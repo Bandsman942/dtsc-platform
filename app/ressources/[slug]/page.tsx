@@ -2,16 +2,22 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Clock3 } from "lucide-react";
 import { PublicationCommentDeepLink } from "@/components/public/publication-comment-deep-link";
 import { PublicationEngagement } from "@/components/public/publication-engagement";
 import { PublicFooter, PublicHeader } from "@/components/public/public-shell";
 import { ShareActionButton } from "@/components/ui/share-action-button";
 import { getCurrentUser } from "@/lib/auth";
+import { getPublicBaseUrl } from "@/lib/domains";
 import { getAppSettings } from "@/lib/settings";
 import { prisma } from "@/lib/prisma";
 import { formatEnumLabel } from "@/lib/labels";
 import { hasHtmlMarkup, sanitizeRichHtml } from "@/lib/rich-content";
+
+function estimateReadingMinutes(content: string) {
+  const words = content.replace(/<[^>]*>/g, " ").trim().split(/\s+/u).filter(Boolean).length;
+  return Math.max(1, Math.ceil(words / 220));
+}
 
 type Params = { params: Promise<{ slug: string }>; searchParams?: Promise<{ commentId?: string }> };
 
@@ -21,7 +27,7 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const { slug } = await params;
   const publication = await prisma.publicPublication.findFirst({
     where: { slug, published: true },
-    select: { title: true, excerpt: true },
+    select: { title: true, excerpt: true, createdAt: true, updatedAt: true, publishedAt: true, author: { select: { name: true, publicProfileConsent: true } } },
   });
 
   if (!publication) return { title: "Ressource introuvable" };
@@ -30,6 +36,16 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
     title: publication.title,
     description: publication.excerpt,
     alternates: { canonical: `/ressources/${slug}` },
+    openGraph: {
+      type: "article",
+      url: new URL(`/ressources/${slug}`, getPublicBaseUrl()).toString(),
+      title: publication.title,
+      description: publication.excerpt,
+      publishedTime: (publication.publishedAt || publication.createdAt).toISOString(),
+      modifiedTime: publication.updatedAt.toISOString(),
+      ...(publication.author?.publicProfileConsent ? { authors: [publication.author.name] } : {}),
+    },
+    twitter: { card: "summary_large_image", title: publication.title, description: publication.excerpt },
   };
 }
 
@@ -53,10 +69,26 @@ export default async function PublicationPage({ params, searchParams }: Params) 
   ]);
 
   if (!publication) notFound();
+  const readingMinutes = estimateReadingMinutes(publication.content);
+  const articleUrl = new URL(`/ressources/${publication.slug}`, getPublicBaseUrl()).toString();
+  const articleStructuredData = {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    headline: publication.title,
+    description: publication.excerpt,
+    mainEntityOfPage: articleUrl,
+    url: articleUrl,
+    datePublished: (publication.publishedAt || publication.createdAt).toISOString(),
+    dateModified: publication.updatedAt.toISOString(),
+    publisher: { "@type": "Organization", name: "Data and Tech Solutions Consulting" },
+    author: { "@type": publication.author?.publicProfileConsent ? "Person" : "Organization", name: publication.author?.publicProfileConsent ? publication.author.name : "Data and Tech Solutions Consulting" },
+    inLanguage: publication.locale || "fr",
+  };
 
   return (
     <main className="min-h-screen w-full max-w-[100vw] overflow-x-clip bg-dtsc-page text-dtsc-ink">
       <PublicHeader />
+      <script type="application/ld+json" suppressHydrationWarning dangerouslySetInnerHTML={{ __html: JSON.stringify(articleStructuredData).replace(/</g, "\\u003c") }} />
       <article>
         <section className="border-b border-dtsc-border bg-dtsc-surface text-dtsc-ink">
           <div className="mx-auto w-full max-w-[52rem] min-w-0 px-4 py-12 sm:px-6 lg:py-16">
@@ -75,9 +107,10 @@ export default async function PublicationPage({ params, searchParams }: Params) 
                   </span>
                 ) : null}
                 <span className="min-w-0 break-words">
-                  Publié le {publication.createdAt.toLocaleDateString("fr-FR")} {publication.author?.publicProfileConsent ? `par ${publication.author.name}` : "par DTSC"}{publication.author?.publicProfileConsent && publication.author.jobTitle ? `, ${publication.author.jobTitle}` : ""}
+                  Publié le {(publication.publishedAt || publication.createdAt).toLocaleDateString("fr-FR")} {publication.author?.publicProfileConsent ? `par ${publication.author.name}` : "par DTSC"}{publication.author?.publicProfileConsent && publication.author.jobTitle ? `, ${publication.author.jobTitle}` : ""}
                 </span>
               </div>
+              <span className="inline-flex items-center gap-1.5 text-xs text-dtsc-muted"><Clock3 className="h-3.5 w-3.5" aria-hidden="true" />{readingMinutes} min de lecture</span>
               <ShareActionButton title={publication.title} text={publication.excerpt} url={`/ressources/${publication.slug}`} className="border-dtsc-border bg-dtsc-page text-dtsc-ink hover:bg-dtsc-soft" />
             </div>
           </div>
