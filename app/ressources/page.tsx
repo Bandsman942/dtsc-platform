@@ -37,7 +37,7 @@ const objectiveResources = [
 export default async function RessourcesPage() {
   const publications = await prisma.publicPublication.findMany({
     where: { published: true },
-    orderBy: [{ publishedAt: "desc" }, { createdAt: "desc" }],
+    orderBy: [{ publishedAt: { sort: "desc", nulls: "last" } }, { createdAt: "desc" }],
     include: {
       author: { select: { name: true, jobTitle: true, avatarUrl: true, publicProfileConsent: true } },
     },
