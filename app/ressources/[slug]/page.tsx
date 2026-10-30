@@ -27,25 +27,29 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const { slug } = await params;
   const publication = await prisma.publicPublication.findFirst({
     where: { slug, published: true },
-    select: { title: true, excerpt: true, createdAt: true, updatedAt: true, publishedAt: true, author: { select: { name: true, publicProfileConsent: true } } },
+    select: { title: true, excerpt: true, seoJson: true, createdAt: true, updatedAt: true, publishedAt: true, author: { select: { name: true, publicProfileConsent: true } } },
   });
 
   if (!publication) return { title: "Ressource introuvable" };
+  const storedSeo = publication.seoJson;
+  const seo = storedSeo && typeof storedSeo === "object" && !Array.isArray(storedSeo) ? storedSeo as Record<string, unknown> : {};
+  const seoTitle = typeof seo.title === "string" && seo.title.trim() ? seo.title : publication.title;
+  const seoDescription = typeof seo.description === "string" && seo.description.trim() ? seo.description : publication.excerpt;
 
   return {
-    title: publication.title,
-    description: publication.excerpt,
+    title: seoTitle,
+    description: seoDescription,
     alternates: { canonical: `/ressources/${slug}` },
     openGraph: {
       type: "article",
       url: new URL(`/ressources/${slug}`, getPublicBaseUrl()).toString(),
-      title: publication.title,
-      description: publication.excerpt,
+      title: seoTitle,
+      description: seoDescription,
       publishedTime: (publication.publishedAt || publication.createdAt).toISOString(),
       modifiedTime: publication.updatedAt.toISOString(),
       ...(publication.author?.publicProfileConsent ? { authors: [publication.author.name] } : {}),
     },
-    twitter: { card: "summary_large_image", title: publication.title, description: publication.excerpt },
+    twitter: { card: "summary_large_image", title: seoTitle, description: seoDescription },
   };
 }
 
