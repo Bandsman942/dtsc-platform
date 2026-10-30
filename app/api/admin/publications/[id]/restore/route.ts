@@ -5,7 +5,7 @@ import { requireConsoleCapability } from "@/lib/admin-api";
 import { CONSOLE_CAPABILITIES } from "@/lib/console/console-capabilities";
 import { writeAuditLog } from "@/lib/audit";
 import { prisma } from "@/lib/prisma";
-import { sanitizeRichHtml } from "@/lib/rich-content";
+import { hasHtmlMarkup, sanitizeRichHtml } from "@/lib/rich-content";
 
 type Params = { params: Promise<{ id: string }> };
 const payloadSchema = z.object({ version: z.number().int().min(1) });
@@ -30,7 +30,7 @@ export async function POST(request: Request, { params }: Params) {
       if (!chosen) return null;
 
       const nextVersion = (latest?.version || 0) + 1;
-      const sanitized = sanitizeRichHtml(chosen.content);
+      const sanitized = hasHtmlMarkup(chosen.content) ? sanitizeRichHtml(chosen.content) : chosen.content;
       const update = await tx.publicPublication.updateMany({
         where: { id, updatedAt: current.updatedAt },
         data: {
