@@ -68,7 +68,7 @@ export function PublicFooter() {
         {columns.map((column, columnIndex) => (
           <div key={column.title}>
             <p className="dtsc-label text-dtsc-ink">
-              <span className={columnIndex === 0 ? "text-cyan-600" : columnIndex === 1 ? "text-violet-600" : "text-pink-600"}>0{columnIndex + 1}</span>
+              <span className={columnIndex === 0 ? "text-cyan-800 dark:text-cyan-300" : columnIndex === 1 ? "text-violet-600" : "text-pink-600"}>0{columnIndex + 1}</span>
               <span className="ml-2">{column.title}</span>
             </p>
             <div className="mt-5 grid gap-3">
