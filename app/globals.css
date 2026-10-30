@@ -1449,3 +1449,8 @@
 @media (max-width: 640px) {
   .dtsc-article-reader .dtsc-publication-content { font-size: 1rem; line-height: 1.8; }
 }
+
+.dtsc-article-reader .dtsc-publication-content h2[id],
+.dtsc-article-reader .dtsc-publication-content h3[id] {
+  scroll-margin-top: 6rem;
+}
