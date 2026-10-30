@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
 import { getSession } from "@/lib/auth";
 import { isCatalogAiModelAllowed } from "@/lib/ai/catalog";
+import { normalizePlanRequirement } from "@/lib/billing/plans";
 import { getAiErrorMessage } from "@/lib/ai/i18n";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { enterprisePreferenceView, getEnterpriseAiConversationPreference } from "@/lib/assistant-conversation-preferences";
@@ -35,7 +36,7 @@ export async function PATCH(req: Request, { params }: Params) {
   if (typeof data.modelOverride !== "undefined") {
     const modelOverride = data.modelOverride?.trim() || "";
     const userLocale = await prisma.user.findUnique({ where: { id: session.userId }, select: { locale: true } });
-    if (modelOverride && !isCatalogAiModelAllowed({ modelCode: modelOverride, context: "ORGANIZATION", locale: userLocale?.locale || "fr" })) {
+    if (modelOverride && !isCatalogAiModelAllowed({ modelCode: modelOverride, context: "ORGANIZATION", locale: userLocale?.locale || "fr", planCode: normalizePlanRequirement(access.planCode) })) {
       return NextResponse.json({ reasonCode: "MODEL_UNAVAILABLE", message: getAiErrorMessage("MODEL_UNAVAILABLE", userLocale?.locale) }, { status: 400 });
     }
   }

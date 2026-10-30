@@ -20,9 +20,10 @@ expect(!route.includes("AI_OPENROUTER_CERTIFIED_MODELS_JSON"), "/api/models must
 expect(!route.includes("openrouter.ai"), "/api/models must never proxy the remote provider catalog");
 
 expect(chatPage.includes("getCanonicalAiUsageLimits"), "Chat page must resolve canonical AI usage limits server-side");
-expect(chatPage.includes("planCode: aiContext === \"DTSC_INTERNAL\" ? \"ENTERPRISE\" : usageLimits.planCode"), "Chat page model catalog must receive the canonical plan and preserve DTSC_INTERNAL enterprise entitlement");
+expect(chatPage.includes('context: "PERSONAL"') && chatPage.includes("planCode: personalPlanCode"), "General chatbot selector must use PERSONAL context and the server-side personal plan, even within enterprise navigation");
+expect(chatPage.includes("filterPlatformAllowedAiModels") && chatPage.includes("getAiPlatformPolicy"), "Chat selector must remove administratively disabled providers and models");
 expect(conversationRoute.includes("getCanonicalAiUsageLimits"), "Conversation model override validation must resolve plan server-side");
-expect(conversationRoute.includes("isCatalogAiModelAllowed({ modelCode: modelOverride, context, locale: userLocale?.locale || \"fr\", planCode })"), "Conversation model override validation must pass canonical planCode to the catalog policy");
+expect(conversationRoute.includes('isCatalogAiModelAllowed({ modelCode: modelOverride, context: "PERSONAL", locale: userLocale?.locale || "fr", planCode })'), "General conversation override must match the PERSONAL routing context and server-side plan");
 expect(accountPreferencesRoute.includes("getCanonicalAiUsageLimits"), "Account preferred-model validation must resolve plan server-side");
 expect(accountPreferencesRoute.includes("isCatalogAiModelAllowed({ modelCode: preferredModel, context: aiContext, locale: body.data.locale, planCode })"), "Account preferred-model validation must pass canonical planCode to the catalog policy");
 expect(!conversationRoute.includes("body.data.planCode"), "Conversation model validation must never trust a client-supplied planCode");

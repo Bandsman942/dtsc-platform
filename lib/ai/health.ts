@@ -1,4 +1,4 @@
-import type { AiModelDefinition, AiProviderDefinition } from "@/lib/ai/types";
+import type { AiContextCode, AiModelDefinition, AiProviderDefinition, AiTaskType } from "@/lib/ai/types";
 import { prisma } from "@/lib/prisma";
 
 export type AiRuntimeHealthStatus = "HEALTHY" | "DEGRADED" | "UNAVAILABLE" | "DISABLED_BY_POLICY";
@@ -17,9 +17,13 @@ const HEALTH_SAMPLE_LIMIT = 20;
 export async function getAiRuntimeHealth({
   provider,
   model,
+  context,
+  taskType,
 }: {
   provider: AiProviderDefinition;
   model: AiModelDefinition;
+  context: AiContextCode;
+  taskType: AiTaskType;
 }): Promise<AiRuntimeHealth> {
   if (provider.status === "DISABLED" || provider.status === "RETIRED" || model.status === "DISABLED" || model.status === "RETIRED") {
     return {
@@ -38,8 +42,16 @@ export async function getAiRuntimeHealth({
         where: {
           providerCode: provider.code,
           modelCode: model.code,
+          contextCode: context,
+          taskType,
           startedAt: { gte: since },
           status: { in: ["SUCCESS", "FAILED"] },
+          // A malformed tool schema is an application contract error, not
+          // evidence that the model is unavailable for ordinary chat.
+          OR: [
+            { reasonCode: null },
+            { reasonCode: { notIn: ["PROVIDER_PROTOCOL_INVALID", "TOOL_CALL_INVALID", "INVALID_REQUEST"] } },
+          ],
         },
         orderBy: { startedAt: "desc" },
         take: HEALTH_SAMPLE_LIMIT,
@@ -52,6 +64,8 @@ export async function getAiRuntimeHealth({
         where: {
           providerCode: provider.code,
           modelCode: model.code,
+          contextCode: context,
+          taskType,
           createdAt: { gte: since },
           status: "SUCCESS",
           firstTokenLatencyMs: { not: null },

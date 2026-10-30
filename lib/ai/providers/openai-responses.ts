@@ -159,7 +159,11 @@ export async function createOpenAiResponsesEventStream({
         instructions,
         input: buildOpenAiResponsesInput(messages),
         ...(tools?.length ? {
-          tools: tools.map((tool) => ({ type: "function", name: tool.code, description: tool.description, parameters: tool.inputSchema, strict: true })),
+          // DTSC tools have optional fields. OpenAI strict tool schemas require
+          // every property to be required, which caused invalid_function_parameters.
+          // The canonical Zod validator + RBAC/confirmation checks in executeAiTool
+          // remain authoritative even when provider-side strict mode is disabled.
+          tools: tools.map((tool) => ({ type: "function", name: tool.code, description: tool.description, parameters: tool.inputSchema, strict: false })),
           tool_choice: "auto",
         } : {}),
         ...(model.capabilities.reasoning ? { include: ["reasoning.encrypted_content"] } : {}),

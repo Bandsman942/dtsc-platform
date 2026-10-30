@@ -117,10 +117,9 @@ export async function ensureEnterpriseAiAssistant(organizationId: string, userId
     select: { id: true },
   });
 
-  await prisma.enterpriseAiSetting.upsert({
-    where: { organizationId },
-    create: { organizationId, updatedById: userId || null },
-    update: {},
+  await prisma.enterpriseAiSetting.createMany({
+    data: [{ organizationId, updatedById: userId || null }],
+    skipDuplicates: true,
   });
 
   return assistant;

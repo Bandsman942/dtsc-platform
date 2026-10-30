@@ -8,10 +8,23 @@ const parseArray = (raw) => {
   }
 };
 
-const certified = parseArray(process.env.AI_OPENROUTER_CERTIFIED_MODELS_JSON)
+const fileFlagIndex = process.argv.indexOf("--catalog-file");
+const catalogFile = fileFlagIndex >= 0 ? process.argv[fileFlagIndex + 1] : null;
+if (fileFlagIndex >= 0 && !catalogFile) {
+  console.error("--catalog-file requires an existing JSON file path");
+  process.exit(1);
+}
+const raw = catalogFile
+  ? (await import("node:fs/promises")).readFile(catalogFile, "utf8").catch(() => "")
+  : process.env.AI_OPENROUTER_CERTIFIED_MODELS_JSON;
+const certified = parseArray(await raw)
   .filter((model) => model && typeof model === "object" && model.providerCode === "OPENROUTER" && model.providerModelId && model.certificationVersion);
 
 if (!certified.length) {
+  if (catalogFile) {
+    console.error("OpenRouter certification file missing or invalid");
+    process.exit(1);
+  }
   console.log("OpenRouter catalog audit skipped: no DTSC-certified OpenRouter models configured.");
   process.exit(0);
 }
@@ -29,6 +42,8 @@ try {
   const remoteModels = Array.isArray(payload?.data) ? payload.data : [];
   const remoteById = new Map(remoteModels.map((model) => [model.id, model]));
   const failures = [];
+  const codeSet = new Set(certified.map((model) => model.code));
+  if (codeSet.size !== certified.length) failures.push("duplicate certified model code");
 
   for (const model of certified) {
     const remote = remoteById.get(model.providerModelId);
@@ -44,6 +59,21 @@ try {
     }
     if (model.capabilities?.structuredOutput && !supportsParameter(remote, "response_format") && !supportsParameter(remote, "structured_outputs")) {
       failures.push(`${model.code}: structured output is certified but not advertised by the current ZDR-compatible catalog entry`);
+    }
+    if (!["STARTER", "BUSINESS", "ENTERPRISE"].includes(model.minimumPlan)) {
+      failures.push(`${model.code}: missing supported SaaS plan gate`);
+    }
+    if (model.dataPolicyCode !== "INHERIT_PROVIDER") {
+      failures.push(`${model.code}: external model must inherit the controlled OpenRouter data policy`);
+    }
+    if (!model.allowedContexts?.includes("PERSONAL") || !model.allowedContexts?.includes("ORGANIZATION")) {
+      failures.push(`${model.code}: missing expected authorized contexts`);
+    }
+    if (!model.costProfile || !(Number(model.costProfile.inputPerMillion) >= 0) || !(Number(model.costProfile.outputPerMillion) >= 0)) {
+      failures.push(`${model.code}: missing non-negative cost profile`);
+    }
+    if (model.fallbackModelCodes?.some((code) => code === model.code || (catalogFile && !codeSet.has(code)))) {
+      failures.push(`${model.code}: fallback must refer to a separate certified model`);
     }
   }
 

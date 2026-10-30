@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { getAiModelDefinition, listCatalogAiModelsForUi } from "@/lib/ai/catalog";
+import { filterPlatformAllowedAiModels, getAiPlatformPolicy } from "@/lib/ai/platform-runtime-policy";
 import type { AiContextCode } from "@/lib/ai/types";
 import { getCanonicalAiUsageLimits } from "@/lib/billing/ai-usage-limits";
 import { getActiveOrganizationId } from "@/lib/organizations";
@@ -24,7 +25,7 @@ export async function GET() {
     ? await getCanonicalAiUsageLimits({ userId: session.userId, organizationId })
     : null;
   const planCode = context === "DTSC_INTERNAL" ? "ENTERPRISE" : usageLimits?.planCode || "STARTER";
-  const models = listCatalogAiModelsForUi({ context, locale, planCode });
+  const models = filterPlatformAllowedAiModels(listCatalogAiModelsForUi({ context, locale, planCode }), await getAiPlatformPolicy());
   const preferred = user?.preferredModel ? getAiModelDefinition(user.preferredModel) : null;
   const defaultModel = preferred && models.some((model) => model.id === preferred.code) ? preferred.code : models[0]?.id || null;
 

@@ -284,6 +284,8 @@
     "qa:standard-ai-prompts": "node scripts/audit-standard-ai-prompts.mjs",
     "qa:standard-ai-i18n": "node scripts/audit-standard-ai-i18n.mjs",
     "qa:standard-ai-guides": "node scripts/audit-standard-ai-guides.mjs",
+    "qa:hotfix-963": "node scripts/qa-hotfix-963-ai-reliability.mjs",
+    "qa:openrouter:certify-20261030": "node scripts/ai/audit-openrouter-catalog.mjs --catalog-file config/ai/openrouter-certified-models-20261030.json",
     "qa:standard-commercial-maturity-kanban": "node scripts/audit-standard-commercial-maturity-kanban.mjs",
     "qa:standard-commercial-maturity-transitions": "node scripts/audit-standard-commercial-maturity-transitions.mjs",
     "qa:standard-modules-iteration-05": "node scripts/qa-standard-modules-iteration-05.mjs",

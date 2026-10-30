@@ -26,11 +26,10 @@ export async function GET(req: Request) {
     await writeApiLog({ request: req, statusCode: 403, userId: session.userId, startedAt });
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  const settings = await prisma.enterpriseAiSetting.upsert({
-    where: { organizationId: parsed.data.organizationId },
-    create: { organizationId: parsed.data.organizationId, updatedById: session.userId },
-    update: {},
-  });
+  // getEnterpriseAiAccess already provisioned this row idempotently. A second
+  // empty-update upsert can race with the first request and throw P2002.
+  const settings = await prisma.enterpriseAiSetting.findUnique({ where: { organizationId: parsed.data.organizationId } });
+  if (!settings) return NextResponse.json({ error: "PROVIDER_UNAVAILABLE" }, { status: 503 });
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId: parsed.data.organizationId } });
   return NextResponse.json({
     settings: {

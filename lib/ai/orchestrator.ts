@@ -56,7 +56,7 @@ async function rankCandidates(request: AiRouteRequest): Promise<RankedCandidate[
       available.map(async (model) => {
         const provider = getAiProviderDefinition(model.providerCode);
         if (!provider) return null;
-        const health = await getAiRuntimeHealth({ provider, model });
+        const health = await getAiRuntimeHealth({ provider, model, context: request.context, taskType: request.taskType });
         if (health.status === "UNAVAILABLE" || health.status === "DISABLED_BY_POLICY") return null;
         const score = scoreAiCandidate({ request, model, health });
         const maximumCost = request.routingConstraints?.maximumEstimatedInputCost;
@@ -134,8 +134,8 @@ export async function routeAiStream(request: AiRouteRequest): Promise<AiStreamRe
   const candidates = await rankCandidates(effectiveRequest);
   if (!candidates.length) {
     throw new AiProviderError({
-      reasonCode: "MODEL_UNAVAILABLE",
-      message: "No policy-allowed and healthy AI model satisfies the active routing constraints",
+      reasonCode: "PROVIDER_UNAVAILABLE",
+      message: "No healthy AI provider satisfies the active routing constraints",
       statusCode: 503,
     });
   }
@@ -215,6 +215,18 @@ export async function routeAiStream(request: AiRouteRequest): Promise<AiStreamRe
       await releaseAiConcurrencyLease(concurrencyLease);
       lastError = error;
       const reasonCode = toAiReasonCode(error);
+      if (error instanceof AiProviderError) {
+        // Safe, bounded diagnostics: never log prompts, upstream error bodies,
+        // authorization headers or provider responses verbatim.
+        console.warn("[ai-provider-attempt-failed]", {
+          providerCode: provider.code,
+          modelCode: model.code,
+          reasonCode,
+          upstreamStatusCode: error.upstreamStatusCode ?? null,
+          contextCode: effectiveRequest.context,
+          taskType: effectiveRequest.taskType,
+        });
+      }
       const alreadyRecordedAdmissionFailure = error instanceof AiProviderError && reasonCode === "RATE_LIMITED" && !concurrencyLease;
       if (!alreadyRecordedAdmissionFailure) {
         attempts.push({ providerCode: provider.code, modelCode: model.code, outcome: "FAILED", reasonCode });

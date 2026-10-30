@@ -56,11 +56,8 @@ export async function PATCH(req: Request, { params }: Params) {
   if (typeof data.modelOverride !== "undefined") {
     const modelOverride = data.modelOverride?.trim() || "";
     const userLocale = await prisma.user.findUnique({ where: { id: session.userId }, select: { locale: true } });
-    const context = organizationId ? "ORGANIZATION" : session.activeContext === "DTSC_INTERNAL" ? "DTSC_INTERNAL" : "PERSONAL";
-    const planCode = context === "DTSC_INTERNAL"
-      ? "ENTERPRISE"
-      : (await getCanonicalAiUsageLimits({ userId: session.userId, organizationId })).planCode;
-    if (modelOverride && !isCatalogAiModelAllowed({ modelCode: modelOverride, context, locale: userLocale?.locale || "fr", planCode })) {
+    const planCode = (await getCanonicalAiUsageLimits({ userId: session.userId, organizationId: null })).planCode;
+    if (modelOverride && !isCatalogAiModelAllowed({ modelCode: modelOverride, context: "PERSONAL", locale: userLocale?.locale || "fr", planCode })) {
       return NextResponse.json({ reasonCode: "MODEL_UNAVAILABLE", message: getAiErrorMessage("MODEL_UNAVAILABLE", userLocale?.locale) }, { status: 400 });
     }
   }

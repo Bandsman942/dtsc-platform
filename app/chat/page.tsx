@@ -4,7 +4,7 @@ import { ChatWorkspaceV2 } from "@/components/chat/chat-workspace-v2";
 import { AppShell } from "@/components/layout/app-shell";
 import { getSession, requireUser } from "@/lib/auth";
 import { listCatalogAiModelsForUi } from "@/lib/ai/catalog";
-import { resolveAiSessionContext } from "@/lib/ai/session-context";
+import { filterPlatformAllowedAiModels, getAiPlatformPolicy } from "@/lib/ai/platform-runtime-policy";
 import { getActiveOrganizationId } from "@/lib/organizations";
 import { getCanonicalAiUsageLimits } from "@/lib/billing/ai-usage-limits";
 import { prisma } from "@/lib/prisma";
@@ -17,7 +17,6 @@ export default async function ChatPage({
   const user = await requireUser();
   const session = await getSession();
   const activeOrganizationId = getActiveOrganizationId(session);
-  const aiContext = resolveAiSessionContext(session);
   const { conversationId } = await searchParams;
   const conversations = await prisma.conversation.findMany({
     where: { userId: user.id, organizationId: activeOrganizationId },
@@ -46,11 +45,16 @@ export default async function ChatPage({
     prisma.usageLog.aggregate({ where: { userId: user.id, organizationId: activeOrganizationId, createdAt: { gte: today } }, _sum: { totalTokens: true } }),
     getCanonicalAiUsageLimits({ userId: user.id, organizationId: activeOrganizationId }),
   ]);
-  const models = listCatalogAiModelsForUi({
-    context: aiContext,
+  // The general chatbot always executes in PERSONAL, even while an enterprise
+  // workspace is active. Use the same personal plan as the server orchestrator.
+  const personalPlanCode = activeOrganizationId
+    ? (await getCanonicalAiUsageLimits({ userId: user.id, organizationId: null })).planCode
+    : usageLimits.planCode;
+  const models = filterPlatformAllowedAiModels(listCatalogAiModelsForUi({
+    context: "PERSONAL",
     locale: user.locale,
-    planCode: aiContext === "DTSC_INTERNAL" ? "ENTERPRISE" : usageLimits.planCode,
-  });
+    planCode: personalPlanCode,
+  }), await getAiPlatformPolicy());
 
   return (
     <AppShell user={user}>
