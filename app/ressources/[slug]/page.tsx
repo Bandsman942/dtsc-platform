@@ -14,6 +14,17 @@ import { prisma } from "@/lib/prisma";
 import { formatEnumLabel } from "@/lib/labels";
 import { hasHtmlMarkup, sanitizeRichHtml } from "@/lib/rich-content";
 
+function withArticleHeadingAnchors(html: string) {
+  const sections: Array<{ id: string; title: string; level: number }> = [];
+  const enriched = html.replace(/<h([23])>([\s\S]*?)<\/h\1>/gi, (_markup, rawLevel: string, inside: string) => {
+    const id = "dtsc-reading-" + (sections.length + 1);
+    const title = inside.replace(/<[^>]*>/g, "").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+    sections.push({ id, title, level: Number(rawLevel) });
+    return "<h" + rawLevel + ' id="' + id + '">' + inside + "</h" + rawLevel + ">";
+  });
+  return { enriched, sections };
+}
+
 function estimateReadingMinutes(content: string) {
   const words = content.replace(/<[^>]*>/g, " ").trim().split(/\s+/u).filter(Boolean).length;
   return Math.max(1, Math.ceil(words / 220));
@@ -73,6 +84,8 @@ export default async function PublicationPage({ params, searchParams }: Params) 
   ]);
 
   if (!publication) notFound();
+  const articleContent = hasHtmlMarkup(publication.content) ? sanitizeRichHtml(publication.content) : "";
+  const { enriched: articleHtml, sections: articleSections } = withArticleHeadingAnchors(articleContent);
   const readingMinutes = estimateReadingMinutes(publication.content);
   const articleUrl = new URL(`/ressources/${publication.slug}`, getPublicBaseUrl()).toString();
   const articleStructuredData = {
@@ -123,8 +136,20 @@ export default async function PublicationPage({ params, searchParams }: Params) 
         <section className="dtsc-public-band-light">
           <div className="mx-auto w-full max-w-[48rem] min-w-0 px-4 py-12 sm:px-6 lg:py-16">
             <div className="dtsc-article-reader min-w-0">
+              {articleSections.length > 1 ? (
+                <nav aria-label="Sommaire de l’article" className="mb-10 border-l-2 border-dtsc-border pl-5">
+                  <p className="text-sm font-semibold text-dtsc-ink">Dans cet article</p>
+                  <ol className="mt-3 grid gap-2">
+                    {articleSections.map((section) => (
+                      <li key={section.id} className={section.level === 3 ? "pl-4" : ""}>
+                        <a href={"#" + section.id} className="text-sm leading-6 text-dtsc-blue hover:underline focus-visible:underline">{section.title}</a>
+                      </li>
+                    ))}
+                  </ol>
+                </nav>
+              ) : null}
               {hasHtmlMarkup(publication.content) ? (
-                <div className="dtsc-publication-content text-dtsc-muted" dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(publication.content) }} />
+                <div className="dtsc-publication-content text-dtsc-muted" dangerouslySetInnerHTML={{ __html: articleHtml }} />
               ) : (
                 <div className="prose prose-slate max-w-none text-dtsc-muted">
                   {publication.content.split("\n").map((paragraph, index) => (
