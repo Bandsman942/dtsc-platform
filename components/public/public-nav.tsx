@@ -46,6 +46,31 @@ const mobileLinkAccents = [
   "dtsc-menu-accent-lime",
 ] as const;
 
+const desktopGroups = [
+  { label: "Solutions", links: [
+    { label: "Services et expertises", href: "/services" },
+    { label: "Solutions numériques", href: "/solutions" },
+    { label: "Data et indicateurs", href: "/bi-kpi" },
+    { label: "Intelligence artificielle", href: "/ia-entreprise" },
+  ] },
+  { label: "Plateforme", links: [
+    { label: "DTSC Platform", href: "/tarifs" },
+    { label: "Offres et tarifs", href: "/tarifs" },
+  ] },
+  { label: "Secteurs", links: [
+    { label: "Secteurs d'activité", href: "/secteurs" },
+    { label: "Projets et démonstrations", href: "/projets" },
+  ] },
+  { label: "Ressources", links: [
+    { label: "Publications et guides", href: "/ressources" },
+    { label: "Data en Afrique", href: "/data-afrique" },
+  ] },
+  { label: "Entreprise", links: [
+    { label: "À propos", href: "/a-propos" },
+    { label: "Nous contacter", href: "/contact" },
+  ] },
+] as const;
+
 function isActive(pathname: string, href: string) {
   return href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(`${href}/`);
 }
@@ -57,9 +82,30 @@ export function PublicNav() {
   const triggerRef = useRef<HTMLButtonElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
+  const desktopNavRef = useRef<HTMLDivElement>(null);
+  const [openDesktopGroup, setOpenDesktopGroup] = useState<string | null>(null);
 
   useEffect(() => setMounted(true), []);
   useEffect(() => setOpen(false), [pathname]);
+  useEffect(() => setOpenDesktopGroup(null), [pathname]);
+  useEffect(() => {
+    if (!openDesktopGroup) return;
+    function handlePointerDown(event: PointerEvent) {
+      if (event.target instanceof Node && !desktopNavRef.current?.contains(event.target)) {
+        setOpenDesktopGroup(null);
+      }
+    }
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setOpenDesktopGroup(null);
+    }
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [openDesktopGroup]);
+
 
   useEffect(() => {
     if (!open) return;
@@ -202,31 +248,59 @@ export function PublicNav() {
 
   return (
     <div className="flex min-w-0 items-center gap-2">
-      <div className="hidden items-center gap-1 xl:flex">
-        {publicLinks.filter((link) => link.href !== "/").map((link) => {
-          const active = isActive(pathname, link.href);
+      <div ref={desktopNavRef} className="hidden min-w-0 items-center gap-0.5 xl:flex" aria-label="Navigation principale">
+        {desktopGroups.map((group, index) => {
+          const expanded = openDesktopGroup === group.label;
+          const active = group.links.some((link) => isActive(pathname, link.href));
+          const popupId = "public-navigation-group-" + index;
           return (
-            <Link
-              key={link.href}
-              href={link.href}
-              className={cn(
-                "rounded-xl px-3 py-2 text-sm font-bold transition",
-                active ? "bg-dtsc-soft text-dtsc-blue" : "text-dtsc-muted hover:-translate-y-0.5 hover:bg-dtsc-soft hover:text-dtsc-blue",
-              )}
-              aria-current={active ? "page" : undefined}
-            >
-              {link.label}
-            </Link>
+            <div key={group.label} className="relative">
+              <button
+                type="button"
+                aria-expanded={expanded}
+                aria-controls={popupId}
+                onClick={() => setOpenDesktopGroup(expanded ? null : group.label)}
+                className={cn(
+                  "inline-flex min-h-10 items-center gap-1 rounded-lg px-2.5 py-2 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-dtsc-blue",
+                  active || expanded ? "bg-dtsc-soft text-dtsc-blue" : "text-dtsc-ink hover:bg-dtsc-soft hover:text-dtsc-blue",
+                )}
+              >
+                {group.label}
+                <span aria-hidden="true" className={cn("text-xs transition-transform", expanded && "rotate-180")}>⌄</span>
+              </button>
+              {expanded ? (
+                <nav
+                  id={popupId}
+                  aria-label={"Explorer " + group.label}
+                  className={cn(
+                    "absolute top-[calc(100%+0.75rem)] z-[110] w-72 rounded-2xl border border-dtsc-border bg-dtsc-surface p-2 shadow-[var(--dtsc-shadow-lg)]",
+                    index >= 3 ? "right-0" : "left-0",
+                  )}
+                >
+                  {group.links.map((link) => (
+                    <Link
+                      key={group.label + link.href}
+                      href={link.href}
+                      onClick={() => setOpenDesktopGroup(null)}
+                      aria-current={isActive(pathname, link.href) ? "page" : undefined}
+                      className="block rounded-xl px-3 py-3 text-sm font-medium text-dtsc-ink transition-colors hover:bg-dtsc-soft hover:text-dtsc-blue focus-visible:outline-2 focus-visible:outline-dtsc-blue"
+                    >
+                      {link.label}
+                    </Link>
+                  ))}
+                </nav>
+              ) : null}
+            </div>
           );
         })}
       </div>
       <div className="hidden items-center gap-2 xl:flex">
         <PublicSearchDialog compact />
         <ProductPreferencesControls />
-        <Link href={getSignInUrl("/dashboard")} className="rounded-xl border border-dtsc-border px-3 py-2 text-sm font-bold text-dtsc-blue transition hover:-translate-y-0.5 hover:bg-dtsc-soft">
+        <Link href={getSignInUrl("/dashboard")} className="rounded-lg border border-dtsc-border px-3 py-2 text-sm font-medium text-dtsc-blue transition-colors hover:bg-dtsc-soft">
           Accès client
         </Link>
-        <Link href="/contact" className="dtsc-animated-gradient rounded-xl px-4 py-2 text-sm font-black text-[#001736] shadow-md transition hover:-translate-y-0.5">
+        <Link href="/contact" className="rounded-lg bg-dtsc-blue px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[var(--dtsc-brand-secondary-hover)]">
           Consultation
         </Link>
       </div>
@@ -234,7 +308,7 @@ export function PublicNav() {
         ref={triggerRef}
         type="button"
         onClick={() => setOpen(true)}
-        className="inline-flex h-11 items-center gap-2 rounded-2xl border border-dtsc-border bg-dtsc-surface px-3.5 text-sm font-black text-dtsc-blue shadow-sm transition hover:-translate-y-0.5 hover:border-cyan-300 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 xl:hidden"
+        className="inline-flex h-11 items-center gap-2 rounded-xl border border-dtsc-border bg-dtsc-surface px-3.5 text-sm font-semibold text-dtsc-blue transition-colors hover:bg-dtsc-soft focus-visible:outline-2 focus-visible:outline-dtsc-blue xl:hidden"
         aria-expanded={open}
         aria-controls="public-mobile-navigation"
       >

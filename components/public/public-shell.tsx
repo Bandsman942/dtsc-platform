@@ -17,7 +17,7 @@ export function PublicHeader() {
     <header className="dtsc-public-header sticky top-0 z-[90] border-b border-dtsc-border/80 backdrop-blur-2xl">
       <PublicScrollAnimator />
       <VisitTracker />
-      <div className="mx-auto flex min-h-[4.75rem] max-w-[92rem] items-center justify-between gap-3 px-4 py-3 sm:gap-5 sm:px-6 lg:px-8">
+      <div className="mx-auto flex min-h-[4.125rem] max-w-[92rem] items-center justify-between gap-3 px-4 py-2 sm:gap-4 sm:px-6 lg:px-8">
         <div className="min-w-0 max-w-[min(68vw,19rem)] sm:max-w-sm">
           <DtscLogo href="/" />
         </div>
