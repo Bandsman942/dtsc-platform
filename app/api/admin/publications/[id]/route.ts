@@ -26,6 +26,7 @@ export async function PATCH(req: Request, { params }: Params) {
   if (!canManage && !canEditOwnDraft) return NextResponse.json({ error: "Forbidden", reasonCode: "CAPABILITY_REQUIRED" }, { status: 403 });
 
   const { contentHtml, seoTitle, seoDescription, ...publicationData } = body.data;
+  const currentSeo = existing.seoJson && typeof existing.seoJson === "object" && !Array.isArray(existing.seoJson) ? existing.seoJson : {};
   const content = contentHtml ? sanitizeRichHtml(contentHtml) : publicationData.content;
   const published = canManage ? publicationData.published : false;
   const now = new Date();
@@ -41,6 +42,7 @@ export async function PATCH(req: Request, { params }: Params) {
         ...publicationData,
         ...(seoTitle !== undefined || seoDescription !== undefined ? {
           seoJson: {
+            ...currentSeo,
             title: seoTitle ?? (typeof existing.seoJson === "object" && existing.seoJson && !Array.isArray(existing.seoJson) && typeof existing.seoJson.title === "string" ? existing.seoJson.title : existing.title),
             description: seoDescription ?? (typeof existing.seoJson === "object" && existing.seoJson && !Array.isArray(existing.seoJson) && typeof existing.seoJson.description === "string" ? existing.seoJson.description : existing.excerpt),
           },
