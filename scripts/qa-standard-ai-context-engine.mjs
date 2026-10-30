@@ -77,7 +77,6 @@ expect(modulesHub.includes("Cet espace n’est pas accessible"), "Denied module 
 
 for (const [label, source] of [
   ["chat v2", chatRoute],
-  ["chat agent", agentRoute],
   ["collaborator agent", collaboratorsAgent],
   ["collaborator compose", collaboratorsCompose],
 ]) {
@@ -86,6 +85,14 @@ for (const [label, source] of [
   expect(source.includes("prepareAiTurn"), `${label} must use the canonical assistant runtime`);
 }
 
+// The public/global Agent is intentionally PERSONAL, even when the authenticated
+// session is navigating an enterprise. The session still determines identity,
+// conversation ownership and the permission checks for all offered tools.
+expect(agentRoute.includes("getSession()") && agentRoute.includes('const contextCode = "PERSONAL" as const'), "Global Agent must authenticate the session but keep its model and tools in PERSONAL scope");
+expect(agentRoute.includes('prepareAiTurn({ userId: session.userId, contextCode, organizationId: null'), "Global Agent must never pass the active organization to its AI context engine");
+expect(agentRoute.includes('retrieveKnowledgeContext(session.userId, data.content, null)'), "Global Agent RAG must remain personal, regardless of enterprise navigation");
+expect(!agentRoute.includes("getCompanyContextForUser") && !agentRoute.includes("resolveAiSessionContext(session)"), "Global Agent must not inherit private enterprise sources from session context");
+expect(agentRoute.includes("AiExecutionContextError") && agentRoute.includes("prepareAiTurn"), "Global Agent must retain canonical access failure handling and assistant runtime");
 expect(chatPage.includes('context: "PERSONAL"') && chatRoute.includes('const contextCode = "PERSONAL"'), "General chat page catalog and its runtime must share the PERSONAL context, regardless of session enterprise navigation");
 expect(chatWorkspace.includes("body?.reasonCode || body?.error || body?.code"), "Chat UI must consume structured AI reason codes instead of a single generic error path");
 expect(chatWorkspace.includes('reasonCode === "DAILY_LIMIT_REACHED"'), "Chat UI must distinguish daily usage limits");
