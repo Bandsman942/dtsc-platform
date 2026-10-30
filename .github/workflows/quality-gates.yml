@@ -117,6 +117,8 @@ jobs:
         run: pnpm qa:hotfix-863-workflow-manual-start
       - name: PUBLIC-UX-01 rich HTML sanitizer safety tests
         run: pnpm qa:public-ux-01
+      - name: PUBLIC-UX-07 public V2 contract QA
+        run: pnpm qa:public-experience-v2
       - name: Type check
         run: pnpm type-check
         env:
