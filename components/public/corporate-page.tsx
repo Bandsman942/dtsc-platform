@@ -5,16 +5,7 @@ import { PublicFooter, PublicHeader } from "@/components/public/public-shell";
 import { Button } from "@/components/ui/button";
 import { Accordion, AccordionItem } from "@/components/ui/accordion";
 import type { PublicLongPage } from "@/lib/public-site";
-import { cn } from "@/lib/utils";
 import { PublicSectionWatermark } from "@/components/public/public-section-watermark";
-
-const toneClasses = {
-  blue: "from-[#001736] via-[#002b5b] to-[#0057b8]",
-  cyan: "from-[#001736] via-[#004f73] to-[#00a7c7]",
-  emerald: "from-[#001736] via-[#064e3b] to-[#00876f]",
-  slate: "from-[#0f172a] via-[#1f2937] to-[#002b5b]",
-  indigo: "from-[#001736] via-[#312e81] to-[#0057b8]",
-};
 
 const platformSteps = [
   { title: "Comprendre", text: "Clarifier le problème, les utilisateurs, les données et les contraintes." },
@@ -124,24 +115,23 @@ export function CorporatePage({ page }: { page: PublicLongPage }) {
 
             <div className="grid min-w-0 gap-5">
               {page.deepDives.map((item, index) => (
-                <article key={item.title} className={cn("dtsc-premium-reveal overflow-hidden rounded-[1.5rem] border border-dtsc-border shadow-[0_18px_60px_rgba(0,43,91,.08)]", index % 2 === 0 ? "bg-dtsc-surface" : "bg-dtsc-soft")} style={{ animationDelay: `${index * 60}ms` }}>
-                  <div className="grid gap-0 lg:grid-cols-[minmax(0,.72fr)_minmax(0,1.28fr)]">
-                    <div className={cn("relative overflow-hidden bg-gradient-to-br p-6 text-white sm:p-7", toneClasses[page.tone])}>
-                      <div className="absolute inset-0 bg-[radial-gradient(circle_at_90%_10%,rgba(255,255,255,.16),transparent_30%)]" />
+                <article key={item.title} className="border-t border-dtsc-border py-8" style={{ animationDelay: `${index * 60}ms` }}>
+                  <div className="grid gap-8 lg:grid-cols-[minmax(0,.72fr)_minmax(0,1.28fr)]">
+                    <div className="min-w-0 text-dtsc-ink">
                       <div className="relative">
-                        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-200">{item.eyebrow}</p>
+                        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-dtsc-blue">{item.eyebrow}</p>
                         <h3 className="mt-4 text-2xl font-semibold leading-tight sm:text-3xl">{item.title}</h3>
-                        <p className="mt-5 text-sm font-semibold uppercase tracking-[0.16em] text-cyan-200">Problème</p>
-                        <p className="mt-2 text-sm leading-6 text-blue-50">{item.problem}</p>
+                        <p className="mt-5 text-xs font-semibold uppercase tracking-[0.12em] text-dtsc-blue">Problème</p>
+                        <p className="mt-2 text-sm leading-7 text-dtsc-muted">{item.problem}</p>
                       </div>
                     </div>
 
-                    <div className="grid min-w-0 gap-5 p-6 sm:p-7">
+                    <div className="grid min-w-0 gap-6">
                       <div>
                         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-600">Ce que DTSC fait</p>
                         <p className="mt-2 text-base leading-8 text-dtsc-muted">{item.dtscAction}</p>
                       </div>
-                      <div className="rounded-2xl border border-dtsc-border bg-dtsc-page p-4 text-sm leading-6 text-dtsc-muted">
+                      <div className="border-l-2 border-dtsc-border pl-4 text-sm leading-7 text-dtsc-muted">
                         <p className="text-xs font-semibold uppercase tracking-[0.16em] text-dtsc-blue">Rôle de DTSC Platform</p>
                         <p className="mt-2">Centraliser les interactions, les documents, les responsabilités et les indicateurs nécessaires pour transformer le livrable en usage quotidien.</p>
                       </div>
@@ -180,7 +170,7 @@ export function CorporatePage({ page }: { page: PublicLongPage }) {
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
                 {page.journey.steps.map((step, index) => (
-                  <div key={step} className="dtsc-card-hover dtsc-premium-reveal rounded-2xl border border-dtsc-border bg-dtsc-surface p-4 shadow-[0_12px_34px_rgba(0,43,91,.08)]" style={{ animationDelay: `${index * 70}ms` }}>
+                  <div key={step} className="border-t border-dtsc-border py-4" style={{ animationDelay: `${index * 70}ms` }}>
                     <p className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-600">Étape {String(index + 1).padStart(2, "0")}</p>
                     <p className="mt-2 text-base font-semibold text-dtsc-ink">{step}</p>
                   </div>
@@ -194,19 +184,18 @@ export function CorporatePage({ page }: { page: PublicLongPage }) {
       <section className="border-y border-dtsc-border dtsc-public-band-soft">
         <div className="mx-auto grid max-w-[92rem] gap-5 px-4 py-16 sm:px-6 lg:px-8">
           {page.sections.map((section, index) => (
-            <article key={section.heading} className={cn("dtsc-premium-reveal grid min-w-0 overflow-hidden rounded-2xl border border-dtsc-border shadow-[0_12px_40px_rgba(0,43,91,.08)] lg:grid-cols-[minmax(0,320px)_minmax(0,1fr)]", index % 2 === 0 ? "bg-dtsc-surface" : "bg-dtsc-soft")} style={{ animationDelay: `${index * 90}ms` }}>
-              <div className={cn("relative overflow-hidden bg-gradient-to-br p-6 text-white", toneClasses[page.tone])}>
-                <div className="absolute inset-0 bg-[radial-gradient(circle_at_90%_10%,rgba(255,255,255,.15),transparent_30%)]" />
+            <article key={section.heading} className="grid min-w-0 gap-5 border-t border-dtsc-border py-8 lg:grid-cols-[minmax(0,320px)_minmax(0,1fr)]" style={{ animationDelay: `${index * 90}ms` }}>
+              <div className="min-w-0 text-dtsc-ink">
                 <div className="relative">
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-200">Partie {String(index + 1).padStart(2, "0")}</p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-dtsc-blue">Partie {String(index + 1).padStart(2, "0")}</p>
                   <h3 className="mt-4 text-2xl font-semibold"><span className="dtsc-line-reveal">{section.heading}</span></h3>
                 </div>
               </div>
-              <div className="min-w-0 p-6">
+              <div className="min-w-0">
                 <p className="text-base leading-8 text-dtsc-muted">{section.text}</p>
                 <div className="mt-6 grid gap-3 sm:grid-cols-2">
                   {section.bullets.map((bullet) => (
-                    <div key={bullet} className="flex items-start gap-3 rounded-xl border border-dtsc-border/70 bg-dtsc-page p-3 text-sm font-bold text-dtsc-ink">
+                    <div key={bullet} className="flex items-start gap-3 text-sm font-medium leading-7 text-dtsc-ink">
                       <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-cyan-500" />{bullet}
                     </div>
                   ))}
@@ -253,7 +242,7 @@ export function CorporatePage({ page }: { page: PublicLongPage }) {
       {page.sources && (
         <section className="dtsc-public-band-light">
           <div className="mx-auto max-w-[92rem] px-4 py-12 sm:px-6 lg:px-8">
-            <div className="rounded-2xl border border-dtsc-border bg-dtsc-surface p-6 shadow-[0_12px_40px_rgba(0,43,91,.06)]">
+            <div className="border-t border-dtsc-border pt-6">
               <h2 className="font-semibold text-dtsc-ink"><span className="text-dtsc-blue">Sources vérifiables</span> utilisées pour enrichir cette page</h2>
               <div className="mt-4 grid gap-2 md:grid-cols-2">
                 {page.sources.map((source) => <Link key={source.href} href={source.href} target="_blank" rel="noreferrer" className="inline-flex w-fit items-center gap-2 text-sm font-semibold text-dtsc-blue underline underline-offset-4 hover:text-cyan-500">{source.label}<ArrowRight className="h-3.5 w-3.5" /></Link>)}
@@ -270,7 +259,7 @@ export function CorporatePage({ page }: { page: PublicLongPage }) {
 
 function DetailList({ title, items }: { title: string; items: string[] }) {
   return (
-    <div className="min-w-0 rounded-2xl border border-dtsc-border bg-dtsc-page p-4">
+    <div className="min-w-0 border-t border-dtsc-border pt-4">
       <p className="text-xs font-semibold uppercase tracking-[0.16em] text-dtsc-blue">{title}</p>
       <ul className="mt-3 grid gap-2">
         {items.map((item) => <li key={item} className="flex items-start gap-2 text-sm font-bold leading-6 text-dtsc-muted"><CheckCircle2 className="mt-1 h-4 w-4 shrink-0 text-cyan-500" /><span>{item}</span></li>)}
