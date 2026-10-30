@@ -38,7 +38,7 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const { slug } = await params;
   const publication = await prisma.publicPublication.findFirst({
     where: { slug, published: true },
-    select: { title: true, excerpt: true, seoJson: true, createdAt: true, updatedAt: true, publishedAt: true, author: { select: { name: true, publicProfileConsent: true } } },
+    select: { title: true, excerpt: true, content: true, seoJson: true, createdAt: true, updatedAt: true, publishedAt: true, author: { select: { name: true, publicProfileConsent: true } } },
   });
 
   if (!publication) return { title: "Ressource introuvable" };
@@ -46,6 +46,11 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const seo = storedSeo && typeof storedSeo === "object" && !Array.isArray(storedSeo) ? storedSeo as Record<string, unknown> : {};
   const seoTitle = typeof seo.title === "string" && seo.title.trim() ? seo.title : publication.title;
   const seoDescription = typeof seo.description === "string" && seo.description.trim() ? seo.description : publication.excerpt;
+  const sanitizedImageMatch = hasHtmlMarkup(publication.content)
+    ? sanitizeRichHtml(publication.content).match(/<img\s[^>]*src="([^"]+)"/i)
+    : null;
+  const coverSource = sanitizedImageMatch?.[1]?.replace(/&amp;/g, "&") || "/dtsc-logo.png";
+  const coverUrl = new URL(coverSource, getPublicBaseUrl()).toString();
 
   return {
     title: seoTitle,
@@ -56,11 +61,12 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
       url: new URL(`/ressources/${slug}`, getPublicBaseUrl()).toString(),
       title: seoTitle,
       description: seoDescription,
+      images: [{ url: coverUrl, alt: publication.title }],
       publishedTime: (publication.publishedAt || publication.createdAt).toISOString(),
       modifiedTime: publication.updatedAt.toISOString(),
       ...(publication.author?.publicProfileConsent ? { authors: [publication.author.name] } : {}),
     },
-    twitter: { card: "summary_large_image", title: seoTitle, description: seoDescription },
+    twitter: { card: "summary_large_image", title: seoTitle, description: seoDescription, images: [coverUrl] },
   };
 }
 
