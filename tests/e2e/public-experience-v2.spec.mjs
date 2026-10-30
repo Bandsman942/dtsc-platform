@@ -62,6 +62,33 @@ test.describe.serial("PUBLIC-UX-07 public experience", () => {
     await expect(page).toHaveURL(/category=GUIDE/);
     await expect(page.getByText(/Aucune publication trouvée|No publications found/)).toBeVisible();
   });
+  test("desktop navigation is keyboard-operable", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(origin + "/", { waitUntil: "domcontentloaded" });
+    await expect(page.getByRole("heading", { level: 1 })).toContainText(/Transformez vos données|Sept leviers numériques/);
+    const solutions = page.getByRole("button", { name: /Solutions/ }).first();
+    await expect(solutions).toBeVisible();
+    await solutions.click();
+    await expect(solutions).toHaveAttribute("aria-expanded", "true");
+    await expect(page.getByRole("navigation", { name: /Explorer Solutions|Explore Solutions/ })).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(solutions).toHaveAttribute("aria-expanded", "false");
+    await noOverflow(page, 1440);
+  });
+
+  test("mobile navigation opens, closes and reaches resources", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(origin + "/", { waitUntil: "domcontentloaded" });
+    const menu = page.getByRole("button", { name: /Menu/ }).first();
+    await menu.click();
+    const dialog = page.getByRole("dialog", { name: /Navigation publique DTSC|DTSC public navigation/ });
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole("link", { name: /Ressources|Resources/ }).first().click();
+    await expect(page).toHaveURL(/\/ressources/);
+    await expect(dialog).toHaveCount(0);
+    await noOverflow(page, 390);
+  });
+
   test("rich content rejects injected executable HTML", async ({ page }) => {
     await page.goto(origin + "/ressources/" + slug, { waitUntil: "domcontentloaded" });
     const content = page.locator(".dtsc-publication-content");
