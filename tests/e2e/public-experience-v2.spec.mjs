@@ -99,6 +99,9 @@ test.describe.serial("PUBLIC-UX-07 public experience", () => {
   });
 });
 async function noOverflow(page, width) {
-  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
-  expect(overflow, "Overflow at " + width + " px").toBeLessThanOrEqual(2);
+  await page.waitForLoadState("load");
+  await expect.poll(async () => {
+    // Next.js may replace its document during hydration; retry only the measurement.
+    return await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  }, { message: "Overflow at " + width + " px", timeout: 15_000, intervals: [100, 250, 500] }).toBeLessThanOrEqual(2);
 }
