@@ -92,6 +92,9 @@ export default async function PublicationPage({ params, searchParams }: Params) 
   if (!publication) notFound();
   const articleContent = hasHtmlMarkup(publication.content) ? sanitizeRichHtml(publication.content) : "";
   const { enriched: articleHtml, sections: articleSections } = withArticleHeadingAnchors(articleContent);
+  const articleCopy = publication.locale === "en"
+    ? { tocLabel: "Article table of contents", tocHeading: "In this article" }
+    : { tocLabel: "Sommaire de l’article", tocHeading: "Dans cet article" };
   const readingMinutes = estimateReadingMinutes(publication.content);
   const articleUrl = new URL(`/ressources/${publication.slug}`, getPublicBaseUrl()).toString();
   const articleStructuredData = {
@@ -143,8 +146,8 @@ export default async function PublicationPage({ params, searchParams }: Params) 
           <div className="mx-auto w-full max-w-[48rem] min-w-0 px-4 py-12 sm:px-6 lg:py-16">
             <div className="dtsc-article-reader min-w-0">
               {articleSections.length > 1 ? (
-                <nav aria-label="Sommaire de l’article" className="mb-10 border-l-2 border-dtsc-border pl-5">
-                  <p className="text-sm font-semibold text-dtsc-ink">Dans cet article</p>
+                <nav aria-label={articleCopy.tocLabel} className="mb-10 border-l-2 border-dtsc-border pl-5">
+                  <p className="text-sm font-semibold text-dtsc-ink">{articleCopy.tocHeading}</p>
                   <ol className="mt-3 grid gap-2">
                     {articleSections.map((section) => (
                       <li key={section.id} className={section.level === 3 ? "pl-4" : ""}>
