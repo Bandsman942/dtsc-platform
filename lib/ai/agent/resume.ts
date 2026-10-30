@@ -86,6 +86,7 @@ export async function resumeAiAgentRun(input: {
   if (!execution) throw new AiAgentResumeError("AGENT_CONFIRMED_EXECUTION_NOT_FOUND", 409);
 
   const contextCode = asContextCode(run.contextCode);
+  if (run.scope === "GLOBAL_CHAT" && contextCode !== "PERSONAL") throw new AiAgentResumeError("AGENT_CONTEXT_INVALID", 409);
   const initialUsage = {
     inputTokens: run.inputTokens,
     outputTokens: run.outputTokens,
