@@ -55,6 +55,7 @@ export function PublicPublicationsManager({
   const [items, setItems] = useState(publications);
   const [message, setMessage] = useState("");
   const [editing, setEditing] = useState<Publication | null>(null);
+  const [showCreate, setShowCreate] = useState(false);
   const [editingDraft, setEditingDraft] = useState<PublicationDraft | null>(null);
   const editingFormRef = useRef<HTMLFormElement | null>(null);
   const [confirmEditSave, setConfirmEditSave] = useState(false);
@@ -108,6 +109,7 @@ export function PublicPublicationsManager({
         );
       }
       setEditing(null);
+      setShowCreate(false);
       setEditingDraft(null);
       setCreatePreviewHtml("");
       setEditingPreviewHtml("");
@@ -127,48 +129,17 @@ export function PublicPublicationsManager({
 
   return (
     <section className="dtsc-card p-6">
-      <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
+      <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,0.4fr)_minmax(0,1fr)]">
         <div>
           <p className="text-sm font-black uppercase tracking-[0.18em] text-cyan-600">Publications publiques</p>
           <h2 className="mt-2 text-2xl font-black text-dtsc-ink">Contenus administrables pour les pages publiques</h2>
           <p className="mt-3 text-sm leading-6 text-dtsc-muted">
             Réservez ici les articles, guides, annonces publiques, projets ou cas pratiques qui alimenteront la page Ressources. Les publications non publiées restent en brouillon.
           </p>
-          <form onSubmit={(event) => submit(event)} className="mt-5 grid gap-3">
-            <Input name="title" placeholder="Titre de la publication" required disabled={!canCreateDrafts} />
-            <Input name="slug" placeholder="slug-url-sans-accents" pattern="[a-z0-9]+(-[a-z0-9]+)*" required disabled={!canCreateDrafts} />
-            <div className="grid gap-3 sm:grid-cols-2">
-              <select name="category" disabled={!canCreateDrafts} className="h-10 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-bold text-dtsc-ink">
-                {categories.map((category) => (
-                  <option key={category} value={category}>{formatEnumLabel(category)}</option>
-                ))}
-              </select>
-              <Input name="coverLabel" placeholder="Label visuel court" disabled={!canCreateDrafts} />
-            </div>
-            <textarea name="excerpt" placeholder="Résumé court visible dans la carte publique" disabled={!canCreateDrafts} className="min-h-20 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm text-dtsc-ink" required />
-            <RichTextEditor
-              textName="content"
-              htmlName="contentHtml"
-              disabled={!canCreateDrafts}
-              allowImageUpload
-              onContentChange={({ html }) => setCreatePreviewHtml(html)}
-              placeholder="Contenu long de la publication. Collez ici un texte déjà mis en forme ou rédigez avec la barre d'outils."
-            />
-            <PublicationPreview html={createPreviewHtml} />
-            <label className="flex items-center justify-between rounded-xl border border-dtsc-border bg-dtsc-page px-4 py-3 text-sm font-bold text-dtsc-ink">
-              Publier sur la page Ressources
-              <input name="published" type="checkbox" disabled={!canPublish} className="h-4 w-4 accent-cyan-500" />
-            </label>
-            {!canPublish && (
-              <p className="text-xs leading-5 text-dtsc-muted">
-                Votre contribution sera enregistrée en brouillon sous votre nom. Seul un administrateur peut la publier ou la supprimer.
-              </p>
-            )}
-            <Button disabled={!canCreateDrafts} title={canCreateDrafts ? "Enregistrer un brouillon public." : "Création de brouillon désactivée par l'administrateur."} className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">
-              <Globe2 className="h-4 w-4" />
-              {canPublish ? "Enregistrer la publication" : "Enregistrer en brouillon"}
-            </Button>
-          </form>
+          <Button type="button" disabled={!canCreateDrafts} onClick={() => setShowCreate(true)} className="mt-6 w-full rounded-xl bg-dtsc-blue px-5 py-3 text-white">
+            <Edit3 className="h-4 w-4" />
+            Rédiger une publication
+          </Button>
         </div>
 
         <div className="space-y-3">
@@ -237,7 +208,55 @@ export function PublicPublicationsManager({
         </div>
       </div>
 
-      <Dialog open={Boolean(editing)} title="Modifier la publication" onClose={() => {
+      <Dialog
+        open={showCreate}
+        title="Studio éditorial · nouvelle publication"
+        description="Préparez votre article, ajoutez des médias, vérifiez son aperçu et enregistrez selon vos autorisations."
+        presentation="editor"
+        className="sm:max-w-[min(96vw,84rem)]"
+        onClose={() => { setShowCreate(false); setCreatePreviewHtml(""); }}
+      >
+        <form onSubmit={(event) => submit(event)} className="grid min-w-0 gap-4 px-1 pb-5 sm:px-2">
+            <Input name="title" placeholder="Titre de la publication" required disabled={!canCreateDrafts} />
+            <Input name="slug" placeholder="slug-url-sans-accents" pattern="[a-z0-9]+(-[a-z0-9]+)*" required disabled={!canCreateDrafts} />
+            <div className="grid gap-3 sm:grid-cols-2">
+              <select name="category" disabled={!canCreateDrafts} className="h-10 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-bold text-dtsc-ink">
+                {categories.map((category) => (
+                  <option key={category} value={category}>{formatEnumLabel(category)}</option>
+                ))}
+              </select>
+              <Input name="coverLabel" placeholder="Label visuel court" disabled={!canCreateDrafts} />
+            </div>
+            <textarea name="excerpt" placeholder="Résumé court pour le catalogue et les moteurs de recherche" disabled={!canCreateDrafts} className="min-h-20 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm text-dtsc-ink" required />
+            <RichTextEditor
+              minHeightClassName="min-h-[40dvh]"
+              maxHeightClassName="max-h-[70dvh]"
+              allowVideoEmbed
+              textName="content"
+              htmlName="contentHtml"
+              disabled={!canCreateDrafts}
+              allowImageUpload
+              onContentChange={({ html }) => setCreatePreviewHtml(html)}
+              placeholder="Contenu long de la publication. Collez ici un texte déjà mis en forme ou rédigez avec la barre d'outils."
+            />
+            <PublicationPreview html={createPreviewHtml} />
+            <label className="flex items-center justify-between rounded-xl border border-dtsc-border bg-dtsc-page px-4 py-3 text-sm font-bold text-dtsc-ink">
+              Publier sur la page Ressources
+              <input name="published" type="checkbox" disabled={!canPublish} className="h-4 w-4 accent-cyan-500" />
+            </label>
+            {!canPublish && (
+              <p className="text-xs leading-5 text-dtsc-muted">
+                Votre contribution sera enregistrée en brouillon sous votre nom. Seul un administrateur peut la publier ou la supprimer.
+              </p>
+            )}
+            <Button disabled={!canCreateDrafts} title={canCreateDrafts ? "Enregistrer un brouillon public." : "Création de brouillon désactivée par l'administrateur."} className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">
+              <Globe2 className="h-4 w-4" />
+              {canPublish ? "Enregistrer la publication" : "Enregistrer en brouillon"}
+            </Button>
+          </form>
+      </Dialog>
+
+      <Dialog open={Boolean(editing)} title="Modifier la publication" presentation="editor" className="sm:max-w-[min(96vw,84rem)]" onClose={() => {
         setEditing(null);
         setEditingDraft(null);
         setEditingPreviewHtml("");
@@ -250,7 +269,7 @@ export function PublicPublicationsManager({
               event.preventDefault();
               setConfirmEditSave(true);
             }}
-            className="grid gap-3"
+            className="grid min-w-0 gap-4 px-1 pb-5 sm:px-2"
           >
             <Input name="title" value={editingDraft.title} onChange={(event) => setEditingDraft((current) => current ? { ...current, title: event.target.value } : current)} required disabled={!canEditPublication(editing)} />
             <Input name="slug" value={editingDraft.slug} onChange={(event) => setEditingDraft((current) => current ? { ...current, slug: event.target.value } : current)} pattern="[a-z0-9]+(-[a-z0-9]+)*" required disabled={!canEditPublication(editing)} />
@@ -263,6 +282,9 @@ export function PublicPublicationsManager({
             <textarea name="excerpt" value={editingDraft.excerpt} onChange={(event) => setEditingDraft((current) => current ? { ...current, excerpt: event.target.value } : current)} disabled={!canEditPublication(editing)} className="min-h-20 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm text-dtsc-ink" required />
             <RichTextEditor
               key={editing.id}
+              minHeightClassName="min-h-[40dvh]"
+              maxHeightClassName="max-h-[70dvh]"
+              allowVideoEmbed
               textName="content"
               htmlName="contentHtml"
               defaultValue={editingDraft.contentHtml || editingDraft.content}
