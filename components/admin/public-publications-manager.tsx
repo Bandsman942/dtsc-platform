@@ -12,6 +12,7 @@ import { useToastMessage } from "@/components/ui/use-toast-message";
 import { useSmartList } from "@/lib/hooks/use-smart-list";
 import { formatEnumLabel } from "@/lib/labels";
 import { sanitizeRichHtml } from "@/lib/rich-content";
+import { confirmSensitiveAction } from "@/lib/client-confirmation";
 
 type Publication = {
   id: string;
@@ -90,6 +91,18 @@ export function PublicPublicationsManager({
   const canEditPublication = useCallback((publication: Publication) => {
     return canPublish || (!publication.published && publication.authorId === currentUserId);
   }, [canPublish, currentUserId]);
+
+  async function confirmDiscardIfDirty(dirty: boolean) {
+    if (!dirty) return true;
+    const result = await confirmSensitiveAction({
+      title: "Quitter l’éditeur ?",
+      description: "Vos modifications non enregistrées seront perdues.",
+      confirmLabel: "Quitter sans enregistrer",
+      cancelLabel: "Continuer la rédaction",
+      tone: "warning",
+    });
+    return result.confirmed;
+  }
 
   async function submit(event: FormEvent<HTMLFormElement>, publicationId?: string) {
     event.preventDefault();
@@ -226,10 +239,10 @@ export function PublicPublicationsManager({
         description="Préparez votre article, ajoutez des médias, vérifiez son aperçu et enregistrez selon vos autorisations."
         presentation="editor"
         className="sm:max-w-[min(96vw,84rem)]"
-        onClose={() => {
-          if (createDirty && !window.confirm("Quitter sans enregistrer les modifications ?")) return;
+        onClose={() => { void (async () => {
+          if (!(await confirmDiscardIfDirty(createDirty))) return;
           setShowCreate(false); setCreateDirty(false); setCreatePreviewHtml("");
-        }}
+        })(); }}
       >
         <form onSubmit={(event) => submit(event)} onChangeCapture={() => setCreateDirty(true)} onInputCapture={() => setCreateDirty(true)} className="grid min-w-0 gap-4 px-1 pb-5 sm:px-2">
             <Input name="title" placeholder="Titre de la publication" required disabled={!canCreateDrafts} />
@@ -278,14 +291,14 @@ export function PublicPublicationsManager({
           </form>
       </Dialog>
 
-      <Dialog open={Boolean(editing)} title="Modifier la publication" presentation="editor" className="sm:max-w-[min(96vw,84rem)]" onClose={() => {
-        if (editingDirty && !window.confirm("Quitter sans enregistrer les modifications ?")) return;
+      <Dialog open={Boolean(editing)} title="Modifier la publication" presentation="editor" className="sm:max-w-[min(96vw,84rem)]" onClose={() => { void (async () => {
+        if (!(await confirmDiscardIfDirty(editingDirty))) return;
         setEditingDirty(false);
         setEditing(null);
         setEditingDraft(null);
         setEditingPreviewHtml("");
         setConfirmEditSave(false);
-      }}>
+      })(); }}>
         {editing && editingDraft && (
           <form
             ref={editingFormRef}
