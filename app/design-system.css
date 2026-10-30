@@ -94,28 +94,28 @@ html[data-dtsc-product="support"] { --dtsc-product-accent: #16875a; }
 
 .dtsc-display {
   font-size: clamp(2.6rem, 7vw, 5.7rem);
-  font-weight: 780;
+  font-weight: 680;
   letter-spacing: -0.055em;
   line-height: 0.98;
 }
 
 .dtsc-h1 {
   font-size: clamp(2.15rem, 5vw, 4.2rem);
-  font-weight: 760;
+  font-weight: 680;
   letter-spacing: -0.045em;
   line-height: 1.02;
 }
 
 .dtsc-h2 {
   font-size: clamp(1.75rem, 3.8vw, 3rem);
-  font-weight: 720;
+  font-weight: 660;
   letter-spacing: -0.035em;
   line-height: 1.08;
 }
 
 .dtsc-h3 {
   font-size: clamp(1.35rem, 2.4vw, 2rem);
-  font-weight: 700;
+  font-weight: 640;
   letter-spacing: -0.025em;
   line-height: 1.14;
 }
@@ -123,7 +123,7 @@ html[data-dtsc-product="support"] { --dtsc-product-accent: #16875a; }
 .dtsc-body-lg { font-size: 1.125rem; line-height: 1.75; }
 .dtsc-body { font-size: 1rem; line-height: 1.65; }
 .dtsc-body-sm { font-size: 0.875rem; line-height: 1.55; }
-.dtsc-label { font-size: 0.75rem; font-weight: 720; letter-spacing: 0.08em; text-transform: uppercase; }
+.dtsc-label { font-size: 0.75rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; }
 .dtsc-caption { font-size: 0.75rem; line-height: 1.45; }
 
 .dtsc-focus-ring:focus-visible,
