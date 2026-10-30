@@ -6,6 +6,7 @@ import { ArrowLeft, Clock3 } from "lucide-react";
 import { PublicationCommentDeepLink } from "@/components/public/publication-comment-deep-link";
 import { PublicationEngagement } from "@/components/public/publication-engagement";
 import { PublicFooter, PublicHeader } from "@/components/public/public-shell";
+import { PublicArticleContent } from "@/components/public/public-article-content";
 import { ShareActionButton } from "@/components/ui/share-action-button";
 import { getCurrentUser } from "@/lib/auth";
 import { getPublicBaseUrl } from "@/lib/domains";
@@ -158,7 +159,7 @@ export default async function PublicationPage({ params, searchParams }: Params) 
                 </nav>
               ) : null}
               {hasHtmlMarkup(publication.content) ? (
-                <div className="dtsc-publication-content text-dtsc-muted" dangerouslySetInnerHTML={{ __html: articleHtml }} />
+                <PublicArticleContent html={articleHtml} />
               ) : (
                 <div className="prose prose-slate max-w-none text-dtsc-muted">
                   {publication.content.split("\n").map((paragraph, index) => (
