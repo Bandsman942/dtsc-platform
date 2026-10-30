@@ -49,7 +49,7 @@ export async function PATCH(req: Request) {
   const eligiblePublicModels = new Set(listAvailableAiModels({
     context: "PERSONAL", locale: "fr", taskType: "GENERAL_CHAT",
     planCode: "STARTER", dataClassifications: ["PUBLIC"], requiredCapabilities: { text: true, tools: true },
-  }).map((model) => model.code));
+  }).filter((model) => model.providerCode === "OPENAI" || model.providerCode === "OPENROUTER").map((model) => model.code));
   if (assistantSettings.landingModelCodes.some((code) => !eligiblePublicModels.has(code) || disabledModelCodes.includes(code))) {
     return NextResponse.json({ error: "Sélectionnez uniquement des modèles publics certifiés, configurés et autorisés pour Starter.", reasonCode: "AI_PUBLIC_MODEL_NOT_ALLOWED" }, { status: 400 });
   }
