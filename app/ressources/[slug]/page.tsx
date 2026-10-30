@@ -75,7 +75,7 @@ export default async function PublicationPage({ params, searchParams }: Params) 
                   </span>
                 ) : null}
                 <span className="min-w-0 break-words">
-                  Publié le {publication.createdAt.toLocaleDateString("fr-FR")} {publication.author?.publicProfileConsent ? `par ${publication.author.name}` : "par DTSC"}{publication.author?.publicProfileConsent && publication.author.jobTitle ? `, ${publication.author.jobTitle}` : ""}
+                  Publié le {(publication.publishedAt || publication.createdAt).toLocaleDateString("fr-FR")} {publication.author?.publicProfileConsent ? `par ${publication.author.name}` : "par DTSC"}{publication.author?.publicProfileConsent && publication.author.jobTitle ? `, ${publication.author.jobTitle}` : ""}
                 </span>
               </div>
               <ShareActionButton title={publication.title} text={publication.excerpt} url={`/ressources/${publication.slug}`} className="border-white/20 bg-white/10 text-white hover:bg-white/20" />
