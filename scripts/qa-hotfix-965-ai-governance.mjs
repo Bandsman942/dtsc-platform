@@ -10,6 +10,7 @@ const globalAgent = read("app/api/chat/agent/route.ts");
 const enterpriseChat = read("app/api/enterprise/ai/chat/route.ts");
 const enterpriseAgent = read("app/api/enterprise/ai/agent/route.ts");
 const runtime = read("lib/ai/agent/runtime.ts");
+const resume = read("lib/ai/agent/resume.ts");
 const schema = read("prisma/schema.prisma");
 const migration = read("prisma/migrations/20261030184500_ai_assistant_governance/migration.sql");
 const doc = read("docs/HOTFIX_965_UNIFIED_AI_GOVERNANCE.md");
@@ -26,6 +27,7 @@ assert(landing.includes('requireZeroDataRetention: true') && landing.includes("h
 assert(chat.includes("generalKnowledgeEnabled") && chat.includes("generalGuidance"), "Global chatbot must support general knowledge and central policy");
 assert(globalAgent.includes('const contextCode = "PERSONAL" as const') && globalAgent.includes("organizationId: null,") && !globalAgent.includes("getCompanyContextForUser"), "Global Agent must never load company context");
 assert(enterpriseChat.includes("enterpriseGuidance") && enterpriseAgent.includes("enterpriseGuidance"), "Enterprise instructions must use shared governance");
+assert(runtime.includes('input.contextCode === "PERSONAL" ? null') && resume.includes('contextCode !== "PERSONAL"') && resume.includes("retrieveKnowledgeContext(input.session.userId, latestUserContent, null)"), "Personal Agent must retain run ownership without enterprise access, including after resume");
 assert(runtime.includes("isOperationalRiskAnalysis") && runtime.includes("maxReadTools") && runtime.includes("shouldSynthesize"), "Agent must reserve a model turn for synthesis and bound read fan-out");
 assert(schema.includes('assistantSettings     Json     @default("{}")') && migration.includes('ALTER TABLE "AiPlatformRuntimePolicy"'), "Additive Prisma migration required");
 assert(doc.includes("E2E propriétaire") && doc.includes("Rollback"), "Delivery instructions and rollback required");
