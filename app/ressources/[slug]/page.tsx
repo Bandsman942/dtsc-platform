@@ -94,8 +94,14 @@ export default async function PublicationPage({ params, searchParams }: Params) 
   const articleContent = hasHtmlMarkup(publication.content) ? sanitizeRichHtml(publication.content) : "";
   const { enriched: articleHtml, sections: articleSections } = withArticleHeadingAnchors(articleContent);
   const articleCopy = publication.locale === "en"
-    ? { tocLabel: "Article table of contents", tocHeading: "In this article" }
-    : { tocLabel: "Sommaire de l’article", tocHeading: "Dans cet article" };
+    ? { tocLabel: "Article table of contents", tocHeading: "In this article", related: "Explore related articles", read: "Read article" }
+    : { tocLabel: "Sommaire de l’article", tocHeading: "Dans cet article", related: "Pour continuer votre lecture", read: "Lire l’article" };
+  const relatedPublications = await prisma.publicPublication.findMany({
+    where: { published: true, category: publication.category, id: { not: publication.id } },
+    orderBy: [{ publishedAt: { sort: "desc", nulls: "last" } }, { createdAt: "desc" }],
+    take: 3,
+    select: { id: true, slug: true, title: true, excerpt: true },
+  });
   const readingMinutes = estimateReadingMinutes(publication.content);
   const articleUrl = new URL(`/ressources/${publication.slug}`, getPublicBaseUrl() || "https://dtsc-platform.com").toString();
   const articleStructuredData = {
@@ -178,6 +184,23 @@ export default async function PublicationPage({ params, searchParams }: Params) 
             </div>
           </div>
         </section>
+        {relatedPublications.length ? (
+          <section className="border-t border-dtsc-border bg-dtsc-surface">
+            <div className="mx-auto w-full max-w-[48rem] px-4 py-10 sm:px-6 lg:py-14">
+              <h2 className="text-xl font-semibold tracking-tight text-dtsc-ink">{articleCopy.related}</h2>
+              <div className="mt-5 divide-y divide-dtsc-border">
+                {relatedPublications.map((item) => (
+                  <Link key={item.id} href={"/ressources/" + item.slug}
+                    className="group block min-w-0 py-5 focus-visible:outline-2 focus-visible:outline-dtsc-blue">
+                    <h3 className="break-words text-lg font-semibold text-dtsc-ink group-hover:text-dtsc-blue">{item.title}</h3>
+                    <p className="mt-2 line-clamp-2 text-sm leading-6 text-dtsc-muted">{item.excerpt}</p>
+                    <span className="mt-3 inline-block text-sm font-medium text-dtsc-blue">{articleCopy.read} →</span>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          </section>
+        ) : null}
       </article>
       <PublicFooter />
     </main>
