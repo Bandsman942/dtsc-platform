@@ -170,8 +170,9 @@ export function PublicPublicationsManager({
         return;
       }
       const body = await response.json() as { publication?: Publication };
-      if (body.publication) {
-        setItems((current) => current.map((item) => item.id === publication.id ? { ...item, ...body.publication } : item));
+      const restoredPublication = body.publication;
+      if (restoredPublication) {
+        setItems((current) => current.map((item) => item.id === publication.id ? { ...item, ...restoredPublication } : item));
       }
       setEditing(null);
       setEditingDraft(null);
@@ -215,8 +216,6 @@ export function PublicPublicationsManager({
       setEditingDraft(null);
       setCreatePreviewHtml("");
       setEditingPreviewHtml("");
-      setCreateDirty(false);
-      setEditingDirty(false);
       router.refresh();
     }
   }
