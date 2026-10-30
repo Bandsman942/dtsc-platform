@@ -10,6 +10,24 @@ const ceiling = z.object({
   maxDurationMs: z.number().int().min(1000).optional(),
 }).strict();
 
+export const DEFAULT_AI_ASSISTANT_SETTINGS = {
+  generalKnowledgeEnabled: true,
+  generalGuidance: "",
+  enterpriseGuidance: "",
+  landingGuidance: "",
+  landingModelCodes: [] as string[],
+  agentMaxReadToolsPerRun: 6,
+};
+
+export const aiAssistantSettingsSchema = z.object({
+  generalKnowledgeEnabled: z.boolean(),
+  generalGuidance: z.string().trim().max(800),
+  enterpriseGuidance: z.string().trim().max(800),
+  landingGuidance: z.string().trim().max(800),
+  landingModelCodes: z.array(z.string().regex(/^[A-Za-z0-9_./:-]{2,120}$/)).max(5).refine((items) => new Set(items).size === items.length, "Duplicate model"),
+  agentMaxReadToolsPerRun: z.number().int().min(1).max(8),
+}).strict();
+
 export const agentCeilingsSchema = z.object({
   STARTER: ceiling.optional(),
   BUSINESS: ceiling.optional(),
@@ -27,6 +45,7 @@ export const aiPlatformPolicyInputSchema = z.object({
   disabledProviderCodes: codes,
   disabledModelCodes: codes,
   agentCeilings: agentCeilingsSchema,
+  assistantSettings: aiAssistantSettingsSchema.optional(),
   reason: z.string().trim().min(8).max(500),
 }).strict();
 
@@ -35,6 +54,7 @@ export type AiPlatformPolicy = {
   disabledProviderCodes: string[];
   disabledModelCodes: string[];
   agentCeilings: z.infer<typeof agentCeilingsSchema>;
+  assistantSettings: z.infer<typeof aiAssistantSettingsSchema>;
 };
 
 /**
@@ -45,12 +65,13 @@ export type AiPlatformPolicy = {
  */
 export async function getAiPlatformPolicy(): Promise<AiPlatformPolicy> {
   const row = await prisma.aiPlatformRuntimePolicy.findUnique({ where: { id: "global" } });
-  if (!row) return { revision: 0, disabledProviderCodes: [], disabledModelCodes: [], agentCeilings: {} };
+  if (!row) return { revision: 0, disabledProviderCodes: [], disabledModelCodes: [], agentCeilings: {}, assistantSettings: DEFAULT_AI_ASSISTANT_SETTINGS };
   return {
     revision: row.revision,
     disabledProviderCodes: codes.parse(row.disabledProviderCodes),
     disabledModelCodes: codes.parse(row.disabledModelCodes),
     agentCeilings: agentCeilingsSchema.parse(row.agentCeilings),
+    assistantSettings: aiAssistantSettingsSchema.parse({ ...DEFAULT_AI_ASSISTANT_SETTINGS, ...(row.assistantSettings && typeof row.assistantSettings === "object" && !Array.isArray(row.assistantSettings) ? row.assistantSettings : {}) }),
   };
 }
 
