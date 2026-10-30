@@ -9,6 +9,9 @@ const title = "DTSC E2E Publication " + Date.now();
 const widths = [320, 360, 390, 414, 768, 1024, 1440];
 
 test.describe.serial("PUBLIC-UX-07 public experience", () => {
+  // The production PWA controller reloads on first activation; block only service workers
+  // in this isolated content/UI suite. PWA lifecycle is covered by separate tests.
+  test.use({ serviceWorkers: "block" });
   test.beforeAll(async () => {
     if (!/^http:\/\/(?:127\.0\.0\.1|localhost):\d+/.test(origin)) throw new Error("Never seed Production");
     await prisma.publicPublication.create({ data: {
