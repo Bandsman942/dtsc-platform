@@ -260,7 +260,7 @@ async function queryPublicAssistant(input: {
           const { done, value } = await reader.read();
           if (done) break;
           if (value.type === "TEXT_DELTA") content += value.text;
-          if (value.type === "TOOL_CALL_COMPLETED") calls.push({ name: value.name, arguments: value.arguments });
+          if (value.type === "TOOL_CALL_COMPLETED") calls.push({ name: value.name || "", arguments: value.arguments });
           if (value.type === "COMPLETED") completed = true;
           if (value.type === "ERROR") throw new AiProviderError({ reasonCode: value.reasonCode, message: "Public provider stream failed" });
           if (content.length > 10_000 || calls.length > 1) throw new Error("PUBLIC_OUTPUT_LIMIT");
