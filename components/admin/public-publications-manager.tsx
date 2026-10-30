@@ -12,6 +12,7 @@ import { useToastMessage } from "@/components/ui/use-toast-message";
 import { useSmartList } from "@/lib/hooks/use-smart-list";
 import { formatEnumLabel } from "@/lib/labels";
 import { sanitizeRichHtml } from "@/lib/rich-content";
+import { confirmSensitiveAction } from "@/lib/client-confirmation";
 
 type Publication = {
   id: string;
@@ -22,6 +23,7 @@ type Publication = {
   excerpt: string;
   content: string;
   coverLabel: string | null;
+  seoJson?: unknown;
   published: boolean;
   createdAt: string;
   updatedAt: string;
@@ -31,12 +33,39 @@ type Publication = {
   } | null;
 };
 
+type PublicationVersionSummary = {
+  version: number;
+  title: string;
+  category: string;
+  published: boolean;
+  createdAt: string;
+};
+
+const versionCopy = {
+  section: "Historique des versions",
+  load: "Afficher les versions",
+  loading: "Chargement de l’historique…",
+  empty: "Aucune version enregistrée.",
+  restore: "Restaurer cette version",
+  restoreTitle: "Restaurer une ancienne version ?",
+  restoreDescription: "Le contenu public sera remplacé par cette version. Une nouvelle version conservera l’historique.",
+  confirmed: "Version restaurée.",
+  failed: "Restauration refusée. Vérifiez vos autorisations ou la version.",
+} as const;
+
 type PublicationDraft = Pick<Publication, "title" | "slug" | "category" | "excerpt" | "coverLabel" | "published"> & {
   content: string;
   contentHtml: string;
+  seoTitle: string;
+  seoDescription: string;
 };
 
-const categories = ["RESSOURCE", "ARTICLE", "GUIDE", "CAS_PRATIQUE", "ANNONCE", "PROJET"];
+const categories = ["RESSOURCE", "ARTICLE", "GUIDE", "CAS_PRATIQUE", "DEMONSTRATION", "PROJET", "ANNONCE", "REFLEXION_BUSINESS_TECH"];
+const seoLabels = {
+  section: "Référencement (SEO) · facultatif",
+  title: "Titre SEO",
+  description: "Description SEO",
+} as const;
 
 export function PublicPublicationsManager({
   publications,
@@ -55,6 +84,13 @@ export function PublicPublicationsManager({
   const [items, setItems] = useState(publications);
   const [message, setMessage] = useState("");
   const [editing, setEditing] = useState<Publication | null>(null);
+  const [showCreate, setShowCreate] = useState(false);
+  const [createDirty, setCreateDirty] = useState(false);
+  const [editingDirty, setEditingDirty] = useState(false);
+  const [versionHistory, setVersionHistory] = useState<PublicationVersionSummary[] | null>(null);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState("");
+  const [restoringVersion, setRestoringVersion] = useState<number | null>(null);
   const [editingDraft, setEditingDraft] = useState<PublicationDraft | null>(null);
   const editingFormRef = useRef<HTMLFormElement | null>(null);
   const [confirmEditSave, setConfirmEditSave] = useState(false);
@@ -85,6 +121,72 @@ export function PublicPublicationsManager({
     return canPublish || (!publication.published && publication.authorId === currentUserId);
   }, [canPublish, currentUserId]);
 
+  async function confirmDiscardIfDirty(dirty: boolean) {
+    if (!dirty) return true;
+    const result = await confirmSensitiveAction({
+      title: "Quitter l’éditeur ?",
+      description: "Vos modifications non enregistrées seront perdues.",
+      confirmLabel: "Quitter sans enregistrer",
+      cancelLabel: "Continuer la rédaction",
+      tone: "warning",
+    });
+    return result.confirmed;
+  }
+
+  async function loadVersionHistory(publicationId: string) {
+    setHistoryLoading(true);
+    setHistoryError("");
+    try {
+      const response = await fetch("/api/admin/publications/" + publicationId + "/versions", { cache: "no-store" });
+      if (!response.ok) throw new Error("History unavailable");
+      const data = await response.json() as { versions: PublicationVersionSummary[] };
+      setVersionHistory(data.versions);
+    } catch {
+      setHistoryError("Impossible de consulter cet historique.");
+    } finally {
+      setHistoryLoading(false);
+    }
+  }
+
+  async function restoreVersion(publication: Publication, version: number) {
+    if (!canPublish || restoringVersion !== null) return;
+    const decision = await confirmSensitiveAction({
+      title: versionCopy.restoreTitle,
+      description: versionCopy.restoreDescription,
+      tone: "warning",
+      confirmLabel: "Restaurer",
+      cancelLabel: "Annuler",
+    });
+    if (!decision.confirmed) return;
+    setRestoringVersion(version);
+    try {
+      const response = await fetch("/api/admin/publications/" + publication.id + "/restore", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ version }),
+      });
+      if (!response.ok) {
+        setMessage(versionCopy.failed);
+        return;
+      }
+      const body = await response.json() as { publication?: Publication };
+      const restoredPublication = body.publication;
+      if (restoredPublication) {
+        setItems((current) => current.map((item) => item.id === publication.id ? { ...item, ...restoredPublication } : item));
+      }
+      setEditing(null);
+      setEditingDraft(null);
+      setEditingDirty(false);
+      setVersionHistory(null);
+      setMessage(versionCopy.confirmed);
+      router.refresh();
+    } catch {
+      setMessage(versionCopy.failed);
+    } finally {
+      setRestoringVersion(null);
+    }
+  }
+
   async function submit(event: FormEvent<HTMLFormElement>, publicationId?: string) {
     event.preventDefault();
     const form = event.currentTarget;
@@ -108,6 +210,9 @@ export function PublicPublicationsManager({
         );
       }
       setEditing(null);
+      setShowCreate(false);
+      setCreateDirty(false);
+      setEditingDirty(false);
       setEditingDraft(null);
       setCreatePreviewHtml("");
       setEditingPreviewHtml("");
@@ -127,48 +232,17 @@ export function PublicPublicationsManager({
 
   return (
     <section className="dtsc-card p-6">
-      <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
+      <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,0.4fr)_minmax(0,1fr)]">
         <div>
           <p className="text-sm font-black uppercase tracking-[0.18em] text-cyan-600">Publications publiques</p>
           <h2 className="mt-2 text-2xl font-black text-dtsc-ink">Contenus administrables pour les pages publiques</h2>
           <p className="mt-3 text-sm leading-6 text-dtsc-muted">
             Réservez ici les articles, guides, annonces publiques, projets ou cas pratiques qui alimenteront la page Ressources. Les publications non publiées restent en brouillon.
           </p>
-          <form onSubmit={(event) => submit(event)} className="mt-5 grid gap-3">
-            <Input name="title" placeholder="Titre de la publication" required disabled={!canCreateDrafts} />
-            <Input name="slug" placeholder="slug-url-sans-accents" pattern="[a-z0-9]+(-[a-z0-9]+)*" required disabled={!canCreateDrafts} />
-            <div className="grid gap-3 sm:grid-cols-2">
-              <select name="category" disabled={!canCreateDrafts} className="h-10 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-bold text-dtsc-ink">
-                {categories.map((category) => (
-                  <option key={category} value={category}>{formatEnumLabel(category)}</option>
-                ))}
-              </select>
-              <Input name="coverLabel" placeholder="Label visuel court" disabled={!canCreateDrafts} />
-            </div>
-            <textarea name="excerpt" placeholder="Résumé court visible dans la carte publique" disabled={!canCreateDrafts} className="min-h-20 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm text-dtsc-ink" required />
-            <RichTextEditor
-              textName="content"
-              htmlName="contentHtml"
-              disabled={!canCreateDrafts}
-              allowImageUpload
-              onContentChange={({ html }) => setCreatePreviewHtml(html)}
-              placeholder="Contenu long de la publication. Collez ici un texte déjà mis en forme ou rédigez avec la barre d'outils."
-            />
-            <PublicationPreview html={createPreviewHtml} />
-            <label className="flex items-center justify-between rounded-xl border border-dtsc-border bg-dtsc-page px-4 py-3 text-sm font-bold text-dtsc-ink">
-              Publier sur la page Ressources
-              <input name="published" type="checkbox" disabled={!canPublish} className="h-4 w-4 accent-cyan-500" />
-            </label>
-            {!canPublish && (
-              <p className="text-xs leading-5 text-dtsc-muted">
-                Votre contribution sera enregistrée en brouillon sous votre nom. Seul un administrateur peut la publier ou la supprimer.
-              </p>
-            )}
-            <Button disabled={!canCreateDrafts} title={canCreateDrafts ? "Enregistrer un brouillon public." : "Création de brouillon désactivée par l'administrateur."} className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">
-              <Globe2 className="h-4 w-4" />
-              {canPublish ? "Enregistrer la publication" : "Enregistrer en brouillon"}
-            </Button>
-          </form>
+          <Button type="button" disabled={!canCreateDrafts} onClick={() => { setCreateDirty(false); setShowCreate(true); }} className="mt-6 w-full rounded-xl bg-dtsc-blue px-5 py-3 text-white">
+            <Edit3 className="h-4 w-4" />
+            Rédiger une publication
+          </Button>
         </div>
 
         <div className="space-y-3">
@@ -206,7 +280,12 @@ export function PublicPublicationsManager({
                   <Button type="button" variant="outline" size="sm" onClick={() => window.open(`/admin/content/preview/${publication.id}`, "_blank", "noopener,noreferrer")} className="rounded-xl" aria-label="Prévisualiser"><Eye className="h-4 w-4" /></Button>
                   <Button type="button" variant="outline" size="sm" disabled={!canEditPublication(publication)} onClick={() => {
                     setEditing(publication);
+                    setEditingDirty(false);
+                    setVersionHistory(null);
+                    setHistoryError("");
                     setEditingDraft({
+                      seoTitle: typeof publication.seoJson === "object" && publication.seoJson && !Array.isArray(publication.seoJson) && typeof (publication.seoJson as Record<string, unknown>).title === "string" ? (publication.seoJson as { title: string }).title : "",
+                      seoDescription: typeof publication.seoJson === "object" && publication.seoJson && !Array.isArray(publication.seoJson) && typeof (publication.seoJson as Record<string, unknown>).description === "string" ? (publication.seoJson as { description: string }).description : "",
                       title: publication.title,
                       slug: publication.slug,
                       category: publication.category,
@@ -237,20 +316,82 @@ export function PublicPublicationsManager({
         </div>
       </div>
 
-      <Dialog open={Boolean(editing)} title="Modifier la publication" onClose={() => {
+      <Dialog
+        open={showCreate}
+        title="Studio éditorial · nouvelle publication"
+        description="Préparez votre article, ajoutez des médias, vérifiez son aperçu et enregistrez selon vos autorisations."
+        presentation="editor"
+        className="sm:max-w-[min(96vw,84rem)]"
+        onClose={() => { void (async () => {
+          if (!(await confirmDiscardIfDirty(createDirty))) return;
+          setShowCreate(false); setCreateDirty(false); setCreatePreviewHtml("");
+        })(); }}
+      >
+        <form onSubmit={(event) => submit(event)} onChangeCapture={() => setCreateDirty(true)} onInputCapture={() => setCreateDirty(true)} className="grid min-w-0 gap-4 px-1 pb-5 sm:px-2">
+            <Input name="title" placeholder="Titre de la publication" required disabled={!canCreateDrafts} />
+            <Input name="slug" placeholder="slug-url-sans-accents" pattern="[a-z0-9]+(-[a-z0-9]+)*" required disabled={!canCreateDrafts} />
+            <div className="grid gap-3 sm:grid-cols-2">
+              <select name="category" disabled={!canCreateDrafts} className="h-10 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-bold text-dtsc-ink">
+                {categories.map((category) => (
+                  <option key={category} value={category}>{formatEnumLabel(category)}</option>
+                ))}
+              </select>
+              <Input name="coverLabel" placeholder="Label visuel court" disabled={!canCreateDrafts} />
+            </div>
+            <textarea name="excerpt" placeholder="Résumé court pour le catalogue et les moteurs de recherche" disabled={!canCreateDrafts} className="min-h-20 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm text-dtsc-ink" required />
+            <details className="rounded-xl border border-dtsc-border px-4 py-3">
+              <summary className="cursor-pointer text-sm font-semibold text-dtsc-blue">{seoLabels.section}</summary>
+              <div className="mt-4 grid gap-3">
+                <Input name="seoTitle" placeholder={seoLabels.title} aria-label={seoLabels.title} maxLength={180} disabled={!canCreateDrafts} />
+                <textarea name="seoDescription" placeholder={seoLabels.description} aria-label={seoLabels.description} maxLength={500} disabled={!canCreateDrafts} className="min-h-24 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm text-dtsc-ink" />
+              </div>
+            </details>
+            <RichTextEditor
+              minHeightClassName="min-h-[40dvh]"
+              maxHeightClassName="max-h-[70dvh]"
+              allowVideoEmbed
+              textName="content"
+              htmlName="contentHtml"
+              disabled={!canCreateDrafts}
+              allowImageUpload
+              onContentChange={({ html }) => setCreatePreviewHtml(html)}
+              placeholder="Contenu long de la publication. Collez ici un texte déjà mis en forme ou rédigez avec la barre d'outils."
+            />
+            <PublicationPreview html={createPreviewHtml} />
+            <label className="flex items-center justify-between rounded-xl border border-dtsc-border bg-dtsc-page px-4 py-3 text-sm font-bold text-dtsc-ink">
+              Publier sur la page Ressources
+              <input name="published" type="checkbox" disabled={!canPublish} className="h-4 w-4 accent-cyan-500" />
+            </label>
+            {!canPublish && (
+              <p className="text-xs leading-5 text-dtsc-muted">
+                Votre contribution sera enregistrée en brouillon sous votre nom. Seul un administrateur peut la publier ou la supprimer.
+              </p>
+            )}
+            <Button disabled={!canCreateDrafts} title={canCreateDrafts ? "Enregistrer un brouillon public." : "Création de brouillon désactivée par l'administrateur."} className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">
+              <Globe2 className="h-4 w-4" />
+              {canPublish ? "Enregistrer la publication" : "Enregistrer en brouillon"}
+            </Button>
+          </form>
+      </Dialog>
+
+      <Dialog open={Boolean(editing)} title="Modifier la publication" presentation="editor" className="sm:max-w-[min(96vw,84rem)]" onClose={() => { void (async () => {
+        if (!(await confirmDiscardIfDirty(editingDirty))) return;
+        setEditingDirty(false);
         setEditing(null);
         setEditingDraft(null);
         setEditingPreviewHtml("");
         setConfirmEditSave(false);
-      }}>
+      })(); }}>
         {editing && editingDraft && (
           <form
             ref={editingFormRef}
+            onChangeCapture={() => setEditingDirty(true)}
+            onInputCapture={() => setEditingDirty(true)}
             onSubmit={(event) => {
               event.preventDefault();
               setConfirmEditSave(true);
             }}
-            className="grid gap-3"
+            className="grid min-w-0 gap-4 px-1 pb-5 sm:px-2"
           >
             <Input name="title" value={editingDraft.title} onChange={(event) => setEditingDraft((current) => current ? { ...current, title: event.target.value } : current)} required disabled={!canEditPublication(editing)} />
             <Input name="slug" value={editingDraft.slug} onChange={(event) => setEditingDraft((current) => current ? { ...current, slug: event.target.value } : current)} pattern="[a-z0-9]+(-[a-z0-9]+)*" required disabled={!canEditPublication(editing)} />
@@ -261,8 +402,18 @@ export function PublicPublicationsManager({
             </select>
             <Input name="coverLabel" value={editingDraft.coverLabel || ""} onChange={(event) => setEditingDraft((current) => current ? { ...current, coverLabel: event.target.value } : current)} disabled={!canEditPublication(editing)} />
             <textarea name="excerpt" value={editingDraft.excerpt} onChange={(event) => setEditingDraft((current) => current ? { ...current, excerpt: event.target.value } : current)} disabled={!canEditPublication(editing)} className="min-h-20 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm text-dtsc-ink" required />
+            <details className="rounded-xl border border-dtsc-border px-4 py-3">
+              <summary className="cursor-pointer text-sm font-semibold text-dtsc-blue">{seoLabels.section}</summary>
+              <div className="mt-4 grid gap-3">
+                <Input name="seoTitle" maxLength={180} placeholder={seoLabels.title} aria-label={seoLabels.title} value={editingDraft.seoTitle} onChange={(event) => setEditingDraft((current) => current ? { ...current, seoTitle: event.target.value } : current)} disabled={!canEditPublication(editing)} />
+                <textarea name="seoDescription" maxLength={500} placeholder={seoLabels.description} aria-label={seoLabels.description} value={editingDraft.seoDescription} onChange={(event) => setEditingDraft((current) => current ? { ...current, seoDescription: event.target.value } : current)} disabled={!canEditPublication(editing)} className="min-h-24 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm text-dtsc-ink" />
+              </div>
+            </details>
             <RichTextEditor
               key={editing.id}
+              minHeightClassName="min-h-[40dvh]"
+              maxHeightClassName="max-h-[70dvh]"
+              allowVideoEmbed
               textName="content"
               htmlName="contentHtml"
               defaultValue={editingDraft.contentHtml || editingDraft.content}
@@ -275,6 +426,38 @@ export function PublicPublicationsManager({
               placeholder="Contenu long de la publication"
             />
             <PublicationPreview html={editingPreviewHtml} />
+            {canPublish ? (
+              <details className="rounded-xl border border-dtsc-border bg-dtsc-page px-4 py-3">
+                <summary className="cursor-pointer font-semibold text-dtsc-blue">{versionCopy.section}</summary>
+                <div className="mt-4">
+                  <Button type="button" variant="outline" disabled={historyLoading} onClick={() => void loadVersionHistory(editing.id)}>
+                    {historyLoading ? versionCopy.loading : versionCopy.load}
+                  </Button>
+                  {historyError ? <p role="alert" className="mt-3 text-sm text-red-600">{historyError}</p> : null}
+                  {versionHistory ? (
+                    versionHistory.length ? (
+                      <ol className="mt-4 divide-y divide-dtsc-border">
+                        {versionHistory.map((version) => (
+                          <li key={version.version} className="flex min-w-0 flex-wrap items-center justify-between gap-3 py-3">
+                            <div className="min-w-0">
+                              <p className="break-words text-sm font-semibold text-dtsc-ink">V{version.version} · {version.title}</p>
+                              <p className="mt-1 text-xs text-dtsc-muted">{formatPublicationDate(version.createdAt)} · {formatEnumLabel(version.category)}</p>
+                            </div>
+                            <Button type="button" variant="outline" size="sm"
+                              disabled={restoringVersion !== null}
+                              onClick={() => void restoreVersion(editing, version.version)}
+                              aria-label={versionCopy.restore + " " + version.version}>
+                              {versionCopy.restore}
+                            </Button>
+                          </li>
+                        ))}
+                      </ol>
+                    ) : <p className="mt-3 text-sm text-dtsc-muted">{versionCopy.empty}</p>
+                  ) : null}
+                </div>
+              </details>
+            ) : null}
+
             <p className="rounded-2xl border border-cyan-300/30 bg-cyan-400/10 px-3 py-2 text-xs font-bold text-cyan-700 dark:text-cyan-100">Vous modifiez une copie locale. La publication publique sera synchronisée uniquement après confirmation.</p>
             <label className="flex items-center justify-between rounded-xl border border-dtsc-border bg-dtsc-page px-4 py-3 text-sm font-bold text-dtsc-ink">
               Publié

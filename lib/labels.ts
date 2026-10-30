@@ -358,6 +358,8 @@ export const publicationCategoryLabels = {
   ARTICLE: "Article",
   GUIDE: "Guide",
   CAS_PRATIQUE: "Cas pratique",
+  DEMONSTRATION: "Démonstration",
+  REFLEXION_BUSINESS_TECH: "Réflexion business-tech",
   ANNONCE: "Annonce",
   PROJET: "Projet",
 } as const;

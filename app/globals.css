@@ -1396,3 +1396,61 @@
 
 /* #884: Support renders its own shell; avoid duplicate visible back buttons in module pages. */
 .dtsc-support-main:has([data-workspace-module-header]) > [data-support-back-fallback] { display: none; }
+
+/* Public editorial pages: an open, readable surface instead of nested cards. */
+.dtsc-article-reader {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.dtsc-article-reader .dtsc-publication-content {
+  font-size: 1.0625rem;
+  line-height: 1.85;
+  color: var(--dtsc-ink);
+}
+
+.dtsc-article-reader .dtsc-publication-content h2 {
+  margin-top: 2.75rem;
+  margin-bottom: 1rem;
+  font-size: clamp(1.6rem, 3vw, 2rem);
+  line-height: 1.25;
+  font-weight: 650;
+}
+
+.dtsc-article-reader .dtsc-publication-content h3 {
+  margin-top: 2rem;
+  font-weight: 600;
+}
+
+.dtsc-article-reader .dtsc-publication-content img {
+  width: auto;
+  max-width: 100%;
+  height: auto;
+  max-height: none;
+  object-fit: contain;
+  border: 0;
+  border-radius: 0.75rem;
+  box-shadow: none;
+  margin-inline: auto;
+}
+
+.dtsc-article-reader .dtsc-publication-content figure {
+  max-width: 100%;
+  margin-block: 2rem;
+}
+
+.dtsc-article-reader .dtsc-publication-content table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+@media (max-width: 640px) {
+  .dtsc-article-reader .dtsc-publication-content { font-size: 1rem; line-height: 1.8; }
+}
+
+.dtsc-article-reader .dtsc-publication-content h2[id],
+.dtsc-article-reader .dtsc-publication-content h3[id] {
+  scroll-margin-top: 6rem;
+}

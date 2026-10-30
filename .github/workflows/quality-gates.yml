@@ -115,6 +115,10 @@ jobs:
         run: node scripts/qa-hotfix-861-workflow-finance.mjs
       - name: "HOTFIX #863 nine-template manual starter eligibility QA"
         run: pnpm qa:hotfix-863-workflow-manual-start
+      - name: PUBLIC-UX-01 rich HTML sanitizer safety tests
+        run: pnpm qa:public-ux-01
+      - name: PUBLIC-UX-07 public V2 contract QA
+        run: pnpm qa:public-experience-v2
       - name: Type check
         run: pnpm type-check
         env:
@@ -274,6 +278,85 @@ jobs:
       - name: Verify Finance migration schema parity
         run: node scripts/qa-enterprise-finance-migration-parity.mjs
 
+  public-browser-integration:
+    name: Public Experience V2 isolated browser acceptance
+    if: github.event_name == 'pull_request' && github.head_ref == 'chore/973-public-v2-integration-ci'
+    needs: governance
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: dtsc_public_acceptance
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d dtsc_public_acceptance"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/dtsc_public_acceptance?schema=public
+      AUTH_SECRET: public-acceptance-secret-longer-than-thirty-two-characters-2026
+      CRON_SECRET: public-acceptance-cron-secret-longer-than-twenty-four-characters
+      APP_URL: http://127.0.0.1:3000
+      NEXT_PUBLIC_PUBLIC_URL: http://127.0.0.1:3000
+      E2E_BASE_URL: http://127.0.0.1:3000
+      DEFAULT_ADMIN_BOOTSTRAP_ENABLED: "false"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Generate Prisma client
+        run: pnpm prisma:generate
+      - name: Apply migrations
+        run: pnpm prisma:deploy
+      - name: Build public application
+        run: pnpm build
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144
+      - name: Install chromium
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Start isolated Next.js
+        run: |
+          nohup pnpm exec next start -H 127.0.0.1 -p 3000 >/tmp/public-acceptance.log 2>&1 &
+          echo $! >/tmp/public-acceptance.pid
+          for attempt in $(seq 1 90); do
+            if curl --fail --silent http://127.0.0.1:3000/ressources >/dev/null; then exit 0; fi
+            sleep 2
+          done
+          cat /tmp/public-acceptance.log
+          exit 1
+      - name: Public V2 WCAG and responsive Playwright tests
+        run: pnpm exec playwright test tests/e2e/public-experience-v2.spec.mjs --workers=1
+      - name: Upload public V2 visual evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: public-v2-integration-visual-evidence
+          if-no-files-found: ignore
+          path: |
+            test-results
+            playwright-report
+            /tmp/public-acceptance.log
+      - name: Stop local server
+        if: always()
+        run: |
+          if [ -f /tmp/public-acceptance.pid ]; then kill "$(cat /tmp/public-acceptance.pid)" || true; fi
+
   authenticated-browser-acceptance:
     name: Authenticated browser acceptance
     if: github.event_name == 'workflow_dispatch'
@@ -355,6 +438,8 @@ jobs:
         run: pnpm exec playwright test tests/e2e/hotfix-574-finance-owner.spec.mjs
       - name: Hotfix 576 Finance owner acceptance
         run: pnpm exec playwright test tests/e2e/hotfix-576-finance-owner.spec.mjs
+      - name: Public Experience V2 isolated browser acceptance
+        run: pnpm exec playwright test tests/e2e/public-experience-v2.spec.mjs
       - name: Stop application
         if: always()
         run: |

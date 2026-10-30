@@ -11,6 +11,7 @@ type RichTextEditorProps = {
   disabled?: boolean;
   defaultValue?: string;
   minHeightClassName?: string;
+  maxHeightClassName?: string;
   allowImageUpload?: boolean;
   allowVideoEmbed?: boolean;
   imageUploadUrl?: string;
@@ -83,7 +84,7 @@ const paragraphSpacings = [
 ];
 
 export const RichTextEditor = forwardRef<HTMLDivElement, RichTextEditorProps>(function RichTextEditor(
-  { textName, htmlName, placeholder, disabled, defaultValue = "", minHeightClassName = "min-h-44", allowImageUpload = false, allowVideoEmbed = false, imageUploadUrl = "/api/admin/publications/images", onContentChange },
+  { textName, htmlName, placeholder, disabled, defaultValue = "", minHeightClassName = "min-h-44", maxHeightClassName = "max-h-80", allowImageUpload = false, allowVideoEmbed = false, imageUploadUrl = "/api/admin/publications/images", onContentChange },
   ref
 ) {
   const shellRef = useRef<HTMLDivElement | null>(null);
@@ -579,7 +580,7 @@ export const RichTextEditor = forwardRef<HTMLDivElement, RichTextEditorProps>(fu
         onClick={handleEditorClick}
         onKeyUp={rememberSelection}
         onScroll={handleEditorScroll}
-        className={`${minHeightClassName} max-h-80 w-full overflow-y-auto px-3 py-3 text-sm leading-7 text-dtsc-ink outline-none empty:before:text-dtsc-muted empty:before:content-[attr(data-placeholder)] [&_a]:font-bold [&_a]:text-dtsc-blue [&_a]:underline [&_figcaption]:mt-2 [&_figcaption]:text-center [&_figcaption]:text-xs [&_figcaption]:font-bold [&_figcaption]:text-dtsc-muted [&_figure]:mx-auto [&_figure]:my-4 [&_figure]:max-w-[640px] [&_img]:max-h-[320px] [&_img]:w-full [&_img]:rounded-2xl [&_img]:border [&_img]:border-dtsc-border [&_img]:bg-dtsc-page [&_img]:object-contain [&_blockquote]:border-l-4 [&_blockquote]:border-cyan-400 [&_blockquote]:bg-dtsc-page [&_blockquote]:px-4 [&_blockquote]:py-2 [&_code]:rounded [&_code]:bg-dtsc-soft [&_code]:px-1 [&_hr]:my-4 [&_pre]:overflow-x-auto [&_pre]:rounded-xl [&_pre]:bg-slate-950 [&_pre]:p-3 [&_pre]:text-slate-100 [&_table]:w-full [&_table]:border-collapse [&_td]:border [&_td]:border-dtsc-border [&_td]:p-2 [&_th]:border [&_th]:border-dtsc-border [&_th]:bg-dtsc-soft [&_th]:p-2 [&_ol]:list-decimal [&_ol]:pl-6 [&_ul]:list-disc [&_ul]:pl-6`}
+        className={`${minHeightClassName} ${maxHeightClassName} w-full overflow-y-auto px-3 py-3 text-sm leading-7 text-dtsc-ink outline-none empty:before:text-dtsc-muted empty:before:content-[attr(data-placeholder)] [&_a]:font-bold [&_a]:text-dtsc-blue [&_a]:underline [&_figcaption]:mt-2 [&_figcaption]:text-center [&_figcaption]:text-xs [&_figcaption]:font-bold [&_figcaption]:text-dtsc-muted [&_figure]:mx-auto [&_figure]:my-4 [&_figure]:max-w-[640px] [&_img]:max-h-[320px] [&_img]:w-full [&_img]:rounded-2xl [&_img]:border [&_img]:border-dtsc-border [&_img]:bg-dtsc-page [&_img]:object-contain [&_blockquote]:border-l-4 [&_blockquote]:border-cyan-400 [&_blockquote]:bg-dtsc-page [&_blockquote]:px-4 [&_blockquote]:py-2 [&_code]:rounded [&_code]:bg-dtsc-soft [&_code]:px-1 [&_hr]:my-4 [&_pre]:overflow-x-auto [&_pre]:rounded-xl [&_pre]:bg-slate-950 [&_pre]:p-3 [&_pre]:text-slate-100 [&_table]:w-full [&_table]:border-collapse [&_td]:border [&_td]:border-dtsc-border [&_td]:p-2 [&_th]:border [&_th]:border-dtsc-border [&_th]:bg-dtsc-soft [&_th]:p-2 [&_ol]:list-decimal [&_ol]:pl-6 [&_ul]:list-disc [&_ul]:pl-6`}
         data-placeholder={placeholder || "Rédigez votre message..."}
         aria-label={placeholder || "Editeur de contenu riche"}
       />

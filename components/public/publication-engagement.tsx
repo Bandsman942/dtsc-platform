@@ -214,7 +214,7 @@ export function PublicationEngagement({
     <section className="mt-8 rounded-3xl border border-dtsc-border bg-dtsc-page p-5 sm:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <p className="text-sm font-black uppercase tracking-[0.16em] text-cyan-600">Échanges lecteurs</p>
+          <p className="text-sm font-black uppercase tracking-[0.16em] text-cyan-800 dark:text-cyan-300">Échanges lecteurs</p>
           <h2 className="mt-1 text-2xl font-black text-dtsc-ink">Réactions et commentaires</h2>
         </div>
         <div className="flex flex-wrap gap-2">

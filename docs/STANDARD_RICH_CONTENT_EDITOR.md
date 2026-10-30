@@ -17,7 +17,7 @@
 
 ## Sécurité
 
-Le HTML affiché passe par `sanitizeRichHtml`. Les scripts, styles injectés, iframes, objets, embeds, gestionnaires d’événements, `javascript:` et `data:text/html` sont supprimés. Les liens externes s’ouvrent avec `noopener noreferrer nofollow`.
+Le HTML affiché passe par la sanitation riche. Un parseur HTML5 (parse5) reconstruit uniquement les balises, attributs, protocoles et styles éditoriaux explicitement sûrs. Scripts, SVG/MathML, iframes, gestionnaires d'événements, URLs exécutables et CSS arbitraire sont rejetés. Les images acceptent des URL http(s) ou des chemins locaux, jamais de data: ou javascript:. Les liens externes s'ouvrent avec noopener noreferrer nofollow. Les publications historiques sont assainies au rendu sans réécriture destructive.
 
 Les vidéos arbitraires ne sont pas injectées sous forme d’iframe. Une URL MP4, WebM ou OGG peut produire un lecteur HTML5; les autres adresses restent des cartes de lien explicites.
 

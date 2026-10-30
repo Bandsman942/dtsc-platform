@@ -1,0 +1,28 @@
+export const resourceCopy = {
+  fr: {
+    eyebrow: "Le journal DTSC", title: "Ressources, analyses et idées qui font avancer.",
+    intro: "Guides, cas pratiques et perspectives sur les données, l'intelligence artificielle et la transformation numérique. Des contenus pour comprendre et agir.",
+    featured: "À la une", lastPublications: "Publications récentes", catalog: "Toutes les publications",
+    filterByCategory: "Filtrer les publications par catégorie", all: "Tous", published: "contenus publiés",
+    search: "Rechercher", searchLabel: "Rechercher dans les publications", searchPlaceholder: "Rechercher un sujet ou un mot-clé",
+    sortLabel: "Trier :", newest: "Plus récents", oldest: "Plus anciens",
+    result: "résultat", results: "résultats", read: "Lire", pagination: "Pagination des publications",
+    previous: "Précédent", next: "Suivant", page: "Page",
+    emptyTitle: "Aucune publication trouvée", emptyDescription: "Essayez d'autres mots-clés ou explorez une autre catégorie.",
+    reset: "Effacer les filtres", services: "Découvrir nos services",
+    categories: { ARTICLE: "Articles", GUIDE: "Guides", CAS_PRATIQUE: "Cas pratiques", DEMONSTRATION: "Démonstrations", PROJET: "Projets", ANNONCE: "Annonces", REFLEXION_BUSINESS_TECH: "Réflexions business-tech", RESSOURCE: "Autres ressources" },
+  },
+  en: {
+    eyebrow: "The DTSC journal", title: "Resources, analysis and ideas that move business forward.",
+    intro: "Guides, practical examples and perspectives on data, artificial intelligence and digital transformation. Insights to help you understand and act.",
+    featured: "Featured", lastPublications: "Recent publications", catalog: "All publications",
+    filterByCategory: "Filter publications by category", all: "All", published: "published articles",
+    search: "Search", searchLabel: "Search publications", searchPlaceholder: "Search a topic or keyword",
+    sortLabel: "Sort:", newest: "Newest", oldest: "Oldest",
+    result: "result", results: "results", read: "Read", pagination: "Publication pagination",
+    previous: "Previous", next: "Next", page: "Page",
+    emptyTitle: "No publications found", emptyDescription: "Try another keyword or browse a different category.",
+    reset: "Clear filters", services: "Explore our services",
+    categories: { ARTICLE: "Articles", GUIDE: "Guides", CAS_PRATIQUE: "Case studies", DEMONSTRATION: "Demonstrations", PROJET: "Projects", ANNONCE: "Announcements", REFLEXION_BUSINESS_TECH: "Business and tech reflections", RESSOURCE: "Other resources" },
+  },
+} as const;
