@@ -60,7 +60,7 @@ type PublicationDraft = Pick<Publication, "title" | "slug" | "category" | "excer
   seoDescription: string;
 };
 
-const categories = ["RESSOURCE", "ARTICLE", "GUIDE", "CAS_PRATIQUE", "ANNONCE", "PROJET"];
+const categories = ["RESSOURCE", "ARTICLE", "GUIDE", "CAS_PRATIQUE", "DEMONSTRATION", "PROJET", "ANNONCE", "REFLEXION_BUSINESS_TECH"];
 const seoLabels = {
   section: "Référencement (SEO) · facultatif",
   title: "Titre SEO",
