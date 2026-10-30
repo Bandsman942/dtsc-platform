@@ -54,7 +54,7 @@ const desktopGroups = [
     { label: "Intelligence artificielle", href: "/ia-entreprise" },
   ] },
   { label: "Plateforme", links: [
-    { label: "DTSC Platform", href: "/tarifs" },
+    { label: "Accéder à DTSC Platform", href: getSignInUrl("/dashboard") },
     { label: "Offres et tarifs", href: "/tarifs" },
   ] },
   { label: "Secteurs", links: [
