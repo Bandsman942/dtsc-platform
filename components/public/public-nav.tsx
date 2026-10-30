@@ -1,6 +1,5 @@
 "use client";
 
-import type { CSSProperties } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { createPortal } from "react-dom";
@@ -35,17 +34,6 @@ const mobileLinkIcons = {
   "/a-propos": Users,
   "/contact": MessageCircleMore,
 } as const;
-
-const mobileLinkAccents = [
-  "dtsc-menu-accent-blue",
-  "dtsc-menu-accent-cyan",
-  "dtsc-menu-accent-violet",
-  "dtsc-menu-accent-emerald",
-  "dtsc-menu-accent-orange",
-  "dtsc-menu-accent-pink",
-  "dtsc-menu-accent-indigo",
-  "dtsc-menu-accent-lime",
-] as const;
 
 const desktopGroups = [
   { key: "solutions", links: [
@@ -149,43 +137,33 @@ export function PublicNav({ locale }: { locale: "fr" | "en" }) {
         <div
           id="public-mobile-navigation"
           ref={dialogRef}
-          className="dtsc-mobile-menu fixed inset-0 z-[999] isolate flex h-[100dvh] min-h-[100dvh] w-screen flex-col overflow-hidden"
+          className="fixed inset-0 z-[999] isolate flex h-[100dvh] min-h-[100dvh] w-screen flex-col overflow-hidden bg-[#001736] text-white"
           role="dialog"
           aria-modal="true"
           aria-label={copy.mobileNavigation}
         >
-          <div className="dtsc-mobile-menu-orb dtsc-mobile-menu-orb-one" aria-hidden="true" />
-          <div className="dtsc-mobile-menu-orb dtsc-mobile-menu-orb-two" aria-hidden="true" />
-          <div className="dtsc-mobile-menu-grid" aria-hidden="true" />
 
           <div className="relative z-10 flex min-h-0 flex-1 flex-col">
-            <div className="dtsc-safe-top flex shrink-0 items-center justify-between gap-4 border-b border-white/10 px-4 pb-4 sm:px-6">
+            <div className="dtsc-safe-top flex shrink-0 items-center justify-between gap-4 border-b border-white/15 px-4 pb-3 sm:px-6">
               <div className="min-w-0">
-                <p className="text-xs font-black uppercase tracking-[0.22em] text-cyan-300">{copy.navigation}</p>
-                <p className="mt-1 text-xl font-black tracking-[-0.03em] text-white">{copy.exploreEcosystem}</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-cyan-300">{copy.navigation}</p>
+                <p className="mt-1 text-lg font-semibold tracking-tight text-white">{copy.exploreEcosystem}</p>
               </div>
               <button
                 ref={closeRef}
                 type="button"
                 onClick={() => setOpen(false)}
-                className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-white/15 bg-white/10 text-white shadow-lg backdrop-blur-xl transition hover:rotate-3 hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300"
+                className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-white/20 text-white transition-colors hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-cyan-300"
                 aria-label={copy.closeMenu}
               >
                 <X className="h-6 w-6" />
               </button>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-5 sm:px-6">
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-3 sm:px-6">
               <div className="mx-auto w-full max-w-3xl">
-                <div className="mb-5 rounded-[1.5rem] border border-white/10 bg-white/8 p-4 text-white shadow-2xl backdrop-blur-xl">
-                  <p className="text-sm font-bold text-cyan-200">Conseil · Data · IA · Solutions digitales</p>
-                  <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">
-                    Trouvez rapidement le service, la solution ou la ressource qui correspond à votre objectif.
-                  </p>
-                </div>
-
-                <nav className="grid gap-3 sm:grid-cols-2" aria-label={copy.sitePages}>
-                  {publicLinks.map((link, index) => {
+                <nav className="grid min-w-0 grid-cols-[minmax(0,1fr)] sm:grid-cols-2 sm:gap-x-8" aria-label={copy.sitePages}>
+                  {publicLinks.map((link) => {
                     const active = isActive(pathname, link.href);
                     const Icon = mobileLinkIcons[link.href as keyof typeof mobileLinkIcons] || ArrowRight;
                     return (
@@ -194,19 +172,17 @@ export function PublicNav({ locale }: { locale: "fr" | "en" }) {
                         href={link.href}
                         onClick={() => setOpen(false)}
                         className={cn(
-                          "dtsc-menu-item group flex min-h-20 items-center gap-4 rounded-[1.35rem] border p-4 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300",
-                          mobileLinkAccents[index % mobileLinkAccents.length],
-                          active ? "border-white/35 bg-white/18" : "border-white/10 bg-white/8 hover:-translate-y-0.5 hover:border-white/25 hover:bg-white/14",
+                          "group flex min-h-16 items-center gap-3 border-b border-white/15 px-2 py-3 text-left transition-colors hover:bg-white/5 focus-visible:outline-2 focus-visible:outline-cyan-300",
+                          active ? "text-cyan-200" : "text-white",
                         )}
-                        style={{ "--dtsc-menu-delay": `${index * 45}ms` } as CSSProperties}
                         aria-current={active ? "page" : undefined}
                       >
-                        <span className="dtsc-menu-icon flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/10 text-white shadow-lg">
+                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white/10 text-white">
                           <Icon className="h-5 w-5" />
                         </span>
                         <span className="min-w-0 flex-1">
-                          <span className="block text-base font-black tracking-[-0.02em] text-white">{copy.sections[link.href as keyof typeof copy.sections] || link.label}</span>
-                          <span className="mt-1 block text-xs font-semibold text-slate-300">{copy.discoverSection}</span>
+                          <span className="block text-base font-medium tracking-tight text-white">{copy.sections[link.href as keyof typeof copy.sections] || link.label}</span>
+                          <span className="mt-0.5 block text-xs text-slate-300">{copy.discoverSection}</span>
                         </span>
                         <ArrowRight className="h-4 w-4 shrink-0 text-slate-400 transition group-hover:translate-x-1 group-hover:text-white" />
                       </Link>
@@ -214,21 +190,21 @@ export function PublicNav({ locale }: { locale: "fr" | "en" }) {
                   })}
                 </nav>
 
-                <div className="mt-5 grid gap-4 rounded-[1.5rem] border border-white/10 bg-[#071427]/70 p-4 shadow-2xl backdrop-blur-xl">
+                <div className="mt-6 grid gap-4 border-t border-white/15 pt-5">
                   <PublicSearchDialog />
                   <ProductPreferencesControls />
                   <div className="grid gap-3 sm:grid-cols-2">
                     <Link
                       href={getSignInUrl("/dashboard")}
                       onClick={() => setOpen(false)}
-                      className="rounded-2xl border border-white/15 bg-white/10 px-4 py-3 text-center font-black text-white transition hover:bg-white/20"
+                      className="rounded-lg border border-white/20 bg-white/5 px-4 py-3 text-center font-semibold text-white transition-colors hover:bg-white/10"
                     >
                       Accès client
                     </Link>
                     <Link
                       href="/contact"
                       onClick={() => setOpen(false)}
-                      className="dtsc-animated-gradient rounded-2xl px-4 py-3 text-center font-black text-[#001736] shadow-[0_18px_50px_rgba(0,194,255,0.25)] transition hover:-translate-y-0.5"
+                      className="rounded-lg bg-cyan-300 px-4 py-3 text-center font-semibold text-[#001736] transition-colors hover:bg-cyan-200"
                     >
                       Demander une consultation
                     </Link>
