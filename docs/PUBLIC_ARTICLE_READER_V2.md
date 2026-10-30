@@ -12,3 +12,8 @@ Le hotfix #967 corrige les dates et la sanitation; sa fusion sur main doit être
 ## QA
 Vérifier desktop, mobile 320/360/375/390/414/768/1024, FR/EN, clair/sombre, images carrées, schémas, liens, tableaux, contenus longs, commentaires et partage.
 Contrôles CONTRIBUTING requis, E2E propriétaire nécessaire avant merge. Production uniquement depuis main; rollback par revert ciblé.
+
+## Compléments implémentés
+Le lecteur dispose d'un sommaire ancré dérivé du HTML assaini, d'un temps de lecture estimé, de métadonnées OpenGraph/Twitter individualisées (SEO issu de seoJson quand disponible), de données structurées Article, d'une visionneuse d'image au clavier préservant le rôle natif des images et d'une sélection d'articles liés de la même catégorie. Aucun brouillon n'est rendu public, et les auteurs ne sont affichés que selon leur consentement.
+
+La validation navigateur multi-terminaux demeure requise pour qualifier l'expérience réelle.
