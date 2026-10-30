@@ -11,3 +11,7 @@ Migration graduelle vers un éditeur moderne, sauvegarde automatique sûre, vers
 
 ## QA et rollback
 Vérifier création, édition, confirmation, refus d'autorisation, médias, iOS/clavier, 320/360/375/390/414/768/1024, clair/sombre, FR/EN et accessibilité. Rebaser sur #967 avant fusion pour les catégories et la sanitation. Production depuis main uniquement, rollback par revert sans migration.
+## Compléments implémentés
+Les métadonnées SEO individuelles sont modifiables depuis le Studio et conservées dans le champ canonique PublicPublication.seoJson. La consultation de l'historique des versions et la restauration contrôlée (avec création d'une nouvelle version, audit et confirmation asynchrone) sont opérationnelles côté code. Les droits de lecture des versions sont limités au gestionnaire ou à l'auteur de son brouillon; la restauration exige CONTENT_MANAGE. Les modifications non enregistrées déclenchent une confirmation asynchrone.
+
+Restent hors livraison : remplacement du moteur document.execCommand, autosauvegarde serveur idempotente et programmation durable de la publication; aucune de ces fonctions n'est annoncée disponible en production.
