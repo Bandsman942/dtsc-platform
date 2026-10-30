@@ -6,7 +6,7 @@ import { CONSOLE_CAPABILITIES } from "@/lib/console/console-capabilities";
 import { prisma } from "@/lib/prisma";
 import { sanitizeRichHtml } from "@/lib/rich-content";
 import { getAppSettings } from "@/lib/settings";
-import { publicPublicationSchema } from "@/lib/validators";
+import { publicPublicationEditorSchema } from "@/lib/publication-editor-schema";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -14,7 +14,7 @@ export async function PATCH(req: Request, { params }: Params) {
   const access = await requireConsoleCapability(CONSOLE_CAPABILITIES.CONTENT_READ);
   if (access.response) return access.response;
   const { id } = await params;
-  const body = publicPublicationSchema.safeParse(await req.json());
+  const body = publicPublicationEditorSchema.safeParse(await req.json());
   if (!body.success) return NextResponse.json({ error: "Invalid publication", reasonCode: "VALIDATION_ERROR" }, { status: 400 });
 
   const existing = await prisma.publicPublication.findUnique({ where: { id }, include: { versions: { orderBy: { version: "desc" }, take: 1 } } });
@@ -25,7 +25,7 @@ export async function PATCH(req: Request, { params }: Params) {
   const canEditOwnDraft = access.session.role !== UserRole.CLIENT && settings.allowNonClientPublicationDrafts && existing.authorId === access.session.userId && !existing.published && existing.status !== "ARCHIVED";
   if (!canManage && !canEditOwnDraft) return NextResponse.json({ error: "Forbidden", reasonCode: "CAPABILITY_REQUIRED" }, { status: 403 });
 
-  const { contentHtml, ...publicationData } = body.data;
+  const { contentHtml, seoTitle, seoDescription, ...publicationData } = body.data;
   const content = contentHtml ? sanitizeRichHtml(contentHtml) : publicationData.content;
   const published = canManage ? publicationData.published : false;
   const now = new Date();
@@ -39,6 +39,12 @@ export async function PATCH(req: Request, { params }: Params) {
       where: { id },
       data: {
         ...publicationData,
+        ...(seoTitle !== undefined || seoDescription !== undefined ? {
+          seoJson: {
+            title: seoTitle ?? (typeof existing.seoJson === "object" && existing.seoJson && !Array.isArray(existing.seoJson) && typeof existing.seoJson.title === "string" ? existing.seoJson.title : existing.title),
+            description: seoDescription ?? (typeof existing.seoJson === "object" && existing.seoJson && !Array.isArray(existing.seoJson) && typeof existing.seoJson.description === "string" ? existing.seoJson.description : existing.excerpt),
+          },
+        } : {}),
         published,
         status: published ? "PUBLISHED" : "DRAFT",
         publishedAt: published ? existing.publishedAt || now : null,
