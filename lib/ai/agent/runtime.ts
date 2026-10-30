@@ -56,16 +56,26 @@ type AgentLoopInput = {
 };
 
 async function createAgentLoopStream(input: AgentLoopInput) {
+  // Ownership and structured confirmations stay in the active workspace.
+  // The PERSONAL model itself never receives organization data, and global
+  // Agent tools are additionally restricted to a small certified allowlist.
   const toolContextBase = {
     session: input.session,
     userId: input.userId,
-    organizationId: input.contextCode === "PERSONAL" ? null : input.organizationId || null,
+    organizationId: input.organizationId || null,
     conversationId: input.sourceConversationId || null,
     assistantCode: input.assistantCode || null,
     dataClassifications: input.dataClassifications,
     request: input.request || null,
   };
-  const authorizedTools = await listAuthorizedAgentTools({ context: toolContextBase, budget: input.budget });
+  const authorizedForScope = await listAuthorizedAgentTools({ context: toolContextBase, budget: input.budget });
+  const PERSONAL_TOOL_CODES = new Set([
+    "CONNECTED_APPS_STATUS_READ", "SUPPORT_TICKET_CREATE",
+    "DTSC_CONTACT_EMAIL_SEND", "TASK_DRAFT_PREPARE",
+  ]);
+  const authorizedTools = input.contextCode === "PERSONAL"
+    ? authorizedForScope.filter((entry) => PERSONAL_TOOL_CODES.has(entry.definition.code))
+    : authorizedForScope;
   const authorizedByCode = new Map(authorizedTools.map((entry) => [entry.definition.code, entry]));
   const governance = await getAiPlatformPolicy();
   const maxReadTools = Math.min(input.budget.maxToolCalls, governance.assistantSettings.agentMaxReadToolsPerRun);
