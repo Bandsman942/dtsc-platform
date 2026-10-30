@@ -12,12 +12,14 @@ export function ConsoleAiPolicyManager({
   initialPolicy,
   providerCodes,
   modelCodes,
+  publicModelCodes,
   canManage,
   locale,
 }: {
   initialPolicy: AiPlatformPolicy;
   providerCodes: string[];
   modelCodes: string[];
+  publicModelCodes: string[];
   canManage: boolean;
   locale: "fr" | "en";
 }) {
@@ -47,6 +49,7 @@ export function ConsoleAiPolicyManager({
       disabledProviderCodes: previous.disabledProviderCodes,
       disabledModelCodes: previous.disabledModelCodes,
       agentCeilings: previous.agentCeilings,
+      assistantSettings: previous.assistantSettings || current.assistantSettings,
     }));
     setReason(t("Restauration d'une politique précédente, à confirmer.", "Restore a previous policy, pending confirmation."));
     setSaved(false);
@@ -69,6 +72,10 @@ export function ConsoleAiPolicyManager({
     });
     setSaved(false);
   };
+  function setAssistantSetting<K extends keyof AiPlatformPolicy["assistantSettings"]>(key: K, value: AiPlatformPolicy["assistantSettings"][K]) {
+    setPolicy((current) => ({ ...current, assistantSettings: { ...current.assistantSettings, [key]: value } }));
+    setSaved(false);
+  }
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!canManage || busy) return;
@@ -85,6 +92,7 @@ export function ConsoleAiPolicyManager({
           disabledProviderCodes: policy.disabledProviderCodes,
           disabledModelCodes: policy.disabledModelCodes,
           agentCeilings: policy.agentCeilings,
+          assistantSettings: policy.assistantSettings,
           reason: reason.trim(),
         }),
       });
@@ -134,6 +142,53 @@ export function ConsoleAiPolicyManager({
               {FIELDS.map((field) => <label key={field} className="block text-xs text-dtsc-muted"><span className="block">{field}</span><input type="number" min={field === "maxToolCalls" ? 0 : field === "maxDurationMs" ? 1000 : 1} step={field === "maxEstimatedCost" ? "0.01" : "1"} value={policy.agentCeilings[tier]?.[field] ?? ""} onChange={(event) => setLimit(tier, field, event.target.value)} placeholder={t("Plafond serveur", "Server cap")} className="mt-1 min-h-10 w-full rounded-lg border border-dtsc-border bg-dtsc-page px-2 text-sm text-dtsc-ink" /></label>)}
             </div>)}
           </div>
+        </fieldset>
+        <fieldset disabled={!canManage || busy} className="space-y-3 rounded-xl border border-dtsc-border p-3">
+          <legend className="px-1 text-sm font-bold text-dtsc-ink">{t("Profils globaux des assistants", "Global assistant profiles")}</legend>
+          <p className="text-xs text-dtsc-muted">{t("Politique publiée pour les prochains messages, sans redéploiement. Les permissions, la confidentialité et les confirmations restent imposées par le serveur.", "Published policy applies to future messages without redeployment. Permissions, confidentiality and confirmations remain server-enforced.")}</p>
+          <label className="flex items-center gap-2 text-sm text-dtsc-ink">
+            <input type="checkbox" checked={policy.assistantSettings.generalKnowledgeEnabled} onChange={(event) => setAssistantSetting("generalKnowledgeEnabled", event.target.checked)} />
+            {t("Autoriser la culture générale dans le chatbot privé", "Allow general knowledge in the private chatbot")}
+          </label>
+          {([
+            ["generalGuidance", t("Orientation générale du chatbot", "General chatbot guidance")],
+            ["enterpriseGuidance", t("Orientation de l'Assistant Entreprise", "Enterprise assistant guidance")],
+            ["landingGuidance", t("Orientation de l'assistant public", "Public landing assistant guidance")],
+          ] as const).map(([field, label]) => (
+            <label key={field} className="block text-xs font-medium text-dtsc-ink">{label}
+              <textarea rows={2} maxLength={800} value={policy.assistantSettings[field]} onChange={(event) => setAssistantSetting(field, event.target.value)}
+                className="mt-1 block min-h-16 w-full rounded-xl border border-dtsc-border bg-dtsc-page p-3 text-sm text-dtsc-ink" />
+            </label>
+          ))}
+          <label className="block text-xs font-medium text-dtsc-ink">{t("Modèle prioritaire de la landing page", "Preferred landing-page model")}
+            <select value={policy.assistantSettings.landingModelCodes[0] || ""} onChange={(event) => {
+              const next = event.target.value;
+              setAssistantSetting("landingModelCodes", next ? [next, ...policy.assistantSettings.landingModelCodes.filter((code) => code !== next).slice(0, 4)] : []);
+            }} className="mt-1 block min-h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-page p-2 text-sm text-dtsc-ink">
+              <option value="">{t("Choix automatique selon le catalogue certifié", "Automatic certified-catalog selection")}</option>
+              {publicModelCodes.map((code) => <option key={code} value={code}>{code}</option>)}
+            </select>
+          </label>
+          <div className="space-y-1">
+            <p className="text-xs font-medium text-dtsc-ink">{t("Modèles de secours (dans l'ordre)", "Fallback models (in order)")}</p>
+            <div className="flex max-h-36 flex-wrap gap-2 overflow-y-auto">
+              {publicModelCodes.filter((code) => code !== policy.assistantSettings.landingModelCodes[0]).map((code) => (
+                <label key={code} className="flex min-h-10 items-center gap-2 rounded-lg border border-dtsc-border px-2 text-xs text-dtsc-ink">
+                  <input type="checkbox" checked={policy.assistantSettings.landingModelCodes.includes(code)}
+                    onChange={(event) => {
+                      const chosen = policy.assistantSettings.landingModelCodes;
+                      setAssistantSetting("landingModelCodes", event.target.checked ? [...chosen, code].slice(0, 5) : chosen.filter((item) => item !== code));
+                    }} />
+                  {code}
+                </label>
+              ))}
+            </div>
+          </div>
+          <label className="block text-xs font-medium text-dtsc-ink">{t("Outils de lecture maximum par exécution Agent", "Maximum read tools per Agent run")}
+            <input type="number" min={1} max={8} value={policy.assistantSettings.agentMaxReadToolsPerRun}
+              onChange={(event) => setAssistantSetting("agentMaxReadToolsPerRun", Math.max(1, Math.min(8, Number(event.target.value) || 1)))}
+              className="mt-1 block min-h-10 w-24 rounded-xl border border-dtsc-border bg-dtsc-page p-2 text-sm text-dtsc-ink" />
+          </label>
         </fieldset>
         {canManage ? <>
           <label className="block text-sm font-bold text-dtsc-ink">{t("Motif obligatoire de la modification", "Required change reason")}

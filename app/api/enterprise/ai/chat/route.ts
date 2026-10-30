@@ -242,7 +242,8 @@ export async function POST(req: Request) {
       length: preference?.responseLength,
       customInstructions: preference?.customInstructions,
     });
-    const instructions = `${baseInstructions}\n\n${buildLanguageInstruction(locale)}\n\nPréférences de cette conversation:\n${preferenceInstructions}`;
+    const governance = await getAiPlatformPolicy();
+    const instructions = `${baseInstructions}\n\n${buildLanguageInstruction(locale)}\n\n${governance.assistantSettings.enterpriseGuidance ? `Orientation éditoriale DTSC (ne modifie aucune permission métier) : ${governance.assistantSettings.enterpriseGuidance}` : ""}\n\nPréférences de cette conversation:\n${preferenceInstructions}`;
     const prompt = buildEnterpriseAiPrompt({
       question: data.content,
       knowledgeContext: knowledge.context,

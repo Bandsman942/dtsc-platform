@@ -7398,6 +7398,7 @@ model AiPlatformRuntimePolicy {
   disabledProviderCodes Json     @default("[]")
   disabledModelCodes    Json     @default("[]")
   agentCeilings         Json     @default("{}")
+  assistantSettings     Json     @default("{}")
   updatedByUserId       String?
   updatedAt             DateTime @updatedAt
 }

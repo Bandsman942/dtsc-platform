@@ -1,3 +1,11 @@
+## 2026-10-30 — Hotfix #965 : gouvernance unifiée des assistants IA (PR en validation)
+
+- Ajout des profils IA globaux administrables et versionnés : culture générale du chatbot, orientations éditoriales, modèle landing prioritaire et fallback, contrôle des lectures Agent.
+- L'assistant de la landing passe par le catalogue certifié OpenAI/OpenRouter, les restrictions publiques Starter/ZDR et les désactivations centrales; plus de dépendance directe à un seul endpoint OpenAI.
+- Agent général isolé au contexte PERSONAL ; mode entreprise : sélection d'outils de risque ciblée et tentative de synthèse avant épuisement des appels de lecture.
+- Migration additive JSONB de la politique IA, contrôle serveur/permissions, QA #965 et E2E propriétaire requis.
+- **État** : branche et PR en validation; aucune fusion ni mise en Production avant CI + OWNER_E2E #965.
+
 ## 2026-10-30 — Hotfix P0 #963 : reprise IA OpenRouter et diversification ZDR (pré-release)
 
 - Diagnostic Production : `google/gemini-2.5-flash` toujours dans le catalogue OpenRouter général mais absent de la liste ZDR ; HTTP 404 fournisseur, puis dégradation du health-check et refus de modèle. Crédits OpenRouter non en cause selon cette preuve.
