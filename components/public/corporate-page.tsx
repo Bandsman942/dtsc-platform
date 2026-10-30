@@ -98,7 +98,7 @@ export function CorporatePage({ page }: { page: PublicLongPage }) {
           <div className="grid min-w-0 gap-x-8 md:grid-cols-2 xl:grid-cols-4">
             {page.cards.map((card, index) => (
               <article key={card.title} className="group min-w-0 border-t border-dtsc-border py-6" style={{ animationDelay: `${index * 70}ms` }}>
-                
+
                 {card.icon && <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-dtsc-soft text-dtsc-blue shadow-[0_10px_30px_rgba(0,43,91,.08)]"><card.icon className="h-6 w-6" /></div>}
                 <h2 className="mt-5 text-xl font-semibold text-dtsc-ink">{card.title}</h2>
                 <p className="mt-3 text-sm leading-6 text-dtsc-muted">{card.text}</p>
