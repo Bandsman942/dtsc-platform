@@ -7,6 +7,7 @@ import { prepareAiTurn } from "@/lib/ai/assistant-runtime";
 import { classifyAiTask } from "@/lib/ai/classifier";
 import { estimateAiCost } from "@/lib/ai/costs";
 import { getAiModelDefinition, isCatalogAiModelAllowed } from "@/lib/ai/catalog";
+import { getAiPlatformPolicy, isPlatformAllowedAiModel } from "@/lib/ai/platform-runtime-policy";
 import { buildConnectedAppsAvailabilityContext } from "@/lib/ai/mcp/product-guidance";
 import { AiExecutionContextError } from "@/lib/ai/context-engine";
 import { AiProviderError, toAiReasonCode } from "@/lib/ai/errors";
@@ -107,9 +108,13 @@ export async function POST(req: Request) {
   // preserving explicit model validation for new client requests.
   const personalPlanCode = (await getCanonicalAiUsageLimits({ userId: session.userId, organizationId: null })).planCode;
   const savedModel = preference?.modelOverride || user.preferredModel || undefined;
-  const availableSavedModel = savedModel && isCatalogAiModelAllowed({
+  const savedDefinition = getAiModelDefinition(savedModel);
+  const savedModelEnabled = savedModel && savedDefinition
+    ? isPlatformAllowedAiModel(savedDefinition, await getAiPlatformPolicy())
+    : false;
+  const availableSavedModel = savedModelEnabled && savedModel && isCatalogAiModelAllowed({
     modelCode: savedModel, context: "PERSONAL", locale, planCode: personalPlanCode,
-  }) ? savedModel : undefined;
+  }) ? savedDefinition?.code : undefined;
   const requestedModel = body.data.model || availableSavedModel;
   const requestedDefinition = getAiModelDefinition(requestedModel);
   if (requestedModel && !requestedDefinition) return NextResponse.json({ error: "MODEL_UNAVAILABLE", reasonCode: "MODEL_UNAVAILABLE" }, { status: 400 });

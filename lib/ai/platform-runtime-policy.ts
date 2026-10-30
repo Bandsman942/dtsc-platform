@@ -54,6 +54,10 @@ export async function getAiPlatformPolicy(): Promise<AiPlatformPolicy> {
   };
 }
 
+export function isPlatformAllowedAiModel(model: { code: string; providerCode: string }, policy: AiPlatformPolicy): boolean {
+  return !policy.disabledModelCodes.includes(model.code) && !policy.disabledProviderCodes.includes(model.providerCode);
+}
+
 export function filterPlatformAllowedAiModels<T extends { id: string; providerCode: string }>(models: T[], policy: AiPlatformPolicy): T[] {
-  return models.filter((model) => !policy.disabledModelCodes.includes(model.id) && !policy.disabledProviderCodes.includes(model.providerCode));
+  return models.filter((model) => isPlatformAllowedAiModel({ code: model.id, providerCode: model.providerCode }, policy));
 }

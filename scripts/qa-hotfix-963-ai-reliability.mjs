@@ -17,8 +17,11 @@ const access = read("lib/enterprise-ai/access.ts");
 const settings = read("app/api/enterprise/ai/settings/route.ts");
 const chatPage = read("app/chat/page.tsx");
 const chatRoute = read("app/api/chat/v2/route.ts");
+const enterpriseChatRoute = read("app/api/enterprise/ai/chat/route.ts");
+const enterpriseAgentRoute = read("app/api/enterprise/ai/agent/route.ts");
 const conversations = read("app/api/conversations/[id]/route.ts");
 const enterpriseConversations = read("app/api/enterprise/ai/conversations/[id]/route.ts");
+const accountPreferences = read("app/api/account/preferences/route.ts");
 const audit = read("scripts/ai/audit-openrouter-catalog.mjs");
 
 expect(models.length >= 6, "At least six additional certified OpenRouter models are required");
@@ -53,8 +56,14 @@ expect(access.includes("enterpriseAiSetting.createMany") && access.includes("ski
 expect(settings.includes("enterpriseAiSetting.findUnique"), "Read settings route must not perform a second empty-update upsert");
 expect(chatPage.includes('context: "PERSONAL"') && chatPage.includes("personalPlanCode"), "General chatbot catalog must use its real PERSONAL plan");
 expect(chatRoute.includes("availableSavedModel") && chatRoute.includes('context: "PERSONAL"'), "Stale model overrides must fall back without bypassing policy");
+for (const [name, source] of [["general chat", chatRoute], ["enterprise chat", enterpriseChatRoute], ["enterprise agent", enterpriseAgentRoute]]) {
+  expect(source.includes("savedModelEnabled") && source.includes("isPlatformAllowedAiModel") && source.includes("getAiPlatformPolicy"), `${name}: disabled or retired saved preference must fall back to Auto`);
+}
 expect(conversations.includes('context: "PERSONAL"'), "General chat preference validation must use PERSONAL");
 expect(enterpriseConversations.includes("normalizePlanRequirement(access.planCode)"), "Enterprise model preference must enforce plan");
+for (const [name, source] of [["general conversation preferences", conversations], ["enterprise conversation preferences", enterpriseConversations], ["account preferences", accountPreferences]]) {
+  expect(source.includes("isPlatformAllowedAiModel") && source.includes("getAiPlatformPolicy"), `${name}: disabled models cannot be saved as valid preferences`);
+}
 for (const file of ["app/chat/page.tsx", "app/api/models/route.ts", "app/enterprise-modules/[moduleCode]/page.tsx", "app/settings/page.tsx"]) {
   expect(read(file).includes("filterPlatformAllowedAiModels") && read(file).includes("getAiPlatformPolicy"), `${file}: selector must respect administrator disabled models and providers`);
 }

@@ -7,7 +7,9 @@ import {
 import { POST as enterpriseAgentPost } from "@/app/api/enterprise/ai/agent/route";
 import { prepareAiTurn } from "@/lib/ai/assistant-runtime";
 import { classifyAiTask } from "@/lib/ai/classifier";
-import { getAiModelDefinition } from "@/lib/ai/catalog";
+import { getAiModelDefinition, isCatalogAiModelAllowed } from "@/lib/ai/catalog";
+import { getAiPlatformPolicy, isPlatformAllowedAiModel } from "@/lib/ai/platform-runtime-policy";
+import { normalizePlanRequirement } from "@/lib/billing/plans";
 import { estimateAiCost } from "@/lib/ai/costs";
 import { AiProviderError, toAiReasonCode } from "@/lib/ai/errors";
 import { getAiErrorMessage } from "@/lib/ai/i18n";
@@ -146,7 +148,15 @@ export async function POST(req: Request) {
       organizationId: data.organizationId,
       userId: session.userId,
     });
-    const requestedModel = preference?.modelOverride || data.model || undefined;
+    const savedModel = preference?.modelOverride || undefined;
+    const savedDefinition = getAiModelDefinition(savedModel);
+    const savedModelEnabled = savedModel && savedDefinition
+      ? isPlatformAllowedAiModel(savedDefinition, await getAiPlatformPolicy())
+      : false;
+    const allowedSavedModel = savedModelEnabled && savedModel && isCatalogAiModelAllowed({
+      modelCode: savedModel, context: "ORGANIZATION", locale, planCode: normalizePlanRequirement(access.planCode),
+    }) ? savedDefinition?.code : undefined;
+    const requestedModel = data.model || allowedSavedModel;
     if (requestedModel && !getAiModelDefinition(requestedModel)) {
       return NextResponse.json({ error: "MODEL_UNAVAILABLE", reasonCode: "MODEL_UNAVAILABLE" }, { status: 400 });
     }

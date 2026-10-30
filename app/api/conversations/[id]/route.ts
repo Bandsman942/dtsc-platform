@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { chatPreferenceView, getChatConversationPreference } from "@/lib/assistant-conversation-preferences";
-import { isCatalogAiModelAllowed } from "@/lib/ai/catalog";
+import { getAiModelDefinition, isCatalogAiModelAllowed } from "@/lib/ai/catalog";
+import { getAiPlatformPolicy, isPlatformAllowedAiModel } from "@/lib/ai/platform-runtime-policy";
 import { getAiErrorMessage } from "@/lib/ai/i18n";
 import { writeApiLog } from "@/lib/audit";
 import { getCanonicalAiUsageLimits } from "@/lib/billing/ai-usage-limits";
@@ -57,7 +58,9 @@ export async function PATCH(req: Request, { params }: Params) {
     const modelOverride = data.modelOverride?.trim() || "";
     const userLocale = await prisma.user.findUnique({ where: { id: session.userId }, select: { locale: true } });
     const planCode = (await getCanonicalAiUsageLimits({ userId: session.userId, organizationId: null })).planCode;
-    if (modelOverride && !isCatalogAiModelAllowed({ modelCode: modelOverride, context: "PERSONAL", locale: userLocale?.locale || "fr", planCode })) {
+    const definition = getAiModelDefinition(modelOverride);
+    const runtimeAllowed = definition && modelOverride ? isPlatformAllowedAiModel(definition, await getAiPlatformPolicy()) : false;
+    if (modelOverride && (!runtimeAllowed || !isCatalogAiModelAllowed({ modelCode: modelOverride, context: "PERSONAL", locale: userLocale?.locale || "fr", planCode }))) {
       return NextResponse.json({ reasonCode: "MODEL_UNAVAILABLE", message: getAiErrorMessage("MODEL_UNAVAILABLE", userLocale?.locale) }, { status: 400 });
     }
   }

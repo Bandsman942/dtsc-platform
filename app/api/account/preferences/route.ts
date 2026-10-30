@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { UserStatus } from "@prisma/client";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
-import { isCatalogAiModelAllowed } from "@/lib/ai/catalog";
+import { getAiModelDefinition, isCatalogAiModelAllowed } from "@/lib/ai/catalog";
+import { getAiPlatformPolicy, isPlatformAllowedAiModel } from "@/lib/ai/platform-runtime-policy";
 import { getAiErrorMessage } from "@/lib/ai/i18n";
 import type { AiContextCode } from "@/lib/ai/types";
 import { getCanonicalAiUsageLimits } from "@/lib/billing/ai-usage-limits";
@@ -44,7 +45,9 @@ export async function PATCH(req: Request) {
   const planCode = aiContext === "DTSC_INTERNAL"
     ? "ENTERPRISE"
     : (await getCanonicalAiUsageLimits({ userId: session.userId, organizationId })).planCode;
-  if (preferredModel && !isCatalogAiModelAllowed({ modelCode: preferredModel, context: aiContext, locale: body.data.locale, planCode })) {
+  const definition = getAiModelDefinition(preferredModel);
+  const runtimeAllowed = definition && preferredModel ? isPlatformAllowedAiModel(definition, await getAiPlatformPolicy()) : false;
+  if (preferredModel && (!runtimeAllowed || !isCatalogAiModelAllowed({ modelCode: preferredModel, context: aiContext, locale: body.data.locale, planCode }))) {
     await writeApiLog({
       request: req,
       statusCode: 400,
