@@ -26,6 +26,10 @@ const TEXT_TASKS: AiTaskType[] = [
   "TOOL_EXECUTION",
 ];
 const MODEL_PROFILE_CODES = new Set<AiModelProfileCode>(["FAST", "BALANCED", "REASONING", "LONG_CONTEXT", "TOOLS", "VISION", "PREMIUM"]);
+// Certification revocation 2026-10-30: the model is available in OpenRouter's
+// general catalog but absent from GET /models?zdr=true. Never send sensitive
+// DTSC workloads to a provider that no longer satisfies mandatory ZDR.
+const REVOKED_NON_ZDR_OPENROUTER_MODEL_IDS = new Set(["google/gemini-2.5-flash"]);
 const SUPPORTED_PROVIDER_PROTOCOLS = new Set<AiProviderDefinition["protocol"]>([
   "OPENAI_RESPONSES",
   "OPENAI_CHAT_COMPLETIONS",
@@ -129,6 +133,7 @@ function isCertifiedOpenRouterModelDefinition(value: unknown): value is AiModelD
 function certifiedOpenRouterModels() {
   return parseJsonArray<unknown>(env.AI_OPENROUTER_CERTIFIED_MODELS_JSON)
     .filter(isCertifiedOpenRouterModelDefinition)
+    .filter((model) => !REVOKED_NON_ZDR_OPENROUTER_MODEL_IDS.has(model.providerModelId))
     .map((model) => ({
       ...model,
       providerCode: "OPENROUTER",

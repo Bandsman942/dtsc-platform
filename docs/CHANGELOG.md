@@ -1,3 +1,11 @@
+## 2026-10-30 — Hotfix P0 #963 : reprise IA OpenRouter et diversification ZDR (pré-release)
+
+- Diagnostic Production : `google/gemini-2.5-flash` toujours dans le catalogue OpenRouter général mais absent de la liste ZDR ; HTTP 404 fournisseur, puis dégradation du health-check et refus de modèle. Crédits OpenRouter non en cause selon cette preuve.
+- Révocation fail-closed du modèle non-ZDR dans la certification historique. Portefeuille versionné de **7 modèles alternatifs** sur cinq familles, coûts/tiers/capacités explicites, audit distant de ZDR ; activation Production exclusivement après validation et configuration de l'allowlist existante.
+- Séparation de santé par contexte/tâche, exclusions des erreurs de schéma applicatif, fallback plus explicite, journalisation HTTP amont sans données confidentielles ; modèle OpenAI Responses accepté avec fonctions optionnelles, validation Zod et autorisations conservées.
+- Harmonisation sélecteurs Chatbot/IA entreprise/API/Paramètres (plan réel, modèles désactivés, préférences obsolètes) ; création initiale des paramètres IA entreprise sans course P2002. QA dédiée #963 et scénario OWNER_E2E documentés.
+- **Non livré** : CI complète et OWNER_E2E propriétaire non encore prouvés, PR non fusionnée, aucune variable Production ni déploiement Vercel modifiés. Voir `docs/HOTFIX_963_OPENROUTER_AI_RECOVERY.md`.
+
 ## 2026-10-28 — Hotfix P0 #916 : référentiel complet 23 relations (PR non fusionnée)
 
 - `ENTERPRISE_IDENTITY_RELATION_TYPES` est l'unique source des **23** types, dont `SUPPLIER`; la QA #786 ne conserve plus une liste incomplète de 22 entrées.

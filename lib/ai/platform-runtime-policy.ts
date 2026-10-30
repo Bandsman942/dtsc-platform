@@ -16,7 +16,9 @@ export const agentCeilingsSchema = z.object({
   ENTERPRISE: ceiling.optional(),
 }).strict();
 
-const codes = z.array(z.string().regex(/^[A-Z0-9_]{2,120}$/)).max(100).superRefine((arr,ctx) => {
+// Provider codes are uppercase, while model codes include lower-case letters,
+// hyphens and sometimes provider/model separators (OpenRouter).
+const codes = z.array(z.string().regex(/^[A-Za-z0-9_./:-]{2,120}$/)).max(100).superRefine((arr,ctx) => {
   if (new Set(arr).size !== arr.length) ctx.addIssue({ code: "custom", message: "Duplicate code" });
 });
 
@@ -50,4 +52,12 @@ export async function getAiPlatformPolicy(): Promise<AiPlatformPolicy> {
     disabledModelCodes: codes.parse(row.disabledModelCodes),
     agentCeilings: agentCeilingsSchema.parse(row.agentCeilings),
   };
+}
+
+export function isPlatformAllowedAiModel(model: { code: string; providerCode: string }, policy: AiPlatformPolicy): boolean {
+  return !policy.disabledModelCodes.includes(model.code) && !policy.disabledProviderCodes.includes(model.providerCode);
+}
+
+export function filterPlatformAllowedAiModels<T extends { id: string; providerCode: string }>(models: T[], policy: AiPlatformPolicy): T[] {
+  return models.filter((model) => isPlatformAllowedAiModel({ code: model.id, providerCode: model.providerCode }, policy));
 }

@@ -86,7 +86,7 @@ for (const [label, source] of [
   expect(source.includes("prepareAiTurn"), `${label} must use the canonical assistant runtime`);
 }
 
-expect(chatPage.includes("resolveAiSessionContext(session)"), "Chat page model catalog must use the same session context resolver as runtime routes");
+expect(chatPage.includes('context: "PERSONAL"') && chatRoute.includes('const contextCode = "PERSONAL"'), "General chat page catalog and its runtime must share the PERSONAL context, regardless of session enterprise navigation");
 expect(chatWorkspace.includes("body?.reasonCode || body?.error || body?.code"), "Chat UI must consume structured AI reason codes instead of a single generic error path");
 expect(chatWorkspace.includes('reasonCode === "DAILY_LIMIT_REACHED"'), "Chat UI must distinguish daily usage limits");
 expect(chatWorkspace.includes('reasonCode === "RATE_LIMITED"'), "Chat UI must distinguish rate limiting");

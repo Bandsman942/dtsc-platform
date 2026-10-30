@@ -29,6 +29,8 @@ import {
   resolveEnterpriseModuleRoute,
 } from "@/lib/enterprise/module-registry";
 import { listCatalogAiModelsForUi } from "@/lib/ai/catalog";
+import { filterPlatformAllowedAiModels, getAiPlatformPolicy } from "@/lib/ai/platform-runtime-policy";
+import { getCanonicalAiUsageLimits } from "@/lib/billing/ai-usage-limits";
 import { prisma } from "@/lib/prisma";
 
 type Params = { params: Promise<{ moduleCode: string }> };
@@ -69,7 +71,11 @@ export default async function EnterpriseModulePage({ params }: Params) {
   const definition = capabilities.definition;
 
   if (definition.routeKind === "AI_SERVICE") {
-    const models = listCatalogAiModelsForUi({ context: "ORGANIZATION", locale: user.locale });
+    const [{ planCode }, platformPolicy] = await Promise.all([
+      getCanonicalAiUsageLimits({ userId: user.id, organizationId }),
+      getAiPlatformPolicy(),
+    ]);
+    const models = filterPlatformAllowedAiModels(listCatalogAiModelsForUi({ context: "ORGANIZATION", locale: user.locale, planCode }), platformPolicy);
     return (
       <AppShell user={user}>
         <AssistantImmersiveWorkspaceShell variant="enterprise">

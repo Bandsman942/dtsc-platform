@@ -116,7 +116,7 @@ export async function createOpenRouterChatCompletionsEventStream({
   }
   if (!response.ok || !response.body) {
     const classified = classifyProviderHttpError(response.status);
-    throw new AiProviderError({ ...classified, message: `${provider.code} response ${response.status}`, providerCode: provider.code, modelCode: model.code });
+    throw new AiProviderError({ ...classified, message: `${provider.code} response ${response.status}`, providerCode: provider.code, modelCode: model.code, upstreamStatusCode: response.status });
   }
 
   const source = response.body;

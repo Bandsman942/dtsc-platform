@@ -6,6 +6,7 @@ export class AiProviderError extends Error {
   readonly retryable: boolean;
   readonly providerCode?: string;
   readonly modelCode?: string;
+  readonly upstreamStatusCode?: number;
 
   constructor({
     reasonCode,
@@ -14,6 +15,7 @@ export class AiProviderError extends Error {
     retryable = false,
     providerCode,
     modelCode,
+    upstreamStatusCode,
   }: {
     reasonCode: AiProviderErrorCode;
     message: string;
@@ -21,6 +23,7 @@ export class AiProviderError extends Error {
     retryable?: boolean;
     providerCode?: string;
     modelCode?: string;
+    upstreamStatusCode?: number;
   }) {
     super(message);
     this.name = "AiProviderError";
@@ -29,6 +32,7 @@ export class AiProviderError extends Error {
     this.retryable = retryable;
     this.providerCode = providerCode;
     this.modelCode = modelCode;
+    this.upstreamStatusCode = upstreamStatusCode;
   }
 }
 

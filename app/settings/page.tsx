@@ -9,6 +9,9 @@ import { ModuleMetric, ModuleMetrics } from "@/components/workspace/module-metri
 import { ModuleContent, ModuleHeader, ModuleSection, ModuleWorkspace } from "@/components/workspace/module-workspace";
 import { StatusBadge } from "@/components/workspace/status-badge";
 import { listCatalogAiModelsForUi } from "@/lib/ai/catalog";
+import { filterPlatformAllowedAiModels, getAiPlatformPolicy } from "@/lib/ai/platform-runtime-policy";
+import { getCanonicalAiUsageLimits } from "@/lib/billing/ai-usage-limits";
+import { getActiveOrganizationId } from "@/lib/organizations";
 import { getSession, requireUser } from "@/lib/auth";
 import { getExperienceCopy, getIntlLocale } from "@/lib/experience-i18n";
 import { formatEnumLabelForLocale } from "@/lib/labels-i18n";
@@ -27,10 +30,17 @@ export default async function SettingsPage() {
     getSession(),
     getUserPushNotificationContentMode(user.id),
   ]);
-  const models = listCatalogAiModelsForUi({
-    context: session?.activeContext === "DTSC_INTERNAL" ? "DTSC_INTERNAL" : session?.activeContext === "ORGANIZATION" ? "ORGANIZATION" : "PERSONAL",
+  const isInternalContext = session?.activeContext === "DTSC_INTERNAL";
+  const organizationId = !isInternalContext && session?.activeContext === "ORGANIZATION" ? getActiveOrganizationId(session) : null;
+  const [usageLimits, platformPolicy] = await Promise.all([
+    isInternalContext ? Promise.resolve(null) : getCanonicalAiUsageLimits({ userId: user.id, organizationId }),
+    getAiPlatformPolicy(),
+  ]);
+  const models = filterPlatformAllowedAiModels(listCatalogAiModelsForUi({
+    context: isInternalContext ? "DTSC_INTERNAL" : organizationId ? "ORGANIZATION" : "PERSONAL",
     locale: user.locale,
-  });
+    planCode: isInternalContext ? "ENTERPRISE" : usageLimits?.planCode,
+  }), platformPolicy);
   const copy = getExperienceCopy(user.locale).settings.page;
   const intlLocale = getIntlLocale(user.locale);
   const activeContext = session?.activeContext || "GLOBAL_CLIENT";
