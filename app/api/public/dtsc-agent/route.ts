@@ -332,7 +332,7 @@ export async function POST(req: Request) {
     const available = listAvailableAiModels({
       context: "PERSONAL", locale: "fr", taskType: "GENERAL_CHAT", planCode: "STARTER",
       dataClassifications: ["PUBLIC"], requiredCapabilities: { text: true, tools: true },
-    }).filter((model) => !policy.disabledModelCodes.includes(model.code) && !policy.disabledProviderCodes.includes(model.providerCode));
+    }).filter((model) => (model.providerCode === "OPENAI" || model.providerCode === "OPENROUTER") && !policy.disabledModelCodes.includes(model.code) && !policy.disabledProviderCodes.includes(model.providerCode));
     const allowedByCode = new Map(available.map((model) => [model.code, model]));
     const selected = policy.assistantSettings.landingModelCodes.length
       ? policy.assistantSettings.landingModelCodes.map((code) => allowedByCode.get(code)).filter((model): model is AiModelDefinition => Boolean(model))
