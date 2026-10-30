@@ -6,7 +6,7 @@ import { CONSOLE_CAPABILITIES } from "@/lib/console/console-capabilities";
 import { prisma } from "@/lib/prisma";
 import { sanitizeRichHtml } from "@/lib/rich-content";
 import { getAppSettings } from "@/lib/settings";
-import { publicPublicationSchema } from "@/lib/validators";
+import { publicPublicationEditorSchema } from "@/lib/publication-editor-schema";
 
 export async function POST(req: Request) {
   const access = await requireConsoleCapability(CONSOLE_CAPABILITIES.CONTENT_READ);
@@ -15,10 +15,10 @@ export async function POST(req: Request) {
   const canCreateDraft = access.session.role === UserRole.ADMIN || (access.session.role !== UserRole.CLIENT && settings.allowNonClientPublicationDrafts);
   if (!canCreateDraft) return NextResponse.json({ error: "Forbidden", reasonCode: "CAPABILITY_REQUIRED" }, { status: 403 });
 
-  const body = publicPublicationSchema.safeParse(await req.json());
+  const body = publicPublicationEditorSchema.safeParse(await req.json());
   if (!body.success) return NextResponse.json({ error: "Invalid publication", reasonCode: "VALIDATION_ERROR" }, { status: 400 });
   const canPublish = (await requireConsoleCapability(CONSOLE_CAPABILITIES.CONTENT_MANAGE)).response === undefined;
-  const { contentHtml, ...publicationData } = body.data;
+  const { contentHtml, seoTitle, seoDescription, ...publicationData } = body.data;
   const content = contentHtml ? sanitizeRichHtml(contentHtml) : publicationData.content;
   const published = canPublish ? publicationData.published : false;
   const now = new Date();
@@ -27,6 +27,7 @@ export async function POST(req: Request) {
     const created = await tx.publicPublication.create({
       data: {
         ...publicationData,
+        seoJson: { title: seoTitle || publicationData.title, description: seoDescription || publicationData.excerpt },
         published,
         status: published ? "PUBLISHED" : "DRAFT",
         publishedAt: published ? now : null,
