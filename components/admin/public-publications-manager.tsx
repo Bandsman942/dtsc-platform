@@ -41,6 +41,11 @@ type PublicationDraft = Pick<Publication, "title" | "slug" | "category" | "excer
 };
 
 const categories = ["RESSOURCE", "ARTICLE", "GUIDE", "CAS_PRATIQUE", "ANNONCE", "PROJET"];
+const seoLabels = {
+  section: "Référencement (SEO) · facultatif",
+  title: "Titre SEO",
+  description: "Description SEO",
+} as const;
 
 export function PublicPublicationsManager({
   publications,
@@ -257,10 +262,10 @@ export function PublicPublicationsManager({
             </div>
             <textarea name="excerpt" placeholder="Résumé court pour le catalogue et les moteurs de recherche" disabled={!canCreateDrafts} className="min-h-20 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm text-dtsc-ink" required />
             <details className="rounded-xl border border-dtsc-border px-4 py-3">
-              <summary className="cursor-pointer text-sm font-semibold text-dtsc-blue">Référencement (SEO) · facultatif</summary>
+              <summary className="cursor-pointer text-sm font-semibold text-dtsc-blue">{seoLabels.section}</summary>
               <div className="mt-4 grid gap-3">
-                <Input name="seoTitle" placeholder="Titre SEO" maxLength={180} disabled={!canCreateDrafts} />
-                <textarea name="seoDescription" placeholder="Description SEO" maxLength={500} disabled={!canCreateDrafts} className="min-h-24 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm text-dtsc-ink" />
+                <Input name="seoTitle" placeholder={seoLabels.title} aria-label={seoLabels.title} maxLength={180} disabled={!canCreateDrafts} />
+                <textarea name="seoDescription" placeholder={seoLabels.description} aria-label={seoLabels.description} maxLength={500} disabled={!canCreateDrafts} className="min-h-24 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm text-dtsc-ink" />
               </div>
             </details>
             <RichTextEditor
@@ -320,10 +325,10 @@ export function PublicPublicationsManager({
             <Input name="coverLabel" value={editingDraft.coverLabel || ""} onChange={(event) => setEditingDraft((current) => current ? { ...current, coverLabel: event.target.value } : current)} disabled={!canEditPublication(editing)} />
             <textarea name="excerpt" value={editingDraft.excerpt} onChange={(event) => setEditingDraft((current) => current ? { ...current, excerpt: event.target.value } : current)} disabled={!canEditPublication(editing)} className="min-h-20 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm text-dtsc-ink" required />
             <details className="rounded-xl border border-dtsc-border px-4 py-3">
-              <summary className="cursor-pointer text-sm font-semibold text-dtsc-blue">Référencement (SEO) · facultatif</summary>
+              <summary className="cursor-pointer text-sm font-semibold text-dtsc-blue">{seoLabels.section}</summary>
               <div className="mt-4 grid gap-3">
-                <Input name="seoTitle" maxLength={180} placeholder="Titre SEO" value={editingDraft.seoTitle} onChange={(event) => setEditingDraft((current) => current ? { ...current, seoTitle: event.target.value } : current)} disabled={!canEditPublication(editing)} />
-                <textarea name="seoDescription" maxLength={500} placeholder="Description SEO" value={editingDraft.seoDescription} onChange={(event) => setEditingDraft((current) => current ? { ...current, seoDescription: event.target.value } : current)} disabled={!canEditPublication(editing)} className="min-h-24 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm text-dtsc-ink" />
+                <Input name="seoTitle" maxLength={180} placeholder={seoLabels.title} aria-label={seoLabels.title} value={editingDraft.seoTitle} onChange={(event) => setEditingDraft((current) => current ? { ...current, seoTitle: event.target.value } : current)} disabled={!canEditPublication(editing)} />
+                <textarea name="seoDescription" maxLength={500} placeholder={seoLabels.description} aria-label={seoLabels.description} value={editingDraft.seoDescription} onChange={(event) => setEditingDraft((current) => current ? { ...current, seoDescription: event.target.value } : current)} disabled={!canEditPublication(editing)} className="min-h-24 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm text-dtsc-ink" />
               </div>
             </details>
             <RichTextEditor
