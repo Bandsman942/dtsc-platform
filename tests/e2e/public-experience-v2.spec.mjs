@@ -101,7 +101,15 @@ test.describe.serial("PUBLIC-UX-07 public experience", () => {
 async function noOverflow(page, width) {
   await page.waitForLoadState("load");
   await expect.poll(async () => {
-    // Next.js may replace its document during hydration; retry only the measurement.
-    return await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+    try {
+      return await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+    } catch (error) {
+      // React/Next.js may replace its document between DOM readiness and measurement.
+      // Retry only a detached execution context; do not discard real overflow or app errors.
+      if (/Execution context was destroyed|Cannot find context with specified id/i.test(String(error))) {
+        return Number.POSITIVE_INFINITY;
+      }
+      throw error;
+    }
   }, { message: "Overflow at " + width + " px", timeout: 15_000, intervals: [100, 250, 500] }).toBeLessThanOrEqual(2);
 }
