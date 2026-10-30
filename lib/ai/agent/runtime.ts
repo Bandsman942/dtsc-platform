@@ -25,7 +25,7 @@ function humanMessage(locale: string, reason: "WAITING_CONFIRMATION" | "BUDGET" 
 
 async function resolvePlanCode(userId: string, organizationId: string | null | undefined, contextCode: AiContextCode) {
   if (contextCode === "DTSC_INTERNAL") return "ENTERPRISE" as const;
-  const limits = await getCanonicalAiUsageLimits({ userId, organizationId: organizationId || null });
+  const limits = await getCanonicalAiUsageLimits({ userId, organizationId: contextCode === "PERSONAL" ? null : organizationId || null });
   return limits.planCode;
 }
 
@@ -59,7 +59,7 @@ async function createAgentLoopStream(input: AgentLoopInput) {
   const toolContextBase = {
     session: input.session,
     userId: input.userId,
-    organizationId: input.organizationId || null,
+    organizationId: input.contextCode === "PERSONAL" ? null : input.organizationId || null,
     conversationId: input.sourceConversationId || null,
     assistantCode: input.assistantCode || null,
     dataClassifications: input.dataClassifications,
@@ -143,7 +143,9 @@ async function createAgentLoopStream(input: AgentLoopInput) {
                 messages,
                 instructions: input.instructions,
                 userId: input.userId,
-                organizationId: input.organizationId,
+                // Storage ownership may be organization-scoped; PERSONAL may never
+                // grant a tenant data classification or ERP tool authority.
+                organizationId: input.contextCode === "PERSONAL" ? null : input.organizationId,
                 assistantCode: input.assistantCode,
                 dataClassifications: input.dataClassifications,
                 requiredCapabilities: turnTools.length ? { tools: true } : undefined,
