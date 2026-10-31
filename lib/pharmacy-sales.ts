@@ -3,6 +3,7 @@ import type { Prisma } from "@prisma/client";
 import { enterpriseBusinessCalendarWindows, getEnterpriseBusinessContext } from "@/lib/enterprise/business-context";
 import { effectivePharmacyBatchStatus } from "@/lib/pharmacy-batches";
 import { convertPharmacyMoneyToBase } from "@/lib/pharmacy-currencies";
+import { resolvePharmacyAmountKpi } from "@/lib/pharmacy-kpi-currency";
 import type { pharmacySaleSchema } from "@/lib/pharmacy-sale-validators";
 import { generatePharmacyEntityNumber, getEffectivePharmacySettings } from "@/lib/pharmacy-settings";
 import { prisma } from "@/lib/prisma";
@@ -86,7 +87,8 @@ export async function getSalesDataset(organizationId: string, params: PharmacySa
   const base = { organizationId };
   const [
     sales, total, totalUnfiltered, products, batches, members, departments, prescriptions, movements,
-    todayStats, monthStats, paid, partial, cancelled, refunds, pendingValidation, linkedPrescriptions, anomalies, stockImpacted,
+    todayStats, monthStats, todayInvalidSnapshots, monthInvalidSnapshots,
+    paid, partial, cancelled, refunds, pendingValidation, linkedPrescriptions, anomalies, stockImpacted,
   ] = await Promise.all([
     prisma.pharmacySale.findMany({ where, orderBy: [{ saleDate: "desc" }, { id: "desc" }], skip: (params.page - 1) * params.pageSize, take: params.pageSize, include: { lines: true, refunds: true, anomalies: true } }),
     prisma.pharmacySale.count({ where }),
@@ -97,8 +99,10 @@ export async function getSalesDataset(organizationId: string, params: PharmacySa
     prisma.enterpriseDepartment.findMany({ where: { organizationId, isActive: true }, select: { id: true, labelFr: true } }),
     prisma.pharmacyPrescription.findMany({ where: { organizationId, status: { notIn: ["REJECTED", "ARCHIVED", "CANCELLED"] } }, select: { id: true, prescriptionNumber: true } }),
     prisma.pharmacyStockMovement.findMany({ where: { organizationId, relatedEntityType: "PharmacySale" }, orderBy: { createdAt: "desc" }, take: 100 }),
-    prisma.pharmacySale.aggregate({ where: { ...base, saleDate: todayFilter }, _count: { _all: true }, _sum: { totalAmountBase: true } }),
-    prisma.pharmacySale.aggregate({ where: { ...base, saleDate: monthFilter }, _count: { _all: true }, _sum: { totalAmountBase: true } }),
+    prisma.pharmacySale.groupBy({ by: ["baseCurrency"], where: { ...base, saleDate: todayFilter }, _count: { _all: true }, _sum: { totalAmountBase: true } }),
+    prisma.pharmacySale.groupBy({ by: ["baseCurrency"], where: { ...base, saleDate: monthFilter }, _count: { _all: true }, _sum: { totalAmountBase: true } }),
+    prisma.pharmacySale.count({ where: { ...base, saleDate: todayFilter, OR: [{ exchangeRateToBase: { lte: 0 } }, { totalAmountBase: 0, totalAmount: { not: 0 } }] } }),
+    prisma.pharmacySale.count({ where: { ...base, saleDate: monthFilter, OR: [{ exchangeRateToBase: { lte: 0 } }, { totalAmountBase: 0, totalAmount: { not: 0 } }] } }),
     prisma.pharmacySale.count({ where: { ...base, paymentStatus: "PAID" } }),
     prisma.pharmacySale.count({ where: { ...base, paymentStatus: "PARTIALLY_PAID" } }),
     prisma.pharmacySale.count({ where: { ...base, status: "CANCELLED" } }),
@@ -108,16 +112,20 @@ export async function getSalesDataset(organizationId: string, params: PharmacySa
     prisma.pharmacySaleAnomaly.count({ where: { ...base, status: "OPEN" } }),
     prisma.pharmacySale.count({ where: { ...base, stockImpactApplied: true, saleDate: todayFilter } }),
   ]);
+  const todayKpi = resolvePharmacyAmountKpi(todayStats, currency, todayInvalidSnapshots);
+  const monthKpi = resolvePharmacyAmountKpi(monthStats, currency, monthInvalidSnapshots);
   const metrics = {
-    today: todayStats._count._all, month: monthStats._count._all,
-    todayAmount: Number(todayStats._sum.totalAmountBase || 0),
-    monthAmount: Number(monthStats._sum.totalAmountBase || 0),
+    today: todayStats.reduce((total, group) => total + group._count._all, 0),
+    month: monthStats.reduce((total, group) => total + group._count._all, 0),
+    todayAmount: todayKpi.amount,
+    monthAmount: monthKpi.amount,
     paid, partial, cancelled, refunds, pendingValidation,
     prescriptions: linkedPrescriptions, anomalies, stockImpacted,
   };
   const cashierMembers = members.filter((member) => `${member.positionCode || ""} ${member.positionTitle || ""}`.toLocaleLowerCase("fr").includes("caiss"));
   return {
     metrics, currency, sales,
+    financialKpiReliable: { today: todayKpi.reliable, month: monthKpi.reliable },
     pagination: { page: params.page, pageSize: params.pageSize, total, totalUnfiltered, pageCount: Math.max(1, Math.ceil(total / params.pageSize)) },
     products, batches: batches.filter((b) => ["ACTIVE", "NEAR_EXPIRY"].includes(effectivePharmacyBatchStatus(b))),
     members: cashierMembers.map((m) => m.user), departments,
