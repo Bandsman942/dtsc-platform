@@ -9,6 +9,10 @@ const adminEmail = process.env.E2E_ADMIN_EMAIL || "erp-admin@example.test";
 const adminPassword = process.env.E2E_ADMIN_PASSWORD || "E2eAdmin2026!";
 const userEmail = process.env.E2E_USER_EMAIL || "erp-user@example.test";
 const userPassword = process.env.E2E_USER_PASSWORD || "E2eUser2026!";
+// The serial acceptance suite uses several isolated browser contexts for the
+// same actors. Reuse their real authenticated session cookies rather than
+// repeatedly signing in and hitting the production-equivalent login limiter.
+const authenticatedCookies = new Map();
 
 const ids = {
   personIdentity: "e2e-786-person-identity",
@@ -49,16 +53,23 @@ async function readJson(response) {
 }
 
 async function signIn(page, email, password, next) {
-  const response = await page.context().request.post(`${baseUrl}/api/auth/sign-in`, {
-    data: { email, password, organizationId, next },
-    headers: {
-      origin: baseUrl,
-      referer: `${baseUrl}/auth/sign-in`,
-      "x-forwarded-for": email === adminEmail ? "203.0.113.86" : "203.0.113.87",
-    },
-  });
-  const body = await response.json().catch(() => null);
-  expect(response.ok(), `Hotfix #786 sign-in failed for ${email}: ${JSON.stringify(body)}`).toBeTruthy();
+  const cached = authenticatedCookies.get(email);
+  if (cached) {
+    await page.context().addCookies(cached);
+  } else {
+    const response = await page.context().request.post(`${baseUrl}/api/auth/sign-in`, {
+      data: { email, password, organizationId, next },
+      headers: {
+        origin: baseUrl,
+        referer: `${baseUrl}/auth/sign-in`,
+        "x-forwarded-for": email === adminEmail ? "203.0.113.86" : "203.0.113.87",
+      },
+    });
+    const body = await response.json().catch(() => null);
+    expect(response.ok(), `Hotfix #786 sign-in failed for ${email}: ${JSON.stringify(body)}`).toBeTruthy();
+    const state = await page.context().storageState();
+    authenticatedCookies.set(email, state.cookies);
+  }
   await page.goto(next);
   await page.waitForLoadState("networkidle");
 }

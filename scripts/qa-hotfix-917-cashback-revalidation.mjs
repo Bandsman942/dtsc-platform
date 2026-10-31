@@ -53,6 +53,8 @@ assert.ok(behavioral.includes('status: "PENDING_APPROVAL", currencyCode: fixture
 assert.ok(behavioral.includes('expect(pending.response.status()).toBeGreaterThanOrEqual(400)'), "Unconfirmed payments must be rejected by Finance");
 assert.ok(behavioral.includes("amount: String(half)"), "Actual partial allocation must use the canonical Finance API");
 assert.ok(behavioral.includes("Promise.all([allocate(), fulfill()])"), "Concurrent settlement must use two real HTTP operations");
+assert.ok(behavioral.includes("authenticatedCookies.set(email, state.cookies)"), "Serial multi-context E2E must reuse real sessions to respect login rate limits");
+assert.ok(behavioral.includes("page.context().addCookies(cached)"), "Reused E2E browser contexts must carry the authenticated cookie");
 assert.ok(service.includes("RELATIONSHIP_OMNI_CASHBACK_REVERSAL_OVERFLOW"), "Over-reversed ledger must fail closed");
 assert.ok(service.includes("alreadyReversed.gt(earned.amount)"), "Reversal must never exceed original EARN");
 const reversal = service.slice(service.indexOf("const reversal = await changeRelationalStoreCreditTx({"));
