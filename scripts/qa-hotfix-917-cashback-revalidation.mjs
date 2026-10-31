@@ -59,6 +59,9 @@ const reversal = service.slice(service.indexOf("const reversal = await changeRel
 assert.ok(reversal.includes('idempotencyKey: `omni-cashback:return:${orderId}:${usage.benefitId}:${returnId}`'), "Omnichannel return must remain traceable and idempotent");
 assert.ok(reversal.includes('reason: `Réversion cashback omnicanal après retour ${returnId}`'), "Omnichannel return must remain visible in the credit ledger audit trail");
 assert.ok(!/\breturnId\s*,\s*idempotencyKey:/.test(reversal), "Omnichannel return ID must never populate the classic POS return foreign key");
+assert.ok(posting.includes('id: returnId, organizationId: input.organizationId'), "GL reversal must resolve the real omnichannel return in the current tenant");
+assert.ok(posting.includes('status: "COMPLETED"'), "GL reversal must require a completed omnichannel return");
+assert.ok(posting.includes('!paidRefund || entry.returnId !== null || entry.saleId !== null'), "GL proof must not require the classic POS foreign key for an omnichannel return");
 assert.ok(allocation.includes("await withRetailTransactionRetry(() => prisma.$transaction("), "Finance allocation must retry serializable clashes");
 assert.ok(fulfillment.includes("return withRetailTransactionRetry(() => prisma.$transaction("), "Sales fulfillment must retry serializable clashes");
 assert.ok(retry.includes('"P2034"'), "Retries must be restricted to Prisma serializable conflicts");
