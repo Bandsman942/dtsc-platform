@@ -374,7 +374,10 @@ export async function reverseRetailOmnichannelCashbackTx(args: {
         tx, organizationId, accountId: earned.accountId,
         customerBusinessPartyId: order.businessPartyId, currencyCode: order.currency,
         actorUserId, amount: delta.negated(), entryType: "REVERSAL",
-        returnId, idempotencyKey: `omni-cashback:return:${orderId}:${usage.benefitId}:${returnId}`,
+        // StoredValueEntry.returnId has a database FK to EnterpriseRetailReturn
+        // (classic POS), not EnterpriseRetailOmnichannelReturn. Keep the latter's
+        // identity in the immutable idempotency key and audit reason instead.
+        idempotencyKey: `omni-cashback:return:${orderId}:${usage.benefitId}:${returnId}`,
         reason: `Réversion cashback omnicanal après retour ${returnId}`,
       });
       await postBusinessEventTx(tx, organizationId, actorUserId, {
