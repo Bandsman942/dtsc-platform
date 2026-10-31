@@ -202,7 +202,8 @@ export const FINANCE_ERROR_MESSAGES: Record<FinanceLocale, Record<string, string
     REGULATORY_STATEMENT_TYPE_NOT_SUPPORTED: "Cet état financier n’est pas disponible pour le plan comptable actif.",
     CHART_TEMPLATE_UPGRADE_REQUIRES_CONTROLLED_MIGRATION: "Cette nouvelle version nécessite une revue avant application. Consultez l’analyse d’impact puis validez la migration.",
     ACCOUNTING_SETUP_INPUT_INVALID: "Vérifiez les informations de configuration comptable puis réessayez.",
-    FINANCE_DUPLICATE: "Une donnée identique existe déjà dans cette entreprise."
+    FINANCE_DUPLICATE: "Une donnée identique existe déjà dans cette entreprise.",
+    FINANCE_NETWORK_UNAVAILABLE: "La connexion a été interrompue. Votre opération n'est pas confirmée ; vérifiez son statut avant de réessayer."
   },
   en: {
     PAYMENT_ALLOCATION_EXCEEDS_UNALLOCATED: "The allocated amount exceeds the remaining available payment amount.",
@@ -334,7 +335,8 @@ export const FINANCE_ERROR_MESSAGES: Record<FinanceLocale, Record<string, string
     REGULATORY_STATEMENT_TYPE_NOT_SUPPORTED: "This financial statement is not available for the active chart of accounts.",
     CHART_TEMPLATE_UPGRADE_REQUIRES_CONTROLLED_MIGRATION: "This new version requires review before it can be applied. Review the impact analysis, then approve the migration.",
     ACCOUNTING_SETUP_INPUT_INVALID: "Review the accounting setup information and try again.",
-    FINANCE_DUPLICATE: "An identical record already exists in this company."
+    FINANCE_DUPLICATE: "An identical record already exists in this company.",
+    FINANCE_NETWORK_UNAVAILABLE: "The connection was interrupted. Your action was not confirmed; check its status before retrying."
   }
 };
 
@@ -433,6 +435,12 @@ function extractSafeFinanceClientMessage(error: unknown) {
   return message.length > 0 && message.length <= 1200 ? message : null;
 }
 
+function financeHttpStatus(error: unknown) {
+  if (!error || typeof error !== "object") return null;
+  const value = (error as { status?: unknown }).status;
+  return typeof value === "number" && Number.isInteger(value) && value >= 0 && value <= 599 ? value : null;
+}
+
 export function financeErrorMessage(error: unknown, locale?: FinanceLocale, fallback?: string) {
   const resolvedLocale = financeClientLocale(locale);
   const code = extractFinanceErrorCode(error);
@@ -446,12 +454,19 @@ export function financeErrorMessage(error: unknown, locale?: FinanceLocale, fall
   if (code?.includes("MAPPING") && (code.includes("MISSING") || code.includes("NOT_FOUND"))) return resolvedLocale === "fr" ? "La configuration comptable de cette opération est incomplète. Complétez les comptes associés puis réessayez." : "The accounting setup for this operation is incomplete. Complete the related accounts and try again.";
   if (code?.endsWith("_NOT_FOUND")) return resolvedLocale === "fr" ? "L’élément financier demandé est introuvable ou n’est plus disponible." : "The requested finance record could not be found or is no longer available.";
   if (code?.includes("NOT_POSTABLE") || code?.includes("NOT_ELIGIBLE")) return resolvedLocale === "fr" ? "Cette opération n’est pas encore dans un état permettant sa comptabilisation." : "This operation is not yet in a state that allows posting.";
+  const status = financeHttpStatus(error);
+  if (status === 401) return resolvedLocale === "fr" ? "Votre session doit être renouvelée. Reconnectez-vous avant de réessayer." : "Your session needs to be renewed. Sign in again before retrying.";
+  if (status === 403) return resolvedLocale === "fr" ? "Vous n'avez pas les droits nécessaires pour cette opération." : "You do not have the required permissions for this operation.";
+  if (status === 409) return resolvedLocale === "fr" ? "Cette opération a changé entre-temps. Actualisez les informations avant de réessayer." : "This operation changed in the meantime. Refresh the information before retrying.";
+  if (status === 429) return resolvedLocale === "fr" ? "Trop de tentatives rapprochées. Patientez quelques instants avant de réessayer." : "Too many attempts in a short time. Wait a moment before trying again.";
+  if (status !== null && status >= 500) return resolvedLocale === "fr" ? "Le service financier est temporairement indisponible. Vérifiez l'état de l'opération avant une nouvelle tentative." : "The finance service is temporarily unavailable. Check the operation status before retrying.";
   const safeServerMessage = extractSafeFinanceClientMessage(error);
   if (resolvedLocale === "fr" && safeServerMessage) return safeServerMessage;
   if (code?.includes("REQUIRED")) return resolvedLocale === "fr" ? "Une information ou une configuration requise manque pour terminer cette opération." : "Required information or configuration is missing to complete this operation.";
   if (code?.includes("FORBIDDEN") || code === "FORBIDDEN" || code === "UNAUTHORIZED") return resolvedLocale === "fr" ? "Vous ne disposez pas de l’autorisation nécessaire pour cette action." : "You do not have the permission required for this action.";
   if (code?.includes("INVALID") || code === "INVALID_PAYLOAD") return resolvedLocale === "fr" ? "Certaines informations saisies sont à corriger avant de continuer." : "Some entered information must be corrected before continuing.";
   if (resolvedLocale === "en" && safeServerMessage && /\b(the|this|that|cannot|must|missing|required|invalid|failed|not|only|select|choose|enter|refresh)\b/i.test(safeServerMessage)) return safeServerMessage;
+  if (status === 400 || status === 422) return resolvedLocale === "fr" ? "Certaines informations de l'opération sont à corriger avant de continuer." : "Some operation details need to be corrected before continuing.";
   if (fallback) return fallback;
   return resolvedLocale === "fr" ? "L’opération financière n’a pas pu être terminée. Vérifiez les informations puis réessayez." : "The finance operation could not be completed. Review the information and try again.";
 }

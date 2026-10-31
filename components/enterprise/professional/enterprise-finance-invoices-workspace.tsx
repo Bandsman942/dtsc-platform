@@ -189,8 +189,8 @@ export function EnterpriseFinanceInvoicesWorkspace(props: Props) {
       : (isReceivables ? "sales-invoices" : "supplier-invoices");
     fetchOperationalFinanceRecord<InvoiceRecord>(`/api/enterprise/${organizationId}/${directName}`, deepId)
       .then((record) => { if (record) setDetail(record); })
-      .catch((error) => setErrorMessage(safeFinanceError(error, t("financeDetails"))));
-  }, [isReceivables, organizationId, searchParams]);
+      .catch((error) => setErrorMessage(safeFinanceError(error, translateEnterpriseFinance(locale, "financeDetails"), locale)));
+  }, [isReceivables, organizationId, searchParams, locale]);
 
   function resetCreate() {
     setLines([newLine(0)]);
@@ -244,7 +244,7 @@ export function EnterpriseFinanceInvoicesWorkspace(props: Props) {
       await financeMutation(`/api/enterprise/${organizationId}/${isReceivables ? "sales-invoices" : "supplier-invoices"}`, payload);
       setCreateOpen(false); resetCreate(); setRefreshKey((value) => value + 1); setMessage(t("invoiceSavedDraft"));
     } catch (error) {
-      setErrorMessage(safeFinanceError(error, t("creationFailed")));
+      setErrorMessage(safeFinanceError(error, t("creationFailed"), locale));
     } finally { setBusy(false); }
   }
 
@@ -269,7 +269,7 @@ export function EnterpriseFinanceInvoicesWorkspace(props: Props) {
       await financeMutation(path, payload);
       setActionTarget(null); setDetail(null); setRefreshKey((value) => value + 1); setMessage(t("invoiceWorkflowUpdated"));
     } catch (error) {
-      setErrorMessage(safeFinanceError(error, t("transitionFailed")));
+      setErrorMessage(safeFinanceError(error, t("transitionFailed"), locale));
     } finally { setBusy(false); }
   }
 
@@ -287,7 +287,7 @@ export function EnterpriseFinanceInvoicesWorkspace(props: Props) {
       });
       setCreditTarget(null); setDetail(null); setTab("credits"); setRefreshKey((value) => value + 1); setMessage(t("creditNoteCreated"));
     } catch (error) {
-      setErrorMessage(safeFinanceError(error, t("creditNoteCreationFailed")));
+      setErrorMessage(safeFinanceError(error, t("creditNoteCreationFailed"), locale));
     } finally { setBusy(false); }
   }
 

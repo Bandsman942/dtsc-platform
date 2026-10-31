@@ -175,6 +175,8 @@ jobs:
         run: node scripts/qa-ux-957-health-insurance-date.mjs
       - name: "UX-07B #959 Compact section density QA"
         run: node scripts/qa-ux-959-workspace-section-density.mjs
+      - name: "UX-03B #986 Finance typed-feedback locale QA"
+        run: node scripts/qa-ux-986-finance-feedback-locale.mjs
       - name: Lint
         run: pnpm lint
       - name: Build

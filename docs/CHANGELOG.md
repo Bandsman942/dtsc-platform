@@ -1,3 +1,9 @@
+## 2026-10-31 — UX-03B #986 : erreurs Finance typées et bilingues (en validation)
+
+- Caisse, Paiements et Factures transmettent explicitement leur langue active aux messages d'erreur métier.
+- Les échecs réseau et les statuts HTTP 401/403/409/429/5xx ont des retours sûrs FR/EN, sans exposer d'erreur technique ni annoncer une opération non confirmée comme réussie.
+- Le contrat HTTP, les validations et les données financières restent inchangés. QA ciblée et E2E propriétaire requis avant fusion.
+
 ## 2026-10-30 — Hotfix #965 : gouvernance unifiée des assistants IA (PR en validation)
 
 - Ajout des profils IA globaux administrables et versionnés : culture générale du chatbot, orientations éditoriales, modèle landing prioritaire et fallback, contrôle des lectures Agent.
