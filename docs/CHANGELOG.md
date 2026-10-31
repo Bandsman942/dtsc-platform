@@ -1,3 +1,9 @@
+## 2026-10-28 — Hotfix P0 #917 : révalidation Finance/consentement avant cashback omnicanal (pré-release)
+
+- Retrait d'audience ou d'attribution après la commande : refus de crédit malgré la preuve de livraison/paiement; entitlements, conditions et quotas revérifiés au moment de l'EARN.
+- Les EARN et REVERSAL restent strictement dans les ledgers et écritures Finance canoniques.
+- CI/E2E automatique et OWNER_E2E #917 **NOT_EXECUTED** à ce stade. Parents #886/#785 ouverts.
+
 ## 2026-10-30 — Hotfix #965 : gouvernance unifiée des assistants IA (PR en validation)
 
 - Ajout des profils IA globaux administrables et versionnés : culture générale du chatbot, orientations éditoriales, modèle landing prioritaire et fallback, contrôle des lectures Agent.
