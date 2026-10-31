@@ -10,6 +10,16 @@
     "withoutBatch": "no batch",
     "empty": "No stock movements match your search."
   },
+  "pharmacySaleReferences": {
+    "search": "Search references...",
+    "loading": "Loading options...",
+    "unavailable": "Reference unavailable or inactive.",
+    "error": "Search unavailable. Try again or check your connection.",
+    "empty": "No matching references.",
+    "chooseProduct": "Select a product first.",
+    "previous": "Previous",
+    "next": "Next"
+  },
   "common": {
     "actions": "Actions",
     "archive": "Archive",

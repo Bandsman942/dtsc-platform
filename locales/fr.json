@@ -10,6 +10,16 @@
     "withoutBatch": "sans lot",
     "empty": "Aucun mouvement correspondant à votre recherche."
   },
+  "pharmacySaleReferences": {
+    "search": "Rechercher dans les références...",
+    "loading": "Chargement des options...",
+    "unavailable": "Référence indisponible ou inactive.",
+    "error": "Recherche indisponible. Réessayez ou vérifiez la connexion.",
+    "empty": "Aucune référence trouvée.",
+    "chooseProduct": "Choisissez d'abord un produit.",
+    "previous": "Précédent",
+    "next": "Suivant"
+  },
   "common": {
     "actions": "Actions",
     "archive": "Archiver",

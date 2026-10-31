@@ -3,6 +3,7 @@
 import type * as React from "react";
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { BadgeCheck, CircleHelp, Eye, Plus, Send, Undo2 } from "lucide-react";
+import { useAppLocale } from "@/components/i18n/locale-provider";
 import { ActionMenu, type ActionMenuItem } from "@/components/ui/action-menu";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
@@ -10,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { ListControls } from "@/components/ui/list-controls";
 import { useToastMessage } from "@/components/ui/use-toast-message";
 import { actionFeedback } from "@/lib/client-action-feedback";
+import { translate } from "@/lib/i18n";
 import type { ToastNotice } from "@/lib/client-toast";
 
 type Opt = {
@@ -27,9 +29,11 @@ type Opt = {
   pharmacistValidationRequired?: boolean;
   controlledProduct?: boolean;
 };
+type SaleReference = { id: string; title: string; stockUnit?: string; referenceSalePrice?: string | null };
+type SaleReferenceResult = { items: SaleReference[]; selected: SaleReference | null; page: number; pageCount: number; total: number };
 type Line = { id: string; productId: string; batchId: string; quantity: string; unit: string; unitPrice: string; totalLine: string; requiresPrescription: boolean; requiresPharmacistValidation: boolean };
 type Sale = { id: string; saleNumber: string; saleType: string; customerName: string | null; prescriptionId: string | null; cashierId: string; saleDate: string; currency: string; totalAmount: string; paidAmount: string; remainingAmount: string; paymentMethod: string | null; paymentStatus: string; pharmacistValidationStatus: string; status: string; stockImpactApplied: boolean; lines: Line[]; refunds: unknown[]; anomalies: unknown[] };
-type Data = { metrics: Record<string, number>; currency: string; sales: Sale[]; pagination: { page: number; pageSize: number; total: number; totalUnfiltered: number; pageCount: number }; products: Opt[]; batches: Opt[]; members: Opt[]; departments: Opt[]; prescriptions: Opt[]; movements: Array<{ id: string; movementType: string; quantity: string; createdAt: string }> };
+type Data = { metrics: Record<string, number>; currency: string; sales: Sale[]; pagination: { page: number; pageSize: number; total: number; totalUnfiltered: number; pageCount: number }; products: Opt[]; members: Opt[]; departments: Opt[]; movements: Array<{ id: string; movementType: string; quantity: string; createdAt: string }> };
 type FLine = { productId: string; batchId: string; quantity: string; unit: string; unitPrice: string; lineDiscount: string; notes: string };
 type Form = { saleNumber: string; saleType: string; customerName: string; customerPhone: string; customerType: string; prescriptionId: string; prescriberName: string; cashierId: string; departmentId: string; saleDate: string; currency: string; globalDiscount: string; taxAmount: string; paidAmount: string; paymentMethod: string; paymentReference: string; notes: string; lines: FLine[] };
 type Tab = "dashboard" | "new" | "today" | "history" | "lines" | "validation" | "refunds" | "exceptional" | "receipts" | "anomalies" | "movements";
@@ -98,7 +102,7 @@ const emptyForm = (data: Data | null): Form => ({
   paymentMethod: "CASH",
   paymentReference: "",
   notes: "",
-  lines: [emptyLine(data?.products[0])],
+  lines: [emptyLine()],
 });
 
 export function PharmacySalesWorkspace({ organizationId }: { organizationId: string }) {
@@ -206,7 +210,7 @@ export function PharmacySalesWorkspace({ organizationId }: { organizationId: str
           <Grid>{sales.map((sale) => <SaleCard key={sale.id} sale={sale} actions={actions(sale, setDetail, action)} />)}</Grid>}
         {!loading && !sales.length && <p className="py-6 text-center text-sm text-dtsc-muted">Aucune vente pour ces critères.</p>}
       </>}
-    <SaleForm open={open} close={() => setOpen(false)} form={form} setForm={setForm} data={data} updateLine={updateLine} save={save} />
+    <SaleForm organizationId={organizationId} open={open} close={() => setOpen(false)} form={form} setForm={setForm} data={data} updateLine={updateLine} save={save} />
     <Dialog open={Boolean(detail)} title={detail?.saleNumber || "Détail vente"} description="Traçabilité de la vente et actions contrôlées." onClose={() => setDetail(null)} className="h-[94dvh] max-w-5xl">
       {detail && <Detail sale={detail} products={productMap} action={action} />}
     </Dialog>
@@ -262,7 +266,7 @@ function Detail({ sale, products, action }: { sale: Sale; products: Map<string, 
   </div>;
 }
 
-function SaleForm({ open, close, form, setForm, data, updateLine, save }: { open: boolean; close: () => void; form: Form; setForm: React.Dispatch<React.SetStateAction<Form>>; data: Data | null; updateLine: (index: number, key: keyof FLine, value: string) => void; save: (event: FormEvent) => Promise<void> }) {
+function SaleForm({ organizationId, open, close, form, setForm, data, updateLine, save }: { organizationId: string; open: boolean; close: () => void; form: Form; setForm: React.Dispatch<React.SetStateAction<Form>>; data: Data | null; updateLine: (index: number, key: keyof FLine, value: string) => void; save: (event: FormEvent) => Promise<void> }) {
   return <Dialog open={open} title="Nouvelle vente / dispensation" description="Formulaire plein écran avec lots vendables FEFO." onClose={close} className="h-[96dvh] max-w-6xl">
     <form onSubmit={save} className="grid min-w-0 gap-4 overflow-x-hidden">
       <Section title="Informations vente">
@@ -270,26 +274,22 @@ function SaleForm({ open, close, form, setForm, data, updateLine, save }: { open
           <Choice name="saleType" labelText="Type de vente" value={form.saleType} onChange={(value) => setForm((current) => ({ ...current, saleType: value }))} options={["COUNTER", "PRESCRIPTION", "INSURANCE", "CREDIT", "INTERNAL_EXIT", "EXCEPTIONAL_EXIT", "OTHER"].map((value) => [value, label(value)])} />
           <Choice name="currency" labelText="Devise de vente" value={form.currency} onChange={(value) => setForm((current) => ({ ...current, currency: value }))} options={[["USD", "Dollar américain (USD)"], ["CDF", "Franc congolais (CDF)"], ["EUR", "Euro (EUR)"]]} />
           <Choice name="cashierId" labelText="Caissier" value={form.cashierId} onChange={(value) => setForm((current) => ({ ...current, cashierId: value }))} options={(data?.members || []).map((member) => [member.id, member.name || "Collaborateur"])} />
-          <Choice name="prescriptionId" labelText="Ordonnance liée" value={form.prescriptionId} onChange={(value) => setForm((current) => ({ ...current, prescriptionId: value }))} options={(data?.prescriptions || []).map((prescription) => [prescription.id, prescription.title || "Ordonnance"])} />
+          <ReferenceChoice organizationId={organizationId} open={open} kind="prescriptions" labelText="Ordonnance liée" value={form.prescriptionId} onChange={(value) => setForm((current) => ({ ...current, prescriptionId: value }))} />
           <Field name="customerName" labelText="Client ou patient"><Input value={form.customerName} onChange={(event) => setForm((current) => ({ ...current, customerName: event.target.value }))} /></Field>
         </GridFields>
       </Section>
       <Section title="Panier et lots FEFO">
         {form.lines.map((line, index) => <div key={index} className="grid min-w-0 gap-3 rounded-xl border p-3 md:grid-cols-2 xl:grid-cols-3">
-          <Choice name="productId" labelText="Produit" value={line.productId} onChange={(value) => {
-            const product = data?.products.find((item) => item.id === value);
-            updateLine(index, "productId", value);
-            updateLine(index, "batchId", "");
-            if (product) {
-              updateLine(index, "unit", product.stockUnit || "unité");
-              updateLine(index, "unitPrice", product.referenceSalePrice || "0");
-            }
-          }} options={(data?.products || []).map((product) => [product.id, product.name || "Produit"])} />
-          <Choice name="batchId" labelText="Lot vendable FEFO" value={line.batchId} onChange={(value) => updateLine(index, "batchId", value)} options={(data?.batches || []).filter((batch) => batch.productId === line.productId).map((batch) => [batch.id, `${batch.batchNumber} · ${batch.availableQuantity} · ${batch.expiryDate?.slice(0, 10)}`])} />
+          <ReferenceChoice organizationId={organizationId} open={open} kind="products" labelText="Produit" value={line.productId} onChange={(value, product) => {
+            setForm((current) => ({ ...current, lines: current.lines.map((item, lineIndex) => lineIndex === index ? {
+              ...item, productId: value, batchId: "", unit: product?.stockUnit || "unité", unitPrice: product?.referenceSalePrice || "0",
+            } : item) }));
+          }} />
+          <ReferenceChoice key={`batch-${index}-${line.productId}`} organizationId={organizationId} open={open} kind="batches" labelText="Lot vendable FEFO" productId={line.productId} value={line.batchId} onChange={(value) => updateLine(index, "batchId", value)} />
           <Field name="quantity" labelText="Quantité"><Input required type="number" min="0.001" step="any" value={line.quantity} onChange={(event) => updateLine(index, "quantity", event.target.value)} /></Field>
           <Field name="unitPrice" labelText={`Prix unitaire (${form.currency})`}><Input required type="number" min="0" step="0.01" value={line.unitPrice} onChange={(event) => updateLine(index, "unitPrice", event.target.value)} /></Field>
         </div>)}
-        <Button type="button" variant="outline" onClick={() => setForm((current) => ({ ...current, lines: [...current.lines, emptyLine(data?.products[0])] }))}><Plus />Ajouter un produit</Button>
+        <Button type="button" variant="outline" onClick={() => setForm((current) => ({ ...current, lines: [...current.lines, emptyLine()] }))}><Plus />Ajouter un produit</Button>
       </Section>
       <Section title="Encaissement">
         <p className="text-sm text-dtsc-muted">La vente est créée non payée. Enregistrez ensuite chaque encaissement dans le module Caisse, factures & paiements afin de conserver la session, le mode et l&apos;audit.</p>
@@ -300,6 +300,76 @@ function SaleForm({ open, close, form, setForm, data, updateLine, save }: { open
       </div>
     </form>
   </Dialog>;
+}
+
+function ReferenceChoice({ organizationId, open, kind, labelText, value, onChange, productId }: {
+  organizationId: string;
+  open: boolean;
+  kind: "products" | "batches" | "prescriptions";
+  labelText: string;
+  value: string;
+  productId?: string;
+  onChange: (value: string, selected: SaleReference | null) => void;
+}) {
+  const locale = useAppLocale() || "fr";
+  const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+  const [page, setPage] = useState(1);
+  const [result, setResult] = useState<SaleReferenceResult | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    const timeout = setTimeout(() => { setPage(1); setDebouncedQuery(query); }, 250);
+    return () => clearTimeout(timeout);
+  }, [query]);
+
+  useEffect(() => {
+    if (!open || (kind === "batches" && !productId)) {
+      setResult(null);
+      setError(false);
+      return;
+    }
+    const controller = new AbortController();
+    const params = new URLSearchParams({ kind, q: debouncedQuery, page: String(page), pageSize: "20", selectedId: value });
+    if (kind === "batches" && productId) params.set("productId", productId);
+    setLoading(true);
+    setError(false);
+    void fetch(`/api/enterprise/${organizationId}/pharmacy/sales/references?${params}`, { cache: "no-store", signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("REFERENCE_SEARCH_UNAVAILABLE");
+        return response.json() as Promise<SaleReferenceResult>;
+      })
+      .then((next) => { if (!controller.signal.aborted) setResult(next); })
+      .catch(() => { if (!controller.signal.aborted) setError(true); })
+      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
+    return () => controller.abort();
+  }, [organizationId, kind, open, productId, debouncedQuery, page, value]);
+
+  const selected = result?.selected;
+  const options = new Map((result?.items || []).map((item) => [item.id, item]));
+  if (selected) options.set(selected.id, selected);
+  // Keep the selected ID visible during search, even before a response arrives.
+  if (value && !options.has(value)) options.set(value, { id: value, title: translate(locale, loading ? "pharmacySaleReferences.loading" : "pharmacySaleReferences.unavailable") });
+  const disabled = !open || (kind === "batches" && !productId);
+
+  return <div className="grid min-w-0 gap-2">
+    <Input value={query} disabled={disabled} onChange={(event) => setQuery(event.target.value)}
+      aria-label={`${labelText} — ${translate(locale, "pharmacySaleReferences.search")}`}
+      placeholder={translate(locale, "pharmacySaleReferences.search")} />
+    <Choice name={kind} labelText={labelText} value={value} disabled={disabled}
+      onChange={(next) => onChange(next, options.get(next) || null)}
+      options={[...options.values()].map((item) => [item.id, item.title])} />
+    {disabled && kind === "batches" ? <p className="text-xs text-dtsc-muted">{translate(locale, "pharmacySaleReferences.chooseProduct")}</p> : null}
+    {loading ? <p role="status" className="text-xs text-dtsc-muted">{translate(locale, "pharmacySaleReferences.loading")}</p> : null}
+    {error ? <p role="alert" className="text-xs text-red-600 dark:text-red-400">{translate(locale, "pharmacySaleReferences.error")}</p> : null}
+    {!loading && !error && result?.total === 0 && !disabled ? <p className="text-xs text-dtsc-muted">{translate(locale, "pharmacySaleReferences.empty")}</p> : null}
+    {result && result.pageCount > 1 ? <div className="flex min-w-0 flex-wrap items-center gap-2 text-xs">
+      <Button type="button" size="sm" variant="outline" disabled={page <= 1 || loading} onClick={() => setPage((current) => current - 1)}>{translate(locale, "pharmacySaleReferences.previous")}</Button>
+      <span aria-live="polite">{page} / {result.pageCount}</span>
+      <Button type="button" size="sm" variant="outline" disabled={page >= result.pageCount || loading} onClick={() => setPage((current) => current + 1)}>{translate(locale, "pharmacySaleReferences.next")}</Button>
+    </div> : null}
+  </div>;
 }
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
@@ -320,8 +390,8 @@ function Field({ name, labelText, children }: { name: string; labelText: string;
     {children}
   </label>;
 }
-function Choice({ name, labelText, value, onChange, options }: { name: string; labelText: string; value: string; onChange: (value: string) => void; options: string[][] }) {
-  return <Field name={name} labelText={labelText}><select value={value} onChange={(event) => onChange(event.target.value)} className="h-11 w-full min-w-0 truncate rounded-xl border bg-dtsc-surface px-3"><option value="">Sélectionner...</option>{options.map(([id, optionLabel]) => <option key={id} value={id}>{optionLabel}</option>)}</select></Field>;
+function Choice({ name, labelText, value, onChange, options, disabled = false }: { name: string; labelText: string; value: string; onChange: (value: string) => void; options: string[][]; disabled?: boolean }) {
+  return <Field name={name} labelText={labelText}><select value={value} disabled={disabled} onChange={(event) => onChange(event.target.value)} className="h-11 w-full min-w-0 truncate rounded-xl border bg-dtsc-surface px-3 disabled:opacity-60"><option value="">Sélectionner...</option>{options.map(([id, optionLabel]) => <option key={id} value={id}>{optionLabel}</option>)}</select></Field>;
 }
 function Badge({ value }: { value: string }) {
   return <span className="rounded-full bg-emerald-400/15 px-2 py-1 text-xs font-black text-emerald-700">{label(value)}</span>;
