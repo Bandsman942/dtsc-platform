@@ -175,6 +175,8 @@ jobs:
         run: node scripts/qa-ux-957-health-insurance-date.mjs
       - name: "UX-07B #959 Compact section density QA"
         run: node scripts/qa-ux-959-workspace-section-density.mjs
+      - name: "UX-03C #989 Finance bank/reconciliation typed-feedback QA"
+        run: node scripts/qa-ux-989-finance-bank-feedback.mjs
       - name: Lint
         run: pnpm lint
       - name: Build
