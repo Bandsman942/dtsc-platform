@@ -6,6 +6,13 @@
 - Migration additive JSONB de la politique IA, contrôle serveur/permissions, QA #965 et E2E propriétaire requis.
 - **État** : branche et PR en validation; aucune fusion ni mise en Production avant CI + OWNER_E2E #965.
 
+## 2026-10-31 — UX-03C #989 : retours typés Banque/Rapprochement (pré-release)
+
+- Les listes Finance conservent désormais les codes/statuts HTTP et distinguent les pannes réseau sans exposer de message serveur arbitraire ; une requête annulée ne peut plus effacer l'état d'une nouvelle recherche.
+- Banque et Rapprochement transmettent explicitement la locale FR/EN dans leurs retours d'échec ; les détails obtenus par lien direct utilisent le même contrat de lecture typé.
+- Un match confirmé demeure une réussite d'écriture même si son rafraîchissement échoue ensuite : la fiche est retirée et une consigne invite à vérifier la liste, sans réémettre l'opération.
+- QA #989 et recette OWNER_E2E documentées ; **non livré** tant que la CI, la revue propriétaire et la fusion sur `main` ne sont pas validées. Voir `docs/UX_FINANCE_BANK_FEEDBACK_989.md`.
+
 ## 2026-10-30 — Hotfix P0 #963 : reprise IA OpenRouter et diversification ZDR (pré-release)
 
 - Diagnostic Production : `google/gemini-2.5-flash` toujours dans le catalogue OpenRouter général mais absent de la liste ZDR ; HTTP 404 fournisseur, puis dégradation du health-check et refus de modèle. Crédits OpenRouter non en cause selon cette preuve.
