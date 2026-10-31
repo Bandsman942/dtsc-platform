@@ -173,6 +173,8 @@ jobs:
         run: node scripts/qa-ux-955-work-review-feedback.mjs
       - name: "UX-02D #957 Health insurance date QA"
         run: node scripts/qa-ux-957-health-insurance-date.mjs
+      - name: "UX-02E #961 Pharmacy historical currency KPI QA"
+        run: node scripts/qa-ux-961-pharmacy-currency-kpis.mjs
       - name: "UX-02F #983 Pharmacy sale reference search QA"
         run: node scripts/qa-ux-983-pharmacy-sale-references.mjs
       - name: "UX-07B #959 Compact section density QA"

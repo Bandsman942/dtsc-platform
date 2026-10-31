@@ -10,6 +10,12 @@
     "withoutBatch": "no batch",
     "empty": "No stock movements match your search."
   },
+  "pharmacySaleKpis": {
+    "todayAmount": "Today's amount",
+    "monthAmount": "This month's amount",
+    "unavailable": "Needs review",
+    "currencyWarning": "Currency totals are temporarily hidden: some sales use a different historical base currency or an exchange-rate snapshot that requires review. Check the sales details before making financial decisions."
+  },
   "pharmacySaleReferences": {
     "search": "Search references...",
     "loading": "Loading options...",

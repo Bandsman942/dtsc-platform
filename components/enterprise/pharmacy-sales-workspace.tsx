@@ -33,7 +33,7 @@ type SaleReference = { id: string; title: string; stockUnit?: string; referenceS
 type SaleReferenceResult = { items: SaleReference[]; selected: SaleReference | null; page: number; pageCount: number; total: number };
 type Line = { id: string; productId: string; batchId: string; quantity: string; unit: string; unitPrice: string; totalLine: string; requiresPrescription: boolean; requiresPharmacistValidation: boolean };
 type Sale = { id: string; saleNumber: string; saleType: string; customerName: string | null; prescriptionId: string | null; cashierId: string; saleDate: string; currency: string; totalAmount: string; paidAmount: string; remainingAmount: string; paymentMethod: string | null; paymentStatus: string; pharmacistValidationStatus: string; status: string; stockImpactApplied: boolean; lines: Line[]; refunds: unknown[]; anomalies: unknown[] };
-type Data = { metrics: Record<string, number>; currency: string; sales: Sale[]; pagination: { page: number; pageSize: number; total: number; totalUnfiltered: number; pageCount: number }; products: Opt[]; members: Opt[]; departments: Opt[]; movements: Array<{ id: string; movementType: string; quantity: string; createdAt: string }> };
+type Data = { metrics: Record<string, number | null>; financialKpiReliable: { today: boolean; month: boolean }; currency: string; sales: Sale[]; pagination: { page: number; pageSize: number; total: number; totalUnfiltered: number; pageCount: number }; products: Opt[]; members: Opt[]; departments: Opt[]; movements: Array<{ id: string; movementType: string; quantity: string; createdAt: string }> };
 type FLine = { productId: string; batchId: string; quantity: string; unit: string; unitPrice: string; lineDiscount: string; notes: string };
 type Form = { saleNumber: string; saleType: string; customerName: string; customerPhone: string; customerType: string; prescriptionId: string; prescriberName: string; cashierId: string; departmentId: string; saleDate: string; currency: string; globalDiscount: string; taxAmount: string; paidAmount: string; paymentMethod: string; paymentReference: string; notes: string; lines: FLine[] };
 type Tab = "dashboard" | "new" | "today" | "history" | "lines" | "validation" | "refunds" | "exceptional" | "receipts" | "anomalies" | "movements";
@@ -106,6 +106,7 @@ const emptyForm = (data: Data | null): Form => ({
 });
 
 export function PharmacySalesWorkspace({ organizationId }: { organizationId: string }) {
+  const locale = useAppLocale() || "fr";
   const [data, setData] = useState<Data | null>(null);
   const [tab, setTab] = useState<Tab>("dashboard");
   const [open, setOpen] = useState(false);
@@ -201,7 +202,13 @@ export function PharmacySalesWorkspace({ organizationId }: { organizationId: str
       ] as Array<[Tab, string]>).map(([code, title]) => <button key={code} type="button" disabled={code === "new" && !data?.currency} onClick={() => code === "new" ? (setForm(emptyForm(data)), setOpen(true)) : changeTab(code)} aria-current={tab === code ? "page" : undefined} className={`shrink-0 rounded-full border px-3 py-2 text-xs font-black disabled:cursor-not-allowed disabled:opacity-50 ${tab === code ? "border-emerald-400 text-emerald-700" : "border-dtsc-border text-dtsc-muted"}`}>{title}</button>)}
     </div>
     {loading && <p className="py-2 text-xs text-dtsc-muted" role="status">Actualisation des ventes…</p>}
-    {tab === "dashboard" ? <Metrics metrics={data?.metrics || {}} />
+    {tab === "dashboard" ? <>
+        {data && (!data.financialKpiReliable?.today || !data.financialKpiReliable?.month) &&
+          <p role="alert" className="my-3 min-w-0 break-words rounded-xl border border-amber-400 bg-amber-50 p-3 text-sm text-amber-950 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-100">
+            {translate(locale, "pharmacySaleKpis.currencyWarning")}
+          </p>}
+        <Metrics metrics={data?.metrics || {}} currency={data?.currency || ""} locale={locale} />
+      </>
       : tab === "movements" ? <><p className="mb-2 text-xs text-dtsc-muted">100 derniers mouvements (historique récent).</p><Grid>{(data?.movements || []).map((movement) => <Card key={movement.id} title={label(movement.movementType)} text={`${movement.quantity} · ${formatDate(movement.createdAt)}`} />)}</Grid></>
       : <>
         <ListControls query={query} onQueryChange={setQuery} page={page} pageCount={pagination?.pageCount || 1} totalCount={pagination?.totalUnfiltered || 0} filteredCount={pagination?.total || 0} onPageChange={setPage} placeholder="Numéro, client ou statut..." />
@@ -217,12 +224,15 @@ export function PharmacySalesWorkspace({ organizationId }: { organizationId: str
   </section>;
 }
 
-function Metrics({ metrics }: { metrics: Record<string, number> }) {
+function Metrics({ metrics, currency, locale }: { metrics: Record<string, number | null>; currency: string; locale: string }) {
+  const amount = (value: number | null | undefined) => value === null
+    ? translate(locale, "pharmacySaleKpis.unavailable")
+    : `${new Intl.NumberFormat(locale === "en" ? "en-US" : "fr-FR", { maximumFractionDigits: 2 }).format(value ?? 0)} ${currency}`;
   return <Grid>{[
     ["Ventes du jour", metrics.today],
     ["Ventes du mois", metrics.month],
-    ["Montant du jour", metrics.todayAmount],
-    ["Montant du mois", metrics.monthAmount],
+    [translate(locale, "pharmacySaleKpis.todayAmount"), amount(metrics.todayAmount)],
+    [translate(locale, "pharmacySaleKpis.monthAmount"), amount(metrics.monthAmount)],
     ["Ventes payées", metrics.paid],
     ["Partiellement payées", metrics.partial],
     ["Annulées", metrics.cancelled],

@@ -10,6 +10,12 @@
     "withoutBatch": "sans lot",
     "empty": "Aucun mouvement correspondant à votre recherche."
   },
+  "pharmacySaleKpis": {
+    "todayAmount": "Montant du jour",
+    "monthAmount": "Montant du mois",
+    "unavailable": "À vérifier",
+    "currencyWarning": "Les montants cumulés sont temporairement masqués : certaines ventes utilisent une ancienne devise de base ou un taux historique à vérifier. Consultez le détail des ventes avant toute décision financière."
+  },
   "pharmacySaleReferences": {
     "search": "Rechercher dans les références...",
     "loading": "Chargement des options...",

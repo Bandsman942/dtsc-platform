@@ -173,8 +173,12 @@ async function buildOmnichannelCashbackPosting(
           }, select: { id: true },
         })
       : null;
+    // The reversal's idempotency key identifies the omnichannel return, whose
+    // completed status and confirmed Finance refund are checked above. The
+    // nullable entry.returnId is reserved by the DB FK for classic POS returns.
     if (!actualReturn || actualReturn.currencyCode !== account.currencyCode ||
-        !paidRefund || entry.returnId !== returnId || entry.amount.abs().gt(usage.effectAmount)) {
+        !paidRefund || entry.returnId !== null || entry.saleId !== null ||
+        entry.amount.abs().gt(usage.effectAmount)) {
       throw new EnterpriseAccountingError("RELATIONSHIP_OMNI_CASHBACK_REFUND_PROOF_INVALID", 409);
     }
   } else if (earnedId !== entry.id || !entry.amount.equals(usage.effectAmount)) {
