@@ -30,11 +30,18 @@ export class FinanceApiError extends Error {
 }
 
 export async function financeMutation(endpoint: string, payload: unknown, method: "POST" | "PATCH" | "DELETE" = "POST") {
-  const response = await fetch(endpoint, {
-    method,
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(payload),
-  });
+  const requestBody = JSON.stringify(payload);
+  let response: Response;
+  try {
+    response = await fetch(endpoint, {
+      method,
+      headers: { "content-type": "application/json" },
+      body: requestBody,
+    });
+  } catch {
+    // Never leak a browser/network exception or turn an unconfirmed write into success.
+    throw new FinanceApiError({ code: "FINANCE_NETWORK_UNAVAILABLE", status: 0 });
+  }
   const body = await response.json().catch(() => null) as {
     error?: string;
     message?: string;

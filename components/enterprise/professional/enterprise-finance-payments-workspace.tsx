@@ -142,8 +142,8 @@ export function EnterpriseFinancePaymentsWorkspace(props: Props) {
     if (!deepId) return;
     fetchOperationalFinanceRecord<Payment>(`/api/enterprise/${organizationId}/payments`, deepId)
       .then((record) => { if (record) setDetail(record); })
-      .catch((error) => setErrorMessage(safeFinanceError(error, t("financeDetails"))));
-  }, [organizationId, searchParams]);
+      .catch((error) => setErrorMessage(safeFinanceError(error, translateEnterpriseFinance(locale, "financeDetails"), locale)));
+  }, [organizationId, searchParams, locale]);
 
   function changePaymentType(value: string) {
     setPaymentType(value);
@@ -181,7 +181,7 @@ export function EnterpriseFinancePaymentsWorkspace(props: Props) {
       });
       setCreateOpen(false); resetCreate(); setRefreshKey((value) => value + 1); setMessage(t("paymentSavedDraft"));
     } catch (error) {
-      setErrorMessage(safeFinanceError(error, t("paymentCreationFailed")));
+      setErrorMessage(safeFinanceError(error, t("paymentCreationFailed"), locale));
     } finally { setBusy(false); }
   }
 
@@ -199,7 +199,7 @@ export function EnterpriseFinancePaymentsWorkspace(props: Props) {
       });
       setActionTarget(null); setDetail(null); setRefreshKey((value) => value + 1); setMessage(t("financeWorkflowUpdated"));
     } catch (error) {
-      setErrorMessage(safeFinanceError(error, t("transitionFailed")));
+      setErrorMessage(safeFinanceError(error, t("transitionFailed"), locale));
     } finally { setBusy(false); }
   }
 
@@ -217,7 +217,7 @@ export function EnterpriseFinancePaymentsWorkspace(props: Props) {
       });
       setAllocationTarget(null); setDetail(null); setRefreshKey((value) => value + 1); setMessage(t("paymentAllocated"));
     } catch (error) {
-      setErrorMessage(safeFinanceError(error, t("allocationFailed")));
+      setErrorMessage(safeFinanceError(error, t("allocationFailed"), locale));
     } finally { setBusy(false); }
   }
 

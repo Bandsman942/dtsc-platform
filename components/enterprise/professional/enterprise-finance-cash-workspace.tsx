@@ -110,7 +110,7 @@ export function EnterpriseFinanceCashWorkspace({ organizationId, organizationNam
       setRefreshKey((value) => value + 1);
       setMessage(t("cashSessionOpened"));
     } catch (cashError) {
-      setError(safeFinanceError(cashError, t("openingFailed")));
+      setError(safeFinanceError(cashError, t("openingFailed"), locale));
     } finally { setBusy(false); }
   }
 
@@ -133,7 +133,7 @@ export function EnterpriseFinanceCashWorkspace({ organizationId, organizationNam
       setRefreshKey((value) => value + 1);
       setMessage(t("cashCloseSubmitted"));
     } catch (cashError) {
-      setError(safeFinanceError(cashError, t("closeFailed")));
+      setError(safeFinanceError(cashError, t("closeFailed"), locale));
     } finally { setBusy(false); }
   }
 
@@ -152,7 +152,7 @@ export function EnterpriseFinanceCashWorkspace({ organizationId, organizationNam
       setRefreshKey((value) => value + 1);
       setMessage(t("cashApproverAssigned"));
     } catch (cashError) {
-      setError(safeFinanceError(cashError, t("cashApproverAssignmentFailed")));
+      setError(safeFinanceError(cashError, t("cashApproverAssignmentFailed"), locale));
     } finally { setBusy(false); }
   }
 
@@ -172,7 +172,7 @@ export function EnterpriseFinanceCashWorkspace({ organizationId, organizationNam
       setRefreshKey((value) => value + 1);
       setMessage(t("cashDecisionRecorded"));
     } catch (cashError) {
-      setError(safeFinanceError(cashError, t("validationFailed")));
+      setError(safeFinanceError(cashError, t("validationFailed"), locale));
     } finally { setBusy(false); }
   }
 
