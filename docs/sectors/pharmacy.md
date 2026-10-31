@@ -353,3 +353,7 @@ Le cycle de vie couvre ouverture, vue, assignation, prise en charge, commentaire
 PHARMACY conserve ses référentiels spécialisés comme sources métier. Chaque activité pharmacie crée également un objet transversal lié par `EnterpriseEntityLink` : les demandes de réapprovisionnement, ajustements, avis pharmacien et documents alimentent Demandes internes ; les rapports caisse et inventaires alimentent Rapports entreprise ; les ruptures, péremptions, anomalies et incidents qualité alimentent Tâches & opérations.
 
 Cette liaison rend le travail visible dans les modules communs aux collaborateurs concernés sans contourner les validations ni modifier directement les lots, stocks, ventes, caisses ou incidents. Les règles détaillées sont documentées dans `docs/enterprise-core.md`.
+
+## Référentiels du formulaire Ventes — UX #983
+
+Les sélecteurs Produits, Lots et Ordonnances du formulaire Ventes utilisent `GET /api/enterprise/[organizationId]/pharmacy/sales/references`, avec recherche serveur paginée, retour de la référence sélectionnée, isolation de l'organisation et tri FEFO. La réponse principale Ventes conserve seulement les noms de produits nécessaires à la page courante. Le backend valide toujours les références et le lot vendable au moment de la soumission. Voir `docs/changelog/2026-10-31-ux-983-pharmacy-sale-references.md`.
