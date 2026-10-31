@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog } from "@/lib/audit";
+import { formatEnterpriseBusinessDate } from "@/lib/enterprise/business-context";
 import { canAccessPharmacySales } from "@/lib/pharmacy-sale-access";
 import { prisma } from "@/lib/prisma";
 
@@ -68,7 +69,8 @@ export async function GET(req: Request, { params }: Params) {
       prisma.pharmacyBatch.count({ where }),
       selectedId ? prisma.pharmacyBatch.findFirst({ where: { ...where, id: selectedId, OR: undefined }, select: fields }) : null,
     ]);
-    const display = (item: typeof records[number]) => ({ ...item, title: `${item.batchNumber} · ${item.availableQuantity} · ${item.expiryDate.toISOString().slice(0, 10)}` });
+    // Batch expiry is a date-only value encoded at UTC midnight in the database.
+    const display = (item: typeof records[number]) => ({ ...item, title: `${item.batchNumber} · ${item.availableQuantity} · ${formatEnterpriseBusinessDate(item.expiryDate, "UTC")}` });
     items = records.map(display);
     selected = selectedRecord ? display(selectedRecord) : null;
     total = count;

@@ -31,6 +31,10 @@ const imported = {
   "next/server": { NextResponse: responses },
   "@/lib/auth": { getSession: async () => ({ userId: "user-a" }) },
   "@/lib/audit": { writeApiLog: async () => {} },
+  "@/lib/enterprise/business-context": { formatEnterpriseBusinessDate: (date, timezone) => {
+    assert.equal(timezone, "UTC", "Date-only expiry values must not be shifted to the organization's timezone");
+    return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
+  } },
   "@/lib/pharmacy-sale-access": { canAccessPharmacySales: async () => authorized },
   "@/lib/prisma": { prisma },
 };
@@ -58,6 +62,7 @@ calls.length = 0;
 result = await get("kind=batches&productId=product-p&q=BATCH&pageSize=9");
 assert.equal(result.status, 200);
 assert.equal(result.body.items[0].title.includes("BATCH-01"), true);
+assert.equal(result.body.items[0].title.includes("2027-10-31"), true, "Expiry date-only labels must remain stable in UTC");
 assert.equal(calls[0].args.where.organizationId, "tenant-a");
 assert.equal(calls[0].args.where.productId, "product-p");
 assert.equal(calls[0].args.where.availableQuantity.gt, 0);
