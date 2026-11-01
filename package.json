@@ -18,6 +18,7 @@
     "lint": "next lint",
     "type-check": "tsc --noEmit",
     "qa:console-saas-workspaces": "node scripts/qa-console-saas-workspaces.mjs",
+    "qa:dtsc-payments-contract": "node scripts/qa-dtsc-payments-contract.mjs",
     "qa:hotfix-1001-renewal-journey": "node scripts/qa-hotfix-1001-renewal-journey.mjs",
     "qa:console-internal-workspaces": "node scripts/qa-console-internal-workspaces.mjs",
     "qa:console-workspace-shell": "node scripts/qa-console-workspace-shell.mjs",
