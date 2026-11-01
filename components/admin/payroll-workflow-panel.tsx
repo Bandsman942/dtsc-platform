@@ -5,14 +5,15 @@ import { Banknote, CheckCircle2, Clock3, Eye, FileCheck2, Plus, RefreshCw, Send,
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { ListControls } from "@/components/ui/list-controls";
+import { InternalFullScreenSurface } from "@/components/admin/internal-full-screen-surface";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToastMessage } from "@/components/ui/use-toast-message";
 import { BusinessDetail, BusinessDetailField, BusinessDetailGrid, BusinessDetailHeader, BusinessDetailSection } from "@/components/workspace/business-detail";
 import { BusinessList, BusinessListItem } from "@/components/workspace/business-list";
 import { ContextActions } from "@/components/workspace/context-actions";
 import { EmptyState } from "@/components/workspace/empty-state";
-import { ModuleMetric, ModuleMetrics } from "@/components/workspace/module-metrics";
-import { ModuleContent, ModuleHeader, ModuleSection, ModuleToolbar, ModuleWorkspace } from "@/components/workspace/module-workspace";
+import { ModuleHeader, ModuleWorkspace } from "@/components/workspace/module-workspace";
 import { StatusBadge, type StatusBadgeTone } from "@/components/workspace/status-badge";
 import type { PayrollBudgetOption, PayrollEmployeeOption, PayrollWorkflowItem } from "@/components/admin/payroll-workflow-types";
 import { translate } from "@/lib/i18n";
@@ -61,6 +62,9 @@ export function PayrollWorkflowPanel({ locale, embedded = false }: { locale?: st
   const [form, setForm] = useState<FormState>(emptyForm);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("ALL");
+  const [dateStart, setDateStart] = useState("");
+  const [dateEnd, setDateEnd] = useState("");
+  const [page, setPage] = useState(1);
   const [message, setMessage] = useState("");
   const [messageTone, setMessageTone] = useState<"success" | "warning" | "error">("success");
   const [actionError, setActionError] = useState("");
@@ -91,11 +95,17 @@ export function PayrollWorkflowPanel({ locale, embedded = false }: { locale?: st
     const normalized = query.trim().toLocaleLowerCase(locale === "en" ? "en" : "fr");
     return payrolls.filter((payroll) => {
       if (status !== "ALL" && payroll.status !== status) return false;
+      if (dateStart && payroll.periodStart < dateStart) return false;
+      if (dateEnd && payroll.periodEnd > dateEnd) return false;
       if (!normalized) return true;
       return [payroll.employee.fullName, payroll.employee.jobTitle, payroll.employee.department, payroll.periodStart, payroll.periodEnd, payroll.status]
         .join(" ").toLocaleLowerCase(locale === "en" ? "en" : "fr").includes(normalized);
     });
-  }, [locale, payrolls, query, status]);
+  }, [dateEnd, dateStart, locale, payrolls, query, status]);
+  const pageCount = Math.max(1, Math.ceil(filtered.length / 12));
+  const currentPage = Math.min(page, pageCount);
+  const paginated = filtered.slice((currentPage - 1) * 12, currentPage * 12);
+  const closeSelected = useCallback(() => { setSelected(null); setConfirmAction(null); setActionText(""); }, []);
 
   const metrics = useMemo(() => ({
     draft: payrolls.filter((item) => item.status === "DRAFT" || item.status === "CHANGES_REQUESTED").length,
@@ -219,38 +229,19 @@ export function PayrollWorkflowPanel({ locale, embedded = false }: { locale?: st
       {!embedded ? (
       <ModuleHeader eyebrow="HR & CFO" title={t("hrTitle")} count={`${filtered.length}/${payrolls.length}`} description={t("hrDescription")} />
       ) : null}
-      <ModuleMetrics label={t("metrics")}>
-        <ModuleMetric label={t("metricDraft")} value={metrics.draft} />
-        <ModuleMetric label={t("metricPending")} value={metrics.pending} />
-        <ModuleMetric label={t("metricValidated")} value={metrics.validated} />
-        <ModuleMetric label={t("metricPaid")} value={metrics.paid} />
-      </ModuleMetrics>
-      <ModuleToolbar
-        ariaLabel={t("filters")}
-        search={<Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("searchPlaceholder")} className="h-11 min-w-0 rounded-xl bg-dtsc-surface" />}
-        controls={<div className="flex min-w-0 flex-1 flex-wrap gap-2 sm:flex-none">
-          <Select value={status} onValueChange={setStatus}>
-            <SelectTrigger className="h-11 min-w-[11rem]"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="ALL">{t("allStatuses")}</SelectItem>
-              {["DRAFT", "PENDING_APPROVAL", "CHANGES_REQUESTED", "VALIDATED", "REJECTED", "PAID", "CANCELLED"].map((value) => <SelectItem key={value} value={value}>{statusLabel(t, value)}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          <Button type="button" onClick={openCreate} className="h-11 rounded-xl bg-dtsc-blue text-white"><Plus className="h-4 w-4" />{t("prepare")}</Button>
-        </div>}
-        activeFilters={<span>{status === "ALL" ? t("noActiveFilter") : statusLabel(t, status)}</span>}
-        summary={`${filtered.length}/${payrolls.length}`}
-      />
-      <ModuleContent>
-        <ModuleSection title={t("payrollList")} description={t("payrollListDescription")} count={String(filtered.length)}>
+      <div className="flex min-w-0 flex-wrap items-center gap-x-5 gap-y-2 border-b border-dtsc-border py-3 text-xs">{[[t("metricDraft"), metrics.draft], [t("metricPending"), metrics.pending], [t("metricValidated"), metrics.validated], [t("metricPaid"), metrics.paid]].map(([label, value]) => <span key={label} className="text-dtsc-muted">{label} <strong className="ml-1 text-base font-black tabular-nums text-dtsc-ink">{value}</strong></span>)}<Button type="button" onClick={openCreate} size="sm" className="ml-auto rounded-lg bg-dtsc-blue text-white"><Plus className="h-4 w-4" />{t("prepare")}</Button></div>
+      <div className="flex min-w-0 flex-wrap items-end gap-2"><label className="grid min-w-0 flex-1 gap-1 text-xs font-bold text-dtsc-muted sm:max-w-48">Période du<Input type="date" value={dateStart} onChange={(event) => { setDateStart(event.target.value); setPage(1); }} className="h-10 rounded-lg" /></label><label className="grid min-w-0 flex-1 gap-1 text-xs font-bold text-dtsc-muted sm:max-w-48">Au<Input type="date" value={dateEnd} onChange={(event) => { setDateEnd(event.target.value); setPage(1); }} className="h-10 rounded-lg" /></label>{dateStart || dateEnd ? <Button type="button" size="sm" variant="outline" onClick={() => { setDateStart(""); setDateEnd(""); }}>Effacer</Button> : null}</div>
+      <nav aria-label={t("filters")} className="flex min-w-0 gap-1.5 overflow-x-auto py-1">{["ALL", "DRAFT", "PENDING_APPROVAL", "CHANGES_REQUESTED", "VALIDATED", "REJECTED", "PAID", "CANCELLED"].map((value) => <button key={value} type="button" aria-pressed={status === value} onClick={() => { setStatus(value); setPage(1); }} className={`min-h-10 shrink-0 rounded-full border px-3 text-xs font-bold ${status === value ? "border-cyan-400 bg-cyan-400/15 text-dtsc-blue" : "border-dtsc-border text-dtsc-muted"}`}>{value === "ALL" ? t("allStatuses") : statusLabel(t, value)} · {value === "ALL" ? payrolls.length : payrolls.filter((item) => item.status === value).length}</button>)}</nav>
+      <ListControls query={query} onQueryChange={(value) => { setQuery(value); setPage(1); }} page={currentPage} pageCount={pageCount} totalCount={payrolls.length} filteredCount={filtered.length} onPageChange={setPage} placeholder={t("searchPlaceholder")} />
+      <section className="min-w-0 space-y-2" aria-label={t("payrollList")}>
           {loading ? <p className="py-6 text-sm text-dtsc-muted">{t("loading")}</p> : filtered.length ? (
             <BusinessList ariaLabel={t("payrollList")}>
-              {filtered.map((payroll) => (
+              {paginated.map((payroll) => (
                 <BusinessListItem
                   key={payroll.id}
                   title={payroll.employee.fullName}
                   meta={`${payroll.employee.jobTitle} · ${formatDate(payroll.periodStart, locale)} → ${formatDate(payroll.periodEnd, locale)}`}
-                  description={`${t("net")}: ${formatMoney(payroll.netAmount)} · ${t("approvedTime")}: ${formatMinutes(payroll.approvedWorkMinutes || 0)} · ${coverageLabel(t, payroll.workCoverage)}`}
+                  className="!py-2"
                   status={<StatusBadge tone={statusTone(payroll.status)}>{payroll.isLegacy ? t("legacy") : statusLabel(t, payroll.status)}</StatusBadge>}
                   onOpen={() => setSelected(payroll)}
                   openLabel={`${t("open")} ${payroll.employee.fullName}`}
@@ -262,8 +253,7 @@ export function PayrollWorkflowPanel({ locale, embedded = false }: { locale?: st
               ))}
             </BusinessList>
           ) : <EmptyState compact title={t("emptyTitle")} description={t("emptyDescription")} icon={Banknote} />}
-        </ModuleSection>
-      </ModuleContent>
+      </section>
 
       <Dialog open={formOpen} title={editTarget ? t("editTitle") : t("prepareTitle")} description={t("prepareDescription")} onClose={() => { setFormOpen(false); setEditTarget(null); }} className="h-[94dvh] sm:h-[92dvh]">
         <form className="grid gap-4 pb-4" onSubmit={save}>
@@ -309,20 +299,20 @@ export function PayrollWorkflowPanel({ locale, embedded = false }: { locale?: st
         </form>
       </Dialog>
 
-      <Dialog
+      <InternalFullScreenSurface
         open={Boolean(selected)}
         title={selected ? `${selected.employee.fullName} · ${formatDate(selected.periodStart, locale)} → ${formatDate(selected.periodEnd, locale)}` : t("detailTitle")}
-        description={t("detailDescription")}
-        onClose={() => { setSelected(null); setConfirmAction(null); setActionText(""); }}
-        className="h-[94dvh] sm:h-[92dvh]"
-        footer={selected && !selected.isLegacy ? <>
+        subtitle={t("detailDescription")}
+        onClose={closeSelected}
+        level={2}
+      >
+        {selected ? <PayrollDetail payroll={selected} locale={locale} t={t} /> : null}
+        {selected && !selected.isLegacy ? <div data-responsive-actions className="mt-4 flex flex-wrap gap-2 border-t border-dtsc-border pt-4">
           {(selected.status === "DRAFT" || selected.status === "CHANGES_REQUESTED") ? <Button type="button" disabled={selected.submissionReadiness?.ready === false} title={selected.submissionReadiness?.blockers[0]?.message} onClick={() => { setActionError(""); setConfirmAction("SUBMIT"); }} className="rounded-xl bg-dtsc-blue text-white"><Send className="h-4 w-4" />{t("submit")}</Button> : null}
           {selected.status === "DRAFT" ? <Button type="button" variant="outline" onClick={() => { setActionError(""); setConfirmAction("CANCEL"); }} className="rounded-xl border-red-500/40 text-red-700"><XCircle className="h-4 w-4" />{t("cancelPayroll")}</Button> : null}
           {selected.status === "VALIDATED" ? <Button type="button" onClick={() => { setActionError(""); setConfirmAction("PAID"); }} className="rounded-xl bg-emerald-700 text-white"><CheckCircle2 className="h-4 w-4" />{t("markPaid")}</Button> : null}
-        </> : undefined}
-      >
-        {selected ? <PayrollDetail payroll={selected} locale={locale} t={t} /> : null}
-      </Dialog>
+        </div> : null}
+      </InternalFullScreenSurface>
 
       <Dialog open={Boolean(confirmAction)} title={confirmAction === "SUBMIT" ? t("submitTitle") : confirmAction === "PAID" ? t("paidTitle") : t("cancelTitle")} description={confirmAction === "SUBMIT" ? t("submitConfirm") : confirmAction === "PAID" ? t("paidConfirm") : t("cancelConfirm")} onClose={() => { setConfirmAction(null); setActionText(""); setActionError(""); }} footer={<>
         <Button type="button" variant="outline" onClick={() => { setConfirmAction(null); setActionText(""); }} className="rounded-xl">{t("close")}</Button>

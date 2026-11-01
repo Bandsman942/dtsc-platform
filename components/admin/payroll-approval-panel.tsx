@@ -1,19 +1,19 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AlertTriangle, CheckCircle2, Clock3, Eye, RotateCcw, Search, XCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Clock3, Eye, RotateCcw, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
+import { ListControls } from "@/components/ui/list-controls";
+import { InternalFullScreenSurface } from "@/components/admin/internal-full-screen-surface";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToastMessage } from "@/components/ui/use-toast-message";
 import type { ToastNotice } from "@/lib/client-toast";
 import { BusinessDetail, BusinessDetailField, BusinessDetailGrid, BusinessDetailHeader, BusinessDetailSection } from "@/components/workspace/business-detail";
 import { BusinessList, BusinessListItem } from "@/components/workspace/business-list";
 import { ContextActions } from "@/components/workspace/context-actions";
 import { EmptyState } from "@/components/workspace/empty-state";
-import { ModuleMetric, ModuleMetrics } from "@/components/workspace/module-metrics";
-import { ModuleContent, ModuleHeader, ModuleSection, ModuleToolbar, ModuleWorkspace } from "@/components/workspace/module-workspace";
+import { ModuleHeader, ModuleWorkspace } from "@/components/workspace/module-workspace";
 import { StatusBadge, type StatusBadgeTone } from "@/components/workspace/status-badge";
 import type { PayrollWorkflowItem } from "@/components/admin/payroll-workflow-types";
 import { translate } from "@/lib/i18n";
@@ -29,6 +29,9 @@ export function PayrollApprovalPanel({ approverRole, locale, embedded = false }:
   const [comment, setComment] = useState("");
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("PENDING_APPROVAL");
+  const [dateStart, setDateStart] = useState("");
+  const [dateEnd, setDateEnd] = useState("");
+  const [page, setPage] = useState(1);
   const [notice, setNotice] = useState<ToastNotice | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -61,11 +64,17 @@ export function PayrollApprovalPanel({ approverRole, locale, embedded = false }:
     const normalized = query.trim().toLocaleLowerCase(locale === "en" ? "en" : "fr");
     return payrolls.filter((payroll) => {
       if (status !== "ALL" && payroll.status !== status) return false;
+      if (dateStart && payroll.periodStart < dateStart) return false;
+      if (dateEnd && payroll.periodEnd > dateEnd) return false;
       if (!normalized) return true;
       return [payroll.employee.fullName, payroll.employee.jobTitle, payroll.employee.department, payroll.periodStart, payroll.periodEnd]
         .join(" ").toLocaleLowerCase(locale === "en" ? "en" : "fr").includes(normalized);
     });
-  }, [locale, payrolls, query, status]);
+  }, [dateEnd, dateStart, locale, payrolls, query, status]);
+  const pageCount = Math.max(1, Math.ceil(filtered.length / 12));
+  const currentPage = Math.min(page, pageCount);
+  const paginated = filtered.slice((currentPage - 1) * 12, currentPage * 12);
+  const closeSelected = useCallback(() => { setSelected(null); setDecision(null); setComment(""); }, []);
 
   async function review() {
     if (!selected || !decision || saving) return;
@@ -109,50 +118,39 @@ export function PayrollApprovalPanel({ approverRole, locale, embedded = false }:
     {!embedded ? (
       <ModuleHeader eyebrow={approverRole} title={t("approvalTitle")} count={`${filtered.length}/${payrolls.length}`} description={approverRole === "CEO" ? t("approvalDescriptionCeo") : t("approvalDescriptionCoo")} />
       ) : null}
-    <ModuleMetrics label={t("approvalMetrics")}>
-      <ModuleMetric label={t("metricPending")} value={pending} />
-      <ModuleMetric label={t("metricValidated")} value={validated} />
-      <ModuleMetric label={t("metricChanges")} value={changes} />
-      <ModuleMetric label={t("metricRejected")} value={rejected} />
-    </ModuleMetrics>
-    <ModuleToolbar
-      ariaLabel={t("filters")}
-      search={<label className="relative block min-w-0"><span className="sr-only">{t("search")}</span><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-dtsc-muted" /><Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("searchPlaceholder")} className="h-11 rounded-xl bg-dtsc-surface pl-10" /></label>}
-      controls={<Select value={status} onValueChange={setStatus}><SelectTrigger className="h-11 min-w-[12rem]"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="ALL">{t("allStatuses")}</SelectItem>{["PENDING_APPROVAL", "CHANGES_REQUESTED", "VALIDATED", "PAID", "REJECTED"].map((value) => <SelectItem key={value} value={value}>{statusLabel(t, value)}</SelectItem>)}</SelectContent></Select>}
-      activeFilters={<span>{status === "ALL" ? t("noActiveFilter") : statusLabel(t, status)}</span>}
-      summary={`${filtered.length}/${payrolls.length}`}
-    />
-    <ModuleContent>
-      <ModuleSection title={t("approvalQueue")} description={t("approvalQueueDescription")} count={String(filtered.length)}>
+    <div className="flex min-w-0 flex-wrap gap-x-5 gap-y-2 border-b border-dtsc-border py-3 text-xs">{[[t("metricPending"), pending], [t("metricValidated"), validated], [t("metricChanges"), changes], [t("metricRejected"), rejected]].map(([label, value]) => <span key={label} className="text-dtsc-muted">{label} <strong className="ml-1 text-base font-black tabular-nums text-dtsc-ink">{value}</strong></span>)}</div>
+    <div className="flex min-w-0 flex-wrap items-end gap-2 border-y border-dtsc-border py-2"><label className="grid min-w-0 flex-1 gap-1 text-xs font-bold text-dtsc-muted sm:max-w-48">Période du<Input type="date" value={dateStart} onChange={(event) => { setDateStart(event.target.value); setPage(1); }} className="h-10 rounded-lg" /></label><label className="grid min-w-0 flex-1 gap-1 text-xs font-bold text-dtsc-muted sm:max-w-48">Au<Input type="date" value={dateEnd} onChange={(event) => { setDateEnd(event.target.value); setPage(1); }} className="h-10 rounded-lg" /></label>{dateStart || dateEnd ? <Button type="button" size="sm" variant="outline" onClick={() => { setDateStart(""); setDateEnd(""); }}>Effacer</Button> : null}</div>
+    <nav aria-label={t("filters")} className="flex min-w-0 gap-1.5 overflow-x-auto py-1">{["ALL", "PENDING_APPROVAL", "CHANGES_REQUESTED", "VALIDATED", "PAID", "REJECTED"].map((value) => <button type="button" key={value} aria-pressed={status === value} onClick={() => { setStatus(value); setPage(1); }} className={`min-h-10 shrink-0 rounded-full border px-3 text-xs font-bold ${status === value ? "border-cyan-400 bg-cyan-400/15 text-dtsc-blue" : "border-dtsc-border text-dtsc-muted"}`}>{value === "ALL" ? t("allStatuses") : statusLabel(t, value)} · {value === "ALL" ? payrolls.length : payrolls.filter((item) => item.status === value).length}</button>)}</nav>
+    <ListControls query={query} onQueryChange={(value) => { setQuery(value); setPage(1); }} page={currentPage} pageCount={pageCount} totalCount={payrolls.length} filteredCount={filtered.length} onPageChange={setPage} placeholder={t("searchPlaceholder")} />
+    <section className="min-w-0 space-y-2" aria-label={t("approvalQueue")}>
         {loading ? <p className="py-6 text-sm text-dtsc-muted">{t("loading")}</p> : filtered.length ? <BusinessList ariaLabel={t("approvalQueue")}>
-          {filtered.map((payroll) => <BusinessListItem
+          {paginated.map((payroll) => <BusinessListItem
             key={payroll.id}
             title={payroll.employee.fullName}
             meta={`${payroll.employee.jobTitle} · ${formatDate(payroll.periodStart, locale)} → ${formatDate(payroll.periodEnd, locale)}`}
-            description={`${t("net")}: ${formatMoney(payroll.netAmount)} · ${t("approvedTime")}: ${formatMinutes(payroll.approvedWorkMinutes || 0)} · ${coverageLabel(t, payroll.workCoverage)}`}
+            className="!py-2"
             status={<StatusBadge tone={statusTone(payroll.status)}>{statusLabel(t, payroll.status)}</StatusBadge>}
             onOpen={() => setSelected(payroll)}
             openLabel={`${t("review")} ${payroll.employee.fullName}`}
             actions={<ContextActions label={t("actions")} actions={[{ id: "review", label: t("review"), icon: Eye, onSelect: () => setSelected(payroll) }]} />}
           />)}
         </BusinessList> : <EmptyState compact title={t("approvalEmpty")} description={t("approvalEmptyDescription")} icon={CheckCircle2} />}
-      </ModuleSection>
-    </ModuleContent>
+    </section>
 
-    <Dialog
+    <InternalFullScreenSurface
       open={Boolean(selected)}
       title={selected ? `${selected.employee.fullName} · ${formatDate(selected.periodStart, locale)} → ${formatDate(selected.periodEnd, locale)}` : t("review")}
-      description={t("approvalDetailDescription")}
-      onClose={() => { setSelected(null); setDecision(null); setComment(""); }}
-      className="h-[94dvh] sm:h-[92dvh]"
-      footer={selected?.status === "PENDING_APPROVAL" ? <>
+      subtitle={t("approvalDetailDescription")}
+      onClose={closeSelected}
+      level={2}
+    >
+      {selected ? <ApprovalDetail payroll={selected} locale={locale} t={t} /> : null}
+      {selected?.status === "PENDING_APPROVAL" ? <div data-responsive-actions className="mt-4 flex flex-wrap gap-2 border-t border-dtsc-border pt-4">
         <Button type="button" variant="outline" onClick={() => setDecision("CHANGES_REQUESTED")} className="rounded-xl border-amber-500/40 text-amber-700"><RotateCcw className="h-4 w-4" />{t("requestChanges")}</Button>
         <Button type="button" variant="outline" onClick={() => setDecision("REJECTED")} className="rounded-xl border-red-500/40 text-red-700"><XCircle className="h-4 w-4" />{t("reject")}</Button>
         <Button type="button" onClick={() => setDecision("APPROVED")} className="rounded-xl bg-dtsc-blue text-white"><CheckCircle2 className="h-4 w-4" />{t("approve")}</Button>
-      </> : undefined}
-    >
-      {selected ? <ApprovalDetail payroll={selected} locale={locale} t={t} /> : null}
-    </Dialog>
+      </div> : null}
+    </InternalFullScreenSurface>
 
     <Dialog open={Boolean(decision)} title={decision === "APPROVED" ? t("approveTitle") : decision === "CHANGES_REQUESTED" ? t("changesTitle") : t("rejectTitle")} description={decision === "APPROVED" ? t("approveDescription") : t("reviewReasonDescription")} onClose={() => { if (saving) return; setDecision(null); setComment(""); }} footer={<>
       <Button type="button" variant="outline" onClick={() => { setDecision(null); setComment(""); }} disabled={saving} className="rounded-xl">{t("close")}</Button>
