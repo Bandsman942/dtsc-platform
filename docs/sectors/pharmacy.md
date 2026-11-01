@@ -357,3 +357,7 @@ Cette liaison rend le travail visible dans les modules communs aux collaborateur
 ## Indicateurs monétaires historiques — UX #961
 
 Les KPI de montants des ventes Pharmacie utilisent le snapshot `baseCurrency` et `totalAmountBase` conservé par vente. Le calcul par période est borné à l'organisation et groupé par devise de base. Lorsque les devises historiques ne correspondent pas à la devise de base actuellement configurée, ou qu'un taux/total de base est manifestement invalide, le total concerné est masqué avec un avertissement FR/EN. Le total n'est jamais recalculé à partir des taux courants, et aucune écriture historique n'est modifiée. Consulter `docs/changelog/2026-10-31-ux-961-pharmacy-currency-kpis.md` pour le périmètre d'audit et les limites de certification.
+
+## Référentiels du formulaire Ventes — UX #983
+
+Les sélecteurs Produits, Lots et Ordonnances du formulaire Ventes utilisent `GET /api/enterprise/[organizationId]/pharmacy/sales/references`, avec recherche serveur paginée, retour de la référence sélectionnée, isolation de l'organisation et tri FEFO. La réponse principale Ventes conserve seulement les noms de produits nécessaires à la page courante. Le backend valide toujours les références et le lot vendable au moment de la soumission. Voir `docs/changelog/2026-10-31-ux-983-pharmacy-sale-references.md`.
