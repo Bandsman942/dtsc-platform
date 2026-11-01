@@ -8,6 +8,8 @@
 
 Ce document est le point d’entrée technique de DTSC Platform. Les règles exécutables se trouvent dans les fichiers `AGENTS.md`. Les contrats détaillés restent dans les documents spécialisés du dossier `docs/`.
 
+> **DTSC Payments — PAY-0 (#370/#371, 01/11/2026) :** [contrat d'architecture et de cutover](DTSC_PAYMENTS_ARCHITECTURE.md). Cartographie vérifiée des paiements SaaS (`Payment`/`Invoice`), de la trésorerie DTSC (`HrcfoExpense`/`FinancialAccount`) et des paiements ERP clients (`EnterprisePayment` et allocations). Contrôle documentaire : `pnpm qa:dtsc-payments-contract`. Cette étape ne change aucun paiement en production ; PAY-1 à PAY-9 restent à livrer et à valider.
+
 > **Programme INFRA-MC (#891–#899, 21/10/2026) :** audit et ADR dans [`INFRA_MC_ARCHITECTURE_AUDIT.md`](INFRA_MC_ARCHITECTURE_AUDIT.md). Secours Vercel + autre cloud en **active-passive proposé, non approuvé**, sans activation ni certification. Production Vercel depuis `main` inchangée ; objectifs RPO/RTO, coût, régions et approbation à compléter.
 
 La reprise durable des workflows (#813), les preuves d’effet, les états incertains
