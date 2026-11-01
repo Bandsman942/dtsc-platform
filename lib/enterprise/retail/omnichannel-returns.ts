@@ -226,7 +226,7 @@ export async function requestRetailOmnichannelReturn(
         idempotencyKey: input.idempotencyKey, reason: input.reason, status: "PENDING_APPROVAL",
         currencyCode: order.currency, refundAmount: amount, salesInvoiceId: invoice.id,
         sourcePaymentId: sourcePayment.id, requestedByUserId: actorUserId, validatorUserId: input.validatorUserId,
-        lines: { create: lines.map((line) => ({ organizationId, salesOrderItemId: line.salesOrderItemId,
+        lines: { create: lines.map((line) => ({ salesOrderItemId: line.salesOrderItemId,
           quantity: line.quantity, refundAmount: line.refundAmount, productCondition: line.productCondition,
           stockDisposition: line.stockDisposition })) },
       }, include: { lines: true },
