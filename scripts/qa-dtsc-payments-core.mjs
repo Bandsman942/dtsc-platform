@@ -26,7 +26,7 @@ function loadTs(path) {
   return mod.exports;
 }
 
-const { assertPaymentTransition, assertPaymentCanFinalize } = loadTs(resolve(root, "payment-state-machine.ts"));
+const { assertPaymentTransition, assertPaymentCanFinalize, assertPaymentProviderNotStarted } = loadTs(resolve(root, "payment-state-machine.ts"));
 const { makePaymentReference, assertPaymentReplay, assertExactPaymentAmount } = loadTs(resolve(root, "payment-idempotency.ts"));
 const { Prisma } = require("@prisma/client");
 const conflict = (code) => (error) => error?.code === code;
@@ -42,6 +42,14 @@ assert.throws(() => assertPaymentTransition("FAILED", "PAID"), conflict("PAYMENT
 assert.throws(() => assertPaymentTransition("FAILED", "PENDING"), conflict("PAYMENT_INVALID_TRANSITION"));
 assert.equal(assertPaymentTransition("FAILED", "PENDING", { retry: true }), "CHANGED");
 assert.throws(() => assertPaymentCanFinalize("CANCELED"), conflict("PAYMENT_INVALID_TRANSITION"));
+assert.doesNotThrow(() => assertPaymentProviderNotStarted({ providerReference: null, checkoutPayload: null, callbackPayload: null }));
+for (const externalActivity of [
+  { providerReference: "psp-initiated" },
+  { checkoutPayload: { checkoutId: "private" } },
+  { callbackPayload: { status: "FAILED" } },
+]) {
+  assert.throws(() => assertPaymentProviderNotStarted(externalActivity), conflict("PAYMENT_UNSUPPORTED_OPERATION"));
+}
 
 const a = makePaymentReference({ scope: "ORGANIZATION", ownerId: "org-1", requestId: "retry-key" });
 assert.equal(a, makePaymentReference({ scope: "ORGANIZATION", ownerId: "org-1", requestId: "retry-key" }));
@@ -146,6 +154,16 @@ const routeAliases = {
       if (invoiceLookupError) throw invoiceLookupError;
       return { invoice: { id: "invoice-1", status: "ISSUED" }, payment: null };
     },
+    getPaymentFinanceSummary: async (session, target, filters) => {
+      observedTarget = target;
+      observedFilters = filters;
+      await assertInternalPaymentAccess(session, "READ");
+      assert.equal(target.scope, "DTSC_INTERNAL");
+      return [
+        { currency: "USD", status: "PAID", _count: { _all: 2 }, _sum: { amount: new Prisma.Decimal("360.00") } },
+        { currency: "CDF", status: "PENDING", _count: { _all: 1 }, _sum: { amount: new Prisma.Decimal("15000.00") } },
+      ];
+    },
   },
   "@/lib/rate-limit": { getRateLimitKey: () => "unit", rateLimit: async () => ({ ok: rateLimitAllowed }) },
 };
@@ -161,10 +179,13 @@ function loadRoute(path) {
 }
 const { GET: getPaymentHistory } = loadRoute(resolve("app/api/billing/payments/route.ts"));
 const { GET: getInvoiceStatus } = loadRoute(resolve("app/api/billing/invoices/[id]/payment/route.ts"));
+const { GET: getInternalFinanceSummary } = loadRoute(resolve("app/api/admin/dtsc-payments/summary/route.ts"));
 const req = (query = "") => ({ url: `https://app.dtsc-platform.com/api/billing/payments${query}`, method: "GET" });
+const summaryReq = (query = "") => ({ url: `https://app.dtsc-platform.com/api/admin/dtsc-payments/summary${query}`, method: "GET" });
 activeSession = null;
 assert.equal((await getPaymentHistory(req())).status, 401);
 assert.equal((await getInvoiceStatus(req(), { params: Promise.resolve({ id: "invoice-1" }) })).status, 401);
+assert.equal((await getInternalFinanceSummary(summaryReq())).status, 401);
 activeSession = organizationSession;
 assert.equal((await getPaymentHistory(req("?organizationId=org-2"))).status, 400);
 assert.equal((await getPaymentHistory(req("?pageSize=500"))).status, 400);
@@ -188,12 +209,34 @@ assert.equal((await getInvoiceStatus(req(), { params: Promise.resolve({ id: "inv
 invoiceLookupError = null;
 assert.equal((await getInvoiceStatus(req(), { params: Promise.resolve({ id: "invoice-1" }) })).status, 200);
 
+const fiscalPeriod = "?from=2026-01-01T00%3A00%3A00Z&to=2026-03-31T23%3A59%3A59Z";
+assert.equal((await getInternalFinanceSummary(summaryReq(fiscalPeriod))).status, 403);
+activeSession = internalSession;
+assert.equal((await getInternalFinanceSummary(summaryReq())).status, 400);
+assert.equal((await getInternalFinanceSummary(summaryReq(`${fiscalPeriod}&organizationId=another-tenant`))).status, 400);
+assert.equal((await getInternalFinanceSummary(summaryReq("?from=2024-01-01T00%3A00%3A00Z&to=2026-03-31T23%3A59%3A59Z"))).status, 400);
+assert.equal((await getInternalFinanceSummary(summaryReq("?from=2026-04-01T00%3A00%3A00Z&to=2026-03-31T23%3A59%3A59Z"))).status, 400);
+memberEnabled = false;
+assert.equal((await getInternalFinanceSummary(summaryReq(fiscalPeriod))).status, 403);
+memberEnabled = true;
+const summaryResponse = await getInternalFinanceSummary(summaryReq(fiscalPeriod));
+assert.equal(summaryResponse.status, 200);
+assert.deepEqual(JSON.parse(JSON.stringify(observedTarget)), { scope: "DTSC_INTERNAL" });
+assert.equal(observedFilters.from.toISOString(), "2026-01-01T00:00:00.000Z");
+assert.equal(summaryResponse.body.accountingBalance, false);
+assert.equal(summaryResponse.body.groups[0].amount, "360");
+assert.equal(summaryResponse.body.groups[1].amount, "15000");
+assert.deepEqual(summaryResponse.body.groups.map((group) => group.currency), ["USD", "CDF"]);
+rateLimitAllowed = false;
+assert.equal((await getInternalFinanceSummary(summaryReq(fiscalPeriod))).status, 429);
+rateLimitAllowed = true;
+
 const access = readFileSync(resolve(root, "payment-access.ts"), "utf8");
 const service = readFileSync(resolve(root, "payment-service.ts"), "utf8");
 for (const expected of ["getSession()", "isSameOriginRequest", "await rateLimit", "organizationMember.findFirst", "status: \"ACTIVE\"", "removedAt: null", "isDtscInternalSession", "SUBSCRIPTIONS_MANAGE", "hrcfoEmployee.findFirst", "member.role !== \"OWNER\""]) {
   assert.ok(access.includes(expected), `access contract missing ${expected}`);
 }
-for (const expected of ["tx.auditLog.create", "tx.apiLog.create", "prisma.$transaction", "FOR UPDATE", "updateMany", "assertPaymentReplay", "assertExactPaymentAmount", "finalizeManualSubscriptionPayment", "getTenantPayments", "getInvoicePaymentState", "getPaymentFinanceSummary", "invoice.payment.organizationId !== invoice.organizationId", "PAYMENT_UNSUPPORTED_OPERATION"]) {
+for (const expected of ["tx.auditLog.create", "tx.apiLog.create", "prisma.$transaction", "FOR UPDATE", "updateMany", "assertPaymentReplay", "assertExactPaymentAmount", "assertPaymentProviderNotStarted", "finalizeManualSubscriptionPayment", "getTenantPayments", "getInvoicePaymentState", "getPaymentFinanceSummary", "invoice.payment.organizationId !== invoice.organizationId", "PAYMENT_UNSUPPORTED_OPERATION"]) {
   assert.ok(service.includes(expected), `service contract missing ${expected}`);
 }
 assert.ok(!/\benterprisePayment\.(create|update|upsert)\s*\(/.test(service), "ERP client payments must remain separate");

@@ -25,3 +25,18 @@ export function assertPaymentCanFinalize(status: PaymentStatus) {
   if (status !== "PENDING" && status !== "ACCEPTED") paymentError("PAYMENT_INVALID_TRANSITION");
   return "CHANGED" as const;
 }
+
+/**
+ * A PSP checkout/callback is not a locally reversible reservation. Until PAY-4
+ * confirms a provider cancellation or explicit new attempt, a simple status
+ * change must never pretend that external money has been rolled back.
+ */
+export function assertPaymentProviderNotStarted(payment: {
+  providerReference?: string | null;
+  checkoutPayload?: unknown;
+  callbackPayload?: unknown;
+}) {
+  if (payment.providerReference || payment.checkoutPayload != null || payment.callbackPayload != null) {
+    paymentError("PAYMENT_UNSUPPORTED_OPERATION");
+  }
+}

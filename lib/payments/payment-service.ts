@@ -10,7 +10,7 @@ import {
 } from "./payment-access";
 import { paymentError } from "./payment-errors";
 import { assertExactPaymentAmount, assertPaymentReplay, makePaymentReference } from "./payment-idempotency";
-import { assertPaymentTransition } from "./payment-state-machine";
+import { assertPaymentProviderNotStarted, assertPaymentTransition } from "./payment-state-machine";
 import type { PaymentContext, PaymentPageInput, PaymentTarget } from "./payment-types";
 
 const paymentIdSchema = z.string().cuid();
@@ -192,6 +192,7 @@ export async function cancelPayment(context: PaymentContext, rawPaymentId: unkno
   // An ACCEPTED PSP payment may already have transferred funds. Cancellation
   // requires the provider-confirmed reversal path introduced by PAY-4/PAY-8.
   if (payment.status === "ACCEPTED") paymentError("PAYMENT_UNSUPPORTED_OPERATION");
+  assertPaymentProviderNotStarted(payment);
   assertPaymentTransition(payment.status, "CANCELED");
 
   const updated = await prisma.$transaction(async (tx) => {
@@ -221,7 +222,7 @@ export async function retryPayment(context: PaymentContext, rawPaymentId: unknow
     ? { scope: "ORGANIZATION", organizationId: payment.organizationId }
     : { scope: "PERSONAL", userId: payment.userId }, "CREATE");
   if (payment.status === "PENDING") return { payment, replayed: true } as const;
-  if (payment.providerReference) paymentError("PAYMENT_UNSUPPORTED_OPERATION");
+  assertPaymentProviderNotStarted(payment);
   assertPaymentTransition(payment.status, "PENDING", { retry: true });
   const updated = await prisma.$transaction(async (tx) => {
     const changed = await tx.payment.updateMany({
