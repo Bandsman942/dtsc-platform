@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from "react";
-import { CalendarDays, Download, Eye, FileText, Plus, Save, Trash2, UploadCloud, X } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, Download, Eye, FileText, Plus, Save, Trash2, UploadCloud, X } from "lucide-react";
+import { InternalFullScreenSurface } from "@/components/admin/internal-full-screen-surface";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -11,8 +12,7 @@ import { useToastMessage } from "@/components/ui/use-toast-message";
 import { BusinessList, BusinessListItem } from "@/components/workspace/business-list";
 import { ContextActions } from "@/components/workspace/context-actions";
 import { EmptyState } from "@/components/workspace/empty-state";
-import { ModuleMetric, ModuleMetrics } from "@/components/workspace/module-metrics";
-import { ModuleContent, ModuleHeader, ModuleSection, ModuleToolbar, ModuleWorkspace } from "@/components/workspace/module-workspace";
+import { ModuleHeader, ModuleWorkspace } from "@/components/workspace/module-workspace";
 import { StatusBadge, type StatusBadgeTone } from "@/components/workspace/status-badge";
 import { useSmartList } from "@/lib/hooks/use-smart-list";
 import type { OperationDataset, OperationField, OperationRecord } from "@/lib/admin-operations-types";
@@ -80,6 +80,9 @@ export function OperationsAdminPanel({
   const [message, setMessage] = useState("");
   const [dateStart, setDateStart] = useState("");
   const [dateEnd, setDateEnd] = useState("");
+  const [activeDatasetId, setActiveDatasetId] = useState<string | null>(null);
+  const getDatasetSearchText = useCallback((dataset: OperationDataset) => `${dataset.label} ${dataset.description} ${dataset.id}`, []);
+  const datasetList = useSmartList({ items: datasets, pageSize: 8, getSearchText: getDatasetSearchText });
   useToastMessage(message);
 
   const visibleItemsByDataset = useMemo(() => {
@@ -153,6 +156,8 @@ export function OperationsAdminPanel({
   const isCooPanel = datasets.some((dataset) => dataset.endpoint.includes("/admin/coo/"));
   const isCeoPanel = datasets.some((dataset) => dataset.endpoint.includes("/admin/ceo/"));
   const hasDateFilter = Boolean(dateStart || dateEnd);
+  const activeDataset = datasets.find((dataset) => dataset.id === activeDatasetId);
+  const closeDataset = useCallback(() => setActiveDatasetId(null), []);
 
   async function createRecord(dataset: OperationDataset, form: HTMLFormElement) {
     let payload: Record<string, FormDataEntryValue>;
@@ -227,92 +232,27 @@ export function OperationsAdminPanel({
       />
       ) : null}
 
-      <ModuleMetrics label={`Indicateurs ${title}`}>
-        <ModuleMetric label={isCooPanel ? "Éléments COO suivis" : "Dossiers suivis"} value={totals.records} />
-        <ModuleMetric
-          label={isCooPanel || isCeoPanel ? "Taux d'exécution" : isHrcfoPanel ? "Chiffre d'affaires" : "Éléments actifs"}
-          value={isCooPanel || isCeoPanel ? `${totals.operationalExecution}%` : isHrcfoPanel ? totals.revenueBreakdown : totals.activeRecords}
-        />
-        <ModuleMetric
-          label={isCooPanel ? "Tâches bloquées/retard" : isCeoPanel ? "Décisions à suivre" : isHrcfoPanel ? "Transactions impactantes" : "Priorités à traiter"}
-          value={isCooPanel ? totals.blockedTasks : isHrcfoPanel ? totals.financialTransactionCount : totals.attentionItems}
-        />
-        {isCooPanel ? <ModuleMetric label="Tâches terminées" value={(visibleItemsByDataset.tasks || []).filter((item) => item.status === "COMPLETED" || item.status === "VALIDATED").length} /> : null}
-        {isCooPanel ? <ModuleMetric label="Blocages ouverts" value={(visibleItemsByDataset.blockers || []).filter((item) => item.status !== "RESOLVED" && item.status !== "CANCELED").length} /> : null}
-        {isCooPanel ? <ModuleMetric label="Workflows partagés" value={(visibleItemsByDataset.workflows || []).filter((item) => item.meta.some((entry) => entry.includes("partage"))).length} /> : null}
-        {isHrcfoPanel ? <ModuleMetric label="Entrées validées/payées" value={totals.inflowBreakdown} /> : null}
-        {isHrcfoPanel ? <ModuleMetric label="Sorties validées/payées" value={totals.outflowBreakdown} /> : null}
-        {isHrcfoPanel ? <ModuleMetric label="Soldes des comptes (par devise)" value={totals.balanceBreakdown} /> : null}
-        {isHrcfoPanel ? <ModuleMetric label="Capital de départ" value={totals.capitalBreakdown} /> : null}
-        {isHrcfoPanel ? <ModuleMetric label="Budget total" value={totals.budgetBreakdown} /> : null}
-        {isHrcfoPanel ? <ModuleMetric label="Budget consommé" value={totals.spentBreakdown} /> : null}
-        {isHrcfoPanel ? <ModuleMetric label="Budget restant" value={totals.remainingBreakdown} /> : null}
-        {isHrcfoPanel ? <ModuleMetric label="Net paie validé/payé" value={totals.payrollBreakdown} /> : null}
-      </ModuleMetrics>
-
-      <ModuleToolbar
-        ariaLabel={`Filtres ${title}`}
-        controls={(
-          <>
-            <label className="grid min-w-[8.5rem] flex-1 gap-1 text-[0.68rem] font-black uppercase tracking-[0.08em] text-dtsc-muted sm:flex-none sm:min-w-[9.5rem]">
-              Début
-              <Input type="date" value={dateStart} onChange={(event) => setDateStart(event.target.value)} className="h-11 min-w-0 rounded-xl bg-dtsc-surface text-dtsc-ink" />
-            </label>
-            <label className="grid min-w-[8.5rem] flex-1 gap-1 text-[0.68rem] font-black uppercase tracking-[0.08em] text-dtsc-muted sm:flex-none sm:min-w-[9.5rem]">
-              Fin
-              <Input type="date" value={dateEnd} onChange={(event) => setDateEnd(event.target.value)} className="h-11 min-w-0 rounded-xl bg-dtsc-surface text-dtsc-ink" />
-            </label>
-            {hasDateFilter ? (
-              <Button type="button" variant="outline" onClick={() => { setDateStart(""); setDateEnd(""); }} className="h-11 rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue">
-                <CalendarDays className="h-4 w-4" />
-                Réinitialiser
-              </Button>
-            ) : null}
-          </>
-        )}
-        activeFilters={<span>{hasDateFilter ? `Période : ${dateStart || "…"} → ${dateEnd || "…"}` : "Aucun filtre actif"}</span>}
-        summary={`${datasets.length} registre${datasets.length > 1 ? "s" : ""}`}
-      />
-
-      <ModuleContent>
-        <ModuleSection title="Flux recommandé" description="Repères opérationnels du module, sans créer de couche de carte supplémentaire.">
-          <ol className="flex max-w-full gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" aria-label={`Flux recommandé ${title}`}>
-            {playbook.map((step, index) => (
-              <li key={step} className="shrink-0 border-l-2 border-dtsc-border px-3 py-1 text-xs font-bold text-dtsc-muted first:border-cyan-400">
-                <span className="mr-1 text-cyan-600">{index + 1}.</span>{step}
-              </li>
-            ))}
-          </ol>
-        </ModuleSection>
-
-        <ModuleSection title="Lecture rapide des volumes" description="Répartition des éléments visibles après application de la période.">
-          <div className="grid gap-x-6 gap-y-3 md:grid-cols-2">
-            {totals.datasetCounts.map((item) => (
-              <div key={item.label} className="min-w-0 border-b border-dtsc-border pb-3 last:border-b-0 md:last:border-b">
-                <div className="flex items-center justify-between gap-3 text-xs font-black text-dtsc-muted">
-                  <span className="truncate">{item.label}</span>
-                  <span>{item.count}</span>
-                </div>
-                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-dtsc-soft">
-                  <div className="h-full rounded-full bg-cyan-400" style={{ width: `${Math.max(4, (item.count / totals.maxCount) * 100)}%` }} />
-                </div>
-              </div>
-            ))}
-          </div>
-        </ModuleSection>
-
-        {datasets.map((dataset) => (
-          <DatasetSection
-            key={dataset.id}
-            dataset={dataset}
-            records={visibleItemsByDataset[dataset.id] || []}
-            canEdit={canEdit}
-            onCreate={createRecord}
-            onUpdate={updateRecord}
-            onRemove={removeRecord}
-          />
-        ))}
-      </ModuleContent>
+      <div className="flex min-w-0 flex-wrap items-center gap-x-5 gap-y-2 border-y border-dtsc-border py-3 text-xs">
+        <span className="text-dtsc-muted">Dossiers <strong className="ml-1 text-base font-black tabular-nums text-dtsc-ink">{totals.records}</strong></span>
+        <span className="text-dtsc-muted">Actifs <strong className="ml-1 text-base font-black tabular-nums text-dtsc-ink">{totals.activeRecords}</strong></span>
+        <span className="text-dtsc-muted">À traiter <strong className="ml-1 text-base font-black tabular-nums text-dtsc-ink">{totals.attentionItems}</strong></span>
+        {(isCooPanel || isCeoPanel) ? <span className="text-dtsc-muted">Exécution <strong className="ml-1 text-base font-black text-dtsc-ink">{totals.operationalExecution}%</strong></span> : null}
+        {isHrcfoPanel ? <span className="text-dtsc-muted">Chiffre d’affaires <strong className="ml-1 text-base font-black text-dtsc-ink">{totals.revenueBreakdown}</strong></span> : null}
+      </div>
+      {isHrcfoPanel ? <details className="border-b border-dtsc-border pb-2 text-xs"><summary className="min-h-10 cursor-pointer py-3 font-black text-dtsc-blue">Soldes et indicateurs financiers détaillés</summary><dl className="grid min-w-0 gap-x-5 gap-y-2 pb-3 sm:grid-cols-2 lg:grid-cols-3">{[["Comptes", totals.balanceBreakdown], ["Entrées", totals.inflowBreakdown], ["Sorties", totals.outflowBreakdown], ["Capital", totals.capitalBreakdown], ["Budgets", totals.budgetBreakdown], ["Consommé", totals.spentBreakdown], ["Restant", totals.remainingBreakdown], ["Paie validée/payée", totals.payrollBreakdown]].map(([label, value]) => <div key={label} className="min-w-0 border-b border-dtsc-border/50 py-2"><dt className="text-dtsc-muted">{label}</dt><dd className="break-words font-black text-dtsc-ink">{value}</dd></div>)}</dl></details> : null}
+      <ol className="flex max-w-full gap-1 overflow-x-auto py-2 [scrollbar-width:none]" aria-label={`Flux recommandé ${title}`}>
+        {playbook.map((step, index) => <li key={step} className="shrink-0 border-r border-dtsc-border px-2 text-[0.7rem] font-bold text-dtsc-muted last:border-0"><span className="mr-1 text-cyan-600">{index + 1}.</span>{step}</li>)}
+      </ol>
+      <ListControls query={datasetList.query} onQueryChange={datasetList.setQuery} page={datasetList.page} pageCount={datasetList.pageCount} totalCount={datasetList.totalCount} filteredCount={datasetList.filteredCount} onPageChange={datasetList.setPage} placeholder="Rechercher un registre, une activité…" />
+      <div className="divide-y divide-dtsc-border border-y border-dtsc-border" aria-label={`Registres ${title}`}>
+        {datasetList.paginatedItems.map((dataset) => <button type="button" key={dataset.id} onClick={() => setActiveDatasetId(dataset.id)} className="flex min-h-14 w-full min-w-0 items-center gap-3 px-2 py-2 text-left hover:bg-dtsc-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500"><span className="min-w-0 flex-1"><span className="block truncate text-sm font-black text-dtsc-ink">{dataset.label}</span><span className="block truncate text-xs text-dtsc-muted">{dataset.description}</span></span><span className="shrink-0 text-xs font-black tabular-nums text-dtsc-muted">{(visibleItemsByDataset[dataset.id] || []).length}</span><ArrowUpRight className="h-4 w-4 shrink-0 text-dtsc-blue" /></button>)}
+      </div>
+      {!datasetList.paginatedItems.length ? <p className="py-4 text-sm text-dtsc-muted">Aucun registre ne correspond à votre recherche.</p> : null}
+      {datasets.map((dataset) => (
+        <InternalFullScreenSurface key={dataset.id} open={activeDataset?.id === dataset.id} title={dataset.label} subtitle={dataset.description} onClose={closeDataset} level={2}>
+          <DatasetSection dataset={dataset} records={visibleItemsByDataset[dataset.id] || []} canEdit={canEdit} onCreate={createRecord} onUpdate={updateRecord} onRemove={removeRecord} dateStart={dateStart} dateEnd={dateEnd} setDateStart={setDateStart} setDateEnd={setDateEnd} hasDateFilter={hasDateFilter} />
+        </InternalFullScreenSurface>
+      ))}
     </ModuleWorkspace>
   );
 }
@@ -350,6 +290,11 @@ function DatasetSection({
   onCreate,
   onUpdate,
   onRemove,
+  dateStart,
+  dateEnd,
+  setDateStart,
+  setDateEnd,
+  hasDateFilter,
 }: {
   dataset: OperationDataset;
   records: OperationRecord[];
@@ -357,9 +302,17 @@ function DatasetSection({
   onCreate: (dataset: OperationDataset, form: HTMLFormElement) => Promise<void>;
   onUpdate: (dataset: OperationDataset, record: OperationRecord, form: HTMLFormElement) => Promise<void>;
   onRemove: (dataset: OperationDataset, record: OperationRecord) => Promise<void>;
+  dateStart: string;
+  dateEnd: string;
+  setDateStart: (value: string) => void;
+  setDateEnd: (value: string) => void;
+  hasDateFilter: boolean;
 }) {
-  const getSearchText = useCallback((record: OperationRecord) => [record.title, record.subtitle, record.status, record.notes, ...record.meta].join(" "), []);
-  const list = useSmartList({ items: records, pageSize: 8, getSearchText });
+  const [status, setStatus] = useState("ALL");
+  const statuses = useMemo(() => Array.from(new Set([...dataset.statusOptions.map((option) => option.value), ...records.map((record) => record.status)])), [dataset.statusOptions, records]);
+  const statusRecords = useMemo(() => status === "ALL" ? records : records.filter((record) => record.status === status), [records, status]);
+  const getSearchText = useCallback((record: OperationRecord) => [record.id, record.title, record.subtitle, record.status, record.notes, record.currency, record.amount, ...record.meta, ...Object.values(record.values || {})].join(" "), []);
+  const list = useSmartList({ items: statusRecords, pageSize: 12, getSearchText });
   const [createOpen, setCreateOpen] = useState(false);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -369,25 +322,28 @@ function DatasetSection({
   }
 
   return (
-    <ModuleSection
-      id={`operations-${dataset.id}`}
-      title={dataset.label}
-      description={dataset.description}
-      count={`${list.filteredCount}/${records.length}`}
-      action={canEdit ? (
-        <Button type="button" size="sm" onClick={() => setCreateOpen(true)} className="rounded-xl bg-dtsc-blue text-white">
-          <Plus className="h-4 w-4" /> Nouveau
-        </Button>
-      ) : undefined}
-    >
+    <section id={`operations-${dataset.id}`} data-dtsc-register-fullscreen className="min-w-0 space-y-3">
+      <div className="flex min-w-0 flex-wrap items-center justify-between gap-2 border-b border-dtsc-border pb-2">
+        <p className="text-xs font-bold text-dtsc-muted">{list.filteredCount} résultat{list.filteredCount > 1 ? "s" : ""} · {records.length} éléments dans la période</p>
+        {canEdit ? <Button type="button" size="sm" onClick={() => setCreateOpen(true)} className="rounded-lg bg-dtsc-blue text-white"><Plus className="h-4 w-4" /> Nouveau</Button> : null}
+      </div>
+      <div className="flex min-w-0 flex-wrap items-end gap-2" aria-label={`Période ${dataset.label}`}>
+        <label className="grid min-w-0 flex-1 gap-1 text-[0.7rem] font-black text-dtsc-muted sm:max-w-48">Du<Input type="date" value={dateStart} onChange={(event) => setDateStart(event.target.value)} className="h-10 min-w-0 rounded-lg bg-dtsc-surface" /></label>
+        <label className="grid min-w-0 flex-1 gap-1 text-[0.7rem] font-black text-dtsc-muted sm:max-w-48">Au<Input type="date" value={dateEnd} onChange={(event) => setDateEnd(event.target.value)} className="h-10 min-w-0 rounded-lg bg-dtsc-surface" /></label>
+        {hasDateFilter ? <Button type="button" size="sm" variant="outline" onClick={() => { setDateStart(""); setDateEnd(""); }} className="h-10 rounded-lg border-dtsc-border">Effacer les dates</Button> : null}
+      </div>
+      <nav aria-label={`Filtrer ${dataset.label} par statut`} className="flex min-w-0 gap-1.5 overflow-x-auto py-1 [scrollbar-width:thin]">
+        <button type="button" aria-pressed={status === "ALL"} onClick={() => { setStatus("ALL"); list.setPage(1); }} className={`min-h-10 shrink-0 rounded-full border px-3 text-xs font-bold ${status === "ALL" ? "border-cyan-400 bg-cyan-400/15 text-dtsc-blue" : "border-dtsc-border text-dtsc-muted"}`}>Tous · {records.length}</button>
+        {statuses.map((item) => <button key={item} type="button" aria-pressed={status === item} onClick={() => { setStatus(item); list.setPage(1); }} className={`min-h-10 shrink-0 rounded-full border px-3 text-xs font-bold ${status === item ? "border-cyan-400 bg-cyan-400/15 text-dtsc-blue" : "border-dtsc-border text-dtsc-muted"}`}>{dataset.statusOptions.find((option) => option.value === item)?.label || formatEnumLabel(item)} · {records.filter((record) => record.status === item).length}</button>)}
+      </nav>
       <ListControls
         query={list.query}
         onQueryChange={list.setQuery}
         page={list.page}
         pageCount={list.pageCount}
-        totalCount={list.totalCount}
+        totalCount={statusRecords.length}
         filteredCount={list.filteredCount}
-        placeholder={`Rechercher dans ${dataset.label.toLowerCase()}...`}
+        placeholder={`Rechercher nom, ID, montant, statut, référence…`}
         onPageChange={list.setPage}
       />
 
@@ -406,7 +362,7 @@ function DatasetSection({
       <Dialog open={createOpen} title={`Nouveau: ${dataset.label}`} description="Remplissez le formulaire puis enregistrez l'élément." onClose={() => setCreateOpen(false)} className="h-[92dvh] max-w-5xl">
         <OperationForm fields={dataset.fields} disabled={!canEdit} onSubmit={submit} submitLabel="Ajouter" submitIcon="plus" />
       </Dialog>
-    </ModuleSection>
+    </section>
   );
 }
 
@@ -425,6 +381,8 @@ function RecordRow({
 }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const [detailOpen, setDetailOpen] = useState(false);
+  const closeDetail = useCallback(() => setDetailOpen(false), []);
   const attachmentHref = typeof record.href === "string" && record.href.length > 0 ? record.href : undefined;
   const checklistType = resolveAdminChecklistType(dataset);
 
@@ -442,11 +400,14 @@ function RecordRow({
         title={record.title}
         status={<StatusBadge tone={statusTone(record.status)}>{formatEnumLabel(record.status)}</StatusBadge>}
         meta={meta || undefined}
-        description={record.notes || undefined}
+        onOpen={() => setDetailOpen(true)}
+        openLabel={`Consulter la fiche ${record.title}`}
+        className="!py-1.5 sm:!py-2"
         actions={(
           <ContextActions
             label={`Actions pour ${record.title}`}
             actions={[
+              { id: "open", label: "Voir la fiche", icon: Eye, onSelect: () => setDetailOpen(true) },
               ...(canEdit ? [{ id: "edit", label: "Modifier", icon: Save, onSelect: () => setEditOpen(true) }] : []),
               ...(attachmentHref ? [{ id: "download", label: "Télécharger le fichier", icon: Download, onSelect: () => window.open(attachmentHref, "_blank", "noopener,noreferrer") }] : []),
               ...(canEdit ? [{ id: "delete", label: "Supprimer", icon: Trash2, destructive: true, separatorBefore: true, onSelect: () => setConfirmDelete(true) }] : []),
@@ -454,7 +415,42 @@ function RecordRow({
           />
         )}
       />
-      {attachmentHref ? <FileAttachmentPreview href={attachmentHref} label={record.hrefLabel || "Document joint"} compact /> : null}
+      <InternalFullScreenSurface
+        open={detailOpen}
+        title={record.title}
+        subtitle={`${dataset.label} · ${record.id}`}
+        onClose={closeDetail}
+        level={3}
+        actions={<ContextActions label={`Actions pour ${record.title}`} actions={[
+          { id: "back", label: "Retour aux résultats", icon: ArrowLeft, onSelect: closeDetail },
+          ...(canEdit ? [{ id: "edit", label: "Modifier", icon: Save, onSelect: () => setEditOpen(true) }] : []),
+          ...(attachmentHref ? [{ id: "download", label: "Télécharger", icon: Download, onSelect: () => window.open(attachmentHref, "_blank", "noopener,noreferrer") }] : []),
+          ...(canEdit ? [{ id: "delete", label: "Supprimer", icon: Trash2, destructive: true, separatorBefore: true, onSelect: () => setConfirmDelete(true) }] : []),
+        ]} />}
+      >
+        <div data-dtsc-record-detail className="min-w-0 space-y-4">
+          <div className="flex min-w-0 flex-wrap items-center gap-2 border-b border-dtsc-border pb-3 text-xs text-dtsc-muted">
+            <StatusBadge tone={statusTone(record.status)}>{formatEnumLabel(record.status)}</StatusBadge>
+            <span>Créé le {Number.isNaN(Date.parse(record.createdAt)) ? "—" : new Intl.DateTimeFormat("fr-FR", { dateStyle: "medium", timeStyle: "short" }).format(new Date(record.createdAt))}</span>
+            {record.amount != null ? <span className="font-black text-dtsc-ink">{record.amount.toFixed(2)} {record.currency || "USD"}</span> : null}
+          </div>
+          <dl className="grid min-w-0 gap-0 sm:grid-cols-2 lg:grid-cols-3">
+            {record.subtitle ? <div className="min-w-0 border-b border-dtsc-border/70 px-2 py-3"><dt className="text-[0.7rem] font-bold uppercase text-dtsc-muted">Domaine</dt><dd className="mt-1 break-words text-sm font-semibold text-dtsc-ink">{record.subtitle}</dd></div> : null}
+            {dataset.fields.filter((field) => field.type !== "hidden" && field.type !== "preview" && field.type !== "file" && Boolean(record.values?.[field.name])).map((field) => (
+              <div key={field.name} className="min-w-0 border-b border-dtsc-border/70 px-2 py-3"><dt className="text-[0.7rem] font-bold uppercase text-dtsc-muted">{field.label}</dt><dd data-responsive-long-token className="mt-1 break-words text-sm font-semibold text-dtsc-ink [overflow-wrap:anywhere]">{record.values?.[field.name]}</dd></div>
+            ))}
+            {record.meta.map((item, index) => <div key={`${index}-${item}`} className="min-w-0 border-b border-dtsc-border/70 px-2 py-3"><dt className="text-[0.7rem] font-bold uppercase text-dtsc-muted">Information {index + 1}</dt><dd className="mt-1 break-words text-sm font-semibold text-dtsc-ink">{item}</dd></div>)}
+          </dl>
+          {record.notes ? <section className="border-b border-dtsc-border py-3"><h3 className="text-xs font-black uppercase text-dtsc-muted">Notes et observations</h3><p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-dtsc-ink">{record.notes}</p></section> : null}
+          {attachmentHref ? <FileAttachmentPreview href={attachmentHref} label={record.hrefLabel || "Document associé"} compact /> : null}
+          {checklistType ? <OperationalChecklistPanel objectType={checklistType} objectId={record.id} title="Tâches et résultats de progression" /> : null}
+          <div data-responsive-actions className="flex flex-wrap gap-2 border-t border-dtsc-border pt-3">
+            {canEdit ? <Button type="button" onClick={() => setEditOpen(true)} className="rounded-lg bg-dtsc-blue text-white"><Save className="h-4 w-4" /> Modifier</Button> : null}
+            {attachmentHref ? <a href={attachmentHref} target="_blank" rel="noreferrer" className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-dtsc-border px-3 text-xs font-black text-dtsc-blue"><Download className="h-4 w-4" /> Télécharger</a> : null}
+            {canEdit ? <Button type="button" variant="outline" onClick={() => setConfirmDelete(true)} className="rounded-lg border-red-400/50 text-red-600"><Trash2 className="h-4 w-4" /> Supprimer</Button> : null}
+          </div>
+        </div>
+      </InternalFullScreenSurface>
       <Dialog open={editOpen} title={`Modifier: ${record.title}`} description="Mettez à jour les informations de l'opération puis envoyez la modification au serveur." onClose={() => setEditOpen(false)} className="h-[92dvh] max-w-5xl">
         <div className="space-y-5">
           {checklistType ? (

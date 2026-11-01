@@ -1,19 +1,19 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AlertTriangle, CheckCircle2, Clock3, Eye, RotateCcw, Search, XCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Clock3, Eye, RotateCcw, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ListControls } from "@/components/ui/list-controls";
+import { InternalFullScreenSurface } from "@/components/admin/internal-full-screen-surface";
 import { useToastMessage } from "@/components/ui/use-toast-message";
 import type { ToastNotice } from "@/lib/client-toast";
 import { BusinessDetail, BusinessDetailField, BusinessDetailGrid, BusinessDetailHeader, BusinessDetailSection } from "@/components/workspace/business-detail";
 import { BusinessList, BusinessListItem } from "@/components/workspace/business-list";
 import { ContextActions } from "@/components/workspace/context-actions";
 import { EmptyState } from "@/components/workspace/empty-state";
-import { ModuleMetric, ModuleMetrics } from "@/components/workspace/module-metrics";
-import { ModuleContent, ModuleHeader, ModuleSection, ModuleToolbar, ModuleWorkspace } from "@/components/workspace/module-workspace";
+import { ModuleHeader, ModuleWorkspace } from "@/components/workspace/module-workspace";
 import { StatusBadge, type StatusBadgeTone } from "@/components/workspace/status-badge";
 import { translate } from "@/lib/i18n";
 
@@ -78,6 +78,9 @@ export function WorkSubmissionReviewPanel({ reviewerRole, locale, embedded = fal
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("ALL");
+  const [dateStart, setDateStart] = useState("");
+  const [dateEnd, setDateEnd] = useState("");
+  const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<Submission | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [decision, setDecision] = useState<ReviewDecision | null>(null);
@@ -112,11 +115,17 @@ export function WorkSubmissionReviewPanel({ reviewerRole, locale, embedded = fal
     const normalizedQuery = query.trim().toLocaleLowerCase(locale === "en" ? "en" : "fr");
     return submissions.filter((submission) => {
       if (status !== "ALL" && submission.status !== status) return false;
+      if (dateStart && submission.periodStart < dateStart) return false;
+      if (dateEnd && submission.periodEnd > dateEnd) return false;
       if (!normalizedQuery) return true;
       const haystack = [submission.employee.fullName, submission.employee.jobTitle, submission.employee.department, submission.periodStart, submission.periodEnd, submission.status].join(" ").toLocaleLowerCase(locale === "en" ? "en" : "fr");
       return haystack.includes(normalizedQuery);
     });
-  }, [locale, query, status, submissions]);
+  }, [dateEnd, dateStart, locale, query, status, submissions]);
+  const pageCount = Math.max(1, Math.ceil(filtered.length / 12));
+  const currentPage = Math.min(page, pageCount);
+  const paginated = filtered.slice((currentPage - 1) * 12, currentPage * 12);
+  const closeSelected = useCallback(() => { if (saving) return; setSelected(null); setDecision(null); setComment(""); }, [saving]);
 
   const pendingCount = submissions.filter((item) => item.status === "SUBMITTED").length;
   const changesCount = submissions.filter((item) => item.status === "CHANGES_REQUESTED").length;
@@ -186,46 +195,19 @@ export function WorkSubmissionReviewPanel({ reviewerRole, locale, embedded = fal
         description={reviewerRole === "COO" ? t("reviewDescriptionCoo") : t("reviewDescriptionCeo")}
       />
       ) : null}
-      <ModuleMetrics label={t("reviewMetrics")}>
-        <ModuleMetric label={t("queueSubmitted")} value={pendingCount} />
-        <ModuleMetric label={t("queueChanges")} value={changesCount} />
-        <ModuleMetric label={t("queueApproved")} value={approvedCount} />
-        <ModuleMetric label={t("queueRejected")} value={rejectedCount} />
-      </ModuleMetrics>
-      <ModuleToolbar
-        ariaLabel={t("reviewFilters")}
-        search={(
-          <label className="relative block min-w-0">
-            <span className="sr-only">{t("search")}</span>
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-dtsc-muted" aria-hidden="true" />
-            <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("searchPlaceholder")} className="h-11 w-full min-w-0 rounded-xl bg-dtsc-surface pl-10" />
-          </label>
-        )}
-        controls={(
-          <Select value={status} onValueChange={setStatus}>
-            <SelectTrigger className="w-full min-w-[12rem] sm:w-auto"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="ALL">{t("allStatuses")}</SelectItem>
-              <SelectItem value="SUBMITTED">{statusLabel(t, "SUBMITTED")}</SelectItem>
-              <SelectItem value="CHANGES_REQUESTED">{statusLabel(t, "CHANGES_REQUESTED")}</SelectItem>
-              <SelectItem value="APPROVED">{statusLabel(t, "APPROVED")}</SelectItem>
-              <SelectItem value="REJECTED">{statusLabel(t, "REJECTED")}</SelectItem>
-            </SelectContent>
-          </Select>
-        )}
-        activeFilters={<span>{status === "ALL" ? t("noActiveFilter") : statusLabel(t, status)}</span>}
-        summary={`${filtered.length}/${submissions.length}`}
-      />
-      <ModuleContent>
-        <ModuleSection title={t("reviewQueue")} description={t("reviewQueueDescription")} count={String(filtered.length)}>
+      <div className="flex min-w-0 flex-wrap gap-x-5 gap-y-2 border-b border-dtsc-border py-3 text-xs">{[[t("queueSubmitted"), pendingCount], [t("queueChanges"), changesCount], [t("queueApproved"), approvedCount], [t("queueRejected"), rejectedCount]].map(([label, value]) => <span key={label} className="text-dtsc-muted">{label} <strong className="ml-1 text-base font-black tabular-nums text-dtsc-ink">{value}</strong></span>)}</div>
+      <div className="flex min-w-0 flex-wrap items-end gap-2 border-b border-dtsc-border py-2"><label className="grid min-w-0 flex-1 gap-1 text-xs font-bold text-dtsc-muted sm:max-w-48">Période du<Input type="date" value={dateStart} onChange={(event) => { setDateStart(event.target.value); setPage(1); }} className="h-10 rounded-lg" /></label><label className="grid min-w-0 flex-1 gap-1 text-xs font-bold text-dtsc-muted sm:max-w-48">Au<Input type="date" value={dateEnd} onChange={(event) => { setDateEnd(event.target.value); setPage(1); }} className="h-10 rounded-lg" /></label>{dateStart || dateEnd ? <Button type="button" size="sm" variant="outline" onClick={() => { setDateStart(""); setDateEnd(""); }}>Effacer</Button> : null}</div>
+      <nav aria-label={t("reviewFilters")} className="flex min-w-0 gap-1.5 overflow-x-auto py-1">{["ALL", "SUBMITTED", "CHANGES_REQUESTED", "APPROVED", "REJECTED"].map((value) => <button type="button" key={value} aria-pressed={status === value} onClick={() => { setStatus(value); setPage(1); }} className={`min-h-10 shrink-0 rounded-full border px-3 text-xs font-bold ${status === value ? "border-cyan-400 bg-cyan-400/15 text-dtsc-blue" : "border-dtsc-border text-dtsc-muted"}`}>{value === "ALL" ? t("allStatuses") : statusLabel(t, value)} · {value === "ALL" ? submissions.length : submissions.filter((item) => item.status === value).length}</button>)}</nav>
+      <ListControls query={query} onQueryChange={(value) => { setQuery(value); setPage(1); }} page={currentPage} pageCount={pageCount} totalCount={submissions.length} filteredCount={filtered.length} onPageChange={setPage} placeholder={t("searchPlaceholder")} />
+      <section className="min-w-0 space-y-2" aria-label={t("reviewQueue")}>
           {loading ? <p className="py-6 text-sm text-dtsc-muted">{t("loading")}</p> : filtered.length ? (
             <BusinessList ariaLabel={t("reviewQueue")}>
-              {filtered.map((submission) => (
+              {paginated.map((submission) => (
                 <BusinessListItem
                   key={submission.id}
                   title={submission.employee.fullName}
                   meta={`${submission.employee.jobTitle} · ${submission.employee.department} · ${formatDate(submission.periodStart, locale)} → ${formatDate(submission.periodEnd, locale)}`}
-                  description={`${t("declaredTime")}: ${formatMinutes(submission.declaredMinutes)} · ${t("entries")}: ${submission.entries.length}${scheduleIssueCount(submission) ? ` · ${t("scheduleIssues")}: ${scheduleIssueCount(submission)}` : ""}`}
+                  className="!py-2"
                   status={<StatusBadge tone={statusTone(submission.status)}>{statusLabel(t, submission.status)}</StatusBadge>}
                   onOpen={() => void openSubmission(submission)}
                   openLabel={`${t("review")} ${submission.employee.fullName}`}
@@ -238,25 +220,22 @@ export function WorkSubmissionReviewPanel({ reviewerRole, locale, embedded = fal
               ))}
             </BusinessList>
           ) : <EmptyState compact title={t("noReviewItems")} description={t("noReviewItemsDescription")} icon={CheckCircle2} />}
-        </ModuleSection>
-      </ModuleContent>
+      </section>
 
-      <Dialog
+      <InternalFullScreenSurface
         open={Boolean(selected)}
         title={selected ? `${selected.employee.fullName} · ${formatDate(selected.periodStart, locale)} → ${formatDate(selected.periodEnd, locale)}` : t("review")}
-        description={t("reviewDetailDescription")}
-        onClose={() => { if (saving) return; setSelected(null); setDecision(null); setComment(""); }}
-        className="h-[94dvh] sm:h-[92dvh]"
-        footer={selected?.status === "SUBMITTED" && !detailLoading ? (
-          <>
+        subtitle={t("reviewDetailDescription")}
+        onClose={closeSelected}
+        level={2}
+      >
+        {detailLoading ? <p className="py-8 text-center text-sm text-dtsc-muted">{t("loading")}</p> : selected ? <SubmissionDetail submission={selected} locale={locale} t={t} /> : null}
+        {selected?.status === "SUBMITTED" && !detailLoading ? <div data-responsive-actions className="mt-4 flex flex-wrap gap-2 border-t border-dtsc-border pt-4">
             <Button type="button" variant="outline" onClick={() => setDecision("CHANGES_REQUESTED")} className="rounded-xl border-amber-500/40 text-amber-700 dark:text-amber-300"><RotateCcw className="h-4 w-4" /> {t("requestChanges")}</Button>
             <Button type="button" variant="outline" onClick={() => setDecision("REJECTED")} className="rounded-xl border-red-500/40 text-red-700 dark:text-red-300"><XCircle className="h-4 w-4" /> {t("reject")}</Button>
             <Button type="button" onClick={() => setDecision("APPROVED")} className="rounded-xl bg-dtsc-blue text-white"><CheckCircle2 className="h-4 w-4" /> {t("approve")}</Button>
-          </>
-        ) : undefined}
-      >
-        {detailLoading ? <p className="py-8 text-center text-sm text-dtsc-muted">{t("loading")}</p> : selected ? <SubmissionDetail submission={selected} locale={locale} t={t} /> : null}
-      </Dialog>
+        </div> : null}
+      </InternalFullScreenSurface>
 
       <Dialog
         open={Boolean(decision)}
