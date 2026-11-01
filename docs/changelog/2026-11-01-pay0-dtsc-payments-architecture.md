@@ -5,7 +5,7 @@
 - Contrat de domaine `docs/DTSC_PAYMENTS_ARCHITECTURE.md` : inventaire vérifié des modèles, flux, statuts, responsabilités, routes, services et risques.
 - Distinction explicite entre paiement d'abonnement DTSC (`Payment`), paiement ERP client (`EnterprisePayment`) et trésorerie interne DTSC (`HrcfoExpense`). Aucun modèle principal ni double source de vérité supplémentaire.
 - Matrice de conformité PAY-0 à PAY-9, rôles tenant-scoped, garde-fous MaishaPay, limites comptables actuelles et plan de cutover sectoriel.
-- QA statique dédiée `pnpm qa:dtsc-payments-contract` et index de la documentation technique.
+- QA statique dédiée `pnpm qa:dtsc-payments-contract`, intégrée aussi dans `qa:regression`, et index de la documentation technique.
 
 ## Hors scope
 
