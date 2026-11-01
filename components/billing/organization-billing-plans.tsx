@@ -4,7 +4,9 @@ import { useRef, useState } from "react";
 import { Building2, CheckCircle2, CreditCard } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useAppLocale } from "@/components/i18n/locale-provider";
 import { toastError, toastInfo } from "@/lib/client-toast";
+import { getExperienceCopy } from "@/lib/experience-i18n";
 
 type OrganizationPlan = {
   id: string;
@@ -29,6 +31,7 @@ export function OrganizationBillingPlans({
   canManage: boolean;
   renewablePlanId?: string;
 }) {
+  const renewalCopy = getExperienceCopy(useAppLocale()).renewal;
   const [walletId, setWalletId] = useState("");
   const [provider, setProvider] = useState<"MPESA" | "AIRTEL" | "ORANGE">("MPESA");
   const [pendingPlanId, setPendingPlanId] = useState("");
@@ -71,7 +74,7 @@ export function OrganizationBillingPlans({
 
   return (
     <div className="min-w-0 space-y-5">
-      <div className="grid min-w-0 gap-4 rounded-2xl border border-dtsc-border bg-dtsc-page p-4 md:grid-cols-2">
+      {paymentAvailable ? <div className="grid min-w-0 gap-4 rounded-2xl border border-dtsc-border bg-dtsc-page p-4 md:grid-cols-2">
         <label className="grid min-w-0 gap-2 text-sm font-bold text-dtsc-ink">
           Numéro mobile money de l’entreprise
           <Input value={walletId} onChange={(event) => setWalletId(event.target.value)} inputMode="tel" placeholder="Ex : 2438XXXXXXXX" disabled={!canManage} />
@@ -87,7 +90,7 @@ export function OrganizationBillingPlans({
         <p className="text-xs font-medium leading-5 text-dtsc-ink md:col-span-2">
           L’abonnement, le paiement, la facture entreprise et l’impact sur le chiffre d’affaires sont appliqués une seule fois à partir de la référence de paiement validée.
         </p>
-      </div>
+      </div> : <p role="status" className="rounded-xl border border-dtsc-border bg-dtsc-page p-3 text-sm text-dtsc-muted">{renewalCopy.onlineUnavailable}</p>}
 
       {plans.length ? (
         <div className="grid min-w-0 gap-4 lg:grid-cols-3">

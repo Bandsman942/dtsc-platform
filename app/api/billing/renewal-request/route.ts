@@ -61,5 +61,5 @@ export async function POST(req: Request) {
     await writeAuditLog({ userId: session.userId, action: "SUBSCRIPTION_RENEWAL_REQUESTED", entity: "SupportTicket", entityId: ticket.id, request: req, metadata: { scope: parsed.data.scope, organizationId, planId: latest.planId } });
   }
   await writeApiLog({ request: req, statusCode: existing ? 200 : 201, userId: session.userId, startedAt, metadata: { ticketId: ticket.id, duplicate: Boolean(existing), notificationPending } });
-  return NextResponse.json({ ok: true, ticketId: ticket.id, existing: Boolean(existing), notificationPending }, { status: existing ? 200 : 201 });
+  return NextResponse.json({ ok: true, ticketId: ticket.id, existing: Boolean(existing), notificationPending, canViewInSupport: ticket.userId === session.userId }, { status: existing ? 200 : 201 });
 }

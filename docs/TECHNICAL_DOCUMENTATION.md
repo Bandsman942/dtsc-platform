@@ -209,6 +209,8 @@ Les notifications utilisent des liens profonds vers le module, l’objet et la s
 
 ## 11. API et sécurité
 
+**Abonnements SaaS — renouvellement entreprise (hotfix #1001).** Le client dispose d'un accès contextualisé au renouvellement depuis `/dashboard` et d'une section directe sur `/billing#renouvellement-entreprise` sans accordéon préalable. Le suivi du dernier ticket de renouvellement (statut, dates, résolution) est projeté depuis `SupportTicket` et non dupliqué dans un nouveau modèle. Seul le créateur accède à la conversation privée via le lien Support ciblé, indépendamment du fait que plusieurs administrateurs d'une même organisation puissent voir le statut de demande dans Facturation. Les routes de renouvellement conservent leur RBAC serveur, la déduplication et l'interdiction de prélèvement récurrent sans mandat. Détails, QA et rollback : `docs/SAAS_BILLING_TREASURY_HOTFIX_2026_11_01.md`.
+
 Contrat général d’une route mutante :
 
 ```text
