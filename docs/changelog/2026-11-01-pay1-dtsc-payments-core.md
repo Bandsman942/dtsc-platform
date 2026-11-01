@@ -9,12 +9,13 @@
 - Contrôles d'accès : session signée à nouveau vérifiée lors des mutations, origine identique, limite async, compte actif, organisation active, membership OWNER/ADMIN, contexte interne DTSC et capacité ou validateur RH actif.
 - Facturation SaaS accessible même à une entreprise **dont l'abonnement a expiré** ; interdiction de réutiliser une entitlement ERP pour verrouiller le renouvellement.
 - Pages de paiement bornées à 100 lignes, filtre date/statut ; résumé par couple devise/statut sans addition des devises.
+- Lecture HTTP réelle (aucune mutation) : `GET /api/billing/payments` et `GET /api/billing/invoices/{id}/payment`, contrôles session/tenant/OWNER/ADMIN, limite async, Zod et ApiLog ; aucun ID de tenant accepté dans les paramètres, facture étrangère masquée en `404`.
 - ApiLog/AuditLog transactionnels lors des créations, annulations et retries. Les décisions manuelles délèguent au finaliseur déjà en place (puis aux routes auditées existantes).
-- QA : `pnpm qa:dtsc-payments-core`, tests unitaires état/idempotence et RBAC/tenant à dépôt simulé, régression globale.
+- QA : `pnpm qa:dtsc-payments-core`, tests unitaires état/idempotence, RBAC/tenant à dépôt simulé et contrats HTTP GET simulés, régression globale.
 
 ## Limitations réelles et suite
 
-- Aucun nouveau endpoint public : ces modules ne sont pas encore branchés aux routes `checkout`, `organization-checkout`, `manual-subscription-payments` ni aux callbacks PSP.
+- Seules les deux lectures API ci-dessus sont branchées ; les mutations `checkout`, `organization-checkout`, `manual-subscription-payments` et callbacks PSP restent sur leurs services existants.
 - `markPaymentPaid` **ne peut pas finaliser un paiement non soldé** ; il vérifie uniquement un règlement et sa facture déjà consolidés. L'activation/facture/trésorerie atomique sera traitée avec PAY-2/PAY-3/PAY-4, après preuve de signature, montant et devise du provider.
 - La preuve bancaire textuelle `externalReference` **n'est pas un document uploadé**. Le justificatif privé avec accès RBAC est réservé à PAY-2.
 - Le flux manuel continue d'utiliser les contrôles historiques du validateur, son transactionnel dédié et les notifications de route ; il reste à raccorder au service et à renforcer l'audit transactionnel unique.

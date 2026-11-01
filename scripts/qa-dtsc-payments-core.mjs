@@ -123,15 +123,80 @@ await assert.rejects(() => assertInternalPaymentAccess(internalSession, "READ"),
 memberEnabled = true;
 await assert.rejects(() => assertInternalPaymentAccess({ ...internalSession, activeContext: "GLOBAL_CLIENT" }, "MANAGE"), conflict("PAYMENT_ACCESS_DENIED"));
 
+// Route integration tests: signed-session fixture and service stand-ins keep
+// actual GET response/error contracts observable without a database.
+let observedTarget;
+let observedFilters;
+let invoiceLookupError = null;
+const { PaymentDomainError } = loadTs(resolve(root, "payment-errors.ts"));
+const routeAliases = {
+  "next/server": { NextResponse: { json: (body, options = {}) => ({ body, status: options.status ?? 200 }) } },
+  zod: require("zod"),
+  "@/lib/auth": { getSession: async () => activeSession },
+  "@/lib/audit": { writeApiLog: async () => {} },
+  "@/lib/payments/payment-errors": { PaymentDomainError },
+  "@/lib/payments/payment-service": {
+    getTenantPayments: async (session, target, options) => {
+      observedTarget = target;
+      observedFilters = options;
+      await assertPaymentTargetAccess(session, target, "READ");
+      return { items: [{ id: "p1", status: "PAID" }], total: 1, page: options.page, pageSize: options.pageSize, pages: 1 };
+    },
+    getInvoicePaymentState: async () => {
+      if (invoiceLookupError) throw invoiceLookupError;
+      return { invoice: { id: "invoice-1", status: "ISSUED" }, payment: null };
+    },
+  },
+  "@/lib/rate-limit": { getRateLimitKey: () => "unit", rateLimit: async () => ({ ok: rateLimitAllowed }) },
+};
+function loadRoute(path) {
+  const outputText = ts.transpileModule(readFileSync(path, "utf8"), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+  }).outputText;
+  const mod = { exports: {} };
+  runInNewContext(`(function(exports, require, module) { ${outputText}\n})`, { URL, Buffer })(
+    mod.exports, (specifier) => routeAliases[specifier] || require(specifier), mod,
+  );
+  return mod.exports;
+}
+const { GET: getPaymentHistory } = loadRoute(resolve("app/api/billing/payments/route.ts"));
+const { GET: getInvoiceStatus } = loadRoute(resolve("app/api/billing/invoices/[id]/payment/route.ts"));
+const req = (query = "") => ({ url: `https://app.dtsc-platform.com/api/billing/payments${query}`, method: "GET" });
+activeSession = null;
+assert.equal((await getPaymentHistory(req())).status, 401);
+assert.equal((await getInvoiceStatus(req(), { params: Promise.resolve({ id: "invoice-1" }) })).status, 401);
+activeSession = organizationSession;
+assert.equal((await getPaymentHistory(req("?organizationId=org-2"))).status, 400);
+assert.equal((await getPaymentHistory(req("?pageSize=500"))).status, 400);
+assert.equal((await getPaymentHistory(req("?from=2026-11-01T00%3A00%3A00Z&to=2026-10-01T00%3A00%3A00Z"))).status, 400);
+const listResponse = await getPaymentHistory(req("?page=2&pageSize=10&status=PAID&from=2026-10-01T00%3A00%3A00Z"));
+assert.equal(listResponse.status, 200);
+assert.deepEqual(JSON.parse(JSON.stringify(observedTarget)), { scope: "ORGANIZATION", organizationId: "org-1" });
+assert.equal(observedFilters.page, 2);
+assert.equal(observedFilters.pageSize, 10);
+assert.equal(observedFilters.status, "PAID");
+assert.equal(listResponse.body.items.length, 1);
+memberRole = "MEMBER";
+assert.equal((await getPaymentHistory(req())).status, 403);
+memberRole = "OWNER";
+activeSession = { ...organizationSession, activeContext: "GLOBAL_CLIENT", activeOrganizationId: null };
+assert.equal((await getPaymentHistory(req())).status, 200);
+assert.deepEqual(JSON.parse(JSON.stringify(observedTarget)), { scope: "PERSONAL", userId: "u1" });
+activeSession = organizationSession;
+invoiceLookupError = new PaymentDomainError("PAYMENT_ACCESS_DENIED");
+assert.equal((await getInvoiceStatus(req(), { params: Promise.resolve({ id: "invoice-1" }) })).status, 404);
+invoiceLookupError = null;
+assert.equal((await getInvoiceStatus(req(), { params: Promise.resolve({ id: "invoice-1" }) })).status, 200);
+
 const access = readFileSync(resolve(root, "payment-access.ts"), "utf8");
 const service = readFileSync(resolve(root, "payment-service.ts"), "utf8");
 for (const expected of ["getSession()", "isSameOriginRequest", "await rateLimit", "organizationMember.findFirst", "status: \"ACTIVE\"", "removedAt: null", "isDtscInternalSession", "SUBSCRIPTIONS_MANAGE", "hrcfoEmployee.findFirst", "member.role !== \"OWNER\""]) {
   assert.ok(access.includes(expected), `access contract missing ${expected}`);
 }
-for (const expected of ["tx.auditLog.create", "tx.apiLog.create", "prisma.$transaction", "FOR UPDATE", "updateMany", "assertPaymentReplay", "assertExactPaymentAmount", "finalizeManualSubscriptionPayment", "getTenantPayments", "getInvoicePaymentState", "getPaymentFinanceSummary", "PAYMENT_UNSUPPORTED_OPERATION"]) {
+for (const expected of ["tx.auditLog.create", "tx.apiLog.create", "prisma.$transaction", "FOR UPDATE", "updateMany", "assertPaymentReplay", "assertExactPaymentAmount", "finalizeManualSubscriptionPayment", "getTenantPayments", "getInvoicePaymentState", "getPaymentFinanceSummary", "invoice.payment.organizationId !== invoice.organizationId", "PAYMENT_UNSUPPORTED_OPERATION"]) {
   assert.ok(service.includes(expected), `service contract missing ${expected}`);
 }
 assert.ok(!/\benterprisePayment\.(create|update|upsert)\s*\(/.test(service), "ERP client payments must remain separate");
 assert.ok(!/\bDtscPayment\b/.test(service), "no parallel primary payment model");
 
-console.log("PASS DTSC Payments PAY-1: transitions, retry, idempotence, amount/currency, RBAC/tenant & tx contracts");
+console.log("PASS DTSC Payments PAY-1: transitions, idempotence, amount/currency, RBAC/tenant, HTTP GET & tx contracts");

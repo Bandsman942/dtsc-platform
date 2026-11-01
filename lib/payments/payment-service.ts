@@ -310,11 +310,21 @@ export async function getInvoicePaymentState(session: PaymentContext["session"],
   const invoiceId = parseInput(paymentIdSchema, rawInvoiceId);
   const invoice = await prisma.invoice.findUnique({
     where: { id: invoiceId },
-    include: { payment: { select: { id: true, reference: true, status: true, paidAt: true, amount: true, currency: true } } },
+    include: { payment: { select: { id: true, userId: true, organizationId: true, reference: true, status: true, paidAt: true, amount: true, currency: true } } },
   });
   if (!invoice) paymentError("PAYMENT_NOT_FOUND");
   await assertPaymentOwnerOrInternal(session, invoice);
-  return { invoice: { id: invoice.id, number: invoice.number, amount: invoice.amount, currency: invoice.currency, status: invoice.status, paidAt: invoice.paidAt }, payment: invoice.payment };
+  if (invoice.payment) {
+    // Never leak a corrupt cross-tenant payment relation, even when the invoice itself is visible.
+    if (invoice.payment.organizationId !== invoice.organizationId ||
+      (!invoice.organizationId && invoice.payment.userId !== invoice.userId)) paymentError("PAYMENT_INVOICE_CONFLICT");
+    assertExactPaymentAmount(invoice, invoice.payment);
+  }
+  const payment = invoice.payment ? {
+    id: invoice.payment.id, reference: invoice.payment.reference, status: invoice.payment.status,
+    paidAt: invoice.payment.paidAt, amount: invoice.payment.amount, currency: invoice.payment.currency,
+  } : null;
+  return { invoice: { id: invoice.id, number: invoice.number, amount: invoice.amount, currency: invoice.currency, status: invoice.status, paidAt: invoice.paidAt }, payment };
 }
 
 /** Report money by currency and state, never aggregate across monetary units. */
