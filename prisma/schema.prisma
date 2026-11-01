@@ -5786,6 +5786,8 @@ model FinancialAccount {
   id             String         @id @default(cuid())
   name           String         @unique
   accountType    String         @default("CASH")
+  currency       String?
+  reconciliationIssue String?
   description    String?
   openingBalance Decimal        @default(0) @db.Decimal(12, 2)
   currentBalance Decimal        @default(0) @db.Decimal(12, 2)
@@ -5797,6 +5799,7 @@ model FinancialAccount {
   payrolls       HrcfoPayroll[]
 
   @@index([status, accountType])
+  @@index([currency, status])
 }
 
 model HrcfoPayroll {

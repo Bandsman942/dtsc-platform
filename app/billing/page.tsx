@@ -3,6 +3,8 @@ import Link from "next/link";
 import { AppShell } from "@/components/layout/app-shell";
 import { BillingPlans } from "@/components/billing/billing-plans";
 import { OrganizationBillingPlans } from "@/components/billing/organization-billing-plans";
+import { SubscriptionRenewalActions } from "@/components/billing/subscription-renewal-actions";
+import { ManualSubscriptionPaymentsAdmin } from "@/components/admin/manual-subscription-payments-admin";
 import { Accordion, AccordionItem } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
 import { BusinessList, BusinessListItem } from "@/components/workspace/business-list";
@@ -16,7 +18,7 @@ import { resolvePersonalCommercialContext } from "@/lib/billing/commercial-conte
 import { getOrganizationEntitlements } from "@/lib/billing/entitlements";
 import { formatEnumLabel } from "@/lib/labels";
 import { isMaishaPayConfigured } from "@/lib/maishapay";
-import { getActiveOrganizationId } from "@/lib/organizations";
+import { DTSC_INTERNAL_ORGANIZATION_ID, getActiveOrganizationId, isDtscInternalSession } from "@/lib/organizations";
 import { prisma } from "@/lib/prisma";
 
 function dateLabel(value: Date | string | null | undefined) {
@@ -29,12 +31,14 @@ function storageLabel(maxStorageMb: number) {
   return `${maxStorageMb} Mo`;
 }
 
-export default async function BillingPage() {
+export default async function BillingPage({ searchParams }: { searchParams?: Promise<{ manualApproval?: string }> }) {
   const user = await requireUser();
   const session = await getSession();
   const activeOrganizationId = getActiveOrganizationId(session);
   const paymentAvailable = isMaishaPayConfigured();
-  const [catalog, latestSubscription, recentInvoices, recentPayments, organizationEntitlements, personalCommercialContext, organizationBillingRecords, organizationInvoices, organizationMembership, usageToday, knowledgeSourceCount] = await Promise.all([
+  const focusedApprovalId = (await searchParams)?.manualApproval;
+  const canSeeManualApprovals = isDtscInternalSession(session) || Boolean(focusedApprovalId && await prisma.user.findFirst({ where: { id: user.id, status: "ACTIVE", hrcfoEmployee: { is: { status: "ACTIVE" } }, organizationMemberships: { some: { organizationId: DTSC_INTERNAL_ORGANIZATION_ID, status: "ACTIVE", removedAt: null } } }, select: { id: true } }));
+  const [catalog, latestSubscription, recentInvoices, recentPayments, organizationEntitlements, personalCommercialContext, organizationBillingRecords, organizationInvoices, organizationMembership, usageToday, knowledgeSourceCount, lastPaidPersonal, lastPaidOrganization, openRenewals] = await Promise.all([
     getPublishedBillingCatalog(),
     prisma.subscription.findFirst({
       where: { userId: user.id },
@@ -78,11 +82,19 @@ export default async function BillingPage() {
       _sum: { totalTokens: true },
     }),
     prisma.knowledgeDocument.count({ where: { userId: user.id, organizationId: activeOrganizationId } }),
+    prisma.subscription.findFirst({ where: { userId: user.id, plan: { priceUsd: { gt: 0 } }, payments: { some: { status: "PAID" } } }, orderBy: { createdAt: "desc" }, include: { plan: true } }),
+    activeOrganizationId ? prisma.organizationSubscription.findFirst({ where: { organizationId: activeOrganizationId, plan: { priceUsd: { gt: 0 } }, payments: { some: { status: "PAID" } } }, orderBy: { createdAt: "desc" }, include: { plan: true } }) : null,
+    prisma.supportTicket.findMany({ where: { source: "SAAS_SUBSCRIPTION_RENEWAL", status: { in: ["OPEN", "IN_PROGRESS"] }, OR: [{ userId: user.id, organizationId: null }, ...(activeOrganizationId ? [{ organizationId: activeOrganizationId }] : [])] }, select: { id: true, organizationId: true }, orderBy: { createdAt: "desc" }, take: 20 }),
   ]);
 
   const personalPlans = catalog.offers.filter((offer) => offer.audience === "PERSONAL");
   const organizationPlans = catalog.offers.filter((offer) => offer.audience === "ORGANIZATION");
   const canManageOrganizationSubscription = organizationMembership?.role === "OWNER" || organizationMembership?.role === "ADMIN";
+  const nowMs = Date.now();
+  const personalExpiresAt = lastPaidPersonal?.currentPeriodEnd?.toISOString() || null;
+  const orgExpiresAt = lastPaidOrganization?.expiresAt?.toISOString() || organizationEntitlements?.expiresAt || null;
+  const personalExpired = Boolean(personalExpiresAt && new Date(personalExpiresAt).getTime() <= nowMs);
+  const organizationExpired = Boolean(orgExpiresAt && new Date(orgExpiresAt).getTime() <= nowMs);
   const hasClientOrganizationContext = Boolean(organizationEntitlements && !organizationEntitlements.isDtscInternal);
   const contextualOfferLabel = hasClientOrganizationContext
     ? organizationEntitlements?.offerName || "Aucune offre organisation active"
@@ -139,8 +151,10 @@ export default async function BillingPage() {
           </ModuleSection>
 
           <ModuleSection title="Offres individuelles disponibles" description={paymentAvailable ? "Sélectionnez une offre uniquement lorsque le changement est réellement supporté par le fournisseur de paiement." : "Le catalogue reste consultable; aucune action de paiement fictive n’est présentée lorsque le fournisseur n’est pas configuré."}>
+            <div id="offres-renouvellement" />
             <BillingPlans
               activePlanId={personalCommercialContext.offer?.id}
+              renewablePlanId={personalExpired ? lastPaidPersonal?.planId : undefined}
               paymentAvailable={paymentAvailable}
               plans={personalPlans.map((plan) => ({
                 id: plan.id,
@@ -156,13 +170,14 @@ export default async function BillingPage() {
 
           <Accordion>
             <AccordionItem title="Abonnement personnel" defaultOpen>
+              <SubscriptionRenewalActions scope="PERSONAL" paidPlan={lastPaidPersonal?.plan.name || null} expiresAt={personalExpiresAt} status={lastPaidPersonal?.status || "MISSING"} canManage paymentAvailable={paymentAvailable} nowMs={nowMs} openRequestId={openRenewals.find((ticket) => !ticket.organizationId)?.id} />
               {latestSubscription ? (
                 <BusinessList ariaLabel="Détails de l’abonnement personnel">
                   <BusinessListItem title="Offre" description={latestSubscription.plan.name} status={<StatusBadge>{formatEnumLabel(latestSubscription.status)}</StatusBadge>} />
                   <BusinessListItem title="Niveau de capacité appliqué" description={personalCommercialContext.capabilityLabel} />
                   <BusinessListItem title="Début de période" description={dateLabel(latestSubscription.currentPeriodStart)} />
                   <BusinessListItem title="Fin de période" description={dateLabel(latestSubscription.currentPeriodEnd)} />
-                  <BusinessListItem title="Renouvellement" description={latestSubscription.cancelAtPeriodEnd ? "Annulation programmée en fin de période" : "Aucune annulation programmée"} status={<StatusBadge tone={latestSubscription.cancelAtPeriodEnd ? "warning" : "success"}>{latestSubscription.cancelAtPeriodEnd ? "Fin de période" : "Maintenu"}</StatusBadge>} />
+                  <BusinessListItem title="Renouvellement" description={latestSubscription.cancelAtPeriodEnd ? "Annulation programmée en fin de période" : "Aucun renouvellement automatique garanti : paiement ou demande DTSC nécessaire à l’échéance"} status={<StatusBadge tone="warning">À suivre</StatusBadge>} />
                 </BusinessList>
               ) : <EmptyState compact title={`Offre appliquée : ${personalCommercialContext.offer?.name || "Découverte"}`} description="Aucun abonnement personnel payant n’est enregistré. Les capacités gratuites appliquées par le serveur restent disponibles." />}
             </AccordionItem>
@@ -170,8 +185,10 @@ export default async function BillingPage() {
             {organizationEntitlements && !organizationEntitlements.isDtscInternal ? (
               <AccordionItem title="Abonnement de l’organisation active">
                 <div className="min-w-0 space-y-6">
+                  <SubscriptionRenewalActions scope="ORGANIZATION" paidPlan={lastPaidOrganization?.plan.name || null} expiresAt={orgExpiresAt} status={lastPaidOrganization?.status || organizationEntitlements.subscriptionStatus} canManage={canManageOrganizationSubscription} paymentAvailable={paymentAvailable} nowMs={nowMs} openRequestId={openRenewals.find((ticket) => ticket.organizationId === activeOrganizationId)?.id} />
                   <OrganizationBillingPlans
                     activePlanId={organizationEntitlements.offerId || undefined}
+                    renewablePlanId={organizationExpired ? lastPaidOrganization?.planId : undefined}
                     canManage={canManageOrganizationSubscription}
                     paymentAvailable={paymentAvailable}
                     plans={organizationPlans.map((plan) => ({
@@ -265,6 +282,11 @@ export default async function BillingPage() {
               ) : <EmptyState compact title="Aucun paiement récent" />}
             </AccordionItem>
           </Accordion>
+          {canSeeManualApprovals ? (
+            <ModuleSection title="Validations des paiements manuels" description="Les collaborateurs DTSC habilités peuvent traiter ici les paiements qui leur ont été attribués, y compris depuis une notification.">
+              <ManualSubscriptionPaymentsAdmin canManage={false} currentUserId={user.id} focusId={focusedApprovalId} />
+            </ModuleSection>
+          ) : null}
         </ModuleContent>
       </ModuleWorkspace>
     </AppShell>

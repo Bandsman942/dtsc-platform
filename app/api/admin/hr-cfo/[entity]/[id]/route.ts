@@ -117,6 +117,15 @@ async function updateRecord(entity: HrcfoEntity, id: string, data: Record<string
     return prisma.department.update({ where: { id }, data: data as never });
   }
   if (entity === "accounts") {
+    if (data.currency) {
+      const account = await prisma.financialAccount.findUnique({ where: { id }, select: { currency: true } });
+      if (!account) throw new Error("Compte introuvable.");
+      const currencies = await prisma.hrcfoExpense.findMany({ where: { accountId: id }, distinct: ["currency"], select: { currency: true } });
+      if (currencies.some((movement) => movement.currency !== data.currency) || (account.currency && account.currency !== data.currency && currencies.length)) {
+        throw new Error("Devise incompatible avec les mouvements existants. Un rapprochement est nécessaire.");
+      }
+    }
+    if (data.openingBalance !== undefined && await prisma.hrcfoExpense.count({ where: { accountId: id } })) throw new Error("Le solde initial d'un compte mouvementé ne peut être modifié sans régularisation.");
     return prisma.financialAccount.update({ where: { id }, data: data as never });
   }
   if (entity === "positions") {

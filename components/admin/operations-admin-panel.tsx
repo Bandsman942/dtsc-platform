@@ -20,6 +20,15 @@ import { formatEnumLabel } from "@/lib/labels";
 import type { OperationalObjectType } from "@/lib/operational-access";
 
 const maxOperationFileSize = 6_000_000;
+
+function currencyBreakdown(records: OperationRecord[], amount: (record: OperationRecord) => number = (record) => record.amount || 0) {
+  const totals = new Map<string, number>();
+  for (const item of records) {
+    const currency = item.currency || "NON_CERTIFIÉ";
+    totals.set(currency, (totals.get(currency) || 0) + amount(item));
+  }
+  return [...totals.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([currency, total]) => `${total.toFixed(2)} ${currency}`).join(" · ") || "0.00 —";
+}
 const medicalProjectFieldNames = new Set([
   "healthDigitalCategory",
   "healthObjective",
@@ -92,6 +101,10 @@ export function OperationsAdminPanel({
     }, 0);
     const transactions = visibleItemsByDataset.transactions || [];
     const financialTransactions = transactions.filter((item) => item.status === "VALIDATED" || item.status === "PAID");
+    const revenueRecords = financialTransactions.filter((item) => item.values?.transactionCategory === "IN" && (item.values?.title || item.title || "").trim().toLocaleLowerCase("fr-FR") !== "capital de départ");
+    const inflowRecords = financialTransactions.filter((item) => item.values?.transactionCategory === "IN");
+    const outflowRecords = financialTransactions.filter((item) => item.values?.transactionCategory === "OUT");
+    const capitalRecords = inflowRecords.filter((item) => (item.values?.title || item.title || "").trim().toLocaleLowerCase("fr-FR") === "capital de départ");
     const totalIn = financialTransactions.filter((item) => item.values?.transactionCategory === "IN").reduce((sum, item) => sum + (item.amount || 0), 0);
     const totalOut = financialTransactions.filter((item) => item.values?.transactionCategory === "OUT").reduce((sum, item) => sum + (item.amount || 0), 0);
     const startingCapital = financialTransactions
@@ -107,6 +120,24 @@ export function OperationsAdminPanel({
     }, 0);
     const payrolls = visibleItemsByDataset.payrolls || [];
     const netPayrollPaid = payrolls.filter((item) => item.status === "VALIDATED" || item.status === "PAID").reduce((sum, item) => sum + (item.amount || 0), 0);
+    const budgetRecords = visibleItemsByDataset.budgets || [];
+    const balanceBreakdown = currencyBreakdown(visibleItemsByDataset.accounts || []);
+    const revenueBreakdown = currencyBreakdown(revenueRecords);
+    const inflowBreakdown = currencyBreakdown(inflowRecords);
+    const outflowBreakdown = currencyBreakdown(outflowRecords);
+    const capitalBreakdown = currencyBreakdown(capitalRecords);
+    const budgetBreakdown = currencyBreakdown(budgetRecords);
+    const spentBreakdown = currencyBreakdown(budgetRecords, (item) => {
+      const spentMeta = item.meta.find((entry) => entry.startsWith("Consommé:"));
+      const value = Number((spentMeta || "").split(" ")[1]);
+      return Number.isFinite(value) ? value : 0;
+    });
+    const remainingBreakdown = currencyBreakdown(budgetRecords, (item) => {
+      const spentMeta = item.meta.find((entry) => entry.startsWith("Consommé:"));
+      const value = Number((spentMeta || "").split(" ")[1]);
+      return Math.max(0, (item.amount || 0) - (Number.isFinite(value) ? value : 0));
+    });
+    const payrollBreakdown = currencyBreakdown(payrolls.filter((item) => item.status === "VALIDATED" || item.status === "PAID"));
     const activeRecords = records.filter((item) => !isClosedStatus(item.status)).length;
     const attentionItems = records.filter((item) => needsAttention(item)).length;
     const taskRecords = visibleItemsByDataset.tasks || [];
@@ -116,7 +147,7 @@ export function OperationsAdminPanel({
       : 0;
     const datasetCounts = datasets.map((dataset) => ({ label: dataset.label, count: (visibleItemsByDataset[dataset.id] || []).length }));
     const maxCount = Math.max(1, ...datasetCounts.map((item) => item.count));
-    return { records: records.length, activeRecords, attentionItems, blockedTasks, hrcfoRevenue, operationalExecution, datasetCounts, maxCount, totalIn, totalOut, startingCapital, accountsBalance, budgetTotal, budgetSpent, netPayrollPaid, financialTransactionCount: financialTransactions.length };
+    return { records: records.length, activeRecords, attentionItems, blockedTasks, hrcfoRevenue, operationalExecution, datasetCounts, maxCount, totalIn, totalOut, startingCapital, accountsBalance, budgetTotal, budgetSpent, netPayrollPaid, financialTransactionCount: financialTransactions.length, revenueBreakdown, inflowBreakdown, outflowBreakdown, balanceBreakdown, capitalBreakdown, budgetBreakdown, spentBreakdown, remainingBreakdown, payrollBreakdown };
   }, [datasets, visibleItemsByDataset]);
   const isHrcfoPanel = datasets.some((dataset) => dataset.id === "transactions" && dataset.endpoint.includes("/hr-cfo/"));
   const isCooPanel = datasets.some((dataset) => dataset.endpoint.includes("/admin/coo/"));
@@ -200,7 +231,7 @@ export function OperationsAdminPanel({
         <ModuleMetric label={isCooPanel ? "Éléments COO suivis" : "Dossiers suivis"} value={totals.records} />
         <ModuleMetric
           label={isCooPanel || isCeoPanel ? "Taux d'exécution" : isHrcfoPanel ? "Chiffre d'affaires" : "Éléments actifs"}
-          value={isCooPanel || isCeoPanel ? `${totals.operationalExecution}%` : isHrcfoPanel ? `${totals.hrcfoRevenue.toFixed(2)} USD` : totals.activeRecords}
+          value={isCooPanel || isCeoPanel ? `${totals.operationalExecution}%` : isHrcfoPanel ? totals.revenueBreakdown : totals.activeRecords}
         />
         <ModuleMetric
           label={isCooPanel ? "Tâches bloquées/retard" : isCeoPanel ? "Décisions à suivre" : isHrcfoPanel ? "Transactions impactantes" : "Priorités à traiter"}
@@ -209,14 +240,14 @@ export function OperationsAdminPanel({
         {isCooPanel ? <ModuleMetric label="Tâches terminées" value={(visibleItemsByDataset.tasks || []).filter((item) => item.status === "COMPLETED" || item.status === "VALIDATED").length} /> : null}
         {isCooPanel ? <ModuleMetric label="Blocages ouverts" value={(visibleItemsByDataset.blockers || []).filter((item) => item.status !== "RESOLVED" && item.status !== "CANCELED").length} /> : null}
         {isCooPanel ? <ModuleMetric label="Workflows partagés" value={(visibleItemsByDataset.workflows || []).filter((item) => item.meta.some((entry) => entry.includes("partage"))).length} /> : null}
-        {isHrcfoPanel ? <ModuleMetric label="Entrées validées/payées" value={`${totals.totalIn.toFixed(2)} USD`} /> : null}
-        {isHrcfoPanel ? <ModuleMetric label="Sorties validées/payées" value={`${totals.totalOut.toFixed(2)} USD`} /> : null}
-        {isHrcfoPanel ? <ModuleMetric label="Solde global comptes" value={`${totals.accountsBalance.toFixed(2)} USD`} /> : null}
-        {isHrcfoPanel ? <ModuleMetric label="Capital de départ" value={`${totals.startingCapital.toFixed(2)} USD`} /> : null}
-        {isHrcfoPanel ? <ModuleMetric label="Budget total" value={`${totals.budgetTotal.toFixed(2)} USD`} /> : null}
-        {isHrcfoPanel ? <ModuleMetric label="Budget consommé" value={`${totals.budgetSpent.toFixed(2)} USD`} /> : null}
-        {isHrcfoPanel ? <ModuleMetric label="Budget restant" value={`${Math.max(0, totals.budgetTotal - totals.budgetSpent).toFixed(2)} USD`} /> : null}
-        {isHrcfoPanel ? <ModuleMetric label="Net paie validé/payé" value={`${totals.netPayrollPaid.toFixed(2)} USD`} /> : null}
+        {isHrcfoPanel ? <ModuleMetric label="Entrées validées/payées" value={totals.inflowBreakdown} /> : null}
+        {isHrcfoPanel ? <ModuleMetric label="Sorties validées/payées" value={totals.outflowBreakdown} /> : null}
+        {isHrcfoPanel ? <ModuleMetric label="Soldes des comptes (par devise)" value={totals.balanceBreakdown} /> : null}
+        {isHrcfoPanel ? <ModuleMetric label="Capital de départ" value={totals.capitalBreakdown} /> : null}
+        {isHrcfoPanel ? <ModuleMetric label="Budget total" value={totals.budgetBreakdown} /> : null}
+        {isHrcfoPanel ? <ModuleMetric label="Budget consommé" value={totals.spentBreakdown} /> : null}
+        {isHrcfoPanel ? <ModuleMetric label="Budget restant" value={totals.remainingBreakdown} /> : null}
+        {isHrcfoPanel ? <ModuleMetric label="Net paie validé/payé" value={totals.payrollBreakdown} /> : null}
       </ModuleMetrics>
 
       <ModuleToolbar

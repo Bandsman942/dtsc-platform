@@ -1193,5 +1193,31 @@
       "empty": "No data available.",
       "guide": "User guide"
     }
+  },
+  "subscriptionRenewal": {
+    "title": "Renew your subscription",
+    "expired": "Your subscription has expired",
+    "expiring": "Your subscription expires soon",
+    "manual": "Ask DTSC to renew the subscription",
+    "online": "Renew with a one-time online payment",
+    "requested": "Your renewal request is being processed",
+    "noAutomaticCharge": "No recurring automatic charge without a valid mandate.",
+    "renewalSupport": "Track my DTSC request",
+    "permission": "Only the organization owner or an administrator can renew its subscription.",
+    "approvalsTitle": "Manual payments assigned to me",
+    "approvalNotification": "A manual payment is awaiting your approval.",
+    "externalReference": "Verifiable payment reference",
+    "invoicePendingMail": "Payment approved and invoiced; email delivery needs confirmation."
+  },
+  "internalFinance": {
+    "title": "DTSC treasury controls",
+    "confirmedPayments": "Confirmed receipts",
+    "postedIncome": "Posted subscription income",
+    "accountsByCurrency": "Account balances by currency",
+    "manualPending": "Pending manual payments",
+    "unlinkedInvoices": "Paid invoices without a posting",
+    "unverifiedAccounts": "Accounts requiring reconciliation",
+    "warning": "Multi-currency history requires human verification.",
+    "notGeneralLedger": "This is not yet complete double-entry bookkeeping."
   }
 }
