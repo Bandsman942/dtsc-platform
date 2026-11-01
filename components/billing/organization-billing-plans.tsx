@@ -21,11 +21,13 @@ export function OrganizationBillingPlans({
   activePlanId,
   paymentAvailable,
   canManage,
+  renewablePlanId,
 }: {
   plans: OrganizationPlan[];
   activePlanId?: string;
   paymentAvailable: boolean;
   canManage: boolean;
+  renewablePlanId?: string;
 }) {
   const [walletId, setWalletId] = useState("");
   const [provider, setProvider] = useState<"MPESA" | "AIRTEL" | "ORANGE">("MPESA");
@@ -107,9 +109,9 @@ export function OrganizationBillingPlans({
                   <span>{plan.dailyTokenLimit.toLocaleString("fr-FR")} tokens/jour</span>
                   <span>{plan.maxDocuments.toLocaleString("fr-FR")} sources de connaissance IA</span>
                 </div>
-                <Button type="button" onClick={() => checkout(plan.id)} disabled={active || !canManage || Boolean(pendingPlanId) || !paymentAvailable} className="mt-5 bg-[#002b5b] text-white hover:bg-[#001736]">
+                <Button type="button" onClick={() => checkout(plan.id)} disabled={(active && renewablePlanId !== plan.id) || !canManage || Boolean(pendingPlanId) || !paymentAvailable} className="mt-5 bg-[#002b5b] text-white hover:bg-[#001736]">
                   <CreditCard className="h-4 w-4" />
-                  {active ? "Offre active" : pendingPlanId === plan.id ? "Traitement…" : !canManage ? "Réservé aux administrateurs" : paymentAvailable ? "Payer pour l’entreprise" : "Paiement indisponible"}
+                  {active && renewablePlanId !== plan.id ? "Offre active" : pendingPlanId === plan.id ? "Traitement…" : !canManage ? "Réservé aux administrateurs" : paymentAvailable ? renewablePlanId === plan.id ? "Renouveler en ligne" : "Payer pour l’entreprise" : "Paiement indisponible"}
                 </Button>
               </article>
             );

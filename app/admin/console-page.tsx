@@ -32,6 +32,7 @@ import { HrcfoInvoiceList } from "@/components/admin/hrcfo-invoice-list";
 import { LegalDashboardSummary } from "@/components/admin/legal-dashboard-summary";
 import { NewsletterSubscribersManager } from "@/components/admin/newsletter-subscribers-manager";
 import { OperationsAdminPanel } from "@/components/admin/operations-admin-panel";
+import { InternalFinanceControls } from "@/components/admin/internal-finance-controls";
 import { PayrollApprovalPanel } from "@/components/admin/payroll-approval-panel";
 import { PayrollWorkflowPanel } from "@/components/admin/payroll-workflow-panel";
 import { PlatformIncidentManager } from "@/components/admin/platform-incident-manager";
@@ -291,6 +292,7 @@ function renderInternalSection(
     <InternalDepartmentWorkspace locale={locale} sections={[
       { id: "payroll", titleKey: "payroll", content: <PayrollWorkflowPanel locale={locale} embedded /> },
       { id: "invoices", titleKey: "invoices", content: <HrcfoInvoiceList invoices={hrcfoInvoices} canRead={canReadHrcfoInvoices} /> },
+      { id: "treasury", titleKey: "operations", content: <InternalFinanceControls /> },
       { id: "operations", titleKey: "operations", content: <OperationsAdminPanel eyebrow="Gestion interne" title="Opérations HR & CFO" description="Dossiers RH, budgets, dépenses, comptes et contrôles depuis les moteurs canoniques." playbook={["Dossier RH", "Budget", "Dépense", "Validation", "Paiement", "Audit"]} datasets={data.hrcfoDatasets.filter((item) => item.id !== "payrolls")} canEdit={canManage} embedded /> },
     ]} />
   );
