@@ -3,7 +3,7 @@ import { requireAdminBlockAccess } from "@/lib/admin-api";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { normalizePositionCode } from "@/lib/business-roles";
 import { syncDtscInternalMembershipForEmployee } from "@/lib/dtsc-internal-membership";
-import { deleteHrcfoTransaction, updateHrcfoTransaction } from "@/lib/hr-cfo-finance";
+import { deleteHrcfoTransaction, reconcileFinancialState, updateHrcfoTransaction } from "@/lib/hr-cfo-finance";
 import { prisma } from "@/lib/prisma";
 import { hrcfoReferenceSchemas, hrcfoSchemas } from "@/lib/validators";
 
@@ -126,7 +126,13 @@ async function updateRecord(entity: HrcfoEntity, id: string, data: Record<string
       }
     }
     if (data.openingBalance !== undefined && await prisma.hrcfoExpense.count({ where: { accountId: id } })) throw new Error("Le solde initial d'un compte mouvementé ne peut être modifié sans régularisation.");
-    return prisma.financialAccount.update({ where: { id }, data: data as never });
+    return prisma.$transaction(async (tx) => {
+      const updated = await tx.financialAccount.update({ where: { id }, data: data as never });
+      if (!data.currency && data.openingBalance === undefined) return updated;
+      // Revalidate the entire ledger before releasing an account for further postings.
+      await reconcileFinancialState(tx);
+      return tx.financialAccount.findUniqueOrThrow({ where: { id } });
+    }, { maxWait: 10_000, timeout: 30_000 });
   }
   if (entity === "positions") {
     const departmentId = data.departmentId ? String(data.departmentId) : undefined;
