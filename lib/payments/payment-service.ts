@@ -57,8 +57,8 @@ async function logMutation(tx: Transaction, context: PaymentContext, action: str
  * remain exclusively in EnterprisePayment and its existing accounting service.
  */
 export async function createSubscriptionPayment(context: PaymentContext, target: PaymentTarget, rawInput: unknown) {
-  const input = parseInput(checkoutSchema, rawInput);
   await assertPaymentMutationBoundary(context, "create-subscription");
+  const input = parseInput(checkoutSchema, rawInput);
   await assertPaymentTargetAccess(context.session, target, "CREATE");
 
   const ownerId = target.scope === "PERSONAL" ? target.userId : target.organizationId;
@@ -126,8 +126,8 @@ export async function createSubscriptionPayment(context: PaymentContext, target:
 
 /** Invoice-first collection; no partial payments or multi-invoice allocations in V1. */
 export async function createInvoicePayment(context: PaymentContext, rawInput: unknown) {
-  const input = parseInput(invoiceCheckoutSchema, rawInput);
   await assertPaymentMutationBoundary(context, "create-invoice");
+  const input = parseInput(invoiceCheckoutSchema, rawInput);
   const invoice = await prisma.invoice.findUnique({ where: { id: input.invoiceId } });
   if (!invoice) paymentError("PAYMENT_NOT_FOUND");
   await assertPaymentTargetAccess(context.session, invoice.organizationId
@@ -181,8 +181,8 @@ export async function createInvoicePayment(context: PaymentContext, rawInput: un
 
 /** Cancel a pending checkout without revoking already paid subscription periods. */
 export async function cancelPayment(context: PaymentContext, rawPaymentId: unknown) {
-  const paymentId = parseInput(paymentIdSchema, rawPaymentId);
   await assertPaymentMutationBoundary(context, "cancel");
+  const paymentId = parseInput(paymentIdSchema, rawPaymentId);
   const payment = await prisma.payment.findUnique({ where: { id: paymentId } });
   if (!payment) paymentError("PAYMENT_NOT_FOUND");
   await assertPaymentTargetAccess(context.session, payment.organizationId
@@ -213,8 +213,8 @@ export async function cancelPayment(context: PaymentContext, rawPaymentId: unkno
 
 /** Explicit retry with the same stable reference; never resurrect PAID payments. */
 export async function retryPayment(context: PaymentContext, rawPaymentId: unknown) {
-  const paymentId = parseInput(paymentIdSchema, rawPaymentId);
   await assertPaymentMutationBoundary(context, "retry");
+  const paymentId = parseInput(paymentIdSchema, rawPaymentId);
   const payment = await prisma.payment.findUnique({ where: { id: paymentId } });
   if (!payment) paymentError("PAYMENT_NOT_FOUND");
   await assertPaymentTargetAccess(context.session, payment.organizationId
@@ -247,12 +247,12 @@ export async function retryPayment(context: PaymentContext, rawPaymentId: unknow
  * is blocked until PAY-4 verifies callback signature, amount and currency.
  */
 export async function decideManualPayment(context: PaymentContext, rawInput: unknown) {
+  await assertPaymentMutationBoundary(context, "manual-decision");
   const input = parseInput(z.object({
     manualPaymentId: paymentIdSchema,
     action: z.enum(["APPROVE", "REJECT"]),
     comment: z.string().trim().max(500).optional(),
   }).strict(), rawInput);
-  await assertPaymentMutationBoundary(context, "manual-decision");
   await assertInternalPaymentAccess(context.session, "VALIDATOR");
   const manual = await prisma.manualSubscriptionPayment.findUnique({ where: { id: input.manualPaymentId } });
   if (!manual) paymentError("PAYMENT_NOT_FOUND");
@@ -269,8 +269,8 @@ export async function decideManualPayment(context: PaymentContext, rawInput: unk
 
 /** Safe, idempotent read of a payment already settled by its canonical workflow. */
 export async function markPaymentPaid(context: PaymentContext, rawPaymentId: unknown) {
-  const paymentId = parseInput(paymentIdSchema, rawPaymentId);
   await assertPaymentMutationBoundary(context, "verify-paid");
+  const paymentId = parseInput(paymentIdSchema, rawPaymentId);
   await assertInternalPaymentAccess(context.session, "MANAGE");
   const payment = await prisma.payment.findUnique({ where: { id: paymentId }, include: { invoice: true, manualSubscriptionPayment: true } });
   if (!payment) paymentError("PAYMENT_NOT_FOUND");
