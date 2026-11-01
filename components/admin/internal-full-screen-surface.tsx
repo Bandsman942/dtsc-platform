@@ -70,7 +70,7 @@ export function InternalFullScreenSurface({
       tabIndex={-1}
       data-dtsc-internal-fullscreen
       data-dtsc-fullscreen-level={level}
-      className={`fixed inset-0 flex min-w-0 flex-col overflow-hidden bg-dtsc-page text-dtsc-ink ${level === 3 ? "z-[420]" : level === 2 ? "z-[320]" : "z-[220]"}`}
+      className={`fixed inset-0 flex min-w-0 flex-col overflow-hidden bg-dtsc-page text-dtsc-ink ${level === 3 ? "z-[990]" : level === 2 ? "z-[980]" : "z-[970]"}`}
     >
       <header className="z-10 flex min-h-14 shrink-0 items-center gap-2 border-b border-dtsc-border bg-dtsc-surface px-3 pb-2 pt-[max(0.5rem,env(safe-area-inset-top))] sm:px-6">
         <button type="button" onClick={onClose} aria-label={en ? "Back to list" : "Retour à la liste"} className="inline-flex min-h-10 shrink-0 items-center gap-1 rounded-lg px-2 text-sm font-bold text-dtsc-blue hover:bg-dtsc-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500">

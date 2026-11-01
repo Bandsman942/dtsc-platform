@@ -47,6 +47,7 @@ assert.match(navigation, /InternalFullScreenSurface/);
 assert.match(fullscreen, /aria-modal="true"/);
 assert.match(fullscreen, /containModalTab/);
 assert.match(fullscreen, /safe-area-inset-bottom/);
+for (const layer of [970, 980, 990]) assert.ok(fullscreen.includes(`z-[${layer}]`), `full-screen layer ${layer} must outrank global floating actions while staying below dialogs`);
 assert.match(registers, /data-dtsc-register-fullscreen/);
 assert.match(registers, /data-dtsc-record-detail/);
 assert.match(registers, /setStatus/);
