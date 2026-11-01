@@ -1,3 +1,9 @@
+## 2026-10-31 — UX-03B #985 : feedback typé des encaissements Gaming (PR en validation)
+
+- Les refus d'encaissement Gaming sont présentés suivant le statut HTTP et le code métier, avec messages sûrs FR/EN issus du catalogue client, sans afficher des détails techniques.
+- Échec répété annoncé à chaque nouvelle tentative, erreur proche du champ identifié et résumé accessible pour les validations multi-champs. Les modales et données saisies sont conservées lors d'un refus.
+- QA #985 sur HTTP 400/401/403/409/422/429/500, conflits de caisse/paiement, champs et masquage ; aucun changement de schéma ni de permission. **CI et OWNER_E2E Gaming/Finance requis avant fusion ; Production inchangée.**
+
 ## 2026-10-28 — Hotfix P0 #917 : révalidation Finance/consentement avant cashback omnicanal (pré-release)
 
 - Retrait d'audience ou d'attribution après la commande : refus de crédit malgré la preuve de livraison/paiement; entitlements, conditions et quotas revérifiés au moment de l'EARN.
