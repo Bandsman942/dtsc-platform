@@ -74,6 +74,7 @@ await import("./qa-guided-form-contract-checks.mjs");
 await import("./qa-controlled-form-reference-checks.mjs");
 await import("./qa-operational-sla-filter-checks.mjs");
 await import("./qa-dtsc-payments-contract.mjs");
+await import("./qa-hotfix-manual-payment-validator-mobile.mjs");
 await import("./qa-media-proxy-hotfix.mjs");
 await import("./qa-hotfix-512-retail-subtypes-mobile-money-forms.mjs");
 await import("./qa-605-generic-sector-subtypes.mjs");
