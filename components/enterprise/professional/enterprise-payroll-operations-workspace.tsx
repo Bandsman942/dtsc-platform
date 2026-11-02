@@ -23,6 +23,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { FinanceCriticalStepUpFields, performFinanceCriticalStepUp } from "@/components/enterprise/professional/finance-critical-step-up";
 import { useToastMessage } from "@/components/ui/use-toast-message";
 import { BusinessList, BusinessListItem } from "@/components/workspace/business-list";
 import { ContextActions, type BusinessContextAction } from "@/components/workspace/context-actions";
@@ -236,9 +237,12 @@ export function EnterprisePayrollOperationsWorkspace({ organizationId, organizat
   async function decideRun(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!decisionTarget) return;
-    const comment = String(new FormData(event.currentTarget).get("comment") || "").trim();
+    const form = new FormData(event.currentTarget);
+    const comment = String(form.get("comment") || "").trim();
     if (decisionTarget.decision === "REJECT" && !comment) return setError(copy.rejectionHelp);
     const run = decisionTarget.run;
+    try { await performFinanceCriticalStepUp(form, "APPROVE"); }
+    catch (stepUpError) { setError(stepUpError instanceof Error ? stepUpError.message : copy.decisionFailed); return; }
     const ok = await mutate(`payroll-decision-${run.id}`, `/api/enterprise/${organizationId}/payroll-runs/${run.id}/decision`, {
       decision: decisionTarget.decision,
       revision: run.revision,
@@ -330,7 +334,7 @@ export function EnterprisePayrollOperationsWorkspace({ organizationId, organizat
     </Dialog>
 
     <Dialog open={Boolean(decisionTarget)} onClose={() => { if (!busyAction) setDecisionTarget(null); }} title={copy.decisionReview} presentation="editor" className="h-[74dvh] max-w-2xl">
-      {decisionTarget ? <form onSubmit={decideRun} className="grid gap-5">{error ? <ProfessionalError message={error} /> : null}<div className="rounded-xl border border-dtsc-border bg-dtsc-page p-4 text-sm"><strong>{decisionTarget.run.reference}</strong> · {professionalErpMoney(decisionTarget.run.netAmount, decisionTarget.run.currency, locale)}</div><Field label={decisionTarget.decision === "REJECT" ? copy.rejectionReason : copy.decisionComment} required={decisionTarget.decision === "REJECT"} help={decisionTarget.decision === "REJECT" ? copy.rejectionHelp : undefined}><textarea name="comment" rows={decisionTarget.decision === "REJECT" ? 6 : 5} required={decisionTarget.decision === "REJECT"} className="w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-base" /></Field><div className="sticky bottom-0 flex justify-end gap-2 border-t border-dtsc-border bg-dtsc-surface py-3"><Button type="button" variant="outline" onClick={() => setDecisionTarget(null)} disabled={Boolean(busyAction)}>{t("people.cancel")}</Button><Button type="submit" disabled={Boolean(busyAction)}>{decisionTarget.decision === "APPROVE" ? t("people.approve") : t("people.reject")}</Button></div></form> : null}
+      {decisionTarget ? <form onSubmit={decideRun} className="grid gap-5">{error ? <ProfessionalError message={error} /> : null}<div className="rounded-xl border border-dtsc-border bg-dtsc-page p-4 text-sm"><strong>{decisionTarget.run.reference}</strong> · {professionalErpMoney(decisionTarget.run.netAmount, decisionTarget.run.currency, locale)}</div><Field label={decisionTarget.decision === "REJECT" ? copy.rejectionReason : copy.decisionComment} required={decisionTarget.decision === "REJECT"} help={decisionTarget.decision === "REJECT" ? copy.rejectionHelp : undefined}><textarea name="comment" rows={decisionTarget.decision === "REJECT" ? 6 : 5} required={decisionTarget.decision === "REJECT"} className="w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-base" /></Field><FinanceCriticalStepUpFields action="APPROVE" locale={locale} /><div className="sticky bottom-0 flex justify-end gap-2 border-t border-dtsc-border bg-dtsc-surface py-3"><Button type="button" variant="outline" onClick={() => setDecisionTarget(null)} disabled={Boolean(busyAction)}>{t("people.cancel")}</Button><Button type="submit" disabled={Boolean(busyAction)}>{decisionTarget.decision === "APPROVE" ? t("people.approve") : t("people.reject")}</Button></div></form> : null}
     </Dialog>
 
     <Dialog open={Boolean(cancelTarget)} onClose={() => { if (!busyAction) setCancelTarget(null); }} title={copy.cancellationReview} presentation="editor" className="h-[70dvh] max-w-2xl">
