@@ -3,6 +3,7 @@ import { AppShell } from "@/components/layout/app-shell";
 import legacySettingsStyles from "@/components/settings/legacy-settings-panel.module.css";
 import { SessionAndPushSettings } from "@/components/settings/session-and-push-settings";
 import { TotpSecuritySettings } from "@/components/settings/totp-security-settings";
+import { ActiveSessionsSettings } from "@/components/settings/active-sessions-settings";
 import { SettingsPanel } from "@/components/settings/settings-panel";
 import { Button } from "@/components/ui/button";
 import { BusinessList, BusinessListItem } from "@/components/workspace/business-list";
@@ -18,9 +19,7 @@ import { getExperienceCopy, getIntlLocale } from "@/lib/experience-i18n";
 import { formatEnumLabelForLocale } from "@/lib/labels-i18n";
 import { getUserPushNotificationContentMode } from "@/lib/session-preference";
 
-// Contrat de gouvernance de la session : Aucune gestion multi-appareils fictive.
-// Cette page décrit uniquement la session signée courante tant qu'un registre serveur
-// de sessions par appareil n'est pas la source réelle de cette fonctionnalité.
+// Les sessions multi-appareils proviennent exclusivement du registre serveur AuthSession.
 function sessionDate(value: number | undefined, intlLocale: string, unavailable: string) {
   return value ? new Date(value * 1000).toLocaleString(intlLocale) : unavailable;
 }
@@ -79,6 +78,7 @@ export default async function SettingsPage() {
             </BusinessList>
           </ModuleSection>
           <TotpSecuritySettings locale={user.locale} />
+          <ActiveSessionsSettings locale={user.locale} />
           <ModuleSection title={copy.sessionAndNotifications} description={copy.sessionAndNotificationsDescription}>
             <SessionAndPushSettings initialIdleTimeoutMinutes={user.sessionIdleTimeoutMinutes} initialPushNotificationContentMode={pushNotificationContentMode} />
           </ModuleSection>
