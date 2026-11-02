@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import { isAuthSessionActive, newSessionId, registerAuthSession, touchRegisteredSession } from "@/lib/auth/session-registry";
 import { redirect } from "next/navigation";
 import type { UserRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
@@ -20,11 +21,16 @@ export async function getSession(): Promise<SessionPayload | null> {
   const token = cookieStore.get(SESSION_COOKIE)?.value;
   const secret = requireEnv("AUTH_SECRET");
 
-  return verifySessionToken(token, secret);
+  const signed = await verifySessionToken(token, secret);
+  if (!signed) return null;
+  return await isAuthSessionActive(signed) ? signed : null;
 }
 
 export async function getCurrentUser(sessionOverride?: SessionPayload) {
-  const session = sessionOverride ?? await getSession();
+  // Never allow a caller-supplied snapshot to bypass the authoritative
+  // revocation, membership and active-account checks in getSession().
+  const session = await getSession();
+  if (sessionOverride && session?.userId !== sessionOverride.userId) return null;
   if (!session) {
     return null;
   }
@@ -127,8 +133,10 @@ export async function setSessionCookie(
   const cookieStore = await cookies();
   const storedIdleTimeout = user.sessionIdleTimeoutMinutes ?? await getUserSessionIdleTimeoutMinutes(user.id);
 
+  const sessionId = options.previousSession?.sessionId || newSessionId();
   const created = await createSessionToken(
     {
+      sessionId,
       userId: user.id,
       email: user.email,
       name: user.name,
@@ -150,6 +158,18 @@ export async function setSessionCookie(
   if (!created) {
     await clearSessionCookie();
     return null;
+  }
+
+  if (options.previousSession?.sessionId) {
+    const renewed = await touchRegisteredSession(created.session);
+    if (!renewed) {
+      await clearSessionCookie();
+      return null;
+    }
+  } else {
+    // From this release onward every new login (and legacy session migration)
+    // is registered before the signed authentication cookie is delivered.
+    await registerAuthSession(created.session);
   }
 
   const cookieDomain = getAuthCookieDomain();
