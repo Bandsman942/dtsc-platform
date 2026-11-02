@@ -1,0 +1,16 @@
+// AUTH-04. Browser identity is a notification/consent marker, never an MFA bypass.
+model AuthKnownBrowser {
+  id             String    @id @default(cuid())
+  userId         String
+  tokenHash      String    @unique
+  agentLabel     String
+  createdAt      DateTime  @default(now())
+  lastSeenAt     DateTime  @default(now())
+  notificationAt DateTime?
+  trustedAt      DateTime?
+  trustedUntil   DateTime?
+  revokedAt      DateTime?
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, revokedAt, lastSeenAt])
+}
