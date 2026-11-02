@@ -16,6 +16,7 @@ const copy = {
     warning: "Attention : toute personne concernée devra vérifier son authentificateur lors de la prochaine connexion. Si nécessaire, elle recevra le parcours sécurisé de configuration.",
     password: "Confirmez votre mot de passe DTSC", reason: "Motif du changement (obligatoire)",
     save: "Appliquer la politique", saved: "Politique de sécurité enregistrée.", retry: "Impossible de récupérer la politique.",
+    code: "Code de sécurité TOTP ou code de récupération",
     readonly: "Lecture seule : vous ne possédez pas la permission de modifier les politiques.",
   },
   en: {
@@ -25,6 +26,7 @@ const copy = {
     warning: "Important: affected users will need to verify their authenticator at their next sign-in. They can use restricted secure onboarding if necessary.",
     password: "Confirm your DTSC password", reason: "Reason for this change (required)",
     save: "Apply security policy", saved: "Security policy saved.", retry: "Unable to load security policy.",
+    code: "TOTP or recovery code",
     readonly: "Read-only: you do not have permission to manage policies.",
   },
 } as const;
@@ -35,6 +37,9 @@ export function ConsoleMfaPolicyPanel({ locale = "fr", canManage = false }: { lo
   const [busy, setBusy] = useState(false);
   const [password, setPassword] = useState("");
   const [reason, setReason] = useState("");
+  const [code, setCode] = useState("");
+  const [factorEnabled, setFactorEnabled] = useState(true);
+  const [factorLoaded, setFactorLoaded] = useState(false);
 
   async function refresh() {
     const res = await fetch("/api/admin/security/mfa-policy", { cache: "no-store" });
@@ -43,11 +48,24 @@ export function ConsoleMfaPolicyPanel({ locale = "fr", canManage = false }: { lo
     setPolicy(body.policy);
   }
   useEffect(() => { void refresh().catch(() => toastError(t.retry)); }, [t.retry]);
+  useEffect(() => {
+    void fetch("/api/account/security/totp", { cache: "no-store" })
+      .then(async r => { if (!r.ok) throw new Error("Unavailable"); return r.json(); })
+      .then(data => { setFactorEnabled(Boolean(data.enabled)); setFactorLoaded(true); })
+      .catch(() => { setFactorEnabled(true); setFactorLoaded(false); });
+  }, []);
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!policy) return;
     setBusy(true);
     try {
+      const elevated = await fetch("/api/auth/step-up", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password, ...(factorEnabled ? { code } : {}) }),
+      });
+      const elevBody = await elevated.json().catch(() => null);
+      if (!elevated.ok) throw new Error(elevBody?.error || t.retry);
       const res = await fetch("/api/admin/security/mfa-policy", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -55,7 +73,7 @@ export function ConsoleMfaPolicyPanel({ locale = "fr", canManage = false }: { lo
       });
       const body = await res.json().catch(() => null);
       if (!res.ok) throw new Error(body?.error || t.retry);
-      setPolicy(body.policy); setPassword(""); setReason("");
+      setPolicy(body.policy); setPassword(""); setReason(""); setCode("");
       toastSuccess(t.saved);
     } catch (error) { toastError(error instanceof Error ? error.message : t.retry); }
     finally { setBusy(false); }
@@ -92,7 +110,12 @@ export function ConsoleMfaPolicyPanel({ locale = "fr", canManage = false }: { lo
               <label className="grid gap-2 text-sm font-semibold text-dtsc-ink">{t.password}
                 <PasswordInput required autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)} />
               </label>
-              <Button className="min-h-11 w-full rounded-xl sm:w-fit" disabled={busy || !password || reason.trim().length < 10}>{t.save}</Button>
+              {factorEnabled ? <label className="grid gap-2 text-sm font-semibold text-dtsc-ink">{t.code}
+                <Input required autoComplete="one-time-code" value={code}
+                  onChange={e => setCode(e.target.value.slice(0, 30))} />
+              </label> : null}
+              <Button className="min-h-11 w-full rounded-xl sm:w-fit"
+                disabled={busy || !factorLoaded || !password || reason.trim().length < 10 || (factorEnabled && code.trim().length < 6)}>{t.save}</Button>
             </div>
           ) : <p className="text-sm text-dtsc-muted">{t.readonly}</p>}
         </form>
