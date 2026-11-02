@@ -2,7 +2,9 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { signInSchema } from "@/lib/validators";
 import { verifyPassword } from "@/lib/security";
-import { setSessionCookie } from "@/lib/auth";
+import { clearSessionCookie, setSessionCookie } from "@/lib/auth";
+import { clearMfaChallengeCookie, createMfaChallenge } from "@/lib/auth/mfa-challenge";
+import { isSameOriginRequest } from "@/lib/request-security";
 import { ensureDefaultAdmin } from "@/lib/default-admin";
 import { getDefaultContextForRole, resolveOrganizationLoginContext } from "@/lib/organizations";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
@@ -10,6 +12,7 @@ import { writeAuditLog } from "@/lib/audit";
 import { resolvePostLoginRedirect } from "@/lib/post-login-redirect";
 
 export async function POST(req: Request) {
+  if (!isSameOriginRequest(req)) return NextResponse.json({ error: "Origine non autorisée." }, { status: 403 });
   const limiter = await rateLimit(getRateLimitKey(req, "auth:sign-in"), 8, 15 * 60 * 1000);
   if (!limiter.ok) {
     return NextResponse.json(
@@ -74,6 +77,30 @@ export async function POST(req: Request) {
     }
   }
 
+  const redirectTo = resolvePostLoginRedirect({
+    next: requestedNext,
+    context: context.activeContext,
+    userStartPage: user.startPage,
+  });
+  const factor = await prisma.authTotpFactor.findUnique({ where: { userId: user.id }, select: { enabledAt: true } });
+  if (factor?.enabledAt) {
+    // Critical: a verified password is not an authenticated session when MFA is enabled.
+    await clearSessionCookie();
+    const challenge = await createMfaChallenge({
+      userId: user.id,
+      organizationId: context.activeOrganizationId || null,
+      redirectTo,
+    });
+    await writeAuditLog({
+      userId: user.id, action: "AUTH_MFA_CHALLENGE_CREATED",
+      entity: "AuthMfaChallenge", entityId: user.id, request: req,
+    });
+    return NextResponse.json({ ok: true, mfaRequired: true, expiresAt: challenge.expiresAt }, {
+      headers: { "Cache-Control": "no-store" },
+    });
+  }
+  await clearMfaChallengeCookie();
+
   await setSessionCookie({
     ...user,
     activeContext: context.activeContext,
@@ -95,10 +122,6 @@ export async function POST(req: Request) {
 
   return NextResponse.json({
     ok: true,
-    redirectTo: resolvePostLoginRedirect({
-      next: requestedNext,
-      context: context.activeContext,
-      userStartPage: user.startPage,
-    }),
+    redirectTo,
   });
 }
