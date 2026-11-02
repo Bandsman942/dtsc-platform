@@ -79,4 +79,19 @@ assert.ok(paymentUi.includes("performFinanceCriticalStepUp(form, actionTarget.ac
 assert.ok(treasuryUi.includes("performFinanceCriticalStepUp(form, actionTarget.action)"), "Legacy treasury/payments UI must not bypass step-up");
 assert.ok(paymentUi.includes("<FinanceCriticalStepUpFields"), "Modern payments UI must show verification");
 assert.ok(treasuryUi.includes("<FinanceCriticalStepUpFields"), "Treasury payments UI must show verification");
+for (const p of [
+  "app/api/admin/hr-cfo/payrolls/[id]/mark-paid/route.ts",
+  "app/api/enterprise/[organizationId]/cash-sessions/[sessionId]/validate/route.ts",
+  "app/api/enterprise/[organizationId]/payroll-runs/[payrollRunId]/decision/route.ts",
+]) {
+  const securedRoute = read(p);
+  assert.ok(securedRoute.includes("hasRecentStepUp("), p + " requires server reauthentication");
+  assert.ok(securedRoute.includes('reasonCode: "STEP_UP_REQUIRED"'), p + " rejects weak sessions with 428");
+}
+const payrollManager = read("components/admin/payroll-workflow-panel.tsx");
+const cashPanel = read("components/enterprise/professional/enterprise-finance-cash-workspace.tsx");
+const enterprisePayrollPanel = read("components/enterprise/professional/enterprise-payroll-operations-workspace.tsx");
+assert.ok(payrollManager.includes('fetch("/api/auth/step-up"'), "HR CFO mark-paid UI requires proof");
+assert.ok(cashPanel.includes("performFinanceCriticalStepUp(form, \"APPROVE\")"), "Cash validator UI requires proof");
+assert.ok(enterprisePayrollPanel.includes("performFinanceCriticalStepUp(form, \"APPROVE\")"), "Payroll run UI requires proof");
 console.log("AUTH-04: dual-operator recovery and administrative step-up safety checks OK; browser E2E pending.");

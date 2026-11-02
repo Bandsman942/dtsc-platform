@@ -35,7 +35,7 @@ Date du plan : 2026-11-02. **Statut des parcours ci-dessous : NOT_EXECUTED**, ju
 | AUTH-E19 | Appareil fiable ayant déjà été enregistré | Le MFA reste obligatoire à chaque connexion | NOT_EXECUTED |
 | AUTH-E20 | Step-up sur Console politique globale | Mot de passe + TOTP, fenêtre 5min liée à session | NOT_EXECUTED |
 | AUTH-E21 | Cookie step-up expiré, rotaté ou volé sans session correspondante | Refus de mutation ; aucune élévation implicite | NOT_EXECUTED |
-| AUTH-E22 | Opérations critiques Console, paies CEO/COO et transitions ERP Paiements | Rejet HTTP 428 sans step-up ; boîte de dialogue mot de passe et TOTP ; APPROVE/CONFIRM/RECONCILE/REVERSE protégées sur API et deux UIs ; rôle/approbation demeurent vérifiés ; autres actions Finance/RH en audit | NOT_EXECUTED |
+| AUTH-E22 | Actions critiques Console, paies internes/entreprises, validations caisse, paiements et transferts | HTTP 428 sans step-up ; UI mot de passe et TOTP ; mutation uniquement après vérification ; approbations, paiements, transferts et décisions RH restent soumis au RBAC ; autres actions à classifier | NOT_EXECUTED |
 | AUTH-E23 | Récupération admin à double contrôle | Deux opérateurs SECURITY_MANAGE distincts, ni demandeur ni cible comme approbateur ; approbation invalide tous les cookies, exige nouvel enrôlement TOTP, mail d’alerte et audit ; refus / expiration / simultanéité | NOT_EXECUTED |
 | AUTH-E24 | Tests panne PostgreSQL, membership perdu, réseau instable | Interdiction par défaut ; pas de bypass ni boucle de connexion | NOT_EXECUTED |
 | AUTH-E25 | Responsive 320/360/375/390/414/768/1024/1440px et FR/EN | Pas de chevauchement, focus clavier, contraste, clair/sombre | NOT_EXECUTED |
