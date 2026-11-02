@@ -7,6 +7,7 @@ import { Dialog } from "@/components/ui/dialog";
 import { ListControls } from "@/components/ui/list-controls";
 import { InternalFullScreenSurface } from "@/components/admin/internal-full-screen-surface";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { useToastMessage } from "@/components/ui/use-toast-message";
 import type { ToastNotice } from "@/lib/client-toast";
 import { BusinessDetail, BusinessDetailField, BusinessDetailGrid, BusinessDetailHeader, BusinessDetailSection } from "@/components/workspace/business-detail";
@@ -27,6 +28,8 @@ export function PayrollApprovalPanel({ approverRole, locale, embedded = false }:
   const [selected, setSelected] = useState<PayrollWorkflowItem | null>(null);
   const [decision, setDecision] = useState<Decision | null>(null);
   const [comment, setComment] = useState("");
+  const [securityPassword, setSecurityPassword] = useState("");
+  const [securityCode, setSecurityCode] = useState("");
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("PENDING_APPROVAL");
   const [dateStart, setDateStart] = useState("");
@@ -74,12 +77,25 @@ export function PayrollApprovalPanel({ approverRole, locale, embedded = false }:
   const pageCount = Math.max(1, Math.ceil(filtered.length / 12));
   const currentPage = Math.min(page, pageCount);
   const paginated = filtered.slice((currentPage - 1) * 12, currentPage * 12);
-  const closeSelected = useCallback(() => { setSelected(null); setDecision(null); setComment(""); }, []);
+  const closeSelected = useCallback(() => { setSelected(null); setDecision(null); setComment(""); setSecurityPassword(""); setSecurityCode(""); }, []);
 
   async function review() {
     if (!selected || !decision || saving) return;
+    if (!securityPassword) {
+      setNotice({ tone: "error", description: locale === "en" ? "Confirm your password before this financial decision." : "Confirmez votre mot de passe avant cette décision financière." });
+      return;
+    }
     setSaving(true);
     try {
+      const elevated = await fetch("/api/auth/step-up", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: securityPassword, ...(securityCode.trim() ? { code: securityCode.trim() } : {}) }),
+      });
+      const elevatedBody = await elevated.json().catch(() => null);
+      if (!elevated.ok) {
+        setNotice({ tone: "error", description: elevatedBody?.error || (locale === "en" ? "Security verification failed." : "Impossible de vérifier votre identité.") });
+        return;
+      }
       const response = await fetch(`${endpoint}/${selected.id}/review`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -100,6 +116,8 @@ export function PayrollApprovalPanel({ approverRole, locale, embedded = false }:
       });
       setDecision(null);
       setComment("");
+      setSecurityPassword("");
+      setSecurityCode("");
       setSelected(null);
       await load();
     } catch {
@@ -152,11 +170,28 @@ export function PayrollApprovalPanel({ approverRole, locale, embedded = false }:
       </div> : null}
     </InternalFullScreenSurface>
 
-    <Dialog open={Boolean(decision)} title={decision === "APPROVED" ? t("approveTitle") : decision === "CHANGES_REQUESTED" ? t("changesTitle") : t("rejectTitle")} description={decision === "APPROVED" ? t("approveDescription") : t("reviewReasonDescription")} onClose={() => { if (saving) return; setDecision(null); setComment(""); }} footer={<>
-      <Button type="button" variant="outline" onClick={() => { setDecision(null); setComment(""); }} disabled={saving} className="rounded-xl">{t("close")}</Button>
-      <Button type="button" onClick={() => void review()} disabled={saving || ((decision === "CHANGES_REQUESTED" || decision === "REJECTED") && !comment.trim())} className="rounded-xl bg-dtsc-blue text-white">{decision === "APPROVED" ? t("approve") : decision === "CHANGES_REQUESTED" ? t("requestChanges") : t("reject")}</Button>
+    <Dialog open={Boolean(decision)} title={decision === "APPROVED" ? t("approveTitle") : decision === "CHANGES_REQUESTED" ? t("changesTitle") : t("rejectTitle")} description={decision === "APPROVED" ? t("approveDescription") : t("reviewReasonDescription")} onClose={() => { if (saving) return; setDecision(null); setComment(""); setSecurityPassword(""); setSecurityCode(""); }} footer={<>
+      <Button type="button" variant="outline" onClick={() => { setDecision(null); setComment(""); setSecurityPassword(""); setSecurityCode(""); }} disabled={saving} className="rounded-xl">{t("close")}</Button>
+      <Button type="button" onClick={() => void review()} disabled={saving || !securityPassword || ((decision === "CHANGES_REQUESTED" || decision === "REJECTED") && !comment.trim())} className="rounded-xl bg-dtsc-blue text-white">{decision === "APPROVED" ? t("approve") : decision === "CHANGES_REQUESTED" ? t("requestChanges") : t("reject")}</Button>
     </>}>
       {decision === "APPROVED" ? <div className="flex gap-3 rounded-xl border border-emerald-500/25 bg-emerald-500/10 p-3 text-sm text-emerald-800 dark:text-emerald-200"><CheckCircle2 className="h-5 w-5 shrink-0" />{t("approveFinancialConfirmation")}</div> : <label className="grid gap-2 text-xs font-black uppercase tracking-[0.08em] text-dtsc-muted"><span>{t("comment")}</span><textarea value={comment} onChange={(event) => setComment(event.target.value)} maxLength={1800} rows={6} className="min-h-32 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm normal-case tracking-normal text-dtsc-ink" /></label>}
+      {decision ? (
+        <div className="mt-4 grid gap-3 border-t border-dtsc-border pt-4">
+          <p className="text-sm font-semibold text-dtsc-ink">{locale === "en"
+            ? "Security verification required before this payroll decision."
+            : "Vérification de sécurité requise avant cette décision de paie."}</p>
+          <label className="grid gap-2 text-sm font-semibold text-dtsc-ink">
+            {locale === "en" ? "Current DTSC password" : "Mot de passe DTSC actuel"}
+            <PasswordInput value={securityPassword} onChange={event => setSecurityPassword(event.target.value)}
+              required autoComplete="current-password" />
+          </label>
+          <label className="grid gap-2 text-sm font-semibold text-dtsc-ink">
+            {locale === "en" ? "TOTP or recovery code (if enabled)" : "Code TOTP ou de secours (si activé)"}
+            <Input value={securityCode} onChange={event => setSecurityCode(event.target.value.slice(0, 30))}
+              autoComplete="one-time-code" />
+          </label>
+        </div>
+      ) : null}
     </Dialog>
   </ModuleWorkspace>;
 }
