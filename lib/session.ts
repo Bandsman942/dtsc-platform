@@ -12,6 +12,7 @@ export type SessionContext = "GLOBAL_CLIENT" | "COMMUNITY" | "DTSC_INTERNAL" | "
 
 export type SessionPayload = {
   userId: string;
+  sessionId?: string;
   email: string;
   name: string;
   role: UserRole;
