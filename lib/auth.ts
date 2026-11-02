@@ -27,11 +27,12 @@ export async function getSession(): Promise<SessionPayload | null> {
   // A valid signature alone does not authorize a revoked, suspended or
   // expired server-side session.
   if (!(await isAuthSessionActive(signed))) return null;
+  const session = signed;
   // MFA policy is evaluated only after revocation and tenant membership.
   const factor = await prisma.authTotpFactor.findUnique({
     where: { userId: signed.userId }, select: { enabledAt: true },
   });
-  const required = await isMfaRequiredForContext(signed);
+  const required = await isMfaRequiredForContext(session);
   if (required && !factor?.enabledAt) return null;
   if (factor?.enabledAt &&
       (!signed.mfaVerifiedAt || signed.mfaVerifiedAt < factor.enabledAt.getTime())) return null;
