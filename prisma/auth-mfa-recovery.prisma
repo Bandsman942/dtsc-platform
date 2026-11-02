@@ -1,0 +1,19 @@
+// AUTH-04 security operations: dual-control recovery is restricted to DTSC security operators.
+model AuthMfaRecoveryRequest {
+  id                String    @id @default(cuid())
+  targetUserId      String
+  requestedByUserId String
+  approvedByUserId  String?
+  status            String    @default("PENDING")
+  reason            String
+  createdAt         DateTime  @default(now())
+  expiresAt         DateTime
+  resolvedAt        DateTime?
+  target            User      @relation("AuthMfaRecoveryTarget", fields: [targetUserId], references: [id], onDelete: Cascade)
+  requester         User      @relation("AuthMfaRecoveryRequester", fields: [requestedByUserId], references: [id], onDelete: Restrict)
+  approver          User?     @relation("AuthMfaRecoveryApprover", fields: [approvedByUserId], references: [id], onDelete: Restrict)
+
+  @@index([targetUserId, status, expiresAt])
+  @@index([status, expiresAt])
+  @@index([requestedByUserId, createdAt])
+}
