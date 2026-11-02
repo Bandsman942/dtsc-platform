@@ -1,0 +1,46 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+
+const read = p => readFileSync(new URL("../"+p, import.meta.url), "utf8");
+const policy=read("lib/auth/mfa-policy.ts"), auth=read("lib/auth.ts"),
+ signin=read("app/api/auth/sign-in/route.ts"), challenge=read("lib/auth/mfa-challenge.ts");
+const confirm=read("app/api/account/security/totp/confirm/route.ts");
+const enroll=read("app/api/account/security/totp/enroll/route.ts");
+const disable=read("app/api/account/security/totp/disable/route.ts");
+const complete=read("app/api/auth/mfa/challenge/route.ts");
+const context=read("app/api/account/context/route.ts");
+const global=read("app/api/admin/security/mfa-policy/route.ts");
+const org=read("app/api/enterprise/[organizationId]/administration/security/route.ts");
+const form=read("components/auth/auth-form.tsx");
+const ui=read("components/auth/mandatory-mfa-enrollment.tsx");
+const consoleUi=read("components/admin/console-mfa-policy-panel.tsx");
+const consolePage=read("app/admin/console-page.tsx");
+const schema=read("prisma/schema.prisma");
+const migration=read("prisma/migrations/20261102193000_auth_mfa_policies/migration.sql");
+
+for(const part of ["requireMfaForAllUsers","requireMfaForDtscInternal","enterpriseOrganizationSecurityPolicy","isMfaRequiredAnywhere"])assert.ok(policy.includes(part),"Missing policy "+part);
+assert.ok(signin.includes("mandatoryMfa"),"Sign-in must load effective policy");
+assert.ok(signin.includes('purpose: factor?.enabledAt ? "VERIFY" : "ENROLL"'),"Enforced users must not bypass MFA");
+assert.ok(challenge.includes("getMfaEnrollmentChallenge"),"Pre-auth challenge must be constrained");
+assert.ok(challenge.includes('purpose: "ENROLL"'),"Enrollment challenge must be purpose bound");
+assert.ok(enroll.includes("getMfaEnrollmentChallenge"),"Enrollment must accept restricted challenge");
+assert.ok(confirm.includes('consumeMfaChallengeAttempt("ENROLL")'),"Enrollment confirmation must consume an attempt");
+assert.ok(confirm.includes("finalizeMfaChallenge(enrollment.id)"),"Enrollment challenge must be one-time");
+assert.ok(confirm.includes("mfaVerifiedAt:"),"MFA setup must stamp session");
+assert.ok(complete.includes("mfaVerifiedAt:"),"MFA challenge must stamp session");
+assert.ok(auth.includes("mfaVerifiedAt < factor.enabledAt.getTime()"),"Signed cookie must not bypass fresh factor");
+assert.ok(auth.includes("isMfaRequiredForContext(session)"),"Signed legacy cookies obey global minima");
+assert.ok(context.includes("isMfaRequiredForContext(context)"),"Context switch must not bypass MFA");
+assert.ok(disable.includes("isMfaRequiredAnywhere"),"Other active tenants must block removal");
+assert.ok(global.includes("CONSOLE_CAPABILITIES.SECURITY_MANAGE"),"Global config RBAC");
+assert.ok(global.includes("verifyPassword("),"Sensitive global changes require reauth");
+assert.ok(global.includes("writeAuditLog"),"Changes audited");
+assert.ok(org.includes("globalMfa.requireMfaForAllUsers"),"Tenants must not weaken global minimum");
+assert.ok(form.includes("<MandatoryMfaEnrollment"),"Login must offer onboarding");
+assert.ok(ui.includes("LocalQrCode"),"Onboarding must have local private QR");
+assert.ok(ui.includes("recoveryCodes"),"Recovery codes must be shown once");
+assert.ok(consoleUi.includes('"/api/admin/security/mfa-policy"'),"Console must manage real backend");
+assert.ok(consolePage.includes("<ConsoleMfaPolicyPanel"),"Console must show global policy");
+assert.ok(schema.includes("requireMfaForAllUsers"),"Schema missing flags");
+assert.ok(migration.includes('ALTER TABLE "AuthMfaChallenge"'),"Challenge migration missing");
+console.log("AUTH-03 mandatory MFA policies, secure enrollment, Console RBAC invariants OK. OWNER_E2E pending.");
