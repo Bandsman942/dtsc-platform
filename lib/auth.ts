@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { isAuthSessionActive, newSessionId, registerAuthSession, touchRegisteredSession } from "@/lib/auth/session-registry";
+import { isMfaRequiredForContext } from "@/lib/auth/mfa-policy";
 import { redirect } from "next/navigation";
 import type { UserRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
@@ -23,7 +24,18 @@ export async function getSession(): Promise<SessionPayload | null> {
 
   const signed = await verifySessionToken(token, secret);
   if (!signed) return null;
-  return await isAuthSessionActive(signed) ? signed : null;
+  // A valid signature alone does not authorize a revoked, suspended or
+  // expired server-side session.
+  if (!(await isAuthSessionActive(signed))) return null;
+  // MFA policy is evaluated only after revocation and tenant membership.
+  const factor = await prisma.authTotpFactor.findUnique({
+    where: { userId: signed.userId }, select: { enabledAt: true },
+  });
+  const required = await isMfaRequiredForContext(signed);
+  if (required && !factor?.enabledAt) return null;
+  if (factor?.enabledAt &&
+      (!signed.mfaVerifiedAt || signed.mfaVerifiedAt < factor.enabledAt.getTime())) return null;
+  return signed;
 }
 
 export async function getCurrentUser(sessionOverride?: SessionPayload) {
@@ -120,6 +132,7 @@ type SessionCookieUser = {
   name: string;
   role: UserRole;
   sessionIdleTimeoutMinutes?: number | null;
+  mfaVerifiedAt?: number;
   activeContext?: SessionContext;
   activeOrganizationId?: string | null;
   activeOrganizationName?: string | null;
@@ -138,6 +151,7 @@ export async function setSessionCookie(
     {
       sessionId,
       userId: user.id,
+      mfaVerifiedAt: user.mfaVerifiedAt ?? options.previousSession?.mfaVerifiedAt,
       email: user.email,
       name: user.name,
       role: user.role,
