@@ -60,3 +60,7 @@ Un **second opérateur distinct** de l'auteur et de la cible doit disposer de `S
 ## Déploiement
 
 Ne pas fusionner ou déployer avant la certification. Les migrations sont additives et préservent les lignes historiques. En cas de rollback, conserver le registre et ne pas réactiver une exemption MFA, car aucune exemption n'est implémentée.
+
+## Réconciliation AUTH-04 après AUTH-01 à AUTH-03
+
+Le correctif #1017 repose sur `main` après fusion de #1013, #1014, #1015 et #1016, et préserve le contrôle cumulatif : session enregistrée/révocable côté serveur, preuve TOTP, minima MFA globaux/entreprise et invalidation des sessions après récupération administrative. Les scénarios E2E du propriétaire #1017 ont été déclarés **BON** le 2 novembre 2026. Les validations CI du commit réconcilié, la fusion et le statut Vercel Production doivent être vérifiés séparément ; une ancienne CI verte ne certifie pas le nouveau commit.
