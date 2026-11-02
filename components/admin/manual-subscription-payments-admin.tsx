@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
+import { FinanceCriticalStepUpFields, performFinanceCriticalStepUp } from "@/components/enterprise/professional/finance-critical-step-up";
 import { ListControls } from "@/components/ui/list-controls";
 import { useToastMessage } from "@/components/ui/use-toast-message";
 import { useAppLocale } from "@/components/i18n/locale-provider";
@@ -122,7 +123,14 @@ export function ManualSubscriptionPaymentsAdmin({ canManage, currentUserId, focu
     event.preventDefault();
     if (!decision) return;
     setBusy(true);
-    const validationComment = String(new FormData(event.currentTarget).get("validationComment") || "");
+    const form = new FormData(event.currentTarget);
+    const validationComment = String(form.get("validationComment") || "");
+    try { await performFinanceCriticalStepUp(form, "APPROVE"); }
+    catch (securityError) {
+      setBusy(false);
+      setMessage(securityError instanceof Error ? securityError.message : "Vérification de sécurité refusée.");
+      return;
+    }
     const response = await fetch(`/api/admin/manual-subscription-payments/${decision.request.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: decision.action, validationComment }) });
     const body = await response.json().catch(() => null) as { message?: string; result?: { mail?: { sent: boolean } } } | null;
     setBusy(false);
@@ -262,6 +270,7 @@ export function ManualSubscriptionPaymentsAdmin({ canManage, currentUserId, focu
           </div>
           <p className="text-sm leading-6 text-dtsc-muted">{decision.action === "APPROVE" ? "Cette action active ou prolonge l’abonnement et comptabilise atomiquement le paiement avec sa facture. L’envoi e-mail intervient ensuite." : "Le paiement restera sans impact sur l’abonnement et le chiffre d’affaires."}</p>
           <FormField label="Commentaire de validation" hint="Le refus doit être motivé pour l’audit."><Input name="validationComment" maxLength={500} required={decision.action === "REJECT"} /></FormField>
+          <FinanceCriticalStepUpFields action="APPROVE" locale={english ? "en" : "fr"} />
           <div className="flex min-w-0 flex-wrap justify-end gap-2"><Button type="button" variant="outline" disabled={busy} onClick={() => setDecision(null)}>Annuler</Button><Button disabled={busy} className={decision.action === "REJECT" ? "bg-red-700 text-white hover:bg-red-800" : ""}>{decision.action === "APPROVE" ? "Confirmer la validation" : "Confirmer le refus"}</Button></div>
         </form> : null}
       </Dialog>
