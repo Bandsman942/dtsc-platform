@@ -221,6 +221,7 @@ export async function middleware(request: NextRequest) {
     const created = await createSessionToken(
       {
         userId: session.userId,
+        sessionId: session.sessionId,
         email: session.email,
         name: session.name,
         role: session.role,
