@@ -27,15 +27,26 @@ export async function getSession(): Promise<SessionPayload | null> {
   // A valid signature alone does not authorize a revoked, suspended or
   // expired server-side session.
   if (!(await isAuthSessionActive(signed))) return null;
-  // MFA policy is evaluated only after revocation and tenant membership.
-  const factor = await prisma.authTotpFactor.findUnique({
-    where: { userId: signed.userId }, select: { enabledAt: true },
+  const session = signed;
+  // Recovery is account-wide; no signed legacy cookie or revoked device may
+  // bypass a two-person administrative recovery or stale MFA proof.
+  const identity = await prisma.user.findUnique({
+    where: { id: session.userId },
+    select: { status: true, mfaRecoveryRequired: true, mfaRecoveryInvalidBefore: true },
   });
-  const required = await isMfaRequiredForContext(signed);
+  if (!identity || identity.status !== "ACTIVE") return null;
+  if (identity.mfaRecoveryInvalidBefore &&
+      (!session.mfaVerifiedAt || session.mfaVerifiedAt <= identity.mfaRecoveryInvalidBefore.getTime())) return null;
+  if (identity.mfaRecoveryRequired) return null;
+  // MFA policy is evaluated only after revocation, account recovery and membership.
+  const factor = await prisma.authTotpFactor.findUnique({
+    where: { userId: session.userId }, select: { enabledAt: true },
+  });
+  const required = await isMfaRequiredForContext(session);
   if (required && !factor?.enabledAt) return null;
   if (factor?.enabledAt &&
-      (!signed.mfaVerifiedAt || signed.mfaVerifiedAt < factor.enabledAt.getTime())) return null;
-  return signed;
+      (!session.mfaVerifiedAt || session.mfaVerifiedAt < factor.enabledAt.getTime())) return null;
+  return session;
 }
 
 export async function getCurrentUser(sessionOverride?: SessionPayload) {
