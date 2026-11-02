@@ -24,3 +24,20 @@ model AuthRecoveryCode {
   @@unique([factorId, codeHash])
   @@index([factorId, consumedAt])
 }
+
+
+model AuthMfaChallenge {
+  id         String    @id @default(cuid())
+  userId     String
+  tokenHash  String    @unique
+  redirectTo String
+  organizationId String?
+  attempts   Int       @default(0)
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime  @default(now())
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+  @@index([expiresAt])
+}

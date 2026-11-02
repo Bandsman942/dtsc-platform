@@ -2,6 +2,7 @@ import Link from "next/link";
 import { AppShell } from "@/components/layout/app-shell";
 import legacySettingsStyles from "@/components/settings/legacy-settings-panel.module.css";
 import { SessionAndPushSettings } from "@/components/settings/session-and-push-settings";
+import { TotpSecuritySettings } from "@/components/settings/totp-security-settings";
 import { SettingsPanel } from "@/components/settings/settings-panel";
 import { Button } from "@/components/ui/button";
 import { BusinessList, BusinessListItem } from "@/components/workspace/business-list";
@@ -77,6 +78,7 @@ export default async function SettingsPage() {
               <BusinessListItem title={copy.absoluteExpiration} description={sessionDate(session?.absoluteExp, intlLocale, copy.unavailable)} status={<StatusBadge tone="warning">{copy.newSignInAfter}</StatusBadge>} />
             </BusinessList>
           </ModuleSection>
+          <TotpSecuritySettings locale={user.locale} />
           <ModuleSection title={copy.sessionAndNotifications} description={copy.sessionAndNotificationsDescription}>
             <SessionAndPushSettings initialIdleTimeoutMinutes={user.sessionIdleTimeoutMinutes} initialPushNotificationContentMode={pushNotificationContentMode} />
           </ModuleSection>

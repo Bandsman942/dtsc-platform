@@ -19,10 +19,42 @@ function normalizeRedirectTarget(target: unknown) {
   return resolveTrustedInternalRedirect(target) || getDashboardUrl();
 }
 
-export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
+const MFA_UI = {
+  fr: {
+    title: "Vérification à deux facteurs",
+    help: "Saisissez le code temporaire de votre application d'authentification. Aucun accès n'est accordé avant cette vérification.",
+    code: "Code à six chiffres", recovery: "Code de récupération",
+    loading: "Vérification…", submit: "Vérifier et me connecter",
+    useRecovery: "Utiliser un code de récupération", useTotp: "Utiliser mon application d'authentification",
+    back: "Revenir à la connexion",
+    prompt: "Vérifiez le code de votre application d'authentification.",
+    titleToast: "Vérification de sécurité",
+    networkError: "Vérification impossible. Vérifiez votre connexion puis réessayez.",
+    genericError: "Impossible de vérifier le code. Recommencez.",
+  },
+  en: {
+    title: "Two-factor verification",
+    help: "Enter the temporary code from your authenticator app. No account access is granted until verification.",
+    code: "Six-digit code", recovery: "Recovery code",
+    loading: "Verifying…", submit: "Verify and sign in",
+    useRecovery: "Use a recovery code", useTotp: "Use my authenticator app",
+    back: "Back to sign in",
+    prompt: "Enter the code from your authenticator app.",
+    titleToast: "Security verification",
+    networkError: "Verification failed. Check your connection and try again.",
+    genericError: "Could not verify the code. Please try again.",
+  },
+} as const;
+
+export function AuthForm({ mode, uiLocale = "fr" }: { mode: "sign-in" | "sign-up"; uiLocale?: "fr" | "en" }) {
+  const mfaCopy = MFA_UI[uiLocale];
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isPending, setIsPending] = useState(false);
+  const [mfaRequired, setMfaRequired] = useState(false);
+  const [mfaMode, setMfaMode] = useState<"totp" | "recovery">("totp");
+  const [mfaCode, setMfaCode] = useState("");
+
   const [pendingRegistration, setPendingRegistration] = useState<Record<string, FormDataEntryValue> | null>(null);
   const [otpExpiresAt, setOtpExpiresAt] = useState("");
   const [emailValue, setEmailValue] = useState("");
@@ -102,6 +134,14 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
       toastError(body?.error || "Impossible de poursuivre pour le moment. Réessayez dans un instant.");
       return;
     }
+    if (!isSignUp && body?.mfaRequired) {
+      setMfaRequired(true);
+      setMfaMode("totp");
+      setMfaCode("");
+      setPasswordValue("");
+      toastInfo(mfaCopy.prompt, mfaCopy.titleToast);
+      return;
+    }
     if (isSignUp && body?.otpRequired) {
       setPendingRegistration(payload);
       setOtpExpiresAt(body.expiresAt || "");
@@ -127,6 +167,73 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
     }
     setOtpExpiresAt(body.expiresAt || "");
     toastInfo("Un nouveau code de vérification vient d’être envoyé.", "Code envoyé");
+  }
+
+  async function submitMfa(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!mfaCode.trim()) return;
+    setIsPending(true);
+    try {
+      const response = await fetch("/api/auth/mfa/challenge", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: mfaMode, code: mfaCode.trim() }),
+      });
+      const body = await response.json().catch(() => null);
+      if (!response.ok) {
+        toastError(body?.error || mfaCopy.genericError);
+        return;
+      }
+      setMfaCode("");
+      const target = normalizeRedirectTarget(body?.redirectTo);
+      if (/^https?:\/\//i.test(target)) window.location.href = target;
+      else { router.push(target); router.refresh(); }
+    } catch {
+      toastError(mfaCopy.networkError);
+    } finally { setIsPending(false); }
+  }
+
+  if (!isSignUp && mfaRequired) {
+    return (
+      <form onSubmit={submitMfa} className="space-y-5" noValidate>
+        <div className="rounded-2xl border border-cyan-400/30 bg-cyan-400/10 p-4">
+          <div className="flex items-start gap-3">
+            <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-dtsc-blue" />
+            <div className="min-w-0">
+              <h2 className="font-semibold text-dtsc-ink">{mfaCopy.title}</h2>
+              <p className="mt-1 text-sm leading-6 text-dtsc-muted">
+                {mfaCopy.help}
+              </p>
+            </div>
+          </div>
+        </div>
+        <label className="grid gap-2 text-sm font-semibold text-dtsc-ink">
+          {mfaMode === "totp" ? mfaCopy.code : mfaCopy.recovery}
+          <Input
+            name="mfaCode" type="text" inputMode={mfaMode === "totp" ? "numeric" : "text"}
+            autoComplete="one-time-code" required autoFocus maxLength={mfaMode === "totp" ? 6 : 30}
+            pattern={mfaMode === "totp" ? "[0-9]{6}" : undefined}
+            value={mfaCode}
+            onChange={(event) => setMfaCode(mfaMode === "totp" ? event.target.value.replace(/\D/g, "").slice(0, 6) : event.target.value.slice(0, 30))}
+          />
+        </label>
+        <Button type="submit" className="min-h-11 w-full rounded-xl bg-dtsc-blue text-white" disabled={isPending || (mfaMode === "totp" ? mfaCode.length !== 6 : mfaCode.length < 20)}>
+          {isPending ? mfaCopy.loading : mfaCopy.submit} <ArrowRight className="h-4 w-4" />
+        </Button>
+        <div className="grid gap-2 text-sm">
+          <button type="button" disabled={isPending}
+            onClick={() => { setMfaMode(mfaMode === "totp" ? "recovery" : "totp"); setMfaCode(""); }}
+            className="min-h-11 rounded-xl text-dtsc-blue underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2">
+            {mfaMode === "totp" ? mfaCopy.useRecovery : mfaCopy.useTotp}
+          </button>
+          <button type="button" disabled={isPending}
+            onClick={() => { setMfaRequired(false); setMfaCode(""); resetWorkspaceChoice(); }}
+            className="min-h-11 rounded-xl text-dtsc-muted underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2">
+            {mfaCopy.back}
+          </button>
+        </div>
+      </form>
+    );
   }
 
   return (
