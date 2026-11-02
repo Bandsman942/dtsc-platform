@@ -94,4 +94,9 @@ const enterprisePayrollPanel = read("components/enterprise/professional/enterpri
 assert.ok(payrollManager.includes('fetch("/api/auth/step-up"'), "HR CFO mark-paid UI requires proof");
 assert.ok(cashPanel.includes("performFinanceCriticalStepUp(form, \"APPROVE\")"), "Cash validator UI requires proof");
 assert.ok(enterprisePayrollPanel.includes("performFinanceCriticalStepUp(form, \"APPROVE\")"), "Payroll run UI requires proof");
+const manualPaymentRoute = read("app/api/admin/manual-subscription-payments/[id]/route.ts");
+const manualPaymentUi = read("components/admin/manual-subscription-payments-admin.tsx");
+assert.ok(manualPaymentRoute.includes("hasRecentStepUp(session)"), "Manual subscription payment must require recent strong authentication");
+assert.ok(manualPaymentRoute.includes('reasonCode: "STEP_UP_REQUIRED"'), "Manual payment API must fail closed");
+assert.ok(manualPaymentUi.includes('performFinanceCriticalStepUp(form, "APPROVE")'), "Subscription payment approval UI must present step-up");
 console.log("AUTH-04: dual-operator recovery and administrative step-up safety checks OK; browser E2E pending.");
