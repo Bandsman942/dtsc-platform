@@ -258,8 +258,14 @@ export function runStandardPersonalWorkspaceAudit(mode = "all") {
     // The former no-fake-multi-device invariant applies only before a real
     // server-side session ledger exists. Its replacement checks the actual
     // revocation service, scoped API and settings UI instead.
-    if (settings.includes("<ActiveSessionsSettings")) {
-      expectTokens(errors, "Sessions actives UI", settings, [
+    const securityWorkspace = requireFile(errors, "components/settings/security-settings-workspace.tsx");
+    if (settings.includes("<SecuritySettingsWorkspace")) {
+      expectTokens(errors, "Sécurité du compte en section", settings, [
+        'id="account-security"',
+        "<SecuritySettingsWorkspace",
+        "currentSession=",
+      ]);
+      expectTokens(errors, "Sessions actives UI", securityWorkspace, [
         'from "@/components/settings/active-sessions-settings"',
         "<ActiveSessionsSettings",
       ]);
