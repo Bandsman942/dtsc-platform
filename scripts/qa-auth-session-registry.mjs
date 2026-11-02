@@ -19,7 +19,11 @@ for(const marker of ["sessionId?: string", "absoluteExp", "exp"]) assert.ok(cook
 for(const marker of ["isAuthSessionActive", "registerAuthSession", "touchRegisteredSession", "newSessionId"]) assert.ok(auth.includes(marker), "Auth gateway missing " + marker);
 assert.ok(auth.indexOf("registerAuthSession(created.session)") < auth.indexOf("cookieStore.set(SESSION_COOKIE"), "Register BEFORE issuing session cookie");
 assert.ok(auth.includes("const signed = await verifySessionToken"), "Auth gateway validates signatures first");
-assert.ok(auth.includes("return await isAuthSessionActive(signed) ? signed : null;"), "Auth gateway must reject revoked sessions");
+assert.ok(
+  auth.includes("if (!(await isAuthSessionActive(signed))) return null;") ||
+  auth.includes("return await isAuthSessionActive(signed) ? signed : null;"),
+  "Auth gateway must reject revoked sessions before any MFA or business authorization",
+);
 assert.ok(auth.includes("if (sessionOverride && session?.userId !== sessionOverride.userId) return null;"), "A caller-supplied session snapshot must never bypass current revocation checks");
 assert.ok(!auth.includes("sessionOverride ?? await getSession()"), "Auth gateway must revalidate the current signed cookie even when a session override is supplied");
 assert.ok(middleware.includes("sessionId: session.sessionId"), "Edge renewal MUST preserve session ID");
