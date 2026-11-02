@@ -5,12 +5,26 @@ import { requireConsoleCapability } from "@/lib/admin-api";
 import { CONSOLE_CAPABILITIES } from "@/lib/console/console-capabilities";
 import { getProtectedUserMutation } from "@/lib/console/console-user-protection";
 import { writeAuditLog } from "@/lib/audit";
+import { hasRecentStepUp } from "@/lib/auth/step-up";
+import { isSameOriginRequest } from "@/lib/request-security";
 
 type Params = { params: Promise<{ id: string }> };
 
 export async function PATCH(req: Request, { params }: Params) {
+  if (!isSameOriginRequest(req)) return NextResponse.json({ error: "Origine non autorisée.", reasonCode: "ORIGIN_FORBIDDEN" }, { status: 403 });
   const access = await requireConsoleCapability(CONSOLE_CAPABILITIES.USERS_MANAGE);
   if (access.response) return access.response;
+  if (!(await hasRecentStepUp(access.session))) {
+    await writeAuditLog({
+      userId: access.session.userId, action: "AUTH_CRITICAL_MUTATION_STEPUP_DENIED",
+      entity: "User", request: req, result: "DENIED", reasonCode: "STEP_UP_REQUIRED", riskLevel: "HIGH",
+      metadata: { operation: "ROLE_CHANGE" },
+    });
+    return NextResponse.json({
+      error: "Cette opération exige une vérification récente de votre identité.",
+      reasonCode: "STEP_UP_REQUIRED",
+    }, { status: 428 });
+  }
   const body = userRoleSchema.safeParse(await req.json());
   if (!body.success) return NextResponse.json({ error: "Invalid role", reasonCode: "VALIDATION_ERROR" }, { status: 400 });
 

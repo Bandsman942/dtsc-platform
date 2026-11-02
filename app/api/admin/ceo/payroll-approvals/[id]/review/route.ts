@@ -5,6 +5,7 @@ import { isDtscInternalSession } from "@/lib/organizations";
 import { getPayrollActor, isPayrollWorkflowError, payrollReviewSchema, reviewPayroll } from "@/lib/payroll-workflow";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
+import { hasRecentStepUp } from "@/lib/auth/step-up";
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const startedAt = Date.now();
@@ -15,7 +16,18 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (!isDtscInternalSession(session)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const limited = await rateLimit(getRateLimitKey(req, `ceo-payroll-review:${session.userId}`), 50, 60 * 60 * 1000);
   if (!limited.ok) return NextResponse.json({ error: "Too many requests" }, { status: 429 });
-  const parsed = payrollReviewSchema.safeParse(await req.json().catch(() => null));
+  if (!(await hasRecentStepUp(session))) {
+    await writeAuditLog({
+      userId: session.userId, action: "AUTH_CRITICAL_MUTATION_STEPUP_DENIED",
+      entity: "HrcfoPayroll", result: "DENIED", reasonCode: "STEP_UP_REQUIRED",
+      riskLevel: "CRITICAL", request: req, metadata: { operation: "CEO_PAYROLL_REVIEW" },
+    });
+    return NextResponse.json({
+      error: "Vérification de sécurité récente nécessaire pour décider d'une paie.",
+      reasonCode: "STEP_UP_REQUIRED",
+    }, { status: 428 });
+  }
+    const parsed = payrollReviewSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message || "Décision invalide." }, { status: 400 });
   const actor = await getPayrollActor(session.userId);
   if (!actor) return NextResponse.json({ error: "Employee required" }, { status: 403 });

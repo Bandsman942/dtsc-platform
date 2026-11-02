@@ -7,6 +7,7 @@ import { getDefaultContextForRole, resolveOrganizationLoginContext } from "@/lib
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
 import { getUserSessionIdleTimeoutMinutes } from "@/lib/session-preference";
+import { isMfaRequiredForContext } from "@/lib/auth/mfa-policy";
 
 const contextSchema = z.object({
   organizationId: z.string().max(120).nullable().optional(),
@@ -64,6 +65,19 @@ export async function POST(req: Request) {
     }
   }
 
+  if (await isMfaRequiredForContext(context)) {
+    const factor = await prisma.authTotpFactor.findUnique({
+      where: { userId: user.id }, select: { enabledAt: true },
+    });
+    if (!factor?.enabledAt || !session.mfaVerifiedAt ||
+        session.mfaVerifiedAt < factor.enabledAt.getTime()) {
+      return NextResponse.json({
+        error: "Authentification renforcée nécessaire.",
+        reasonCode: "MFA_REQUIRED",
+        message: "Reconnectez-vous et activez la double authentification pour accéder à cet espace.",
+      }, { status: 403 });
+    }
+  }
   const sessionIdleTimeoutMinutes = await getUserSessionIdleTimeoutMinutes(user.id);
   const renewedSession = await setSessionCookie(
     {

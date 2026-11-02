@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { clearSessionCookie, getSession } from "@/lib/auth";
+import { clearStepUp } from "@/lib/auth/step-up";
+import { revokeOneSession } from "@/lib/auth/session-registry";
 import { getSignInUrl } from "@/lib/domains";
 import { prisma } from "@/lib/prisma";
 import { isSameOriginRequest } from "@/lib/request-security";
@@ -33,6 +35,10 @@ export async function POST(req: Request) {
     }
   }
 
+  await clearStepUp();
+  if (session?.sessionId) {
+    await revokeOneSession(session.userId, session.sessionId, reason === "expired" ? "SESSION_EXPIRED" : "USER_SIGNED_OUT");
+  }
   await clearSessionCookie();
   return NextResponse.json({ ok: true, redirectTo: getSignInUrl() });
 }

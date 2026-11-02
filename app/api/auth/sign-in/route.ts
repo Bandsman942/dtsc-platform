@@ -2,14 +2,19 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { signInSchema } from "@/lib/validators";
 import { verifyPassword } from "@/lib/security";
-import { setSessionCookie } from "@/lib/auth";
+import { clearSessionCookie, setSessionCookie } from "@/lib/auth";
+import { clearMfaChallengeCookie, createMfaChallenge } from "@/lib/auth/mfa-challenge";
+import { isSameOriginRequest } from "@/lib/request-security";
 import { ensureDefaultAdmin } from "@/lib/default-admin";
 import { getDefaultContextForRole, resolveOrganizationLoginContext } from "@/lib/organizations";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { writeAuditLog } from "@/lib/audit";
 import { resolvePostLoginRedirect } from "@/lib/post-login-redirect";
+import { isMfaRequiredForContext } from "@/lib/auth/mfa-policy";
+import { recordAuthenticatedBrowser } from "@/lib/auth/known-browser";
 
 export async function POST(req: Request) {
+  if (!isSameOriginRequest(req)) return NextResponse.json({ error: "Origine non autorisée." }, { status: 403 });
   const limiter = await rateLimit(getRateLimitKey(req, "auth:sign-in"), 8, 15 * 60 * 1000);
   if (!limiter.ok) {
     return NextResponse.json(
@@ -74,6 +79,38 @@ export async function POST(req: Request) {
     }
   }
 
+  const redirectTo = resolvePostLoginRedirect({
+    next: requestedNext,
+    context: context.activeContext,
+    userStartPage: user.startPage,
+  });
+  const [factor, mandatoryMfa] = await Promise.all([
+    prisma.authTotpFactor.findUnique({ where: { userId: user.id }, select: { enabledAt: true } }),
+    isMfaRequiredForContext(context),
+  ]);
+  if (user.mfaRecoveryRequired || factor?.enabledAt || mandatoryMfa) {
+    // Critical: a verified password is not an authenticated session when MFA is enabled.
+    await clearSessionCookie();
+    const challenge = await createMfaChallenge({
+      userId: user.id,
+      organizationId: context.activeOrganizationId || null,
+      redirectTo,
+      purpose: user.mfaRecoveryRequired ? "ENROLL" : factor?.enabledAt ? "VERIFY" : "ENROLL",
+    });
+    await writeAuditLog({
+      userId: user.id, action: "AUTH_MFA_CHALLENGE_CREATED",
+      entity: "AuthMfaChallenge", entityId: user.id, request: req,
+    });
+    return NextResponse.json({
+      ok: true, mfaRequired: Boolean(factor?.enabledAt) && !user.mfaRecoveryRequired,
+      mfaEnrollmentRequired: user.mfaRecoveryRequired || (!factor?.enabledAt && mandatoryMfa),
+      expiresAt: challenge.expiresAt,
+    }, {
+      headers: { "Cache-Control": "no-store" },
+    });
+  }
+  await clearMfaChallengeCookie();
+
   await setSessionCookie({
     ...user,
     activeContext: context.activeContext,
@@ -82,6 +119,7 @@ export async function POST(req: Request) {
     activeOrganizationRole: context.activeOrganizationRole,
   });
 
+  await recordAuthenticatedBrowser(req, { id: user.id, name: user.name, email: user.email });
   if (context.activeOrganizationId) {
     await writeAuditLog({
       userId: user.id,
@@ -95,10 +133,6 @@ export async function POST(req: Request) {
 
   return NextResponse.json({
     ok: true,
-    redirectTo: resolvePostLoginRedirect({
-      next: requestedNext,
-      context: context.activeContext,
-      userStartPage: user.startPage,
-    }),
+    redirectTo,
   });
 }

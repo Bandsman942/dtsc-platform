@@ -11,6 +11,8 @@ import { transitionEnterprisePayment } from "@/lib/enterprise/accounting/payment
 import { confirmCustomerRefundPayment } from "@/lib/enterprise/accounting/customer-refund-service";
 import { prisma } from "@/lib/prisma";
 import { convergeConfirmedGamingPayment } from "@/lib/enterprise/gaming/payment-convergence";
+import { hasRecentStepUp } from "@/lib/auth/step-up";
+import { requiresPaymentStepUp } from "@/lib/auth/critical-actions";
 
 type Params = { params: Promise<{ organizationId: string; paymentId: string }> };
 
@@ -31,6 +33,18 @@ export async function POST(req: Request, { params }: Params) {
           : "submit";
   const auth = await authorizeFinanceRequest(req, organizationId, "FINANCE_PAYMENTS", action, { mutation: true, limit: 100 });
   if (!auth.ok) return auth.response;
+  if (requiresPaymentStepUp(parsed.data.action) && !(await hasRecentStepUp(auth.session))) {
+    await writeAuditLog({
+      userId: auth.session.userId, action: "AUTH_CRITICAL_MUTATION_STEPUP_DENIED",
+      entity: "EnterprisePayment", entityId: paymentId, request: req, result: "DENIED",
+      riskLevel: "CRITICAL", reasonCode: "STEP_UP_REQUIRED",
+      metadata: { organizationId, action: parsed.data.action },
+    });
+    return NextResponse.json({
+      error: "Une vérification récente par mot de passe et authentificateur est nécessaire.",
+      reasonCode: "STEP_UP_REQUIRED",
+    }, { status: 428, headers: { "Cache-Control": "no-store" } });
+  }
 
   try {
     const currentPayment = parsed.data.action === "CONFIRM"

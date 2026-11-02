@@ -36,6 +36,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { FinanceCriticalStepUpFields, performFinanceCriticalStepUp } from "@/components/enterprise/professional/finance-critical-step-up";
 import { ModuleMetric, ModuleMetrics } from "@/components/workspace/module-metrics";
 import { ModuleContent, ModuleHeader, ModuleSection, ModuleToolbar, ModuleWorkspace } from "@/components/workspace/module-workspace";
 import { StatusBadge } from "@/components/workspace/status-badge";
@@ -229,6 +230,7 @@ export function EnterpriseFinancePaymentsTreasuryWorkspace({
       ? `/api/enterprise/${organizationId}/payments/${actionTarget.record.id}/transition`
       : `/api/enterprise/${organizationId}/account-transfers/${actionTarget.record.id}/transition`;
     try {
+      await performFinanceCriticalStepUp(form, actionTarget.action);
       await financeMutation(endpointPath, {
         action: actionTarget.action,
         reason: String(form.get("reason") || "") || undefined,
@@ -404,6 +406,7 @@ export function EnterpriseFinancePaymentsTreasuryWorkspace({
           {actionTarget.kind === "payment" && actionTarget.action === "SUBMIT" ? <EnterpriseApproverSelect organizationId={organizationId} moduleCode="FINANCE_PAYMENTS" locale={requestedLocale} /> : null}
           <Field label={t("reason")}><textarea name="reason" rows={4} className="w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-base" /></Field>
           <p className="text-sm text-dtsc-muted">{t("sodSelfApprovalBlocked")}</p>
+          <FinanceCriticalStepUpFields action={actionTarget.action} locale={locale} />
           <div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={() => setActionTarget(null)}>{t("cancel")}</Button><Button type="submit">{t("confirm")}</Button></div>
         </form> : null}
       </Dialog>
