@@ -76,6 +76,12 @@ model User {
   passwordHash                          String
   role                                  UserRole                          @default(CLIENT)
   authSessions                          AuthSession[]
+  knownBrowsers                          AuthKnownBrowser[]
+  mfaRecoveryRequired                   Boolean                           @default(false)
+  mfaRecoveryInvalidBefore              DateTime?
+  mfaRecoveryTargets                    AuthMfaRecoveryRequest[]          @relation("AuthMfaRecoveryTarget")
+  mfaRecoveryRequested                  AuthMfaRecoveryRequest[]          @relation("AuthMfaRecoveryRequester")
+  mfaRecoveryApproved                   AuthMfaRecoveryRequest[]          @relation("AuthMfaRecoveryApprover")
   authTotpFactor                        AuthTotpFactor?
   authMfaChallenges                     AuthMfaChallenge[]
   companyName                           String?
