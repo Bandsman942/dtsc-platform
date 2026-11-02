@@ -5,6 +5,7 @@ import { Banknote, CheckCircle2, Clock3, Eye, FileCheck2, Plus, RefreshCw, Send,
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { ListControls } from "@/components/ui/list-controls";
 import { InternalFullScreenSurface } from "@/components/admin/internal-full-screen-surface";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -72,6 +73,8 @@ export function PayrollWorkflowPanel({ locale, embedded = false }: { locale?: st
   const [saving, setSaving] = useState(false);
   const [confirmAction, setConfirmAction] = useState<"SUBMIT" | "PAID" | "CANCEL" | null>(null);
   const [actionText, setActionText] = useState("");
+  const [paymentSecurityPassword, setPaymentSecurityPassword] = useState("");
+  const [paymentSecurityCode, setPaymentSecurityCode] = useState("");
   useToastMessage(message, messageTone);
 
   const load = useCallback(async () => {
@@ -105,7 +108,7 @@ export function PayrollWorkflowPanel({ locale, embedded = false }: { locale?: st
   const pageCount = Math.max(1, Math.ceil(filtered.length / 12));
   const currentPage = Math.min(page, pageCount);
   const paginated = filtered.slice((currentPage - 1) * 12, currentPage * 12);
-  const closeSelected = useCallback(() => { setSelected(null); setConfirmAction(null); setActionText(""); }, []);
+  const closeSelected = useCallback(() => { setSelected(null); setConfirmAction(null); setActionText(""); setPaymentSecurityPassword(""); setPaymentSecurityCode(""); }, []);
 
   const metrics = useMemo(() => ({
     draft: payrolls.filter((item) => item.status === "DRAFT" || item.status === "CHANGES_REQUESTED").length,
@@ -200,6 +203,21 @@ export function PayrollWorkflowPanel({ locale, embedded = false }: { locale?: st
         ? `/api/admin/hr-cfo/payrolls/${selected.id}/mark-paid`
         : `/api/admin/hr-cfo/payrolls/${selected.id}/cancel`;
     const payload = confirmAction === "PAID" ? { paymentReference: actionText } : confirmAction === "CANCEL" ? { reason: actionText } : {};
+    if (confirmAction === "PAID") {
+      const proof = await fetch("/api/auth/step-up", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          password: paymentSecurityPassword,
+          ...(paymentSecurityCode.trim() ? { code: paymentSecurityCode.trim() } : {}),
+        }),
+      }).catch(() => null);
+      const proofBody = await proof?.json().catch(() => null);
+      if (!proof?.ok) {
+        const msg = proofBody?.error || (locale === "en" ? "Security verification failed." : "Vérification de sécurité refusée.");
+        setSaving(false); setActionError(msg); setMessageTone("error"); setMessage(msg);
+        return;
+      }
+    }
     const response = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
     const body = (await response.json().catch(() => null)) as { payroll?: PayrollWorkflowItem; message?: string } | null;
     setSaving(false);
@@ -215,6 +233,8 @@ export function PayrollWorkflowPanel({ locale, embedded = false }: { locale?: st
     setMessage(confirmAction === "SUBMIT" ? t("submitted") : confirmAction === "PAID" ? t("markedPaid") : t("cancelled"));
     setConfirmAction(null);
     setActionText("");
+    setPaymentSecurityPassword("");
+    setPaymentSecurityCode("");
     setSelected(null);
     await load();
   }
@@ -314,12 +334,23 @@ export function PayrollWorkflowPanel({ locale, embedded = false }: { locale?: st
         </div> : null}
       </InternalFullScreenSurface>
 
-      <Dialog open={Boolean(confirmAction)} title={confirmAction === "SUBMIT" ? t("submitTitle") : confirmAction === "PAID" ? t("paidTitle") : t("cancelTitle")} description={confirmAction === "SUBMIT" ? t("submitConfirm") : confirmAction === "PAID" ? t("paidConfirm") : t("cancelConfirm")} onClose={() => { setConfirmAction(null); setActionText(""); setActionError(""); }} footer={<>
+      <Dialog open={Boolean(confirmAction)} title={confirmAction === "SUBMIT" ? t("submitTitle") : confirmAction === "PAID" ? t("paidTitle") : t("cancelTitle")} description={confirmAction === "SUBMIT" ? t("submitConfirm") : confirmAction === "PAID" ? t("paidConfirm") : t("cancelConfirm")} onClose={() => { setConfirmAction(null); setActionText(""); setActionError(""); setPaymentSecurityPassword(""); setPaymentSecurityCode(""); }} footer={<>
         <Button type="button" variant="outline" onClick={() => { setConfirmAction(null); setActionText(""); }} className="rounded-xl">{t("close")}</Button>
-        <Button type="button" onClick={() => void executeAction()} disabled={saving || (confirmAction === "CANCEL" && actionText.trim().length < 3)} className="rounded-xl bg-dtsc-blue text-white">{t("confirm")}</Button>
+        <Button type="button" onClick={() => void executeAction()} disabled={saving || (confirmAction === "PAID" && !paymentSecurityPassword) || (confirmAction === "CANCEL" && actionText.trim().length < 3)} className="rounded-xl bg-dtsc-blue text-white">{t("confirm")}</Button>
       </>}>
         {actionError ? <div role="alert" className="rounded-xl border border-red-500/35 bg-red-500/10 p-3 text-sm font-semibold text-red-700">{actionError}</div> : null}
         {confirmAction === "CANCEL" || confirmAction === "PAID" ? <FieldLabel label={confirmAction === "CANCEL" ? t("cancelReason") : t("paymentReference")}><Input value={actionText} onChange={(event) => setActionText(event.target.value)} /></FieldLabel> : <div className="flex gap-3 rounded-xl border border-cyan-500/25 bg-cyan-500/10 p-3 text-sm"><FileCheck2 className="h-5 w-5 shrink-0" />{t("submitEvidenceFrozen")}</div>}
+        {confirmAction === "PAID" ? <div className="mt-3 grid gap-3 rounded-xl border border-amber-500/40 bg-amber-500/10 p-3">
+          <p className="text-sm font-semibold text-dtsc-ink">{locale === "en"
+            ? "Strong verification required before recording a salary as paid."
+            : "Vérification renforcée obligatoire avant de marquer une paie comme payée."}</p>
+          <label className="grid gap-2 text-sm font-semibold text-dtsc-ink">{locale === "en" ? "Current password" : "Mot de passe actuel"}
+            <PasswordInput required value={paymentSecurityPassword} autoComplete="current-password"
+              onChange={event => setPaymentSecurityPassword(event.target.value)} /></label>
+          <label className="grid gap-2 text-sm font-semibold text-dtsc-ink">{locale === "en" ? "TOTP / recovery code, if enabled" : "TOTP / code de secours, si activé"}
+            <Input autoComplete="one-time-code" maxLength={30} value={paymentSecurityCode}
+              onChange={event => setPaymentSecurityCode(event.target.value)} /></label>
+        </div> : null}
       </Dialog>
     </ModuleWorkspace>
   );
