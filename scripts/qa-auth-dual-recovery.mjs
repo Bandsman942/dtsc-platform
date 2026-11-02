@@ -13,7 +13,6 @@ const changed = read("components/admin/critical-change-select.tsx");
 const roleSelect = read("components/admin/user-role-select.tsx");
 const statusSelect = read("components/admin/user-status-select.tsx");
 const auth = read("lib/auth.ts");
-const registry = read("lib/auth/session-registry.ts");
 const signIn = read("app/api/auth/sign-in/route.ts");
 const confirmation = read("app/api/account/security/totp/confirm/route.ts");
 const consoleUI = read("components/admin/console-mfa-recovery-panel.tsx");
@@ -26,9 +25,8 @@ assert.ok(migration.includes('ADD COLUMN "mfaRecoveryRequired"'));
 assert.ok(migration.includes('ADD COLUMN "mfaRecoveryInvalidBefore"'));
 assert.ok(userModel.includes('mfaRecoveryTargets') && userModel.includes('mfaRecoveryRequested'));
 assert.ok(userModel.includes('mfaRecoveryApproved'), "Three independent User relations must be modeled");
-assert.ok(auth.includes("isAuthSessionActive"), "Authorization must consult the canonical registry");
-assert.ok(registry.includes("mfaRecoveryInvalidBefore") && registry.includes("mfaRecoveryRequired"));
-assert.ok(registry.includes("session.mfaVerifiedAt <= user.mfaRecoveryInvalidBefore.getTime()"), "Old verified cookies rejected by registry");
+assert.ok(auth.includes("mfaRecoveryInvalidBefore") && auth.includes("mfaRecoveryRequired"));
+assert.ok(auth.includes("session.mfaVerifiedAt <= identity.mfaRecoveryInvalidBefore.getTime()"), "Old verified cookies rejected");
 assert.ok(signIn.includes('purpose: user.mfaRecoveryRequired ? "ENROLL"'), "Recovery must force limited enrollment");
 assert.ok(confirmation.includes('mfaRecoveryRequired: false'), "Unlock only after factor confirmation");
 for (const source of [create, decide]) {
@@ -63,4 +61,20 @@ for (const role of ["ceo", "coo"]) {
 }
 assert.ok(payrollPanel.includes('fetch("/api/auth/step-up"'), "Payroll UI must perform step-up");
 assert.ok(payrollPanel.includes("securityPassword") && payrollPanel.includes("securityCode"), "Payroll approval exposes secure reauth form");
+const paymentRoute = read("app/api/enterprise/[organizationId]/payments/[paymentId]/transition/route.ts");
+const criticalActions = read("lib/auth/critical-actions.ts");
+const paymentUi = read("components/enterprise/professional/enterprise-finance-payments-workspace.tsx");
+const treasuryUi = read("components/enterprise/professional/enterprise-finance-payments-treasury-workspace.tsx");
+const criticalStepUpUi = read("components/enterprise/professional/finance-critical-step-up.tsx");
+for (const action of ["APPROVE", "CONFIRM", "RECONCILE", "REVERSE"]) {
+  assert.ok(criticalActions.includes('"' + action + '"'), "Payment action " + action + " must require step-up");
+}
+assert.ok(paymentRoute.includes("requiresPaymentStepUp(parsed.data.action)"), "Finance API must enforce step-up independently of UI");
+assert.ok(paymentRoute.includes("hasRecentStepUp(auth.session)"), "Finance API must inspect verified session");
+assert.ok(paymentRoute.includes('reasonCode: "STEP_UP_REQUIRED"'), "Finance API must return actionable 428");
+assert.ok(criticalStepUpUi.includes('fetch("/api/auth/step-up"'), "Finance step-up must invoke authenticated endpoint");
+assert.ok(paymentUi.includes("performFinanceCriticalStepUp(form, actionTarget.action)"), "Modern payments UI must not bypass step-up");
+assert.ok(treasuryUi.includes("performFinanceCriticalStepUp(form, actionTarget.action)"), "Legacy treasury/payments UI must not bypass step-up");
+assert.ok(paymentUi.includes("<FinanceCriticalStepUpFields"), "Modern payments UI must show verification");
+assert.ok(treasuryUi.includes("<FinanceCriticalStepUpFields"), "Treasury payments UI must show verification");
 console.log("AUTH-04: dual-operator recovery and administrative step-up safety checks OK; browser E2E pending.");

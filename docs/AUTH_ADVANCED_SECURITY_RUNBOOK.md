@@ -28,7 +28,9 @@ Le panneau global de politique MFA Console exige ce step-up avant toute modifica
 
 Les routes de Console `PATCH /api/admin/users/[id]/role` et `PATCH /api/admin/users/[id]/status` exigent maintenant `SECURITY_MANAGE` ou `USERS_MANAGE` suivant leur contrôle existant, ainsi qu'un `hasRecentStepUp` de moins de 5 minutes ; toute tentative sans preuve répond `428 STEP_UP_REQUIRED` et est auditée. Les sélecteurs de rôle et de statut lancent eux-mêmes le parcours sécurisé (mot de passe et, si activé, TOTP/code de secours) avant l'écriture métier.
 
-Les validations de paie interne DTSC CEO et COO utilisent aussi un step-up obligatoire sur leur API, avec saisie du mot de passe et, si activé, d'un code TOTP dans la boîte de dialogue. Les autres actions financières/RH critiques non encore couvertes doivent être auditées avant de déclarer le contrôle transversal exhaustif. Ne pas marquer ces actions validées sans preuve de leurs garde-fous API **et** UI.
+Les validations de paie interne DTSC CEO et COO utilisent aussi un step-up obligatoire sur leur API, avec saisie du mot de passe et, si activé, d'un code TOTP dans la boîte de dialogue.
+Les transitions monétaires `APPROVE`, `CONFIRM`, `RECONCILE` et `REVERSE` sur `/api/enterprise/[organizationId]/payments/[paymentId]/transition` exigent également un step-up récent validé **côté serveur**, après la vérification RBAC Finance et avant toute modification. Les deux interfaces professionnelles de Paiements (moderne et écran Paiements/Trésorerie) proposent la confirmation dans la boîte de dialogue, avec mot de passe et second facteur si activé. Le contrôle de séparation approbateur/demandeur demeure appliqué par les services métier.
+ Les autres actions financières/RH critiques non encore couvertes doivent être auditées avant de déclarer le contrôle transversal exhaustif. Ne pas marquer ces actions validées sans preuve de leurs garde-fous API **et** UI.
 
 ## Récupération MFA administrateur — double contrôle obligatoire
 
