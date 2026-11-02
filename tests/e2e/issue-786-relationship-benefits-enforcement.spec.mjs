@@ -13,6 +13,21 @@ const userPassword = process.env.E2E_USER_PASSWORD || "E2eUser2026!";
 // same actors. Reuse their real authenticated session cookies rather than
 // repeatedly signing in and hitting the production-equivalent login limiter.
 const authenticatedCookies = new Map();
+const authenticatedContextPasswords = new WeakMap();
+
+async function ensureFinanceStepUp(page) {
+  const password = authenticatedContextPasswords.get(page.context());
+  if (!password) throw new Error("Hotfix #1017 requires a real authenticated Finance actor");
+  const status = await page.context().request.get(`${baseUrl}/api/auth/step-up`);
+  expect(status.ok(), await status.text()).toBeTruthy();
+  const verification = await status.json();
+  if (verification.verified) return;
+  const response = await page.context().request.post(`${baseUrl}/api/auth/step-up`, {
+    data: { password },
+    headers: { origin: baseUrl, referer: `${baseUrl}/enterprise-modules/FINANCE_PAYMENTS` },
+  });
+  expect(response.ok(), `Hotfix #1017 step-up: ${await response.text()}`).toBeTruthy();
+}
 
 const ids = {
   personIdentity: "e2e-786-person-identity",
@@ -70,11 +85,18 @@ async function signIn(page, email, password, next) {
     const state = await page.context().storageState();
     authenticatedCookies.set(email, state.cookies);
   }
+  authenticatedContextPasswords.set(page.context(), password);
   await page.goto(next);
   await page.waitForLoadState("networkidle");
 }
 
 async function post(page, path, data, referer = "/enterprise-relationship-benefits") {
+  // Financial decisions still pass through the real short-lived password/TOTP
+  // challenge. Never bypass the production guard to make an E2E pass.
+  if (/\/payments\/[^/]+\/transition$/.test(path) &&
+      ["APPROVE", "CONFIRM", "RECONCILE", "REVERSE"].includes(data?.action)) {
+    await ensureFinanceStepUp(page);
+  }
   return readJson(
     await page.context().request.post(path, {
       data,
