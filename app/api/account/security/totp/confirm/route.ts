@@ -9,6 +9,7 @@ import { prisma } from "@/lib/prisma";
 import { rateLimit, getRateLimitKey } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
 import { writeAuditLog } from "@/lib/audit";
+import { recordAuthenticatedBrowser } from "@/lib/auth/known-browser";
 
 const schema = z.object({ code: z.string().regex(/^\d{6}$/) }).strict();
 
@@ -46,6 +47,12 @@ export async function POST(req: Request) {
     await tx.authRecoveryCode.createMany({
       data: recoveryCodes.map((code) => ({ factorId: factor.id, codeHash: hashRecoveryCode(code)! })),
     });
+    // Complete recovery only after the freshly enrolled factor and recovery
+    // codes are committed. Old cookies remain invalidated by the timestamp.
+    await tx.user.update({
+      where: { id: userId },
+      data: { mfaRecoveryRequired: false },
+    });
     return true;
   });
 
@@ -72,6 +79,7 @@ export async function POST(req: Request) {
   }, session ? { previousSession: session } : {});
   if (!issuedSession) return NextResponse.json({ error: "Session expirée. Reconnectez-vous." }, { status: 401 });
   if (enrollment) await clearMfaChallengeCookie();
+  await recordAuthenticatedBrowser(req, actor);
   await writeAuditLog({ userId, action: "AUTH_TOTP_ENABLED", entity: "AuthTotpFactor", entityId: userId, request: req });
   return NextResponse.json({
     ok: true,
