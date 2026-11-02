@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdminBlockAccess } from "@/lib/admin-api";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
+import { hasRecentStepUp } from "@/lib/auth/step-up";
 import { isDtscInternalSession } from "@/lib/organizations";
 import { getPayrollActor, isPayrollWorkflowError, markPayrollPaid, payrollPaymentSchema } from "@/lib/payroll-workflow";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
@@ -15,6 +16,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (!isDtscInternalSession(session)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const limited = await rateLimit(getRateLimitKey(req, `payroll-paid:${session.userId}`), 40, 60 * 60 * 1000);
   if (!limited.ok) return NextResponse.json({ error: "Too many requests" }, { status: 429 });
+  if (!(await hasRecentStepUp(session))) {
+    await writeAuditLog({ userId: session.userId, action: "AUTH_CRITICAL_MUTATION_STEPUP_DENIED",
+      entity: "HrcfoPayroll", request: req, result: "DENIED", reasonCode: "STEP_UP_REQUIRED", riskLevel: "CRITICAL" });
+    return NextResponse.json({ error: "Confirmez récemment votre identité avant d'enregistrer la paie payée.", reasonCode: "STEP_UP_REQUIRED" }, { status: 428 });
+  }
   const parsed = payrollPaymentSchema.safeParse(await req.json().catch(() => ({})));
   if (!parsed.success) return NextResponse.json({ error: "Invalid payload", message: parsed.error.issues[0]?.message || "Confirmation invalide." }, { status: 400 });
   const actor = await getPayrollActor(session.userId);
