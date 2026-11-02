@@ -23,6 +23,21 @@ let currencyCode = "";
 let requesterContext;
 let validatorContext;
 let settlerContext;
+const authenticatedContextPasswords = new WeakMap();
+
+async function ensureFinanceStepUp(context) {
+  const password = authenticatedContextPasswords.get(context);
+  if (!password) throw new Error("Hotfix #1017 requires a real authenticated Finance actor");
+  const status = await context.request.get(`${baseUrl}/api/auth/step-up`);
+  expect(status.ok(), await status.text()).toBeTruthy();
+  const verification = await status.json();
+  if (verification.verified) return;
+  const response = await context.request.post(`${baseUrl}/api/auth/step-up`, {
+    data: { password },
+    headers: { origin: baseUrl, referer: `${baseUrl}/enterprise-modules/FINANCE_PAYMENTS` },
+  });
+  expect(response.ok(), `Hotfix #1017 step-up: ${await response.text()}`).toBeTruthy();
+}
 
 const modules = [
   "CRM_CUSTOMERS",
@@ -102,9 +117,16 @@ async function signInAs(context, email, password) {
     headers: { origin: baseUrl, referer: `${baseUrl}/auth/sign-in` },
   });
   expect(response.ok(), await response.text()).toBeTruthy();
+  authenticatedContextPasswords.set(context, password);
 }
 
 async function post(context, path, data, referer = "/enterprise-modules/FINANCE_PAYMENTS") {
+  // Existing financial E2E flows must prove recent reauthentication before
+  // decisions rather than skipping the new sensitive-action policy.
+  if (/\/payments\/[^/]+\/transition$/.test(path) &&
+      ["APPROVE", "CONFIRM", "RECONCILE", "REVERSE"].includes(data?.action)) {
+    await ensureFinanceStepUp(context);
+  }
   const response = await context.request.post(`${baseUrl}${path}`, {
     data,
     headers: { origin: baseUrl, referer: `${baseUrl}${referer}` },
