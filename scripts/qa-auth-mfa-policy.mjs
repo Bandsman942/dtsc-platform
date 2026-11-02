@@ -20,13 +20,14 @@ const migration=read("prisma/migrations/20261102193000_auth_mfa_policies/migrati
 
 for(const part of ["requireMfaForAllUsers","requireMfaForDtscInternal","enterpriseOrganizationSecurityPolicy","isMfaRequiredAnywhere"])assert.ok(policy.includes(part),"Missing policy "+part);
 assert.ok(signin.includes("mandatoryMfa"),"Sign-in must load effective policy");
-assert.ok(signin.includes('purpose: factor?.enabledAt ? "VERIFY" : "ENROLL"'),"Enforced users must not bypass MFA");
+assert.ok(signin.includes('purpose: user.mfaRecoveryRequired ? "ENROLL" : factor?.enabledAt ? "VERIFY" : "ENROLL"'),"Enforced and recovered users must not bypass MFA");
 assert.ok(challenge.includes("getMfaEnrollmentChallenge"),"Pre-auth challenge must be constrained");
 assert.ok(challenge.includes('purpose: "ENROLL"'),"Enrollment challenge must be purpose bound");
 assert.ok(enroll.includes("getMfaEnrollmentChallenge"),"Enrollment must accept restricted challenge");
 assert.ok(confirm.includes('consumeMfaChallengeAttempt("ENROLL")'),"Enrollment confirmation must consume an attempt");
 assert.ok(confirm.includes("finalizeMfaChallenge(enrollment.id)"),"Enrollment challenge must be one-time");
 assert.ok(confirm.includes("mfaVerifiedAt:"),"MFA setup must stamp session");
+assert.ok(confirm.includes("mfaRecoveryRequired: false"),"Admin recovery must unlock only with new TOTP proof");
 assert.ok(complete.includes("mfaVerifiedAt:"),"MFA challenge must stamp session");
 assert.ok(auth.includes("mfaVerifiedAt < factor.enabledAt.getTime()"),"Signed cookie must not bypass fresh factor");
 assert.ok(auth.includes("isMfaRequiredForContext(session)"),"Signed legacy cookies obey global minima");
