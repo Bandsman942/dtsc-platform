@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requireConsoleCapability } from "@/lib/admin-api";
 import { CONSOLE_CAPABILITIES } from "@/lib/console/console-capabilities";
 import { getGlobalMfaPolicy } from "@/lib/auth/mfa-policy";
+import { hasRecentStepUp } from "@/lib/auth/step-up";
 import { isSameOriginRequest } from "@/lib/request-security";
 import { prisma } from "@/lib/prisma";
 import { verifyPassword } from "@/lib/security";
@@ -30,6 +31,12 @@ export async function PUT(req: Request) {
   const limited = await rateLimit(getRateLimitKey(req, "admin:auth:mfa-policy:" + access.session.userId),
     4, 15 * 60 * 1000, { failureMode: "closed" });
   if (!limited.ok) return NextResponse.json({ error: "Trop de modifications. Réessayez plus tard." }, { status: 429 });
+  if (!(await hasRecentStepUp(access.session))) {
+    return NextResponse.json({
+      error: "Confirmez à nouveau votre mot de passe et votre authentificateur avant de modifier la sécurité.",
+      reasonCode: "STEP_UP_REQUIRED",
+    }, { status: 428 });
+  }
   const parsed = policySchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Politique, motif et mot de passe requis." }, { status: 400 });
   const actor = await prisma.user.findUnique({ where: { id: access.session.userId }, select: { passwordHash: true, status: true } });

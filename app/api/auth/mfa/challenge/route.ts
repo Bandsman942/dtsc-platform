@@ -9,6 +9,7 @@ import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
 import { resolveTrustedInternalRedirect } from "@/lib/post-login-redirect";
 import { writeAuditLog } from "@/lib/audit";
+import { recordAuthenticatedBrowser } from "@/lib/auth/known-browser";
 
 const schema = z.object({
   mode: z.enum(["totp", "recovery"]),
@@ -77,6 +78,7 @@ export async function POST(req: Request) {
     await clearSessionCookie();
     return NextResponse.json({ error: "Impossible de créer la session. Reconnectez-vous." }, { status: 503 });
   }
+  await recordAuthenticatedBrowser(req, { id: user.id, name: user.name, email: user.email });
   await writeAuditLog({ userId: user.id, action: "AUTH_MFA_LOGIN_COMPLETED", entity: "AuthMfaChallenge", entityId: challenge.id, request: req });
   return NextResponse.json({
     ok: true,

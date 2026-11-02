@@ -8,6 +8,7 @@ import { prisma } from "@/lib/prisma";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
 import { finalizeManualSubscriptionPayment } from "@/lib/subscription-payments";
+import { hasRecentStepUp } from "@/lib/auth/step-up";
 
 const schema = z.object({ action: z.enum(["APPROVE", "REJECT"]), validationComment: z.string().trim().max(500).optional() }).superRefine((value, ctx) => {
   if (value.action === "REJECT" && !value.validationComment) ctx.addIssue({ code: "custom", path: ["validationComment"], message: "Le motif du refus est obligatoire." });
@@ -24,6 +25,19 @@ export async function PATCH(req: Request, { params }: Params) {
   const parsed = schema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "VALIDATION_ERROR", message: parsed.error.issues[0]?.message }, { status: 400 });
   const { id } = await params;
+  if (!(await hasRecentStepUp(session))) {
+    await writeAuditLog({
+      userId: session.userId, action: "AUTH_CRITICAL_MUTATION_STEPUP_DENIED",
+      entity: "ManualSubscriptionPayment", entityId: id, request: req,
+      result: "DENIED", reasonCode: "STEP_UP_REQUIRED", riskLevel: "CRITICAL",
+      metadata: { action: parsed.data.action },
+    });
+    return NextResponse.json({
+      error: "STEP_UP_REQUIRED",
+      message: "Confirmez votre mot de passe et votre authentificateur avant cette décision de paiement.",
+      reasonCode: "STEP_UP_REQUIRED",
+    }, { status: 428 });
+  }
   try {
     const validator = await prisma.user.findFirst({ where: { id: session.userId, status: "ACTIVE", hrcfoEmployee: { is: { status: "ACTIVE" } }, organizationMemberships: { some: { organizationId: DTSC_INTERNAL_ORGANIZATION_ID, status: "ACTIVE", removedAt: null } } }, select: { id: true } });
     if (!validator) return NextResponse.json({ error: "VALIDATOR_INACTIVE", message: "Le statut de collaborateur actif est nécessaire pour approuver." }, { status: 403 });

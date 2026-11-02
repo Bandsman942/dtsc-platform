@@ -11,6 +11,7 @@ import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { writeAuditLog } from "@/lib/audit";
 import { resolvePostLoginRedirect } from "@/lib/post-login-redirect";
 import { isMfaRequiredForContext } from "@/lib/auth/mfa-policy";
+import { recordAuthenticatedBrowser } from "@/lib/auth/known-browser";
 
 export async function POST(req: Request) {
   if (!isSameOriginRequest(req)) return NextResponse.json({ error: "Origine non autorisée." }, { status: 403 });
@@ -87,22 +88,22 @@ export async function POST(req: Request) {
     prisma.authTotpFactor.findUnique({ where: { userId: user.id }, select: { enabledAt: true } }),
     isMfaRequiredForContext(context),
   ]);
-  if (factor?.enabledAt || mandatoryMfa) {
+  if (user.mfaRecoveryRequired || factor?.enabledAt || mandatoryMfa) {
     // Critical: a verified password is not an authenticated session when MFA is enabled.
     await clearSessionCookie();
     const challenge = await createMfaChallenge({
       userId: user.id,
       organizationId: context.activeOrganizationId || null,
       redirectTo,
-      purpose: factor?.enabledAt ? "VERIFY" : "ENROLL",
+      purpose: user.mfaRecoveryRequired ? "ENROLL" : factor?.enabledAt ? "VERIFY" : "ENROLL",
     });
     await writeAuditLog({
       userId: user.id, action: "AUTH_MFA_CHALLENGE_CREATED",
       entity: "AuthMfaChallenge", entityId: user.id, request: req,
     });
     return NextResponse.json({
-      ok: true, mfaRequired: Boolean(factor?.enabledAt),
-      mfaEnrollmentRequired: !factor?.enabledAt && mandatoryMfa,
+      ok: true, mfaRequired: Boolean(factor?.enabledAt) && !user.mfaRecoveryRequired,
+      mfaEnrollmentRequired: user.mfaRecoveryRequired || (!factor?.enabledAt && mandatoryMfa),
       expiresAt: challenge.expiresAt,
     }, {
       headers: { "Cache-Control": "no-store" },
@@ -118,6 +119,7 @@ export async function POST(req: Request) {
     activeOrganizationRole: context.activeOrganizationRole,
   });
 
+  await recordAuthenticatedBrowser(req, { id: user.id, name: user.name, email: user.email });
   if (context.activeOrganizationId) {
     await writeAuditLog({
       userId: user.id,

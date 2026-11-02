@@ -4,6 +4,8 @@ import { authorizeFinanceRequest, financeErrorResponse, financeValidationErrorRe
 import { approveAssignedAccountTransfer, rejectAssignedAccountTransfer } from "@/lib/enterprise/accounting/treasury-approval-service";
 import { confirmTreasuryTransfer } from "@/lib/enterprise/accounting/treasury-transfer-service";
 import { transferTransitionSchema } from "@/lib/enterprise/accounting/treasury-schemas";
+import { hasRecentStepUp } from "@/lib/auth/step-up";
+import { requiresPaymentStepUp } from "@/lib/auth/critical-actions";
 
 type Params = { params: Promise<{ organizationId: string; transferId: string }> };
 
@@ -15,6 +17,18 @@ export async function POST(req: Request, { params }: Params) {
   const permissionAction = parsed.data.action === "CONFIRM" ? "pay" : "approve";
   const auth = await authorizeFinanceRequest(req, organizationId, "FINANCE_TREASURY", permissionAction, { mutation: true, limit: 60 });
   if (!auth.ok) return auth.response;
+  if (requiresPaymentStepUp(parsed.data.action) && !(await hasRecentStepUp(auth.session))) {
+    await writeAuditLog({
+      userId: auth.session.userId, action: "AUTH_CRITICAL_MUTATION_STEPUP_DENIED",
+      entity: "EnterpriseAccountTransfer", entityId: transferId, request: req,
+      result: "DENIED", reasonCode: "STEP_UP_REQUIRED", riskLevel: "CRITICAL",
+      metadata: { organizationId, action: parsed.data.action },
+    });
+    return NextResponse.json({
+      error: "Confirmez récemment votre mot de passe et votre authentificateur pour cette opération.",
+      reasonCode: "STEP_UP_REQUIRED",
+    }, { status: 428, headers: { "Cache-Control": "no-store" } });
+  }
   try {
     const transfer = parsed.data.action === "APPROVE"
       ? await approveAssignedAccountTransfer(organizationId, transferId, auth.session.userId, parsed.data.revision)

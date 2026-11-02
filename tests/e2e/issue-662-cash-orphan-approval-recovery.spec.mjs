@@ -247,6 +247,9 @@ test.describe.serial("Hotfix #662 orphan cash approval recovery", () => {
     await expect(page.getByRole("button", { name: "Valider la clôture" })).toBeVisible();
     await page.getByRole("button", { name: "Valider la clôture" }).click();
     await page.getByRole("combobox", { name: "Décision" }).selectOption("true");
+    // Exercise the real step-up in the Cash approval form. The server must
+    // continue to reject an approval without recent identity verification.
+    await page.getByLabel("Mot de passe DTSC actuel").fill(approverPassword);
     await page.getByRole("button", { name: "Enregistrer la décision" }).click();
     await expect(page.getByRole("status")).toContainText("décision");
 

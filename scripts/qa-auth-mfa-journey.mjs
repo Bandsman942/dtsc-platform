@@ -17,17 +17,18 @@ const model = read("prisma/auth-security.prisma");
 const migration = read("prisma/migrations/20261102160000_auth_mfa_challenge/migration.sql");
 
 for (const marker of [
-  "if (factor?.enabledAt || mandatoryMfa)",
+  "if (user.mfaRecoveryRequired || factor?.enabledAt || mandatoryMfa)",
   "await clearSessionCookie();",
   "await createMfaChallenge(",
-  "mfaRequired: Boolean(factor?.enabledAt)",
-  "mfaEnrollmentRequired: !factor?.enabledAt && mandatoryMfa",
+  "mfaRequired: Boolean(factor?.enabledAt) && !user.mfaRecoveryRequired",
+  "mfaEnrollmentRequired: user.mfaRecoveryRequired || (!factor?.enabledAt && mandatoryMfa)",
   "await clearMfaChallengeCookie();",
 ]) assert.ok(login.includes(marker), "Missing MFA sign-in condition " + marker);
 
-const challengeStart = login.indexOf("if (factor?.enabledAt || mandatoryMfa)");
+const challengeStart = login.indexOf("if (user.mfaRecoveryRequired || factor?.enabledAt || mandatoryMfa)");
 const sessionStart = login.indexOf("await setSessionCookie(");
 assert.ok(challengeStart !== -1 && sessionStart > challengeStart, "MFA must be decided before full session");
+assert.ok(login.includes('purpose: user.mfaRecoveryRequired ? "ENROLL"'), "Recovery cannot issue a full session without new MFA setup");
 assert.ok(manager.includes('sameSite: "strict"'), "MFA cookie must be same-site");
 assert.ok(manager.includes("httpOnly: true"), "MFA cookie must be httpOnly");
 assert.ok(manager.includes("tokenHash: hashToken(token)"), "No raw challenge token in database");
