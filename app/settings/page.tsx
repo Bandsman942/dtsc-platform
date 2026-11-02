@@ -4,6 +4,7 @@ import legacySettingsStyles from "@/components/settings/legacy-settings-panel.mo
 import { SessionAndPushSettings } from "@/components/settings/session-and-push-settings";
 import { TotpSecuritySettings } from "@/components/settings/totp-security-settings";
 import { ActiveSessionsSettings } from "@/components/settings/active-sessions-settings";
+import { KnownBrowsersSettings } from "@/components/settings/known-browsers-settings";
 import { SettingsPanel } from "@/components/settings/settings-panel";
 import { Button } from "@/components/ui/button";
 import { BusinessList, BusinessListItem } from "@/components/workspace/business-list";
@@ -79,6 +80,7 @@ export default async function SettingsPage() {
           </ModuleSection>
           <TotpSecuritySettings locale={user.locale} />
           <ActiveSessionsSettings locale={user.locale} />
+          <KnownBrowsersSettings locale={user.locale} />
           <ModuleSection title={copy.sessionAndNotifications} description={copy.sessionAndNotificationsDescription}>
             <SessionAndPushSettings initialIdleTimeoutMinutes={user.sessionIdleTimeoutMinutes} initialPushNotificationContentMode={pushNotificationContentMode} />
           </ModuleSection>
