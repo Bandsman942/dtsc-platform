@@ -10,6 +10,7 @@ const signout = read("app/api/auth/sign-out/route.ts");
 const api = read("app/api/account/security/sessions/route.ts");
 const component = read("components/settings/active-sessions-settings.tsx");
 const page = read("app/settings/page.tsx");
+const securityWorkspace = read("components/settings/security-settings-workspace.tsx");
 const model = read("prisma/auth-sessions.prisma");
 const migration = read("prisma/migrations/20261102183000_auth_sessions_registry/migration.sql");
 const preference = read("prisma/session-policy.prisma");
@@ -41,7 +42,8 @@ assert.ok(api.includes("where: { userId: session.userId"), "Lists scoped to curr
 assert.ok(api.includes("writeAuditLog"), "Mutations audited");
 assert.ok(component.includes("requestSessions"), "UI must call real server actions");
 assert.ok(component.includes("setConfirm"), "Destructive UI must confirm");
-assert.ok(page.includes("<ActiveSessionsSettings"), "Settings UI must expose session list");
+assert.ok(page.includes("<SecuritySettingsWorkspace"), "Settings UI must open consolidated security section");
+assert.ok(securityWorkspace.includes("<ActiveSessionsSettings") && securityWorkspace.includes("embedded"), "Security workspace must expose actual session revocation UI");
 assert.ok(model.includes("model AuthSession"), "Session schema missing");
 assert.ok(user.includes("authSessions"), "User relation missing");
 assert.ok(migration.includes('CREATE TABLE "AuthSession"'), "Migration missing ledger");
