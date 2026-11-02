@@ -62,6 +62,7 @@ for (const role of ["ceo", "coo"]) {
 assert.ok(payrollPanel.includes('fetch("/api/auth/step-up"'), "Payroll UI must perform step-up");
 assert.ok(payrollPanel.includes("securityPassword") && payrollPanel.includes("securityCode"), "Payroll approval exposes secure reauth form");
 const paymentRoute = read("app/api/enterprise/[organizationId]/payments/[paymentId]/transition/route.ts");
+const transferRoute = read("app/api/enterprise/[organizationId]/account-transfers/[transferId]/transition/route.ts");
 const criticalActions = read("lib/auth/critical-actions.ts");
 const paymentUi = read("components/enterprise/professional/enterprise-finance-payments-workspace.tsx");
 const treasuryUi = read("components/enterprise/professional/enterprise-finance-payments-treasury-workspace.tsx");
@@ -71,6 +72,7 @@ for (const action of ["APPROVE", "CONFIRM", "RECONCILE", "REVERSE"]) {
 }
 assert.ok(paymentRoute.includes("requiresPaymentStepUp(parsed.data.action)"), "Finance API must enforce step-up independently of UI");
 assert.ok(paymentRoute.includes("hasRecentStepUp(auth.session)"), "Finance API must inspect verified session");
+assert.ok(transferRoute.includes("requiresPaymentStepUp(parsed.data.action)") && transferRoute.includes("hasRecentStepUp(auth.session)"), "Money transfer approval and execution must require step-up");
 assert.ok(paymentRoute.includes('reasonCode: "STEP_UP_REQUIRED"'), "Finance API must return actionable 428");
 assert.ok(criticalStepUpUi.includes('fetch("/api/auth/step-up"'), "Finance step-up must invoke authenticated endpoint");
 assert.ok(paymentUi.includes("performFinanceCriticalStepUp(form, actionTarget.action)"), "Modern payments UI must not bypass step-up");

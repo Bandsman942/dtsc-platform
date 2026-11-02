@@ -30,6 +30,7 @@ Les routes de Console `PATCH /api/admin/users/[id]/role` et `PATCH /api/admin/us
 
 Les validations de paie interne DTSC CEO et COO utilisent aussi un step-up obligatoire sur leur API, avec saisie du mot de passe et, si activé, d'un code TOTP dans la boîte de dialogue.
 Les transitions monétaires `APPROVE`, `CONFIRM`, `RECONCILE` et `REVERSE` sur `/api/enterprise/[organizationId]/payments/[paymentId]/transition` exigent également un step-up récent validé **côté serveur**, après la vérification RBAC Finance et avant toute modification. Les deux interfaces professionnelles de Paiements (moderne et écran Paiements/Trésorerie) proposent la confirmation dans la boîte de dialogue, avec mot de passe et second facteur si activé. Le contrôle de séparation approbateur/demandeur demeure appliqué par les services métier.
+Les transferts entre comptes financiers dans la Trésorerie appliquent le même contrôle serveur pour `APPROVE` et `CONFIRM` ; l'interface Paiements/Trésorerie propose le même parcours de réauthentification avant la décision ou l'exécution.
  Les autres actions financières/RH critiques non encore couvertes doivent être auditées avant de déclarer le contrôle transversal exhaustif. Ne pas marquer ces actions validées sans preuve de leurs garde-fous API **et** UI.
 
 ## Récupération MFA administrateur — double contrôle obligatoire

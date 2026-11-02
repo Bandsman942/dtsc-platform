@@ -230,7 +230,7 @@ export function EnterpriseFinancePaymentsTreasuryWorkspace({
       ? `/api/enterprise/${organizationId}/payments/${actionTarget.record.id}/transition`
       : `/api/enterprise/${organizationId}/account-transfers/${actionTarget.record.id}/transition`;
     try {
-      if (actionTarget.kind === "payment") await performFinanceCriticalStepUp(form, actionTarget.action);
+      await performFinanceCriticalStepUp(form, actionTarget.action);
       await financeMutation(endpointPath, {
         action: actionTarget.action,
         reason: String(form.get("reason") || "") || undefined,
@@ -406,7 +406,7 @@ export function EnterpriseFinancePaymentsTreasuryWorkspace({
           {actionTarget.kind === "payment" && actionTarget.action === "SUBMIT" ? <EnterpriseApproverSelect organizationId={organizationId} moduleCode="FINANCE_PAYMENTS" locale={requestedLocale} /> : null}
           <Field label={t("reason")}><textarea name="reason" rows={4} className="w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-base" /></Field>
           <p className="text-sm text-dtsc-muted">{t("sodSelfApprovalBlocked")}</p>
-          {actionTarget.kind === "payment" ? <FinanceCriticalStepUpFields action={actionTarget.action} locale={locale} /> : null}
+          <FinanceCriticalStepUpFields action={actionTarget.action} locale={locale} />
           <div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={() => setActionTarget(null)}>{t("cancel")}</Button><Button type="submit">{t("confirm")}</Button></div>
         </form> : null}
       </Dialog>
