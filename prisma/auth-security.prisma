@@ -1,0 +1,26 @@
+// Account-global authentication state. A user identity can belong to multiple tenants.
+model AuthTotpFactor {
+  id               String             @id @default(cuid())
+  userId           String             @unique
+  secretCiphertext String
+  enabledAt        DateTime?
+  lastAcceptedStep Int?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  user             User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  recoveryCodes    AuthRecoveryCode[]
+
+  @@index([enabledAt])
+}
+
+model AuthRecoveryCode {
+  id         String         @id @default(cuid())
+  factorId   String
+  codeHash   String
+  consumedAt DateTime?
+  createdAt  DateTime       @default(now())
+  factor     AuthTotpFactor @relation(fields: [factorId], references: [id], onDelete: Cascade)
+
+  @@unique([factorId, codeHash])
+  @@index([factorId, consumedAt])
+}
