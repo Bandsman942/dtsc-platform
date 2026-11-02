@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { type FormEvent, useState } from "react";
 import { ArrowRight, Building2, ShieldCheck } from "lucide-react";
+import { MandatoryMfaEnrollment } from "@/components/auth/mandatory-mfa-enrollment";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
@@ -52,6 +53,7 @@ export function AuthForm({ mode, uiLocale = "fr" }: { mode: "sign-in" | "sign-up
   const searchParams = useSearchParams();
   const [isPending, setIsPending] = useState(false);
   const [mfaRequired, setMfaRequired] = useState(false);
+  const [mfaEnrollmentRequired, setMfaEnrollmentRequired] = useState(false);
   const [mfaMode, setMfaMode] = useState<"totp" | "recovery">("totp");
   const [mfaCode, setMfaCode] = useState("");
 
@@ -134,6 +136,11 @@ export function AuthForm({ mode, uiLocale = "fr" }: { mode: "sign-in" | "sign-up
       toastError(body?.error || "Impossible de poursuivre pour le moment. Réessayez dans un instant.");
       return;
     }
+    if (!isSignUp && body?.mfaEnrollmentRequired) {
+      setMfaEnrollmentRequired(true);
+      setPasswordValue("");
+      return;
+    }
     if (!isSignUp && body?.mfaRequired) {
       setMfaRequired(true);
       setMfaMode("totp");
@@ -193,6 +200,18 @@ export function AuthForm({ mode, uiLocale = "fr" }: { mode: "sign-in" | "sign-up
     } finally { setIsPending(false); }
   }
 
+  if (!isSignUp && mfaEnrollmentRequired) {
+    return (
+      <MandatoryMfaEnrollment locale={uiLocale}
+        onDone={(target) => {
+          const resolved = normalizeRedirectTarget(target);
+          if (/^https?:\/\//i.test(resolved)) window.location.href = resolved;
+          else { router.push(resolved); router.refresh(); }
+        }}
+        onCancel={() => { setMfaEnrollmentRequired(false); resetWorkspaceChoice(); }}
+      />
+    );
+  }
   if (!isSignUp && mfaRequired) {
     return (
       <form onSubmit={submitMfa} className="space-y-5" noValidate>
