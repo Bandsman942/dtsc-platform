@@ -18,7 +18,7 @@ export default async function SignInPage() {
       session={session}
       isDtscInternal={isDtscInternalSession(session)}
     >
-      <Suspense><AuthForm mode="sign-in" /></Suspense>
+      <Suspense><AuthForm mode="sign-in" uiLocale={requestHeaders.get("accept-language")?.toLowerCase().startsWith("en") ? "en" : "fr"} /></Suspense>
     </AccountProductShell>
   );
 }
