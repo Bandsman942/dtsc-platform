@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { getSession } from "@/lib/auth";
+import { getSession, setSessionCookie } from "@/lib/auth";
+import { consumeMfaChallengeAttempt, finalizeMfaChallenge, clearMfaChallengeCookie } from "@/lib/auth/mfa-challenge";
+import { getDefaultContextForRole, resolveOrganizationLoginContext } from "@/lib/organizations";
+import { resolveTrustedInternalRedirect } from "@/lib/post-login-redirect";
 import { decryptTotpSecret, generateRecoveryCodes, hashRecoveryCode, verifyTotpCode } from "@/lib/auth/totp";
 import { prisma } from "@/lib/prisma";
 import { rateLimit, getRateLimitKey } from "@/lib/rate-limit";
@@ -12,8 +15,12 @@ const schema = z.object({ code: z.string().regex(/^\d{6}$/) }).strict();
 export async function POST(req: Request) {
   if (!isSameOriginRequest(req)) return NextResponse.json({ error: "Origine non autorisée." }, { status: 403 });
   const session = await getSession();
-  if (!session) return NextResponse.json({ error: "Reconnectez-vous pour continuer." }, { status: 401 });
-  const limiter = await rateLimit(getRateLimitKey(req, "auth:totp-confirm:" + session.userId), 6, 15 * 60 * 1000, { failureMode: "closed" });
+  // A pending enrollment challenge proves password ownership, but is NOT a
+  // regular authenticated session. It can only complete TOTP enrollment.
+  const enrollment = session ? null : await consumeMfaChallengeAttempt("ENROLL");
+  const userId = session?.userId || enrollment?.userId;
+  if (!userId) return NextResponse.json({ error: "La vérification a expiré. Reconnectez-vous." }, { status: 401 });
+  const limiter = await rateLimit(getRateLimitKey(req, "auth:totp-confirm:" + userId), 6, 15 * 60 * 1000, { failureMode: "closed" });
   if (!limiter.ok) return NextResponse.json({ error: "Trop de tentatives. Réessayez plus tard." }, { status: 429 });
   const parsed = schema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Saisissez le code à six chiffres." }, { status: 400 });
@@ -21,10 +28,10 @@ export async function POST(req: Request) {
   const recoveryCodes = generateRecoveryCodes();
   const now = new Date();
   const success = await prisma.$transaction(async (tx) => {
-    const user = await tx.user.findUnique({ where: { id: session.userId }, select: { status: true } });
+    const user = await tx.user.findUnique({ where: { id: userId }, select: { status: true } });
     if (!user || user.status !== "ACTIVE") return false;
     const factor = await tx.authTotpFactor.findUnique({
-      where: { userId: session.userId },
+      where: { userId: userId },
       select: { id: true, secretCiphertext: true, enabledAt: true, lastAcceptedStep: true },
     });
     if (!factor || factor.enabledAt) return false;
@@ -43,6 +50,32 @@ export async function POST(req: Request) {
   });
 
   if (!success) return NextResponse.json({ error: "Code incorrect, expiré ou configuration déjà validée." }, { status: 400 });
-  await writeAuditLog({ userId: session.userId, action: "AUTH_TOTP_ENABLED", entity: "AuthTotpFactor", entityId: session.userId, request: req });
-  return NextResponse.json({ ok: true, recoveryCodes }, { headers: { "Cache-Control": "no-store" } });
+  const actor = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, name: true, email: true, role: true, status: true },
+  });
+  if (!actor || actor.status !== "ACTIVE") return NextResponse.json({ error: "Compte indisponible." }, { status: 403 });
+  let context = getDefaultContextForRole();
+  if (enrollment?.organizationId) {
+    try { context = await resolveOrganizationLoginContext(actor, enrollment.organizationId); }
+    catch { return NextResponse.json({ error: "Cet espace n'est plus accessible. Reconnectez-vous." }, { status: 403 }); }
+  }
+  if (enrollment && !(await finalizeMfaChallenge(enrollment.id))) {
+    return NextResponse.json({ error: "Vérification déjà consommée. Reconnectez-vous." }, { status: 409 });
+  }
+  const issuedSession = await setSessionCookie({
+    ...actor, mfaVerifiedAt: Date.now(),
+    activeContext: session?.activeContext || context.activeContext,
+    activeOrganizationId: session?.activeOrganizationId || context.activeOrganizationId,
+    activeOrganizationName: session?.activeOrganizationName || context.activeOrganizationName,
+    activeOrganizationRole: session?.activeOrganizationRole || context.activeOrganizationRole,
+  }, session ? { previousSession: session } : {});
+  if (!issuedSession) return NextResponse.json({ error: "Session expirée. Reconnectez-vous." }, { status: 401 });
+  if (enrollment) await clearMfaChallengeCookie();
+  await writeAuditLog({ userId, action: "AUTH_TOTP_ENABLED", entity: "AuthTotpFactor", entityId: userId, request: req });
+  return NextResponse.json({
+    ok: true,
+    recoveryCodes,
+    redirectTo: enrollment ? resolveTrustedInternalRedirect(enrollment.redirectTo) || "/dashboard" : null,
+  }, { headers: { "Cache-Control": "no-store" } });
 }

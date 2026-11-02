@@ -46,7 +46,7 @@ const EN: typeof FR = {
   disabledNotice: "Your account protection is disabled.",
 };
 
-function LocalQrCode({ text }: { text: string }) {
+export function LocalQrCode({ text }: { text: string }) {
   const qr = useMemo(() => qrcodegen.QrCode.encodeText(text, qrcodegen.QrCode.Ecc.MEDIUM), [text]);
   const padding = 4;
   const size = qr.size + padding * 2;

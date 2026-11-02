@@ -67,6 +67,7 @@ export async function POST(req: Request) {
   await clearMfaChallengeCookie();
   const session = await setSessionCookie({
     ...user,
+    mfaVerifiedAt: Date.now(),
     activeContext: context.activeContext,
     activeOrganizationId: context.activeOrganizationId,
     activeOrganizationName: context.activeOrganizationName,

@@ -17,14 +17,15 @@ const model = read("prisma/auth-security.prisma");
 const migration = read("prisma/migrations/20261102160000_auth_mfa_challenge/migration.sql");
 
 for (const marker of [
-  "if (factor?.enabledAt)",
+  "if (factor?.enabledAt || mandatoryMfa)",
   "await clearSessionCookie();",
   "await createMfaChallenge(",
-  "mfaRequired: true",
+  "mfaRequired: Boolean(factor?.enabledAt)",
+  "mfaEnrollmentRequired: !factor?.enabledAt && mandatoryMfa",
   "await clearMfaChallengeCookie();",
 ]) assert.ok(login.includes(marker), "Missing MFA sign-in condition " + marker);
 
-const challengeStart = login.indexOf("if (factor?.enabledAt)");
+const challengeStart = login.indexOf("if (factor?.enabledAt || mandatoryMfa)");
 const sessionStart = login.indexOf("await setSessionCookie(");
 assert.ok(challengeStart !== -1 && sessionStart > challengeStart, "MFA must be decided before full session");
 assert.ok(manager.includes('sameSite: "strict"'), "MFA cookie must be same-site");

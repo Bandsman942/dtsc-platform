@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getSession } from "@/lib/auth";
+import { isMfaRequiredAnywhere } from "@/lib/auth/mfa-policy";
 import { consumeTotpFactorCode, consumeTotpRecoveryCode } from "@/lib/auth/totp-factor-service";
 import { prisma } from "@/lib/prisma";
 import { verifyPassword } from "@/lib/security";
@@ -25,6 +26,10 @@ export async function POST(req: Request) {
   const user = await prisma.user.findUnique({ where: { id: session.userId }, select: { passwordHash: true, status: true } });
   if (!user || user.status !== "ACTIVE" || !verifyPassword(parsed.data.password, user.passwordHash)) {
     return NextResponse.json({ error: "Impossible de vérifier votre identité." }, { status: 403 });
+  }
+  // A factor is account-global. A different active tenant may still require it.
+  if (await isMfaRequiredAnywhere(session.userId)) {
+    return NextResponse.json({ error: "La double authentification est obligatoire pour au moins un de vos espaces." }, { status: 403 });
   }
   const factor = await prisma.authTotpFactor.findUnique({ where: { userId: session.userId }, select: { enabledAt: true } });
   if (!factor?.enabledAt) return NextResponse.json({ error: "La double authentification n'est pas activée." }, { status: 409 });

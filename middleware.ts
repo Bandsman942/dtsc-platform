@@ -122,7 +122,7 @@ function applyHostRouting(request: NextRequest, session: Awaited<ReturnType<type
       return redirectToHost(request, "account", "/auth/sign-in");
     }
     if (isPathMatch(pathname, authRoutes)) {
-      if (session) {
+      if (session?.mfaVerifiedAt) {
         return NextResponse.redirect(new URL(resolvePostLoginRedirect({
           next: request.nextUrl.searchParams.get("next"),
           context: session.activeContext,
@@ -201,7 +201,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL(getDashboardUrl(), request.url));
   }
 
-  if ((pathname === "/auth/sign-in" || pathname === "/auth/sign-up") && session) {
+  if ((pathname === "/auth/sign-in" || pathname === "/auth/sign-up") && session?.mfaVerifiedAt) {
     return NextResponse.redirect(new URL(resolvePostLoginRedirect({
       next: request.nextUrl.searchParams.get("next"),
       context: session.activeContext,
@@ -222,6 +222,7 @@ export async function middleware(request: NextRequest) {
       {
         userId: session.userId,
         sessionId: session.sessionId,
+        mfaVerifiedAt: session.mfaVerifiedAt,
         email: session.email,
         name: session.name,
         role: session.role,

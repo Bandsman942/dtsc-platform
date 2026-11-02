@@ -10,6 +10,7 @@ import { getDefaultContextForRole, resolveOrganizationLoginContext } from "@/lib
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { writeAuditLog } from "@/lib/audit";
 import { resolvePostLoginRedirect } from "@/lib/post-login-redirect";
+import { isMfaRequiredForContext } from "@/lib/auth/mfa-policy";
 
 export async function POST(req: Request) {
   if (!isSameOriginRequest(req)) return NextResponse.json({ error: "Origine non autorisée." }, { status: 403 });
@@ -82,20 +83,28 @@ export async function POST(req: Request) {
     context: context.activeContext,
     userStartPage: user.startPage,
   });
-  const factor = await prisma.authTotpFactor.findUnique({ where: { userId: user.id }, select: { enabledAt: true } });
-  if (factor?.enabledAt) {
+  const [factor, mandatoryMfa] = await Promise.all([
+    prisma.authTotpFactor.findUnique({ where: { userId: user.id }, select: { enabledAt: true } }),
+    isMfaRequiredForContext(context),
+  ]);
+  if (factor?.enabledAt || mandatoryMfa) {
     // Critical: a verified password is not an authenticated session when MFA is enabled.
     await clearSessionCookie();
     const challenge = await createMfaChallenge({
       userId: user.id,
       organizationId: context.activeOrganizationId || null,
       redirectTo,
+      purpose: factor?.enabledAt ? "VERIFY" : "ENROLL",
     });
     await writeAuditLog({
       userId: user.id, action: "AUTH_MFA_CHALLENGE_CREATED",
       entity: "AuthMfaChallenge", entityId: user.id, request: req,
     });
-    return NextResponse.json({ ok: true, mfaRequired: true, expiresAt: challenge.expiresAt }, {
+    return NextResponse.json({
+      ok: true, mfaRequired: Boolean(factor?.enabledAt),
+      mfaEnrollmentRequired: !factor?.enabledAt && mandatoryMfa,
+      expiresAt: challenge.expiresAt,
+    }, {
       headers: { "Cache-Control": "no-store" },
     });
   }

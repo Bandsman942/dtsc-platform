@@ -5407,6 +5407,8 @@ model AppSetting {
   notificationRetentionDays       Int      @default(60)
   signUpOtpEnabled                Boolean  @default(true)
   signUpOtpExpirationMinutes      Int      @default(10)
+  requireMfaForAllUsers            Boolean  @default(false)
+  requireMfaForDtscInternal        Boolean  @default(false)
   adminRoleAccess                 Json     @default("{}")
   updatedAt                       DateTime @updatedAt
 }
