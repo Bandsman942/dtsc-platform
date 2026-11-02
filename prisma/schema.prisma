@@ -70,11 +70,20 @@ enum DocumentStatus {
 }
 
 model User {
+  authSessions                          AuthSession[]
+  knownBrowsers                          AuthKnownBrowser[]
   id                                    String                            @id @default(cuid())
   name                                  String
   email                                 String                            @unique
   passwordHash                          String
   role                                  UserRole                          @default(CLIENT)
+  authTotpFactor                        AuthTotpFactor?
+  authMfaChallenges                     AuthMfaChallenge[]
+  mfaRecoveryRequired                   Boolean                           @default(false)
+  mfaRecoveryInvalidBefore              DateTime?
+  mfaRecoveryTargets                    AuthMfaRecoveryRequest[]          @relation("AuthMfaRecoveryTarget")
+  mfaRecoveryRequested                  AuthMfaRecoveryRequest[]          @relation("AuthMfaRecoveryRequester")
+  mfaRecoveryApproved                   AuthMfaRecoveryRequest[]          @relation("AuthMfaRecoveryApprover")
   companyName                           String?
   phone                                 String?
   jobTitle                              String?
@@ -5404,6 +5413,8 @@ model AppSetting {
   notificationRetentionDays       Int      @default(60)
   signUpOtpEnabled                Boolean  @default(true)
   signUpOtpExpirationMinutes      Int      @default(10)
+  requireMfaForAllUsers            Boolean  @default(false)
+  requireMfaForDtscInternal        Boolean  @default(false)
   adminRoleAccess                 Json     @default("{}")
   updatedAt                       DateTime @updatedAt
 }

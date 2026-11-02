@@ -1,0 +1,15 @@
+// AUTH-03. Canonical account-global session ledger; session tokens contain only the record ID.
+model AuthSession {
+  id                String    @id
+  userId            String
+  userAgent         String?
+  createdAt         DateTime  @default(now())
+  lastSeenAt        DateTime  @default(now())
+  absoluteExpiresAt DateTime
+  revokedAt         DateTime?
+  revokeReason      String?
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, revokedAt, absoluteExpiresAt])
+  @@index([absoluteExpiresAt])
+}

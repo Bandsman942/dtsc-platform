@@ -1,4 +1,6 @@
 import { cookies } from "next/headers";
+import { isMfaRequiredForContext } from "@/lib/auth/mfa-policy";
+import { isAuthSessionActive, newSessionId, registerAuthSession, touchRegisteredSession } from "@/lib/auth/session-registry";
 import { redirect } from "next/navigation";
 import type { UserRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
@@ -20,11 +22,30 @@ export async function getSession(): Promise<SessionPayload | null> {
   const token = cookieStore.get(SESSION_COOKIE)?.value;
   const secret = requireEnv("AUTH_SECRET");
 
-  return verifySessionToken(token, secret);
+  const session = await verifySessionToken(token, secret);
+  if (!session) return null;
+  // Recovery cutoff and account status are checked by the same canonical
+  // server-side session registry guard; avoid a redundant DB user query.
+  // A pre-MFA or signed legacy cookie must never satisfy a newly enforced
+  // policy. After TOTP enrollment, only sessions stamped with proof survive.
+  const factor = await prisma.authTotpFactor.findUnique({
+    where: { userId: session.userId }, select: { enabledAt: true },
+  });
+  const [required, active] = await Promise.all([
+    isMfaRequiredForContext(session),
+    isAuthSessionActive(session),
+  ]);
+  if (!active) return null;
+  if (required && !factor?.enabledAt) return null;
+  if (factor?.enabledAt &&
+      (!session.mfaVerifiedAt || session.mfaVerifiedAt < factor.enabledAt.getTime())) return null;
+  return session;
 }
 
 export async function getCurrentUser(sessionOverride?: SessionPayload) {
-  const session = sessionOverride ?? await getSession();
+  const session = await getSession();
+  // A caller-provided snapshot can only narrow a signed active cookie, never bypass the registry.
+  if (sessionOverride && session?.userId !== sessionOverride.userId) return null;
   if (!session) {
     return null;
   }
@@ -114,6 +135,7 @@ type SessionCookieUser = {
   name: string;
   role: UserRole;
   sessionIdleTimeoutMinutes?: number | null;
+  mfaVerifiedAt?: number;
   activeContext?: SessionContext;
   activeOrganizationId?: string | null;
   activeOrganizationName?: string | null;
@@ -127,9 +149,12 @@ export async function setSessionCookie(
   const cookieStore = await cookies();
   const storedIdleTimeout = user.sessionIdleTimeoutMinutes ?? await getUserSessionIdleTimeoutMinutes(user.id);
 
+  const sessionId = options.previousSession?.sessionId || newSessionId();
   const created = await createSessionToken(
     {
+      sessionId,
       userId: user.id,
+      mfaVerifiedAt: user.mfaVerifiedAt ?? options.previousSession?.mfaVerifiedAt,
       email: user.email,
       name: user.name,
       role: user.role,
@@ -150,6 +175,16 @@ export async function setSessionCookie(
   if (!created) {
     await clearSessionCookie();
     return null;
+  }
+
+  if (options.previousSession?.sessionId) {
+    const renewed = await touchRegisteredSession(created.session);
+    if (!renewed) {
+      await clearSessionCookie();
+      return null;
+    }
+  } else {
+    await registerAuthSession(created.session);
   }
 
   const cookieDomain = getAuthCookieDomain();
