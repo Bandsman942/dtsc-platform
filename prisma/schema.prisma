@@ -76,6 +76,7 @@ model User {
   passwordHash                          String
   role                                  UserRole                          @default(CLIENT)
   authTotpFactor                        AuthTotpFactor?
+  authMfaChallenges                     AuthMfaChallenge[]
   companyName                           String?
   phone                                 String?
   jobTitle                              String?
