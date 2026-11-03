@@ -30,6 +30,11 @@ import calendarScheduleFr from "@/locales/calendar-schedule.fr.json";
 import calendarScheduleEn from "@/locales/calendar-schedule.en.json";
 import calendarWorkspaceFr from "@/locales/calendar-workspace.fr.json";
 import calendarWorkspaceEn from "@/locales/calendar-workspace.en.json";
+import internalAdminFr from "@/locales/internal-admin.fr.json";
+import internalAdminEn from "@/locales/internal-admin.en.json";
+import internalAdminStatusFr from "@/locales/internal-admin-status.fr.json";
+import internalAdminStatusEn from "@/locales/internal-admin-status.en.json";
+import internalAdminDatasetsEn from "@/locales/internal-admin-datasets.en.json";
 import { clientFacingCopy } from "@/lib/client-facing-copy";
 
 type Dictionary = typeof fr;
@@ -58,6 +63,8 @@ const collaborationExperienceDictionaries = { fr: collaborationExperienceFr, en:
 const activitiesDictionaries = { fr: activitiesFr, en: activitiesEn } as const;
 const calendarScheduleDictionaries = { fr: calendarScheduleFr, en: calendarScheduleEn } as const;
 const calendarWorkspaceDictionaries = { fr: calendarWorkspaceFr, en: calendarWorkspaceEn } as const;
+const internalAdminDictionaries = { fr: internalAdminFr, en: internalAdminEn } as const;
+const internalAdminStatusDictionaries = { fr: internalAdminStatusFr, en: internalAdminStatusEn } as const;
 export type WorkspaceGeneralizationKey = keyof typeof workspaceGeneralizationDictionaries.fr;
 export type EnterpriseProcurementKey = keyof typeof enterpriseProcurementDictionaries.fr;
 export type EnterpriseFinanceKey = keyof typeof enterpriseFinanceDictionaries.fr;
@@ -69,6 +76,7 @@ export type CollaborationExperienceKey = keyof typeof collaborationExperienceDic
 export type ActivitiesKey = keyof typeof activitiesDictionaries.fr;
 export type CalendarScheduleKey = keyof typeof calendarScheduleDictionaries.fr;
 export type CalendarWorkspaceKey = keyof typeof calendarWorkspaceDictionaries.fr;
+export type InternalAdminKey = keyof typeof internalAdminDictionaries.fr;
 
 function translatedClientCopy(locale: string | null | undefined, value: string) {
   return clientFacingCopy(locale, value);
@@ -87,3 +95,13 @@ export function translateCollaborationExperience(locale: string | null | undefin
 export function translateActivities(locale: string | null | undefined, key: ActivitiesKey) { const dictionary = activitiesDictionaries[locale === "en" ? "en" : "fr"]; return translatedClientCopy(locale, dictionary[key] || activitiesDictionaries.fr[key]); }
 export function translateCalendarSchedule(locale: string | null | undefined, key: CalendarScheduleKey) { const dictionary = calendarScheduleDictionaries[locale === "en" ? "en" : "fr"]; return translatedClientCopy(locale, dictionary[key] || calendarScheduleDictionaries.fr[key]); }
 export function translateCalendarWorkspace(locale: string | null | undefined, key: CalendarWorkspaceKey) { const dictionary = calendarWorkspaceDictionaries[locale === "en" ? "en" : "fr"]; return translatedClientCopy(locale, dictionary[key] || calendarWorkspaceDictionaries.fr[key]); }
+export function translateInternalAdmin(locale: string | null | undefined, key: InternalAdminKey) { const dictionary = internalAdminDictionaries[locale === "en" ? "en" : "fr"]; return translatedClientCopy(locale, dictionary[key] || internalAdminDictionaries.fr[key]); }
+export function translateInternalAdminStatus(locale: string | null | undefined, status: string) {
+  const dictionary: Record<string, string> = internalAdminStatusDictionaries[locale === "en" ? "en" : "fr"];
+  return dictionary[status] || status.toLowerCase().split("_").map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(" ");
+}
+export function translateInternalAdminDataset(locale: string | null | undefined, section: string, datasetId: string, label: string, description: string) {
+  const dictionary: Record<string, { label: string; description: string }> = internalAdminDatasetsEn;
+  const localized = locale === "en" ? dictionary[`${section}.${datasetId}`] : undefined;
+  return localized || { label, description };
+}

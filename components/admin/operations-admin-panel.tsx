@@ -16,8 +16,14 @@ import { ModuleHeader, ModuleWorkspace } from "@/components/workspace/module-wor
 import { StatusBadge, type StatusBadgeTone } from "@/components/workspace/status-badge";
 import { useSmartList } from "@/lib/hooks/use-smart-list";
 import type { OperationDataset, OperationField, OperationRecord } from "@/lib/admin-operations-types";
-import { formatEnumLabel } from "@/lib/labels";
+import { useAppLocale } from "@/components/i18n/locale-provider";
+import { translateInternalAdmin, translateInternalAdminDataset, translateInternalAdminStatus, type InternalAdminKey } from "@/lib/i18n";
 import type { OperationalObjectType } from "@/lib/operational-access";
+
+function useAdminCopy() {
+  const locale = useAppLocale();
+  return { locale, t: (key: InternalAdminKey) => translateInternalAdmin(locale, key) };
+}
 
 const maxOperationFileSize = 6_000_000;
 
@@ -62,7 +68,7 @@ export function OperationsAdminPanel({
   title,
   description,
   playbook,
-  datasets,
+  datasets: rawDatasets,
   canEdit,
   embedded = false,
 }: {
@@ -74,6 +80,12 @@ export function OperationsAdminPanel({
   canEdit: boolean;
   embedded?: boolean;
 }) {
+  const { locale, t } = useAdminCopy();
+  const datasets = useMemo(() => rawDatasets.map((dataset) => {
+    const routeSection = /^\/api\/admin\/(hr-cfo|sco|coo|ceo|mpo|cto|la)\//.exec(dataset.endpoint)?.[1];
+    const section = routeSection === "la" ? "legal" : routeSection || "";
+    return { ...dataset, ...translateInternalAdminDataset(locale, section, dataset.id, dataset.label, dataset.description) };
+  }), [locale, rawDatasets]);
   const [itemsByDataset, setItemsByDataset] = useState(() =>
     Object.fromEntries(datasets.map((dataset) => [dataset.id, dataset.records]))
   );
@@ -162,9 +174,9 @@ export function OperationsAdminPanel({
   async function createRecord(dataset: OperationDataset, form: HTMLFormElement) {
     let payload: Record<string, FormDataEntryValue>;
     try {
-      payload = await buildPayloadWithUploads(form);
+      payload = await buildPayloadWithUploads(form, t("fileUploadError"));
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Import de fichier impossible.");
+      setMessage(error instanceof Error ? error.message : t("uploadError"));
       return;
     }
     const response = await fetch(dataset.endpoint, {
@@ -173,7 +185,7 @@ export function OperationsAdminPanel({
       body: JSON.stringify(payload),
     });
     const body = (await response.json().catch(() => null)) as { record?: Record<string, unknown>; message?: string } | null;
-    setMessage(response.ok ? `${dataset.label}: élément enregistré.` : body?.message || `${dataset.label}: enregistrement impossible.`);
+    setMessage(response.ok ? `${dataset.label}: ${t("saved")}` : body?.message || `${dataset.label}: ${t("saveError")}`);
     const savedRecord = body?.record;
     if (response.ok && savedRecord) {
       setItemsByDataset((current) => ({
@@ -187,9 +199,9 @@ export function OperationsAdminPanel({
   async function updateRecord(dataset: OperationDataset, record: OperationRecord, form: HTMLFormElement) {
     let payload: Record<string, FormDataEntryValue>;
     try {
-      payload = await buildPayloadWithUploads(form);
+      payload = await buildPayloadWithUploads(form, t("fileUploadError"));
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Import de fichier impossible.");
+      setMessage(error instanceof Error ? error.message : t("uploadError"));
       return;
     }
     const response = await fetch(`${dataset.endpoint}/${record.id}`, {
@@ -198,7 +210,7 @@ export function OperationsAdminPanel({
       body: JSON.stringify(payload),
     });
     const body = (await response.json().catch(() => null)) as { record?: Record<string, unknown>; message?: string } | null;
-    setMessage(response.ok ? "Élément opérationnel mis à jour." : body?.message || "Impossible de mettre à jour cet élément.");
+    setMessage(response.ok ? t("updated") : body?.message || t("updateError"));
     const savedRecord = body?.record;
     if (response.ok && savedRecord) {
       const saved = recordFromRaw(dataset, savedRecord);
@@ -212,7 +224,7 @@ export function OperationsAdminPanel({
   async function removeRecord(dataset: OperationDataset, record: OperationRecord) {
     const response = await fetch(`${dataset.endpoint}/${record.id}`, { method: "DELETE" });
     const body = (await response.json().catch(() => null)) as { message?: string } | null;
-    setMessage(response.ok ? "Élément supprimé." : body?.message || "Suppression impossible.");
+    setMessage(response.ok ? t("deleted") : body?.message || t("deleteError"));
     if (response.ok) {
       setItemsByDataset((current) => ({
         ...current,
@@ -227,27 +239,27 @@ export function OperationsAdminPanel({
       <ModuleHeader
         eyebrow={eyebrow}
         title={title}
-        count={`${totals.records} élément${totals.records > 1 ? "s" : ""}`}
+        count={`${totals.records} ${t("elements")}`}
         description={description}
       />
       ) : null}
 
       <div className="flex min-w-0 flex-wrap items-center gap-x-5 gap-y-2 border-y border-dtsc-border py-3 text-xs">
-        <span className="text-dtsc-muted">Dossiers <strong className="ml-1 text-base font-black tabular-nums text-dtsc-ink">{totals.records}</strong></span>
-        <span className="text-dtsc-muted">Actifs <strong className="ml-1 text-base font-black tabular-nums text-dtsc-ink">{totals.activeRecords}</strong></span>
-        <span className="text-dtsc-muted">À traiter <strong className="ml-1 text-base font-black tabular-nums text-dtsc-ink">{totals.attentionItems}</strong></span>
-        {(isCooPanel || isCeoPanel) ? <span className="text-dtsc-muted">Exécution <strong className="ml-1 text-base font-black text-dtsc-ink">{totals.operationalExecution}%</strong></span> : null}
-        {isHrcfoPanel ? <span className="text-dtsc-muted">Chiffre d’affaires <strong className="ml-1 text-base font-black text-dtsc-ink">{totals.revenueBreakdown}</strong></span> : null}
+        <span className="text-dtsc-muted">{t("records")} <strong className="ml-1 text-base font-black tabular-nums text-dtsc-ink">{totals.records}</strong></span>
+        <span className="text-dtsc-muted">{t("active")} <strong className="ml-1 text-base font-black tabular-nums text-dtsc-ink">{totals.activeRecords}</strong></span>
+        <span className="text-dtsc-muted">{t("attention")} <strong className="ml-1 text-base font-black tabular-nums text-dtsc-ink">{totals.attentionItems}</strong></span>
+        {(isCooPanel || isCeoPanel) ? <span className="text-dtsc-muted">{t("execution")} <strong className="ml-1 text-base font-black text-dtsc-ink">{totals.operationalExecution}%</strong></span> : null}
+        {isHrcfoPanel ? <span className="text-dtsc-muted">{t("revenue")} <strong className="ml-1 text-base font-black text-dtsc-ink">{totals.revenueBreakdown}</strong></span> : null}
       </div>
-      {isHrcfoPanel ? <details className="border-b border-dtsc-border pb-2 text-xs"><summary className="min-h-10 cursor-pointer py-3 font-black text-dtsc-blue">Soldes et indicateurs financiers détaillés</summary><dl className="grid min-w-0 gap-x-5 gap-y-2 pb-3 sm:grid-cols-2 lg:grid-cols-3">{[["Comptes", totals.balanceBreakdown], ["Entrées", totals.inflowBreakdown], ["Sorties", totals.outflowBreakdown], ["Capital", totals.capitalBreakdown], ["Budgets", totals.budgetBreakdown], ["Consommé", totals.spentBreakdown], ["Restant", totals.remainingBreakdown], ["Paie validée/payée", totals.payrollBreakdown]].map(([label, value]) => <div key={label} className="min-w-0 border-b border-dtsc-border/50 py-2"><dt className="text-dtsc-muted">{label}</dt><dd className="break-words font-black text-dtsc-ink">{value}</dd></div>)}</dl></details> : null}
-      <ol className="flex max-w-full gap-1 overflow-x-auto py-2 [scrollbar-width:none]" aria-label={`Flux recommandé ${title}`}>
+      {isHrcfoPanel ? <details className="border-b border-dtsc-border pb-2 text-xs"><summary className="min-h-10 cursor-pointer py-3 font-black text-dtsc-blue">{t("financialDetails")}</summary><dl className="grid min-w-0 gap-x-5 gap-y-2 pb-3 sm:grid-cols-2 lg:grid-cols-3">{[[t("accounts"), totals.balanceBreakdown], [t("inflows"), totals.inflowBreakdown], [t("outflows"), totals.outflowBreakdown], [t("capital"), totals.capitalBreakdown], [t("budgets"), totals.budgetBreakdown], [t("spent"), totals.spentBreakdown], [t("remaining"), totals.remainingBreakdown], [t("payrollPaid"), totals.payrollBreakdown]].map(([label, value]) => <div key={label} className="min-w-0 border-b border-dtsc-border/50 py-2"><dt className="text-dtsc-muted">{label}</dt><dd className="break-words font-black text-dtsc-ink">{value}</dd></div>)}</dl></details> : null}
+      <ol className="flex max-w-full gap-1 overflow-x-auto py-2 [scrollbar-width:none]" aria-label={`${t("recommendedFlow")} ${title}`}>
         {playbook.map((step, index) => <li key={step} className="shrink-0 border-r border-dtsc-border px-2 text-[0.7rem] font-bold text-dtsc-muted last:border-0"><span className="mr-1 text-cyan-600">{index + 1}.</span>{step}</li>)}
       </ol>
-      <ListControls query={datasetList.query} onQueryChange={datasetList.setQuery} page={datasetList.page} pageCount={datasetList.pageCount} totalCount={datasetList.totalCount} filteredCount={datasetList.filteredCount} onPageChange={datasetList.setPage} placeholder="Rechercher un registre, une activité…" />
-      <div className="divide-y divide-dtsc-border border-y border-dtsc-border" aria-label={`Registres ${title}`}>
+      <ListControls query={datasetList.query} onQueryChange={datasetList.setQuery} page={datasetList.page} pageCount={datasetList.pageCount} totalCount={datasetList.totalCount} filteredCount={datasetList.filteredCount} onPageChange={datasetList.setPage} placeholder={t("searchRegister")} />
+      <div className="divide-y divide-dtsc-border border-y border-dtsc-border" aria-label={`${t("registers")} ${title}`}>
         {datasetList.paginatedItems.map((dataset) => <button type="button" key={dataset.id} onClick={() => setActiveDatasetId(dataset.id)} className="flex min-h-14 w-full min-w-0 items-center gap-3 px-2 py-2 text-left hover:bg-dtsc-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500"><span className="min-w-0 flex-1"><span className="block truncate text-sm font-black text-dtsc-ink">{dataset.label}</span><span className="block truncate text-xs text-dtsc-muted">{dataset.description}</span></span><span className="shrink-0 text-xs font-black tabular-nums text-dtsc-muted">{(visibleItemsByDataset[dataset.id] || []).length}</span><ArrowUpRight className="h-4 w-4 shrink-0 text-dtsc-blue" /></button>)}
       </div>
-      {!datasetList.paginatedItems.length ? <p className="py-4 text-sm text-dtsc-muted">Aucun registre ne correspond à votre recherche.</p> : null}
+      {!datasetList.paginatedItems.length ? <p className="py-4 text-sm text-dtsc-muted">{t("noRegister")}</p> : null}
       {datasets.map((dataset) => (
         <InternalFullScreenSurface key={dataset.id} open={activeDataset?.id === dataset.id} title={dataset.label} subtitle={dataset.description} onClose={closeDataset} level={2}>
           <DatasetSection dataset={dataset} records={visibleItemsByDataset[dataset.id] || []} canEdit={canEdit} onCreate={createRecord} onUpdate={updateRecord} onRemove={removeRecord} dateStart={dateStart} dateEnd={dateEnd} setDateStart={setDateStart} setDateEnd={setDateEnd} hasDateFilter={hasDateFilter} />
@@ -308,6 +320,7 @@ function DatasetSection({
   setDateEnd: (value: string) => void;
   hasDateFilter: boolean;
 }) {
+  const { locale, t } = useAdminCopy();
   const [status, setStatus] = useState("ALL");
   const statuses = useMemo(() => Array.from(new Set([...dataset.statusOptions.map((option) => option.value), ...records.map((record) => record.status)])), [dataset.statusOptions, records]);
   const statusRecords = useMemo(() => status === "ALL" ? records : records.filter((record) => record.status === status), [records, status]);
@@ -324,17 +337,17 @@ function DatasetSection({
   return (
     <section id={`operations-${dataset.id}`} data-dtsc-register-fullscreen className="min-w-0 space-y-3">
       <div className="flex min-w-0 flex-wrap items-center justify-between gap-2 border-b border-dtsc-border pb-2">
-        <p className="text-xs font-bold text-dtsc-muted">{list.filteredCount} résultat{list.filteredCount > 1 ? "s" : ""} · {records.length} éléments dans la période</p>
-        {canEdit ? <Button type="button" size="sm" onClick={() => setCreateOpen(true)} className="rounded-lg bg-dtsc-blue text-white"><Plus className="h-4 w-4" /> Nouveau</Button> : null}
+        <p className="text-xs font-bold text-dtsc-muted">{list.filteredCount} {t("result")} · {records.length} {t("inPeriod")}</p>
+        {canEdit ? <Button type="button" size="sm" onClick={() => setCreateOpen(true)} className="rounded-lg bg-dtsc-blue text-white"><Plus className="h-4 w-4" /> {t("new")}</Button> : null}
       </div>
-      <div className="flex min-w-0 flex-wrap items-end gap-2" aria-label={`Période ${dataset.label}`}>
-        <label className="grid min-w-0 flex-1 gap-1 text-[0.7rem] font-black text-dtsc-muted sm:max-w-48">Du<Input type="date" value={dateStart} onChange={(event) => setDateStart(event.target.value)} className="h-10 min-w-0 rounded-lg bg-dtsc-surface" /></label>
-        <label className="grid min-w-0 flex-1 gap-1 text-[0.7rem] font-black text-dtsc-muted sm:max-w-48">Au<Input type="date" value={dateEnd} onChange={(event) => setDateEnd(event.target.value)} className="h-10 min-w-0 rounded-lg bg-dtsc-surface" /></label>
-        {hasDateFilter ? <Button type="button" size="sm" variant="outline" onClick={() => { setDateStart(""); setDateEnd(""); }} className="h-10 rounded-lg border-dtsc-border">Effacer les dates</Button> : null}
+      <div className="flex min-w-0 flex-wrap items-end gap-2" aria-label={`${t("from")} ${dataset.label}`}>
+        <label className="grid min-w-0 flex-1 gap-1 text-[0.7rem] font-black text-dtsc-muted sm:max-w-48">{t("from")}<Input type="date" value={dateStart} onChange={(event) => setDateStart(event.target.value)} className="h-10 min-w-0 rounded-lg bg-dtsc-surface" /></label>
+        <label className="grid min-w-0 flex-1 gap-1 text-[0.7rem] font-black text-dtsc-muted sm:max-w-48">{t("to")}<Input type="date" value={dateEnd} onChange={(event) => setDateEnd(event.target.value)} className="h-10 min-w-0 rounded-lg bg-dtsc-surface" /></label>
+        {hasDateFilter ? <Button type="button" size="sm" variant="outline" onClick={() => { setDateStart(""); setDateEnd(""); }} className="h-10 rounded-lg border-dtsc-border">{t("clearDates")}</Button> : null}
       </div>
-      <nav aria-label={`Filtrer ${dataset.label} par statut`} className="flex min-w-0 gap-1.5 overflow-x-auto py-1 [scrollbar-width:thin]">
-        <button type="button" aria-pressed={status === "ALL"} onClick={() => { setStatus("ALL"); list.setPage(1); }} className={`min-h-10 shrink-0 rounded-full border px-3 text-xs font-bold ${status === "ALL" ? "border-cyan-400 bg-cyan-400/15 text-dtsc-blue" : "border-dtsc-border text-dtsc-muted"}`}>Tous · {records.length}</button>
-        {statuses.map((item) => <button key={item} type="button" aria-pressed={status === item} onClick={() => { setStatus(item); list.setPage(1); }} className={`min-h-10 shrink-0 rounded-full border px-3 text-xs font-bold ${status === item ? "border-cyan-400 bg-cyan-400/15 text-dtsc-blue" : "border-dtsc-border text-dtsc-muted"}`}>{dataset.statusOptions.find((option) => option.value === item)?.label || formatEnumLabel(item)} · {records.filter((record) => record.status === item).length}</button>)}
+      <nav aria-label={`${t("filterStatus")} ${dataset.label}`} className="flex min-w-0 gap-1.5 overflow-x-auto py-1 [scrollbar-width:thin]">
+        <button type="button" aria-pressed={status === "ALL"} onClick={() => { setStatus("ALL"); list.setPage(1); }} className={`min-h-10 shrink-0 rounded-full border px-3 text-xs font-bold ${status === "ALL" ? "border-cyan-400 bg-cyan-400/15 text-dtsc-blue" : "border-dtsc-border text-dtsc-muted"}`}>{t("all")} · {records.length}</button>
+        {statuses.map((item) => <button key={item} type="button" aria-pressed={status === item} onClick={() => { setStatus(item); list.setPage(1); }} className={`min-h-10 shrink-0 rounded-full border px-3 text-xs font-bold ${status === item ? "border-cyan-400 bg-cyan-400/15 text-dtsc-blue" : "border-dtsc-border text-dtsc-muted"}`}>{translateInternalAdminStatus(locale, item)} · {records.filter((record) => record.status === item).length}</button>)}
       </nav>
       <ListControls
         query={list.query}
@@ -343,7 +356,7 @@ function DatasetSection({
         pageCount={list.pageCount}
         totalCount={statusRecords.length}
         filteredCount={list.filteredCount}
-        placeholder={`Rechercher nom, ID, montant, statut, référence…`}
+        placeholder={t("searchRecord")}
         onPageChange={list.setPage}
       />
 
@@ -354,13 +367,13 @@ function DatasetSection({
           ))}
         </BusinessList>
       ) : records.length ? (
-        <EmptyState compact title="Aucun résultat" description="Aucun élément ne correspond à cette recherche." />
+        <EmptyState compact title={t("noResults")} description={t("noResultsDescription")} />
       ) : (
-        <EmptyState compact title="Aucun contenu" description={`Aucun élément n'est encore enregistré dans ${dataset.label.toLowerCase()}.`} action={canEdit ? <Button type="button" variant="outline" onClick={() => setCreateOpen(true)} className="rounded-xl border-dtsc-border">Créer le premier élément</Button> : undefined} />
+        <EmptyState compact title={t("noContent")} description={`${t("noContentPrefix")} ${dataset.label.toLowerCase()}.`} action={canEdit ? <Button type="button" variant="outline" onClick={() => setCreateOpen(true)} className="rounded-xl border-dtsc-border">{t("createFirst")}</Button> : undefined} />
       )}
 
-      <Dialog open={createOpen} title={`Nouveau: ${dataset.label}`} description="Remplissez le formulaire puis enregistrez l'élément." onClose={() => setCreateOpen(false)} className="h-[92dvh] max-w-5xl">
-        <OperationForm fields={dataset.fields} disabled={!canEdit} onSubmit={submit} submitLabel="Ajouter" submitIcon="plus" />
+      <Dialog open={createOpen} title={`${t("newRecord")}: ${dataset.label}`} description={t("fillForm")} onClose={() => setCreateOpen(false)} className="h-[92dvh] max-w-5xl">
+        <OperationForm fields={dataset.fields} disabled={!canEdit} onSubmit={submit} submitLabel={t("add")} submitIcon="plus" />
       </Dialog>
     </section>
   );
@@ -379,6 +392,7 @@ function RecordRow({
   onUpdate: (dataset: OperationDataset, record: OperationRecord, form: HTMLFormElement) => Promise<void>;
   onRemove: (dataset: OperationDataset, record: OperationRecord) => Promise<void>;
 }) {
+  const { locale, t } = useAdminCopy();
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
@@ -398,19 +412,19 @@ function RecordRow({
     <>
       <BusinessListItem
         title={record.title}
-        status={<StatusBadge tone={statusTone(record.status)}>{formatEnumLabel(record.status)}</StatusBadge>}
+        status={<StatusBadge tone={statusTone(record.status)}>{translateInternalAdminStatus(locale, record.status)}</StatusBadge>}
         meta={meta || undefined}
         onOpen={() => setDetailOpen(true)}
-        openLabel={`Consulter la fiche ${record.title}`}
+        openLabel={`${t("openDetails")} ${record.title}`}
         className="!py-1.5 sm:!py-2"
         actions={(
           <ContextActions
-            label={`Actions pour ${record.title}`}
+            label={`${t("actionsFor")} ${record.title}`}
             actions={[
-              { id: "open", label: "Voir la fiche", icon: Eye, onSelect: () => setDetailOpen(true) },
-              ...(canEdit ? [{ id: "edit", label: "Modifier", icon: Save, onSelect: () => setEditOpen(true) }] : []),
-              ...(attachmentHref ? [{ id: "download", label: "Télécharger le fichier", icon: Download, onSelect: () => window.open(attachmentHref, "_blank", "noopener,noreferrer") }] : []),
-              ...(canEdit ? [{ id: "delete", label: "Supprimer", icon: Trash2, destructive: true, separatorBefore: true, onSelect: () => setConfirmDelete(true) }] : []),
+              { id: "open", label: t("view"), icon: Eye, onSelect: () => setDetailOpen(true) },
+              ...(canEdit ? [{ id: "edit", label: t("edit"), icon: Save, onSelect: () => setEditOpen(true) }] : []),
+              ...(attachmentHref ? [{ id: "download", label: t("downloadFile"), icon: Download, onSelect: () => window.open(attachmentHref, "_blank", "noopener,noreferrer") }] : []),
+              ...(canEdit ? [{ id: "delete", label: t("delete"), icon: Trash2, destructive: true, separatorBefore: true, onSelect: () => setConfirmDelete(true) }] : []),
             ]}
           />
         )}
@@ -421,61 +435,61 @@ function RecordRow({
         subtitle={`${dataset.label} · ${record.id}`}
         onClose={closeDetail}
         level={3}
-        actions={<ContextActions label={`Actions pour ${record.title}`} actions={[
-          { id: "back", label: "Retour aux résultats", icon: ArrowLeft, onSelect: closeDetail },
-          ...(canEdit ? [{ id: "edit", label: "Modifier", icon: Save, onSelect: () => setEditOpen(true) }] : []),
-          ...(attachmentHref ? [{ id: "download", label: "Télécharger", icon: Download, onSelect: () => window.open(attachmentHref, "_blank", "noopener,noreferrer") }] : []),
-          ...(canEdit ? [{ id: "delete", label: "Supprimer", icon: Trash2, destructive: true, separatorBefore: true, onSelect: () => setConfirmDelete(true) }] : []),
+        actions={<ContextActions label={`${t("actionsFor")} ${record.title}`} actions={[
+          { id: "back", label: t("backResults"), icon: ArrowLeft, onSelect: closeDetail },
+          ...(canEdit ? [{ id: "edit", label: t("edit"), icon: Save, onSelect: () => setEditOpen(true) }] : []),
+          ...(attachmentHref ? [{ id: "download", label: t("download"), icon: Download, onSelect: () => window.open(attachmentHref, "_blank", "noopener,noreferrer") }] : []),
+          ...(canEdit ? [{ id: "delete", label: t("delete"), icon: Trash2, destructive: true, separatorBefore: true, onSelect: () => setConfirmDelete(true) }] : []),
         ]} />}
       >
         <div data-dtsc-record-detail className="min-w-0 space-y-4">
           <div className="flex min-w-0 flex-wrap items-center gap-2 border-b border-dtsc-border pb-3 text-xs text-dtsc-muted">
-            <StatusBadge tone={statusTone(record.status)}>{formatEnumLabel(record.status)}</StatusBadge>
-            <span>Créé le {Number.isNaN(Date.parse(record.createdAt)) ? "—" : new Intl.DateTimeFormat("fr-FR", { dateStyle: "medium", timeStyle: "short" }).format(new Date(record.createdAt))}</span>
+            <StatusBadge tone={statusTone(record.status)}>{translateInternalAdminStatus(locale, record.status)}</StatusBadge>
+            <span>{t("createdOn")} {Number.isNaN(Date.parse(record.createdAt)) ? "—" : new Intl.DateTimeFormat(locale === "en" ? "en-GB" : "fr-FR", { dateStyle: "medium", timeStyle: "short" }).format(new Date(record.createdAt))}</span>
             {record.amount != null ? <span className="font-black text-dtsc-ink">{record.amount.toFixed(2)} {record.currency || "USD"}</span> : null}
           </div>
           <dl className="grid min-w-0 gap-0 sm:grid-cols-2 lg:grid-cols-3">
-            {record.subtitle ? <div className="min-w-0 border-b border-dtsc-border/70 px-2 py-3"><dt className="text-[0.7rem] font-bold uppercase text-dtsc-muted">Domaine</dt><dd className="mt-1 break-words text-sm font-semibold text-dtsc-ink">{record.subtitle}</dd></div> : null}
+            {record.subtitle ? <div className="min-w-0 border-b border-dtsc-border/70 px-2 py-3"><dt className="text-[0.7rem] font-bold uppercase text-dtsc-muted">{t("domain")}</dt><dd className="mt-1 break-words text-sm font-semibold text-dtsc-ink">{record.subtitle}</dd></div> : null}
             {dataset.fields.filter((field) => field.type !== "hidden" && field.type !== "preview" && field.type !== "file" && Boolean(record.values?.[field.name])).map((field) => (
               <div key={field.name} className="min-w-0 border-b border-dtsc-border/70 px-2 py-3"><dt className="text-[0.7rem] font-bold uppercase text-dtsc-muted">{field.label}</dt><dd data-responsive-long-token className="mt-1 break-words text-sm font-semibold text-dtsc-ink [overflow-wrap:anywhere]">{record.values?.[field.name]}</dd></div>
             ))}
-            {record.meta.map((item, index) => <div key={`${index}-${item}`} className="min-w-0 border-b border-dtsc-border/70 px-2 py-3"><dt className="text-[0.7rem] font-bold uppercase text-dtsc-muted">Information {index + 1}</dt><dd className="mt-1 break-words text-sm font-semibold text-dtsc-ink">{item}</dd></div>)}
+            {record.meta.map((item, index) => <div key={`${index}-${item}`} className="min-w-0 border-b border-dtsc-border/70 px-2 py-3"><dt className="text-[0.7rem] font-bold uppercase text-dtsc-muted">{t("information")} {index + 1}</dt><dd className="mt-1 break-words text-sm font-semibold text-dtsc-ink">{item}</dd></div>)}
           </dl>
-          {record.notes ? <section className="border-b border-dtsc-border py-3"><h3 className="text-xs font-black uppercase text-dtsc-muted">Notes et observations</h3><p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-dtsc-ink">{record.notes}</p></section> : null}
-          {attachmentHref ? <FileAttachmentPreview href={attachmentHref} label={record.hrefLabel || "Document associé"} compact /> : null}
-          {checklistType ? <OperationalChecklistPanel objectType={checklistType} objectId={record.id} title="Tâches et résultats de progression" /> : null}
+          {record.notes ? <section className="border-b border-dtsc-border py-3"><h3 className="text-xs font-black uppercase text-dtsc-muted">{t("notesObservations")}</h3><p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-dtsc-ink">{record.notes}</p></section> : null}
+          {attachmentHref ? <FileAttachmentPreview href={attachmentHref} label={record.hrefLabel || t("associatedDocument")} compact /> : null}
+          {checklistType ? <OperationalChecklistPanel objectType={checklistType} objectId={record.id} title={t("tasksProgress")} /> : null}
           <div data-responsive-actions className="flex flex-wrap gap-2 border-t border-dtsc-border pt-3">
-            {canEdit ? <Button type="button" onClick={() => setEditOpen(true)} className="rounded-lg bg-dtsc-blue text-white"><Save className="h-4 w-4" /> Modifier</Button> : null}
-            {attachmentHref ? <a href={attachmentHref} target="_blank" rel="noreferrer" className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-dtsc-border px-3 text-xs font-black text-dtsc-blue"><Download className="h-4 w-4" /> Télécharger</a> : null}
-            {canEdit ? <Button type="button" variant="outline" onClick={() => setConfirmDelete(true)} className="rounded-lg border-red-400/50 text-red-600"><Trash2 className="h-4 w-4" /> Supprimer</Button> : null}
+            {canEdit ? <Button type="button" onClick={() => setEditOpen(true)} className="rounded-lg bg-dtsc-blue text-white"><Save className="h-4 w-4" /> {t("edit")}</Button> : null}
+            {attachmentHref ? <a href={attachmentHref} target="_blank" rel="noreferrer" className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-dtsc-border px-3 text-xs font-black text-dtsc-blue"><Download className="h-4 w-4" /> {t("download")}</a> : null}
+            {canEdit ? <Button type="button" variant="outline" onClick={() => setConfirmDelete(true)} className="rounded-lg border-red-400/50 text-red-600"><Trash2 className="h-4 w-4" /> {t("delete")}</Button> : null}
           </div>
         </div>
       </InternalFullScreenSurface>
-      <Dialog open={editOpen} title={`Modifier: ${record.title}`} description="Mettez à jour les informations de l'opération puis envoyez la modification au serveur." onClose={() => setEditOpen(false)} className="h-[92dvh] max-w-5xl">
+      <Dialog open={editOpen} title={`${t("updateRecord")}: ${record.title}`} description={t("updateDescription")} onClose={() => setEditOpen(false)} className="h-[92dvh] max-w-5xl">
         <div className="space-y-5">
           {checklistType ? (
             <OperationalChecklistPanel
               objectType={checklistType}
               objectId={record.id}
-              title="Tâches et résultats qui gouvernent la progression"
+              title={t("tasksProgress")}
             />
           ) : null}
-          <OperationForm fields={dataset.fields} defaults={{ ...(record.values || {}), status: record.status, notes: record.notes || "" }} disabled={!canEdit} onSubmit={submit} submitLabel="Enregistrer les modifications" submitIcon="save" />
+          <OperationForm fields={dataset.fields} defaults={{ ...(record.values || {}), status: record.status, notes: record.notes || "" }} disabled={!canEdit} onSubmit={submit} submitLabel={t("saveChanges")} submitIcon="save" />
         </div>
       </Dialog>
       <Dialog
         open={confirmDelete}
-        title="Supprimer cet élément"
-        description="Cette action retire l’élément du suivi opérationnel."
+        title={t("deleteRecord")}
+        description={t("deleteDescription")}
         onClose={() => setConfirmDelete(false)}
         footer={(
           <>
-            <Button type="button" variant="outline" onClick={() => setConfirmDelete(false)} className="rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-ink">Annuler</Button>
-            <Button type="button" onClick={async () => { setConfirmDelete(false); await onRemove(dataset, record); }} className="rounded-xl bg-red-600 text-white hover:bg-red-700">Supprimer</Button>
+            <Button type="button" variant="outline" onClick={() => setConfirmDelete(false)} className="rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-ink">{t("cancel")}</Button>
+            <Button type="button" onClick={async () => { setConfirmDelete(false); await onRemove(dataset, record); }} className="rounded-xl bg-red-600 text-white hover:bg-red-700">{t("delete")}</Button>
           </>
         )}
       >
-        <p className="text-sm leading-7 text-dtsc-muted">Confirmez la suppression de <span className="font-black text-dtsc-ink">{record.title}</span>. Les journaux d&apos;audit conserveront la trace de l&apos;action.</p>
+        <p className="text-sm leading-7 text-dtsc-muted">{t("deleteConfirmPrefix")} <span className="font-black text-dtsc-ink">{record.title}</span>. {t("auditPreserved")}</p>
       </Dialog>
     </>
   );
@@ -557,6 +571,7 @@ function FieldInput({
   checkboxChecked?: boolean;
   onCheckboxChange?: (checked: boolean) => void;
 }) {
+  const { t } = useAdminCopy();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [fileError, setFileError] = useState("");
@@ -574,7 +589,7 @@ function FieldInput({
     if (file.size > maxOperationFileSize) {
       event.currentTarget.value = "";
       setSelectedFile(null);
-      setFileError("Le fichier dépasse la limite autorisée de 6 Mo.");
+      setFileError(t("fileTooLarge"));
       return;
     }
     setSelectedFile(file);
@@ -584,25 +599,25 @@ function FieldInput({
   if (field.type === "hidden") return <input type="hidden" name={field.name} value={defaultValue || field.placeholder || ""} />;
 
   if (field.type === "preview") {
-    return <label className="grid min-w-0 gap-1">{label}<Input value={previewValue} readOnly disabled placeholder={field.placeholder || "Sélectionnez d'abord un collaborateur"} />{field.helperText && <span className="text-xs leading-5 text-dtsc-muted">{field.helperText}</span>}</label>;
+    return <label className="grid min-w-0 gap-1">{label}<Input value={previewValue} readOnly disabled placeholder={field.placeholder || t("chooseStaff")} />{field.helperText && <span className="text-xs leading-5 text-dtsc-muted">{field.helperText}</span>}</label>;
   }
 
   if (field.type === "file") {
     return (
       <div className="grid min-w-0 gap-2 md:col-span-2">
         {label}
-        {defaultValue && <FileAttachmentPreview href={defaultValue} label="Fichier déjà associé" />}
+        {defaultValue && <FileAttachmentPreview href={defaultValue} label={t("fileAlready")} />}
         <input type="hidden" name={field.name} value={defaultValue} />
         <input ref={fileInputRef} name={`${field.name}__file`} type="file" disabled={disabled} onChange={handleOperationFileChange} className="sr-only" accept=".pdf,.png,.jpg,.jpeg,.webp,.docx,.xlsx,.txt,application/pdf,image/png,image/jpeg,image/webp" />
         <button type="button" disabled={disabled} onClick={() => fileInputRef.current?.click()} className="flex min-h-28 w-full min-w-0 flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-cyan-300/70 bg-cyan-400/10 px-4 py-5 text-center transition hover:bg-cyan-400/15 disabled:cursor-not-allowed disabled:opacity-60">
           <UploadCloud className="h-5 w-5 text-cyan-500" />
-          <span className="text-sm font-black text-dtsc-ink">{selectedFile ? selectedFile.name : "Sélectionner un fichier depuis l'appareil"}</span>
-          <span className="text-xs leading-5 text-dtsc-muted">PDF, image, Word, Excel ou texte. Taille maximale: 6 Mo.</span>
+          <span className="text-sm font-black text-dtsc-ink">{selectedFile ? selectedFile.name : t("selectFile")}</span>
+          <span className="text-xs leading-5 text-dtsc-muted">{t("fileTypes")}</span>
         </button>
         {selectedFile && (
           <div className="flex min-w-0 items-center justify-between gap-3 border-y border-dtsc-border px-1 py-2">
             <span className="flex min-w-0 items-center gap-2 text-sm font-bold text-dtsc-ink"><FileText className="h-4 w-4 shrink-0 text-cyan-500" /><span className="truncate">{selectedFile.name}</span><span className="shrink-0 text-xs text-dtsc-muted">{formatFileSize(selectedFile.size)}</span></span>
-            <Button type="button" size="icon" variant="ghost" onClick={() => { setSelectedFile(null); setFileError(""); if (fileInputRef.current) fileInputRef.current.value = ""; }} className="h-8 w-8 rounded-xl text-dtsc-muted hover:text-red-500" aria-label={`Retirer ${selectedFile.name}`}><X className="h-4 w-4" /></Button>
+            <Button type="button" size="icon" variant="ghost" onClick={() => { setSelectedFile(null); setFileError(""); if (fileInputRef.current) fileInputRef.current.value = ""; }} className="h-8 w-8 rounded-xl text-dtsc-muted hover:text-red-500" aria-label={`${t("removeFile")} ${selectedFile.name}`}><X className="h-4 w-4" /></Button>
           </div>
         )}
         {fileError && <span className="text-xs font-bold text-red-500">{fileError}</span>}
@@ -639,7 +654,7 @@ function FieldInput({
                 </label>
               ))}
             </div>
-          ) : <p className="px-2 py-2 text-sm font-semibold text-dtsc-muted">Aucun collaborateur disponible.</p>}
+          ) : <p className="px-2 py-2 text-sm font-semibold text-dtsc-muted">{t("noStaff")}</p>}
         </div>
         {field.helperText && <span className="text-xs leading-5 text-dtsc-muted">{field.helperText}</span>}
       </div>
@@ -651,7 +666,7 @@ function FieldInput({
       <label className="grid min-w-0 gap-1">
         {label}
         <select name={field.name} required={field.required} disabled={disabled || field.readOnly} defaultValue={defaultValue} className={className} onChange={(event) => onSelectPreview(field.name, event.currentTarget.selectedOptions[0]?.dataset.email || "")}>
-          {!field.required && <option value="">Non renseigné</option>}
+          {!field.required && <option value="">{t("notProvided")}</option>}
           {field.options?.map((option) => <option key={option.value} value={option.value} data-email={option.email || ""}>{option.label}</option>)}
         </select>
         {field.helperText && <span className="text-xs leading-5 text-dtsc-muted">{field.helperText}</span>}
@@ -663,6 +678,7 @@ function FieldInput({
 }
 
 function FileAttachmentPreview({ href, label, compact = false }: { href: string; label: string; compact?: boolean }) {
+  const { t } = useAdminCopy();
   const [previewOpen, setPreviewOpen] = useState(false);
   const lowerHref = href.toLowerCase();
   const canPreviewImage = /\.(png|jpe?g|webp)(\?|$)/i.test(lowerHref);
@@ -672,15 +688,15 @@ function FileAttachmentPreview({ href, label, compact = false }: { href: string;
       <div className="flex flex-wrap items-center justify-between gap-3">
         <span className="flex min-w-0 items-center gap-2 text-sm font-bold text-dtsc-ink"><FileText className="h-4 w-4 shrink-0 text-cyan-500" /><span className="truncate">{label}</span></span>
         <div className="flex flex-wrap gap-2">
-          {(canPreviewImage || canPreviewPdf) && <Button type="button" size="sm" variant="outline" onClick={() => setPreviewOpen(true)} className="rounded-xl border-dtsc-border bg-dtsc-page text-dtsc-blue"><Eye className="h-4 w-4" />Aperçu</Button>}
-          <a href={href} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-xl bg-dtsc-blue px-3 py-2 text-xs font-black text-white"><Download className="h-4 w-4" />Télécharger</a>
+          {(canPreviewImage || canPreviewPdf) && <Button type="button" size="sm" variant="outline" onClick={() => setPreviewOpen(true)} className="rounded-xl border-dtsc-border bg-dtsc-page text-dtsc-blue"><Eye className="h-4 w-4" />{t("preview")}</Button>}
+          <a href={href} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-xl bg-dtsc-blue px-3 py-2 text-xs font-black text-white"><Download className="h-4 w-4" />{t("download")}</a>
         </div>
       </div>
       <Dialog open={previewOpen} title={`Aperçu: ${label}`} onClose={() => setPreviewOpen(false)} className="max-w-5xl">
         {canPreviewImage ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={href} alt={label} className="mx-auto max-h-[70vh] max-w-full rounded-2xl border border-dtsc-border object-contain" />
-        ) : canPreviewPdf ? <iframe src={href} title={label} className="h-[70vh] w-full rounded-2xl border border-dtsc-border bg-white" /> : <p className="text-sm text-dtsc-muted">Aperçu non disponible pour ce type de fichier. Utilisez le téléchargement.</p>}
+        ) : canPreviewPdf ? <iframe src={href} title={label} className="h-[70vh] w-full rounded-2xl border border-dtsc-border bg-white" /> : <p className="text-sm text-dtsc-muted">{t("previewUnavailable")}</p>}
       </Dialog>
     </div>
   );
@@ -691,7 +707,7 @@ function formatFileSize(size: number) {
   return `${(size / (1024 * 1024)).toFixed(1)} Mo`;
 }
 
-async function buildPayloadWithUploads(form: HTMLFormElement) {
+async function buildPayloadWithUploads(form: HTMLFormElement, uploadErrorMessage: string) {
   const formData = new FormData(form);
   const payload: Record<string, FormDataEntryValue> = {};
   const uploadEntries = Array.from(formData.entries()).filter(([key, value]) => key.endsWith("__file") && value instanceof File && value.size > 0);
@@ -708,7 +724,7 @@ async function buildPayloadWithUploads(form: HTMLFormElement) {
     fileData.set("file", value);
     const response = await fetch("/api/admin/operation-files", { method: "POST", body: fileData });
     const body = (await response.json().catch(() => null)) as { url?: string; error?: string } | null;
-    if (!response.ok || !body?.url) throw new Error(body?.error || "Import de la pièce justificative impossible.");
+    if (!response.ok || !body?.url) throw new Error(uploadErrorMessage);
     payload[targetName] = body.url;
   }
   return payload;
