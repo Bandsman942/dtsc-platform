@@ -10,6 +10,8 @@ Ce document est le point d’entrée technique de DTSC Platform. Les règles ex�
 
 > **DTSC Payments — PAY-0 (#370/#371, 01/11/2026) :** [contrat d'architecture et de cutover](DTSC_PAYMENTS_ARCHITECTURE.md). Cartographie vérifiée des paiements SaaS (`Payment`/`Invoice`), de la trésorerie DTSC (`HrcfoExpense`/`FinancialAccount`) et des paiements ERP clients (`EnterprisePayment` et allocations). Contrôle documentaire : `pnpm qa:dtsc-payments-contract`. Cette étape ne change aucun paiement en production ; PAY-1 à PAY-9 restent à livrer et à valider.
 
+> **Hotfix P0 Console Chrome (#1022, 03/11/2026, avant fusion) :** [diagnostic et recette propriétaire](HOTFIX_1022_CONSOLE_AUTO_RELOAD.md). Reprise PWA sans refresh inutile, expiration/navigation inter-produits dédupliquées, diagnostics opt-in sans données personnelles. OWNER_E2E obligatoire ; Production uniquement depuis `main`.
+
 > **Programme INFRA-MC (#891–#899, 21/10/2026) :** audit et ADR dans [`INFRA_MC_ARCHITECTURE_AUDIT.md`](INFRA_MC_ARCHITECTURE_AUDIT.md). Secours Vercel + autre cloud en **active-passive proposé, non approuvé**, sans activation ni certification. Production Vercel depuis `main` inchangée ; objectifs RPO/RTO, coût, régions et approbation à compléter.
 
 La reprise durable des workflows (#813), les preuves d’effet, les états incertains

@@ -10,11 +10,13 @@ import {
   SESSION_HEARTBEAT_THROTTLE_MS,
   SESSION_WARNING_MIN_SECONDS,
 } from "@/lib/session-config";
+import { navigateToSessionExpired } from "@/lib/client/session-expired-navigation";
 
 const CHANNEL_NAME = "dtsc-session";
 const STORAGE_EVENT_KEY = "dtsc-session-sync";
 const LAST_ACTIVITY_KEY = "dtsc-session-last-activity";
 const ACTIVITY_BROADCAST_THROTTLE_MS = 5_000;
+const RESUME_HEARTBEAT_MIN_INTERVAL_MS = 3_000;
 
 type SessionHeartbeatResponse = {
   ok: true;
@@ -51,6 +53,7 @@ export function SessionTimeoutGuard() {
   const lastActivityRef = useRef(Date.now());
   const lastActivityBroadcastRef = useRef(0);
   const lastHeartbeatRef = useRef(0);
+  const lastResumeHeartbeatRef = useRef(0);
   const expiresAtRef = useRef(0);
   const absoluteExpiresAtRef = useRef<number | null>(null);
   const idleTimeoutMinutesRef = useRef<number>(SESSION_DEFAULT_IDLE_TIMEOUT_MINUTES);
@@ -73,11 +76,11 @@ export function SessionTimeoutGuard() {
     expiredRef.current = true;
     setShowWarning(false);
     publish({ type: "logout", at: Date.now() });
-    router.push("/session-expired");
-    router.refresh();
+    navigateToSessionExpired(router, "heartbeat-session-expired");
   }, [publish, router]);
 
   const applySession = useCallback((body: SessionHeartbeatResponse, broadcast = true) => {
+    if (expiredRef.current) return;
     const expiresAt = new Date(body.expiresAt).getTime();
     const absoluteExpiresAt = body.absoluteExpiresAt ? new Date(body.absoluteExpiresAt).getTime() : null;
     if (!Number.isFinite(expiresAt)) return;
@@ -100,6 +103,7 @@ export function SessionTimeoutGuard() {
   }, [publish]);
 
   const heartbeat = useCallback(async (force = false) => {
+    if (expiredRef.current) return false;
     const now = Date.now();
     if (!force && now - lastHeartbeatRef.current < SESSION_HEARTBEAT_THROTTLE_MS) {
       return true;
@@ -173,6 +177,7 @@ export function SessionTimeoutGuard() {
         return;
       }
       if (message.type === "session") {
+        if (expiredRef.current) return;
         expiresAtRef.current = Math.max(expiresAtRef.current, message.expiresAt);
         absoluteExpiresAtRef.current = message.absoluteExpiresAt;
         idleTimeoutMinutesRef.current = message.idleTimeoutMinutes;
@@ -182,10 +187,10 @@ export function SessionTimeoutGuard() {
         return;
       }
       if (message.type === "logout") {
+        if (expiredRef.current) return;
         expiredRef.current = true;
         setShowWarning(false);
-        router.push("/session-expired");
-        router.refresh();
+        navigateToSessionExpired(router, "session-sync-logout");
       }
     };
 
@@ -212,13 +217,15 @@ export function SessionTimeoutGuard() {
     events.forEach((eventName) => window.addEventListener(eventName, registerActivity, { passive: true }));
 
     const verifyOnResume = () => {
-      if (document.visibilityState === "visible") {
-        lastActivityRef.current = Math.max(lastActivityRef.current, readStoredActivity());
-        void heartbeat(true);
-      }
+      if (document.visibilityState !== "visible" || expiredRef.current) return;
+      const now = Date.now();
+      if (now - lastResumeHeartbeatRef.current < RESUME_HEARTBEAT_MIN_INTERVAL_MS) return;
+      lastResumeHeartbeatRef.current = now;
+      lastActivityRef.current = Math.max(lastActivityRef.current, readStoredActivity());
+      void heartbeat(true);
     };
-    const onFocus = () => void heartbeat(true);
-    const onPageShow = () => void heartbeat(true);
+    const onFocus = () => verifyOnResume();
+    const onPageShow = () => verifyOnResume();
     document.addEventListener("visibilitychange", verifyOnResume);
     window.addEventListener("focus", onFocus);
     window.addEventListener("pageshow", onPageShow);

@@ -187,7 +187,7 @@ export async function AppShell({
     <LocaleProvider locale={user.locale}>
       <div style={enterpriseBrandStyle} className="min-h-screen bg-dtsc-page text-dtsc-ink dtsc-mobile-mesh">
         <SessionTimeoutGuard />
-        <AppResumeSync pushEnabled={Boolean(user.pushNotificationsEnabled)} />
+        <AppResumeSync pushEnabled={Boolean(user.pushNotificationsEnabled)} initialUnreadCount={unreadNotifications} />
         <PrivateMobileChromeController />
         <GlobalCallToast />
         {organizationContext && activeOrganizationId && enterpriseShell.modules.length ? (
