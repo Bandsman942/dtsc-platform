@@ -30,6 +30,10 @@ for (const [, sourceName, searchFields] of registered) {
   }
 }
 for (const section of ["hr-cfo", "sco", "coo", "ceo", "mpo", "cto", "legal"]) assert.ok(service.includes(`${section}: {`) || service.includes(`"${section}": {`));
+for (const amountField of ["openingBalance", "currentBalance", "spentAmount", "grossAmount", "netAmount"]) {
+  assert.ok(service.includes(`"${amountField}"`), `Exact numeric amount search must cover ${amountField}`);
+}
+assert.match(service, /predicates\.push\(\{ \[field\]: numeric \}\)/);
 
 for (const requirement of [
   "requireAdminBlockAccess", "isInternalRegisterSection", "isAllowedInternalRegister", "rateLimit", "querySchema.safeParse", "Cache-Control",

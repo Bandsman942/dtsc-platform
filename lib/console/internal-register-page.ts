@@ -22,6 +22,7 @@ type Reader = {
 type RegisterSpec = {
   source: { findMany: unknown; count: unknown };
   search: readonly string[];
+  amountFields?: readonly string[];
   include?: Record<string, unknown>;
 };
 
@@ -29,12 +30,12 @@ type RegisterSpec = {
 const registers = {
   "hr-cfo": {
     departments: { source: prisma.department, search: ["name", "description"] },
-    accounts: { source: prisma.financialAccount, search: ["name", "accountType", "currency", "description"] },
+    accounts: { source: prisma.financialAccount, search: ["name", "accountType", "currency", "description"], amountFields: ["openingBalance", "currentBalance"] },
     positions: { source: prisma.dtscPosition, search: ["title", "code", "departmentName", "description"] },
     employees: { source: prisma.hrcfoEmployee, search: ["fullName", "email", "department", "jobTitle", "notes"] },
-    budgets: { source: prisma.hrcfoBudget, search: ["name", "ownerDepartment", "notes"] },
-    transactions: { source: prisma.hrcfoExpense, search: ["title", "requesterName", "category", "project", "notes"], include: { account: true, department: true, budget: true, invoice: true } },
-    payrolls: { source: prisma.hrcfoPayroll, search: ["notes", "paymentReference"], include: { employee: true, account: true, budget: true } },
+    budgets: { source: prisma.hrcfoBudget, search: ["name", "ownerDepartment", "notes"], amountFields: ["amount", "spentAmount"] },
+    transactions: { source: prisma.hrcfoExpense, search: ["title", "requesterName", "category", "project", "sourceId", "paymentMethod", "notes"], amountFields: ["amount"], include: { account: true, department: true, budget: true, invoice: true } },
+    payrolls: { source: prisma.hrcfoPayroll, search: ["notes", "paymentReference"], amountFields: ["grossAmount", "netAmount"], include: { employee: true, account: true, budget: true } },
   },
   sco: {
     materialItems: { source: prisma.materialItem, search: ["name", "sku", "category", "location", "description"] },
@@ -127,7 +128,16 @@ export async function getInternalRegisterPage({ section, datasetId, page, pageSi
   const spec = (registers[section] as Record<string, RegisterSpec>)[datasetId];
   if (!spec) throw new Error("UNKNOWN_REGISTER");
   const baseWhere: Record<string, unknown> = {};
-  if (search) baseWhere.OR = ["id", ...spec.search].map((field) => ({ [field]: { contains: search, mode: "insensitive" } }));
+  if (search) {
+    const predicates: Record<string, unknown>[] = ["id", ...spec.search].map((field) => ({ [field]: { contains: search, mode: "insensitive" } }));
+    if (/^-?\d+(?:[.,]\d{1,2})?$/.test(search)) {
+      const numeric = Number(search.replace(",", "."));
+      if (Number.isFinite(numeric) && Math.abs(numeric) <= 10_000_000_000) {
+        for (const field of spec.amountFields || []) predicates.push({ [field]: numeric });
+      }
+    }
+    baseWhere.OR = predicates;
+  }
   if (from || to) {
     baseWhere.createdAt = {
       ...(from ? { gte: new Date(`${from}T00:00:00+01:00`) } : {}),

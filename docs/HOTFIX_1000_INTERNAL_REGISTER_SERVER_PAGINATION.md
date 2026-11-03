@@ -5,7 +5,7 @@
 - Nouveau point de lecture `GET /api/admin/internal-registers/{section}/{datasetId}` pour les 35 registres des sections HR&CFO, SCO, COO, CEO, MPO, CTO et Juridique/LA.
 - Liste blanche explicite des modèles et des colonnes de recherche ; authentification interne DTSC, permission du bloc administratif et limitation de débit par utilisateur.
 - Filtres composables `search` (120 caractères maximum), `status`, `from`, `to` (dates de création inclusives, fuseau Kinshasa), `page` et `pageSize` (12 par défaut, 25 maximum).
-- Recherche et comptages réalisés dans PostgreSQL avant pagination ; compte exact du filtre courant, répartition exacte des statuts dans le contexte recherche + dates, ordre déterministe `(createdAt DESC, id DESC)`.
+- Recherche et comptages réalisés dans PostgreSQL avant pagination (texte insensible à la casse et montants numériques exacts des registres financiers) ; compte exact du filtre courant, répartition exacte des statuts dans le contexte recherche + dates, ordre déterministe `(createdAt DESC, id DESC)`.
 - Pages client récupérées au fil de l'eau. Réponses obsolètes annulées, recherche temporisée, affichage de chargement/erreur et nouvel appel après mutation.
 - Les métriques de la page d'accueil des départements sont explicitement qualifiées d'« aperçu » car leur calcul historique s'appuie encore sur les premiers éléments chargés. **Ne pas les utiliser comme indicateurs financiers certifiés.**
 
