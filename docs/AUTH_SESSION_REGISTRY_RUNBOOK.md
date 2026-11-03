@@ -8,6 +8,7 @@ Statut : **implémentation initiale en branche**, non livrée en Production.
 
 - Toute nouvelle connexion enregistre une session avant émission du cookie.
 - `getSession()` contrôle signature, expiration du cookie et statut de la session en base. Une session révoquée échoue fermée.
+- Hotfix P0 #1026 : même si le cookie reste signé et contient `mfaVerifiedAt`, le middleware ne redirige plus automatiquement Account → Console ; seules les pages Account, après `getSession()`, peuvent le faire. La boucle Console → Account → Console sur session révoquée est ainsi interrompue. Un signal `logout` émis par un ancien onglet doit être confirmé par `GET /api/auth/heartbeat` (`401`) avant de déconnecter une nouvelle session active. Voir [recette Chrome mobile](HOTFIX_1026_CHROME_MFA_SESSION_LOOP.md).
 - Changement d'espace, renouvellement de session et heartbeat conservent le `sessionId` ; le middleware conserve l'identifiant dans la signature renouvelée.
 - Déconnexion : la session correspondante est révoquée côté serveur, puis le cookie est effacé.
 - `getCurrentUser(sessionOverride)` revalide toujours le cookie courant via `getSession()` : un snapshot de session transmis par un appelant ne constitue jamais un contournement de la révocation ; une identité discordante est refusée.

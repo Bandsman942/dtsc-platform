@@ -12,6 +12,8 @@ Ce document est le point d’entrée technique de DTSC Platform. Les règles ex�
 
 > **Hotfix P0 Console Chrome (#1022, 03/11/2026, avant fusion) :** [diagnostic et recette propriétaire](HOTFIX_1022_CONSOLE_AUTO_RELOAD.md). Reprise PWA sans refresh inutile, expiration/navigation inter-produits dédupliquées, diagnostics opt-in sans données personnelles. OWNER_E2E obligatoire ; Production uniquement depuis `main`.
 
+> **Hotfix P0 MFA/Chrome (#1026, 03/11/2026, avant fusion) :** [frontière de confiance et E2E Chrome mobile](HOTFIX_1026_CHROME_MFA_SESSION_LOOP.md). Le cookie signé sert au routage Edge, tandis que seule la validation serveur `getSession()` autorise Account à renvoyer vers Console ; les déconnexions inter-onglets sont revalidées avant navigation. Aucun changement MFA/RBAC ni Production sans OWNER_E2E.
+
 > **Programme INFRA-MC (#891–#899, 21/10/2026) :** audit et ADR dans [`INFRA_MC_ARCHITECTURE_AUDIT.md`](INFRA_MC_ARCHITECTURE_AUDIT.md). Secours Vercel + autre cloud en **active-passive proposé, non approuvé**, sans activation ni certification. Production Vercel depuis `main` inchangée ; objectifs RPO/RTO, coût, régions et approbation à compléter.
 
 La reprise durable des workflows (#813), les preuves d’effet, les états incertains
@@ -55,6 +57,8 @@ La session identifie l’utilisateur, le rôle global, le contexte actif et l’
 - `GLOBAL_CLIENT` : compte client global.
 
 Une URL, un body ou une clé étrangère fournie par le navigateur n’est jamais une preuve d’accès.
+
+Un cookie HTTP-only correctement signé n'est pas non plus une preuve suffisante de session toujours active après révocation. Les pages de connexion Account qui veulent rediriger un utilisateur déjà authentifié doivent obtenir une session courante de `getSession()`, en respectant `reason=session-expired`. Le middleware ne déduit pas cette autorisation des seules claims Edge (hotfix #1026).
 
 ## 5. Isolation multi-tenant
 

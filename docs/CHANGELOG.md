@@ -1,3 +1,10 @@
+## 2026-11-03 — Hotfix P0 #1026 : boucle MFA Console/Account sous Chrome mobile (pré-release)
+
+- Suppression de la redirection automatique Account → Console fondée uniquement sur un cookie signé `mfaVerifiedAt` potentiellement révoqué : `getSession()` doit confirmer registre et MFA avant redirection.
+- `GET /api/auth/heartbeat` en lecture seule et sans cache ; vérification serveur et déduplication des notifications de déconnexion inter-onglets, sans navigation forcée lors d'erreurs réseau.
+- Respect de `next` contrôlé par le résolveur existant, `reason=session-expired`, RBAC et exigences MFA. QA comportementale #1026 et non-régression #1022.
+- **OWNER_E2E #1026 NOT_EXECUTED** : aucune fusion, Preview ni livraison Production. Voir [HOTFIX_1026_CHROME_MFA_SESSION_LOOP.md](HOTFIX_1026_CHROME_MFA_SESSION_LOOP.md).
+
 ## 2026-11-03 — Hotfix P0 #1022 : boucle de rechargement de la Console Chrome (pré-release)
 
 - Suppression du rechargement complet forcé à chaque changement de contrôleur Service Worker ; mises à jour PWA vérifiées à fréquence bornée sans interrompre le travail.
