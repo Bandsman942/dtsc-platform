@@ -216,7 +216,13 @@ Les messages collaborateurs, appels de groupe, support, invitations et autres mo
 - retour online ;
 - message du Service Worker après push.
 
-Le `SessionTimeoutGuard` reste responsable de la revalidation de session au retour. `AppResumeSync` réconcilie l'abonnement courant, récupère le compteur non lu via une route authentifiée, traite un `401` comme une expiration, actualise le badge si l'API existe et fait un refresh RSC ciblé.
+Le `SessionTimeoutGuard` reste responsable de la revalidation de session au retour. Depuis #1022, ses événements `focus`, `pageshow` et `visibilitychange` partagent une fenêtre de 3 secondes, sans empêcher le renouvellement explicite « Rester connecté ».
+
+`AppResumeSync` réconcilie l'abonnement courant, récupère le compteur non lu via une route authentifiée et actualise le badge si l'API existe. Il ne fait un `router.refresh()` **que si le compteur diffère de la valeur rendue côté serveur**. Les événements de reprise/online sont regroupés sur 15 secondes, les Push sur 1 seconde. Sur 401, la navigation `/session-expired` est dédupliquée entre composants sans refresh concurrent. La page d'expiration conserve le produit d'origine comme destination après reconnexion.
+
+`PWARegister` ne recharge pas le document lors de `controllerchange` : un changement de Service Worker ne doit jamais effacer une saisie en cours. Les vérifications `registration.update()` des événements de premier plan sont limitées à une toutes les 60 secondes, sans requêtes concurrentes. La prochaine navigation/recharge volontaire récupère la version disponible.
+
+Pour le diagnostic opt-in Chrome (timestamps et catégories uniquement, sans données privées) et la matrice E2E, voir [HOTFIX_1022_CONSOLE_AUTO_RELOAD.md](HOTFIX_1022_CONSOLE_AUTO_RELOAD.md). La QA dédiée `pnpm qa:hotfix-1022-console-auto-reload` est incluse dans les contrôles de session.
 
 ## LiveKit / appels
 

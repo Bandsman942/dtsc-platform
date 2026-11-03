@@ -122,7 +122,9 @@ function applyHostRouting(request: NextRequest, session: Awaited<ReturnType<type
       return redirectToHost(request, "account", "/auth/sign-in");
     }
     if (isPathMatch(pathname, authRoutes)) {
-      if (session?.mfaVerifiedAt) {
+      // A signed cookie can outlive a revoked server-side session. Respect the
+      // explicit expired-session sign-in flow instead of bouncing back to Console.
+      if (session?.mfaVerifiedAt && request.nextUrl.searchParams.get("reason") !== "session-expired") {
         return NextResponse.redirect(new URL(resolvePostLoginRedirect({
           next: request.nextUrl.searchParams.get("next"),
           context: session.activeContext,
@@ -201,7 +203,8 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL(getDashboardUrl(), request.url));
   }
 
-  if ((pathname === "/auth/sign-in" || pathname === "/auth/sign-up") && session?.mfaVerifiedAt) {
+  if ((pathname === "/auth/sign-in" || pathname === "/auth/sign-up") &&
+      session?.mfaVerifiedAt && request.nextUrl.searchParams.get("reason") !== "session-expired") {
     return NextResponse.redirect(new URL(resolvePostLoginRedirect({
       next: request.nextUrl.searchParams.get("next"),
       context: session.activeContext,

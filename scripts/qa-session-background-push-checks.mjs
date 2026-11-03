@@ -106,3 +106,4 @@ if (failures.length) {
   process.exit(1);
 }
 console.log("\nQA session/Web Push: 38 contrôles source-level passent.");
+await import("./qa-hotfix-1022-console-auto-reload.mjs");

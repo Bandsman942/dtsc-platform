@@ -1,3 +1,11 @@
+## 2026-11-03 — Hotfix P0 #1022 : boucle de rechargement de la Console Chrome (pré-release)
+
+- Suppression du rechargement complet forcé à chaque changement de contrôleur Service Worker ; mises à jour PWA vérifiées à fréquence bornée sans interrompre le travail.
+- La reprise Chrome n'actualise le rendu serveur que si le compteur non lu change, avec regroupement des événements focus/visibilité/pageshow/online/Push.
+- Navigation d'expiration idempotente sans refresh supplémentaire ; reconnexion ciblée sur Console/App/Support et respect de `reason=session-expired` si cookie signé et session serveur divergent.
+- Diagnostic opt-in sans donnée personnelle ; 15 assertions QA connectées aux tests de session/régression. `/session-expired` était déjà exclu du matcher middleware, qui reste inchangé.
+- **OWNER_E2E #1022 NOT_EXECUTED** : PR/CI à vérifier, aucune fusion ni production. Voir [HOTFIX_1022_CONSOLE_AUTO_RELOAD.md](HOTFIX_1022_CONSOLE_AUTO_RELOAD.md).
+
 ## 2026-10-28 — Hotfix P0 #917 : révalidation Finance/consentement avant cashback omnicanal (pré-release)
 
 - Retrait d'audience ou d'attribution après la commande : refus de crédit malgré la preuve de livraison/paiement; entitlements, conditions et quotas revérifiés au moment de l'EARN.

@@ -20,6 +20,7 @@
     "qa:console-saas-workspaces": "node scripts/qa-console-saas-workspaces.mjs",
     "qa:dtsc-payments-contract": "node scripts/qa-dtsc-payments-contract.mjs",
     "qa:hotfix-1001-renewal-journey": "node scripts/qa-hotfix-1001-renewal-journey.mjs",
+    "qa:hotfix-1022-console-auto-reload": "node scripts/qa-hotfix-1022-console-auto-reload.mjs",
     "qa:console-internal-workspaces": "node scripts/qa-console-internal-workspaces.mjs",
     "qa:console-workspace-shell": "node scripts/qa-console-workspace-shell.mjs",
     "qa:standard-module-registry": "node scripts/audit-standard-module-registry.mjs",
