@@ -10,6 +10,9 @@ const diagnostics = read("lib/client/refresh-diagnostics.ts");
 const expiredPage = read("app/session-expired/page.tsx");
 const expiredCard = read("components/auth/session-expired-card.tsx");
 const middleware = read("middleware.ts");
+const accountLanding = read("lib/auth/account-landing-redirect.ts");
+const accountSignIn = read("app/auth/sign-in/page.tsx");
+const accountSignUp = read("app/auth/sign-up/page.tsx");
 const pushQa = read("scripts/qa-session-background-push-checks.mjs");
 const pwaRegister = read("components/pwa/pwa-register.tsx");
 
@@ -50,7 +53,11 @@ check("reconnexion rétablit la bonne destination produit", expiredPage.includes
   expiredPage.includes('hostType === "support"') &&
   expiredPage.includes('getSupportUrl("/support")') &&
   expiredPage.includes("getSignInUrl(returnUrl)"));
-check("compte respecte reason=session-expired malgré le cookie signé", (middleware.match(/request\.nextUrl\.searchParams\.get\("reason"\) !== "session-expired"/g) || []).length === 2);
+check("compte valide la session serveur avant toute redirection MFA et respecte reason=session-expired",
+  !middleware.includes("session?.mfaVerifiedAt") &&
+  accountLanding.includes('searchParams.reason === "session-expired"') &&
+  accountSignIn.includes("resolveValidatedAccountLandingRedirect(session, params)") &&
+  accountSignUp.includes("resolveValidatedAccountLandingRedirect(session, params)"));
 check("la route session-expired reste hors matcher, sans nouvelle redirection", !middleware.slice(middleware.indexOf("export const config =")).includes('"/session-expired"'));
 check("le compte à rebours déclenche une seule navigation", expiredCard.includes("navigationStartedRef.current = true") &&
   expiredCard.includes("window.location.replace(reconnectUrl)") &&
