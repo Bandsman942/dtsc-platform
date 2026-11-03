@@ -129,7 +129,7 @@ export async function getInternalRegisterPage({ section, datasetId, page, pageSi
   if (!spec) throw new Error("UNKNOWN_REGISTER");
   const baseWhere: Record<string, unknown> = {};
   if (search) {
-    const predicates: Record<string, unknown>[] = ["id", ...spec.search].map((field) => ({ [field]: { contains: search, mode: "insensitive" } }));
+    const predicates: Record<string, unknown>[] = ["id", "status", ...spec.search].map((field) => ({ [field]: { contains: search, mode: "insensitive" } }));
     if (/^-?\d+(?:[.,]\d{1,2})?$/.test(search)) {
       const numeric = Number(search.replace(",", "."));
       if (Number.isFinite(numeric) && Math.abs(numeric) <= 10_000_000_000) {
