@@ -34,7 +34,7 @@ async function requestBrowser(url: string, payload?: Record<string, string>) {
   return body;
 }
 
-export function KnownBrowsersSettings({ locale = "fr" }: { locale?: string }) {
+export function KnownBrowsersSettings({ locale = "fr", embedded = false }: { locale?: string; embedded?: boolean }) {
   const t = locale === "en" ? copy.en : copy.fr;
   const [data, setData] = useState<ResponseBody | null>(null);
   const [password, setPassword] = useState("");
@@ -58,7 +58,7 @@ export function KnownBrowsersSettings({ locale = "fr" }: { locale?: string }) {
   }
   const current = data?.devices.find((x) => x.id === data.currentId);
   return (
-    <section className="min-w-0 space-y-4 rounded-2xl border border-dtsc-border bg-dtsc-surface p-4 sm:p-6">
+    <section className={embedded ? "min-w-0 space-y-3" : "min-w-0 space-y-4 rounded-2xl border border-dtsc-border bg-dtsc-surface p-4 sm:p-6"}>
       <header>
         <h3 className="flex items-center gap-2 text-base font-bold text-dtsc-ink"><ShieldCheck className="h-5 w-5 text-dtsc-blue" />{t.title}</h3>
         <p className="mt-2 text-sm leading-6 text-dtsc-muted">{t.about}</p>

@@ -105,7 +105,9 @@ function stateLabel(state: PushCapabilityState, labels: (typeof copy)["fr"] | (t
 export function SessionAndPushSettings({
   initialIdleTimeoutMinutes,
   initialPushNotificationContentMode,
+  embedded = false,
 }: {
+  embedded?: boolean;
   initialIdleTimeoutMinutes: number;
   initialPushNotificationContentMode: PushNotificationContentMode;
 }) {
@@ -244,12 +246,12 @@ export function SessionAndPushSettings({
   ];
 
   return (
-    <section className="min-w-0 border-y border-dtsc-border bg-dtsc-surface px-4 py-5 sm:rounded-2xl sm:border sm:p-6">
+    <section className={embedded ? "min-w-0 space-y-3" : "min-w-0 border-y border-dtsc-border bg-dtsc-surface px-4 py-5 sm:rounded-2xl sm:border sm:p-6"}>
       <div className="flex min-w-0 items-start gap-3">
         <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-cyan-400/12 text-cyan-600"><ShieldCheck className="h-5 w-5" /></span>
         <div className="min-w-0">
           <p className="text-xs font-black uppercase tracking-[0.14em] text-cyan-600">{labels.eyebrow}</p>
-          <h2 className="mt-1 text-xl font-black text-dtsc-ink">{labels.title}</h2>
+          <h2 className={embedded ? "mt-0.5 text-base font-bold text-dtsc-ink" : "mt-1 text-xl font-black text-dtsc-ink"}>{labels.title}</h2>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-dtsc-muted">{labels.description}</p>
         </div>
       </div>

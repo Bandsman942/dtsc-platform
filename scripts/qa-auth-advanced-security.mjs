@@ -13,7 +13,8 @@ const schema=read("prisma/auth-known-browser.prisma"),
  signin=read("app/api/auth/sign-in/route.ts"),
  challenge=read("app/api/auth/mfa/challenge/route.ts"),
  confirm=read("app/api/account/security/totp/confirm/route.ts"),
- settings=read("app/settings/page.tsx");
+ settings=read("app/settings/page.tsx"),
+ securityWorkspace=read("components/settings/security-settings-workspace.tsx");
 
 for(const token of ["tokenHash","trustedAt","trustedUntil","revokedAt"])assert.ok(schema.includes(token));
 assert.ok(migration.includes('CREATE TABLE "AuthKnownBrowser"'),"New device record migration");
@@ -35,7 +36,8 @@ assert.ok(browsers.includes("userId: session.userId"),"Cannot revoke other users
 assert.ok(browsers.includes("writeAuditLog"),"Trust and revoke audited");
 assert.ok(ui.includes('action: "trust"'),"Consent UI is real");
 assert.ok(ui.includes('action: "revoke"'),"Revoke UI is real");
-assert.ok(settings.includes("<KnownBrowsersSettings"),"UI integrated");
+assert.ok(settings.includes("<SecuritySettingsWorkspace"),"Consolidated security UI integrated");
+assert.ok(securityWorkspace.includes("<KnownBrowsersSettings") && securityWorkspace.includes("embedded"),"Recognized browsers remain manageable from security workspace");
 assert.ok(stepup.includes("timingSafeEqual"),"Step-up signature compare timing-safe");
 assert.ok(stepup.includes("sessionDigest(token)"),"Step-up bound to current session cookie");
 assert.ok(stepup.includes('sameSite: "strict"'),"Step-up cookie CSRF protected");

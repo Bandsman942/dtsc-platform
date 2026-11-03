@@ -1,11 +1,8 @@
 import Link from "next/link";
 import { AppShell } from "@/components/layout/app-shell";
 import legacySettingsStyles from "@/components/settings/legacy-settings-panel.module.css";
-import { SessionAndPushSettings } from "@/components/settings/session-and-push-settings";
-import { TotpSecuritySettings } from "@/components/settings/totp-security-settings";
-import { ActiveSessionsSettings } from "@/components/settings/active-sessions-settings";
-import { KnownBrowsersSettings } from "@/components/settings/known-browsers-settings";
 import { SettingsPanel } from "@/components/settings/settings-panel";
+import { SecuritySettingsWorkspace } from "@/components/settings/security-settings-workspace";
 import { Button } from "@/components/ui/button";
 import { BusinessList, BusinessListItem } from "@/components/workspace/business-list";
 import { ModuleMetric, ModuleMetrics } from "@/components/workspace/module-metrics";
@@ -68,21 +65,29 @@ export default async function SettingsPage() {
           <ModuleMetric label={copy.aiModels} value={models.length} hint={copy.availableModels} />
         </ModuleMetrics>
         <ModuleContent>
-          <ModuleSection title={copy.currentSession} description={copy.currentSessionDescription}>
-            <BusinessList ariaLabel={copy.currentSession}>
-              <BusinessListItem title={copy.accountPreferences} description={user.email} status={<StatusBadge tone="success">{copy.activeSession}</StatusBadge>} />
-              <BusinessListItem title={copy.activeSpace} description={`${formatEnumLabelForLocale(activeContext, user.locale)}${session?.activeOrganizationName ? ` · ${session.activeOrganizationName}` : ""}`} status={session?.activeOrganizationRole ? <StatusBadge>{formatEnumLabelForLocale(session.activeOrganizationRole, user.locale)}</StatusBadge> : undefined} />
-              <BusinessListItem title={copy.authentication} description={sessionDate(session?.authTime, intlLocale, copy.unavailable)} />
-              <BusinessListItem title={copy.lastRenewal} description={sessionDate(session?.issuedAt, intlLocale, copy.unavailable)} />
-              <BusinessListItem title={copy.idleExpiration} description={sessionDate(session?.exp, intlLocale, copy.unavailable)} />
-              <BusinessListItem title={copy.absoluteExpiration} description={sessionDate(session?.absoluteExp, intlLocale, copy.unavailable)} status={<StatusBadge tone="warning">{copy.newSignInAfter}</StatusBadge>} />
-            </BusinessList>
-          </ModuleSection>
-          <TotpSecuritySettings locale={user.locale} />
-          <ActiveSessionsSettings locale={user.locale} />
-          <KnownBrowsersSettings locale={user.locale} />
-          <ModuleSection title={copy.sessionAndNotifications} description={copy.sessionAndNotificationsDescription}>
-            <SessionAndPushSettings initialIdleTimeoutMinutes={user.sessionIdleTimeoutMinutes} initialPushNotificationContentMode={pushNotificationContentMode} />
+          <ModuleSection
+            id="account-security"
+            density="compact"
+            title={user.locale === "en" ? "Account security and notifications" : "Sécurité du compte et notifications"}
+            description={user.locale === "en"
+              ? "Two-factor authentication, active sessions, recognized browsers, sign-out policies and notifications in one place."
+              : "Authentification à deux facteurs, connexions actives, navigateurs reconnus, déconnexion et notifications au même endroit."}
+          >
+            <SecuritySettingsWorkspace
+              locale={user.locale}
+              initialIdleTimeoutMinutes={user.sessionIdleTimeoutMinutes}
+              initialPushNotificationContentMode={pushNotificationContentMode}
+              currentSession={(
+                <BusinessList ariaLabel={copy.currentSession}>
+                  <BusinessListItem title={copy.accountPreferences} description={user.email} status={<StatusBadge tone="success">{copy.activeSession}</StatusBadge>} />
+                  <BusinessListItem title={copy.activeSpace} description={`${formatEnumLabelForLocale(activeContext, user.locale)}${session?.activeOrganizationName ? ` · ${session.activeOrganizationName}` : ""}`} status={session?.activeOrganizationRole ? <StatusBadge>{formatEnumLabelForLocale(session.activeOrganizationRole, user.locale)}</StatusBadge> : undefined} />
+                  <BusinessListItem title={copy.authentication} description={sessionDate(session?.authTime, intlLocale, copy.unavailable)} />
+                  <BusinessListItem title={copy.lastRenewal} description={sessionDate(session?.issuedAt, intlLocale, copy.unavailable)} />
+                  <BusinessListItem title={copy.idleExpiration} description={sessionDate(session?.exp, intlLocale, copy.unavailable)} />
+                  <BusinessListItem title={copy.absoluteExpiration} description={sessionDate(session?.absoluteExp, intlLocale, copy.unavailable)} status={<StatusBadge tone="warning">{copy.newSignInAfter}</StatusBadge>} />
+                </BusinessList>
+              )}
+            />
           </ModuleSection>
           <ModuleSection title={copy.accountPreferences} description={copy.accountPreferencesDescription}>
             <div className={legacySettingsStyles.scope}>

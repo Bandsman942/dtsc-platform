@@ -12,6 +12,7 @@ const status = read("app/api/account/security/totp/route.ts");
 const authForm = read("components/auth/auth-form.tsx");
 const settings = read("components/settings/totp-security-settings.tsx");
 const settingsPage = read("app/settings/page.tsx");
+const securityWorkspace = read("components/settings/security-settings-workspace.tsx");
 const qr = read("lib/vendor/qrcodegen.ts");
 const model = read("prisma/auth-security.prisma");
 const migration = read("prisma/migrations/20261102160000_auth_mfa_challenge/migration.sql");
@@ -54,7 +55,8 @@ assert.ok(!status.includes("secretCiphertext"), "Account status cannot expose TO
 assert.ok(qr.includes("MIT License"), "Vendored QR generator retains MIT notice");
 assert.ok(settings.includes("qrcodegen.QrCode.encodeText"), "QR must be rendered locally");
 assert.ok(!settings.includes("https://api.qr"), "No external QR providers for secrets");
-assert.ok(settingsPage.includes("TotpSecuritySettings"), "Settings must expose TOTP");
+assert.ok(settingsPage.includes("<SecuritySettingsWorkspace"), "Settings page must open a dedicated security section");
+assert.ok(securityWorkspace.includes("<TotpSecuritySettings") && securityWorkspace.includes("embedded"), "Compact security workspace must expose functional TOTP enrollment");
 assert.ok(authForm.includes("/api/auth/mfa/challenge"), "Frontend must verify second factor");
 assert.ok(authForm.includes("mfaRequired"), "Frontend must recognize challenge");
 assert.ok(model.includes("model AuthMfaChallenge"), "Prisma challenge model missing");

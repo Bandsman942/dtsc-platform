@@ -58,7 +58,7 @@ export function LocalQrCode({ text }: { text: string }) {
   }
   return (
     <svg role="img" aria-label="QR code TOTP DTSC Platform" viewBox={"0 0 " + size + " " + size}
-      className="mx-auto aspect-square h-auto w-full max-w-[240px] rounded-xl bg-white p-2 text-black" xmlns="http://www.w3.org/2000/svg">
+      className="mx-auto block aspect-square h-auto w-full max-w-[248px] rounded-lg bg-white p-2 text-black" style={{ width: 248, maxWidth: "100%", height: "auto" }} xmlns="http://www.w3.org/2000/svg">
       <rect width={size} height={size} fill="#fff" />
       <g fill="#000">{pixels}</g>
     </svg>
@@ -72,7 +72,7 @@ async function requestJson(url: string, payload?: Record<string, string>) {
   return body;
 }
 
-export function TotpSecuritySettings({ locale = "fr" }: { locale?: string }) {
+export function TotpSecuritySettings({ locale = "fr", embedded = false }: { locale?: string; embedded?: boolean }) {
   const t = locale === "en" ? EN : FR;
   const [status, setStatus] = useState<SecurityStatus | null>(null);
   const [stage, setStage] = useState<Stage>("overview");
@@ -130,9 +130,9 @@ export function TotpSecuritySettings({ locale = "fr" }: { locale?: string }) {
   }
 
   return (
-    <section className="w-full min-w-0 space-y-4 rounded-2xl border border-dtsc-border bg-dtsc-surface p-4 shadow-[var(--dtsc-shadow-sm)] sm:p-6">
+    <section className={embedded ? "w-full min-w-0 space-y-3" : "w-full min-w-0 space-y-4 rounded-2xl border border-dtsc-border bg-dtsc-surface p-4 shadow-[var(--dtsc-shadow-sm)] sm:p-6"}>
       <div className="flex min-w-0 items-start gap-3">
-        <span className="rounded-xl bg-dtsc-soft p-3 text-dtsc-blue"><ShieldCheck className="h-5 w-5" /></span>
+        <span className="rounded-lg bg-dtsc-soft p-2 text-dtsc-blue"><ShieldCheck className="h-5 w-5" /></span>
         <div className="min-w-0 flex-1 space-y-1">
           <h3 className="text-base font-bold text-dtsc-ink">{t.title}</h3>
           <p className="text-sm leading-6 text-dtsc-muted">{t.description}</p>
@@ -152,9 +152,11 @@ export function TotpSecuritySettings({ locale = "fr" }: { locale?: string }) {
       ) : null}
 
       {stage === "enroll" && enrollment ? (
-        <div className="space-y-4 rounded-2xl border border-dtsc-border bg-dtsc-page p-4">
+        <div className="min-w-0 space-y-3 rounded-xl border border-dtsc-border bg-dtsc-page p-3 sm:p-4">
           <p className="text-sm leading-6 text-dtsc-muted">{t.scan}</p>
-          <LocalQrCode text={enrollment.provisioningUri} />
+          <div data-totp-qr-container className="mx-auto w-fit max-w-full rounded-xl border border-dtsc-border bg-white p-2 shadow-sm sm:p-3">
+            <LocalQrCode text={enrollment.provisioningUri} />
+          </div>
           <p className="text-sm leading-6 text-dtsc-muted">{t.manual}</p>
           <div className="flex min-w-0 flex-wrap items-center gap-2 rounded-xl border border-dtsc-border bg-dtsc-surface p-3">
             <code className="min-w-0 flex-1 break-all text-sm font-semibold text-dtsc-ink">{enrollment.secret}</code>

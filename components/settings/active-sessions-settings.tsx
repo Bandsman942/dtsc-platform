@@ -49,7 +49,7 @@ async function requestSessions(url: string, payload?: { action: string; sessionI
   return json;
 }
 
-export function ActiveSessionsSettings({ locale = "fr" }: { locale?: string }) {
+export function ActiveSessionsSettings({ locale = "fr", embedded = false }: { locale?: string; embedded?: boolean }) {
   const t = locale === "en" ? copy.en : copy.fr;
   const [items, setItems] = useState<DeviceSession[]>([]);
   const [cursor, setCursor] = useState<string | null>(null);
@@ -94,7 +94,7 @@ export function ActiveSessionsSettings({ locale = "fr" }: { locale?: string }) {
   }
 
   return (
-    <section className="min-w-0 space-y-4 rounded-2xl border border-dtsc-border bg-dtsc-surface p-4 sm:p-6">
+    <section className={embedded ? "min-w-0 space-y-3" : "min-w-0 space-y-4 rounded-2xl border border-dtsc-border bg-dtsc-surface p-4 sm:p-6"}>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <h3 className="flex items-center gap-2 text-base font-bold text-dtsc-ink"><ShieldCheck className="h-5 w-5 text-dtsc-blue" />{t.title}</h3>
