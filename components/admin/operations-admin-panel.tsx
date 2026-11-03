@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import { ArrowLeft, ArrowUpRight, Download, Eye, FileText, Plus, Save, Trash2, UploadCloud, X } from "lucide-react";
 import { InternalFullScreenSurface } from "@/components/admin/internal-full-screen-surface";
 import { Button } from "@/components/ui/button";
@@ -57,6 +57,21 @@ function resolveAdminChecklistType(dataset: OperationDataset): OperationalObject
   return null;
 }
 
+type InternalRegisterPage = {
+  records: OperationRecord[];
+  page: number;
+  pageSize: number;
+  total: number;
+  allCount: number;
+  totalPages: number;
+  statusCounts: Record<string, number>;
+};
+
+function internalRegisterSection(endpoint: string) {
+  const match = /^\/api\/admin\/(hr-cfo|sco|coo|ceo|mpo|cto|la)\//.exec(endpoint);
+  return match?.[1] === "la" ? "legal" : match?.[1] || null;
+}
+
 export function OperationsAdminPanel({
   eyebrow,
   title,
@@ -81,6 +96,7 @@ export function OperationsAdminPanel({
   const [dateStart, setDateStart] = useState("");
   const [dateEnd, setDateEnd] = useState("");
   const [activeDatasetId, setActiveDatasetId] = useState<string | null>(null);
+  const [registerRevision, setRegisterRevision] = useState<Record<string, number>>({});
   const getDatasetSearchText = useCallback((dataset: OperationDataset) => `${dataset.label} ${dataset.description} ${dataset.id}`, []);
   const datasetList = useSmartList({ items: datasets, pageSize: 8, getSearchText: getDatasetSearchText });
   useToastMessage(message);
@@ -182,6 +198,7 @@ export function OperationsAdminPanel({
       }));
       form.reset();
     }
+    if (response.ok) setRegisterRevision((current) => ({ ...current, [dataset.id]: (current[dataset.id] || 0) + 1 }));
   }
 
   async function updateRecord(dataset: OperationDataset, record: OperationRecord, form: HTMLFormElement) {
@@ -207,6 +224,7 @@ export function OperationsAdminPanel({
         [dataset.id]: (current[dataset.id] || []).map((item) => item.id === saved.id ? saved : item),
       }));
     }
+    if (response.ok) setRegisterRevision((current) => ({ ...current, [dataset.id]: (current[dataset.id] || 0) + 1 }));
   }
 
   async function removeRecord(dataset: OperationDataset, record: OperationRecord) {
@@ -218,6 +236,7 @@ export function OperationsAdminPanel({
         ...current,
         [dataset.id]: (current[dataset.id] || []).filter((item) => item.id !== record.id),
       }));
+      setRegisterRevision((current) => ({ ...current, [dataset.id]: (current[dataset.id] || 0) + 1 }));
     }
   }
 
@@ -227,17 +246,17 @@ export function OperationsAdminPanel({
       <ModuleHeader
         eyebrow={eyebrow}
         title={title}
-        count={`${totals.records} élément${totals.records > 1 ? "s" : ""}`}
+        count={`${totals.records} élément${totals.records > 1 ? "s" : ""} chargés (aperçu)`}
         description={description}
       />
       ) : null}
 
       <div className="flex min-w-0 flex-wrap items-center gap-x-5 gap-y-2 border-y border-dtsc-border py-3 text-xs">
-        <span className="text-dtsc-muted">Dossiers <strong className="ml-1 text-base font-black tabular-nums text-dtsc-ink">{totals.records}</strong></span>
-        <span className="text-dtsc-muted">Actifs <strong className="ml-1 text-base font-black tabular-nums text-dtsc-ink">{totals.activeRecords}</strong></span>
-        <span className="text-dtsc-muted">À traiter <strong className="ml-1 text-base font-black tabular-nums text-dtsc-ink">{totals.attentionItems}</strong></span>
-        {(isCooPanel || isCeoPanel) ? <span className="text-dtsc-muted">Exécution <strong className="ml-1 text-base font-black text-dtsc-ink">{totals.operationalExecution}%</strong></span> : null}
-        {isHrcfoPanel ? <span className="text-dtsc-muted">Chiffre d’affaires <strong className="ml-1 text-base font-black text-dtsc-ink">{totals.revenueBreakdown}</strong></span> : null}
+        <span className="text-dtsc-muted" title="Aperçu des éléments chargés uniquement ; les totaux exacts figurent dans chaque registre.">Dossiers (aperçu) <strong className="ml-1 text-base font-black tabular-nums text-dtsc-ink">{totals.records}</strong></span>
+        <span className="text-dtsc-muted">Actifs (aperçu) <strong className="ml-1 text-base font-black tabular-nums text-dtsc-ink">{totals.activeRecords}</strong></span>
+        <span className="text-dtsc-muted">À traiter (aperçu) <strong className="ml-1 text-base font-black tabular-nums text-dtsc-ink">{totals.attentionItems}</strong></span>
+        {(isCooPanel || isCeoPanel) ? <span className="text-dtsc-muted">Exécution (aperçu) <strong className="ml-1 text-base font-black text-dtsc-ink">{totals.operationalExecution}%</strong></span> : null}
+        {isHrcfoPanel ? <span className="text-dtsc-muted">Recettes (aperçu) <strong className="ml-1 text-base font-black text-dtsc-ink">{totals.revenueBreakdown}</strong></span> : null}
       </div>
       {isHrcfoPanel ? <details className="border-b border-dtsc-border pb-2 text-xs"><summary className="min-h-10 cursor-pointer py-3 font-black text-dtsc-blue">Soldes et indicateurs financiers détaillés</summary><dl className="grid min-w-0 gap-x-5 gap-y-2 pb-3 sm:grid-cols-2 lg:grid-cols-3">{[["Comptes", totals.balanceBreakdown], ["Entrées", totals.inflowBreakdown], ["Sorties", totals.outflowBreakdown], ["Capital", totals.capitalBreakdown], ["Budgets", totals.budgetBreakdown], ["Consommé", totals.spentBreakdown], ["Restant", totals.remainingBreakdown], ["Paie validée/payée", totals.payrollBreakdown]].map(([label, value]) => <div key={label} className="min-w-0 border-b border-dtsc-border/50 py-2"><dt className="text-dtsc-muted">{label}</dt><dd className="break-words font-black text-dtsc-ink">{value}</dd></div>)}</dl></details> : null}
       <ol className="flex max-w-full gap-1 overflow-x-auto py-2 [scrollbar-width:none]" aria-label={`Flux recommandé ${title}`}>
@@ -245,12 +264,12 @@ export function OperationsAdminPanel({
       </ol>
       <ListControls query={datasetList.query} onQueryChange={datasetList.setQuery} page={datasetList.page} pageCount={datasetList.pageCount} totalCount={datasetList.totalCount} filteredCount={datasetList.filteredCount} onPageChange={datasetList.setPage} placeholder="Rechercher un registre, une activité…" />
       <div className="divide-y divide-dtsc-border border-y border-dtsc-border" aria-label={`Registres ${title}`}>
-        {datasetList.paginatedItems.map((dataset) => <button type="button" key={dataset.id} onClick={() => setActiveDatasetId(dataset.id)} className="flex min-h-14 w-full min-w-0 items-center gap-3 px-2 py-2 text-left hover:bg-dtsc-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500"><span className="min-w-0 flex-1"><span className="block truncate text-sm font-black text-dtsc-ink">{dataset.label}</span><span className="block truncate text-xs text-dtsc-muted">{dataset.description}</span></span><span className="shrink-0 text-xs font-black tabular-nums text-dtsc-muted">{(visibleItemsByDataset[dataset.id] || []).length}</span><ArrowUpRight className="h-4 w-4 shrink-0 text-dtsc-blue" /></button>)}
+        {datasetList.paginatedItems.map((dataset) => <button type="button" key={dataset.id} onClick={() => setActiveDatasetId(dataset.id)} className="flex min-h-14 w-full min-w-0 items-center gap-3 px-2 py-2 text-left hover:bg-dtsc-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500"><span className="min-w-0 flex-1"><span className="block truncate text-sm font-black text-dtsc-ink">{dataset.label}</span><span className="block truncate text-xs text-dtsc-muted">{dataset.description}</span></span><span title="Éléments chargés en aperçu. Ouvrez le registre pour les totaux exacts." className="shrink-0 text-xs font-black tabular-nums text-dtsc-muted">{(visibleItemsByDataset[dataset.id] || []).length}{(visibleItemsByDataset[dataset.id] || []).length >= 60 ? "+" : ""}</span><ArrowUpRight className="h-4 w-4 shrink-0 text-dtsc-blue" /></button>)}
       </div>
       {!datasetList.paginatedItems.length ? <p className="py-4 text-sm text-dtsc-muted">Aucun registre ne correspond à votre recherche.</p> : null}
       {datasets.map((dataset) => (
         <InternalFullScreenSurface key={dataset.id} open={activeDataset?.id === dataset.id} title={dataset.label} subtitle={dataset.description} onClose={closeDataset} level={2}>
-          <DatasetSection dataset={dataset} records={visibleItemsByDataset[dataset.id] || []} canEdit={canEdit} onCreate={createRecord} onUpdate={updateRecord} onRemove={removeRecord} dateStart={dateStart} dateEnd={dateEnd} setDateStart={setDateStart} setDateEnd={setDateEnd} hasDateFilter={hasDateFilter} />
+          <DatasetSection dataset={dataset} canEdit={canEdit} onCreate={createRecord} onUpdate={updateRecord} onRemove={removeRecord} dateStart={dateStart} dateEnd={dateEnd} setDateStart={setDateStart} setDateEnd={setDateEnd} hasDateFilter={hasDateFilter} revision={registerRevision[dataset.id] || 0} />
         </InternalFullScreenSurface>
       ))}
     </ModuleWorkspace>
@@ -285,7 +304,6 @@ function statusTone(status: string): StatusBadgeTone {
 
 function DatasetSection({
   dataset,
-  records,
   canEdit,
   onCreate,
   onUpdate,
@@ -295,9 +313,9 @@ function DatasetSection({
   setDateStart,
   setDateEnd,
   hasDateFilter,
+  revision,
 }: {
   dataset: OperationDataset;
-  records: OperationRecord[];
   canEdit: boolean;
   onCreate: (dataset: OperationDataset, form: HTMLFormElement) => Promise<void>;
   onUpdate: (dataset: OperationDataset, record: OperationRecord, form: HTMLFormElement) => Promise<void>;
@@ -307,13 +325,59 @@ function DatasetSection({
   setDateStart: (value: string) => void;
   setDateEnd: (value: string) => void;
   hasDateFilter: boolean;
+  revision: number;
 }) {
   const [status, setStatus] = useState("ALL");
-  const statuses = useMemo(() => Array.from(new Set([...dataset.statusOptions.map((option) => option.value), ...records.map((record) => record.status)])), [dataset.statusOptions, records]);
-  const statusRecords = useMemo(() => status === "ALL" ? records : records.filter((record) => record.status === status), [records, status]);
-  const getSearchText = useCallback((record: OperationRecord) => [record.id, record.title, record.subtitle, record.status, record.notes, record.currency, record.amount, ...record.meta, ...Object.values(record.values || {})].join(" "), []);
-  const list = useSmartList({ items: statusRecords, pageSize: 12, getSearchText });
+  const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+  const [page, setPage] = useState(1);
+  const [result, setResult] = useState<InternalRegisterPage | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const [retry, setRetry] = useState(0);
   const [createOpen, setCreateOpen] = useState(false);
+  const section = internalRegisterSection(dataset.endpoint);
+  const statuses = useMemo(() => Array.from(new Set([...dataset.statusOptions.map((option) => option.value), ...Object.keys(result?.statusCounts || {})])), [dataset.statusOptions, result?.statusCounts]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedQuery(query.trim()), 300);
+    return () => clearTimeout(timer);
+  }, [query]);
+
+  useEffect(() => {
+    if (!section) {
+      setLoadError("Ce registre ne dispose pas encore d’un accès serveur.");
+      setIsLoading(false);
+      return;
+    }
+    const controller = new AbortController();
+    const params = new URLSearchParams({ page: String(page), pageSize: "12" });
+    if (debouncedQuery) params.set("search", debouncedQuery);
+    if (status !== "ALL") params.set("status", status);
+    if (dateStart) params.set("from", dateStart);
+    if (dateEnd) params.set("to", dateEnd);
+    setIsLoading(true);
+    setLoadError("");
+    setResult(null);
+    fetch(`/api/admin/internal-registers/${section}/${dataset.id}?${params}`, { signal: controller.signal, cache: "no-store" })
+      .then(async (response) => {
+        const body = await response.json().catch(() => null) as (InternalRegisterPage & { message?: string }) | null;
+        if (!response.ok || !body || !Array.isArray(body.records)) throw new Error(body?.message || "Chargement du registre impossible.");
+        return body;
+      })
+      .then((body) => { if (!controller.signal.aborted) { setResult(body); setPage(body.page); } })
+      .catch((error: unknown) => { if (!controller.signal.aborted) setLoadError(error instanceof Error ? error.message : "Chargement du registre impossible."); })
+      .finally(() => { if (!controller.signal.aborted) setIsLoading(false); });
+    return () => controller.abort();
+  }, [dataset.id, section, page, debouncedQuery, status, dateStart, dateEnd, revision, retry]);
+
+  const records = result?.records || [];
+  const allCount = result?.allCount || 0;
+  const filteredCount = result?.total || 0;
+  const updateStatus = (value: string) => { setPage(1); setStatus(value); };
+  const updateQuery = (value: string) => { setPage(1); setQuery(value); };
+  const updateDateStart = (value: string) => { setPage(1); setDateStart(value); };
+  const updateDateEnd = (value: string) => { setPage(1); setDateEnd(value); };
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -324,36 +388,37 @@ function DatasetSection({
   return (
     <section id={`operations-${dataset.id}`} data-dtsc-register-fullscreen className="min-w-0 space-y-3">
       <div className="flex min-w-0 flex-wrap items-center justify-between gap-2 border-b border-dtsc-border pb-2">
-        <p className="text-xs font-bold text-dtsc-muted">{list.filteredCount} résultat{list.filteredCount > 1 ? "s" : ""} · {records.length} éléments dans la période</p>
+        <p className="text-xs font-bold text-dtsc-muted" aria-live="polite">{isLoading ? "Chargement des résultats…" : `${filteredCount} résultat${filteredCount > 1 ? "s" : ""} · ${allCount} éléments dans la période`}</p>
         {canEdit ? <Button type="button" size="sm" onClick={() => setCreateOpen(true)} className="rounded-lg bg-dtsc-blue text-white"><Plus className="h-4 w-4" /> Nouveau</Button> : null}
       </div>
       <div className="flex min-w-0 flex-wrap items-end gap-2" aria-label={`Période ${dataset.label}`}>
-        <label className="grid min-w-0 flex-1 gap-1 text-[0.7rem] font-black text-dtsc-muted sm:max-w-48">Du<Input type="date" value={dateStart} onChange={(event) => setDateStart(event.target.value)} className="h-10 min-w-0 rounded-lg bg-dtsc-surface" /></label>
-        <label className="grid min-w-0 flex-1 gap-1 text-[0.7rem] font-black text-dtsc-muted sm:max-w-48">Au<Input type="date" value={dateEnd} onChange={(event) => setDateEnd(event.target.value)} className="h-10 min-w-0 rounded-lg bg-dtsc-surface" /></label>
-        {hasDateFilter ? <Button type="button" size="sm" variant="outline" onClick={() => { setDateStart(""); setDateEnd(""); }} className="h-10 rounded-lg border-dtsc-border">Effacer les dates</Button> : null}
+        <label className="grid min-w-0 flex-1 gap-1 text-[0.7rem] font-black text-dtsc-muted sm:max-w-48">Du<Input type="date" value={dateStart} onChange={(event) => updateDateStart(event.target.value)} className="h-10 min-w-0 rounded-lg bg-dtsc-surface" /></label>
+        <label className="grid min-w-0 flex-1 gap-1 text-[0.7rem] font-black text-dtsc-muted sm:max-w-48">Au<Input type="date" value={dateEnd} onChange={(event) => updateDateEnd(event.target.value)} className="h-10 min-w-0 rounded-lg bg-dtsc-surface" /></label>
+        {hasDateFilter ? <Button type="button" size="sm" variant="outline" onClick={() => { setPage(1); setDateStart(""); setDateEnd(""); }} className="h-10 rounded-lg border-dtsc-border">Effacer les dates</Button> : null}
       </div>
       <nav aria-label={`Filtrer ${dataset.label} par statut`} className="flex min-w-0 gap-1.5 overflow-x-auto py-1 [scrollbar-width:thin]">
-        <button type="button" aria-pressed={status === "ALL"} onClick={() => { setStatus("ALL"); list.setPage(1); }} className={`min-h-10 shrink-0 rounded-full border px-3 text-xs font-bold ${status === "ALL" ? "border-cyan-400 bg-cyan-400/15 text-dtsc-blue" : "border-dtsc-border text-dtsc-muted"}`}>Tous · {records.length}</button>
-        {statuses.map((item) => <button key={item} type="button" aria-pressed={status === item} onClick={() => { setStatus(item); list.setPage(1); }} className={`min-h-10 shrink-0 rounded-full border px-3 text-xs font-bold ${status === item ? "border-cyan-400 bg-cyan-400/15 text-dtsc-blue" : "border-dtsc-border text-dtsc-muted"}`}>{dataset.statusOptions.find((option) => option.value === item)?.label || formatEnumLabel(item)} · {records.filter((record) => record.status === item).length}</button>)}
+        <button type="button" aria-pressed={status === "ALL"} onClick={() => updateStatus("ALL")} className={`min-h-10 shrink-0 rounded-full border px-3 text-xs font-bold ${status === "ALL" ? "border-cyan-400 bg-cyan-400/15 text-dtsc-blue" : "border-dtsc-border text-dtsc-muted"}`}>Tous · {allCount}</button>
+        {statuses.map((item) => <button key={item} type="button" aria-pressed={status === item} onClick={() => updateStatus(item)} className={`min-h-10 shrink-0 rounded-full border px-3 text-xs font-bold ${status === item ? "border-cyan-400 bg-cyan-400/15 text-dtsc-blue" : "border-dtsc-border text-dtsc-muted"}`}>{dataset.statusOptions.find((option) => option.value === item)?.label || formatEnumLabel(item)} · {result?.statusCounts[item] || 0}</button>)}
       </nav>
       <ListControls
-        query={list.query}
-        onQueryChange={list.setQuery}
-        page={list.page}
-        pageCount={list.pageCount}
-        totalCount={statusRecords.length}
-        filteredCount={list.filteredCount}
+        query={query}
+        onQueryChange={updateQuery}
+        page={result?.page || page}
+        pageCount={result?.totalPages || 1}
+        totalCount={allCount}
+        filteredCount={filteredCount}
         placeholder={`Rechercher nom, ID, montant, statut, référence…`}
-        onPageChange={list.setPage}
+        onPageChange={setPage}
       />
 
-      {list.paginatedItems.length ? (
+      {loadError ? <p role="alert" className="rounded-lg border border-red-400/40 bg-red-500/10 px-3 py-2 text-sm text-red-600">{loadError} <button type="button" className="ml-2 underline" onClick={() => setRetry((current) => current + 1)}>Réessayer</button></p> : null}
+      {isLoading ? <p className="py-4 text-sm text-dtsc-muted" role="status">Chargement des données serveur…</p> : records.length ? (
         <BusinessList ariaLabel={dataset.label}>
-          {list.paginatedItems.map((record) => (
+          {records.map((record) => (
             <RecordRow key={record.id} dataset={dataset} record={record} canEdit={canEdit} onUpdate={onUpdate} onRemove={onRemove} />
           ))}
         </BusinessList>
-      ) : records.length ? (
+      ) : loadError ? null : allCount ? (
         <EmptyState compact title="Aucun résultat" description="Aucun élément ne correspond à cette recherche." />
       ) : (
         <EmptyState compact title="Aucun contenu" description={`Aucun élément n'est encore enregistré dans ${dataset.label.toLowerCase()}.`} action={canEdit ? <Button type="button" variant="outline" onClick={() => setCreateOpen(true)} className="rounded-xl border-dtsc-border">Créer le premier élément</Button> : undefined} />
