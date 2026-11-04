@@ -49,6 +49,8 @@ assert.match(registers, /option\.label === formatEnumLabel\(option\.value\)/);
 assert.match(read("components/admin/ceo-executive-summary.tsx"), /translateInternalAdminSystemCopy/);
 assert.match(read("components/admin/legal-dashboard-summary.tsx"), /translateInternalAdminSystemCopy/);
 assert.match(read("components/admin/internal-finance-controls-client.tsx"), /translateInternalAdminSystemCopy\(locale, metric\.label\)/);
+assert.match(read("components/admin/internal-finance-controls-client.tsx"), /translateInternalAdminAccountType\(locale, selected\.accountType\)/);
+assert.match(read("lib/i18n.ts"), /translateInternalAdminAccountType\(locale/);
 assert.match(consoleSource, /playbook=\{\[[^\]]+\]\.map\(copy\)\}/);
 assert.match(registers, /translateInternalAdminStatus/);
 assert.match(registers, /useAppLocale/);

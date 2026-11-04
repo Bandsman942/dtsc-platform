@@ -6,7 +6,7 @@
 - Catalogue bilingue de 90 codes de statuts métier, avec repli lisible lorsque le statut est inconnu.
 - Noms et descriptions en anglais des 35 registres internes HR&CFO, SCO, COO, CEO, MPO, CTO et LA, et maintien du texte métier original en français.
 - Traduction explicite des 291 libellés, aides et exemples de champs historiques de `lib/admin-operations.ts`. Le catalogue est exhaustif pour les chaînes littérales de champs de ce constructeur et vérifié par un inventaire automatique. Les options dynamiques (noms, références saisies) restent intactes ; seuls les codes de statut système sont localisés.
-- Traduction des 115 textes sources inventoriés dans les synthèses CEO/juridiques et les parcours recommandés des directions (titres, descriptions, indicateurs et aides). Recherche possible avec les titres en anglais sans modifier les clés métier utilisées par la navigation.
+- Traduction des 121 textes sources inventoriés dans les synthèses CEO/juridiques, les parcours recommandés des directions et les indicateurs de rapprochement de trésorerie (titres, descriptions, indicateurs et aides). Recherche possible avec les titres en anglais sans modifier les clés métier utilisées par la navigation.
 - Les dates et les libellés accessibles (menus, détails, confirmations, filtres) suivent la langue courante. Les données et commentaires des utilisateurs ne sont jamais traduits automatiquement.
 
 ## QA locale

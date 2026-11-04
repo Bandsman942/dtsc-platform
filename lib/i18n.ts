@@ -115,3 +115,11 @@ export function translateInternalAdminSystemCopy(locale: string | null | undefin
   const dictionary: Record<string, string> = internalAdminSystemCopyEn;
   return locale === "en" ? dictionary[sourceCopy] || translateInternalAdminFieldCopy(locale, sourceCopy) : sourceCopy;
 }
+const internalAccountTypes = {
+  fr: { CASH: "Caisse", BANK: "Banque", MOBILE_MONEY: "Mobile Money", PROJECT: "Compte projet", OPERATIONS: "Compte opérationnel" },
+  en: { CASH: "Cash", BANK: "Bank", MOBILE_MONEY: "Mobile money", PROJECT: "Project account", OPERATIONS: "Operating account" },
+} as const;
+export function translateInternalAdminAccountType(locale: string | null | undefined, accountType: string) {
+  const dictionary: Record<string, string> = internalAccountTypes[locale === "en" ? "en" : "fr"];
+  return dictionary[accountType] || accountType;
+}
