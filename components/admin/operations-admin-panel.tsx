@@ -17,12 +17,30 @@ import { StatusBadge, type StatusBadgeTone } from "@/components/workspace/status
 import { useSmartList } from "@/lib/hooks/use-smart-list";
 import type { OperationDataset, OperationField, OperationRecord } from "@/lib/admin-operations-types";
 import { useAppLocale } from "@/components/i18n/locale-provider";
-import { translateInternalAdmin, translateInternalAdminDataset, translateInternalAdminStatus, type InternalAdminKey } from "@/lib/i18n";
+import { translateInternalAdmin, translateInternalAdminDataset, translateInternalAdminFieldCopy, translateInternalAdminStatus, type InternalAdminKey } from "@/lib/i18n";
+import { formatEnumLabel } from "@/lib/labels";
 import type { OperationalObjectType } from "@/lib/operational-access";
 
 function useAdminCopy() {
   const locale = useAppLocale();
   return { locale, t: (key: InternalAdminKey) => translateInternalAdmin(locale, key) };
+}
+
+// Only system-owned labels/help copy are translated; record data and dynamic names stay untouched.
+function localizedOperationField(locale: string | null | undefined, field: OperationField): OperationField {
+  return {
+    ...field,
+    label: translateInternalAdminFieldCopy(locale, field.label),
+    ...(field.placeholder ? { placeholder: translateInternalAdminFieldCopy(locale, field.placeholder) } : {}),
+    ...(field.helperText ? { helperText: translateInternalAdminFieldCopy(locale, field.helperText) } : {}),
+    ...(field.options ? { options: field.options.map((option) => ({
+      ...option,
+      label: option.value === "true" && option.label === "Oui" ? translateInternalAdminFieldCopy(locale, "Oui")
+        : option.value === "false" && option.label === "Non" ? translateInternalAdminFieldCopy(locale, "Non")
+        : option.label === formatEnumLabel(option.value) ? translateInternalAdminStatus(locale, option.value)
+        : option.label,
+    })) } : {}),
+  };
 }
 
 const maxOperationFileSize = 6_000_000;
@@ -84,7 +102,12 @@ export function OperationsAdminPanel({
   const datasets = useMemo(() => rawDatasets.map((dataset) => {
     const routeSection = /^\/api\/admin\/(hr-cfo|sco|coo|ceo|mpo|cto|la)\//.exec(dataset.endpoint)?.[1];
     const section = routeSection === "la" ? "legal" : routeSection || "";
-    return { ...dataset, ...translateInternalAdminDataset(locale, section, dataset.id, dataset.label, dataset.description) };
+    return {
+      ...dataset,
+      ...translateInternalAdminDataset(locale, section, dataset.id, dataset.label, dataset.description),
+      fields: dataset.fields.map((field) => localizedOperationField(locale, field)),
+      statusOptions: dataset.statusOptions.map((option) => ({ ...option, label: translateInternalAdminStatus(locale, option.value) })),
+    };
   }), [locale, rawDatasets]);
   const [itemsByDataset, setItemsByDataset] = useState(() =>
     Object.fromEntries(datasets.map((dataset) => [dataset.id, dataset.records]))

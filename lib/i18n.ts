@@ -35,6 +35,8 @@ import internalAdminEn from "@/locales/internal-admin.en.json";
 import internalAdminStatusFr from "@/locales/internal-admin-status.fr.json";
 import internalAdminStatusEn from "@/locales/internal-admin-status.en.json";
 import internalAdminDatasetsEn from "@/locales/internal-admin-datasets.en.json";
+import internalAdminFieldCopyEn from "@/locales/internal-admin-field-copy.en.json";
+import internalAdminSystemCopyEn from "@/locales/internal-admin-system-copy.en.json";
 import { clientFacingCopy } from "@/lib/client-facing-copy";
 
 type Dictionary = typeof fr;
@@ -104,4 +106,12 @@ export function translateInternalAdminDataset(locale: string | null | undefined,
   const dictionary: Record<string, { label: string; description: string }> = internalAdminDatasetsEn;
   const localized = locale === "en" ? dictionary[`${section}.${datasetId}`] : undefined;
   return localized || { label, description };
+}
+export function translateInternalAdminFieldCopy(locale: string | null | undefined, sourceCopy: string) {
+  const dictionary: Record<string, string> = internalAdminFieldCopyEn;
+  return locale === "en" ? dictionary[sourceCopy] || sourceCopy : sourceCopy;
+}
+export function translateInternalAdminSystemCopy(locale: string | null | undefined, sourceCopy: string) {
+  const dictionary: Record<string, string> = internalAdminSystemCopyEn;
+  return locale === "en" ? dictionary[sourceCopy] || translateInternalAdminFieldCopy(locale, sourceCopy) : sourceCopy;
 }
