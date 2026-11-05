@@ -5,6 +5,13 @@ import { EnterpriseDomainError } from "@/lib/enterprise/common/errors";
 
 const BUSINESS_ERROR_MESSAGES: Record<string, { fr: string; en: string }> = {
   EMPLOYEE_NOT_FOUND: { fr: "Ce dossier collaborateur est introuvable ou n’est plus disponible dans cette entreprise. Actualisez le registre RH.", en: "This employee record is unavailable in your company. Refresh the HR register." },
+
+  EMPLOYEE_SELF_LINK_REQUIRED: { fr: "Votre compte n’est pas encore associé à un dossier salarié actif. Demandez au service RH de vérifier votre rattachement.", en: "Your account is not linked to an active employee record. Ask HR to verify the association." },
+  EMPLOYEE_CLOCK_ALREADY_RUNNING: { fr: "Un pointage est déjà en cours. Terminez-le avant de commencer une nouvelle session.", en: "A clock-in is already running. Stop it before starting another session." },
+  EMPLOYEE_CLOCK_NOT_RUNNING: { fr: "Aucune session de travail active à clôturer. Actualisez votre suivi de temps.", en: "No active work session to stop. Refresh your time tracking." },
+  EMPLOYEE_CLOCK_FAILED: { fr: "Le pointage n’a pas pu être enregistré. Actualisez vos sessions et réessayez.", en: "The clock entry could not be saved. Refresh your sessions and try again." },
+  EMPLOYEE_WORK_REPORT_FAILED: { fr: "Le rapport de travail n’a pas été soumis. Vérifiez les périodes, le validateur et les heures déclarées.", en: "The work report was not submitted. Check dates, approver and declared minutes." },
+  EMPLOYEE_TIMESHEET_NOT_OWNED: { fr: "Vous ne pouvez soumettre une feuille de temps que pour votre propre dossier salarié.", en: "You can submit a timesheet only for your own employee record." },
   EMPLOYEE_ARCHIVE_NOT_FOUND: { fr: "Ce dossier ne se trouve plus dans les archives. Actualisez les dossiers archivés.", en: "This employee record is no longer archived. Refresh the archived records." },
   EMPLOYEE_ARCHIVE_DEPENDENCIES: { fr: "L’archivage est bloqué : clôturez les contrats actifs, faites traiter les feuilles de temps en attente et réaffectez les collaborateurs encadrés.", en: "Archiving is blocked: close active contracts, resolve pending timesheets and reassign direct reports." },
   EMPLOYEE_CANNOT_MANAGE_SELF: { fr: "Un collaborateur ne peut pas être son propre responsable. Sélectionnez un autre responsable.", en: "An employee cannot be their own manager. Select another manager." },

@@ -34,6 +34,7 @@ model EnterpriseEmployee {
   assignments           EnterpriseEmployeeAssignment[]
   workSchedules         EnterpriseWorkSchedule[]
   attendanceRecords     EnterpriseAttendance[]
+  workClockSessions     EnterpriseWorkClockSession[]
   leaveRequests         EnterpriseLeaveRequest[]
   timesheets            EnterpriseTimesheet[]
   payrollItems          EnterprisePayrollItem[]
@@ -395,4 +396,24 @@ model EnterprisePayslip {
   @@unique([organizationId, payrollItemId])
   @@unique([organizationId, payslipNumber])
   @@index([organizationId, status, generatedAt])
+}
+
+
+model EnterpriseWorkClockSession {
+  id              String             @id @default(cuid())
+  organizationId  String
+  employeeId      String
+  startedAt       DateTime           @default(now())
+  stoppedAt       DateTime?
+  startedByUserId String
+  stoppedByUserId String?
+  workSummary     String?
+  revision        Int                @default(1)
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  employee        EnterpriseEmployee @relation(fields: [organizationId, employeeId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, id], map: "EWCS_org_id_uniq")
+  @@index([organizationId, employeeId, startedAt], map: "EWCS_employee_started_idx")
+  @@index([organizationId, employeeId, stoppedAt], map: "EWCS_employee_open_idx")
 }

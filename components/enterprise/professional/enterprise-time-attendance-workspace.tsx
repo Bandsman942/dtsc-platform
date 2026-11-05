@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Ban, CalendarClock, CalendarDays, CheckCircle2, Clock3, Eye, UserCheck, XCircle } from "lucide-react";
 import { Field, NativeSelect } from "@/components/enterprise/core-v2/erp-v2-ui";
+import { EnterpriseMyHrSelfService } from "@/components/enterprise/professional/enterprise-my-hr-self-service";
 import {
   professionalErpDate,
   professionalErpEnumLabel,
@@ -408,12 +409,13 @@ export function EnterpriseTimeAttendanceWorkspace({ organizationId, organization
       description={`${locale === "en" ? definition.descriptionEn : definition.descriptionFr} ${copy.separation}`}
       count={`${schedules.pagination.total + attendance.pagination.total + leaves.pagination.total + timesheets.pagination.total}`}
       primaryAction={<div data-responsive-actions>
-        {tab === "SCHEDULES" ? <Button onClick={() => { setError(""); setScheduleOpen(true); }}><CalendarClock className="h-4 w-4" />{copy.newSchedule}</Button> : null}
-        {tab === "ATTENDANCE" ? <Button onClick={() => { setError(""); setAttendanceOpen(true); }}><UserCheck className="h-4 w-4" />{copy.recordAttendance}</Button> : null}
+        {tab === "SCHEDULES" && schedules.canManage ? <Button onClick={() => { setError(""); setScheduleOpen(true); }}><CalendarClock className="h-4 w-4" />{copy.newSchedule}</Button> : null}
+        {tab === "ATTENDANCE" && attendance.canManage ? <Button onClick={() => { setError(""); setAttendanceOpen(true); }}><UserCheck className="h-4 w-4" />{copy.recordAttendance}</Button> : null}
         {tab === "LEAVE" ? <Button onClick={() => { setError(""); setLeaveOpen(true); }}><CalendarDays className="h-4 w-4" />{t("time.requestLeave")}</Button> : null}
         {tab === "TIMESHEETS" ? <Button disabled={!timesheets.canWrite} onClick={() => { setError(""); setTimesheetOpen(true); }}><Clock3 className="h-4 w-4" />{t("time.declareTime")}</Button> : null}
       </div>}
     />
+    <EnterpriseMyHrSelfService organizationId={organizationId} />
     <ModuleMetrics label={t("time.metrics")}>
       <ModuleMetric label={copy.activeSchedules} value={schedules.metrics.active || 0} />
       <ModuleMetric label={copy.observedPresence} value={attendance.metrics.present || 0} />
