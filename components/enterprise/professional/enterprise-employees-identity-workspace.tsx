@@ -5,7 +5,7 @@ import { Eye, Plus, UsersRound } from "lucide-react";
 import { EnterpriseEmployeeDossierDialog } from "@/components/enterprise/professional/enterprise-employee-dossier-dialog";
 import { EnterpriseIdentityLinkChoice, type EnterpriseIdentityLinkChoiceValue } from "@/components/enterprise/identity-links/identity-link-choice";
 import { Field, NativeSelect } from "@/components/enterprise/core-v2/erp-v2-ui";
-import { professionalErpDate, professionalErpEnumLabel, professionalErpT, useProfessionalErpLocale } from "@/components/enterprise/professional/professional-erp-i18n";
+import { professionalErpEnumLabel, professionalErpT, useProfessionalErpLocale } from "@/components/enterprise/professional/professional-erp-i18n";
 import { ProfessionalPager } from "@/components/enterprise/professional/professional-pager";
 import { ProfessionalError, ProfessionalFormSection, ProfessionalHelp, ProfessionalLoading, ProfessionalSearch, professionalMutation, useProfessionalCollection } from "@/components/enterprise/professional/professional-erp-ui";
 import { Button } from "@/components/ui/button";
