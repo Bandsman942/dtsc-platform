@@ -5,20 +5,22 @@
 - Réutiliser `EnterpriseEmployee`, `EnterprisePayrollItem`, `EnterprisePayslip`, `EnterpriseTimesheet` sans créer de paie concurrente.
 - Ajouter `EnterpriseWorkClockSession` comme observation réelle horodatée par le serveur, **distincte** du planning, de la présence et de la feuille de temps approuvée.
 - Offrir à chaque salarié lié à un membre actif de son entreprise : historique personnel de ses paies approuvées, vrai PDF privé téléchargeable, entrée/sortie de pointage, rapport de travail soumis au validateur, historique de statut.
-- Interface RH personnelle réutilisée dans les workspaces Temps et Paie, FR/EN, couleurs sémantiques, responsive et sombre.
+- Interface RH personnelle accessible depuis le hub ERP ainsi que les workspaces Temps et Paie, FR/EN, couleurs sémantiques, responsive et sombre.
 
 ## Autorisations et confidentialité
 
 | Action | Autorisation requise |
 | --- | --- |
-| Ouvrir l'espace personnel | Session DTSC, membership actif, module concerné actif et autorisé |
-| Lire sa paie | `PAYROLL_OPERATIONS:read`, bulletin généré et run `APPROVED`, salarié propriétaire |
+| Ouvrir l’espace personnel | Session DTSC, membership actif, module concerné actif, abonnement et restriction personnelle vérifiés ; aucun droit de lire le registre RH global requis |
+| Lire sa paie | Capacité SELF bornée au propriétaire + module `PAYROLL_OPERATIONS` et entitlement ENTERPRISE, bulletin généré et run `APPROVED` |
 | Télécharger son PDF | Même autorisation, comparaison stricte `organizationId + employeeId`, audit, cache désactivé |
-| Voir ses temps et rapports | `TIME_ATTENDANCE:read` ou `TIME_ATTENDANCE:submit`, salarié propriétaire |
-| Pointage/rapport | `TIME_ATTENDANCE:submit`, même origine, Zod, rate limit, dossier lié |
+| Voir ses temps et rapports | Capacité SELF bornée au propriétaire + module `TIME_ATTENDANCE` et entitlement BUSINESS |
+| Pointage/rapport | Capacité SELF de `TIME_ATTENDANCE` pour son dossier uniquement, même origine, Zod, rate limit |
 | Registre paie d'entreprise | `manage` complet ; `approve` seuls runs assignés ; `write` seuls runs préparés |
 | Registre timesheets | `manage` complet ; `approve` seuls dossiers assignés ; salarié, ses seules feuilles |
 | Liste de présence | `manage` complet, sinon salarié uniquement |
+
+La capacité SELF ne donne pas `enterprise.payroll.view` ni accès aux listes d’entreprise ; l’autorisation de gestion reste séparée. Le validateur doit posséder `TIME_ATTENDANCE:approve`. La liste des validateurs indépendants provient de `/my-hr/approvers`, pas du registre global.
 
 Le salarié est résolu uniquement à travers `OrganizationMember.status=ACTIVE, removedAt=null` puis `EnterpriseEmployee.organizationMemberId=member.id, employmentStatus=ACTIVE, archivedAt=null`. Aucun lien par email ou par similitude de nom. Les références inter-tenant ne sont pas suivies.
 
@@ -28,6 +30,7 @@ Le PDF ne prouve **jamais** qu'un paiement financier a été exécuté. Il repre
 
 - `GET /api/enterprise/:organizationId/my-hr?page=1&pageSize=10` : réponse personnelle bornée, avec capacités par module et indicateur d'association salarié.
 - `POST /api/enterprise/:organizationId/my-hr/clock` : `{action:"START"|"STOP",workSummary?}`, horodatage serveur, révision optimiste, une session ouverte maximum garantie par index PostgreSQL partiel.
+- `GET /api/enterprise/:organizationId/my-hr/approvers` : validateurs indépendants autorisés, salarié lié uniquement.
 - `POST /api/enterprise/:organizationId/my-hr/reports` : entrée de feuille de temps canonique, `employeeId` forcé au dossier de la session, validateur indépendant via service existant.
 - `GET /api/enterprise/:organizationId/my-hr/payslips/:payslipId/pdf?lang=fr|en` : PDF natif `application/pdf` en téléchargement, route privée auditée.
 

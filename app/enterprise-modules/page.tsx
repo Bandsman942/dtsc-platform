@@ -3,6 +3,7 @@ import { ArrowRight, Layers3 } from "lucide-react";
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/layout/app-shell";
 import { EnterpriseQuickAccess } from "@/components/enterprise/enterprise-quick-access";
+import { EnterpriseMyHrSelfService } from "@/components/enterprise/professional/enterprise-my-hr-self-service";
 import { BusinessList, BusinessListItem } from "@/components/workspace/business-list";
 import { EmptyState } from "@/components/workspace/empty-state";
 import { ModuleContent, ModuleHeader, ModuleSection, ModuleWorkspace } from "@/components/workspace/module-workspace";
@@ -82,6 +83,7 @@ export default async function EnterpriseModulesHubPage() {
             modules={modules}
             locale={user.locale}
           />
+          <EnterpriseMyHrSelfService organizationId={organizationId} />
           {Array.from(groupedModules.entries()).map(([groupLabel, groupModules]) => (
             <ModuleSection
               key={groupLabel}

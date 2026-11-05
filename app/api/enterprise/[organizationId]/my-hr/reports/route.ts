@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
-import { getEnterpriseCommonDomainAccess } from "@/lib/enterprise/common/access";
 import { enterpriseDomainErrorResponse, enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
-import { getActiveEnterpriseSelfEmployee } from "@/lib/enterprise/hr-payroll/self-service";
+import { getActiveEnterpriseSelfEmployee, hasEnterpriseSelfHrModule } from "@/lib/enterprise/hr-payroll/self-service";
 import { timesheetCreateSchema } from "@/lib/enterprise/hr-payroll/schemas";
 import { createEnterpriseTimesheet } from "@/lib/enterprise/hr-payroll/timesheets";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
@@ -19,7 +18,7 @@ export async function POST(req: Request, { params }: Params) {
   const limited = await rateLimit(getRateLimitKey(req, `enterprise-self-work-report:${session.userId}`), 50, 60 * 60 * 1000);
   if (!limited.ok) return NextResponse.json({ error: "Too many requests" }, { status: 429 });
   const { organizationId } = await params;
-  const access = await getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode: "TIME_ATTENDANCE", action: "submit", includeMutationCapabilities: false });
+  const access = await hasEnterpriseSelfHrModule(session, organizationId, "TIME_ATTENDANCE");
   if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const employee = await getActiveEnterpriseSelfEmployee(session, organizationId);
   if (!employee) return NextResponse.json({ error: "EMPLOYEE_SELF_LINK_REQUIRED" }, { status: 403 });
@@ -30,7 +29,7 @@ export async function POST(req: Request, { params }: Params) {
     : null);
   if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "EMPLOYEE_WORK_REPORT_INPUT_INVALID", req);
   try {
-    const timesheet = await createEnterpriseTimesheet(organizationId, session.userId, parsed.data);
+    const timesheet = await createEnterpriseTimesheet(organizationId, session.userId, parsed.data, { selfService: true });
     await writeAuditLog({
       userId: session.userId, action: "ENTERPRISE_SELF_WORK_REPORT_SUBMITTED",
       entity: "EnterpriseTimesheet", entityId: timesheet.id, request: req,

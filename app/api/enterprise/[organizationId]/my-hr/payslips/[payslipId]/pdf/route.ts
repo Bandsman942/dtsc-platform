@@ -2,8 +2,7 @@ import type { ProfessionalReportExportModel } from "@/lib/reporting/professional
 import { renderProfessionalPdfBytes } from "@/lib/reporting/professional-pdf-v2";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
-import { getEnterpriseCommonDomainAccess } from "@/lib/enterprise/common/access";
-import { getActiveEnterpriseSelfEmployee } from "@/lib/enterprise/hr-payroll/self-service";
+import { getActiveEnterpriseSelfEmployee, hasEnterpriseSelfHrModule } from "@/lib/enterprise/hr-payroll/self-service";
 import { prisma } from "@/lib/prisma";
 
 type Params = { params: Promise<{ organizationId: string; payslipId: string }> };
@@ -13,7 +12,7 @@ export async function GET(req: Request, { params }: Params) {
   const session = await getSession();
   if (!session) return new Response(null, { status: 401 });
   const { organizationId, payslipId } = await params;
-  const access = await getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode: "PAYROLL_OPERATIONS", action: "read", includeMutationCapabilities: false });
+  const access = await hasEnterpriseSelfHrModule(session, organizationId, "PAYROLL_OPERATIONS");
   if (!access) return new Response(null, { status: 403 });
   const employee = await getActiveEnterpriseSelfEmployee(session, organizationId);
   if (!employee) return new Response(null, { status: 403 });

@@ -14,25 +14,36 @@ expect("prisma/migrations/20261105210000_employee_work_clock_sessions/migration.
 ]);
 expect("lib/enterprise/hr-payroll/self-service.ts", [
   'status: "ACTIVE"', "removedAt: null", "organizationMemberId: member.id",
-  "archivedAt: null", "employmentStatus: \"ACTIVE\"",
+  "archivedAt: null", "employmentStatus: \"ACTIVE\"", "hasEnterpriseSelfHrModule",
+  "getOrganizationEntitlements", "getActiveEnterpriseModuleRestriction",
 ]);
 expect("app/api/enterprise/[organizationId]/my-hr/route.ts", [
-  'moduleCode: "PAYROLL_OPERATIONS"', 'moduleCode: "TIME_ATTENDANCE"',
+  'hasEnterpriseSelfHrModule(session, organizationId, "PAYROLL_OPERATIONS")', 'hasEnterpriseSelfHrModule(session, organizationId, "TIME_ATTENDANCE")',
   "employeeId: employee.id", 'status: "APPROVED"', 'status: "GENERATED"',
   '"Cache-Control": "private, no-store, max-age=0"',
 ]);
 expect("app/api/enterprise/[organizationId]/my-hr/clock/route.ts", [
-  "isSameOriginRequest", "rateLimit", 'action: "submit"', "employeeId: employee.id",
+  "isSameOriginRequest", "rateLimit", "hasEnterpriseSelfHrModule", "employeeId: employee.id",
   "new Date()", "TransactionIsolationLevel.Serializable", "revision: open.revision",
 ]);
 expect("app/api/enterprise/[organizationId]/my-hr/reports/route.ts", [
   "isSameOriginRequest", "timesheetCreateSchema", "employeeId: employee.id",
+  "{ selfService: true }",
   "createEnterpriseTimesheet", "ENTERPRISE_SELF_WORK_REPORT_SUBMITTED",
 ]);
 expect("app/api/enterprise/[organizationId]/my-hr/payslips/[payslipId]/pdf/route.ts", [
-  "getActiveEnterpriseSelfEmployee", 'status: "APPROVED"', 'status: "GENERATED"',
+  "getActiveEnterpriseSelfEmployee", "hasEnterpriseSelfHrModule", 'status: "APPROVED"', 'status: "GENERATED"',
   '"Content-Type": "application/pdf"', '"Cache-Control": "private, no-store, max-age=0"',
   "ENTERPRISE_SELF_PAYSLIP_DOWNLOADED",
+]);
+expect("app/api/enterprise/[organizationId]/my-hr/approvers/route.ts", [
+  "hasEnterpriseSelfHrModule", 'action: "approve"', "getActiveEnterpriseSelfEmployee",
+]);
+expect("lib/enterprise/hr-payroll/timesheets.ts", [
+  "options?.selfService", 'action: "approve"', "SELF_APPROVAL_FORBIDDEN",
+]);
+expect("app/enterprise-modules/page.tsx", [
+  "<EnterpriseMyHrSelfService organizationId={organizationId} />",
 ]);
 expect("app/api/enterprise/[organizationId]/payroll-runs/route.ts", [
   "actorScope", "manageAccess", "approverUserId: session.userId",
@@ -55,4 +66,6 @@ assert.ok(!file("app/api/enterprise/[organizationId]/my-hr/clock/route.ts").incl
   "A clock session must not automatically create an approved timesheet");
 assert.ok(!file("app/api/enterprise/[organizationId]/my-hr/payslips/[payslipId]/pdf/route.ts").includes("enterprisePayment.create"),
   "PDF payslips must never trigger payments");
+assert.ok(!file("components/enterprise/professional/enterprise-my-hr-self-service.tsx").includes("new Date().toISOString().slice(0, 10)"),
+  "Business date input must use the browser local calendar date");
 console.info("Hotfix #1029 HR personal payroll/time security QA: OK");

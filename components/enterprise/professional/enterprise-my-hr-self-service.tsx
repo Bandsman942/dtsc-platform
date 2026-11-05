@@ -93,9 +93,11 @@ export function EnterpriseMyHrSelfService({ organizationId }: { organizationId: 
 
   useEffect(() => {
     let active = true;
+    setData(null); setLoading(true);
     void fetch(`/api/enterprise/${organizationId}/my-hr?page=${page}&pageSize=10`, { cache: "no-store" })
       .then(async (response) => {
         const payload = await response.json().catch(() => null) as (SelfData & { message?: string }) | null;
+        if (response.status === 403) { if (active) { setData(null); setError(""); } return; }
         if (!response.ok || !payload) throw new Error(payload?.message || c.unavailable);
         if (active) { setData(payload); setError(""); }
       }).catch((err) => { if (active) setError(err instanceof Error ? err.message : c.unavailable); })
@@ -106,7 +108,7 @@ export function EnterpriseMyHrSelfService({ organizationId }: { organizationId: 
   useEffect(() => {
     let active = true;
     if (!data?.canSubmitReport) return;
-    void fetch(`/api/enterprise/${organizationId}/hr-payroll-lookups?module=TIME_ATTENDANCE`, { cache: "no-store" })
+    void fetch(`/api/enterprise/${organizationId}/my-hr/approvers`, { cache: "no-store" })
       .then((response) => response.json())
       .then((payload: { approvers?: Approver[] }) => { if (active) setApprovers(payload.approvers || []); })
       .catch(() => { if (active) setApprovers([]); });
@@ -159,7 +161,7 @@ export function EnterpriseMyHrSelfService({ organizationId }: { organizationId: 
     if (!description) return setError(c.emptyDescription);
     if (!approverUserId) return setError(c.noApprover);
     if (!day || declaredMinutes <= 0 || declaredMinutes > 1440) return setError(c.failed);
-    const workDate = new Date(day + "T12:00:00.000Z").toISOString();
+    const workDate = day;
     setBusy(true); setError(""); setSuccess("");
     try {
       await post(`/api/enterprise/${organizationId}/my-hr/reports`, {

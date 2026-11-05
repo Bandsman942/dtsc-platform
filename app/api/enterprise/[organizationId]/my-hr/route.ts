@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog } from "@/lib/audit";
-import { getEnterpriseCommonDomainAccess } from "@/lib/enterprise/common/access";
-import { getActiveEnterpriseSelfEmployee } from "@/lib/enterprise/hr-payroll/self-service";
+import { getActiveEnterpriseSelfEmployee, hasEnterpriseSelfHrModule } from "@/lib/enterprise/hr-payroll/self-service";
 import { prisma } from "@/lib/prisma";
 
 type Params = { params: Promise<{ organizationId: string }> };
@@ -13,15 +12,14 @@ export async function GET(req: Request, { params }: Params) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401, headers: privateHeaders });
   const { organizationId } = await params;
-  const [payAccess, timeAccess, timeSubmitAccess] = await Promise.all([
-    getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode: "PAYROLL_OPERATIONS", action: "read", includeMutationCapabilities: false }),
-    getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode: "TIME_ATTENDANCE", action: "read", includeMutationCapabilities: false }),
-    getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode: "TIME_ATTENDANCE", action: "submit", includeMutationCapabilities: false }),
+  const [payAccess, timeAccess] = await Promise.all([
+    hasEnterpriseSelfHrModule(session, organizationId, "PAYROLL_OPERATIONS"),
+    hasEnterpriseSelfHrModule(session, organizationId, "TIME_ATTENDANCE"),
   ]);
-  if (!payAccess && !timeAccess && !timeSubmitAccess) return NextResponse.json({ error: "Forbidden" }, { status: 403, headers: privateHeaders });
+  if (!payAccess && !timeAccess) return NextResponse.json({ error: "Forbidden" }, { status: 403, headers: privateHeaders });
   const employee = await getActiveEnterpriseSelfEmployee(session, organizationId);
   if (!employee) return NextResponse.json({
-    linked: false, payrollEnabled: Boolean(payAccess), timeEnabled: Boolean(timeAccess || timeSubmitAccess),
+    linked: false, payrollEnabled: Boolean(payAccess), timeEnabled: Boolean(timeAccess),
     canClock: false, canSubmitReport: false, payslips: [], timesheets: [], clockSessions: [],
     message: "EMPLOYEE_SELF_LINK_REQUIRED",
   }, { headers: privateHeaders });
@@ -45,12 +43,12 @@ export async function GET(req: Request, { params }: Params) {
       },
     }) : Promise.resolve([]),
     payAccess ? prisma.enterprisePayslip.count({ where: payslipWhere }) : Promise.resolve(0),
-    (timeAccess || timeSubmitAccess) ? prisma.enterpriseTimesheet.findMany({
+    (timeAccess) ? prisma.enterpriseTimesheet.findMany({
       where: { organizationId, employeeId: employee.id, archivedAt: null },
       orderBy: { createdAt: "desc" }, take: 20,
       select: { id: true, reference: true, periodStart: true, periodEnd: true, status: true, totalDeclaredMinutes: true, totalApprovedMinutes: true, submittedAt: true, approvedAt: true, correctionComment: true, rejectionComment: true },
     }) : Promise.resolve([]),
-    (timeAccess || timeSubmitAccess) ? prisma.enterpriseWorkClockSession.findMany({
+    (timeAccess) ? prisma.enterpriseWorkClockSession.findMany({
       where: { organizationId, employeeId: employee.id },
       orderBy: { startedAt: "desc" }, take: 20,
       select: { id: true, startedAt: true, stoppedAt: true, workSummary: true, revision: true },
@@ -59,7 +57,7 @@ export async function GET(req: Request, { params }: Params) {
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "my-hr", page } });
   return NextResponse.json({
     linked: true, employee, payrollEnabled: Boolean(payAccess), timeEnabled: Boolean(timeAccess),
-    canClock: Boolean(timeSubmitAccess), canSubmitReport: Boolean(timeSubmitAccess),
+    canClock: Boolean(timeAccess), canSubmitReport: Boolean(timeAccess),
     payslips, payslipsPagination: { page, pageSize, total: totalPayslips, pages: Math.max(1, Math.ceil(totalPayslips / pageSize)) },
     timesheets, clockSessions,
   }, { headers: privateHeaders });
