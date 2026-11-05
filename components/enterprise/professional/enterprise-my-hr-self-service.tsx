@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
+import Link from "next/link";
 import { Clock3, Download, FileText, Play, RefreshCw, Send, Square, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,6 +24,8 @@ type SelfData = {
 };
 type Approver = { userId: string; name?: string | null; label?: string; email?: string };
 type Pagination = { page: number; pages: number; total: number };
+export type SelfHrRelatedModule = { code: "TIME_ATTENDANCE" | "HUMAN_RESOURCES" | "PAYROLL_OPERATIONS"; href: string; label: string };
+export type SelfHrTimeTab = "SCHEDULES" | "ATTENDANCE" | "LEAVE" | "TIMESHEETS";
 
 const copy = {
   fr: {
@@ -38,6 +41,7 @@ const copy = {
     selectApprover: "Choisir un validateur", submit: "Soumettre le rapport", history: "Rapports précédents",
     noHistory: "Aucun rapport soumis.", declared: "Déclaré", accepted: "Approuvé",
     page: "Page", previous: "Précédente", next: "Suivante",
+    related: "Accès rapides et modules associés", schedules: "Horaires planifiés", attendance: "Présences", leaves: "Congés", sheets: "Feuilles de temps",
     sent: "Votre rapport de travail a été soumis au validateur sélectionné.",
     started: "Votre pointage a commencé, à l'heure du serveur.",
     stopped: "Votre pointage a été terminé et conservé dans l'historique.",
@@ -61,6 +65,7 @@ const copy = {
     selectApprover: "Choose an approver", submit: "Submit work report", history: "Previous reports",
     noHistory: "No reports submitted.", declared: "Declared", accepted: "Approved",
     page: "Page", previous: "Previous", next: "Next",
+    related: "Quick access and related modules", schedules: "Planned schedules", attendance: "Attendance", leaves: "Leave", sheets: "Timesheets",
     sent: "Your work report was submitted to the selected approver.",
     started: "Clock-in recorded using server time.",
     stopped: "Clock-out recorded and preserved in history.",
@@ -92,7 +97,7 @@ function HrPager({ pagination, onChange, label, copy: c }: {
   </nav>;
 }
 
-export function EnterpriseMyHrSelfService({ organizationId }: { organizationId: string }) {
+export function EnterpriseMyHrSelfService({ organizationId, relatedModules = [], onOpenTimeTab }: { organizationId: string; relatedModules?: SelfHrRelatedModule[]; onOpenTimeTab?: (tab: SelfHrTimeTab) => void }) {
   const locale = useProfessionalErpLocale();
   const c = copy[locale === "en" ? "en" : "fr"];
   const [data, setData] = useState<SelfData | null>(null);
@@ -142,6 +147,11 @@ export function EnterpriseMyHrSelfService({ organizationId }: { organizationId: 
   const money = (amount: string, currency: string) =>
     new Intl.NumberFormat(locale === "en" ? "en-GB" : "fr-FR", { maximumFractionDigits: 2, minimumFractionDigits: 2 }).format(Number(amount)) + " " + currency;
   const activeClock = data?.activeClockSession || data?.clockSessions.find((clock) => !clock.stoppedAt);
+  const timeModule = relatedModules.find((module) => module.code === "TIME_ATTENDANCE");
+  const timeLinks: Array<{ tab: SelfHrTimeTab; label: string }> = [
+    { tab: "SCHEDULES", label: c.schedules }, { tab: "ATTENDANCE", label: c.attendance },
+    { tab: "LEAVE", label: c.leaves }, { tab: "TIMESHEETS", label: c.sheets },
+  ];
   const errorMessage = (body: { error?: string; message?: string } | null) => {
     if (body?.error === "EMPLOYEE_CLOCK_ALREADY_RUNNING") return c.already;
     if (body?.error === "EMPLOYEE_CLOCK_NOT_RUNNING") return c.notRunning;
@@ -200,7 +210,17 @@ export function EnterpriseMyHrSelfService({ organizationId }: { organizationId: 
       <Button variant="outline" size="sm" disabled={loading || busy} onClick={() => setRefresh((v) => v + 1)}><RefreshCw className="mr-1 h-4 w-4" />{c.refresh}</Button>
     </header>
     {!data.linked ? <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm font-medium text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100">{c.linking}</div> : <>
-      {data.payrollEnabled ? <article className="grid min-w-0 gap-3 rounded-2xl border border-dtsc-border bg-dtsc-surface p-4">
+      <nav aria-label={c.related} className="grid min-w-0 gap-3 rounded-xl border border-dtsc-border bg-dtsc-soft/30 p-3 sm:p-4">
+        <h3 className="text-sm font-bold text-dtsc-ink">{c.related}</h3>
+        <div className="flex min-w-0 flex-wrap gap-2">
+          {data.payrollEnabled ? <a href="#my-hr-payslips" className="inline-flex min-h-10 items-center rounded-lg border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm font-semibold text-dtsc-blue hover:border-dtsc-blue">{c.pays}</a> : null}
+          {data.timeEnabled ? <a href="#my-hr-clock" className="inline-flex min-h-10 items-center rounded-lg border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm font-semibold text-dtsc-blue hover:border-dtsc-blue">{c.time}</a> : null}
+          {data.canSubmitReport ? <a href="#my-hr-reports" className="inline-flex min-h-10 items-center rounded-lg border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm font-semibold text-dtsc-blue hover:border-dtsc-blue">{c.report}</a> : null}
+          {timeModule ? timeLinks.map((item) => onOpenTimeTab ? <button key={item.tab} type="button" onClick={() => onOpenTimeTab(item.tab)} className="inline-flex min-h-10 items-center rounded-lg border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm font-semibold text-dtsc-blue hover:border-dtsc-blue focus-visible:outline focus-visible:outline-2 focus-visible:outline-dtsc-blue">{item.label}</button> : <Link key={item.tab} href={`${timeModule.href}?tab=${item.tab}`} className="inline-flex min-h-10 items-center rounded-lg border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm font-semibold text-dtsc-blue hover:border-dtsc-blue focus-visible:outline focus-visible:outline-2 focus-visible:outline-dtsc-blue">{item.label}</Link>) : null}
+          {relatedModules.filter((module) => module.code !== "TIME_ATTENDANCE").map((module) => <Link key={module.code} href={module.href} className="inline-flex min-h-10 items-center rounded-lg border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm font-semibold text-dtsc-blue hover:border-dtsc-blue focus-visible:outline focus-visible:outline-2 focus-visible:outline-dtsc-blue">{module.label}</Link>)}
+        </div>
+      </nav>
+      {data.payrollEnabled ? <article id="my-hr-payslips" className="grid min-w-0 gap-3 rounded-2xl border border-dtsc-border bg-dtsc-surface p-4">
         <h3 className="flex items-center gap-2 font-bold text-dtsc-ink [&>svg]:text-dtsc-blue"><Wallet className="h-5 w-5" />{c.pays}</h3>
         {!data.payslips.length ? <p className="text-sm text-dtsc-muted">{c.noPays}</p> : data.payslips.map((payslip) => <div key={payslip.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-dtsc-border bg-dtsc-soft/30 p-3">
           <div><p className="font-semibold">{payslip.payrollItem.payrollRun.payrollPeriod.name} · {payslip.payslipNumber}</p>
@@ -210,7 +230,7 @@ export function EnterpriseMyHrSelfService({ organizationId }: { organizationId: 
         </div>)}
         <HrPager pagination={data.payslipsPagination} onChange={setPage} label={c.pays} copy={c} />
       </article> : null}
-      {data.timeEnabled || data.canClock ? <article className="grid min-w-0 gap-4 rounded-2xl border border-dtsc-border bg-dtsc-surface p-4">
+      {data.timeEnabled || data.canClock ? <article id="my-hr-clock" className="grid min-w-0 gap-4 rounded-2xl border border-dtsc-border bg-dtsc-surface p-4">
         <h3 className="flex items-center gap-2 font-bold text-dtsc-ink [&>svg]:text-dtsc-blue"><Clock3 className="h-5 w-5" />{c.time}</h3>
         {data.canClock ? <div className="flex flex-wrap items-center gap-3">
           <span className={`rounded-full px-3 py-1 text-xs font-bold ${activeClock ? "bg-amber-200 text-amber-950 dark:bg-amber-900 dark:text-amber-100" : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200"}`}>{activeClock ? `${c.running} · ${time(activeClock.startedAt)}` : c.idle}</span>
@@ -225,7 +245,7 @@ export function EnterpriseMyHrSelfService({ organizationId }: { organizationId: 
         </div>
         <HrPager pagination={data.clockSessionsPagination} onChange={setClockPage} label={c.past} copy={c} />
       </article> : null}
-      {data.canSubmitReport ? <article className="grid min-w-0 gap-3 rounded-2xl border border-dtsc-border bg-dtsc-surface p-4">
+      {data.canSubmitReport ? <article id="my-hr-reports" className="grid min-w-0 gap-3 rounded-2xl border border-dtsc-border bg-dtsc-surface p-4">
         <h3 className="flex items-center gap-2 font-bold text-dtsc-ink [&>svg]:text-dtsc-blue"><FileText className="h-5 w-5" />{c.report}</h3>
         <form onSubmit={(event) => void submitReport(event)} className="grid gap-3 sm:grid-cols-2">
           <label className="grid gap-1 text-sm font-semibold">{c.day}<Input name="day" type="date" required defaultValue={todayLocalDateInput()} /></label>

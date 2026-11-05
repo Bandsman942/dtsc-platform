@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Ban, CalendarClock, CalendarDays, CheckCircle2, Clock3, Eye, UserCheck, XCircle } from "lucide-react";
 import { Field, NativeSelect } from "@/components/enterprise/core-v2/erp-v2-ui";
-import { EnterpriseMyHrSelfService } from "@/components/enterprise/professional/enterprise-my-hr-self-service";
+import { EnterpriseMyHrSelfService, type SelfHrRelatedModule } from "@/components/enterprise/professional/enterprise-my-hr-self-service";
 import {
   professionalErpDate,
   professionalErpEnumLabel,
@@ -125,7 +125,7 @@ function PaginationControls({ page, pageCount, onChange, copy }: { page: number;
   return <div className="flex flex-wrap items-center justify-between gap-3 border-t border-dtsc-border pt-4"><span className="text-sm font-semibold text-dtsc-muted">{copy.page} {page}/{pageCount}</span><div className="flex gap-2"><Button type="button" variant="outline" disabled={page <= 1} onClick={() => onChange(page - 1)}>{copy.previous}</Button><Button type="button" variant="outline" disabled={page >= pageCount} onClick={() => onChange(page + 1)}>{copy.next}</Button></div></div>;
 }
 
-export function EnterpriseTimeAttendanceWorkspace({ organizationId, organizationName, definition }: { organizationId: string; organizationName: string; definition: EnterpriseModuleDefinition }) {
+export function EnterpriseTimeAttendanceWorkspace({ organizationId, organizationName, definition, relatedModules = [] }: { organizationId: string; organizationName: string; definition: EnterpriseModuleDefinition; relatedModules?: SelfHrRelatedModule[] }) {
   const locale = useProfessionalErpLocale();
   const copy = copyByLocale[locale === "en" ? "en" : "fr"];
   const t = (key: Parameters<typeof professionalErpT>[1], values?: Record<string, string | number>) => professionalErpT(locale, key, values);
@@ -134,6 +134,10 @@ export function EnterpriseTimeAttendanceWorkspace({ organizationId, organization
   const minutesLabel = (minutes: number) => t("time.minutesValue", { hours: Math.floor(minutes / 60), minutes: (minutes % 60).toString().padStart(2, "0") });
 
   const [tab, setTab] = useState<TimeTab>("SCHEDULES");
+  useEffect(() => {
+    const requested = new URL(window.location.href).searchParams.get("tab");
+    if (requested && ["SCHEDULES", "ATTENDANCE", "LEAVE", "TIMESHEETS", "SELF_SERVICE"].includes(requested)) setTab(requested as TimeTab);
+  }, []);
   const [page, setPage] = useState(1);
   const [status, setStatus] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
@@ -425,7 +429,7 @@ export function EnterpriseTimeAttendanceWorkspace({ organizationId, organization
     <ModuleToolbar controls={<><ProfessionalTabs value={tab} onChange={(value) => { setTab(value); setStatus(""); setPage(1); }} items={tabs} />{tab !== "SCHEDULES" && tab !== "SELF_SERVICE" ? <NativeSelect value={status} onChange={(value) => { setStatus(value); setPage(1); }} items={currentStatusItems} /> : null}</>} summary={copy.separation} />
     <ModuleContent>
       {error && !scheduleOpen && !attendanceOpen && !leaveOpen && !timesheetOpen && !decisionTarget && !cancelTarget && !scheduleEndTarget ? <ProfessionalError message={error} /> : null}
-      {tab === "SELF_SERVICE" ? <EnterpriseMyHrSelfService organizationId={organizationId} /> : <ModuleSection title={tab === "SCHEDULES" ? copy.scheduleSection : tab === "ATTENDANCE" ? copy.attendanceSection : tab === "LEAVE" ? t("time.leaveSection") : t("time.timesheetSection")} description={tab === "SCHEDULES" ? copy.scheduleDescription : tab === "ATTENDANCE" ? copy.attendanceDescription : tab === "LEAVE" ? t("time.leaveSectionDescription") : t("time.timesheetSectionDescription")}>
+      {tab === "SELF_SERVICE" ? <EnterpriseMyHrSelfService organizationId={organizationId} relatedModules={relatedModules} onOpenTimeTab={(nextTab) => { setTab(nextTab); setStatus(""); setPage(1); }} /> : <ModuleSection title={tab === "SCHEDULES" ? copy.scheduleSection : tab === "ATTENDANCE" ? copy.attendanceSection : tab === "LEAVE" ? t("time.leaveSection") : t("time.timesheetSection")} description={tab === "SCHEDULES" ? copy.scheduleDescription : tab === "ATTENDANCE" ? copy.attendanceDescription : tab === "LEAVE" ? t("time.leaveSectionDescription") : t("time.timesheetSectionDescription")}>
         {activeCollection.error ? <ProfessionalError message={activeCollection.error} /> : activeCollection.loading ? <ProfessionalLoading /> : tab === "SCHEDULES" ? (
           schedules.items.length ? <BusinessList ariaLabel={copy.scheduleSection}>{schedules.items.map((item) => {
             const day = item.scheduleType === "WEEKLY" ? copy.days[Math.max(0, (item.dayOfWeek || 1) - 1)] : (item.scheduleDate ? professionalErpDate(item.scheduleDate, locale) : copy.date);

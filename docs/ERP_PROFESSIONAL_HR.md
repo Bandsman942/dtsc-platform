@@ -38,6 +38,9 @@ Les surfaces de dossier collaborateur, contrats, organisation et libre-service R
 
 Le libre-service « Mon espace RH » est accessible uniquement par l'onglet du rail horizontal de `TIME_ATTENDANCE`, après chargement paresseux. Dans la même vue métier plein écran que les autres onglets, il regroupe bulletins, pointage et rapports. Les trois historiques possèdent des paginations indépendantes côté serveur (`page`, `clockPage`, `reportPage`, taille bornée à 5–25) et des compteurs. Le pointage actif reste visible indépendamment de la page d'historique ; les listes demeurent liées au collaborateur du compte authentifié et à l'organisation active. Aucun historique n'est tronqué à 6/8/20 éléments dans le client.
 
+**Liaisons transversales (#1036) :** navigation interne vers « Mes bulletins », « Mon temps de travail » et « Rapports », liens vers les onglets « Horaires planifiés », « Présences », « Congés » et « Feuilles de temps » du rail quand `TIME_ATTENDANCE` est accessible, puis modules RH et paie uniquement s'ils apparaissent dans la navigation autorisée calculée côté serveur. Le hub des modules ERP propose désormais un accès compact ; les collaborateurs disposant du seul droit de lire leurs propres données peuvent ouvrir `/enterprise-modules/my-hr` en plein écran sans exiger une permission de lecture de l'ensemble du module TIME_ATTENDANCE. Ces liens sont des raccourcis, **jamais un contournement RBAC**. La route personnelle vérifie indépendamment les modules habilités ; les API d'historiques vérifient toujours l'identité et le tenant.
+
+
 **Recette visuelle #1036 :** mobile 320, 360, 375, 390, 414 px, tablette 768/1024 px, FR/EN, clair/sombre, statut pointage actif/inactif, paie approuvée, rapports en attente/refusés/approuvés, navigation dossier/contrat/organisation et clavier.
 
 ## Maturité

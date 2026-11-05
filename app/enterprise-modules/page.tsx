@@ -3,7 +3,7 @@ import { ArrowRight, Layers3 } from "lucide-react";
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/layout/app-shell";
 import { EnterpriseQuickAccess } from "@/components/enterprise/enterprise-quick-access";
-import { EnterpriseMyHrSelfService } from "@/components/enterprise/professional/enterprise-my-hr-self-service";
+import { hasEnterpriseSelfHrModule } from "@/lib/enterprise/hr-payroll/self-service";
 import { BusinessList, BusinessListItem } from "@/components/workspace/business-list";
 import { EmptyState } from "@/components/workspace/empty-state";
 import { ModuleContent, ModuleHeader, ModuleSection, ModuleWorkspace } from "@/components/workspace/module-workspace";
@@ -25,7 +25,12 @@ export default async function EnterpriseModulesHubPage() {
     redirect("/dashboard");
   }
 
-  const modules = await getEnterpriseNavigationModules(organizationId, user.id, user.locale);
+  const [modules, selfPayrollAccess, selfTimeAccess] = await Promise.all([
+    getEnterpriseNavigationModules(organizationId, user.id, user.locale),
+    hasEnterpriseSelfHrModule(session, organizationId, "PAYROLL_OPERATIONS"),
+    hasEnterpriseSelfHrModule(session, organizationId, "TIME_ATTENDANCE"),
+  ]);
+  const attendanceModule = modules.find((module) => module.code === "TIME_ATTENDANCE");
   const groupedModules = new Map<string, typeof modules>();
   for (const enterpriseModule of modules) {
     const groupModules = groupedModules.get(enterpriseModule.navigationGroupLabel) || [];
@@ -83,7 +88,18 @@ export default async function EnterpriseModulesHubPage() {
             modules={modules}
             locale={user.locale}
           />
-          <EnterpriseMyHrSelfService organizationId={organizationId} />
+          {(selfPayrollAccess || selfTimeAccess) ? <ModuleSection
+            title={user.locale === "en" ? "My HR space" : "Mon espace RH"}
+            description={user.locale === "en" ? "Private payslips, work clock and reports, with links to authorized modules." : "Bulletins privés, pointage et rapports, avec accès aux modules autorisés."}
+          >
+            <Link
+              href={attendanceModule ? `${attendanceModule.href}?tab=SELF_SERVICE` : "/enterprise-modules/my-hr"}
+              className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-dtsc-border bg-dtsc-surface px-4 py-3 text-sm font-bold text-dtsc-blue hover:border-dtsc-blue focus-visible:outline focus-visible:outline-2 focus-visible:outline-dtsc-blue"
+            >
+              {user.locale === "en" ? "Open my HR space" : "Ouvrir mon espace RH"}
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          </ModuleSection> : null}
           {Array.from(groupedModules.entries()).map(([groupLabel, groupModules]) => (
             <ModuleSection
               key={groupLabel}

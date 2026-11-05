@@ -6,6 +6,9 @@ const hr = fs.readFileSync('components/enterprise/professional/enterprise-human-
 const self = fs.readFileSync('components/enterprise/professional/enterprise-my-hr-self-service.tsx', 'utf8');
 const workspace = fs.readFileSync('components/enterprise/professional/enterprise-time-attendance-workspace.tsx', 'utf8');
 const route = fs.readFileSync('app/api/enterprise/[organizationId]/my-hr/route.ts', 'utf8');
+const moduleHub = fs.readFileSync('app/enterprise-modules/page.tsx', 'utf8');
+const moduleRoute = fs.readFileSync('app/enterprise-modules/[moduleCode]/page.tsx', 'utf8');
+const personalRoute = fs.readFileSync('app/enterprise-modules/my-hr/page.tsx', 'utf8');
 
 // Sections and content use DTSC surface tokens in both themes.
 assert.match(dossier, /function Section\(\{ title, icon: Icon, children/);
@@ -56,4 +59,21 @@ assert.match(route, /clockSessionsPagination:/);
 assert.match(route, /activeClockSession,/);
 assert.match(route, /Cache-Control": "private, no-store/);
 
-console.log('HOTFIX #1036: DTSC palette, personal tab and private pagination contract passed (OWNER_E2E pending).');
+// Navigation never implies management permissions; links are resolved from the
+// canonical module registry and the owner-only fallback route stays available.
+assert.match(self, /relatedModules\.filter\(\(module\) => module\.code !== "TIME_ATTENDANCE"\)/);
+assert.match(self, /href=\{module\.href\}/);
+assert.match(self, /onOpenTimeTab\(item\.tab\)/);
+assert.match(self, /href="#my-hr-payslips"/);
+assert.match(self, /href="#my-hr-clock"/);
+assert.match(self, /href="#my-hr-reports"/);
+assert.match(workspace, /relatedModules=\{relatedModules\}/);
+assert.match(workspace, /new URL\(window\.location\.href\)\.searchParams\.get\("tab"\)/);
+assert.match(moduleHub, /\?tab=SELF_SERVICE/);
+assert.match(moduleHub, /hasEnterpriseSelfHrModule\(session, organizationId/);
+assert.doesNotMatch(moduleHub, /<EnterpriseMyHrSelfService/);
+assert.match(moduleRoute, /getEnterpriseNavigationModules\(organizationId, user\.id, user\.locale\)/);
+assert.match(personalRoute, /hasEnterpriseSelfHrModule\(session, organizationId/);
+assert.match(personalRoute, /<EnterpriseMyHrSelfService organizationId=\{organizationId\} relatedModules=\{relatedModules\}/);
+
+console.log('HOTFIX #1036: DTSC palette, HR links, personal tab and private pagination contract passed (OWNER_E2E pending).');
