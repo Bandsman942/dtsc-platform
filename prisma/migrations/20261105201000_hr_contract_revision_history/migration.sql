@@ -11,9 +11,9 @@ CREATE TABLE "EnterpriseEmploymentContractRevision" (
   CONSTRAINT "EnterpriseEmploymentContractRevision_pkey" PRIMARY KEY ("id")
 );
 
-CREATE UNIQUE INDEX "EnterpriseEmploymentContractRevision_organizationId_contractId_revisionNumber_key"
+CREATE UNIQUE INDEX "ECR_contract_revision_uniq"
   ON "EnterpriseEmploymentContractRevision"("organizationId", "contractId", "revisionNumber");
-CREATE INDEX "EnterpriseEmploymentContractRevision_organizationId_contractId_savedAt_idx"
+CREATE INDEX "ECR_contract_saved_idx"
   ON "EnterpriseEmploymentContractRevision"("organizationId", "contractId", "savedAt");
 ALTER TABLE "EnterpriseEmploymentContractRevision"
   ADD CONSTRAINT "EnterpriseEmploymentContractRevision_organizationId_contractId_fkey"

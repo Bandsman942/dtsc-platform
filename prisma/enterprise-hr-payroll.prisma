@@ -110,8 +110,8 @@ model EnterpriseEmploymentContractRevision {
   savedAt             DateTime                     @default(now())
   contract            EnterpriseEmploymentContract @relation(fields: [organizationId, contractId], references: [organizationId, id], onDelete: Restrict)
 
-  @@unique([organizationId, contractId, revisionNumber])
-  @@index([organizationId, contractId, savedAt])
+  @@unique([organizationId, contractId, revisionNumber], map: "ECR_contract_revision_uniq")
+  @@index([organizationId, contractId, savedAt], map: "ECR_contract_saved_idx")
 }
 
 model EnterpriseEmployeeAssignment {

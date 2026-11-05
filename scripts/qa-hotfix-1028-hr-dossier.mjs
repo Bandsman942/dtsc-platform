@@ -7,7 +7,7 @@ function includes(path, tokens) {
   for (const token of tokens) assert.ok(content.includes(token), path + " missing: " + token);
 }
 includes("prisma/enterprise-hr-payroll.prisma", [
-  "model EnterpriseEmploymentContractRevision", "@@unique([organizationId, contractId, revisionNumber])",
+  "model EnterpriseEmploymentContractRevision", "@@unique([organizationId, contractId, revisionNumber], map: \"ECR_contract_revision_uniq\")",
 ]);
 includes("prisma/migrations/20261105201000_hr_contract_revision_history/migration.sql", [
   "CREATE TABLE", "FOREIGN KEY", "ON DELETE RESTRICT",
