@@ -71,6 +71,11 @@ const copy = {
   },
 } as const;
 
+function todayLocalDateInput() {
+  const value = new Date();
+  return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
+}
+
 export function EnterpriseMyHrSelfService({ organizationId }: { organizationId: string }) {
   const locale = useProfessionalErpLocale();
   const c = copy[locale === "en" ? "en" : "fr"];
@@ -205,7 +210,7 @@ export function EnterpriseMyHrSelfService({ organizationId }: { organizationId: 
       {data.canSubmitReport ? <article className="grid gap-3 rounded-2xl border border-violet-200 bg-violet-50/70 p-4 dark:border-violet-800 dark:bg-violet-950/20">
         <h3 className="flex items-center gap-2 font-bold text-violet-900 dark:text-violet-100"><FileText className="h-5 w-5" />{c.report}</h3>
         <form onSubmit={(event) => void submitReport(event)} className="grid gap-3 sm:grid-cols-2">
-          <label className="grid gap-1 text-sm font-semibold">{c.day}<Input name="day" type="date" required defaultValue={new Date().toISOString().slice(0, 10)} /></label>
+          <label className="grid gap-1 text-sm font-semibold">{c.day}<Input name="day" type="date" required defaultValue={todayLocalDateInput()} /></label>
           <label className="grid gap-1 text-sm font-semibold">{c.hours}<Input name="hours" type="number" min="0.25" max="24" step="0.25" required defaultValue="8" /></label>
           <label className="grid gap-1 text-sm font-semibold sm:col-span-2">{c.desc}<textarea name="description" minLength={3} maxLength={1000} required className="min-h-24 w-full rounded-xl border border-dtsc-border bg-dtsc-surface p-3 text-sm" /></label>
           <label className="grid gap-1 text-sm font-semibold sm:col-span-2">{c.approver}<select name="approverUserId" required defaultValue="" className="w-full rounded-xl border border-dtsc-border bg-dtsc-surface p-3 text-sm">
