@@ -10,6 +10,10 @@ Les tokens sont définis dans `app/design-system.css`. Les composants doivent ut
 
 Les accents produits restent légers : Public bleu, Account cyan, App bleu, Console indigo, Support vert. La marque mère conserve DTSC Navy, DTSC Blue et DTSC Cyan.
 
+## Hiérarchie des modules RH
+
+Les conteneurs et sous-sections utilisent d'abord les surfaces et traits DTSC neutres avec titres et icônes bleu de marque. Les variations cyan, violet, orange, rose et vert ne servent pas à classifier les panneaux. Elles sont limitées aux badges d'état et aux encadrés exceptionnels (alerte, confirmation, erreur, archivage), en restant compatibles avec le contraste sombre et clair. Une information ne dépend jamais de la couleur seule ; l'état est nommé.
+
 ## Typographie
 
 L’échelle canonique comprend Display, H1, H2, H3, Body large, Body, Body small, Label et Caption. Les titres n’utilisent plus systématiquement le poids maximal ; la hiérarchie dépend aussi de la taille, de l’espacement et du contraste.

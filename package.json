@@ -22,6 +22,7 @@
     "qa:hotfix-1001-renewal-journey": "node scripts/qa-hotfix-1001-renewal-journey.mjs",
     "qa:hotfix-1022-console-auto-reload": "node scripts/qa-hotfix-1022-console-auto-reload.mjs",
     "qa:hotfix-1026-chrome-mfa-session-loop": "node scripts/qa-hotfix-1026-chrome-mfa-session-loop.mjs",
+    "qa:hotfix-1036-hr-palette": "node scripts/qa-hotfix-1036-hr-palette.mjs",
     "qa:console-internal-workspaces": "node scripts/qa-console-internal-workspaces.mjs",
     "qa:console-workspace-shell": "node scripts/qa-console-workspace-shell.mjs",
     "qa:standard-module-registry": "node scripts/audit-standard-module-registry.mjs",

@@ -1,3 +1,9 @@
+## 2026-11-06 — Hotfix #1036 : palette RH DTSC sobre (pré-release)
+
+- Fonds et bordures uniformisés dans le libre-service RH, les sections de la fiche collaborateur, l'organigramme et les contrats ; titres/icônes bleu DTSC.
+- Couleurs réservées aux statuts métier et alertes importantes, badge des feuilles de temps traduit FR/EN, sans perte des liens, de l'historique ou des sections dépliables.
+- Aucun changement de schéma, sécurité, plan, variable ou workflow. QA ciblée `pnpm qa:hotfix-1036-hr-palette` ; CI et E2E visuels propriétaire **NOT_EXECUTED** tant que non prouvés. Production uniquement après fusion validée.
+
 ## 2026-11-03 — Hotfix P0 #1026 : boucle MFA Console/Account sous Chrome mobile (pré-release)
 
 - Suppression de la redirection automatique Account → Console fondée uniquement sur un cookie signé `mfaVerifiedAt` potentiellement révoqué : `getSession()` doit confirmer registre et MFA avant redirection.

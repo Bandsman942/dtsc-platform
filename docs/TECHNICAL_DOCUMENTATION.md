@@ -6,6 +6,8 @@
 
 ## 1. Objet
 
+> **Hotfix #1036 (06/11/2026, pré-release) :** palette des interfaces RH uniformisée sur la marque DTSC, couleurs sémantiques limitées aux statuts/alertes, i18n et QA visuelle. Voir [contrat RH](ERP_PROFESSIONAL_HR.md) et [design system](DTSC_FRONTEND_DESIGN_SYSTEM.md). OWNER_E2E et preuves CI requis avant Production.
+
 Ce document est le point d’entrée technique de DTSC Platform. Les règles exécutables se trouvent dans les fichiers `AGENTS.md`. Les contrats détaillés restent dans les documents spécialisés du dossier `docs/`.
 
 > **DTSC Payments — PAY-0 (#370/#371, 01/11/2026) :** [contrat d'architecture et de cutover](DTSC_PAYMENTS_ARCHITECTURE.md). Cartographie vérifiée des paiements SaaS (`Payment`/`Invoice`), de la trésorerie DTSC (`HrcfoExpense`/`FinancialAccount`) et des paiements ERP clients (`EnterprisePayment` et allocations). Contrôle documentaire : `pnpm qa:dtsc-payments-contract`. Cette étape ne change aucun paiement en production ; PAY-1 à PAY-9 restent à livrer et à valider.

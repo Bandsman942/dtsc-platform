@@ -75,10 +75,10 @@ function Entry({ label, value }: { label: string; value: string | number | null 
   return <div className="min-w-0"><dt className="text-xs font-semibold text-dtsc-muted">{label}</dt><dd className="mt-1 break-words text-sm font-medium text-dtsc-ink">{value === "" || value == null ? "—" : value}</dd></div>;
 }
 
-function Section({ title, icon: Icon, color, children, defaultOpen = false }: { title: string; icon: typeof UserRound; color: string; children: ReactNode; defaultOpen?: boolean }) {
-  return <details className={"group min-w-0 rounded-xl border p-3 sm:p-4 " + color} open={defaultOpen ? true : undefined}>
+function Section({ title, icon: Icon, children, defaultOpen = false }: { title: string; icon: typeof UserRound; children: ReactNode; defaultOpen?: boolean }) {
+  return <details className="group min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface p-3 text-dtsc-ink sm:p-4" open={defaultOpen ? true : undefined}>
     <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 text-sm font-bold outline-none focus-visible:ring-2 focus-visible:ring-dtsc-blue [&::-webkit-details-marker]:hidden">
-      <Icon className="h-5 w-5 shrink-0" aria-hidden="true" /><span className="min-w-0 flex-1">{title}</span><ChevronRight className="h-4 w-4 shrink-0 transition-transform group-open:rotate-90" />
+      <Icon className="h-5 w-5 shrink-0 text-dtsc-blue" aria-hidden="true" /><span className="min-w-0 flex-1">{title}</span><ChevronRight className="h-4 w-4 shrink-0 transition-transform group-open:rotate-90" />
     </summary>
     <div className="grid min-w-0 gap-3 pt-3">{children}</div>
   </details>;
@@ -213,14 +213,14 @@ export function EnterpriseEmployeeDossierDialog({
           </ProfessionalFormSection>
           <div className="flex flex-wrap justify-end gap-2" data-responsive-actions><Button variant="outline" type="button" disabled={saving} onClick={() => setEditing(false)}>{copy.cancel}</Button><Button type="submit" disabled={saving}>{saving ? copy.saving : copy.save}</Button></div>
         </form> : <>
-          <Section title={copy.identity} icon={UserRound} color="border-sky-500/30 bg-sky-500/5 text-sky-700 dark:text-sky-300" defaultOpen>
+          <Section title={copy.identity} icon={UserRound} defaultOpen>
             <dl className="grid min-w-0 gap-4 sm:grid-cols-2">
               <Entry label={copy.number} value={employee.employeeNumber} /><Entry label={copy.firstName} value={employee.firstName} /><Entry label={copy.lastName} value={employee.lastName} />
               <Entry label={copy.email} value={employee.workEmail} /><Entry label={copy.phone} value={employee.workPhone} />
               <Entry label={copy.employmentType} value={employee.employmentType ? professionalErpEnumLabel(locale, "employmentType", employee.employmentType) : null} />
             </dl>
           </Section>
-          <Section title={copy.assignment} icon={UsersRound} color="border-violet-500/30 bg-violet-500/5 text-violet-700 dark:text-violet-300">
+          <Section title={copy.assignment} icon={UsersRound}>
             <dl className="grid min-w-0 gap-4 sm:grid-cols-2">
               <Entry label={copy.position} value={nameFor(lookups.positions.find((item) => item.id === employee.positionId))} />
               <Entry label={copy.department} value={nameFor(lookups.departments.find((item) => item.id === employee.departmentId))} />
@@ -231,17 +231,17 @@ export function EnterpriseEmployeeDossierDialog({
               <Entry label={copy.schedules} value={employee._count.workSchedules} /><Entry label={copy.attendance} value={employee._count.attendanceRecords} />
             </dl>
           </Section>
-          <Section title={copy.contracts} icon={FileText} color="border-amber-500/30 bg-amber-500/5 text-amber-700 dark:text-amber-300">
-            {employee.contracts.length ? employee.contracts.map((contract) => <Link key={contract.id} className="flex min-w-0 items-center justify-between gap-2 rounded-lg border border-amber-500/20 px-3 py-2 text-sm hover:bg-amber-500/10" href={"/enterprise-modules/HUMAN_RESOURCES?tab=CONTRACTS&recordId=" + encodeURIComponent(contract.id)}>
+          <Section title={copy.contracts} icon={FileText}>
+            {employee.contracts.length ? employee.contracts.map((contract) => <Link key={contract.id} className="flex min-w-0 items-center justify-between gap-2 rounded-lg border border-dtsc-border px-3 py-2 text-sm hover:border-dtsc-blue hover:bg-dtsc-soft focus-visible:outline-2 focus-visible:outline-dtsc-blue" href={"/enterprise-modules/HUMAN_RESOURCES?tab=CONTRACTS&recordId=" + encodeURIComponent(contract.id)}>
               <span className="min-w-0 break-words">{contract.reference} · v{contract.versionNumber} · {professionalErpEnumLabel(locale, "employmentContractStatus", contract.status)}</span><ChevronRight className="h-4 w-4 shrink-0" />
             </Link>) : <p className="text-sm text-dtsc-muted">{copy.noContract}</p>}
           </Section>
-          <Section title={copy.compensation} icon={Wallet} color="border-emerald-500/30 bg-emerald-500/5 text-emerald-700 dark:text-emerald-300">
+          <Section title={copy.compensation} icon={Wallet}>
             {data?.canEdit && employee.baseCompensation != null && employee.compensationCurrency
               ? <dl><Entry label={copy.base} value={professionalErpMoney(employee.baseCompensation, employee.compensationCurrency, locale)} /></dl>
               : <p className="flex items-center gap-2 text-sm text-dtsc-muted"><ShieldCheck className="h-4 w-4" />{copy.private}</p>}
           </Section>
-          <Section title={copy.activity} icon={BriefcaseBusiness} color="border-fuchsia-500/30 bg-fuchsia-500/5 text-fuchsia-700 dark:text-fuchsia-300" defaultOpen>
+          <Section title={copy.activity} icon={BriefcaseBusiness} defaultOpen>
             {data?.activities.length ? data.activities.map((activity) => <div key={activity.key} className="min-w-0 border-b border-dtsc-border/60 pb-3 last:border-b-0">
               <div className="flex flex-wrap items-center justify-between gap-2 text-sm font-semibold">
                 <span>{sectionName(activity.key)} · {activity.count}</span>
@@ -254,7 +254,7 @@ export function EnterpriseEmployeeDossierDialog({
               </div>
             </div>) : <p className="text-sm text-dtsc-muted">{copy.noActivity}</p>}
           </Section>
-          <Section title={copy.governance} icon={Clock3} color="border-slate-500/30 bg-slate-500/5 text-slate-700 dark:text-slate-300">
+          <Section title={copy.governance} icon={Clock3}>
             <dl className="grid gap-4 sm:grid-cols-2"><Entry label={copy.revision} value={employee.revision} />
               <Entry label={copy.status} value={employee.archivedAt ? copy.archived : professionalErpEnumLabel(locale, "employmentStatus", employee.employmentStatus)} />
             </dl>
