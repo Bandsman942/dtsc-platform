@@ -50,7 +50,7 @@ type Timesheet = { id: string; reference: string; employeeId: string; periodStar
 type WorkSchedule = { id: string; employeeId: string; scheduleType: string; dayOfWeek: number | null; scheduleDate: string | null; startMinute: number; endMinute: number; breakMinutes: number; timezone: string; status: string; effectiveFrom: string; effectiveUntil: string | null; revision: number; employee: Employee };
 type Attendance = { id: string; employeeId: string; attendanceDate: string; observedStartAt: string | null; observedEndAt: string | null; status: string; source: string; siteId: string | null; notes: string | null; revision: number; employee: Employee };
 type DecisionTarget = { item: LeaveRequest | Timesheet; decision: "APPROVE" | "REJECT" };
-type TimeTab = "SCHEDULES" | "ATTENDANCE" | "LEAVE" | "TIMESHEETS";
+type TimeTab = "SCHEDULES" | "ATTENDANCE" | "LEAVE" | "TIMESHEETS" | "SELF_SERVICE";
 
 const TIME_STATUSES = ["DRAFT", "SUBMITTED", "APPROVED", "REJECTED", "CANCELLED", "RETURNED", "LOCKED"];
 const LEAVE_TYPES = ["ANNUAL", "SICK", "MATERNITY", "PATERNITY", "UNPAID", "OTHER"];
@@ -59,7 +59,7 @@ const DEFAULT_REJECTION_AUDIT_COMMENT = "Retour motivé depuis le workspace prof
 
 const copyByLocale = {
   fr: {
-    schedules: "Horaires planifiés", attendance: "Présences", scheduleSection: "Horaires attendus", attendanceSection: "Présence observée",
+    schedules: "Horaires planifiés", attendance: "Présences", selfService: "Mon espace RH", scheduleSection: "Horaires attendus", attendanceSection: "Présence observée",
     scheduleDescription: "Planifiez les heures attendues sans les transformer en présence ni en temps approuvé.",
     attendanceDescription: "Enregistrez ce qui a été observé. La présence reste distincte du temps déclaré et de la paie.",
     newSchedule: "Planifier un horaire", recordAttendance: "Enregistrer une présence", scheduleType: "Type de planning", weekly: "Hebdomadaire", date: "Date précise",
@@ -78,7 +78,7 @@ const copyByLocale = {
     siteTimezoneMissing: "Le site sélectionné n’a pas de fuseau horaire configuré. Configurez son fuseau avant d’enregistrer des heures locales.",
   },
   en: {
-    schedules: "Planned schedules", attendance: "Attendance", scheduleSection: "Expected schedules", attendanceSection: "Observed attendance",
+    schedules: "Planned schedules", attendance: "Attendance", selfService: "My HR space", scheduleSection: "Expected schedules", attendanceSection: "Observed attendance",
     scheduleDescription: "Plan expected hours without turning them into attendance or approved time.", attendanceDescription: "Record what was observed. Attendance remains separate from declared time and payroll.",
     newSchedule: "Plan a schedule", recordAttendance: "Record attendance", scheduleType: "Schedule type", weekly: "Weekly", date: "Specific date", day: "Day of week", days: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
     scheduleDate: "Scheduled date", start: "Start time", end: "End time", breakMinutes: "Break (minutes)", timezone: "Timezone", effectiveFrom: "Effective from", effectiveUntil: "Effective until",
@@ -397,6 +397,7 @@ export function EnterpriseTimeAttendanceWorkspace({ organizationId, organization
     { id: "ATTENDANCE" as const, label: copy.attendance, count: attendance.pagination.total },
     { id: "LEAVE" as const, label: t("time.leavesTab"), count: leaves.pagination.total },
     { id: "TIMESHEETS" as const, label: t("time.timesheetsTab"), count: timesheets.pagination.total },
+    { id: "SELF_SERVICE" as const, label: copy.selfService },
   ];
 
   const employeeItems = [{ id: "", label: lookups.employees.length ? copy.selectEmployee : copy.noEmployee }, ...lookups.employees.map((employee) => ({ id: employee.id, label: employeeLabel(employee) }))];
@@ -415,17 +416,16 @@ export function EnterpriseTimeAttendanceWorkspace({ organizationId, organization
         {tab === "TIMESHEETS" ? <Button disabled={!timesheets.canWrite} onClick={() => { setError(""); setTimesheetOpen(true); }}><Clock3 className="h-4 w-4" />{t("time.declareTime")}</Button> : null}
       </div>}
     />
-    <EnterpriseMyHrSelfService organizationId={organizationId} />
     <ModuleMetrics label={t("time.metrics")}>
       <ModuleMetric label={copy.activeSchedules} value={schedules.metrics.active || 0} />
       <ModuleMetric label={copy.observedPresence} value={attendance.metrics.present || 0} />
       <ModuleMetric label={t("time.leavePending")} value={leaves.metrics.pending || 0} />
       <ModuleMetric label={t("time.approvedTime")} value={minutesLabel(Number(timesheets.metrics.approvedMinutes || 0))} />
     </ModuleMetrics>
-    <ModuleToolbar controls={<><ProfessionalTabs value={tab} onChange={(value) => { setTab(value); setStatus(""); setPage(1); }} items={tabs} />{tab !== "SCHEDULES" ? <NativeSelect value={status} onChange={(value) => { setStatus(value); setPage(1); }} items={currentStatusItems} /> : null}</>} summary={copy.separation} />
+    <ModuleToolbar controls={<><ProfessionalTabs value={tab} onChange={(value) => { setTab(value); setStatus(""); setPage(1); }} items={tabs} />{tab !== "SCHEDULES" && tab !== "SELF_SERVICE" ? <NativeSelect value={status} onChange={(value) => { setStatus(value); setPage(1); }} items={currentStatusItems} /> : null}</>} summary={copy.separation} />
     <ModuleContent>
       {error && !scheduleOpen && !attendanceOpen && !leaveOpen && !timesheetOpen && !decisionTarget && !cancelTarget && !scheduleEndTarget ? <ProfessionalError message={error} /> : null}
-      <ModuleSection title={tab === "SCHEDULES" ? copy.scheduleSection : tab === "ATTENDANCE" ? copy.attendanceSection : tab === "LEAVE" ? t("time.leaveSection") : t("time.timesheetSection")} description={tab === "SCHEDULES" ? copy.scheduleDescription : tab === "ATTENDANCE" ? copy.attendanceDescription : tab === "LEAVE" ? t("time.leaveSectionDescription") : t("time.timesheetSectionDescription")}>
+      {tab === "SELF_SERVICE" ? <EnterpriseMyHrSelfService organizationId={organizationId} /> : <ModuleSection title={tab === "SCHEDULES" ? copy.scheduleSection : tab === "ATTENDANCE" ? copy.attendanceSection : tab === "LEAVE" ? t("time.leaveSection") : t("time.timesheetSection")} description={tab === "SCHEDULES" ? copy.scheduleDescription : tab === "ATTENDANCE" ? copy.attendanceDescription : tab === "LEAVE" ? t("time.leaveSectionDescription") : t("time.timesheetSectionDescription")}>
         {activeCollection.error ? <ProfessionalError message={activeCollection.error} /> : activeCollection.loading ? <ProfessionalLoading /> : tab === "SCHEDULES" ? (
           schedules.items.length ? <BusinessList ariaLabel={copy.scheduleSection}>{schedules.items.map((item) => {
             const day = item.scheduleType === "WEEKLY" ? copy.days[Math.max(0, (item.dayOfWeek || 1) - 1)] : (item.scheduleDate ? professionalErpDate(item.scheduleDate, locale) : copy.date);
@@ -441,7 +441,7 @@ export function EnterpriseTimeAttendanceWorkspace({ organizationId, organization
           leaves.items.length ? <BusinessList ariaLabel={t("time.leaveSection")}>{leaves.items.map((item) => <BusinessListItem key={item.id} title={`${item.reference} · ${item.employee.displayName}`} leading={<CalendarDays className="h-5 w-5 text-dtsc-blue" />} status={<StatusBadge tone={statusTone(item.status)}>{professionalErpEnumLabel(locale, "timeStatus", item.status)}</StatusBadge>} meta={t("time.leaveRange", { type: professionalErpEnumLabel(locale, "leaveType", item.leaveType), start: professionalErpDate(item.startDate, locale), end: professionalErpDate(item.endDate, locale) })} description={item.reason || (item.partialDay ? t("time.halfDay") : t("time.fullDay"))} onOpen={() => setDetail(item)} actions={<ContextActions label={t("time.leaveActions")} actions={actionsFor(item)} />} />)}</BusinessList> : <EmptyState compact title={t("time.noLeave")} description={t("time.noLeaveDescription")} />
         ) : timesheets.items.length ? <BusinessList ariaLabel={t("time.timesheetSection")}>{timesheets.items.map((item) => <BusinessListItem key={item.id} title={`${item.reference} · ${item.employee.displayName}`} leading={<Clock3 className="h-5 w-5 text-dtsc-blue" />} status={<StatusBadge tone={statusTone(item.status)}>{professionalErpEnumLabel(locale, "timeStatus", item.status)}</StatusBadge>} meta={`${professionalErpDate(item.periodStart, locale)} – ${professionalErpDate(item.periodEnd, locale)}`} description={t("time.declaredApproved", { declared: minutesLabel(item.totalDeclaredMinutes), approved: minutesLabel(item.totalApprovedMinutes) })} onOpen={() => setDetail(item)} actions={<ContextActions label={t("time.timesheetActions")} actions={actionsFor(item)} />} />)}</BusinessList> : <EmptyState compact title={t("time.noTimesheet")} description={t("time.noTimesheetDescription")} />}
         <PaginationControls page={activeCollection.pagination.page} pageCount={activeCollection.pagination.pageCount} onChange={setPage} copy={copy} />
-      </ModuleSection>
+      </ModuleSection>}
       <ProfessionalHelp moduleCode="TIME_ATTENDANCE" />
     </ModuleContent>
 

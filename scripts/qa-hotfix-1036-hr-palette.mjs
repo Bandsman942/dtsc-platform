@@ -4,6 +4,8 @@ import fs from 'node:fs';
 const dossier = fs.readFileSync('components/enterprise/professional/enterprise-employee-dossier-dialog.tsx', 'utf8');
 const hr = fs.readFileSync('components/enterprise/professional/enterprise-human-resources-workspace.tsx', 'utf8');
 const self = fs.readFileSync('components/enterprise/professional/enterprise-my-hr-self-service.tsx', 'utf8');
+const workspace = fs.readFileSync('components/enterprise/professional/enterprise-time-attendance-workspace.tsx', 'utf8');
+const route = fs.readFileSync('app/api/enterprise/[organizationId]/my-hr/route.ts', 'utf8');
 
 // Sections and content use DTSC surface tokens in both themes.
 assert.match(dossier, /function Section\(\{ title, icon: Icon, children/);
@@ -29,4 +31,29 @@ assert.match(self, /professionalErpEnumLabel\(locale, "timeStatus", sheet\.statu
 assert.match(self, /bg-amber-200 text-amber-950/); // active clock status
 assert.match(self, /copy\[locale === "en" \? "en" : "fr"\]/);
 
-console.log('HOTFIX #1036: DTSC HR palette contract passed (rendered OWNER_E2E pending).');
+// Personal HR is a lazy, full-module tab within the same horizontal rail.
+assert.match(workspace, /type TimeTab = .*"SELF_SERVICE"/);
+assert.match(workspace, /id: "SELF_SERVICE" as const, label: copy\.selfService/);
+assert.match(workspace, /tab === "SELF_SERVICE" \? <EnterpriseMyHrSelfService/);
+assert.match(workspace, /tab !== "SCHEDULES" && tab !== "SELF_SERVICE"/);
+assert.doesNotMatch(workspace, /<EnterpriseMyHrSelfService organizationId=\{organizationId\} \/>\s*<ModuleMetrics/);
+
+// Each private history is paginated independently on the server, including an
+// active clock record that stays visible while history pages change.
+for (const key of ['page', 'reportPage', 'clockPage']) {
+  assert.ok(self.includes(key + '=${' + key + '}'), `Missing private page parameter ${key}`);
+}
+assert.match(self, /<HrPager pagination=\{data\.payslipsPagination\}/);
+assert.match(self, /<HrPager pagination=\{data\.reportsPagination\}/);
+assert.match(self, /<HrPager pagination=\{data\.clockSessionsPagination\}/);
+assert.doesNotMatch(self, /clockSessions\.slice\(|timesheets\.slice\(/);
+assert.match(route, /getActiveEnterpriseSelfEmployee\(session, organizationId\)/);
+assert.match(route, /hasEnterpriseSelfHrModule\(session, organizationId, "TIME_ATTENDANCE"\)/);
+assert.match(route, /skip: \(reportPage - 1\) \* pageSize, take: pageSize/);
+assert.match(route, /skip: \(clockPage - 1\) \* pageSize, take: pageSize/);
+assert.match(route, /reportsPagination:/);
+assert.match(route, /clockSessionsPagination:/);
+assert.match(route, /activeClockSession,/);
+assert.match(route, /Cache-Control": "private, no-store/);
+
+console.log('HOTFIX #1036: DTSC palette, personal tab and private pagination contract passed (OWNER_E2E pending).');

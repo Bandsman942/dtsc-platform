@@ -6,7 +6,7 @@
 
 ## 1. Objet
 
-> **Hotfix #1036 (06/11/2026, pré-release) :** palette des interfaces RH uniformisée sur la marque DTSC, couleurs sémantiques limitées aux statuts/alertes, i18n et QA visuelle. Voir [contrat RH](ERP_PROFESSIONAL_HR.md) et [design system](DTSC_FRONTEND_DESIGN_SYSTEM.md). OWNER_E2E et preuves CI requis avant Production.
+> **Hotfix #1036 (06/11/2026, pré-release) :** palette des interfaces RH uniformisée sur la marque DTSC, couleurs sémantiques limitées aux statuts/alertes, i18n et QA visuelle. Voir [contrat RH](ERP_PROFESSIONAL_HR.md) et [design system](DTSC_FRONTEND_DESIGN_SYSTEM.md). OWNER_E2E et preuves CI requis avant Production. Le libre-service RH intègre désormais le rail de `TIME_ATTENDANCE` et les historiques paginés côté serveur ; `GET /api/enterprise/[organizationId]/my-hr` accepte `page`, `reportPage`, `clockPage` et `pageSize` (5–25), renvoie `payslipsPagination`, `reportsPagination`, `clockSessionsPagination` et `activeClockSession`, avec contrôles de session, organisation, accès module et `Cache-Control: private, no-store`. Les nouveaux champs sont additifs.
 
 Ce document est le point d’entrée technique de DTSC Platform. Les règles exécutables se trouvent dans les fichiers `AGENTS.md`. Les contrats détaillés restent dans les documents spécialisés du dossier `docs/`.
 

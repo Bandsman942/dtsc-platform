@@ -36,6 +36,8 @@ La vue mobile regroupe les collaborateurs par département. Les postes, responsa
 
 Les surfaces de dossier collaborateur, contrats, organisation et libre-service RH utilisent les tokens DTSC (`border-dtsc-border`, `bg-dtsc-surface`, `text-dtsc-ink`, `text-dtsc-blue`) dans les deux thèmes. Les sections dépliables restent visuellement homogènes. Les couleurs hors marque sont réservées aux statuts et alertes réels (approuvé/actif, attente, refus, archivage) ; un montant, une catégorie de section ou un département ne justifie pas un aplat coloré.
 
+Le libre-service « Mon espace RH » est accessible uniquement par l'onglet du rail horizontal de `TIME_ATTENDANCE`, après chargement paresseux. Dans la même vue métier plein écran que les autres onglets, il regroupe bulletins, pointage et rapports. Les trois historiques possèdent des paginations indépendantes côté serveur (`page`, `clockPage`, `reportPage`, taille bornée à 5–25) et des compteurs. Le pointage actif reste visible indépendamment de la page d'historique ; les listes demeurent liées au collaborateur du compte authentifié et à l'organisation active. Aucun historique n'est tronqué à 6/8/20 éléments dans le client.
+
 **Recette visuelle #1036 :** mobile 320, 360, 375, 390, 414 px, tablette 768/1024 px, FR/EN, clair/sombre, statut pointage actif/inactif, paie approuvée, rapports en attente/refusés/approuvés, navigation dossier/contrat/organisation et clavier.
 
 ## Maturité
