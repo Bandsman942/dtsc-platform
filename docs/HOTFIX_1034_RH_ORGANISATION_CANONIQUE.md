@@ -23,7 +23,7 @@ Dans **Ressources humaines → Contrats & organisation → Organisation** :
 ## Contrôles et limites
 - Écriture/désactivation des référentiels réservée à l'administrateur de l'entreprise. Un RH gestionnaire sans droit d'administration conserve une lecture seule ; l'API refuse les accès non autorisés même si un bouton est forcé.
 - Depuis l'onglet RH, les droits d'un poste ne peuvent pas être modifiés : mode métadonnées uniquement. Vérifier en E2E que les permissions avant et après édition sont identiques ; utiliser Administration entreprise pour les modifications de droits sensibles.
-- Une désactivation de département conserve ses positions, collaborateurs, contrats et l'historique ; elle ne désactive pas implicitement les comptes membres.
+- Une désactivation de département conserve ses positions, collaborateurs, contrats et l'historique ; elle ne désactive pas implicitement les comptes membres. La désactivation d’un poste demande une confirmation explicite et conserve son historique.
 - Les annuaires d'employés restent limités par les permissions RH déjà appliquées à `hr-payroll-lookups` ; le droit de lecture personnelle n'ouvre pas l'annuaire global.
 - Les grandes données de l'Administration entreprise ne sont demandées qu'à l'ouverture de l'onglet Organisation par un administrateur autorisé.
 

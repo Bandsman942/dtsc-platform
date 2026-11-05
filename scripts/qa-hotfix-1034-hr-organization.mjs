@@ -35,6 +35,7 @@ assert.ok(canonicalDepartment.includes('moduleCode: "ADMIN_DASHBOARD"') && canon
 assert.ok(canonicalPosition.includes("requireEnterpriseGovernanceAccess") && canonicalPosition.includes("permissionsJson"), "Official position capabilities must remain server controlled.");
 assert.ok(canonicalPosition.includes("data.preservePermissions ? {} : { permissionsJson"), "HR position metadata updates must preserve role permissions.");
 assert.ok(positions.includes("preservePermissions: !allowPermissionsEdit"), "HR positions must use the safe metadata-only mutation mode.");
+assert.ok(positions.includes("confirmSensitiveAction") && positions.includes('form.get("isActive") !== "on"'), "Position deactivation must require an explicit confirmation.");
 assert.ok(!hr.includes("prisma."), "No direct client-side database mutation.");
 
 console.log("Hotfix #1034 organization canonical CRUD QA: OK");

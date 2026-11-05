@@ -107,6 +107,17 @@ export function EnterprisePositionsGuidedPanel({ organizationId, departments, po
     setBusy(true);
     setMessage("");
     try {
+      if (editing?.isActive && form.get("isActive") !== "on") {
+        const { confirmSensitiveAction } = await import("@/lib/client-confirmation");
+        const decision = await confirmSensitiveAction({
+          title: tx(locale, "Désactiver le poste", "Deactivate position"),
+          description: tx(locale, "Ce poste deviendra inactif, sans supprimer les rattachements ni les autorisations historiques.", "This position will become inactive without removing historic assignments or permissions."),
+          confirmLabel: tx(locale, "Désactiver", "Deactivate"),
+          cancelLabel: tx(locale, "Annuler", "Cancel"),
+          tone: "warning",
+        });
+        if (!decision.confirmed) return;
+      }
       const response = await fetch(`/api/enterprise/${organizationId}/administration/positions-guided`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
