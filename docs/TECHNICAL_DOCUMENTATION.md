@@ -1,6 +1,7 @@
 # DTSC Platform — Documentation technique
 
-**Version applicative :** `package.json` (SemVer ; la Release GitHub confirme seule une version livrée). Consolidation ERP + modules standards 8/8 + DTSC AI 08/08
+**Version :** Consolidation ERP + modules standards 8/8 + DTSC AI 08/08
+**Version applicative :** `package.json` (SemVer ; la Release GitHub confirme seule une version livrée).
 **Repository :** `Bandsman942/dtsc-platform`
 **Production :** déploiement Vercel exclusivement depuis `main`
 
