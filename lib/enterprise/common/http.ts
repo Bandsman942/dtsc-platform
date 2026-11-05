@@ -4,6 +4,12 @@ import { NextResponse } from "next/server";
 import { EnterpriseDomainError } from "@/lib/enterprise/common/errors";
 
 const BUSINESS_ERROR_MESSAGES: Record<string, { fr: string; en: string }> = {
+  EMPLOYMENT_CONTRACT_NOT_FOUND: { fr: "Ce contrat n’est plus disponible dans cette entreprise. Actualisez la liste.", en: "This contract is no longer available in your company. Refresh the list." },
+  EMPLOYMENT_CONTRACT_ARCHIVE_NOT_FOUND: { fr: "Ce contrat n’est plus archivé. Actualisez les archives avant de le restaurer.", en: "This contract is no longer archived. Refresh the archive before restoring it." },
+  EMPLOYMENT_CONTRACT_ACTIVE_ARCHIVE_FORBIDDEN: { fr: "Un contrat actif ne peut pas être archivé. Terminez-le par le processus RH avant l’archivage.", en: "An active contract cannot be archived. End it through the HR process first." },
+  EMPLOYMENT_CONTRACT_ACTIVE_RESTORE_FORBIDDEN: { fr: "Un contrat actif historique ne peut pas être restauré sans nouveau circuit de validation.", en: "A historical active contract cannot be restored without a new approval workflow." },
+  EMPLOYMENT_CONTRACT_ARCHIVE_FAILED: { fr: "L’archivage du contrat a échoué. Vérifiez son état et sa révision, puis recommencez.", en: "Contract archiving failed. Check its status and revision, then try again." },
+  EMPLOYMENT_CONTRACT_RESTORE_FAILED: { fr: "La restauration du contrat a échoué. Actualisez l’archive et réessayez.", en: "Contract restore failed. Refresh the archive and try again." },
   EMPLOYEE_NOT_FOUND: { fr: "Ce dossier collaborateur est introuvable ou n’est plus disponible dans cette entreprise. Actualisez le registre RH.", en: "This employee record is unavailable in your company. Refresh the HR register." },
 
   EMPLOYEE_SELF_LINK_REQUIRED: { fr: "Votre compte n’est pas encore associé à un dossier salarié actif. Demandez au service RH de vérifier votre rattachement.", en: "Your account is not linked to an active employee record. Ask HR to verify the association." },

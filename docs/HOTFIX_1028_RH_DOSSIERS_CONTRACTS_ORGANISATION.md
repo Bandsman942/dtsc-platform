@@ -43,3 +43,7 @@ Ajout : `EnterpriseEmploymentContractRevision` avec `organizationId`, `contractI
 - Pas de merge sans CI verte, revue, conversations résolues et **OWNER_E2E BON**. Déploiement Vercel automatique depuis `main` uniquement ; aucun Preview de branche.
 
 La maturité commerciale RH/Paie/Temps ne peut pas être promue automatiquement par cette PR. Les parcours #1029, l'entitlement et leur E2E restent à prouver module par module.
+
+
+## Complément tranche 2 (archive des contrats)
+Le parcours de versionnement de la tranche 1 est complété par l'archivage métier/restauration des contrats non actifs : validation indépendante pending annulée, revision optimiste, données historiques et bulletins conservés. Voir `docs/HOTFIX_1028_RH_CONTRACT_ARCHIVE_PHASE2.md`. L'issue reste ouverte pour le CRUD direct des référentiels Organisation et la certification des liens transversaux.
