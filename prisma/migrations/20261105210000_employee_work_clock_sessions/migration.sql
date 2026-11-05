@@ -17,6 +17,8 @@ CREATE UNIQUE INDEX "EWCS_org_id_uniq" ON "EnterpriseWorkClockSession"("organiza
 CREATE INDEX "EWCS_employee_started_idx" ON "EnterpriseWorkClockSession"("organizationId", "employeeId", "startedAt");
 CREATE INDEX "EWCS_employee_open_idx" ON "EnterpriseWorkClockSession"("organizationId", "employeeId", "stoppedAt");
 CREATE UNIQUE INDEX "EWCS_one_open_per_employee" ON "EnterpriseWorkClockSession"("organizationId", "employeeId") WHERE "stoppedAt" IS NULL;
+-- Historical installations may predate the Prisma composite unique declaration.
+CREATE UNIQUE INDEX IF NOT EXISTS "EnterpriseEmployee_organizationId_id_key" ON "EnterpriseEmployee"("organizationId", "id");
 ALTER TABLE "EnterpriseWorkClockSession" ADD CONSTRAINT "EWCS_employee_fk"
   FOREIGN KEY ("organizationId", "employeeId") REFERENCES "EnterpriseEmployee"("organizationId", "id")
   ON DELETE RESTRICT ON UPDATE CASCADE;
