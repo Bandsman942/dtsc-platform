@@ -1,10 +1,12 @@
 # DTSC Platform — Documentation technique
 
-**Version :** Consolidation ERP + modules standards 8/8 + DTSC AI 08/08
+**Version applicative :** `package.json` (SemVer ; la Release GitHub confirme seule une version livrée). Consolidation ERP + modules standards 8/8 + DTSC AI 08/08
 **Repository :** `Bandsman942/dtsc-platform`
 **Production :** déploiement Vercel exclusivement depuis `main`
 
 ## 1. Objet
+
+> **SemVer #1037 (06/11/2026, candidate) :** adoption de `vMAJOR.MINOR.PATCH` pour la traçabilité de la plateforme entière, avec incrément obligatoire par PR, QA de version et GitHub Release seulement après Vercel Production réussi. Voir [versionnement et procédure de release](RELEASE_VERSIONING.md). Cette étape n'est pas considérée Production tant que les preuves CI/review/merge/déploiement ne sont pas disponibles.
 
 Ce document est le point d’entrée technique de DTSC Platform. Les règles exécutables se trouvent dans les fichiers `AGENTS.md`. Les contrats détaillés restent dans les documents spécialisés du dossier `docs/`.
 

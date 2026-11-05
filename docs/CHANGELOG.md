@@ -1,3 +1,10 @@
+## 2026-11-06 — Version candidate 1.1.0 : adoption SemVer (#1037, pré-release)
+
+- `package.json` devient l'unique source de version pour les cinq surfaces DTSC ; règles MAJOR/MINOR/PATCH et incrément de version par PR associés à Conventional Commits.
+- La GitHub Release passe aux tags `vX.Y.Z` uniquement après preuve Vercel Production réussie sur SHA `main`, avec collision interdite, idempotence et conservation intégrale des anciens tags `prod-*`.
+- Gate SemVer, tests de version/release, contrat contribution, gouvernance, documentation technique et runbook actualisés. **CI, merge et Production NOT_EXECUTED** avant leurs preuves ; les versions historiques ne sont pas réécrites.
+- Détails : [RELEASE_VERSIONING.md](RELEASE_VERSIONING.md).
+
 ## 2026-11-03 — Hotfix P0 #1026 : boucle MFA Console/Account sous Chrome mobile (pré-release)
 
 - Suppression de la redirection automatique Account → Console fondée uniquement sur un cookie signé `mfaVerifiedAt` potentiellement révoqué : `getSession()` doit confirmer registre et MFA avant redirection.

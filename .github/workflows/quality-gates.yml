@@ -36,6 +36,10 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Validate commits
         run: node scripts/github/validate-commits.mjs
+      - name: Validate SemVer increment
+        run: node scripts/github/validate-semver.mjs
+      - name: Test SemVer release contract
+        run: node scripts/qa-semver.mjs
       - name: Test governance contract
         run: node scripts/qa-delivery-governance.mjs
 
