@@ -25,9 +25,12 @@ export async function GET(req: Request, { params }: Params) {
   const search = url.searchParams.get("search")?.trim() || "";
   const status = url.searchParams.get("status")?.trim() || "";
   const departmentId = url.searchParams.get("departmentId")?.trim() || "";
+  const archivedRequested = url.searchParams.get("archived") === "true";
+  if (archivedRequested && !access.canAdminister) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const includeArchived = archivedRequested;
   const where: Prisma.EnterpriseEmployeeWhereInput = {
     organizationId,
-    archivedAt: null,
+    archivedAt: includeArchived ? { not: null } : null,
     ...(status ? { employmentStatus: status } : {}),
     ...(departmentId ? { departmentId } : {}),
     ...(search ? {
@@ -45,7 +48,7 @@ export async function GET(req: Request, { params }: Params) {
       skip: (page - 1) * pageSize,
       take: pageSize,
       include: {
-        contracts: { where: { status: "ACTIVE", archivedAt: null }, orderBy: { versionNumber: "desc" }, take: 1 },
+        contracts: { where: { status: "ACTIVE", archivedAt: null }, orderBy: { versionNumber: "desc" }, take: 1, select: { id: true, reference: true, status: true, contractType: true, versionNumber: true } },
         _count: { select: { directReports: true, timesheets: true, leaveRequests: true } },
       },
     }),
@@ -65,13 +68,21 @@ export async function GET(req: Request, { params }: Params) {
   const linkByPerson = new Map<string, (typeof identityLinks)[number]>();
   for (const link of identityLinks) if (!linkByPerson.has(link.personIdentityId)) linkByPerson.set(link.personIdentityId, link);
   const linkByEmployee = new Map(references.filter((reference) => reference.employeeId).map((reference) => [reference.employeeId as string, linkByPerson.get(reference.personIdentityId) || null]));
-  const items = rawItems.map((item) => ({ ...item, identityLink: linkByEmployee.get(item.id) || null }));
+  // Read permission alone never discloses compensation or private HR notes.
+  const items = rawItems.map((item) => ({
+    ...item,
+    baseCompensation: access.canAdminister ? item.baseCompensation : null,
+    compensationCurrency: access.canAdminister ? item.compensationCurrency : null,
+    professionalInfoJson: access.canAdminister ? item.professionalInfoJson : null,
+    identityLink: linkByEmployee.get(item.id) || null,
+  }));
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "employees", page } });
   return NextResponse.json({
     items,
     pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) },
     metrics: { active, withoutContract },
     canManage: access.canManage,
+    canAdminister: access.canAdminister,
   });
 }
 

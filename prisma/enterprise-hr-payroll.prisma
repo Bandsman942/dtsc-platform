@@ -87,6 +87,7 @@ model EnterpriseEmploymentContract {
   supersedesContract    EnterpriseEmploymentContract? @relation("EnterpriseEmploymentContractHistory", fields: [organizationId, supersedesContractId], references: [organizationId, id], onDelete: Restrict)
   supersededBy          EnterpriseEmploymentContract[] @relation("EnterpriseEmploymentContractHistory")
   payrollItems          EnterprisePayrollItem[]
+  revisions             EnterpriseEmploymentContractRevision[]
 
   @@unique([organizationId, id])
   @@unique([organizationId, reference])
@@ -95,6 +96,22 @@ model EnterpriseEmploymentContract {
   @@index([organizationId, endDate, status])
   @@index([organizationId, supersedesContractId])
   @@index([archivedAt])
+}
+
+// Immutable snapshots of submitted-contract edits, separate from approved
+// successor contracts (versionNumber and supersedesContractId).
+model EnterpriseEmploymentContractRevision {
+  id                  String                       @id @default(cuid())
+  organizationId      String
+  contractId          String
+  revisionNumber      Int
+  snapshotJson        Json
+  savedByUserId       String
+  savedAt             DateTime                     @default(now())
+  contract            EnterpriseEmploymentContract @relation(fields: [organizationId, contractId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, contractId, revisionNumber], map: "ECR_contract_revision_uniq")
+  @@index([organizationId, contractId, savedAt], map: "ECR_contract_saved_idx")
 }
 
 model EnterpriseEmployeeAssignment {
