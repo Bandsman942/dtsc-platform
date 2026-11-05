@@ -34,8 +34,8 @@ export async function hasEnterpriseSelfHrModule(session: SessionPayload, organiz
   if (!membership || membership.organization.status !== "ACTIVE" || membership.organization.deletedAt || membership.organization.organizationType !== "CLIENT") return false;
   if (!entitlements || entitlements.organizationStatus !== "ACTIVE" || entitlements.organizationType !== "CLIENT") return false;
   if (getActiveEnterpriseModuleRestriction(membership.organization.settingsJson, session.userId, moduleCode)) return false;
-  const module = entitlements.modules.find((candidate) => candidate.canonicalCode === moduleCode && candidate.isEnabled && candidate.allowed);
-  if (!module) return false;
+  const entitledModule = entitlements.modules.find((candidate) => candidate.canonicalCode === moduleCode && candidate.isEnabled && candidate.allowed);
+  if (!entitledModule) return false;
   const definition = getEnterpriseModuleDefinition(moduleCode);
   if (!definition) return false;
   for (const dependency of definition.dependencies) {
