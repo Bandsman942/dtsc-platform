@@ -34,6 +34,9 @@ includes("components/enterprise/professional/enterprise-employee-dossier-dialog.
   "<details", "professionalErpMoney", "onChanged", "copyByLocale",
   '"DELETE"', '"PATCH"',
 ]);
+includes("lib/enterprise/common/http.ts", [
+  "EMPLOYEE_ARCHIVE_DEPENDENCIES", "EMPLOYEE_MANAGER_CYCLE", "EMPLOYEE_MEMBER_ALREADY_LINKED",
+]);
 includes("components/enterprise/professional/enterprise-human-resources-workspace.tsx", [
   "contractHistory", "historySelected", "setFocusedEmployeeId", "canViewHistory",
 ]);
