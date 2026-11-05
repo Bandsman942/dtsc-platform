@@ -19,6 +19,8 @@ type Props = {
   modules: EnterpriseModuleItem[];
   locale?: string | null;
   onSaved?: (message: string) => void;
+  reloadOnSave?: boolean;
+  allowPermissionsEdit?: boolean;
 };
 
 const ACTIONS: GuidedAction[] = ["read", "submit", "write", "approve", "manage"];
@@ -63,7 +65,7 @@ function actionLabel(locale: string | null | undefined, action: GuidedAction) {
   return tx(locale, "Administrer", "Administer");
 }
 
-export function EnterprisePositionsGuidedPanel({ organizationId, departments, positions, modules, locale, onSaved }: Props) {
+export function EnterprisePositionsGuidedPanel({ organizationId, departments, positions, modules, locale, onSaved, reloadOnSave = true, allowPermissionsEdit = true }: Props) {
   const [editing, setEditing] = useState<EnterprisePositionItem | null>(null);
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -78,7 +80,7 @@ export function EnterprisePositionsGuidedPanel({ organizationId, departments, po
 
   function openEditor(position: EnterprisePositionItem | null) {
     setEditing(position);
-    setSelectedCapabilities(initialCapabilities(position, availableModules));
+    setSelectedCapabilities(allowPermissionsEdit ? initialCapabilities(position, availableModules) : []);
     setMessage("");
     setOpen(true);
   }
@@ -117,7 +119,8 @@ export function EnterprisePositionsGuidedPanel({ organizationId, departments, po
           hierarchyLevel: Number(form.get("hierarchyLevel") || 1),
           isKeyPosition: form.get("isKeyPosition") === "on",
           isActive: form.get("isActive") === "on",
-          capabilities: selectedCapabilities,
+          capabilities: allowPermissionsEdit ? selectedCapabilities : [],
+          preservePermissions: !allowPermissionsEdit,
         }),
       });
       const body = await response.json().catch(() => null) as { message?: string } | null;
@@ -128,7 +131,7 @@ export function EnterprisePositionsGuidedPanel({ organizationId, departments, po
       setSelectedCapabilities([]);
       setMessage(success);
       onSaved?.(success);
-      window.location.reload();
+      if (reloadOnSave) window.location.reload();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : tx(locale, "Enregistrement impossible.", "Unable to save."));
     } finally {
@@ -139,8 +142,8 @@ export function EnterprisePositionsGuidedPanel({ organizationId, departments, po
   return <div className="grid min-w-0 gap-4">
     <div className="flex flex-wrap items-start justify-between gap-3 rounded-2xl border border-dtsc-border bg-dtsc-surface p-4">
       <div className="min-w-0">
-        <p className="font-black text-dtsc-ink">{tx(locale, "Postes et autorisations guidées", "Positions and guided permissions")}</p>
-        <p className="mt-1 max-w-3xl text-sm leading-6 text-dtsc-muted">{tx(locale, "Choisissez ce que chaque fonction peut faire dans les services réellement actifs de votre entreprise. Les codes techniques restent gérés par DTSC.", "Choose what each function can do in the services actually active for your company. Technical permission codes remain managed by DTSC.")}</p>
+        <p className="font-black text-dtsc-ink">{allowPermissionsEdit ? tx(locale, "Postes et autorisations guidées", "Positions and guided permissions") : tx(locale, "Postes officiels", "Official positions")}</p>
+        <p className="mt-1 max-w-3xl text-sm leading-6 text-dtsc-muted">{allowPermissionsEdit ? tx(locale, "Choisissez ce que chaque fonction peut faire dans les services réellement actifs de votre entreprise. Les codes techniques restent gérés par DTSC.", "Choose what each function can do in the services actually active for your company. Technical permission codes remain managed by DTSC.") : tx(locale, "Gérez les libellés, rattachements et états sans modifier les autorisations du poste.", "Manage position names, assignments and status without changing their permissions.")}</p>
       </div>
       <Button type="button" onClick={() => openEditor(null)}><Plus className="h-4 w-4" />{tx(locale, "Nouveau poste", "New position")}</Button>
     </div>
@@ -164,7 +167,7 @@ export function EnterprisePositionsGuidedPanel({ organizationId, departments, po
       })}
     </div>
 
-    <Dialog open={open} onClose={() => setOpen(false)} title={editing ? tx(locale, "Modifier le poste", "Edit position") : tx(locale, "Nouveau poste", "New position")} description={tx(locale, "Les autorisations sont traduites en droits techniques par le backend et restent limitées à cette entreprise.", "Permissions are translated into technical rights by the backend and remain limited to this company.")} className="h-[94dvh] max-w-5xl overflow-x-hidden">
+    <Dialog open={open} onClose={() => setOpen(false)} title={editing ? tx(locale, "Modifier le poste", "Edit position") : tx(locale, "Nouveau poste", "New position")} description={allowPermissionsEdit ? tx(locale, "Les autorisations sont traduites en droits techniques par le backend et restent limitées à cette entreprise.", "Permissions are translated into technical rights by the backend and remain limited to this company.") : tx(locale, "Les autorisations existantes restent inchangées.", "Existing permissions remain unchanged.")} className="h-[94dvh] max-w-5xl overflow-x-hidden">
       <form onSubmit={submit} className="grid gap-5">
         <div className="grid gap-3 md:grid-cols-2">
           <label className="grid gap-1 text-xs font-black text-dtsc-muted">{tx(locale, "Nom du poste", "Position name")}<Input name="label" required minLength={2} defaultValue={editing ? (locale === "en" ? editing.labelEn : editing.labelFr) : ""} /></label>
@@ -173,7 +176,7 @@ export function EnterprisePositionsGuidedPanel({ organizationId, departments, po
           <label className="grid gap-1 text-xs font-black text-dtsc-muted md:col-span-2">{tx(locale, "Description", "Description")}<textarea name="description" defaultValue={editing?.descriptionFr || ""} className="min-h-24 rounded-xl border border-dtsc-border bg-dtsc-page p-3 text-sm text-dtsc-ink" /></label>
         </div>
 
-        <div className="rounded-2xl border border-cyan-400/25 bg-cyan-400/10 p-4">
+        {allowPermissionsEdit ? <><div className="rounded-2xl border border-cyan-400/25 bg-cyan-400/10 p-4">
           <p className="flex items-center gap-2 font-black text-dtsc-ink"><ShieldCheck className="h-4 w-4 text-cyan-600" />{tx(locale, "Autorisations par service", "Permissions by service")}</p>
           <p className="mt-1 text-sm text-dtsc-muted">{tx(locale, "Seuls les services actifs et autorisés pour l’entreprise apparaissent ici.", "Only services active and allowed for the company appear here.")}</p>
         </div>
@@ -190,7 +193,7 @@ export function EnterprisePositionsGuidedPanel({ organizationId, departments, po
             </fieldset>;
           })}
           {!availableModules.length ? <p className="rounded-xl border border-dashed border-dtsc-border p-4 text-sm text-dtsc-muted">{tx(locale, "Aucun service actif ne propose actuellement d’autorisations configurables.", "No active service currently exposes configurable permissions.")}</p> : null}
-        </div>
+        </div></> : <p className="rounded-xl border border-sky-500/30 bg-sky-500/5 p-3 text-sm text-dtsc-muted">{tx(locale, "Les autorisations de ce poste restent inchangées. Ouvrez Administration entreprise pour modifier les droits d’accès.", "This position’s permissions remain unchanged. Open Company administration to change access rights.")}</p>}
 
         <div className="flex flex-wrap gap-4">
           <label className="flex min-h-11 items-center gap-2 text-sm font-bold text-dtsc-ink"><input name="isKeyPosition" type="checkbox" defaultChecked={editing?.isKeyPosition || false} />{tx(locale, "Poste clé", "Key position")}</label>

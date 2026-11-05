@@ -27,6 +27,7 @@ const guidedPositionSchema = z.object({
   isKeyPosition: z.boolean().default(false),
   isActive: z.boolean().default(true),
   capabilities: z.array(capabilitySchema).max(200).default([]),
+  preservePermissions: z.boolean().default(false),
 });
 
 function generatedPositionCode(label: string) {
@@ -47,6 +48,7 @@ export async function POST(req: Request, { params }: Params) {
   if (!parsed.success) return NextResponse.json({ error: "VALIDATION_ERROR", message: parsed.error.issues[0]?.message || "Poste invalide / Invalid position." }, { status: 400 });
 
   const data = parsed.data;
+  if (data.preservePermissions && data.capabilities.length > 0) return NextResponse.json({ error: "POSITION_CAPABILITY_MODE_INVALID", message: data.locale === "en" ? "Select one permissions-editing mode." : "Choisissez un seul mode de modification des autorisations." }, { status: 400 });
   if (data.departmentId) {
     const department = await prisma.enterpriseDepartment.findFirst({ where: { id: data.departmentId, organizationId, isActive: true }, select: { id: true } });
     if (!department) return NextResponse.json({ error: "INVALID_DEPARTMENT", message: data.locale === "en" ? "The selected department is not active in this company." : "Le département sélectionné n’est pas actif dans cette entreprise." }, { status: 400 });
@@ -54,7 +56,7 @@ export async function POST(req: Request, { params }: Params) {
 
   let derived: Awaited<ReturnType<typeof deriveTenantPermissionsFromCapabilities>>;
   try {
-    derived = await deriveTenantPermissionsFromCapabilities({ organizationId, capabilities: data.capabilities });
+    derived = await deriveTenantPermissionsFromCapabilities({ organizationId, capabilities: data.preservePermissions ? [] : data.capabilities });
   } catch {
     return NextResponse.json({
       error: "CAPABILITY_NOT_ALLOWED",
@@ -95,7 +97,7 @@ export async function POST(req: Request, { params }: Params) {
       hierarchyLevel: data.hierarchyLevel,
       isActive: data.isActive,
       isKeyPosition: data.isKeyPosition,
-      permissionsJson: derived.permissions as Prisma.InputJsonValue,
+      ...(data.preservePermissions ? {} : { permissionsJson: derived.permissions as Prisma.InputJsonValue }),
     },
   });
 
@@ -110,7 +112,7 @@ export async function POST(req: Request, { params }: Params) {
     riskLevel: "HIGH",
     before: before as unknown as Prisma.InputJsonValue | undefined,
     after: position as unknown as Prisma.InputJsonValue,
-    metadata: { organizationId, moduleCount: derived.modules.length, permissionCount: derived.permissions.length },
+    metadata: { organizationId, moduleCount: derived.modules.length, permissionCount: data.preservePermissions && existing && Array.isArray(existing.permissionsJson) ? existing.permissionsJson.length : derived.permissions.length, permissionsPreserved: data.preservePermissions && Boolean(existing) },
   });
   return NextResponse.json({ ok: true, position }, { status: existing ? 200 : 201 });
 }
