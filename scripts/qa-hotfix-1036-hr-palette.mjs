@@ -9,6 +9,7 @@ const route = fs.readFileSync('app/api/enterprise/[organizationId]/my-hr/route.t
 const moduleHub = fs.readFileSync('app/enterprise-modules/page.tsx', 'utf8');
 const moduleRoute = fs.readFileSync('app/enterprise-modules/[moduleCode]/page.tsx', 'utf8');
 const personalRoute = fs.readFileSync('app/enterprise-modules/my-hr/page.tsx', 'utf8');
+const payrollWorkspace = fs.readFileSync('components/enterprise/professional/enterprise-payroll-operations-workspace.tsx', 'utf8');
 
 // Sections and content use DTSC surface tokens in both themes.
 assert.match(dossier, /function Section\(\{ title, icon: Icon, children/);
@@ -72,6 +73,8 @@ assert.match(workspace, /new URL\(window\.location\.href\)\.searchParams\.get\("
 assert.match(moduleHub, /\?tab=SELF_SERVICE/);
 assert.match(moduleHub, /hasEnterpriseSelfHrModule\(session, organizationId/);
 assert.doesNotMatch(moduleHub, /<EnterpriseMyHrSelfService/);
+assert.doesNotMatch(payrollWorkspace, /<EnterpriseMyHrSelfService/);
+assert.match(payrollWorkspace, /href="\/enterprise-modules\/my-hr"/);
 assert.match(moduleRoute, /getEnterpriseNavigationModules\(organizationId, user\.id, user\.locale\)/);
 assert.match(personalRoute, /hasEnterpriseSelfHrModule\(session, organizationId/);
 assert.match(personalRoute, /<EnterpriseMyHrSelfService organizationId=\{organizationId\} relatedModules=\{relatedModules\}/);
