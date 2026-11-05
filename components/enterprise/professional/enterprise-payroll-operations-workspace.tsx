@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Ban, CheckCircle2, Eye, FileText, Landmark, Plus, Send, XCircle } from "lucide-react";
 import { Field, NativeSelect } from "@/components/enterprise/core-v2/erp-v2-ui";
+import { EnterpriseMyHrSelfService } from "@/components/enterprise/professional/enterprise-my-hr-self-service";
 import {
   professionalErpDate,
   professionalErpEnumLabel,
@@ -263,7 +264,7 @@ export function EnterprisePayrollOperationsWorkspace({ organizationId, organizat
   function actionsFor(run: PayrollRun): BusinessContextAction[] {
     return [
       { id: "open", label: t("people.open"), icon: Eye, onSelect: () => setDetail(run) },
-      ...(run.status === "PREPARED" ? [
+      ...(runs.canManage && run.status === "PREPARED" ? [
         { id: "submit", label: t("payroll.submit"), icon: Send, onSelect: () => { setError(""); setSubmitTarget(run); } },
         { id: "cancel", label: t("payroll.cancel"), icon: Ban, destructive: true, onSelect: () => { setError(""); setCancelTarget(run); } },
       ] : []),
@@ -271,7 +272,7 @@ export function EnterprisePayrollOperationsWorkspace({ organizationId, organizat
         { id: "approve", label: t("people.approve"), icon: CheckCircle2, onSelect: () => { setError(""); setDecisionTarget({ run, decision: "APPROVE" as const }); } },
         { id: "reject", label: t("people.reject"), icon: XCircle, destructive: true, onSelect: () => { setError(""); setDecisionTarget({ run, decision: "REJECT" as const }); } },
       ] : []),
-      ...(run.status === "REJECTED" ? [{ id: "cancel", label: t("payroll.cancelPermanently"), icon: Ban, destructive: true, onSelect: () => { setError(""); setCancelTarget(run); } }] : []),
+      ...(runs.canManage && run.status === "REJECTED" ? [{ id: "cancel", label: t("payroll.cancelPermanently"), icon: Ban, destructive: true, onSelect: () => { setError(""); setCancelTarget(run); } }] : []),
     ];
   }
 
@@ -281,8 +282,9 @@ export function EnterprisePayrollOperationsWorkspace({ organizationId, organizat
       title={t("payroll.title")}
       description={`${locale === "en" ? definition.descriptionEn : definition.descriptionFr} ${copy.financeBoundary}`}
       count={t("payroll.count", { count: runs.pagination.total, suffix: suffix(runs.pagination.total) })}
-      primaryAction={<div data-responsive-actions><Button variant="outline" onClick={() => { setError(""); setPeriodOpen(true); }}><Plus className="h-4 w-4" />{t("payroll.newPeriod")}</Button><Button onClick={() => { setError(""); setPrepareOpen(true); }}><FileText className="h-4 w-4" />{t("payroll.prepareRun")}</Button></div>}
+      primaryAction={runs.canManage ? <div data-responsive-actions><Button variant="outline" onClick={() => { setError(""); setPeriodOpen(true); }}><Plus className="h-4 w-4" />{t("payroll.newPeriod")}</Button><Button onClick={() => { setError(""); setPrepareOpen(true); }}><FileText className="h-4 w-4" />{t("payroll.prepareRun")}</Button></div> : undefined}
     />
+    <EnterpriseMyHrSelfService organizationId={organizationId} />
     <ModuleMetrics label={t("payroll.metrics")}><ModuleMetric label={t("payroll.openPeriods")} value={periods.metrics.open || 0} /><ModuleMetric label={t("payroll.toApprove")} value={runs.metrics.pendingApproval || 0} /><ModuleMetric label={t("payroll.approvedRuns")} value={runs.metrics.approved || 0} /><ModuleMetric label={t("payroll.activePopulation")} value={lookups.employees.length} /></ModuleMetrics>
     <ModuleToolbar controls={<><ProfessionalTabs value={tab} onChange={(value) => { setTab(value); setStatus(""); setPage(1); }} items={[{ id: "RUNS", label: t("payroll.runsTab"), count: runs.pagination.total }, { id: "PERIODS", label: t("payroll.periodsTab"), count: periods.pagination.total }]} /><NativeSelect value={status} onChange={(value) => { setStatus(value); setPage(1); }} items={statusItems} /></>} summary={copy.financeBoundary} />
     <ModuleContent>
