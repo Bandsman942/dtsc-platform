@@ -10,7 +10,7 @@ includes("prisma/enterprise-hr-payroll.prisma", [
   "model EnterpriseEmploymentContractRevision", "@@unique([organizationId, contractId, revisionNumber], map: \"ECR_contract_revision_uniq\")",
 ]);
 includes("prisma/migrations/20261105201000_hr_contract_revision_history/migration.sql", [
-  "CREATE TABLE", "FOREIGN KEY", "ON DELETE RESTRICT",
+  "CREATE TABLE", "FOREIGN KEY", "ON DELETE RESTRICT", "CREATE UNIQUE INDEX IF NOT EXISTS",
 ]);
 includes("lib/enterprise/hr-payroll/employees.ts", [
   "updateEnterpriseEmployee", "archiveEnterpriseEmployee", "restoreEnterpriseEmployee",
