@@ -246,6 +246,34 @@ export async function updateEnterpriseEmploymentContract(
     });
     if (updated.count !== 1) throw new EnterpriseDomainConflictError();
 
+    // Persist the exact previous revision inside the same guarded transaction.
+    // Do not rewrite an approved contract or expose compensation in event logs.
+    await tx.enterpriseEmploymentContractRevision.create({
+      data: {
+        organizationId,
+        contractId: contract.id,
+        revisionNumber: contract.revision,
+        savedByUserId: actorUserId,
+        snapshotJson: {
+          reference: contract.reference,
+          versionNumber: contract.versionNumber,
+          status: contract.status,
+          contractType: contract.contractType,
+          startDate: contract.startDate.toISOString(),
+          endDate: contract.endDate?.toISOString() || null,
+          probationEndDate: contract.probationEndDate?.toISOString() || null,
+          jobTitle: contract.jobTitle,
+          departmentId: contract.departmentId,
+          siteId: contract.siteId,
+          baseCompensation: contract.baseCompensation.toString(),
+          compensationCurrency: contract.compensationCurrency,
+          payFrequency: contract.payFrequency,
+          standardHoursPerWeek: contract.standardHoursPerWeek?.toString() || null,
+          terms: contract.terms,
+        },
+      },
+    });
+
     const supersededAt = new Date();
     await tx.enterpriseApproval.updateMany({
       where: {

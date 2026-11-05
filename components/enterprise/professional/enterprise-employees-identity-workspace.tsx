@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Eye, Plus, UsersRound } from "lucide-react";
+import { EnterpriseEmployeeDossierDialog } from "@/components/enterprise/professional/enterprise-employee-dossier-dialog";
 import { EnterpriseIdentityLinkChoice, type EnterpriseIdentityLinkChoiceValue } from "@/components/enterprise/identity-links/identity-link-choice";
 import { Field, NativeSelect } from "@/components/enterprise/core-v2/erp-v2-ui";
 import { professionalErpDate, professionalErpEnumLabel, professionalErpT, useProfessionalErpLocale } from "@/components/enterprise/professional/professional-erp-i18n";
@@ -19,18 +20,19 @@ import { StatusBadge } from "@/components/workspace/status-badge";
 import type { EnterpriseModuleDefinition } from "@/lib/enterprise/module-registry";
 
 type IdentityLink = { id: string; status: string; requestedRelationType: string; activatedAt: string | null; expiresAt: string | null };
-type Employee = { id: string; employeeNumber: string; organizationMemberId: string | null; firstName: string; lastName: string; displayName: string; workEmail: string | null; workPhone: string | null; positionId: string | null; positionCode: string | null; departmentId: string | null; managerEmployeeId: string | null; siteId: string | null; hireDate: string; employmentStatus: string; employmentType: string | null; baseCompensation: string | number | null; compensationCurrency: string | null; identityLink: IdentityLink | null; contracts: Array<{ id: string; reference: string; status: string; contractType: string }>; _count: { directReports: number; timesheets: number; leaveRequests: number } };
+type Employee = { id: string; archivedAt: string | null; employeeNumber: string; organizationMemberId: string | null; firstName: string; lastName: string; displayName: string; workEmail: string | null; workPhone: string | null; positionId: string | null; positionCode: string | null; departmentId: string | null; managerEmployeeId: string | null; siteId: string | null; hireDate: string; employmentStatus: string; employmentType: string | null; baseCompensation: string | number | null; compensationCurrency: string | null; identityLink: IdentityLink | null; contracts: Array<{ id: string; reference: string; status: string; contractType: string }>; _count: { directReports: number; timesheets: number; leaveRequests: number } };
 type Member = { id: string; membershipId: string; label: string; email: string; role: string; positionTitle: string | null };
 type LookupItem = { id: string; labelFr?: string; labelEn?: string | null; name?: string; code?: string; positionCode?: string; employeeNumber?: string; displayName?: string; departmentId?: string | null };
 type Lookups = { members: Member[]; departments: LookupItem[]; positions: LookupItem[]; employees: LookupItem[]; sites: LookupItem[]; currencies: string[] };
 
 function identityTone(status?: string | null) { return status === "ACTIVE" ? "success" as const : ["REFUSED", "EXPIRED", "REVOKED", "CANCELLED"].includes(status || "") ? "danger" as const : status ? "warning" as const : "neutral" as const; }
 
-export function EnterpriseEmployeesIdentityWorkspace({ organizationId, organizationName, definition }: { organizationId: string; organizationName: string; definition: EnterpriseModuleDefinition }) {
+export function EnterpriseEmployeesIdentityWorkspace({ organizationId, organizationName, definition, focusedEmployeeId, onFocusConsumed }: { organizationId: string; organizationName: string; definition: EnterpriseModuleDefinition; focusedEmployeeId?: string | null; onFocusConsumed?: () => void }) {
   const locale = useProfessionalErpLocale();
   const t = (key: Parameters<typeof professionalErpT>[1], values?: Record<string, string | number>) => professionalErpT(locale, key, values);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
+  const [showArchived, setShowArchived] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const [createOpen, setCreateOpen] = useState(false);
   const [detail, setDetail] = useState<Employee | null>(null);
@@ -42,6 +44,10 @@ export function EnterpriseEmployeesIdentityWorkspace({ organizationId, organizat
   useToastMessage(notice, "success");
 
   useEffect(() => {
+    if (focusedEmployeeId) setDetail({ id: focusedEmployeeId } as Employee);
+  }, [focusedEmployeeId]);
+
+  useEffect(() => {
     let active = true;
     void fetch(`/api/enterprise/${organizationId}/hr-payroll-lookups?module=HUMAN_RESOURCES`, { cache: "no-store" }).then(async (response) => {
       const body = await response.json().catch(() => null) as Lookups & { message?: string; error?: string } | null;
@@ -51,8 +57,8 @@ export function EnterpriseEmployeesIdentityWorkspace({ organizationId, organizat
     return () => { active = false; };
   }, [organizationId, refreshKey, locale]);
 
-  const params = useMemo(() => { const value = new URLSearchParams({ page: String(page), pageSize: "25" }); if (search.trim()) value.set("search", search.trim()); return value; }, [page, search]);
-  const collection = useProfessionalCollection<Employee>({ endpoint: `/api/enterprise/${organizationId}/employees`, params, refreshKey });
+  const params = useMemo(() => { const value = new URLSearchParams({ page: String(page), pageSize: "25" }); if (search.trim()) value.set("search", search.trim()); if (showArchived) value.set("archived", "true"); return value; }, [page, search, showArchived]);
+  const collection = useProfessionalCollection<Employee, { canAdminister: boolean }>({ endpoint: `/api/enterprise/${organizationId}/employees`, params, refreshKey });
   const lookupLabel = (item: LookupItem | undefined, fallback: string) => item ? (locale === "en" ? item.labelEn || item.labelFr || item.name || fallback : item.labelFr || item.labelEn || item.name || fallback) : fallback;
   const positionLabel = (employee: Employee) => lookupLabel(lookups.positions.find((position) => position.id === employee.positionId), t("people.positionToComplete"));
   const memberLabel = (member: Member) => `${member.label} · ${member.positionTitle || professionalErpEnumLabel(locale, "role", member.role)}`;
@@ -103,11 +109,11 @@ export function EnterpriseEmployeesIdentityWorkspace({ organizationId, organizat
   return <ModuleWorkspace>
     <ModuleHeader eyebrow={t("identity.eyebrow", { organization: organizationName })} title={t("identity.title")} description={`${locale === "en" ? definition.descriptionEn : definition.descriptionFr} ${t("identity.descriptionSuffix")}`} count={t("identity.count", { count: collection.pagination.total, suffix: collection.pagination.total === 1 ? "" : "s" })} primaryAction={collection.canManage ? <Button onClick={() => { setError(""); setCreateOpen(true); }} className="bg-dtsc-blue text-white"><Plus className="h-4 w-4" />{t("identity.newRecord")}</Button> : undefined} />
     <ModuleMetrics label={t("identity.metrics")}><ModuleMetric label={t("identity.activeRecords")} value={collection.metrics.active || 0} /><ModuleMetric label={t("identity.withoutActiveContract")} value={collection.metrics.withoutContract || 0} /></ModuleMetrics>
-    <ModuleToolbar search={<ProfessionalSearch value={search} onChange={(value) => { setSearch(value); setPage(1); }} placeholder={t("identity.searchPlaceholder")} />} summary={locale === "en" ? "Canonical HR identity, assignment and account relationship." : "Identité RH canonique, affectation et relation de compte."} />
+    <ModuleToolbar search={<ProfessionalSearch value={search} onChange={(value) => { setSearch(value); setPage(1); }} placeholder={t("identity.searchPlaceholder")} />} controls={collection.extra.canAdminister ? <Button variant="outline" onClick={() => { setShowArchived((value) => !value); setPage(1); }}>{showArchived ? (locale === "en" ? "Current records" : "Dossiers courants") : (locale === "en" ? "Archived records" : "Dossiers archivés")}</Button> : undefined} summary={locale === "en" ? "Canonical HR identity, assignment and account relationship." : "Identité RH canonique, affectation et relation de compte."} />
     <ModuleContent>
       {error ? <ProfessionalError message={error} /> : null}
       <ModuleSection title={t("identity.recordsSection")} description={t("identity.recordsDescription")}>
-        {collection.error ? <ProfessionalError message={collection.error} /> : collection.loading ? <ProfessionalLoading /> : collection.items.length ? <><BusinessList ariaLabel={t("identity.title")}>{collection.items.map((employee) => <BusinessListItem key={employee.id} title={employee.displayName} leading={<UsersRound className="h-5 w-5 text-dtsc-blue" />} status={<StatusBadge tone={employee.employmentStatus === "ACTIVE" ? "success" : "neutral"}>{professionalErpEnumLabel(locale, "employmentStatus", employee.employmentStatus)}</StatusBadge>} meta={`${employee.employeeNumber} · ${positionLabel(employee)}`} description={`${employee.workEmail || employee.workPhone || t("people.contactsToComplete")} · ${employee.contracts[0] ? employee.contracts[0].reference : t("identity.withoutActiveContract")}`} onOpen={() => setDetail(employee)} openLabel={t("identity.openEmployee", { name: employee.displayName })} actions={<div className="flex items-center gap-2">{employee.identityLink ? <StatusBadge tone={identityTone(employee.identityLink.status)}>{professionalErpEnumLabel(locale, "identityStatus", employee.identityLink.status)}</StatusBadge> : <StatusBadge>{t("identity.notLinked")}</StatusBadge>}<Button size="sm" variant="outline" onClick={() => setDetail(employee)}><Eye className="h-4 w-4" />{t("people.details")}</Button></div>} />)}</BusinessList><ProfessionalPager pagination={collection.pagination} onPageChange={setPage} locale={locale} /></> : <EmptyState compact title={t("identity.noHrRecord")} description={t("identity.noHrRecordDescription")} />}
+        {collection.error ? <ProfessionalError message={collection.error} /> : collection.loading ? <ProfessionalLoading /> : collection.items.length ? <><BusinessList ariaLabel={t("identity.title")}>{collection.items.map((employee) => <BusinessListItem key={employee.id} title={employee.displayName} leading={<UsersRound className="h-5 w-5 text-dtsc-blue" />} status={<StatusBadge tone={employee.archivedAt ? "danger" : employee.employmentStatus === "ACTIVE" ? "success" : "neutral"}>{employee.archivedAt ? (locale === "en" ? "Archived" : "Archivé") : professionalErpEnumLabel(locale, "employmentStatus", employee.employmentStatus)}</StatusBadge>} meta={`${employee.employeeNumber} · ${positionLabel(employee)}`} description={`${employee.workEmail || employee.workPhone || t("people.contactsToComplete")} · ${employee.contracts[0] ? employee.contracts[0].reference : t("identity.withoutActiveContract")}`} onOpen={() => setDetail(employee)} openLabel={t("identity.openEmployee", { name: employee.displayName })} actions={<div className="flex items-center gap-2">{employee.identityLink ? <StatusBadge tone={identityTone(employee.identityLink.status)}>{professionalErpEnumLabel(locale, "identityStatus", employee.identityLink.status)}</StatusBadge> : <StatusBadge>{t("identity.notLinked")}</StatusBadge>}<Button size="sm" variant="outline" onClick={() => setDetail(employee)}><Eye className="h-4 w-4" />{t("people.details")}</Button></div>} />)}</BusinessList><ProfessionalPager pagination={collection.pagination} onPageChange={setPage} locale={locale} /></> : <EmptyState compact title={t("identity.noHrRecord")} description={t("identity.noHrRecordDescription")} />}
       </ModuleSection><ProfessionalHelp moduleCode="HUMAN_RESOURCES" />
     </ModuleContent>
 
@@ -120,6 +126,6 @@ export function EnterpriseEmployeesIdentityWorkspace({ organizationId, organizat
       <div className="sticky bottom-0 flex justify-end gap-2 border-t border-dtsc-border bg-dtsc-surface py-3"><Button type="button" variant="outline" disabled={saving} onClick={() => setCreateOpen(false)}>{t("people.cancel")}</Button><Button type="submit" disabled={saving} aria-busy={saving}>{saving ? (locale === "en" ? "Saving…" : "Enregistrement…") : t("identity.saveRecord")}</Button></div>
     </form></Dialog>
 
-    <Dialog open={Boolean(detail)} onClose={() => setDetail(null)} title={detail?.displayName || t("identity.hrRecord")} presentation="editor" className="h-[94dvh] max-w-4xl">{detail ? <div className="grid gap-5"><div className="flex flex-wrap gap-2"><StatusBadge>{detail.employeeNumber}</StatusBadge><StatusBadge tone={detail.employmentStatus === "ACTIVE" ? "success" : "neutral"}>{professionalErpEnumLabel(locale, "employmentStatus", detail.employmentStatus)}</StatusBadge>{detail.identityLink ? <StatusBadge tone={identityTone(detail.identityLink.status)}>{professionalErpEnumLabel(locale, "identityStatus", detail.identityLink.status)}</StatusBadge> : null}</div><dl className="grid gap-4 border-y border-dtsc-border py-4 sm:grid-cols-2"><div><dt className="text-xs font-black uppercase text-dtsc-muted">{t("identity.workContact")}</dt><dd className="mt-1 text-sm">{detail.workEmail || detail.workPhone || "—"}</dd></div><div><dt className="text-xs font-black uppercase text-dtsc-muted">{t("identity.position")}</dt><dd className="mt-1 text-sm">{positionLabel(detail)}</dd></div><div><dt className="text-xs font-black uppercase text-dtsc-muted">{t("identity.hireDate")}</dt><dd className="mt-1 text-sm">{professionalErpDate(detail.hireDate, locale)}</dd></div><div><dt className="text-xs font-black uppercase text-dtsc-muted">{locale === "en" ? "Activity" : "Activité"}</dt><dd className="mt-1 text-sm">{detail._count.timesheets} timesheet(s) · {detail._count.leaveRequests} congé(s)</dd></div></dl></div> : null}</Dialog>
+    <EnterpriseEmployeeDossierDialog organizationId={organizationId} employeeId={detail?.id || null} lookups={lookups} onClose={() => { setDetail(null); onFocusConsumed?.(); }} onChanged={() => setRefreshKey((value) => value + 1)} />
   </ModuleWorkspace>;
 }

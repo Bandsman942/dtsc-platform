@@ -37,11 +37,18 @@ export async function GET(req: Request, { params }: Params) {
     select: { targetEntityId: true, approverUserId: true },
   }) : [];
   const approverByContract = new Map(pendingApprovals.map((approval) => [approval.targetEntityId, approval.approverUserId]));
-  const visibleItems = items.map((item) => ({
-    ...item,
-    canEdit: item.createdByUserId === session.userId && ["DRAFT", "PENDING_APPROVAL"].includes(item.status),
-    canDecide: Boolean(approvalAccess && item.status === "PENDING_APPROVAL" && approverByContract.get(item.id) === session.userId),
-  }));
+  const visibleItems = items.map((item) => {
+    const canDecide = Boolean(approvalAccess && item.status === "PENDING_APPROVAL" && approverByContract.get(item.id) === session.userId);
+    const canReadSensitive = access.canAdminister || canDecide || (access.canWrite && item.createdByUserId === session.userId);
+    return {
+      ...item,
+      baseCompensation: canReadSensitive ? item.baseCompensation : null,
+      terms: canReadSensitive ? item.terms : null,
+      canEdit: access.canWrite && item.createdByUserId === session.userId && ["DRAFT", "PENDING_APPROVAL"].includes(item.status),
+      canDecide,
+      canViewHistory: access.canAdminister,
+    };
+  });
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "employment-contracts", page } });
   return NextResponse.json({ items: visibleItems, pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) }, metrics: { active, pendingApproval }, canManage: access.canManage });
 }
