@@ -54,6 +54,8 @@ Le mode `CONFIRMED` peut laisser des marchandises en transit si personne n'enreg
 
 Ces trois QA Retail #1042 sont désormais explicitement branchées au job `quality` de `.github/workflows/quality-gates.yml`. Les tests d'interaction réels avec PostgreSQL/transaction et les parcours navigateur multi-rôles restent à développer et à certifier séparément : les contrats statiques ne remplacent pas une recette E2E.
 
+Contrôle du 7 novembre : `npm run build` local a terminé avec succès la compilation et la génération des 225 pages ; pendant ce build, une lecture Prisma a signalé l'absence de `DATABASE_URL` dans cet environnement, donc **aucune vérification de données Neon ni recette transactionnelle authentifiée ne peut en être déduite**. La PR #1043 conserve son statut brouillon et ses preuves `NOT_EXECUTED` pour l'E2E. Le titre, les étiquettes, le milestone et les sections de gouvernance PR ont été mis au format de livraison ; la Quality Gate doit être prouvée sur un nouvel événement `synchronize` portant ces métadonnées, puisque le validateur SemVer exploite le titre de l'événement original pendant un simple `rerun`.
+
 ### Parcours E2E propriétaire à retenir pour la certification finale
 
 - Organisation Retail à deux boutiques A/B et dépôts séparés : aucun mélange des produits, des lots, des comptes financiers ni des dépenses par site ; consolidation globale cohérente.
