@@ -1,3 +1,9 @@
+## 2026-11-07 — Hotfix P0 Retail #1042, tranche 6 — Soumission facturier vers approbation Finance (PR brouillon #1043)
+
+- Le facturier Retail ne disposant pas de droits Finance globaux peut soumettre **sa propre** facture en brouillon avec version et validateur indépendant. Ce dernier est choisi parmi les collaborateurs autorisés à approuver dans `FINANCE_RECEIVABLES`, avec contrôle transactionnel du lien facture↔boutique et des permissions `PREPARE_INVOICE`.
+- L'orchestration commune conserve la facture Finance, la création de l'approbation assignée et les notifications. Aucun paiement, stock ou créance n'est enregistré à la soumission ; l'approbation et l'émission restent du ressort du workflow Finance.
+- Sélecteur des validateurs et confirmation dans le workbench Retail Design 2.0 bilingue ; tests des refus inter-boutiques, de l'auto-validation, du retrait de droit et des flags OFF. **Aucune activation, fusion ou livraison client** avant circuit caisse et E2E complet.
+
 ## 2026-11-07 — Hotfix P0 Retail #1042, tranche 5 — Annulation des factures Retail en brouillon (PR brouillon #1043)
 
 - Nouvelle transition Retail `CANCEL` limitée aux **brouillons Finance**, avec version optimiste, motif obligatoire, permission `CANCEL_UNPAID_INVOICE` du site et contrôle transactionnel canonique Finance ; les autres transitions continuent de relever des validations Finance indépendantes.

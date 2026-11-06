@@ -117,23 +117,76 @@ assert.match(route, /authorizeRetailRequest\(req, organizationId, "RETAIL_POS"/)
 assert.match(route, /writeAuditLog\(/);
 assert.match(route, /canCancel: entry\.invoice\.status === "DRAFT"/);
 assert.match(route, /auth\.visibility\.cancellableSiteIds\.includes\(entry\.siteId\)/);
+assert.match(route, /canSubmit: entry\.invoice\.status === "DRAFT" && entry\.invoice\.createdByUserId === auth\.session\.userId/);
 const cancelRoute = fs.readFileSync("app/api/enterprise/[organizationId]/retail/invoices/[invoiceId]/transition/route.ts", "utf8");
 assert.match(cancelRoute, /z\.literal\("CANCEL"\)/, "Retail must not expose direct approval, issuance or refund shortcuts");
+assert.match(cancelRoute, /z\.literal\("SUBMIT"\)/);
 assert.doesNotMatch(cancelRoute, /z\.literal\("(APPROVE|ISSUE|VOID|REFUND)"\)/);
-assert.match(cancelRoute, /requireRetailSiteCapability\(organizationId, auth\.session\.userId, checkout\.siteId, "CANCEL_UNPAID_INVOICE", prisma, \{ requireAssignment: true \}\)/);
+assert.match(cancelRoute, /parsed\.data\.action === "CANCEL" \? "CANCEL_UNPAID_INVOICE" : "PREPARE_INVOICE"/);
 assert.match(cancelRoute, /checkout\.invoice\.status !== "DRAFT"/);
 assert.match(cancelRoute, /checkout\.invoice\.revision !== parsed\.data\.revision/);
 assert.match(cancelRoute, /transitionSalesInvoice\(organizationId, invoiceId, auth\.session\.userId, parsed\.data\)/);
+assert.match(cancelRoute, /submitSalesInvoiceForAssignedApproval\(organizationId, invoiceId, auth\.session\.userId, parsed\.data, \{ retailInvoiceSiteId: checkout\.siteId \}\)/);
 assert.match(cancelRoute, /writeAuditLog\(/);
+const candidatesRoute = fs.readFileSync("app/api/enterprise/[organizationId]/retail/invoices/approval-candidates/route.ts", "utf8");
+assert.match(candidatesRoute, /retailInvoiceVisibleSites/);
+assert.match(candidatesRoute, /listRetailInvoiceFinanceApprovers/);
+assert.match(candidatesRoute, /visibility\.siteIds\.includes\(parsed\.data\)/);
+const financeApprovals = fs.readFileSync("lib/enterprise/accounting/accounting-approval-service.ts", "utf8");
+assert.match(financeApprovals, /assertRetailInvoiceFinanceApproverTx\(tx,/);
+assert.match(financeApprovals, /input\.targetEntityType !== "EnterpriseSalesInvoice"/);
+const invoiceOrchestration = fs.readFileSync("lib/enterprise/accounting/accounting-invoice-approval-orchestration.ts", "utf8");
+assert.match(invoiceOrchestration, /invoice\.createdByUserId !== actorUserId/);
+assert.match(invoiceOrchestration, /retailInvoiceSiteId: options\.retailInvoiceSiteId/);
+
+const approvalState = { linkedSite: "shop-A", allowCandidate: true, isAssigned: true, settings: { invoiceCheckoutEnabled: true, siteStaffIsolationEnabled: true } };
+const approvalDb = {
+  enterpriseRetailInvoiceCheckout: { findFirst: async ({ where }) => where.siteId === approvalState.linkedSite ? { id: "checkout" } : null },
+  enterpriseRetailConfiguration: { findUnique: async () => ({ settingsJson: approvalState.settings }) },
+  organizationMember: {
+    findFirst: async () => ({ role: "MEMBER" }),
+    findMany: async () => [{ userId: "approver", role: "MANAGER", positionTitle: null, user: { name: "Finance approver", email: "finance@example.test" } }],
+  },
+  enterpriseRetailSiteAssignment: { findUnique: async () => approvalState.isAssigned ? { isActive: true, roleCode: "INVOICER", permissionsJson: null } : null },
+};
+const approvalSource = fs.readFileSync("lib/enterprise/retail/invoice-approval.ts", "utf8");
+const approvalCompiled = ts.transpileModule(approvalSource, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
+const approvalModule = { exports: {} };
+vm.runInNewContext(approvalCompiled, {
+  module: approvalModule, exports: approvalModule.exports, Promise, Set, Map,
+  require: (id) => {
+    if (id === "@/lib/prisma") return { prisma: approvalDb };
+    if (id === "@/lib/enterprise/retail/errors") return { EnterpriseRetailError };
+    if (id === "@/lib/enterprise/module-access") return { resolveEnterpriseModuleAccess: async ({ userId, action }) => ({ allowed: approvalState.allowCandidate && userId === "approver" && action === "approve" }) };
+    if (id === "@/lib/enterprise/retail/site-access") return {
+      RETAIL_OWNER_ROLES: new Set(["OWNER"]), retailStaffIsolationIsEnabled: (settings) => settings?.siteStaffIsolationEnabled === true,
+      requireRetailSiteCapability: async () => { if (!approvalState.isAssigned) throw new EnterpriseRetailError("RETAIL_SITE_ACCESS_DENIED", 403); },
+    };
+    return require(id);
+  },
+});
+const { assertRetailInvoiceFinanceApproverTx } = approvalModule.exports;
+const approvalInput = { organizationId: "tenant", invoiceId: "finance-invoice", siteId: "shop-A", requesterUserId: "invoicer", approverUserId: "approver" };
+await assert.doesNotReject(assertRetailInvoiceFinanceApproverTx(approvalDb, approvalInput));
+await assert.rejects(assertRetailInvoiceFinanceApproverTx(approvalDb, { ...approvalInput, siteId: "shop-B" }), { code: "RETAIL_INVOICE_NOT_FOUND" });
+await assert.rejects(assertRetailInvoiceFinanceApproverTx(approvalDb, { ...approvalInput, approverUserId: "invoicer" }), { code: "RETAIL_INVOICE_SELF_APPROVAL_FORBIDDEN" });
+approvalState.allowCandidate = false;
+await assert.rejects(assertRetailInvoiceFinanceApproverTx(approvalDb, approvalInput), { code: "RETAIL_INVOICE_APPROVER_NOT_ELIGIBLE" });
+approvalState.allowCandidate = true; approvalState.isAssigned = false;
+await assert.rejects(assertRetailInvoiceFinanceApproverTx(approvalDb, approvalInput), { code: "RETAIL_SITE_ACCESS_DENIED" });
+approvalState.isAssigned = true; approvalState.settings = { invoiceCheckoutEnabled: false, siteStaffIsolationEnabled: true };
+await assert.rejects(assertRetailInvoiceFinanceApproverTx(approvalDb, approvalInput), { code: "RETAIL_INVOICE_CHECKOUT_NOT_ACTIVE" });
 const invoiceUI = fs.readFileSync("components/enterprise/professional/retail-invoice-flow-workbench.tsx", "utf8");
 assert.match(invoiceUI, /retail\/invoices/);
 assert.match(invoiceUI, /data\?\.checkoutReady/);
 assert.match(invoiceUI, /disabled=\{!chosenWarehouse \|\| !lines\.length \|\| submitting\}/);
 assert.match(invoiceUI, /"en"/);
 assert.match(invoiceUI, /"fr"/);
-assert.match(invoiceUI, /entry\.canCancel && data\.checkoutReady/);
+assert.match(invoiceUI, /data\.checkoutReady && \(entry\.canCancel \|\| entry\.canSubmit\)/);
 assert.match(invoiceUI, /<Dialog open=\{Boolean\(cancelTarget\)\}/);
 assert.match(invoiceUI, /cancelReason\.trim\(\)\.length < 4/);
+assert.match(invoiceUI, /<Dialog open=\{Boolean\(submitTarget\)\}/);
+assert.match(invoiceUI, /retail\/invoices\/approval-candidates\?siteId=/);
 assert.match(fs.readFileSync("app/enterprise-modules/retail-page.tsx", "utf8"), /RetailInvoiceFlowWorkbench/);
 assert.match(fs.readFileSync("app\/api\/enterprise\/[organizationId]\/retail\/products\/search\/route.ts", "utf8"), /requireRetailSiteCapability\(organizationId, auth\.session\.userId, warehouse\.siteId, "VIEW_STOCK"\)/);
 assert.match(fs.readFileSync("app\/api\/enterprise\/[organizationId]\/retail\/stock-lots\/route.ts", "utf8"), /requireRetailSiteCapability\(organizationId, auth\.session\.userId, warehouse\.siteId, "VIEW_STOCK"\)/);

@@ -32,6 +32,8 @@ const ERROR_MESSAGES: Record<string, string> = {
   RETAIL_INVOICE_NOT_FOUND: "Cette facture n’existe plus dans les boutiques autorisées. Actualisez le registre.",
   RETAIL_INVOICE_CANCELLATION_NOT_ALLOWED: "Seule une facture encore à l’état de brouillon peut être annulée depuis Retail. Utilisez Finance pour les opérations ultérieures.",
   RETAIL_INVOICE_REVISION_CONFLICT: "Cette facture a changé depuis son affichage. Actualisez son état avant de décider.",
+  RETAIL_INVOICE_SELF_APPROVAL_FORBIDDEN: "Le facturier ne peut pas valider lui-même sa facture. Choisissez un autre responsable Finance.",
+  RETAIL_INVOICE_APPROVER_NOT_ELIGIBLE: "Le validateur Finance sélectionné n’est plus habilité. Actualisez la liste des responsables.",
   RETAIL_CONFIGURATION_REQUIRED: "Terminez d’abord la configuration du Shop avant de modifier les règles de stock.",
   RETAIL_INVENTORY_POLICY_CONFLICT: "Les règles de stock ont été modifiées entre-temps. Rechargez-les avant d’enregistrer.",
   RETAIL_STOCK_LOT_REQUIRED: "Sélectionnez un lot de stock pour cet article avant de confirmer la vente.",

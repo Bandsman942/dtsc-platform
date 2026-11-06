@@ -16,6 +16,7 @@ export async function submitSalesInvoiceForAssignedApproval(
   invoiceId: string,
   actorUserId: string,
   input: { revision: number; approverUserId: string; reason?: string },
+  options: { retailInvoiceSiteId?: string } = {},
 ) {
   return prisma.$transaction(async (tx) => {
     await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterpriseSalesInvoice" WHERE id = ${invoiceId} AND "organizationId" = ${organizationId} FOR UPDATE`);
@@ -24,6 +25,12 @@ export async function submitSalesInvoiceForAssignedApproval(
     if (invoice.revision !== input.revision) throw new EnterpriseAccountingError("SALES_INVOICE_REVISION_CONFLICT", 409, { currentRevision: invoice.revision });
     if (invoice.status !== "DRAFT") throw new EnterpriseAccountingError("SALES_INVOICE_TRANSITION_INVALID", 409);
     if (invoice.createdByUserId !== actorUserId) throw new EnterpriseAccountingError("SALES_INVOICE_SUBMITTER_MISMATCH", 403);
+    if (options.retailInvoiceSiteId) {
+      const checkout = await tx.enterpriseRetailInvoiceCheckout.findFirst({
+        where: { organizationId, salesInvoiceId: invoice.id, siteId: options.retailInvoiceSiteId }, select: { id: true },
+      });
+      if (!checkout) throw new EnterpriseAccountingError("SALES_INVOICE_NOT_FOUND", 404);
+    }
 
     const approval = await createAccountingApprovalAssignment(tx, {
       organizationId,
@@ -31,6 +38,7 @@ export async function submitSalesInvoiceForAssignedApproval(
       targetEntityId: invoice.id,
       requesterUserId: actorUserId,
       approverUserId: input.approverUserId,
+      retailInvoiceSiteId: options.retailInvoiceSiteId,
     });
     const updated = await tx.enterpriseSalesInvoice.update({
       where: { id: invoice.id },
