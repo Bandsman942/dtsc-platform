@@ -14,7 +14,7 @@ import {
   financeMutation,
   type FinanceRecord,
 } from "@/components/enterprise/professional/finance-professional-workspace-shared";
-import { fetchOperationalFinanceRecord, useOperationalFinanceCollection } from "@/components/enterprise/professional/use-operational-finance-collection";
+import { fetchOperationalFinanceJson, fetchOperationalFinanceRecord, useOperationalFinanceCollection } from "@/components/enterprise/professional/use-operational-finance-collection";
 import { ProfessionalError, ProfessionalFormSection, ProfessionalHelp, ProfessionalLoading, ProfessionalSearch, ProfessionalTabs } from "@/components/enterprise/professional/professional-erp-ui";
 import { financeDate, financeMoney, financeStatusLabel, financeStatusTone, safeFinanceError, type FinanceLocale } from "@/components/enterprise/professional/finance-professional-ui";
 import { Button } from "@/components/ui/button";
@@ -246,27 +246,26 @@ export function EnterpriseFinanceCashBankReconciliationBase(props: Props) {
     search,
     status: effectiveStatus,
     refreshKey,
+    locale,
   });
 
   const loadExact = useCallback(async (recordId: string) => {
     if (isCash) return fetchOperationalFinanceRecord<CashSession>(`/api/enterprise/${organizationId}/cash-sessions`, recordId);
-    const response = await fetch(`/api/enterprise/${organizationId}/${isBank ? "bank-statements" : "reconciliations"}/${recordId}`, { cache: "no-store" });
-    const body = await response.json().catch(() => null) as { statement?: BankStatement; reconciliation?: Reconciliation; message?: string; error?: string } | null;
-    if (!response.ok || !body) throw new Error(body?.message || body?.error || t("cashDetailUnavailable"));
-    return (isBank ? body.statement : body.reconciliation) || null;
-  }, [isBank, isCash, organizationId, t]);
+    const body = await fetchOperationalFinanceJson(`/api/enterprise/${organizationId}/${isBank ? "bank-statements" : "reconciliations"}/${recordId}`);
+    return (isBank ? body.statement as BankStatement | undefined : body.reconciliation as Reconciliation | undefined) || null;
+  }, [isBank, isCash, organizationId]);
 
   useEffect(() => {
     const key = isCash ? "cashSessionId" : isBank ? "statementId" : "reconciliationId";
     const id = searchParams.get(key);
     if (!id) return;
-    void loadExact(id).then((record) => { if (record) setDetail(record); }).catch((error) => setErrorMessage(safeFinanceError(error, t("cashDetailUnavailable"))));
-  }, [isBank, isCash, loadExact, searchParams, t]);
+    void loadExact(id).then((record) => { if (record) setDetail(record); }).catch((error) => setErrorMessage(safeFinanceError(error, t("cashDetailUnavailable"), locale)));
+  }, [isBank, isCash, loadExact, locale, searchParams, t]);
 
   async function openDetail(record: FinanceRecord) {
     setErrorMessage("");
     try { setDetail(await loadExact(record.id) || record); }
-    catch (error) { setDetail(record); setErrorMessage(safeFinanceError(error, t("cashDetailUnavailable"))); }
+    catch (error) { setDetail(record); setErrorMessage(safeFinanceError(error, t("cashDetailUnavailable"), locale)); }
   }
 
   function mutationSuccess(copy: string) {
@@ -286,7 +285,7 @@ export function EnterpriseFinanceCashBankReconciliationBase(props: Props) {
         openingAmount: String(form.get("openingAmount") || "0"),
       });
       setCreateOpen(false); mutationSuccess(t("cashSessionOpened"));
-    } catch (error) { setErrorMessage(safeFinanceError(error, t("openingFailed"))); }
+    } catch (error) { setErrorMessage(safeFinanceError(error, t("openingFailed"), locale)); }
     finally { setBusy(false); }
   }
 
@@ -305,7 +304,7 @@ export function EnterpriseFinanceCashBankReconciliationBase(props: Props) {
         approverUserId: String(form.get("approverUserId") || ""),
       });
       setCloseTarget(null); mutationSuccess(t("cashCloseSubmitted"));
-    } catch (error) { setErrorMessage(safeFinanceError(error, t("closeFailed"))); }
+    } catch (error) { setErrorMessage(safeFinanceError(error, t("closeFailed"), locale)); }
     finally { setBusy(false); }
   }
 
@@ -321,7 +320,7 @@ export function EnterpriseFinanceCashBankReconciliationBase(props: Props) {
         revision: validateTarget.revision,
       });
       setValidateTarget(null); mutationSuccess(t("cashDecisionRecorded"));
-    } catch (error) { setErrorMessage(safeFinanceError(error, t("validationFailed"))); }
+    } catch (error) { setErrorMessage(safeFinanceError(error, t("validationFailed"), locale)); }
     finally { setBusy(false); }
   }
 
@@ -335,7 +334,7 @@ export function EnterpriseFinanceCashBankReconciliationBase(props: Props) {
       const parsed = parseBankCsv(await file.text(), locale);
       if (parsed.length > 10_000) throw new Error(t("bankStatementTooManyRows"));
       setCsvLines(parsed); setCsvName(file.name); setErrorMessage("");
-    } catch (error) { setErrorMessage(safeFinanceError(error, t("csvParsingFailed"))); }
+    } catch (error) { setErrorMessage(safeFinanceError(error, t("csvParsingFailed"), locale)); }
   }
 
   async function importStatement(event: FormEvent<HTMLFormElement>) {
@@ -356,7 +355,7 @@ export function EnterpriseFinanceCashBankReconciliationBase(props: Props) {
         lines: csvLines,
       });
       setCreateOpen(false); setCsvLines([]); setCsvName(""); mutationSuccess(t("statementImported"));
-    } catch (error) { setErrorMessage(safeFinanceError(error, t("importFailed"))); }
+    } catch (error) { setErrorMessage(safeFinanceError(error, t("importFailed"), locale)); }
     finally { setBusy(false); }
   }
 
@@ -372,7 +371,7 @@ export function EnterpriseFinanceCashBankReconciliationBase(props: Props) {
         periodEnd: String(form.get("periodEnd") || ""),
       });
       setCreateOpen(false); setReconciliationAccountId(""); mutationSuccess(t("reconciliationPrepared"));
-    } catch (error) { setErrorMessage(safeFinanceError(error, t("creationFailed"))); }
+    } catch (error) { setErrorMessage(safeFinanceError(error, t("creationFailed"), locale)); }
     finally { setBusy(false); }
   }
 
@@ -389,9 +388,19 @@ export function EnterpriseFinanceCashBankReconciliationBase(props: Props) {
         journalEntryId: String(form.get("journalEntryId") || "") || undefined,
         matchedAmount: String(form.get("matchedAmount") || "0"),
       });
-      const refreshed = await loadExact(matchTarget.id);
-      setMatchTarget(null); setDetail(refreshed); setRefreshKey((value) => value + 1); setMessage(t("matchRecorded"));
-    } catch (error) { setErrorMessage(safeFinanceError(error, t("matchingFailed"))); }
+      // The write is already confirmed here. An unrelated detail refresh failure must
+      // never suggest that the user should submit the same financial match again.
+      setMatchTarget(null); setRefreshKey((value) => value + 1);
+      try {
+        setDetail(await loadExact(matchTarget.id));
+        setMessage(t("matchRecorded"));
+      } catch {
+        setDetail(null);
+        setErrorMessage(tx(locale,
+          "Rapprochement enregistré, mais son détail n’a pas pu être actualisé. Consultez la liste avant toute nouvelle action.",
+          "Match saved, but its details could not be refreshed. Check the list before taking another action."));
+      }
+    } catch (error) { setErrorMessage(safeFinanceError(error, t("matchingFailed"), locale)); }
     finally { setBusy(false); }
   }
 
@@ -408,7 +417,7 @@ export function EnterpriseFinanceCashBankReconciliationBase(props: Props) {
         ...(actionTarget.action === "SUBMIT" ? { approverUserId: String(form.get("approverUserId") || "") } : {}),
       });
       setActionTarget(null); mutationSuccess(t("reconciliationCompleted"));
-    } catch (error) { setErrorMessage(safeFinanceError(error, t("completionFailed"))); }
+    } catch (error) { setErrorMessage(safeFinanceError(error, t("completionFailed"), locale)); }
     finally { setBusy(false); }
   }
 
