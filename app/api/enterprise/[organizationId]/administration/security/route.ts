@@ -5,6 +5,7 @@ import { writeAuditLog } from "@/lib/audit";
 import { requireEnterpriseGovernanceAccess } from "@/lib/enterprise/governance/access";
 import { enterpriseSecurityPolicySchema } from "@/lib/enterprise/governance/validators";
 import { prisma } from "@/lib/prisma";
+import { getGlobalMfaPolicy } from "@/lib/auth/mfa-policy";
 import { isSameOriginRequest } from "@/lib/request-security";
 
 type Params = { params: Promise<{ organizationId: string }> };
@@ -27,6 +28,19 @@ export async function PUT(req: Request, { params }: Params) {
   if (!(await requireEnterpriseGovernanceAccess(session.userId, organizationId))) return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
   const parsed = enterpriseSecurityPolicySchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "VALIDATION_ERROR", message: parsed.error.issues[0]?.message || "Politique invalide." }, { status: 400 });
+  const globalMfa = await getGlobalMfaPolicy();
+  const organization = await prisma.organization.findUnique({
+    where: { id: organizationId },
+    select: { organizationType: true },
+  });
+  const globallyRequired = globalMfa.requireMfaForAllUsers ||
+    (globalMfa.requireMfaForDtscInternal && organization?.organizationType === "DTSC_INTERNAL");
+  if (globallyRequired && !parsed.data.requireMfa) {
+    return NextResponse.json({
+      error: "MFA_MINIMUM_REQUIRED",
+      message: "La politique de sécurité DTSC impose la double authentification pour cet espace.",
+    }, { status: 403 });
+  }
   const previous = await prisma.enterpriseOrganizationSecurityPolicy.findUnique({ where: { organizationId } });
   const { allowedEmailDomains, devicePolicy, dataExportPolicy, ...scalarPolicy } = parsed.data;
   const policyData = {

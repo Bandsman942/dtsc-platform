@@ -16,6 +16,8 @@ const DEFAULT_APP_SETTINGS: AppSetting = {
   notificationRetentionDays: 60,
   signUpOtpEnabled: true,
   signUpOtpExpirationMinutes: 10,
+  requireMfaForAllUsers: false,
+  requireMfaForDtscInternal: false,
   adminRoleAccess: {},
   updatedAt: new Date(0),
 };

@@ -1155,6 +1155,7 @@ export const hrcfoReferenceSchemas = {
   accounts: z.object({
     name: z.string().min(2).max(140),
     accountType: z.enum(["CASH", "BANK", "MOBILE_MONEY", "PROJECT", "OPERATIONS"]).default("CASH"),
+    currency: z.enum(["USD", "CDF", "EUR"]),
     description: optionalText(800),
     openingBalance: money.default(0),
     status: z.enum(["ACTIVE", "INACTIVE"]).default("ACTIVE"),

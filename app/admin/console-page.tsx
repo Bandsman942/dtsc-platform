@@ -9,6 +9,9 @@ import { ConsoleAiAlertPanel } from "@/components/admin/console-ai-alert-panel";
 import { ConsoleAiConfigurationPanel } from "@/components/admin/console-ai-configuration-panel";
 import { ConsoleAiPolicyManager } from "@/components/admin/console-ai-policy-manager";
 import { AdminAuditTables } from "@/components/admin/admin-audit-tables";
+import { ConsoleSessionsSecurityPanel } from "@/components/admin/console-sessions-security-panel";
+import { ConsoleMfaRecoveryPanel } from "@/components/admin/console-mfa-recovery-panel";
+import { ConsoleMfaPolicyPanel } from "@/components/admin/console-mfa-policy-panel";
 import { AdminBillingSubscriptions } from "@/components/admin/admin-billing-subscriptions";
 import { ManualSubscriptionPaymentsAdmin } from "@/components/admin/manual-subscription-payments-admin";
 import { AdminDataTables } from "@/components/admin/admin-data-tables";
@@ -32,6 +35,7 @@ import { HrcfoInvoiceList } from "@/components/admin/hrcfo-invoice-list";
 import { LegalDashboardSummary } from "@/components/admin/legal-dashboard-summary";
 import { NewsletterSubscribersManager } from "@/components/admin/newsletter-subscribers-manager";
 import { OperationsAdminPanel } from "@/components/admin/operations-admin-panel";
+import { InternalFinanceControls } from "@/components/admin/internal-finance-controls";
 import { PayrollApprovalPanel } from "@/components/admin/payroll-approval-panel";
 import { PayrollWorkflowPanel } from "@/components/admin/payroll-workflow-panel";
 import { PlatformIncidentManager } from "@/components/admin/platform-incident-manager";
@@ -199,7 +203,7 @@ export async function DtscConsolePage({ forcedSection, searchParams }: { forcedS
       prisma.platformIncident.findMany({ orderBy: [{ status: "asc" }, { startedAt: "desc" }], take: 100 }),
       getConsoleAccessDecision({ user, capability: CONSOLE_CAPABILITIES.WEBHOOK_RETRY, adminRoleAccess }),
     ]);
-    content = <div className="space-y-4"><ConsoleFilterBar action={pathname} search={search} hidden={{ pageSize }}><ConsoleSelectFilter name="source" label={t("console.filters.source")} value={source} options={[{ value: "AUDIT", label: "Audit" }, { value: "API", label: "API" }, { value: "WEBHOOK", label: "Webhook" }]} /></ConsoleFilterBar><ConsoleExportLinks locale={locale} links={[{ href: `/api/admin/exports/audit?result=${encodeURIComponent(stringParams.result || "")}`, label: locale === "en" ? "Export audit" : "Exporter l’audit" }]} /><ConsoleJumpLinks label={t("console.detailSections.jumpNav")} items={[{ id: "security-incidents", label: t("console.detailSections.incidents") }, { id: "security-traces", label: t("console.detailSections.auditLogs") }]} /><ConsoleSubsection id="security-incidents" title={t("console.detailSections.incidents")}><PlatformIncidentManager incidents={toJsonSafe(incidents)} canManage={canManage} locale={locale} /></ConsoleSubsection><ConsoleSubsection id="security-traces" title={t("console.detailSections.auditLogs")}><AdminAuditTables payments={billing.paymentAuditItems} logs={toJsonSafe(dataset.logAuditItems)} canRetryWebhooks={webhookRetryDecision.allowed} /></ConsoleSubsection><ConsoleServerPagination pagination={dataset.pagination} pathname={pathname} searchParams={{ search, source, result: stringParams.result, organizationId: stringParams.organizationId, userId: stringParams.userId, provider: stringParams.provider, requestId: stringParams.requestId, pageSize }} /></div>;
+    content = <div className="space-y-4"><ConsoleMfaRecoveryPanel locale={locale} canManage={canManage} /><ConsoleMfaPolicyPanel locale={locale} canManage={canManage} /><ConsoleSessionsSecurityPanel locale={locale} canManage={canManage} /><ConsoleFilterBar action={pathname} search={search} hidden={{ pageSize }}><ConsoleSelectFilter name="source" label={t("console.filters.source")} value={source} options={[{ value: "AUDIT", label: "Audit" }, { value: "API", label: "API" }, { value: "WEBHOOK", label: "Webhook" }]} /></ConsoleFilterBar><ConsoleExportLinks locale={locale} links={[{ href: `/api/admin/exports/audit?result=${encodeURIComponent(stringParams.result || "")}`, label: locale === "en" ? "Export audit" : "Exporter l’audit" }]} /><ConsoleJumpLinks label={t("console.detailSections.jumpNav")} items={[{ id: "security-incidents", label: t("console.detailSections.incidents") }, { id: "security-traces", label: t("console.detailSections.auditLogs") }]} /><ConsoleSubsection id="security-incidents" title={t("console.detailSections.incidents")}><PlatformIncidentManager incidents={toJsonSafe(incidents)} canManage={canManage} locale={locale} /></ConsoleSubsection><ConsoleSubsection id="security-traces" title={t("console.detailSections.auditLogs")}><AdminAuditTables payments={billing.paymentAuditItems} logs={toJsonSafe(dataset.logAuditItems)} canRetryWebhooks={webhookRetryDecision.allowed} /></ConsoleSubsection><ConsoleServerPagination pagination={dataset.pagination} pathname={pathname} searchParams={{ search, source, result: stringParams.result, organizationId: stringParams.organizationId, userId: stringParams.userId, provider: stringParams.provider, requestId: stringParams.requestId, pageSize }} /></div>;
   } else if (isInternalSection(activeSection)) {
     const ceoStart = validDate(stringParams.ceoStart) ? stringParams.ceoStart : undefined;
     const ceoEnd = validDate(stringParams.ceoEnd) ? stringParams.ceoEnd : undefined;
@@ -291,6 +295,7 @@ function renderInternalSection(
     <InternalDepartmentWorkspace locale={locale} sections={[
       { id: "payroll", titleKey: "payroll", content: <PayrollWorkflowPanel locale={locale} embedded /> },
       { id: "invoices", titleKey: "invoices", content: <HrcfoInvoiceList invoices={hrcfoInvoices} canRead={canReadHrcfoInvoices} /> },
+      { id: "treasury", titleKey: "operations", content: <InternalFinanceControls /> },
       { id: "operations", titleKey: "operations", content: <OperationsAdminPanel eyebrow="Gestion interne" title="Opérations HR & CFO" description="Dossiers RH, budgets, dépenses, comptes et contrôles depuis les moteurs canoniques." playbook={["Dossier RH", "Budget", "Dépense", "Validation", "Paiement", "Audit"]} datasets={data.hrcfoDatasets.filter((item) => item.id !== "payrolls")} canEdit={canManage} embedded /> },
     ]} />
   );

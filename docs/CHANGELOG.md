@@ -1,3 +1,33 @@
+## 2026-11-06 — Version candidate 1.1.0 : adoption SemVer (#1037, pré-release)
+
+- `package.json` devient l'unique source de version pour les cinq surfaces DTSC ; règles MAJOR/MINOR/PATCH et incrément de version par PR associés à Conventional Commits.
+- La GitHub Release passe aux tags `vX.Y.Z` uniquement après preuve Vercel Production réussie sur SHA `main`, avec collision interdite, idempotence et conservation intégrale des anciens tags `prod-*`.
+- Gate SemVer, tests de version/release, contrat contribution, gouvernance, documentation technique et runbook actualisés. **CI, merge et Production NOT_EXECUTED** avant leurs preuves ; les versions historiques ne sont pas réécrites.
+- Détails : [RELEASE_VERSIONING.md](RELEASE_VERSIONING.md).
+
+## 2026-11-06 — Hotfix #1036 : palette RH DTSC sobre (pré-release)
+
+- Fonds et bordures uniformisés dans le libre-service RH, les sections de la fiche collaborateur, l'organigramme et les contrats ; titres/icônes bleu DTSC.
+- Couleurs réservées aux statuts métier et alertes importantes, badge des feuilles de temps traduit FR/EN, sans perte des liens, de l'historique ou des sections dépliables.
+- « Mon espace RH » est désormais un onglet du rail horizontal de Temps et présences, ouvert dans le même workspace plein écran que les autres ; chargement seulement à la sélection. Bulletins, sessions et rapports paginés séparément côté serveur, pointage actif toujours visible.
+- Accès rapides reliés aux sections personnelles et aux onglets horaires/présences/congés/feuilles de temps, puis aux modules RH et Paie uniquement si autorisés par la navigation canonique. Hub ERP et workspace Paie réduits à des CTA ; route personnelle plein écran accessible même sans autorisation de lire tout le module Temps et présences, avec contrôles d’accès self-service.
+- Aucun changement de schéma Prisma, de politique de droits, de plan, de variable ou de workflow. API privée étendue de champs/paginations additifs. QA ciblée `pnpm qa:hotfix-1036-hr-palette` ; CI et E2E visuels propriétaire **NOT_EXECUTED** tant que non prouvés. Production uniquement après fusion validée.
+
+## 2026-11-03 — Hotfix P0 #1026 : boucle MFA Console/Account sous Chrome mobile (pré-release)
+
+- Suppression de la redirection automatique Account → Console fondée uniquement sur un cookie signé `mfaVerifiedAt` potentiellement révoqué : `getSession()` doit confirmer registre et MFA avant redirection.
+- `GET /api/auth/heartbeat` en lecture seule et sans cache ; vérification serveur et déduplication des notifications de déconnexion inter-onglets, sans navigation forcée lors d'erreurs réseau.
+- Respect de `next` contrôlé par le résolveur existant, `reason=session-expired`, RBAC et exigences MFA. QA comportementale #1026 et non-régression #1022.
+- **OWNER_E2E #1026 NOT_EXECUTED** : aucune fusion, Preview ni livraison Production. Voir [HOTFIX_1026_CHROME_MFA_SESSION_LOOP.md](HOTFIX_1026_CHROME_MFA_SESSION_LOOP.md).
+
+## 2026-11-03 — Hotfix P0 #1022 : boucle de rechargement de la Console Chrome (pré-release)
+
+- Suppression du rechargement complet forcé à chaque changement de contrôleur Service Worker ; mises à jour PWA vérifiées à fréquence bornée sans interrompre le travail.
+- La reprise Chrome n'actualise le rendu serveur que si le compteur non lu change, avec regroupement des événements focus/visibilité/pageshow/online/Push.
+- Navigation d'expiration idempotente sans refresh supplémentaire ; reconnexion ciblée sur Console/App/Support et respect de `reason=session-expired` si cookie signé et session serveur divergent.
+- Diagnostic opt-in sans donnée personnelle ; 15 assertions QA connectées aux tests de session/régression. `/session-expired` était déjà exclu du matcher middleware, qui reste inchangé.
+- **OWNER_E2E #1022 NOT_EXECUTED** : PR/CI à vérifier, aucune fusion ni production. Voir [HOTFIX_1022_CONSOLE_AUTO_RELOAD.md](HOTFIX_1022_CONSOLE_AUTO_RELOAD.md).
+
 ## 2026-10-31 — UX-03B #985 : feedback typé des encaissements Gaming (PR en validation)
 
 - Les refus d'encaissement Gaming sont présentés suivant le statut HTTP et le code métier, avec messages sûrs FR/EN issus du catalogue client, sans afficher des détails techniques.

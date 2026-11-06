@@ -12,6 +12,7 @@ import { prisma } from "@/lib/prisma";
 import { signUpSchema } from "@/lib/validators";
 import { hashPassword } from "@/lib/security";
 import { setSessionCookie } from "@/lib/auth";
+import { isMfaRequiredForContext } from "@/lib/auth/mfa-policy";
 import { getAppSettings } from "@/lib/settings";
 import { createPendingRegistration, sendSignUpOtpEmail, verifyPendingRegistrationOtp } from "@/lib/otp";
 import { writeAuditLog } from "@/lib/audit";
@@ -115,6 +116,9 @@ export async function POST(req: Request) {
     metadata: { role: user.role, legalConsent: true, legalDocumentVersion: ACCOUNT_LEGAL_DOCUMENT_VERSION },
     request: req,
   });
+  if (await isMfaRequiredForContext({ activeContext: "GLOBAL_CLIENT" })) {
+    return NextResponse.json({ ok: true, mfaEnrollmentRequired: true, redirectTo: "/auth/sign-in" });
+  }
   await setSessionCookie(user);
   return NextResponse.json({ ok: true });
 }

@@ -20,10 +20,12 @@ export function BillingPlans({
   plans,
   activePlanId,
   paymentAvailable,
+  renewablePlanId,
 }: {
   plans: Plan[];
   activePlanId?: string;
   paymentAvailable: boolean;
+  renewablePlanId?: string;
 }) {
   const [walletId, setWalletId] = useState("");
   const [selectedPlan, setSelectedPlan] = useState("");
@@ -119,18 +121,18 @@ export function BillingPlans({
               </ul>
               <Button
                 className={`mt-auto rounded-xl ${active ? "bg-cyan-300 text-[#001736] hover:bg-cyan-200" : "bg-[#002b5b] text-white hover:bg-[#001736]"}`}
-                disabled={isPending || active || (plan.priceUsd > 0 && !paymentAvailable)}
+                disabled={isPending || (active && renewablePlanId !== plan.id) || (plan.priceUsd > 0 && !paymentAvailable)}
                 onClick={() => checkout(plan.id, plan.priceUsd)}
               >
                 <CreditCard className="h-4 w-4" />
-                {active
+                {active && renewablePlanId !== plan.id
                   ? "Plan actif"
                   : selectedPlan === plan.id && isPending
                     ? "Traitement..."
                     : plan.priceUsd === 0
                       ? "Activer"
                       : paymentAvailable
-                        ? "Payer en ligne"
+                        ? renewablePlanId === plan.id ? "Renouveler en ligne" : "Payer en ligne"
                         : "Indisponible temporairement"}
               </Button>
             </article>

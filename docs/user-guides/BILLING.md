@@ -163,6 +163,18 @@ Pour une organisation :
 - une modification d’offre peut entraîner une réconciliation des modules éligibles ;
 - les données historiques des modules désactivés ne doivent pas être supprimées par un simple changement de package.
 
+## Renouveler manuellement l'abonnement de votre entreprise
+
+1. Connectez-vous à l'application DTSC et sélectionnez l'entreprise concernée dans le sélecteur d'organisation active.
+2. Depuis le **Tableau de bord**, utilisez le bouton de renouvellement lorsqu'une échéance approche ou est dépassée. Vous pouvez aussi ouvrir **Abonnement** puis **Renouvellement de l'abonnement entreprise** : cette section est accessible directement, sans passer par le détail de facturation replié.
+3. Si vous êtes **propriétaire ou administrateur** et avez déjà eu un abonnement payant, cliquez **Demander un renouvellement manuel à DTSC**. Une demande de support unique est créée et transmise à l'équipe DTSC ; il ne s'agit pas encore d'un paiement ni de l'activation du nouvel abonnement.
+4. Consultez le statut et les dates du dernier dossier dans la même section Abonnement. Si vous avez créé la demande, **Voir le dossier et les échanges** ouvre la fiche exacte sur Support DTSC, même lorsqu'elle est ancienne. Un autre administrateur voit l'état de la demande dans Facturation, mais pas la conversation privée du demandeur.
+5. Suivez les consignes de règlement communiquées par DTSC. L'abonnement n'est prolongé qu'après validation effective du paiement par le circuit habilité.
+
+Si le paiement mobile money en ligne est disponible, choisissez plutôt **Renouveler en ligne** puis l'offre et la plateforme de paiement ; il s'agit d'un **paiement ponctuel**, pas d'un prélèvement automatique. Si le prestataire n'est pas disponible, le formulaire de paiement ne s'affiche pas. Un utilisateur sans rôle de gestion peut consulter la situation, mais ne peut ni demander ni payer le renouvellement.
+
+**Première souscription :** si aucune offre payante n'a encore été enregistrée, sélectionnez une nouvelle offre ou contactez DTSC pour une activation accompagnée. La demande de « renouvellement » est alors volontairement indisponible.
+
 ## Console DTSC et révision du catalogue
 
 La Console DTSC affiche l’identifiant de release/révision du catalogue et distingue :

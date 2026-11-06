@@ -21,6 +21,7 @@ import { AppShell } from "@/components/layout/app-shell";
 import { getSession, requireUser } from "@/lib/auth";
 import { MANUFACTURING_MODULE_CODES, type ManufacturingModuleCode } from "@/lib/enterprise/manufacturing/constants";
 import { resolveEnterpriseModuleCapabilities } from "@/lib/enterprise/module-access";
+import { getEnterpriseNavigationModules } from "@/lib/enterprise/enterprise-navigation";
 import {
   getEnterpriseAdminLegacyRedirect,
   getEnterpriseModuleDescription,
@@ -178,7 +179,10 @@ export default async function EnterpriseModulePage({ params }: Params) {
     return <AppShell user={user}><EnterpriseHumanResourcesWorkspace organizationId={organizationId} organizationName={organization.name} definition={definition} /></AppShell>;
   }
   if (definition.code === "TIME_ATTENDANCE") {
-    return <AppShell user={user}><EnterpriseTimeAttendanceWorkspace organizationId={organizationId} organizationName={organization.name} definition={definition} /></AppShell>;
+    const relatedModules = (await getEnterpriseNavigationModules(organizationId, user.id, user.locale))
+      .filter((module) => ["TIME_ATTENDANCE", "HUMAN_RESOURCES", "PAYROLL_OPERATIONS"].includes(module.code))
+      .map((module) => ({ code: module.code as "TIME_ATTENDANCE" | "HUMAN_RESOURCES" | "PAYROLL_OPERATIONS", href: module.href, label: module.label }));
+    return <AppShell user={user}><EnterpriseTimeAttendanceWorkspace organizationId={organizationId} organizationName={organization.name} definition={definition} relatedModules={relatedModules} /></AppShell>;
   }
   if (definition.code === "PAYROLL_OPERATIONS") {
     return <AppShell user={user}><EnterprisePayrollOperationsWorkspace organizationId={organizationId} organizationName={organization.name} organizationLogoUrl={organization.logoUrl} locale={user.locale} definition={definition} /></AppShell>;

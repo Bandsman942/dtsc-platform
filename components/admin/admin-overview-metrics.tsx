@@ -40,6 +40,7 @@ type AdminOverviewMetricsProps = {
     subscribers: number;
     payments: number;
     revenue: number;
+    revenuesByCurrency?: { currency: string; amount: number; count: number }[];
     apiErrors: number;
     readyDocuments: number;
     publishedPublications: number;
@@ -141,7 +142,7 @@ export function AdminOverviewMetrics({
           title="Paiements"
           lines={[
             `${period.payments} paiement(s) confirmé(s) ${periodLabel}`,
-            `${period.revenue.toFixed(2)} USD de revenu suivi`,
+            ...(period.revenuesByCurrency?.length ? period.revenuesByCurrency.map((row) => `${row.amount.toFixed(2)} ${row.currency} encaissés (${row.count})`) : ["0.00 USD encaissés"]),
           ]}
           items={breakdowns.payments}
         />

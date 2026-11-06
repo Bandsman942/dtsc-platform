@@ -1,12 +1,23 @@
 # DTSC Platform — Documentation technique
 
 **Version :** Consolidation ERP + modules standards 8/8 + DTSC AI 08/08
+**Version applicative :** `package.json` (SemVer ; la Release GitHub confirme seule une version livrée).
 **Repository :** `Bandsman942/dtsc-platform`
 **Production :** déploiement Vercel exclusivement depuis `main`
 
 ## 1. Objet
 
+> **SemVer #1037 (06/11/2026, candidate) :** adoption de `vMAJOR.MINOR.PATCH` pour la traçabilité de la plateforme entière, avec incrément obligatoire par PR, QA de version et GitHub Release seulement après Vercel Production réussi. Voir [versionnement et procédure de release](RELEASE_VERSIONING.md). Cette étape n'est pas considérée Production tant que les preuves CI/review/merge/déploiement ne sont pas disponibles.
+
+> **Hotfix #1036 (06/11/2026, pré-release) :** palette des interfaces RH uniformisée sur la marque DTSC, couleurs sémantiques limitées aux statuts/alertes, i18n et QA visuelle. Voir [contrat RH](ERP_PROFESSIONAL_HR.md) et [design system](DTSC_FRONTEND_DESIGN_SYSTEM.md). OWNER_E2E et preuves CI requis avant Production. Le libre-service RH intègre désormais le rail de `TIME_ATTENDANCE` et les historiques paginés côté serveur ; `GET /api/enterprise/[organizationId]/my-hr` accepte `page`, `reportPage`, `clockPage` et `pageSize` (5–25), renvoie `payslipsPagination`, `reportsPagination`, `clockSessionsPagination` et `activeClockSession`, avec contrôles de session, organisation, accès module et `Cache-Control: private, no-store`. Les nouveaux champs sont additifs. Liaison depuis `app/enterprise-modules/page.tsx` et le workspace Paie par des CTA compacts, soit vers `TIME_ATTENDANCE?tab=SELF_SERVICE` si l'accès canonique le permet, soit vers la route personnelle indépendante `app/enterprise-modules/my-hr/page.tsx`. Dans le rail, liens locaux vers les quatre onglets de suivi ; les liens vers `HUMAN_RESOURCES` et `PAYROLL_OPERATIONS` proviennent exclusivement de `getEnterpriseNavigationModules` (RBAC, abonnement et restrictions).
+
 Ce document est le point d’entrée technique de DTSC Platform. Les règles exécutables se trouvent dans les fichiers `AGENTS.md`. Les contrats détaillés restent dans les documents spécialisés du dossier `docs/`.
+
+> **DTSC Payments — PAY-0 (#370/#371, 01/11/2026) :** [contrat d'architecture et de cutover](DTSC_PAYMENTS_ARCHITECTURE.md). Cartographie vérifiée des paiements SaaS (`Payment`/`Invoice`), de la trésorerie DTSC (`HrcfoExpense`/`FinancialAccount`) et des paiements ERP clients (`EnterprisePayment` et allocations). Contrôle documentaire : `pnpm qa:dtsc-payments-contract`. Cette étape ne change aucun paiement en production ; PAY-1 à PAY-9 restent à livrer et à valider.
+
+> **Hotfix P0 Console Chrome (#1022, 03/11/2026, avant fusion) :** [diagnostic et recette propriétaire](HOTFIX_1022_CONSOLE_AUTO_RELOAD.md). Reprise PWA sans refresh inutile, expiration/navigation inter-produits dédupliquées, diagnostics opt-in sans données personnelles. OWNER_E2E obligatoire ; Production uniquement depuis `main`.
+
+> **Hotfix P0 MFA/Chrome (#1026, 03/11/2026, avant fusion) :** [frontière de confiance et E2E Chrome mobile](HOTFIX_1026_CHROME_MFA_SESSION_LOOP.md). Le cookie signé sert au routage Edge, tandis que seule la validation serveur `getSession()` autorise Account à renvoyer vers Console ; les déconnexions inter-onglets sont revalidées avant navigation. Aucun changement MFA/RBAC ni Production sans OWNER_E2E.
 
 > **Programme INFRA-MC (#891–#899, 21/10/2026) :** audit et ADR dans [`INFRA_MC_ARCHITECTURE_AUDIT.md`](INFRA_MC_ARCHITECTURE_AUDIT.md). Secours Vercel + autre cloud en **active-passive proposé, non approuvé**, sans activation ni certification. Production Vercel depuis `main` inchangée ; objectifs RPO/RTO, coût, régions et approbation à compléter.
 
@@ -51,6 +62,8 @@ La session identifie l’utilisateur, le rôle global, le contexte actif et l’
 - `GLOBAL_CLIENT` : compte client global.
 
 Une URL, un body ou une clé étrangère fournie par le navigateur n’est jamais une preuve d’accès.
+
+Un cookie HTTP-only correctement signé n'est pas non plus une preuve suffisante de session toujours active après révocation. Les pages de connexion Account qui veulent rediriger un utilisateur déjà authentifié doivent obtenir une session courante de `getSession()`, en respectant `reason=session-expired`. Le middleware ne déduit pas cette autorisation des seules claims Edge (hotfix #1026).
 
 ## 5. Isolation multi-tenant
 
@@ -208,6 +221,8 @@ Les pièces financières utilisent le stockage privé et les liens structurels. 
 Les notifications utilisent des liens profonds vers le module, l’objet et la section utile. Le backend revalide toujours l’accès à la destination.
 
 ## 11. API et sécurité
+
+**Abonnements SaaS — renouvellement entreprise (hotfix #1001).** Le client dispose d'un accès contextualisé au renouvellement depuis `/dashboard` et d'une section directe sur `/billing#renouvellement-entreprise` sans accordéon préalable. Le suivi du dernier ticket de renouvellement (statut, dates, résolution) est projeté depuis `SupportTicket` et non dupliqué dans un nouveau modèle. Seul le créateur accède à la conversation privée via le lien Support ciblé, indépendamment du fait que plusieurs administrateurs d'une même organisation puissent voir le statut de demande dans Facturation. Les routes de renouvellement conservent leur RBAC serveur, la déduplication et l'interdiction de prélèvement récurrent sans mandat. Détails, QA et rollback : `docs/SAAS_BILLING_TREASURY_HOTFIX_2026_11_01.md`.
 
 Contrat général d’une route mutante :
 
@@ -643,3 +658,25 @@ La fiche détaillée d'une définition Workflow (#863) est désormais rendue en 
 La politique `AiPlatformRuntimePolicy` reste l'autorité globale révisionnée; elle inclut désormais un profil `assistantSettings` borné et validé côté serveur (culture générale du chatbot, guidance par surface, modèles publics ordonnés et maximum de lectures Agent). L'API admin `GET/PATCH /api/admin/ai/policy` reste sous `CONSOLE_AI_READ/MANAGE`, same-origin et révision optimiste, avec historique et audit. Le frontend Console affiche des contrôles réels FR/EN; les prochains tours relisent les réglages sans rebuild, mais aucun changement ne peut accorder des permissions, contourner ZDR ou augmenter les plafonds serveur.
 
 Le chatbot et le Mode Agent général utilisent `PERSONAL` (pas de CAG ni RAG d'entreprise). L'assistant entreprise garde le contexte tenant et les contrôles d'accès. L'agent d'analyse de risque limite le nombre de lectures et réserve un tour pour synthétiser les résultats réellement reçus. L'assistant public de landing consomme `listAvailableAiModels` et `createProviderEventStream` avec paramètres `PUBLIC/STARTER`, sélection interne ordonnée et restrictions runtime, sans identité utilisateur fictive ni lecture de ressources privées. Sa qualification de prospect nécessite une confirmation textuelle dans l'échange et une validation Zod, sans assimilation à une preuve d'identité anonyme. Voir `docs/HOTFIX_965_UNIFIED_AI_GOVERNANCE.md`.
+
+
+## Hotfix RH #1028 — Dossiers, organisation et révisions contractuelles (en validation)
+
+Les dossiers `EnterpriseEmployee` restent canoniques et indépendants de l'identité globale DTSC. Une fiche RH détaillée paginée renvoie les valeurs autorisées de l'employé, l'organisation et les comptes/liens des modules RH, Temps, Paie, Projets et Actifs selon le résolveur d'accès de chaque module. Le montant salarial et les notes RH privées ne sont transmis qu'à un gestionnaire `HUMAN_RESOURCES:manage`. La route de liste conserve la pagination serveur et permet la consultation des dossiers archivés uniquement avec ce droit.
+
+Les commandes `PATCH /api/enterprise/:organizationId/employees/:employeeId`, `DELETE` (archivage), et `POST /employees/:employeeId/restore` vérifient révision, références tenant-scoped, rôles, same-origin, Zod, rate limit et audit minimal. L'édition ne lie pas silencieusement un compte utilisateur. L'archivage est réversible et protège les contrats/validations et subordonnés actifs.
+
+La modification préapprobation d'`EnterpriseEmploymentContract` garde sa garde `revision`, mais écrit maintenant un snapshot immuable `EnterpriseEmploymentContractRevision` dans la même transaction, après update conditionnel. Les contrats actifs restent versionnés séparément via `versionNumber` et `supersedesContractId`. La lecture paginée `GET /employment-contracts/:contractId/revisions` exige `HUMAN_RESOURCES:manage`.
+
+Voir [détail, critères QA et rollback](HOTFIX_1028_RH_DOSSIERS_CONTRACTS_ORGANISATION.md). L'issue #1029 couvrira ensuite l'accès salarié personnel, les PDF de bulletins privés, les pointages serveur et les rapports de travail ; ces fonctionnalités ne sont pas certifiées par #1028.
+
+
+## Hotfix RH #1029 — self-service salarié paie / temps
+
+L'espace personnel s'appuie sur l'association explicite `EnterpriseEmployee.organizationMemberId` avec un membership DTSC actif. `GET /my-hr` retourne seulement les bulletins `EnterprisePayslip` des runs de paie approuvés du salarié, ses rapports `EnterpriseTimesheet` et ses pointages `EnterpriseWorkClockSession`. Les PDF sont générés côté serveur et auditables, sans présumer d'un décaissement. Les mutations exigent `TIME_ATTENDANCE:submit`, même origine, limitation de fréquence, objet appartenant à l'employé et, pour les rapports, approbateur indépendant. La migration additive `20261105210000_employee_work_clock_sessions` assure une seule session ouverte par salarié au niveau PostgreSQL ; la paie et le calendrier existants ne sont pas dupliqués. Les registres entreprise des cycles de paie, timesheets et présences sont désormais limités selon la permission et/ou l'objet. Documentation et E2E : [HOTFIX_1029_RH_SELF_SERVICE_PAYSLIPS_CLOCK_REPORTS.md](HOTFIX_1029_RH_SELF_SERVICE_PAYSLIPS_CLOCK_REPORTS.md).
+
+La capacité SELF de #1029 se fonde sur le plan et les modules activés, le membership actif et le dossier salarié lié. Elle ne confère jamais les permissions positionnelles `enterprise.payroll.view` ou les lectures RH d'entreprise. `GET /my-hr/approvers` sélectionne des validateurs indépendants ayant `TIME_ATTENDANCE:approve`. Le composant personnel est disponible dans le hub ERP, même quand les modules de gestion RH ne sont pas navigables pour le salarié.
+
+
+### Hotfix RH #1028 — archive/restauration des contrats (tranche 2)
+Les contrats `EnterpriseEmploymentContract` exposent deux mutations contrôlées sur les endpoints `DELETE /api/enterprise/:organizationId/employment-contracts/:contractId` et `POST /api/enterprise/:organizationId/employment-contracts/:contractId/restore`. La mutation est exclusivement logique (`archivedAt`) et atomique avec les approbations à révoquer ; aucun bulletin ou ancien contrat n'est effacé. Le registre standard exclut les archives et `GET /employment-contracts?archived=1` exige `HUMAN_RESOURCES:manage`. Le client affiche bascule courants/archives, actions par objet et états FR/EN. Référence de QA et de recette : `docs/HOTFIX_1028_RH_CONTRACT_ARCHIVE_PHASE2.md`. Les référentiels Organisation restent à livrer séparément.

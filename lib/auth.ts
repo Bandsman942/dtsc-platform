@@ -1,4 +1,6 @@
 import { cookies } from "next/headers";
+import { isAuthSessionActive, newSessionId, registerAuthSession, touchRegisteredSession } from "@/lib/auth/session-registry";
+import { isMfaRequiredForContext } from "@/lib/auth/mfa-policy";
 import { redirect } from "next/navigation";
 import type { UserRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
@@ -20,11 +22,38 @@ export async function getSession(): Promise<SessionPayload | null> {
   const token = cookieStore.get(SESSION_COOKIE)?.value;
   const secret = requireEnv("AUTH_SECRET");
 
-  return verifySessionToken(token, secret);
+  const signed = await verifySessionToken(token, secret);
+  if (!signed) return null;
+  // A valid signature alone does not authorize a revoked, suspended or
+  // expired server-side session.
+  if (!(await isAuthSessionActive(signed))) return null;
+  const session = signed;
+  // Recovery is account-wide; no signed legacy cookie or revoked device may
+  // bypass a two-person administrative recovery or stale MFA proof.
+  const identity = await prisma.user.findUnique({
+    where: { id: session.userId },
+    select: { status: true, mfaRecoveryRequired: true, mfaRecoveryInvalidBefore: true },
+  });
+  if (!identity || identity.status !== "ACTIVE") return null;
+  if (identity.mfaRecoveryInvalidBefore &&
+      (!session.mfaVerifiedAt || session.mfaVerifiedAt <= identity.mfaRecoveryInvalidBefore.getTime())) return null;
+  if (identity.mfaRecoveryRequired) return null;
+  // MFA policy is evaluated only after revocation, account recovery and membership.
+  const factor = await prisma.authTotpFactor.findUnique({
+    where: { userId: session.userId }, select: { enabledAt: true },
+  });
+  const required = await isMfaRequiredForContext(session);
+  if (required && !factor?.enabledAt) return null;
+  if (factor?.enabledAt &&
+      (!session.mfaVerifiedAt || session.mfaVerifiedAt < factor.enabledAt.getTime())) return null;
+  return session;
 }
 
 export async function getCurrentUser(sessionOverride?: SessionPayload) {
-  const session = sessionOverride ?? await getSession();
+  // Never allow a caller-supplied snapshot to bypass the authoritative
+  // revocation, membership and active-account checks in getSession().
+  const session = await getSession();
+  if (sessionOverride && session?.userId !== sessionOverride.userId) return null;
   if (!session) {
     return null;
   }
@@ -114,6 +143,7 @@ type SessionCookieUser = {
   name: string;
   role: UserRole;
   sessionIdleTimeoutMinutes?: number | null;
+  mfaVerifiedAt?: number;
   activeContext?: SessionContext;
   activeOrganizationId?: string | null;
   activeOrganizationName?: string | null;
@@ -127,9 +157,12 @@ export async function setSessionCookie(
   const cookieStore = await cookies();
   const storedIdleTimeout = user.sessionIdleTimeoutMinutes ?? await getUserSessionIdleTimeoutMinutes(user.id);
 
+  const sessionId = options.previousSession?.sessionId || newSessionId();
   const created = await createSessionToken(
     {
+      sessionId,
       userId: user.id,
+      mfaVerifiedAt: user.mfaVerifiedAt ?? options.previousSession?.mfaVerifiedAt,
       email: user.email,
       name: user.name,
       role: user.role,
@@ -150,6 +183,18 @@ export async function setSessionCookie(
   if (!created) {
     await clearSessionCookie();
     return null;
+  }
+
+  if (options.previousSession?.sessionId) {
+    const renewed = await touchRegisteredSession(created.session);
+    if (!renewed) {
+      await clearSessionCookie();
+      return null;
+    }
+  } else {
+    // From this release onward every new login (and legacy session migration)
+    // is registered before the signed authentication cookie is delivered.
+    await registerAuthSession(created.session);
   }
 
   const cookieDomain = getAuthCookieDomain();

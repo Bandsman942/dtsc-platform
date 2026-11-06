@@ -81,7 +81,7 @@ export async function getConsoleOverviewMetrics(input: {
     prisma.supportTicket.count({ where: { resolvedAt: { gte: visitStart, lte: visitEnd } } }),
     prisma.contactMessage.count({ where: periodWhere }),
     prisma.newsletterSubscriber.count({ where: periodWhere }),
-    prisma.payment.aggregate({ where: { ...periodWhere, status: { in: [PaymentStatus.ACCEPTED, PaymentStatus.PAID] } }, _count: { _all: true }, _sum: { amount: true } }),
+    prisma.payment.groupBy({ by: ["currency"], where: { paidAt: { gte: visitStart, lte: visitEnd }, status: PaymentStatus.PAID }, _count: { _all: true }, _sum: { amount: true } }),
     prisma.payment.count({ where: { ...periodWhere, status: PaymentStatus.FAILED } }),
     prisma.apiLog.count({ where: { ...periodWhere, statusCode: { gte: 400 } } }),
     prisma.webhookEvent.count({ where: { ...periodWhere, status: { in: ["FAILED", "ERROR", "RETRY_REQUIRED"] } } }),
@@ -117,7 +117,9 @@ export async function getConsoleOverviewMetrics(input: {
   const totalTokens = totalTokenAggregate._sum.totalTokens || 0;
   const periodTokens = periodTokenAggregate._sum.totalTokens || 0;
   const aiCost = Number(periodAiCostAggregate._sum.estimatedCost || 0);
-  const validatedRevenue = Number(paidPaymentsInPeriod._sum.amount || 0);
+  const revenuesByCurrency = paidPaymentsInPeriod.map((row) => ({ currency: row.currency, amount: Number(row._sum.amount || 0), count: row._count._all }));
+  const usdRevenue = revenuesByCurrency.find((row) => row.currency === "USD")?.amount || 0;
+  const paidPaymentCount = revenuesByCurrency.reduce((sum, row) => sum + row.count, 0);
 
   const metric = (data: Omit<ConsoleMetric, "period" | "freshness">): ConsoleMetric => ({ ...data, period: periodLabel, freshness });
   const metrics: ConsoleMetric[] = [
@@ -129,7 +131,7 @@ export async function getConsoleOverviewMetrics(input: {
     metric({ code: "ACTIVE_USERS", label: "Utilisateurs actifs", value: activeUserCount, helper: `${usersInPeriod} nouvelle(s) inscription(s) sur la période.`, icon: "users", source: "User.status", definition: "Compte utilisateur au statut ACTIVE.", unit: "utilisateurs", href: getConsoleSectionHref("users", { status: "ACTIVE" }) }),
     metric({ code: "ENABLED_MODULES", label: "Modules activés", value: enabledModules, helper: "Modules entreprise actifs chez les clients.", icon: "modules", source: "EnterpriseModule.isEnabled", definition: "Module entreprise activé pour une organisation CLIENT non supprimée.", unit: "modules", href: getConsoleSectionHref("organizations", { modules: "enabled" }) }),
     metric({ code: "API_ERRORS", label: "Erreurs API", value: apiErrorsInPeriod, helper: `${webhookFailures} webhook(s) en échec sur la période.`, icon: "platform", source: "ApiLog + WebhookEvent", definition: "Réponse HTTP ≥ 400 et webhook au statut d’échec.", unit: "événements", href: getConsoleSectionHref("security-audit", { source: "API", result: "ERROR" }) }),
-    metric({ code: "VALIDATED_REVENUE", label: "Revenus validés", value: `${validatedRevenue.toFixed(2)} USD`, helper: `${paidPaymentsInPeriod._count._all} paiement(s) ACCEPTED ou PAID.`, icon: "subscriptions", source: "Payment", definition: "Somme des paiements ACCEPTED ou PAID sur la période, sans montant ambigu.", unit: "USD", href: getConsoleSectionHref("subscriptions", { paymentStatus: "PAID" }) }),
+    metric({ code: "VALIDATED_REVENUE", label: "Encaissements confirmés", value: revenuesByCurrency.length ? revenuesByCurrency.map((row) => `${row.amount.toFixed(2)} ${row.currency}`).join(" · ") : "0.00 USD", helper: `${paidPaymentCount} règlement(s) PAID, par devise.`, icon: "subscriptions", source: "Payment.paidAt", definition: "Paiements PAID par date de règlement effectif et devise, sans conversion implicite.", unit: "par devise", href: getConsoleSectionHref("subscriptions", { paymentStatus: "PAID" }) }),
     metric({ code: "AI_USAGE", label: "Consommation IA", value: periodTokens, helper: `${aiCost.toFixed(4)} USD de coût estimé.`, icon: "platform", source: "UsageLog", definition: "Somme des tokens et du coût estimé sur la période.", unit: "tokens", href: getConsoleSectionHref("overview", { period: selectedPeriod }) }),
   ];
 
@@ -167,7 +169,7 @@ export async function getConsoleOverviewMetrics(input: {
       period: {
         users: usersInPeriod, conversations: conversationsInPeriod, messages: messagesInPeriod, tokens: periodTokens, tickets: ticketsInPeriod,
         resolvedTickets: resolvedTicketsInPeriod, visits: visitTotal, contacts: contactsInPeriod, subscribers: subscribersInPeriod,
-        payments: paidPaymentsInPeriod._count._all, revenue: validatedRevenue, apiErrors: apiErrorsInPeriod, readyDocuments,
+        payments: paidPaymentCount, revenue: usdRevenue, revenuesByCurrency, apiErrors: apiErrorsInPeriod, readyDocuments,
         publishedPublications: publishedPublicationsCount, draftPublications: draftPublicationsCount,
       },
       series: {

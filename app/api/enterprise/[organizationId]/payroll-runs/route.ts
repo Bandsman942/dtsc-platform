@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
@@ -18,13 +19,32 @@ export async function GET(req: Request, { params }: Params) {
   const { organizationId } = await params;
   const access = await getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode: "PAYROLL_OPERATIONS", action: "read" });
   if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  const approvalAccess = await getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode: "PAYROLL_OPERATIONS", action: "approve" });
+  const [approvalAccess, writeAccess, manageAccess] = await Promise.all([
+    getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode: "PAYROLL_OPERATIONS", action: "approve" }),
+    getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode: "PAYROLL_OPERATIONS", action: "write" }),
+    getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode: "PAYROLL_OPERATIONS", action: "manage" }),
+  ]);
   const url = new URL(req.url);
   const page = Math.max(1, Number(url.searchParams.get("page") || 1) || 1);
   const pageSize = Math.min(100, Math.max(5, Number(url.searchParams.get("pageSize") || 25) || 25));
   const status = url.searchParams.get("status")?.trim() || "";
   const payrollPeriodId = url.searchParams.get("payrollPeriodId")?.trim() || "";
-  const where = { organizationId, archivedAt: null, ...(status ? { status } : {}), ...(payrollPeriodId ? { payrollPeriodId } : {}) };
+  // Read permission alone never grants an enterprise-wide compensation register.
+  // Only payroll managers have full scope; designated approvers/preparers see their runs.
+  const actorScope: Prisma.EnterprisePayrollRunWhereInput = manageAccess ? {} : {
+    OR: [
+      ...(approvalAccess ? [{ approverUserId: session.userId }] : []),
+      ...(writeAccess ? [{ preparedByUserId: session.userId }] : []),
+    ],
+  };
+  const where: Prisma.EnterprisePayrollRunWhereInput = {
+    organizationId, archivedAt: null, ...actorScope,
+    ...(status ? { status } : {}), ...(payrollPeriodId ? { payrollPeriodId } : {}),
+  };
+  if (!manageAccess && !approvalAccess && !writeAccess) {
+    await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "payroll-runs-self-only" } });
+    return NextResponse.json({ items: [], pagination: { page, pageSize, total: 0, pageCount: 1 }, metrics: { pendingApproval: 0, approved: 0 }, canManage: false }, { headers: { "Cache-Control": "private, no-store" } });
+  }
   const [rawItems, total, pendingApproval, approved] = await Promise.all([
     prisma.enterprisePayrollRun.findMany({
       where,
@@ -37,8 +57,8 @@ export async function GET(req: Request, { params }: Params) {
       },
     }),
     prisma.enterprisePayrollRun.count({ where }),
-    prisma.enterprisePayrollRun.count({ where: { organizationId, archivedAt: null, status: "PENDING_APPROVAL" } }),
-    prisma.enterprisePayrollRun.count({ where: { organizationId, archivedAt: null, status: "APPROVED" } }),
+    prisma.enterprisePayrollRun.count({ where: { organizationId, archivedAt: null, ...actorScope, status: "PENDING_APPROVAL" } }),
+    prisma.enterprisePayrollRun.count({ where: { organizationId, archivedAt: null, ...actorScope, status: "APPROVED" } }),
   ]);
   const items = rawItems.map((item) => ({
     ...item,

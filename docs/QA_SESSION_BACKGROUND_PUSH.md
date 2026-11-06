@@ -35,6 +35,20 @@ Ce document complète `docs/QA_REGRESSION_CHECKLIST.md` pour le sprint transvers
 - [ ] `focus`, `pageshow` et `visibilitychange` ne provoquent pas un polling permanent.
 - [ ] L'application ne dépend pas d'un timer d'une seconde comme source de vérité après suspension mobile.
 
+### Hotfix P0 #1022 — Chrome Console sans boucle de rechargement
+
+- [ ] Chrome desktop : 5 minutes de saisie dans la Console sans navigation de document ni perte de formulaire.
+- [ ] Mise à jour de Service Worker durant une saisie : `controllerchange` ne déclenche aucun `window.location.reload()` ; saisie intacte.
+- [ ] Compteur non lu inchangé après `focus` / `pageshow` / reprise : aucun `router.refresh()` ; pas de rafale de requêtes.
+- [ ] Compteur modifié après Push : un seul refresh RSC utile, badge cohérent.
+- [ ] Retour réseau, connexion lente et Chrome Android : aucune boucle ni erreur bloquante.
+- [ ] 401 heartbeat ou notifications : une seule navigation `/session-expired`, sans refresh concurrent.
+- [ ] Cookie signé encore valide et session serveur révoquée : connexion Account avec `reason=session-expired` sans rebond automatique.
+- [ ] Console → Account → reconnexion : destination Console `/admin` ; App et Support conservent leurs destinations.
+- [ ] Deux onglets, expiration/logout : pas de navigation multiple ; Web Push intact.
+- [ ] DevTools Network « Preserve log » : distinguer `document`, RSC et API ; diagnostics opt-in détaillés dans [HOTFIX_1022_CONSOLE_AUTO_RELOAD.md](HOTFIX_1022_CONSOLE_AUTO_RELOAD.md).
+- [ ] Le propriétaire confirme **E2E #1022 BON** avant fusion dans `main` et Production Vercel.
+
 ## Contexte multi-tenant
 
 - [ ] Organisation A → B → heartbeat conserve B.

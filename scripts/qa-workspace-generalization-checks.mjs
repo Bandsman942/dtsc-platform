@@ -20,11 +20,11 @@ const healthPatients = read("components/enterprise/health-patients-workspace.tsx
 const pharmacy = read("components/enterprise/pharmacy-admin-workspace.tsx");
 const actionMenu = read("components/ui/action-menu.tsx");
 
-expect("internal operations use workspace primitives", operations.includes("ModuleWorkspace") && operations.includes("ModuleHeader") && operations.includes("ModuleToolbar") && operations.includes("ModuleMetrics") && operations.includes("BusinessList") && operations.includes("ContextActions"));
+expect("internal operations use compact full-screen workspace primitives", operations.includes("ModuleWorkspace") && operations.includes("ModuleHeader") && operations.includes("InternalFullScreenSurface") && operations.includes("data-dtsc-register-fullscreen") && operations.includes("data-dtsc-record-detail") && operations.includes("BusinessList") && operations.includes("ContextActions"));
 expect("internal operations preserve smart list controls", operations.includes("ListControls") && operations.includes("useSmartList"));
 expect("internal operations removed decorative accordion/card shell", !operations.includes("<Accordion") && !operations.includes("dtsc-card") && !operations.includes("dtsc-glass-list-item"));
 expect("internal operations preserve real CRUD endpoints", operations.includes("fetch(dataset.endpoint") && operations.includes("method: \"PATCH\"") && operations.includes("method: \"DELETE\"") && operations.includes("/api/admin/operation-files"));
-expect("CEO summary uses workspace architecture", ceo.includes("ModuleWorkspace") && ceo.includes("ModuleHeader") && ceo.includes("ModuleToolbar") && ceo.includes("ModuleMetrics") && !ceo.includes("dtsc-card"));
+expect("CEO summary uses paged full-screen workspace architecture", ceo.includes("ModuleWorkspace") && ceo.includes("ModuleHeader") && ceo.includes("InternalFullScreenSurface") && ceo.includes("ListControls") && ceo.includes("ContextActions") && !ceo.includes("dtsc-card"));
 expect("Legal summary uses workspace architecture", legal.includes("ModuleWorkspace") && legal.includes("ModuleHeader") && legal.includes("ModuleMetrics") && !legal.includes("dtsc-card"));
 expect("admin server still guards DTSC internal access", adminPage.includes("isDtscInternalSession") && adminPage.includes("canAccessAdminSection") && adminPage.includes("OperationsAdminPanel"));
 expect("private app shell propagates user locale", appShell.includes("LocaleProvider") && appShell.includes("locale={user.locale}") && localeProvider.includes("LocaleContext") && localeProvider.includes("useAppLocale"));

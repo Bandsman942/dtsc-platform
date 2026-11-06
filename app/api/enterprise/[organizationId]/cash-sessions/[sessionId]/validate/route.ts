@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
+import { hasRecentStepUp } from "@/lib/auth/step-up";
 import { authorizeFinanceRequest, financeErrorResponse, financeValidationErrorResponse } from "@/lib/enterprise/accounting/http";
 import { validateCashSessionAssignedApproval } from "@/lib/enterprise/accounting/accounting-operations-approval-orchestration";
 import { cashValidateSchema } from "@/lib/enterprise/accounting/treasury-schemas";
@@ -11,6 +12,12 @@ export async function POST(req: Request, { params }: Params) {
   const { organizationId, sessionId } = await params;
   const auth = await authorizeFinanceRequest(req, organizationId, "FINANCE_CASH", "approve", { mutation: true, limit: 30 });
   if (!auth.ok) return auth.response;
+  if (!(await hasRecentStepUp(auth.session))) {
+    await writeAuditLog({ userId: auth.session.userId, action: "AUTH_CRITICAL_MUTATION_STEPUP_DENIED",
+      entity: "EnterpriseCashSession", entityId: sessionId, request: req, result: "DENIED",
+      reasonCode: "STEP_UP_REQUIRED", riskLevel: "CRITICAL", metadata: { organizationId } });
+    return NextResponse.json({ error: "Vérification de sécurité récente obligatoire avant de valider la caisse.", reasonCode: "STEP_UP_REQUIRED" }, { status: 428 });
+  }
   const parsed = cashValidateSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return financeValidationErrorResponse(parsed.error);
   try {

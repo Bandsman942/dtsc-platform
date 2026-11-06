@@ -34,6 +34,7 @@ model EnterpriseEmployee {
   assignments           EnterpriseEmployeeAssignment[]
   workSchedules         EnterpriseWorkSchedule[]
   attendanceRecords     EnterpriseAttendance[]
+  workClockSessions     EnterpriseWorkClockSession[]
   leaveRequests         EnterpriseLeaveRequest[]
   timesheets            EnterpriseTimesheet[]
   payrollItems          EnterprisePayrollItem[]
@@ -87,6 +88,7 @@ model EnterpriseEmploymentContract {
   supersedesContract    EnterpriseEmploymentContract? @relation("EnterpriseEmploymentContractHistory", fields: [organizationId, supersedesContractId], references: [organizationId, id], onDelete: Restrict)
   supersededBy          EnterpriseEmploymentContract[] @relation("EnterpriseEmploymentContractHistory")
   payrollItems          EnterprisePayrollItem[]
+  revisions             EnterpriseEmploymentContractRevision[]
 
   @@unique([organizationId, id])
   @@unique([organizationId, reference])
@@ -95,6 +97,22 @@ model EnterpriseEmploymentContract {
   @@index([organizationId, endDate, status])
   @@index([organizationId, supersedesContractId])
   @@index([archivedAt])
+}
+
+// Immutable snapshots of submitted-contract edits, separate from approved
+// successor contracts (versionNumber and supersedesContractId).
+model EnterpriseEmploymentContractRevision {
+  id                  String                       @id @default(cuid())
+  organizationId      String
+  contractId          String
+  revisionNumber      Int
+  snapshotJson        Json
+  savedByUserId       String
+  savedAt             DateTime                     @default(now())
+  contract            EnterpriseEmploymentContract @relation(fields: [organizationId, contractId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, contractId, revisionNumber], map: "ECR_contract_revision_uniq")
+  @@index([organizationId, contractId, savedAt], map: "ECR_contract_saved_idx")
 }
 
 model EnterpriseEmployeeAssignment {
@@ -378,4 +396,24 @@ model EnterprisePayslip {
   @@unique([organizationId, payrollItemId])
   @@unique([organizationId, payslipNumber])
   @@index([organizationId, status, generatedAt])
+}
+
+
+model EnterpriseWorkClockSession {
+  id              String             @id @default(cuid())
+  organizationId  String
+  employeeId      String
+  startedAt       DateTime           @default(now())
+  stoppedAt       DateTime?
+  startedByUserId String
+  stoppedByUserId String?
+  workSummary     String?
+  revision        Int                @default(1)
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  employee        EnterpriseEmployee @relation(fields: [organizationId, employeeId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, id], map: "EWCS_org_id_uniq")
+  @@index([organizationId, employeeId, startedAt], map: "EWCS_employee_started_idx")
+  @@index([organizationId, employeeId, stoppedAt], map: "EWCS_employee_open_idx")
 }

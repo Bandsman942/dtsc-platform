@@ -1193,5 +1193,31 @@
       "empty": "Aucune donnée disponible.",
       "guide": "Guide utilisateur"
     }
+  },
+  "subscriptionRenewal": {
+    "title": "Renouvellement de votre abonnement",
+    "expired": "Votre abonnement est arrivé à échéance",
+    "expiring": "Votre abonnement expire bientôt",
+    "manual": "Demander le renouvellement à DTSC",
+    "online": "Renouveler par paiement en ligne ponctuel",
+    "requested": "Votre demande est en cours de traitement",
+    "noAutomaticCharge": "Aucun prélèvement récurrent automatique sans mandat valide.",
+    "renewalSupport": "Suivre ma demande auprès de DTSC",
+    "permission": "Seul le propriétaire ou un administrateur peut renouveler l’abonnement entreprise.",
+    "approvalsTitle": "Paiements manuels qui me sont attribués",
+    "approvalNotification": "Un paiement manuel attend votre validation.",
+    "externalReference": "Référence de règlement vérifiable",
+    "invoicePendingMail": "Paiement approuvé et facturé ; l’envoi d’e-mail reste à confirmer."
+  },
+  "internalFinance": {
+    "title": "Contrôle de trésorerie DTSC",
+    "confirmedPayments": "Encaissements confirmés",
+    "postedIncome": "Revenus d’abonnement comptabilisés",
+    "accountsByCurrency": "Soldes de comptes par devise",
+    "manualPending": "Paiements manuels en attente",
+    "unlinkedInvoices": "Factures payées sans écriture",
+    "unverifiedAccounts": "Comptes à rapprocher",
+    "warning": "Les historiques multidevises nécessitent une certification humaine.",
+    "notGeneralLedger": "Il ne s’agit pas encore d’une comptabilité complète en partie double."
   }
 }
