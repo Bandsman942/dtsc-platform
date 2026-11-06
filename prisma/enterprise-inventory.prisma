@@ -52,7 +52,9 @@ model EnterpriseStockLot {
   movements         EnterpriseStockMovement[]
 
   @@unique([organizationId, id])
-  @@unique([organizationId, inventoryItemId, lotNumber])
+  // A physical batch may exist in multiple stores at once; each local lot
+  // retains its original batch number and expiry while balances remain isolated.
+  @@unique([organizationId, inventoryItemId, warehouseId, lotNumber])
   @@index([organizationId, warehouseId, status])
   @@index([organizationId, storageLocationId, status])
   @@index([organizationId, expiryDate, status])

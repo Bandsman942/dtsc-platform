@@ -4,6 +4,7 @@ import type { z } from "zod";
 import { EnterpriseDomainConflictError, EnterpriseDomainError } from "@/lib/enterprise/common/errors";
 import { publishEnterpriseEvent } from "@/lib/enterprise/crm-sales/helpers";
 import { assertInventoryApprovalCandidate, assertInventoryApprovalDecision } from "@/lib/enterprise/inventory/approval";
+import { readRetailInventoryPolicy } from "@/lib/enterprise/retail/inventory-policy";
 import type {
   inventoryCountCreateSchema,
   inventoryCountDecisionSchema,
@@ -94,6 +95,70 @@ export async function createEnterpriseStockTransfer(organizationId: string, acto
   });
 }
 
+async function resolveTransferredLotTx(
+  tx: Prisma.TransactionClient,
+  transfer: { organizationId: string; destinationWarehouseId: string; id: string },
+  line: { id: string; inventoryItemId: string; stockLotId: string | null },
+  actorUserId: string,
+) {
+  if (!line.stockLotId) return null;
+  const sourceLot = await tx.enterpriseStockLot.findFirst({
+    where: { id: line.stockLotId, organizationId: transfer.organizationId, inventoryItemId: line.inventoryItemId },
+  });
+  if (!sourceLot) throw new EnterpriseDomainError("STOCK_TRANSFER_SOURCE_LOT_NOT_FOUND", 409);
+  const existing = await tx.enterpriseStockLot.findFirst({
+    where: { organizationId: transfer.organizationId, inventoryItemId: line.inventoryItemId, warehouseId: transfer.destinationWarehouseId, lotNumber: sourceLot.lotNumber, archivedAt: null },
+  });
+  if (existing) {
+    if (existing.status !== "AVAILABLE" || existing.expiryDate?.toISOString() !== sourceLot.expiryDate?.toISOString()
+      || existing.productionDate?.toISOString() !== sourceLot.productionDate?.toISOString()) {
+      throw new EnterpriseDomainError("STOCK_TRANSFER_DESTINATION_LOT_CONFLICT", 409);
+    }
+    return existing.id;
+  }
+  const destinationLot = await tx.enterpriseStockLot.create({
+    data: {
+      organizationId: transfer.organizationId,
+      inventoryItemId: line.inventoryItemId,
+      warehouseId: transfer.destinationWarehouseId,
+      lotNumber: sourceLot.lotNumber,
+      productionDate: sourceLot.productionDate,
+      expiryDate: sourceLot.expiryDate,
+      supplierId: sourceLot.supplierId,
+      storageLocationId: null,
+      status: "AVAILABLE",
+      notes: `Lot issu du transfert ${transfer.id}, ligne ${line.id}`,
+      createdByUserId: actorUserId,
+    },
+  });
+  return destinationLot.id;
+}
+
+async function receiveTransferLinesTx(
+  tx: Prisma.TransactionClient,
+  transfer: { organizationId: string; id: string; destinationWarehouseId: string; lines: Array<{ id: string; inventoryItemId: string; stockLotId: string | null; destinationLocationId: string | null; quantity: Prisma.Decimal }> },
+  actorUserId: string,
+  comment?: string | null,
+) {
+  for (const line of transfer.lines) {
+    const destinationLotId = await resolveTransferredLotTx(tx, transfer, line, actorUserId);
+    await applyStockMovementTx(tx, transfer.organizationId, actorUserId, {
+      inventoryItemId: line.inventoryItemId,
+      warehouseId: transfer.destinationWarehouseId,
+      storageLocationId: line.destinationLocationId,
+      stockLotId: destinationLotId,
+      movementType: "TRANSFER_IN",
+      direction: "IN",
+      quantity: Number(line.quantity),
+      sourceEntityType: "EnterpriseStockTransfer",
+      sourceEntityId: transfer.id,
+      sourceLineId: line.id,
+      idempotencyKey: `transfer:${transfer.id}:${line.id}:in`,
+      reason: comment || null,
+    });
+  }
+}
+
 export async function decideEnterpriseStockTransfer(organizationId: string, transferId: string, actorUserId: string, input: StockTransferDecisionInput) {
   const candidate = await prisma.enterpriseStockTransfer.findFirst({ where: { id: transferId, organizationId, status: "PENDING_APPROVAL", archivedAt: null }, select: { requestedByUserId: true, approvedByUserId: true } });
   if (!candidate) throw new EnterpriseDomainError("STOCK_TRANSFER_NOT_FOUND", 404);
@@ -113,15 +178,37 @@ export async function decideEnterpriseStockTransfer(organizationId: string, tran
       await publishEnterpriseEvent(tx, { organizationId, entityType: "EnterpriseStockTransfer", entityId: transfer.id, eventType: "STOCK_TRANSFER_REJECTED", summary: `Transfert ${transfer.reference} rejeté`, actorUserId, fromStatus: "PENDING_APPROVAL", toStatus: "REJECTED", metadataJson: { selfApprovalOverride: decision.selfApprovalOverride } });
       return tx.enterpriseStockTransfer.findUniqueOrThrow({ where: { id: transfer.id }, include: { lines: true } });
     }
+    const retailConfig = await tx.enterpriseRetailConfiguration.findUnique({ where: { organizationId }, select: { settingsJson: true } });
+    const confirmedReceipt = Boolean(retailConfig && readRetailInventoryPolicy(retailConfig.settingsJson).transferReception === "CONFIRMED");
     for (const line of transfer.lines) {
       await applyStockMovementTx(tx, organizationId, actorUserId, { inventoryItemId: line.inventoryItemId, warehouseId: transfer.sourceWarehouseId, storageLocationId: line.sourceLocationId, stockLotId: line.stockLotId, movementType: "TRANSFER_OUT", direction: "OUT", quantity: Number(line.quantity), sourceEntityType: "EnterpriseStockTransfer", sourceEntityId: transfer.id, sourceLineId: line.id, idempotencyKey: `transfer:${transfer.id}:${line.id}:out`, reason: input.comment || null });
-      await applyStockMovementTx(tx, organizationId, actorUserId, { inventoryItemId: line.inventoryItemId, warehouseId: transfer.destinationWarehouseId, storageLocationId: line.destinationLocationId, stockLotId: null, movementType: "TRANSFER_IN", direction: "IN", quantity: Number(line.quantity), sourceEntityType: "EnterpriseStockTransfer", sourceEntityId: transfer.id, sourceLineId: line.id, idempotencyKey: `transfer:${transfer.id}:${line.id}:in`, reason: input.comment || null });
     }
-    const updated = await tx.enterpriseStockTransfer.updateMany({ where: { id: transfer.id, organizationId, revision: input.revision, status: "PENDING_APPROVAL" }, data: { status: "COMPLETED", approvedAt: new Date(), dispatchedAt: new Date(), receivedAt: new Date(), dispatchedByUserId: actorUserId, receivedByUserId: actorUserId, revision: { increment: 1 } } });
+    if (!confirmedReceipt) await receiveTransferLinesTx(tx, transfer, actorUserId, input.comment);
+    const now = new Date();
+    const updated = await tx.enterpriseStockTransfer.updateMany({ where: { id: transfer.id, organizationId, revision: input.revision, status: "PENDING_APPROVAL" }, data: { status: confirmedReceipt ? "IN_TRANSIT" : "COMPLETED", approvedAt: now, dispatchedAt: now, receivedAt: confirmedReceipt ? null : now, dispatchedByUserId: actorUserId, receivedByUserId: confirmedReceipt ? null : actorUserId, revision: { increment: 1 } } });
     if (updated.count !== 1) throw new EnterpriseDomainConflictError();
     await tx.enterpriseApproval.update({ where: { id: approval.id }, data: { status: "APPROVED", decidedAt: new Date(), decisionComment, revision: { increment: 1 } } });
-    await publishEnterpriseEvent(tx, { organizationId, entityType: "EnterpriseStockTransfer", entityId: transfer.id, eventType: "STOCK_TRANSFER_COMPLETED", summary: `Transfert ${transfer.reference} exécuté`, actorUserId, fromStatus: "PENDING_APPROVAL", toStatus: "COMPLETED", metadataJson: { selfApprovalOverride: decision.selfApprovalOverride } });
+    await publishEnterpriseEvent(tx, { organizationId, entityType: "EnterpriseStockTransfer", entityId: transfer.id, eventType: confirmedReceipt ? "STOCK_TRANSFER_DISPATCHED" : "STOCK_TRANSFER_COMPLETED", summary: confirmedReceipt ? `Transfert ${transfer.reference} expédié, réception attendue` : `Transfert ${transfer.reference} exécuté`, actorUserId, fromStatus: "PENDING_APPROVAL", toStatus: confirmedReceipt ? "IN_TRANSIT" : "COMPLETED", metadataJson: { selfApprovalOverride: decision.selfApprovalOverride } });
     return tx.enterpriseStockTransfer.findUniqueOrThrow({ where: { id: transfer.id }, include: { lines: true } });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+}
+
+export async function receiveEnterpriseStockTransfer(organizationId: string, transferId: string, actorUserId: string, revision: number, comment?: string) {
+  return prisma.$transaction(async (tx) => {
+    const transfer = await tx.enterpriseStockTransfer.findFirst({
+      where: { id: transferId, organizationId, status: "IN_TRANSIT", archivedAt: null },
+      include: { lines: true },
+    });
+    if (!transfer) throw new EnterpriseDomainError("STOCK_TRANSFER_NOT_IN_TRANSIT", 409);
+    if (transfer.revision !== revision) throw new EnterpriseDomainConflictError("STOCK_TRANSFER_REVISION_CONFLICT");
+    await receiveTransferLinesTx(tx, transfer, actorUserId, comment);
+    const updated = await tx.enterpriseStockTransfer.updateMany({
+      where: { id: transferId, organizationId, status: "IN_TRANSIT", revision },
+      data: { status: "COMPLETED", receivedAt: new Date(), receivedByUserId: actorUserId, revision: { increment: 1 } },
+    });
+    if (updated.count !== 1) throw new EnterpriseDomainConflictError("STOCK_TRANSFER_REVISION_CONFLICT");
+    await publishEnterpriseEvent(tx, { organizationId, entityType: "EnterpriseStockTransfer", entityId: transfer.id, eventType: "STOCK_TRANSFER_RECEIVED", summary: `Transfert ${transfer.reference} reçu`, actorUserId, fromStatus: "IN_TRANSIT", toStatus: "COMPLETED" });
+    return tx.enterpriseStockTransfer.findUniqueOrThrow({ where: { id: transferId }, include: { lines: true } });
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 }
 

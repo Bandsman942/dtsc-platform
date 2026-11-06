@@ -178,5 +178,29 @@
     "configurationRetry": "Refresh the Configuration section. If the problem persists, check company networks and financial accounts.",
     "configurationAccountHelp": "Select only an active Mobile Money or clearing account belonging to this company and using the same currency.",
     "configurationCurrencyHelp": "Add a currency only when a real provider account already exists in the company Finance module."
+  },
+  "inventoryPolicy": {
+    "title": "Stock expiry policy",
+    "description": "Adapt stock protection to your business. The server checks these rules before a sale can be completed.",
+    "loading": "Loading stock rules…",
+    "loadError": "Unable to load stock rules.",
+    "saveError": "The stock rules could not be saved.",
+    "saved": "Company stock expiry rules saved.",
+    "expiryMode": "Expired stock handling",
+    "allow": "Allow — no expiry enforcement",
+    "warn": "Monitor — do not block sales",
+    "block": "Block expired lots",
+    "expiryHelp": "Blocking requires a lot selection for items with dated stock lots.",
+    "warningDays": "Warning horizon (days)",
+    "warningHelp": "Number of days used by upcoming stock expiry alerts.",
+    "fefo": "First-expiring, first-out (FEFO)",
+    "fefoHelp": "The sale must use the earliest usable lot while stock remains available.",
+    "legacyNotice": "Existing businesses keep their current rules until this protection is enabled.",
+    "transferReception": "Transfer receipt confirmation",
+    "transferImmediate": "Automatically receive on approval (legacy)",
+    "transferConfirmed": "Dispatch, then physically confirm receipt",
+    "transferHelp": "Goods leave the source warehouse on approval and enter the destination only when receipt is recorded.",
+    "save": "Save stock rules",
+    "saving": "Saving…"
   }
 }

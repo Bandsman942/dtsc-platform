@@ -1981,3 +1981,12 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 - No capacity stage is marked certified until a real CI load run is archived.
 
 Hotfix #861 (complément) : un secret CRON_SECRET Production commun réveille potentiellement sept autres queues. Ajout de verrous par route avec opt-in explicite `*_CRON_ENABLED` après auth, sans changement des secrets dédiés ; aucune file ancienne relancée automatiquement.
+## 2026-11-06 — v1.3.0 candidate — Retail paramétrable, première tranche #1042 (NON LIVRÉ)
+
+- Paramètres propres à l'entreprise pour les lots et la péremption : autoriser/surveiller/bloquer, FEFO, horizon d'alerte, prise en compte de la date métier locale ; formulaire Design 2.0 FR/EN.
+- Alertes de lots datés par dépôt, filtrables côté API, paginées et respectueuses des données d'organisation.
+- Sélection de lot dans le POS et le transfert ERP : quantité disponible et date de péremption, contrôle serveur maintenu.
+- Transferts : option historique immédiate préservée ; nouvelle option expédition puis réception physique confirmée, sans comptage simultané dans les deux stocks ; mouvement entrant au reçu et journal d'événements. Numéro de lot, date de fabrication et date de péremption transmis à destination avec migration d'unicité par dépôt.
+- Dépenses de Finance : attribution optionnelle à un site/boutique (FK tenant-aware), saisie et lecture ; les historiques non attribués restent tels quels. Vue propriétaire multi-boutiques : ventes et encaissements POS séparés par devise, dépenses approuvées affectées, nombre de lignes stock et sessions de caisse, sans bénéfice estimé non justifié.
+- **NON COUVERT** : RBAC complet par boutique, facturier→caissier, paiements partiels, profits comptables consolidés, exports complets et restauration de sauvegarde. Les checklists de l'issue #1042 restent ouvertes. Ne pas utiliser cette version comme acceptation complète du cahier des charges.
+- CI, QA globale, OWNER_E2E et Production : **NOT_EXECUTED** ; aucun merge/deploy sans E2E global du propriétaire. Migration en attente de déploiement via `prisma migrate deploy` sur `main` uniquement.

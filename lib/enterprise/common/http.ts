@@ -4,6 +4,10 @@ import { NextResponse } from "next/server";
 import { EnterpriseDomainError } from "@/lib/enterprise/common/errors";
 
 const BUSINESS_ERROR_MESSAGES: Record<string, { fr: string; en: string }> = {
+  STOCK_TRANSFER_NOT_IN_TRANSIT: { fr: "Ce transfert ne peut pas être réceptionné : il n'est pas en cours de transport ou il a déjà été reçu.", en: "This transfer cannot be received: it is not in transit or has already been received." },
+  STOCK_TRANSFER_REVISION_CONFLICT: { fr: "Ce transfert a changé depuis votre dernière lecture. Actualisez sa fiche.", en: "This transfer changed since you last viewed it. Refresh its details." },
+  STOCK_TRANSFER_SOURCE_LOT_NOT_FOUND: { fr: "Le lot d'origine de ce transfert est introuvable. Contactez le responsable du stock avant réception.", en: "The original transfer batch is missing. Contact the stock manager before receiving." },
+  STOCK_TRANSFER_DESTINATION_LOT_CONFLICT: { fr: "Un lot du même numéro existe à destination avec des dates différentes. Vérifiez les lots avant de réceptionner.", en: "A batch with this number exists at the destination with different dates. Check the batches before receiving." },
   EMPLOYMENT_CONTRACT_NOT_FOUND: { fr: "Ce contrat n’est plus disponible dans cette entreprise. Actualisez la liste.", en: "This contract is no longer available in your company. Refresh the list." },
   EMPLOYMENT_CONTRACT_ARCHIVE_NOT_FOUND: { fr: "Ce contrat n’est plus archivé. Actualisez les archives avant de le restaurer.", en: "This contract is no longer archived. Refresh the archive before restoring it." },
   EMPLOYMENT_CONTRACT_ACTIVE_ARCHIVE_FORBIDDEN: { fr: "Un contrat actif ne peut pas être archivé. Terminez-le par le processus RH avant l’archivage.", en: "An active contract cannot be archived. End it through the HR process first." },

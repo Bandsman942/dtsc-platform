@@ -1,6 +1,6 @@
 {
   "name": "dtsc-platform",
-  "version": "1.2.3",
+  "version": "1.3.0",
   "private": true,
   "engines": {
     "node": "22.x"
@@ -25,6 +25,7 @@
     "qa:semver": "node scripts/qa-semver.mjs",
     "release:version:check": "node scripts/github/validate-semver.mjs",
     "qa:hotfix-1036-hr-palette": "node scripts/qa-hotfix-1036-hr-palette.mjs",
+    "qa:hotfix-1042-retail": "node scripts/qa-hotfix-1042-retail-batches-transfer.mjs",
     "qa:console-internal-workspaces": "node scripts/qa-console-internal-workspaces.mjs",
     "qa:console-workspace-shell": "node scripts/qa-console-workspace-shell.mjs",
     "qa:standard-module-registry": "node scripts/audit-standard-module-registry.mjs",

@@ -239,6 +239,7 @@ model EnterpriseSite {
   updatedAt       DateTime              @updatedAt
   archivedAt      DateTime?
   warehouses      EnterpriseWarehouse[]
+  expenses        EnterpriseExpense[]
   employees       EnterpriseEmployee[]
   assets          EnterpriseAsset[]
 
