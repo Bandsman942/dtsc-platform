@@ -248,4 +248,8 @@ export function downloadProfessionalPdfV2(model: ProfessionalReportExportModel) 
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+export function renderProfessionalPdfBytes(model: ProfessionalReportExportModel): Uint8Array {
+  return pdfDocument(model);
+}
+
 export const __professionalPdfV2Internals = { pdfDocument };

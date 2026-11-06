@@ -1,4 +1,4 @@
-import { InvoiceStatus, PaymentStatus, type Prisma } from "@prisma/client";
+import { InvoiceStatus, PaymentStatus, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 
 type HrcfoTransactionInput = {
@@ -68,6 +68,7 @@ export async function ensureDefaultFinancialAccount() {
       id: "acct-caisse-principale",
       name: "Caisse principale",
       accountType: "CASH",
+      currency: "USD",
       description: "Compte de caisse principal DTSC.",
       status: "ACTIVE",
     },
@@ -82,9 +83,23 @@ export async function ensureBankFinancialAccount() {
       id: "acct-banque",
       name: "Banque",
       accountType: "BANK",
+      currency: "USD",
       description: "Compte bancaire principal DTSC pour les paiements d'abonnement.",
       status: "ACTIVE",
     },
+  });
+}
+
+/** Internal DTSC subscription settlement, isolated from customer ERP ledgers. */
+export async function ensureSubscriptionSettlementAccount(method: string, currency: string) {
+  const normalizedCurrency = currency.trim().toUpperCase();
+  if (!/^[A-Z]{3}$/.test(normalizedCurrency)) throw new Error("INVALID_TREASURY_CURRENCY");
+  const paymentMethod = method.trim().toUpperCase();
+  const accountType = paymentMethod === "CASH" ? "CASH" : paymentMethod === "MOBILE_MONEY" || ["MPESA", "AIRTEL", "ORANGE"].includes(paymentMethod) ? "MOBILE_MONEY" : "BANK";
+  const name = `Encaissements abonnements · ${accountType} · ${normalizedCurrency}`;
+  return prisma.financialAccount.upsert({
+    where: { name }, update: {},
+    create: { name, accountType, currency: normalizedCurrency, status: "ACTIVE", description: `Règlements abonnements DTSC en ${normalizedCurrency} (${accountType}).` },
   });
 }
 
@@ -168,8 +183,17 @@ export async function createValidatedTransactionInTx(tx: Prisma.TransactionClien
   if (normalizedCategory !== "OUT") {
     await tx.$queryRaw`SELECT "id" FROM "FinancialAccount" WHERE "id" = ${accountId} FOR UPDATE`;
   }
+  if (input.sourceType && input.sourceId) {
+    const posted = await tx.hrcfoExpense.findFirst({ where: { sourceType: input.sourceType, sourceId: input.sourceId } });
+    if (posted) return posted;
+  }
   const account = await tx.financialAccount.findUnique({ where: { id: accountId } });
   if (!account || account.status !== "ACTIVE") throw new Error("Le compte financier sélectionné est inactif ou introuvable.");
+  const movementCurrency = (input.currency || "USD").trim().toUpperCase();
+  if (!/^[A-Z]{3}$/.test(movementCurrency)) throw new Error("INVALID_TREASURY_CURRENCY");
+  if (account.reconciliationIssue) throw new Error("TREASURY_ACCOUNT_RECONCILIATION_REQUIRED");
+  if (!account.currency) throw new Error("TREASURY_ACCOUNT_CURRENCY_UNVERIFIED");
+  if (account.currency !== movementCurrency) throw new Error("TREASURY_ACCOUNT_CURRENCY_MISMATCH");
 
   const transaction = await tx.hrcfoExpense.create({
     data: {
@@ -179,7 +203,7 @@ export async function createValidatedTransactionInTx(tx: Prisma.TransactionClien
       transactionCategory: normalizedCategory,
       transactionType: input.transactionType || "MANUAL",
       amount: input.amount,
-      currency: input.currency || "USD",
+      currency: movementCurrency,
       transactionDate: input.transactionDate || new Date(),
       accountId,
       departmentId: input.departmentId || null,
@@ -356,7 +380,9 @@ export async function createSubscriptionIncomeTransaction(paymentId: string) {
     return null;
   }
 
-  const account = await ensureBankFinancialAccount();
+  const method = payment.provider === "MANUAL" && payment.checkoutPayload && typeof payment.checkoutPayload === "object" && !Array.isArray(payment.checkoutPayload)
+    ? String(payment.checkoutPayload.method || "BANK_TRANSFER") : "MOBILE_MONEY";
+  const account = await ensureSubscriptionSettlementAccount(method, payment.currency);
   const transaction = await createValidatedTransaction({
     title: `Abonnement ${payment.subscription.plan.name}`,
     requesterName: payment.user.name,
@@ -366,6 +392,7 @@ export async function createSubscriptionIncomeTransaction(paymentId: string) {
     amount: Number(payment.amount),
     currency: payment.currency,
     accountId: account.id,
+    paymentMethod: method,
     status: "VALIDATED",
     sourceType: "PAYMENT",
     sourceId: payment.id,
@@ -446,13 +473,14 @@ export async function calculateAccountBalance(accountId: string) {
   }
   const movements = await prisma.hrcfoExpense.findMany({
     where: { accountId, status: { in: Array.from(impactingStatuses) } },
-    select: { transactionCategory: true, category: true, amount: true },
+    select: { transactionCategory: true, category: true, amount: true, currency: true },
   });
+  if (account.reconciliationIssue || !account.currency || movements.some((movement) => movement.currency !== account.currency)) throw new Error("TREASURY_ACCOUNT_RECONCILIATION_REQUIRED");
   return movements.reduce((balance, movement) => {
-    const amount = Number(movement.amount);
+    const amount = movement.amount;
     const category = movement.transactionCategory || movement.category;
-    return category === "IN" ? balance + amount : balance - amount;
-  }, Number(account.openingBalance));
+    return category === "IN" ? balance.plus(amount) : balance.minus(amount);
+  }, new Prisma.Decimal(account.openingBalance)).toNumber();
 }
 
 export async function calculateAccountAvailableForBudget(accountId: string) {
@@ -466,18 +494,24 @@ export async function calculateAccountAvailableForBudget(accountId: string) {
 }
 
 export async function reconcileFinancialState(tx: Prisma.TransactionClient | typeof prisma = prisma) {
-  const accounts = await tx.financialAccount.findMany({ select: { id: true, openingBalance: true } });
+  const accounts = await tx.financialAccount.findMany({ select: { id: true, currency: true, openingBalance: true } });
   for (const account of accounts) {
     const movements = await tx.hrcfoExpense.findMany({
       where: { accountId: account.id, status: { in: Array.from(impactingStatuses) } },
-      select: { transactionCategory: true, category: true, amount: true },
+      select: { transactionCategory: true, category: true, amount: true, currency: true },
     });
+    const currencies = new Set(movements.map((movement) => movement.currency));
+    const hasMixedCurrencies = currencies.size > 1 || Boolean(account.currency && currencies.size && !currencies.has(account.currency));
+    if (!account.currency || hasMixedCurrencies) {
+      await tx.financialAccount.update({ where: { id: account.id }, data: { reconciliationIssue: hasMixedCurrencies ? "MIXED_CURRENCIES" : "CURRENCY_UNVERIFIED" } });
+      continue;
+    }
     const currentBalance = movements.reduce((balance, movement) => {
-      const amount = Number(movement.amount);
+      const amount = movement.amount;
       const category = movement.transactionCategory || movement.category;
-      return category === "IN" ? balance + amount : balance - amount;
-    }, Number(account.openingBalance));
-    await tx.financialAccount.update({ where: { id: account.id }, data: { currentBalance } });
+      return category === "IN" ? balance.plus(amount) : balance.minus(amount);
+    }, new Prisma.Decimal(account.openingBalance));
+    await tx.financialAccount.update({ where: { id: account.id }, data: { currentBalance, reconciliationIssue: null } });
   }
 
   const budgets = await tx.hrcfoBudget.findMany({ select: { id: true } });

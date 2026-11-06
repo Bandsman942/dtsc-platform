@@ -1,603 +1,227 @@
 # DTSC Platform
 
-Plateforme SaaS multi-tenant pour **DTSC — Data and Tech Solutions Consulting**, cabinet basé à Kinshasa.
+**Plateforme SaaS multi-entreprises de Data and Tech Solutions Consulting (DTSC)**
 
-Slogan: **Le numérique au service de votre performance**.
+*Le numérique au service de votre performance.*
 
-L'application fournit un assistant IA professionnel pour aider les clients à clarifier leurs besoins autour des 7 leviers numériques officiels DTSC: Data & BI, Intelligence artificielle, Solutions digitales, Audit & optimisation, Formations, Marketing digital et Imprimerie numérique.
+DTSC Platform réunit, dans une application web Next.js, le site public de DTSC, les comptes utilisateurs, les abonnements, les espaces de travail des entreprises clientes, les modules ERP, les assistants IA, la collaboration et la Console interne DTSC.
 
-DTSC cible prioritairement les assurances, cliniques, pharmacies et PME avec une offre hybride où les dashboards, chatbots, ERP, CRM, portails clients, assistants documentaires, workflows numériques et supports imprimés restent des exemples rattachés aux 7 leviers, pas des services séparés.
+Ce README est le **point d'entrée du dépôt**, pas le journal chronologique des hotfixes. Il décrit les capacités représentées dans le code de `main` après la PR [#1020](https://github.com/Bandsman942/dtsc-platform/pull/1020), le 3 novembre 2026. Pour le détail métier, les règles opérationnelles et les preuves de recette, consulter les documents spécialisés dans [`docs/`](docs/TECHNICAL_DOCUMENTATION.md).
 
-## Stack Technique
+> **Périmètre de la documentation :** un module présent dans le code ou déclaré `ACTIVE` dans un registre n'est pas automatiquement disponible pour toute entreprise, inclus dans tout abonnement, configuré en production ou certifié commercialement. Son accès dépend du contexte, du secteur, du plan, des dépendances, des permissions et de sa maturité réelle.
 
-- Next.js App Router
-- React 19.1.2+ et TypeScript
-- Tailwind CSS
-- Neon PostgreSQL
-- Prisma ORM
-- OpenAI Responses API côté serveur
-- LiveKit optionnel pour les appels audio/vidéo de groupes et réunions COO
-- Auth maison par cookie signé HTTP-only
-- PWA privée installable côté espace client
-- Design mobile/PWA premium avec header compact, bottom navigation, cartes glass et safe-area mobile
-- Déploiement Vercel
-- GitHub Actions CI/CD
+## Version applicative et release
 
-## Documentation Technique
+La version de DTSC Platform est désormais au format [Semantic Versioning (SemVer)](docs/RELEASE_VERSIONING.md) : `MAJOR.MINOR.PATCH` dans `package.json`. Elle s'applique aux cinq surfaces. Chaque PR incrémente la version selon les changements ; la GitHub Release `vX.Y.Z` est produite seulement après réussite du déploiement Vercel Production depuis `main`. La version sur une branche/PR ne constitue pas une livraison. Les historiques `prod-*` restent conservés.
 
-La documentation technique complete est disponible dans [docs/TECHNICAL_DOCUMENTATION.md](docs/TECHNICAL_DOCUMENTATION.md).
-La matrice de routage multi-sous-domaines est documentée dans [docs/ROUTING_AND_SUBDOMAINS.md](docs/ROUTING_AND_SUBDOMAINS.md).
-La logique SaaS des plans et entitlements est documentee dans [docs/SAAS_PLANS_AND_ENTITLEMENTS.md](docs/SAAS_PLANS_AND_ENTITLEMENTS.md).
-La checklist QA des sous-domaines est disponible dans [docs/SUBDOMAIN_QA_CHECKLIST.md](docs/SUBDOMAIN_QA_CHECKLIST.md).
-La checklist QA globale de regression est disponible dans [docs/QA_REGRESSION_CHECKLIST.md](docs/QA_REGRESSION_CHECKLIST.md).
-La gouvernance IA de l’itération 5 est documentée dans [docs/STANDARD_AI_ORCHESTRATION_ARCHITECTURE.md](docs/STANDARD_AI_ORCHESTRATION_ARCHITECTURE.md), avec le catalogue fournisseurs/modèles, le RAG multilingue, les outils autorisés, les coûts, l’observabilité et le Kanban de maturité commerciale.
+## 1. Produits et parcours
 
-## Fonctionnalités
+Les cinq surfaces sont hébergées par **un seul projet Next.js/Vercel**, avec routage selon le nom de domaine et session partagée lorsque la configuration l'autorise.
 
-- Intelligence artificielle gouvernée par un catalogue canonique de fournisseurs et modèles, avec classification de tâche, routage central, fallbacks compatibles avec la confidentialité, reason codes stables, prompts versionnés, observabilité détaillée par appel et coût exact/calculé/estimé/inconnu.
-- Chatbot global et IA Assistant Entreprise raccordés au même orchestrateur sans recréer leurs conversations, quotas, outils ni historiques; réponses localisées, citations enrichies et arrêt des mutations après interruption.
-- RAG documentaire multilingue tenant-aware et permission-aware avec langue, version, page, section et offsets de citation, retrait logique des fragments révoqués et conservation de la langue source.
-- Guides utilisateurs IA intégrés au composant natif de l’application en français et en anglais.
-- Administration DTSC enrichie d’un Kanban de maturité commerciale fondé sur le registre canonique, avec filtres réels, historique, preuves persistées et transitions contrôlées côté serveur; `COMMERCIAL_READY` reste bloqué sans Production, E2E propriétaire et validation explicite.
-- Landing page publique DTSC refondue avec navigation Accueil, Services, Solutions, Secteurs, Projets, Ressources, À propos et Contact
-- Contenus publics harmonisés autour des 7 leviers numériques officiels DTSC, avec solutions, secteurs et projets présentés comme des cas d'application.
-- Pages publiques Services, Solutions, Secteurs, Projets et À propos enrichies avec blocs problème client, action DTSC, livrables, résultats mesurables, FAQ, parcours de méthode et liens internes.
-- FAQ premium sur l'accueil avec composant Accordion accessible, catégories métier et données structurées SEO `FAQPage`
-- FAQ publique enrichie avec les questions sur l'assistant IA, le chatbot privé, les tickets, la sécurité, les ressources et les brouillons de publications
-- Sections publiques harmonisées avec bandes visuelles alternées et cartes contrastées pour éviter la confusion entre blocs et arrière-plan
-- Pages publiques dédiées avec onglet actif, contenus DTSC issus du business plan et sources vérifiables
-- Publications publiques administrables depuis `/admin` pour alimenter la page Ressources sans modifier le code, avec lien visuel depuis l'accueil
-- Contribution brouillon aux publications publiques pour rôles non-client autorisés, avec publication et suppression réservées aux administrateurs
-- Recherche et pagination instantanées dans le catalogue admin des brouillons et articles publiés
-- Éditeur riche pour les publications publiques et annonces: gras, italique, soulignement, palette de couleurs contrôlée, listes avancées, liens, emojis, collage/dépôt d'images, upload d'images optimisées via Supabase Storage et aperçu mobile/desktop avant publication
-- Publications publiques interactives: partage, likes, dislikes, commentaires, réponses aux commentaires et CRUD des commentaires aligné sur la logique RBAC des annonces
-- Page Ressources organisée comme vitrine média avec catégories éditoriales, lecture par objectif, ressources pédagogiques, accordions par catégorie et mise en avant des 3 dernières publications
-- Page Contact transformée en qualification client avec besoins par levier, mini-parcours de cadrage, formulaire existant et FAQ.
-- Recherche intelligente sur les pages publiques via une barre large dédiée sous la navigation
-- Agent IA public sur la landing page pour répondre aux questions DTSC, qualifier les prospects, enregistrer les demandes dans les inscrits newsletter et notifier l'équipe par email après confirmation
-- Réponses progressives en streaming pour l'agent IA public, réglage admin permettant de l'activer/désactiver avec fallback informatif et garde-fous serveur contre les questions hors DTSC ou les ressources inventées
-- Inscription, connexion, déconnexion
-- Inscription sécurisée par OTP email configurable par l'admin
-- Plans d'abonnement chatbot: Découverte, Essentiel, Professionnel, Entreprise
-- Paiement MaishaPay avec callback et activation automatique de l'abonnement
-- Factures envoyées par email après confirmation du paiement
-- Base documentaire privée avec upload TXT/Markdown/CSV/JSON/PDF, embeddings OpenAI et recherche pgvector pour RAG chatbot
-- Stockage optionnel des fichiers originaux dans Supabase Storage, tout en gardant Neon PostgreSQL comme base principale
-- Module Entreprise: profil organisationnel, poste utilisateur, responsabilités, activités métier, processus, données, objectifs et KPI injectés dans le contexte privé du chatbot
-- Espaces conversationnels premium mobile-first: listes denses, avatars, badges non lus, recherche unifiée, FAB d'action principale, headers compacts, fils plein écran et saisie fixe pour Mes collaborateurs, Chatbot général et IA Assistant Entreprise
-- IA Assistant Entreprise avec projets persistants pour classer les conversations, créer une nouvelle conversation vide, renommer/fusionner ou supprimer un projet sans perdre les échanges
-- Ancienne page `/documents` redirigée vers `/company`; les documents restent gérés dans le module Entreprise selon les limites d'abonnement
-- Sessions sécurisées par cookie signé
-- Préparation multi-sous-domaines dans une seule app Vercel: site public, espace SaaS, console DTSC, compte/authentification et support peuvent être routés par host sans extraction monorepo.
-- Navigation inter-produits Console DTSC, SaaS, Support, Compte et Site public avec redirections post-login centralisées, `next` interne validé et déconnexion ramenée vers Account.
-- Console DTSC SaaS enrichie avec vue générale de pilotage: entreprises clientes actives, abonnements, tickets support, utilisateurs, modules, incidents API, audits sensibles et événements sécurité.
-- Rôles: `ADMIN`, `MANAGER`, `CLIENT`, `SUPPORT`
-- Fondation SaaS hybride multi-entreprises: tenant interne `DTSC` créé comme organisation réelle, entreprises clientes créées par DTSC, memberships actifs, contexte d'accès optionnel à la connexion, sélecteur d'espace après connexion et isolation progressive par `organizationId`.
-- Isolation renforcée en contexte entreprise: Abonnement, Annonces et Profil restent communs au compte utilisateur, tandis que Dashboard, Chatbot, Entreprise, Documents, Paramètres, Notifications, Support, Calendrier interne et Mes collaborateurs restent visibles avec des données filtrées par le contexte actif, `organizationId` et l'appartenance réelle aux groupes.
-- Couche sectorielle SaaS: secteurs d'activité en combobox, modèles sectoriels applicables aux entreprises clientes, modules dynamiques `Administration [Entreprise]` et `Activités [Entreprise]`, postes, départements, workflows et blocs d'activités isolés par organisation.
-- Première itération sectorielle santé (`HEALTH_CARE`) dans `Administration [Entreprise]`: dashboard santé, patients, rendez-vous, consultations, dossiers médicaux, équipe médicale, laboratoire, pharmacie interne, facturation médicale, assurances/prises en charge, incidents qualité, documents médicaux, confidentialité, paramètres et rapports persistés dans `EnterpriseSectorRecord`, avec recherche, détail, formulaire mobile plein écran, combobox liées aux données de l'entreprise, workflows/procédures, invitations collaborateurs, paramètres persistés, actions métier, archivage, audit et contrôle par `organizationId`.
-- Itérations sectorielles pharmacie (`PHARMACY`): produits, lots, péremptions, stock, inventaires, réceptions, ventes, ordonnances, fournisseurs, commandes, caisse, ajustements, alertes, registre qualité/pharmacovigilance, Documents & conformité et Rapports pharmacie décisionnels, le tout isolé par `organizationId`.
-- Formulaires privés guidés: les formulaires longs des modules Entreprise, Support, Paramètres, Activités DTSC, Administration DTSC et Activités [Entreprise] utilisent des dialogues hauts responsive avec étiquettes visibles et aides contextuelles.
-- Accès DTSC interne limité aux utilisateurs possédant un membership actif sur l'organisation `DTSC`, généré à partir des dossiers collaborateurs RH actifs; un membre d'une entreprise cliente ne voit plus les données internes DTSC.
-- Administration DTSC des entreprises clientes: création, activation/suspension/archivage, attribution/retrait du rôle `ADMIN_ENTREPRISE` et liaison d'un plan sans accès aux données métier privées des clients.
-- Plans SaaS organisationnels centralises: `STARTER`, `BUSINESS`, `ENTERPRISE`, entitlements par feature/module, limites utilisateurs/stockage/appels/documents, Console DTSC enrichie, gestion tarifaire `ADMIN` auditée et acces client lecture seule dans `/billing`.
-- Middleware de protection des routes privées
-- Dashboard client enrichi avec KPI entreprise, activités métier, documents prêts et usage IA journalier
-- Shell privé mobile/PWA premium inspiré du redesign DTSC: navigation principale Accueil, IA, Activités, Collaborateurs et Notifications, avec accès secondaire aux autres modules sans remplacer les données réelles.
-- Conversations mobiles optimisées: dialogs hauts, fils de groupe/chatbot plus immersifs, cartes de groupes plus lisibles, chat texte disponible pendant les appels de groupe, partage d'écran, portrait/paysage PWA et contrôles d'appel DTSC premium.
-- Accès mobile aux modules conversationnels par liste d'abord: Chatbot, IA Assistant Entreprise et Mes collaborateurs laissent l'utilisateur choisir la conversation ou le groupe à ouvrir, sauf lien profond explicite.
-- UI mobile/PWA compacte: accordéons premium pour Dashboard, Entreprise, Abonnement et Profil, navigation flottante Administration, formulaires support/annonces repliables, commentaires repliés par défaut et filtres avancés des notifications.
-- Calendrier interne privé sans API externe: CRUD des disponibilités collaborateurs sur date précise ou fréquence claire, événements, participants, conflits de planning, vues mobiles premium, isolation par `organizationId` en contexte entreprise et visibilité des disponibilités DTSC pour le rôle `SUPPORT`.
-- Interface chatbot avec panneau mobile de conversations inspiré des applications de chat professionnelles
-- Réactions persistées Like/Dislike et copie compacte sous chaque réponse assistant du chatbot privé.
-- Chatbot privé capable, après confirmation explicite, d'envoyer un message à DTSC ou de créer un ticket support à partir des informations collectées
-- Historique des conversations et messages en base, avec dates/heures selon les préférences utilisateur, classement par dossier/projet et CRUD des dossiers
-- Préférences chatbot persistantes: modèle préféré, style de réponse et longueur de réponse par utilisateur
-- Renommage, classement et suppression de conversation
-- Partage fonctionnel des conversations via API native du navigateur, copie du lien ou snapshot consultable dans un groupe Mes collaborateurs sans exposer la conversation privée originale
-- Support markdown pour les réponses IA
-- Copier une réponse assistant
-- Tickets support conversationnels avec historique propriétaire restauré même après changement de contexte d'organisation.
-- Dashboard admin organisé en sous-modules: vue générale, RBAC, paramètres, publications, utilisateurs, HR & CFO, SCO, COO, CEO, MPO, CTO, LA, visites, activité et audits
-- Sous-modules admin HR & CFO, SCO, MPO, CTO et LA avec RBAC et permissions métier par poste officiel: collaborateurs liés aux membres internes, départements, postes DTSC, comptes financiers, budgets contrôlés, transactions, paie, factures automatiques, fournisseurs, achats, stocks, actifs, logistique, projets numériques, pilotage technique, dossiers juridiques, contrats, conformité, litiges et archivage confidentiel
-- Règles financières HR & CFO centralisées côté serveur: chiffre d'affaires hors capital de départ, soldes de comptes recalculés, budgets liés aux comptes, sorties bloquées si budget ou compte insuffisant, paie reliée au budget et abonnements payés enregistrés sur le compte Banque
-- Sous-module COO avec opérations, tâches, réunions en mode commentaires/audio/vidéo, groupes de réunion liés, décisions, tâches de suivi, blocages, rapports, workflows partagés et commentaires opérationnels sécurisés
-- Sous-module CEO avec tableau de bord exécutif finance/RH/COO/SCO filtrable par période, objectifs stratégiques, alertes critiques et journal de supervision
-- Module Activités DTSC pour collaborateurs: tâches, opérations, coordination, demandes collaboratives directes avec pièces jointes privées, blocages, rapports, workflows partagés, objectifs/supervisions CEO assignés, suivis SCO/MPO/CTO/LA, suivi de paie, mentions `@collaborateur` dans les commentaires et téléchargement des bulletins personnels
-- Module privé Mes collaborateurs: visible dans tous les contextes authentifiés avec accès limité aux groupes autorisés par membership, groupes internes ou transversaux, en-tête sobre et détails consultables au clic, recherche d'utilisateurs actifs de toute l'application pour invitations acceptées/refusées, badges de mentions non lues, réponses à messages, membres, rôles de groupe, messagerie paginée avec menus `...`, couleurs stables par intervenant, mentions interactives, appels audio/vidéo LiveKit sécurisés, notifications, snapshots de conversations chatbot et contact contrôlé de l'équipe DTSC
-- Filtres de dates immédiats dans HR & CFO, SCO, COO et Activités DTSC pour analyser les blocs visibles sur une période précise
-- Page PWA `/offline` et fallback statique `public/offline.html` avec informations publiques DTSC, services, FAQ et contact essentiel consultables hors connexion sans cache de données privées, avec vérification automatique des mises à jour au retour en ligne pour les applications installées
-- Vue générale admin enrichie avec filtres période/date, graphiques visites/messages/tokens, utilisateurs actifs, nouveaux comptes, tickets, paiements, revenus, prospects, documents, publications et erreurs API
-- Gestion RBAC côté admin: modification des rôles `ADMIN`, `MANAGER`, `CLIENT`, `SUPPORT` et accès aux blocs Administration par rôle non-client
-- Création de comptes utilisateurs par l'admin avec rôle et limites d'usage
-- Limites journalières configurables par utilisateur: messages et tokens
-- Indicateurs de limites visibles dans le chatbot
-- Gestion support pour `ADMIN` et `SUPPORT`: traitement, résolution et clôture de tickets
-- Pages publiques d'information: Data en Afrique, BI & KPI, IA en entreprise, secteurs accompagnés
-- Pages publiques corporate: Services, Solutions, Secteurs, Projets, Ressources, À propos, Contact et politique des cookies
-- Analytics simples des visites publiques avec filtre par période dans `/admin`, agrégation journalière et total calculé en temps réel
-- Filtre calendrier des visites publiques et graphique borné avec chiffres par jour
-- Paramètres globaux admin: limites par défaut, activation chatbot, assistant public, contribution brouillon publications, maintenance, règles annonces et support
-- Bannières promotionnelles administrables: CRUD, ciblage par rôle, surfaces Chatbot / IA Assistant Entreprise / Mes collaborateurs / Annonces, priorités, dates et fermeture persistante par utilisateur
-- Paramètres OTP: activation et durée d'expiration des codes d'inscription
-- Diffusion globale: notifications internes + email groupé protégé avec destinataires en CCI
-- Adresse professionnelle DTSC: `contact@dtsc-platform.com`
-- Formulaire public de contact transmis côté serveur vers Zoho Mail via webhook
-- Inscription newsletter publique avec stockage en base et notification Zoho au format professionnel DTSC
-- Prospects qualifiés par l'agent IA public: service demandé, description du besoin, urgence, budget facultatif, canal de contact préféré et résumé IA conservés dans les inscrits newsletter
-- Diffusion email admin vers les utilisateurs actifs et les abonnés newsletter, avec personnalisation `{user}`, CCI confidentielle et éditeur riche pour conserver le format collé
-- Fondations audit log et historisation des webhooks entrants
-- Logs API, audit des paiements et exports CSV/HTML imprimable PDF
-- Expiration automatique des sessions après 5 minutes sans activité avec avertissement premium
-- SEO technique: métadonnées, sitemap, robots.txt, Open Graph et données structurées
-- Module `/notifications` pour alertes tickets, annonces, réponses support et messages admin, avec extraits, état lu/non lu, préférences et alertes navigateur/PWA; le module Mes collaborateurs affiche aussi son compteur global de messages non lus dans la navigation
-- Notifications applicatives globales pour confirmations, erreurs et informations client, avec toasts accessibles, fermeture manuelle et expiration automatique
-- Module `/announcements` pour fil d'actualités interne avec publications selon rôle, commentaires scrollables, réponses, réactions et menu `...` permettant infos, modification, soft delete, copie, transfert intelligent multi-destinataires, indicateurs, signalement, archivage et épinglage
-- Support repensé en discussion par ticket avec échanges jusqu'à résolution/clôture
-- Support conversationnel paginé avec réponses ciblées et CRUD non destructif des messages depuis les menus `...`.
-- Navigation entreprise dynamique: chaque module actif et inclus dans le plan apparaît dans la navigation et possède une page privée dédiée; sa désactivation le retire pour tous les collaborateurs.
-- Menus d'actions globaux rendus au premier plan afin de rester utilisables dans les cartes, modales et fils scrollables.
-- Discussions de tickets support contenues dans un fil scrollable pour éviter les pages mobiles infinies.
-- Paramètres complets: profil, mot de passe, mode clair/sombre/système, page de démarrage, densité d'interface, langue, fuseau horaire, format de date, synthèse email, modèle LLM préféré, style IA et préférences de notifications persistantes
-- Logo officiel DTSC et copyright 2026 sur les footers essentiels
-- Rate limiting sur chat, connexion, inscription, contact et newsletter, avec Upstash Redis optionnel et fallback local
-- Headers de sécurité globaux, blocage des requêtes cross-origin mutantes et protection contre l'en-tête `x-middleware-subrequest`
-- Validation des inputs avec Zod
-- PWA avec manifest, icônes, page hors ligne, invitation publique d'installation sur l'accueil, notifications visibles pendant session connectée et service worker qui cache uniquement les assets statiques, jamais les API ni les pages privées
+| Produit | Domaine | Capacités principales |
+| --- | --- | --- |
+| Site public | [dtsc-platform.com](https://dtsc-platform.com) | Présentation DTSC, services, solutions, secteurs, projets, ressources éditoriales, contact, newsletter et assistant public |
+| Compte | [account.dtsc-platform.com](https://account.dtsc-platform.com) | Inscription, connexion, récupération de compte, MFA et redirection vers l'espace autorisé |
+| Application | [app.dtsc-platform.com](https://app.dtsc-platform.com) | Tableau de bord, abonnement, profil, paramètres, IA, collaboration, espaces entreprise et ERP |
+| Console DTSC | [console.dtsc-platform.com](https://console.dtsc-platform.com) | Pilotage interne, entreprises clientes, abonnements, contenus, support, sécurité et activités des directions habilitées |
+| Support | [support.dtsc-platform.com](https://support.dtsc-platform.com) | Tickets, échanges et suivi des demandes dans le périmètre autorisé |
 
-## Variables D'environnement
+Les routes réelles restent dans `app/` et `app/api/`. Le routage et les URL sont centralisés dans `lib/domains.ts` et `middleware.ts` ; voir [Routage et sous-domaines](docs/ROUTING_AND_SUBDOMAINS.md).
 
-Copier `env.example` vers `.env.local` en local:
+## 2. Capacités effectivement codées
 
-```bash
-DATABASE_URL=
-OPENAI_API_KEY=
-AUTH_SECRET=
-APP_URL=http://localhost:3000
-NEXTAUTH_URL=http://localhost:3000
-NEXT_PUBLIC_PUBLIC_URL=https://dtsc-platform.com
-NEXT_PUBLIC_APP_URL=https://app.dtsc-platform.com
-NEXT_PUBLIC_CONSOLE_URL=https://console.dtsc-platform.com
-NEXT_PUBLIC_ACCOUNT_URL=https://account.dtsc-platform.com
-NEXT_PUBLIC_SUPPORT_URL=https://support.dtsc-platform.com
-# Production only when official subdomains share the session cookie:
-# AUTH_COOKIE_DOMAIN=.dtsc-platform.com
-OPENAI_MODEL=gpt-5-nano
-OPENAI_EMBEDDING_MODEL=text-embedding-3-small
-OPENAI_MODEL_IDS=gpt-5-nano,gpt-5-mini,gpt-4.1-mini
-# Catalogues JSON optionnels pour fournisseurs/modèles compatibles Responses API:
-AI_PROVIDER_CATALOG_JSON=
-AI_MODEL_CATALOG_JSON=
-NEXT_PUBLIC_DEFAULT_MODEL=gpt-5-nano
-LIVEKIT_API_KEY=
-LIVEKIT_API_SECRET=
-LIVEKIT_URL=
-ADMIN_EMAIL=
-DEFAULT_ADMIN_EMAIL=admin@dtsc-platform.com
-DEFAULT_ADMIN_PASSWORD=DtscAdmin2026!
-DEFAULT_ADMIN_BOOTSTRAP_ENABLED=false
-DTSC_CONTACT_EMAIL=contact@dtsc-platform.com
-CONTACT_EMAIL=contact@dtsc-platform.com
-ZOHO_MAIL_WEBHOOK_URL=
-ZOHO_OUTBOUND_MAIL_WEBHOOK_URL=
-ZOHO_OUTGOING_WEBHOOK_SECRET=
-ZOHO_MAIL_API_BASE_URL=https://mail.zoho.com
-ZOHO_ACCOUNTS_API_BASE_URL=https://accounts.zoho.com
-ZOHO_MAIL_ACCOUNT_ID=
-ZOHO_MAIL_FROM_ADDRESS=contact@dtsc-platform.com
-ZOHO_MAIL_CLIENT_ID=
-ZOHO_MAIL_CLIENT_SECRET=
-ZOHO_MAIL_REFRESH_TOKEN=
-MAISHAPAY_API_URL=https://marchand.maishapay.online/api/payment/rest/vers1.0/merchant
-MAISHAPAY_GATEWAY_MODE=0
-MAISHAPAY_PUBLIC_API_KEY=
-MAISHAPAY_SECRET_API_KEY=
-MAISHAPAY_DEFAULT_PROVIDER=MPESA
-MAISHAPAY_CALLBACK_SECRET=
-SUPABASE_STORAGE_URL=
-SUPABASE_STORAGE_SERVICE_ROLE_KEY=
-SUPABASE_STORAGE_BUCKET=dtsc-documents
-```
+### Compte, SaaS et collaboration
 
-Notes:
+- Gestion des comptes, profils, préférences, notifications, invitations, organisations et contexte actif (`GLOBAL_CLIENT`, `ORGANIZATION`, `DTSC_INTERNAL`).
+- Abonnements personnels et organisationnels, catalogue commercial, limites de consommation, facturation SaaS, demande de renouvellement manuel et traitements internes des demandes de paiement.
+- Chatbot général, IA Assistant Entreprise, bases de connaissance et conversations persistées, avec outils conditionnés par les autorisations.
+- Messagerie et groupes de collaborateurs, annonces, commentaires, calendriers, réunions, appels audio/vidéo et partage de contenu selon les fonctionnalités et intégrations configurées.
+- Coordination : tâches, demandes, validations, réunions, workflows, documents et activités des collaborateurs.
+- PWA installable, notifications navigateur et interface responsive avec garde-fous de cache pour les données privées.
 
-- `OPENAI_API_KEY` ne doit jamais être exposé côté client.
-- `AUTH_SECRET` doit être une chaîne aléatoire longue, au minimum 32 caractères.
-- `ADMIN_EMAIL` donne automatiquement le rôle `ADMIN` au premier compte créé avec cet email.
-- `DEFAULT_ADMIN_EMAIL` et `DEFAULT_ADMIN_PASSWORD` permettent le bootstrap du compte admin uniquement si `DEFAULT_ADMIN_BOOTSTRAP_ENABLED=true`.
-- En production, garder `DEFAULT_ADMIN_BOOTSTRAP_ENABLED=false` après la création initiale de l'admin, puis changer le mot de passe depuis `/settings`.
-- Sur Vercel, configurer ces variables dans Project Settings → Environment Variables.
-- `ZOHO_MAIL_WEBHOOK_URL` doit contenir l'URL complète du webhook entrant Zoho Mail. Ne jamais la commiter dans le dépôt.
-- `ZOHO_OUTBOUND_MAIL_WEBHOOK_URL` doit pointer vers le webhook Zoho/Zoho Flow chargé d'envoyer les emails directs. En diffusion, l'application place `DTSC_CONTACT_EMAIL` en destinataire principal et les membres en CCI.
-- `ZOHO_OUTGOING_WEBHOOK_SECRET` protège l'URL applicative à configurer côté Zoho: `APP_URL/api/webhooks/zoho/outgoing-mail?secret=VOTRE_SECRET`.
-- `DTSC_CONTACT_EMAIL` est l'adresse professionnelle affichée sur le site et utilisée dans les messages serveur.
-- `CONTACT_EMAIL` peut pointer vers la même adresse et sert de destinataire explicite pour les notifications de prospects qualifiés par l'agent IA public.
-- Si `ZOHO_MAIL_ACCOUNT_ID`, `ZOHO_MAIL_CLIENT_ID`, `ZOHO_MAIL_CLIENT_SECRET` et `ZOHO_MAIL_REFRESH_TOKEN` sont configurés, l'application envoie les diffusions directement par l'API Zoho Mail avant de tenter les fallbacks webhook. Les listes d'adresses ne sont jamais ajoutées dans le contenu du mail.
-- Dans les diffusions admin et newsletter, le placeholder `{user}` est remplacé par le nom de l'utilisateur ou de l'abonné. Lorsqu'il est présent, l'application envoie des mails personnalisés individuellement en CCI pour préserver la confidentialité.
-- `ZOHO_MAIL_CLIENT_SECRET` et `ZOHO_MAIL_REFRESH_TOKEN` sont des secrets: ne jamais les commiter et les régénérer s'ils ont été partagés.
-- `UPSTASH_REDIS_REST_URL` et `UPSTASH_REDIS_REST_TOKEN` activent un rate limiting distribué en production. Si ces variables sont absentes, l'application utilise un fallback mémoire uniquement adapté au développement ou à faible charge.
-- `MAISHAPAY_PUBLIC_API_KEY`, `MAISHAPAY_SECRET_API_KEY` et `MAISHAPAY_CALLBACK_SECRET` doivent être configurés dans Vercel pour activer les paiements payants. Le callback à fournir côté MaishaPay est `APP_URL/api/billing/maishapay/callback?secret=VOTRE_SECRET`.
-- Tant que le prestataire de paiement n'a pas fourni les clés, ne créez pas ces variables dans Vercel ou laissez-les vides. L'application affichera les plans payants en maintenance et gardera le plan gratuit opérationnel.
-- `OPENAI_EMBEDDING_MODEL` doit rester compatible avec la dimension pgvector configurée. Par défaut: `text-embedding-3-small` avec `vector(1536)`.
-- `SUPABASE_STORAGE_URL`, `SUPABASE_STORAGE_SERVICE_ROLE_KEY` et `SUPABASE_STORAGE_BUCKET` activent le stockage des fichiers originaux, des avatars et des images optimisées des publications publiques dans Supabase Storage.
+### ERP commun des entreprises clientes
 
-Mapping conseillé dans Zoho Flow, action Send Mail:
+Le registre ERP déclare notamment les domaines suivants. Les services métier possèdent leurs propres modèles, routes, contrôles d'accès et tests ; les anciens objets génériques ne doivent pas redevenir une seconde source d'écriture.
 
-```txt
-From address -> fromAddress
-Reply to      -> replyTo
-To            -> toText
-CC            -> ccText
-BCC           -> bccText
-Subject       -> subject
-Body          -> bodyHtml
-Nicknames     -> laisser vide
-```
+| Domaine | Modules et opérations présents dans le code |
+| --- | --- |
+| Administration | Entreprise, collaborateurs, postes, départements, rôles, permissions, audit, identités et consentements, relations et avantages |
+| Référentiels et commerce | Tiers/prospects/clients, catalogue, sites et entrepôts, CRM/pipeline, devis, commandes, ventes et contrats |
+| Achats et logistique | Fournisseurs, achats, réceptions, stocks, inventaires, transferts et mouvements |
+| RH, temps et projets | RH, présences et congés, paie opérationnelle, projets, prestations, temps/livrables, actifs et maintenance |
+| Pilotage et processus | Tâches, demandes, validations, réunions, workflows versionnés, documents, rapports et IA d'entreprise |
+| Finance opérationnelle | Créances, dettes, paiements et allocations, trésorerie, caisse, banque, transferts et rapprochement |
+| Comptabilité et finance avancée | Plan comptable, journaux et écritures, fiscalité, clôture, états financiers, immobilisations et valorisation des stocks |
 
-## Compte Admin Par Défaut
+La comptabilité ERP s'appuie sur des écritures en partie double, des opérations idempotentes et une correction des écritures comptabilisées par contrepassation. Les factures et paiements sectoriels convergent vers les objets financiers communs, sans dupliquer le grand livre.
 
-Identifiants temporaires prévus pour la première connexion:
+### Extensions sectorielles
 
-```txt
-Email: admin@dtsc-platform.com
-Mot de passe: DtscAdmin2026!
-```
+| Secteur / profil | Composants codés |
+| --- | --- |
+| Santé (`HEALTH_CARE`) | Patients, rendez-vous, consultations, dossiers médicaux, équipe soignante, laboratoire, prescriptions, facturation et documents médicaux |
+| Pharmacie (`PHARMACY`) | Médicaments et produits, lots/péremptions, stock, ordonnances, dispensation, achats, caisse, qualité, pharmacovigilance et rapports |
+| Commerce / Shop | Point de vente `RETAIL_POS`, agence Mobile Money, recharges télécoms, clôture journalière, tarifs, avantages et parcours de vente |
+| Gaming | Postes, sessions, réservations, tarification, encaissement, clôture, tournois et rapports |
+| Production et couture | Nomenclatures, ordres de production, exécution, qualité, rebuts ; mensurations, patrons, coupe, essayages, retouches et suivi des vêtements |
+| Éducation | Paramètres, structure et calendrier académiques, admissions, étudiants, parents et tuteurs |
 
-Le bootstrap automatique ne fonctionne que si `DEFAULT_ADMIN_BOOTSTRAP_ENABLED=true`. Utiliser cette option uniquement pour créer le premier admin, puis repasser la variable à `false` en production. Après connexion, changer le mot de passe dans `/settings`, puis remplacer `DEFAULT_ADMIN_PASSWORD` dans Vercel.
+Les capacités sectorielles ne sont ni universelles ni activées par défaut. Par exemple, les modules génériques historiques d'assurance, de missions ou de classes peuvent être `PLANNED` ; plusieurs écrans administratifs historiques Santé sont `HIDDEN` dans le registre effectif.
 
-Générer un `AUTH_SECRET` localement avec PowerShell:
+### Directions internes DTSC
 
-```powershell
-[Convert]::ToBase64String((1..48 | ForEach-Object { Get-Random -Maximum 256 }))
-```
+La Console et les activités internes couvrent des espaces autorisés pour **CEO, COO, CTO, HR & CFO, MPO, SCO et LA** : supervision, opérations, projets techniques, ressources humaines, finance interne, approvisionnements, coordination et dossiers métier. Ces accès dépendent d'un **membership DTSC actif et des postes/permissions officiels**, pas d'un simple rôle global.
 
-## Installation Locale
+Voir [Tableaux de bord des directions](docs/STANDARD_DTSC_INTERNAL_ROLE_DASHBOARDS.md) et [Architecture des modules standards](docs/STANDARD_MODULE_DOMAIN_ARCHITECTURE.md).
+
+## 3. Statut des modules : ce que signifie « disponible »
+
+Deux registres servent de sources de vérité :
+
+- **Modules standards** : [`lib/modules/standard-module-registry.ts`](lib/modules/standard-module-registry.ts) et [`standard-module-registry-data.json`](lib/modules/standard-module-registry-data.json) pour les surfaces personnelles, publiques, Console, Support et collaboratives.
+- **Modules ERP** : [`lib/enterprise/module-registry.ts`](lib/enterprise/module-registry.ts) et les fichiers `module-registry-*.json` pour les domaines communs et sectoriels.
+
+Les statuts d'implémentation distinguent `ACTIVE`, `BETA`, `PLANNED`, `HIDDEN`, `DEPRECATED` et `RETIRED`. Les modules `PLANNED` et `HIDDEN` ne constituent pas des fonctionnalités ouvrables. Le registre standard distingue en plus la **maturité commerciale** (`BACKEND_READY`, `READ_ONLY_UI`, `OPERATIONAL_UI`, `PROFESSIONAL_READY`, `COMMERCIAL_READY`).
+
+En pratique, l'ouverture d'un module exige aussi : organisation et membership actifs, secteur ou sous-profil compatible, abonnement/entitlement, dépendances, permissions serveur et configuration métier. **`ACTIVE` est un statut technique, pas une preuve de validation E2E ou de disponibilité commerciale.**
+
+Références : [Architecture ERP](docs/ERP_FINAL_ARCHITECTURE.md), [navigation et accès](docs/ERP_NAVIGATION_AND_ACCESS_CONTRACT.md), [maturité commerciale](docs/STANDARD_MODULE_COMMERCIAL_READINESS.md) et [offres SaaS](docs/SAAS_PLANS_AND_ENTITLEMENTS.md).
+
+## 4. Identité, sécurité et isolation
+
+- Authentification côté serveur avec session révocable et cookie signé `HTTP-only`, adaptée aux sous-domaines officiels.
+- MFA par application TOTP : enrôlement local par QR code, validation au login, codes de récupération à usage unique, politiques globales et par entreprise, appareils/sessions révocables et navigateurs reconnus.
+- Alertes de nouvelle connexion et réauthentification récente (*step-up*) pour les opérations sensibles identifiées par le serveur.
+- Paramètres personnels de sécurité regroupés dans une section compacte Design 2.0 : session actuelle, MFA, appareils connectés, navigateurs reconnus, sessions et notifications.
+- Autorisations tenant-scoped : session, contexte actif, membership, module, entitlement, permission, visibilité de l'objet, validation des entrées, limitation de débit, transaction et audit selon l'opération.
+- Séparation stricte entre données internes DTSC, données des entreprises clientes, dossiers médicaux et données financières. Un rôle global n'accorde pas un accès universel.
+
+Le chiffrement des secrets TOTP requiert une configuration serveur dédiée. **Ne jamais placer de secret, de code de secours ou de véritable QR d'enrôlement dans le dépôt, les logs ou une capture publique.**
+
+Voir [TOTP](docs/AUTH_TOTP_SECURITY_RUNBOOK.md), [parcours MFA](docs/AUTH_MFA_LOGIN_RUNBOOK.md), [sessions](docs/AUTH_SESSION_REGISTRY_RUNBOOK.md), [politiques MFA](docs/AUTH_MFA_POLICY_RUNBOOK.md) et [sécurité avancée](docs/AUTH_ADVANCED_SECURITY_RUNBOOK.md).
+
+## 5. IA et connaissance
+
+L'IA est orchestrée côté serveur entre le chatbot général, l'assistant d'entreprise et les surfaces autorisées. Le code comprend un catalogue de fournisseurs/modèles (dont les intégrations compatibles OpenAI et OpenRouter), le routage de requêtes, des limites de plan, la journalisation des coûts et des outils métier gouvernés.
+
+Le RAG documentaire filtre les sources et fragments selon l'organisation, la confidentialité et les permissions. Les opérations de l'IA sur l'ERP réutilisent les services canoniques, avec confirmation et audit lorsqu'une action sensible est autorisée. Un modèle présent au catalogue ne garantit ni son activation dans les variables Production, ni la disponibilité de son fournisseur.
+
+Références : [Orchestration IA](docs/STANDARD_AI_ORCHESTRATION_ARCHITECTURE.md), [runtime Agent](docs/STANDARD_AI_AGENT_RUNTIME.md) et [gouvernance MCP](docs/STANDARD_DTSC_AI_MCP_GOVERNANCE.md).
+
+## 6. Abonnements et paiements DTSC
+
+L'application distingue trois périmètres **à ne pas fusionner dans une même source de vérité** :
+
+1. **Facturation SaaS DTSC** : offres personnelles et entreprises, factures, abonnements, `Payment`, checkout MaishaPay lorsqu'il est configuré et dossiers de paiement/renouvellement manuel.
+2. **Trésorerie interne DTSC** : comptes et opérations HR & CFO, distincts de l'ERP de ses clients.
+3. **Paiements ERP clients** : `EnterprisePayment`, allocations, sessions de caisse, trésorerie et comptabilité de chaque entreprise cliente.
+
+Le programme **DTSC Payments** possède une architecture documentée en **PAY-0**, mais les étapes PAY-1 à PAY-9 ne doivent pas être considérées comme livrées sur la seule base de cette documentation. En particulier, certification complète des providers, paiements récurrents et nouveaux parcours de rapprochement restent soumis à leurs livraisons et recettes propres.
+
+Voir [DTSC Payments — état réel et cible](docs/DTSC_PAYMENTS_ARCHITECTURE.md) et [catalogue/entitlements](docs/SAAS_PLANS_AND_ENTITLEMENTS.md). Les tarifs effectifs proviennent du catalogue administré en base : ne pas reproduire une grille chiffrée statique dans ce README.
+
+## 7. Stack et architecture du dépôt
+
+| Couche | Implémentation |
+| --- | --- |
+| Application | Next.js App Router 15, React 19, TypeScript 5, Tailwind CSS 4 |
+| Validation et données | Zod 4, Prisma 6 (schéma multi-fichiers), PostgreSQL/Neon |
+| IA et fichiers | APIs de modèles côté serveur, recherche vectorielle/RAG, Supabase Storage selon configuration |
+| Temps réel et communication | LiveKit pour les appels, Zoho Mail pour les parcours email selon configuration |
+| Cache et limitation de débit | Redis/Upstash lorsque configuré, protections applicatives en repli selon les parcours |
+| Paiement SaaS | Adaptateur MaishaPay côté serveur, callbacks et flux de validation métier |
+| Exploitation | Vercel, GitHub Actions, scripts QA Node, PWA/service worker |
+
+Répertoires structurants :
+
+- `app/` : pages App Router, produits, workspaces et `app/api/` ;
+- `components/` : UI, design système, modules métier et composants `workspace/` ;
+- `lib/` : authentification, services métier, registres, résolveurs d'accès, IA et intégrations ;
+- `prisma/` : modèles Prisma, migrations et schémas sectoriels ;
+- `scripts/` : QA, audits, migration et outils de maintenance ;
+- `docs/` : contrats normatifs, architecture, guides, runbooks et E2E ;
+- `.github/workflows/` : Quality Gates, migrations, QA spécialisées et livraison ;
+- `public/` : assets, manifeste/PWA et service worker.
+
+Le Design 2.0 réutilise notamment `ModuleWorkspace`, `ModuleHeader`, `ModuleSection`, `BusinessList`, `BusinessDetail` et les actions contextuelles ; l'affichage est responsive, avec interface FR/EN et contraintes mobile/PWA.
+
+## 8. Démarrage local
+
+### Prérequis
+
+- **Node.js 22.x** (contrat `engines` de `package.json`) et **pnpm** ;
+- une base PostgreSQL de développement compatible Prisma ;
+- les accès et variables nécessaires aux intégrations que vous souhaitez réellement tester.
+
+Depuis la racine du dépôt :
 
 ```bash
-pnpm install
-pnpm prisma generate
+cp env.example .env.local
+pnpm install --frozen-lockfile
+pnpm prisma:generate
+pnpm prisma:deploy
 pnpm dev
 ```
 
-Validation avant livraison:
+Configurer les variables de `.env.local` **avant** la génération/migration et le démarrage. `pnpm prisma:deploy` applique les migrations à la base pointée par `DATABASE_URL` : utiliser exclusivement une **base de développement**. Ne pas exécuter cette commande contre la Production pour un simple démarrage local.
+
+Ouvrir [http://localhost:3000](http://localhost:3000). Sur localhost, ne pas imposer le domaine de cookie réservé à `*.dtsc-platform.com`.
+
+### Configuration par domaine
+
+Le fichier [`env.example`](env.example) décrit les variables prises en charge. Les principales familles sont :
+
+| Besoin | Variables indicatives |
+| --- | --- |
+| Base et session | `DATABASE_URL`, `AUTH_SECRET`, paramètres de cookie et URLs des produits |
+| MFA | clé de chiffrement TOTP documentée dans le runbook d'authentification |
+| IA | clés des providers, catalogues de modèles, limites et configuration RAG |
+| Paiements SaaS | `MAISHAPAY_*` et callback vérifié, uniquement si le provider est activé |
+| Email | `ZOHO_*` et paramètres d'expédition |
+| Fichiers, temps réel, rate limiting | `SUPABASE_*`, `LIVEKIT_*`, `UPSTASH_REDIS_*` |
+
+Les intégrations absentes peuvent limiter des fonctions ou activer leurs états de repli. **N'ajoutez jamais de clé réelle dans un commit, une issue, un README ou un log.** Aucun compte administrateur ni mot de passe par défaut n'est publié ici : le bootstrap d'administration doit être géré comme une procédure sécurisée et désactivé ensuite.
+
+## 9. Qualité, contribution et déploiement
+
+Principales commandes déclarées dans `package.json` :
 
 ```bash
+pnpm prisma:generate
 pnpm type-check
-pnpm lint
 pnpm qa:regression
-pnpm build
-git diff --check
-```
-
-`pnpm qa:regression` execute une suite source-level sans dependance externe pour verifier les garde-fous critiques: auth, middleware sous-domaines, Support, modules Entreprise, groupes, appels, notifications, calendrier et isolation multi-tenant.
-
-Puis ouvrir:
-
-```bash
-http://localhost:3000
-```
-
-## Configuration Neon PostgreSQL
-
-1. Créer une base Neon.
-2. Copier l'URL de connexion PostgreSQL.
-3. Mettre l'URL dans `DATABASE_URL`.
-4. Appliquer les migrations:
-
-```bash
-pnpm prisma migrate deploy
-```
-
-En développement, pour créer une nouvelle migration après modification du schema:
-
-```bash
-pnpm prisma migrate dev
-```
-
-Ouvrir Prisma Studio:
-
-```bash
-pnpm prisma studio
-```
-
-## Paramètres pharmacie
-
-Le sous-module `PHARMACY_SETTINGS` fournit un centre de configuration métier isolé par organisation. Les valeurs sont appliquées côté serveur aux ventes, réceptions, lots, caisse, alertes, documents, qualité et rapports. Les changements critiques sont motivés et audités; les numéros métier sont générés avec des séquences transactionnelles.
-
-Les devises PHARMACY sont administrées dans `Devises & conversions`: `USD`, `CDF` et `EUR` disposent de taux auditables, les achats/réceptions/ventes gardent leur devise métier et stockent un miroir converti vers la devise principale.
-
-## OpenAI
-
-Le chatbot utilise l'endpoint OpenAI **Responses API** côté serveur dans `app/api/chat/route.ts`.
-
-Le prompt système DTSC est centralisé dans:
-
-```txt
-lib/openai.ts
-```
-
-Le modèle par défaut est configuré avec:
-
-```bash
-OPENAI_MODEL=gpt-5-nano
-```
-
-## Paiements MaishaPay
-
-Les plans payants utilisent MaishaPay côté serveur. Tant que les clés MaishaPay ne sont pas configurées, le module `/billing` affiche une maintenance professionnelle pour les paiements payants. Le plan gratuit Découverte reste activable sans numéro M-Pesa.
-
-Variables à ajouter seulement quand MaishaPay fournit les valeurs:
-
-```bash
-MAISHAPAY_PUBLIC_API_KEY
-MAISHAPAY_SECRET_API_KEY
-MAISHAPAY_CALLBACK_SECRET
-```
-
-Sur Vercel, il n'est pas nécessaire d'ajouter ces variables vides avant le push. Laissez-les absentes pour éviter toute confusion opérationnelle.
-
-## Documents et Supabase Storage
-
-La base documentaire accepte TXT, Markdown, CSV, JSON et PDF jusqu'à 2 Mo. Le plan Découverte autorise déjà 1 document afin de tester le flux complet. Le texte est extrait côté serveur, vectorisé avec OpenAI Embeddings et stocké dans Neon PostgreSQL via pgvector.
-
-Supabase Storage est utilisé pour conserver les fichiers originaux, les avatars et les images optimisées des publications publiques si les variables Supabase sont configurées. Créer un bucket privé `dtsc-documents`, puis ajouter dans Vercel:
-
-```bash
-SUPABASE_STORAGE_URL
-SUPABASE_STORAGE_SERVICE_ROLE_KEY
-SUPABASE_STORAGE_BUCKET=dtsc-documents
-```
-
-## Rôles Utilisateurs
-
-- `ADMIN`: accès à `/admin`, supervision utilisateurs, conversations, tickets et usage IA.
-- `MANAGER`: supervision métier et suivi opérationnel futur.
-- `CLIENT`: rôle standard pour les clients DTSC.
-- `SUPPORT`: traitement des tickets et accompagnement client.
-
-## Routes Principales
-
-- `/` landing page publique
-- `/services` services DTSC
-- `/solutions` solutions et offres concrètes
-- `/secteurs` secteurs accompagnés
-- `/projets` projets et démonstrations
-- `/ressources` ressources publiques et publications admin
-- `/a-propos` présentation DTSC et organisation
-- `/contact` contact et newsletter
-- `/auth/sign-in` connexion
-- `/auth/sign-up` inscription
-- `/dashboard` dashboard client
-- `/chat` chatbot
-- `/billing` abonnements et factures
-- `/documents` base documentaire RAG
-- `/profile` profil utilisateur
-- `/settings` paramètres
-- `/support` tickets support
-- `/notifications` centre de notifications
-- `/announcements` fil d'annonces
-- `/admin` administration
-- `/data-afrique` ressource publique historique
-- `/bi-kpi` ressource publique historique
-- `/ia-entreprise` ressource publique historique
-
-## Administration Des Contenus Publics
-
-Le module `/admin` contient une zone de publications publiques. L'admin peut créer, publier, modifier ou supprimer des contenus destinés à `/ressources`, insérer des images optimisées en format web, les prévisualiser avant publication, les repositionner dans le corps de la publication via l'éditeur riche et retirer une image en cliquant dessus puis sur l'icône de suppression.
-
-Le catalogue des articles et brouillons utilise une recherche intelligente instantanée et une pagination côté interface pour éviter une page Administration trop longue. Chaque élément affiche son auteur, son statut, ainsi que la date et l'heure de publication ou de mise en brouillon. Les modifications sont synchronisées immédiatement côté interface, puis les données serveur sont rafraîchies.
-
-Champs principaux:
-
-- titre;
-- slug public unique;
-- catégorie: `RESSOURCE`, `ARTICLE`, `GUIDE`, `CAS_PRATIQUE`, `ANNONCE`, `PROJET`;
-- résumé;
-- contenu long;
-- libellé visuel;
-- statut publié/brouillon.
-
-Seules les publications marquées comme publiées sont visibles publiquement. Dans `/ressources`, elles sont regroupées par catégorie dans des accordions, tandis que les cartes visibles présentent seulement les 3 derniers contenus publiés. Les contenus institutionnels fixes sont centralisés dans `lib/public-site.ts` et l'index de recherche publique dans `lib/public-search.ts`.
-
-Les utilisateurs connectés peuvent liker/disliker, commenter et répondre aux commentaires sur une publication publique. Un utilisateur peut modifier son propre commentaire dans la fenêtre configurée par l'admin; seul `ADMIN` peut supprimer un commentaire.
-
-## Administration HR & CFO / SCO / CEO / MPO / CTO / LA
-
-Les sous-modules internes complètent l'administration:
-
-- `HR & CFO`: départements, postes officiels DTSC, comptes financiers, collaborateurs liés aux utilisateurs non-clients, budgets, transactions et paie. Les budgets exigent un compte suffisamment provisionné; les sorties exigent un budget disponible; les transactions validées mettent à jour les soldes et peuvent générer une facture exportable.
-- `SCO`: référentiel des biens matériels DTSC, fournisseurs, demandes d'achat, stocks, inventaire, actifs, équipements et logistique des missions ou événements. Le fournisseur retenu d'une demande d'achat se choisit dans la liste des fournisseurs déjà enregistrés, et les champs Responsable/Demandeur/Assigné à s'appuient sur les collaborateurs déjà créés. Un collaborateur dont le dossier RH porte le poste officiel `SCO` peut accéder aux opérations SCO autorisées.
-- `CEO`: tableau de bord exécutif consolidant finance, RH, COO et SCO avec filtre de période dédié, suivi des objectifs stratégiques et journal de supervision. Les objectifs et suivis assignés apparaissent dans `Activités DTSC` chez les collaborateurs concernés avec commentaires et notifications ciblées.
-- `MPO`: portefeuille des projets numériques, cadrage des besoins, cahiers de charges, livrables, risques, rapports, documentation et demandes budgétaires ou matérielles liées aux projets.
-- `CTO`: projets techniques, architecture, tâches de développement, APIs, bases de données, déploiements, sécurité, bugs/incidents, qualité et besoins techniques liés à SCO ou HR & CFO.
-- `LA`: dossiers juridiques, contrats et conventions, modèles juridiques, risques de conformité, documents officiels, litiges, demandes juridiques internes et rapports. Les documents très confidentiels sont réservés à LA, CEO ou administrateur autorisé.
-
-Ces sections utilisent le RBAC Administration existant et les postes officiels du dossier RH: `ADMIN` conserve l'accès complet, tandis que `MANAGER` et `SUPPORT` peuvent recevoir ou perdre l'accès depuis le bloc `Accès RBAC`; les postes `CEO`, `COO`, `HR_CFO`, `SCO`, `CTO`, `MPO` et `LA` complètent les droits métier côté serveur. Chaque sous-module dispose de formulaires de création, listes paginées, recherche intelligente, modification de statut, notes de suivi, suppression contrôlée, journalisation API et audit log. Les KPI génériques ont été remplacés par des indicateurs actionnables: éléments actifs, priorités à traiter, transactions impactantes, tâches bloquées/en retard ou décisions à suivre selon la section.
-
-## PWA
-
-DTSC Platform est installable comme application depuis l'espace privé authentifié.
-
-- Manifest: `app/manifest.ts`
-- Start URL: `/dashboard`
-- Service worker: `public/sw.js`
-- Page hors ligne: `/offline`
-- Icônes: `public/icons/icon-192x192.png`, `public/icons/icon-512x512.png`, `public/icons/maskable-icon-512x512.png`, `public/icons/apple-touch-icon.png`
-
-Le prompt discret reste disponible dans le shell privé. La page d'accueil affiche aussi une carte publique "Installer l'application" pour aider les visiteurs à ajouter DTSC Platform sur mobile avant d'ouvrir leur espace client. Le service worker ne met pas en cache les réponses `/api/*`, les routes d'authentification ni les pages privées contenant des données utilisateur; il cache seulement les assets statiques, icônes, images publiques, polices, JS et CSS.
-
-## Structure
-
-```txt
-app/
-  api/
-    auth/
-    chat/
-    conversations/
-    support/
-    admin/
-  admin/
-  services/
-  solutions/
-  secteurs/
-  projets/
-  ressources/
-  a-propos/
-  contact/
-  auth/
-  chat/
-  dashboard/
-  profile/
-  settings/
-  support/
-components/
-  admin/
-  auth/
-  chat/
-  dashboard/
-  layout/
-  support/
-  settings/
-  brand/
-  ui/
-lib/
-  auth.ts
-  env.ts
-  format.ts
-  openai.ts
-  prisma.ts
-  rate-limit.ts
-  security.ts
-  session.ts
-  validators.ts
-  dtsc.ts
-  public-site.ts
-  default-admin.ts
-prisma/
-  schema.prisma
-  migrations/
-```
-
-## CI/CD Vercel
-
-Le workflow `.github/workflows/vercel-production.yml` se lance à chaque push sur `main`.
-
-Secrets GitHub requis:
-
-```bash
-VERCEL_TOKEN
-VERCEL_ORG_ID
-VERCEL_PROJECT_ID
-```
-
-Variables Vercel Production requises:
-
-```bash
-DATABASE_URL
-OPENAI_API_KEY
-AUTH_SECRET
-APP_URL
-OPENAI_MODEL
-OPENAI_MODEL_IDS
-NEXT_PUBLIC_DEFAULT_MODEL
-ADMIN_EMAIL
-DEFAULT_ADMIN_EMAIL
-DEFAULT_ADMIN_PASSWORD
-DEFAULT_ADMIN_BOOTSTRAP_ENABLED
-DTSC_CONTACT_EMAIL
-ZOHO_MAIL_WEBHOOK_URL
-ZOHO_OUTBOUND_MAIL_WEBHOOK_URL
-ZOHO_OUTGOING_WEBHOOK_SECRET
-ZOHO_MAIL_API_BASE_URL
-ZOHO_ACCOUNTS_API_BASE_URL
-ZOHO_MAIL_ACCOUNT_ID
-ZOHO_MAIL_FROM_ADDRESS
-ZOHO_MAIL_CLIENT_ID
-ZOHO_MAIL_CLIENT_SECRET
-ZOHO_MAIL_REFRESH_TOKEN
-MAISHAPAY_API_URL
-MAISHAPAY_GATEWAY_MODE
-MAISHAPAY_PUBLIC_API_KEY
-MAISHAPAY_SECRET_API_KEY
-MAISHAPAY_DEFAULT_PROVIDER
-MAISHAPAY_CALLBACK_SECRET
-```
-
-Le projet Vercel utilise `sh vercel.sh` comme commande de build. En Production sur `main`, ce script exécute :
-
-```bash
-pnpm install --no-frozen-lockfile
-pnpm type-check
-pnpm prisma migrate deploy
+pnpm lint
 pnpm build
 ```
 
-Le script `vercel-build` de `package.json` conserve le même ordre comme garde-fou si la commande personnalisée
-Vercel est retirée. La CI vérifie les deux chemins. La migration utilise la `DATABASE_URL` de l'environnement
-Vercel ciblé et doit réussir avant que Next.js ne construise le déploiement ; un échec de migration bloque donc
-la mise en production au lieu de publier un code incompatible avec la base.
+Le dépôt possède également des QA ciblées par domaine, par exemple `pnpm qa:dtsc-payments-contract`. Une QA documentaire ne remplace ni un test transactionnel ni un E2E navigateur. La source des commandes et de leur composition reste `package.json`.
 
-## Sécurité
+**Circuit obligatoire :** Issue → branche numérotée depuis le dernier `main` → commits → Pull Request → Quality Gates/migrations/QA applicables → revue → `OWNER_E2E` lorsque requis → squash/merge → déploiement automatique Vercel **Production depuis `main` uniquement** → vérification du **même SHA** et de l'état `READY`.
 
-Mesures présentes:
+Les **Preview Vercel sont désactivées** par la politique du projet. Aucune branche feature ne doit être déployée manuellement en Production. Les migrations historiquement appliquées ne sont pas réécrites ; les changements de schéma exigent leurs migrations et plans de rollback.
 
-- Routes privées protégées par `middleware.ts`
-- Cookie de session HTTP-only, `sameSite=lax`, `secure` en production
-- Expiration d'inactivité à 5 minutes avec renouvellement par heartbeat sur les pages privées
-- Signature HMAC du token de session
-- Hash de mot de passe PBKDF2 avec salt
-- Validation Zod sur auth, chat, conversations, tickets et admin
-- API OpenAI uniquement côté serveur
-- Rate limiting distribué si Upstash Redis est configuré, sinon fallback mémoire sur `/api/chat`, `/api/auth/sign-in`, `/api/auth/sign-up`, `/api/public/contact` et `/api/public/newsletter`
-- Limites applicatives par utilisateur sur messages/tokens journaliers
-- Erreurs publiques génériques côté client
-- Headers sécurité globaux via `next.config.ts`
-- Protection middleware contre les requêtes cross-origin mutantes et l'en-tête `x-middleware-subrequest`
-- Visibilité des sections Administration sensibles basée sur le poste officiel RH (`DtscPosition`) en plus du RBAC: HR_CFO, SCO, COO, CEO, MPO, CTO et LA
-- Administration COO avec RBAC configurable, suivi des opérations internes, tâches, blocages, réunions, workflows et rapports
-- Activités DTSC permet aux collaborateurs RH actifs de créer des réunions COO et de soumettre des dossiers, contrats, risques, litiges ou demandes juridiques vers LA sans accès direct aux sections Administration
-- Vue CEO consolidée enrichie pour MPO, CTO et LA avec filtres de période conservés dans l'URL
-- Bloc Administration > Utilisateurs > Inscrits newsletter pour qualifier, archiver, désabonner ou lier explicitement un prospect newsletter à un utilisateur existant
-- Pièces justificatives HR & CFO / SCO / COO importées depuis l'appareil et stockées côté serveur dans Supabase Storage
-- Boutons de téléchargement visibles pour les factures et les bulletins de paie imprimables/exportables en PDF
-- Module privé `Activités DTSC` pour les utilisateurs reliés à un dossier collaborateur HR & CFO
+Avant toute contribution, lire [`AGENTS.md`](AGENTS.md), [`docs/CONTRIBUTING.md`](docs/CONTRIBUTING.md), le [contrat de livraison](docs/DELIVERY_GOVERNANCE.md) et les éventuels `AGENTS.md` locaux au domaine modifié.
 
-À renforcer avant forte charge:
+## 10. Guide de la documentation
 
-- Remplacement complet du fallback mémoire par Redis/Upstash obligatoire sur forte charge
-- Rotation de sessions
-- MFA
-- Journalisation d'audit
-- Détection d'abus
-- Politiques CSP strictes
-- Remplacer le mot de passe admin par défaut dès la mise en production
+| Besoin | Référence |
+| --- | --- |
+| Architecture générale, couches et décisions | [Documentation technique](docs/TECHNICAL_DOCUMENTATION.md) |
+| Modules ERP, sources de vérité et legacy | [Architecture ERP finale](docs/ERP_FINAL_ARCHITECTURE.md) · [Runbook ERP](docs/ERP_FINAL_OPERATIONAL_RUNBOOK.md) |
+| Sécurité, sessions et MFA | [Runbook sécurité TOTP](docs/AUTH_TOTP_SECURITY_RUNBOOK.md) · [matrice E2E Auth](docs/AUTH_OWNER_E2E_MATRIX.md) |
+| Abonnements et droits | [SaaS, plans et entitlements](docs/SAAS_PLANS_AND_ENTITLEMENTS.md) |
+| Finance et comptabilité | [Architecture Finance](docs/ERP_FINANCE_ARCHITECTURE.md) · [Intégrité financière](docs/ERP_FINANCIAL_INTEGRITY_CONTROLS.md) |
+| Health / Pharmacy | [Modules sectoriels](docs/enterprise-sector-modules.md) · [Convergence Finance sectorielle](docs/ERP_FINAL_ARCHITECTURE.md) |
+| Commerce Shop / Mobile Money | [Programme Shop 2.0](docs/SHOP_2_0_PROFESSIONALIZATION_PROGRAM.md) · [Guide Shop FR](docs/SHOP_2_0_COMMERCIAL_USER_GUIDE_FR.md) |
+| Gaming et autres secteurs | [Architecture sectorielle](docs/ERP_SECTOR_COMMERCIAL_PACKAGING.md) |
+| IA et assistants | [Orchestration IA](docs/STANDARD_AI_ORCHESTRATION_ARCHITECTURE.md) |
+| UX, responsive et formulaires | [Design système](docs/DTSC_FRONTEND_DESIGN_SYSTEM.md) · [Contrat responsive](docs/RESPONSIVE_UI_CONTRACT.md) · [Formulaires](docs/FORM_UX_CONTRACT.md) |
+| CI, recette et livraison | [QA de régression](docs/QA_REGRESSION_CHECKLIST.md) · [Politique Vercel](docs/VERCEL_PRODUCTION_ONLY_POLICY.md) · [Gouvernance](docs/DELIVERY_GOVERNANCE.md) |
 
-## Roadmap
+## 11. Limites de lecture et responsabilité
 
-- Politique de rétention documentaire Supabase Storage
-- Rate limiting distribué Upstash Redis
-- Tickets support avancés
-- Analytics avancés
-- Export PDF des conversations
-- Multilingue français / anglais
-- Intégration WhatsApp Business
-- Intégration CRM
-- Agents IA spécialisés par domaine
-- Préférences de modèles par utilisateur
-- Recherche globale dans conversations et documents
+- Ce README ne constitue ni une certification de Production ni une promesse que tous les modules soient disponibles pour tous les clients.
+- Les routes, schémas, registres, services métier et QA du dépôt font foi sur les fonctionnalités réellement codées. La configuration Production, les paiements réels, les migrations appliquées et les validations E2E doivent être vérifiés séparément.
+- Toute évolution fonctionnelle exige une mise à jour de la documentation du domaine et des tests associés ; le README reste volontairement stable, synthétique et orienté navigation.
 
-## Commandes Utiles
-
-```bash
-pnpm dev
-pnpm build
-pnpm type-check
-pnpm prisma generate
-pnpm prisma migrate dev
-pnpm prisma migrate deploy
-pnpm prisma studio
-```
-
-### Professionnalisation des modules standards — Itération 06
-
-Budgets, rapports et gouvernance des entreprises clientes disposent désormais de contrats professionnels : versions et scénarios, sources ERP traçables, métriques définies, administration tenant-scoped, rôles et permissions serveur, politiques de sécurité, audit, i18n et guides natifs. Voir `docs/STANDARD_MODULE_ITERATION_06_AUDIT.md` et `docs/MANUAL_E2E_STANDARD_MODULES_ITERATION_06.md`.
+**DTSC — Data and Tech Solutions Consulting** · [dtsc-platform.com](https://dtsc-platform.com)

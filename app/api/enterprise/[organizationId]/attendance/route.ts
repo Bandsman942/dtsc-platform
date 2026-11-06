@@ -4,6 +4,7 @@ import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { getEnterpriseCommonDomainAccess } from "@/lib/enterprise/common/access";
 import { enterpriseDomainErrorResponse } from "@/lib/enterprise/common/http";
+import { getActiveEnterpriseSelfEmployee } from "@/lib/enterprise/hr-payroll/self-service";
 import { createEnterpriseAttendance } from "@/lib/enterprise/hr-payroll/time-attendance";
 import { attendanceCreateSchema } from "@/lib/enterprise/hr-payroll/time-schemas";
 import { prisma } from "@/lib/prisma";
@@ -24,12 +25,17 @@ export async function GET(req: Request, { params }: Params) {
   const pageSize = Math.min(100, Math.max(5, Number(url.searchParams.get("pageSize") || 25) || 25));
   const employeeId = url.searchParams.get("employeeId")?.trim() || "";
   const status = url.searchParams.get("status")?.trim() || "";
-  const where: Prisma.EnterpriseAttendanceWhereInput = { organizationId, ...(employeeId ? { employeeId } : {}), ...(status ? { status } : {}) };
+  const [manageAccess, selfEmployee] = await Promise.all([
+    getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode: "TIME_ATTENDANCE", action: "manage" }),
+    getActiveEnterpriseSelfEmployee(session, organizationId),
+  ]);
+  const actorScope: Prisma.EnterpriseAttendanceWhereInput = manageAccess ? {} : { employeeId: selfEmployee?.id || "__none__" };
+  const where: Prisma.EnterpriseAttendanceWhereInput = { organizationId, ...(employeeId ? { employeeId } : {}), ...(status ? { status } : {}), ...actorScope };
   const [items, total, present, absent] = await Promise.all([
     prisma.enterpriseAttendance.findMany({ where, orderBy: [{ attendanceDate: "desc" }, { createdAt: "desc" }], skip: (page - 1) * pageSize, take: pageSize, include: { employee: { select: { id: true, employeeNumber: true, displayName: true, siteId: true } } } }),
     prisma.enterpriseAttendance.count({ where }),
-    prisma.enterpriseAttendance.count({ where: { organizationId, status: { in: ["PRESENT", "LATE", "PARTIAL", "REMOTE"] } } }),
-    prisma.enterpriseAttendance.count({ where: { organizationId, status: "ABSENT" } }),
+    prisma.enterpriseAttendance.count({ where: { organizationId, ...actorScope, status: { in: ["PRESENT", "LATE", "PARTIAL", "REMOTE"] } } }),
+    prisma.enterpriseAttendance.count({ where: { organizationId, ...actorScope, status: "ABSENT" } }),
   ]);
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "attendance", page } });
   return NextResponse.json({ items, metrics: { present, absent }, pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) }, canManage: access.canManage });

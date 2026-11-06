@@ -6,6 +6,7 @@ import { assertActiveClientOrganization, financeReference, money, publishFinance
 import { postBusinessEvent, postBusinessEventTx } from "@/lib/enterprise/accounting/posting-service";
 import { reverseJournalEntryTx } from "@/lib/enterprise/accounting/reversal-service";
 import { tryGrantRetailOmnichannelCashbackTx } from "@/lib/enterprise/relationship-benefits/omnichannel-cashback";
+import { withRetailTransactionRetry } from "@/lib/enterprise/retail/transaction-retry";
 import type { paymentCreateSchema } from "@/lib/enterprise/accounting/schemas";
 import type { z } from "zod";
 
@@ -437,7 +438,7 @@ export async function allocateEnterprisePayment(
   actorUserId: string,
   input: { receivableId?: string; payableId?: string; amount: string },
 ) {
-  const allocation = await prisma.$transaction(async (tx) => {
+  const allocation = await withRetailTransactionRetry(() => prisma.$transaction(async (tx) => {
     await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterprisePayment" WHERE id = ${paymentId} AND "organizationId" = ${organizationId} FOR UPDATE`);
     const payment = await tx.enterprisePayment.findFirst({ where: { id: paymentId, organizationId } });
     if (!payment || !["CONFIRMED", "RECONCILED"].includes(payment.status)) throw new EnterpriseAccountingError("PAYMENT_NOT_ALLOCATABLE", 409);
@@ -516,7 +517,7 @@ export async function allocateEnterprisePayment(
     await addPaymentEvent(tx, organizationId, payment.id, actorUserId, "ALLOCATED", "Payment allocation confirmed", { allocationId: created.id, amount: amount.toFixed(), receivableId: receivable?.id || null, payableId: payable?.id || null });
     await publishFinanceEvent(tx, { organizationId, entityType: "EnterprisePayment", entityId: payment.id, eventType: "PAYMENT_ALLOCATED", summary: `Payment ${payment.number} allocated`, actorUserId, metadataJson: { allocationId: created.id, amount: amount.toFixed(), receivableId: receivable?.id || null, payableId: payable?.id || null } });
     return created;
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }));
   await postBusinessEvent(organizationId, actorUserId, { postingEvent: "PAYMENT_ALLOCATION_CONFIRMED", sourceEntityType: "EnterprisePaymentAllocation", sourceEntityId: allocation.id });
   return allocation;
 }

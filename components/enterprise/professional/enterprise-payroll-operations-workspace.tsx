@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Ban, CheckCircle2, Eye, FileText, Landmark, Plus, Send, XCircle } from "lucide-react";
 import { Field, NativeSelect } from "@/components/enterprise/core-v2/erp-v2-ui";
+
 import {
   professionalErpDate,
   professionalErpEnumLabel,
@@ -23,6 +24,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { FinanceCriticalStepUpFields, performFinanceCriticalStepUp } from "@/components/enterprise/professional/finance-critical-step-up";
 import { useToastMessage } from "@/components/ui/use-toast-message";
 import { BusinessList, BusinessListItem } from "@/components/workspace/business-list";
 import { ContextActions, type BusinessContextAction } from "@/components/workspace/context-actions";
@@ -236,9 +238,12 @@ export function EnterprisePayrollOperationsWorkspace({ organizationId, organizat
   async function decideRun(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!decisionTarget) return;
-    const comment = String(new FormData(event.currentTarget).get("comment") || "").trim();
+    const form = new FormData(event.currentTarget);
+    const comment = String(form.get("comment") || "").trim();
     if (decisionTarget.decision === "REJECT" && !comment) return setError(copy.rejectionHelp);
     const run = decisionTarget.run;
+    try { await performFinanceCriticalStepUp(form, "APPROVE"); }
+    catch (stepUpError) { setError(stepUpError instanceof Error ? stepUpError.message : copy.decisionFailed); return; }
     const ok = await mutate(`payroll-decision-${run.id}`, `/api/enterprise/${organizationId}/payroll-runs/${run.id}/decision`, {
       decision: decisionTarget.decision,
       revision: run.revision,
@@ -259,7 +264,7 @@ export function EnterprisePayrollOperationsWorkspace({ organizationId, organizat
   function actionsFor(run: PayrollRun): BusinessContextAction[] {
     return [
       { id: "open", label: t("people.open"), icon: Eye, onSelect: () => setDetail(run) },
-      ...(run.status === "PREPARED" ? [
+      ...(runs.canManage && run.status === "PREPARED" ? [
         { id: "submit", label: t("payroll.submit"), icon: Send, onSelect: () => { setError(""); setSubmitTarget(run); } },
         { id: "cancel", label: t("payroll.cancel"), icon: Ban, destructive: true, onSelect: () => { setError(""); setCancelTarget(run); } },
       ] : []),
@@ -267,7 +272,7 @@ export function EnterprisePayrollOperationsWorkspace({ organizationId, organizat
         { id: "approve", label: t("people.approve"), icon: CheckCircle2, onSelect: () => { setError(""); setDecisionTarget({ run, decision: "APPROVE" as const }); } },
         { id: "reject", label: t("people.reject"), icon: XCircle, destructive: true, onSelect: () => { setError(""); setDecisionTarget({ run, decision: "REJECT" as const }); } },
       ] : []),
-      ...(run.status === "REJECTED" ? [{ id: "cancel", label: t("payroll.cancelPermanently"), icon: Ban, destructive: true, onSelect: () => { setError(""); setCancelTarget(run); } }] : []),
+      ...(runs.canManage && run.status === "REJECTED" ? [{ id: "cancel", label: t("payroll.cancelPermanently"), icon: Ban, destructive: true, onSelect: () => { setError(""); setCancelTarget(run); } }] : []),
     ];
   }
 
@@ -277,8 +282,13 @@ export function EnterprisePayrollOperationsWorkspace({ organizationId, organizat
       title={t("payroll.title")}
       description={`${locale === "en" ? definition.descriptionEn : definition.descriptionFr} ${copy.financeBoundary}`}
       count={t("payroll.count", { count: runs.pagination.total, suffix: suffix(runs.pagination.total) })}
-      primaryAction={<div data-responsive-actions><Button variant="outline" onClick={() => { setError(""); setPeriodOpen(true); }}><Plus className="h-4 w-4" />{t("payroll.newPeriod")}</Button><Button onClick={() => { setError(""); setPrepareOpen(true); }}><FileText className="h-4 w-4" />{t("payroll.prepareRun")}</Button></div>}
+      primaryAction={runs.canManage ? <div data-responsive-actions><Button variant="outline" onClick={() => { setError(""); setPeriodOpen(true); }}><Plus className="h-4 w-4" />{t("payroll.newPeriod")}</Button><Button onClick={() => { setError(""); setPrepareOpen(true); }}><FileText className="h-4 w-4" />{t("payroll.prepareRun")}</Button></div> : undefined}
     />
+    <div className="flex min-w-0 justify-end">
+      <Link href="/enterprise-modules/my-hr" className="inline-flex min-h-10 items-center rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm font-bold text-dtsc-blue hover:border-dtsc-blue focus-visible:outline focus-visible:outline-2 focus-visible:outline-dtsc-blue">
+        {locale === "en" ? "My HR space · private payslips" : "Mon espace RH · bulletins privés"}
+      </Link>
+    </div>
     <ModuleMetrics label={t("payroll.metrics")}><ModuleMetric label={t("payroll.openPeriods")} value={periods.metrics.open || 0} /><ModuleMetric label={t("payroll.toApprove")} value={runs.metrics.pendingApproval || 0} /><ModuleMetric label={t("payroll.approvedRuns")} value={runs.metrics.approved || 0} /><ModuleMetric label={t("payroll.activePopulation")} value={lookups.employees.length} /></ModuleMetrics>
     <ModuleToolbar controls={<><ProfessionalTabs value={tab} onChange={(value) => { setTab(value); setStatus(""); setPage(1); }} items={[{ id: "RUNS", label: t("payroll.runsTab"), count: runs.pagination.total }, { id: "PERIODS", label: t("payroll.periodsTab"), count: periods.pagination.total }]} /><NativeSelect value={status} onChange={(value) => { setStatus(value); setPage(1); }} items={statusItems} /></>} summary={copy.financeBoundary} />
     <ModuleContent>
@@ -330,7 +340,7 @@ export function EnterprisePayrollOperationsWorkspace({ organizationId, organizat
     </Dialog>
 
     <Dialog open={Boolean(decisionTarget)} onClose={() => { if (!busyAction) setDecisionTarget(null); }} title={copy.decisionReview} presentation="editor" className="h-[74dvh] max-w-2xl">
-      {decisionTarget ? <form onSubmit={decideRun} className="grid gap-5">{error ? <ProfessionalError message={error} /> : null}<div className="rounded-xl border border-dtsc-border bg-dtsc-page p-4 text-sm"><strong>{decisionTarget.run.reference}</strong> · {professionalErpMoney(decisionTarget.run.netAmount, decisionTarget.run.currency, locale)}</div><Field label={decisionTarget.decision === "REJECT" ? copy.rejectionReason : copy.decisionComment} required={decisionTarget.decision === "REJECT"} help={decisionTarget.decision === "REJECT" ? copy.rejectionHelp : undefined}><textarea name="comment" rows={decisionTarget.decision === "REJECT" ? 6 : 5} required={decisionTarget.decision === "REJECT"} className="w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-base" /></Field><div className="sticky bottom-0 flex justify-end gap-2 border-t border-dtsc-border bg-dtsc-surface py-3"><Button type="button" variant="outline" onClick={() => setDecisionTarget(null)} disabled={Boolean(busyAction)}>{t("people.cancel")}</Button><Button type="submit" disabled={Boolean(busyAction)}>{decisionTarget.decision === "APPROVE" ? t("people.approve") : t("people.reject")}</Button></div></form> : null}
+      {decisionTarget ? <form onSubmit={decideRun} className="grid gap-5">{error ? <ProfessionalError message={error} /> : null}<div className="rounded-xl border border-dtsc-border bg-dtsc-page p-4 text-sm"><strong>{decisionTarget.run.reference}</strong> · {professionalErpMoney(decisionTarget.run.netAmount, decisionTarget.run.currency, locale)}</div><Field label={decisionTarget.decision === "REJECT" ? copy.rejectionReason : copy.decisionComment} required={decisionTarget.decision === "REJECT"} help={decisionTarget.decision === "REJECT" ? copy.rejectionHelp : undefined}><textarea name="comment" rows={decisionTarget.decision === "REJECT" ? 6 : 5} required={decisionTarget.decision === "REJECT"} className="w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-base" /></Field><FinanceCriticalStepUpFields action="APPROVE" locale={locale} /><div className="sticky bottom-0 flex justify-end gap-2 border-t border-dtsc-border bg-dtsc-surface py-3"><Button type="button" variant="outline" onClick={() => setDecisionTarget(null)} disabled={Boolean(busyAction)}>{t("people.cancel")}</Button><Button type="submit" disabled={Boolean(busyAction)}>{decisionTarget.decision === "APPROVE" ? t("people.approve") : t("people.reject")}</Button></div></form> : null}
     </Dialog>
 
     <Dialog open={Boolean(cancelTarget)} onClose={() => { if (!busyAction) setCancelTarget(null); }} title={copy.cancellationReview} presentation="editor" className="h-[70dvh] max-w-2xl">

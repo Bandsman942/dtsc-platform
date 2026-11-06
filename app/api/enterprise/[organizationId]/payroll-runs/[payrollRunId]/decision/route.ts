@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
+import { hasRecentStepUp } from "@/lib/auth/step-up";
 import { getEnterpriseCommonDomainAccess } from "@/lib/enterprise/common/access";
 import { enterpriseDomainErrorResponse } from "@/lib/enterprise/common/http";
 import { decideEnterprisePayrollRun } from "@/lib/enterprise/hr-payroll/payroll";
@@ -20,6 +21,12 @@ export async function POST(req: Request, { params }: Params) {
   const { organizationId, payrollRunId } = await params;
   const access = await getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode: "PAYROLL_OPERATIONS", action: "approve" });
   if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!(await hasRecentStepUp(session))) {
+    await writeAuditLog({ userId: session.userId, action: "AUTH_CRITICAL_MUTATION_STEPUP_DENIED",
+      entity: "EnterprisePayrollRun", entityId: payrollRunId, request: req, result: "DENIED",
+      reasonCode: "STEP_UP_REQUIRED", riskLevel: "CRITICAL", metadata: { organizationId } });
+    return NextResponse.json({ error: "Validez récemment votre identité avant cette décision de paie.", reasonCode: "STEP_UP_REQUIRED" }, { status: 428 });
+  }
   const parsed = payrollRunDecisionSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "ENTERPRISE_INPUT_INVALID", message: parsed.error.issues[0]?.message || "Décision invalide." }, { status: 400 });
   try {

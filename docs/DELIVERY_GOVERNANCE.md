@@ -43,7 +43,7 @@ Rollback = revenir au dernier SHA/Deployment Production sain via une PR/hotfix t
 
 ## Release
 
-Tag déterministe : `prod-YYYYMMDD-HHmm-<sha7>`. Le tag et la Release pointent sur le SHA Production exact. La création est idempotente par SHA/tag.
+Depuis #1037, le tag de livraison est `vMAJOR.MINOR.PATCH`, dérivé de `package.json` du SHA Production exact, créé après preuve native `Production/success`. La création est idempotente par SHA/tag et refuse toute collision de version ou régression SemVer. Les anciens tags `prod-YYYYMMDD-HHmm-<sha7>` sont conservés et servent à retrouver les releases historiques. Voir [le contrat SemVer](RELEASE_VERSIONING.md).
 
 ## Commandes
 

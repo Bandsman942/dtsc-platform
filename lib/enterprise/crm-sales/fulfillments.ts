@@ -8,12 +8,13 @@ import { consumeEnterpriseInventoryReservationsTx } from "@/lib/enterprise/inven
 import { consumeRetailOmnichannelRelationshipBenefitsTx } from "@/lib/enterprise/relationship-benefits/omnichannel-adapter";
 import { tryGrantRetailOmnichannelCashbackTx } from "@/lib/enterprise/relationship-benefits/omnichannel-cashback";
 import { valueRetailOmnichannelFulfillmentIssuesTx } from "@/lib/enterprise/retail/accounting";
+import { withRetailTransactionRetry } from "@/lib/enterprise/retail/transaction-retry";
 import { prisma } from "@/lib/prisma";
 
 type FulfillmentCreateInput = z.infer<typeof fulfillmentCreateSchema>;
 
 export async function createEnterpriseFulfillment(organizationId: string, salesOrderId: string, actorUserId: string, input: FulfillmentCreateInput) {
-  return prisma.$transaction(async (tx) => {
+  return withRetailTransactionRetry(() => prisma.$transaction(async (tx) => {
     const existing = await tx.enterpriseFulfillment.findFirst({
       where: { organizationId, idempotencyKey: input.idempotencyKey },
       include: { items: true },
@@ -196,5 +197,5 @@ export async function createEnterpriseFulfillment(organizationId: string, salesO
       metadataJson: { fulfillmentId: fulfillment.id, retailOrchestrationId: retailOrchestration?.id || null },
     });
     return fulfillment;
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 30000 });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 30000 }));
 }

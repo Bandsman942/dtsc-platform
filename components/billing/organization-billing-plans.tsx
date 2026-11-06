@@ -4,7 +4,9 @@ import { useRef, useState } from "react";
 import { Building2, CheckCircle2, CreditCard } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useAppLocale } from "@/components/i18n/locale-provider";
 import { toastError, toastInfo } from "@/lib/client-toast";
+import { getExperienceCopy } from "@/lib/experience-i18n";
 
 type OrganizationPlan = {
   id: string;
@@ -21,12 +23,15 @@ export function OrganizationBillingPlans({
   activePlanId,
   paymentAvailable,
   canManage,
+  renewablePlanId,
 }: {
   plans: OrganizationPlan[];
   activePlanId?: string;
   paymentAvailable: boolean;
   canManage: boolean;
+  renewablePlanId?: string;
 }) {
+  const renewalCopy = getExperienceCopy(useAppLocale()).renewal;
   const [walletId, setWalletId] = useState("");
   const [provider, setProvider] = useState<"MPESA" | "AIRTEL" | "ORANGE">("MPESA");
   const [pendingPlanId, setPendingPlanId] = useState("");
@@ -69,7 +74,7 @@ export function OrganizationBillingPlans({
 
   return (
     <div className="min-w-0 space-y-5">
-      <div className="grid min-w-0 gap-4 rounded-2xl border border-dtsc-border bg-dtsc-page p-4 md:grid-cols-2">
+      {paymentAvailable ? <div className="grid min-w-0 gap-4 rounded-2xl border border-dtsc-border bg-dtsc-page p-4 md:grid-cols-2">
         <label className="grid min-w-0 gap-2 text-sm font-bold text-dtsc-ink">
           Numéro mobile money de l’entreprise
           <Input value={walletId} onChange={(event) => setWalletId(event.target.value)} inputMode="tel" placeholder="Ex : 2438XXXXXXXX" disabled={!canManage} />
@@ -85,7 +90,7 @@ export function OrganizationBillingPlans({
         <p className="text-xs font-medium leading-5 text-dtsc-ink md:col-span-2">
           L’abonnement, le paiement, la facture entreprise et l’impact sur le chiffre d’affaires sont appliqués une seule fois à partir de la référence de paiement validée.
         </p>
-      </div>
+      </div> : <p role="status" className="rounded-xl border border-dtsc-border bg-dtsc-page p-3 text-sm text-dtsc-muted">{renewalCopy.onlineUnavailable}</p>}
 
       {plans.length ? (
         <div className="grid min-w-0 gap-4 lg:grid-cols-3">
@@ -107,9 +112,9 @@ export function OrganizationBillingPlans({
                   <span>{plan.dailyTokenLimit.toLocaleString("fr-FR")} tokens/jour</span>
                   <span>{plan.maxDocuments.toLocaleString("fr-FR")} sources de connaissance IA</span>
                 </div>
-                <Button type="button" onClick={() => checkout(plan.id)} disabled={active || !canManage || Boolean(pendingPlanId) || !paymentAvailable} className="mt-5 bg-[#002b5b] text-white hover:bg-[#001736]">
+                <Button type="button" onClick={() => checkout(plan.id)} disabled={(active && renewablePlanId !== plan.id) || !canManage || Boolean(pendingPlanId) || !paymentAvailable} className="mt-5 bg-[#002b5b] text-white hover:bg-[#001736]">
                   <CreditCard className="h-4 w-4" />
-                  {active ? "Offre active" : pendingPlanId === plan.id ? "Traitement…" : !canManage ? "Réservé aux administrateurs" : paymentAvailable ? "Payer pour l’entreprise" : "Paiement indisponible"}
+                  {active && renewablePlanId !== plan.id ? "Offre active" : pendingPlanId === plan.id ? "Traitement…" : !canManage ? "Réservé aux administrateurs" : paymentAvailable ? renewablePlanId === plan.id ? "Renouveler en ligne" : "Payer pour l’entreprise" : "Paiement indisponible"}
                 </Button>
               </article>
             );

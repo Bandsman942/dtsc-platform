@@ -24,6 +24,7 @@ import { financeEnumLabel, financeErrorMessage, financeMoney, financePaymentConf
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { FinanceCriticalStepUpFields, performFinanceCriticalStepUp } from "@/components/enterprise/professional/finance-critical-step-up";
 import { useToastMessage } from "@/components/ui/use-toast-message";
 import { ModuleMetric, ModuleMetrics } from "@/components/workspace/module-metrics";
 import { ModuleContent, ModuleHeader, ModuleSection, ModuleToolbar, ModuleWorkspace } from "@/components/workspace/module-workspace";
@@ -191,6 +192,7 @@ export function EnterpriseFinancePaymentsWorkspace(props: Props) {
     const form = new FormData(event.currentTarget);
     setBusy(true); setErrorMessage("");
     try {
+      await performFinanceCriticalStepUp(form, actionTarget.action);
       await financeMutation(`/api/enterprise/${organizationId}/payments/${actionTarget.record.id}/transition`, {
         action: actionTarget.action,
         reason: String(form.get("reason") || "") || undefined,
@@ -323,6 +325,7 @@ export function EnterpriseFinancePaymentsWorkspace(props: Props) {
       {actionTarget ? <form onSubmit={transition} className="grid gap-4">
         {actionTarget.action === "SUBMIT" && canSubmit ? <EnterpriseApproverSelect organizationId={organizationId} moduleCode="FINANCE_PAYMENTS" locale={rawLocale} /> : null}
         {["CANCEL", "REVERSE"].includes(actionTarget.action) ? <Field label={t("decisionReasonComment")}><textarea name="reason" minLength={4} rows={4} required disabled={busy} className="w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 disabled:opacity-60" /><p className="mt-2 text-xs leading-5 text-dtsc-muted">{t("rejectionReasonMinimumHint")}</p></Field> : <Field label={t("decisionReasonComment")}><textarea name="reason" rows={3} disabled={busy} className="w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 disabled:opacity-60" /><p className="mt-2 text-xs leading-5 text-dtsc-muted">{t("decisionCommentOptionalHint")}</p></Field>}
+        <FinanceCriticalStepUpFields action={actionTarget.action} locale={locale} />
         <div className="flex justify-end gap-2"><Button type="button" variant="outline" disabled={busy} onClick={() => setActionTarget(null)}>{t("cancel")}</Button><Button type="submit" disabled={busy || (actionTarget.action === "APPROVE" && !canApprove) || (actionTarget.action === "CONFIRM" && !canWrite) || (["RECONCILE", "REVERSE"].includes(actionTarget.action) && !canManage)}>{busy ? (locale === "en" ? "Processing…" : "Traitement…") : t("confirmAction")}</Button></div>
       </form> : null}
     </Dialog>

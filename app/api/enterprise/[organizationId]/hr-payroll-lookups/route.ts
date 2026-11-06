@@ -15,8 +15,28 @@ export async function GET(req: Request, { params }: Params) {
   const { organizationId } = await params;
   const moduleCode = (new URL(req.url).searchParams.get("module") || "").toUpperCase();
   if (!ALLOWED.has(moduleCode)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  const access = await getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode, action: "read" });
+  const access = await getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode, action: "read" })
+    || (moduleCode === "TIME_ATTENDANCE" ? await getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode, action: "submit" }) : null);
   if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const [manageAccess, writeAccess, approvalAccess] = await Promise.all([
+    getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode, action: "manage" }),
+    getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode, action: "write" }),
+    getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode, action: "approve" }),
+  ]);
+  // A personal read permission never exposes the HR directory or payroll preparation selectors.
+  if (!manageAccess && !writeAccess && !approvalAccess) {
+    const submitAccess = moduleCode === "TIME_ATTENDANCE"
+      ? await getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode, action: "submit" })
+      : null;
+    const available = submitAccess
+      ? await listEnterpriseApprovalCandidates({ organizationId, requesterUserId: session.userId, moduleCode }).catch(() => ({ candidates: [] }))
+      : { candidates: [] };
+    const approvers = available.candidates.filter((item) => item.userId !== session.userId);
+    await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "hr-payroll-lookups-self" } });
+    return NextResponse.json({
+      members: [], employees: [], departments: [], positions: [], sites: [], currencies: [], approvers, payrollPeriods: [], projects: [], tasks: [],
+    }, { headers: { "Cache-Control": "private, no-store" } });
+  }
 
   const [members, employees, departments, positions, sites, financeConfiguration, financialAccountCurrencies, approval] = await Promise.all([
     prisma.organizationMember.findMany({

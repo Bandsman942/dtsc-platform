@@ -98,28 +98,32 @@ export function AdminFloatingNav({
   const activeGroup = CONSOLE_SECTION_GROUP[activeSectionId];
   const relatedSections = navigationSections.filter((section) => section.groupId === activeGroup);
   const guide = getIteration07UserGuide(guideMap[activeSectionId], locale);
+  const compactInternal = ["hr-cfo", "sco", "coo", "ceo", "mpo", "cto"].includes(activeSection);
 
   return (
     <>
       <div data-admin-modern-module-header className="min-w-0 max-w-full">
-        <ModuleHeader
+        {compactInternal ? <header data-dtsc-internal-compact-header className="flex min-w-0 items-center justify-between gap-3 border-b border-dtsc-border py-2">
+          <div className="min-w-0 border-l-[3px] border-cyan-500 pl-3"><p className="text-[0.65rem] font-black uppercase tracking-widest text-dtsc-muted">{translate(locale, "console.eyebrow")}</p><h1 className="truncate text-lg font-black text-dtsc-ink">{activeLabel}</h1><p className="hidden truncate text-xs text-dtsc-muted sm:block">{activeDescription}</p></div>
+          <ContextualUserGuide guide={guide} compact />
+        </header> : <ModuleHeader
           eyebrow={translate(locale, "console.eyebrow")}
           title={activeLabel}
           description={activeDescription}
           secondaryActions={<ContextualUserGuide guide={guide} compact />}
-        />
+        />}
       </div>
       <nav
         data-admin-workspace-tabs
         aria-label={translate(locale, "console.workspace.tabs")}
-        className="flex min-w-0 max-w-full gap-2 overflow-x-auto overscroll-x-contain pb-2 [scrollbar-width:thin]"
+        className={`flex min-w-0 max-w-full gap-2 overflow-x-auto overscroll-x-contain pb-2 [scrollbar-width:thin] ${compactInternal ? "gap-1.5" : ""}`}
       >
         {relatedSections.map((section) => (
           <Link
             key={section.id}
             href={section.href}
             aria-current={activeSection === section.id ? "page" : undefined}
-            className={`inline-flex min-h-11 shrink-0 items-center justify-center rounded-full border px-4 py-2 text-sm font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60 ${activeSection === section.id ? "border-cyan-400 bg-dtsc-blue text-white" : "border-dtsc-border bg-dtsc-surface text-dtsc-ink hover:border-cyan-400 hover:bg-dtsc-soft"}`}
+            className={`inline-flex shrink-0 items-center justify-center rounded-full border font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60 ${compactInternal ? "min-h-10 px-3 py-1.5 text-xs" : "min-h-11 px-4 py-2 text-sm"} ${activeSection === section.id ? "border-cyan-400 bg-dtsc-blue text-white" : "border-dtsc-border bg-dtsc-surface text-dtsc-ink hover:border-cyan-400 hover:bg-dtsc-soft"}`}
           >
             {section.label}
           </Link>

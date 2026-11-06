@@ -2,6 +2,8 @@
 
 import { useEffect } from "react";
 
+const SW_UPDATE_MIN_INTERVAL_MS = 60_000;
+
 export function PWARegister({ enabled = true }: { enabled?: boolean }) {
   useEffect(() => {
     if (process.env.NODE_ENV !== "production" || !("serviceWorker" in navigator)) return;
@@ -12,25 +14,26 @@ export function PWARegister({ enabled = true }: { enabled?: boolean }) {
       return;
     }
 
-    let refreshing = false;
     let disposed = false;
     let intervalId: number | undefined;
+    let lastUpdateAt = 0;
+    let updateInFlight = false;
     const cleanupCallbacks: Array<() => void> = [];
 
     function activateWaitingWorker(registration: ServiceWorkerRegistration) {
       if (registration.waiting) registration.waiting.postMessage({ type: "SKIP_WAITING" });
     }
     function requestUpdate(registration: ServiceWorkerRegistration) {
-      if (!navigator.onLine) return;
-      registration.update().then(() => activateWaitingWorker(registration)).catch(() => undefined);
-    }
-    function handleControllerChange() {
-      if (refreshing) return;
-      refreshing = true;
-      window.location.reload();
+      const now = Date.now();
+      if (disposed || !navigator.onLine || updateInFlight || now - lastUpdateAt < SW_UPDATE_MIN_INTERVAL_MS) return;
+      lastUpdateAt = now;
+      updateInFlight = true;
+      void registration.update()
+        .then(() => { if (!disposed) activateWaitingWorker(registration); })
+        .catch(() => undefined)
+        .finally(() => { updateInFlight = false; });
     }
 
-    navigator.serviceWorker.addEventListener("controllerchange", handleControllerChange);
     navigator.serviceWorker.register("/sw.js", { scope: "/" }).then((registration) => {
       if (disposed) return;
       activateWaitingWorker(registration);
@@ -54,7 +57,6 @@ export function PWARegister({ enabled = true }: { enabled?: boolean }) {
 
     return () => {
       disposed = true;
-      navigator.serviceWorker.removeEventListener("controllerchange", handleControllerChange);
       cleanupCallbacks.forEach((cleanup) => cleanup());
       if (intervalId) window.clearInterval(intervalId);
     };

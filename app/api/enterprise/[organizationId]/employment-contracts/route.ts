@@ -19,13 +19,18 @@ export async function GET(req: Request, { params }: Params) {
   const { organizationId } = await params;
   const access = await getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode: "HUMAN_RESOURCES", action: "read" });
   if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  const approvalAccess = await getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode: "HUMAN_RESOURCES", action: "approve" });
+  const [approvalAccess, managerAccess] = await Promise.all([
+    getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode: "HUMAN_RESOURCES", action: "approve" }),
+    getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode: "HUMAN_RESOURCES", action: "manage" }),
+  ]);
   const url = new URL(req.url);
   const page = Math.max(1, Number(url.searchParams.get("page") || 1) || 1);
   const pageSize = Math.min(100, Math.max(5, Number(url.searchParams.get("pageSize") || 25) || 25));
   const employeeId = url.searchParams.get("employeeId")?.trim() || "";
   const status = url.searchParams.get("status")?.trim() || "";
-  const where: Prisma.EnterpriseEmploymentContractWhereInput = { organizationId, archivedAt: null, ...(employeeId ? { employeeId } : {}), ...(status ? { status } : {}) };
+  const archived = url.searchParams.get("archived") === "1";
+  if (archived && !managerAccess) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const where: Prisma.EnterpriseEmploymentContractWhereInput = { organizationId, archivedAt: archived ? { not: null } : null, ...(employeeId ? { employeeId } : {}), ...(status ? { status } : {}) };
   const [items, total, active, pendingApproval] = await Promise.all([
     prisma.enterpriseEmploymentContract.findMany({ where, orderBy: [{ status: "asc" }, { startDate: "desc" }], skip: (page - 1) * pageSize, take: pageSize, include: { employee: { select: { id: true, employeeNumber: true, displayName: true, employmentStatus: true } } } }),
     prisma.enterpriseEmploymentContract.count({ where }),
@@ -37,13 +42,22 @@ export async function GET(req: Request, { params }: Params) {
     select: { targetEntityId: true, approverUserId: true },
   }) : [];
   const approverByContract = new Map(pendingApprovals.map((approval) => [approval.targetEntityId, approval.approverUserId]));
-  const visibleItems = items.map((item) => ({
-    ...item,
-    canEdit: item.createdByUserId === session.userId && ["DRAFT", "PENDING_APPROVAL"].includes(item.status),
-    canDecide: Boolean(approvalAccess && item.status === "PENDING_APPROVAL" && approverByContract.get(item.id) === session.userId),
-  }));
+  const visibleItems = items.map((item) => {
+    const canDecide = Boolean(approvalAccess && item.status === "PENDING_APPROVAL" && approverByContract.get(item.id) === session.userId);
+    const canReadSensitive = access.canAdminister || canDecide || (access.canWrite && item.createdByUserId === session.userId);
+    return {
+      ...item,
+      baseCompensation: canReadSensitive ? item.baseCompensation : null,
+      terms: canReadSensitive ? item.terms : null,
+      canEdit: !archived && access.canWrite && item.createdByUserId === session.userId && ["DRAFT", "PENDING_APPROVAL"].includes(item.status),
+      canArchive: Boolean(managerAccess && !archived && item.status !== "ACTIVE"),
+      canRestore: Boolean(managerAccess && archived && item.status !== "ACTIVE"),
+      canDecide,
+      canViewHistory: access.canAdminister,
+    };
+  });
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "employment-contracts", page } });
-  return NextResponse.json({ items: visibleItems, pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) }, metrics: { active, pendingApproval }, canManage: access.canManage });
+  return NextResponse.json({ items: visibleItems, pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) }, metrics: { active, pendingApproval }, canManage: access.canManage, canArchiveRecords: Boolean(managerAccess) });
 }
 
 export async function POST(req: Request, { params }: Params) {

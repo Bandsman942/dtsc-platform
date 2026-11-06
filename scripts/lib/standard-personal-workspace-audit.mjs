@@ -216,10 +216,18 @@ export function runStandardPersonalWorkspaceAudit(mode = "all") {
     const appShell = requireFile(errors, "components/layout/app-shell.tsx");
     const frCopy = requireFile(errors, "locales/experience.fr.json");
     expectTokens(errors, "Préférences notification", settings, [
-      "SessionAndPushSettings",
+      "<SecuritySettingsWorkspace",
+      "initialPushNotificationContentMode",
       "getExperienceCopy",
       "copy.accountPreferences",
       "copy.guide",
+    ]);
+    const securityWorkspace = requireFile(errors, "components/settings/security-settings-workspace.tsx");
+    expectTokens(errors, "Notifications dans sécurité", securityWorkspace, [
+      'from "@/components/settings/session-and-push-settings"',
+      "<SessionAndPushSettings",
+      "initialIdleTimeoutMinutes={initialIdleTimeoutMinutes}",
+      "initialPushNotificationContentMode={initialPushNotificationContentMode}",
     ]);
     expectTokens(errors, "Préférences notification FR", frCopy, [
       '"accountPreferences": "Préférences du compte"',
@@ -253,9 +261,36 @@ export function runStandardPersonalWorkspaceAudit(mode = "all") {
       "copy.currentSession",
       "authTime",
       "absoluteExp",
-      "Aucune gestion multi-appareils fictive",
       "getIntlLocale",
     ]);
+    // The former no-fake-multi-device invariant applies only before a real
+    // server-side session ledger exists. Its replacement checks the actual
+    // revocation service, scoped API and settings UI instead.
+    const securityWorkspace = requireFile(errors, "components/settings/security-settings-workspace.tsx");
+    if (settings.includes("<SecuritySettingsWorkspace")) {
+      expectTokens(errors, "Sécurité du compte en section", settings, [
+        'id="account-security"',
+        "<SecuritySettingsWorkspace",
+        "currentSession=",
+      ]);
+      expectTokens(errors, "Sessions actives UI", securityWorkspace, [
+        'from "@/components/settings/active-sessions-settings"',
+        "<ActiveSessionsSettings",
+      ]);
+      const registry = requireFile(errors, "lib/auth/session-registry.ts");
+      expectTokens(errors, "Registre de révocation", registry, [
+        "isAuthSessionActive", "revokeOneSession", "revokeOtherSessions",
+      ]);
+      const sessionsApi = requireFile(errors, "app/api/account/security/sessions/route.ts");
+      expectTokens(errors, "Sessions utilisateur sécurisées", sessionsApi, [
+        "getSession()", "isSameOriginRequest(req)", "revokeOtherSessions",
+        "revokeOneSession", "writeAuditLog",
+      ]);
+    } else {
+      expectTokens(errors, "Aucune gestion multi-appareils fictive", settings, [
+        "Aucune gestion multi-appareils fictive",
+      ]);
+    }
     expectTokens(errors, "Session actuelle FR", frCopy, ['"currentSession": "Session actuelle"']);
     expectTokens(errors, "Session signée", session, ["createSessionToken", "verifySessionToken", "absoluteExp", "constantTimeEqual"]);
     requireFile(errors, "docs/STANDARD_SESSION_SECURITY_MODEL.md");

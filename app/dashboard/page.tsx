@@ -46,6 +46,11 @@ export default async function DashboardPage() {
   const intlLocale = getIntlLocale(user.locale);
   const workspace = await getPersonalWorkspaceSummary({ user, session });
   const subscription = workspace.subscription;
+  const organizationSubscription = subscription.source === "ORGANIZATION" && workspace.context.type === "ORGANIZATION";
+  const canManageOrganizationSubscription = workspace.context.organizationRole === "OWNER" || workspace.context.organizationRole === "ADMIN";
+  const subscriptionRemainingDays = subscription.periodEnd ? Math.ceil((new Date(subscription.periodEnd).getTime() - Date.now()) / 86_400_000) : null;
+  const showRenewalNotice = organizationSubscription && (!subscription.active || (subscriptionRemainingDays !== null && subscriptionRemainingDays <= 30));
+  const renewalExpired = !subscription.active || (subscriptionRemainingDays !== null && subscriptionRemainingDays <= 0);
   const contextLabel = workspace.context.type === "PERSONAL"
     ? copy.personal
     : workspace.context.type === "DTSC_INTERNAL"
@@ -101,6 +106,19 @@ export default async function DashboardPage() {
         </ModuleMetrics>
 
         <ModuleContent>
+          {showRenewalNotice ? (
+            <section aria-label={renewalExpired ? copy.renewalExpiredTitle : copy.renewalNoticeTitle} className="flex min-w-0 max-w-full flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-500/50 border-l-4 bg-amber-500/10 px-3 py-3 sm:px-4">
+              <div className="min-w-0 flex-1 space-y-1">
+                <h2 className="break-words text-sm font-black text-dtsc-ink">{renewalExpired ? copy.renewalExpiredTitle : copy.renewalNoticeTitle}</h2>
+                <p className="break-words text-xs leading-5 text-dtsc-muted">{subscription.periodEnd
+                  ? fillExperienceTemplate(renewalExpired ? copy.renewalExpiredDescription : copy.renewalNoticeDescription, { date: new Date(subscription.periodEnd).toLocaleDateString(intlLocale) })
+                  : copy.noDueDate}</p>
+              </div>
+              <Button asChild className="h-auto min-h-11 whitespace-normal rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">
+                <Link href="/billing#renouvellement-entreprise">{canManageOrganizationSubscription ? copy.renewalOpen : copy.renewalReadOnly}</Link>
+              </Button>
+            </section>
+          ) : null}
           <ModuleSection title={copy.currentContext} description={copy.currentContextDescription}>
             <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.7fr)]">
               <BusinessList ariaLabel={copy.currentContext}>
@@ -143,7 +161,7 @@ export default async function DashboardPage() {
               {[
                 ["/chat", copy.assistant, Bot],
                 ["/profile", copy.profile, UserRound],
-                ["/billing", copy.subscription, CreditCard],
+                [organizationSubscription ? "/billing#renouvellement-entreprise" : "/billing", copy.subscription, CreditCard],
                 ["/company", copy.company, BriefcaseBusiness],
                 ["/notifications", copy.notifications, Bell],
                 [getSupportUrl("/support"), copy.support, Headphones],
@@ -173,7 +191,7 @@ export default async function DashboardPage() {
                   <BusinessListItem title={copy.documents} status={<StatusBadge>{usageLabel(subscription.usedDocuments, subscription.documentLimit)}</StatusBadge>} />
                   <BusinessListItem title={copy.period} description={subscription.periodEnd ? fillExperienceTemplate(copy.dueDate, { date: new Date(subscription.periodEnd).toLocaleDateString(intlLocale) }) : copy.noDueDate} />
                 </BusinessList>
-                <Button asChild variant="outline" className="rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue hover:bg-dtsc-soft"><Link href="/billing">{copy.openSubscription}</Link></Button>
+                <Button asChild variant="outline" className="h-auto min-h-11 whitespace-normal rounded-xl border-dtsc-border bg-dtsc-surface text-dtsc-blue hover:bg-dtsc-soft"><Link href={organizationSubscription ? "/billing#renouvellement-entreprise" : "/billing"}>{organizationSubscription ? canManageOrganizationSubscription ? copy.renewalOpen : copy.renewalReadOnly : copy.openSubscription}</Link></Button>
               </div>
             </AccordionItem>
 
