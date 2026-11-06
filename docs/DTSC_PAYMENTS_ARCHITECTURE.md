@@ -4,6 +4,8 @@
 
 **Portée de cette livraison :** diagnostic et règles d'intégration, sans migration, nouveau provider, mutation financière ou changement du runtime. Les éléments marqués **CIBLE** ne sont pas des fonctionnalités déclarées opérationnelles. La QA PAY-0 contrôle le contrat documentaire ; elle ne certifie pas les paiements réels, l'E2E, les secrets PSP ni la Production.
 
+> **Mise à jour #992 — 06/11/2026 :** la tranche candidate 1.2.4 lie les décisions manuelles au compte financier de destination explicite et vérifié par le validateur. Voir [HOTFIX_992_SETTLEMENT_DESTINATION.md](HOTFIX_992_SETTLEMENT_DESTINATION.md). Cette livraison ne certifie pas encore le rapprochement PSP ni les paiements automatiques.
+
 ## 1. Conformité contribution / AGENTS
 
 Les références **effectivement présentes sur la baseline auditée** sont `AGENTS.md`, `docs/CONTRIBUTING.md`, `docs/DELIVERY_GOVERNANCE.md` et `.github/PULL_REQUEST_TEMPLATE.md`. Le commentaire du 17 août 2026 sur #370/#371 indiquant qu'aucun `CONTRIBUTING.md` n'existait était exact à sa date, mais **ne décrit plus le `main` actuel**. Le contrat le plus récent et le plus restrictif s'applique.
