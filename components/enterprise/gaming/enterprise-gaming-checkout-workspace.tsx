@@ -4,12 +4,14 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Plus } from "lucide-react";
 import { Field, NativeSelect, formatEnterpriseAmount, formatEnterpriseDate } from "@/components/enterprise/core-v2/erp-v2-ui";
 import { gamingCheckoutCopy } from "@/components/enterprise/gaming/gaming-checkout-i18n";
-import { ProfessionalError, ProfessionalLoading, ProfessionalSearch, ProfessionalTabs, professionalMutation, useProfessionalCollection } from "@/components/enterprise/professional/professional-erp-ui";
+import { ProfessionalApiError, ProfessionalError, ProfessionalLoading, ProfessionalSearch, ProfessionalTabs, professionalMutation, professionalRequest, useProfessionalCollection } from "@/components/enterprise/professional/professional-erp-ui";
 import { useAppLocale } from "@/components/i18n/locale-provider";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { useToastMessage } from "@/components/ui/use-toast-message";
+import type { ToastNotice } from "@/lib/client-toast";
+import { gamingCheckoutFailureFeedback, type GamingCheckoutFeedback, type GamingCheckoutField } from "@/lib/enterprise/gaming/checkout-client-feedback";
 import { BusinessList, BusinessListItem } from "@/components/workspace/business-list";
 import { type BusinessContextAction } from "@/components/workspace/context-actions";
 import { EmptyState } from "@/components/workspace/empty-state";
@@ -83,10 +85,7 @@ function statusLabel(status: CheckoutStatus, copy: ReturnType<typeof gamingCheck
 }
 
 async function json<T>(url: string) {
-  const response = await fetch(url, { cache: "no-store" });
-  const body = await response.json().catch(() => null) as (T & { message?: string; error?: string }) | null;
-  if (!response.ok || !body) throw new Error(body?.message || body?.error || "LOAD_FAILED");
-  return body;
+  return professionalRequest<T>(url, { fallbackCode: "GAMING_CHECKOUT_READ_FAILED" });
 }
 
 export function EnterpriseGamingCheckoutWorkspace({ organizationId, organizationName, definition, focusedCheckoutId }: {
@@ -109,10 +108,13 @@ export function EnterpriseGamingCheckoutWorkspace({ organizationId, organization
     ).then((loaded) => {
       if (active) setDetail(loaded);
     }).catch((reason: unknown) => {
-      if (active) setMessage(reason instanceof Error ? reason.message : copy.actionFailed);
+      if (active) {
+        const mapped = gamingCheckoutFailureFeedback(reason instanceof ProfessionalApiError ? reason : null, copy);
+        setFeedback({ ...mapped, modal: null, notice: { tone: "error", description: mapped.message } });
+      }
     });
     return () => { active = false; };
-  }, [organizationId, focusedCheckoutId, copy.actionFailed]);
+  }, [organizationId, focusedCheckoutId, copy]);
 
   function closeDetail() {
     setDetail(null);
@@ -124,15 +126,28 @@ export function EnterpriseGamingCheckoutWorkspace({ organizationId, organization
   }
   const [modal, setModal] = useState<Modal>(null);
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState("");
+  const [feedback, setFeedback] = useState<(GamingCheckoutFeedback & { modal: Modal; notice: ToastNotice }) | null>(null);
   const [success, setSuccess] = useState("");
   const [lookups, setLookups] = useState<LookupState | null>(null);
   const [lookupLoading, setLookupLoading] = useState(false);
   const [extras, setExtras] = useState<Array<{ catalogItemId: string; quantity: number }>>([]);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("CASH");
 
-  useToastMessage(message, "error");
+  useToastMessage(feedback?.notice);
   useToastMessage(success, "success");
+
+  function reportFailure(error: unknown, fallback?: string) {
+    const mapped = gamingCheckoutFailureFeedback(error instanceof ProfessionalApiError ? error : null, copy);
+    const message = error instanceof ProfessionalApiError ? mapped.message : fallback || mapped.message;
+    // A new notice object allows the same failed HTTP action to announce again after retry.
+    setFeedback({ ...mapped, message, modal, notice: { tone: "error", description: message } });
+  }
+
+  function formError(field: GamingCheckoutField) {
+    return feedback?.modal === modal ? feedback.fields[field] : undefined;
+  }
+
+  const formSummary = feedback?.modal === modal && modal ? feedback.message : null;
 
   const params = useMemo(() => {
     const value = new URLSearchParams({ page: String(page), pageSize: "20" });
@@ -166,16 +181,16 @@ export function EnterpriseGamingCheckoutWorkspace({ organizationId, organization
       setLookups(state);
       return state;
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : copy.loadLookupsFailed);
+      reportFailure(error, copy.loadLookupsFailed);
       return null;
     } finally {
       setLookupLoading(false);
     }
   }
 
-  async function openCreate() { setMessage(""); await loadLookups(); setExtras([]); setModal("create"); }
+  async function openCreate() { setFeedback(null); await loadLookups(); setExtras([]); setModal("create"); }
   async function openAction(next: Exclude<Modal, "create" | null>) {
-    setMessage("");
+    setFeedback(null);
     if (next === "payment" || next === "refund") setPaymentMethod("CASH");
     await loadLookups();
     setModal(next);
@@ -183,10 +198,10 @@ export function EnterpriseGamingCheckoutWorkspace({ organizationId, organization
 
   async function openDetail(item: CheckoutItem) {
     setBusy(true);
-    setMessage("");
+    setFeedback(null);
     try {
       setDetail(await json<CheckoutDetail>(`/api/enterprise/${organizationId}/gaming/checkouts/${item.id}`));
-    } catch (error) { setMessage(error instanceof Error ? error.message : copy.actionFailed); }
+    } catch (error) { reportFailure(error); }
     finally { setBusy(false); }
   }
 
@@ -200,20 +215,23 @@ export function EnterpriseGamingCheckoutWorkspace({ organizationId, organization
 
   async function mutate(payload: unknown) {
     if (!detail) return;
-    setBusy(true); setMessage(""); setSuccess("");
+    setBusy(true); setFeedback(null); setSuccess("");
     try {
       await professionalMutation(`/api/enterprise/${organizationId}/gaming/checkouts/${detail.checkout.id}`, payload, "PATCH");
-      await refreshDetail();
       setSuccess(copy.actionDone);
       setModal(null);
-    } catch (error) { setMessage(error instanceof Error ? error.message : copy.actionFailed); }
+      // A read failure after a committed mutation must not be labeled as a failed mutation.
+      try { await refreshDetail(); } catch {
+        setFeedback({ message: copy.feedbackRefreshFailed, fields: {}, modal: null, notice: { tone: "error", description: copy.feedbackRefreshFailed } });
+      }
+    } catch (error) { reportFailure(error); }
     finally { setBusy(false); }
   }
 
   async function createCheckout(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
-    setBusy(true); setMessage(""); setSuccess("");
+    setBusy(true); setFeedback(null); setSuccess("");
     try {
       const body = await professionalMutation(`/api/enterprise/${organizationId}/gaming/checkouts`, {
         sessionId: String(form.get("sessionId") || ""),
@@ -226,7 +244,7 @@ export function EnterpriseGamingCheckoutWorkspace({ organizationId, organization
       const checkout = (body as { checkout?: CheckoutItem }).checkout;
       setModal(null); setExtras([]); setSuccess(copy.actionDone); setRefreshKey((value) => value + 1);
       if (checkout) await openDetail(checkout);
-    } catch (error) { setMessage(error instanceof Error ? error.message : copy.actionFailed); }
+    } catch (error) { reportFailure(error); }
     finally { setBusy(false); }
   }
 
@@ -267,11 +285,11 @@ export function EnterpriseGamingCheckoutWorkspace({ organizationId, organization
 
   async function loadReceipt() {
     if (!detail) return;
-    setBusy(true); setMessage("");
+    setBusy(true); setFeedback(null);
     try {
       const body = await json<{ receipt: Receipt }>(`/api/enterprise/${organizationId}/gaming/checkouts/${detail.checkout.id}/receipt`);
       setReceipt(body.receipt);
-    } catch (error) { setMessage(error instanceof Error ? error.message : copy.actionFailed); }
+    } catch (error) { reportFailure(error); }
     finally { setBusy(false); }
   }
 
@@ -337,10 +355,11 @@ export function EnterpriseGamingCheckoutWorkspace({ organizationId, organization
 
       <Dialog open={modal === "create"} onClose={() => setModal(null)} title={copy.newCheckout} className="h-[92dvh] max-w-3xl">
         <form className="grid gap-5 p-1" onSubmit={createCheckout}>
-          <Field label={copy.sessionToCheckout} required><NativeSelect name="sessionId" required items={(lookups?.sessions || []).map((item) => ({ id: item.id, label: `${item.reference} · ${item.station.displayName || item.station.stationCode} · ${item.finalAmount && item.currency ? formatEnterpriseAmount(item.finalAmount, item.currency, locale) : "—"}` }))} disabled={lookupLoading} /></Field>
-          <Field label={copy.invoiceApprover} required><NativeSelect name="invoiceApproverUserId" required items={(lookups?.invoiceApprovers || []).map((item) => ({ id: item.userId, label: `${item.name}${item.positionTitle ? ` · ${item.positionTitle}` : ""}` }))} disabled={lookupLoading} /></Field>
-          <div className="border-t border-dtsc-border pt-4"><div className="flex items-center justify-between gap-2"><h3 className="font-black">{copy.extras}</h3><Button type="button" variant="outline" size="sm" onClick={() => setExtras((items) => [...items, { catalogItemId: "", quantity: 1 }])}>{copy.addExtra}</Button></div>{extras.length === 0 ? <p className="mt-2 text-sm text-dtsc-muted">{copy.noExtras}</p> : <div className="mt-3 grid gap-3">{extras.map((extra, index) => <div key={index} className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_8rem_auto]"><NativeSelect value={extra.catalogItemId} onChange={(value) => setExtras((items) => items.map((item, itemIndex) => itemIndex === index ? { ...item, catalogItemId: value } : item))} items={(lookups?.products || []).map((item) => ({ id: item.id, label: `${item.name}${item.trackInventory ? " · stock" : ""}` }))} /><Input type="number" min="0.001" step="0.001" value={extra.quantity} onChange={(event) => setExtras((items) => items.map((item, itemIndex) => itemIndex === index ? { ...item, quantity: Number(event.target.value) } : item))} /><Button type="button" variant="outline" onClick={() => setExtras((items) => items.filter((_, itemIndex) => itemIndex !== index))}>{copy.close}</Button></div>)}</div>}</div>
-          {extras.some((extra) => (lookups?.products || []).find((product) => product.id === extra.catalogItemId)?.trackInventory) ? <Field label={copy.warehouse} required><NativeSelect name="warehouseId" required items={(lookups?.warehouses || []).map((item) => ({ id: item.id, label: `${item.code} · ${item.name}` }))} /></Field> : null}
+          {formSummary ? <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300">{formSummary}</p> : null}
+          <Field label={copy.sessionToCheckout} error={formError("sessionId")} required><NativeSelect name="sessionId" required items={(lookups?.sessions || []).map((item) => ({ id: item.id, label: `${item.reference} · ${item.station.displayName || item.station.stationCode} · ${item.finalAmount && item.currency ? formatEnterpriseAmount(item.finalAmount, item.currency, locale) : "—"}` }))} disabled={lookupLoading} /></Field>
+          <Field label={copy.invoiceApprover} error={formError("invoiceApproverUserId")} required><NativeSelect name="invoiceApproverUserId" required items={(lookups?.invoiceApprovers || []).map((item) => ({ id: item.userId, label: `${item.name}${item.positionTitle ? ` · ${item.positionTitle}` : ""}` }))} disabled={lookupLoading} /></Field>
+          <div className="border-t border-dtsc-border pt-4"><div className="flex items-center justify-between gap-2"><h3 className="font-black">{copy.extras}</h3><Button type="button" variant="outline" size="sm" onClick={() => setExtras((items) => [...items, { catalogItemId: "", quantity: 1 }])}>{copy.addExtra}</Button></div>{formError("extraItems") ? <p role="alert" className="mt-2 text-sm font-semibold text-red-600">{formError("extraItems")}</p> : null}{extras.length === 0 ? <p className="mt-2 text-sm text-dtsc-muted">{copy.noExtras}</p> : <div className="mt-3 grid gap-3">{extras.map((extra, index) => <div key={index} className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_8rem_auto]"><NativeSelect value={extra.catalogItemId} onChange={(value) => setExtras((items) => items.map((item, itemIndex) => itemIndex === index ? { ...item, catalogItemId: value } : item))} items={(lookups?.products || []).map((item) => ({ id: item.id, label: `${item.name}${item.trackInventory ? " · stock" : ""}` }))} /><Input type="number" min="0.001" step="0.001" value={extra.quantity} onChange={(event) => setExtras((items) => items.map((item, itemIndex) => itemIndex === index ? { ...item, quantity: Number(event.target.value) } : item))} /><Button type="button" variant="outline" onClick={() => setExtras((items) => items.filter((_, itemIndex) => itemIndex !== index))}>{copy.close}</Button></div>)}</div>}</div>
+          {extras.some((extra) => (lookups?.products || []).find((product) => product.id === extra.catalogItemId)?.trackInventory) ? <Field label={copy.warehouse} error={formError("warehouseId")} required><NativeSelect name="warehouseId" required items={(lookups?.warehouses || []).map((item) => ({ id: item.id, label: `${item.code} · ${item.name}` }))} /></Field> : null}
           {lookupLoading ? <ProfessionalLoading rows={1} /> : null}
           <Button type="submit" disabled={busy || lookupLoading}>{copy.submit}</Button>
         </form>
@@ -348,19 +367,20 @@ export function EnterpriseGamingCheckoutWorkspace({ organizationId, organization
 
       <Dialog open={modal === "payment" || modal === "refund"} onClose={() => setModal(null)} title={modal === "refund" ? copy.requestRefund : copy.addPayment} className="h-[92dvh] max-w-xl">
         <form className="grid gap-4 p-1" onSubmit={(event) => void paymentSubmit(event, modal === "refund")}>
-          <Field label={copy.method} required><NativeSelect name="methodType" required value={paymentMethod} onChange={(value) => setPaymentMethod(value as PaymentMethod)} items={methods.map((method) => ({ id: method, label: labels[method] }))} /></Field>
-          <Field label={copy.account} required><NativeSelect key={paymentMethod} name="financialAccountId" required items={paymentAccounts.map((account) => ({ id: account.id, label: `${account.code} · ${account.name} · ${account.currencyCode}` }))} /></Field>
+          {formSummary ? <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300">{formSummary}</p> : null}
+          <Field label={copy.method} error={formError("methodType")} required><NativeSelect name="methodType" required value={paymentMethod} onChange={(value) => setPaymentMethod(value as PaymentMethod)} items={methods.map((method) => ({ id: method, label: labels[method] }))} /></Field>
+          <Field label={copy.account} error={formError("financialAccountId")} required><NativeSelect key={paymentMethod} name="financialAccountId" required items={paymentAccounts.map((account) => ({ id: account.id, label: `${account.code} · ${account.name} · ${account.currencyCode}` }))} /></Field>
           {!cashReady ? <p role="alert" className="text-sm font-semibold text-dtsc-danger">{cashReadinessMessage}</p> : null}
-          {modal === "payment" ? <Field label={copy.amount} required><Input name="amount" type="number" min="0.01" step="0.01" required defaultValue={detail?.invoice?.outstandingAmount || ""} /></Field> : null}
-          <Field label={modal === "refund" ? copy.refundApprover : copy.paymentApprover} required><NativeSelect name="approverUserId" required items={(lookups?.paymentApprovers || []).map((item) => ({ id: item.userId, label: `${item.name}${item.positionTitle ? ` · ${item.positionTitle}` : ""}` }))} /></Field>
-          {modal === "refund" ? <Field label={copy.reason} required><Input name="reason" required minLength={8} /></Field> : null}
+          {modal === "payment" ? <Field label={copy.amount} error={formError("amount")} required><Input name="amount" type="number" min="0.01" step="0.01" required defaultValue={detail?.invoice?.outstandingAmount || ""} /></Field> : null}
+          <Field label={modal === "refund" ? copy.refundApprover : copy.paymentApprover} error={formError("approverUserId")} required><NativeSelect name="approverUserId" required items={(lookups?.paymentApprovers || []).map((item) => ({ id: item.userId, label: `${item.name}${item.positionTitle ? ` · ${item.positionTitle}` : ""}` }))} /></Field>
+          {modal === "refund" ? <Field label={copy.reason} error={formError("reason")} required><Input name="reason" required minLength={8} /></Field> : null}
           <Field label={copy.reference}><Input name="reference" /></Field>
           <Button type="submit" disabled={busy || !cashReady}>{copy.submit}</Button>
         </form>
       </Dialog>
 
       <Dialog open={modal === "cancel" || modal === "approveRefund"} onClose={() => setModal(null)} title={modal === "cancel" ? copy.cancel : copy.approveRefund} className="max-w-lg">
-        <form className="grid gap-4 p-1" onSubmit={(event) => void reasonSubmit(event, modal === "cancel" ? "CANCEL" : "APPROVE_REFUND")}><Field label={copy.reason} required><Input name="reason" required minLength={8} /></Field><Button type="submit" disabled={busy}>{copy.submit}</Button></form>
+        <form className="grid gap-4 p-1" onSubmit={(event) => void reasonSubmit(event, modal === "cancel" ? "CANCEL" : "APPROVE_REFUND")}>{formSummary ? <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300">{formSummary}</p> : null}<Field label={copy.reason} error={formError("reason")} required><Input name="reason" required minLength={8} /></Field><Button type="submit" disabled={busy}>{copy.submit}</Button></form>
       </Dialog>
 
       <Dialog open={Boolean(receipt)} onClose={() => setReceipt(null)} title={copy.receiptTitle} className="h-[92dvh] max-w-3xl">
