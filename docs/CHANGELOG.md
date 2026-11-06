@@ -5,6 +5,14 @@
 - Gate SemVer, tests de version/release, contrat contribution, gouvernance, documentation technique et runbook actualisés. **CI, merge et Production NOT_EXECUTED** avant leurs preuves ; les versions historiques ne sont pas réécrites.
 - Détails : [RELEASE_VERSIONING.md](RELEASE_VERSIONING.md).
 
+## 2026-11-06 — Hotfix #1036 : palette RH DTSC sobre (pré-release)
+
+- Fonds et bordures uniformisés dans le libre-service RH, les sections de la fiche collaborateur, l'organigramme et les contrats ; titres/icônes bleu DTSC.
+- Couleurs réservées aux statuts métier et alertes importantes, badge des feuilles de temps traduit FR/EN, sans perte des liens, de l'historique ou des sections dépliables.
+- « Mon espace RH » est désormais un onglet du rail horizontal de Temps et présences, ouvert dans le même workspace plein écran que les autres ; chargement seulement à la sélection. Bulletins, sessions et rapports paginés séparément côté serveur, pointage actif toujours visible.
+- Accès rapides reliés aux sections personnelles et aux onglets horaires/présences/congés/feuilles de temps, puis aux modules RH et Paie uniquement si autorisés par la navigation canonique. Hub ERP et workspace Paie réduits à des CTA ; route personnelle plein écran accessible même sans autorisation de lire tout le module Temps et présences, avec contrôles d’accès self-service.
+- Aucun changement de schéma Prisma, de politique de droits, de plan, de variable ou de workflow. API privée étendue de champs/paginations additifs. QA ciblée `pnpm qa:hotfix-1036-hr-palette` ; CI et E2E visuels propriétaire **NOT_EXECUTED** tant que non prouvés. Production uniquement après fusion validée.
+
 ## 2026-11-03 — Hotfix P0 #1026 : boucle MFA Console/Account sous Chrome mobile (pré-release)
 
 - Suppression de la redirection automatique Account → Console fondée uniquement sur un cookie signé `mfaVerifiedAt` potentiellement révoqué : `getSession()` doit confirmer registre et MFA avant redirection.
