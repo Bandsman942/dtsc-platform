@@ -537,7 +537,7 @@ export function EnterpriseHumanResourcesWorkspace({ organizationId, organization
           </> : <EmptyState compact title={locale === "en" ? "No contract" : "Aucun contrat"} description={locale === "en" ? "Create a contract for an active collaborator from Company administration." : "Créez un contrat pour un collaborateur actif d’Administration entreprise."} />}
         </ModuleSection> : <ModuleSection title={t("hr.orgSection")} description={locale === "en" ? "Department grouping uses canonical HR department identifiers." : "Le regroupement par département utilise les identifiants RH canoniques."}>
           {grouped.length ? <div className="grid min-w-0 gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-            {grouped.map(([departmentId, employees], index) => <details key={departmentId} open={index === 0} className={"group min-w-0 rounded-xl border p-3 sm:p-4 " + (index % 3 === 0 ? "border-sky-500/25 bg-sky-500/5" : index % 3 === 1 ? "border-violet-500/25 bg-violet-500/5" : "border-emerald-500/25 bg-emerald-500/5")}>
+            {grouped.map(([departmentId, employees], index) => <details key={departmentId} open={index === 0} className="group min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface p-3 sm:p-4">
               <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 font-bold text-dtsc-ink outline-none focus-visible:ring-2 focus-visible:ring-dtsc-blue [&::-webkit-details-marker]:hidden">
                 <UsersRound className="h-5 w-5 shrink-0 text-dtsc-blue" />
                 <span className="min-w-0 flex-1 break-words">{departmentId === "NONE" ? (locale === "en" ? "No department" : "Sans département") : label(lookups.departments.find((item) => item.id === departmentId))}</span>
@@ -645,7 +645,7 @@ export function EnterpriseHumanResourcesWorkspace({ organizationId, organization
             <StatusBadge>v{detail.versionNumber} · {locale === "en" ? "Revision" : "Révision"} {detail.revision}</StatusBadge>
           </div>
           {detail.archivedAt ? <p className="rounded-xl border border-rose-400/30 bg-rose-500/10 p-3 text-sm">{locale === "en" ? "Archived on" : "Archivé le"} {professionalErpDate(detail.archivedAt, locale)}</p> : null}
-          <details open className="group min-w-0 rounded-xl border border-sky-500/30 bg-sky-500/5 p-4">
+          <details open className="group min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface p-4">
             <summary className="min-h-10 cursor-pointer font-bold text-dtsc-ink outline-none focus-visible:ring-2 focus-visible:ring-dtsc-blue">{locale === "en" ? "Employee, contract and assignment" : "Collaborateur, contrat et affectation"}</summary>
             <dl className="mt-3 grid min-w-0 gap-4 sm:grid-cols-2">
               <div><dt className="text-xs text-dtsc-muted">{locale === "en" ? "Employee" : "Collaborateur"}</dt><dd className="mt-1 text-sm font-semibold">{detail.employee.displayName} · {detail.employee.employeeNumber}</dd></div>
@@ -655,7 +655,7 @@ export function EnterpriseHumanResourcesWorkspace({ organizationId, organization
             </dl>
             <Button size="sm" variant="outline" className="mt-3" onClick={() => { setFocusedEmployeeId(detail.employeeId); setDetail(null); }}><UsersRound className="h-4 w-4" />{locale === "en" ? "Open employee record" : "Ouvrir le dossier collaborateur"}</Button>
           </details>
-          <details open className="group min-w-0 rounded-xl border border-amber-500/30 bg-amber-500/5 p-4">
+          <details open className="group min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface p-4">
             <summary className="min-h-10 cursor-pointer font-bold text-dtsc-ink outline-none focus-visible:ring-2 focus-visible:ring-dtsc-blue">{locale === "en" ? "Duration and contractual terms" : "Durée et conditions contractuelles"}</summary>
             <dl className="mt-3 grid gap-4 sm:grid-cols-2">
               <div><dt className="text-xs text-dtsc-muted">{locale === "en" ? "Start" : "Début"}</dt><dd className="mt-1 text-sm">{professionalErpDate(detail.startDate, locale)}</dd></div>
@@ -665,24 +665,24 @@ export function EnterpriseHumanResourcesWorkspace({ organizationId, organization
             </dl>
             {detail.terms ? <p className="mt-3 whitespace-pre-wrap break-words rounded-lg bg-dtsc-surface p-3 text-sm">{detail.terms}</p> : null}
           </details>
-          <details className="group min-w-0 rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4">
+          <details className="group min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface p-4">
             <summary className="min-h-10 cursor-pointer font-bold text-dtsc-ink outline-none focus-visible:ring-2 focus-visible:ring-dtsc-blue">{locale === "en" ? "Restricted compensation" : "Rémunération confidentielle"}</summary>
             {detail.baseCompensation != null ? <dl className="mt-3 grid gap-4 sm:grid-cols-2">
               <div><dt className="text-xs text-dtsc-muted">{locale === "en" ? "Base compensation" : "Rémunération de base"}</dt><dd className="mt-1 text-sm font-semibold">{professionalErpMoney(detail.baseCompensation, detail.compensationCurrency, locale)}</dd></div>
               <div><dt className="text-xs text-dtsc-muted">{locale === "en" ? "Pay frequency" : "Fréquence de paie"}</dt><dd className="mt-1 text-sm">{professionalErpEnumLabel(locale, "payFrequency", detail.payFrequency)}</dd></div>
             </dl> : <p className="mt-3 text-sm text-dtsc-muted">{locale === "en" ? "Restricted HR access." : "Accès RH restreint."}</p>}
           </details>
-          {detail.canViewHistory ? <details open className="group min-w-0 rounded-xl border border-violet-500/30 bg-violet-500/5 p-4">
+          {detail.canViewHistory ? <details open className="group min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface p-4">
             <summary className="min-h-10 cursor-pointer font-bold text-dtsc-ink outline-none focus-visible:ring-2 focus-visible:ring-dtsc-blue">{locale === "en" ? "Immutable revision history" : "Historique immuable des révisions"} · {contractHistory.length}</summary>
             {historyLoading ? <ProfessionalLoading rows={2} /> : null}
             {historyError ? <ProfessionalError message={historyError} /> : null}
             <div className="mt-3 grid gap-2">
-              {contractHistory.map((revision) => <button key={revision.id} type="button" onClick={() => setHistorySelected((current) => current?.id === revision.id ? null : revision)} className="flex min-h-11 min-w-0 items-center justify-between gap-2 rounded-lg border border-violet-500/20 px-3 py-2 text-left text-sm hover:bg-violet-500/10 focus-visible:outline-2 focus-visible:outline-dtsc-blue">
+              {contractHistory.map((revision) => <button key={revision.id} type="button" onClick={() => setHistorySelected((current) => current?.id === revision.id ? null : revision)} className="flex min-h-11 min-w-0 items-center justify-between gap-2 rounded-lg border border-dtsc-border px-3 py-2 text-left text-sm hover:border-dtsc-blue hover:bg-dtsc-soft focus-visible:outline-2 focus-visible:outline-dtsc-blue">
                 <span className="min-w-0 break-words">{locale === "en" ? "Revision" : "Révision"} {revision.revisionNumber} · {professionalErpDate(revision.savedAt, locale)}</span>
                 <Eye className="h-4 w-4 shrink-0" />
               </button>)}
             </div>
-            {historySelected ? <div className="mt-3 rounded-xl border border-violet-500/20 bg-dtsc-surface p-3">
+            {historySelected ? <div className="mt-3 rounded-xl border border-dtsc-border bg-dtsc-surface p-3">
               <h4 className="text-sm font-bold">{locale === "en" ? "Previous version" : "Version antérieure"} · {historySelected.revisionNumber}</h4>
               <dl className="mt-3 grid min-w-0 gap-3 text-sm sm:grid-cols-2">
                 <div><dt className="text-xs text-dtsc-muted">{locale === "en" ? "Contract type" : "Type de contrat"}</dt><dd>{professionalErpEnumLabel(locale, "employmentContractType", canonicalContractType(historySelected.snapshotJson.contractType))}</dd></div>

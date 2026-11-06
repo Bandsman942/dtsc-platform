@@ -462,6 +462,12 @@ Mettre à jour selon le scope :
 
 Une documentation décrivant une fonctionnalité non livrée est une dette documentaire et n'est pas acceptée.
 
+## 16 bis. Version applicative et notes de release
+
+Le numéro de version applicatif suit SemVer `MAJOR.MINOR.PATCH`, avec `package.json` comme source unique. Toute PR future vers `main` incrémente strictement la version par rapport au dernier `origin/main` : `feat` compatible = MINOR, `fix`/maintenance/documentation = PATCH, rupture explicite = MAJOR. Le titre Conventional Commit et la version sont vérifiés en CI. Le changelog et la documentation touchée sont mis à jour avant merge.
+
+Les versions Production portent `vX.Y.Z` et ne sont créées qu'après Vercel Production réussi, avec SHA exact. Les anciens `prod-*` restent accessibles. Voir [docs/RELEASE_VERSIONING.md](RELEASE_VERSIONING.md) pour les branches concurrentes, l'idempotence, le rollback et les preuves.
+
 ## 17. Production
 
 La Production provient uniquement de `main`.

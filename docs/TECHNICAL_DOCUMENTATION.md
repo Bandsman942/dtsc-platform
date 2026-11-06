@@ -1,10 +1,15 @@
 # DTSC Platform — Documentation technique
 
 **Version :** Consolidation ERP + modules standards 8/8 + DTSC AI 08/08
+**Version applicative :** `package.json` (SemVer ; la Release GitHub confirme seule une version livrée).
 **Repository :** `Bandsman942/dtsc-platform`
 **Production :** déploiement Vercel exclusivement depuis `main`
 
 ## 1. Objet
+
+> **SemVer #1037 (06/11/2026, candidate) :** adoption de `vMAJOR.MINOR.PATCH` pour la traçabilité de la plateforme entière, avec incrément obligatoire par PR, QA de version et GitHub Release seulement après Vercel Production réussi. Voir [versionnement et procédure de release](RELEASE_VERSIONING.md). Cette étape n'est pas considérée Production tant que les preuves CI/review/merge/déploiement ne sont pas disponibles.
+
+> **Hotfix #1036 (06/11/2026, pré-release) :** palette des interfaces RH uniformisée sur la marque DTSC, couleurs sémantiques limitées aux statuts/alertes, i18n et QA visuelle. Voir [contrat RH](ERP_PROFESSIONAL_HR.md) et [design system](DTSC_FRONTEND_DESIGN_SYSTEM.md). OWNER_E2E et preuves CI requis avant Production. Le libre-service RH intègre désormais le rail de `TIME_ATTENDANCE` et les historiques paginés côté serveur ; `GET /api/enterprise/[organizationId]/my-hr` accepte `page`, `reportPage`, `clockPage` et `pageSize` (5–25), renvoie `payslipsPagination`, `reportsPagination`, `clockSessionsPagination` et `activeClockSession`, avec contrôles de session, organisation, accès module et `Cache-Control: private, no-store`. Les nouveaux champs sont additifs. Liaison depuis `app/enterprise-modules/page.tsx` et le workspace Paie par des CTA compacts, soit vers `TIME_ATTENDANCE?tab=SELF_SERVICE` si l'accès canonique le permet, soit vers la route personnelle indépendante `app/enterprise-modules/my-hr/page.tsx`. Dans le rail, liens locaux vers les quatre onglets de suivi ; les liens vers `HUMAN_RESOURCES` et `PAYROLL_OPERATIONS` proviennent exclusivement de `getEnterpriseNavigationModules` (RBAC, abonnement et restrictions).
 
 Ce document est le point d’entrée technique de DTSC Platform. Les règles exécutables se trouvent dans les fichiers `AGENTS.md`. Les contrats détaillés restent dans les documents spécialisés du dossier `docs/`.
 

@@ -43,7 +43,10 @@ expect("lib/enterprise/hr-payroll/timesheets.ts", [
   "options?.selfService", 'action: "approve"', "SELF_APPROVAL_FORBIDDEN",
 ]);
 expect("app/enterprise-modules/page.tsx", [
-  "<EnterpriseMyHrSelfService organizationId={organizationId} />",
+  "hasEnterpriseSelfHrModule", "?tab=SELF_SERVICE", '"/enterprise-modules/my-hr"',
+]);
+expect("app/enterprise-modules/my-hr/page.tsx", [
+  "hasEnterpriseSelfHrModule", "getEnterpriseNavigationModules", "<EnterpriseMyHrSelfService",
 ]);
 expect("app/api/enterprise/[organizationId]/payroll-runs/route.ts", [
   "actorScope", "manageAccess", "approverUserId: session.userId",

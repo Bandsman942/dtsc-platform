@@ -24,13 +24,19 @@ export async function GET(req: Request, { params }: Params) {
     message: "EMPLOYEE_SELF_LINK_REQUIRED",
   }, { headers: privateHeaders });
   const url = new URL(req.url);
-  const page = Math.max(1, Math.min(10000, Number(url.searchParams.get("page")) || 1));
-  const pageSize = Math.max(5, Math.min(25, Number(url.searchParams.get("pageSize")) || 10));
+  const boundedPage = (key: string) => Math.max(1, Math.min(10000, Math.floor(Number(url.searchParams.get(key)) || 1)));
+  const page = boundedPage("page");
+  const reportPage = boundedPage("reportPage");
+  const clockPage = boundedPage("clockPage");
+  const pageSize = Math.max(5, Math.min(25, Math.floor(Number(url.searchParams.get("pageSize")) || 10)));
   const payslipWhere = {
     organizationId, status: "GENERATED",
     payrollItem: { is: { organizationId, employeeId: employee.id, payrollRun: { is: { organizationId, status: "APPROVED", archivedAt: null } } } },
   };
-  const [payslips, totalPayslips, timesheets, clockSessions] = await Promise.all([
+  const timesheetWhere = { organizationId, employeeId: employee.id, archivedAt: null };
+  const clockWhere = { organizationId, employeeId: employee.id };
+  const clockSelect = { id: true, startedAt: true, stoppedAt: true, workSummary: true, revision: true } as const;
+  const [payslips, totalPayslips, timesheets, totalReports, clockSessions, totalClockSessions, activeClockSession] = await Promise.all([
     payAccess ? prisma.enterprisePayslip.findMany({
       where: payslipWhere, orderBy: [{ generatedAt: "desc" }, { createdAt: "desc" }],
       skip: (page - 1) * pageSize, take: pageSize,
@@ -44,21 +50,26 @@ export async function GET(req: Request, { params }: Params) {
     }) : Promise.resolve([]),
     payAccess ? prisma.enterprisePayslip.count({ where: payslipWhere }) : Promise.resolve(0),
     (timeAccess) ? prisma.enterpriseTimesheet.findMany({
-      where: { organizationId, employeeId: employee.id, archivedAt: null },
-      orderBy: { createdAt: "desc" }, take: 20,
+      where: timesheetWhere,
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }], skip: (reportPage - 1) * pageSize, take: pageSize,
       select: { id: true, reference: true, periodStart: true, periodEnd: true, status: true, totalDeclaredMinutes: true, totalApprovedMinutes: true, submittedAt: true, approvedAt: true, correctionComment: true, rejectionComment: true },
     }) : Promise.resolve([]),
-    (timeAccess) ? prisma.enterpriseWorkClockSession.findMany({
-      where: { organizationId, employeeId: employee.id },
-      orderBy: { startedAt: "desc" }, take: 20,
-      select: { id: true, startedAt: true, stoppedAt: true, workSummary: true, revision: true },
+    timeAccess ? prisma.enterpriseTimesheet.count({ where: timesheetWhere }) : Promise.resolve(0),
+    timeAccess ? prisma.enterpriseWorkClockSession.findMany({
+      where: clockWhere,
+      orderBy: [{ startedAt: "desc" }, { id: "desc" }], skip: (clockPage - 1) * pageSize, take: pageSize,
+      select: clockSelect,
     }) : Promise.resolve([]),
+    timeAccess ? prisma.enterpriseWorkClockSession.count({ where: clockWhere }) : Promise.resolve(0),
+    timeAccess ? prisma.enterpriseWorkClockSession.findFirst({ where: { ...clockWhere, stoppedAt: null }, orderBy: { startedAt: "desc" }, select: clockSelect }) : Promise.resolve(null),
   ]);
-  await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "my-hr", page } });
+  await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "my-hr", page, reportPage, clockPage } });
   return NextResponse.json({
     linked: true, employee, payrollEnabled: Boolean(payAccess), timeEnabled: Boolean(timeAccess),
     canClock: Boolean(timeAccess), canSubmitReport: Boolean(timeAccess),
     payslips, payslipsPagination: { page, pageSize, total: totalPayslips, pages: Math.max(1, Math.ceil(totalPayslips / pageSize)) },
-    timesheets, clockSessions,
+    timesheets, reportsPagination: { page: reportPage, pageSize, total: totalReports, pages: Math.max(1, Math.ceil(totalReports / pageSize)) },
+    clockSessions, clockSessionsPagination: { page: clockPage, pageSize, total: totalClockSessions, pages: Math.max(1, Math.ceil(totalClockSessions / pageSize)) },
+    activeClockSession,
   }, { headers: privateHeaders });
 }
