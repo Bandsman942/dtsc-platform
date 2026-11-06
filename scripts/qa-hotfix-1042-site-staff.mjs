@@ -11,11 +11,12 @@ const db = {
   membership: { role: "MEMBER" },
   settings: { siteStaffIsolationEnabled: true },
   assignment: { roleCode: "INVOICER", isActive: true, permissionsJson: null },
+  assignments: [{ siteId: "shopA", roleCode: "INVOICER", isActive: true, permissionsJson: null }],
 };
 const prisma = {
   organizationMember: { findFirst: async () => db.membership },
   enterpriseRetailConfiguration: { findUnique: async () => ({ settingsJson: db.settings }) },
-  enterpriseRetailSiteAssignment: { findUnique: async () => db.assignment },
+  enterpriseRetailSiteAssignment: { findUnique: async () => db.assignment, findMany: async () => db.assignments },
 };
 const code = ts.transpileModule(policySource, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
 const unit = { exports: {} };
@@ -24,7 +25,7 @@ vm.runInNewContext(code, {
   require: (id) => id === "@/lib/prisma" ? { prisma } : id === "@/lib/enterprise/retail/errors" ? { EnterpriseRetailError } : require(id),
   Set, Promise,
 });
-const { siteStaffCapabilities, retailStaffIsolationIsEnabled, requireRetailSiteCapability } = unit.exports;
+const { siteStaffCapabilities, retailStaffIsolationIsEnabled, requireRetailSiteCapability, retailInvoiceVisibleSites } = unit.exports;
 assert.equal(retailStaffIsolationIsEnabled(null), false, "Existing tenants must not be silently isolated");
 assert.equal(retailStaffIsolationIsEnabled({ siteStaffIsolationEnabled: true }), true);
 assert.deepEqual([...siteStaffCapabilities("INVOICER", null)].sort(), ["VIEW_STOCK", "VIEW_SALES", "PREPARE_INVOICE"].sort());
@@ -48,6 +49,14 @@ db.membership = null;
 await assert.rejects(check("COLLECT_PAYMENT"), { code: "RETAIL_SITE_ACCESS_DENIED" });
 db.membership = { role: "MEMBER" }; db.settings = {};
 await assert.doesNotReject(check("COLLECT_PAYMENT", null), "Legacy organization workflows remain unchanged until guarded cutover");
+await assert.rejects(requireRetailSiteCapability("tenant", "staff", "shopA", "COLLECT_PAYMENT", prisma, { requireAssignment: true }), { code: "RETAIL_SITE_ACCESS_DENIED" }, "Forced guard on the new checkout must not depend on legacy feature flag");
+await assert.rejects(retailInvoiceVisibleSites("tenant", "staff"), { code: "RETAIL_INVOICE_CHECKOUT_NOT_ACTIVE" });
+db.settings = { siteStaffIsolationEnabled: true, invoiceCheckoutEnabled: true };
+assert.deepEqual(JSON.parse(JSON.stringify(await retailInvoiceVisibleSites("tenant", "staff"))), { isOwner: false, siteIds: ["shopA"] });
+db.assignments = [{ siteId: "shopA", roleCode: "CASHIER", isActive: true, permissionsJson: ["COLLECT_PAYMENT"] }];
+await assert.rejects(retailInvoiceVisibleSites("tenant", "staff"), { code: "RETAIL_SITE_ACCESS_DENIED" }, "A role without VIEW_SALES cannot see invoices");
+db.membership = { role: "OWNER" };
+assert.deepEqual(JSON.parse(JSON.stringify(await retailInvoiceVisibleSites("tenant", "owner"))), { isOwner: true, siteIds: [] });
 
 const api = fs.readFileSync("app/api/enterprise/[organizationId]/retail/site-assignments/route.ts", "utf8");
 assert.match(api, /role: \{ in: \[\.\.\.RETAIL_OWNER_ROLES\] \}/);

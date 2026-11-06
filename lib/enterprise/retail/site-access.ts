@@ -53,6 +53,7 @@ export async function requireRetailSiteCapability(
   siteId: string | null | undefined,
   capability: RetailSiteCapability,
   database: RetailSiteAccessReader = prisma,
+  options: { requireAssignment?: boolean } = {},
 ) {
   const [membership, configuration] = await Promise.all([
     database.organizationMember.findFirst({
@@ -65,7 +66,7 @@ export async function requireRetailSiteCapability(
   ]);
   if (!membership) throw new EnterpriseRetailError("RETAIL_SITE_ACCESS_DENIED", 403);
   if (RETAIL_OWNER_ROLES.has(membership.role)) return;
-  if (!retailStaffIsolationIsEnabled(configuration?.settingsJson)) return;
+  if (!options.requireAssignment && !retailStaffIsolationIsEnabled(configuration?.settingsJson)) return;
   if (!siteId) throw new EnterpriseRetailError("RETAIL_SITE_REQUIRED", 403);
   const assignment = await database.enterpriseRetailSiteAssignment.findUnique({
     where: { organizationId_siteId_userId: { organizationId, siteId, userId } },
@@ -74,4 +75,35 @@ export async function requireRetailSiteCapability(
   if (!assignment?.isActive || !siteStaffCapabilities(assignment.roleCode, assignment.permissionsJson).includes(capability)) {
     throw new EnterpriseRetailError("RETAIL_SITE_ACCESS_DENIED", 403);
   }
+}
+
+/** Scope invoices to the operator's *assigned* stores. Staff cutover is
+ * deliberately gated twice until every legacy route has been audited.
+ * Owners keep a complete company-wide view.
+ */
+export async function retailInvoiceVisibleSites(
+  organizationId: string,
+  userId: string,
+  database: RetailSiteAccessReader = prisma,
+): Promise<{ isOwner: boolean; siteIds: string[] }> {
+  const [membership, configuration] = await Promise.all([
+    database.organizationMember.findFirst({
+      where: { organizationId, userId, status: "ACTIVE", removedAt: null }, select: { role: true },
+    }),
+    database.enterpriseRetailConfiguration.findUnique({ where: { organizationId }, select: { settingsJson: true } }),
+  ]);
+  if (!membership) throw new EnterpriseRetailError("RETAIL_SITE_ACCESS_DENIED", 403);
+  if (RETAIL_OWNER_ROLES.has(membership.role)) return { isOwner: true, siteIds: [] };
+  const settings = configuration?.settingsJson;
+  if (!retailStaffIsolationIsEnabled(settings) || !settings || typeof settings !== "object" || Array.isArray(settings) || (settings as Prisma.JsonObject).invoiceCheckoutEnabled !== true) {
+    throw new EnterpriseRetailError("RETAIL_INVOICE_CHECKOUT_NOT_ACTIVE", 403);
+  }
+  const assignments = await database.enterpriseRetailSiteAssignment.findMany({
+    where: { organizationId, userId, isActive: true },
+    select: { siteId: true, roleCode: true, permissionsJson: true },
+  });
+  const siteIds = assignments.filter((assignment) => siteStaffCapabilities(assignment.roleCode, assignment.permissionsJson).includes("VIEW_SALES"))
+    .map((assignment) => assignment.siteId);
+  if (!siteIds.length) throw new EnterpriseRetailError("RETAIL_SITE_ACCESS_DENIED", 403);
+  return { isOwner: false, siteIds: [...new Set(siteIds)] };
 }

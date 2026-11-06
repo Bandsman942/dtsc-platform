@@ -1,3 +1,10 @@
+## 2026-11-07 — Hotfix P0 Retail #1042, tranche 4 — Contrôle site Finance et interface Design 2.0 (PR brouillon #1043)
+
+- Filtrage serveur des factures par affectation active de boutique, interdiction des consultations inter-boutiques et préparation par facturier autorisé ; double activation explicite encore désactivée.
+- Avant chaque affectation de paiement Finance sur une facture Retail : vérification du droit `COLLECT_PAYMENT`, du compte financier et de la session de caisse dans **la même boutique**. Protection du canal API Finance direct et des mélanges entre boutiques.
+- Workbench Retail de facturation responsive FR/EN Design 2.0, panier sur catalogue, lots, suivi de factures et soldes canoniques ; préparation visible uniquement si activée. Recherche produit et lots limités au site quand l'isolation du personnel est activée.
+- **Toujours en cours** : workflow de validation Finance et caisse, réservation, remboursements et retours, RBAC transversal complet, E2E base/navigateur, OWNER_E2E global. Aucune fusion ni mise en Production.
+
 ## 2026-11-06 — Hotfix P0 Retail #1042, tranche 3 — Facture Finance canonique (PR brouillon #1043)
 
 - Extension Retail de provenance boutique/dépôt/lot liée à la **facture Finance existante**, sans second registre de factures ni de paiements ; préparation idempotente à prix et taxes serveur, transaction atomique.

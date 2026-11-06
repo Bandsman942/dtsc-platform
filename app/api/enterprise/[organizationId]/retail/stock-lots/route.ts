@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
-import { authorizeRetailRequest } from "@/lib/enterprise/retail/http";
+import { authorizeRetailRequest, retailErrorResponse } from "@/lib/enterprise/retail/http";
+import { requireRetailSiteCapability } from "@/lib/enterprise/retail/site-access";
 import { writeApiLog } from "@/lib/audit";
 import { prisma } from "@/lib/prisma";
 
@@ -17,15 +18,17 @@ export async function GET(req: Request, { params }: Params) {
   if (!warehouseId || warehouseId.length > 240 || !itemIds.length || itemIds.length > 200 || itemIds.some((id) => id.length > 240)) {
     return NextResponse.json({ error: "RETAIL_LOT_SELECTION_INVALID", message: "Choisissez un dépôt et les articles suivis en stock." }, { status: 400 });
   }
-  const warehouse = await prisma.enterpriseWarehouse.findFirst({ where: { organizationId, id: warehouseId, status: "ACTIVE", archivedAt: null }, select: { id: true } });
+  const warehouse = await prisma.enterpriseWarehouse.findFirst({ where: { organizationId, id: warehouseId, status: "ACTIVE", archivedAt: null }, select: { id: true, siteId: true } });
   if (!warehouse) return NextResponse.json({ error: "RETAIL_WAREHOUSE_NOT_FOUND" }, { status: 404 });
+  try { await requireRetailSiteCapability(organizationId, auth.session.userId, warehouse.siteId, "VIEW_STOCK"); }
+  catch (error) { return retailErrorResponse(error, "RETAIL_LOT_ACCESS_DENIED"); }
   const lots = await prisma.enterpriseStockLot.findMany({
     where: { organizationId, warehouseId, inventoryItemId: { in: itemIds }, status: "AVAILABLE", archivedAt: null },
     orderBy: [{ expiryDate: "asc" }, { lotNumber: "asc" }],
     take: 1000,
     select: {
       id: true, inventoryItemId: true, lotNumber: true, expiryDate: true,
-      balances: { where: { organizationId, warehouseId, storageLocationId: null }, select: { quantityOnHand: true, quantityReserved: true } },
+      balances: { where: { organizationId, warehouseId }, select: { quantityOnHand: true, quantityReserved: true } },
     },
   });
   const items = lots.map((lot) => ({

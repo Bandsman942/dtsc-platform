@@ -1,7 +1,8 @@
 import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { writeApiLog } from "@/lib/audit";
-import { authorizeRetailRequest } from "@/lib/enterprise/retail/http";
+import { authorizeRetailRequest, retailErrorResponse } from "@/lib/enterprise/retail/http";
+import { requireRetailSiteCapability } from "@/lib/enterprise/retail/site-access";
 import { prisma } from "@/lib/prisma";
 
 type Params = { params: Promise<{ organizationId: string }> };
@@ -27,7 +28,7 @@ export async function GET(req: Request, { params }: Params) {
   if (warehouseId) {
     const warehouse = await prisma.enterpriseWarehouse.findFirst({
       where: { id: warehouseId, organizationId, status: "ACTIVE", archivedAt: null },
-      select: { id: true },
+      select: { id: true, siteId: true },
     });
     if (!warehouse) {
       return NextResponse.json(
@@ -35,6 +36,13 @@ export async function GET(req: Request, { params }: Params) {
         { status: 409 },
       );
     }
+    try { await requireRetailSiteCapability(organizationId, auth.session.userId, warehouse.siteId, "VIEW_STOCK"); }
+    catch (error) { return retailErrorResponse(error, "RETAIL_PRODUCT_ACCESS_DENIED"); }
+  } else {
+    // Existing owner and legacy POS search stays compatible. With strict
+    // store isolation enabled, unscoped inventory search must fail closed.
+    try { await requireRetailSiteCapability(organizationId, auth.session.userId, null, "VIEW_STOCK"); }
+    catch (error) { return retailErrorResponse(error, "RETAIL_SITE_REQUIRED"); }
   }
 
   const searchFilter: Prisma.EnterpriseCatalogItemWhereInput = query

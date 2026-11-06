@@ -1,6 +1,6 @@
 # RETAIL-1042 — cahier des charges boutiques, paramétrage et Design 2.0
 
-Statut du 6 novembre 2026 : **trois tranches en préparation sur la PR brouillon #1043 ; aucune fusion, aucun déploiement ni acceptation client**.
+Statut du 7 novembre 2026 : **quatre tranches en préparation sur la PR brouillon #1043 ; aucune fusion, aucun déploiement ni acceptation client**.
 
 ## Cible produit
 
@@ -25,6 +25,10 @@ Une organisation DTSC Platform du secteur COMMERCE_RETAIL peut exploiter un nomb
 - API propriétaire GET/POST `/api/enterprise/:organizationId/retail/invoices` sécurisée, paginée, auditée, **désactivée par défaut** par `settingsJson.invoiceCheckoutEnabled`. Aucun rôle `INVOICER`/`CASHIER` n'y a encore accès ; `checkoutReady:false` explicite. Aucun interrupteur d'activation exposé dans l'UI tant que tous les parcours ne sont pas certifiés.
 - **Point de convergence paiement → stock** : lorsqu'un paiement Finance confirmé est affecté à une créance Retail et que son solde devient zéro, le service Finance déclenche les mouvements `SALE_FULFILLMENT` dans **la même transaction sérialisable** que l'affectation finale. Contrôle de la boutique/dépôt/lot, péremption, FEFO, quantités réservées et stock réel. En cas d'insuffisance, la dernière affectation est annulée (le paiement déjà confirmé reste non affecté) ; sortie de stock impossible avant paiement intégral. Marqueur `stockPostedAt` et clé de mouvement propre à chaque ligne/emplacement empêchent une double sortie.
 - Ces éléments restent une **fondation désactivée** : il faut encore achever les rôles cloisonnés, les réservations de stock entre préparation et règlement, les workflows de remboursement/retour pour les factures Retail, les écrans facturier→caissier et l'activation contrôlée par entreprise.
+- **Tranche 4 (sécurisation des boutiques et Design 2.0, toujours non activée)** : les listes de factures Retail sont filtrées côté serveur à `siteId ∈ affectations actives` pour un collaborateur autorisé à `VIEW_SALES`. La consultation du registre par le personnel est **interdite** tant que `siteStaffIsolationEnabled` et `invoiceCheckoutEnabled` ne sont pas simultanément à `true` ; propriétaires et administrateurs d'entreprise conservent une vue transversale. Une demande explicite de `siteId` non autorisé retourne 403, sans révéler le contenu.
+- La préparation facturier exige désormais `PREPARE_INVOICE` sur le site choisi **avec vérification forcée**, sans bénéficier du mode legacy permissif. L'affectation d'un paiement dans Finance commune exige `COLLECT_PAYMENT` sur la boutique et valide le compte financier `siteId`, la devise et, pour les espèces, la session de caisse de **cette même boutique**. Une URL Finance directe ne contourne plus ce contrôle pour les factures Retail ; les autres factures Finance ne changent pas de règle.
+- UI `<RetailInvoiceFlowWorkbench>` : panneau responsive FR/EN au thème DTSC Design 2.0, recherche d'articles existants, dépôt et lot, panier sans prix libre, préparation idempotente seulement lorsque la fonctionnalité est prête, liste paginée des factures avec soldes **directement issus de Finance** et statut de sortie de stock. En l'absence d'activation le formulaire reste masqué, une explication explicite est affichée au propriétaire ; aucun faux bouton d'encaissement n'est proposé.
+- Les recherches de produits par dépôt et les lots Retail vérifient désormais `VIEW_STOCK` par boutique lorsque l'isolation est activée ; une recherche sans dépôt ne fournit pas une liste globale au personnel isolé. La quantité de lots est agrégée sur les emplacements du dépôt, sans masquer les stocks placés en emplacement physique.
 
 ## Risques / rollback
 
@@ -35,7 +39,7 @@ Le mode `CONFIRMED` peut laisser des marchandises en transit si personne n'enreg
 ## Exigences encore ouvertes (bloquantes pour le client)
 
 1. Isolation complète des utilisateurs par boutique, périmètres et rôles administrateur/gérant/facturier/caissier, vérifiés sur toutes les routes ERP communes concernées. Le registre d'affectation est commencé, pas encore appliqué transversalement.
-2. Exposer de bout en bout la préparation de facture impayée par facturier, transmission et encaissement par caissier, annulation, avoirs et remboursements/retours, réservation ou promesse de stock, paiements partiels traçables. Le pont Finance et le déclencheur de livraison après paiement total sont codés mais **non activés en exploitation**.
+2. Terminer les transitions dans la nouvelle UI : soumettre la facture du facturier au validateur Finance, approbation indépendante, émission, création de paiement par caissier, validation/confirmation indépendante, allocation partielle ou totale, annulation, avoir et remboursement/retour ; garantir une réservation ou promesse de stock. Le pont Finance, le formulaire de préparation et la sortie après solde intégral sont codés mais **non activés en exploitation**.
 3. Lots reçus et sortis hors transfert : UI de réception par lot, historique et conformité approvisionnement, motifs de pertes.
 4. Caisses propres au site, clôture et validation avec modes de paiement, sessions multiples contrôlées ; attribution de dépense existante à compléter par l'isolement d'accès par site.
 5. Tableau de bord financier complet par boutique et consolidé (la vue opérationnelle est amorcée), vrai CA ≠ encaissements, coût des ventes/charges, exports PDF/Excel et impressions A4/thermiques.
@@ -45,6 +49,8 @@ Le mode `CONFIRMED` peut laisser des marchandises en transit si personne n'enreg
 ## QA disponible
 
 `node scripts/qa-hotfix-1042-retail-batches-transfer.mjs`, `node scripts/qa-hotfix-1042-site-staff.mjs`, `node scripts/qa-hotfix-1042-retail-invoice-finance.mjs`, `node scripts/qa-enterprise-inventory-checks.mjs`, `node scripts/qa-retail-product-coherence.mjs`, `prisma validate`, `tsc --noEmit`, `git diff --check`.
+
+Ces trois QA Retail #1042 sont désormais explicitement branchées au job `quality` de `.github/workflows/quality-gates.yml`. Les tests d'interaction réels avec PostgreSQL/transaction et les parcours navigateur multi-rôles restent à développer et à certifier séparément : les contrats statiques ne remplacent pas une recette E2E.
 
 ### Parcours E2E propriétaire à retenir pour la certification finale
 

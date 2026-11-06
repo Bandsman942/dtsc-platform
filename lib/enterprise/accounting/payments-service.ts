@@ -7,7 +7,7 @@ import { postBusinessEvent, postBusinessEventTx } from "@/lib/enterprise/account
 import { reverseJournalEntryTx } from "@/lib/enterprise/accounting/reversal-service";
 import { tryGrantRetailOmnichannelCashbackTx } from "@/lib/enterprise/relationship-benefits/omnichannel-cashback";
 import { withRetailTransactionRetry } from "@/lib/enterprise/retail/transaction-retry";
-import { postPaidRetailInvoiceStockTx } from "@/lib/enterprise/retail/invoice-checkout";
+import { assertRetailInvoicePaymentScopeTx, postPaidRetailInvoiceStockTx } from "@/lib/enterprise/retail/invoice-checkout";
 import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
 import type { paymentCreateSchema } from "@/lib/enterprise/accounting/schemas";
 import type { z } from "zod";
@@ -482,6 +482,12 @@ export async function allocateEnterprisePayment(
       receivable = await tx.enterpriseReceivable.findFirst({ where: { id: input.receivableId, organizationId, status: "OPEN" } });
       if (!receivable || payment.direction !== "INBOUND" || payment.paymentType !== "CUSTOMER_PAYMENT") throw new EnterpriseAccountingError("RECEIVABLE_ALLOCATION_INVALID", 409);
       if (payment.businessPartyId !== receivable.businessPartyId || payment.currencyCode !== receivable.currencyCode || amount.greaterThan(receivable.outstandingAmount)) throw new EnterpriseAccountingError("RECEIVABLE_ALLOCATION_SCOPE_OR_AMOUNT_INVALID", 409);
+      try {
+        await assertRetailInvoicePaymentScopeTx(tx, organizationId, receivable.salesInvoiceId, actorUserId, payment);
+      } catch (error) {
+        if (error instanceof EnterpriseRetailError) throw new EnterpriseAccountingError(error.code, error.status, error.details);
+        throw error;
+      }
     } else if (input.payableId) {
       payable = await tx.enterprisePayable.findFirst({ where: { id: input.payableId, organizationId, status: "OPEN" } });
       if (!payable || payment.direction !== "OUTBOUND" || payment.paymentType !== "SUPPLIER_PAYMENT") throw new EnterpriseAccountingError("PAYABLE_ALLOCATION_INVALID", 409);

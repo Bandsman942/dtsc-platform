@@ -52,7 +52,7 @@ async function resolveWalkInCustomerTx(tx: Prisma.TransactionClient, organizatio
 /** Creates Finance's only invoice and Retail's non-financial site/stock link
  * in one serializable transaction. Does not post an invoice, accept payment,
  * reserve goods or debit stock. Until the paid-stock hook is complete the
- * owner-only API is feature-gated and unavailable to shop staff. */
+ * feature-gated API is unavailable to shop staff until the audited cutover. */
 export async function prepareRetailInvoice(organizationId: string, actorUserId: string, input: RetailInvoicePrepareInput) {
   const requestFingerprint = fingerprint(input);
   const uniqueItems = new Set(input.lines.map((line) => line.catalogItemId));
@@ -155,6 +155,38 @@ export async function prepareRetailInvoice(organizationId: string, actorUserId: 
     });
     return { checkout, invoice, idempotent: false };
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 30000 });
+}
+
+/** Finance may allocate a payment only to the store that issued this Retail
+ * invoice. This guard belongs in the canonical allocation service, rather
+ * than only in a Retail client screen: Finance URLs can be called directly.
+ */
+export async function assertRetailInvoicePaymentScopeTx(
+  tx: Prisma.TransactionClient,
+  organizationId: string,
+  salesInvoiceId: string,
+  actorUserId: string,
+  payment: { financialAccountId: string | null; cashSessionId: string | null; methodType: string; currencyCode: string },
+) {
+  const checkout = await tx.enterpriseRetailInvoiceCheckout.findFirst({
+    where: { organizationId, salesInvoiceId }, select: { id: true, siteId: true },
+  });
+  if (!checkout) return;
+  await requireRetailSiteCapability(organizationId, actorUserId, checkout.siteId, "COLLECT_PAYMENT", tx, { requireAssignment: true });
+  const account = payment.financialAccountId ? await tx.enterpriseFinancialAccount.findFirst({
+    where: { organizationId, id: payment.financialAccountId, status: "ACTIVE", archivedAt: null },
+    select: { siteId: true, currencyCode: true },
+  }) : null;
+  if (!account || account.siteId !== checkout.siteId || account.currencyCode !== payment.currencyCode) {
+    throw new EnterpriseRetailError("RETAIL_INVOICE_FINANCIAL_ACCOUNT_SITE_MISMATCH", 409);
+  }
+  if (payment.methodType === "CASH") {
+    const session = payment.cashSessionId ? await tx.enterpriseCashSession.findFirst({
+      where: { organizationId, id: payment.cashSessionId, financialAccountId: payment.financialAccountId!, siteId: checkout.siteId },
+      select: { id: true },
+    }) : null;
+    if (!session) throw new EnterpriseRetailError("RETAIL_INVOICE_CASH_SESSION_SITE_MISMATCH", 409);
+  }
 }
 
 /** Called by Finance in the *same* transaction that allocates the final

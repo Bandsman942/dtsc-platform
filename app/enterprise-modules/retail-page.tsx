@@ -6,6 +6,7 @@ import { RetailDeviceReadiness } from "@/components/enterprise/professional/reta
 import { RetailExpiryAlertsPanel } from "@/components/enterprise/professional/retail-expiry-alerts-panel";
 import { RetailGlobalReadiness } from "@/components/enterprise/professional/retail-global-readiness";
 import { RetailHistoricalImportPanel } from "@/components/enterprise/professional/retail-historical-import-panel";
+import { RetailInvoiceFlowWorkbench } from "@/components/enterprise/professional/retail-invoice-flow-workbench";
 import { RetailInventoryPolicySettings } from "@/components/enterprise/professional/retail-inventory-policy-settings";
 import { RetailLocaleText } from "@/components/enterprise/professional/retail-locale-text";
 import { RetailOfflineContinuity } from "@/components/enterprise/professional/retail-offline-continuity";
@@ -82,6 +83,7 @@ export async function renderRetailModulePage(moduleCode: "RETAIL_POS" | "MOBILE_
         {moduleCode === "RETAIL_POS" ? (
           <section aria-labelledby="retail-pos-additional-tools" className="space-y-3">
             {["OWNER", "ADMIN_ENTREPRISE", "ADMIN_ENTERPRISE"].includes(membership.role) ? <><RetailSiteOverview organizationId={organizationId} locale={locale} /><RetailSiteStaffAccess organizationId={organizationId} locale={locale} /></> : null}
+            <RetailInvoiceFlowWorkbench organizationId={organizationId} locale={locale} />
             <span id="retail-pos-additional-tools" className="sr-only"><RetailLocaleText textKey="additionalShopTools" /></span>
             <details className="group rounded-2xl border border-dtsc-border bg-dtsc-surface shadow-sm">
               <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-black text-dtsc-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400">

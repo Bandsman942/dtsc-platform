@@ -13,7 +13,7 @@ const decimal = (value) => new Prisma.Decimal(value);
 const state = { existing: null, checkout: null, invoiceCreated: false, movements: [], updated: false, settings: {} };
 const tx = {
   enterpriseRetailInvoiceCheckout: {
-    findFirst: async ({ where }) => where.idempotencyKey ? state.existing : state.checkout,
+    findFirst: async ({ where }) => where.idempotencyKey ? state.existing : where.salesInvoiceId && where.salesInvoiceId !== "finance-invoice" ? null : state.checkout,
     update: async () => { state.updated = true; },
   },
   organization: {
@@ -27,6 +27,8 @@ const tx = {
   enterpriseInventoryBalance: { findMany: async () => [{ id: "balance", inventoryItemId: "inventory", storageLocationId: null, stockLotId: null, quantityOnHand: decimal(4), quantityReserved: decimal(0) }] },
   enterpriseInventoryReservation: { findMany: async () => [] },
   enterpriseStockLot: { findMany: async () => [] },
+  enterpriseFinancialAccount: { findFirst: async () => state.account },
+  enterpriseCashSession: { findFirst: async () => state.cashSession },
 };
 const prisma = {
   enterpriseRetailInvoiceCheckout: { findFirst: async () => state.existing },
@@ -50,7 +52,7 @@ vm.runInNewContext(compiled, {
   },
 });
 
-const { prepareRetailInvoice, retailInvoicePrepareSchema, postPaidRetailInvoiceStockTx } = unit.exports;
+const { prepareRetailInvoice, retailInvoicePrepareSchema, postPaidRetailInvoiceStockTx, assertRetailInvoicePaymentScopeTx } = unit.exports;
 const input = {
   idempotencyKey: "client-retry-001", siteId: "site", warehouseId: "warehouse", currencyCode: "CDF",
   lines: [{ catalogItemId: "product", quantity: 2 }],
@@ -67,7 +69,7 @@ await assert.rejects(prepareRetailInvoice("tenant", "owner", input), { code: "RE
 assert.equal(state.invoiceCreated, false, "Owner-only draft is disabled for existing tenants");
 
 const checkout = {
-  id: "checkout", salesInvoiceId: "finance-invoice", warehouseId: "warehouse", stockPostedAt: null,
+  id: "checkout", siteId: "shop-A", salesInvoiceId: "finance-invoice", warehouseId: "warehouse", stockPostedAt: null,
   invoice: { id: "finance-invoice", status: "ISSUED", outstandingAmount: decimal(20) },
   lines: [{ id: "line", inventoryItemId: "inventory", stockLotId: null, invoiceItemId: "finance-line", invoiceItem: { quantity: decimal(2) } }],
 };
@@ -86,17 +88,46 @@ checkout.stockPostedAt = new Date();
 await postPaidRetailInvoiceStockTx(tx, "tenant", "finance-invoice", "cashier");
 assert.equal(state.movements.length, 1, "Repeated posting must be idempotent");
 
+// Cross-store payments are forbidden at the *Finance allocation service*
+// even when a caller skips Retail UI and submits the receivable UUID directly.
+state.account = { siteId: "shop-B", currencyCode: "CDF" };
+state.cashSession = { id: "cash-A" };
+const payment = { financialAccountId: "account-B", cashSessionId: "cash-A", methodType: "CASH", currencyCode: "CDF" };
+await assert.rejects(assertRetailInvoicePaymentScopeTx(tx, "tenant", "finance-invoice", "finance-operator", payment), { code: "RETAIL_INVOICE_FINANCIAL_ACCOUNT_SITE_MISMATCH" });
+state.account = { siteId: "shop-A", currencyCode: "CDF" };
+state.cashSession = null;
+await assert.rejects(assertRetailInvoicePaymentScopeTx(tx, "tenant", "finance-invoice", "finance-operator", payment), { code: "RETAIL_INVOICE_CASH_SESSION_SITE_MISMATCH" });
+state.cashSession = { id: "cash-A" };
+await assert.doesNotReject(assertRetailInvoicePaymentScopeTx(tx, "tenant", "finance-invoice", "finance-operator", payment));
+await assert.doesNotReject(assertRetailInvoicePaymentScopeTx(tx, "tenant", "ordinary-invoice", "finance-operator", payment));
+
 const financeService = fs.readFileSync("lib/enterprise/accounting/payments-service.ts", "utf8");
 assert.match(financeService, /postPaidRetailInvoiceStockTx\(tx, organizationId, receivable\.salesInvoiceId, actorUserId\)/);
+assert.match(financeService, /assertRetailInvoicePaymentScopeTx\(tx, organizationId, receivable\.salesInvoiceId, actorUserId, payment\)/);
 assert.match(financeService, /if \(outstanding\.isZero\(\)\) \{/);
 assert.match(financeService, /isolationLevel: Prisma\.TransactionIsolationLevel\.Serializable/);
 const route = fs.readFileSync("app/api/enterprise/[organizationId]/retail/invoices/route.ts", "utf8");
-assert.match(route, /RETAIL_OWNER_ROLES/);
-assert.match(route, /checkoutReady: false/);
+assert.match(route, /retailInvoiceVisibleSites/);
+assert.match(route, /auth\.visibility\.siteIds\.includes\(siteId\)/);
+assert.match(route, /requireRetailSiteCapability\(organizationId, auth\.session\.userId, parsed\.data\.siteId, "PREPARE_INVOICE", prisma, \{ requireAssignment: true \}\)/);
+assert.match(route, /checkoutReady \}/);
+assert.match(route, /siteId: siteId \|\| \{ in: auth\.visibility\.siteIds \}/);
+assert.match(route, /enterpriseSite\.findMany/);
 assert.match(route, /authorizeRetailRequest\(req, organizationId, "RETAIL_POS"/);
 assert.match(route, /writeAuditLog\(/);
+const invoiceUI = fs.readFileSync("components/enterprise/professional/retail-invoice-flow-workbench.tsx", "utf8");
+assert.match(invoiceUI, /retail\/invoices/);
+assert.match(invoiceUI, /data\?\.checkoutReady/);
+assert.match(invoiceUI, /disabled=\{!chosenWarehouse \|\| !lines\.length \|\| submitting\}/);
+assert.match(invoiceUI, /"en"/);
+assert.match(invoiceUI, /"fr"/);
+assert.match(fs.readFileSync("app/enterprise-modules/retail-page.tsx", "utf8"), /RetailInvoiceFlowWorkbench/);
+assert.match(fs.readFileSync("app\/api\/enterprise\/[organizationId]\/retail\/products\/search\/route.ts", "utf8"), /requireRetailSiteCapability\(organizationId, auth\.session\.userId, warehouse\.siteId, "VIEW_STOCK"\)/);
+assert.match(fs.readFileSync("app\/api\/enterprise\/[organizationId]\/retail\/stock-lots\/route.ts", "utf8"), /requireRetailSiteCapability\(organizationId, auth\.session\.userId, warehouse\.siteId, "VIEW_STOCK"\)/);
+assert.doesNotMatch(fs.readFileSync("app\/api\/enterprise\/[organizationId]\/retail\/stock-lots\/route.ts", "utf8"), /balances: \{ where: \{ organizationId, warehouseId, storageLocationId: null \}/, "Lot availability must cover every location in the selected warehouse");
+assert.match(fs.readFileSync(".github/workflows/quality-gates.yml", "utf8"), /qa-hotfix-1042-retail-invoice-finance\.mjs/);
 const schema = fs.readFileSync("prisma/enterprise-retail-invoice-checkout.prisma", "utf8");
 assert.match(schema, /@@unique\(\[organizationId, idempotencyKey\]\)/);
 assert.match(schema, /@relation\(fields: \[organizationId, salesInvoiceId\], references: \[organizationId, id\]/);
 assert.doesNotMatch(schema, /grandTotal|amountPaid|outstandingAmount|financialAccountId/, "Retail must not create a competing financial ledger");
-console.log("HOTFIX #1042 Finance bridge: retry/collision, opt-in guard, no early stock, full-payment stock posting, idempotency, owner scope, canonical Finance schema passed.");
+console.log("HOTFIX #1042 Finance bridge: retry/collision, opt-in guard, no early stock, full-payment posting, store-level invoice read/write/collection scope, Design 2.0 and canonical Finance schema passed.");
