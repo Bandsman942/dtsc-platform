@@ -3,6 +3,7 @@ import { getSession } from "@/lib/auth";
 import { writeApiLog } from "@/lib/audit";
 import { listEnterpriseApprovalCandidates } from "@/lib/enterprise/approval-assignment";
 import { getEnterpriseCommonDomainAccess } from "@/lib/enterprise/common/access";
+import { resolveEnterpriseModuleAccess } from "@/lib/enterprise/module-access";
 import { prisma } from "@/lib/prisma";
 
 type Params = { params: Promise<{ organizationId: string }> };
@@ -34,9 +35,14 @@ export async function GET(req: Request, { params }: Params) {
     const approvers = available.candidates.filter((item) => item.userId !== session.userId);
     await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "hr-payroll-lookups-self" } });
     return NextResponse.json({
-      members: [], employees: [], departments: [], positions: [], sites: [], currencies: [], approvers, payrollPeriods: [], projects: [], tasks: [],
+      members: [], employees: [], departments: [], positions: [], sites: [], currencies: [], approvers, payrollPeriods: [], projects: [], tasks: [], canManageOrganization: false,
     }, { headers: { "Cache-Control": "private, no-store" } });
   }
+
+  // HR management does not imply permission to change the enterprise hierarchy or its role capabilities.
+  const canManageOrganization = moduleCode === "HUMAN_RESOURCES"
+    ? (await resolveEnterpriseModuleAccess({ userId: session.userId, organizationId, moduleCode: "ADMIN_DASHBOARD", action: "manage" })).allowed
+    : false;
 
   const [members, employees, departments, positions, sites, financeConfiguration, financialAccountCurrencies, approval] = await Promise.all([
     prisma.organizationMember.findMany({
@@ -78,5 +84,5 @@ export async function GET(req: Request, { params }: Params) {
   }
 
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "hr-payroll-lookups", moduleCode } });
-  return NextResponse.json({ members: mappedMembers, employees, departments, positions, sites, approvers, currencies, ...modulePayload });
+  return NextResponse.json({ members: mappedMembers, employees, departments, positions, sites, approvers, currencies, canManageOrganization, ...modulePayload }, { headers: { "Cache-Control": "private, no-store" } });
 }

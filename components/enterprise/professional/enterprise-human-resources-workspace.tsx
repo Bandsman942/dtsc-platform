@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
+import dynamic from "next/dynamic";
 import { Archive, CheckCircle2, ChevronRight, Eye, FileText, Pencil, Plus, RotateCcw, UsersRound, XCircle } from "lucide-react";
 import { Field, NativeSelect } from "@/components/enterprise/core-v2/erp-v2-ui";
 import { EnterpriseEmployeesIdentityWorkspace } from "@/components/enterprise/professional/enterprise-employees-identity-workspace";
+
 import {
   professionalErpDate,
   professionalErpEnumLabel,
@@ -31,7 +33,18 @@ import { EmptyState } from "@/components/workspace/empty-state";
 import { ModuleMetric, ModuleMetrics } from "@/components/workspace/module-metrics";
 import { ModuleContent, ModuleHeader, ModuleSection, ModuleToolbar, ModuleWorkspace } from "@/components/workspace/module-workspace";
 import { StatusBadge } from "@/components/workspace/status-badge";
-import type { EnterpriseModuleDefinition } from "@/lib/enterprise/module-registry";
+import type { EnterpriseDepartmentItem, EnterpriseMemberItem, EnterpriseModuleItem, EnterprisePositionItem } from "@/lib/enterprise/enterprise-admin-types";
+import { getEnterpriseModuleDefinition, normalizeEnterpriseModuleCode, type EnterpriseModuleDefinition } from "@/lib/enterprise/module-registry";
+
+// Heavy governance editors load only when an authorized administrator opens Organisation.
+const EnterpriseAdministrationDepartmentsPanel = dynamic(
+  () => import("@/components/enterprise/enterprise-administration-panels-base").then((entry) => entry.EnterpriseAdministrationDepartmentsPanel),
+  { ssr: false },
+);
+const EnterprisePositionsGuidedPanel = dynamic(
+  () => import("@/components/enterprise/enterprise-positions-guided-panel").then((entry) => entry.EnterprisePositionsGuidedPanel),
+  { ssr: false },
+);
 
 type Employee = {
   id: string;
@@ -109,6 +122,14 @@ type Lookups = {
   sites: Lookup[];
   approvers: Approver[];
   currencies: string[];
+  canManageOrganization: boolean;
+};
+
+type OrganizationAdminData = {
+  departments: EnterpriseDepartmentItem[];
+  positions: EnterprisePositionItem[];
+  modules: EnterpriseModuleItem[];
+  members: EnterpriseMemberItem[];
 };
 
 type Tab = "CONTRACTS" | "ORG";
@@ -141,7 +162,11 @@ export function EnterpriseHumanResourcesWorkspace({ organizationId, organization
   const [archivedView, setArchivedView] = useState(false);
   const [archiveAction, setArchiveAction] = useState<{ contract: Contract; mode: "ARCHIVE" | "RESTORE" } | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
-  const [lookups, setLookups] = useState<Lookups>({ members: [], employees: [], departments: [], positions: [], sites: [], approvers: [], currencies: [] });
+  const [lookups, setLookups] = useState<Lookups>({ members: [], employees: [], departments: [], positions: [], sites: [], approvers: [], currencies: [], canManageOrganization: false });
+  const [organizationAdmin, setOrganizationAdmin] = useState<OrganizationAdminData | null>(null);
+  const [organizationLoading, setOrganizationLoading] = useState(false);
+  const [organizationError, setOrganizationError] = useState("");
+  const [organizationRefresh, setOrganizationRefresh] = useState(0);
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Contract | null>(null);
   const [detail, setDetail] = useState<Contract | null>(null);
@@ -176,6 +201,7 @@ export function EnterpriseHumanResourcesWorkspace({ organizationId, organization
           sites: body.sites || [],
           approvers: body.approvers || [],
           currencies: body.currencies || [],
+          canManageOrganization: body.canManageOrganization === true,
         });
       })
       .catch((loadError) => {
@@ -204,6 +230,43 @@ export function EnterpriseHumanResourcesWorkspace({ organizationId, organization
     return query;
   }, [page, status, archivedView]);
   const collection = useProfessionalCollection<Contract>({ endpoint: `/api/enterprise/${organizationId}/employment-contracts`, params, refreshKey });
+
+  // Governance CRUD stays behind the canonical administration permission and endpoints.
+  useEffect(() => {
+    if (tab !== "ORG" || !lookups.canManageOrganization) {
+      setOrganizationAdmin(null);
+      return;
+    }
+    let active = true;
+    setOrganizationLoading(true);
+    setOrganizationError("");
+    void professionalRequest<OrganizationAdminData>(`/api/enterprise/${organizationId}/administration`)
+      .then((data) => { if (active) setOrganizationAdmin(data); })
+      .catch((issue) => {
+        if (active) setOrganizationError(issue instanceof Error ? issue.message : (locale === "en" ? "Unable to load organization settings." : "Impossible de charger les paramètres d’organisation."));
+      })
+      .finally(() => { if (active) setOrganizationLoading(false); });
+    return () => { active = false; };
+  }, [tab, lookups.canManageOrganization, organizationId, organizationRefresh, locale]);
+
+  const organizationModules = useMemo(() => (organizationAdmin?.modules || []).map((entry) => {
+    const canonicalCode = normalizeEnterpriseModuleCode(entry.moduleCode);
+    const definition = getEnterpriseModuleDefinition(canonicalCode);
+    const implemented = definition?.implementationStatus === "ACTIVE" || definition?.implementationStatus === "BETA";
+    return {
+      ...entry,
+      canonicalCode,
+      registryKnown: Boolean(definition),
+      implementationStatus: definition?.implementationStatus || "HIDDEN",
+      routeKind: definition?.routeKind || "HIDDEN",
+      isEnabled: entry.isEnabled && implemented,
+    };
+  }), [organizationAdmin?.modules]);
+
+  function refreshOrganization() {
+    setOrganizationRefresh((value) => value + 1);
+    setRefreshKey((value) => value + 1);
+  }
 
   const label = (item: Lookup | undefined, fallback = "—") => item
     ? (locale === "en" ? item.labelEn || item.labelFr || item.name || fallback : item.labelFr || item.labelEn || item.name || fallback)
@@ -487,6 +550,24 @@ export function EnterpriseHumanResourcesWorkspace({ organizationId, organization
               </button>)}</div>
             </details>)}
           </div> : <EmptyState compact title={locale === "en" ? "No initialized HR record" : "Aucun dossier RH initialisé"} description={locale === "en" ? "Create an HR record or submit a contract for an active collaborator." : "Créez un dossier RH ou soumettez un contrat pour un collaborateur actif."} />}
+          {lookups.canManageOrganization ? <details open className="group mt-5 min-w-0 rounded-2xl border border-indigo-500/30 bg-indigo-500/5 p-3 sm:p-4">
+            <summary className="flex min-h-11 cursor-pointer list-none items-center gap-3 font-bold text-dtsc-ink outline-none focus-visible:ring-2 focus-visible:ring-dtsc-blue [&::-webkit-details-marker]:hidden">
+              <UsersRound className="h-5 w-5 shrink-0 text-indigo-600 dark:text-indigo-300" />
+              <span className="min-w-0 flex-1 break-words">{locale === "en" ? "Departments and official positions" : "Départements et postes officiels"}</span>
+              <ChevronRight className="h-4 w-4 shrink-0 transition-transform group-open:rotate-90" />
+            </summary>
+            <p className="mt-2 text-sm text-dtsc-muted">{locale === "en" ? "These changes use the existing Company administration permissions and records. They never change HR payroll data or silently grant access." : "Ces modifications utilisent les autorisations et référentiels existants de l’Administration entreprise. Elles ne modifient pas la paie ni n’accordent silencieusement des accès."}</p>
+            {organizationError ? <ProfessionalError message={organizationError} /> : null}
+            {organizationLoading ? <ProfessionalLoading /> : organizationAdmin ? <div className="mt-4 grid min-w-0 grid-cols-[minmax(0,1fr)] gap-6">
+              <div className="min-w-0 rounded-xl border border-sky-500/25 bg-dtsc-surface p-3 sm:p-4">
+                <h3 className="mb-3 text-base font-black text-dtsc-ink">{locale === "en" ? "Department directory" : "Répertoire des départements"}</h3>
+                <EnterpriseAdministrationDepartmentsPanel organizationId={organizationId} departments={organizationAdmin.departments} members={organizationAdmin.members} locale={locale} onSaved={refreshOrganization} />
+              </div>
+              <div className="min-w-0 rounded-xl border border-emerald-500/25 bg-dtsc-surface p-3 sm:p-4">
+                <EnterprisePositionsGuidedPanel organizationId={organizationId} departments={organizationAdmin.departments} positions={organizationAdmin.positions} modules={organizationModules} locale={locale} allowPermissionsEdit={false} reloadOnSave={false} onSaved={refreshOrganization} />
+              </div>
+            </div> : null}
+          </details> : <p className="mt-4 rounded-xl border border-sky-500/25 bg-sky-500/5 p-3 text-sm text-dtsc-muted">{locale === "en" ? "The organizational directory is available in read-only mode. Company administrators can manage departments and positions from Company administration." : "Le répertoire d’organisation est accessible en lecture seule. Les administrateurs autorisés configurent les départements et postes dans Administration entreprise."}</p>}
         </ModuleSection>}
         <ProfessionalHelp moduleCode="HUMAN_RESOURCES" />
       </ModuleContent>
