@@ -1,3 +1,9 @@
+## 2026-11-06 — v1.2.3 candidate — Feedback Finance FR/EN (#988)
+
+- Caisse, Paiements et Factures : retours HTTP et réseau structurés, sûrs et traduits suivant la langue utilisateur ; les refus ne sont jamais présentés comme des succès.
+- Conserve les contrôles QA précédents des PR #1025 et #1024 et leurs fonctionnalités ; aucune mutation métier, permission, devise ou migration de données modifiée.
+- OWNER_E2E #988 déclaré BON le 06/11/2026 ; CI du SHA réconcilié exigée avant fusion, Production uniquement depuis main.
+
 ## 2026-11-06 — v1.2.2 candidate — Pagination serveur des registres internes (#1024)
 
 - Liste complète des 35 registres avec recherche, statut, période, totaux exacts et pagination sécurisée côté serveur ; conservation des traductions FR/EN de #1025 lors de la réconciliation.
@@ -44,6 +50,12 @@
 - Retrait d'audience ou d'attribution après la commande : refus de crédit malgré la preuve de livraison/paiement; entitlements, conditions et quotas revérifiés au moment de l'EARN.
 - Les EARN et REVERSAL restent strictement dans les ledgers et écritures Finance canoniques.
 - CI/E2E automatique et OWNER_E2E #917 **NOT_EXECUTED** à ce stade. Parents #886/#785 ouverts.
+
+## 2026-10-31 — UX-03B #986 : erreurs Finance typées et bilingues (en validation)
+
+- Caisse, Paiements et Factures transmettent explicitement leur langue active aux messages d'erreur métier.
+- Les échecs réseau et les statuts HTTP 401/403/409/429/5xx ont des retours sûrs FR/EN, sans exposer d'erreur technique ni annoncer une opération non confirmée comme réussie.
+- Le contrat HTTP, les validations et les données financières restent inchangés. QA ciblée et E2E propriétaire requis avant fusion.
 
 ## 2026-10-30 — Hotfix #965 : gouvernance unifiée des assistants IA (PR en validation)
 
