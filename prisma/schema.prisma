@@ -4915,6 +4915,7 @@ model OrganizationMember {
   user                  User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
   healthStaffAssignment HealthStaffAssignment?
   organizationRoleAssignments EnterpriseOrganizationMemberRole[]
+  retailSiteAssignments EnterpriseRetailSiteAssignment[]
 
   @@unique([organizationId, userId])
   @@unique([organizationId, id])

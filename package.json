@@ -26,6 +26,7 @@
     "release:version:check": "node scripts/github/validate-semver.mjs",
     "qa:hotfix-1036-hr-palette": "node scripts/qa-hotfix-1036-hr-palette.mjs",
     "qa:hotfix-1042-retail": "node scripts/qa-hotfix-1042-retail-batches-transfer.mjs",
+    "qa:hotfix-1042-site-staff": "node scripts/qa-hotfix-1042-site-staff.mjs",
     "qa:console-internal-workspaces": "node scripts/qa-console-internal-workspaces.mjs",
     "qa:console-workspace-shell": "node scripts/qa-console-workspace-shell.mjs",
     "qa:standard-module-registry": "node scripts/audit-standard-module-registry.mjs",

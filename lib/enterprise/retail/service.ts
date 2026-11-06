@@ -10,6 +10,7 @@ import { finalizeRetailSaleAccountingTx, finalizeRetailSaleReversalAccountingTx 
 import { RETAIL_PROFILE_CODE, RETAIL_SECTOR_CODE } from "@/lib/enterprise/retail/constants";
 import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
 import { assertRetailLotPolicyTx } from "@/lib/enterprise/retail/inventory-policy";
+import { requireRetailSiteCapability } from "@/lib/enterprise/retail/site-access";
 import {
   applyRetailRelationshipBenefitEffectsTx,
   reverseRetailRelationshipBenefitEffectsTx,
@@ -207,6 +208,7 @@ export async function createRetailSale(
     ]);
     if (!warehouse || (input.siteId && !site) || (input.storageLocationId && !location) || (input.customerBusinessPartyId && !customer)) throw new EnterpriseRetailError("RETAIL_REFERENCE_INVALID", 409);
     if (input.siteId && warehouse.siteId !== input.siteId) throw new EnterpriseRetailError("RETAIL_REFERENCE_INVALID", 409, { field: "siteId" });
+    await requireRetailSiteCapability(organizationId, actorUserId, warehouse.siteId, "COLLECT_PAYMENT", tx);
     if (catalogItems.length !== catalogItemIds.length) throw new EnterpriseRetailError("RETAIL_CATALOG_ITEM_INVALID", 409);
     if (financialAccounts.length !== tenderAccountIds.length) throw new EnterpriseRetailError("RETAIL_FINANCIAL_ACCOUNT_INVALID", 409);
 

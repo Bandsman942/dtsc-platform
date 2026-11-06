@@ -13,6 +13,7 @@ import { RetailOmnichannelPanel } from "@/components/enterprise/professional/ret
 import { RetailPaymentFollowup } from "@/components/enterprise/professional/retail-payment-followup";
 import { RetailPosDtscWorkspace as RetailPosWorkspace } from "@/components/enterprise/professional/retail-pos-dtsc-workspace";
 import { RetailSiteOverview } from "@/components/enterprise/professional/retail-site-overview";
+import { RetailSiteStaffAccess } from "@/components/enterprise/professional/retail-site-staff-access";
 import { TelcoTopupsWorkspace } from "@/components/enterprise/professional/telco-topups-workspace";
 import { AppShell } from "@/components/layout/app-shell";
 import { getSession, requireUser } from "@/lib/auth";
@@ -80,7 +81,7 @@ export async function renderRetailModulePage(moduleCode: "RETAIL_POS" | "MOBILE_
 
         {moduleCode === "RETAIL_POS" ? (
           <section aria-labelledby="retail-pos-additional-tools" className="space-y-3">
-            {["OWNER", "ADMIN_ENTREPRISE", "ADMIN_ENTERPRISE"].includes(membership.role) ? <RetailSiteOverview organizationId={organizationId} locale={locale} /> : null}
+            {["OWNER", "ADMIN_ENTREPRISE", "ADMIN_ENTERPRISE"].includes(membership.role) ? <><RetailSiteOverview organizationId={organizationId} locale={locale} /><RetailSiteStaffAccess organizationId={organizationId} locale={locale} /></> : null}
             <span id="retail-pos-additional-tools" className="sr-only"><RetailLocaleText textKey="additionalShopTools" /></span>
             <details className="group rounded-2xl border border-dtsc-border bg-dtsc-surface shadow-sm">
               <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-black text-dtsc-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400">

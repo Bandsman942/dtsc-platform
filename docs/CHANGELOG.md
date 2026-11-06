@@ -1990,3 +1990,10 @@ Hotfix #861 (complément) : un secret CRON_SECRET Production commun réveille po
 - Dépenses de Finance : attribution optionnelle à un site/boutique (FK tenant-aware), saisie et lecture ; les historiques non attribués restent tels quels. Vue propriétaire multi-boutiques : ventes et encaissements POS séparés par devise, dépenses approuvées affectées, nombre de lignes stock et sessions de caisse, sans bénéfice estimé non justifié.
 - **NON COUVERT** : RBAC complet par boutique, facturier→caissier, paiements partiels, profits comptables consolidés, exports complets et restauration de sauvegarde. Les checklists de l'issue #1042 restent ouvertes. Ne pas utiliser cette version comme acceptation complète du cahier des charges.
 - CI, QA globale, OWNER_E2E et Production : **NOT_EXECUTED** ; aucun merge/deploy sans E2E global du propriétaire. Migration en attente de déploiement via `prisma migrate deploy` sur `main` uniquement.
+
+## 2026-11-06 — v1.3.0 candidate — Retail #1042 : accès personnel par boutique (NON LIVRÉ)
+
+- Modèle additif `EnterpriseRetailSiteAssignment` : rôles gérant/facturier/caissier attribués par site et membre actif de l'entreprise, permissions par défaut ou surchargées, désactivation logique et révision concurrente.
+- API propriétaire GET/PUT `retail/site-assignments`, tenant-aware, same-origin, Zod, limitation, audit, et panneau Design 2.0 FR/EN pour les affectations sans UUID visible.
+- Résolveur serveur à politique deny-by-default pour les capacités par site ; **isolation stricte non activable depuis l'interface** tant que toutes les routes ERP communes ne sont pas contrôlées. Les permissions affichées ne constituent donc PAS encore un cloisonnement fonctionnel complet.
+- QA ciblée `qa:hotfix-1042-site-staff` ; migration nouvelle additive. Les P0 facturier→caissier, stock après solde total, RBAC sur toutes les routes et E2E restent **NOT_EXECUTED / INCOMPLETE**.

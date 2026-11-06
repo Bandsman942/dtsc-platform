@@ -240,6 +240,7 @@ model EnterpriseSite {
   archivedAt      DateTime?
   warehouses      EnterpriseWarehouse[]
   expenses        EnterpriseExpense[]
+  retailSiteAssignments EnterpriseRetailSiteAssignment[]
   employees       EnterpriseEmployee[]
   assets          EnterpriseAsset[]
 

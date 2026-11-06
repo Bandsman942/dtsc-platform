@@ -19,6 +19,8 @@ Une organisation DTSC Platform du secteur COMMERCE_RETAIL peut exploiter un nomb
 - Dimension de dépense `siteId` nullable, relation tenant-aware, validation du site actif et filtrage par boutique. Vue opérationnelle propriétaire `retail/site-overview` : ventes, encaissements POS, dépenses approuvées attribuées, sessions et stocks, par site/période/devise. Jamais de marge calculée à partir de prix indicatifs.
 - Barrière de cohérence de caisse POS : les comptes financiers affectés à un site ne peuvent être utilisés pour une vente dans une autre boutique ; le POS filtre ces comptes et le backend refuse toute tentative directe hors site. Les comptes transverses sans `siteId` restent compatibles.
 - Impression du justificatif POS au format A4 ou ticket thermique à partir de la route d'impression sécurisée, avec identification de la boutique d'émission.
+- **Tranche 2 (en développement, non activée)** : modèle `EnterpriseRetailSiteAssignment` avec clé unique `(organizationId, siteId, userId)` et foreign keys tenant-aware ; rôles `MANAGER`, `INVOICER`, `CASHIER`, permissions explicites surchargées, archivage logique `isActive` et révision. Gestion GET/PUT propriétaire `/api/enterprise/:organizationId/retail/site-assignments` (Zod, same-origin, rate limit, audit) et panneau d'affectation Design 2.0 FR/EN. Le propriétaire voit les membres actifs, aucun annuaire global n'est exposé.
+- Le résolveur `requireRetailSiteCapability` refuse un rôle absent, inactif ou sans permission et conserve les organisations existantes par défaut. **Ne pas mettre `siteStaffIsolationEnabled` à `true` avant le durcissement de toutes les routes métier**, faute de quoi des API historiques pourraient rester hors périmètre. Aucun bouton d'activation n'est exposé.
 
 ## Risques / rollback
 
@@ -28,7 +30,7 @@ Le mode `CONFIRMED` peut laisser des marchandises en transit si personne n'enreg
 
 ## Exigences encore ouvertes (bloquantes pour le client)
 
-1. Isolation complète des utilisateurs par boutique, périmètres et rôles administrateur/gérant/facturier/caissier, vérifiés sur toutes les routes ERP communes concernées.
+1. Isolation complète des utilisateurs par boutique, périmètres et rôles administrateur/gérant/facturier/caissier, vérifiés sur toutes les routes ERP communes concernées. Le registre d'affectation est commencé, pas encore appliqué transversalement.
 2. Préparation de facture impayée par facturier, transmission et encaissement par caissier, annulation, avoirs et paiements partiels traçables dans la comptabilité commune sans double écriture ni sortie de stock anticipée.
 3. Lots reçus et sortis hors transfert : UI de réception par lot, historique et conformité approvisionnement, motifs de pertes.
 4. Caisses propres au site, clôture et validation avec modes de paiement, sessions multiples contrôlées ; attribution de dépense existante à compléter par l'isolement d'accès par site.
@@ -38,6 +40,6 @@ Le mode `CONFIRMED` peut laisser des marchandises en transit si personne n'enreg
 
 ## QA disponible
 
-`node scripts/qa-hotfix-1042-retail-batches-transfer.mjs`, `node scripts/qa-enterprise-inventory-checks.mjs`, `node scripts/qa-retail-product-coherence.mjs`, `prisma validate`, `tsc --noEmit`, `git diff --check`.
+`node scripts/qa-hotfix-1042-retail-batches-transfer.mjs`, `node scripts/qa-hotfix-1042-site-staff.mjs`, `node scripts/qa-enterprise-inventory-checks.mjs`, `node scripts/qa-retail-product-coherence.mjs`, `prisma validate`, `tsc --noEmit`, `git diff --check`.
 
 **Ne pas annoncer la conformité complète au client tant que ces sept exigences ne sont pas implémentées et validées.**
