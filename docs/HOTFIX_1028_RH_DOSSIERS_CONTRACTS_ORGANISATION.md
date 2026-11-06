@@ -1,6 +1,6 @@
 # Hotfix #1028 — Dossier RH, organisation et historique contractuel
 
-État : **en cours de validation CI et E2E propriétaire**. Ce document décrit la tranche livrée par la PR liée à #1028. La paie personnelle, le pointage et les rapports du salarié relèvent de l'issue dépendante #1029 et ne sont pas déclarés livrés ici.
+État : **tranche 1 (#1030) et tranche 2 (#1032) livrées ; tranche 3 (#1034) en préparation avec CI et E2E requis**. Ce document décrit le programme issu de #1028. La paie personnelle, le pointage et les rapports du salarié relèvent de l'issue dépendante #1029 et ne sont pas déclarés livrés ici.
 
 ## Parcours métier
 
@@ -47,3 +47,7 @@ La maturité commerciale RH/Paie/Temps ne peut pas être promue automatiquement 
 
 ## Complément tranche 2 (archive des contrats)
 Le parcours de versionnement de la tranche 1 est complété par l'archivage métier/restauration des contrats non actifs : validation indépendante pending annulée, revision optimiste, données historiques et bulletins conservés. Voir `docs/HOTFIX_1028_RH_CONTRACT_ARCHIVE_PHASE2.md`. L'issue reste ouverte pour le CRUD direct des référentiels Organisation et la certification des liens transversaux.
+
+
+## Complément tranche 3 (structure Organisation)
+La gestion des départements et postes officiels dans l’onglet RH réutilise les **panneaux et mutations canoniques** de l’Administration entreprise. L’édition de la structure et des capacités est réservée à `ADMIN_DASHBOARD:manage`, indépendamment des seuls droits RH. La lecture des membres RH sans autorisation administrative demeure limitée ; la présentation FR/EN colorée et les liens vers la fiche collaborateur restent accessibles selon permissions. Voir `docs/HOTFIX_1034_RH_ORGANISATION_CANONIQUE.md` et l’issue #1034. Aucune nouvelle migration.

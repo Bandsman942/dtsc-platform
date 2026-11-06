@@ -52,7 +52,8 @@ assert.match(registers, /data-dtsc-register-fullscreen/);
 assert.match(registers, /data-dtsc-record-detail/);
 assert.match(registers, /setStatus/);
 assert.match(registers, /type="date"/);
-assert.match(registers, /pageSize: 12/);
+assert.match(registers, /pageSize: "12"/);
+assert.match(registers, /\/api\/admin\/internal-registers\//);
 for (const [file, requirements] of [
   ["components/admin/payroll-workflow-panel.tsx", ["InternalFullScreenSurface", "ListControls", "type=\"date\"", "aria-pressed"]],
   ["components/admin/payroll-approval-panel.tsx", ["InternalFullScreenSurface", "ListControls", "type=\"date\"", "aria-pressed"]],

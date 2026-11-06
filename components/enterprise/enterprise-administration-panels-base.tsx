@@ -206,7 +206,7 @@ export function EnterpriseAdministrationModulesPanel({ organizationId, modules, 
 
 function Info({ label, value }: { label: string; value: string }) { return <div className="rounded-2xl border border-dtsc-border p-3"><p className="text-xs font-black uppercase tracking-[0.12em] text-dtsc-muted">{label}</p><p className="mt-1 font-bold text-dtsc-ink">{value}</p></div>; }
 
-export function EnterpriseAdministrationDepartmentsPanel({ organizationId, departments, members, locale }: { organizationId: string; departments: EnterpriseDepartmentItem[]; members: EnterpriseMemberItem[]; locale?: string | null }) {
+export function EnterpriseAdministrationDepartmentsPanel({ organizationId, departments, members, locale, onSaved }: { organizationId: string; departments: EnterpriseDepartmentItem[]; members: EnterpriseMemberItem[]; locale?: string | null; onSaved?: () => void }) {
   const router = useRouter();
   const runSubmission = useFormSubmissionGuard();
   const [createOpen, setCreateOpen] = useState(false);
@@ -231,7 +231,7 @@ export function EnterpriseAdministrationDepartmentsPanel({ organizationId, depar
         ? t(locale, "Département enregistré.", "Department saved.")
         : clientMessage(locale, body?.message, "Impossible d’enregistrer le département. Vérifiez les informations puis réessayez.", "Unable to save the department. Check the information and try again."));
       if (!response.ok) return;
-      form.reset(); setCreateOpen(false); setEditOpen(false); if (body?.department) setSelected(body.department); router.refresh();
+      form.reset(); setCreateOpen(false); setEditOpen(false); if (body?.department) setSelected(body.department); onSaved?.(); router.refresh();
     });
   }
 
@@ -251,7 +251,7 @@ export function EnterpriseAdministrationDepartmentsPanel({ organizationId, depar
     setMessage(response.ok
       ? t(locale, "Département désactivé. Son historique reste disponible.", "Department deactivated. Its history remains available.")
       : clientMessage(locale, body?.message, "Impossible de désactiver le département. Vérifiez vos autorisations puis réessayez.", "Unable to deactivate the department. Check your permissions and try again."));
-    if (response.ok) { setSelected(null); router.refresh(); }
+    if (response.ok) { setSelected(null); onSaved?.(); router.refresh(); }
   }
 
   return <>

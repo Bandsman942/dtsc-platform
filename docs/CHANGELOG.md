@@ -1,3 +1,20 @@
+## 2026-11-06 — v1.2.3 candidate — Feedback Finance FR/EN (#988)
+
+- Caisse, Paiements et Factures : retours HTTP et réseau structurés, sûrs et traduits suivant la langue utilisateur ; les refus ne sont jamais présentés comme des succès.
+- Conserve les contrôles QA précédents des PR #1025 et #1024 et leurs fonctionnalités ; aucune mutation métier, permission, devise ou migration de données modifiée.
+- OWNER_E2E #988 déclaré BON le 06/11/2026 ; CI du SHA réconcilié exigée avant fusion, Production uniquement depuis main.
+
+## 2026-11-06 — v1.2.2 candidate — Pagination serveur des registres internes (#1024)
+
+- Liste complète des 35 registres avec recherche, statut, période, totaux exacts et pagination sécurisée côté serveur ; conservation des traductions FR/EN de #1025 lors de la réconciliation.
+- Les résumés déjà chargés restent identifiés comme aperçus et ne sont pas présentés comme des chiffres financiers certifiés.
+- OWNER_E2E #1024 déclaré BON le 06/11/2026 ; nouvelle CI obligatoire sur le SHA réconcilié, Production depuis main uniquement.
+
+## 2026-11-06 — v1.2.1 candidate — Localisation Console (#1025, E2E propriétaire BON)
+
+- Traduction FR/EN des contrôles, statuts, registres et synthèses des directions internes DTSC, sans changement des valeurs métier ni des permissions.
+- `OWNER_E2E #1025` déclaré BON par le propriétaire le 06/11/2026 ; CI sur SHA réconcilié requise avant fusion. Version livrée uniquement après Vercel Production READY et Release correspondante.
+
 ## 2026-11-06 — Version candidate 1.1.0 : adoption SemVer (#1037, pré-release)
 
 - `package.json` devient l'unique source de version pour les cinq surfaces DTSC ; règles MAJOR/MINOR/PATCH et incrément de version par PR associés à Conventional Commits.
