@@ -1,3 +1,10 @@
+## 2026-11-06 — Version candidate 1.1.0 : adoption SemVer (#1037, pré-release)
+
+- `package.json` devient l'unique source de version pour les cinq surfaces DTSC ; règles MAJOR/MINOR/PATCH et incrément de version par PR associés à Conventional Commits.
+- La GitHub Release passe aux tags `vX.Y.Z` uniquement après preuve Vercel Production réussie sur SHA `main`, avec collision interdite, idempotence et conservation intégrale des anciens tags `prod-*`.
+- Gate SemVer, tests de version/release, contrat contribution, gouvernance, documentation technique et runbook actualisés. **CI, merge et Production NOT_EXECUTED** avant leurs preuves ; les versions historiques ne sont pas réécrites.
+- Détails : [RELEASE_VERSIONING.md](RELEASE_VERSIONING.md).
+
 ## 2026-11-06 — Hotfix #1036 : palette RH DTSC sobre (pré-release)
 
 - Fonds et bordures uniformisés dans le libre-service RH, les sections de la fiche collaborateur, l'organigramme et les contrats ; titres/icônes bleu DTSC.
