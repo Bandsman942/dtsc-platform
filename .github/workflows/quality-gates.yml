@@ -187,6 +187,8 @@ jobs:
         run: node scripts/qa-ux-959-workspace-section-density.mjs
       - name: "UX #998 Internal Design 2.0 FR/EN contract QA"
         run: node scripts/qa-hotfix-998-internal-design-i18n.mjs
+      - name: "UX #1000 Internal register pagination contract QA"
+        run: node scripts/qa-hotfix-1000-internal-register-pagination.mjs
       - name: Lint
         run: pnpm lint
       - name: Build

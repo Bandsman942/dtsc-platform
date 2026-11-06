@@ -1,3 +1,9 @@
+## 2026-11-06 — v1.2.2 candidate — Pagination serveur des registres internes (#1024)
+
+- Liste complète des 35 registres avec recherche, statut, période, totaux exacts et pagination sécurisée côté serveur ; conservation des traductions FR/EN de #1025 lors de la réconciliation.
+- Les résumés déjà chargés restent identifiés comme aperçus et ne sont pas présentés comme des chiffres financiers certifiés.
+- OWNER_E2E #1024 déclaré BON le 06/11/2026 ; nouvelle CI obligatoire sur le SHA réconcilié, Production depuis main uniquement.
+
 ## 2026-11-06 — v1.2.1 candidate — Localisation Console (#1025, E2E propriétaire BON)
 
 - Traduction FR/EN des contrôles, statuts, registres et synthèses des directions internes DTSC, sans changement des valeurs métier ni des permissions.
