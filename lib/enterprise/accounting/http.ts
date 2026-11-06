@@ -10,6 +10,12 @@ import { isSameOriginRequest } from "@/lib/request-security";
 const FINANCE_ERROR_MESSAGES: Record<string, string> = {
   FINANCE_PERIOD_CLOSED: "Cette période financière est fermée. Choisissez une période ouverte ou demandez une réouverture autorisée.",
   FINANCE_INPUT_INVALID: "Certaines informations sont invalides ou incomplètes. Corrigez les champs signalés puis réessayez.",
+  RETAIL_INVOICE_NOT_FULLY_PAID: "La facture Retail doit être intégralement réglée avant de déclencher sa sortie de stock.",
+  RETAIL_INVOICE_STOCK_INSUFFICIENT: "Stock insuffisant dans la boutique pour livrer cette facture. La dernière affectation du paiement a été annulée ; vérifiez les lots et les quantités disponibles.",
+  RETAIL_STOCK_LOT_REQUIRED: "Sélectionnez le lot de stock de la boutique avant de préparer ou solder la facture.",
+  RETAIL_STOCK_LOT_INVALID: "Le lot choisi n’est plus disponible dans cette boutique.",
+  RETAIL_STOCK_LOT_EXPIRED: "Le lot choisi est périmé et les règles de la boutique interdisent sa vente.",
+  RETAIL_FEFO_LOT_REQUIRED: "Les règles de la boutique imposent d’utiliser d’abord le lot dont l’échéance est la plus proche.",
   FINANCE_DECISION_REASON_TOO_SHORT: "Le motif de cette décision doit contenir au moins 4 caractères.",
   FINANCE_DECISION_REASON_TOO_LONG: "Le motif de cette décision ne peut pas dépasser 1 000 caractères.",
   PAYMENT_NOT_FOUND: "Ce paiement n’existe pas ou n’est plus disponible dans cette entreprise.",

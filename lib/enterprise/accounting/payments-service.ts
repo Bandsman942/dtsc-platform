@@ -7,6 +7,8 @@ import { postBusinessEvent, postBusinessEventTx } from "@/lib/enterprise/account
 import { reverseJournalEntryTx } from "@/lib/enterprise/accounting/reversal-service";
 import { tryGrantRetailOmnichannelCashbackTx } from "@/lib/enterprise/relationship-benefits/omnichannel-cashback";
 import { withRetailTransactionRetry } from "@/lib/enterprise/retail/transaction-retry";
+import { postPaidRetailInvoiceStockTx } from "@/lib/enterprise/retail/invoice-checkout";
+import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
 import type { paymentCreateSchema } from "@/lib/enterprise/accounting/schemas";
 import type { z } from "zod";
 
@@ -494,6 +496,17 @@ export async function allocateEnterprisePayment(
       await tx.enterpriseReceivable.update({ where: { id: receivable.id }, data: { allocatedAmount: { increment: amount }, outstandingAmount: outstanding, status: outstanding.isZero() ? "CLOSED" : "OPEN" } });
       await tx.enterpriseSalesInvoice.update({ where: { id: receivable.salesInvoiceId }, data: { amountPaid: { increment: amount }, outstandingAmount: outstanding, status: outstanding.isZero() ? "PAID" : "PARTIALLY_PAID", revision: { increment: 1 } } });
       if (outstanding.isZero()) {
+        // Finance settlement and stock delivery are one serializable unit:
+        // never debit stock for an unpaid invoice, nor commit a final
+        // allocation if the original shop has insufficient stock.
+        try {
+          await postPaidRetailInvoiceStockTx(tx, organizationId, receivable.salesInvoiceId, actorUserId);
+        } catch (error) {
+          if (error instanceof EnterpriseRetailError) {
+            throw new EnterpriseAccountingError(error.code, error.status, error.details);
+          }
+          throw error;
+        }
         const orderInvoice = await tx.enterpriseSalesInvoice.findFirst({
           where: { id: receivable.salesInvoiceId, organizationId },
           select: { salesOrderId: true },

@@ -1,0 +1,46 @@
+// Retail extension of the canonical Finance invoice, never another invoice
+// ledger or another payment balance. Stock is posted only after Finance proves
+// the invoice fully allocated; each posting has a unique source key.
+model EnterpriseRetailInvoiceCheckout {
+  id                String   @id @default(cuid())
+  organizationId    String
+  salesInvoiceId    String
+  siteId            String
+  warehouseId       String
+  idempotencyKey    String
+  requestFingerprint String
+  preparedByUserId  String
+  stockPostedAt     DateTime?
+  stockPostedByUserId String?
+  revision          Int      @default(1)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  invoice   EnterpriseSalesInvoice @relation(fields: [organizationId, salesInvoiceId], references: [organizationId, id], onDelete: Restrict)
+  site      EnterpriseSite         @relation(fields: [organizationId, siteId], references: [organizationId, id], onDelete: Restrict)
+  warehouse EnterpriseWarehouse    @relation(fields: [organizationId, warehouseId], references: [organizationId, id], onDelete: Restrict)
+  lines     EnterpriseRetailInvoiceCheckoutLine[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, salesInvoiceId])
+  @@unique([organizationId, idempotencyKey])
+  @@index([organizationId, siteId, createdAt])
+  @@index([organizationId, warehouseId, stockPostedAt])
+}
+
+model EnterpriseRetailInvoiceCheckoutLine {
+  id                 String   @id @default(cuid())
+  organizationId     String
+  checkoutId         String
+  invoiceItemId      String
+  inventoryItemId    String?
+  stockLotId         String?
+
+  checkout    EnterpriseRetailInvoiceCheckout @relation(fields: [organizationId, checkoutId], references: [organizationId, id], onDelete: Restrict)
+  invoiceItem EnterpriseSalesInvoiceItem      @relation(fields: [organizationId, invoiceItemId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, invoiceItemId])
+  @@index([organizationId, checkoutId])
+  @@index([organizationId, inventoryItemId, stockLotId])
+}

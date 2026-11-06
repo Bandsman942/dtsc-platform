@@ -241,6 +241,7 @@ model EnterpriseSite {
   warehouses      EnterpriseWarehouse[]
   expenses        EnterpriseExpense[]
   retailSiteAssignments EnterpriseRetailSiteAssignment[]
+  retailInvoiceCheckouts EnterpriseRetailInvoiceCheckout[]
   employees       EnterpriseEmployee[]
   assets          EnterpriseAsset[]
 
@@ -272,6 +273,7 @@ model EnterpriseWarehouse {
   stockMovements       EnterpriseStockMovement[]
   sourceTransfers      EnterpriseStockTransfer[] @relation("EnterpriseStockTransferSource")
   destinationTransfers EnterpriseStockTransfer[] @relation("EnterpriseStockTransferDestination")
+  retailInvoiceCheckouts EnterpriseRetailInvoiceCheckout[]
 
   @@unique([organizationId, id])
   @@unique([organizationId, code])

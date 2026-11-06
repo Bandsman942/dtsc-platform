@@ -1,3 +1,10 @@
+## 2026-11-06 — Hotfix P0 Retail #1042, tranche 3 — Facture Finance canonique (PR brouillon #1043)
+
+- Extension Retail de provenance boutique/dépôt/lot liée à la **facture Finance existante**, sans second registre de factures ni de paiements ; préparation idempotente à prix et taxes serveur, transaction atomique.
+- Lors de l'allocation Finance du dernier paiement, sortie de stock seulement si la facture est totalement payée et si les lots/quantités sont valides. Allocation et mouvements dans la même transaction sérialisable ; erreurs métier explicites.
+- Route propriétaire de préparation et consultation des factures Retail **désactivée par défaut**, sans activation UI. Le parcours facturier/caissier, les retours, le RBAC transversal et l'E2E multi-boutiques restent à terminer : **NON PRÊT pour livraison client**, OWNER_E2E non reçu, aucune fusion ni Production.
+- QA unitaire/contrat `npm run qa:hotfix-1042-retail-invoice-finance`. Détails : [HOTFIX_1042_RETAIL_CONFIGURABLE_MULTISTORE.md](HOTFIX_1042_RETAIL_CONFIGURABLE_MULTISTORE.md).
+
 ## 2026-11-06 — v1.2.3 candidate — Feedback Finance FR/EN (#988)
 
 - Caisse, Paiements et Factures : retours HTTP et réseau structurés, sûrs et traduits suivant la langue utilisateur ; les refus ne sont jamais présentés comme des succès.
