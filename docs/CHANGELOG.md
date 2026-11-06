@@ -1,3 +1,9 @@
+## 2026-11-07 — Hotfix P0 Retail #1042, tranche 5 — Annulation des factures Retail en brouillon (PR brouillon #1043)
+
+- Nouvelle transition Retail `CANCEL` limitée aux **brouillons Finance**, avec version optimiste, motif obligatoire, permission `CANCEL_UNPAID_INVOICE` du site et contrôle transactionnel canonique Finance ; les autres transitions continuent de relever des validations Finance indépendantes.
+- Registre Retail Design 2.0 FR/EN : action d'annulation affichée seulement si le serveur confirme le droit et le statut, dialogue de confirmation et historisation ; aucun effacement de facture ni mouvement de stock.
+- Le circuit complet facturier → approbateur → caissier, les réservations, retours, remboursements, isolement des API historiques et E2E multi-acteurs restent bloquants. Les flags Retail restent désactivés et aucune fusion ni Production n'est autorisée sans E2E global.
+
 ## 2026-11-07 — Hotfix P0 Retail #1042, tranche 4 — Contrôle site Finance et interface Design 2.0 (PR brouillon #1043)
 
 - Filtrage serveur des factures par affectation active de boutique, interdiction des consultations inter-boutiques et préparation par facturier autorisé ; double activation explicite encore désactivée.

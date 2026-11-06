@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowRight, FileClock, FilePlus2, RefreshCw, Search, ShieldAlert, ShoppingBasket } from "lucide-react";
+import { ArrowRight, FileClock, FilePlus2, RefreshCw, Search, ShieldAlert, ShoppingBasket, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Dialog } from "@/components/ui/dialog";
 import { toastError, toastSuccess } from "@/lib/client-toast";
 import { customerFacingError } from "@/lib/customer-facing-language";
 
@@ -13,7 +14,8 @@ type Checkout = {
   siteId: string;
   warehouseId: string;
   stockPostedAt: string | null;
-  invoice: { id: string; number: string; status: string; currencyCode: string; grandTotal: string; outstandingAmount: string; items: InvoiceItem[] };
+  canCancel: boolean;
+  invoice: { id: string; revision: number; number: string; status: string; currencyCode: string; grandTotal: string; outstandingAmount: string; items: InvoiceItem[] };
   site: { id: string; name: string; code: string };
 };
 type InvoiceResponse = {
@@ -35,6 +37,7 @@ const language = {
     list: "Factures Retail", all: "Toutes les boutiques", refresh: "Actualiser", loading: "Chargement du registre…", empty: "Aucune facture Retail préparée pour cette sélection.",
     date: "Préparée", outstanding: "Reste dû", paid: "Payée", draft: "Brouillon", pending: "À valider", approved: "Approuvée", issued: "Émise", partial: "Partiellement payée", cancelled: "Annulée", voided: "Invalidée", overdue: "Échue", credited: "Avoir comptabilisé", unknown: "Statut à vérifier", delivered: "Stock délivré", stockPending: "Stock non encore délivré", finance: "Les validations et affectations de paiement sont réalisées dans le module Finance commun, avec les droits de chaque intervenant.",
     pagePrev: "Précédente", pageNext: "Suivante", currencyMismatch: "Une facture ne peut pas mélanger plusieurs devises. Préparez un autre panier pour cet article.", ready: "Circuit en cours d'activation contrôlée", failed: "Impossible de consulter les factures Retail.", saved: "Facture préparée. Elle attend les étapes de validation Finance.", duplicate: "Une facture existe déjà pour cette référence ; son état a été actualisé.",
+    cancelDraft: "Annuler le brouillon", cancelTitle: "Confirmer l’annulation de la facture", cancelHint: "Cette opération annule uniquement le brouillon Finance. Elle ne génère ni remboursement ni mouvement de stock.", cancelReason: "Motif de l’annulation", cancelReasonHelp: "Précisez au moins quatre caractères pour conserver une trace de la décision.", cancelConfirm: "Confirmer l’annulation", cancelAbort: "Garder la facture", cancelSuccess: "Le brouillon a été annulé et conservé dans l’historique.", cancelFailed: "L’annulation n’a pas pu être enregistrée.",
   },
   en: {
     title: "Store invoices and collections", lead: "Prepare sales and track the single Finance invoice, with inventory released only after complete settlement.",
@@ -43,6 +46,7 @@ const language = {
     list: "Retail invoices", all: "All stores", refresh: "Refresh", loading: "Loading invoices…", empty: "No Retail invoices in this selection.",
     date: "Prepared", outstanding: "Outstanding", paid: "Paid", draft: "Draft", pending: "Awaiting approval", approved: "Approved", issued: "Issued", partial: "Partially paid", cancelled: "Cancelled", voided: "Voided", overdue: "Overdue", credited: "Credit note posted", unknown: "Check status", delivered: "Inventory delivered", stockPending: "Inventory not yet delivered", finance: "Approvals and payment allocations are performed in the common Finance module under each actor's permissions.",
     pagePrev: "Previous", pageNext: "Next", currencyMismatch: "An invoice cannot mix currencies. Create another basket for this item.", ready: "Controlled activation in progress", failed: "Retail invoices are unavailable.", saved: "Invoice prepared. It is awaiting Finance approval stages.", duplicate: "An invoice already exists for this reference; its status has been refreshed.",
+    cancelDraft: "Cancel draft", cancelTitle: "Confirm invoice cancellation", cancelHint: "Only the Finance draft will be cancelled. No refund or inventory movement is created.", cancelReason: "Cancellation reason", cancelReasonHelp: "Enter at least four characters to preserve the decision trail.", cancelConfirm: "Confirm cancellation", cancelAbort: "Keep invoice", cancelSuccess: "The draft was cancelled and retained in the history.", cancelFailed: "Cancellation could not be recorded.",
   },
 } as const;
 
@@ -75,6 +79,9 @@ export function RetailInvoiceFlowWorkbench({ organizationId, locale }: { organiz
   const [lines, setLines] = useState<Line[]>([]);
   const [lots, setLots] = useState<Lot[]>([]);
   const [submitting, setSubmitting] = useState(false);
+  const [cancelTarget, setCancelTarget] = useState<Checkout | null>(null);
+  const [cancelReason, setCancelReason] = useState("");
+  const [cancelling, setCancelling] = useState(false);
   const idempotencyKey = useRef<string>("");
   const warehouses = useMemo(() => (data?.sites || []).flatMap((site) => site.warehouses.map((warehouse) => ({ ...warehouse, siteId: site.id, siteName: site.name }))), [data?.sites]);
   const chosenWarehouse = warehouses.find((warehouse) => warehouse.id === warehouseId);
@@ -151,6 +158,23 @@ export function RetailInvoiceFlowWorkbench({ organizationId, locale }: { organiz
     finally { setSubmitting(false); }
   }
 
+  async function cancelDraft() {
+    if (!cancelTarget?.canCancel || cancelling || cancelReason.trim().length < 4) return;
+    setCancelling(true);
+    try {
+      const response = await fetch(`/api/enterprise/${organizationId}/retail/invoices/${encodeURIComponent(cancelTarget.invoice.id)}/transition`, {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "CANCEL", revision: cancelTarget.invoice.revision, reason: cancelReason.trim() }),
+      });
+      const payload = await response.json().catch(() => null) as { message?: string } | null;
+      if (!response.ok) throw new Error(payload?.message || copy.cancelFailed);
+      toastSuccess(copy.cancelSuccess);
+      setCancelTarget(null); setCancelReason("");
+      await load(page, siteFilter);
+    } catch (caught) { const message = customerFacingError(caught, locale); setError(message); toastError(message); }
+    finally { setCancelling(false); }
+  }
+
   if (forbidden) return null;
   return <section data-testid="retail-invoice-flow-workbench" className="min-w-0 rounded-2xl border border-dtsc-border bg-dtsc-surface p-4 shadow-sm sm:p-5">
     <header className="flex min-w-0 flex-wrap items-start justify-between gap-3">
@@ -174,8 +198,16 @@ export function RetailInvoiceFlowWorkbench({ organizationId, locale }: { organiz
       <div className="flex min-w-0 flex-wrap items-center justify-between gap-3"><h3 className="text-sm font-black text-dtsc-ink">{copy.list}</h3>{data?.sites.length ? <select aria-label={copy.warehouse} className="min-h-11 max-w-full rounded-lg border border-dtsc-border bg-dtsc-page px-2 text-sm" value={siteFilter} onChange={(event) => { setSiteFilter(event.target.value); setPage(1); }}><option value="">{copy.all}</option>{data.sites.map((site) => <option key={site.id} value={site.id}>{site.name}</option>)}</select> : null}</div>
       {loading ? <p role="status" className="mt-3 text-sm text-dtsc-muted">{copy.loading}</p> : null}
       {!loading && data && !data.items.length ? <p className="mt-3 rounded-xl bg-dtsc-page p-3 text-sm text-dtsc-muted">{copy.empty}</p> : null}
-      <div className="mt-3 grid min-w-0 gap-2">{data?.items.map((entry) => <article key={entry.id} className="min-w-0 rounded-xl border border-dtsc-border bg-dtsc-page p-3"><div className="flex min-w-0 flex-wrap items-center justify-between gap-2"><div className="min-w-0"><p className="break-words text-sm font-black text-dtsc-ink">{entry.invoice.number} · {entry.site.name}</p><p className="mt-1 text-xs text-dtsc-muted">{entry.invoice.items.map((item) => item.description).join(" · ")}</p></div><span className="shrink-0 rounded-full bg-blue-500/10 px-2 py-1 text-xs font-bold text-blue-700 dark:text-blue-300">{invoiceStatus(entry.invoice.status, copy)}</span></div><div className="mt-2 flex flex-wrap items-center justify-between gap-3 text-xs text-dtsc-muted"><span>{copy.outstanding} : <strong className="text-dtsc-ink">{money(entry.invoice.outstandingAmount, entry.invoice.currencyCode, locale)}</strong></span><span>{entry.stockPostedAt ? copy.delivered : copy.stockPending}</span></div></article>)}</div>
+      <div className="mt-3 grid min-w-0 gap-2">{data?.items.map((entry) => <article key={entry.id} className="min-w-0 rounded-xl border border-dtsc-border bg-dtsc-page p-3"><div className="flex min-w-0 flex-wrap items-center justify-between gap-2"><div className="min-w-0"><p className="break-words text-sm font-black text-dtsc-ink">{entry.invoice.number} · {entry.site.name}</p><p className="mt-1 text-xs text-dtsc-muted">{entry.invoice.items.map((item) => item.description).join(" · ")}</p></div><span className="shrink-0 rounded-full bg-blue-500/10 px-2 py-1 text-xs font-bold text-blue-700 dark:text-blue-300">{invoiceStatus(entry.invoice.status, copy)}</span></div><div className="mt-2 flex min-w-0 flex-wrap items-center justify-between gap-3 text-xs text-dtsc-muted"><span>{copy.outstanding} : <strong className="text-dtsc-ink">{money(entry.invoice.outstandingAmount, entry.invoice.currencyCode, locale)}</strong></span><span>{entry.stockPostedAt ? copy.delivered : copy.stockPending}</span></div>{entry.canCancel && data.checkoutReady ? <div data-responsive-actions className="mt-3 flex min-w-0 flex-wrap justify-end border-t border-dtsc-border pt-3"><Button type="button" variant="outline" onClick={() => { setCancelTarget(entry); setCancelReason(""); }}><XCircle className="h-4 w-4 text-amber-600" />{copy.cancelDraft}</Button></div> : null}</article>)}</div>
       {data && data.pagination.pageCount > 1 ? <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-xs text-dtsc-muted"><span>{data.pagination.page} / {data.pagination.pageCount} · {data.pagination.total}</span><div className="flex gap-2"><Button type="button" variant="outline" disabled={page <= 1 || loading} onClick={() => setPage((current) => Math.max(1, current - 1))}>{copy.pagePrev}</Button><Button type="button" variant="outline" disabled={page >= data.pagination.pageCount || loading} onClick={() => setPage((current) => current + 1)}>{copy.pageNext}</Button></div></div> : null}
     </div>
+    <Dialog open={Boolean(cancelTarget)} onClose={() => { if (!cancelling) { setCancelTarget(null); setCancelReason(""); } }} title={copy.cancelTitle} description={copy.cancelHint} className="max-w-xl" presentation="editor">
+      {cancelTarget ? <form onSubmit={(event) => { event.preventDefault(); void cancelDraft(); }} className="grid min-w-0 gap-4">
+        <p className="break-words rounded-lg bg-dtsc-page p-3 text-sm font-bold text-dtsc-ink">{cancelTarget.invoice.number} · {cancelTarget.site.name}</p>
+        <label className="grid min-w-0 gap-1.5 text-sm font-semibold text-dtsc-ink">{copy.cancelReason}<textarea className="min-h-28 w-full min-w-0 rounded-xl border border-dtsc-border bg-dtsc-page p-3 text-base" value={cancelReason} minLength={4} maxLength={1000} required disabled={cancelling} onChange={(event) => setCancelReason(event.target.value)} /></label>
+        <p className="text-xs text-dtsc-muted">{copy.cancelReasonHelp}</p>
+        <div data-responsive-actions className="flex min-w-0 flex-wrap justify-end gap-2"><Button type="button" variant="outline" disabled={cancelling} onClick={() => { setCancelTarget(null); setCancelReason(""); }}>{copy.cancelAbort}</Button><Button type="submit" disabled={cancelling || cancelReason.trim().length < 4}><XCircle className="h-4 w-4" />{copy.cancelConfirm}</Button></div>
+      </form> : null}
+    </Dialog>
   </section>;
 }

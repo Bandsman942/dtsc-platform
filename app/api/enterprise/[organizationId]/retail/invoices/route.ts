@@ -56,7 +56,11 @@ export async function GET(req: Request, { params }: Params) {
   await writeApiLog({ request: req, startedAt, statusCode: 200, userId: auth.session.userId, metadata: { organizationId, domain: "retail-checkout-invoices", page } });
   const settings = configuration?.settingsJson;
   const checkoutReady = Boolean(settings && typeof settings === "object" && !Array.isArray(settings) && settings.invoiceCheckoutEnabled === true);
-  return NextResponse.json({ items, sites, pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) }, checkoutReady }, { headers: { "Cache-Control": "private, no-store" } });
+  const visibleItems = items.map((entry) => ({
+    ...entry,
+    canCancel: entry.invoice.status === "DRAFT" && (auth.visibility.isOwner || auth.visibility.cancellableSiteIds.includes(entry.siteId)),
+  }));
+  return NextResponse.json({ items: visibleItems, sites, pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) }, checkoutReady }, { headers: { "Cache-Control": "private, no-store" } });
 }
 
 export async function POST(req: Request, { params }: Params) {

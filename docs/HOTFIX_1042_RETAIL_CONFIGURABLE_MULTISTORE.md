@@ -1,6 +1,6 @@
 # RETAIL-1042 — cahier des charges boutiques, paramétrage et Design 2.0
 
-Statut du 7 novembre 2026 : **quatre tranches en préparation sur la PR brouillon #1043 ; aucune fusion, aucun déploiement ni acceptation client**.
+Statut du 7 novembre 2026 : **cinq tranches en préparation sur la PR brouillon #1043 ; aucune fusion, aucun déploiement ni acceptation client**.
 
 ## Cible produit
 
@@ -29,6 +29,7 @@ Une organisation DTSC Platform du secteur COMMERCE_RETAIL peut exploiter un nomb
 - La préparation facturier exige désormais `PREPARE_INVOICE` sur le site choisi **avec vérification forcée**, sans bénéficier du mode legacy permissif. L'affectation d'un paiement dans Finance commune exige `COLLECT_PAYMENT` sur la boutique et valide le compte financier `siteId`, la devise et, pour les espèces, la session de caisse de **cette même boutique**. Une URL Finance directe ne contourne plus ce contrôle pour les factures Retail ; les autres factures Finance ne changent pas de règle.
 - UI `<RetailInvoiceFlowWorkbench>` : panneau responsive FR/EN au thème DTSC Design 2.0, recherche d'articles existants, dépôt et lot, panier sans prix libre, préparation idempotente seulement lorsque la fonctionnalité est prête, liste paginée des factures avec soldes **directement issus de Finance** et statut de sortie de stock. En l'absence d'activation le formulaire reste masqué, une explication explicite est affichée au propriétaire ; aucun faux bouton d'encaissement n'est proposé.
 - Les recherches de produits par dépôt et les lots Retail vérifient désormais `VIEW_STOCK` par boutique lorsque l'isolation est activée ; une recherche sans dépôt ne fournit pas une liste globale au personnel isolé. La quantité de lots est agrégée sur les emplacements du dépôt, sans masquer les stocks placés en emplacement physique.
+- **Tranche 5 (annulation sécurisée, toujours non activée)** : le registre des factures expose `canCancel` depuis les droits réels de la boutique, sans se fier au seul statut UI. Un gérant ou collaborateur explicitement habilité à `CANCEL_UNPAID_INVOICE` (ou le propriétaire d'entreprise) peut annuler un **brouillon Finance non encore soumis** via `POST /api/enterprise/:organizationId/retail/invoices/:invoiceId/transition` avec `{ action:"CANCEL", revision, reason }`. Le serveur recoupe l'appartenance organisation/boutique, force l'affectation, valide la révision, puis appelle la transaction sérialisable de Finance qui vérifie encore le statut sous verrou ; audit nominatif et motif conservés. Les factures annulées restent dans le registre et la clé d'idempotence ne crée pas de double facture. Confirmation explicite en dialogue Design 2.0 bilingue. L'API ne propose volontairement **aucune validation, émission, annulation post-émission, avoir ou remboursement de contournement** : ces opérations restent dans le workflow Finance partagé et leur délégation propre aux boutiques est encore à terminer.
 
 ## Risques / rollback
 
@@ -39,7 +40,7 @@ Le mode `CONFIRMED` peut laisser des marchandises en transit si personne n'enreg
 ## Exigences encore ouvertes (bloquantes pour le client)
 
 1. Isolation complète des utilisateurs par boutique, périmètres et rôles administrateur/gérant/facturier/caissier, vérifiés sur toutes les routes ERP communes concernées. Le registre d'affectation est commencé, pas encore appliqué transversalement.
-2. Terminer les transitions dans la nouvelle UI : soumettre la facture du facturier au validateur Finance, approbation indépendante, émission, création de paiement par caissier, validation/confirmation indépendante, allocation partielle ou totale, annulation, avoir et remboursement/retour ; garantir une réservation ou promesse de stock. Le pont Finance, le formulaire de préparation et la sortie après solde intégral sont codés mais **non activés en exploitation**.
+2. Terminer les transitions dans la nouvelle UI : soumettre la facture du facturier au validateur Finance, approbation indépendante, émission, création de paiement par caissier, validation/confirmation indépendante, allocation partielle ou totale, avoir et remboursement/retour ; garantir une réservation ou promesse de stock. L'annulation sécurisée d'un **brouillon** est déjà couverte ; la suite des transitions, le pont Finance, le formulaire de préparation et la sortie après solde intégral sont codés partiellement mais **non activés en exploitation**.
 3. Lots reçus et sortis hors transfert : UI de réception par lot, historique et conformité approvisionnement, motifs de pertes.
 4. Caisses propres au site, clôture et validation avec modes de paiement, sessions multiples contrôlées ; attribution de dépense existante à compléter par l'isolement d'accès par site.
 5. Tableau de bord financier complet par boutique et consolidé (la vue opérationnelle est amorcée), vrai CA ≠ encaissements, coût des ventes/charges, exports PDF/Excel et impressions A4/thermiques.
