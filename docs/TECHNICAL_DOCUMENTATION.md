@@ -680,3 +680,10 @@ La capacité SELF de #1029 se fonde sur le plan et les modules activés, le memb
 
 ### Hotfix RH #1028 — archive/restauration des contrats (tranche 2)
 Les contrats `EnterpriseEmploymentContract` exposent deux mutations contrôlées sur les endpoints `DELETE /api/enterprise/:organizationId/employment-contracts/:contractId` et `POST /api/enterprise/:organizationId/employment-contracts/:contractId/restore`. La mutation est exclusivement logique (`archivedAt`) et atomique avec les approbations à révoquer ; aucun bulletin ou ancien contrat n'est effacé. Le registre standard exclut les archives et `GET /employment-contracts?archived=1` exige `HUMAN_RESOURCES:manage`. Le client affiche bascule courants/archives, actions par objet et états FR/EN. Référence de QA et de recette : `docs/HOTFIX_1028_RH_CONTRACT_ARCHIVE_PHASE2.md`. Les référentiels Organisation restent à livrer séparément.
+
+
+### RH Design 2.0 — Organisation canonique #1034 (tranche 3, en PR)
+- La section RH Organisation ne duplique ni `EnterpriseDepartment` ni `EnterprisePosition`. Elle charge les données administratives uniquement dans le sous-onglet Organisation et seulement après un `canManageOrganization` résolu par `ADMIN_DASHBOARD:manage` côté serveur.
+- Les panneaux canoniques `EnterpriseAdministrationDepartmentsPanel` et `EnterprisePositionsGuidedPanel` sont réemployés sans autre route mutante ; sauvegardes suivies d’un rafraîchissement ciblé côté RH, tout en conservant le comportement historique de l’administration.
+- Les utilisateurs RH sans gestion de l’administration restent en lecture seule. Les listes personnelles RH ne gagnent aucun droit de lecture de l’annuaire ; les réponses de sélecteurs sont `private, no-store`.
+- QA `scripts/qa-hotfix-1034-hr-organization.mjs` et documentation `docs/HOTFIX_1034_RH_ORGANISATION_CANONIQUE.md`. Aucun changement Prisma/env. CI et E2E humain requis avant merge.
