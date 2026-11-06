@@ -11,6 +11,7 @@ import { DTSC_INTERNAL_ORGANIZATION_ID, isDtscInternalSession } from "@/lib/orga
 import { manualSubscriptionApprovalNotificationTarget } from "@/lib/notification-targets";
 import { notifyUser } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
+import { isConfiguredSubscriptionSettlementAccount } from "@/lib/subscription-settlement";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
 
@@ -49,6 +50,7 @@ const requestInclude = {
   requestedBy: { select: { id: true, name: true } },
   validator: { select: { id: true, name: true } },
   invoice: { select: { id: true, number: true, status: true, emailSentAt: true } },
+  settlementAccount: { select: { id: true, name: true, currency: true, accountType: true } },
 } satisfies Prisma.ManualSubscriptionPaymentInclude;
 
 export async function GET(req: Request) {
@@ -85,7 +87,7 @@ export async function GET(req: Request) {
   ]);
   const pageCount = Math.max(1, Math.ceil(total / pageSize));
   const page = Math.min(filters.data.page, pageCount);
-  const [requests, validators, users, organizations, plans] = await Promise.all([
+  const [requests, validators, users, organizations, plans, settlementAccounts] = await Promise.all([
     prisma.manualSubscriptionPayment.findMany({
       where,
       include: requestInclude,
@@ -95,6 +97,7 @@ export async function GET(req: Request) {
     assignedOnly ? Promise.resolve([]) : prisma.user.findMany({ where: { status: "ACTIVE" }, select: { id: true, name: true, email: true }, orderBy: { name: "asc" }, take: 500 }),
     assignedOnly ? Promise.resolve([]) : prisma.organization.findMany({ where: { organizationType: "CLIENT", deletedAt: null }, select: { id: true, name: true, email: true }, orderBy: { name: "asc" }, take: 500 }),
     assignedOnly ? Promise.resolve([]) : prisma.billingPlan.findMany({ where: { isActive: true }, select: { id: true, name: true, audience: true, priceUsd: true }, orderBy: { sortOrder: "asc" } }),
+    prisma.financialAccount.findMany({ where: { status: "ACTIVE", reconciliationIssue: null, currency: { not: null }, accountType: { in: ["BANK", "CASH", "MOBILE_MONEY"] } }, select: { id: true, name: true, accountType: true, currency: true, reconciliationIssue: true, status: true }, orderBy: [{ currency: "asc" }, { name: "asc" }], take: 500 }),
   ]);
   // Notification deep links may pin an assigned item on initial load; once the user
   // filters or paginates, the displayed rows must honor the selected criteria.
@@ -109,7 +112,7 @@ export async function GET(req: Request) {
     if (group.status === "REJECTED") statusCounts.rejected = group._count._all;
   }
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { count: requests.length, assignedOnly, page, pageSize } });
-  return NextResponse.json({ requests, validators, users, organizations, plans: plans.map((plan) => ({ ...plan, priceUsd: Number(plan.priceUsd) })), assignedOnly, pagination: { page, pageSize, pageCount, total }, statusCounts });
+  return NextResponse.json({ requests, validators, users, organizations, plans: plans.map((plan) => ({ ...plan, priceUsd: Number(plan.priceUsd) })), settlementAccounts: settlementAccounts.filter(isConfiguredSubscriptionSettlementAccount).map(({ id, name, currency, accountType }) => ({ id, name, currency, accountType })), assignedOnly, pagination: { page, pageSize, pageCount, total }, statusCounts });
 }
 
 export async function POST(req: Request) {

@@ -1,3 +1,9 @@
+## 2026-11-06 — v1.2.4 candidate — P0 #992 règlement manuel DTSC (tranche 1)
+
+- Compte interne de destination réel obligatoire, revalidation sous verrou des devise/type/statut et attestation du validateur avant l'approbation manuelle. Pas de compte créé automatiquement pendant cette validation.
+- Colonne de liaison nullable pour l'historique, migration additive, UI FR/EN, QA de non-régression et E2E propriétaire à effectuer.
+- **Non livré** : CI/E2E sur nouveau SHA nécessaires avant merge, Production uniquement depuis main.
+
 ## 2026-11-06 — v1.2.3 candidate — Feedback Finance FR/EN (#988)
 
 - Caisse, Paiements et Factures : retours HTTP et réseau structurés, sûrs et traduits suivant la langue utilisateur ; les refus ne sont jamais présentés comme des succès.

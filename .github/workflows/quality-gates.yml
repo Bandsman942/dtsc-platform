@@ -191,6 +191,8 @@ jobs:
         run: node scripts/qa-hotfix-1000-internal-register-pagination.mjs
       - name: "UX-03B #986 Finance typed-feedback locale QA"
         run: node scripts/qa-ux-986-finance-feedback-locale.mjs
+      - name: "P0 #992 SaaS settlement destination QA"
+        run: pnpm qa:hotfix-992-settlement
       - name: Lint
         run: pnpm lint
       - name: Build
