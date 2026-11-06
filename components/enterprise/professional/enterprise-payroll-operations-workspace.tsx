@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Ban, CheckCircle2, Eye, FileText, Landmark, Plus, Send, XCircle } from "lucide-react";
 import { Field, NativeSelect } from "@/components/enterprise/core-v2/erp-v2-ui";
-import { EnterpriseMyHrSelfService } from "@/components/enterprise/professional/enterprise-my-hr-self-service";
+
 import {
   professionalErpDate,
   professionalErpEnumLabel,
@@ -284,7 +284,11 @@ export function EnterprisePayrollOperationsWorkspace({ organizationId, organizat
       count={t("payroll.count", { count: runs.pagination.total, suffix: suffix(runs.pagination.total) })}
       primaryAction={runs.canManage ? <div data-responsive-actions><Button variant="outline" onClick={() => { setError(""); setPeriodOpen(true); }}><Plus className="h-4 w-4" />{t("payroll.newPeriod")}</Button><Button onClick={() => { setError(""); setPrepareOpen(true); }}><FileText className="h-4 w-4" />{t("payroll.prepareRun")}</Button></div> : undefined}
     />
-    <EnterpriseMyHrSelfService organizationId={organizationId} />
+    <div className="flex min-w-0 justify-end">
+      <Link href="/enterprise-modules/my-hr" className="inline-flex min-h-10 items-center rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm font-bold text-dtsc-blue hover:border-dtsc-blue focus-visible:outline focus-visible:outline-2 focus-visible:outline-dtsc-blue">
+        {locale === "en" ? "My HR space · private payslips" : "Mon espace RH · bulletins privés"}
+      </Link>
+    </div>
     <ModuleMetrics label={t("payroll.metrics")}><ModuleMetric label={t("payroll.openPeriods")} value={periods.metrics.open || 0} /><ModuleMetric label={t("payroll.toApprove")} value={runs.metrics.pendingApproval || 0} /><ModuleMetric label={t("payroll.approvedRuns")} value={runs.metrics.approved || 0} /><ModuleMetric label={t("payroll.activePopulation")} value={lookups.employees.length} /></ModuleMetrics>
     <ModuleToolbar controls={<><ProfessionalTabs value={tab} onChange={(value) => { setTab(value); setStatus(""); setPage(1); }} items={[{ id: "RUNS", label: t("payroll.runsTab"), count: runs.pagination.total }, { id: "PERIODS", label: t("payroll.periodsTab"), count: periods.pagination.total }]} /><NativeSelect value={status} onChange={(value) => { setStatus(value); setPage(1); }} items={statusItems} /></>} summary={copy.financeBoundary} />
     <ModuleContent>
