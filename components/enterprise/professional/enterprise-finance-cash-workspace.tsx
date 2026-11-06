@@ -29,6 +29,7 @@ import { financeMoney, financeStatusLabel, financeStatusTone, safeFinanceError, 
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { FinanceCriticalStepUpFields, performFinanceCriticalStepUp } from "@/components/enterprise/professional/finance-critical-step-up";
 import { useToastMessage } from "@/components/ui/use-toast-message";
 import { ModuleMetric, ModuleMetrics } from "@/components/workspace/module-metrics";
 import { ModuleContent, ModuleHeader, ModuleSection, ModuleToolbar, ModuleWorkspace } from "@/components/workspace/module-workspace";
@@ -162,6 +163,7 @@ export function EnterpriseFinanceCashWorkspace({ organizationId, organizationNam
     const form = new FormData(event.currentTarget);
     setBusy(true); setMessage(""); setError("");
     try {
+      await performFinanceCriticalStepUp(form, "APPROVE");
       await financeMutation(`/api/enterprise/${organizationId}/cash-sessions/${validateTarget.id}/validate`, {
         approve: form.get("approve") === "true",
         reason: String(form.get("reason") || "") || undefined,
@@ -283,6 +285,7 @@ export function EnterpriseFinanceCashWorkspace({ organizationId, organizationNam
           <textarea name="reason" rows={4} minLength={cashDecision === "false" ? 4 : undefined} required={cashDecision === "false"} disabled={busy} className="w-full min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-base disabled:opacity-60" />
           <p className="mt-2 text-xs leading-5 text-dtsc-muted">{t(cashDecision === "false" ? "rejectionReasonMinimumHint" : "decisionCommentOptionalHint")}</p>
         </Field>
+        <FinanceCriticalStepUpFields action="APPROVE" locale={locale} />
         <div className="flex flex-wrap justify-end gap-2"><Button type="button" variant="outline" disabled={busy} onClick={() => setValidateTarget(null)}>{t("cancel")}</Button><Button type="submit" disabled={busy}>{t("saveDecision")}</Button></div>
       </form> : null}
     </Dialog>

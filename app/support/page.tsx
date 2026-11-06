@@ -81,24 +81,27 @@ export default async function SupportPage({ searchParams }: PageProps) {
   if (q) conditions.push({ OR: [{ subject: { contains: q, mode: "insensitive" } }, { description: { contains: q, mode: "insensitive" } }] });
   const where: Prisma.SupportTicketWhereInput = { AND: conditions };
 
-  const [ticketCount, tickets, assignees, openCount, inProgressCount, completedCount] = await Promise.all([
+  const ticketInclude = {
+    user: { select: { name: true, email: true, role: true } },
+    messages: { orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 21, include: { user: { select: { id: true, name: true, role: true } }, replyTo: { select: { id: true, content: true, deletedAt: true, user: { select: { name: true } } } } } },
+  } satisfies Prisma.SupportTicketInclude;
+  const [ticketCount, tickets, focusedTicket, assignees, openCount, inProgressCount, completedCount] = await Promise.all([
     prisma.supportTicket.count({ where }),
     prisma.supportTicket.findMany({
       where,
       orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
       skip: (page - 1) * PAGE_SIZE,
       take: PAGE_SIZE,
-      include: {
-        user: { select: { name: true, email: true, role: true } },
-        messages: { orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 21, include: { user: { select: { id: true, name: true, role: true } }, replyTo: { select: { id: true, content: true, deletedAt: true, user: { select: { name: true } } } } } },
-      },
+      include: ticketInclude,
     }),
+    params.ticketId ? prisma.supportTicket.findFirst({ where: { AND: [baseWhere, { id: params.ticketId }] }, include: ticketInclude }) : Promise.resolve(null),
     canManageTickets ? prisma.user.findMany({ where: { role: { in: ["ADMIN", "SUPPORT", "MANAGER"] }, status: "ACTIVE", organizationMemberships: { some: { organization: { organizationType: "DTSC_INTERNAL", deletedAt: null }, status: "ACTIVE", removedAt: null } } }, select: { id: true, name: true, email: true, role: true }, orderBy: { name: "asc" }, take: 100 }) : Promise.resolve([]),
     prisma.supportTicket.count({ where: { AND: [baseWhere, { status: "OPEN" }] } }),
     prisma.supportTicket.count({ where: { AND: [baseWhere, { status: "IN_PROGRESS" }] } }),
     prisma.supportTicket.count({ where: { AND: [baseWhere, { status: { in: ["RESOLVED", "CLOSED"] } }] } }),
   ]);
   const pageCount = Math.max(1, Math.ceil(ticketCount / PAGE_SIZE));
+  const visibleTickets = focusedTicket && !tickets.some((ticket) => ticket.id === focusedTicket.id) ? [focusedTicket, ...tickets] : tickets;
   const guide = getIteration07UserGuide("CONSOLE_SUPPORT", locale);
   const productNavigation = supportNavigation(locale);
 
@@ -117,7 +120,7 @@ export default async function SupportPage({ searchParams }: PageProps) {
               <label className="grid gap-1 text-xs font-bold text-dtsc-muted">Priorité<select name="priority" defaultValue={priority || ""} className="h-11 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm text-dtsc-ink"><option value="">Toutes</option><option value="URGENT">Urgente</option><option value="HIGH">Haute</option><option value="MEDIUM">Normale</option><option value="LOW">Faible</option></select></label>
               <button className="self-end rounded-xl bg-dtsc-blue px-4 py-3 text-sm font-semibold text-white hover:bg-[var(--dtsc-brand-secondary-hover)]">Filtrer</button>
             </form>
-            <TicketBoard tickets={JSON.parse(JSON.stringify(tickets))} canManage={canManageTickets} currentUserId={user.id} focusTicketId={params.ticketId} assignees={assignees} />
+            <TicketBoard tickets={JSON.parse(JSON.stringify(visibleTickets))} canManage={canManageTickets} currentUserId={user.id} focusTicketId={params.ticketId} assignees={assignees} />
             <SupportPagination page={Math.min(page, pageCount)} pageCount={pageCount} query={{ q, status, priority }} />
           </ModuleSection>
           <ModuleSection id="support-guide" title="Guides et ressources utiles" description="Consultez l’aide native ou une publication réelle avant de créer une nouvelle demande." action={<ContextualUserGuide guide={guide} />}>

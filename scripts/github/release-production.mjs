@@ -1,6 +1,9 @@
 import fs from 'node:fs';
 import {
-  buildProductionTag,
+  buildSemanticTag,
+  compareProductionVersions,
+  findSemanticTagForSha,
+  parseProductionVersion,
   findProductionTagForSha,
   hasReleaseForTag,
   isFinalDeploymentState,
@@ -147,14 +150,15 @@ if (shouldOpenProductionBlocker(state)) {
   process.exit(5);
 }
 
-const [releases, productionRefs] = await Promise.all([
+const [releases, productionRefs, semanticRefs] = await Promise.all([
   ghAll(`/repos/${owner}/${name}/releases`),
-  ghAll(`/repos/${owner}/${name}/git/matching-refs/tags/prod-`).catch(
-    () => [],
-  ),
+  ghAll(`/repos/${owner}/${name}/git/matching-refs/tags/prod-`).catch(() => []),
+  ghAll(`/repos/${owner}/${name}/git/matching-refs/tags/v`).catch(() => []),
 ]);
 
-const existingTagForSha = findProductionTagForSha(productionRefs, sha);
+const existingTagForSha =
+  findSemanticTagForSha(semanticRefs, sha) ||
+  findProductionTagForSha(productionRefs, sha);
 const hasReleaseForSha = hasReleaseForTag(releases, existingTagForSha);
 
 if (!shouldCreateSuccessfulRelease({ state, hasReleaseForSha })) {
@@ -162,14 +166,25 @@ if (!shouldCreateSuccessfulRelease({ state, hasReleaseForSha })) {
   process.exit(0);
 }
 
-const tag =
-  existingTagForSha ||
-  buildProductionTag(
-    deployment.created_at || status.created_at || new Date().toISOString(),
-    sha,
-  );
+// package.json is read from the exact deployed SHA checked out by the workflow.
+const version = JSON.parse(fs.readFileSync('package.json', 'utf8')).version;
+parseProductionVersion(version);
+const semanticTag = buildSemanticTag(version);
+const existingVersionRef = semanticRefs.find((ref) => ref.ref === `refs/tags/${semanticTag}`);
+if (existingVersionRef && existingVersionRef.object?.sha !== sha) {
+  throw new Error(`Refusing to reuse ${semanticTag}: it already points to ${existingVersionRef.object?.sha}.`);
+}
+const latestVersion = releases
+  .map((release) => String(release.tag_name || ''))
+  .filter((name) => /^v(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)$/.test(name))
+  .map((name) => name.slice(1))
+  .sort((a, b) => compareProductionVersions(b, a))[0];
+if (!existingTagForSha && latestVersion && compareProductionVersions(version, latestVersion) <= 0) {
+  throw new Error(`Refusing non-monotonic release ${semanticTag}; latest is v${latestVersion}.`);
+}
+const tag = existingTagForSha || semanticTag;
 
-if (!existingTagForSha) {
+if (!existingTagForSha && !existingVersionRef) {
   await gh('POST', `/repos/${owner}/${name}/git/refs`, {
     ref: `refs/tags/${tag}`,
     sha,
@@ -206,14 +221,16 @@ const milestones = [
   ...new Set((prs || []).map((pr) => pr.milestone?.title).filter(Boolean)),
 ];
 const previous =
-  releases.find((release) => release.tag_name?.startsWith('prod-'))
-    ?.tag_name || 'aucune Release Production précédente';
+  releases.find((release) => /^v\d+\.\d+\.\d+$/.test(release.tag_name || ''))?.tag_name ||
+  releases.find((release) => release.tag_name?.startsWith('prod-'))?.tag_name ||
+  'aucune Release Production précédente';
 const now = new Date();
 const note = [
   '# DTSC Platform Production Delivery',
   '',
   `Date/heure: ${now.toISOString()}`,
   `SHA: ${sha}`,
+  `Version SemVer: ${semanticTag}`,
   'PR(s) incluse(s):',
   ...(prLines.length ? prLines : ['- aucune PR résolue automatiquement']),
   `Issues fermées: ${[...new Set(issues)].join(', ') || 'aucune détectée'}`,
@@ -242,7 +259,7 @@ const note = [
 await gh('POST', `/repos/${owner}/${name}/releases`, {
   tag_name: tag,
   target_commitish: sha,
-  name: `DTSC Production ${tag}`,
+  name: `DTSC Platform ${tag}`,
   body: note,
   draft: false,
   prerelease: false,

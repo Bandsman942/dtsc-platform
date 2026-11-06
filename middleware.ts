@@ -1,6 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { buildUrlForHostType, getAuthCookieDomain, getCurrentHostType, getDashboardUrl, getSignInUrl, type HostType } from "@/lib/domains";
-import { resolvePostLoginRedirect } from "@/lib/post-login-redirect";
 import { isSameOriginRequest } from "@/lib/request-security";
 import { SESSION_HEARTBEAT_THROTTLE_MS } from "@/lib/session-config";
 import { shouldUseSecureSessionCookie } from "@/lib/session-cookie-security";
@@ -122,12 +121,9 @@ function applyHostRouting(request: NextRequest, session: Awaited<ReturnType<type
       return redirectToHost(request, "account", "/auth/sign-in");
     }
     if (isPathMatch(pathname, authRoutes)) {
-      if (session) {
-        return NextResponse.redirect(new URL(resolvePostLoginRedirect({
-          next: request.nextUrl.searchParams.get("next"),
-          context: session.activeContext,
-        }), request.url));
-      }
+      // Do not infer current authentication from an Edge-verified cookie.
+      // Account pages revalidate revocation, membership and MFA via getSession()
+      // before optionally forwarding an already authenticated visitor.
       return null;
     }
     return redirectToHost(request, routeHostForPrivatePath(pathname), requestPathWithSearch(request));
@@ -201,13 +197,6 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL(getDashboardUrl(), request.url));
   }
 
-  if ((pathname === "/auth/sign-in" || pathname === "/auth/sign-up") && session) {
-    return NextResponse.redirect(new URL(resolvePostLoginRedirect({
-      next: request.nextUrl.searchParams.get("next"),
-      context: session.activeContext,
-    }), request.url));
-  }
-
   const response = NextResponse.next();
   const nowSeconds = Math.floor(Date.now() / 1000);
   const canRenewSignedPolicy = Boolean(
@@ -221,6 +210,8 @@ export async function middleware(request: NextRequest) {
     const created = await createSessionToken(
       {
         userId: session.userId,
+        sessionId: session.sessionId,
+        mfaVerifiedAt: session.mfaVerifiedAt,
         email: session.email,
         name: session.name,
         role: session.role,

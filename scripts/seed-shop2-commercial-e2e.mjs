@@ -131,26 +131,32 @@ async function main() {
     update: { status: "ACTIVE", allowNegativeStock: false, archivedAt: null },
     create: { organizationId, catalogItemId: commercialProduct.id, status: "ACTIVE", allowNegativeStock: false, createdByUserId: admin.id },
   });
+  // The behavioral suite now exercises multiple paid deliveries and refunds
+  // before its final omnichannel fulfillment. Give the shared E2E SKU enough
+  // matching physical and valued opening stock for the entire serial suite.
+  const openingQuantity = 100;
   const commercialBalance = await prisma.enterpriseInventoryBalance.findFirst({
     where: { organizationId, inventoryItemId: commercialInventoryItem.id, warehouseId: warehouse.id, storageLocationId: null, stockLotId: null },
   });
   if (commercialBalance) {
-    await prisma.enterpriseInventoryBalance.update({ where: { id: commercialBalance.id }, data: { quantityOnHand: 20, quantityReserved: 0 } });
+    await prisma.enterpriseInventoryBalance.update({ where: { id: commercialBalance.id }, data: { quantityOnHand: openingQuantity, quantityReserved: 0 } });
   } else {
-    await prisma.enterpriseInventoryBalance.create({ data: { organizationId, inventoryItemId: commercialInventoryItem.id, warehouseId: warehouse.id, quantityOnHand: 20, quantityReserved: 0 } });
+    await prisma.enterpriseInventoryBalance.create({ data: { organizationId, inventoryItemId: commercialInventoryItem.id, warehouseId: warehouse.id, quantityOnHand: openingQuantity, quantityReserved: 0 } });
   }
   const openingKey = `shop2-commercial-opening:${commercialInventoryItem.id}:${warehouse.id}`;
   let openingMovement = await prisma.enterpriseStockMovement.findFirst({ where: { organizationId, idempotencyKey: openingKey } });
   if (!openingMovement) {
     openingMovement = await prisma.enterpriseStockMovement.create({
-      data: { organizationId, inventoryItemId: commercialInventoryItem.id, warehouseId: warehouse.id, movementType: "OPENING_BALANCE", direction: "IN", quantity: 20, balanceAfter: 20, idempotencyKey: openingKey, reason: "Shop 2 iteration 2 commercial acceptance opening stock", createdByUserId: admin.id },
+      data: { organizationId, inventoryItemId: commercialInventoryItem.id, warehouseId: warehouse.id, movementType: "OPENING_BALANCE", direction: "IN", quantity: openingQuantity, balanceAfter: openingQuantity, idempotencyKey: openingKey, reason: "Shop 2 iteration 2 commercial acceptance opening stock", createdByUserId: admin.id },
     });
+  } else {
+    await prisma.enterpriseStockMovement.update({ where: { id: openingMovement.id }, data: { quantity: openingQuantity, balanceAfter: openingQuantity } });
   }
   const existingCostLayer = await prisma.enterpriseInventoryCostLayer.findFirst({ where: { organizationId, sourceMovementId: openingMovement.id } });
   if (existingCostLayer) {
-    await prisma.enterpriseInventoryCostLayer.update({ where: { id: existingCostLayer.id }, data: { quantity: 20, remainingQuantity: 20, unitCost: 50, totalCost: 1000, currencyCode, effectiveAt: new Date() } });
+    await prisma.enterpriseInventoryCostLayer.update({ where: { id: existingCostLayer.id }, data: { quantity: openingQuantity, remainingQuantity: openingQuantity, unitCost: 50, totalCost: openingQuantity * 50, currencyCode, effectiveAt: new Date() } });
   } else {
-    await prisma.enterpriseInventoryCostLayer.create({ data: { organizationId, inventoryItemId: commercialInventoryItem.id, warehouseId: warehouse.id, sourceMovementId: openingMovement.id, valuationMethod: "WEIGHTED_AVERAGE", quantity: 20, remainingQuantity: 20, unitCost: 50, totalCost: 1000, currencyCode, effectiveAt: new Date() } });
+    await prisma.enterpriseInventoryCostLayer.create({ data: { organizationId, inventoryItemId: commercialInventoryItem.id, warehouseId: warehouse.id, sourceMovementId: openingMovement.id, valuationMethod: "WEIGHTED_AVERAGE", quantity: openingQuantity, remainingQuantity: openingQuantity, unitCost: 50, totalCost: openingQuantity * 50, currencyCode, effectiveAt: new Date() } });
   }
 
   const commercialPrice = await upsertCatalogPrice(commercialProduct.id, 116, true, admin.id);

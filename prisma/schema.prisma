@@ -75,6 +75,15 @@ model User {
   email                                 String                            @unique
   passwordHash                          String
   role                                  UserRole                          @default(CLIENT)
+  authSessions                          AuthSession[]
+  knownBrowsers                          AuthKnownBrowser[]
+  mfaRecoveryRequired                   Boolean                           @default(false)
+  mfaRecoveryInvalidBefore              DateTime?
+  mfaRecoveryTargets                    AuthMfaRecoveryRequest[]          @relation("AuthMfaRecoveryTarget")
+  mfaRecoveryRequested                  AuthMfaRecoveryRequest[]          @relation("AuthMfaRecoveryRequester")
+  mfaRecoveryApproved                   AuthMfaRecoveryRequest[]          @relation("AuthMfaRecoveryApprover")
+  authTotpFactor                        AuthTotpFactor?
+  authMfaChallenges                     AuthMfaChallenge[]
   companyName                           String?
   phone                                 String?
   jobTitle                              String?
@@ -5404,6 +5413,8 @@ model AppSetting {
   notificationRetentionDays       Int      @default(60)
   signUpOtpEnabled                Boolean  @default(true)
   signUpOtpExpirationMinutes      Int      @default(10)
+  requireMfaForAllUsers            Boolean  @default(false)
+  requireMfaForDtscInternal        Boolean  @default(false)
   adminRoleAccess                 Json     @default("{}")
   updatedAt                       DateTime @updatedAt
 }
@@ -5786,6 +5797,8 @@ model FinancialAccount {
   id             String         @id @default(cuid())
   name           String         @unique
   accountType    String         @default("CASH")
+  currency       String?
+  reconciliationIssue String?
   description    String?
   openingBalance Decimal        @default(0) @db.Decimal(12, 2)
   currentBalance Decimal        @default(0) @db.Decimal(12, 2)
@@ -5797,6 +5810,7 @@ model FinancialAccount {
   payrolls       HrcfoPayroll[]
 
   @@index([status, accountType])
+  @@index([currency, status])
 }
 
 model HrcfoPayroll {

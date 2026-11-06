@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const employeeCreateSchema = z.object({
+const employeePayloadSchema = z.object({
   organizationMemberId: z.string().trim().min(1).optional().nullable(),
   businessPartyId: z.string().trim().min(1).optional().nullable(),
   firstName: z.string().trim().min(1).max(120),
@@ -16,11 +16,18 @@ export const employeeCreateSchema = z.object({
   employmentType: z.string().trim().max(120).optional().nullable(),
   baseCompensation: z.coerce.number().nonnegative().max(1_000_000_000).optional().nullable(),
   compensationCurrency: z.string().trim().toUpperCase().length(3).optional().nullable(),
-}).superRefine((value, ctx) => {
+});
+function validateEmployeeCompensation(value: { baseCompensation?: number | null; compensationCurrency?: string | null }, ctx: z.RefinementCtx) {
   if ((value.baseCompensation == null) !== (value.compensationCurrency == null)) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: "La rémunération et sa devise doivent être renseignées ensemble.", path: value.baseCompensation == null ? ["baseCompensation"] : ["compensationCurrency"] });
   }
-});
+}
+
+export const employeeCreateSchema = employeePayloadSchema.superRefine(validateEmployeeCompensation);
+export const employeeUpdateSchema = employeePayloadSchema
+  .omit({ organizationMemberId: true, businessPartyId: true })
+  .extend({ revision: z.coerce.number().int().positive() })
+  .superRefine(validateEmployeeCompensation);
 
 export const EMPLOYMENT_CONTRACT_TYPES = ["EMPLOYMENT", "INDEFINITE", "FIXED_TERM", "CONSULTING", "INTERNSHIP"] as const;
 export const LEAVE_TYPES = ["ANNUAL", "SICK", "MATERNITY", "PATERNITY", "UNPAID", "OTHER"] as const;

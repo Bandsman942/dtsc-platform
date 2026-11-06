@@ -41,6 +41,10 @@ export function adminNotificationTarget(section: string, focusId?: string | null
   return withQuery("/admin", { section, focusId, focusKind });
 }
 
+export function manualSubscriptionApprovalNotificationTarget(requestId: string) {
+  return withQuery("/billing", { manualApproval: requestId });
+}
+
 export function calendarNotificationTarget(eventId: string) {
   return withQuery("/calendar", { eventId });
 }

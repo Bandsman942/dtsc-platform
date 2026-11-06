@@ -1,9 +1,11 @@
+import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { getEnterpriseCommonDomainAccess } from "@/lib/enterprise/common/access";
 import { enterpriseDomainErrorResponse } from "@/lib/enterprise/common/http";
+import { getActiveEnterpriseSelfEmployee } from "@/lib/enterprise/hr-payroll/self-service";
 import { timesheetCreateSchema } from "@/lib/enterprise/hr-payroll/schemas";
 import { createEnterpriseTimesheet } from "@/lib/enterprise/hr-payroll/timesheets";
 import { prisma } from "@/lib/prisma";
@@ -19,16 +21,29 @@ export async function GET(req: Request, { params }: Params) {
   const { organizationId } = await params;
   const access = await getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode: "TIME_ATTENDANCE", action: "read" });
   if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  const [approvalAccess, submitAccess] = await Promise.all([
+  const [approvalAccess, submitAccess, manageAccess, selfEmployee] = await Promise.all([
     getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode: "TIME_ATTENDANCE", action: "approve" }),
     getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode: "TIME_ATTENDANCE", action: "submit" }),
+    getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode: "TIME_ATTENDANCE", action: "manage" }),
+    getActiveEnterpriseSelfEmployee(session, organizationId),
   ]);
   const url = new URL(req.url);
   const page = Math.max(1, Number(url.searchParams.get("page") || 1) || 1);
   const pageSize = Math.min(100, Math.max(5, Number(url.searchParams.get("pageSize") || 25) || 25));
   const employeeId = url.searchParams.get("employeeId")?.trim() || "";
   const status = url.searchParams.get("status")?.trim() || "";
-  const where = { organizationId, archivedAt: null, ...(employeeId ? { employeeId } : {}), ...(status ? { status } : {}) };
+  const actorScope: Prisma.EnterpriseTimesheetWhereInput = manageAccess ? {} : {
+    OR: [
+      ...(selfEmployee ? [{ employeeId: selfEmployee.id }] : []),
+      ...(approvalAccess ? [{ approverUserId: session.userId }] : []),
+    ],
+  };
+  const where: Prisma.EnterpriseTimesheetWhereInput = {
+    organizationId, archivedAt: null,
+    ...(selfEmployee || approvalAccess || manageAccess ? actorScope : { id: "__none__" }),
+    ...(employeeId ? { employeeId } : {}), ...(status ? { status } : {}),
+  };
+  const metricScope: Prisma.EnterpriseTimesheetWhereInput = selfEmployee || approvalAccess || manageAccess ? actorScope : { id: "__none__" };
   const [rawItems, total, pending, approvedMinutes] = await Promise.all([
     prisma.enterpriseTimesheet.findMany({
       where,
@@ -41,8 +56,8 @@ export async function GET(req: Request, { params }: Params) {
       },
     }),
     prisma.enterpriseTimesheet.count({ where }),
-    prisma.enterpriseTimesheet.count({ where: { organizationId, archivedAt: null, status: "SUBMITTED" } }),
-    prisma.enterpriseTimesheet.aggregate({ where: { organizationId, archivedAt: null, status: "APPROVED" }, _sum: { totalApprovedMinutes: true } }),
+    prisma.enterpriseTimesheet.count({ where: { organizationId, archivedAt: null, ...metricScope, status: "SUBMITTED" } }),
+    prisma.enterpriseTimesheet.aggregate({ where: { organizationId, archivedAt: null, ...metricScope, status: "APPROVED" }, _sum: { totalApprovedMinutes: true } }),
   ]);
   const items = rawItems.map((item) => ({
     ...item,
@@ -64,6 +79,14 @@ export async function POST(req: Request, { params }: Params) {
   if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const parsed = timesheetCreateSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "TIMESHEETS_INPUT_INVALID", req);
+  const [manageAccess, writeAccess] = await Promise.all([
+    getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode: "TIME_ATTENDANCE", action: "manage" }),
+    getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode: "TIME_ATTENDANCE", action: "write" }),
+  ]);
+  if (!manageAccess && !writeAccess) {
+    const selfEmployee = await getActiveEnterpriseSelfEmployee(session, organizationId);
+    if (!selfEmployee || selfEmployee.id !== parsed.data.employeeId) return NextResponse.json({ error: "EMPLOYEE_TIMESHEET_NOT_OWNED" }, { status: 403 });
+  }
   try {
     const timesheet = await createEnterpriseTimesheet(organizationId, session.userId, parsed.data);
     await writeAuditLog({ userId: session.userId, action: "ENTERPRISE_TIMESHEET_SUBMITTED", entity: "EnterpriseTimesheet", entityId: timesheet.id, request: req, metadata: { organizationId } });

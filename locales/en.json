@@ -10,6 +10,22 @@
     "withoutBatch": "no batch",
     "empty": "No stock movements match your search."
   },
+  "pharmacySaleKpis": {
+    "todayAmount": "Today's amount",
+    "monthAmount": "This month's amount",
+    "unavailable": "Needs review",
+    "currencyWarning": "Currency totals are temporarily hidden: some sales use a different historical base currency or an exchange-rate snapshot that requires review. Check the sales details before making financial decisions."
+  },
+  "pharmacySaleReferences": {
+    "search": "Search references...",
+    "loading": "Loading options...",
+    "unavailable": "Reference unavailable or inactive.",
+    "error": "Search unavailable. Try again or check your connection.",
+    "empty": "No matching references.",
+    "chooseProduct": "Select a product first.",
+    "previous": "Previous",
+    "next": "Next"
+  },
   "common": {
     "actions": "Actions",
     "archive": "Archive",
@@ -1177,5 +1193,31 @@
       "empty": "No data available.",
       "guide": "User guide"
     }
+  },
+  "subscriptionRenewal": {
+    "title": "Renew your subscription",
+    "expired": "Your subscription has expired",
+    "expiring": "Your subscription expires soon",
+    "manual": "Ask DTSC to renew the subscription",
+    "online": "Renew with a one-time online payment",
+    "requested": "Your renewal request is being processed",
+    "noAutomaticCharge": "No recurring automatic charge without a valid mandate.",
+    "renewalSupport": "Track my DTSC request",
+    "permission": "Only the organization owner or an administrator can renew its subscription.",
+    "approvalsTitle": "Manual payments assigned to me",
+    "approvalNotification": "A manual payment is awaiting your approval.",
+    "externalReference": "Verifiable payment reference",
+    "invoicePendingMail": "Payment approved and invoiced; email delivery needs confirmation."
+  },
+  "internalFinance": {
+    "title": "DTSC treasury controls",
+    "confirmedPayments": "Confirmed receipts",
+    "postedIncome": "Posted subscription income",
+    "accountsByCurrency": "Account balances by currency",
+    "manualPending": "Pending manual payments",
+    "unlinkedInvoices": "Paid invoices without a posting",
+    "unverifiedAccounts": "Accounts requiring reconciliation",
+    "warning": "Multi-currency history requires human verification.",
+    "notGeneralLedger": "This is not yet complete double-entry bookkeeping."
   }
 }

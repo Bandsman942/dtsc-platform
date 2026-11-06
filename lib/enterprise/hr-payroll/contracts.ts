@@ -246,6 +246,34 @@ export async function updateEnterpriseEmploymentContract(
     });
     if (updated.count !== 1) throw new EnterpriseDomainConflictError();
 
+    // Persist the exact previous revision inside the same guarded transaction.
+    // Do not rewrite an approved contract or expose compensation in event logs.
+    await tx.enterpriseEmploymentContractRevision.create({
+      data: {
+        organizationId,
+        contractId: contract.id,
+        revisionNumber: contract.revision,
+        savedByUserId: actorUserId,
+        snapshotJson: {
+          reference: contract.reference,
+          versionNumber: contract.versionNumber,
+          status: contract.status,
+          contractType: contract.contractType,
+          startDate: contract.startDate.toISOString(),
+          endDate: contract.endDate?.toISOString() || null,
+          probationEndDate: contract.probationEndDate?.toISOString() || null,
+          jobTitle: contract.jobTitle,
+          departmentId: contract.departmentId,
+          siteId: contract.siteId,
+          baseCompensation: contract.baseCompensation.toString(),
+          compensationCurrency: contract.compensationCurrency,
+          payFrequency: contract.payFrequency,
+          standardHoursPerWeek: contract.standardHoursPerWeek?.toString() || null,
+          terms: contract.terms,
+        },
+      },
+    });
+
     const supersededAt = new Date();
     await tx.enterpriseApproval.updateMany({
       where: {
@@ -377,6 +405,73 @@ export async function decideEnterpriseEmploymentContract(organizationId: string,
     });
     await tx.enterpriseApproval.update({ where: { id: approval.id }, data: { status: "APPROVED", decidedAt: new Date(), decisionComment: input.comment || null, revision: { increment: 1 } } });
     await publishHrEvent(tx, { organizationId, entityType: "EnterpriseEmploymentContract", entityId: contract.id, eventType: "EMPLOYMENT_CONTRACT_ACTIVATED", summary: `Contrat ${contract.reference} activé`, actorUserId, fromStatus: "PENDING_APPROVAL", toStatus: "ACTIVE", metadataJson: { positionId: position?.id || null, departmentId: contract.departmentId || position?.departmentId || null, siteId: contract.siteId || null } });
+    return tx.enterpriseEmploymentContract.findUniqueOrThrow({ where: { id: contract.id } });
+  });
+}
+
+/** A contract can be removed from operational lists without deleting legal/payroll history. */
+export async function archiveEnterpriseEmploymentContract(
+  organizationId: string,
+  contractId: string,
+  actorUserId: string,
+  input: { revision: number; reason: string },
+) {
+  return prisma.$transaction(async (tx) => {
+    const contract = await tx.enterpriseEmploymentContract.findFirst({
+      where: { id: contractId, organizationId, archivedAt: null },
+    });
+    if (!contract) throw new EnterpriseDomainError("EMPLOYMENT_CONTRACT_NOT_FOUND", 404);
+    if (contract.status === "ACTIVE") throw new EnterpriseDomainError("EMPLOYMENT_CONTRACT_ACTIVE_ARCHIVE_FORBIDDEN", 409);
+    if (contract.revision !== input.revision) throw new EnterpriseDomainConflictError();
+    const now = new Date();
+    const updated = await tx.enterpriseEmploymentContract.updateMany({
+      where: { id: contract.id, organizationId, archivedAt: null, revision: input.revision, status: contract.status },
+      data: { archivedAt: now, updatedByUserId: actorUserId, revision: { increment: 1 } },
+    });
+    if (updated.count !== 1) throw new EnterpriseDomainConflictError();
+    // A pending request must never remain actionable after the contract was archived.
+    await tx.enterpriseApproval.updateMany({
+      where: { organizationId, targetEntityType: "EnterpriseEmploymentContract", targetEntityId: contract.id, status: "PENDING", archivedAt: null },
+      data: { status: "SUPERSEDED", archivedAt: now, decidedAt: now, decisionComment: "Contract archived before decision.", revision: { increment: 1 } },
+    });
+    await publishHrEvent(tx, {
+      organizationId,
+      entityType: "EnterpriseEmploymentContract", entityId: contract.id,
+      eventType: "EMPLOYMENT_CONTRACT_ARCHIVED", summary: `Contrat ${contract.reference} archivé`,
+      actorUserId, fromStatus: contract.status, toStatus: contract.status,
+      metadataJson: { archiveReason: input.reason.trim(), previousRevision: contract.revision },
+    });
+    return tx.enterpriseEmploymentContract.findUniqueOrThrow({ where: { id: contract.id } });
+  });
+}
+
+export async function restoreEnterpriseEmploymentContract(
+  organizationId: string,
+  contractId: string,
+  actorUserId: string,
+  revision: number,
+) {
+  return prisma.$transaction(async (tx) => {
+    const contract = await tx.enterpriseEmploymentContract.findFirst({
+      where: { id: contractId, organizationId, archivedAt: { not: null } },
+    });
+    if (!contract) throw new EnterpriseDomainError("EMPLOYMENT_CONTRACT_ARCHIVE_NOT_FOUND", 404);
+    // Historical active terms must not be silently reactivated or bypass independent approval.
+    if (contract.status === "ACTIVE") throw new EnterpriseDomainError("EMPLOYMENT_CONTRACT_ACTIVE_RESTORE_FORBIDDEN", 409);
+    if (contract.revision !== revision) throw new EnterpriseDomainConflictError();
+    const restoredStatus = contract.status === "PENDING_APPROVAL" ? "DRAFT" : contract.status;
+    const updated = await tx.enterpriseEmploymentContract.updateMany({
+      where: { id: contract.id, organizationId, archivedAt: { not: null }, revision },
+      data: { archivedAt: null, status: restoredStatus, updatedByUserId: actorUserId, revision: { increment: 1 } },
+    });
+    if (updated.count !== 1) throw new EnterpriseDomainConflictError();
+    await publishHrEvent(tx, {
+      organizationId,
+      entityType: "EnterpriseEmploymentContract", entityId: contract.id,
+      eventType: "EMPLOYMENT_CONTRACT_RESTORED", summary: `Contrat ${contract.reference} restauré`,
+      actorUserId, fromStatus: contract.status, toStatus: restoredStatus,
+      metadataJson: { previousRevision: contract.revision, requiresResubmission: contract.status === "PENDING_APPROVAL" },
+    });
     return tx.enterpriseEmploymentContract.findUniqueOrThrow({ where: { id: contract.id } });
   });
 }

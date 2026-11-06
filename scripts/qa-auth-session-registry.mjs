@@ -1,0 +1,63 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+
+const read = (path) => readFileSync(new URL("../" + path, import.meta.url), "utf8");
+const ledger = read("lib/auth/session-registry.ts");
+const auth = read("lib/auth.ts");
+const cookie = read("lib/session.ts");
+const middleware = read("middleware.ts");
+const signout = read("app/api/auth/sign-out/route.ts");
+const api = read("app/api/account/security/sessions/route.ts");
+const component = read("components/settings/active-sessions-settings.tsx");
+const page = read("app/settings/page.tsx");
+const securityWorkspace = read("components/settings/security-settings-workspace.tsx");
+const model = read("prisma/auth-sessions.prisma");
+const migration = read("prisma/migrations/20261102183000_auth_sessions_registry/migration.sql");
+const preference = read("prisma/session-policy.prisma");
+const user = read("prisma/schema.prisma");
+
+for(const marker of ["sessionId?: string", "absoluteExp", "exp"]) assert.ok(cookie.includes(marker), "Signed cookie missing " + marker);
+for(const marker of ["isAuthSessionActive", "registerAuthSession", "touchRegisteredSession", "newSessionId"]) assert.ok(auth.includes(marker), "Auth gateway missing " + marker);
+assert.ok(auth.indexOf("registerAuthSession(created.session)") < auth.indexOf("cookieStore.set(SESSION_COOKIE"), "Register BEFORE issuing session cookie");
+assert.ok(auth.includes("const signed = await verifySessionToken"), "Auth gateway validates signatures first");
+assert.ok(
+  auth.includes("if (!(await isAuthSessionActive(signed))) return null;") ||
+  auth.includes("return await isAuthSessionActive(signed) ? signed : null;"),
+  "Auth gateway must reject revoked sessions before any MFA or business authorization",
+);
+assert.ok(auth.includes("if (sessionOverride && session?.userId !== sessionOverride.userId) return null;"), "A caller-supplied session snapshot must never bypass current revocation checks");
+assert.ok(!auth.includes("sessionOverride ?? await getSession()"), "Auth gateway must revalidate the current signed cookie even when a session override is supplied");
+assert.ok(middleware.includes("sessionId: session.sessionId"), "Edge renewal MUST preserve session ID");
+assert.ok(ledger.includes("id: session.sessionId"), "Ledger queries by signed session ID");
+assert.ok(ledger.includes("revokedAt: null"), "Ledger checks non-revoked status");
+assert.ok(ledger.includes("absoluteExpiresAt: { gt: new Date() }"), "Ledger checks expiration");
+assert.ok(ledger.includes("legacySessionsInvalidBefore"), "Legacy cutover supports a revoke-others boundary");
+assert.ok(ledger.includes("userId: session.userId"), "Ledger enforces account ownership");
+assert.ok(signout.includes("await revokeOneSession(session.userId, session.sessionId"), "Logout revokes server session");
+assert.ok(api.includes("isSameOriginRequest(req)"), "Mutations require same origin");
+assert.ok(api.includes('failureMode: "closed"'), "Revocation rate limiting must fail closed");
+assert.ok(api.includes("revokeOtherSessions("), "API supports global account logout other devices");
+assert.ok(api.includes("revokeOneSession("), "API supports single session revocation");
+assert.ok(api.includes("where: { userId: session.userId"), "Lists scoped to current account");
+assert.ok(api.includes("writeAuditLog"), "Mutations audited");
+assert.ok(component.includes("requestSessions"), "UI must call real server actions");
+assert.ok(component.includes("setConfirm"), "Destructive UI must confirm");
+assert.ok(page.includes("<SecuritySettingsWorkspace"), "Settings UI must open consolidated security section");
+assert.ok(securityWorkspace.includes("<ActiveSessionsSettings") && securityWorkspace.includes("embedded"), "Security workspace must expose actual session revocation UI");
+assert.ok(model.includes("model AuthSession"), "Session schema missing");
+assert.ok(user.includes("authSessions"), "User relation missing");
+assert.ok(migration.includes('CREATE TABLE "AuthSession"'), "Migration missing ledger");
+assert.ok(preference.includes("legacySessionsInvalidBefore"), "Legacy invalidation preference missing");
+const consoleRoute = read("app/api/admin/security/sessions/route.ts");
+const consolePanel = read("components/admin/console-sessions-security-panel.tsx");
+const consolePage = read("app/admin/console-page.tsx");
+assert.ok(consoleRoute.includes("CONSOLE_CAPABILITIES.SECURITY_READ"), "Console listing requires RBAC read");
+assert.ok(consoleRoute.includes("CONSOLE_CAPABILITIES.SECURITY_MANAGE"), "Console revocation requires RBAC manage");
+assert.ok(consoleRoute.includes("verifyPassword("), "Admin session revocation requires reauthentication");
+assert.ok(consoleRoute.includes("isSameOriginRequest"), "Admin mutation protects request origin");
+assert.ok(consoleRoute.includes("revokeOneSession(parsed.data.userId"), "Admin can only revoke selected session");
+assert.ok(consoleRoute.includes("writeAuditLog"), "Admin revocation must be audited");
+assert.ok(consolePanel.includes("canManage"), "Console hides mutations for read-only actor");
+assert.ok(consolePanel.includes("setSelected"), "Console requires explicit confirmation");
+assert.ok(consolePage.includes("<ConsoleSessionsSecurityPanel"), "Console must expose session panel");
+console.log("AUTH-03 session registry source invariants OK. Browser E2E still needed.");
