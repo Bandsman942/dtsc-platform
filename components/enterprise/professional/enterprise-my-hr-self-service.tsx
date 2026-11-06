@@ -1,0 +1,266 @@
+"use client";
+
+import { useEffect, useState, type FormEvent } from "react";
+import Link from "next/link";
+import { Clock3, Download, FileText, Play, RefreshCw, Send, Square, Wallet } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { useToastMessage } from "@/components/ui/use-toast-message";
+import { professionalErpEnumLabel, useProfessionalErpLocale } from "@/components/enterprise/professional/professional-erp-i18n";
+import { StatusBadge } from "@/components/workspace/status-badge";
+
+type Payslip = {
+  id: string; payslipNumber: string; generatedAt: string | null; currency: string;
+  grossAmount: string; deductionAmount: string; netAmount: string;
+  payrollItem: { payrollRun: { reference: string; approvedAt: string | null; payrollPeriod: { name: string; periodStart: string; periodEnd: string; payDate: string | null } } };
+};
+type Clock = { id: string; startedAt: string; stoppedAt: string | null; workSummary: string | null; revision: number };
+type Sheet = { id: string; reference: string; status: string; periodStart: string; periodEnd: string; totalDeclaredMinutes: number; totalApprovedMinutes: number; correctionComment: string | null; rejectionComment: string | null };
+type SelfData = {
+  linked: boolean; payrollEnabled: boolean; timeEnabled: boolean; canClock: boolean; canSubmitReport: boolean;
+  employee?: { id: string; employeeNumber: string; displayName: string };
+  payslips: Payslip[]; timesheets: Sheet[]; clockSessions: Clock[]; activeClockSession?: Clock | null;
+  payslipsPagination?: Pagination; reportsPagination?: Pagination; clockSessionsPagination?: Pagination;
+};
+type Approver = { userId: string; name?: string | null; label?: string; email?: string };
+type Pagination = { page: number; pages: number; total: number };
+export type SelfHrRelatedModule = { code: "TIME_ATTENDANCE" | "HUMAN_RESOURCES" | "PAYROLL_OPERATIONS"; href: string; label: string };
+export type SelfHrTimeTab = "SCHEDULES" | "ATTENDANCE" | "LEAVE" | "TIMESHEETS";
+
+const copy = {
+  fr: {
+    title: "Mon espace RH", description: "Vos bulletins privés, votre pointage et vos rapports de travail.",
+    linking: "Votre compte n'est pas encore lié à un dossier salarié actif. Contactez votre responsable RH pour activer cet espace personnel.",
+    loading: "Chargement de votre espace RH…", refresh: "Actualiser",
+    pays: "Mes bulletins de paie", noPays: "Aucun bulletin approuvé pour le moment.",
+    pdf: "Télécharger le PDF", net: "Net à payer", approved: "Paie approuvée, décaissement non présumé",
+    time: "Mon temps de travail", start: "Débuter le pointage", stop: "Terminer le pointage",
+    running: "Pointage en cours", idle: "Aucun pointage en cours", past: "Dernières sessions", noPast: "Aucune session enregistrée.",
+    summary: "Résumé de la session (facultatif)", report: "Soumettre un rapport de travail",
+    day: "Date de travail", hours: "Heures travaillées", desc: "Travail réalisé", approver: "Validateur indépendant",
+    selectApprover: "Choisir un validateur", submit: "Soumettre le rapport", history: "Rapports précédents",
+    noHistory: "Aucun rapport soumis.", declared: "Déclaré", accepted: "Approuvé",
+    page: "Page", previous: "Précédente", next: "Suivante",
+    related: "Accès rapides et modules associés", schedules: "Horaires planifiés", attendance: "Présences", leaves: "Congés", sheets: "Feuilles de temps",
+    sent: "Votre rapport de travail a été soumis au validateur sélectionné.",
+    started: "Votre pointage a commencé, à l'heure du serveur.",
+    stopped: "Votre pointage a été terminé et conservé dans l'historique.",
+    emptyDescription: "Décrivez les tâches réalisées avant de soumettre le rapport.",
+    noApprover: "Choisissez un validateur indépendant habilité.",
+    failed: "Cette opération n'a pas abouti. Vérifiez vos données et réessayez.",
+    unavailable: "L'espace RH personnel est indisponible pour le moment.",
+    already: "Un pointage est déjà en cours. Terminez-le d'abord.",
+    notRunning: "Aucun pointage actif à terminer.",
+  },
+  en: {
+    title: "My HR space", description: "Your private payslips, work clock and work reports.",
+    linking: "Your account is not yet linked to an active employee record. Contact HR to activate this personal space.",
+    loading: "Loading your HR space…", refresh: "Refresh",
+    pays: "My payslips", noPays: "No approved payslips yet.",
+    pdf: "Download PDF", net: "Net payable", approved: "Payroll approved; payment not presumed",
+    time: "My working time", start: "Clock in", stop: "Clock out",
+    running: "Clock running", idle: "No active clock", past: "Recent sessions", noPast: "No work sessions recorded.",
+    summary: "Session summary (optional)", report: "Submit a work report",
+    day: "Work date", hours: "Hours worked", desc: "Work performed", approver: "Independent approver",
+    selectApprover: "Choose an approver", submit: "Submit work report", history: "Previous reports",
+    noHistory: "No reports submitted.", declared: "Declared", accepted: "Approved",
+    page: "Page", previous: "Previous", next: "Next",
+    related: "Quick access and related modules", schedules: "Planned schedules", attendance: "Attendance", leaves: "Leave", sheets: "Timesheets",
+    sent: "Your work report was submitted to the selected approver.",
+    started: "Clock-in recorded using server time.",
+    stopped: "Clock-out recorded and preserved in history.",
+    emptyDescription: "Describe the work performed before submitting.",
+    noApprover: "Choose an authorized independent approver.",
+    failed: "The operation failed. Check your details and try again.",
+    unavailable: "Your personal HR space is temporarily unavailable.",
+    already: "A clock-in is already running. Stop it first.",
+    notRunning: "There is no running work session to stop.",
+  },
+} as const;
+
+function todayLocalDateInput() {
+  const value = new Date();
+  return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
+}
+
+function HrPager({ pagination, onChange, label, copy: c }: {
+  pagination?: Pagination; onChange: (page: number) => void; label: string;
+  copy: (typeof copy)["fr"] | (typeof copy)["en"];
+}) {
+  if (!pagination || pagination.pages <= 1) return null;
+  return <nav aria-label={label} className="flex min-w-0 flex-wrap items-center justify-between gap-3 border-t border-dtsc-border pt-3">
+    <span className="text-xs text-dtsc-muted">{c.page} {pagination.page}/{pagination.pages}</span>
+    <div className="flex flex-wrap gap-2">
+      <Button type="button" size="sm" variant="outline" disabled={pagination.page <= 1} onClick={() => onChange(pagination.page - 1)}>{c.previous}</Button>
+      <Button type="button" size="sm" variant="outline" disabled={pagination.page >= pagination.pages} onClick={() => onChange(pagination.page + 1)}>{c.next}</Button>
+    </div>
+  </nav>;
+}
+
+export function EnterpriseMyHrSelfService({ organizationId, relatedModules = [], onOpenTimeTab }: { organizationId: string; relatedModules?: SelfHrRelatedModule[]; onOpenTimeTab?: (tab: SelfHrTimeTab) => void }) {
+  const locale = useProfessionalErpLocale();
+  const c = copy[locale === "en" ? "en" : "fr"];
+  const [data, setData] = useState<SelfData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [page, setPage] = useState(1);
+  const [reportPage, setReportPage] = useState(1);
+  const [clockPage, setClockPage] = useState(1);
+  const [refresh, setRefresh] = useState(0);
+  const [approvers, setApprovers] = useState<Approver[]>([]);
+  const [success, setSuccess] = useState("");
+  const [error, setError] = useState("");
+  const [workSummary, setWorkSummary] = useState("");
+  useToastMessage(success, "success");
+  useToastMessage(error, "error");
+
+  useEffect(() => {
+    let active = true;
+    setData(null); setLoading(true);
+    void fetch(`/api/enterprise/${organizationId}/my-hr?page=${page}&reportPage=${reportPage}&clockPage=${clockPage}&pageSize=10`, { cache: "no-store" })
+      .then(async (response) => {
+        const payload = await response.json().catch(() => null) as (SelfData & { message?: string }) | null;
+        if (response.status === 403) { if (active) { setData(null); setError(""); } return; }
+        if (!response.ok || !payload) throw new Error(payload?.message || c.unavailable);
+        if (active) { setData(payload); setError(""); }
+      }).catch((err) => { if (active) setError(err instanceof Error ? err.message : c.unavailable); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [organizationId, page, reportPage, clockPage, refresh, c.unavailable]);
+
+  useEffect(() => {
+    let active = true;
+    if (!data?.canSubmitReport) return;
+    void fetch(`/api/enterprise/${organizationId}/my-hr/approvers`, { cache: "no-store" })
+      .then((response) => response.json())
+      .then((payload: { approvers?: Approver[] }) => { if (active) setApprovers(payload.approvers || []); })
+      .catch(() => { if (active) setApprovers([]); });
+    return () => { active = false; };
+  }, [data?.canSubmitReport, organizationId]);
+
+  const date = (value: string | null) => value
+    ? new Intl.DateTimeFormat(locale === "en" ? "en-GB" : "fr-FR", { dateStyle: "medium", timeZone: "UTC" }).format(new Date(value))
+    : "—";
+  const time = (value: string | null) => value
+    ? new Intl.DateTimeFormat(locale === "en" ? "en-GB" : "fr-FR", { dateStyle: "short", timeStyle: "short" }).format(new Date(value))
+    : "—";
+  const money = (amount: string, currency: string) =>
+    new Intl.NumberFormat(locale === "en" ? "en-GB" : "fr-FR", { maximumFractionDigits: 2, minimumFractionDigits: 2 }).format(Number(amount)) + " " + currency;
+  const activeClock = data?.activeClockSession || data?.clockSessions.find((clock) => !clock.stoppedAt);
+  const timeModule = relatedModules.find((module) => module.code === "TIME_ATTENDANCE");
+  const timeLinks: Array<{ tab: SelfHrTimeTab; label: string }> = [
+    { tab: "SCHEDULES", label: c.schedules }, { tab: "ATTENDANCE", label: c.attendance },
+    { tab: "LEAVE", label: c.leaves }, { tab: "TIMESHEETS", label: c.sheets },
+  ];
+  const errorMessage = (body: { error?: string; message?: string } | null) => {
+    if (body?.error === "EMPLOYEE_CLOCK_ALREADY_RUNNING") return c.already;
+    if (body?.error === "EMPLOYEE_CLOCK_NOT_RUNNING") return c.notRunning;
+    return body?.message || c.failed;
+  };
+
+  async function post(url: string, payload: unknown) {
+    const response = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+    const body = await response.json().catch(() => null) as { error?: string; message?: string } | null;
+    if (!response.ok) throw new Error(errorMessage(body));
+    return body;
+  }
+
+  async function clock(action: "START" | "STOP") {
+    if (busy) return;
+    setBusy(true); setError(""); setSuccess("");
+    try {
+      await post(`/api/enterprise/${organizationId}/my-hr/clock`, { action, workSummary: action === "STOP" ? workSummary.trim() : null });
+      setWorkSummary("");
+      setClockPage(1);
+      setSuccess(action === "START" ? c.started : c.stopped);
+      setRefresh((v) => v + 1);
+    } catch (err) { setError(err instanceof Error ? err.message : c.failed); }
+    finally { setBusy(false); }
+  }
+
+  async function submitReport(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (busy) return;
+    const form = event.currentTarget;
+    const values = new FormData(form);
+    const description = String(values.get("description") || "").trim();
+    const approverUserId = String(values.get("approverUserId") || "");
+    const day = String(values.get("day") || "");
+    const declaredMinutes = Math.round(Number(values.get("hours") || 0) * 60);
+    if (!description) return setError(c.emptyDescription);
+    if (!approverUserId) return setError(c.noApprover);
+    if (!day || declaredMinutes <= 0 || declaredMinutes > 1440) return setError(c.failed);
+    const workDate = day;
+    setBusy(true); setError(""); setSuccess("");
+    try {
+      await post(`/api/enterprise/${organizationId}/my-hr/reports`, {
+        periodStart: workDate, periodEnd: workDate, approverUserId,
+        entries: [{ workDate, declaredMinutes, breakMinutes: 0, serviceDescription: description, billable: false }],
+      });
+      form.reset(); setReportPage(1); setSuccess(c.sent); setRefresh((v) => v + 1);
+    } catch (err) { setError(err instanceof Error ? err.message : c.failed); }
+    finally { setBusy(false); }
+  }
+
+  if (!data && loading) return <div className="rounded-2xl border border-dtsc-border p-4 text-sm text-dtsc-muted">{c.loading}</div>;
+  if (!data) return null;
+  return <section aria-label={c.title} className="grid gap-4 rounded-2xl border border-dtsc-border bg-dtsc-surface p-4 shadow-sm sm:p-5">
+    <header className="flex flex-wrap items-center justify-between gap-3">
+      <div><h2 className="text-lg font-black text-dtsc-text">{c.title}</h2><p className="text-sm text-dtsc-muted">{c.description}</p></div>
+      <Button variant="outline" size="sm" disabled={loading || busy} onClick={() => setRefresh((v) => v + 1)}><RefreshCw className="mr-1 h-4 w-4" />{c.refresh}</Button>
+    </header>
+    {!data.linked ? <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm font-medium text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100">{c.linking}</div> : <>
+      <nav aria-label={c.related} className="grid min-w-0 gap-3 rounded-xl border border-dtsc-border bg-dtsc-soft/30 p-3 sm:p-4">
+        <h3 className="text-sm font-bold text-dtsc-ink">{c.related}</h3>
+        <div className="flex min-w-0 flex-wrap gap-2">
+          {data.payrollEnabled ? <a href="#my-hr-payslips" className="inline-flex min-h-10 items-center rounded-lg border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm font-semibold text-dtsc-blue hover:border-dtsc-blue">{c.pays}</a> : null}
+          {data.timeEnabled ? <a href="#my-hr-clock" className="inline-flex min-h-10 items-center rounded-lg border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm font-semibold text-dtsc-blue hover:border-dtsc-blue">{c.time}</a> : null}
+          {data.canSubmitReport ? <a href="#my-hr-reports" className="inline-flex min-h-10 items-center rounded-lg border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm font-semibold text-dtsc-blue hover:border-dtsc-blue">{c.report}</a> : null}
+          {timeModule ? timeLinks.map((item) => onOpenTimeTab ? <button key={item.tab} type="button" onClick={() => onOpenTimeTab(item.tab)} className="inline-flex min-h-10 items-center rounded-lg border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm font-semibold text-dtsc-blue hover:border-dtsc-blue focus-visible:outline focus-visible:outline-2 focus-visible:outline-dtsc-blue">{item.label}</button> : <Link key={item.tab} href={`${timeModule.href}?tab=${item.tab}`} className="inline-flex min-h-10 items-center rounded-lg border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm font-semibold text-dtsc-blue hover:border-dtsc-blue focus-visible:outline focus-visible:outline-2 focus-visible:outline-dtsc-blue">{item.label}</Link>) : null}
+          {relatedModules.filter((module) => module.code !== "TIME_ATTENDANCE").map((module) => <Link key={module.code} href={module.href} className="inline-flex min-h-10 items-center rounded-lg border border-dtsc-border bg-dtsc-surface px-3 py-2 text-sm font-semibold text-dtsc-blue hover:border-dtsc-blue focus-visible:outline focus-visible:outline-2 focus-visible:outline-dtsc-blue">{module.label}</Link>)}
+        </div>
+      </nav>
+      {data.payrollEnabled ? <article id="my-hr-payslips" className="grid min-w-0 gap-3 rounded-2xl border border-dtsc-border bg-dtsc-surface p-4">
+        <h3 className="flex items-center gap-2 font-bold text-dtsc-ink [&>svg]:text-dtsc-blue"><Wallet className="h-5 w-5" />{c.pays}</h3>
+        {!data.payslips.length ? <p className="text-sm text-dtsc-muted">{c.noPays}</p> : data.payslips.map((payslip) => <div key={payslip.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-dtsc-border bg-dtsc-soft/30 p-3">
+          <div><p className="font-semibold">{payslip.payrollItem.payrollRun.payrollPeriod.name} · {payslip.payslipNumber}</p>
+            <p className="text-xs text-dtsc-muted">{date(payslip.generatedAt)} · {c.approved}</p>
+            <p className="mt-1 text-sm font-bold text-dtsc-ink">{c.net}: {money(payslip.netAmount, payslip.currency)}</p></div>
+          <a className="inline-flex items-center gap-2 rounded-lg border border-dtsc-border bg-dtsc-soft px-3 py-2 text-sm font-semibold text-dtsc-blue hover:border-dtsc-blue hover:bg-dtsc-soft/70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-dtsc-blue" href={`/api/enterprise/${organizationId}/my-hr/payslips/${payslip.id}/pdf?lang=${locale === "en" ? "en" : "fr"}`}><Download className="h-4 w-4" />{c.pdf}</a>
+        </div>)}
+        <HrPager pagination={data.payslipsPagination} onChange={setPage} label={c.pays} copy={c} />
+      </article> : null}
+      {data.timeEnabled || data.canClock ? <article id="my-hr-clock" className="grid min-w-0 gap-4 rounded-2xl border border-dtsc-border bg-dtsc-surface p-4">
+        <h3 className="flex items-center gap-2 font-bold text-dtsc-ink [&>svg]:text-dtsc-blue"><Clock3 className="h-5 w-5" />{c.time}</h3>
+        {data.canClock ? <div className="flex flex-wrap items-center gap-3">
+          <span className={`rounded-full px-3 py-1 text-xs font-bold ${activeClock ? "bg-amber-200 text-amber-950 dark:bg-amber-900 dark:text-amber-100" : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200"}`}>{activeClock ? `${c.running} · ${time(activeClock.startedAt)}` : c.idle}</span>
+          {activeClock ? <div className="flex flex-wrap items-center gap-2">
+            <Input value={workSummary} onChange={(event) => setWorkSummary(event.target.value)} placeholder={c.summary} maxLength={2000} />
+            <Button disabled={busy} onClick={() => void clock("STOP")}><Square className="mr-2 h-4 w-4" />{c.stop}</Button>
+          </div> : <Button disabled={busy} onClick={() => void clock("START")}><Play className="mr-2 h-4 w-4" />{c.start}</Button>}
+        </div> : null}
+        <div className="grid gap-2">
+          <h4 className="text-sm font-semibold text-dtsc-ink">{c.past}</h4>
+          {!data.clockSessions.length ? <p className="text-sm text-dtsc-muted">{c.noPast}</p> : data.clockSessions.map((entry) => <div key={entry.id} className="flex min-w-0 flex-wrap justify-between gap-2 rounded-lg border border-dtsc-border/60 bg-dtsc-soft/30 p-2 text-xs"><span>{time(entry.startedAt)} → {entry.stoppedAt ? time(entry.stoppedAt) : c.running}</span><span className="text-dtsc-muted">{entry.workSummary || "—"}</span></div>)}
+        </div>
+        <HrPager pagination={data.clockSessionsPagination} onChange={setClockPage} label={c.past} copy={c} />
+      </article> : null}
+      {data.canSubmitReport ? <article id="my-hr-reports" className="grid min-w-0 gap-3 rounded-2xl border border-dtsc-border bg-dtsc-surface p-4">
+        <h3 className="flex items-center gap-2 font-bold text-dtsc-ink [&>svg]:text-dtsc-blue"><FileText className="h-5 w-5" />{c.report}</h3>
+        <form onSubmit={(event) => void submitReport(event)} className="grid gap-3 sm:grid-cols-2">
+          <label className="grid gap-1 text-sm font-semibold">{c.day}<Input name="day" type="date" required defaultValue={todayLocalDateInput()} /></label>
+          <label className="grid gap-1 text-sm font-semibold">{c.hours}<Input name="hours" type="number" min="0.25" max="24" step="0.25" required defaultValue="8" /></label>
+          <label className="grid gap-1 text-sm font-semibold sm:col-span-2">{c.desc}<textarea name="description" minLength={3} maxLength={1000} required className="min-h-24 w-full rounded-xl border border-dtsc-border bg-dtsc-surface p-3 text-sm" /></label>
+          <label className="grid gap-1 text-sm font-semibold sm:col-span-2">{c.approver}<select name="approverUserId" required defaultValue="" className="w-full rounded-xl border border-dtsc-border bg-dtsc-surface p-3 text-sm">
+            <option value="">{c.selectApprover}</option>{approvers.map((candidate) => <option key={candidate.userId} value={candidate.userId}>{candidate.name || candidate.label || candidate.email || candidate.userId}</option>)}
+          </select></label>
+          <div className="sm:col-span-2"><Button type="submit" disabled={busy || !approvers.length}><Send className="mr-2 h-4 w-4" />{c.submit}</Button></div>
+        </form>
+        <div className="grid gap-2"><h4 className="text-sm font-semibold text-dtsc-ink">{c.history}</h4>
+          {!data.timesheets.length ? <p className="text-sm text-dtsc-muted">{c.noHistory}</p> : data.timesheets.map((sheet) => <div key={sheet.id} className="flex min-w-0 flex-wrap justify-between gap-2 rounded-lg border border-dtsc-border/60 bg-dtsc-soft/30 p-2 text-xs"><span className="flex min-w-0 flex-wrap items-center gap-2">{sheet.reference} · {date(sheet.periodStart)} <StatusBadge tone={sheet.status === "APPROVED" ? "success" : sheet.status === "REJECTED" || sheet.status === "CANCELLED" ? "danger" : sheet.status === "SUBMITTED" || sheet.status === "PENDING_APPROVAL" ? "warning" : "neutral"}>{professionalErpEnumLabel(locale, "timeStatus", sheet.status)}</StatusBadge></span><span>{c.declared}: {(sheet.totalDeclaredMinutes / 60).toFixed(1)} h · {c.accepted}: {(sheet.totalApprovedMinutes / 60).toFixed(1)} h</span></div>)}
+        </div>
+        <HrPager pagination={data.reportsPagination} onChange={setReportPage} label={c.history} copy={c} />
+      </article> : null}
+    </>}
+  </section>;
+}

@@ -7,6 +7,18 @@ import { isSameOriginRequest } from "@/lib/request-security";
 import { getUserSessionIdleTimeoutMinutes } from "@/lib/session-preference";
 import { sessionWarningSeconds } from "@/lib/session-policy";
 
+/**
+ * Passive, no-store validation used when another browser tab announces a
+ * logout. It must neither renew the cookie nor extend the absolute lifetime.
+ */
+export async function GET() {
+  const session = await getSession();
+  return NextResponse.json(
+    session ? { ok: true } : { error: "Session expired" },
+    { status: session ? 200 : 401, headers: { "Cache-Control": "no-store" } },
+  );
+}
+
 export async function POST(req: Request) {
   if (!isSameOriginRequest(req)) {
     return NextResponse.json({ error: "Cross-origin request blocked" }, { status: 403 });

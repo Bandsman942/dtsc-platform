@@ -11,6 +11,7 @@ import {
   SESSION_WARNING_MIN_SECONDS,
 } from "@/lib/session-config";
 import { navigateToSessionExpired } from "@/lib/client/session-expired-navigation";
+import { isCurrentSessionRejected } from "@/lib/client/session-status-check";
 
 const CHANNEL_NAME = "dtsc-session";
 const STORAGE_EVENT_KEY = "dtsc-session-sync";
@@ -163,11 +164,25 @@ export function SessionTimeoutGuard() {
   }, [heartbeat, registerActivity]);
 
   useEffect(() => {
+    let disposed = false;
+    let peerLogoutValidation: Promise<void> | null = null;
     lastActivityRef.current = readStoredActivity();
 
     if ("BroadcastChannel" in window) {
       channelRef.current = new BroadcastChannel(CHANNEL_NAME);
     }
+
+    const validatePeerLogout = () => {
+      if (expiredRef.current || peerLogoutValidation) return;
+      // The existing cookie may have changed since the other tab emitted its
+      // logout, so recheck the *current* server session before navigating.
+      peerLogoutValidation = (async () => {
+        if (!await isCurrentSessionRejected() || disposed || expiredRef.current) return;
+        expiredRef.current = true;
+        setShowWarning(false);
+        navigateToSessionExpired(router, "session-sync-logout");
+      })().finally(() => { peerLogoutValidation = null; });
+    };
 
     const handleSyncMessage = (message: SessionSyncMessage) => {
       if (!message || typeof message !== "object") return;
@@ -187,10 +202,7 @@ export function SessionTimeoutGuard() {
         return;
       }
       if (message.type === "logout") {
-        if (expiredRef.current) return;
-        expiredRef.current = true;
-        setShowWarning(false);
-        navigateToSessionExpired(router, "session-sync-logout");
+        validatePeerLogout();
       }
     };
 
@@ -249,6 +261,7 @@ export function SessionTimeoutGuard() {
     }, 1000);
 
     return () => {
+      disposed = true;
       window.clearInterval(countdownInterval);
       events.forEach((eventName) => window.removeEventListener(eventName, registerActivity));
       document.removeEventListener("visibilitychange", verifyOnResume);

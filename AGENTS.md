@@ -365,6 +365,14 @@ These rules are durable for every common or sector ERP change:
 24. Node 22 et les protections de build ne sont pas retirés sans preuve.
 25. Aucune QA historique n’est supprimée et aucun déploiement Production manuel depuis une branche n’est autorisé.
 
+## Version applicative DTSC — SemVer
+
+- `package.json` est la source unique de version DTSC Platform (`MAJOR.MINOR.PATCH` stable).
+- Toute PR vers `main` incrémente exactement la version du dernier `origin/main` conformément à Conventional Commits : `feat` → MINOR, rupture `!` / `BREAKING CHANGE` → MAJOR, le reste → PATCH.
+- Changelog, documents métier/technique et checklist QA sont mis à jour dans la même PR, avant Production.
+- Les GitHub Releases `vX.Y.Z` sont créées uniquement pour un SHA `main` dont le déploiement Vercel Production natif est réussi. Une version/tag existant ne se réutilise jamais pour un autre SHA ; anciens tags `prod-*` conservés.
+- Les PR concurrentes rebasent leur bump ; aucun contournement de la CI ou publication depuis une branche. Contrat détaillé : `docs/RELEASE_VERSIONING.md`.
+
 ## DTSC DELIVERY GOVERNANCE
 
 Pour tout changement matériel :

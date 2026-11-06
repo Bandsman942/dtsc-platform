@@ -10,6 +10,7 @@ import {
 } from "@/lib/enterprise/hr-payroll/helpers";
 import type { approvalDecisionSchema, timesheetCreateSchema } from "@/lib/enterprise/hr-payroll/schemas";
 import { prisma } from "@/lib/prisma";
+import { resolveEnterpriseModuleAccess } from "@/lib/enterprise/module-access";
 
 type TimesheetCreateInput = z.infer<typeof timesheetCreateSchema>;
 type ApprovalDecisionInput = z.infer<typeof approvalDecisionSchema>;
@@ -67,11 +68,20 @@ async function assertTimesheetReferences(tx: Prisma.TransactionClient, organizat
   }
 }
 
-export async function createEnterpriseTimesheet(organizationId: string, actorUserId: string, input: TimesheetCreateInput) {
+export async function createEnterpriseTimesheet(organizationId: string, actorUserId: string, input: TimesheetCreateInput, options?: { selfService?: boolean }) {
   if (input.periodEnd < input.periodStart) throw new EnterpriseDomainError("TIMESHEET_PERIOD_INVALID");
   return prisma.$transaction(async (tx) => {
     const employee = await assertActiveCustomerEmployee(tx, organizationId, input.employeeId);
-    await assertOrganizationApprover(tx, organizationId, input.approverUserId, actorUserId, "TIME_ATTENDANCE");
+    if (options?.selfService) {
+      // The ownership route already checked the subject and active plan. The requester
+      // needs no company-wide submit permission, but the approver must still have
+      // an active explicit TIME_ATTENDANCE:approve capability.
+      if (input.approverUserId === actorUserId) throw new EnterpriseDomainError("SELF_APPROVAL_FORBIDDEN", 409);
+      const candidate = await resolveEnterpriseModuleAccess({ userId: input.approverUserId, organizationId, moduleCode: "TIME_ATTENDANCE", action: "approve" });
+      if (!candidate.allowed) throw new EnterpriseDomainError("APPROVER_PERMISSION_DENIED", 403);
+    } else {
+      await assertOrganizationApprover(tx, organizationId, input.approverUserId, actorUserId, "TIME_ATTENDANCE");
+    }
     const overlap = await tx.enterpriseTimesheet.findFirst({
       where: {
         organizationId,
