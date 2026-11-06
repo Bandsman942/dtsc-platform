@@ -107,3 +107,4 @@ if (failures.length) {
 }
 console.log("\nQA session/Web Push: 38 contrôles source-level passent.");
 await import("./qa-hotfix-1022-console-auto-reload.mjs");
+await import("./qa-hotfix-1026-chrome-mfa-session-loop.mjs");

@@ -39,6 +39,9 @@ Date du plan : 2026-11-02. **Statut des parcours ci-dessous : NOT_EXECUTED**, ju
 | AUTH-E23 | Récupération admin à double contrôle | Deux opérateurs SECURITY_MANAGE distincts, ni demandeur ni cible comme approbateur ; approbation invalide tous les cookies, exige nouvel enrôlement TOTP, mail d’alerte et audit ; refus / expiration / simultanéité | NOT_EXECUTED |
 | AUTH-E24 | Tests panne PostgreSQL, membership perdu, réseau instable | Interdiction par défaut ; pas de bypass ni boucle de connexion | NOT_EXECUTED |
 | AUTH-E25 | Responsive 320/360/375/390/414/768/1024/1440px et FR/EN | Pas de chevauchement, focus clavier, contraste, clair/sombre | NOT_EXECUTED |
+| AUTH-E26 / #1026 | Chrome mobile : ancien cookie MFA signé mais session révoquée ; Console → Account | Un seul retour vers le formulaire, aucune boucle Account → Console pendant 2 minutes | NOT_EXECUTED |
+| AUTH-E27 / #1026 | Session MFA active, `next` interne et `reason=session-expired` ; App/Support | Navigation contrôlée avec session valide ; reconnexion explicite stable, sans bypass MFA | NOT_EXECUTED |
+| AUTH-E28 / #1026 | Chrome mobile avec deux onglets, ancienne notification logout, Wi-Fi↔4G, arrière-plan | Vérification `401` avant déconnexion, nouvelle session `200` préservée, aucun refresh compulsif | NOT_EXECUTED |
 
 ## Rapport attendu de l'acceptance
 

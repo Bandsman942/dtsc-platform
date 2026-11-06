@@ -190,6 +190,11 @@ assert.equal(
 assert.equal(hasReleaseForTag([{ tag_name: tag }], tag), true);
 assert.equal(hasReleaseForTag([], tag), false);
 
+// SemVer vX.Y.Z is the new release label; historical prod-* tags remain readable.
+const semverReleaseQA = fs.readFileSync('scripts/qa-semver.mjs', 'utf8');
+assert.match(semverReleaseQA, /classifyVersionBump/);
+assert.match(semverReleaseQA, /findSemanticTagForSha/);
+
 const sync = fs.readFileSync(
   'scripts/github/sync-delivery-governance.mjs',
   'utf8',
