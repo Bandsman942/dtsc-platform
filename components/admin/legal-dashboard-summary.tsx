@@ -1,6 +1,7 @@
 import { EmptyState } from "@/components/workspace/empty-state";
 import { ModuleMetric, ModuleMetrics } from "@/components/workspace/module-metrics";
 import { ModuleContent, ModuleHeader, ModuleSection, ModuleWorkspace } from "@/components/workspace/module-workspace";
+import { translateInternalAdminStatus, translateInternalAdminSystemCopy } from "@/lib/i18n";
 
 type LegalMetric = {
   label: string;
@@ -13,33 +14,36 @@ type LegalChart = {
   items: Array<{ label: string; value: number }>;
 };
 
-export function LegalDashboardSummary({ metrics, charts, embedded = false }: { metrics: LegalMetric[]; charts: LegalChart[]; embedded?: boolean }) {
+const legalEnumCharts = new Set(["Dossiers juridiques par statut", "Risques juridiques par niveau", "Contrats par type", "Demandes juridiques par priorité"]);
+
+export function LegalDashboardSummary({ metrics, charts, locale = "fr", embedded = false }: { metrics: LegalMetric[]; charts: LegalChart[]; locale?: string; embedded?: boolean }) {
   const maxChartValue = Math.max(1, ...charts.flatMap((chart) => chart.items.map((item) => item.value)));
+  const copy = (value: string) => translateInternalAdminSystemCopy(locale, value);
 
   return (
     <ModuleWorkspace>
       {!embedded ? (
       <ModuleHeader
-        eyebrow="Tableau de bord juridique"
-        title="Vue LA consolidée"
-        count={`${metrics.length} indicateur${metrics.length > 1 ? "s" : ""}`}
-        description="Suivi des dossiers, contrats, risques, documents officiels, litiges et demandes juridiques avec alertes CEO sur les points critiques."
+        eyebrow={copy("Tableau de bord juridique")}
+        title={copy("Vue LA consolidée")}
+        count={`${metrics.length} ${copy(metrics.length > 1 ? "indicateurs" : "indicateur")}`}
+        description={copy("Suivi des dossiers, contrats, risques, documents officiels, litiges et demandes juridiques avec alertes CEO sur les points critiques.")}
       />
       ) : null}
 
-      <ModuleMetrics label="Indicateurs juridiques">
-        {metrics.map((metric) => <ModuleMetric key={metric.label} label={metric.label} value={metric.value} hint={metric.detail} />)}
+      <ModuleMetrics label={copy("Indicateurs juridiques")}>
+        {metrics.map((metric) => <ModuleMetric key={metric.label} label={copy(metric.label)} value={metric.value} hint={copy(metric.detail)} />)}
       </ModuleMetrics>
 
       <ModuleContent>
         {charts.map((chart) => (
-          <ModuleSection key={chart.title} title={chart.title} count={`${chart.items.length}`}>
+          <ModuleSection key={chart.title} title={copy(chart.title)} count={`${chart.items.length}`}>
             {chart.items.length ? (
               <div className="grid gap-x-6 gap-y-3 md:grid-cols-2">
                 {chart.items.slice(0, 8).map((item) => (
                   <div key={`${chart.title}-${item.label}`} className="min-w-0 border-b border-dtsc-border pb-3">
                     <div className="flex items-center justify-between gap-3 text-xs font-black uppercase tracking-[0.1em] text-dtsc-muted">
-                      <span className="min-w-0 truncate">{item.label}</span>
+                      <span className="min-w-0 truncate">{legalEnumCharts.has(chart.title) ? translateInternalAdminStatus(locale, item.label) : copy(item.label)}</span>
                       <span>{item.value}</span>
                     </div>
                     <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-dtsc-soft">
@@ -48,7 +52,7 @@ export function LegalDashboardSummary({ metrics, charts, embedded = false }: { m
                   </div>
                 ))}
               </div>
-            ) : <EmptyState compact title="Aucune donnée juridique" description="Aucun élément n'alimente encore cette synthèse." />}
+            ) : <EmptyState compact title={copy("Aucune donnée juridique")} description={copy("Aucun élément n'alimente encore cette synthèse.")} />}
           </ModuleSection>
         ))}
       </ModuleContent>

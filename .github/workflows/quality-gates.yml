@@ -185,6 +185,8 @@ jobs:
         run: node scripts/qa-ux-983-pharmacy-sale-references.mjs
       - name: "UX-07B #959 Compact section density QA"
         run: node scripts/qa-ux-959-workspace-section-density.mjs
+      - name: "UX #998 Internal Design 2.0 FR/EN contract QA"
+        run: node scripts/qa-hotfix-998-internal-design-i18n.mjs
       - name: Lint
         run: pnpm lint
       - name: Build

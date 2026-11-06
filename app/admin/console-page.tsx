@@ -65,7 +65,7 @@ import { getConsoleSupportDataset } from "@/lib/console/console-support";
 import { toJsonSafe } from "@/lib/console/console-utils";
 import { getConsoleUsersDataset } from "@/lib/console/console-users";
 import { getDashboardUrl } from "@/lib/domains";
-import { translate } from "@/lib/i18n";
+import { translate, translateInternalAdminSystemCopy } from "@/lib/i18n";
 import { isDtscInternalSession } from "@/lib/organizations";
 import { prisma } from "@/lib/prisma";
 import { getAppSettings } from "@/lib/settings";
@@ -291,24 +291,25 @@ function renderInternalSection(
   hrcfoInvoices: Array<{ id: string; number: string; planName: string; amount: number; currency: string; status: string; issuedAt: string; beneficiary: string; transactionReference: string | null }> = [],
   canReadHrcfoInvoices = false,
 ) {
+  const copy = (source: string) => translateInternalAdminSystemCopy(locale, source);
   if (section === "hr-cfo") return (
     <InternalDepartmentWorkspace locale={locale} sections={[
       { id: "payroll", titleKey: "payroll", content: <PayrollWorkflowPanel locale={locale} embedded /> },
       { id: "invoices", titleKey: "invoices", content: <HrcfoInvoiceList invoices={hrcfoInvoices} canRead={canReadHrcfoInvoices} /> },
       { id: "treasury", titleKey: "operations", content: <InternalFinanceControls /> },
-      { id: "operations", titleKey: "operations", content: <OperationsAdminPanel eyebrow="Gestion interne" title="Opérations HR & CFO" description="Dossiers RH, budgets, dépenses, comptes et contrôles depuis les moteurs canoniques." playbook={["Dossier RH", "Budget", "Dépense", "Validation", "Paiement", "Audit"]} datasets={data.hrcfoDatasets.filter((item) => item.id !== "payrolls")} canEdit={canManage} embedded /> },
+      { id: "operations", titleKey: "operations", content: <OperationsAdminPanel eyebrow={copy("Gestion interne")} title={copy("Opérations HR & CFO")} description={copy("Dossiers RH, budgets, dépenses, comptes et contrôles depuis les moteurs canoniques.")} playbook={["Dossier RH", "Budget", "Dépense", "Validation", "Paiement", "Audit"].map(copy)} datasets={data.hrcfoDatasets.filter((item) => item.id !== "payrolls")} canEdit={canManage} embedded /> },
     ]} />
   );
   if (section === "sco") return (
     <InternalDepartmentWorkspace locale={locale} sections={[
-      { id: "operations", titleKey: "supplyChain", content: <OperationsAdminPanel eyebrow="Supply Chain Operations" title="Opérations SCO" description="Fournisseurs, achats, stocks, actifs et logistique." playbook={["Besoin", "Budget", "Fournisseur", "Commande", "Réception", "Audit"]} datasets={data.scoDatasets} canEdit={canManage} embedded /> },
+      { id: "operations", titleKey: "supplyChain", content: <OperationsAdminPanel eyebrow="Supply Chain Operations" title={copy("Opérations SCO")} description={copy("Fournisseurs, achats, stocks, actifs et logistique.")} playbook={["Besoin", "Budget", "Fournisseur", "Commande", "Réception", "Audit"].map(copy)} datasets={data.scoDatasets} canEdit={canManage} embedded /> },
     ]} />
   );
   if (section === "coo") return (
     <InternalDepartmentWorkspace locale={locale} sections={[
       { id: "payroll-approvals", titleKey: "payrollApprovals", content: <PayrollApprovalPanel approverRole="COO" locale={locale} embedded /> },
       { id: "work-approvals", titleKey: "workApprovals", content: <WorkSubmissionReviewPanel reviewerRole="COO" locale={locale} embedded /> },
-      { id: "operations", titleKey: "operations", content: <OperationsAdminPanel eyebrow="Chief Operating Officer" title="Pilotage COO" description="Opérations, tâches, demandes, blocages, réunions et rapports." playbook={["Cadrage", "Assignation", "Coordination", "Validation", "Rapport"]} datasets={data.cooDatasets} canEdit={canManage} embedded /> },
+      { id: "operations", titleKey: "operations", content: <OperationsAdminPanel eyebrow="Chief Operating Officer" title={copy("Pilotage COO")} description={copy("Opérations, tâches, demandes, blocages, réunions et rapports.")} playbook={["Cadrage", "Assignation", "Coordination", "Validation", "Rapport"].map(copy)} datasets={data.cooDatasets} canEdit={canManage} embedded /> },
     ]} />
   );
   if (section === "ceo") return (
@@ -316,23 +317,23 @@ function renderInternalSection(
       { id: "executive", titleKey: "executive", content: <CeoExecutiveSummary groups={data.ceoExecutiveGroups} dateStart={ceoStart} dateEnd={ceoEnd} embedded /> },
       { id: "payroll-approvals", titleKey: "payrollApprovals", content: <PayrollApprovalPanel approverRole="CEO" locale={locale} embedded /> },
       { id: "work-approvals", titleKey: "workApprovals", content: <WorkSubmissionReviewPanel reviewerRole="CEO" locale={locale} embedded /> },
-      { id: "operations", titleKey: "operations", content: <OperationsAdminPanel eyebrow="Chief Executive Officer" title="Supervision CEO" description="Objectifs, décisions, risques et indicateurs réels consolidés." playbook={["Synthèse", "Alerte", "Décision", "Arbitrage", "Suivi"]} datasets={data.ceoDatasets} canEdit={canManage} embedded /> },
+      { id: "operations", titleKey: "operations", content: <OperationsAdminPanel eyebrow="Chief Executive Officer" title={copy("Supervision CEO")} description={copy("Objectifs, décisions, risques et indicateurs réels consolidés.")} playbook={["Synthèse", "Alerte", "Décision", "Arbitrage", "Suivi"].map(copy)} datasets={data.ceoDatasets} canEdit={canManage} embedded /> },
     ]} />
   );
   if (section === "mpo") return (
     <InternalDepartmentWorkspace locale={locale} sections={[
-      { id: "operations", titleKey: "projects", content: <OperationsAdminPanel eyebrow="Management & Projects Officer" title="MPO — Management & Projets" description="Projets, livrables, risques, jalons et dépendances." playbook={["Cadrage", "Plan", "Livrable", "Risque", "Validation", "Clôture"]} datasets={data.mpoDatasets} canEdit={canManage} embedded /> },
+      { id: "operations", titleKey: "projects", content: <OperationsAdminPanel eyebrow="Management & Projects Officer" title={copy("MPO — Management & Projets")} description={copy("Projets, livrables, risques, jalons et dépendances.")} playbook={["Cadrage", "Plan", "Livrable", "Risque", "Validation", "Clôture"].map(copy)} datasets={data.mpoDatasets} canEdit={canManage} embedded /> },
     ]} />
   );
   if (section === "cto") return (
     <InternalDepartmentWorkspace locale={locale} sections={[
-      { id: "operations", titleKey: "technology", content: <OperationsAdminPanel eyebrow="Chief Technical Officer" title="CTO — Technologie & Développement" description="Projets techniques, qualité, sécurité, API et incidents." playbook={["Analyse", "Architecture", "Développement", "Test", "Déploiement", "Documentation"]} datasets={data.ctoDatasets} canEdit={canManage} embedded /> },
+      { id: "operations", titleKey: "technology", content: <OperationsAdminPanel eyebrow="Chief Technical Officer" title={copy("CTO — Technologie & Développement")} description={copy("Projets techniques, qualité, sécurité, API et incidents.")} playbook={["Analyse", "Architecture", "Développement", "Test", "Déploiement", "Documentation"].map(copy)} datasets={data.ctoDatasets} canEdit={canManage} embedded /> },
     ]} />
   );
   return (
     <InternalDepartmentWorkspace locale={locale} sections={[
-      { id: "legal-overview", titleKey: "legalOverview", content: <LegalDashboardSummary metrics={data.legalMetrics} charts={data.legalCharts} embedded /> },
-      { id: "operations", titleKey: "legalOperations", content: <OperationsAdminPanel eyebrow="Legal Advisor" title="Legal Advisor" description="Dossiers, contrats, risques, litiges, documents et échéances." playbook={["Demande", "Analyse", "Avis", "Validation", "Arbitrage", "Archivage"]} datasets={data.laDatasets} canEdit={canManage} embedded /> },
+      { id: "legal-overview", titleKey: "legalOverview", content: <LegalDashboardSummary metrics={data.legalMetrics} charts={data.legalCharts} locale={locale} embedded /> },
+      { id: "operations", titleKey: "legalOperations", content: <OperationsAdminPanel eyebrow="Legal Advisor" title="Legal Advisor" description={copy("Dossiers, contrats, risques, litiges, documents et échéances.")} playbook={["Demande", "Analyse", "Avis", "Validation", "Arbitrage", "Archivage"].map(copy)} datasets={data.laDatasets} canEdit={canManage} embedded /> },
     ]} />
   );
 }
