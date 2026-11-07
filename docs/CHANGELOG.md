@@ -1,3 +1,9 @@
+## 2026-11-07 — Retail #1042, tranche 31 — Provenance et précision des mouvements de retour (candidat, PR #1043)
+
+- Refus des quantités à plus de trois décimales pour les retours physiques, cohérent avec le stockage canonique Inventory ; saisie FR/EN adaptée, sans affecter les articles non stockés.
+- Précontrôle transactionnel renforcé : sortie originale de stock strictement égale à la quantité facturée, puis ventilation déterministe des portions encore retournables par mouvement, emplacement et lot ; rejette un double débit physique.
+- Contrats de non-écriture et de traçabilité des dispositions (`RESTOCK`, `QUARANTINE`, `DISPOSE`). Le règlement atomique Finance/stock et l'E2E global ne sont pas encore réalisés.
+
 ## 2026-11-07 — Retail #1042, tranche 30 — Montants strictement positifs Finance/Retail (candidat, PR #1043)
 
 - Les contrôles `Prisma.Decimal.isPositive()` acceptaient le zéro : correction dans Finance commun (paiements, affectations, factures, remboursements, écritures d'ouverture, valorisation, trésorerie) et Retail/Inventaire (sorties, réservations, retours, store credit, fidélité).

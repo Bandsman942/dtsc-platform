@@ -250,6 +250,12 @@ export async function createRetailInvoiceReturnRequest(
       if (!value.greaterThan(0) || value.greaterThan(left)) {
         throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_QUANTITY_EXCEEDED", 409);
       }
+      // Inventory balances/movements store three decimal places. An invoice
+      // item may have six, but a physical return cannot silently round its
+      // quantity when it is later applied to the canonical stock ledger.
+      if (line.inventoryItemId && value.decimalPlaces() > 3) {
+        throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_STOCK_QUANTITY_PRECISION", 409);
+      }
       if (entry.stockDisposition === "RESTOCK" && !line.inventoryItemId) {
         throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_STOCK_DISPOSITION_INVALID", 409);
       }

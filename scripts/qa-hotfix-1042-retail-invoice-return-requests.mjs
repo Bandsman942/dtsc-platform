@@ -85,6 +85,9 @@ const tx = {
 };
 const prisma = { ...tx, $transaction: async (fn) => fn(tx) };
 const source = fs.readFileSync("lib/enterprise/retail/invoice-returns.ts", "utf8");
+const returnUi = fs.readFileSync("components/enterprise/professional/retail-invoice-return-dialog.tsx", "utf8");
+assert.match(returnUi, /step=\{line\.inventoryItemId \? "0\.001" : "0\.000001"\}/);
+assert.match(returnUi, /line\.hasStock && !\/\^/);
 const unit = { exports: {} };
 vm.runInNewContext(ts.transpileModule(source, {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
@@ -164,6 +167,10 @@ state.checkout.stockPostedAt = null;
 await assert.rejects(createRetailInvoiceReturnRequest("tenant", "invoice-A", "requester", input),
   { code: "RETAIL_INVOICE_RETURN_PAID_REQUIRED" });
 state.checkout.stockPostedAt = new Date();
+await assert.rejects(createRetailInvoiceReturnRequest("tenant", "invoice-A", "requester", {
+  ...input, idempotencyKey: "shop-return-stock-precision-001",
+  lines: [{ ...input.lines[0], quantity: "0.0001" }],
+}), { code: "RETAIL_INVOICE_RETURN_STOCK_QUANTITY_PRECISION" });
 await assert.rejects(createRetailInvoiceReturnRequest("tenant", "invoice-A", "requester", {
   ...input, approverUserId: "requester",
 }), { code: "RETAIL_INVOICE_RETURN_SELF_APPROVAL_FORBIDDEN" });

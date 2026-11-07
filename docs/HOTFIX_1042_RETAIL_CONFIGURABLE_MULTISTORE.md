@@ -1,6 +1,6 @@
 # RETAIL-1042 — cahier des charges boutiques, paramétrage et Design 2.0
 
-Statut du 7 novembre 2026 : **29 tranches publiées sur la PR brouillon #1043 (17/17 Quality Gates vertes sur la tranche 27, CI de la tranche 29 en cours) et tranche 30 en validation locale ; aucune fusion, aucun déploiement, aucune acceptation client. Le moteur atomique avoir/remboursement/stock sur facture Finance Retail et la recette PostgreSQL multi-rôles restent ouverts.**
+Statut du 7 novembre 2026 : **30 tranches publiées sur la PR brouillon #1043 (17/17 contrôles GitHub verts sur la tranche 29 ; contrôles de la tranche 30 en cours) et tranche 31 en validation locale. Aucune fusion, aucun déploiement, aucune acceptation client. Le moteur atomique avoir/remboursement/stock sur facture Finance Retail et la recette PostgreSQL multi-rôles restent ouverts.**
 
 La [matrice exhaustive de réception](RETAIL_1042_CAHIER_ACCEPTANCE_MATRIX.md) suit les 17 chapitres, RG01–RG20, les huit décisions et les deux niveaux de E2E du cahier client original ; aucune ligne non certifiée ne doit être masquée par un total de workflows verts.
 
@@ -254,3 +254,9 @@ Contrôle du 7 novembre : `npm run build` local a terminé avec succès la compi
 - En particulier, les lignes d'ouverture **100 au débit / 0 au crédit** ou **0 au débit / 100 au crédit** redeviennent valides ; **0/0** et **100/100** restent rejetées. Aucun journal ou allocation de montant zéro n'est créé intentionnellement.
 - Retail et Inventaire commun : sorties de stock liées aux factures totalement réglées, réservation logique des factures, ventes/retours POS, remontées comptables de stock, retours omnicanaux, store credit, fidélité et import historique n'exécutent plus d'opération pour un montant/une quantité nuls. Cela évite notamment l'appel d'une sortie de stock physique de quantité zéro.
 - QA spécifique `qa-hotfix-1042-finance-strict-positive.mjs` vérifie la sémantique Decimal, la fonction commune `assertPositiveAmount`, les gardes de chaque domaine et les écritures d'ouverture ; branchée aux Quality Gates. Les régressions ERP/Finance/Retail globales doivent rester vertes. Pas de migration, flags OFF ; **ce correctif ne réalise pas encore le règlement atomique d'un retour**.
+
+### Tranche 31 — traçabilité exacte de la sortie de stock pour un retour (2026-11-07, candidat)
+
+- Une demande de retour d'article stocké refuse les quantités ayant plus de **trois décimales**, car les mouvements et soldes d'Inventaire sont stockés à cette précision. Les lignes sans stock restent compatibles avec leur précision Finance. Le formulaire FR/EN adapte ses bornes et son pas (`0.001`) aux articles physiques.
+- Le précontrôle en lecture seule exige la correspondance **exacte** entre la quantité facturée et les sorties canoniques trouvées (un doublon de sortie interdit le règlement), puis calcule un plan FIFO déterministe de provenance par mouvement, dépôt, emplacement et lot. Les quantités déjà retournées sont soustraites ; `RESTOCK`, `QUARANTINE` et `DISPOSE` conservent des destinations distinctes pour l'implémentation future.
+- QA de rejet des fractions physiquement non représentables, des sorties en double, et de ventilation sur deux mouvements sources après un premier retour terminé. **Aucun mouvement retour, avoir, paiement ni écriture n'est créé** par ce plan : l'orchestrateur transactionnel et les essais réels sur deux boutiques restent nécessaires avant `OWNER_E2E`.

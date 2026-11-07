@@ -65,7 +65,10 @@ export async function assertRetailInvoiceReturnSettlementReadinessTx(
   if (!request.lines.length) throw conflict("RETAIL_INVOICE_RETURN_SETTLEMENT_LINE_INVALID");
 
   const invoiceLines = new Map(checkout.lines.map((line) => [line.id, line]));
-  const stockLines = [] as Array<{ checkoutLineId: string; invoiceItemId: string; quantity: Prisma.Decimal }>;
+  const stockLines = [] as Array<{
+    returnLineId: string; checkoutLineId: string; invoiceItemId: string;
+    quantity: Prisma.Decimal; stockDisposition: string;
+  }>;
   const ids = new Set<string>();
   for (const line of request.lines) {
     const source = invoiceLines.get(line.checkoutLineId);
@@ -78,9 +81,13 @@ export async function assertRetailInvoiceReturnSettlementReadinessTx(
     if (line.stockDisposition === "RESTOCK" && !source.inventoryItemId) {
       throw conflict("RETAIL_INVOICE_RETURN_SETTLEMENT_STOCK_INVALID");
     }
+    if (source.inventoryItemId && line.quantity.decimalPlaces() > 3) {
+      throw conflict("RETAIL_INVOICE_RETURN_STOCK_QUANTITY_PRECISION");
+    }
     ids.add(source.id);
     if (source.inventoryItemId) stockLines.push({
-      checkoutLineId: source.id, invoiceItemId: source.invoiceItemId, quantity: line.quantity,
+      returnLineId: line.id, checkoutLineId: source.id, invoiceItemId: source.invoiceItemId,
+      quantity: line.quantity, stockDisposition: line.stockDisposition,
     });
   }
   const [confirmedAllocations, originalMovements, previouslyCompleted] = await Promise.all([
@@ -97,7 +104,9 @@ export async function assertRetailInvoiceReturnSettlementReadinessTx(
         direction: "OUT", movementType: "SALE_FULFILLMENT",
         sourceLineId: { in: stockLines.map((line) => line.invoiceItemId) },
       },
-      select: { sourceLineId: true, warehouseId: true, inventoryItemId: true, stockLotId: true, quantity: true },
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+      select: { id: true, sourceLineId: true, warehouseId: true, storageLocationId: true,
+        inventoryItemId: true, stockLotId: true, quantity: true },
     }),
     tx.enterpriseRetailInvoiceReturnLine.findMany({
       where: { organizationId, checkoutId: checkout.id, checkoutLineId: { in: [...ids] }, request: { status: "COMPLETED" } },
@@ -131,23 +140,54 @@ export async function assertRetailInvoiceReturnSettlementReadinessTx(
     }
   }
 
+  // Deterministic source trace for the future atomic stock settlement. Every
+  // disposition retains its original cost/lot provenance; RESTOCK alone is
+  // eligible to increase saleable inventory. This plan creates NO movements.
+  const stockSourcePlan: Array<{
+    returnLineId: string; originalMovementId: string; inventoryItemId: string;
+    warehouseId: string; storageLocationId: string | null; stockLotId: string | null;
+    quantity: Prisma.Decimal; stockDisposition: string;
+  }> = [];
   for (const line of stockLines) {
     const source = invoiceLines.get(line.checkoutLineId)!;
-    const original = sum(originalMovements.filter((movement) =>
+    const movements = originalMovements.filter((movement) =>
       movement.sourceLineId === line.invoiceItemId && movement.warehouseId === checkout.warehouseId &&
       movement.inventoryItemId === source.inventoryItemId && movement.stockLotId === source.stockLotId,
-    ).map((movement) => movement.quantity));
+    );
+    const original = sum(movements.map((movement) => movement.quantity));
     const completed = sum(previouslyCompleted.filter((previous) =>
       previous.checkoutLineId === line.checkoutLineId,
     ).map((previous) => previous.quantity));
-    if (original.lessThan(source.invoiceItem.quantity) ||
+    if (!original.equals(source.invoiceItem.quantity) ||
         completed.plus(line.quantity).greaterThan(original)) {
       throw conflict("RETAIL_INVOICE_RETURN_SETTLEMENT_STOCK_INVALID");
     }
+    let skip = completed;
+    let remaining = line.quantity;
+    for (const movement of movements) {
+      if (remaining.isZero()) break;
+      if (skip.greaterThanOrEqualTo(movement.quantity)) {
+        skip = skip.minus(movement.quantity);
+        continue;
+      }
+      const available = movement.quantity.minus(skip);
+      skip = new Prisma.Decimal(0);
+      const portion = Prisma.Decimal.min(remaining, available);
+      if (!portion.greaterThan(0)) continue;
+      stockSourcePlan.push({
+        returnLineId: line.returnLineId, originalMovementId: movement.id,
+        inventoryItemId: movement.inventoryItemId, warehouseId: movement.warehouseId,
+        storageLocationId: movement.storageLocationId, stockLotId: movement.stockLotId,
+        quantity: portion, stockDisposition: line.stockDisposition,
+      });
+      remaining = remaining.minus(portion);
+    }
+    if (!remaining.isZero()) throw conflict("RETAIL_INVOICE_RETURN_SETTLEMENT_STOCK_INVALID");
   }
   return {
     requestId: request.id, checkoutId: checkout.id, siteId: checkout.siteId,
     receivableId: checkout.invoice.receivable.id, refundAmount,
     currencyCode: checkout.invoice.currencyCode, stockLineCount: stockLines.length,
+    stockSourcePlan,
   };
 }

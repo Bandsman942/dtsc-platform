@@ -29,7 +29,8 @@ const state = {
   },
   allocations: [{ amount: D(100), payment: { status: "CONFIRMED", direction: "INBOUND", paymentType: "CUSTOMER_PAYMENT",
     businessPartyId: "buyer-A", currencyCode: "CDF", financialAccountId: "account-A" } }],
-  movements: [{ sourceLineId: "invoice-line-A", warehouseId: "warehouse-A", inventoryItemId: "item-A", stockLotId: "lot-A", quantity: D(3) }],
+  movements: [{ id: "movement-A", sourceLineId: "invoice-line-A", warehouseId: "warehouse-A",
+    storageLocationId: "shelf-A", inventoryItemId: "item-A", stockLotId: "lot-A", quantity: D(3) }],
   completed: [],
 };
 const tx = {
@@ -55,6 +56,7 @@ const tx = {
     assert.equal(where.sourceEntityId, "invoice-A");
     assert.equal(where.direction, "OUT");
     assert.equal(where.movementType, "SALE_FULFILLMENT");
+    assert.equal(where.sourceLineId.in.join(","), "invoice-line-A");
     return state.movements;
   } },
   enterpriseRetailInvoiceReturnLine: { findMany: async ({ where }) => {
@@ -81,6 +83,46 @@ const ready = await preview();
 assert.equal(ready.refundAmount.toFixed(2), "33.33");
 assert.equal(ready.siteId, "site-A");
 assert.equal(ready.stockLineCount, 1);
+assert.equal(ready.stockSourcePlan.length, 1);
+assert.equal(ready.stockSourcePlan[0].originalMovementId, "movement-A");
+assert.equal(ready.stockSourcePlan[0].storageLocationId, "shelf-A");
+assert.equal(ready.stockSourcePlan[0].quantity.toFixed(), "1");
+assert.equal(ready.stockSourcePlan[0].stockDisposition, "RESTOCK");
+
+// Stock movements have three decimal places, invoice items may have six.
+state.request.lines[0].quantity = D("0.0001");
+await assert.rejects(preview(), { code: "RETAIL_INVOICE_RETURN_STOCK_QUANTITY_PRECISION" });
+state.request.lines[0].quantity = D(1);
+
+// A duplicated or out-of-balance posting must never feed a return.
+state.movements[0].quantity = D(4);
+await assert.rejects(preview(), { code: "RETAIL_INVOICE_RETURN_SETTLEMENT_STOCK_INVALID" });
+state.movements[0].quantity = D(3);
+
+// Previous completed returns consume the original movement FIFO; a later
+// return traces exact remaining source movements without duplicating stock.
+state.movements = [
+  { ...state.movements[0], quantity: D(2) },
+  { ...state.movements[0], id: "movement-B", storageLocationId: "shelf-B", quantity: D(1) },
+];
+state.completed = [{ checkoutLineId: "checkoutline-A", quantity: D(1) }];
+state.request.lines[0].quantity = D(2);
+state.request.lines[0].refundAmount = D("66.67");
+state.request.refundAmount = D("66.67");
+const split = await preview();
+assert.equal(split.stockSourcePlan.length, 2);
+assert.equal(split.stockSourcePlan[0].originalMovementId, "movement-A");
+assert.equal(split.stockSourcePlan[0].quantity.toFixed(), "1");
+assert.equal(split.stockSourcePlan[1].originalMovementId, "movement-B");
+assert.equal(split.stockSourcePlan[1].quantity.toFixed(), "1");
+state.request.lines[0].stockDisposition = "DISPOSE";
+assert.equal((await preview()).stockSourcePlan[0].stockDisposition, "DISPOSE");
+state.request.lines[0].stockDisposition = "RESTOCK";
+state.completed = [];
+state.request.lines[0].quantity = D(1);
+state.request.lines[0].refundAmount = D("33.33");
+state.request.refundAmount = D("33.33");
+state.movements = [{ ...state.movements[0], quantity: D(3) }];
 
 state.request.status = "SUBMITTED";
 await assert.rejects(preview(), { code: "RETAIL_INVOICE_RETURN_SETTLEMENT_APPROVAL_REQUIRED" });
