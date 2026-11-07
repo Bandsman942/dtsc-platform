@@ -185,6 +185,15 @@ export async function createSalesCreditNote(organizationId: string, actorUserId:
   return prisma.$transaction(async (tx) => {
     const invoice = await tx.enterpriseSalesInvoice.findFirst({ where: { id: input.invoiceId, organizationId, status: { in: ["ISSUED", "PARTIALLY_PAID", "PAID", "OVERDUE"] } }, include: { receivable: true } });
     if (!invoice?.receivable) throw new EnterpriseAccountingError("SALES_INVOICE_NOT_CREDITABLE", 409);
+    // An ordinary Finance credit note would reduce the receivable but leave
+    // an unfulfilled Retail checkout's stock promise intact, or would fail to
+    // reverse a posted Retail stock exit. Until Retail return/refund settlement
+    // is atomic with stock and Finance, refuse this bypass for linked invoices.
+    const retailCheckout = await tx.enterpriseRetailInvoiceCheckout.findFirst({
+      where: { organizationId, salesInvoiceId: invoice.id },
+      select: { id: true },
+    });
+    if (retailCheckout) throw new EnterpriseAccountingError("RETAIL_INVOICE_RETURN_WORKFLOW_REQUIRED", 409);
     const calculated = await calculateItems(tx, organizationId, input.creditDate, input.items);
     const subtotal = money(sumDecimals(calculated.map((item) => item.netAmount)));
     const taxTotal = money(sumDecimals(calculated.map((item) => item.taxAmount)));
