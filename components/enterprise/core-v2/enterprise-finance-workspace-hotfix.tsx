@@ -60,6 +60,7 @@ type ExpenseItem = {
   supplierId: string | null;
   purchaseId: string | null;
   budgetLineId: string | null;
+  siteId: string | null;
   revision: number;
   budgetStatus: string;
   supplier: { id: string; legalName: string; displayName: string | null } | null;
@@ -122,6 +123,7 @@ export function EnterpriseFinanceWorkspaceHotfix({ organizationId, members, depa
   const [alertBudget, setAlertBudget] = useState<BudgetItem | null>(null);
   const [lines, setLines] = useState<BudgetLineDraft[]>([{ ...emptyLine }]);
   const [purchaseSource, setPurchaseSource] = useState<FinanceReferenceOption | null>(null);
+  const [expenseSites, setExpenseSites] = useState<Array<{ id: string; code: string; name: string }>>([]);
   const [message, setMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [busy, setBusy] = useState(false);
@@ -145,6 +147,15 @@ export function EnterpriseFinanceWorkspaceHotfix({ organizationId, members, depa
     }
   }, [organizationId]);
   useEffect(() => { void loadSummary(); }, [loadSummary, refreshKey]);
+
+  useEffect(() => {
+    let active = true;
+    void fetch(`/api/enterprise/${organizationId}/expenses/sites`, { cache: "no-store" })
+      .then(async (response) => response.ok ? response.json() as Promise<{ items?: Array<{ id: string; code: string; name: string }> }> : null)
+      .then((value) => { if (active) setExpenseSites(value?.items || []); })
+      .catch(() => { if (active) setExpenseSites([]); });
+    return () => { active = false; };
+  }, [organizationId]);
 
   function mutationError(error: unknown) {
     const raw = error instanceof Error ? error.message : "";
@@ -285,7 +296,7 @@ export function EnterpriseFinanceWorkspaceHotfix({ organizationId, members, depa
 
     <ModuleSection title={en ? "Expenses" : "Dépenses"} description={en ? "ERP expenses are budget consumption, not bank payments." : "Les dépenses ERP représentent une consommation budgétaire, pas un paiement bancaire."} count={`${expenses.pagination.total}`} action={canCreate ? <Button onClick={() => { setErrorMessage(""); setPurchaseSource(null); setCreateExpenseOpen(true); }}><FilePlus2 className="h-4 w-4" />{en ? "New expense" : "Nouvelle dépense"}</Button> : undefined}>
       <div className="grid gap-2 border-y border-dtsc-border py-3 md:grid-cols-2"><Input value={expenseSearch} onChange={(event) => { setExpenseSearch(event.target.value); setPageExpense(1); }} placeholder={en ? "Search expenses…" : "Rechercher une dépense…"} /><NativeSelect value={expenseStatus} onChange={setExpenseStatus} items={expenseStatuses.map((id) => ({ id, label: label(en, id) }))} /></div>
-      {expenses.loading ? <p className="py-8 text-center text-sm text-dtsc-muted">{en ? "Loading…" : "Chargement…"}</p> : expenses.items.length ? <BusinessList ariaLabel="expenses">{expenses.items.map((item) => <BusinessListItem key={item.id} title={`${item.reference} · ${item.title}`} status={<StatusBadge tone={tone(item.status)}>{label(en, item.status)}</StatusBadge>} meta={`${amount(item.amount, item.currency, en)} · ${label(en, item.budgetStatus)}`} description={`${formatEnterpriseDate(item.expenseDate, locale)} · ${item.supplier?.displayName || item.supplier?.legalName || (en ? "No supplier" : "Sans fournisseur")}${item.purchase ? ` · ${item.purchase.reference}` : ""}`} onOpen={() => void openExpense(item)} actions={<ContextActions label={en ? "Expense actions" : "Actions dépense"} actions={expenseActions(item)} />} />)}</BusinessList> : <EmptyState compact title={en ? "No expenses" : "Aucune dépense"} description={expenses.error || (en ? "No expense matches the filters." : "Aucune dépense ne correspond aux filtres.")} />}
+      {expenses.loading ? <p className="py-8 text-center text-sm text-dtsc-muted">{en ? "Loading…" : "Chargement…"}</p> : expenses.items.length ? <BusinessList ariaLabel="expenses">{expenses.items.map((item) => <BusinessListItem key={item.id} title={`${item.reference} · ${item.title}`} status={<StatusBadge tone={tone(item.status)}>{label(en, item.status)}</StatusBadge>} meta={`${amount(item.amount, item.currency, en)} · ${label(en, item.budgetStatus)}`} description={`${formatEnterpriseDate(item.expenseDate, locale)} · ${expenseSites.find((site) => site.id === item.siteId)?.name || (en ? "No store assigned" : "Sans boutique affectée")} · ${item.supplier?.displayName || item.supplier?.legalName || (en ? "No supplier" : "Sans fournisseur")}${item.purchase ? ` · ${item.purchase.reference}` : ""}`} onOpen={() => void openExpense(item)} actions={<ContextActions label={en ? "Expense actions" : "Actions dépense"} actions={expenseActions(item)} />} />)}</BusinessList> : <EmptyState compact title={en ? "No expenses" : "Aucune dépense"} description={expenses.error || (en ? "No expense matches the filters." : "Aucune dépense ne correspond aux filtres.")} />}
       <Pager page={pageExpense} pageCount={expenses.pagination.pageCount} setPage={setPageExpense} en={en} />
     </ModuleSection>
 
@@ -306,6 +317,7 @@ export function EnterpriseFinanceWorkspaceHotfix({ organizationId, members, depa
       <form onSubmit={createExpense} className="grid gap-5">
         <Field label={en ? "Title" : "Dépense"}><Input name="title" required disabled={busy} /></Field>
         <div className="grid gap-3 md:grid-cols-2"><Field label={en ? "Expense date" : "Date"}><Input name="expenseDate" type="date" required disabled={busy} /></Field><Field label={en ? "Category" : "Catégorie"}><Input name="category" disabled={busy} /></Field></div>
+        <Field label={en ? "Store / site attribution" : "Boutique / site concerné"}><NativeSelect name="siteId" disabled={busy} items={[{ id: "", label: en ? "Unattributed / general expense" : "Charge générale non affectée" }, ...expenseSites.map((site) => ({ id: site.id, label: `${site.code} · ${site.name}` }))]} /></Field>
         <Field label={en ? "Purchase source" : "Achat source"}><FinanceReferenceSelect organizationId={organizationId} kind="purchase" name="purchaseId" label={en ? "purchase" : "achat"} locale={locale} disabled={busy} onOptionChange={setPurchaseSource} /></Field>
         {purchaseSource ? <div className="rounded-xl border border-cyan-500/30 bg-cyan-500/5 px-4 py-3 text-sm text-dtsc-muted"><strong className="text-dtsc-ink">{en ? "Purchase-linked expense" : "Dépense liée à un achat"}</strong><p className="mt-1">{en ? "Supplier, budget line and currency are inherited from the purchase and revalidated by the server. Leave the amount empty to reuse the purchase total." : "Le fournisseur, la ligne budgétaire et la devise sont repris de l’achat puis revalidés par le serveur. Laissez le montant vide pour reprendre le total de l’achat."}</p></div> : <div className="grid gap-3 md:grid-cols-2"><Field label={en ? "Supplier" : "Fournisseur"}><FinanceReferenceSelect organizationId={organizationId} kind="supplier" name="supplierId" label={en ? "supplier" : "fournisseur"} locale={locale} disabled={busy} /></Field><Field label={en ? "Budget line" : "Ligne budgétaire"}><FinanceReferenceSelect organizationId={organizationId} kind="budget-line" name="budgetLineId" label={en ? "budget line" : "ligne budgétaire"} locale={locale} disabled={busy} /></Field></div>}
         <Field label={en ? "Supporting document" : "Justificatif"}><FinanceReferenceSelect organizationId={organizationId} kind="document" name="documentId" label={en ? "supporting document" : "justificatif"} locale={locale} disabled={busy} /></Field>

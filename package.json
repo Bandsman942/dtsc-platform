@@ -1,6 +1,6 @@
 {
   "name": "dtsc-platform",
-  "version": "1.2.3",
+  "version": "1.3.0",
   "private": true,
   "engines": {
     "node": "22.x"
@@ -25,6 +25,9 @@
     "qa:semver": "node scripts/qa-semver.mjs",
     "release:version:check": "node scripts/github/validate-semver.mjs",
     "qa:hotfix-1036-hr-palette": "node scripts/qa-hotfix-1036-hr-palette.mjs",
+    "qa:hotfix-1042-retail": "node scripts/qa-hotfix-1042-retail-batches-transfer.mjs",
+    "qa:hotfix-1042-site-staff": "node scripts/qa-hotfix-1042-site-staff.mjs",
+    "qa:hotfix-1042-warehouse-receipts": "node scripts/qa-hotfix-1042-warehouse-receipt-scoping.mjs",
     "qa:console-internal-workspaces": "node scripts/qa-console-internal-workspaces.mjs",
     "qa:console-workspace-shell": "node scripts/qa-console-workspace-shell.mjs",
     "qa:standard-module-registry": "node scripts/audit-standard-module-registry.mjs",
@@ -406,7 +409,11 @@
     "qa:auth-mfa-policy": "node scripts/qa-auth-mfa-policy.mjs",
     "qa:auth-advanced-security": "node scripts/qa-auth-advanced-security.mjs",
     "qa:auth-dual-recovery": "node scripts/qa-auth-dual-recovery.mjs",
-    "qa:hotfix-1019-security-settings": "node scripts/qa-hotfix-1019-security-settings-design2.mjs"
+    "qa:hotfix-1019-security-settings": "node scripts/qa-hotfix-1019-security-settings-design2.mjs",
+    "qa:hotfix-1042-retail-invoice-finance": "node scripts/qa-hotfix-1042-retail-invoice-finance.mjs",
+    "qa:hotfix-1042-retail-invoice-payments": "node scripts/qa-hotfix-1042-retail-invoice-payments.mjs",
+    "qa:hotfix-1042-retail-invoice-stock-holds": "node scripts/qa-hotfix-1042-retail-invoice-stock-holds.mjs",
+    "qa:hotfix-1042-retail-invoice-print": "node scripts/qa-hotfix-1042-retail-invoice-print.mjs"
   },
   "dependencies": {
     "@ai-sdk/gateway": "2.0.27",

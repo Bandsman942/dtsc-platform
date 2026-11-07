@@ -105,6 +105,7 @@ export const enterpriseBudgetAlertActionSchema = z.object({
 });
 
 const expenseBase = z.object({
+  siteId: optionalId,
   title: z.string().trim().min(2).max(240),
   description: optionalText(8000),
   expenseDate: z.coerce.date(),
@@ -130,6 +131,7 @@ export const enterpriseExpenseCreateSchema = expenseBase.superRefine((data, ctx)
 
 export const enterpriseExpenseUpdateSchema = z.object({
   revision,
+  siteId: optionalId,
   title: z.string().trim().min(2).max(240).optional(),
   description: optionalText(8000),
   expenseDate: z.coerce.date().optional(),

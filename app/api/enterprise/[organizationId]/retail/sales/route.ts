@@ -8,6 +8,7 @@ import { getRetailMetricsByCurrency } from "@/lib/enterprise/retail/commercial-g
 import { authorizeRetailRequest, retailErrorResponse, retailListParams } from "@/lib/enterprise/retail/http";
 import { getRetailCommercialPermissions } from "@/lib/enterprise/retail/permissions";
 import { executeCanonicalRetailSale } from "@/lib/enterprise/retail/sale-execution";
+import { retailSitesForCapability } from "@/lib/enterprise/retail/site-access";
 import { retailSaleCreateSchema } from "@/lib/enterprise/retail/schemas";
 import { prisma } from "@/lib/prisma";
 
@@ -19,10 +20,14 @@ export async function GET(req: Request, { params }: Params) {
   const { organizationId } = await params;
   const auth = await authorizeRetailRequest(req, organizationId, "RETAIL_POS", "read", { includeMutationCapabilities: false });
   if (!auth.ok) return auth.response;
+  let scope: Awaited<ReturnType<typeof retailSitesForCapability>>;
+  try { scope = await retailSitesForCapability(organizationId, auth.session.userId, "VIEW_SALES"); }
+  catch (error) { return retailErrorResponse(error, "RETAIL_SITE_ACCESS_DENIED"); }
   const accessMs = Number((performance.now() - accessStartedAt).toFixed(2));
   const { page, pageSize, status, search, from, to } = retailListParams(req);
   const where: Prisma.EnterpriseRetailSaleWhereInput = {
     organizationId,
+    ...(scope.isolationEnabled ? { siteId: { in: scope.siteIds } } : {}),
     ...(status ? { status } : {}),
     ...(from || to ? { soldAt: { ...(from ? { gte: from } : {}), ...(to ? { lte: to } : {}) } } : {}),
     ...(search
@@ -46,7 +51,7 @@ export async function GET(req: Request, { params }: Params) {
       include: { lines: true, tenders: true, pricingDecisions: true, promotionRedemptions: true, returns: { include: { lines: true, refunds: true } } },
     }),
     prisma.enterpriseRetailSale.count({ where }),
-    getRetailMetricsByCurrency(organizationId, metricFrom, metricTo, "RETAIL_POS"),
+    getRetailMetricsByCurrency(organizationId, metricFrom, metricTo, "RETAIL_POS", scope.isolationEnabled ? scope.siteIds : undefined),
   ]);
   const dataMs = Number((performance.now() - dataStartedAt).toFixed(2));
   await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "retail-pos", page, scale7ReadPhaseMs: { access: accessMs, data: dataMs } } });

@@ -3,7 +3,7 @@ import type { z } from "zod";
 import { EnterpriseDomainConflictError, EnterpriseDomainError } from "@/lib/enterprise/common/errors";
 import { publishEnterpriseEvent } from "@/lib/enterprise/crm-sales/helpers";
 import { assertInventoryApprovalCandidate, assertInventoryApprovalDecision } from "@/lib/enterprise/inventory/approval";
-import { applyStockMovementTx } from "@/lib/enterprise/inventory/service";
+import { applyStockMovementTx, requireInventoryStockAuthorityTx } from "@/lib/enterprise/inventory/service";
 import type { stockAdjustmentCreateSchema, stockAdjustmentDecisionSchema } from "@/lib/enterprise/inventory/schemas";
 import { prisma } from "@/lib/prisma";
 
@@ -34,6 +34,7 @@ export async function createEnterpriseStockAdjustment(organizationId: string, ac
     const approver = await tx.organizationMember.findFirst({ where: { organizationId, userId: input.approverUserId, status: "ACTIVE", removedAt: null }, select: { id: true } });
     if (!approver) throw new EnterpriseDomainError("APPROVER_NOT_MEMBER", 404);
     await assertAdjustmentCoordinates(tx, organizationId, input);
+    await requireInventoryStockAuthorityTx(tx, organizationId, actorUserId, input.warehouseId);
     const adjustment = await tx.enterpriseStockAdjustment.create({
       data: { organizationId, reference: adjustmentReference(), inventoryItemId: input.inventoryItemId, warehouseId: input.warehouseId, storageLocationId: input.storageLocationId || null, stockLotId: input.stockLotId || null, adjustmentType: input.adjustmentType, quantity: input.quantity, reason: input.reason, status: "PENDING_APPROVAL", requestedByUserId: actorUserId, approvedByUserId: input.approverUserId, idempotencyKey: input.idempotencyKey || null, submittedAt: new Date() },
     });
@@ -51,6 +52,7 @@ export async function decideEnterpriseStockAdjustment(organizationId: string, ad
   return prisma.$transaction(async (tx) => {
     const adjustment = await tx.enterpriseStockAdjustment.findFirst({ where: { id: adjustmentId, organizationId, status: "PENDING_APPROVAL" } });
     if (!adjustment) throw new EnterpriseDomainError("STOCK_ADJUSTMENT_NOT_FOUND", 404);
+    await requireInventoryStockAuthorityTx(tx, organizationId, actorUserId, adjustment.warehouseId);
     if (adjustment.approvedByUserId !== actorUserId) throw new EnterpriseDomainError("NOT_STOCK_ADJUSTMENT_APPROVER", 403);
     const approval = await tx.enterpriseApproval.findFirst({ where: { organizationId, targetEntityType: "EnterpriseStockAdjustment", targetEntityId: adjustment.id, status: "PENDING", approverUserId: actorUserId } });
     if (!approval) throw new EnterpriseDomainError("APPROVAL_NOT_FOUND", 404);

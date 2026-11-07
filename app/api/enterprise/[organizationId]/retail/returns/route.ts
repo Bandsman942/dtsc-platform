@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { writeApiLog } from "@/lib/audit";
-import { authorizeRetailRequest, retailListParams } from "@/lib/enterprise/retail/http";
+import { authorizeRetailRequest, retailErrorResponse, retailListParams } from "@/lib/enterprise/retail/http";
+import { retailSitesForCapability } from "@/lib/enterprise/retail/site-access";
 import { prisma } from "@/lib/prisma";
 
 type Params = { params: Promise<{ organizationId: string }> };
@@ -10,9 +11,13 @@ export async function GET(req: Request, { params }: Params) {
   const { organizationId } = await params;
   const auth = await authorizeRetailRequest(req, organizationId, "RETAIL_POS", "read");
   if (!auth.ok) return auth.response;
+  let scope: Awaited<ReturnType<typeof retailSitesForCapability>>;
+  try { scope = await retailSitesForCapability(organizationId, auth.session.userId, "VIEW_SALES"); }
+  catch (error) { return retailErrorResponse(error, "RETAIL_SITE_ACCESS_DENIED"); }
   const { page, pageSize, status, search } = retailListParams(req);
   const where = {
     organizationId,
+    ...(scope.isolationEnabled ? { sale: { siteId: { in: scope.siteIds } } } : {}),
     ...(status ? { status } : {}),
     ...(search ? { OR: [{ number: { contains: search, mode: "insensitive" as const } }, { sale: { number: { contains: search, mode: "insensitive" as const } } }] } : {}),
   };

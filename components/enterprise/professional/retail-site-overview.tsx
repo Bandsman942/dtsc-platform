@@ -1,0 +1,58 @@
+"use client";
+
+import { useCallback, useEffect, useState } from "react";
+import { Building2, Landmark, RefreshCw, ShoppingBasket, Wallet } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { customerFacingError } from "@/lib/customer-facing-language";
+
+type Money = { currencyCode: string; total: string; count: number };
+type Tender = Money & { method: string };
+type Site = { id: string; code: string; name: string; sales: Money[]; approvedExpenses: Money[]; collections: Tender[]; inventory: { balanceRows: number }; cashSessions: Array<{ status: string; count: number }>; dailyCloses: Array<{ status: string; count: number }> };
+
+function currencyAmount(value: string, currency: string, en: boolean) {
+  try { return new Intl.NumberFormat(en ? "en-US" : "fr-FR", { maximumFractionDigits: 2 }).format(Number(value)) + " " + currency; }
+  catch { return `${value} ${currency}`; }
+}
+
+export function RetailSiteOverview({ organizationId, locale }: { organizationId: string; locale: "fr" | "en" }) {
+  const [days, setDays] = useState(7);
+  const [items, setItems] = useState<Site[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const en = locale === "en";
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const start = new Date();
+      start.setUTCDate(start.getUTCDate() - (days - 1));
+      start.setUTCHours(0, 0, 0, 0);
+      const query = new URLSearchParams({ from: start.toISOString(), to: new Date().toISOString() });
+      const response = await fetch(`/api/enterprise/${organizationId}/retail/site-overview?${query}`, { cache: "no-store" });
+      const payload = await response.json().catch(() => null) as { items?: Site[]; message?: string } | null;
+      if (!response.ok || !payload?.items) throw new Error(payload?.message || (en ? "Store overview is unavailable." : "La vue multi-boutiques est indisponible."));
+      setItems(payload.items);
+    } catch (caught) { setError(customerFacingError(caught, locale)); }
+    finally { setLoading(false); }
+  }, [organizationId, days, en, locale]);
+  useEffect(() => { void load(); }, [load]);
+  return <section data-testid="retail-multisite-overview" className="min-w-0 rounded-2xl border border-dtsc-border bg-dtsc-surface p-4 shadow-sm sm:p-5">
+    <div className="flex flex-wrap items-start justify-between gap-3">
+      <div className="flex min-w-0 items-start gap-3"><Building2 className="mt-1 h-5 w-5 shrink-0 text-dtsc-blue" /><div className="min-w-0"><h2 className="font-black text-dtsc-ink">{en ? "Store management overview" : "Pilotage des boutiques"}</h2><p className="mt-1 text-sm text-dtsc-muted">{en ? "Operational activity by store and currency; only the company owner/admin can access this comparison." : "Activités par boutique et par devise, réservées au propriétaire et à l'administration."}</p></div></div>
+      <div className="flex flex-wrap items-center gap-2"><label className="text-xs font-semibold text-dtsc-muted">{en ? "Period" : "Période"}<select className="ml-2 min-h-11 rounded-xl border border-dtsc-border bg-dtsc-page px-2 text-sm text-dtsc-ink" value={days} onChange={(event) => setDays(Number(event.target.value))}><option value={1}>{en ? "Today" : "Aujourd'hui"}</option><option value={7}>{en ? "7 days" : "7 jours"}</option><option value={30}>{en ? "30 days" : "30 jours"}</option></select></label><Button type="button" variant="outline" onClick={() => void load()} disabled={loading}><RefreshCw className="h-4 w-4" />{en ? "Refresh" : "Actualiser"}</Button></div>
+    </div>
+    {error ? <p role="alert" className="mt-4 rounded-xl bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-200">{error}</p> : null}
+    {loading ? <p role="status" className="mt-4 text-sm text-dtsc-muted">{en ? "Loading stores…" : "Chargement des boutiques…"}</p> : null}
+    {!loading && !items.length ? <p className="mt-4 rounded-xl bg-dtsc-page p-3 text-sm text-dtsc-muted">{en ? "No active store has been set up. Create sites and their warehouses from Enterprise master data." : "Aucune boutique active. Créez les sites et leurs dépôts depuis les Référentiels ERP."}</p> : null}
+    {!loading && items.length ? <div className="mt-4 grid min-w-0 gap-3 lg:grid-cols-2">{items.map((site) => <article key={site.id} className="min-w-0 rounded-2xl border border-dtsc-border bg-dtsc-page p-4">
+      <div className="flex items-center gap-2"><Landmark className="h-4 w-4 text-dtsc-blue" /><h3 className="min-w-0 break-words font-black text-dtsc-ink">{site.code} · {site.name}</h3></div>
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        <div className="min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface p-3"><p className="flex items-center gap-2 text-xs font-bold text-dtsc-muted"><ShoppingBasket className="h-4 w-4" />{en ? "Completed sales" : "Ventes réalisées"}</p>{site.sales.length ? site.sales.map((sale) => <p key={sale.currencyCode} className="mt-2 break-words text-sm font-black text-dtsc-ink">{currencyAmount(sale.total, sale.currencyCode, en)} <span className="font-normal text-dtsc-muted">({sale.count})</span></p>) : <p className="mt-2 text-sm text-dtsc-muted">0</p>}</div>
+        <div className="min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface p-3"><p className="flex items-center gap-2 text-xs font-bold text-dtsc-muted"><Wallet className="h-4 w-4" />{en ? "POS collections" : "Encaissements POS"}</p>{site.collections.length ? site.collections.map((tender) => <p key={`${tender.currencyCode}:${tender.method}`} className="mt-2 break-words text-sm font-semibold text-dtsc-ink">{currencyAmount(tender.total, tender.currencyCode, en)} <span className="text-xs font-normal text-dtsc-muted">· {tender.method}</span></p>) : <p className="mt-2 text-sm text-dtsc-muted">0</p>}</div>
+      </div>
+      <div className="mt-3 rounded-xl border border-dtsc-border bg-dtsc-surface p-3"><p className="text-xs font-bold text-dtsc-muted">{en ? "Approved expenses attributed to this store" : "Dépenses approuvées affectées à cette boutique"}</p><div className="mt-1 flex flex-wrap gap-x-4 gap-y-1">{site.approvedExpenses.length ? site.approvedExpenses.map((expense) => <p key={expense.currencyCode} className="text-sm font-semibold text-dtsc-ink">{currencyAmount(expense.total, expense.currencyCode, en)} <span className="font-normal text-dtsc-muted">({expense.count})</span></p>) : <p className="text-sm text-dtsc-muted">0</p>}</div></div>
+      <p className="mt-3 text-xs text-dtsc-muted">{site.inventory.balanceRows} {en ? "inventory balance rows" : "lignes de stock"} · {site.cashSessions.filter((row) => row.status === "OPEN").reduce((sum, row) => sum + row.count, 0)} {en ? "open cash sessions" : "sessions de caisse ouvertes"}</p>
+    </article>)}</div> : null}
+    <p className="mt-4 text-xs text-dtsc-muted">{en ? "Operational overview only. Financial margin and net profit require verified posted accounting entries and expense attribution by store." : "Vue opérationnelle uniquement. Les marges et bénéfices nets exigent les écritures comptables validées et l'affectation des dépenses par boutique."}</p>
+  </section>;
+}

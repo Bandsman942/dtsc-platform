@@ -1,0 +1,23 @@
+// Retail permissions are scoped to the physical boutique. An organization
+// membership is still required and remains the authority for module access.
+model EnterpriseRetailSiteAssignment {
+  id              String   @id @default(cuid())
+  organizationId  String
+  siteId          String
+  userId          String
+  roleCode        String
+  permissionsJson Json?
+  isActive        Boolean  @default(true)
+  createdByUserId String
+  updatedByUserId String?
+  revision        Int      @default(1)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  site    EnterpriseSite     @relation(fields: [organizationId, siteId], references: [organizationId, id], onDelete: Restrict)
+  member  OrganizationMember @relation(fields: [organizationId, userId], references: [organizationId, userId], onDelete: Restrict)
+
+  @@unique([organizationId, siteId, userId])
+  @@index([organizationId, userId, isActive])
+  @@index([organizationId, siteId, roleCode, isActive])
+}

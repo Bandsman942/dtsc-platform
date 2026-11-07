@@ -24,10 +24,12 @@ for (const [label,src,auth] of [
     get.includes("writeApiLog") && !post.includes("scale7ReadPhaseMs"),
     label+" preserves scoped access/audit and emits bounded timing on GET only");
 }
-check(sales.includes('getRetailMetricsByCurrency(organizationId, metricFrom, metricTo, "RETAIL_POS")') &&
+check(sales.includes('getRetailMetricsByCurrency(organizationId, metricFrom, metricTo, "RETAIL_POS", scope.isolationEnabled ? scope.siteIds : undefined)') &&
+  sales.includes('retailSitesForCapability(organizationId, auth.session.userId, "VIEW_SALES")') &&
+  sales.includes('siteId: { in: scope.siteIds }') &&
   sales.includes("include: { lines: true, tenders: true, pricingDecisions: true, promotionRedemptions: true") &&
   tasks.includes("enterpriseTaskVisibilityWhere({ organizationId, userId: session.userId, canSeeAll: access.canSeeAll })"),
-  "Shop response and Task visibility unchanged");
+  "Shop response, boutique-filtered metrics and Task visibility preserved");
 for (const marker of [
  'http_req_duration: ["p(95)<1000", "p(99)<2000"]',
  '"http_req_duration{workload:enterprise-read}": ["p(95)<1000", "p(99)<2000"]',

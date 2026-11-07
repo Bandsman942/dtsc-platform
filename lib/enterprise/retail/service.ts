@@ -9,6 +9,8 @@ import { applyStockMovementTx } from "@/lib/enterprise/inventory/service";
 import { finalizeRetailSaleAccountingTx, finalizeRetailSaleReversalAccountingTx } from "@/lib/enterprise/retail/accounting";
 import { RETAIL_PROFILE_CODE, RETAIL_SECTOR_CODE } from "@/lib/enterprise/retail/constants";
 import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
+import { assertRetailLotPolicyTx } from "@/lib/enterprise/retail/inventory-policy";
+import { requireRetailSiteCapability, retailStaffIsolationIsEnabled } from "@/lib/enterprise/retail/site-access";
 import {
   applyRetailRelationshipBenefitEffectsTx,
   reverseRetailRelationshipBenefitEffectsTx,
@@ -173,9 +175,13 @@ export async function createRetailSale(
 ) {
   return prisma.$transaction(async (tx) => {
     await assertRetailOrganization(tx, organizationId);
-    await ensureRetailConfigurationTx(tx, organizationId, actorUserId);
+    const configuration = await ensureRetailConfigurationTx(tx, organizationId, actorUserId);
     const existing = await tx.enterpriseRetailSale.findFirst({ where: { organizationId, idempotencyKey: input.idempotencyKey }, include: { lines: true, tenders: true } });
     if (existing) {
+      if (existing.warehouseId !== input.warehouseId) throw new EnterpriseRetailError("RETAIL_SALE_IDEMPOTENCY_COLLISION", 409);
+      const replayWarehouse = await tx.enterpriseWarehouse.findFirst({ where: { id: existing.warehouseId, organizationId, status: "ACTIVE", archivedAt: null }, select: { siteId: true } });
+      if (!replayWarehouse || (existing.siteId && existing.siteId !== replayWarehouse.siteId)) throw new EnterpriseRetailError("RETAIL_SITE_ACCESS_DENIED", 403);
+      await requireRetailSiteCapability(organizationId, actorUserId, replayWarehouse.siteId, "COLLECT_PAYMENT", tx);
       // The relationship-benefit ledger is written atomically with the original
       // sale. A replay must return that committed sale as-is: re-resolving
       // today's eligibility could otherwise attach a different benefit to an
@@ -206,6 +212,7 @@ export async function createRetailSale(
     ]);
     if (!warehouse || (input.siteId && !site) || (input.storageLocationId && !location) || (input.customerBusinessPartyId && !customer)) throw new EnterpriseRetailError("RETAIL_REFERENCE_INVALID", 409);
     if (input.siteId && warehouse.siteId !== input.siteId) throw new EnterpriseRetailError("RETAIL_REFERENCE_INVALID", 409, { field: "siteId" });
+    await requireRetailSiteCapability(organizationId, actorUserId, warehouse.siteId, "COLLECT_PAYMENT", tx);
     if (catalogItems.length !== catalogItemIds.length) throw new EnterpriseRetailError("RETAIL_CATALOG_ITEM_INVALID", 409);
     if (financialAccounts.length !== tenderAccountIds.length) throw new EnterpriseRetailError("RETAIL_FINANCIAL_ACCOUNT_INVALID", 409);
 
@@ -237,6 +244,15 @@ export async function createRetailSale(
       preparedLines.push({ catalogItemId: catalogItem.id, inventoryItemId, stockLotId: line.stockLotId || null, description: catalogItem.name, quantity, unitPrice, discountAmount, taxAmount, lineTotal: money(gross.minus(discountAmount).plus(taxAmount)), trackInventory: catalogItem.trackInventory });
     }
 
+    const organization = await tx.organization.findUniqueOrThrow({ where: { id: organizationId }, select: { timezone: true } });
+    await assertRetailLotPolicyTx(tx, {
+      organizationId,
+      warehouseId: input.warehouseId,
+      timezone: organization.timezone || "UTC",
+      settings: configuration.settingsJson,
+      lines: preparedLines,
+    });
+
     const subtotal = money(sumDecimals(preparedLines.map((line) => line.quantity.times(line.unitPrice))));
     const discountTotal = money(sumDecimals(preparedLines.map((line) => line.discountAmount)));
     const taxTotal = money(sumDecimals(preparedLines.map((line) => line.taxAmount)));
@@ -245,6 +261,7 @@ export async function createRetailSale(
     if (!tenderTotal.equals(grandTotal)) throw new EnterpriseRetailError("RETAIL_TENDER_TOTAL_MISMATCH", 409, { tenderTotal: tenderTotal.toFixed(), grandTotal: grandTotal.toFixed() });
 
     const cashAccountIds: string[] = [];
+    const sellingSiteId = input.siteId || warehouse.siteId;
     for (const tender of input.tenders) {
       if (tender.methodType === "STORE_CREDIT") {
         if (!input.customerBusinessPartyId || !tender.storedValueAccountId || tender.financialAccountId) {
@@ -256,6 +273,11 @@ export async function createRetailSale(
       const expectedTypes = tender.methodType === "CASH" ? ["CASH"] : tender.methodType === "MOBILE_MONEY" ? ["MOBILE_MONEY"] : ["BANK", "CLEARING"];
       if (!account || account.currencyCode !== input.currencyCode || !expectedTypes.includes(account.accountType)) {
         throw new EnterpriseRetailError("RETAIL_FINANCIAL_ACCOUNT_INVALID", 409, { accountId: tender.financialAccountId, currencyCode: input.currencyCode, allowedTypes: expectedTypes });
+      }
+      // A shop-scoped cash/bank/wallet account cannot receive a tender from
+      // another boutique, even when the caller knows its organization ID.
+      if ((retailStaffIsolationIsEnabled(configuration.settingsJson) && account.siteId !== sellingSiteId) || (account.siteId && account.siteId !== sellingSiteId)) {
+        throw new EnterpriseRetailError("RETAIL_FINANCIAL_ACCOUNT_SITE_MISMATCH", 409, { accountId: account.id, sellingSiteId });
       }
       if (account.accountType === "CASH") cashAccountIds.push(account.id);
     }
@@ -366,6 +388,12 @@ export async function reverseRetailSale(organizationId: string, saleId: string, 
     await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterpriseRetailSale" WHERE id = ${saleId} AND "organizationId" = ${organizationId} FOR UPDATE`);
     const sale = await tx.enterpriseRetailSale.findFirst({ where: { id: saleId, organizationId }, include: { lines: true, tenders: true } });
     if (!sale) throw new EnterpriseRetailError("RETAIL_SALE_NOT_FOUND", 404);
+    const warehouse = await tx.enterpriseWarehouse.findFirst({ where: { id: sale.warehouseId, organizationId, archivedAt: null }, select: { siteId: true } });
+    if (!warehouse || (sale.siteId && sale.siteId !== warehouse.siteId)) throw new EnterpriseRetailError("RETAIL_SITE_ACCESS_DENIED", 403);
+    await requireRetailSiteCapability(organizationId, actorUserId, warehouse.siteId, "COLLECT_PAYMENT", tx);
+    if (sale.lines.some((line) => line.trackInventory && line.inventoryItemId)) {
+      await requireRetailSiteCapability(organizationId, actorUserId, warehouse.siteId, "MANAGE_STOCK", tx);
+    }
     if (sale.status === "REVERSED") {
       await finalizeRetailSaleReversalAccountingTx(tx, organizationId, actorUserId, sale.id);
       return sale;
@@ -404,6 +432,10 @@ export async function reverseRetailSale(organizationId: string, saleId: string, 
         continue;
       }
       const account = await assertFinancialAccount(tx, organizationId, tender.financialAccountId!, tender.currencyCode);
+      const configuration = await tx.enterpriseRetailConfiguration.findUnique({ where: { organizationId }, select: { settingsJson: true } });
+      if (retailStaffIsolationIsEnabled(configuration?.settingsJson) && account.siteId !== warehouse.siteId) {
+        throw new EnterpriseRetailError("RETAIL_FINANCIAL_ACCOUNT_SITE_MISMATCH", 403);
+      }
       const cashSession = account.accountType === "CASH" ? await assertOpenCashSession(tx, organizationId, account.id, actorUserId) : null;
       await applyAccountEffectTx(tx, { organizationId, actorUserId, account, effect: tender.amount.negated(), transactionType: "RETAIL_POS_REVERSAL", reference: sale.number, transactionDate: new Date(), cashSessionId: cashSession?.id, cashReason: input.reason });
     }

@@ -47,6 +47,14 @@ async function requireSupplier(tx: Tx, organizationId: string, supplierId?: stri
   return supplier;
 }
 
+async function requireExpenseSite(tx: Tx, organizationId: string, siteId?: string | null) {
+  const id = nullable(siteId);
+  if (!id) return null;
+  const site = await tx.enterpriseSite.findFirst({ where: { id, organizationId, status: "ACTIVE", archivedAt: null }, select: { id: true } });
+  if (!site) throw new EnterpriseCoreV2Error("La boutique sélectionnée n'est plus active ou n'appartient pas à cette entreprise.", 400, "INVALID_EXPENSE_SITE");
+  return site.id;
+}
+
 async function requirePurchase(tx: Tx, organizationId: string, purchaseId?: string | null) {
   const id = nullable(purchaseId);
   if (!id) return null;
@@ -118,6 +126,7 @@ export async function createEnterpriseExpense(organizationId: string, actorUserI
   return prisma.$transaction(async (tx) => {
     await requireActiveEnterpriseMember(tx, organizationId, actorUserId);
     const departmentId = await requireEnterpriseDepartment(tx, organizationId, input.departmentId);
+    const siteId = await requireExpenseSite(tx, organizationId, input.siteId);
     const purchase = await requirePurchase(tx, organizationId, input.purchaseId);
     const supplier = await requireSupplier(tx, organizationId, input.supplierId || purchase?.supplierId);
     if (purchase?.supplierId && supplier?.id && purchase.supplierId !== supplier.id) throw new EnterpriseCoreV2Error("Le fournisseur de la dépense doit correspondre à l’achat source.", 400, "EXPENSE_PURCHASE_SUPPLIER_MISMATCH");
@@ -137,6 +146,7 @@ export async function createEnterpriseExpense(organizationId: string, actorUserI
     const expense = await tx.enterpriseExpense.create({
       data: {
         organizationId,
+        siteId,
         reference: expenseReference(await resolveEnterpriseBusinessDate(tx, organizationId)),
         title: input.title,
         description: nullable(input.description),
@@ -169,6 +179,7 @@ export async function updateEnterpriseExpense(organizationId: string, expenseId:
     const existing = await tx.enterpriseExpense.findFirst({ where: { id: expenseId, organizationId, archivedAt: null } });
     if (!existing) throw new EnterpriseCoreV2Error("Dépense introuvable.", 404, "EXPENSE_NOT_FOUND");
     if (existing.status !== "DRAFT") throw new EnterpriseCoreV2Error("Seule une dépense en brouillon peut être modifiée.", 409, "EXPENSE_NOT_EDITABLE");
+    const siteId = input.siteId !== undefined ? await requireExpenseSite(tx, organizationId, input.siteId) : undefined;
 
     const purchase = input.purchaseId !== undefined ? await requirePurchase(tx, organizationId, input.purchaseId) : await requirePurchase(tx, organizationId, existing.purchaseId);
     const supplier = input.supplierId !== undefined ? await requireSupplier(tx, organizationId, input.supplierId) : await requireSupplier(tx, organizationId, existing.supplierId);
@@ -188,6 +199,7 @@ export async function updateEnterpriseExpense(organizationId: string, expenseId:
     const updated = await tx.enterpriseExpense.updateMany({
       where: { id: expenseId, organizationId, status: "DRAFT", revision: input.revision, archivedAt: null },
       data: {
+        ...(input.siteId !== undefined ? { siteId } : {}),
         ...(input.title !== undefined ? { title: input.title } : {}),
         ...(input.description !== undefined ? { description: nullable(input.description) } : {}),
         ...(input.expenseDate !== undefined ? { expenseDate: input.expenseDate } : {}),

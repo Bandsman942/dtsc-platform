@@ -61,8 +61,10 @@ async function calculateItems(
   return calculated;
 }
 
-export async function createSalesInvoice(organizationId: string, actorUserId: string, input: SalesInvoiceInput) {
-  return prisma.$transaction(async (tx) => {
+// The transaction-scoped variant lets sector adapters create their *link* to
+// the canonical Finance invoice atomically. A failure must not strand an
+// unlinked invoice or create a second invoice authority.
+export async function createSalesInvoiceTx(tx: Prisma.TransactionClient, organizationId: string, actorUserId: string, input: SalesInvoiceInput) {
     await assertActiveClientOrganization(tx, organizationId);
     const customer = await tx.enterpriseBusinessParty.findFirst({
       where: { id: input.businessPartyId, organizationId, status: "ACTIVE", archivedAt: null, roles: { some: { roleCode: "CUSTOMER", status: "ACTIVE", archivedAt: null } } },
@@ -121,7 +123,13 @@ export async function createSalesInvoice(organizationId: string, actorUserId: st
     });
     await publishFinanceEvent(tx, { organizationId, entityType: "EnterpriseSalesInvoice", entityId: invoice.id, eventType: "SALES_INVOICE_CREATED", summary: `Customer invoice ${invoice.number} created`, actorUserId, toStatus: "DRAFT", metadataJson: { total: grandTotal.toFixed(), currency: invoice.currencyCode } });
     return invoice;
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+}
+
+export async function createSalesInvoice(organizationId: string, actorUserId: string, input: SalesInvoiceInput) {
+  return prisma.$transaction(
+    (tx) => createSalesInvoiceTx(tx, organizationId, actorUserId, input),
+    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+  );
 }
 
 export async function transitionSalesInvoice(

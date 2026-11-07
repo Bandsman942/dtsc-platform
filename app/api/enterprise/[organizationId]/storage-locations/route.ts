@@ -1,12 +1,15 @@
 import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
-import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
+import { enterpriseDomainErrorResponse, enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
+import { EnterpriseDomainError } from "@/lib/enterprise/common/errors";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { getEnterpriseCommonDomainAccess } from "@/lib/enterprise/common/access";
 import { assertStorageLocationCanBecomeInactive, locationIntegrityMessage } from "@/lib/enterprise/master-data/location-integrity";
 import { storageLocationCreateSchema, storageLocationUpdateSchema } from "@/lib/enterprise/master-data/schemas";
 import { createEnterpriseStorageLocation, updateEnterpriseStorageLocation } from "@/lib/enterprise/master-data/service";
+import { retailErrorResponse } from "@/lib/enterprise/retail/http";
+import { retailInventoryVisibleSites } from "@/lib/enterprise/retail/site-access";
 import { prisma } from "@/lib/prisma";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
@@ -20,6 +23,9 @@ export async function GET(req: Request, { params }: Params) {
   const { organizationId } = await params;
   const access = await getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode: "SITES_WAREHOUSES", action: "read" });
   if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  let scope: Awaited<ReturnType<typeof retailInventoryVisibleSites>>;
+  try { scope = await retailInventoryVisibleSites(organizationId, session.userId); }
+  catch (error) { return retailErrorResponse(error, "RETAIL_SITE_ACCESS_DENIED"); }
   const url = new URL(req.url);
   const page = Math.max(1, Number(url.searchParams.get("page") || 1) || 1);
   const pageSize = Math.min(50, Math.max(5, Number(url.searchParams.get("pageSize") || 20) || 20));
@@ -30,6 +36,7 @@ export async function GET(req: Request, { params }: Params) {
     organizationId,
     archivedAt: null,
     ...(warehouseId ? { warehouseId } : {}),
+    ...(scope.isolationEnabled ? { warehouse: { siteId: { in: scope.siteIds } } } : {}),
     ...(status ? { status } : {}),
     ...(search ? { OR: [{ code: { contains: search, mode: "insensitive" } }, { name: { contains: search, mode: "insensitive" } }, { barcode: { contains: search, mode: "insensitive" } }] } : {}),
   };
@@ -44,7 +51,7 @@ export async function GET(req: Request, { params }: Params) {
     prisma.enterpriseStorageLocation.count({ where }),
   ]);
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "storage-locations", page, pageSize } });
-  return NextResponse.json({ items, pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) }, canManage: access.canManage });
+  return NextResponse.json({ items, pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) }, canManage: access.canManage && (!scope.isolationEnabled || scope.manageableSiteIds.length > 0) });
 }
 
 export async function POST(req: Request, { params }: Params) {
@@ -65,6 +72,7 @@ export async function POST(req: Request, { params }: Params) {
     await writeApiLog({ request: req, statusCode: 201, userId: session.userId, startedAt, metadata: { organizationId, domain: "storage-locations" } });
     return NextResponse.json({ ok: true, location }, { status: 201 });
   } catch (error) {
+    if (error instanceof EnterpriseDomainError) return enterpriseDomainErrorResponse(error, "STORAGE_LOCATION_CREATE_FAILED", req);
     const duplicate = error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
     return NextResponse.json({ error: duplicate ? "STORAGE_LOCATION_DUPLICATE" : "STORAGE_LOCATION_CREATE_FAILED", message: duplicate ? "Cet emplacement existe déjà dans l’entrepôt." : "Création de l’emplacement impossible." }, { status: duplicate ? 409 : 400 });
   }
@@ -90,6 +98,7 @@ export async function PATCH(req: Request, { params }: Params) {
     await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, action: "update" } });
     return NextResponse.json({ ok: true, entity });
   } catch (error) {
+    if (error instanceof EnterpriseDomainError) return enterpriseDomainErrorResponse(error, "STORAGE_LOCATION_UPDATE_FAILED", req);
     const integrityMessage = locationIntegrityMessage(error);
     if (integrityMessage) return NextResponse.json({ error: "STORAGE_LOCATION_INTEGRITY_CONFLICT", message: integrityMessage }, { status: 409 });
     const conflict = error instanceof Error && error.message === "REVISION_CONFLICT";

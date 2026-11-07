@@ -425,6 +425,7 @@ model EnterpriseSalesInvoice {
   items                 EnterpriseSalesInvoiceItem[]
   creditNotes           EnterpriseSalesCreditNote[]
   receivable            EnterpriseReceivable?
+  retailCheckout        EnterpriseRetailInvoiceCheckout?
 
   @@unique([organizationId, id])
   @@unique([organizationId, number])
@@ -450,6 +451,7 @@ model EnterpriseSalesInvoiceItem {
   projectId          String?
   createdAt          DateTime               @default(now())
   salesInvoice       EnterpriseSalesInvoice @relation(fields: [organizationId, salesInvoiceId], references: [organizationId, id], onDelete: Cascade)
+  retailCheckoutLine EnterpriseRetailInvoiceCheckoutLine?
 
   @@unique([organizationId, id])
   @@index([organizationId, salesInvoiceId])
@@ -759,6 +761,7 @@ model EnterprisePayment {
   createdAt                DateTime                      @default(now())
   updatedAt                DateTime                      @updatedAt
   allocations              EnterprisePaymentAllocation[]
+  retailInvoiceProposals   EnterpriseRetailInvoicePaymentProposal[]
   events                   EnterprisePaymentEvent[]
   treasuryTransactions     EnterpriseTreasuryTransaction[]
   cashSession              EnterpriseCashSession?         @relation(fields: [organizationId, cashSessionId], references: [organizationId, id], onDelete: Restrict)

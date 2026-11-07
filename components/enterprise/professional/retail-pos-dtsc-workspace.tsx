@@ -47,6 +47,7 @@ type CartLine = {
   taxAmount: number;
   currencyCode: string;
   inventoryItemId: string | null;
+  stockLotId: string | null;
 };
 
 type TenderDraft = {
@@ -86,6 +87,7 @@ type SaleDraft = {
   lines: Array<{
     catalogItemId: string;
     inventoryItemId: string | null;
+    stockLotId: string | null;
     quantity: number;
     unitPrice: number;
     discountAmount: number;
@@ -202,6 +204,8 @@ function PosOperate({
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchError, setSearchError] = useState("");
   const [cart, setCart] = useState<CartLine[]>([]);
+  const [stockLots, setStockLots] = useState<Array<{ id: string; inventoryItemId: string; lotNumber: string; expiryDate: string | null; quantityAvailable: string }>>([]);
+  const [stockLotsLoading, setStockLotsLoading] = useState(false);
   const [overrideReason, setOverrideReason] = useState("");
   const [method1, setMethod1] = useState("CASH");
   const [account1, setAccount1] = useState("");
@@ -219,6 +223,25 @@ function PosOperate({
   const [pricingPreviewLoading, setPricingPreviewLoading] = useState(false);
   const [pricingPreviewError, setPricingPreviewError] = useState("");
   const currency = cart[0]?.currencyCode || dashboard.configuration?.baseCurrencyCode || "CDF";
+  const inventoryIds = useMemo(() => [...new Set(cart.map((line) => line.inventoryItemId).filter((id): id is string => Boolean(id)))].join(","), [cart]);
+  useEffect(() => {
+    if (!warehouseId || !inventoryIds) { setStockLots([]); return; }
+    const controller = new AbortController();
+    setStockLotsLoading(true);
+    const query = new URLSearchParams({ warehouseId, inventoryItemIds: inventoryIds });
+    void fetch(`/api/enterprise/${organizationId}/retail/stock-lots?${query}`, { cache: "no-store", signal: controller.signal })
+      .then(async (response) => {
+        const body = await response.json().catch(() => null) as { items?: typeof stockLots } | null;
+        if (!response.ok || !body?.items) throw new Error("LOT_LOOKUP_FAILED");
+        if (!controller.signal.aborted) setStockLots(body.items);
+      })
+      .catch(() => { if (!controller.signal.aborted) setStockLots([]); })
+      .finally(() => { if (!controller.signal.aborted) setStockLotsLoading(false); });
+    return () => controller.abort();
+  }, [organizationId, warehouseId, inventoryIds]);
+  useEffect(() => {
+    setCart((current) => current.some((line) => line.stockLotId !== null) ? current.map((line) => ({ ...line, stockLotId: null })) : current);
+  }, [warehouseId]);
   useEffect(() => {
     let active = true;
     const refresh = async () => {
@@ -421,6 +444,7 @@ function PosOperate({
         taxAmount: 0,
         currencyCode: itemCurrency,
         inventoryItemId: item.inventoryItemId || null,
+        stockLotId: null,
       }];
     });
     setPending(null);
@@ -433,25 +457,30 @@ function PosOperate({
     setErrors((current) => ({ ...current, cart: undefined, override: undefined, amounts: undefined }));
   }
 
+  const selectedSiteId = warehouses.find((warehouse) => warehouse.id === warehouseId)?.site.id || null;
+  const availableSiteAccounts = useMemo(
+    () => dashboard.accounts.filter((account) => !account.siteId || account.siteId === selectedSiteId),
+    [dashboard.accounts, selectedSiteId],
+  );
   const openCashAccounts = useMemo(
     () => openSessions
       .filter((session) => session.financialAccount.currencyCode === currency)
-      .map((session) => dashboard.accounts.find((account) => account.id === session.financialAccount.id))
+      .map((session) => availableSiteAccounts.find((account) => account.id === session.financialAccount.id))
       .filter((account): account is FinancialAccount => Boolean(account)),
-    [currency, dashboard.accounts, openSessions],
+    [currency, availableSiteAccounts, openSessions],
   );
 
   const accountsFor = useCallback((method: string) => {
     if (method === "STORE_CREDIT") return storeCreditAccounts.filter((account) => account.currencyCode === currency);
     if (method === "CASH") return openCashAccounts;
     if (method === "MOBILE_MONEY") {
-      return dashboard.accounts.filter((account) => account.accountType === "MOBILE_MONEY" && account.currencyCode === currency);
+      return availableSiteAccounts.filter((account) => account.accountType === "MOBILE_MONEY" && account.currencyCode === currency);
     }
     if (method === "CARD") {
-      return dashboard.accounts.filter((account) => ["BANK", "CLEARING", "CARD_CLEARING"].includes(account.accountType) && account.currencyCode === currency);
+      return availableSiteAccounts.filter((account) => ["BANK", "CLEARING", "CARD_CLEARING"].includes(account.accountType) && account.currencyCode === currency);
     }
-    return dashboard.accounts.filter((account) => ["BANK", "CLEARING"].includes(account.accountType) && account.currencyCode === currency);
-  }, [currency, dashboard.accounts, openCashAccounts, storeCreditAccounts]);
+    return availableSiteAccounts.filter((account) => ["BANK", "CLEARING"].includes(account.accountType) && account.currencyCode === currency);
+  }, [currency, availableSiteAccounts, openCashAccounts, storeCreditAccounts]);
 
   const paymentAccounts1 = useMemo(() => accountsFor(method1), [accountsFor, method1]);
   const paymentAccounts2 = useMemo(() => accountsFor(method2), [accountsFor, method2]);
@@ -486,6 +515,9 @@ function PosOperate({
       || line.discountAmount > line.quantity * line.unitPrice + line.taxAmount
     );
     if (invalidLine || !Number.isFinite(effectiveTotal) || effectiveTotal <= 0) nextErrors.cart = copy.invalidCart;
+    if (cart.some((line) => line.stockLotId && Number(stockLots.find((lot) => lot.id === line.stockLotId)?.quantityAvailable || 0) < line.quantity)) {
+      nextErrors.cart = locale === "fr" ? "Le lot sélectionné ne dispose pas de la quantité demandée." : "The selected batch has insufficient stock.";
+    }
     if (previewRequired && (pricingPreviewLoading || pricingPreviewError || !pricingPreview)) {
       nextErrors.amounts = pricingPreviewError || retailText(locale, "pricingPreviewUnavailable");
     }
@@ -531,6 +563,7 @@ function PosOperate({
       lines: cart.map((line) => ({
         catalogItemId: line.catalogItemId,
         inventoryItemId: line.inventoryItemId,
+        stockLotId: line.stockLotId,
         quantity: line.quantity,
         unitPrice: line.unitPrice,
         discountAmount: line.discountAmount,
@@ -669,6 +702,14 @@ function PosOperate({
                       <Input type="number" min="0" step="0.01" value={line.discountAmount} disabled={!dashboard.access.canManage} onChange={(event) => updateLine(line.catalogItemId, { discountAmount: Number(event.target.value) })} />
                     </GuidedField>
                   </div>
+                  {line.inventoryItemId && stockLots.some((lot) => lot.inventoryItemId === line.inventoryItemId) ? (
+                    <GuidedField label={locale === "fr" ? "Lot de marchandises" : "Stock batch"} help={locale === "fr" ? "Choisissez le lot du dépôt réellement disponible. Les règles de péremption et FEFO seront revérifiées par le serveur." : "Choose an available batch in this warehouse. Expiry and FEFO rules are rechecked on the server."}>
+                      <select value={line.stockLotId || ""} disabled={stockLotsLoading} onChange={(event) => updateLine(line.catalogItemId, { stockLotId: event.target.value || null })} className="mt-1 block min-h-11 w-full min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-base text-dtsc-ink focus-visible:ring-2 focus-visible:ring-cyan-400">
+                        <option value="">{locale === "fr" ? "Sélectionner un lot" : "Select a batch"}</option>
+                        {stockLots.filter((lot) => lot.inventoryItemId === line.inventoryItemId && Number(lot.quantityAvailable) > 0).map((lot) => <option key={lot.id} value={lot.id}>{lot.lotNumber} · {Number(lot.quantityAvailable)} {locale === "fr" ? "disponibles" : "available"}{lot.expiryDate ? ` · ${locale === "fr" ? "Péremption" : "Expiry"} ${new Intl.DateTimeFormat(locale === "fr" ? "fr-FR" : "en-US", { dateStyle: "short" }).format(new Date(lot.expiryDate))}` : ""}</option>)}
+                      </select>
+                    </GuidedField>
+                  ) : null}
                 </div>
               ))}
               {!cart.length ? <EmptyState compact title={retailText(locale, "emptyBasket")} description={retailText(locale, "emptyBasketDescription")} /> : null}
@@ -831,7 +872,8 @@ function PosOperate({
                 <p className="text-sm font-bold text-dtsc-muted">{lastReceipt.lines.map((line) => `${line.description} × ${Number(line.quantity)}`).join(" · ")}</p>
               </div>
               <div data-responsive-actions>
-                <Button variant="outline" onClick={() => window.print()}><Printer className="h-4 w-4" />{retailText(locale, "print")}</Button>
+                <Button variant="outline" onClick={() => window.open(`/api/enterprise/${organizationId}/retail/sales/${lastReceipt.id}/receipt?format=html&lang=${locale}&paper=a4`, "_blank", "noopener,noreferrer")}><Printer className="h-4 w-4" />{locale === "fr" ? "Imprimer A4" : "Print A4"}</Button>
+                <Button variant="outline" onClick={() => window.open(`/api/enterprise/${organizationId}/retail/sales/${lastReceipt.id}/receipt?format=html&lang=${locale}&paper=thermal`, "_blank", "noopener,noreferrer")}><Printer className="h-4 w-4" />{locale === "fr" ? "Ticket thermique" : "Thermal receipt"}</Button>
                 {typeof navigator !== "undefined" && "share" in navigator ? (
                   <Button variant="outline" onClick={() => void navigator.share({ title: lastReceipt.number, text: `${lastReceipt.number} · ${moneyValue(lastReceipt.grandTotal, lastReceipt.currencyCode, locale)}` })}>
                     <Share2 className="h-4 w-4" />{retailText(locale, "share")}
