@@ -1,6 +1,6 @@
 # RETAIL-1042 — cahier des charges boutiques, paramétrage et Design 2.0
 
-Statut du 7 novembre 2026 : **dix-neuf tranches techniques sur la PR brouillon #1043 ; pas de fusion, déploiement ni acceptation client. Les avoirs/remboursements de la facture Finance Retail et la recette PostgreSQL multi-rôles sont encore ouverts.**
+Statut du 7 novembre 2026 : **vingt tranches techniques sur la PR brouillon #1043 ; pas de fusion, déploiement ni acceptation client. Les avoirs/remboursements de la facture Finance Retail et la recette PostgreSQL multi-rôles sont encore ouverts.**
 
 ## Cible produit
 
@@ -168,3 +168,11 @@ Contrôle du 7 novembre : `npm run build` local a terminé avec succès la compi
 - Pour chaque devise : montant brut des factures émises sur la période, paiements affectés cumulés et solde restant **à la date de consultation**. Ces derniers montants ne sont pas présentés comme des encaissements sur la période.
 - Le panneau Design 2.0 FR/EN présente les factures Finance séparément des ventes et encaissements POS ; aucune addition CDF+USD ni assimilation du CA à l'encaissement. Tests contractuels de jointure tenant-aware, périmètre propriétaire et étiquetage explicite.
 - **Non certifié** : revenus/profits de la comptabilité POSTED par boutique, exports PDF/XLSX, rapprochement et retour/remboursement Finance Retail, E2E multi-rôles. Les flags d'activation restent OFF.
+
+### Tranche 20 — garde Finance de lecture pour les opérateurs Retail assignés (2026-11-07)
+
+- `retailFinanceReadSiteScope` maintient le statut Finance global pour les membres **sans aucune affectation Retail** et les propriétaires, mais les collaborateurs déjà affectés à une boutique restent limités à ses capacités locales lorsque `siteStaffIsolationEnabled` est actif. Révoquer la dernière affectation produit une liste **vide**, jamais une réouverture globale.
+- `GET /sales-invoices` applique la visibilité à la source `EnterpriseRetailInvoiceCheckout.siteId` dans les requêtes Prisma, y compris `recordId` et compteurs ; les autres factures restent soumises aux droits Finance habituels. L'action « Créer un avoir » est masquée sur les factures Retail, son rejet serveur étant déjà établi.
+- `GET /payments` contraint comptes financiers de la boutique, rattachement des propositions Retail, liste et **trois agrégats** de montants par devise ; les comptes archivés sont conservés pour la lecture historique autorisée. Un caissier de la boutique A ne peut obtenir les montants des paiements Retail de B depuis Finance.
+- QA unitaire : propriétaire/Finance pur, droits explicites, perte de la dernière affectation et présence de filtres sur liste/agrégats ; non constitutive d'un E2E connecté.
+- **Limite** : les autres routes Finance (détails/écritures/exports spécialisés), Finance hors facturation Retail, les remboursements et le rapport comptable final exigent encore revue approfondie et tests multi-rôles. Flags OFF, PR brouillon.
