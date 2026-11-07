@@ -15,6 +15,7 @@ const state = {
   site: "shop-A", method: "CASH", accountSite: "shop-A", invoiceStatus: "ISSUED", invoiceOutstanding: "100", receivable: true,
   settings: { invoiceCheckoutEnabled: true, siteStaffIsolationEnabled: true }, existing: null, pending: [],
   paymentCreations: [], proposalCreations: [], allowed: true, cashSessionOpen: true, customerActive: true,
+  transactionAttempts: 0, retriableFailures: 0,
 };
 const invoice = () => ({
   id: "invoice-A", number: "INV-2026-001", status: state.invoiceStatus, currencyCode: "CDF", businessPartyId: "customer-A",
@@ -33,13 +34,27 @@ const tx = {
   enterpriseCashSession: { findFirst: async () => state.cashSessionOpen ? { id: "session-A" } : null },
   enterpriseBusinessParty: { findFirst: async () => state.customerActive ? { id: "customer-A" } : null },
 };
-const prisma = { $transaction: async (callback) => callback(tx) };
+const prisma = { $transaction: async (callback) => {
+  state.transactionAttempts += 1;
+  if (state.retriableFailures > 0) {
+    state.retriableFailures -= 1;
+    throw Object.assign(new Error("Could not serialize access"), { code: "P2034" });
+  }
+  return callback(tx);
+} };
+const retrySource = fs.readFileSync("lib/enterprise/retail/transaction-retry.ts", "utf8");
+const retryModule = { exports: {} };
+vm.runInNewContext(ts.transpileModule(retrySource, {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+}).outputText, { module: retryModule, exports: retryModule.exports, Promise, Set, Error, setTimeout });
+
 const source = fs.readFileSync("lib/enterprise/retail/invoice-payments.ts", "utf8");
 const transpiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
 const mod = { exports: {} };
 vm.runInNewContext(transpiled, { module: mod, exports: mod.exports, Promise, Map, Set, Date,
   require: (id) => {
     if (id === "@/lib/prisma") return { prisma };
+    if (id === "@/lib/enterprise/retail/transaction-retry") return retryModule.exports;
     if (id === "@/lib/enterprise/retail/errors") return { EnterpriseRetailError };
     if (id === "@/lib/enterprise/accounting/schemas") return { positiveMoneyInputSchema: z.string().regex(/^\d+(?:\.\d{1,6})?$/).refine((value) => Number(value) > 0) };
     if (id === "@/lib/enterprise/accounting/payments-service") return { createEnterprisePaymentTx: async (_tx, org, actor, data) => {
@@ -92,6 +107,26 @@ const retried = await proposeRetailInvoicePayment("tenant-A", "invoice-A", "cash
 assert.equal(retried.idempotent, true);
 assert.equal(state.paymentCreations.length, 1, "Idempotent retry does not create duplicate Finance payment");
 await assert.rejects(proposeRetailInvoicePayment("tenant-A", "invoice-A", "cashier-A", { ...input, amount: "30" }), { code: "RETAIL_INVOICE_PAYMENT_IDEMPOTENCY_COLLISION" });
+
+// A serialization conflict must rerun the WHOLE transaction: permissions,
+// outstanding balance, idempotency and Finance payment remain in the same unit.
+state.existing = null;
+state.retriableFailures = 1;
+const previousAttempts = state.transactionAttempts;
+const retryInput = { ...input, idempotencyKey: "shop-payment-0002" };
+const afterConflict = await proposeRetailInvoicePayment("tenant-A", "invoice-A", "cashier-A", retryInput);
+assert.equal(afterConflict.idempotent, false);
+assert.equal(state.transactionAttempts - previousAttempts, 2, "P2034 retries the entire payment transaction exactly once");
+assert.equal(state.paymentCreations.length, 2, "Retried transaction creates just one additional canonical Finance draft");
+assert.equal(state.proposalCreations.length, 2, "Retried transaction creates just one additional Retail mapping");
+state.retriableFailures = 3;
+const beforeExhaustion = state.transactionAttempts;
+await assert.rejects(proposeRetailInvoicePayment("tenant-A", "invoice-A", "cashier-A", {
+  ...input, idempotencyKey: "shop-payment-0003",
+}), { code: "P2034" });
+assert.equal(state.transactionAttempts - beforeExhaustion, 3, "Bounded retries never spin indefinitely");
+assert.equal(state.paymentCreations.length, 2, "Failed serialization must not create a Finance payment");
+
 
 const finance = fs.readFileSync("lib/enterprise/accounting/payments-service.ts", "utf8");
 assert.match(finance, /export async function createEnterprisePaymentTx\(/);
