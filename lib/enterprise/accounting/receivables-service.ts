@@ -226,6 +226,10 @@ export async function approveAndPostSalesCreditNote(organizationId: string, cred
     const credit = await tx.enterpriseSalesCreditNote.findFirst({ where: { id: creditNoteId, organizationId } });
     if (!credit) throw new EnterpriseAccountingError("SALES_CREDIT_NOTE_NOT_FOUND", 404);
     if (credit.status === "POSTED") return credit;
+    const retailCheckout = await tx.enterpriseRetailInvoiceCheckout.findFirst({
+      where: { organizationId, salesInvoiceId: credit.salesInvoiceId }, select: { id: true },
+    });
+    if (retailCheckout) throw new EnterpriseAccountingError("RETAIL_INVOICE_RETURN_WORKFLOW_REQUIRED", 409);
     if (credit.status !== "DRAFT" || credit.revision !== revision) throw new EnterpriseAccountingError("SALES_CREDIT_NOTE_CONFLICT", 409);
     assertIndependentActor({ actorUserId, relatedUserIds: [credit.createdByUserId], errorCode: "SALES_CREDIT_NOTE_SELF_APPROVAL_FORBIDDEN" });
     return tx.enterpriseSalesCreditNote.update({ where: { id: credit.id }, data: { status: "APPROVED", approvedAt: new Date(), approvedByUserId: actorUserId, revision: { increment: 1 } } });
