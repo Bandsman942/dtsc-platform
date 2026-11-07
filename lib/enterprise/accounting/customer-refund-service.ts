@@ -597,6 +597,13 @@ export async function prepareSalesCreditNoteForRefundAmount(
     if (!invoice || !["ISSUED", "PARTIALLY_PAID", "PAID", "OVERDUE", "CREDIT_NOTE"].includes(invoice.status)) {
       throw new EnterpriseAccountingError("SALES_INVOICE_NOT_CREDITABLE", 409);
     }
+    // Sector refund helpers are also Finance writers. Do not bypass the
+    // Retail stock/credit-note safeguard through a Pharmacy/Gaming legacy
+    // endpoint, including an idempotent replay with the same reason.
+    const retailCheckout = await tx.enterpriseRetailInvoiceCheckout.findFirst({
+      where: { organizationId, salesInvoiceId: invoice.id }, select: { id: true },
+    });
+    if (retailCheckout) throw new EnterpriseAccountingError("RETAIL_INVOICE_RETURN_WORKFLOW_REQUIRED", 409);
     const existing = invoice.creditNotes.find((credit) => credit.reason === reason);
     if (existing) {
       if (!existing.grandTotal.equals(amount)) throw new EnterpriseAccountingError("REFUND_CREDIT_NOTE_AMOUNT_MISMATCH", 409);
@@ -690,6 +697,10 @@ export async function createExactSalesCreditNoteForRefund(
     if (!["ISSUED", "PARTIALLY_PAID", "PAID", "OVERDUE"].includes(invoice.status)) {
       throw new EnterpriseAccountingError("SALES_INVOICE_NOT_CREDITABLE", 409);
     }
+    const retailCheckout = await tx.enterpriseRetailInvoiceCheckout.findFirst({
+      where: { organizationId, salesInvoiceId: invoice.id }, select: { id: true },
+    });
+    if (retailCheckout) throw new EnterpriseAccountingError("RETAIL_INVOICE_RETURN_WORKFLOW_REQUIRED", 409);
     const existing = await tx.enterpriseSalesCreditNote.findFirst({
       where: { organizationId, salesInvoiceId: invoice.id, reason },
       orderBy: { createdAt: "desc" },
@@ -800,6 +811,10 @@ export async function markCustomerRefundFinancialInverseReady(
       select: { id: true, salesInvoiceId: true },
     });
     if (!receivable) throw new EnterpriseAccountingError("RECEIVABLE_NOT_FOUND", 404);
+    const retailCheckout = await tx.enterpriseRetailInvoiceCheckout.findFirst({
+      where: { organizationId, salesInvoiceId: receivable.salesInvoiceId }, select: { id: true },
+    });
+    if (retailCheckout) throw new EnterpriseAccountingError("RETAIL_INVOICE_RETURN_WORKFLOW_REQUIRED", 409);
     const credit = await tx.enterpriseSalesCreditNote.findFirst({
       where: {
         id: creditNoteId,
