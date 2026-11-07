@@ -4,6 +4,7 @@ import { EnterpriseDomainConflictError, EnterpriseDomainError } from "@/lib/ente
 import { publishEnterpriseEvent } from "@/lib/enterprise/crm-sales/helpers";
 import type { inventoryReservationCreateSchema } from "@/lib/enterprise/inventory/reservation-schemas";
 import { applyStockMovementTx } from "@/lib/enterprise/inventory/service";
+import { readActiveRetailInvoiceStockHoldsTx } from "@/lib/enterprise/retail/invoice-stock-holds";
 import { prisma } from "@/lib/prisma";
 
 type ReservationCreateInput = z.infer<typeof inventoryReservationCreateSchema>;
@@ -23,6 +24,7 @@ type AvailabilityRow = {
   quantityOnHand: string;
   legacyQuantityReserved: string;
   reservationQuantity: string;
+  retailInvoiceHoldQuantity: string;
   quantityAvailable: string;
 };
 
@@ -72,7 +74,7 @@ export async function getEnterpriseInventoryAvailability(organizationId: string,
   });
   if (!inventoryItem) throw new EnterpriseDomainError("INVENTORY_ITEM_NOT_FOUND", 404);
 
-  const [warehouses, balances, reservations] = await Promise.all([
+  const [warehouses, balances, reservations, retailHolds] = await Promise.all([
     prisma.enterpriseWarehouse.findMany({
       where: { organizationId, status: "ACTIVE", archivedAt: null },
       orderBy: [{ siteId: "asc" }, { code: "asc" }],
@@ -86,6 +88,7 @@ export async function getEnterpriseInventoryAvailability(organizationId: string,
       where: activeReservationWhere(organizationId, inventoryItem.id),
       select: { warehouseId: true, quantity: true, fulfilledQuantity: true },
     }),
+    readActiveRetailInvoiceStockHoldsTx(prisma, { organizationId, inventoryItemIds: [inventoryItem.id] }),
   ]);
 
   const balanceByWarehouse = new Map<string, { onHand: Prisma.Decimal; legacyReserved: Prisma.Decimal }>();
@@ -101,12 +104,17 @@ export async function getEnterpriseInventoryAvailability(organizationId: string,
     if (remaining.lte(0)) continue;
     reservationByWarehouse.set(row.warehouseId, (reservationByWarehouse.get(row.warehouseId) || decimal()).plus(remaining));
   }
+  const retailHoldsByWarehouse = new Map<string, Prisma.Decimal>();
+  for (const row of retailHolds) {
+    retailHoldsByWarehouse.set(row.warehouseId, (retailHoldsByWarehouse.get(row.warehouseId) || decimal()).plus(row.quantity));
+  }
 
   let totalAvailable = decimal();
   const stores = warehouses.map((warehouse) => {
     const balance = balanceByWarehouse.get(warehouse.id) || { onHand: decimal(), legacyReserved: decimal() };
     const reserved = reservationByWarehouse.get(warehouse.id) || decimal();
-    const available = Prisma.Decimal.max(decimal(), balance.onHand.minus(balance.legacyReserved).minus(reserved));
+    const retailHeld = retailHoldsByWarehouse.get(warehouse.id) || decimal();
+    const available = Prisma.Decimal.max(decimal(), balance.onHand.minus(balance.legacyReserved).minus(reserved).minus(retailHeld));
     totalAvailable = totalAvailable.plus(available);
     return {
       warehouseId: warehouse.id,
@@ -118,6 +126,7 @@ export async function getEnterpriseInventoryAvailability(organizationId: string,
       quantityOnHand: balance.onHand.toFixed(),
       legacyQuantityReserved: balance.legacyReserved.toFixed(),
       reservationQuantity: reserved.toFixed(),
+      retailInvoiceHoldQuantity: retailHeld.toFixed(),
       quantityAvailable: available.toFixed(),
     };
   });
@@ -155,7 +164,7 @@ export async function createEnterpriseInventoryReservation(organizationId: strin
     });
     if (!inventoryItem) throw new EnterpriseDomainError("INVENTORY_ITEM_NOT_FOUND", 404);
 
-    const [balances, activeReservations] = await Promise.all([
+    const [balances, activeReservations, retailHolds] = await Promise.all([
       tx.enterpriseInventoryBalance.findMany({
         where: {
           organizationId,
@@ -169,13 +178,17 @@ export async function createEnterpriseInventoryReservation(organizationId: strin
         where: activeReservationWhere(organizationId, inventoryItem.id, input.warehouseId),
         select: { quantity: true, fulfilledQuantity: true, storageLocationId: true },
       }),
+      readActiveRetailInvoiceStockHoldsTx(tx, { organizationId, warehouseId: input.warehouseId, inventoryItemIds: [inventoryItem.id] }),
     ]);
     const onHand = balances.reduce((sum, row) => sum.plus(row.quantityOnHand), decimal());
     const legacyReserved = balances.reduce((sum, row) => sum.plus(row.quantityReserved), decimal());
     const reserved = activeReservations
       .filter((row) => !input.storageLocationId || row.storageLocationId === input.storageLocationId)
       .reduce((sum, row) => sum.plus(decimal(row.quantity).minus(row.fulfilledQuantity)), decimal());
-    const available = onHand.minus(legacyReserved).minus(reserved);
+    // Retail invoice promises have no specific storage location. Subtract all
+    // of them even when the sales-order request targets one shelf.
+    const retailHeld = retailHolds.reduce((sum, row) => sum.plus(row.quantity), decimal());
+    const available = onHand.minus(legacyReserved).minus(reserved).minus(retailHeld);
     if (decimal(input.quantity).gt(available)) {
       throw new EnterpriseDomainError(
         "INVENTORY_RESERVATION_INSUFFICIENT",

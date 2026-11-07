@@ -45,6 +45,7 @@ vm.runInNewContext(compiled, {
     if (id === "@/lib/enterprise/retail/constants") return { RETAIL_SECTOR_CODE: "COMMERCE_RETAIL" };
     if (id === "@/lib/enterprise/retail/commercial-engine") return { resolveRetailCommercialPricingDecisions: async () => [{ catalogItemId: "product", lineTotal: decimal(10) }] };
     if (id === "@/lib/enterprise/retail/inventory-policy") return { assertRetailLotPolicyTx: async () => {} };
+    if (id === "@/lib/enterprise/retail/invoice-stock-holds") return { readActiveRetailInvoiceStockHoldsTx: async () => [] };
     if (id === "@/lib/enterprise/retail/site-access") return { requireRetailSiteCapability: async () => {} };
     if (id === "@/lib/enterprise/inventory/service") return { applyStockMovementTx: async (_tx, _org, _actor, movement) => { state.movements.push(movement); } };
     if (id === "@/lib/enterprise/accounting/receivables-service") return { createSalesInvoiceTx: async () => { state.invoiceCreated = true; return {}; } };

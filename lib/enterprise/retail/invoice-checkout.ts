@@ -5,6 +5,7 @@ import { createSalesInvoiceTx } from "@/lib/enterprise/accounting/receivables-se
 import { resolveRetailCommercialPricingDecisions } from "@/lib/enterprise/retail/commercial-engine";
 import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
 import { assertRetailLotPolicyTx } from "@/lib/enterprise/retail/inventory-policy";
+import { readActiveRetailInvoiceStockHoldsTx } from "@/lib/enterprise/retail/invoice-stock-holds";
 import { applyStockMovementTx } from "@/lib/enterprise/inventory/service";
 import { RETAIL_SECTOR_CODE } from "@/lib/enterprise/retail/constants";
 import { requireRetailSiteCapability } from "@/lib/enterprise/retail/site-access";
@@ -50,9 +51,9 @@ async function resolveWalkInCustomerTx(tx: Prisma.TransactionClient, organizatio
 }
 
 /** Creates Finance's only invoice and Retail's non-financial site/stock link
- * in one serializable transaction. Does not post an invoice, accept payment,
- * reserve goods or debit stock. Until the paid-stock hook is complete the
- * feature-gated API is unavailable to shop staff until the audited cutover. */
+ * in one serializable transaction. Its checkout lines reserve the available
+ * physical quantity without a stock movement until full payment; cancellation
+ * releases this derived reservation automatically. */
 export async function prepareRetailInvoice(organizationId: string, actorUserId: string, input: RetailInvoicePrepareInput) {
   const requestFingerprint = fingerprint(input);
   const uniqueItems = new Set(input.lines.map((line) => line.catalogItemId));
@@ -96,10 +97,11 @@ export async function prepareRetailInvoice(organizationId: string, actorUserId: 
     const byCatalog = new Map(catalogs.map((item) => [item.id, item]));
     const inventoryByCatalog = new Map(inventoryItems.map((item) => [item.catalogItemId, item]));
     const selectedLots = [...new Set(input.lines.map((line) => line.stockLotId).filter((id): id is string => Boolean(id)))];
-    const [lots, balances, reservations] = await Promise.all([
+    const [lots, balances, reservations, retailHolds] = await Promise.all([
       selectedLots.length ? tx.enterpriseStockLot.findMany({ where: { organizationId, warehouseId: input.warehouseId, id: { in: selectedLots }, status: "AVAILABLE", archivedAt: null }, select: { id: true, inventoryItemId: true } }) : Promise.resolve([]),
       tx.enterpriseInventoryBalance.findMany({ where: { organizationId, warehouseId: input.warehouseId, inventoryItemId: { in: inventoryItems.map((item) => item.id) } }, select: { inventoryItemId: true, stockLotId: true, quantityOnHand: true, quantityReserved: true } }),
       tx.enterpriseInventoryReservation.findMany({ where: { organizationId, warehouseId: input.warehouseId, inventoryItemId: { in: inventoryItems.map((item) => item.id) }, status: "ACTIVE", OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] }, select: { inventoryItemId: true, quantity: true, fulfilledQuantity: true } }),
+      readActiveRetailInvoiceStockHoldsTx(tx, { organizationId, warehouseId: input.warehouseId, inventoryItemIds: inventoryItems.map((item) => item.id) }),
     ]);
     const lotById = new Map(lots.map((lot) => [lot.id, lot]));
     const prepared = input.lines.map((line) => {
@@ -117,7 +119,8 @@ export async function prepareRetailInvoice(organizationId: string, actorUserId: 
           throw new EnterpriseRetailError("RETAIL_STOCK_LOT_REQUIRED", 409);
         }
         const available = rows.reduce((sum, row) => sum.plus(row.quantityOnHand.minus(row.quantityReserved)), new Prisma.Decimal(0))
-          .minus(reservations.filter((row) => row.inventoryItemId === inventory.id).reduce((sum, row) => sum.plus(row.quantity.minus(row.fulfilledQuantity)), new Prisma.Decimal(0)));
+          .minus(reservations.filter((row) => row.inventoryItemId === inventory.id).reduce((sum, row) => sum.plus(row.quantity.minus(row.fulfilledQuantity)), new Prisma.Decimal(0)))
+          .minus(retailHolds.filter((hold) => hold.inventoryItemId === inventory.id && hold.stockLotId === (line.stockLotId || null)).reduce((sum, hold) => sum.plus(hold.quantity), new Prisma.Decimal(0)));
         if (available.lessThan(line.quantity)) throw new EnterpriseRetailError("NEGATIVE_STOCK_FORBIDDEN", 409);
       }
       return { ...line, inventoryItemId: inventory?.id || null, itemName: item.name, decision };
@@ -234,17 +237,25 @@ export async function postPaidRetailInvoiceStockTx(
       },
       orderBy: [{ storageLocationId: "asc" }, { id: "asc" }],
     });
-    const activeReservations = await tx.enterpriseInventoryReservation.findMany({
+    const [activeReservations, otherRetailHolds] = await Promise.all([tx.enterpriseInventoryReservation.findMany({
       where: {
         organizationId, warehouseId: checkout.warehouseId, inventoryItemId: line.inventoryItemId,
         status: "ACTIVE", OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
       },
       select: { quantity: true, fulfilledQuantity: true, storageLocationId: true },
-    });
+    }), readActiveRetailInvoiceStockHoldsTx(tx, {
+      organizationId, warehouseId: checkout.warehouseId, inventoryItemIds: [line.inventoryItemId],
+      excludeSalesInvoiceId: checkout.salesInvoiceId,
+    })]);
     let stillNeeded = line.invoiceItem.quantity;
     let unscopedReserved = activeReservations
       .filter((reservation) => !reservation.storageLocationId)
       .reduce((sum, reservation) => sum.plus(reservation.quantity.minus(reservation.fulfilledQuantity)), new Prisma.Decimal(0));
+    // Another unpaid invoice owns this physical quantity. This checkout's
+    // own promise must not block its eventual fulfillment.
+    unscopedReserved = unscopedReserved.plus(otherRetailHolds
+      .filter((hold) => hold.stockLotId === line.stockLotId)
+      .reduce((sum, hold) => sum.plus(hold.quantity), new Prisma.Decimal(0)));
     // Reserve outstanding sales orders first. InventoryBalance.quantityReserved
     // is a separate legacy field, so these two sources must both be counted.
     for (const balance of balances) {
@@ -268,7 +279,7 @@ export async function postPaidRetailInvoiceStockTx(
         sourceLineId: line.invoiceItemId,
         idempotencyKey: `retail-invoice:${checkout.id}:${line.id}:${balance.id}`,
         reason: "Facture Retail intégralement encaissée et allouée",
-      });
+      }, { consumingRetailInvoiceId: checkout.salesInvoiceId });
       stillNeeded = stillNeeded.minus(take);
     }
     if (!stillNeeded.isZero()) throw new EnterpriseRetailError("RETAIL_INVOICE_STOCK_INSUFFICIENT", 409);

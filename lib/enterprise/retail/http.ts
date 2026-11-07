@@ -27,6 +27,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   RETAIL_INVOICE_LINE_MISSING: "Un article de la facture n'a pas été enregistré correctement. L'opération entière est annulée.",
   RETAIL_INVOICE_NOT_FULLY_PAID: "La sortie de stock nécessite une facture entièrement réglée et affectée en Finance.",
   RETAIL_INVOICE_STOCK_INSUFFICIENT: "Le stock de cette boutique ne suffit plus pour livrer la facture. L'affectation finale du paiement a été annulée ; vérifiez les stocks et les lots.",
+  RETAIL_INVOICE_STOCK_HELD: "La quantité demandée est déjà promise à une facture non soldée de cette boutique. Annulez ou régularisez cette facture avant de déplacer ou de vendre ces articles.",
   RETAIL_INVOICE_FINANCIAL_ACCOUNT_SITE_MISMATCH: "Le compte d'encaissement de ce paiement doit appartenir à la boutique ayant établi la facture.",
   RETAIL_INVOICE_CASH_SESSION_SITE_MISMATCH: "La session de caisse ne correspond pas à la boutique de cette facture. Ouvrez une caisse au bon emplacement.",
   RETAIL_INVOICE_NOT_FOUND: "Cette facture n’existe plus dans les boutiques autorisées. Actualisez le registre.",

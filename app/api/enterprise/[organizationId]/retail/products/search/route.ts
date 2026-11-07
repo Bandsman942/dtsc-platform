@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { writeApiLog } from "@/lib/audit";
 import { authorizeRetailRequest, retailErrorResponse } from "@/lib/enterprise/retail/http";
 import { requireRetailSiteCapability } from "@/lib/enterprise/retail/site-access";
+import { readActiveRetailInvoiceStockHoldsTx } from "@/lib/enterprise/retail/invoice-stock-holds";
 import { prisma } from "@/lib/prisma";
 
 type Params = { params: Promise<{ organizationId: string }> };
@@ -102,12 +103,22 @@ export async function GET(req: Request, { params }: Params) {
     prisma.enterpriseCatalogItem.count({ where }),
   ]);
 
+  const retailHolds = await readActiveRetailInvoiceStockHoldsTx(prisma, {
+    organizationId,
+    inventoryItemIds: items.flatMap((item) => item.inventoryItems.map((inventory) => inventory.id)),
+    ...(warehouseId ? { warehouseId } : {}),
+  });
+  const heldByItem = new Map<string, Prisma.Decimal>();
+  for (const hold of retailHolds) {
+    heldByItem.set(hold.inventoryItemId, (heldByItem.get(hold.inventoryItemId) || new Prisma.Decimal(0)).plus(hold.quantity));
+  }
+
   const results = items.map((item) => {
     const inventoryItem = item.inventoryItems[0] || null;
     const availableQuantity = inventoryItem?.balances.reduce(
       (totalAvailable, balance) => totalAvailable.plus(balance.quantityOnHand).minus(balance.quantityReserved),
       new Prisma.Decimal(0),
-    ) ?? null;
+    ).minus(heldByItem.get(inventoryItem.id) || 0) ?? null;
 
     return {
       id: item.id,

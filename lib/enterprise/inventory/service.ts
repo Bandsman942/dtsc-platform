@@ -5,6 +5,7 @@ import { EnterpriseDomainConflictError, EnterpriseDomainError } from "@/lib/ente
 import { publishEnterpriseEvent } from "@/lib/enterprise/crm-sales/helpers";
 import { assertInventoryApprovalCandidate, assertInventoryApprovalDecision } from "@/lib/enterprise/inventory/approval";
 import { readRetailInventoryPolicy } from "@/lib/enterprise/retail/inventory-policy";
+import { readActiveRetailInvoiceStockHoldsTx } from "@/lib/enterprise/retail/invoice-stock-holds";
 import type {
   inventoryCountCreateSchema,
   inventoryCountDecisionSchema,
@@ -46,7 +47,13 @@ async function assertInventoryCoordinates(tx: Prisma.TransactionClient, organiza
   return inventoryItem;
 }
 
-export async function applyStockMovementTx(tx: Prisma.TransactionClient, organizationId: string, actorUserId: string, input: StockMovementInput) {
+export async function applyStockMovementTx(
+  tx: Prisma.TransactionClient,
+  organizationId: string,
+  actorUserId: string,
+  input: StockMovementInput,
+  internal?: { consumingRetailInvoiceId?: string },
+) {
   const existing = await tx.enterpriseStockMovement.findFirst({ where: { organizationId, idempotencyKey: input.idempotencyKey } });
   if (existing) return { movement: existing, idempotent: true };
   const inventoryItem = await assertInventoryCoordinates(tx, organizationId, input);
@@ -55,6 +62,31 @@ export async function applyStockMovementTx(tx: Prisma.TransactionClient, organiz
   const delta = input.direction === "IN" ? input.quantity : -input.quantity;
   const nextQuantity = currentQuantity + delta;
   if (nextQuantity < -0.000001 && !inventoryItem.allowNegativeStock) throw new EnterpriseDomainError("NEGATIVE_STOCK_FORBIDDEN", 409);
+  if (input.direction === "OUT") {
+    // An invoice is not a stock movement until fully paid, but it promises
+    // this stock to its customer. Every outbound channel (manual adjustment,
+    // transfer, POS, fulfillment) must honor those open promises. The private
+    // override is used only when Finance atomically settles that very invoice.
+    const holds = await readActiveRetailInvoiceStockHoldsTx(tx, {
+      organizationId, warehouseId: input.warehouseId, inventoryItemIds: [input.inventoryItemId],
+      excludeSalesInvoiceId: internal?.consumingRetailInvoiceId,
+    });
+    const held = holds.filter((row) => row.stockLotId === (input.stockLotId || null))
+      .reduce((sum, row) => sum.plus(row.quantity), new Prisma.Decimal(0));
+    if (held.isPositive()) {
+      const balances = await tx.enterpriseInventoryBalance.findMany({
+        where: {
+          organizationId, inventoryItemId: input.inventoryItemId, warehouseId: input.warehouseId,
+          stockLotId: input.stockLotId || null,
+        },
+        select: { quantityOnHand: true, quantityReserved: true },
+      });
+      const physicallyFree = balances.reduce((sum, row) => sum.plus(row.quantityOnHand.minus(row.quantityReserved)), new Prisma.Decimal(0));
+      if (physicallyFree.minus(input.quantity).lessThan(held)) {
+        throw new EnterpriseDomainError("RETAIL_INVOICE_STOCK_HELD", 409);
+      }
+    }
+  }
   const movement = await tx.enterpriseStockMovement.create({ data: { organizationId, inventoryItemId: input.inventoryItemId, warehouseId: input.warehouseId, storageLocationId: input.storageLocationId || null, stockLotId: input.stockLotId || null, movementType: input.movementType, direction: input.direction, quantity: input.quantity, balanceAfter: nextQuantity, sourceEntityType: input.sourceEntityType || null, sourceEntityId: input.sourceEntityId || null, sourceLineId: input.sourceLineId || null, idempotencyKey: input.idempotencyKey, reason: input.reason || null, createdByUserId: actorUserId } });
   if (balance) {
     const updated = await tx.enterpriseInventoryBalance.updateMany({ where: { id: balance.id, organizationId, revision: balance.revision }, data: { quantityOnHand: nextQuantity, revision: { increment: 1 } } });

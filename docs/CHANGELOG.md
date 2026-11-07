@@ -1,3 +1,9 @@
+## 2026-11-07 — Hotfix P0 Retail #1042, tranche 8 — Disponibilité promise par facture sans sortie anticipée (PR brouillon #1043)
+
+- Les lignes de facture Retail en attente constituent des **promesses de stock** par boutique, dépôt et lot. La préparation tient compte des promesses existantes sans diminuer le stock réel ; l'annulation ou l'invalidation Finance libère cette disponibilité, la facturation totalement réglée la consomme atomiquement.
+- Le moteur commun des mouvements sortants et la réservation des commandes consultent ces mêmes lignes afin de refuser une vente, un transfert ou une perte qui empiéterait sur un autre client. L'indicateur de disponibilité distingue explicitement les quantités promises aux factures Retail des réservations de commandes.
+- Tests de contrat et de comportement isolé du résolveur, documentation et QA Quality Gates. **Activation et fusion interdites** avant vérification PostgreSQL des accès concurrents, des rôles, des remboursements/retours et validation globale OWNER_E2E.
+
 ## 2026-11-07 — Hotfix P0 Retail #1042, tranche 7 — Propositions de paiement caissier et Finance canonique (PR brouillon #1043)
 
 - Table de rattachement minimale `EnterpriseRetailInvoicePaymentProposal` avec migration additive et unicité du paiement Finance ; émission d'un unique `EnterprisePayment DRAFT` dans une transaction sérialisable, avec montant réservé contre le reste dû et contrôles boutique/compte/session/devise/client.
