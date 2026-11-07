@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { authorizeRetailRequest, retailErrorResponse } from "@/lib/enterprise/retail/http";
-import { businessDateKey, lotIsExpired, readRetailInventoryPolicy } from "@/lib/enterprise/retail/inventory-policy";
+import { businessDateKey, lotIsExpired, readRetailInventoryPolicy, retailLotExpiryDateKey } from "@/lib/enterprise/retail/inventory-policy";
 import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
 import { writeApiLog } from "@/lib/audit";
 import { prisma } from "@/lib/prisma";
@@ -59,7 +59,7 @@ export async function GET(req: Request, { params }: Params) {
       lotId: balance.stockLot!.id,
       lotNumber: balance.stockLot!.lotNumber,
       expiryDate: balance.stockLot!.expiryDate,
-      status: lotIsExpired(balance.stockLot!.expiryDate, businessDate) ? "EXPIRED" : balance.stockLot!.expiryDate?.toISOString().slice(0, 10) === businessDate ? "DUE_TODAY" : "EXPIRING_SOON",
+      status: lotIsExpired(balance.stockLot!.expiryDate, businessDate) ? "EXPIRED" : balance.stockLot!.expiryDate && retailLotExpiryDateKey(balance.stockLot!.expiryDate) === businessDate ? "DUE_TODAY" : "EXPIRING_SOON",
       quantityOnHand: balance.quantityOnHand.toFixed(),
       quantityAvailable: balance.quantityOnHand.minus(balance.quantityReserved).toFixed(),
     }));

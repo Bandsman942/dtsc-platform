@@ -22,7 +22,7 @@ vm.runInNewContext(cjs, {
 }, { filename: "inventory-policy.ts" });
 
 const {
-  readRetailInventoryPolicy, businessDateKey, lotIsExpired, assertRetailLotPolicyTx,
+  readRetailInventoryPolicy, businessDateKey, retailLotExpiryDateKey, lotIsExpired, assertRetailLotPolicyTx,
 } = module.exports;
 const legacy = readRetailInventoryPolicy(null);
 assert.deepEqual({ ...legacy }, { expiryMode: "ALLOW", enforceFefo: false, warningDays: 30, transferReception: "IMMEDIATE" });
@@ -31,6 +31,8 @@ assert.equal(configured.transferReception, "IMMEDIATE", "Saved policies from the
 assert.equal(readRetailInventoryPolicy({ inventoryPolicy: { ...configured, transferReception: "CONFIRMED" } }).transferReception, "CONFIRMED");
 assert.throws(() => readRetailInventoryPolicy({ inventoryPolicy: { ...configured, warningDays: -1 } }), { code: "RETAIL_INVENTORY_POLICY_INVALID" });
 assert.equal(businessDateKey(new Date("2026-11-06T23:30:00.000Z"), "Africa/Kinshasa"), "2026-11-07");
+assert.equal(retailLotExpiryDateKey(new Date("2026-11-06T00:00:00.000Z")), "2026-11-06", "StockLot expiry is a stored calendar date, not the current UTC business day");
+assert.equal(businessDateKey(new Date("2026-11-06T23:30:00.000Z"), "America/New_York"), "2026-11-06", "Different stores can still be on the previous business day");
 assert.equal(lotIsExpired(new Date("2026-11-06T00:00:00.000Z"), "2026-11-06"), false, "Expiry is a whole calendar date");
 assert.equal(lotIsExpired(new Date("2026-11-05T00:00:00.000Z"), "2026-11-06"), true);
 

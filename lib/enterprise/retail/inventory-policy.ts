@@ -42,10 +42,20 @@ export function businessDateKey(value: Date, timezone: string): string {
   return `${field("year")}-${field("month")}-${field("day")}`;
 }
 
-// The lot's date is a calendar date, not a UTC instant. A lot expires only
-// after that business date, even when the organization operates outside UTC.
+// StockLot expiryDate is a date entered as a calendar day, persisted as a
+// UTC-anchored DateTime by the shared Inventory domain. Decode only that
+// stored date label here; today's *business* date must come independently
+// from businessDateKey(now, organization.timezone), never from UTC now.
+export function retailLotExpiryDateKey(expiryDate: Date): string {
+  const year = String(expiryDate.getUTCFullYear()).padStart(4, "0");
+  const month = String(expiryDate.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(expiryDate.getUTCDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+// A lot remains valid throughout its named expiry day in the store's timezone.
 export function lotIsExpired(expiryDate: Date | null, businessDate: string): boolean {
-  return Boolean(expiryDate && expiryDate.toISOString().slice(0, 10) < businessDate);
+  return Boolean(expiryDate && retailLotExpiryDateKey(expiryDate) < businessDate);
 }
 
 export async function assertRetailLotPolicyTx(
