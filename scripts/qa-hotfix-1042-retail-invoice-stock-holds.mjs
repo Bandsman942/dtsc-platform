@@ -85,6 +85,11 @@ vm.runInNewContext(serviceJavaScript, {
     };
     if (name === "@/lib/enterprise/inventory/approval") return {};
     if (name === "@/lib/enterprise/retail/inventory-policy") return {};
+    // Inventory now imports the Retail site guard for stock transfer writes.
+    // This test exercises movement reservation only; site authorization has
+    // its own negative/positive cases in qa-hotfix-1042-site-staff.mjs.
+    if (name === "@/lib/enterprise/retail/site-access") return { requireRetailSiteCapability: async () => {} };
+    if (name === "@/lib/enterprise/retail/errors") return { EnterpriseRetailError: class extends Error {} };
     if (name === "@/lib/prisma") return { prisma: {} };
     throw Error(`Unexpected import: ${name}`);
   },
