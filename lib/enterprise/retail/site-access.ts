@@ -195,7 +195,7 @@ export const retailStockTransferVisibleSites = retailInventoryVisibleSites;
 export async function retailFinanceReadSiteScope(
   organizationId: string,
   userId: string,
-  capability: "VIEW_SALES" | "COLLECT_PAYMENT",
+  capability: "VIEW_SALES" | "COLLECT_PAYMENT" | "CLOSE_CASH",
   database: RetailSiteAccessReader = prisma,
 ): Promise<string[] | null> {
   const [membership, configuration] = await Promise.all([
