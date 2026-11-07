@@ -1,3 +1,8 @@
+## 2026-11-07 — Hotfix P0 Retail #1042, tranche 21 — Créances Finance par boutique (PR brouillon #1043)
+
+- Liste des créances clients et synthèses dues/en retard restreintes aux boutiques assignées pour les opérateurs Retail isolés, sans modification des créances Finance non Retail.
+- Filtrage appliqué avant pagination/agrégation ; QA de contrat. E2E multi-rôles et exports non certifiés, flags OFF, PR brouillon.
+
 ## 2026-11-07 — Hotfix P0 Retail #1042, tranche 20 — Cloisonnement des lectures Finance pour personnel boutique (PR brouillon #1043)
 
 - Les listes de factures Finance et paiements Finance filtrent leurs objets Retail et agrégats selon l'affectation de boutique lorsque l'isolation est activée. La révocation d'une affectation ne donne jamais un accès global ; les Finance-only et propriétaires restent dans leur périmètre Finance actuel.
