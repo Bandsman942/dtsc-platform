@@ -1,3 +1,11 @@
+## 2026-11-07 — Retail #1042, tranche 25 — Demandes de retour sur facture payée (candidat, PR #1043)
+
+- Ajout non destructif de `EnterpriseRetailInvoiceReturnRequest` et de ses lignes reliées à la facture Finance canonique par son checkout, avec clés composites interdisant toute référence à la ligne d'une autre facture ou entreprise.
+- Nouveau cycle `SUBMITTED → APPROVED/REJECTED` indépendant, quantités et montants proportionnels contrôlés, motifs, dispositions de retour `RESTOCK/QUARANTINE/DISPOSE`, refus des quantités déjà réservées par une autre demande, idempotence et protections de concurrence.
+- Capacités explicites par boutique `REQUEST_INVOICE_RETURN` et `APPROVE_INVOICE_RETURN`, **aucune attribution automatique**. Un validateur distinct doit disposer du droit Finance de validation et de l'affectation boutique valide.
+- API de création/liste et décision par facture avec session, autorisation, same-origin, Zod, rate limiting et audit ; QA ciblée intégrée aux Quality Gates. Aucune écriture de stock, d'avoir ou de paiement à ce stade : **un retour approuvé n'est pas encore un remboursement terminé**.
+- Tranche encore non commercialisable, E2E PostgreSQL multi-utilisateurs et UI Retour/Paiement à poursuivre, flags OFF, pas de merge/Production.
+
 ## 2026-11-07 — Retail #1042, tranche 24 — Caisses liées au site réel et clôtures isolées (PR brouillon #1043)
 
 - L'ouverture de session vérifie la boutique réellement attachée au compte financier **dans sa transaction Finance**, refuse les identifiants de site contraires, vérifie la permission `CLOSE_CASH` de l'utilisateur assigné et ne permet pas qu'une ancienne affectation révoquée autorise une ouverture.
