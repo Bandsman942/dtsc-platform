@@ -1,3 +1,9 @@
+## 2026-11-07 — Retail #1042, tranche 32 — Traçabilité des paiements de remboursement et stock inter-dépôts (candidat, PR #1043)
+
+- Le préflight borne les allocations confirmées à inverser par ordre stable, client/devise/site/compte, et refuse les historiques non représentables en centimes. Aucun débit ni avoir n'est encore effectué.
+- Les sorties supplémentaires dans un dépôt ou lot non conforme empêchent le retour, même lorsque le dépôt attendu semble équilibré. Message métier français pour la précision d'inventaire ; scénarios négatifs QA.
+- Les preuves d'atomicité du règlement et l'E2E propriétaire restent obligatoires avant fusion.
+
 ## 2026-11-07 — Retail #1042, tranche 31 — Provenance et précision des mouvements de retour (candidat, PR #1043)
 
 - Refus des quantités à plus de trois décimales pour les retours physiques, cohérent avec le stockage canonique Inventory ; saisie FR/EN adaptée, sans affecter les articles non stockés.

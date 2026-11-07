@@ -1,6 +1,6 @@
 # RETAIL-1042 — cahier des charges boutiques, paramétrage et Design 2.0
 
-Statut du 7 novembre 2026 : **30 tranches publiées sur la PR brouillon #1043 (17/17 contrôles GitHub verts sur la tranche 29 ; contrôles de la tranche 30 en cours) et tranche 31 en validation locale. Aucune fusion, aucun déploiement, aucune acceptation client. Le moteur atomique avoir/remboursement/stock sur facture Finance Retail et la recette PostgreSQL multi-rôles restent ouverts.**
+Statut du 7 novembre 2026 : **31 tranches publiées sur la PR brouillon #1043 (17/17 contrôles GitHub verts sur la tranche 30 ; contrôles de la tranche 31 en cours) et tranche 32 en validation locale. Aucune fusion, aucun déploiement, aucune acceptation client. Le moteur atomique avoir/remboursement/stock sur facture Finance Retail et la recette PostgreSQL multi-rôles restent ouverts.**
 
 La [matrice exhaustive de réception](RETAIL_1042_CAHIER_ACCEPTANCE_MATRIX.md) suit les 17 chapitres, RG01–RG20, les huit décisions et les deux niveaux de E2E du cahier client original ; aucune ligne non certifiée ne doit être masquée par un total de workflows verts.
 
@@ -258,5 +258,11 @@ Contrôle du 7 novembre : `npm run build` local a terminé avec succès la compi
 ### Tranche 31 — traçabilité exacte de la sortie de stock pour un retour (2026-11-07, candidat)
 
 - Une demande de retour d'article stocké refuse les quantités ayant plus de **trois décimales**, car les mouvements et soldes d'Inventaire sont stockés à cette précision. Les lignes sans stock restent compatibles avec leur précision Finance. Le formulaire FR/EN adapte ses bornes et son pas (`0.001`) aux articles physiques.
-- Le précontrôle en lecture seule exige la correspondance **exacte** entre la quantité facturée et les sorties canoniques trouvées (un doublon de sortie interdit le règlement), puis calcule un plan FIFO déterministe de provenance par mouvement, dépôt, emplacement et lot. Les quantités déjà retournées sont soustraites ; `RESTOCK`, `QUARANTINE` et `DISPOSE` conservent des destinations distinctes pour l'implémentation future.
+- Le précontrôle en lecture seule exige la correspondance **exacte** entre la quantité facturée et toutes les sorties canoniques trouvées (un doublon de sortie, même dans un autre dépôt/lot, interdit le règlement), puis calcule un plan FIFO déterministe de provenance par mouvement, dépôt, emplacement et lot. Les quantités déjà retournées sont soustraites ; `RESTOCK`, `QUARANTINE` et `DISPOSE` conservent des destinations distinctes pour l'implémentation future.
 - QA de rejet des fractions physiquement non représentables, des sorties en double, et de ventilation sur deux mouvements sources après un premier retour terminé. **Aucun mouvement retour, avoir, paiement ni écriture n'est créé** par ce plan : l'orchestrateur transactionnel et les essais réels sur deux boutiques restent nécessaires avant `OWNER_E2E`.
+
+### Tranche 32 — sources d'allocations Finance et refus des doubles sorties inter-dépôts (2026-11-07, candidat)
+
+- Le précontrôle déroule les **allocations de paiements confirmées dans un ordre stable** et produit un plan de ventilation de l'inversion sur une ou plusieurs allocations, borné au montant demandé et au compte Finance de la boutique. Les montants historiques non représentables à deux décimales sont refusés, sans arrondi silencieux.
+- Une sortie d'inventaire originale surnuméraire dans un **autre dépôt ou lot** pour la même ligne de facture bloque également le retour, même si la quantité du dépôt attendu reste correcte. Une erreur d'interface contextualise la précision maximale des quantités physiques en français.
+- QA : remboursement partiel sur plusieurs allocations sources, conservation des centimes, source invalide et double sortie dans un autre dépôt. Le plan reste **en lecture seule**. Le prochain chantier est l'exécuteur transactionnel Finance/Inventaire et sa preuve PostgreSQL ; ne pas traiter ce plan comme un remboursement.

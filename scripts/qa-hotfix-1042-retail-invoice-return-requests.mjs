@@ -86,6 +86,8 @@ const tx = {
 const prisma = { ...tx, $transaction: async (fn) => fn(tx) };
 const source = fs.readFileSync("lib/enterprise/retail/invoice-returns.ts", "utf8");
 const returnUi = fs.readFileSync("components/enterprise/professional/retail-invoice-return-dialog.tsx", "utf8");
+const retailErrors = fs.readFileSync("lib/enterprise/retail/http.ts", "utf8");
+assert.match(retailErrors, /RETAIL_INVOICE_RETURN_STOCK_QUANTITY_PRECISION: "La quantité/);
 assert.match(returnUi, /step=\{line\.inventoryItemId \? "0\.001" : "0\.000001"\}/);
 assert.match(returnUi, /line\.hasStock && !\/\^/);
 const unit = { exports: {} };

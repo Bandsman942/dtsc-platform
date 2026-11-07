@@ -93,7 +93,8 @@ export async function assertRetailInvoiceReturnSettlementReadinessTx(
   const [confirmedAllocations, originalMovements, previouslyCompleted] = await Promise.all([
     tx.enterprisePaymentAllocation.findMany({
       where: { organizationId, receivableId: checkout.invoice.receivable.id, status: "CONFIRMED" },
-      select: { amount: true, payment: { select: {
+      orderBy: [{ allocatedAt: "asc" }, { id: "asc" }],
+      select: { id: true, paymentId: true, amount: true, payment: { select: {
         status: true, direction: true, paymentType: true, businessPartyId: true,
         currencyCode: true, financialAccountId: true,
       } } },
@@ -119,7 +120,7 @@ export async function assertRetailInvoiceReturnSettlementReadinessTx(
     select: { id: true, siteId: true, currencyCode: true },
   });
   const accountById = new Map(accounts.map((account) => [account.id, account]));
-  const refundable = sum(confirmedAllocations.filter((allocation) => {
+  const eligibleAllocations = confirmedAllocations.filter((allocation) => {
     const payment = allocation.payment;
     const account = payment.financialAccountId ? accountById.get(payment.financialAccountId) : null;
     return payment.direction === "INBOUND" && payment.paymentType === "CUSTOMER_PAYMENT" &&
@@ -127,8 +128,30 @@ export async function assertRetailInvoiceReturnSettlementReadinessTx(
       payment.businessPartyId === checkout.invoice.businessPartyId &&
       payment.currencyCode === checkout.invoice.currencyCode &&
       account?.siteId === checkout.siteId && account.currencyCode === payment.currencyCode;
-  }).map((allocation) => allocation.amount));
+  });
+  const refundable = sum(eligibleAllocations.map((allocation) => allocation.amount));
   if (refundable.lessThan(refundAmount)) throw conflict("RETAIL_INVOICE_RETURN_SETTLEMENT_FUNDS_INSUFFICIENT");
+  // Finance must never silently round a source allocation while reversing
+  // only part of it. Stable order also prevents an actor choosing a different
+  // payment/account from the verified source when the final transaction runs.
+  const financeSourcePlan: Array<{
+    allocationId: string; paymentId: string; financialAccountId: string;
+    amount: Prisma.Decimal;
+  }> = [];
+  let financeRemaining = refundAmount;
+  for (const allocation of eligibleAllocations) {
+    if (!allocation.amount.greaterThan(0) || !allocation.amount.equals(cents(allocation.amount))) {
+      throw conflict("RETAIL_INVOICE_RETURN_SETTLEMENT_ALLOCATION_PRECISION_INVALID");
+    }
+    if (financeRemaining.isZero()) continue;
+    const portion = Prisma.Decimal.min(allocation.amount, financeRemaining);
+    financeSourcePlan.push({
+      allocationId: allocation.id, paymentId: allocation.paymentId,
+      financialAccountId: allocation.payment.financialAccountId!, amount: portion,
+    });
+    financeRemaining = financeRemaining.minus(portion);
+  }
+  if (!financeRemaining.isZero()) throw conflict("RETAIL_INVOICE_RETURN_SETTLEMENT_FUNDS_INSUFFICIENT");
 
   for (const line of request.lines) {
     const source = invoiceLines.get(line.checkoutLineId)!;
@@ -150,10 +173,17 @@ export async function assertRetailInvoiceReturnSettlementReadinessTx(
   }> = [];
   for (const line of stockLines) {
     const source = invoiceLines.get(line.checkoutLineId)!;
-    const movements = originalMovements.filter((movement) =>
+    const related = originalMovements.filter((movement) => movement.sourceLineId === line.invoiceItemId);
+    const movements = related.filter((movement) =>
       movement.sourceLineId === line.invoiceItemId && movement.warehouseId === checkout.warehouseId &&
       movement.inventoryItemId === source.inventoryItemId && movement.stockLotId === source.stockLotId,
     );
+    // It is insufficient for the matching warehouse to be balanced: an
+    // additional sale-fulfillment in a DIFFERENT depot/lot for the same
+    // invoice line would still represent an unreconciled double stock debit.
+    if (related.length !== movements.length) {
+      throw conflict("RETAIL_INVOICE_RETURN_SETTLEMENT_STOCK_INVALID");
+    }
     const original = sum(movements.map((movement) => movement.quantity));
     const completed = sum(previouslyCompleted.filter((previous) =>
       previous.checkoutLineId === line.checkoutLineId,
@@ -188,6 +218,6 @@ export async function assertRetailInvoiceReturnSettlementReadinessTx(
     requestId: request.id, checkoutId: checkout.id, siteId: checkout.siteId,
     receivableId: checkout.invoice.receivable.id, refundAmount,
     currencyCode: checkout.invoice.currencyCode, stockLineCount: stockLines.length,
-    stockSourcePlan,
+    financeSourcePlan, stockSourcePlan,
   };
 }
