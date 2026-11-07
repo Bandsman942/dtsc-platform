@@ -708,3 +708,6 @@ Les flags `siteStaffIsolationEnabled` et `invoiceCheckoutEnabled` sont toujours 
 
 
 **Complément Retail #1042 tranche 18 (PR #1043, pré-release)** : la Quality Gate fournit un PostgreSQL `pgvector/pgvector:pg16` jetable et exécute `qa-hotfix-1042-retail-postgres-serialization.mjs` après migrations. Cette QA démontre la sémantique du retry transactionnel sous un conflit PostgreSQL SERIALIZABLE réel, mais ne couvre pas encore les transactions métier concurrentes ni les retours, remboursements et validations multi-rôles. Le script refuse les environnements hors base éphémère `dtsc_quality_test` et nettoie sa table d'essai.
+
+
+**Complément Retail #1042 tranche 19 (pré-release)** : `GET /retail/site-overview` conserve sa restriction propriétaire/admin et ajoute `financeInvoices` avec agrégation SQL par `EnterpriseRetailInvoiceCheckout.siteId` et `EnterpriseSalesInvoice.currencyCode` sur la date d'émission. Les champs `issuedTotal`, `allocatedToDate` et `outstandingToDate` ne sont pas des encaissements de période ni une marge comptable ; la vue Design 2.0 FR/EN les affiche séparément des tickets POS. Les exports et le résultat net par site doivent s'appuyer sur les écritures POSTED avec dimensions et historique FX, non sur cette vue opérationnelle.
