@@ -6,7 +6,7 @@ import { publishEnterpriseEvent } from "@/lib/enterprise/crm-sales/helpers";
 import { assertInventoryApprovalCandidate, assertInventoryApprovalDecision } from "@/lib/enterprise/inventory/approval";
 import { readRetailInventoryPolicy } from "@/lib/enterprise/retail/inventory-policy";
 import { readActiveRetailInvoiceStockHoldsTx } from "@/lib/enterprise/retail/invoice-stock-holds";
-import { requireRetailSiteCapability } from "@/lib/enterprise/retail/site-access";
+import { requireRetailSiteCapability, retailStaffIsolationIsEnabled } from "@/lib/enterprise/retail/site-access";
 import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
 import type {
   inventoryCountCreateSchema,
@@ -33,6 +33,34 @@ async function requireTransferSiteAuthority(
 ) {
   try {
     await requireRetailSiteCapability(organizationId, actorUserId, siteId, "AUTHORIZE_TRANSFER", tx);
+  } catch (error) {
+    if (error instanceof EnterpriseRetailError) throw new EnterpriseDomainError(error.code, error.status);
+    throw error;
+  }
+}
+
+/** Guard legacy inventory writes without changing other industries or
+ * existing Retail tenants before the opt-in site isolation cutover.
+ * This is called inside the same transaction as the stock mutation.
+ */
+export async function requireInventoryStockAuthorityTx(
+  tx: Prisma.TransactionClient,
+  organizationId: string,
+  actorUserId: string,
+  warehouseId: string,
+) {
+  const config = await tx.enterpriseRetailConfiguration.findUnique({
+    where: { organizationId },
+    select: { settingsJson: true },
+  });
+  if (!retailStaffIsolationIsEnabled(config?.settingsJson)) return;
+  const warehouse = await tx.enterpriseWarehouse.findFirst({
+    where: { organizationId, id: warehouseId, status: "ACTIVE", archivedAt: null },
+    select: { siteId: true },
+  });
+  if (!warehouse) throw new EnterpriseDomainError("WAREHOUSE_NOT_FOUND", 404);
+  try {
+    await requireRetailSiteCapability(organizationId, actorUserId, warehouse.siteId, "MANAGE_STOCK", tx);
   } catch (error) {
     if (error instanceof EnterpriseRetailError) throw new EnterpriseDomainError(error.code, error.status);
     throw error;
@@ -117,7 +145,10 @@ export async function applyStockMovementTx(
 }
 
 export async function applyEnterpriseStockMovement(organizationId: string, actorUserId: string, input: StockMovementInput) {
-  return prisma.$transaction((tx) => applyStockMovementTx(tx, organizationId, actorUserId, input), { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+  return prisma.$transaction(async (tx) => {
+    await requireInventoryStockAuthorityTx(tx, organizationId, actorUserId, input.warehouseId);
+    return applyStockMovementTx(tx, organizationId, actorUserId, input);
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 }
 
 export async function createEnterpriseStockTransfer(organizationId: string, actorUserId: string, input: StockTransferCreateInput) {
@@ -277,6 +308,7 @@ export async function createEnterpriseInventoryCount(organizationId: string, act
     ]);
     if (!warehouse) throw new EnterpriseDomainError("WAREHOUSE_NOT_FOUND", 404);
     if (!approver) throw new EnterpriseDomainError("APPROVER_NOT_MEMBER", 404);
+    await requireInventoryStockAuthorityTx(tx, organizationId, actorUserId, input.warehouseId);
     const seen = new Set<string>();
     const lines = [];
     for (const line of input.lines) {
@@ -303,6 +335,7 @@ export async function decideEnterpriseInventoryCount(organizationId: string, cou
   return prisma.$transaction(async (tx) => {
     const count = await tx.enterpriseInventoryCount.findFirst({ where: { id: countId, organizationId, status: "SUBMITTED", archivedAt: null }, include: { lines: true } });
     if (!count) throw new EnterpriseDomainError("INVENTORY_COUNT_NOT_FOUND", 404);
+    await requireInventoryStockAuthorityTx(tx, organizationId, actorUserId, count.warehouseId);
     if (count.approvedByUserId !== actorUserId) throw new EnterpriseDomainError("NOT_INVENTORY_COUNT_APPROVER", 403);
     const approval = await tx.enterpriseApproval.findFirst({ where: { organizationId, targetEntityType: "EnterpriseInventoryCount", targetEntityId: count.id, status: "PENDING", approverUserId: actorUserId } });
     if (!approval) throw new EnterpriseDomainError("APPROVAL_NOT_FOUND", 404);

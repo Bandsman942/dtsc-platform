@@ -98,3 +98,13 @@ Contrôle du 7 novembre : `npm run build` local a terminé avec succès la compi
 - Contrats statiques ajoutés à `qa-hotfix-1042-site-staff.mjs`. Aucune prétention à une recette PostgreSQL ou à une couverture des écritures legacy.
 
 **Activation toujours bloquée :** les mutations d'inventaire, les écritures de stocks et les exports/rapports legacy restent à auditer. Le flag d'isolation et la facturation Retail demeurent OFF jusqu'à la recette complète.
+
+### Tranche 12 — autorisation paramétrable des écritures d'inventaire
+
+- La capacité `MANAGE_STOCK` est désormais disponible dans les affectations de boutique, avec libellé FR/EN. Elle n'est accordée **par défaut à aucun rôle** : un propriétaire doit l'attribuer explicitement, selon les responsabilités du collaborateur.
+- Les écritures directes de mouvements de stock, la soumission et les décisions d'inventaire physique ainsi que la soumission et les décisions d'ajustements passent par `requireInventoryStockAuthorityTx`. Cette barrière résout le dépôt actif dans le tenant et vérifie `MANAGE_STOCK` sur sa boutique **dans la transaction de mutation**, sans modifier le moteur canonique des mouvements.
+- L'ancienne séparation demandeur/approbateur des inventaires et ajustements demeure obligatoire ; ce droit local ne vaut jamais approbation automatique. Les transferts conservent leur capacité distincte `AUTHORIZE_TRANSFER`.
+- En dehors d'une entreprise opt-in `siteStaffIsolationEnabled`, le comportement ERP historique reste inchangé. Aucune migration ni nouvelle comptabilité.
+- QA contractuelle enrichie : absence de privilège implicite, override explicite, protections des quatre points d'écriture et traduction de l'interface.
+
+**Avant activation**, il reste à certifier les routes de valorisation, les opérations spécialisées, les rapports/exports, les migrations sur PostgreSQL et les parcours E2E de deux boutiques avec rôles réellement authentifiés.

@@ -1,3 +1,9 @@
+## 2026-11-07 — Hotfix P0 Retail #1042, tranche 12 — Permissions des écritures de stock (PR brouillon #1043)
+
+- Capacité MANAGE_STOCK assignable explicitement par boutique, aucune attribution automatique au gérant, facturier ou caissier ; libellés FR/EN.
+- Les mouvements directs, inventaires physiques et ajustements de stock passent une vérification de la boutique et de MANAGE_STOCK dans leur transaction canonique. L'approbation indépendante demeure obligatoire lorsqu'elle existait déjà.
+- Comportement historique conservé tant que l'isolation stricte est OFF ; aucun déploiement, fusion ou E2E propriétaire déclaré. Les autres API spécialisées et rapports sont encore à auditer.
+
 ## 2026-11-07 — Hotfix P0 Retail #1042, tranche 11 — Lectures Inventory isolées par boutique (PR brouillon #1043)
 
 - Stocks, balances, mouvements, inventaires physiques et ajustements de stock : filtrage des résultats et des compteurs sur les dépôts des boutiques autorisées. Un filtre explicite de dépôt n'élargit jamais cette portée.

@@ -27,7 +27,7 @@ const dictionary = {
     empty: "Aucune affectation enregistrée.", edit: "Modifier", enabled: "Active", disabled: "Désactivée", legacy: "Isolation stricte en préparation : les règles spécifiques aux boutiques ne sont pas encore activées sur toutes les API ERP.",
     activeIsolation: "Isolation stricte des boutiques active", ownerExcluded: "Les propriétaires et administrateurs d’entreprise sont gérés dans l’administration générale.",
     capability: {
-      VIEW_STOCK: "Consulter les stocks", VIEW_SALES: "Consulter les ventes", PREPARE_INVOICE: "Préparer les factures", CANCEL_UNPAID_INVOICE: "Annuler une facture impayée",
+      VIEW_STOCK: "Consulter les stocks", MANAGE_STOCK: "Gérer les mouvements, inventaires et ajustements de stock", VIEW_SALES: "Consulter les ventes", PREPARE_INVOICE: "Préparer les factures", CANCEL_UNPAID_INVOICE: "Annuler une facture impayée",
       COLLECT_PAYMENT: "Encaisser les paiements", CLOSE_CASH: "Clôturer la caisse", VIEW_REPORTS: "Consulter les rapports", AUTHORIZE_TRANSFER: "Autoriser un transfert",
       RECORD_EXPENSE: "Enregistrer une dépense", APPROVE_EXPENSE: "Valider une dépense",
     },
@@ -41,7 +41,7 @@ const dictionary = {
     empty: "No assignments recorded.", edit: "Edit", enabled: "Active", disabled: "Disabled", legacy: "Strict isolation is being prepared: store-specific access rules are not yet active on every ERP API.",
     activeIsolation: "Strict store isolation enabled", ownerExcluded: "Owners and organization administrators are managed in general administration.",
     capability: {
-      VIEW_STOCK: "View stock", VIEW_SALES: "View sales", PREPARE_INVOICE: "Prepare invoices", CANCEL_UNPAID_INVOICE: "Cancel unpaid invoice",
+      VIEW_STOCK: "View stock", MANAGE_STOCK: "Manage stock movements, counts and adjustments", VIEW_SALES: "View sales", PREPARE_INVOICE: "Prepare invoices", CANCEL_UNPAID_INVOICE: "Cancel unpaid invoice",
       COLLECT_PAYMENT: "Collect payments", CLOSE_CASH: "Close cash register", VIEW_REPORTS: "View reports", AUTHORIZE_TRANSFER: "Authorize transfer",
       RECORD_EXPENSE: "Record expense", APPROVE_EXPENSE: "Approve expense",
     },

@@ -31,7 +31,9 @@ assert.equal(retailStaffIsolationIsEnabled({ siteStaffIsolationEnabled: true }),
 assert.deepEqual([...siteStaffCapabilities("INVOICER", null)].sort(), ["VIEW_STOCK", "VIEW_SALES", "PREPARE_INVOICE"].sort());
 assert.equal(siteStaffCapabilities("CASHIER", null).includes("PREPARE_INVOICE"), false);
 assert.equal(siteStaffCapabilities("MANAGER", null).includes("AUTHORIZE_TRANSFER"), false, "Transfer approval is owner-only unless explicitly granted");
+assert.equal(siteStaffCapabilities("MANAGER", null).includes("MANAGE_STOCK"), false, "Stock mutations require an explicit, configurable grant");
 assert.deepEqual([...siteStaffCapabilities("MANAGER", ["VIEW_STOCK"])], ["VIEW_STOCK"], "Overrides must not inherit other permissions");
+assert.deepEqual([...siteStaffCapabilities("MANAGER", ["MANAGE_STOCK"])], ["MANAGE_STOCK"], "Explicit stock permission must be configurable");
 assert.deepEqual([...siteStaffCapabilities("MANAGER", { privilege: "*" })], [], "Malformed stored permissions must fail closed");
 const check = (capability, siteId = "shopA") => requireRetailSiteCapability("tenant", "staff", siteId, capability);
 await assert.doesNotReject(check("PREPARE_INVOICE"));
@@ -103,6 +105,15 @@ const inventoryService = fs.readFileSync("lib/enterprise/inventory/service.ts", 
 assert.match(inventoryService, /requireTransferSiteAuthority\(tx, organizationId, actorUserId, source\.siteId\)/);
 assert.match(inventoryService, /requireTransferSiteAuthority\(tx, organizationId, actorUserId, transfer\.sourceWarehouse\.siteId\)/);
 assert.match(inventoryService, /requireTransferSiteAuthority\(tx, organizationId, actorUserId, transfer\.destinationWarehouse\.siteId\)/);
+assert.match(inventoryService, /requireRetailSiteCapability\(organizationId, actorUserId, warehouse\.siteId, "MANAGE_STOCK", tx\)/);
+assert.match(inventoryService, /requireInventoryStockAuthorityTx\(tx, organizationId, actorUserId, input\.warehouseId\)/);
+assert.match(inventoryService, /requireInventoryStockAuthorityTx\(tx, organizationId, actorUserId, count\.warehouseId\)/);
+const adjustmentsService = fs.readFileSync("lib/enterprise/inventory/adjustment-service.ts", "utf8");
+assert.match(adjustmentsService, /requireInventoryStockAuthorityTx\(tx, organizationId, actorUserId, input\.warehouseId\)/);
+assert.match(adjustmentsService, /requireInventoryStockAuthorityTx\(tx, organizationId, actorUserId, adjustment\.warehouseId\)/);
+const staffInterface = fs.readFileSync("components/enterprise/professional/retail-site-staff-access.tsx", "utf8");
+assert.match(staffInterface, /MANAGE_STOCK: "Gérer les mouvements/);
+assert.match(staffInterface, /MANAGE_STOCK: "Manage stock movements/);
 const expiryAlerts = fs.readFileSync("app/api/enterprise/[organizationId]/retail/inventory-alerts/route.ts", "utf8");
 assert.match(expiryAlerts, /requireRetailSiteCapability\(organizationId, auth\.session\.userId, warehouse\?\.siteId, "VIEW_STOCK"\)/);
 const inventoryList = fs.readFileSync("app/api/enterprise/[organizationId]/inventory/route.ts", "utf8");
