@@ -72,7 +72,9 @@ vm.runInNewContext(compiled, {
 const {
   reverseCustomerPaymentAllocationsForRefund,
   reverseCustomerPaymentAllocationsForRefundAmount,
+  reverseCustomerPaymentAllocationsForRefundAmountTx,
   confirmCustomerRefundPayment,
+  confirmCustomerRefundPaymentTx,
 } = unit.exports;
 const reverse = () => reverseCustomerPaymentAllocationsForRefundAmount(
   "organization-1", "receivable-1", "refund-1", "finance-user", "Retour client",
@@ -86,6 +88,18 @@ const reverseAll = (paymentId = "refund-1") => reverseCustomerPaymentAllocations
 );
 
 assert.equal((await reverse()).idempotent, true, "Same-site idempotent refund is accepted");
+const originalTransaction = prisma.$transaction;
+prisma.$transaction = () => { throw new Error("NESTED_FINANCE_TRANSACTION_FORBIDDEN"); };
+assert.equal((await reverseCustomerPaymentAllocationsForRefundAmountTx(
+  tx, "organization-1", "receivable-1", "refund-1", "finance-user", "Retour client",
+  new Prisma.Decimal(20), "payment-original",
+)).idempotent, true, "The canonical Finance inverse can participate in a caller-owned transaction");
+state.refund.status = "CONFIRMED";
+assert.equal((await confirmCustomerRefundPaymentTx(
+  tx, "organization-1", "refund-1", "finance-user", { revision: 1, reason: "Retour client" },
+)).id, "refund-1", "The canonical refund confirmation can be reused in a caller-owned transaction");
+state.refund.status = "APPROVED";
+prisma.$transaction = originalTransaction;
 assert.equal((await reverseAll()).idempotent, true, "Legacy reversal also checks a valid same-site refund");
 state.allowedSites = ["boutique-B"];
 await assert.rejects(reverse(), { code: "RETAIL_INVOICE_REFUND_SITE_ACCESS_DENIED" });

@@ -1,3 +1,9 @@
+## 2026-11-07 — Retail #1042, tranche 33 — Finance transactionnelle composable pour retours (candidat, PR #1043)
+
+- Les primitives Finance communes d'inversion partielle d'allocations et de confirmation de remboursements deviennent utilisables dans la transaction SERIALIZABLE de l'appelant, sans transactions imbriquées.
+- Les enveloppes Finance publiques existantes, leurs autorisations de compte/boutique et les journaux restent inchangés. QA d'idempotence, permissions et composition par `TransactionClient`.
+- L'orchestrateur de règlement complet, l'avoir et la validation E2E de deux boutiques restent à implémenter.
+
 ## 2026-11-07 — Retail #1042, tranche 32 — Traçabilité des paiements de remboursement et stock inter-dépôts (candidat, PR #1043)
 
 - Le préflight borne les allocations confirmées à inverser par ordre stable, client/devise/site/compte, et refuse les historiques non représentables en centimes. Aucun débit ni avoir n'est encore effectué.

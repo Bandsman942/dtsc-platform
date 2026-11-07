@@ -1,6 +1,6 @@
 # RETAIL-1042 — cahier des charges boutiques, paramétrage et Design 2.0
 
-Statut du 7 novembre 2026 : **31 tranches publiées sur la PR brouillon #1043 (17/17 contrôles GitHub verts sur la tranche 30 ; contrôles de la tranche 31 en cours) et tranche 32 en validation locale. Aucune fusion, aucun déploiement, aucune acceptation client. Le moteur atomique avoir/remboursement/stock sur facture Finance Retail et la recette PostgreSQL multi-rôles restent ouverts.**
+Statut du 7 novembre 2026 : **32 tranches publiées sur la PR brouillon #1043 (17/17 contrôles GitHub verts sur les tranches 30 et 31 ; contrôles de la tranche 32 en cours) et tranche 33 en validation locale. Aucune fusion, aucun déploiement, aucune acceptation client. Le moteur atomique avoir/remboursement/stock sur facture Finance Retail et la recette PostgreSQL multi-rôles restent ouverts.**
 
 La [matrice exhaustive de réception](RETAIL_1042_CAHIER_ACCEPTANCE_MATRIX.md) suit les 17 chapitres, RG01–RG20, les huit décisions et les deux niveaux de E2E du cahier client original ; aucune ligne non certifiée ne doit être masquée par un total de workflows verts.
 
@@ -266,3 +266,9 @@ Contrôle du 7 novembre : `npm run build` local a terminé avec succès la compi
 - Le précontrôle déroule les **allocations de paiements confirmées dans un ordre stable** et produit un plan de ventilation de l'inversion sur une ou plusieurs allocations, borné au montant demandé et au compte Finance de la boutique. Les montants historiques non représentables à deux décimales sont refusés, sans arrondi silencieux.
 - Une sortie d'inventaire originale surnuméraire dans un **autre dépôt ou lot** pour la même ligne de facture bloque également le retour, même si la quantité du dépôt attendu reste correcte. Une erreur d'interface contextualise la précision maximale des quantités physiques en français.
 - QA : remboursement partiel sur plusieurs allocations sources, conservation des centimes, source invalide et double sortie dans un autre dépôt. Le plan reste **en lecture seule**. Le prochain chantier est l'exécuteur transactionnel Finance/Inventaire et sa preuve PostgreSQL ; ne pas traiter ce plan comme un remboursement.
+
+### Tranche 33 — primitives Finance réutilisables dans une transaction de liquidation (2026-11-07, candidat)
+
+- Le service commun Finance expose deux variantes transactionnelles internes (`reverseCustomerPaymentAllocationsForRefundAmountTx` et `confirmCustomerRefundPaymentTx`) qui reçoivent le `Prisma.TransactionClient` de l'orchestrateur. Les API/fonctions existantes restent des enveloppes conservant `SERIALIZABLE` et leurs limites de durée ; les reprises éventuelles de conflits restent du ressort de l'orchestrateur englobant.
+- Cela permettra à la future liquidation Retail d'inverser les allocations et de confirmer le remboursement **dans la même transaction** que le retour physique et l'avoir, sans écrire une saga à transactions séparées. Les contrôles de compte/boutique, acteurs indépendants, journaux et caisse restent dans les implémentations Finance canoniques, sans duplication de grand livre.
+- QA confirme les parcours hérités et le rejeu ainsi que l'absence de transaction imbriquée lorsque l'appelant fournit déjà `tx`. **Les primitives ne sont pas encore raccordées au retour** ; ce travail n'effectue aucun remboursement et ne vaut pas E2E métier.

@@ -279,10 +279,30 @@ export async function reverseCustomerPaymentAllocationsForRefundAmount(
   requestedAmount: Prisma.Decimal.Value,
   preferredPaymentId?: string | null,
 ) {
+  return prisma.$transaction(
+    (tx) => reverseCustomerPaymentAllocationsForRefundAmountTx(
+      tx, organizationId, receivableId, refundPaymentId, actorUserId, reason, requestedAmount, preferredPaymentId,
+    ),
+    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 30000 },
+  );
+}
+
+/** Canonical Finance allocation inverse for an orchestration that already
+ * owns the SERIALIZABLE transaction. The caller MUST retain Finance RBAC,
+ * approval and refund source validation; this function does not grant them. */
+export async function reverseCustomerPaymentAllocationsForRefundAmountTx(
+  tx: Prisma.TransactionClient,
+  organizationId: string,
+  receivableId: string,
+  refundPaymentId: string,
+  actorUserId: string,
+  reason: string,
+  requestedAmount: Prisma.Decimal.Value,
+  preferredPaymentId?: string | null,
+) {
   const amount = money(requestedAmount);
   if (!amount.greaterThan(0)) throw new EnterpriseAccountingError("REFUND_AMOUNT_INVALID", 400);
 
-  return prisma.$transaction(async (tx) => {
     await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterprisePayment" WHERE id = ${refundPaymentId} AND "organizationId" = ${organizationId} FOR UPDATE`);
     const refundPayment = await tx.enterprisePayment.findFirst({
       where: { id: refundPaymentId, organizationId, paymentType: "REFUND", direction: "OUTBOUND" },
@@ -465,7 +485,6 @@ export async function reverseCustomerPaymentAllocationsForRefundAmount(
       metadataJson: { amount: amount.toFixed(), paymentIds, refundPaymentId, reason: reason.slice(0, 500) },
     });
     return { reversedAmount: amount, paymentIds, idempotent: false };
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 30000 });
 }
 
 async function consumeCustomerPaymentRefundAvailabilityTx(
@@ -856,7 +875,22 @@ export async function confirmCustomerRefundPayment(
   actorUserId: string,
   input: { revision: number; reason: string },
 ) {
-  const payment = await prisma.$transaction(async (tx) => {
+  return prisma.$transaction(
+    (tx) => confirmCustomerRefundPaymentTx(tx, organizationId, paymentId, actorUserId, input),
+    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 30000 },
+  );
+}
+
+/** Confirms a canonical refund, books its cash/treasury ledger, consumes the
+ * refund availability, and posts Finance journals in the CALLER transaction.
+ * Never invoke before the independent Finance approval and inverse evidence. */
+export async function confirmCustomerRefundPaymentTx(
+  tx: Prisma.TransactionClient,
+  organizationId: string,
+  paymentId: string,
+  actorUserId: string,
+  input: { revision: number; reason: string },
+) {
     await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterprisePayment" WHERE id = ${paymentId} AND "organizationId" = ${organizationId} FOR UPDATE`);
     const current = await tx.enterprisePayment.findFirst({ where: { id: paymentId, organizationId } });
     if (!current) throw new EnterpriseAccountingError("PAYMENT_NOT_FOUND", 404);
@@ -983,7 +1017,4 @@ export async function confirmCustomerRefundPayment(
       sourceEntityId: confirmed.id,
     });
     return confirmed;
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 30000 });
-
-  return payment;
 }
