@@ -1,3 +1,9 @@
+## 2026-11-07 — Retail #1042, tranche 41 — Cycle Finance à trois acteurs (candidat, PR #1043)
+
+- Nouvelle recette navigateur authentifiée, limitée à la base synthétique PostgreSQL CI : facturier-caissier de boutique, propriétaire approbateur et administrateur financier distinct confirmateur. Une facture est créée, soumise, approuvée, émise puis payée en deux étapes, avec réelle vérification renforcée par mot de passe pour les mutations critiques.
+- Le test contrôle la proposition Finance canonique, les allocations idempotentes, l'absence de consommation physique au paiement partiel, puis une seule sortie de stock et son événement comptable de coût **POSTED** au règlement intégral ; restauration du flag dans l'environnement éphémère.
+- **Candidat technique, à confirmer par les Actions GitHub**. Ne couvre pas encore la totalité des retours/remboursements multi-acteurs, des caisses, impressions physiques, exports ou restaurations. `OWNER_E2E` humain non exécuté, PR en brouillon, aucune fusion/déploiement, flags OFF en Production.
+
 ## 2026-11-07 — Retail #1042, tranche 40 — Inventaires et ajustements cloisonnés par dépôt (candidat, PR #1043)
 
 - Fermeture des API ERP historiques de création d'inventaire et d'ajustement, ainsi que des décisions de validation/rejet, par contrôle du `warehouseId` et de la capacité `MANAGE_STOCK` du collaborateur sur la boutique propriétaire ; l'appartenance ERP générale reste requise. Absence de dépôt, affectation révoquée ou boutique étrangère refusées sous flag actif.
