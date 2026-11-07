@@ -9,6 +9,7 @@ import { readActiveRetailInvoiceStockHoldsTx } from "@/lib/enterprise/retail/inv
 import { applyStockMovementTx } from "@/lib/enterprise/inventory/service";
 import { RETAIL_SECTOR_CODE } from "@/lib/enterprise/retail/constants";
 import { requireRetailSiteCapability } from "@/lib/enterprise/retail/site-access";
+import { withRetailTransactionRetry } from "@/lib/enterprise/retail/transaction-retry";
 import { prisma } from "@/lib/prisma";
 
 export const retailInvoicePrepareSchema = z.object({
@@ -63,6 +64,9 @@ export async function prepareRetailInvoice(organizationId: string, actorUserId: 
     where: { organizationId, idempotencyKey: input.idempotencyKey }, include: { invoice: { include: { items: true } }, lines: true },
   });
   if (earlier) {
+    // Idempotency must not bypass store access after a user's assignment is
+    // removed, even when the original request has the same fingerprint.
+    await requireRetailSiteCapability(organizationId, actorUserId, earlier.siteId, "PREPARE_INVOICE", prisma, { requireAssignment: true });
     if (earlier.requestFingerprint !== requestFingerprint) throw new EnterpriseRetailError("RETAIL_INVOICE_IDEMPOTENCY_COLLISION", 409);
     return { checkout: earlier, invoice: earlier.invoice, idempotent: true };
   }
@@ -74,11 +78,12 @@ export async function prepareRetailInvoice(organizationId: string, actorUserId: 
   const decisionByCatalog = new Map(decisions.map((decision) => [decision.catalogItemId, decision]));
   const calculatedTotal = decisions.reduce((sum, decision) => sum.plus(decision.lineTotal), new Prisma.Decimal(0));
 
-  return prisma.$transaction(async (tx) => {
+  return withRetailTransactionRetry(() => prisma.$transaction(async (tx) => {
     const existing = await tx.enterpriseRetailInvoiceCheckout.findFirst({
       where: { organizationId, idempotencyKey: input.idempotencyKey }, include: { invoice: { include: { items: true } }, lines: true },
     });
     if (existing) {
+      await requireRetailSiteCapability(organizationId, actorUserId, existing.siteId, "PREPARE_INVOICE", tx, { requireAssignment: true });
       if (existing.requestFingerprint !== requestFingerprint) throw new EnterpriseRetailError("RETAIL_INVOICE_IDEMPOTENCY_COLLISION", 409);
       return { checkout: existing, invoice: existing.invoice, idempotent: true };
     }
@@ -91,7 +96,7 @@ export async function prepareRetailInvoice(organizationId: string, actorUserId: 
     ]);
     if (!organization || !warehouse) throw new EnterpriseRetailError("RETAIL_REFERENCE_INVALID", 409);
     if (!invoiceCheckoutEnabled(configuration?.settingsJson)) throw new EnterpriseRetailError("RETAIL_INVOICE_CHECKOUT_NOT_ACTIVE", 409);
-    await requireRetailSiteCapability(organizationId, actorUserId, input.siteId, "PREPARE_INVOICE", tx);
+    await requireRetailSiteCapability(organizationId, actorUserId, input.siteId, "PREPARE_INVOICE", tx, { requireAssignment: true });
     if (catalogs.length !== uniqueItems.size) throw new EnterpriseRetailError("RETAIL_CATALOG_ITEM_INVALID", 409);
 
     const byCatalog = new Map(catalogs.map((item) => [item.id, item]));
@@ -157,7 +162,7 @@ export async function prepareRetailInvoice(organizationId: string, actorUserId: 
       include: { lines: true },
     });
     return { checkout, invoice, idempotent: false };
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 30000 });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 30000 }));
 }
 
 /** Finance may allocate a payment only to the store that issued this Retail

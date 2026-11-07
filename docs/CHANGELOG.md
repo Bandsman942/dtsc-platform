@@ -1,3 +1,9 @@
+## 2026-11-07 — Hotfix P0 Retail #1042, tranche 15 — Rejeu de facture et concurrence contrôlés (PR brouillon #1043)
+
+- La préparation de facture Finance Retail revérifie `PREPARE_INVOICE` et l'affectation active à la boutique **avant tout retour idempotent**, y compris après révocation de l'utilisateur ou lorsque le résultat est trouvé seulement dans la transaction.
+- Les conflits de sérialisation PostgreSQL de la préparation sont repris par le mécanisme Retail borné existant, sans création d'une seconde facture. Contrats négatifs ajoutés pour droits révoqués, collision de clé et rejeu transactionnel.
+- **Ne constitue pas un E2E PostgreSQL réel** : les avoirs, remboursements de la nouvelle facture, opérations concurrentes connectées et recette multi-rôles propriétaire restent à valider. Flags OFF, PR brouillon, aucune fusion ni Production.
+
 ## 2026-11-07 — Hotfix P0 Retail #1042, tranche 14 — Référentiels, réceptions et historique POS cloisonnés (PR brouillon #1043)
 
 - Entrepôts, emplacements, listes et compteurs filtrés par boutique ; écritures contrôlées sous transaction avec `MANAGE_STOCK`, sans permission implicite.

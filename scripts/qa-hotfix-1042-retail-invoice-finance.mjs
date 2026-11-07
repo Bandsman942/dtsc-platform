@@ -10,7 +10,10 @@ class EnterpriseRetailError extends Error {
   constructor(code, status = 409) { super(code); this.code = code; this.status = status; }
 }
 const decimal = (value) => new Prisma.Decimal(value);
-const state = { existing: null, checkout: null, invoiceCreated: false, movements: [], updated: false, settings: {} };
+const state = {
+  existing: null, outerExisting: null, checkout: null, invoiceCreated: false, movements: [], updated: false,
+  settings: {}, denyCapability: false, capabilityChecks: [], transactionAttempts: 0, retriableFailures: 0,
+};
 const tx = {
   enterpriseRetailInvoiceCheckout: {
     findFirst: async ({ where }) => where.idempotencyKey ? state.existing : where.salesInvoiceId && where.salesInvoiceId !== "finance-invoice" ? null : state.checkout,
@@ -31,9 +34,21 @@ const tx = {
   enterpriseCashSession: { findFirst: async () => state.cashSession },
 };
 const prisma = {
-  enterpriseRetailInvoiceCheckout: { findFirst: async () => state.existing },
-  $transaction: async (callback) => callback(tx),
+  enterpriseRetailInvoiceCheckout: { findFirst: async () => state.outerExisting },
+  $transaction: async (callback) => {
+    state.transactionAttempts += 1;
+    if (state.retriableFailures > 0) {
+      state.retriableFailures -= 1;
+      throw Object.assign(new Error("Could not serialize access"), { code: "P2034" });
+    }
+    return callback(tx);
+  },
 };
+const retrySource = fs.readFileSync("lib/enterprise/retail/transaction-retry.ts", "utf8");
+const retryModule = { exports: {} };
+vm.runInNewContext(ts.transpileModule(retrySource, {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+}).outputText, { module: retryModule, exports: retryModule.exports, Promise, Set, Error, setTimeout });
 const serviceSource = fs.readFileSync("lib/enterprise/retail/invoice-checkout.ts", "utf8");
 const compiled = ts.transpileModule(serviceSource, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
 const unit = { exports: {} };
@@ -46,7 +61,11 @@ vm.runInNewContext(compiled, {
     if (id === "@/lib/enterprise/retail/commercial-engine") return { resolveRetailCommercialPricingDecisions: async () => [{ catalogItemId: "product", lineTotal: decimal(10) }] };
     if (id === "@/lib/enterprise/retail/inventory-policy") return { assertRetailLotPolicyTx: async () => {} };
     if (id === "@/lib/enterprise/retail/invoice-stock-holds") return { readActiveRetailInvoiceStockHoldsTx: async () => [] };
-    if (id === "@/lib/enterprise/retail/site-access") return { requireRetailSiteCapability: async () => {} };
+    if (id === "@/lib/enterprise/retail/site-access") return { requireRetailSiteCapability: async (_org, _actor, siteId, capability, _db, options) => {
+      state.capabilityChecks.push({ siteId, capability, requireAssignment: options?.requireAssignment });
+      if (state.denyCapability) throw new EnterpriseRetailError("RETAIL_SITE_ACCESS_DENIED", 403);
+    } };
+    if (id === "@/lib/enterprise/retail/transaction-retry") return retryModule.exports;
     if (id === "@/lib/enterprise/inventory/service") return { applyStockMovementTx: async (_tx, _org, _actor, movement) => { state.movements.push(movement); } };
     if (id === "@/lib/enterprise/accounting/receivables-service") return { createSalesInvoiceTx: async () => { state.invoiceCreated = true; return {}; } };
     return require(id);
@@ -60,12 +79,29 @@ const input = {
 };
 assert.equal(retailInvoicePrepareSchema.safeParse(input).success, true);
 assert.equal(retailInvoicePrepareSchema.safeParse({ ...input, lines: [{ catalogItemId: "product", quantity: -2 }] }).success, false);
-state.existing = { id: "checkout", idempotencyKey: input.idempotencyKey, requestFingerprint: require("node:crypto").createHash("sha256").update(JSON.stringify(input)).digest("hex"), invoice: { id: "finance-invoice" } };
+state.existing = { id: "checkout", siteId: "site", idempotencyKey: input.idempotencyKey, requestFingerprint: require("node:crypto").createHash("sha256").update(JSON.stringify(input)).digest("hex"), invoice: { id: "finance-invoice" } };
+state.outerExisting = state.existing;
 const repeated = await prepareRetailInvoice("tenant", "owner", input);
 assert.equal(repeated.idempotent, true, "Retry returns the same canonical invoice");
 assert.equal(state.invoiceCreated, false, "Retry cannot issue a second Finance invoice");
+assert.deepEqual(state.capabilityChecks.at(-1), { siteId: "site", capability: "PREPARE_INVOICE", requireAssignment: true });
+state.denyCapability = true;
+await assert.rejects(prepareRetailInvoice("tenant", "revoked", input), { code: "RETAIL_SITE_ACCESS_DENIED" });
+await assert.rejects(prepareRetailInvoice("tenant", "revoked", { ...input, currencyCode: "USD" }), { code: "RETAIL_SITE_ACCESS_DENIED" });
+state.denyCapability = false;
 await assert.rejects(prepareRetailInvoice("tenant", "owner", { ...input, currencyCode: "USD" }), { code: "RETAIL_INVOICE_IDEMPOTENCY_COLLISION" });
+state.outerExisting = null; // Concurrent commit visible only from the transaction read.
+state.denyCapability = true;
+await assert.rejects(prepareRetailInvoice("tenant", "revoked", input), { code: "RETAIL_SITE_ACCESS_DENIED" });
+state.denyCapability = false;
+const repeatedInTx = await prepareRetailInvoice("tenant", "owner", input);
+assert.equal(repeatedInTx.idempotent, true);
+assert.deepEqual(state.capabilityChecks.at(-1), { siteId: "site", capability: "PREPARE_INVOICE", requireAssignment: true });
 state.existing = null;
+state.retriableFailures = 1;
+const attemptsBeforeRetry = state.transactionAttempts;
+await assert.rejects(prepareRetailInvoice("tenant", "owner", input), { code: "RETAIL_INVOICE_CHECKOUT_NOT_ACTIVE" });
+assert.equal(state.transactionAttempts - attemptsBeforeRetry, 2, "Serializable conflict must retry once, then run normal guards");
 await assert.rejects(prepareRetailInvoice("tenant", "owner", input), { code: "RETAIL_INVOICE_CHECKOUT_NOT_ACTIVE" });
 assert.equal(state.invoiceCreated, false, "Owner-only draft is disabled for existing tenants");
 
