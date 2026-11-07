@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { authorizeRetailRequest, retailErrorResponse } from "@/lib/enterprise/retail/http";
 import { businessDateKey, lotIsExpired, readRetailInventoryPolicy, retailLotExpiryDateKey } from "@/lib/enterprise/retail/inventory-policy";
 import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
+import { requireRetailSiteCapability } from "@/lib/enterprise/retail/site-access";
 import { writeApiLog } from "@/lib/audit";
 import { prisma } from "@/lib/prisma";
 
@@ -25,7 +26,18 @@ export async function GET(req: Request, { params }: Params) {
     const horizon = new Date(`${businessDate}T00:00:00.000Z`);
     horizon.setUTCDate(horizon.getUTCDate() + policy.warningDays);
     const url = new URL(req.url);
-    const warehouseId = url.searchParams.get("warehouseId") || undefined;
+    const warehouseId = url.searchParams.get("warehouseId")?.trim() || undefined;
+    if (warehouseId && warehouseId.length > 240) throw new EnterpriseRetailError("RETAIL_REFERENCE_INVALID", 400);
+    const warehouse = warehouseId
+      ? await prisma.enterpriseWarehouse.findFirst({
+          where: { organizationId, id: warehouseId, status: "ACTIVE", archivedAt: null },
+          select: { siteId: true },
+        })
+      : null;
+    if (warehouseId && !warehouse) throw new EnterpriseRetailError("RETAIL_REFERENCE_INVALID", 404);
+    // Owner can inspect every shop. An isolated operator must select a shop
+    // explicitly; a company-wide alert list would disclose other shops.
+    await requireRetailSiteCapability(organizationId, auth.session.userId, warehouse?.siteId, "VIEW_STOCK");
     const page = Math.max(1, Math.min(1000, Number(url.searchParams.get("page") || "1") || 1));
     const pageSize = Math.max(5, Math.min(100, Number(url.searchParams.get("pageSize") || "30") || 30));
     const where = {
@@ -69,3 +81,4 @@ export async function GET(req: Request, { params }: Params) {
     return retailErrorResponse(error, "RETAIL_EXPIRY_ALERTS_FAILED");
   }
 }
+

@@ -1,3 +1,9 @@
+## 2026-11-07 — Hotfix P0 Retail #1042, tranche 10 — Transferts et alertes isolés par boutique (PR brouillon #1043)
+
+- La liste des transferts ERP et ses compteurs sont filtrés par boutiques attribuées lorsque l'isolation Retail est activée ; le sélecteur de lots exige le droit de lecture du dépôt.
+- Création et approbation contrôlées dans la boutique source, réception dans la boutique destinataire, par le service Inventory commun et sous transaction ; les alertes de péremption refusent les lectures transversales non autorisées.
+- Tests contractuels étendus ; flag d'isolation toujours OFF en attendant l'audit des autres routes, les E2E multi-rôles et l'accord propriétaire. Aucun merge ni déploiement.
+
 ## 2026-11-07 — Hotfix P0 Retail #1042, tranche 9 — Impression des factures Retail depuis Finance (PR brouillon #1043)
 
 - Nouvelle route d'impression A4 et ticket thermique 80 mm pour la **facture Finance canonique**, avec facture/boutique/date/facturier/client/montants/reste dû, sans donnée de contact personnelle non requise ; HTML échappé, en-têtes sans cache et 404 sur accès inter-boutiques.

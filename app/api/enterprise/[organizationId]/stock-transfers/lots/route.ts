@@ -3,6 +3,8 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog } from "@/lib/audit";
 import { getEnterpriseCommonDomainAccess } from "@/lib/enterprise/common/access";
+import { retailErrorResponse } from "@/lib/enterprise/retail/http";
+import { requireRetailSiteCapability } from "@/lib/enterprise/retail/site-access";
 import { prisma } from "@/lib/prisma";
 
 type Params = { params: Promise<{ organizationId: string }> };
@@ -19,6 +21,16 @@ export async function GET(req: Request, { params }: Params) {
   if (!warehouseId || !inventoryItemId || warehouseId.length > 240 || inventoryItemId.length > 240) {
     return NextResponse.json({ error: "STOCK_TRANSFER_LOT_FILTER_INVALID" }, { status: 400 });
   }
+  const warehouse = await prisma.enterpriseWarehouse.findFirst({
+    where: { id: warehouseId, organizationId, status: "ACTIVE", archivedAt: null },
+    select: { siteId: true },
+  });
+  if (!warehouse) return NextResponse.json({ error: "WAREHOUSE_NOT_FOUND" }, { status: 404 });
+  try {
+    await requireRetailSiteCapability(organizationId, session.userId, warehouse.siteId, "VIEW_STOCK");
+  } catch (error) {
+    return retailErrorResponse(error, "RETAIL_SITE_ACCESS_DENIED");
+  }
   const lots = await prisma.enterpriseStockLot.findMany({
     where: { organizationId, warehouseId, inventoryItemId, status: "AVAILABLE", archivedAt: null },
     select: { id: true, lotNumber: true, expiryDate: true, balances: { where: { organizationId, warehouseId }, select: { quantityOnHand: true, quantityReserved: true, storageLocationId: true } } },
@@ -32,3 +44,4 @@ export async function GET(req: Request, { params }: Params) {
     locations: lot.balances.map((balance) => ({ storageLocationId: balance.storageLocationId, available: balance.quantityOnHand.minus(balance.quantityReserved).toFixed() })),
   })) }, { headers: { "Cache-Control": "private, no-store" } });
 }
+

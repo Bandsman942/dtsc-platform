@@ -113,3 +113,39 @@ export async function retailInvoiceVisibleSites(
     .map((assignment) => assignment.siteId);
   return { isOwner: false, siteIds: [...new Set(siteIds)], cancellableSiteIds: [...new Set(cancellableSiteIds)], submittableSiteIds: [...new Set(submittableSiteIds)], collectibleSiteIds: [...new Set(collectibleSiteIds)] };
 }
+
+/** Legacy Inventory routes must never expose company-wide stock transfers
+ * to a Retail site operator once site isolation is enabled. This scope is
+ * independent of invoice checkout: transfers may be used without invoicing.
+ */
+export async function retailStockTransferVisibleSites(
+  organizationId: string,
+  userId: string,
+  database: RetailSiteAccessReader = prisma,
+): Promise<{ isolationEnabled: boolean; isOwner: boolean; siteIds: string[] }> {
+  const [membership, configuration] = await Promise.all([
+    database.organizationMember.findFirst({
+      where: { organizationId, userId, status: "ACTIVE", removedAt: null },
+      select: { role: true },
+    }),
+    database.enterpriseRetailConfiguration.findUnique({
+      where: { organizationId },
+      select: { settingsJson: true },
+    }),
+  ]);
+  if (!membership) throw new EnterpriseRetailError("RETAIL_SITE_ACCESS_DENIED", 403);
+  if (RETAIL_OWNER_ROLES.has(membership.role)) return { isolationEnabled: false, isOwner: true, siteIds: [] };
+  if (!retailStaffIsolationIsEnabled(configuration?.settingsJson)) {
+    return { isolationEnabled: false, isOwner: false, siteIds: [] };
+  }
+  const assignments = await database.enterpriseRetailSiteAssignment.findMany({
+    where: { organizationId, userId, isActive: true },
+    select: { siteId: true, roleCode: true, permissionsJson: true },
+  });
+  const siteIds = [...new Set(assignments
+    .filter((assignment) => siteStaffCapabilities(assignment.roleCode, assignment.permissionsJson).includes("VIEW_STOCK"))
+    .map((assignment) => assignment.siteId))];
+  if (!siteIds.length) throw new EnterpriseRetailError("RETAIL_SITE_ACCESS_DENIED", 403);
+  return { isolationEnabled: true, isOwner: false, siteIds };
+}
+

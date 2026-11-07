@@ -78,3 +78,14 @@ Contrôle du 7 novembre : `npm run build` local a terminé avec succès la compi
 - Imprimer la facture source en français et anglais sur A4 puis sur le modèle d'imprimante thermique 80 mm effectivement disponible : nom et adresse de **la bonne boutique**, lignes, devises, totaux et solde ; vérifier le filigrane brouillon/annulée. L'opérateur de la boutique B doit recevoir 404 en essayant l'URL d'impression d'une facture A, y compris en accès direct.
 
 **Ne pas annoncer la conformité complète au client tant que ces sept exigences ne sont pas implémentées et validées.**
+
+### Tranche 10 — verrouillage des transferts et alertes de stock par boutique
+
+- Les transferts de stock communs sont filtrés côté serveur lorsqu'une entreprise a explicitement activé `siteStaffIsolationEnabled` : liste, pagination et **compteurs** utilisent la même portée (boutiques actives attribuées avec `VIEW_STOCK`). Les transferts concernant une boutique attribuée restent consultables ; un filtre de dépôt ne peut pas contourner cette portée.
+- Le sélecteur de lots du transfert valide le dépôt actif de l'organisation puis exige `VIEW_STOCK` dans la boutique correspondante. Le registre des alertes de péremption impose également une boutique autorisée ; les consultations sans filtre sont interdites aux opérateurs isolés.
+- La création du transfert et la décision sur l'expédition exigent `AUTHORIZE_TRANSFER` sur la **boutique source**, tandis que la réception exige cette capacité sur la **boutique destinataire**. Ces contrôles sont exécutés dans les transactions des services canoniques afin de couvrir les appels hors UI.
+- Un propriétaire garde la vision consolidée et les entreprises dont l'isolation est désactivée conservent leur comportement historique. L'autorisation globale `INVENTORY_LOGISTICS` reste exigée en complément.
+- QA contrats étendue dans `qa-hotfix-1042-site-staff.mjs` pour la portée, les rôles, les compteurs et les points d'entrée du transfert. Ce test n'est **pas** un E2E PostgreSQL ni un test de concurrence.
+
+**Cette tranche ne suffit pas à activer l'isolation.** D'autres routes communes (inventaires, ajustements, mouvements, rapports et exports) doivent encore recevoir la même vérification avant de passer le flag `siteStaffIsolationEnabled` à ON. Aucun changement de production, aucun merge et aucun feu vert client.
+

@@ -6,6 +6,8 @@ import { publishEnterpriseEvent } from "@/lib/enterprise/crm-sales/helpers";
 import { assertInventoryApprovalCandidate, assertInventoryApprovalDecision } from "@/lib/enterprise/inventory/approval";
 import { readRetailInventoryPolicy } from "@/lib/enterprise/retail/inventory-policy";
 import { readActiveRetailInvoiceStockHoldsTx } from "@/lib/enterprise/retail/invoice-stock-holds";
+import { requireRetailSiteCapability } from "@/lib/enterprise/retail/site-access";
+import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
 import type {
   inventoryCountCreateSchema,
   inventoryCountDecisionSchema,
@@ -20,6 +22,22 @@ type StockTransferCreateInput = z.infer<typeof stockTransferCreateSchema>;
 type StockTransferDecisionInput = z.infer<typeof stockTransferDecisionSchema>;
 type InventoryCountCreateInput = z.infer<typeof inventoryCountCreateSchema>;
 type InventoryCountDecisionInput = z.infer<typeof inventoryCountDecisionSchema>;
+
+// Keep the public Inventory API's error contract while enforcing the Retail
+// site guard inside the same transaction as stock mutations.
+async function requireTransferSiteAuthority(
+  tx: Prisma.TransactionClient,
+  organizationId: string,
+  actorUserId: string,
+  siteId: string | null,
+) {
+  try {
+    await requireRetailSiteCapability(organizationId, actorUserId, siteId, "AUTHORIZE_TRANSFER", tx);
+  } catch (error) {
+    if (error instanceof EnterpriseRetailError) throw new EnterpriseDomainError(error.code, error.status);
+    throw error;
+  }
+}
 
 function inventoryReference(prefix: string) {
   return `${prefix}-${Date.now().toString(36).toUpperCase()}-${randomUUID().slice(0, 6).toUpperCase()}`;
@@ -107,12 +125,13 @@ export async function createEnterpriseStockTransfer(organizationId: string, acto
   await assertInventoryApprovalCandidate({ organizationId, requesterUserId: actorUserId, approverUserId: input.approverUserId });
   return prisma.$transaction(async (tx) => {
     const [source, destination, approver] = await Promise.all([
-      tx.enterpriseWarehouse.findFirst({ where: { id: input.sourceWarehouseId, organizationId, status: "ACTIVE", archivedAt: null }, select: { id: true } }),
+      tx.enterpriseWarehouse.findFirst({ where: { id: input.sourceWarehouseId, organizationId, status: "ACTIVE", archivedAt: null }, select: { id: true, siteId: true } }),
       tx.enterpriseWarehouse.findFirst({ where: { id: input.destinationWarehouseId, organizationId, status: "ACTIVE", archivedAt: null }, select: { id: true } }),
       tx.organizationMember.findFirst({ where: { organizationId, userId: input.approverUserId, status: "ACTIVE", removedAt: null }, select: { id: true } }),
     ]);
     if (!source || !destination) throw new EnterpriseDomainError("WAREHOUSE_NOT_FOUND", 404);
     if (!approver) throw new EnterpriseDomainError("APPROVER_NOT_MEMBER", 404);
+    await requireTransferSiteAuthority(tx, organizationId, actorUserId, source.siteId);
     for (const line of input.lines) {
       await assertInventoryCoordinates(tx, organizationId, { inventoryItemId: line.inventoryItemId, warehouseId: input.sourceWarehouseId, storageLocationId: line.sourceLocationId, stockLotId: line.stockLotId });
       if (line.destinationLocationId) {
@@ -197,8 +216,12 @@ export async function decideEnterpriseStockTransfer(organizationId: string, tran
   if (!candidate.approvedByUserId) throw new EnterpriseDomainError("APPROVAL_NOT_FOUND", 404);
   const decision = await assertInventoryApprovalDecision({ organizationId, requesterUserId: candidate.requestedByUserId, approverUserId: candidate.approvedByUserId, actorUserId });
   return prisma.$transaction(async (tx) => {
-    const transfer = await tx.enterpriseStockTransfer.findFirst({ where: { id: transferId, organizationId, status: "PENDING_APPROVAL", archivedAt: null }, include: { lines: true } });
+    const transfer = await tx.enterpriseStockTransfer.findFirst({
+      where: { id: transferId, organizationId, status: "PENDING_APPROVAL", archivedAt: null },
+      include: { lines: true, sourceWarehouse: { select: { siteId: true } } },
+    });
     if (!transfer) throw new EnterpriseDomainError("STOCK_TRANSFER_NOT_FOUND", 404);
+    await requireTransferSiteAuthority(tx, organizationId, actorUserId, transfer.sourceWarehouse.siteId);
     if (transfer.approvedByUserId !== actorUserId) throw new EnterpriseDomainError("NOT_TRANSFER_APPROVER", 403);
     const approval = await tx.enterpriseApproval.findFirst({ where: { organizationId, targetEntityType: "EnterpriseStockTransfer", targetEntityId: transfer.id, status: "PENDING", approverUserId: actorUserId } });
     if (!approval) throw new EnterpriseDomainError("APPROVAL_NOT_FOUND", 404);
@@ -229,9 +252,10 @@ export async function receiveEnterpriseStockTransfer(organizationId: string, tra
   return prisma.$transaction(async (tx) => {
     const transfer = await tx.enterpriseStockTransfer.findFirst({
       where: { id: transferId, organizationId, status: "IN_TRANSIT", archivedAt: null },
-      include: { lines: true },
+      include: { lines: true, destinationWarehouse: { select: { siteId: true } } },
     });
     if (!transfer) throw new EnterpriseDomainError("STOCK_TRANSFER_NOT_IN_TRANSIT", 409);
+    await requireTransferSiteAuthority(tx, organizationId, actorUserId, transfer.destinationWarehouse.siteId);
     if (transfer.revision !== revision) throw new EnterpriseDomainConflictError("STOCK_TRANSFER_REVISION_CONFLICT");
     await receiveTransferLinesTx(tx, transfer, actorUserId, comment);
     const updated = await tx.enterpriseStockTransfer.updateMany({
@@ -302,3 +326,4 @@ export async function decideEnterpriseInventoryCount(organizationId: string, cou
     return tx.enterpriseInventoryCount.findUniqueOrThrow({ where: { id: count.id }, include: { lines: true } });
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 }
+
