@@ -1,6 +1,6 @@
 # RETAIL-1042 — cahier des charges boutiques, paramétrage et Design 2.0
 
-Statut du 7 novembre 2026 : **seize tranches techniques sur la PR brouillon #1043 ; pas de fusion, déploiement ni acceptation client. Les avoirs/remboursements de la facture Finance Retail et la recette PostgreSQL multi-rôles sont encore ouverts.**
+Statut du 7 novembre 2026 : **dix-sept tranches techniques sur la PR brouillon #1043 ; pas de fusion, déploiement ni acceptation client. Les avoirs/remboursements de la facture Finance Retail et la recette PostgreSQL multi-rôles sont encore ouverts.**
 
 ## Cible produit
 
@@ -141,3 +141,10 @@ Contrôle du 7 novembre : `npm run build` local a terminé avec succès la compi
 - Les tentatives sont bornées à trois et réutilisent la clé d'idempotence de la proposition ; ni paiement Finance ni réservation supplémentaire ne doivent survivre à une transaction annulée par PostgreSQL.
 - Le contrat `qa-hotfix-1042-retail-invoice-payments.mjs` simule un conflit suivi d'un succès (deux tentatives, une création) et l'épuisement des trois tentatives (aucune création).
 - **Limite de preuve** : simulation transactionnelle uniquement, pas d'E2E connecté à Neon ni de simulation réaliste d'interruptions/reprises entre caissiers. Les deux flags restent OFF ; les avoirs/remboursements/rapports/export et la recette globale demeurent ouverts avant OWNER_E2E.
+
+### Tranche 17 — garde d'intégrité avoir Finance / stock Retail (2026-11-07)
+
+- Défaut identifié : un avoir Finance direct sur une facture `EnterpriseRetailInvoiceCheckout` pouvait réduire la créance sans corriger le stock réservé, ni inverser une sortie déjà comptabilisée. En particulier, un passage en statut `CREDIT_NOTE` ne libère pas la promesse de stock par lui-même.
+- Tant que le circuit canonique Retail de retour/avoir/remboursement **avec réconciliation du stock** n'est pas terminé, `createSalesCreditNote` et les parcours de posting Finance refusent les factures rattachées à un checkout Retail avec `RETAIL_INVOICE_RETURN_WORKFLOW_REQUIRED` (HTTP 409) ; erreur expliquée en français.
+- Les autres factures Finance restent éligibles selon leurs règles habituelles. Le refus est appliqué dans le service de création, la prévalidation de posting et les orchestrateurs d'approbation/posting, pas seulement dans un bouton d'interface. Le contrat QA simule un avoir Retail interdit et un avoir ordinaire admis.
+- **Il s'agit d'une protection, et non de la réalisation des retours et remboursements Retail**. Ne pas activer les deux flags ou déclarer le cahier des charges livré. L'E2E PostgreSQL et la validation propriétaire restent à obtenir.
