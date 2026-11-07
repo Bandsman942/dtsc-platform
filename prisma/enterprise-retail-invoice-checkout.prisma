@@ -21,6 +21,7 @@ model EnterpriseRetailInvoiceCheckout {
   warehouse EnterpriseWarehouse    @relation(fields: [organizationId, warehouseId], references: [organizationId, id], onDelete: Restrict)
   lines     EnterpriseRetailInvoiceCheckoutLine[]
   paymentProposals EnterpriseRetailInvoicePaymentProposal[]
+  returnRequests EnterpriseRetailInvoiceReturnRequest[]
 
   @@unique([organizationId, id])
   @@unique([organizationId, salesInvoiceId])
@@ -60,9 +61,59 @@ model EnterpriseRetailInvoiceCheckoutLine {
 
   checkout    EnterpriseRetailInvoiceCheckout @relation(fields: [organizationId, checkoutId], references: [organizationId, id], onDelete: Restrict)
   invoiceItem EnterpriseSalesInvoiceItem      @relation(fields: [organizationId, invoiceItemId], references: [organizationId, id], onDelete: Restrict)
+  returnLines EnterpriseRetailInvoiceReturnLine[]
 
   @@unique([organizationId, id])
   @@unique([organizationId, invoiceItemId])
   @@index([organizationId, checkoutId])
   @@index([organizationId, inventoryItemId, stockLotId])
+}
+
+// Refund/return requests are ONLY workflow evidence; invoice, accounting
+// balances, refunds and physical stock remain owned by Finance/Inventory.
+// An APPROVED request is not a completed return or a customer reimbursement.
+model EnterpriseRetailInvoiceReturnRequest {
+  id                String   @id @default(cuid())
+  organizationId    String
+  checkoutId        String
+  number            String
+  status            String   @default("SUBMITTED")
+  reason            String
+  refundAmount      Decimal  @db.Decimal(20, 6)
+  idempotencyKey    String
+  requestFingerprint String
+  requestedByUserId String
+  approverUserId    String
+  decidedByUserId   String?
+  decidedAt         DateTime?
+  decisionReason    String?
+  revision          Int      @default(1)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  checkout EnterpriseRetailInvoiceCheckout @relation(fields: [organizationId, checkoutId], references: [organizationId, id], onDelete: Restrict)
+  lines    EnterpriseRetailInvoiceReturnLine[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, number])
+  @@unique([organizationId, idempotencyKey])
+  @@index([organizationId, checkoutId, status])
+  @@index([organizationId, approverUserId, status])
+}
+
+model EnterpriseRetailInvoiceReturnLine {
+  id               String  @id @default(cuid())
+  organizationId   String
+  returnRequestId  String
+  checkoutLineId   String
+  quantity         Decimal @db.Decimal(20, 6)
+  refundAmount     Decimal @db.Decimal(20, 6)
+  stockDisposition String
+
+  request EnterpriseRetailInvoiceReturnRequest @relation(fields: [organizationId, returnRequestId], references: [organizationId, id], onDelete: Restrict)
+  checkoutLine EnterpriseRetailInvoiceCheckoutLine @relation(fields: [organizationId, checkoutLineId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, returnRequestId, checkoutLineId])
+  @@index([organizationId, checkoutLineId])
 }
