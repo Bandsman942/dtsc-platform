@@ -3,6 +3,8 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { getEnterpriseCommonDomainAccess } from "@/lib/enterprise/common/access";
+import { retailErrorResponse } from "@/lib/enterprise/retail/http";
+import { retailInventoryVisibleSites } from "@/lib/enterprise/retail/site-access";
 import { enterpriseDomainErrorResponse } from "@/lib/enterprise/common/http";
 import { inventoryCountCreateSchema } from "@/lib/enterprise/inventory/schemas";
 import { createEnterpriseInventoryCount } from "@/lib/enterprise/inventory/service";
@@ -19,20 +21,37 @@ export async function GET(req: Request, { params }: Params) {
   const { organizationId } = await params;
   const access = await getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode: "INVENTORY_LOGISTICS", action: "read" });
   if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  let scope: Awaited<ReturnType<typeof retailInventoryVisibleSites>>;
+  try { scope = await retailInventoryVisibleSites(organizationId, session.userId); }
+  catch (error) { return retailErrorResponse(error, "RETAIL_SITE_ACCESS_DENIED"); }
   const url = new URL(req.url);
   const page = Math.max(1, Number(url.searchParams.get("page") || 1) || 1);
   const pageSize = Math.min(50, Math.max(5, Number(url.searchParams.get("pageSize") || 20) || 20));
   const status = url.searchParams.get("status")?.trim().toUpperCase() || "";
   const warehouseId = url.searchParams.get("warehouseId")?.trim() || "";
-  const where: Prisma.EnterpriseInventoryCountWhereInput = { organizationId, archivedAt: null, ...(status ? { status } : {}), ...(warehouseId ? { warehouseId } : {}) };
+  // InventoryCount stores warehouseId as a scalar (no Prisma warehouse
+  // relation). Resolve authorized warehouse IDs before filtering any rows.
+  const scopedWarehouseIds = scope.isolationEnabled
+    ? (await prisma.enterpriseWarehouse.findMany({
+        where: { organizationId, siteId: { in: scope.siteIds }, archivedAt: null },
+        select: { id: true },
+      })).map((warehouse) => warehouse.id)
+    : [];
+  const siteScope: Prisma.EnterpriseInventoryCountWhereInput = scope.isolationEnabled
+    ? { warehouseId: { in: scopedWarehouseIds } }
+    : {};
+  const baseWhere: Prisma.EnterpriseInventoryCountWhereInput = { organizationId, archivedAt: null, ...siteScope };
+  const where: Prisma.EnterpriseInventoryCountWhereInput = {
+    AND: [baseWhere, { ...(status ? { status } : {}), ...(warehouseId ? { warehouseId } : {}) }],
+  };
   const [items, total, pending, completed] = await Promise.all([
     prisma.enterpriseInventoryCount.findMany({ where, orderBy: [{ createdAt: "desc" }], skip: (page - 1) * pageSize, take: pageSize, include: { lines: { orderBy: { createdAt: "asc" } } } }),
     prisma.enterpriseInventoryCount.count({ where }),
-    prisma.enterpriseInventoryCount.count({ where: { organizationId, archivedAt: null, status: "SUBMITTED" } }),
-    prisma.enterpriseInventoryCount.count({ where: { organizationId, archivedAt: null, status: "COMPLETED" } }),
+    prisma.enterpriseInventoryCount.count({ where: { AND: [baseWhere, { status: "SUBMITTED" }] } }),
+    prisma.enterpriseInventoryCount.count({ where: { AND: [baseWhere, { status: "COMPLETED" }] } }),
   ]);
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "inventory-counts", page } });
-  return NextResponse.json({ items, pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) }, metrics: { pending, completed }, canManage: access.canManage });
+  return NextResponse.json({ items, pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) }, metrics: { pending, completed }, canManage: access.canManage && !scope.isolationEnabled });
 }
 
 export async function POST(req: Request, { params }: Params) {

@@ -114,11 +114,11 @@ export async function retailInvoiceVisibleSites(
   return { isOwner: false, siteIds: [...new Set(siteIds)], cancellableSiteIds: [...new Set(cancellableSiteIds)], submittableSiteIds: [...new Set(submittableSiteIds)], collectibleSiteIds: [...new Set(collectibleSiteIds)] };
 }
 
-/** Legacy Inventory routes must never expose company-wide stock transfers
- * to a Retail site operator once site isolation is enabled. This scope is
- * independent of invoice checkout: transfers may be used without invoicing.
+/** Legacy Inventory routes must never expose company-wide inventory,
+ * movements, counts or transfers to a Retail site operator once site
+ * isolation is enabled. This is independent of invoice checkout.
  */
-export async function retailStockTransferVisibleSites(
+export async function retailInventoryVisibleSites(
   organizationId: string,
   userId: string,
   database: RetailSiteAccessReader = prisma,
@@ -148,3 +148,6 @@ export async function retailStockTransferVisibleSites(
   if (!siteIds.length) throw new EnterpriseRetailError("RETAIL_SITE_ACCESS_DENIED", 403);
   return { isolationEnabled: true, isOwner: false, siteIds };
 }
+
+// Backward-compatible name for the transfer service introduced in tranche 10.
+export const retailStockTransferVisibleSites = retailInventoryVisibleSites;

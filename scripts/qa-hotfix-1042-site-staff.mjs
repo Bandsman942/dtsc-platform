@@ -105,6 +105,21 @@ assert.match(inventoryService, /requireTransferSiteAuthority\(tx, organizationId
 assert.match(inventoryService, /requireTransferSiteAuthority\(tx, organizationId, actorUserId, transfer\.destinationWarehouse\.siteId\)/);
 const expiryAlerts = fs.readFileSync("app/api/enterprise/[organizationId]/retail/inventory-alerts/route.ts", "utf8");
 assert.match(expiryAlerts, /requireRetailSiteCapability\(organizationId, auth\.session\.userId, warehouse\?\.siteId, "VIEW_STOCK"\)/);
+const inventoryList = fs.readFileSync("app/api/enterprise/[organizationId]/inventory/route.ts", "utf8");
+assert.match(inventoryList, /retailInventoryVisibleSites\(organizationId, session\.userId\)/);
+assert.match(inventoryList, /balances: \{ some: balancesScope \}/);
+assert.match(inventoryList, /warehouse: \{ siteId: \{ in: scope\.siteIds \} \}/);
+const movementsList = fs.readFileSync("app/api/enterprise/[organizationId]/stock-movements/route.ts", "utf8");
+assert.match(movementsList, /retailInventoryVisibleSites\(organizationId, session\.userId\)/);
+assert.match(movementsList, /warehouse: \{ siteId: \{ in: scope\.siteIds \} \}/);
+const countsList = fs.readFileSync("app/api/enterprise/[organizationId]/inventory-counts/route.ts", "utf8");
+assert.match(countsList, /warehouseId: \{ in: scopedWarehouseIds \}/);
+assert.match(countsList, /AND: \[baseWhere,/);
+const adjustmentsList = fs.readFileSync("app/api/enterprise/[organizationId]/stock-adjustments/route.ts", "utf8");
+assert.match(adjustmentsList, /warehouseId: \{ in: scopedWarehouseIds \}/);
+assert.match(adjustmentsList, /status: "PENDING_APPROVAL", \.\.\.siteScope/);
+const valuation = fs.readFileSync("app/api/enterprise/[organizationId]/inventory-valuation/route.ts", "utf8");
+assert.match(valuation, /if \(scope\.isolationEnabled\)/);
 
 const api = fs.readFileSync("app/api/enterprise/[organizationId]/retail/site-assignments/route.ts", "utf8");
 assert.match(api, /role: \{ in: \[\.\.\.RETAIL_OWNER_ROLES\] \}/);

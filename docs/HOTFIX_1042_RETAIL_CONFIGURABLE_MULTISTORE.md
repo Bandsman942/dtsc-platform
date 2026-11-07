@@ -88,3 +88,13 @@ Contrôle du 7 novembre : `npm run build` local a terminé avec succès la compi
 - QA contrats étendue dans `qa-hotfix-1042-site-staff.mjs` pour la portée, les rôles, les compteurs et les points d'entrée du transfert. Ce test n'est **pas** un E2E PostgreSQL ni un test de concurrence.
 
 **Cette tranche ne suffit pas à activer l'isolation.** D'autres routes communes (inventaires, ajustements, mouvements, rapports et exports) doivent encore recevoir la même vérification avant de passer le flag `siteStaffIsolationEnabled` à ON. Aucun changement de production, aucun merge et aucun feu vert client.
+
+### Tranche 11 — lecture d'inventaire filtrée par boutique
+
+- Le registre des articles en stock limite **à la fois** les articles visibles et leurs balances aux entrepôts des boutiques attribuées. Les compteurs de mouvements et d'entrepôts respectent la même portée.
+- Les journaux de mouvements, inventaires physiques et ajustements de stock sont filtrés côté serveur, y compris leurs totaux, états `SUBMITTED`/`COMPLETED` et `PENDING_APPROVAL`. Les filtres de recherche et de dépôt ne peuvent pas supprimer la contrainte d'accès.
+- Les anciens modèles `EnterpriseInventoryCount` et `EnterpriseStockAdjustment` n'ont pas de relation Prisma directe vers le dépôt : les identifiants de dépôts autorisés sont résolus d'abord, puis utilisés dans les filtres de lignes et compteurs.
+- La valorisation Finance en SQL agrégé reste temporairement interdite aux opérateurs Retail isolés : aucune valorisation consolidée inter-boutiques ne doit être transmise avant un filtre SQL validé. Le propriétaire conserve la lecture globale.
+- Contrats statiques ajoutés à `qa-hotfix-1042-site-staff.mjs`. Aucune prétention à une recette PostgreSQL ou à une couverture des écritures legacy.
+
+**Activation toujours bloquée :** les mutations d'inventaire, les écritures de stocks et les exports/rapports legacy restent à auditer. Le flag d'isolation et la facturation Retail demeurent OFF jusqu'à la recette complète.

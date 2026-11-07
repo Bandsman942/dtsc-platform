@@ -4,6 +4,8 @@ import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http"
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { getEnterpriseCommonDomainAccess } from "@/lib/enterprise/common/access";
+import { retailErrorResponse } from "@/lib/enterprise/retail/http";
+import { retailInventoryVisibleSites } from "@/lib/enterprise/retail/site-access";
 import { enterpriseDomainErrorResponse } from "@/lib/enterprise/common/http";
 import { stockMovementCreateSchema } from "@/lib/enterprise/inventory/schemas";
 import { applyEnterpriseStockMovement } from "@/lib/enterprise/inventory/service";
@@ -20,13 +22,22 @@ export async function GET(req: Request, { params }: Params) {
   const { organizationId } = await params;
   const access = await getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode: "INVENTORY_LOGISTICS", action: "read" });
   if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  let scope: Awaited<ReturnType<typeof retailInventoryVisibleSites>>;
+  try { scope = await retailInventoryVisibleSites(organizationId, session.userId); }
+  catch (error) { return retailErrorResponse(error, "RETAIL_SITE_ACCESS_DENIED"); }
   const url = new URL(req.url);
   const page = Math.max(1, Number(url.searchParams.get("page") || 1) || 1);
   const pageSize = Math.min(100, Math.max(10, Number(url.searchParams.get("pageSize") || 30) || 30));
   const inventoryItemId = url.searchParams.get("inventoryItemId")?.trim() || "";
   const warehouseId = url.searchParams.get("warehouseId")?.trim() || "";
   const movementType = url.searchParams.get("movementType")?.trim().toUpperCase() || "";
-  const where: Prisma.EnterpriseStockMovementWhereInput = { organizationId, ...(inventoryItemId ? { inventoryItemId } : {}), ...(warehouseId ? { warehouseId } : {}), ...(movementType ? { movementType } : {}) };
+  const where: Prisma.EnterpriseStockMovementWhereInput = {
+    organizationId,
+    ...(inventoryItemId ? { inventoryItemId } : {}),
+    ...(warehouseId ? { warehouseId } : {}),
+    ...(movementType ? { movementType } : {}),
+    ...(scope.isolationEnabled ? { warehouse: { siteId: { in: scope.siteIds } } } : {}),
+  };
   const [items, total] = await Promise.all([
     prisma.enterpriseStockMovement.findMany({ where, orderBy: [{ occurredAt: "desc" }, { createdAt: "desc" }], skip: (page - 1) * pageSize, take: pageSize, include: { inventoryItem: { include: { catalogItem: { select: { id: true, code: true, name: true } } } }, warehouse: { select: { id: true, code: true, name: true } }, storageLocation: { select: { id: true, code: true, name: true } }, stockLot: { select: { id: true, lotNumber: true, expiryDate: true } } } }),
     prisma.enterpriseStockMovement.count({ where }),

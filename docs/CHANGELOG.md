@@ -1,3 +1,9 @@
+## 2026-11-07 — Hotfix P0 Retail #1042, tranche 11 — Lectures Inventory isolées par boutique (PR brouillon #1043)
+
+- Stocks, balances, mouvements, inventaires physiques et ajustements de stock : filtrage des résultats et des compteurs sur les dépôts des boutiques autorisées. Un filtre explicite de dépôt n'élargit jamais cette portée.
+- Valorisation Finance agrégée temporairement refusée aux opérateurs Retail isolés jusqu'à certification du filtrage SQL ; vue consolidée propriétaire préservée.
+- Contrats QA étendus ; les mutations, rapports et exports legacy restent à auditer avant activation du cloisonnement. PR brouillon, aucune fusion, aucune production ni E2E propriétaire.
+
 ## 2026-11-07 — Hotfix P0 Retail #1042, tranche 10 — Transferts et alertes isolés par boutique (PR brouillon #1043)
 
 - La liste des transferts ERP et ses compteurs sont filtrés par boutiques attribuées lorsque l'isolation Retail est activée ; le sélecteur de lots exige le droit de lecture du dépôt.
