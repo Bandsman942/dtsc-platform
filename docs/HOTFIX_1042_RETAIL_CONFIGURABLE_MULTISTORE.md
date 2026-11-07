@@ -1,6 +1,6 @@
 # RETAIL-1042 — cahier des charges boutiques, paramétrage et Design 2.0
 
-Statut du 7 novembre 2026 : **dix-sept tranches techniques sur la PR brouillon #1043 ; pas de fusion, déploiement ni acceptation client. Les avoirs/remboursements de la facture Finance Retail et la recette PostgreSQL multi-rôles sont encore ouverts.**
+Statut du 7 novembre 2026 : **dix-huit tranches techniques sur la PR brouillon #1043 ; pas de fusion, déploiement ni acceptation client. Les avoirs/remboursements de la facture Finance Retail et la recette PostgreSQL multi-rôles sont encore ouverts.**
 
 ## Cible produit
 
@@ -148,3 +148,9 @@ Contrôle du 7 novembre : `npm run build` local a terminé avec succès la compi
 - Tant que le circuit canonique Retail de retour/avoir/remboursement **avec réconciliation du stock** n'est pas terminé, `createSalesCreditNote` et les parcours de posting Finance refusent les factures rattachées à un checkout Retail avec `RETAIL_INVOICE_RETURN_WORKFLOW_REQUIRED` (HTTP 409) ; erreur expliquée en français.
 - Les autres factures Finance restent éligibles selon leurs règles habituelles. Le refus est appliqué dans le service de création, la prévalidation de posting et les orchestrateurs d'approbation/posting, pas seulement dans un bouton d'interface. Le contrat QA simule un avoir Retail interdit et un avoir ordinaire admis.
 - **Il s'agit d'une protection, et non de la réalisation des retours et remboursements Retail**. Ne pas activer les deux flags ou déclarer le cahier des charges livré. L'E2E PostgreSQL et la validation propriétaire restent à obtenir.
+
+### Tranche 18 — QA de concurrence PostgreSQL réelle en CI (2026-11-07)
+
+- Nouveau test `scripts/qa-hotfix-1042-retail-postgres-serialization.mjs` intégré à la Quality Gate, sur le service PostgreSQL éphémère `dtsc_quality_test` après `prisma migrate deploy`.
+- Deux transactions SERIALIZABLE lisent la même valeur et tentent de la modifier. Le test vérifie qu'une transaction est effectivement reprise après conflit et que le compteur final vaut 2, sans écriture perdue ni boucle infinie. La table de preuve est créée et supprimée pendant la QA, et le script refuse tout autre environnement ou base que celle de CI.
+- Ce test est **un vrai test de sérialisation PostgreSQL** pour le mécanisme générique de retry, mais **ne certifie pas** les opérations métier `EnterpriseRetailInvoiceCheckout`, une caisse multi-acteurs ou les écritures comptables. Les tests métier multi-boutiques réels, les avoirs/remboursements et la recette OWNER_E2E restent ouverts. Flags OFF.
