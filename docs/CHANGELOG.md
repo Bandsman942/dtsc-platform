@@ -1,3 +1,9 @@
+## 2026-11-07 — Hotfix P0 Retail #1042, tranche 19 — Factures Finance par boutique sans confusion avec POS (PR brouillon #1043)
+
+- Vue propriétaire multi-sites enrichie d'un agrégat SQL tenant-aware des factures Retail Finance émises : brut sur la période, allocations cumulées et solde à date, séparés par boutique et devise.
+- Les montants POS directs et les factures Finance ne sont pas additionnés comme un chiffre d'affaires unique ; labels FR/EN sur Design 2.0. Aucun bénéfice estimé sans écritures comptables POSTED.
+- QA contractuelle ; CI du HEAD, E2E et exports complets en attente. Flags OFF, aucune fusion/Production.
+
 ## 2026-11-07 — Hotfix P0 Retail #1042, tranche 18 — Concurrence PostgreSQL réellement testée en CI (PR brouillon #1043)
 
 - QA intégrée dans `quality-gates.yml` avec PostgreSQL éphémère : deux transactions SERIALIZABLE concurrentes, conflit réel, retry borné, compteur final sans mise à jour perdue.
