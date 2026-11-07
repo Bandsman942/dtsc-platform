@@ -29,6 +29,7 @@ const tx = {
     assert.equal(where.salesInvoiceId, "inv-A");
     return state.retailCheckout ? { id: "retail-checkout-A" } : null;
   } },
+  enterpriseRetailInvoiceReturnRequest: { findFirst: async () => null },
   enterpriseSalesCreditNote: {
     findFirst: async () => null,
     create: async ({ data }) => {

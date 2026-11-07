@@ -11,7 +11,7 @@ class EnterpriseRetailError extends Error {
 }
 const decimal = (value) => new Prisma.Decimal(value);
 const state = {
-  existing: null, outerExisting: null, checkout: null, invoiceCreated: false, movements: [], updated: false,
+  existing: null, outerExisting: null, checkout: null, invoiceCreated: false, movements: [], valuations: [], updated: false, rejectValuation: false,
   settings: {}, denyCapability: false, capabilityChecks: [], transactionAttempts: 0, retriableFailures: 0,
 };
 const tx = {
@@ -66,7 +66,11 @@ vm.runInNewContext(compiled, {
       if (state.denyCapability) throw new EnterpriseRetailError("RETAIL_SITE_ACCESS_DENIED", 403);
     } };
     if (id === "@/lib/enterprise/retail/transaction-retry") return retryModule.exports;
-    if (id === "@/lib/enterprise/inventory/service") return { applyStockMovementTx: async (_tx, _org, _actor, movement) => { state.movements.push(movement); } };
+    if (id === "@/lib/enterprise/inventory/service") return { applyStockMovementTx: async (_tx, _org, _actor, movement) => { state.movements.push(movement); return { movement: { id: `issued-${state.movements.length}` } }; } };
+    if (id === "@/lib/enterprise/retail/accounting") return { valueRetailInvoiceFulfillmentIssueTx: async (_tx, org, actor, movementId, invoiceId, currencyCode) => {
+      if (state.rejectValuation) throw new EnterpriseRetailError("RETAIL_INVENTORY_COST_LAYER_REQUIRED", 409);
+      state.valuations.push({ org, actor, movementId, invoiceId, currencyCode });
+    } };
     if (id === "@/lib/enterprise/accounting/receivables-service") return { createSalesInvoiceTx: async () => { state.invoiceCreated = true; return {}; } };
     return require(id);
   },
@@ -107,23 +111,29 @@ assert.equal(state.invoiceCreated, false, "Owner-only draft is disabled for exis
 
 const checkout = {
   id: "checkout", siteId: "shop-A", salesInvoiceId: "finance-invoice", warehouseId: "warehouse", stockPostedAt: null,
-  invoice: { id: "finance-invoice", status: "ISSUED", outstandingAmount: decimal(20) },
+  invoice: { id: "finance-invoice", status: "ISSUED", currencyCode: "CDF", outstandingAmount: decimal(20) },
   lines: [{ id: "line", inventoryItemId: "inventory", stockLotId: null, invoiceItemId: "finance-line", invoiceItem: { quantity: decimal(2) } }],
 };
 state.checkout = checkout;
 await assert.rejects(postPaidRetailInvoiceStockTx(tx, "tenant", "finance-invoice", "cashier"), { code: "RETAIL_INVOICE_NOT_FULLY_PAID" });
 assert.equal(state.movements.length, 0, "No stock exit before confirmed full payment allocation");
 checkout.invoice = { ...checkout.invoice, status: "PAID", outstandingAmount: decimal(0) };
+state.rejectValuation = true;
+await assert.rejects(postPaidRetailInvoiceStockTx(tx, "tenant", "finance-invoice", "cashier"), { code: "RETAIL_INVENTORY_COST_LAYER_REQUIRED" });
+assert.equal(state.updated, false, "Missing issue valuation must prevent marking checkout stock as posted");
+state.rejectValuation = false;
 await postPaidRetailInvoiceStockTx(tx, "tenant", "finance-invoice", "cashier");
-assert.equal(state.movements.length, 1, "One stock exit after full settlement");
-assert.equal(state.movements[0].movementType, "SALE_FULFILLMENT");
-assert.equal(state.movements[0].sourceEntityType, "EnterpriseSalesInvoice");
-assert.equal(state.movements[0].sourceEntityId, "finance-invoice");
-assert.equal(state.movements[0].quantity, 2);
+assert.equal(state.movements.length, 2, "One committed stock exit after full settlement (one rejected simulated attempt)");
+assert.equal(state.movements[1].movementType, "SALE_FULFILLMENT");
+assert.equal(state.movements[1].sourceEntityType, "EnterpriseSalesInvoice");
+assert.equal(state.movements[1].sourceEntityId, "finance-invoice");
+assert.equal(state.movements[1].quantity, 2);
+assert.deepEqual(state.valuations, [{ org: "tenant", actor: "cashier", movementId: "issued-2", invoiceId: "finance-invoice", currencyCode: "CDF" }], "The original issue has a matching Finance valuation");
 assert.equal(state.updated, true);
 checkout.stockPostedAt = new Date();
 await postPaidRetailInvoiceStockTx(tx, "tenant", "finance-invoice", "cashier");
-assert.equal(state.movements.length, 1, "Repeated posting must be idempotent");
+assert.equal(state.movements.length, 2, "Repeated posting must be idempotent");
+assert.equal(state.valuations.length, 1, "Repeated posting must not duplicate Finance cost of goods sold");
 
 // Cross-store payments are forbidden at the *Finance allocation service*
 // even when a caller skips Retail UI and submits the receivable UUID directly.

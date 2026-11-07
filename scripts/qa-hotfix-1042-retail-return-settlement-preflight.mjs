@@ -16,15 +16,17 @@ const state = {
     id: "return-A", checkoutId: "checkout-A", status: "APPROVED", refundAmount: D("33.33"),
     requestedByUserId: "requester", approverUserId: "approver", decidedByUserId: "approver",
     inspectedByUserId: "inspector", inspectedAt: new Date(), inspectionNotes: "Stock reçu et vérifié",
-    lines: [{ id: "returnline-A", checkoutLineId: "checkoutline-A", quantity: D(1), refundAmount: D("33.33"), stockDisposition: "RESTOCK" }],
+    lines: [{ id: "returnline-A", checkoutLineId: "checkoutline-A", quantity: D(1),
+      refundAmount: D("33.33"), refundNetAmount: D(30), refundTaxAmount: D("3.33"), stockDisposition: "RESTOCK" }],
     checkout: {
       id: "checkout-A", siteId: "site-A", warehouseId: "warehouse-A", stockPostedAt: new Date(),
       invoice: {
         id: "invoice-A", status: "PAID", grandTotal: D(100), currencyCode: "CDF",
+        amountPaid: D(100), amountCredited: D(0), outstandingAmount: D(0),
         businessPartyId: "buyer-A", receivable: { id: "receivable-A" },
       },
       lines: [{ id: "checkoutline-A", invoiceItemId: "invoice-line-A", inventoryItemId: "item-A", stockLotId: "lot-A",
-        invoiceItem: { quantity: D(3), totalAmount: D(100) } }],
+        invoiceItem: { quantity: D(3), netAmount: D(90), taxAmount: D(10), totalAmount: D(100) } }],
     },
   },
   allocations: [{ id: "allocation-A", paymentId: "payment-A", amount: D(100), payment: { status: "CONFIRMED", direction: "INBOUND", paymentType: "CUSTOMER_PAYMENT",
@@ -128,9 +130,12 @@ state.movements = [
   { ...state.movements[0], quantity: D(2) },
   { ...state.movements[0], id: "movement-B", storageLocationId: "shelf-B", quantity: D(1) },
 ];
-state.completed = [{ checkoutLineId: "checkoutline-A", quantity: D(1) }];
+state.completed = [{ checkoutLineId: "checkoutline-A", quantity: D(1), refundAmount: D("33.33"),
+  refundNetAmount: D(30), refundTaxAmount: D("3.33") }];
 state.request.lines[0].quantity = D(2);
 state.request.lines[0].refundAmount = D("66.67");
+state.request.lines[0].refundNetAmount = D(60);
+state.request.lines[0].refundTaxAmount = D("6.67");
 state.request.refundAmount = D("66.67");
 const split = await preview();
 assert.equal(split.stockSourcePlan.length, 2);
@@ -144,6 +149,8 @@ state.request.lines[0].stockDisposition = "RESTOCK";
 state.completed = [];
 state.request.lines[0].quantity = D(1);
 state.request.lines[0].refundAmount = D("33.33");
+state.request.lines[0].refundNetAmount = D(30);
+state.request.lines[0].refundTaxAmount = D("3.33");
 state.request.refundAmount = D("33.33");
 state.movements = [{ ...state.movements[0], quantity: D(3) }];
 
@@ -185,7 +192,8 @@ state.movements[0].stockLotId = "lot-A";
 state.movements[0].quantity = D(2);
 await assert.rejects(preview(), { code: "RETAIL_INVOICE_RETURN_SETTLEMENT_STOCK_INVALID" });
 state.movements[0].quantity = D(3);
-state.completed = [{ checkoutLineId: "checkoutline-A", quantity: D(3) }];
+state.completed = [{ checkoutLineId: "checkoutline-A", quantity: D(3), refundAmount: D(100),
+  refundNetAmount: D(90), refundTaxAmount: D(10) }];
 await assert.rejects(preview(), { code: "RETAIL_INVOICE_RETURN_SETTLEMENT_LINE_INVALID" });
 state.completed = [];
 

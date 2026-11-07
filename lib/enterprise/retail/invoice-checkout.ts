@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { createSalesInvoiceTx } from "@/lib/enterprise/accounting/receivables-service";
 import { resolveRetailCommercialPricingDecisions } from "@/lib/enterprise/retail/commercial-engine";
+import { valueRetailInvoiceFulfillmentIssueTx } from "@/lib/enterprise/retail/accounting";
 import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
 import { assertRetailLotPolicyTx } from "@/lib/enterprise/retail/inventory-policy";
 import { readActiveRetailInvoiceStockHoldsTx } from "@/lib/enterprise/retail/invoice-stock-holds";
@@ -202,7 +203,8 @@ export async function assertRetailInvoicePaymentScopeTx(
  * the entire final allocation is rejected; no paid invoice without stock
  * delivery and no stock movement against an unpaid invoice.
  *
- * Financial balance stays in Finance. This extension only records stock.
+ * Financial balance stays in Finance; physical delivery and cost-of-sales
+ * valuation are committed atomically with the final payment allocation.
  */
 export async function postPaidRetailInvoiceStockTx(
   tx: Prisma.TransactionClient,
@@ -274,7 +276,7 @@ export async function postPaidRetailInvoiceStockTx(
       const free = physicallyFree.minus(unscopedTakenHere);
       const take = Prisma.Decimal.min(stillNeeded, free);
       if (!take.greaterThan(0)) continue;
-      await applyStockMovementTx(tx, organizationId, actorUserId, {
+      const issued = await applyStockMovementTx(tx, organizationId, actorUserId, {
         inventoryItemId: line.inventoryItemId,
         warehouseId: checkout.warehouseId,
         storageLocationId: balance.storageLocationId,
@@ -285,6 +287,10 @@ export async function postPaidRetailInvoiceStockTx(
         idempotencyKey: `retail-invoice:${checkout.id}:${line.id}:${balance.id}`,
         reason: "Facture Retail intégralement encaissée et allouée",
       }, { consumingRetailInvoiceId: checkout.salesInvoiceId });
+      await valueRetailInvoiceFulfillmentIssueTx(
+        tx, organizationId, actorUserId, issued.movement.id,
+        checkout.salesInvoiceId, checkout.invoice.currencyCode,
+      );
       stillNeeded = stillNeeded.minus(take);
     }
     if (!stillNeeded.isZero()) throw new EnterpriseRetailError("RETAIL_INVOICE_STOCK_INSUFFICIENT", 409);

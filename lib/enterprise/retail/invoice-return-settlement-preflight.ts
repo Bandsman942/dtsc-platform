@@ -19,6 +19,7 @@ export async function assertRetailInvoiceReturnSettlementReadinessTx(
   organizationId: string,
   invoiceId: string,
   requestId: string,
+  expectedStatus: "APPROVED" | "FINANCE_PENDING" = "APPROVED",
 ) {
   const request = await tx.enterpriseRetailInvoiceReturnRequest.findFirst({
     where: { organizationId, id: requestId, checkout: { salesInvoiceId: invoiceId } },
@@ -26,17 +27,19 @@ export async function assertRetailInvoiceReturnSettlementReadinessTx(
       id: true, checkoutId: true, status: true, refundAmount: true,
       requestedByUserId: true, approverUserId: true, decidedByUserId: true,
       inspectedByUserId: true, inspectedAt: true, inspectionNotes: true,
-      lines: { select: { id: true, checkoutLineId: true, quantity: true, refundAmount: true, stockDisposition: true } },
+      lines: { select: { id: true, checkoutLineId: true, quantity: true, refundAmount: true,
+        refundNetAmount: true, refundTaxAmount: true, stockDisposition: true } },
       checkout: {
         select: {
           id: true, siteId: true, warehouseId: true, stockPostedAt: true,
           invoice: { select: {
-            id: true, status: true, grandTotal: true, currencyCode: true, businessPartyId: true,
+            id: true, status: true, grandTotal: true, amountPaid: true, amountCredited: true,
+            outstandingAmount: true, currencyCode: true, businessPartyId: true,
             receivable: { select: { id: true } },
           } },
           lines: { select: {
             id: true, invoiceItemId: true, inventoryItemId: true, stockLotId: true,
-            invoiceItem: { select: { quantity: true, totalAmount: true } },
+            invoiceItem: { select: { quantity: true, totalAmount: true, netAmount: true, taxAmount: true } },
           } },
         },
       },
@@ -44,7 +47,7 @@ export async function assertRetailInvoiceReturnSettlementReadinessTx(
   });
   if (!request) throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_NOT_FOUND", 404);
   const { checkout } = request;
-  if (request.status !== "APPROVED" || !request.inspectedAt ||
+  if (request.status !== expectedStatus || !request.inspectedAt ||
       !request.inspectedByUserId || !request.inspectionNotes || request.inspectionNotes.trim().length < 5 ||
       !request.decidedByUserId || request.decidedByUserId !== request.approverUserId ||
       new Set([request.requestedByUserId, request.approverUserId, request.inspectedByUserId]).size !== 3) {
@@ -52,7 +55,9 @@ export async function assertRetailInvoiceReturnSettlementReadinessTx(
   }
   if (!checkout.stockPostedAt ||
       !["PAID", "CREDIT_NOTE", "PARTIALLY_PAID"].includes(checkout.invoice.status) ||
-      !checkout.invoice.receivable) {
+      !checkout.invoice.receivable ||
+      !checkout.invoice.amountPaid.plus(checkout.invoice.amountCredited).equals(checkout.invoice.grandTotal) ||
+      !checkout.invoice.outstandingAmount.isZero()) {
     throw conflict("RETAIL_INVOICE_RETURN_SETTLEMENT_SOURCE_INVALID");
   }
   const refundAmount = request.refundAmount;
@@ -77,6 +82,16 @@ export async function assertRetailInvoiceReturnSettlementReadinessTx(
         !line.refundAmount.greaterThan(0) || !line.refundAmount.equals(cents(line.refundAmount)) ||
         !["RESTOCK", "QUARANTINE", "DISPOSE"].includes(line.stockDisposition)) {
       throw conflict("RETAIL_INVOICE_RETURN_SETTLEMENT_LINE_INVALID");
+    }
+    if (line.refundNetAmount === null || line.refundTaxAmount === null ||
+        !line.refundNetAmount.equals(cents(line.refundNetAmount)) ||
+        !line.refundTaxAmount.equals(cents(line.refundTaxAmount)) ||
+        line.refundNetAmount.lessThan(0) || line.refundTaxAmount.lessThan(0) ||
+        !line.refundNetAmount.plus(line.refundTaxAmount).equals(line.refundAmount) ||
+        !source.invoiceItem.netAmount.equals(cents(source.invoiceItem.netAmount)) ||
+        !source.invoiceItem.taxAmount.equals(cents(source.invoiceItem.taxAmount)) ||
+        !source.invoiceItem.netAmount.plus(source.invoiceItem.taxAmount).equals(source.invoiceItem.totalAmount)) {
+      throw conflict("RETAIL_INVOICE_RETURN_SETTLEMENT_TAX_SPLIT_INVALID");
     }
     if (line.stockDisposition === "RESTOCK" && !source.inventoryItemId) {
       throw conflict("RETAIL_INVOICE_RETURN_SETTLEMENT_STOCK_INVALID");
@@ -111,7 +126,8 @@ export async function assertRetailInvoiceReturnSettlementReadinessTx(
     }),
     tx.enterpriseRetailInvoiceReturnLine.findMany({
       where: { organizationId, checkoutId: checkout.id, checkoutLineId: { in: [...ids] }, request: { status: "COMPLETED" } },
-      select: { checkoutLineId: true, quantity: true },
+      select: { checkoutLineId: true, quantity: true, refundAmount: true,
+        refundNetAmount: true, refundTaxAmount: true },
     }),
   ]);
   const accounts = await tx.enterpriseFinancialAccount.findMany({
@@ -155,11 +171,22 @@ export async function assertRetailInvoiceReturnSettlementReadinessTx(
 
   for (const line of request.lines) {
     const source = invoiceLines.get(line.checkoutLineId)!;
-    const completed = sum(previouslyCompleted.filter((previous) =>
+    const previous = previouslyCompleted.filter((entry) => entry.checkoutLineId === line.checkoutLineId);
+    if (previous.some((entry) => entry.refundNetAmount === null || entry.refundTaxAmount === null ||
+      !entry.refundNetAmount.plus(entry.refundTaxAmount).equals(entry.refundAmount))) {
+      throw conflict("RETAIL_INVOICE_RETURN_SETTLEMENT_TAX_SPLIT_INVALID");
+    }
+    const completed = sum(previous.filter((previous) =>
       previous.checkoutLineId === line.checkoutLineId,
     ).map((previous) => previous.quantity));
     if (completed.plus(line.quantity).greaterThan(source.invoiceItem.quantity)) {
       throw conflict("RETAIL_INVOICE_RETURN_SETTLEMENT_LINE_INVALID");
+    }
+    const priorNet = sum(previous.map((entry) => entry.refundNetAmount!));
+    const priorTax = sum(previous.map((entry) => entry.refundTaxAmount!));
+    if (priorNet.plus(line.refundNetAmount!).greaterThan(source.invoiceItem.netAmount) ||
+        priorTax.plus(line.refundTaxAmount!).greaterThan(source.invoiceItem.taxAmount)) {
+      throw conflict("RETAIL_INVOICE_RETURN_SETTLEMENT_TAX_SPLIT_INVALID");
     }
   }
 

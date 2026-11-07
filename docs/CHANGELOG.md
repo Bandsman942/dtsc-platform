@@ -1,3 +1,12 @@
+## 2026-11-07 — Retail #1042, tranche 34 — Préparation Finance et retour atomique (candidat, PR #1043)
+
+- Une demande Retail inspectée et validée peut préparer en une transaction le paiement sortant REFUND et l'avoir Finance exact, chacun soumis à une approbation indépendante ; statut intermédiaire `FINANCE_PENDING` et liens uniques tenant-aware.
+- Après approbation des deux pièces, une liquidation distincte réconcilie allocations et journaux, avoir, trésorerie, inventaire réintégré et valorisation d'origine dans une transaction SERIALIZABLE unique. Refus des mauvais sites, sources, comptes ou acteurs ; pas de remboursement sans preuve préalable.
+- Précision HT/taxes au centime, retours partiels répétés, nouveaux états et boutons FR/EN, QA de simulation et garde empêchant les circuits Finance historiques de contourner le stock.
+- Correction de la provenance du coût : le paiement final d'une facture Retail valorise désormais chaque sortie `SALE_FULFILLMENT` dans **la même transaction Finance + Stock**. Une couche de coût manquante annule la finalisation au lieu de livrer une sortie sans événement `ISSUE` ; les retours `RESTOCK` utilisent cet événement initial.
+- Les routes de préparation/liquidation autorisent le vrai rôle Finance (`FINANCE_PAYMENTS` + contrôles `FINANCE_RECEIVABLES`) sans exiger artificiellement le rôle caissier `RETAIL_POS`; la révocation et l'isolation de boutique sont toujours vérifiées dans les transactions métier.
+- **NON LIVRÉ** : migration PostgreSQL GitHub, tests métier multi-boutiques authentifiés, restauration, complétude des rapports et E2E final du propriétaire restent à valider ; flags OFF, PR brouillon, aucun déploiement.
+
 ## 2026-11-07 — Retail #1042, tranche 33 — Finance transactionnelle composable pour retours (candidat, PR #1043)
 
 - Les primitives Finance communes d'inversion partielle d'allocations et de confirmation de remboursements deviennent utilisables dans la transaction SERIALIZABLE de l'appelant, sans transactions imbriquées.

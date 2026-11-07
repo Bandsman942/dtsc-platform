@@ -478,6 +478,7 @@ model EnterpriseSalesCreditNote {
   createdAt           DateTime                        @default(now())
   updatedAt           DateTime                        @updatedAt
   salesInvoice        EnterpriseSalesInvoice          @relation(fields: [organizationId, salesInvoiceId], references: [organizationId, id], onDelete: Restrict)
+  retailInvoiceReturnRequests EnterpriseRetailInvoiceReturnRequest[] @relation("RetailInvoiceReturnSalesCreditNote")
   items               EnterpriseSalesCreditNoteItem[]
 
   @@unique([organizationId, id])
@@ -762,6 +763,7 @@ model EnterprisePayment {
   updatedAt                DateTime                      @updatedAt
   allocations              EnterprisePaymentAllocation[]
   retailInvoiceProposals   EnterpriseRetailInvoicePaymentProposal[]
+  retailInvoiceReturnRequests EnterpriseRetailInvoiceReturnRequest[] @relation("RetailInvoiceReturnRefundPayment")
   events                   EnterprisePaymentEvent[]
   treasuryTransactions     EnterpriseTreasuryTransaction[]
   cashSession              EnterpriseCashSession?         @relation(fields: [organizationId, cashSessionId], references: [organizationId, id], onDelete: Restrict)

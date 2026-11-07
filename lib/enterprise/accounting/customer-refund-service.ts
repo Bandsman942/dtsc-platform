@@ -83,6 +83,10 @@ export async function reverseCustomerPaymentAllocationsForRefund(
       });
       if (!refundPayment) throw new EnterpriseAccountingError("REFUND_PAYMENT_INVALID", 409);
       await assertRetailInvoiceRefundAccountTx(tx, organizationId, receivable.salesInvoiceId, actorUserId, refundPayment);
+      // This legacy full-allocation path has no bounded Retail return/stock
+      // provenance. Only the scoped transaction adapter may reverse an
+      // invoice-checkout allocation during atomic settlement.
+      throw new EnterpriseAccountingError("RETAIL_INVOICE_RETURN_WORKFLOW_REQUIRED", 409);
     }
     if (!receivable.paymentAllocations.length) {
       if (!refundPaymentId) return { reversedAmount: money(0), paymentIds: [] as string[], idempotent: true };
@@ -299,6 +303,7 @@ export async function reverseCustomerPaymentAllocationsForRefundAmountTx(
   reason: string,
   requestedAmount: Prisma.Decimal.Value,
   preferredPaymentId?: string | null,
+  allowedAllocationIds?: readonly string[],
 ) {
   const amount = money(requestedAmount);
   if (!amount.greaterThan(0)) throw new EnterpriseAccountingError("REFUND_AMOUNT_INVALID", 400);
@@ -317,6 +322,18 @@ export async function reverseCustomerPaymentAllocationsForRefundAmountTx(
     });
     if (!receivable) throw new EnterpriseAccountingError("RECEIVABLE_NOT_FOUND", 404);
     await assertRetailInvoiceRefundAccountTx(tx, organizationId, receivable.salesInvoiceId, actorUserId, refundPayment);
+
+    const retailCheckout = await tx.enterpriseRetailInvoiceCheckout.findFirst({
+      where: { organizationId, salesInvoiceId: receivable.salesInvoiceId }, select: { id: true },
+    });
+    if (retailCheckout) {
+      const boundReturn = allowedAllocationIds?.length ? await tx.enterpriseRetailInvoiceReturnRequest.findFirst({
+        where: { organizationId, checkoutId: retailCheckout.id, refundPaymentId,
+          status: "FINANCE_PENDING", salesCreditNoteId: { not: null },
+          preparedByUserId: { not: null } }, select: { id: true },
+      }) : null;
+      if (!boundReturn) throw new EnterpriseAccountingError("RETAIL_INVOICE_RETURN_WORKFLOW_REQUIRED", 409);
+    }
 
     const alreadyReversed = await tx.enterprisePaymentEvent.findFirst({
       where: { organizationId, paymentId: refundPayment.id, eventType: "REFUND_ALLOCATIONS_REVERSED" },
@@ -337,11 +354,26 @@ export async function reverseCustomerPaymentAllocationsForRefundAmountTx(
       include: { payment: true },
       orderBy: [{ allocatedAt: "asc" }, { id: "asc" }],
     });
+    const allowedIds = allowedAllocationIds === undefined ? null : new Set(allowedAllocationIds);
+    if (allowedIds && allowedIds.size !== allowedAllocationIds!.length) {
+      throw new EnterpriseAccountingError("REFUND_SOURCE_ALLOCATION_SCOPE_INVALID", 409);
+    }
     const eligible = allocations.filter((allocation) =>
-      allocation.payment.direction === "INBOUND"
+      (!allowedIds || allowedIds.has(allocation.id))
+      && (!allowedIds || (allocation.payment.financialAccountId !== null &&
+        allocation.payment.financialAccountId === refundPayment.financialAccountId &&
+        allocation.payment.businessPartyId === refundPayment.businessPartyId &&
+        allocation.payment.businessPartyId === receivable.businessPartyId &&
+        allocation.payment.currencyCode === refundPayment.currencyCode &&
+        allocation.payment.currencyCode === receivable.currencyCode &&
+        allocation.amount.greaterThan(0) && allocation.amount.equals(money(allocation.amount))))
+      && allocation.payment.direction === "INBOUND"
       && allocation.payment.paymentType === "CUSTOMER_PAYMENT"
       && ["CONFIRMED", "RECONCILED"].includes(allocation.payment.status)
     );
+    if (allowedIds && eligible.length !== allowedIds.size) {
+      throw new EnterpriseAccountingError("REFUND_SOURCE_ALLOCATION_SCOPE_INVALID", 409);
+    }
     eligible.sort((left, right) => {
       if (!preferredPaymentId) return 0;
       if (left.paymentId === preferredPaymentId && right.paymentId !== preferredPaymentId) return -1;
@@ -783,7 +815,22 @@ export async function markCustomerRefundFinancialInverseReady(
   creditNoteId: string,
   actorUserId: string,
 ) {
-  return prisma.$transaction(async (tx) => {
+  return prisma.$transaction((tx) => markCustomerRefundFinancialInverseReadyTx(
+    tx, organizationId, refundPaymentId, creditNoteId, actorUserId,
+  ), { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 30000 });
+}
+
+/** The Retail exception is deliberately scoped to the specific, approved
+ * invoice-return binding, and is usable only inside the caller's transaction.
+ * All other Finance entrypoints continue to reject Retail invoice refunds. */
+export async function markCustomerRefundFinancialInverseReadyTx(
+  tx: Prisma.TransactionClient,
+  organizationId: string,
+  refundPaymentId: string,
+  creditNoteId: string,
+  actorUserId: string,
+  retailReturnRequestId?: string,
+) {
     await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterprisePayment" WHERE id = ${refundPaymentId} AND "organizationId" = ${organizationId} FOR UPDATE`);
     const refundPayment = await tx.enterprisePayment.findFirst({
       where: {
@@ -795,6 +842,15 @@ export async function markCustomerRefundFinancialInverseReady(
       },
     });
     if (!refundPayment) throw new EnterpriseAccountingError("REFUND_PAYMENT_INVALID", 409);
+
+    const linkedRetailReturn = await tx.enterpriseRetailInvoiceReturnRequest.findFirst({
+      where: { organizationId, refundPaymentId: refundPayment.id },
+      select: { id: true, salesCreditNoteId: true, status: true },
+    });
+    if (linkedRetailReturn && (!retailReturnRequestId || linkedRetailReturn.id !== retailReturnRequestId ||
+        linkedRetailReturn.salesCreditNoteId !== creditNoteId || linkedRetailReturn.status !== "FINANCE_PENDING")) {
+      throw new EnterpriseAccountingError("RETAIL_INVOICE_RETURN_WORKFLOW_REQUIRED", 409);
+    }
 
     const existing = await tx.enterprisePaymentEvent.findFirst({
       where: { organizationId, paymentId: refundPayment.id, eventType: "REFUND_FINANCIAL_INVERSE_READY" },
@@ -833,7 +889,17 @@ export async function markCustomerRefundFinancialInverseReady(
     const retailCheckout = await tx.enterpriseRetailInvoiceCheckout.findFirst({
       where: { organizationId, salesInvoiceId: receivable.salesInvoiceId }, select: { id: true },
     });
-    if (retailCheckout) throw new EnterpriseAccountingError("RETAIL_INVOICE_RETURN_WORKFLOW_REQUIRED", 409);
+    if (retailCheckout) {
+      const bound = retailReturnRequestId ? await tx.enterpriseRetailInvoiceReturnRequest.findFirst({
+        where: {
+          organizationId, id: retailReturnRequestId, checkoutId: retailCheckout.id,
+          status: "FINANCE_PENDING", refundPaymentId, salesCreditNoteId: creditNoteId,
+          preparedByUserId: { not: null },
+        }, select: { id: true },
+      }) : null;
+      if (!bound) throw new EnterpriseAccountingError("RETAIL_INVOICE_RETURN_WORKFLOW_REQUIRED", 409);
+      await assertRetailInvoiceRefundAccountTx(tx, organizationId, receivable.salesInvoiceId, actorUserId, refundPayment);
+    }
     const credit = await tx.enterpriseSalesCreditNote.findFirst({
       where: {
         id: creditNoteId,
@@ -866,7 +932,6 @@ export async function markCustomerRefundFinancialInverseReady(
       },
     });
     return { idempotent: false };
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 30000 });
 }
 
 export async function confirmCustomerRefundPayment(

@@ -411,10 +411,14 @@
     "qa:auth-dual-recovery": "node scripts/qa-auth-dual-recovery.mjs",
     "qa:hotfix-1019-security-settings": "node scripts/qa-hotfix-1019-security-settings-design2.mjs",
     "qa:hotfix-1042-retail-invoice-finance": "node scripts/qa-hotfix-1042-retail-invoice-finance.mjs",
+    "qa:hotfix-1042-retail-invoice-issue-valuation": "node scripts/qa-hotfix-1042-retail-invoice-issue-valuation.mjs",
     "qa:hotfix-1042-retail-invoice-payments": "node scripts/qa-hotfix-1042-retail-invoice-payments.mjs",
     "qa:hotfix-1042-retail-invoice-stock-holds": "node scripts/qa-hotfix-1042-retail-invoice-stock-holds.mjs",
     "qa:hotfix-1042-retail-invoice-print": "node scripts/qa-hotfix-1042-retail-invoice-print.mjs",
-    "qa:hotfix-1042-retail-invoice-refund-scope": "node scripts/qa-hotfix-1042-retail-invoice-refund-scope.mjs"
+    "qa:hotfix-1042-retail-invoice-refund-scope": "node scripts/qa-hotfix-1042-retail-invoice-refund-scope.mjs",
+    "qa:hotfix-1042-retail-invoice-return-finance": "node scripts/qa-hotfix-1042-retail-invoice-return-finance.mjs",
+    "qa:hotfix-1042-retail-invoice-return-requests": "node scripts/qa-hotfix-1042-retail-invoice-return-requests.mjs",
+    "qa:hotfix-1042-retail-return-settlement-preflight": "node scripts/qa-hotfix-1042-retail-return-settlement-preflight.mjs"
   },
   "dependencies": {
     "@ai-sdk/gateway": "2.0.27",

@@ -15,9 +15,10 @@ const state = {
   existing: false, created: null, saved: null, lines: [], review: null, events: [], operations: [],
   checkout: {
     id: "checkout-A", salesInvoiceId: "invoice-A", siteId: "store-A",
-    stockPostedAt: new Date(), invoice: { status: "PAID", currencyCode: "CDF", grandTotal: D(30) },
+    stockPostedAt: new Date(), invoice: { status: "PAID", currencyCode: "CDF", grandTotal: D(30),
+      amountPaid: D(30), amountCredited: D(0), outstandingAmount: D(0) },
     lines: [{ id: "line-A", inventoryItemId: "item-A", stockLotId: "lot-A",
-      invoiceItem: { quantity: D(3), totalAmount: D(30) } }],
+      invoiceItem: { quantity: D(3), netAmount: D(27), taxAmount: D(3), totalAmount: D(30) } }],
   },
 };
 const tx = {
@@ -31,7 +32,7 @@ const tx = {
   } },
   enterpriseRetailInvoiceReturnLine: {
     findMany: async ({ where }) => {
-      assert.equal(where.request.status.in.join(","), "SUBMITTED,INSPECTED,APPROVED,COMPLETED");
+      assert.equal(where.request.status.in.join(","), "SUBMITTED,INSPECTED,APPROVED,FINANCE_PENDING,COMPLETED");
       return state.reserved;
     },
     createMany: async ({ data }) => {
@@ -105,9 +106,13 @@ vm.runInNewContext(ts.transpileModule(source, {
     };
     if (id === "@/lib/enterprise/module-access") return {
       resolveEnterpriseModuleAccess: async ({ moduleCode, action }) => {
-        assert.equal(moduleCode, "FINANCE_RECEIVABLES"); assert.equal(action, "approve");
+        assert.ok(["FINANCE_RECEIVABLES", "FINANCE_PAYMENTS"].includes(moduleCode)); assert.equal(action, "approve");
         return { allowed: state.financeAllowed };
       },
+      resolveEnterpriseModuleCapabilities: async () => ({
+        canCreate: state.financeAllowed, canSubmit: state.financeAllowed,
+        canWrite: state.financeAllowed, canManage: state.financeAllowed,
+      }),
     };
     if (id === "@/lib/enterprise/retail/errors") return { EnterpriseRetailError };
     if (id === "@/lib/enterprise/retail/site-access") return {
@@ -148,6 +153,8 @@ assert.equal(created.request.refundAmount.toFixed(), "20");
 assert.equal(created.request.lines.length, 1);
 assert.equal(created.request.lines[0].checkoutId, "checkout-A");
 assert.equal(created.request.lines[0].refundAmount.toFixed(), "20");
+assert.equal(created.request.lines[0].refundNetAmount.toFixed(), "18");
+assert.equal(created.request.lines[0].refundTaxAmount.toFixed(), "2");
 assert.deepEqual(state.operations, ["create-request", "create-lines"]);
 assert.equal(state.events.length, 1);
 state.existing = true;
@@ -161,7 +168,7 @@ await assert.rejects(createRetailInvoiceReturnRequest("tenant", "invoice-A", "re
   { code: "RETAIL_SITE_ACCESS_DENIED" });
 state.revoked = false;
 state.existing = false;
-state.reserved = [{ checkoutLineId: "line-A", quantity: D(2), refundAmount: D(20) }];
+state.reserved = [{ checkoutLineId: "line-A", quantity: D(2), refundAmount: D(20), refundNetAmount: D(18), refundTaxAmount: D(2) }];
 await assert.rejects(createRetailInvoiceReturnRequest("tenant", "invoice-A", "requester", input),
   { code: "RETAIL_INVOICE_RETURN_QUANTITY_EXCEEDED" });
 state.reserved = [];
@@ -253,35 +260,44 @@ state.financeAllowed = true;
 // The single canonical Finance credit/refund amount has two decimals. Partial
 // quantities must preserve exact pennies across successive return requests.
 state.existing = false;
-state.checkout.lines[0].invoiceItem = { quantity: D(3), totalAmount: D(100) };
+state.checkout.lines[0].invoiceItem = { quantity: D(3), netAmount: D(90), taxAmount: D(10), totalAmount: D(100) };
 state.checkout.invoice.grandTotal = D(100);
+state.checkout.invoice.amountPaid = D(100);
 const oneThird = { ...input, idempotencyKey: "shop-return-penny-001",
   lines: [{ ...input.lines[0], quantity: "1" }] };
 assert.equal((await createRetailInvoiceReturnRequest("tenant", "invoice-A", "requester", oneThird)).request.refundAmount.toFixed(2), "33.33");
-state.reserved = [{ checkoutLineId: "line-A", quantity: D(1), refundAmount: D("33.33") }];
+assert.equal(state.lines[0].refundNetAmount.toFixed(2), "30.00");
+assert.equal(state.lines[0].refundTaxAmount.toFixed(2), "3.33");
+state.reserved = [{ checkoutLineId: "line-A", quantity: D(1), refundAmount: D("33.33"), refundNetAmount: D(30), refundTaxAmount: D("3.33") }];
 assert.equal((await createRetailInvoiceReturnRequest("tenant", "invoice-A", "requester", {
   ...oneThird, idempotencyKey: "shop-return-penny-002",
 })).request.refundAmount.toFixed(2), "33.33");
-state.reserved = [{ checkoutLineId: "line-A", quantity: D(2), refundAmount: D("66.66") }];
+state.reserved = [{ checkoutLineId: "line-A", quantity: D(2), refundAmount: D("66.66"), refundNetAmount: D(60), refundTaxAmount: D("6.66") }];
 assert.equal((await createRetailInvoiceReturnRequest("tenant", "invoice-A", "requester", {
   ...oneThird, idempotencyKey: "shop-return-penny-003",
 })).request.refundAmount.toFixed(2), "33.34");
+assert.equal(state.lines[0].refundNetAmount.toFixed(2), "30.00");
+assert.equal(state.lines[0].refundTaxAmount.toFixed(2), "3.34");
 state.reserved = [];
-state.checkout.lines[0].invoiceItem = { quantity: D(100), totalAmount: D("0.01") };
+state.checkout.lines[0].invoiceItem = { quantity: D(100), netAmount: D("0.01"), taxAmount: D(0), totalAmount: D("0.01") };
 state.checkout.invoice.grandTotal = D("0.01");
+state.checkout.invoice.amountPaid = D("0.01");
 await assert.rejects(createRetailInvoiceReturnRequest("tenant", "invoice-A", "requester", oneThird),
   { code: "RETAIL_INVOICE_RETURN_AMOUNT_BELOW_MINOR_UNIT" });
-state.checkout.lines[0].invoiceItem = { quantity: D(1), totalAmount: D("10.005") };
+state.checkout.lines[0].invoiceItem = { quantity: D(1), netAmount: D("10.005"), taxAmount: D(0), totalAmount: D("10.005") };
 state.checkout.invoice.grandTotal = D("10.005");
+state.checkout.invoice.amountPaid = D("10.005");
 await assert.rejects(createRetailInvoiceReturnRequest("tenant", "invoice-A", "requester", oneThird),
   { code: "RETAIL_INVOICE_RETURN_HISTORICAL_PRECISION_UNSUPPORTED" });
-state.checkout.lines[0].invoiceItem = { quantity: D(3), totalAmount: D(100) };
+state.checkout.lines[0].invoiceItem = { quantity: D(3), netAmount: D(90), taxAmount: D(10), totalAmount: D(100) };
 state.checkout.invoice.grandTotal = D(100);
-state.reserved = [{ checkoutLineId: "line-A", quantity: D(1), refundAmount: D("33.333333") }];
+state.checkout.invoice.amountPaid = D(100);
+state.reserved = [{ checkoutLineId: "line-A", quantity: D(1), refundAmount: D("33.333333"), refundNetAmount: D(30), refundTaxAmount: D("3.333333") }];
 await assert.rejects(createRetailInvoiceReturnRequest("tenant", "invoice-A", "requester", oneThird),
   { code: "RETAIL_INVOICE_RETURN_HISTORICAL_PRECISION_UNSUPPORTED" });
 state.reserved = [];
 state.checkout.invoice.grandTotal = D("100.005");
+state.checkout.invoice.amountPaid = D("100.005");
 await assert.rejects(createRetailInvoiceReturnRequest("tenant", "invoice-A", "requester", oneThird),
   { code: "RETAIL_INVOICE_RETURN_HISTORICAL_PRECISION_UNSUPPORTED" });
 

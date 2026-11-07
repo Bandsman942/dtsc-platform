@@ -36,6 +36,7 @@ const tx = {
     id: "receivable-1", salesInvoiceId: "invoice-A", salesInvoice: state.invoice, paymentAllocations: [],
   }) },
   enterpriseRetailInvoiceCheckout: { findFirst: async () => state.checkout },
+  enterpriseRetailInvoiceReturnRequest: { findFirst: async () => ({ id: "return-1", status: "FINANCE_PENDING" }) },
   enterpriseSalesInvoice: { findFirst: async () => state.invoice },
   enterpriseFinancialAccount: { findFirst: async () => state.account },
   enterprisePaymentEvent: { findFirst: async ({ where }) => {
@@ -87,12 +88,13 @@ const reverseAll = (paymentId = "refund-1") => reverseCustomerPaymentAllocations
   "organization-1", "receivable-1", "finance-user", "Retour client", paymentId,
 );
 
-assert.equal((await reverse()).idempotent, true, "Same-site idempotent refund is accepted");
+await assert.rejects(reverse(), { code: "RETAIL_INVOICE_RETURN_WORKFLOW_REQUIRED" },
+  "Retail refund reversal is forbidden outside its bound atomic return transaction");
 const originalTransaction = prisma.$transaction;
 prisma.$transaction = () => { throw new Error("NESTED_FINANCE_TRANSACTION_FORBIDDEN"); };
 assert.equal((await reverseCustomerPaymentAllocationsForRefundAmountTx(
   tx, "organization-1", "receivable-1", "refund-1", "finance-user", "Retour client",
-  new Prisma.Decimal(20), "payment-original",
+  new Prisma.Decimal(20), "payment-original", ["allocation-original"],
 )).idempotent, true, "The canonical Finance inverse can participate in a caller-owned transaction");
 state.refund.status = "CONFIRMED";
 assert.equal((await confirmCustomerRefundPaymentTx(
@@ -100,7 +102,8 @@ assert.equal((await confirmCustomerRefundPaymentTx(
 )).id, "refund-1", "The canonical refund confirmation can be reused in a caller-owned transaction");
 state.refund.status = "APPROVED";
 prisma.$transaction = originalTransaction;
-assert.equal((await reverseAll()).idempotent, true, "Legacy reversal also checks a valid same-site refund");
+await assert.rejects(reverseAll(), { code: "RETAIL_INVOICE_RETURN_WORKFLOW_REQUIRED" },
+  "Legacy full reversal cannot bypass Retail atomic settlement");
 state.allowedSites = ["boutique-B"];
 await assert.rejects(reverse(), { code: "RETAIL_INVOICE_REFUND_SITE_ACCESS_DENIED" });
 await assert.rejects(reverseAll(), { code: "RETAIL_INVOICE_REFUND_SITE_ACCESS_DENIED" });
@@ -111,11 +114,12 @@ state.refund = { ...state.refund, status: "APPROVED" };
 state.allowedSites = [];
 await assert.rejects(reverse(), { code: "RETAIL_INVOICE_REFUND_SITE_ACCESS_DENIED" });
 state.allowedSites = null;
-assert.equal((await reverse()).idempotent, true, "Independent Finance actor keeps Finance-authorized scope");
+await assert.rejects(reverse(), { code: "RETAIL_INVOICE_RETURN_WORKFLOW_REQUIRED" },
+  "Finance-only actors still require the bounded Retail return workflow");
 state.allowedSites = ["boutique-A"];
 state.reversalReceivableId = "receivable-B";
-await assert.rejects(reverse(), { code: "REFUND_ALLOCATION_REVERSAL_CONFLICT" });
-await assert.rejects(reverseAll(), { code: "REFUND_ALLOCATION_REVERSAL_CONFLICT" });
+await assert.rejects(reverse(), { code: "RETAIL_INVOICE_RETURN_WORKFLOW_REQUIRED" });
+await assert.rejects(reverseAll(), { code: "RETAIL_INVOICE_RETURN_WORKFLOW_REQUIRED" });
 state.reversalReceivableId = "receivable-1";
 await assert.rejects(reverseAll(null), { code: "RETAIL_INVOICE_REFUND_PAYMENT_REQUIRED" });
 state.account = { siteId: "boutique-B", currencyCode: "CDF" };

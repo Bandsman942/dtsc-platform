@@ -91,17 +91,27 @@ model EnterpriseRetailInvoiceReturnRequest {
   decidedByUserId   String?
   decidedAt         DateTime?
   decisionReason    String?
+  refundPaymentId   String?
+  salesCreditNoteId String?
+  preparedByUserId  String?
+  preparedAt        DateTime?
+  settledByUserId   String?
+  completedAt       DateTime?
   revision          Int      @default(1)
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
   checkout EnterpriseRetailInvoiceCheckout @relation(fields: [organizationId, checkoutId], references: [organizationId, id], onDelete: Restrict, map: "retail_invoice_return_request_checkout_fkey")
+  refundPayment EnterprisePayment? @relation("RetailInvoiceReturnRefundPayment", fields: [organizationId, refundPaymentId], references: [organizationId, id], onDelete: Restrict, map: "retail_invoice_return_refund_payment_fkey")
+  salesCreditNote EnterpriseSalesCreditNote? @relation("RetailInvoiceReturnSalesCreditNote", fields: [organizationId, salesCreditNoteId], references: [organizationId, id], onDelete: Restrict, map: "retail_invoice_return_credit_note_fkey")
   lines    EnterpriseRetailInvoiceReturnLine[]
 
   @@unique([organizationId, id], map: "retail_invoice_return_request_org_id_key")
   @@unique([organizationId, id, checkoutId], map: "retail_invoice_return_request_scoped_id_key")
   @@unique([organizationId, number], map: "retail_invoice_return_request_org_number_key")
   @@unique([organizationId, idempotencyKey], map: "retail_invoice_return_request_org_idempotency_key")
+  @@unique([organizationId, refundPaymentId], map: "retail_invoice_return_request_refund_payment_key")
+  @@unique([organizationId, salesCreditNoteId], map: "retail_invoice_return_request_credit_note_key")
   @@index([organizationId, checkoutId, status], map: "retail_invoice_return_request_checkout_status_idx")
   @@index([organizationId, approverUserId, status], map: "retail_invoice_return_request_approver_status_idx")
 }
@@ -114,6 +124,8 @@ model EnterpriseRetailInvoiceReturnLine {
   checkoutLineId   String
   quantity         Decimal @db.Decimal(20, 6)
   refundAmount     Decimal @db.Decimal(20, 6)
+  refundNetAmount  Decimal? @db.Decimal(20, 6)
+  refundTaxAmount  Decimal? @db.Decimal(20, 6)
   stockDisposition String
 
   request EnterpriseRetailInvoiceReturnRequest @relation(fields: [organizationId, returnRequestId, checkoutId], references: [organizationId, id, checkoutId], onDelete: Restrict, map: "retail_invoice_return_line_request_fkey")
