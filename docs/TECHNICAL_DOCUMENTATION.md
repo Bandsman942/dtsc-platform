@@ -705,3 +705,6 @@ Les flags `siteStaffIsolationEnabled` et `invoiceCheckoutEnabled` sont toujours 
 
 
 **Complément Retail #1042 tranche 17 (pré-release)** : Finance rejette `EnterpriseSalesCreditNote` sur une facture possédant `EnterpriseRetailInvoiceCheckout`, via `RETAIL_INVOICE_RETURN_WORKFLOW_REQUIRED`, dans création, preflight et posting (service + orchestration). Tant que les mouvements compensatoires, l'avoir et le remboursement ne sont pas liés transactionnellement et validés par des acteurs distincts, un avoir Finance direct pourrait laisser une réservation de stock orpheline. Ce garde n'est pas un parcours de retour fonctionnel ; interdiction de lever les flags. La QA simule le refus et le maintien du chemin Finance non Retail.
+
+
+**Complément Retail #1042 tranche 18 (PR #1043, pré-release)** : la Quality Gate fournit un PostgreSQL `pgvector/pgvector:pg16` jetable et exécute `qa-hotfix-1042-retail-postgres-serialization.mjs` après migrations. Cette QA démontre la sémantique du retry transactionnel sous un conflit PostgreSQL SERIALIZABLE réel, mais ne couvre pas encore les transactions métier concurrentes ni les retours, remboursements et validations multi-rôles. Le script refuse les environnements hors base éphémère `dtsc_quality_test` et nettoie sa table d'essai.
