@@ -1,3 +1,9 @@
+## 2026-11-07 — Hotfix P0 Retail #1042, tranche 17 — Protection des avoirs Finance contre les stocks Retail incohérents (PR brouillon #1043)
+
+- Un avoir Finance sur facture Retail avec checkout est désormais refusé jusqu'à la livraison d'un circuit de retour/remboursement atomique avec stock : évite de solder une créance en laissant des quantités réservées ou sans contre-mouvement.
+- Gardes de création, de prévalidation et de posting avec message utilisateur ; QA de refus positif et préservation du chemin Finance ordinaire. Le remboursement Retail n'est pas implémenté par cette protection.
+- Flags OFF, pas de merge/Production, E2E authentifié et validation propriétaire toujours requis.
+
 ## 2026-11-07 — Hotfix P0 Retail #1042, tranche 16 — Résilience des propositions d'encaissement (PR brouillon #1043)
 
 - Les propositions de paiement par caissier reprennent la transaction sérialisable entière après un conflit PostgreSQL `P2034`, avec relue systématique de la boutique, des permissions, du montant disponible et de la clé d'idempotence. Trois tentatives maximum.
