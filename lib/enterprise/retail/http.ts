@@ -286,11 +286,6 @@ export function retailErrorResponse(error: unknown, fallback = "RETAIL_OPERATION
       { status: 409 },
     );
   }
-  // Temporary, tightly scoped CI diagnostic. NEVER surface internal errors to browsers.
-  // Remove this once the isolated Shop 2 acceptance failure is resolved.
-  if (process.env.CI === "true" && /\/dtsc_shop2_behavioral(?:\?|$)/.test(process.env.DATABASE_URL || "")) {
-    console.error("SHOP2_E2E_UNHANDLED_RETAIL_ERROR", error instanceof Error ? `${error.name}: ${error.message}\n${error.stack || ""}` : String(error));
-  }
   return NextResponse.json(
     retailFailureOutcome(null, { error: fallback, message: "L’opération n’a pas pu être terminée. Vérifiez les données et réessayez." }),
     { status: 500 },

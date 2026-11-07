@@ -205,14 +205,6 @@ jobs:
           exit 1
       - name: Shop 2 POS behavioral acceptance
         run: pnpm exec playwright test tests/e2e/issue-786-relationship-benefits-enforcement.spec.mjs tests/e2e/issue-910-relationship-credit.spec.mjs tests/e2e/scale5b-retail-dashboard-cache.spec.mjs tests/e2e/shop2-retail.spec.mjs tests/e2e/shop2-commercial.spec.mjs tests/e2e/shop2-customer-payments.spec.mjs tests/e2e/shop2-customer-value-ui.spec.mjs tests/e2e/shop2-daily-close-ui.spec.mjs tests/e2e/shop2-final-coherence-ui.spec.mjs tests/e2e/shop2-z-global.spec.mjs tests/e2e/accounting-atomic-retail-posting.spec.mjs
-      - name: Summarize isolated Next.js application errors after failed acceptance
-        if: failure()
-        run: |
-          if [ -f /tmp/dtsc-shop2-next.log ]; then
-            # Emit only error/stack context from this disposable CI tenant.
-            # Do not print environment variables or raw HTTP bodies.
-            grep -Ein -A 34 -B 3 'SHOP2_E2E_UNHANDLED_RETAIL_ERROR|PrismaClientValidationError|P20[0-9]{2}' /tmp/dtsc-shop2-next.log | tail -n 140 | sed -E 's#postgres(ql)?://[^[:space:]]+#<DATABASE_URL_REDACTED>#g' || true
-          fi
       - name: Stop application and Redis REST proxy
         if: always()
         run: |

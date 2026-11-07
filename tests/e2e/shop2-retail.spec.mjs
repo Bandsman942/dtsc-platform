@@ -6,6 +6,8 @@ const baseUrl = process.env.E2E_BASE_URL || "http://127.0.0.1:3000";
 const organizationId = process.env.E2E_ORGANIZATION_ID || "e2e-erp-professional-org";
 const adminEmail = process.env.E2E_ADMIN_EMAIL || "erp-admin@example.test";
 const adminPassword = process.env.E2E_ADMIN_PASSWORD || "E2eAdmin2026!";
+const staffEmail = process.env.E2E_USER_EMAIL || "erp-user@example.test";
+const staffPassword = process.env.E2E_USER_PASSWORD || "E2eUser2026!";
 
 const fixture = {
   userId: "",
@@ -239,11 +241,11 @@ async function prepareRetailFixture() {
   fixture.cashAccountId = cashAccount.id;
 }
 
-async function signIn(page) {
+async function signIn(page, email = adminEmail, password = adminPassword) {
   const response = await page.context().request.post(`${baseUrl}/api/auth/sign-in`, {
     data: {
-      email: adminEmail,
-      password: adminPassword,
+      email,
+      password,
       organizationId,
       next: "/enterprise-modules/RETAIL_POS",
     },
@@ -581,4 +583,148 @@ test.describe.serial("Shop 2.0 Retail behavioral acceptance", () => {
       });
     }
   });
+  test("#1042 two-store authenticated invoice isolation and immediate revocation", async ({ page, browser }) => {
+    if (process.env.CI !== "true" || !/\/dtsc_shop2_behavioral(?:\?|$)/.test(process.env.DATABASE_URL || "")) {
+      throw new Error("RETAIL_1042_MULTISTORE_E2E_REQUIRES_EPHEMERAL_CI_DATABASE");
+    }
+    const staff = await prisma.user.findUniqueOrThrow({ where: { email: staffEmail } });
+    const config = await prisma.enterpriseRetailConfiguration.findUniqueOrThrow({ where: { organizationId } });
+    const originalSettings = config.settingsJson;
+    const existingMembership = await prisma.organizationMember.findUnique({
+      where: { organizationId_userId: { organizationId, userId: staff.id } },
+    });
+    let ownerContext;
+    try {
+      const secondarySite = await prisma.enterpriseSite.upsert({
+        where: { organizationId_code: { organizationId, code: "SHOP2-E2E-SITE-B" } },
+        update: { name: "Shop 2 E2E Store B", status: "ACTIVE", archivedAt: null },
+        create: { organizationId, code: "SHOP2-E2E-SITE-B", name: "Shop 2 E2E Store B",
+          siteType: "STORE", countryCode: "US", timezone: "UTC", status: "ACTIVE", createdByUserId: fixture.userId },
+      });
+      const secondaryWarehouse = await prisma.enterpriseWarehouse.upsert({
+        where: { organizationId_code: { organizationId, code: "SHOP2-E2E-WH-B" } },
+        update: { siteId: secondarySite.id, status: "ACTIVE", archivedAt: null },
+        create: { organizationId, siteId: secondarySite.id, code: "SHOP2-E2E-WH-B", name: "Shop 2 E2E Warehouse B",
+          warehouseType: "STORE", status: "ACTIVE", createdByUserId: fixture.userId },
+      });
+      const position = await prisma.enterprisePosition.upsert({
+        where: { organizationId_positionCode: { organizationId, positionCode: "SHOP2-E2E-INVOICER" } },
+        update: { permissionsJson: ["enterprise.retail.pos.view", "enterprise.retail.pos.create"], isActive: true },
+        create: { organizationId, positionCode: "SHOP2-E2E-INVOICER",
+          labelFr: "Facturier de recette B", labelEn: "B test invoicer",
+          permissionsJson: ["enterprise.retail.pos.view", "enterprise.retail.pos.create"], isActive: true },
+      });
+      await prisma.organizationMember.upsert({
+        where: { organizationId_userId: { organizationId, userId: staff.id } },
+        update: { role: "MEMBER", status: "ACTIVE", removedAt: null,
+          positionId: position.id, positionCode: position.positionCode },
+        create: { organizationId, userId: staff.id, role: "MEMBER", status: "ACTIVE",
+          positionId: position.id, positionCode: position.positionCode, joinedAt: new Date() },
+      });
+      const assignmentKey = { organizationId, siteId: secondarySite.id, userId: staff.id };
+      await prisma.enterpriseRetailSiteAssignment.upsert({
+        where: { organizationId_siteId_userId: assignmentKey },
+        update: { roleCode: "MANAGER", permissionsJson: ["VIEW_SALES", "PREPARE_INVOICE"], isActive: true },
+        create: { ...assignmentKey, roleCode: "MANAGER", permissionsJson: ["VIEW_SALES", "PREPARE_INVOICE"],
+          isActive: true, createdByUserId: fixture.userId },
+      });
+      const product = await prisma.enterpriseCatalogItem.findFirstOrThrow({
+        where: { organizationId, code: "SHOP2-E2E-INVOICE-SKU" },
+      });
+      const inventory = await prisma.enterpriseInventoryItem.findFirstOrThrow({
+        where: { organizationId, catalogItemId: product.id },
+      });
+      const balance = await prisma.enterpriseInventoryBalance.findFirst({
+        where: { organizationId, warehouseId: secondaryWarehouse.id, inventoryItemId: inventory.id,
+          storageLocationId: null, stockLotId: null },
+      });
+      if (balance) {
+        await prisma.enterpriseInventoryBalance.update({
+          where: { id: balance.id }, data: { quantityOnHand: new Prisma.Decimal(10), quantityReserved: new Prisma.Decimal(0) },
+        });
+      } else {
+        await prisma.enterpriseInventoryBalance.create({ data: {
+          organizationId, warehouseId: secondaryWarehouse.id, inventoryItemId: inventory.id,
+          quantityOnHand: new Prisma.Decimal(10), quantityReserved: new Prisma.Decimal(0),
+        } });
+      }
+      await prisma.enterpriseRetailConfiguration.update({
+        where: { organizationId },
+        data: { settingsJson: {
+          ...(originalSettings && typeof originalSettings === "object" && !Array.isArray(originalSettings) ? originalSettings : {}),
+          invoiceCheckoutEnabled: true, siteStaffIsolationEnabled: true,
+        }, revision: { increment: 1 } },
+      });
+      ownerContext = await browser.newContext({ baseURL: baseUrl });
+      const ownerPage = await ownerContext.newPage();
+      await signIn(ownerPage);
+      const primarySite = await prisma.enterpriseWarehouse.findUniqueOrThrow({
+        where: { id: fixture.warehouseId }, select: { siteId: true },
+      });
+      const primaryPayload = {
+        idempotencyKey: "shop2-e2e-a-" + Date.now(), siteId: primarySite.siteId,
+        warehouseId: fixture.warehouseId, currencyCode: fixture.currencyCode,
+        lines: [{ catalogItemId: product.id, quantity: 1 }],
+      };
+      const endpoint = "/api/enterprise/" + organizationId + "/retail/invoices";
+      const primaryInvoice = await apiPost(ownerPage, endpoint, primaryPayload);
+      expect(primaryInvoice.response.status(), JSON.stringify(primaryInvoice.body)).toBe(201);
+
+      await signIn(page, staffEmail, staffPassword);
+      const scoped = await apiGet(page, endpoint);
+      expect(scoped.response.status(), JSON.stringify(scoped.body)).toBe(200);
+      expect(scoped.body.items.every((row) => row.siteId === secondarySite.id)).toBe(true);
+      expect(scoped.body.items.some((row) => row.invoice.id === primaryInvoice.body.invoice.id)).toBe(false);
+      const forbiddenPrint = await page.context().request.get(
+        endpoint + "/" + primaryInvoice.body.invoice.id + "/print?paper=a4&lang=fr",
+      );
+      expect(forbiddenPrint.status()).toBe(404);
+      const forbiddenCreate = await apiPost(page, endpoint, {
+        ...primaryPayload, idempotencyKey: "shop2-e2e-forbidden-" + Date.now(),
+      });
+      expect(forbiddenCreate.response.status()).toBe(403);
+      expect(forbiddenCreate.body.error).toBe("RETAIL_SITE_ACCESS_DENIED");
+
+      const secondaryInvoice = await apiPost(page, endpoint, {
+        ...primaryPayload, idempotencyKey: "shop2-e2e-b-" + Date.now(),
+        siteId: secondarySite.id, warehouseId: secondaryWarehouse.id,
+      });
+      expect(secondaryInvoice.response.status(), JSON.stringify(secondaryInvoice.body)).toBe(201);
+      const afterInvoice = await apiGet(page, endpoint);
+      expect(afterInvoice.response.ok()).toBe(true);
+      expect(afterInvoice.body.items.some((row) => row.invoice.id === secondaryInvoice.body.invoice.id)).toBe(true);
+      expect(afterInvoice.body.items.some((row) => row.invoice.id === primaryInvoice.body.invoice.id)).toBe(false);
+      const ownerList = await apiGet(ownerPage, endpoint);
+      expect(ownerList.response.ok()).toBe(true);
+      expect(ownerList.body.items.some((row) => row.invoice.id === primaryInvoice.body.invoice.id)).toBe(true);
+      expect(ownerList.body.items.some((row) => row.invoice.id === secondaryInvoice.body.invoice.id)).toBe(true);
+
+      await prisma.enterpriseRetailSiteAssignment.update({
+        where: { organizationId_siteId_userId: assignmentKey },
+        data: { isActive: false, revision: { increment: 1 } },
+      });
+      const revokedList = await apiGet(page, endpoint);
+      expect(revokedList.response.status(), JSON.stringify(revokedList.body)).toBe(403);
+      const revokedCreate = await apiPost(page, endpoint, {
+        ...primaryPayload, idempotencyKey: "shop2-e2e-revoked-" + Date.now(),
+        siteId: secondarySite.id, warehouseId: secondaryWarehouse.id,
+      });
+      expect(revokedCreate.response.status()).toBe(403);
+    } finally {
+      await ownerContext?.close();
+      await prisma.enterpriseRetailConfiguration.update({
+        where: { organizationId },
+        data: { settingsJson: originalSettings === null ? Prisma.DbNull : originalSettings, revision: { increment: 1 } },
+      });
+      if (existingMembership) {
+        await prisma.organizationMember.update({
+          where: { id: existingMembership.id },
+          data: { role: existingMembership.role, status: existingMembership.status,
+            removedAt: existingMembership.removedAt, positionId: existingMembership.positionId,
+            positionCode: existingMembership.positionCode },
+        });
+      }
+    }
+  });
+
 });

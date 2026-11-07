@@ -105,6 +105,6 @@ Les **12 critères du chapitre XVI** sont : (1) A/B accessibles sur une platefor
 ## 5. Conditions bloquantes et gouvernance
 
 - `siteStaffIsolationEnabled` et `invoiceCheckoutEnabled` restent OFF jusqu'à couverture **de toutes** les routes et des parcours ; pas de valeur de configuration codée pour ce client.
-- E2E automatisé validé ≠ OWNER_E2E validé. Les deux sont nécessaires. Les premiers ne sont pas encore exécutés comme une recette complète sur environnement authentifié.
+- E2E automatisé validé ≠ OWNER_E2E validé. Les deux sont nécessaires. Les premiers couvrent désormais une émission/annulation de facture sur PostgreSQL authentifié (21 tests du workflow ciblé) et une nouvelle contre-épreuve deux boutiques proposée, mais **pas** la recette complète multi-rôles, caisse, rapports, matériel et restauration.
 - Aucun merge de la PR #1043 avant `OWNER_E2E` global BON du Dr Jonathan ; Production uniquement depuis `main` avec CI et release vérifiées.
 - Ne pas annoncer une date ni un nombre définitif de tranches avant clôture de chaque lacune et de la matrice de réception.

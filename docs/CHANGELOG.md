@@ -1,8 +1,14 @@
+## 2026-11-07 — Retail #1042, tranche 36 — Deux boutiques authentifiées (candidat, PR #1043)
+
+- Ajout de la contre-épreuve navigateur CI sur **deux sites distincts et deux utilisateurs authentifiés** : facture A créée par propriétaire, liste du facturier B isolée, impression et mutation A refusées, facture B créée, propriétaire A+B et révocation immédiate de B. Drapeaux temporaires activés uniquement sur la base éphémère `dtsc_shop2_behavioral` puis restaurés ; ce test ne vaut **ni** E2E global **ni** validation du propriétaire.
+- Correction détectée par PostgreSQL : création des lignes de checkout Retail en écriture explicite avec `createMany` dans la même transaction SERIALIZABLE que la facture Finance et le lien Retail ; circuit brouillon, idempotence et annulation désormais **21/21 scénarios navigateur passés** sur le commit correctif `3e4148b9` (autres workflows à confirmer).
+- Instrumentation provisoire d'erreur côté serveur retirée ; flags de production toujours OFF et PR en brouillon.
+
 ## 2026-11-07 — Retail #1042, tranche 35 — Protocole final et erreurs métier (candidat, PR #1043)
 
 - Protocole d'acceptation [RETAIL_1042_OWNER_E2E_SCRIPT.md](RETAIL_1042_OWNER_E2E_SCRIPT.md) : tenant isolé, deux boutiques, dix acteurs indépendants, dix-neuf contre-épreuves, 12 critères de signature, justificatifs et blocages clairement identifiés. **Document préparatoire, aucun E2E signé**.
 - Messages d'erreur contextualisés pour une sortie originale non valorisée, les couches de coût/devises incompatibles et l'impossibilité d'utiliser une session de caisse pour le remboursement en espèces ; tests de présence de ces messages.
-- Extension du navigateur authentifié `shop2-retail.spec.mjs` (base éphémère CI seulement) : activation temporaire de la facture en deux étapes sur le tenant synthétique, création réelle de facture, rejeu/collision, vérification qu'un brouillon ne sort aucun stock, annulation Finance et rétablissement du flag initial. **Scénario ajouté mais non encore exécuté en CI sur la tranche 35.**
+- Extension du navigateur authentifié `shop2-retail.spec.mjs` (base éphémère CI seulement) : activation temporaire de la facture en deux étapes sur le tenant synthétique, création réelle de facture, rejeu/collision, vérification qu'un brouillon ne sort aucun stock, annulation Finance et rétablissement du flag initial. **Scénario E2E passé avec 21 tests navigateur sur la branche correctrice (SHA `3e4148b9`).**
 - **Toujours NON LIVRÉ** : E2E authentifié PostgreSQL multi-boutiques, fermeture de caisse, rapports financiers certifiés et exports, impression physique et restauration exigent une vérification. Flags OFF, PR brouillon.
 
 ## 2026-11-07 — Retail #1042, tranche 34 — Préparation Finance et retour atomique (candidat, PR #1043)
