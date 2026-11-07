@@ -7,6 +7,7 @@ import { assertSalesInvoiceSources } from "@/lib/enterprise/accounting/invoice-s
 import { createSalesInvoice } from "@/lib/enterprise/accounting/receivables-service";
 import { salesInvoiceCreateSchema } from "@/lib/enterprise/accounting/schemas";
 import { prisma } from "@/lib/prisma";
+import { retailFinanceReadSiteScope } from "@/lib/enterprise/retail/site-access";
 
 type Params = { params: Promise<{ organizationId: string }> };
 
@@ -17,11 +18,18 @@ export async function GET(req: Request, { params }: Params) {
   if (!auth.ok) return auth.response;
 
   const { page, pageSize, search, status } = financeListParams(req);
+  const retailScope = await retailFinanceReadSiteScope(organizationId, auth.session.userId, "VIEW_SALES");
   const url = new URL(req.url);
   const recordId = url.searchParams.get("recordId")?.trim() || undefined;
   const workflowPending = url.searchParams.get("workflowPending") === "true";
   const where: Prisma.EnterpriseSalesInvoiceWhereInput = {
     organizationId,
+    // Site staff with a Finance permission cannot bypass Retail store scope
+    // by opening a direct Finance invoice list or recordId. Keep non-Retail
+    // invoices under the existing Finance permission model.
+    ...(retailScope !== null ? { AND: [{
+      OR: [{ retailCheckout: { is: null } }, { retailCheckout: { is: { siteId: { in: retailScope } } } }],
+    }] } : {}),
     ...(recordId ? { id: recordId } : {}),
     ...(workflowPending ? { status: "PENDING_APPROVAL" } : status ? { status } : {}),
     ...(search ? { OR: [
@@ -36,7 +44,7 @@ export async function GET(req: Request, { params }: Params) {
       orderBy: [{ invoiceDate: "desc" }, { createdAt: "desc" }],
       skip: (page - 1) * pageSize,
       take: pageSize,
-      include: { items: true, receivable: true },
+      include: { items: true, receivable: true, retailCheckout: { select: { siteId: true } } },
     }),
     prisma.enterpriseSalesInvoice.count({ where }),
   ]);
@@ -53,13 +61,13 @@ export async function GET(req: Request, { params }: Params) {
   }) : [];
   const assignedIds = new Set(assignedApprovals.map((approval) => approval.targetEntityId));
   const capabilities = auth.access.capabilities;
-  const resultItems = items.map((item) => ({
+  const resultItems = items.map(({ retailCheckout, ...item }) => ({
     ...item,
     capabilities: {
       canSubmit: capabilities.canSubmit && item.status === "DRAFT" && item.createdByUserId === auth.session.userId,
       canApprove: capabilities.canApprove && item.status === "PENDING_APPROVAL" && assignedIds.has(item.id),
       canPost: capabilities.canManage && item.status === "APPROVED",
-      canCreateCredit: capabilities.canCreate && ["ISSUED", "PARTIALLY_PAID", "PAID", "OVERDUE"].includes(item.status),
+      canCreateCredit: capabilities.canCreate && !retailCheckout && ["ISSUED", "PARTIALLY_PAID", "PAID", "OVERDUE"].includes(item.status),
     },
   }));
 
