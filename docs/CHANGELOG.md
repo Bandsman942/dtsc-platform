@@ -1,3 +1,10 @@
+## 2026-11-07 — Retail #1042, tranche 23 — Bloquer les avoirs sectoriels sans retour Finance/stock (PR brouillon #1043)
+
+- Les helpers d'avoirs pour remboursements Pharmacie/Gaming ne peuvent plus créer ou rejouer un avoir sur une facture liée au checkout Retail ; la préparation partielle et exacte refusent désormais avec `RETAIL_INVOICE_RETURN_WORKFLOW_REQUIRED` avant tout effet financier.
+- La transition de « contrepartie financière prête » refuse également une facture Retail sans preuve de retour/stock, empêchant qu'un remboursement soit marqué prêt alors que la sortie d'inventaire n'a pas été contrepassée.
+- Le contrat `qa-hotfix-1042-retail-refund-credit-bypass.mjs` vérifie les refus en simulation et le maintien du chemin normal pour une facture non Retail ; ajouté à Quality Gates. **Ce verrou ne constitue pas le circuit de retour/remboursement fonctionnel.**
+- Le circuit de correction/retour des factures Retail reste à développer et certifier, E2E PostgreSQL multi-acteurs et propriétaire non exécutés ; flags OFF, aucune fusion ni Production.
+
 ## 2026-11-07 — Retail #1042, tranche 22 en préparation — Traçabilité exhaustive et permissions de remboursement
 
 - Matrice de réception issue du cahier original de 22 pages : 17 chapitres, RG01–RG20, huit décisions, scénarios E2E techniques et les 12 critères OWNER_E2E. Les contradictions sur les droits du gérant sont explicitement marquées, sans élargissement automatique de privilèges.
