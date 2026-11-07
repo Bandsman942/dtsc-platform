@@ -200,4 +200,8 @@ assert.match(financePaymentsRoute, /retailFinanceReadSiteScope\(organizationId, 
 assert.match(financePaymentsRoute, /financialAccountId: \{ in: accountIds \|\| \[\] \}/);
 assert.match(financePaymentsRoute, /retailInvoiceProposals: \{ some: \{ checkout: \{ siteId: \{ in: retailScope \} \} \} \}/);
 assert.equal((financePaymentsRoute.match(/AND: \[sitePaymentScope\]/g) || []).length, 4, "Both list and all 3 Finance metrics must be scoped");
+const financeReceivablesRoute = fs.readFileSync("app/api/enterprise/[organizationId]/receivables/route.ts", "utf8");
+assert.match(financeReceivablesRoute, /retailFinanceReadSiteScope\(organizationId, auth\.session\.userId, "VIEW_SALES"\)/);
+assert.match(financeReceivablesRoute, /salesInvoice: \{ retailCheckout: \{ is: \{ siteId: \{ in: retailScope \} \} \} \}/);
+assert.equal((financeReceivablesRoute.match(/AND: \[siteReceivableScope\]/g) || []).length, 3, "Finance receivables list and 2 ageing totals must obey the same store scope");
 console.log("HOTFIX #1042 boutique staff: tenant-scoped assignments, owner-only CRUD, RBAC defaults/overrides, site-scoped stock transfers and expiry alert contracts passed; strict activation deferred.");
