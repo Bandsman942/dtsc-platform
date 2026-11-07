@@ -15,6 +15,14 @@ export async function assertSalesCreditNoteStillPostable(
     });
     if (!credit) throw new EnterpriseAccountingError("SALES_CREDIT_NOTE_NOT_FOUND", 404);
     if (credit.status === "POSTED") return;
+    // A previously drafted credit note must also be stopped if the invoice
+    // has since been linked to Retail. Never post finance-only corrections
+    // while a Retail stock promise or posted stock exit is unreconciled.
+    const retailCheckout = await tx.enterpriseRetailInvoiceCheckout.findFirst({
+      where: { organizationId, salesInvoiceId: credit.salesInvoiceId },
+      select: { id: true },
+    });
+    if (retailCheckout) throw new EnterpriseAccountingError("RETAIL_INVOICE_RETURN_WORKFLOW_REQUIRED", 409);
     if (credit.status !== "APPROVED" || credit.revision !== revision) throw new EnterpriseAccountingError("SALES_CREDIT_NOTE_NOT_APPROVED", 409);
     const receivable = credit.salesInvoice.receivable;
     if (!receivable) throw new EnterpriseAccountingError("RECEIVABLE_NOT_FOUND", 409);
