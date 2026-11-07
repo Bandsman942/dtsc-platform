@@ -4,11 +4,11 @@ Source primaire : `CAHIER_DES_CHARGES_BOUTIQUES.pdf`, novembre 2026, 22 pages. C
 
 Protocole concret d'exécution et fiche de signature : [RETAIL_1042_OWNER_E2E_SCRIPT.md](RETAIL_1042_OWNER_E2E_SCRIPT.md). **Aucun des scénarios ni des douze critères n'est encore attesté BON** par le propriétaire.
 
-Tranche 45 candidate : aucun liquidateur ne doit confirmer un remboursement sans revérification récente du mot de passe et, si activé, d'un code MFA. Test navigateur `428 STEP_UP_REQUIRED` avant vérification, puis liquidation réelle ; reste à valider en CI, en environnement client et sur le matériel réel.
+Tranche 45 vérifiée en CI : la liquidation du remboursement exige le step-up récent (mot de passe et MFA si activé). Le test navigateur obtient `428 STEP_UP_REQUIRED` sans vérification puis liquide réellement après vérification. Validation client/matérielle toujours requise.
 
-Tranche 43 candidate : véritable scénario navigateur de retour/avoir/remboursement à cinq acteurs et réintégration comptabilisée du stock. Les cas de paiements multi-comptes, le CASH, l'habilitation minimale réelle des cinq fonctions et la recette propriétaire restent ouverts.
+Tranches 43–47 validées sur PostgreSQL isolé : retour/avoir/remboursement réel à cinq acteurs distincts, reprise de stock, écriture de coût et contrepassation, contrôle d'idempotence, rapprochement du coût des ventes par magasin via mappage canonique. Les paiements multi-comptes, le CASH, la stricte habilitation métier des cinq fonctions et la recette propriétaire restent à vérifier.
 
-Tranche 41 validée par CI (24/24 E2E, 17/17 workflows) : contrôle navigateur d'une facture à trois acteurs, double paiement Finance, allocations idempotentes et unique imputation stock/coût après règlement intégral. Cela ne valide **pas** l'E2E de retour/avoir/remboursement, la clôture réelle multi-caissiers, les imprimantes, les exports, la restauration ou la signature propriétaire.
+Tranche 47, commit `ae31f391` : **24/24 tests navigateur et 17/17 workflows CI réussis**, incluant facture Finance à trois acteurs, paiements partiel/intégral, stock/COGS à l'unique règlement complet, isolation des boutiques, puis retour/avoir/remboursement à cinq acteurs avec vérification renforcée et écritures inverses. Cela **ne valide pas** la clôture réelle multi-caissiers, les imprimantes, les exports visuels et financiers certifiés, la restauration ni la signature propriétaire.
 
 Périmètre : ERP Core Retail **paramétrable et réutilisable** pour N boutiques, avec un scénario de référence à deux boutiques alimentaires à Kinshasa. Ne jamais créer une solution codée pour un client, un nombre de boutiques, un gérant, une devise, une caisse ou une marque déterminés.
 
@@ -18,17 +18,17 @@ Périmètre : ERP Core Retail **paramétrable et réutilisable** pour N boutique
 
 | Chapitre du cahier | Contrat de réception à prouver | État conservateur au 07/11/2026 |
 | --- | --- | --- |
-| I — Présentation et objectifs | Centralisation, indépendance, traçabilité, simplicité, sécurité | PARTIEL : fondation multi-site présente, E2E absent |
+| I — Présentation et objectifs | Centralisation, indépendance, traçabilité, simplicité, sécurité | PARTIEL : fondation multi-site et tests navigateur multi-boutiques validés ; acceptation globale propriétaire en attente |
 | II — Périmètre et fonctionnement | Stock, ventes, caisse, dépenses et rapports isolés pour chaque boutique ; supervision propriétaire | PARTIEL : isolation incomplète dans certaines routes communes |
 | III — Profils et droits | Administrateur, gérant, facturier et caissier ; restrictions UI **et serveur** ; désactivation ; pas d'accès inter-boutiques | PARTIEL : gestion d'affectations disponible ; matrice contradictoire à arbitrer par paramètres explicites |
 | IV — 4.1 Authentification | Login, logout, récupération, sessions, comptes désactivés, autorisations | À_CERTIFIER avec les quatre profils |
 | IV — 4.2 Articles et catégories | Code, code-barres facultatif, désignation, catégorie, unité, prix d'achat/vente, seuil, statut, historique | PARTIEL : contrôler UI, catalogues, permissions sur prix et désactivation |
-| IV — 4.3 Stocks | Stock disponible, rupture, minimum, mouvements par boutique, pas d'édition sans justification | PARTIEL : réservations/contrôles ajoutés, E2E concurrent encore absent |
+| IV — 4.3 Stocks | Stock disponible, rupture, minimum, mouvements par boutique, pas d'édition sans justification | PARTIEL : réservations/contrôles et scénarios de stock testés ; acceptation concurrence et lots à signer |
 | IV — 4.4 Entrées de marchandises | Fournisseur, réception, quantités, prix/coût, observation, responsable, historique, lot et boutique | PARTIEL : contrôler réception par lot et interdiction aux rôles non autorisés |
 | IV — 4.5 Sorties de marchandises | Sortie motivée (perte, péremption, dommage, consommation, retour fournisseur), audit et stock | PARTIEL : contrôler tous les motifs, historique et permissions |
 | IV — 4.6 Transferts | Préparation, demande, validation indépendante, transit, réception, écarts, lots, historique, pas de double stock | PARTIEL : transit et réception codés, tests humains manquants |
 | IV — 4.7 Ventes | Numéro, boutique, facturier, client facultatif, prix/remises, quantité, horodatage, statut et stock disponible | PARTIEL : contrôle des remises facultatives et séparation des rôles à certifier |
-| IV — 4.8 Facturation | Facture unique, statuts, annulation non destructive, A4/thermique, mentions légales et règlement partiel | PARTIEL : facture Finance, impression et orchestrateur de retour/avoir/remboursement codés ; tests PostgreSQL multi-acteurs et E2E final toujours absents |
+| IV — 4.8 Facturation | Facture unique, statuts, annulation non destructive, A4/thermique, mentions légales et règlement partiel | PARTIEL : tests PostgreSQL multi-acteurs passés (règlement fractionné, retour, avoir, remboursement et COGS) ; impression physique et OWNER_E2E final non exécutés |
 | IV — 4.9 Caisses | Espèces/Mobile Money/virement, recettes, clôture journalière, écarts, autorisation distincte et historique | OUVERT : certification par boutique, plusieurs caissiers, correctifs et validation de clôture |
 | IV — 4.10 Dépenses | Catégorie, boutique, justificatif, mode de paiement, droits d'entrée et validation configurables, rapport | PARTIEL : siteId ajouté, isolement transversal et rapprochement à terminer |
 | IV — 4.11 Clients | Enregistrement facultatif, coordonnées facultatives et historique d'achats | À_CERTIFIER : vente anonyme et consentement, pas de compte global imposé |
@@ -37,13 +37,13 @@ Périmètre : ERP Core Retail **paramétrable et réutilisable** pour N boutique
 | IV — 4.14 Rapports/statistiques | Ventes, stocks, top/flop, entrées/sorties, CA, COGS, dépenses, marges, bénéfices, filtres, PDF/XLSX | PARTIEL : écritures de résultat `POSTED`/`REVERSED` groupées par boutique/devise avec marge brute et résultat d'exploitation **non certifiés** ; exports PDF/XLSX provisoires disponibles, mais historique sans `siteId`, exhaustivité, résultat net et validation visuelle des fichiers restent ouverts |
 | V — Tableaux de bord | Propriétaire consolidé ; gérant/facturier/caissier limité à son périmètre, KPI non fictifs | PARTIEL : revue des 4 expériences et des totaux nécessaire |
 | VI — Règles RG01–RG20 | Toutes les règles numérotées ci-dessous doivent passer dans le produit | PARTIEL : voir matrice RG |
-| VII — Architecture technique | Web responsive, base unique, extensions canoniques et multi-tenant ; pas de double ledger | À_CERTIFIER : schéma/migrations/contraintes CI + base réelle |
+| VII — Architecture technique | Web responsive, base unique, extensions canoniques et multi-tenant ; pas de double ledger | PARTIEL : migrations, schéma et parcours PostgreSQL vérifiés en CI ; contraintes de charge et restauration isolée à certifier |
 | VIII — Sécurité et protection | Auth, RBAC, HTTPS, injections, journaux, sauvegardes, **restauration testée** | OUVERT : restauration et test inter-rôles non réalisés |
 | IX — UI/UX | Menu selon rôle, interfaces professionnelles, ergonomie Android/tablette/desktop | PARTIEL : Design 2.0, vérification visuelle mobile/accessibilité requise |
 | X — Non fonctionnel | Performance, disponibilité, navigateurs, N boutiques, fiabilité, confidentialité et sauvegarde | OUVERT : mesures et exercices de reprise à documenter |
 | XI — Matériel | 3 PC, Android facultatif, réseau, imprimantes, fonctionnement de bout en bout | À_CERTIFIER : impression A4/80 mm sur matériel disponible |
 | XII — Phases/délai | Analyse, UML, schéma, UI, modules, tests, déploiement, formation ; délai prévisionnel non garanti | PARTIEL : suivi de livraison, formation et accord commercial séparés |
-| XIII — Tests et validation | Auth, stock, facture, caisse, finance, comparaison A/B | OUVERT : E2E techniques et E2E propriétaire |
+| XIII — Tests et validation | Auth, stock, facture, caisse, finance, comparaison A/B | PARTIEL : 24/24 tests navigateur et 17/17 workflows au SHA `ae31f391` ; tests métier/manuels E01–E19 et signature propriétaire encore ouverts |
 | XIV — Livrables | Application, base/migrations, interfaces, accès initiaux, guides, sauvegarde, déploiement, maintenance | OUVERT : conformité technique ; remise du code SaaS soumise au contrat commercial |
 | XV — Évolutions futures | N boutiques ; mobile natif, offline, crédit, commandes, scanners, intégrations possibles en extensions | PARTIEL : capacités futures restent optionnelles, **pas** critères de release immédiate |
 | XVI — Réception | Les douze critères ci-dessous doivent être démontrés | OUVERT : OWNER_E2E non exécuté |
@@ -93,7 +93,7 @@ Le **refus par défaut** s'applique à toute capacité sensible non attribuée e
 
 ## 4. Deux niveaux de E2E, sans substitution
 
-### E2E technique (à construire et exécuter avant remise)
+### E2E technique (24/24 tests navigateur au SHA `ae31f391` ; couverture complémentaire encore requise)
 
 1. PostgreSQL réel isolé, migrations base vide et reprise après conflit ; deux boutiques, plusieurs opérateurs, sessions authentifiées.
 2. Contre-épreuves inter-boutiques sur lectures, écritures, détails, recherches, compteurs, notifications, exports et accès direct ; révocation immédiate.
@@ -111,6 +111,6 @@ Les **12 critères du chapitre XVI** sont : (1) A/B accessibles sur une platefor
 ## 5. Conditions bloquantes et gouvernance
 
 - `siteStaffIsolationEnabled` et `invoiceCheckoutEnabled` restent OFF jusqu'à couverture **de toutes** les routes et des parcours ; pas de valeur de configuration codée pour ce client.
-- E2E automatisé validé ≠ OWNER_E2E validé. Les deux sont nécessaires. Les commits `19818f1c` et `07207f65` ont validé **22/22 tests navigateur** sur PostgreSQL isolé (facture brouillon, séparation A/B, révocation, refus d'accès aux paiements/retours inter-boutiques et vues d'impression), mais **pas** le règlement Finance multi-acteurs, les caisses, les rapports, l'impression physique ni la restauration. Un test de concurrence sur l'unique article et de libération de promesse après annulation est proposé en tranche 38, sans prétendre qu'il est déjà exécuté.
+- E2E automatisé validé ≠ OWNER_E2E validé. Les deux sont nécessaires. Le commit `ae31f391` valide **24/24 tests navigateur et 17/17 workflows CI** sur base PostgreSQL isolée, dont règlement Finance multi-acteurs et retour/avoir/remboursement réel. La recette des caisses multi-acteurs, des rapports certifiables, de l'impression physique, de la restauration et des 19 scénarios propriétaires reste à exécuter. Ne pas déduire une conformité globale d'un sous-ensemble de tests.
 - Aucun merge de la PR #1043 avant `OWNER_E2E` global BON du Dr Jonathan ; Production uniquement depuis `main` avec CI et release vérifiées.
 - Ne pas annoncer une date ni un nombre définitif de tranches avant clôture de chaque lacune et de la matrice de réception.
