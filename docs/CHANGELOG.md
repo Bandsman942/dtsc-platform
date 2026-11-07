@@ -1,3 +1,10 @@
+## 2026-11-07 — Retail #1042, tranche 24 — Caisses liées au site réel et clôtures isolées (PR brouillon #1043)
+
+- L'ouverture de session vérifie la boutique réellement attachée au compte financier **dans sa transaction Finance**, refuse les identifiants de site contraires, vérifie la permission `CLOSE_CASH` de l'utilisateur assigné et ne permet pas qu'une ancienne affectation révoquée autorise une ouverture.
+- Les listes Finance et Retail des sessions de caisse, ainsi que la liste des clôtures Retail et leurs compteurs, sont filtrées par site pour le personnel affecté. Les finance-only/propriétaires conservent leurs droits Finance réels.
+- Une clôture Retail ne peut réutiliser une ancienne clé pour lire une autre boutique ni combiner les comptes de boutiques distinctes lorsque le cloisonnement est actif. Les décisions de clôture sont également contrôlées par site ; validations Finance indépendantes préservées.
+- QA ciblée de l'ouverture de caisse et contrats des lectures/clôtures en CI, erreurs contextualisées. **E2E multi-caissiers, vrais avoirs/remboursements, matériels et restauration toujours à certifier ; flags OFF.**
+
 ## 2026-11-07 — Retail #1042, tranche 23 — Bloquer les avoirs sectoriels sans retour Finance/stock (PR brouillon #1043)
 
 - Les helpers d'avoirs pour remboursements Pharmacie/Gaming ne peuvent plus créer ou rejouer un avoir sur une facture liée au checkout Retail ; la préparation partielle et exacte refusent désormais avec `RETAIL_INVOICE_RETURN_WORKFLOW_REQUIRED` avant tout effet financier.
