@@ -108,3 +108,11 @@ Contrôle du 7 novembre : `npm run build` local a terminé avec succès la compi
 - QA contractuelle enrichie : absence de privilège implicite, override explicite, protections des quatre points d'écriture et traduction de l'interface.
 
 **Avant activation**, il reste à certifier les routes de valorisation, les opérations spécialisées, les rapports/exports, les migrations sur PostgreSQL et les parcours E2E de deux boutiques avec rôles réellement authentifiés.
+
+### Tranche 13 — réservations Retail et disponibilités multi-boutiques (2026-11-07)
+
+- La route de disponibilité Retail ne livre plus les quantités, le détail des dépôts ou le total agrégé de boutiques non affectées lorsque l'isolation des collaborateurs est activée : `VIEW_STOCK` détermine les boutiques visibles et le total est recalculé sur elles seules.
+- Le registre des réservations applique la même portée aux lignes **et** au total de pagination. Les filtres par commande ou état ne peuvent pas échapper au périmètre boutique.
+- Création et libération des réservations : vérification transactionnelle `MANAGE_STOCK` sur le dépôt concerné ; le contrôle précède le retour d'idempotence. Une réutilisation de clé avec une autre commande, quantité ou boutique est rejetée.
+- Aucune modification de droits par défaut et aucun changement hors activation explicite de `siteStaffIsolationEnabled`. Ce lot ne valide pas l'isolation des autres routes de référentiel, achats, rapports ou exports.
+- Tests contractuels ajoutés dans `qa-hotfix-1042-site-staff.mjs`. Contrôles GitHub, PostgreSQL multi-rôles et E2E propriétaire restent à obtenir avant toute fusion.

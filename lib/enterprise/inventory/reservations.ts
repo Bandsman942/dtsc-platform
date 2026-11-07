@@ -3,7 +3,7 @@ import type { z } from "zod";
 import { EnterpriseDomainConflictError, EnterpriseDomainError } from "@/lib/enterprise/common/errors";
 import { publishEnterpriseEvent } from "@/lib/enterprise/crm-sales/helpers";
 import type { inventoryReservationCreateSchema } from "@/lib/enterprise/inventory/reservation-schemas";
-import { applyStockMovementTx } from "@/lib/enterprise/inventory/service";
+import { applyStockMovementTx, requireInventoryStockAuthorityTx } from "@/lib/enterprise/inventory/service";
 import { readActiveRetailInvoiceStockHoldsTx } from "@/lib/enterprise/retail/invoice-stock-holds";
 import { prisma } from "@/lib/prisma";
 
@@ -135,8 +135,16 @@ export async function getEnterpriseInventoryAvailability(organizationId: string,
 
 export async function createEnterpriseInventoryReservation(organizationId: string, actorUserId: string, input: ReservationCreateInput) {
   return reservationRetry(() => prisma.$transaction(async (tx) => {
+    // Enforce site rights before an idempotency hit can expose another store.
+    await requireInventoryStockAuthorityTx(tx, organizationId, actorUserId, input.warehouseId);
     const existing = await tx.enterpriseInventoryReservation.findFirst({ where: { organizationId, idempotencyKey: input.idempotencyKey } });
-    if (existing) return { reservation: existing, idempotent: true };
+    if (existing) {
+      if (existing.warehouseId !== input.warehouseId || existing.salesOrderId !== input.salesOrderId
+        || existing.salesOrderItemId !== input.salesOrderItemId || !existing.quantity.equals(input.quantity)) {
+        throw new EnterpriseDomainConflictError("INVENTORY_RESERVATION_IDEMPOTENCY_COLLISION");
+      }
+      return { reservation: existing, idempotent: true };
+    }
 
     const [orderItem, warehouse, storageLocation] = await Promise.all([
       tx.enterpriseSalesOrderItem.findFirst({
@@ -329,8 +337,12 @@ export async function releaseEnterpriseInventoryReservationTx(
 }
 
 export async function releaseEnterpriseInventoryReservation(organizationId: string, reservationId: string, actorUserId: string, reason: string) {
-  return reservationRetry(() => prisma.$transaction(
-    (tx) => releaseEnterpriseInventoryReservationTx(tx, organizationId, reservationId, actorUserId, reason),
-    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 30000 },
-  ));
+  return reservationRetry(() => prisma.$transaction(async (tx) => {
+    const reservation = await tx.enterpriseInventoryReservation.findFirst({
+      where: { id: reservationId, organizationId }, select: { warehouseId: true },
+    });
+    if (!reservation) throw new EnterpriseDomainError("INVENTORY_RESERVATION_NOT_FOUND", 404);
+    await requireInventoryStockAuthorityTx(tx, organizationId, actorUserId, reservation.warehouseId);
+    return releaseEnterpriseInventoryReservationTx(tx, organizationId, reservationId, actorUserId, reason);
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 30000 }));
 }

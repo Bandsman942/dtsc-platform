@@ -141,4 +141,19 @@ assert.match(fs.readFileSync("prisma/enterprise-retail-site-access.prisma", "utf
 assert.match(fs.readFileSync("prisma/enterprise-retail-site-access.prisma", "utf8"), /@relation\(fields: \[organizationId, userId\]/);
 assert.match(fs.readFileSync("app/enterprise-modules/retail-page.tsx", "utf8"), /RetailSiteStaffAccess/);
 assert.match(fs.readFileSync("lib/enterprise/retail/service.ts", "utf8"), /requireRetailSiteCapability\(organizationId, actorUserId, warehouse\.siteId, "COLLECT_PAYMENT", tx\)/);
+// The legacy reservations and availability endpoints must never return
+// unfiltered multi-store records or totals after staff isolation is enabled.
+const retailAvailability = fs.readFileSync("app/api/enterprise/[organizationId]/retail/inventory/availability/route.ts", "utf8");
+assert.match(retailAvailability, /retailInventoryVisibleSites\(organizationId, auth\.session\.userId\)/);
+assert.match(retailAvailability, /availability\.stores\.filter\(\(store\) => scope\.siteIds\.includes\(store\.siteId\)\)/);
+assert.match(retailAvailability, /stores\.reduce\(\(sum, store\) => sum\.plus\(store\.quantityAvailable\)/);
+const retailReservations = fs.readFileSync("app/api/enterprise/[organizationId]/retail/inventory/reservations/route.ts", "utf8");
+assert.match(retailReservations, /retailInventoryVisibleSites\(organizationId, auth\.session\.userId\)/);
+assert.match(retailReservations, /warehouseId: \{ in: allowedWarehouseIds \}/);
+const reservationService = fs.readFileSync("lib/enterprise/inventory/reservations.ts", "utf8");
+assert.match(reservationService, /requireInventoryStockAuthorityTx\(tx, organizationId, actorUserId, input\.warehouseId\)/);
+assert.match(reservationService, /requireInventoryStockAuthorityTx\(tx, organizationId, actorUserId, reservation\.warehouseId\)/);
+assert.ok(reservationService.indexOf("requireInventoryStockAuthorityTx(tx, organizationId, actorUserId, input.warehouseId)") < reservationService.indexOf("idempotencyKey: input.idempotencyKey"), "Authorization must precede reservation idempotency lookup");
+assert.match(reservationService, /INVENTORY_RESERVATION_IDEMPOTENCY_COLLISION/);
+
 console.log("HOTFIX #1042 boutique staff: tenant-scoped assignments, owner-only CRUD, RBAC defaults/overrides, site-scoped stock transfers and expiry alert contracts passed; strict activation deferred.");
