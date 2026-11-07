@@ -4,6 +4,7 @@
 - Préparation atomique : regroupement exact des allocations d'origine par compte, contrôle client/devise/boutique/méthode, montants arrondis au centime, clés d'idempotence distinctes, un paiement `PENDING_APPROVAL` par compte et un avoir unique. Une méthode incompatible sur le même compte est refusée, sans inventer une réallocation.
 - Liquidation sérialisable : chaque paiement approuvé doit couvrir ses allocations du même compte, soldes et droits revérifiés, contrepassations par tranche puis un avoir `POSTED`, paiements `CONFIRMED` et stock `RETURN_IN` valorisé une fois ; échec de n'importe quelle étape = rollback de toute la transaction.
 - Le dialogue Retour/Avoir affiche la progression agrégée des approbations et refuse le bouton de liquidation tant qu'un paiement manque. Contre-épreuves unitaires d'un remboursement simple et d'un retour à deux comptes ; scénario PostgreSQL navigateur étendu à deux comptes, **à confirmer en CI**. Ni `OWNER_E2E` ni certification des rapports/caisses/matériel/restauration ne sont acquis. Aucune fusion, Preview ou Production, flags OFF.
+- Ajustement du garde QA de schéma après retour CI : l'interdiction de balances/ledgers Retail reste imposée aux modèles de checkout ; le nouveau lien de remboursement est explicitement limité aux références Finance canoniques, sans solde financier concurrent. Les vérifications de ce garde ne sont pas retirées.
 
 ## 2026-11-07 — Retail #1042, tranche 47 — Exports Excel et PDF explicites non certifiés (candidat, PR #1043)
 

@@ -246,7 +246,18 @@ assert.match(fs.readFileSync(".github/workflows/quality-gates.yml", "utf8"), /qa
 const schema = fs.readFileSync("prisma/enterprise-retail-invoice-checkout.prisma", "utf8");
 assert.match(schema, /@@unique\(\[organizationId, idempotencyKey\]\)/);
 assert.match(schema, /@relation\(fields: \[organizationId, salesInvoiceId\], references: \[organizationId, id\]/);
-assert.doesNotMatch(schema, /grandTotal|amountPaid|outstandingAmount|financialAccountId/, "Retail must not create a competing financial ledger");
+for (const name of ["EnterpriseRetailInvoiceCheckout", "EnterpriseRetailInvoiceCheckoutLine"]) {
+  const block = schema.match(new RegExp(`model ${name} \\{[\\s\\S]*?\\n\\}`))?.[0];
+  assert.ok(block, `${name} schema is required`);
+  assert.doesNotMatch(block, /grandTotal|amountPaid|outstandingAmount|financialAccountId/,
+    "Retail checkout must not create a competing financial ledger");
+}
+const refundLeg = schema.match(/model EnterpriseRetailInvoiceReturnRefundLeg \{[\s\S]*?\n\}/)?.[0];
+assert.ok(refundLeg, "Refund payout links must be explicit and tenant-scoped");
+assert.match(refundLeg, /refundPayment EnterprisePayment @relation/);
+assert.match(refundLeg, /financialAccount EnterpriseFinancialAccount @relation/);
+assert.doesNotMatch(refundLeg, /grandTotal|amountPaid|outstandingAmount|operationalBalance/,
+  "A refund leg may reference canonical Finance but cannot store a second ledger or balance");
 // Finance-only credit notes must not silently unlock or strand Retail stock
 // promises. Check actual preflight behavior, not just the presence of a guard.
 const creditNoteState = { linkedToRetail: true };
