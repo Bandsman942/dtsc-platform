@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
+import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
 import { authorizeRetailRequest, retailErrorResponse } from "@/lib/enterprise/retail/http";
 import {
   createRetailInvoiceReturnRequest, listRetailInvoiceReturnRequests, retailInvoiceReturnRequestSchema,
@@ -15,7 +16,7 @@ export async function GET(req: Request, { params }: Params) {
   const auth = await authorizeRetailRequest(req, organizationId, "RETAIL_POS", "read");
   if (!auth.ok) return auth.response;
   const parsed = z.coerce.number().int().min(1).max(10000).safeParse(new URL(req.url).searchParams.get("page") || "1");
-  if (!parsed.success) return retailErrorResponse(new Error("INVALID_PAGE"), "RETAIL_INVOICE_RETURN_PAGE_INVALID");
+  if (!parsed.success) return retailErrorResponse(new EnterpriseRetailError("RETAIL_INVOICE_RETURN_PAGE_INVALID", 400));
   try {
     const data = await listRetailInvoiceReturnRequests(organizationId, invoiceId, auth.session.userId, parsed.data);
     await writeApiLog({ request: req, startedAt, statusCode: 200, userId: auth.session.userId,
