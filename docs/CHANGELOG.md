@@ -1,3 +1,9 @@
+## 2026-11-07 — Hotfix P0 Retail #1042, tranche 9 — Impression des factures Retail depuis Finance (PR brouillon #1043)
+
+- Nouvelle route d'impression A4 et ticket thermique 80 mm pour la **facture Finance canonique**, avec facture/boutique/date/facturier/client/montants/reste dû, sans donnée de contact personnelle non requise ; HTML échappé, en-têtes sans cache et 404 sur accès inter-boutiques.
+- Badges explicites Brouillon/Annulée/Invalidée, double langue FR/EN, actions adaptatives Design 2.0 dans le registre de factures ; tests d'affichage, filtrage, sécurité et de contrat dans les Quality Gates.
+- **Toujours en PR brouillon** : aucune activation client, impression sur matériel physique, fusion ou production avant E2E global et certification propriétaire.
+
 ## 2026-11-07 — Hotfix P0 Retail #1042, tranche 8 — Disponibilité promise par facture sans sortie anticipée (PR brouillon #1043)
 
 - Les lignes de facture Retail en attente constituent des **promesses de stock** par boutique, dépôt et lot. La préparation tient compte des promesses existantes sans diminuer le stock réel ; l'annulation ou l'invalidation Finance libère cette disponibilité, la facturation totalement réglée la consomme atomiquement.

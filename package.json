@@ -411,7 +411,8 @@
     "qa:hotfix-1019-security-settings": "node scripts/qa-hotfix-1019-security-settings-design2.mjs",
     "qa:hotfix-1042-retail-invoice-finance": "node scripts/qa-hotfix-1042-retail-invoice-finance.mjs",
     "qa:hotfix-1042-retail-invoice-payments": "node scripts/qa-hotfix-1042-retail-invoice-payments.mjs",
-    "qa:hotfix-1042-retail-invoice-stock-holds": "node scripts/qa-hotfix-1042-retail-invoice-stock-holds.mjs"
+    "qa:hotfix-1042-retail-invoice-stock-holds": "node scripts/qa-hotfix-1042-retail-invoice-stock-holds.mjs",
+    "qa:hotfix-1042-retail-invoice-print": "node scripts/qa-hotfix-1042-retail-invoice-print.mjs"
   },
   "dependencies": {
     "@ai-sdk/gateway": "2.0.27",

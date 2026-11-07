@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowRight, FileClock, FilePlus2, RefreshCw, Search, Send, ShieldAlert, ShoppingBasket, XCircle } from "lucide-react";
+import { ArrowRight, FileClock, FilePlus2, Printer, RefreshCw, Search, Send, ShieldAlert, ShoppingBasket, XCircle } from "lucide-react";
 import { EnterpriseApproverSelect } from "@/components/enterprise/enterprise-approver-select";
 import { RetailInvoicePaymentDialog } from "@/components/enterprise/professional/retail-invoice-payment-dialog";
 import { Button } from "@/components/ui/button";
@@ -43,6 +43,7 @@ const language = {
     pagePrev: "Précédente", pageNext: "Suivante", currencyMismatch: "Une facture ne peut pas mélanger plusieurs devises. Préparez un autre panier pour cet article.", ready: "Circuit en cours d'activation contrôlée", failed: "Impossible de consulter les factures Retail.", saved: "Facture préparée. Elle attend les étapes de validation Finance.", duplicate: "Une facture existe déjà pour cette référence ; son état a été actualisé.",
     cancelDraft: "Annuler le brouillon", cancelTitle: "Confirmer l’annulation de la facture", cancelHint: "Cette opération annule uniquement le brouillon Finance. Elle ne génère ni remboursement ni mouvement de stock.", cancelReason: "Motif de l’annulation", cancelReasonHelp: "Précisez au moins quatre caractères pour conserver une trace de la décision.", cancelConfirm: "Confirmer l’annulation", cancelAbort: "Garder la facture", cancelSuccess: "Le brouillon a été annulé et conservé dans l’historique.", cancelFailed: "L’annulation n’a pas pu être enregistrée.",
     submitDraft: "Soumettre à validation", submitTitle: "Soumettre au validateur Finance", submitHint: "Un responsable indépendant, autorisé dans Finance, doit approuver la facture avant son émission. Aucun encaissement ni stock ne sera enregistré à cette étape.", submitConfirm: "Soumettre la facture", submitSuccess: "Facture soumise au validateur Finance. Son approbation est désormais attendue.", submitFailed: "La facture n’a pas pu être transmise à Finance.", submitNote: "Commentaire de soumission (facultatif)", submitApprover: "Responsable chargé de la validation", submitAbort: "Conserver en brouillon",
+    printA4: "Facture A4", printThermal: "Ticket 80 mm",
   },
   en: {
     title: "Store invoices and collections", lead: "Prepare sales and track the single Finance invoice, with inventory released only after complete settlement.",
@@ -53,6 +54,7 @@ const language = {
     pagePrev: "Previous", pageNext: "Next", currencyMismatch: "An invoice cannot mix currencies. Create another basket for this item.", ready: "Controlled activation in progress", failed: "Retail invoices are unavailable.", saved: "Invoice prepared. It is awaiting Finance approval stages.", duplicate: "An invoice already exists for this reference; its status has been refreshed.",
     cancelDraft: "Cancel draft", cancelTitle: "Confirm invoice cancellation", cancelHint: "Only the Finance draft will be cancelled. No refund or inventory movement is created.", cancelReason: "Cancellation reason", cancelReasonHelp: "Enter at least four characters to preserve the decision trail.", cancelConfirm: "Confirm cancellation", cancelAbort: "Keep invoice", cancelSuccess: "The draft was cancelled and retained in the history.", cancelFailed: "Cancellation could not be recorded.",
     submitDraft: "Submit for approval", submitTitle: "Submit to Finance approver", submitHint: "An independent approver with Finance permissions must approve the invoice before it can be issued. No payment or inventory movement occurs now.", submitConfirm: "Submit invoice", submitSuccess: "Invoice submitted for Finance approval.", submitFailed: "The invoice could not be submitted to Finance.", submitNote: "Submission comment (optional)", submitApprover: "Finance approver", submitAbort: "Keep as draft",
+    printA4: "A4 invoice", printThermal: "80 mm receipt",
   },
 } as const;
 
@@ -222,7 +224,28 @@ export function RetailInvoiceFlowWorkbench({ organizationId, locale }: { organiz
       <div className="flex min-w-0 flex-wrap items-center justify-between gap-3"><h3 className="text-sm font-black text-dtsc-ink">{copy.list}</h3>{data?.sites.length ? <select aria-label={copy.warehouse} className="min-h-11 max-w-full rounded-lg border border-dtsc-border bg-dtsc-page px-2 text-sm" value={siteFilter} onChange={(event) => { setSiteFilter(event.target.value); setPage(1); }}><option value="">{copy.all}</option>{data.sites.map((site) => <option key={site.id} value={site.id}>{site.name}</option>)}</select> : null}</div>
       {loading ? <p role="status" className="mt-3 text-sm text-dtsc-muted">{copy.loading}</p> : null}
       {!loading && data && !data.items.length ? <p className="mt-3 rounded-xl bg-dtsc-page p-3 text-sm text-dtsc-muted">{copy.empty}</p> : null}
-      <div className="mt-3 grid min-w-0 gap-2">{data?.items.map((entry) => <article key={entry.id} className="min-w-0 rounded-xl border border-dtsc-border bg-dtsc-page p-3"><div className="flex min-w-0 flex-wrap items-center justify-between gap-2"><div className="min-w-0"><p className="break-words text-sm font-black text-dtsc-ink">{entry.invoice.number} · {entry.site.name}</p><p className="mt-1 text-xs text-dtsc-muted">{entry.invoice.items.map((item) => item.description).join(" · ")}</p></div><span className="shrink-0 rounded-full bg-blue-500/10 px-2 py-1 text-xs font-bold text-blue-700 dark:text-blue-300">{invoiceStatus(entry.invoice.status, copy)}</span></div><div className="mt-2 flex min-w-0 flex-wrap items-center justify-between gap-3 text-xs text-dtsc-muted"><span>{copy.outstanding} : <strong className="text-dtsc-ink">{money(entry.invoice.outstandingAmount, entry.invoice.currencyCode, locale)}</strong></span><span>{entry.stockPostedAt ? copy.delivered : copy.stockPending}</span></div>{data.checkoutReady && (entry.canCancel || entry.canSubmit || entry.canCollect) ? <div data-responsive-actions className="mt-3 flex min-w-0 flex-wrap justify-end gap-2 border-t border-dtsc-border pt-3">{entry.canCancel ? <Button type="button" variant="outline" onClick={() => { setCancelTarget(entry); setCancelReason(""); }}><XCircle className="h-4 w-4 text-amber-600" />{copy.cancelDraft}</Button> : null}{entry.canSubmit ? <Button type="button" onClick={() => setSubmitTarget(entry)}><Send className="h-4 w-4" />{copy.submitDraft}</Button> : null}{entry.canCollect ? <RetailInvoicePaymentDialog organizationId={organizationId} invoiceId={entry.invoice.id} invoiceNumber={entry.invoice.number} siteName={entry.site.name} invoiceStatus={entry.invoice.status} locale={locale} onChanged={() => { void load(page, siteFilter); }} /> : null}</div> : null}</article>)}</div>
+      <div className="mt-3 grid min-w-0 gap-2">{data?.items.map((entry) => (
+        <article key={entry.id} className="min-w-0 rounded-xl border border-dtsc-border bg-dtsc-page p-3">
+          <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
+            <div className="min-w-0">
+              <p className="break-words text-sm font-black text-dtsc-ink">{entry.invoice.number} · {entry.site.name}</p>
+              <p className="mt-1 text-xs text-dtsc-muted">{entry.invoice.items.map((item) => item.description).join(" · ")}</p>
+            </div>
+            <span className="shrink-0 rounded-full bg-blue-500/10 px-2 py-1 text-xs font-bold text-blue-700 dark:text-blue-300">{invoiceStatus(entry.invoice.status, copy)}</span>
+          </div>
+          <div className="mt-2 flex min-w-0 flex-wrap items-center justify-between gap-3 text-xs text-dtsc-muted">
+            <span>{copy.outstanding} : <strong className="text-dtsc-ink">{money(entry.invoice.outstandingAmount, entry.invoice.currencyCode, locale)}</strong></span>
+            <span>{entry.stockPostedAt ? copy.delivered : copy.stockPending}</span>
+          </div>
+          <div data-responsive-actions className="mt-3 flex min-w-0 flex-wrap justify-end gap-2 border-t border-dtsc-border pt-3">
+            <Button type="button" variant="outline" onClick={() => window.open(`/api/enterprise/${organizationId}/retail/invoices/${encodeURIComponent(entry.invoice.id)}/print?paper=a4&lang=${locale}`, "_blank", "noopener,noreferrer")}><Printer className="h-4 w-4" />{copy.printA4}</Button>
+            <Button type="button" variant="outline" onClick={() => window.open(`/api/enterprise/${organizationId}/retail/invoices/${encodeURIComponent(entry.invoice.id)}/print?paper=thermal&lang=${locale}`, "_blank", "noopener,noreferrer")}><Printer className="h-4 w-4" />{copy.printThermal}</Button>
+            {data.checkoutReady && entry.canCancel ? <Button type="button" variant="outline" onClick={() => { setCancelTarget(entry); setCancelReason(""); }}><XCircle className="h-4 w-4 text-amber-600" />{copy.cancelDraft}</Button> : null}
+            {data.checkoutReady && entry.canSubmit ? <Button type="button" onClick={() => setSubmitTarget(entry)}><Send className="h-4 w-4" />{copy.submitDraft}</Button> : null}
+            {data.checkoutReady && entry.canCollect ? <RetailInvoicePaymentDialog organizationId={organizationId} invoiceId={entry.invoice.id} invoiceNumber={entry.invoice.number} siteName={entry.site.name} invoiceStatus={entry.invoice.status} locale={locale} onChanged={() => { void load(page, siteFilter); }} /> : null}
+          </div>
+        </article>
+      ))}</div>
       {data && data.pagination.pageCount > 1 ? <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-xs text-dtsc-muted"><span>{data.pagination.page} / {data.pagination.pageCount} · {data.pagination.total}</span><div className="flex gap-2"><Button type="button" variant="outline" disabled={page <= 1 || loading} onClick={() => setPage((current) => Math.max(1, current - 1))}>{copy.pagePrev}</Button><Button type="button" variant="outline" disabled={page >= data.pagination.pageCount || loading} onClick={() => setPage((current) => current + 1)}>{copy.pageNext}</Button></div></div> : null}
     </div>
     <Dialog open={Boolean(cancelTarget)} onClose={() => { if (!cancelling) { setCancelTarget(null); setCancelReason(""); } }} title={copy.cancelTitle} description={copy.cancelHint} className="max-w-xl" presentation="editor">
