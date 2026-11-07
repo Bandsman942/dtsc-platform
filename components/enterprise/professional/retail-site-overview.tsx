@@ -1,13 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Building2, Landmark, RefreshCw, ShoppingBasket, Wallet } from "lucide-react";
+import { Building2, Landmark, ReceiptText, RefreshCw, ShoppingBasket, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { customerFacingError } from "@/lib/customer-facing-language";
 
 type Money = { currencyCode: string; total: string; count: number };
 type Tender = Money & { method: string };
-type Site = { id: string; code: string; name: string; sales: Money[]; approvedExpenses: Money[]; collections: Tender[]; inventory: { balanceRows: number }; cashSessions: Array<{ status: string; count: number }>; dailyCloses: Array<{ status: string; count: number }> };
+type FinanceInvoice = { currencyCode: string; count: number; issuedTotal: string; allocatedToDate: string; outstandingToDate: string };
+type Site = { id: string; code: string; name: string; sales: Money[]; financeInvoices: FinanceInvoice[]; approvedExpenses: Money[]; collections: Tender[]; inventory: { balanceRows: number }; cashSessions: Array<{ status: string; count: number }>; dailyCloses: Array<{ status: string; count: number }> };
 
 function currencyAmount(value: string, currency: string, en: boolean) {
   try { return new Intl.NumberFormat(en ? "en-US" : "fr-FR", { maximumFractionDigits: 2 }).format(Number(value)) + " " + currency; }
@@ -49,6 +50,15 @@ export function RetailSiteOverview({ organizationId, locale }: { organizationId:
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
         <div className="min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface p-3"><p className="flex items-center gap-2 text-xs font-bold text-dtsc-muted"><ShoppingBasket className="h-4 w-4" />{en ? "Completed sales" : "Ventes réalisées"}</p>{site.sales.length ? site.sales.map((sale) => <p key={sale.currencyCode} className="mt-2 break-words text-sm font-black text-dtsc-ink">{currencyAmount(sale.total, sale.currencyCode, en)} <span className="font-normal text-dtsc-muted">({sale.count})</span></p>) : <p className="mt-2 text-sm text-dtsc-muted">0</p>}</div>
         <div className="min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface p-3"><p className="flex items-center gap-2 text-xs font-bold text-dtsc-muted"><Wallet className="h-4 w-4" />{en ? "POS collections" : "Encaissements POS"}</p>{site.collections.length ? site.collections.map((tender) => <p key={`${tender.currencyCode}:${tender.method}`} className="mt-2 break-words text-sm font-semibold text-dtsc-ink">{currencyAmount(tender.total, tender.currencyCode, en)} <span className="text-xs font-normal text-dtsc-muted">· {tender.method}</span></p>) : <p className="mt-2 text-sm text-dtsc-muted">0</p>}</div>
+      </div>
+      <div className="mt-3 rounded-xl border border-dtsc-border bg-dtsc-surface p-3">
+        <p className="flex items-center gap-2 text-xs font-bold text-dtsc-muted"><ReceiptText className="h-4 w-4" />{en ? "Issued Finance invoices — distinct from POS sales" : "Factures Finance émises — distinctes des ventes POS"}</p>
+        {(site.financeInvoices || []).length ? site.financeInvoices.map((entry) =>
+          <div key={entry.currencyCode} className="mt-2 min-w-0 border-t border-dtsc-border/60 pt-2 first:border-0 first:pt-0">
+            <p className="text-sm font-bold text-dtsc-ink">{currencyAmount(entry.issuedTotal, entry.currencyCode, en)} <span className="font-normal text-dtsc-muted">({entry.count})</span></p>
+            <p className="mt-1 text-xs text-dtsc-muted">{en ? "Allocated to date" : "Paiements affectés à date"}: {currencyAmount(entry.allocatedToDate, entry.currencyCode, en)} · {en ? "Outstanding to date" : "Solde dû à date"}: {currencyAmount(entry.outstandingToDate, entry.currencyCode, en)}</p>
+          </div>) : <p className="mt-2 text-sm text-dtsc-muted">0</p>}
+        <p className="mt-2 text-xs text-dtsc-muted">{en ? "Invoice amounts are grouped by issue date, while allocated/outstanding figures reflect the current balance. These are not collections received during this period." : "Montants regroupés par date d’émission ; affectations et soldes à date. Ce ne sont pas les encaissements reçus pendant la période."}</p>
       </div>
       <div className="mt-3 rounded-xl border border-dtsc-border bg-dtsc-surface p-3"><p className="text-xs font-bold text-dtsc-muted">{en ? "Approved expenses attributed to this store" : "Dépenses approuvées affectées à cette boutique"}</p><div className="mt-1 flex flex-wrap gap-x-4 gap-y-1">{site.approvedExpenses.length ? site.approvedExpenses.map((expense) => <p key={expense.currencyCode} className="text-sm font-semibold text-dtsc-ink">{currencyAmount(expense.total, expense.currencyCode, en)} <span className="font-normal text-dtsc-muted">({expense.count})</span></p>) : <p className="text-sm text-dtsc-muted">0</p>}</div></div>
       <p className="mt-3 text-xs text-dtsc-muted">{site.inventory.balanceRows} {en ? "inventory balance rows" : "lignes de stock"} · {site.cashSessions.filter((row) => row.status === "OPEN").reduce((sum, row) => sum + row.count, 0)} {en ? "open cash sessions" : "sessions de caisse ouvertes"}</p>
