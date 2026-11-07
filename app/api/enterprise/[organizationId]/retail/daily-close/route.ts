@@ -5,6 +5,7 @@ import { authorizeRetailRequest, retailErrorResponse, retailListParams } from "@
 import { retailDailyCloseCreateSchema } from "@/lib/enterprise/retail/schemas";
 import { createRetailDailyClose } from "@/lib/enterprise/retail/service";
 import { prisma } from "@/lib/prisma";
+import { retailFinanceReadSiteScope } from "@/lib/enterprise/retail/site-access";
 
 type Params = { params: Promise<{ organizationId: string }> };
 
@@ -14,7 +15,10 @@ export async function GET(req: Request, { params }: Params) {
   const auth = await authorizeRetailRequest(req, organizationId, "RETAIL_DAILY_CLOSE", "read");
   if (!auth.ok) return auth.response;
   const { page, pageSize, status, from, to } = retailListParams(req);
-  const where: Prisma.EnterpriseRetailDailyCloseWhereInput = { organizationId, ...(status ? { status } : {}), ...(from || to ? { businessDate: { ...(from ? { gte: from } : {}), ...(to ? { lte: to } : {}) } } : {}) };
+  const closeScope = await retailFinanceReadSiteScope(organizationId, auth.session.userId, "CLOSE_CASH");
+  const where: Prisma.EnterpriseRetailDailyCloseWhereInput = { organizationId,
+    ...(closeScope !== null ? { siteId: { in: closeScope } } : {}),
+    ...(status ? { status } : {}), ...(from || to ? { businessDate: { ...(from ? { gte: from } : {}), ...(to ? { lte: to } : {}) } } : {}) };
   const [rawItems, total] = await Promise.all([
     prisma.enterpriseRetailDailyClose.findMany({ where, orderBy: [{ businessDate: "desc" }, { createdAt: "desc" }], skip: (page - 1) * pageSize, take: pageSize, include: { lines: true } }),
     prisma.enterpriseRetailDailyClose.count({ where }),
