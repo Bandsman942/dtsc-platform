@@ -91,14 +91,14 @@ model EnterpriseRetailInvoiceReturnRequest {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
-  checkout EnterpriseRetailInvoiceCheckout @relation(fields: [organizationId, checkoutId], references: [organizationId, id], onDelete: Restrict)
+  checkout EnterpriseRetailInvoiceCheckout @relation(fields: [organizationId, checkoutId], references: [organizationId, id], onDelete: Restrict, map: "retail_invoice_return_request_checkout_fkey")
   lines    EnterpriseRetailInvoiceReturnLine[]
 
-  @@unique([organizationId, id])
-  @@unique([organizationId, number])
-  @@unique([organizationId, idempotencyKey])
-  @@index([organizationId, checkoutId, status])
-  @@index([organizationId, approverUserId, status])
+  @@unique([organizationId, id], map: "retail_invoice_return_request_org_id_key")
+  @@unique([organizationId, number], map: "retail_invoice_return_request_org_number_key")
+  @@unique([organizationId, idempotencyKey], map: "retail_invoice_return_request_org_idempotency_key")
+  @@index([organizationId, checkoutId, status], map: "retail_invoice_return_request_checkout_status_idx")
+  @@index([organizationId, approverUserId, status], map: "retail_invoice_return_request_approver_status_idx")
 }
 
 model EnterpriseRetailInvoiceReturnLine {
@@ -110,10 +110,10 @@ model EnterpriseRetailInvoiceReturnLine {
   refundAmount     Decimal @db.Decimal(20, 6)
   stockDisposition String
 
-  request EnterpriseRetailInvoiceReturnRequest @relation(fields: [organizationId, returnRequestId], references: [organizationId, id], onDelete: Restrict)
-  checkoutLine EnterpriseRetailInvoiceCheckoutLine @relation(fields: [organizationId, checkoutLineId], references: [organizationId, id], onDelete: Restrict)
+  request EnterpriseRetailInvoiceReturnRequest @relation(fields: [organizationId, returnRequestId], references: [organizationId, id], onDelete: Restrict, map: "retail_invoice_return_line_request_fkey")
+  checkoutLine EnterpriseRetailInvoiceCheckoutLine @relation(fields: [organizationId, checkoutLineId], references: [organizationId, id], onDelete: Restrict, map: "retail_invoice_return_line_checkout_line_fkey")
 
-  @@unique([organizationId, id])
-  @@unique([organizationId, returnRequestId, checkoutLineId])
-  @@index([organizationId, checkoutLineId])
+  @@unique([organizationId, id], map: "retail_invoice_return_line_org_id_key")
+  @@unique([organizationId, returnRequestId, checkoutLineId], map: "retail_invoice_return_line_request_line_key")
+  @@index([organizationId, checkoutLineId], map: "retail_invoice_return_line_checkout_line_idx")
 }
