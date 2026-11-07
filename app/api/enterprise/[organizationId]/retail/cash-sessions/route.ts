@@ -6,6 +6,7 @@ import type { EnterpriseModuleAction } from "@/lib/enterprise/module-access";
 import type { RetailModuleCode } from "@/lib/enterprise/retail/constants";
 import { authorizeRetailRequest, retailErrorResponse } from "@/lib/enterprise/retail/http";
 import { prisma } from "@/lib/prisma";
+import { retailFinanceReadSiteScope } from "@/lib/enterprise/retail/site-access";
 
 type Params = { params: Promise<{ organizationId: string }> };
 
@@ -26,8 +27,11 @@ export async function GET(req: Request, { params }: Params) {
   const { organizationId } = await params;
   const auth = await authorizeRetailCashRequest(req, organizationId, "read");
   if (!auth.ok) return auth.response;
+  const siteScope = await retailFinanceReadSiteScope(organizationId, auth.session.userId, "CLOSE_CASH");
   const items = await prisma.enterpriseCashSession.findMany({
-    where: { organizationId, cashierUserId: auth.session.userId, status: { in: ["OPEN", "PENDING_VALIDATION", "CLOSED", "REJECTED"] } },
+    where: { organizationId, cashierUserId: auth.session.userId,
+      ...(siteScope !== null ? { siteId: { in: siteScope } } : {}),
+      status: { in: ["OPEN", "PENDING_VALIDATION", "CLOSED", "REJECTED"] } },
     orderBy: { openedAt: "desc" },
     take: 30,
     include: { financialAccount: { select: { id: true, code: true, name: true, currencyCode: true } }, _count: { select: { movements: true, counts: true, discrepancies: true } } },
