@@ -1,6 +1,6 @@
 # RETAIL-1042 — cahier des charges boutiques, paramétrage et Design 2.0
 
-Statut du 7 novembre 2026 : **tranches 38–40 publiées, tranche 41 candidate** sur la PR brouillon #1043. La tranche 40 (`c110c365`) clôt les routes communes d'inventaires/ajustements par boutique ; la tranche 41 ajoute une recette navigateur Finance à trois acteurs distincts (facturier, approbateur, confirmateur), deux paiements, allocations idempotentes, mouvement et imputation coût après paiement intégral. Résultat de CI à vérifier pour chaque SHA ; aucune fusion ni déploiement, `OWNER_E2E` non exécuté, flags sensibles OFF en Production.
+Statut du 7 novembre 2026 : **tranches 38–41 publiées, tranche 42 candidate** sur la PR brouillon #1043. La tranche 40 (`c110c365`) clôt les routes communes d'inventaires/ajustements par boutique ; la tranche 41 (`3defd357`) ajoute une recette navigateur Finance à trois acteurs distincts, deux paiements, allocations idempotentes et stock/coût postés après règlement. La tranche 42 corrige le calcul générique de balance pour n'inclure que les journaux `POSTED/REVERSED`. Résultat de CI à vérifier pour chaque SHA ; aucune fusion ni déploiement, `OWNER_E2E` non exécuté, flags sensibles OFF en Production.
 
 La [matrice exhaustive de réception](RETAIL_1042_CAHIER_ACCEPTANCE_MATRIX.md) suit les 17 chapitres, RG01–RG20, les huit décisions et les deux niveaux de E2E du cahier client original ; aucune ligne non certifiée ne doit être masquée par un total de workflows verts.
 

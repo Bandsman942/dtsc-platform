@@ -1,3 +1,5 @@
+import assert from "node:assert/strict";
+import fs from "node:fs";
 import { requirePaths, requireTokens, success } from "./qa-enterprise-common-domain-lib.mjs";
 
 requirePaths([
@@ -17,6 +19,13 @@ requireTokens("lib/enterprise/accounting/statements-service.ts", [
   "type: \"AR\" | \"AP\"",
   "functionalCurrencyCode",
 ]);
+// Never sum draft journal lines into a published trial balance or income
+// statement. Filtering only a second LEFT JOIN still sums those lines.
+const statements = fs.readFileSync("lib/enterprise/accounting/statements-service.ts", "utf8");
+const balanceQuery = statements.slice(statements.indexOf("async function trialBalance"), statements.indexOf("async function generalLedger"));
+assert.match(balanceQuery, /INNER JOIN "EnterpriseJournalEntry" e/);
+assert.match(balanceQuery, /AND e\.status IN \('POSTED', 'REVERSED'\)/);
+assert.doesNotMatch(balanceQuery, /LEFT JOIN "EnterpriseJournalEntry" e/);
 requireTokens("app/api/enterprise/[organizationId]/financial-statements/route.ts", [
   "authorizeFinanceRequest",
   "statementGenerateSchema.safeParse",

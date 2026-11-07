@@ -1,3 +1,8 @@
+## 2026-11-07 — Retail #1042, tranche 42 — Balance comptable : exclure les journaux non postés (candidat, PR #1043)
+
+- Correction de la source des états financiers : la balance, puis le compte de résultat, agrègent exclusivement les lignes reliées à des journaux **POSTED/REVERSED** dans la période demandée. Auparavant, une condition portée par une seconde jointure externe pouvait laisser entrer les lignes `DRAFT` dans les sommes.
+- Requête groupée par compte/tenant et contrôle statique anti-régression des écritures non postées ; aucune ligne historique modifiée ni migration. **Ce correctif ne suffit pas à certifier le résultat net par boutique** : dimensions de site et rapprochement des sources Retail, exports PDF/XLSX et OWNER_E2E restent ouverts.
+
 ## 2026-11-07 — Retail #1042, tranche 41 — Cycle Finance à trois acteurs (candidat, PR #1043)
 
 - Nouvelle recette navigateur authentifiée, limitée à la base synthétique PostgreSQL CI : facturier-caissier de boutique, propriétaire approbateur et administrateur financier distinct confirmateur. Une facture est créée, soumise, approuvée, émise puis payée en deux étapes, avec réelle vérification renforcée par mot de passe pour les mutations critiques.
