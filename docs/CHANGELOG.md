@@ -1,3 +1,9 @@
+## 2026-11-07 — Hotfix P0 Retail #1042, tranche 20 — Cloisonnement des lectures Finance pour personnel boutique (PR brouillon #1043)
+
+- Les listes de factures Finance et paiements Finance filtrent leurs objets Retail et agrégats selon l'affectation de boutique lorsque l'isolation est activée. La révocation d'une affectation ne donne jamais un accès global ; les Finance-only et propriétaires restent dans leur périmètre Finance actuel.
+- Le bouton de création d'avoir n'est plus proposé sur une facture Retail tant que le retour synchronisé au stock n'existe pas ; contrôle serveur conservé.
+- Contrats de permissions ajoutés ; pas de certification E2E ni activation des flags. Les exports et autres chemins Finance restent à auditer.
+
 ## 2026-11-07 — Hotfix P0 Retail #1042, tranche 19 — Factures Finance par boutique sans confusion avec POS (PR brouillon #1043)
 
 - Vue propriétaire multi-sites enrichie d'un agrégat SQL tenant-aware des factures Retail Finance émises : brut sur la période, allocations cumulées et solde à date, séparés par boutique et devise.
