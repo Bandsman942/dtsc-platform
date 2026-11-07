@@ -146,7 +146,7 @@ async function financeFixture() {
   return { owner, cashier, settler, site, warehouse, product, inventory, bank, currencyCode };
 }
 
-test("#1042 real three-actor invoice issue, partial/full Finance payments and unique stock posting", async ({ browser }) => {
+test("#1042 real Finance settlement and five-actor credit, refund and inventory return", async ({ browser }) => {
   if (process.env.CI !== "true" || !/\/dtsc_shop2_behavioral(?:\?|$)/.test(process.env.DATABASE_URL || "")) {
     throw new Error("RETAIL_1042_FINANCE_LIFECYCLE_REQUIRES_EPHEMERAL_CI_DATABASE");
   }
@@ -255,6 +255,111 @@ test("#1042 real three-actor invoice issue, partial/full Finance payments and un
         expect(balance.quantityOnHand.equals(4)).toBe(true);
       }
     }
+
+    // A return is not a cashier's automatic reversal: request, physical
+    // inspection, independent approval, Finance preparation and settlement
+    // are five different real users, all authenticated over HTTP.
+    const inspectorEmail = "shop2-e2e-return-inspector@example.test";
+    const preparerEmail = "shop2-e2e-return-preparer@example.test";
+    for (const [email, role] of [[inspectorEmail, "Inspector"], [preparerEmail, "Finance Preparer"]]) {
+      const actor = await prisma.user.upsert({
+        where: { email },
+        update: { name: `Retail E2E ${role}`, passwordHash: testPasswordHash(cashierPassword), role: "CLIENT", status: "ACTIVE" },
+        create: { email, name: `Retail E2E ${role}`, passwordHash: testPasswordHash(cashierPassword), role: "CLIENT", status: "ACTIVE", locale: "fr" },
+      });
+      await prisma.organizationMember.upsert({
+        where: { organizationId_userId: { organizationId, userId: actor.id } },
+        update: { role: "ADMIN_ENTREPRISE", status: "ACTIVE", removedAt: null },
+        create: { organizationId, userId: actor.id, role: "ADMIN_ENTREPRISE", status: "ACTIVE", joinedAt: new Date() },
+      });
+    }
+    context.inspector = await browser.newContext({ baseURL: baseUrl });
+    context.preparer = await browser.newContext({ baseURL: baseUrl });
+    await Promise.all([
+      signIn(context.inspector, inspectorEmail, cashierPassword),
+      signIn(context.preparer, preparerEmail, cashierPassword),
+    ]);
+    const checkout = await prisma.enterpriseRetailInvoiceCheckout.findFirstOrThrow({
+      where: { organizationId, salesInvoiceId: invoiceId },
+      include: { lines: true },
+    });
+    expect(checkout.lines).toHaveLength(1);
+    const returnsPath = `${base}/retail/invoices/${invoiceId}/returns`;
+    const request = await post(context.cashier, returnsPath, {
+      idempotencyKey: `shop2-five-actor-return-${Date.now()}`,
+      approverUserId: fixture.owner.id,
+      reason: "Customer returned inspected item for refund",
+      lines: [{ checkoutLineId: checkout.lines[0].id, quantity: "1", stockDisposition: "RESTOCK" }],
+    });
+    expect(request.status, JSON.stringify(request.body)).toBe(201);
+    const returnId = request.body.request.id;
+    const returnPath = `${returnsPath}/${returnId}`;
+    const initialReturnStock = await prisma.enterpriseInventoryBalance.findFirstOrThrow({
+      where: { organizationId, warehouseId: fixture.warehouse.id, inventoryItemId: fixture.inventory.id,
+        storageLocationId: null, stockLotId: null },
+    });
+    expect(initialReturnStock.quantityOnHand.equals(4)).toBe(true);
+    const inspection = await post(context.inspector, `${returnPath}/inspection`, {
+      revision: request.body.request.revision, receivedAndInspected: true,
+      notes: "Physical goods received and verified with matching serial number",
+    });
+    expect(inspection.status, JSON.stringify(inspection.body)).toBe(200);
+    const decided = await post(context.owner, `${returnPath}/decision`, {
+      decision: "APPROVE", revision: inspection.body.request.revision,
+    });
+    expect(decided.status, JSON.stringify(decided.body)).toBe(200);
+    const preparedRefund = await post(context.preparer, `${returnPath}/prepare`, {
+      revision: decided.body.request.revision,
+    });
+    expect(preparedRefund.status, JSON.stringify(preparedRefund.body)).toBe(201);
+    expect(preparedRefund.body.request.status).toBe("FINANCE_PENDING");
+    const refundId = preparedRefund.body.request.refundPaymentId;
+    const creditId = preparedRefund.body.request.salesCreditNoteId;
+    const refund = await prisma.enterprisePayment.findUniqueOrThrow({ where: { id: refundId } });
+    const credit = await prisma.enterpriseSalesCreditNote.findUniqueOrThrow({ where: { id: creditId } });
+    await ensureStepUp(context.owner, ownerPassword);
+    const approveRefund = await post(context.owner, `${base}/payments/${refundId}/transition`, {
+      action: "APPROVE", revision: refund.revision,
+    });
+    expect(approveRefund.status, JSON.stringify(approveRefund.body)).toBe(200);
+    const approveCredit = await post(context.owner, `${base}/sales-credit-notes/${creditId}/transition`, {
+      action: "APPROVE", revision: credit.revision,
+    });
+    expect(approveCredit.status, JSON.stringify(approveCredit.body)).toBe(200);
+    const beforeSettlement = await prisma.enterpriseStockMovement.count({
+      where: { organizationId, sourceEntityType: "EnterpriseRetailInvoiceReturnRequest",
+        sourceEntityId: returnId, movementType: "RETURN_IN" },
+    });
+    expect(beforeSettlement).toBe(0);
+    await ensureStepUp(context.settler, cashierPassword);
+    const settled = await post(context.settler, `${returnPath}/settle`, {
+      revision: preparedRefund.body.request.revision,
+      reason: "Returned item verified; refund approved and financial reversal settled",
+    });
+    expect(settled.status, JSON.stringify(settled.body)).toBe(200);
+    expect(settled.body.request.status).toBe("COMPLETED");
+    const replay = await post(context.settler, `${returnPath}/settle`, {
+      revision: preparedRefund.body.request.revision,
+      reason: "Returned item verified; refund approved and financial reversal settled",
+    });
+    expect(replay.status, JSON.stringify(replay.body)).toBe(200);
+    expect(replay.body.idempotent).toBe(true);
+    const returnMovements = await prisma.enterpriseStockMovement.findMany({
+      where: { organizationId, sourceEntityType: "EnterpriseRetailInvoiceReturnRequest",
+        sourceEntityId: returnId, movementType: "RETURN_IN" },
+    });
+    expect(returnMovements).toHaveLength(1);
+    const returnValuation = await prisma.enterpriseInventoryAccountingEvent.findFirstOrThrow({
+      where: { organizationId, stockMovementId: returnMovements[0].id, status: "POSTED" },
+    });
+    expect(returnValuation.journalEntryId).toBeTruthy();
+    const afterReturn = await prisma.enterpriseInventoryBalance.findFirstOrThrow({
+      where: { organizationId, warehouseId: fixture.warehouse.id, inventoryItemId: fixture.inventory.id,
+        storageLocationId: null, stockLotId: null },
+    });
+    expect(afterReturn.quantityOnHand.equals(5)).toBe(true);
+    const creditedInvoice = await prisma.enterpriseSalesInvoice.findUniqueOrThrow({ where: { id: invoiceId } });
+    expect(creditedInvoice.status).toBe("CREDIT_NOTE");
   } finally {
     if (originalSettings !== undefined) await prisma.enterpriseRetailConfiguration.update({
       where: { organizationId }, data: { settingsJson: originalSettings === null ? Prisma.DbNull : originalSettings,

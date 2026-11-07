@@ -4,7 +4,9 @@ Source primaire : `CAHIER_DES_CHARGES_BOUTIQUES.pdf`, novembre 2026, 22 pages. C
 
 Protocole concret d'exécution et fiche de signature : [RETAIL_1042_OWNER_E2E_SCRIPT.md](RETAIL_1042_OWNER_E2E_SCRIPT.md). **Aucun des scénarios ni des douze critères n'est encore attesté BON** par le propriétaire.
 
-Tranche 41 candidate (CI en attente) : contrôle navigateur d'une facture à trois acteurs, double paiement Finance, allocations idempotentes et unique imputation stock/coût après règlement intégral. Cela ne valide **pas** l'E2E de retour/avoir/remboursement, la clôture réelle multi-caissiers, les imprimantes, les exports, la restauration ou la signature propriétaire.
+Tranche 43 candidate : véritable scénario navigateur de retour/avoir/remboursement à cinq acteurs et réintégration comptabilisée du stock. Les cas de paiements multi-comptes, le CASH, l'habilitation minimale réelle des cinq fonctions et la recette propriétaire restent ouverts.
+
+Tranche 41 validée par CI (24/24 E2E, 17/17 workflows) : contrôle navigateur d'une facture à trois acteurs, double paiement Finance, allocations idempotentes et unique imputation stock/coût après règlement intégral. Cela ne valide **pas** l'E2E de retour/avoir/remboursement, la clôture réelle multi-caissiers, les imprimantes, les exports, la restauration ou la signature propriétaire.
 
 Périmètre : ERP Core Retail **paramétrable et réutilisable** pour N boutiques, avec un scénario de référence à deux boutiques alimentaires à Kinshasa. Ne jamais créer une solution codée pour un client, un nombre de boutiques, un gérant, une devise, une caisse ou une marque déterminés.
 

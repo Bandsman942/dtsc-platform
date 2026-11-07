@@ -1,9 +1,15 @@
+## 2026-11-07 — Retail #1042, tranche 43 — Retour client et remboursement à cinq acteurs (candidat, PR #1043)
+
+- Étend la recette authentifiée PostgreSQL de la tranche 41 : le **demandeur**, l'**inspecteur physique**, l'**approbateur**, le **préparateur Finance** et le **liquidateur** sont cinq utilisateurs réellement distincts. Retour d'une unité déjà payée, réception/inspection, double approbation du remboursement et de l'avoir, puis liquidation.
+- Contrôle que le stock ne rentre **pas** à l'inspection ni à l'approbation, puis que le remboursement et une seule entrée `RETURN_IN` réintègrent l'unité ; événement comptable de valorisation **POSTED**, statut facture `CREDIT_NOTE`, et rejeu idempotent de la liquidation.
+- La tranche 41 précédente a réussi **24/24 scénarios navigateur et 17/17 workflows GitHub** sur `3defd357`. Tranches 42 (balance comptable) et 43 (retour/remboursement) devront être certifiées sur leur propre SHA. Ne certifie pas les remboursements multi-comptes, le CASH multi-caissiers, les imprimantes ou `OWNER_E2E`. Flags OFF en Production, aucune fusion ni déploiement.
+
 ## 2026-11-07 — Retail #1042, tranche 42 — Balance comptable : exclure les journaux non postés (candidat, PR #1043)
 
 - Correction de la source des états financiers : la balance, puis le compte de résultat, agrègent exclusivement les lignes reliées à des journaux **POSTED/REVERSED** dans la période demandée. Auparavant, une condition portée par une seconde jointure externe pouvait laisser entrer les lignes `DRAFT` dans les sommes.
 - Requête groupée par compte/tenant et contrôle statique anti-régression des écritures non postées ; aucune ligne historique modifiée ni migration. **Ce correctif ne suffit pas à certifier le résultat net par boutique** : dimensions de site et rapprochement des sources Retail, exports PDF/XLSX et OWNER_E2E restent ouverts.
 
-## 2026-11-07 — Retail #1042, tranche 41 — Cycle Finance à trois acteurs (candidat, PR #1043)
+## 2026-11-07 — Retail #1042, tranche 41 — Cycle Finance à trois acteurs (24/24 navigateur, 17/17 CI, PR #1043)
 
 - Nouvelle recette navigateur authentifiée, limitée à la base synthétique PostgreSQL CI : facturier-caissier de boutique, propriétaire approbateur et administrateur financier distinct confirmateur. Une facture est créée, soumise, approuvée, émise puis payée en deux étapes, avec réelle vérification renforcée par mot de passe pour les mutations critiques.
 - Le test contrôle la proposition Finance canonique, les allocations idempotentes, l'absence de consommation physique au paiement partiel, puis une seule sortie de stock et son événement comptable de coût **POSTED** au règlement intégral ; restauration du flag dans l'environnement éphémère.
