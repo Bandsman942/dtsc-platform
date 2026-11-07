@@ -63,4 +63,41 @@ if (resetIndex === -1 || closeIndex === -1 || resetIndex > closeIndex) {
   throw new Error("Accounting Redis reset must happen before close/history acceptance");
 }
 
+
+ // The Shop 2 browser suite uses more than eight legitimate sign-ins from the
+ // same loopback IP. Keep security-critical auth limiting unchanged: split the
+ // independent acceptance groups across explicit resets of CI-only Redis.
+const shop2Workflow = read(files.shop2);
+const shop2Stages = [
+  "Shop 2 POS behavioral acceptance - finance and relationships",
+  "Reset isolated Redis state before Shop 2 retail experience acceptance",
+  "Shop 2 retail experience acceptance",
+  "Reset isolated Redis state before Shop 2 invoice isolation acceptance",
+  "Shop 2 invoice and global multistore acceptance",
+];
+let previousStageIndex = -1;
+for (const stage of shop2Stages) {
+  const index = shop2Workflow.indexOf(`- name: ${stage}`);
+  if (index <= previousStageIndex) throw new Error(`Shop 2 CI authentication isolation stage missing or out of order: ${stage}`);
+  previousStageIndex = index;
+}
+if ((shop2Workflow.match(/--data '\["FLUSHDB"\]'/g) || []).length !== 2) {
+  throw new Error("Shop 2 CI must reset only the disposable Redis between its three browser acceptance groups");
+}
+const shop2Specs = [
+  "accounting-atomic-retail-posting", "issue-786-relationship-benefits-enforcement",
+  "issue-910-relationship-credit", "scale5b-retail-dashboard-cache",
+  "shop2-commercial", "shop2-customer-payments", "shop2-customer-value-ui",
+  "shop2-daily-close-ui", "shop2-final-coherence-ui", "shop2-retail", "shop2-z-global",
+];
+const acceptanceRuns = shop2Workflow.split("\n").filter((line) =>
+  line.includes("run: pnpm exec playwright test tests/e2e/"),
+).join("\n");
+for (const spec of shop2Specs) {
+  const token = `tests/e2e/${spec}.spec.mjs`;
+  if (acceptanceRuns.split(token).length !== 2) {
+    throw new Error(`Shop 2 CI must run each behavioral acceptance spec exactly once: ${token}`);
+  }
+}
+
 console.log("QA CI auth rate-limit provisioning: OK — browser acceptances provision isolated Redis REST while Production remains fail-closed");

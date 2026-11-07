@@ -1,3 +1,8 @@
+## 2026-11-07 — Retail #1042, tranche 37 — Contre-épreuves inter-boutiques et CI anti-bruteforce (candidat, PR #1043)
+
+- Après **22/22 scénarios navigateur réussis** sur le commit `19818f1c`, tests supplémentaires avec deux identités authentifiées : filtres A/B, accès directs aux paiements et retours de la boutique opposée refusés, facture FR/A4 et EN/80 mm pour la bonne boutique, et rejeu de clé d'idempotence refusé après révocation. Impression sur imprimante physique et `OWNER_E2E` toujours non exécutés.
+- Garde de non-régression pour les onze spécifications navigateur Retail : trois groupes isolés, deux réinitialisations du Redis **éphémère de CI** entre groupes, aucune modification du rate-limit applicatif de production (8 tentatives / 15 minutes).
+
 ## 2026-11-07 — Retail #1042, tranche 36 — Deux boutiques authentifiées (candidat, PR #1043)
 
 - Ajout de la contre-épreuve navigateur CI sur **deux sites distincts et deux utilisateurs authentifiés** : facture A créée par propriétaire, liste du facturier B isolée, impression et mutation A refusées, facture B créée, propriétaire A+B et révocation immédiate de B. Drapeaux temporaires activés uniquement sur la base éphémère `dtsc_shop2_behavioral` puis restaurés ; ce test ne vaut **ni** E2E global **ni** validation du propriétaire.

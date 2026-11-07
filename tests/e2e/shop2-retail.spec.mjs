@@ -675,6 +675,12 @@ test.describe.serial("Shop 2.0 Retail behavioral acceptance", () => {
       expect(scoped.response.status(), JSON.stringify(scoped.body)).toBe(200);
       expect(scoped.body.items.every((row) => row.siteId === secondarySite.id)).toBe(true);
       expect(scoped.body.items.some((row) => row.invoice.id === primaryInvoice.body.invoice.id)).toBe(false);
+      const forbiddenFilteredList = await apiGet(page, endpoint + "?siteId=" + primarySite.siteId);
+      expect(forbiddenFilteredList.response.status()).toBe(403);
+      const forbiddenPaymentRead = await apiGet(page, endpoint + "/" + primaryInvoice.body.invoice.id + "/payments");
+      expect(forbiddenPaymentRead.response.status()).toBe(403);
+      const forbiddenReturnRead = await apiGet(page, endpoint + "/" + primaryInvoice.body.invoice.id + "/returns");
+      expect(forbiddenReturnRead.response.status()).toBe(403);
       const forbiddenPrint = await page.context().request.get(
         endpoint + "/" + primaryInvoice.body.invoice.id + "/print?paper=a4&lang=fr",
       );
@@ -685,11 +691,25 @@ test.describe.serial("Shop 2.0 Retail behavioral acceptance", () => {
       expect(forbiddenCreate.response.status()).toBe(403);
       expect(forbiddenCreate.body.error).toBe("RETAIL_SITE_ACCESS_DENIED");
 
-      const secondaryInvoice = await apiPost(page, endpoint, {
+      const secondaryPayload = {
         ...primaryPayload, idempotencyKey: "shop2-e2e-b-" + Date.now(),
         siteId: secondarySite.id, warehouseId: secondaryWarehouse.id,
-      });
+      };
+      const secondaryInvoice = await apiPost(page, endpoint, secondaryPayload);
       expect(secondaryInvoice.response.status(), JSON.stringify(secondaryInvoice.body)).toBe(201);
+      const secondaryPrint = await page.context().request.get(
+        endpoint + "/" + secondaryInvoice.body.invoice.id + "/print?paper=a4&lang=fr");
+      expect(secondaryPrint.status()).toBe(200);
+      const secondaryHtml = await secondaryPrint.text();
+      expect(secondaryHtml).toContain(secondarySite.name);
+      expect(secondaryHtml).toContain("BROUILLON");
+      const thermalPrint = await page.context().request.get(
+        endpoint + "/" + secondaryInvoice.body.invoice.id + "/print?paper=thermal&lang=en");
+      expect(thermalPrint.status()).toBe(200);
+      const thermalHtml = await thermalPrint.text();
+      expect(thermalHtml).toContain(secondarySite.name);
+      expect(thermalHtml).toContain("DRAFT");
+      expect(thermalHtml).toContain("80mm auto");
       const afterInvoice = await apiGet(page, endpoint);
       expect(afterInvoice.response.ok()).toBe(true);
       expect(afterInvoice.body.items.some((row) => row.invoice.id === secondaryInvoice.body.invoice.id)).toBe(true);
@@ -705,6 +725,8 @@ test.describe.serial("Shop 2.0 Retail behavioral acceptance", () => {
       });
       const revokedList = await apiGet(page, endpoint);
       expect(revokedList.response.status(), JSON.stringify(revokedList.body)).toBe(403);
+      const revokedReplay = await apiPost(page, endpoint, secondaryPayload);
+      expect(revokedReplay.response.status(), "Revoked staff must not replay an earlier valid invoice key").toBe(403);
       const revokedCreate = await apiPost(page, endpoint, {
         ...primaryPayload, idempotencyKey: "shop2-e2e-revoked-" + Date.now(),
         siteId: secondarySite.id, warehouseId: secondaryWarehouse.id,

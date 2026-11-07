@@ -1,6 +1,6 @@
 # RETAIL-1042 — cahier des charges boutiques, paramétrage et Design 2.0
 
-Statut du 7 novembre 2026 : **35 tranches publiées sur la PR brouillon #1043, tranche 36 candidate (boutiques et utilisateurs distincts en E2E CI). La facture Retail a passé les 21 tests du workflow Shop 2 behavioral sur le correctif `3e4148b9`, mais toutes les autres contre-épreuves, le E2E PostgreSQL complet, et la validation propriétaire restent à certifier. Aucune fusion, aucun déploiement ni acceptation client ; flags sensibles OFF en production.**
+Statut du 7 novembre 2026 : **36 tranches publiées sur la PR brouillon #1043, correctif de CI `19818f1c` validé sur 22/22 scénarios navigateur PostgreSQL et 17/17 workflows GitHub. La tranche 37 renforce les contre-épreuves inter-boutiques et reste candidate jusqu'à sa propre CI. Aucun merge, déploiement ou accord client. Le cycle Finance complet multi-rôles, les caisses, les rapports et l'OWNER_E2E final ne sont PAS certifiés ; flags sensibles OFF en production.**
 
 La [matrice exhaustive de réception](RETAIL_1042_CAHIER_ACCEPTANCE_MATRIX.md) suit les 17 chapitres, RG01–RG20, les huit décisions et les deux niveaux de E2E du cahier client original ; aucune ligne non certifiée ne doit être masquée par un total de workflows verts.
 
