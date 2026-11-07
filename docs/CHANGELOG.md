@@ -1,3 +1,9 @@
+## 2026-11-07 — Retail #1042, tranche 22 en préparation — Traçabilité exhaustive et permissions de remboursement
+
+- Matrice de réception issue du cahier original de 22 pages : 17 chapitres, RG01–RG20, huit décisions, scénarios E2E techniques et les 12 critères OWNER_E2E. Les contradictions sur les droits du gérant sont explicitement marquées, sans élargissement automatique de privilèges.
+- Finance limite les remboursements de nouvelles factures Retail à la boutique permise pour un opérateur affecté, même en cas de révocation et de rejeu. Un intervenant Finance non affecté reste soumis au RBAC Finance sans restriction Retail artificielle ; la validation séparée est maintenue.
+- Le circuit fonctionnel de retour/avoir, l'impression physique, le reporting complet et les E2E restent ouverts. Flags OFF, aucune fusion ni Production.
+
 ## 2026-11-07 — Hotfix P0 Retail #1042, tranche 21 — Créances Finance par boutique (PR brouillon #1043)
 
 - Liste des créances clients et synthèses dues/en retard restreintes aux boutiques assignées pour les opérateurs Retail isolés, sans modification des créances Finance non Retail.

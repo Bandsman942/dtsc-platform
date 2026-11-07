@@ -5,6 +5,7 @@ import { financeReference, publishFinanceEvent } from "@/lib/enterprise/accounti
 import { postBusinessEventTx } from "@/lib/enterprise/accounting/posting-service";
 import { reverseJournalEntryTx } from "@/lib/enterprise/accounting/reversal-service";
 import { resolveCashSessionForConfirmation } from "@/lib/enterprise/accounting/payments-service";
+import { retailFinanceReadSiteScope } from "@/lib/enterprise/retail/site-access";
 import { prisma } from "@/lib/prisma";
 
 function money(value: Prisma.Decimal.Value) {
@@ -19,6 +20,7 @@ async function assertRetailInvoiceRefundAccountTx(
   tx: Prisma.TransactionClient,
   organizationId: string,
   salesInvoiceId: string,
+  actorUserId: string,
   refundPayment: {
     businessPartyId: string | null;
     currencyCode: string;
@@ -30,6 +32,13 @@ async function assertRetailInvoiceRefundAccountTx(
     select: { siteId: true },
   });
   if (!checkout) return;
+  // A Finance-only approver keeps Finance RBAC; an actor ever assigned to
+  // Retail staff cannot use that global permission after a site revocation.
+  // The local check is repeated on idempotent replays and on confirmation.
+  const allowedSites = await retailFinanceReadSiteScope(organizationId, actorUserId, "COLLECT_PAYMENT", tx);
+  if (allowedSites !== null && !allowedSites.includes(checkout.siteId)) {
+    throw new EnterpriseAccountingError("RETAIL_INVOICE_REFUND_SITE_ACCESS_DENIED", 403);
+  }
   const [invoice, account] = await Promise.all([
     tx.enterpriseSalesInvoice.findFirst({
       where: { organizationId, id: salesInvoiceId },
@@ -73,7 +82,7 @@ export async function reverseCustomerPaymentAllocationsForRefund(
         where: { organizationId, id: refundPaymentId, paymentType: "REFUND", direction: "OUTBOUND" },
       });
       if (!refundPayment) throw new EnterpriseAccountingError("REFUND_PAYMENT_INVALID", 409);
-      await assertRetailInvoiceRefundAccountTx(tx, organizationId, receivable.salesInvoiceId, refundPayment);
+      await assertRetailInvoiceRefundAccountTx(tx, organizationId, receivable.salesInvoiceId, actorUserId, refundPayment);
     }
     if (!receivable.paymentAllocations.length) {
       if (!refundPaymentId) return { reversedAmount: money(0), paymentIds: [] as string[], idempotent: true };
@@ -287,7 +296,7 @@ export async function reverseCustomerPaymentAllocationsForRefundAmount(
       include: { salesInvoice: true },
     });
     if (!receivable) throw new EnterpriseAccountingError("RECEIVABLE_NOT_FOUND", 404);
-    await assertRetailInvoiceRefundAccountTx(tx, organizationId, receivable.salesInvoiceId, refundPayment);
+    await assertRetailInvoiceRefundAccountTx(tx, organizationId, receivable.salesInvoiceId, actorUserId, refundPayment);
 
     const alreadyReversed = await tx.enterprisePaymentEvent.findFirst({
       where: { organizationId, paymentId: refundPayment.id, eventType: "REFUND_ALLOCATIONS_REVERSED" },
@@ -837,6 +846,19 @@ export async function confirmCustomerRefundPayment(
     const current = await tx.enterprisePayment.findFirst({ where: { id: paymentId, organizationId } });
     if (!current) throw new EnterpriseAccountingError("PAYMENT_NOT_FOUND", 404);
     if (["CONFIRMED", "RECONCILED"].includes(current.status)) {
+      // A confirmation replay still returns the Finance object. Do not let
+      // a revoked Retail operator use that replay to read another store's
+      // refund or to retrigger posting without the current site permission.
+      const inverse = await tx.enterprisePaymentEvent.findFirst({
+        where: { organizationId, paymentId: current.id, eventType: "REFUND_FINANCIAL_INVERSE_READY" },
+        select: { metadataJson: true },
+      });
+      const metadata = inverse?.metadataJson;
+      const invoiceId = metadata && typeof metadata === "object" && !Array.isArray(metadata)
+        ? (metadata as Prisma.JsonObject).salesInvoiceId : null;
+      if (typeof invoiceId === "string" && invoiceId) {
+        await assertRetailInvoiceRefundAccountTx(tx, organizationId, invoiceId, actorUserId, current);
+      }
       await postBusinessEventTx(tx, organizationId, actorUserId, {
         postingEvent: "CUSTOMER_REFUND_CONFIRMED",
         sourceEntityType: "EnterprisePayment",
@@ -860,7 +882,7 @@ export async function confirmCustomerRefundPayment(
     if (typeof salesInvoiceId !== "string" || !salesInvoiceId) {
       throw new EnterpriseAccountingError("REFUND_FINANCIAL_INVERSE_CONFLICT", 409);
     }
-    await assertRetailInvoiceRefundAccountTx(tx, organizationId, salesInvoiceId, current);
+    await assertRetailInvoiceRefundAccountTx(tx, organizationId, salesInvoiceId, actorUserId, current);
     assertIndependentActor({
       actorUserId,
       relatedUserIds: [current.initiatedByUserId, current.approvedByUserId],

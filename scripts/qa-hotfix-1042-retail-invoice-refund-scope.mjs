@@ -27,6 +27,7 @@ const state = {
   reversed: true,
   reversalReceivableId: "receivable-1",
   confirmed: false,
+  allowedSites: ["boutique-A"],
 };
 const tx = {
   $executeRaw: async () => 1,
@@ -64,6 +65,7 @@ vm.runInNewContext(compiled, {
     if (name === "@/lib/enterprise/accounting/posting-service") return { postBusinessEventTx: async () => {} };
     if (name === "@/lib/enterprise/accounting/reversal-service") return { reverseJournalEntryTx: async () => {} };
     if (name === "@/lib/enterprise/accounting/payments-service") return { resolveCashSessionForConfirmation: async () => ({ id: "cash-session" }) };
+    if (name === "@/lib/enterprise/retail/site-access") return { retailFinanceReadSiteScope: async () => state.allowedSites };
     return require(name);
   },
 });
@@ -85,6 +87,18 @@ const reverseAll = (paymentId = "refund-1") => reverseCustomerPaymentAllocations
 
 assert.equal((await reverse()).idempotent, true, "Same-site idempotent refund is accepted");
 assert.equal((await reverseAll()).idempotent, true, "Legacy reversal also checks a valid same-site refund");
+state.allowedSites = ["boutique-B"];
+await assert.rejects(reverse(), { code: "RETAIL_INVOICE_REFUND_SITE_ACCESS_DENIED" });
+await assert.rejects(reverseAll(), { code: "RETAIL_INVOICE_REFUND_SITE_ACCESS_DENIED" });
+await assert.rejects(confirm(), { code: "RETAIL_INVOICE_REFUND_SITE_ACCESS_DENIED" });
+state.refund = { ...state.refund, status: "CONFIRMED" };
+await assert.rejects(confirm(), { code: "RETAIL_INVOICE_REFUND_SITE_ACCESS_DENIED" });
+state.refund = { ...state.refund, status: "APPROVED" };
+state.allowedSites = [];
+await assert.rejects(reverse(), { code: "RETAIL_INVOICE_REFUND_SITE_ACCESS_DENIED" });
+state.allowedSites = null;
+assert.equal((await reverse()).idempotent, true, "Independent Finance actor keeps Finance-authorized scope");
+state.allowedSites = ["boutique-A"];
 state.reversalReceivableId = "receivable-B";
 await assert.rejects(reverse(), { code: "REFUND_ALLOCATION_REVERSAL_CONFLICT" });
 await assert.rejects(reverseAll(), { code: "REFUND_ALLOCATION_REVERSAL_CONFLICT" });
@@ -107,6 +121,6 @@ state.refund = { ...state.refund, currencyCode: "CDF" };
 state.checkout = null;
 assert.equal((await reverse()).idempotent, true, "Common Finance invoices keep their existing refund flow");
 
-assert.match(source, /await assertRetailInvoiceRefundAccountTx\(tx, organizationId, receivable\.salesInvoiceId, refundPayment\)/);
-assert.match(source, /await assertRetailInvoiceRefundAccountTx\(tx, organizationId, salesInvoiceId, current\)/);
-console.log("HOTFIX #1042 refund account scope: same-site, cross-site, currency, customer, replay and Finance fallback OK");
+assert.match(source, /await assertRetailInvoiceRefundAccountTx\(tx, organizationId, receivable\.salesInvoiceId, actorUserId, refundPayment\)/);
+assert.match(source, /await assertRetailInvoiceRefundAccountTx\(tx, organizationId, salesInvoiceId, actorUserId, current\)/);
+console.log("HOTFIX #1042 refund scope: site actor, revocation, same-site, cross-site, currency, customer, replay and Finance fallback OK");

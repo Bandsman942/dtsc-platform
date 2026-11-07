@@ -12,6 +12,7 @@ const FINANCE_ERROR_MESSAGES: Record<string, string> = {
   FINANCE_INPUT_INVALID: "Certaines informations sont invalides ou incomplètes. Corrigez les champs signalés puis réessayez.",
   RETAIL_INVOICE_NOT_FULLY_PAID: "La facture Retail doit être intégralement réglée avant de déclencher sa sortie de stock.",
   RETAIL_INVOICE_RETURN_WORKFLOW_REQUIRED: "Cette facture est liée à une vente Retail. Un avoir direct ne réconcilierait pas le stock et les paiements ; utilisez le circuit de retour et remboursement Retail lorsqu'il sera activé.",
+  RETAIL_INVOICE_REFUND_SITE_ACCESS_DENIED: "Vous ne pouvez pas effectuer un remboursement pour cette boutique. Demandez une autorisation Finance ou une affectation valide à cette boutique.",
   RETAIL_INVOICE_STOCK_INSUFFICIENT: "Stock insuffisant dans la boutique pour livrer cette facture. La dernière affectation du paiement a été annulée ; vérifiez les lots et les quantités disponibles.",
   RETAIL_INVOICE_FINANCIAL_ACCOUNT_SITE_MISMATCH: "Ce paiement utilise un compte financier d'une autre boutique. Sélectionnez le compte de la boutique indiquée sur la facture.",
   RETAIL_INVOICE_CASH_SESSION_SITE_MISMATCH: "La session de caisse ne correspond pas à la boutique de cette facture. Choisissez une caisse ouverte dans la bonne boutique.",
