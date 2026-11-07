@@ -5,6 +5,7 @@ import { createEnterprisePaymentTx } from "@/lib/enterprise/accounting/payments-
 import { positiveMoneyInputSchema } from "@/lib/enterprise/accounting/schemas";
 import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
 import { requireRetailSiteCapability, retailInvoiceVisibleSites } from "@/lib/enterprise/retail/site-access";
+import { withRetailTransactionRetry } from "@/lib/enterprise/retail/transaction-retry";
 import { prisma } from "@/lib/prisma";
 
 export const retailInvoicePaymentProposalSchema = z.object({
@@ -56,7 +57,7 @@ export async function retailInvoicePaymentOptions(organizationId: string, invoic
  * All checks and both rows share one serializable transaction. */
 export async function proposeRetailInvoicePayment(organizationId: string, invoiceId: string, actorUserId: string, input: ProposalInput) {
   const requestFingerprint = fingerprint(invoiceId, input);
-  return prisma.$transaction(async (tx) => {
+  return withRetailTransactionRetry(() => prisma.$transaction(async (tx) => {
     await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterpriseSalesInvoice" WHERE id = ${invoiceId} AND "organizationId" = ${organizationId} FOR UPDATE`);
     const checkout = await tx.enterpriseRetailInvoiceCheckout.findFirst({
       where: { organizationId, salesInvoiceId: invoiceId },
@@ -140,5 +141,5 @@ export async function proposeRetailInvoicePayment(organizationId: string, invoic
       idempotencyKey: input.idempotencyKey, requestFingerprint, recordedByUserId: actorUserId,
     } });
     return { proposal, payment, idempotent: false };
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 30000 });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 30000 }));
 }
