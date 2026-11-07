@@ -150,17 +150,26 @@ export async function prepareRetailInvoice(organizationId: string, actorUserId: 
     // tax-inclusive pricing must never silently double-add VAT.
     if (!invoice.grandTotal.equals(calculatedTotal)) throw new EnterpriseRetailError("RETAIL_INVOICE_PRICING_MISMATCH", 409);
     const invoiceItems = new Map(invoice.items.map((item) => [item.catalogItemId, item]));
-    const checkout = await tx.enterpriseRetailInvoiceCheckout.create({
+    const checkoutLines = prepared.map((line) => {
+      const item = invoiceItems.get(line.catalogItemId);
+      if (!item) throw new EnterpriseRetailError("RETAIL_INVOICE_LINE_MISSING", 409);
+      return { organizationId, invoiceItemId: item.id, inventoryItemId: line.inventoryItemId,
+        stockLotId: line.stockLotId || null };
+    });
+    // Keep both writes inside the same serializable transaction. Prisma's
+    // nested unchecked create cannot safely mix the composite Finance line
+    // FK scalars with the checkout relation; createMany uses scalar FK inputs.
+    const checkoutRecord = await tx.enterpriseRetailInvoiceCheckout.create({
       data: {
         organizationId, salesInvoiceId: invoice.id, siteId: input.siteId, warehouseId: input.warehouseId,
         idempotencyKey: input.idempotencyKey, requestFingerprint, preparedByUserId: actorUserId,
-        lines: { create: prepared.map((line) => {
-          const item = invoiceItems.get(line.catalogItemId);
-          if (!item) throw new EnterpriseRetailError("RETAIL_INVOICE_LINE_MISSING", 409);
-          return { organizationId, invoiceItemId: item.id, inventoryItemId: line.inventoryItemId, stockLotId: line.stockLotId || null };
-        }) },
       },
-      include: { lines: true },
+    });
+    await tx.enterpriseRetailInvoiceCheckoutLine.createMany({
+      data: checkoutLines.map((line) => ({ ...line, checkoutId: checkoutRecord.id })),
+    });
+    const checkout = await tx.enterpriseRetailInvoiceCheckout.findUniqueOrThrow({
+      where: { id: checkoutRecord.id }, include: { lines: true },
     });
     return { checkout, invoice, idempotent: false };
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 30000 }));

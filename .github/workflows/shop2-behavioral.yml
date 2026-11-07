@@ -211,7 +211,7 @@ jobs:
           if [ -f /tmp/dtsc-shop2-next.log ]; then
             # Emit only error/stack context from this disposable CI tenant.
             # Do not print environment variables or raw HTTP bodies.
-            grep -Ein 'error|prisma|invoice|exception|digest|typeerror|constraint|database' /tmp/dtsc-shop2-next.log | tail -n 100 | sed -E 's#postgres(ql)?://[^[:space:]]+#<DATABASE_URL_REDACTED>#g' || true
+            grep -Ein -A 34 -B 3 'SHOP2_E2E_UNHANDLED_RETAIL_ERROR|PrismaClientValidationError|P20[0-9]{2}' /tmp/dtsc-shop2-next.log | tail -n 140 | sed -E 's#postgres(ql)?://[^[:space:]]+#<DATABASE_URL_REDACTED>#g' || true
           fi
       - name: Stop application and Redis REST proxy
         if: always()
