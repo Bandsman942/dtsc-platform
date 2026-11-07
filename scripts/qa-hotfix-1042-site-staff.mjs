@@ -52,11 +52,19 @@ await assert.doesNotReject(check("COLLECT_PAYMENT", null), "Legacy organization 
 await assert.rejects(requireRetailSiteCapability("tenant", "staff", "shopA", "COLLECT_PAYMENT", prisma, { requireAssignment: true }), { code: "RETAIL_SITE_ACCESS_DENIED" }, "Forced guard on the new checkout must not depend on legacy feature flag");
 await assert.rejects(retailInvoiceVisibleSites("tenant", "staff"), { code: "RETAIL_INVOICE_CHECKOUT_NOT_ACTIVE" });
 db.settings = { siteStaffIsolationEnabled: true, invoiceCheckoutEnabled: true };
-assert.deepEqual(JSON.parse(JSON.stringify(await retailInvoiceVisibleSites("tenant", "staff"))), { isOwner: false, siteIds: ["shopA"] });
+assert.deepEqual(JSON.parse(JSON.stringify(await retailInvoiceVisibleSites("tenant", "staff"))), {
+  isOwner: false, siteIds: ["shopA"], cancellableSiteIds: [], submittableSiteIds: ["shopA"], collectibleSiteIds: [],
+});
 db.assignments = [{ siteId: "shopA", roleCode: "CASHIER", isActive: true, permissionsJson: ["COLLECT_PAYMENT"] }];
 await assert.rejects(retailInvoiceVisibleSites("tenant", "staff"), { code: "RETAIL_SITE_ACCESS_DENIED" }, "A role without VIEW_SALES cannot see invoices");
+db.assignments = [{ siteId: "shopA", roleCode: "CASHIER", isActive: true, permissionsJson: ["VIEW_SALES", "COLLECT_PAYMENT"] }];
+assert.deepEqual(JSON.parse(JSON.stringify(await retailInvoiceVisibleSites("tenant", "staff"))), {
+  isOwner: false, siteIds: ["shopA"], cancellableSiteIds: [], submittableSiteIds: [], collectibleSiteIds: ["shopA"],
+});
 db.membership = { role: "OWNER" };
-assert.deepEqual(JSON.parse(JSON.stringify(await retailInvoiceVisibleSites("tenant", "owner"))), { isOwner: true, siteIds: [] });
+assert.deepEqual(JSON.parse(JSON.stringify(await retailInvoiceVisibleSites("tenant", "owner"))), {
+  isOwner: true, siteIds: [], cancellableSiteIds: [], submittableSiteIds: [], collectibleSiteIds: [],
+});
 
 const api = fs.readFileSync("app/api/enterprise/[organizationId]/retail/site-assignments/route.ts", "utf8");
 assert.match(api, /role: \{ in: \[\.\.\.RETAIL_OWNER_ROLES\] \}/);

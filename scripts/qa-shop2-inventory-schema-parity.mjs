@@ -5,7 +5,9 @@ const prisma = new PrismaClient();
 const expected = [
   { label: "inventory item per catalog item", table: "EnterpriseInventoryItem", columns: ["organizationId", "catalogItemId"], nullsNotDistinct: false },
   { label: "tenant-scoped stock lot id", table: "EnterpriseStockLot", columns: ["organizationId", "id"], nullsNotDistinct: false },
-  { label: "stock lot business key", table: "EnterpriseStockLot", columns: ["organizationId", "inventoryItemId", "lotNumber"], nullsNotDistinct: false },
+  // A transferred lot retains its reference in both warehouses. The unique
+  // business key is therefore scoped to each warehouse, not the whole tenant.
+  { label: "stock lot business key per warehouse", table: "EnterpriseStockLot", columns: ["organizationId", "inventoryItemId", "warehouseId", "lotNumber"], nullsNotDistinct: false },
   { label: "inventory balance coordinate", table: "EnterpriseInventoryBalance", columns: ["organizationId", "inventoryItemId", "warehouseId", "storageLocationId", "stockLotId"], nullsNotDistinct: true },
   { label: "tenant-scoped stock movement id", table: "EnterpriseStockMovement", columns: ["organizationId", "id"], nullsNotDistinct: false },
   { label: "stock movement idempotency key", table: "EnterpriseStockMovement", columns: ["organizationId", "idempotencyKey"], nullsNotDistinct: false },

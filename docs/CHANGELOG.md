@@ -1,3 +1,9 @@
+## 2026-11-07 — Hotfix P0 Retail #1042, tranche 7 — Propositions de paiement caissier et Finance canonique (PR brouillon #1043)
+
+- Table de rattachement minimale `EnterpriseRetailInvoicePaymentProposal` avec migration additive et unicité du paiement Finance ; émission d'un unique `EnterprisePayment DRAFT` dans une transaction sérialisable, avec montant réservé contre le reste dû et contrôles boutique/compte/session/devise/client.
+- Soumission et annulation du brouillon par son caissier, approbateur Finance indépendant ; affectation de paiement **confirmé** à la seule créance source, en réutilisant le service Finance commun et son mouvement de stock uniquement après paiement intégral. Interface Design 2.0 FR/EN dédiée, historique après règlement, QA structurale #1042 intégrée aux Quality Gates.
+- Correctif de date civile des lots détecté par le contrôle distant #670. **Pas de fusion, déploiement ou activation** : flags OFF, tests PostgreSQL/authentifiés multi-boutiques, retours/avoirs et OWNER_E2E global encore requis.
+
 ## 2026-11-07 — Hotfix P0 Retail #1042, tranche 6 — Soumission facturier vers approbation Finance (PR brouillon #1043)
 
 - Le facturier Retail ne disposant pas de droits Finance globaux peut soumettre **sa propre** facture en brouillon avec version et validateur indépendant. Ce dernier est choisi parmi les collaborateurs autorisés à approuver dans `FINANCE_RECEIVABLES`, avec contrôle transactionnel du lien facture↔boutique et des permissions `PREPARE_INVOICE`.

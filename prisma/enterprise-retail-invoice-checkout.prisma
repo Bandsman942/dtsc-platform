@@ -20,12 +20,34 @@ model EnterpriseRetailInvoiceCheckout {
   site      EnterpriseSite         @relation(fields: [organizationId, siteId], references: [organizationId, id], onDelete: Restrict)
   warehouse EnterpriseWarehouse    @relation(fields: [organizationId, warehouseId], references: [organizationId, id], onDelete: Restrict)
   lines     EnterpriseRetailInvoiceCheckoutLine[]
+  paymentProposals EnterpriseRetailInvoicePaymentProposal[]
 
   @@unique([organizationId, id])
   @@unique([organizationId, salesInvoiceId])
   @@unique([organizationId, idempotencyKey])
   @@index([organizationId, siteId, createdAt])
   @@index([organizationId, warehouseId, stockPostedAt])
+}
+
+// A cashier's payment intent is only a link to the canonical Finance payment.
+// No independent payment status, account balance, allocation or ledger exists.
+model EnterpriseRetailInvoicePaymentProposal {
+  id                 String   @id @default(cuid())
+  organizationId     String
+  checkoutId         String
+  paymentId          String
+  idempotencyKey     String
+  requestFingerprint String
+  recordedByUserId   String
+  createdAt          DateTime @default(now())
+
+  checkout EnterpriseRetailInvoiceCheckout @relation(fields: [organizationId, checkoutId], references: [organizationId, id], onDelete: Restrict)
+  payment  EnterprisePayment               @relation(fields: [organizationId, paymentId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, paymentId])
+  @@unique([organizationId, idempotencyKey])
+  @@index([organizationId, checkoutId, createdAt])
 }
 
 model EnterpriseRetailInvoiceCheckoutLine {

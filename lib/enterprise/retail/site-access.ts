@@ -85,7 +85,7 @@ export async function retailInvoiceVisibleSites(
   organizationId: string,
   userId: string,
   database: RetailSiteAccessReader = prisma,
-): Promise<{ isOwner: boolean; siteIds: string[]; cancellableSiteIds: string[]; submittableSiteIds: string[] }> {
+): Promise<{ isOwner: boolean; siteIds: string[]; cancellableSiteIds: string[]; submittableSiteIds: string[]; collectibleSiteIds: string[] }> {
   const [membership, configuration] = await Promise.all([
     database.organizationMember.findFirst({
       where: { organizationId, userId, status: "ACTIVE", removedAt: null }, select: { role: true },
@@ -93,7 +93,7 @@ export async function retailInvoiceVisibleSites(
     database.enterpriseRetailConfiguration.findUnique({ where: { organizationId }, select: { settingsJson: true } }),
   ]);
   if (!membership) throw new EnterpriseRetailError("RETAIL_SITE_ACCESS_DENIED", 403);
-  if (RETAIL_OWNER_ROLES.has(membership.role)) return { isOwner: true, siteIds: [], cancellableSiteIds: [], submittableSiteIds: [] };
+  if (RETAIL_OWNER_ROLES.has(membership.role)) return { isOwner: true, siteIds: [], cancellableSiteIds: [], submittableSiteIds: [], collectibleSiteIds: [] };
   const settings = configuration?.settingsJson;
   if (!retailStaffIsolationIsEnabled(settings) || !settings || typeof settings !== "object" || Array.isArray(settings) || (settings as Prisma.JsonObject).invoiceCheckoutEnabled !== true) {
     throw new EnterpriseRetailError("RETAIL_INVOICE_CHECKOUT_NOT_ACTIVE", 403);
@@ -109,5 +109,7 @@ export async function retailInvoiceVisibleSites(
     .map((assignment) => assignment.siteId);
   const submittableSiteIds = assignments.filter((assignment) => siteStaffCapabilities(assignment.roleCode, assignment.permissionsJson).includes("PREPARE_INVOICE"))
     .map((assignment) => assignment.siteId);
-  return { isOwner: false, siteIds: [...new Set(siteIds)], cancellableSiteIds: [...new Set(cancellableSiteIds)], submittableSiteIds: [...new Set(submittableSiteIds)] };
+  const collectibleSiteIds = assignments.filter((assignment) => siteStaffCapabilities(assignment.roleCode, assignment.permissionsJson).includes("COLLECT_PAYMENT"))
+    .map((assignment) => assignment.siteId);
+  return { isOwner: false, siteIds: [...new Set(siteIds)], cancellableSiteIds: [...new Set(cancellableSiteIds)], submittableSiteIds: [...new Set(submittableSiteIds)], collectibleSiteIds: [...new Set(collectibleSiteIds)] };
 }

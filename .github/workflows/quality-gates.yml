@@ -162,6 +162,7 @@ jobs:
           node scripts/qa-hotfix-1042-retail-batches-transfer.mjs
           node scripts/qa-hotfix-1042-site-staff.mjs
           node scripts/qa-hotfix-1042-retail-invoice-finance.mjs
+          node scripts/qa-hotfix-1042-retail-invoice-payments.mjs
       - name: Sector onboarding commercial readiness QA
         run: node scripts/qa-sector-onboarding-commercial-readiness.mjs
       - name: Standard modules iteration 08 QA

@@ -409,7 +409,8 @@
     "qa:auth-advanced-security": "node scripts/qa-auth-advanced-security.mjs",
     "qa:auth-dual-recovery": "node scripts/qa-auth-dual-recovery.mjs",
     "qa:hotfix-1019-security-settings": "node scripts/qa-hotfix-1019-security-settings-design2.mjs",
-    "qa:hotfix-1042-retail-invoice-finance": "node scripts/qa-hotfix-1042-retail-invoice-finance.mjs"
+    "qa:hotfix-1042-retail-invoice-finance": "node scripts/qa-hotfix-1042-retail-invoice-finance.mjs",
+    "qa:hotfix-1042-retail-invoice-payments": "node scripts/qa-hotfix-1042-retail-invoice-payments.mjs"
   },
   "dependencies": {
     "@ai-sdk/gateway": "2.0.27",

@@ -7,7 +7,7 @@ import {
 import type { EnterpriseFinanceModuleCode } from "@/lib/enterprise/accounting/constants";
 import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
 import { enqueueWebPushNotification } from "@/lib/push/queue";
-import { assertRetailInvoiceFinanceApproverTx } from "@/lib/enterprise/retail/invoice-approval";
+import { assertRetailInvoiceFinanceApproverTx, assertRetailPaymentFinanceApproverTx } from "@/lib/enterprise/retail/invoice-approval";
 
 export const ACCOUNTING_APPROVAL_MODULE_BY_TARGET: Readonly<Record<string, EnterpriseFinanceModuleCode>> = {
   EnterpriseJournalEntry: "FINANCE_ACCOUNTING",
@@ -83,6 +83,7 @@ export async function createAccountingApprovalAssignment(
     approverUserId: string;
     initialStatus?: "PENDING" | "QUEUED";
     retailInvoiceSiteId?: string;
+    retailPaymentSiteId?: string;
   },
 ) {
   if (input.retailInvoiceSiteId) {
@@ -91,6 +92,12 @@ export async function createAccountingApprovalAssignment(
     }
     await assertRetailInvoiceFinanceApproverTx(tx, {
       organizationId: input.organizationId, invoiceId: input.targetEntityId, siteId: input.retailInvoiceSiteId,
+      requesterUserId: input.requesterUserId, approverUserId: input.approverUserId,
+    });
+  } else if (input.retailPaymentSiteId) {
+    if (input.targetEntityType !== "EnterprisePayment") throw new EnterpriseAccountingError("ACCOUNTING_APPROVAL_TARGET_UNSUPPORTED", 400);
+    await assertRetailPaymentFinanceApproverTx(tx, {
+      organizationId: input.organizationId, paymentId: input.targetEntityId, siteId: input.retailPaymentSiteId,
       requesterUserId: input.requesterUserId, approverUserId: input.approverUserId,
     });
   } else {

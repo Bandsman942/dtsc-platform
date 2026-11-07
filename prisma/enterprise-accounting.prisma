@@ -761,6 +761,7 @@ model EnterprisePayment {
   createdAt                DateTime                      @default(now())
   updatedAt                DateTime                      @updatedAt
   allocations              EnterprisePaymentAllocation[]
+  retailInvoiceProposals   EnterpriseRetailInvoicePaymentProposal[]
   events                   EnterprisePaymentEvent[]
   treasuryTransactions     EnterpriseTreasuryTransaction[]
   cashSession              EnterpriseCashSession?         @relation(fields: [organizationId, cashSessionId], references: [organizationId, id], onDelete: Restrict)

@@ -60,6 +60,7 @@ export async function GET(req: Request, { params }: Params) {
     ...entry,
     canCancel: entry.invoice.status === "DRAFT" && (auth.visibility.isOwner || auth.visibility.cancellableSiteIds.includes(entry.siteId)),
     canSubmit: entry.invoice.status === "DRAFT" && entry.invoice.createdByUserId === auth.session.userId && (auth.visibility.isOwner || auth.visibility.submittableSiteIds.includes(entry.siteId)),
+    canCollect: ["ISSUED", "PARTIALLY_PAID", "OVERDUE", "PAID"].includes(entry.invoice.status) && (auth.visibility.isOwner || auth.visibility.collectibleSiteIds.includes(entry.siteId)),
   }));
   return NextResponse.json({ items: visibleItems, sites, pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) }, checkoutReady }, { headers: { "Cache-Control": "private, no-store" } });
 }

@@ -198,8 +198,9 @@ export async function resolveCashSessionForConfirmation(
   throw new EnterpriseAccountingError("OPEN_CASH_SESSION_REQUIRED", 409);
 }
 
-export async function createEnterprisePayment(organizationId: string, actorUserId: string, input: PaymentInput) {
-  return prisma.$transaction(async (tx) => {
+/** Shared Finance payment constructor. Sector adapters may compose the same
+ * DRAFT payment with a tenant-scoped intent inside one atomic transaction. */
+export async function createEnterprisePaymentTx(tx: Prisma.TransactionClient, organizationId: string, actorUserId: string, input: PaymentInput) {
     await assertActiveClientOrganization(tx, organizationId);
     const amount = new Prisma.Decimal(input.amount);
     if (!amount.isPositive()) throw new EnterpriseAccountingError("PAYMENT_AMOUNT_INVALID", 400);
@@ -268,7 +269,12 @@ export async function createEnterprisePayment(organizationId: string, actorUserI
     await addPaymentEvent(tx, organizationId, payment.id, actorUserId, "CREATED", "Payment created");
     await publishFinanceEvent(tx, { organizationId, entityType: "EnterprisePayment", entityId: payment.id, eventType: "PAYMENT_CREATED", summary: `Payment ${payment.number} created`, actorUserId, toStatus: "DRAFT", metadataJson: { amount: amount.toFixed(), currency: payment.currencyCode, direction: payment.direction, payrollRunId: payment.payrollRunId, cashSessionId: payment.cashSessionId } });
     return payment;
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+}
+
+export async function createEnterprisePayment(organizationId: string, actorUserId: string, input: PaymentInput) {
+  return prisma.$transaction((tx) => createEnterprisePaymentTx(tx, organizationId, actorUserId, input), {
+    isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+  });
 }
 
 export async function transitionEnterprisePayment(
@@ -409,6 +415,24 @@ async function confirmEnterprisePayment(organizationId: string, paymentId: strin
     if (!payment.financialAccountId) throw new EnterpriseAccountingError("PAYMENT_FINANCIAL_ACCOUNT_REQUIRED", 409);
     const account = await tx.enterpriseFinancialAccount.findFirst({ where: { id: payment.financialAccountId, organizationId, status: "ACTIVE", archivedAt: null } });
     if (!account || account.currencyCode !== payment.currencyCode) throw new EnterpriseAccountingError("PAYMENT_FINANCIAL_ACCOUNT_INVALID", 409);
+    // A Finance approver may confirm a Retail collection days after its
+    // preparation. Revalidate that this customer's receivable still covers
+    // the full amount before creating any irreversible treasury movement.
+    const retailIntent = await tx.enterpriseRetailInvoicePaymentProposal.findFirst({
+      where: { organizationId, paymentId: payment.id },
+      select: { checkout: { select: { siteId: true, invoice: { select: { status: true, outstandingAmount: true, currencyCode: true, businessPartyId: true } } } } },
+    });
+    if (retailIntent) {
+      const source = retailIntent.checkout.invoice;
+      if (!["ISSUED", "PARTIALLY_PAID", "OVERDUE"].includes(source.status) ||
+          source.outstandingAmount.lessThan(payment.amount) || source.currencyCode !== payment.currencyCode ||
+          source.businessPartyId !== payment.businessPartyId) {
+        throw new EnterpriseAccountingError("RETAIL_INVOICE_PAYMENT_EXCEEDS_OUTSTANDING", 409);
+      }
+      if (account.siteId !== retailIntent.checkout.siteId) {
+        throw new EnterpriseAccountingError("RETAIL_INVOICE_FINANCIAL_ACCOUNT_SITE_MISMATCH", 409);
+      }
+    }
     let confirmedCashSessionId: string | null = null;
     if (payment.methodType === "CASH") {
       const cashSession = await resolveCashSessionForConfirmation(tx, payment, actorUserId);
@@ -481,6 +505,15 @@ export async function allocateEnterprisePayment(
     if (input.receivableId) {
       receivable = await tx.enterpriseReceivable.findFirst({ where: { id: input.receivableId, organizationId, status: "OPEN" } });
       if (!receivable || payment.direction !== "INBOUND" || payment.paymentType !== "CUSTOMER_PAYMENT") throw new EnterpriseAccountingError("RECEIVABLE_ALLOCATION_INVALID", 409);
+      // A Retail cashier's payment intent may never be silently redirected
+      // to another customer's invoice through a direct Finance API call.
+      const retailIntent = await tx.enterpriseRetailInvoicePaymentProposal.findFirst({
+        where: { organizationId, paymentId: payment.id },
+        select: { checkout: { select: { salesInvoiceId: true } } },
+      });
+      if (retailIntent && retailIntent.checkout.salesInvoiceId !== receivable.salesInvoiceId) {
+        throw new EnterpriseAccountingError("RETAIL_INVOICE_PAYMENT_TARGET_MISMATCH", 409);
+      }
       if (payment.businessPartyId !== receivable.businessPartyId || payment.currencyCode !== receivable.currencyCode || amount.greaterThan(receivable.outstandingAmount)) throw new EnterpriseAccountingError("RECEIVABLE_ALLOCATION_SCOPE_OR_AMOUNT_INVALID", 409);
       try {
         await assertRetailInvoicePaymentScopeTx(tx, organizationId, receivable.salesInvoiceId, actorUserId, payment);
