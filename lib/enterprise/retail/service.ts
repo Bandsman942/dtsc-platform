@@ -10,7 +10,7 @@ import { finalizeRetailSaleAccountingTx, finalizeRetailSaleReversalAccountingTx 
 import { RETAIL_PROFILE_CODE, RETAIL_SECTOR_CODE } from "@/lib/enterprise/retail/constants";
 import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
 import { assertRetailLotPolicyTx } from "@/lib/enterprise/retail/inventory-policy";
-import { requireRetailSiteCapability, retailStaffIsolationIsEnabled } from "@/lib/enterprise/retail/site-access";
+import { requireRetailSiteCapability, retailFinanceReadSiteScope, retailStaffIsolationIsEnabled } from "@/lib/enterprise/retail/site-access";
 import {
   applyRetailRelationshipBenefitEffectsTx,
   reverseRetailRelationshipBenefitEffectsTx,
@@ -602,9 +602,22 @@ export async function reverseTelcoTopup(organizationId: string, topupId: string,
 export async function createRetailDailyClose(organizationId: string, actorUserId: string, input: RetailCloseInput) {
   return prisma.$transaction(async (tx) => {
     await assertRetailOrganization(tx, organizationId);
-    await ensureRetailConfigurationTx(tx, organizationId, actorUserId);
+    const configuration = await ensureRetailConfigurationTx(tx, organizationId, actorUserId);
+    const strictSites = retailStaffIsolationIsEnabled(configuration.settingsJson);
+    const closeScope = await retailFinanceReadSiteScope(organizationId, actorUserId, "CLOSE_CASH", tx);
     const existing = await tx.enterpriseRetailDailyClose.findFirst({ where: { organizationId, idempotencyKey: input.idempotencyKey }, include: { lines: true } });
-    if (existing) return { close: existing, idempotent: true };
+    if (existing) {
+      // Permission checks must run even when a request is replayed after the
+      // submitter's site assignment was revoked.
+      if (existing.submittedByUserId !== actorUserId || (input.siteId && existing.siteId !== input.siteId)) {
+        throw new EnterpriseRetailError("RETAIL_CLOSE_CONFLICT", 409);
+      }
+      if (closeScope !== null && (!existing.siteId || !closeScope.includes(existing.siteId))) {
+        throw new EnterpriseRetailError("RETAIL_SITE_ACCESS_DENIED", 403);
+      }
+      return { close: existing, idempotent: true };
+    }
+    const accountSites = new Set<string>();
     const seen = new Set<string>();
     const preparedLines: Array<{ financialAccountId: string; accountType: string; currencyCode: string; cashSessionId: string | null; systemClosingBalance: Prisma.Decimal; declaredBalance: Prisma.Decimal; differenceAmount: Prisma.Decimal; varianceReason: string | null; countDetailsJson?: Prisma.InputJsonValue }> = [];
     for (const line of input.lines) {
@@ -612,11 +625,19 @@ export async function createRetailDailyClose(organizationId: string, actorUserId
       seen.add(line.financialAccountId);
       const account = await tx.enterpriseFinancialAccount.findFirst({ where: { id: line.financialAccountId, organizationId, status: "ACTIVE", archivedAt: null } });
       if (!account || account.accountType !== line.accountType) throw new EnterpriseRetailError("RETAIL_FINANCIAL_ACCOUNT_INVALID", 409, { financialAccountId: line.financialAccountId });
+      if (input.siteId && account.siteId !== input.siteId) throw new EnterpriseRetailError("RETAIL_CLOSE_ACCOUNT_SITE_MISMATCH", 409);
+      if (closeScope !== null && (!account.siteId || !closeScope.includes(account.siteId))) {
+        throw new EnterpriseRetailError("RETAIL_SITE_ACCESS_DENIED", 403);
+      }
+      if (account.siteId) accountSites.add(account.siteId);
       const declared = money(decimal(line.declaredBalance));
       if (account.accountType === "CASH") {
         await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterpriseCashSession" WHERE "organizationId" = ${organizationId} AND "financialAccountId" = ${account.id} AND "cashierUserId" = ${actorUserId} AND status = 'OPEN' FOR UPDATE`);
         const cashSession = await tx.enterpriseCashSession.findFirst({ where: { organizationId, financialAccountId: account.id, cashierUserId: actorUserId, status: "OPEN" }, include: { movements: true } });
         if (!cashSession) throw new EnterpriseRetailError("RETAIL_OPEN_CASH_SESSION_REQUIRED", 409, { financialAccountId: account.id });
+        if (strictSites && (!cashSession.siteId || cashSession.siteId !== account.siteId)) {
+          throw new EnterpriseRetailError("RETAIL_CLOSE_ACCOUNT_SITE_MISMATCH", 409);
+        }
         const inflows = sumDecimals(cashSession.movements.filter((movement) => movement.direction === "INBOUND").map((movement) => movement.amount));
         const outflows = sumDecimals(cashSession.movements.filter((movement) => movement.direction === "OUTBOUND").map((movement) => movement.amount));
         const expected = money(cashSession.openingAmount.plus(inflows).minus(outflows));
@@ -655,7 +676,9 @@ export async function createRetailDailyClose(organizationId: string, actorUserId
         preparedLines.push({ financialAccountId: account.id, accountType: account.accountType, currencyCode: account.currencyCode, cashSessionId: null, systemClosingBalance: expected, declaredBalance: declared, differenceAmount: difference, varianceReason: line.varianceReason || null });
       }
     }
-    const close = await tx.enterpriseRetailDailyClose.create({ data: { organizationId, number: retailReference("CLOSE"), businessDate: input.businessDate, siteId: input.siteId || null, status: "SUBMITTED", submittedByUserId: actorUserId, notes: input.notes || null, idempotencyKey: input.idempotencyKey, lines: { create: preparedLines } }, include: { lines: true } });
+    if (strictSites && accountSites.size !== 1) throw new EnterpriseRetailError("RETAIL_CLOSE_MULTISITE_FORBIDDEN", 409);
+    const canonicalSite = accountSites.size === 1 ? [...accountSites][0] : null;
+    const close = await tx.enterpriseRetailDailyClose.create({ data: { organizationId, number: retailReference("CLOSE"), businessDate: input.businessDate, siteId: input.siteId || canonicalSite, status: "SUBMITTED", submittedByUserId: actorUserId, notes: input.notes || null, idempotencyKey: input.idempotencyKey, lines: { create: preparedLines } }, include: { lines: true } });
     await publishFinanceEvent(tx, { organizationId, entityType: "EnterpriseRetailDailyClose", entityId: close.id, eventType: "RETAIL_DAILY_CLOSE_SUBMITTED", summary: `Clôture ${close.number} soumise`, actorUserId, toStatus: "SUBMITTED", metadataJson: { businessDate: close.businessDate.toISOString(), lineCount: close.lines.length, totalVariance: money(sumDecimals(close.lines.map((line) => line.differenceAmount.abs()))).toFixed() } });
     return { close, idempotent: false };
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 30000 });
@@ -667,6 +690,10 @@ export async function decideRetailDailyClose(organizationId: string, closeId: st
     await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterpriseRetailDailyClose" WHERE id = ${closeId} AND "organizationId" = ${organizationId} FOR UPDATE`);
     const close = await tx.enterpriseRetailDailyClose.findFirst({ where: { id: closeId, organizationId }, include: { lines: true } });
     if (!close) throw new EnterpriseRetailError("RETAIL_CLOSE_NOT_FOUND", 404);
+    const closeScope = await retailFinanceReadSiteScope(organizationId, actorUserId, "CLOSE_CASH", tx);
+    if (closeScope !== null && (!close.siteId || !closeScope.includes(close.siteId))) {
+      throw new EnterpriseRetailError("RETAIL_SITE_ACCESS_DENIED", 403);
+    }
     if (close.submittedByUserId === actorUserId) throw new EnterpriseRetailError("RETAIL_CLOSE_SELF_VALIDATION_FORBIDDEN", 409);
     if (close.status !== "SUBMITTED" || close.revision !== input.revision) throw new EnterpriseRetailError("RETAIL_CLOSE_CONFLICT", 409);
     const discrepancyIds: string[] = [];
