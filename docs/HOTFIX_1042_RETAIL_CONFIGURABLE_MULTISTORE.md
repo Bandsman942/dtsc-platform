@@ -1,6 +1,6 @@
 # RETAIL-1042 — cahier des charges boutiques, paramétrage et Design 2.0
 
-Statut du 7 novembre 2026 : **vingt tranches techniques sur la PR brouillon #1043 ; pas de fusion, déploiement ni acceptation client. Les avoirs/remboursements de la facture Finance Retail et la recette PostgreSQL multi-rôles sont encore ouverts.**
+Statut du 7 novembre 2026 : **vingt et une tranches techniques sur la PR brouillon #1043 ; pas de fusion, déploiement ni acceptation client. Les avoirs/remboursements de la facture Finance Retail et la recette PostgreSQL multi-rôles sont encore ouverts.**
 
 ## Cible produit
 
@@ -176,3 +176,9 @@ Contrôle du 7 novembre : `npm run build` local a terminé avec succès la compi
 - `GET /payments` contraint comptes financiers de la boutique, rattachement des propositions Retail, liste et **trois agrégats** de montants par devise ; les comptes archivés sont conservés pour la lecture historique autorisée. Un caissier de la boutique A ne peut obtenir les montants des paiements Retail de B depuis Finance.
 - QA unitaire : propriétaire/Finance pur, droits explicites, perte de la dernière affectation et présence de filtres sur liste/agrégats ; non constitutive d'un E2E connecté.
 - **Limite** : les autres routes Finance (détails/écritures/exports spécialisés), Finance hors facturation Retail, les remboursements et le rapport comptable final exigent encore revue approfondie et tests multi-rôles. Flags OFF, PR brouillon.
+
+### Tranche 21 — créances et indicateurs d'ancienneté Finance limités aux boutiques (2026-11-07)
+
+- La liste `GET /receivables` applique les mêmes affectations Retail `VIEW_SALES` que les factures Finance canoniques, y compris pour `recordId`, la recherche, la pagination et les filtres d'ancienneté.
+- Les deux agrégats `openByCurrency` et `overdueByCurrency` utilisent **exactement** le même filtre de site dans les requêtes Prisma : aucun total de créances de la boutique B n'est dévoilé au personnel de A. Les créances d'autres flux Finance conservent leur règle RBAC Finance existante ; aucun total CDF+USD.
+- La QA #1042 vérifie que les trois requêtes (liste et deux compteurs) sont alignées. Les tests d'identité et d'authentification et tous les exports Finance restent à réaliser avant activation.
