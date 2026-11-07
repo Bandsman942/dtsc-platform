@@ -1,3 +1,9 @@
+## 2026-11-07 — Hotfix P0 Retail #1042, tranche 18 — Concurrence PostgreSQL réellement testée en CI (PR brouillon #1043)
+
+- QA intégrée dans `quality-gates.yml` avec PostgreSQL éphémère : deux transactions SERIALIZABLE concurrentes, conflit réel, retry borné, compteur final sans mise à jour perdue.
+- Exécution interdite en dehors de `CI=true` et de la base `dtsc_quality_test` ; nettoyage de la table de test. Résultat GitHub Actions à confirmer sur le dernier commit.
+- Ne constitue pas encore un E2E métier authentifié ni la preuve de remboursements Retail. Flags OFF et PR brouillon.
+
 ## 2026-11-07 — Hotfix P0 Retail #1042, tranche 17 — Protection des avoirs Finance contre les stocks Retail incohérents (PR brouillon #1043)
 
 - Un avoir Finance sur facture Retail avec checkout est désormais refusé jusqu'à la livraison d'un circuit de retour/remboursement atomique avec stock : évite de solder une créance en laissant des quantités réservées ou sans contre-mouvement.
