@@ -133,6 +133,9 @@ const { createRetailInvoiceReturnRequest, decideRetailInvoiceReturnRequest,
 const input = { idempotencyKey: "shop-return-001", approverUserId: "reviewer",
   reason: "Produit endommagé", lines: [{ checkoutLineId: "line-A", quantity: "2", stockDisposition: "QUARANTINE" }] };
 assert.equal(retailInvoiceReturnRequestSchema.safeParse(input).success, true);
+assert.equal(retailInvoiceReturnRequestSchema.safeParse({ ...input, lines: [{ ...input.lines[0], quantity: "0" }] }).success, false);
+assert.equal(retailInvoiceReturnRequestSchema.safeParse({ ...input, lines: [{ ...input.lines[0], quantity: "0.000000" }] }).success, false);
+assert.equal(retailInvoiceReturnRequestSchema.safeParse({ ...input, lines: [{ ...input.lines[0], quantity: "invalid" }] }).success, false);
 assert.equal(retailInvoiceReturnRequestSchema.safeParse({ ...input, lines: [{ ...input.lines[0], quantity: "2.1234567" }] }).success, false);
 const created = await createRetailInvoiceReturnRequest("tenant", "invoice-A", "requester", input);
 assert.equal(created.idempotent, false);
@@ -237,6 +240,41 @@ await assert.rejects(listRetailInvoiceReturnApprovers("tenant", "requester", "st
 state.financeAllowed = false;
 assert.equal((await listRetailInvoiceReturnApprovers("tenant", "requester", "store-A")).candidates.length, 0);
 state.financeAllowed = true;
+
+// The single canonical Finance credit/refund amount has two decimals. Partial
+// quantities must preserve exact pennies across successive return requests.
+state.existing = false;
+state.checkout.lines[0].invoiceItem = { quantity: D(3), totalAmount: D(100) };
+state.checkout.invoice.grandTotal = D(100);
+const oneThird = { ...input, idempotencyKey: "shop-return-penny-001",
+  lines: [{ ...input.lines[0], quantity: "1" }] };
+assert.equal((await createRetailInvoiceReturnRequest("tenant", "invoice-A", "requester", oneThird)).request.refundAmount.toFixed(2), "33.33");
+state.reserved = [{ checkoutLineId: "line-A", quantity: D(1), refundAmount: D("33.33") }];
+assert.equal((await createRetailInvoiceReturnRequest("tenant", "invoice-A", "requester", {
+  ...oneThird, idempotencyKey: "shop-return-penny-002",
+})).request.refundAmount.toFixed(2), "33.33");
+state.reserved = [{ checkoutLineId: "line-A", quantity: D(2), refundAmount: D("66.66") }];
+assert.equal((await createRetailInvoiceReturnRequest("tenant", "invoice-A", "requester", {
+  ...oneThird, idempotencyKey: "shop-return-penny-003",
+})).request.refundAmount.toFixed(2), "33.34");
+state.reserved = [];
+state.checkout.lines[0].invoiceItem = { quantity: D(100), totalAmount: D("0.01") };
+state.checkout.invoice.grandTotal = D("0.01");
+await assert.rejects(createRetailInvoiceReturnRequest("tenant", "invoice-A", "requester", oneThird),
+  { code: "RETAIL_INVOICE_RETURN_AMOUNT_BELOW_MINOR_UNIT" });
+state.checkout.lines[0].invoiceItem = { quantity: D(1), totalAmount: D("10.005") };
+state.checkout.invoice.grandTotal = D("10.005");
+await assert.rejects(createRetailInvoiceReturnRequest("tenant", "invoice-A", "requester", oneThird),
+  { code: "RETAIL_INVOICE_RETURN_HISTORICAL_PRECISION_UNSUPPORTED" });
+state.checkout.lines[0].invoiceItem = { quantity: D(3), totalAmount: D(100) };
+state.checkout.invoice.grandTotal = D(100);
+state.reserved = [{ checkoutLineId: "line-A", quantity: D(1), refundAmount: D("33.333333") }];
+await assert.rejects(createRetailInvoiceReturnRequest("tenant", "invoice-A", "requester", oneThird),
+  { code: "RETAIL_INVOICE_RETURN_HISTORICAL_PRECISION_UNSUPPORTED" });
+state.reserved = [];
+state.checkout.invoice.grandTotal = D("100.005");
+await assert.rejects(createRetailInvoiceReturnRequest("tenant", "invoice-A", "requester", oneThird),
+  { code: "RETAIL_INVOICE_RETURN_HISTORICAL_PRECISION_UNSUPPORTED" });
 
 const migration = fs.readFileSync("prisma/migrations/20261107163000_retail_invoice_return_requests/migration.sql", "utf8");
 assert.match(migration, /FOREIGN KEY \("organizationId", "returnRequestId", "checkoutId"\)/);

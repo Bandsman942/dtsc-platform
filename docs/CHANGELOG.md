@@ -1,3 +1,9 @@
+## 2026-11-07 — Retail #1042, tranche 28 — Retours à montants exacts et quantités strictes (candidat, PR #1043)
+
+- Correction du cas zéro en Prisma Decimal : quantité et montant de retour strictement positifs dans le formulaire serveur et la transaction, sans réservation financière factice.
+- Le calcul des retours fractionnaires s'aligne sur les deux décimales Finance ; la dernière fraction récupère le reliquat de centimes, sans écart silencieux lors du futur remboursement.
+- Rejet explicite des anciennes lignes monétaires non représentables et des fractions trop petites pour Finance, avec tests et messages métier. Aucun avoir, stock, décaissement ni activation de flag ; E2E final encore ouvert.
+
 ## 2026-11-07 — Retail #1042, tranche 27 — Demandes de retour dans l'interface (candidat, PR #1043)
 
 - Dialogue mobile et bilingue depuis les factures Retail livrées : choix des articles/quantités, traitement physique et validateur Finance indépendant ; registre paginé et contextualisé.

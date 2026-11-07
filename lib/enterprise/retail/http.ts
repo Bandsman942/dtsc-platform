@@ -36,6 +36,8 @@ const ERROR_MESSAGES: Record<string, string> = {
   RETAIL_INVOICE_RETURN_QUANTITY_EXCEEDED: "La quantité demandée dépasse la quantité encore autorisée pour retour.",
   RETAIL_INVOICE_RETURN_STOCK_DISPOSITION_INVALID: "Un service non stocké ne peut pas être réintégré physiquement au stock.",
   RETAIL_INVOICE_RETURN_AMOUNT_INVALID: "Le montant calculé pour ce retour est invalide. Vérifiez les quantités de la facture.",
+  RETAIL_INVOICE_RETURN_AMOUNT_BELOW_MINOR_UNIT: "La quantité retournée correspond à un montant inférieur à la plus petite unité monétaire prise en charge par Finance. Augmentez la quantité ou faites vérifier la facture.",
+  RETAIL_INVOICE_RETURN_HISTORICAL_PRECISION_UNSUPPORTED: "Cette ancienne ligne de facture contient des fractions monétaires que le circuit de remboursement Finance ne sait pas comptabiliser exactement. Faites-la examiner avant de demander un retour.",
   RETAIL_INVOICE_RETURN_REVISION_CONFLICT: "La demande a déjà été traitée ou modifiée. Rechargez avant de décider.",
   RETAIL_INVOICE_RETURN_INSPECTION_INVALID: "Confirmez la réception et décrivez le contrôle physique des articles retournés.",
   RETAIL_INVOICE_RETURN_INSPECTION_REQUIRED: "Le retour doit être reçu et contrôlé par un responsable des stocks indépendant avant son approbation Finance.",

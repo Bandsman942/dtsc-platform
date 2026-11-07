@@ -10,7 +10,8 @@ import { prisma } from "@/lib/prisma";
 
 // A request and its approval are NOT a refund. No Finance balance, credit
 // note, stock quantity or payment changes in this module.
-const quantity = z.string().trim().regex(/^(?:0|[1-9][0-9]{0,6})(?:\.[0-9]{1,6})?$/);
+const quantity = z.string().trim().regex(/^(?:0|[1-9][0-9]{0,6})(?:\.[0-9]{1,6})?$/)
+  .refine((value) => /[1-9]/.test(value));
 export const retailInvoiceReturnRequestSchema = z.object({
   idempotencyKey: z.string().trim().min(8).max(160),
   approverUserId: z.string().trim().min(1).max(191),
@@ -38,6 +39,12 @@ type InspectionInput = z.infer<typeof retailInvoiceReturnInspectionSchema>;
 
 function monetary(value: Prisma.Decimal.Value) {
   return new Prisma.Decimal(value).toDecimalPlaces(6, Prisma.Decimal.ROUND_HALF_UP);
+}
+// Canonical Finance refund and credit-note services book at two decimal
+// places. A request must never reserve an amount that those services would
+// silently round at settlement time.
+function financeMoney(value: Prisma.Decimal.Value) {
+  return new Prisma.Decimal(value).toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
 }
 function fingerprint(input: RequestInput) {
   const normalized = input.lines.map((line) => ({
@@ -209,6 +216,9 @@ export async function createRetailInvoiceReturnRequest(
     if (checkout.invoice.status !== "PAID" || !checkout.stockPostedAt) {
       throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_PAID_REQUIRED", 409);
     }
+    if (!checkout.invoice.grandTotal.equals(financeMoney(checkout.invoice.grandTotal))) {
+      throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_HISTORICAL_PRECISION_UNSUPPORTED", 409);
+    }
     await requireReturnApproverTx(tx, organizationId, actorUserId, input.approverUserId, checkout.siteId);
     const lineIds = input.lines.map((row) => row.checkoutLineId);
     if (new Set(lineIds).size !== lineIds.length) throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_DUPLICATE_LINE", 409);
@@ -237,25 +247,33 @@ export async function createRetailInvoiceReturnRequest(
       const priorQty = previousQuantity.get(line.id) || new Prisma.Decimal(0);
       const priorAmount = previousAmount.get(line.id) || new Prisma.Decimal(0);
       const left = line.invoiceItem.quantity.minus(priorQty);
-      if (!value.isPositive() || value.greaterThan(left)) {
+      if (!value.greaterThan(0) || value.greaterThan(left)) {
         throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_QUANTITY_EXCEEDED", 409);
       }
       if (entry.stockDisposition === "RESTOCK" && !line.inventoryItemId) {
         throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_STOCK_DISPOSITION_INVALID", 409);
       }
+      if (!line.invoiceItem.totalAmount.equals(financeMoney(line.invoiceItem.totalAmount)) ||
+          !priorAmount.equals(financeMoney(priorAmount))) {
+        throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_HISTORICAL_PRECISION_UNSUPPORTED", 409);
+      }
       const remainingAmount = line.invoiceItem.totalAmount.minus(priorAmount);
       const proportional = monetary(line.invoiceItem.totalAmount.times(value).div(line.invoiceItem.quantity));
-      const amount = value.equals(left) ? remainingAmount : Prisma.Decimal.min(proportional, remainingAmount);
-      if (amount.isNegative()) throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_AMOUNT_INVALID", 409);
+      // Preserve the last-cent remainder on the final quantity return. Three
+      // successive 1/3 returns of 100.00 therefore yield 33.33, 33.33, 33.34.
+      const amount = value.equals(left) ? remainingAmount : Prisma.Decimal.min(financeMoney(proportional), remainingAmount);
+      if (!amount.greaterThan(0)) {
+        throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_AMOUNT_BELOW_MINOR_UNIT", 409);
+      }
       return {
         organizationId, checkoutId: checkout.id, checkoutLineId: line.id,
         quantity: value, refundAmount: amount, stockDisposition: entry.stockDisposition,
       };
     });
-    const refundAmount = monetary(prepared.reduce(
+    const refundAmount = financeMoney(prepared.reduce(
       (sum, line) => sum.plus(line.refundAmount), new Prisma.Decimal(0),
     ));
-    if (!refundAmount.isPositive() || refundAmount.greaterThan(checkout.invoice.grandTotal)) {
+    if (!refundAmount.greaterThan(0) || refundAmount.greaterThan(checkout.invoice.grandTotal)) {
       throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_AMOUNT_INVALID", 409);
     }
     const created = await tx.enterpriseRetailInvoiceReturnRequest.create({
