@@ -1,6 +1,6 @@
 # RETAIL-1042 — cahier des charges boutiques, paramétrage et Design 2.0
 
-Statut du 7 novembre 2026 : **dix-huit tranches techniques sur la PR brouillon #1043 ; pas de fusion, déploiement ni acceptation client. Les avoirs/remboursements de la facture Finance Retail et la recette PostgreSQL multi-rôles sont encore ouverts.**
+Statut du 7 novembre 2026 : **dix-neuf tranches techniques sur la PR brouillon #1043 ; pas de fusion, déploiement ni acceptation client. Les avoirs/remboursements de la facture Finance Retail et la recette PostgreSQL multi-rôles sont encore ouverts.**
 
 ## Cible produit
 
@@ -154,3 +154,10 @@ Contrôle du 7 novembre : `npm run build` local a terminé avec succès la compi
 - Nouveau test `scripts/qa-hotfix-1042-retail-postgres-serialization.mjs` intégré à la Quality Gate, sur le service PostgreSQL éphémère `dtsc_quality_test` après `prisma migrate deploy`.
 - Deux transactions SERIALIZABLE lisent la même valeur et tentent de la modifier. Le test vérifie qu'une transaction est effectivement reprise après conflit et que le compteur final vaut 2, sans écriture perdue ni boucle infinie. La table de preuve est créée et supprimée pendant la QA, et le script refuse tout autre environnement ou base que celle de CI.
 - Ce test est **un vrai test de sérialisation PostgreSQL** pour le mécanisme générique de retry, mais **ne certifie pas** les opérations métier `EnterpriseRetailInvoiceCheckout`, une caisse multi-acteurs ou les écritures comptables. Les tests métier multi-boutiques réels, les avoirs/remboursements et la recette OWNER_E2E restent ouverts. Flags OFF.
+
+### Tranche 19 — ventilation des factures Finance par boutique et devise (2026-11-07)
+
+- `GET /retail/site-overview`, réservé au propriétaire/admin d'entreprise, relie `EnterpriseRetailInvoiceCheckout` à l'unique facture `EnterpriseSalesInvoice` et agrège en SQL **par boutique et devise**, sans chargement d'une liste tronquée. Dates filtrées sur `issuedAt` et statuts émis ; aucun brouillon/annulation n'est compté.
+- Pour chaque devise : montant brut des factures émises sur la période, paiements affectés cumulés et solde restant **à la date de consultation**. Ces derniers montants ne sont pas présentés comme des encaissements sur la période.
+- Le panneau Design 2.0 FR/EN présente les factures Finance séparément des ventes et encaissements POS ; aucune addition CDF+USD ni assimilation du CA à l'encaissement. Tests contractuels de jointure tenant-aware, périmètre propriétaire et étiquetage explicite.
+- **Non certifié** : revenus/profits de la comptabilité POSTED par boutique, exports PDF/XLSX, rapprochement et retour/remboursement Finance Retail, E2E multi-rôles. Les flags d'activation restent OFF.
