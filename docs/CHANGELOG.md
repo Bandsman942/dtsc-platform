@@ -1,3 +1,9 @@
+## 2026-11-07 — Retail #1042, tranche 29 — Vérification des prérequis de liquidation (candidat, PR #1043)
+
+- Service interne en lecture vérifiant les preuves indépendantes d'inspection et validation, les montants exacts, la disponibilité des paiements Finance confirmés et l'origine des sorties de stock article/lot/dépôt ; quantités déjà retournées déduites.
+- QA dédiée ajoutée aux Quality Gates, sans action UI, écriture, migration ni déploiement ; cette vérification est un prérequis, pas encore un avoir ou un remboursement.
+- Le règlement atomique Finance/Inventory et les tests E2E authentifiés restent bloquants avant toute activation.
+
 ## 2026-11-07 — Retail #1042, tranche 28 — Retours à montants exacts et quantités strictes (candidat, PR #1043)
 
 - Correction du cas zéro en Prisma Decimal : quantité et montant de retour strictement positifs dans le formulaire serveur et la transaction, sans réservation financière factice.

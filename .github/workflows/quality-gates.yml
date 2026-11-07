@@ -171,6 +171,7 @@ jobs:
           node scripts/qa-hotfix-1042-retail-refund-credit-bypass.mjs
           node scripts/qa-hotfix-1042-retail-cash-site.mjs
           node scripts/qa-hotfix-1042-retail-invoice-return-requests.mjs
+          node scripts/qa-hotfix-1042-retail-return-settlement-preflight.mjs
           node scripts/qa-hotfix-1042-cahier-traceability.mjs
       - name: Sector onboarding commercial readiness QA
         run: node scripts/qa-sector-onboarding-commercial-readiness.mjs
