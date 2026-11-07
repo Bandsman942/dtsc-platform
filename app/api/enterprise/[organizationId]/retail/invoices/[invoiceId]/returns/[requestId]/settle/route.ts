@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { hasRecentStepUp } from "@/lib/auth/step-up";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { authorizeFinanceRequest } from "@/lib/enterprise/accounting/http";
 import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
@@ -14,6 +15,17 @@ export async function POST(req: Request, { params }: Params) {
   // privilege is granted; the service enforces both Finance modules and site.
   const auth = await authorizeFinanceRequest(req, organizationId, "FINANCE_PAYMENTS", "update", { mutation: true, limit: 20 });
   if (!auth.ok) return auth.response;
+  // Settlement confirms an outbound customer refund and posts the credit and
+  // inventory movements atomically. It must not bypass the real-password/TOTP
+  // step-up required by the canonical Finance CONFIRM endpoint.
+  if (!(await hasRecentStepUp(auth.session))) {
+    await writeAuditLog({ userId: auth.session.userId, action: "AUTH_CRITICAL_MUTATION_STEPUP_DENIED",
+      entity: "EnterpriseRetailInvoiceReturnRequest", entityId: requestId, request: req,
+      result: "DENIED", riskLevel: "CRITICAL", reasonCode: "STEP_UP_REQUIRED",
+      metadata: { organizationId, action: "SETTLE_FINANCE" } });
+    return NextResponse.json({ error: "Une vérification récente par mot de passe et authentificateur est nécessaire.",
+      reasonCode: "STEP_UP_REQUIRED" }, { status: 428, headers: { "Cache-Control": "no-store" } });
+  }
   const parsed = retailInvoiceReturnFinanceSettlementSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "RETAIL_INVOICE_RETURN_FINANCE_SETTLE_INVALID", req);
   try {

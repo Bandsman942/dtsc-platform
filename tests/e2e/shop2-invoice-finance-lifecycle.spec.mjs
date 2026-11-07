@@ -276,7 +276,9 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
     // are five different real users, all authenticated over HTTP.
     const inspectorEmail = "shop2-e2e-return-inspector@example.test";
     const preparerEmail = "shop2-e2e-return-preparer@example.test";
-    for (const [email, role] of [[inspectorEmail, "Inspector"], [preparerEmail, "Finance Preparer"]]) {
+    const returnSettlerEmail = "shop2-e2e-return-settler@example.test";
+    for (const [email, role] of [[inspectorEmail, "Inspector"], [preparerEmail, "Finance Preparer"],
+      [returnSettlerEmail, "Refund Settler"]]) {
       const actor = await prisma.user.upsert({
         where: { email },
         update: { name: `Retail E2E ${role}`, passwordHash: testPasswordHash(cashierPassword), role: "CLIENT", status: "ACTIVE" },
@@ -290,9 +292,11 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
     }
     context.inspector = await browser.newContext({ baseURL: baseUrl });
     context.preparer = await browser.newContext({ baseURL: baseUrl });
+    context.returnSettler = await browser.newContext({ baseURL: baseUrl });
     await Promise.all([
       signIn(context.inspector, inspectorEmail, cashierPassword),
       signIn(context.preparer, preparerEmail, cashierPassword),
+      signIn(context.returnSettler, returnSettlerEmail, cashierPassword),
     ]);
     const checkout = await prisma.enterpriseRetailInvoiceCheckout.findFirstOrThrow({
       where: { organizationId, salesInvoiceId: invoiceId },
@@ -346,17 +350,18 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
         sourceEntityId: returnId, movementType: "RETURN_IN" },
     });
     expect(beforeSettlement).toBe(0);
-    await ensureStepUp(context.settler, cashierPassword);
-    const settled = await post(context.settler, `${returnPath}/settle`, {
+    const settlementPayload = {
       revision: preparedRefund.body.request.revision,
       reason: "Returned item verified; refund approved and financial reversal settled",
-    });
+    };
+    const deniedWithoutStepUp = await post(context.returnSettler, `${returnPath}/settle`, settlementPayload);
+    expect(deniedWithoutStepUp.status, JSON.stringify(deniedWithoutStepUp.body)).toBe(428);
+    expect(deniedWithoutStepUp.body.reasonCode).toBe("STEP_UP_REQUIRED");
+    await ensureStepUp(context.returnSettler, cashierPassword);
+    const settled = await post(context.returnSettler, `${returnPath}/settle`, settlementPayload);
     expect(settled.status, JSON.stringify(settled.body)).toBe(200);
     expect(settled.body.request.status).toBe("COMPLETED");
-    const replay = await post(context.settler, `${returnPath}/settle`, {
-      revision: preparedRefund.body.request.revision,
-      reason: "Returned item verified; refund approved and financial reversal settled",
-    });
+    const replay = await post(context.returnSettler, `${returnPath}/settle`, settlementPayload);
     expect(replay.status, JSON.stringify(replay.body)).toBe(200);
     expect(replay.body.idempotent).toBe(true);
     const returnMovements = await prisma.enterpriseStockMovement.findMany({

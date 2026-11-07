@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ClipboardCheck, CreditCard, PackageSearch, RotateCcw, ShieldCheck, ShieldX } from "lucide-react";
 import { EnterpriseApproverSelect } from "@/components/enterprise/enterprise-approver-select";
+import { FinanceCriticalStepUpFields, performFinanceCriticalStepUp } from "@/components/enterprise/professional/finance-critical-step-up";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { toastError, toastSuccess } from "@/lib/client-toast";
@@ -42,7 +43,7 @@ type Action = { request: ReturnRequest; type: "INSPECT" | "APPROVE" | "REJECT" |
 
 const translations = {
   fr: {
-    trigger: "Retours et avoirs", title: "Retours de marchandise", explain: "Un retour nécessite trois intervenants indépendants : demande, inspection physique et validation Finance. Aucun avoir, stock ou remboursement n’est comptabilisé à ce stade.",
+    trigger: "Retours et avoirs", title: "Retours de marchandise", explain: "Le retour suit cinq étapes humaines séparées : demande, inspection, approbation, préparation Finance et liquidation. Aucun stock ni remboursement n’est comptabilisé avant la liquidation.",
     refresh: "Actualiser", loading: "Chargement des demandes…", empty: "Aucune demande de retour enregistrée.", error: "Impossible de charger les retours de cette facture.",
     new: "Demander un retour", newHint: "Seules les factures entièrement réglées et dont le stock a été livré peuvent faire l’objet d’un retour.",
     item: "Article", quantity: "Quantité retournée", disposition: "Traitement physique", restock: "Réintégrer en stock", quarantine: "Placer en quarantaine", dispose: "Écarter / détruire", reason: "Motif du retour", approver: "Validateur Finance indépendant", send: "Soumettre la demande", cancel: "Annuler", sending: "Enregistrement…", createSuccess: "Demande de retour enregistrée. L’inspection physique indépendante est maintenant attendue.",
@@ -51,7 +52,7 @@ const translations = {
     previous: "Précédente", next: "Suivante", close: "Fermer", select: "Sélectionner", rowMissing: "Aucune ligne facturée n’est disponible pour créer un retour.", itemRequired: "Sélectionnez au moins un article avec une quantité valide.", invalidQuantity: "La quantité doit être positive, ne pas dépasser la facture et avoir au plus 3 décimales pour un article en stock. Les quantités déjà engagées sont revérifiées par le serveur.",
   },
   en: {
-    trigger: "Returns and credits", title: "Merchandise returns", explain: "Returns require three independent actors: requester, physical inspector and Finance approver. No credit, stock or reimbursement is posted at this stage.",
+    trigger: "Returns and credits", title: "Merchandise returns", explain: "Returns use five independent roles: requester, physical inspector, approver, Finance preparer and settler. No stock or refund posts before settlement.",
     refresh: "Refresh", loading: "Loading return requests…", empty: "No return requests yet.", error: "Unable to load this invoice's returns.",
     new: "Request a return", newHint: "Only fully paid invoices with delivered inventory are eligible for returns.",
     item: "Item", quantity: "Quantity returned", disposition: "Physical disposition", restock: "Return to stock", quarantine: "Quarantine", dispose: "Discard / destroy", reason: "Return reason", approver: "Independent Finance approver", send: "Submit request", cancel: "Cancel", sending: "Saving…", createSuccess: "Return request registered. Independent physical inspection is now required.",
@@ -147,7 +148,7 @@ export function RetailInvoiceReturnDialog({ organizationId, invoiceId, invoiceNu
     finally { setBusy(false); }
   }
 
-  async function completeAction() {
+  async function completeAction(form?: FormData) {
     if (!action || busy || (action.type === "INSPECT" && actionNotes.trim().length < 5) ||
       (["REJECT", "SETTLE_FINANCE"].includes(action.type) && actionNotes.trim().length < 4)) return;
     setBusy(true); setError("");
@@ -156,6 +157,10 @@ export function RetailInvoiceReturnDialog({ organizationId, invoiceId, invoiceNu
       const inspection = action.type === "INSPECT";
       const financePrepare = action.type === "PREPARE_FINANCE";
       const financeSettlement = action.type === "SETTLE_FINANCE";
+      if (financeSettlement) {
+        if (!form) throw new Error(locale === "fr" ? "Vérification de sécurité requise." : "Security verification required.");
+        await performFinanceCriticalStepUp(form, "CONFIRM");
+      }
       const path = financePrepare ? "prepare" : financeSettlement ? "settle" : inspection ? "inspection" : "decision";
       const response = await fetch(`${target}/${path}`, {
         method: "POST", headers: { "content-type": "application/json" },
@@ -165,8 +170,8 @@ export function RetailInvoiceReturnDialog({ organizationId, invoiceId, invoiceNu
           : { revision: action.request.revision, decision: action.type === "APPROVE" ? "APPROVE" : "REJECT",
             ...(actionNotes.trim() ? { reason: actionNotes.trim() } : {}) }),
       });
-      const payload = await response.json().catch(() => null) as { message?: string } | null;
-      if (!response.ok) throw new Error(payload?.message || copy.error);
+      const payload = await response.json().catch(() => null) as { message?: string; error?: string } | null;
+      if (!response.ok) throw new Error(payload?.message || payload?.error || copy.error);
       toastSuccess(financePrepare ? copy.prepareFinanceSuccess : financeSettlement ? copy.settleFinanceSuccess :
         inspection ? copy.inspectionSuccess : action.type === "APPROVE" ? copy.approvalSuccess : copy.rejectionSuccess);
       setAction(null); setActionNotes(""); await load(page); onChanged();
@@ -200,10 +205,11 @@ export function RetailInvoiceReturnDialog({ organizationId, invoiceId, invoiceNu
           <EnterpriseApproverSelect organizationId={organizationId} moduleCode="FINANCE_RECEIVABLES" locale={locale} label={copy.approver} disabled={busy} candidatesEndpoint={`/api/enterprise/${organizationId}/retail/invoices/return-approval-candidates?siteId=${encodeURIComponent(siteId)}`} />
           <div data-responsive-actions className="flex min-w-0 flex-wrap justify-end gap-2"><Button type="button" variant="outline" disabled={busy} onClick={stopCreate}>{copy.cancel}</Button><Button type="submit" disabled={busy || !sourceItems.some((line) => rows[line.id]?.checked) || reason.trim().length < 4}><ClipboardCheck className="h-4 w-4" />{busy ? copy.sending : copy.send}</Button></div>
         </form> : null}
-        {action ? <form className="grid min-w-0 gap-3 rounded-xl border border-blue-500/30 bg-blue-500/5 p-3 sm:p-4" onSubmit={(event) => { event.preventDefault(); void completeAction(); }}>
+        {action ? <form className="grid min-w-0 gap-3 rounded-xl border border-blue-500/30 bg-blue-500/5 p-3 sm:p-4" onSubmit={(event) => { event.preventDefault(); void completeAction(new FormData(event.currentTarget)); }}>
           <h3 className="text-sm font-black text-dtsc-ink">{action.type === "INSPECT" ? copy.inspection : action.type === "APPROVE" ? copy.approve : action.type === "REJECT" ? copy.reject : action.type === "PREPARE_FINANCE" ? copy.prepareFinance : copy.settleFinance} · {action.request.number}</h3>
           <p className="text-sm leading-6 text-dtsc-muted">{action.type === "INSPECT" ? copy.inspectionHint : action.type === "PREPARE_FINANCE" ? copy.prepareFinanceHint : action.type === "SETTLE_FINANCE" ? copy.settleFinanceHint : copy.decisionHint}</p>
           {action.type !== "PREPARE_FINANCE" ? <label className="grid min-w-0 gap-1 text-sm font-semibold text-dtsc-ink">{action.type === "INSPECT" ? copy.inspectionNotes : action.type === "REJECT" ? copy.rejectionReason : action.type === "SETTLE_FINANCE" ? copy.settlementReason : copy.decisionReason}<textarea className="min-h-28 w-full min-w-0 rounded-lg border border-dtsc-border bg-dtsc-surface p-3 text-base" minLength={action.type === "INSPECT" ? 5 : ["REJECT", "SETTLE_FINANCE"].includes(action.type) ? 4 : undefined} maxLength={1000} required={["INSPECT", "REJECT", "SETTLE_FINANCE"].includes(action.type)} value={actionNotes} disabled={busy} onChange={(event) => setActionNotes(event.target.value)} /></label> : null}
+          {action.type === "SETTLE_FINANCE" ? <FinanceCriticalStepUpFields action="CONFIRM" locale={locale} /> : null}
           <div data-responsive-actions className="flex min-w-0 flex-wrap justify-end gap-2"><Button type="button" variant="outline" disabled={busy} onClick={() => { setAction(null); setActionNotes(""); }}>{copy.cancel}</Button><Button type="submit" disabled={busy || (action.type === "INSPECT" && actionNotes.trim().length < 5) || (["REJECT", "SETTLE_FINANCE"].includes(action.type) && actionNotes.trim().length < 4)}>{action.type === "INSPECT" ? copy.confirmInspection : action.type === "APPROVE" ? copy.confirmApprove : action.type === "REJECT" ? copy.confirmReject : action.type === "PREPARE_FINANCE" ? copy.confirmPrepareFinance : copy.confirmSettleFinance}</Button></div>
         </form> : null}
         <div className="grid min-w-0 gap-3 border-t border-dtsc-border pt-3">

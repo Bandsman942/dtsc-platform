@@ -1,3 +1,10 @@
+## 2026-11-07 — Retail #1042, tranche 45 — Vérification renforcée des remboursements (candidat, PR #1043)
+
+- La liquidation Retail d'un retour confirmé est une mutation financière sensible : la route `/retail/invoices/*/returns/*/settle` exige désormais le même **step-up récent (mot de passe + MFA si activé)** que la confirmation d'un paiement Finance ; refus audité `428 STEP_UP_REQUIRED` avant toute écriture lorsque cette preuve manque.
+- Le dialogue Retour/Avoir affiche les champs de revérification FR/EN, transmet le mot de passe et l'éventuel TOTP à l'API d'authentification avant la liquidation, et expose le message précis d'échec sans exécuter le remboursement.
+- Recette navigateur à six sessions successives dont **cinq acteurs indépendants pour le retour** : un liquidateur inédit sans step-up doit être refusé, puis peut régler après vérification réelle ; retour restocké une seule fois et écriture de coût `POSTED`. Les contrôles de dimensions `siteId` du contributeur précédent sont conservés.
+- La tranche 43 a montré un **403 attendu** car l'affectation de test du caissier omettait `REQUEST_INVOICE_RETURN` ; la tranche 44 l'a corrigé avec des contrôles comptables supplémentaires. Cette tranche 45 est **candidate** avant CI. `OWNER_E2E` non exécuté, flags OFF en Production, aucune fusion ni déploiement.
+
 ## 2026-11-07 — Retail #1042, tranche 44 — Dimensions de boutique dans le grand livre (candidat, PR #1043)
 
 - Propagation du `siteId` métier dans les lignes comptables canoniques des factures Retail, avoirs, coûts d'inventaire, retours de marchandise et dépenses directement postées. La source est vérifiée dans le tenant : checkout associé à la facture, dépôt du mouvement de stock, ou site de la dépense ; une facture Finance non Retail n'invente pas de boutique.
