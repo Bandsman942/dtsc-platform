@@ -5,6 +5,7 @@ import { authorizeFinanceRequest, financeErrorResponse, financeListParams } from
 import { openCashSession } from "@/lib/enterprise/accounting/treasury-service";
 import { cashSessionOpenSchema } from "@/lib/enterprise/accounting/treasury-schemas";
 import { prisma } from "@/lib/prisma";
+import { retailFinanceReadSiteScope } from "@/lib/enterprise/retail/site-access";
 
 type Params = { params: Promise<{ organizationId: string }> };
 
@@ -17,8 +18,10 @@ export async function GET(req: Request, { params }: Params) {
   const url = new URL(req.url);
   const { page, pageSize, search, status } = financeListParams(req);
   const recordId = url.searchParams.get("recordId")?.trim() || undefined;
+  const siteScope = await retailFinanceReadSiteScope(organizationId, auth.session.userId, "CLOSE_CASH");
   const where: Prisma.EnterpriseCashSessionWhereInput = {
     organizationId,
+    ...(siteScope !== null ? { siteId: { in: siteScope } } : {}),
     ...(recordId ? { id: recordId } : {}),
     ...(status ? { status } : {}),
     ...(search ? {
@@ -89,7 +92,7 @@ export async function GET(req: Request, { params }: Params) {
         approverLabel: null,
       },
       capabilities: {
-        canClose: capabilities.canManage && item.status === "OPEN",
+        canClose: capabilities.canManage && item.cashierUserId === auth.session.userId && item.status === "OPEN",
         canAssignApprover: capabilities.canManage && item.status === "PENDING_VALIDATION" && !approval,
         canApprove: capabilities.canApprove && item.status === "PENDING_VALIDATION" && assignedToCurrentUser,
         canReject: capabilities.canApprove && item.status === "PENDING_VALIDATION" && assignedToCurrentUser,
