@@ -209,11 +209,13 @@ export async function retailFinanceReadSiteScope(
   if (!membership) throw new EnterpriseRetailError("RETAIL_SITE_ACCESS_DENIED", 403);
   if (RETAIL_OWNER_ROLES.has(membership.role) || !retailStaffIsolationIsEnabled(configuration?.settingsJson)) return null;
   const assignments = await database.enterpriseRetailSiteAssignment.findMany({
-    where: { organizationId, userId, isActive: true },
-    select: { siteId: true, roleCode: true, permissionsJson: true },
+    where: { organizationId, userId },
+    select: { siteId: true, isActive: true, roleCode: true, permissionsJson: true },
   });
+  // A revoked operator must never fall back to the organization-wide Finance
+  // view after losing their last active assignment.
   if (!assignments.length) return null;
   return [...new Set(assignments.filter((assignment) =>
-    siteStaffCapabilities(assignment.roleCode, assignment.permissionsJson).includes(capability),
+    assignment.isActive && siteStaffCapabilities(assignment.roleCode, assignment.permissionsJson).includes(capability),
   ).map((assignment) => assignment.siteId))];
 }
