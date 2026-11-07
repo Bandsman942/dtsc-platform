@@ -184,3 +184,15 @@ Contrôle du 7 novembre : `npm run build` local a terminé avec succès la compi
 - La liste `GET /receivables` applique les mêmes affectations Retail `VIEW_SALES` que les factures Finance canoniques, y compris pour `recordId`, la recherche, la pagination et les filtres d'ancienneté.
 - Les deux agrégats `openByCurrency` et `overdueByCurrency` utilisent **exactement** le même filtre de site dans les requêtes Prisma : aucun total de créances de la boutique B n'est dévoilé au personnel de A. Les créances d'autres flux Finance conservent leur règle RBAC Finance existante ; aucun total CDF+USD.
 - La QA #1042 vérifie que les trois requêtes (liste et deux compteurs) sont alignées. Les tests d'identité et d'authentification et tous les exports Finance restent à réaliser avant activation.
+
+### Tranche 22 — traçabilité du cahier et droits Finance au remboursement (2026-11-07)
+
+- Matrice de réception de référence des 17 chapitres, RG01–RG20, D01–D08, douze critères de validation OWNER_E2E et étapes de recette technique. La contradiction des droits du gérant reste une décision explicite (permissions configurables restrictives par défaut).
+- Contrôle de remboursement Finance par boutique renforcé, y compris relecture d'affectation révoquée et rejeu ; QA `qa-hotfix-1042-retail-invoice-refund-scope.mjs`. Les flux de retour et les tests E2E métier ne sont pas assimilés à ces QA simulées.
+
+### Tranche 23 — accès sectoriel aux avoirs Finance : fail closed (2026-11-07)
+
+- `prepareSalesCreditNoteForRefundAmount` et `createExactSalesCreditNoteForRefund` (voies communes utilisées par Pharmacy/Gaming) refusent toute facture liée à `EnterpriseRetailInvoiceCheckout` tant que l'opération de retour n'a pas été reliée de manière sûre à l'inversion des sorties de stock. Le garde est vérifié **avant le rejeu idempotent**, pour éviter de récupérer un avoir par simple réutilisation de motif.
+- `markCustomerRefundFinancialInverseReady` refuse également de déclarer la contrepartie financière prête sans circuit de retour/stock Retail. Le parcours non Retail conserve ses règles habituelles.
+- QA d'exécution simulée : remboursement partiel, avoir exact, marqueur de readiness et rejeu interdits ; création non Retail préservée. Quality Gates étendues. **Ne signifie pas que retours, avoirs et remboursements Retail sont fonctionnels.**
+- Les propriétaires et les collaborateurs ne peuvent pas lever ce garde via l'UI ; poursuivre le circuit autorisé de retour, le lien Finance/Inventory, les tests de concurrence, les rapports/export et l'E2E global avant d'activer les flags. Aucune livraison client.
