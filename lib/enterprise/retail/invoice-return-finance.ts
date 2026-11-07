@@ -149,7 +149,10 @@ export async function prepareRetailInvoiceReturnFinance(
         creditDate: new Date(), currencyCode: invoice.currencyCode,
         subtotal, taxTotal, grandTotal: preview.refundAmount, createdByUserId: actorUserId,
         items: { create: request.lines.map((line) => ({
-          organizationId, description: line.checkoutLine.invoiceItem.description,
+          // The composite tenant relation is inherited from the parent
+          // credit note by Prisma's nested create. Supplying organizationId
+          // here makes the checked nested input invalid at runtime.
+          description: line.checkoutLine.invoiceItem.description,
           quantity: line.quantity, unitPrice: line.refundAmount.div(line.quantity),
           netAmount: line.refundNetAmount!, taxAmount: line.refundTaxAmount!, totalAmount: line.refundAmount,
         })) },

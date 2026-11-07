@@ -1,3 +1,10 @@
+## 2026-11-07 — Retail #1042, tranche 46 — Résultat provisoire par boutique depuis les journaux postés (candidat, PR #1043)
+
+- Nouvelle source groupée `retailPostedSiteLedger` : prend exclusivement les lignes de résultat liées aux écritures `POSTED` ou `REVERSED`, par entreprise, boutique, devise fonctionnelle et période. Produits, coût des ventes, autres charges/produits, marge brute et résultat d'exploitation sont calculés en décimales exactes, sans addition de devises.
+- La vue propriétaire multi-boutiques affiche ces résultats avec mention **PROVISOIRE / NON CERTIFIÉ** et signale séparément les écritures sans boutique au lieu de leur attribuer arbitrairement un site. Les totaux POS et les soldes de facture Finance restent distincts.
+- Contre-épreuve unitaire de classement, signes de contrepassation, séparations CDF/USD et écritures non attribuées ; scénario PostgreSQL authentifié facture payée puis remboursée attend une marge comptable redevenue nulle. Il reste à certifier l'imputation historique et l'exhaustivité des écritures, les exports PDF/XLSX, les caisses, le matériel, la restauration et l'`OWNER_E2E`. Les flags Production restent OFF et la PR en brouillon.
+- Correctif de préparation du remboursement détecté à l'E2E de la tranche 45 : la création imbriquée des lignes de l'avoir ne fournit plus le `organizationId` de relation composite dans un objet Prisma enfant, conformément au chemin Finance existant. Garde régressif ajouté au test unitaire ; validation PostgreSQL du scénario retour toujours requise sur ce commit avant acceptation.
+
 ## 2026-11-07 — Retail #1042, tranche 45 — Vérification renforcée des remboursements (candidat, PR #1043)
 
 - La liquidation Retail d'un retour confirmé est une mutation financière sensible : la route `/retail/invoices/*/returns/*/settle` exige désormais le même **step-up récent (mot de passe + MFA si activé)** que la confirmation d'un paiement Finance ; refus audité `428 STEP_UP_REQUIRED` avant toute écriture lorsque cette preuve manque.

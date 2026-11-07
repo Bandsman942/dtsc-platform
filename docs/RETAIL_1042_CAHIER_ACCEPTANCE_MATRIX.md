@@ -34,7 +34,7 @@ Périmètre : ERP Core Retail **paramétrable et réutilisable** pour N boutique
 | IV — 4.11 Clients | Enregistrement facultatif, coordonnées facultatives et historique d'achats | À_CERTIFIER : vente anonyme et consentement, pas de compte global imposé |
 | IV — 4.12 Fournisseurs | Répertoire et historique des approvisionnements | À_CERTIFIER : référence canonique de tiers, filtrage et UI |
 | IV — 4.13 Péremption | Lots distincts, dates, alertes avant/à/après expiration, politique FEFO, blocage optionnel | PARTIEL : paramétrage et alertes codés, réception/vente réelles à vérifier |
-| IV — 4.14 Rapports/statistiques | Ventes, stocks, top/flop, entrées/sorties, CA, COGS, dépenses, marges, bénéfices, filtres, PDF/XLSX | OUVERT : vue partielle ; profits comptables, filtres/export multi-site manquants |
+| IV — 4.14 Rapports/statistiques | Ventes, stocks, top/flop, entrées/sorties, CA, COGS, dépenses, marges, bénéfices, filtres, PDF/XLSX | PARTIEL : écritures de résultat `POSTED`/`REVERSED` groupées par boutique/devise avec marge brute et résultat d'exploitation **non certifiés** ; historique sans `siteId`, exhaustivité et exports PDF/XLSX restent ouverts |
 | V — Tableaux de bord | Propriétaire consolidé ; gérant/facturier/caissier limité à son périmètre, KPI non fictifs | PARTIEL : revue des 4 expériences et des totaux nécessaire |
 | VI — Règles RG01–RG20 | Toutes les règles numérotées ci-dessous doivent passer dans le produit | PARTIEL : voir matrice RG |
 | VII — Architecture technique | Web responsive, base unique, extensions canoniques et multi-tenant ; pas de double ledger | À_CERTIFIER : schéma/migrations/contraintes CI + base réelle |

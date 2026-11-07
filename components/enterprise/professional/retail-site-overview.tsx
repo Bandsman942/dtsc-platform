@@ -8,7 +8,8 @@ import { customerFacingError } from "@/lib/customer-facing-language";
 type Money = { currencyCode: string; total: string; count: number };
 type Tender = Money & { method: string };
 type FinanceInvoice = { currencyCode: string; count: number; issuedTotal: string; allocatedToDate: string; outstandingToDate: string };
-type Site = { id: string; code: string; name: string; sales: Money[]; financeInvoices: FinanceInvoice[]; approvedExpenses: Money[]; collections: Tender[]; inventory: { balanceRows: number }; cashSessions: Array<{ status: string; count: number }>; dailyCloses: Array<{ status: string; count: number }> };
+type PostedLedger = { currencyCode: string; revenue: string; otherIncome: string; costOfSales: string; operatingExpenses: string; grossMargin: string; operatingResult: string; journalLineCount: number };
+type Site = { id: string; code: string; name: string; sales: Money[]; financeInvoices: FinanceInvoice[]; postedLedger?: PostedLedger[]; approvedExpenses: Money[]; collections: Tender[]; inventory: { balanceRows: number }; cashSessions: Array<{ status: string; count: number }>; dailyCloses: Array<{ status: string; count: number }> };
 
 function currencyAmount(value: string, currency: string, en: boolean) {
   try { return new Intl.NumberFormat(en ? "en-US" : "fr-FR", { maximumFractionDigits: 2 }).format(Number(value)) + " " + currency; }
@@ -18,6 +19,7 @@ function currencyAmount(value: string, currency: string, en: boolean) {
 export function RetailSiteOverview({ organizationId, locale }: { organizationId: string; locale: "fr" | "en" }) {
   const [days, setDays] = useState(7);
   const [items, setItems] = useState<Site[]>([]);
+  const [unallocatedLedger, setUnallocatedLedger] = useState<PostedLedger[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const en = locale === "en";
@@ -30,9 +32,10 @@ export function RetailSiteOverview({ organizationId, locale }: { organizationId:
       start.setUTCHours(0, 0, 0, 0);
       const query = new URLSearchParams({ from: start.toISOString(), to: new Date().toISOString() });
       const response = await fetch(`/api/enterprise/${organizationId}/retail/site-overview?${query}`, { cache: "no-store" });
-      const payload = await response.json().catch(() => null) as { items?: Site[]; message?: string } | null;
+      const payload = await response.json().catch(() => null) as { items?: Site[]; unallocatedPostedLedger?: PostedLedger[]; message?: string } | null;
       if (!response.ok || !payload?.items) throw new Error(payload?.message || (en ? "Store overview is unavailable." : "La vue multi-boutiques est indisponible."));
       setItems(payload.items);
+      setUnallocatedLedger(payload.unallocatedPostedLedger || []);
     } catch (caught) { setError(customerFacingError(caught, locale)); }
     finally { setLoading(false); }
   }, [organizationId, days, en, locale]);
@@ -61,8 +64,24 @@ export function RetailSiteOverview({ organizationId, locale }: { organizationId:
         <p className="mt-2 text-xs text-dtsc-muted">{en ? "Invoice amounts are grouped by issue date, while allocated/outstanding figures reflect the current balance. These are not collections received during this period." : "Montants regroupés par date d’émission ; affectations et soldes à date. Ce ne sont pas les encaissements reçus pendant la période."}</p>
       </div>
       <div className="mt-3 rounded-xl border border-dtsc-border bg-dtsc-surface p-3"><p className="text-xs font-bold text-dtsc-muted">{en ? "Approved expenses attributed to this store" : "Dépenses approuvées affectées à cette boutique"}</p><div className="mt-1 flex flex-wrap gap-x-4 gap-y-1">{site.approvedExpenses.length ? site.approvedExpenses.map((expense) => <p key={expense.currencyCode} className="text-sm font-semibold text-dtsc-ink">{currencyAmount(expense.total, expense.currencyCode, en)} <span className="font-normal text-dtsc-muted">({expense.count})</span></p>) : <p className="text-sm text-dtsc-muted">0</p>}</div></div>
+      <div className="mt-3 rounded-xl border border-amber-500/30 bg-amber-500/5 p-3">
+        <p className="text-xs font-black text-dtsc-ink">{en ? "Posted ledger indicators — provisional" : "Indicateurs du grand livre — provisoires"}</p>
+        {(site.postedLedger || []).length ? site.postedLedger?.map((entry) => <div key={entry.currencyCode} className="mt-3 border-t border-amber-500/20 pt-2 first:border-0 first:pt-0">
+          <p className="text-xs font-bold text-dtsc-muted">{entry.currencyCode} · {entry.journalLineCount} {en ? "posted P&L lines" : "lignes de résultat postées"}</p>
+          <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-2 text-xs sm:grid-cols-3">
+            <div><dt className="text-dtsc-muted">{en ? "Revenue" : "Produits"}</dt><dd className="font-bold text-emerald-700 dark:text-emerald-300">{currencyAmount(entry.revenue, entry.currencyCode, en)}</dd></div>
+            <div><dt className="text-dtsc-muted">{en ? "Cost of sales" : "Coût des ventes"}</dt><dd className="font-bold text-dtsc-ink">{currencyAmount(entry.costOfSales, entry.currencyCode, en)}</dd></div>
+            <div><dt className="text-dtsc-muted">{en ? "Other expenses" : "Autres charges"}</dt><dd className="font-bold text-dtsc-ink">{currencyAmount(entry.operatingExpenses, entry.currencyCode, en)}</dd></div>
+            <div><dt className="text-dtsc-muted">{en ? "Other income" : "Autres produits"}</dt><dd className="font-bold text-dtsc-ink">{currencyAmount(entry.otherIncome, entry.currencyCode, en)}</dd></div>
+            <div><dt className="text-dtsc-muted">{en ? "Gross margin" : "Marge brute"}</dt><dd className="font-black text-dtsc-blue">{currencyAmount(entry.grossMargin, entry.currencyCode, en)}</dd></div>
+            <div><dt className="text-dtsc-muted">{en ? "Operating result" : "Résultat d'exploitation"}</dt><dd className="font-black text-dtsc-ink">{currencyAmount(entry.operatingResult, entry.currencyCode, en)}</dd></div>
+          </dl>
+        </div>) : <p className="mt-2 text-xs text-dtsc-muted">{en ? "No posted profit-and-loss journal lines for this period." : "Aucune ligne de résultat postée pour cette période."}</p>}
+        <p className="mt-2 text-xs text-amber-800 dark:text-amber-200">{en ? "Not certified: historical site allocation, accounting completeness and exports remain to be verified." : "Non certifié : affectation historique des boutiques, exhaustivité comptable et exports à vérifier."}</p>
+      </div>
       <p className="mt-3 text-xs text-dtsc-muted">{site.inventory.balanceRows} {en ? "inventory balance rows" : "lignes de stock"} · {site.cashSessions.filter((row) => row.status === "OPEN").reduce((sum, row) => sum + row.count, 0)} {en ? "open cash sessions" : "sessions de caisse ouvertes"}</p>
     </article>)}</div> : null}
+    {unallocatedLedger.length ? <p role="status" className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-900 dark:text-amber-200">{en ? "Some posted profit-and-loss lines have no store assignment. They are excluded from store results until reconciled:" : "Certaines écritures de résultat postées n'ont pas de boutique attribuée. Elles restent exclues des résultats par boutique jusqu'au rapprochement :"} {unallocatedLedger.map((row) => `${row.journalLineCount} (${row.currencyCode})`).join(" · ")}</p> : null}
     <p className="mt-4 text-xs text-dtsc-muted">{en ? "Operational overview only. Financial margin and net profit require verified posted accounting entries and expense attribution by store." : "Vue opérationnelle uniquement. Les marges et bénéfices nets exigent les écritures comptables validées et l'affectation des dépenses par boutique."}</p>
   </section>;
 }

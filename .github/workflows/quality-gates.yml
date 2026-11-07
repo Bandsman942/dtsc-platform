@@ -163,6 +163,7 @@ jobs:
           node scripts/qa-hotfix-1042-site-staff.mjs
           node scripts/qa-hotfix-1042-warehouse-receipt-scoping.mjs
           node scripts/qa-hotfix-1042-retail-invoice-finance.mjs
+          node scripts/qa-hotfix-1042-retail-site-ledger.mjs
           node scripts/qa-hotfix-1042-retail-invoice-issue-valuation.mjs
           node scripts/qa-hotfix-1042-retail-invoice-payments.mjs
           node scripts/qa-hotfix-1042-retail-invoice-stock-holds.mjs

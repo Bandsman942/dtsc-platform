@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { getEnterpriseCommonDomainAccess } from "@/lib/enterprise/common/access";
 import { writeApiLog } from "@/lib/audit";
+import { retailPostedSiteLedger } from "@/lib/enterprise/retail/site-financial-report";
 import { prisma } from "@/lib/prisma";
 
 type Params = { params: Promise<{ organizationId: string }> };
@@ -92,6 +93,9 @@ export async function GET(req: Request, { params }: Params) {
     where: { organizationId, sale: { organizationId, siteId: site.id, status: "COMPLETED", soldAt: dateWhere } },
     _sum: { amount: true }, _count: { _all: true },
   })));
+  // Posted accounting is the source for provisional margin figures; never
+  // invent a catalog cost or add POS sales to Finance invoice balances.
+  const postedLedger = await retailPostedSiteLedger(organizationId, from, to, ids);
   const items = sites.map((site, index) => ({
     ...site,
     sales: sales.filter((row) => row.siteId === site.id).map((row) => ({ currencyCode: row.currencyCode, total: (row._sum.grandTotal || new Prisma.Decimal(0)).toFixed(), count: row._count._all })),
@@ -100,6 +104,7 @@ export async function GET(req: Request, { params }: Params) {
       issuedTotal: row.gross.toFixed(), allocatedToDate: row.allocated.toFixed(),
       outstandingToDate: row.outstanding.toFixed(),
     })),
+    postedLedger: postedLedger.bySite.filter((row) => row.siteId === site.id),
     approvedExpenses: expenses.filter((row) => row.siteId === site.id).map((row) => ({ currencyCode: row.currency, total: (row._sum.amount || new Prisma.Decimal(0)).toFixed(), count: row._count._all })),
     collections: tenderRows[index].map((row) => ({ currencyCode: row.currencyCode, method: row.methodType, total: (row._sum.amount || new Prisma.Decimal(0)).toFixed(), count: row._count._all })),
     inventory: stockByWarehouse.filter((row) => siteByWarehouse.get(row.warehouseId) === site.id).reduce((result, row) => ({
@@ -111,5 +116,5 @@ export async function GET(req: Request, { params }: Params) {
     dailyCloses: closes.filter((row) => row.siteId === site.id).map((row) => ({ status: row.status, count: row._count._all })),
   }));
   await writeApiLog({ request: req, startedAt, statusCode: 200, userId: session.userId, metadata: { organizationId, domain: "retail-site-overview", siteCount: items.length } });
-  return NextResponse.json({ items: items.map((item) => ({ ...item, inventory: { quantityOnHand: item.inventory.quantityOnHand.toFixed(), quantityReserved: item.inventory.quantityReserved.toFixed(), balanceRows: item.inventory.balanceRows } })), period: { from, to }, scope: "OWNER_ONLY_OPERATIONAL", currencyPolicy: "SEPARATE_PER_CURRENCY", financeMarginCertified: false }, { headers: { "Cache-Control": "private, no-store" } });
+  return NextResponse.json({ items: items.map((item) => ({ ...item, inventory: { quantityOnHand: item.inventory.quantityOnHand.toFixed(), quantityReserved: item.inventory.quantityReserved.toFixed(), balanceRows: item.inventory.balanceRows } })), period: { from, to }, scope: "OWNER_ONLY_OPERATIONAL", currencyPolicy: "SEPARATE_PER_CURRENCY", financeMarginCertified: false, postedLedgerScope: "PROVISIONAL_POSTED_ONLY", unallocatedPostedLedger: postedLedger.unallocated }, { headers: { "Cache-Control": "private, no-store" } });
 }

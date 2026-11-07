@@ -89,6 +89,8 @@ const tx = {
     create: async ({ data }) => {
       assert.equal(data.items.create[0].taxAmount.toFixed(2), "3.33");
       assert.equal(data.items.create[0].netAmount.toFixed(2), "30.00");
+      assert.equal(Object.hasOwn(data.items.create[0], "organizationId"), false,
+        "Nested credit-note items must inherit their composite organization relation from the parent");
       state.operations.push("credit:create");
       return { id: "credit-A", number: "CN-A", ...data };
     },

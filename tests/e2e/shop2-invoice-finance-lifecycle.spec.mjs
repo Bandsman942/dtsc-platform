@@ -271,6 +271,22 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
       }
     }
 
+    const readPostedStorePnl = async () => {
+      const from = new Date(Date.now() - 86_400_000).toISOString();
+      const to = new Date(Date.now() + 86_400_000).toISOString();
+      const response = await context.owner.request.get(`${base}/retail/site-overview?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
+      expect(response.status()).toBe(200);
+      const payload = await response.json();
+      expect(payload.financeMarginCertified).toBe(false);
+      const row = payload.items.find((item) => item.id === fixture.site.id)?.postedLedger
+        ?.find((item) => item.currencyCode === fixture.currencyCode);
+      expect(row, "The finance store must expose its posted-ledger, provisional P&L rows").toBeTruthy();
+      return row;
+    };
+    const beforeReturnPnl = await readPostedStorePnl();
+    expect(new Prisma.Decimal(beforeReturnPnl.revenue).equals(total)).toBe(true);
+    expect(new Prisma.Decimal(beforeReturnPnl.costOfSales).equals(7)).toBe(true);
+
     // A return is not a cashier's automatic reversal: request, physical
     // inspection, independent approval, Finance preparation and settlement
     // are five different real users, all authenticated over HTTP.
@@ -386,6 +402,9 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
     expect(afterReturn.quantityOnHand.equals(5)).toBe(true);
     const creditedInvoice = await prisma.enterpriseSalesInvoice.findUniqueOrThrow({ where: { id: invoiceId } });
     expect(creditedInvoice.status).toBe("CREDIT_NOTE");
+    const afterReturnPnl = await readPostedStorePnl();
+    expect(new Prisma.Decimal(afterReturnPnl.revenue).isZero()).toBe(true);
+    expect(new Prisma.Decimal(afterReturnPnl.costOfSales).isZero()).toBe(true);
   } finally {
     if (originalSettings !== undefined) await prisma.enterpriseRetailConfiguration.update({
       where: { organizationId }, data: { settingsJson: originalSettings === null ? Prisma.DbNull : originalSettings,
