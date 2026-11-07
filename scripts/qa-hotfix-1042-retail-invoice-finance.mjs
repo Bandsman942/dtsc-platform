@@ -237,4 +237,45 @@ const schema = fs.readFileSync("prisma/enterprise-retail-invoice-checkout.prisma
 assert.match(schema, /@@unique\(\[organizationId, idempotencyKey\]\)/);
 assert.match(schema, /@relation\(fields: \[organizationId, salesInvoiceId\], references: \[organizationId, id\]/);
 assert.doesNotMatch(schema, /grandTotal|amountPaid|outstandingAmount|financialAccountId/, "Retail must not create a competing financial ledger");
+// Finance-only credit notes must not silently unlock or strand Retail stock
+// promises. Check actual preflight behavior, not just the presence of a guard.
+const creditNoteState = { linkedToRetail: true };
+const creditNoteTx = {
+  $executeRaw: async () => 1,
+  enterpriseSalesCreditNote: { findFirst: async () => ({
+    id: "credit", status: "APPROVED", revision: 2, salesInvoiceId: "invoice", currencyCode: "CDF",
+    grandTotal: decimal(10), salesInvoice: { receivable: { currencyCode: "CDF", outstandingAmount: decimal(20) } },
+  }) },
+  enterpriseRetailInvoiceCheckout: { findFirst: async ({ where }) => {
+    assert.equal(where.organizationId, "tenant");
+    assert.equal(where.salesInvoiceId, "invoice");
+    return creditNoteState.linkedToRetail ? { id: "retail-checkout" } : null;
+  } },
+};
+const creditNotePrisma = { $transaction: async (callback) => callback(creditNoteTx) };
+class EnterpriseAccountingError extends Error {
+  constructor(code, status = 409) { super(code); this.code = code; this.status = status; }
+}
+const creditNotePreflight = { exports: {} };
+vm.runInNewContext(ts.transpileModule(fs.readFileSync("lib/enterprise/accounting/credit-note-posting-preflight.ts", "utf8"), {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+}).outputText, {
+  module: creditNotePreflight, exports: creditNotePreflight.exports, Promise,
+  require: (id) => {
+    if (id === "@/lib/prisma") return { prisma: creditNotePrisma };
+    if (id === "@/lib/enterprise/accounting/errors") return { EnterpriseAccountingError };
+    return require(id);
+  },
+});
+await assert.rejects(creditNotePreflight.exports.assertSalesCreditNoteStillPostable("tenant", "credit", 2),
+  { code: "RETAIL_INVOICE_RETURN_WORKFLOW_REQUIRED" },
+  "Posted Finance credit must be blocked until Retail stock/return reconciliation exists");
+creditNoteState.linkedToRetail = false;
+await creditNotePreflight.exports.assertSalesCreditNoteStillPostable("tenant", "credit", 2);
+const financeCreditService = fs.readFileSync("lib/enterprise/accounting/receivables-service.ts", "utf8");
+assert.match(financeCreditService, /if \(retailCheckout\) throw new EnterpriseAccountingError\("RETAIL_INVOICE_RETURN_WORKFLOW_REQUIRED"/);
+const financeCreditPosting = fs.readFileSync("lib/enterprise/accounting/accounting-document-approval-orchestration.ts", "utf8");
+assert.match(financeCreditPosting, /await assertSalesCreditNoteStillPostable\(organizationId, creditNoteId, revision\)/);
+const financeUiErrors = fs.readFileSync("lib/enterprise/accounting/http.ts", "utf8");
+assert.match(financeUiErrors, /RETAIL_INVOICE_RETURN_WORKFLOW_REQUIRED: "Cette facture est liée à une vente Retail/);
 console.log("HOTFIX #1042 Finance bridge: retry/collision, opt-in guard, no early stock, full-payment posting, store-level invoice read/write/collection scope, Design 2.0 and canonical Finance schema passed.");
