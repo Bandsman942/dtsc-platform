@@ -1,8 +1,10 @@
 # RETAIL-1042 — cahier des charges boutiques, paramétrage et Design 2.0
 
-Statut du 7 novembre 2026 : **33 tranches publiées sur la PR brouillon #1043 (17/17 contrôles GitHub verts sur la tranche 33), tranche 34 en vérification locale. Aucune fusion, aucun déploiement, aucune acceptation client. Le règlement Finance/Stock est codé, mais sa recette PostgreSQL transactionnelle complète, les scénarios navigateur multi-rôles et l'E2E final du propriétaire ne sont PAS encore certifiés.**
+Statut du 7 novembre 2026 : **34 tranches publiées sur la PR brouillon #1043 (commit tranche 34 `28d59469`, 17/17 workflows GitHub réussis), tranche 35 en préparation locale. Aucune fusion, aucun déploiement, aucune acceptation client. Le règlement Finance/Stock est codé, mais sa recette métier PostgreSQL authentifiée complète, les scénarios navigateur multi-rôles et l'E2E final du propriétaire ne sont PAS encore certifiés.**
 
 La [matrice exhaustive de réception](RETAIL_1042_CAHIER_ACCEPTANCE_MATRIX.md) suit les 17 chapitres, RG01–RG20, les huit décisions et les deux niveaux de E2E du cahier client original ; aucune ligne non certifiée ne doit être masquée par un total de workflows verts.
+
+Le [protocole OWNER_E2E](RETAIL_1042_OWNER_E2E_SCRIPT.md) détaille les prérequis de recette, dix-neuf contre-épreuves et les douze critères à signer ; **aucune case BON n'a été attestée**.
 
 ## Cible produit
 

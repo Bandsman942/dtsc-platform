@@ -2,6 +2,8 @@
 
 Source primaire : `CAHIER_DES_CHARGES_BOUTIQUES.pdf`, novembre 2026, 22 pages. Cette matrice est une transcription de suivi, **pas** un remplacement du document client. Elle doit être revue contre la source avant l'`OWNER_E2E`.
 
+Protocole concret d'exécution et fiche de signature : [RETAIL_1042_OWNER_E2E_SCRIPT.md](RETAIL_1042_OWNER_E2E_SCRIPT.md). **Aucun des scénarios ni des douze critères n'est encore attesté BON** par le propriétaire.
+
 Périmètre : ERP Core Retail **paramétrable et réutilisable** pour N boutiques, avec un scénario de référence à deux boutiques alimentaires à Kinshasa. Ne jamais créer une solution codée pour un client, un nombre de boutiques, un gérant, une devise, une caisse ou une marque déterminés.
 
 **Statuts utilisés :** `PARTIEL` signifie qu'une fondation existe mais qu'un point ou une preuve manque ; `À_CERTIFIER` signifie que l'implémentation doit encore passer un E2E réel ; `OUVERT` signifie qu'au moins une capacité nécessaire manque. Aucun de ces statuts ne vaut acceptation.

@@ -75,4 +75,10 @@ const payment = fs.readFileSync("lib/enterprise/accounting/payments-service.ts",
 assert.match(payment, /postPaidRetailInvoiceStockTx\(tx, organizationId, receivable\.salesInvoiceId, actorUserId\)/);
 const accounting = fs.readFileSync("lib/enterprise/retail/accounting.ts", "utf8");
 assert.match(accounting, /eventType: "ISSUE",\s*status: "POSTED"/);
+const retailHttp = fs.readFileSync("lib/enterprise/retail/http.ts", "utf8");
+for (const code of ["RETAIL_ORIGINAL_ISSUE_VALUATION_REQUIRED", "RETAIL_INVENTORY_COST_LAYER_REQUIRED",
+  "INVENTORY_ACCOUNTING_NEGATIVE_STOCK_FORBIDDEN", "INVENTORY_WEIGHTED_AVERAGE_REQUIRED",
+  "OPEN_CASH_SESSION_REQUIRED", "PAYMENT_CASH_SESSION_AMBIGUOUS"]) {
+  assert.match(retailHttp, new RegExp(`\\b${code}: "[^"\\n]{24,}"`), `${code} must surface a contextualized business error`);
+}
 console.log("✓ Retail invoice paid-stock original issue valuation: strict source, weighted-average cost currency, rollback on missing layers, return basis and same Finance transaction");

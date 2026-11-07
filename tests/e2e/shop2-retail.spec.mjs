@@ -485,4 +485,100 @@ test.describe.serial("Shop 2.0 Retail behavioral acceptance", () => {
     const hasHorizontalOverflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 2);
     expect(hasHorizontalOverflow, "Retail POS must not overflow horizontally at 390px").toBe(false);
   });
+
+  test("#1042 Finance invoice checkout stays an unpaid stock promise and cancels idempotently", async ({ page }) => {
+    // The live two-step checkout remains OFF. Exercise it only in GitHub's
+    // disposable PostgreSQL tenant, never against a live organization's data.
+    if (process.env.CI !== "true" || !/\/dtsc_shop2_behavioral(?:\?|$)/.test(process.env.DATABASE_URL || "")) {
+      throw new Error("RETAIL_1042_CHECKOUT_E2E_REQUIRES_EPHEMERAL_CI_DATABASE");
+    }
+    const config = await prisma.enterpriseRetailConfiguration.findUniqueOrThrow({ where: { organizationId } });
+    const originalSettings = config.settingsJson;
+    const settings = originalSettings && typeof originalSettings === "object" && !Array.isArray(originalSettings)
+      ? { ...originalSettings } : {};
+    let invoiceId = null;
+    try {
+      await prisma.enterpriseRetailConfiguration.update({
+        where: { organizationId },
+        data: { settingsJson: { ...settings, invoiceCheckoutEnabled: true, siteStaffIsolationEnabled: false }, revision: { increment: 1 } },
+      });
+      await signIn(page);
+      const site = await prisma.enterpriseWarehouse.findUniqueOrThrow({ where: { id: fixture.warehouseId }, select: { siteId: true } });
+      // A dedicated SKU prevents this checkout scenario from resetting or
+      // borrowing the balances used by concurrently running Shop 2 tests.
+      const baseCatalog = await prisma.enterpriseCatalogItem.findUniqueOrThrow({ where: { id: fixture.catalogItemId } });
+      const invoiceCatalog = await prisma.enterpriseCatalogItem.upsert({
+        where: { organizationId_code: { organizationId, code: "SHOP2-E2E-INVOICE-SKU" } },
+        update: { status: "ACTIVE", archivedAt: null, currency: fixture.currencyCode,
+          trackInventory: true, taxable: false, indicativeSalePrice: 10 },
+        create: {
+          organizationId, code: "SHOP2-E2E-INVOICE-SKU", sku: "SHOP2-E2E-INVOICE-SKU",
+          name: "Invoice checkout isolated QA article", normalizedName: "invoice checkout isolated qa article",
+          itemType: "PRODUCT", unitOfMeasureId: baseCatalog.unitOfMeasureId,
+          indicativeSalePrice: 10, indicativeCost: 4, currency: fixture.currencyCode,
+          status: "ACTIVE", taxable: false, trackInventory: true, createdByUserId: fixture.userId,
+        },
+      });
+      const invoiceInventory = await prisma.enterpriseInventoryItem.upsert({
+        where: { organizationId_catalogItemId: { organizationId, catalogItemId: invoiceCatalog.id } },
+        update: { status: "ACTIVE", allowNegativeStock: false, archivedAt: null },
+        create: { organizationId, catalogItemId: invoiceCatalog.id, status: "ACTIVE",
+          allowNegativeStock: false, createdByUserId: fixture.userId },
+      });
+      const previousStock = await prisma.enterpriseInventoryBalance.findFirst({
+        where: { organizationId, inventoryItemId: invoiceInventory.id, warehouseId: fixture.warehouseId,
+          storageLocationId: null, stockLotId: null },
+      });
+      const originalStock = previousStock
+        ? await prisma.enterpriseInventoryBalance.update({ where: { id: previousStock.id },
+          data: { quantityOnHand: new Prisma.Decimal(10), quantityReserved: new Prisma.Decimal(0) } })
+        : await prisma.enterpriseInventoryBalance.create({ data: {
+          organizationId, inventoryItemId: invoiceInventory.id, warehouseId: fixture.warehouseId,
+          quantityOnHand: new Prisma.Decimal(10), quantityReserved: new Prisma.Decimal(0),
+        } });
+      const payload = {
+        idempotencyKey: `retail-1042-browser-${Date.now()}`,
+        siteId: site.siteId, warehouseId: fixture.warehouseId,
+        currencyCode: fixture.currencyCode,
+        lines: [{ catalogItemId: invoiceCatalog.id, quantity: 1 }],
+      };
+      const created = await apiPost(page, `/api/enterprise/${organizationId}/retail/invoices`, payload);
+      expect(created.response.status(), JSON.stringify(created.body)).toBe(201);
+      invoiceId = created.body.invoice.id;
+      expect(created.body.invoice.status).toBe("DRAFT");
+      expect(created.body.checkout.siteId).toBe(site.siteId);
+      expect(created.body.checkout.stockPostedAt).toBeNull();
+
+      const replay = await apiPost(page, `/api/enterprise/${organizationId}/retail/invoices`, payload);
+      expect(replay.response.status(), JSON.stringify(replay.body)).toBe(200);
+      expect(replay.body.idempotent).toBe(true);
+      expect(replay.body.invoice.id).toBe(invoiceId);
+      const collision = await apiPost(page, `/api/enterprise/${organizationId}/retail/invoices`, {
+        ...payload, lines: [{ ...payload.lines[0], quantity: 2 }],
+      });
+      expect(collision.response.status()).toBe(409);
+      expect(collision.body.error).toBe("RETAIL_INVOICE_IDEMPOTENCY_COLLISION");
+      const afterDraftStock = await prisma.enterpriseInventoryBalance.findUniqueOrThrow({ where: { id: originalStock.id } });
+      expect(afterDraftStock.quantityOnHand.equals(originalStock.quantityOnHand), "Draft may reserve but must not debit physical stock").toBe(true);
+      expect(await prisma.enterpriseStockMovement.count({
+        where: { organizationId, sourceEntityType: "EnterpriseSalesInvoice", sourceEntityId: invoiceId },
+      })).toBe(0);
+
+      const cancel = await apiPost(page, `/api/enterprise/${organizationId}/retail/invoices/${invoiceId}/transition`, {
+        action: "CANCEL", revision: created.body.invoice.revision, reason: "Annulation de la facture de recette",
+      });
+      expect(cancel.response.ok(), JSON.stringify(cancel.body)).toBe(true);
+      expect(cancel.body.invoice.status).toBe("CANCELLED");
+      const afterCancel = await prisma.enterpriseRetailInvoiceCheckout.findFirstOrThrow({ where: { organizationId, salesInvoiceId: invoiceId } });
+      expect(afterCancel.stockPostedAt).toBeNull();
+      expect(await prisma.enterpriseStockMovement.count({
+        where: { organizationId, sourceEntityType: "EnterpriseSalesInvoice", sourceEntityId: invoiceId },
+      })).toBe(0);
+    } finally {
+      await prisma.enterpriseRetailConfiguration.update({
+        where: { organizationId },
+        data: { settingsJson: originalSettings === null ? Prisma.DbNull : originalSettings, revision: { increment: 1 } },
+      });
+    }
+  });
 });

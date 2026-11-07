@@ -1,3 +1,10 @@
+## 2026-11-07 — Retail #1042, tranche 35 — Protocole final et erreurs métier (candidat, PR #1043)
+
+- Protocole d'acceptation [RETAIL_1042_OWNER_E2E_SCRIPT.md](RETAIL_1042_OWNER_E2E_SCRIPT.md) : tenant isolé, deux boutiques, dix acteurs indépendants, dix-neuf contre-épreuves, 12 critères de signature, justificatifs et blocages clairement identifiés. **Document préparatoire, aucun E2E signé**.
+- Messages d'erreur contextualisés pour une sortie originale non valorisée, les couches de coût/devises incompatibles et l'impossibilité d'utiliser une session de caisse pour le remboursement en espèces ; tests de présence de ces messages.
+- Extension du navigateur authentifié `shop2-retail.spec.mjs` (base éphémère CI seulement) : activation temporaire de la facture en deux étapes sur le tenant synthétique, création réelle de facture, rejeu/collision, vérification qu'un brouillon ne sort aucun stock, annulation Finance et rétablissement du flag initial. **Scénario ajouté mais non encore exécuté en CI sur la tranche 35.**
+- **Toujours NON LIVRÉ** : E2E authentifié PostgreSQL multi-boutiques, fermeture de caisse, rapports financiers certifiés et exports, impression physique et restauration exigent une vérification. Flags OFF, PR brouillon.
+
 ## 2026-11-07 — Retail #1042, tranche 34 — Préparation Finance et retour atomique (candidat, PR #1043)
 
 - Une demande Retail inspectée et validée peut préparer en une transaction le paiement sortant REFUND et l'avoir Finance exact, chacun soumis à une approbation indépendante ; statut intermédiaire `FINANCE_PENDING` et liens uniques tenant-aware.
