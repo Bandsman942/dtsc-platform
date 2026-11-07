@@ -16,7 +16,7 @@ const state = {
   accountSite: "shop-A", sourceAccounts: ["cash-A"], operations: [], requestStatus: "APPROVED",
   requestRevision: 1, refundPaymentId: null, salesCreditNoteId: null, preparedByUserId: null,
   settledByUserId: null, creditStatus: "PENDING_APPROVAL", paymentStatus: "PENDING_APPROVAL",
-  approvedByUserId: null, receivableOutstanding: d(0), throwStock: false,
+  approvedByUserId: null, receivableOutstanding: d(0), throwStock: false, refundLegs: [],
 };
 const currentRequest = () => ({
   id: "return-A", number: "RIR-A", organizationId: "tenant", checkoutId: "checkout-A",
@@ -35,7 +35,7 @@ const preview = () => ({
   refundAmount: d("33.33"), currencyCode: "CDF",
   financeSourcePlan: state.sourceAccounts.map((account, index) => ({
     allocationId: `allocation-${index}`, paymentId: `source-payment-${index}`,
-    financialAccountId: account, amount: d("33.33"),
+    financialAccountId: account, amount: d(state.sourceAccounts.length > 1 ? (index === 0 ? "16.67" : "16.66") : "33.33"),
   })),
   stockSourcePlan: [{ returnLineId: "line-A", originalMovementId: "movement-A",
     inventoryItemId: "item-A", warehouseId: "warehouse-A", stockLotId: "lot-A",
@@ -68,11 +68,21 @@ const tx = {
       businessPartyId: "buyer-A", currencyCode: "CDF", status: "CONFIRMED",
       direction: "INBOUND", paymentType: "CUSTOMER_PAYMENT",
     })),
-    findFirst: async () => ({ id: "refund-A", status: state.paymentStatus,
+    findFirst: async ({ where }) => ({ id: where.id, status: state.paymentStatus,
       approvedByUserId: state.approvedByUserId, initiatedByUserId: "preparer",
-      financialAccountId: "cash-A", direction: "OUTBOUND", paymentType: "REFUND",
-      currencyCode: "CDF", businessPartyId: "buyer-A", amount: d("33.33"), revision: 2 }),
+      financialAccountId: where.id === "refund-cash-B" ? "cash-B" : "cash-A", direction: "OUTBOUND", paymentType: "REFUND",
+      currencyCode: "CDF", businessPartyId: "buyer-A",
+      amount: d(state.sourceAccounts.length > 1 ? (where.id === "refund-cash-B" ? "16.66" : "16.67") : "33.33"), revision: 2 }),
     update: async () => { state.operations.push("payment:submit"); return {}; },
+  },
+  enterpriseRetailInvoiceReturnRefundLeg: {
+    createMany: async ({ data }) => { state.refundLegs = data; state.operations.push("refund-legs:create"); },
+    findMany: async () => state.refundLegs.map((leg) => ({ ...leg, refundPayment: {
+      id: leg.refundPaymentId, status: state.paymentStatus, approvedByUserId: state.approvedByUserId,
+      initiatedByUserId: "preparer", financialAccountId: leg.financialAccountId,
+      direction: "OUTBOUND", paymentType: "REFUND", currencyCode: "CDF", businessPartyId: "buyer-A",
+      amount: leg.amount, revision: 2,
+    } })),
   },
   enterpriseSalesInvoice: {
     findFirst: async () => ({
@@ -97,8 +107,8 @@ const tx = {
     update: async ({ data }) => { state.operations.push(`credit:${data.status}`); return {}; },
   },
   enterprisePaymentEvent: { create: async () => { state.operations.push("payment:event"); return {}; } },
-  enterpriseFinancialAccount: { findFirst: async () => ({
-    id: "cash-A", siteId: state.accountSite, currencyCode: "CDF", operationalBalance: state.accountBalance,
+  enterpriseFinancialAccount: { findFirst: async ({ where }) => ({
+    id: where.id, siteId: state.accountSite, currencyCode: "CDF", operationalBalance: state.accountBalance,
   }) },
   enterpriseReceivable: {
     findFirst: async () => ({ id: "receivable-A", outstandingAmount: state.receivableOutstanding }),
@@ -133,10 +143,10 @@ const mocks = {
   "@/lib/enterprise/accounting/payments-service": {
     createEnterprisePaymentTx: async (_tx, org, actor, input) => {
       assert.equal(org, "tenant"); assert.equal(actor, "preparer");
-      assert.equal(input.financialAccountId, "cash-A");
-      assert.equal(input.amount, "33.33");
+      assert.ok(state.sourceAccounts.includes(input.financialAccountId));
+      assert.equal(input.amount, state.sourceAccounts.length > 1 ? (input.financialAccountId === "cash-B" ? "16.66" : "16.67") : "33.33");
       state.operations.push("payment:create");
-      return { id: "refund-A", number: "PAY-A" };
+      return { id: state.sourceAccounts.length > 1 ? `refund-${input.financialAccountId}` : "refund-A", number: "PAY-A" };
     },
   },
   "@/lib/enterprise/accounting/accounting-approval-service": {
@@ -148,14 +158,20 @@ const mocks = {
   },
   "@/lib/enterprise/accounting/customer-refund-service": {
     reverseCustomerPaymentAllocationsForRefundAmountTx: async (_tx, org, id, refund, actor, reason, amount, preference, allowedIds) => {
-      assert.equal(org, "tenant"); assert.equal(id, "receivable-A"); assert.equal(refund, "refund-A");
-      assert.equal(actor, "settler"); assert.equal(amount.toFixed(2), "33.33");
-      assert.equal(preference, null); assert.equal(allowedIds.join(","), "allocation-0");
+      assert.equal(org, "tenant"); assert.equal(id, "receivable-A");
+      assert.equal(actor, "settler"); assert.equal(preference, null);
+      if (state.sourceAccounts.length === 1) {
+        assert.equal(refund, "refund-A"); assert.equal(amount.toFixed(2), "33.33");
+        assert.equal(allowedIds.join(","), "allocation-0");
+      } else {
+        assert.equal(amount.toFixed(2), refund === "refund-cash-A" ? "16.67" : "16.66");
+        assert.equal(allowedIds.join(","), refund === "refund-cash-A" ? "allocation-0" : "allocation-1");
+      }
       state.operations.push("payment:reverse-allocations");
-      state.receivableOutstanding = d("33.33");
+      state.receivableOutstanding = state.receivableOutstanding.plus(amount);
     },
     markCustomerRefundFinancialInverseReadyTx: async (_tx, _org, refund, credit, actor, requestId) => {
-      assert.equal(refund, "refund-A"); assert.equal(credit, "credit-A");
+      assert.ok(refund === "refund-A" || refund.startsWith("refund-cash-")); assert.equal(credit, "credit-A");
       assert.equal(actor, "settler"); assert.equal(requestId, "return-A");
       state.operations.push("payment:inverse-ready");
     },
@@ -200,10 +216,6 @@ await assert.rejects(prep(), { code: "RETAIL_INVOICE_RETURN_FINANCE_PERMISSION_R
 state.financeAllowed = true;
 await assert.rejects(prep("approver"), { code: "RETAIL_INVOICE_RETURN_FINANCE_CONFLICT" });
 await assert.rejects(prep("preparer", 99), { code: "RETAIL_INVOICE_RETURN_FINANCE_CONFLICT" });
-state.sourceAccounts = ["cash-A", "cash-B"];
-await assert.rejects(prep(), { code: "RETAIL_INVOICE_RETURN_MULTIPLE_REFUND_ACCOUNTS_UNSUPPORTED" });
-state.sourceAccounts = ["cash-A"];
-
 const prepared = await prep();
 assert.equal(prepared.request.status, "FINANCE_PENDING");
 assert.equal(prepared.request.refundPaymentId, "refund-A");
@@ -228,6 +240,32 @@ assert.ok(state.operations.indexOf("payment:reverse-allocations") < state.operat
 assert.ok(state.operations.indexOf("credit:posted-journal") < state.operations.indexOf("payment:inverse-ready"));
 assert.ok(state.operations.indexOf("payment:confirmed") < state.operations.indexOf("stock:return-in"));
 assert.ok(state.operations.indexOf("stock:valued") < state.operations.indexOf("return:COMPLETED"));
+
+// Two original accounts: two canonical payouts, one independently approved
+// credit note, one stock reversal. Every payout is tied to its own source.
+Object.assign(state, {
+  sourceAccounts: ["cash-A", "cash-B"], operations: [], requestStatus: "APPROVED",
+  requestRevision: 1, refundPaymentId: null, salesCreditNoteId: null,
+  preparedByUserId: null, settledByUserId: null, refundLegs: [],
+  paymentStatus: "PENDING_APPROVAL", creditStatus: "PENDING_APPROVAL",
+  approvedByUserId: null, receivableOutstanding: d(0),
+});
+const preparedSplit = await prep();
+assert.equal(preparedSplit.request.status, "FINANCE_PENDING");
+assert.equal(state.refundLegs.length, 2);
+assert.equal(JSON.stringify(state.refundLegs.map((leg) => [leg.financialAccountId, leg.amount.toFixed(2)])),
+  JSON.stringify([["cash-A", "16.67"], ["cash-B", "16.66"]]));
+assert.equal(state.operations.filter((entry) => entry === "approval:EnterprisePayment").length, 2);
+assert.equal(state.operations.filter((entry) => entry === "credit:create").length, 1);
+assert.equal((await prep("preparer", 1)).idempotent, true);
+state.paymentStatus = "APPROVED"; state.creditStatus = "APPROVED"; state.approvedByUserId = "approver";
+state.operations = [];
+await settle();
+assert.equal(state.operations.filter((entry) => entry === "payment:reverse-allocations").length, 2);
+assert.equal(state.operations.filter((entry) => entry === "payment:confirmed").length, 2);
+assert.equal(state.operations.filter((entry) => entry === "stock:return-in").length, 1);
+assert.equal(state.operations.filter((entry) => entry === "credit:posted-journal").length, 1);
+assert.equal((await settle("settler", 2)).idempotent, true);
 const financePrepareRoute = fs.readFileSync("app/api/enterprise/[organizationId]/retail/invoices/[invoiceId]/returns/[requestId]/prepare/route.ts", "utf8");
 const financeSettleRoute = fs.readFileSync("app/api/enterprise/[organizationId]/retail/invoices/[invoiceId]/returns/[requestId]/settle/route.ts", "utf8");
 assert.match(financePrepareRoute, /authorizeFinanceRequest\(req, organizationId, "FINANCE_PAYMENTS", "submit", \{ mutation: true/);

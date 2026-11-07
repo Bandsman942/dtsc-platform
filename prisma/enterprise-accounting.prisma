@@ -764,6 +764,7 @@ model EnterprisePayment {
   allocations              EnterprisePaymentAllocation[]
   retailInvoiceProposals   EnterpriseRetailInvoicePaymentProposal[]
   retailInvoiceReturnRequests EnterpriseRetailInvoiceReturnRequest[] @relation("RetailInvoiceReturnRefundPayment")
+  retailInvoiceReturnRefundLegs EnterpriseRetailInvoiceReturnRefundLeg[] @relation("RetailInvoiceReturnRefundLegPayment")
   events                   EnterprisePaymentEvent[]
   treasuryTransactions     EnterpriseTreasuryTransaction[]
   cashSession              EnterpriseCashSession?         @relation(fields: [organizationId, cashSessionId], references: [organizationId, id], onDelete: Restrict)
@@ -841,6 +842,7 @@ model EnterpriseFinancialAccount {
   bankStatements        EnterpriseBankStatement[]
   reconciliationSessions EnterpriseReconciliationSession[]
   fundingOperations      EnterpriseFundingOperation[]
+  retailInvoiceReturnRefundLegs EnterpriseRetailInvoiceReturnRefundLeg[]
 
   @@unique([organizationId, id])
   @@unique([organizationId, code])

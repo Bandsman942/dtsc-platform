@@ -88,28 +88,46 @@ export async function prepareRetailInvoiceReturnFinance(
       throw fail("RETAIL_INVOICE_RETURN_FINANCE_CONFLICT");
     }
     const preview = await assertRetailInvoiceReturnSettlementReadinessTx(tx, organizationId, invoiceId, requestId);
-    // One Finance refund is bound to one account. Fail closed if the invoice
-    // was paid from several accounts; a future split-refund adapter must
-    // explicitly model multiple independently approved payouts.
     const accountIds = new Set(preview.financeSourcePlan.map((source) => source.financialAccountId));
-    if (accountIds.size !== 1 || preview.financeSourcePlan.length === 0) {
-      throw fail("RETAIL_INVOICE_RETURN_MULTIPLE_REFUND_ACCOUNTS_UNSUPPORTED");
-    }
+    if (preview.financeSourcePlan.length === 0) throw fail("RETAIL_INVOICE_RETURN_FINANCE_SOURCE_MISMATCH");
     const payments = await tx.enterprisePayment.findMany({
       where: { organizationId, id: { in: [...new Set(preview.financeSourcePlan.map((source) => source.paymentId))] } },
       select: { id: true, methodType: true, financialAccountId: true, businessPartyId: true,
         currencyCode: true, status: true, paymentType: true, direction: true },
     });
-    const methods = new Set(payments.map((payment) => payment.methodType));
-    const sourceAccountId = [...accountIds][0];
-    const method = payments[0]?.methodType;
-    if (methods.size !== 1 || payments.length !== new Set(preview.financeSourcePlan.map((source) => source.paymentId)).size ||
-        !method || !["CASH", "MOBILE_MONEY", "BANK_TRANSFER", "CARD", "CHEQUE"].includes(method) ||
-        payments.some((payment) => payment.financialAccountId !== sourceAccountId ||
+    const sourcePayments = new Map(payments.map((payment) => [payment.id, payment]));
+    if (payments.length !== new Set(preview.financeSourcePlan.map((source) => source.paymentId)).size ||
+        payments.some((payment) => !accountIds.has(payment.financialAccountId || "") ||
           payment.businessPartyId !== request.checkout.invoice.businessPartyId ||
           payment.currencyCode !== request.checkout.invoice.currencyCode ||
           !["CONFIRMED", "RECONCILED"].includes(payment.status) || payment.paymentType !== "CUSTOMER_PAYMENT" ||
           payment.direction !== "INBOUND")) {
+      throw fail("RETAIL_INVOICE_RETURN_FINANCE_SOURCE_MISMATCH");
+    }
+    const grouped = new Map<string, {
+      financialAccountId: string; methodType: "CASH" | "MOBILE_MONEY" | "BANK_TRANSFER" | "CARD" | "CHEQUE";
+      amount: Prisma.Decimal;
+    }>();
+    for (const source of preview.financeSourcePlan) {
+      const payment = sourcePayments.get(source.paymentId);
+      const method = payment?.methodType;
+      if (!payment || payment.financialAccountId !== source.financialAccountId ||
+          !method || !["CASH", "MOBILE_MONEY", "BANK_TRANSFER", "CARD", "CHEQUE"].includes(method)) {
+        throw fail("RETAIL_INVOICE_RETURN_FINANCE_SOURCE_MISMATCH");
+      }
+      const existing = grouped.get(source.financialAccountId);
+      // A single payout account cannot silently change tender method. A
+      // separate account (or explicit reallocation) is required in that case.
+      if (existing && existing.methodType !== method) throw fail("RETAIL_INVOICE_RETURN_FINANCE_SOURCE_MISMATCH");
+      if (existing) existing.amount = existing.amount.plus(source.amount);
+      else grouped.set(source.financialAccountId, {
+        financialAccountId: source.financialAccountId,
+        methodType: method as "CASH" | "MOBILE_MONEY" | "BANK_TRANSFER" | "CARD" | "CHEQUE",
+        amount: source.amount,
+      });
+    }
+    const payoutPlan = [...grouped.values()];
+    if (!payoutPlan.reduce((total, leg) => total.plus(leg.amount), new Prisma.Decimal(0)).equals(preview.refundAmount)) {
       throw fail("RETAIL_INVOICE_RETURN_FINANCE_SOURCE_MISMATCH");
     }
 
@@ -134,14 +152,26 @@ export async function prepareRetailInvoiceReturnFinance(
     if (!subtotal.plus(taxTotal).equals(preview.refundAmount)) {
       throw fail("RETAIL_INVOICE_RETURN_SETTLEMENT_TAX_SPLIT_INVALID");
     }
-    const payment = await createEnterprisePaymentTx(tx, organizationId, actorUserId, {
-      direction: "OUTBOUND", paymentType: "REFUND", methodType: method as "CASH" | "MOBILE_MONEY" | "BANK_TRANSFER" | "CARD" | "CHEQUE",
-      financialAccountId: sourceAccountId,
-      businessPartyId: request.checkout.invoice.businessPartyId,
-      currencyCode: invoice.currencyCode, amount: preview.refundAmount.toFixed(2),
-      paymentDate: new Date(), reference: request.number,
-      idempotencyKey: `retail-invoice-return:${request.id}:refund`,
-    });
+    const refundPayments = [] as Array<{ id: string; number: string; financialAccountId: string; amount: Prisma.Decimal }>;
+    for (const leg of payoutPlan) {
+      const payment = await createEnterprisePaymentTx(tx, organizationId, actorUserId, {
+        direction: "OUTBOUND", paymentType: "REFUND", methodType: leg.methodType,
+        financialAccountId: leg.financialAccountId,
+        businessPartyId: request.checkout.invoice.businessPartyId,
+        currencyCode: invoice.currencyCode, amount: leg.amount.toFixed(2),
+        paymentDate: new Date(), reference: request.number,
+        idempotencyKey: payoutPlan.length === 1
+          ? `retail-invoice-return:${request.id}:refund`
+          : `retail-invoice-return:${request.id}:refund:${leg.financialAccountId}`,
+      });
+      refundPayments.push({ id: payment.id, number: payment.number, financialAccountId: leg.financialAccountId, amount: leg.amount });
+    }
+    if (refundPayments.length > 1) {
+      await tx.enterpriseRetailInvoiceReturnRefundLeg.createMany({ data: refundPayments.map((leg) => ({
+        organizationId, returnRequestId: request.id, refundPaymentId: leg.id,
+        financialAccountId: leg.financialAccountId, amount: leg.amount,
+      })) });
+    }
     const credit = await tx.enterpriseSalesCreditNote.create({
       data: {
         organizationId, number: financeReference("CN"), salesInvoiceId: invoiceId,
@@ -167,22 +197,24 @@ export async function prepareRetailInvoiceReturnFinance(
 
     // Two real, independently approved Finance assignments, committed in the
     // same transaction as the draft documents and the Retail binding.
-    const paymentApproval = await createAccountingApprovalAssignment(tx, {
-      organizationId, targetEntityType: "EnterprisePayment", targetEntityId: payment.id,
-      requesterUserId: actorUserId, approverUserId: request.approverUserId,
-    });
-    await tx.enterprisePayment.update({ where: { id: payment.id },
-      data: { status: "PENDING_APPROVAL", revision: { increment: 1 } } });
-    await tx.enterprisePaymentEvent.create({ data: {
-      organizationId, paymentId: payment.id, actorUserId, eventType: "SUBMIT",
-      summary: "Refund payment submitted for independent Finance approval",
-      metadataJson: { approvalId: paymentApproval.id, returnRequestId: request.id },
-    } });
-    await publishFinanceEvent(tx, { organizationId, entityType: "EnterprisePayment", entityId: payment.id,
-      eventType: "PAYMENT_SUBMIT", summary: `Payment ${payment.number}: SUBMIT`, actorUserId,
-      fromStatus: "DRAFT", toStatus: "PENDING_APPROVAL",
-      metadataJson: { approvalId: paymentApproval.id, approverUserId: request.approverUserId, returnRequestId: request.id },
-    });
+    for (const payment of refundPayments) {
+      const paymentApproval = await createAccountingApprovalAssignment(tx, {
+        organizationId, targetEntityType: "EnterprisePayment", targetEntityId: payment.id,
+        requesterUserId: actorUserId, approverUserId: request.approverUserId,
+      });
+      await tx.enterprisePayment.update({ where: { id: payment.id },
+        data: { status: "PENDING_APPROVAL", revision: { increment: 1 } } });
+      await tx.enterprisePaymentEvent.create({ data: {
+        organizationId, paymentId: payment.id, actorUserId, eventType: "SUBMIT",
+        summary: "Refund payment submitted for independent Finance approval",
+        metadataJson: { approvalId: paymentApproval.id, returnRequestId: request.id },
+      } });
+      await publishFinanceEvent(tx, { organizationId, entityType: "EnterprisePayment", entityId: payment.id,
+        eventType: "PAYMENT_SUBMIT", summary: `Payment ${payment.number}: SUBMIT`, actorUserId,
+        fromStatus: "DRAFT", toStatus: "PENDING_APPROVAL",
+        metadataJson: { approvalId: paymentApproval.id, approverUserId: request.approverUserId, returnRequestId: request.id },
+      });
+    }
     const creditApproval = await createAccountingApprovalAssignment(tx, {
       organizationId, targetEntityType: "EnterpriseSalesCreditNoteApproval", targetEntityId: credit.id,
       requesterUserId: actorUserId, approverUserId: request.approverUserId,
@@ -197,7 +229,7 @@ export async function prepareRetailInvoiceReturnFinance(
 
     const updated = await tx.enterpriseRetailInvoiceReturnRequest.update({
       where: { id: request.id, organizationId }, data: {
-        status: "FINANCE_PENDING", refundPaymentId: payment.id, salesCreditNoteId: credit.id,
+        status: "FINANCE_PENDING", refundPaymentId: refundPayments[0].id, salesCreditNoteId: credit.id,
         preparedByUserId: actorUserId, preparedAt: new Date(), revision: { increment: 1 },
       },
     });
@@ -205,7 +237,8 @@ export async function prepareRetailInvoiceReturnFinance(
       organizationId, entityType: "EnterpriseRetailInvoiceReturnRequest", entityId: request.id,
       eventType: "RETAIL_INVOICE_RETURN_FINANCE_PREPARED", summary: "Retail invoice return bound to two Finance approvals",
       actorUserId, fromStatus: "APPROVED", toStatus: "FINANCE_PENDING",
-      metadataJson: { invoiceId, siteId: preview.siteId, paymentId: payment.id,
+      metadataJson: { invoiceId, siteId: preview.siteId, paymentId: refundPayments[0].id,
+        payoutPaymentIds: refundPayments.map((payment) => payment.id),
         creditNoteId: credit.id, amount: preview.refundAmount.toFixed(2) },
     });
     return { request: updated, idempotent: false };
@@ -260,37 +293,59 @@ export async function settleRetailInvoiceReturnFinance(
       tx.enterpriseReceivable.findFirst({ where: { organizationId, id: plan.receivableId } }),
     ]);
     const accountIds = new Set(plan.financeSourcePlan.map((source) => source.financialAccountId));
-    if (!payment || !credit || !invoice || !receivable ||
-        accountIds.size !== 1 || !accountIds.has(payment.financialAccountId || "") ||
-        payment.status !== "APPROVED" || credit.status !== "APPROVED" ||
-        payment.approvedByUserId !== request.approverUserId ||
+    const multiAccount = accountIds.size > 1;
+    const storedLegs = multiAccount ? await tx.enterpriseRetailInvoiceReturnRefundLeg.findMany({
+      where: { organizationId, returnRequestId: request.id }, include: { refundPayment: true },
+    }) : [];
+    const payouts = multiAccount
+      ? storedLegs.map((leg) => ({ payment: leg.refundPayment, accountId: leg.financialAccountId, amount: leg.amount }))
+      : payment ? [{ payment, accountId: payment.financialAccountId!, amount: payment.amount }] : [];
+    const expectedByAccount = new Map<string, Prisma.Decimal>();
+    for (const source of plan.financeSourcePlan) {
+      expectedByAccount.set(source.financialAccountId,
+        (expectedByAccount.get(source.financialAccountId) || new Prisma.Decimal(0)).plus(source.amount));
+    }
+    if (!payment || !credit || !invoice || !receivable || !payouts.length ||
+        payouts.length !== accountIds.size || (multiAccount && !payouts.some((leg) => leg.payment.id === payment.id)) ||
+        new Set(payouts.map((leg) => leg.accountId)).size !== accountIds.size ||
+        !payouts.reduce((total, leg) => total.plus(leg.amount), new Prisma.Decimal(0)).equals(plan.refundAmount) ||
+        payouts.some((leg) => !expectedByAccount.get(leg.accountId)?.equals(leg.amount) ||
+          leg.payment.financialAccountId !== leg.accountId || !leg.payment.amount.equals(leg.amount) ||
+          leg.payment.status !== "APPROVED" || leg.payment.approvedByUserId !== request.approverUserId ||
+          leg.payment.initiatedByUserId !== request.preparedByUserId ||
+          leg.payment.direction !== "OUTBOUND" || leg.payment.paymentType !== "REFUND" ||
+          leg.payment.businessPartyId !== invoice.businessPartyId ||
+          leg.payment.currencyCode !== invoice.currencyCode) ||
+        credit.status !== "APPROVED" ||
         credit.approvedByUserId !== request.approverUserId ||
-        payment.initiatedByUserId !== request.preparedByUserId ||
         credit.createdByUserId !== request.preparedByUserId ||
-        payment.direction !== "OUTBOUND" || payment.paymentType !== "REFUND" ||
-        payment.businessPartyId !== invoice.businessPartyId ||
-        payment.currencyCode !== invoice.currencyCode || credit.currencyCode !== invoice.currencyCode ||
-        credit.salesInvoiceId !== invoiceId || !payment.amount.equals(plan.refundAmount) ||
+        credit.currencyCode !== invoice.currencyCode ||
+        credit.salesInvoiceId !== invoiceId ||
         !credit.grandTotal.equals(plan.refundAmount) ||
         !credit.subtotal.plus(credit.taxTotal).equals(credit.grandTotal) ||
         credit.grandTotal.greaterThan(invoice.grandTotal)) {
       throw fail("RETAIL_INVOICE_RETURN_FINANCE_CONFLICT");
     }
-    const account = await tx.enterpriseFinancialAccount.findFirst({
-      where: { organizationId, id: payment.financialAccountId!, status: "ACTIVE", archivedAt: null },
-      select: { siteId: true, currencyCode: true, operationalBalance: true },
-    });
-    if (!account || account.siteId !== plan.siteId || account.currencyCode !== plan.currencyCode ||
-        account.operationalBalance.lessThan(plan.refundAmount)) {
-      throw fail("RETAIL_INVOICE_RETURN_REFUND_ACCOUNT_INSUFFICIENT");
+    for (const payout of payouts) {
+      const account = await tx.enterpriseFinancialAccount.findFirst({
+        where: { organizationId, id: payout.accountId, status: "ACTIVE", archivedAt: null },
+        select: { siteId: true, currencyCode: true, operationalBalance: true },
+      });
+      if (!account || account.siteId !== plan.siteId || account.currencyCode !== plan.currencyCode ||
+          account.operationalBalance.lessThan(payout.amount)) {
+        throw fail("RETAIL_INVOICE_RETURN_REFUND_ACCOUNT_INSUFFICIENT");
+      }
     }
     // The source allocation identifiers are recomputed WITHIN this locked
     // transaction; the Finance helper cannot consume payments from another
     // shop, even if they happen to have earlier allocation timestamps.
-    await reverseCustomerPaymentAllocationsForRefundAmountTx(
-      tx, organizationId, receivable.id, payment.id, actorUserId, input.reason,
-      plan.refundAmount, null, plan.financeSourcePlan.map((source) => source.allocationId),
-    );
+    for (const payout of payouts) {
+      await reverseCustomerPaymentAllocationsForRefundAmountTx(
+        tx, organizationId, receivable.id, payout.payment.id, actorUserId, input.reason,
+        payout.amount, null, plan.financeSourcePlan.filter((source) =>
+          source.financialAccountId === payout.accountId).map((source) => source.allocationId),
+      );
+    }
     const liveReceivable = await tx.enterpriseReceivable.findFirst({
       where: { organizationId, id: receivable.id }, select: { outstandingAmount: true },
     });
@@ -321,11 +376,13 @@ export async function settleRetailInvoiceReturnFinance(
       actorUserId, fromStatus: "APPROVED", toStatus: "POSTED",
       metadataJson: { receivableId: receivable.id, journalEntryId: posting.entry.id, returnRequestId: request.id },
     });
-    await markCustomerRefundFinancialInverseReadyTx(
-      tx, organizationId, payment.id, credit.id, actorUserId, request.id,
-    );
-    await confirmCustomerRefundPaymentTx(tx, organizationId, payment.id, actorUserId,
-      { revision: payment.revision, reason: input.reason });
+    for (const payout of payouts) {
+      await markCustomerRefundFinancialInverseReadyTx(
+        tx, organizationId, payout.payment.id, credit.id, actorUserId, request.id,
+      );
+      await confirmCustomerRefundPaymentTx(tx, organizationId, payout.payment.id, actorUserId,
+        { revision: payout.payment.revision, reason: input.reason });
+    }
     let restockedCount = 0;
     for (const source of plan.stockSourcePlan) {
       if (source.stockDisposition !== "RESTOCK") continue;
@@ -353,6 +410,7 @@ export async function settleRetailInvoiceReturnFinance(
       summary: "Retail invoice return settled atomically in Finance and Inventory",
       actorUserId, fromStatus: "FINANCE_PENDING", toStatus: "COMPLETED",
       metadataJson: { invoiceId, siteId: plan.siteId, refundPaymentId: payment.id,
+        payoutPaymentIds: payouts.map((leg) => leg.payment.id),
         creditNoteId: credit.id, amount: plan.refundAmount.toFixed(2),
         restockedMovementCount: restockedCount,
         nonRestockedLineCount: plan.stockSourcePlan.filter((source) => source.stockDisposition !== "RESTOCK").length },

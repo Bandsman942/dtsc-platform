@@ -145,7 +145,16 @@ async function financeFixture() {
       accountType: "BANK", siteId: site.id, currencyCode, ledgerAccountId: bankTemplate.ledgerAccountId,
       status: "ACTIVE", openingBalance: 0, operationalBalance: 0, reconciledBalance: 0, availableBalance: 0 },
   });
-  return { owner, cashier, settler, site, warehouse, product, inventory, bank, currencyCode };
+  const bank2 = await prisma.enterpriseFinancialAccount.upsert({
+    where: { organizationId_code: { organizationId, code: "SHOP2-E2E-FINANCE-BANK2" } },
+    update: { name: "Shop 2 Finance test bank 2", accountType: "BANK", siteId: site.id,
+      currencyCode, ledgerAccountId: bankTemplate.ledgerAccountId, status: "ACTIVE", archivedAt: null,
+      openingBalance: 0, operationalBalance: 0, reconciledBalance: 0, availableBalance: 0 },
+    create: { organizationId, code: "SHOP2-E2E-FINANCE-BANK2", name: "Shop 2 Finance test bank 2",
+      accountType: "BANK", siteId: site.id, currencyCode, ledgerAccountId: bankTemplate.ledgerAccountId,
+      status: "ACTIVE", openingBalance: 0, operationalBalance: 0, reconciledBalance: 0, availableBalance: 0 },
+  });
+  return { owner, cashier, settler, site, warehouse, product, inventory, bank, bank2, currencyCode };
 }
 
 test("#1042 real Finance settlement and five-actor credit, refund and inventory return", async ({ browser }) => {
@@ -209,7 +218,8 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
       const amount = amounts[index];
       const prepared = await post(context.cashier, `${base}/retail/invoices/${invoiceId}/payments`, {
         idempotencyKey: `retail-1042-3actors-payment-${index}-${Date.now()}`,
-        financialAccountId: fixture.bank.id, methodType: "BANK_TRANSFER", amount: amount.toFixed(2),
+        financialAccountId: index === 0 ? fixture.bank.id : fixture.bank2.id,
+        methodType: "BANK_TRANSFER", amount: amount.toFixed(2),
       });
       expect(prepared.status, JSON.stringify(prepared.body)).toBe(201);
       const paymentId = prepared.body.payment.id;
@@ -351,13 +361,21 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
     expect(preparedRefund.body.request.status).toBe("FINANCE_PENDING");
     const refundId = preparedRefund.body.request.refundPaymentId;
     const creditId = preparedRefund.body.request.salesCreditNoteId;
-    const refund = await prisma.enterprisePayment.findUniqueOrThrow({ where: { id: refundId } });
+    const payoutLegs = await prisma.enterpriseRetailInvoiceReturnRefundLeg.findMany({
+      where: { organizationId, returnRequestId: returnId }, include: { refundPayment: true },
+    });
+    expect(payoutLegs).toHaveLength(2);
+    expect(new Set(payoutLegs.map((leg) => leg.financialAccountId))).toEqual(new Set([fixture.bank.id, fixture.bank2.id]));
+    expect(payoutLegs.reduce((total, leg) => total.plus(leg.amount), new Prisma.Decimal(0)).equals(total)).toBe(true);
+    expect(payoutLegs.some((leg) => leg.refundPaymentId === refundId)).toBe(true);
     const credit = await prisma.enterpriseSalesCreditNote.findUniqueOrThrow({ where: { id: creditId } });
     await ensureStepUp(context.owner, ownerPassword);
-    const approveRefund = await post(context.owner, `${base}/payments/${refundId}/transition`, {
-      action: "APPROVE", revision: refund.revision,
-    });
-    expect(approveRefund.status, JSON.stringify(approveRefund.body)).toBe(200);
+    for (const leg of payoutLegs) {
+      const approveRefund = await post(context.owner, `${base}/payments/${leg.refundPaymentId}/transition`, {
+        action: "APPROVE", revision: leg.refundPayment.revision,
+      });
+      expect(approveRefund.status, JSON.stringify(approveRefund.body)).toBe(200);
+    }
     const approveCredit = await post(context.owner, `${base}/sales-credit-notes/${creditId}/transition`, {
       action: "APPROVE", revision: credit.revision,
     });
@@ -378,6 +396,12 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
     const settled = await post(context.returnSettler, `${returnPath}/settle`, settlementPayload);
     expect(settled.status, JSON.stringify(settled.body)).toBe(200);
     expect(settled.body.request.status).toBe("COMPLETED");
+    const payoutStatuses = await prisma.enterprisePayment.findMany({
+      where: { organizationId, id: { in: payoutLegs.map((leg) => leg.refundPaymentId) } },
+      select: { status: true, amount: true, financialAccountId: true },
+    });
+    expect(payoutStatuses).toHaveLength(2);
+    expect(payoutStatuses.every((entry) => entry.status === "CONFIRMED")).toBe(true);
     const replay = await post(context.returnSettler, `${returnPath}/settle`, settlementPayload);
     expect(replay.status, JSON.stringify(replay.body)).toBe(200);
     expect(replay.body.idempotent).toBe(true);

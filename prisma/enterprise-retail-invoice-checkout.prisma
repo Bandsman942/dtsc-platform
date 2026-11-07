@@ -105,6 +105,7 @@ model EnterpriseRetailInvoiceReturnRequest {
   refundPayment EnterprisePayment? @relation("RetailInvoiceReturnRefundPayment", fields: [organizationId, refundPaymentId], references: [organizationId, id], onDelete: Restrict, map: "retail_invoice_return_refund_payment_fkey")
   salesCreditNote EnterpriseSalesCreditNote? @relation("RetailInvoiceReturnSalesCreditNote", fields: [organizationId, salesCreditNoteId], references: [organizationId, id], onDelete: Restrict, map: "retail_invoice_return_credit_note_fkey")
   lines    EnterpriseRetailInvoiceReturnLine[]
+  refundLegs EnterpriseRetailInvoiceReturnRefundLeg[]
 
   @@unique([organizationId, id], map: "retail_invoice_return_request_org_id_key")
   @@unique([organizationId, id, checkoutId], map: "retail_invoice_return_request_scoped_id_key")
@@ -114,6 +115,26 @@ model EnterpriseRetailInvoiceReturnRequest {
   @@unique([organizationId, salesCreditNoteId], map: "retail_invoice_return_request_credit_note_key")
   @@index([organizationId, checkoutId, status], map: "retail_invoice_return_request_checkout_status_idx")
   @@index([organizationId, approverUserId, status], map: "retail_invoice_return_request_approver_status_idx")
+}
+
+// Each payout remains a canonical Finance payment. This structural link lets
+// one approved return refund the original payment accounts independently,
+// while the credit note and inventory reversal are performed exactly once.
+model EnterpriseRetailInvoiceReturnRefundLeg {
+  id                 String  @id @default(cuid())
+  organizationId     String
+  returnRequestId    String
+  refundPaymentId    String
+  financialAccountId String
+  amount             Decimal @db.Decimal(20, 6)
+
+  request EnterpriseRetailInvoiceReturnRequest @relation(fields: [organizationId, returnRequestId], references: [organizationId, id], onDelete: Restrict)
+  refundPayment EnterprisePayment @relation("RetailInvoiceReturnRefundLegPayment", fields: [organizationId, refundPaymentId], references: [organizationId, id], onDelete: Restrict)
+  financialAccount EnterpriseFinancialAccount @relation(fields: [organizationId, financialAccountId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, refundPaymentId], map: "retail_invoice_return_refund_leg_payment_key")
+  @@unique([organizationId, returnRequestId, financialAccountId], map: "retail_invoice_return_refund_leg_account_key")
+  @@index([organizationId, returnRequestId], map: "retail_invoice_return_refund_leg_request_idx")
 }
 
 model EnterpriseRetailInvoiceReturnLine {

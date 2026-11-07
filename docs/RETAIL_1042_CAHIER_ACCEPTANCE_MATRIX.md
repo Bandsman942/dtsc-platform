@@ -10,6 +10,8 @@ Tranches 43–47 validées sur PostgreSQL isolé : retour/avoir/remboursement r�
 
 Tranche 47, commit `ae31f391` : **24/24 tests navigateur et 17/17 workflows CI réussis**, incluant facture Finance à trois acteurs, paiements partiel/intégral, stock/COGS à l'unique règlement complet, isolation des boutiques, puis retour/avoir/remboursement à cinq acteurs avec vérification renforcée et écritures inverses. Cela **ne valide pas** la clôture réelle multi-caissiers, les imprimantes, les exports visuels et financiers certifiés, la restauration ni la signature propriétaire.
 
+Tranche 48 **candidate, non certifiée** : remboursement ventilé sur les comptes d'encaissement d'origine, plusieurs paiements Finance indépendamment approuvés et un avoir unique ; contrat unitaire ajouté et parcours PostgreSQL deux comptes étendu. Cette capacité ne passe à `À_CERTIFIER` qu'après la CI du nouveau SHA ; la recette propriétaire E13 reste `NON EXÉCUTÉ`.
+
 Périmètre : ERP Core Retail **paramétrable et réutilisable** pour N boutiques, avec un scénario de référence à deux boutiques alimentaires à Kinshasa. Ne jamais créer une solution codée pour un client, un nombre de boutiques, un gérant, une devise, une caisse ou une marque déterminés.
 
 **Statuts utilisés :** `PARTIEL` signifie qu'une fondation existe mais qu'un point ou une preuve manque ; `À_CERTIFIER` signifie que l'implémentation doit encore passer un E2E réel ; `OUVERT` signifie qu'au moins une capacité nécessaire manque. Aucun de ces statuts ne vaut acceptation.

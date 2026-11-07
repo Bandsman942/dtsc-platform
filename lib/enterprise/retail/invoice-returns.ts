@@ -113,6 +113,7 @@ export async function listRetailInvoiceReturnRequests(
         id: true, number: true, status: true, reason: true, refundAmount: true,
         requestedByUserId: true, approverUserId: true, inspectedByUserId: true,
         preparedByUserId: true, refundPayment: { select: { status: true } },
+        refundLegs: { select: { refundPayment: { select: { status: true } } } },
         salesCreditNote: { select: { status: true } },
         inspectedAt: true, inspectionNotes: true, decidedAt: true, decisionReason: true,
         revision: true, createdAt: true,
@@ -149,18 +150,27 @@ export async function listRetailInvoiceReturnRequests(
     receivableCapabilities.canCreate && receivableCapabilities.canSubmit;
   const canSettleFinance = paymentCapabilities.canWrite && receivableCapabilities.canManage;
   return {
-    items: items.map((item) => ({
+    items: items.map((item) => {
+      const payoutStatuses = item.refundLegs.length
+        ? item.refundLegs.map((leg) => leg.refundPayment.status)
+        : item.refundPayment ? [item.refundPayment.status] : [];
+      const approvedPayouts = payoutStatuses.filter((status) => status === "APPROVED").length;
+      return {
       id: item.id, number: item.number, status: item.status, reason: item.reason,
       refundAmount: item.refundAmount, inspectedAt: item.inspectedAt,
       inspectionNotes: item.inspectionNotes, decidedAt: item.decidedAt,
       decisionReason: item.decisionReason, revision: item.revision,
       createdAt: item.createdAt, lines: item.lines,
-      paymentApprovalStatus: item.refundPayment?.status || null,
+      paymentApprovalStatus: payoutStatuses.length && approvedPayouts === payoutStatuses.length
+        ? "APPROVED" : item.refundPayment?.status || null,
+      paymentApprovalCount: approvedPayouts,
+      paymentApprovalTotal: payoutStatuses.length,
       creditApprovalStatus: item.salesCreditNote?.status || null,
       canPrepareFinance: canPrepareFinance && item.status === "APPROVED" &&
         item.requestedByUserId !== actorUserId && item.approverUserId !== actorUserId,
       canSettleFinance: canSettleFinance && item.status === "FINANCE_PENDING" &&
-        item.refundPayment?.status === "APPROVED" && item.salesCreditNote?.status === "APPROVED" &&
+        payoutStatuses.length > 0 && approvedPayouts === payoutStatuses.length &&
+        item.salesCreditNote?.status === "APPROVED" &&
         ![item.requestedByUserId, item.approverUserId, item.inspectedByUserId,
           item.preparedByUserId].includes(actorUserId),
       canInspect: capabilities.canInspect && item.status === "SUBMITTED" &&
@@ -168,7 +178,7 @@ export async function listRetailInvoiceReturnRequests(
       canDecide: capabilities.canApprove && finance?.every((entry) => entry.allowed) === true &&
         ["SUBMITTED", "INSPECTED"].includes(item.status) && item.approverUserId === actorUserId &&
         item.requestedByUserId !== actorUserId && item.inspectedByUserId !== actorUserId,
-    })),
+    }; }),
     canRequest: capabilities.canRequest && ["PAID", "CREDIT_NOTE"].includes(checkout.invoice.status) &&
       checkout.invoice.amountPaid.plus(checkout.invoice.amountCredited).equals(checkout.invoice.grandTotal) &&
       checkout.invoice.outstandingAmount.isZero() && Boolean(checkout.stockPostedAt),

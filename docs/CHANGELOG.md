@@ -1,3 +1,10 @@
+## 2026-11-08 — Retail #1042, tranche 48 — Remboursements par compte d'origine (candidat, PR #1043)
+
+- Migration **additive** `EnterpriseRetailInvoiceReturnRefundLeg` : un retour peut avoir plusieurs paiements de remboursement Finance canoniques (un par compte d'encaissement), chacun tenant-scoped, approuvé indépendamment et relié structurellement au retour ; l'avoir Finance et les mouvements de stock ne sont pas dupliqués. Les anciens retours à un seul paiement restent utilisables.
+- Préparation atomique : regroupement exact des allocations d'origine par compte, contrôle client/devise/boutique/méthode, montants arrondis au centime, clés d'idempotence distinctes, un paiement `PENDING_APPROVAL` par compte et un avoir unique. Une méthode incompatible sur le même compte est refusée, sans inventer une réallocation.
+- Liquidation sérialisable : chaque paiement approuvé doit couvrir ses allocations du même compte, soldes et droits revérifiés, contrepassations par tranche puis un avoir `POSTED`, paiements `CONFIRMED` et stock `RETURN_IN` valorisé une fois ; échec de n'importe quelle étape = rollback de toute la transaction.
+- Le dialogue Retour/Avoir affiche la progression agrégée des approbations et refuse le bouton de liquidation tant qu'un paiement manque. Contre-épreuves unitaires d'un remboursement simple et d'un retour à deux comptes ; scénario PostgreSQL navigateur étendu à deux comptes, **à confirmer en CI**. Ni `OWNER_E2E` ni certification des rapports/caisses/matériel/restauration ne sont acquis. Aucune fusion, Preview ou Production, flags OFF.
+
 ## 2026-11-07 — Retail #1042, tranche 47 — Exports Excel et PDF explicites non certifiés (candidat, PR #1043)
 
 - La vue de supervision multi-boutiques propose les exports **Excel (.xlsx) et PDF** en réutilisant les générateurs de rapports professionnels existants. Les boutons et documents précisent « provisoire / non certifié » en FR/EN ; les écritures sans boutique sont exportées sur des lignes séparées, pas redistribuées.

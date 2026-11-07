@@ -328,7 +328,8 @@ export async function reverseCustomerPaymentAllocationsForRefundAmountTx(
     });
     if (retailCheckout) {
       const boundReturn = allowedAllocationIds?.length ? await tx.enterpriseRetailInvoiceReturnRequest.findFirst({
-        where: { organizationId, checkoutId: retailCheckout.id, refundPaymentId,
+        where: { organizationId, checkoutId: retailCheckout.id,
+          OR: [{ refundPaymentId }, { refundLegs: { some: { refundPaymentId } } }],
           status: "FINANCE_PENDING", salesCreditNoteId: { not: null },
           preparedByUserId: { not: null } }, select: { id: true },
       }) : null;
@@ -844,7 +845,8 @@ export async function markCustomerRefundFinancialInverseReadyTx(
     if (!refundPayment) throw new EnterpriseAccountingError("REFUND_PAYMENT_INVALID", 409);
 
     const linkedRetailReturn = await tx.enterpriseRetailInvoiceReturnRequest.findFirst({
-      where: { organizationId, refundPaymentId: refundPayment.id },
+      where: { organizationId,
+        OR: [{ refundPaymentId: refundPayment.id }, { refundLegs: { some: { refundPaymentId: refundPayment.id } } }] },
       select: { id: true, salesCreditNoteId: true, status: true },
     });
     if (linkedRetailReturn && (!retailReturnRequestId || linkedRetailReturn.id !== retailReturnRequestId ||
@@ -893,7 +895,8 @@ export async function markCustomerRefundFinancialInverseReadyTx(
       const bound = retailReturnRequestId ? await tx.enterpriseRetailInvoiceReturnRequest.findFirst({
         where: {
           organizationId, id: retailReturnRequestId, checkoutId: retailCheckout.id,
-          status: "FINANCE_PENDING", refundPaymentId, salesCreditNoteId: creditNoteId,
+          status: "FINANCE_PENDING", salesCreditNoteId: creditNoteId,
+          OR: [{ refundPaymentId }, { refundLegs: { some: { refundPaymentId } } }],
           preparedByUserId: { not: null },
         }, select: { id: true },
       }) : null;
@@ -908,7 +911,15 @@ export async function markCustomerRefundFinancialInverseReadyTx(
         status: "POSTED",
       },
     });
-    if (!credit || !credit.grandTotal.equals(refundPayment.amount)) {
+    const refundLegs = retailReturnRequestId ? await tx.enterpriseRetailInvoiceReturnRefundLeg.findMany({
+      where: { organizationId, returnRequestId: retailReturnRequestId },
+      select: { refundPaymentId: true, amount: true },
+    }) : [];
+    const matchingLeg = refundLegs.find((leg) => leg.refundPaymentId === refundPayment.id);
+    const aggregateRefund = refundLegs.reduce((total, leg) => total.plus(leg.amount), new Prisma.Decimal(0));
+    if (!credit || (refundLegs.length
+      ? (!matchingLeg || !matchingLeg.amount.equals(refundPayment.amount) || !credit.grandTotal.equals(aggregateRefund))
+      : !credit.grandTotal.equals(refundPayment.amount))) {
       throw new EnterpriseAccountingError("REFUND_CREDIT_NOTE_NOT_READY", 409, {
         creditNoteId,
         refundAmount: refundPayment.amount.toFixed(),
