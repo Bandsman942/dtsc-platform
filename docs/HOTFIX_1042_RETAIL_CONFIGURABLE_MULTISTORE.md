@@ -1,6 +1,6 @@
 # RETAIL-1042 — cahier des charges boutiques, paramétrage et Design 2.0
 
-Statut du 7 novembre 2026 : **treize tranches sur la PR brouillon #1043 ; durcissement de la tranche 14 en cours. Aucune fusion, aucun déploiement ni acceptation client**.
+Statut du 7 novembre 2026 : **seize tranches techniques sur la PR brouillon #1043 ; pas de fusion, déploiement ni acceptation client. Les avoirs/remboursements de la facture Finance Retail et la recette PostgreSQL multi-rôles sont encore ouverts.**
 
 ## Cible produit
 
@@ -134,3 +134,10 @@ Contrôle du 7 novembre : `npm run build` local a terminé avec succès la compi
 - Le mécanisme commun `withRetailTransactionRetry` reprend au plus trois fois les conflits de sérialisation/deadlock détectés par Prisma (`P2034`), sans retry des erreurs métier. La transaction relit les clés d'idempotence à chaque tentative ; une tentative rejetée ne confirme ni facture ni mouvement de stock.
 - Le contrat `qa-hotfix-1042-retail-invoice-finance.mjs` couvre les refus au rejeu, le rejeu visible seulement dans la transaction, les collisions et une erreur de sérialisation suivie d'un contrôle métier. Il reste **simulé** : aucune preuve de concurrence authentifiée sur PostgreSQL réel ou de remboursement Finance complet n'en découle.
 - Les deux flags d'activation restent OFF ; PR #1043 en brouillon, sans fusion ni production avant CI du nouveau SHA, recette E2E multi-boutiques et validation propriétaire.
+
+### Tranche 16 — transactions caissier rejouables après conflit PostgreSQL (2026-11-07)
+
+- La proposition de paiement Retail utilise maintenant `withRetailTransactionRetry` sur **l'intégralité** de la transaction sérialisable, et non un retry du seul insert. En cas de `P2034`, les permissions de boutique et de caisse, le statut du document, le montant encore disponible, la collision de clé et la création Finance DRAFT sont tous réévalués.
+- Les tentatives sont bornées à trois et réutilisent la clé d'idempotence de la proposition ; ni paiement Finance ni réservation supplémentaire ne doivent survivre à une transaction annulée par PostgreSQL.
+- Le contrat `qa-hotfix-1042-retail-invoice-payments.mjs` simule un conflit suivi d'un succès (deux tentatives, une création) et l'épuisement des trois tentatives (aucune création).
+- **Limite de preuve** : simulation transactionnelle uniquement, pas d'E2E connecté à Neon ni de simulation réaliste d'interruptions/reprises entre caissiers. Les deux flags restent OFF ; les avoirs/remboursements/rapports/export et la recette globale demeurent ouverts avant OWNER_E2E.
