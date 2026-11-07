@@ -65,6 +65,28 @@ export async function GET(req: Request, { params }: Params) {
     select: { id: true, siteId: true },
   });
   const siteByWarehouse = new Map(warehouses.map((warehouse) => [warehouse.id, warehouse.siteId]));
+  // Finance and classic POS are separate sale channels. Do not sum these
+  // columns or label lifetime invoice allocations as current-period cashflow.
+  // Group on the source site and currency in SQL: no capped list or cross-FX sum.
+  const invoiceRows = ids.length ? await prisma.$queryRaw<Array<{
+    siteId: string; currencyCode: string; invoiceCount: bigint;
+    gross: Prisma.Decimal; allocated: Prisma.Decimal; outstanding: Prisma.Decimal;
+  }>>(Prisma.sql`
+    SELECT checkout."siteId" AS "siteId", invoice."currencyCode" AS "currencyCode",
+      COUNT(*)::bigint AS "invoiceCount",
+      COALESCE(SUM(invoice."grandTotal"), 0) AS "gross",
+      COALESCE(SUM(invoice."amountPaid"), 0) AS "allocated",
+      COALESCE(SUM(invoice."outstandingAmount"), 0) AS "outstanding"
+    FROM "EnterpriseRetailInvoiceCheckout" checkout
+    JOIN "EnterpriseSalesInvoice" invoice
+      ON invoice."id" = checkout."salesInvoiceId"
+      AND invoice."organizationId" = checkout."organizationId"
+    WHERE checkout."organizationId" = ${organizationId}
+      AND checkout."siteId" IN (${Prisma.join(ids)})
+      AND invoice."issuedAt" >= ${from} AND invoice."issuedAt" <= ${to}
+      AND invoice."status" IN ('ISSUED', 'PARTIALLY_PAID', 'PAID', 'OVERDUE', 'CREDIT_NOTE')
+    GROUP BY checkout."siteId", invoice."currencyCode"
+  `) : [];
   const tenderRows = await Promise.all(sites.map((site) => prisma.enterpriseRetailTender.groupBy({
     by: ["currencyCode", "methodType"],
     where: { organizationId, sale: { organizationId, siteId: site.id, status: "COMPLETED", soldAt: dateWhere } },
@@ -73,6 +95,11 @@ export async function GET(req: Request, { params }: Params) {
   const items = sites.map((site, index) => ({
     ...site,
     sales: sales.filter((row) => row.siteId === site.id).map((row) => ({ currencyCode: row.currencyCode, total: (row._sum.grandTotal || new Prisma.Decimal(0)).toFixed(), count: row._count._all })),
+    financeInvoices: invoiceRows.filter((row) => row.siteId === site.id).map((row) => ({
+      currencyCode: row.currencyCode, count: Number(row.invoiceCount),
+      issuedTotal: row.gross.toFixed(), allocatedToDate: row.allocated.toFixed(),
+      outstandingToDate: row.outstanding.toFixed(),
+    })),
     approvedExpenses: expenses.filter((row) => row.siteId === site.id).map((row) => ({ currencyCode: row.currency, total: (row._sum.amount || new Prisma.Decimal(0)).toFixed(), count: row._count._all })),
     collections: tenderRows[index].map((row) => ({ currencyCode: row.currencyCode, method: row.methodType, total: (row._sum.amount || new Prisma.Decimal(0)).toFixed(), count: row._count._all })),
     inventory: stockByWarehouse.filter((row) => siteByWarehouse.get(row.warehouseId) === site.id).reduce((result, row) => ({
