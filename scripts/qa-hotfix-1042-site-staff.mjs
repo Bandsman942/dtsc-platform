@@ -25,7 +25,7 @@ vm.runInNewContext(code, {
   require: (id) => id === "@/lib/prisma" ? { prisma } : id === "@/lib/enterprise/retail/errors" ? { EnterpriseRetailError } : require(id),
   Set, Promise,
 });
-const { siteStaffCapabilities, retailStaffIsolationIsEnabled, requireRetailSiteCapability, retailInvoiceVisibleSites, retailStockTransferVisibleSites, retailSitesForCapability } = unit.exports;
+const { siteStaffCapabilities, retailStaffIsolationIsEnabled, requireRetailSiteCapability, retailInvoiceVisibleSites, retailStockTransferVisibleSites, retailSitesForCapability, retailFinanceReadSiteScope } = unit.exports;
 assert.equal(retailStaffIsolationIsEnabled(null), false, "Existing tenants must not be silently isolated");
 assert.equal(retailStaffIsolationIsEnabled({ siteStaffIsolationEnabled: true }), true);
 assert.deepEqual([...siteStaffCapabilities("INVOICER", null)].sort(), ["VIEW_STOCK", "VIEW_SALES", "PREPARE_INVOICE"].sort());
@@ -170,4 +170,34 @@ assert.match(reservationService, /requireInventoryStockAuthorityTx\(tx, organiza
 assert.ok(reservationService.indexOf("requireInventoryStockAuthorityTx(tx, organizationId, actorUserId, input.warehouseId)") < reservationService.indexOf("idempotencyKey: input.idempotencyKey"), "Authorization must precede reservation idempotency lookup");
 assert.match(reservationService, /INVENTORY_RESERVATION_IDEMPOTENCY_COLLISION/);
 
+// Finance read permission must never become a cross-store Retail data bypass.
+// A revoked last assignment returns [] (deny checkout documents), not null
+// (Finance-wide scope). Finance-only operators keep their normal Finance RBAC.
+db.membership = { role: "MEMBER" };
+db.settings = { siteStaffIsolationEnabled: true, invoiceCheckoutEnabled: true };
+db.assignments = [
+  { siteId: "shopA", roleCode: "MANAGER", isActive: true, permissionsJson: ["VIEW_SALES", "COLLECT_PAYMENT"] },
+  { siteId: "shopB", roleCode: "MANAGER", isActive: false, permissionsJson: ["VIEW_SALES", "COLLECT_PAYMENT"] },
+];
+assert.deepEqual(JSON.parse(JSON.stringify(await retailFinanceReadSiteScope("tenant", "staff", "VIEW_SALES"))), ["shopA"]);
+assert.deepEqual(JSON.parse(JSON.stringify(await retailFinanceReadSiteScope("tenant", "staff", "COLLECT_PAYMENT"))), ["shopA"]);
+db.assignments[0].isActive = false;
+assert.deepEqual(JSON.parse(JSON.stringify(await retailFinanceReadSiteScope("tenant", "revoked", "VIEW_SALES"))), []);
+db.assignments = [];
+assert.equal(await retailFinanceReadSiteScope("tenant", "finance-only", "VIEW_SALES"), null);
+db.membership = { role: "OWNER" };
+assert.equal(await retailFinanceReadSiteScope("tenant", "owner", "VIEW_SALES"), null);
+db.membership = { role: "MEMBER" };
+db.settings = {};
+db.assignments = [{ siteId: "shopA", roleCode: "CASHIER", isActive: false, permissionsJson: null }];
+assert.equal(await retailFinanceReadSiteScope("tenant", "legacy", "COLLECT_PAYMENT"), null);
+const financeInvoicesRoute = fs.readFileSync("app/api/enterprise/[organizationId]/sales-invoices/route.ts", "utf8");
+assert.match(financeInvoicesRoute, /retailFinanceReadSiteScope\(organizationId, auth\.session\.userId, "VIEW_SALES"\)/);
+assert.match(financeInvoicesRoute, /retailCheckout: \{ is: \{ siteId: \{ in: retailScope \} \} \}/);
+assert.match(financeInvoicesRoute, /canCreateCredit: capabilities\.canCreate && !retailCheckout/);
+const financePaymentsRoute = fs.readFileSync("app/api/enterprise/[organizationId]/payments/route.ts", "utf8");
+assert.match(financePaymentsRoute, /retailFinanceReadSiteScope\(organizationId, auth\.session\.userId, "COLLECT_PAYMENT"\)/);
+assert.match(financePaymentsRoute, /financialAccountId: \{ in: accountIds \|\| \[\] \}/);
+assert.match(financePaymentsRoute, /retailInvoiceProposals: \{ some: \{ checkout: \{ siteId: \{ in: retailScope \} \} \} \}/);
+assert.equal((financePaymentsRoute.match(/AND: \[sitePaymentScope\]/g) || []).length, 4, "Both list and all 3 Finance metrics must be scoped");
 console.log("HOTFIX #1042 boutique staff: tenant-scoped assignments, owner-only CRUD, RBAC defaults/overrides, site-scoped stock transfers and expiry alert contracts passed; strict activation deferred.");
