@@ -79,7 +79,7 @@ export async function confirmReconciliationMatch(organizationId: string, session
     });
     if (!session) throw new EnterpriseAccountingError("RECONCILIATION_SESSION_NOT_OPEN", 409);
     const matchedAmount = new Prisma.Decimal(input.matchedAmount);
-    if (!matchedAmount.isPositive()) throw new EnterpriseAccountingError("RECONCILIATION_AMOUNT_INVALID", 400);
+    if (!matchedAmount.greaterThan(0)) throw new EnterpriseAccountingError("RECONCILIATION_AMOUNT_INVALID", 400);
 
     if (input.bankStatementLineId) {
       await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterpriseBankStatementLine" WHERE id = ${input.bankStatementLineId} AND "organizationId" = ${organizationId} FOR UPDATE`);

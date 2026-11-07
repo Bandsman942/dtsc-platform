@@ -180,7 +180,7 @@ export async function createFundingOperation(
     if (!approverMembership) throw new EnterpriseAccountingError("FUNDING_APPROVER_NOT_ELIGIBLE", 403);
 
     const amount = money(new Prisma.Decimal(input.amount));
-    if (!amount.isPositive()) throw new EnterpriseAccountingError("FINANCE_AMOUNT_MUST_BE_POSITIVE", 400);
+    if (!amount.greaterThan(0)) throw new EnterpriseAccountingError("FINANCE_AMOUNT_MUST_BE_POSITIVE", 400);
     await validateFundingCounterpart(tx, organizationId, input.fundingType, input.counterpartyLedgerAccountId);
 
     const cashSession = financialAccount.accountType === "CASH"

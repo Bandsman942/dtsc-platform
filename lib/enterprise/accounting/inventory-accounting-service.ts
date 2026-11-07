@@ -30,7 +30,7 @@ export async function valueInventoryReceipt(
     }
 
     const unitCost = new Prisma.Decimal(input.unitCost);
-    if (!unitCost.isPositive()) throw new EnterpriseAccountingError("INVENTORY_UNIT_COST_INVALID", 400);
+    if (!unitCost.greaterThan(0)) throw new EnterpriseAccountingError("INVENTORY_UNIT_COST_INVALID", 400);
     const totalCost = money(movement.quantity.times(unitCost));
     const stableKey = idempotencyKey({
       organizationId,
@@ -154,7 +154,7 @@ export async function valueInventoryIssueTx(
         requested: issueQuantity.toFixed(),
       });
     }
-    if (!availableQuantity.isPositive()) throw new EnterpriseAccountingError("INVENTORY_COST_LAYER_REQUIRED", 409);
+    if (!availableQuantity.greaterThan(0)) throw new EnterpriseAccountingError("INVENTORY_COST_LAYER_REQUIRED", 409);
 
     const availableValue = sumDecimals(layers.map((layer) => layer.remainingQuantity.times(layer.unitCost)));
     const weightedUnitCost = money(availableValue.dividedBy(availableQuantity));
@@ -261,6 +261,6 @@ export async function getInventoryValuation(organizationId: string, input?: { wa
     ...row,
     quantity: row.quantity.toDecimalPlaces(3, Prisma.Decimal.ROUND_HALF_UP),
     value: money(row.value),
-    weightedAverageUnitCost: row.quantity.isPositive() ? money(row.value.dividedBy(row.quantity)) : new Prisma.Decimal(0),
+    weightedAverageUnitCost: row.quantity.greaterThan(0) ? money(row.value.dividedBy(row.quantity)) : new Prisma.Decimal(0),
   }));
 }

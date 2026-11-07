@@ -273,7 +273,7 @@ export async function postPaidRetailInvoiceStockTx(
       unscopedReserved = unscopedReserved.minus(unscopedTakenHere);
       const free = physicallyFree.minus(unscopedTakenHere);
       const take = Prisma.Decimal.min(stillNeeded, free);
-      if (!take.isPositive()) continue;
+      if (!take.greaterThan(0)) continue;
       await applyStockMovementTx(tx, organizationId, actorUserId, {
         inventoryItemId: line.inventoryItemId,
         warehouseId: checkout.warehouseId,

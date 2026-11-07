@@ -119,7 +119,7 @@ export async function applyStockMovementTx(
     });
     const held = holds.filter((row) => row.stockLotId === (input.stockLotId || null))
       .reduce((sum, row) => sum.plus(row.quantity), new Prisma.Decimal(0));
-    if (held.isPositive()) {
+    if (held.greaterThan(0)) {
       const balances = await tx.enterpriseInventoryBalance.findMany({
         where: {
           organizationId, inventoryItemId: input.inventoryItemId, warehouseId: input.warehouseId,

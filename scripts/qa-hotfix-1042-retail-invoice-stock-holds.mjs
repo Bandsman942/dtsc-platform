@@ -17,7 +17,8 @@ class Decimal {
   plus(value) { return new Decimal(this.value + new Decimal(value).value); }
   minus(value) { return new Decimal(this.value - new Decimal(value).value); }
   lessThan(value) { return this.value < new Decimal(value).value; }
-  isPositive() { return this.value > 0; }
+  greaterThan(value) { return this.value > new Decimal(value).value; }
+  isPositive() { return this.value >= 0; } // Decimal.js treats zero as non-negative.
 }
 
 const module = { exports: {} };

@@ -99,7 +99,7 @@ export async function assertRetailSaleAccountingPreflight(
           .filter((layer) => layer.currencyCode === valuationCurrency)
           .map((layer) => layer.remainingQuantity),
       );
-      if (!available.isPositive()) {
+      if (!available.greaterThan(0)) {
         throw new EnterpriseAccountingError("INVENTORY_COST_LAYER_REQUIRED", 409, { inventoryItemId });
       }
       if (requestedQuantity.greaterThan(available)) {

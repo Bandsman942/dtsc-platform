@@ -280,7 +280,7 @@ export async function reverseCustomerPaymentAllocationsForRefundAmount(
   preferredPaymentId?: string | null,
 ) {
   const amount = money(requestedAmount);
-  if (!amount.isPositive()) throw new EnterpriseAccountingError("REFUND_AMOUNT_INVALID", 400);
+  if (!amount.greaterThan(0)) throw new EnterpriseAccountingError("REFUND_AMOUNT_INVALID", 400);
 
   return prisma.$transaction(async (tx) => {
     await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterprisePayment" WHERE id = ${refundPaymentId} AND "organizationId" = ${organizationId} FOR UPDATE`);
@@ -512,7 +512,7 @@ async function consumeCustomerPaymentRefundAvailabilityTx(
     const amountValue = typeof value.amount === "string" || typeof value.amount === "number" ? value.amount : null;
     if (!paymentId || amountValue === null) throw new EnterpriseAccountingError("REFUND_SOURCE_RESERVATION_INVALID", 409);
     const amount = money(amountValue);
-    if (!amount.isPositive()) throw new EnterpriseAccountingError("REFUND_SOURCE_RESERVATION_INVALID", 409);
+    if (!amount.greaterThan(0)) throw new EnterpriseAccountingError("REFUND_SOURCE_RESERVATION_INVALID", 409);
     return { paymentId, amount };
   });
 
@@ -587,7 +587,7 @@ export async function prepareSalesCreditNoteForRefundAmount(
   requestedAmount: Prisma.Decimal.Value,
 ) {
   const amount = money(requestedAmount);
-  if (!amount.isPositive()) throw new EnterpriseAccountingError("REFUND_AMOUNT_INVALID", 400);
+  if (!amount.greaterThan(0)) throw new EnterpriseAccountingError("REFUND_AMOUNT_INVALID", 400);
   return prisma.$transaction(async (tx) => {
     await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterpriseSalesInvoice" WHERE id = ${invoiceId} AND "organizationId" = ${organizationId} FOR UPDATE`);
     const invoice = await tx.enterpriseSalesInvoice.findFirst({

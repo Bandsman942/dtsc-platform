@@ -22,7 +22,7 @@ export async function createSupplierCreditNote(organizationId: string, actorUser
     const subtotal = money(sumDecimals(calculated.map((row) => row.netAmount)));
     const taxTotal = money(sumDecimals(calculated.map((row) => row.taxAmount)));
     const grandTotal = money(subtotal.plus(taxTotal));
-    if (!grandTotal.isPositive() || grandTotal.greaterThan(invoice.payable.outstandingAmount)) throw new EnterpriseAccountingError("SUPPLIER_CREDIT_EXCEEDS_OPEN_PAYABLE", 409);
+    if (!grandTotal.greaterThan(0) || grandTotal.greaterThan(invoice.payable.outstandingAmount)) throw new EnterpriseAccountingError("SUPPLIER_CREDIT_EXCEEDS_OPEN_PAYABLE", 409);
     const credit = await tx.enterpriseSupplierCreditNote.create({ data: { organizationId, number: financeReference("SCN"), supplierInvoiceId: invoice.id, reason: input.reason, creditDate: input.creditDate, currencyCode: invoice.currencyCode, subtotal, taxTotal, grandTotal, createdByUserId: actorUserId } });
     await tx.enterpriseSupplierCreditNoteItem.createMany({ data: calculated.map((row) => ({ organizationId, supplierCreditNoteId: credit.id, catalogItemId: row.item.catalogItemId || null, description: row.item.description, quantity: row.quantity, unitPrice: row.unitPrice, netAmount: row.netAmount, taxAmount: row.taxAmount, totalAmount: row.totalAmount })) });
     await publishFinanceEvent(tx, { organizationId, entityType: "EnterpriseSupplierCreditNote", entityId: credit.id, eventType: "SUPPLIER_CREDIT_NOTE_CREATED", summary: `Supplier credit note ${credit.number} created`, actorUserId, toStatus: "DRAFT", metadataJson: { total: credit.grandTotal.toFixed(), currency: credit.currencyCode } });

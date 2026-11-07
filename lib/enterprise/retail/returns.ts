@@ -89,7 +89,7 @@ async function applyRefundAccountEffectTx(
     idempotencyKey: string;
   },
 ) {
-  if (!input.amount.isPositive()) throw new EnterpriseRetailError("RETAIL_REFUND_AMOUNT_INVALID", 409);
+  if (!input.amount.greaterThan(0)) throw new EnterpriseRetailError("RETAIL_REFUND_AMOUNT_INVALID", 409);
   if (input.account.operationalBalance.lessThan(input.amount)) {
     throw new EnterpriseRetailError("RETAIL_INSUFFICIENT_BALANCE", 409, {
       financialAccountId: input.account.id,
@@ -220,7 +220,7 @@ async function prepareReturnLinesTx(
     const quantity = decimal(requested.quantity);
     const reserved = reservedByLine.get(source.id) || decimal(0);
     const remaining = source.quantity.minus(reserved);
-    if (!quantity.isPositive() || quantity.greaterThan(remaining)) {
+    if (!quantity.greaterThan(0) || quantity.greaterThan(remaining)) {
       throw new EnterpriseRetailError("RETAIL_RETURN_QUANTITY_EXCEEDED", 409, { saleLineId: source.id, requested: quantity.toFixed(), remaining: remaining.toFixed() });
     }
     if (!source.trackInventory && requested.stockDisposition === "RESTOCK") {
@@ -272,7 +272,7 @@ export async function createRetailReturnRequest(
     const discountTotal = money(prepared.reduce((sum, line) => sum.plus(line.discountAmount), decimal(0)));
     const taxTotal = money(prepared.reduce((sum, line) => sum.plus(line.taxAmount), decimal(0)));
     const grandTotal = money(prepared.reduce((sum, line) => sum.plus(line.lineTotal), decimal(0)));
-    if (!grandTotal.isPositive()) throw new EnterpriseRetailError("RETAIL_REFUND_AMOUNT_INVALID", 409);
+    if (!grandTotal.greaterThan(0)) throw new EnterpriseRetailError("RETAIL_REFUND_AMOUNT_INVALID", 409);
 
     const createdReturn = await tx.enterpriseRetailReturn.create({
       data: {
@@ -416,7 +416,7 @@ export async function decideRetailReturn(
           ? money(retailReturn.grandTotal.minus(allocated))
           : money(retailReturn.grandTotal.times(tender.amount).div(tenderTotal));
         allocated = allocated.plus(amount);
-        if (!amount.isPositive()) continue;
+        if (!amount.greaterThan(0)) continue;
         if (tender.methodType === "STORE_CREDIT") {
           refunds.push(await refundOriginalStoreCreditTenderTx({
             tx, organizationId, actorUserId, returnId: retailReturn.id, returnNumber: retailReturn.number,

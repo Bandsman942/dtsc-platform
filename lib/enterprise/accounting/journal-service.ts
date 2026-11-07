@@ -18,7 +18,7 @@ function validateBalancedLines(lines: Array<{ debit: Prisma.Decimal.Value; credi
   if (debit.minus(credit).abs().greaterThan(tolerance)) {
     throw new EnterpriseAccountingError("JOURNAL_ENTRY_UNBALANCED", 409, { debit: debit.toFixed(), credit: credit.toFixed() });
   }
-  if (!debit.isPositive()) throw new EnterpriseAccountingError("JOURNAL_ENTRY_EMPTY", 400);
+  if (!debit.greaterThan(0)) throw new EnterpriseAccountingError("JOURNAL_ENTRY_EMPTY", 400);
   return { debit: money(debit), credit: money(credit) };
 }
 
@@ -66,7 +66,7 @@ export async function createJournalEntryDraft(
     const preparedLines = input.lines.map((line) => {
       const debit = money(line.debit);
       const credit = money(line.credit);
-      const amount = debit.isPositive() ? debit : credit;
+      const amount = debit.greaterThan(0) ? debit : credit;
       const lineCurrency = line.transactionCurrencyCode || transactionCurrency;
       if (lineCurrency !== transactionCurrency) throw new EnterpriseAccountingError("JOURNAL_MULTIPLE_TRANSACTION_CURRENCIES", 409);
       const exchangeRate = line.exchangeRate ? new Prisma.Decimal(line.exchangeRate) : conversion.exchangeRate;

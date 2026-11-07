@@ -1,3 +1,9 @@
+## 2026-11-07 — Retail #1042, tranche 30 — Montants strictement positifs Finance/Retail (candidat, PR #1043)
+
+- Les contrôles `Prisma.Decimal.isPositive()` acceptaient le zéro : correction dans Finance commun (paiements, affectations, factures, remboursements, écritures d'ouverture, valorisation, trésorerie) et Retail/Inventaire (sorties, réservations, retours, store credit, fidélité).
+- Les écritures d'ouverture valides à un seul côté positif sont préservées ; les paiements, journaux, stocks et remboursements zéro sont refusés. Nouvelle QA de contrat et vérification comportementale du zéro branchée à la CI.
+- Aucun état de règlement Retail activé : le moteur complet d'avoir/remboursement/stock et les E2E métier restent à livrer.
+
 ## 2026-11-07 — Retail #1042, tranche 29 — Vérification des prérequis de liquidation (candidat, PR #1043)
 
 - Service interne en lecture vérifiant les preuves indépendantes d'inspection et validation, les montants exacts, la disponibilité des paiements Finance confirmés et l'origine des sorties de stock article/lot/dépôt ; quantités déjà retournées déduites.

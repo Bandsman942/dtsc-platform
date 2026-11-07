@@ -217,7 +217,7 @@ export async function requestRetailOmnichannelReturn(
       return { ...line, quantity, refundAmount };
     });
     const amount = lines.reduce((sum, line) => sum.plus(line.refundAmount), d(0));
-    if (!amount.isPositive() || amount.gt(invoice.grandTotal)) throw conflict("RETAIL_OMNICHANNEL_RETURN_AMOUNT_INVALID");
+    if (!amount.greaterThan(0) || amount.gt(invoice.grandTotal)) throw conflict("RETAIL_OMNICHANNEL_RETURN_AMOUNT_INVALID");
     const sourcePayment = assertEligiblePaymentSource(invoice, amount);
 
     const created = await tx.enterpriseRetailOmnichannelReturn.create({

@@ -29,7 +29,7 @@ async function calculateItems(
     const quantityDecimal = new Prisma.Decimal(item.quantity);
     const unitPriceDecimal = new Prisma.Decimal(item.unitPrice);
     const discountDecimal = new Prisma.Decimal(item.discountAmount);
-    if (!quantityDecimal.isPositive() || unitPriceDecimal.isNegative() || discountDecimal.isNegative()) {
+    if (!quantityDecimal.greaterThan(0) || unitPriceDecimal.isNegative() || discountDecimal.isNegative()) {
       throw new EnterpriseAccountingError("SALES_INVOICE_LINE_INVALID", 400);
     }
     if (item.catalogItemId) {
@@ -82,7 +82,7 @@ export async function createSalesInvoiceTx(tx: Prisma.TransactionClient, organiz
     const discountTotal = money(sumDecimals(calculated.map((item) => item.discountDecimal)));
     const taxTotal = money(sumDecimals(calculated.map((item) => item.taxAmount)));
     const grandTotal = money(sumDecimals(calculated.map((item) => item.totalAmount)));
-    if (!grandTotal.isPositive()) throw new EnterpriseAccountingError("SALES_INVOICE_TOTAL_INVALID", 400);
+    if (!grandTotal.greaterThan(0)) throw new EnterpriseAccountingError("SALES_INVOICE_TOTAL_INVALID", 400);
     const invoice = await tx.enterpriseSalesInvoice.create({
       data: {
         organizationId,

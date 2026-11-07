@@ -203,7 +203,7 @@ export async function valueRetailInventoryReturnTx(
     },
   });
   if (!originalIssue) throw new EnterpriseAccountingError("RETAIL_ORIGINAL_ISSUE_VALUATION_REQUIRED", 409);
-  if (!movement.quantity.isPositive() || movement.quantity.greaterThan(originalIssue.quantity)) {
+  if (!movement.quantity.greaterThan(0) || movement.quantity.greaterThan(originalIssue.quantity)) {
     throw new EnterpriseAccountingError("RETAIL_INVENTORY_RETURN_QUANTITY_INVALID", 409, {
       returnQuantity: movement.quantity.toFixed(),
       issuedQuantity: originalIssue.quantity.toFixed(),

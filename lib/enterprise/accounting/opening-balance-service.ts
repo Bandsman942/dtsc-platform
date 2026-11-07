@@ -50,8 +50,8 @@ export async function createOpeningBalanceImport(
       if (
         debit.isNegative()
         || credit.isNegative()
-        || (debit.isPositive() && credit.isPositive())
-        || (!debit.isPositive() && !credit.isPositive())
+        || (debit.greaterThan(0) && credit.greaterThan(0))
+        || (!debit.greaterThan(0) && !credit.greaterThan(0))
       ) {
         throw new EnterpriseAccountingError("OPENING_LINE_INVALID", 400);
       }

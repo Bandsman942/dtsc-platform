@@ -203,7 +203,7 @@ export async function resolveCashSessionForConfirmation(
 export async function createEnterprisePaymentTx(tx: Prisma.TransactionClient, organizationId: string, actorUserId: string, input: PaymentInput) {
     await assertActiveClientOrganization(tx, organizationId);
     const amount = new Prisma.Decimal(input.amount);
-    if (!amount.isPositive()) throw new EnterpriseAccountingError("PAYMENT_AMOUNT_INVALID", 400);
+    if (!amount.greaterThan(0)) throw new EnterpriseAccountingError("PAYMENT_AMOUNT_INVALID", 400);
     if (["CASH", "BANK_TRANSFER", "MOBILE_MONEY", "CARD", "CHEQUE"].includes(input.methodType) && !input.financialAccountId) throw new EnterpriseAccountingError("PAYMENT_FINANCIAL_ACCOUNT_REQUIRED", 409);
     let cashSessionId: string | null = null;
     if (input.financialAccountId) {
@@ -492,7 +492,7 @@ export async function allocateEnterprisePayment(
     }
     reservedForRefund = money(Prisma.Decimal.max(0, reservedForRefund));
     const allocatableAmount = money(Prisma.Decimal.max(0, payment.unallocatedAmount.minus(reservedForRefund)));
-    if (!amount.isPositive() || amount.greaterThan(allocatableAmount)) {
+    if (!amount.greaterThan(0) || amount.greaterThan(allocatableAmount)) {
       throw new EnterpriseAccountingError("PAYMENT_ALLOCATION_EXCEEDS_UNALLOCATED", 409, {
         requestedAmount: amount.toFixed(),
         unallocatedAmount: payment.unallocatedAmount.toFixed(),
