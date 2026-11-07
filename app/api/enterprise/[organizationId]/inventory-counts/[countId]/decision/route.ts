@@ -2,11 +2,15 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { getEnterpriseCommonDomainAccess } from "@/lib/enterprise/common/access";
+import { retailErrorResponse } from "@/lib/enterprise/retail/http";
+import { requireRetailWarehouseCapability } from "@/lib/enterprise/retail/site-access";
+import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
 import { enterpriseDomainErrorResponse } from "@/lib/enterprise/common/http";
 import { inventoryCountDecisionSchema } from "@/lib/enterprise/inventory/schemas";
 import { decideEnterpriseInventoryCount } from "@/lib/enterprise/inventory/service";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
+import { prisma } from "@/lib/prisma";
 
 type Params = { params: Promise<{ organizationId: string; countId: string }> };
 
@@ -23,11 +27,16 @@ export async function POST(req: Request, { params }: Params) {
   const parsed = inventoryCountDecisionSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "ENTERPRISE_INPUT_INVALID", message: parsed.error.issues[0]?.message || "Décision invalide." }, { status: 400 });
   try {
+    const target = await prisma.enterpriseInventoryCount.findFirst({
+      where: { organizationId, id: countId }, select: { warehouseId: true },
+    });
+    await requireRetailWarehouseCapability(organizationId, session.userId, target?.warehouseId, "MANAGE_STOCK");
     const count = await decideEnterpriseInventoryCount(organizationId, countId, session.userId, parsed.data);
     await writeAuditLog({ userId: session.userId, action: `ENTERPRISE_INVENTORY_COUNT_${parsed.data.decision}`, entity: "EnterpriseInventoryCount", entityId: count.id, request: req, metadata: { organizationId } });
     await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "inventory-counts", action: parsed.data.decision } });
     return NextResponse.json({ ok: true, count });
   } catch (error) {
+    if (error instanceof EnterpriseRetailError) return retailErrorResponse(error, "RETAIL_SITE_ACCESS_DENIED");
     return enterpriseDomainErrorResponse(error, "INVENTORY_COUNT_DECISION_FAILED");
   }
 }

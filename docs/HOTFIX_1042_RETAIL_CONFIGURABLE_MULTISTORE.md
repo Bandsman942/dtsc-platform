@@ -1,8 +1,10 @@
 # RETAIL-1042 — cahier des charges boutiques, paramétrage et Design 2.0
 
-Statut du 7 novembre 2026 : **38 tranches publiées sur la PR brouillon #1043, tranche 38 (`500fcd9`) dédiée à la concurrence de réservation du dernier article, tranche 39 candidate pour la fermeture des anciennes routes ERP multi-sites. Les contrôles GitHub du dernier SHA doivent être consultés avant de déclarer la tranche validée. Aucune fusion ni déploiement, OWNER_E2E non exécuté, flags sensibles OFF en production.**
+Statut du 7 novembre 2026 : **39 tranches publiées sur la PR brouillon #1043, tranche 39 (`4e1ea56a`) dédiée à la fermeture des anciennes routes ERP multi-sites ; tranche 40 candidate pour les écritures et décisions d'inventaire/ajustement. Les contrôles GitHub du dernier SHA doivent être consultés avant de déclarer une tranche validée. Aucune fusion ni déploiement, OWNER_E2E non exécuté, flags sensibles OFF en production.**
 
 La [matrice exhaustive de réception](RETAIL_1042_CAHIER_ACCEPTANCE_MATRIX.md) suit les 17 chapitres, RG01–RG20, les huit décisions et les deux niveaux de E2E du cahier client original ; aucune ligne non certifiée ne doit être masquée par un total de workflows verts.
+
+**Tranche 40 candidate — comptes et ajustements de stock :** les routes de création et de décision `inventory-counts` et `stock-adjustments` résolvent le dépôt côté serveur avant d'autoriser `MANAGE_STOCK` de la boutique. L'absence de dépôt ou une affectation révoquée refuse toute opération pour un collaborateur isolé, et la CI multi-boutiques teste un manager B volontairement muni d'autorisations ERP générales. Cette tranche ne remplace pas les circuits de caisse et d'analyse financière qui restent ouverts.
 
 Le [protocole OWNER_E2E](RETAIL_1042_OWNER_E2E_SCRIPT.md) détaille les prérequis de recette, dix-neuf contre-épreuves et les douze critères à signer ; **aucune case BON n'a été attestée**.
 

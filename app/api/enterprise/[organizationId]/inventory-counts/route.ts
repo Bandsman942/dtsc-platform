@@ -5,6 +5,8 @@ import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { getEnterpriseCommonDomainAccess } from "@/lib/enterprise/common/access";
 import { retailErrorResponse } from "@/lib/enterprise/retail/http";
 import { retailInventoryVisibleSites } from "@/lib/enterprise/retail/site-access";
+import { requireRetailWarehouseCapability } from "@/lib/enterprise/retail/site-access";
+import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
 import { enterpriseDomainErrorResponse } from "@/lib/enterprise/common/http";
 import { inventoryCountCreateSchema } from "@/lib/enterprise/inventory/schemas";
 import { createEnterpriseInventoryCount } from "@/lib/enterprise/inventory/service";
@@ -67,11 +69,13 @@ export async function POST(req: Request, { params }: Params) {
   const parsed = inventoryCountCreateSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "ENTERPRISE_INPUT_INVALID", message: parsed.error.issues[0]?.message || "Inventaire invalide." }, { status: 400 });
   try {
+    await requireRetailWarehouseCapability(organizationId, session.userId, parsed.data.warehouseId, "MANAGE_STOCK");
     const count = await createEnterpriseInventoryCount(organizationId, session.userId, parsed.data);
     await writeAuditLog({ userId: session.userId, action: "ENTERPRISE_INVENTORY_COUNT_SUBMITTED", entity: "EnterpriseInventoryCount", entityId: count.id, request: req, metadata: { organizationId, approverUserId: parsed.data.approverUserId } });
     await writeApiLog({ request: req, statusCode: 201, userId: session.userId, startedAt, metadata: { organizationId, domain: "inventory-counts" } });
     return NextResponse.json({ ok: true, count }, { status: 201 });
   } catch (error) {
+    if (error instanceof EnterpriseRetailError) return retailErrorResponse(error, "RETAIL_SITE_ACCESS_DENIED");
     return enterpriseDomainErrorResponse(error, "INVENTORY_COUNT_CREATE_FAILED");
   }
 }

@@ -3,11 +3,15 @@ import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http"
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { getEnterpriseCommonDomainAccess } from "@/lib/enterprise/common/access";
+import { retailErrorResponse } from "@/lib/enterprise/retail/http";
+import { requireRetailWarehouseCapability } from "@/lib/enterprise/retail/site-access";
+import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
 import { enterpriseDomainErrorResponse } from "@/lib/enterprise/common/http";
 import { decideEnterpriseStockAdjustment } from "@/lib/enterprise/inventory/adjustment-service";
 import { stockAdjustmentDecisionSchema } from "@/lib/enterprise/inventory/schemas";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
+import { prisma } from "@/lib/prisma";
 
 type Params = { params: Promise<{ organizationId: string; adjustmentId: string }> };
 
@@ -24,11 +28,16 @@ export async function POST(req: Request, { params }: Params) {
   const parsed = stockAdjustmentDecisionSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "STOCK_ADJUSTMENTS_DECISION_INPUT_INVALID", req);
   try {
+    const target = await prisma.enterpriseStockAdjustment.findFirst({
+      where: { organizationId, id: adjustmentId }, select: { warehouseId: true },
+    });
+    await requireRetailWarehouseCapability(organizationId, session.userId, target?.warehouseId, "MANAGE_STOCK");
     const adjustment = await decideEnterpriseStockAdjustment(organizationId, adjustmentId, session.userId, parsed.data);
     await writeAuditLog({ userId: session.userId, action: `ENTERPRISE_STOCK_ADJUSTMENT_${parsed.data.decision}`, entity: "EnterpriseStockAdjustment", entityId: adjustment.id, request: req, metadata: { organizationId } });
     await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "stock-adjustments", action: parsed.data.decision } });
     return NextResponse.json({ ok: true, adjustment });
   } catch (error) {
+    if (error instanceof EnterpriseRetailError) return retailErrorResponse(error, "RETAIL_SITE_ACCESS_DENIED");
     return enterpriseDomainErrorResponse(error, "STOCK_ADJUSTMENT_DECISION_FAILED");
   }
 }

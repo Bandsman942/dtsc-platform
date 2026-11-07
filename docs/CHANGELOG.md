@@ -1,6 +1,7 @@
-## 2026-11-07 — Retail #1042, tranche 38 — Concurrence du dernier article (candidat, PR #1043)
+## 2026-11-07 — Retail #1042, tranche 40 — Inventaires et ajustements cloisonnés par dépôt (candidat, PR #1043)
 
-- Recette navigateur PostgreSQL à deux requêtes concurrentes de préparation de facture sur **l'unique unité disponible** d'un SKU dédié : une réservation acceptée, une refusée, zéro sortie physique avant règlement, annulation du brouillon libérant la promesse puis même demande précédemment rejetée acceptée. Le test est limité au tenant synthétique CI et restaure ses options ; aucune preuve de paiement final ni E2E propriétaire n'est déduite avant une CI verte.
+- Fermeture des API ERP historiques de création d'inventaire et d'ajustement, ainsi que des décisions de validation/rejet, par contrôle du `warehouseId` et de la capacité `MANAGE_STOCK` du collaborateur sur la boutique propriétaire ; l'appartenance ERP générale reste requise. Absence de dépôt, affectation révoquée ou boutique étrangère refusées sous flag actif.
+- Contre-épreuve PostgreSQL ajoutée pour un manager B doté de permissions ERP générales, tentant de créer ou d'approuver des inventaires/ajustements de A. Les deux drapeaux Retail restent OFF en production ; aucune signature `OWNER_E2E` sans rapports certifiés, caisse, restauration et matériel réel.
 
 ## 2026-11-07 — Retail #1042, tranche 39 — Frontières des anciennes API ERP (candidat, PR #1043)
 
@@ -8,6 +9,10 @@
 - Transferts inter-boutiques : la demande exige une gestion autorisée du site source, la décision le droit explicite `AUTHORIZE_TRANSFER` du site source, et la réception le droit `MANAGE_STOCK` du site destinataire. Les droits et validations ERP communs restent nécessaires.
 - Contre-épreuve Playwright PostgreSQL étendue à un manager B possédant volontairement les permissions ERP Sites/Inventaire, avec refus des écritures sur A et vérification de la liste et des compteurs filtrés ; contrats statiques branchés aux Quality Gates.
 - **Pré-release uniquement** : garder les deux flags OFF en Production, ne pas fusionner tant que la CI de cette tranche et l'OWNER_E2E complet ne sont pas validés. Rapports de résultat net, exports, matériel réel et restauration restent à certifier.
+
+## 2026-11-07 — Retail #1042, tranche 38 — Concurrence du dernier article (candidat, PR #1043)
+
+- Recette navigateur PostgreSQL à deux requêtes concurrentes de préparation de facture sur **l'unique unité disponible** d'un SKU dédié : une réservation acceptée, une refusée, zéro sortie physique avant règlement, annulation du brouillon libérant la promesse puis même demande précédemment rejetée acceptée. Le test est limité au tenant synthétique CI et restaure ses options ; aucune preuve de paiement final ni E2E propriétaire n'est déduite avant une CI verte.
 
 ## 2026-11-07 — Retail #1042, tranche 37 — Contre-épreuves inter-boutiques et CI anti-bruteforce (candidat, PR #1043)
 

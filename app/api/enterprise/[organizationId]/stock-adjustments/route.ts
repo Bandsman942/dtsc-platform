@@ -6,6 +6,8 @@ import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { getEnterpriseCommonDomainAccess } from "@/lib/enterprise/common/access";
 import { retailErrorResponse } from "@/lib/enterprise/retail/http";
 import { retailInventoryVisibleSites } from "@/lib/enterprise/retail/site-access";
+import { requireRetailWarehouseCapability } from "@/lib/enterprise/retail/site-access";
+import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
 import { enterpriseDomainErrorResponse } from "@/lib/enterprise/common/http";
 import { createEnterpriseStockAdjustment } from "@/lib/enterprise/inventory/adjustment-service";
 import { stockAdjustmentCreateSchema } from "@/lib/enterprise/inventory/schemas";
@@ -76,11 +78,13 @@ export async function POST(req: Request, { params }: Params) {
   const parsed = stockAdjustmentCreateSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "STOCK_ADJUSTMENTS_INPUT_INVALID", req);
   try {
+    await requireRetailWarehouseCapability(organizationId, session.userId, parsed.data.warehouseId, "MANAGE_STOCK");
     const adjustment = await createEnterpriseStockAdjustment(organizationId, session.userId, parsed.data);
     await writeAuditLog({ userId: session.userId, action: "ENTERPRISE_STOCK_ADJUSTMENT_SUBMITTED", entity: "EnterpriseStockAdjustment", entityId: adjustment.id, request: req, metadata: { organizationId, approverUserId: parsed.data.approverUserId } });
     await writeApiLog({ request: req, statusCode: 201, userId: session.userId, startedAt, metadata: { organizationId, domain: "stock-adjustments" } });
     return NextResponse.json({ ok: true, adjustment }, { status: 201 });
   } catch (error) {
+    if (error instanceof EnterpriseRetailError) return retailErrorResponse(error, "RETAIL_SITE_ACCESS_DENIED");
     return enterpriseDomainErrorResponse(error, "STOCK_ADJUSTMENT_CREATE_FAILED");
   }
 }

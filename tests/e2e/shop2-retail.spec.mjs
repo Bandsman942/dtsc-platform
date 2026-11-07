@@ -609,10 +609,10 @@ test.describe.serial("Shop 2.0 Retail behavioral acceptance", () => {
       });
       const position = await prisma.enterprisePosition.upsert({
         where: { organizationId_positionCode: { organizationId, positionCode: "SHOP2-E2E-INVOICER" } },
-        update: { permissionsJson: ["enterprise.retail.pos.view", "enterprise.retail.pos.create", "enterprise.sites.view", "enterprise.sites.create", "enterprise.sites.update", "enterprise.inventory.view", "enterprise.inventory.create", "enterprise.inventory.update"], isActive: true },
+        update: { permissionsJson: ["enterprise.retail.pos.view", "enterprise.retail.pos.create", "enterprise.sites.view", "enterprise.sites.create", "enterprise.sites.update", "enterprise.inventory.view", "enterprise.inventory.create", "enterprise.inventory.update", "enterprise.inventory.manage"], isActive: true },
         create: { organizationId, positionCode: "SHOP2-E2E-INVOICER",
           labelFr: "Facturier de recette B", labelEn: "B test invoicer",
-          permissionsJson: ["enterprise.retail.pos.view", "enterprise.retail.pos.create", "enterprise.sites.view", "enterprise.sites.create", "enterprise.sites.update", "enterprise.inventory.view", "enterprise.inventory.create", "enterprise.inventory.update"], isActive: true },
+          permissionsJson: ["enterprise.retail.pos.view", "enterprise.retail.pos.create", "enterprise.sites.view", "enterprise.sites.create", "enterprise.sites.update", "enterprise.inventory.view", "enterprise.inventory.create", "enterprise.inventory.update", "enterprise.inventory.manage"], isActive: true },
       });
       await prisma.organizationMember.upsert({
         where: { organizationId_userId: { organizationId, userId: staff.id } },
@@ -745,6 +745,44 @@ test.describe.serial("Shop 2.0 Retail behavioral acceptance", () => {
         approverUserId: fixture.userId, lines: [{ inventoryItemId: inventory.id, quantity: 1 }],
       });
       expect(forbiddenTransfer.response.status(), JSON.stringify(forbiddenTransfer.body)).toBe(403);
+
+      const forbiddenAdjustment = await apiPost(page, `/api/enterprise/${organizationId}/stock-adjustments`, {
+        inventoryItemId: inventory.id, warehouseId: fixture.warehouseId,
+        adjustmentType: "OUT", quantity: 1, reason: "Forbidden cross-store correction",
+        approverUserId: fixture.userId,
+      });
+      expect(forbiddenAdjustment.response.status(), JSON.stringify(forbiddenAdjustment.body)).toBe(403);
+      const forbiddenCount = await apiPost(page, `/api/enterprise/${organizationId}/inventory-counts`, {
+        warehouseId: fixture.warehouseId, countType: "SPOT", approverUserId: fixture.userId,
+        lines: [{ inventoryItemId: inventory.id, countedQuantity: 1 }],
+      });
+      expect(forbiddenCount.response.status(), JSON.stringify(forbiddenCount.body)).toBe(403);
+
+      // Decision endpoints are independently checked: an authorized ERP
+      // manager B must not approve corrections or counts belonging to A.
+      const crossStoreAdjustment = await prisma.enterpriseStockAdjustment.create({ data: {
+        organizationId, reference: `SHOP2-E2E-ADJUST-${Date.now()}`,
+        inventoryItemId: inventory.id, warehouseId: fixture.warehouseId,
+        adjustmentType: "OUT", quantity: new Prisma.Decimal(1), reason: "Cross-store decision guard",
+        status: "PENDING_APPROVAL", requestedByUserId: fixture.userId,
+      } });
+      const crossStoreCount = await prisma.enterpriseInventoryCount.create({ data: {
+        organizationId, reference: `SHOP2-E2E-COUNT-${Date.now()}`,
+        warehouseId: fixture.warehouseId, status: "SUBMITTED", requestedByUserId: fixture.userId,
+      } });
+      try {
+        const deniedAdjustmentDecision = await apiPost(page,
+          `/api/enterprise/${organizationId}/stock-adjustments/${crossStoreAdjustment.id}/decision`,
+          { decision: "APPROVE", revision: crossStoreAdjustment.revision });
+        expect(deniedAdjustmentDecision.response.status(), JSON.stringify(deniedAdjustmentDecision.body)).toBe(403);
+        const deniedCountDecision = await apiPost(page,
+          `/api/enterprise/${organizationId}/inventory-counts/${crossStoreCount.id}/decision`,
+          { decision: "APPROVE", revision: crossStoreCount.revision });
+        expect(deniedCountDecision.response.status(), JSON.stringify(deniedCountDecision.body)).toBe(403);
+      } finally {
+        await prisma.enterpriseStockAdjustment.delete({ where: { id: crossStoreAdjustment.id } });
+        await prisma.enterpriseInventoryCount.delete({ where: { id: crossStoreCount.id } });
+      }
 
       const ownerSiteList = await apiGet(ownerPage, `/api/enterprise/${organizationId}/sites`);
       expect(ownerSiteList.response.status()).toBe(200);

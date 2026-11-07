@@ -78,6 +78,23 @@ export async function requireRetailSiteCapability(
   }
 }
 
+/** Close the bridge from legacy Inventory actions to a store's permissions.
+ * Inventory counts and adjustments hold only a warehouseId, not a siteId.
+ * An unknown warehouse must fail closed when the isolation flag is active.
+ */
+export async function requireRetailWarehouseCapability(
+  organizationId: string,
+  userId: string,
+  warehouseId: string | null | undefined,
+  capability: RetailSiteCapability,
+) {
+  const warehouse = warehouseId ? await prisma.enterpriseWarehouse.findFirst({
+    where: { organizationId, id: warehouseId },
+    select: { siteId: true },
+  }) : null;
+  await requireRetailSiteCapability(organizationId, userId, warehouse?.siteId, capability);
+}
+
 /** Read scope for legacy Retail lists that do not use the invoice checkout.
  * The capability is explicit: a cashier can view/refund only the stores
  * granted to that cashier, without inheriting inventory read access.

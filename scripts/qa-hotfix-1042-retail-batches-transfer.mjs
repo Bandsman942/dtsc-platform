@@ -91,6 +91,17 @@ for (const path of [
   assert.match(route, /requireRetailSiteCapability/, `${path}: explicit site capability`);
   assert.match(route, /RETAIL_SITE_ACCESS_DENIED/, `${path}: denied store access`);
 }
+const warehouseCapability = fs.readFileSync("lib/enterprise/retail/site-access.ts", "utf8");
+assert.match(warehouseCapability, /export async function requireRetailWarehouseCapability/);
+assert.match(warehouseCapability, /await requireRetailSiteCapability\(organizationId, userId, warehouse\?\.siteId, capability\)/);
+for (const path of [
+  "inventory-counts", "stock-adjustments",
+  "inventory-counts/[countId]/decision", "stock-adjustments/[adjustmentId]/decision",
+]) {
+  const route = fs.readFileSync(`app/api/enterprise/[organizationId]/${path}/route.ts`, "utf8");
+  assert.match(route, /requireRetailWarehouseCapability/, `${path}: stock authorization by depot`);
+  assert.match(route, /RETAIL_SITE_ACCESS_DENIED/, `${path}: site isolation must fail closed`);
+}
 const pos = fs.readFileSync("components/enterprise/professional/retail-pos-dtsc-workspace.tsx", "utf8");
 assert.match(pos, /stockLotId: line.stockLotId/);
 assert.match(pos, /retail\/stock-lots/);
