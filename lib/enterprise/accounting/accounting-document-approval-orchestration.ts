@@ -6,6 +6,7 @@ import {
   requireAccountingApprovalDecision,
 } from "@/lib/enterprise/accounting/accounting-approval-service";
 import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
+import { assertSalesCreditNoteStillPostable } from "@/lib/enterprise/accounting/credit-note-posting-preflight";
 import { money, publishFinanceEvent } from "@/lib/enterprise/accounting/helpers";
 import { postBusinessEvent } from "@/lib/enterprise/accounting/posting-service";
 
@@ -259,6 +260,8 @@ export async function postApprovedSalesCreditNote(
   if (!initial) throw new EnterpriseAccountingError("SALES_CREDIT_NOTE_NOT_FOUND", 404);
   if (initial.status === "POSTED") return initial;
   if (initial.status !== "APPROVED" || initial.revision !== revision) throw new EnterpriseAccountingError("SALES_CREDIT_NOTE_NOT_APPROVED", 409);
+  // Preflight before posting prevents any Finance journal on an unreconciled Retail sale.
+  await assertSalesCreditNoteStillPostable(organizationId, creditNoteId, revision);
 
   const posting = await postBusinessEvent(organizationId, actorUserId, {
     postingEvent: "SALES_CREDIT_NOTE_POSTED",
@@ -270,6 +273,10 @@ export async function postApprovedSalesCreditNote(
     const credit = await tx.enterpriseSalesCreditNote.findFirst({ where: { id: creditNoteId, organizationId }, include: { salesInvoice: { include: { receivable: true } } } });
     if (!credit?.salesInvoice.receivable) throw new EnterpriseAccountingError("RECEIVABLE_NOT_FOUND", 409);
     if (credit.status === "POSTED") return credit;
+    const retailCheckout = await tx.enterpriseRetailInvoiceCheckout.findFirst({
+      where: { organizationId, salesInvoiceId: credit.salesInvoiceId }, select: { id: true },
+    });
+    if (retailCheckout) throw new EnterpriseAccountingError("RETAIL_INVOICE_RETURN_WORKFLOW_REQUIRED", 409);
     if (credit.status !== "APPROVED" || credit.revision !== revision) throw new EnterpriseAccountingError("SALES_CREDIT_NOTE_NOT_APPROVED", 409);
     const receivable = credit.salesInvoice.receivable;
     if (credit.grandTotal.greaterThan(receivable.outstandingAmount)) throw new EnterpriseAccountingError("CREDIT_NOTE_EXCEEDS_OPEN_RECEIVABLE", 409);
