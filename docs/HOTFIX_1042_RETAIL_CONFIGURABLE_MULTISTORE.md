@@ -79,6 +79,13 @@ Contrôle du 7 novembre : `npm run build` local a terminé avec succès la compi
 
 **Ne pas annoncer la conformité complète au client tant que ces sept exigences ne sont pas implémentées et validées.**
 
+### Tranche 20 — garde de remboursement Finance par boutique (2026-11-07)
+
+- Le moteur Finance commun contrôle désormais le compte de sortie du remboursement **avant l'inversion d'allocations**, y compris lorsque la demande est rejouée avec la même clé. Pour une facture issue de `EnterpriseRetailInvoiceCheckout`, le compte doit être actif, attribué au site émetteur et dans la devise de la facture ; le paiement sortant doit viser le même client et la même devise.
+- Ce contrôle est réappliqué **avant la confirmation de trésorerie** à partir du lien de facture présent dans l'événement canonique `REFUND_FINANCIAL_INVERSE_READY`. Un appel direct aux routes Finance ne peut donc pas débiter la caisse de la boutique B pour une facture de A. Les factures Finance non Retail conservent leur parcours historique.
+- Contrat de tests `qa:hotfix-1042-retail-invoice-refund-scope` ajouté aux Quality Gates : rejouabilité, refus inter-boutiques, compte absent, devise/client erronés et préservation de Finance hors Retail.
+- **Périmètre non terminé :** ce garde n'est pas une UI de retour. Il reste à enregistrer les retours détaillés par ligne, le stock à réintégrer ou à isoler, l'approbation Finance indépendante, les avoirs et décaissements bout-en-bout, puis une recette PostgreSQL réelle. Les flags restent OFF ; aucune fusion ni Production avant l'E2E propriétaire.
+
 ### Tranche 10 — verrouillage des transferts et alertes de stock par boutique
 
 - Les transferts de stock communs sont filtrés côté serveur lorsqu'une entreprise a explicitement activé `siteStaffIsolationEnabled` : liste, pagination et **compteurs** utilisent la même portée (boutiques actives attribuées avec `VIEW_STOCK`). Les transferts concernant une boutique attribuée restent consultables ; un filtre de dépôt ne peut pas contourner cette portée.

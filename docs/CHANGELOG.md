@@ -2096,3 +2096,9 @@ Hotfix #861 (complément) : un secret CRON_SECRET Production commun réveille po
 - API propriétaire GET/PUT `retail/site-assignments`, tenant-aware, same-origin, Zod, limitation, audit, et panneau Design 2.0 FR/EN pour les affectations sans UUID visible.
 - Résolveur serveur à politique deny-by-default pour les capacités par site ; **isolation stricte non activable depuis l'interface** tant que toutes les routes ERP communes ne sont pas contrôlées. Les permissions affichées ne constituent donc PAS encore un cloisonnement fonctionnel complet.
 - QA ciblée `qa:hotfix-1042-site-staff` ; migration nouvelle additive. Les P0 facturier→caissier, stock après solde total, RBAC sur toutes les routes et E2E restent **NOT_EXECUTED / INCOMPLETE**.
+
+## 2026-11-07 — v1.3.0 candidate — Retail #1042 tranche 20, garde des remboursements (NON LIVRÉ)
+
+- Les remboursements Finance associés à une facture Retail multi-boutiques ne peuvent plus débiter un compte financier d'une autre boutique, même en appelant directement les services Finance ou en rejouant une inversion d'allocation.
+- Vérification du client, de la devise et du compte de sortie avant l'inversion et à la confirmation de trésorerie. Les factures Finance hors Retail restent inchangées.
+- Tests ciblés branchés aux Quality Gates. Le workflow complet de retour, avoir, approbation et restock, la concurrence PostgreSQL, l'E2E propriétaire et la Production restent à valider. Flags d'activation OFF.
