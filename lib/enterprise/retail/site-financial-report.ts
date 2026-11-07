@@ -6,6 +6,7 @@ type PostedPnlRow = {
   currencyCode: string;
   accountType: string;
   accountSubtype: string | null;
+  isCostOfSales: boolean;
   amount: Prisma.Decimal;
   lineCount: bigint;
 };
@@ -48,6 +49,14 @@ export async function retailPostedSiteLedger(
   const rows = await prisma.$queryRaw<PostedPnlRow[]>(Prisma.sql`
     SELECT l."siteId" AS "siteId", e."functionalCurrencyCode" AS "currencyCode",
       a."accountType" AS "accountType", a."accountSubtype" AS "accountSubtype",
+      CASE WHEN a."accountType" IN ('EXPENSE', 'OTHER_EXPENSE') AND (
+        a."accountSubtype" = 'COST_OF_SALES' OR EXISTS (
+          SELECT 1 FROM "EnterpriseAccountMapping" mapping
+          WHERE mapping."organizationId" = ${organizationId}
+            AND mapping."ledgerAccountId" = a.id
+            AND mapping."mappingKey" = 'COST_OF_SALES'
+        )
+      ) THEN TRUE ELSE FALSE END AS "isCostOfSales",
       COALESCE(SUM(CASE WHEN a."accountType" IN ('REVENUE', 'OTHER_INCOME')
         THEN l.credit - l.debit ELSE l.debit - l.credit END), 0) AS amount,
       COUNT(*)::bigint AS "lineCount"
@@ -61,7 +70,7 @@ export async function retailPostedSiteLedger(
       AND e."accountingDate" BETWEEN ${from} AND ${to}
       AND a."accountType" IN ('REVENUE', 'OTHER_INCOME', 'EXPENSE', 'OTHER_EXPENSE')
       AND (l."siteId" IS NULL OR l."siteId" IN (${Prisma.join(siteIds)}))
-    GROUP BY l."siteId", e."functionalCurrencyCode", a."accountType", a."accountSubtype"
+    GROUP BY l."siteId", e."functionalCurrencyCode", a.id, a."accountType", a."accountSubtype"
   `);
   const totals = new Map<string, PnlAccumulator>();
   for (const row of rows) {
@@ -78,7 +87,7 @@ export async function retailPostedSiteLedger(
     }
     if (row.accountType === "REVENUE") current.revenue = current.revenue.plus(row.amount);
     else if (row.accountType === "OTHER_INCOME") current.otherIncome = current.otherIncome.plus(row.amount);
-    else if (row.accountSubtype === "COST_OF_SALES") current.costOfSales = current.costOfSales.plus(row.amount);
+    else if (row.isCostOfSales) current.costOfSales = current.costOfSales.plus(row.amount);
     else current.operatingExpenses = current.operatingExpenses.plus(row.amount);
     current.journalLineCount += Number(row.lineCount);
   }

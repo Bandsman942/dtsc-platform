@@ -1,3 +1,10 @@
+## 2026-11-07 — Retail #1042, tranche 47 — Exports Excel et PDF explicites non certifiés (candidat, PR #1043)
+
+- La vue de supervision multi-boutiques propose les exports **Excel (.xlsx) et PDF** en réutilisant les générateurs de rapports professionnels existants. Les boutons et documents précisent « provisoire / non certifié » en FR/EN ; les écritures sans boutique sont exportées sur des lignes séparées, pas redistribuées.
+- Modèle d'export commun avec colonnes boutique, devise fonctionnelle, produits, coût des ventes, marge brute, autres charges/produits, résultat d'exploitation, nombre de lignes et état d'affectation ; aucun total consolidé inter-devises ni zéro fictif pour une boutique sans écritures. Test de contrat branché à Quality Gates.
+- Ce n'est **pas** une certification E16 : l'export représente seulement le résultat comptable déjà posté. Les écritures historiques sans attribution, la complétude du posting, la fiscalité, le résultat net, l'impression sur matériel, la caisse et la restauration exigent des contre-épreuves supplémentaires. Pas de fusion/Production ; `OWNER_E2E` reste requis.
+- La CI PostgreSQL de la tranche 46 a exposé un écart de classement COGS (le compte `SHOP2-COGS` existe mais sans `accountSubtype`). Le tableau provisoire accepte désormais soit le sous-type `COST_OF_SALES`, soit le **mapping canonique** `EnterpriseAccountMapping.mappingKey=COST_OF_SALES` de ce compte. Requête groupée par compte pour éviter la confusion avec d'autres charges de sous-type identique ; QA de l'ancien format ajoutée. À confirmer sur le prochain SHA.
+
 ## 2026-11-07 — Retail #1042, tranche 46 — Résultat provisoire par boutique depuis les journaux postés (candidat, PR #1043)
 
 - Nouvelle source groupée `retailPostedSiteLedger` : prend exclusivement les lignes de résultat liées aux écritures `POSTED` ou `REVERSED`, par entreprise, boutique, devise fonctionnelle et période. Produits, coût des ventes, autres charges/produits, marge brute et résultat d'exploitation sont calculés en décimales exactes, sans addition de devises.

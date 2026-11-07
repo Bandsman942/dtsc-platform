@@ -10,13 +10,13 @@ const source = fs.readFileSync("lib/enterprise/retail/site-financial-report.ts",
 const module = { exports: {} };
 let calls = 0;
 const groupedRows = [
-  { siteId: "site-a", currencyCode: "CDF", accountType: "REVENUE", accountSubtype: "REVENUE", amount: new Prisma.Decimal("100.50"), lineCount: 2n },
-  { siteId: "site-a", currencyCode: "CDF", accountType: "EXPENSE", accountSubtype: "COST_OF_SALES", amount: new Prisma.Decimal("40.20"), lineCount: 1n },
-  { siteId: "site-a", currencyCode: "CDF", accountType: "EXPENSE", accountSubtype: "OPERATING_EXPENSES", amount: new Prisma.Decimal("10.30"), lineCount: 1n },
-  { siteId: "site-a", currencyCode: "CDF", accountType: "OTHER_INCOME", accountSubtype: "OTHER_INCOME", amount: new Prisma.Decimal("5.01"), lineCount: 1n },
-  { siteId: "site-a", currencyCode: "USD", accountType: "REVENUE", accountSubtype: "REVENUE", amount: new Prisma.Decimal("20"), lineCount: 1n },
-  { siteId: "site-b", currencyCode: "CDF", accountType: "REVENUE", accountSubtype: "REVENUE", amount: new Prisma.Decimal("-10.50"), lineCount: 2n },
-  { siteId: null, currencyCode: "CDF", accountType: "EXPENSE", accountSubtype: "OPERATING_EXPENSES", amount: new Prisma.Decimal("12"), lineCount: 1n },
+  { siteId: "site-a", currencyCode: "CDF", accountType: "REVENUE", accountSubtype: "REVENUE", isCostOfSales: false, amount: new Prisma.Decimal("100.50"), lineCount: 2n },
+  { siteId: "site-a", currencyCode: "CDF", accountType: "EXPENSE", accountSubtype: null, isCostOfSales: true, amount: new Prisma.Decimal("40.20"), lineCount: 1n },
+  { siteId: "site-a", currencyCode: "CDF", accountType: "EXPENSE", accountSubtype: "OPERATING_EXPENSES", isCostOfSales: false, amount: new Prisma.Decimal("10.30"), lineCount: 1n },
+  { siteId: "site-a", currencyCode: "CDF", accountType: "OTHER_INCOME", accountSubtype: "OTHER_INCOME", isCostOfSales: false, amount: new Prisma.Decimal("5.01"), lineCount: 1n },
+  { siteId: "site-a", currencyCode: "USD", accountType: "REVENUE", accountSubtype: "REVENUE", isCostOfSales: false, amount: new Prisma.Decimal("20"), lineCount: 1n },
+  { siteId: "site-b", currencyCode: "CDF", accountType: "REVENUE", accountSubtype: "REVENUE", isCostOfSales: false, amount: new Prisma.Decimal("-10.50"), lineCount: 2n },
+  { siteId: null, currencyCode: "CDF", accountType: "EXPENSE", accountSubtype: "OPERATING_EXPENSES", isCostOfSales: false, amount: new Prisma.Decimal("12"), lineCount: 1n },
 ];
 vm.runInNewContext(ts.transpileModule(source, {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
@@ -29,6 +29,8 @@ vm.runInNewContext(ts.transpileModule(source, {
       const statement = sql.strings.join("?");
       assert.match(statement, /INNER JOIN "EnterpriseJournalEntry"/);
       assert.match(statement, /e\.status IN \('POSTED', 'REVERSED'\)/);
+      assert.match(statement, /"EnterpriseAccountMapping" mapping/);
+      assert.match(statement, /mapping\."mappingKey" = 'COST_OF_SALES'/);
       assert.match(statement, /l\."siteId" IN/);
       assert.match(statement, /GROUP BY l\."siteId"/);
       return groupedRows;

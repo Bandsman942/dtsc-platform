@@ -285,7 +285,8 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
     };
     const beforeReturnPnl = await readPostedStorePnl();
     expect(new Prisma.Decimal(beforeReturnPnl.revenue).equals(total)).toBe(true);
-    expect(new Prisma.Decimal(beforeReturnPnl.costOfSales).equals(7)).toBe(true);
+    expect(new Prisma.Decimal(beforeReturnPnl.costOfSales).equals(7),
+      `The store COGS mapping must recognize ledger accounts without a populated subtype: ${JSON.stringify(beforeReturnPnl)}`).toBe(true);
 
     // A return is not a cashier's automatic reversal: request, physical
     // inspection, independent approval, Finance preparation and settlement

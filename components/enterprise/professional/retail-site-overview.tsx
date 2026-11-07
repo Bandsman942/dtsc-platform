@@ -1,15 +1,17 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Building2, Landmark, ReceiptText, RefreshCw, ShoppingBasket, Wallet } from "lucide-react";
+import { Building2, FileSpreadsheet, FileText, Landmark, ReceiptText, RefreshCw, ShoppingBasket, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { customerFacingError } from "@/lib/customer-facing-language";
+import { buildRetailPostedLedgerExport, type RetailPostedLedger } from "@/lib/enterprise/retail/site-financial-export";
+import { downloadProfessionalXlsx } from "@/lib/reporting/professional-export";
+import { downloadProfessionalPdfV2 } from "@/lib/reporting/professional-pdf-v2";
 
 type Money = { currencyCode: string; total: string; count: number };
 type Tender = Money & { method: string };
 type FinanceInvoice = { currencyCode: string; count: number; issuedTotal: string; allocatedToDate: string; outstandingToDate: string };
-type PostedLedger = { currencyCode: string; revenue: string; otherIncome: string; costOfSales: string; operatingExpenses: string; grossMargin: string; operatingResult: string; journalLineCount: number };
-type Site = { id: string; code: string; name: string; sales: Money[]; financeInvoices: FinanceInvoice[]; postedLedger?: PostedLedger[]; approvedExpenses: Money[]; collections: Tender[]; inventory: { balanceRows: number }; cashSessions: Array<{ status: string; count: number }>; dailyCloses: Array<{ status: string; count: number }> };
+type Site = { id: string; code: string; name: string; sales: Money[]; financeInvoices: FinanceInvoice[]; postedLedger?: RetailPostedLedger[]; approvedExpenses: Money[]; collections: Tender[]; inventory: { balanceRows: number }; cashSessions: Array<{ status: string; count: number }>; dailyCloses: Array<{ status: string; count: number }> };
 
 function currencyAmount(value: string, currency: string, en: boolean) {
   try { return new Intl.NumberFormat(en ? "en-US" : "fr-FR", { maximumFractionDigits: 2 }).format(Number(value)) + " " + currency; }
@@ -19,7 +21,8 @@ function currencyAmount(value: string, currency: string, en: boolean) {
 export function RetailSiteOverview({ organizationId, locale }: { organizationId: string; locale: "fr" | "en" }) {
   const [days, setDays] = useState(7);
   const [items, setItems] = useState<Site[]>([]);
-  const [unallocatedLedger, setUnallocatedLedger] = useState<PostedLedger[]>([]);
+  const [unallocatedLedger, setUnallocatedLedger] = useState<RetailPostedLedger[]>([]);
+  const [reportPeriod, setReportPeriod] = useState({ from: "", to: "" });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const en = locale === "en";
@@ -32,18 +35,21 @@ export function RetailSiteOverview({ organizationId, locale }: { organizationId:
       start.setUTCHours(0, 0, 0, 0);
       const query = new URLSearchParams({ from: start.toISOString(), to: new Date().toISOString() });
       const response = await fetch(`/api/enterprise/${organizationId}/retail/site-overview?${query}`, { cache: "no-store" });
-      const payload = await response.json().catch(() => null) as { items?: Site[]; unallocatedPostedLedger?: PostedLedger[]; message?: string } | null;
+      const payload = await response.json().catch(() => null) as { items?: Site[]; unallocatedPostedLedger?: RetailPostedLedger[]; period?: { from: string; to: string }; message?: string } | null;
       if (!response.ok || !payload?.items) throw new Error(payload?.message || (en ? "Store overview is unavailable." : "La vue multi-boutiques est indisponible."));
       setItems(payload.items);
       setUnallocatedLedger(payload.unallocatedPostedLedger || []);
+      setReportPeriod(payload.period || { from: "", to: "" });
     } catch (caught) { setError(customerFacingError(caught, locale)); }
     finally { setLoading(false); }
   }, [organizationId, days, en, locale]);
   useEffect(() => { void load(); }, [load]);
+  const exportLedger = () => buildRetailPostedLedgerExport({ sites: items, unallocated: unallocatedLedger,
+    from: reportPeriod.from, to: reportPeriod.to, locale });
   return <section data-testid="retail-multisite-overview" className="min-w-0 rounded-2xl border border-dtsc-border bg-dtsc-surface p-4 shadow-sm sm:p-5">
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div className="flex min-w-0 items-start gap-3"><Building2 className="mt-1 h-5 w-5 shrink-0 text-dtsc-blue" /><div className="min-w-0"><h2 className="font-black text-dtsc-ink">{en ? "Store management overview" : "Pilotage des boutiques"}</h2><p className="mt-1 text-sm text-dtsc-muted">{en ? "Operational activity by store and currency; only the company owner/admin can access this comparison." : "Activités par boutique et par devise, réservées au propriétaire et à l'administration."}</p></div></div>
-      <div className="flex flex-wrap items-center gap-2"><label className="text-xs font-semibold text-dtsc-muted">{en ? "Period" : "Période"}<select className="ml-2 min-h-11 rounded-xl border border-dtsc-border bg-dtsc-page px-2 text-sm text-dtsc-ink" value={days} onChange={(event) => setDays(Number(event.target.value))}><option value={1}>{en ? "Today" : "Aujourd'hui"}</option><option value={7}>{en ? "7 days" : "7 jours"}</option><option value={30}>{en ? "30 days" : "30 jours"}</option></select></label><Button type="button" variant="outline" onClick={() => void load()} disabled={loading}><RefreshCw className="h-4 w-4" />{en ? "Refresh" : "Actualiser"}</Button></div>
+      <div className="flex flex-wrap items-center gap-2"><label className="text-xs font-semibold text-dtsc-muted">{en ? "Period" : "Période"}<select className="ml-2 min-h-11 rounded-xl border border-dtsc-border bg-dtsc-page px-2 text-sm text-dtsc-ink" value={days} onChange={(event) => setDays(Number(event.target.value))}><option value={1}>{en ? "Today" : "Aujourd'hui"}</option><option value={7}>{en ? "7 days" : "7 jours"}</option><option value={30}>{en ? "30 days" : "30 jours"}</option></select></label><Button type="button" variant="outline" onClick={() => void load()} disabled={loading}><RefreshCw className="h-4 w-4" />{en ? "Refresh" : "Actualiser"}</Button><Button type="button" variant="outline" onClick={() => downloadProfessionalXlsx(exportLedger())} disabled={loading || !items.length}><FileSpreadsheet className="h-4 w-4" />{en ? "Provisional Excel" : "Excel provisoire"}</Button><Button type="button" variant="outline" onClick={() => downloadProfessionalPdfV2(exportLedger())} disabled={loading || !items.length}><FileText className="h-4 w-4" />{en ? "Provisional PDF" : "PDF provisoire"}</Button></div>
     </div>
     {error ? <p role="alert" className="mt-4 rounded-xl bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-200">{error}</p> : null}
     {loading ? <p role="status" className="mt-4 text-sm text-dtsc-muted">{en ? "Loading stores…" : "Chargement des boutiques…"}</p> : null}
