@@ -1,6 +1,6 @@
 # RETAIL-1042 — cahier des charges boutiques, paramétrage et Design 2.0
 
-Statut du 7 novembre 2026 : **neuf tranches en préparation sur la PR brouillon #1043 ; aucune fusion, aucun déploiement ni acceptation client**.
+Statut du 7 novembre 2026 : **treize tranches sur la PR brouillon #1043 ; durcissement de la tranche 14 en cours. Aucune fusion, aucun déploiement ni acceptation client**.
 
 ## Cible produit
 
@@ -116,3 +116,14 @@ Contrôle du 7 novembre : `npm run build` local a terminé avec succès la compi
 - Création et libération des réservations : vérification transactionnelle `MANAGE_STOCK` sur le dépôt concerné ; le contrôle précède le retour d'idempotence. Une réutilisation de clé avec une autre commande, quantité ou boutique est rejetée.
 - Aucune modification de droits par défaut et aucun changement hors activation explicite de `siteStaffIsolationEnabled`. Ce lot ne valide pas l'isolation des autres routes de référentiel, achats, rapports ou exports.
 - Tests contractuels ajoutés dans `qa-hotfix-1042-site-staff.mjs`. Contrôles GitHub, PostgreSQL multi-rôles et E2E propriétaire restent à obtenir avant toute fusion.
+
+### Tranche 14 — référentiels, réceptions et parcours POS historiques par boutique (2026-11-07)
+
+- `GET /warehouses` et `GET /storage-locations` appliquent les boutiques ayant `VIEW_STOCK` **dans les filtres Prisma**, y compris les compteurs d'entrepôts et d'emplacements. Le filtrage explicite par site/dépôt ne peut élargir le périmètre ; le propriétaire conserve sa vue globale.
+- La création/mise à jour d'un dépôt ou emplacement vérifie `MANAGE_STOCK` sur la boutique du dépôt **dans la transaction du service**, même si une autre API appelle directement le service. La permission entreprise `SITES_WAREHOUSES` reste nécessaire en complément. Aucun nouveau droit local n'est accordé implicitement.
+- `postEnterprisePurchaseReceiptToInventoryTx` impose `MANAGE_STOCK` sur la boutique de réception avant l'écriture **et avant le rejeu d'idempotence**. Le même garde protège la route d'intégration directe et la réception depuis le module Achats. Une clé d'idempotence déjà associée à une autre réception retourne un conflit. La réception de services sans destination identifiable est refusée à un collaborateur isolé ; les propriétaires et tenants avec isolation OFF conservent le comportement existant.
+- Les registres de ventes POS, retours et remboursements historiques, les justificatifs individuels et les listes de comptes de remboursement sont filtrés par capacités `VIEW_SALES` / `COLLECT_PAYMENT` et affectations actives. Les agrégats de ventes par devise utilisent le **même filtre** que la liste de tickets.
+- Les services de création de retour et décision vérifient la boutique réelle du dépôt dans leur transaction ; le retour de clé idempotente ne devance plus l'autorisation. La validation d'un remboursement nécessite `COLLECT_PAYMENT`, et `MANAGE_STOCK` si les articles sont remis en stock. Le compte financier du remboursement doit appartenir à cette boutique lorsque l'isolation est active ; refus des comptes transversaux non affectés. Les inversions de ventes suivent les mêmes droits et vérifications de compte.
+- Couverture locale : script de contrats et simulations transactionnelles `scripts/qa-hotfix-1042-warehouse-receipt-scoping.mjs`, intégré aux Quality Gates, et script historique `qa-hotfix-1042-site-staff.mjs`. Aucune migration et aucun changement du flag d'activation.
+
+**Portes restantes avant OWNER_E2E** : revérifier les routes Finance/ERP annexes et exports, exécuter une vraie batterie PostgreSQL concurrente (réceptions, retours, promesses de stock et affectations de paiements), tester les rôles authentifiés sur deux boutiques et les parcours mobiles/impression. Les remboursements/avoirs de la **nouvelle facture Finance Retail** ne doivent pas être assimilés aux retours POS historiques ici durcis. Ne pas activer `siteStaffIsolationEnabled` ni `invoiceCheckoutEnabled` sur cette seule preuve statique et simulée.

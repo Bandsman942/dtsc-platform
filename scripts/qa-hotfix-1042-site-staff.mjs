@@ -25,7 +25,7 @@ vm.runInNewContext(code, {
   require: (id) => id === "@/lib/prisma" ? { prisma } : id === "@/lib/enterprise/retail/errors" ? { EnterpriseRetailError } : require(id),
   Set, Promise,
 });
-const { siteStaffCapabilities, retailStaffIsolationIsEnabled, requireRetailSiteCapability, retailInvoiceVisibleSites, retailStockTransferVisibleSites } = unit.exports;
+const { siteStaffCapabilities, retailStaffIsolationIsEnabled, requireRetailSiteCapability, retailInvoiceVisibleSites, retailStockTransferVisibleSites, retailSitesForCapability } = unit.exports;
 assert.equal(retailStaffIsolationIsEnabled(null), false, "Existing tenants must not be silently isolated");
 assert.equal(retailStaffIsolationIsEnabled({ siteStaffIsolationEnabled: true }), true);
 assert.deepEqual([...siteStaffCapabilities("INVOICER", null)].sort(), ["VIEW_STOCK", "VIEW_SALES", "PREPARE_INVOICE"].sort());
@@ -77,19 +77,33 @@ db.assignments = [
   { siteId: "shopB", roleCode: "CASHIER", isActive: true, permissionsJson: null },
   { siteId: "shopC", roleCode: "MANAGER", isActive: true, permissionsJson: ["VIEW_STOCK"] },
 ];
+assert.deepEqual(JSON.parse(JSON.stringify(await retailSitesForCapability("tenant", "staff", "VIEW_SALES"))), {
+  isolationEnabled: true, isOwner: false, siteIds: ["shopA", "shopB"],
+}, "Historical POS sales and returns must have a VIEW_SALES store scope");
+assert.deepEqual(JSON.parse(JSON.stringify(await retailSitesForCapability("tenant", "staff", "COLLECT_PAYMENT"))), {
+  isolationEnabled: true, isOwner: false, siteIds: ["shopB"],
+}, "Refund accounts and decisions must have an independent COLLECT_PAYMENT scope");
+await assert.rejects(retailSitesForCapability("tenant", "staff", "MANAGE_STOCK"), { code: "RETAIL_SITE_ACCESS_DENIED", status: 403 });
 assert.deepEqual(JSON.parse(JSON.stringify(await retailStockTransferVisibleSites("tenant", "staff"))), {
-  isolationEnabled: true, isOwner: false, siteIds: ["shopA", "shopC"],
+  isolationEnabled: true, isOwner: false, siteIds: ["shopA", "shopC"], manageableSiteIds: [],
 }, "Cashiers without VIEW_STOCK must not see other shops");
+db.assignments = [
+  { siteId: "shopA", roleCode: "MANAGER", isActive: true, permissionsJson: ["VIEW_STOCK", "MANAGE_STOCK"] },
+  { siteId: "shopB", roleCode: "MANAGER", isActive: true, permissionsJson: ["VIEW_STOCK"] },
+];
+assert.deepEqual(JSON.parse(JSON.stringify(await retailStockTransferVisibleSites("tenant", "staff"))), {
+  isolationEnabled: true, isOwner: false, siteIds: ["shopA", "shopB"], manageableSiteIds: ["shopA"],
+}, "Write access must be independently scoped from stock visibility");
 db.assignments = [{ siteId: "shopB", roleCode: "CASHIER", isActive: true, permissionsJson: null }];
 await assert.rejects(retailStockTransferVisibleSites("tenant", "staff"), { code: "RETAIL_SITE_ACCESS_DENIED", status: 403 });
 db.settings = {};
 assert.deepEqual(JSON.parse(JSON.stringify(await retailStockTransferVisibleSites("tenant", "staff"))), {
-  isolationEnabled: false, isOwner: false, siteIds: [],
+  isolationEnabled: false, isOwner: false, siteIds: [], manageableSiteIds: [],
 }, "The legacy tenant remains unchanged while isolation is OFF");
 db.settings = { siteStaffIsolationEnabled: true };
 db.membership = { role: "OWNER" };
 assert.deepEqual(JSON.parse(JSON.stringify(await retailStockTransferVisibleSites("tenant", "owner"))), {
-  isolationEnabled: false, isOwner: true, siteIds: [],
+  isolationEnabled: false, isOwner: true, siteIds: [], manageableSiteIds: [],
 }, "Owner retains the consolidated cross-shop view");
 db.membership = null;
 await assert.rejects(retailStockTransferVisibleSites("tenant", "removed"), { code: "RETAIL_SITE_ACCESS_DENIED", status: 403 });

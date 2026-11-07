@@ -166,6 +166,7 @@ export async function getRetailMetricsByCurrency(
   from: Date,
   to: Date,
   moduleCode?: RetailModuleCode,
+  siteIds?: string[],
 ) {
   const includeSales = !moduleCode || moduleCode === "RETAIL_POS";
   const includeMobileMoney = !moduleCode || moduleCode === "MOBILE_MONEY_AGENCY";
@@ -175,7 +176,7 @@ export async function getRetailMetricsByCurrency(
     includeSales
       ? prisma.enterpriseRetailSale.groupBy({
           by: ["currencyCode"],
-          where: { organizationId, status: "COMPLETED", soldAt: { gte: from, lte: to } },
+          where: { organizationId, status: "COMPLETED", soldAt: { gte: from, lte: to }, ...(siteIds ? { siteId: { in: siteIds } } : {}) },
           _count: { _all: true },
           _sum: { grandTotal: true },
         })

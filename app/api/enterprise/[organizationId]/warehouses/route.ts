@@ -1,12 +1,15 @@
 import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { enterpriseDomainErrorResponse, enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
+import { EnterpriseDomainError } from "@/lib/enterprise/common/errors";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { getEnterpriseCommonDomainAccess } from "@/lib/enterprise/common/access";
 import { assertWarehouseCanBecomeInactive, locationIntegrityMessage } from "@/lib/enterprise/master-data/location-integrity";
 import { warehouseCreateSchema, warehouseUpdateSchema } from "@/lib/enterprise/master-data/schemas";
 import { createEnterpriseWarehouse, updateEnterpriseWarehouse } from "@/lib/enterprise/master-data/service";
+import { retailErrorResponse } from "@/lib/enterprise/retail/http";
+import { retailInventoryVisibleSites } from "@/lib/enterprise/retail/site-access";
 import { prisma } from "@/lib/prisma";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
@@ -20,6 +23,9 @@ export async function GET(req: Request, { params }: Params) {
   const { organizationId } = await params;
   const access = await getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode: "SITES_WAREHOUSES", action: "read" });
   if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  let scope: Awaited<ReturnType<typeof retailInventoryVisibleSites>>;
+  try { scope = await retailInventoryVisibleSites(organizationId, session.userId); }
+  catch (error) { return retailErrorResponse(error, "RETAIL_SITE_ACCESS_DENIED"); }
   const url = new URL(req.url);
   const page = Math.max(1, Number(url.searchParams.get("page") || 1) || 1);
   const pageSize = Math.min(50, Math.max(5, Number(url.searchParams.get("pageSize") || 20) || 20));
@@ -30,17 +36,17 @@ export async function GET(req: Request, { params }: Params) {
     organizationId,
     archivedAt: null,
     ...(search ? { OR: [{ name: { contains: search, mode: "insensitive" } }, { code: { contains: search, mode: "insensitive" } }] } : {}),
-    ...(siteId ? { siteId } : {}),
+    ...(scope.isolationEnabled ? { siteId: { in: siteId ? scope.siteIds.filter((id) => id === siteId) : scope.siteIds } } : siteId ? { siteId } : {}),
     ...(status ? { status } : {}),
   };
   const [items, total, active, locations] = await Promise.all([
     prisma.enterpriseWarehouse.findMany({ where, orderBy: [{ name: "asc" }], skip: (page - 1) * pageSize, take: pageSize, include: { site: { select: { id: true, code: true, name: true, city: true } }, storageLocations: { where: { archivedAt: null }, orderBy: { code: "asc" }, take: 20 } } }),
     prisma.enterpriseWarehouse.count({ where }),
-    prisma.enterpriseWarehouse.count({ where: { organizationId, archivedAt: null, status: "ACTIVE" } }),
-    prisma.enterpriseStorageLocation.count({ where: { organizationId, archivedAt: null, status: "ACTIVE" } }),
+    prisma.enterpriseWarehouse.count({ where: { organizationId, archivedAt: null, status: "ACTIVE", ...(scope.isolationEnabled ? { siteId: { in: scope.siteIds } } : {}) } }),
+    prisma.enterpriseStorageLocation.count({ where: { organizationId, archivedAt: null, status: "ACTIVE", ...(scope.isolationEnabled ? { warehouse: { siteId: { in: scope.siteIds } } } : {}) } }),
   ]);
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "warehouses", page } });
-  return NextResponse.json({ items, pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) }, metrics: { active, locations }, canManage: access.canManage });
+  return NextResponse.json({ items, pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) }, metrics: { active, locations }, canManage: access.canManage && (!scope.isolationEnabled || scope.manageableSiteIds.length > 0) });
 }
 
 export async function POST(req: Request, { params }: Params) {
@@ -61,6 +67,7 @@ export async function POST(req: Request, { params }: Params) {
     await writeApiLog({ request: req, statusCode: 201, userId: session.userId, startedAt, metadata: { organizationId, domain: "warehouses" } });
     return NextResponse.json({ ok: true, warehouse }, { status: 201 });
   } catch (error) {
+    if (error instanceof EnterpriseDomainError) return enterpriseDomainErrorResponse(error, "WAREHOUSE_CREATE_FAILED", req);
     const duplicate = error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
     return NextResponse.json({ error: duplicate ? "WAREHOUSE_DUPLICATE" : "WAREHOUSE_CREATE_FAILED", message: duplicate ? "Un entrepôt possédant ce code existe déjà." : "Création de l’entrepôt impossible." }, { status: duplicate ? 409 : 400 });
   }
@@ -86,6 +93,7 @@ export async function PATCH(req: Request, { params }: Params) {
     await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, action: "update" } });
     return NextResponse.json({ ok: true, entity });
   } catch (error) {
+    if (error instanceof EnterpriseDomainError) return enterpriseDomainErrorResponse(error, "WAREHOUSE_UPDATE_FAILED", req);
     const integrityMessage = locationIntegrityMessage(error);
     if (integrityMessage) return NextResponse.json({ error: "WAREHOUSE_INTEGRITY_CONFLICT", message: integrityMessage }, { status: 409 });
     return enterpriseDomainErrorResponse(error, "WAREHOUSE_UPDATE_FAILED", req);

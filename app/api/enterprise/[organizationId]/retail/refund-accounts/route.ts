@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { writeApiLog } from "@/lib/audit";
-import { authorizeRetailRequest } from "@/lib/enterprise/retail/http";
+import { authorizeRetailRequest, retailErrorResponse } from "@/lib/enterprise/retail/http";
+import { retailSitesForCapability } from "@/lib/enterprise/retail/site-access";
 import { prisma } from "@/lib/prisma";
 
 type Params = { params: Promise<{ organizationId: string }> };
@@ -10,8 +11,11 @@ export async function GET(req: Request, { params }: Params) {
   const { organizationId } = await params;
   const auth = await authorizeRetailRequest(req, organizationId, "RETAIL_POS", "read");
   if (!auth.ok) return auth.response;
+  let scope: Awaited<ReturnType<typeof retailSitesForCapability>>;
+  try { scope = await retailSitesForCapability(organizationId, auth.session.userId, "COLLECT_PAYMENT"); }
+  catch (error) { return retailErrorResponse(error, "RETAIL_SITE_ACCESS_DENIED"); }
   const items = await prisma.enterpriseFinancialAccount.findMany({
-    where: { organizationId, status: "ACTIVE", archivedAt: null, accountType: { in: ["CASH", "BANK", "MOBILE_MONEY", "CLEARING"] } },
+    where: { organizationId, status: "ACTIVE", archivedAt: null, accountType: { in: ["CASH", "BANK", "MOBILE_MONEY", "CLEARING"] }, ...(scope.isolationEnabled ? { siteId: { in: scope.siteIds } } : {}) },
     orderBy: [{ currencyCode: "asc" }, { accountType: "asc" }, { name: "asc" }],
     select: { id: true, code: true, name: true, accountType: true, currencyCode: true, operationalBalance: true },
     take: 200,

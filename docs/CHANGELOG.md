@@ -1,3 +1,10 @@
+## 2026-11-07 — Hotfix P0 Retail #1042, tranche 14 — Référentiels, réceptions et historique POS cloisonnés (PR brouillon #1043)
+
+- Entrepôts, emplacements, listes et compteurs filtrés par boutique ; écritures contrôlées sous transaction avec `MANAGE_STOCK`, sans permission implicite.
+- Réceptions d'achats contrôlées avant mouvement et rejeu idempotent ; une clé utilisée sur une autre réception est rejetée.
+- Ventes POS et métriques, reçus, retours, comptes de remboursement et inversions protégés des accès inter-boutiques ; flux stock/Finance soumis aux droits locaux du magasin.
+- QA simulées et contrats CI ajoutés. **Flag d'isolation OFF ; E2E PostgreSQL, remboursement de factures Finance et validation propriétaire toujours bloquants, aucune fusion/Production.**
+
 ## 2026-11-07 — Hotfix P0 Retail #1042, tranche 12 — Permissions des écritures de stock (PR brouillon #1043)
 
 - Capacité MANAGE_STOCK assignable explicitement par boutique, aucune attribution automatique au gérant, facturier ou caissier ; libellés FR/EN.

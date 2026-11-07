@@ -77,6 +77,36 @@ export async function requireRetailSiteCapability(
   }
 }
 
+/** Read scope for legacy Retail lists that do not use the invoice checkout.
+ * The capability is explicit: a cashier can view/refund only the stores
+ * granted to that cashier, without inheriting inventory read access.
+ */
+export async function retailSitesForCapability(
+  organizationId: string,
+  userId: string,
+  capability: RetailSiteCapability,
+  database: RetailSiteAccessReader = prisma,
+): Promise<{ isolationEnabled: boolean; isOwner: boolean; siteIds: string[] }> {
+  const [membership, configuration] = await Promise.all([
+    database.organizationMember.findFirst({
+      where: { organizationId, userId, status: "ACTIVE", removedAt: null }, select: { role: true },
+    }),
+    database.enterpriseRetailConfiguration.findUnique({ where: { organizationId }, select: { settingsJson: true } }),
+  ]);
+  if (!membership) throw new EnterpriseRetailError("RETAIL_SITE_ACCESS_DENIED", 403);
+  if (RETAIL_OWNER_ROLES.has(membership.role)) return { isolationEnabled: false, isOwner: true, siteIds: [] };
+  if (!retailStaffIsolationIsEnabled(configuration?.settingsJson)) return { isolationEnabled: false, isOwner: false, siteIds: [] };
+  const assignments = await database.enterpriseRetailSiteAssignment.findMany({
+    where: { organizationId, userId, isActive: true },
+    select: { siteId: true, roleCode: true, permissionsJson: true },
+  });
+  const siteIds = [...new Set(assignments.filter((assignment) =>
+    siteStaffCapabilities(assignment.roleCode, assignment.permissionsJson).includes(capability),
+  ).map((assignment) => assignment.siteId))];
+  if (!siteIds.length) throw new EnterpriseRetailError("RETAIL_SITE_ACCESS_DENIED", 403);
+  return { isolationEnabled: true, isOwner: false, siteIds };
+}
+
 /** Scope invoices to the operator's *assigned* stores. Staff cutover is
  * deliberately gated twice until every legacy route has been audited.
  * Owners keep a complete company-wide view.
@@ -122,7 +152,7 @@ export async function retailInventoryVisibleSites(
   organizationId: string,
   userId: string,
   database: RetailSiteAccessReader = prisma,
-): Promise<{ isolationEnabled: boolean; isOwner: boolean; siteIds: string[] }> {
+): Promise<{ isolationEnabled: boolean; isOwner: boolean; siteIds: string[]; manageableSiteIds: string[] }> {
   const [membership, configuration] = await Promise.all([
     database.organizationMember.findFirst({
       where: { organizationId, userId, status: "ACTIVE", removedAt: null },
@@ -134,9 +164,9 @@ export async function retailInventoryVisibleSites(
     }),
   ]);
   if (!membership) throw new EnterpriseRetailError("RETAIL_SITE_ACCESS_DENIED", 403);
-  if (RETAIL_OWNER_ROLES.has(membership.role)) return { isolationEnabled: false, isOwner: true, siteIds: [] };
+  if (RETAIL_OWNER_ROLES.has(membership.role)) return { isolationEnabled: false, isOwner: true, siteIds: [], manageableSiteIds: [] };
   if (!retailStaffIsolationIsEnabled(configuration?.settingsJson)) {
-    return { isolationEnabled: false, isOwner: false, siteIds: [] };
+    return { isolationEnabled: false, isOwner: false, siteIds: [], manageableSiteIds: [] };
   }
   const assignments = await database.enterpriseRetailSiteAssignment.findMany({
     where: { organizationId, userId, isActive: true },
@@ -146,7 +176,10 @@ export async function retailInventoryVisibleSites(
     .filter((assignment) => siteStaffCapabilities(assignment.roleCode, assignment.permissionsJson).includes("VIEW_STOCK"))
     .map((assignment) => assignment.siteId))];
   if (!siteIds.length) throw new EnterpriseRetailError("RETAIL_SITE_ACCESS_DENIED", 403);
-  return { isolationEnabled: true, isOwner: false, siteIds };
+  const manageableSiteIds = [...new Set(assignments
+    .filter((assignment) => siteStaffCapabilities(assignment.roleCode, assignment.permissionsJson).includes("MANAGE_STOCK"))
+    .map((assignment) => assignment.siteId))];
+  return { isolationEnabled: true, isOwner: false, siteIds, manageableSiteIds };
 }
 
 // Backward-compatible name for the transfer service introduced in tranche 10.
