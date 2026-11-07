@@ -81,9 +81,11 @@ async function financeFixture() {
   });
   await prisma.enterpriseRetailSiteAssignment.upsert({
     where: { organizationId_siteId_userId: { organizationId, siteId: site.id, userId: cashier.id } },
-    update: { roleCode: "CASHIER", permissionsJson: ["VIEW_SALES", "PREPARE_INVOICE", "COLLECT_PAYMENT"], isActive: true },
+    // Return requests have their own explicit permission; collection alone
+    // must never grant a cashier the right to reverse a sale.
+    update: { roleCode: "CASHIER", permissionsJson: ["VIEW_SALES", "PREPARE_INVOICE", "COLLECT_PAYMENT", "REQUEST_INVOICE_RETURN"], isActive: true },
     create: { organizationId, siteId: site.id, userId: cashier.id, roleCode: "CASHIER",
-      permissionsJson: ["VIEW_SALES", "PREPARE_INVOICE", "COLLECT_PAYMENT"], isActive: true, createdByUserId: owner.id },
+      permissionsJson: ["VIEW_SALES", "PREPARE_INVOICE", "COLLECT_PAYMENT", "REQUEST_INVOICE_RETURN"], isActive: true, createdByUserId: owner.id },
   });
   const baseCatalog = await prisma.enterpriseCatalogItem.findFirstOrThrow({
     where: { organizationId, code: "SHOP2-E2E-SKU", status: "ACTIVE" },
@@ -191,6 +193,13 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
     });
     expect(issued.status, JSON.stringify(issued.body)).toBe(200);
     expect(issued.body.invoice.status).toBe("ISSUED");
+    const salesEntry = await prisma.enterpriseJournalEntry.findFirstOrThrow({
+      where: { organizationId, sourceEntityType: "EnterpriseSalesInvoice", sourceEntityId: invoiceId, status: "POSTED" },
+      include: { lines: true },
+    });
+    expect(salesEntry.lines.length).toBeGreaterThan(0);
+    expect(salesEntry.lines.every((line) => line.siteId === fixture.site.id),
+      "A Retail sales invoice must carry its store on every posted ledger line").toBe(true);
 
     const total = new Prisma.Decimal(issued.body.invoice.grandTotal);
     const partial = total.div(2).toDecimalPlaces(2, Prisma.Decimal.ROUND_DOWN);
@@ -248,6 +257,12 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
           where: { organizationId, stockMovementId: movements[0].id, status: "POSTED" },
         });
         expect(valuation?.journalEntryId).toBeTruthy();
+        const inventoryEntry = await prisma.enterpriseJournalEntry.findUniqueOrThrow({
+          where: { id: valuation.journalEntryId }, include: { lines: true },
+        });
+        expect(inventoryEntry.lines.length).toBeGreaterThan(0);
+        expect(inventoryEntry.lines.every((line) => line.siteId === fixture.site.id),
+          "Retail COGS and inventory must be posted under the store that owns the stock").toBe(true);
         const balance = await prisma.enterpriseInventoryBalance.findFirstOrThrow({
           where: { organizationId, warehouseId: fixture.warehouse.id, inventoryItemId: fixture.inventory.id,
             storageLocationId: null, stockLotId: null },
@@ -353,6 +368,12 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
       where: { organizationId, stockMovementId: returnMovements[0].id, status: "POSTED" },
     });
     expect(returnValuation.journalEntryId).toBeTruthy();
+    const returnEntry = await prisma.enterpriseJournalEntry.findUniqueOrThrow({
+      where: { id: returnValuation.journalEntryId }, include: { lines: true },
+    });
+    expect(returnEntry.lines.length).toBeGreaterThan(0);
+    expect(returnEntry.lines.every((line) => line.siteId === fixture.site.id),
+      "Return valuation and COGS reversal must preserve the original store").toBe(true);
     const afterReturn = await prisma.enterpriseInventoryBalance.findFirstOrThrow({
       where: { organizationId, warehouseId: fixture.warehouse.id, inventoryItemId: fixture.inventory.id,
         storageLocationId: null, stockLotId: null },

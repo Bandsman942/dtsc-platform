@@ -29,8 +29,8 @@ export async function buildExpensePosting(tx: Prisma.TransactionClient, input: {
     sourceEntityId: expense.id,
     currencyCode: expense.currency,
     lines: [
-      { accountMappingKey: "OPERATING_EXPENSE", description: expense.title, debit: expense.amount, transactionCurrencyCode: expense.currency, transactionAmount: expense.amount, departmentId: expense.departmentId },
-      { accountMappingKey: counterpart, description: expense.title, credit: expense.amount, transactionCurrencyCode: expense.currency, transactionAmount: expense.amount, departmentId: expense.departmentId },
+      { accountMappingKey: "OPERATING_EXPENSE", description: expense.title, debit: expense.amount, transactionCurrencyCode: expense.currency, transactionAmount: expense.amount, departmentId: expense.departmentId, siteId: expense.siteId },
+      { accountMappingKey: counterpart, description: expense.title, credit: expense.amount, transactionCurrencyCode: expense.currency, transactionAmount: expense.amount, departmentId: expense.departmentId, siteId: expense.siteId },
     ],
   };
 }
@@ -50,6 +50,10 @@ export async function buildPayrollPosting(tx: Prisma.TransactionClient, input: {
 export async function buildInventoryAccountingPosting(tx: Prisma.TransactionClient, input: { organizationId: string; sourceEntityType: string; sourceEntityId: string }, kind: "RECEIPT" | "ISSUE"): Promise<PostingDocument> {
   const event = await tx.enterpriseInventoryAccountingEvent.findFirst({ where: { id: input.sourceEntityId, organizationId: input.organizationId, status: { in: ["PENDING", "APPROVED", "POSTED"] }, eventType: kind } });
   if (!event) throw new EnterpriseAccountingError("INVENTORY_ACCOUNTING_EVENT_NOT_POSTABLE", 409);
+  const sourceMovement = await tx.enterpriseStockMovement.findFirst({
+    where: { organizationId: input.organizationId, id: event.stockMovementId },
+    select: { warehouse: { select: { siteId: true } } },
+  });
   const receipt = kind === "RECEIPT";
   return {
     organizationId: input.organizationId,
@@ -63,8 +67,8 @@ export async function buildInventoryAccountingPosting(tx: Prisma.TransactionClie
     sourceEntityId: event.id,
     currencyCode: event.currencyCode,
     lines: [
-      { accountMappingKey: receipt ? "INVENTORY" : "COST_OF_SALES", description: `${kind} ${event.inventoryItemId}`, debit: event.totalCost, transactionCurrencyCode: event.currencyCode, transactionAmount: event.totalCost, inventoryItemId: event.inventoryItemId },
-      { accountMappingKey: receipt ? "GOODS_RECEIVED_CLEARING" : "INVENTORY", description: `${kind} ${event.inventoryItemId}`, credit: event.totalCost, transactionCurrencyCode: event.currencyCode, transactionAmount: event.totalCost, inventoryItemId: event.inventoryItemId },
+      { accountMappingKey: receipt ? "INVENTORY" : "COST_OF_SALES", description: `${kind} ${event.inventoryItemId}`, debit: event.totalCost, transactionCurrencyCode: event.currencyCode, transactionAmount: event.totalCost, inventoryItemId: event.inventoryItemId, siteId: sourceMovement?.warehouse.siteId },
+      { accountMappingKey: receipt ? "GOODS_RECEIVED_CLEARING" : "INVENTORY", description: `${kind} ${event.inventoryItemId}`, credit: event.totalCost, transactionCurrencyCode: event.currencyCode, transactionAmount: event.totalCost, inventoryItemId: event.inventoryItemId, siteId: sourceMovement?.warehouse.siteId },
     ],
   };
 }

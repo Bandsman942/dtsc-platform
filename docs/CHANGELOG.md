@@ -1,3 +1,8 @@
+## 2026-11-07 — Retail #1042, tranche 44 — Dimensions de boutique dans le grand livre (candidat, PR #1043)
+
+- Propagation du `siteId` métier dans les lignes comptables canoniques des factures Retail, avoirs, coûts d'inventaire, retours de marchandise et dépenses directement postées. La source est vérifiée dans le tenant : checkout associé à la facture, dépôt du mouvement de stock, ou site de la dépense ; une facture Finance non Retail n'invente pas de boutique.
+- Contre-épreuve navigateur sur le cycle de règlement final : toutes les lignes de vente et de coût `POSTED` doivent porter la boutique d'origine. Ce travail prépare le rapprochement par magasin, mais ne certifie pas encore les écritures historiques sans dimension, ni les rapports PDF/XLSX, ni le résultat net consolidé.
+
 ## 2026-11-07 — Retail #1042, tranche 43 — Retour client et remboursement à cinq acteurs (candidat, PR #1043)
 
 - Étend la recette authentifiée PostgreSQL de la tranche 41 : le **demandeur**, l'**inspecteur physique**, l'**approbateur**, le **préparateur Finance** et le **liquidateur** sont cinq utilisateurs réellement distincts. Retour d'une unité déjà payée, réception/inspection, double approbation du remboursement et de l'avoir, puis liquidation.

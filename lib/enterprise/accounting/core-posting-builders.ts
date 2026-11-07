@@ -5,23 +5,33 @@ import type { PostingBuilder, PostingDocument, PostingLineDraft } from "@/lib/en
 export const buildSalesInvoicePosting: PostingBuilder = async (tx, input) => {
   const invoice = await tx.enterpriseSalesInvoice.findFirst({ where: { id: input.sourceEntityId, organizationId: input.organizationId, status: { in: ["APPROVED", "ISSUED", "PARTIALLY_PAID", "PAID", "OVERDUE"] } } });
   if (!invoice) throw new EnterpriseAccountingError("SALES_INVOICE_NOT_POSTABLE", 409);
+  // Only Retail checkouts carry a store dimension. Never guess a store for
+  // ordinary Finance invoices; a report must surface unallocated dimensions.
+  const checkout = await tx.enterpriseRetailInvoiceCheckout.findUnique({
+    where: { organizationId_salesInvoiceId: { organizationId: input.organizationId, salesInvoiceId: invoice.id } },
+    select: { siteId: true },
+  });
   const revenue = invoice.subtotal.minus(invoice.discountTotal);
   const lines: PostingLineDraft[] = [
-    { accountMappingKey: "ACCOUNTS_RECEIVABLE", description: `Receivable ${invoice.number}`, debit: invoice.grandTotal, transactionCurrencyCode: invoice.currencyCode, transactionAmount: invoice.grandTotal, businessPartyId: invoice.businessPartyId, projectId: invoice.projectId },
-    { accountMappingKey: "SALES_REVENUE", description: `Revenue ${invoice.number}`, credit: revenue, transactionCurrencyCode: invoice.currencyCode, transactionAmount: revenue, businessPartyId: invoice.businessPartyId, projectId: invoice.projectId },
+    { accountMappingKey: "ACCOUNTS_RECEIVABLE", description: `Receivable ${invoice.number}`, debit: invoice.grandTotal, transactionCurrencyCode: invoice.currencyCode, transactionAmount: invoice.grandTotal, businessPartyId: invoice.businessPartyId, projectId: invoice.projectId, siteId: checkout?.siteId },
+    { accountMappingKey: "SALES_REVENUE", description: `Revenue ${invoice.number}`, credit: revenue, transactionCurrencyCode: invoice.currencyCode, transactionAmount: revenue, businessPartyId: invoice.businessPartyId, projectId: invoice.projectId, siteId: checkout?.siteId },
   ];
-  if (invoice.taxTotal.gt(0)) lines.push({ accountMappingKey: "TAX_PAYABLE", description: `Output tax ${invoice.number}`, credit: invoice.taxTotal, transactionCurrencyCode: invoice.currencyCode, transactionAmount: invoice.taxTotal, businessPartyId: invoice.businessPartyId });
+  if (invoice.taxTotal.gt(0)) lines.push({ accountMappingKey: "TAX_PAYABLE", description: `Output tax ${invoice.number}`, credit: invoice.taxTotal, transactionCurrencyCode: invoice.currencyCode, transactionAmount: invoice.taxTotal, businessPartyId: invoice.businessPartyId, siteId: checkout?.siteId });
   return { organizationId: input.organizationId, journalType: "SALES", accountingDate: invoice.invoiceDate, documentDate: invoice.invoiceDate, reference: invoice.number, description: `Customer invoice ${invoice.number}`, sourceModule: "FINANCE_RECEIVABLES", sourceEntityType: "EnterpriseSalesInvoice", sourceEntityId: invoice.id, currencyCode: invoice.currencyCode, lines };
 };
 
 export const buildSalesCreditNotePosting: PostingBuilder = async (tx, input) => {
   const credit = await tx.enterpriseSalesCreditNote.findFirst({ where: { id: input.sourceEntityId, organizationId: input.organizationId, status: { in: ["APPROVED", "POSTED"] } }, include: { salesInvoice: true } });
   if (!credit) throw new EnterpriseAccountingError("SALES_CREDIT_NOTE_NOT_POSTABLE", 409);
+  const checkout = await tx.enterpriseRetailInvoiceCheckout.findUnique({
+    where: { organizationId_salesInvoiceId: { organizationId: input.organizationId, salesInvoiceId: credit.salesInvoiceId } },
+    select: { siteId: true },
+  });
   const lines: PostingLineDraft[] = [
-    { accountMappingKey: "SALES_REVENUE", description: `Revenue reversal ${credit.number}`, debit: credit.subtotal, transactionCurrencyCode: credit.currencyCode, transactionAmount: credit.subtotal, businessPartyId: credit.salesInvoice.businessPartyId },
-    { accountMappingKey: "ACCOUNTS_RECEIVABLE", description: `Receivable credit ${credit.number}`, credit: credit.grandTotal, transactionCurrencyCode: credit.currencyCode, transactionAmount: credit.grandTotal, businessPartyId: credit.salesInvoice.businessPartyId },
+    { accountMappingKey: "SALES_REVENUE", description: `Revenue reversal ${credit.number}`, debit: credit.subtotal, transactionCurrencyCode: credit.currencyCode, transactionAmount: credit.subtotal, businessPartyId: credit.salesInvoice.businessPartyId, siteId: checkout?.siteId },
+    { accountMappingKey: "ACCOUNTS_RECEIVABLE", description: `Receivable credit ${credit.number}`, credit: credit.grandTotal, transactionCurrencyCode: credit.currencyCode, transactionAmount: credit.grandTotal, businessPartyId: credit.salesInvoice.businessPartyId, siteId: checkout?.siteId },
   ];
-  if (credit.taxTotal.gt(0)) lines.splice(1, 0, { accountMappingKey: "TAX_PAYABLE", description: `Output tax reversal ${credit.number}`, debit: credit.taxTotal, transactionCurrencyCode: credit.currencyCode, transactionAmount: credit.taxTotal, businessPartyId: credit.salesInvoice.businessPartyId });
+  if (credit.taxTotal.gt(0)) lines.splice(1, 0, { accountMappingKey: "TAX_PAYABLE", description: `Output tax reversal ${credit.number}`, debit: credit.taxTotal, transactionCurrencyCode: credit.currencyCode, transactionAmount: credit.taxTotal, businessPartyId: credit.salesInvoice.businessPartyId, siteId: checkout?.siteId });
   return { organizationId: input.organizationId, journalType: "SALES", accountingDate: credit.creditDate, documentDate: credit.creditDate, reference: credit.number, description: `Customer credit note ${credit.number}`, sourceModule: "FINANCE_RECEIVABLES", sourceEntityType: "EnterpriseSalesCreditNote", sourceEntityId: credit.id, currencyCode: credit.currencyCode, lines };
 };
 

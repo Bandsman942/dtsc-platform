@@ -1,6 +1,6 @@
 # RETAIL-1042 — cahier des charges boutiques, paramétrage et Design 2.0
 
-Statut du 7 novembre 2026 : **tranche 41 validée techniquement** sur `3defd357` (24/24 E2E navigateur, 17/17 workflows GitHub) ; tranche 42 externe (`746bc916`) : correction du calcul de la balance comptable ; **tranche 43 candidate** : retour payé inspecté, approuvé, préparé et liquidé par **cinq utilisateurs distincts**, avec avoir, remboursement, restock et valorisation idempotente. La PR #1043 reste **brouillon** ; aucune fusion, Preview ni Production, `OWNER_E2E` humain non exécuté, flags sensibles OFF en Production.
+Statut du 7 novembre 2026 : **tranche 41 validée techniquement** sur `3defd357` (24/24 E2E navigateur, 17/17 workflows GitHub) ; tranche 42 (`746bc916`) : correction du calcul de la balance ; tranche 43 (`e56bda12`) : retour payé inspecté, approuvé, préparé et liquidé par **cinq utilisateurs distincts** (CI à confirmer) ; **tranche 44 candidate** : propagation du `siteId` des ventes, coûts, avoirs et dépenses dans le grand livre. La PR #1043 reste **brouillon** ; aucune fusion, Preview ni Production, `OWNER_E2E` humain non exécuté, flags sensibles OFF en Production.
 
 La [matrice exhaustive de réception](RETAIL_1042_CAHIER_ACCEPTANCE_MATRIX.md) suit les 17 chapitres, RG01–RG20, les huit décisions et les deux niveaux de E2E du cahier client original ; aucune ligne non certifiée ne doit être masquée par un total de workflows verts.
 
