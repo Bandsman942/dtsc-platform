@@ -1,3 +1,9 @@
+## 2026-11-07 — Hotfix P0 Retail #1042, tranche 16 — Résilience des propositions d'encaissement (PR brouillon #1043)
+
+- Les propositions de paiement par caissier reprennent la transaction sérialisable entière après un conflit PostgreSQL `P2034`, avec relue systématique de la boutique, des permissions, du montant disponible et de la clé d'idempotence. Trois tentatives maximum.
+- QA contractuelle : conflit transitoire, absence de double paiement Finance et épuisement borné des tentatives. Vérification CI obligatoire sur le dernier commit.
+- **Non livré** : les remboursements et avoirs de la nouvelle facture Finance Retail, les E2E authentifiés PostgreSQL multi-boutiques et les tests physiques d'impression ne sont pas certifiés. Flags OFF, aucun merge/Production.
+
 ## 2026-11-07 — Hotfix P0 Retail #1042, tranche 15 — Rejeu de facture et concurrence contrôlés (PR brouillon #1043)
 
 - La préparation de facture Finance Retail revérifie `PREPARE_INVOICE` et l'affectation active à la boutique **avant tout retour idempotent**, y compris après révocation de l'utilisateur ou lorsque le résultat est trouvé seulement dans la transaction.
