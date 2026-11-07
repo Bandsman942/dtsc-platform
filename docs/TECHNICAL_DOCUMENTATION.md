@@ -713,3 +713,6 @@ Les flags `siteStaffIsolationEnabled` et `invoiceCheckoutEnabled` sont toujours 
 
 
 **Complément Retail #1042 tranche 20 (pré-release)** : `retailFinanceReadSiteScope` restreint la lecture Finance à une liste de sites lorsqu'un utilisateur est affecté comme collaborateur Retail et que l'isolation de site est active ; les affectations révoquées ne donnent pas accès aux autres boutiques. `GET /sales-invoices` filtre la relation 1:1 `retailCheckout` ; `GET /payments` filtre les comptes du site, les propositions liées au checkout et tous les agrégats. Finance-only conserve sa portée Finance originale, tandis qu'aucun droit Finance supplémentaire n'est concédé aux facturiers/caissiers. Cette tranche ne certifie ni les écritures, ni l'export, ni le circuit de retour Finance.
+
+
+**Complément Retail #1042 tranche 21 (pré-release)** : `GET /receivables` utilise `retailFinanceReadSiteScope(..., VIEW_SALES)` pour filtrer les créances Finance adossées aux factures `EnterpriseRetailInvoiceCheckout` dans le listing et les agrégats `openByCurrency`/`overdueByCurrency`, avant pagination. Les autres créances restent soumises aux autorisations Finance préexistantes. Ce correctif ne constitue pas une revue complète des vues Finance ni des exports.
