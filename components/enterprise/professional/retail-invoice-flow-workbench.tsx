@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowRight, FileClock, FilePlus2, Printer, RefreshCw, Search, Send, ShieldAlert, ShoppingBasket, XCircle } from "lucide-react";
 import { EnterpriseApproverSelect } from "@/components/enterprise/enterprise-approver-select";
 import { RetailInvoicePaymentDialog } from "@/components/enterprise/professional/retail-invoice-payment-dialog";
+import { RetailInvoiceReturnDialog } from "@/components/enterprise/professional/retail-invoice-return-dialog";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { toastError, toastSuccess } from "@/lib/client-toast";
@@ -15,6 +16,7 @@ type Checkout = {
   id: string;
   siteId: string;
   warehouseId: string;
+  lines: { id: string; invoiceItemId: string; inventoryItemId: string | null }[];
   stockPostedAt: string | null;
   canCancel: boolean;
   canSubmit: boolean;
@@ -243,6 +245,7 @@ export function RetailInvoiceFlowWorkbench({ organizationId, locale }: { organiz
             {data.checkoutReady && entry.canCancel ? <Button type="button" variant="outline" onClick={() => { setCancelTarget(entry); setCancelReason(""); }}><XCircle className="h-4 w-4 text-amber-600" />{copy.cancelDraft}</Button> : null}
             {data.checkoutReady && entry.canSubmit ? <Button type="button" onClick={() => setSubmitTarget(entry)}><Send className="h-4 w-4" />{copy.submitDraft}</Button> : null}
             {data.checkoutReady && entry.canCollect ? <RetailInvoicePaymentDialog organizationId={organizationId} invoiceId={entry.invoice.id} invoiceNumber={entry.invoice.number} siteName={entry.site.name} invoiceStatus={entry.invoice.status} locale={locale} onChanged={() => { void load(page, siteFilter); }} /> : null}
+            {data.checkoutReady && entry.stockPostedAt ? <RetailInvoiceReturnDialog organizationId={organizationId} invoiceId={entry.invoice.id} invoiceNumber={entry.invoice.number} siteId={entry.siteId} currencyCode={entry.invoice.currencyCode} checkoutLines={entry.lines} invoiceItems={entry.invoice.items} locale={locale} onChanged={() => { void load(page, siteFilter); }} /> : null}
           </div>
         </article>
       ))}</div>

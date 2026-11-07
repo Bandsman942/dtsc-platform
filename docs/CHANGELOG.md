@@ -1,3 +1,10 @@
+## 2026-11-07 — Retail #1042, tranche 27 — Demandes de retour dans l'interface (candidat, PR #1043)
+
+- Dialogue mobile et bilingue depuis les factures Retail livrées : choix des articles/quantités, traitement physique et validateur Finance indépendant ; registre paginé et contextualisé.
+- Interface distincte pour le demandeur, le contrôleur physique et le validateur ; séparation visible des étapes avec refus motivé et protection des révisions concurrentes.
+- Sélecteur de validateur limité aux permissions combinées de la boutique et de Finance ; liste des demandes sans clé d'idempotence, empreinte interne ni identifiants des acteurs.
+- **Toujours NON LIVRÉ** : `APPROVED` n'est pas un remboursement, les retours ne réconcilient pas encore Finance et Inventory, aucun E2E client confirmé ni activation des flags, ni fusion/déploiement.
+
 ## 2026-11-07 — Retail #1042, tranche 26 — Réception et inspection indépendante (candidat, PR #1043)
 
 - Nouvelle étape `INSPECTED` obligatoire avant approbation d'un retour de facture Retail payée, contrôlée par un gestionnaire des stocks distinct du demandeur et du validateur Finance, avec date et notes conservées.

@@ -4,7 +4,7 @@ import { z } from "zod";
 import { publishFinanceEvent } from "@/lib/enterprise/accounting/helpers";
 import { resolveEnterpriseModuleAccess } from "@/lib/enterprise/module-access";
 import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
-import { requireRetailSiteCapability } from "@/lib/enterprise/retail/site-access";
+import { requireRetailSiteCapability, RETAIL_OWNER_ROLES, siteStaffCapabilities } from "@/lib/enterprise/retail/site-access";
 import { withRetailTransactionRetry } from "@/lib/enterprise/retail/transaction-retry";
 import { prisma } from "@/lib/prisma";
 
@@ -82,21 +82,102 @@ export async function listRetailInvoiceReturnRequests(
 ) {
   await requireReturnFeatureTx(prisma, organizationId);
   const checkout = await prisma.enterpriseRetailInvoiceCheckout.findFirst({
-    where: { organizationId, salesInvoiceId: invoiceId }, select: { id: true, siteId: true },
+    where: { organizationId, salesInvoiceId: invoiceId },
+    select: { id: true, siteId: true, stockPostedAt: true, invoice: { select: { status: true } } },
   });
   if (!checkout) throw new EnterpriseRetailError("RETAIL_INVOICE_NOT_FOUND", 404);
   await requireRetailSiteCapability(
     organizationId, actorUserId, checkout.siteId, "VIEW_SALES", prisma, { requireAssignment: true },
   );
   const where = { organizationId, checkoutId: checkout.id };
-  const [items, total] = await Promise.all([
+  const [items, total, member, siteAssignment] = await Promise.all([
     prisma.enterpriseRetailInvoiceReturnRequest.findMany({
       where, orderBy: { createdAt: "desc" }, skip: (page - 1) * 25, take: 25,
-      include: { lines: true },
+      select: {
+        id: true, number: true, status: true, reason: true, refundAmount: true,
+        requestedByUserId: true, approverUserId: true, inspectedByUserId: true,
+        inspectedAt: true, inspectionNotes: true, decidedAt: true, decisionReason: true,
+        revision: true, createdAt: true,
+        lines: { select: { id: true, checkoutLineId: true, quantity: true, refundAmount: true, stockDisposition: true } },
+      },
     }),
     prisma.enterpriseRetailInvoiceReturnRequest.count({ where }),
+    prisma.organizationMember.findFirst({
+      where: { organizationId, userId: actorUserId, status: "ACTIVE", removedAt: null }, select: { role: true },
+    }),
+    prisma.enterpriseRetailSiteAssignment.findUnique({
+      where: { organizationId_siteId_userId: { organizationId, siteId: checkout.siteId, userId: actorUserId } },
+      select: { isActive: true, roleCode: true, permissionsJson: true },
+    }),
   ]);
-  return { items, pagination: { page, pageSize: 25, total, pageCount: Math.max(1, Math.ceil(total / 25)) } };
+  const capabilities = member && (RETAIL_OWNER_ROLES.has(member.role) || siteAssignment?.isActive)
+    ? RETAIL_OWNER_ROLES.has(member.role)
+      ? { canRequest: true, canInspect: true, canApprove: true }
+      : {
+        canRequest: siteStaffCapabilities(siteAssignment!.roleCode, siteAssignment!.permissionsJson).includes("REQUEST_INVOICE_RETURN"),
+        canInspect: siteStaffCapabilities(siteAssignment!.roleCode, siteAssignment!.permissionsJson).includes("MANAGE_STOCK"),
+        canApprove: siteStaffCapabilities(siteAssignment!.roleCode, siteAssignment!.permissionsJson).includes("APPROVE_INVOICE_RETURN"),
+      }
+    : { canRequest: false, canInspect: false, canApprove: false };
+  const finance = capabilities.canApprove ? await resolveEnterpriseModuleAccess({
+    organizationId, userId: actorUserId, moduleCode: "FINANCE_RECEIVABLES", action: "approve",
+  }) : null;
+  return {
+    items: items.map((item) => ({
+      id: item.id, number: item.number, status: item.status, reason: item.reason,
+      refundAmount: item.refundAmount, inspectedAt: item.inspectedAt,
+      inspectionNotes: item.inspectionNotes, decidedAt: item.decidedAt,
+      decisionReason: item.decisionReason, revision: item.revision,
+      createdAt: item.createdAt, lines: item.lines,
+      canInspect: capabilities.canInspect && item.status === "SUBMITTED" &&
+        item.requestedByUserId !== actorUserId && item.approverUserId !== actorUserId,
+      canDecide: capabilities.canApprove && finance?.allowed === true &&
+        ["SUBMITTED", "INSPECTED"].includes(item.status) && item.approverUserId === actorUserId &&
+        item.requestedByUserId !== actorUserId && item.inspectedByUserId !== actorUserId,
+    })),
+    canRequest: capabilities.canRequest && checkout.invoice.status === "PAID" && Boolean(checkout.stockPostedAt),
+    pagination: { page, pageSize: 25, total, pageCount: Math.max(1, Math.ceil(total / 25)) },
+  };
+}
+
+/** Only active enterprise members independently capable of approving Retail
+ * returns in THIS store and in the canonical Finance receivables module. */
+export async function listRetailInvoiceReturnApprovers(
+  organizationId: string, actorUserId: string, siteId: string,
+) {
+  await requireReturnFeatureTx(prisma, organizationId);
+  const site = await prisma.enterpriseSite.findFirst({
+    where: { organizationId, id: siteId, status: "ACTIVE", archivedAt: null }, select: { id: true },
+  });
+  if (!site) throw new EnterpriseRetailError("RETAIL_SITE_ACCESS_DENIED", 403);
+  await requireRetailSiteCapability(
+    organizationId, actorUserId, siteId, "REQUEST_INVOICE_RETURN", prisma, { requireAssignment: true },
+  );
+  const members = await prisma.organizationMember.findMany({
+    where: { organizationId, status: "ACTIVE", removedAt: null, userId: { not: actorUserId } },
+    take: 250, orderBy: { user: { name: "asc" } },
+    select: { userId: true, role: true, positionTitle: true, user: { select: { name: true } } },
+  });
+  const assignments = await prisma.enterpriseRetailSiteAssignment.findMany({
+    where: { organizationId, siteId, isActive: true, userId: { in: members.map((member) => member.userId) } },
+    select: { userId: true, roleCode: true, permissionsJson: true },
+  });
+  const siteAccess = new Map(assignments.map((assignment) => [assignment.userId, assignment]));
+  const eligible = members.filter((member) => {
+    if (RETAIL_OWNER_ROLES.has(member.role)) return true;
+    const assignment = siteAccess.get(member.userId);
+    return Boolean(assignment && siteStaffCapabilities(assignment.roleCode, assignment.permissionsJson).includes("APPROVE_INVOICE_RETURN"));
+  });
+  const candidates = await Promise.all(eligible.map(async (member) => {
+    const access = await resolveEnterpriseModuleAccess({
+      organizationId, userId: member.userId, moduleCode: "FINANCE_RECEIVABLES", action: "approve",
+    });
+    return access.allowed ? {
+      userId: member.userId, name: member.user.name, positionTitle: member.positionTitle,
+      role: member.role, isRequester: false, selfApprovalOverride: false,
+    } : null;
+  }));
+  return { candidates: candidates.filter((candidate): candidate is NonNullable<typeof candidate> => Boolean(candidate)) };
 }
 
 export async function createRetailInvoiceReturnRequest(
