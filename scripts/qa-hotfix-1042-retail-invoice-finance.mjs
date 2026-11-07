@@ -278,4 +278,18 @@ const financeCreditPosting = fs.readFileSync("lib/enterprise/accounting/accounti
 assert.match(financeCreditPosting, /await assertSalesCreditNoteStillPostable\(organizationId, creditNoteId, revision\)/);
 const financeUiErrors = fs.readFileSync("lib/enterprise/accounting/http.ts", "utf8");
 assert.match(financeUiErrors, /RETAIL_INVOICE_RETURN_WORKFLOW_REQUIRED: "Cette facture est liée à une vente Retail/);
+const overview = fs.readFileSync("app/api/enterprise/[organizationId]/retail/site-overview/route.ts", "utf8");
+assert.match(overview, /role: \{ in: ADMIN_ROLES \}/, "Owner-only report must retain its strict server membership check");
+assert.match(overview, /FROM "EnterpriseRetailInvoiceCheckout" checkout/);
+assert.match(overview, /JOIN "EnterpriseSalesInvoice" invoice/);
+assert.match(overview, /checkout\."organizationId" = \$\{organizationId\}/);
+assert.match(overview, /checkout\."siteId" IN \(\$\{Prisma\.join\(ids\)\}\)/);
+assert.match(overview, /GROUP BY checkout\."siteId", invoice\."currencyCode"/);
+assert.match(overview, /issuedAt/);
+assert.match(overview, /allocatedToDate/);
+assert.match(overview, /outstandingToDate/);
+const overviewUI = fs.readFileSync("components/enterprise/professional/retail-site-overview.tsx", "utf8");
+assert.match(overviewUI, /site\.financeInvoices/);
+assert.match(overviewUI, /distinctes des ventes POS/);
+assert.match(overviewUI, /These are not collections received during this period/);
 console.log("HOTFIX #1042 Finance bridge: retry/collision, opt-in guard, no early stock, full-payment posting, store-level invoice read/write/collection scope, Design 2.0 and canonical Finance schema passed.");
