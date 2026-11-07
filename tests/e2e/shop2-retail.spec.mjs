@@ -749,4 +749,83 @@ test.describe.serial("Shop 2.0 Retail behavioral acceptance", () => {
     }
   });
 
+  test("#1042 concurrent last-unit invoice promises serialize and cancellation releases capacity", async ({ page }) => {
+    if (process.env.CI !== "true" || !/\/dtsc_shop2_behavioral(?:\?|$)/.test(process.env.DATABASE_URL || "")) {
+      throw new Error("RETAIL_1042_LAST_UNIT_E2E_REQUIRES_EPHEMERAL_CI_DATABASE");
+    }
+    const config = await prisma.enterpriseRetailConfiguration.findUniqueOrThrow({ where: { organizationId } });
+    const originalSettings = config.settingsJson;
+    try {
+      await prisma.enterpriseRetailConfiguration.update({
+        where: { organizationId },
+        data: { settingsJson: {
+          ...(originalSettings && typeof originalSettings === "object" && !Array.isArray(originalSettings) ? originalSettings : {}),
+          invoiceCheckoutEnabled: true, siteStaffIsolationEnabled: false,
+        }, revision: { increment: 1 } },
+      });
+      await signIn(page);
+      const baseCatalog = await prisma.enterpriseCatalogItem.findUniqueOrThrow({ where: { id: fixture.catalogItemId } });
+      const catalog = await prisma.enterpriseCatalogItem.upsert({
+        where: { organizationId_code: { organizationId, code: "SHOP2-E2E-LAST-UNIT" } },
+        update: { status: "ACTIVE", archivedAt: null, currency: fixture.currencyCode,
+          trackInventory: true, taxable: false, indicativeSalePrice: 10 },
+        create: { organizationId, code: "SHOP2-E2E-LAST-UNIT", sku: "SHOP2-E2E-LAST-UNIT",
+          name: "Shop 2 isolated last unit", normalizedName: "shop 2 isolated last unit",
+          itemType: "PRODUCT", unitOfMeasureId: baseCatalog.unitOfMeasureId,
+          indicativeSalePrice: 10, indicativeCost: 4, currency: fixture.currencyCode,
+          status: "ACTIVE", taxable: false, trackInventory: true, createdByUserId: fixture.userId },
+      });
+      const inventory = await prisma.enterpriseInventoryItem.upsert({
+        where: { organizationId_catalogItemId: { organizationId, catalogItemId: catalog.id } },
+        update: { status: "ACTIVE", archivedAt: null, allowNegativeStock: false },
+        create: { organizationId, catalogItemId: catalog.id, status: "ACTIVE",
+          allowNegativeStock: false, createdByUserId: fixture.userId },
+      });
+      const existingBalance = await prisma.enterpriseInventoryBalance.findFirst({
+        where: { organizationId, warehouseId: fixture.warehouseId, inventoryItemId: inventory.id,
+          storageLocationId: null, stockLotId: null },
+      });
+      const balance = existingBalance
+        ? await prisma.enterpriseInventoryBalance.update({ where: { id: existingBalance.id },
+          data: { quantityOnHand: new Prisma.Decimal(1), quantityReserved: new Prisma.Decimal(0) } })
+        : await prisma.enterpriseInventoryBalance.create({ data: {
+          organizationId, warehouseId: fixture.warehouseId, inventoryItemId: inventory.id,
+          quantityOnHand: new Prisma.Decimal(1), quantityReserved: new Prisma.Decimal(0),
+        } });
+      const site = await prisma.enterpriseWarehouse.findUniqueOrThrow({
+        where: { id: fixture.warehouseId }, select: { siteId: true },
+      });
+      const payload = (key) => ({
+        idempotencyKey: key, siteId: site.siteId, warehouseId: fixture.warehouseId,
+        currencyCode: fixture.currencyCode, lines: [{ catalogItemId: catalog.id, quantity: 1 }],
+      });
+      const first = payload(`retail-1042-last-unit-a-${Date.now()}`);
+      const second = payload(`retail-1042-last-unit-b-${Date.now()}`);
+      const endpoint = `/api/enterprise/${organizationId}/retail/invoices`;
+      const results = await Promise.all([apiPost(page, endpoint, first), apiPost(page, endpoint, second)]);
+      expect(results.map((result) => result.response.status()).sort((a, b) => a - b)).toEqual([201, 409]);
+      const accepted = results.find((result) => result.response.status() === 201);
+      const rejected = results.find((result) => result.response.status() === 409);
+      expect(rejected.body.error).toBe("NEGATIVE_STOCK_FORBIDDEN");
+      const afterHolds = await prisma.enterpriseInventoryBalance.findUniqueOrThrow({ where: { id: balance.id } });
+      expect(afterHolds.quantityOnHand.equals(1)).toBe(true);
+      expect(await prisma.enterpriseStockMovement.count({ where: { organizationId,
+        sourceEntityType: "EnterpriseSalesInvoice", sourceEntityId: accepted.body.invoice.id } })).toBe(0);
+      const cancelled = await apiPost(page, endpoint + "/" + accepted.body.invoice.id + "/transition", {
+        action: "CANCEL", revision: accepted.body.invoice.revision, reason: "Libération test de promesse concurrente",
+      });
+      expect(cancelled.response.status(), JSON.stringify(cancelled.body)).toBe(200);
+      expect(cancelled.body.invoice.status).toBe("CANCELLED");
+      const nowAvailable = await apiPost(page, endpoint, results[0] === rejected ? first : second);
+      expect(nowAvailable.response.status(), JSON.stringify(nowAvailable.body)).toBe(201);
+      const afterRetry = await prisma.enterpriseInventoryBalance.findUniqueOrThrow({ where: { id: balance.id } });
+      expect(afterRetry.quantityOnHand.equals(1), "A stock promise never reduces physical stock before payment").toBe(true);
+    } finally {
+      await prisma.enterpriseRetailConfiguration.update({
+        where: { organizationId },
+        data: { settingsJson: originalSettings === null ? Prisma.DbNull : originalSettings, revision: { increment: 1 } },
+      });
+    }
+  });
+
 });

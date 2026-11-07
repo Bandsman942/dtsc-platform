@@ -1,3 +1,7 @@
+## 2026-11-07 — Retail #1042, tranche 38 — Concurrence du dernier article (candidat, PR #1043)
+
+- Recette navigateur PostgreSQL à deux requêtes concurrentes de préparation de facture sur **l'unique unité disponible** d'un SKU dédié : une réservation acceptée, une refusée, zéro sortie physique avant règlement, annulation du brouillon libérant la promesse puis même demande précédemment rejetée acceptée. Le test est limité au tenant synthétique CI et restaure ses options ; aucune preuve de paiement final ni E2E propriétaire n'est déduite avant une CI verte.
+
 ## 2026-11-07 — Retail #1042, tranche 37 — Contre-épreuves inter-boutiques et CI anti-bruteforce (candidat, PR #1043)
 
 - Après **22/22 scénarios navigateur réussis** sur le commit `19818f1c`, tests supplémentaires avec deux identités authentifiées : filtres A/B, accès directs aux paiements et retours de la boutique opposée refusés, facture FR/A4 et EN/80 mm pour la bonne boutique, et rejeu de clé d'idempotence refusé après révocation. Impression sur imprimante physique et `OWNER_E2E` toujours non exécutés.
