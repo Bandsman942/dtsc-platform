@@ -6,6 +6,10 @@ import { getEnterpriseCommonDomainAccess } from "@/lib/enterprise/common/access"
 import { enterpriseDomainErrorResponse } from "@/lib/enterprise/common/http";
 import { stockTransferDecisionSchema } from "@/lib/enterprise/inventory/schemas";
 import { decideEnterpriseStockTransfer } from "@/lib/enterprise/inventory/service";
+import { retailErrorResponse } from "@/lib/enterprise/retail/http";
+import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
+import { requireRetailSiteCapability } from "@/lib/enterprise/retail/site-access";
+import { prisma } from "@/lib/prisma";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
 
@@ -24,11 +28,21 @@ export async function POST(req: Request, { params }: Params) {
   const parsed = stockTransferDecisionSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "STOCK_TRANSFERS_DECISION_INPUT_INVALID", req);
   try {
+    const source = await prisma.enterpriseStockTransfer.findFirst({
+      where: { organizationId, id: transferId }, select: { sourceWarehouse: { select: { siteId: true } } },
+    });
+    // An assigned store operator needs an explicit transfer authorization;
+    // the common Inventory permission alone does not grant global approval.
+    await requireRetailSiteCapability(organizationId, session.userId,
+      source?.sourceWarehouse.siteId, "AUTHORIZE_TRANSFER");
     const transfer = await decideEnterpriseStockTransfer(organizationId, transferId, session.userId, parsed.data);
     await writeAuditLog({ userId: session.userId, action: `ENTERPRISE_STOCK_TRANSFER_${parsed.data.decision}`, entity: "EnterpriseStockTransfer", entityId: transfer.id, request: req, metadata: { organizationId } });
     await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "stock-transfers", action: parsed.data.decision } });
     return NextResponse.json({ ok: true, transfer });
   } catch (error) {
+    if (error instanceof EnterpriseRetailError) {
+      return retailErrorResponse(error, "RETAIL_SITE_ACCESS_DENIED");
+    }
     return enterpriseDomainErrorResponse(error, "STOCK_TRANSFER_DECISION_FAILED");
   }
 }

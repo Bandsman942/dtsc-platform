@@ -6,6 +6,7 @@ import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { getEnterpriseCommonDomainAccess } from "@/lib/enterprise/common/access";
 import { retailErrorResponse } from "@/lib/enterprise/retail/http";
 import { retailStockTransferVisibleSites } from "@/lib/enterprise/retail/site-access";
+import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
 import { enterpriseDomainErrorResponse } from "@/lib/enterprise/common/http";
 import { stockTransferCreateSchema } from "@/lib/enterprise/inventory/schemas";
 import { createEnterpriseStockTransfer } from "@/lib/enterprise/inventory/service";
@@ -71,11 +72,21 @@ export async function POST(req: Request, { params }: Params) {
   const parsed = stockTransferCreateSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "STOCK_TRANSFERS_INPUT_INVALID", req);
   try {
+    const scope = await retailStockTransferVisibleSites(organizationId, session.userId);
+    if (scope.isolationEnabled) {
+      const source = await prisma.enterpriseWarehouse.findFirst({
+        where: { organizationId, id: parsed.data.sourceWarehouseId }, select: { siteId: true },
+      });
+      if (!source || !scope.manageableSiteIds.includes(source.siteId)) {
+        throw new EnterpriseRetailError("RETAIL_SITE_ACCESS_DENIED", 403);
+      }
+    }
     const transfer = await createEnterpriseStockTransfer(organizationId, session.userId, parsed.data);
     await writeAuditLog({ userId: session.userId, action: "ENTERPRISE_STOCK_TRANSFER_SUBMITTED", entity: "EnterpriseStockTransfer", entityId: transfer.id, request: req, metadata: { organizationId, approverUserId: parsed.data.approverUserId } });
     await writeApiLog({ request: req, statusCode: 201, userId: session.userId, startedAt, metadata: { organizationId, domain: "stock-transfers" } });
     return NextResponse.json({ ok: true, transfer }, { status: 201 });
   } catch (error) {
+    if (error instanceof EnterpriseRetailError) return retailErrorResponse(error, "RETAIL_SITE_ACCESS_DENIED");
     return enterpriseDomainErrorResponse(error, "STOCK_TRANSFER_CREATE_FAILED");
   }
 }

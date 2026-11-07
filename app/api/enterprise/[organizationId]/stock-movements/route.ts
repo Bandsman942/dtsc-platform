@@ -6,6 +6,7 @@ import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { getEnterpriseCommonDomainAccess } from "@/lib/enterprise/common/access";
 import { retailErrorResponse } from "@/lib/enterprise/retail/http";
 import { retailInventoryVisibleSites } from "@/lib/enterprise/retail/site-access";
+import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
 import { enterpriseDomainErrorResponse } from "@/lib/enterprise/common/http";
 import { stockMovementCreateSchema } from "@/lib/enterprise/inventory/schemas";
 import { applyEnterpriseStockMovement } from "@/lib/enterprise/inventory/service";
@@ -60,11 +61,21 @@ export async function POST(req: Request, { params }: Params) {
   if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "STOCK_MOVEMENTS_INPUT_INVALID", req);
   if (parsed.data.movementType !== "OPENING_BALANCE" || parsed.data.direction !== "IN") return NextResponse.json({ error: "DIRECT_MOVEMENT_FORBIDDEN", message: "Seul un stock d’ouverture entrant peut être saisi directement." }, { status: 409 });
   try {
+    const scope = await retailInventoryVisibleSites(organizationId, session.userId);
+    if (scope.isolationEnabled) {
+      const warehouse = await prisma.enterpriseWarehouse.findFirst({
+        where: { organizationId, id: parsed.data.warehouseId }, select: { siteId: true },
+      });
+      if (!warehouse || !scope.manageableSiteIds.includes(warehouse.siteId)) {
+        throw new EnterpriseRetailError("RETAIL_SITE_ACCESS_DENIED", 403);
+      }
+    }
     const result = await applyEnterpriseStockMovement(organizationId, session.userId, parsed.data);
     await writeAuditLog({ userId: session.userId, action: "ENTERPRISE_OPENING_STOCK_CREATED", entity: "EnterpriseStockMovement", entityId: result.movement.id, request: req, metadata: { organizationId, idempotent: result.idempotent } });
     await writeApiLog({ request: req, statusCode: result.idempotent ? 200 : 201, userId: session.userId, startedAt, metadata: { organizationId, domain: "stock-movements", action: "opening-balance" } });
     return NextResponse.json({ ok: true, ...result }, { status: result.idempotent ? 200 : 201 });
   } catch (error) {
+    if (error instanceof EnterpriseRetailError) return retailErrorResponse(error, "RETAIL_SITE_ACCESS_DENIED");
     return enterpriseDomainErrorResponse(error, "STOCK_MOVEMENT_FAILED");
   }
 }

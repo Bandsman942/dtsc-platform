@@ -2,6 +2,13 @@
 
 - Recette navigateur PostgreSQL à deux requêtes concurrentes de préparation de facture sur **l'unique unité disponible** d'un SKU dédié : une réservation acceptée, une refusée, zéro sortie physique avant règlement, annulation du brouillon libérant la promesse puis même demande précédemment rejetée acceptée. Le test est limité au tenant synthétique CI et restaure ses options ; aucune preuve de paiement final ni E2E propriétaire n'est déduite avant une CI verte.
 
+## 2026-11-07 — Retail #1042, tranche 39 — Frontières des anciennes API ERP (candidat, PR #1043)
+
+- Extension du cloisonnement `siteStaffIsolationEnabled` aux API communes de sites, dépôts, emplacements et mouvements de stock, y compris leurs mutations ; un collaborateur affecté à B ne peut plus exploiter un droit ERP général pour créer ou modifier un objet de A. La création/modification du référentiel des sites reste réservée aux propriétaires/administrateurs lorsque l'isolation est active.
+- Transferts inter-boutiques : la demande exige une gestion autorisée du site source, la décision le droit explicite `AUTHORIZE_TRANSFER` du site source, et la réception le droit `MANAGE_STOCK` du site destinataire. Les droits et validations ERP communs restent nécessaires.
+- Contre-épreuve Playwright PostgreSQL étendue à un manager B possédant volontairement les permissions ERP Sites/Inventaire, avec refus des écritures sur A et vérification de la liste et des compteurs filtrés ; contrats statiques branchés aux Quality Gates.
+- **Pré-release uniquement** : garder les deux flags OFF en Production, ne pas fusionner tant que la CI de cette tranche et l'OWNER_E2E complet ne sont pas validés. Rapports de résultat net, exports, matériel réel et restauration restent à certifier.
+
 ## 2026-11-07 — Retail #1042, tranche 37 — Contre-épreuves inter-boutiques et CI anti-bruteforce (candidat, PR #1043)
 
 - Après **22/22 scénarios navigateur réussis** sur le commit `19818f1c`, tests supplémentaires avec deux identités authentifiées : filtres A/B, accès directs aux paiements et retours de la boutique opposée refusés, facture FR/A4 et EN/80 mm pour la bonne boutique, et rejeu de clé d'idempotence refusé après révocation. Impression sur imprimante physique et `OWNER_E2E` toujours non exécutés.

@@ -10,6 +10,7 @@ import { storageLocationCreateSchema, storageLocationUpdateSchema } from "@/lib/
 import { createEnterpriseStorageLocation, updateEnterpriseStorageLocation } from "@/lib/enterprise/master-data/service";
 import { retailErrorResponse } from "@/lib/enterprise/retail/http";
 import { retailInventoryVisibleSites } from "@/lib/enterprise/retail/site-access";
+import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
 import { prisma } from "@/lib/prisma";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
@@ -67,11 +68,21 @@ export async function POST(req: Request, { params }: Params) {
   const parsed = storageLocationCreateSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "STORAGE_LOCATION_CREATE_INPUT_INVALID", req);
   try {
+    const scope = await retailInventoryVisibleSites(organizationId, session.userId);
+    if (scope.isolationEnabled) {
+      const warehouse = await prisma.enterpriseWarehouse.findFirst({
+        where: { organizationId, id: parsed.data.warehouseId }, select: { siteId: true },
+      });
+      if (!warehouse || !scope.manageableSiteIds.includes(warehouse.siteId)) {
+        throw new EnterpriseRetailError("RETAIL_SITE_ACCESS_DENIED", 403);
+      }
+    }
     const location = await createEnterpriseStorageLocation(organizationId, session.userId, parsed.data);
     await writeAuditLog({ userId: session.userId, action: "ENTERPRISE_STORAGE_LOCATION_CREATED", entity: "EnterpriseStorageLocation", entityId: location.id, request: req, metadata: { organizationId, warehouseId: parsed.data.warehouseId } });
     await writeApiLog({ request: req, statusCode: 201, userId: session.userId, startedAt, metadata: { organizationId, domain: "storage-locations" } });
     return NextResponse.json({ ok: true, location }, { status: 201 });
   } catch (error) {
+    if (error instanceof EnterpriseRetailError) return retailErrorResponse(error, "RETAIL_SITE_ACCESS_DENIED");
     if (error instanceof EnterpriseDomainError) return enterpriseDomainErrorResponse(error, "STORAGE_LOCATION_CREATE_FAILED", req);
     const duplicate = error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
     return NextResponse.json({ error: duplicate ? "STORAGE_LOCATION_DUPLICATE" : "STORAGE_LOCATION_CREATE_FAILED", message: duplicate ? "Cet emplacement existe déjà dans l’entrepôt." : "Création de l’emplacement impossible." }, { status: duplicate ? 409 : 400 });
@@ -92,12 +103,22 @@ export async function PATCH(req: Request, { params }: Params) {
   if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "STORAGE_LOCATION_UPDATE_INPUT_INVALID", req);
   if (!entityId) return NextResponse.json({ error: "STORAGE_LOCATION_REFERENCE_REQUIRED", message: "Référence manquante." }, { status: 400 });
   try {
+    const scope = await retailInventoryVisibleSites(organizationId, session.userId);
+    if (scope.isolationEnabled) {
+      const location = await prisma.enterpriseStorageLocation.findFirst({
+        where: { organizationId, id: entityId }, select: { warehouse: { select: { siteId: true } } },
+      });
+      if (!location || !scope.manageableSiteIds.includes(location.warehouse.siteId)) {
+        throw new EnterpriseRetailError("RETAIL_SITE_ACCESS_DENIED", 403);
+      }
+    }
     if (parsed.data.status === "INACTIVE") await prisma.$transaction((tx) => assertStorageLocationCanBecomeInactive(tx, organizationId, entityId), { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     const entity = await updateEnterpriseStorageLocation(organizationId, entityId, session.userId, parsed.data);
     await writeAuditLog({ userId: session.userId, action: "ENTERPRISE_STORAGE_LOCATION_UPDATED", entity: "EnterpriseStorageLocation", entityId, request: req, metadata: { organizationId } });
     await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, action: "update" } });
     return NextResponse.json({ ok: true, entity });
   } catch (error) {
+    if (error instanceof EnterpriseRetailError) return retailErrorResponse(error, "RETAIL_SITE_ACCESS_DENIED");
     if (error instanceof EnterpriseDomainError) return enterpriseDomainErrorResponse(error, "STORAGE_LOCATION_UPDATE_FAILED", req);
     const integrityMessage = locationIntegrityMessage(error);
     if (integrityMessage) return NextResponse.json({ error: "STORAGE_LOCATION_INTEGRITY_CONFLICT", message: integrityMessage }, { status: 409 });

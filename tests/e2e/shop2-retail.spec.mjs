@@ -609,23 +609,23 @@ test.describe.serial("Shop 2.0 Retail behavioral acceptance", () => {
       });
       const position = await prisma.enterprisePosition.upsert({
         where: { organizationId_positionCode: { organizationId, positionCode: "SHOP2-E2E-INVOICER" } },
-        update: { permissionsJson: ["enterprise.retail.pos.view", "enterprise.retail.pos.create"], isActive: true },
+        update: { permissionsJson: ["enterprise.retail.pos.view", "enterprise.retail.pos.create", "enterprise.sites.view", "enterprise.sites.create", "enterprise.sites.update", "enterprise.inventory.view", "enterprise.inventory.create", "enterprise.inventory.update"], isActive: true },
         create: { organizationId, positionCode: "SHOP2-E2E-INVOICER",
           labelFr: "Facturier de recette B", labelEn: "B test invoicer",
-          permissionsJson: ["enterprise.retail.pos.view", "enterprise.retail.pos.create"], isActive: true },
+          permissionsJson: ["enterprise.retail.pos.view", "enterprise.retail.pos.create", "enterprise.sites.view", "enterprise.sites.create", "enterprise.sites.update", "enterprise.inventory.view", "enterprise.inventory.create", "enterprise.inventory.update"], isActive: true },
       });
       await prisma.organizationMember.upsert({
         where: { organizationId_userId: { organizationId, userId: staff.id } },
-        update: { role: "MEMBER", status: "ACTIVE", removedAt: null,
+        update: { role: "MANAGER", status: "ACTIVE", removedAt: null,
           positionId: position.id, positionCode: position.positionCode },
-        create: { organizationId, userId: staff.id, role: "MEMBER", status: "ACTIVE",
+        create: { organizationId, userId: staff.id, role: "MANAGER", status: "ACTIVE",
           positionId: position.id, positionCode: position.positionCode, joinedAt: new Date() },
       });
       const assignmentKey = { organizationId, siteId: secondarySite.id, userId: staff.id };
       await prisma.enterpriseRetailSiteAssignment.upsert({
         where: { organizationId_siteId_userId: assignmentKey },
-        update: { roleCode: "MANAGER", permissionsJson: ["VIEW_SALES", "PREPARE_INVOICE"], isActive: true },
-        create: { ...assignmentKey, roleCode: "MANAGER", permissionsJson: ["VIEW_SALES", "PREPARE_INVOICE"],
+        update: { roleCode: "MANAGER", permissionsJson: ["VIEW_SALES", "PREPARE_INVOICE", "VIEW_STOCK", "MANAGE_STOCK"], isActive: true },
+        create: { ...assignmentKey, roleCode: "MANAGER", permissionsJson: ["VIEW_SALES", "PREPARE_INVOICE", "VIEW_STOCK", "MANAGE_STOCK"],
           isActive: true, createdByUserId: fixture.userId },
       });
       const product = await prisma.enterpriseCatalogItem.findFirstOrThrow({
@@ -690,6 +690,66 @@ test.describe.serial("Shop 2.0 Retail behavioral acceptance", () => {
       });
       expect(forbiddenCreate.response.status()).toBe(403);
       expect(forbiddenCreate.body.error).toBe("RETAIL_SITE_ACCESS_DENIED");
+
+      // A staff member deliberately has the common Sites/Inventory module
+      // permissions here. Their store assignment still restricts legacy
+      // endpoints, including aggregate counts and mutation routes.
+      const siteList = await apiGet(page, `/api/enterprise/${organizationId}/sites`);
+      expect(siteList.response.status(), JSON.stringify(siteList.body)).toBe(200);
+      expect(siteList.body.items.map((item) => item.id)).toEqual([secondarySite.id]);
+      expect(siteList.body.metrics.active).toBe(1);
+      expect(siteList.body.canManage).toBe(false);
+      const forbiddenSiteCreate = await apiPost(page, `/api/enterprise/${organizationId}/sites`, {
+        name: "Forbidden extra shop", siteType: "STORE",
+      });
+      expect(forbiddenSiteCreate.response.status(), JSON.stringify(forbiddenSiteCreate.body)).toBe(403);
+      const primarySiteRecord = await prisma.enterpriseSite.findUniqueOrThrow({ where: { id: primarySite.siteId } });
+      const forbiddenSiteEdit = await apiJson(await page.context().request.patch(
+        `/api/enterprise/${organizationId}/sites`, {
+          data: { siteId: primarySite.siteId, revision: primarySiteRecord.revision, name: "Forbidden shop edit" },
+          headers: { origin: baseUrl, referer: `${baseUrl}/enterprise-modules/RETAIL_POS` },
+        },
+      ));
+      expect(forbiddenSiteEdit.response.status(), JSON.stringify(forbiddenSiteEdit.body)).toBe(403);
+
+      const warehouseList = await apiGet(page, `/api/enterprise/${organizationId}/warehouses`);
+      expect(warehouseList.response.status(), JSON.stringify(warehouseList.body)).toBe(200);
+      expect(warehouseList.body.items.every((item) => item.siteId === secondarySite.id)).toBe(true);
+      expect(warehouseList.body.items.some((item) => item.id === fixture.warehouseId)).toBe(false);
+      const sourceWarehouse = await prisma.enterpriseWarehouse.findUniqueOrThrow({ where: { id: fixture.warehouseId } });
+
+      const forbiddenWarehouseCreate = await apiPost(page, `/api/enterprise/${organizationId}/warehouses`, {
+        siteId: primarySite.siteId, name: "Forbidden cross-store depot",
+      });
+      expect(forbiddenWarehouseCreate.response.status(), JSON.stringify(forbiddenWarehouseCreate.body)).toBe(403);
+      const forbiddenWarehouseEdit = await apiJson(await page.context().request.patch(
+        `/api/enterprise/${organizationId}/warehouses`, {
+          data: { warehouseId: fixture.warehouseId, revision: sourceWarehouse.revision, name: "Forbidden cross-store edit" },
+          headers: { origin: baseUrl, referer: `${baseUrl}/enterprise-modules/RETAIL_POS` },
+        },
+      ));
+      expect(forbiddenWarehouseEdit.response.status(), JSON.stringify(forbiddenWarehouseEdit.body)).toBe(403);
+      const forbiddenLocationCreate = await apiPost(page, `/api/enterprise/${organizationId}/storage-locations`, {
+        warehouseId: fixture.warehouseId, name: "Forbidden cross-store shelf",
+      });
+      expect(forbiddenLocationCreate.response.status(), JSON.stringify(forbiddenLocationCreate.body)).toBe(403);
+
+      const forbiddenStockCreate = await apiPost(page, `/api/enterprise/${organizationId}/stock-movements`, {
+        inventoryItemId: inventory.id, warehouseId: fixture.warehouseId,
+        movementType: "OPENING_BALANCE", direction: "IN", quantity: 1,
+        idempotencyKey: `shop2-1042-forbidden-opening-${Date.now()}`,
+      });
+      expect(forbiddenStockCreate.response.status(), JSON.stringify(forbiddenStockCreate.body)).toBe(403);
+      const forbiddenTransfer = await apiPost(page, `/api/enterprise/${organizationId}/stock-transfers`, {
+        sourceWarehouseId: fixture.warehouseId, destinationWarehouseId: secondaryWarehouse.id,
+        approverUserId: fixture.userId, lines: [{ inventoryItemId: inventory.id, quantity: 1 }],
+      });
+      expect(forbiddenTransfer.response.status(), JSON.stringify(forbiddenTransfer.body)).toBe(403);
+
+      const ownerSiteList = await apiGet(ownerPage, `/api/enterprise/${organizationId}/sites`);
+      expect(ownerSiteList.response.status()).toBe(200);
+      expect(ownerSiteList.body.items.some((item) => item.id === primarySite.siteId)).toBe(true);
+      expect(ownerSiteList.body.items.some((item) => item.id === secondarySite.id)).toBe(true);
 
       const secondaryPayload = {
         ...primaryPayload, idempotencyKey: "shop2-e2e-b-" + Date.now(),

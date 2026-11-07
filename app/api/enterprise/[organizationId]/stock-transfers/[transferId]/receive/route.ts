@@ -5,6 +5,10 @@ import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { enterpriseValidationErrorResponse, enterpriseDomainErrorResponse } from "@/lib/enterprise/common/http";
 import { getEnterpriseCommonDomainAccess } from "@/lib/enterprise/common/access";
 import { receiveEnterpriseStockTransfer } from "@/lib/enterprise/inventory/service";
+import { retailErrorResponse } from "@/lib/enterprise/retail/http";
+import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
+import { requireRetailSiteCapability } from "@/lib/enterprise/retail/site-access";
+import { prisma } from "@/lib/prisma";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
 
@@ -24,11 +28,19 @@ export async function POST(req: Request, { params }: Params) {
   const parsed = schema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "STOCK_TRANSFER_RECEIVE_INPUT_INVALID", req);
   try {
+    const destination = await prisma.enterpriseStockTransfer.findFirst({
+      where: { organizationId, id: transferId }, select: { destinationWarehouse: { select: { siteId: true } } },
+    });
+    await requireRetailSiteCapability(organizationId, session.userId,
+      destination?.destinationWarehouse.siteId, "MANAGE_STOCK");
     const transfer = await receiveEnterpriseStockTransfer(organizationId, transferId, session.userId, parsed.data.revision, parsed.data.comment);
     await writeAuditLog({ userId: session.userId, action: "ENTERPRISE_STOCK_TRANSFER_RECEIVED", entity: "EnterpriseStockTransfer", entityId: transfer.id, request: req, metadata: { organizationId, receivedByUserId: session.userId, transferReference: transfer.reference } });
     await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "stock-transfers", action: "receive" } });
     return NextResponse.json({ ok: true, transfer });
   } catch (error) {
+    if (error instanceof EnterpriseRetailError) {
+      return retailErrorResponse(error, "RETAIL_SITE_ACCESS_DENIED");
+    }
     return enterpriseDomainErrorResponse(error, "STOCK_TRANSFER_RECEIVE_FAILED", req);
   }
 }

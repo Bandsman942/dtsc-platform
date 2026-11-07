@@ -13,17 +13,17 @@ class EnterpriseRetailError extends Error {
 const cjs = typescript.transpileModule(source, {
   compilerOptions: { module: typescript.ModuleKind.CommonJS, target: typescript.ScriptTarget.ES2022 },
 }).outputText;
-const module = { exports: {} };
+const cjsModule = { exports: {} };
 vm.runInNewContext(cjs, {
-  module,
-  exports: module.exports,
+  module: cjsModule,
+  exports: cjsModule.exports,
   require: (id) => id === "@/lib/enterprise/retail/errors" ? { EnterpriseRetailError } : require(id),
   Date, Intl, Set, Map,
 }, { filename: "inventory-policy.ts" });
 
 const {
   readRetailInventoryPolicy, businessDateKey, retailLotExpiryDateKey, lotIsExpired, assertRetailLotPolicyTx,
-} = module.exports;
+} = cjsModule.exports;
 const legacy = readRetailInventoryPolicy(null);
 assert.deepEqual({ ...legacy }, { expiryMode: "ALLOW", enforceFefo: false, warningDays: 30, transferReception: "IMMEDIATE" });
 const configured = readRetailInventoryPolicy({ unrelated: "keep", inventoryPolicy: { expiryMode: "BLOCK", enforceFefo: true, warningDays: 21 } });
@@ -71,6 +71,26 @@ const receiveRoute = fs.readFileSync("app/api/enterprise/[organizationId]/stock-
 assert.match(receiveRoute, /isSameOriginRequest\(req\)/);
 assert.match(receiveRoute, /getEnterpriseCommonDomainAccess/);
 assert.match(receiveRoute, /writeAuditLog/);
+// Multi-boutique cutover must protect old ERP routes as well as new Retail
+// invoices: staff with common module rights cannot read or mutate another
+// store's site, depot, storage location, movement or transfer.
+for (const path of ["sites", "warehouses", "storage-locations", "stock-movements", "stock-transfers"]) {
+  const route = fs.readFileSync(`app/api/enterprise/[organizationId]/${path}/route.ts`, "utf8");
+  assert.match(route, /retailInventoryVisibleSites|retailStockTransferVisibleSites/, `${path}: store read scope`);
+  assert.match(route, /scope\.isolationEnabled/, `${path}: cutover-aware restrictions`);
+  assert.match(route, /RETAIL_SITE_ACCESS_DENIED/, `${path}: fail-closed mutation error`);
+}
+const siteRegistry = fs.readFileSync("app/api/enterprise/[organizationId]/sites/route.ts", "utf8");
+assert.match(siteRegistry, /id: \{ in: scope\.siteIds \}/, "site list and counts must stay local");
+assert.match(siteRegistry, /access\.canManage && !scope\.isolationEnabled/, "site staff cannot administer all stores");
+for (const path of [
+  "stock-transfers/[transferId]/decision",
+  "stock-transfers/[transferId]/receive",
+]) {
+  const route = fs.readFileSync(`app/api/enterprise/[organizationId]/${path}/route.ts`, "utf8");
+  assert.match(route, /requireRetailSiteCapability/, `${path}: explicit site capability`);
+  assert.match(route, /RETAIL_SITE_ACCESS_DENIED/, `${path}: denied store access`);
+}
 const pos = fs.readFileSync("components/enterprise/professional/retail-pos-dtsc-workspace.tsx", "utf8");
 assert.match(pos, /stockLotId: line.stockLotId/);
 assert.match(pos, /retail\/stock-lots/);

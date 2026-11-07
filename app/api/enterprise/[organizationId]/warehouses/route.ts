@@ -10,6 +10,7 @@ import { warehouseCreateSchema, warehouseUpdateSchema } from "@/lib/enterprise/m
 import { createEnterpriseWarehouse, updateEnterpriseWarehouse } from "@/lib/enterprise/master-data/service";
 import { retailErrorResponse } from "@/lib/enterprise/retail/http";
 import { retailInventoryVisibleSites } from "@/lib/enterprise/retail/site-access";
+import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
 import { prisma } from "@/lib/prisma";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
@@ -62,11 +63,16 @@ export async function POST(req: Request, { params }: Params) {
   const parsed = warehouseCreateSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "WAREHOUSE_INPUT_INVALID", req);
   try {
+    const scope = await retailInventoryVisibleSites(organizationId, session.userId);
+    if (scope.isolationEnabled && !scope.manageableSiteIds.includes(parsed.data.siteId)) {
+      throw new EnterpriseRetailError("RETAIL_SITE_ACCESS_DENIED", 403);
+    }
     const warehouse = await createEnterpriseWarehouse(organizationId, session.userId, parsed.data);
     await writeAuditLog({ userId: session.userId, action: "ENTERPRISE_WAREHOUSE_CREATED", entity: "EnterpriseWarehouse", entityId: warehouse.id, request: req, metadata: { organizationId, siteId: warehouse.siteId } });
     await writeApiLog({ request: req, statusCode: 201, userId: session.userId, startedAt, metadata: { organizationId, domain: "warehouses" } });
     return NextResponse.json({ ok: true, warehouse }, { status: 201 });
   } catch (error) {
+    if (error instanceof EnterpriseRetailError) return retailErrorResponse(error, "RETAIL_SITE_ACCESS_DENIED");
     if (error instanceof EnterpriseDomainError) return enterpriseDomainErrorResponse(error, "WAREHOUSE_CREATE_FAILED", req);
     const duplicate = error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
     return NextResponse.json({ error: duplicate ? "WAREHOUSE_DUPLICATE" : "WAREHOUSE_CREATE_FAILED", message: duplicate ? "Un entrepôt possédant ce code existe déjà." : "Création de l’entrepôt impossible." }, { status: duplicate ? 409 : 400 });
@@ -87,12 +93,22 @@ export async function PATCH(req: Request, { params }: Params) {
   if (!entityId) return NextResponse.json({ error: "WAREHOUSE_REFERENCE_REQUIRED", message: "La référence de l’entrepôt est obligatoire." }, { status: 400 });
   if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "WAREHOUSE_UPDATE_INPUT_INVALID", req);
   try {
+    const scope = await retailInventoryVisibleSites(organizationId, session.userId);
+    if (scope.isolationEnabled) {
+      const warehouse = await prisma.enterpriseWarehouse.findFirst({
+        where: { organizationId, id: entityId }, select: { siteId: true },
+      });
+      if (!warehouse || !scope.manageableSiteIds.includes(warehouse.siteId)) {
+        throw new EnterpriseRetailError("RETAIL_SITE_ACCESS_DENIED", 403);
+      }
+    }
     if (parsed.data.status === "INACTIVE") await prisma.$transaction((tx) => assertWarehouseCanBecomeInactive(tx, organizationId, entityId), { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     const entity = await updateEnterpriseWarehouse(organizationId, entityId, session.userId, parsed.data);
     await writeAuditLog({ userId: session.userId, action: "ENTERPRISE_WAREHOUSE_UPDATED", entity: "EnterpriseWarehouse", entityId, request: req, metadata: { organizationId } });
     await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, action: "update" } });
     return NextResponse.json({ ok: true, entity });
   } catch (error) {
+    if (error instanceof EnterpriseRetailError) return retailErrorResponse(error, "RETAIL_SITE_ACCESS_DENIED");
     if (error instanceof EnterpriseDomainError) return enterpriseDomainErrorResponse(error, "WAREHOUSE_UPDATE_FAILED", req);
     const integrityMessage = locationIntegrityMessage(error);
     if (integrityMessage) return NextResponse.json({ error: "WAREHOUSE_INTEGRITY_CONFLICT", message: integrityMessage }, { status: 409 });

@@ -7,6 +7,9 @@ import { getEnterpriseCommonDomainAccess } from "@/lib/enterprise/common/access"
 import { assertSiteCanBecomeInactive, locationIntegrityMessage } from "@/lib/enterprise/master-data/location-integrity";
 import { siteCreateSchema, siteUpdateSchema } from "@/lib/enterprise/master-data/schemas";
 import { createEnterpriseSite, updateEnterpriseSite } from "@/lib/enterprise/master-data/service";
+import { retailErrorResponse } from "@/lib/enterprise/retail/http";
+import { retailInventoryVisibleSites } from "@/lib/enterprise/retail/site-access";
+import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
 import { prisma } from "@/lib/prisma";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
@@ -20,6 +23,9 @@ export async function GET(req: Request, { params }: Params) {
   const { organizationId } = await params;
   const access = await getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode: "SITES_WAREHOUSES", action: "read" });
   if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  let scope: Awaited<ReturnType<typeof retailInventoryVisibleSites>>;
+  try { scope = await retailInventoryVisibleSites(organizationId, session.userId); }
+  catch (error) { return retailErrorResponse(error, "RETAIL_SITE_ACCESS_DENIED"); }
   const url = new URL(req.url);
   const page = Math.max(1, Number(url.searchParams.get("page") || 1) || 1);
   const pageSize = Math.min(50, Math.max(5, Number(url.searchParams.get("pageSize") || 20) || 20));
@@ -29,6 +35,7 @@ export async function GET(req: Request, { params }: Params) {
   const where: Prisma.EnterpriseSiteWhereInput = {
     organizationId,
     archivedAt: null,
+    ...(scope.isolationEnabled ? { id: { in: scope.siteIds } } : {}),
     ...(search ? { OR: [{ name: { contains: search, mode: "insensitive" } }, { code: { contains: search, mode: "insensitive" } }, { city: { contains: search, mode: "insensitive" } }] } : {}),
     ...(siteType ? { siteType } : {}),
     ...(status ? { status } : {}),
@@ -36,11 +43,11 @@ export async function GET(req: Request, { params }: Params) {
   const [items, total, active, warehouses] = await Promise.all([
     prisma.enterpriseSite.findMany({ where, orderBy: [{ name: "asc" }], skip: (page - 1) * pageSize, take: pageSize, include: { warehouses: { where: { archivedAt: null }, orderBy: { name: "asc" }, take: 10 } } }),
     prisma.enterpriseSite.count({ where }),
-    prisma.enterpriseSite.count({ where: { organizationId, archivedAt: null, status: "ACTIVE" } }),
-    prisma.enterpriseWarehouse.count({ where: { organizationId, archivedAt: null, status: "ACTIVE" } }),
+    prisma.enterpriseSite.count({ where: { organizationId, archivedAt: null, status: "ACTIVE", ...(scope.isolationEnabled ? { id: { in: scope.siteIds } } : {}) } }),
+    prisma.enterpriseWarehouse.count({ where: { organizationId, archivedAt: null, status: "ACTIVE", ...(scope.isolationEnabled ? { siteId: { in: scope.siteIds } } : {}) } }),
   ]);
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "sites", page } });
-  return NextResponse.json({ items, pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) }, metrics: { active, warehouses }, canManage: access.canManage });
+  return NextResponse.json({ items, pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) }, metrics: { active, warehouses }, canManage: access.canManage && !scope.isolationEnabled });
 }
 
 export async function POST(req: Request, { params }: Params) {
@@ -53,6 +60,12 @@ export async function POST(req: Request, { params }: Params) {
   const { organizationId } = await params;
   const access = await getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode: "SITES_WAREHOUSES", action: "write" });
   if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  try {
+    const scope = await retailInventoryVisibleSites(organizationId, session.userId);
+    // Creating a new company site cannot be authorized by an assignment to an
+    // existing store. Store-local staff may only read their assigned sites.
+    if (scope.isolationEnabled) throw new EnterpriseRetailError("RETAIL_SITE_ACCESS_DENIED", 403);
+  } catch (error) { return retailErrorResponse(error, "RETAIL_SITE_ACCESS_DENIED"); }
   const parsed = siteCreateSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "SITE_INPUT_INVALID", req);
   try {
@@ -74,6 +87,10 @@ export async function PATCH(req: Request, { params }: Params) {
   const { organizationId } = await params;
   const access = await getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode: "SITES_WAREHOUSES", action: "write" });
   if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  try {
+    const scope = await retailInventoryVisibleSites(organizationId, session.userId);
+    if (scope.isolationEnabled) throw new EnterpriseRetailError("RETAIL_SITE_ACCESS_DENIED", 403);
+  } catch (error) { return retailErrorResponse(error, "RETAIL_SITE_ACCESS_DENIED"); }
   const raw = await req.json().catch(() => null) as (Record<string, unknown> & { siteId?: string }) | null;
   const entityId = typeof raw?.siteId === "string" ? raw.siteId : "";
   const parsed = siteUpdateSchema.safeParse(raw);
