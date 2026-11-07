@@ -171,14 +171,21 @@ export async function createRetailInvoiceReturnRequest(
     if (!refundAmount.isPositive() || refundAmount.greaterThan(checkout.invoice.grandTotal)) {
       throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_AMOUNT_INVALID", 409);
     }
-    const request = await tx.enterpriseRetailInvoiceReturnRequest.create({
+    const created = await tx.enterpriseRetailInvoiceReturnRequest.create({
       data: {
         organizationId, checkoutId: checkout.id, number: reference(), status: "SUBMITTED",
         reason: input.reason, refundAmount, idempotencyKey: input.idempotencyKey,
         requestFingerprint: requestHash, requestedByUserId: actorUserId,
-        approverUserId: input.approverUserId, lines: { create: prepared },
-      }, include: { lines: true },
+        approverUserId: input.approverUserId,
+      },
     });
+    await tx.enterpriseRetailInvoiceReturnLine.createMany({
+      data: prepared.map((line) => ({ ...line, returnRequestId: created.id })),
+    });
+    const request = await tx.enterpriseRetailInvoiceReturnRequest.findFirst({
+      where: { organizationId, id: created.id }, include: { lines: true },
+    });
+    if (!request) throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_NOT_FOUND", 409);
     await publishFinanceEvent(tx, {
       organizationId, entityType: "EnterpriseRetailInvoiceReturnRequest", entityId: request.id,
       eventType: "RETAIL_INVOICE_RETURN_REQUESTED", summary: "Retail invoice return submitted for independent review",
