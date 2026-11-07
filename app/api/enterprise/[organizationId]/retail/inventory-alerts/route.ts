@@ -81,4 +81,3 @@ export async function GET(req: Request, { params }: Params) {
     return retailErrorResponse(error, "RETAIL_EXPIRY_ALERTS_FAILED");
   }
 }
-

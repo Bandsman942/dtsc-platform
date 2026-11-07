@@ -79,4 +79,3 @@ export async function POST(req: Request, { params }: Params) {
     return enterpriseDomainErrorResponse(error, "STOCK_TRANSFER_CREATE_FAILED");
   }
 }
-

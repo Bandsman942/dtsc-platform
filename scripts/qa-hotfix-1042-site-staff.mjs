@@ -116,4 +116,3 @@ assert.match(fs.readFileSync("prisma/enterprise-retail-site-access.prisma", "utf
 assert.match(fs.readFileSync("app/enterprise-modules/retail-page.tsx", "utf8"), /RetailSiteStaffAccess/);
 assert.match(fs.readFileSync("lib/enterprise/retail/service.ts", "utf8"), /requireRetailSiteCapability\(organizationId, actorUserId, warehouse\.siteId, "COLLECT_PAYMENT", tx\)/);
 console.log("HOTFIX #1042 boutique staff: tenant-scoped assignments, owner-only CRUD, RBAC defaults/overrides, site-scoped stock transfers and expiry alert contracts passed; strict activation deferred.");
-

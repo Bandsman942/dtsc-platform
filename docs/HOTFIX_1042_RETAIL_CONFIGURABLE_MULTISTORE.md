@@ -88,4 +88,3 @@ Contrôle du 7 novembre : `npm run build` local a terminé avec succès la compi
 - QA contrats étendue dans `qa-hotfix-1042-site-staff.mjs` pour la portée, les rôles, les compteurs et les points d'entrée du transfert. Ce test n'est **pas** un E2E PostgreSQL ni un test de concurrence.
 
 **Cette tranche ne suffit pas à activer l'isolation.** D'autres routes communes (inventaires, ajustements, mouvements, rapports et exports) doivent encore recevoir la même vérification avant de passer le flag `siteStaffIsolationEnabled` à ON. Aucun changement de production, aucun merge et aucun feu vert client.
-

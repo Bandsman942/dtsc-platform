@@ -44,4 +44,3 @@ export async function GET(req: Request, { params }: Params) {
     locations: lot.balances.map((balance) => ({ storageLocationId: balance.storageLocationId, available: balance.quantityOnHand.minus(balance.quantityReserved).toFixed() })),
   })) }, { headers: { "Cache-Control": "private, no-store" } });
 }
-

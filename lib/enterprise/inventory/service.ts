@@ -326,4 +326,3 @@ export async function decideEnterpriseInventoryCount(organizationId: string, cou
     return tx.enterpriseInventoryCount.findUniqueOrThrow({ where: { id: count.id }, include: { lines: true } });
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 }
-

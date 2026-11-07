@@ -148,4 +148,3 @@ export async function retailStockTransferVisibleSites(
   if (!siteIds.length) throw new EnterpriseRetailError("RETAIL_SITE_ACCESS_DENIED", 403);
   return { isolationEnabled: true, isOwner: false, siteIds };
 }
-
