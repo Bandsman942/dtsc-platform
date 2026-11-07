@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { writeApiLog } from "@/lib/audit";
 import { authorizeFinanceRequest, financeListParams } from "@/lib/enterprise/accounting/http";
 import { prisma } from "@/lib/prisma";
+import { retailFinanceReadSiteScope } from "@/lib/enterprise/retail/site-access";
 
 type Params = { params: Promise<{ organizationId: string }> };
 
@@ -34,6 +35,13 @@ export async function GET(req: Request, { params }: Params) {
   if (!auth.ok) return auth.response;
 
   const { page, pageSize, search, status } = financeListParams(req);
+  const retailScope = await retailFinanceReadSiteScope(organizationId, auth.session.userId, "VIEW_SALES");
+  const siteReceivableScope: Prisma.EnterpriseReceivableWhereInput | null = retailScope === null ? null : {
+    OR: [
+      { salesInvoice: { retailCheckout: { is: null } } },
+      { salesInvoice: { retailCheckout: { is: { siteId: { in: retailScope } } } } },
+    ],
+  };
   const url = new URL(req.url);
   const overdue = url.searchParams.get("overdue") === "true";
   const ageBucket = url.searchParams.get("ageBucket");
@@ -45,6 +53,7 @@ export async function GET(req: Request, { params }: Params) {
 
   const where: Prisma.EnterpriseReceivableWhereInput = {
     organizationId,
+    ...(siteReceivableScope ? { AND: [siteReceivableScope] } : {}),
     ...(recordId ? { id: recordId } : {}),
     ...(!hasAgeFilter && status ? { status } : {}),
     ...ageFilter,
@@ -67,13 +76,13 @@ export async function GET(req: Request, { params }: Params) {
     prisma.enterpriseReceivable.count({ where }),
     prisma.enterpriseReceivable.groupBy({
       by: ["currencyCode"],
-      where: { organizationId, status: "OPEN" },
+      where: { organizationId, status: "OPEN", ...(siteReceivableScope ? { AND: [siteReceivableScope] } : {}) },
       _sum: { outstandingAmount: true },
       _count: { _all: true },
     }),
     prisma.enterpriseReceivable.groupBy({
       by: ["currencyCode"],
-      where: { organizationId, status: "OPEN", dueDate: { lt: today } },
+      where: { organizationId, status: "OPEN", dueDate: { lt: today }, ...(siteReceivableScope ? { AND: [siteReceivableScope] } : {}) },
       _sum: { outstandingAmount: true },
       _count: { _all: true },
     }),
