@@ -184,3 +184,36 @@ export async function retailInventoryVisibleSites(
 
 // Backward-compatible name for the transfer service introduced in tranche 10.
 export const retailStockTransferVisibleSites = retailInventoryVisibleSites;
+
+/** Finance list scopes are not a substitute for Finance RBAC. Once Retail
+ * isolation is enabled, a collaborator assigned as site staff may not use a
+ * global Finance list to read checkout documents from other stores. Finance-
+ * only staff with no Retail assignments retain their existing Finance scope.
+ * An assigned operator with no requested capability gets an empty site list
+ * (not the global Finance view).
+ */
+export async function retailFinanceReadSiteScope(
+  organizationId: string,
+  userId: string,
+  capability: "VIEW_SALES" | "COLLECT_PAYMENT",
+  database: RetailSiteAccessReader = prisma,
+): Promise<string[] | null> {
+  const [membership, configuration] = await Promise.all([
+    database.organizationMember.findFirst({
+      where: { organizationId, userId, status: "ACTIVE", removedAt: null }, select: { role: true },
+    }),
+    database.enterpriseRetailConfiguration.findUnique({
+      where: { organizationId }, select: { settingsJson: true },
+    }),
+  ]);
+  if (!membership) throw new EnterpriseRetailError("RETAIL_SITE_ACCESS_DENIED", 403);
+  if (RETAIL_OWNER_ROLES.has(membership.role) || !retailStaffIsolationIsEnabled(configuration?.settingsJson)) return null;
+  const assignments = await database.enterpriseRetailSiteAssignment.findMany({
+    where: { organizationId, userId, isActive: true },
+    select: { siteId: true, roleCode: true, permissionsJson: true },
+  });
+  if (!assignments.length) return null;
+  return [...new Set(assignments.filter((assignment) =>
+    siteStaffCapabilities(assignment.roleCode, assignment.permissionsJson).includes(capability),
+  ).map((assignment) => assignment.siteId))];
+}
