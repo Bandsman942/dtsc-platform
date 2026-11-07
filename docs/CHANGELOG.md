@@ -1,3 +1,9 @@
+## 2026-11-07 — Retail #1042, tranche 26 — Réception et inspection indépendante (candidat, PR #1043)
+
+- Nouvelle étape `INSPECTED` obligatoire avant approbation d'un retour de facture Retail payée, contrôlée par un gestionnaire des stocks distinct du demandeur et du validateur Finance, avec date et notes conservées.
+- Route POST d'inspection tenant/site-scoped, permission `MANAGE_STOCK`, révision optimiste, audit, erreurs métier et migration additive ; les demandes inspectées continuent de réserver les quantités retournables.
+- QA dédiée étendue aux tentatives d'approbation sans inspection, auto-inspection et décisions concurrentes. Cette tranche est **sans impact immédiat** sur Finance et Stock : ni avoir, ni remboursement, ni correction de stock. Flags OFF ; E2E technique et propriétaire non exécutés ; PR brouillon et aucune Production.
+
 ## 2026-11-07 — Retail #1042, tranche 25 — Demandes de retour sur facture payée (candidat, PR #1043)
 
 - Ajout non destructif de `EnterpriseRetailInvoiceReturnRequest` et de ses lignes reliées à la facture Finance canonique par son checkout, avec clés composites interdisant toute référence à la ligne d'une autre facture ou entreprise.

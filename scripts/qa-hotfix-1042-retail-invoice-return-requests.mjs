@@ -10,7 +10,8 @@ class EnterpriseRetailError extends Error {
   constructor(code, status = 409) { super(code); this.code = code; this.status = status; }
 }
 const state = {
-  featureEnabled: true, revoked: false, financeAllowed: true, reserved: [],
+  featureEnabled: true, revoked: false, inspectorRevoked: false, allowExtraStockCapability: false,
+  financeAllowed: true, reserved: [],
   existing: false, created: null, saved: null, lines: [], review: null, events: [], operations: [],
   checkout: {
     id: "checkout-A", salesInvoiceId: "invoice-A", siteId: "store-A",
@@ -29,7 +30,10 @@ const tx = {
     return state.checkout;
   } },
   enterpriseRetailInvoiceReturnLine: {
-    findMany: async () => state.reserved,
+    findMany: async ({ where }) => {
+      assert.equal(where.request.status.in.join(","), "SUBMITTED,INSPECTED,APPROVED,COMPLETED");
+      return state.reserved;
+    },
     createMany: async ({ data }) => {
       state.operations.push("create-lines");
       state.lines = data;
@@ -51,8 +55,11 @@ const tx = {
       return state.created;
     },
     update: async ({ data }) => {
-      state.operations.push("approve-request");
-      state.review = { ...state.review, status: data.status, revision: state.review.revision + 1 };
+      state.operations.push(data.status === "INSPECTED" ? "inspect-request" : "decide-request");
+      state.review = { ...state.review, status: data.status, revision: state.review.revision + 1,
+        inspectedByUserId: data.inspectedByUserId ?? state.review.inspectedByUserId,
+        inspectedAt: data.inspectedAt ?? state.review.inspectedAt,
+        inspectionNotes: data.inspectionNotes ?? state.review.inspectionNotes };
       return state.review;
     },
   },
@@ -83,8 +90,12 @@ vm.runInNewContext(ts.transpileModule(source, {
       requireRetailSiteCapability: async (_org, user, site, capability) => {
         assert.equal(site, "store-A");
         if ((state.revoked && user === "requester") ||
-            (user === "requester" && !["REQUEST_INVOICE_RETURN", "VIEW_SALES"].includes(capability)) ||
-            (user === "reviewer" && capability !== "APPROVE_INVOICE_RETURN")) {
+            (state.inspectorRevoked && user === "inspector") ||
+            (user === "requester" && !["REQUEST_INVOICE_RETURN", "VIEW_SALES"].includes(capability) &&
+              !(state.allowExtraStockCapability && capability === "MANAGE_STOCK")) ||
+            (user === "reviewer" && capability !== "APPROVE_INVOICE_RETURN" &&
+              !(state.allowExtraStockCapability && capability === "MANAGE_STOCK")) ||
+            (user === "inspector" && capability !== "MANAGE_STOCK")) {
           throw new EnterpriseRetailError("RETAIL_SITE_ACCESS_DENIED", 403);
         }
       },
@@ -96,7 +107,8 @@ vm.runInNewContext(ts.transpileModule(source, {
   },
 });
 const { createRetailInvoiceReturnRequest, decideRetailInvoiceReturnRequest,
-  listRetailInvoiceReturnRequests, retailInvoiceReturnRequestSchema } = unit.exports;
+  inspectRetailInvoiceReturnRequest, listRetailInvoiceReturnRequests,
+  retailInvoiceReturnRequestSchema, retailInvoiceReturnInspectionSchema } = unit.exports;
 const input = { idempotencyKey: "shop-return-001", approverUserId: "reviewer",
   reason: "Produit endommagé", lines: [{ checkoutLineId: "line-A", quantity: "2", stockDisposition: "QUARANTINE" }] };
 assert.equal(retailInvoiceReturnRequestSchema.safeParse(input).success, true);
@@ -136,19 +148,52 @@ await assert.rejects(createRetailInvoiceReturnRequest("tenant", "invoice-A", "re
   { code: "RETAIL_INVOICE_CHECKOUT_NOT_ACTIVE" });
 state.featureEnabled = true;
 state.review = { id: "request-A", revision: 1, checkoutId: "checkout-A", status: "SUBMITTED",
-  requestedByUserId: "requester", approverUserId: "reviewer", checkout: { siteId: "store-A" } };
+  requestedByUserId: "requester", approverUserId: "reviewer",
+  checkout: { siteId: "store-A", stockPostedAt: new Date(), invoice: { status: "PAID" } } };
 state.financeAllowed = false;
 await assert.rejects(decideRetailInvoiceReturnRequest("tenant", "invoice-A", "request-A", "reviewer", { revision: 1, decision: "APPROVE" }),
   { code: "RETAIL_INVOICE_RETURN_APPROVER_INELIGIBLE" });
 state.financeAllowed = true;
+await assert.rejects(decideRetailInvoiceReturnRequest("tenant", "invoice-A", "request-A", "reviewer", { revision: 1, decision: "APPROVE" }),
+  { code: "RETAIL_INVOICE_RETURN_REVISION_CONFLICT" });
 await assert.rejects(decideRetailInvoiceReturnRequest("tenant", "invoice-A", "request-A", "requester", { revision: 1, decision: "APPROVE" }),
   { code: "RETAIL_SITE_ACCESS_DENIED" });
 await assert.rejects(decideRetailInvoiceReturnRequest("tenant", "invoice-A", "request-A", "reviewer", { revision: 1, decision: "REJECT", reason: "non" }),
   { code: "RETAIL_INVOICE_RETURN_REJECTION_REASON_REQUIRED" });
-const approved = await decideRetailInvoiceReturnRequest("tenant", "invoice-A", "request-A", "reviewer", { revision: 1, decision: "APPROVE" });
+assert.equal(retailInvoiceReturnInspectionSchema.safeParse({ revision: 1, receivedAndInspected: false, notes: "Contrôle physique des articles" }).success, false);
+await assert.rejects(inspectRetailInvoiceReturnRequest("tenant", "invoice-A", "request-A", "requester", {
+  revision: 1, receivedAndInspected: true, notes: "Contrôle physique des articles",
+}), { code: "RETAIL_SITE_ACCESS_DENIED" });
+await assert.rejects(inspectRetailInvoiceReturnRequest("tenant", "invoice-A", "request-A", "reviewer", {
+  revision: 1, receivedAndInspected: true, notes: "Contrôle physique des articles",
+}), { code: "RETAIL_SITE_ACCESS_DENIED" });
+state.allowExtraStockCapability = true;
+await assert.rejects(inspectRetailInvoiceReturnRequest("tenant", "invoice-A", "request-A", "requester", {
+  revision: 1, receivedAndInspected: true, notes: "Contrôle physique des articles",
+}), { code: "RETAIL_INVOICE_RETURN_INSPECTOR_INELIGIBLE" });
+await assert.rejects(inspectRetailInvoiceReturnRequest("tenant", "invoice-A", "request-A", "reviewer", {
+  revision: 1, receivedAndInspected: true, notes: "Contrôle physique des articles",
+}), { code: "RETAIL_INVOICE_RETURN_INSPECTOR_INELIGIBLE" });
+state.allowExtraStockCapability = false;
+state.inspectorRevoked = true;
+await assert.rejects(inspectRetailInvoiceReturnRequest("tenant", "invoice-A", "request-A", "inspector", {
+  revision: 1, receivedAndInspected: true, notes: "Contrôle physique des articles",
+}), { code: "RETAIL_SITE_ACCESS_DENIED" });
+state.inspectorRevoked = false;
+const inspected = await inspectRetailInvoiceReturnRequest("tenant", "invoice-A", "request-A", "inspector", {
+  revision: 1, receivedAndInspected: true, notes: "Articles reçus et vérifiés physiquement",
+});
+assert.equal(inspected.status, "INSPECTED");
+assert.equal(inspected.inspectedByUserId, "inspector");
+await assert.rejects(inspectRetailInvoiceReturnRequest("tenant", "invoice-A", "request-A", "inspector", {
+  revision: 1, receivedAndInspected: true, notes: "Contrôle physique des articles",
+}), { code: "RETAIL_INVOICE_RETURN_REVISION_CONFLICT" });
+const approved = await decideRetailInvoiceReturnRequest("tenant", "invoice-A", "request-A", "reviewer", { revision: 2, decision: "APPROVE" });
 assert.equal(approved.status, "APPROVED");
-assert.equal(approved.revision, 2);
-assert.equal(state.operations.includes("approve-request"), true);
+assert.equal(approved.revision, 3);
+assert.equal(state.operations.includes("inspect-request"), true);
+assert.equal(state.operations.includes("decide-request"), true);
+assert.equal(state.events.includes("RETAIL_INVOICE_RETURN_INSPECTED"), true);
 assert.equal(state.events.includes("RETAIL_INVOICE_RETURN_APPROVED"), true);
 const listing = await listRetailInvoiceReturnRequests("tenant", "invoice-A", "requester", 1);
 assert.equal(listing.pagination.pageSize, 25);
@@ -157,6 +202,9 @@ const migration = fs.readFileSync("prisma/migrations/20261107163000_retail_invoi
 assert.match(migration, /FOREIGN KEY \("organizationId", "returnRequestId", "checkoutId"\)/);
 assert.match(migration, /FOREIGN KEY \("organizationId", "checkoutId", "checkoutLineId"\)/);
 assert.match(migration, /CHECK \("status" IN/);
+const inspectionMigration = fs.readFileSync("prisma/migrations/20261107170000_retail_invoice_return_inspection/migration.sql", "utf8");
+assert.match(inspectionMigration, /ADD COLUMN "inspectedByUserId" TEXT/);
+assert.match(inspectionMigration, /'INSPECTED'/);
 const schema = fs.readFileSync("prisma/enterprise-retail-invoice-checkout.prisma", "utf8");
 assert.match(schema, /model EnterpriseRetailInvoiceReturnRequest/);
 assert.match(schema, /model EnterpriseRetailInvoiceReturnLine/);
@@ -166,6 +214,9 @@ assert.match(route, /authorizeRetailRequest\(req, organizationId, "RETAIL_POS", 
 assert.match(route, /writeAuditLog/);
 const decisionRoute = fs.readFileSync("app/api/enterprise/[organizationId]/retail/invoices/[invoiceId]/returns/[requestId]/decision/route.ts", "utf8");
 assert.match(decisionRoute, /writeAuditLog/);
+const inspectionRoute = fs.readFileSync("app/api/enterprise/[organizationId]/retail/invoices/[invoiceId]/returns/[requestId]/inspection/route.ts", "utf8");
+assert.match(inspectionRoute, /authorizeRetailRequest\(req, organizationId, "RETAIL_POS", "submit", \{ mutation: true/);
+assert.match(inspectionRoute, /writeAuditLog/);
 assert.doesNotMatch(source, /enterpriseSalesCreditNote\.create|enterprisePayment\.create|applyStockMovementTx/,
   "Request and approval must not mutate canonical money or stock");
-console.log("HOTFIX #1042: Retail invoice return requests are tenant/site scoped, serializable, independently approved and finance/stock-inert");
+console.log("HOTFIX #1042: Retail invoice returns require independent stock inspection before Finance approval; money and stock remain inert");

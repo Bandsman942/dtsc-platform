@@ -85,6 +85,9 @@ model EnterpriseRetailInvoiceReturnRequest {
   requestFingerprint String
   requestedByUserId String
   approverUserId    String
+  inspectedByUserId String?
+  inspectedAt       DateTime?
+  inspectionNotes   String?
   decidedByUserId   String?
   decidedAt         DateTime?
   decisionReason    String?

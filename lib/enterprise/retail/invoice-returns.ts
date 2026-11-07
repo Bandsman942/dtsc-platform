@@ -26,9 +26,15 @@ export const retailInvoiceReturnDecisionSchema = z.object({
   decision: z.enum(["APPROVE", "REJECT"]),
   reason: z.string().trim().max(1000).optional(),
 }).strict();
+export const retailInvoiceReturnInspectionSchema = z.object({
+  revision: z.number().int().positive(),
+  receivedAndInspected: z.literal(true),
+  notes: z.string().trim().min(5).max(1000),
+}).strict();
 
 type RequestInput = z.infer<typeof retailInvoiceReturnRequestSchema>;
 type DecisionInput = z.infer<typeof retailInvoiceReturnDecisionSchema>;
+type InspectionInput = z.infer<typeof retailInvoiceReturnInspectionSchema>;
 
 function monetary(value: Prisma.Decimal.Value) {
   return new Prisma.Decimal(value).toDecimalPlaces(6, Prisma.Decimal.ROUND_HALF_UP);
@@ -132,7 +138,7 @@ export async function createRetailInvoiceReturnRequest(
     const committed = await tx.enterpriseRetailInvoiceReturnLine.findMany({
       where: {
         organizationId, checkoutId: checkout.id, checkoutLineId: { in: lineIds },
-        request: { status: { in: ["SUBMITTED", "APPROVED", "COMPLETED"] } },
+        request: { status: { in: ["SUBMITTED", "INSPECTED", "APPROVED", "COMPLETED"] } },
       },
       select: { checkoutLineId: true, quantity: true, refundAmount: true },
     });
@@ -218,8 +224,16 @@ export async function decideRetailInvoiceReturnRequest(
       organizationId, userId: actorUserId, moduleCode: "FINANCE_RECEIVABLES", action: "approve",
     });
     if (!finance.allowed) throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_APPROVER_INELIGIBLE", 403);
-    if (request.status !== "SUBMITTED" || request.revision !== input.revision) {
+    if (request.revision !== input.revision ||
+      (input.decision === "APPROVE" ? request.status !== "INSPECTED" :
+        !["SUBMITTED", "INSPECTED"].includes(request.status))) {
       throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_REVISION_CONFLICT", 409);
+    }
+    if (input.decision === "APPROVE" &&
+      (!request.inspectedAt || !request.inspectedByUserId || !request.inspectionNotes ||
+        request.inspectionNotes.trim().length < 5 || request.inspectedByUserId === request.requestedByUserId ||
+        request.inspectedByUserId === actorUserId)) {
+      throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_INSPECTION_REQUIRED", 409);
     }
     if (input.decision === "REJECT" && (!input.reason || input.reason.length < 4)) {
       throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_REJECTION_REASON_REQUIRED", 400);
@@ -235,9 +249,51 @@ export async function decideRetailInvoiceReturnRequest(
       organizationId, entityType: "EnterpriseRetailInvoiceReturnRequest", entityId: request.id,
       eventType: "RETAIL_INVOICE_RETURN_" + nextStatus,
       summary: "Retail invoice return reviewed: " + nextStatus,
-      actorUserId, fromStatus: "SUBMITTED", toStatus: nextStatus,
+      actorUserId, fromStatus: request.status, toStatus: nextStatus,
       metadataJson: { invoiceId, siteId: request.checkout.siteId, ...(input.reason ? { reason: input.reason } : {}) },
     });
     return updated;
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 30000 }));
+}
+
+/** Independent stock operator records physical receipt/inspection. This is
+ * evidence only: even inspected returns never change stock or cash before the
+ * canonical Finance/Inventory settlement is built and certified. */
+export async function inspectRetailInvoiceReturnRequest(
+  organizationId: string, invoiceId: string, requestId: string,
+  actorUserId: string, input: InspectionInput,
+) {
+  return withRetailTransactionRetry(() => prisma.$transaction(async (tx) => {
+    await requireReturnFeatureTx(tx, organizationId);
+    const request = await tx.enterpriseRetailInvoiceReturnRequest.findFirst({
+      where: { id: requestId, organizationId, checkout: { salesInvoiceId: invoiceId } },
+      include: { checkout: { select: { siteId: true, stockPostedAt: true,
+        invoice: { select: { status: true } } } } },
+    });
+    if (!request) throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_NOT_FOUND", 404);
+    await requireRetailSiteCapability(
+      organizationId, actorUserId, request.checkout.siteId, "MANAGE_STOCK", tx, { requireAssignment: true },
+    );
+    if (actorUserId === request.requestedByUserId || actorUserId === request.approverUserId) {
+      throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_INSPECTOR_INELIGIBLE", 403);
+    }
+    if (request.status !== "SUBMITTED" || request.revision !== input.revision ||
+      request.checkout.invoice.status !== "PAID" || !request.checkout.stockPostedAt) {
+      throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_REVISION_CONFLICT", 409);
+    }
+    const inspected = await tx.enterpriseRetailInvoiceReturnRequest.update({
+      where: { id: request.id }, data: {
+        status: "INSPECTED", inspectedByUserId: actorUserId, inspectedAt: new Date(),
+        inspectionNotes: input.notes, revision: { increment: 1 },
+      },
+    });
+    await publishFinanceEvent(tx, {
+      organizationId, entityType: "EnterpriseRetailInvoiceReturnRequest", entityId: request.id,
+      eventType: "RETAIL_INVOICE_RETURN_INSPECTED",
+      summary: "Retail invoice return physically received and inspected",
+      actorUserId, fromStatus: "SUBMITTED", toStatus: "INSPECTED",
+      metadataJson: { invoiceId, siteId: request.checkout.siteId },
+    });
+    return inspected;
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 30000 }));
 }
