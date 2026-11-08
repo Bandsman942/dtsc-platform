@@ -123,3 +123,4 @@ await import("./qa-scale7-staged-certification.mjs");
 await import("./qa-education-architecture-contract.mjs");
 await import("./qa-education-academic-structure.mjs");
 await import("./qa-education-admissions.mjs");
+await import("./qa-hotfix-1075-forms-catalog-import-toasts.mjs");

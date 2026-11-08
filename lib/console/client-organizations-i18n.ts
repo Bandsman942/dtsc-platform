@@ -5,8 +5,12 @@ const dictionaries = {
     actionSaved: "Action enregistrée.",
     actionImpossible: "Action impossible. Réessayez ou vérifiez les informations saisies.",
     invalidForm: "Certaines informations obligatoires sont manquantes ou invalides. Vérifiez le formulaire puis réessayez.",
-    companyCreated: "Entreprise cliente créée.",
-    companyCreatedWithAdmin: "Entreprise cliente créée. L’invitation administrateur est en attente d’acceptation.",
+    companyCreated: "L’entreprise « {company} » a été créée. Vous pouvez maintenant terminer sa configuration.",
+    companyCreatedWithAdmin: "L’entreprise « {company} » a été créée. L’invitation de {admin} est enregistrée et attend son acceptation.",
+    companyCreatedNotificationPending: "L’entreprise « {company} » a été créée et l’invitation de {admin} enregistrée, mais sa notification n’a pas pu être remise. Vérifiez l’invitation dans Administration DTSC.",
+    companyCreationFailed: "Impossible de créer l’entreprise « {company} ». Vérifiez les informations du formulaire et réessayez.",
+    companyCreationNetworkFailed: "La création de « {company} » n’a pas pu être confirmée. Vérifiez votre connexion et recherchez l’entreprise avant de réessayer.",
+    creatingCompany: "Création en cours…",
     companyUpdated: "Entreprise mise à jour.",
     companyUpdatedSubscriptionFailed: "Les informations de l’entreprise ont été enregistrées, mais l’abonnement n’a pas pu être mis à jour.",
     adminInvitationSent: "Invitation administrateur envoyée. Elle restera en attente jusqu’à l’acceptation du nouvel administrateur.",
@@ -40,8 +44,12 @@ const dictionaries = {
     actionSaved: "Action saved.",
     actionImpossible: "The action could not be completed. Try again or review the information entered.",
     invalidForm: "Some required information is missing or invalid. Review the form and try again.",
-    companyCreated: "Client company created.",
-    companyCreatedWithAdmin: "Client company created. The administrator invitation is pending acceptance.",
+    companyCreated: "The company “{company}” has been created. You can now finish its setup.",
+    companyCreatedWithAdmin: "The company “{company}” has been created. The invitation for {admin} has been recorded and is awaiting acceptance.",
+    companyCreatedNotificationPending: "The company “{company}” was created and the invitation for {admin} recorded, but its notification could not be delivered. Check the invitation in DTSC Administration.",
+    companyCreationFailed: "The company “{company}” could not be created. Review the form and try again.",
+    companyCreationNetworkFailed: "Creation of “{company}” could not be confirmed. Check your connection and search for the company before retrying.",
+    creatingCompany: "Creating…",
     companyUpdated: "Company updated.",
     companyUpdatedSubscriptionFailed: "The company information was saved, but the subscription could not be updated.",
     adminInvitationSent: "Administrator invitation sent. It will remain pending until the new administrator accepts it.",
@@ -78,7 +86,8 @@ export type ClientOrganizationsCopyKey = keyof typeof dictionaries.fr;
 export function translateClientOrganizations(
   locale: string | null | undefined,
   key: ClientOrganizationsCopyKey,
+  values: Record<string, string> = {},
 ) {
   const dictionary = dictionaries[locale === "en" ? "en" : "fr"];
-  return dictionary[key] || dictionaries.fr[key];
+  return (dictionary[key] || dictionaries.fr[key]).replace(/\{(\w+)\}/g, (match, field: string) => values[field] ?? match);
 }

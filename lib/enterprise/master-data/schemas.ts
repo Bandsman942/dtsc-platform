@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isSupportedTimeZone } from "@/lib/timezones";
 import { BUSINESS_PARTY_ROLES, BUSINESS_PARTY_TYPES, CATALOG_ITEM_TYPES, SITE_TYPES, STORAGE_LOCATION_TYPES, WAREHOUSE_TYPES } from "@/lib/enterprise/master-data/constants";
 
 const optionalText = z.string().trim().max(500).optional().nullable();
@@ -61,7 +62,7 @@ export const siteCreateSchema = z.object({
   stateProvince: z.string().trim().max(120).optional().nullable(),
   postalCode: z.string().trim().max(40).optional().nullable(),
   countryCode: z.string().trim().toUpperCase().max(3).optional().nullable(),
-  timezone: z.string().trim().max(80).optional().nullable(),
+  timezone: z.string().trim().max(80).refine((value) => !value || isSupportedTimeZone(value), "INVALID_TIMEZONE").optional().nullable(),
   managerUserId: z.string().trim().min(1).optional().nullable(),
 });
 

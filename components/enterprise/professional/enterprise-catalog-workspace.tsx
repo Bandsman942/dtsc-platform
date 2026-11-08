@@ -1,15 +1,16 @@
 "use client";
 
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import { Boxes, Layers3, Pencil, Plus, Ruler, ShoppingBag } from "lucide-react";
 import { currencyChoices, Field, NativeSelect } from "@/components/enterprise/core-v2/erp-v2-ui";
 import { commercialHotfixCopy } from "@/components/enterprise/professional/commercial-hotfix-copy";
+import { CatalogImportControls } from "@/components/enterprise/professional/catalog-import-controls";
 import { ProfessionalError, ProfessionalFormSection, ProfessionalHelp, ProfessionalLoading, ProfessionalSearch, ProfessionalTabs, professionalMutation, useProfessionalCollection } from "@/components/enterprise/professional/professional-erp-ui";
 import { professionalErpDate, professionalErpEnumLabel, professionalErpMoney, professionalErpT, useProfessionalErpLocale, type ProfessionalErpLocale } from "@/components/enterprise/professional/professional-erp-i18n";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { useToastMessage } from "@/components/ui/use-toast-message";
+import { notifyToast } from "@/lib/client-toast";
 import { BusinessList, BusinessListItem } from "@/components/workspace/business-list";
 import { EmptyState } from "@/components/workspace/empty-state";
 import { ModuleMetric, ModuleMetrics } from "@/components/workspace/module-metrics";
@@ -32,7 +33,7 @@ function unitCategoryLabel(value: string, locale: ProfessionalErpLocale) {
 export function EnterpriseCatalogWorkspace({ organizationId, organizationName, definition }: { organizationId: string; organizationName: string; definition: EnterpriseModuleDefinition }) {
   const locale = useProfessionalErpLocale();
   const hotfix = commercialHotfixCopy(locale);
-  const t = (key: Parameters<typeof professionalErpT>[1], values?: Record<string, string | number>) => professionalErpT(locale, key, values);
+  const t = useCallback((key: Parameters<typeof professionalErpT>[1], values?: Record<string, string | number>) => professionalErpT(locale, key, values), [locale]);
   const [tab, setTab] = useState("ALL");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
@@ -43,9 +44,12 @@ export function EnterpriseCatalogWorkspace({ organizationId, organizationName, d
   const [lookups, setLookups] = useState<Lookups>({ currencies: [], taxCodes: [] });
   const [unitCategoryChoice, setUnitCategoryChoice] = useState("");
   const [message, setMessage] = useState("");
-  const [success, setSuccess] = useState("");
   const [busy, setBusy] = useState(false);
-  useToastMessage(success, "success");
+  const reportError = useCallback((error: unknown, fallback: string) => {
+    const detail = error instanceof Error ? error.message : fallback;
+    setMessage(detail);
+    notifyToast({ title: fallback, description: detail, tone: "error" });
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -53,13 +57,13 @@ export function EnterpriseCatalogWorkspace({ organizationId, organizationName, d
       const body = await response.json().catch(() => null) as (Lookups & { message?: string; error?: string }) | null;
       if (!response.ok || !body) throw new Error(body?.message || body?.error || t("common.selectorsUnavailable"));
       if (active) setLookups({ currencies: body.currencies || [], taxCodes: body.taxCodes || [] });
-    }).catch((error) => { if (active) setMessage(error instanceof Error ? error.message : t("common.selectorsUnavailable")); });
+    }).catch((error) => { if (active) reportError(error, t("common.selectorsUnavailable")); });
     return () => { active = false; };
-  }, [organizationId, refreshKey, locale]);
+  }, [organizationId, refreshKey, reportError, t]);
 
   const params = useMemo(() => { const value = new URLSearchParams({ page: String(page), pageSize: "20" }); if (search.trim()) value.set("search", search.trim()); if (tab === "PRODUCT" || tab === "SERVICE") value.set("itemType", tab); return value; }, [page, search, tab]);
   const collection = useProfessionalCollection<CatalogItem, CatalogExtra>({ endpoint: `/api/enterprise/${organizationId}/catalog`, params, refreshKey });
-  const units = collection.extra.units || [];
+  const units = useMemo(() => collection.extra.units || [], [collection.extra.units]);
   const categories = collection.extra.categories || [];
   const currencies = lookups.currencies.length ? lookups.currencies.map((code) => ({ id: code, label: code })) : currencyChoices(locale);
   const taxChoices = [{ id: "", label: hotfix.noTaxCode }, ...lookups.taxCodes.map((tax) => ({ id: tax.code, label: `${tax.code} · ${locale === "en" ? tax.nameEn : tax.nameFr}` }))];
@@ -68,7 +72,7 @@ export function EnterpriseCatalogWorkspace({ organizationId, organizationName, d
   const itemTypeItems = ["PRODUCT", "SERVICE"].map((id) => ({ id, label: professionalErpEnumLabel(locale, "itemType", id) }));
   const canWrite = collection.canWrite || collection.canManage;
 
-  function clearFeedback() { setMessage(""); setSuccess(""); }
+  function clearFeedback() { setMessage(""); }
   function openEdit(item: CatalogItem) { clearFeedback(); setDetail(null); setEdit(item); }
   function openUnitDialog() { clearFeedback(); setUnitCategoryChoice(tenantUnitCategories[0]?.id || "__NEW__"); setDialogMode("UNIT"); }
 
@@ -76,22 +80,22 @@ export function EnterpriseCatalogWorkspace({ organizationId, organizationName, d
     event.preventDefault(); clearFeedback(); const form = new FormData(event.currentTarget); setBusy(true);
     try {
       await professionalMutation(`/api/enterprise/${organizationId}/catalog`, { name: String(form.get("name") || ""), sku: String(form.get("sku") || "") || null, description: String(form.get("description") || "") || null, itemType: String(form.get("itemType") || "PRODUCT"), categoryId: String(form.get("categoryId") || "") || null, unitOfMeasureId: String(form.get("unitOfMeasureId") || ""), indicativeSalePrice: form.get("indicativeSalePrice") ? Number(form.get("indicativeSalePrice")) : null, indicativeCost: form.get("indicativeCost") ? Number(form.get("indicativeCost")) : null, currency: String(form.get("currency") || "") || null, taxable: form.get("taxable") === "on", taxCode: String(form.get("taxCode") || "") || null, trackInventory: form.get("trackInventory") === "on", notes: String(form.get("notes") || "") || null });
-      setDialogMode(null); setRefreshKey((value) => value + 1); setSuccess(hotfix.savedCatalogItem);
-    } catch (error) { setMessage(error instanceof Error ? error.message : t("common.createFailed")); } finally { setBusy(false); }
+      setDialogMode(null); setRefreshKey((value) => value + 1); notifyToast(hotfix.savedCatalogItem, "success");
+    } catch (error) { reportError(error, t("common.createFailed")); } finally { setBusy(false); }
   }
 
   async function updateItem(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); if (!edit) return; clearFeedback(); const form = new FormData(event.currentTarget); setBusy(true);
     try {
       await professionalMutation(`/api/enterprise/${organizationId}/catalog`, { itemId: edit.id, revision: edit.revision, name: String(form.get("name") || ""), sku: String(form.get("sku") || "") || null, description: String(form.get("description") || "") || null, itemType: String(form.get("itemType") || edit.itemType), categoryId: String(form.get("categoryId") || "") || null, unitOfMeasureId: String(form.get("unitOfMeasureId") || edit.unitOfMeasure.id), indicativeSalePrice: form.get("indicativeSalePrice") ? Number(form.get("indicativeSalePrice")) : null, indicativeCost: form.get("indicativeCost") ? Number(form.get("indicativeCost")) : null, currency: String(form.get("currency") || "") || null, taxable: form.get("taxable") === "on", taxCode: String(form.get("taxCode") || "") || null, trackInventory: form.get("trackInventory") === "on", status: String(form.get("status") || edit.status) }, "PATCH");
-      setEdit(null); setRefreshKey((value) => value + 1); setSuccess(hotfix.updatedCatalogItem);
-    } catch (error) { setMessage(error instanceof Error ? error.message : t("common.updateFailed")); } finally { setBusy(false); }
+      setEdit(null); setRefreshKey((value) => value + 1); notifyToast(hotfix.updatedCatalogItem, "success");
+    } catch (error) { reportError(error, t("common.updateFailed")); } finally { setBusy(false); }
   }
 
   async function createCategory(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); clearFeedback(); const form = new FormData(event.currentTarget); setBusy(true);
-    try { await professionalMutation(`/api/enterprise/${organizationId}/catalog-categories`, { name: String(form.get("name") || ""), code: String(form.get("code") || "") || undefined, parentCategoryId: String(form.get("parentCategoryId") || "") || null, description: String(form.get("description") || "") || null, sortOrder: Number(form.get("sortOrder") || 0) }); setDialogMode(null); setRefreshKey((value) => value + 1); setSuccess(hotfix.savedCategory); }
-    catch (error) { setMessage(error instanceof Error ? error.message : t("common.createFailed")); } finally { setBusy(false); }
+    try { await professionalMutation(`/api/enterprise/${organizationId}/catalog-categories`, { name: String(form.get("name") || ""), code: String(form.get("code") || "") || undefined, parentCategoryId: String(form.get("parentCategoryId") || "") || null, description: String(form.get("description") || "") || null, sortOrder: Number(form.get("sortOrder") || 0) }); setDialogMode(null); setRefreshKey((value) => value + 1); notifyToast(hotfix.savedCategory, "success"); }
+    catch (error) { reportError(error, t("common.createFailed")); } finally { setBusy(false); }
   }
 
   async function createUnit(event: FormEvent<HTMLFormElement>) {
@@ -99,10 +103,10 @@ export function EnterpriseCatalogWorkspace({ organizationId, organizationName, d
     const selectedCategory = String(form.get("unitCategoryChoice") || "");
     const customCategory = String(form.get("unitCategoryCustom") || "").trim();
     const category = selectedCategory === "__NEW__" ? customCategory : selectedCategory;
-    if (!category) { setMessage(hotfix.unitCategoryRequired); return; }
+    if (!category) { reportError(hotfix.unitCategoryRequired, hotfix.unitCategoryRequired); return; }
     setBusy(true);
-    try { await professionalMutation(`/api/enterprise/${organizationId}/units-of-measure`, { code: String(form.get("code") || ""), name: String(form.get("name") || ""), symbol: String(form.get("symbol") || "") || null, category, decimalScale: Number(form.get("decimalScale") || 3) }); setDialogMode(null); setUnitCategoryChoice(""); setRefreshKey((value) => value + 1); setSuccess(hotfix.savedUnit); }
-    catch (error) { setMessage(error instanceof Error ? error.message : t("common.createFailed")); } finally { setBusy(false); }
+    try { await professionalMutation(`/api/enterprise/${organizationId}/units-of-measure`, { code: String(form.get("code") || ""), name: String(form.get("name") || ""), symbol: String(form.get("symbol") || "") || null, category, decimalScale: Number(form.get("decimalScale") || 3) }); setDialogMode(null); setUnitCategoryChoice(""); setRefreshKey((value) => value + 1); notifyToast(hotfix.savedUnit, "success"); }
+    catch (error) { reportError(error, t("common.createFailed")); } finally { setBusy(false); }
   }
 
   const categoriesView = tab === "CATEGORY";
@@ -110,6 +114,7 @@ export function EnterpriseCatalogWorkspace({ organizationId, organizationName, d
   return <ModuleWorkspace>
     <ModuleHeader eyebrow={t("catalog.eyebrow", { organization: organizationName })} title={t("catalog.title")} description={locale === "en" ? definition.descriptionEn : definition.descriptionFr} count={t("catalog.count", { count: collection.pagination.total, suffix: collection.pagination.total === 1 ? "" : "s" })} primaryAction={canWrite ? <Button onClick={() => { clearFeedback(); setDialogMode("ITEM"); }}><Plus className="h-4 w-4" />{t("catalog.newItem")}</Button> : undefined} secondaryActions={canWrite ? <><Button variant="outline" onClick={() => { clearFeedback(); setDialogMode("CATEGORY"); }}><Layers3 className="h-4 w-4" />{t("catalog.category")}</Button><Button variant="outline" onClick={openUnitDialog}><Ruler className="h-4 w-4" />{t("catalog.unit")}</Button></> : undefined} />
     <ModuleMetrics label={t("catalog.metrics")}><ModuleMetric label={t("catalog.activeProducts")} value={collection.metrics.products || 0} /><ModuleMetric label={t("catalog.activeServices")} value={collection.metrics.services || 0} /><ModuleMetric label={t("catalog.stockTracked")} value={collection.metrics.tracked || 0} /><ModuleMetric label={t("catalog.categories")} value={categories.length} /></ModuleMetrics>
+    <CatalogImportControls organizationId={organizationId} organizationName={organizationName} locale={locale} canWrite={canWrite} units={units} categories={categories} onImported={() => { setPage(1); setRefreshKey((value) => value + 1); }} />
     <ModuleToolbar search={<ProfessionalSearch value={search} onChange={(value) => { setSearch(value); setPage(1); }} placeholder={t("catalog.search")} />} controls={<ProfessionalTabs value={tab} onChange={(value) => { setTab(value); setPage(1); }} label={t("catalog.views")} items={[{ id: "ALL", label: t("catalog.all"), count: collection.pagination.total }, { id: "PRODUCT", label: t("catalog.products"), count: collection.metrics.products }, { id: "SERVICE", label: t("catalog.services"), count: collection.metrics.services }, { id: "CATEGORY", label: t("catalog.categories"), count: categories.length }, { id: "UNIT", label: t("catalog.units"), count: units.length }]} />} />
     <ModuleContent>
       {message && !dialogMode && !edit ? <ProfessionalError message={message} /> : null}

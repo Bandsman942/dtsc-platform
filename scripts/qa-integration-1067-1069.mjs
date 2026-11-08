@@ -11,7 +11,8 @@ const history=read("components/chat/ai-tool-action-history.tsx");
 const consolePage=read("app/admin/console-page.tsx");
 const consoleShell=read("components/admin/console-workspace-shell.tsx");
 const changelog=read("docs/CHANGELOG.md");
-assert.equal(pkg.version,"1.6.3");
+assert.match(pkg.version,/^1\.6\.\d+$/);
+assert.ok(Number(pkg.version.split(".")[2]) >= 3,"The integrated release must remain at or above v1.6.3 after later patch hotfixes");
 for(const id of ["1067","1068","1069"]){
  assert(pkg.scripts["qa:regression"].includes(`qa-hotfix-${id}`),`Regression pipeline missing #${id}`);
  assert(changelog.includes(`Hotfix #${id}`),`Changelog missing #${id}`);
