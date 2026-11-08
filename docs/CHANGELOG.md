@@ -1,4 +1,4 @@
-## 2026-11-08 — Hotfix #1068 — Conversations IA Design System 2.0 (candidat v1.6.4)
+## 2026-11-08 — Hotfix #1068 — Conversations IA Design System 2.0 (candidat v1.6.3 ; ajustement séquentiel lors de la fusion)
 
 - Chatbot général et Assistant entreprise partagent un espace conversationnel 3 zones desktop (rail global DTSC, historique permanent, conversation et composer flexible), en conservant les modèles de permissions distincts.
 - Navigation de retour mobile dédiée à l'historique, liens profonds et précédent/suivant navigateur synchronisés dans l'URL sans rechargement, recherches/filtres/favoris/projets/archives maintenus.
