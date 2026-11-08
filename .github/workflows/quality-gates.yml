@@ -180,6 +180,8 @@ jobs:
           node scripts/qa-hotfix-1042-cahier-traceability.mjs
       - name: "RETAIL #1050 POS dashboard boutique confidentiality QA"
         run: node scripts/qa-retail-pos-dashboard-site-isolation.mjs
+      - name: "HOTFIX #1080 POS multi-boutiques, poste canonique et caisse séparée QA"
+        run: node scripts/qa-hotfix-1080-retail-pos-rbac-invoice-cashier.mjs
       - name: "RETAIL #1049 multi-store onboarding and staff switcher QA"
         run: node scripts/qa-retail-multistore-onboarding.mjs
       - name: Sector onboarding commercial readiness QA

@@ -37,7 +37,7 @@ export async function retailInvoicePaymentOptions(organizationId: string, invoic
   });
   if (!checkout) throw new EnterpriseRetailError("RETAIL_INVOICE_NOT_FOUND", 404);
   const visibility = await retailInvoiceVisibleSites(organizationId, actorUserId);
-  if (!visibility.isOwner && !visibility.siteIds.includes(checkout.siteId)) throw new EnterpriseRetailError("RETAIL_SITE_ACCESS_DENIED", 403);
+  if (!visibility.isOwner && !visibility.collectibleSiteIds.includes(checkout.siteId)) throw new EnterpriseRetailError("RETAIL_SITE_ACCESS_DENIED", 403);
   await requireRetailSiteCapability(organizationId, actorUserId, checkout.siteId, "COLLECT_PAYMENT", prisma, { requireAssignment: true });
   const accounts = await prisma.enterpriseFinancialAccount.findMany({
     where: { organizationId, siteId: checkout.siteId, currencyCode: checkout.invoice.currencyCode, status: "ACTIVE", archivedAt: null,
@@ -65,7 +65,7 @@ export async function proposeRetailInvoicePayment(organizationId: string, invoic
     });
     if (!checkout) throw new EnterpriseRetailError("RETAIL_INVOICE_NOT_FOUND", 404);
     const visibility = await retailInvoiceVisibleSites(organizationId, actorUserId, tx);
-    if (!visibility.isOwner && !visibility.siteIds.includes(checkout.siteId)) throw new EnterpriseRetailError("RETAIL_SITE_ACCESS_DENIED", 403);
+    if (!visibility.isOwner && !visibility.collectibleSiteIds.includes(checkout.siteId)) throw new EnterpriseRetailError("RETAIL_SITE_ACCESS_DENIED", 403);
     await requireRetailSiteCapability(organizationId, actorUserId, checkout.siteId, "COLLECT_PAYMENT", tx, { requireAssignment: true });
     const config = await tx.enterpriseRetailConfiguration.findUnique({ where: { organizationId }, select: { settingsJson: true } });
     const settings = config?.settingsJson;

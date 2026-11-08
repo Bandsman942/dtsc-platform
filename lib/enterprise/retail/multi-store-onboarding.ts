@@ -103,9 +103,17 @@ export async function getRetailMultiStoreOnboarding(organizationId: string) {
 /** The operator's store switcher is built from server-verified assignments.
  * A client-supplied siteId is never used to broaden the authorized store list. */
 export async function getRetailMyStores(organizationId: string, userId: string, role: string) {
-  const configuration = await prisma.enterpriseRetailConfiguration.findUnique({
-    where: { organizationId }, select: { settingsJson: true },
-  });
+  const [configuration, member] = await Promise.all([
+    prisma.enterpriseRetailConfiguration.findUnique({ where: { organizationId }, select: { settingsJson: true } }),
+    prisma.organizationMember.findFirst({
+      where: { organizationId, userId, status: "ACTIVE", removedAt: null },
+      select: { positionId: true, positionTitle: true },
+    }),
+  ]);
+  const position = member?.positionId ? await prisma.enterprisePosition.findFirst({
+    where: { organizationId, id: member.positionId }, select: { labelFr: true, labelEn: true },
+  }) : null;
+  const officialPosition = { fr: position?.labelFr || member?.positionTitle || null, en: position?.labelEn || member?.positionTitle || null };
   const isolationEnabled = retailStaffIsolationIsEnabled(configuration?.settingsJson);
   if (RETAIL_OWNER_ROLES.has(role)) {
     const sites = await prisma.enterpriseSite.findMany({
@@ -115,7 +123,7 @@ export async function getRetailMyStores(organizationId: string, userId: string, 
     });
     const storeSites = sites.some((site) => site.siteType === "STORE") ? sites.filter((site) => site.siteType === "STORE") : sites;
     const accounts = await prisma.enterpriseFinancialAccount.findMany({ where: { organizationId, status: "ACTIVE", archivedAt: null, accountType: "CASH", siteId: { in: storeSites.map((site) => site.id) } }, select: { siteId: true, name: true, currencyCode: true }, take: 1000 });
-    return { isolationEnabled, isOwner: true, sites: storeSites.map((site) => ({ ...site, roleCode: "OWNER", capabilities: ["VIEW_SALES", "COLLECT_PAYMENT", "PREPARE_INVOICE", "CLOSE_CASH"], tills: accounts.filter((account) => account.siteId === site.id).map((account) => ({ name: account.name, currencyCode: account.currencyCode })) })) };
+    return { isolationEnabled, isOwner: true, officialPosition, sites: storeSites.map((site) => ({ ...site, roleCode: "OWNER", capabilities: ["VIEW_SALES", "COLLECT_PAYMENT", "PREPARE_INVOICE", "CLOSE_CASH"], tills: accounts.filter((account) => account.siteId === site.id).map((account) => ({ name: account.name, currencyCode: account.currencyCode })) })) };
   }
 
   const assignments = await prisma.enterpriseRetailSiteAssignment.findMany({
@@ -130,6 +138,7 @@ export async function getRetailMyStores(organizationId: string, userId: string, 
   return {
     isolationEnabled,
     isOwner: false,
+    officialPosition,
     sites: assignments.map((assignment) => ({
       ...assignment.site,
       roleCode: assignment.roleCode,

@@ -1,6 +1,6 @@
 {
   "name": "dtsc-platform",
-  "version": "1.6.5",
+  "version": "1.6.6",
   "private": true,
   "engines": {
     "node": "22.x"
@@ -31,6 +31,7 @@
     "qa:hotfix-1044-retail-activation": "node scripts/qa-hotfix-1044-retail-activation.mjs",
     "qa:finance-design2-four-groups": "node scripts/qa-finance-design2-four-groups.mjs && node scripts/qa-finance-design2-exports.mjs && node scripts/qa-hotfix-1044-retail-activation.mjs",
     "qa:hotfix-1046-retail-collaboration-ui": "node scripts/qa-hotfix-1046-retail-collaboration-ui.mjs",
+    "qa:hotfix-1080-retail-pos": "node scripts/qa-hotfix-1080-retail-pos-rbac-invoice-cashier.mjs",
     "qa:hotfix-1055-navigation-cards": "node scripts/qa-module-navigation-cards-1055.mjs",
     "qa:hotfix-1061-desktop-sidebar": "node scripts/qa-hotfix-1061-desktop-sidebar.mjs",
     "qa:hotfix-1064-retail-sector-packs": "node scripts/qa-hotfix-1064-retail-sector-packs.mjs",

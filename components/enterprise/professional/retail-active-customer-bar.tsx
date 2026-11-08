@@ -75,7 +75,7 @@ function points(value: string | number) {
   return new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 }).format(Number(value || 0));
 }
 
-export function RetailActiveCustomerBar({ organizationId }: { organizationId: string }) {
+export function RetailActiveCustomerBar({ organizationId, compact = false }: { organizationId: string; compact?: boolean }) {
   const language: "fr" | "en" = useAppLocale() === "en" ? "en" : "fr";
   const [capabilities, setCapabilities] = useState<Capabilities | null>(null);
   const [active, setActive] = useState<Customer | null>(null);
@@ -300,15 +300,15 @@ export function RetailActiveCustomerBar({ organizationId }: { organizationId: st
   if (!capabilities?.canReadCustomers) return null;
 
   return (
-    <section data-retail-customer-workspace className="min-w-0 max-w-full rounded-3xl border border-dtsc-border bg-dtsc-surface p-4 shadow-[0_8px_30px_rgba(0,23,54,0.07)] sm:p-6" aria-label={copy.title}>
-      <div className="flex min-w-0 flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+    <section data-retail-customer-workspace data-retail-customer-compact={compact ? "true" : undefined} className={compact ? "min-w-0 max-w-full rounded-xl border border-dtsc-border bg-dtsc-surface p-3" : "min-w-0 max-w-full rounded-3xl border border-dtsc-border bg-dtsc-surface p-4 shadow-[0_8px_30px_rgba(0,23,54,0.07)] sm:p-6"} aria-label={copy.title}>
+      <div className={`flex min-w-0 flex-col lg:flex-row lg:items-start lg:justify-between ${compact ? "gap-3" : "gap-5"}`}>
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 flex-wrap items-center gap-2.5 border-l-4 border-cyan-500 pl-3">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-cyan-500/10 text-dtsc-blue dark:text-cyan-300"><UserRoundCheck className="h-5 w-5" aria-hidden="true" /></span>
-            <h2 className="min-w-0 break-words text-lg font-black tracking-tight text-dtsc-ink">{copy.title}</h2>
+            {!compact ? <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-cyan-500/10 text-dtsc-blue dark:text-cyan-300"><UserRoundCheck className="h-5 w-5" aria-hidden="true" /></span> : null}
+            <h2 className={`min-w-0 break-words font-black tracking-tight text-dtsc-ink ${compact ? "text-sm" : "text-lg"}`}>{copy.title}</h2>
             <span className="rounded-full border border-cyan-500/25 bg-cyan-500/10 px-2.5 py-1 text-[11px] font-bold text-dtsc-blue dark:text-cyan-200">{active ? copy.selected : copy.walkIn}</span>
           </div>
-          <p className="mt-3 max-w-3xl text-sm leading-6 text-dtsc-muted">{copy.hint}</p>
+          {!compact ? <p className="mt-3 max-w-3xl text-sm leading-6 text-dtsc-muted">{copy.hint}</p> : null}
           {active ? (
             <div className="mt-3 space-y-3">
               <div className="flex min-w-0 flex-wrap items-center gap-3 rounded-2xl border border-cyan-500/25 bg-cyan-500/5 p-3">

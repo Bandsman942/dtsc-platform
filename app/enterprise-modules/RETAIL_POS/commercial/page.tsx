@@ -1,8 +1,10 @@
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { getSession, requireUser } from "@/lib/auth";
 import { resolveEnterpriseModuleAccess } from "@/lib/enterprise/module-access";
 import { RetailCommercialWorkspace } from "@/components/enterprise/professional/retail-commercial-workspace";
 import { AppShell } from "@/components/layout/app-shell";
+import { prisma } from "@/lib/prisma";
+import { RETAIL_OWNER_ROLES } from "@/lib/enterprise/retail/site-access";
 
 export default async function RetailCommercialControlPage() {
   const session = await getSession();
@@ -17,6 +19,11 @@ export default async function RetailCommercialControlPage() {
     action: "read",
   });
   if (!access.allowed) redirect("/enterprise-modules/RETAIL_POS");
+  const member = await prisma.organizationMember.findFirst({
+    where: { organizationId, userId: user.id, status: "ACTIVE", removedAt: null },
+    select: { role: true },
+  });
+  if (!member || !RETAIL_OWNER_ROLES.has(member.role)) notFound();
   return (
     <AppShell user={user} hideContextualBack>
       <RetailCommercialWorkspace organizationId={organizationId} />

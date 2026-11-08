@@ -1,6 +1,5 @@
 import { notFound, redirect } from "next/navigation";
 import { MobileMoneyAgencyWorkspace } from "@/components/enterprise/professional/mobile-money-agency-workspace";
-import { RetailActiveCustomerBar } from "@/components/enterprise/professional/retail-active-customer-bar";
 import { RetailDailyCloseWorkspace } from "@/components/enterprise/professional/retail-daily-close-workspace";
 import { RetailDeviceReadiness } from "@/components/enterprise/professional/retail-device-readiness";
 import { RetailExpiryAlertsPanel } from "@/components/enterprise/professional/retail-expiry-alerts-panel";
@@ -8,6 +7,7 @@ import { RetailFeatureActivationPanel } from "@/components/enterprise/profession
 import { RetailGlobalReadiness } from "@/components/enterprise/professional/retail-global-readiness";
 import { RetailHistoricalImportPanel } from "@/components/enterprise/professional/retail-historical-import-panel";
 import { RetailInvoiceFlowWorkbench } from "@/components/enterprise/professional/retail-invoice-flow-workbench";
+import { RetailInvoiceCashierWorkbench } from "@/components/enterprise/professional/retail-invoice-cashier-workbench";
 import { RetailInventoryPolicySettings } from "@/components/enterprise/professional/retail-inventory-policy-settings";
 import { RetailMultiStoreOnboarding, RetailMyStores } from "@/components/enterprise/professional/retail-multi-store-onboarding";
 import { RetailOfflineContinuity } from "@/components/enterprise/professional/retail-offline-continuity";
@@ -24,6 +24,7 @@ import { formatEnterpriseBusinessDate } from "@/lib/enterprise/business-context"
 import { resolveEnterpriseModuleAccess } from "@/lib/enterprise/module-access";
 import { requireEnterpriseMembership } from "@/lib/enterprise-sector-templates";
 import { prisma } from "@/lib/prisma";
+import { siteStaffCapabilities } from "@/lib/enterprise/retail/site-access";
 
 export async function renderRetailModulePage(moduleCode: "RETAIL_POS" | "MOBILE_MONEY_AGENCY" | "TELCO_TOPUPS" | "RETAIL_DAILY_CLOSE", options?: { section?: string; siteId?: string }) {
   const user = await requireUser();
@@ -48,6 +49,16 @@ export async function renderRetailModulePage(moduleCode: "RETAIL_POS" | "MOBILE_
 
   const locale: "fr" | "en" = user.locale === "en" ? "en" : "fr";
   const canManagePos = ["OWNER", "ADMIN_ENTREPRISE", "ADMIN_ENTERPRISE"].includes(membership.role);
+  const posAssignments = moduleCode === "RETAIL_POS" && !canManagePos
+    ? await prisma.enterpriseRetailSiteAssignment.findMany({
+      where: { organizationId, userId: user.id, isActive: true, site: { status: "ACTIVE", archivedAt: null } },
+      select: { siteId: true, roleCode: true, permissionsJson: true }, take: 500,
+    })
+    : [];
+  const posCapabilities = new Set(posAssignments.flatMap((assignment) => siteStaffCapabilities(assignment.roleCode, assignment.permissionsJson)));
+  const posConfiguration = moduleCode === "RETAIL_POS"
+    ? await prisma.enterpriseRetailConfiguration.findUnique({ where: { organizationId }, select: { settingsJson: true } }) : null;
+  const invoiceCheckoutEnabled = Boolean(posConfiguration?.settingsJson && typeof posConfiguration.settingsJson === "object" && !Array.isArray(posConfiguration.settingsJson) && posConfiguration.settingsJson.invoiceCheckoutEnabled === true);
   const companySites = moduleCode === "RETAIL_DAILY_CLOSE" && canManagePos
     ? await prisma.enterpriseSite.findMany({
       where: { organizationId, status: "ACTIVE", archivedAt: null },
@@ -56,8 +67,12 @@ export async function renderRetailModulePage(moduleCode: "RETAIL_POS" | "MOBILE_
     : undefined;
   const adminStores = companySites?.some((site) => site.siteType === "STORE")
     ? companySites.filter((site) => site.siteType === "STORE") : companySites;
-  const posSection = moduleCode === "RETAIL_POS" ? getRetailPosSection(options?.section, canManagePos) : undefined;
+  const posSection = moduleCode === "RETAIL_POS" ? getRetailPosSection(options?.section, canManagePos, posCapabilities) : undefined;
   if (moduleCode === "RETAIL_POS" && options?.section && !posSection) notFound();
+  if (posSection && options?.siteId && !canManagePos && !posAssignments.some((assignment) =>
+    assignment.siteId === options.siteId && (!posSection.requiredCapability || siteStaffCapabilities(assignment.roleCode, assignment.permissionsJson).includes(posSection.requiredCapability as "PREPARE_INVOICE" | "COLLECT_PAYMENT" | "VIEW_STOCK")),
+  )) notFound();
+  if (posSection?.id === "customers") redirect(`/enterprise-modules/RETAIL_POS?section=checkout${options?.siteId ? `&siteId=${encodeURIComponent(options.siteId)}` : ""}`);
 
   return (
     <AppShell user={user} hideContextualBack={moduleCode === "RETAIL_POS"}>
@@ -75,19 +90,21 @@ export async function renderRetailModulePage(moduleCode: "RETAIL_POS" | "MOBILE_
           posSection ? (
             <RetailPosSectionDetail locale={locale} section={posSection}>
               {posSection.id === "checkout" ? (
-                <RetailPosWorkspace organizationId={organizationId} organizationName={organization.name} definition={access.definition} preferredSiteId={options?.siteId} />
+                invoiceCheckoutEnabled
+                  ? <RetailInvoiceFlowWorkbench organizationId={organizationId} organizationName={organization.name} locale={locale} preferredSiteId={options?.siteId} mode="checkout" />
+                  : <RetailPosWorkspace organizationId={organizationId} organizationName={organization.name} definition={access.definition} preferredSiteId={options?.siteId} />
               ) : posSection.id === "store-setup" ? (
                 <RetailMultiStoreOnboarding organizationId={organizationId} locale={locale} selectedSiteId={options?.siteId} />
               ) : posSection.id === "my-stores" ? (
                 <RetailMyStores organizationId={organizationId} userId={user.id} role={membership.role} locale={locale} />
-              ) : posSection.id === "customers" ? (
-                <RetailActiveCustomerBar organizationId={organizationId} />
               ) : posSection.id === "sites" ? (
                 <RetailSiteOverview organizationId={organizationId} locale={locale} />
               ) : posSection.id === "staff" ? (
                 <RetailSiteStaffAccess organizationId={organizationId} locale={locale} />
               ) : posSection.id === "invoices" ? (
-                <RetailInvoiceFlowWorkbench organizationId={organizationId} locale={locale} preferredSiteId={options?.siteId} />
+                <RetailInvoiceFlowWorkbench organizationId={organizationId} organizationName={organization.name} locale={locale} preferredSiteId={options?.siteId} mode="invoices" />
+              ) : posSection.id === "collections" ? (
+                <RetailInvoiceCashierWorkbench organizationId={organizationId} locale={locale} preferredSiteId={options?.siteId} />
               ) : posSection.id === "offline" ? (
                 <RetailOfflineContinuity organizationId={organizationId} locale={locale} />
               ) : posSection.id === "omnichannel" ? (
@@ -106,7 +123,7 @@ export async function renderRetailModulePage(moduleCode: "RETAIL_POS" | "MOBILE_
                 <RetailExpiryAlertsPanel organizationId={organizationId} locale={locale} />
               ) : null}
             </RetailPosSectionDetail>
-          ) : <RetailPosSectionDirectory locale={locale} canManage={canManagePos} />
+          ) : <RetailPosSectionDirectory locale={locale} canManage={canManagePos} capabilities={posCapabilities} />
         ) : moduleCode === "MOBILE_MONEY_AGENCY" ? (
           <MobileMoneyAgencyWorkspace
             organizationId={organizationId}
