@@ -3,6 +3,7 @@ import { canUseFeature } from "@/lib/billing/entitlements";
 import { resolveEnterpriseModuleAccess } from "@/lib/enterprise/module-access";
 import { canonicalSectorActivityDestination } from "@/lib/enterprise/sector-activity-canonical-handoffs";
 import { RETAIL_SECTOR_CODE } from "@/lib/enterprise/retail/constants";
+import { getRetailExtensionPreference, isRetailOptionalExtensionModule } from "@/lib/enterprise/retail/extension-policy";
 import {
   getRetailBusinessSubtype,
   retailSubtypeAllowsModule,
@@ -326,6 +327,16 @@ export async function applySectorTemplateToOrganization({
     ? template.activityBlocks.filter((block) => !block.targetModuleCode || retailSubtypeAllowsModule(block.targetModuleCode, effectiveSubtypeCode))
     : template.activityBlocks;
 
+  // Applying a Shop template must not undo an explicit console/tenant decision
+  // to keep an operator extension disabled. The template is an onboarding
+  // suggestion, never a higher authority than the tenant preference.
+  const retailConfiguration = sector.code === RETAIL_SECTOR_CODE
+    ? await prisma.enterpriseRetailConfiguration.findUnique({
+        where: { organizationId },
+        select: { settingsJson: true },
+      })
+    : null;
+
   return prisma.$transaction(async (tx) => {
     const organization = await tx.organization.update({
       where: { id: organizationId },
@@ -396,6 +407,10 @@ export async function applySectorTemplateToOrganization({
     const modules = [];
     for (const templateModule of selectedModules) {
       const isCore = templateModule.moduleCategory === "CORE";
+      const explicitPackChoice = isRetailOptionalExtensionModule(templateModule.moduleCode)
+        ? getRetailExtensionPreference(retailConfiguration?.settingsJson, templateModule.moduleCode)
+        : undefined;
+      const shouldEnable = explicitPackChoice ?? templateModule.defaultEnabled;
       const savedModule = await tx.enterpriseModule.upsert({
         where: { organizationId_moduleCode: { organizationId, moduleCode: templateModule.moduleCode } },
         update: {
@@ -406,7 +421,7 @@ export async function applySectorTemplateToOrganization({
           descriptionEn: templateModule.descriptionEn,
           moduleCategory: templateModule.moduleCategory,
           icon: templateModule.icon,
-          isEnabled: templateModule.defaultEnabled,
+          isEnabled: shouldEnable,
           isCore,
           sourceTemplateId: templateModule.id,
           requiresPlanLevel: templateModule.requiresPlanLevel,
@@ -422,7 +437,7 @@ export async function applySectorTemplateToOrganization({
           descriptionEn: templateModule.descriptionEn,
           moduleCategory: templateModule.moduleCategory,
           icon: templateModule.icon,
-          isEnabled: templateModule.defaultEnabled,
+          isEnabled: shouldEnable,
           isCore,
           sourceTemplateId: templateModule.id,
           requiresPlanLevel: templateModule.requiresPlanLevel,
@@ -439,7 +454,7 @@ export async function applySectorTemplateToOrganization({
           descriptionFr: templateModule.descriptionFr,
           descriptionEn: templateModule.descriptionEn,
           icon: templateModule.icon,
-          isEnabled: templateModule.defaultEnabled,
+          isEnabled: shouldEnable,
           requiredPermission: `module:${templateModule.moduleCode}:manage`,
           sortOrder: templateModule.sortOrder,
           sourceTemplateId: templateModule.id,
@@ -453,7 +468,7 @@ export async function applySectorTemplateToOrganization({
           descriptionFr: templateModule.descriptionFr,
           descriptionEn: templateModule.descriptionEn,
           icon: templateModule.icon,
-          isEnabled: templateModule.defaultEnabled,
+          isEnabled: shouldEnable,
           requiredPermission: `module:${templateModule.moduleCode}:manage`,
           sortOrder: templateModule.sortOrder,
           sourceTemplateId: templateModule.id,
