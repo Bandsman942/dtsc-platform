@@ -317,25 +317,36 @@ export async function applySectorTemplateToOrganization({
     throw new Error("RETAIL_BUSINESS_SUBTYPE_INVALID");
   }
 
-  const selectedModules = sector.code === RETAIL_SECTOR_CODE
-    ? template.modules.filter((templateModule) => retailSubtypeAllowsModule(templateModule.moduleCode, effectiveSubtypeCode))
-    : template.modules;
+  // The generic Retail classification is orthogonal to the two separately
+  // licensed operator packs. A template reapplication must respect explicit
+  // preferences and grandfather historical enabled rows, including when
+  // changing SHOP -> generic Retail.
+  const [retailConfiguration, currentlyEnabledPacks] = sector.code === RETAIL_SECTOR_CODE
+    ? await Promise.all([
+        prisma.enterpriseRetailConfiguration.findUnique({
+          where: { organizationId },
+          select: { settingsJson: true },
+        }),
+        prisma.enterpriseModule.findMany({
+          where: { organizationId, isEnabled: true, moduleCode: { in: ["MOBILE_MONEY_AGENCY", "TELCO_TOPUPS"] } },
+          select: { moduleCode: true },
+        }),
+      ])
+    : [null, []];
+  const enabledHistoricalPacks = new Set(currentlyEnabledPacks.map((item) => item.moduleCode));
+  const shouldIncludeModule = (code: string) => {
+    if (sector.code !== RETAIL_SECTOR_CODE || retailSubtypeAllowsModule(code, effectiveSubtypeCode)) return true;
+    if (!isRetailOptionalExtensionModule(code)) return false;
+    const preference = getRetailExtensionPreference(retailConfiguration?.settingsJson, code);
+    return preference ?? enabledHistoricalPacks.has(code);
+  };
+  const selectedModules = template.modules.filter((item) => shouldIncludeModule(item.moduleCode));
   const excludedModuleCodes = sector.code === RETAIL_SECTOR_CODE
-    ? template.modules.filter((templateModule) => !retailSubtypeAllowsModule(templateModule.moduleCode, effectiveSubtypeCode)).map((templateModule) => templateModule.moduleCode)
+    ? template.modules.filter((item) => !shouldIncludeModule(item.moduleCode)).map((item) => item.moduleCode)
     : [];
-  const selectedActivityBlocks = sector.code === RETAIL_SECTOR_CODE
-    ? template.activityBlocks.filter((block) => !block.targetModuleCode || retailSubtypeAllowsModule(block.targetModuleCode, effectiveSubtypeCode))
-    : template.activityBlocks;
-
-  // Applying a Shop template must not undo an explicit console/tenant decision
-  // to keep an operator extension disabled. The template is an onboarding
-  // suggestion, never a higher authority than the tenant preference.
-  const retailConfiguration = sector.code === RETAIL_SECTOR_CODE
-    ? await prisma.enterpriseRetailConfiguration.findUnique({
-        where: { organizationId },
-        select: { settingsJson: true },
-      })
-    : null;
+  const selectedActivityBlocks = template.activityBlocks.filter(
+    (block) => !block.targetModuleCode || shouldIncludeModule(block.targetModuleCode),
+  );
 
   return prisma.$transaction(async (tx) => {
     const organization = await tx.organization.update({
@@ -410,7 +421,8 @@ export async function applySectorTemplateToOrganization({
       const explicitPackChoice = isRetailOptionalExtensionModule(templateModule.moduleCode)
         ? getRetailExtensionPreference(retailConfiguration?.settingsJson, templateModule.moduleCode)
         : undefined;
-      const shouldEnable = explicitPackChoice ?? templateModule.defaultEnabled;
+      const shouldEnable = explicitPackChoice ?? (isRetailOptionalExtensionModule(templateModule.moduleCode)
+        && effectiveSubtypeCode === null ? enabledHistoricalPacks.has(templateModule.moduleCode) : templateModule.defaultEnabled);
       const savedModule = await tx.enterpriseModule.upsert({
         where: { organizationId_moduleCode: { organizationId, moduleCode: templateModule.moduleCode } },
         update: {
