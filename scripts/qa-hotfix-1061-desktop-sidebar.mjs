@@ -21,6 +21,7 @@ assert.match(shell, /dtsc-sidebar-collapsed-only/);
 assert.match(navigation, /data-sidebar-nav-link/);
 assert.match(navigation, /aria-label=\{label\}/);
 assert.match(navigation, /aria-current=\{active \? "page"/);
+assert.match(navigation, /focus-visible:ring-2/);
 assert.match(controller, /window\.localStorage\.getItem\(storageKey\)/);
 assert.match(controller, /window\.localStorage\.setItem\(storageKey/);
 assert.match(controller, /\$\{userId\}:\$\{productKey\}/);
