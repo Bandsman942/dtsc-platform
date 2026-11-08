@@ -248,6 +248,9 @@ export async function DtscConsolePage({ forcedSection, searchParams }: { forcedS
       <ConsoleWorkspaceShell
         activeSection={activeSection}
         locale={locale}
+        selectedGroup={stringParams.group}
+        focus={stringParams.focus}
+        searchParams={stringParams}
         sections={visibleSections.map((id) => ({
           id,
           label: t(`console.sections.${id}.label`),
