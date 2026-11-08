@@ -1,3 +1,11 @@
+## 2026-11-08 — Hotfix #1075 — Formulaires Console, import catalogue et toasts (candidat v1.6.4)
+
+- Administration DTSC : succès/erreurs contextualisés après création d’une entreprise cliente ; fermeture du formulaire seulement après confirmation serveur et distinction entre invitation enregistrée et notification réellement créée.
+- ERP Sites/Entrepôts : choix IANA de fuseau horaire par combobox cherchable, contrôlé côté serveur, FR/EN et mobile.
+- ERP Catalogue : modèles CSV/Excel propres aux référentiels d’unités et catégories de chaque entreprise, import en deux étapes (prévalidation, création confirmée), lignes invalides détaillées, jusqu’à 200 articles, écriture transactionnelle réutilisant les services canoniques prix/stock.
+- Stock/transferts/inventaires : notifications directes à sémantique explicite pour soumission, approbation, rejet et réception ; design global coloré et dédoublonnage de deux émissions simultanées identiques, sans bloquer les notifications ultérieures.
+- Tests automatisés `scripts/qa-hotfix-1075-forms-catalog-import-toasts.mjs` dans le parcours de régression et protocole E2E `docs/HOTFIX_1075_FORMS_CATALOG_IMPORT_TOASTS.md`. Fusion et publication seulement après CI et validation E2E propriétaire, sans Preview Vercel.
+
 ## 2026-11-08 — Candidat d’intégration A+B+C — validation E2E conjointe en attente (v1.6.3)
 
 - Regroupe trois hotfixes indépendants : #1067 vérité/contextualisation des IA, #1068 conversations IA DS 2.0, #1069 navigation Console DS 2.0.

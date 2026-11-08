@@ -132,7 +132,11 @@ export async function createEnterpriseBusinessParty(organizationId: string, acto
 }
 
 export async function createEnterpriseCatalogItem(organizationId: string, actorUserId: string, input: CatalogItemInput) {
-  return prisma.$transaction(async (tx) => {
+  return prisma.$transaction((tx) => createEnterpriseCatalogItemTx(tx, organizationId, actorUserId, input));
+}
+
+/** Reuses the canonical catalog write path inside a validated bulk transaction. */
+export async function createEnterpriseCatalogItemTx(tx: Prisma.TransactionClient, organizationId: string, actorUserId: string, input: CatalogItemInput) {
     await assertClientOrganization(tx, organizationId);
     const [unit, category] = await Promise.all([
       tx.enterpriseUnitOfMeasure.findFirst({ where: { id: input.unitOfMeasureId, organizationId, status: "ACTIVE", archivedAt: null }, select: { id: true } }),
@@ -210,7 +214,6 @@ export async function createEnterpriseCatalogItem(organizationId: string, actorU
       },
     });
     return item;
-  });
 }
 
 export async function createEnterpriseSite(organizationId: string, actorUserId: string, input: SiteInput) {

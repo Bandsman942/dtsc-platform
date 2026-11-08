@@ -224,8 +224,9 @@ export async function POST(req: Request) {
     return created;
   });
 
+  let adminInvitationNotificationCreated = false;
   if (data.adminUserId) {
-    await notifyUser({
+    const notification = await notifyUser({
       userId: data.adminUserId,
       title: `Invitation administrateur · ${organization.name}`,
       body: adminReason,
@@ -233,6 +234,7 @@ export async function POST(req: Request) {
       targetUrl: `/enterprise-invitations?organizationId=${encodeURIComponent(organization.id)}`,
       organizationId: organization.id,
     }).catch(() => null);
+    adminInvitationNotificationCreated = Boolean(notification);
   }
 
   const requiresCanonicalSectorTemplate = businessSubtypeCode === TAILORING_BUSINESS_SUBTYPE_CODE || businessSubtypeCode === GAMING_BUSINESS_SUBTYPE_CODE
@@ -272,5 +274,11 @@ export async function POST(req: Request) {
     request: req,
   });
   await writeApiLog({ request: req, statusCode: 201, userId: session.userId, startedAt });
-  return NextResponse.json({ ok: true, organization, businessSubtypeCode }, { status: 201 });
+  return NextResponse.json({
+    ok: true,
+    organization,
+    businessSubtypeCode,
+    adminInvitationStatus: data.adminUserId ? "PENDING" : null,
+    adminInvitationNotificationCreated,
+  }, { status: 201 });
 }

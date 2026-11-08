@@ -12,7 +12,7 @@ import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
 import { ListControls } from "@/components/ui/list-controls";
 import { ReferenceCombobox } from "@/components/ui/reference-combobox";
-import { useToastMessage } from "@/components/ui/use-toast-message";
+import { notifyToast, type ToastTone } from "@/lib/client-toast";
 import { translateClientOrganizations, type ClientOrganizationsLocale } from "@/lib/console/client-organizations-i18n";
 import { useSmartList } from "@/lib/hooks/use-smart-list";
 
@@ -79,6 +79,7 @@ type OrganizationUpdateBody = {
   error?: string;
   reasonCode?: string;
   field?: string | null;
+  adminInvitationNotificationCreated?: boolean;
 };
 type OrganizationUpdateResult = { ok: boolean; message: string };
 
@@ -98,7 +99,7 @@ export function ClientOrganizationsPanel({
   const router = useRouter();
   const appLocale = useAppLocale();
   const locale: ClientOrganizationsLocale = appLocale === "en" ? "en" : "fr";
-  const [message, setMessage] = useState("");
+  const [creating, setCreating] = useState(false);
   const [selectedSectorId, setSelectedSectorId] = useState("");
   const [selectedBusinessSubtypeCode, setSelectedBusinessSubtypeCode] = useState("");
   const [businessSubtypeOptions, setBusinessSubtypeOptions] = useState<BusinessSubtypeOption[]>([]);
@@ -111,7 +112,6 @@ export function ClientOrganizationsPanel({
   const [subscriptionOrganization, setSubscriptionOrganization] = useState<ClientOrganization | null>(null);
   const [retailOrganization, setRetailOrganization] = useState<ClientOrganization | null>(null);
   const [organizationToDelete, setOrganizationToDelete] = useState<ClientOrganization | null>(null);
-  useToastMessage(message);
   const list = useSmartList({
     items: organizations,
     pageSize: 8,
@@ -126,7 +126,8 @@ export function ClientOrganizationsPanel({
     }
     return sectors.filter((sector) => `${sector.labelFr} ${sector.labelEn} ${sector.code}`.toLowerCase().includes(query));
   }, [sectorQuery, sectors]);
-  const t = (key: Parameters<typeof translateClientOrganizations>[1]) => translateClientOrganizations(locale, key);
+  const t = (key: Parameters<typeof translateClientOrganizations>[1], values?: Record<string, string>) => translateClientOrganizations(locale, key, values);
+  const feedback = (description: string, tone: ToastTone) => notifyToast({ description, tone });
 
   useEffect(() => {
     let cancelled = false;
@@ -175,6 +176,7 @@ export function ClientOrganizationsPanel({
   }
 
   function closeCreateDialog() {
+    if (creating) return;
     setCreateOpen(false);
     resetCreateAdminInvitation();
     resetCreateClassification();
@@ -182,12 +184,15 @@ export function ClientOrganizationsPanel({
 
   async function createOrganization(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setMessage("");
-    const payload = Object.fromEntries(new FormData(event.currentTarget).entries()) as Record<string, string>;
+    if (creating) return;
+    const formElement = event.currentTarget;
+    const payload = Object.fromEntries(new FormData(formElement).entries()) as Record<string, string>;
+    const companyName = String(payload.name || "").trim();
+    const selectedAdmin = activeUsers.find((user) => user.id === createAdminUserId);
     if (createAdminUserId) {
       const normalizedReason = createAdminReason.trim();
       if (normalizedReason.length < 3) {
-        setMessage(t("adminReasonRequired"));
+        feedback(t("adminReasonRequired"), "error");
         return;
       }
       payload.adminUserId = createAdminUserId;
@@ -199,21 +204,31 @@ export function ClientOrganizationsPanel({
     if (!selectedBusinessSubtypeCode) {
       delete payload.businessSubtypeCode;
     }
-    const response = await fetch("/api/admin/client-organizations", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    const body = (await response.json().catch(() => null)) as OrganizationUpdateBody | null;
-    setMessage(response.ok
-      ? createAdminUserId ? t("companyCreatedWithAdmin") : t("companyCreated")
-      : resolveUpdateError(body, response.status));
-    if (response.ok) {
-      event.currentTarget.reset();
+    setCreating(true);
+    try {
+      const response = await fetch("/api/admin/client-organizations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const body = (await response.json().catch(() => null)) as OrganizationUpdateBody | null;
+      if (!response.ok) {
+        feedback(resolveUpdateError(body, response.status) || t("companyCreationFailed", { company: companyName }), "error");
+        return;
+      }
+      const hasAdmin = Boolean(createAdminUserId);
+      const values = { company: companyName, admin: selectedAdmin ? `${selectedAdmin.name} (${selectedAdmin.email})` : "" };
+      const notificationMissing = hasAdmin && !body?.adminInvitationNotificationCreated;
+      feedback(notificationMissing ? t("companyCreatedNotificationPending", values) : hasAdmin ? t("companyCreatedWithAdmin", values) : t("companyCreated", values), notificationMissing ? "warning" : "success");
+      formElement.reset();
       setCreateOpen(false);
       resetCreateAdminInvitation();
       resetCreateClassification();
       router.refresh();
+    } catch {
+      feedback(t("companyCreationNetworkFailed", { company: companyName }), "error");
+    } finally {
+      setCreating(false);
     }
   }
 
@@ -244,9 +259,8 @@ export function ClientOrganizationsPanel({
   }
 
   async function updateOrganization(organizationId: string, payload: Record<string, string>) {
-    setMessage("");
     const result = await requestOrganizationUpdate(organizationId, payload);
-    setMessage(result.message);
+    feedback(result.message, result.ok ? "success" : "error");
     if (result.ok) {
       router.refresh();
     }
@@ -256,16 +270,15 @@ export function ClientOrganizationsPanel({
   async function inviteOrganizationAdmin(organizationId: string, userId: string, reason: string) {
     const normalizedReason = reason.trim();
     if (!userId || normalizedReason.length < 3) {
-      setMessage(t("adminReasonRequired"));
+      feedback(t("adminReasonRequired"), "error");
       return false;
     }
-    setMessage("");
     const result = await requestOrganizationUpdate(organizationId, {
       action: "grant_admin",
       userId,
       reason: normalizedReason,
     });
-    setMessage(result.ok ? t("adminInvitationSent") : result.message);
+    feedback(result.ok ? t("adminInvitationSent") : result.message, result.ok ? "success" : "error");
     if (result.ok) {
       setEditingOrganization(null);
       router.refresh();
@@ -278,13 +291,12 @@ export function ClientOrganizationsPanel({
     if (!editingOrganization) {
       return;
     }
-    setMessage("");
     const payload = Object.fromEntries(new FormData(event.currentTarget).entries()) as Record<string, string>;
     delete payload.userId;
 
     const organizationResult = await requestOrganizationUpdate(editingOrganization.id, { ...payload, action: "update" });
     if (!organizationResult.ok) {
-      setMessage(organizationResult.message);
+      feedback(organizationResult.message, "error");
       return;
     }
 
@@ -298,13 +310,13 @@ export function ClientOrganizationsPanel({
         trialEndsAt: payload.trialEndsAt || "",
       });
       if (!subscriptionResult.ok) {
-        setMessage(`${t("companyUpdatedSubscriptionFailed")} ${subscriptionResult.message}`);
+        feedback(`${t("companyUpdatedSubscriptionFailed")} ${subscriptionResult.message}`, "warning");
         router.refresh();
         return;
       }
     }
 
-    setMessage(t("companyUpdated"));
+    feedback(t("companyUpdated"), "success");
     setEditingOrganization(null);
     router.refresh();
   }
@@ -512,9 +524,9 @@ export function ClientOrganizationsPanel({
           </div>
         )}
         <div className="flex min-w-0 justify-end xl:col-span-3" data-responsive-actions>
-          <Button disabled={Boolean(createAdminUserId) && createAdminReason.trim().length < 3} className="w-full rounded-xl bg-[#002b5b] text-white hover:bg-[#001736] sm:w-auto">
+          <Button disabled={creating || (Boolean(createAdminUserId) && createAdminReason.trim().length < 3)} className="w-full rounded-xl bg-[#002b5b] text-white hover:bg-[#001736] sm:w-auto">
             <Building2 className="h-4 w-4" />
-            Créer l&apos;entreprise cliente
+            {creating ? t("creatingCompany") : "Créer l’entreprise cliente"}
           </Button>
         </div>
       </form>

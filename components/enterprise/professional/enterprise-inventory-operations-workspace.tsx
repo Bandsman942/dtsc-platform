@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import { CheckCircle2, ClipboardCheck, Eye, PackageSearch, Truck, XCircle } from "lucide-react";
 import { Field, NativeSelect } from "@/components/enterprise/core-v2/erp-v2-ui";
 import {
@@ -23,7 +23,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { useToastMessage } from "@/components/ui/use-toast-message";
+import { notifyToast } from "@/lib/client-toast";
 import { BusinessList, BusinessListItem } from "@/components/workspace/business-list";
 import { ContextActions, type BusinessContextAction } from "@/components/workspace/context-actions";
 import { EmptyState } from "@/components/workspace/empty-state";
@@ -99,7 +99,7 @@ function statusTone(status: string) {
 
 export function EnterpriseInventoryOperationsWorkspace({ organizationId, organizationName, definition }: { organizationId: string; organizationName: string; definition: EnterpriseModuleDefinition }) {
   const locale = useProfessionalErpLocale();
-  const t = (key: Parameters<typeof professionalErpT>[1], values?: Record<string, string | number>) => professionalErpT(locale, key, values);
+  const t = useCallback((key: Parameters<typeof professionalErpT>[1], values?: Record<string, string | number>) => professionalErpT(locale, key, values), [locale]);
   const suffix = (count: number) => (count === 1 ? "" : "s");
   const quantity = (value: string | number, symbol?: string | null) => `${professionalErpNumber(value, locale)} ${symbol || ""}`.trim();
   const memberLabel = (item: Member) => `${item.label} · ${item.positionTitle || professionalErpEnumLabel(locale, "role", item.role)}`;
@@ -116,7 +116,6 @@ export function EnterpriseInventoryOperationsWorkspace({ organizationId, organiz
   const [decisionTarget, setDecisionTarget] = useState<DecisionTarget | null>(null);
   const [receiptTarget, setReceiptTarget] = useState<Transfer | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [message, setMessage] = useState("");
   const [sourceWarehouseId, setSourceWarehouseId] = useState("");
   const [transferInventoryId, setTransferInventoryId] = useState("");
   const [transferLotId, setTransferLotId] = useState("");
@@ -138,7 +137,6 @@ export function EnterpriseInventoryOperationsWorkspace({ organizationId, organiz
       .catch(() => { if (!controller.signal.aborted) setTransferLots([]); });
     return () => controller.abort();
   }, [organizationId, sourceWarehouseId, transferInventoryId]);
-  useToastMessage(message);
 
   useEffect(() => {
     let active = true;
@@ -148,9 +146,9 @@ export function EnterpriseInventoryOperationsWorkspace({ organizationId, organiz
         if (!response.ok || !body) throw new Error(body?.message || t("inventory.selectorsUnavailable"));
         if (active) setLookups({ members: body.members || [], warehouses: body.warehouses || [], locations: body.locations || [], inventoryItems: body.inventoryItems || [] });
       })
-      .catch((error) => { if (active) setMessage(error instanceof Error ? error.message : t("inventory.selectorsUnavailable")); });
+      .catch((error) => { if (active) notifyToast({ title: t("inventory.selectorsUnavailable"), description: error instanceof Error ? error.message : t("inventory.selectorsUnavailable"), tone: "error" }); });
     return () => { active = false; };
-  }, [organizationId, refreshKey, locale]);
+  }, [organizationId, refreshKey, t]);
 
   const params = useMemo(() => {
     const value = new URLSearchParams({ page: String(page), pageSize: "25" });
@@ -191,8 +189,8 @@ export function EnterpriseInventoryOperationsWorkspace({ organizationId, organiz
           quantity: Number(form.get("quantity") || 0),
         }],
       });
-      setTransferOpen(false); resetTransfer(); setTab("TRANSFERS"); setRefreshKey((value) => value + 1); setMessage(t("inventory.transferSubmitted"));
-    } catch (error) { setMessage(error instanceof Error ? error.message : t("inventory.transferCreateFailed")); }
+      setTransferOpen(false); resetTransfer(); setTab("TRANSFERS"); setRefreshKey((value) => value + 1); notifyToast(t("inventory.transferSubmitted"), "success");
+    } catch (error) { notifyToast({ title: t("inventory.transferCreateFailed"), description: error instanceof Error ? error.message : t("inventory.transferCreateFailed"), tone: "error" }); }
     finally { setSubmitting(false); }
   }
 
@@ -209,8 +207,8 @@ export function EnterpriseInventoryOperationsWorkspace({ organizationId, organiz
         notes: String(form.get("notes") || "") || null,
         lines: [{ inventoryItemId: String(form.get("inventoryItemId") || ""), countedQuantity: Number(form.get("countedQuantity") || 0), notes: String(form.get("lineNotes") || "") || null }],
       });
-      setCountOpen(false); resetCount(); setTab("COUNTS"); setRefreshKey((value) => value + 1); setMessage(t("inventory.countCreated"));
-    } catch (error) { setMessage(error instanceof Error ? error.message : t("inventory.countCreateFailed")); }
+      setCountOpen(false); resetCount(); setTab("COUNTS"); setRefreshKey((value) => value + 1); notifyToast(t("inventory.countCreated"), "success");
+    } catch (error) { notifyToast({ title: t("inventory.countCreateFailed"), description: error instanceof Error ? error.message : t("inventory.countCreateFailed"), tone: "error" }); }
     finally { setSubmitting(false); }
   }
 
@@ -229,8 +227,8 @@ export function EnterpriseInventoryOperationsWorkspace({ organizationId, organiz
         approverUserId: String(form.get("approverUserId") || ""),
         idempotencyKey: crypto.randomUUID(),
       });
-      setAdjustOpen(false); resetAdjustment(); setTab("ADJUSTMENTS"); setRefreshKey((value) => value + 1); setMessage(t("inventory.adjustmentPending"));
-    } catch (error) { setMessage(error instanceof Error ? error.message : t("inventory.adjustmentCreateFailed")); }
+      setAdjustOpen(false); resetAdjustment(); setTab("ADJUSTMENTS"); setRefreshKey((value) => value + 1); notifyToast(t("inventory.adjustmentPending"), "success");
+    } catch (error) { notifyToast({ title: t("inventory.adjustmentCreateFailed"), description: error instanceof Error ? error.message : t("inventory.adjustmentCreateFailed"), tone: "error" }); }
     finally { setSubmitting(false); }
   }
 
@@ -240,7 +238,7 @@ export function EnterpriseInventoryOperationsWorkspace({ organizationId, organiz
     const form = new FormData(event.currentTarget);
     const comment = String(form.get("comment") || "").trim();
     if (decisionTarget.decision === "REJECT" && !comment) {
-      setMessage(t("inventory.rejectionReasonRequired"));
+      notifyToast(t("inventory.rejectionReasonRequired"), "warning");
       return;
     }
     const entity = decisionTarget.entity;
@@ -253,8 +251,8 @@ export function EnterpriseInventoryOperationsWorkspace({ organizationId, organiz
     try {
       await professionalMutation(`/api/enterprise/${organizationId}/${endpoint}`, { decision: decisionTarget.decision, revision: entity.revision, comment: comment || null });
       setDecisionTarget(null); setDetail(null); setRefreshKey((value) => value + 1);
-      setMessage(decisionTarget.decision === "APPROVE" ? t("inventory.operationApproved") : t("inventory.operationRejected"));
-    } catch (error) { setMessage(error instanceof Error ? error.message : t("inventory.decisionFailed")); }
+      notifyToast(decisionTarget.decision === "APPROVE" ? t("inventory.operationApproved") : t("inventory.operationRejected"), "success");
+    } catch (error) { notifyToast({ title: t("inventory.decisionFailed"), description: error instanceof Error ? error.message : t("inventory.decisionFailed"), tone: "error" }); }
     finally { setSubmitting(false); }
   }
 
@@ -275,9 +273,9 @@ export function EnterpriseInventoryOperationsWorkspace({ organizationId, organiz
       setReceiptTarget(null);
       setDetail(null);
       setRefreshKey((value) => value + 1);
-      setMessage(locale === "fr" ? "Réception confirmée : le stock de destination est actualisé." : "Receipt confirmed: destination stock has been updated.");
+      notifyToast(locale === "fr" ? "Réception confirmée : le stock de destination est actualisé." : "Receipt confirmed: destination stock has been updated.", "success");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : locale === "fr" ? "La réception a échoué." : "Receipt failed.");
+      notifyToast({ title: locale === "fr" ? "Réception impossible" : "Receipt failed", description: error instanceof Error ? error.message : locale === "fr" ? "La réception a échoué." : "Receipt failed.", tone: "error" });
     } finally { setSubmitting(false); }
   }
 

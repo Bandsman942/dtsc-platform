@@ -10,25 +10,34 @@ type ToastItem = Required<Pick<ToastPayload, "description" | "tone">> & {
   id: string;
   title?: string;
   durationMs: number;
+  createdAt: number;
   expiresAt: number;
 };
 
-const toneConfig: Record<ToastTone, { icon: LucideIcon; className: string }> = {
+const toneConfig: Record<ToastTone, { icon: LucideIcon; className: string; iconClassName: string; titleClassName: string }> = {
   success: {
     icon: CheckCircle2,
-    className: "border-emerald-300/60 bg-emerald-500/14 text-emerald-900 dark:text-emerald-50",
+    className: "border-emerald-400 bg-emerald-50/95 dark:border-emerald-600 dark:bg-emerald-950/95",
+    iconClassName: "bg-emerald-200 text-emerald-800 dark:bg-emerald-800 dark:text-emerald-100",
+    titleClassName: "text-emerald-900 dark:text-emerald-100",
   },
   error: {
     icon: XCircle,
-    className: "border-red-300/70 bg-red-500/14 text-red-950 dark:text-red-50",
+    className: "border-red-400 bg-red-50/95 dark:border-red-600 dark:bg-red-950/95",
+    iconClassName: "bg-red-200 text-red-800 dark:bg-red-800 dark:text-red-100",
+    titleClassName: "text-red-900 dark:text-red-100",
   },
   warning: {
     icon: AlertTriangle,
-    className: "border-amber-300/70 bg-amber-400/16 text-amber-950 dark:text-amber-50",
+    className: "border-amber-400 bg-amber-50/95 dark:border-amber-600 dark:bg-amber-950/95",
+    iconClassName: "bg-amber-200 text-amber-800 dark:bg-amber-800 dark:text-amber-100",
+    titleClassName: "text-amber-900 dark:text-amber-100",
   },
   info: {
     icon: Info,
-    className: "border-cyan-300/60 bg-cyan-400/14 text-cyan-950 dark:text-cyan-50",
+    className: "border-cyan-400 bg-cyan-50/95 dark:border-cyan-600 dark:bg-cyan-950/95",
+    iconClassName: "bg-cyan-200 text-cyan-800 dark:bg-cyan-800 dark:text-cyan-100",
+    titleClassName: "text-cyan-900 dark:text-cyan-100",
   },
 };
 
@@ -78,9 +87,18 @@ export function ToastProvider() {
         description,
         tone,
         durationMs,
+        createdAt: Date.now(),
         expiresAt: Date.now() + durationMs,
       };
-      setToasts((current) => [item, ...current].slice(0, 4));
+      // Some legacy screens emit both an imperative toast and a state-driven
+      // toast for the same mutation. Collapse that pair, but never suppress a
+      // later submission merely because its text matches an older one.
+      setToasts((current) => current.some((existing) =>
+        existing.tone === item.tone &&
+        existing.title === item.title &&
+        existing.description === item.description &&
+        Math.abs(item.createdAt - existing.createdAt) < 120
+      ) ? current : [item, ...current].slice(0, 4));
     }
 
     window.addEventListener(DTSC_TOAST_EVENT, handleToast);
@@ -114,17 +132,16 @@ export function ToastProvider() {
             role={toast.tone === "error" ? "alert" : "status"}
             className={cn(
               "pointer-events-auto w-full max-w-[min(100%,24rem)] animate-dtsc-toast-in rounded-2xl border px-4 py-3 shadow-[0_22px_70px_rgba(0,23,54,0.28)] backdrop-blur-2xl",
-              "bg-dtsc-surface/92",
               config.className,
             )}
           >
             <div className="flex min-w-0 items-start gap-3">
-              <span className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-white/50 text-current dark:bg-white/10" aria-hidden="true">
+              <span className={cn("mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-xl", config.iconClassName)} aria-hidden="true">
                 <Icon className="h-4 w-4" />
               </span>
               <div className="min-w-0 flex-1">
-                <p className="break-words text-sm font-black text-dtsc-ink dark:text-white">{toast.title || copy[toast.tone]}</p>
-                <p className="mt-1 break-words text-sm font-semibold leading-6 text-dtsc-muted dark:text-slate-200">{toast.description}</p>
+                <p className={cn("break-words text-sm font-black", config.titleClassName)}>{toast.title || copy[toast.tone]}</p>
+                <p className="mt-1 break-words text-sm font-semibold leading-6 text-slate-800 dark:text-slate-100">{toast.description}</p>
               </div>
               <button
                 type="button"
