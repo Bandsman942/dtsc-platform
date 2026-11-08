@@ -30,7 +30,7 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "ORGANIZATION_ACCESS_DENIED" }, { status: 403 });
   }
   const value = new URL(req.url).searchParams.get("conversationId");
-  if (value && !z.string().uuid().safeParse(value).success) {
+  if (value && !z.string().min(8).max(128).regex(/^[a-zA-Z0-9_-]+$/).safeParse(value).success) {
     return NextResponse.json({ error: "INVALID_CONVERSATION_ID" }, { status: 400 });
   }
   const conversationId = value || null;
