@@ -1,8 +1,8 @@
 import { test, expect } from "@playwright/test";
 
 const baseUrl=process.env.E2E_BASE_URL||"http://127.0.0.1:3000";
-const email=process.env.E2E_DTSC_ADMIN_EMAIL;
-const password=process.env.E2E_DTSC_ADMIN_PASSWORD;
+const email=process.env.E2E_DTSC_ADMIN_EMAIL || process.env.E2E_USER_EMAIL;
+const password=process.env.E2E_DTSC_ADMIN_PASSWORD || process.env.E2E_USER_PASSWORD;
 
 async function auth(page) {
   const response=await page.context().request.post(`${baseUrl}/api/auth/sign-in`,{
@@ -25,7 +25,7 @@ for(const width of [390,768,1024,1440]) {
     await first.click();
     await expect(page).toHaveURL(/group=/);
     await expect(page.locator("[data-console-section-card]")).not.toHaveCount(0);
-    await page.locator("[data-console-section-card]").first().click();
+    await page.locator('[data-console-section-card]:not([data-console-section-card="overview"])').first().click();
     await expect(page.locator("[data-console-breadcrumb]")).toBeVisible();
     const back=page.locator("[data-console-depth-back]");
     await expect(back).toBeVisible();
