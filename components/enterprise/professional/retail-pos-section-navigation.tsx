@@ -11,7 +11,7 @@ import { translateRetailWorkspace, type RetailWorkspaceKey } from "@/lib/i18n";
 export type RetailPosSectionId =
   | "checkout" | "customers" | "sites" | "staff" | "invoices" | "offline"
   | "omnichannel" | "payments" | "equipment" | "readiness" | "activation"
-  | "inventory" | "alerts";
+  | "inventory" | "alerts" | "store-setup" | "my-stores";
 
 type RetailPosSection = {
   id: RetailPosSectionId | "commercial";
@@ -25,6 +25,8 @@ type RetailPosSection = {
 /** A single registry powers the directory, detail headers and role-aware navigation. */
 export const RETAIL_POS_SECTIONS: readonly RetailPosSection[] = [
   { id: "checkout", title: "counterSale", description: "counterSaleDescription", icon: ShoppingBasket },
+  { id: "my-stores", title: "posNavMyStores", description: "posNavMyStoresDescription", icon: Building2 },
+  { id: "store-setup", title: "posNavStoreSetup", description: "posNavStoreSetupDescription", icon: Building2, adminOnly: true },
   { id: "customers", title: "posNavCustomers", description: "posNavCustomersDescription", icon: UsersRound },
   { id: "sites", title: "posNavSites", description: "posNavSitesDescription", icon: Building2, adminOnly: true },
   { id: "staff", title: "posNavStaff", description: "posNavStaffDescription", icon: ShieldCheck, adminOnly: true },

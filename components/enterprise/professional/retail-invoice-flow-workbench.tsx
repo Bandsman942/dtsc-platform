@@ -72,14 +72,14 @@ function money(value: string, currency: string, locale: "fr" | "en") {
   return `${new Intl.NumberFormat(locale === "fr" ? "fr-FR" : "en-US", { maximumFractionDigits: 2 }).format(Number(value))} ${currency}`;
 }
 
-export function RetailInvoiceFlowWorkbench({ organizationId, locale }: { organizationId: string; locale: "fr" | "en" }) {
+export function RetailInvoiceFlowWorkbench({ organizationId, locale, preferredSiteId }: { organizationId: string; locale: "fr" | "en"; preferredSiteId?: string }) {
   const copy = language[locale];
   const [data, setData] = useState<InvoiceResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [forbidden, setForbidden] = useState(false);
   const [error, setError] = useState("");
   const [page, setPage] = useState(1);
-  const [siteFilter, setSiteFilter] = useState("");
+  const [siteFilter, setSiteFilter] = useState(preferredSiteId || "");
   const [warehouseId, setWarehouseId] = useState("");
   const [query, setQuery] = useState("");
   const [products, setProducts] = useState<Product[]>([]);
@@ -96,6 +96,11 @@ export function RetailInvoiceFlowWorkbench({ organizationId, locale }: { organiz
   const [submittingApproval, setSubmittingApproval] = useState(false);
   const idempotencyKey = useRef<string>("");
   const warehouses = useMemo(() => (data?.sites || []).flatMap((site) => site.warehouses.map((warehouse) => ({ ...warehouse, siteId: site.id, siteName: site.name }))), [data?.sites]);
+  useEffect(() => {
+    if (!preferredSiteId) return;
+    setWarehouseId((current) => warehouses.some((warehouse) => warehouse.id === current)
+      ? current : warehouses.find((warehouse) => warehouse.siteId === preferredSiteId)?.id || "");
+  }, [preferredSiteId, warehouses]);
   const chosenWarehouse = warehouses.find((warehouse) => warehouse.id === warehouseId);
   const chosenProduct = products.find((product) => product.id === selection);
   const currencyCode = lines[0]?.currencyCode || chosenProduct?.currency || "CDF";

@@ -9,6 +9,7 @@ import { RetailGlobalReadiness } from "@/components/enterprise/professional/reta
 import { RetailHistoricalImportPanel } from "@/components/enterprise/professional/retail-historical-import-panel";
 import { RetailInvoiceFlowWorkbench } from "@/components/enterprise/professional/retail-invoice-flow-workbench";
 import { RetailInventoryPolicySettings } from "@/components/enterprise/professional/retail-inventory-policy-settings";
+import { RetailMultiStoreOnboarding, RetailMyStores } from "@/components/enterprise/professional/retail-multi-store-onboarding";
 import { RetailOfflineContinuity } from "@/components/enterprise/professional/retail-offline-continuity";
 import { RetailOmnichannelPanel } from "@/components/enterprise/professional/retail-omnichannel-panel";
 import { RetailPaymentFollowup } from "@/components/enterprise/professional/retail-payment-followup";
@@ -23,7 +24,7 @@ import { resolveEnterpriseModuleAccess } from "@/lib/enterprise/module-access";
 import { requireEnterpriseMembership } from "@/lib/enterprise-sector-templates";
 import { prisma } from "@/lib/prisma";
 
-export async function renderRetailModulePage(moduleCode: "RETAIL_POS" | "MOBILE_MONEY_AGENCY" | "TELCO_TOPUPS" | "RETAIL_DAILY_CLOSE", options?: { section?: string }) {
+export async function renderRetailModulePage(moduleCode: "RETAIL_POS" | "MOBILE_MONEY_AGENCY" | "TELCO_TOPUPS" | "RETAIL_DAILY_CLOSE", options?: { section?: string; siteId?: string }) {
   const user = await requireUser();
   const session = await getSession();
   const organizationId = session?.activeContext === "ORGANIZATION" ? session.activeOrganizationId : null;
@@ -62,7 +63,11 @@ export async function renderRetailModulePage(moduleCode: "RETAIL_POS" | "MOBILE_
           posSection ? (
             <RetailPosSectionDetail locale={locale} section={posSection}>
               {posSection.id === "checkout" ? (
-                <RetailPosWorkspace organizationId={organizationId} organizationName={organization.name} definition={access.definition} />
+                <RetailPosWorkspace organizationId={organizationId} organizationName={organization.name} definition={access.definition} preferredSiteId={options?.siteId} />
+              ) : posSection.id === "store-setup" ? (
+                <RetailMultiStoreOnboarding organizationId={organizationId} locale={locale} selectedSiteId={options?.siteId} />
+              ) : posSection.id === "my-stores" ? (
+                <RetailMyStores organizationId={organizationId} userId={user.id} role={membership.role} locale={locale} />
               ) : posSection.id === "customers" ? (
                 <RetailActiveCustomerBar organizationId={organizationId} />
               ) : posSection.id === "sites" ? (
@@ -70,7 +75,7 @@ export async function renderRetailModulePage(moduleCode: "RETAIL_POS" | "MOBILE_
               ) : posSection.id === "staff" ? (
                 <RetailSiteStaffAccess organizationId={organizationId} locale={locale} />
               ) : posSection.id === "invoices" ? (
-                <RetailInvoiceFlowWorkbench organizationId={organizationId} locale={locale} />
+                <RetailInvoiceFlowWorkbench organizationId={organizationId} locale={locale} preferredSiteId={options?.siteId} />
               ) : posSection.id === "offline" ? (
                 <RetailOfflineContinuity organizationId={organizationId} locale={locale} />
               ) : posSection.id === "omnichannel" ? (
