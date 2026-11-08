@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { translate } from "@/lib/i18n";
 import { ArrowLeft, ChevronRight, Home } from "lucide-react";
 import {
   CONSOLE_SECTION_GROUP, CONSOLE_SECTION_GROUPS, getConsoleSectionHref,
@@ -6,6 +7,22 @@ import {
 } from "@/lib/console/console-routes";
 
 type Section = { id: string; label: string; description: string; href: string };
+const FOCUS_LABEL_KEYS: Record<string, string> = {
+  "platform-indicators": "platformIndicators",
+  "ai-models": "aiModels",
+  "ai-connectors": "aiConnectors",
+  "ai-safety": "aiSafety",
+  "platform-preferences": "platformPreferences",
+  "platform-flags": "platformFlags",
+  "users-create": "createUser",
+  "users-newsletter": "newsletter",
+  "users-list": "userList",
+  "billing-plans": "billingPlans",
+  "billing-manual": "billingManual",
+  "billing-subscriptions": "billingSubscriptions",
+  "security-incidents": "incidents",
+  "security-traces": "auditLogs",
+};
 
 export function ConsoleWorkspaceBreadcrumb({
   section, sections, locale, group, focus, params,
@@ -54,7 +71,7 @@ export function ConsoleWorkspaceBreadcrumb({
             : <span aria-current="page" className="break-words text-dtsc-ink">{selected.label}</span>}
         </>
       ) : null}
-      {focus ? <><ChevronRight size={13} aria-hidden="true"/><span aria-current="page" className="break-words text-dtsc-ink">{focus.replaceAll("-", " ")}</span></> : null}
+      {focus ? <><ChevronRight size={13} aria-hidden="true"/><span aria-current="page" className="break-words text-dtsc-ink">{FOCUS_LABEL_KEYS[focus] ? translate(locale, `console.detailSections.${FOCUS_LABEL_KEYS[focus]}`) : focus.replaceAll("-", " ")}</span></> : null}
     </nav>
   );
 }
