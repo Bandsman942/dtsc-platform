@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { RETAIL_SECTOR_CODE } from "@/lib/enterprise/retail/constants";
+import { getRetailExtensionPreference, initialRetailExtensionSettings } from "@/lib/enterprise/retail/extension-policy";
 import {
   RETAIL_CORE_PROFILE_CODE,
   RETAIL_TELCO_MOBILE_MONEY_PROFILE_CODE,
@@ -78,7 +79,7 @@ export async function syncRetailOperatorProvidersTx(
   if (profileCode === undefined) {
     const configuration = await tx.enterpriseRetailConfiguration.findUnique({
       where: { organizationId },
-      select: { profileCode: true },
+      select: { profileCode: true, settingsJson: true },
     });
     profileCode = configuration?.profileCode && isRetailBusinessProfileCode(configuration.profileCode)
       ? configuration.profileCode
@@ -99,8 +100,16 @@ export async function syncRetailOperatorProvidersTx(
   ]);
 
   const legacySpecializedProfile = profileCode === RETAIL_TELCO_MOBILE_MONEY_PROFILE_CODE;
-  const mobileMoneyEnabled = legacySpecializedProfile || Boolean(mobileMoneyModule);
-  const telcoEnabled = legacySpecializedProfile || Boolean(telcoModule);
+  const mobileMoneyPreference = getRetailExtensionPreference(configuration?.settingsJson, "MOBILE_MONEY_AGENCY");
+  const telcoPreference = getRetailExtensionPreference(configuration?.settingsJson, "TELCO_TOPUPS");
+  // For historical profiles without explicit choices, keep legacy provider
+  // behavior. Once DTSC sets a preference, disabled packs have no active provider.
+  const mobileMoneyEnabled = mobileMoneyPreference === undefined
+    ? legacySpecializedProfile || Boolean(mobileMoneyModule)
+    : Boolean(mobileMoneyModule);
+  const telcoEnabled = telcoPreference === undefined
+    ? legacySpecializedProfile || Boolean(telcoModule)
+    : Boolean(telcoModule);
 
   for (const provider of RETAIL_DEFAULT_PROVIDERS) {
     const shouldBeActive = provider.providerType === "MOBILE_MONEY" ? mobileMoneyEnabled : telcoEnabled;
@@ -185,7 +194,10 @@ async function provisionRetailBusinessProfileTx(
     throw new Error("RETAIL_BUSINESS_SUBTYPE_INVALID");
   }
 
-  const settingsJson = nextRetailSettings(existingConfiguration?.settingsJson, resolvedSubtype);
+  const settingsJson = initialRetailExtensionSettings(
+    nextRetailSettings(existingConfiguration?.settingsJson, resolvedSubtype),
+    !existingConfiguration && resolvedSubtype === null,
+  );
 
   await tx.enterpriseRetailConfiguration.upsert({
     where: { organizationId },
