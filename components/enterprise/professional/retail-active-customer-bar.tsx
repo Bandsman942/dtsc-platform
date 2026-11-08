@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Plus, UserRoundCheck } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { useAppLocale } from "@/components/i18n/locale-provider";
 import {
   customerFacingError,
@@ -298,26 +300,27 @@ export function RetailActiveCustomerBar({ organizationId }: { organizationId: st
   if (!capabilities?.canReadCustomers) return null;
 
   return (
-    <section className="rounded-2xl border bg-background/95 p-4 shadow-sm" aria-label={copy.title}>
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+    <section data-retail-customer-workspace className="min-w-0 max-w-full rounded-3xl border border-dtsc-border bg-dtsc-surface p-4 shadow-[0_8px_30px_rgba(0,23,54,0.07)] sm:p-6" aria-label={copy.title}>
+      <div className="flex min-w-0 flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <h2 className="font-semibold">{copy.title}</h2>
-            <span className="rounded-full border px-2 py-1 text-xs text-muted-foreground">{active ? copy.selected : copy.walkIn}</span>
+          <div className="flex min-w-0 flex-wrap items-center gap-2.5 border-l-4 border-cyan-500 pl-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-cyan-500/10 text-dtsc-blue dark:text-cyan-300"><UserRoundCheck className="h-5 w-5" aria-hidden="true" /></span>
+            <h2 className="min-w-0 break-words text-lg font-black tracking-tight text-dtsc-ink">{copy.title}</h2>
+            <span className="rounded-full border border-cyan-500/25 bg-cyan-500/10 px-2.5 py-1 text-[11px] font-bold text-dtsc-blue dark:text-cyan-200">{active ? copy.selected : copy.walkIn}</span>
           </div>
-          <p className="mt-1 max-w-3xl text-xs leading-5 text-muted-foreground">{copy.hint}</p>
+          <p className="mt-3 max-w-3xl text-sm leading-6 text-dtsc-muted">{copy.hint}</p>
           {active ? (
             <div className="mt-3 space-y-3">
-              <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-muted/30 p-3">
+              <div className="flex min-w-0 flex-wrap items-center gap-3 rounded-2xl border border-cyan-500/25 bg-cyan-500/5 p-3">
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold">{active.displayName || active.legalName}</p>
-                  <p className="truncate text-xs text-muted-foreground">{[active.retailProfile?.customerNumber || active.code, active.primaryPhone, active.primaryEmail, active.retailProfile?.segmentCode].filter(Boolean).join(" · ")}</p>
+                  <p className="break-words text-sm font-extrabold text-dtsc-ink">{active.displayName || active.legalName}</p>
+                  <p className="break-words text-xs text-dtsc-muted">{[active.retailProfile?.customerNumber || active.code, active.primaryPhone, active.primaryEmail, active.retailProfile?.segmentCode].filter(Boolean).join(" · ")}</p>
                 </div>
-                <button type="button" onClick={() => void clear()} className="min-h-10 rounded-xl border px-3 text-sm font-medium hover:bg-muted">{copy.clear}</button>
+                <Button type="button" variant="outline" size="sm" onClick={() => void clear()} className="shrink-0 rounded-xl">{copy.clear}</Button>
               </div>
 
-              <details className="group rounded-xl border bg-background">
-                <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-3 py-2 text-sm font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400">
+              <details className="group min-w-0 rounded-2xl border border-dtsc-border bg-dtsc-page">
+                <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-3 py-2 text-sm font-bold text-dtsc-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400">
                   <span>{copy.benefits}</span>
                   <span className="text-xs font-medium text-muted-foreground group-open:hidden">{language === "en" ? "View" : "Voir"}</span>
                   <span className="hidden text-xs font-medium text-muted-foreground group-open:inline">{language === "en" ? "Hide" : "Masquer"}</span>
@@ -386,17 +389,17 @@ export function RetailActiveCustomerBar({ organizationId }: { organizationId: st
           ) : null}
         </div>
 
-        <div className="w-full lg:max-w-md">
-          <div className="flex gap-2">
-            <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={copy.search} className="min-h-11 min-w-0 flex-1 rounded-xl border bg-background px-3 text-sm" autoComplete="off" />
-            {capabilities.canCreateCustomers ? <button type="button" onClick={() => setShowCreate((value) => !value)} className="min-h-11 whitespace-nowrap rounded-xl border px-3 text-sm font-medium hover:bg-muted">{copy.create}</button> : null}
+        <div className="w-full min-w-0 lg:max-w-md">
+          <div data-responsive-actions className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+            <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={copy.search} aria-label={copy.search} className="min-h-11 w-full min-w-0 max-w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 text-sm text-dtsc-ink outline-none placeholder:text-dtsc-muted focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20" autoComplete="off" type="search" />
+            {capabilities.canCreateCustomers ? <Button type="button" onClick={() => setShowCreate((value) => !value)} variant="outline" className="w-full rounded-xl sm:w-auto"><Plus className="h-4 w-4 shrink-0" />{copy.create}</Button> : null}
           </div>
           {search.trim().length >= 2 ? (
-            <div className="mt-2 max-h-64 overflow-y-auto rounded-xl border bg-background p-1 shadow-lg">
+            <div className="mt-2 max-h-64 min-w-0 overflow-y-auto rounded-xl border border-dtsc-border bg-dtsc-surface p-1 shadow-lg">
               {searching ? <p className="p-3 text-sm text-muted-foreground">…</p> : results.length ? results.map((customer) => (
-                <button key={customer.id} type="button" onClick={() => void select(customer)} className="block w-full rounded-lg px-3 py-2 text-left hover:bg-muted">
-                  <span className="block truncate text-sm font-medium">{customer.displayName || customer.legalName}</span>
-                  <span className="block truncate text-xs text-muted-foreground">{[customer.retailProfile?.customerNumber || customer.code, customer.primaryPhone, customer.primaryEmail].filter(Boolean).join(" · ")}</span>
+                <button key={customer.id} type="button" onClick={() => void select(customer)} className="block min-w-0 w-full rounded-lg px-3 py-2 text-left transition hover:bg-dtsc-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400">
+                  <span className="block break-words text-sm font-bold text-dtsc-ink">{customer.displayName || customer.legalName}</span>
+                  <span className="block break-words text-xs text-dtsc-muted">{[customer.retailProfile?.customerNumber || customer.code, customer.primaryPhone, customer.primaryEmail].filter(Boolean).join(" · ")}</span>
                 </button>
               )) : <p className="p-3 text-sm text-muted-foreground">{copy.noResult}</p>}
             </div>
@@ -405,13 +408,13 @@ export function RetailActiveCustomerBar({ organizationId }: { organizationId: st
       </div>
 
       {showCreate && capabilities.canCreateCustomers ? (
-        <form onSubmit={quickCreate} className="mt-4 grid gap-3 rounded-xl border p-3 sm:grid-cols-3">
-          <label className="text-sm font-medium">{copy.name}<input required minLength={2} value={form.legalName} onChange={(event) => setForm({ ...form, legalName: event.target.value })} className="mt-1 min-h-11 w-full rounded-xl border bg-background px-3" /></label>
-          <label className="text-sm font-medium">{copy.phone}<input value={form.primaryPhone} onChange={(event) => setForm({ ...form, primaryPhone: event.target.value })} className="mt-1 min-h-11 w-full rounded-xl border bg-background px-3" inputMode="tel" /></label>
-          <label className="text-sm font-medium">{copy.email}<input value={form.primaryEmail} onChange={(event) => setForm({ ...form, primaryEmail: event.target.value })} className="mt-1 min-h-11 w-full rounded-xl border bg-background px-3" inputMode="email" type="email" /></label>
-          <div className="flex gap-2 sm:col-span-3">
-            <button disabled={creating} className="min-h-11 rounded-xl bg-foreground px-4 text-sm font-medium text-background disabled:opacity-50">{copy.save}</button>
-            <button type="button" onClick={() => setShowCreate(false)} className="min-h-11 rounded-xl border px-4 text-sm font-medium">{copy.cancel}</button>
+        <form onSubmit={quickCreate} className="mt-5 grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3 rounded-2xl border border-dtsc-border bg-dtsc-page p-3 sm:grid-cols-3">
+          <label className="min-w-0 text-sm font-bold text-dtsc-ink">{copy.name}<input required minLength={2} value={form.legalName} onChange={(event) => setForm({ ...form, legalName: event.target.value })} className="mt-1 min-h-11 w-full min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-dtsc-ink" /></label>
+          <label className="min-w-0 text-sm font-bold text-dtsc-ink">{copy.phone}<input value={form.primaryPhone} onChange={(event) => setForm({ ...form, primaryPhone: event.target.value })} className="mt-1 min-h-11 w-full min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-dtsc-ink" inputMode="tel" /></label>
+          <label className="min-w-0 text-sm font-bold text-dtsc-ink">{copy.email}<input value={form.primaryEmail} onChange={(event) => setForm({ ...form, primaryEmail: event.target.value })} className="mt-1 min-h-11 w-full min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-dtsc-ink" inputMode="email" type="email" /></label>
+          <div data-responsive-actions className="flex flex-wrap gap-2 sm:col-span-3">
+            <Button disabled={creating} className="rounded-xl bg-[var(--dtsc-blue)] text-[var(--dtsc-page)] hover:brightness-110">{copy.save}</Button>
+            <Button type="button" variant="outline" onClick={() => setShowCreate(false)} className="rounded-xl">{copy.cancel}</Button>
           </div>
         </form>
       ) : null}

@@ -123,6 +123,8 @@ test.describe.serial("Shop 2.0 customer value and payment follow-up UI", () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto("/enterprise-modules/RETAIL_POS");
     await page.waitForURL((url) => url.pathname.includes("/enterprise-modules/RETAIL_POS"), { timeout: 30_000 });
+    await page.locator('[data-retail-pos-card="customers"]').click();
+    await expect(page).toHaveURL(/\?section=customers$/);
 
     await expect(page.getByText(customer.displayName || customer.legalName, { exact: true })).toBeVisible();
 
@@ -133,6 +135,9 @@ test.describe.serial("Shop 2.0 customer value and payment follow-up UI", () => {
     await expect(benefits.getByText("Carte-cadeau", { exact: true }).first()).toBeVisible();
     await expect(benefits.getByText(/25.*points disponibles/i).first()).toBeVisible();
 
+    await page.goto("/enterprise-modules/RETAIL_POS");
+    await page.locator('[data-retail-pos-card="payments"]').click();
+    await expect(page).toHaveURL(/\?section=payments$/);
     const paymentFollowup = page.locator("details").filter({ hasText: "Suivi des paiements" }).first();
     await expect(paymentFollowup).toBeVisible();
     await paymentFollowup.locator("summary").click();

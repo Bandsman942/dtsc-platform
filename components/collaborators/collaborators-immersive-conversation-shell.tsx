@@ -125,6 +125,12 @@ export function CollaboratorsImmersiveConversationShell(props: Props) {
   return (
     <div ref={rootRef} data-collaboration-immersive-root className="h-full min-h-0 min-w-0 overflow-hidden">
       <style>{`
+        /* The global hub must never cover a message field or the Android soft keyboard.
+           Its add-contact action is available in the contacts rail on this screen. */
+        html[data-dtsc-conversation-immersive="active"] [data-floating-action-hub] {
+          display: none !important;
+        }
+
         @media (max-width: 1023px) {
           [data-collaboration-immersive-root] > div {
             height: 100% !important;
@@ -144,7 +150,14 @@ export function CollaboratorsImmersiveConversationShell(props: Props) {
         }
 
         [data-collaboration-immersive-root] [data-contact-avatar-rail="true"] > div:first-child {
-          display: none !important;
+          display: flex;
+          padding: 0.1rem 0.2rem 0.35rem;
+          gap: 0.5rem;
+        }
+
+        [data-collaboration-immersive-root] [data-contact-avatar-rail="true"] > div:first-child button,
+        [data-collaboration-immersive-root] [data-contact-avatar-rail="true"] > div:first-child a {
+          min-height: 2rem;
         }
 
         [data-collaboration-immersive-root] [data-contact-avatar-rail="true"] > div:last-child {
@@ -175,6 +188,25 @@ export function CollaboratorsImmersiveConversationShell(props: Props) {
         [data-collaboration-immersive-root] main [data-message-id] {
           margin-block: 0.18rem;
           gap: 0.45rem;
+          min-width: 0;
+        }
+
+        [data-collaboration-immersive-root] aside [data-conversation-id] {
+          border-radius: 0.85rem;
+          padding-block: 0.65rem;
+          min-width: 0;
+        }
+
+        [data-collaboration-immersive-root] aside [data-conversation-id][aria-current="true"] {
+          background: color-mix(in srgb, var(--dtsc-blue) 8%, var(--dtsc-surface));
+        }
+
+        [data-collaboration-immersive-root] main > header {
+          box-shadow: 0 2px 12px rgba(0, 23, 54, 0.035);
+        }
+
+        [data-collaboration-immersive-root] main > header button {
+          flex-shrink: 0;
         }
 
         [data-collaboration-immersive-root] main [data-collaboration-message-bubble="true"] {
@@ -217,11 +249,17 @@ export function CollaboratorsImmersiveConversationShell(props: Props) {
           opacity: 0.38;
         }
 
+        [data-collaboration-immersive-root] [data-collaboration-message-bubble="true"] > div > button:last-child:focus-visible,
+        [data-collaboration-immersive-root] [data-collaboration-message-bubble="true"]:hover > div > button:last-child {
+          opacity: 1;
+        }
+
         [data-collaboration-immersive-root] [data-collaboration-composer="true"] {
           position: relative;
           flex: 0 0 auto;
           background: color-mix(in srgb, var(--dtsc-surface) 94%, transparent);
           backdrop-filter: blur(14px);
+          border-top-color: color-mix(in srgb, var(--dtsc-border) 58%, transparent);
         }
 
         [data-collaboration-immersive-root] [data-collaboration-composer="true"] > .mb-2.flex.justify-end {
@@ -262,6 +300,10 @@ export function CollaboratorsImmersiveConversationShell(props: Props) {
         }
 
         @media (max-width: 639px) {
+          [data-collaboration-immersive-root] main > header [aria-label] {
+            max-width: 2.5rem;
+          }
+
           [data-collaboration-immersive-root] [data-collaboration-composer="true"] {
             padding-top: 0.6rem !important;
             padding-bottom: calc(0.6rem + env(safe-area-inset-bottom)) !important;

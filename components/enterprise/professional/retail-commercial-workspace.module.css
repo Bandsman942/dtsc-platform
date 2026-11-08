@@ -1,0 +1,66 @@
+.workspace {
+  color: var(--dtsc-ink);
+}
+
+.workspace :global(.text-muted-foreground) {
+  color: var(--dtsc-muted);
+}
+
+.workspace :global(.bg-background) {
+  background-color: var(--dtsc-surface);
+}
+
+.workspace :global(.border),
+.workspace :global(.divide-y) > * + * {
+  border-color: var(--dtsc-border);
+}
+
+.workspace :is(input:not([type="checkbox"]), select, textarea) {
+  min-width: 0;
+  max-width: 100%;
+  border-color: var(--dtsc-border);
+  background: var(--dtsc-surface-strong);
+  color: var(--dtsc-ink);
+  font-size: 0.9rem;
+  transition: border-color 140ms ease, box-shadow 140ms ease;
+}
+
+.workspace :is(input:not([type="checkbox"]), select, textarea):focus-visible {
+  outline: 2px solid var(--dtsc-cyan);
+  outline-offset: 1px;
+  border-color: var(--dtsc-blue);
+}
+
+.workspace :is(input, textarea)::placeholder {
+  color: var(--dtsc-muted);
+}
+
+.workspace select option {
+  background: var(--dtsc-surface);
+  color: var(--dtsc-ink);
+}
+
+.workspace button:not([type="button"]) {
+  background: var(--dtsc-blue);
+  color: var(--dtsc-page);
+  transition: filter 140ms ease;
+}
+
+.workspace button:not([type="button"]):hover:not(:disabled) {
+  filter: brightness(1.1);
+}
+
+.workspace button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.workspace button:focus-visible,
+.workspace a:focus-visible {
+  outline: 2px solid var(--dtsc-cyan);
+  outline-offset: 2px;
+}
+
+.workspace section {
+  min-width: 0;
+}

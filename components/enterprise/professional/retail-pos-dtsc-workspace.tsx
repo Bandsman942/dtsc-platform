@@ -153,7 +153,7 @@ export function RetailPosDtscWorkspace({
 }) {
   const locale: "fr" | "en" = useAppLocale() === "en" ? "en" : "fr";
   return (
-    <RetailWorkspaceFrame organizationId={organizationId} organizationName={organizationName} definition={definition} moduleCode="RETAIL_POS" locale={locale}>
+    <RetailWorkspaceFrame organizationId={organizationId} organizationName={organizationName} definition={definition} moduleCode="RETAIL_POS" locale={locale} hideHeaderBack>
       {(context) => {
         const dashboard = context.dashboard as PosDashboard;
         if (context.tab === "HISTORY") {

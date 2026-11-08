@@ -207,7 +207,8 @@ test.describe.serial("Shop 2.0 customer, loyalty, stored value and payment accep
     });
     expect(device.response.ok(), JSON.stringify(device.body)).toBeTruthy();
     await page.goto("/enterprise-modules/RETAIL_POS");
-    await page.getByText("Mise en service & équipements du Shop", { exact: true }).click();
+    await page.locator('[data-retail-pos-card="equipment"]').click();
+    await expect(page).toHaveURL(/\?section=equipment$/);
     await expect(page.getByText("Équipements d’encaissement", { exact: true })).toBeVisible();
     await expect(page.getByText("Imprimante manuelle E2E", { exact: true })).toBeVisible();
     await expect(page.getByText("Utilisation manuelle possible", { exact: true })).toBeVisible();

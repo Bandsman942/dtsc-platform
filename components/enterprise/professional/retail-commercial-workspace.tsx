@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import { ArrowLeft, BadgePercent, RotateCcw, Tags } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAppLocale } from "@/components/i18n/locale-provider";
+import styles from "./retail-commercial-workspace.module.css";
 import {
   customerFacingError,
   customerFacingFinancialAccountType,
@@ -631,32 +633,35 @@ export function RetailCommercialWorkspace({ organizationId }: { organizationId: 
   }
 
   if (loading) {
-    return <div className="mx-auto max-w-7xl p-4 text-sm text-muted-foreground">{copy.loading}</div>;
+    return <div className="dtsc-card mx-auto max-w-7xl p-5 text-sm text-dtsc-muted" role="status">{copy.loading}</div>;
   }
 
   return (
-    <main className="mx-auto w-full max-w-7xl space-y-6 px-4 py-5 sm:px-6 lg:px-8">
-      <header className="space-y-3">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">{copy.eyebrow}</p>
-            <h1 className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">{copy.title}</h1>
+    <div data-retail-commercial-workspace role="region" aria-label={copy.title} className={`${styles.workspace} mx-auto w-full min-w-0 max-w-7xl space-y-5 px-1 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-2 text-dtsc-ink sm:px-4 sm:pt-4 lg:px-6`}>
+      <header className="dtsc-card-alt space-y-3 p-4 sm:p-6">
+        <Link href="/enterprise-modules/RETAIL_POS" className="inline-flex min-h-10 w-fit items-center gap-2 rounded-full border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-blue transition hover:bg-dtsc-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400">
+          <ArrowLeft className="h-4 w-4" aria-hidden="true" /> {copy.back}
+        </Link>
+        <div className="flex min-w-0 items-start gap-3">
+          <span className="dtsc-icon-badge shrink-0"><Tags className="h-5 w-5" aria-hidden="true" /></span>
+          <div className="min-w-0 flex-1">
+            <p className="text-[0.7rem] font-bold uppercase tracking-[0.14em] text-dtsc-blue">{copy.eyebrow}</p>
+            <h1 className="mt-1 break-words text-xl font-black tracking-tight text-dtsc-ink sm:text-2xl lg:text-3xl">{copy.title}</h1>
           </div>
-          <Link href="/enterprise-modules/RETAIL_POS" className="min-h-11 rounded-xl border px-4 py-2.5 text-sm font-medium hover:bg-muted">
-            {copy.back}
-          </Link>
         </div>
-        <p className="max-w-3xl text-sm leading-6 text-muted-foreground">{copy.intro}</p>
+        <p className="max-w-3xl text-sm leading-6 text-dtsc-muted">{copy.intro}</p>
       </header>
 
-      <nav className="flex gap-2 overflow-x-auto pb-1 [touch-action:pan-x]" aria-label={copy.title}>
+      <nav className="flex min-w-0 gap-2 overflow-x-auto pb-2 [scrollbar-width:thin] [touch-action:pan-x]" aria-label={copy.title}>
         {(["PRICING", "PROMOTIONS", "RETURNS"] as Tab[]).map((item) => (
           <button
             key={item}
             type="button"
             onClick={() => setTab(item)}
-            className={`min-h-11 shrink-0 whitespace-nowrap rounded-full border px-4 py-2 text-sm font-medium ${tab === item ? "bg-foreground text-background" : "bg-background hover:bg-muted"}`}
+            aria-current={tab === item ? "page" : undefined}
+            className={`inline-flex min-h-11 shrink-0 items-center gap-2 whitespace-nowrap rounded-xl border px-4 py-2 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 ${tab === item ? "border-cyan-500/50 bg-dtsc-soft text-dtsc-blue shadow-sm" : "border-dtsc-border bg-dtsc-surface text-dtsc-muted hover:bg-dtsc-soft hover:text-dtsc-ink"}`}
           >
+            {item === "PRICING" ? <Tags className="h-4 w-4" aria-hidden="true" /> : item === "PROMOTIONS" ? <BadgePercent className="h-4 w-4" aria-hidden="true" /> : <RotateCcw className="h-4 w-4" aria-hidden="true" />}
             {item === "PRICING" ? copy.pricing : item === "PROMOTIONS" ? copy.promotions : copy.returns}
           </button>
         ))}
@@ -701,7 +706,7 @@ export function RetailCommercialWorkspace({ organizationId }: { organizationId: 
             )}
           </div>
 
-          <aside className="rounded-2xl border bg-background p-4 sm:p-5">
+          <aside className="dtsc-card p-4 sm:p-5">
             <h2 className="font-semibold">{copy.availablePrices}</h2>
             {!prices.length ? (
               <div className="mt-3 space-y-3">
@@ -790,7 +795,7 @@ export function RetailCommercialWorkspace({ organizationId }: { organizationId: 
             )}
           </div>
 
-          <aside className="rounded-2xl border bg-background p-4 sm:p-5">
+          <aside className="dtsc-card p-4 sm:p-5">
             {capabilities?.canManagePromotions ? (
               <form className="space-y-3" onSubmit={submitPromotion}>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -923,7 +928,7 @@ export function RetailCommercialWorkspace({ organizationId }: { organizationId: 
           </div>
 
           <div className="grid gap-6 lg:grid-cols-[minmax(340px,0.8fr)_minmax(0,1fr)]">
-            <aside className="rounded-2xl border bg-background p-4 sm:p-5">
+            <aside className="dtsc-card p-4 sm:p-5">
               {capabilities?.canCreateReturns ? (
                 <form className="space-y-3" onSubmit={submitReturn}>
                   <h3 className="font-semibold">{copy.returnRequest}</h3>
@@ -1020,8 +1025,8 @@ export function RetailCommercialWorkspace({ organizationId }: { organizationId: 
 
             <div className="space-y-3">
               <div className="flex gap-2 overflow-x-auto pb-1 [touch-action:pan-x]">
-                <button type="button" onClick={() => setReturnStatus("PENDING_APPROVAL")} className={`min-h-10 shrink-0 rounded-full border px-3 py-2 text-sm ${returnStatus === "PENDING_APPROVAL" ? "bg-foreground text-background" : ""}`}>{copy.pendingOnly}</button>
-                <button type="button" onClick={() => setReturnStatus("")} className={`min-h-10 shrink-0 rounded-full border px-3 py-2 text-sm ${returnStatus === "" ? "bg-foreground text-background" : ""}`}>{copy.allReturns}</button>
+                <button type="button" onClick={() => setReturnStatus("PENDING_APPROVAL")} className={`min-h-10 shrink-0 rounded-full border px-3 py-2 text-sm transition ${returnStatus === "PENDING_APPROVAL" ? "border-cyan-500/50 bg-dtsc-soft font-semibold text-dtsc-blue" : "border-dtsc-border bg-dtsc-surface text-dtsc-muted hover:bg-dtsc-soft"}`}>{copy.pendingOnly}</button>
+                <button type="button" onClick={() => setReturnStatus("")} className={`min-h-10 shrink-0 rounded-full border px-3 py-2 text-sm transition ${returnStatus === "" ? "border-cyan-500/50 bg-dtsc-soft font-semibold text-dtsc-blue" : "border-dtsc-border bg-dtsc-surface text-dtsc-muted hover:bg-dtsc-soft"}`}>{copy.allReturns}</button>
               </div>
 
               {returns.length ? returns.map((item) => (
@@ -1054,7 +1059,7 @@ export function RetailCommercialWorkspace({ organizationId }: { organizationId: 
                         <textarea value={decisionReasons[item.id] || ""} onChange={(event) => setDecisionReasons((current) => ({ ...current, [item.id]: event.target.value }))} className="mt-1 min-h-20 w-full rounded-xl border bg-background px-3 py-2" />
                       </label>
                       <div className="flex flex-col gap-2 sm:flex-row">
-                        <button type="button" disabled={saving} onClick={() => void decideReturn(item, "APPROVE")} className="min-h-11 rounded-xl bg-foreground px-4 text-sm font-medium text-background disabled:opacity-50">{copy.approve}</button>
+                        <button type="button" disabled={saving} onClick={() => void decideReturn(item, "APPROVE")} className="min-h-11 rounded-xl bg-[var(--dtsc-blue)] px-4 text-sm font-semibold text-[var(--dtsc-page)] transition hover:brightness-110 disabled:opacity-50">{copy.approve}</button>
                         <button type="button" disabled={saving} onClick={() => void decideReturn(item, "REJECT")} className="min-h-11 rounded-xl border px-4 text-sm font-medium disabled:opacity-50">{copy.reject}</button>
                       </div>
                     </div>
@@ -1067,6 +1072,6 @@ export function RetailCommercialWorkspace({ organizationId }: { organizationId: 
           </div>
         </section>
       ) : null}
-    </main>
+    </div>
   );
 }

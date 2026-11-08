@@ -39,6 +39,7 @@ import { ConversationListItem } from "@/components/chat/ConversationListItem";
 import { FloatingActionButton } from "@/components/chat/FloatingActionButton";
 import { SearchBar } from "@/components/chat/SearchBar";
 import { VoiceConversationComposer } from "@/components/chat/VoiceConversationComposer";
+import { ContextualBackButton } from "@/components/workspace/contextual-back-button";
 import {
   CollaborationMeetingMessageContent,
   type CollaborationMeetingFollowUpView,
@@ -872,11 +873,11 @@ export function CollaboratorsConversationWorkspace(props: Props) {
 
 
   return (
-    <div className="relative grid h-[calc(100dvh-7.25rem)] min-w-0 overflow-hidden bg-dtsc-surface sm:h-[calc(100dvh-8rem)] lg:grid-cols-[360px_minmax(0,1fr)]">
+    <div className="relative grid h-[calc(100dvh-7.25rem)] min-w-0 max-w-full overflow-hidden bg-dtsc-surface sm:h-[calc(100dvh-8rem)] lg:grid-cols-[minmax(0,340px)_minmax(0,1fr)]">
       <aside className={cn("relative h-full min-h-0 min-w-0 flex-col overflow-hidden border-r border-dtsc-border bg-dtsc-surface", activeGroup && !mobileListOpen ? "hidden lg:flex" : "flex")}>
-        <div className="shrink-0 px-3 pb-2 pt-3 sm:px-4">
+        <div className="shrink-0 border-b border-dtsc-border bg-dtsc-surface px-3 pb-2 pt-3 sm:px-4">
           <div className="flex items-center justify-between gap-3">
-            <div className="min-w-0"><p className="text-[0.68rem] font-black uppercase tracking-[0.16em] text-cyan-600">{t("title")}</p><h2 className="truncate text-xl font-black text-dtsc-ink">{t("groups")}</h2></div>
+            <div className="flex min-w-0 items-center gap-2"><ContextualBackButton compact /><div className="min-w-0"><p className="text-[0.6rem] font-extrabold uppercase tracking-[0.12em] text-cyan-600">{t("title")}</p><h2 className="truncate text-lg font-extrabold tracking-tight text-dtsc-ink">{t("groups")}</h2></div></div>
             <div className="flex gap-2"><Button asChild type="button" size="icon" variant="outline" className="h-11 w-11 rounded-full" aria-label={collaborationExperienceT(userPreferences.locale, "conversationUiUserGuide")}><Link href="/help/standard?guide=collaborators"><BookOpen className="h-5 w-5" /></Link></Button><Button type="button" size="icon" variant="outline" onClick={() => setDirectOpen(true)} className="h-11 w-11 rounded-full lg:hidden" aria-label={collaborationExperienceT(userPreferences.locale, "conversationUiNewDirectConversation")}><UserPlus className="h-5 w-5" /></Button><Button type="button" size="icon" onClick={() => setGroupDialog("create")} className="h-11 w-11 rounded-full bg-[#002b5b] text-white lg:hidden" aria-label={t("newGroup")}><MessageCircle className="h-5 w-5" /></Button></div>
           </div>
           {activeStories.length ? (
@@ -888,7 +889,7 @@ export function CollaboratorsConversationWorkspace(props: Props) {
               })}
             </div>
           ) : null}
-          <div className="mt-3"><SearchBar value={query} onChange={setQuery} placeholder={t("search")} /></div>
+          <div className="mt-3"><SearchBar value={query} onChange={setQuery} placeholder={t("search")} className="border-dtsc-border bg-dtsc-page shadow-none" /></div>
           <div className="mt-3 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {(["ALL", "DIRECT", "UNREAD", "FAVORITES", "GROUPS", "ARCHIVED"] as BuiltInFilter[]).map((item) => <button key={item} type="button" onClick={() => setFilter(item)} className={cn("shrink-0 rounded-full border px-3 py-1.5 text-xs font-black transition", filter === item ? "border-cyan-500 bg-cyan-500/15 text-cyan-700 dark:text-cyan-200" : "border-dtsc-border bg-dtsc-page text-dtsc-muted hover:bg-dtsc-soft")}>{item === "ALL" ? t("all") : item === "DIRECT" ? (collaborationExperienceT(userPreferences.locale, "conversationUiDirect")) : item === "UNREAD" ? t("unread") : item === "FAVORITES" ? t("favorites") : item === "GROUPS" ? t("groupsFilter") : t("archived")}</button>)}
             {customFilters.map((item) => <button key={item.id} type="button" onClick={() => setFilter(`CUSTOM:${item.id}`)} className={cn("shrink-0 rounded-full border px-3 py-1.5 text-xs font-black transition", filter === `CUSTOM:${item.id}` ? "border-cyan-500 bg-cyan-500/15 text-cyan-700 dark:text-cyan-200" : "border-dtsc-border bg-dtsc-page text-dtsc-muted hover:bg-dtsc-soft")}>{item.name}</button>)}
@@ -901,28 +902,28 @@ export function CollaboratorsConversationWorkspace(props: Props) {
         <section className="mx-3 mb-2 shrink-0 rounded-2xl border border-dtsc-border bg-dtsc-page p-2 sm:mx-4" aria-label={collaborationExperienceT(userPreferences.locale, "conversationUiMyAcceptedContacts")}>
           <div className="flex items-center justify-between gap-2 px-1 pb-2">
             <div className="min-w-0"><p className="text-[0.65rem] font-black uppercase tracking-[0.12em] text-cyan-700 dark:text-cyan-200">{collaborationExperienceT(userPreferences.locale, "conversationUiMyContacts")}</p><p className="truncate text-xs text-dtsc-muted">{initialContacts.length ? (collaborationExperienceT(userPreferences.locale, "conversationUiAcceptedContactS", { v0: initialContacts.length })) : (collaborationExperienceT(userPreferences.locale, "conversationUiNoAcceptedContactYet"))}</p></div>
-            <Button type="button" size="sm" variant="outline" className="shrink-0 rounded-xl" onClick={() => setDirectOpen(true)}><UserPlus className="h-4 w-4" />{collaborationExperienceT(userPreferences.locale, "conversationUiAdd")}</Button>
+            <Button asChild type="button" size="sm" variant="outline" className="shrink-0 rounded-xl"><Link href="/collaborators/contacts/new"><UserPlus className="h-4 w-4" />{collaborationExperienceT(userPreferences.locale, "conversationUiAdd")}</Link></Button>
           </div>
           {initialContacts.length ? <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">{initialContacts.map((contact) => <button key={contact.id} type="button" onClick={() => void startDirectConversation(contact.id)} disabled={Boolean(startingDirectUserId)} className="w-20 shrink-0 rounded-xl p-2 text-center transition hover:bg-dtsc-soft disabled:opacity-60"><ConversationAvatar title={contact.name} avatarUrl={contact.avatarUrl} isOnline={isOnline(contact.lastSeenAt)} className="mx-auto h-10 w-10" /><span className="mt-1 block truncate text-xs font-black text-dtsc-ink">{contact.name}</span><span className="block truncate text-[0.62rem] text-dtsc-muted">{contact.jobTitle || (collaborationExperienceT(userPreferences.locale, "conversationUiContact"))}</span></button>)}</div> : null}
         </section>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-20 sm:px-3 lg:pb-3">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pb-[calc(5rem+env(safe-area-inset-bottom))] sm:px-3 lg:pb-3">
           {visibleGroups.map((group) => {
             const latest = group.messages[0];
             const preference = preferences[group.id] || defaultPreference(group.id, currentUserId);
             const activeCall = group.calls?.find((call) => call.status === "RINGING" || call.status === "ACTIVE");
             const preview = activeCall ? `${activeCall.callType === "VIDEO" ? t("conversationUiVideo") : t("conversationUiAudio")} · ${t("online")}` : group.unreadMentionPreview || (latest ? `${latest.author.name}: ${latest.content}` : group.description || t("noMessage"));
-            return <div key={group.id} className="relative"><ConversationListItem id={group.id} title={`${preference.pinned ? "📌 " : ""}${group.name}`} preview={preview} timestamp={latest ? formatRelativeUserDateTime(latest.createdAt, userPreferences) : undefined} avatarUrl={profiles[group.id]} unreadCount={group.unreadMessageCount} mentionCount={group.unreadMentionCount} isActive={activeGroupId === group.id} type="group" onClick={() => selectGroup(group.id)} />{preference.favorite ? <Heart className="pointer-events-none absolute right-2 top-9 h-3 w-3 fill-current text-cyan-600" /> : null}</div>;
+            return <div key={group.id} className="relative border-b border-dtsc-border last:border-b-0"><ConversationListItem id={group.id} title={`${preference.pinned ? "📌 " : ""}${group.name}`} preview={preview} timestamp={latest ? formatRelativeUserDateTime(latest.createdAt, userPreferences) : undefined} avatarUrl={profiles[group.id]} unreadCount={group.unreadMessageCount} mentionCount={group.unreadMentionCount} isActive={activeGroupId === group.id} type="group" onClick={() => selectGroup(group.id)} />{preference.favorite ? <Heart className="pointer-events-none absolute right-2 top-9 h-3 w-3 fill-current text-cyan-600" /> : null}</div>;
           })}
           {!visibleGroups.length ? <p className="px-4 py-10 text-center text-sm font-semibold text-dtsc-muted">{t("noGroup")}</p> : null}
         </div>
         <div className="absolute bottom-5 right-5 hidden items-center gap-2 lg:flex"><Button type="button" variant="outline" className="rounded-full shadow-lg" onClick={() => setDirectOpen(true)}><UserPlus className="h-4 w-4" />{collaborationExperienceT(userPreferences.locale, "conversationUiDirect2")}</Button><FloatingActionButton label={t("newGroup")} onClick={() => setGroupDialog("create")} className="static" /></div>
       </aside>
 
-      <main className={cn("h-full min-h-0 min-w-0 flex-col overflow-hidden bg-dtsc-page", activeGroup && !mobileListOpen ? "flex" : "hidden lg:flex")}>
+      <main className={cn("h-full min-h-0 min-w-0 max-w-full flex-col overflow-hidden bg-dtsc-page", activeGroup && !mobileListOpen ? "flex" : "hidden lg:flex")}>
         {activeGroup ? (
           <>
-            <ConversationHeader title={activeGroup.name} subtitle={`${activeGroup.members.length} ${t("members")} · ${activeGroup.groupType.replaceAll("_", " ")}`} avatarUrl={profiles[activeGroup.id]} type="group" onBack={() => setMobileListOpen(true)} onTitleClick={() => setInfoOpen(true)} actions={<><Button type="button" variant="outline" size="icon" className="rounded-full" disabled={callJoining} onClick={() => void startGroupCall("AUDIO")} aria-label={collaborationExperienceT(userPreferences.locale, "conversationUiStartAudioCall")}><Phone className="h-4 w-4" /></Button><Button type="button" variant="outline" size="icon" className="rounded-full" disabled={callJoining} onClick={() => void startGroupCall("VIDEO")} aria-label={collaborationExperienceT(userPreferences.locale, "conversationUiStartVideoCall")}><Video className="h-4 w-4" /></Button><ActionMenu label={t("conversationUiGroupActions")} items={groupMenu} /></>} />
+            <ConversationHeader compact backLabel={t("conversationUiBackToDiscussions")} title={activeGroup.name} subtitle={`${activeGroup.members.length} ${t("members")} · ${activeGroup.groupType.replaceAll("_", " ")}`} avatarUrl={profiles[activeGroup.id]} type="group" onBack={() => setMobileListOpen(true)} onTitleClick={() => setInfoOpen(true)} actions={<><Button type="button" variant="outline" size="icon" className="rounded-full" disabled={callJoining} onClick={() => void startGroupCall("AUDIO")} aria-label={collaborationExperienceT(userPreferences.locale, "conversationUiStartAudioCall")}><Phone className="h-4 w-4" /></Button><Button type="button" variant="outline" size="icon" className="rounded-full" disabled={callJoining} onClick={() => void startGroupCall("VIDEO")} aria-label={collaborationExperienceT(userPreferences.locale, "conversationUiStartVideoCall")}><Video className="h-4 w-4" /></Button><ActionMenu label={t("conversationUiGroupActions")} items={groupMenu} /></>} />
             {activeGroup.calls?.find((call) => call.status === "RINGING" || call.status === "ACTIVE") ? (() => {
               const activeCall = activeGroup.calls!.find((call) => call.status === "RINGING" || call.status === "ACTIVE")!;
               return <div className="mx-3 mt-3 flex flex-wrap items-center gap-2 rounded-2xl border border-cyan-400/50 bg-cyan-400/10 px-3 py-2 text-sm sm:mx-5"><span className="min-w-0 flex-1 font-bold text-dtsc-ink">{activeCall.callType === "VIDEO" ? (collaborationExperienceT(userPreferences.locale, "conversationUiVideoCallInProgress")) : (collaborationExperienceT(userPreferences.locale, "conversationUiAudioCallInProgress"))}</span><Button type="button" size="sm" disabled={callJoining} onClick={() => void joinGroupCall(activeCall)} className="rounded-full">{callJoining ? "…" : collaborationExperienceT(userPreferences.locale, "conversationUiJoin")}</Button>{activeCall.startedById === currentUserId || canManage ? <Button type="button" size="sm" variant="outline" onClick={() => void endGroupCall(activeCall)} className="rounded-full">{collaborationExperienceT(userPreferences.locale, "conversationUiEnd")}</Button> : <Button type="button" size="sm" variant="outline" onClick={() => void rejectGroupCall(activeCall)} className="rounded-full">{collaborationExperienceT(userPreferences.locale, "decline")}</Button>}</div>;

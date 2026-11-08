@@ -53,8 +53,11 @@ export async function AppShell({
   user,
   precomputed,
   verifiedSession,
+  hideContextualBack = false,
 }: {
   children: React.ReactNode;
+  /** Fullscreen modules render their own in-context back navigation. */
+  hideContextualBack?: boolean;
   user: {
     id: string;
     name: string;
@@ -282,7 +285,7 @@ export async function AppShell({
               </div>
             </div>
           </header>
-          <main className="dtsc-private-main min-w-0 px-4 pb-36 pt-5 sm:px-6 lg:px-8 lg:pb-6 lg:pt-6"><div data-module-back-fallback className="mb-4"><ContextualBackButton /></div>{children}</main>
+          <main className="dtsc-private-main min-w-0 px-4 pb-36 pt-5 sm:px-6 lg:px-8 lg:pb-6 lg:pt-6">{!hideContextualBack ? <div data-module-back-fallback className="mb-4"><ContextualBackButton /></div> : null}{children}</main>
           <MobileBottomNavigation
             user={user}
             unreadCollaboratorMessages={unreadCollaboratorMessages}

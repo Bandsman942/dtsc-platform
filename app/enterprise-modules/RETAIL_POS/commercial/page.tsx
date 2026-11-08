@@ -1,11 +1,13 @@
 import { redirect } from "next/navigation";
-import { getSession } from "@/lib/auth";
+import { getSession, requireUser } from "@/lib/auth";
 import { resolveEnterpriseModuleAccess } from "@/lib/enterprise/module-access";
 import { RetailCommercialWorkspace } from "@/components/enterprise/professional/retail-commercial-workspace";
+import { AppShell } from "@/components/layout/app-shell";
 
 export default async function RetailCommercialControlPage() {
   const session = await getSession();
   if (!session) redirect("/auth/sign-in?next=/enterprise-modules/RETAIL_POS/commercial");
+  const user = await requireUser();
   const organizationId = session.activeOrganizationId;
   if (!organizationId || session.activeContext !== "ORGANIZATION") redirect("/dashboard");
   const access = await resolveEnterpriseModuleAccess({
@@ -15,5 +17,9 @@ export default async function RetailCommercialControlPage() {
     action: "read",
   });
   if (!access.allowed) redirect("/enterprise-modules/RETAIL_POS");
-  return <RetailCommercialWorkspace organizationId={organizationId} />;
+  return (
+    <AppShell user={user} hideContextualBack>
+      <RetailCommercialWorkspace organizationId={organizationId} />
+    </AppShell>
+  );
 }

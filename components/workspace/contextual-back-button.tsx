@@ -75,7 +75,7 @@ function saveScroll() {
 }
 
 /** Local-tab, tenant-agnostic navigation contains safe routes only. Access is always revalidated server-side. */
-export function ContextualBackButton() {
+export function ContextualBackButton({ compact = false }: { compact?: boolean }) {
   const pathname = usePathname();
   const router = useRouter();
   const english = useAppLocale() === "en";
@@ -177,10 +177,12 @@ export function ContextualBackButton() {
     <button type="button" onClick={() => void goBack()} disabled={navigating}
       data-contextual-module-back
       aria-label={english ? "Return to the previous page" : "Revenir à la page précédente"}
-      className="inline-flex min-h-11 min-w-11 items-center justify-center gap-2 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-bold text-dtsc-blue transition hover:bg-dtsc-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 disabled:opacity-50"
+      className={compact
+        ? "inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-dtsc-border/60 bg-dtsc-surface/75 text-dtsc-blue transition hover:bg-dtsc-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 disabled:opacity-50"
+        : "inline-flex min-h-11 min-w-11 items-center justify-center gap-2 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-bold text-dtsc-blue transition hover:bg-dtsc-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 disabled:opacity-50"}
     >
       <ArrowLeft className="h-4 w-4 shrink-0" aria-hidden="true" />
-      <span>{english ? "Back" : "Retour"}</span>
+      {!compact ? <span>{english ? "Back" : "Retour"}</span> : null}
     </button>
   );
 }

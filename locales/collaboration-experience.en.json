@@ -224,5 +224,6 @@
   "conversationUiAdministrator": "Administrator",
   "conversationUiTransfer": "Transfer",
   "conversationUiRemove": "Remove",
-  "conversationUiKilobytesShort": "KB"
+  "conversationUiKilobytesShort": "KB",
+  "conversationUiBackToDiscussions": "Back to conversations"
 }
