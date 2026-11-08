@@ -10,6 +10,7 @@ La conversation fournie montre une réponse fondée sur des notes datées du 13 
 - Le transport contact utilise le mode mail direct et autorise l'adresse destinataire officielle. Le résultat du mail est strictement `sent: true`; un échec de l'envoi est enregistré comme `FAILED` par `AiToolExecution`. Le numéro du `ContactMessage` n'est pas inventé comme un numéro de message fournisseur.
 - Le ticket doit porter un `ticketId` non vide. Les actions utilisent toujours `AiToolConfirmation`, `AiToolExecution`, les permissions existantes, la limitation de débit, l'isolation tenant et le journal d'audit, sans nouvelles tables.
 - `GET /api/ai/tools/history` renvoie jusqu'à 12 événements de la session avec preuve filtrée (statut réel, référence ticket/contact), sans arguments ou données sensibles, avec `private, no-store`; filtre optionnel de conversation et tenant.
+- Le panneau de confirmation et les preuves sont montés au niveau de la conversation active. Changer de fil met à jour la liste des confirmations et l'historique sans utiliser une valeur de session initiale obsolète.
 - L'UI d'actions vérifiées n'annonce `SUCCEEDED` que si l'exécution réelle en base possède la preuve requise ; un échec affiche « non effectué ». Les confirmations restent sous contrôle explicite de l'utilisateur.
 
 ## Limites explicitement conservées
@@ -22,6 +23,8 @@ pnpm qa:assistant-ux
 pnpm qa:regression
 pnpm type-check && pnpm lint && pnpm build
 ```
+Le test automatisé non destructif est `tests/e2e/issue-1067-ai-action-truth.spec.mjs` (authentification, isolation, données brutes cachées). Les véritables mutations sont réservées à une fixture de transport ou à la validation E2E humaine pour ne jamais envoyer de courriel réel depuis la CI.
+
 E2E : nouvelle conversation demande « nouveautés de novembre » : la version active est citée. Demander création d'un ticket : contrôle de confirmation visible, aucun ticket avant clic, puis véritable ID en historique. Refuser la confirmation : aucune action envoyée. Répéter pour un mail à DTSC ; mettre le transport en échec dans un environnement de test, exiger statut FAILED, jamais « envoyé ». Tester français/anglais, offres, droit de lecture et isolation de deux comptes.
 
 Pas de Preview Vercel, pas de migration ni modification de secrets. Production seulement après fusion sur `main` et E2E final global A+B+C du propriétaire. **Rollback** : revert de la PR ; les lignes `AiToolExecution` restent l'historique canonique.
