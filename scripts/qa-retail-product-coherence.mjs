@@ -31,6 +31,7 @@ const contract = read("docs/CUSTOMER_FACING_LANGUAGE_CONTRACT.md");
 const language = read("lib/customer-facing-language.ts");
 const operatorLanguage = read("lib/retail-customer-language.ts");
 const retailPage = read("app/enterprise-modules/retail-page.tsx");
+const posNavigation = read("components/enterprise/professional/retail-pos-section-navigation.tsx");
 const posWorkspace = read("components/enterprise/professional/retail-pos-workspace.tsx");
 const operatorWorkspace = read("components/enterprise/professional/retail-operator-workspace.tsx");
 const mobileMoneyWorkspace = read("components/enterprise/professional/mobile-money-agency-workspace.tsx");
@@ -97,7 +98,12 @@ check(!retailPage.includes("EnterpriseRetailShopWorkspace"), "Retail routing mus
 check(before(retailPage, "<RetailPosWorkspace", "<RetailOfflineContinuity"), "The core POS workspace must render before offline tools.");
 check(before(retailPage, "<RetailPosWorkspace", "<RetailOmnichannelPanel"), "The core POS workspace must render before customer order tools.");
 check(before(retailPage, "<RetailPosWorkspace", "<RetailGlobalReadiness"), "The core POS workspace must render before setup/readiness tools.");
-check((retailPage.match(/<details/g) || []).length >= 2, "Retail POS secondary tools must use progressive disclosure.");
+const legacyPosDisclosure = (retailPage.match(/<details/g) || []).length >= 2;
+const routedPosDisclosure = retailPage.includes("<RetailPosSectionDirectory")
+  && retailPage.includes("posSection ? (")
+  && posNavigation.includes("POS_DIRECTORY_SECTIONS.filter")
+  && posNavigation.includes("href={item.href ?? `${POS_URL}?section=${item.id}`}");
+check(legacyPosDisclosure || routedPosDisclosure, "Retail POS secondary tools must use progressive disclosure (collapsible panels or a role-aware route-per-card directory).");
 check(retailPage.includes("RetailPaymentFollowup"), "Retail POS must integrate the permission-aware payment follow-up surface.");
 check(mobileMoneyWorkspace.includes("RetailWorkspaceFrame") && telcoWorkspace.includes("RetailWorkspaceFrame"), "Mobile Money and Telecom dedicated workspaces must keep the shared professional Retail frame.");
 
