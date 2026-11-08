@@ -873,8 +873,8 @@ export function CollaboratorsConversationWorkspace(props: Props) {
 
 
   return (
-    <div className="relative grid h-[calc(100dvh-7.25rem)] min-w-0 max-w-full overflow-hidden bg-dtsc-surface sm:h-[calc(100dvh-8rem)] lg:grid-cols-[minmax(0,340px)_minmax(0,1fr)]">
-      <aside className={cn("relative h-full min-h-0 min-w-0 flex-col overflow-hidden border-r border-dtsc-border bg-dtsc-surface", activeGroup && !mobileListOpen ? "hidden lg:flex" : "flex")}>
+    <div data-collaborators-split-view className="relative grid h-[calc(100dvh-7.25rem)] min-w-0 max-w-full overflow-hidden bg-dtsc-surface sm:h-[calc(100dvh-8rem)] lg:grid-cols-[minmax(0,340px)_minmax(0,1fr)]">
+      <aside data-collaborators-discussions-pane className={cn("relative h-full min-h-0 min-w-0 flex-col overflow-hidden border-r border-dtsc-border bg-dtsc-surface", activeGroup && !mobileListOpen ? "hidden lg:flex" : "flex")}>
         <div className="shrink-0 border-b border-dtsc-border bg-dtsc-surface px-3 pb-2 pt-3 sm:px-4">
           <div className="flex items-center justify-between gap-3">
             <div className="flex min-w-0 items-center gap-2"><ContextualBackButton compact /><div className="min-w-0"><p className="text-[0.6rem] font-extrabold uppercase tracking-[0.12em] text-cyan-600">{t("title")}</p><h2 className="truncate text-lg font-extrabold tracking-tight text-dtsc-ink">{t("groups")}</h2></div></div>
@@ -920,7 +920,7 @@ export function CollaboratorsConversationWorkspace(props: Props) {
         <div className="absolute bottom-5 right-5 hidden items-center gap-2 lg:flex"><Button type="button" variant="outline" className="rounded-full shadow-lg" onClick={() => setDirectOpen(true)}><UserPlus className="h-4 w-4" />{collaborationExperienceT(userPreferences.locale, "conversationUiDirect2")}</Button><FloatingActionButton label={t("newGroup")} onClick={() => setGroupDialog("create")} className="static" /></div>
       </aside>
 
-      <main className={cn("h-full min-h-0 min-w-0 max-w-full flex-col overflow-hidden bg-dtsc-page", activeGroup && !mobileListOpen ? "flex" : "hidden lg:flex")}>
+      <main data-collaborators-conversation-pane className={cn("h-full min-h-0 min-w-0 max-w-full flex-col overflow-hidden bg-dtsc-page", activeGroup && !mobileListOpen ? "flex" : "hidden lg:flex")}>
         {activeGroup ? (
           <>
             <ConversationHeader compact backLabel={t("conversationUiBackToDiscussions")} title={activeGroup.name} subtitle={`${activeGroup.members.length} ${t("members")} · ${activeGroup.groupType.replaceAll("_", " ")}`} avatarUrl={profiles[activeGroup.id]} type="group" onBack={() => setMobileListOpen(true)} onTitleClick={() => setInfoOpen(true)} actions={<><Button type="button" variant="outline" size="icon" className="rounded-full" disabled={callJoining} onClick={() => void startGroupCall("AUDIO")} aria-label={collaborationExperienceT(userPreferences.locale, "conversationUiStartAudioCall")}><Phone className="h-4 w-4" /></Button><Button type="button" variant="outline" size="icon" className="rounded-full" disabled={callJoining} onClick={() => void startGroupCall("VIDEO")} aria-label={collaborationExperienceT(userPreferences.locale, "conversationUiStartVideoCall")}><Video className="h-4 w-4" /></Button><ActionMenu label={t("conversationUiGroupActions")} items={groupMenu} /></>} />
