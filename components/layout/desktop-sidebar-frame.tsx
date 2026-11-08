@@ -45,15 +45,13 @@ export function DesktopSidebarFrame({
   }, [preferCollapsed, storageKey]);
 
   function toggle() {
-    setCollapsed((previous) => {
-      const next = !previous;
-      try {
-        window.localStorage.setItem(storageKey, next ? "collapsed" : "expanded");
-      } catch {
-        // Private browsing and restricted storage must not break the menu.
-      }
-      return next;
-    });
+    const next = !collapsed;
+    setCollapsed(next);
+    try {
+      window.localStorage.setItem(storageKey, next ? "collapsed" : "expanded");
+    } catch {
+      // Private browsing and restricted storage must not break the menu.
+    }
   }
 
   return (
