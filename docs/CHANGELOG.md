@@ -1,3 +1,11 @@
+## 2026-11-08 — Hotfix #1064 — RETAIL Core sans Shop, packs administrés (candidat v1.6.2)
+
+- Commerce de détail générique désormais indépendant de SHOP : POS et clôture accessibles selon l'abonnement, et TELCO/Mobile Money OFF par défaut pour les nouveaux tenants génériques.
+- Administration DTSC : gestion sécurisée et auditée des extensions RETAIL par entreprise, ainsi que reclassification volontaire des anciens SHOP ; rétrocompatibilité sans suppression de données.
+- Le rapprochement des abonnements et la réapplication des modèles respectent les opt-outs TELCO/MM. Nettoyage des libellés génériques FR/EN et guides contextuels Retail.
+- Neuf sous-secteurs RETAIL prospectifs en statut PLANNED (aucun module métier facturé ou annoncé disponible).
+- QA dédiée, documentation et protocole OWNER E2E dans `docs/HOTFIX_1064_RETAIL_CORE_SECTOR_PACKS.md`. Pas de fusion ni production avant validation E2E finale.
+
 ## 2026-11-08 — Hotfix #1061 — Menu desktop rétractable et collaboration immersive (candidat v1.6.1)
 
 - Navigation principale desktop rétractable, inspirée du comportement de Neon : 288 px ouverte / 76 px réduite, icônes et badges actifs, infobulles, bouton accessible d'ouverture/fermeture, préférence locale par utilisateur et produit, sans modification RBAC.
