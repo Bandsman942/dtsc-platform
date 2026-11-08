@@ -41,7 +41,7 @@ const prisma = {
       return { count: 1 };
     },
   },
-  enterpriseSite: { findMany: async () => [{ id: "store-A" }] },
+  enterpriseSite: { findMany: async ({ where }) => where.siteType === "STORE" ? [{ id: "store-A" }] : [{ id: "store-A" }, { id: "hq" }] },
   enterpriseWarehouse: { findMany: async () => [{ siteId: "store-A" }] },
   enterpriseFinancialAccount: { findMany: async () => [{ siteId: "store-A", currencyCode: "CDF" }] },
   enterpriseRetailSiteAssignment: { findMany: async () => current.staff },
@@ -83,6 +83,7 @@ const change = (feature, enabled, revision = current.revision) => changeRetailFe
 });
 
 assert.equal((await getRetailFeatureActivation("tenant-A")).flags.siteStaffIsolationEnabled, false, "Existing tenants stay OFF");
+assert.equal((await getRetailFeatureActivation("tenant-A")).counts.sites, 1, "A headquarters must not require checkout staff, stock and cash when STORE sites exist");
 await assert.rejects(getRetailFeatureActivation("tenant-B"), { code: "RETAIL_SECTOR_REQUIRED" }, "Cross-tenant reads are denied");
 assert.equal((await getRetailFeatureActivation("tenant-A")).prerequisites.invoiceCheckoutEnabled.ready, false, "Invoicing depends on isolation");
 await assert.rejects(change("invoiceCheckoutEnabled", true), { code: "RETAIL_FEATURE_ACTIVATION_NOT_READY" });

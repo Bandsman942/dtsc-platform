@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { ArrowLeft, ArrowUpRight, Building2, CheckCircle2, CircleAlert, CreditCard, Package, ShieldCheck, UsersRound } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, Building2, CheckCircle2, CircleAlert, CreditCard, Package, ShieldCheck, UsersRound, BookOpenCheck, ShoppingBasket, ClipboardCheck, Banknote, ListChecks } from "lucide-react";
 import { getRetailMultiStoreOnboarding, getRetailMyStores } from "@/lib/enterprise/retail/multi-store-onboarding";
+import { RetailGuidedStoreSetup } from "@/components/enterprise/professional/retail-guided-store-setup";
 
 const POS = "/enterprise-modules/RETAIL_POS";
 const setupCopy = {
@@ -15,6 +16,7 @@ const setupCopy = {
     warehouseAction: "Gérer les entrepôts", accountAction: "Gérer les caisses", staffAction: "Affecter le personnel", isolationAction: "Activer les accès isolés",
     finalAction: "Contrôler la préparation globale", selected: "Boutique sélectionnée", completed: "Étapes terminées", choose: "Ouvrir la configuration", finished: "Configuration de cette boutique complète.",
     note: "Les boutiques, caisses, stocks et collaborateurs sont conservés dans leurs modules ERP de référence. Aucun doublon n’est créé.",
+    operational: "Prête à vendre", structural: "Préparation initiale", finance: "Finance et comptabilité", catalog: "Catalogue actif", stock: "Stock approvisionné", checkout: "Facturation activée", stockOptional: "Le stock physique n’est exigé ici que lorsque le catalogue comporte des articles suivis en stock.", openTills: "Caisses ouvertes", operationalHelp: "Ces vérifications sont indicatives ; l’autorisation réelle reste contrôlée par les API et l’activation sécurisée.",
   },
   en: {
     heading: "Set up my stores", intro: "One company subscription, multiple independent stores. Configure each point of sale using your existing ERP records, then assign the team.",
@@ -27,6 +29,7 @@ const setupCopy = {
     warehouseAction: "Manage warehouses", accountAction: "Manage cash accounts", staffAction: "Assign staff", isolationAction: "Enable isolated access",
     finalAction: "Review overall readiness", selected: "Selected store", completed: "Steps complete", choose: "Open setup", finished: "This store is fully configured.",
     note: "Stores, accounts, stock and employees remain in their canonical ERP modules. No duplicate records are created.",
+    operational: "Ready to sell", structural: "Initial setup", finance: "Finance and accounting", catalog: "Active catalogue", stock: "Inventory loaded", checkout: "Invoice checkout active", stockOptional: "Physical inventory is required here only when your catalogue contains tracked items.", openTills: "Open tills", operationalHelp: "These checks are advisory; actual permissions are enforced by the APIs and secure activation.",
   },
 } as const;
 
@@ -39,6 +42,7 @@ export async function RetailMultiStoreOnboarding({ organizationId, locale, selec
       <div className="flex items-start gap-3"><Building2 aria-hidden="true" className="mt-1 h-6 w-6 shrink-0 text-cyan-600" /><div className="min-w-0"><h2 className="text-xl font-black tracking-tight text-dtsc-ink">{copy.heading}</h2><p className="mt-2 text-sm leading-6 text-dtsc-muted">{copy.intro}</p></div></div>
       <p className="mt-4 rounded-xl border border-dtsc-border bg-dtsc-soft/45 p-3 text-xs leading-5 text-dtsc-muted">{copy.note}</p>
     </div>
+    <RetailGuidedStoreSetup organizationId={organizationId} locale={locale} baseCurrency={onboarding.baseCurrency} selectedSite={selected || null} sites={onboarding.sites} />
     {!onboarding.sites.length ? <div className="rounded-2xl border border-dashed border-dtsc-border bg-dtsc-surface p-5"><p className="text-sm text-dtsc-muted">{copy.empty}</p><Link className="mt-4 inline-flex rounded-xl bg-dtsc-blue px-4 py-3 text-sm font-bold text-white" href="/enterprise-modules/SITES_WAREHOUSES#sites">{copy.create}</Link></div> : null}
     {selected ? <>
       <Link className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-bold text-dtsc-blue" href={`${POS}?section=store-setup`}><ArrowLeft aria-hidden="true" className="h-4 w-4" />{copy.previous}</Link>
@@ -55,12 +59,29 @@ export async function RetailMultiStoreOnboarding({ organizationId, locale, selec
           <Link href={step.href} className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-lg border border-dtsc-border px-3 py-2 text-sm font-bold text-dtsc-blue hover:bg-dtsc-soft focus-visible:ring-2 focus-visible:ring-cyan-400">{step.action}<ArrowUpRight className="h-4 w-4" /></Link>
         </article>)}
       </div>
+      <div className="rounded-2xl border border-dtsc-border bg-dtsc-surface p-4 sm:p-5" data-retail-store-operational-readiness>
+        <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="text-lg font-black text-dtsc-ink">{copy.operational}</h3><span className={`rounded-full px-3 py-1 text-xs font-black ${selected.operationalReady ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : "bg-amber-500/10 text-amber-800 dark:text-amber-200"}`}>{Object.values(selected.readiness).filter(Boolean).length}/8</span></div>
+        <p className="mt-2 text-sm text-dtsc-muted">{copy.operationalHelp}</p>
+        <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          {([
+            { label: copy.warehouse, ok: selected.readiness.warehouse, href: "/enterprise-modules/SITES_WAREHOUSES#warehouses", Icon: Package },
+            { label: copy.account, ok: selected.readiness.cash, href: "/enterprise-modules/FINANCE_TREASURY#cash-accounts", Icon: CreditCard },
+            { label: copy.staff, ok: selected.readiness.team, href: `${POS}?section=staff`, Icon: UsersRound },
+            { label: copy.isolation, ok: selected.readiness.isolation, href: `${POS}?section=activation`, Icon: ShieldCheck },
+            { label: copy.finance, ok: selected.readiness.finance, href: "/enterprise-modules/FINANCE_ACCOUNTING#accounting-readiness", Icon: BookOpenCheck },
+            { label: copy.catalog, ok: selected.readiness.catalog, href: "/enterprise-modules/CATALOG#catalog-items", Icon: ShoppingBasket },
+            { label: copy.stock, ok: selected.readiness.stock, href: "/enterprise-modules/INVENTORY_LOGISTICS#inventory-items", Icon: Package },
+            { label: copy.checkout, ok: selected.readiness.checkout, href: `${POS}?section=activation`, Icon: ClipboardCheck },
+          ] as const).map(({ label, ok, href, Icon }) => <Link key={label} href={href} className="flex min-h-11 items-center gap-2 rounded-xl border border-dtsc-border px-3 py-2 text-sm font-semibold text-dtsc-ink hover:bg-dtsc-soft focus-visible:ring-2 focus-visible:ring-cyan-400"><Icon aria-hidden="true" className="h-4 w-4 shrink-0 text-dtsc-blue" />{label}{ok ? <CheckCircle2 aria-label="OK" className="ml-auto h-4 w-4 text-emerald-600" /> : <CircleAlert aria-label="Pending" className="ml-auto h-4 w-4 text-amber-600" />}</Link>)}
+        </div>
+        <p className="mt-3 text-xs text-dtsc-muted">{copy.stockOptional} · {copy.openTills} : {selected.openTillCount} · {copy.stock} : {selected.stockLineCount}</p>
+      </div>
       <Link href={`${POS}?section=readiness`} className="inline-flex min-h-11 items-center rounded-xl border border-dtsc-border bg-dtsc-surface px-4 text-sm font-bold text-dtsc-blue">{copy.finalAction}</Link>
     </> : <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{onboarding.sites.map((site) => {
-      const complete = Number(site.warehouseCount > 0) + Number(site.cashReady) + Number(site.staffCount > 0 && site.invoicerCount > 0 && site.cashierCount > 0) + Number(onboarding.isolationEnabled);
+      const complete = Object.values(site.readiness).filter(Boolean).length;
       return <Link key={site.id} href={`${POS}?section=store-setup&siteId=${encodeURIComponent(site.id)}`} className="group flex min-w-0 flex-col gap-3 rounded-2xl border border-dtsc-border bg-dtsc-surface p-4 shadow-sm transition hover:border-cyan-500/60 hover:bg-dtsc-soft/45 focus-visible:ring-2 focus-visible:ring-cyan-400">
         <div className="flex items-start gap-3"><Building2 aria-hidden="true" className="mt-1 h-5 w-5 shrink-0 text-dtsc-blue" /><div className="min-w-0 flex-1"><h3 className="break-words font-black text-dtsc-ink">{site.name}</h3><p className="text-xs text-dtsc-muted">{site.code} · {site.siteType}</p></div><ArrowUpRight aria-hidden="true" className="h-4 w-4 shrink-0 text-dtsc-blue" /></div>
-        <div className="flex flex-wrap items-center justify-between gap-2"><span className={`rounded-full px-2 py-1 text-xs font-bold ${site.ready ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : "bg-amber-500/10 text-amber-800 dark:text-amber-200"}`}>{site.ready ? copy.ready : copy.incomplete}</span><span className="text-xs font-bold text-dtsc-muted">{complete}/4 · {copy.completed}</span></div>
+        <div className="flex flex-wrap items-center justify-between gap-2"><span className={`rounded-full px-2 py-1 text-xs font-bold ${site.operationalReady ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : "bg-amber-500/10 text-amber-800 dark:text-amber-200"}`}>{site.operationalReady ? copy.operational : site.ready ? copy.structural : copy.incomplete}</span><span className="text-xs font-bold text-dtsc-muted">{complete}/8 · {copy.completed}</span></div>
         <span className="text-sm font-bold text-dtsc-blue">{copy.choose}</span>
       </Link>;
     })}</div>}
@@ -69,8 +90,8 @@ export async function RetailMultiStoreOnboarding({ organizationId, locale, selec
 }
 
 const myCopy = {
-  fr: { title: "Mes boutiques", intro: "Accédez directement aux boutiques auxquelles votre compte est affecté.", role: "Rôle", roles: { MANAGER: "Gérant", INVOICER: "Facturier", CASHIER: "Caissier", OWNER: "Administrateur" }, checkout: "Ouvrir la caisse", invoices: "Factures", noAccess: "Aucune boutique ne vous est affectée. Demandez à l’administrateur de vous attribuer un rôle par boutique.", legacy: "L’isolation par boutique n’est pas encore activée. L’administrateur doit vérifier les affectations avant l’activation.", setup: "Configurer les boutiques" },
-  en: { title: "My stores", intro: "Open the stores assigned to your account.", role: "Role", roles: { MANAGER: "Manager", INVOICER: "Invoicing clerk", CASHIER: "Cashier", OWNER: "Administrator" }, checkout: "Open checkout", invoices: "Invoices", noAccess: "No store is assigned to you yet. Ask an administrator to grant store-specific access.", legacy: "Store isolation is not enabled yet. Your administrator must review staff assignments before activation.", setup: "Set up stores" },
+  fr: { title: "Mes boutiques", intro: "Votre poste de travail : choisissez votre boutique, retrouvez votre rôle et vos opérations autorisées.", role: "Rôle", roles: { MANAGER: "Gérant", INVOICER: "Facturier", CASHIER: "Caissier", OWNER: "Administrateur" }, checkout: "Vente au comptoir", invoices: "Préparer les factures", noAccess: "Aucune boutique ne vous est affectée. Demandez à l’administrateur de vous attribuer un rôle par boutique.", legacy: "L’isolation par boutique n’est pas encore activée. L’administrateur doit vérifier les affectations avant l’activation.", setup: "Configurer les boutiques", tills: "Caisses de ma boutique", noTill: "Aucune caisse n’est encore configurée pour cette boutique.", close: "Clôture journalière", start: "Par quoi commencer ?", steps: "Ouvrez la vente ou la facturation selon vos droits. Avant d’encaisser, vérifiez qu’une session de caisse est ouverte.", canClose: "Vous êtes autorisé à préparer la clôture, soumise ensuite à une validation indépendante." },
+  en: { title: "My stores", intro: "Your workspace: choose an assigned store, review your role and available actions.", role: "Role", roles: { MANAGER: "Manager", INVOICER: "Invoicing clerk", CASHIER: "Cashier", OWNER: "Administrator" }, checkout: "Point-of-sale checkout", invoices: "Prepare invoices", noAccess: "No store is assigned to you yet. Ask an administrator to grant store-specific access.", legacy: "Store isolation is not enabled yet. Your administrator must review staff assignments before activation.", setup: "Set up stores", tills: "My store tills", noTill: "No till is configured for this store yet.", close: "Daily close", start: "Where to start?", steps: "Open checkout or invoicing according to your permissions. Before collecting payment, make sure a cash session is open.", canClose: "You may prepare a close, which then requires independent approval." },
 } as const;
 
 export async function RetailMyStores({ organizationId, userId, role, locale }: { organizationId: string; userId: string; role: string; locale: "fr" | "en" }) {
@@ -83,7 +104,9 @@ export async function RetailMyStores({ organizationId, userId, role, locale }: {
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{sites.map((site) => <article key={site.id} className="min-w-0 rounded-2xl border border-dtsc-border bg-dtsc-surface p-4 shadow-sm">
       <div className="flex items-center gap-3"><Building2 className="h-5 w-5 shrink-0 text-dtsc-blue" aria-hidden="true" /><div className="min-w-0"><h3 className="break-words text-base font-black text-dtsc-ink">{site.name}</h3><p className="text-xs text-dtsc-muted">{site.code}{site.city ? ` · ${site.city}` : ""}</p></div></div>
       <p className="mt-3 text-xs font-semibold text-dtsc-muted">{copy.role} : {copy.roles[site.roleCode as keyof typeof copy.roles] || site.roleCode}</p>
-      <div className="mt-4 flex flex-wrap gap-2">{site.capabilities.includes("VIEW_SALES") ? <Link href={`${POS}?section=checkout&siteId=${encodeURIComponent(site.id)}`} className="inline-flex min-h-11 items-center rounded-xl bg-dtsc-blue px-3 text-sm font-bold text-white">{copy.checkout}</Link> : null}{site.capabilities.includes("PREPARE_INVOICE") ? <Link href={`${POS}?section=invoices&siteId=${encodeURIComponent(site.id)}`} className="inline-flex min-h-11 items-center rounded-xl border border-dtsc-border px-3 text-sm font-bold text-dtsc-blue">{copy.invoices}</Link> : null}</div>
+      {site.capabilities.includes("COLLECT_PAYMENT") || site.capabilities.includes("CLOSE_CASH") ? <div className="mt-3 rounded-xl bg-dtsc-soft/50 p-3"><p className="flex items-center gap-2 text-sm font-black text-dtsc-ink"><Banknote aria-hidden="true" className="h-4 w-4" />{copy.tills}</p>{site.tills.length ? <ul className="mt-2 space-y-1 text-xs text-dtsc-muted">{site.tills.map((till, index) => <li key={`${till.name}-${index}`}>{till.name} · {till.currencyCode}</li>)}</ul> : <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">{copy.noTill}</p>}</div> : null}
+      <div className="mt-3"><p className="flex items-center gap-2 text-sm font-black text-dtsc-ink"><ListChecks aria-hidden="true" className="h-4 w-4" />{copy.start}</p><p className="mt-1 text-xs leading-5 text-dtsc-muted">{copy.steps}</p>{site.capabilities.includes("CLOSE_CASH") ? <p className="mt-2 text-xs font-semibold text-dtsc-blue">{copy.canClose}</p> : null}</div>
+      <div className="mt-4 flex flex-wrap gap-2">{site.capabilities.includes("VIEW_SALES") ? <Link href={`${POS}?section=checkout&siteId=${encodeURIComponent(site.id)}`} className="inline-flex min-h-11 items-center rounded-xl bg-dtsc-blue px-3 text-sm font-bold text-white">{copy.checkout}</Link> : null}{site.capabilities.includes("PREPARE_INVOICE") ? <Link href={`${POS}?section=invoices&siteId=${encodeURIComponent(site.id)}`} className="inline-flex min-h-11 items-center rounded-xl border border-dtsc-border px-3 text-sm font-bold text-dtsc-blue">{copy.invoices}</Link> : null}{site.capabilities.includes("CLOSE_CASH") ? <Link href={`/enterprise-modules/RETAIL_DAILY_CLOSE?siteId=${encodeURIComponent(site.id)}`} className="inline-flex min-h-11 items-center rounded-xl border border-dtsc-border px-3 text-sm font-bold text-dtsc-blue">{copy.close}</Link> : null}</div>
     </article>)}</div>
     {isOwner ? <Link href={`${POS}?section=store-setup`} className="inline-flex min-h-11 items-center rounded-xl border border-dtsc-border bg-dtsc-surface px-4 text-sm font-bold text-dtsc-blue">{copy.setup}</Link> : null}
   </section>;

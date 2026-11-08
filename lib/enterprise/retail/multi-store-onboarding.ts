@@ -1,10 +1,11 @@
 import { prisma } from "@/lib/prisma";
+import { getRetailAccountingReadiness } from "@/lib/enterprise/retail/accounting-readiness";
 import { RETAIL_OWNER_ROLES, retailStaffIsolationIsEnabled, siteStaffCapabilities } from "@/lib/enterprise/retail/site-access";
 
 /** Read-only onboarding projection. Sites, stock, accounts and assignments remain
  * owned by their existing ERP modules; this is not a second source of truth. */
 export async function getRetailMultiStoreOnboarding(organizationId: string) {
-  const [sites, warehouses, cashAccounts, assignments, configuration] = await Promise.all([
+  const [sites, warehouses, cashAccounts, assignments, configuration, accounting, catalogCount, trackedCatalogCount] = await Promise.all([
     prisma.enterpriseSite.findMany({
       where: { organizationId, status: "ACTIVE", archivedAt: null },
       select: { id: true, name: true, code: true, siteType: true, city: true },
@@ -16,7 +17,7 @@ export async function getRetailMultiStoreOnboarding(organizationId: string) {
     }),
     prisma.enterpriseFinancialAccount.findMany({
       where: { organizationId, status: "ACTIVE", archivedAt: null, accountType: "CASH", siteId: { not: null }, ledgerAccount: { isActive: true, archivedAt: null } },
-      select: { id: true, siteId: true, currencyCode: true }, take: 1000,
+      select: { id: true, siteId: true, currencyCode: true, name: true }, take: 1000,
     }),
     prisma.enterpriseRetailSiteAssignment.findMany({
       where: { organizationId, isActive: true, member: { status: "ACTIVE", removedAt: null } },
@@ -25,14 +26,39 @@ export async function getRetailMultiStoreOnboarding(organizationId: string) {
     prisma.enterpriseRetailConfiguration.findUnique({
       where: { organizationId }, select: { baseCurrencyCode: true, settingsJson: true },
     }),
+    getRetailAccountingReadiness(organizationId),
+    prisma.enterpriseCatalogItem.count({ where: { organizationId, status: "ACTIVE", archivedAt: null } }),
+    prisma.enterpriseCatalogItem.count({ where: { organizationId, status: "ACTIVE", archivedAt: null, trackInventory: true } }),
   ]);
+
+  const [stockBalances, openSessions] = await Promise.all([
+    prisma.enterpriseInventoryBalance.groupBy({
+      by: ["warehouseId"],
+      where: { organizationId, warehouseId: { in: warehouses.map((warehouse) => warehouse.id) }, quantityOnHand: { gt: 0 } },
+      _count: { _all: true },
+    }),
+    prisma.enterpriseCashSession.findMany({
+      where: { organizationId, status: "OPEN", financialAccountId: { in: cashAccounts.map((account) => account.id) } },
+      select: { financialAccountId: true }, take: 2000,
+    }),
+  ]);
+  const stockByWarehouse = new Map(stockBalances.map((row) => [row.warehouseId, row._count._all]));
+  const openSessionAccounts = new Set(openSessions.map((session) => session.financialAccountId));
 
   const baseCurrency = configuration?.baseCurrencyCode || "CDF";
   const isolationEnabled = retailStaffIsolationIsEnabled(configuration?.settingsJson);
+  const invoiceCheckoutEnabled = Boolean(configuration?.settingsJson && typeof configuration.settingsJson === "object" && !Array.isArray(configuration.settingsJson) && configuration.settingsJson.invoiceCheckoutEnabled === true);
+  // Prefer real stores when an enterprise also has a headquarters or back-office site.
+  // Existing Retail tenants using BRANCH-only sites retain their legacy flow.
+  const storeSites = sites.some((site) => site.siteType === "STORE") ? sites.filter((site) => site.siteType === "STORE") : sites;
   return {
     baseCurrency,
     isolationEnabled,
-    sites: sites.map((site) => {
+    invoiceCheckoutEnabled,
+    accountingReady: accounting.ready && accounting.functionalCurrencyCode === baseCurrency,
+    catalogCount,
+    trackedCatalogCount,
+    sites: storeSites.map((site) => {
       const assigned = assignments.filter((assignment) => assignment.siteId === site.id);
       const siteAccounts = cashAccounts.filter((account) => account.siteId === site.id);
       const warehouseCount = warehouses.filter((warehouse) => warehouse.siteId === site.id).length;
@@ -46,6 +72,11 @@ export async function getRetailMultiStoreOnboarding(organizationId: string) {
       const cashierCount = new Set(assigned.filter((assignment) => siteStaffCapabilities(assignment.roleCode, assignment.permissionsJson)
         .includes("COLLECT_PAYMENT")).map((assignment) => assignment.userId)).size;
       const cashReady = siteAccounts.some((account) => account.currencyCode === baseCurrency);
+      const stockLineCount = warehouses.filter((warehouse) => warehouse.siteId === site.id).reduce((count, warehouse) => count + (stockByWarehouse.get(warehouse.id) || 0), 0);
+      const openTillCount = siteAccounts.filter((account) => openSessionAccounts.has(account.id)).length;
+      const teamReady = staffCount > 0 && invoicerCount > 0 && cashierCount > 0;
+      const stockReady = trackedCatalogCount === 0 || stockLineCount > 0;
+      const configurationReady = warehouseCount > 0 && cashReady && teamReady && isolationEnabled;
       return {
         ...site,
         warehouseCount,
@@ -54,7 +85,16 @@ export async function getRetailMultiStoreOnboarding(organizationId: string) {
         staffCount,
         invoicerCount,
         cashierCount,
-        ready: warehouseCount > 0 && cashReady && staffCount > 0 && invoicerCount > 0 && cashierCount > 0 && isolationEnabled,
+        stockLineCount,
+        openTillCount,
+        cashAccounts: siteAccounts.map((account) => ({ id: account.id, name: account.name, currencyCode: account.currencyCode })),
+        readiness: {
+          warehouse: warehouseCount > 0, cash: cashReady, team: teamReady, isolation: isolationEnabled,
+          finance: accounting.ready && accounting.functionalCurrencyCode === baseCurrency,
+          catalog: catalogCount > 0, stock: stockReady, checkout: invoiceCheckoutEnabled,
+        },
+        ready: configurationReady,
+        operationalReady: configurationReady && accounting.ready && accounting.functionalCurrencyCode === baseCurrency && catalogCount > 0 && stockReady && invoiceCheckoutEnabled,
       };
     }),
   };
@@ -70,16 +110,22 @@ export async function getRetailMyStores(organizationId: string, userId: string, 
   if (RETAIL_OWNER_ROLES.has(role)) {
     const sites = await prisma.enterpriseSite.findMany({
       where: { organizationId, status: "ACTIVE", archivedAt: null },
-      select: { id: true, name: true, code: true, city: true },
+      select: { id: true, name: true, code: true, city: true, siteType: true },
       orderBy: { name: "asc" }, take: 500,
     });
-    return { isolationEnabled, isOwner: true, sites: sites.map((site) => ({ ...site, roleCode: "OWNER", capabilities: ["VIEW_SALES", "COLLECT_PAYMENT", "PREPARE_INVOICE"] })) };
+    const storeSites = sites.some((site) => site.siteType === "STORE") ? sites.filter((site) => site.siteType === "STORE") : sites;
+    const accounts = await prisma.enterpriseFinancialAccount.findMany({ where: { organizationId, status: "ACTIVE", archivedAt: null, accountType: "CASH", siteId: { in: storeSites.map((site) => site.id) } }, select: { siteId: true, name: true, currencyCode: true }, take: 1000 });
+    return { isolationEnabled, isOwner: true, sites: storeSites.map((site) => ({ ...site, roleCode: "OWNER", capabilities: ["VIEW_SALES", "COLLECT_PAYMENT", "PREPARE_INVOICE", "CLOSE_CASH"], tills: accounts.filter((account) => account.siteId === site.id).map((account) => ({ name: account.name, currencyCode: account.currencyCode })) })) };
   }
 
   const assignments = await prisma.enterpriseRetailSiteAssignment.findMany({
     where: { organizationId, userId, isActive: true, member: { status: "ACTIVE", removedAt: null }, site: { status: "ACTIVE", archivedAt: null } },
     select: { siteId: true, roleCode: true, permissionsJson: true, site: { select: { id: true, name: true, code: true, city: true } } },
     orderBy: { site: { name: "asc" } }, take: 500,
+  });
+  const accounts = await prisma.enterpriseFinancialAccount.findMany({
+    where: { organizationId, status: "ACTIVE", archivedAt: null, accountType: "CASH", siteId: { in: assignments.map((assignment) => assignment.siteId) } },
+    select: { siteId: true, name: true, currencyCode: true }, take: 1000,
   });
   return {
     isolationEnabled,
@@ -88,8 +134,11 @@ export async function getRetailMyStores(organizationId: string, userId: string, 
       ...assignment.site,
       roleCode: assignment.roleCode,
       capabilities: siteStaffCapabilities(assignment.roleCode, assignment.permissionsJson),
+      tills: siteStaffCapabilities(assignment.roleCode, assignment.permissionsJson).some((capability) => capability === "COLLECT_PAYMENT" || capability === "CLOSE_CASH")
+        ? accounts.filter((account) => account.siteId === assignment.siteId).map((account) => ({ name: account.name, currencyCode: account.currencyCode }))
+        : [],
     })).filter((site) => site.capabilities.some((capability) =>
-      capability === "VIEW_SALES" || capability === "PREPARE_INVOICE" || capability === "COLLECT_PAYMENT",
+      capability === "VIEW_SALES" || capability === "PREPARE_INVOICE" || capability === "COLLECT_PAYMENT" || capability === "CLOSE_CASH",
     )),
   };
 }

@@ -20,6 +20,7 @@ import { RetailSiteStaffAccess } from "@/components/enterprise/professional/reta
 import { TelcoTopupsWorkspace } from "@/components/enterprise/professional/telco-topups-workspace";
 import { AppShell } from "@/components/layout/app-shell";
 import { getSession, requireUser } from "@/lib/auth";
+import { formatEnterpriseBusinessDate } from "@/lib/enterprise/business-context";
 import { resolveEnterpriseModuleAccess } from "@/lib/enterprise/module-access";
 import { requireEnterpriseMembership } from "@/lib/enterprise-sector-templates";
 import { prisma } from "@/lib/prisma";
@@ -37,7 +38,7 @@ export async function renderRetailModulePage(moduleCode: "RETAIL_POS" | "MOBILE_
     requireEnterpriseMembership(session, organizationId),
     prisma.organization.findFirst({
       where: { id: organizationId, status: "ACTIVE", deletedAt: null, organizationType: "CLIENT", sectorCode: "COMMERCE_RETAIL" },
-      select: { name: true },
+      select: { name: true, timezone: true },
     }),
     moduleCode === "RETAIL_DAILY_CLOSE"
       ? resolveEnterpriseModuleAccess({ userId: user.id, organizationId, moduleCode, action: "manage" })
@@ -47,6 +48,14 @@ export async function renderRetailModulePage(moduleCode: "RETAIL_POS" | "MOBILE_
 
   const locale: "fr" | "en" = user.locale === "en" ? "en" : "fr";
   const canManagePos = ["OWNER", "ADMIN_ENTREPRISE", "ADMIN_ENTERPRISE"].includes(membership.role);
+  const companySites = moduleCode === "RETAIL_DAILY_CLOSE" && canManagePos
+    ? await prisma.enterpriseSite.findMany({
+      where: { organizationId, status: "ACTIVE", archivedAt: null },
+      select: { id: true, name: true, code: true, siteType: true }, orderBy: { name: "asc" }, take: 500,
+    })
+    : undefined;
+  const adminStores = companySites?.some((site) => site.siteType === "STORE")
+    ? companySites.filter((site) => site.siteType === "STORE") : companySites;
   const posSection = moduleCode === "RETAIL_POS" ? getRetailPosSection(options?.section, canManagePos) : undefined;
   if (moduleCode === "RETAIL_POS" && options?.section && !posSection) notFound();
 
@@ -58,6 +67,9 @@ export async function renderRetailModulePage(moduleCode: "RETAIL_POS" | "MOBILE_
             organizationId={organizationId}
             organizationName={organization.name}
             definition={access.definition}
+            adminStores={adminStores}
+            preferredSiteId={options?.siteId}
+            defaultBusinessDate={formatEnterpriseBusinessDate(new Date(), organization.timezone || "UTC")}
           />
         ) : moduleCode === "RETAIL_POS" ? (
           posSection ? (
