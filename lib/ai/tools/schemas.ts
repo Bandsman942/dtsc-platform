@@ -99,7 +99,7 @@ export const AI_TOOL_OUTPUT_SCHEMAS = {
   }).strict(),
   TASK_DRAFT_PREPARE: z.object({ title: z.string(), description: z.string().nullable(), status: z.literal("DRAFT") }),
   SUPPORT_TICKET_CREATE: z.object({ ticketId: z.string(), status: z.string() }),
-  DTSC_CONTACT_EMAIL_SEND: z.object({ contactMessageId: z.string(), sent: z.boolean() }),
+  DTSC_CONTACT_EMAIL_SEND: z.object({ contactMessageId: z.string(), sent: z.literal(true) }),
   ENTERPRISE_FORM_BATCH_IMPORT: z.object({
     formCode: formImportCode,
     sourceLabel: z.string().nullable(),
