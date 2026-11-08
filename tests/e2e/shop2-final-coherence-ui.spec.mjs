@@ -136,8 +136,9 @@ test.describe.serial("Shop 2.0 final product coherence", () => {
 
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto("/enterprise-modules/RETAIL_POS");
+    await expect(page.locator("[data-retail-pos-directory]")).toBeVisible();
     await expect(page.getByText("Vente comptoir", { exact: true })).toBeVisible();
-    await expect(page.getByText("Continuer dans l’ERP", { exact: true }).first()).toBeVisible();
+    await expect(page.locator('[data-retail-pos-card="commercial"]')).toBeVisible();
     await assertNoRawRetailLanguage(page);
     await assertNoHorizontalOverflow(page);
 

@@ -1,6 +1,6 @@
 # Hotfix #1046 — POS cartes & conversations immersives 2.0
 
-Date : 8 novembre 2026. Statut : **candidat en branche**, sans déploiement, en attente de CI et validation E2E du propriétaire.
+Date : 8 novembre 2026. Statut : **E2E #1048 BON confirmé par le propriétaire** ; candidat en branche, sans déploiement, en attente de la totalité de la CI et de la fusion sécurisée dans `main`.
 
 Version candidate : **1.4.1** (incrément patch depuis `main@1.4.0`, sous réserve que la base n'évolue pas avant fusion).
 
@@ -18,7 +18,9 @@ Version candidate : **1.4.1** (incrément patch depuis `main@1.4.0`, sous réser
 
 Automatique : `node scripts/qa-hotfix-1046-retail-collaboration-ui.mjs`, `pnpm qa:responsive-ui`, `pnpm qa:standard-experience`, `pnpm qa:regression`, `pnpm type-check`, `pnpm lint`, `pnpm build`. Contrôle requis à 320, 360, 375, 390, 414, 768, 1024 px, thème clair/sombre, FR/EN.
 
-## Recette propriétaire E2E (à signer)
+Les contrats d'acceptation navigateur Shop 2 suivent les pages réellement rendues : les scénarios client/fidélité et paiement ouvrent respectivement les cartes `customers` et `payments` ; l'équipement s'ouvre depuis `equipment` ; la vérification globale POS inspecte les cartes `checkout` et `commercial`. Les tests ne recherchent plus les panneaux de l'ancienne page monolithique à la racine. Aucun traitement métier ni jeu de données ne change dans cette correction des parcours de test.
+
+## Recette propriétaire E2E (validée le 8 novembre 2026)
 
 1. Avec un **caissier** : ouvrir POS et consulter les cartes (sans cartes administratives), entrer dans **Vente comptoir**, revenir, sélectionner un client, revenir et encaisser normalement. Le client sélectionné doit être repris par la vente et les droits de caisse conservés.
 2. Avec un **propriétaire/admin** : ouvrir **Pilotage des boutiques**, **Accès des collaborateurs**, **Mise en service** et **Activation avancée** ; ouvrir leurs prérequis par liens et vérifier la bonne page/section, sans activer de flag par accident.
