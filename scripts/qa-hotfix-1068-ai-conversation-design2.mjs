@@ -21,7 +21,7 @@ for(const [name,code] of [["general",personal],["enterprise",enterprise]]) {
   assert.match(code,/window\.addEventListener\("popstate"/,`${name} must respond to browser back/forward`);
   assert.match(code,/lg:grid-cols-\[minmax\(260px,320px\)_minmax\(0,1fr\)\]/,`${name} must provide stable responsive split`);
   assert.match(code,/AssistantComposer/,`${name} must reuse canonical composer`);
-  assert.match(code,/filter === "PINNED"/,`${name} must preserve pinned filter`);
+  assert.match(code,/filter !== "PINNED"/,`${name} must preserve pinned filter`);
   assert.match(code,/filter === "ARCHIVED"/,`${name} must preserve archive filter`);
 }
 assert.match(back,/Retour aux conversations/);
