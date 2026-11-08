@@ -132,6 +132,8 @@ assert.match(service, /await tx\.auditLog\.create/, "Audit and mutation share th
 assert.match(page, /<RetailFeatureActivationPanel organizationId=\{organizationId\} locale=\{locale\}/);
 assert.match(panel, /\/api\/auth\/step-up/, "UI confirms identity before mutation");
 assert.match(panel, /translateRetailWorkspace/, "Localized FR\/EN labels");
+assert.match(panel, /retailActivationInvalidPassword/, "Step-up failures must be translated instead of displaying raw server text");
+assert.match(panel, /retailActivationInvalidCode/, "MFA errors must be translated separately from password errors");
 assert.match(panel, /lg:grid-cols-2/, "Responsive two-card layout");
 for (const language of ["fr", "en"]) {
   const dictionary = JSON.parse(fs.readFileSync(`locales/retail-workspace.${language}.json`, "utf8"));

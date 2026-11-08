@@ -82,7 +82,7 @@ export function RetailFeatureActivationPanel({ organizationId, locale }: Props) 
     try {
       const response = await fetch(`/api/enterprise/${encodeURIComponent(organizationId)}/retail/feature-activation?page=${historyPage}`, { cache: "no-store" });
       const body = await response.json().catch(() => null) as ActivationState | Failure | null;
-      if (!response.ok || !body || !("flags" in body)) throw new Error((body as Failure | null)?.message || "RETAIL_FEATURE_ACTIVATION_READ_FAILED");
+      if (!response.ok || !body || !("flags" in body)) throw new Error(t("retailActivationLoadError"));
       setState(body as ActivationState);
     } catch (error) {
       setLoadError(error instanceof Error ? error.message : t("retailActivationLoadError"));
@@ -110,7 +110,15 @@ export function RetailFeatureActivationPanel({ organizationId, locale }: Props) 
         body: JSON.stringify({ password, ...(totp.trim() ? { code: totp.trim() } : {}) }),
       });
       const stepupResult = await stepup.json().catch(() => null) as Failure | null;
-      if (!stepup.ok) throw new Error(stepupResult?.error || t("retailActivationStepupRequired"));
+      if (!stepup.ok) {
+        const knownErrors: Record<string, RetailWorkspaceKey> = {
+          "Mot de passe incorrect.": "retailActivationInvalidPassword",
+          "Le code de sécurité est incorrect ou déjà utilisé.": "retailActivationInvalidCode",
+          "Trop de tentatives de sécurité.": "retailActivationTooManyAttempts",
+          "Reconnectez-vous pour continuer.": "retailActivationSessionExpired",
+        };
+        throw new Error(t(knownErrors[stepupResult?.error || ""] || "retailActivationStepupRequired"));
+      }
       const response = await fetch(`/api/enterprise/${encodeURIComponent(organizationId)}/retail/feature-activation`, {
         method: "POST", headers: { "content-type": "application/json" },
         body: JSON.stringify({ feature: pending.feature, enabled: pending.enabled, revision: state.revision, reason: reason.trim() }),
