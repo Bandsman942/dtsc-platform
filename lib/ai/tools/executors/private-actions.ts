@@ -42,6 +42,7 @@ const sendContactEmail: AiToolExecutor = async ({ args, context }) => {
     fromEmail: user.email,
     replyTo: user.email,
     source: "ai-tool-gateway-contact",
+    deliveryMode: "direct",
     heading: "Message transmis par l'assistant DTSC",
     message: [
       input.message,
@@ -55,12 +56,16 @@ const sendContactEmail: AiToolExecutor = async ({ args, context }) => {
     ].join("\n"),
   });
 
+  // Accepted by the real transport is the minimum success condition. A stored
+  // ContactMessage is not itself evidence of a sent email.
+  if (!mail.sent) throw new Error("CONTACT_EMAIL_DELIVERY_UNCONFIRMED");
+
   await writeAuditLog({
     userId: context.userId,
     action: "AI_TOOL_CONTACT_EMAIL_SENT",
     entity: "ContactMessage",
     entityId: contactMessage.id,
-    metadata: { toolCode: "DTSC_CONTACT_EMAIL_SEND", sent: mail.sent },
+    metadata: { toolCode: "DTSC_CONTACT_EMAIL_SEND", sent: true, deliveryConfirmedByTransport: true },
     request: context.request || undefined,
   });
 

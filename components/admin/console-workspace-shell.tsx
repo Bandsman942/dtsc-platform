@@ -2,6 +2,10 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { BookOpen, LifeBuoy, ShieldCheck } from "lucide-react";
 import { AdminFloatingNav } from "@/components/admin/admin-floating-nav";
+import { ConsoleSectionDirectory } from "@/components/admin/console-section-directory";
+import { ConsoleWorkspaceBreadcrumb } from "@/components/admin/console-workspace-breadcrumb";
+import { resolveConsoleFocus } from "@/lib/console/console-depth-registry";
+import type { ConsoleSectionId } from "@/lib/console/console-routes";
 import { ModuleContent, ModuleWorkspace } from "@/components/workspace/module-workspace";
 import { getConsoleSectionHref } from "@/lib/console/console-routes";
 import { buildUrlForHostType, getSupportUrl } from "@/lib/domains";
@@ -18,22 +22,48 @@ export function ConsoleWorkspaceShell({
   activeSection,
   locale,
   sections,
+  selectedGroup,
+  focus,
+  searchParams,
   children,
 }: {
   activeSection: string;
   locale: "fr" | "en";
   sections: ConsoleWorkspaceSection[];
   children: ReactNode;
+  selectedGroup?: string | null;
+  focus?: string | null;
+  searchParams?: Record<string, string | undefined>;
 }) {
   const canViewAccess = sections.some((section) => section.id === "access");
+  const resolvedFocus = resolveConsoleFocus(activeSection as ConsoleSectionId, focus);
+  const domainSelected = activeSection === "overview" && Boolean(selectedGroup);
+  const focusRule = resolvedFocus
+    ? `[data-console-focused-workspace] [data-console-subsection]:not(#${resolvedFocus}) { display: none !important; }`
+    : "";
   const compactInternal = ["hr-cfo", "sco", "coo", "ceo", "mpo", "cto"].includes(activeSection);
   const footerLinkClass =
     "inline-flex min-h-11 min-w-0 items-center gap-2 rounded-xl px-2 py-2 text-xs font-bold text-dtsc-blue transition hover:bg-dtsc-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60";
 
   return (
-    <ModuleWorkspace className={compactInternal ? "space-y-3" : "space-y-5"}>
+    <ModuleWorkspace className={compactInternal ? "min-w-0 max-w-full space-y-3" : "min-w-0 max-w-full space-y-5"}>
+      <ConsoleWorkspaceBreadcrumb
+        section={activeSection} sections={sections} locale={locale}
+        group={selectedGroup} focus={resolvedFocus} params={searchParams}
+      />
       <AdminFloatingNav activeSection={activeSection} locale={locale} sections={sections} />
-      <ModuleContent className={compactInternal ? "min-w-0 space-y-3" : "min-w-0 space-y-5"}>{children}</ModuleContent>
+      <ModuleContent className={compactInternal ? "min-w-0 max-w-full space-y-3" : "min-w-0 max-w-full space-y-5"}>
+        {activeSection === "overview" ? (
+          <ConsoleSectionDirectory sections={sections} locale={locale} selectedGroup={selectedGroup} />
+        ) : null}
+        {!domainSelected ? (
+          <div data-console-focused-workspace={resolvedFocus || undefined}
+            className="min-h-[calc(100dvh-18rem)] min-w-0 max-w-full">
+            {focusRule ? <style>{focusRule}</style> : null}
+            {children}
+          </div>
+        ) : null}
+      </ModuleContent>
       <footer
         aria-label={translate(locale, "console.workspace.resources")}
         className="flex min-w-0 flex-wrap items-center justify-between gap-3 border-t border-dtsc-border pt-4"

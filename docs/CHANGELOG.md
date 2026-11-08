@@ -1,3 +1,30 @@
+## 2026-11-08 — Candidat d’intégration A+B+C — validation E2E conjointe en attente (v1.6.3)
+
+- Regroupe trois hotfixes indépendants : #1067 vérité/contextualisation des IA, #1068 conversations IA DS 2.0, #1069 navigation Console DS 2.0.
+- CI et E2E de branche intégrée obligatoires avant feu vert propriétaire. Aucune Preview Vercel, aucune fusion ni publication automatique depuis cette branche.
+- Les sources et comportements sont contrôlés en commun ; ne considérer aucune release candidate comme livrée tant que la fusion sur main et la publication Vercel ne sont pas confirmées.
+
+## 2026-11-08 — Hotfix #1069 — Console DS 2.0 en cartes et workspaces (candidat v1.6.3 ; révision séquentielle lors de la fusion)
+
+- Navigation Administration DTSC par domaines puis sections visibles selon permissions, entrée via cartes responsive avec icônes, compteur et descriptions, sans créer de nouvelle route métier non autorisée.
+- Sous-sections ouvrables par URL ?focus=id, fil d'Ariane avec retour logique et hauteur de travail optimisée, état navigateur réversible.
+- Recherche et filtres serveur traduits FR/EN, vues de recherche nommées isolées par compte, pagination numérotée première/précédente/suivante/dernière et conservation du contexte d'URL.
+- QA, documentation et E2E ciblé : docs/HOTFIX_1069_CONSOLE_WORKSPACE_NAVIGATION2.md. Aucun déploiement avant E2E final propriétaire A+B+C.
+
+## 2026-11-08 — Hotfix #1068 — Conversations IA Design System 2.0 (candidat v1.6.3 ; ajustement séquentiel lors de la fusion)
+
+- Chatbot général et Assistant entreprise partagent un espace conversationnel 3 zones desktop (rail global DTSC, historique permanent, conversation et composer flexible), en conservant les modèles de permissions distincts.
+- Navigation de retour mobile dédiée à l'historique, liens profonds et précédent/suivant navigateur synchronisés dans l'URL sans rechargement, recherches/filtres/favoris/projets/archives maintenus.
+- Styles DS 2.0 responsive FR/EN, clair/sombre, clavier, safe-area et reduced-motion, QA et E2E. Pas de fusion/Production avant validation E2E propriétaire des hotfixes A+B+C.
+- Documentation : `docs/HOTFIX_1068_AI_CONVERSATION_DESIGN2.md`.
+
+## 2026-11-08 — Hotfix #1067 — Contexte IA à jour et actions vérifiables (candidat v1.6.3)
+
+- Contexte des assistants général et entreprise fondé sur la version réellement construite, le changelog le plus récent et la révision déployée ; reconnaissance des notes hotfix sans sous-rubriques.
+- Aucune annonce d'envoi de courriel ou de création de ticket sans confirmation explicite et résultat vérifié par la base. Zoho envoi direct au support, erreurs d'envoi non converties en succès.
+- Historique de preuves d'action tenant-scoped : état, référence et lien Support, sans exposition des arguments sensibles. Tests et rollback : `docs/HOTFIX_1067_AI_RELEASE_ACTION_TRUTH.md`.
+- Pas de Production avant OWNER_E2E final des trois hotfixes A+B+C.
+
 ## 2026-11-08 — Hotfix #1064 — RETAIL Core sans Shop, packs administrés (candidat v1.6.2)
 
 - Commerce de détail générique désormais indépendant de SHOP : POS et clôture accessibles selon l'abonnement, et TELCO/Mobile Money OFF par défaut pour les nouveaux tenants génériques.

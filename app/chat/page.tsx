@@ -1,5 +1,4 @@
 import { AssistantImmersiveWorkspaceShell } from "@/components/chat/assistant-immersive-workspace-shell";
-import { AiToolConfirmationDock } from "@/components/chat/ai-tool-confirmation-dock";
 import { ChatWorkspaceV2 } from "@/components/chat/chat-workspace-v2";
 import { AppShell } from "@/components/layout/app-shell";
 import { getSession, requireUser } from "@/lib/auth";
@@ -57,7 +56,7 @@ export default async function ChatPage({
   }), await getAiPlatformPolicy());
 
   return (
-    <AppShell user={user}>
+    <AppShell user={user} hideContextualBack desktopWorkspaceMode="conversation">
       <AssistantImmersiveWorkspaceShell variant="chatbot">
         <ChatWorkspaceV2
           initialConversations={JSON.parse(JSON.stringify(conversations))}
@@ -69,7 +68,6 @@ export default async function ChatPage({
           models={models}
           assistantDefaults={{ preferredModel: user.preferredModel || null, responseStyle: user.chatResponseStyle || "PROFESSIONAL", responseLength: user.chatResponseLength || "BALANCED" }}
         />
-        <AiToolConfirmationDock conversationId={conversationId || null} locale={user.locale} />
       </AssistantImmersiveWorkspaceShell>
     </AppShell>
   );
