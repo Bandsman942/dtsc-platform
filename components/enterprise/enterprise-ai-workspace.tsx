@@ -1,6 +1,6 @@
 "use client";
 
-import { Archive, BarChart3, Bot, Copy, Database, Download, Edit3, FileText, FolderKanban, FolderPlus, History, Info, Menu, Pencil, Pin, PinOff, Plus, RefreshCw, Search, Settings, Settings2, Share2, ThumbsDown, ThumbsUp, Trash2, Upload, X } from "lucide-react";
+import { Archive, BarChart3, Bot, Copy, Database, Download, Edit3, FileText, FolderKanban, FolderPlus, History, Info, Pencil, Pin, PinOff, Plus, RefreshCw, Search, Settings, Settings2, Share2, ThumbsDown, ThumbsUp, Trash2, Upload, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Streamdown } from "streamdown";
 import { ActionMenu } from "@/components/ui/action-menu";
