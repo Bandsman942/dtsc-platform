@@ -1,3 +1,10 @@
+## 2026-11-08 — Hotfix #1067 — Contexte IA à jour et actions vérifiables (candidat v1.6.3)
+
+- Contexte des assistants général et entreprise fondé sur la version réellement construite, le changelog le plus récent et la révision déployée ; reconnaissance des notes hotfix sans sous-rubriques.
+- Aucune annonce d'envoi de courriel ou de création de ticket sans confirmation explicite et résultat vérifié par la base. Zoho envoi direct au support, erreurs d'envoi non converties en succès.
+- Historique de preuves d'action tenant-scoped : état, référence et lien Support, sans exposition des arguments sensibles. Tests et rollback : `docs/HOTFIX_1067_AI_RELEASE_ACTION_TRUTH.md`.
+- Pas de Production avant OWNER_E2E final des trois hotfixes A+B+C.
+
 ## 2026-11-08 — Hotfix #1064 — RETAIL Core sans Shop, packs administrés (candidat v1.6.2)
 
 - Commerce de détail générique désormais indépendant de SHOP : POS et clôture accessibles selon l'abonnement, et TELCO/Mobile Money OFF par défaut pour les nouveaux tenants génériques.
