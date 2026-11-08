@@ -1,5 +1,9 @@
 # ERP Retail — Commerce Retail / Shop 2.0 / Télécom & Mobile Money
 
+## Navigation POS 2.0 (hotfix UI #1046, candidat)
+
+L'entrée **Point de vente** présente désormais 14 cartes plutôt que les panneaux fonctionnels simultanément. Treize ouvrent `RETAIL_POS?section=<vue>` ; la quatorzième ouvre `RETAIL_POS/commercial` (tarification, offres, retours), également habillée dans le Design DTSC 2.0, avec retour à l'index. Les sous-vues `sites`, `staff` et `activation` restent réservées aux propriétaires/administrateurs par le serveur ; les sections de caisse, client, facturation, stock, vente hors connexion et configuration métier ne changent pas de source de données. Les liens de préparation et d'activation utilisent la sous-vue `readiness`, `staff` ou `activation` avec les ancres métier existantes. Les réglages avancés restent inactifs par défaut.
+
 ## Statut produit
 
 Secteur : `COMMERCE_RETAIL`

@@ -224,5 +224,6 @@
   "conversationUiAdministrator": "Administrateur",
   "conversationUiTransfer": "Transférer",
   "conversationUiRemove": "Retirer",
-  "conversationUiKilobytesShort": "Ko"
+  "conversationUiKilobytesShort": "Ko",
+  "conversationUiBackToDiscussions": "Retour aux discussions"
 }

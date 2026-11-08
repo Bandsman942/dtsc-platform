@@ -376,6 +376,7 @@ export function RetailWorkspaceFrame({
   locale,
   children,
   includeConfigurationTab = false,
+  hideHeaderBack = false,
 }: {
   organizationId: string;
   organizationName: string;
@@ -384,6 +385,7 @@ export function RetailWorkspaceFrame({
   locale: "fr" | "en";
   children: (context: ReturnType<typeof useRetailOperationalWorkspace>) => React.ReactNode;
   includeConfigurationTab?: boolean;
+  hideHeaderBack?: boolean;
 }) {
   const context = useRetailOperationalWorkspace({ organizationId, moduleCode, locale });
   const [guideOpen, setGuideOpen] = useState(false);
@@ -398,6 +400,7 @@ export function RetailWorkspaceFrame({
   return (
     <ModuleWorkspace>
       <ModuleHeader
+        hideBack={hideHeaderBack}
         eyebrow={`${retailText(locale, "shopOperations")} · ${organizationName}`}
         title={locale === "en" ? definition.labelEn : definition.labelFr}
         description={locale === "en" ? definition.descriptionEn : definition.descriptionFr}

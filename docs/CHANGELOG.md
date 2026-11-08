@@ -2293,3 +2293,11 @@ Hotfix #861 (complément) : un secret CRON_SECRET Production commun réveille po
 - Les remboursements Finance associés à une facture Retail multi-boutiques ne peuvent plus débiter un compte financier d'une autre boutique, même en appelant directement les services Finance ou en rejouant une inversion d'allocation.
 - Vérification du client, de la devise et du compte de sortie avant l'inversion et à la confirmation de trésorerie. Les factures Finance hors Retail restent inchangées.
 - Tests ciblés branchés aux Quality Gates. Le workflow complet de retour, avoir, approbation et restock, la concurrence PostgreSQL, l'E2E propriétaire et la Production restent à valider. Flags d'activation OFF.
+
+## 2026-11-08 — Hotfix UI #1046 — POS et Collaborateurs 2.0 (candidat)
+
+- POS : quatorze cartes d'accès distinctes remplacent l'empilement des formulaires ; treize vues dédiées `?section=...` et la route commerciale existante, avec retour explicite. Accès administratifs conservés côté serveur.
+- Client au comptoir : charte DTSC, champs et actions mobiles adaptatifs, conservation intégrale des interactions client et fidélité.
+- Tarification, offres et retours : reprise de l'écran entier dans `AppShell`, navigation et retour DTSC, thème 2.0 clair/sombre, onglets accessibles, formulaires et contrôles de focus harmonisés, logique de prix, promotions et remboursements intacte.
+- Mes collaborateurs : suppression du retour extérieur à l'espace immersif, retour compact au niveau de la liste, fil et compositeur protégés des superpositions du bouton flottant. Aucune modification de la messagerie serveur.
+- Documentation et recette : [HOTFIX_1046_RETAIL_POS_COLLABORATORS_UI.md](HOTFIX_1046_RETAIL_POS_COLLABORATORS_UI.md). Aucun déploiement ni E2E propriétaire validé à ce stade.

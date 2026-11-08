@@ -29,6 +29,7 @@
     "qa:hotfix-1042-site-staff": "node scripts/qa-hotfix-1042-site-staff.mjs",
     "qa:hotfix-1042-warehouse-receipts": "node scripts/qa-hotfix-1042-warehouse-receipt-scoping.mjs",
     "qa:hotfix-1044-retail-activation": "node scripts/qa-hotfix-1044-retail-activation.mjs",
+    "qa:hotfix-1046-retail-collaboration-ui": "node scripts/qa-hotfix-1046-retail-collaboration-ui.mjs",
     "qa:console-internal-workspaces": "node scripts/qa-console-internal-workspaces.mjs",
     "qa:console-workspace-shell": "node scripts/qa-console-workspace-shell.mjs",
     "qa:standard-module-registry": "node scripts/audit-standard-module-registry.mjs",

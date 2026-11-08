@@ -45,6 +45,7 @@ export function ModuleHeader({
   primaryAction,
   secondaryActions,
   className,
+  hideBack = false,
 }: {
   eyebrow?: ReactNode;
   title: ReactNode;
@@ -53,6 +54,7 @@ export function ModuleHeader({
   primaryAction?: ReactNode;
   secondaryActions?: ReactNode;
   className?: string;
+  hideBack?: boolean;
 }) {
   const locale = useAppLocale();
   const copy = getExperienceCopy(locale).workspace;
@@ -90,7 +92,7 @@ export function ModuleHeader({
           ) : null}
         </div>
         <div data-responsive-actions className="relative items-center lg:shrink-0 lg:justify-end">
-          <div data-workspace-back-action className="min-w-0"><ContextualBackButton /></div>
+          {!hideBack ? <div data-workspace-back-action className="min-w-0"><ContextualBackButton /></div> : null}
           <div data-workspace-refresh-action className="min-w-0"><ModuleRefreshButton compact /></div>
           {secondaryActions ? (
             <>

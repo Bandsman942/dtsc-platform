@@ -9,11 +9,11 @@ import { RetailGlobalReadiness } from "@/components/enterprise/professional/reta
 import { RetailHistoricalImportPanel } from "@/components/enterprise/professional/retail-historical-import-panel";
 import { RetailInvoiceFlowWorkbench } from "@/components/enterprise/professional/retail-invoice-flow-workbench";
 import { RetailInventoryPolicySettings } from "@/components/enterprise/professional/retail-inventory-policy-settings";
-import { RetailLocaleText } from "@/components/enterprise/professional/retail-locale-text";
 import { RetailOfflineContinuity } from "@/components/enterprise/professional/retail-offline-continuity";
 import { RetailOmnichannelPanel } from "@/components/enterprise/professional/retail-omnichannel-panel";
 import { RetailPaymentFollowup } from "@/components/enterprise/professional/retail-payment-followup";
 import { RetailPosDtscWorkspace as RetailPosWorkspace } from "@/components/enterprise/professional/retail-pos-dtsc-workspace";
+import { getRetailPosSection, RetailPosSectionDetail, RetailPosSectionDirectory } from "@/components/enterprise/professional/retail-pos-section-navigation";
 import { RetailSiteOverview } from "@/components/enterprise/professional/retail-site-overview";
 import { RetailSiteStaffAccess } from "@/components/enterprise/professional/retail-site-staff-access";
 import { TelcoTopupsWorkspace } from "@/components/enterprise/professional/telco-topups-workspace";
@@ -23,7 +23,7 @@ import { resolveEnterpriseModuleAccess } from "@/lib/enterprise/module-access";
 import { requireEnterpriseMembership } from "@/lib/enterprise-sector-templates";
 import { prisma } from "@/lib/prisma";
 
-export async function renderRetailModulePage(moduleCode: "RETAIL_POS" | "MOBILE_MONEY_AGENCY" | "TELCO_TOPUPS" | "RETAIL_DAILY_CLOSE") {
+export async function renderRetailModulePage(moduleCode: "RETAIL_POS" | "MOBILE_MONEY_AGENCY" | "TELCO_TOPUPS" | "RETAIL_DAILY_CLOSE", options?: { section?: string }) {
   const user = await requireUser();
   const session = await getSession();
   const organizationId = session?.activeContext === "ORGANIZATION" ? session.activeOrganizationId : null;
@@ -45,12 +45,13 @@ export async function renderRetailModulePage(moduleCode: "RETAIL_POS" | "MOBILE_
   if (!membership || !organization) notFound();
 
   const locale: "fr" | "en" = user.locale === "en" ? "en" : "fr";
+  const canManagePos = ["OWNER", "ADMIN_ENTREPRISE", "ADMIN_ENTERPRISE"].includes(membership.role);
+  const posSection = moduleCode === "RETAIL_POS" ? getRetailPosSection(options?.section, canManagePos) : undefined;
+  if (moduleCode === "RETAIL_POS" && options?.section && !posSection) notFound();
 
   return (
-    <AppShell user={user}>
+    <AppShell user={user} hideContextualBack={moduleCode === "RETAIL_POS"}>
       <div className="space-y-4">
-        {moduleCode === "RETAIL_POS" ? <RetailActiveCustomerBar organizationId={organizationId} /> : null}
-
         {moduleCode === "RETAIL_DAILY_CLOSE" ? (
           <RetailDailyCloseWorkspace
             organizationId={organizationId}
@@ -58,11 +59,37 @@ export async function renderRetailModulePage(moduleCode: "RETAIL_POS" | "MOBILE_
             definition={access.definition}
           />
         ) : moduleCode === "RETAIL_POS" ? (
-          <RetailPosWorkspace
-            organizationId={organizationId}
-            organizationName={organization.name}
-            definition={access.definition}
-          />
+          posSection ? (
+            <RetailPosSectionDetail locale={locale} section={posSection}>
+              {posSection.id === "checkout" ? (
+                <RetailPosWorkspace organizationId={organizationId} organizationName={organization.name} definition={access.definition} />
+              ) : posSection.id === "customers" ? (
+                <RetailActiveCustomerBar organizationId={organizationId} />
+              ) : posSection.id === "sites" ? (
+                <RetailSiteOverview organizationId={organizationId} locale={locale} />
+              ) : posSection.id === "staff" ? (
+                <RetailSiteStaffAccess organizationId={organizationId} locale={locale} />
+              ) : posSection.id === "invoices" ? (
+                <RetailInvoiceFlowWorkbench organizationId={organizationId} locale={locale} />
+              ) : posSection.id === "offline" ? (
+                <RetailOfflineContinuity organizationId={organizationId} locale={locale} />
+              ) : posSection.id === "omnichannel" ? (
+                <RetailOmnichannelPanel organizationId={organizationId} locale={locale} />
+              ) : posSection.id === "payments" ? (
+                <RetailPaymentFollowup organizationId={organizationId} locale={locale} />
+              ) : posSection.id === "equipment" ? (
+                <RetailDeviceReadiness organizationId={organizationId} locale={locale} />
+              ) : posSection.id === "readiness" ? (
+                <RetailGlobalReadiness organizationId={organizationId} locale={locale} />
+              ) : posSection.id === "activation" ? (
+                <RetailFeatureActivationPanel organizationId={organizationId} locale={locale} />
+              ) : posSection.id === "inventory" ? (
+                <RetailInventoryPolicySettings organizationId={organizationId} locale={locale} />
+              ) : posSection.id === "alerts" ? (
+                <RetailExpiryAlertsPanel organizationId={organizationId} locale={locale} />
+              ) : null}
+            </RetailPosSectionDetail>
+          ) : <RetailPosSectionDirectory locale={locale} canManage={canManagePos} />
         ) : moduleCode === "MOBILE_MONEY_AGENCY" ? (
           <MobileMoneyAgencyWorkspace
             organizationId={organizationId}
@@ -81,41 +108,6 @@ export async function renderRetailModulePage(moduleCode: "RETAIL_POS" | "MOBILE_
           <RetailHistoricalImportPanel organizationId={organizationId} canManage={Boolean(manageAccess?.allowed)} />
         ) : null}
 
-        {moduleCode === "RETAIL_POS" ? (
-          <section aria-labelledby="retail-pos-additional-tools" className="space-y-3">
-            {["OWNER", "ADMIN_ENTREPRISE", "ADMIN_ENTERPRISE"].includes(membership.role) ? <><RetailSiteOverview organizationId={organizationId} locale={locale} /><RetailSiteStaffAccess organizationId={organizationId} locale={locale} /></> : null}
-            <RetailInvoiceFlowWorkbench organizationId={organizationId} locale={locale} />
-            <span id="retail-pos-additional-tools" className="sr-only"><RetailLocaleText textKey="additionalShopTools" /></span>
-            <details className="group rounded-2xl border border-dtsc-border bg-dtsc-surface shadow-sm">
-              <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-black text-dtsc-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400">
-                <span><RetailLocaleText textKey="ordersPickupOffline" /></span>
-                <span className="text-xs font-bold text-dtsc-muted group-open:hidden"><RetailLocaleText textKey="open" /></span>
-                <span className="hidden text-xs font-bold text-dtsc-muted group-open:inline"><RetailLocaleText textKey="close" /></span>
-              </summary>
-              <div className="grid gap-4 border-t border-dtsc-border p-3 sm:p-4">
-                <RetailOfflineContinuity organizationId={organizationId} locale={locale} />
-                <RetailOmnichannelPanel organizationId={organizationId} locale={locale} />
-              </div>
-            </details>
-
-            <RetailPaymentFollowup organizationId={organizationId} locale={locale} />
-
-            <details className="group rounded-2xl border border-dtsc-border bg-dtsc-surface shadow-sm">
-              <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-black text-dtsc-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400">
-                <span><RetailLocaleText textKey="shopSetupEquipment" /></span>
-                <span className="text-xs font-bold text-dtsc-muted group-open:hidden"><RetailLocaleText textKey="open" /></span>
-                <span className="hidden text-xs font-bold text-dtsc-muted group-open:inline"><RetailLocaleText textKey="close" /></span>
-              </summary>
-              <div className="grid gap-4 border-t border-dtsc-border p-3 sm:p-4">
-                <RetailDeviceReadiness organizationId={organizationId} locale={locale} />
-                <RetailGlobalReadiness organizationId={organizationId} locale={locale} />
-                {["OWNER", "ADMIN_ENTREPRISE", "ADMIN_ENTERPRISE"].includes(membership.role) ? <RetailFeatureActivationPanel organizationId={organizationId} locale={locale} /> : null}
-                <RetailInventoryPolicySettings organizationId={organizationId} locale={locale} />
-                <RetailExpiryAlertsPanel organizationId={organizationId} locale={locale} />
-              </div>
-            </details>
-          </section>
-        ) : null}
       </div>
     </AppShell>
   );

@@ -1,5 +1,6 @@
 import { renderRetailModulePage } from "@/app/enterprise-modules/retail-page";
 
-export default function RetailPosPage() {
-  return renderRetailModulePage("RETAIL_POS");
+export default async function RetailPosPage({ searchParams }: { searchParams?: Promise<{ section?: string }> }) {
+  const params = await searchParams;
+  return renderRetailModulePage("RETAIL_POS", { section: params?.section });
 }

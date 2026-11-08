@@ -45,15 +45,15 @@ const CHECK_LABELS: Record<Check, RetailWorkspaceKey> = {
   ISOLATION_ACTIVE: "retailActivationCheckIsolation",
 };
 const CHECK_LINKS: Record<Check, string> = {
-  RETAIL_ACTIVE: "/enterprise-modules/RETAIL_POS#shop-point-of-sale-configuration",
+  RETAIL_ACTIVE: "/enterprise-modules/RETAIL_POS?section=readiness#shop-point-of-sale-configuration",
   SITES_CONFIGURED: "/enterprise-modules/SITES_WAREHOUSES#sites",
   WAREHOUSES_PER_SITE: "/enterprise-modules/SITES_WAREHOUSES#warehouses",
   ACCOUNTS_PER_SITE: "/enterprise-modules/FINANCE_TREASURY#cash-accounts",
-  STAFF_PER_SITE: "/enterprise-modules/RETAIL_POS#retail-site-staff-access",
-  INVOICERS_PER_SITE: "/enterprise-modules/RETAIL_POS#retail-site-staff-access",
-  CASHIERS_PER_SITE: "/enterprise-modules/RETAIL_POS#retail-site-staff-access",
+  STAFF_PER_SITE: "/enterprise-modules/RETAIL_POS?section=staff#retail-site-staff-access",
+  INVOICERS_PER_SITE: "/enterprise-modules/RETAIL_POS?section=staff#retail-site-staff-access",
+  CASHIERS_PER_SITE: "/enterprise-modules/RETAIL_POS?section=staff#retail-site-staff-access",
   FINANCE_READY: "/enterprise-modules/FINANCE_ACCOUNTING#accounting-readiness",
-  ISOLATION_ACTIVE: "/enterprise-modules/RETAIL_POS#retail-feature-activation",
+  ISOLATION_ACTIVE: "/enterprise-modules/RETAIL_POS?section=activation#retail-feature-activation",
 };
 const ERRORS: Record<string, RetailWorkspaceKey> = {
   RETAIL_FEATURE_ACTIVATION_CONFLICT: "retailActivationConflict",
