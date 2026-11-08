@@ -40,9 +40,9 @@ export function siteStaffCapabilities(roleCode: string, permissions: unknown): R
   return [...ROLE_DEFAULT_CAPABILITIES[roleCode as typeof RETAIL_SITE_STAFF_ROLES[number]]];
 }
 
-// Intentionally off for existing tenants. Do not expose the activation switch
-// until every Retail/Common endpoint used by scoped staff has a fail-closed
-// site filter and the full multi-role E2E is green.
+// Intentionally off for existing tenants. Activation is controlled per tenant
+// by the owner-only step-up and readiness workflow from Retail #1044, after
+// the multi-role site-scoping validation delivered in #1043.
 export function retailStaffIsolationIsEnabled(settings: Prisma.JsonValue | null | undefined): boolean {
   if (!settings || typeof settings !== "object" || Array.isArray(settings)) return false;
   return (settings as Prisma.JsonObject).siteStaffIsolationEnabled === true;

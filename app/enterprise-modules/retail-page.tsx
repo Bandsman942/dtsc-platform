@@ -4,6 +4,7 @@ import { RetailActiveCustomerBar } from "@/components/enterprise/professional/re
 import { RetailDailyCloseWorkspace } from "@/components/enterprise/professional/retail-daily-close-workspace";
 import { RetailDeviceReadiness } from "@/components/enterprise/professional/retail-device-readiness";
 import { RetailExpiryAlertsPanel } from "@/components/enterprise/professional/retail-expiry-alerts-panel";
+import { RetailFeatureActivationPanel } from "@/components/enterprise/professional/retail-feature-activation-panel";
 import { RetailGlobalReadiness } from "@/components/enterprise/professional/retail-global-readiness";
 import { RetailHistoricalImportPanel } from "@/components/enterprise/professional/retail-historical-import-panel";
 import { RetailInvoiceFlowWorkbench } from "@/components/enterprise/professional/retail-invoice-flow-workbench";
@@ -108,6 +109,7 @@ export async function renderRetailModulePage(moduleCode: "RETAIL_POS" | "MOBILE_
               <div className="grid gap-4 border-t border-dtsc-border p-3 sm:p-4">
                 <RetailDeviceReadiness organizationId={organizationId} locale={locale} />
                 <RetailGlobalReadiness organizationId={organizationId} locale={locale} />
+                {["OWNER", "ADMIN_ENTREPRISE", "ADMIN_ENTERPRISE"].includes(membership.role) ? <RetailFeatureActivationPanel organizationId={organizationId} locale={locale} /> : null}
                 <RetailInventoryPolicySettings organizationId={organizationId} locale={locale} />
                 <RetailExpiryAlertsPanel organizationId={organizationId} locale={locale} />
               </div>

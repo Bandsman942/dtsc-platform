@@ -1,6 +1,6 @@
 {
   "name": "dtsc-platform",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "private": true,
   "engines": {
     "node": "22.x"
@@ -28,6 +28,7 @@
     "qa:hotfix-1042-retail": "node scripts/qa-hotfix-1042-retail-batches-transfer.mjs",
     "qa:hotfix-1042-site-staff": "node scripts/qa-hotfix-1042-site-staff.mjs",
     "qa:hotfix-1042-warehouse-receipts": "node scripts/qa-hotfix-1042-warehouse-receipt-scoping.mjs",
+    "qa:hotfix-1044-retail-activation": "node scripts/qa-hotfix-1044-retail-activation.mjs",
     "qa:console-internal-workspaces": "node scripts/qa-console-internal-workspaces.mjs",
     "qa:console-workspace-shell": "node scripts/qa-console-workspace-shell.mjs",
     "qa:standard-module-registry": "node scripts/audit-standard-module-registry.mjs",

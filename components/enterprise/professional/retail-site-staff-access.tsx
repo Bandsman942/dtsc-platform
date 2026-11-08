@@ -104,7 +104,7 @@ export function RetailSiteStaffAccess({ organizationId, locale }: { organization
   }
 
   return (
-    <section data-testid="retail-site-staff-access" className="min-w-0 rounded-2xl border border-dtsc-border bg-dtsc-surface p-4 shadow-sm sm:p-5">
+    <section id="retail-site-staff-access" data-testid="retail-site-staff-access" className="min-w-0 scroll-mt-24 rounded-2xl border border-dtsc-border bg-dtsc-surface p-4 shadow-sm sm:p-5">
       <div className="flex min-w-0 items-start gap-3">
         <UsersRound aria-hidden="true" className="mt-0.5 h-5 w-5 shrink-0 text-dtsc-blue" />
         <div className="min-w-0 flex-1"><h2 className="text-base font-black text-dtsc-ink">{copy.title}</h2><p className="mt-1 text-sm leading-6 text-dtsc-muted">{copy.description}</p></div>
