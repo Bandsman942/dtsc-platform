@@ -20,6 +20,7 @@ import { RetailSiteStaffAccess } from "@/components/enterprise/professional/reta
 import { TelcoTopupsWorkspace } from "@/components/enterprise/professional/telco-topups-workspace";
 import { AppShell } from "@/components/layout/app-shell";
 import { getSession, requireUser } from "@/lib/auth";
+import { formatEnterpriseBusinessDate } from "@/lib/enterprise/business-context";
 import { resolveEnterpriseModuleAccess } from "@/lib/enterprise/module-access";
 import { requireEnterpriseMembership } from "@/lib/enterprise-sector-templates";
 import { prisma } from "@/lib/prisma";
@@ -37,7 +38,7 @@ export async function renderRetailModulePage(moduleCode: "RETAIL_POS" | "MOBILE_
     requireEnterpriseMembership(session, organizationId),
     prisma.organization.findFirst({
       where: { id: organizationId, status: "ACTIVE", deletedAt: null, organizationType: "CLIENT", sectorCode: "COMMERCE_RETAIL" },
-      select: { name: true },
+      select: { name: true, timezone: true },
     }),
     moduleCode === "RETAIL_DAILY_CLOSE"
       ? resolveEnterpriseModuleAccess({ userId: user.id, organizationId, moduleCode, action: "manage" })
@@ -68,6 +69,7 @@ export async function renderRetailModulePage(moduleCode: "RETAIL_POS" | "MOBILE_
             definition={access.definition}
             adminStores={adminStores}
             preferredSiteId={options?.siteId}
+            defaultBusinessDate={formatEnterpriseBusinessDate(new Date(), organization.timezone || "UTC")}
           />
         ) : moduleCode === "RETAIL_POS" ? (
           posSection ? (

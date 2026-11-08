@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { writeApiLog } from "@/lib/audit";
+import { enterpriseBusinessCalendarWindows, formatEnterpriseBusinessDate } from "@/lib/enterprise/business-context";
 import { authorizeRetailRequest } from "@/lib/enterprise/retail/http";
 import { RETAIL_OWNER_ROLES } from "@/lib/enterprise/retail/site-access";
 import { prisma } from "@/lib/prisma";
@@ -19,11 +20,18 @@ export async function GET(req: Request, { params }: Params) {
   });
   if (!owner) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  const date = new URL(req.url).searchParams.get("date") || new Date().toISOString().slice(0, 10);
+  const organization = await prisma.organization.findUnique({ where: { id: organizationId }, select: { timezone: true } });
+  if (!organization) return NextResponse.json({ error: "Organization not found" }, { status: 404 });
+  const timezone = organization.timezone || "UTC";
+  const date = new URL(req.url).searchParams.get("date") || formatEnterpriseBusinessDate(new Date(), timezone);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return NextResponse.json({ message: "Invalid business date" }, { status: 400 });
-  const start = new Date(`${date}T00:00:00.000Z`);
-  if (Number.isNaN(start.getTime()) || start.toISOString().slice(0, 10) !== date) return NextResponse.json({ message: "Invalid business date" }, { status: 400 });
-  const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
+  // The selected calendar date must be interpreted in the company's timezone.
+  // Midnight offsets can differ across DST changes; never assume a 24-hour UTC day.
+  const anchor = [`${date}T00:00:00.000Z`, `${date}T12:00:00.000Z`]
+    .map((value) => new Date(value))
+    .find((value) => !Number.isNaN(value.getTime()) && formatEnterpriseBusinessDate(value, timezone) === date);
+  if (!anchor) return NextResponse.json({ message: "Invalid business date" }, { status: 400 });
+  const { day } = enterpriseBusinessCalendarWindows(anchor, timezone);
 
   const rows = await prisma.$queryRaw<SummaryRow[]>`
     SELECT c."siteId" AS "siteId", c."status" AS "status",
@@ -33,7 +41,7 @@ export async function GET(req: Request, { params }: Params) {
     LEFT JOIN "EnterpriseRetailDailyCloseLine" l
       ON l."organizationId" = c."organizationId" AND l."dailyCloseId" = c."id"
     WHERE c."organizationId" = ${organizationId}
-      AND c."businessDate" >= ${start} AND c."businessDate" < ${end}
+      AND c."businessDate" >= ${day.gte} AND c."businessDate" < ${day.lt}
     GROUP BY c."siteId", c."status"
   `;
   await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "retail-multistore-close-summary", date } });

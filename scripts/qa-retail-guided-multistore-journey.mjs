@@ -34,6 +34,11 @@ assert.match(summaryRoute, /RETAIL_OWNER_ROLES/, "Full organization close summar
 assert.match(summaryRoute, /"organizationId" = \$\{organizationId\}/, "Close summary query must be tenant scoped");
 assert.match(summaryRoute, /"dailyCloseId" = c\."id"/, "Variance counts must join canonical close lines");
 assert.match(summaryRoute, /GROUP BY c\."siteId", c\."status"/, "Summary must group by store and approval status");
+assert.match(summaryRoute, /enterpriseBusinessCalendarWindows\(anchor, timezone\)/, "Summary must use organization-local calendar-day boundaries, including DST");
+assert.match(summaryRoute, /formatEnterpriseBusinessDate\(new Date\(\), timezone\)/, "Default close reporting day must honor organization timezone");
+assert.match(retailPage, /defaultBusinessDate=\{formatEnterpriseBusinessDate\(new Date\(\), organization\.timezone/, "Close form must receive organization-local date from server");
+assert.match(closeUI, /useState\(defaultBusinessDate\)/, "Client must not default to UTC instead of store business date");
+assert.doesNotMatch(summaryRoute, /toISOString\(\)\.slice\(0, 10\)/, "No naive UTC date conversion in close summary");
 assert.doesNotMatch(summaryRoute, /\b(POST|PATCH|PUT|DELETE)\b/, "Close summary should be read-only");
 assert.match(retailPage, /adminStores=\{adminStores\}/, "Only admin-validated page provides organization store names");
 

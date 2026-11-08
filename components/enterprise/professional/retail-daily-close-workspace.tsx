@@ -128,12 +128,14 @@ export function RetailDailyCloseWorkspace({
   definition,
   adminStores,
   preferredSiteId,
+  defaultBusinessDate,
 }: {
   organizationId: string;
   organizationName: string;
   definition: EnterpriseModuleDefinition;
   adminStores?: AdminStore[];
   preferredSiteId?: string;
+  defaultBusinessDate: string;
 }) {
   const locale: "fr" | "en" = useAppLocale() === "en" ? "en" : "fr";
   const [dashboard, setDashboard] = useState<Dashboard | null>(null);
@@ -146,7 +148,7 @@ export function RetailDailyCloseWorkspace({
   const [guideOpen, setGuideOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [siteFilter, setSiteFilter] = useState(preferredSiteId || "ALL");
-  const [summaryDate, setSummaryDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [summaryDate, setSummaryDate] = useState(defaultBusinessDate);
   const [summary, setSummary] = useState<CloseSummary | null>(null);
   const [summaryError, setSummaryError] = useState("");
   const mutationKeys = useRef<Record<string, string>>({});
@@ -268,7 +270,7 @@ export function RetailDailyCloseWorkspace({
       setMessage(translateRetailWorkspace(locale, "dailyCloseApproverRequired"));
       return;
     }
-    const businessDate = String(form.get("businessDate") || new Date().toISOString().slice(0, 10));
+    const businessDate = String(form.get("businessDate") || defaultBusinessDate);
     await post(
       "daily-close-submit",
       `/api/enterprise/${organizationId}/retail/daily-close`,
@@ -462,7 +464,7 @@ export function RetailDailyCloseWorkspace({
             >
               <form onSubmit={(event) => void submitClose(event)} className="grid min-w-0 gap-4">
                 <div className="grid min-w-0 gap-3 sm:grid-cols-2">
-                  <Field label={translateRetailWorkspace(locale, "dailyCloseBusinessDate")}><Input name="businessDate" type="date" defaultValue={new Date().toISOString().slice(0, 10)} required /></Field>
+                  <Field label={translateRetailWorkspace(locale, "dailyCloseBusinessDate")}><Input name="businessDate" type="date" defaultValue={defaultBusinessDate} required /></Field>
                   <Field label={translateRetailWorkspace(locale, "dailyCloseCloseNotes")}><Input name="notes" maxLength={2000} /></Field>
                 </div>
                 <div className="grid min-w-0 gap-3">
