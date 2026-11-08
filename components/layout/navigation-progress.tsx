@@ -3,7 +3,6 @@
 import { LoaderCircle, RefreshCw } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import type { MouseEvent as ReactMouseEvent } from "react";
 
 /**
  * Feedback for same-product navigation while the next RSC route is loading.
