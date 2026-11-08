@@ -4,7 +4,7 @@
 La conversation fournie montre une réponse fondée sur des notes datées du 13 octobre alors que le code principal dispose de notes de novembre, suivie d'une affirmation « ticket transmis » sans preuve d'un ticket réel. Deux causes ont été identifiées : `lib/ai/product-awareness.ts` priorisait les fragments d'archives avant le changelog récent et exigeait `### Ajouté/Corrigé` alors que les derniers hotfixes sont des puces sous `## date`. De plus, l'exécuteur mail acceptait `sent:false` comme résultat `SUCCESS`, tandis que le service Zoho excluait son adresse contact dans le mode par défaut.
 
 ## Implémentation
-- La version courante est importée de `package.json` et la révision de déploiement vient de `VERCEL_GIT_COMMIT_SHA`. `docs/CHANGELOG.md` est lu avant les archives de `docs/changelog`. Les puces de release récentes entrent désormais dans le contexte même sans sous-titre `###`.
+- La version courante est importée de `package.json` et la révision de déploiement vient de `VERCEL_GIT_COMMIT_SHA`. `docs/CHANGELOG.md` est lu avant les archives de `docs/changelog`. Les puces de release récentes entrent désormais dans le contexte même sans sous-titre `###`. Les mentions **candidat** restent explicitement signalées comme non vérifiées en production et ne constituent pas une preuve de disponibilité.
 - Le contexte dynamique est injecté à chaque tour via `buildLanguageInstruction` dans l'IA générale **et** dans l'assistant entreprise. Le code actuel inclut déjà `docs/CHANGELOG.md` et `docs/changelog/*.md` dans le tracing Next.js ; aucun second index RAG à reconstituer pour les notes de release. La nouvelle image de déploiement rend les anciennes versions inapplicables. Les données privées continuent à passer par leur propre resolver d'autorisation.
 - Les prompts FR/EN interdisent de présenter une simple confirmation utilisateur ou un texte antérieur comme la preuve d'une action accomplie.
 - Le transport contact utilise le mode mail direct et autorise l'adresse destinataire officielle. Le résultat du mail est strictement `sent: true`; un échec de l'envoi est enregistré comme `FAILED` par `AiToolExecution`. Le numéro du `ContactMessage` n'est pas inventé comme un numéro de message fournisseur.
@@ -14,7 +14,7 @@ La conversation fournie montre une réponse fondée sur des notes datées du 13 
 - L'UI d'actions vérifiées n'annonce `SUCCEEDED` que si l'exécution réelle en base possède la preuve requise ; un échec affiche « non effectué ». Les confirmations restent sous contrôle explicite de l'utilisateur.
 
 ## Limites explicitement conservées
-`sent:true` signifie une acceptation par le transport (Zoho/webhook) et **non** une lecture ou une livraison garantie à la boîte de réception. Les notes de version sont des déclarations de fonctionnalités livrées, pas une preuve du plan du client ni de l'état live d'un connecteur. Toute action nouvelle requiert sa propre exécution autorisée ; un modèle de langage ne peut pas se donner ce droit.
+`sent:true` signifie une acceptation par le transport (Zoho/webhook) et **non** une lecture ou une livraison garantie à la boîte de réception. Les notes de version peuvent aussi inclure des versions candidates non approuvées : elles ne garantissent aucune capacité actuellement livrée. Même des notes livrées ne prouvent pas le plan du client ni l'état live d'un connecteur. Toute action nouvelle requiert sa propre exécution autorisée ; un modèle de langage ne peut pas se donner ce droit.
 
 ## Validation
 ```bash
