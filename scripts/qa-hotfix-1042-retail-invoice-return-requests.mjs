@@ -48,7 +48,13 @@ const tx = {
       if (where.id) return state.saved;
       return state.existing ? state.saved : null;
     },
-    findMany: async () => state.saved ? [state.saved] : [],
+    findMany: async ({ select }) => {
+      assert.ok(select.refundLegs?.select?.refundPayment?.select?.status,
+        "Retail return list must select each canonical refund payment approval");
+      return state.saved ? [{ ...state.saved, refundLegs: state.listRefundLegs || [],
+        refundPayment: state.listRefundPayment || null,
+        salesCreditNote: state.listCreditNote || null }] : [];
+    },
     count: async () => state.saved ? 1 : 0,
     create: async ({ data }) => {
       state.operations.push("create-request");
@@ -244,6 +250,8 @@ assert.equal("requestedByUserId" in listing.items[0], false);
 assert.equal("approverUserId" in listing.items[0], false);
 assert.equal("idempotencyKey" in listing.items[0], false);
 assert.equal("requestFingerprint" in listing.items[0], false);
+assert.equal(listing.items[0].paymentApprovalTotal, 0);
+assert.equal(listing.items[0].paymentApprovalCount, 0);
 const reviewerList = await listRetailInvoiceReturnRequests("tenant", "invoice-A", "reviewer", 1);
 assert.equal(reviewerList.items[0].canDecide, true);
 assert.equal(reviewerList.items[0].canInspect, false);
@@ -251,6 +259,29 @@ assert.equal(reviewerList.canRequest, false);
 const inspectorList = await listRetailInvoiceReturnRequests("tenant", "invoice-A", "inspector", 1);
 assert.equal(inspectorList.items[0].canInspect, true);
 assert.equal(inspectorList.items[0].canDecide, false);
+// A legacy single-account refund has no legs; multi-account refunds expose
+// the actual independent approval count and cannot settle partially.
+state.saved = { ...state.saved, status: "FINANCE_PENDING",
+  inspectedByUserId: "inspector", preparedByUserId: "preparer" };
+state.listRefundPayment = { status: "APPROVED" };
+state.listCreditNote = { status: "APPROVED" };
+let settlementList = await listRetailInvoiceReturnRequests("tenant", "invoice-A", "settler", 1);
+assert.equal(settlementList.items[0].paymentApprovalTotal, 1);
+assert.equal(settlementList.items[0].paymentApprovalCount, 1);
+assert.equal(settlementList.items[0].canSettleFinance, true);
+state.listRefundLegs = [
+  { refundPayment: { status: "APPROVED" } },
+  { refundPayment: { status: "PENDING_APPROVAL" } },
+];
+settlementList = await listRetailInvoiceReturnRequests("tenant", "invoice-A", "settler", 1);
+assert.equal(settlementList.items[0].paymentApprovalTotal, 2);
+assert.equal(settlementList.items[0].paymentApprovalCount, 1);
+assert.equal(settlementList.items[0].canSettleFinance, false);
+state.listRefundLegs[1].refundPayment.status = "APPROVED";
+settlementList = await listRetailInvoiceReturnRequests("tenant", "invoice-A", "settler", 1);
+assert.equal(settlementList.items[0].paymentApprovalTotal, 2);
+assert.equal(settlementList.items[0].paymentApprovalCount, 2);
+assert.equal(settlementList.items[0].canSettleFinance, true);
 assert.equal((await listRetailInvoiceReturnApprovers("tenant", "requester", "store-A")).candidates.map((row) => row.userId).join(","), "reviewer");
 await assert.rejects(listRetailInvoiceReturnApprovers("tenant", "requester", "store-OTHER"), { code: "RETAIL_SITE_ACCESS_DENIED" });
 state.financeAllowed = false;
