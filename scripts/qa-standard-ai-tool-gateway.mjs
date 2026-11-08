@@ -14,6 +14,7 @@ const privateExecutors = read("lib/ai/tools/executors/private-actions.ts");
 const taskExecutors = read("lib/ai/tools/executors/task-drafts.ts");
 const confirmationDock = read("components/chat/ai-tool-confirmation-dock.tsx");
 const chatPage = read("app/chat/page.tsx");
+const chatWorkspace = read("components/chat/chat-workspace-v2.tsx");
 
 const certifiedCodes = [
   "PHARMACY_DASHBOARD_READ",
@@ -58,7 +59,7 @@ if (/import\s*\([^)]*toolCode/.test(execute)) failures.push("client toolCode mus
 if (!confirmationDock.includes("/api/ai/tools/confirm")) failures.push("chat confirmation UI must call structured confirmation endpoint");
 if (!confirmationDock.includes("/api/ai/tools/cancel")) failures.push("chat confirmation UI must provide cancellation");
 if (!confirmationDock.includes("Typing yes in the chat never authorizes this action")) failures.push("confirmation UI must state natural language is not authorization");
-if (!chatPage.includes("<AiToolConfirmationDock")) failures.push("chat page must mount confirmation UI");
+if (!chatPage.includes("<ChatWorkspaceV2") || !chatWorkspace.includes("<AiToolConfirmationDock conversationId={activeConversationId || null}")) failures.push("the active chat workspace must mount confirmation UI bound to the selected conversation");
 
 if (failures.length) {
   console.error("AI tool gateway QA failed:\n" + failures.map((item) => `- ${item}`).join("\n"));
