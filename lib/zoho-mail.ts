@@ -112,7 +112,9 @@ async function getZohoAccessToken() {
 }
 
 async function sendZohoMailApi(payload: ZohoMailPayload) {
-  const recipients = uniqueEmails(payload.to).filter((email) => email !== contactEmail());
+  // Direct verified mail to DTSC itself is a real delivery target. The old
+  // self-address filter silently discarded contact@dtsc-platform.com.
+  const recipients = uniqueEmails(payload.to).filter((email) => payload.deliveryMode === "direct" || email !== contactEmail());
   if (!recipients.length) {
     return { sent: false, reason: "No recipients" };
   }
