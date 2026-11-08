@@ -1,6 +1,6 @@
 # RETAIL multiboutique — Assistant opérationnel et clôture consolidée
 
-Version : **1.6.0** · Branche : `hotfix/retail-guided-multistore-journey` · Cible : `main` exclusivement après QA, E2E final du propriétaire et PR verte.
+Version : **1.6.0** · Branche : `feat/1058-retail-guided-multistore` (hotfix produit #1058) · Cible : `main` exclusivement après QA, E2E final du propriétaire et PR verte.
 
 ## Architecture et contrat
 
