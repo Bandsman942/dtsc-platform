@@ -3,6 +3,7 @@ import { z } from "zod";
 import { assertSafeZip, parseCatalogCsv } from "@/lib/enterprise/master-data/catalog-import";
 import { taxCodeCreateSchema } from "@/lib/enterprise/accounting/finance-domain-schemas";
 import { FINANCE_IMPORT_COLUMNS } from "@/lib/enterprise/accounting/finance-template-columns";
+import { isValidEnterpriseActivityCivilDate } from "@/lib/enterprise/enterprise-activity-civil-date";
 import { prisma } from "@/lib/prisma";
 
 export type FinanceImportKind = "tax" | "accounts";
@@ -37,7 +38,9 @@ const tr = (locale: FinanceImportLocale, fr: string, en: string) => locale === "
 function readCell(value: ExcelJS.CellValue): string {
   if (value == null) return "";
   if (typeof value === "string" || typeof value === "number") return String(value);
-  if (value instanceof Date && !Number.isNaN(value.getTime())) return value.toISOString().slice(0, 10);
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return [value.getUTCFullYear(), String(value.getUTCMonth() + 1).padStart(2, "0"), String(value.getUTCDate()).padStart(2, "0")].join("-");
+  }
   throw new FinanceImportError("Les formules, liens et cellules Excel enrichies ne sont pas autorisés dans ce modèle.");
 }
 
@@ -103,7 +106,7 @@ export async function previewFinanceImport(organizationId: string, kind: Finance
       // CSV from a French spreadsheet often stores decimal rates as "0,16".
       const parsed = taxSchema.safeParse({ ...fields, rate: (fields.rate || "").replace(",", ".") });
       if (!parsed.success) errors.push(tr(locale, "Code, libellés, catégorie, taux décimal ou date invalides.", "Invalid code, labels, category, decimal rate or date."));
-      else if (Number.isNaN(new Date(`${parsed.data.effectiveFrom}T00:00:00Z`).getTime()) || new Date(`${parsed.data.effectiveFrom}T00:00:00Z`).toISOString().slice(0, 10) !== parsed.data.effectiveFrom) errors.push(tr(locale, "Date invalide.", "Invalid date."));
+      else if (!isValidEnterpriseActivityCivilDate(parsed.data.effectiveFrom)) errors.push(tr(locale, "Date invalide.", "Invalid date."));
       else valid = { kind, data: parsed.data };
     } else {
       const parsed = accountSchema.safeParse(fields);

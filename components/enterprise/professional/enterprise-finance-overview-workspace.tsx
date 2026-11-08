@@ -156,7 +156,7 @@ export function EnterpriseFinanceOverviewWorkspace({ organizationId, organizatio
     const model: ProfessionalReportExportModel = {
       organizationName, title: financeT(locale, "financeOverviewTitle"),
       subtitle: locale === "en" ? "Current operational snapshot · Not a historical reporting period" : "Situation opérationnelle actuelle · Pas de période historique",
-      filenameBase: `DTSC-pilotage-financier-${new Date().toISOString().slice(0, 10)}`,
+      filenameBase: `DTSC-pilotage-financier-${new Intl.DateTimeFormat("sv-SE", { year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date())}`,
       generatedLabel: new Intl.DateTimeFormat(locale === "en" ? "en-GB" : "fr-FR", { dateStyle: "long", timeStyle: "short" }).format(new Date()),
       kpis: keys.map((key) => ({ label: financeMetricLabel(key, locale), value: summary[key].state === "error" ? "—" : String(summary[key].value ?? 0), numericValue: summary[key].state === "error" ? undefined : summary[key].value ?? 0 })),
       columns: [{ key: "indicator", label: locale === "en" ? "Indicator" : "Indicateur" }, { key: "value", label: locale === "en" ? "Current count" : "Valeur actuelle" }, { key: "quality", label: locale === "en" ? "Data availability" : "Disponibilité des données" }],
