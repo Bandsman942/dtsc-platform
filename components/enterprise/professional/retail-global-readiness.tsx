@@ -53,7 +53,7 @@ function capabilityNote(status: string, locale: "fr" | "en") {
     case "NOT_CERTIFIED":
       return locale === "en" ? "This feature is not offered as certified in the current country configuration." : "Cette fonction n’est pas proposée comme certifiée dans la configuration pays actuelle.";
     default:
-      return locale === "en" ? "Availability depends on your Retail setup." : "La disponibilité dépend de la configuration de votre Shop.";
+      return locale === "en" ? "Availability depends on your Retail setup." : "La disponibilité dépend de la configuration de votre commerce de détail.";
   }
 }
 
