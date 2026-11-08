@@ -1,5 +1,6 @@
 import { BUSINESS_SUBTYPES, normalizeBusinessSubtypeCode } from "@/lib/enterprise/business-subtype-registry";
-import { RETAIL_MODULE_CODES, RETAIL_SECTOR_CODE, type RetailModuleCode } from "@/lib/enterprise/retail/constants";
+import { RETAIL_SECTOR_CODE, type RetailModuleCode } from "@/lib/enterprise/retail/constants";
+import { RETAIL_OPTIONAL_EXTENSION_MODULE_CODES } from "@/lib/enterprise/retail/extension-policy";
 
 export const RETAIL_BUSINESS_SUBTYPE_CODES = ["SHOP"] as const;
 export type RetailBusinessSubtypeCode = (typeof RETAIL_BUSINESS_SUBTYPE_CODES)[number];
@@ -30,9 +31,9 @@ export const RETAIL_BUSINESS_SUBTYPES: readonly RetailBusinessSubtypeDefinition[
     labelEn: SHOP_BUSINESS_SUBTYPE.labelEn,
     descriptionFr: SHOP_BUSINESS_SUBTYPE.descriptionFr,
     descriptionEn: SHOP_BUSINESS_SUBTYPE.descriptionEn,
-    // Preserve the existing Shop surface exactly. Mobile Money and Telco remain
-    // optional at runtime through module enablement, entitlement and provider setup.
-    moduleCodes: RETAIL_MODULE_CODES,
+    // SHOP is a specialization; POS and daily close belong to Retail Core.
+    // Generic tenants can separately buy/enable operator extensions via DTSC governance.
+    moduleCodes: RETAIL_OPTIONAL_EXTENSION_MODULE_CODES,
   },
 ] as const;
 
