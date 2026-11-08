@@ -75,16 +75,14 @@ export async function syncRetailOperatorProvidersTx(
   organizationId: string,
   knownProfileCode?: RetailBusinessProfileCode | null,
 ) {
-  let profileCode = knownProfileCode;
-  if (profileCode === undefined) {
-    const configuration = await tx.enterpriseRetailConfiguration.findUnique({
-      where: { organizationId },
-      select: { profileCode: true, settingsJson: true },
-    });
-    profileCode = configuration?.profileCode && isRetailBusinessProfileCode(configuration.profileCode)
-      ? configuration.profileCode
-      : null;
-  }
+  const configuration = await tx.enterpriseRetailConfiguration.findUnique({
+    where: { organizationId },
+    select: { profileCode: true, settingsJson: true },
+  });
+  const profileCode = knownProfileCode === undefined
+    ? configuration?.profileCode && isRetailBusinessProfileCode(configuration.profileCode)
+      ? configuration.profileCode : null
+    : knownProfileCode;
 
   if (!profileCode) return [];
 
