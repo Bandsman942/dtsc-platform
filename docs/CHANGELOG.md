@@ -1,4 +1,4 @@
-## 2026-11-08 — Hotfix #1069 — Console DS 2.0 en cartes et workspaces (candidat v1.6.5)
+## 2026-11-08 — Hotfix #1069 — Console DS 2.0 en cartes et workspaces (candidat v1.6.3 ; révision séquentielle lors de la fusion)
 
 - Navigation Administration DTSC par domaines puis sections visibles selon permissions, entrée via cartes responsive avec icônes, compteur et descriptions, sans créer de nouvelle route métier non autorisée.
 - Sous-sections ouvrables par URL ?focus=id, fil d'Ariane avec retour logique et hauteur de travail optimisée, état navigateur réversible.
