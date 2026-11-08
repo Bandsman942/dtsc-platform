@@ -24,6 +24,7 @@ import type {
   EnterpriseWorkflowItem,
 } from "@/lib/enterprise/enterprise-admin-types";
 import { RETAIL_PERMISSION_CATALOG } from "@/lib/enterprise/retail/constants";
+import { isRetailOptionalExtensionModule } from "@/lib/enterprise/retail/extension-policy";
 import { ENTERPRISE_INVITABLE_ROLE_OPTIONS, isEnterprisePrivilegedRole } from "@/lib/enterprise/member-invitation-roles";
 import { translate } from "@/lib/i18n";
 
@@ -359,7 +360,7 @@ export function EnterpriseModulesPanel({
                     key: "toggle",
                     label: enterpriseModule.isEnabled ? "Désactiver" : "Activer",
                     icon: enterpriseModule.isEnabled ? ToggleLeft : ToggleRight,
-                    disabled: (enterpriseModule.isCore && enterpriseModule.isEnabled) || (!enterpriseModule.isEnabled && enterpriseModule.accessAllowed === false),
+                    disabled: (enterpriseModule.isCore && !isRetailOptionalExtensionModule(enterpriseModule.moduleCode) && enterpriseModule.isEnabled) || (!enterpriseModule.isEnabled && enterpriseModule.accessAllowed === false),
                     onSelect: () => void toggleModule(enterpriseModule),
                   },
                 ]}
@@ -367,7 +368,7 @@ export function EnterpriseModulesPanel({
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
               <span className={`inline-flex rounded-full px-2 py-1 text-[0.68rem] font-black ${enterpriseModule.isEnabled ? "bg-emerald-400/14 text-emerald-500" : "bg-slate-500/14 text-dtsc-muted"}`}>
-                {enterpriseModule.isEnabled ? "Activé" : "Désactivé"} {enterpriseModule.isCore ? "· socle" : ""}
+                {enterpriseModule.isEnabled ? "Activé" : "Désactivé"} {enterpriseModule.isCore && !isRetailOptionalExtensionModule(enterpriseModule.moduleCode) ? "· socle" : ""}
               </span>
               {enterpriseModule.createdAt && <span className="inline-flex rounded-full bg-dtsc-page px-2 py-1 text-[0.68rem] font-black text-dtsc-muted">Activation {new Date(enterpriseModule.createdAt).toLocaleDateString("fr-FR")}</span>}
               {enterpriseModule.requiredPlan && <span className="inline-flex rounded-full bg-dtsc-page px-2 py-1 text-[0.68rem] font-black text-dtsc-muted">Plan {enterpriseModule.requiredPlan}</span>}
