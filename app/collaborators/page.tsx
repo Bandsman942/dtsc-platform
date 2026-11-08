@@ -161,7 +161,7 @@ export default async function CollaboratorsPage({ searchParams }: { searchParams
   }));
 
   return (
-    <AppShell user={user} hideContextualBack>
+    <AppShell user={user} hideContextualBack desktopWorkspaceMode="conversation">
       <div className="h-full min-h-0 min-w-0 overflow-hidden">
         <CollaboratorsImmersiveConversationShell
           currentUserId={user.id}
