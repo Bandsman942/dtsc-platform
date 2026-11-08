@@ -18,6 +18,7 @@ import { NavLinks } from "@/components/layout/nav-links";
 import { OrganizationContextSwitcher } from "@/components/layout/organization-context-switcher";
 import { PrivateMobileChromeController } from "@/components/layout/private-mobile-chrome-controller";
 import { ProductNavigation } from "@/components/layout/product-navigation";
+import { NavigationProgress } from "@/components/layout/navigation-progress";
 import { AppResumeSync } from "@/components/pwa/app-resume-sync";
 import { PWAInstallPrompt } from "@/components/pwa/pwa-install-prompt";
 import { PwaNotificationBridge } from "@/components/pwa/pwa-notification-bridge";
@@ -189,6 +190,7 @@ export async function AppShell({
   return (
     <LocaleProvider locale={user.locale}>
       <div style={enterpriseBrandStyle} className="min-h-screen bg-dtsc-page text-dtsc-ink dtsc-mobile-mesh">
+        <NavigationProgress locale={user.locale} />
         <SessionTimeoutGuard />
         <AppResumeSync pushEnabled={Boolean(user.pushNotificationsEnabled)} initialUnreadCount={unreadNotifications} />
         <PrivateMobileChromeController />

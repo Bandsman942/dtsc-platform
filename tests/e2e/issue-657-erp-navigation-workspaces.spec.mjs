@@ -62,11 +62,13 @@ async function assertNoGlobalOverflow(page) {
 }
 
 async function getCanonicalErpCatalogLink(page, label, openLabel) {
-  const catalogItem = page.getByRole("listitem").filter({ hasText: label });
-  await expect(catalogItem).toHaveCount(1);
-  const catalogLink = catalogItem.getByRole("link", { name: openLabel, exact: true });
+  // #1055 renders the single canonical ERP entry as an interactive POS-style card.
+  // Assert its exact registry code, accessible name, and destination instead of legacy listitem markup.
+  const catalogLink = page.locator('a[data-module-navigation-card="ENTERPRISE_MODULES_SUBSCRIPTION"]');
   await expect(catalogLink).toHaveCount(1);
+  await expect(catalogLink).toHaveAttribute("aria-label", `${openLabel} ${label}`);
   await expect(catalogLink).toHaveAttribute("href", /\/enterprise-modules$/);
+  await expect(catalogLink).toBeVisible();
   return catalogLink;
 }
 

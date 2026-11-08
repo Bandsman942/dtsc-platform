@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 
 const hub = readFileSync("app/enterprise-modules/page.tsx", "utf8");
 const quick = readFileSync("components/enterprise/enterprise-quick-access.tsx", "utf8");
+const cards = readFileSync("components/workspace/module-navigation-grid.tsx", "utf8");
 const command = readFileSync("components/enterprise/enterprise-command-palette.tsx", "utf8");
 const dialog = readFileSync("components/enterprise/enterprise-command-dialog.tsx", "utf8");
 const shell = readFileSync("components/layout/app-shell.tsx", "utf8");
@@ -12,7 +13,9 @@ const nav = readFileSync("lib/enterprise/enterprise-navigation.ts", "utf8");
 assert.match(hub, /getEnterpriseNavigationModules\(organizationId, user\.id, user\.locale\)/);
 assert.match(hub, /<EnterpriseQuickAccess/);
 assert.match(hub, /activeOrganizationRole=\{session\.activeOrganizationRole\}/);
-assert.match(hub, /data-enterprise-module-code=\{enterpriseModule\.code\}/);
+assert.match(hub, /<ModuleNavigationGrid/);
+assert.match(cards, /data-enterprise-module-code=\{item\.code\}/);
+assert.match(cards, /href=\{item\.href\}/);
 assert.match(quick, /new Map\(modules\.map/);
 assert.match(quick, /allowed\.has\(code\)/);
 assert.match(quick, /dtsc:erp-shortcuts:v1:\$\{organizationId\}:\$\{userId\}/);
