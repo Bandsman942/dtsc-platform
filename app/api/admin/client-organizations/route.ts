@@ -235,7 +235,8 @@ export async function POST(req: Request) {
     }).catch(() => null);
   }
 
-  const requiresCanonicalSectorTemplate = businessSubtypeCode === TAILORING_BUSINESS_SUBTYPE_CODE || businessSubtypeCode === GAMING_BUSINESS_SUBTYPE_CODE;
+  const requiresCanonicalSectorTemplate = businessSubtypeCode === TAILORING_BUSINESS_SUBTYPE_CODE || businessSubtypeCode === GAMING_BUSINESS_SUBTYPE_CODE
+    || (sector?.code === RETAIL_SECTOR_CODE && !businessSubtypeCode);
   if (sector && (data.applySectorTemplate || requiresCanonicalSectorTemplate)) {
     await applyCanonicalSectorTemplateToOrganization({
       organizationId: organization.id,
