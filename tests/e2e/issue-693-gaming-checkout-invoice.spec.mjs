@@ -340,6 +340,16 @@ async function signIn() {
   await signInAs(context, adminEmail, adminPassword);
 }
 
+async function completeFinanceStepUp(targetContext, password) {
+  // Finance payment approval requires recent identity verification. Exercise
+  // the canonical password/MFA endpoint; never bypass or mock its server gate.
+  const response = await targetContext.request.post(`${baseUrl}/api/auth/step-up`, {
+    data: { password },
+    headers: { origin: baseUrl, referer: `${baseUrl}/enterprise-modules/FINANCE_PAYMENTS` },
+  });
+  expect(response.ok(), await response.text()).toBeTruthy();
+}
+
 async function startAndEndSession({ businessPartyId, suffix }) {
   const start = await context.request.post(`${baseUrl}/api/enterprise/${organizationId}/gaming/sessions`, {
     data: {
@@ -466,6 +476,8 @@ test.describe.serial("Issue #693 Gaming checkout invoice nested write", () => {
     await prepareTenant();
     await signInAs(approverContext, approverEmail, approverPassword);
     await signInAs(confirmerContext, confirmerEmail, confirmerPassword, "/enterprise-modules/FINANCE_PAYMENTS");
+    await completeFinanceStepUp(approverContext, approverPassword);
+    await completeFinanceStepUp(confirmerContext, confirmerPassword);
   });
 
   test.afterAll(async () => {
