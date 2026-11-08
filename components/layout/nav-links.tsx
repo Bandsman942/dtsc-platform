@@ -92,7 +92,7 @@ export function NavLinks({
             data-sidebar-nav-link={!mobile ? group.code : undefined}
             aria-current={active ? "page" : undefined}
             className={cn(
-              "relative flex min-w-0 items-center gap-3 rounded-xl font-semibold transition",
+              "relative flex min-w-0 items-center gap-3 rounded-xl font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400",
               mobile ? "shrink-0 px-3 py-2 text-xs" : "px-3 py-2.5 text-sm",
               active
                 ? "bg-cyan-400/15 text-cyan-500 shadow-[inset_3px_0_0_rgb(34,211,238)]"
