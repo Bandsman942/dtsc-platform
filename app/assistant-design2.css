@@ -1,0 +1,64 @@
+/* Hotfix #1068: one presentation contract for general and enterprise AI chat.
+   Desktop rail from AppShell + persistent thread list + focused conversation.
+   Mobile retains the existing history overlay, IME and safe-area behavior. */
+[data-ai-conversation-design2] {
+  min-width: 0;
+  max-width: 100%;
+  isolation: isolate;
+}
+
+[data-ai-conversation-design2] > [data-assistant-history-pane] {
+  background: var(--dtsc-surface, inherit);
+}
+
+[data-ai-conversation-design2] > [data-assistant-message-pane] {
+  min-height: 0;
+  min-width: 0;
+  background: var(--dtsc-page, inherit);
+}
+
+[data-ai-conversation-design2] > [data-assistant-message-pane] > header {
+  z-index: 1;
+  min-width: 0;
+  background: var(--dtsc-surface, inherit);
+}
+
+[data-ai-conversation-design2] > [data-assistant-message-pane] > header button {
+  min-width: 0;
+}
+
+[data-ai-conversation-design2] [data-assistant-history-pane] button:focus-visible,
+[data-ai-conversation-design2] [data-assistant-message-pane] button:focus-visible {
+  outline: 2px solid var(--dtsc-focus, #22d3ee);
+  outline-offset: 2px;
+}
+
+@media (min-width: 1024px) {
+  [data-ai-conversation-design2] {
+    height: 100% !important;
+    min-height: 0;
+  }
+  [data-ai-conversation-design2] > [data-assistant-history-pane] {
+    display: block;
+    overflow: hidden;
+    min-width: 0;
+  }
+  [data-ai-conversation-design2] > [data-assistant-message-pane] {
+    height: 100%;
+    overflow: hidden;
+  }
+}
+
+@media (max-width: 1023px) {
+  [data-ai-conversation-design2] [data-assistant-history-pane] {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-ai-conversation-design2] *,
+  [data-ai-conversation-design2] *::before,
+  [data-ai-conversation-design2] *::after {
+    scroll-behavior: auto !important;
+  }
+}
