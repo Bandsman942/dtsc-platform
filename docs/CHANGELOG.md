@@ -1,3 +1,10 @@
+## 2026-11-08 — Hotfix #1068 — Conversations IA Design System 2.0 (candidat v1.6.4)
+
+- Chatbot général et Assistant entreprise partagent un espace conversationnel 3 zones desktop (rail global DTSC, historique permanent, conversation et composer flexible), en conservant les modèles de permissions distincts.
+- Navigation de retour mobile dédiée à l'historique, liens profonds et précédent/suivant navigateur synchronisés dans l'URL sans rechargement, recherches/filtres/favoris/projets/archives maintenus.
+- Styles DS 2.0 responsive FR/EN, clair/sombre, clavier, safe-area et reduced-motion, QA et E2E. Pas de fusion/Production avant validation E2E propriétaire des hotfixes A+B+C.
+- Documentation : `docs/HOTFIX_1068_AI_CONVERSATION_DESIGN2.md`.
+
 ## 2026-11-08 — Hotfix #1064 — RETAIL Core sans Shop, packs administrés (candidat v1.6.2)
 
 - Commerce de détail générique désormais indépendant de SHOP : POS et clôture accessibles selon l'abonnement, et TELCO/Mobile Money OFF par défaut pour les nouveaux tenants génériques.
