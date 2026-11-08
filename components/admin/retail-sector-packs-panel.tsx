@@ -35,6 +35,7 @@ export function RetailSectorPacksPanel({
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [pending, setPending] = useState<{ moduleCode: RetailPackCode; enabled: boolean } | null>(null);
+  const [classificationPending, setClassificationPending] = useState<"GENERAL" | "SHOP" | null>(null);
   const [reason, setReason] = useState("");
   const [password, setPassword] = useState("");
   const [code, setCode] = useState("");
@@ -61,13 +62,14 @@ export function RetailSectorPacksPanel({
   const cancel = () => {
     if (saving) return;
     setPending(null);
+    setClassificationPending(null);
     setReason("");
     setPassword("");
     setCode("");
   };
 
   async function submit() {
-    if (!pending || reason.trim().length < 8 || password.length < 1 || saving) return;
+    if ((!pending && !classificationPending) || reason.trim().length < 8 || password.length < 1 || saving) return;
     setSaving(true);
     try {
       const verification = await fetch("/api/auth/step-up", {
@@ -78,7 +80,9 @@ export function RetailSectorPacksPanel({
       if (!verification.ok) throw new Error(verified?.error || (en ? "Identity verification failed." : "Échec de la vérification d'identité."));
       const response = await fetch(`/api/admin/client-organizations/${encodeURIComponent(organizationId)}/retail-extensions`, {
         method: "PATCH", headers: { "content-type": "application/json" },
-        body: JSON.stringify({ moduleCode: pending.moduleCode, enabled: pending.enabled, reason: reason.trim() }),
+        body: JSON.stringify(pending
+          ? { operation: "extension", moduleCode: pending.moduleCode, enabled: pending.enabled, reason: reason.trim() }
+          : { operation: "classification", businessSubtypeCode: classificationPending === "SHOP" ? "SHOP" : null, reason: reason.trim() }),
       });
       const result = await response.json().catch(() => null) as { state?: State; error?: string } | null;
       if (!response.ok) throw new Error(result?.error || (en ? "Unable to change this extension." : "Modification de l'extension impossible."));
@@ -86,6 +90,7 @@ export function RetailSectorPacksPanel({
       else await load();
       toastSuccess(en ? "The Retail extension has been updated." : "Extension RETAIL actualisée.");
       setPending(null);
+      setClassificationPending(null);
       setPassword("");
       setCode("");
       setReason("");
@@ -128,7 +133,13 @@ export function RetailSectorPacksPanel({
               <div className="rounded-2xl border border-dtsc-border bg-dtsc-surface p-4">
                 <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-dtsc-muted"><ShieldCheck size={16}/>{en ? "Business classification" : "Classification métier"}</div>
                 <p className="mt-2 text-lg font-black text-dtsc-ink">{data.businessSubtypeCode === "SHOP" ? "SHOP" : (en ? "General retail" : "Commerce de détail général")}</p>
-                <p className="text-xs text-dtsc-muted">{en ? "Historical Shop memberships remain compatible." : "Les entreprises historiques SHOP restent compatibles."}</p>
+                <p className="text-xs text-dtsc-muted">{en ? "Historical data and modules stay intact." : "Les données et les modules historiques restent conservés."}</p>
+                <Button type="button" variant="outline" className="mt-3 w-full min-h-11"
+                  disabled={saving} onClick={() => setClassificationPending(data.businessSubtypeCode === "SHOP" ? "GENERAL" : "SHOP")}>
+                  {data.businessSubtypeCode === "SHOP"
+                    ? (en ? "Reclassify as general retail" : "Reclasser en commerce général")
+                    : (en ? "Classify as Shop" : "Déclarer le sous-secteur SHOP")}
+                </Button>
               </div>
             </div>
 
@@ -182,7 +193,9 @@ export function RetailSectorPacksPanel({
                 {data.history.map((item) => <li key={item.id} className="min-w-0 rounded-lg border border-dtsc-border bg-dtsc-page p-3 text-xs">
                   <div className="flex min-w-0 flex-wrap items-center gap-2 font-bold text-dtsc-ink">
                     <CheckCircle2 size={14} className="text-emerald-600" aria-hidden="true"/>
-                    {item.moduleCode || "RETAIL"} · {item.action.endsWith("_ENABLED") ? (en ? "Enabled" : "Activé") : (en ? "Disabled" : "Désactivé")}
+                    {item.moduleCode || "RETAIL"} · {item.action === "DTSC_RETAIL_CLASSIFICATION_CHANGED"
+                      ? (en ? "Classification updated" : "Classification modifiée")
+                      : item.action.endsWith("_ENABLED") ? (en ? "Enabled" : "Activé") : (en ? "Disabled" : "Désactivé")}
                   </div>
                   <p className="mt-1 text-dtsc-muted">{item.actorName || "DTSC"} · {new Intl.DateTimeFormat(en ? "en-GB" : "fr-FR", { dateStyle: "short", timeStyle: "short" }).format(new Date(item.at))}</p>
                   {item.reason ? <p className="mt-1 break-words text-dtsc-muted">{item.reason}</p> : null}
@@ -193,11 +206,17 @@ export function RetailSectorPacksPanel({
         )}
       </div>
 
-      <Dialog open={Boolean(pending)} onClose={cancel}
-        title={pending?.enabled ? (en ? "Enable Retail extension" : "Activer l'extension RETAIL") : (en ? "Disable Retail extension" : "Désactiver l'extension RETAIL")}
+      <Dialog open={Boolean(pending || classificationPending)} onClose={cancel}
+        title={classificationPending
+          ? (en ? "Change Retail classification" : "Modifier la classification RETAIL")
+          : pending?.enabled ? (en ? "Enable Retail extension" : "Activer l'extension RETAIL")
+          : (en ? "Disable Retail extension" : "Désactiver l'extension RETAIL")}
         description={en ? "Justification, password and MFA (if enabled) are required." : "Motif, mot de passe et code MFA si configuré : confirmation obligatoire."}>
         <div className="space-y-3">
-          <p className="flex items-center gap-2 text-sm font-semibold text-dtsc-ink"><LockKeyhole size={18} aria-hidden="true"/> {pending?.moduleCode}</p>
+          <p className="flex items-center gap-2 text-sm font-semibold text-dtsc-ink"><LockKeyhole size={18} aria-hidden="true"/> {pending?.moduleCode || (classificationPending === "SHOP" ? "SHOP" : "RETAIL_CORE")}</p>
+          {classificationPending ? <p className="rounded-xl border border-amber-400/30 bg-amber-500/10 p-3 text-xs font-semibold text-amber-700 dark:text-amber-300">
+            {en ? "This changes classification only. Existing modules and financial records are preserved." : "Seule la classification change. Les modules et écritures financières sont conservés."}
+          </p> : null}
           <label className="block text-sm font-semibold text-dtsc-ink">
             {en ? "Reason (8–500 characters)" : "Motif (8 à 500 caractères)"}
             <textarea className="mt-1 min-h-24 w-full rounded-xl border border-dtsc-border bg-dtsc-surface p-3 text-sm focus-visible:ring-2 focus-visible:ring-cyan-400"
