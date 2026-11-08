@@ -34,10 +34,8 @@ test.describe("#1061 Neon-like desktop rail and WhatsApp-like collaborators", ()
     await expect(shell).toHaveAttribute("data-sidebar-collapsed", "true");
     await expect(toggle).toHaveAttribute("aria-expanded", "false");
     await expect(page.locator("[data-sidebar-nav-link]:visible")).not.toHaveCount(0);
-    const narrow = await sidebar.boundingBox();
-    expect(narrow?.width).toBeLessThan(100);
-    const enlarged = await content.boundingBox();
-    expect(enlarged?.width).toBeGreaterThan(wide?.width ?? 0);
+    await expect.poll(async () => Math.round((await sidebar.boundingBox())?.width ?? 0)).toBe(76);
+    await expect.poll(async () => Math.round((await content.boundingBox())?.width ?? 0)).toBeGreaterThan(Math.round(wide?.width ?? 0));
     await page.reload({ waitUntil: "domcontentloaded" });
     await expect(shell).toHaveAttribute("data-sidebar-collapsed", "true");
 
