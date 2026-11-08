@@ -1,0 +1,40 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+const read = p => readFileSync(p,"utf8");
+const personal=read("components/chat/chat-workspace-v2.tsx");
+const enterprise=read("components/enterprise/enterprise-ai-workspace.tsx");
+const shared=read("components/chat/assistant-conversation-ui.tsx");
+const back=read("components/chat/assistant-thread-back-button.tsx");
+const root=read("components/chat/assistant-immersive-workspace-shell.tsx");
+const app=read("app/layout.tsx");
+const styles=read("app/assistant-design2.css");
+const generalPage=read("app/chat/page.tsx");
+const enterprisePage=read("app/enterprise-modules/[moduleCode]/page.tsx");
+const guard=read("components/chat/AGENTS.md");
+
+for(const [name,code] of [["general",personal],["enterprise",enterprise]]) {
+  assert.match(code,/data-ai-conversation-design2/,`${name} must use DS2 layout`);
+  assert.match(code,/data-assistant-history-pane/,`${name} must retain visible desktop sidebar`);
+  assert.match(code,/data-assistant-message-pane/,`${name} must have independent message pane`);
+  assert.match(code,/AssistantThreadBackButton/,`${name} mobile return must use history`);
+  assert.match(code,/window\.history\.pushState/,`${name} must preserve deep-link history`);
+  assert.match(code,/window\.addEventListener\("popstate"/,`${name} must respond to browser back/forward`);
+  assert.match(code,/lg:grid-cols-\[minmax\(260px,320px\)_minmax\(0,1fr\)\]/,`${name} must provide stable responsive split`);
+  assert.match(code,/AssistantComposer/,`${name} must reuse canonical composer`);
+  assert.match(code,/filter === "PINNED"/,`${name} must preserve pinned filter`);
+  assert.match(code,/filter === "ARCHIVED"/,`${name} must preserve archive filter`);
+}
+assert.match(back,/Retour aux conversations/);
+assert.match(back,/lg:hidden/);
+assert.match(back,/aria-label=\{label\}/);
+assert.match(generalPage,/hideContextualBack desktopWorkspaceMode="conversation"/);
+assert.match(enterprisePage,/hideContextualBack desktopWorkspaceMode="conversation"/);
+assert.match(root,/data-assistant-immersive-root/);
+assert.match(styles,/@media \(min-width: 1024px\)/);
+assert.match(styles,/prefers-reduced-motion/);
+assert.match(app,/import "\.\/assistant-design2\.css"/);
+assert.match(shared,/onKeyDown/);
+assert.match(shared,/event\.shiftKey/);
+assert.match(shared,/event\.nativeEvent\.isComposing/);
+assert.match(guard,/ne doit pas déclencher de `scrollIntoView/);
+console.log("PASS #1068: shared desktop split, mobile return, URL-first history and responsive assistant UX");
