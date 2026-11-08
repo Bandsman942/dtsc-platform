@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { CheckCircle2, Printer, RotateCcw, Search, Share2, ShoppingCart, XCircle } from "lucide-react";
 import { useAppLocale } from "@/components/i18n/locale-provider";
@@ -146,10 +147,12 @@ export function RetailPosDtscWorkspace({
   organizationId,
   organizationName,
   definition,
+  preferredSiteId,
 }: {
   organizationId: string;
   organizationName: string;
   definition: EnterpriseModuleDefinition;
+  preferredSiteId?: string;
 }) {
   const locale: "fr" | "en" = useAppLocale() === "en" ? "en" : "fr";
   return (
@@ -164,6 +167,7 @@ export function RetailPosDtscWorkspace({
           <PosOperate
             organizationId={organizationId}
             dashboard={dashboard}
+            preferredSiteId={preferredSiteId}
             locale={locale}
             busyAction={context.busyAction}
             mutate={context.mutate}
@@ -178,6 +182,7 @@ export function RetailPosDtscWorkspace({
 function PosOperate({
   organizationId,
   dashboard,
+  preferredSiteId,
   locale,
   busyAction,
   mutate,
@@ -185,6 +190,7 @@ function PosOperate({
 }: {
   organizationId: string;
   dashboard: PosDashboard;
+  preferredSiteId?: string;
   locale: "fr" | "en";
   busyAction: string | null;
   mutate: RetailMutation;
@@ -199,7 +205,18 @@ function PosOperate({
   const openSessions = useMemo(() => sessions.filter((session) => session.status === "OPEN"), [sessions]);
   const [selectedCashSessionId, setSelectedCashSessionId] = useState("");
   const [search, setSearch] = useState("");
-  const [warehouseId, setWarehouseId] = useState(warehouses[0]?.id || "");
+  const [warehouseId, setWarehouseId] = useState(
+    warehouses.find((warehouse) => warehouse.site.id === preferredSiteId)?.id || warehouses[0]?.id || "",
+  );
+  useEffect(() => {
+    setWarehouseId((current) => {
+      // Only warehouses already scoped by the server may be selected. A forged
+      // siteId query parameter never grants additional POS access.
+      const preferred = warehouses.find((warehouse) => warehouse.site.id === preferredSiteId);
+      if (preferred && warehouses.find((warehouse) => warehouse.id === current)?.site.id !== preferredSiteId) return preferred.id;
+      return warehouses.some((warehouse) => warehouse.id === current) ? current : warehouses[0]?.id || "";
+    });
+  }, [warehouses, preferredSiteId]);
   const [products, setProducts] = useState<CatalogItem[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchError, setSearchError] = useState("");
@@ -604,6 +621,14 @@ function PosOperate({
 
   return (
     <div className="grid min-w-0 gap-5">
+      <div className="flex min-w-0 flex-wrap items-center justify-between gap-2 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2">
+        <span className="min-w-0 break-words text-xs font-semibold text-dtsc-muted">
+          {warehouses.find((warehouse) => warehouse.id === warehouseId)?.site.name || (locale === "fr" ? "Sélectionnez un point de vente" : "Select a store")}
+        </span>
+        <Link href="/enterprise-modules/RETAIL_POS?section=my-stores" className="inline-flex min-h-10 items-center rounded-lg px-3 text-xs font-black text-dtsc-blue hover:bg-dtsc-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400">
+          {locale === "fr" ? "Mes boutiques" : "My stores"}
+        </Link>
+      </div>
       <RetailPosCashSessionManager
         organizationId={organizationId}
         accounts={dashboard.accounts}
