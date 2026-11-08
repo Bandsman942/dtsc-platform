@@ -9,6 +9,7 @@ import {
   EnterpriseModuleConfigurationError,
 } from "@/lib/enterprise/module-subscription-reconciliation";
 import { normalizeEnterpriseModuleCode } from "@/lib/enterprise/module-registry";
+import { isRetailOptionalExtensionModule } from "@/lib/enterprise/retail/extension-policy";
 import { prisma } from "@/lib/prisma";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
@@ -67,7 +68,7 @@ export async function PATCH(req: Request, { params }: Params) {
     await writeApiLog({ request: req, statusCode: 404, userId: session.userId, startedAt });
     return NextResponse.json({ error: "Not found", message: "Le module demandé est introuvable dans cette entreprise." }, { status: 404 });
   }
-  if (enterpriseModule.isCore && !parsed.data.isEnabled) {
+  if (enterpriseModule.isCore && !isRetailOptionalExtensionModule(enterpriseModule.moduleCode) && !parsed.data.isEnabled) {
     await writeApiLog({ request: req, statusCode: 400, userId: session.userId, startedAt });
     return NextResponse.json({ error: "Core module", message: "Ce service fait partie du socle indispensable de l’entreprise et ne peut pas être désactivé." }, { status: 400 });
   }
