@@ -4,10 +4,9 @@ import { ArrowUpRight, BadgeDollarSign, Blocks, Bot, Gauge, LifeBuoy, ShieldChec
 import type { ElementType } from "react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Accordion, AccordionItem } from "@/components/ui/accordion";
-import { BusinessList, BusinessListItem } from "@/components/workspace/business-list";
+import { ModuleNavigationGrid } from "@/components/workspace/module-navigation-grid";
 import { EmptyState } from "@/components/workspace/empty-state";
 import { ModuleContent, ModuleHeader, ModuleWorkspace } from "@/components/workspace/module-workspace";
-import { StatusBadge } from "@/components/workspace/status-badge";
 import { canAccessAdministration } from "@/lib/admin-access";
 import { getSession, requireUser } from "@/lib/auth";
 import { getPendingEnterpriseInvitationCount } from "@/lib/enterprise-invitations";
@@ -34,7 +33,7 @@ type HubModule = {
   label: string;
   description: string;
   href: string;
-  meta: string;
+  icon: string | null;
 };
 
 type HubSubgroup = {
@@ -114,7 +113,7 @@ export default async function ModulesHubPage({ searchParams }: { searchParams: P
       label: item.label,
       description: item.description,
       href: item.href,
-      meta: item.host === "APP" ? "DTSC Platform" : item.host,
+      icon: item.iconKey,
     }));
     return {
       code: subgroup.code,
@@ -198,15 +197,7 @@ export default async function ModulesHubPage({ searchParams }: { searchParams: P
                 <AccordionItem key={subgroup.code} title={`${subgroup.label} · ${subgroup.modules.length}`}>
                   <div className="min-w-0 space-y-4">
                     <p className="break-words text-sm leading-6 text-dtsc-muted">{subgroup.description}</p>
-                    <BusinessList ariaLabel={subgroup.label}>
-                      {subgroup.modules.map((hubModule) => (
-                        <BusinessListItem key={`${subgroup.code}:${hubModule.code}`} title={hubModule.label} description={hubModule.description} status={<StatusBadge>{hubModule.meta}</StatusBadge>} actions={(
-                          <Link href={hubModule.href} className="inline-flex min-h-11 items-center gap-2 rounded-xl px-3 text-sm font-black text-dtsc-blue hover:bg-dtsc-soft">
-                            {isEnglish ? "Open" : "Ouvrir"}<ArrowUpRight className="h-4 w-4" />
-                          </Link>
-                        )} />
-                      ))}
-                    </BusinessList>
+                    <ModuleNavigationGrid ariaLabel={subgroup.label} locale={user.locale} items={subgroup.modules} />
                   </div>
                 </AccordionItem>
               ))}
