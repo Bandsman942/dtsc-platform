@@ -59,8 +59,8 @@ export function retailReadinessDetail(code: string, detail: unknown, complete: b
       const candidateCount = asCount(value.candidateCount);
       if (complete) return en ? `Stock warehouse selected: ${name}${siteName ? ` · ${siteName}` : ""}.` : `Dépôt de stock sélectionné : ${name}${siteName ? ` · ${siteName}` : ""}.`;
       if (!siteName) return en
-        ? "Select the store location first. The Shop can then identify warehouses attached to that site."
-        : "Sélectionnez d’abord le point de vente. Le Shop pourra ensuite identifier les dépôts rattachés à ce site.";
+        ? "Select the store location first. The Retail workspace can then identify warehouses attached to that site."
+        : "Sélectionnez d’abord le point de vente. L’espace RETAIL pourra ensuite identifier les dépôts rattachés à ce site.";
       if (candidateCount > 1) return en
         ? `${candidateCount} active warehouses are attached to ${siteName}. Select the warehouse used for Retail stock, then save.`
         : `${candidateCount} dépôts actifs sont rattachés à ${siteName}. Sélectionnez le dépôt utilisé pour le stock du commerce de détail, puis enregistrez.`;
