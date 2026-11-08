@@ -57,7 +57,7 @@ export default async function ChatPage({
   }), await getAiPlatformPolicy());
 
   return (
-    <AppShell user={user}>
+    <AppShell user={user} hideContextualBack desktopWorkspaceMode="conversation">
       <AssistantImmersiveWorkspaceShell variant="chatbot">
         <ChatWorkspaceV2
           initialConversations={JSON.parse(JSON.stringify(conversations))}
