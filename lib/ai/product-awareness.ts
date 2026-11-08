@@ -1,11 +1,12 @@
 import "server-only";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
+import packageJson from "../../package.json";
 
 const PRODUCT_CHANGELOG_PATH = join(process.cwd(), "docs", "CHANGELOG.md");
 const PRODUCT_CHANGELOG_FRAGMENTS_DIR = join(process.cwd(), "docs", "changelog");
-export const AI_PRODUCT_CONTEXT_VERSION = "2026-08-17.1";
-const MAX_RELEASES = 4;
+export const AI_PRODUCT_CONTEXT_VERSION = `release-${packageJson.version}`;
+const MAX_RELEASES = 6;
 const MAX_ITEMS = 28;
 const MAX_ITEM_LENGTH = 320;
 const USER_FACING_SECTIONS = new Set(["ajouté", "amélioré", "modifié", "corrigé", "added", "improved", "changed", "fixed"]);
@@ -30,6 +31,9 @@ function normalizeProductChange(value: string) {
 function readVersionedProductChanges() {
   const sources: string[] = [];
   try {
+    // The root changelog is updated at each deployment; it must take precedence
+    // over dated historical fragments that may otherwise exhaust MAX_RELEASES.
+    sources.push(readFileSync(PRODUCT_CHANGELOG_PATH, "utf8"));
     if (existsSync(PRODUCT_CHANGELOG_FRAGMENTS_DIR)) {
       const fragments = readdirSync(PRODUCT_CHANGELOG_FRAGMENTS_DIR)
         .filter((name) => /^\d{4}-\d{2}-\d{2}.*\.md$/i.test(name))
@@ -38,7 +42,6 @@ function readVersionedProductChanges() {
         sources.push(readFileSync(join(PRODUCT_CHANGELOG_FRAGMENTS_DIR, fragment), "utf8"));
       }
     }
-    sources.push(readFileSync(PRODUCT_CHANGELOG_PATH, "utf8"));
   } catch {
     // A missing optional changelog source must not make an assistant route unavailable.
   }
@@ -67,7 +70,10 @@ export function getAiProductAwarenessSnapshot(): AiProductAwarenessSnapshot {
       currentSection = sectionMatch[1].trim().toLocaleLowerCase("fr");
       continue;
     }
-    if (!USER_FACING_SECTIONS.has(currentSection) || !rawLine.startsWith("- ")) continue;
+    // Modern hotfix entries use root-level bullets instead of ### Ajouté.
+    // These lines are still versioned release notes, not live feature state.
+    if (currentSection && !USER_FACING_SECTIONS.has(currentSection)) continue;
+    if (!rawLine.startsWith("- ")) continue;
 
     const normalized = normalizeProductChange(rawLine.slice(2));
     if (!normalized || TECHNICAL_ONLY.test(normalized)) continue;
@@ -85,14 +91,17 @@ export function getAiProductAwarenessSnapshot(): AiProductAwarenessSnapshot {
 
 export function buildAiProductAwarenessInstruction(locale: string) {
   const snapshot = getAiProductAwarenessSnapshot();
-  if (!snapshot.changes.length) return "";
-  const releaseLabel = snapshot.releases.join(", ");
-  const list = snapshot.changes.map((change) => `- ${change}`).join("\n");
+  // Always include build provenance, even if the packaged release text is absent.
+  // Do not quietly fall back to a hard-coded historical product revision.
+  const releaseLabel = snapshot.releases.length ? snapshot.releases.join(", ") : "not available";
+  const runtimeVersion = packageJson.version;
+  const list = snapshot.changes.length ? snapshot.changes.map((change) => `- ${change}`).join("\n") : "(no verified release details available)";
 
   if (locale === "en") {
     return [
       "CURRENT DTSC PRODUCT AWARENESS (versioned, trusted application context):",
-      `Context version: ${snapshot.contextVersion}. Deployment revision: ${snapshot.revision}. Product releases represented: ${releaseLabel}.`,
+      `Current application build: v${runtimeVersion}. Context version: ${snapshot.contextVersion}. Deployment revision: ${snapshot.revision}. Product releases represented: ${releaseLabel}.`,
+      "The release date is the date of the deployed build, NOT the age of old embedded documents. Do not claim the build is stale because an archived article is older.",
       "Treat the release notes below as newer than older static product descriptions when they conflict.",
       "Release notes describe shipped product changes, not live connector readiness, plan ownership, or tool execution. Check authorized current state before making such claims.",
       "Use them only to understand current DTSC user-facing capabilities. Never expose implementation details, secret configuration or internal identifiers from this context.",
@@ -103,7 +112,8 @@ export function buildAiProductAwarenessInstruction(locale: string) {
 
   return [
     "ACTUALITÉ PRODUIT DTSC (contexte applicatif versionné et fiable) :",
-    `Version du contexte : ${snapshot.contextVersion}. Révision de déploiement : ${snapshot.revision}. Versions produit représentées : ${releaseLabel}.`,
+    `Version applicative courante : v${runtimeVersion}. Version du contexte : ${snapshot.contextVersion}. Révision de déploiement : ${snapshot.revision}. Notes de version représentées : ${releaseLabel}.`,
+    "La version applicative déployée fait autorité sur la date de vieux articles embarqués : une ancienne documentation ne prouve pas que les déploiements récents sont absents.",
     "Considère les nouveautés ci-dessous comme plus récentes que les anciennes descriptions statiques lorsqu’elles se contredisent.",
     "Les notes de version décrivent des livraisons, pas la disponibilité opérationnelle actuelle des connecteurs, l’abonnement effectif ni une exécution d’outil. Vérifie l’état courant autorisé avant toute affirmation de ce type.",
     "Utilise-les uniquement pour comprendre les capacités DTSC visibles par les utilisateurs. N’expose jamais les détails d’implémentation, configurations secrètes ou identifiants internes issus de ce contexte.",
