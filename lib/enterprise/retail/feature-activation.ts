@@ -23,7 +23,7 @@ function flags(settings: Prisma.JsonValue | null | undefined): ActivationSetting
 }
 
 async function preflight(db: Reader, organizationId: string) {
-  const [organization, configuration, sites, finance] = await Promise.all([
+  const [organization, configuration, configuredStores, finance] = await Promise.all([
     db.organization.findFirst({
       where: { id: organizationId, status: "ACTIVE", deletedAt: null, organizationType: "CLIENT", sectorCode: "COMMERCE_RETAIL" },
       select: { id: true },
@@ -32,12 +32,18 @@ async function preflight(db: Reader, organizationId: string) {
       where: { organizationId }, select: { id: true, status: true, baseCurrencyCode: true, settingsJson: true, revision: true },
     }),
     db.enterpriseSite.findMany({
-      where: { organizationId, status: "ACTIVE", archivedAt: null }, take: 101,
+      where: { organizationId, status: "ACTIVE", archivedAt: null, siteType: "STORE" }, take: 101,
       select: { id: true },
     }),
     resolveEnterpriseFinanceReadiness(db, organizationId, { mode: "POSTING" }),
   ]);
   if (!organization) throw new EnterpriseRetailError("RETAIL_SECTOR_REQUIRED", 403);
+  // Headquarters and back offices are not retail stores. Older tenants with
+  // only BRANCH sites keep the previous prerequisite contract.
+  const sites = configuredStores.length ? configuredStores : await db.enterpriseSite.findMany({
+    where: { organizationId, status: "ACTIVE", archivedAt: null }, take: 101,
+    select: { id: true },
+  });
   const siteIds = sites.map((site) => site.id);
   const [warehouses, accounts, assignments] = await Promise.all([
     db.enterpriseWarehouse.findMany({

@@ -47,6 +47,14 @@ export async function renderRetailModulePage(moduleCode: "RETAIL_POS" | "MOBILE_
 
   const locale: "fr" | "en" = user.locale === "en" ? "en" : "fr";
   const canManagePos = ["OWNER", "ADMIN_ENTREPRISE", "ADMIN_ENTERPRISE"].includes(membership.role);
+  const companySites = moduleCode === "RETAIL_DAILY_CLOSE" && canManagePos
+    ? await prisma.enterpriseSite.findMany({
+      where: { organizationId, status: "ACTIVE", archivedAt: null },
+      select: { id: true, name: true, code: true, siteType: true }, orderBy: { name: "asc" }, take: 500,
+    })
+    : undefined;
+  const adminStores = companySites?.some((site) => site.siteType === "STORE")
+    ? companySites.filter((site) => site.siteType === "STORE") : companySites;
   const posSection = moduleCode === "RETAIL_POS" ? getRetailPosSection(options?.section, canManagePos) : undefined;
   if (moduleCode === "RETAIL_POS" && options?.section && !posSection) notFound();
 
@@ -58,6 +66,8 @@ export async function renderRetailModulePage(moduleCode: "RETAIL_POS" | "MOBILE_
             organizationId={organizationId}
             organizationName={organization.name}
             definition={access.definition}
+            adminStores={adminStores}
+            preferredSiteId={options?.siteId}
           />
         ) : moduleCode === "RETAIL_POS" ? (
           posSection ? (

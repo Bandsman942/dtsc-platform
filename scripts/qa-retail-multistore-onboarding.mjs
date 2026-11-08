@@ -14,7 +14,7 @@ const compile = (path, imports) => {
   return exports;
 };
 
-let config = { baseCurrencyCode: "CDF", settingsJson: { siteStaffIsolationEnabled: true } };
+let config = { baseCurrencyCode: "CDF", settingsJson: { siteStaffIsolationEnabled: true, invoiceCheckoutEnabled: true } };
 const sites = [
   { id: "shopA", name: "Boutique A", code: "A", siteType: "STORE" },
   { id: "shopB", name: "Boutique B", code: "B", siteType: "STORE" },
@@ -29,6 +29,9 @@ const db = {
   enterpriseSite: { findMany: async () => sites },
   enterpriseWarehouse: { findMany: async () => [{ id: "whA", siteId: "shopA" }, { id: "whB", siteId: "shopB" }] },
   enterpriseFinancialAccount: { findMany: async () => [{ id: "accA", siteId: "shopA", currencyCode: "CDF" }, { id: "accB", siteId: "shopB", currencyCode: "USD" }] },
+  enterpriseInventoryBalance: { groupBy: async () => [{ warehouseId: "whA", _count: { _all: 2 } }] },
+  enterpriseCashSession: { findMany: async () => [{ financialAccountId: "accA" }] },
+  enterpriseCatalogItem: { count: async () => 2 },
   enterpriseRetailSiteAssignment: {
     findMany: async ({ where }) => where.userId ? assignments.filter((row) => row.userId === where.userId) : assignments,
   },
@@ -36,6 +39,7 @@ const db = {
 };
 const service = compile("lib/enterprise/retail/multi-store-onboarding.ts", {
   "@/lib/prisma": { prisma: db },
+  "@/lib/enterprise/retail/accounting-readiness": { getRetailAccountingReadiness: async () => ({ ready: true, functionalCurrencyCode: "CDF" }) },
   "@/lib/enterprise/retail/site-access": {
     RETAIL_OWNER_ROLES: new Set(["OWNER", "ADMIN_ENTREPRISE", "ADMIN_ENTERPRISE"]),
     retailStaffIsolationIsEnabled: (settings) => settings?.siteStaffIsolationEnabled === true,
@@ -45,6 +49,8 @@ const service = compile("lib/enterprise/retail/multi-store-onboarding.ts", {
 
 const result = await service.getRetailMultiStoreOnboarding("tenant");
 assert.equal(result.sites[0].ready, true, "Store A has stock, CDF cash, staff and isolation");
+assert.equal(result.sites[0].operationalReady, true, "Operational check must include finance, catalogue, inventory and checkout");
+assert.equal(result.sites[2].operationalReady, false, "An unconfigured store cannot be operational");
 assert.equal(result.sites[1].ready, false, "USD cash account must not pass CDF requirement");
 assert.equal(result.sites[2].ready, false, "Unconfigured store must remain incomplete");
 assert.equal(result.sites[0].staffCount, 2);
