@@ -1,6 +1,6 @@
 # Hotfix B #1068 — Conversations IA DS 2.0, navigation déterministe
 
-**Date** : 8 novembre 2026. **Version candidate : v1.6.4.** Base : main v1.6.2, Hotfix A complémentaire #1067.
+**Date** : 8 novembre 2026. **Version candidate : v1.6.3 sur la base main v1.6.2 ; incrément séquentiel après fusion précédente.** Base : main v1.6.2, Hotfix A complémentaire #1067.
 
 ## Couverture
 Le chatbot général `/chat` et l'Assistant entreprise `/enterprise-modules/AI_ASSISTANT` partagent déjà `AssistantConversationUI` (messages, composer multiligne, préférences). Le présent hotfix ajoute une seule convention d'interaction : **rail DTSC rétractable du shell + colonne Conversations (260–320 px) + fil de messages flexible**. Listes épinglées, archives, projets, recherche et menus existants restent conservés. Le contenu ne sort pas du viewport ni du périmètre autorisé.
