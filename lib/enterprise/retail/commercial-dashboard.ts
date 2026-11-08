@@ -1,4 +1,6 @@
 import type { RetailModuleCode } from "@/lib/enterprise/retail/constants";
+import { getRetailMetricsByCurrency } from "@/lib/enterprise/retail/commercial-guardrails";
+import { retailPosDashboardSiteScope } from "@/lib/enterprise/retail/site-access";
 import {
   getRetailDashboardOrganizationProjection,
   getRetailDashboardPeriodProjection,
@@ -85,18 +87,38 @@ export async function getCommercialRetailDashboardRead(
       && telcoConfiguration.providers.every((provider) => provider.ready),
   );
 
+  const siteScope = moduleCode === "RETAIL_POS"
+    ? await retailPosDashboardSiteScope(organizationId, userId)
+    : null;
+  const isolate = siteScope?.isolationEnabled === true;
+  const visibleSites = new Set(siteScope?.visibleSiteIds || []);
+  const salesSites = new Set(siteScope?.salesSiteIds || []);
+  const collectionSites = new Set(siteScope?.collectionSiteIds || []);
+  const cashSessions = isolate
+    ? userProjection.cashSessions.filter((session) => session.financialAccount.siteId && collectionSites.has(session.financialAccount.siteId))
+    : userProjection.cashSessions;
+  // The period projection is tenant-wide and cacheable. Never serialize its
+  // aggregate to an isolated operator: recompute it with the permitted sites.
+  const scopedMetrics = isolate
+    ? await getRetailMetricsByCurrency(organizationId, new Date(period.range.from), new Date(period.range.to), "RETAIL_POS", siteScope.salesSiteIds)
+    : period.metricsByCurrency;
+
   const dashboard = {
     configuration: organization.configuration,
     providers: organization.providers,
-    accounts: organization.accounts,
-    warehouses: organization.warehouses,
+    accounts: isolate ? organization.accounts.filter((account) => account.siteId && collectionSites.has(account.siteId)) : organization.accounts,
+    warehouses: isolate ? organization.warehouses.filter((warehouse) => visibleSites.has(warehouse.siteId)) : organization.warehouses,
     catalogItems: organization.catalogItems,
     inventoryItems: organization.inventoryItems,
-    cashSession: userProjection.cashSession,
-    cashSessions: userProjection.cashSessions,
+    cashSession: isolate ? cashSessions.find((session) => session.status === "OPEN") || cashSessions[0] || null : userProjection.cashSession,
+    // Telco and Mobile Money retain their complete current-user till list;
+    // only RETAIL_POS may apply boutique-level isolation.
+    ...(moduleCode === "RETAIL_POS"
+      ? { cashSessions }
+      : { cashSessions: userProjection.cashSessions }),
     mobileMoneyConfiguration,
     telcoConfiguration,
-    metricsByCurrency: period.metricsByCurrency,
+    metricsByCurrency: scopedMetrics,
     fxReadiness,
     accountingReadiness: period.accountingReadiness,
     reportingReadiness,
@@ -109,7 +131,7 @@ export async function getCommercialRetailDashboardRead(
       readyForTelco: canonicalReadiness.ready && allTelcoProvidersReady,
     },
     recent: {
-      sales: period.sales,
+      sales: isolate ? period.sales.filter((sale) => sale.siteId && salesSites.has(sale.siteId)) : period.sales,
       mobileMoney: period.mobileMoney.map((item) => ({ ...item, customerPhoneMasked: phoneForList(item.customerPhone) })),
       topups: period.topups.map((item) => ({ ...item, destinationPhoneMasked: phoneForList(item.destinationPhone) })),
       closes: period.closes,

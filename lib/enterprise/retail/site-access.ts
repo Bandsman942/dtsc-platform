@@ -125,6 +125,40 @@ export async function retailSitesForCapability(
   return { isolationEnabled: true, isOwner: false, siteIds };
 }
 
+/** The POS dashboard combines cached organization-wide projections. This
+ * per-request scope must be applied after cache reads and before serialization:
+ * neither a shared cache key nor a client-side warehouse selector is an ACL.
+ */
+export async function retailPosDashboardSiteScope(
+  organizationId: string,
+  userId: string,
+  database: RetailSiteAccessReader = prisma,
+): Promise<{ isolationEnabled: boolean; visibleSiteIds: string[]; salesSiteIds: string[]; collectionSiteIds: string[] }> {
+  const [membership, configuration] = await Promise.all([
+    database.organizationMember.findFirst({
+      where: { organizationId, userId, status: "ACTIVE", removedAt: null }, select: { role: true },
+    }),
+    database.enterpriseRetailConfiguration.findUnique({ where: { organizationId }, select: { settingsJson: true } }),
+  ]);
+  if (!membership) throw new EnterpriseRetailError("RETAIL_SITE_ACCESS_DENIED", 403);
+  if (RETAIL_OWNER_ROLES.has(membership.role) || !retailStaffIsolationIsEnabled(configuration?.settingsJson)) {
+    return { isolationEnabled: false, visibleSiteIds: [], salesSiteIds: [], collectionSiteIds: [] };
+  }
+  const assignments = await database.enterpriseRetailSiteAssignment.findMany({
+    where: { organizationId, userId, isActive: true },
+    select: { siteId: true, roleCode: true, permissionsJson: true },
+  });
+  const byCapability = (capability: RetailSiteCapability) => [...new Set(assignments
+    .filter((assignment) => siteStaffCapabilities(assignment.roleCode, assignment.permissionsJson).includes(capability))
+    .map((assignment) => assignment.siteId))];
+  const salesSiteIds = byCapability("VIEW_SALES");
+  const collectionSiteIds = byCapability("COLLECT_PAYMENT");
+  const visibleSiteIds = [...new Set([
+    ...salesSiteIds, ...collectionSiteIds, ...byCapability("VIEW_STOCK"), ...byCapability("PREPARE_INVOICE"),
+  ])];
+  return { isolationEnabled: true, visibleSiteIds, salesSiteIds, collectionSiteIds };
+}
+
 /** Scope invoices to the operator's *assigned* stores. Staff cutover is
  * deliberately gated twice until every legacy route has been audited.
  * Owners keep a complete company-wide view.
