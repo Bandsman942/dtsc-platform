@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 const load = (path) => readFileSync(path, "utf8");
 const page = load("app/admin/console-page.tsx");
 const subsection = load("components/admin/console-subsection.tsx");
+const subsectionCards = load("components/admin/console-subsection-cards.tsx");
 const fr = JSON.parse(load("locales/fr.json")).console.detailSections;
 const en = JSON.parse(load("locales/en.json")).console.detailSections;
 const routes = load("lib/console/console-routes.ts");
@@ -20,8 +21,10 @@ for (const lib of ["ConsoleAiConfigurationPanel", "ConsoleAiPolicyManager", "Con
   assert.match(page, new RegExp(`<${lib}\\b`), `Functional panel lost: ${lib}`);
 }
 assert.match(subsection, /scroll-mt-24/);
-assert.match(subsection, /<Link key=\{item.id\}/);
-assert.match(subsection, /aria-label=\{label\}/);
+assert.match(subsection, /<ConsoleSubsectionCards items=\{items\} label=\{label\}/);
+assert.match(subsectionCards, /<Link key=\{item.id\}/);
+assert.match(subsectionCards, /aria-label=\{label\}/);
+assert.match(subsectionCards, /aria-label=\{label\}/);
 assert.match(page, /<ModuleMetrics label=\{translate\(locale, "console.detailSections.supportIndicators"\)\}/);
 assert.match(subsection, /<section id=\{id\}/);
 const ids = [...page.matchAll(/<ConsoleSubsection id="([^"]+)"/g)].map((m) => m[1]);
