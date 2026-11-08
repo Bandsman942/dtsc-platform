@@ -25,4 +25,4 @@ Automatique : `node scripts/qa-hotfix-1046-retail-collaboration-ui.mjs`, `pnpm q
 5. Dans **Mes collaborateurs** : vérifier la liste sans barre de retour supérieure, utiliser le retour discret, ouvrir un groupe et revenir à la liste ; contrôler les messages, pièces jointes, vocaux, appels audio/vidéo, recherche et menus.
 6. Sur **Android Chrome** et **iOS/PWA** : ouvrir le clavier, rédiger un long message, faire défiler le fil, vérifier que le compositeur n'est jamais caché ou couvert par un bouton flottant, et que la navigation native du navigateur reste fonctionnelle.
 
-**Garde-fou de livraison :** n'effectuer aucune fusion ou publication Production avant `E2E #1046 BON` explicite du propriétaire et la réussite des Quality Gates. Les previews Vercel restent désactivées.
+**Garde-fou de livraison :** n'effectuer aucune fusion ou publication Production avant `E2E #1048 BON` explicite du propriétaire sur la PR active [#1048](https://github.com/Bandsman942/dtsc-platform/pull/1048) et la réussite des Quality Gates. Les previews Vercel restent désactivées.
