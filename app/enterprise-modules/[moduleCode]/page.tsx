@@ -78,7 +78,7 @@ export default async function EnterpriseModulePage({ params }: Params) {
     ]);
     const models = filterPlatformAllowedAiModels(listCatalogAiModelsForUi({ context: "ORGANIZATION", locale: user.locale, planCode }), platformPolicy);
     return (
-      <AppShell user={user}>
+      <AppShell user={user} hideContextualBack desktopWorkspaceMode="conversation">
         <AssistantImmersiveWorkspaceShell variant="enterprise">
           <EnterpriseAiWorkspace
             organizationId={organizationId}

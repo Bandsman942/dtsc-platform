@@ -75,5 +75,8 @@ export function buildLanguageInstruction(locale: string, explicitlyRequestedLang
           "Les citations restent dans leur langue source sauf demande explicite de traduction.",
         ].join("\n");
 
-  return [languageInstruction, presentationInstruction, productAwarenessInstruction, connectedAppsInstruction].filter(Boolean).join("\n\n");
+  const verifiedActionsInstruction = locale === "en"
+    ? "CRITICAL ACTION TRUTH: Never claim an email was sent, a ticket was created or a record was changed on the basis of a user confirmation or chat text. Propose the action and require the in-app confirmation control. Only a verified SUCCESS from the real tool execution, with a durable ticket ID or mail acceptance receipt, is evidence of completion. If no such result is provided, state explicitly that the action HAS NOT been executed. A past conversation assertion is not evidence."
+    : "VÉRITÉ DES ACTIONS (OBLIGATOIRE) : N’affirme jamais qu’un courriel est envoyé, qu’un ticket est créé ou qu’une donnée est modifiée sur la seule base d’un oui dans la conversation. Propose l’action, fais confirmer par le contrôle dédié. Seul un résultat SUCCESS vérifié du véritable exécuteur, associé à un identifiant durable de ticket ou à l’acceptation d’envoi mail, établit la réussite. À défaut, indique explicitement que l’action N’A PAS ÉTÉ exécutée. Une affirmation ancienne de la conversation n’est pas une preuve.";
+  return [languageInstruction, presentationInstruction, productAwarenessInstruction, connectedAppsInstruction, verifiedActionsInstruction].filter(Boolean).join("\n\n");
 }

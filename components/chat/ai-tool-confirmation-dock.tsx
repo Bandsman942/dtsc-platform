@@ -6,6 +6,7 @@ import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/button";
 import { toastError, toastSuccess } from "@/lib/client-toast";
 import { cn } from "@/lib/utils";
+import { AiToolActionHistory } from "@/components/chat/ai-tool-action-history";
 
 type PendingConfirmation = {
   id: string;
@@ -105,7 +106,14 @@ export function AiToolConfirmationDock({ conversationId, locale = "fr" }: { conv
       const body = await response.json().catch(() => null) as ToolExecutionResult | null;
       if (!response.ok || !body?.ok) throw new Error(body?.error || body?.reasonCode || body?.status || "CONFIRM_FAILED");
 
+      if (item.toolCode === "SUPPORT_TICKET_CREATE" && typeof body.result?.ticketId !== "string") {
+        throw new Error("TICKET_NOT_CONFIRMED");
+      }
+      if (item.toolCode === "DTSC_CONTACT_EMAIL_SEND" && body.result?.sent !== true) {
+        throw new Error("EMAIL_NOT_CONFIRMED");
+      }
       setConfirmations((current) => current.filter((entry) => entry.id !== item.id));
+      window.dispatchEvent(new Event("dtsc-ai-tool-history-updated"));
       if (item.toolCode === "SUPPORT_TICKET_CREATE") {
         const ticketId = typeof body.result?.ticketId === "string" ? body.result.ticketId : "";
         toastSuccess(ticketId ? (en ? `Support ticket created: ${ticketId}.` : `Ticket support créé : ${ticketId}.`) : (en ? "Support ticket created." : "Ticket support créé."));
@@ -123,10 +131,11 @@ export function AiToolConfirmationDock({ conversationId, locale = "fr" }: { conv
     }
   }
 
-  if (!confirmations.length || !portalTarget) return null;
+  if (!portalTarget) return null;
 
   return createPortal(
     <div className="shrink-0 border-t border-dtsc-border/70 bg-dtsc-surface px-2.5 py-2 sm:px-4" aria-live="polite">
+      <AiToolActionHistory conversationId={conversationId} locale={locale} />
       <div className="mx-auto grid w-full max-w-4xl gap-2">
         {confirmations.map((item) => {
           const busy = busyId === item.id;

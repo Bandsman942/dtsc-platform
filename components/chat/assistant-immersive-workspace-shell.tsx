@@ -25,7 +25,7 @@ export function AssistantImmersiveWorkspaceShell({
       data-assistant-immersive-root
       data-assistant-immersive-variant={variant}
       className={cn(
-        "h-full min-h-0 min-w-0 overflow-hidden lg:h-[calc(100vh-7rem)]",
+        "h-full min-h-0 min-w-0 max-w-full overflow-hidden lg:h-full",
         className
       )}
     >

@@ -98,8 +98,8 @@ export const AI_TOOL_OUTPUT_SCHEMAS = {
     })).max(20),
   }).strict(),
   TASK_DRAFT_PREPARE: z.object({ title: z.string(), description: z.string().nullable(), status: z.literal("DRAFT") }),
-  SUPPORT_TICKET_CREATE: z.object({ ticketId: z.string(), status: z.string() }),
-  DTSC_CONTACT_EMAIL_SEND: z.object({ contactMessageId: z.string(), sent: z.boolean() }),
+  SUPPORT_TICKET_CREATE: z.object({ ticketId: z.string().min(1), status: z.string().min(1) }),
+  DTSC_CONTACT_EMAIL_SEND: z.object({ contactMessageId: z.string(), sent: z.literal(true) }),
   ENTERPRISE_FORM_BATCH_IMPORT: z.object({
     formCode: formImportCode,
     sourceLabel: z.string().nullable(),
