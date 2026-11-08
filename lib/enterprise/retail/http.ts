@@ -88,8 +88,8 @@ const ERROR_MESSAGES: Record<string, string> = {
   RETAIL_INVOICE_PAYMENT_NOT_CONFIRMED: "Seul un encaissement déjà confirmé par Finance peut être affecté à une facture.",
   RETAIL_INVOICE_PAYMENT_NOT_ALLOCATABLE: "Cet encaissement n'a plus de montant affectable. Consultez son historique Finance.",
   RETAIL_INVOICE_PAYMENT_TARGET_MISMATCH: "Cet encaissement a été créé pour une autre facture et ne peut pas être réaffecté.",
-  RETAIL_CONFIGURATION_REQUIRED: "Terminez d’abord la configuration du Shop avant de modifier les règles de stock.",
-  RETAIL_FEATURE_ACTIVATION_CONFLICT: "Les réglages du Shop ont changé. Actualisez la page avant de recommencer.",
+  RETAIL_CONFIGURATION_REQUIRED: "Terminez d’abord la configuration du commerce de détail avant de modifier les règles de stock.",
+  RETAIL_FEATURE_ACTIVATION_CONFLICT: "Les réglages RETAIL ont changé. Actualisez la page avant de recommencer.",
   RETAIL_FEATURE_ACTIVATION_UNCHANGED: "Cette fonctionnalité est déjà dans l’état demandé. Actualisez la page.",
   RETAIL_FEATURE_ACTIVATION_NOT_READY: "Les prérequis de la fonctionnalité ne sont pas tous remplis. Vérifiez les éléments signalés avant l’activation.",
   RETAIL_FEATURE_ISOLATION_DEPENDENCY: "Désactivez d’abord la facturation avancée avant de modifier l’isolation des boutiques.",
@@ -274,7 +274,7 @@ export function retailErrorResponse(error: unknown, fallback = "RETAIL_OPERATION
     return NextResponse.json(
       retailFailureOutcome(null, {
         error: error.code,
-        message: ERROR_MESSAGES[error.code] || "La comptabilisation de l’opération Shop n’est pas prête ou n’a pas pu être finalisée. Vérifiez la configuration Finance, les comptes et la valorisation du stock.",
+        message: ERROR_MESSAGES[error.code] || "La comptabilisation de l’opération RETAIL n’est pas prête ou n’a pas pu être finalisée. Vérifiez la configuration Finance, les comptes et la valorisation du stock.",
         details: error.details,
       }),
       { status: error.status },
