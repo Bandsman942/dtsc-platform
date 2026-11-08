@@ -111,7 +111,11 @@ export async function getCommercialRetailDashboardRead(
     catalogItems: organization.catalogItems,
     inventoryItems: organization.inventoryItems,
     cashSession: isolate ? cashSessions.find((session) => session.status === "OPEN") || cashSessions[0] || null : userProjection.cashSession,
-    cashSessions,
+    // Telco and Mobile Money retain their complete current-user till list;
+    // only RETAIL_POS may apply boutique-level isolation.
+    ...(moduleCode === "RETAIL_POS"
+      ? { cashSessions }
+      : { cashSessions: userProjection.cashSessions }),
     mobileMoneyConfiguration,
     telcoConfiguration,
     metricsByCurrency: scopedMetrics,
