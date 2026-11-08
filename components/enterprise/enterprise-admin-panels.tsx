@@ -24,6 +24,7 @@ import type {
   EnterpriseWorkflowItem,
 } from "@/lib/enterprise/enterprise-admin-types";
 import { RETAIL_PERMISSION_CATALOG } from "@/lib/enterprise/retail/constants";
+import { isRetailOptionalExtensionModule } from "@/lib/enterprise/retail/extension-policy";
 import { ENTERPRISE_INVITABLE_ROLE_OPTIONS, isEnterprisePrivilegedRole } from "@/lib/enterprise/member-invitation-roles";
 import { translate } from "@/lib/i18n";
 
@@ -131,10 +132,10 @@ const permissionLabels: Record<string, string> = {
   "enterprise.retail.telco.read": "Consulter les opérations Télécom",
   "enterprise.retail.telco.create": "Effectuer les recharges Télécom",
   "enterprise.retail.telco.manage": "Superviser les opérations Télécom",
-  "enterprise.retail.close.read": "Consulter les clôtures Shop",
-  "enterprise.retail.close.submit": "Soumettre une clôture Shop",
-  "enterprise.retail.close.validate": "Valider indépendamment une clôture Shop",
-  "enterprise.retail.close.manage": "Administrer les clôtures Shop",
+  "enterprise.retail.close.read": "Consulter les clôtures du commerce de détail",
+  "enterprise.retail.close.submit": "Soumettre une clôture du commerce de détail",
+  "enterprise.retail.close.validate": "Valider indépendamment une clôture du commerce de détail",
+  "enterprise.retail.close.manage": "Administrer les clôtures du commerce de détail",
   "enterprise.suppliers.view": "Consulter les fournisseurs",
   "enterprise.suppliers.manage": "Gérer les fournisseurs",
   "enterprise.purchases.manage": "Gérer les achats et réapprovisionnements",
@@ -196,15 +197,15 @@ const settingsPanelCopy = {
     settingsTitle: "Paramètres entreprise",
     settingsDescription: "Modifiez les paramètres généraux et sectoriels persistés pour cette entreprise.",
     generalSettings: "Paramètres généraux",
-    shopSettings: "Paramètres Shop",
-    shopSettingsDescription: "Les sites, dépôts, caisses, wallets Mobile Money et opérateurs Télécom sont configurés dans leurs modules ERP dédiés. Cette page conserve uniquement l’identité et les paramètres généraux de l’entreprise.",
+    shopSettings: "Paramètres RETAIL",
+    shopSettingsDescription: "Les sites, dépôts et caisses se configurent dans les modules RETAIL communs ; Mobile Money et Télécom restent facultatifs selon l’abonnement. Cette page conserve uniquement l’identité et les paramètres généraux de l’entreprise.",
   },
   en: {
     settingsTitle: "Company settings",
     settingsDescription: "Edit the persistent general and sector-specific settings for this company.",
     generalSettings: "General settings",
-    shopSettings: "Shop settings",
-    shopSettingsDescription: "Sites, warehouses, tills, Mobile Money wallets and telecom operators are configured in their dedicated ERP modules. This page only keeps the company identity and general settings.",
+    shopSettings: "Retail settings",
+    shopSettingsDescription: "Stores, warehouses and tills use Retail Core; Mobile Money and telecom services remain optional according to the subscription. This page only keeps the company identity and general settings.",
   },
 } as const;
 
@@ -359,7 +360,7 @@ export function EnterpriseModulesPanel({
                     key: "toggle",
                     label: enterpriseModule.isEnabled ? "Désactiver" : "Activer",
                     icon: enterpriseModule.isEnabled ? ToggleLeft : ToggleRight,
-                    disabled: (enterpriseModule.isCore && enterpriseModule.isEnabled) || (!enterpriseModule.isEnabled && enterpriseModule.accessAllowed === false),
+                    disabled: (enterpriseModule.isCore && !isRetailOptionalExtensionModule(enterpriseModule.moduleCode) && enterpriseModule.isEnabled) || (!enterpriseModule.isEnabled && enterpriseModule.accessAllowed === false),
                     onSelect: () => void toggleModule(enterpriseModule),
                   },
                 ]}
@@ -367,7 +368,7 @@ export function EnterpriseModulesPanel({
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
               <span className={`inline-flex rounded-full px-2 py-1 text-[0.68rem] font-black ${enterpriseModule.isEnabled ? "bg-emerald-400/14 text-emerald-500" : "bg-slate-500/14 text-dtsc-muted"}`}>
-                {enterpriseModule.isEnabled ? "Activé" : "Désactivé"} {enterpriseModule.isCore ? "· socle" : ""}
+                {enterpriseModule.isEnabled ? "Activé" : "Désactivé"} {enterpriseModule.isCore && !isRetailOptionalExtensionModule(enterpriseModule.moduleCode) ? "· socle" : ""}
               </span>
               {enterpriseModule.createdAt && <span className="inline-flex rounded-full bg-dtsc-page px-2 py-1 text-[0.68rem] font-black text-dtsc-muted">Activation {new Date(enterpriseModule.createdAt).toLocaleDateString("fr-FR")}</span>}
               {enterpriseModule.requiredPlan && <span className="inline-flex rounded-full bg-dtsc-page px-2 py-1 text-[0.68rem] font-black text-dtsc-muted">Plan {enterpriseModule.requiredPlan}</span>}

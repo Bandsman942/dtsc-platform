@@ -73,8 +73,9 @@ check(
   "Retail subtype adapter must consume the generic subtype registry",
 );
 check(
-  retailRegistry.includes("RETAIL_MODULE_CODES"),
-  "Retail must retain ownership of Shop module scope",
+  retailRegistry.includes("RETAIL_OPTIONAL_EXTENSION_MODULE_CODES") &&
+    !retailRegistry.includes("moduleCodes: RETAIL_MODULE_CODES"),
+  "Retail Core POS/close must not be gated by SHOP; the adapter only scopes optional packs",
 );
 check(
   retailRegistry.includes('RETAIL_BUSINESS_SUBTYPE_CODES = ["SHOP"]'),

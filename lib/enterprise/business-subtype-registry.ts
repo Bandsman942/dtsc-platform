@@ -1,7 +1,11 @@
 export const BUSINESS_SUBTYPE_IMPLEMENTATION_STATUSES = ["ACTIVE", "PLANNED"] as const;
 export type BusinessSubtypeImplementationStatus = (typeof BUSINESS_SUBTYPE_IMPLEMENTATION_STATUSES)[number];
 
-export const BUSINESS_SUBTYPE_CODES = ["SHOP", "TAILORING_APPAREL", "GAMING_LOUNGE"] as const;
+export const BUSINESS_SUBTYPE_CODES = [
+  "SHOP", "SUPERMARKET_GROCERY", "FASHION_ACCESSORIES", "ELECTRONICS_PHONES",
+  "BEAUTY_COSMETICS", "HARDWARE_DIY", "AUTO_PARTS", "BOOKS_STATIONERY",
+  "FURNITURE_APPLIANCES", "FRESH_FOOD", "TAILORING_APPAREL", "GAMING_LOUNGE",
+] as const;
 export type BusinessSubtypeCode = (typeof BUSINESS_SUBTYPE_CODES)[number];
 
 export type BusinessSubtypeDefinition = {
@@ -31,6 +35,87 @@ export const BUSINESS_SUBTYPES = [
     descriptionFr: "Commerce de détail avec point de vente, clôture Retail et extensions opérateur déjà disponibles dans DTSC Platform.",
     descriptionEn: "Retail shop with point of sale, Retail close and operator extensions already available in DTSC Platform.",
     implementationStatus: "ACTIVE",
+  },
+  {
+    sectorCode: "COMMERCE_RETAIL",
+    code: "SUPERMARKET_GROCERY",
+    labelFr: "Supermarchés & supérettes",
+    labelEn: "Supermarkets & grocery",
+    descriptionFr: "À développer : produits pesés, codes PLU, rayons, péremptions, promotions et réapprovisionnement.",
+    descriptionEn: "Planned: weighted goods, PLU codes, aisles, expiry control, promotions and replenishment.",
+    implementationStatus: "PLANNED",
+  },
+  {
+    sectorCode: "COMMERCE_RETAIL",
+    code: "FASHION_ACCESSORIES",
+    labelFr: "Mode & accessoires",
+    labelEn: "Fashion & accessories",
+    descriptionFr: "À développer : tailles, couleurs, collections, variantes et échanges.",
+    descriptionEn: "Planned: sizes, colors, collections, product variants and exchanges.",
+    implementationStatus: "PLANNED",
+  },
+  {
+    sectorCode: "COMMERCE_RETAIL",
+    code: "ELECTRONICS_PHONES",
+    labelFr: "Électronique & téléphones",
+    labelEn: "Electronics & phones",
+    descriptionFr: "À développer : suivi IMEI et numéros de série, garanties, SAV et réparations.",
+    descriptionEn: "Planned: IMEI and serial tracking, warranties, after-sales service and repairs.",
+    implementationStatus: "PLANNED",
+  },
+  {
+    sectorCode: "COMMERCE_RETAIL",
+    code: "BEAUTY_COSMETICS",
+    labelFr: "Cosmétiques & parfumerie",
+    labelEn: "Beauty & cosmetics",
+    descriptionFr: "À développer : suivi des lots, nuances, testeurs, coffrets et fidélité.",
+    descriptionEn: "Planned: lot tracking, product shades, testers, gift sets and loyalty.",
+    implementationStatus: "PLANNED",
+  },
+  {
+    sectorCode: "COMMERCE_RETAIL",
+    code: "HARDWARE_DIY",
+    labelFr: "Quincaillerie & bricolage",
+    labelEn: "Hardware & DIY",
+    descriptionFr: "À développer : vente au mètre, au poids ou à l'unité, devis de chantier et livraisons.",
+    descriptionEn: "Planned: sales by length, weight or unit, project quotes and deliveries.",
+    implementationStatus: "PLANNED",
+  },
+  {
+    sectorCode: "COMMERCE_RETAIL",
+    code: "AUTO_PARTS",
+    labelFr: "Pièces détachées automobiles",
+    labelEn: "Automotive spare parts",
+    descriptionFr: "À développer : compatibilités véhicules, références équivalentes et commandes spéciales.",
+    descriptionEn: "Planned: vehicle compatibility, equivalent parts and special orders.",
+    implementationStatus: "PLANNED",
+  },
+  {
+    sectorCode: "COMMERCE_RETAIL",
+    code: "BOOKS_STATIONERY",
+    labelFr: "Librairie & papeterie",
+    labelEn: "Books & stationery",
+    descriptionFr: "À développer : ISBN, éditions, listes scolaires, kits et commandes institutionnelles.",
+    descriptionEn: "Planned: ISBN, editions, school lists, bundles and institutional orders.",
+    implementationStatus: "PLANNED",
+  },
+  {
+    sectorCode: "COMMERCE_RETAIL",
+    code: "FURNITURE_APPLIANCES",
+    labelFr: "Meubles & électroménagers",
+    labelEn: "Furniture & appliances",
+    descriptionFr: "À développer : commandes personnalisées, acomptes, livraison, installation et garanties.",
+    descriptionEn: "Planned: custom orders, deposits, delivery, installation and warranties.",
+    implementationStatus: "PLANNED",
+  },
+  {
+    sectorCode: "COMMERCE_RETAIL",
+    code: "FRESH_FOOD",
+    labelFr: "Produits frais & alimentation spécialisée",
+    labelEn: "Fresh & specialty foods",
+    descriptionFr: "À développer : traçabilité de lots, DLC, pesées, pertes et préparation des commandes.",
+    descriptionEn: "Planned: batch traceability, expiry dates, weighing, waste and order preparation.",
+    implementationStatus: "PLANNED",
   },
   {
     sectorCode: "MANUFACTURING",

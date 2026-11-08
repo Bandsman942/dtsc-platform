@@ -122,7 +122,7 @@ const REFUND_METHODS = ["ORIGINAL_TENDER", "CASH", "MOBILE_MONEY", "BANK_TRANSFE
 function buildCopy(language: CustomerFacingLocale) {
   if (language === "en") {
     return {
-      eyebrow: "Shop · Commercial management",
+      eyebrow: "Retail · Commercial management",
       title: "Pricing, offers & customer returns",
       intro: "Set when your sale prices apply, manage customer offers and handle returns through a clear approval and refund flow.",
       back: "Back to checkout",
@@ -199,7 +199,7 @@ function buildCopy(language: CustomerFacingLocale) {
     };
   }
   return {
-    eyebrow: "Shop · Gestion commerciale",
+    eyebrow: "Commerce de détail · Gestion commerciale",
     title: "Tarification, offres & retours clients",
     intro: "Définissez quand vos prix de vente s’appliquent, pilotez les offres clients et gérez les retours jusqu’à leur validation et leur remboursement.",
     back: "Retour à la caisse",

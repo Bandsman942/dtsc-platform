@@ -8,11 +8,12 @@ const check = (condition, message) => { if (!condition) failures.push(message); 
 
 const genericSubtypes = read("lib/enterprise/business-subtype-registry.ts");
 const subtypes = read("lib/enterprise/retail/subtype-registry.ts");
-for (const marker of ["SHOP", "RETAIL_BUSINESS_SUBTYPES", "retailSubtypeAllowsModule", "RETAIL_MODULE_CODES"]) {
+for (const marker of ["SHOP", "RETAIL_BUSINESS_SUBTYPES", "retailSubtypeAllowsModule", "RETAIL_OPTIONAL_EXTENSION_MODULE_CODES"]) {
   check(subtypes.includes(marker), `Retail subtype adapter missing ${marker}`);
 }
 check(genericSubtypes.includes('sectorCode: "COMMERCE_RETAIL"') && genericSubtypes.includes('code: "SHOP"'), "Generic subtype registry must preserve COMMERCE_RETAIL -> SHOP");
 check(genericSubtypes.includes('implementationStatus: "ACTIVE"'), "SHOP must remain an active generic business subtype");
+check(subtypes.includes("moduleCodes: RETAIL_OPTIONAL_EXTENSION_MODULE_CODES"), "Generic RETAIL_CORE must not be SHOP-only");
 
 const templates = read("lib/enterprise-sector-templates.ts");
 check(templates.includes("businessSubtypeCode"), "Sector template application must carry retail subtype");

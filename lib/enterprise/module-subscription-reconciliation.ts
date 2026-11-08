@@ -4,12 +4,18 @@ import {
   getEnterpriseModuleDefinition,
   isEnterpriseModuleImplemented,
   isEnterpriseModuleSectorCompatible,
+  isEnterpriseModuleBusinessSubtypeCompatible,
   listEnterpriseModuleDefinitions,
   normalizeEnterpriseModuleCode,
   type EnterpriseModuleDefinition,
 } from "@/lib/enterprise/module-registry";
 import { compareEnterpriseModuleDefinitions } from "@/lib/enterprise/module-order";
 import { syncRetailOperatorProvidersTx } from "@/lib/enterprise/retail/provisioning";
+import {
+  isRetailOptionalExtensionModule,
+  retailExtensionShouldBeEnabled,
+  withRetailExtensionPreference,
+} from "@/lib/enterprise/retail/extension-policy";
 import { prisma } from "@/lib/prisma";
 
 export class EnterpriseModuleConfigurationError extends Error {
@@ -36,6 +42,8 @@ type ModuleContext = {
   planCode: SaasPlanCode;
   subscriptionActive: boolean;
   tenantModules: Array<{ id: string; moduleCode: string; isEnabled: boolean }>;
+  businessSubtypeCode: string | null;
+  retailSettings: Prisma.JsonValue | null;
 };
 
 function isCurrentSubscriptionActive(subscription?: {
@@ -73,6 +81,15 @@ async function getModuleContext(organizationId: string): Promise<ModuleContext> 
       404,
     );
   }
+  const [retailConfiguration, selection] = await Promise.all([
+    organization.sectorCode === "COMMERCE_RETAIL"
+      ? prisma.enterpriseRetailConfiguration.findUnique({ where: { organizationId }, select: { settingsJson: true } })
+      : Promise.resolve(null),
+    prisma.enterpriseBusinessSubtypeSelection.findUnique({
+      where: { organizationId },
+      select: { sectorCode: true, businessSubtypeCode: true },
+    }),
+  ]);
   const subscription = organization.subscriptions[0] || null;
   return {
     organization: {
@@ -84,6 +101,8 @@ async function getModuleContext(organizationId: string): Promise<ModuleContext> 
     planCode: resolveSaasPlanCode(subscription?.plan),
     subscriptionActive: isCurrentSubscriptionActive(subscription),
     tenantModules: organization.enterpriseModules,
+    businessSubtypeCode: selection?.sectorCode === organization.sectorCode ? selection.businessSubtypeCode : null,
+    retailSettings: retailConfiguration?.settingsJson ?? null,
   };
 }
 
@@ -96,6 +115,9 @@ function commercialAvailability(definition: EnterpriseModuleDefinition, context:
   }
   if (!isEnterpriseModuleSectorCompatible(definition, context.organization.sectorCode)) {
     return "Ce module ne correspond pas au secteur de l’entreprise sélectionnée.";
+  }
+  if (!isEnterpriseModuleBusinessSubtypeCompatible(definition, context.businessSubtypeCode)) {
+    return "Ce module n'est pas compatible avec le sous-secteur sélectionné.";
   }
   if (!planMeetsRequirement(context.planCode, definition.minimumPlan)) {
     return `Ce module nécessite une offre supérieure à l’abonnement actuel.`;
@@ -148,11 +170,45 @@ function moduleWriteData(definition: EnterpriseModuleDefinition, organizationId:
     moduleCategory: definition.domain,
     icon: definition.iconKey,
     isEnabled,
-    isCore: definition.routeKind === "DEDICATED_CORE" || definition.routeKind === "AI_SERVICE",
+    isCore: !isRetailOptionalExtensionModule(definition.code) && (definition.routeKind === "DEDICATED_CORE" || definition.routeKind === "AI_SERVICE"),
     sourceTemplateId: null,
     requiresPlanLevel: definition.minimumPlan,
     sortOrder: definition.navigationOrder,
   };
+}
+
+/** Atomic policy intent alongside the existing EnterpriseModule projection; no second module catalogue. */
+async function persistRetailExtensionChoice(
+  tx: Prisma.TransactionClient,
+  organizationId: string,
+  moduleCode: string,
+  enabled: boolean,
+) {
+  if (!isRetailOptionalExtensionModule(moduleCode)) return;
+  await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterpriseRetailConfiguration" WHERE "organizationId" = ${organizationId} FOR UPDATE`);
+  const configuration = await tx.enterpriseRetailConfiguration.findUnique({
+    where: { organizationId },
+    select: { settingsJson: true },
+  });
+  if (!configuration) {
+    throw new EnterpriseModuleConfigurationError("RETAIL_CONFIGURATION_REQUIRED", "Configurez d'abord le commerce de détail avant d'activer ses extensions.", 409);
+  }
+  if (!enabled) {
+    const sourceEntityType = moduleCode === "MOBILE_MONEY_AGENCY" ? "PENDING_MOBILE_MONEY" : "PENDING_TELCO_TOPUP";
+    const inFlight = await tx.enterpriseRetailProviderOperation.count({
+      where: { organizationId, sourceEntityType, status: { in: ["INITIATED", "PENDING_PROVIDER", "UNKNOWN"] } },
+    });
+    if (inFlight) {
+      throw new EnterpriseModuleConfigurationError("RETAIL_EXTENSION_PENDING_OPERATIONS", "Réconciliez les opérations opérateur en cours avant de désactiver ce service.", 409);
+    }
+  }
+  await tx.enterpriseRetailConfiguration.update({
+    where: { organizationId },
+    data: {
+      settingsJson: withRetailExtensionPreference(configuration.settingsJson, moduleCode, enabled),
+      revision: { increment: 1 },
+    },
+  });
 }
 
 export async function activateEnterpriseModule({
@@ -221,6 +277,7 @@ export async function activateEnterpriseModule({
         create: data,
       });
     }
+    await persistRetailExtensionChoice(tx, organizationId, requestedDefinition.code, true);
     await syncRetailOperatorProvidersTx(tx, organizationId);
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 
@@ -248,6 +305,7 @@ export async function disableEnterpriseModule({ organizationId, moduleCode }: { 
     );
   }
   await prisma.$transaction(async (tx) => {
+    await persistRetailExtensionChoice(tx, organizationId, canonicalCode, false);
     await tx.enterpriseModule.updateMany({
       where: { organizationId, moduleCode: { in: [moduleCode, canonicalCode] } },
       data: { isEnabled: false },
@@ -269,6 +327,11 @@ export async function reconcileOrganizationModulesWithSubscription(organizationI
   const eligibleCodes = new Set(
     definitions
       .filter((definition) => !commercialAvailability(definition, context))
+      .filter((definition) => retailExtensionShouldBeEnabled(
+        context.retailSettings,
+        definition.code,
+        context.tenantModules.some((row) => normalizeEnterpriseModuleCode(row.moduleCode) === definition.code && row.isEnabled),
+      ))
       .map((definition) => definition.code),
   );
   let changed = true;

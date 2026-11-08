@@ -505,3 +505,8 @@ Pour les extensions :
 - [ ] anti-doublon.
 
 La validation de cette checklist signifie qu’un **tenant** est prêt à exploiter le périmètre activé. Elle ne change pas automatiquement le statut commercial du produit. Toute nouvelle promotion de maturité Shop 2.0 reste une décision explicite DTSC après preuves CI/E2E.
+
+
+## Note #1064 — Entreprise RETAIL générale
+
+Ce guide historique SHOP reste applicable aux entreprises spécialisées. Pour créer une entreprise RETAIL non-SHOP, choisissez le secteur `COMMERCE_RETAIL` et laissez le sous-secteur vide. Le template `RETAIL_CORE` couvre le POS et la clôture sans opérateurs ; `MOBILE_MONEY_AGENCY` et `TELCO_TOPUPS` sont désactivés par défaut et peuvent être activés individuellement dans Administration DTSC selon le plan et les autorisations. Les options futures sont `PLANNED` et non opérationnelles. Voir `docs/HOTFIX_1064_RETAIL_CORE_SECTOR_PACKS.md`.

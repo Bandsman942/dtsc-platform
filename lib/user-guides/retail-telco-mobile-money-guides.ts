@@ -5,12 +5,12 @@ type RetailGuideCode = "RETAIL_POS" | "MOBILE_MONEY_AGENCY" | "TELCO_TOPUPS" | "
 const fr: Record<RetailGuideCode, ContextualUserGuide> = {
   RETAIL_POS: {
     code: "RETAIL_POS",
-    title: "Guide Shop & Point de vente — Retail Core",
-    summary: "Mettre en service et exploiter un Shop Retail Core : catalogue, stock, Finance, tarification, retours, clienteling CRM, fidélité, cartes-cadeaux/avoirs, paiements, reçus et périphériques POS.",
+    title: "Guide Commerce de détail & Point de vente — Retail Core",
+    summary: "Mettre en service et exploiter une entreprise de commerce de détail Retail Core : catalogue, stock, Finance, tarification, retours, clienteling CRM, fidélité, cartes-cadeaux/avoirs, paiements, reçus et périphériques POS.",
     audience: "Administrateur entreprise, gérant, responsable ventes, vendeur, caissier et contrôleur",
     updatedAt: "2026-08-08",
     capabilities: [
-      "Guide d’onboarding Shop",
+      "Guide d’onboarding Commerce de détail",
       "Onboarding STARTER / BUSINESS / ENTERPRISE",
       "Profil RETAIL_CORE par défaut avec extensions optionnelles Mobile Money et Télécom",
       "Recherche catalogue/SKU paginée côté serveur",
@@ -48,12 +48,12 @@ const fr: Record<RetailGuideCode, ContextualUserGuide> = {
     limitations: [
       "Un adaptateur PSP/opérateur n’est considéré connecté que s’il est réellement enregistré et configuré ; DTSC ne simule aucun fournisseur externe.",
       "Les scénarios de valorisation COGS multi-devise ambiguë doivent être validés avant certification globale.",
-      "Offline, omnicanal avancé, multi-store global et country packs relèvent de Shop 2.0 itération 4.",
+      "Les fonctions offline, omnicanal avancé, multi-boutiques et localisation dépendent de leur maturité certifiée ; vérifiez les disponibilités propres à votre abonnement.",
     ],
   },
   MOBILE_MONEY_AGENCY: {
     code: "MOBILE_MONEY_AGENCY",
-    title: "Guide Agence Mobile Money — extension Shop",
+    title: "Guide Agence Mobile Money — extension RETAIL",
     summary: "Exploiter Mobile Money en mode manuel contrôlé ou via un provider connecté, avec cash/float séparés, états asynchrones, webhooks signés et rapprochement.",
     audience: "Gérant, agent Mobile Money, caissier et contrôleur",
     updatedAt: "2026-08-08",
@@ -69,7 +69,7 @@ const fr: Record<RetailGuideCode, ContextualUserGuide> = {
   },
   TELCO_TOPUPS: {
     code: "TELCO_TOPUPS",
-    title: "Guide Télécom & forfaits — extension Shop",
+    title: "Guide Télécom & forfaits — extension RETAIL",
     summary: "Exploiter les recharges Télécom multi-devise en séparant réseau, comptes opérateur et encaissement, avec coût/marge, mode manuel ou connecté et rapprochement.",
     audience: "Gérant, responsable ventes, vendeur, agent Télécom et contrôleur",
     updatedAt: "2026-08-14",
@@ -102,8 +102,8 @@ const fr: Record<RetailGuideCode, ContextualUserGuide> = {
 const en: Record<RetailGuideCode, ContextualUserGuide> = {
   RETAIL_POS: {
     code: "RETAIL_POS",
-    title: "Shop & Point of Sale guide — Retail Core",
-    summary: "Bring a Retail Core Shop into operation with catalog, inventory, Finance, pricing, returns, canonical CRM clienteling, loyalty, gift cards/store credit, payments, receipts and POS devices.",
+    title: "Retail & Point of Sale guide — Retail Core",
+    summary: "Bring a Retail Core business into operation with catalog, inventory, Finance, pricing, returns, canonical CRM clienteling, loyalty, gift cards/store credit, payments, receipts and POS devices.",
     audience: "Company administrator, store manager, sales manager, seller, cashier and controller",
     updatedAt: "2026-08-08",
     capabilities: ["STARTER / BUSINESS / ENTERPRISE onboarding", "RETAIL_CORE default profile with optional Mobile Money and Telco extensions", "Paginated server-side catalog/SKU search", "Multi-item basket and split payment", "Server-protected pricing and taxes", "Audited promotions/coupons/overrides", "Partial returns, exchanges and controlled refunds", "Canonical CRM customer at POS", "Purchase/return history without a second customer master", "Transactional loyalty ledger", "Double-spend protected gift cards/store credit", "Provider-neutral payment states", "Consent-aware JSON/printable receipt", "Graceful POS device readiness", "Atomic inventory issue", "POS double-entry accounting", "COGS / INVENTORY valuation", "Historical FX consolidation", "Audited full reversal"],
@@ -121,11 +121,11 @@ const en: Record<RetailGuideCode, ContextualUserGuide> = {
       { title: "Process returns and exchanges", description: "Returnable quantities account for completed and pending returns. Requesters cannot approve their own refund." },
       { title: "Verify Finance and close", description: "Check entries, valuation, currency-native reporting and historical rates, then have the close validated independently." },
     ],
-    limitations: ["A PSP/operator is connected only when a real adapter is registered/configured; DTSC ships no fake external provider.", "Ambiguous multi-currency COGS scenarios require validation before global certification.", "Offline, advanced omnichannel, global multi-store and country packs belong to Shop 2.0 iteration 4."],
+    limitations: ["A PSP/operator is connected only when a real adapter is registered/configured; DTSC ships no fake external provider.", "Ambiguous multi-currency COGS scenarios require validation before global certification.", "Offline, advanced omnichannel, multi-store and country localization depend on their certified maturity and the subscription's effective capabilities."],
   },
   MOBILE_MONEY_AGENCY: {
     code: "MOBILE_MONEY_AGENCY",
-    title: "Mobile Money Agency guide — Shop extension",
+    title: "Mobile Money Agency guide — Retail extension",
     summary: "Operate Mobile Money in controlled manual mode or through a connected provider with separated cash/float, asynchronous states, signed webhooks and reconciliation.",
     audience: "Store manager, Mobile Money agent, cashier and controller",
     updatedAt: "2026-08-08",
@@ -141,7 +141,7 @@ const en: Record<RetailGuideCode, ContextualUserGuide> = {
   },
   TELCO_TOPUPS: {
     code: "TELCO_TOPUPS",
-    title: "Telco top-ups & bundles guide — Shop extension",
+    title: "Telco top-ups & bundles guide — Retail extension",
     summary: "Operate multi-currency Telco top-ups with separated network, operator and tender accounts, cost/margin, manual or connected provider mode and reconciliation.",
     audience: "Store manager, sales manager, seller, Telco agent and controller",
     updatedAt: "2026-08-14",

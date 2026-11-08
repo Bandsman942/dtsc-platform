@@ -34,7 +34,7 @@ const READINESS_LABELS: Record<string, string> = {
   INVENTORY_LINKS: "Disponibilité du stock reliée au catalogue",
   TEAM: "Équipe autorisée",
   [ACCOUNTING_READINESS_DESCRIPTOR.code]: ACCOUNTING_READINESS_DESCRIPTOR.label,
-  RETAIL_CONFIGURATION: "Paramètres du Shop actifs",
+  RETAIL_CONFIGURATION: "Paramètres du commerce de détail actifs",
 };
 
 type RetailDashboardCacheSources = {
@@ -69,7 +69,7 @@ export async function getCommercialRetailDashboardRead(
 
   const readinessItems = canonicalReadiness.items.map((item) => ({
     code: item.code,
-    label: READINESS_LABELS[item.code] || "Configuration du Shop",
+    label: READINESS_LABELS[item.code] || "Configuration du commerce de détail",
     complete: item.complete,
     deepLink: item.code === "RETAIL_CONFIGURATION" ? "/enterprise-modules/RETAIL_POS/commercial" : item.deepLink,
   }));

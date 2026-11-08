@@ -53,20 +53,20 @@ const ERROR_MESSAGES: Record<string, Bilingual> = {
     en: "The offline sale could not be saved on this device.",
   },
   RETAIL_ONBOARDING_LOAD_FAILED: {
-    fr: "L’état de mise en service du Shop n’a pas pu être chargé.",
-    en: "The Shop setup status could not be loaded.",
+    fr: "L’état de mise en service du commerce de détail n’a pas pu être chargé.",
+    en: "The Retail setup status could not be loaded.",
   },
   RETAIL_ONBOARDING_SAVE_FAILED: {
-    fr: "La mise en service du Shop n’a pas pu être enregistrée. Vérifiez les éléments sélectionnés puis réessayez.",
-    en: "The Shop setup could not be saved. Check the selected items and try again.",
+    fr: "La mise en service du commerce de détail n’a pas pu être enregistrée. Vérifiez les éléments sélectionnés puis réessayez.",
+    en: "The Retail setup could not be saved. Check the selected items and try again.",
   },
   RETAIL_COUNTRY_PACK_ACTIVATION_FAILED: {
     fr: "La configuration du pays n’a pas pu être activée.",
     en: "The country configuration could not be activated.",
   },
   RETAIL_ONBOARDING_UNAVAILABLE: {
-    fr: "La mise en service du Shop est momentanément indisponible.",
-    en: "Shop setup is temporarily unavailable.",
+    fr: "La mise en service du commerce de détail est momentanément indisponible.",
+    en: "Retail setup is temporarily unavailable.",
   },
   RETAIL_OMNICHANNEL_DASHBOARD_FAILED: {
     fr: "Les magasins et dépôts nécessaires aux commandes clients n’ont pas pu être chargés.",
@@ -85,8 +85,8 @@ const ERROR_MESSAGES: Record<string, Bilingual> = {
     en: "Customer search could not be completed. Try another name, number or contact.",
   },
   RETAIL_CUSTOMER_NOT_FOUND: {
-    fr: "Ce client n’est plus disponible dans le Shop actif.",
-    en: "This customer is no longer available in the active Shop.",
+    fr: "Ce client n’est plus disponible dans le commerce de détail actif.",
+    en: "This customer is no longer available in the active retail store.",
   },
   RETAIL_CUSTOMER_HISTORY_LOAD_FAILED: {
     fr: "Les avantages et l’historique de ce client ne sont pas disponibles pour le moment.",
@@ -133,8 +133,8 @@ const ERROR_MESSAGES: Record<string, Bilingual> = {
     en: "The basket amount cannot be saved to cents without changing the total. Adjust the price or quantity.",
   },
   RETAIL_COUNTRY_PACK_UNSUPPORTED: {
-    fr: "Cette configuration pays n’est pas encore disponible pour votre Shop.",
-    en: "This country configuration is not yet available for your Shop.",
+    fr: "Cette configuration pays n’est pas encore disponible pour votre commerce de détail.",
+    en: "This country configuration is not yet available for your retail business.",
   },
   RETAIL_ORGANIZATION_NOT_FOUND: {
     fr: "L’entreprise active ne permet pas d’utiliser cette fonction Retail.",
@@ -231,7 +231,7 @@ const STATUS_LABELS: Record<string, Bilingual> = {
 };
 
 const CAPABILITY_LABELS: Record<string, Bilingual> = {
-  CORE_LOCALIZATION: { fr: "Langues et configuration du Shop", en: "Shop language and setup" },
+  CORE_LOCALIZATION: { fr: "Langues et configuration RETAIL", en: "Retail language and setup" },
   MULTI_CURRENCY: { fr: "Ventes et suivi multi-devises", en: "Multi-currency sales and reporting" },
   TAX_REFERENCE: { fr: "Taxes et règles fiscales", en: "Taxes and fiscal rules" },
   DOCUMENT_NUMBERING: { fr: "Numérotation des documents", en: "Document numbering" },
@@ -422,7 +422,7 @@ export function customerFacingStatusLabel(status: string | null | undefined, loc
 }
 
 export function customerFacingCapabilityLabel(code: string, locale: CustomerFacingLocale) {
-  return labelFrom(CAPABILITY_LABELS, code, locale, { fr: "Fonctionnalité du Shop", en: "Shop capability" });
+  return labelFrom(CAPABILITY_LABELS, code, locale, { fr: "Fonctionnalité RETAIL", en: "Retail capability" });
 }
 
 export function customerFacingDeviceType(code: string, locale: CustomerFacingLocale) {

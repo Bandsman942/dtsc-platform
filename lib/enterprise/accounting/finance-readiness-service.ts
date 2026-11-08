@@ -224,13 +224,13 @@ export async function resolveEnterpriseFinanceReadiness(
       code: retailFinanceRequired ? "RETAIL_FINANCIAL_ACCOUNT_REQUIRED" : "TREASURY_ACCOUNT_RECOMMENDED",
       severity: retailFinanceRequired ? "BLOCKER" : "WARNING",
       ready: treasuryCount > 0,
-      labelFr: retailFinanceRequired ? "Compte d’encaissement Shop" : "Comptes financiers",
-      labelEn: retailFinanceRequired ? "Shop settlement account" : "Financial accounts",
+      labelFr: retailFinanceRequired ? "Compte d’encaissement RETAIL" : "Comptes financiers",
+      labelEn: retailFinanceRequired ? "Retail settlement account" : "Financial accounts",
       messageFr: retailFinanceRequired
-        ? "Un compte financier actif (caisse, banque, Mobile Money ou clearing) est requis pour encaisser les ventes Shop."
+        ? "Un compte financier actif (caisse, banque, Mobile Money ou clearing) est requis pour encaisser les ventes RETAIL."
         : "Aucun compte financier actif n’est configuré.",
       messageEn: retailFinanceRequired
-        ? "An active financial account (cash, bank, Mobile Money, or clearing) is required to collect Shop sales."
+        ? "An active financial account (cash, bank, Mobile Money, or clearing) is required to collect retail sales."
         : "No active financial account is configured.",
       actionFr: retailFinanceRequired ? "Créer le compte d’encaissement utilisé par le point de vente." : "Configurer caisse, banque ou Mobile Money avant les encaissements/décaissements.",
       actionEn: retailFinanceRequired ? "Create the settlement account used by the point of sale." : "Configure cash, bank or Mobile Money before collections/disbursements.",

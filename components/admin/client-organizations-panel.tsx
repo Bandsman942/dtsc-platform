@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Building2, CreditCard, Edit3, Layers3, ShieldCheck, Trash2 } from "lucide-react";
 import { useAppLocale } from "@/components/i18n/locale-provider";
+import { RetailSectorPacksPanel } from "@/components/admin/retail-sector-packs-panel";
 import { ActionMenu } from "@/components/ui/action-menu";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
@@ -108,6 +109,7 @@ export function ClientOrganizationsPanel({
   const [createAdminReason, setCreateAdminReason] = useState("");
   const [editingOrganization, setEditingOrganization] = useState<ClientOrganization | null>(null);
   const [subscriptionOrganization, setSubscriptionOrganization] = useState<ClientOrganization | null>(null);
+  const [retailOrganization, setRetailOrganization] = useState<ClientOrganization | null>(null);
   const [organizationToDelete, setOrganizationToDelete] = useState<ClientOrganization | null>(null);
   useToastMessage(message);
   const list = useSmartList({
@@ -555,6 +557,7 @@ export function ClientOrganizationsPanel({
                     { key: "activate", label: "Activer", icon: ShieldCheck, onSelect: () => updateOrganization(organization.id, { action: "set_status", status: "ACTIVE" }) },
                     { key: "edit", label: "Modifier l'entreprise", icon: Edit3, onSelect: () => setEditingOrganization(organization) },
                     { key: "subscription", label: "Gérer l'abonnement", icon: CreditCard, onSelect: () => setSubscriptionOrganization(organization) },
+                    ...(organization.sectorCode === "COMMERCE_RETAIL" ? [{ key: "retail-packs", label: locale === "en" ? "Retail extensions" : "Modules spécialisés RETAIL", icon: Layers3, onSelect: () => setRetailOrganization(organization) }] : []),
                     { key: "suspend", label: "Suspendre", icon: ShieldCheck, onSelect: () => updateOrganization(organization.id, { action: "set_status", status: "SUSPENDED" }) },
                     ...(organization.sectorId ? [{ key: "apply-template", label: "Appliquer le modèle sectoriel", icon: Layers3, onSelect: () => updateOrganization(organization.id, { action: "apply_sector_template", sectorId: organization.sectorId || "" }) }] : []),
                     { key: "archive", label: "Archiver", icon: ShieldCheck, destructive: true, onSelect: () => updateOrganization(organization.id, { action: "set_status", status: "ARCHIVED" }) },
@@ -583,6 +586,12 @@ export function ClientOrganizationsPanel({
         onClose={() => setSubscriptionOrganization(null)}
         onSubmit={submitSubscriptionEdit}
       />
+      {retailOrganization ? <RetailSectorPacksPanel
+        key={retailOrganization.id}
+        organizationId={retailOrganization.id} organizationName={retailOrganization.name}
+        locale={locale} onClose={() => setRetailOrganization(null)}
+        onChanged={() => router.refresh()}
+      /> : null}
       <Dialog
         open={Boolean(organizationToDelete)}
         title="Supprimer l'entreprise"

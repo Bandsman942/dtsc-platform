@@ -39,13 +39,13 @@ const LABELS: Record<string, { fr: string; en: string }> = {
   INVENTORY_LINKS: { fr: "Disponibilité du stock", en: "Stock availability" },
   TEAM: { fr: "Équipe autorisée", en: "Authorized team" },
   ACCOUNTING: { fr: "Suivi comptable des ventes", en: "Sales accounting" },
-  RETAIL_CONFIGURATION: { fr: "Paramètres du Shop", en: "Shop settings" },
+  RETAIL_CONFIGURATION: { fr: "Paramètres RETAIL", en: "Retail settings" },
 };
 
 function capabilityNote(status: string, locale: "fr" | "en") {
   switch (status) {
     case "SUPPORTED":
-      return locale === "en" ? "Available with this Shop configuration." : "Disponible avec cette configuration du Shop.";
+      return locale === "en" ? "Available with this Retail configuration." : "Disponible avec cette configuration du commerce de détail.";
     case "TENANT_CONFIGURATION_REQUIRED":
       return locale === "en" ? "Complete your company settings before using this feature." : "Complétez les paramètres de votre entreprise avant d’utiliser cette fonction.";
     case "EVIDENCE_REQUIRED":
@@ -53,7 +53,7 @@ function capabilityNote(status: string, locale: "fr" | "en") {
     case "NOT_CERTIFIED":
       return locale === "en" ? "This feature is not offered as certified in the current country configuration." : "Cette fonction n’est pas proposée comme certifiée dans la configuration pays actuelle.";
     default:
-      return locale === "en" ? "Availability depends on your Shop setup." : "La disponibilité dépend de la configuration de votre Shop.";
+      return locale === "en" ? "Availability depends on your Retail setup." : "La disponibilité dépend de la configuration de votre commerce de détail.";
   }
 }
 
@@ -104,7 +104,7 @@ export function RetailGlobalReadiness({ organizationId, locale }: Props) {
       });
       const body = await response.json().catch(() => null) as { activation?: Activation; error?: string; message?: string } | null;
       if (!response.ok) throw new Error(body?.message || body?.error || "RETAIL_COUNTRY_PACK_ACTIVATION_FAILED");
-      toastSuccess(locale === "en" ? "Country configuration activated. Continue the Shop setup." : "Configuration pays activée. Poursuivez la mise en service du Shop.");
+      toastSuccess(locale === "en" ? "Country configuration activated. Continue the Retail setup." : "Configuration pays activée. Poursuivez la mise en service du commerce de détail.");
       await load();
     } catch (caught) {
       toastError(customerFacingError(caught, locale));
@@ -124,7 +124,7 @@ export function RetailGlobalReadiness({ organizationId, locale }: Props) {
       const body = await response.json().catch(() => null) as { run?: Run; readiness?: Readiness; error?: string; message?: string } | null;
       if (!response.ok) throw new Error(body?.message || body?.error || "RETAIL_ONBOARDING_SAVE_FAILED");
       toastSuccess(body?.readiness?.ready
-        ? (locale === "en" ? "Your Shop is ready for its first sale." : "Votre Shop est prêt pour sa première vente.")
+        ? (locale === "en" ? "Your Retail business is ready for its first sale." : "Votre entreprise de commerce de détail est prêt pour sa première vente.")
         : (locale === "en" ? "Setup saved. Each remaining step now explains exactly what is still required." : "Configuration enregistrée. Chaque étape restante indique maintenant précisément ce qu’il faut encore faire."));
       await load();
     } catch (caught) {
@@ -135,7 +135,7 @@ export function RetailGlobalReadiness({ organizationId, locale }: Props) {
   }
 
   if (!state && busy === "load") {
-    return <section className="rounded-3xl border border-dtsc-border bg-dtsc-surface p-5"><div className="flex items-center gap-2 text-sm font-bold text-dtsc-muted"><RefreshCw className="h-4 w-4 animate-spin" />{locale === "en" ? "Checking Shop setup…" : "Vérification de la mise en service du Shop…"}</div></section>;
+    return <section className="rounded-3xl border border-dtsc-border bg-dtsc-surface p-5"><div className="flex items-center gap-2 text-sm font-bold text-dtsc-muted"><RefreshCw className="h-4 w-4 animate-spin" />{locale === "en" ? "Checking Retail setup…" : "Vérification de la mise en service du commerce de détail…"}</div></section>;
   }
 
   if (!state) {
@@ -146,7 +146,7 @@ export function RetailGlobalReadiness({ organizationId, locale }: Props) {
     <section id="shop-setup" data-testid="retail-global-readiness" className="rounded-3xl border border-dtsc-border bg-dtsc-surface p-4 shadow-sm sm:p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <div className="flex items-center gap-2"><Globe2 className="h-5 w-5 text-cyan-600" /><h2 className="text-lg font-black text-dtsc-ink">{locale === "en" ? "Shop setup" : "Mise en service du Shop"}</h2></div>
+          <div className="flex items-center gap-2"><Globe2 className="h-5 w-5 text-cyan-600" /><h2 className="text-lg font-black text-dtsc-ink">{locale === "en" ? "Retail setup" : "Mise en service du commerce de détail"}</h2></div>
           <p className="mt-1 max-w-3xl text-sm text-dtsc-muted">{locale === "en" ? "Choose the company resources used by this point of sale. The checklist below recognizes existing configuration and explains any remaining action." : "Choisissez les ressources utilisées par ce point de vente. La checklist ci-dessous reconnaît la configuration existante et explique toute action restante."}</p>
         </div>
         <div className={`rounded-full px-3 py-1.5 text-xs font-black ${state.readiness.ready ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : "bg-amber-500/10 text-amber-800 dark:text-amber-200"}`}>{state.readiness.completed}/{state.readiness.total} · {state.readiness.ready ? (locale === "en" ? "Ready to sell" : "Prêt à vendre") : (locale === "en" ? "Setup to finish" : "Mise en service à finaliser")}</div>
@@ -179,7 +179,7 @@ export function RetailGlobalReadiness({ organizationId, locale }: Props) {
               <label className="text-xs font-bold text-dtsc-muted">{locale === "en" ? "Stock warehouse" : "Dépôt de stock"}<select className="mt-1 h-10 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-2 text-sm text-dtsc-ink" value={selection.warehouseId} onChange={(event) => setSelection((current) => ({ ...current, warehouseId: event.target.value }))}><option value="">—</option>{warehouses.map((item) => <option key={item.id} value={item.id}>{item.code} · {item.name}</option>)}</select></label>
               <label className="text-xs font-bold text-dtsc-muted sm:col-span-2">{locale === "en" ? "Collection account" : "Compte d’encaissement"}<select className="mt-1 h-10 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-2 text-sm text-dtsc-ink" value={selection.cashFinancialAccountId} onChange={(event) => setSelection((current) => ({ ...current, cashFinancialAccountId: event.target.value }))}><option value="">—</option>{cashAccounts.map((item) => <option key={item.id} value={item.id}>{item.code} · {item.name} · {item.currencyCode}</option>)}</select></label>
             </div>
-            <p className="mt-3 text-xs leading-5 text-dtsc-muted">{locale === "en" ? "The collection account is a persistent Shop configuration. Opening or closing a till session does not change whether this account is configured." : "Le compte d’encaissement est une configuration permanente du Shop. Ouvrir ou clôturer une session de caisse ne change pas le fait que ce compte soit configuré."}</p>
+            <p className="mt-3 text-xs leading-5 text-dtsc-muted">{locale === "en" ? "The collection account is a persistent Retail configuration. Opening or closing a till session does not change whether this account is configured." : "Le compte d’encaissement est une configuration permanente du commerce de détail. Ouvrir ou clôturer une session de caisse ne change pas le fait que ce compte soit configuré."}</p>
             <Button type="button" className="mt-4 w-full" disabled={Boolean(busy)} onClick={() => void save()}>{busy === "save" ? "…" : (locale === "en" ? "Save & check setup" : "Enregistrer & vérifier la mise en service")}</Button>
           </div>
         </div>
@@ -188,7 +188,7 @@ export function RetailGlobalReadiness({ organizationId, locale }: Props) {
           <p className="font-black text-dtsc-ink">{locale === "en" ? "Steps before the first sale" : "Étapes avant la première vente"}</p>
           <p className="mt-1 text-xs leading-5 text-dtsc-muted">{locale === "en" ? "Each step states what DTSC already recognizes and the exact remaining action, if any." : "Chaque étape indique ce que DTSC reconnaît déjà et l’action exacte restante, s’il y en a une."}</p>
           <div className="mt-3 grid gap-2">{state.readiness.items.map((item) => {
-            const label = LABELS[item.code]?.[locale] || (locale === "en" ? "Shop setup" : "Configuration du Shop");
+            const label = LABELS[item.code]?.[locale] || (locale === "en" ? "Retail setup" : "Configuration du commerce de détail");
             const href = item.deepLink || getRetailReadinessDeepLink(item.code);
             return (
               <Link key={item.code} href={href} className="group flex min-w-0 items-start gap-3 rounded-xl border border-dtsc-border bg-dtsc-surface p-3 transition hover:border-cyan-400 hover:bg-cyan-500/5 focus:outline-none focus:ring-2 focus:ring-cyan-400/40">

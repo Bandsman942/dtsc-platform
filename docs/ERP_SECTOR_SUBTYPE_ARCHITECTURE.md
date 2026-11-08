@@ -165,3 +165,10 @@ Aucune donnée métier du tenant n’est supprimée ou transformée par #605. #6
 Dette créée attendue : **Aucune**.
 
 Le miroir `EnterpriseRetailConfiguration.settingsJson` reste une compatibilité historique bornée au cutover Retail. L’autorité de classification inter-secteurs est le registre générique + la sélection d’organisation. Les spécialisations comme sur mesure, prêt-à-porter et mixte restent des paramètres métier, jamais un quatrième niveau de classification.
+
+
+## Mise à jour #1064 — RETAIL_CORE indépendant de SHOP (8 novembre 2026)
+
+La classification `COMMERCE_RETAIL` sans sous-secteur n'est pas un SHOP. Elle bénéficie du socle POS et clôture générale `RETAIL_POS`/`RETAIL_DAILY_CLOSE`, sans extension opérateur activée par défaut. `SHOP` reste un sous-secteur historique actif pour la compatibilité, pas un prérequis pour utiliser Retail Core. TELCO et Mobile Money sont des extensions indépendantes sélectionnées selon le plan et la préférence explicite de l'entreprise.
+
+Les neuf nouveaux sous-secteurs RETAIL introduits dans le registre canonique sont `PLANNED` (visibles dans la planification de la Console DTSC uniquement, jamais comme modules disponibles). Les classifications historiques ne sont pas migrées automatiquement. Voir [HOTFIX_1064_RETAIL_CORE_SECTOR_PACKS.md](HOTFIX_1064_RETAIL_CORE_SECTOR_PACKS.md).
