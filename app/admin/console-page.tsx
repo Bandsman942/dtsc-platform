@@ -134,6 +134,11 @@ export async function DtscConsolePage({ forcedSection, searchParams }: { forcedS
     : Boolean(CONSOLE_SECTION_ADMIN_BLOCK[activeSection] && await canAccessAdminSection(user, CONSOLE_SECTION_ADMIN_BLOCK[activeSection] as AdminBlockId, adminRoleAccess));
   const t = (key: string) => translate(user.locale, key);
   const locale = user.locale === "en" ? "en" : "fr";
+  // A read-only Console user may open /admin/users but must not be routed into
+  // a management-only sub-workspace via an arbitrary ?focus= URL.
+  const effectiveFocus = activeSection === "users" && !canManage
+    && ["users-create", "users-newsletter"].includes(stringParams.focus || "")
+    ? undefined : stringParams.focus;
   const pathname = activeSection === "overview" ? "/admin" : `/admin/${activeSection}`;
   const page = stringParams.page;
   const pageSize = stringParams.pageSize;
@@ -249,7 +254,7 @@ export async function DtscConsolePage({ forcedSection, searchParams }: { forcedS
         activeSection={activeSection}
         locale={locale}
         selectedGroup={stringParams.group}
-        focus={stringParams.focus}
+        focus={effectiveFocus}
         searchParams={stringParams}
         sections={visibleSections.map((id) => ({
           id,
