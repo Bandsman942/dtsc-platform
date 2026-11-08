@@ -4,10 +4,9 @@ import { redirect } from "next/navigation";
 import { AppShell } from "@/components/layout/app-shell";
 import { EnterpriseQuickAccess } from "@/components/enterprise/enterprise-quick-access";
 import { hasEnterpriseSelfHrModule } from "@/lib/enterprise/hr-payroll/self-service";
-import { BusinessList, BusinessListItem } from "@/components/workspace/business-list";
+import { ModuleNavigationGrid } from "@/components/workspace/module-navigation-grid";
 import { EmptyState } from "@/components/workspace/empty-state";
 import { ModuleContent, ModuleHeader, ModuleSection, ModuleWorkspace } from "@/components/workspace/module-workspace";
-import { StatusBadge } from "@/components/workspace/status-badge";
 import { getSession, requireUser } from "@/lib/auth";
 import { getEnterpriseNavigationModules } from "@/lib/enterprise/enterprise-navigation";
 import {
@@ -39,28 +38,20 @@ export default async function EnterpriseModulesHubPage() {
   }
 
   const renderModuleList = (items: typeof modules, ariaLabel: string) => (
-    <BusinessList ariaLabel={ariaLabel}>
-      {items
+    <ModuleNavigationGrid
+      ariaLabel={ariaLabel}
+      locale={user.locale}
+      items={[...items]
         .sort((left, right) => left.navigationOrder - right.navigationOrder)
-        .map((enterpriseModule) => (
-          <BusinessListItem
-            key={enterpriseModule.code}
-            title={enterpriseModule.label}
-            description={enterpriseModule.description}
-            status={<StatusBadge>{enterpriseModule.implementationStatus === "BETA" ? "Beta" : "Actif"}</StatusBadge>}
-            actions={(
-              <Link
-                href={enterpriseModule.href}
-                data-enterprise-module-code={enterpriseModule.code}
-                aria-label={`${user.locale === "en" ? "Open" : "Ouvrir"} ${enterpriseModule.label}`}
-                className="inline-flex h-11 w-11 items-center justify-center rounded-xl text-dtsc-blue hover:bg-dtsc-soft"
-              >
-                <ArrowRight className="h-4 w-4" />
-              </Link>
-            )}
-          />
-        ))}
-    </BusinessList>
+        .map((enterpriseModule) => ({
+          code: enterpriseModule.code,
+          label: enterpriseModule.label,
+          description: enterpriseModule.description,
+          href: enterpriseModule.href,
+          icon: enterpriseModule.icon,
+          status: enterpriseModule.implementationStatus === "BETA" ? "BETA" as const : "ACTIVE" as const,
+        }))}
+    />
   );
 
   return (
