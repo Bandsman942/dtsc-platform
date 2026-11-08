@@ -1,11 +1,13 @@
 "use client";
 import Link from "next/link";
+import { useAppLocale } from "@/components/i18n/locale-provider";
 import { usePathname, useSearchParams } from "next/navigation";
 import { ChevronRight, Layers3 } from "lucide-react";
 
 type JumpLink = { id: string; label: string };
 
 export function ConsoleSubsectionCards({ items, label }: { items: JumpLink[]; label: string }) {
+  const en = useAppLocale() === "en";
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const active = searchParams.get("focus");
@@ -30,7 +32,7 @@ export function ConsoleSubsectionCards({ items, label }: { items: JumpLink[]; la
         <strong className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-wider text-dtsc-muted">
           <Layers3 size={15} aria-hidden="true"/>{label}
         </strong>
-        {active ? <Link href={clear()} className="rounded-lg px-2 py-1 text-xs font-bold text-dtsc-blue underline hover:bg-dtsc-soft focus-visible:ring-2">Tous les espaces</Link> : null}
+        {active ? <Link href={clear()} className="rounded-lg px-2 py-1 text-xs font-bold text-dtsc-blue underline hover:bg-dtsc-soft focus-visible:ring-2">{en ? "All workspaces" : "Tous les espaces"}</Link> : null}
       </div>
       <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-2 sm:grid-cols-2 xl:grid-cols-3">
         {items.map(item => <Link key={item.id} href={link(item.id)} aria-current={active === item.id ? "page" : undefined}
