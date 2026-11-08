@@ -136,3 +136,8 @@ Le contrôle vérifie :
 - absence de dépendance vendue dans une offre supérieure à son module parent.
 
 Ce contrôle est intégré à `pnpm qa:regression`.
+
+
+## Mise à jour #1064 — extensions RETAIL
+
+La réconciliation d'abonnement n'autorise pas la réactivation silencieuse de `MOBILE_MONEY_AGENCY` ou `TELCO_TOPUPS` explicitement désactivés. La préférence de pack est persistée dans `EnterpriseRetailConfiguration.settingsJson.optionalRetailModules` ; `EnterpriseModule.isEnabled` demeure l'état technique matérialisé et les permissions/entitlements restent obligatoires à chaque accès. Les entreprises sans préférence enregistrée conservent leur état de modules historiques. L'Administration DTSC dispose d'un panneau dédié avec step-up, justification et audit ; voir [HOTFIX_1064_RETAIL_CORE_SECTOR_PACKS.md](HOTFIX_1064_RETAIL_CORE_SECTOR_PACKS.md).
