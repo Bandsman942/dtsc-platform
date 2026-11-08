@@ -38,7 +38,7 @@ assert.match(crumbs,/data-console-depth-back/);
 assert.match(crumbs,/getConsoleSectionHref/);
 assert.match(subsection,/ConsoleSubsectionCards/);
 assert.match(cards,/data-console-subsection-cards/);
-assert.match(cards,/window/);
+assert.match(cards,/usePathname/);
 assert.match(cards,/useSearchParams/);
 assert.match(cards,/query\.set\("focus", id\)/);
 assert.match(cards,/query\.delete\("page"\)/);
