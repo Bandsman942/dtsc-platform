@@ -3,6 +3,7 @@ import { getSession } from "@/lib/auth";
 import { requireConsoleCapability } from "@/lib/admin-api";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { applyCanonicalSectorTemplateToOrganization } from "@/lib/enterprise/sector-template-application";
+import { reconcileOrganizationModulesWithSubscription } from "@/lib/enterprise/module-subscription-reconciliation";
 import { persistBusinessSubtypeSelection } from "@/lib/enterprise/business-subtype-selection";
 import { CONSOLE_CAPABILITIES } from "@/lib/console/console-capabilities";
 import { canManageClientOrganizations, isDtscInternalSession } from "@/lib/organizations";
@@ -161,13 +162,14 @@ export async function PATCH(req: Request, { params }: Params) {
     const subscription = latestSubscription
       ? await prisma.organizationSubscription.update({ where: { id: latestSubscription.id }, data: subscriptionData })
       : await prisma.organizationSubscription.create({ data: { organizationId: id, createdByDtscUserId: session.userId, ...subscriptionData } });
+    const moduleReconciliation = await reconcileOrganizationModulesWithSubscription(id);
     await writeAuditLog({
       userId: session.userId,
       action: "CLIENT_ORGANIZATION_SUBSCRIPTION_UPDATED",
       entity: "OrganizationSubscription",
       entityId: subscription.id,
       request: req,
-      metadata: { organizationId: id, planId, status: subscription.status },
+      metadata: { organizationId: id, planId, status: subscription.status, modulesAligned: moduleReconciliation.enabledModuleCodes.length },
     });
   } else if (data.action === "soft_delete") {
     await prisma.$transaction(async (tx) => {
