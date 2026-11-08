@@ -1,14 +1,14 @@
 import { expect, test } from "@playwright/test";
 
 const baseUrl=process.env.E2E_BASE_URL||"http://127.0.0.1:3000";
-const email=process.env.E2E_DTSC_USER_EMAIL;
-const password=process.env.E2E_DTSC_USER_PASSWORD;
-const organizationId=process.env.E2E_ENTERPRISE_AI_ORGANIZATION_ID;
+const email=process.env.E2E_DTSC_USER_EMAIL || process.env.E2E_USER_EMAIL;
+const password=process.env.E2E_DTSC_USER_PASSWORD || process.env.E2E_USER_PASSWORD;
+const organizationId=process.env.E2E_ENTERPRISE_AI_ORGANIZATION_ID || process.env.E2E_ORGANIZATION_ID;
 
 async function login(page) {
   if(!email||!password) throw new Error("Synthetic E2E login is required; never use Production sessions");
   const response=await page.context().request.post(`${baseUrl}/api/auth/sign-in`,{
-    data:{email,password,next:"/chat"},
+    data:{email,password,organizationId,next:"/chat"},
     headers:{origin:baseUrl,referer:`${baseUrl}/auth/sign-in`},
   });
   expect(response.ok(),await response.text()).toBeTruthy();
