@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } fro
 import { Streamdown } from "streamdown";
 import { ActionMenu } from "@/components/ui/action-menu";
 import { AssistantComposer, AssistantConversationSettingsDialog, AssistantEmptyState, AssistantMessage, type AssistantPreferenceState } from "@/components/chat/assistant-conversation-ui";
+import { AiToolConfirmationDock } from "@/components/chat/ai-tool-confirmation-dock";
 import { Button } from "@/components/ui/button";
 import { ContextualUserGuide } from "@/components/user-guides/contextual-user-guide";
 import { Dialog } from "@/components/ui/dialog";
@@ -290,6 +291,7 @@ export function ChatWorkspaceV2({
         </div>
         <AssistantComposer value={input} onChange={setInput} onSubmit={sendMessage} placeholder={en ? "Message DTSC Assistant" : "Message à l’Assistant DTSC"} disabled={limitReached || Boolean(activePreference.archivedAt)} sending={isStreaming} modelLabel={modelLabel} onSettings={() => setSettingsOpen(true)} contextChips={[{ key: "docs", label: en ? "Personal documents" : "Documents personnels", active: settingsDraft.useKnowledge, onClick: () => void toggleContext("useKnowledge") }]} helper={activePreference.archivedAt ? (en ? "Restore this conversation before sending a new message." : "Restaurez cette conversation avant d’envoyer un nouveau message.") : (en ? "General help only. Use Enterprise AI for authorized ERP data and Agent mode for actions." : "Aide générale uniquement. Utilisez IA Entreprise pour les données ERP autorisées et le mode Agent pour agir.")} />
       </main>
+      <AiToolConfirmationDock conversationId={activeConversationId || null} locale={locale} />
 
       <AssistantConversationSettingsDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} title={en ? "General chatbot settings" : "Paramètres du chatbot général"} preference={settingsDraft} onChange={setSettingsDraft} onSave={() => void saveSettings()} models={models} locale={locale} sourceOptions={[{ key: "useKnowledge", label: en ? "Personal documents" : "Documents personnels", description: en ? "Uses only your personal authorized documents; enterprise ERP data remains in Enterprise AI." : "Utilise uniquement vos documents personnels autorisés ; les données ERP restent réservées à IA Entreprise." }]} />
       <Dialog open={renameOpen} title={en ? "Rename and organize" : "Renommer et classer"} onClose={() => setRenameOpen(false)}>{activeConversation ? <form onSubmit={renameConversation} className="grid gap-3"><Input name="title" defaultValue={activeConversation.title} required /><select name="projectId" defaultValue={activeConversation.projectId || ""} className="h-11 rounded-xl border border-dtsc-border bg-dtsc-page px-3 text-sm font-semibold"><option value="">{en ? "No project" : "Sans projet"}</option>{projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select><Button type="submit">{en ? "Save" : "Enregistrer"}</Button></form> : null}</Dialog>
