@@ -15,6 +15,7 @@ import { LocaleProvider } from "@/components/i18n/locale-provider";
 import { DtscFooter } from "@/components/layout/dtsc-footer";
 import { ContextualBackButton } from "@/components/workspace/contextual-back-button";
 import { NavLinks } from "@/components/layout/nav-links";
+import { DesktopSidebarFrame, DesktopSidebarToggle } from "@/components/layout/desktop-sidebar-frame";
 import { OrganizationContextSwitcher } from "@/components/layout/organization-context-switcher";
 import { PrivateMobileChromeController } from "@/components/layout/private-mobile-chrome-controller";
 import { ProductNavigation } from "@/components/layout/product-navigation";
@@ -55,10 +56,12 @@ export async function AppShell({
   precomputed,
   verifiedSession,
   hideContextualBack = false,
+  desktopWorkspaceMode = "default",
 }: {
   children: React.ReactNode;
   /** Fullscreen modules render their own in-context back navigation. */
   hideContextualBack?: boolean;
+  desktopWorkspaceMode?: "default" | "conversation";
   user: {
     id: string;
     name: string;
@@ -218,29 +221,34 @@ export async function AppShell({
           showInternalModules={dtscInternalContext}
           showEmployeeActivities={showEmployeeActivities}
         />
-        <aside className="fixed inset-y-0 left-0 hidden w-72 flex-col overflow-hidden border-r border-dtsc-border bg-dtsc-surface px-5 py-6 shadow-[0_18px_60px_rgba(0,23,54,0.08)] lg:flex">
-          <DtscLogo href={getDashboardUrl()} />
-          <div className="mt-3 inline-flex w-fit items-center rounded-full border border-cyan-400/30 bg-cyan-400/10 px-3 py-1 text-[11px] font-black uppercase tracking-[0.14em] text-cyan-600 dark:text-cyan-200">
+        <DesktopSidebarFrame userId={user.id} productKey={currentHostType} preferCollapsed={desktopWorkspaceMode === "conversation"} workspaceMode={desktopWorkspaceMode}>
+        <aside id="dtsc-desktop-sidebar" aria-label={user.locale === "en" ? "DTSC main navigation" : "Navigation principale DTSC"} className="dtsc-desktop-sidebar fixed inset-y-0 left-0 hidden min-w-0 flex-col overflow-hidden border-r border-dtsc-border bg-dtsc-surface px-5 py-6 shadow-[0_18px_60px_rgba(0,23,54,0.08)] lg:flex">
+          <div className="dtsc-sidebar-expanded-only"><DtscLogo href={getDashboardUrl()} /></div>
+          <Link href={getDashboardUrl()} aria-label={user.locale === "en" ? "DTSC home" : "Accueil DTSC"} title={user.locale === "en" ? "DTSC home" : "Accueil DTSC"} className="dtsc-sidebar-collapsed-only mb-3 min-h-11 items-center justify-center rounded-xl text-dtsc-blue focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400">
+            <Image src="/dtsc-logo.png" alt="" width={40} height={40} className="h-10 w-10 rounded-xl object-cover" />
+          </Link>
+          <div className="dtsc-sidebar-expanded-only mt-3 inline-flex w-fit items-center rounded-full border border-cyan-400/30 bg-cyan-400/10 px-3 py-1 text-[11px] font-black uppercase tracking-[0.14em] text-cyan-600 dark:text-cyan-200">
             {productBranding}
           </div>
           {organizationContext && activeOrganization ? (
-            <div className="mt-3 flex items-center gap-3 rounded-2xl border border-dtsc-border bg-dtsc-page p-3">
+            <div className="dtsc-sidebar-expanded-only mt-3 flex items-center gap-3 rounded-2xl border border-dtsc-border bg-dtsc-page p-3">
               {activeOrganizationLogoUrl ? <Image src={activeOrganizationLogoUrl} alt="" width={40} height={40} unoptimized className="h-10 w-10 rounded-xl bg-white object-contain p-1" /> : <div className="grid h-10 w-10 place-items-center rounded-xl bg-[var(--dtsc-product-accent)] text-xs font-black text-white">{initials(activeOrganization.name)}</div>}
               <div className="min-w-0"><p className="truncate text-sm font-black text-dtsc-ink">{activeOrganization.name}</p><p className="mt-0.5 text-[11px] font-bold text-dtsc-muted">{user.locale === "en" ? "Company workspace" : "Espace entreprise"}</p></div>
             </div>
           ) : null}
-          <ProductNavigation currentHostType={currentHostType} isDtscInternal={dtscInternalContext} className="mt-5" />
+          <ProductNavigation currentHostType={currentHostType} isDtscInternal={dtscInternalContext} locale={user.locale === "en" ? "en" : "fr"} className="dtsc-sidebar-expanded-only mt-5" />
 
           <Link
             href="/chat"
             title={copy.dashboard.newChat}
-            className="mt-8 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#001736] px-4 py-3 text-sm font-semibold text-white shadow-[0_4px_20px_rgba(0,43,91,0.12)] transition-all duration-150 hover:-translate-y-0.5 hover:bg-[#002b5b] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60 active:translate-y-px"
+            aria-label={copy.dashboard.newChat}
+            className="dtsc-sidebar-new-chat mt-8 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#001736] px-4 py-3 text-sm font-semibold text-white shadow-[0_4px_20px_rgba(0,43,91,0.12)] transition-all duration-150 hover:-translate-y-0.5 hover:bg-[#002b5b] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60 active:translate-y-px"
           >
             <Sparkles className="h-4 w-4 text-cyan-300" />
-            {copy.dashboard.newChat}
+            <span className="dtsc-sidebar-optional-text">{copy.dashboard.newChat}</span>
           </Link>
 
-          <nav className="mt-10 min-h-0 flex-1 space-y-1 overflow-y-auto pr-1">
+          <nav className="dtsc-sidebar-nav mt-10 min-h-0 flex-1 space-y-1 overflow-y-auto pr-1" aria-label={user.locale === "en" ? "Module groups" : "Groupes de modules"}>
             <NavLinks
               role={user.role}
               unreadNotifications={unreadNotifications}
@@ -254,9 +262,10 @@ export async function AppShell({
               locale={user.locale}
             />
           </nav>
+          <DesktopSidebarToggle locale={user.locale} />
         </aside>
 
-        <div className="lg:pl-72">
+        <div className="dtsc-desktop-content min-w-0">
           <header className="sticky top-0 z-30 hidden border-b border-dtsc-border bg-dtsc-surface backdrop-blur-xl lg:block">
             <div className="flex h-16 items-center justify-between px-4 sm:px-6 lg:px-8">
               <Link href={getDashboardUrl()} className="font-extrabold text-dtsc-ink lg:hidden">
@@ -302,6 +311,7 @@ export async function AppShell({
           <PwaNotificationBridge enabled={Boolean(user.pushNotificationsEnabled)} />
           <DtscFooter />
         </div>
+        </DesktopSidebarFrame>
       </div>
     </LocaleProvider>
   );

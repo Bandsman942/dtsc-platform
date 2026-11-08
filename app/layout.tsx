@@ -13,6 +13,7 @@ import { getProductBaseUrl, getProductDefinition } from "@/lib/product-registry"
 import "./globals.css";
 import "./design-system.css";
 import "./mobile-stability.css";
+import "./desktop-sidebar.css";
 
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });

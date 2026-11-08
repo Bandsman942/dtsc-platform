@@ -1,0 +1,94 @@
+/* #1061: desktop only. The mobile/PWA navigation and viewport controllers are untouched. */
+.dtsc-sidebar-collapsed-only {
+  display: none !important;
+}
+
+@media (min-width: 1024px) {
+  .dtsc-desktop-shell {
+    --dtsc-desktop-sidebar-width: 18rem;
+  }
+
+  .dtsc-desktop-shell[data-sidebar-collapsed="true"] {
+    --dtsc-desktop-sidebar-width: 4.75rem;
+  }
+
+  .dtsc-desktop-shell .dtsc-desktop-sidebar {
+    width: var(--dtsc-desktop-sidebar-width);
+    transition: width 180ms ease, padding 180ms ease;
+  }
+
+  .dtsc-desktop-shell .dtsc-desktop-content {
+    min-width: 0;
+    padding-left: var(--dtsc-desktop-sidebar-width);
+    transition: padding-left 180ms ease;
+  }
+
+  .dtsc-desktop-shell[data-sidebar-collapsed="true"] .dtsc-desktop-sidebar {
+    padding-inline: 0.5rem;
+  }
+
+  .dtsc-desktop-shell[data-sidebar-collapsed="true"] .dtsc-sidebar-expanded-only,
+  .dtsc-desktop-shell[data-sidebar-collapsed="true"] .dtsc-sidebar-optional-text,
+  .dtsc-desktop-shell[data-sidebar-collapsed="true"] .dtsc-sidebar-nav-label,
+  .dtsc-desktop-shell[data-sidebar-collapsed="true"] .dtsc-sidebar-nav-hint {
+    display: none !important;
+  }
+
+  .dtsc-desktop-shell[data-sidebar-collapsed="true"] .dtsc-sidebar-collapsed-only {
+    display: flex !important;
+  }
+
+  .dtsc-desktop-shell[data-sidebar-collapsed="true"] .dtsc-sidebar-new-chat {
+    padding-inline: 0.5rem;
+    margin-top: 1rem;
+  }
+
+  .dtsc-desktop-shell[data-sidebar-collapsed="true"] .dtsc-sidebar-nav {
+    margin-top: 1rem;
+    padding-right: 0;
+  }
+
+  .dtsc-desktop-shell[data-sidebar-collapsed="true"] [data-sidebar-nav-link] {
+    justify-content: center;
+    gap: 0;
+    padding: 0.85rem 0.5rem;
+  }
+
+  .dtsc-desktop-shell[data-sidebar-collapsed="true"] [data-sidebar-nav-link] > span:first-child {
+    margin-inline: auto;
+  }
+
+  /* WhatsApp-like desktop layout: the DTSC icon rail, scrollable conversation
+     list and message pane share the viewport without another page scrollbar. */
+  .dtsc-desktop-shell[data-workspace-mode="conversation"] .dtsc-desktop-content {
+    height: 100dvh;
+    overflow: hidden;
+  }
+
+  .dtsc-desktop-shell[data-workspace-mode="conversation"] .dtsc-private-main {
+    height: calc(100dvh - 4rem);
+    min-height: 0;
+    padding: 0 !important;
+    overflow: hidden;
+  }
+
+  .dtsc-desktop-shell[data-workspace-mode="conversation"] .dtsc-private-main > div,
+  .dtsc-desktop-shell[data-workspace-mode="conversation"] [data-collaboration-immersive-root],
+  .dtsc-desktop-shell[data-workspace-mode="conversation"] [data-collaboration-immersive-root] > [data-collaborators-split-view] {
+    height: 100%;
+    min-height: 0;
+  }
+
+  .dtsc-desktop-shell[data-workspace-mode="conversation"] [data-collaborators-split-view] > [data-collaborators-discussions-pane],
+  .dtsc-desktop-shell[data-workspace-mode="conversation"] [data-collaborators-split-view] > [data-collaborators-conversation-pane] {
+    min-width: 0;
+    min-height: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dtsc-desktop-shell .dtsc-desktop-sidebar,
+  .dtsc-desktop-shell .dtsc-desktop-content {
+    transition: none !important;
+  }
+}

@@ -87,10 +87,12 @@ export function NavLinks({
           <Link
             key={group.code}
             href={href}
-            title={title}
+            title={title ? `${label} · ${title}` : label}
+            aria-label={label}
+            data-sidebar-nav-link={!mobile ? group.code : undefined}
             aria-current={active ? "page" : undefined}
             className={cn(
-              "relative flex min-w-0 items-center gap-3 rounded-xl font-semibold transition",
+              "relative flex min-w-0 items-center gap-3 rounded-xl font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400",
               mobile ? "shrink-0 px-3 py-2 text-xs" : "px-3 py-2.5 text-sm",
               active
                 ? "bg-cyan-400/15 text-cyan-500 shadow-[inset_3px_0_0_rgb(34,211,238)]"
@@ -105,9 +107,9 @@ export function NavLinks({
                 </span>
               ) : null}
             </span>
-            <span className="min-w-0 flex-1 truncate">{label}</span>
+            <span className="dtsc-sidebar-nav-label min-w-0 flex-1 truncate">{label}</span>
             {!mobile && organizationHint ? (
-              <span className="max-w-24 truncate rounded-full bg-dtsc-page px-2 py-0.5 text-[0.62rem] font-black text-dtsc-muted">{organizationHint}</span>
+              <span className="dtsc-sidebar-nav-hint max-w-24 truncate rounded-full bg-dtsc-page px-2 py-0.5 text-[0.62rem] font-black text-dtsc-muted">{organizationHint}</span>
             ) : null}
           </Link>
         );

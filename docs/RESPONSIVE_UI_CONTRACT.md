@@ -252,3 +252,12 @@ Une page est conforme lorsque :
 13. les badges ne dupliquent pas le même signal sans raison ;
 14. `pnpm qa:responsive-ui` et les Quality Gates passent ;
 15. les E2E visuels requis par le changement ont une preuve explicite.
+
+
+## Hotfix #1061 — Réduction du menu desktop et workspaces conversationnels
+
+Sur desktop (>= 1024 px), le shell privé DTSC possède désormais un menu principal rétractable de 288 px à 76 px, sans en changer les destinations autorisées. `DesktopSidebarFrame` pilote l'affichage avec `data-sidebar-collapsed` et restaure la préférence locale propre à l'utilisateur et au produit. Les boutons restent accessibles avec `aria-label`, `title`, `aria-current` et focus visible ; le changement d'organisation demeure dans l'en-tête desktop.
+
+Le workspace `/collaborators` active `desktopWorkspaceMode="conversation"` et utilise la hauteur utile sous l'en-tête pour former la disposition rail DTSC / discussions / fil de messages. Les scrolls de la liste et du fil restent indépendants. Sur mobile, aucun comportement du sélecteur, des gestes, du composer ou du contrôleur VisualViewport n'est modifié.
+
+Contrat QA dédié : `scripts/qa-hotfix-1061-desktop-sidebar.mjs` ; E2E Playwright : `tests/e2e/issue-1061-desktop-sidebar.spec.mjs` ; détails et rollback : `docs/HOTFIX_1061_DESKTOP_NAVIGATION_COLLABORATORS.md`.
