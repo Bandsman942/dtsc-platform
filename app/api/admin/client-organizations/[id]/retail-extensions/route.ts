@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { requireConsoleCapability } from "@/lib/admin-api";
 import { hasRecentStepUp } from "@/lib/auth/step-up";
@@ -7,6 +8,7 @@ import { planMeetsRequirement } from "@/lib/billing/plans";
 import { getOrganizationEntitlements } from "@/lib/billing/entitlements";
 import { CONSOLE_CAPABILITIES } from "@/lib/console/console-capabilities";
 import { BUSINESS_SUBTYPES } from "@/lib/enterprise/business-subtype-registry";
+import { persistBusinessSubtypeSelection } from "@/lib/enterprise/business-subtype-selection";
 import {
   activateEnterpriseModule,
   disableEnterpriseModule,
@@ -15,19 +17,30 @@ import {
 import { getEnterpriseModuleDefinition } from "@/lib/enterprise/module-registry";
 import {
   getRetailExtensionPreferences,
+  getRetailExtensionPreference,
+  withRetailExtensionPreference,
   RETAIL_OPTIONAL_EXTENSION_MODULE_CODES,
 } from "@/lib/enterprise/retail/extension-policy";
 import { prisma } from "@/lib/prisma";
+import { syncRetailOperatorProvidersForModules } from "@/lib/enterprise/retail/provisioning";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
 
 type Params = { params: Promise<{ id: string }> };
-const schema = z.object({
-  moduleCode: z.enum(RETAIL_OPTIONAL_EXTENSION_MODULE_CODES),
-  enabled: z.boolean(),
-  reason: z.string().trim().min(8).max(500),
-}).strict();
-const auditActions = ["DTSC_RETAIL_EXTENSION_ENABLED", "DTSC_RETAIL_EXTENSION_DISABLED"];
+const schema = z.discriminatedUnion("operation", [
+  z.object({
+    operation: z.literal("extension"),
+    moduleCode: z.enum(RETAIL_OPTIONAL_EXTENSION_MODULE_CODES),
+    enabled: z.boolean(),
+    reason: z.string().trim().min(8).max(500),
+  }).strict(),
+  z.object({
+    operation: z.literal("classification"),
+    businessSubtypeCode: z.literal("SHOP").nullable(),
+    reason: z.string().trim().min(8).max(500),
+  }).strict(),
+]);
+const auditActions = ["DTSC_RETAIL_EXTENSION_ENABLED", "DTSC_RETAIL_EXTENSION_DISABLED", "DTSC_RETAIL_CLASSIFICATION_CHANGED"];
 
 async function inspect(organizationId: string) {
   const [organization, configuration, entitlements, history] = await Promise.all([
@@ -117,9 +130,56 @@ export async function PATCH(req: Request, { params }: Params) {
   }
   const parsed = schema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Sélection invalide ou justification trop courte.", reasonCode: "VALIDATION_ERROR" }, { status: 400 });
-  const { moduleCode, enabled, reason } = parsed.data;
   const before = await inspect(id);
   if (!before) return NextResponse.json({ error: "Entreprise RETAIL introuvable." }, { status: 404 });
+  if (parsed.data.operation === "classification") {
+    const { businessSubtypeCode, reason } = parsed.data;
+    if (businessSubtypeCode === before.businessSubtypeCode) {
+      return NextResponse.json({ error: "La classification est déjà à jour.", reasonCode: "UNCHANGED" }, { status: 409 });
+    }
+    await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterpriseRetailConfiguration" WHERE "organizationId" = ${id} FOR UPDATE`);
+      const [configuration, installed] = await Promise.all([
+        tx.enterpriseRetailConfiguration.findUnique({ where: { organizationId: id }, select: { settingsJson: true, profileCode: true } }),
+        tx.enterpriseModule.findMany({
+          where: { organizationId: id, moduleCode: { in: [...RETAIL_OPTIONAL_EXTENSION_MODULE_CODES] } },
+          select: { moduleCode: true, isEnabled: true },
+        }),
+      ]);
+      if (!configuration) throw new EnterpriseModuleConfigurationError("RETAIL_CONFIGURATION_REQUIRED", "Configuration RETAIL manquante.", 409);
+      let settings: Prisma.JsonValue = configuration.settingsJson;
+      // A classification switch never enables a new pack or disables an
+      // already contracted module. Freeze the exact historical choices first.
+      for (const code of RETAIL_OPTIONAL_EXTENSION_MODULE_CODES) {
+        if (getRetailExtensionPreference(settings, code) === undefined) {
+          settings = withRetailExtensionPreference(settings, code, installed.some((item) => item.moduleCode === code && item.isEnabled));
+        }
+      }
+      const base = settings && typeof settings === "object" && !Array.isArray(settings) ? settings as Prisma.JsonObject : {};
+      await tx.enterpriseRetailConfiguration.update({
+        where: { organizationId: id },
+        data: {
+          profileCode: businessSubtypeCode === null ? "RETAIL_CORE" : configuration.profileCode,
+          settingsJson: { ...base, businessSubtypeSelectionVersion: 1, businessSubtypeCode },
+          revision: { increment: 1 },
+        },
+      });
+      await persistBusinessSubtypeSelection({
+        organizationId: id, sectorCode: "COMMERCE_RETAIL", businessSubtypeCode,
+        source: "DTSC_ADMIN", actorUserId: access.session.userId,
+      }, tx);
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+    await syncRetailOperatorProvidersForModules(id);
+    await writeAuditLog({
+      userId: access.session.userId, organizationId: id, entity: "EnterpriseRetailConfiguration", entityId: id,
+      action: "DTSC_RETAIL_CLASSIFICATION_CHANGED", request: req, riskLevel: "HIGH",
+      before: { businessSubtypeCode: before.businessSubtypeCode }, after: { businessSubtypeCode },
+      metadata: { reason, businessSubtypeCode, previousSubtypeCode: before.businessSubtypeCode },
+    });
+    return NextResponse.json({ ok: true, message: "Classification RETAIL mise à jour sans suppression de données.", state: await inspect(id) },
+      { headers: { "Cache-Control": "private, no-store" } });
+  }
+  const { moduleCode, enabled, reason } = parsed.data;
   const target = before.modules.find((item) => item.moduleCode === moduleCode);
   if (!target) return NextResponse.json({ error: "Extension inconnue." }, { status: 404 });
   if (enabled && !target.eligible) return NextResponse.json({ error: target.reason, reasonCode: "PLAN_REQUIRED" }, { status: 402 });
