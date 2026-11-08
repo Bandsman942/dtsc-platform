@@ -121,7 +121,7 @@ const en: Record<RetailGuideCode, ContextualUserGuide> = {
       { title: "Process returns and exchanges", description: "Returnable quantities account for completed and pending returns. Requesters cannot approve their own refund." },
       { title: "Verify Finance and close", description: "Check entries, valuation, currency-native reporting and historical rates, then have the close validated independently." },
     ],
-    limitations: ["A PSP/operator is connected only when a real adapter is registered/configured; DTSC ships no fake external provider.", "Ambiguous multi-currency COGS scenarios require validation before global certification.", "Offline, advanced omnichannel, global multi-store and country packs belong to Shop 2.0 iteration 4."],
+    limitations: ["A PSP/operator is connected only when a real adapter is registered/configured; DTSC ships no fake external provider.", "Ambiguous multi-currency COGS scenarios require validation before global certification.", "Offline, advanced omnichannel, multi-store and country localization depend on their certified maturity and the subscription's effective capabilities."],
   },
   MOBILE_MONEY_AGENCY: {
     code: "MOBILE_MONEY_AGENCY",
