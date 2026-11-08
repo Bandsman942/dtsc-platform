@@ -1,3 +1,11 @@
+## 2026-11-08 — Retail #1044 — Activation administrée des fonctionnalités multi-boutiques et facturation (candidat v1.4.0)
+
+- Le propriétaire / administrateur entreprise dispose d'un panneau dans **Shop → Mise en service & équipements** pour piloter séparément l'isolation des boutiques puis le circuit facturation/encaissement RETAIL ; les deux options restent désactivées tant qu'une entreprise n'a pas choisi de les activer.
+- Précontrôles tenant-scoped : boutiques et dépôts actifs, comptes financiers par boutique, affectations et capacités réelles des collaborateurs, comptabilité prête ; la facturation exige le cloisonnement préalablement activé. Les écarts sont affichés en FR/EN avec liens de configuration.
+- Les mutations requièrent session entreprise, entitlement `RETAIL_POS`, rôle propriétaire/admin actif, même origine, limitation de débit et **vérification récente du mot de passe/MFA** ; un changement comporte une justification, une révision optimiste et un audit atomique CRITICAL. Historique paginé consultable.
+- Désactivation protégée : la facturation ne peut être coupée avec factures non soldées/non postées, retours ou paiements en cours ; le cloisonnement ne peut être arrêté tant que la facturation est active ou qu'il reste des collaborateurs non administrateurs. Aucun changement automatique en Production.
+- QA ciblée `pnpm qa:hotfix-1044-retail-activation` (sécurité, prérequis, collisions, réversibilité, tenant, historique, i18n). Livraison **candidate** : revue CI et `OWNER_E2E` de #1044 requis avant toute fusion dans `main`, sans Preview Vercel.
+
 ## 2026-11-08 — Retail #1042, tranche 48 — Remboursements par compte d'origine (candidat, PR #1043)
 
 - Migration **additive** `EnterpriseRetailInvoiceReturnRefundLeg` : un retour peut avoir plusieurs paiements de remboursement Finance canoniques (un par compte d'encaissement), chacun tenant-scoped, approuvé indépendamment et relié structurellement au retour ; l'avoir Finance et les mouvements de stock ne sont pas dupliqués. Les anciens retours à un seul paiement restent utilisables.

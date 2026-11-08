@@ -1,5 +1,7 @@
 # DTSC Platform — Documentation technique
 
+> **RETAIL #1044 — activation administrée (08/11/2026, candidat v1.4.0) :** une nouvelle section **Shop → Mise en service & équipements → Activation des fonctionnalités avancées** pilote `siteStaffIsolationEnabled` et `invoiceCheckoutEnabled` par entreprise, dans cet ordre. `GET/POST /api/enterprise/:organizationId/retail/feature-activation` imposent membership owner/admin, module, same-origin, step-up récent MFA, prérequis Finance/équipe/dépôts, révision optimistic/transaction sérialisable et journal AuditLog atomique. Désactivation sécurisée (factures, retours, paiements, collaborateurs). Les deux flags restent OFF par défaut ; OWNER_E2E de #1044 indispensable avant merge. Contrat, parcours et risques : [HOTFIX_1044_RETAIL_FEATURE_ACTIVATION.md](HOTFIX_1044_RETAIL_FEATURE_ACTIVATION.md).
+
 **Version :** Consolidation ERP + modules standards 8/8 + DTSC AI 08/08
 **Version applicative :** `package.json` (SemVer ; la Release GitHub confirme seule une version livrée).
 **Repository :** `Bandsman942/dtsc-platform`
