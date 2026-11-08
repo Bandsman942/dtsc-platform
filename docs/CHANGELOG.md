@@ -1,3 +1,9 @@
+## 2026-11-08 — Hotfix #1061 — Menu desktop rétractable et collaboration immersive (candidat v1.5.2)
+
+- Navigation principale desktop rétractable, inspirée du comportement de Neon : 288 px ouverte / 76 px réduite, icônes et badges actifs, infobulles, bouton accessible d'ouverture/fermeture, préférence locale par utilisateur et produit, sans modification RBAC.
+- Dans « Mes collaborateurs », disposition conversationnelle à trois zones sur ordinateur : rail DTSC étroit, discussions toujours visibles, fil de messages et composer occupant toute la surface restante ; les comportements mobiles/iOS et appels restent inchangés.
+- QA dédiée et E2E Playwright ; documentation [HOTFIX_1061_DESKTOP_NAVIGATION_COLLABORATORS.md](HOTFIX_1061_DESKTOP_NAVIGATION_COLLABORATORS.md). Pas de déploiement tant que CI et validation E2E du propriétaire ne sont pas confirmés.
+
 ## 2026-11-08 — Retail #1044 — Activation administrée des fonctionnalités multi-boutiques et facturation (candidat v1.4.0)
 
 - Le propriétaire / administrateur entreprise dispose d'un panneau dans **Shop → Mise en service & équipements** pour piloter séparément l'isolation des boutiques puis le circuit facturation/encaissement RETAIL ; les deux options restent désactivées tant qu'une entreprise n'a pas choisi de les activer.
