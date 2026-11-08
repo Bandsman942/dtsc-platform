@@ -5,6 +5,7 @@ import { Banknote, LockKeyhole, Plus, ShieldCheck } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { Field, NativeSelect } from "@/components/enterprise/core-v2/erp-v2-ui";
 import { CashPhysicalCountFields, cashCountsFromForm } from "@/components/enterprise/professional/cash-physical-count-fields";
+import { FinanceDateFilter, FinanceExportControls, type FinanceExportColumn } from "@/components/enterprise/professional/finance-design2-controls";
 import { EnterpriseApproverSelect } from "@/components/enterprise/enterprise-approver-select";
 import {
   FinanceCollaboration,
@@ -64,6 +65,8 @@ export function EnterpriseFinanceCashWorkspace({ organizationId, organizationNam
   const [tab, setTab] = useState(searchParams.get("tab") || "all");
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [page, setPage] = useState(1);
   const [refreshKey, setRefreshKey] = useState(0);
   const [detail, setDetail] = useState<CashSession | null>(null);
@@ -79,7 +82,15 @@ export function EnterpriseFinanceCashWorkspace({ organizationId, organizationNam
   useToastMessage(error, "error");
 
   const effectiveStatus = status || (tab === "pending" ? "PENDING_VALIDATION" : tab === "open" ? "OPEN" : tab === "closed" ? "CLOSED" : "");
-  const collection = useFinanceCollection<CashSession>({ endpoint: `/api/enterprise/${organizationId}/cash-sessions`, page, search, status: effectiveStatus, refreshKey });
+  const collection = useFinanceCollection<CashSession>({ endpoint: `/api/enterprise/${organizationId}/cash-sessions`, page, search, status: effectiveStatus, dateFrom, dateTo, refreshKey });
+  const exportColumns: FinanceExportColumn[] = [
+    { key: "reference", labelFr: "Référence", labelEn: "Reference", get: (row) => String(row.code || row.number || row.id || "") },
+    { key: "status", labelFr: "Statut", labelEn: "Status", get: (row) => financeStatusLabel(String(row.status || ""), locale) },
+    { key: "opened", labelFr: "Ouverture", labelEn: "Opened on", get: (row) => String(row.openedAt || "") },
+    { key: "closed", labelFr: "Clôture", labelEn: "Closed on", get: (row) => String(row.closedAt || "") },
+    { key: "opening", labelFr: "Solde d’ouverture", labelEn: "Opening balance", get: (row) => String(row.openingAmount || "") },
+    { key: "difference", labelFr: "Écart", labelEn: "Difference", get: (row) => String(row.discrepancyAmount || "") },
+  ];
   const lookupData = useFinanceLookups(organizationId, "FINANCE_CASH", refreshKey);
   const cashAccounts = lookupData.accounts.filter((account) => account.accountType === "CASH");
   const tabs = [
@@ -197,7 +208,7 @@ export function EnterpriseFinanceCashWorkspace({ organizationId, organizationNam
     </ModuleMetrics>
     <ModuleToolbar
       search={<ProfessionalSearch value={search} onChange={(value) => { setSearch(value); setPage(1); }} placeholder={t("cashSearchPlaceholder")} />}
-      controls={<div className="grid min-w-0 gap-2"><ProfessionalTabs value={tab} onChange={(value) => { setTab(value); setStatus(""); setPage(1); }} items={tabs} label={t("moduleViews")} /><NativeSelect value={status} onChange={(value) => { setStatus(value); setPage(1); }} items={[{ id: "", label: t("allStatuses") }, ...["OPEN", "PENDING_VALIDATION", "CLOSED", "REJECTED"].map((id) => ({ id, label: financeStatusLabel(id, locale) }))]} /></div>}
+      controls={<div className="grid min-w-0 gap-2"><ProfessionalTabs value={tab} onChange={(value) => { setTab(value); setStatus(""); setPage(1); }} items={tabs} label={t("moduleViews")} /><div className="flex min-w-0 flex-wrap items-end gap-2"><NativeSelect value={status} onChange={(value) => { setStatus(value); setPage(1); }} items={[{ id: "", label: t("allStatuses") }, ...["OPEN", "PENDING_VALIDATION", "CLOSED", "REJECTED"].map((id) => ({ id, label: financeStatusLabel(id, locale) }))]} /><FinanceDateFilter locale={locale} from={dateFrom} to={dateTo} onChange={(from, to) => { setDateFrom(from); setDateTo(to); setPage(1); }} /><FinanceExportControls endpoint={`/api/enterprise/${organizationId}/cash-sessions`} organizationName={organizationName} title={locale === "en" ? definition.labelEn : definition.labelFr} locale={locale} filters={{ search, status: effectiveStatus, dateFrom, dateTo }} columns={exportColumns} disabled={collection.loading} /></div></div>}
       summary={t("cashSectionDescription")}
     />
     <ModuleContent>

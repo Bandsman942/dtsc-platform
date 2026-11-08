@@ -167,7 +167,7 @@ export function EnterpriseModuleWorkspace({
             <EnterprisePurchasesWorkspace organizationId={organizationId} members={memberChoices} departments={departmentChoices} capabilities={capabilities} locale={locale} legacyRecords={coreRecords.filter((record) => record.recordType === "PURCHASE")} />
           </div>
         ) : enterpriseModule.code === "FINANCE_BUDGETS" ? (
-          <EnterpriseFinanceWorkspace organizationId={organizationId} members={memberChoices} departments={departmentChoices} canCreate={canCreate} canManage={canManage} locale={locale} legacyRecords={coreRecords.filter((record) => ["BUDGET", "EXPENSE"].includes(record.recordType))} />
+          <EnterpriseFinanceWorkspace organizationId={organizationId} organizationName={organizationName} members={memberChoices} departments={departmentChoices} canCreate={canCreate} canManage={canManage} locale={locale} legacyRecords={coreRecords.filter((record) => ["BUDGET", "EXPENSE"].includes(record.recordType))} />
         ) : enterpriseModule.code === "REPORTS" ? (
           <EnterpriseReportsWorkspace organizationId={organizationId} organizationName={organizationName} organizationLogoUrl={organizationLogoUrl} canCreate={canCreate} canManage={canManage} locale={locale} legacyRecords={coreRecords.filter((record) => record.recordType === "REPORT")} />
         ) : enterpriseModule.code === "WORKFLOWS" ? (

@@ -9,6 +9,8 @@ import { FinanceAccountingReferenceSelect, type FinanceAccountingReferenceOption
 import { AccountingCompactTable, type AccountingCompactColumn } from "@/components/enterprise/professional/accounting-compact-table";
 import { AccountingJournalWorkbench } from "@/components/enterprise/professional/accounting-journal-workbench";
 import { AccountingRecordDetail, type AccountingRecordDetailKind } from "@/components/enterprise/professional/accounting-record-detail";
+import { FinanceDateFilter, FinanceExportControls, type FinanceExportColumn } from "@/components/enterprise/professional/finance-design2-controls";
+import { FinanceTemplateImportControls } from "@/components/enterprise/professional/finance-template-import-controls";
 import { AssignedApprovalSubmitPanel } from "@/components/enterprise/professional/assigned-approval-submit-panel";
 import { EnterpriseAccountingOnboardingPanel } from "@/components/enterprise/professional/enterprise-accounting-onboarding-panel";
 import { ProfessionalError, ProfessionalLoading } from "@/components/enterprise/professional/professional-erp-ui";
@@ -145,6 +147,7 @@ export function EnterpriseFinanceAccountingWorkspace(props: Props) {
   const [overview, setOverview] = useState<OverviewPayload>({});
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
   const [page, setPage] = useState(1);
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
@@ -201,6 +204,9 @@ export function EnterpriseFinanceAccountingWorkspace(props: Props) {
         if (space === "post") {
           const query = new URLSearchParams({ page: String(page), pageSize: "25" });
           if (search.trim()) query.set("search", search.trim());
+          if (statusFilter) query.set("status", statusFilter);
+          if (dateFrom) query.set("dateFrom", dateFrom);
+          if (dateTo) query.set("dateTo", dateTo);
           const response = await fetch(`/api/enterprise/${organizationId}/journal-entries?${query.toString()}`, { cache: "no-store", signal: controller.signal });
           const body = await response.json().catch(() => ({})) as ListPayload<JournalEntry> & { message?: string; error?: string };
           if (!response.ok) throw new Error(body.message || body.error || "JOURNAL_ENTRIES_FAILED");
@@ -210,6 +216,7 @@ export function EnterpriseFinanceAccountingWorkspace(props: Props) {
         if (space === "review") {
           const query = new URLSearchParams({ view: reviewView === "ledger" ? "general-ledger" : reviewView === "trial" ? "trial-balance" : "anomalies", page: String(page), pageSize: "25" });
           if (search.trim()) query.set("search", search.trim());
+          if (statusFilter) query.set("status", statusFilter);
           if (dateFrom) query.set("dateFrom", dateQueryValue(dateFrom));
           if (dateTo) query.set("dateTo", dateQueryValue(dateTo, true));
           const response = await fetch(`/api/enterprise/${organizationId}/accounting-query?${query.toString()}`, { cache: "no-store", signal: controller.signal });
@@ -241,7 +248,7 @@ export function EnterpriseFinanceAccountingWorkspace(props: Props) {
     }
     void load();
     return () => { cancelled = true; controller.abort(); };
-  }, [configureView, dateFrom, dateTo, en, locale, organizationId, page, refreshKey, reviewView, search, space]);
+  }, [configureView, dateFrom, dateTo, en, locale, organizationId, page, refreshKey, reviewView, search, space, statusFilter]);
 
   useEffect(() => {
     if (!detailEntryId) { setEntryTrace(null); return; }
@@ -506,6 +513,18 @@ export function EnterpriseFinanceAccountingWorkspace(props: Props) {
   const workspaceTitle = en ? definition.labelEn || definition.labelFr : definition.labelFr || definition.labelEn;
   const configureOptions = (["setup", "charts", "accounts", "years", "periods", "journals", "rules"] as ConfigureView[]);
   const reviewOptions = (["ledger", "trial", "anomalies"] as ReviewView[]);
+  const currentExportEndpoint = space === "post" ? `/api/enterprise/${organizationId}/journal-entries`
+    : space === "review" ? `/api/enterprise/${organizationId}/accounting-query?view=${reviewView === "ledger" ? "general-ledger" : reviewView === "trial" ? "trial-balance" : "anomalies"}`
+      : `/api/enterprise/${organizationId}/${configureView === "rules" ? "account-mappings" : configureView === "charts" ? "charts-of-accounts" : configureView === "accounts" ? "ledger-accounts" : configureView === "years" ? "fiscal-years" : configureView === "periods" ? "fiscal-periods" : "journals"}`;
+  const currentExportColumns: FinanceExportColumn[] = [
+    { key: "reference", labelFr: "Code / référence", labelEn: "Code / reference", get: (row) => rawText(row.code || row.number || row.reference || row.id) },
+    { key: "description", labelFr: "Désignation", labelEn: "Description", get: (row) => rawText(row.description || (en ? row.nameEn || row.nameFr : row.nameFr || row.nameEn) || (row.ledgerAccount as Record<string, unknown> | undefined)?.code) },
+    { key: "status", labelFr: "Statut", labelEn: "Status", get: (row) => financeStatusLabel(rawText(row.status), locale) },
+    { key: "account", labelFr: "Compte", labelEn: "Account", get: (row) => rawText((row.ledgerAccount as Record<string, unknown> | undefined)?.code || row.mappingKey) },
+    { key: "date", labelFr: "Date comptable", labelEn: "Accounting date", get: (row) => financeDate(row.accountingDate || row.createdAt || row.startDate, locale) },
+    { key: "debit", labelFr: "Débit", labelEn: "Debit", get: (row) => rawText(row.debit || row.totalDebit || row.periodDebit || "") },
+    { key: "credit", labelFr: "Crédit", labelEn: "Credit", get: (row) => rawText(row.credit || row.totalCredit || row.periodCredit || "") },
+  ];
 
   return <ModuleWorkspace className="mx-auto w-full max-w-[1600px] px-4 sm:px-6 lg:px-8">
     <ModuleHeader
@@ -524,13 +543,14 @@ export function EnterpriseFinanceAccountingWorkspace(props: Props) {
 
     {hasToolbar ? <ModuleToolbar
       search={<label className="relative block min-w-0"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-dtsc-muted" /><Input value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder={en ? "Search…" : "Rechercher…"} className="pl-9" /></label>}
-      controls={<div className="flex min-w-0 flex-wrap items-end gap-2">{space === "review" && reviewView !== "anomalies" ? <><label className="grid min-w-0 gap-1 text-xs font-bold text-dtsc-muted">{en ? "From" : "Du"}<Input type="date" value={dateFrom} onChange={(event) => { setDateFrom(event.target.value); setPage(1); }} className="h-10 w-full min-w-0 sm:w-40" /></label><label className="grid min-w-0 gap-1 text-xs font-bold text-dtsc-muted">{en ? "To" : "Au"}<Input type="date" value={dateTo} onChange={(event) => { setDateTo(event.target.value); setPage(1); }} className="h-10 w-full min-w-0 sm:w-40" /></label></> : null}<Button type="button" variant="outline" size="sm" onClick={() => reload()}><RotateCcw className="mr-1.5 h-4 w-4" />{en ? "Refresh" : "Actualiser"}</Button>{space === "configure" && configureView !== "setup" && ((configureView === "charts" || configureView === "rules") ? canManage : canCreate) ? <Button type="button" size="sm" onClick={() => { setSelectedRuleChartId(""); setSelectedAccountChart(null); setConfigForm({ open: true, kind: configureView as ConfigCreatable, record: null }); }}><Plus className="mr-1.5 h-4 w-4" />{configureView === "rules" ? (en ? "New rule" : "Nouvelle règle") : (en ? "Create" : "Créer")}</Button> : null}</div>}
+      controls={<div className="flex min-w-0 flex-wrap items-end gap-2">{space === "post" || (space === "review" && reviewView !== "anomalies") ? <FinanceDateFilter locale={locale} from={dateFrom} to={dateTo} onChange={(from, to) => { setDateFrom(from); setDateTo(to); setPage(1); }} /> : null}{space === "post" ? <label className="grid gap-1 text-xs font-bold text-dtsc-muted">{en ? "Status" : "Statut"}<select className="h-10 rounded-xl border border-dtsc-border bg-dtsc-surface px-2 text-sm" value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value); setPage(1); }}><option value="">{en ? "All statuses" : "Tous les statuts"}</option>{["DRAFT", "PENDING_APPROVAL", "APPROVED", "POSTED", "REJECTED", "REVERSED"].map((status) => <option key={status} value={status}>{financeStatusLabel(status, locale)}</option>)}</select></label> : null}<Button type="button" variant="outline" size="sm" onClick={() => reload()}><RotateCcw className="mr-1.5 h-4 w-4" />{en ? "Refresh" : "Actualiser"}</Button><FinanceExportControls endpoint={currentExportEndpoint} organizationName={organizationName} title={`${workspaceTitle} · ${space === "post" ? (en ? "Entries" : "Écritures") : space === "review" ? reviewView : configureView}`} locale={locale} filters={{ search, ...(space === "post" ? { status: statusFilter } : {}), ...(space === "post" ? { dateFrom, dateTo } : space === "review" && reviewView !== "anomalies" ? { dateFrom: dateQueryValue(dateFrom), dateTo: dateQueryValue(dateTo, true) } : {}) }} columns={currentExportColumns} disabled={loading} />{space === "configure" && configureView !== "setup" && ((configureView === "charts" || configureView === "rules") ? canManage : canCreate) ? <Button type="button" size="sm" onClick={() => { setSelectedRuleChartId(""); setSelectedAccountChart(null); setConfigForm({ open: true, kind: configureView as ConfigCreatable, record: null }); }}><Plus className="mr-1.5 h-4 w-4" />{configureView === "rules" ? (en ? "New rule" : "Nouvelle règle") : (en ? "Create" : "Créer")}</Button> : null}</div>}
       summary={pagination.total ? `${pagination.total} ${en ? "record(s)" : "élément(s)"}` : undefined}
     /> : null}
 
     {errorMessage ? <ProfessionalError message={errorMessage} /> : null}
 
     <ModuleContent className="space-y-5">
+      {space === "configure" && configureView === "accounts" ? <FinanceTemplateImportControls kind="accounts" organizationId={organizationId} organizationName={organizationName} locale={locale} canImport={canCreate} onImported={() => reload()} /> : null}
       {space === "home" ? <div className="space-y-5">
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">{metricCards.map(([label, value, target]) => <button type="button" key={label} onClick={() => { if (target === "anomalies") { chooseSpace("review"); setReviewView("anomalies"); } else if (target === "rules") { chooseSpace("configure"); setConfigureView("rules"); } else if (target === "configure") { chooseSpace("configure"); setConfigureView("periods"); } else chooseSpace(target); }} className="rounded-2xl border border-dtsc-border bg-dtsc-surface p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"><span className="block text-xs font-black uppercase tracking-[0.05em] text-dtsc-muted">{label}</span><strong className="mt-2 block text-2xl font-black tabular-nums text-dtsc-ink">{value}</strong></button>)}</div>
         <div className="grid gap-4 lg:grid-cols-2"><section className="rounded-2xl border border-dtsc-border bg-dtsc-surface p-5"><div className="flex items-start gap-3"><BookOpenCheck className="mt-0.5 h-5 w-5 text-cyan-600" /><div><h2 className="font-black text-dtsc-ink">{en ? "Accounting work queue" : "File de travail comptable"}</h2><p className="mt-1 text-sm leading-6 text-dtsc-muted">{en ? "Create entries, route them for independent approval, post them and inspect their source trace without leaving the ledger." : "Créez les écritures, affectez leur validation indépendante, comptabilisez-les et remontez à leur source sans quitter le grand livre."}</p><Button type="button" className="mt-4" onClick={() => chooseSpace("post")}>{en ? "Open work queue" : "Ouvrir la file"}<ChevronRight className="ml-2 h-4 w-4" /></Button></div></div></section><section className="rounded-2xl border border-dtsc-border bg-dtsc-surface p-5"><div className="flex items-start gap-3"><AlertTriangle className="mt-0.5 h-5 w-5 text-amber-600" /><div><h2 className="font-black text-dtsc-ink">{en ? "Controls and close readiness" : "Contrôles et préparation de clôture"}</h2><p className="mt-1 text-sm leading-6 text-dtsc-muted">{en ? "Review failed postings and the underlying ledger before financial close. Close remains managed by its dedicated entitlement." : "Analysez les échecs de comptabilisation et le grand livre avant la clôture. La clôture reste protégée par son entitlement dédié."}</p><Button type="button" variant="outline" className="mt-4" onClick={() => { chooseSpace("review"); setReviewView("anomalies"); }}>{en ? "Review anomalies" : "Voir les anomalies"}<ChevronRight className="ml-2 h-4 w-4" /></Button></div></div></section></div>

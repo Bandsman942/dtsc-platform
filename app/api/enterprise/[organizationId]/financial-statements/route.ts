@@ -1,7 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
-import { authorizeFinanceRequest, financeErrorResponse, financeListParams } from "@/lib/enterprise/accounting/http";
+import { authorizeFinanceRequest, financeBusinessDateRange, financeErrorResponse, financeListParams } from "@/lib/enterprise/accounting/http";
 import { generateFinancialStatement } from "@/lib/enterprise/accounting/statements-service";
 import { statementGenerateSchema } from "@/lib/enterprise/accounting/treasury-schemas";
 import { prisma } from "@/lib/prisma";
@@ -16,9 +16,15 @@ export async function GET(req: Request, { params }: Params) {
 
   const url = new URL(req.url);
   const { page, pageSize, status, search } = financeListParams(req);
+  const dates = financeBusinessDateRange(req);
+  if (!dates.ok) return dates.response;
   const recordId = url.searchParams.get("recordId")?.trim() || undefined;
   const where: Prisma.EnterpriseFinancialStatementSnapshotWhereInput = {
     organizationId,
+    // Range-overlap semantics: show reports whose accounting period includes
+    // the selected date, not only reports generated on that day.
+    ...(dates.to ? { periodStart: { lte: dates.to } } : {}),
+    ...(dates.from ? { periodEnd: { gte: dates.from } } : {}),
     ...(recordId ? { id: recordId } : {}),
     ...(status ? { status } : {}),
     ...(search ? { OR: [

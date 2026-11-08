@@ -18,9 +18,10 @@ import {
   type FinanceRecord,
 } from "@/components/enterprise/professional/finance-professional-workspace-shared";
 import { useOperationalFinanceCollection, fetchOperationalFinanceRecord } from "@/components/enterprise/professional/use-operational-finance-collection";
+import { FinanceDateFilter, FinanceExportControls, type FinanceExportColumn } from "@/components/enterprise/professional/finance-design2-controls";
 import { useOperationalFinanceSummary } from "@/components/enterprise/professional/use-operational-finance-summary";
 import { ProfessionalError, ProfessionalFormSection, ProfessionalHelp, ProfessionalLoading, ProfessionalSearch, ProfessionalTabs } from "@/components/enterprise/professional/professional-erp-ui";
-import { financeEnumLabel, financeErrorMessage, financeMoney, financePaymentConfirmationCopy, financeStatusLabel, financeStatusTone, safeFinanceError, type FinanceLocale } from "@/components/enterprise/professional/finance-professional-ui";
+import { financeDate, financeEnumLabel, financeErrorMessage, financeMoney, financePaymentConfirmationCopy, financeStatusLabel, financeStatusTone, safeFinanceError, type FinanceLocale } from "@/components/enterprise/professional/finance-professional-ui";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -103,6 +104,8 @@ export function EnterpriseFinancePaymentsWorkspace(props: Props) {
   const [tab, setTab] = useState(searchParams.get("tab") || "all");
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [page, setPage] = useState(1);
   const [refreshKey, setRefreshKey] = useState(0);
   const [detail, setDetail] = useState<Payment | null>(null);
@@ -123,7 +126,8 @@ export function EnterpriseFinancePaymentsWorkspace(props: Props) {
     direction: tab === "inbound" ? "INBOUND" : tab === "outbound" ? "OUTBOUND" : undefined,
     unallocated: tab === "unallocated" ? true : undefined,
     workflowPending: tab === "approvals" ? true : undefined,
-  }), [tab]);
+    dateFrom, dateTo,
+  }), [dateFrom, dateTo, tab]);
   const collection = useOperationalFinanceCollection<Payment>({
     endpoint: `/api/enterprise/${organizationId}/payments`,
     page,
@@ -132,6 +136,15 @@ export function EnterpriseFinancePaymentsWorkspace(props: Props) {
     filters,
     refreshKey,
   });
+  const exportColumns: FinanceExportColumn[] = [
+    { key: "reference", labelFr: "Référence", labelEn: "Reference", get: (row) => String(row.number || row.reference || row.id || "") },
+    { key: "type", labelFr: "Nature du paiement", labelEn: "Payment type", get: (row) => financeEnumLabel(String(row.paymentType || ""), locale) },
+    { key: "direction", labelFr: "Sens", labelEn: "Direction", get: (row) => financeEnumLabel(String(row.direction || ""), locale) },
+    { key: "status", labelFr: "Statut", labelEn: "Status", get: (row) => financeStatusLabel(String(row.status || ""), locale) },
+    { key: "date", labelFr: "Date", labelEn: "Date", get: (row) => financeDate(row.paymentDate, locale) },
+    { key: "amount", labelFr: "Montant", labelEn: "Amount", get: (row) => String(row.amount || "") },
+    { key: "currency", labelFr: "Devise", labelEn: "Currency", get: (row) => String(row.currencyCode || "") },
+  ];
   const { summary, error: summaryError } = useOperationalFinanceSummary(organizationId, "FINANCE_PAYMENTS", refreshKey);
 
   useEffect(() => {
@@ -247,7 +260,7 @@ export function EnterpriseFinancePaymentsWorkspace(props: Props) {
     </ModuleMetrics>
     <ModuleToolbar
       search={<ProfessionalSearch value={search} onChange={(value) => { setSearch(value); setPage(1); }} placeholder={t("financeSearchPlaceholder")} />}
-      controls={<div className="grid min-w-0 gap-2"><ProfessionalTabs value={tab} onChange={(value) => { setTab(value); setStatus(""); setPage(1); setDetail(null); }} items={tabs} label={t("financeViews")} /><NativeSelect value={status} onChange={(value) => { setStatus(value); setPage(1); }} items={[{ id: "", label: t("allStatuses") }, ...["DRAFT", "PENDING_APPROVAL", "APPROVED", "CONFIRMED", "RECONCILED", "CANCELLED", "REVERSED"].map((id) => ({ id, label: financeStatusLabel(id, locale) }))]} /></div>}
+      controls={<div className="grid min-w-0 gap-2"><ProfessionalTabs value={tab} onChange={(value) => { setTab(value); setStatus(""); setPage(1); setDetail(null); }} items={tabs} label={t("financeViews")} /><div className="flex min-w-0 flex-wrap items-end gap-2"><NativeSelect value={status} onChange={(value) => { setStatus(value); setPage(1); }} items={[{ id: "", label: t("allStatuses") }, ...["DRAFT", "PENDING_APPROVAL", "APPROVED", "CONFIRMED", "RECONCILED", "CANCELLED", "REVERSED"].map((id) => ({ id, label: financeStatusLabel(id, locale) }))]} /><FinanceDateFilter locale={locale} from={dateFrom} to={dateTo} onChange={(from, to) => { setDateFrom(from); setDateTo(to); setPage(1); }} /><FinanceExportControls endpoint={`/api/enterprise/${organizationId}/payments`} organizationName={organizationName} title={locale === "en" ? definition.labelEn : definition.labelFr} locale={locale} filters={{ search, status, direction: tab === "inbound" ? "INBOUND" : tab === "outbound" ? "OUTBOUND" : "", unallocated: tab === "unallocated" ? "true" : "", workflowPending: tab === "approvals" ? "true" : "", dateFrom, dateTo }} columns={exportColumns} disabled={collection.loading} /></div></div>}
       summary={t("currenciesSeparated")}
     />
     <ModuleContent>

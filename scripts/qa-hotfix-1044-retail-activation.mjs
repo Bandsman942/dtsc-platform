@@ -23,6 +23,7 @@ const current = {
     { siteId: "store-A", roleCode: "CASHIER", permissionsJson: null },
   ],
   financeReady: true,
+  financeLegacyStatus: "DRAFT",
   nonOwnerMembers: 1,
   invoices: 0, returns: 0, payments: 0,
 };
@@ -66,7 +67,8 @@ vm.runInNewContext(code, {
     if (id === "@prisma/client") return { Prisma };
     if (id === "@/lib/prisma") return { prisma };
     if (id === "@/lib/enterprise/accounting/finance-readiness-service") return { resolveEnterpriseFinanceReadiness: async () => ({
-      ready: current.financeReady, configuration: { functionalCurrencyCode: "CDF", readinessStatus: current.financeReady ? "READY" : "DRAFT" },
+      ready: current.financeReady, configuration: { functionalCurrencyCode: "CDF", readinessStatus: current.financeLegacyStatus },
+      blockers: current.financeReady ? [] : [{ code: "OPEN_FISCAL_PERIOD_REQUIRED", labelFr: "Période ouverte", labelEn: "Open period", messageFr: "Ouvrez une période.", messageEn: "Open a period.", actionHref: "/enterprise-modules/FINANCE_ACCOUNTING?tab=periods" }],
     }) };
     if (id === "@/lib/enterprise/retail/errors") return { EnterpriseRetailError };
     if (id === "@/lib/enterprise/retail/site-access") return {
@@ -86,6 +88,7 @@ assert.equal((await getRetailFeatureActivation("tenant-A")).flags.siteStaffIsola
 assert.equal((await getRetailFeatureActivation("tenant-A")).counts.sites, 1, "A headquarters must not require checkout staff, stock and cash when STORE sites exist");
 await assert.rejects(getRetailFeatureActivation("tenant-B"), { code: "RETAIL_SECTOR_REQUIRED" }, "Cross-tenant reads are denied");
 assert.equal((await getRetailFeatureActivation("tenant-A")).prerequisites.invoiceCheckoutEnabled.ready, false, "Invoicing depends on isolation");
+assert.equal((await getRetailFeatureActivation("tenant-A")).checks.FINANCE_READY, true, "Live Finance readiness supersedes the stale legacy DRAFT projection");
 await assert.rejects(change("invoiceCheckoutEnabled", true), { code: "RETAIL_FEATURE_ACTIVATION_NOT_READY" });
 current.staff = [];
 await assert.rejects(change("siteStaffIsolationEnabled", true), { code: "RETAIL_FEATURE_ACTIVATION_NOT_READY" }, "Missing view-capable staff cannot enable isolation");
@@ -96,6 +99,7 @@ assert.equal(current.settingsJson.otherPreference, "preserved", "Unrelated setti
 await assert.rejects(change("siteStaffIsolationEnabled", false, 1), { code: "RETAIL_FEATURE_ACTIVATION_CONFLICT" }, "Stale changes are rejected");
 await assert.rejects(change("siteStaffIsolationEnabled", true), { code: "RETAIL_FEATURE_ACTIVATION_UNCHANGED" }, "No-op is rejected");
 current.financeReady = false;
+assert.equal((await getRetailFeatureActivation("tenant-A")).financeBlockers[0].code, "OPEN_FISCAL_PERIOD_REQUIRED", "Retail must show the exact Finance blocker and its link");
 await assert.rejects(change("invoiceCheckoutEnabled", true), { code: "RETAIL_FEATURE_ACTIVATION_NOT_READY" }, "Finance blocks invoice activation");
 current.financeReady = true;
 await change("invoiceCheckoutEnabled", true);

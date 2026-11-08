@@ -225,9 +225,10 @@ export async function postJournalEntry(organizationId: string, entryId: string, 
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 30000 });
 }
 
-export async function listJournalEntries(organizationId: string, input: { page: number; pageSize: number; status?: string; search?: string }) {
+export async function listJournalEntries(organizationId: string, input: { page: number; pageSize: number; status?: string; search?: string; dateFrom?: Date | null; dateTo?: Date | null }) {
   const where: Prisma.EnterpriseJournalEntryWhereInput = {
     organizationId,
+    ...(input.dateFrom || input.dateTo ? { accountingDate: { ...(input.dateFrom ? { gte: input.dateFrom } : {}), ...(input.dateTo ? { lte: input.dateTo } : {}) } } : {}),
     ...(input.status ? { status: input.status } : {}),
     ...(input.search ? { OR: [
       { number: { contains: input.search, mode: "insensitive" } },

@@ -2,7 +2,7 @@ import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
-import { authorizeFinanceRequest, financeErrorResponse, financeListParams } from "@/lib/enterprise/accounting/http";
+import { authorizeFinanceRequest, financeBusinessDateRange, financeErrorResponse, financeListParams } from "@/lib/enterprise/accounting/http";
 import { createSalesCreditNote } from "@/lib/enterprise/accounting/receivables-service";
 import { creditNoteCreateSchema } from "@/lib/enterprise/accounting/schemas";
 import { prisma } from "@/lib/prisma";
@@ -14,11 +14,14 @@ export async function GET(req: Request, { params }: Params) {
   const { organizationId } = await params;
   const auth = await authorizeFinanceRequest(req, organizationId, "FINANCE_RECEIVABLES", "view");
   if (!auth.ok) return auth.response;
+  const dates = financeBusinessDateRange(req);
+  if (!dates.ok) return dates.response;
 
   const { page, pageSize, search, status } = financeListParams(req);
   const recordId = new URL(req.url).searchParams.get("recordId")?.trim() || undefined;
   const where: Prisma.EnterpriseSalesCreditNoteWhereInput = {
     organizationId,
+    ...((dates.from || dates.to) ? { creditDate: { ...(dates.from ? { gte: dates.from } : {}), ...(dates.to ? { lte: dates.to } : {}) } } : {}),
     ...(recordId ? { id: recordId } : {}),
     ...(status ? { status } : {}),
     ...(search ? { OR: [

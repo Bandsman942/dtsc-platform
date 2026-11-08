@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from "react";
-import { AlertTriangle, ArrowRight, CheckCircle2, Coins, Network, RotateCcw, Settings2, ShieldAlert } from "lucide-react";
+import { AlertTriangle, ArrowRight, CheckCircle2, Coins, Download, FileSpreadsheet, FileText, Network, RotateCcw, Settings2, ShieldAlert } from "lucide-react";
+import { FinanceDateFilter } from "@/components/enterprise/professional/finance-design2-controls";
 import { Field, NativeSelect } from "@/components/enterprise/core-v2/erp-v2-ui";
 import { ProfessionalError, ProfessionalFormSection, ProfessionalHelp, ProfessionalLoading } from "@/components/enterprise/professional/professional-erp-ui";
 import { financeMutation, ReloadButton } from "@/components/enterprise/professional/finance-professional-workspace-shared";
@@ -12,10 +13,11 @@ import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { useToastMessage } from "@/components/ui/use-toast-message";
 import { ModuleMetric, ModuleMetrics } from "@/components/workspace/module-metrics";
-import { ModuleContent, ModuleHeader, ModuleSection, ModuleWorkspace } from "@/components/workspace/module-workspace";
+import { ModuleContent, ModuleHeader, ModuleSection, ModuleToolbar, ModuleWorkspace } from "@/components/workspace/module-workspace";
 import type { EnterpriseModuleDefinition } from "@/lib/enterprise/module-registry";
 import { translateEnterpriseFinance, type EnterpriseFinanceKey } from "@/lib/i18n";
 import { translateEnterpriseCurrency } from "@/lib/i18n/enterprise-currencies";
+import { downloadProfessionalCsv, downloadProfessionalPdf, downloadProfessionalXlsx, type ProfessionalReportExportModel } from "@/lib/reporting/professional-export";
 
 type ReadinessDiagnostic = { code: string; severity: "BLOCKER" | "WARNING"; ready: boolean; labelFr: string; labelEn: string; messageFr: string; messageEn: string; actionFr?: string; actionEn?: string; actionKind: "CONFIGURATION" | "LINK" | "NONE"; actionHref?: string };
 type ReadinessCurrency = { code: string; name: string; symbol?: string | null; precision: number; configured?: boolean };
@@ -149,12 +151,29 @@ export function EnterpriseFinanceOverviewWorkspace({ organizationId, organizatio
     { href: "/enterprise-modules/FINANCE_PAYMENTS?tab=unallocated", label: financeT(locale, "allocatePayments"), metric: summary.unallocatedPayments },
     { href: "/enterprise-modules/FINANCE_RECONCILIATION?tab=pending", label: financeT(locale, "completeReconciliations"), metric: summary.pendingReconciliations },
   ];
+  function downloadSnapshot(format: "CSV" | "Excel" | "PDF") {
+    const keys: Array<keyof Summary> = ["openReceivables", "openPayables", "unallocatedPayments", "openCashSessions", "pendingReconciliations", "invoicesToPost", "pendingApprovals"];
+    const model: ProfessionalReportExportModel = {
+      organizationName, title: financeT(locale, "financeOverviewTitle"),
+      subtitle: locale === "en" ? "Current operational snapshot · Not a historical reporting period" : "Situation opérationnelle actuelle · Pas de période historique",
+      filenameBase: `DTSC-pilotage-financier-${new Date().toISOString().slice(0, 10)}`,
+      generatedLabel: new Intl.DateTimeFormat(locale === "en" ? "en-GB" : "fr-FR", { dateStyle: "long", timeStyle: "short" }).format(new Date()),
+      kpis: keys.map((key) => ({ label: financeMetricLabel(key, locale), value: summary[key].state === "error" ? "—" : String(summary[key].value ?? 0), numericValue: summary[key].state === "error" ? undefined : summary[key].value ?? 0 })),
+      columns: [{ key: "indicator", label: locale === "en" ? "Indicator" : "Indicateur" }, { key: "value", label: locale === "en" ? "Current count" : "Valeur actuelle" }, { key: "quality", label: locale === "en" ? "Data availability" : "Disponibilité des données" }],
+      rows: keys.map((key) => ({ indicator: financeMetricLabel(key, locale), value: summary[key].value ?? "—", quality: summary[key].state === "error" ? (locale === "en" ? "Unavailable" : "Indisponible") : (locale === "en" ? "Available" : "Disponible") })),
+      insights: [], chart: [], accentHex: "#087EA4",
+    };
+    if (format === "CSV") downloadProfessionalCsv(model);
+    else if (format === "Excel") downloadProfessionalXlsx(model);
+    else downloadProfessionalPdf(model);
+  }
 
   return <ModuleWorkspace density="compact">
     <ModuleHeader eyebrow={`${financeT(locale, "financeReadiness")} · ${organizationName}`} title={financeT(locale, "financeOverviewTitle")} description={locale === "en" ? definition.descriptionEn : definition.descriptionFr} count={`${percentage}%`} primaryAction={canManage ? <Button onClick={() => setConfigurationOpen(true)}><Settings2 className="h-4 w-4" />{financeT(locale, "configureFinance")}</Button> : undefined} secondaryActions={<div className="flex flex-wrap gap-2"><Link href="/enterprise-modules/FINANCE_OVERVIEW/currencies"><Button variant="outline"><Coins className="h-4 w-4" />{translateEnterpriseCurrency(locale, "title")}</Button></Link><ReloadButton onClick={() => void load()} locale={locale} loading={loading} /></div>} />
     <ModuleMetrics label={financeT(locale, "financeMetrics")}>
       <ModuleMetric label={financeMetricLabel("openReceivables", locale)} value={metricDisplay(summary.openReceivables, locale)} /><ModuleMetric label={financeMetricLabel("openPayables", locale)} value={metricDisplay(summary.openPayables, locale)} /><ModuleMetric label={financeMetricLabel("unallocatedPayments", locale)} value={metricDisplay(summary.unallocatedPayments, locale)} /><ModuleMetric label={financeMetricLabel("openCashSessions", locale)} value={metricDisplay(summary.openCashSessions, locale)} /><ModuleMetric label={financeMetricLabel("pendingReconciliations", locale)} value={metricDisplay(summary.pendingReconciliations, locale)} /><ModuleMetric label={financeMetricLabel("invoicesToPost", locale)} value={metricDisplay(summary.invoicesToPost, locale)} /><ModuleMetric label={financeMetricLabel("pendingApprovals", locale)} value={metricDisplay(summary.pendingApprovals, locale)} />
     </ModuleMetrics>
+    <ModuleToolbar density="compact" summary={locale === "en" ? "Live Finance readiness and operational indicators" : "État de préparation Finance et indicateurs à jour"} controls={<div className="flex min-w-0 flex-wrap items-end gap-2"><FinanceDateFilter locale={locale} from="" to="" onChange={() => {}} disabledReason={locale === "en" ? "This dashboard is a live snapshot. Historical date filters belong to transaction modules." : "Ce tableau affiche la situation actuelle. Les dates historiques se filtrent dans les modules d’opérations."} /><Button size="sm" variant="outline" disabled={loading || !readiness} onClick={() => downloadSnapshot("Excel")}><FileSpreadsheet className="mr-1 h-4 w-4" />Excel</Button><Button size="sm" variant="outline" disabled={loading || !readiness} onClick={() => downloadSnapshot("CSV")}><Download className="mr-1 h-4 w-4" />CSV</Button><Button size="sm" variant="outline" disabled={loading || !readiness} onClick={() => downloadSnapshot("PDF")}><FileText className="mr-1 h-4 w-4" />PDF</Button></div>} />
     <ModuleContent density="compact">
       {message ? <div role="status" className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm font-bold text-emerald-800 dark:text-emerald-200">{message}</div> : null}
       {degradedMetrics > 0 ? <div role="status" className="flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm font-bold text-amber-800 dark:text-amber-200"><AlertTriangle className="h-5 w-5 shrink-0" />{degradedMetrics} {financeT(locale, "metricsUnavailable")}</div> : null}

@@ -2,7 +2,7 @@ import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
-import { authorizeFinanceRequest, financeErrorResponse, financeListParams } from "@/lib/enterprise/accounting/http";
+import { authorizeFinanceRequest, financeBusinessDateRange, financeErrorResponse, financeListParams } from "@/lib/enterprise/accounting/http";
 import { assertSalesInvoiceSources } from "@/lib/enterprise/accounting/invoice-source-validation";
 import { createSalesInvoice } from "@/lib/enterprise/accounting/receivables-service";
 import { salesInvoiceCreateSchema } from "@/lib/enterprise/accounting/schemas";
@@ -16,6 +16,8 @@ export async function GET(req: Request, { params }: Params) {
   const { organizationId } = await params;
   const auth = await authorizeFinanceRequest(req, organizationId, "FINANCE_RECEIVABLES", "view");
   if (!auth.ok) return auth.response;
+  const dates = financeBusinessDateRange(req);
+  if (!dates.ok) return dates.response;
 
   const { page, pageSize, search, status } = financeListParams(req);
   const retailScope = await retailFinanceReadSiteScope(organizationId, auth.session.userId, "VIEW_SALES");
@@ -24,6 +26,7 @@ export async function GET(req: Request, { params }: Params) {
   const workflowPending = url.searchParams.get("workflowPending") === "true";
   const where: Prisma.EnterpriseSalesInvoiceWhereInput = {
     organizationId,
+    ...((dates.from || dates.to) ? { invoiceDate: { ...(dates.from ? { gte: dates.from } : {}), ...(dates.to ? { lte: dates.to } : {}) } } : {}),
     // Site staff with a Finance permission cannot bypass Retail store scope
     // by opening a direct Finance invoice list or recordId. Keep non-Retail
     // invoices under the existing Finance permission model.

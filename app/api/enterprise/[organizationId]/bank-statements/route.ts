@@ -1,7 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
-import { authorizeFinanceRequest, financeErrorResponse, financeListParams } from "@/lib/enterprise/accounting/http";
+import { authorizeFinanceRequest, financeBusinessDateRange, financeErrorResponse, financeListParams } from "@/lib/enterprise/accounting/http";
 import { importBankStatement } from "@/lib/enterprise/accounting/treasury-service";
 import { bankStatementSchema } from "@/lib/enterprise/accounting/treasury-schemas";
 import { ENTERPRISE_BULK_LIMITS } from "@/lib/enterprise/bulk-jobs/constants";
@@ -18,9 +18,12 @@ export async function GET(req: Request, { params }: Params) {
 
   const url = new URL(req.url);
   const { page, pageSize, search, status } = financeListParams(req);
+  const dates = financeBusinessDateRange(req);
+  if (!dates.ok) return dates.response;
   const recordId = url.searchParams.get("recordId")?.trim() || undefined;
   const where: Prisma.EnterpriseBankStatementWhereInput = {
     organizationId,
+    ...(dates.from || dates.to ? { statementDate: { ...(dates.from ? { gte: dates.from } : {}), ...(dates.to ? { lte: dates.to } : {}) } } : {}),
     ...(recordId ? { id: recordId } : {}),
     ...(status ? { status } : {}),
     ...(search ? {

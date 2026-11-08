@@ -6,6 +6,7 @@ import { AlertCircle, BookOpen, CheckCircle2, Plus, RefreshCw, RotateCcw, Save, 
 import { AssignedApprovalSubmitPanel } from "@/components/enterprise/professional/assigned-approval-submit-panel";
 import { Button } from "@/components/ui/button";
 import { FinancialStatementReportDialog } from "@/components/reports/financial-statement-report-dialog";
+import { FinanceDateFilter, FinanceExportControls, type FinanceExportColumn } from "@/components/enterprise/professional/finance-design2-controls";
 import { Input } from "@/components/ui/input";
 import { financeDate, financeEnumLabel, financeMoney, financeStatusLabel, financeStatusTone, safeFinanceError, type FinanceLocale } from "@/components/enterprise/professional/finance-professional-ui";
 import { professionalRequest } from "@/components/enterprise/professional/professional-erp-ui";
@@ -267,8 +268,19 @@ export function EnterpriseAdvancedFinanceWorkspace({ organizationId, organizatio
   async function openFiscalYearItem(item: Item) { await mutate(`/api/enterprise/${organizationId}/fiscal-years/${item.id}/open`, { revision: item.revision }, "fiscalYearOpened"); }
   async function runDepreciation() { await mutate(`/api/enterprise/${organizationId}/asset-depreciation/run`, { throughDate: form.throughDate }, "depreciationPosted"); }
 
-  const actionAvailable = canManage && ["charts", "accounts", "years", "periods", "journals", "entries", "taxes", "close", "statements", "assets", "inventory"].includes(activeKey);
+  // Inventory valuation is derived from stock layers; it is not a manually
+  // creatable accounting document and cannot be backdated as a snapshot.
+  const actionAvailable = canManage && ["charts", "accounts", "years", "periods", "journals", "entries", "taxes", "close", "statements", "assets"].includes(activeKey);
   const sectionDescription = t(activeKey === "close" ? "closeSectionDescription" : "advancedSectionDescription");
+  const exportColumns: FinanceExportColumn[] = [
+    { key: "reference", labelFr: "Référence", labelEn: "Reference", get: (row) => String(row.inventoryItemCode || row.code || row.number || row.reference || row.id || "") },
+    { key: "name", labelFr: "Désignation", labelEn: "Description", get: (row) => String(row.inventoryItemName || row.name || row.description || "") },
+    { key: "warehouse", labelFr: "Entrepôt", labelEn: "Warehouse", get: (row) => String(row.warehouseName || row.warehouseCode || "") },
+    { key: "status", labelFr: "Statut", labelEn: "Status", get: (row) => financeStatusLabel(String(row.status || ""), locale) },
+    { key: "quantity", labelFr: "Quantité", labelEn: "Quantity", get: (row) => String(row.quantity || "") },
+    { key: "value", labelFr: "Valeur", labelEn: "Value", get: (row) => String(row.value || row.originalCost || "") },
+    { key: "currency", labelFr: "Devise", labelEn: "Currency", get: (row) => String(row.currencyCode || "") },
+  ];
 
   return <ModuleWorkspace>
     <ModuleHeader
@@ -286,7 +298,7 @@ export function EnterpriseAdvancedFinanceWorkspace({ organizationId, organizatio
     {Object.keys(metrics).length ? <ModuleMetrics label={t("accountingMetrics")}>{Object.entries(metrics).slice(0, 8).map(([key, value]) => <ModuleMetric key={key} label={key === "TOTAL" ? t("total") : businessLabel(key, locale)} value={value} />)}</ModuleMetrics> : null}
     <ModuleToolbar
       search={<div className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-dtsc-muted" /><Input value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder={t("accountingSearchPlaceholder")} className="pl-9" /></div>}
-      controls={<div className="flex min-w-0 flex-wrap gap-2"><Input value={status} onChange={(event) => { setStatus(event.target.value.toUpperCase()); setPage(1); }} placeholder={t("status")} className="min-w-36 flex-1 sm:w-48" /><Button variant="outline" onClick={() => { setSearch(""); setStatus(""); setPage(1); }}><RotateCcw className="h-4 w-4" />{t("reset")}</Button></div>}
+      controls={<div className="flex min-w-0 flex-wrap items-end gap-2">{activeKey === "inventory" ? <FinanceDateFilter locale={locale} from="" to="" onChange={() => {}} disabledReason={locale === "en" ? "Live valuation: historical date snapshots are unavailable." : "Valorisation en direct : les instantanés historiques par date ne sont pas disponibles."} /> : <label className="grid gap-1 text-xs font-bold text-dtsc-muted">{t("status")}<select value={status} className="h-10 min-w-32 rounded-xl border border-dtsc-border bg-dtsc-surface px-2" onChange={(event) => { setStatus(event.target.value); setPage(1); }}><option value="">{locale === "en" ? "All statuses" : "Tous les statuts"}</option>{["ACTIVE", "DRAFT", "POSTED", "APPROVED", "CLOSED"].map((item) => <option key={item} value={item}>{financeStatusLabel(item, locale)}</option>)}</select></label>}<Button variant="outline" onClick={() => { setSearch(""); setStatus(""); setPage(1); }}><RotateCcw className="h-4 w-4" />{t("reset")}</Button><FinanceExportControls endpoint={`/api/enterprise/${organizationId}/${activeSection?.endpoint || "inventory-valuation"}`} organizationName={organizationName} title={locale === "en" ? definition.labelEn : definition.labelFr} locale={locale} filters={{ search, ...(activeKey === "inventory" ? {} : { status }) }} columns={exportColumns} disabled={loading} /></div>}
       summary={`${pagination.total} ${t("itemPlural")}`}
     />
     {notice ? <div className="flex items-start gap-3 rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4 text-sm"><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" /><span>{notice}</span></div> : null}

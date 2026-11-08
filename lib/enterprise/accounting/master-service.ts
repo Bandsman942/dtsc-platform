@@ -132,7 +132,16 @@ export async function createTaxCode(
   actorUserId: string,
   input: { code: string; nameFr: string; nameEn: string; category: string; jurisdiction?: string; payableAccountId?: string; recoverableAccountId?: string; roundingRule: string; rate: string; effectiveFrom: Date },
 ) {
-  return prisma.$transaction(async (tx) => {
+  return prisma.$transaction((tx) => createTaxCodeTx(tx, organizationId, actorUserId, input));
+}
+
+/** Reused by atomic, audited bulk imports; no nested transactions. */
+export async function createTaxCodeTx(
+  tx: Prisma.TransactionClient,
+  organizationId: string,
+  actorUserId: string,
+  input: { code: string; nameFr: string; nameEn: string; category: string; jurisdiction?: string; payableAccountId?: string; recoverableAccountId?: string; roundingRule: string; rate: string; effectiveFrom: Date },
+) {
     for (const accountId of [input.payableAccountId, input.recoverableAccountId].filter(Boolean) as string[]) {
       const account = await tx.enterpriseLedgerAccount.findFirst({ where: { id: accountId, organizationId, isActive: true, archivedAt: null } });
       if (!account) throw new EnterpriseAccountingError("TAX_LEDGER_ACCOUNT_INVALID", 409);
@@ -153,5 +162,4 @@ export async function createTaxCode(
     });
     await publishFinanceEvent(tx, { organizationId, entityType: "EnterpriseTaxCode", entityId: taxCode.id, eventType: "TAX_CODE_CREATED", summary: `Tax code ${taxCode.code} created`, actorUserId, toStatus: "ACTIVE", metadataJson: { category: taxCode.category, jurisdiction: taxCode.jurisdiction } });
     return taxCode;
-  });
 }

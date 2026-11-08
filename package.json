@@ -29,6 +29,7 @@
     "qa:hotfix-1042-site-staff": "node scripts/qa-hotfix-1042-site-staff.mjs",
     "qa:hotfix-1042-warehouse-receipts": "node scripts/qa-hotfix-1042-warehouse-receipt-scoping.mjs",
     "qa:hotfix-1044-retail-activation": "node scripts/qa-hotfix-1044-retail-activation.mjs",
+    "qa:finance-design2-four-groups": "node scripts/qa-finance-design2-four-groups.mjs && node scripts/qa-finance-design2-exports.mjs && node scripts/qa-hotfix-1044-retail-activation.mjs",
     "qa:hotfix-1046-retail-collaboration-ui": "node scripts/qa-hotfix-1046-retail-collaboration-ui.mjs",
     "qa:hotfix-1055-navigation-cards": "node scripts/qa-module-navigation-cards-1055.mjs",
     "qa:hotfix-1061-desktop-sidebar": "node scripts/qa-hotfix-1061-desktop-sidebar.mjs",

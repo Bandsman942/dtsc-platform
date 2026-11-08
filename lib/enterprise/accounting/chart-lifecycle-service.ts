@@ -87,7 +87,17 @@ export async function createCustomChildAccount(
   actorUserId: string,
   input: { parentId: string; code: string; nameFr: string; nameEn: string; currencyCode?: string },
 ) {
-  return prisma.$transaction(async (tx) => {
+  return prisma.$transaction((tx) => createCustomChildAccountTx(tx, organizationId, chartId, actorUserId, input), { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+}
+
+/** A single tenant-scoped transaction can safely create several child accounts. */
+export async function createCustomChildAccountTx(
+  tx: Prisma.TransactionClient,
+  organizationId: string,
+  chartId: string,
+  actorUserId: string,
+  input: { parentId: string; code: string; nameFr: string; nameEn: string; currencyCode?: string },
+) {
     const chart = await tx.enterpriseChartOfAccounts.findFirst({ where: { id: chartId, organizationId, status: { in: ["DRAFT", "READY", "ACTIVE"] } } });
     if (!chart) throw new EnterpriseAccountingError("CHART_OF_ACCOUNTS_INVALID", 409);
     const parent = await tx.enterpriseLedgerAccount.findFirst({ where: { id: input.parentId, organizationId, chartId, isActive: true, archivedAt: null } });
@@ -115,7 +125,6 @@ export async function createCustomChildAccount(
     });
     await publishFinanceEvent(tx, { organizationId, entityType: "EnterpriseLedgerAccount", entityId: account.id, eventType: "CUSTOM_LEDGER_ACCOUNT_CREATED", summary: `Custom child account ${account.code} created`, actorUserId, toStatus: "ACTIVE", metadataJson: { chartId, parentId: parent.id, templateReference: chart.templateCode } });
     return account;
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 }
 
 export async function deactivateCustomLedgerAccount(

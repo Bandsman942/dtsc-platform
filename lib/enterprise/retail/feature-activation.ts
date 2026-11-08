@@ -12,6 +12,17 @@ type CheckCode =
   | "RETAIL_ACTIVE" | "SITES_CONFIGURED" | "WAREHOUSES_PER_SITE" | "ACCOUNTS_PER_SITE"
   | "STAFF_PER_SITE" | "INVOICERS_PER_SITE" | "CASHIERS_PER_SITE" | "FINANCE_READY" | "ISOLATION_ACTIVE";
 
+type FinanceActivationBlocker = {
+  code: string;
+  labelFr: string;
+  labelEn: string;
+  messageFr: string;
+  messageEn: string;
+  actionFr?: string;
+  actionEn?: string;
+  actionHref?: string;
+};
+
 function flags(settings: Prisma.JsonValue | null | undefined): ActivationSettings {
   if (!settings || typeof settings !== "object" || Array.isArray(settings)) {
     return { siteStaffIsolationEnabled: false, invoiceCheckoutEnabled: false };
@@ -76,7 +87,10 @@ async function preflight(db: Reader, organizationId: string) {
     STAFF_PER_SITE: byCapability("VIEW_SALES"),
     INVOICERS_PER_SITE: byCapability("PREPARE_INVOICE"),
     CASHIERS_PER_SITE: byCapability("COLLECT_PAYMENT"),
-    FINANCE_READY: finance.ready && finance.configuration?.readinessStatus === "READY",
+    // Canonical live posting diagnostics are authoritative. The stored
+    // configuration.readinessStatus is a legacy projection and may lag behind
+    // chart, journal, mapping or fiscal-period changes made in other modules.
+    FINANCE_READY: finance.ready,
     ISOLATION_ACTIVE: configured.siteStaffIsolationEnabled,
   };
   const isolationRequired: CheckCode[] = ["RETAIL_ACTIVE", "SITES_CONFIGURED", "WAREHOUSES_PER_SITE", "ACCOUNTS_PER_SITE", "STAFF_PER_SITE"];
@@ -84,6 +98,12 @@ async function preflight(db: Reader, organizationId: string) {
   const missing = (required: CheckCode[]) => required.filter((code) => !checks[code]);
   return {
     configuration, flags: configured, checks,
+    financeBlockers: finance.ready ? [] : finance.blockers.map((item): FinanceActivationBlocker => ({
+      code: item.code, labelFr: item.labelFr, labelEn: item.labelEn,
+      messageFr: item.messageFr, messageEn: item.messageEn,
+      actionFr: item.actionFr, actionEn: item.actionEn,
+      actionHref: item.actionHref,
+    })),
     prerequisites: {
       siteStaffIsolationEnabled: { ready: missing(isolationRequired).length === 0, missing: missing(isolationRequired) },
       invoiceCheckoutEnabled: { ready: missing(invoiceRequired).length === 0, missing: missing(invoiceRequired) },
@@ -109,6 +129,7 @@ export async function getRetailFeatureActivation(organizationId: string, page = 
   return {
     revision: state.configuration?.revision ?? null,
     flags: state.flags, checks: state.checks, prerequisites: state.prerequisites, counts: state.counts,
+    financeBlockers: state.financeBlockers,
     history: history.map((row) => ({ id: row.id, action: row.action, at: row.createdAt,
       actorName: row.user?.name || null,
       feature: row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata) && typeof row.metadata.feature === "string"
@@ -139,6 +160,7 @@ export async function changeRetailFeatureActivation(input: {
     if (enabled && !state.prerequisites[feature].ready) {
       throw new EnterpriseRetailError("RETAIL_FEATURE_ACTIVATION_NOT_READY", 409, {
         missing: state.prerequisites[feature].missing,
+        financeBlockers: state.prerequisites[feature].missing.includes("FINANCE_READY") ? state.financeBlockers : [],
       });
     }
     if (!enabled && feature === "siteStaffIsolationEnabled") {

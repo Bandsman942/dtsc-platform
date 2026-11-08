@@ -295,3 +295,20 @@ export function financeListParams(req: Request) {
   const pageSize = Math.min(100, Math.max(5, Number(url.searchParams.get("pageSize") || 25) || 25));
   return { page, pageSize, search: url.searchParams.get("search")?.trim() || undefined, status: url.searchParams.get("status")?.trim() || undefined };
 }
+
+/** Strict, UTC-normalized business-day boundaries for paginated Finance lists. */
+export function financeBusinessDateRange(req: Request) {
+  const params = new URL(req.url).searchParams;
+  const fromText = params.get("dateFrom") || "";
+  const toText = params.get("dateTo") || "";
+  const valid = (value: string) => {
+    if (!value) return true;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+    const actual = new Date(`${value}T00:00:00.000Z`);
+    return !Number.isNaN(actual.getTime()) && actual.toISOString().slice(0, 10) === value;
+  };
+  if (!valid(fromText) || !valid(toText) || (fromText && toText && fromText > toText)) {
+    return { ok: false as const, response: NextResponse.json({ error: "FINANCE_DATE_RANGE_INVALID", message: "Vérifiez les dates : utilisez un calendrier valide et une date de fin postérieure ou égale au début." }, { status: 400 }) };
+  }
+  return { ok: true as const, from: fromText ? new Date(`${fromText}T00:00:00.000Z`) : null, to: toText ? new Date(`${toText}T23:59:59.999Z`) : null };
+}

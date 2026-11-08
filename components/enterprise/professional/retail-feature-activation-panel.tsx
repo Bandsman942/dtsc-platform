@@ -18,6 +18,7 @@ type ActivationState = {
   flags: Record<Feature, boolean>;
   checks: Record<Check, boolean>;
   prerequisites: Record<Feature, { ready: boolean; missing: Check[] }>;
+  financeBlockers: Array<{ code: string; labelFr: string; labelEn: string; messageFr: string; messageEn: string; actionFr?: string; actionEn?: string; actionHref?: string }>;
   counts: { sites: number; assignedStaff: number };
   history: Array<{ id: string; action: string; at: string; actorName: string | null; feature: Feature | null; reason: string | null }>;
   historyPagination: { page: number; total: number; pageCount: number };
@@ -173,7 +174,14 @@ export function RetailFeatureActivationPanel({ organizationId, locale }: Props) 
                   {prerequisites.missing.length ? (
                     <div className="mt-3 rounded-xl border border-amber-500/30 bg-amber-500/5 p-3">
                       <p className="flex items-center gap-1.5 text-xs font-bold text-amber-700 dark:text-amber-300"><CircleAlert className="h-4 w-4" />{t("retailActivationMissing")}</p>
-                      <ul className="mt-2 list-inside list-disc space-y-1 text-xs text-dtsc-ink">{prerequisites.missing.map((check) => <li key={check}><Link href={CHECK_LINKS[check]} className="font-semibold text-dtsc-blue underline underline-offset-2 hover:no-underline">{t(CHECK_LABELS[check])}</Link></li>)}</ul>
+                      <ul className="mt-2 list-inside list-disc space-y-2 text-xs text-dtsc-ink">{prerequisites.missing.map((check) => <li key={check}>
+                        <Link href={CHECK_LINKS[check]} className="font-semibold text-dtsc-blue underline underline-offset-2 hover:no-underline">{t(CHECK_LABELS[check])}</Link>
+                        {check === "FINANCE_READY" && state.financeBlockers?.length ? <ul className="mt-2 ml-3 list-none space-y-2 border-l-2 border-amber-500/40 pl-3">{state.financeBlockers.map((blocker) => <li key={blocker.code} className="rounded-lg bg-dtsc-surface/70 p-2">
+                          <p className="font-bold">{locale === "en" ? blocker.labelEn : blocker.labelFr}</p>
+                          <p className="mt-1 leading-5 text-dtsc-muted">{locale === "en" ? blocker.messageEn : blocker.messageFr}</p>
+                          {blocker.actionHref ? <Link className="mt-1 inline-block font-bold text-dtsc-blue underline underline-offset-2" href={blocker.actionHref}>{(locale === "en" ? blocker.actionEn : blocker.actionFr) || (locale === "en" ? "Complete setup" : "Finaliser la configuration")}</Link> : null}
+                        </li>)}</ul> : null}
+                      </li>)}</ul>
                     </div>
                   ) : <p className="mt-3 flex items-center gap-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300"><CheckCircle2 className="h-4 w-4" />{t("retailActivationReady")}</p>}
                   <Button type="button" variant={enabled ? "outline" : "default"} className="mt-4 w-full" disabled={Boolean(busy) || blocked || state.revision === null} onClick={() => setPending({ feature, enabled: !enabled })}>{enabled ? t("retailActivationDisableButton") : t("retailActivationEnableButton")}</Button>
