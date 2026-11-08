@@ -308,6 +308,7 @@ export async function getRetailDashboardUserProjection(organizationId: string, u
           name: true,
           currencyCode: true,
           operationalBalance: true,
+          siteId: true,
         },
       },
       movements: { select: { direction: true, amount: true } },
