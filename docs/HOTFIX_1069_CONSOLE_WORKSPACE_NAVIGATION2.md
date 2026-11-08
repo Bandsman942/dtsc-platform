@@ -1,5 +1,5 @@
 # Hotfix C #1069 — Administration DTSC en cartes et workspaces
-Date : 8 novembre 2026. Version candidate : v1.6.5.
+Date : 8 novembre 2026. Version candidate : v1.6.3 sur la base main v1.6.2 (incrément strict ; réajuster après fusion d'un hotfix précédent).
 
 ## Architecture et périmètre
 Le registre CONSOLE_SECTION_IDS / CONSOLE_SECTION_GROUPS / CONSOLE_SECTION_GROUP, la fonction getConsoleSectionHref et les contrôles de capacités de DtscConsolePage sont toujours les sources canoniques.
