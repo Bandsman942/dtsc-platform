@@ -2,6 +2,8 @@
 
 Date : 8 novembre 2026. Statut : **candidat en branche**, sans déploiement, en attente de CI et validation E2E du propriétaire.
 
+Version candidate : **1.4.1** (incrément patch depuis `main@1.4.0`, sous réserve que la base n'évolue pas avant fusion).
+
 ## Portée
 
 - **POS** : entrée `/enterprise-modules/RETAIL_POS` devenue un répertoire de **14 petites cartes tactiles** : 13 sections `?section=...` et un accès à la route commerciale dédiée. Chaque carte mène à une vue distincte avec retour explicite vers le répertoire. Aucun panneau client, financier, de boutique ou d'équipement n'est monté avant ouverture de sa carte.
