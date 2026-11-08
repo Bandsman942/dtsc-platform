@@ -24,18 +24,28 @@ assert(i18n.includes("translateRetailWorkspace"), "helper canonique translateRet
 assert(i18n.includes("RetailWorkspaceKey"), "type de clé Retail canonique absent");
 
 const pagePath = "app/enterprise-modules/retail-page.tsx";
+const posNavigationPath = "components/enterprise/professional/retail-pos-section-navigation.tsx";
 const localeTextPath = "components/enterprise/professional/retail-locale-text.tsx";
 const sharedPath = "components/enterprise/professional/retail-workspace-shared.tsx";
 const posPath = "components/enterprise/professional/retail-pos-workspace.tsx";
 const page = read(pagePath);
+const posNavigation = read(posNavigationPath);
 const localeText = read(localeTextPath);
 const shared = read(sharedPath);
 const pos = read(posPath);
 
-assert(page.includes("RetailLocaleText"), "shell Retail POS: primitive de copie locale-reactive absente");
-assert(page.includes('<RetailLocaleText textKey="additionalShopTools"'), "shell Retail POS: libellé des outils complémentaires non canonique");
-assert(page.includes('<RetailLocaleText textKey="ordersPickupOffline"'), "shell Retail POS: libellé offline/commandes non canonique");
-assert(page.includes('<RetailLocaleText textKey="shopSetupEquipment"'), "shell Retail POS: libellé mise en service non canonique");
+const routedPos = page.includes("RetailPosSectionDirectory")
+  && page.includes("getRetailPosSection")
+  && page.includes('const locale: "fr" | "en" = user.locale')
+  && posNavigation.includes("translateRetailWorkspace(locale, key)")
+  && posNavigation.includes("POS_DIRECTORY_SECTIONS.filter");
+assert(page.includes("RetailLocaleText") || routedPos, "shell Retail POS: projection de copie FR/EN absente (primitive réactive ou navigation locale serveur)");
+assert(page.includes('<RetailLocaleText textKey="additionalShopTools"') || (routedPos && posNavigation.includes('t("posNavTitle")')), "shell Retail POS: libellé des outils complémentaires non canonique");
+assert(page.includes('<RetailLocaleText textKey="ordersPickupOffline"') || (routedPos && posNavigation.includes('title: "posNavOffline"')), "shell Retail POS: libellé offline/commandes non canonique");
+assert(page.includes('<RetailLocaleText textKey="shopSetupEquipment"') || (routedPos && posNavigation.includes('title: "posNavEquipment"') && posNavigation.includes('title: "retailActivationTitle"')), "shell Retail POS: libellé mise en service non canonique");
+for (const key of ["posNavTitle", "posNavDescription", "posNavOffline", "posNavEquipment", "retailActivationTitle", "posNavCommercial"]) {
+  if (routedPos) assert(typeof fr[key] === "string" && typeof en[key] === "string", `shell Retail POS: catalogue de cartes incomplet pour ${key}`);
+}
 for (const literal of ["Additional Shop tools", "Outils complémentaires du Shop", "Orders, pickup & offline sales", "Commandes, retraits & vente hors connexion", "Shop setup & POS equipment", "Mise en service & équipements du Shop"]) {
   assert(!page.includes(literal), `shell Retail POS: copie locale restante: ${literal}`);
 }
@@ -65,7 +75,7 @@ assert(!pos.includes('locale === "en" ? "Reason for reversal"'), "POS: motif ann
 assert(!pos.includes('moneyValue(total, currency)'), "POS: total encore formaté sans locale explicite");
 assert(!pos.includes('moneyValue(item.grandTotal, item.currencyCode)'), "POS: historique encore formaté sans locale explicite");
 
-for (const path of [pagePath, localeTextPath, sharedPath, posPath]) {
+for (const path of [pagePath, posNavigationPath, localeTextPath, sharedPath, posPath]) {
   const source = read(path);
   assert(!source.includes('toLocaleString("fr-FR"'), `${path}: format fr-FR direct encore présent`);
   assert(!source.includes('toLocaleString("en-US"'), `${path}: format en-US direct encore présent`);
