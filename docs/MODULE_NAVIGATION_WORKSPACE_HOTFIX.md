@@ -121,3 +121,8 @@ La CI GitHub reste la preuve opposable lorsque l’environnement local n’est p
 ## Rollback
 
 Le rollback consiste à revert la PR #241. Aucun backfill, aucune migration et aucune suppression de donnée ne sont nécessaires.
+
+
+## Mise à jour transversale du 8 novembre 2026 — #1055
+
+Les sous-groupes du hub standard `/modules` et les groupes ERP du hub `/enterprise-modules` utilisent désormais la même grille compacte de cartes interactives inspirée du Point de vente. Les contrôles de permission et les destinations restent alimentés exclusivement par les résolveurs côté serveur ; les détails sont dans [HOTFIX_1055_UNIFIED_MODULE_NAVIGATION.md](./HOTFIX_1055_UNIFIED_MODULE_NAVIGATION.md). Le shell affiche un indicateur en cas de navigation lente et les routes disposent de skeletons pendant leur chargement.
