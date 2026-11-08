@@ -54,12 +54,14 @@ export function getAiProductAwarenessSnapshot(): AiProductAwarenessSnapshot {
   const changes: string[] = [];
   let currentRelease = "";
   let currentSection = "";
+  let currentCandidate = false;
 
   for (const rawLine of source.split(/\r?\n/)) {
     const releaseMatch = rawLine.match(/^##\s+(\d{4}-\d{2}-\d{2})(?:\s+—\s+(.+))?\s*$/);
     if (releaseMatch) {
       currentRelease = releaseMatch[1];
       currentSection = "";
+      currentCandidate = /\bcandidat\b|\bcandidate\b/i.test(releaseMatch[2] || "");
       if (!releases.includes(currentRelease) && releases.length < MAX_RELEASES) releases.push(currentRelease);
       continue;
     }
@@ -77,7 +79,9 @@ export function getAiProductAwarenessSnapshot(): AiProductAwarenessSnapshot {
 
     const normalized = normalizeProductChange(rawLine.slice(2));
     if (!normalized || TECHNICAL_ONLY.test(normalized)) continue;
-    if (!changes.includes(normalized)) changes.push(normalized);
+    // A candidate in repository sources is not evidence of a live release.
+    const annotated = currentCandidate ? `[RELEASE CANDIDATE — NOT VERIFIED IN PRODUCTION] ${normalized}` : normalized;
+    if (!changes.includes(annotated)) changes.push(annotated);
     if (changes.length >= MAX_ITEMS) break;
   }
 
@@ -103,7 +107,8 @@ export function buildAiProductAwarenessInstruction(locale: string) {
       `Current application build: v${runtimeVersion}. Context version: ${snapshot.contextVersion}. Deployment revision: ${snapshot.revision}. Product releases represented: ${releaseLabel}.`,
       "The release date is the date of the deployed build, NOT the age of old embedded documents. Do not claim the build is stale because an archived article is older.",
       "Treat the release notes below as newer than older static product descriptions when they conflict.",
-      "Release notes describe shipped product changes, not live connector readiness, plan ownership, or tool execution. Check authorized current state before making such claims.",
+      "Release notes may contain candidates still awaiting approval. A RELEASE CANDIDATE is NOT proof of a shipped feature; verify actual runtime access before claiming availability.",
+      "Even shipped notes do not establish live connector readiness, plan ownership or tool execution. Check authorized current state before making such claims.",
       "Use them only to understand current DTSC user-facing capabilities. Never expose implementation details, secret configuration or internal identifiers from this context.",
       "If a capability is not supported by the current application context, do not invent it.",
       list,
@@ -115,7 +120,8 @@ export function buildAiProductAwarenessInstruction(locale: string) {
     `Version applicative courante : v${runtimeVersion}. Version du contexte : ${snapshot.contextVersion}. Révision de déploiement : ${snapshot.revision}. Notes de version représentées : ${releaseLabel}.`,
     "La version applicative déployée fait autorité sur la date de vieux articles embarqués : une ancienne documentation ne prouve pas que les déploiements récents sont absents.",
     "Considère les nouveautés ci-dessous comme plus récentes que les anciennes descriptions statiques lorsqu’elles se contredisent.",
-    "Les notes de version décrivent des livraisons, pas la disponibilité opérationnelle actuelle des connecteurs, l’abonnement effectif ni une exécution d’outil. Vérifie l’état courant autorisé avant toute affirmation de ce type.",
+    "Les notes peuvent comporter des CANDIDATS non approuvés. Un CANDIDAT DE VERSION ne prouve PAS une fonctionnalité déjà disponible en production : vérifie l’accès réel avant de l’affirmer.",
+    "Même une note publiée ne prouve pas la disponibilité opérationnelle d’un connecteur, l’abonnement effectif ni une exécution d’outil. Vérifie l’état courant autorisé avant toute affirmation.",
     "Utilise-les uniquement pour comprendre les capacités DTSC visibles par les utilisateurs. N’expose jamais les détails d’implémentation, configurations secrètes ou identifiants internes issus de ce contexte.",
     "Si une capacité n’est pas supportée par le contexte applicatif actuel, ne l’invente pas.",
     list,
