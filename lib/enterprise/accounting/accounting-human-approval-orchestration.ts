@@ -118,6 +118,7 @@ export async function submitPaymentForAssignedApproval(
   paymentId: string,
   actorUserId: string,
   input: { revision: number; approverUserId: string; reason?: string },
+  options: { retailPaymentSiteId?: string } = {},
 ) {
   return prisma.$transaction(async (tx) => {
     await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterprisePayment" WHERE id = ${paymentId} AND "organizationId" = ${organizationId} FOR UPDATE`);
@@ -126,6 +127,13 @@ export async function submitPaymentForAssignedApproval(
     if (payment.revision !== input.revision) throw new EnterpriseAccountingError("PAYMENT_REVISION_CONFLICT", 409, { currentRevision: payment.revision });
     if (payment.status !== "DRAFT") throw new EnterpriseAccountingError("PAYMENT_TRANSITION_INVALID", 409);
     if (payment.initiatedByUserId !== actorUserId) throw new EnterpriseAccountingError("PAYMENT_SUBMITTER_MISMATCH", 403);
+    if (options.retailPaymentSiteId) {
+      const proposal = await tx.enterpriseRetailInvoicePaymentProposal.findFirst({
+        where: { organizationId, paymentId: payment.id, checkout: { siteId: options.retailPaymentSiteId } },
+        select: { id: true },
+      });
+      if (!proposal) throw new EnterpriseAccountingError("PAYMENT_NOT_FOUND", 404);
+    }
 
     const approval = await createAccountingApprovalAssignment(tx, {
       organizationId,
@@ -133,6 +141,7 @@ export async function submitPaymentForAssignedApproval(
       targetEntityId: payment.id,
       requesterUserId: actorUserId,
       approverUserId: input.approverUserId,
+      retailPaymentSiteId: options.retailPaymentSiteId,
     });
     const updated = await tx.enterprisePayment.update({
       where: { id: payment.id },

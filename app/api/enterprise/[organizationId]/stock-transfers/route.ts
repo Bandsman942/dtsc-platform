@@ -4,6 +4,9 @@ import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http"
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { getEnterpriseCommonDomainAccess } from "@/lib/enterprise/common/access";
+import { retailErrorResponse } from "@/lib/enterprise/retail/http";
+import { retailStockTransferVisibleSites } from "@/lib/enterprise/retail/site-access";
+import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
 import { enterpriseDomainErrorResponse } from "@/lib/enterprise/common/http";
 import { stockTransferCreateSchema } from "@/lib/enterprise/inventory/schemas";
 import { createEnterpriseStockTransfer } from "@/lib/enterprise/inventory/service";
@@ -25,15 +28,35 @@ export async function GET(req: Request, { params }: Params) {
   const pageSize = Math.min(50, Math.max(5, Number(url.searchParams.get("pageSize") || 20) || 20));
   const status = url.searchParams.get("status")?.trim().toUpperCase() || "";
   const warehouseId = url.searchParams.get("warehouseId")?.trim() || "";
-  const where: Prisma.EnterpriseStockTransferWhereInput = { organizationId, archivedAt: null, ...(status ? { status } : {}), ...(warehouseId ? { OR: [{ sourceWarehouseId: warehouseId }, { destinationWarehouseId: warehouseId }] } : {}) };
+  let scope: Awaited<ReturnType<typeof retailStockTransferVisibleSites>>;
+  try {
+    scope = await retailStockTransferVisibleSites(organizationId, session.userId);
+  } catch (error) {
+    return retailErrorResponse(error, "RETAIL_SITE_ACCESS_DENIED");
+  }
+  // Counts, pagination and rows use the same site scope. Combining the two
+  // OR clauses with AND prevents a warehouseId filter from bypassing isolation.
+  const siteScope: Prisma.EnterpriseStockTransferWhereInput = scope.isolationEnabled
+    ? { OR: [
+        { sourceWarehouse: { siteId: { in: scope.siteIds } } },
+        { destinationWarehouse: { siteId: { in: scope.siteIds } } },
+      ] }
+    : {};
+  const baseWhere: Prisma.EnterpriseStockTransferWhereInput = { organizationId, archivedAt: null, ...siteScope };
+  const where: Prisma.EnterpriseStockTransferWhereInput = {
+    AND: [
+      baseWhere,
+      { ...(status ? { status } : {}), ...(warehouseId ? { OR: [{ sourceWarehouseId: warehouseId }, { destinationWarehouseId: warehouseId }] } : {}) },
+    ],
+  };
   const [items, total, pending, completed] = await Promise.all([
     prisma.enterpriseStockTransfer.findMany({ where, orderBy: [{ requestedAt: "desc" }], skip: (page - 1) * pageSize, take: pageSize, include: { sourceWarehouse: { select: { id: true, code: true, name: true } }, destinationWarehouse: { select: { id: true, code: true, name: true } }, lines: true } }),
     prisma.enterpriseStockTransfer.count({ where }),
-    prisma.enterpriseStockTransfer.count({ where: { organizationId, archivedAt: null, status: "PENDING_APPROVAL" } }),
-    prisma.enterpriseStockTransfer.count({ where: { organizationId, archivedAt: null, status: "COMPLETED" } }),
+    prisma.enterpriseStockTransfer.count({ where: { AND: [baseWhere, { status: "PENDING_APPROVAL" }] } }),
+    prisma.enterpriseStockTransfer.count({ where: { AND: [baseWhere, { status: "COMPLETED" }] } }),
   ]);
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "stock-transfers", page } });
-  return NextResponse.json({ items, pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) }, metrics: { pending, completed }, canManage: access.canManage });
+  return NextResponse.json({ items, pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) }, metrics: { pending, completed }, canManage: access.canManage && !scope.isolationEnabled });
 }
 
 export async function POST(req: Request, { params }: Params) {
@@ -49,11 +72,21 @@ export async function POST(req: Request, { params }: Params) {
   const parsed = stockTransferCreateSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "STOCK_TRANSFERS_INPUT_INVALID", req);
   try {
+    const scope = await retailStockTransferVisibleSites(organizationId, session.userId);
+    if (scope.isolationEnabled) {
+      const source = await prisma.enterpriseWarehouse.findFirst({
+        where: { organizationId, id: parsed.data.sourceWarehouseId }, select: { siteId: true },
+      });
+      if (!source || !scope.manageableSiteIds.includes(source.siteId)) {
+        throw new EnterpriseRetailError("RETAIL_SITE_ACCESS_DENIED", 403);
+      }
+    }
     const transfer = await createEnterpriseStockTransfer(organizationId, session.userId, parsed.data);
     await writeAuditLog({ userId: session.userId, action: "ENTERPRISE_STOCK_TRANSFER_SUBMITTED", entity: "EnterpriseStockTransfer", entityId: transfer.id, request: req, metadata: { organizationId, approverUserId: parsed.data.approverUserId } });
     await writeApiLog({ request: req, statusCode: 201, userId: session.userId, startedAt, metadata: { organizationId, domain: "stock-transfers" } });
     return NextResponse.json({ ok: true, transfer }, { status: 201 });
   } catch (error) {
+    if (error instanceof EnterpriseRetailError) return retailErrorResponse(error, "RETAIL_SITE_ACCESS_DENIED");
     return enterpriseDomainErrorResponse(error, "STOCK_TRANSFER_CREATE_FAILED");
   }
 }

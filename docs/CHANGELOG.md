@@ -1,3 +1,285 @@
+## 2026-11-08 — Retail #1042, tranche 48 — Remboursements par compte d'origine (candidat, PR #1043)
+
+- Migration **additive** `EnterpriseRetailInvoiceReturnRefundLeg` : un retour peut avoir plusieurs paiements de remboursement Finance canoniques (un par compte d'encaissement), chacun tenant-scoped, approuvé indépendamment et relié structurellement au retour ; l'avoir Finance et les mouvements de stock ne sont pas dupliqués. Les anciens retours à un seul paiement restent utilisables.
+- Préparation atomique : regroupement exact des allocations d'origine par compte, contrôle client/devise/boutique/méthode, montants arrondis au centime, clés d'idempotence distinctes, un paiement `PENDING_APPROVAL` par compte et un avoir unique. Une méthode incompatible sur le même compte est refusée, sans inventer une réallocation.
+- Liquidation sérialisable : chaque paiement approuvé doit couvrir ses allocations du même compte, soldes et droits revérifiés, contrepassations par tranche puis un avoir `POSTED`, paiements `CONFIRMED` et stock `RETURN_IN` valorisé une fois ; échec de n'importe quelle étape = rollback de toute la transaction.
+- Le dialogue Retour/Avoir affiche la progression agrégée des approbations et refuse le bouton de liquidation tant qu'un paiement manque. Contre-épreuves unitaires d'un remboursement simple et d'un retour à deux comptes ; scénario PostgreSQL navigateur étendu à deux comptes, **à confirmer en CI**. Ni `OWNER_E2E` ni certification des rapports/caisses/matériel/restauration ne sont acquis. Aucune fusion, Preview ou Production, flags OFF.
+- Ajustement du garde QA de schéma après retour CI : l'interdiction de balances/ledgers Retail reste imposée aux modèles de checkout ; le nouveau lien de remboursement est explicitement limité aux références Finance canoniques, sans solde financier concurrent. Les vérifications de ce garde ne sont pas retirées.
+- Réparation de la fixture QA des retours après second retour CI : la projection simulée inclut maintenant les relations `refundLegs`, `refundPayment` et `salesCreditNote` réellement sélectionnées par Prisma ; assertions supplémentaires pour l'ancien paiement unique, l'attente d'une seconde approbation et la liquidation seulement après les deux approbations. L'API n'accepte aucune liquidation partielle.
+
+## 2026-11-07 — Retail #1042, tranche 47 — Exports Excel et PDF explicites non certifiés (candidat, PR #1043)
+
+- La vue de supervision multi-boutiques propose les exports **Excel (.xlsx) et PDF** en réutilisant les générateurs de rapports professionnels existants. Les boutons et documents précisent « provisoire / non certifié » en FR/EN ; les écritures sans boutique sont exportées sur des lignes séparées, pas redistribuées.
+- Modèle d'export commun avec colonnes boutique, devise fonctionnelle, produits, coût des ventes, marge brute, autres charges/produits, résultat d'exploitation, nombre de lignes et état d'affectation ; aucun total consolidé inter-devises ni zéro fictif pour une boutique sans écritures. Test de contrat branché à Quality Gates.
+- Ce n'est **pas** une certification E16 : l'export représente seulement le résultat comptable déjà posté. Les écritures historiques sans attribution, la complétude du posting, la fiscalité, le résultat net, l'impression sur matériel, la caisse et la restauration exigent des contre-épreuves supplémentaires. Pas de fusion/Production ; `OWNER_E2E` reste requis.
+- La CI PostgreSQL de la tranche 46 a exposé un écart de classement COGS (le compte `SHOP2-COGS` existe mais sans `accountSubtype`). Le tableau provisoire accepte désormais soit le sous-type `COST_OF_SALES`, soit le **mapping canonique** `EnterpriseAccountMapping.mappingKey=COST_OF_SALES` de ce compte. Requête groupée par compte pour éviter la confusion avec d'autres charges de sous-type identique ; QA de l'ancien format ajoutée. À confirmer sur le prochain SHA.
+
+## 2026-11-07 — Retail #1042, tranche 46 — Résultat provisoire par boutique depuis les journaux postés (candidat, PR #1043)
+
+- Nouvelle source groupée `retailPostedSiteLedger` : prend exclusivement les lignes de résultat liées aux écritures `POSTED` ou `REVERSED`, par entreprise, boutique, devise fonctionnelle et période. Produits, coût des ventes, autres charges/produits, marge brute et résultat d'exploitation sont calculés en décimales exactes, sans addition de devises.
+- La vue propriétaire multi-boutiques affiche ces résultats avec mention **PROVISOIRE / NON CERTIFIÉ** et signale séparément les écritures sans boutique au lieu de leur attribuer arbitrairement un site. Les totaux POS et les soldes de facture Finance restent distincts.
+- Contre-épreuve unitaire de classement, signes de contrepassation, séparations CDF/USD et écritures non attribuées ; scénario PostgreSQL authentifié facture payée puis remboursée attend une marge comptable redevenue nulle. Il reste à certifier l'imputation historique et l'exhaustivité des écritures, les exports PDF/XLSX, les caisses, le matériel, la restauration et l'`OWNER_E2E`. Les flags Production restent OFF et la PR en brouillon.
+- Correctif de préparation du remboursement détecté à l'E2E de la tranche 45 : la création imbriquée des lignes de l'avoir ne fournit plus le `organizationId` de relation composite dans un objet Prisma enfant, conformément au chemin Finance existant. Garde régressif ajouté au test unitaire ; validation PostgreSQL du scénario retour toujours requise sur ce commit avant acceptation.
+
+## 2026-11-07 — Retail #1042, tranche 45 — Vérification renforcée des remboursements (candidat, PR #1043)
+
+- La liquidation Retail d'un retour confirmé est une mutation financière sensible : la route `/retail/invoices/*/returns/*/settle` exige désormais le même **step-up récent (mot de passe + MFA si activé)** que la confirmation d'un paiement Finance ; refus audité `428 STEP_UP_REQUIRED` avant toute écriture lorsque cette preuve manque.
+- Le dialogue Retour/Avoir affiche les champs de revérification FR/EN, transmet le mot de passe et l'éventuel TOTP à l'API d'authentification avant la liquidation, et expose le message précis d'échec sans exécuter le remboursement.
+- Recette navigateur à six sessions successives dont **cinq acteurs indépendants pour le retour** : un liquidateur inédit sans step-up doit être refusé, puis peut régler après vérification réelle ; retour restocké une seule fois et écriture de coût `POSTED`. Les contrôles de dimensions `siteId` du contributeur précédent sont conservés.
+- La tranche 43 a montré un **403 attendu** car l'affectation de test du caissier omettait `REQUEST_INVOICE_RETURN` ; la tranche 44 l'a corrigé avec des contrôles comptables supplémentaires. Cette tranche 45 est **candidate** avant CI. `OWNER_E2E` non exécuté, flags OFF en Production, aucune fusion ni déploiement.
+
+## 2026-11-07 — Retail #1042, tranche 44 — Dimensions de boutique dans le grand livre (candidat, PR #1043)
+
+- Propagation du `siteId` métier dans les lignes comptables canoniques des factures Retail, avoirs, coûts d'inventaire, retours de marchandise et dépenses directement postées. La source est vérifiée dans le tenant : checkout associé à la facture, dépôt du mouvement de stock, ou site de la dépense ; une facture Finance non Retail n'invente pas de boutique.
+- Contre-épreuve navigateur sur le cycle de règlement final : toutes les lignes de vente et de coût `POSTED` doivent porter la boutique d'origine. Ce travail prépare le rapprochement par magasin, mais ne certifie pas encore les écritures historiques sans dimension, ni les rapports PDF/XLSX, ni le résultat net consolidé.
+
+## 2026-11-07 — Retail #1042, tranche 43 — Retour client et remboursement à cinq acteurs (candidat, PR #1043)
+
+- Étend la recette authentifiée PostgreSQL de la tranche 41 : le **demandeur**, l'**inspecteur physique**, l'**approbateur**, le **préparateur Finance** et le **liquidateur** sont cinq utilisateurs réellement distincts. Retour d'une unité déjà payée, réception/inspection, double approbation du remboursement et de l'avoir, puis liquidation.
+- Contrôle que le stock ne rentre **pas** à l'inspection ni à l'approbation, puis que le remboursement et une seule entrée `RETURN_IN` réintègrent l'unité ; événement comptable de valorisation **POSTED**, statut facture `CREDIT_NOTE`, et rejeu idempotent de la liquidation.
+- La tranche 41 précédente a réussi **24/24 scénarios navigateur et 17/17 workflows GitHub** sur `3defd357`. Tranches 42 (balance comptable) et 43 (retour/remboursement) devront être certifiées sur leur propre SHA. Ne certifie pas les remboursements multi-comptes, le CASH multi-caissiers, les imprimantes ou `OWNER_E2E`. Flags OFF en Production, aucune fusion ni déploiement.
+
+## 2026-11-07 — Retail #1042, tranche 42 — Balance comptable : exclure les journaux non postés (candidat, PR #1043)
+
+- Correction de la source des états financiers : la balance, puis le compte de résultat, agrègent exclusivement les lignes reliées à des journaux **POSTED/REVERSED** dans la période demandée. Auparavant, une condition portée par une seconde jointure externe pouvait laisser entrer les lignes `DRAFT` dans les sommes.
+- Requête groupée par compte/tenant et contrôle statique anti-régression des écritures non postées ; aucune ligne historique modifiée ni migration. **Ce correctif ne suffit pas à certifier le résultat net par boutique** : dimensions de site et rapprochement des sources Retail, exports PDF/XLSX et OWNER_E2E restent ouverts.
+
+## 2026-11-07 — Retail #1042, tranche 41 — Cycle Finance à trois acteurs (24/24 navigateur, 17/17 CI, PR #1043)
+
+- Nouvelle recette navigateur authentifiée, limitée à la base synthétique PostgreSQL CI : facturier-caissier de boutique, propriétaire approbateur et administrateur financier distinct confirmateur. Une facture est créée, soumise, approuvée, émise puis payée en deux étapes, avec réelle vérification renforcée par mot de passe pour les mutations critiques.
+- Le test contrôle la proposition Finance canonique, les allocations idempotentes, l'absence de consommation physique au paiement partiel, puis une seule sortie de stock et son événement comptable de coût **POSTED** au règlement intégral ; restauration du flag dans l'environnement éphémère.
+- **Candidat technique, à confirmer par les Actions GitHub**. Ne couvre pas encore la totalité des retours/remboursements multi-acteurs, des caisses, impressions physiques, exports ou restaurations. `OWNER_E2E` humain non exécuté, PR en brouillon, aucune fusion/déploiement, flags OFF en Production.
+
+## 2026-11-07 — Retail #1042, tranche 40 — Inventaires et ajustements cloisonnés par dépôt (candidat, PR #1043)
+
+- Fermeture des API ERP historiques de création d'inventaire et d'ajustement, ainsi que des décisions de validation/rejet, par contrôle du `warehouseId` et de la capacité `MANAGE_STOCK` du collaborateur sur la boutique propriétaire ; l'appartenance ERP générale reste requise. Absence de dépôt, affectation révoquée ou boutique étrangère refusées sous flag actif.
+- Contre-épreuve PostgreSQL ajoutée pour un manager B doté de permissions ERP générales, tentant de créer ou d'approuver des inventaires/ajustements de A. Les deux drapeaux Retail restent OFF en production ; aucune signature `OWNER_E2E` sans rapports certifiés, caisse, restauration et matériel réel.
+
+## 2026-11-07 — Retail #1042, tranche 39 — Frontières des anciennes API ERP (candidat, PR #1043)
+
+- Extension du cloisonnement `siteStaffIsolationEnabled` aux API communes de sites, dépôts, emplacements et mouvements de stock, y compris leurs mutations ; un collaborateur affecté à B ne peut plus exploiter un droit ERP général pour créer ou modifier un objet de A. La création/modification du référentiel des sites reste réservée aux propriétaires/administrateurs lorsque l'isolation est active.
+- Transferts inter-boutiques : la demande exige une gestion autorisée du site source, la décision le droit explicite `AUTHORIZE_TRANSFER` du site source, et la réception le droit `MANAGE_STOCK` du site destinataire. Les droits et validations ERP communs restent nécessaires.
+- Contre-épreuve Playwright PostgreSQL étendue à un manager B possédant volontairement les permissions ERP Sites/Inventaire, avec refus des écritures sur A et vérification de la liste et des compteurs filtrés ; contrats statiques branchés aux Quality Gates.
+- **Pré-release uniquement** : garder les deux flags OFF en Production, ne pas fusionner tant que la CI de cette tranche et l'OWNER_E2E complet ne sont pas validés. Rapports de résultat net, exports, matériel réel et restauration restent à certifier.
+
+## 2026-11-07 — Retail #1042, tranche 38 — Concurrence du dernier article (candidat, PR #1043)
+
+- Recette navigateur PostgreSQL à deux requêtes concurrentes de préparation de facture sur **l'unique unité disponible** d'un SKU dédié : une réservation acceptée, une refusée, zéro sortie physique avant règlement, annulation du brouillon libérant la promesse puis même demande précédemment rejetée acceptée. Le test est limité au tenant synthétique CI et restaure ses options ; aucune preuve de paiement final ni E2E propriétaire n'est déduite avant une CI verte.
+
+## 2026-11-07 — Retail #1042, tranche 37 — Contre-épreuves inter-boutiques et CI anti-bruteforce (candidat, PR #1043)
+
+- Après **22/22 scénarios navigateur réussis** sur le commit `19818f1c`, tests supplémentaires avec deux identités authentifiées : filtres A/B, accès directs aux paiements et retours de la boutique opposée refusés, facture FR/A4 et EN/80 mm pour la bonne boutique, et rejeu de clé d'idempotence refusé après révocation. Impression sur imprimante physique et `OWNER_E2E` toujours non exécutés.
+- Garde de non-régression pour les onze spécifications navigateur Retail : trois groupes isolés, deux réinitialisations du Redis **éphémère de CI** entre groupes, aucune modification du rate-limit applicatif de production (8 tentatives / 15 minutes).
+
+## 2026-11-07 — Retail #1042, tranche 36 — Deux boutiques authentifiées (candidat, PR #1043)
+
+- Ajout de la contre-épreuve navigateur CI sur **deux sites distincts et deux utilisateurs authentifiés** : facture A créée par propriétaire, liste du facturier B isolée, impression et mutation A refusées, facture B créée, propriétaire A+B et révocation immédiate de B. Drapeaux temporaires activés uniquement sur la base éphémère `dtsc_shop2_behavioral` puis restaurés ; ce test ne vaut **ni** E2E global **ni** validation du propriétaire.
+- Correction détectée par PostgreSQL : création des lignes de checkout Retail en écriture explicite avec `createMany` dans la même transaction SERIALIZABLE que la facture Finance et le lien Retail ; circuit brouillon, idempotence et annulation désormais **21/21 scénarios navigateur passés** sur le commit correctif `3e4148b9` (autres workflows à confirmer).
+- Instrumentation provisoire d'erreur côté serveur retirée ; flags de production toujours OFF et PR en brouillon.
+
+## 2026-11-07 — Retail #1042, tranche 35 — Protocole final et erreurs métier (candidat, PR #1043)
+
+- Protocole d'acceptation [RETAIL_1042_OWNER_E2E_SCRIPT.md](RETAIL_1042_OWNER_E2E_SCRIPT.md) : tenant isolé, deux boutiques, dix acteurs indépendants, dix-neuf contre-épreuves, 12 critères de signature, justificatifs et blocages clairement identifiés. **Document préparatoire, aucun E2E signé**.
+- Messages d'erreur contextualisés pour une sortie originale non valorisée, les couches de coût/devises incompatibles et l'impossibilité d'utiliser une session de caisse pour le remboursement en espèces ; tests de présence de ces messages.
+- Extension du navigateur authentifié `shop2-retail.spec.mjs` (base éphémère CI seulement) : activation temporaire de la facture en deux étapes sur le tenant synthétique, création réelle de facture, rejeu/collision, vérification qu'un brouillon ne sort aucun stock, annulation Finance et rétablissement du flag initial. **Scénario E2E passé avec 21 tests navigateur sur la branche correctrice (SHA `3e4148b9`).**
+- **Toujours NON LIVRÉ** : E2E authentifié PostgreSQL multi-boutiques, fermeture de caisse, rapports financiers certifiés et exports, impression physique et restauration exigent une vérification. Flags OFF, PR brouillon.
+
+## 2026-11-07 — Retail #1042, tranche 34 — Préparation Finance et retour atomique (candidat, PR #1043)
+
+- Une demande Retail inspectée et validée peut préparer en une transaction le paiement sortant REFUND et l'avoir Finance exact, chacun soumis à une approbation indépendante ; statut intermédiaire `FINANCE_PENDING` et liens uniques tenant-aware.
+- Après approbation des deux pièces, une liquidation distincte réconcilie allocations et journaux, avoir, trésorerie, inventaire réintégré et valorisation d'origine dans une transaction SERIALIZABLE unique. Refus des mauvais sites, sources, comptes ou acteurs ; pas de remboursement sans preuve préalable.
+- Précision HT/taxes au centime, retours partiels répétés, nouveaux états et boutons FR/EN, QA de simulation et garde empêchant les circuits Finance historiques de contourner le stock.
+- Correction de la provenance du coût : le paiement final d'une facture Retail valorise désormais chaque sortie `SALE_FULFILLMENT` dans **la même transaction Finance + Stock**. Une couche de coût manquante annule la finalisation au lieu de livrer une sortie sans événement `ISSUE` ; les retours `RESTOCK` utilisent cet événement initial.
+- Les routes de préparation/liquidation autorisent le vrai rôle Finance (`FINANCE_PAYMENTS` + contrôles `FINANCE_RECEIVABLES`) sans exiger artificiellement le rôle caissier `RETAIL_POS`; la révocation et l'isolation de boutique sont toujours vérifiées dans les transactions métier.
+- **NON LIVRÉ** : migration PostgreSQL GitHub, tests métier multi-boutiques authentifiés, restauration, complétude des rapports et E2E final du propriétaire restent à valider ; flags OFF, PR brouillon, aucun déploiement.
+
+## 2026-11-07 — Retail #1042, tranche 33 — Finance transactionnelle composable pour retours (candidat, PR #1043)
+
+- Les primitives Finance communes d'inversion partielle d'allocations et de confirmation de remboursements deviennent utilisables dans la transaction SERIALIZABLE de l'appelant, sans transactions imbriquées.
+- Les enveloppes Finance publiques existantes, leurs autorisations de compte/boutique et les journaux restent inchangés. QA d'idempotence, permissions et composition par `TransactionClient`.
+- L'orchestrateur de règlement complet, l'avoir et la validation E2E de deux boutiques restent à implémenter.
+
+## 2026-11-07 — Retail #1042, tranche 32 — Traçabilité des paiements de remboursement et stock inter-dépôts (candidat, PR #1043)
+
+- Le préflight borne les allocations confirmées à inverser par ordre stable, client/devise/site/compte, et refuse les historiques non représentables en centimes. Aucun débit ni avoir n'est encore effectué.
+- Les sorties supplémentaires dans un dépôt ou lot non conforme empêchent le retour, même lorsque le dépôt attendu semble équilibré. Message métier français pour la précision d'inventaire ; scénarios négatifs QA.
+- Les preuves d'atomicité du règlement et l'E2E propriétaire restent obligatoires avant fusion.
+
+## 2026-11-07 — Retail #1042, tranche 31 — Provenance et précision des mouvements de retour (candidat, PR #1043)
+
+- Refus des quantités à plus de trois décimales pour les retours physiques, cohérent avec le stockage canonique Inventory ; saisie FR/EN adaptée, sans affecter les articles non stockés.
+- Précontrôle transactionnel renforcé : sortie originale de stock strictement égale à la quantité facturée, puis ventilation déterministe des portions encore retournables par mouvement, emplacement et lot ; rejette un double débit physique.
+- Contrats de non-écriture et de traçabilité des dispositions (`RESTOCK`, `QUARANTINE`, `DISPOSE`). Le règlement atomique Finance/stock et l'E2E global ne sont pas encore réalisés.
+
+## 2026-11-07 — Retail #1042, tranche 30 — Montants strictement positifs Finance/Retail (candidat, PR #1043)
+
+- Les contrôles `Prisma.Decimal.isPositive()` acceptaient le zéro : correction dans Finance commun (paiements, affectations, factures, remboursements, écritures d'ouverture, valorisation, trésorerie) et Retail/Inventaire (sorties, réservations, retours, store credit, fidélité).
+- Les écritures d'ouverture valides à un seul côté positif sont préservées ; les paiements, journaux, stocks et remboursements zéro sont refusés. Nouvelle QA de contrat et vérification comportementale du zéro branchée à la CI.
+- Aucun état de règlement Retail activé : le moteur complet d'avoir/remboursement/stock et les E2E métier restent à livrer.
+
+## 2026-11-07 — Retail #1042, tranche 29 — Vérification des prérequis de liquidation (candidat, PR #1043)
+
+- Service interne en lecture vérifiant les preuves indépendantes d'inspection et validation, les montants exacts, la disponibilité des paiements Finance confirmés et l'origine des sorties de stock article/lot/dépôt ; quantités déjà retournées déduites.
+- QA dédiée ajoutée aux Quality Gates, sans action UI, écriture, migration ni déploiement ; cette vérification est un prérequis, pas encore un avoir ou un remboursement.
+- Le règlement atomique Finance/Inventory et les tests E2E authentifiés restent bloquants avant toute activation.
+
+## 2026-11-07 — Retail #1042, tranche 28 — Retours à montants exacts et quantités strictes (candidat, PR #1043)
+
+- Correction du cas zéro en Prisma Decimal : quantité et montant de retour strictement positifs dans le formulaire serveur et la transaction, sans réservation financière factice.
+- Le calcul des retours fractionnaires s'aligne sur les deux décimales Finance ; la dernière fraction récupère le reliquat de centimes, sans écart silencieux lors du futur remboursement.
+- Rejet explicite des anciennes lignes monétaires non représentables et des fractions trop petites pour Finance, avec tests et messages métier. Aucun avoir, stock, décaissement ni activation de flag ; E2E final encore ouvert.
+
+## 2026-11-07 — Retail #1042, tranche 27 — Demandes de retour dans l'interface (candidat, PR #1043)
+
+- Dialogue mobile et bilingue depuis les factures Retail livrées : choix des articles/quantités, traitement physique et validateur Finance indépendant ; registre paginé et contextualisé.
+- Interface distincte pour le demandeur, le contrôleur physique et le validateur ; séparation visible des étapes avec refus motivé et protection des révisions concurrentes.
+- Sélecteur de validateur limité aux permissions combinées de la boutique et de Finance ; liste des demandes sans clé d'idempotence, empreinte interne ni identifiants des acteurs.
+- **Toujours NON LIVRÉ** : `APPROVED` n'est pas un remboursement, les retours ne réconcilient pas encore Finance et Inventory, aucun E2E client confirmé ni activation des flags, ni fusion/déploiement.
+
+## 2026-11-07 — Retail #1042, tranche 26 — Réception et inspection indépendante (candidat, PR #1043)
+
+- Nouvelle étape `INSPECTED` obligatoire avant approbation d'un retour de facture Retail payée, contrôlée par un gestionnaire des stocks distinct du demandeur et du validateur Finance, avec date et notes conservées.
+- Route POST d'inspection tenant/site-scoped, permission `MANAGE_STOCK`, révision optimiste, audit, erreurs métier et migration additive ; les demandes inspectées continuent de réserver les quantités retournables.
+- QA dédiée étendue aux tentatives d'approbation sans inspection, auto-inspection et décisions concurrentes. Cette tranche est **sans impact immédiat** sur Finance et Stock : ni avoir, ni remboursement, ni correction de stock. Flags OFF ; E2E technique et propriétaire non exécutés ; PR brouillon et aucune Production.
+
+## 2026-11-07 — Retail #1042, tranche 25 — Demandes de retour sur facture payée (candidat, PR #1043)
+
+- Ajout non destructif de `EnterpriseRetailInvoiceReturnRequest` et de ses lignes reliées à la facture Finance canonique par son checkout, avec clés composites interdisant toute référence à la ligne d'une autre facture ou entreprise.
+- Nouveau cycle `SUBMITTED → APPROVED/REJECTED` indépendant, quantités et montants proportionnels contrôlés, motifs, dispositions de retour `RESTOCK/QUARANTINE/DISPOSE`, refus des quantités déjà réservées par une autre demande, idempotence et protections de concurrence.
+- Capacités explicites par boutique `REQUEST_INVOICE_RETURN` et `APPROVE_INVOICE_RETURN`, **aucune attribution automatique**. Un validateur distinct doit disposer du droit Finance de validation et de l'affectation boutique valide.
+- API de création/liste et décision par facture avec session, autorisation, same-origin, Zod, rate limiting et audit ; QA ciblée intégrée aux Quality Gates. Aucune écriture de stock, d'avoir ou de paiement à ce stade : **un retour approuvé n'est pas encore un remboursement terminé**.
+- Tranche encore non commercialisable, E2E PostgreSQL multi-utilisateurs et UI Retour/Paiement à poursuivre, flags OFF, pas de merge/Production.
+
+## 2026-11-07 — Retail #1042, tranche 24 — Caisses liées au site réel et clôtures isolées (PR brouillon #1043)
+
+- L'ouverture de session vérifie la boutique réellement attachée au compte financier **dans sa transaction Finance**, refuse les identifiants de site contraires, vérifie la permission `CLOSE_CASH` de l'utilisateur assigné et ne permet pas qu'une ancienne affectation révoquée autorise une ouverture.
+- Les listes Finance et Retail des sessions de caisse, ainsi que la liste des clôtures Retail et leurs compteurs, sont filtrées par site pour le personnel affecté. Les finance-only/propriétaires conservent leurs droits Finance réels.
+- Une clôture Retail ne peut réutiliser une ancienne clé pour lire une autre boutique ni combiner les comptes de boutiques distinctes lorsque le cloisonnement est actif. Les décisions de clôture sont également contrôlées par site ; validations Finance indépendantes préservées.
+- QA ciblée de l'ouverture de caisse et contrats des lectures/clôtures en CI, erreurs contextualisées. **E2E multi-caissiers, vrais avoirs/remboursements, matériels et restauration toujours à certifier ; flags OFF.**
+
+## 2026-11-07 — Retail #1042, tranche 23 — Bloquer les avoirs sectoriels sans retour Finance/stock (PR brouillon #1043)
+
+- Les helpers d'avoirs pour remboursements Pharmacie/Gaming ne peuvent plus créer ou rejouer un avoir sur une facture liée au checkout Retail ; la préparation partielle et exacte refusent désormais avec `RETAIL_INVOICE_RETURN_WORKFLOW_REQUIRED` avant tout effet financier.
+- La transition de « contrepartie financière prête » refuse également une facture Retail sans preuve de retour/stock, empêchant qu'un remboursement soit marqué prêt alors que la sortie d'inventaire n'a pas été contrepassée.
+- Le contrat `qa-hotfix-1042-retail-refund-credit-bypass.mjs` vérifie les refus en simulation et le maintien du chemin normal pour une facture non Retail ; ajouté à Quality Gates. **Ce verrou ne constitue pas le circuit de retour/remboursement fonctionnel.**
+- Le circuit de correction/retour des factures Retail reste à développer et certifier, E2E PostgreSQL multi-acteurs et propriétaire non exécutés ; flags OFF, aucune fusion ni Production.
+
+## 2026-11-07 — Retail #1042, tranche 22 en préparation — Traçabilité exhaustive et permissions de remboursement
+
+- Matrice de réception issue du cahier original de 22 pages : 17 chapitres, RG01–RG20, huit décisions, scénarios E2E techniques et les 12 critères OWNER_E2E. Les contradictions sur les droits du gérant sont explicitement marquées, sans élargissement automatique de privilèges.
+- Finance limite les remboursements de nouvelles factures Retail à la boutique permise pour un opérateur affecté, même en cas de révocation et de rejeu. Un intervenant Finance non affecté reste soumis au RBAC Finance sans restriction Retail artificielle ; la validation séparée est maintenue.
+- Le circuit fonctionnel de retour/avoir, l'impression physique, le reporting complet et les E2E restent ouverts. Flags OFF, aucune fusion ni Production.
+
+## 2026-11-07 — Hotfix P0 Retail #1042, tranche 21 — Créances Finance par boutique (PR brouillon #1043)
+
+- Liste des créances clients et synthèses dues/en retard restreintes aux boutiques assignées pour les opérateurs Retail isolés, sans modification des créances Finance non Retail.
+- Filtrage appliqué avant pagination/agrégation ; QA de contrat. E2E multi-rôles et exports non certifiés, flags OFF, PR brouillon.
+
+## 2026-11-07 — Hotfix P0 Retail #1042, tranche 20 — Cloisonnement des lectures Finance pour personnel boutique (PR brouillon #1043)
+
+- Les listes de factures Finance et paiements Finance filtrent leurs objets Retail et agrégats selon l'affectation de boutique lorsque l'isolation est activée. La révocation d'une affectation ne donne jamais un accès global ; les Finance-only et propriétaires restent dans leur périmètre Finance actuel.
+- Le bouton de création d'avoir n'est plus proposé sur une facture Retail tant que le retour synchronisé au stock n'existe pas ; contrôle serveur conservé.
+- Contrats de permissions ajoutés ; pas de certification E2E ni activation des flags. Les exports et autres chemins Finance restent à auditer.
+
+## 2026-11-07 — Hotfix P0 Retail #1042, tranche 19 — Factures Finance par boutique sans confusion avec POS (PR brouillon #1043)
+
+- Vue propriétaire multi-sites enrichie d'un agrégat SQL tenant-aware des factures Retail Finance émises : brut sur la période, allocations cumulées et solde à date, séparés par boutique et devise.
+- Les montants POS directs et les factures Finance ne sont pas additionnés comme un chiffre d'affaires unique ; labels FR/EN sur Design 2.0. Aucun bénéfice estimé sans écritures comptables POSTED.
+- QA contractuelle ; CI du HEAD, E2E et exports complets en attente. Flags OFF, aucune fusion/Production.
+
+## 2026-11-07 — Hotfix P0 Retail #1042, tranche 18 — Concurrence PostgreSQL réellement testée en CI (PR brouillon #1043)
+
+- QA intégrée dans `quality-gates.yml` avec PostgreSQL éphémère : deux transactions SERIALIZABLE concurrentes, conflit réel, retry borné, compteur final sans mise à jour perdue.
+- Exécution interdite en dehors de `CI=true` et de la base `dtsc_quality_test` ; nettoyage de la table de test. Résultat GitHub Actions à confirmer sur le dernier commit.
+- Ne constitue pas encore un E2E métier authentifié ni la preuve de remboursements Retail. Flags OFF et PR brouillon.
+
+## 2026-11-07 — Hotfix P0 Retail #1042, tranche 17 — Protection des avoirs Finance contre les stocks Retail incohérents (PR brouillon #1043)
+
+- Un avoir Finance sur facture Retail avec checkout est désormais refusé jusqu'à la livraison d'un circuit de retour/remboursement atomique avec stock : évite de solder une créance en laissant des quantités réservées ou sans contre-mouvement.
+- Gardes de création, de prévalidation et de posting avec message utilisateur ; QA de refus positif et préservation du chemin Finance ordinaire. Le remboursement Retail n'est pas implémenté par cette protection.
+- Flags OFF, pas de merge/Production, E2E authentifié et validation propriétaire toujours requis.
+
+## 2026-11-07 — Hotfix P0 Retail #1042, tranche 16 — Résilience des propositions d'encaissement (PR brouillon #1043)
+
+- Les propositions de paiement par caissier reprennent la transaction sérialisable entière après un conflit PostgreSQL `P2034`, avec relue systématique de la boutique, des permissions, du montant disponible et de la clé d'idempotence. Trois tentatives maximum.
+- QA contractuelle : conflit transitoire, absence de double paiement Finance et épuisement borné des tentatives. Vérification CI obligatoire sur le dernier commit.
+- **Non livré** : les remboursements et avoirs de la nouvelle facture Finance Retail, les E2E authentifiés PostgreSQL multi-boutiques et les tests physiques d'impression ne sont pas certifiés. Flags OFF, aucun merge/Production.
+
+## 2026-11-07 — Hotfix P0 Retail #1042, tranche 15 — Rejeu de facture et concurrence contrôlés (PR brouillon #1043)
+
+- La préparation de facture Finance Retail revérifie `PREPARE_INVOICE` et l'affectation active à la boutique **avant tout retour idempotent**, y compris après révocation de l'utilisateur ou lorsque le résultat est trouvé seulement dans la transaction.
+- Les conflits de sérialisation PostgreSQL de la préparation sont repris par le mécanisme Retail borné existant, sans création d'une seconde facture. Contrats négatifs ajoutés pour droits révoqués, collision de clé et rejeu transactionnel.
+- **Ne constitue pas un E2E PostgreSQL réel** : les avoirs, remboursements de la nouvelle facture, opérations concurrentes connectées et recette multi-rôles propriétaire restent à valider. Flags OFF, PR brouillon, aucune fusion ni Production.
+
+## 2026-11-07 — Hotfix P0 Retail #1042, tranche 14 — Référentiels, réceptions et historique POS cloisonnés (PR brouillon #1043)
+
+- Entrepôts, emplacements, listes et compteurs filtrés par boutique ; écritures contrôlées sous transaction avec `MANAGE_STOCK`, sans permission implicite.
+- Réceptions d'achats contrôlées avant mouvement et rejeu idempotent ; une clé utilisée sur une autre réception est rejetée.
+- Ventes POS et métriques, reçus, retours, comptes de remboursement et inversions protégés des accès inter-boutiques ; flux stock/Finance soumis aux droits locaux du magasin.
+- QA simulées et contrats CI ajoutés. **Flag d'isolation OFF ; E2E PostgreSQL, remboursement de factures Finance et validation propriétaire toujours bloquants, aucune fusion/Production.**
+
+## 2026-11-07 — Hotfix P0 Retail #1042, tranche 12 — Permissions des écritures de stock (PR brouillon #1043)
+
+- Capacité MANAGE_STOCK assignable explicitement par boutique, aucune attribution automatique au gérant, facturier ou caissier ; libellés FR/EN.
+- Les mouvements directs, inventaires physiques et ajustements de stock passent une vérification de la boutique et de MANAGE_STOCK dans leur transaction canonique. L'approbation indépendante demeure obligatoire lorsqu'elle existait déjà.
+- Comportement historique conservé tant que l'isolation stricte est OFF ; aucun déploiement, fusion ou E2E propriétaire déclaré. Les autres API spécialisées et rapports sont encore à auditer.
+
+## 2026-11-07 — Hotfix P0 Retail #1042, tranche 11 — Lectures Inventory isolées par boutique (PR brouillon #1043)
+
+- Stocks, balances, mouvements, inventaires physiques et ajustements de stock : filtrage des résultats et des compteurs sur les dépôts des boutiques autorisées. Un filtre explicite de dépôt n'élargit jamais cette portée.
+- Valorisation Finance agrégée temporairement refusée aux opérateurs Retail isolés jusqu'à certification du filtrage SQL ; vue consolidée propriétaire préservée.
+- Contrats QA étendus ; les mutations, rapports et exports legacy restent à auditer avant activation du cloisonnement. PR brouillon, aucune fusion, aucune production ni E2E propriétaire.
+
+## 2026-11-07 — Hotfix P0 Retail #1042, tranche 10 — Transferts et alertes isolés par boutique (PR brouillon #1043)
+
+- La liste des transferts ERP et ses compteurs sont filtrés par boutiques attribuées lorsque l'isolation Retail est activée ; le sélecteur de lots exige le droit de lecture du dépôt.
+- Création et approbation contrôlées dans la boutique source, réception dans la boutique destinataire, par le service Inventory commun et sous transaction ; les alertes de péremption refusent les lectures transversales non autorisées.
+- Tests contractuels étendus ; flag d'isolation toujours OFF en attendant l'audit des autres routes, les E2E multi-rôles et l'accord propriétaire. Aucun merge ni déploiement.
+
+## 2026-11-07 — Hotfix P0 Retail #1042, tranche 9 — Impression des factures Retail depuis Finance (PR brouillon #1043)
+
+- Nouvelle route d'impression A4 et ticket thermique 80 mm pour la **facture Finance canonique**, avec facture/boutique/date/facturier/client/montants/reste dû, sans donnée de contact personnelle non requise ; HTML échappé, en-têtes sans cache et 404 sur accès inter-boutiques.
+- Badges explicites Brouillon/Annulée/Invalidée, double langue FR/EN, actions adaptatives Design 2.0 dans le registre de factures ; tests d'affichage, filtrage, sécurité et de contrat dans les Quality Gates.
+- **Toujours en PR brouillon** : aucune activation client, impression sur matériel physique, fusion ou production avant E2E global et certification propriétaire.
+
+## 2026-11-07 — Hotfix P0 Retail #1042, tranche 8 — Disponibilité promise par facture sans sortie anticipée (PR brouillon #1043)
+
+- Les lignes de facture Retail en attente constituent des **promesses de stock** par boutique, dépôt et lot. La préparation tient compte des promesses existantes sans diminuer le stock réel ; l'annulation ou l'invalidation Finance libère cette disponibilité, la facturation totalement réglée la consomme atomiquement.
+- Le moteur commun des mouvements sortants et la réservation des commandes consultent ces mêmes lignes afin de refuser une vente, un transfert ou une perte qui empiéterait sur un autre client. L'indicateur de disponibilité distingue explicitement les quantités promises aux factures Retail des réservations de commandes.
+- Tests de contrat et de comportement isolé du résolveur, documentation et QA Quality Gates. **Activation et fusion interdites** avant vérification PostgreSQL des accès concurrents, des rôles, des remboursements/retours et validation globale OWNER_E2E.
+
+## 2026-11-07 — Hotfix P0 Retail #1042, tranche 7 — Propositions de paiement caissier et Finance canonique (PR brouillon #1043)
+
+- Table de rattachement minimale `EnterpriseRetailInvoicePaymentProposal` avec migration additive et unicité du paiement Finance ; émission d'un unique `EnterprisePayment DRAFT` dans une transaction sérialisable, avec montant réservé contre le reste dû et contrôles boutique/compte/session/devise/client.
+- Soumission et annulation du brouillon par son caissier, approbateur Finance indépendant ; affectation de paiement **confirmé** à la seule créance source, en réutilisant le service Finance commun et son mouvement de stock uniquement après paiement intégral. Interface Design 2.0 FR/EN dédiée, historique après règlement, QA structurale #1042 intégrée aux Quality Gates.
+- Correctif de date civile des lots détecté par le contrôle distant #670. **Pas de fusion, déploiement ou activation** : flags OFF, tests PostgreSQL/authentifiés multi-boutiques, retours/avoirs et OWNER_E2E global encore requis.
+
+## 2026-11-07 — Hotfix P0 Retail #1042, tranche 6 — Soumission facturier vers approbation Finance (PR brouillon #1043)
+
+- Le facturier Retail ne disposant pas de droits Finance globaux peut soumettre **sa propre** facture en brouillon avec version et validateur indépendant. Ce dernier est choisi parmi les collaborateurs autorisés à approuver dans `FINANCE_RECEIVABLES`, avec contrôle transactionnel du lien facture↔boutique et des permissions `PREPARE_INVOICE`.
+- L'orchestration commune conserve la facture Finance, la création de l'approbation assignée et les notifications. Aucun paiement, stock ou créance n'est enregistré à la soumission ; l'approbation et l'émission restent du ressort du workflow Finance.
+- Sélecteur des validateurs et confirmation dans le workbench Retail Design 2.0 bilingue ; tests des refus inter-boutiques, de l'auto-validation, du retrait de droit et des flags OFF. **Aucune activation, fusion ou livraison client** avant circuit caisse et E2E complet.
+
+## 2026-11-07 — Hotfix P0 Retail #1042, tranche 5 — Annulation des factures Retail en brouillon (PR brouillon #1043)
+
+- Nouvelle transition Retail `CANCEL` limitée aux **brouillons Finance**, avec version optimiste, motif obligatoire, permission `CANCEL_UNPAID_INVOICE` du site et contrôle transactionnel canonique Finance ; les autres transitions continuent de relever des validations Finance indépendantes.
+- Registre Retail Design 2.0 FR/EN : action d'annulation affichée seulement si le serveur confirme le droit et le statut, dialogue de confirmation et historisation ; aucun effacement de facture ni mouvement de stock.
+- Le circuit complet facturier → approbateur → caissier, les réservations, retours, remboursements, isolement des API historiques et E2E multi-acteurs restent bloquants. Les flags Retail restent désactivés et aucune fusion ni Production n'est autorisée sans E2E global.
+
+## 2026-11-07 — Hotfix P0 Retail #1042, tranche 4 — Contrôle site Finance et interface Design 2.0 (PR brouillon #1043)
+
+- Filtrage serveur des factures par affectation active de boutique, interdiction des consultations inter-boutiques et préparation par facturier autorisé ; double activation explicite encore désactivée.
+- Avant chaque affectation de paiement Finance sur une facture Retail : vérification du droit `COLLECT_PAYMENT`, du compte financier et de la session de caisse dans **la même boutique**. Protection du canal API Finance direct et des mélanges entre boutiques.
+- Workbench Retail de facturation responsive FR/EN Design 2.0, panier sur catalogue, lots, suivi de factures et soldes canoniques ; préparation visible uniquement si activée. Recherche produit et lots limités au site quand l'isolation du personnel est activée.
+- **Toujours en cours** : workflow de validation Finance et caisse, réservation, remboursements et retours, RBAC transversal complet, E2E base/navigateur, OWNER_E2E global. Aucune fusion ni mise en Production.
+
+## 2026-11-06 — Hotfix P0 Retail #1042, tranche 3 — Facture Finance canonique (PR brouillon #1043)
+
+- Extension Retail de provenance boutique/dépôt/lot liée à la **facture Finance existante**, sans second registre de factures ni de paiements ; préparation idempotente à prix et taxes serveur, transaction atomique.
+- Lors de l'allocation Finance du dernier paiement, sortie de stock seulement si la facture est totalement payée et si les lots/quantités sont valides. Allocation et mouvements dans la même transaction sérialisable ; erreurs métier explicites.
+- Route propriétaire de préparation et consultation des factures Retail **désactivée par défaut**, sans activation UI. Le parcours facturier/caissier, les retours, le RBAC transversal et l'E2E multi-boutiques restent à terminer : **NON PRÊT pour livraison client**, OWNER_E2E non reçu, aucune fusion ni Production.
+- QA unitaire/contrat `npm run qa:hotfix-1042-retail-invoice-finance`. Détails : [HOTFIX_1042_RETAIL_CONFIGURABLE_MULTISTORE.md](HOTFIX_1042_RETAIL_CONFIGURABLE_MULTISTORE.md).
+
 ## 2026-11-06 — v1.2.3 candidate — Feedback Finance FR/EN (#988)
 
 - Caisse, Paiements et Factures : retours HTTP et réseau structurés, sûrs et traduits suivant la langue utilisateur ; les refus ne sont jamais présentés comme des succès.
@@ -1981,3 +2263,25 @@ Ce document suit en français professionnel les améliorations apportées à DTS
 - No capacity stage is marked certified until a real CI load run is archived.
 
 Hotfix #861 (complément) : un secret CRON_SECRET Production commun réveille potentiellement sept autres queues. Ajout de verrous par route avec opt-in explicite `*_CRON_ENABLED` après auth, sans changement des secrets dédiés ; aucune file ancienne relancée automatiquement.
+## 2026-11-06 — v1.3.0 candidate — Retail paramétrable, première tranche #1042 (NON LIVRÉ)
+
+- Paramètres propres à l'entreprise pour les lots et la péremption : autoriser/surveiller/bloquer, FEFO, horizon d'alerte, prise en compte de la date métier locale ; formulaire Design 2.0 FR/EN.
+- Alertes de lots datés par dépôt, filtrables côté API, paginées et respectueuses des données d'organisation.
+- Sélection de lot dans le POS et le transfert ERP : quantité disponible et date de péremption, contrôle serveur maintenu.
+- Transferts : option historique immédiate préservée ; nouvelle option expédition puis réception physique confirmée, sans comptage simultané dans les deux stocks ; mouvement entrant au reçu et journal d'événements. Numéro de lot, date de fabrication et date de péremption transmis à destination avec migration d'unicité par dépôt.
+- Dépenses de Finance : attribution optionnelle à un site/boutique (FK tenant-aware), saisie et lecture ; les historiques non attribués restent tels quels. Vue propriétaire multi-boutiques : ventes et encaissements POS séparés par devise, dépenses approuvées affectées, nombre de lignes stock et sessions de caisse, sans bénéfice estimé non justifié.
+- **NON COUVERT** : RBAC complet par boutique, facturier→caissier, paiements partiels, profits comptables consolidés, exports complets et restauration de sauvegarde. Les checklists de l'issue #1042 restent ouvertes. Ne pas utiliser cette version comme acceptation complète du cahier des charges.
+- CI, QA globale, OWNER_E2E et Production : **NOT_EXECUTED** ; aucun merge/deploy sans E2E global du propriétaire. Migration en attente de déploiement via `prisma migrate deploy` sur `main` uniquement.
+
+## 2026-11-06 — v1.3.0 candidate — Retail #1042 : accès personnel par boutique (NON LIVRÉ)
+
+- Modèle additif `EnterpriseRetailSiteAssignment` : rôles gérant/facturier/caissier attribués par site et membre actif de l'entreprise, permissions par défaut ou surchargées, désactivation logique et révision concurrente.
+- API propriétaire GET/PUT `retail/site-assignments`, tenant-aware, same-origin, Zod, limitation, audit, et panneau Design 2.0 FR/EN pour les affectations sans UUID visible.
+- Résolveur serveur à politique deny-by-default pour les capacités par site ; **isolation stricte non activable depuis l'interface** tant que toutes les routes ERP communes ne sont pas contrôlées. Les permissions affichées ne constituent donc PAS encore un cloisonnement fonctionnel complet.
+- QA ciblée `qa:hotfix-1042-site-staff` ; migration nouvelle additive. Les P0 facturier→caissier, stock après solde total, RBAC sur toutes les routes et E2E restent **NOT_EXECUTED / INCOMPLETE**.
+
+## 2026-11-07 — v1.3.0 candidate — Retail #1042 tranche 20, garde des remboursements (NON LIVRÉ)
+
+- Les remboursements Finance associés à une facture Retail multi-boutiques ne peuvent plus débiter un compte financier d'une autre boutique, même en appelant directement les services Finance ou en rejouant une inversion d'allocation.
+- Vérification du client, de la devise et du compte de sortie avant l'inversion et à la confirmation de trésorerie. Les factures Finance hors Retail restent inchangées.
+- Tests ciblés branchés aux Quality Gates. Le workflow complet de retour, avoir, approbation et restock, la concurrence PostgreSQL, l'E2E propriétaire et la Production restent à valider. Flags d'activation OFF.

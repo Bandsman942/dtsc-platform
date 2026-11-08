@@ -3,6 +3,8 @@ import { NextResponse } from "next/server";
 import { writeApiLog } from "@/lib/audit";
 import { inventoryValuationQuerySchema } from "@/lib/enterprise/accounting/finance-domain-schemas";
 import { authorizeFinanceRequest, financeListParams } from "@/lib/enterprise/accounting/http";
+import { retailErrorResponse } from "@/lib/enterprise/retail/http";
+import { retailInventoryVisibleSites } from "@/lib/enterprise/retail/site-access";
 import { prisma } from "@/lib/prisma";
 
 type Params = { params: Promise<{ organizationId: string }> };
@@ -20,6 +22,17 @@ export async function GET(req: Request, { params }: Params) {
   const { organizationId } = await params;
   const auth = await authorizeFinanceRequest(req, organizationId, "FINANCE_INVENTORY", "view");
   if (!auth.ok) return auth.response;
+  // Valuation uses an aggregate raw-SQL pipeline. Until a validated
+  // warehouse-scoped version exists, isolated Retail operators must never
+  // obtain a consolidated cross-shop cost or stock figure through Finance.
+  try {
+    const scope = await retailInventoryVisibleSites(organizationId, auth.session.userId);
+    if (scope.isolationEnabled) {
+      return NextResponse.json({ error: "RETAIL_SITE_ACCESS_DENIED" }, { status: 403 });
+    }
+  } catch (error) {
+    return retailErrorResponse(error, "RETAIL_SITE_ACCESS_DENIED");
+  }
 
   const url = new URL(req.url);
   const parsed = inventoryValuationQuerySchema.safeParse({

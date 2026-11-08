@@ -21,7 +21,7 @@ export function sumDecimals(values: Prisma.Decimal.Value[]): Prisma.Decimal {
 
 export function assertPositiveAmount(value: Prisma.Decimal.Value, code = "FINANCE_AMOUNT_MUST_BE_POSITIVE") {
   const amount = decimal(value);
-  if (!amount.isPositive()) throw new EnterpriseAccountingError(code, 400);
+  if (!amount.greaterThan(0)) throw new EnterpriseAccountingError(code, 400);
   return amount;
 }
 

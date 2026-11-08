@@ -48,7 +48,7 @@ async function calculateSupplierItems(
   for (const item of items) {
     const quantityDecimal = new Prisma.Decimal(item.quantity);
     const unitPriceDecimal = new Prisma.Decimal(item.unitPrice);
-    if (!quantityDecimal.isPositive() || unitPriceDecimal.isNegative()) throw new EnterpriseAccountingError("SUPPLIER_INVOICE_LINE_INVALID", 400);
+    if (!quantityDecimal.greaterThan(0) || unitPriceDecimal.isNegative()) throw new EnterpriseAccountingError("SUPPLIER_INVOICE_LINE_INVALID", 400);
     if (item.catalogItemId) {
       const catalog = await tx.enterpriseCatalogItem.findFirst({ where: { id: item.catalogItemId, organizationId, status: "ACTIVE", archivedAt: null } });
       if (!catalog) throw new EnterpriseAccountingError("SUPPLIER_INVOICE_CATALOG_ITEM_INVALID", 409);
@@ -113,7 +113,7 @@ export async function createSupplierInvoice(organizationId: string, actorUserId:
     const subtotal = money(sumDecimals(calculated.map((item) => item.netAmount)));
     const taxTotal = money(sumDecimals(calculated.map((item) => item.taxAmount)));
     const grandTotal = money(sumDecimals(calculated.map((item) => item.totalAmount)));
-    if (!grandTotal.isPositive()) throw new EnterpriseAccountingError("SUPPLIER_INVOICE_TOTAL_INVALID", 400);
+    if (!grandTotal.greaterThan(0)) throw new EnterpriseAccountingError("SUPPLIER_INVOICE_TOTAL_INVALID", 400);
     const match = await evaluateThreeWayMatch(tx, organizationId, input, subtotal, taxTotal);
     const invoice = await tx.enterpriseSupplierInvoice.create({
       data: {
@@ -190,7 +190,7 @@ export async function transitionSupplierInvoice(
         if (commitment) {
           const remaining = commitment.committedAmount.minus(commitment.realizedAmount).minus(commitment.releasedAmount);
           const realized = Prisma.Decimal.min(Prisma.Decimal.max(remaining, 0), invoice.grandTotal);
-          if (realized.isPositive()) await tx.enterpriseBudgetCommitment.update({ where: { id: commitment.id }, data: { realizedAmount: { increment: realized }, status: commitment.realizedAmount.plus(realized).gte(commitment.committedAmount.minus(commitment.releasedAmount)) ? "REALIZED" : commitment.status } });
+          if (realized.greaterThan(0)) await tx.enterpriseBudgetCommitment.update({ where: { id: commitment.id }, data: { realizedAmount: { increment: realized }, status: commitment.realizedAmount.plus(realized).gte(commitment.committedAmount.minus(commitment.releasedAmount)) ? "REALIZED" : commitment.status } });
         }
       }
       await publishFinanceEvent(tx, { organizationId, entityType: "EnterpriseSupplierInvoice", entityId: invoice.id, eventType: "SUPPLIER_INVOICE_POSTED", summary: `Supplier invoice ${invoice.number} posted`, actorUserId, fromStatus: invoice.status, toStatus: "POSTED", metadataJson: { payableId: payable.id, journalEntryId: posting.entry.id } });

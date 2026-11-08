@@ -1,9 +1,11 @@
+import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { createEnterpriseInventoryReservation } from "@/lib/enterprise/inventory/reservations";
 import { inventoryReservationCreateSchema } from "@/lib/enterprise/inventory/reservation-schemas";
 import { authorizeRetailRequest, retailErrorResponse, retailListParams } from "@/lib/enterprise/retail/http";
+import { retailInventoryVisibleSites } from "@/lib/enterprise/retail/site-access";
 import { prisma } from "@/lib/prisma";
 
 type Params = { params: Promise<{ organizationId: string }> };
@@ -15,7 +17,21 @@ export async function GET(req: Request, { params }: Params) {
   if (!auth.ok) return auth.response;
   const { page, pageSize, status } = retailListParams(req);
   const salesOrderId = new URL(req.url).searchParams.get("salesOrderId")?.trim() || null;
-  const where = { organizationId, ...(status ? { status } : {}), ...(salesOrderId ? { salesOrderId } : {}) };
+  let scope: Awaited<ReturnType<typeof retailInventoryVisibleSites>>;
+  try { scope = await retailInventoryVisibleSites(organizationId, auth.session.userId); }
+  catch (error) { return retailErrorResponse(error, "RETAIL_SITE_ACCESS_DENIED"); }
+  const allowedWarehouseIds = scope.isolationEnabled
+    ? (await prisma.enterpriseWarehouse.findMany({
+        where: { organizationId, siteId: { in: scope.siteIds }, archivedAt: null },
+        select: { id: true },
+      })).map((warehouse) => warehouse.id)
+    : [];
+  const where: Prisma.EnterpriseInventoryReservationWhereInput = {
+    organizationId,
+    ...(status ? { status } : {}),
+    ...(salesOrderId ? { salesOrderId } : {}),
+    ...(scope.isolationEnabled ? { warehouseId: { in: allowedWarehouseIds } } : {}),
+  };
   const [items, total] = await Promise.all([
     prisma.enterpriseInventoryReservation.findMany({ where, orderBy: { createdAt: "desc" }, skip: (page - 1) * pageSize, take: pageSize }),
     prisma.enterpriseInventoryReservation.count({ where }),

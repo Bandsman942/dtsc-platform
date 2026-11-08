@@ -5,6 +5,7 @@ import { retailReturnCreateSchema } from "@/lib/enterprise/retail/commercial-sch
 import { authorizeRetailRequest, retailErrorResponse, retailListParams } from "@/lib/enterprise/retail/http";
 import { getRetailCommercialPermissions } from "@/lib/enterprise/retail/permissions";
 import { createRetailReturnRequest } from "@/lib/enterprise/retail/returns";
+import { retailSitesForCapability } from "@/lib/enterprise/retail/site-access";
 import { prisma } from "@/lib/prisma";
 
 type Params = { params: Promise<{ organizationId: string; saleId: string }> };
@@ -14,8 +15,11 @@ export async function GET(req: Request, { params }: Params) {
   const { organizationId, saleId } = await params;
   const auth = await authorizeRetailRequest(req, organizationId, "RETAIL_POS", "read");
   if (!auth.ok) return auth.response;
+  let scope: Awaited<ReturnType<typeof retailSitesForCapability>>;
+  try { scope = await retailSitesForCapability(organizationId, auth.session.userId, "VIEW_SALES"); }
+  catch (error) { return retailErrorResponse(error, "RETAIL_SITE_ACCESS_DENIED"); }
   const { page, pageSize, status } = retailListParams(req);
-  const where = { organizationId, saleId, ...(status ? { status } : {}) };
+  const where = { organizationId, saleId, ...(status ? { status } : {}), ...(scope.isolationEnabled ? { sale: { siteId: { in: scope.siteIds } } } : {}) };
   const [items, total] = await Promise.all([
     prisma.enterpriseRetailReturn.findMany({ where, orderBy: { createdAt: "desc" }, skip: (page - 1) * pageSize, take: pageSize, include: { lines: true, refunds: true } }),
     prisma.enterpriseRetailReturn.count({ where }),

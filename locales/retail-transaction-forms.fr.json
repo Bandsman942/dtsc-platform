@@ -178,5 +178,29 @@
     "configurationRetry": "Actualisez le bloc Configuration. Si le problème persiste, vérifiez les réseaux et comptes financiers de l’entreprise.",
     "configurationAccountHelp": "Sélectionnez uniquement un compte actif Mobile Money ou de clearing appartenant à cette entreprise et portant la même devise.",
     "configurationCurrencyHelp": "Ajoutez une devise uniquement si un vrai compte opérateur existe déjà dans les Finances de l’entreprise."
+  },
+  "inventoryPolicy": {
+    "title": "Règles de péremption du stock",
+    "description": "Adaptez la protection des marchandises à l'activité de votre entreprise. Les règles sont vérifiées par le serveur avant de confirmer une vente.",
+    "loading": "Chargement des règles…",
+    "loadError": "Impossible de consulter les règles du stock.",
+    "saveError": "Les règles n'ont pas été enregistrées.",
+    "saved": "Règles de péremption enregistrées pour l'entreprise.",
+    "expiryMode": "Traitement des marchandises périmées",
+    "allow": "Autoriser — sans contrôle de péremption",
+    "warn": "Surveiller — sans blocage de vente",
+    "block": "Bloquer les lots périmés",
+    "expiryHelp": "Le blocage impose la sélection d'un lot pour les articles ayant des lots datés.",
+    "warningDays": "Délai d'alerte (jours)",
+    "warningHelp": "Horizon à utiliser pour les alertes de péremption du magasin.",
+    "fefo": "Sortir d'abord les lots qui périment le plus tôt (FEFO)",
+    "fefoHelp": "Une vente ne peut pas choisir un lot plus récent lorsqu'un lot antérieur utilisable est disponible.",
+    "legacyNotice": "Les entreprises existantes conservent leurs règles actuelles tant que cette protection n'est pas activée.",
+    "transferReception": "Confirmation de réception des transferts",
+    "transferImmediate": "Réception automatique à la validation (historique)",
+    "transferConfirmed": "Expédition puis réception physique par une autre opération",
+    "transferHelp": "Le stock quitte le dépôt source après approbation et n'entre dans le dépôt destinataire qu'après réception enregistrée.",
+    "save": "Enregistrer les règles",
+    "saving": "Enregistrement…"
   }
 }

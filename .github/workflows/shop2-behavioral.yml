@@ -34,6 +34,7 @@ on:
       - "tests/e2e/accounting-atomic-retail-posting.spec.mjs"
       - "tests/e2e/scale5b-retail-dashboard-cache.spec.mjs"
       - "tests/e2e/shop2-retail.spec.mjs"
+      - "tests/e2e/shop2-invoice-finance-lifecycle.spec.mjs"
       - "tests/e2e/issue-786-relationship-benefits-enforcement.spec.mjs"
       - "tests/e2e/issue-910-relationship-credit.spec.mjs"
       - "tests/e2e/shop2-commercial.spec.mjs"
@@ -203,8 +204,37 @@ jobs:
           done
           cat /tmp/dtsc-shop2-next.log
           exit 1
-      - name: Shop 2 POS behavioral acceptance
-        run: pnpm exec playwright test tests/e2e/issue-786-relationship-benefits-enforcement.spec.mjs tests/e2e/issue-910-relationship-credit.spec.mjs tests/e2e/scale5b-retail-dashboard-cache.spec.mjs tests/e2e/shop2-retail.spec.mjs tests/e2e/shop2-commercial.spec.mjs tests/e2e/shop2-customer-payments.spec.mjs tests/e2e/shop2-customer-value-ui.spec.mjs tests/e2e/shop2-daily-close-ui.spec.mjs tests/e2e/shop2-final-coherence-ui.spec.mjs tests/e2e/shop2-z-global.spec.mjs tests/e2e/accounting-atomic-retail-posting.spec.mjs
+      - name: Shop 2 POS behavioral acceptance - finance and relationships
+        run: pnpm exec playwright test tests/e2e/accounting-atomic-retail-posting.spec.mjs tests/e2e/issue-786-relationship-benefits-enforcement.spec.mjs tests/e2e/issue-910-relationship-credit.spec.mjs tests/e2e/scale5b-retail-dashboard-cache.spec.mjs
+      # Only this job's disposable Redis is cleared: production sign-in still
+      # enforces 8 attempts per IP / 15 minutes, with no CI auth bypass.
+      - name: Reset isolated Redis state before Shop 2 retail experience acceptance
+        run: |
+          curl --fail --silent --show-error \
+            -H "Authorization: Bearer ${CI_REDIS_REST_TOKEN}" \
+            -H "Content-Type: application/json" \
+            --data '["FLUSHDB"]' \
+            http://127.0.0.1:8079/ >/dev/null
+      - name: Shop 2 retail experience acceptance
+        run: pnpm exec playwright test tests/e2e/shop2-commercial.spec.mjs tests/e2e/shop2-customer-payments.spec.mjs tests/e2e/shop2-customer-value-ui.spec.mjs tests/e2e/shop2-daily-close-ui.spec.mjs tests/e2e/shop2-final-coherence-ui.spec.mjs
+      - name: Reset isolated Redis state before Shop 2 invoice isolation acceptance
+        run: |
+          curl --fail --silent --show-error \
+            -H "Authorization: Bearer ${CI_REDIS_REST_TOKEN}" \
+            -H "Content-Type: application/json" \
+            --data '["FLUSHDB"]' \
+            http://127.0.0.1:8079/ >/dev/null
+      - name: Shop 2 invoice and global multistore acceptance
+        run: pnpm exec playwright test tests/e2e/shop2-retail.spec.mjs tests/e2e/shop2-z-global.spec.mjs
+      - name: Reset isolated Redis state before Shop 2 three-actor Finance acceptance
+        run: |
+          curl --fail --silent --show-error \
+            -H "Authorization: Bearer ${CI_REDIS_REST_TOKEN}" \
+            -H "Content-Type: application/json" \
+            --data '["FLUSHDB"]' \
+            http://127.0.0.1:8079/ >/dev/null
+      - name: Shop 2 independent Finance lifecycle acceptance
+        run: pnpm exec playwright test tests/e2e/shop2-invoice-finance-lifecycle.spec.mjs
       - name: Stop application and Redis REST proxy
         if: always()
         run: |

@@ -210,6 +210,7 @@ export function professionalErpEnumLabel(
     const supplemented = projectStatusSupplements[locale][value as keyof typeof projectStatusSupplements.fr];
     if (supplemented) return supplemented;
   }
+  if (group === "inventoryStatus" && value === "IN_TRANSIT") return locale === "fr" ? "En cours de transfert" : "In transit";
   const key = `${group}.${value}` as BaseProfessionalErpKey;
   const localized = translateProfessionalErp(locale, key);
   return localized || professionalErpT(locale, "common.valueToReview");

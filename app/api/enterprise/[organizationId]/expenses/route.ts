@@ -29,6 +29,7 @@ export async function GET(req: Request, { params }: Params) {
   const category = url.searchParams.get("category")?.trim();
   const supplierId = url.searchParams.get("supplierId")?.trim();
   const departmentId = url.searchParams.get("departmentId")?.trim();
+  const siteId = url.searchParams.get("siteId")?.trim();
   const budgetId = url.searchParams.get("budgetId")?.trim();
   const purchaseId = url.searchParams.get("purchaseId")?.trim();
   const currency = url.searchParams.get("currency")?.trim().toUpperCase();
@@ -40,6 +41,7 @@ export async function GET(req: Request, { params }: Params) {
   if (category) filters.push({ category });
   if (supplierId) filters.push({ supplierId });
   if (departmentId) filters.push({ departmentId });
+  if (siteId) filters.push({ siteId });
   if (budgetId) filters.push({ budgetLine: { budgetId } });
   if (purchaseId) filters.push({ purchaseId });
   if (currency) filters.push({ currency });

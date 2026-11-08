@@ -83,7 +83,7 @@ export async function changeRelationalStoreCreditTx(args: {
   if (args.entryType === "REDEEM" && (!args.amount.isNegative() || !account.balance.gte(args.amount.abs()) || account.status !== "ACTIVE")) {
     throw new EnterpriseRetailError("RETAIL_STORED_VALUE_INSUFFICIENT", 409, { available: account.balance.toFixed(), requested: args.amount.abs().toFixed() });
   }
-  if (args.entryType !== "REDEEM" && args.entryType !== "REVERSAL" && !args.amount.isPositive()) {
+  if (args.entryType !== "REDEEM" && args.entryType !== "REVERSAL" && !args.amount.greaterThan(0)) {
     throw new EnterpriseRetailError("RETAIL_STORED_VALUE_AMOUNT_INVALID", 409);
   }
   if (args.entryType === "REVERSAL" && !args.amount.isNegative()) throw new EnterpriseRetailError("RETAIL_STORED_VALUE_AMOUNT_INVALID", 409);

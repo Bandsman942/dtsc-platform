@@ -49,7 +49,7 @@ export async function createAssetAccountingProfile(
 
     const originalCost = new Prisma.Decimal(input.originalCost);
     const residualValue = new Prisma.Decimal(input.residualValue);
-    if (!originalCost.isPositive() || residualValue.isNegative() || residualValue.greaterThanOrEqualTo(originalCost) || input.usefulLifeMonths <= 0) {
+    if (!originalCost.greaterThan(0) || residualValue.isNegative() || residualValue.greaterThanOrEqualTo(originalCost) || input.usefulLifeMonths <= 0) {
       throw new EnterpriseAccountingError("ASSET_DEPRECIATION_PARAMETERS_INVALID", 400);
     }
 

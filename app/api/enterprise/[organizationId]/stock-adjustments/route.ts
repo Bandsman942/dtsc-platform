@@ -4,6 +4,10 @@ import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http"
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { getEnterpriseCommonDomainAccess } from "@/lib/enterprise/common/access";
+import { retailErrorResponse } from "@/lib/enterprise/retail/http";
+import { retailInventoryVisibleSites } from "@/lib/enterprise/retail/site-access";
+import { requireRetailWarehouseCapability } from "@/lib/enterprise/retail/site-access";
+import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
 import { enterpriseDomainErrorResponse } from "@/lib/enterprise/common/http";
 import { createEnterpriseStockAdjustment } from "@/lib/enterprise/inventory/adjustment-service";
 import { stockAdjustmentCreateSchema } from "@/lib/enterprise/inventory/schemas";
@@ -20,11 +24,23 @@ export async function GET(req: Request, { params }: Params) {
   const { organizationId } = await params;
   const access = await getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode: "INVENTORY_LOGISTICS", action: "read" });
   if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  let scope: Awaited<ReturnType<typeof retailInventoryVisibleSites>>;
+  try { scope = await retailInventoryVisibleSites(organizationId, session.userId); }
+  catch (error) { return retailErrorResponse(error, "RETAIL_SITE_ACCESS_DENIED"); }
   const url = new URL(req.url);
   const page = Math.max(1, Number(url.searchParams.get("page") || 1) || 1);
   const pageSize = Math.min(50, Math.max(5, Number(url.searchParams.get("pageSize") || 20) || 20));
   const status = url.searchParams.get("status")?.trim().toUpperCase() || "";
-  const where: Prisma.EnterpriseStockAdjustmentWhereInput = { organizationId, ...(status ? { status } : {}) };
+  const scopedWarehouseIds = scope.isolationEnabled
+    ? (await prisma.enterpriseWarehouse.findMany({
+        where: { organizationId, siteId: { in: scope.siteIds }, archivedAt: null },
+        select: { id: true },
+      })).map((warehouse) => warehouse.id)
+    : [];
+  const siteScope: Prisma.EnterpriseStockAdjustmentWhereInput = scope.isolationEnabled
+    ? { warehouseId: { in: scopedWarehouseIds } }
+    : {};
+  const where: Prisma.EnterpriseStockAdjustmentWhereInput = { organizationId, ...siteScope, ...(status ? { status } : {}) };
   const [items, total, pending, completed] = await Promise.all([
     prisma.enterpriseStockAdjustment.findMany({
       where,
@@ -36,15 +52,15 @@ export async function GET(req: Request, { params }: Params) {
       },
     }),
     prisma.enterpriseStockAdjustment.count({ where }),
-    prisma.enterpriseStockAdjustment.count({ where: { organizationId, status: "PENDING_APPROVAL" } }),
-    prisma.enterpriseStockAdjustment.count({ where: { organizationId, status: "COMPLETED" } }),
+    prisma.enterpriseStockAdjustment.count({ where: { organizationId, status: "PENDING_APPROVAL", ...siteScope } }),
+    prisma.enterpriseStockAdjustment.count({ where: { organizationId, status: "COMPLETED", ...siteScope } }),
   ]);
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "stock-adjustments", page } });
   return NextResponse.json({
     items,
     pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) },
     metrics: { pending, completed },
-    canManage: access.canManage,
+    canManage: access.canManage && !scope.isolationEnabled,
     currentUserId: session.userId,
   });
 }
@@ -62,11 +78,13 @@ export async function POST(req: Request, { params }: Params) {
   const parsed = stockAdjustmentCreateSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "STOCK_ADJUSTMENTS_INPUT_INVALID", req);
   try {
+    await requireRetailWarehouseCapability(organizationId, session.userId, parsed.data.warehouseId, "MANAGE_STOCK");
     const adjustment = await createEnterpriseStockAdjustment(organizationId, session.userId, parsed.data);
     await writeAuditLog({ userId: session.userId, action: "ENTERPRISE_STOCK_ADJUSTMENT_SUBMITTED", entity: "EnterpriseStockAdjustment", entityId: adjustment.id, request: req, metadata: { organizationId, approverUserId: parsed.data.approverUserId } });
     await writeApiLog({ request: req, statusCode: 201, userId: session.userId, startedAt, metadata: { organizationId, domain: "stock-adjustments" } });
     return NextResponse.json({ ok: true, adjustment }, { status: 201 });
   } catch (error) {
+    if (error instanceof EnterpriseRetailError) return retailErrorResponse(error, "RETAIL_SITE_ACCESS_DENIED");
     return enterpriseDomainErrorResponse(error, "STOCK_ADJUSTMENT_CREATE_FAILED");
   }
 }

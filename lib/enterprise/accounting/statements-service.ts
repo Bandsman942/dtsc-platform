@@ -20,15 +20,22 @@ async function assertStatementCurrency(organizationId: string, currencyCode: str
 async function trialBalance(organizationId: string, periodStart: Date, periodEnd: Date) {
   return prisma.$queryRaw<Array<{ accountId: string; code: string; nameFr: string; nameEn: string; accountType: string; accountSubtype: string | null; debit: Prisma.Decimal; credit: Prisma.Decimal; balance: Prisma.Decimal }>>(Prisma.sql`
     SELECT a.id AS "accountId", a.code, a."nameFr", a."nameEn", a."accountType", a."accountSubtype",
-      COALESCE(SUM(l.debit), 0) AS debit,
-      COALESCE(SUM(l.credit), 0) AS credit,
-      COALESCE(SUM(l.debit - l.credit), 0) AS balance
+      COALESCE(posted.debit, 0) AS debit,
+      COALESCE(posted.credit, 0) AS credit,
+      COALESCE(posted.balance, 0) AS balance
     FROM "EnterpriseLedgerAccount" a
-    LEFT JOIN "EnterpriseJournalLine" l ON l."ledgerAccountId" = a.id AND l."organizationId" = a."organizationId"
-    LEFT JOIN "EnterpriseJournalEntry" e ON e.id = l."journalEntryId" AND e."organizationId" = l."organizationId"
-      AND e.status IN ('POSTED', 'REVERSED') AND e."accountingDate" BETWEEN ${periodStart} AND ${periodEnd}
+    LEFT JOIN (
+      SELECT l."organizationId", l."ledgerAccountId",
+        SUM(l.debit) AS debit, SUM(l.credit) AS credit,
+        SUM(l.debit - l.credit) AS balance
+      FROM "EnterpriseJournalLine" l
+      INNER JOIN "EnterpriseJournalEntry" e ON e.id = l."journalEntryId" AND e."organizationId" = l."organizationId"
+      WHERE l."organizationId" = ${organizationId}
+        AND e.status IN ('POSTED', 'REVERSED')
+        AND e."accountingDate" BETWEEN ${periodStart} AND ${periodEnd}
+      GROUP BY l."organizationId", l."ledgerAccountId"
+    ) posted ON posted."ledgerAccountId" = a.id AND posted."organizationId" = a."organizationId"
     WHERE a."organizationId" = ${organizationId} AND a."archivedAt" IS NULL
-    GROUP BY a.id, a.code, a."nameFr", a."nameEn", a."accountType", a."accountSubtype"
     ORDER BY a.code ASC
   `);
 }

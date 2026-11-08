@@ -530,7 +530,7 @@ async function createHistoricalOperationsTx(
     if (effect.isZero()) continue;
     await tx.enterpriseFinancialAccount.update({
       where: { id: summary.financialAccountId },
-      data: effect.isPositive()
+      data: effect.greaterThan(0)
         ? { operationalBalance: { increment: effect }, revision: { increment: 1 } }
         : { operationalBalance: { decrement: effect.abs() }, revision: { increment: 1 } },
     });

@@ -29,7 +29,7 @@ async function calculateItems(
     const quantityDecimal = new Prisma.Decimal(item.quantity);
     const unitPriceDecimal = new Prisma.Decimal(item.unitPrice);
     const discountDecimal = new Prisma.Decimal(item.discountAmount);
-    if (!quantityDecimal.isPositive() || unitPriceDecimal.isNegative() || discountDecimal.isNegative()) {
+    if (!quantityDecimal.greaterThan(0) || unitPriceDecimal.isNegative() || discountDecimal.isNegative()) {
       throw new EnterpriseAccountingError("SALES_INVOICE_LINE_INVALID", 400);
     }
     if (item.catalogItemId) {
@@ -61,8 +61,10 @@ async function calculateItems(
   return calculated;
 }
 
-export async function createSalesInvoice(organizationId: string, actorUserId: string, input: SalesInvoiceInput) {
-  return prisma.$transaction(async (tx) => {
+// The transaction-scoped variant lets sector adapters create their *link* to
+// the canonical Finance invoice atomically. A failure must not strand an
+// unlinked invoice or create a second invoice authority.
+export async function createSalesInvoiceTx(tx: Prisma.TransactionClient, organizationId: string, actorUserId: string, input: SalesInvoiceInput) {
     await assertActiveClientOrganization(tx, organizationId);
     const customer = await tx.enterpriseBusinessParty.findFirst({
       where: { id: input.businessPartyId, organizationId, status: "ACTIVE", archivedAt: null, roles: { some: { roleCode: "CUSTOMER", status: "ACTIVE", archivedAt: null } } },
@@ -80,7 +82,7 @@ export async function createSalesInvoice(organizationId: string, actorUserId: st
     const discountTotal = money(sumDecimals(calculated.map((item) => item.discountDecimal)));
     const taxTotal = money(sumDecimals(calculated.map((item) => item.taxAmount)));
     const grandTotal = money(sumDecimals(calculated.map((item) => item.totalAmount)));
-    if (!grandTotal.isPositive()) throw new EnterpriseAccountingError("SALES_INVOICE_TOTAL_INVALID", 400);
+    if (!grandTotal.greaterThan(0)) throw new EnterpriseAccountingError("SALES_INVOICE_TOTAL_INVALID", 400);
     const invoice = await tx.enterpriseSalesInvoice.create({
       data: {
         organizationId,
@@ -121,7 +123,13 @@ export async function createSalesInvoice(organizationId: string, actorUserId: st
     });
     await publishFinanceEvent(tx, { organizationId, entityType: "EnterpriseSalesInvoice", entityId: invoice.id, eventType: "SALES_INVOICE_CREATED", summary: `Customer invoice ${invoice.number} created`, actorUserId, toStatus: "DRAFT", metadataJson: { total: grandTotal.toFixed(), currency: invoice.currencyCode } });
     return invoice;
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+}
+
+export async function createSalesInvoice(organizationId: string, actorUserId: string, input: SalesInvoiceInput) {
+  return prisma.$transaction(
+    (tx) => createSalesInvoiceTx(tx, organizationId, actorUserId, input),
+    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+  );
 }
 
 export async function transitionSalesInvoice(
@@ -177,6 +185,15 @@ export async function createSalesCreditNote(organizationId: string, actorUserId:
   return prisma.$transaction(async (tx) => {
     const invoice = await tx.enterpriseSalesInvoice.findFirst({ where: { id: input.invoiceId, organizationId, status: { in: ["ISSUED", "PARTIALLY_PAID", "PAID", "OVERDUE"] } }, include: { receivable: true } });
     if (!invoice?.receivable) throw new EnterpriseAccountingError("SALES_INVOICE_NOT_CREDITABLE", 409);
+    // An ordinary Finance credit note would reduce the receivable but leave
+    // an unfulfilled Retail checkout's stock promise intact, or would fail to
+    // reverse a posted Retail stock exit. Until Retail return/refund settlement
+    // is atomic with stock and Finance, refuse this bypass for linked invoices.
+    const retailCheckout = await tx.enterpriseRetailInvoiceCheckout.findFirst({
+      where: { organizationId, salesInvoiceId: invoice.id },
+      select: { id: true },
+    });
+    if (retailCheckout) throw new EnterpriseAccountingError("RETAIL_INVOICE_RETURN_WORKFLOW_REQUIRED", 409);
     const calculated = await calculateItems(tx, organizationId, input.creditDate, input.items);
     const subtotal = money(sumDecimals(calculated.map((item) => item.netAmount)));
     const taxTotal = money(sumDecimals(calculated.map((item) => item.taxAmount)));
@@ -209,6 +226,10 @@ export async function approveAndPostSalesCreditNote(organizationId: string, cred
     const credit = await tx.enterpriseSalesCreditNote.findFirst({ where: { id: creditNoteId, organizationId } });
     if (!credit) throw new EnterpriseAccountingError("SALES_CREDIT_NOTE_NOT_FOUND", 404);
     if (credit.status === "POSTED") return credit;
+    const retailCheckout = await tx.enterpriseRetailInvoiceCheckout.findFirst({
+      where: { organizationId, salesInvoiceId: credit.salesInvoiceId }, select: { id: true },
+    });
+    if (retailCheckout) throw new EnterpriseAccountingError("RETAIL_INVOICE_RETURN_WORKFLOW_REQUIRED", 409);
     if (credit.status !== "DRAFT" || credit.revision !== revision) throw new EnterpriseAccountingError("SALES_CREDIT_NOTE_CONFLICT", 409);
     assertIndependentActor({ actorUserId, relatedUserIds: [credit.createdByUserId], errorCode: "SALES_CREDIT_NOTE_SELF_APPROVAL_FORBIDDEN" });
     return tx.enterpriseSalesCreditNote.update({ where: { id: credit.id }, data: { status: "APPROVED", approvedAt: new Date(), approvedByUserId: actorUserId, revision: { increment: 1 } } });

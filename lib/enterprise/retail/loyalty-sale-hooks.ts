@@ -31,11 +31,11 @@ export async function autoEarnRetailLoyaltyForSale(organizationId: string, actor
       ],
     },
   });
-  const autoPrograms = programs.filter((program) => autoEarnEnabled(program.settingsJson) && program.earnPointsPerCurrencyUnit.isPositive());
+  const autoPrograms = programs.filter((program) => autoEarnEnabled(program.settingsJson) && program.earnPointsPerCurrencyUnit.greaterThan(0));
   const applied = [];
   for (const program of autoPrograms) {
     const points = decimal(sale.grandTotal).times(program.earnPointsPerCurrencyUnit).toDecimalPlaces(6, Prisma.Decimal.ROUND_HALF_UP);
-    if (!points.isPositive()) continue;
+    if (!points.greaterThan(0)) continue;
     const result = await earnRetailLoyaltyPoints(organizationId, actorUserId, {
       programId: program.id,
       customerBusinessPartyId: sale.customerBusinessPartyId,
@@ -70,7 +70,7 @@ export async function reverseRetailLoyaltyForCompletedReturnTx(
     });
     if (!retailReturn) throw new EnterpriseRetailError("RETAIL_RETURN_NOT_FOUND", 404);
     const sale = await tx.enterpriseRetailSale.findFirst({ where: { id: retailReturn.saleId, organizationId }, select: { id: true, customerBusinessPartyId: true, grandTotal: true } });
-    if (!sale?.customerBusinessPartyId || !decimal(sale.grandTotal).isPositive()) return { applied: [], skipped: "NO_CUSTOMER_OR_VALUE" as const };
+    if (!sale?.customerBusinessPartyId || !decimal(sale.grandTotal).greaterThan(0)) return { applied: [], skipped: "NO_CUSTOMER_OR_VALUE" as const };
 
     const earnedEntries = await tx.enterpriseRetailLoyaltyEntry.findMany({
       where: { organizationId, saleId: sale.id, entryType: "EARN", points: { gt: 0 } },
@@ -87,7 +87,7 @@ export async function reverseRetailLoyaltyForCompletedReturnTx(
       await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterpriseRetailLoyaltyAccount" WHERE id = ${earned.accountId} AND "organizationId" = ${organizationId} FOR UPDATE`);
       const account = await tx.enterpriseRetailLoyaltyAccount.findFirstOrThrow({ where: { id: earned.accountId, organizationId } });
       const proportional = decimal(earned.points).times(retailReturn.grandTotal).div(sale.grandTotal).toDecimalPlaces(6, Prisma.Decimal.ROUND_HALF_UP);
-      if (!proportional.isPositive()) continue;
+      if (!proportional.greaterThan(0)) continue;
       const isRelationshipAward = earned.idempotencyKey.startsWith("loyalty:relationship:");
       const previous = await tx.enterpriseRetailLoyaltyEntry.findMany({
         where: { organizationId, accountId: earned.accountId, entryType: "REVERSAL" },
@@ -101,7 +101,7 @@ export async function reverseRetailLoyaltyForCompletedReturnTx(
         remaining,
         isRelationshipAward ? proportional : Prisma.Decimal.min(proportional, account.pointsBalance),
       );
-      if (!reversible.isPositive()) continue;
+      if (!reversible.greaterThan(0)) continue;
       const entry = await tx.enterpriseRetailLoyaltyEntry.create({
         data: {
           organizationId,

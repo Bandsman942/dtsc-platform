@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { retailFinanceReadSiteScope } from "@/lib/enterprise/retail/site-access";
 import { assertIndependentActor } from "@/lib/enterprise/accounting/access";
 import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
 import { financeReference, money, publishFinanceEvent, sumDecimals } from "@/lib/enterprise/accounting/helpers";
@@ -14,10 +15,19 @@ export async function openCashSession(organizationId: string, cashierUserId: str
   return prisma.$transaction(async (tx) => {
     const account = await tx.enterpriseFinancialAccount.findFirst({ where: { id: input.financialAccountId, organizationId, accountType: "CASH", status: "ACTIVE", archivedAt: null } });
     if (!account) throw new EnterpriseAccountingError("CASH_ACCOUNT_INVALID", 409);
+    // Cash sessions inherit their site from the *financial account*, never
+    // from an arbitrary siteId supplied by a browser.
+    if (input.siteId && input.siteId !== account.siteId) {
+      throw new EnterpriseAccountingError("CASH_ACCOUNT_SITE_MISMATCH", 409);
+    }
+    const scope = await retailFinanceReadSiteScope(organizationId, cashierUserId, "CLOSE_CASH", tx);
+    if (scope !== null && (!account.siteId || !scope.includes(account.siteId))) {
+      throw new EnterpriseAccountingError("RETAIL_SITE_ACCESS_DENIED", 403);
+    }
     const existing = await tx.enterpriseCashSession.findFirst({ where: { organizationId, financialAccountId: account.id, cashierUserId, status: { in: ["OPEN", "CLOSING"] } } });
     if (existing) throw new EnterpriseAccountingError("CASH_SESSION_ALREADY_ACTIVE", 409, { sessionId: existing.id });
     const openingAmount = new Prisma.Decimal(input.openingAmount);
-    const session = await tx.enterpriseCashSession.create({ data: { organizationId, number: financeReference("CASH"), financialAccountId: account.id, cashierUserId, siteId: input.siteId || account.siteId, openingAmount } });
+    const session = await tx.enterpriseCashSession.create({ data: { organizationId, number: financeReference("CASH"), financialAccountId: account.id, cashierUserId, siteId: account.siteId || null, openingAmount } });
     await publishFinanceEvent(tx, { organizationId, entityType: "EnterpriseCashSession", entityId: session.id, eventType: "CASH_SESSION_OPENED", summary: `Cash session ${session.number} opened`, actorUserId: cashierUserId, toStatus: "OPEN", metadataJson: { financialAccountId: account.id, openingAmount: openingAmount.toFixed(), currency: account.currencyCode } });
     return session;
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
@@ -69,7 +79,7 @@ export async function confirmReconciliationMatch(organizationId: string, session
     });
     if (!session) throw new EnterpriseAccountingError("RECONCILIATION_SESSION_NOT_OPEN", 409);
     const matchedAmount = new Prisma.Decimal(input.matchedAmount);
-    if (!matchedAmount.isPositive()) throw new EnterpriseAccountingError("RECONCILIATION_AMOUNT_INVALID", 400);
+    if (!matchedAmount.greaterThan(0)) throw new EnterpriseAccountingError("RECONCILIATION_AMOUNT_INVALID", 400);
 
     if (input.bankStatementLineId) {
       await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterpriseBankStatementLine" WHERE id = ${input.bankStatementLineId} AND "organizationId" = ${organizationId} FOR UPDATE`);

@@ -75,6 +75,30 @@ export async function valueRetailOmnichannelFulfillmentIssuesTx(
   }
 }
 
+/** A paid Retail invoice creates the cost-of-sales entry together with its
+ * physical stock issue and Finance's final payment allocation. A missing cost
+ * layer must roll back all three; otherwise a later credit note cannot value
+ * the returned stock against the original issue. */
+export async function valueRetailInvoiceFulfillmentIssueTx(
+  tx: Prisma.TransactionClient,
+  organizationId: string,
+  actorUserId: string,
+  stockMovementId: string,
+  salesInvoiceId: string,
+  invoiceCurrencyCode: string,
+) {
+  const movement = await tx.enterpriseStockMovement.findFirst({
+    where: {
+      id: stockMovementId, organizationId,
+      sourceEntityType: "EnterpriseSalesInvoice", sourceEntityId: salesInvoiceId,
+      movementType: "SALE_FULFILLMENT", direction: "OUT",
+    },
+  });
+  if (!movement) throw new EnterpriseAccountingError("RETAIL_INVOICE_FULFILLMENT_MOVEMENT_INVALID", 409);
+  const currencyCode = await resolveRetailIssueValuationCurrencyTx(tx, organizationId, movement, invoiceCurrencyCode);
+  return valueInventoryIssueTx(tx, organizationId, stockMovementId, actorUserId, { currencyCode });
+}
+
 export async function finalizeRetailSaleAccountingTx(
   tx: Prisma.TransactionClient,
   organizationId: string,
@@ -137,17 +161,20 @@ export async function valueRetailInventoryReturnTx(
       organizationId,
       direction: "IN",
       movementType: "RETURN_IN",
-      sourceEntityType: { in: ["EnterpriseRetailSale", "EnterpriseRetailOmnichannelReturn"] },
+      sourceEntityType: { in: ["EnterpriseRetailSale", "EnterpriseRetailOmnichannelReturn", "EnterpriseRetailInvoiceReturnRequest"] },
     },
   });
   if (!movement?.sourceEntityId || !movement.sourceLineId) {
     throw new EnterpriseAccountingError("RETAIL_INVENTORY_RETURN_MOVEMENT_INVALID", 409);
   }
   const omnichannel = movement.sourceEntityType === "EnterpriseRetailOmnichannelReturn";
-  if (omnichannel !== Boolean(options?.originalStockMovementId)) {
+  const invoiceReturn = movement.sourceEntityType === "EnterpriseRetailInvoiceReturnRequest";
+  if ((omnichannel || invoiceReturn) !== Boolean(options?.originalStockMovementId)) {
     throw new EnterpriseAccountingError("RETAIL_INVENTORY_RETURN_ORIGIN_REQUIRED", 409);
   }
   let omnichannelOriginalLineId: string | null = null;
+  let invoiceReturnOriginalLineId: string | null = null;
+  let invoiceReturnOriginalInvoiceId: string | null = null;
   if (omnichannel) {
     const returnLine = await tx.enterpriseRetailOmnichannelReturnLine.findFirst({
       where: {
@@ -172,8 +199,25 @@ export async function valueRetailInventoryReturnTx(
     }) : null;
     if (!fulfillment) throw new EnterpriseAccountingError("RETAIL_ORIGINAL_ISSUE_MOVEMENT_REQUIRED", 409);
   }
+  if (invoiceReturn) {
+    const line = await tx.enterpriseRetailInvoiceReturnLine.findFirst({
+      where: { organizationId, id: movement.sourceLineId, returnRequestId: movement.sourceEntityId,
+        stockDisposition: "RESTOCK", request: { status: { in: ["FINANCE_PENDING", "COMPLETED"] } } },
+      select: { checkoutLine: { select: { invoiceItemId: true, checkout: { select: { salesInvoiceId: true } } } } },
+    });
+    if (!line) throw new EnterpriseAccountingError("RETAIL_INVENTORY_RETURN_MOVEMENT_INVALID", 409);
+    invoiceReturnOriginalLineId = line.checkoutLine.invoiceItemId;
+    invoiceReturnOriginalInvoiceId = line.checkoutLine.checkout.salesInvoiceId;
+  }
   const originalMovement = await tx.enterpriseStockMovement.findFirst({
-    where: omnichannel ? {
+    where: invoiceReturn ? {
+      id: options!.originalStockMovementId,
+      organizationId,
+      sourceEntityType: "EnterpriseSalesInvoice",
+      sourceEntityId: invoiceReturnOriginalInvoiceId!,
+      sourceLineId: invoiceReturnOriginalLineId!,
+      movementType: "SALE_FULFILLMENT", direction: "OUT",
+    } : omnichannel ? {
       id: options!.originalStockMovementId,
       organizationId,
       sourceEntityType: "EnterpriseFulfillment",
@@ -188,7 +232,7 @@ export async function valueRetailInventoryReturnTx(
     },
   });
   if (!originalMovement) throw new EnterpriseAccountingError("RETAIL_ORIGINAL_ISSUE_MOVEMENT_REQUIRED", 409);
-  if (omnichannel && (originalMovement.inventoryItemId !== movement.inventoryItemId ||
+  if ((omnichannel || invoiceReturn) && (originalMovement.inventoryItemId !== movement.inventoryItemId ||
       originalMovement.warehouseId !== movement.warehouseId ||
       originalMovement.storageLocationId !== movement.storageLocationId ||
       originalMovement.stockLotId !== movement.stockLotId)) {
@@ -203,7 +247,7 @@ export async function valueRetailInventoryReturnTx(
     },
   });
   if (!originalIssue) throw new EnterpriseAccountingError("RETAIL_ORIGINAL_ISSUE_VALUATION_REQUIRED", 409);
-  if (!movement.quantity.isPositive() || movement.quantity.greaterThan(originalIssue.quantity)) {
+  if (!movement.quantity.greaterThan(0) || movement.quantity.greaterThan(originalIssue.quantity)) {
     throw new EnterpriseAccountingError("RETAIL_INVENTORY_RETURN_QUANTITY_INVALID", 409, {
       returnQuantity: movement.quantity.toFixed(),
       issuedQuantity: originalIssue.quantity.toFixed(),

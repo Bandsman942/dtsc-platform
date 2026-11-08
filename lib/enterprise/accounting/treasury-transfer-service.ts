@@ -35,7 +35,7 @@ async function resolveTransfer(
   if (!source || !target || source.id === target.id) throw new EnterpriseAccountingError("TRANSFER_ACCOUNTS_INVALID", 409);
 
   const sourceAmount = money(new Prisma.Decimal(input.sourceAmount));
-  if (!sourceAmount.isPositive()) throw new EnterpriseAccountingError("FINANCE_AMOUNT_MUST_BE_POSITIVE", 400);
+  if (!sourceAmount.greaterThan(0)) throw new EnterpriseAccountingError("FINANCE_AMOUNT_MUST_BE_POSITIVE", 400);
   if (source.operationalBalance.lessThan(sourceAmount)) {
     throw new EnterpriseAccountingError("TRANSFER_INSUFFICIENT_OPERATIONAL_BALANCE", 409);
   }

@@ -157,6 +157,27 @@ jobs:
         run: node scripts/qa-shop2-retail-frontend-contract.mjs
       - name: Retail product coherence and customer language QA
         run: node scripts/qa-retail-product-coherence.mjs
+      - name: "HOTFIX #1042 Retail multistore, site permissions and Finance invoice checkout contracts"
+        run: |
+          node scripts/qa-hotfix-1042-retail-batches-transfer.mjs
+          node scripts/qa-hotfix-1042-site-staff.mjs
+          node scripts/qa-hotfix-1042-warehouse-receipt-scoping.mjs
+          node scripts/qa-hotfix-1042-retail-invoice-finance.mjs
+          node scripts/qa-hotfix-1042-retail-site-ledger.mjs
+          node scripts/qa-hotfix-1042-retail-site-financial-export.mjs
+          node scripts/qa-hotfix-1042-retail-invoice-issue-valuation.mjs
+          node scripts/qa-hotfix-1042-retail-invoice-payments.mjs
+          node scripts/qa-hotfix-1042-retail-invoice-stock-holds.mjs
+          node scripts/qa-hotfix-1042-retail-invoice-print.mjs
+          node scripts/qa-hotfix-1042-retail-postgres-serialization.mjs
+          node scripts/qa-hotfix-1042-retail-invoice-refund-scope.mjs
+          node scripts/qa-hotfix-1042-retail-refund-credit-bypass.mjs
+          node scripts/qa-hotfix-1042-retail-cash-site.mjs
+          node scripts/qa-hotfix-1042-retail-invoice-return-requests.mjs
+          node scripts/qa-hotfix-1042-retail-return-settlement-preflight.mjs
+          node scripts/qa-hotfix-1042-retail-invoice-return-finance.mjs
+          node scripts/qa-hotfix-1042-finance-strict-positive.mjs
+          node scripts/qa-hotfix-1042-cahier-traceability.mjs
       - name: Sector onboarding commercial readiness QA
         run: node scripts/qa-sector-onboarding-commercial-readiness.mjs
       - name: Standard modules iteration 08 QA

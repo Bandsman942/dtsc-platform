@@ -5,6 +5,7 @@ import { authorizeFinanceRequest, financeErrorResponse, financeListParams } from
 import { createEnterprisePayment, paymentCashSessionConfirmationBlocker, paymentCashSessionConfirmationNotice } from "@/lib/enterprise/accounting/payments-service";
 import { paymentCreateSchema } from "@/lib/enterprise/accounting/schemas";
 import { prisma } from "@/lib/prisma";
+import { retailFinanceReadSiteScope } from "@/lib/enterprise/retail/site-access";
 
 type Params = { params: Promise<{ organizationId: string }> };
 
@@ -15,6 +16,20 @@ export async function GET(req: Request, { params }: Params) {
   if (!auth.ok) return auth.response;
 
   const { page, pageSize, search, status } = financeListParams(req);
+  const retailScope = await retailFinanceReadSiteScope(organizationId, auth.session.userId, "COLLECT_PAYMENT");
+  // An assigned shop operator must not see payments of other stores through
+  // Finance's direct list or global summary metrics. Finance-only users keep
+  // their preexisting scope. Archived accounts remain visible for history.
+  const accountIds = retailScope === null ? null : (await prisma.enterpriseFinancialAccount.findMany({
+    where: { organizationId, siteId: { in: retailScope } }, select: { id: true },
+  })).map((account) => account.id);
+  const sitePaymentScope: Prisma.EnterprisePaymentWhereInput | null = retailScope === null ? null : {
+    financialAccountId: { in: accountIds || [] },
+    OR: [
+      { retailInvoiceProposals: { none: {} } },
+      { retailInvoiceProposals: { some: { checkout: { siteId: { in: retailScope } } } } },
+    ],
+  };
   const url = new URL(req.url);
   const recordId = url.searchParams.get("recordId")?.trim() || undefined;
   const directionRaw = url.searchParams.get("direction")?.trim();
@@ -26,6 +41,7 @@ export async function GET(req: Request, { params }: Params) {
 
   const where: Prisma.EnterprisePaymentWhereInput = {
     organizationId,
+    ...(sitePaymentScope ? { AND: [sitePaymentScope] } : {}),
     ...(recordId ? { id: recordId } : {}),
     ...(workflowPending ? { status: "PENDING_APPROVAL" } : status ? { status } : {}),
     ...(direction ? { direction } : {}),
@@ -49,19 +65,19 @@ export async function GET(req: Request, { params }: Params) {
     prisma.enterprisePayment.count({ where }),
     prisma.enterprisePayment.groupBy({
       by: ["currencyCode"],
-      where: { organizationId, status: { in: ["CONFIRMED", "RECONCILED"] }, direction: "INBOUND" },
+      where: { organizationId, ...(sitePaymentScope ? { AND: [sitePaymentScope] } : {}), status: { in: ["CONFIRMED", "RECONCILED"] }, direction: "INBOUND" },
       _sum: { amount: true },
       _count: { _all: true },
     }),
     prisma.enterprisePayment.groupBy({
       by: ["currencyCode"],
-      where: { organizationId, status: { in: ["CONFIRMED", "RECONCILED"] }, direction: "OUTBOUND" },
+      where: { organizationId, ...(sitePaymentScope ? { AND: [sitePaymentScope] } : {}), status: { in: ["CONFIRMED", "RECONCILED"] }, direction: "OUTBOUND" },
       _sum: { amount: true },
       _count: { _all: true },
     }),
     prisma.enterprisePayment.groupBy({
       by: ["currencyCode"],
-      where: { organizationId, status: { in: ["CONFIRMED", "RECONCILED"] }, unallocatedAmount: { gt: 0 } },
+      where: { organizationId, ...(sitePaymentScope ? { AND: [sitePaymentScope] } : {}), status: { in: ["CONFIRMED", "RECONCILED"] }, unallocatedAmount: { gt: 0 } },
       _sum: { unallocatedAmount: true },
       _count: { _all: true },
     }),

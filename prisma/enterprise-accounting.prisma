@@ -425,6 +425,7 @@ model EnterpriseSalesInvoice {
   items                 EnterpriseSalesInvoiceItem[]
   creditNotes           EnterpriseSalesCreditNote[]
   receivable            EnterpriseReceivable?
+  retailCheckout        EnterpriseRetailInvoiceCheckout?
 
   @@unique([organizationId, id])
   @@unique([organizationId, number])
@@ -450,6 +451,7 @@ model EnterpriseSalesInvoiceItem {
   projectId          String?
   createdAt          DateTime               @default(now())
   salesInvoice       EnterpriseSalesInvoice @relation(fields: [organizationId, salesInvoiceId], references: [organizationId, id], onDelete: Cascade)
+  retailCheckoutLine EnterpriseRetailInvoiceCheckoutLine?
 
   @@unique([organizationId, id])
   @@index([organizationId, salesInvoiceId])
@@ -476,6 +478,7 @@ model EnterpriseSalesCreditNote {
   createdAt           DateTime                        @default(now())
   updatedAt           DateTime                        @updatedAt
   salesInvoice        EnterpriseSalesInvoice          @relation(fields: [organizationId, salesInvoiceId], references: [organizationId, id], onDelete: Restrict)
+  retailInvoiceReturnRequests EnterpriseRetailInvoiceReturnRequest[] @relation("RetailInvoiceReturnSalesCreditNote")
   items               EnterpriseSalesCreditNoteItem[]
 
   @@unique([organizationId, id])
@@ -759,6 +762,9 @@ model EnterprisePayment {
   createdAt                DateTime                      @default(now())
   updatedAt                DateTime                      @updatedAt
   allocations              EnterprisePaymentAllocation[]
+  retailInvoiceProposals   EnterpriseRetailInvoicePaymentProposal[]
+  retailInvoiceReturnRequests EnterpriseRetailInvoiceReturnRequest[] @relation("RetailInvoiceReturnRefundPayment")
+  retailInvoiceReturnRefundLegs EnterpriseRetailInvoiceReturnRefundLeg[] @relation("RetailInvoiceReturnRefundLegPayment")
   events                   EnterprisePaymentEvent[]
   treasuryTransactions     EnterpriseTreasuryTransaction[]
   cashSession              EnterpriseCashSession?         @relation(fields: [organizationId, cashSessionId], references: [organizationId, id], onDelete: Restrict)
@@ -836,6 +842,7 @@ model EnterpriseFinancialAccount {
   bankStatements        EnterpriseBankStatement[]
   reconciliationSessions EnterpriseReconciliationSession[]
   fundingOperations      EnterpriseFundingOperation[]
+  retailInvoiceReturnRefundLegs EnterpriseRetailInvoiceReturnRefundLeg[]
 
   @@unique([organizationId, id])
   @@unique([organizationId, code])

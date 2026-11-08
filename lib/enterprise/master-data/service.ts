@@ -5,6 +5,8 @@ import { prisma } from "@/lib/prisma";
 import { refreshLinkedSupplierSnapshotFromPartyTx } from "@/lib/enterprise/master-data/supplier-projection";
 import { synchronizeLinkedPersonIdentityTx } from "@/lib/enterprise/identity-links/person-projection";
 import { EnterpriseDomainError } from "@/lib/enterprise/common/errors";
+import { requireRetailSiteCapability } from "@/lib/enterprise/retail/site-access";
+import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
 import type {
   businessPartyCreateSchema,
   businessPartyUpdateSchema,
@@ -51,6 +53,15 @@ async function assertClientOrganization(tx: Parameters<Parameters<typeof prisma.
     select: { id: true },
   });
   if (!organization) throw new EnterpriseDomainError("ORGANIZATION_NOT_ACTIVE", 403);
+}
+
+async function requireWarehouseSiteWrite(tx: Prisma.TransactionClient, organizationId: string, actorUserId: string, siteId: string) {
+  try {
+    await requireRetailSiteCapability(organizationId, actorUserId, siteId, "MANAGE_STOCK", tx);
+  } catch (error) {
+    if (error instanceof EnterpriseRetailError) throw new EnterpriseDomainError(error.code, error.status);
+    throw error;
+  }
 }
 
 export async function createEnterpriseBusinessParty(organizationId: string, actorUserId: string, input: BusinessPartyInput) {
@@ -241,6 +252,7 @@ export async function createEnterpriseWarehouse(organizationId: string, actorUse
     await assertClientOrganization(tx, organizationId);
     const site = await tx.enterpriseSite.findFirst({ where: { organizationId, id: input.siteId, status: "ACTIVE", archivedAt: null }, select: { id: true } });
     if (!site) throw new Error("SITE_NOT_FOUND");
+    await requireWarehouseSiteWrite(tx, organizationId, actorUserId, site.id);
     if (input.managerUserId) {
       const manager = await tx.organizationMember.findFirst({ where: { organizationId, userId: input.managerUserId, status: "ACTIVE", removedAt: null }, select: { id: true } });
       if (!manager) throw new Error("WAREHOUSE_MANAGER_NOT_MEMBER");
@@ -320,8 +332,9 @@ export async function createEnterpriseStorageLocation(
 ) {
   return prisma.$transaction(async (tx) => {
     await assertClientOrganization(tx, organizationId);
-    const warehouse = await tx.enterpriseWarehouse.findFirst({ where: { id: input.warehouseId, organizationId, archivedAt: null, status: "ACTIVE" }, select: { id: true } });
+    const warehouse = await tx.enterpriseWarehouse.findFirst({ where: { id: input.warehouseId, organizationId, archivedAt: null, status: "ACTIVE" }, select: { id: true, siteId: true } });
     if (!warehouse) throw new Error("WAREHOUSE_NOT_FOUND");
+    await requireWarehouseSiteWrite(tx, organizationId, actorUserId, warehouse.siteId);
     if (input.parentLocationId) {
       const parent = await tx.enterpriseStorageLocation.findFirst({ where: { id: input.parentLocationId, organizationId, warehouseId: input.warehouseId, archivedAt: null, status: "ACTIVE" }, select: { id: true } });
       if (!parent) throw new Error("PARENT_STORAGE_LOCATION_NOT_FOUND");
@@ -546,6 +559,7 @@ export async function updateEnterpriseWarehouse(organizationId: string, warehous
   return prisma.$transaction(async (tx) => {
     const existing = await tx.enterpriseWarehouse.findFirst({ where: { id: warehouseId, organizationId, archivedAt: null } });
     if (!existing) throw new Error("WAREHOUSE_NOT_FOUND");
+    await requireWarehouseSiteWrite(tx, organizationId, actorUserId, existing.siteId);
     if (input.managerUserId) { const manager = await tx.organizationMember.findFirst({ where: { organizationId, userId: input.managerUserId, status: "ACTIVE", removedAt: null }, select: { id: true } }); if (!manager) throw new Error("WAREHOUSE_MANAGER_NOT_MEMBER"); }
     const updated = await tx.enterpriseWarehouse.updateMany({ where: { id: warehouseId, organizationId, revision: input.revision, archivedAt: null }, data: { ...(input.name !== undefined ? { name: input.name } : {}), ...(input.warehouseType !== undefined ? { warehouseType: input.warehouseType } : {}), ...(input.managerUserId !== undefined ? { managerUserId: input.managerUserId || null } : {}), ...(input.status !== undefined ? { status: input.status } : {}), revision: { increment: 1 } } });
     if (updated.count !== 1) throw new Error("REVISION_CONFLICT");
@@ -556,8 +570,9 @@ export async function updateEnterpriseWarehouse(organizationId: string, warehous
 
 export async function updateEnterpriseStorageLocation(organizationId: string, locationId: string, actorUserId: string, input: StorageLocationUpdateInput) {
   return prisma.$transaction(async (tx) => {
-    const existing = await tx.enterpriseStorageLocation.findFirst({ where: { id: locationId, organizationId, archivedAt: null } });
+    const existing = await tx.enterpriseStorageLocation.findFirst({ where: { id: locationId, organizationId, archivedAt: null }, include: { warehouse: { select: { siteId: true } } } });
     if (!existing) throw new Error("STORAGE_LOCATION_NOT_FOUND");
+    await requireWarehouseSiteWrite(tx, organizationId, actorUserId, existing.warehouse.siteId);
     if (input.parentLocationId) { const parent = await tx.enterpriseStorageLocation.findFirst({ where: { id: input.parentLocationId, organizationId, warehouseId: existing.warehouseId, archivedAt: null, status: "ACTIVE" }, select: { id: true } }); if (!parent || parent.id === locationId) throw new Error("PARENT_STORAGE_LOCATION_NOT_FOUND"); }
     const updated = await tx.enterpriseStorageLocation.updateMany({ where: { id: locationId, organizationId, revision: input.revision, archivedAt: null }, data: { ...(input.parentLocationId !== undefined ? { parentLocationId: input.parentLocationId || null } : {}), ...(input.name !== undefined ? { name: input.name } : {}), ...(input.code !== undefined ? { code: input.code || existing.code } : {}), ...(input.locationType !== undefined ? { locationType: input.locationType } : {}), ...(input.barcode !== undefined ? { barcode: input.barcode || null } : {}), ...(input.capacityValue !== undefined ? { capacityValue: input.capacityValue ?? null } : {}), ...(input.capacityUnit !== undefined ? { capacityUnit: input.capacityUnit || null } : {}), ...(input.status !== undefined ? { status: input.status } : {}), revision: { increment: 1 } } });
     if (updated.count !== 1) throw new Error("REVISION_CONFLICT");

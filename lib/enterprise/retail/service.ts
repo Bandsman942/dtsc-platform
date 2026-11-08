@@ -9,6 +9,8 @@ import { applyStockMovementTx } from "@/lib/enterprise/inventory/service";
 import { finalizeRetailSaleAccountingTx, finalizeRetailSaleReversalAccountingTx } from "@/lib/enterprise/retail/accounting";
 import { RETAIL_PROFILE_CODE, RETAIL_SECTOR_CODE } from "@/lib/enterprise/retail/constants";
 import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
+import { assertRetailLotPolicyTx } from "@/lib/enterprise/retail/inventory-policy";
+import { requireRetailSiteCapability, retailFinanceReadSiteScope, retailStaffIsolationIsEnabled } from "@/lib/enterprise/retail/site-access";
 import {
   applyRetailRelationshipBenefitEffectsTx,
   reverseRetailRelationshipBenefitEffectsTx,
@@ -173,9 +175,13 @@ export async function createRetailSale(
 ) {
   return prisma.$transaction(async (tx) => {
     await assertRetailOrganization(tx, organizationId);
-    await ensureRetailConfigurationTx(tx, organizationId, actorUserId);
+    const configuration = await ensureRetailConfigurationTx(tx, organizationId, actorUserId);
     const existing = await tx.enterpriseRetailSale.findFirst({ where: { organizationId, idempotencyKey: input.idempotencyKey }, include: { lines: true, tenders: true } });
     if (existing) {
+      if (existing.warehouseId !== input.warehouseId) throw new EnterpriseRetailError("RETAIL_SALE_IDEMPOTENCY_COLLISION", 409);
+      const replayWarehouse = await tx.enterpriseWarehouse.findFirst({ where: { id: existing.warehouseId, organizationId, status: "ACTIVE", archivedAt: null }, select: { siteId: true } });
+      if (!replayWarehouse || (existing.siteId && existing.siteId !== replayWarehouse.siteId)) throw new EnterpriseRetailError("RETAIL_SITE_ACCESS_DENIED", 403);
+      await requireRetailSiteCapability(organizationId, actorUserId, replayWarehouse.siteId, "COLLECT_PAYMENT", tx);
       // The relationship-benefit ledger is written atomically with the original
       // sale. A replay must return that committed sale as-is: re-resolving
       // today's eligibility could otherwise attach a different benefit to an
@@ -206,6 +212,7 @@ export async function createRetailSale(
     ]);
     if (!warehouse || (input.siteId && !site) || (input.storageLocationId && !location) || (input.customerBusinessPartyId && !customer)) throw new EnterpriseRetailError("RETAIL_REFERENCE_INVALID", 409);
     if (input.siteId && warehouse.siteId !== input.siteId) throw new EnterpriseRetailError("RETAIL_REFERENCE_INVALID", 409, { field: "siteId" });
+    await requireRetailSiteCapability(organizationId, actorUserId, warehouse.siteId, "COLLECT_PAYMENT", tx);
     if (catalogItems.length !== catalogItemIds.length) throw new EnterpriseRetailError("RETAIL_CATALOG_ITEM_INVALID", 409);
     if (financialAccounts.length !== tenderAccountIds.length) throw new EnterpriseRetailError("RETAIL_FINANCIAL_ACCOUNT_INVALID", 409);
 
@@ -237,6 +244,15 @@ export async function createRetailSale(
       preparedLines.push({ catalogItemId: catalogItem.id, inventoryItemId, stockLotId: line.stockLotId || null, description: catalogItem.name, quantity, unitPrice, discountAmount, taxAmount, lineTotal: money(gross.minus(discountAmount).plus(taxAmount)), trackInventory: catalogItem.trackInventory });
     }
 
+    const organization = await tx.organization.findUniqueOrThrow({ where: { id: organizationId }, select: { timezone: true } });
+    await assertRetailLotPolicyTx(tx, {
+      organizationId,
+      warehouseId: input.warehouseId,
+      timezone: organization.timezone || "UTC",
+      settings: configuration.settingsJson,
+      lines: preparedLines,
+    });
+
     const subtotal = money(sumDecimals(preparedLines.map((line) => line.quantity.times(line.unitPrice))));
     const discountTotal = money(sumDecimals(preparedLines.map((line) => line.discountAmount)));
     const taxTotal = money(sumDecimals(preparedLines.map((line) => line.taxAmount)));
@@ -245,6 +261,7 @@ export async function createRetailSale(
     if (!tenderTotal.equals(grandTotal)) throw new EnterpriseRetailError("RETAIL_TENDER_TOTAL_MISMATCH", 409, { tenderTotal: tenderTotal.toFixed(), grandTotal: grandTotal.toFixed() });
 
     const cashAccountIds: string[] = [];
+    const sellingSiteId = input.siteId || warehouse.siteId;
     for (const tender of input.tenders) {
       if (tender.methodType === "STORE_CREDIT") {
         if (!input.customerBusinessPartyId || !tender.storedValueAccountId || tender.financialAccountId) {
@@ -256,6 +273,11 @@ export async function createRetailSale(
       const expectedTypes = tender.methodType === "CASH" ? ["CASH"] : tender.methodType === "MOBILE_MONEY" ? ["MOBILE_MONEY"] : ["BANK", "CLEARING"];
       if (!account || account.currencyCode !== input.currencyCode || !expectedTypes.includes(account.accountType)) {
         throw new EnterpriseRetailError("RETAIL_FINANCIAL_ACCOUNT_INVALID", 409, { accountId: tender.financialAccountId, currencyCode: input.currencyCode, allowedTypes: expectedTypes });
+      }
+      // A shop-scoped cash/bank/wallet account cannot receive a tender from
+      // another boutique, even when the caller knows its organization ID.
+      if ((retailStaffIsolationIsEnabled(configuration.settingsJson) && account.siteId !== sellingSiteId) || (account.siteId && account.siteId !== sellingSiteId)) {
+        throw new EnterpriseRetailError("RETAIL_FINANCIAL_ACCOUNT_SITE_MISMATCH", 409, { accountId: account.id, sellingSiteId });
       }
       if (account.accountType === "CASH") cashAccountIds.push(account.id);
     }
@@ -366,6 +388,12 @@ export async function reverseRetailSale(organizationId: string, saleId: string, 
     await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterpriseRetailSale" WHERE id = ${saleId} AND "organizationId" = ${organizationId} FOR UPDATE`);
     const sale = await tx.enterpriseRetailSale.findFirst({ where: { id: saleId, organizationId }, include: { lines: true, tenders: true } });
     if (!sale) throw new EnterpriseRetailError("RETAIL_SALE_NOT_FOUND", 404);
+    const warehouse = await tx.enterpriseWarehouse.findFirst({ where: { id: sale.warehouseId, organizationId, archivedAt: null }, select: { siteId: true } });
+    if (!warehouse || (sale.siteId && sale.siteId !== warehouse.siteId)) throw new EnterpriseRetailError("RETAIL_SITE_ACCESS_DENIED", 403);
+    await requireRetailSiteCapability(organizationId, actorUserId, warehouse.siteId, "COLLECT_PAYMENT", tx);
+    if (sale.lines.some((line) => line.trackInventory && line.inventoryItemId)) {
+      await requireRetailSiteCapability(organizationId, actorUserId, warehouse.siteId, "MANAGE_STOCK", tx);
+    }
     if (sale.status === "REVERSED") {
       await finalizeRetailSaleReversalAccountingTx(tx, organizationId, actorUserId, sale.id);
       return sale;
@@ -404,6 +432,10 @@ export async function reverseRetailSale(organizationId: string, saleId: string, 
         continue;
       }
       const account = await assertFinancialAccount(tx, organizationId, tender.financialAccountId!, tender.currencyCode);
+      const configuration = await tx.enterpriseRetailConfiguration.findUnique({ where: { organizationId }, select: { settingsJson: true } });
+      if (retailStaffIsolationIsEnabled(configuration?.settingsJson) && account.siteId !== warehouse.siteId) {
+        throw new EnterpriseRetailError("RETAIL_FINANCIAL_ACCOUNT_SITE_MISMATCH", 403);
+      }
       const cashSession = account.accountType === "CASH" ? await assertOpenCashSession(tx, organizationId, account.id, actorUserId) : null;
       await applyAccountEffectTx(tx, { organizationId, actorUserId, account, effect: tender.amount.negated(), transactionType: "RETAIL_POS_REVERSAL", reference: sale.number, transactionDate: new Date(), cashSessionId: cashSession?.id, cashReason: input.reason });
     }
@@ -570,9 +602,22 @@ export async function reverseTelcoTopup(organizationId: string, topupId: string,
 export async function createRetailDailyClose(organizationId: string, actorUserId: string, input: RetailCloseInput) {
   return prisma.$transaction(async (tx) => {
     await assertRetailOrganization(tx, organizationId);
-    await ensureRetailConfigurationTx(tx, organizationId, actorUserId);
+    const configuration = await ensureRetailConfigurationTx(tx, organizationId, actorUserId);
+    const strictSites = retailStaffIsolationIsEnabled(configuration.settingsJson);
+    const closeScope = await retailFinanceReadSiteScope(organizationId, actorUserId, "CLOSE_CASH", tx);
     const existing = await tx.enterpriseRetailDailyClose.findFirst({ where: { organizationId, idempotencyKey: input.idempotencyKey }, include: { lines: true } });
-    if (existing) return { close: existing, idempotent: true };
+    if (existing) {
+      // Permission checks must run even when a request is replayed after the
+      // submitter's site assignment was revoked.
+      if (existing.submittedByUserId !== actorUserId || (input.siteId && existing.siteId !== input.siteId)) {
+        throw new EnterpriseRetailError("RETAIL_CLOSE_CONFLICT", 409);
+      }
+      if (closeScope !== null && (!existing.siteId || !closeScope.includes(existing.siteId))) {
+        throw new EnterpriseRetailError("RETAIL_SITE_ACCESS_DENIED", 403);
+      }
+      return { close: existing, idempotent: true };
+    }
+    const accountSites = new Set<string>();
     const seen = new Set<string>();
     const preparedLines: Array<{ financialAccountId: string; accountType: string; currencyCode: string; cashSessionId: string | null; systemClosingBalance: Prisma.Decimal; declaredBalance: Prisma.Decimal; differenceAmount: Prisma.Decimal; varianceReason: string | null; countDetailsJson?: Prisma.InputJsonValue }> = [];
     for (const line of input.lines) {
@@ -580,11 +625,19 @@ export async function createRetailDailyClose(organizationId: string, actorUserId
       seen.add(line.financialAccountId);
       const account = await tx.enterpriseFinancialAccount.findFirst({ where: { id: line.financialAccountId, organizationId, status: "ACTIVE", archivedAt: null } });
       if (!account || account.accountType !== line.accountType) throw new EnterpriseRetailError("RETAIL_FINANCIAL_ACCOUNT_INVALID", 409, { financialAccountId: line.financialAccountId });
+      if (input.siteId && account.siteId !== input.siteId) throw new EnterpriseRetailError("RETAIL_CLOSE_ACCOUNT_SITE_MISMATCH", 409);
+      if (closeScope !== null && (!account.siteId || !closeScope.includes(account.siteId))) {
+        throw new EnterpriseRetailError("RETAIL_SITE_ACCESS_DENIED", 403);
+      }
+      if (account.siteId) accountSites.add(account.siteId);
       const declared = money(decimal(line.declaredBalance));
       if (account.accountType === "CASH") {
         await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterpriseCashSession" WHERE "organizationId" = ${organizationId} AND "financialAccountId" = ${account.id} AND "cashierUserId" = ${actorUserId} AND status = 'OPEN' FOR UPDATE`);
         const cashSession = await tx.enterpriseCashSession.findFirst({ where: { organizationId, financialAccountId: account.id, cashierUserId: actorUserId, status: "OPEN" }, include: { movements: true } });
         if (!cashSession) throw new EnterpriseRetailError("RETAIL_OPEN_CASH_SESSION_REQUIRED", 409, { financialAccountId: account.id });
+        if (strictSites && (!cashSession.siteId || cashSession.siteId !== account.siteId)) {
+          throw new EnterpriseRetailError("RETAIL_CLOSE_ACCOUNT_SITE_MISMATCH", 409);
+        }
         const inflows = sumDecimals(cashSession.movements.filter((movement) => movement.direction === "INBOUND").map((movement) => movement.amount));
         const outflows = sumDecimals(cashSession.movements.filter((movement) => movement.direction === "OUTBOUND").map((movement) => movement.amount));
         const expected = money(cashSession.openingAmount.plus(inflows).minus(outflows));
@@ -623,7 +676,9 @@ export async function createRetailDailyClose(organizationId: string, actorUserId
         preparedLines.push({ financialAccountId: account.id, accountType: account.accountType, currencyCode: account.currencyCode, cashSessionId: null, systemClosingBalance: expected, declaredBalance: declared, differenceAmount: difference, varianceReason: line.varianceReason || null });
       }
     }
-    const close = await tx.enterpriseRetailDailyClose.create({ data: { organizationId, number: retailReference("CLOSE"), businessDate: input.businessDate, siteId: input.siteId || null, status: "SUBMITTED", submittedByUserId: actorUserId, notes: input.notes || null, idempotencyKey: input.idempotencyKey, lines: { create: preparedLines } }, include: { lines: true } });
+    if (strictSites && accountSites.size !== 1) throw new EnterpriseRetailError("RETAIL_CLOSE_MULTISITE_FORBIDDEN", 409);
+    const canonicalSite = accountSites.size === 1 ? [...accountSites][0] : null;
+    const close = await tx.enterpriseRetailDailyClose.create({ data: { organizationId, number: retailReference("CLOSE"), businessDate: input.businessDate, siteId: input.siteId || canonicalSite, status: "SUBMITTED", submittedByUserId: actorUserId, notes: input.notes || null, idempotencyKey: input.idempotencyKey, lines: { create: preparedLines } }, include: { lines: true } });
     await publishFinanceEvent(tx, { organizationId, entityType: "EnterpriseRetailDailyClose", entityId: close.id, eventType: "RETAIL_DAILY_CLOSE_SUBMITTED", summary: `Clôture ${close.number} soumise`, actorUserId, toStatus: "SUBMITTED", metadataJson: { businessDate: close.businessDate.toISOString(), lineCount: close.lines.length, totalVariance: money(sumDecimals(close.lines.map((line) => line.differenceAmount.abs()))).toFixed() } });
     return { close, idempotent: false };
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 30000 });
@@ -635,6 +690,10 @@ export async function decideRetailDailyClose(organizationId: string, closeId: st
     await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterpriseRetailDailyClose" WHERE id = ${closeId} AND "organizationId" = ${organizationId} FOR UPDATE`);
     const close = await tx.enterpriseRetailDailyClose.findFirst({ where: { id: closeId, organizationId }, include: { lines: true } });
     if (!close) throw new EnterpriseRetailError("RETAIL_CLOSE_NOT_FOUND", 404);
+    const closeScope = await retailFinanceReadSiteScope(organizationId, actorUserId, "CLOSE_CASH", tx);
+    if (closeScope !== null && (!close.siteId || !closeScope.includes(close.siteId))) {
+      throw new EnterpriseRetailError("RETAIL_SITE_ACCESS_DENIED", 403);
+    }
     if (close.submittedByUserId === actorUserId) throw new EnterpriseRetailError("RETAIL_CLOSE_SELF_VALIDATION_FORBIDDEN", 409);
     if (close.status !== "SUBMITTED" || close.revision !== input.revision) throw new EnterpriseRetailError("RETAIL_CLOSE_CONFLICT", 409);
     const discrepancyIds: string[] = [];

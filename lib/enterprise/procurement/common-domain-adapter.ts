@@ -2,6 +2,8 @@ import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { EnterpriseDomainError } from "@/lib/enterprise/common/errors";
 import { applyStockMovementTx } from "@/lib/enterprise/inventory/service";
+import { requireRetailSiteCapability } from "@/lib/enterprise/retail/site-access";
+import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
 import { operationsReference, publishOperationsEvent } from "@/lib/enterprise/projects-assets/helpers";
 import { prisma } from "@/lib/prisma";
 
@@ -100,11 +102,6 @@ export async function postEnterprisePurchaseReceiptToInventoryTx(
   actorUserId: string,
   input: ReceiptInventoryPostInput,
 ) {
-  const existing = await tx.enterprisePurchaseReceiptOperationalLink.findFirst({
-    where: { organizationId, OR: [{ purchaseReceiptId: receiptId }, { idempotencyKey: input.idempotencyKey }] },
-  });
-  if (existing) return { receiptLink: existing, results: [], idempotent: true };
-
   const receipt = await tx.enterprisePurchaseReceipt.findFirst({
     where: { id: receiptId, organizationId },
     include: {
@@ -117,6 +114,26 @@ export async function postEnterprisePurchaseReceiptToInventoryTx(
   const purchaseLink = await tx.enterprisePurchaseOperationalLink.findFirst({
     where: { organizationId, purchaseId: receipt.purchaseId },
   });
+
+  const existing = await tx.enterprisePurchaseReceiptOperationalLink.findFirst({
+    where: { organizationId, OR: [{ purchaseReceiptId: receiptId }, { idempotencyKey: input.idempotencyKey }] },
+  });
+  if (existing) {
+    // Authorize the ORIGINAL destination, never an arbitrary warehouseId
+    // supplied on replay. Archived warehouses retain their site attribution.
+    const previousWarehouse = existing.warehouseId
+      ? await tx.enterpriseWarehouse.findFirst({ where: { id: existing.warehouseId, organizationId }, select: { siteId: true } })
+      : null;
+    try {
+      await requireRetailSiteCapability(organizationId, actorUserId,
+        previousWarehouse?.siteId || (existing.purchaseReceiptId === receiptId ? purchaseLink?.siteId : null), "MANAGE_STOCK", tx);
+    } catch (error) {
+      if (error instanceof EnterpriseRetailError) throw new EnterpriseDomainError(error.code, error.status);
+      throw error;
+    }
+    if (existing.purchaseReceiptId !== receiptId) throw new EnterpriseDomainError("RECEIPT_IDEMPOTENCY_KEY_CONFLICT", 409);
+    return { receiptLink: existing, results: [], idempotent: true };
+  }
 
   let warehouseId = input.warehouseId || purchaseLink?.destinationWarehouseId || null;
   let storageLocationId = input.storageLocationId || null;
@@ -137,6 +154,15 @@ export async function postEnterprisePurchaseReceiptToInventoryTx(
   if (warehouseId && !warehouse) throw new EnterpriseDomainError("WAREHOUSE_NOT_FOUND", 404);
   if (purchaseLink?.siteId && warehouse && warehouse.siteId !== purchaseLink.siteId) throw new EnterpriseDomainError("PURCHASE_SITE_WAREHOUSE_MISMATCH", 409);
 
+  // A receipt can be posted through either the direct Inventory route or the
+  // Purchase receive workflow. Enforce the destination store in this shared
+  // transaction, including the idempotent replay path.
+  try {
+    await requireRetailSiteCapability(organizationId, actorUserId, warehouse?.siteId || purchaseLink?.siteId || null, "MANAGE_STOCK", tx);
+  } catch (error) {
+    if (error instanceof EnterpriseRetailError) throw new EnterpriseDomainError(error.code, error.status);
+    throw error;
+  }
   const results: Array<{ receiptItemId: string; stockMovementId: string | null; serviceAccepted: boolean }> = [];
   for (const receiptItem of receipt.items) {
     const existingItemLink = await tx.enterprisePurchaseReceiptItemStockLink.findFirst({

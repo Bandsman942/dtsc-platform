@@ -186,6 +186,10 @@ export const buildRetailInventoryReturnPosting: PostingBuilder = async (tx, inpu
     },
   });
   if (!event || !event.totalCost.gt(0)) throw new EnterpriseAccountingError("RETAIL_INVENTORY_RETURN_NOT_POSTABLE", 409);
+  const sourceMovement = await tx.enterpriseStockMovement.findFirst({
+    where: { organizationId: input.organizationId, id: event.stockMovementId },
+    select: { warehouse: { select: { siteId: true } } },
+  });
   return {
     organizationId: input.organizationId,
     journalType: "INVENTORY",
@@ -205,6 +209,7 @@ export const buildRetailInventoryReturnPosting: PostingBuilder = async (tx, inpu
         transactionCurrencyCode: event.currencyCode,
         transactionAmount: event.totalCost,
         inventoryItemId: event.inventoryItemId,
+        siteId: sourceMovement?.warehouse.siteId,
       },
       {
         accountMappingKey: "COST_OF_SALES",
@@ -213,6 +218,7 @@ export const buildRetailInventoryReturnPosting: PostingBuilder = async (tx, inpu
         transactionCurrencyCode: event.currencyCode,
         transactionAmount: event.totalCost,
         inventoryItemId: event.inventoryItemId,
+        siteId: sourceMovement?.warehouse.siteId,
       },
     ],
   };

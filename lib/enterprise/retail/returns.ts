@@ -11,6 +11,7 @@ import { reverseRetailRelationshipCashbackTx } from "@/lib/enterprise/relationsh
 import { changeRelationalStoreCreditTx } from "@/lib/enterprise/retail/relationship-store-credit";
 import type { retailReturnCreateSchema, retailReturnDecisionSchema } from "@/lib/enterprise/retail/commercial-schemas";
 import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
+import { requireRetailSiteCapability, retailStaffIsolationIsEnabled } from "@/lib/enterprise/retail/site-access";
 import { withRetailTransactionRetry } from "@/lib/enterprise/retail/transaction-retry";
 import { prisma } from "@/lib/prisma";
 import type { z } from "zod";
@@ -37,17 +38,40 @@ function refundAccountTypes(methodType: string) {
   return ["CASH", "MOBILE_MONEY", "BANK", "CLEARING"];
 }
 
+async function requireRetailSaleSiteAuthorityTx(
+  tx: Prisma.TransactionClient,
+  organizationId: string,
+  actorUserId: string,
+  sale: { siteId: string | null; warehouseId: string },
+  capability: "VIEW_SALES" | "COLLECT_PAYMENT",
+) {
+  const configuration = await tx.enterpriseRetailConfiguration.findUnique({
+    where: { organizationId }, select: { settingsJson: true },
+  });
+  if (!retailStaffIsolationIsEnabled(configuration?.settingsJson)) return { isolationEnabled: false, siteId: sale.siteId };
+  const warehouse = await tx.enterpriseWarehouse.findFirst({
+    where: { organizationId, id: sale.warehouseId, archivedAt: null }, select: { siteId: true },
+  });
+  if (!warehouse || (sale.siteId && sale.siteId !== warehouse.siteId)) throw new EnterpriseRetailError("RETAIL_SITE_ACCESS_DENIED", 403);
+  await requireRetailSiteCapability(organizationId, actorUserId, warehouse.siteId, capability, tx);
+  return { isolationEnabled: true, siteId: warehouse.siteId };
+}
+
 async function getRefundAccountTx(
   tx: Prisma.TransactionClient,
   organizationId: string,
   accountId: string,
   currencyCode: string,
   methodType: string,
+  scope: { isolationEnabled: boolean; siteId: string | null },
 ) {
   const account = await tx.enterpriseFinancialAccount.findFirst({
     where: { id: accountId, organizationId, currencyCode, accountType: { in: refundAccountTypes(methodType) }, status: "ACTIVE", archivedAt: null },
   });
   if (!account) throw new EnterpriseRetailError("RETAIL_REFUND_ACCOUNT_INVALID", 409, { accountId, methodType, currencyCode });
+  if (scope.isolationEnabled && (!scope.siteId || account.siteId !== scope.siteId)) {
+    throw new EnterpriseRetailError("RETAIL_FINANCIAL_ACCOUNT_SITE_MISMATCH", 403);
+  }
   return account;
 }
 
@@ -65,7 +89,7 @@ async function applyRefundAccountEffectTx(
     idempotencyKey: string;
   },
 ) {
-  if (!input.amount.isPositive()) throw new EnterpriseRetailError("RETAIL_REFUND_AMOUNT_INVALID", 409);
+  if (!input.amount.greaterThan(0)) throw new EnterpriseRetailError("RETAIL_REFUND_AMOUNT_INVALID", 409);
   if (input.account.operationalBalance.lessThan(input.amount)) {
     throw new EnterpriseRetailError("RETAIL_INSUFFICIENT_BALANCE", 409, {
       financialAccountId: input.account.id,
@@ -196,7 +220,7 @@ async function prepareReturnLinesTx(
     const quantity = decimal(requested.quantity);
     const reserved = reservedByLine.get(source.id) || decimal(0);
     const remaining = source.quantity.minus(reserved);
-    if (!quantity.isPositive() || quantity.greaterThan(remaining)) {
+    if (!quantity.greaterThan(0) || quantity.greaterThan(remaining)) {
       throw new EnterpriseRetailError("RETAIL_RETURN_QUANTITY_EXCEEDED", 409, { saleLineId: source.id, requested: quantity.toFixed(), remaining: remaining.toFixed() });
     }
     if (!source.trackInventory && requested.stockDisposition === "RESTOCK") {
@@ -218,22 +242,26 @@ export async function createRetailReturnRequest(
   input: RetailReturnInput,
 ) {
   return prisma.$transaction(async (tx) => {
+    await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterpriseRetailSale" WHERE id = ${saleId} AND "organizationId" = ${organizationId} FOR UPDATE`);
+    const sale = await tx.enterpriseRetailSale.findFirst({ where: { id: saleId, organizationId, status: "COMPLETED" }, include: { lines: true } });
+    if (!sale) throw new EnterpriseRetailError("RETAIL_SALE_NOT_RETURNABLE", 409);
+    await requireRetailSaleSiteAuthorityTx(tx, organizationId, actorUserId, sale, "VIEW_SALES");
     const existing = await tx.enterpriseRetailReturn.findFirst({
       where: { organizationId, idempotencyKey: input.idempotencyKey },
       include: { lines: true, refunds: true },
     });
-    if (existing) return { retailReturn: existing, idempotent: true };
-
-    await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterpriseRetailSale" WHERE id = ${saleId} AND "organizationId" = ${organizationId} FOR UPDATE`);
-    const sale = await tx.enterpriseRetailSale.findFirst({ where: { id: saleId, organizationId, status: "COMPLETED" }, include: { lines: true } });
-    if (!sale) throw new EnterpriseRetailError("RETAIL_SALE_NOT_RETURNABLE", 409);
+    if (existing) {
+      if (existing.saleId !== sale.id) throw new EnterpriseRetailError("RETAIL_RETURN_IDEMPOTENCY_COLLISION", 409);
+      return { retailReturn: existing, idempotent: true };
+    }
     if (input.returnType === "EXCHANGE") {
       if (!input.exchangeSaleId || input.exchangeSaleId === sale.id) throw new EnterpriseRetailError("RETAIL_EXCHANGE_SALE_INVALID", 409);
       const replacement = await tx.enterpriseRetailSale.findFirst({
         where: { id: input.exchangeSaleId, organizationId, status: "COMPLETED", currencyCode: sale.currencyCode },
-        select: { id: true, customerBusinessPartyId: true },
+        select: { id: true, customerBusinessPartyId: true, warehouseId: true, siteId: true },
       });
       if (!replacement) throw new EnterpriseRetailError("RETAIL_EXCHANGE_SALE_INVALID", 409);
+      await requireRetailSaleSiteAuthorityTx(tx, organizationId, actorUserId, replacement, "VIEW_SALES");
       if (sale.customerBusinessPartyId && replacement.customerBusinessPartyId && sale.customerBusinessPartyId !== replacement.customerBusinessPartyId) {
         throw new EnterpriseRetailError("RETAIL_EXCHANGE_SALE_INVALID", 409, { reason: "CUSTOMER_MISMATCH" });
       }
@@ -244,7 +272,7 @@ export async function createRetailReturnRequest(
     const discountTotal = money(prepared.reduce((sum, line) => sum.plus(line.discountAmount), decimal(0)));
     const taxTotal = money(prepared.reduce((sum, line) => sum.plus(line.taxAmount), decimal(0)));
     const grandTotal = money(prepared.reduce((sum, line) => sum.plus(line.lineTotal), decimal(0)));
-    if (!grandTotal.isPositive()) throw new EnterpriseRetailError("RETAIL_REFUND_AMOUNT_INVALID", 409);
+    if (!grandTotal.greaterThan(0)) throw new EnterpriseRetailError("RETAIL_REFUND_AMOUNT_INVALID", 409);
 
     const createdReturn = await tx.enterpriseRetailReturn.create({
       data: {
@@ -322,6 +350,10 @@ export async function decideRetailReturn(
       },
     });
     if (!retailReturn) throw new EnterpriseRetailError("RETAIL_RETURN_NOT_FOUND", 404);
+    const siteScope = await requireRetailSaleSiteAuthorityTx(tx, organizationId, actorUserId, retailReturn.sale, "COLLECT_PAYMENT");
+    if (input.decision === "APPROVE" && retailReturn.lines.some((line) => line.stockDisposition === "RESTOCK")) {
+      await requireRetailSiteCapability(organizationId, actorUserId, siteScope.siteId, "MANAGE_STOCK", tx);
+    }
     // Serialize decisions of different returns for the same sale before changing
     // amounts, stock, or quotas. No effect occurs outside this transaction.
     await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterpriseRetailSale" WHERE id = ${retailReturn.saleId} AND "organizationId" = ${organizationId} FOR UPDATE`);
@@ -384,7 +416,7 @@ export async function decideRetailReturn(
           ? money(retailReturn.grandTotal.minus(allocated))
           : money(retailReturn.grandTotal.times(tender.amount).div(tenderTotal));
         allocated = allocated.plus(amount);
-        if (!amount.isPositive()) continue;
+        if (!amount.greaterThan(0)) continue;
         if (tender.methodType === "STORE_CREDIT") {
           refunds.push(await refundOriginalStoreCreditTenderTx({
             tx, organizationId, actorUserId, returnId: retailReturn.id, returnNumber: retailReturn.number,
@@ -394,7 +426,7 @@ export async function decideRetailReturn(
           continue;
         }
         if (!tender.financialAccountId) throw new EnterpriseRetailError("RETAIL_REFUND_ACCOUNT_INVALID", 409);
-        const account = await getRefundAccountTx(tx, organizationId, tender.financialAccountId, retailReturn.currencyCode, tender.methodType);
+        const account = await getRefundAccountTx(tx, organizationId, tender.financialAccountId, retailReturn.currencyCode, tender.methodType, siteScope);
         refunds.push(await applyRefundAccountEffectTx(tx, {
           organizationId,
           actorUserId,
@@ -409,7 +441,7 @@ export async function decideRetailReturn(
       }
     } else {
       if (!refundAccountId) throw new EnterpriseRetailError("RETAIL_REFUND_ACCOUNT_INVALID", 409);
-      const account = await getRefundAccountTx(tx, organizationId, refundAccountId, retailReturn.currencyCode, retailReturn.refundMethod);
+      const account = await getRefundAccountTx(tx, organizationId, refundAccountId, retailReturn.currencyCode, retailReturn.refundMethod, siteScope);
       refunds.push(await applyRefundAccountEffectTx(tx, {
         organizationId,
         actorUserId,

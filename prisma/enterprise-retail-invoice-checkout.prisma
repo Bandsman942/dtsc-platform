@@ -1,0 +1,158 @@
+// Retail extension of the canonical Finance invoice, never another invoice
+// ledger or another payment balance. Stock is posted only after Finance proves
+// the invoice fully allocated; each posting has a unique source key.
+model EnterpriseRetailInvoiceCheckout {
+  id                String   @id @default(cuid())
+  organizationId    String
+  salesInvoiceId    String
+  siteId            String
+  warehouseId       String
+  idempotencyKey    String
+  requestFingerprint String
+  preparedByUserId  String
+  stockPostedAt     DateTime?
+  stockPostedByUserId String?
+  revision          Int      @default(1)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  invoice   EnterpriseSalesInvoice @relation(fields: [organizationId, salesInvoiceId], references: [organizationId, id], onDelete: Restrict)
+  site      EnterpriseSite         @relation(fields: [organizationId, siteId], references: [organizationId, id], onDelete: Restrict)
+  warehouse EnterpriseWarehouse    @relation(fields: [organizationId, warehouseId], references: [organizationId, id], onDelete: Restrict)
+  lines     EnterpriseRetailInvoiceCheckoutLine[]
+  paymentProposals EnterpriseRetailInvoicePaymentProposal[]
+  returnRequests EnterpriseRetailInvoiceReturnRequest[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, salesInvoiceId])
+  @@unique([organizationId, idempotencyKey])
+  @@index([organizationId, siteId, createdAt])
+  @@index([organizationId, warehouseId, stockPostedAt])
+}
+
+// A cashier's payment intent is only a link to the canonical Finance payment.
+// No independent payment status, account balance, allocation or ledger exists.
+model EnterpriseRetailInvoicePaymentProposal {
+  id                 String   @id @default(cuid())
+  organizationId     String
+  checkoutId         String
+  paymentId          String
+  idempotencyKey     String
+  requestFingerprint String
+  recordedByUserId   String
+  createdAt          DateTime @default(now())
+
+  checkout EnterpriseRetailInvoiceCheckout @relation(fields: [organizationId, checkoutId], references: [organizationId, id], onDelete: Restrict)
+  payment  EnterprisePayment               @relation(fields: [organizationId, paymentId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, paymentId])
+  @@unique([organizationId, idempotencyKey])
+  @@index([organizationId, checkoutId, createdAt])
+}
+
+model EnterpriseRetailInvoiceCheckoutLine {
+  id                 String   @id @default(cuid())
+  organizationId     String
+  checkoutId         String
+  invoiceItemId      String
+  inventoryItemId    String?
+  stockLotId         String?
+
+  checkout    EnterpriseRetailInvoiceCheckout @relation(fields: [organizationId, checkoutId], references: [organizationId, id], onDelete: Restrict)
+  invoiceItem EnterpriseSalesInvoiceItem      @relation(fields: [organizationId, invoiceItemId], references: [organizationId, id], onDelete: Restrict)
+  returnLines EnterpriseRetailInvoiceReturnLine[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, invoiceItemId])
+  @@unique([organizationId, checkoutId, id], map: "retail_invoice_checkout_line_scoped_id_key")
+  @@index([organizationId, checkoutId])
+  @@index([organizationId, inventoryItemId, stockLotId])
+}
+
+// Refund/return requests are ONLY workflow evidence; invoice, accounting
+// balances, refunds and physical stock remain owned by Finance/Inventory.
+// An APPROVED request is not a completed return or a customer reimbursement.
+model EnterpriseRetailInvoiceReturnRequest {
+  id                String   @id @default(cuid())
+  organizationId    String
+  checkoutId        String
+  number            String
+  status            String   @default("SUBMITTED")
+  reason            String
+  refundAmount      Decimal  @db.Decimal(20, 6)
+  idempotencyKey    String
+  requestFingerprint String
+  requestedByUserId String
+  approverUserId    String
+  inspectedByUserId String?
+  inspectedAt       DateTime?
+  inspectionNotes   String?
+  decidedByUserId   String?
+  decidedAt         DateTime?
+  decisionReason    String?
+  refundPaymentId   String?
+  salesCreditNoteId String?
+  preparedByUserId  String?
+  preparedAt        DateTime?
+  settledByUserId   String?
+  completedAt       DateTime?
+  revision          Int      @default(1)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  checkout EnterpriseRetailInvoiceCheckout @relation(fields: [organizationId, checkoutId], references: [organizationId, id], onDelete: Restrict, map: "retail_invoice_return_request_checkout_fkey")
+  refundPayment EnterprisePayment? @relation("RetailInvoiceReturnRefundPayment", fields: [organizationId, refundPaymentId], references: [organizationId, id], onDelete: Restrict, map: "retail_invoice_return_refund_payment_fkey")
+  salesCreditNote EnterpriseSalesCreditNote? @relation("RetailInvoiceReturnSalesCreditNote", fields: [organizationId, salesCreditNoteId], references: [organizationId, id], onDelete: Restrict, map: "retail_invoice_return_credit_note_fkey")
+  lines    EnterpriseRetailInvoiceReturnLine[]
+  refundLegs EnterpriseRetailInvoiceReturnRefundLeg[]
+
+  @@unique([organizationId, id], map: "retail_invoice_return_request_org_id_key")
+  @@unique([organizationId, id, checkoutId], map: "retail_invoice_return_request_scoped_id_key")
+  @@unique([organizationId, number], map: "retail_invoice_return_request_org_number_key")
+  @@unique([organizationId, idempotencyKey], map: "retail_invoice_return_request_org_idempotency_key")
+  @@unique([organizationId, refundPaymentId], map: "retail_invoice_return_request_refund_payment_key")
+  @@unique([organizationId, salesCreditNoteId], map: "retail_invoice_return_request_credit_note_key")
+  @@index([organizationId, checkoutId, status], map: "retail_invoice_return_request_checkout_status_idx")
+  @@index([organizationId, approverUserId, status], map: "retail_invoice_return_request_approver_status_idx")
+}
+
+// Each payout remains a canonical Finance payment. This structural link lets
+// one approved return refund the original payment accounts independently,
+// while the credit note and inventory reversal are performed exactly once.
+model EnterpriseRetailInvoiceReturnRefundLeg {
+  id                 String  @id @default(cuid())
+  organizationId     String
+  returnRequestId    String
+  refundPaymentId    String
+  financialAccountId String
+  amount             Decimal @db.Decimal(20, 6)
+
+  request EnterpriseRetailInvoiceReturnRequest @relation(fields: [organizationId, returnRequestId], references: [organizationId, id], onDelete: Restrict)
+  refundPayment EnterprisePayment @relation("RetailInvoiceReturnRefundLegPayment", fields: [organizationId, refundPaymentId], references: [organizationId, id], onDelete: Restrict)
+  financialAccount EnterpriseFinancialAccount @relation(fields: [organizationId, financialAccountId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, refundPaymentId], map: "retail_invoice_return_refund_leg_payment_key")
+  @@unique([organizationId, returnRequestId, financialAccountId], map: "retail_invoice_return_refund_leg_account_key")
+  @@index([organizationId, returnRequestId], map: "retail_invoice_return_refund_leg_request_idx")
+}
+
+model EnterpriseRetailInvoiceReturnLine {
+  id               String  @id @default(cuid())
+  organizationId   String
+  returnRequestId  String
+  checkoutId       String
+  checkoutLineId   String
+  quantity         Decimal @db.Decimal(20, 6)
+  refundAmount     Decimal @db.Decimal(20, 6)
+  refundNetAmount  Decimal? @db.Decimal(20, 6)
+  refundTaxAmount  Decimal? @db.Decimal(20, 6)
+  stockDisposition String
+
+  request EnterpriseRetailInvoiceReturnRequest @relation(fields: [organizationId, returnRequestId, checkoutId], references: [organizationId, id, checkoutId], onDelete: Restrict, map: "retail_invoice_return_line_request_fkey")
+  checkoutLine EnterpriseRetailInvoiceCheckoutLine @relation(fields: [organizationId, checkoutId, checkoutLineId], references: [organizationId, checkoutId, id], onDelete: Restrict, map: "retail_invoice_return_line_checkout_line_fkey")
+
+  @@unique([organizationId, id], map: "retail_invoice_return_line_org_id_key")
+  @@unique([organizationId, returnRequestId, checkoutLineId], map: "retail_invoice_return_line_request_line_key")
+  @@index([organizationId, checkoutLineId], map: "retail_invoice_return_line_checkout_line_idx")
+}
