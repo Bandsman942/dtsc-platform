@@ -22,6 +22,8 @@ assert.match(product, /const runtimeVersion = packageJson\.version/);
 assert.match(product, /Current application build:/);
 assert.match(product, /Version applicative courante/);
 assert.match(product, /VERCEL_GIT_COMMIT_SHA/);
+assert.match(product, /currentCandidate/);
+assert.match(product, /RELEASE CANDIDATE/);
 assert.match(prompts, /VÉRITÉ DES ACTIONS/);
 assert.match(prompts, /CRITICAL ACTION TRUTH/);
 assert.match(legacyRoute, /buildLanguageInstruction/);
