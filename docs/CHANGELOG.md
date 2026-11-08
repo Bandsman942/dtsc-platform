@@ -1,3 +1,10 @@
+## 2026-11-08 — Hotfix #1069 — Console DS 2.0 en cartes et workspaces (candidat v1.6.5)
+
+- Navigation Administration DTSC par domaines puis sections visibles selon permissions, entrée via cartes responsive avec icônes, compteur et descriptions, sans créer de nouvelle route métier non autorisée.
+- Sous-sections ouvrables par URL ?focus=id, fil d'Ariane avec retour logique et hauteur de travail optimisée, état navigateur réversible.
+- Recherche et filtres serveur traduits FR/EN, vues de recherche nommées isolées par compte, pagination numérotée première/précédente/suivante/dernière et conservation du contexte d'URL.
+- QA, documentation et E2E ciblé : docs/HOTFIX_1069_CONSOLE_WORKSPACE_NAVIGATION2.md. Aucun déploiement avant E2E final propriétaire A+B+C.
+
 ## 2026-11-08 — Hotfix #1064 — RETAIL Core sans Shop, packs administrés (candidat v1.6.2)
 
 - Commerce de détail générique désormais indépendant de SHOP : POS et clôture accessibles selon l'abonnement, et TELCO/Mobile Money OFF par défaut pour les nouveaux tenants génériques.
