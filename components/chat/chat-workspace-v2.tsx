@@ -307,7 +307,7 @@ export function ChatWorkspaceV2({
   ] : [];
 
   return (
-    <div className="relative grid h-[calc(100dvh-7.25rem)] min-h-0 min-w-0 max-w-full overflow-hidden bg-dtsc-surface sm:h-[calc(100dvh-8rem)] lg:h-full lg:grid-cols-[minmax(260px,320px)_minmax(0,1fr)]">
+    <div data-ai-conversation-design2 className="relative grid h-[calc(100dvh-7.25rem)] min-h-0 min-w-0 max-w-full overflow-hidden bg-dtsc-surface sm:h-[calc(100dvh-8rem)] lg:h-full lg:grid-cols-[minmax(260px,320px)_minmax(0,1fr)]">
       <aside data-assistant-history-pane className="hidden min-h-0 min-w-0 overflow-hidden border-r border-dtsc-border lg:block">{sidebar}</aside>
       {historyOpen ? <div className="fixed inset-0 z-[80] bg-dtsc-surface lg:hidden"><div className="flex h-12 items-center justify-between border-b border-dtsc-border px-3"><strong className="text-sm text-dtsc-ink">{en ? "Conversations" : "Conversations"}</strong><Button type="button" size="icon" variant="ghost" className="rounded-full" onClick={() => setHistoryOpen(false)}><X className="h-4 w-4" /></Button></div><div className="h-[calc(100dvh-3rem)]">{sidebar}</div></div> : null}
       <main data-immersive-conversation="true" data-assistant-message-pane className="flex min-h-0 min-w-0 max-w-full flex-col overflow-hidden bg-dtsc-surface">
