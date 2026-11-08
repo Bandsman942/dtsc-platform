@@ -1,3 +1,11 @@
+## 2026-11-08 — Hotfix Finance/RETAIL Design 2.0 — PR #1077, Issue #1078 (candidat v1.6.5)
+
+- RETAIL multi-boutiques : synchronisation de l'activation « Facturation et encaissement » avec les vérifications POSTING Finance réellement en vigueur et messages de blocage contextualisés.
+- Refonte Design 2.0 transversale des 15 modules : Comptabilité & conformité, Trésorerie & encaissements, Pilotage financier et Opérations clients & fournisseurs ; actions, filtres, recherche, dates par calendrier, tableaux compacts, pagination, statuts et formulaires harmonisés.
+- Exports CSV/Excel/PDF professionnels et sécurisés avec identité entreprise, résultats filtrés et PDF multipages ; modèles et imports prévisualisés/validés pour sous-comptes et codes fiscaux, modèle CSV pour relevés bancaires.
+- Dates civiles préservées sans conversion automatique UTC des valeurs saisies ou des dates Excel ; QA de non-régression et compilation TypeScript validées localement.
+- Déploiement **interdit tant que CI, gouvernance de branche et E2E propriétaire ne sont pas validés**. Production uniquement depuis `main` et aucune Preview Vercel. Runbook : `docs/HOTFIX_FINANCE_DESIGN2_FOUR_GROUPS_2026.md`.
+
 ## 2026-11-08 — Hotfix #1075 — Formulaires Console, import catalogue et toasts (candidat v1.6.4)
 
 - Administration DTSC : succès/erreurs contextualisés après création d’une entreprise cliente ; fermeture du formulaire seulement après confirmation serveur et distinction entre invitation enregistrée et notification réellement créée.
