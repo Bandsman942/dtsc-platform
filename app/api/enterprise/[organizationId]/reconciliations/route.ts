@@ -1,7 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
-import { authorizeFinanceRequest, financeErrorResponse, financeListParams, financeValidationErrorResponse } from "@/lib/enterprise/accounting/http";
+import { authorizeFinanceRequest, financeBusinessDateRange, financeErrorResponse, financeListParams, financeValidationErrorResponse } from "@/lib/enterprise/accounting/http";
 import { createReconciliationSession } from "@/lib/enterprise/accounting/treasury-service";
 import { reconciliationCreateSchema } from "@/lib/enterprise/accounting/treasury-schemas";
 import { prisma } from "@/lib/prisma";
@@ -16,12 +16,16 @@ export async function GET(req: Request, { params }: Params) {
 
   const url = new URL(req.url);
   const { page, pageSize, search, status } = financeListParams(req);
+  const dates = financeBusinessDateRange(req);
+  if (!dates.ok) return dates.response;
   const recordId = url.searchParams.get("recordId")?.trim() || undefined;
   const statusFilter: Prisma.EnterpriseReconciliationSessionWhereInput = status === "OPEN"
     ? { status: { in: ["DRAFT", "IN_PROGRESS"] } }
     : status ? { status } : {};
   const where: Prisma.EnterpriseReconciliationSessionWhereInput = {
     organizationId,
+    ...(dates.to ? { periodStart: { lte: dates.to } } : {}),
+    ...(dates.from ? { periodEnd: { gte: dates.from } } : {}),
     ...(recordId ? { id: recordId } : {}),
     ...statusFilter,
     ...(search ? {

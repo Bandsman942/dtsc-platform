@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { createAssetAccountingProfile } from "@/lib/enterprise/accounting/asset-accounting-service";
-import { authorizeFinanceRequest, financeErrorResponse, financeListParams } from "@/lib/enterprise/accounting/http";
+import { authorizeFinanceRequest, financeBusinessDateRange, financeErrorResponse, financeListParams } from "@/lib/enterprise/accounting/http";
 import { assetProfileSchema } from "@/lib/enterprise/accounting/treasury-schemas";
 import { prisma } from "@/lib/prisma";
 
@@ -18,6 +18,8 @@ export async function GET(req: Request, { params }: Params) {
 
   const url = new URL(req.url);
   const { page, pageSize, status, search } = financeListParams(req);
+  const dates = financeBusinessDateRange(req);
+  if (!dates.ok) return dates.response;
   const recordId = url.searchParams.get("recordId")?.trim() || undefined;
   const assetMatches = search
     ? await prisma.enterpriseAsset.findMany({
@@ -36,6 +38,7 @@ export async function GET(req: Request, { params }: Params) {
 
   const where: Prisma.EnterpriseAssetAccountingProfileWhereInput = {
     organizationId,
+    ...(dates.from || dates.to ? { inServiceDate: { ...(dates.from ? { gte: dates.from } : {}), ...(dates.to ? { lte: dates.to } : {}) } } : {}),
     ...(recordId ? { id: recordId } : {}),
     ...(status ? { status } : {}),
     ...(search ? { assetId: { in: assetMatches.map((item) => item.id) } } : {}),

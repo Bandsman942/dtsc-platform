@@ -58,7 +58,9 @@ function triggerDownload(blob: Blob, filename: string) {
 
 function csvCell(value: unknown) {
   const text = value == null ? "" : String(value);
-  return `"${text.replace(/"/g, '""')}"`;
+  // Quoting alone does not stop Excel interpreting CSV cells as formulas.
+  const safe = /^[\s\t\r\n]*[=+@]/.test(text) || /^[\s\t\r\n]*-[^\d.,]/.test(text) ? `'${text}` : text;
+  return `"${safe.replace(/"/g, '""')}"`;
 }
 
 export function downloadProfessionalCsv(model: ProfessionalReportExportModel) {
@@ -229,72 +231,117 @@ function hexRgb(hex: string) {
 
 function pdfDocument(model: ProfessionalReportExportModel) {
   const [r, g, b] = hexRgb(model.accentHex || "#087EA4");
-  const commands: string[] = [];
-  const text = (x: number, y: number, size: number, value: string, bold = false) => commands.push(`BT /F${bold ? 2 : 1} ${size} Tf ${x} ${y} Td (${pdfEscape(value)}) Tj ET`);
-  commands.push(`${r.toFixed(3)} ${g.toFixed(3)} ${b.toFixed(3)} rg 0 792 595 50 re f`);
-  text(36, 815, 10, model.organizationName || "DTSC Platform", true);
-  text(36, 780, 19, model.title, true);
-  if (model.subtitle) text(36, 760, 9, model.subtitle);
-  if (model.generatedLabel) text(36, 744, 8, model.generatedLabel);
-
-  let y = 704;
-  const kpis = model.kpis.slice(0, 4);
-  const cardWidth = 125;
-  kpis.forEach((item, index) => {
-    const x = 36 + index * 132;
-    commands.push(`0.96 0.97 0.98 rg ${x} ${y - 42} ${cardWidth} 48 re f`);
-    text(x + 8, y - 12, 7, item.label);
-    text(x + 8, y - 30, 11, item.value, true);
-  });
-
-  y -= 82;
+  const pages: string[][] = [];
+  let commands: string[] = [];
+  let y = 0;
+  const accent = `${r.toFixed(3)} ${g.toFixed(3)} ${b.toFixed(3)}`;
+  const text = (x: number, baseline: number, size: number, value: string, bold = false) => {
+    // Explicit dark text avoids accidentally inheriting the last fill color.
+    commands.push(`0.071 0.125 0.196 rg BT /F${bold ? 2 : 1} ${size} Tf ${x} ${baseline} Td (${pdfEscape(value)}) Tj ET`);
+  };
+  const cut = (value: unknown, length: number) => {
+    const cleaned = String(value ?? "").replace(/[\r\n\t]+/g, " ");
+    return cleaned.length > length ? `${cleaned.slice(0, Math.max(1, length - 1))}…` : cleaned;
+  };
+  const startPage = () => {
+    if (commands.length) pages.push(commands);
+    commands = [];
+    commands.push(`0.035 0.101 0.173 rg 0 746 595 96 re f`, `${accent} rg 0 740 595 6 re f`);
+    commands.push(`1 1 1 rg BT /F2 11 Tf 36 810 Td (${pdfEscape(cut(model.organizationName || "DTSC Platform", 70))}) Tj ET`);
+    commands.push(`1 1 1 rg BT /F2 18 Tf 36 780 Td (${pdfEscape(cut(model.title, 48))}) Tj ET`);
+    if (model.subtitle) commands.push(`0.75 0.9 0.98 rg BT /F1 8 Tf 36 758 Td (${pdfEscape(cut(model.subtitle, 90))}) Tj ET`);
+    y = 714;
+  };
+  startPage();
+  if (model.generatedLabel) { text(36, y, 8, cut(model.generatedLabel, 110)); y -= 20; }
+  if (model.kpis.length) {
+    model.kpis.slice(0, 4).forEach((item, index) => {
+      const x = 36 + index * 132;
+      commands.push("0.94 0.97 0.99 rg", `${x} ${y - 47} 125 50 re f`);
+      text(x + 7, y - 14, 7, cut(item.label, 23));
+      text(x + 7, y - 32, 11, cut(item.value, 20), true);
+    });
+    y -= 76;
+  }
+  if (model.filters?.length) {
+    text(36, y, 9, "Périmètre et critères de sélection", true);
+    y -= 17;
+    for (const filter of model.filters.slice(0, 6)) {
+      text(40, y, 8, cut(`${filter.label}: ${filter.value}`, 110));
+      y -= 15;
+    }
+    y -= 10;
+  }
   if (model.chart.length) {
-    text(36, y, 11, model.chartTitle || "Visualisation", true);
-    y -= 16;
+    if (y < 230) startPage();
+    text(36, y, 10, cut(model.chartTitle || "Indicateurs", 55), true);
+    y -= 20;
     const points = model.chart.slice(0, 8);
     const max = Math.max(1, ...points.map((point) => Math.abs(point.value)));
-    points.forEach((point) => {
-      text(36, y, 7, point.label.slice(0, 26));
-      const width = Math.max(2, Math.min(260, Math.abs(point.value) / max * 260));
-      commands.push(`${r.toFixed(3)} ${g.toFixed(3)} ${b.toFixed(3)} rg 180 ${y - 2} ${width.toFixed(1)} 8 re f`);
-      text(450, y, 7, point.displayValue || String(point.value));
-      y -= 18;
-    });
-    y -= 8;
+    for (const point of points) {
+      if (y < 90) startPage();
+      text(36, y, 8, cut(point.label, 25));
+      commands.push(`${accent} rg 180 ${y - 1} ${Math.max(2, Math.min(260, Math.abs(point.value) / max * 260)).toFixed(1)} 8 re f`);
+      text(460, y, 8, cut(point.displayValue || point.value, 15));
+      y -= 20;
+    }
+    y -= 16;
   }
-
   if (model.insights.length) {
-    text(36, y, 11, "Interprétation", true);
-    y -= 16;
-    model.insights.slice(0, 4).forEach((insight) => {
-      text(42, y, 8, `${insight.title}: ${insight.body}`.slice(0, 105));
-      y -= 14;
-    });
-    y -= 6;
+    if (y < 180) startPage();
+    text(36, y, 10, "Observations", true);
+    y -= 20;
+    for (const insight of model.insights.slice(0, 8)) {
+      if (y < 82) startPage();
+      text(40, y, 8, cut(`${insight.title} : ${insight.body}`, 113));
+      y -= 17;
+    }
+    y -= 12;
   }
-
-  if (model.columns.length && model.rows.length && y > 150) {
-    text(36, y, 11, "Données clés", true);
-    y -= 16;
-    const cols = model.columns.slice(0, 4);
-    text(36, y, 7, cols.map((column) => column.label.slice(0, 18)).join("   |   "), true);
-    y -= 13;
-    model.rows.slice(0, Math.max(1, Math.floor((y - 55) / 13))).forEach((row) => {
-      text(36, y, 7, cols.map((column) => String(row[column.key] ?? "").slice(0, 18)).join("   |   "));
-      y -= 13;
-    });
+  if (model.columns.length) {
+    // Do not silently drop fields beyond the seventh PDF column. Continue on
+    // additional sections with the first identifying column repeated.
+    const columnGroups = [model.columns.slice(0, 7)];
+    for (let first = 7; first < model.columns.length; first += 6) {
+      columnGroups.push([model.columns[0], ...model.columns.slice(first, first + 6)]);
+    }
+    for (const [groupIndex, columns] of columnGroups.entries()) {
+      if (groupIndex > 0 || y < 120) startPage();
+      const width = 523 / columns.length;
+      const renderHeader = () => {
+        commands.push(`${accent} rg 36 ${y - 19} 523 25 re f`);
+        columns.forEach((column, index) => {
+          commands.push(`1 1 1 rg BT /F2 7 Tf ${40 + index * width} ${y - 10} Td (${pdfEscape(cut(column.label, Math.max(8, Math.floor(width / 4.3))))}) Tj ET`);
+        });
+        y -= 28;
+      };
+      text(36, y, 10, groupIndex === 0 ? "Registre détaillé" : `Registre détaillé — suite ${groupIndex + 1}/${columnGroups.length}`, true);
+      y -= 21;
+      renderHeader();
+      for (let rowIndex = 0; rowIndex < model.rows.length; rowIndex += 1) {
+        if (y < 70) { startPage(); renderHeader(); }
+        if (rowIndex % 2 === 0) commands.push("0.95 0.97 0.98 rg", `36 ${y - 8} 523 19 re f`);
+        columns.forEach((column, index) => text(40 + index * width, y, 7, cut(model.rows[rowIndex][column.key], Math.max(7, Math.floor(width / 3.85)))));
+        y -= 19;
+      }
+    }
   }
-  text(36, 28, 7, "DTSC Platform — rapport professionnel. Les données détaillées restent disponibles dans les exports CSV et Excel.");
-
-  const stream = commands.join("\n");
-  const objects = [
+  pages.push(commands);
+  const fontId = 3 + pages.length * 2;
+  const boldFontId = fontId + 1;
+  const objects: string[] = [
     "<< /Type /Catalog /Pages 2 0 R >>",
-    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 5 0 R /F2 6 0 R >> >> /Contents 4 0 R >>",
-    `<< /Length ${winAnsi(stream).length} >>\nstream\n${stream}\nendstream`,
-    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>",
-    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>",
+    `<< /Type /Pages /Kids [${pages.map((_, index) => `${3 + index * 2} 0 R`).join(" ")}] /Count ${pages.length} >>`,
   ];
+  pages.forEach((page, index) => {
+    const pageNo = index + 1;
+    page.push(`0.47 0.55 0.62 rg BT /F1 8 Tf 36 30 Td (${pdfEscape(`DTSC Platform · ${model.organizationName || ""}`)}) Tj ET`);
+    page.push(`0.47 0.55 0.62 rg BT /F1 8 Tf 480 30 Td (${pdfEscape(`${pageNo} / ${pages.length}`)}) Tj ET`);
+    const stream = page.join("\n");
+    objects.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 ${fontId} 0 R /F2 ${boldFontId} 0 R >> >> /Contents ${4 + index * 2} 0 R >>`);
+    objects.push(`<< /Length ${winAnsi(stream).length} >>\nstream\n${stream}\nendstream`);
+  });
+  objects.push("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>", "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>");
 
   const chunks: Uint8Array[] = [winAnsi("%PDF-1.4\n%âãÏÓ\n")];
   const offsets = [0];

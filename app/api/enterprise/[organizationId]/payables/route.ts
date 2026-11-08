@@ -1,7 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { writeApiLog } from "@/lib/audit";
-import { authorizeFinanceRequest, financeListParams } from "@/lib/enterprise/accounting/http";
+import { authorizeFinanceRequest, financeBusinessDateRange, financeListParams } from "@/lib/enterprise/accounting/http";
 import { prisma } from "@/lib/prisma";
 
 type Params = { params: Promise<{ organizationId: string }> };
@@ -32,6 +32,8 @@ export async function GET(req: Request, { params }: Params) {
   const { organizationId } = await params;
   const auth = await authorizeFinanceRequest(req, organizationId, "FINANCE_PAYABLES", "view");
   if (!auth.ok) return auth.response;
+  const dates = financeBusinessDateRange(req);
+  if (!dates.ok) return dates.response;
 
   const { page, pageSize, search, status } = financeListParams(req);
   const url = new URL(req.url);
@@ -46,6 +48,7 @@ export async function GET(req: Request, { params }: Params) {
 
   const where: Prisma.EnterprisePayableWhereInput = {
     organizationId,
+    ...((dates.from || dates.to) ? { dueDate: { ...(dates.from ? { gte: dates.from } : {}), ...(dates.to ? { lte: dates.to } : {}) } } : {}),
     ...(recordId ? { id: recordId } : {}),
     ...(!hasAgeFilter && status ? { status } : {}),
     ...ageFilter,

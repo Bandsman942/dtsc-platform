@@ -5,6 +5,7 @@ import { CheckCircle2, FileSpreadsheet, Plus, Scale, Send, XCircle } from "lucid
 import { useSearchParams } from "next/navigation";
 import { Field, NativeSelect } from "@/components/enterprise/core-v2/erp-v2-ui";
 import { FinanceReferenceSelect } from "@/components/enterprise/core-v2/finance-reference-select";
+import { FinanceDateFilter, FinanceExportControls, type FinanceExportColumn } from "@/components/enterprise/professional/finance-design2-controls";
 import { EnterpriseApproverSelect } from "@/components/enterprise/enterprise-approver-select";
 import {
   FinanceDetailGrid,
@@ -25,6 +26,7 @@ import { ModuleContent, ModuleHeader, ModuleSection, ModuleToolbar, ModuleWorksp
 import { StatusBadge } from "@/components/workspace/status-badge";
 import type { EnterpriseModuleDefinition } from "@/lib/enterprise/module-registry";
 import { translateEnterpriseFinance, type EnterpriseFinanceKey } from "@/lib/i18n";
+import { downloadProfessionalCsv, type ProfessionalReportExportModel } from "@/lib/reporting/professional-export";
 
 type Props = {
   organizationId: string;
@@ -201,6 +203,8 @@ export function EnterpriseFinanceCashBankReconciliationBase(props: Props) {
   const [tab, setTab] = useState(searchParams.get("tab") || "all");
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [page, setPage] = useState(1);
   const [refreshKey, setRefreshKey] = useState(0);
   const [detail, setDetail] = useState<FinanceRecord | null>(null);
@@ -245,8 +249,27 @@ export function EnterpriseFinanceCashBankReconciliationBase(props: Props) {
     page,
     search,
     status: effectiveStatus,
+    filters: { dateFrom, dateTo },
     refreshKey,
   });
+  const exportColumns: FinanceExportColumn[] = [
+    { key: "reference", labelFr: "Référence", labelEn: "Reference", get: (row) => String(row.reference || row.number || row.code || row.id || "") },
+    { key: "status", labelFr: "Statut", labelEn: "Status", get: (row) => financeStatusLabel(String(row.status || ""), locale) },
+    { key: "date", labelFr: "Date", labelEn: "Date", get: (row) => financeDate(row.statementDate || row.periodStart || row.openedAt || row.createdAt, locale) },
+    { key: "currency", labelFr: "Devise", labelEn: "Currency", get: (row) => String(row.currencyCode || "") },
+    { key: "opening", labelFr: "Ouverture", labelEn: "Opening", get: (row) => String(row.openingBalance || row.openingAmount || "") },
+    { key: "closing", labelFr: "Clôture", labelEn: "Closing", get: (row) => String(row.closingBalance || row.differenceAmount || "") },
+  ];
+  function downloadBankImportTemplate() {
+    // The bank import accepts CSV only; never advertise an XLSX format it cannot parse.
+    const fields = ["transactionDate", "valueDate", "description", "reference", "counterparty", "debit", "credit", "runningBalance"];
+    const model: ProfessionalReportExportModel = {
+      title: tx(locale, "Modèle des lignes de relevé", "Bank statement lines template"), organizationName,
+      filenameBase: "DTSC-modele-releve-bancaire", columns: fields.map((key) => ({ key, label: key })),
+      rows: [], chart: [], insights: [], kpis: [],
+    };
+    downloadProfessionalCsv(model);
+  }
 
   const loadExact = useCallback(async (recordId: string) => {
     if (isCash) return fetchOperationalFinanceRecord<CashSession>(`/api/enterprise/${organizationId}/cash-sessions`, recordId);
@@ -437,6 +460,7 @@ export function EnterpriseFinanceCashBankReconciliationBase(props: Props) {
       controls={<div className="grid min-w-0 gap-2">
         <ProfessionalTabs value={tab} onChange={(value) => { setTab(value); setPage(1); setStatus(""); setDetail(null); }} items={tabs.map(({ id, label }) => ({ id, label }))} label={t("moduleViews")} />
         <NativeSelect value={status} onChange={(value) => { setStatus(value); setPage(1); }} items={[{ id: "", label: t("allStatuses") }, ...statusItems.map((id) => ({ id, label: financeStatusLabel(id, locale) }))]} />
+        <div className="flex min-w-0 flex-wrap items-end gap-2"><FinanceDateFilter locale={locale} from={dateFrom} to={dateTo} onChange={(from, to) => { setDateFrom(from); setDateTo(to); setPage(1); }} /><FinanceExportControls endpoint={`/api/enterprise/${organizationId}/${endpoint}`} organizationName={organizationName} title={title} locale={locale} filters={{ search, status: effectiveStatus, dateFrom, dateTo }} columns={exportColumns} disabled={collection.loading} />{isBank ? <Button type="button" size="sm" variant="outline" onClick={downloadBankImportTemplate}><FileSpreadsheet className="mr-1 h-4 w-4" />{tx(locale, "Modèle CSV", "CSV template")}</Button> : null}</div>
       </div>}
       summary={isBank ? t("bankSectionDescription") : t("noReconciledLineReuse")}
     />

@@ -61,7 +61,7 @@ function apiError(
   return error;
 }
 
-export function useFinanceCollection<T extends FinanceRecord>({ endpoint, page, pageSize = 25, search, status, refreshKey }: { endpoint: string; page: number; pageSize?: number; search?: string; status?: string; refreshKey: number }) {
+export function useFinanceCollection<T extends FinanceRecord>({ endpoint, page, pageSize = 25, search, status, dateFrom, dateTo, refreshKey }: { endpoint: string; page: number; pageSize?: number; search?: string; status?: string; dateFrom?: string; dateTo?: string; refreshKey: number }) {
   const [items, setItems] = useState<T[]>([]);
   const [pagination, setPagination] = useState<FinancePagination>({ page: 1, pageSize, total: 0, pageCount: 1 });
   const [metrics, setMetrics] = useState<Record<string, number>>({});
@@ -71,8 +71,10 @@ export function useFinanceCollection<T extends FinanceRecord>({ endpoint, page, 
     const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
     if (search?.trim()) params.set("search", search.trim());
     if (status?.trim()) params.set("status", status.trim());
+    if (dateFrom) params.set("dateFrom", dateFrom);
+    if (dateTo) params.set("dateTo", dateTo);
     return params.toString();
-  }, [page, pageSize, search, status]);
+  }, [page, pageSize, search, status, dateFrom, dateTo]);
 
   const load = useCallback(async () => {
     setLoading(true); setError("");

@@ -43,7 +43,7 @@ export function parseCatalogCsv(content: string): string[][] {
   return rows;
 }
 
-function assertSafeZip(buffer: Buffer) {
+export function assertSafeZip(buffer: Buffer) {
   // Read the ZIP central directory before letting the XLSX parser inflate the
   // file. A small compressed upload must not expand into a huge workbook.
   let end = -1;

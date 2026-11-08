@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
+import { financeBusinessDateRange } from "@/lib/enterprise/accounting/http";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { normalizeEnterpriseCoreV2Error } from "@/lib/enterprise/core-v2/errors";
 import { enterpriseBudgetVisibilityWhere, getEnterpriseFinanceAccess } from "@/lib/enterprise/finance/access";
@@ -20,6 +21,8 @@ export async function GET(req: Request, { params }: Params) {
   const { organizationId } = await params;
   const access = await getEnterpriseFinanceAccess({ session, organizationId, moduleCode: "FINANCE_BUDGETS", action: "read" });
   if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const dates = financeBusinessDateRange(req);
+  if (!dates.ok) return dates.response;
 
   const url = new URL(req.url);
   const page = Math.max(1, Number(url.searchParams.get("page") || 1) || 1);
@@ -37,6 +40,8 @@ export async function GET(req: Request, { params }: Params) {
   if (search) filters.push({ OR: [{ reference: { contains: search, mode: "insensitive" } }, { title: { contains: search, mode: "insensitive" } }, { description: { contains: search, mode: "insensitive" } }] });
   if (from) filters.push({ periodEnd: { gte: new Date(from) } });
   if (to) filters.push({ periodStart: { lte: new Date(to) } });
+  if (dates.from) filters.push({ periodEnd: { gte: dates.from } });
+  if (dates.to) filters.push({ periodStart: { lte: dates.to } });
 
   const where: Prisma.EnterpriseBudgetWhereInput = { AND: filters };
   const [budgets, total] = await Promise.all([

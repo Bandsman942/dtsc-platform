@@ -1,7 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
-import { authorizeFinanceRequest, financeErrorResponse, financeListParams } from "@/lib/enterprise/accounting/http";
+import { authorizeFinanceRequest, financeBusinessDateRange, financeErrorResponse, financeListParams } from "@/lib/enterprise/accounting/http";
 import { createEnterprisePayment, paymentCashSessionConfirmationBlocker, paymentCashSessionConfirmationNotice } from "@/lib/enterprise/accounting/payments-service";
 import { paymentCreateSchema } from "@/lib/enterprise/accounting/schemas";
 import { prisma } from "@/lib/prisma";
@@ -14,6 +14,8 @@ export async function GET(req: Request, { params }: Params) {
   const { organizationId } = await params;
   const auth = await authorizeFinanceRequest(req, organizationId, "FINANCE_PAYMENTS", "view");
   if (!auth.ok) return auth.response;
+  const dates = financeBusinessDateRange(req);
+  if (!dates.ok) return dates.response;
 
   const { page, pageSize, search, status } = financeListParams(req);
   const retailScope = await retailFinanceReadSiteScope(organizationId, auth.session.userId, "COLLECT_PAYMENT");
@@ -41,6 +43,7 @@ export async function GET(req: Request, { params }: Params) {
 
   const where: Prisma.EnterprisePaymentWhereInput = {
     organizationId,
+    ...((dates.from || dates.to) ? { paymentDate: { ...(dates.from ? { gte: dates.from } : {}), ...(dates.to ? { lte: dates.to } : {}) } } : {}),
     ...(sitePaymentScope ? { AND: [sitePaymentScope] } : {}),
     ...(recordId ? { id: recordId } : {}),
     ...(workflowPending ? { status: "PENDING_APPROVAL" } : status ? { status } : {}),

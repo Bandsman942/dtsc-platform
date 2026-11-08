@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { validateAccountingDimensions } from "@/lib/enterprise/accounting/accounting-dimension-validation";
-import { authorizeFinanceRequest, financeErrorResponse, financeListParams, financeValidationErrorResponse } from "@/lib/enterprise/accounting/http";
+import { authorizeFinanceRequest, financeBusinessDateRange, financeErrorResponse, financeListParams, financeValidationErrorResponse } from "@/lib/enterprise/accounting/http";
 import { createJournalEntryDraft, listJournalEntries } from "@/lib/enterprise/accounting/journal-service";
 import { journalEntryCreateSchema } from "@/lib/enterprise/accounting/schemas";
 import { prisma } from "@/lib/prisma";
@@ -23,6 +23,8 @@ export async function GET(req: Request, { params }: Params) {
 
   const url = new URL(req.url);
   const recordId = url.searchParams.get("recordId")?.trim() || undefined;
+  const dates = financeBusinessDateRange(req);
+  if (!dates.ok) return dates.response;
   const input = financeListParams(req);
   const baseResult = recordId
     ? {
@@ -33,7 +35,7 @@ export async function GET(req: Request, { params }: Params) {
         }),
         pagination: { page: 1, pageSize: 1, total: 0, pageCount: 1 },
       }
-    : await listJournalEntries(organizationId, input);
+    : await listJournalEntries(organizationId, { ...input, dateFrom: dates.from, dateTo: dates.to });
   const rawItems = baseResult.items as JournalListItem[];
   const ids = rawItems.map((item) => item.id);
   const approvals = ids.length ? await prisma.enterpriseApproval.findMany({

@@ -2,7 +2,7 @@ import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
-import { authorizeFinanceRequest, financeErrorResponse, financeListParams } from "@/lib/enterprise/accounting/http";
+import { authorizeFinanceRequest, financeBusinessDateRange, financeErrorResponse, financeListParams } from "@/lib/enterprise/accounting/http";
 import { assertSupplierInvoiceSources } from "@/lib/enterprise/accounting/invoice-source-validation";
 import { createSupplierInvoice } from "@/lib/enterprise/accounting/payables-service";
 import { supplierInvoiceCreateSchema } from "@/lib/enterprise/accounting/schemas";
@@ -15,6 +15,8 @@ export async function GET(req: Request, { params }: Params) {
   const { organizationId } = await params;
   const auth = await authorizeFinanceRequest(req, organizationId, "FINANCE_PAYABLES", "view");
   if (!auth.ok) return auth.response;
+  const dates = financeBusinessDateRange(req);
+  if (!dates.ok) return dates.response;
 
   const { page, pageSize, search, status } = financeListParams(req);
   const url = new URL(req.url);
@@ -22,6 +24,7 @@ export async function GET(req: Request, { params }: Params) {
   const workflowPending = url.searchParams.get("workflowPending") === "true";
   const where: Prisma.EnterpriseSupplierInvoiceWhereInput = {
     organizationId,
+    ...((dates.from || dates.to) ? { invoiceDate: { ...(dates.from ? { gte: dates.from } : {}), ...(dates.to ? { lte: dates.to } : {}) } } : {}),
     ...(recordId ? { id: recordId } : {}),
     ...(workflowPending ? { status: { in: ["PENDING_REVIEW", "PENDING_APPROVAL"] } } : status ? { status } : {}),
     ...(search ? { number: { contains: search, mode: "insensitive" } } : {}),
