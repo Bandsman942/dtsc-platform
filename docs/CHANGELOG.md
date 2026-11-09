@@ -1,3 +1,11 @@
+## 2026-11-09 — Hotfix #1097 — MCP hybride Time/Brave Vercel, Fetch Fly.io (candidat v1.7.5, NON LIVRÉ)
+
+- Time et Brave Search sont réécrits comme serveurs MCP HTTP sans état avec `mcp-handler` 2 dans Next.js Node 22 ; Time exploite `Intl` et signale les ambiguïtés DST, Brave utilise exclusivement les API officielles web/news et sa clé dans les Secrets Vercel.
+- Le pont stdio externe ne lance plus que `mcp-server-fetch` : image et configuration **un seul conteneur Fly.io**, authentification HTTPS, pare-feu egress nftables obligatoire et refus des réseaux privés/métadonnées.
+- Les 3 flags de certification et les sondes Console IA sont indépendants : une panne de Fetch ne retire pas Time/Brave du catalogue, et chaque sonde vérifie les outils réellement découverts. Tool Gateway, quotas, audits, frontières de données, 5 outils READ et exclusion du site public sont préservés.
+- Variables Production et étapes réelles : `docs/HOTFIX_1097_HYBRID_MCP_RUNBOOK.md`. QA nouvelle `pnpm qa:hotfix-1097` et QA #1094 adaptée sans perdre les assertions comptables/SSRF. Aucun changement Prisma, aucun secret ajouté ; #1096 reste ouvert pour provisioning et certification réelle.
+- **Statut :** candidat de branche, OWNER_E2E, CI et appels live restent à prouver ; ni fusion, ni déploiement Production, ni serveur Fly ne sont déclarés réussis.
+
 ## 2026-11-09 — Hotfix #1094 — Libellés comptables bilingues et MCP global (candidate v1.7.4)
 
 - Comptabilité : les libellés automatiques identifiables issus des journaux ERP (ventes, achats, sortie/entrée de stock, règlement, avance client, dépense, paie, immobilisations, écarts de change, clôture, RETAIL POS, télécom, Mobile Money, remboursements et transferts) sont rendus en **français comptable clair** ou en **anglais clair** dans les écritures, le grand livre, le détail et les exports. La base et les textes libres saisis par l'utilisateur restent intacts.

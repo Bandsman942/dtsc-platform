@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Run on dedicated MCP runner after provisioning BRAVE_API_KEY and runner TLS.
+ * Run against the isolated Fly.io Fetch runner after provisioning its TLS.
  * Real network probes (no mocks), prints a sanitized execution report.
  * Only successful discovery + expected responses + SSRF denials may certify.
  */
@@ -25,9 +25,7 @@ async function probe(path, method = "GET", payload) {
 }
 const servers = await probe("/v1/certification");
 const expectedTools = {
-  time: ["get_current_time", "convert_time"],
   fetch: ["fetch"],
-  brave: ["brave_web_search", "brave_news_search"],
 };
 const report = { at: new Date().toISOString(), status: "NOT_CERTIFIED", servers: {}, assistantVisibility: { DTSC_GENERAL: "APP_E2E_REQUIRED", ENTERPRISE_GENERAL: "APP_E2E_REQUIRED", SHOP_ASSISTANT: "APP_E2E_REQUIRED" }, tests: [] };
 for (const [name, names] of Object.entries(expectedTools)) {
@@ -37,9 +35,6 @@ for (const [name, names] of Object.entries(expectedTools)) {
   report.servers[name] = { status: ready ? "DISCOVERED" : "FAILED", tools: discovered.filter((tool) => names.includes(tool)), transport: "stdio" };
 }
 const checks = [
-  ["time / Kinshasa", "time.get_current_time", { timezone: "Africa/Kinshasa" }, 200, /Africa\/Kinshasa/],
-  ["brave / news", "brave.search_news", { query: "technology security news today", count: 3 }, 200, /https?:\/\//],
-  ["brave / web", "brave.search_web", { query: "Model Context Protocol documentation", count: 3 }, 200, /https?:\/\//],
   ["fetch / example.com", "fetch.fetch", { url: "https://example.com/" }, 200, /Example Domain/i],
   ["SSRF / localhost", "fetch.fetch", { url: "http://localhost/" }, 422, null],
   ["SSRF / cloud metadata", "fetch.fetch", { url: "http://169.254.169.254/latest/meta-data/" }, 422, null],

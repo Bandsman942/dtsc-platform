@@ -1,0 +1,12 @@
+table inet dtsc_fetch {
+  chain output {
+    type filter hook output priority -10; policy accept;
+    ct state established,related accept
+    # Fly's internal DNS resolver is needed solely for resolution; all other
+    # organization private-network destinations are denied below.
+    ip6 daddr fdaa::3 udp dport 53 accept
+    ip6 daddr fdaa::3 tcp dport 53 accept
+    ip daddr { 0.0.0.0/8, 10.0.0.0/8, 100.64.0.0/10, 127.0.0.0/8, 169.254.0.0/16, 172.16.0.0/12, 192.0.2.0/24, 192.168.0.0/16, 198.18.0.0/15, 198.51.100.0/24, 203.0.113.0/24, 224.0.0.0/4, 240.0.0.0/4 } reject
+    ip6 daddr { ::/128, ::1/128, fc00::/7, fe80::/10, 2001:db8::/32, ff00::/8 } reject
+  }
+}
