@@ -575,5 +575,9 @@
   "closingOperationsTitle": "Opérations de clôture",
   "closingOperationsDescription": "Réévaluation de change de clôture, contrepassation liée et clôture annuelle vers le report à nouveau.",
   "assetDisposalsTitle": "Cessions d’actifs",
-  "assetDisposalsDescription": "Préparez et comptabilisez la sortie auditée des actifs avec produit de cession et gain ou perte."
+  "assetDisposalsDescription": "Préparez et comptabilisez la sortie auditée des actifs avec produit de cession et gain ou perte.",
+  "affectedStockItems": "Articles concernés",
+  "allDueDates": "Toutes les échéances",
+  "detailsLabel": "Détail",
+  "noLinkedCustomerInvoice": "Aucune facture client n’est liée à cet encaissement. Un reçu de paiement ne remplace pas une facture."
 }
