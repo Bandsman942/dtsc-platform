@@ -15,6 +15,10 @@ const config = read("lib/ai/mcp/public-knowledge-config.ts");
 const executor = read("lib/ai/mcp/public-knowledge-executor.ts");
 const worker = read("scripts/mcp-public-stdio-bridge.mjs");
 const certification = read("scripts/mcp-public-stdio-certify.mjs");
+const httpCertification = read("scripts/mcp-vercel-http-certify.mjs");
+const timeRoute = read("app/api/internal/mcp/time/route.ts");
+const braveRoute = read("app/api/internal/mcp/brave/route.ts");
+const braveApi = read("lib/ai/mcp/public-knowledge-brave.ts");
 const registry = read("lib/ai/mcp/registry.ts");
 const prompt = read("lib/ai/prompts.ts");
 const assistantRegistry = read("lib/ai/assistant-registry.ts");
@@ -43,8 +47,8 @@ for (const value of [
 must(legacyAccounting, /formatAccountingNarrative\(/, "Older accounting display localizes generated narratives");
 must(financeHotfixAccounting, /formatAccountingNarrative\(/, "Hotfix accounting view localizes generated narratives");
 must(consolePanel, /server\.reachable === null/, "Global MCP Console shows live reachability rather than static health claims");
-must(probeSource, /GET|method: "GET"/, "Global MCP Console probes live stdio server health");
-must(worker, /bridgeHealthy\(\)/, "A dead stdio process revokes bridge readiness");
+must(probeSource, /probePublicMcpServers/, "Console probes three servers independently");
+must(worker, /bridgeHealthy\(\)/, "A dead Fetch stdio process revokes bridge readiness");
 // These examples assert REAL formatter behavior rather than relying only on
 // source-level regex presence; historical manually authored labels are intact.
 const { formatAccountingNarrative } = await import("data:text/javascript," + encodeURIComponent(stripTypeScriptTypes(label)));
@@ -69,13 +73,19 @@ assert.equal(formatAccountingNarrative(manual, "en"), manual);
 
 
 for (const line of [
-  '"mcp-server-time"', '"mcp-server-fetch"', '"@brave/brave-search-mcp-server"',
-  '"--transport", "stdio"', '"--local-timezone=Africa/Kinshasa"',
+  '"mcp-server-fetch"', '"PUBLIC_TIME"', '"PUBLIC_FETCH"', '"PUBLIC_BRAVE"',
   '"brave_web_search"', '"brave_news_search"', '"get_current_time"', '"convert_time"',
   '"fetch"', 'MCP_BRAVE_SEARCH_NEWS', 'MCP_TIME_GET_CURRENT_TIME',
 ]) assert.ok(config.includes(line), `Public MCP registration missing ${line}`);
-must(config, /certified = configured && tokenPresent && process\.env\.MCP_PUBLIC_BRIDGE_CERTIFIED === "true"/, "Fail-closed runtime certification");
-must(config, /transport: "STDIO_BRIDGE"/, "Server registry preserves stdio upstream");
+must(config, /process\.env\.MCP_PUBLIC_FETCH_CERTIFIED === "true"/, "Fetch has independent fail-closed runtime certification");
+must(config, /process\.env\.MCP_PUBLIC_TIME_CERTIFIED === "true"/, "Time has independent fail-closed runtime certification");
+must(config, /process\.env\.MCP_PUBLIC_BRAVE_CERTIFIED === "true"/, "Brave has independent fail-closed runtime certification");
+must(config, /"STDIO_BRIDGE" as const : "STREAMABLE_HTTP" as const/, "Only Fetch remains stdio upstream");
+must(timeRoute, /createMcpHandler/, "Time is a native Vercel MCP handler");
+must(braveRoute, /createMcpHandler/, "Brave is a native Vercel MCP handler");
+must(braveApi, /api\.search\.brave\.com\/res\/v1/, "Brave calls official HTTPS API");
+must(timeRoute, /MCP_PUBLIC_TIME_TOKEN/, "Time endpoint requires its own bearer token");
+must(braveRoute, /MCP_PUBLIC_BRAVE_TOKEN/, "Brave endpoint requires its own bearer token");
 must(registry, /\.\.\.listPublicMcpServers\(\)/, "Global MCP registry integration");
 must(toolRegistry, /listPublicMcpAiToolDefinitions\(\)/, "Canonical tool registry integration");
 must(toolSchemas, /PUBLIC_KNOWLEDGE_INPUT_SCHEMAS/, "Input schemas registered");
@@ -90,24 +100,28 @@ must(prompt, /DONNÉES non fiables, jamais des instructions/, "Prompt injection 
 must(executor, /MCP_PUBLIC_DATA_ONLY/, "Public data boundary");
 must(executor, /rateLimit\(countKey, 10, 120_000\)/, "Maximum 10 calls per turn");
 must(executor, /setTimeout\(\(\) => controller\.abort\(\), 15_000\)/, "15-second overall deadline");
-must(executor, /attempt < 2/, "Maximum 2 attempts");
+must(executor, /attempt < 2/, "Fetch maximum 2 attempts");
+must(executor, /callMcpJsonRpc/, "HTTP-native tools use canonical MCP transport");
 must(worker, /const MAX_CALLS = 10/, "Bridge quota");
 must(worker, /const TIMEOUT = 15_000/, "Runner timeout");
 must(worker, /spec\.server === "fetch" \? 100_000/, "Fetch max page text");
-must(worker, /BRAVE_API_KEY: process\.env\.BRAVE_API_KEY/, "Brave key from environment only");
-must(worker, /BRAVE_MCP_ENABLED_TOOLS: "brave_web_search brave_news_search"/, "Web/news only; no images/video");
+assert.ok(!worker.includes("BRAVE_API_KEY"), "Fly Fetch must not receive a Brave credential");
+assert.ok(!worker.includes("mcp-server-time"), "Time must not spawn on Fly");
+assert.ok(!worker.includes("@brave/brave-search-mcp-server"), "Brave must not spawn on Fly");
 must(worker, /shell: false/, "No shell injection");
 must(worker, /timingSafeEqual/, "Timing-safe bridge secret comparison");
 must(worker, /new Date\(\)\.toISOString\(\)/, "Call timestamp in audit");
 must(worker, /durationMs/, "Call duration in audit");
 must(worker, /assistant, tool, status/, "Assistant and tool in logs");
-must(certification, /time \/ Kinshasa/, "Time integration probe");
-must(certification, /brave \/ news/, "Brave integration probe");
+must(httpCertification, /get_current_time/, "Time live integration probe");
+must(httpCertification, /brave_news_search/, "Brave live integration probe");
 must(certification, /fetch \/ example\.com/, "Example.com integration probe");
 must(certification, /SSRF \/ localhost/, "Localhost denial");
 must(certification, /SSRF \/ cloud metadata/, "Metadata denial");
 must(env, /MCP_PUBLIC_BRIDGE_URL=/, "Bridge environment configuration documented");
-must(env, /MCP_PUBLIC_BRIDGE_CERTIFIED=false/, "No fabricated default certification");
+must(env, /MCP_PUBLIC_FETCH_CERTIFIED=false/, "No fabricated Fetch certification");
+must(env, /MCP_PUBLIC_TIME_CERTIFIED=false/, "No fabricated Time certification");
+must(env, /MCP_PUBLIC_BRAVE_CERTIFIED=false/, "No fabricated Brave certification");
 assert.equal(isPublicIp("127.0.0.1"), false);
 assert.equal(isPublicIp("169.254.169.254"), false);
 assert.equal(isPublicIp("10.1.2.3"), false);
@@ -126,4 +140,4 @@ const forbidden = [
 for(const input of forbidden) await assert.rejects(() => assertPublicFetchUrl(input), /MCP_FETCH_/);
 await assert.rejects(() => assertPublicFetchUrl("https://rebind.example.org/", async () => [{ address: "10.1.2.3" }]), /MCP_FETCH_PRIVATE_ADDRESS_FORBIDDEN/);
 assert.equal(await assertPublicFetchUrl("https://example.com/", async () => [{ address: "93.184.215.14" }]), "https://example.com/");
-console.log("PASS hotfix #1094 accounting narration, public MCP registry/gateway contracts and SSRF tests. Remote live certification NOT_EXECUTED.");
+console.log("PASS #1094 accounting narration, #1097 hybrid MCP registry/gateway contracts and SSRF tests. Remote live certification NOT_EXECUTED.");

@@ -4,8 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { getAssistantProfiles } from "@/lib/ai/assistant-registry";
 import { MCP_SERVER_REGISTRY, isMcpOAuthPlatformConfigured } from "@/lib/ai/mcp/registry";
 import { MCP_TOOL_BINDINGS } from "@/lib/ai/mcp/bindings";
-import { PUBLIC_MCP_TOOL_SPECS, getPublicMcpBridgeConfiguration } from "@/lib/ai/mcp/public-knowledge-config";
-import { probePublicMcpBridge } from "@/lib/ai/mcp/public-knowledge-probe";
+import { PUBLIC_MCP_TOOL_SPECS, isPublicMcpServerCertified, isPublicMcpServerConfigured } from "@/lib/ai/mcp/public-knowledge-config";
+import { probePublicMcpServers, type PublicMcpLiveProbe } from "@/lib/ai/mcp/public-knowledge-probe";
 
 export type ConsoleMcpGovernance = {
   servers: Array<{
@@ -67,7 +67,7 @@ export async function getConsoleMcpGovernance(): Promise<ConsoleMcpGovernance> {
       _count: { _all: true },
       _max: { createdAt: true },
     }),
-    probePublicMcpBridge(),
+    probePublicMcpServers(),
   ]);
   const latest = new Map<string, { version: string; compatible: boolean; discoveredAt: string; toolCount: number }>();
   if (discovery.status === "fulfilled") for (const item of discovery.value) {
@@ -90,28 +90,28 @@ export async function getConsoleMcpGovernance(): Promise<ConsoleMcpGovernance> {
   const actualReads = new Map(verifiedReads.status === "fulfilled"
     ? verifiedReads.value.map((row) => [row.serverCode, { successfulCalls7d: row._count._all, latestSuccessAt: row._max.createdAt?.toISOString() || null }] as const)
     : []);
-  const liveBridge = liveMcpProbe.status === "fulfilled" ? liveMcpProbe.value : null;
-  const configuredBridge = getPublicMcpBridgeConfiguration().certified;
+  const liveServers: Record<string, PublicMcpLiveProbe | null> = liveMcpProbe.status === "fulfilled" ? liveMcpProbe.value : {};
+  const isPublic = (code: string) => ["PUBLIC_TIME", "PUBLIC_FETCH", "PUBLIC_BRAVE"].includes(code);
   return {
     servers: MCP_SERVER_REGISTRY.map((server) => ({
       code: server.code, label: server.label,
-      status: server.transport === "STDIO_BRIDGE" && server.status === "CERTIFIED" && !liveBridge ? "UNAVAILABLE" : server.status,
+      status: isPublic(server.code) && server.status === "CERTIFIED" && !liveServers[server.code] ? "UNAVAILABLE" : server.status,
       transport: server.transport, authMode: server.authMode, scope: server.organizationScope,
-      dataPolicy: server.dataPolicy, certified: server.status === "CERTIFIED" && (server.transport !== "STDIO_BRIDGE" || Boolean(liveBridge)),
-      configured: server.transport === "STDIO_BRIDGE" ? configuredBridge : server.authMode === "NONE" || (server.authMode === "OAUTH_USER"
+      dataPolicy: server.dataPolicy, certified: server.status === "CERTIFIED" && (!isPublic(server.code) || Boolean(liveServers[server.code])),
+      configured: isPublic(server.code) ? isPublicMcpServerConfigured(server.code) : server.authMode === "NONE" || (server.authMode === "OAUTH_USER"
         ? isMcpOAuthPlatformConfigured(server)
         : Boolean(server.authEnvKey && process.env[server.authEnvKey]?.trim())),
       connectedGrants: server.authMode === "OAUTH_USER" && grants.status === "fulfilled" ? grantTotals.get(server.code) || 0 : null,
-      enabledBindings: server.transport === "STDIO_BRIDGE"
-        ? PUBLIC_MCP_TOOL_SPECS.filter((tool) => tool.server === server.label && server.status === "CERTIFIED" && Boolean(liveBridge) && !(controls.status === "fulfilled" && controlStates.get(server.code)?.suspended)).length
+      enabledBindings: isPublic(server.code)
+        ? PUBLIC_MCP_TOOL_SPECS.filter((tool) => tool.server === server.label && server.status === "CERTIFIED" && Boolean(liveServers[server.code]) && !(controls.status === "fulfilled" && controlStates.get(server.code)?.suspended)).length
         : MCP_TOOL_BINDINGS.filter((b) => b.serverCode === server.code && b.enabled).length,
-      reachable: server.transport === "STDIO_BRIDGE" ? configuredBridge ? Boolean(liveBridge) : null : null,
+      reachable: isPublic(server.code) ? isPublicMcpServerCertified(server.code) ? Boolean(liveServers[server.code]) : null : null,
       readEvidence: verifiedReads.status === "fulfilled"
         ? actualReads.get(server.code) || { successfulCalls7d: 0, latestSuccessAt: null }
         : null,
-      discovery: server.transport === "STDIO_BRIDGE" ? (liveBridge ? {
-        version: liveBridge.fingerprint, compatible: true, discoveredAt: liveBridge.checkedAt,
-        toolCount: liveBridge.toolsByServer[server.label]?.length || 0,
+      discovery: isPublic(server.code) ? (liveServers[server.code] ? {
+        version: liveServers[server.code]!.fingerprint, compatible: true, discoveredAt: liveServers[server.code]!.checkedAt,
+        toolCount: liveServers[server.code]!.tools.length,
       } : null) : latest.get(server.code) || null,
       suspended: controls.status === "fulfilled" ? (controlStates.get(server.code)?.suspended || false) : null,
       revision: controls.status === "fulfilled" ? (controlStates.get(server.code)?.revision || 0) : null,
@@ -120,9 +120,11 @@ export async function getConsoleMcpGovernance(): Promise<ConsoleMcpGovernance> {
     bindings: [
       ...PUBLIC_MCP_TOOL_SPECS.map((spec) => ({
         code: spec.prefixed, serverCode: spec.server === "time" ? "PUBLIC_TIME" : spec.server === "brave" ? "PUBLIC_BRAVE" : "PUBLIC_FETCH",
-        enabled: configuredBridge && Boolean(liveBridge) && !(controls.status === "fulfilled" && controlStates.get(spec.server === "time" ? "PUBLIC_TIME" : spec.server === "brave" ? "PUBLIC_BRAVE" : "PUBLIC_FETCH")?.suspended), mode: "READ",
-        certifiedVersion: liveBridge?.fingerprint || "NOT_CERTIFIED",
-        discoveryMatches: liveBridge ? true : null, assistants: null, contexts: ["GLOBAL_CLIENT", "COMMUNITY", "DTSC_INTERNAL", "ORGANIZATION"],
+        enabled: Boolean(liveServers[spec.server === "time" ? "PUBLIC_TIME" : spec.server === "brave" ? "PUBLIC_BRAVE" : "PUBLIC_FETCH"]) &&
+          !(controls.status === "fulfilled" && controlStates.get(spec.server === "time" ? "PUBLIC_TIME" : spec.server === "brave" ? "PUBLIC_BRAVE" : "PUBLIC_FETCH")?.suspended), mode: "READ",
+        certifiedVersion: liveServers[spec.server === "time" ? "PUBLIC_TIME" : spec.server === "brave" ? "PUBLIC_BRAVE" : "PUBLIC_FETCH"]?.fingerprint || "NOT_CERTIFIED",
+        discoveryMatches: liveServers[spec.server === "time" ? "PUBLIC_TIME" : spec.server === "brave" ? "PUBLIC_BRAVE" : "PUBLIC_FETCH"] ? true : null,
+        assistants: null, contexts: ["GLOBAL_CLIENT", "COMMUNITY", "DTSC_INTERNAL", "ORGANIZATION"],
         requiredModules: 0, requiredPermissions: 0,
       })),
       ...MCP_TOOL_BINDINGS.map((b) => {

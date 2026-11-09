@@ -1,65 +1,60 @@
 import "server-only";
 import { createHash } from "node:crypto";
-import { getPublicMcpBridgeConfiguration, PUBLIC_MCP_SERVERS } from "@/lib/ai/mcp/public-knowledge-config";
+import { PUBLIC_MCP_SERVERS, getPublicMcpBridgeConfiguration } from "@/lib/ai/mcp/public-knowledge-config";
 import { getMcpServerDefinition } from "@/lib/ai/mcp/registry";
 import { validateMcpEndpointResolution } from "@/lib/ai/mcp/security";
+import { callMcpJsonRpc } from "@/lib/ai/mcp/transport";
 
-type PublicMcpBridgeProbe = {
+export type PublicMcpLiveProbe = {
   checkedAt: string;
   fingerprint: string;
-  toolsByServer: Record<string, string[]>;
+  tools: string[];
 };
 
-/**
- * Live discovery only. Certification in environment is a precondition, never
- * evidence of a healthy running stdio server. No user data or secrets returned.
- */
-export async function probePublicMcpBridge(): Promise<PublicMcpBridgeProbe | null> {
-  const bridge = getPublicMcpBridgeConfiguration();
-  if (!bridge.certified) return null;
-  const time = getMcpServerDefinition("PUBLIC_TIME");
-  if (!time || time.transport !== "STDIO_BRIDGE" || time.status !== "CERTIFIED") return null;
-  const allowed = await validateMcpEndpointResolution(time);
-  if (!allowed.allowed) return null;
-  const token = process.env.MCP_PUBLIC_BRIDGE_TOKEN?.trim();
-  if (!token) return null;
-  const controller = new AbortController();
-  const abort = setTimeout(() => controller.abort(), 4_000);
-  try {
-    const endpoint = new URL(bridge.url);
-    endpoint.pathname = "/v1/certification";
-    const response = await fetch(endpoint.toString(), {
-      method: "GET",
-      headers: { authorization: `Bearer ${token}` },
-      redirect: "manual", cache: "no-store", signal: controller.signal,
-    });
-    if (!response.ok || response.status >= 300 && response.status < 400 ||
-      Number(response.headers.get("content-length") || "0") > 32_000) return null;
-    const source = await response.text();
-    if (source.length > 32_000) return null;
-    const data: unknown = JSON.parse(source);
-    if (!data || typeof data !== "object" || !("ready" in data) || data.ready !== true ||
-      !("servers" in data) || !Array.isArray(data.servers)) return null;
-    const toolsByServer: Record<string, string[]> = {};
-    for (const server of PUBLIC_MCP_SERVERS) {
-      const found = (data.servers as unknown[]).find((row) => row && typeof row === "object" &&
-        "server" in row && row.server === server.name);
-      if (!found || typeof found !== "object" || !("tools" in found)) return null;
-      const discoveredTools: unknown = found.tools;
-      if (!Array.isArray(discoveredTools) || !server.tools.every((name) => discoveredTools.includes(name))) return null;
-      // Only reviewed tool names are returned to the Console UI.
-      toolsByServer[server.name] = [...server.tools];
-    }
-    return {
-      checkedAt: new Date().toISOString(),
-      fingerprint: createHash("sha256").update(JSON.stringify(toolsByServer)).digest("hex"),
-      toolsByServer,
-    };
-  } catch {
-    // Remote metadata/response is untrusted. Fail closed without logging
-    // response bodies, tokens, URLs, or exception messages.
-    return null;
-  } finally {
-    clearTimeout(abort);
+async function probeOne(code: string): Promise<PublicMcpLiveProbe | null> {
+  const server = getMcpServerDefinition(code);
+  const expected = PUBLIC_MCP_SERVERS.find((entry) => entry.code === code);
+  if (!server || !expected || server.status !== "CERTIFIED") return null;
+  let discovered: unknown;
+  if (server.transport === "STREAMABLE_HTTP") {
+    try {
+      const response = await callMcpJsonRpc<{ tools?: Array<{ name?: string }> }>({ server: { ...server, timeoutMs: 4_000 }, method: "tools/list" });
+      discovered = response.tools?.map((entry) => entry.name);
+    } catch { return null; }
+  } else {
+    const bridge = getPublicMcpBridgeConfiguration();
+    if (!bridge.certified || !(await validateMcpEndpointResolution(server)).allowed) return null;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 4_000);
+    try {
+      const endpoint = new URL(bridge.url);
+      endpoint.pathname = "/v1/certification";
+      const response = await fetch(endpoint.toString(), {
+        method: "GET", headers: { authorization: `Bearer ${process.env.MCP_PUBLIC_BRIDGE_TOKEN?.trim() || ""}` },
+        redirect: "manual", cache: "no-store", signal: controller.signal,
+      });
+      if (!response.ok || Number(response.headers.get("content-length") || "0") > 32_000) return null;
+      const body = await response.text();
+      if (body.length > 32_000) return null;
+      const parsed: unknown = JSON.parse(body);
+      if (!parsed || typeof parsed !== "object" || !("ready" in parsed) || parsed.ready !== true ||
+        !("servers" in parsed) || !Array.isArray(parsed.servers)) return null;
+      const item: unknown = parsed.servers.find((entry: unknown) => entry && typeof entry === "object" && "server" in entry && entry.server === "fetch");
+      discovered = item && typeof item === "object" && "tools" in item ? item.tools : null;
+    } catch { return null; }
+    finally { clearTimeout(timer); }
   }
+  if (!Array.isArray(discovered) || !expected.tools.every((name) => discovered.includes(name))) return null;
+  const tools = [...expected.tools];
+  return {
+    checkedAt: new Date().toISOString(),
+    fingerprint: createHash("sha256").update(JSON.stringify({ code, tools })).digest("hex"),
+    tools,
+  };
+}
+
+/** A credential or feature flag is never considered live discovery evidence. */
+export async function probePublicMcpServers(): Promise<Record<string, PublicMcpLiveProbe | null>> {
+  const outcomes = await Promise.all(PUBLIC_MCP_SERVERS.map(async ({ code }) => [code, await probeOne(code)] as const));
+  return Object.fromEntries(outcomes);
 }

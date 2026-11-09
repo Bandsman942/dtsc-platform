@@ -1,5 +1,7 @@
 # Hotfix #1094 — Libellés comptables FR/EN + MCP culture générale pour assistants internes
 
+> **Historique v1.7.4 :** les sections stdio ci-dessous décrivent la conception initiale avant la migration proposée dans le candidat **v1.7.5 / #1097**. Les libellés comptables restent livrés ; pour la configuration actuelle Time/Brave sur Vercel et Fetch sur Fly.io, suivre [le runbook hybride #1097](HOTFIX_1097_HYBRID_MCP_RUNBOOK.md). Les résultats de certification #1097 ne doivent pas être déduits de ce document historique.
+
 **Date :** 2026-11-09 · **Version candidate :** v1.7.4 · **Issue :** #1094
 **OWNER_E2E :** NOT_EXECUTED. **MCP live certification :** NOT_EXECUTED tant qu’un runner stdio permanent, son endpoint HTTPS et sa clé Brave ne sont pas configurés.
 **Règle de livraison :** branche `fix/1094-accounting-labels-global-mcp-stdio` → CI → OWNER E2E BON → fusion `main` → Vercel Production par Git uniquement.

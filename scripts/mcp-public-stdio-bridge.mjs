@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Dedicated, hardened Node 22 MCP stdio bridge. Never deploy on Vercel.
+ * Fly.io dedicated, hardened Node 22 Fetch-only MCP stdio bridge.
  * Runs behind an HTTPS reverse proxy with egress firewall denying private IPs.
  * Warm-up/certification takes place before HTTP becomes available.
  *
@@ -19,16 +19,10 @@ const MAX_REQUEST = 16 * 1024;
 const MAX_CALLS = 10;
 const TIMEOUT = 15_000;
 const tools = {
-  "time.get_current_time": { server: "time", remote: "get_current_time" },
-  "time.convert_time": { server: "time", remote: "convert_time" },
   "fetch.fetch": { server: "fetch", remote: "fetch" },
-  "brave.search_web": { server: "brave", remote: "brave_web_search" },
-  "brave.search_news": { server: "brave", remote: "brave_news_search" },
 };
 const definitions = [
-  { code: "time", command: "uvx", args: ["mcp-server-time", "--local-timezone=Africa/Kinshasa"], allowed: ["get_current_time", "convert_time"] },
   { code: "fetch", command: "uvx", args: ["mcp-server-fetch"], allowed: ["fetch"] },
-  { code: "brave", command: "npx", args: ["-y", "@brave/brave-search-mcp-server", "--transport", "stdio"], allowed: ["brave_web_search", "brave_news_search"] },
 ];
 
 class StdioClient {
@@ -49,13 +43,6 @@ class StdioClient {
       NODE_ENV: "production",
       PYTHONIOENCODING: "utf-8",
       TZ: "Africa/Kinshasa",
-      ...(d.code === "brave" ? {
-        BRAVE_API_KEY: process.env.BRAVE_API_KEY || "",
-        ...(process.env.BRAVE_API_KEY_FILE ? { BRAVE_API_KEY_FILE: process.env.BRAVE_API_KEY_FILE } : {}),
-        BRAVE_MCP_ENABLED_TOOLS: "brave_web_search brave_news_search",
-        BRAVE_MCP_LOG_LEVEL: "error",
-        BRAVE_MCP_TRANSPORT: "stdio",
-      } : {}),
     };
     const child = spawn(d.command, d.args, { shell: false, env: environment, stdio: ["pipe", "pipe", "ignore"], windowsHide: true });
     this.child = child;
@@ -163,31 +150,11 @@ function validBody(value) {
 function validToolArgs(body) {
   const { tool, args } = body;
   const keys = Object.keys(args);
-  if (tool === "time.get_current_time") {
-    if (keys.some((key) => key !== "timezone")) throw new Error("MCP_ARGS_INVALID");
-    const timezone = args.timezone || "Africa/Kinshasa";
-    try { new Intl.DateTimeFormat("en", { timeZone: timezone }); }
-    catch { throw new Error("MCP_TIMEZONE_INVALID"); }
-    return { timezone };
-  }
-  if (tool === "time.convert_time") {
-    if (keys.some((key) => !["source_timezone", "target_timezone", "time"].includes(key)) ||
-      !/^([01]\d|2[0-3]):[0-5]\d$/.test(args.time)) throw new Error("MCP_ARGS_INVALID");
-    for (const zone of [args.source_timezone, args.target_timezone]) {
-      try { new Intl.DateTimeFormat("en", { timeZone: zone }); }
-      catch { throw new Error("MCP_TIMEZONE_INVALID"); }
-    }
-    return args;
-  }
   if (tool === "fetch.fetch") {
     if (keys.some((key) => key !== "url") || typeof args.url !== "string") throw new Error("MCP_ARGS_INVALID");
     return args;
   }
-  if (keys.some((key) => !["query", "count"].includes(key)) ||
-    typeof args.query !== "string" || !args.query.trim() || args.query.length > 400 ||
-    args.query.trim().split(/\s+/).length > 50 ||
-    (args.count !== undefined && (!Number.isInteger(args.count) || args.count < 1 || args.count > 10))) throw new Error("MCP_ARGS_INVALID");
-  return { query: args.query, count: args.count ?? 5 };
+  throw new Error("MCP_TOOL_FORBIDDEN");
 }
 
 async function handleCall(body) {
@@ -247,7 +214,6 @@ function startHttp() {
 
 async function main() {
   if (TOKEN.length < 32) throw new Error("MCP_BRIDGE_AUTH_NOT_CONFIGURED");
-  if (!process.env.BRAVE_API_KEY && !process.env.BRAVE_API_KEY_FILE) throw new Error("MCP_BRAVE_CREDENTIAL_NOT_CONFIGURED");
   for (const definition of definitions) {
     const client = new StdioClient(definition);
     clients.set(definition.code, client);

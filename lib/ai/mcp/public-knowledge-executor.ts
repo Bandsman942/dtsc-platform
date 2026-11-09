@@ -3,8 +3,9 @@ import { isIP } from "node:net";
 import { z } from "zod";
 import { getMcpServerDefinition } from "@/lib/ai/mcp/registry";
 import { writeMcpAuditEvent } from "@/lib/ai/mcp/audit";
-import { PUBLIC_MCP_TOOL_SPECS, getPublicMcpBridgeConfiguration } from "@/lib/ai/mcp/public-knowledge-config";
+import { PUBLIC_MCP_TOOL_SPECS, getPublicMcpBridgeConfiguration, isPublicMcpServerCertified } from "@/lib/ai/mcp/public-knowledge-config";
 import { validateMcpEndpointResolution } from "@/lib/ai/mcp/security";
+import { callMcpJsonRpc } from "@/lib/ai/mcp/transport";
 import { assertMcpServerNotSuspended } from "@/lib/ai/mcp/control";
 import { rateLimit } from "@/lib/rate-limit";
 import type { AiToolExecutor, AiToolRuntimeContext } from "@/lib/ai/tools/types";
@@ -19,6 +20,7 @@ export const PUBLIC_KNOWLEDGE_INPUT_SCHEMAS = {
     source_timezone: zone,
     target_timezone: zone,
     time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   }).strict(),
   MCP_FETCH_FETCH: z.object({ url: z.string().url().min(8).max(2048) }).strict(),
   MCP_BRAVE_SEARCH_WEB: search,
@@ -87,11 +89,9 @@ function assertPublicOnly(context: AiToolRuntimeContext) {
 export async function executePublicKnowledgeTool({ code, args, context }: { code: string; args: unknown; context: AiToolRuntimeContext }) {
   const spec = PUBLIC_MCP_TOOL_SPECS.find((entry) => entry.code === code);
   if (!spec) throw new Error("MCP_PUBLIC_TOOL_UNREGISTERED");
-  const bridge = getPublicMcpBridgeConfiguration();
-  if (!bridge.certified) throw new Error("MCP_PUBLIC_BRIDGE_NOT_CERTIFIED");
   const serverCode = spec.server === "brave" ? "PUBLIC_BRAVE" : spec.server === "fetch" ? "PUBLIC_FETCH" : "PUBLIC_TIME";
   const server = getMcpServerDefinition(serverCode);
-  if (!server || server.status !== "CERTIFIED" || server.transport !== "STDIO_BRIDGE") throw new Error("MCP_PUBLIC_SERVER_NOT_CERTIFIED");
+  if (!server || server.status !== "CERTIFIED" || !isPublicMcpServerCertified(serverCode)) throw new Error("MCP_PUBLIC_SERVER_NOT_CERTIFIED");
   const started = Date.now();
   const auditBase = { userId: context.userId, organizationId: context.organizationId || null,
     serverCode, dtscToolCode: code, remoteToolName: spec.prefixed };
@@ -110,6 +110,21 @@ export async function executePublicKnowledgeTool({ code, args, context }: { code
     if (!turnLimiter.ok || !minuteLimiter.ok) throw new Error("MCP_REQUEST_TOOL_LIMIT");
     const sanitized = (PUBLIC_KNOWLEDGE_INPUT_SCHEMAS as Record<string, z.ZodTypeAny>)[code].parse(args) as Record<string, unknown>;
     if (spec.server === "fetch") sanitized.url = await validatePublicKnowledgeFetchUrl(String(sanitized.url));
+    if (server.transport === "STREAMABLE_HTTP") {
+      const result = await callMcpJsonRpc<{ isError?: boolean; content?: Array<{ type: string; text?: string }> }>({
+        server, method: "tools/call", params: { name: spec.remote, arguments: sanitized },
+      });
+      if (result.isError || !Array.isArray(result.content)) throw new Error("MCP_PUBLIC_REMOTE_ERROR");
+      const content = result.content.filter((item) => item.type === "text" && typeof item.text === "string")
+        .map((item) => item.text).join("\n").slice(0, 160_000);
+      const sources = spec.server === "brave"
+        ? [...new Set((content.match(/https?:\/\/[^\s"'<>]+/g) || []).map((url) => url.replace(/\\+$/, "")))].filter((url) => url.length <= 2048).slice(0, 16)
+        : [];
+      status = "SUCCESS";
+      return { tool: spec.prefixed, content, sources, untrusted: true };
+    }
+    if (server.transport !== "STDIO_BRIDGE" || spec.server !== "fetch") throw new Error("MCP_PUBLIC_TRANSPORT_INVALID");
+    const bridge = getPublicMcpBridgeConfiguration();
     const gate = await validateMcpEndpointResolution(server);
     if (!gate.allowed) throw new Error(gate.reasonCode);
     const token = process.env.MCP_PUBLIC_BRIDGE_TOKEN?.trim();
@@ -166,6 +181,8 @@ export async function executePublicKnowledgeTool({ code, args, context }: { code
   }
 }
 
-export const PUBLIC_KNOWLEDGE_EXECUTORS: Record<string, AiToolExecutor> = getPublicMcpBridgeConfiguration().certified
-  ? Object.fromEntries(PUBLIC_MCP_TOOL_SPECS.map((spec) => [spec.code, ({ args, context }) => executePublicKnowledgeTool({ code: spec.code, args, context })]))
-  : {};
+export const PUBLIC_KNOWLEDGE_EXECUTORS: Record<string, AiToolExecutor> = Object.fromEntries(
+  PUBLIC_MCP_TOOL_SPECS.filter((spec) => isPublicMcpServerCertified(
+    spec.server === "time" ? "PUBLIC_TIME" : spec.server === "brave" ? "PUBLIC_BRAVE" : "PUBLIC_FETCH",
+  )).map((spec) => [spec.code, ({ args, context }: Parameters<AiToolExecutor>[0]) => executePublicKnowledgeTool({ code: spec.code, args, context })]),
+);
