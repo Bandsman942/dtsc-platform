@@ -54,7 +54,7 @@ for (const [source, fr, en] of [
   ["Settle receivable PAY-MW9A1KC3-6E441F", "Affectation d’un encaissement à une créance client — paiement PAY-MW9A1KC3-6E441F", "Customer receivable settlement — payment PAY-MW9A1KC3-6E441F"],
   ["Apply customer advance PAY-MW9A1KC3-6E441F", "Imputation d’une avance client — paiement PAY-MW9A1KC3-6E441F", "Customer advance applied — payment PAY-MW9A1KC3-6E441F"],
   ["Retail POS sale POS-998", "Vente au point de vente — POS-998", "Retail point-of-sale transaction — POS-998"],
-  ["Retail COGS reversal item99", "Annulation du coût des marchandises vendues — article — item99", "Retail cost-of-goods-sold reversal — item — item99"],
+  ["Retail COGS reversal item99", "Annulation du coût des marchandises vendues — article item99", "Retail cost-of-goods-sold reversal — item item99"],
   ["Mobile Money deposit MM-132", "Dépôt Mobile Money — MM-132", "Mobile Money deposit — MM-132"],
   ["Telco operator float TOPUP-3", "Consommation du solde chez l’opérateur télécom — TOPUP-3", "Telecom operator float consumption — TOPUP-3"],
   ["Internal transfer TR-49", "Virement interne entre comptes financiers — TR-49", "Internal transfer between financial accounts — TR-49"],
