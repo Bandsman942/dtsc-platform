@@ -290,7 +290,7 @@ export function EnterpriseFinancePaymentsWorkspace(props: Props) {
     <ModuleContent>
       {summaryError ? <ProfessionalError message={summaryError} /> : null}
       <ModuleSection title={tabs.find((item) => item.id === tab)?.label || ""} description={t("paymentSectionDescription")}>
-        {collection.error ? <ProfessionalError message={collection.error} /> : collection.loading ? <ProfessionalLoading /> : <FinanceRecordList items={collection.items} locale={locale} emptyTitle={t("noItemInView")} emptyDescription={t("professionalFormOrFilters")} onOpen={(record) => openPaymentDetail(record as Payment)} actions={(record) => record.linkedSalesInvoiceId ? <Button size="sm" variant="outline" onClick={() => printLinkedInvoice(record as Payment)}><Printer className="h-4 w-4" />{t("printInvoicePreview")}</Button> : undefined} />}
+        {collection.error ? <ProfessionalError message={collection.error} /> : collection.loading ? <ProfessionalLoading /> : <FinanceRecordList items={collection.items} locale={locale} emptyTitle={t("noItemInView")} emptyDescription={t("professionalFormOrFilters")} onOpen={(record) => openPaymentDetail(record as Payment)} actions={(record) => (record as Payment).linkedSalesInvoiceId ? <Button size="sm" variant="outline" onClick={() => printLinkedInvoice(record as Payment)}><Printer className="h-4 w-4" />{t("printInvoicePreview")}</Button> : undefined} />}
         <FinancePaginationControls pagination={collection.pagination} page={page} onPage={setPage} locale={locale} />
       </ModuleSection>
       <ProfessionalHelp moduleCode="FINANCE_PAYMENTS" />
