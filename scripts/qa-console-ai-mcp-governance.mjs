@@ -16,7 +16,7 @@ assert(schema.includes("model AiMcpControlState") && migration.includes('CREATE 
 assert(catalog.includes('MCP_MANAGE: "CONSOLE_AI_MCP_MANAGE"') && catalog.includes('CONSOLE_AI_MCP_MANAGE: "ai-control-center"'), "Server control must have distinct Console capability");
 assert(service.includes("MCP_SERVER_REGISTRY") && service.includes("MCP_TOOL_BINDINGS") && service.includes("getAssistantProfiles"), "MCP and assistant governance must use certified source registries");
 assert(service.includes("prisma.aiMcpDiscoverySnapshot.findMany") && service.includes("prisma.aiMcpAuditEvent.groupBy"), "MCP diagnostics must use discovery and audit aggregates, not fabricated health");
-assert(service.includes("prisma.$queryRaw") && service.includes('COUNT(*)::int AS "total"') && service.includes('reachable: null'), "OAuth grants must be aggregated while remote reachability remains unmeasured");
+assert(service.includes("prisma.$queryRaw") && service.includes('COUNT(*)::int AS "total"') && service.includes('reachable: server.transport === "STDIO_BRIDGE" ?') && service.includes('probePublicMcpBridge()'), "OAuth grants must remain aggregated, HTTP reachability unknown, and stdio certification must require a live probe");
 assert(!service.includes("encryptedCredentials") && !service.includes('"userId"') && !service.includes('"organizationId"'), "Console must not expose user or tenant credentials and identities");
 assert(service.includes("Promise.allSettled") && service.includes(' ? "AVAILABLE" : "PARTIAL"'), "Unavailable telemetry must not be represented as a healthy zero");
 assert(api.includes("requireConsoleCapability(CONSOLE_CAPABILITIES.MCP_MANAGE)") && api.includes("isSameOriginRequest"), "MCP management requires a dedicated capability and CSRF origin boundary");

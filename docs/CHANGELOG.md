@@ -1,3 +1,10 @@
+## 2026-11-09 — Hotfix #1094 — Libellés comptables bilingues et MCP global (candidate v1.7.4)
+
+- Comptabilité : les libellés automatiques identifiables issus des journaux ERP (ventes, achats, sortie/entrée de stock, règlement, avance client, dépense, paie, immobilisations, écarts de change, clôture, RETAIL POS, télécom, Mobile Money, remboursements et transferts) sont rendus en **français comptable clair** ou en **anglais clair** dans les écritures, le grand livre, le détail et les exports. La base et les textes libres saisis par l'utilisateur restent intacts.
+- MCP : trois serveurs stdio `time`, `fetch`, `brave` définis globalement, cinq outils publics READ préfixés, exposition via le Tool Gateway unique aux assistants de l'application avec exclusions des assistants du site public. Limite 10 appels/turn, deadline 15 s, maximum 2 tentatives, fetch ≤100 000 caractères, garde SSRF réseau privé et métadonnées cloud, audit borné et prompt-injection traitée comme donnée non fiable.
+- **Déploiement sécurisé** : pont stdio permanent sur serveur dédié obligatoire ; activation **désactivée tant que** URL HTTPS, secret d'authentification et certification live réelle ne sont pas renseignés. Aucune clé Brave n'a été écrite dans le dépôt. Les tests fonctionnels live nécessitent le runner et BRAVE_API_KEY ; tests statiques ne prouvent pas la connectivité.
+- Documentation : `docs/HOTFIX_1094_ACCOUNTING_MCP_RUNBOOK.md`. QA : `pnpm qa:hotfix-1094`. OWNER_E2E non exécuté, pas de fusion automatique.
+
 ## 2026-11-09 — Hotfix #1091 — Prévalidation financière et impression des factures dans tous les flux (candidat v1.7.3)
 
 - Les paiements professionnels ne montrent plus « Confirmation disponible » avant un précontrôle serveur détaillé : caisse, tiers, site, compte, créance, valorisation des stocks, journal, mappings et période. Aucune mutation n'est lancée lors du diagnostic.

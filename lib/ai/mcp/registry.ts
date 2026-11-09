@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { McpServerDefinition } from "@/lib/ai/mcp/types";
 import { validateMcpEndpoint } from "@/lib/ai/mcp/security";
+import { listPublicMcpServers } from "@/lib/ai/mcp/public-knowledge-config";
 
 const envKeySchema = z.string().regex(/^[A-Z][A-Z0-9_]*$/);
 const hostSchema = z.string().min(1).max(253).transform((value) => value.toLowerCase());
@@ -8,7 +9,7 @@ const hostSchema = z.string().min(1).max(253).transform((value) => value.toLower
 const serverSchema = z.object({
   code: z.string().regex(/^[A-Z0-9_]{3,80}$/),
   label: z.string().min(2).max(120),
-  transport: z.literal("STREAMABLE_HTTP"),
+  transport: z.enum(["STREAMABLE_HTTP", "STDIO_BRIDGE"]),
   endpoint: z.string().url(),
   allowedHosts: z.array(hostSchema).min(1).max(8),
   contexts: z.array(z.enum(["GLOBAL_CLIENT", "COMMUNITY", "DTSC_INTERNAL", "ORGANIZATION"])).min(1),
@@ -25,11 +26,14 @@ const serverSchema = z.object({
   timeoutMs: z.number().int().min(500).max(30_000).default(8_000),
   maxResponseBytes: z.number().int().min(1_024).max(5_000_000).default(1_000_000),
   allowedToolModes: z.array(z.enum(["READ", "PREPARE", "MUTATE", "SENSITIVE_MUTATE"])).min(1),
+  stdioCommand: z.string().min(1).optional(),
+  stdioArgs: z.array(z.string()).optional(),
 }).strict();
 
 const GOOGLE_OAUTH_HOSTS = ["accounts.google.com", "oauth2.googleapis.com"];
 
 const BUILT_IN_MCP_SERVERS: McpServerDefinition[] = [
+  ...listPublicMcpServers(),
   {
     code: "GOOGLE_GMAIL_OFFICIAL",
     label: "Gmail",
@@ -92,7 +96,12 @@ function loadConfiguredServers(): McpServerDefinition[] {
 
 function mergeServerRegistry() {
   const byCode = new Map(BUILT_IN_MCP_SERVERS.map((server) => [server.code, server]));
-  for (const server of loadConfiguredServers()) byCode.set(server.code, server);
+  for (const server of loadConfiguredServers()) {
+    if (server.code === "PUBLIC_TIME" || server.code === "PUBLIC_FETCH" || server.code === "PUBLIC_BRAVE") {
+      throw new Error("MCP_GLOBAL_PUBLIC_SERVER_OVERRIDE_FORBIDDEN");
+    }
+    byCode.set(server.code, server);
+  }
   return [...byCode.values()];
 }
 
@@ -138,6 +147,7 @@ export function assertMcpServerRegistryIntegrity() {
       if (previousServer && previousServer !== server.code) failures.push(`${server.code}: authEnvKey is already assigned to ${previousServer}`);
       else authEnvKeys.set(server.authEnvKey, server.code);
     }
+    if (server.transport === "STDIO_BRIDGE" && (server.stdioCommand !== "uvx" && server.stdioCommand !== "npx")) failures.push(`${server.code}: unapproved stdio executable`);
     if (server.allowedToolModes.some((mode) => mode !== "READ")) failures.push(`${server.code}: current MCP certification only permits READ tools`);
     const endpoint = validateMcpEndpoint(server);
     if (!endpoint.allowed) failures.push(`${server.code}: ${endpoint.reasonCode}`);

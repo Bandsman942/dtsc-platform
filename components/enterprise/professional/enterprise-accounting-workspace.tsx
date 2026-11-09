@@ -16,6 +16,7 @@ import { ModuleContent, ModuleHeader, ModuleSection, ModuleToolbar, ModuleWorksp
 import { StatusBadge } from "@/components/workspace/status-badge";
 import { getAccountingActionCopy } from "@/lib/enterprise/accounting/accounting-action-copy";
 import { getAccountingWorkspaceCopy } from "@/lib/enterprise/accounting/accounting-workspace-copy";
+import { formatAccountingNarrative } from "@/lib/enterprise/accounting/narrative-i18n";
 import type { EnterpriseModuleDefinition } from "@/lib/enterprise/module-registry";
 
 type TabKey = "setup" | "overview" | "charts" | "accounts" | "years" | "periods" | "journals" | "entries" | "ledger" | "trial" | "rules" | "anomalies";
@@ -368,8 +369,8 @@ function tableHeaders(tab: TabKey, copy: ReturnType<typeof getAccountingWorkspac
 }
 function tableCells(item: Item, tab: TabKey, locale: FinanceLocale): ReactNode[] {
   const currency = stringValue(item, "currencyCode") || stringValue(item, "functionalCurrencyCode") || "USD";
-  if (tab === "entries") return [financeDate(item.accountingDate, locale), stringValue(item, "number"), nestedValue(item, "journal", "code"), nestedValue(item, "fiscalPeriod", "code"), stringValue(item, "reference") || "—", stringValue(item, "description"), financeMoney(item.totalDebit, currency, locale), financeMoney(item.totalCredit, currency, locale), <StatusBadge key="status" tone={financeStatusTone(itemStatus(item))}>{financeStatusLabel(itemStatus(item), locale)}</StatusBadge>];
-  if (tab === "ledger") return [financeDate(item.accountingDate, locale), `${stringValue(item, "accountCode")} · ${locale === "fr" ? stringValue(item, "accountNameFr") : stringValue(item, "accountNameEn")}`, stringValue(item, "journalCode"), stringValue(item, "periodCode"), stringValue(item, "reference") || "—", stringValue(item, "description"), financeMoney(item.debit, currency, locale), financeMoney(item.credit, currency, locale)];
+  if (tab === "entries") return [financeDate(item.accountingDate, locale), stringValue(item, "number"), nestedValue(item, "journal", "code"), nestedValue(item, "fiscalPeriod", "code"), stringValue(item, "reference") || "—", formatAccountingNarrative(stringValue(item, "description"), locale), financeMoney(item.totalDebit, currency, locale), financeMoney(item.totalCredit, currency, locale), <StatusBadge key="status" tone={financeStatusTone(itemStatus(item))}>{financeStatusLabel(itemStatus(item), locale)}</StatusBadge>];
+  if (tab === "ledger") return [financeDate(item.accountingDate, locale), `${stringValue(item, "accountCode")} · ${locale === "fr" ? stringValue(item, "accountNameFr") : stringValue(item, "accountNameEn")}`, stringValue(item, "journalCode"), stringValue(item, "periodCode"), stringValue(item, "reference") || "—", formatAccountingNarrative(stringValue(item, "description"), locale), financeMoney(item.debit, currency, locale), financeMoney(item.credit, currency, locale)];
   return [`${stringValue(item, "code")} · ${locale === "fr" ? stringValue(item, "nameFr") : stringValue(item, "nameEn")}`, financeEnumLabel(stringValue(item, "accountType"), locale), financeMoney(item.debit, currency, locale), financeMoney(item.credit, currency, locale), financeMoney(item.balance, currency, locale), <StatusBadge key="status" tone={financeStatusTone(itemStatus(item))}>{financeStatusLabel(itemStatus(item), locale)}</StatusBadge>];
 }
 
@@ -433,7 +434,7 @@ function itemSubtitle(item: Item, tab: TabKey, locale: FinanceLocale, copy: Retu
   if (tab === "periods") return `${nestedValue(item, "fiscalYear", "code")} · ${financeDate(item.startDate, locale)} → ${financeDate(item.endDate, locale)}`;
   if (tab === "journals") return `${financeEnumLabel(stringValue(item, "journalType"), locale)} · ${copy.approvalRequired}: ${booleanValue(item, "requiresApproval") ? copy.yes : copy.no}`;
   if (tab === "rules") return `${stringValue(item, "sourceModule") || "—"} → ${stringValue(item, "accountCode")} · ${locale === "fr" ? stringValue(item, "accountNameFr") : stringValue(item, "accountNameEn")}`;
-  return stringValue(item, "description") || copy.openDetails;
+  return formatAccountingNarrative(stringValue(item, "description"), locale) || copy.openDetails;
 }
 function accountMeaning(type: string, locale: FinanceLocale) {
   const meanings: Record<string, [string, string]> = {

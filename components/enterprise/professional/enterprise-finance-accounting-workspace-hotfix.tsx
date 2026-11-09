@@ -11,6 +11,7 @@ import { financeDate, financeEnumLabel, financeMoney, financeStatusLabel, financ
 import { financeMutation, type FinanceRecord } from "@/components/enterprise/professional/finance-professional-workspace-shared";
 import { getAccountingActionCopy } from "@/lib/enterprise/accounting/accounting-action-copy";
 import { getAccountingWorkspaceCopy } from "@/lib/enterprise/accounting/accounting-workspace-copy";
+import { formatAccountingNarrative } from "@/lib/enterprise/accounting/narrative-i18n";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -72,7 +73,7 @@ function recordSubtitle(item: Item, tab: TabKey, locale: FinanceLocale) {
   if (tab === "accounts") return `${financeEnumLabel(item.accountType || "", locale)}${item.currencyCode ? ` · ${item.currencyCode}` : ""}`;
   if (tab === "journals") return `${financeEnumLabel(item.journalType || "", locale)} · ${item.requiresApproval ? (locale === "en" ? "Independent approval" : "Validation indépendante") : (locale === "en" ? "Direct workflow" : "Workflow direct")}`;
   if (tab === "years" || tab === "periods") return `${financeDate(item.startDate as string, locale)} → ${financeDate(item.endDate as string, locale)}`;
-  return text(item, "description") || text(item, "sourceModule") || "";
+  return formatAccountingNarrative(text(item, "description"), locale) || text(item, "sourceModule") || "";
 }
 function exactParam(tab: TabKey) {
   if (tab === "charts") return "chartId";

@@ -8,6 +8,7 @@ import { Field } from "@/components/enterprise/core-v2/erp-v2-ui";
 import { FinanceAccountingReferenceSelect, type FinanceAccountingReferenceOption } from "@/components/enterprise/core-v2/finance-accounting-reference-select";
 import { AccountingCompactTable, type AccountingCompactColumn } from "@/components/enterprise/professional/accounting-compact-table";
 import { AccountingJournalWorkbench } from "@/components/enterprise/professional/accounting-journal-workbench";
+import { formatAccountingNarrative } from "@/lib/enterprise/accounting/narrative-i18n";
 import { AccountingRecordDetail, type AccountingRecordDetailKind } from "@/components/enterprise/professional/accounting-record-detail";
 import { FinanceDateFilter, FinanceExportControls, type FinanceExportColumn } from "@/components/enterprise/professional/finance-design2-controls";
 import { FinanceTemplateImportControls } from "@/components/enterprise/professional/finance-template-import-controls";
@@ -421,7 +422,7 @@ export function EnterpriseFinanceAccountingWorkspace(props: Props) {
     { key: "date", label: en ? "Date" : "Date", render: (row) => financeDate(row.accountingDate || "", locale) },
     { key: "journal", label: en ? "Journal" : "Journal", render: (row) => row.journal?.code || "—" },
     { key: "period", label: en ? "Period" : "Période", render: (row) => row.fiscalPeriod?.code || "—" },
-    { key: "description", label: en ? "Description" : "Libellé", cellClassName: "max-w-[22rem] truncate", render: (row) => row.description || "—" },
+    { key: "description", label: en ? "Description" : "Libellé", cellClassName: "max-w-[22rem] truncate", render: (row) => formatAccountingNarrative(row.description, locale) || "—" },
     { key: "debit", label: en ? "Debit" : "Débit", numeric: true, render: (row) => financeMoney(row.totalDebit || 0, row.functionalCurrencyCode || "", locale) },
     { key: "status", label: en ? "Status" : "Statut", render: (row) => <StatusBadge tone={financeStatusTone(row.status || "")}>{financeStatusLabel(row.status || "", locale)}</StatusBadge> },
   ];
@@ -430,7 +431,7 @@ export function EnterpriseFinanceAccountingWorkspace(props: Props) {
     { key: "date", label: en ? "Date" : "Date", render: (row) => financeDate(row.journalEntry?.accountingDate || "", locale) },
     { key: "entry", label: en ? "Entry" : "Écriture", render: (row) => <span className="font-black text-dtsc-blue">{row.journalEntry?.number || "—"}</span> },
     { key: "account", label: en ? "Account" : "Compte", render: (row) => <span className="font-bold">{row.ledgerAccount?.code || "—"} · {locale === "en" ? row.ledgerAccount?.nameEn || row.ledgerAccount?.nameFr : row.ledgerAccount?.nameFr || row.ledgerAccount?.nameEn}</span> },
-    { key: "description", label: en ? "Description" : "Libellé", cellClassName: "max-w-[24rem] truncate", render: (row) => row.description || row.journalEntry?.description || "—" },
+    { key: "description", label: en ? "Description" : "Libellé", cellClassName: "max-w-[24rem] truncate", render: (row) => formatAccountingNarrative(row.description || row.journalEntry?.description, locale) || "—" },
     { key: "journal", label: en ? "Journal" : "Journal", render: (row) => row.journalEntry?.journal?.code || "—" },
     { key: "period", label: en ? "Period" : "Période", render: (row) => row.journalEntry?.fiscalPeriod?.code || "—" },
     { key: "debit", label: en ? "Debit" : "Débit", numeric: true, render: (row) => financeMoney(row.debit || 0, row.journalEntry?.functionalCurrencyCode || "", locale) },
@@ -518,7 +519,7 @@ export function EnterpriseFinanceAccountingWorkspace(props: Props) {
       : `/api/enterprise/${organizationId}/${configureView === "rules" ? "account-mappings" : configureView === "charts" ? "charts-of-accounts" : configureView === "accounts" ? "ledger-accounts" : configureView === "years" ? "fiscal-years" : configureView === "periods" ? "fiscal-periods" : "journals"}`;
   const currentExportColumns: FinanceExportColumn[] = [
     { key: "reference", labelFr: "Code / référence", labelEn: "Code / reference", get: (row) => rawText(row.code || row.number || row.reference || row.id) },
-    { key: "description", labelFr: "Désignation", labelEn: "Description", get: (row) => rawText(row.description || (en ? row.nameEn || row.nameFr : row.nameFr || row.nameEn) || (row.ledgerAccount as Record<string, unknown> | undefined)?.code) },
+    { key: "description", labelFr: "Désignation", labelEn: "Description", get: (row) => formatAccountingNarrative(row.description || (en ? row.nameEn || row.nameFr : row.nameFr || row.nameEn) || (row.ledgerAccount as Record<string, unknown> | undefined)?.code, locale) },
     { key: "status", labelFr: "Statut", labelEn: "Status", get: (row) => financeStatusLabel(rawText(row.status), locale) },
     { key: "account", labelFr: "Compte", labelEn: "Account", get: (row) => rawText((row.ledgerAccount as Record<string, unknown> | undefined)?.code || row.mappingKey) },
     { key: "date", labelFr: "Date comptable", labelEn: "Accounting date", get: (row) => financeDate(row.accountingDate || row.createdAt || row.startDate, locale) },

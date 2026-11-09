@@ -5,6 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { AlertCircle, BookOpen, CheckCircle2, Plus, RefreshCw, RotateCcw, Save, Search, Settings2, ShieldCheck } from "lucide-react";
 import { AssignedApprovalSubmitPanel } from "@/components/enterprise/professional/assigned-approval-submit-panel";
 import { InventoryUnvaluedReceiptsPanel } from "@/components/enterprise/professional/inventory-unvalued-receipts-panel";
+import { formatAccountingNarrative } from "@/lib/enterprise/accounting/narrative-i18n";
 import { Button } from "@/components/ui/button";
 import { FinancialStatementReportDialog } from "@/components/reports/financial-statement-report-dialog";
 import { FinanceDateFilter, FinanceExportControls, type FinanceExportColumn } from "@/components/enterprise/professional/finance-design2-controls";
@@ -111,7 +112,7 @@ function itemTitle(item: Item, activeKey: string, locale: FinanceLocale) {
   return text(item, "number") || text(item, "code") || text(item, "nameFr") || text(item, "nameEn") || text(item, "reference") || ft(locale, "accountingItem");
 }
 function itemDescription(item: Item, activeKey: string, locale: FinanceLocale) {
-  if (activeKey === "entries") return `${nestedText(item, "journal", "code")} · ${nestedText(item, "fiscalPeriod", "code")} · ${text(item, "description")}`;
+  if (activeKey === "entries") return `${nestedText(item, "journal", "code")} · ${nestedText(item, "fiscalPeriod", "code")} · ${formatAccountingNarrative(text(item, "description"), locale)}`;
   if (activeKey === "accounts") return `${businessLabel(item.accountType, locale)}${item.accountSubtype ? ` · ${businessLabel(item.accountSubtype, locale)}` : ""}`;
   if (activeKey === "periods") return `${financeDate(item.startDate, locale)} → ${financeDate(item.endDate, locale)} · ${nestedText(item, "fiscalYear", "code")}`;
   if (activeKey === "years") return `${financeDate(item.startDate, locale)} → ${financeDate(item.endDate, locale)}`;
@@ -125,7 +126,7 @@ function itemDescription(item: Item, activeKey: string, locale: FinanceLocale) {
   if (activeKey === "statements") return `${financeDate(item.periodStart, locale)} → ${financeDate(item.periodEnd, locale)} · ${text(item, "currencyCode")}`;
   if (activeKey === "assets") return `${businessLabel(item.depreciationMethod, locale)} · ${text(item, "usefulLifeMonths")} ${ft(locale, "months")}`;
   if (activeKey === "inventory") return `${text(item, "quantity")} × ${financeMoney(item.weightedAverageUnitCost, text(item, "currencyCode") || "USD", locale)}`;
-  return text(item, "description") || (locale === "fr" ? text(item, "nameFr") : text(item, "nameEn")) || "";
+  return formatAccountingNarrative(text(item, "description"), locale) || (locale === "fr" ? text(item, "nameFr") : text(item, "nameEn")) || "";
 }
 function amountSummary(item: Item, activeKey: string, locale: FinanceLocale) {
   const currency = text(item, "currencyCode") || text(item, "functionalCurrencyCode") || "USD";
@@ -275,7 +276,7 @@ export function EnterpriseAdvancedFinanceWorkspace({ organizationId, organizatio
   const sectionDescription = t(activeKey === "close" ? "closeSectionDescription" : "advancedSectionDescription");
   const exportColumns: FinanceExportColumn[] = [
     { key: "reference", labelFr: "Référence", labelEn: "Reference", get: (row) => String(row.inventoryItemCode || row.code || row.number || row.reference || row.id || "") },
-    { key: "name", labelFr: "Désignation", labelEn: "Description", get: (row) => String(row.inventoryItemName || row.name || row.description || "") },
+    { key: "name", labelFr: "Désignation", labelEn: "Description", get: (row) => formatAccountingNarrative(String(row.inventoryItemName || row.name || row.description || ""), locale) },
     { key: "warehouse", labelFr: "Entrepôt", labelEn: "Warehouse", get: (row) => String(row.warehouseName || row.warehouseCode || "") },
     { key: "status", labelFr: "Statut", labelEn: "Status", get: (row) => financeStatusLabel(String(row.status || ""), locale) },
     { key: "quantity", labelFr: "Quantité", labelEn: "Quantity", get: (row) => String(row.quantity || "") },
