@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { getAssistantProfiles } from "@/lib/ai/assistant-registry";
 import { MCP_SERVER_REGISTRY, isMcpOAuthPlatformConfigured } from "@/lib/ai/mcp/registry";
 import { MCP_TOOL_BINDINGS } from "@/lib/ai/mcp/bindings";
+import { PUBLIC_MCP_TOOL_SPECS, getPublicMcpBridgeConfiguration } from "@/lib/ai/mcp/public-knowledge-config";
 
 export type ConsoleMcpGovernance = {
   servers: Array<{
@@ -92,11 +93,13 @@ export async function getConsoleMcpGovernance(): Promise<ConsoleMcpGovernance> {
       code: server.code, label: server.label, status: server.status,
       transport: server.transport, authMode: server.authMode, scope: server.organizationScope,
       dataPolicy: server.dataPolicy, certified: server.status === "CERTIFIED",
-      configured: server.authMode === "NONE" || (server.authMode === "OAUTH_USER"
+      configured: server.transport === "STDIO_BRIDGE" ? getPublicMcpBridgeConfiguration().certified : server.authMode === "NONE" || (server.authMode === "OAUTH_USER"
         ? isMcpOAuthPlatformConfigured(server)
         : Boolean(server.authEnvKey && process.env[server.authEnvKey]?.trim())),
       connectedGrants: server.authMode === "OAUTH_USER" && grants.status === "fulfilled" ? grantTotals.get(server.code) || 0 : null,
-      enabledBindings: MCP_TOOL_BINDINGS.filter((b) => b.serverCode === server.code && b.enabled).length,
+      enabledBindings: server.transport === "STDIO_BRIDGE"
+        ? PUBLIC_MCP_TOOL_SPECS.filter((tool) => tool.server === server.label && server.status === "CERTIFIED").length
+        : MCP_TOOL_BINDINGS.filter((b) => b.serverCode === server.code && b.enabled).length,
       reachable: null,
       readEvidence: verifiedReads.status === "fulfilled"
         ? actualReads.get(server.code) || { successfulCalls7d: 0, latestSuccessAt: null }
@@ -106,7 +109,15 @@ export async function getConsoleMcpGovernance(): Promise<ConsoleMcpGovernance> {
       revision: controls.status === "fulfilled" ? (controlStates.get(server.code)?.revision || 0) : null,
       audit: audit.status === "fulfilled" ? activity.get(server.code) || { successful: 0, denied: 0, failed: 0 } : null,
     })),
-    bindings: MCP_TOOL_BINDINGS.map((b) => {
+    bindings: [
+      ...PUBLIC_MCP_TOOL_SPECS.map((spec) => ({
+        code: spec.prefixed, serverCode: spec.server === "time" ? "PUBLIC_TIME" : spec.server === "brave" ? "PUBLIC_BRAVE" : "PUBLIC_FETCH",
+        enabled: getPublicMcpBridgeConfiguration().certified, mode: "READ",
+        certifiedVersion: getPublicMcpBridgeConfiguration().certified ? "BRIDGE_RUNTIME_PROBE_REQUIRED" : "NOT_CERTIFIED",
+        discoveryMatches: null, assistants: null, contexts: ["GLOBAL_CLIENT", "COMMUNITY", "DTSC_INTERNAL", "ORGANIZATION"],
+        requiredModules: 0, requiredPermissions: 0,
+      })),
+      ...MCP_TOOL_BINDINGS.map((b) => {
       const d = latest.get(b.serverCode);
       return {
         code: b.dtscToolCode, serverCode: b.serverCode,
@@ -116,6 +127,7 @@ export async function getConsoleMcpGovernance(): Promise<ConsoleMcpGovernance> {
         requiredModules: b.requiredModuleCodes.length, requiredPermissions: b.requiredPermissions.length,
       };
     }),
+    ],
     assistants: getAssistantProfiles().map((a) => ({
       code: a.code, scope: a.scope, version: a.version, toolPolicy: a.toolPolicyCode,
       knowledgePolicy: a.knowledgePolicyCode, modelPolicy: a.modelPolicyCode,

@@ -1,5 +1,6 @@
 import { listEnabledMcpToolBindings } from "@/lib/ai/mcp/bindings";
 import { getMcpToolExecutor } from "@/lib/ai/mcp/tool-adapter";
+import { PUBLIC_KNOWLEDGE_EXECUTORS } from "@/lib/ai/mcp/public-knowledge-executor";
 import { ERP_AI_TOOL_EXECUTORS } from "@/lib/ai/tools/executors/erp";
 import { FINANCE_AI_TOOL_EXECUTORS } from "@/lib/ai/tools/executors/finance";
 import { FINANCE_ACCOUNTING_QUERY_AI_EXECUTORS } from "@/lib/ai/tools/executors/finance-accounting-query";
@@ -17,6 +18,7 @@ import { CONNECTED_APP_AI_TOOL_EXECUTORS } from "@/lib/ai/tools/executors/connec
 import type { AiToolExecutor } from "@/lib/ai/tools/types";
 
 const AI_TOOL_EXECUTORS: Record<string, AiToolExecutor> = {
+  ...PUBLIC_KNOWLEDGE_EXECUTORS,
   ...PHARMACY_AI_TOOL_EXECUTORS,
   ...FINANCE_AI_TOOL_EXECUTORS,
   ...FINANCE_ACCOUNTING_QUERY_AI_EXECUTORS,

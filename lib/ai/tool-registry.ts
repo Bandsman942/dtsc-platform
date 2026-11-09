@@ -1,6 +1,7 @@
 import { CERTIFIED_FORM_IMPORT_CODES } from "@/lib/ai/forms/import-registry";
 import { assertMcpToolBindingIntegrity, listMcpAiToolDefinitions } from "@/lib/ai/mcp/bindings";
 import { assertMcpResourceBindingIntegrity } from "@/lib/ai/mcp/resource-adapter";
+import { listPublicMcpAiToolDefinitions } from "@/lib/ai/mcp/public-knowledge-config";
 
 export type AiToolMode = "READ" | "PREPARE" | "MUTATE" | "SENSITIVE_MUTATE";
 
@@ -156,7 +157,7 @@ const STATIC_AI_TOOL_REGISTRY: AiToolDefinition[] = [
   },
 ];
 
-export const AI_TOOL_REGISTRY: AiToolDefinition[] = [...STATIC_AI_TOOL_REGISTRY, ...listMcpAiToolDefinitions()];
+export const AI_TOOL_REGISTRY: AiToolDefinition[] = [...STATIC_AI_TOOL_REGISTRY, ...listMcpAiToolDefinitions(), ...listPublicMcpAiToolDefinitions()];
 
 export function getAiToolDefinition(code: string) {
   return AI_TOOL_REGISTRY.find((tool) => tool.code === code) || null;

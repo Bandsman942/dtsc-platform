@@ -72,6 +72,7 @@ async function createAgentLoopStream(input: AgentLoopInput) {
   const PERSONAL_TOOL_CODES = new Set([
     "CONNECTED_APPS_STATUS_READ", "SUPPORT_TICKET_CREATE",
     "DTSC_CONTACT_EMAIL_SEND", "TASK_DRAFT_PREPARE",
+    "MCP_TIME_GET_CURRENT_TIME", "MCP_TIME_CONVERT_TIME", "MCP_FETCH_FETCH", "MCP_BRAVE_SEARCH_WEB", "MCP_BRAVE_SEARCH_NEWS",
   ]);
   const authorizedTools = input.contextCode === "PERSONAL"
     ? authorizedForScope.filter((entry) => PERSONAL_TOOL_CODES.has(entry.definition.code))

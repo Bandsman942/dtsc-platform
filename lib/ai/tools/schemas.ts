@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { CERTIFIED_FORM_IMPORT_CODES } from "@/lib/ai/forms/import-registry";
 import { getMcpBindingInputSchema, getMcpBindingOutputSchema } from "@/lib/ai/mcp/bindings";
+import { PUBLIC_KNOWLEDGE_INPUT_SCHEMAS, PUBLIC_KNOWLEDGE_OUTPUT_SCHEMA } from "@/lib/ai/mcp/public-knowledge-executor";
 import {
   ERP_AI_TOOL_INPUT_SCHEMAS,
   ERP_AI_TOOL_OUTPUT_SCHEMAS,
@@ -113,9 +114,9 @@ export const AI_TOOL_OUTPUT_SCHEMAS = {
 export type AiToolSchemaCode = keyof typeof AI_TOOL_INPUT_SCHEMAS;
 
 export function getAiToolInputSchema(code: string) {
-  return AI_TOOL_INPUT_SCHEMAS[code as AiToolSchemaCode] || getMcpBindingInputSchema(code);
+  return AI_TOOL_INPUT_SCHEMAS[code as AiToolSchemaCode] || PUBLIC_KNOWLEDGE_INPUT_SCHEMAS[code as keyof typeof PUBLIC_KNOWLEDGE_INPUT_SCHEMAS] || getMcpBindingInputSchema(code);
 }
 
 export function getAiToolOutputSchema(code: string) {
-  return AI_TOOL_OUTPUT_SCHEMAS[code as AiToolSchemaCode] || getMcpBindingOutputSchema(code);
+  return AI_TOOL_OUTPUT_SCHEMAS[code as AiToolSchemaCode] || (code in PUBLIC_KNOWLEDGE_INPUT_SCHEMAS ? PUBLIC_KNOWLEDGE_OUTPUT_SCHEMA : null) || getMcpBindingOutputSchema(code);
 }
