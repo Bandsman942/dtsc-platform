@@ -61,11 +61,11 @@ assert.doesNotMatch(printRoute, /organizationId: (null|undefined)/, "Print remai
 
 // Historical receipts are valued with their ACTUAL acquisition cost through
 // the existing atomic canonical posting, never by duplicating stock movements.
-has(unvaluedRoute, /authorizeFinanceRequest\\(req, organizationId, "FINANCE_INVENTORY", "view"\\)/, "Unvalued queue needs Finance Inventory permissions");
-has(unvaluedRoute, /retailInventoryVisibleSites\\(/, "No cross-shop stock valuation exposure");
-has(unvaluedRoute, /NOT EXISTS \\([\\s\\S]*EnterpriseInventoryCostLayer/, "Only genuinely unvalued receipts");
-has(unvaluedRoute, /LIMIT \\$\\{pageSize\\} OFFSET \\$\\{offset\\}/, "Server-side pagination of unvalued receipts");
-has(unvaluedPanel, /financeMutation\\(/, "Valuation UI submits actual movement, not placeholder");
+has(unvaluedRoute, /authorizeFinanceRequest\(req, organizationId, "FINANCE_INVENTORY", "view"\)/, "Unvalued queue needs Finance Inventory permissions");
+has(unvaluedRoute, /retailInventoryVisibleSites\(/, "No cross-shop stock valuation exposure");
+has(unvaluedRoute, /NOT EXISTS \([\s\S]*EnterpriseInventoryCostLayer/, "Only genuinely unvalued receipts");
+has(unvaluedRoute, /LIMIT \$\{pageSize\} OFFSET \$\{offset\}/, "Server-side pagination of unvalued receipts");
+has(unvaluedPanel, /financeMutation\(/, "Valuation UI submits actual movement, not placeholder");
 has(unvaluedPanel, /evidenceChecked/, "Human acquisition-cost attestation");
 has(advancedFinanceUi, /<InventoryUnvaluedReceiptsPanel/, "New valuation action is discoverable");
 has(receiptValuationRoute, /"FINANCE_INVENTORY", "post"/, "Posting remains behind Finance Inventory RBAC");
