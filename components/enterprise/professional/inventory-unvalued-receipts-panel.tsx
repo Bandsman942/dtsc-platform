@@ -63,13 +63,13 @@ export function InventoryUnvaluedReceiptsPanel({ organizationId, locale, canMana
     fetch(`/api/enterprise/${organizationId}/inventory-unvalued-receipts?${params}`, { cache: "no-store", signal: abort.signal })
       .then(async (response) => {
         const body = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(body.message || body.error || t("inventoryUnvaluedLoadFailed"));
+        if (!response.ok) throw new Error(body.message || body.error || translateEnterpriseFinance(locale, "inventoryUnvaluedLoadFailed"));
         setItems(Array.isArray(body.items) ? body.items : []);
         setPagination(body.pagination || EMPTY_PAGINATION);
       })
       .catch((cause) => {
         if (cause instanceof DOMException && cause.name === "AbortError") return;
-        setError(safeFinanceError(cause, t("inventoryUnvaluedLoadFailed"), locale));
+        setError(safeFinanceError(cause, translateEnterpriseFinance(locale, "inventoryUnvaluedLoadFailed"), locale));
         setItems([]);
         setPagination(EMPTY_PAGINATION);
       })
