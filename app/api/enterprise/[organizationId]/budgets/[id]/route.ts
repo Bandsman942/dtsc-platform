@@ -18,6 +18,11 @@ export async function GET(req: Request, { params }: Params) {
   const visibility = enterpriseBudgetVisibilityWhere({ organizationId, userId: session.userId, canSeeAll: access.canSeeAll });
   const budget = await prisma.enterpriseBudget.findFirst({ where: { AND: [visibility, { id }] } }); if (!budget) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const position = await prisma.$transaction((tx) => getBudgetPosition(tx, organizationId, id));
+  const fundingAccountIds = [...new Set(position.lines.map((entry) => entry.line.fundingFinancialAccountId).filter((value): value is string => Boolean(value)))];
+  const fundingAccounts = fundingAccountIds.length ? await prisma.enterpriseFinancialAccount.findMany({
+    where: { organizationId, id: { in: fundingAccountIds } }, select: { id: true, code: true, name: true, currencyCode: true },
+  }) : [];
+  const fundingAccountLabels = new Map(fundingAccounts.map((account) => [account.id, `${account.code} · ${account.name} · ${account.currencyCode}`]));
   const [purchases, expenses, links, events, approval] = await Promise.all([
     prisma.enterprisePurchase.findMany({ where: { organizationId, budgetLineId: { in: position.lines.map((line) => line.line.id) }, archivedAt: null }, select: { id: true, reference: true, title: true, status: true, currency: true, totalAmount: true, budgetLineId: true }, orderBy: { createdAt: "desc" }, take: 100 }),
     prisma.enterpriseExpense.findMany({ where: { organizationId, budgetLineId: { in: position.lines.map((line) => line.line.id) }, archivedAt: null }, select: { id: true, reference: true, title: true, status: true, currency: true, amount: true, budgetLineId: true, expenseDate: true }, orderBy: { expenseDate: "desc" }, take: 100 }),
@@ -30,7 +35,7 @@ export async function GET(req: Request, { params }: Params) {
     prisma.enterpriseBudget.findMany({ where: { organizationId, OR: [{ id: position.budget.parentBudgetId || id }, { parentBudgetId: position.budget.parentBudgetId || id }], archivedAt: null }, select: { id: true, reference: true, title: true, scenarioCode: true, versionNumber: true, status: true, createdAt: true, approvedAt: true, frozenAt: true }, orderBy: { versionNumber: "desc" }, take: 50 }),
   ]);
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "budgets", budgetId: id } });
-  return NextResponse.json({ budget: position.budget, lines: position.lines.map((entry) => ({ ...entry.line, plannedAmount: entry.planned, committedAmount: entry.remainingCommitment, actualAmount: entry.actual, availableAmount: entry.available })), totals: { plannedAmount: position.planned, committedAmount: position.committedRemaining, actualAmount: position.actual, availableAmount: position.available }, purchases, expenses, links, events, approval, alerts, versions, canManage: access.canManage });
+  return NextResponse.json({ budget: position.budget, lines: position.lines.map((entry) => ({ ...entry.line, fundingAccountLabel: entry.line.fundingFinancialAccountId ? fundingAccountLabels.get(entry.line.fundingFinancialAccountId) || null : null, plannedAmount: entry.planned, committedAmount: entry.remainingCommitment, actualAmount: entry.actual, availableAmount: entry.available })), totals: { plannedAmount: position.planned, committedAmount: position.committedRemaining, actualAmount: position.actual, availableAmount: position.available }, purchases, expenses, links, events, approval, alerts, versions, canManage: access.canManage });
 }
 
 export async function PATCH(req: Request, { params }: Params) {

@@ -14,8 +14,15 @@ export async function buildSupplierCreditNotePosting(tx: Prisma.TransactionClien
 }
 
 export async function buildExpensePosting(tx: Prisma.TransactionClient, input: { organizationId: string; sourceEntityType: string; sourceEntityId: string }): Promise<PostingDocument> {
-  const expense = await tx.enterpriseExpense.findFirst({ where: { id: input.sourceEntityId, organizationId: input.organizationId, status: "APPROVED", accountedAt: null } });
+  const expense = await tx.enterpriseExpense.findFirst({ where: { id: input.sourceEntityId, organizationId: input.organizationId, status: "APPROVED", accountedAt: null }, include: { budgetLine: true } });
   if (!expense || ["SUPPLIER_INVOICE_PROJECTION", "ALREADY_ACCOUNTED"].includes(expense.accountingTreatment)) throw new EnterpriseAccountingError("EXPENSE_NOT_DIRECTLY_POSTABLE", 409);
+  if (expense.purchaseId || expense.supplierId || ["STOCK_PURCHASE", "FIXED_ASSET", "TAX_PAYMENT"].includes(expense.category || "")) throw new EnterpriseAccountingError("EXPENSE_REQUIRES_SPECIALIZED_ACCOUNTING", 409);
+  let expenseAccountKey = "OPERATING_EXPENSE";
+  if (expense.budgetLine?.accountCode) {
+    const account = await tx.enterpriseLedgerAccount.findFirst({ where: { organizationId: input.organizationId, code: expense.budgetLine.accountCode, isActive: true, archivedAt: null, allowDirectPosting: true, accountType: { in: ["EXPENSE", "OTHER_EXPENSE"] } }, select: { id: true } });
+    if (!account) throw new EnterpriseAccountingError("EXPENSE_BUDGET_ACCOUNT_NOT_POSTABLE", 409);
+    expenseAccountKey = `ACCOUNT_ID:${account.id}`;
+  }
   const counterpart = expense.accountingTreatment === "EMPLOYEE_REIMBURSEMENT" ? "EMPLOYEE_PAYABLE" : "EXPENSE_CLEARING";
   return {
     organizationId: input.organizationId,
@@ -29,8 +36,34 @@ export async function buildExpensePosting(tx: Prisma.TransactionClient, input: {
     sourceEntityId: expense.id,
     currencyCode: expense.currency,
     lines: [
-      { accountMappingKey: "OPERATING_EXPENSE", description: expense.title, debit: expense.amount, transactionCurrencyCode: expense.currency, transactionAmount: expense.amount, departmentId: expense.departmentId, siteId: expense.siteId },
+      { accountMappingKey: expenseAccountKey, description: expense.title, debit: expense.amount, transactionCurrencyCode: expense.currency, transactionAmount: expense.amount, departmentId: expense.departmentId, siteId: expense.siteId },
       { accountMappingKey: counterpart, description: expense.title, credit: expense.amount, transactionCurrencyCode: expense.currency, transactionAmount: expense.amount, departmentId: expense.departmentId, siteId: expense.siteId },
+    ],
+  };
+}
+
+/** Settle the liability created by a directly posted expense using the canonical
+ * payment and treasury transaction. The charge is NEVER booked again here. */
+export async function buildExpenseSettlementPosting(tx: Prisma.TransactionClient, input: { organizationId: string; sourceEntityType: string; sourceEntityId: string }): Promise<PostingDocument> {
+  const payment = await tx.enterprisePayment.findFirst({ where: { id: input.sourceEntityId, organizationId: input.organizationId, paymentType: "EXPENSE_SETTLEMENT", direction: "OUTBOUND", status: { in: ["CONFIRMED", "RECONCILED"] } }, include: { expense: true } });
+  if (!payment?.expense || !payment.financialAccountId || !payment.expense.accountedAt || !payment.expense.journalEntryId || payment.expense.supplierInvoiceId || payment.expense.purchaseId || payment.expense.supplierId) throw new EnterpriseAccountingError("EXPENSE_SETTLEMENT_NOT_POSTABLE", 409);
+  const account = await tx.enterpriseFinancialAccount.findFirst({ where: { id: payment.financialAccountId, organizationId: input.organizationId, status: "ACTIVE", archivedAt: null }, select: { ledgerAccountId: true, accountType: true } });
+  if (!account) throw new EnterpriseAccountingError("PAYMENT_FINANCIAL_ACCOUNT_REQUIRED", 409);
+  const counterpart = payment.expense.accountingTreatment === "EMPLOYEE_REIMBURSEMENT" ? "EMPLOYEE_PAYABLE" : "EXPENSE_CLEARING";
+  return {
+    organizationId: input.organizationId,
+    journalType: account.accountType === "CASH" ? "CASH" : account.accountType === "MOBILE_MONEY" ? "MOBILE_MONEY" : "BANK",
+    accountingDate: payment.paymentDate,
+    documentDate: payment.paymentDate,
+    reference: payment.number,
+    description: `Expense settlement ${payment.expense.reference}`,
+    sourceModule: "FINANCE_PAYMENTS",
+    sourceEntityType: "EnterprisePayment",
+    sourceEntityId: payment.id,
+    currencyCode: payment.currencyCode,
+    lines: [
+      { accountMappingKey: counterpart, description: payment.expense.title, debit: payment.amount, transactionCurrencyCode: payment.currencyCode, transactionAmount: payment.amount, departmentId: payment.expense.departmentId, siteId: payment.expense.siteId },
+      { accountMappingKey: `ACCOUNT_ID:${account.ledgerAccountId}`, description: payment.expense.title, credit: payment.amount, transactionCurrencyCode: payment.currencyCode, transactionAmount: payment.amount, departmentId: payment.expense.departmentId, siteId: payment.expense.siteId },
     ],
   };
 }

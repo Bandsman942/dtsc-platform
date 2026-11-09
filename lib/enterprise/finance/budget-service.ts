@@ -77,19 +77,32 @@ async function requireOptionalSite(tx: Tx, organizationId: string, siteId?: stri
   return site.id;
 }
 
-async function validateBudgetLines(tx: Tx, organizationId: string, lines: EnterpriseBudgetCreateInput["lines"]) {
+async function validateBudgetLines(tx: Tx, organizationId: string, currency: string, lines: EnterpriseBudgetCreateInput["lines"]) {
   const prepared: PreparedBudgetLine[] = [];
   for (const line of lines) {
     const departmentId = await requireEnterpriseDepartment(tx, organizationId, line.departmentId);
     const projectId = await requireOptionalProject(tx, organizationId, line.projectId);
     const siteId = await requireOptionalSite(tx, organizationId, line.siteId);
     const responsibleUserId = await requireOptionalMember(tx, organizationId, line.responsibleUserId);
+    const fundingFinancialAccountId = nullable(line.fundingFinancialAccountId);
+    if (fundingFinancialAccountId) {
+      const fundingAccount = await tx.enterpriseFinancialAccount.findFirst({ where: { id: fundingFinancialAccountId, organizationId, status: "ACTIVE", archivedAt: null }, select: { id: true, currencyCode: true, siteId: true } });
+      if (!fundingAccount) throw new EnterpriseCoreV2Error("Le compte de financement prévisionnel n’est plus actif dans cette entreprise.", 400, "BUDGET_FUNDING_ACCOUNT_INVALID");
+      if (fundingAccount.currencyCode !== currency) throw new EnterpriseCoreV2Error("La devise du compte prévisionnel doit correspondre à celle du budget.", 400, "BUDGET_FUNDING_CURRENCY_MISMATCH");
+      if (siteId && fundingAccount.siteId && siteId !== fundingAccount.siteId) throw new EnterpriseCoreV2Error("Le compte de financement prévisionnel est affecté à une autre boutique.", 400, "BUDGET_FUNDING_SITE_MISMATCH");
+    }
+    const accountCode = nullable(line.accountCode);
+    if (accountCode) {
+      const ledgerAccount = await tx.enterpriseLedgerAccount.findFirst({ where: { organizationId, code: accountCode, isActive: true, archivedAt: null, allowDirectPosting: true }, select: { id: true } });
+      if (!ledgerAccount) throw new EnterpriseCoreV2Error("Le compte comptable de cette ligne est introuvable, inactif ou non imputable. Choisissez un compte actif du plan comptable.", 400, "BUDGET_LEDGER_ACCOUNT_INVALID");
+    }
     prepared.push({
       code: nullable(line.code),
       name: line.name,
       description: nullable(line.description),
       category: nullable(line.category),
-      accountCode: nullable(line.accountCode),
+      accountCode,
+      fundingFinancialAccountId,
       costCenterCode: nullable(line.costCenterCode),
       departmentId,
       projectId,
@@ -110,7 +123,7 @@ export async function createEnterpriseBudget(organizationId: string, actorUserId
     await requireActiveEnterpriseMember(tx, organizationId, actorUserId);
     const departmentId = await requireEnterpriseDepartment(tx, organizationId, input.departmentId);
     const ownerUserId = await requireOptionalMember(tx, organizationId, input.ownerUserId || actorUserId);
-    const lines = await validateBudgetLines(tx, organizationId, input.lines);
+    const lines = await validateBudgetLines(tx, organizationId, input.currency, input.lines);
     const budget = await tx.enterpriseBudget.create({
       data: {
         organizationId,
@@ -159,7 +172,7 @@ export async function updateEnterpriseBudget(organizationId: string, budgetId: s
     if (nextEnd < nextStart) throw new EnterpriseCoreV2Error("La période budgétaire est invalide.", 400, "INVALID_BUDGET_PERIOD");
     const departmentId = input.departmentId !== undefined ? await requireEnterpriseDepartment(tx, organizationId, input.departmentId) : undefined;
     const ownerUserId = input.ownerUserId !== undefined ? await requireOptionalMember(tx, organizationId, input.ownerUserId) : undefined;
-    const lines = input.lines ? await validateBudgetLines(tx, organizationId, input.lines as EnterpriseBudgetCreateInput["lines"]) : null;
+    const lines = input.lines ? await validateBudgetLines(tx, organizationId, input.currency || existing.currency, input.lines as EnterpriseBudgetCreateInput["lines"]) : null;
     const updated = await tx.enterpriseBudget.updateMany({
       where: { id: budgetId, organizationId, status: existing.status, revision: input.revision, archivedAt: null },
       data: {

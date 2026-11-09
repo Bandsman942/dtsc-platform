@@ -743,6 +743,7 @@ model EnterprisePayment {
   businessPartyId          String?
   employeeId               String?
   payrollRunId             String?
+  expenseId                String?
   currencyCode             String
   amount                   Decimal                       @db.Decimal(20, 6)
   unallocatedAmount        Decimal                       @db.Decimal(20, 6)
@@ -768,6 +769,7 @@ model EnterprisePayment {
   events                   EnterprisePaymentEvent[]
   treasuryTransactions     EnterpriseTreasuryTransaction[]
   cashSession              EnterpriseCashSession?         @relation(fields: [organizationId, cashSessionId], references: [organizationId, id], onDelete: Restrict)
+  expense                  EnterpriseExpense? @relation("ExpenseSettlements", fields: [organizationId, expenseId], references: [organizationId, id], onDelete: Restrict, map: "EnterprisePayment_expense_fkey")
 
   @@unique([organizationId, id])
   @@unique([organizationId, number])
@@ -776,6 +778,7 @@ model EnterprisePayment {
   @@index([organizationId, businessPartyId, status])
   @@index([organizationId, financialAccountId])
   @@index([organizationId, cashSessionId])
+  @@index([organizationId, expenseId, status])
 }
 
 model EnterprisePaymentAllocation {
@@ -842,6 +845,8 @@ model EnterpriseFinancialAccount {
   bankStatements        EnterpriseBankStatement[]
   reconciliationSessions EnterpriseReconciliationSession[]
   fundingOperations      EnterpriseFundingOperation[]
+  fundedBudgetLines       EnterpriseBudgetLine[] @relation("BudgetFundingAccount")
+  preferredExpenses       EnterpriseExpense[] @relation("ExpensePreferredAccount")
   retailInvoiceReturnRefundLegs EnterpriseRetailInvoiceReturnRefundLeg[]
 
   @@unique([organizationId, id])

@@ -47,6 +47,24 @@ async function requireSupplier(tx: Tx, organizationId: string, supplierId?: stri
   return supplier;
 }
 
+async function requireBeneficiaryEmployee(tx: Tx, organizationId: string, employeeId?: string | null) {
+  const id = nullable(employeeId);
+  if (!id) return null;
+  const employee = await tx.enterpriseEmployee.findFirst({ where: { id, organizationId, employmentStatus: "ACTIVE", archivedAt: null }, select: { id: true } });
+  if (!employee) throw new EnterpriseCoreV2Error("Le collaborateur bénéficiaire n’appartient pas à cette entreprise.", 400, "EXPENSE_EMPLOYEE_INVALID");
+  return employee.id;
+}
+
+async function requirePreferredAccount(tx: Tx, organizationId: string, accountId: string | null | undefined, currency: string, siteId: string | null) {
+  const id = nullable(accountId);
+  if (!id) return null;
+  const account = await tx.enterpriseFinancialAccount.findFirst({ where: { id, organizationId, archivedAt: null, status: "ACTIVE" }, select: { id: true, currencyCode: true, siteId: true } });
+  if (!account) throw new EnterpriseCoreV2Error("Le compte de financement prévu n’est pas actif dans cette entreprise.", 400, "EXPENSE_PREFERRED_ACCOUNT_INVALID");
+  if (account.currencyCode !== currency) throw new EnterpriseCoreV2Error("Le compte prévu et la dépense doivent être dans la même devise.", 400, "EXPENSE_PREFERRED_ACCOUNT_CURRENCY_MISMATCH");
+  if (siteId && account.siteId && account.siteId !== siteId) throw new EnterpriseCoreV2Error("Le compte financier sélectionné appartient à une autre boutique.", 400, "EXPENSE_PREFERRED_ACCOUNT_SITE_MISMATCH");
+  return account.id;
+}
+
 async function requireExpenseSite(tx: Tx, organizationId: string, siteId?: string | null) {
   const id = nullable(siteId);
   if (!id) return null;
@@ -129,6 +147,8 @@ export async function createEnterpriseExpense(organizationId: string, actorUserI
     const siteId = await requireExpenseSite(tx, organizationId, input.siteId);
     const purchase = await requirePurchase(tx, organizationId, input.purchaseId);
     const supplier = await requireSupplier(tx, organizationId, input.supplierId || purchase?.supplierId);
+    const beneficiaryEmployeeId = await requireBeneficiaryEmployee(tx, organizationId, input.beneficiaryEmployeeId);
+    if (beneficiaryEmployeeId && (supplier || purchase)) throw new EnterpriseCoreV2Error("Une dépense remboursée à un collaborateur ne peut pas être rattachée simultanément à un achat fournisseur.", 400, "EXPENSE_BENEFICIARY_CONFLICT");
     if (purchase?.supplierId && supplier?.id && purchase.supplierId !== supplier.id) throw new EnterpriseCoreV2Error("Le fournisseur de la dépense doit correspondre à l’achat source.", 400, "EXPENSE_PURCHASE_SUPPLIER_MISMATCH");
 
     const budgetLineId = nullable(input.budgetLineId) || purchase?.budgetLineId || null;
@@ -138,6 +158,7 @@ export async function createEnterpriseExpense(organizationId: string, actorUserI
     if (purchase && !assertSameCurrency(purchase.currency, currency)) throw new EnterpriseCoreV2Error("La devise de la dépense doit correspondre à celle de l’achat.", 400, "EXPENSE_PURCHASE_CURRENCY_MISMATCH");
     if (budgetLine && !assertSameCurrency(budgetLine.budget.currency, currency)) throw new EnterpriseCoreV2Error("La devise de la dépense doit correspondre à celle du budget.", 400, "BUDGET_CURRENCY_MISMATCH");
     const expenseAmount = enterpriseMoney(input.amount ?? purchase?.totalAmount ?? 0);
+    const preferredFinancialAccountId = await requirePreferredAccount(tx, organizationId, input.preferredFinancialAccountId || budgetLine?.fundingFinancialAccountId, currency, siteId);
     if (!purchase && input.amount === undefined) throw new EnterpriseCoreV2Error("Le montant est obligatoire sans achat source.", 400, "EXPENSE_AMOUNT_REQUIRED");
     if (purchase && !expenseAmount.eq(enterpriseMoney(purchase.totalAmount)) && !nullable(input.amountVarianceReason)) throw new EnterpriseCoreV2Error("Un motif est obligatoire lorsque le montant diffère de l’achat source.", 400, "EXPENSE_VARIANCE_REASON_REQUIRED");
     const source = await requireEnterpriseSourceReference(tx, organizationId, input);
@@ -156,12 +177,16 @@ export async function createEnterpriseExpense(organizationId: string, actorUserI
         currency,
         amount: expenseAmount,
         supplierId: supplier?.id || null,
+        beneficiaryEmployeeId,
         purchaseId: purchase?.id || null,
         budgetLineId: budgetLine?.id || null,
         departmentId,
         requestedByUserId: actorUserId,
         createdByUserId: actorUserId,
         amountVarianceReason: nullable(input.amountVarianceReason),
+        settlementMode: input.settlementMode,
+        paymentDueDate: input.paymentDueDate || null,
+        preferredFinancialAccountId,
         sourceModule: source?.sourceModule || null,
         sourceEntityType: source?.sourceEntityType || null,
         sourceEntityId: source?.sourceEntityId || null,
@@ -183,6 +208,8 @@ export async function updateEnterpriseExpense(organizationId: string, expenseId:
 
     const purchase = input.purchaseId !== undefined ? await requirePurchase(tx, organizationId, input.purchaseId) : await requirePurchase(tx, organizationId, existing.purchaseId);
     const supplier = input.supplierId !== undefined ? await requireSupplier(tx, organizationId, input.supplierId) : await requireSupplier(tx, organizationId, existing.supplierId);
+    const beneficiaryEmployeeId = input.beneficiaryEmployeeId !== undefined ? await requireBeneficiaryEmployee(tx, organizationId, input.beneficiaryEmployeeId) : existing.beneficiaryEmployeeId;
+    if (beneficiaryEmployeeId && (supplier || purchase)) throw new EnterpriseCoreV2Error("Choisissez un fournisseur ou un collaborateur bénéficiaire, pas les deux.", 400, "EXPENSE_BENEFICIARY_CONFLICT");
     if (purchase?.supplierId && supplier?.id && purchase.supplierId !== supplier.id) throw new EnterpriseCoreV2Error("Le fournisseur de la dépense doit correspondre à l’achat source.", 400, "EXPENSE_PURCHASE_SUPPLIER_MISMATCH");
     const nextBudgetLineId = input.budgetLineId !== undefined ? nullable(input.budgetLineId) : (purchase?.budgetLineId || existing.budgetLineId);
     if (purchase?.budgetLineId && nextBudgetLineId && purchase.budgetLineId !== nextBudgetLineId) throw new EnterpriseCoreV2Error("La dépense ne peut pas viser une autre ligne budgétaire que son achat source.", 400, "EXPENSE_PURCHASE_BUDGET_MISMATCH");
@@ -191,6 +218,8 @@ export async function updateEnterpriseExpense(organizationId: string, expenseId:
     const nextCurrency = (input.currency || existing.currency).toUpperCase();
     if (purchase && !assertSameCurrency(purchase.currency, nextCurrency)) throw new EnterpriseCoreV2Error("La devise de la dépense doit correspondre à celle de l’achat.", 400, "EXPENSE_PURCHASE_CURRENCY_MISMATCH");
     if (budgetLine && !assertSameCurrency(budgetLine.budget.currency, nextCurrency)) throw new EnterpriseCoreV2Error("La devise de la dépense doit correspondre à celle du budget.", 400, "BUDGET_CURRENCY_MISMATCH");
+    const resolvedSiteId = siteId !== undefined ? siteId : existing.siteId;
+    const preferredFinancialAccountId = await requirePreferredAccount(tx, organizationId, input.preferredFinancialAccountId !== undefined ? input.preferredFinancialAccountId : existing.preferredFinancialAccountId, nextCurrency, resolvedSiteId);
     const nextAmount = enterpriseMoney(input.amount ?? existing.amount);
     const varianceReason = input.amountVarianceReason !== undefined ? nullable(input.amountVarianceReason) : existing.amountVarianceReason;
     if (purchase && !nextAmount.eq(enterpriseMoney(purchase.totalAmount)) && !varianceReason) throw new EnterpriseCoreV2Error("Un motif est obligatoire lorsque le montant diffère de l’achat source.", 400, "EXPENSE_VARIANCE_REASON_REQUIRED");
@@ -207,10 +236,14 @@ export async function updateEnterpriseExpense(organizationId: string, expenseId:
         ...(input.currency !== undefined ? { currency: nextCurrency } : {}),
         ...(input.amount !== undefined ? { amount: nextAmount } : {}),
         ...(input.supplierId !== undefined ? { supplierId: supplier?.id || null } : {}),
+        ...(input.beneficiaryEmployeeId !== undefined ? { beneficiaryEmployeeId } : {}),
         ...(input.purchaseId !== undefined ? { purchaseId: purchase?.id || null } : {}),
         ...((input.budgetLineId !== undefined || input.purchaseId !== undefined) ? { budgetLineId: budgetLine?.id || null } : {}),
         ...(input.departmentId !== undefined ? { departmentId: departmentId || null } : {}),
         ...(input.amountVarianceReason !== undefined ? { amountVarianceReason: varianceReason } : {}),
+        ...(input.settlementMode !== undefined ? { settlementMode: input.settlementMode } : {}),
+        ...(input.paymentDueDate !== undefined ? { paymentDueDate: input.paymentDueDate } : {}),
+        ...(input.preferredFinancialAccountId !== undefined ? { preferredFinancialAccountId } : {}),
         updatedByUserId: actorUserId,
         revision: { increment: 1 },
       },

@@ -18,6 +18,7 @@ function paymentPostingEvent(paymentType: string) {
   if (paymentType === "CUSTOMER_PAYMENT") return "CUSTOMER_PAYMENT_CONFIRMED" as const;
   if (paymentType === "SUPPLIER_PAYMENT") return "SUPPLIER_PAYMENT_CONFIRMED" as const;
   if (paymentType === "PAYROLL_PAYMENT") return "PAYROLL_PAYMENT_CONFIRMED" as const;
+  if (paymentType === "EXPENSE_SETTLEMENT") return "EXPENSE_SETTLEMENT_CONFIRMED" as const;
   return null;
 }
 
@@ -285,6 +286,27 @@ export async function createEnterprisePaymentTx(tx: Prisma.TransactionClient, or
       if (!employee) throw new EnterpriseAccountingError("PAYMENT_EMPLOYEE_INVALID", 409);
     }
 
+    if (input.paymentType === "EXPENSE_SETTLEMENT") {
+      if (!input.expenseId || input.direction !== "OUTBOUND" || input.businessPartyId || input.employeeId || input.payrollRunId || !input.financialAccountId) {
+        throw new EnterpriseAccountingError("EXPENSE_PAYMENT_SOURCE_REQUIRED", 409);
+      }
+      const expense = await tx.enterpriseExpense.findFirst({ where: { id: input.expenseId, organizationId, status: "APPROVED", archivedAt: null }, select: { id: true, siteId: true, amount: true, currency: true, accountedAt: true, journalEntryId: true, supplierInvoiceId: true, purchaseId: true, supplierId: true, accountingTreatment: true } });
+      if (!expense || !expense.accountedAt || !expense.journalEntryId || expense.supplierInvoiceId || expense.purchaseId || expense.supplierId || !["DIRECT_EXPENSE", "EMPLOYEE_REIMBURSEMENT", "PETTY_CASH"].includes(expense.accountingTreatment)) {
+        throw new EnterpriseAccountingError("EXPENSE_NOT_READY_FOR_SETTLEMENT", 409);
+      }
+      if (expense.currency !== input.currencyCode) throw new EnterpriseAccountingError("EXPENSE_PAYMENT_CURRENCY_MISMATCH", 409);
+      // Lock the expense row so concurrent settlement drafts cannot both reserve
+      // the same available amount before either one becomes visible.
+      await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterpriseExpense" WHERE id = ${expense.id} AND "organizationId" = ${organizationId} FOR UPDATE`);
+      const account = await tx.enterpriseFinancialAccount.findFirst({ where: { id: input.financialAccountId, organizationId, status: "ACTIVE", archivedAt: null }, select: { siteId: true, accountType: true } });
+      if (expense.siteId && account?.siteId && expense.siteId !== account.siteId) throw new EnterpriseAccountingError("EXPENSE_PAYMENT_SITE_MISMATCH", 409);
+      if (["BANK_TRANSFER", "CARD", "CHEQUE"].includes(input.methodType) && account?.accountType !== "BANK") throw new EnterpriseAccountingError("PAYMENT_METHOD_ACCOUNT_MISMATCH", 409);
+      const payments = await tx.enterprisePayment.aggregate({ where: { organizationId, expenseId: expense.id, status: { notIn: ["CANCELLED", "REVERSED"] } }, _sum: { amount: true } });
+      if ((payments._sum.amount || new Prisma.Decimal(0)).plus(amount).greaterThan(expense.amount)) throw new EnterpriseAccountingError("EXPENSE_PAYMENT_EXCEEDS_REMAINING", 409);
+    } else if (input.expenseId) {
+      throw new EnterpriseAccountingError("EXPENSE_PAYMENT_TYPE_REQUIRED", 409);
+    }
+
     if (input.paymentType === "PAYROLL_PAYMENT" && !input.payrollRunId) throw new EnterpriseAccountingError("PAYROLL_RUN_REQUIRED", 409);
     if (input.payrollRunId && input.paymentType !== "PAYROLL_PAYMENT") throw new EnterpriseAccountingError("PAYROLL_PAYMENT_TYPE_REQUIRED", 409);
     if (input.payrollRunId) {
@@ -301,17 +323,18 @@ export async function createEnterprisePaymentTx(tx: Prisma.TransactionClient, or
       if (alreadyCommitted.plus(amount).greaterThan(payroll.netAmount)) throw new EnterpriseAccountingError("PAYROLL_PAYMENT_EXCEEDS_REMAINING", 409);
     }
 
-    const unallocatedAmount = input.paymentType === "PAYROLL_PAYMENT" ? new Prisma.Decimal(0) : amount;
-    const payment = await tx.enterprisePayment.create({ data: { organizationId, number: financeReference("PAY"), direction: input.direction, paymentType: input.paymentType, methodType: input.methodType, paymentMethodId: input.paymentMethodId || null, financialAccountId: input.financialAccountId || null, cashSessionId, businessPartyId: input.businessPartyId || null, employeeId: input.employeeId || null, payrollRunId: input.payrollRunId || null, currencyCode: input.currencyCode, amount, unallocatedAmount, paymentDate: input.paymentDate, reference: input.reference || null, maskedExternalReference: input.maskedExternalReference || null, initiatedByUserId: actorUserId, idempotencyKey: input.idempotencyKey || null } });
+    const payrollUnallocatedAmount = input.paymentType === "PAYROLL_PAYMENT" ? new Prisma.Decimal(0) : amount;
+    const unallocatedAmount = input.paymentType === "EXPENSE_SETTLEMENT" ? new Prisma.Decimal(0) : payrollUnallocatedAmount;
+    const payment = await tx.enterprisePayment.create({ data: { organizationId, number: financeReference("PAY"), direction: input.direction, paymentType: input.paymentType, methodType: input.methodType, paymentMethodId: input.paymentMethodId || null, financialAccountId: input.financialAccountId || null, cashSessionId, businessPartyId: input.businessPartyId || null, employeeId: input.employeeId || null, payrollRunId: input.payrollRunId || null, expenseId: input.expenseId || null, currencyCode: input.currencyCode, amount, unallocatedAmount, paymentDate: input.paymentDate, reference: input.reference || null, maskedExternalReference: input.maskedExternalReference || null, initiatedByUserId: actorUserId, idempotencyKey: input.idempotencyKey || null } });
     await addPaymentEvent(tx, organizationId, payment.id, actorUserId, "CREATED", "Payment created");
     await publishFinanceEvent(tx, { organizationId, entityType: "EnterprisePayment", entityId: payment.id, eventType: "PAYMENT_CREATED", summary: `Payment ${payment.number} created`, actorUserId, toStatus: "DRAFT", metadataJson: { amount: amount.toFixed(), currency: payment.currencyCode, direction: payment.direction, payrollRunId: payment.payrollRunId, cashSessionId: payment.cashSessionId } });
     return payment;
 }
 
 export async function createEnterprisePayment(organizationId: string, actorUserId: string, input: PaymentInput) {
-  return prisma.$transaction((tx) => createEnterprisePaymentTx(tx, organizationId, actorUserId, input), {
+  return withRetailTransactionRetry(() => prisma.$transaction((tx) => createEnterprisePaymentTx(tx, organizationId, actorUserId, input), {
     isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-  });
+  }));
 }
 
 export async function transitionEnterprisePayment(
@@ -452,6 +475,13 @@ async function confirmEnterprisePayment(organizationId: string, paymentId: strin
     if (!payment.financialAccountId) throw new EnterpriseAccountingError("PAYMENT_FINANCIAL_ACCOUNT_REQUIRED", 409);
     const account = await tx.enterpriseFinancialAccount.findFirst({ where: { id: payment.financialAccountId, organizationId, status: "ACTIVE", archivedAt: null } });
     if (!account || account.currencyCode !== payment.currencyCode) throw new EnterpriseAccountingError("PAYMENT_FINANCIAL_ACCOUNT_INVALID", 409);
+    if (payment.paymentType === "EXPENSE_SETTLEMENT") {
+      const expense = await tx.enterpriseExpense.findFirst({ where: { id: payment.expenseId || "", organizationId, status: "APPROVED", archivedAt: null }, select: { siteId: true, currency: true, accountedAt: true, journalEntryId: true, supplierInvoiceId: true, purchaseId: true, supplierId: true } });
+      if (!expense?.accountedAt || !expense.journalEntryId || expense.supplierInvoiceId || expense.purchaseId || expense.supplierId || expense.currency !== payment.currencyCode) throw new EnterpriseAccountingError("EXPENSE_NOT_READY_FOR_SETTLEMENT", 409);
+      if (expense.siteId && account.siteId && expense.siteId !== account.siteId) throw new EnterpriseAccountingError("EXPENSE_PAYMENT_SITE_MISMATCH", 409);
+      const balance = account.availableBalance ?? account.operationalBalance;
+      if (balance.lessThan(payment.amount)) throw new EnterpriseAccountingError("EXPENSE_PAYMENT_INSUFFICIENT_FUNDS", 409);
+    }
     // A Finance approver may confirm a Retail collection days after its
     // preparation. Revalidate that this customer's receivable still covers
     // the full amount before creating any irreversible treasury movement.

@@ -17,6 +17,12 @@ export async function classifyAndPostExpense(
     if (expense.status !== "APPROVED" || expense.accountedAt || expense.supplierInvoiceId || expense.revision !== input.revision) {
       throw new EnterpriseAccountingError("EXPENSE_NOT_POSTABLE", 409);
     }
+    if (expense.purchaseId || expense.supplierId || ["STOCK_PURCHASE", "FIXED_ASSET", "TAX_PAYMENT"].includes(expense.category || "")) {
+      throw new EnterpriseAccountingError("EXPENSE_REQUIRES_SPECIALIZED_ACCOUNTING", 409);
+    }
+    if (Boolean(expense.beneficiaryEmployeeId) !== (input.accountingTreatment === "EMPLOYEE_REIMBURSEMENT")) {
+      throw new EnterpriseAccountingError("EXPENSE_EMPLOYEE_TREATMENT_MISMATCH", 409);
+    }
     const classified = await tx.enterpriseExpense.update({
       where: { id: expense.id },
       data: {

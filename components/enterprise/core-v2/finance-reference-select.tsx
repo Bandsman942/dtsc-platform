@@ -33,6 +33,7 @@ type ReferenceKind =
   | "funding-counterpart-account";
 
 type OperationalFinanceModuleCode =
+  | "FINANCE_BUDGETS"
   | "FINANCE_RECEIVABLES"
   | "FINANCE_PAYABLES"
   | "FINANCE_PAYMENTS"
@@ -52,6 +53,7 @@ export type FinanceReferenceOption = {
   financialAccountId?: string | null;
   currency?: string | null;
   amount?: string | number | null;
+  accountCode?: string | null;
   accountType?: string | null;
 };
 
@@ -70,6 +72,11 @@ function endpointFor(
   moduleCode?: OperationalFinanceModuleCode,
   parentId?: string,
 ) {
+  if (moduleCode === "FINANCE_BUDGETS" && ["financial-account", "expense-account", "employee"].includes(kind)) {
+    const query = new URLSearchParams({ kind });
+    if (search.trim()) query.set("search", search.trim());
+    return `/api/enterprise/${organizationId}/budgets/references?${query.toString()}`;
+  }
   if (moduleCode && TREASURY_MODULES.has(moduleCode) && TREASURY_KINDS.has(kind)) {
     const query = new URLSearchParams({ module: moduleCode, kind });
     if (search.trim()) query.set("search", search.trim());
@@ -116,7 +123,7 @@ function mapOptions(kind: ReferenceKind, items: unknown[], locale?: string | nul
   if (kind === "financial-account") return (items as Array<{ id: string; code: string; name: string; accountType: string; currencyCode: string; maskedReference?: string | null }>).map((item) => ({ id: item.id, label: `${item.code} · ${item.name} · ${item.currencyCode}${item.maskedReference ? ` · ${item.maskedReference}` : ""}`, currency: item.currencyCode, accountType: item.accountType }));
   if (kind === "payroll-run") return (items as Array<{ id: string; reference: string; currency: string; netAmount: string | number; payrollPeriod: { code: string; name: string } }>).map((item) => ({ id: item.id, label: `${item.reference} · ${item.payrollPeriod.code} · ${item.payrollPeriod.name} · ${item.currency}`, currency: item.currency, amount: item.netAmount }));
   if (kind === "employee") return (items as Array<{ id: string; employeeNumber: string; displayName: string }>).map((item) => ({ id: item.id, label: `${item.employeeNumber} · ${item.displayName}` }));
-  if (kind === "expense-account") return (items as Array<{ id: string; code: string; nameFr: string; nameEn: string }>).map((item) => ({ id: item.id, label: `${item.code} · ${en ? item.nameEn : item.nameFr}` }));
+  if (kind === "expense-account") return (items as Array<{ id: string; code: string; nameFr: string; nameEn: string }>).map((item) => ({ id: item.id, accountCode: item.code, label: `${item.code} · ${en ? item.nameEn : item.nameFr}` }));
   if (kind === "ledger-account") return (items as Array<{ id: string; code: string; nameFr: string; nameEn: string; currencyCode?: string | null }>).map((item) => ({ id: item.id, label: `${item.code} · ${en ? item.nameEn : item.nameFr}${item.currencyCode ? ` · ${item.currencyCode}` : ""}`, currency: item.currencyCode }));
   if (kind === "funding-counterpart-account") return (items as Array<{ id: string; code: string; nameFr: string; nameEn: string; currencyCode?: string | null }>).map((item) => ({ id: item.id, label: `${item.code} · ${en ? item.nameEn : item.nameFr}${item.currencyCode ? ` · ${item.currencyCode}` : ""}`, currency: item.currencyCode, accountType: "LIABILITY" }));
   if (kind === "cash-session") return (items as Array<{ id: string; number: string; status: string; openedAt: string; openingAmount: string | number }>).map((item) => ({ id: item.id, label: `${item.number} · ${new Date(item.openedAt).toLocaleString(en ? "en" : "fr")} · ${item.openingAmount}` }));
@@ -191,7 +198,7 @@ export function FinanceReferenceSelect({ organizationId, kind, name, label, loca
 
   return <div className="grid min-w-0 gap-2">
     <Input value={search} onChange={(event) => setSearch(event.target.value)} disabled={disabled} aria-label={en ? `Search ${label}` : `Rechercher ${label}`} placeholder={en ? `Search ${label.toLowerCase()}…` : `Rechercher ${label.toLowerCase()}…`} />
-    <select name={name} value={selected?.id || ""} required={required} disabled={disabled || loading} onChange={(event) => { const next = options.find((item) => item.id === event.target.value) || null; setSelected(next); onOptionChange?.(next); }} className="h-11 w-full min-w-0 max-w-full truncate rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-base text-dtsc-ink outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 disabled:opacity-60 md:text-sm">
+    <select name={name} aria-label={en ? `Select ${label}` : `Sélectionner ${label}`} aria-busy={loading} value={selected?.id || ""} required={required} disabled={disabled || loading} onChange={(event) => { const next = options.find((item) => item.id === event.target.value) || null; setSelected(next); onOptionChange?.(next); }} className="h-11 w-full min-w-0 max-w-full truncate rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-base text-dtsc-ink outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 disabled:opacity-60 md:text-sm">
       <option value="">{loading ? (en ? "Loading…" : "Chargement…") : emptyLabel || (en ? "Select…" : "Sélectionner…")}</option>
       {options.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
     </select>
