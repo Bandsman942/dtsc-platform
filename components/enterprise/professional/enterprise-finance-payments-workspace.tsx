@@ -352,7 +352,7 @@ export function EnterpriseFinancePaymentsWorkspace(props: Props) {
           <FinanceDetailValue label={t("method")}>{financeEnumLabel(detail.methodType, locale)}</FinanceDetailValue>
           <FinanceDetailValue label={t("amount")}>{financeMoney(detail.amount, detail.currencyCode, locale)}</FinanceDetailValue>
           <FinanceDetailValue label={t("unallocated")}>{financeMoney(detail.unallocatedAmount, detail.currencyCode, locale)}</FinanceDetailValue>
-          <FinanceDetailValue label={t("date")}>{detail.paymentDate}</FinanceDetailValue>
+          <FinanceDetailValue label={t("date")}>{financeDate(detail.paymentDate, locale)}</FinanceDetailValue>
         </FinanceDetailGrid>
         <div data-responsive-actions>
           {detail.linkedSalesInvoiceId ? <Button variant="outline" onClick={() => printLinkedInvoice(detail)}><Printer className="h-4 w-4" />{t("printInvoicePreview")}</Button> : null}
