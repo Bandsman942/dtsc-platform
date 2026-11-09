@@ -30,7 +30,7 @@ export function getPublicMcpBridgeConfiguration() {
     const parsed = new URL(supplied || DEFAULT_BRIDGE);
     if (parsed.protocol === "https:" && !parsed.username && !parsed.password && !parsed.hash &&
       !parsed.search && parsed.pathname === "/v1/tool" && parsed.hostname !== "localhost" &&
-      !parsed.hostname.endsWith(".internal") && !parsed.hostname.endsWith(".local") &&
+      !parsed.hostname.endsWith(".internal") && !parsed.hostname.endsWith(".local") && !parsed.hostname.endsWith(".invalid") && !parsed.hostname.endsWith(".test") &&
       !/^\d+\.\d+\.\d+\.\d+$/.test(parsed.hostname)) {
       url = parsed.toString();
       host = parsed.hostname.toLowerCase();
@@ -39,7 +39,7 @@ export function getPublicMcpBridgeConfiguration() {
   } catch {
     // Fail closed: runtime remains disabled and requires explicit operator fix.
   }
-  const tokenPresent = Boolean(process.env.MCP_PUBLIC_BRIDGE_TOKEN?.trim());
+  const tokenPresent = (process.env.MCP_PUBLIC_BRIDGE_TOKEN?.trim().length || 0) >= 32;
   const certified = configured && tokenPresent && process.env.MCP_PUBLIC_BRIDGE_CERTIFIED === "true";
   return { url, host, configured, certified, tokenPresent };
 }
