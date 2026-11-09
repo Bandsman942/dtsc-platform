@@ -149,6 +149,7 @@ export function EnterpriseFinanceInvoicesWorkspace(props: Props) {
   const [tab, setTab] = useState(searchParams.get("tab") || "invoices");
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
+  const [ageBucket, setAgeBucket] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [page, setPage] = useState(1);
@@ -177,9 +178,10 @@ export function EnterpriseFinanceInvoicesWorkspace(props: Props) {
   const endpoint = `/api/enterprise/${organizationId}/${endpointName}`;
   const filters = useMemo<Record<string, string | boolean | undefined>>(() => ({
     overdue: tab === "overdue" ? true : undefined,
+    ageBucket: tab === "ageing" && ageBucket ? ageBucket : undefined,
     workflowPending: !isReceivables && tab === "to-approve" ? true : undefined,
     dateFrom, dateTo,
-  }), [dateFrom, dateTo, isReceivables, tab]);
+  }), [ageBucket, dateFrom, dateTo, isReceivables, tab]);
   const effectiveStatus = useMemo(() => {
     if (status) return status;
     if (["ageing", "to-pay"].includes(tab)) return "OPEN";
@@ -320,6 +322,10 @@ export function EnterpriseFinanceInvoicesWorkspace(props: Props) {
   const actionRequiresReason = Boolean(actionTarget && ["REJECT", "REQUEST_CORRECTION", "CANCEL", "VOID"].includes(actionTarget.action));
   const printCustomerInvoice = (id: string) => window.open(`/api/enterprise/${organizationId}/sales-invoices/${encodeURIComponent(id)}/print?lang=${locale}`, "_blank", "noopener,noreferrer");
 
+  const invoiceIdFor = (record: InvoiceRecord) => isReceivables && detailKind !== "credit"
+    ? (endpointName === "sales-invoices" ? record.id : record.salesInvoiceId || null)
+    : null;
+
   return <ModuleWorkspace>
     <ModuleHeader
       eyebrow={`${isReceivables ? t("receivablesEyebrow") : t("payablesEyebrow")} · ${organizationName}`}
@@ -336,18 +342,37 @@ export function EnterpriseFinanceInvoicesWorkspace(props: Props) {
     </ModuleMetrics>
     <ModuleToolbar
       search={<ProfessionalSearch value={search} onChange={(value) => { setSearch(value); setPage(1); }} placeholder={t("financeSearchPlaceholder")} />}
-      controls={<div className="grid min-w-0 gap-2"><ProfessionalTabs value={tab} onChange={(value) => { setTab(value); setStatus(""); setPage(1); setDetail(null); }} items={tabs} label={t("financeViews")} /><div className="flex min-w-0 flex-wrap items-end gap-2"><NativeSelect value={status} onChange={(value) => { setStatus(value); setPage(1); }} items={[{ id: "", label: t("allStatuses") }, ...["DRAFT", "PENDING_REVIEW", "PENDING_APPROVAL", "APPROVED", "REJECTED", "ISSUED", "POSTED", "PARTIALLY_PAID", "PAID", "CANCELLED"].map((id) => ({ id, label: financeStatusLabel(id, locale) }))]} /><FinanceDateFilter locale={locale} from={dateFrom} to={dateTo} onChange={(from, to) => { setDateFrom(from); setDateTo(to); setPage(1); }} /><FinanceExportControls endpoint={endpoint} organizationName={organizationName} title={`${locale === "en" ? definition.labelEn : definition.labelFr} · ${tab}`} locale={locale} filters={{ search, status: effectiveStatus, overdue: tab === "overdue" ? "true" : "", workflowPending: !isReceivables && tab === "to-approve" ? "true" : "", dateFrom, dateTo }} columns={exportColumns} disabled={collection.loading} /></div></div>}
+      controls={<div className="grid min-w-0 gap-2"><ProfessionalTabs value={tab} onChange={(value) => { setTab(value); setStatus(""); setAgeBucket(""); setPage(1); setDetail(null); }} items={tabs} label={t("financeViews")} /><div className="flex min-w-0 flex-wrap items-end gap-2"><NativeSelect value={status} onChange={(value) => { setStatus(value); setPage(1); }} items={[{ id: "", label: t("allStatuses") }, ...["DRAFT", "PENDING_REVIEW", "PENDING_APPROVAL", "APPROVED", "REJECTED", "ISSUED", "POSTED", "PARTIALLY_PAID", "PAID", "CANCELLED"].map((id) => ({ id, label: financeStatusLabel(id, locale) }))]} /><FinanceDateFilter locale={locale} from={dateFrom} to={dateTo} onChange={(from, to) => { setDateFrom(from); setDateTo(to); setPage(1); }} /><FinanceExportControls endpoint={endpoint} organizationName={organizationName} title={`${locale === "en" ? definition.labelEn : definition.labelFr} · ${tab}`} locale={locale} filters={{ search, status: effectiveStatus, overdue: tab === "overdue" ? "true" : "", workflowPending: !isReceivables && tab === "to-approve" ? "true" : "", dateFrom, dateTo }} columns={exportColumns} disabled={collection.loading} /></div></div>}
       summary={t("currenciesSeparated")}
     />
     <ModuleContent>
       {summaryError ? <ProfessionalError message={summaryError} /> : null}
       <ModuleSection title={tabs.find((item) => item.id === tab)?.label || ""} description={t(isReceivables ? "receivablesSectionDescription" : "payablesSectionDescription")}>
-        {collection.error ? <ProfessionalError message={collection.error} /> : collection.loading ? <ProfessionalLoading /> : tab === "ageing" ? (
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">{[
-            ["TO_DUE", t("notDue")], ["D1_30", "1–30"], ["D31_60", "31–60"], ["D61_90", "61–90"], ["D90_PLUS", t("over90Days")],
-          ].map(([id, label]) => <article key={id} className="rounded-xl border border-dtsc-border p-4"><p className="text-xs font-black uppercase text-dtsc-muted">{label}</p><p className="mt-2 text-2xl font-black text-dtsc-ink">{summary?.ageing?.[id as keyof NonNullable<typeof summary.ageing>] || 0}</p><p className="mt-1 text-sm text-dtsc-muted">{t("records")}</p></article>)}</div>
-        ) : <FinanceRecordList items={collection.items} locale={locale} emptyTitle={t("noItemInView")} emptyDescription={t("professionalFormOrFilters")} onOpen={(record) => setDetail(record as InvoiceRecord)} actions={isReceivables && endpointName === "sales-invoices" ? (record) => <div data-responsive-actions className="flex min-w-0 flex-wrap gap-2"><Button size="sm" variant="outline" onClick={() => setDetail(record)}><Eye className="h-4 w-4" />{locale === "fr" ? "Détail" : "Details"}</Button><Button size="sm" variant="outline" onClick={() => printCustomerInvoice(record.id)}><Printer className="h-4 w-4" />{t("printInvoicePreview")}</Button></div> : undefined} />}
-        {tab !== "ageing" ? <FinancePaginationControls pagination={collection.pagination} page={page} onPage={setPage} locale={locale} /> : null}
+        {collection.error ? <ProfessionalError message={collection.error} /> : collection.loading ? <ProfessionalLoading /> : <div className="grid gap-3">
+          {tab === "ageing" ? <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
+            {[
+              ["", locale === "en" ? "All due dates" : "Toutes les échéances"],
+              ["TO_DUE", t("notDue")], ["D1_30", "1–30"], ["D31_60", "31–60"], ["D61_90", "61–90"], ["D90_PLUS", t("over90Days")],
+            ].map(([id, label]) => <button type="button" key={id} aria-pressed={ageBucket === id}
+              onClick={() => { setAgeBucket(id); setPage(1); }}
+              className={`rounded-xl border p-4 text-left transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-500 ${ageBucket === id ? "border-sky-500 bg-sky-500/10" : "border-dtsc-border hover:border-sky-500/60"}`}>
+              <span className="block text-xs font-black uppercase text-dtsc-muted">{label}</span>
+              <span className="mt-2 block text-2xl font-black text-dtsc-ink">{id ? summary?.ageing?.[id as keyof NonNullable<typeof summary.ageing>] || 0 : summary?.openCount || 0}</span>
+              <span className="mt-1 block text-xs text-dtsc-muted">{t("records")}</span>
+            </button>)}
+          </div> : null}
+          <FinanceRecordList items={collection.items} locale={locale} emptyTitle={t("noItemInView")}
+            emptyDescription={t("professionalFormOrFilters")} onOpen={(record) => setDetail(record as InvoiceRecord)}
+            actions={isReceivables && (endpointName === "sales-invoices" || endpointName === "receivables") ? (record) => {
+              const invoiceId = endpointName === "sales-invoices" ? record.id : (record as InvoiceRecord).salesInvoiceId;
+              return invoiceId ? <div data-responsive-actions className="flex min-w-0 flex-wrap gap-2">
+                <Button size="sm" variant="outline" onClick={() => setDetail(record as InvoiceRecord)}><Eye className="h-4 w-4" />{locale === "fr" ? "Détail" : "Details"}</Button>
+                <Button size="sm" variant="outline" onClick={() => printCustomerInvoice(invoiceId)}><Printer className="h-4 w-4" />{t("printInvoicePreview")}</Button>
+              </div> : null;
+            } : undefined}
+          />
+        </div>}
+        <FinancePaginationControls pagination={collection.pagination} page={page} onPage={setPage} locale={locale} />
       </ModuleSection>
       <ProfessionalHelp moduleCode={moduleCode} />
     </ModuleContent>
@@ -401,7 +426,8 @@ export function EnterpriseFinanceInvoicesWorkspace(props: Props) {
           {detail.dueDate ? <FinanceDetailValue label={t("dueDate")}>{financeDate(detail.dueDate, locale)}</FinanceDetailValue> : null}
         </FinanceDetailGrid>
         {!isReceivables && detailKind === "invoice" && detail.threeWayMatch ? <section className="rounded-xl border border-dtsc-border p-4"><h3 className="font-black text-dtsc-ink">{t("poReceiptInvoiceControl")}</h3><div className="mt-3 grid gap-3 sm:grid-cols-3"><FinanceDetailValue label={t("quantity")}>{String(detail.threeWayMatch.quantityVariance ?? 0)}</FinanceDetailValue><FinanceDetailValue label={t("price")}>{String(detail.threeWayMatch.priceVariance ?? 0)}</FinanceDetailValue><FinanceDetailValue label={t("totalVariance")}>{String(detail.threeWayMatch.totalVariance ?? 0)}</FinanceDetailValue></div></section> : null}
-        {detailHasWorkflow ? <div data-responsive-actions>{isReceivables && detailKind === "invoice" ? <Button variant="outline" onClick={() => printCustomerInvoice(detail.id)}><Printer className="h-4 w-4" />{t("printInvoicePreview")}</Button> : null}{(detailKind === "credit" ? creditTransitionActions(detail.status, locale) : invoiceTransitionActions(detail.status, locale, isReceivables)).filter((action) => capabilityAllowsAction(detail, action.action)).map((action) => { const Icon = action.icon; return <Button key={action.action} disabled={busy} variant={action.destructive ? "destructive" : "outline"} onClick={() => setActionTarget({ record: detail, action: action.action, kind: detailKind })}><Icon className="h-4 w-4" />{action.label}</Button>; })}{detailKind === "invoice" && detail.capabilities?.canCreateCredit ? <Button variant="outline" disabled={busy} onClick={() => setCreditTarget(detail)}><FileMinus2 className="h-4 w-4" />{t("createCreditNote")}</Button> : null}</div> : null}
+        {invoiceIdFor(detail) ? <div data-responsive-actions><Button variant="outline" onClick={() => printCustomerInvoice(invoiceIdFor(detail)!)}><Printer className="h-4 w-4" />{t("printInvoicePreview")}</Button></div> : null}
+        {detailHasWorkflow ? <div data-responsive-actions>{(detailKind === "credit" ? creditTransitionActions(detail.status, locale) : invoiceTransitionActions(detail.status, locale, isReceivables)).filter((action) => capabilityAllowsAction(detail, action.action)).map((action) => { const Icon = action.icon; return <Button key={action.action} disabled={busy} variant={action.destructive ? "destructive" : "outline"} onClick={() => setActionTarget({ record: detail, action: action.action, kind: detailKind })}><Icon className="h-4 w-4" />{action.label}</Button>; })}{detailKind === "invoice" && detail.capabilities?.canCreateCredit ? <Button variant="outline" disabled={busy} onClick={() => setCreditTarget(detail)}><FileMinus2 className="h-4 w-4" />{t("createCreditNote")}</Button> : null}</div> : null}
         <FinanceCollaboration organizationId={organizationId} moduleCode={moduleCode} record={detail} locale={locale} />
       </div> : null}
     </Dialog>
