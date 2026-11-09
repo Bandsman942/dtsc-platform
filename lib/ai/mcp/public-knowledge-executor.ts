@@ -78,8 +78,8 @@ function resolveTurnKey(context: AiToolRuntimeContext) {
 
 function assertPublicOnly(context: AiToolRuntimeContext) {
   // Public Web results must NEVER receive confidential user or tenant material.
-  const classes = new Set(context.dataClassifications || []);
-  if (["CONFIDENTIAL", "RESTRICTED", "HEALTH_SENSITIVE", "HR_SENSITIVE", "FINANCIAL_SENSITIVE", "LEGAL_SENSITIVE", "SECRET"].some((sensitivity) => classes.has(sensitivity as typeof context.dataClassifications[number]))) {
+  const classes: ReadonlySet<string> = new Set(context.dataClassifications || []);
+  if (["CONFIDENTIAL", "RESTRICTED", "HEALTH_SENSITIVE", "HR_SENSITIVE", "FINANCIAL_SENSITIVE", "LEGAL_SENSITIVE", "SECRET"].some((sensitivity) => classes.has(sensitivity))) {
     throw new Error("MCP_PUBLIC_DATA_ONLY");
   }
 }
