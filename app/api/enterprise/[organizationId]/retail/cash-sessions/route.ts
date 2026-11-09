@@ -5,8 +5,9 @@ import { cashSessionOpenSchema } from "@/lib/enterprise/accounting/treasury-sche
 import type { EnterpriseModuleAction } from "@/lib/enterprise/module-access";
 import type { RetailModuleCode } from "@/lib/enterprise/retail/constants";
 import { authorizeRetailRequest, retailErrorResponse } from "@/lib/enterprise/retail/http";
+import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
 import { prisma } from "@/lib/prisma";
-import { retailFinanceReadSiteScope } from "@/lib/enterprise/retail/site-access";
+import { requireRetailSiteCapability, retailFinanceReadSiteScope } from "@/lib/enterprise/retail/site-access";
 
 type Params = { params: Promise<{ organizationId: string }> };
 
@@ -27,7 +28,11 @@ export async function GET(req: Request, { params }: Params) {
   const { organizationId } = await params;
   const auth = await authorizeRetailCashRequest(req, organizationId, "read");
   if (!auth.ok) return auth.response;
-  const siteScope = await retailFinanceReadSiteScope(organizationId, auth.session.userId, "CLOSE_CASH");
+  const [openScope, closeScope] = await Promise.all([
+    retailFinanceReadSiteScope(organizationId, auth.session.userId, "OPEN_CASH"),
+    retailFinanceReadSiteScope(organizationId, auth.session.userId, "CLOSE_CASH"),
+  ]);
+  const siteScope = openScope === null || closeScope === null ? null : [...new Set([...openScope, ...closeScope])];
   const items = await prisma.enterpriseCashSession.findMany({
     where: { organizationId, cashierUserId: auth.session.userId,
       ...(siteScope !== null ? { siteId: { in: siteScope } } : {}),
@@ -36,8 +41,11 @@ export async function GET(req: Request, { params }: Params) {
     take: 30,
     include: { financialAccount: { select: { id: true, code: true, name: true, currencyCode: true } }, _count: { select: { movements: true, counts: true, discrepancies: true } } },
   });
+  const operatorIds = [...new Set(items.flatMap((item) => [item.cashierUserId, item.validatedByUserId].filter((id): id is string => Boolean(id))))];
+  const members = await prisma.organizationMember.findMany({ where: { organizationId, userId: { in: operatorIds } }, select: { userId: true, user: { select: { name: true, email: true } } } });
+  const operatorNames = new Map(members.map((member) => [member.userId, member.user.name || member.user.email || "—"]));
   await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "retail-cash-sessions", moduleCode: auth.moduleCode } });
-  return NextResponse.json({ items });
+  return NextResponse.json({ items: items.map((session) => ({ ...session, openedByLabel: operatorNames.get(session.cashierUserId) || "—", submittedByLabel: session.submittedAt ? operatorNames.get(session.cashierUserId) || "—" : null, closedByLabel: session.validatedAt ? operatorNames.get(session.validatedByUserId || "") || "—" : null, closedAt: session.validatedAt || null })) });
 }
 
 export async function POST(req: Request, { params }: Params) {
@@ -48,6 +56,9 @@ export async function POST(req: Request, { params }: Params) {
   const parsed = cashSessionOpenSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "ENTERPRISE_INPUT_INVALID", message: parsed.error.issues[0]?.message || "Ouverture de caisse invalide." }, { status: 400 });
   try {
+    const cashAccount = await prisma.enterpriseFinancialAccount.findFirst({ where: { id: parsed.data.financialAccountId, organizationId, accountType: "CASH", status: "ACTIVE", archivedAt: null }, select: { siteId: true } });
+    if (!cashAccount?.siteId) throw new EnterpriseRetailError("RETAIL_CASH_ACCOUNT_REQUIRES_STORE", 409);
+    await requireRetailSiteCapability(organizationId, auth.session.userId, cashAccount.siteId, "OPEN_CASH", prisma, { requireAssignment: true });
     const session = await openCashSession(organizationId, auth.session.userId, parsed.data);
     await writeAuditLog({ userId: auth.session.userId, action: "ENTERPRISE_RETAIL_CASH_SESSION_OPENED", entity: "EnterpriseCashSession", entityId: session.id, request: req, metadata: { organizationId, financialAccountId: session.financialAccountId, openingAmount: session.openingAmount.toFixed(), moduleCode: auth.moduleCode } });
     await writeApiLog({ request: req, statusCode: 201, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "retail-cash-sessions", action: "open", moduleCode: auth.moduleCode } });

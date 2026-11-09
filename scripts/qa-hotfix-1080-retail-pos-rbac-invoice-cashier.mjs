@@ -15,6 +15,10 @@ const assignments = read("app/api/enterprise/[organizationId]/retail/site-assign
 const access = read("lib/enterprise/retail/site-access.ts");
 const invoicePayments = read("lib/enterprise/retail/invoice-payments.ts");
 const apiSource = read("app/api/enterprise/[organizationId]/retail/invoices/route.ts");
+const civilDates = { exports: {} };
+vm.runInNewContext(ts.transpileModule(read("lib/enterprise/retail/civil-date.ts"), {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+}).outputText, { module: civilDates, exports: civilDates.exports, Date, Intl });
 
 for (const id of ["store-setup", "sites", "staff", "payments", "equipment", "readiness", "activation", "inventory", "offline", "omnichannel"]) {
   assert.match(nav, new RegExp(`id: "${id}"[^\\n]*adminOnly: true`), `${id} must be owner/admin-only`);
@@ -66,7 +70,8 @@ const prisma = {
     findMany: async ({ where }) => { capturedWhere = where; return [checkout]; },
     count: async () => 1,
   },
-  enterpriseSite: { findMany: async () => [{ id: "shop-a", name: "Boutique A", warehouses: [] }] },
+  enterpriseSite: { findMany: async () => [{ id: "shop-a", name: "Boutique A", warehouses: [] }], findFirst: async () => ({ timezone: "Africa/Kinshasa" }) },
+  organization: { findFirst: async () => ({ timezone: "Africa/Kinshasa" }) },
   enterpriseRetailConfiguration: { findUnique: async () => ({ settingsJson: { invoiceCheckoutEnabled: true } }) },
 };
 const unit = { exports: {} };
@@ -84,6 +89,7 @@ vm.runInNewContext(ts.transpileModule(apiSource, {
       retailListParams: () => ({ page: 1, pageSize: 10, status: null }),
     };
     if (name === "@/lib/enterprise/retail/errors") return { EnterpriseRetailError: class extends Error { constructor(code, status) { super(code); this.code = code; this.status = status; } } };
+    if (name === "@/lib/enterprise/retail/civil-date") return civilDates.exports;
     if (name === "@/lib/enterprise/retail/invoice-checkout") return { retailInvoicePrepareSchema: { safeParse: () => ({ success: false }) } };
     if (name === "@/lib/enterprise/retail/site-access") return {
       retailInvoiceVisibleSites: async () => ({
@@ -101,7 +107,13 @@ assert.equal(collections.status, 200);
 assert.equal(collections.body.items[0].canCollect, true);
 assert.equal(capturedWhere.siteId.in[0], "shop-a");
 assert.deepEqual(Array.from(capturedWhere.invoice.status.in), ["ISSUED", "PARTIALLY_PAID", "OVERDUE"]);
-assert.equal(capturedWhere.invoice.number.contains, "FAC");
+assert.equal(capturedWhere.invoice.OR[0].number.contains, "FAC");
+assert.equal(capturedWhere.invoice.OR[1].items.some.description.contains, "FAC");
+
+const exact = await unit.exports.GET(new Request("https://app.dtsc-platform.com/api/enterprise/tenant/retail/invoices?view=collections&dateFrom=2026-11-09&dateTo=2026-11-09"), params);
+assert.equal(exact.status, 200);
+assert.equal(capturedWhere.invoice.invoiceDate.gte.toISOString(), "2026-11-08T23:00:00.000Z", "Kinshasa business day starts at 23:00 UTC");
+assert.equal(capturedWhere.invoice.invoiceDate.lt.toISOString(), "2026-11-09T23:00:00.000Z");
 
 const general = await unit.exports.GET(new Request("https://app.dtsc-platform.com/api/enterprise/tenant/retail/invoices"), params);
 assert.equal(general.status, 200);

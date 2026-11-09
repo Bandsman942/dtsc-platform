@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import type { Prisma } from "@prisma/client";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
+import { civilMidnightUtc, followingCivilDate, isCivilDate } from "@/lib/enterprise/retail/civil-date";
 import { authorizeRetailRequest, retailErrorResponse, retailListParams } from "@/lib/enterprise/retail/http";
 import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
 import { prepareRetailInvoice, retailInvoicePrepareSchema } from "@/lib/enterprise/retail/invoice-checkout";
@@ -33,16 +34,39 @@ export async function GET(req: Request, { params }: Params) {
   const siteId = url.searchParams.get("siteId") || undefined;
   const collectionsOnly = url.searchParams.get("view") === "collections";
   const search = (url.searchParams.get("q") || "").trim().slice(0, 100);
+  const dateFrom = url.searchParams.get("dateFrom") || "";
+  const dateTo = url.searchParams.get("dateTo") || "";
+  if ((dateFrom && !isCivilDate(dateFrom)) || (dateTo && !isCivilDate(dateTo)) || (dateFrom && dateTo && dateFrom > dateTo)) {
+    return retailErrorResponse(new EnterpriseRetailError("RETAIL_REPORT_DATE_INVALID", 400));
+  }
   const permittedSites = collectionsOnly ? auth.visibility.collectibleSiteIds : auth.visibility.siteIds;
   if (siteId && !auth.visibility.isOwner && !permittedSites.includes(siteId)) {
     return retailErrorResponse(new EnterpriseRetailError("RETAIL_SITE_ACCESS_DENIED", 403));
   }
+  // Exact dates are interpreted in the selected store's timezone, or in the
+  // enterprise timezone for a company-wide report. Never use UTC midnight as
+  // a substitute for a local business day.
+  const [organization, filteredSite] = dateFrom || dateTo ? await Promise.all([
+    prisma.organization.findFirst({ where: { id: organizationId }, select: { timezone: true } }),
+    siteId ? prisma.enterpriseSite.findFirst({ where: { organizationId, id: siteId, status: "ACTIVE", archivedAt: null }, select: { timezone: true } }) : Promise.resolve(null),
+  ]) : [null, null];
+  const timezone = filteredSite?.timezone || organization?.timezone || "UTC";
+  const invoiceDate: Prisma.DateTimeFilter = {
+    ...(dateFrom ? { gte: civilMidnightUtc(dateFrom, timezone) } : {}),
+    ...(dateTo ? { lt: civilMidnightUtc(followingCivilDate(dateTo), timezone) } : {}),
+  };
+  const invoiceConditions: Prisma.EnterpriseSalesInvoiceWhereInput = {
+    ...(collectionsOnly ? { status: { in: ["ISSUED", "PARTIALLY_PAID", "OVERDUE"] } } : status ? { status } : {}),
+    ...(dateFrom || dateTo ? { invoiceDate } : {}),
+    ...(search ? { OR: [
+      { number: { contains: search, mode: "insensitive" } },
+      { items: { some: { description: { contains: search, mode: "insensitive" } } } },
+    ] } : {}),
+  };
   const where: Prisma.EnterpriseRetailInvoiceCheckoutWhereInput = {
     organizationId,
     ...(auth.visibility.isOwner ? (siteId ? { siteId } : {}) : { siteId: siteId || { in: permittedSites } }),
-    ...(collectionsOnly
-      ? { invoice: { status: { in: ["ISSUED", "PARTIALLY_PAID", "OVERDUE"] }, ...(search ? { number: { contains: search, mode: "insensitive" as const } } : {}) } }
-      : status || search ? { invoice: { ...(status ? { status } : {}), ...(search ? { number: { contains: search, mode: "insensitive" as const } } : {}) } } : {}),
+    ...(collectionsOnly || status || search || dateFrom || dateTo ? { invoice: invoiceConditions } : {}),
   };
   const [items, total, sites, configuration] = await Promise.all([
     prisma.enterpriseRetailInvoiceCheckout.findMany({
@@ -61,8 +85,24 @@ export async function GET(req: Request, { params }: Params) {
   await writeApiLog({ request: req, startedAt, statusCode: 200, userId: auth.session.userId, metadata: { organizationId, domain: "retail-checkout-invoices", page } });
   const settings = configuration?.settingsJson;
   const checkoutReady = Boolean(settings && typeof settings === "object" && !Array.isArray(settings) && settings.invoiceCheckoutEnabled === true);
+  const pendingInvoiceIds = items.filter((entry) => entry.invoice.status === "PENDING_APPROVAL").map((entry) => entry.invoice.id);
+  const approvals = pendingInvoiceIds.length ? await prisma.enterpriseApproval.findMany({
+    where: { organizationId, targetEntityType: "EnterpriseSalesInvoice", targetEntityId: { in: pendingInvoiceIds }, status: "PENDING", archivedAt: null },
+    orderBy: { requestedAt: "desc" }, select: { targetEntityId: true, approverUserId: true },
+  }) : [];
+  const approverIds = [...new Set(approvals.map((row) => row.approverUserId))];
+  const approvers = approverIds.length ? await prisma.organizationMember.findMany({
+    where: { organizationId, userId: { in: approverIds }, status: "ACTIVE", removedAt: null },
+    select: { userId: true, user: { select: { name: true, email: true } } },
+  }) : [];
+  const approverNames = new Map(approvers.map((member) => [member.userId, member.user.name || member.user.email || "—"]));
+  const pendingApprovers = new Map<string, string>();
+  for (const approval of approvals) {
+    if (!pendingApprovers.has(approval.targetEntityId)) pendingApprovers.set(approval.targetEntityId, approverNames.get(approval.approverUserId) || "—");
+  }
   const visibleItems = items.map((entry) => ({
     ...entry,
+    invoice: { ...entry.invoice, pendingApproverName: pendingApprovers.get(entry.invoice.id) || null },
     canCancel: entry.invoice.status === "DRAFT" && (auth.visibility.isOwner || auth.visibility.cancellableSiteIds.includes(entry.siteId)),
     canSubmit: entry.invoice.status === "DRAFT" && entry.invoice.createdByUserId === auth.session.userId && (auth.visibility.isOwner || auth.visibility.submittableSiteIds.includes(entry.siteId)),
     canCollect: ["ISSUED", "PARTIALLY_PAID", "OVERDUE"].includes(entry.invoice.status) && (auth.visibility.isOwner || auth.visibility.collectibleSiteIds.includes(entry.siteId)),

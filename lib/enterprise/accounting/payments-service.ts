@@ -25,6 +25,43 @@ async function addPaymentEvent(tx: Prisma.TransactionClient, organizationId: str
   await tx.enterprisePaymentEvent.create({ data: { organizationId, paymentId, actorUserId, eventType, summary, metadataJson } });
 }
 
+/** A POS payment intent names exactly one Finance invoice. Confirming it in
+ * Finance must settle that same receivable in the SAME serializable commit as
+ * its cash/treasury entry; there is no second cashier allocation to forget. */
+async function allocateConfirmedRetailPaymentTx(
+  tx: Prisma.TransactionClient,
+  organizationId: string,
+  payment: { id: string; number: string; amount: Prisma.Decimal; unallocatedAmount: Prisma.Decimal; currencyCode: string; businessPartyId: string | null },
+  actorUserId: string,
+  salesInvoiceId: string,
+) {
+  const receivable = await tx.enterpriseReceivable.findFirst({ where: { organizationId, salesInvoiceId, status: "OPEN" } });
+  if (!receivable || receivable.businessPartyId !== payment.businessPartyId || receivable.currencyCode !== payment.currencyCode ||
+      receivable.outstandingAmount.lessThan(payment.amount) || payment.unallocatedAmount.lessThan(payment.amount)) {
+    throw new EnterpriseAccountingError("RETAIL_INVOICE_PAYMENT_EXCEEDS_OUTSTANDING", 409);
+  }
+  const allocation = await tx.enterprisePaymentAllocation.create({ data: {
+    organizationId, paymentId: payment.id, receivableId: receivable.id, amount: payment.amount, allocatedByUserId: actorUserId,
+  } });
+  await tx.enterprisePayment.update({ where: { id: payment.id }, data: { unallocatedAmount: { decrement: payment.amount }, revision: { increment: 1 } } });
+  const outstanding = money(receivable.outstandingAmount.minus(payment.amount));
+  await tx.enterpriseReceivable.update({ where: { id: receivable.id }, data: { allocatedAmount: { increment: payment.amount }, outstandingAmount: outstanding, status: outstanding.isZero() ? "CLOSED" : "OPEN" } });
+  await tx.enterpriseSalesInvoice.update({ where: { id: salesInvoiceId }, data: { amountPaid: { increment: payment.amount }, outstandingAmount: outstanding, status: outstanding.isZero() ? "PAID" : "PARTIALLY_PAID", revision: { increment: 1 } } });
+  await tx.enterpriseReceivableAllocation.create({ data: { organizationId, receivableId: receivable.id, sourceType: "PAYMENT", sourceId: allocation.id, amount: payment.amount, allocationDate: new Date(), createdByUserId: actorUserId } });
+  if (outstanding.isZero()) {
+    try { await postPaidRetailInvoiceStockTx(tx, organizationId, salesInvoiceId, actorUserId); }
+    catch (error) {
+      if (error instanceof EnterpriseRetailError) throw new EnterpriseAccountingError(error.code, error.status, error.details);
+      throw error;
+    }
+    const salesInvoice = await tx.enterpriseSalesInvoice.findFirst({ where: { organizationId, id: salesInvoiceId }, select: { salesOrderId: true } });
+    if (salesInvoice?.salesOrderId) await tryGrantRetailOmnichannelCashbackTx({ tx, organizationId, orderId: salesInvoice.salesOrderId, actorUserId });
+  }
+  await addPaymentEvent(tx, organizationId, payment.id, actorUserId, "ALLOCATED", "Retail payment automatically allocated upon Finance confirmation", { allocationId: allocation.id, amount: payment.amount.toFixed(), receivableId: receivable.id });
+  await publishFinanceEvent(tx, { organizationId, entityType: "EnterprisePayment", entityId: payment.id, eventType: "PAYMENT_ALLOCATED", summary: `Retail payment ${payment.number} automatically allocated`, actorUserId, metadataJson: { allocationId: allocation.id, amount: payment.amount.toFixed(), receivableId: receivable.id } });
+  await postBusinessEventTx(tx, organizationId, actorUserId, { postingEvent: "PAYMENT_ALLOCATION_CONFIRMED", sourceEntityType: "EnterprisePaymentAllocation", sourceEntityId: allocation.id });
+}
+
 // Cutover of migration 20260929083000_payment_cash_session_binding.
 // Only rows created before this point may use automatic Cash-session recovery/rebinding.
 export const CASH_SESSION_BINDING_CUTOVER_AT = new Date("2026-09-29T08:30:00.000Z");
@@ -404,7 +441,7 @@ export async function transitionEnterprisePayment(
 }
 
 async function confirmEnterprisePayment(organizationId: string, paymentId: string, actorUserId: string, revision: number) {
-  const confirmed = await prisma.$transaction(async (tx) => {
+  const confirmed = await withRetailTransactionRetry(() => prisma.$transaction(async (tx) => {
     await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterprisePayment" WHERE id = ${paymentId} AND "organizationId" = ${organizationId} FOR UPDATE`);
     const payment = await tx.enterprisePayment.findFirst({ where: { id: paymentId, organizationId } });
     if (!payment) throw new EnterpriseAccountingError("PAYMENT_NOT_FOUND", 404);
@@ -453,8 +490,15 @@ async function confirmEnterprisePayment(organizationId: string, paymentId: strin
         sourceEntityId: updated.id,
       });
     }
+    if (retailIntent) {
+      const checkout = await tx.enterpriseRetailInvoicePaymentProposal.findFirst({
+        where: { organizationId, paymentId: payment.id }, select: { checkout: { select: { salesInvoiceId: true } } },
+      });
+      if (!checkout) throw new EnterpriseAccountingError("RETAIL_INVOICE_PAYMENT_TARGET_MISMATCH", 409);
+      await allocateConfirmedRetailPaymentTx(tx, organizationId, payment, actorUserId, checkout.checkout.salesInvoiceId);
+    }
     return updated;
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 30000 });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 30000 }));
   return confirmed;
 }
 

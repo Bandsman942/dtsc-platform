@@ -82,13 +82,15 @@ async function assertInventoryCoordinates(tx: Prisma.TransactionClient, organiza
       ? tx.enterpriseStorageLocation.findFirst({ where: { id: input.storageLocationId, organizationId, warehouseId: input.warehouseId, status: "ACTIVE", archivedAt: null }, select: { id: true } })
       : Promise.resolve(null),
     input.stockLotId
-      ? tx.enterpriseStockLot.findFirst({ where: { id: input.stockLotId, organizationId, inventoryItemId: input.inventoryItemId, warehouseId: input.warehouseId, status: "AVAILABLE", archivedAt: null }, select: { id: true, storageLocationId: true } })
+      ? tx.enterpriseStockLot.findFirst({ where: { id: input.stockLotId, organizationId, inventoryItemId: input.inventoryItemId, warehouseId: input.warehouseId, status: "AVAILABLE", archivedAt: null }, select: { id: true, storageLocationId: true, expiryDate: true } })
       : Promise.resolve(null),
   ]);
   if (!inventoryItem || !inventoryItem.catalogItem.trackInventory) throw new EnterpriseDomainError("INVENTORY_ITEM_NOT_FOUND", 404);
   if (!warehouse) throw new EnterpriseDomainError("WAREHOUSE_NOT_FOUND", 404);
   if (input.storageLocationId && !storageLocation) throw new EnterpriseDomainError("STORAGE_LOCATION_NOT_FOUND", 404);
   if (input.stockLotId && !stockLot) throw new EnterpriseDomainError("STOCK_LOT_NOT_FOUND", 404);
+  if (inventoryItem.lotTracking && !stockLot) throw new EnterpriseDomainError("STOCK_LOT_REQUIRED_FOR_TRACKED_ITEM", 409);
+  if (inventoryItem.expiryTracking && !stockLot?.expiryDate) throw new EnterpriseDomainError("STOCK_EXPIRY_DATE_REQUIRED", 409);
   if (stockLot?.storageLocationId && input.storageLocationId && stockLot.storageLocationId !== input.storageLocationId) throw new EnterpriseDomainError("STOCK_LOT_LOCATION_MISMATCH", 409);
   return inventoryItem;
 }

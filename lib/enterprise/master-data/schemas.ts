@@ -50,6 +50,15 @@ export const catalogItemCreateSchema = z.object({
   taxable: z.boolean().default(false),
   taxCode: z.string().trim().max(80).optional().nullable(),
   trackInventory: z.boolean().default(false),
+  minimumQuantity: z.coerce.number().nonnegative().max(1_000_000_000).optional().nullable(),
+  reorderQuantity: z.coerce.number().nonnegative().max(1_000_000_000).optional().nullable(),
+  lotTracking: z.boolean().default(false),
+  expiryTracking: z.boolean().default(false),
+  initialLot: z.object({
+    warehouseId: z.string().trim().min(1).max(191),
+    lotNumber: z.string().trim().min(1).max(120),
+    expiryDate: z.iso.date().optional(),
+  }).optional(),
   notes: optionalText,
 });
 

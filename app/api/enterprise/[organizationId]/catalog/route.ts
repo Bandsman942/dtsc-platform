@@ -6,6 +6,7 @@ import { getEnterpriseCommonDomainAccess } from "@/lib/enterprise/common/access"
 import { catalogItemCreateSchema, catalogItemUpdateSchema } from "@/lib/enterprise/master-data/schemas";
 import { createEnterpriseCatalogItem, updateEnterpriseCatalogItem } from "@/lib/enterprise/master-data/service";
 import { prisma } from "@/lib/prisma";
+import { retailSitesForCapability } from "@/lib/enterprise/retail/site-access";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
 import { enterpriseDomainErrorResponse, enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
@@ -44,7 +45,7 @@ export async function GET(req: Request, { params }: Params) {
     ...(status ? { status } : {}),
   };
   const [items, total, products, services, tracked, units, categories] = await Promise.all([
-    prisma.enterpriseCatalogItem.findMany({ where, orderBy: [{ name: "asc" }, { createdAt: "desc" }], skip: (page - 1) * pageSize, take: pageSize, include: { category: { select: { id: true, code: true, name: true } }, unitOfMeasure: { select: { id: true, code: true, name: true, symbol: true } }, prices: { where: { archivedAt: null }, orderBy: { effectiveFrom: "desc" }, take: 8 } } }),
+    prisma.enterpriseCatalogItem.findMany({ where, orderBy: [{ name: "asc" }, { createdAt: "desc" }], skip: (page - 1) * pageSize, take: pageSize, include: { category: { select: { id: true, code: true, name: true } }, unitOfMeasure: { select: { id: true, code: true, name: true, symbol: true } }, inventoryItems: { select: { id: true, minimumQuantity: true, reorderQuantity: true, lotTracking: true, expiryTracking: true } }, prices: { where: { archivedAt: null }, orderBy: { effectiveFrom: "desc" }, take: 8 } } }),
     prisma.enterpriseCatalogItem.count({ where }),
     prisma.enterpriseCatalogItem.count({ where: { organizationId, archivedAt: null, itemType: "PRODUCT", status: "ACTIVE" } }),
     prisma.enterpriseCatalogItem.count({ where: { organizationId, archivedAt: null, itemType: "SERVICE", status: "ACTIVE" } }),
@@ -52,8 +53,13 @@ export async function GET(req: Request, { params }: Params) {
     prisma.enterpriseUnitOfMeasure.findMany({ where: { organizationId, archivedAt: null, status: "ACTIVE" }, orderBy: { code: "asc" }, take: 100 }),
     prisma.enterpriseCatalogCategory.findMany({ where: { organizationId, archivedAt: null, status: "ACTIVE" }, orderBy: [{ sortOrder: "asc" }, { name: "asc" }], take: 200 }),
   ]);
+  const lotScope = await retailSitesForCapability(organizationId, session.userId, "MANAGE_STOCK").catch(() => null);
+  const warehouses = lotScope ? await prisma.enterpriseWarehouse.findMany({
+    where: { organizationId, archivedAt: null, status: "ACTIVE", ...(lotScope.isOwner ? {} : { siteId: { in: lotScope.siteIds } }) },
+    orderBy: { name: "asc" }, take: 100, select: { id: true, name: true, code: true, site: { select: { name: true } } },
+  }) : [];
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "catalog", page } });
-  return NextResponse.json({ items, units, categories, pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) }, metrics: { products, services, tracked }, canManage: access.canManage, canWrite: access.canWrite });
+  return NextResponse.json({ items, units, categories, warehouses, pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) }, metrics: { products, services, tracked }, canManage: access.canManage, canWrite: access.canWrite });
 }
 
 export async function POST(req: Request, { params }: Params) {
