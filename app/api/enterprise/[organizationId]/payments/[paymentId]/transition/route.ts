@@ -11,6 +11,7 @@ import { transitionEnterprisePayment } from "@/lib/enterprise/accounting/payment
 import { confirmCustomerRefundPayment } from "@/lib/enterprise/accounting/customer-refund-service";
 import { prisma } from "@/lib/prisma";
 import { convergeConfirmedGamingPayment } from "@/lib/enterprise/gaming/payment-convergence";
+import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
 import { hasRecentStepUp } from "@/lib/auth/step-up";
 import { requiresPaymentStepUp } from "@/lib/auth/critical-actions";
 
@@ -93,6 +94,22 @@ export async function POST(req: Request, { params }: Params) {
     });
     return NextResponse.json({ ok: true, payment });
   } catch (error) {
+    const reasonCode = error instanceof EnterpriseAccountingError ? error.code : "PAYMENT_TRANSITION_FAILED";
+    const statusCode = error instanceof EnterpriseAccountingError ? error.status : 500;
+    // Denials are observable without exposing credentials, personal data or
+    // accounting internals to the client. Success is logged above as before.
+    await writeAuditLog({
+      userId: auth.session.userId,
+      action: `ENTERPRISE_PAYMENT_${parsed.data.action}_DENIED`,
+      entity: "EnterprisePayment", entityId: paymentId, request: req,
+      result: "DENIED", reasonCode,
+      metadata: { organizationId },
+    });
+    await writeApiLog({
+      request: req, startedAt, statusCode,
+      userId: auth.session.userId,
+      metadata: { organizationId, domain: "payments", action: parsed.data.action, reasonCode },
+    });
     return financeErrorResponse(error, "PAYMENT_TRANSITION_FAILED");
   }
 }
