@@ -1,11 +1,16 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import { stripTypeScriptTypes } from "node:module";
 import { assertPublicFetchUrl, isPublicIp } from "./mcp-public-stdio-security.mjs";
 
 const read = (name) => fs.readFileSync(new URL(`../${name}`, import.meta.url), "utf8");
 const must = (source, expression, reason) => assert.match(source, expression, reason);
 const label = read("lib/enterprise/accounting/narrative-i18n.ts");
 const accountingUi = read("components/enterprise/professional/enterprise-finance-accounting-workspace.tsx");
+const legacyAccounting = read("components/enterprise/professional/enterprise-accounting-workspace.tsx");
+const financeHotfixAccounting = read("components/enterprise/professional/enterprise-finance-accounting-workspace-hotfix.tsx");
+const consolePanel = read("components/admin/console-ai-mcp-panel.tsx");
+const probeSource = read("lib/ai/mcp/public-knowledge-probe.ts");
 const config = read("lib/ai/mcp/public-knowledge-config.ts");
 const executor = read("lib/ai/mcp/public-knowledge-executor.ts");
 const worker = read("scripts/mcp-public-stdio-bridge.mjs");
@@ -30,6 +35,38 @@ must(label, /Human-authored comments[\s\S]*preserved/, "Do not mutate custom lab
 must(accountingUi, /render: \(row\) => formatAccountingNarrative\(row\.description, locale\)/, "Journal entries display translated");
 must(accountingUi, /formatAccountingNarrative\(row\.description \|\| row\.journalEntry\?\.description, locale\)/, "Ledger and journal detail translated");
 must(accountingUi, /get: \(row\) => formatAccountingNarrative\(/, "Export descriptions translated");
+for (const value of [
+  "Retail POS sale", "Retail POS reversal", "Retail POS return", "Retail cashback expense",
+  "Telco top-up", "Telco operator float", "Mobile Money deposit", "Mobile Money withdrawal",
+  "Store credit refund", "Internal transfer", "Customer refund", "Transfer in", "Transfer out",
+]) assert.ok(label.includes(value), `Retail/telco/Mobile Money accounting label missing: ${value}`);
+must(legacyAccounting, /formatAccountingNarrative\(/, "Older accounting display localizes generated narratives");
+must(financeHotfixAccounting, /formatAccountingNarrative\(/, "Hotfix accounting view localizes generated narratives");
+must(consolePanel, /server\.reachable === null/, "Global MCP Console shows live reachability rather than static health claims");
+must(probeSource, /GET|method: "GET"/, "Global MCP Console probes live stdio server health");
+must(worker, /bridgeHealthy\(\)/, "A dead stdio process revokes bridge readiness");
+// These examples assert REAL formatter behavior rather than relying only on
+// source-level regex presence; historical manually authored labels are intact.
+const { formatAccountingNarrative } = await import("data:text/javascript," + encodeURIComponent(stripTypeScriptTypes(label)));
+for (const [source, fr, en] of [
+  ["ISSUE cmw83foo", "Sortie de stock — article cmw83foo", "Inventory issue — item cmw83foo"],
+  ["RECEIPT cmw83foo", "Entrée de stock — article cmw83foo", "Inventory receipt — item cmw83foo"],
+  ["Settle receivable PAY-MW9A1KC3-6E441F", "Affectation d’un encaissement à une créance client — paiement PAY-MW9A1KC3-6E441F", "Customer receivable settlement — payment PAY-MW9A1KC3-6E441F"],
+  ["Apply customer advance PAY-MW9A1KC3-6E441F", "Imputation d’une avance client — paiement PAY-MW9A1KC3-6E441F", "Customer advance applied — payment PAY-MW9A1KC3-6E441F"],
+  ["Retail POS sale POS-998", "Vente au point de vente — POS-998", "Retail point-of-sale transaction — POS-998"],
+  ["Retail COGS reversal item99", "Annulation du coût des marchandises vendues — article — item99", "Retail cost-of-goods-sold reversal — item — item99"],
+  ["Mobile Money deposit MM-132", "Dépôt Mobile Money — MM-132", "Mobile Money deposit — MM-132"],
+  ["Telco operator float TOPUP-3", "Consommation du solde chez l’opérateur télécom — TOPUP-3", "Telecom operator float consumption — TOPUP-3"],
+  ["Internal transfer TR-49", "Virement interne entre comptes financiers — TR-49", "Internal transfer between financial accounts — TR-49"],
+  ["Bank charge", "Frais bancaires", "Bank charge"],
+]) {
+  assert.equal(formatAccountingNarrative(source, "fr"), fr, `Unexpected French accounting label for ${source}`);
+  assert.equal(formatAccountingNarrative(source, "en"), en, `Unexpected English accounting label for ${source}`);
+}
+const manual = "Versement à un fournisseur selon contrat n°003";
+assert.equal(formatAccountingNarrative(manual, "fr"), manual);
+assert.equal(formatAccountingNarrative(manual, "en"), manual);
+
 
 for (const line of [
   '"mcp-server-time"', '"mcp-server-fetch"', '"@brave/brave-search-mcp-server"',
