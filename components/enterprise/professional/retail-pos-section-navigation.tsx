@@ -9,7 +9,7 @@ import { ModuleHeader, ModuleWorkspace } from "@/components/workspace/module-wor
 import { translateRetailWorkspace, type RetailWorkspaceKey } from "@/lib/i18n";
 
 export type RetailPosSectionId =
-  | "checkout" | "customers" | "sites" | "staff" | "invoices" | "collections" | "offline"
+  | "checkout" | "customers" | "sites" | "staff" | "invoices" | "approvals" | "collections" | "offline"
   | "omnichannel" | "payments" | "equipment" | "readiness" | "activation"
   | "inventory" | "alerts" | "store-setup" | "my-stores";
 
@@ -34,6 +34,7 @@ export const RETAIL_POS_SECTIONS: readonly RetailPosSection[] = [
   { id: "sites", title: "posNavSites", description: "posNavSitesDescription", icon: Building2, adminOnly: true },
   { id: "staff", title: "posNavStaff", description: "posNavStaffDescription", icon: ShieldCheck, adminOnly: true },
   { id: "invoices", title: "posNavInvoices", description: "posNavInvoicesDescription", icon: ReceiptText, requiredCapability: "PREPARE_INVOICE" },
+  { id: "approvals", title: "posNavApprovals", description: "posNavApprovalsDescription", icon: FileText, requiredCapability: "INVOICE_WORKFLOW" },
   { id: "collections", title: "posNavCollections", description: "posNavCollectionsDescription", icon: CreditCard, requiredCapability: "COLLECT_PAYMENT" },
   { id: "offline", title: "posNavOffline", description: "posNavOfflineDescription", icon: WifiOff, adminOnly: true },
   { id: "omnichannel", title: "posNavOmnichannel", description: "posNavOmnichannelDescription", icon: Globe2, adminOnly: true },

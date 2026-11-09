@@ -7,6 +7,7 @@ import { RetailFeatureActivationPanel } from "@/components/enterprise/profession
 import { RetailGlobalReadiness } from "@/components/enterprise/professional/retail-global-readiness";
 import { RetailHistoricalImportPanel } from "@/components/enterprise/professional/retail-historical-import-panel";
 import { RetailInvoiceFlowWorkbench } from "@/components/enterprise/professional/retail-invoice-flow-workbench";
+import { RetailInvoiceApprovalWorkbench } from "@/components/enterprise/professional/retail-invoice-approval-workbench";
 import { RetailInvoiceCashierWorkbench } from "@/components/enterprise/professional/retail-invoice-cashier-workbench";
 import { RetailInventoryPolicySettings } from "@/components/enterprise/professional/retail-inventory-policy-settings";
 import { RetailMultiStoreOnboarding, RetailMyStores } from "@/components/enterprise/professional/retail-multi-store-onboarding";
@@ -55,7 +56,14 @@ export async function renderRetailModulePage(moduleCode: "RETAIL_POS" | "MOBILE_
       select: { siteId: true, roleCode: true, permissionsJson: true }, take: 500,
     })
     : [];
-  const posCapabilities = new Set(posAssignments.flatMap((assignment) => siteStaffCapabilities(assignment.roleCode, assignment.permissionsJson)));
+  const posCapabilities = new Set<string>(posAssignments.flatMap((assignment) => siteStaffCapabilities(assignment.roleCode, assignment.permissionsJson)));
+  if (moduleCode === "RETAIL_POS") {
+    const [approve, post] = await Promise.all([
+      resolveEnterpriseModuleAccess({ userId: user.id, organizationId, moduleCode: "FINANCE_RECEIVABLES", action: "approve" }),
+      resolveEnterpriseModuleAccess({ userId: user.id, organizationId, moduleCode: "FINANCE_RECEIVABLES", action: "manage" }),
+    ]);
+    if (approve.allowed || post.allowed || posCapabilities.has("ISSUE_INVOICE")) posCapabilities.add("INVOICE_WORKFLOW");
+  }
   const posConfiguration = moduleCode === "RETAIL_POS"
     ? await prisma.enterpriseRetailConfiguration.findUnique({ where: { organizationId }, select: { settingsJson: true } }) : null;
   const invoiceCheckoutEnabled = Boolean(posConfiguration?.settingsJson && typeof posConfiguration.settingsJson === "object" && !Array.isArray(posConfiguration.settingsJson) && posConfiguration.settingsJson.invoiceCheckoutEnabled === true);
@@ -69,7 +77,7 @@ export async function renderRetailModulePage(moduleCode: "RETAIL_POS" | "MOBILE_
     ? companySites.filter((site) => site.siteType === "STORE") : companySites;
   const posSection = moduleCode === "RETAIL_POS" ? getRetailPosSection(options?.section, canManagePos, posCapabilities) : undefined;
   if (moduleCode === "RETAIL_POS" && options?.section && !posSection) notFound();
-  if (posSection && options?.siteId && !canManagePos && !posAssignments.some((assignment) =>
+  if (posSection && options?.siteId && posSection.id !== "approvals" && !canManagePos && !posAssignments.some((assignment) =>
     assignment.siteId === options.siteId && (!posSection.requiredCapability || siteStaffCapabilities(assignment.roleCode, assignment.permissionsJson).includes(posSection.requiredCapability as "PREPARE_INVOICE" | "COLLECT_PAYMENT" | "VIEW_STOCK")),
   )) notFound();
   if (posSection?.id === "customers") redirect(`/enterprise-modules/RETAIL_POS?section=checkout${options?.siteId ? `&siteId=${encodeURIComponent(options.siteId)}` : ""}`);
@@ -103,6 +111,8 @@ export async function renderRetailModulePage(moduleCode: "RETAIL_POS" | "MOBILE_
                 <RetailSiteStaffAccess organizationId={organizationId} locale={locale} />
               ) : posSection.id === "invoices" ? (
                 <RetailInvoiceFlowWorkbench organizationId={organizationId} organizationName={organization.name} locale={locale} preferredSiteId={options?.siteId} mode="invoices" />
+              ) : posSection.id === "approvals" ? (
+                <RetailInvoiceApprovalWorkbench organizationId={organizationId} locale={locale} preferredSiteId={options?.siteId} />
               ) : posSection.id === "collections" ? (
                 <RetailInvoiceCashierWorkbench organizationId={organizationId} locale={locale} preferredSiteId={options?.siteId} />
               ) : posSection.id === "offline" ? (

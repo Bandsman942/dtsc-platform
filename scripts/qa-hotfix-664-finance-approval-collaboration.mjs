@@ -135,7 +135,7 @@ check(hasAll(paymentsUi, [
 ]), "Payments explain required destructive reasons and optional approval comments");
 
 check(hasAll(invoicesUi, [
-  'const actionRequiresReason = Boolean(actionTarget && ["REJECT", "CANCEL", "VOID"].includes(actionTarget.action))',
+  'const actionRequiresReason = Boolean(actionTarget && ["REJECT", "REQUEST_CORRECTION", "CANCEL", "VOID"].includes(actionTarget.action))',
   "minLength={actionRequiresReason ? 4 : undefined}",
   "required={actionRequiresReason}",
   't(actionRequiresReason ? "rejectionReasonMinimumHint" : "decisionCommentOptionalHint")',

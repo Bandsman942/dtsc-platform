@@ -56,19 +56,26 @@ export async function GET(req: Request, { params }: Params) {
       organizationId,
       targetEntityType: "EnterpriseSalesInvoice",
       targetEntityId: { in: items.map((item) => item.id) },
-      approverUserId: auth.session.userId,
       status: "PENDING",
       archivedAt: null,
     },
-    select: { targetEntityId: true },
+    select: { targetEntityId: true, approverUserId: true },
   }) : [];
-  const assignedIds = new Set(assignedApprovals.map((approval) => approval.targetEntityId));
+  const assignedIds = new Set(assignedApprovals.filter((approval) => approval.approverUserId === auth.session.userId).map((approval) => approval.targetEntityId));
+  const approverMembers = assignedApprovals.length ? await prisma.organizationMember.findMany({
+    where: { organizationId, userId: { in: [...new Set(assignedApprovals.map((approval) => approval.approverUserId))] }, status: "ACTIVE", removedAt: null },
+    select: { userId: true, user: { select: { name: true, email: true } } },
+  }) : [];
+  const memberNames = new Map(approverMembers.map((member) => [member.userId, member.user.name || member.user.email]));
+  const approvers = new Map(assignedApprovals.map((approval) => [approval.targetEntityId, memberNames.get(approval.approverUserId) || null]));
   const capabilities = auth.access.capabilities;
   const resultItems = items.map(({ retailCheckout, ...item }) => ({
     ...item,
+    pendingApproverName: item.status === "PENDING_APPROVAL" ? approvers.get(item.id) || null : null,
     capabilities: {
       canSubmit: capabilities.canSubmit && item.status === "DRAFT" && item.createdByUserId === auth.session.userId,
       canApprove: capabilities.canApprove && item.status === "PENDING_APPROVAL" && assignedIds.has(item.id),
+      canReject: capabilities.canApprove && item.status === "PENDING_APPROVAL" && assignedIds.has(item.id),
       canPost: capabilities.canManage && item.status === "APPROVED",
       canCreateCredit: capabilities.canCreate && !retailCheckout && ["ISSUED", "PARTIALLY_PAID", "PAID", "OVERDUE"].includes(item.status),
     },

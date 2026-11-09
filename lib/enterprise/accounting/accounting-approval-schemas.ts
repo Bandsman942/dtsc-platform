@@ -29,6 +29,8 @@ export const assignedPaymentTransitionSchema = z.discriminatedUnion("action", [
 export const assignedSalesInvoiceTransitionSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("SUBMIT"), revision, approverUserId: id, reason: optionalComment }),
   z.object({ action: z.literal("APPROVE"), revision, reason: optionalComment }),
+  z.object({ action: z.literal("REJECT"), revision, reason: requiredReason }),
+  z.object({ action: z.literal("REQUEST_CORRECTION"), revision, reason: requiredReason }),
   z.object({ action: z.literal("ISSUE"), revision, reason: optionalComment }),
   z.object({ action: z.literal("CANCEL"), revision, reason: requiredReason }),
   z.object({ action: z.literal("VOID"), revision, reason: requiredReason }),

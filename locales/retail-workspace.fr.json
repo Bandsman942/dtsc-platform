@@ -377,6 +377,8 @@
   "posNavStaffDescription": "Gérer les affectations et droits par boutique.",
   "posNavInvoices": "Registre des factures",
   "posNavInvoicesDescription": "Suivre les factures préparées, validées et réglées.",
+  "posNavApprovals": "Factures à valider et à émettre",
+  "posNavApprovalsDescription": "Valider les factures qui me sont confiées et émettre les factures approuvées selon les droits de mes boutiques ou de Finance.",
   "posNavCollections": "Encaissements",
   "posNavCollectionsDescription": "Encaisser les factures émises et encore impayées de mes boutiques.",
   "posNavOffline": "Commandes & vente hors connexion",

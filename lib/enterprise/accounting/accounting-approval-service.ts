@@ -7,6 +7,7 @@ import {
 import type { EnterpriseFinanceModuleCode } from "@/lib/enterprise/accounting/constants";
 import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
 import { enqueueWebPushNotification } from "@/lib/push/queue";
+import { enterpriseApprovalTargetDeepLink } from "@/lib/enterprise/approval-targets";
 import { assertRetailInvoiceFinanceApproverTx, assertRetailPaymentFinanceApproverTx } from "@/lib/enterprise/retail/invoice-approval";
 
 export const ACCOUNTING_APPROVAL_MODULE_BY_TARGET: Readonly<Record<string, EnterpriseFinanceModuleCode>> = {
@@ -48,7 +49,9 @@ async function createAccountingApprovalNotification(
       type: "ENTERPRISE_APPROVAL",
       title: invoice ? `Facture ${invoice.number} à valider` : "Validation financière requise",
       body: invoice ? `Vous avez été désigné(e) pour valider la facture ${invoice.number}. Ouvrez vos validations Finance pour prendre votre décision.` : "Une opération financière vous a été attribuée et attend votre décision.",
-      targetUrl: `/enterprise-modules/VALIDATIONS?approval=${encodeURIComponent(input.approvalId)}`,
+      targetUrl: invoice && input.targetEntityId
+        ? enterpriseApprovalTargetDeepLink("EnterpriseSalesInvoice", input.targetEntityId, input.approvalId)
+        : `/enterprise-modules/VALIDATIONS?approval=${encodeURIComponent(input.approvalId)}`,
     },
   });
   await enqueueWebPushNotification(tx, { notificationId: notification.id, organizationId: input.organizationId });

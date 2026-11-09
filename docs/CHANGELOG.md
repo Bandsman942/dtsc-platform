@@ -1,3 +1,12 @@
+## 2026-11-09 — Hotfix #1086 — validation et émission des factures RETAIL, aperçu universel A4 (candidat v1.7.1)
+
+- Le POS propose une file « À valider par moi » réservée au validateur affecté, puis une file distincte « Validées · à émettre » ; actions avec raison tracée, recherche, dates exactes/plages, boutique et pagination côté serveur.
+- Un gérant `MANAGER` peut émettre nativement les factures **préalablement approuvées de ses boutiques affectées** ; un utilisateur ayant le droit de comptabilisation Finance peut également émettre dans le périmètre autorisé. Le droit d'émettre n'accorde jamais le droit d'approuver sa propre facture.
+- Les décisions de validation POS, factures clients et espace commun Validations convergent vers une transaction d'approbation unique. L'émission Finance atomise facture, créance et écriture ; les encaissements utilisent toujours le circuit de paiement canonique déjà en place.
+- Le registre « Factures clients » de **tous les secteurs** indique le nom du validateur désigné et propose une prévisualisation imprimable A4 premium avec logo. Tout document non émis affiche clairement sa nature provisoire. Un gérant sans accès Finance ne peut prévisualiser que ses factures RETAIL autorisées.
+- QA de régression : `pnpm qa:hotfix-1086-invoice-workflow` et tests antérieurs Finance/RETAIL ; la validation E2E propriétaire de la branche **reste obligatoire** avant toute fusion ou production.
+- Contrat, matrice d'accès, guide utilisateur et recette : `docs/HOTFIX_RETAIL_INVOICE_APPROVAL_1086_20261109.md`.
+
 ## 2026-11-09 — Hotfix #1084 — factures, encaissements, péremptions et KPI RETAIL (candidat v1.7.0)
 
 - Validation Finance : responsable nommé à côté de « À valider », notification ciblée, recherche intelligente et dates civiles propres au fuseau de chaque boutique, pagination sur les deux registres Facturier/Caissier.

@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { assertIndependentActor } from "@/lib/enterprise/accounting/access";
 import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
 import { assertActiveClientOrganization, financeReference, money, publishFinanceEvent, sumDecimals } from "@/lib/enterprise/accounting/helpers";
-import { postBusinessEvent } from "@/lib/enterprise/accounting/posting-service";
+import { postBusinessEvent, postBusinessEventTx } from "@/lib/enterprise/accounting/posting-service";
 import type { creditNoteCreateSchema, salesInvoiceCreateSchema } from "@/lib/enterprise/accounting/schemas";
 import type { z } from "zod";
 
@@ -139,15 +139,18 @@ export async function transitionSalesInvoice(
   input: { action: "SUBMIT" | "APPROVE" | "ISSUE" | "CANCEL" | "VOID"; reason?: string; revision: number },
 ) {
   if (input.action === "ISSUE") {
-    const initial = await prisma.enterpriseSalesInvoice.findFirst({ where: { id: invoiceId, organizationId } });
-    if (!initial) throw new EnterpriseAccountingError("SALES_INVOICE_NOT_FOUND", 404);
-    if (["ISSUED", "PARTIALLY_PAID", "PAID", "OVERDUE"].includes(initial.status)) return initial;
-    if (initial.status !== "APPROVED" || initial.revision !== input.revision) throw new EnterpriseAccountingError("SALES_INVOICE_NOT_APPROVED", 409);
-    const posting = await postBusinessEvent(organizationId, actorUserId, { postingEvent: "SALES_INVOICE_POSTED", sourceEntityType: "EnterpriseSalesInvoice", sourceEntityId: initial.id });
     return prisma.$transaction(async (tx) => {
       await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterpriseSalesInvoice" WHERE id = ${invoiceId} AND "organizationId" = ${organizationId} FOR UPDATE`);
       const invoice = await tx.enterpriseSalesInvoice.findFirst({ where: { id: invoiceId, organizationId } });
       if (!invoice) throw new EnterpriseAccountingError("SALES_INVOICE_NOT_FOUND", 404);
+      // A retry of an already issued invoice is a read, not a new posting.
+      if (["ISSUED", "PARTIALLY_PAID", "PAID", "OVERDUE"].includes(invoice.status)) return invoice;
+      if (invoice.status !== "APPROVED" || invoice.revision !== input.revision) throw new EnterpriseAccountingError("SALES_INVOICE_NOT_APPROVED", 409);
+      // Posting, unique receivable and invoice status share one atomic commit.
+      // A failed receivable creation cannot strand a posted journal entry.
+      const posting = await postBusinessEventTx(tx, organizationId, actorUserId, {
+        postingEvent: "SALES_INVOICE_POSTED", sourceEntityType: "EnterpriseSalesInvoice", sourceEntityId: invoice.id,
+      });
       const receivable = await tx.enterpriseReceivable.upsert({
         where: { salesInvoiceId: invoice.id },
         update: {},
@@ -156,7 +159,7 @@ export async function transitionSalesInvoice(
       const updated = await tx.enterpriseSalesInvoice.update({ where: { id: invoice.id }, data: { status: "ISSUED", issuedAt: invoice.issuedAt || new Date(), postedAt: invoice.postedAt || new Date(), revision: { increment: 1 } } });
       await publishFinanceEvent(tx, { organizationId, entityType: "EnterpriseSalesInvoice", entityId: invoice.id, eventType: "SALES_INVOICE_ISSUED", summary: `Customer invoice ${invoice.number} issued`, actorUserId, fromStatus: invoice.status, toStatus: "ISSUED", metadataJson: { receivableId: receivable.id, journalEntryId: posting.entry.id } });
       return updated;
-    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 30000 });
   }
   return prisma.$transaction(async (tx) => {
     await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterpriseSalesInvoice" WHERE id = ${invoiceId} AND "organizationId" = ${organizationId} FOR UPDATE`);

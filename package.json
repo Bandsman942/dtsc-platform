@@ -1,6 +1,6 @@
 {
   "name": "dtsc-platform",
-  "version": "1.7.0",
+  "version": "1.7.1",
   "private": true,
   "engines": {
     "node": "22.x"
@@ -427,6 +427,7 @@
     "qa:hotfix-1042-retail-invoice-return-finance": "node scripts/qa-hotfix-1042-retail-invoice-return-finance.mjs",
     "qa:hotfix-1042-retail-invoice-return-requests": "node scripts/qa-hotfix-1042-retail-invoice-return-requests.mjs",
     "qa:hotfix-1042-retail-return-settlement-preflight": "node scripts/qa-hotfix-1042-retail-return-settlement-preflight.mjs",
+    "qa:hotfix-1086-invoice-workflow": "node scripts/qa-hotfix-1086-invoice-workflow.mjs",
     "qa:hotfix-1067-ai-action-truth": "node scripts/qa-hotfix-1067-ai-action-truth.mjs",
     "qa:hotfix-1068-ai-conversation-design2": "node scripts/qa-hotfix-1068-ai-conversation-design2.mjs",
     "qa:hotfix-1069-console-workspaces": "node scripts/qa-hotfix-1069-console-workspaces.mjs",
