@@ -117,7 +117,7 @@ export function InventoryUnvaluedReceiptsPanel({ organizationId, locale, canMana
     </div>
     {visible ? <div className="mt-4 grid min-w-0 gap-4">
       <label className="relative block min-w-0">
-        <span className="sr-only">{t("search")}</span>
+        <span className="sr-only">{t("inventoryUnvaluedSearch")}</span>
         <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-dtsc-muted" />
         <Input value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); setSelected(null); }} className="pl-9" placeholder={t("inventoryUnvaluedSearch")} />
       </label>
