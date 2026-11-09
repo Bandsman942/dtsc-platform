@@ -606,16 +606,33 @@ export async function inspectEnterprisePaymentConfirmation(
             select: { inventoryItemId: true, stockLotId: true, quantityOnHand: true, quantityReserved: true },
           }),
         ]);
-        const missingCost = lines.filter((line) => {
-          const layers = costLayers.filter((layer) => layer.inventoryItemId === line.inventoryItemId);
-          return layers.reduce((sum, layer) => sum.plus(layer.remainingQuantity), new Prisma.Decimal(0)).lessThan(line.invoiceItem.quantity);
-        }).map((line) => line.invoiceItem.description);
+        // Group demand before checking cost layers: the same inventory item
+        // may occur on several invoice lines, but only one shared stock and
+        // cost pool exists per warehouse. A line-by-line check can falsely
+        // signal readiness when each line fits but their combined demand does not.
+        const requiredByItem = new Map<string, Prisma.Decimal>();
+        for (const line of lines) {
+          const id = line.inventoryItemId!;
+          requiredByItem.set(id, (requiredByItem.get(id) || new Prisma.Decimal(0)).plus(line.invoiceItem.quantity));
+        }
+        const missingItemIds = new Set<string>();
+        for (const [inventoryItemId, quantity] of requiredByItem) {
+          const layers = costLayers.filter((layer) => layer.inventoryItemId === inventoryItemId);
+          const currencies = [...new Set(layers.map((layer) => layer.currencyCode))];
+          if (currencies.length > 1 && !currencies.includes(invoice.currencyCode)) {
+            return blocked("RETAIL_INVENTORY_VALUATION_CURRENCY_AMBIGUOUS");
+          }
+          // Mirror the canonical Retail issue currency resolver: prefer
+          // invoice currency if present, otherwise the single actual cost
+          // currency. Never add valuations from incompatible currencies.
+          const currency = currencies.includes(invoice.currencyCode) ? invoice.currencyCode : currencies[0];
+          const available = layers.filter((layer) => layer.currencyCode === currency)
+            .reduce((sum, layer) => sum.plus(layer.remainingQuantity), new Prisma.Decimal(0));
+          if (!currency || available.lessThan(quantity)) missingItemIds.add(inventoryItemId);
+        }
+        const missingCost = lines.filter((line) => missingItemIds.has(line.inventoryItemId!))
+          .map((line) => line.invoiceItem.description);
         if (missingCost.length) return blocked("RETAIL_INVENTORY_COST_LAYER_REQUIRED", [...new Set(missingCost)].slice(0, 8));
-        const ambiguousCost = lines.some((line) => {
-          const currencies = [...new Set(costLayers.filter((layer) => layer.inventoryItemId === line.inventoryItemId).map((layer) => layer.currencyCode))];
-          return currencies.length > 1 && !currencies.includes(payment.currencyCode);
-        });
-        if (ambiguousCost) return blocked("RETAIL_INVENTORY_VALUATION_CURRENCY_AMBIGUOUS");
         const shortStock = lines.filter((line) => balances
           .filter((balance) => balance.inventoryItemId === line.inventoryItemId && (line.stockLotId === null ? balance.stockLotId === null : balance.stockLotId === line.stockLotId))
           .reduce((sum, balance) => sum.plus(balance.quantityOnHand.minus(balance.quantityReserved)), new Prisma.Decimal(0))
@@ -638,10 +655,12 @@ export async function inspectEnterprisePaymentConfirmation(
     requiredMappingKeys: mappingKeys,
     requiredJournalTypes: [journalType],
   });
-  if (!readiness.configuration || readiness.blockers.some((diagnostic) =>
-    ["FUNCTIONAL_CURRENCY_REQUIRED", "CHART_REQUIRED", "ACTIVE_CHART_REQUIRED", "CHART_ACCOUNTS_REQUIRED",
-      "TEMPLATE_LINEAGE_REQUIRED", "TEMPLATE_SEMANTIC_COVERAGE_REQUIRED", "ORGANIZATION_MAPPINGS_REQUIRED",
-      "JOURNALS_REQUIRED"].includes(diagnostic.code))) return blocked("FINANCE_CONFIGURATION_NOT_READY");
+  // No ignored blocker: fiscal-year, open-period, chart and journal readiness
+  // all contribute to the same strict POSTING readiness verdict.
+  if (!readiness.ready) {
+    if (readiness.missingMappings.length) return blocked("POSTING_MAPPING_MISSING");
+    return blocked("FINANCE_CONFIGURATION_NOT_READY");
+  }
   try {
     await prisma.$transaction(async (tx) => {
       await getPostingPeriod(tx, organizationId, payment.paymentDate, { allowSoftClosed: true });
