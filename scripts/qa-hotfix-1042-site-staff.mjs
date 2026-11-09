@@ -32,8 +32,8 @@ assert.deepEqual([...siteStaffCapabilities("INVOICER", null)].sort(), ["VIEW_STO
 assert.equal(siteStaffCapabilities("CASHIER", null).includes("PREPARE_INVOICE"), false);
 assert.equal(siteStaffCapabilities("MANAGER", null).includes("AUTHORIZE_TRANSFER"), false, "Transfer approval is owner-only unless explicitly granted");
 assert.equal(siteStaffCapabilities("MANAGER", null).includes("MANAGE_STOCK"), false, "Stock mutations require an explicit, configurable grant");
-assert.deepEqual([...siteStaffCapabilities("MANAGER", ["VIEW_STOCK"])], ["VIEW_STOCK"], "Overrides must not inherit other permissions");
-assert.deepEqual([...siteStaffCapabilities("MANAGER", ["MANAGE_STOCK"])], ["MANAGE_STOCK"], "Explicit stock permission must be configurable");
+assert.deepEqual([...siteStaffCapabilities("MANAGER", ["VIEW_STOCK"])].sort(), ["VIEW_STOCK", "ISSUE_INVOICE"].sort(), "Manager overrides retain only the native invoice-issuance right, not other role defaults");
+assert.deepEqual([...siteStaffCapabilities("MANAGER", ["MANAGE_STOCK"])].sort(), ["MANAGE_STOCK", "ISSUE_INVOICE"].sort(), "Explicit stock permission must be configurable without losing native invoice issuance");
 assert.deepEqual([...siteStaffCapabilities("MANAGER", { privilege: "*" })], [], "Malformed stored permissions must fail closed");
 const check = (capability, siteId = "shopA") => requireRetailSiteCapability("tenant", "staff", siteId, capability);
 await assert.doesNotReject(check("PREPARE_INVOICE"));
