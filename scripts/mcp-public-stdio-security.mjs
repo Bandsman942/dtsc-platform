@@ -19,6 +19,7 @@ export function isPublicIp(address) {
   const ip = address.toLowerCase().replace(/^\[|\]$/g, "").split("%")[0];
   if (net.isIP(ip) === 4) return !ipv4Private(ip);
   if (net.isIP(ip) === 6) {
+    if (ip.startsWith("::ffff:")) return false; // Reject all IPv4-mapped IPv6 encodings (including hex).
     if (ip === "::" || ip === "::1" || ip.startsWith("fc") || ip.startsWith("fd") ||
       ip.startsWith("fe8") || ip.startsWith("fe9") || ip.startsWith("fea") || ip.startsWith("feb") ||
       ip.startsWith("ff") || ip.startsWith("2001:db8:")) return false;
@@ -37,7 +38,7 @@ export async function assertPublicFetchUrl(raw, lookup = dns.lookup) {
   try { url = new URL(raw); } catch { throw new Error("MCP_FETCH_URL_INVALID"); }
   if (!["http:", "https:"].includes(url.protocol) || url.username || url.password ||
       url.hash || !url.hostname || (url.port && !["80","443"].includes(url.port))) throw new Error("MCP_FETCH_URL_INVALID");
-  const host = url.hostname.toLowerCase().replace(/\.$/, "");
+  const host = url.hostname.toLowerCase().replace(/^\[|\]$/g, "").replace(/\.$/, "");
   if (LOCAL_NAMES.has(host) || host.endsWith(".localhost") || host.endsWith(".local") ||
     host.endsWith(".internal") || host.endsWith(".home") || host.endsWith(".lan") || host.endsWith(".test") ||
     host.endsWith(".invalid")) throw new Error("MCP_FETCH_PRIVATE_ADDRESS_FORBIDDEN");
