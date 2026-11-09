@@ -2,7 +2,7 @@ import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { authorizeFinanceRequest, financeBusinessDateRange, financeErrorResponse, financeListParams } from "@/lib/enterprise/accounting/http";
-import { createEnterprisePayment, paymentCashSessionConfirmationBlocker, paymentCashSessionConfirmationNotice } from "@/lib/enterprise/accounting/payments-service";
+import { createEnterprisePayment, inspectEnterprisePaymentConfirmation, paymentCashSessionConfirmationBlocker, paymentCashSessionConfirmationNotice } from "@/lib/enterprise/accounting/payments-service";
 import { paymentCreateSchema } from "@/lib/enterprise/accounting/schemas";
 import { prisma } from "@/lib/prisma";
 import { retailFinanceReadSiteScope } from "@/lib/enterprise/retail/site-access";
@@ -86,11 +86,36 @@ export async function GET(req: Request, { params }: Params) {
     }),
   ]);
 
+  // Invoice identity originates from the canonical Retail intent or confirmed
+  // receivable allocations; a payment without an invoice is not a fake invoice.
+  const paymentIds = items.map((item) => item.id);
+  const [retailProposals, customerAllocations] = paymentIds.length ? await Promise.all([
+    prisma.enterpriseRetailInvoicePaymentProposal.findMany({
+      where: { organizationId, paymentId: { in: paymentIds } },
+      select: { paymentId: true, checkout: { select: { salesInvoiceId: true } } },
+    }),
+    prisma.enterprisePaymentAllocation.findMany({
+      where: { organizationId, paymentId: { in: paymentIds }, status: "CONFIRMED", receivableId: { not: null } },
+      select: { paymentId: true, receivableId: true },
+    }),
+  ]) : [[], []];
+  const invoiceByPayment = new Map(retailProposals.map((proposal) => [proposal.paymentId, proposal.checkout.salesInvoiceId]));
+  const receivableIds = [...new Set(customerAllocations.map((allocation) => allocation.receivableId).filter((id): id is string => Boolean(id)))];
+  const receivables = receivableIds.length ? await prisma.enterpriseReceivable.findMany({
+    where: { organizationId, id: { in: receivableIds } },
+    select: { id: true, salesInvoiceId: true },
+  }) : [];
+  const invoiceByReceivable = new Map(receivables.map((receivable) => [receivable.id, receivable.salesInvoiceId]));
+  for (const allocation of customerAllocations) {
+    const salesInvoiceId = allocation.receivableId && invoiceByReceivable.get(allocation.receivableId);
+    if (salesInvoiceId && !invoiceByPayment.has(allocation.paymentId)) invoiceByPayment.set(allocation.paymentId, salesInvoiceId);
+  }
+
   const assignedApprovals = items.length ? await prisma.enterpriseApproval.findMany({
     where: {
       organizationId,
       targetEntityType: "EnterprisePayment",
-      targetEntityId: { in: items.map((item) => item.id) },
+      targetEntityId: { in: paymentIds },
       approverUserId: auth.session.userId,
       status: "PENDING",
       archivedAt: null,
@@ -99,7 +124,7 @@ export async function GET(req: Request, { params }: Params) {
   }) : [];
   const assignedIds = new Set(assignedApprovals.map((approval) => approval.targetEntityId));
   const capabilities = auth.access.capabilities;
-  const resultItems = items.map(({ cashSession, ...item }) => {
+  const resultItems = await Promise.all(items.map(async ({ cashSession, ...item }) => {
     const actorBlocker = item.status === "APPROVED"
       && (item.initiatedByUserId === auth.session.userId || item.approvedByUserId === auth.session.userId)
       ? item.paymentType === "REFUND"
@@ -109,14 +134,21 @@ export async function GET(req: Request, { params }: Params) {
     const cashBlocker = item.status === "APPROVED"
       ? paymentCashSessionConfirmationBlocker({ ...item, cashSession })
       : null;
-    const confirmationBlocker = actorBlocker || cashBlocker;
+    // The expensive read-only preflight runs only for an explicitly opened
+    // record. List pagination never performs N accounting/inventory round trips.
+    const preflight = recordId && recordId === item.id && item.status === "APPROVED" && !actorBlocker && !cashBlocker
+      ? await inspectEnterprisePaymentConfirmation(organizationId, item.id, auth.session.userId)
+      : null;
+    const confirmationBlocker = actorBlocker || cashBlocker || preflight?.blockerCode || null;
     const confirmationNotice = item.status === "APPROVED" && !confirmationBlocker
       ? paymentCashSessionConfirmationNotice({ ...item, cashSession })
+        || (!preflight ? "PAYMENT_CONFIRMATION_PREFLIGHT_REQUIRED" : null)
       : null;
-    const canConfirm = capabilities.canWrite && item.status === "APPROVED" && !confirmationBlocker;
+    const canConfirm = Boolean(capabilities.canWrite && item.status === "APPROVED" && preflight?.ready && !confirmationBlocker);
 
     return {
       ...item,
+      linkedSalesInvoiceId: invoiceByPayment.get(item.id) || null,
       capabilities: {
         canSubmit: capabilities.canSubmit && item.status === "DRAFT" && item.initiatedByUserId === auth.session.userId,
         canApprove: capabilities.canApprove && item.status === "PENDING_APPROVAL" && assignedIds.has(item.id),
@@ -129,10 +161,11 @@ export async function GET(req: Request, { params }: Params) {
       confirmation: {
         ready: canConfirm,
         blockerCode: confirmationBlocker,
+        blockerItems: preflight?.blockerItems || [],
         noticeCode: confirmationNotice,
       },
     };
-  });
+  }));
 
   await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "payments", page, direction, unallocatedOnly, workflowPending, recordId: Boolean(recordId) } });
   return NextResponse.json({
