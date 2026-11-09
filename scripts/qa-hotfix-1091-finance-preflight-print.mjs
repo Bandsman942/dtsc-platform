@@ -22,7 +22,7 @@ const has = (text, pattern, reason) => assert.match(text, pattern, reason);
 // detail GET verifies facts without mutating stock or ledger.
 has(paymentRoute, /recordId && recordId === item\.id && item\.status === "APPROVED"/, "Detailed preflight only");
 has(paymentRoute, /inspectEnterprisePaymentConfirmation\(/, "Server preflight shared with detail");
-has(paymentRoute, /canConfirm = Boolean\(capabilities\.canWrite[\s\S]*preflight\?\.ready/, "Confirm UI requires preflight");
+has(paymentRoute, /const canConfirm = capabilities\.canWrite && Boolean\([\s\S]*preflight\?\.ready/, "Confirm UI requires preflight");
 has(paymentService, /export async function inspectEnterprisePaymentConfirmation\(/, "Public read-only preflight function");
 for (const code of [
   "RETAIL_INVENTORY_COST_LAYER_REQUIRED", "RETAIL_INVOICE_PAYMENT_EXCEEDS_OUTSTANDING",
