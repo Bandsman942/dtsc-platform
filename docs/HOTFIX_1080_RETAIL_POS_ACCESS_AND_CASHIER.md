@@ -12,7 +12,7 @@
 ## Conditions d'activation et compatibilité
 
 - Les deux interrupteurs administrés issus du flux de mise en service RETAIL restent requis : `siteStaffIsolationEnabled` puis `invoiceCheckoutEnabled`, avec leurs prérequis Finance, caisses, stocks et droits. **Ce hotfix ne force pas l'activation sur les entreprises existantes.**
-- Si `invoiceCheckoutEnabled=false`, la vente historique directe est maintenue pour éviter un arrêt brutal de caisse ; l'administrateur doit achever la mise en service pour disposer du nouveau circuit facture → validation → encaissement. Aucun nouveau flux n'effectue le paiement dans le panier.
+- Si `invoiceCheckoutEnabled=false`, la vente historique directe est maintenue pour éviter un arrêt brutal de caisse ; l'administrateur doit achever la mise en service pour disposer du nouveau circuit facture → validation → encaissement. **Même dans cette compatibilité, le client actif, sa fidélité et ses avoirs sont accessibles directement et de manière compacte dans « Vente comptoir ».** Aucun nouveau flux n'effectue le paiement dans le panier.
 - Les anciennes URLs `?section=customers` des utilisateurs habilités redirigent vers `?section=checkout`. Le profil de boutique n'élève jamais le rôle global dans Administration entreprise.
 - Aucun changement de schéma Prisma ni migration destructive. Les documents de paiement et de vente Finance existants restent les sources canoniques.
 
@@ -26,6 +26,7 @@ node scripts/qa-hotfix-1042-retail-invoice-print.mjs
 node scripts/qa-hotfix-1042-retail-invoice-payments.mjs
 node scripts/qa-hotfix-1044-retail-activation.mjs
 node scripts/qa-retail-pos-dashboard-site-isolation.mjs
+node scripts/qa-shop2-customer-payments.mjs
 ```
 
 ## Scénario E2E final à remettre au propriétaire

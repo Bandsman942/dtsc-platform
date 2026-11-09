@@ -123,12 +123,14 @@ test.describe.serial("Shop 2.0 customer value and payment follow-up UI", () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto("/enterprise-modules/RETAIL_POS");
     await page.waitForURL((url) => url.pathname.includes("/enterprise-modules/RETAIL_POS"), { timeout: 30_000 });
-    await page.locator('[data-retail-pos-card="customers"]').click();
-    await expect(page).toHaveURL(/\?section=customers$/);
+    await page.locator('[data-retail-pos-card="checkout"]').click();
+    await expect(page).toHaveURL(/\?section=checkout$/);
 
-    await expect(page.getByText(customer.displayName || customer.legalName, { exact: true })).toBeVisible();
+    const customerInCheckout = page.locator('[data-retail-customer-workspace][data-retail-customer-compact="true"]');
+    await expect(customerInCheckout).toBeVisible();
+    await expect(customerInCheckout.getByText(customer.displayName || customer.legalName, { exact: true })).toBeVisible();
 
-    const benefits = page.locator("details").filter({ hasText: "Fidélité & avoirs client" }).first();
+    const benefits = customerInCheckout.locator("details").filter({ hasText: "Fidélité & avoirs client" }).first();
     await expect(benefits).toBeVisible();
     await benefits.locator("summary").click();
     await expect(benefits.getByText("Avantages client E2E", { exact: true })).toBeVisible();

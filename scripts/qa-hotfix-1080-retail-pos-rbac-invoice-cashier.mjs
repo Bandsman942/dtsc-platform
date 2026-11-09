@@ -7,6 +7,8 @@ const read = (name) => readFileSync(new URL(`../${name}`, import.meta.url), "utf
 const nav = read("components/enterprise/professional/retail-pos-section-navigation.tsx");
 const page = read("app/enterprise-modules/retail-page.tsx");
 const sale = read("components/enterprise/professional/retail-invoice-flow-workbench.tsx");
+const legacySale = read("components/enterprise/professional/retail-pos-dtsc-workspace.tsx");
+const customerValueE2e = read("tests/e2e/shop2-customer-value-ui.spec.mjs");
 const cashier = read("components/enterprise/professional/retail-invoice-cashier-workbench.tsx");
 const staff = read("components/enterprise/professional/retail-site-staff-access.tsx");
 const assignments = read("app/api/enterprise/[organizationId]/retail/site-assignments/route.ts");
@@ -35,6 +37,9 @@ assert.equal((invoicePayments.match(/visibility\.collectibleSiteIds\.includes\(c
   "Payment options and the payment proposal transaction must allow collection-only staff, without granting invoice draft access");
 
 assert.match(sale, /<RetailActiveCustomerBar organizationId=\{organizationId\} compact/);
+assert.match(legacySale, /<RetailActiveCustomerBar organizationId=\{organizationId\} compact/, "Legacy checkout must also embed the active customer instead of restoring a separate POS card");
+assert.match(customerValueE2e, /data-retail-pos-card="checkout"/, "Customer value browser acceptance must exercise the compact checkout");
+assert.doesNotMatch(customerValueE2e, /data-retail-pos-card="customers"/);
 assert.match(sale, /data-retail-invoice-proforma/);
 assert.match(sale, /previewOpen/);
 assert.match(sale, /printProforma/);
