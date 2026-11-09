@@ -8,6 +8,7 @@
 - La soumission Finance crée déjà une notification personnelle et une tâche de push ; le contenu de la notification identifie maintenant la facture et renvoie à sa validation.
 - La file du caissier **exclut intentionnellement** les brouillons, factures en attente de validation et factures déjà soldées. Seules `ISSUED`, `PARTIALLY_PAID`, `OVERDUE` sont encaissables. Le message vide explique la chaîne *préparer → valider → émettre → encaisser*.
 - Recherche par numéro ou description d'article, boutique, date initiale/finale ou date exacte ; filtrage et pagination côté serveur, sur les deux postes.
+- Les dates civiles des factures utilisent le fuseau de la boutique sélectionnée (ou celui de l'entreprise pour le registre transversal), avec bornes UTC calculées correctement y compris lors des changements d'heure.
 - Les impressions A4 et ticket 80 mm réutilisent le logo privé de l'organisation via son proxy authentifié, sans URL arbitraire injectée dans le HTML. Les documents en brouillon conservent leur filigrane de non-émission.
 
 ## Source comptable et trésorerie

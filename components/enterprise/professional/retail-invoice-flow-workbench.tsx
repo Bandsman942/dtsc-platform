@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { toastError, toastSuccess } from "@/lib/client-toast";
 import { customerFacingError } from "@/lib/customer-facing-language";
+import { browserCivilDate } from "@/lib/enterprise/retail/civil-date";
 
 type Store = { id: string; code: string; name: string; warehouses: { id: string; code: string; name: string }[] };
 type InvoiceItem = { id: string; description: string; quantity: string; totalAmount: string };
@@ -327,7 +328,7 @@ export function RetailInvoiceFlowWorkbench({ organizationId, organizationName, l
         <label className="text-xs font-bold text-dtsc-ink">{locale === "fr" ? "Recherche intelligente" : "Smart search"}<span className="mt-1 flex min-h-11 items-center gap-2 rounded-lg border border-dtsc-border bg-dtsc-page px-2"><Search className="h-4 w-4 text-dtsc-muted"/><input className="min-w-0 flex-1 bg-transparent text-sm outline-none" placeholder={locale === "fr" ? "N°, article, désignation" : "Number or item"} value={invoiceSearch} onChange={(event) => { setInvoiceSearch(event.target.value); setPage(1); }} /></span></label>
         <label className="text-xs font-bold text-dtsc-ink">{locale === "fr" ? "Du" : "From"}<input type="date" max={invoiceDateTo || undefined} value={invoiceDateFrom} onChange={(event) => { setInvoiceDateFrom(event.target.value); setPage(1); }} className="mt-1 min-h-11 w-full rounded-lg border border-dtsc-border bg-dtsc-page px-2 text-sm" /></label>
         <label className="text-xs font-bold text-dtsc-ink">{locale === "fr" ? "Au" : "To"}<input type="date" min={invoiceDateFrom || undefined} value={invoiceDateTo} onChange={(event) => { setInvoiceDateTo(event.target.value); setPage(1); }} className="mt-1 min-h-11 w-full rounded-lg border border-dtsc-border bg-dtsc-page px-2 text-sm" /></label>
-        <div className="flex flex-wrap items-end gap-1"><Button type="button" variant="outline" onClick={() => { const date = invoiceDateFrom || invoiceDateTo || new Date().toISOString().slice(0, 10); setInvoiceDateFrom(date); setInvoiceDateTo(date); setPage(1); }}>{locale === "fr" ? "Date précise" : "Exact date"}</Button><Button type="button" variant="ghost" onClick={() => { setInvoiceDateFrom(""); setInvoiceDateTo(""); setPage(1); }} disabled={!invoiceDateFrom && !invoiceDateTo}>{locale === "fr" ? "Effacer" : "Clear"}</Button></div>
+        <div className="flex flex-wrap items-end gap-1"><Button type="button" variant="outline" onClick={() => { const date = invoiceDateFrom || invoiceDateTo || browserCivilDate(); setInvoiceDateFrom(date); setInvoiceDateTo(date); setPage(1); }}>{locale === "fr" ? "Date précise" : "Exact date"}</Button><Button type="button" variant="ghost" onClick={() => { setInvoiceDateFrom(""); setInvoiceDateTo(""); setPage(1); }} disabled={!invoiceDateFrom && !invoiceDateTo}>{locale === "fr" ? "Effacer" : "Clear"}</Button></div>
       </div>
       {loading ? <p role="status" className="mt-3 text-sm text-dtsc-muted">{copy.loading}</p> : null}
       {!loading && data && !data.items.length ? <p className="mt-3 rounded-xl bg-dtsc-page p-3 text-sm text-dtsc-muted">{copy.empty}</p> : null}

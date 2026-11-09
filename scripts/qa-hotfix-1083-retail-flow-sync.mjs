@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import vm from "node:vm";
+import ts from "typescript";
 
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 const approval = read("lib/enterprise/accounting/accounting-approval-service.ts");
@@ -15,6 +17,16 @@ const stock = read("lib/enterprise/inventory/service.ts");
 const inventoryAlerts = read("app/api/enterprise/[organizationId]/retail/inventory-alerts/route.ts");
 const dashboard = read("components/enterprise/professional/retail-site-overview.tsx");
 const print = read("app/api/enterprise/[organizationId]/retail/invoices/[invoiceId]/print/route.ts");
+const dates = { exports: {} };
+vm.runInNewContext(ts.transpileModule(read("lib/enterprise/retail/civil-date.ts"), {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+}).outputText, { module: dates, exports: dates.exports, Date, Intl });
+const { isCivilDate, civilMidnightUtc, followingCivilDate } = dates.exports;
+assert.equal(isCivilDate("2026-02-29"), false);
+assert.equal(isCivilDate("2028-02-29"), true);
+assert.equal(civilMidnightUtc("2026-11-09", "Africa/Kinshasa").toISOString(), "2026-11-08T23:00:00.000Z");
+assert.equal(civilMidnightUtc("2026-03-08", "America/New_York").toISOString(), "2026-03-08T05:00:00.000Z");
+assert.equal(civilMidnightUtc(followingCivilDate("2026-03-08"), "America/New_York").toISOString(), "2026-03-09T04:00:00.000Z");
 
 // Invoice approval and personalised push target remain scoped to the assigned person.
 assert.match(invoices, /targetEntityType: "EnterpriseSalesInvoice"/);

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import type { Prisma } from "@prisma/client";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
+import { civilMidnightUtc, followingCivilDate, isCivilDate } from "@/lib/enterprise/retail/civil-date";
 import { authorizeRetailRequest, retailErrorResponse, retailListParams } from "@/lib/enterprise/retail/http";
 import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
 import { prepareRetailInvoice, retailInvoicePrepareSchema } from "@/lib/enterprise/retail/invoice-checkout";
@@ -35,14 +36,24 @@ export async function GET(req: Request, { params }: Params) {
   const search = (url.searchParams.get("q") || "").trim().slice(0, 100);
   const dateFrom = url.searchParams.get("dateFrom") || "";
   const dateTo = url.searchParams.get("dateTo") || "";
-  const civilDate = /^\d{4}-\d{2}-\d{2}$/;
-  const validDate = (value: string) => !value || (civilDate.test(value) && !Number.isNaN(Date.parse(`${value}T00:00:00.000Z`)) && new Date(`${value}T00:00:00.000Z`).toISOString().slice(0, 10) === value);
-  if (!validDate(dateFrom) || !validDate(dateTo) || (dateFrom && dateTo && dateFrom > dateTo)) {
+  if ((dateFrom && !isCivilDate(dateFrom)) || (dateTo && !isCivilDate(dateTo)) || (dateFrom && dateTo && dateFrom > dateTo)) {
     return retailErrorResponse(new EnterpriseRetailError("RETAIL_REPORT_DATE_INVALID", 400));
   }
+  const permittedSites = collectionsOnly ? auth.visibility.collectibleSiteIds : auth.visibility.siteIds;
+  if (siteId && !auth.visibility.isOwner && !permittedSites.includes(siteId)) {
+    return retailErrorResponse(new EnterpriseRetailError("RETAIL_SITE_ACCESS_DENIED", 403));
+  }
+  // Exact dates are interpreted in the selected store's timezone, or in the
+  // enterprise timezone for a company-wide report. Never use UTC midnight as
+  // a substitute for a local business day.
+  const [organization, filteredSite] = dateFrom || dateTo ? await Promise.all([
+    prisma.organization.findFirst({ where: { id: organizationId }, select: { timezone: true } }),
+    siteId ? prisma.enterpriseSite.findFirst({ where: { organizationId, id: siteId, status: "ACTIVE", archivedAt: null }, select: { timezone: true } }) : Promise.resolve(null),
+  ]) : [null, null];
+  const timezone = filteredSite?.timezone || organization?.timezone || "UTC";
   const invoiceDate: Prisma.DateTimeFilter = {
-    ...(dateFrom ? { gte: new Date(`${dateFrom}T00:00:00.000Z`) } : {}),
-    ...(dateTo ? { lt: new Date(new Date(`${dateTo}T00:00:00.000Z`).getTime() + 86_400_000) } : {}),
+    ...(dateFrom ? { gte: civilMidnightUtc(dateFrom, timezone) } : {}),
+    ...(dateTo ? { lt: civilMidnightUtc(followingCivilDate(dateTo), timezone) } : {}),
   };
   const invoiceConditions: Prisma.EnterpriseSalesInvoiceWhereInput = {
     ...(collectionsOnly ? { status: { in: ["ISSUED", "PARTIALLY_PAID", "OVERDUE"] } } : status ? { status } : {}),
@@ -52,10 +63,6 @@ export async function GET(req: Request, { params }: Params) {
       { items: { some: { description: { contains: search, mode: "insensitive" } } } },
     ] } : {}),
   };
-  const permittedSites = collectionsOnly ? auth.visibility.collectibleSiteIds : auth.visibility.siteIds;
-  if (siteId && !auth.visibility.isOwner && !permittedSites.includes(siteId)) {
-    return retailErrorResponse(new EnterpriseRetailError("RETAIL_SITE_ACCESS_DENIED", 403));
-  }
   const where: Prisma.EnterpriseRetailInvoiceCheckoutWhereInput = {
     organizationId,
     ...(auth.visibility.isOwner ? (siteId ? { siteId } : {}) : { siteId: siteId || { in: permittedSites } }),

@@ -5,6 +5,7 @@ import { CreditCard, Printer, RefreshCw, Search } from "lucide-react";
 import { RetailInvoicePaymentDialog } from "@/components/enterprise/professional/retail-invoice-payment-dialog";
 import { Button } from "@/components/ui/button";
 import { customerFacingError } from "@/lib/customer-facing-language";
+import { browserCivilDate } from "@/lib/enterprise/retail/civil-date";
 
 type Store = { id: string; name: string; code: string };
 type Checkout = {
@@ -116,7 +117,7 @@ export function RetailInvoiceCashierWorkbench({ organizationId, locale, preferre
     {!forbidden ? <div className="flex min-w-0 flex-wrap items-end gap-2 rounded-xl bg-dtsc-page p-2">
       <label className="min-w-32 flex-1 text-xs font-bold text-dtsc-ink">{t.from}<input type="date" value={dateFrom} max={dateTo || undefined} onChange={(event) => { setDateFrom(event.target.value); setPage(1); }} className="mt-1 min-h-11 w-full rounded-lg border border-dtsc-border bg-dtsc-surface px-2 text-sm" /></label>
       <label className="min-w-32 flex-1 text-xs font-bold text-dtsc-ink">{t.to}<input type="date" value={dateTo} min={dateFrom || undefined} onChange={(event) => { setDateTo(event.target.value); setPage(1); }} className="mt-1 min-h-11 w-full rounded-lg border border-dtsc-border bg-dtsc-surface px-2 text-sm" /></label>
-      <Button type="button" variant="outline" onClick={() => { const value = dateFrom || dateTo || new Date().toISOString().slice(0, 10); setDateFrom(value); setDateTo(value); setPage(1); }}>{t.exact}</Button>
+      <Button type="button" variant="outline" onClick={() => { const value = dateFrom || dateTo || browserCivilDate(); setDateFrom(value); setDateTo(value); setPage(1); }}>{t.exact}</Button>
       <Button type="button" variant="ghost" disabled={!dateFrom && !dateTo} onClick={() => { setDateFrom(""); setDateTo(""); setPage(1); }}>{t.reset}</Button>
     </div> : null}
     {loading ? <p role="status" className="text-sm text-dtsc-muted">{t.loading}</p> : null}
