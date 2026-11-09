@@ -17,7 +17,7 @@ const agentRuntime = read("lib/ai/agent/runtime.ts");
 const toolRegistry = read("lib/ai/tool-registry.ts");
 const toolSchemas = read("lib/ai/tools/schemas.ts");
 const toolExecutors = read("lib/ai/tools/executors/index.ts");
-const console = read("lib/console/console-ai-mcp.ts");
+const consoleSource = read("lib/console/console-ai-mcp.ts");
 const env = read("env.example");
 
 for (const phrase of [
@@ -43,7 +43,7 @@ must(registry, /\.\.\.listPublicMcpServers\(\)/, "Global MCP registry integratio
 must(toolRegistry, /listPublicMcpAiToolDefinitions\(\)/, "Canonical tool registry integration");
 must(toolSchemas, /PUBLIC_KNOWLEDGE_INPUT_SCHEMAS/, "Input schemas registered");
 must(toolExecutors, /\.\.\.PUBLIC_KNOWLEDGE_EXECUTORS/, "Executors in shared Tool Gateway");
-must(console, /PUBLIC_MCP_TOOL_SPECS\.map\(/, "Console displays registered tools");
+must(consoleSource, /PUBLIC_MCP_TOOL_SPECS\.map\(/, "Console displays registered tools");
 must(agentRuntime, /"MCP_TIME_GET_CURRENT_TIME".*"MCP_BRAVE_SEARCH_NEWS"/, "Personal DTSC assistant tool exposure");
 must(assistantRegistry, /code: "DTSC_GENERAL"/, "Global assistant supported");
 must(assistantRegistry, /code: "ENTERPRISE_GENERAL"/, "Enterprise assistant supported");
