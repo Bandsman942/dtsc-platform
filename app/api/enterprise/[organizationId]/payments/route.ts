@@ -124,7 +124,10 @@ export async function GET(req: Request, { params }: Params) {
   }) : [];
   const assignedIds = new Set(assignedApprovals.map((approval) => approval.targetEntityId));
   const capabilities = auth.access.capabilities;
-  const resultItems = await Promise.all(items.map(async ({ cashSession, ...item }) => {
+  // Strip the cash-session relation before any API projection. Only a
+  // server-derived blocker/notice may be returned, never the session object.
+  const paymentRows = items.map(({ cashSession, ...item }) => ({ cashSession, item }));
+  const resultItems = await Promise.all(paymentRows.map(async ({ cashSession, item }) => {
     const actorBlocker = item.status === "APPROVED"
       && (item.initiatedByUserId === auth.session.userId || item.approvedByUserId === auth.session.userId)
       ? item.paymentType === "REFUND"
