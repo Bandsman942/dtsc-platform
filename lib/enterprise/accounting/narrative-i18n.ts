@@ -10,6 +10,12 @@ export type AccountingNarrativeLocale = "fr" | "en";
 
 type Template = { pattern: RegExp; fr: string; en: string };
 const templates: Template[] = [
+  { pattern: /^DEPOSIT cash (.+)$/i, fr: "Encaissement d’espèces lié à un dépôt Mobile Money — $1", en: "Cash received for Mobile Money deposit — $1" },
+  { pattern: /^WITHDRAWAL cash (.+)$/i, fr: "Décaissement d’espèces lié à un retrait Mobile Money — $1", en: "Cash paid for Mobile Money withdrawal — $1" },
+  { pattern: /^DEPOSIT operator float (.+)$/i, fr: "Variation du solde opérateur liée à un dépôt Mobile Money — $1", en: "Operator float for Mobile Money deposit — $1" },
+  { pattern: /^WITHDRAWAL operator float (.+)$/i, fr: "Variation du solde opérateur liée à un retrait Mobile Money — $1", en: "Operator float for Mobile Money withdrawal — $1" },
+  { pattern: /^Mobile Money deposit (.+)$/i, fr: "Dépôt Mobile Money — $1", en: "Mobile Money deposit — $1" },
+  { pattern: /^Mobile Money withdrawal (.+)$/i, fr: "Retrait Mobile Money — $1", en: "Mobile Money withdrawal — $1" },
   { pattern: /^Retail POS sale (.+)$/i, fr: "Vente au point de vente — $1", en: "Retail point-of-sale transaction — $1" },
   { pattern: /^Retail POS reversal (.+)$/i, fr: "Contrepassation d’une vente en caisse — $1", en: "Retail POS sale reversal — $1" },
   { pattern: /^Retail POS return (.+)$/i, fr: "Retour client sur vente au point de vente — $1", en: "Retail POS customer return — $1" },
