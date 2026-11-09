@@ -1,3 +1,12 @@
+## 2026-11-09 — Hotfix #1084 — factures, encaissements, péremptions et KPI RETAIL (candidat v1.7.0)
+
+- Validation Finance : responsable nommé à côté de « À valider », notification ciblée, recherche intelligente et dates civiles propres au fuseau de chaque boutique, pagination sur les deux registres Facturier/Caissier.
+- Paiement d'une facture émise : confirmation et affectation Finance atomiques avec trésorerie, caisse, créance et comptabilisation, sans second registre ni action d'affectation oubliée.
+- Impression A4 et ticket 80 mm avec logo de l'entreprise ; stock faible et lots/péremptions enregistrables au catalogue, mouvements par lot et alertes par dépôt autorisé.
+- Sécurité des caisses : droit explicite `OPEN_CASH` synchronisé entre POS et Finance, identité et dates des responsables de l'ouverture et de la clôture.
+- Pilotage administrateur : graphiques KPI interactifs et dates exactes/plages, filtres boutiques/devises, exports Excel/PDF premium séparant opérations et P&L provisoire.
+- Contrôles locaux TypeScript et tests RETAIL ciblés exécutés ; CI PostgreSQL et `OWNER_E2E` encore requis. Voir `docs/HOTFIX_RETAIL_INVOICE_PAYMENTS_STOCK_EXPIRY_20261109.md`. Aucune fusion ni déploiement avant validation.
+
 ## 2026-11-09 — Hotfix #1080 — POS multi-boutiques et séparation facturier/caissier (candidat v1.6.6)
 
 - Menu POS filtré par droits de boutique : écrans de gestion du réseau réservés aux propriétaires/administrateurs, URL `siteId` et API sensibles vérifiées côté serveur, aucune réouverture d'accès après révocation de boutique.
