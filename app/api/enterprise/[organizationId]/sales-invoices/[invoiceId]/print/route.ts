@@ -22,15 +22,55 @@ export async function GET(req: Request, { params }: Params) {
   const retailAuth = !financeAuth.ok && financeAuth.response.status === 403
     ? await authorizeRetailRequest(req, organizationId, "RETAIL_POS", "read")
     : null;
-  if (!financeAuth.ok && !retailAuth?.ok) return financeAuth.response;
-  const userId = financeAuth.ok ? financeAuth.session.userId : retailAuth!.ok ? retailAuth!.session.userId : "";
+  // FINANCE_PAYMENTS viewers may print ONLY an invoice structurally linked to
+  // a payment they can see. This grants no general receivables read permission.
+  const paymentId = new URL(req.url).searchParams.get("paymentId")?.trim() || null;
+  const paymentAuth = !financeAuth.ok && financeAuth.response.status === 403 && paymentId
+    ? await authorizeFinanceRequest(req, organizationId, "FINANCE_PAYMENTS", "view")
+    : null;
+  if (!financeAuth.ok && !retailAuth?.ok && !paymentAuth?.ok) return financeAuth.response;
+  const userId = financeAuth.ok ? financeAuth.session.userId
+    : paymentAuth?.ok ? paymentAuth.session.userId
+    : retailAuth?.ok ? retailAuth.session.userId : "";
   try {
     const invoice = await prisma.enterpriseSalesInvoice.findFirst({
       where: { organizationId, id: invoiceId, archivedAt: null },
       include: { items: { orderBy: { createdAt: "asc" } }, retailCheckout: { select: { siteId: true, site: { select: { name: true, timezone: true } } } } },
     });
     if (!invoice) throw new EnterpriseAccountingError("SALES_INVOICE_NOT_FOUND", 404);
-    if (!financeAuth.ok) {
+    if (!financeAuth.ok && paymentAuth?.ok && paymentId) {
+      const payment = await prisma.enterprisePayment.findFirst({
+        where: { id: paymentId, organizationId },
+        select: { financialAccountId: true, paymentType: true },
+      });
+      if (!payment || payment.paymentType !== "CUSTOMER_PAYMENT") throw new EnterpriseAccountingError("SALES_INVOICE_NOT_FOUND", 404);
+      const [intent, allocations] = await Promise.all([
+        prisma.enterpriseRetailInvoicePaymentProposal.findFirst({
+          where: { organizationId, paymentId, checkout: { salesInvoiceId: invoice.id } },
+          select: { id: true },
+        }),
+        prisma.enterprisePaymentAllocation.findMany({
+          where: { organizationId, paymentId, status: { in: ["CONFIRMED", "REVERSED"] }, receivableId: { not: null } },
+          select: { receivableId: true },
+        }),
+      ]);
+      const receivableIds = allocations.map((row) => row.receivableId).filter((id): id is string => Boolean(id));
+      const linkedReceivable = receivableIds.length ? await prisma.enterpriseReceivable.findFirst({
+        where: { organizationId, id: { in: receivableIds }, salesInvoiceId: invoice.id },
+        select: { id: true },
+      }) : null;
+      if (!intent && !linkedReceivable) throw new EnterpriseAccountingError("SALES_INVOICE_NOT_FOUND", 404);
+      const paymentSites = await retailFinanceReadSiteScope(organizationId, userId, "COLLECT_PAYMENT");
+      if (paymentSites !== null) {
+        const account = payment.financialAccountId ? await prisma.enterpriseFinancialAccount.findFirst({
+          where: { id: payment.financialAccountId, organizationId, siteId: { in: paymentSites } },
+          select: { id: true },
+        }) : null;
+        if (!account || (invoice.retailCheckout && !paymentSites.includes(invoice.retailCheckout.siteId))) {
+          throw new EnterpriseAccountingError("SALES_INVOICE_NOT_FOUND", 404);
+        }
+      }
+    } else if (!financeAuth.ok) {
       if (!invoice.retailCheckout) throw new EnterpriseAccountingError("SALES_INVOICE_NOT_FOUND", 404);
       await requireRetailSiteCapability(organizationId, userId, invoice.retailCheckout.siteId, "ISSUE_INVOICE", prisma, { requireAssignment: true });
     } else {

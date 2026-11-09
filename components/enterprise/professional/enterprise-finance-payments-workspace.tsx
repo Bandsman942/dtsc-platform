@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { CheckCircle2, CircleDollarSign, Plus, Send, ShieldCheck, Undo2, XCircle } from "lucide-react";
+import { CheckCircle2, CircleDollarSign, Plus, Printer, Send, ShieldCheck, Undo2, XCircle } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { useEnterpriseBusinessContext } from "@/components/enterprise/use-enterprise-business-context";
 import { Field, NativeSelect } from "@/components/enterprise/core-v2/erp-v2-ui";
@@ -57,6 +57,7 @@ type PaymentConfirmationState = {
   ready?: boolean;
   blockerCode?: string | null;
   noticeCode?: string | null;
+  blockerItems?: string[];
 };
 
 type Payment = FinanceRecord & {
@@ -75,6 +76,7 @@ type Payment = FinanceRecord & {
   reference?: string | null;
   maskedExternalReference?: string | null;
   revision: number;
+  linkedSalesInvoiceId?: string | null;
   capabilities?: PaymentCapabilities;
   confirmation?: PaymentConfirmationState;
 };
@@ -158,6 +160,28 @@ export function EnterpriseFinancePaymentsWorkspace(props: Props) {
       .then((record) => { if (record) setDetail(record); })
       .catch((error) => setErrorMessage(safeFinanceError(error, translateEnterpriseFinance(locale, "financeDetails"), locale)));
   }, [organizationId, searchParams, locale]);
+
+  const printLinkedInvoice = (record: Payment) => {
+    if (!record.linkedSalesInvoiceId) return;
+    const invoiceId = encodeURIComponent(record.linkedSalesInvoiceId);
+    const paymentId = encodeURIComponent(record.id);
+    window.open(`/api/enterprise/${organizationId}/sales-invoices/${invoiceId}/print?lang=${locale}&paymentId=${paymentId}`, "_blank", "noopener,noreferrer");
+  };
+
+  function openPaymentDetail(record: Payment) {
+    // List rows are intentionally not presented as confirmation-ready:
+    // detailed server preflight must complete before exposing the action.
+    setDetail({
+      ...record,
+      confirmation: record.status === "APPROVED"
+        ? { ready: false, noticeCode: "PAYMENT_CONFIRMATION_PREFLIGHT_REQUIRED" }
+        : record.confirmation,
+      capabilities: { ...record.capabilities, canConfirm: false },
+    });
+    fetchOperationalFinanceRecord<Payment>(`/api/enterprise/${organizationId}/payments`, record.id)
+      .then((fresh) => { if (fresh) setDetail((previous) => previous?.id === record.id ? fresh : previous); })
+      .catch((error) => setErrorMessage(safeFinanceError(error, t("financeDetails"), locale)));
+  }
 
   function changePaymentType(value: string) {
     setPaymentType(value);
@@ -266,7 +290,7 @@ export function EnterpriseFinancePaymentsWorkspace(props: Props) {
     <ModuleContent>
       {summaryError ? <ProfessionalError message={summaryError} /> : null}
       <ModuleSection title={tabs.find((item) => item.id === tab)?.label || ""} description={t("paymentSectionDescription")}>
-        {collection.error ? <ProfessionalError message={collection.error} /> : collection.loading ? <ProfessionalLoading /> : <FinanceRecordList items={collection.items} locale={locale} emptyTitle={t("noItemInView")} emptyDescription={t("professionalFormOrFilters")} onOpen={(record) => setDetail(record as Payment)} />}
+        {collection.error ? <ProfessionalError message={collection.error} /> : collection.loading ? <ProfessionalLoading /> : <FinanceRecordList items={collection.items} locale={locale} emptyTitle={t("noItemInView")} emptyDescription={t("professionalFormOrFilters")} onOpen={(record) => openPaymentDetail(record as Payment)} actions={(record) => (record as Payment).linkedSalesInvoiceId ? <Button size="sm" variant="outline" onClick={() => printLinkedInvoice(record as Payment)}><Printer className="h-4 w-4" />{t("printInvoicePreview")}</Button> : undefined} />}
         <FinancePaginationControls pagination={collection.pagination} page={page} onPage={setPage} locale={locale} />
       </ModuleSection>
       <ProfessionalHelp moduleCode="FINANCE_PAYMENTS" />
@@ -320,6 +344,7 @@ export function EnterpriseFinancePaymentsWorkspace(props: Props) {
               : detail.confirmation?.noticeCode
                 ? financeErrorMessage(new Error(detail.confirmation.noticeCode), locale)
                 : confirmationCopy.readyDescription}
+            {detail.confirmation?.blockerItems?.length ? <span className="mt-1 block text-xs font-normal">{t("affectedStockItems")} : {detail.confirmation.blockerItems.join(", ")}</span> : null}
           </p>
         </div> : null}
         <FinanceDetailGrid>
@@ -327,9 +352,12 @@ export function EnterpriseFinancePaymentsWorkspace(props: Props) {
           <FinanceDetailValue label={t("method")}>{financeEnumLabel(detail.methodType, locale)}</FinanceDetailValue>
           <FinanceDetailValue label={t("amount")}>{financeMoney(detail.amount, detail.currencyCode, locale)}</FinanceDetailValue>
           <FinanceDetailValue label={t("unallocated")}>{financeMoney(detail.unallocatedAmount, detail.currencyCode, locale)}</FinanceDetailValue>
-          <FinanceDetailValue label={t("date")}>{detail.paymentDate}</FinanceDetailValue>
+          <FinanceDetailValue label={t("date")}>{financeDate(detail.paymentDate, locale)}</FinanceDetailValue>
         </FinanceDetailGrid>
-        <div data-responsive-actions>{paymentActions(detail, locale).map(({ action, label, icon: Icon, destructive }) => <Button key={action} variant={destructive ? "destructive" : "outline"} disabled={busy} onClick={() => setActionTarget({ record: detail, action, label })}><Icon className="h-4 w-4" />{label}</Button>)}{detail.capabilities?.canAllocate ? <Button variant="outline" disabled={busy} onClick={() => setAllocationTarget(detail)}><CircleDollarSign className="h-4 w-4" />{t("allocatePayment")}</Button> : null}</div>
+        <div data-responsive-actions>
+          {detail.linkedSalesInvoiceId ? <Button variant="outline" onClick={() => printLinkedInvoice(detail)}><Printer className="h-4 w-4" />{t("printInvoicePreview")}</Button> : null}
+          {paymentActions(detail, locale).map(({ action, label, icon: Icon, destructive }) => <Button key={action} variant={destructive ? "destructive" : "outline"} disabled={busy} onClick={() => setActionTarget({ record: detail, action, label })}><Icon className="h-4 w-4" />{label}</Button>)}{detail.capabilities?.canAllocate ? <Button variant="outline" disabled={busy} onClick={() => setAllocationTarget(detail)}><CircleDollarSign className="h-4 w-4" />{t("allocatePayment")}</Button> : null}</div>
+        {detail.paymentType === "CUSTOMER_PAYMENT" && !detail.linkedSalesInvoiceId ? <p className="text-sm text-dtsc-muted">{t("noLinkedCustomerInvoice")}</p> : null}
         <FinanceCollaboration organizationId={organizationId} moduleCode="FINANCE_PAYMENTS" record={detail} locale={locale} />
       </div> : null}
     </Dialog>

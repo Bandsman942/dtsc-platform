@@ -1,3 +1,12 @@
+## 2026-11-09 — Hotfix #1091 — Prévalidation financière et impression des factures dans tous les flux (candidat v1.7.3)
+
+- Les paiements professionnels ne montrent plus « Confirmation disponible » avant un précontrôle serveur détaillé : caisse, tiers, site, compte, créance, valorisation des stocks, journal, mappings et période. Aucune mutation n'est lancée lors du diagnostic.
+- Les refus de confirmation conservent un reasonCode actionnable (valorisation du stock et article concerné notamment) ; les erreurs HTTP 409 ne sont plus systématiquement présentées comme un conflit de mise à jour. Les échecs sont auditables sans secrets.
+- L'aperçu A4 canonique est accessible depuis chaque statut d'un paiement associé à une vraie facture, et depuis Factures clients, Créances, Échéances et En retard. Les échéances disposent d'une liste détaillée, de filtres par ancienneté et de pagination ; l'accès par paiement reste limité à la facture réellement liée et à la boutique autorisée.
+- Le module **Finance → Valorisation du stock** comporte une file consultable des mouvements entrants historiques sans couche de coût et une action sécurisée pour saisir le **coût d'achat réel justifié** et poster l'écriture sur le mouvement d'origine ; aucun stock supplémentaire ni coût fictif. Le droit de comptabiliser reste `FINANCE_INVENTORY.post`.
+
+- Aucune couche de coût historique n'est inventée et aucun stock n'est dupliqué : les coûts réels doivent être régularisés selon le circuit officiel. QA : `pnpm qa:hotfix-1091`. E2E propriétaire non exécuté. Voir `docs/HOTFIX_1091_FINANCE_CONFIRMATION_INVOICE_PRINT.md`.
+
 ## 2026-11-09 — Hotfix #1088 — budgets, dépenses, comptabilisation et règlements (candidat v1.7.2)
 
 - Les lignes de budget peuvent préciser un compte du plan comptable et un compte financier de financement **prévisionnel** : l'approbation du budget ne débite aucun fonds.

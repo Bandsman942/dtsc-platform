@@ -92,6 +92,15 @@ export const FINANCE_ERROR_MESSAGES: Record<FinanceLocale, Record<string, string
     PAYMENT_CASH_SESSION_CLOSING: "La caisse précédemment liée à ce paiement est en cours de clôture. Terminez la clôture ou ouvrez une nouvelle caisse autorisée sur le même compte, puis réessayez.",
     PAYMENT_CASH_SESSION_CLOSED: "La caisse précédemment liée à ce paiement est fermée. Ouvrez une nouvelle caisse compatible sur le même compte puis réessayez.",
     PAYMENT_NOT_APPROVED: "Ce paiement doit être approuvé avant sa confirmation. Rechargez-le et vérifiez son statut.",
+    PAYMENT_CONFIRMATION_PREFLIGHT_REQUIRED: "Vérification détaillée des prérequis en cours. Ouvrez le dossier pour connaître les éventuels blocages avant de confirmer.",
+    RETAIL_INVENTORY_COST_LAYER_REQUIRED: "La facture contient des articles en stock sans valorisation comptable disponible. Régularisez les coûts réels d’acquisition dans Stocks avant de confirmer l’encaissement.",
+    INVENTORY_COST_LAYER_REQUIRED: "Le stock existe, mais son coût d’acquisition n’est pas disponible. Régularisez la valorisation du stock.",
+    RETAIL_INVOICE_STOCK_INSUFFICIENT: "Stock disponible insuffisant pour livrer cette facture. Vérifiez l'inventaire et les réservations de la boutique.",
+    RETAIL_INVOICE_PAYMENT_EXCEEDS_OUTSTANDING: "La facture ou la créance ne couvre plus ce montant. Rechargez la facture et vérifiez son solde.",
+    RETAIL_INVOICE_FINANCIAL_ACCOUNT_SITE_MISMATCH: "Le compte financier ne correspond pas à la boutique qui a émis cette facture.",
+    FINANCE_CONFIGURATION_NOT_READY: "La comptabilité n’est pas prête pour ce paiement. Vérifiez les comptes associés, le journal et la période financière.",
+    POSTING_ACCOUNT_MAPPING_REQUIRED: "La correspondance avec un compte comptable actif manque pour cette écriture.",
+    RETAIL_INVENTORY_VALUATION_CURRENCY_AMBIGUOUS: "Plusieurs devises de coût existent pour cet article. Corrigez la valorisation avant l'encaissement.",
     PAYMENT_SELF_CONFIRMATION_FORBIDDEN: "La confirmation doit être effectuée par une troisième personne autorisée, différente de l’initiateur et du validateur du paiement.",
     REFUND_PAYMENT_SELF_CONFIRMATION_FORBIDDEN: "La confirmation du remboursement doit être effectuée par une troisième personne autorisée, différente de l’initiateur et du validateur.",
     PAYMENT_CASH_SESSION_BINDING_REQUIRED: "Ce paiement en espèces récent n’est rattaché à aucune caisse. Créez-le depuis une caisse ouverte ou corrigez son rattachement avant de confirmer.",
@@ -225,6 +234,15 @@ export const FINANCE_ERROR_MESSAGES: Record<FinanceLocale, Record<string, string
     PAYMENT_CASH_SESSION_CLOSING: "The cash session previously linked to this payment is closing. Finish closing it or open a new authorized cash session on the same account, then try again.",
     PAYMENT_CASH_SESSION_CLOSED: "The cash session previously linked to this payment is closed. Open a new compatible cash session on the same account, then try again.",
     PAYMENT_NOT_APPROVED: "This payment must be approved before confirmation. Reload it and check its status.",
+    PAYMENT_CONFIRMATION_PREFLIGHT_REQUIRED: "Detailed prerequisites are being checked. Open the payment to see any blockers before confirming.",
+    RETAIL_INVENTORY_COST_LAYER_REQUIRED: "Some invoice stock items have no available acquisition-cost valuation. Record justified acquisition costs in Inventory before confirming the payment.",
+    INVENTORY_COST_LAYER_REQUIRED: "Stock quantities exist but acquisition-cost valuation is missing. Correct the inventory valuation.",
+    RETAIL_INVOICE_STOCK_INSUFFICIENT: "Insufficient available stock to fulfill this invoice. Check inventory and shop reservations.",
+    RETAIL_INVOICE_PAYMENT_EXCEEDS_OUTSTANDING: "The invoice or receivable no longer covers this amount. Refresh the invoice and check its balance.",
+    RETAIL_INVOICE_FINANCIAL_ACCOUNT_SITE_MISMATCH: "The settlement account does not belong to the shop issuing this invoice.",
+    FINANCE_CONFIGURATION_NOT_READY: "Accounting is not ready for this payment. Check account mappings, journals and fiscal period.",
+    POSTING_ACCOUNT_MAPPING_REQUIRED: "A required active ledger-account mapping is missing for this posting.",
+    RETAIL_INVENTORY_VALUATION_CURRENCY_AMBIGUOUS: "Multiple cost currencies exist for an inventory item. Correct its valuation before collection.",
     PAYMENT_SELF_CONFIRMATION_FORBIDDEN: "Payment confirmation must be performed by a third authorized person, different from the initiator and approver.",
     REFUND_PAYMENT_SELF_CONFIRMATION_FORBIDDEN: "Refund confirmation must be performed by a third authorized person, different from the initiator and approver.",
     PAYMENT_CASH_SESSION_BINDING_REQUIRED: "This recent cash payment is not linked to a cash session. Create it from an open cash session or repair the binding before confirming.",
@@ -457,11 +475,13 @@ export function financeErrorMessage(error: unknown, locale?: FinanceLocale, fall
   const status = financeHttpStatus(error);
   if (status === 401) return resolvedLocale === "fr" ? "Votre session doit être renouvelée. Reconnectez-vous avant de réessayer." : "Your session needs to be renewed. Sign in again before retrying.";
   if (status === 403) return resolvedLocale === "fr" ? "Vous n'avez pas les droits nécessaires pour cette opération." : "You do not have the required permissions for this operation.";
+  // HTTP 409 also covers business prerequisites (inventory valuation, periods, mappings).
+  // Preserve the server’s sanitized business explanation when no code mapping exists.
+  const safeServerMessage = extractSafeFinanceClientMessage(error);
+  if (safeServerMessage && resolvedLocale === "fr") return safeServerMessage;
   if (status === 409) return resolvedLocale === "fr" ? "Cette opération a changé entre-temps. Actualisez les informations avant de réessayer." : "This operation changed in the meantime. Refresh the information before retrying.";
   if (status === 429) return resolvedLocale === "fr" ? "Trop de tentatives rapprochées. Patientez quelques instants avant de réessayer." : "Too many attempts in a short time. Wait a moment before trying again.";
   if (status !== null && status >= 500) return resolvedLocale === "fr" ? "Le service financier est temporairement indisponible. Vérifiez l'état de l'opération avant une nouvelle tentative." : "The finance service is temporarily unavailable. Check the operation status before retrying.";
-  const safeServerMessage = extractSafeFinanceClientMessage(error);
-  if (resolvedLocale === "fr" && safeServerMessage) return safeServerMessage;
   if (code?.includes("REQUIRED")) return resolvedLocale === "fr" ? "Une information ou une configuration requise manque pour terminer cette opération." : "Required information or configuration is missing to complete this operation.";
   if (code?.includes("FORBIDDEN") || code === "FORBIDDEN" || code === "UNAUTHORIZED") return resolvedLocale === "fr" ? "Vous ne disposez pas de l’autorisation nécessaire pour cette action." : "You do not have the permission required for this action.";
   if (code?.includes("INVALID") || code === "INVALID_PAYLOAD") return resolvedLocale === "fr" ? "Certaines informations saisies sont à corriger avant de continuer." : "Some entered information must be corrected before continuing.";

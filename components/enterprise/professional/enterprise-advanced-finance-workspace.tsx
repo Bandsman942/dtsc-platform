@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNo
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { AlertCircle, BookOpen, CheckCircle2, Plus, RefreshCw, RotateCcw, Save, Search, Settings2, ShieldCheck } from "lucide-react";
 import { AssignedApprovalSubmitPanel } from "@/components/enterprise/professional/assigned-approval-submit-panel";
+import { InventoryUnvaluedReceiptsPanel } from "@/components/enterprise/professional/inventory-unvalued-receipts-panel";
 import { Button } from "@/components/ui/button";
 import { FinancialStatementReportDialog } from "@/components/reports/financial-statement-report-dialog";
 import { FinanceDateFilter, FinanceExportControls, type FinanceExportColumn } from "@/components/enterprise/professional/finance-design2-controls";
@@ -327,6 +328,8 @@ export function EnterpriseAdvancedFinanceWorkspace({ organizationId, organizatio
         <div className="flex flex-wrap gap-2 sm:col-span-2 lg:col-span-3"><Button type="submit" disabled={saving}><Save className="h-4 w-4" />{saving ? t("processing") : t("save")}</Button><Button type="button" variant="outline" onClick={() => { setShowForm(false); setReversalEntryId(""); setReopenClose(null); }}>{t("cancel")}</Button>{activeKey === "assets" && !reversalEntryId ? <Button type="button" variant="outline" onClick={() => void runDepreciation()} disabled={saving}><Settings2 className="h-4 w-4" />{t("runDueDepreciation")}</Button> : null}</div>
       </form>
     </ModuleSection> : null}
+
+    {activeKey === "inventory" ? <InventoryUnvaluedReceiptsPanel organizationId={organizationId} locale={locale} canManage={canManage} onPosted={load} /> : null}
 
     <ModuleContent><ModuleSection title={activeSection ? t(activeSection.labelKey) : (locale === "fr" ? definition.labelFr : definition.labelEn)} description={sectionDescription} count={pagination.total}>
       {loading ? <div className="space-y-3">{Array.from({ length: 4 }).map((_, index) => <div key={index} className="h-28 animate-pulse rounded-xl bg-dtsc-soft" />)}</div> : items.length === 0 ? <div className="flex min-h-48 flex-col items-center justify-center border-y border-dashed border-dtsc-border py-10 text-center"><BookOpen className="h-8 w-8 text-dtsc-muted" /><p className="mt-3 font-black text-dtsc-ink">{t("noDataForView")}</p><p className="mt-1 max-w-xl text-sm text-dtsc-muted">{t("useActionOrFilters")}</p></div> : <div className="divide-y divide-dtsc-border border-y border-dtsc-border">
