@@ -144,7 +144,7 @@ export async function GET(req: Request, { params }: Params) {
       ? paymentCashSessionConfirmationNotice({ ...item, cashSession })
         || (!preflight ? "PAYMENT_CONFIRMATION_PREFLIGHT_REQUIRED" : null)
       : null;
-    const canConfirm = Boolean(capabilities.canWrite && item.status === "APPROVED" && preflight?.ready && !confirmationBlocker);
+    const canConfirm = capabilities.canWrite && Boolean(item.status === "APPROVED" && preflight?.ready && !confirmationBlocker);
 
     return {
       ...item,
