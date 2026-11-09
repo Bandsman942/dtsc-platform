@@ -5,12 +5,13 @@ import { getAssistantProfiles } from "@/lib/ai/assistant-registry";
 import { MCP_SERVER_REGISTRY, isMcpOAuthPlatformConfigured } from "@/lib/ai/mcp/registry";
 import { MCP_TOOL_BINDINGS } from "@/lib/ai/mcp/bindings";
 import { PUBLIC_MCP_TOOL_SPECS, getPublicMcpBridgeConfiguration } from "@/lib/ai/mcp/public-knowledge-config";
+import { probePublicMcpBridge } from "@/lib/ai/mcp/public-knowledge-probe";
 
 export type ConsoleMcpGovernance = {
   servers: Array<{
     code: string; label: string; status: string; transport: string; authMode: string;
     scope: string; dataPolicy: string; certified: boolean; configured: boolean;
-    connectedGrants: number | null; enabledBindings: number; reachable: null;
+    connectedGrants: number | null; enabledBindings: number; reachable: boolean | null;
     readEvidence: { successfulCalls7d: number; latestSuccessAt: string | null } | null;
     discovery: { version: string; compatible: boolean; discoveredAt: string; toolCount: number } | null;
     suspended: boolean | null; revision: number | null;
@@ -36,7 +37,7 @@ export type ConsoleMcpGovernance = {
 export async function getConsoleMcpGovernance(): Promise<ConsoleMcpGovernance> {
   const since = new Date(Date.now() - 7 * 86_400_000);
   const codes = MCP_SERVER_REGISTRY.map((s) => s.code);
-  const [discovery, audit, grants, controls, verifiedReads] = await Promise.allSettled([
+  const [discovery, audit, grants, controls, verifiedReads, liveMcpProbe] = await Promise.allSettled([
     prisma.aiMcpDiscoverySnapshot.findMany({
       where: { serverCode: { in: codes } },
       orderBy: { discoveredAt: "desc" },
@@ -66,6 +67,7 @@ export async function getConsoleMcpGovernance(): Promise<ConsoleMcpGovernance> {
       _count: { _all: true },
       _max: { createdAt: true },
     }),
+    probePublicMcpBridge(),
   ]);
   const latest = new Map<string, { version: string; compatible: boolean; discoveredAt: string; toolCount: number }>();
   if (discovery.status === "fulfilled") for (const item of discovery.value) {
@@ -88,23 +90,29 @@ export async function getConsoleMcpGovernance(): Promise<ConsoleMcpGovernance> {
   const actualReads = new Map(verifiedReads.status === "fulfilled"
     ? verifiedReads.value.map((row) => [row.serverCode, { successfulCalls7d: row._count._all, latestSuccessAt: row._max.createdAt?.toISOString() || null }] as const)
     : []);
+  const liveBridge = liveMcpProbe.status === "fulfilled" ? liveMcpProbe.value : null;
+  const configuredBridge = getPublicMcpBridgeConfiguration().certified;
   return {
     servers: MCP_SERVER_REGISTRY.map((server) => ({
-      code: server.code, label: server.label, status: server.status,
+      code: server.code, label: server.label,
+      status: server.transport === "STDIO_BRIDGE" && server.status === "CERTIFIED" && !liveBridge ? "UNAVAILABLE" : server.status,
       transport: server.transport, authMode: server.authMode, scope: server.organizationScope,
-      dataPolicy: server.dataPolicy, certified: server.status === "CERTIFIED",
-      configured: server.transport === "STDIO_BRIDGE" ? getPublicMcpBridgeConfiguration().certified : server.authMode === "NONE" || (server.authMode === "OAUTH_USER"
+      dataPolicy: server.dataPolicy, certified: server.status === "CERTIFIED" && (server.transport !== "STDIO_BRIDGE" || Boolean(liveBridge)),
+      configured: server.transport === "STDIO_BRIDGE" ? configuredBridge : server.authMode === "NONE" || (server.authMode === "OAUTH_USER"
         ? isMcpOAuthPlatformConfigured(server)
         : Boolean(server.authEnvKey && process.env[server.authEnvKey]?.trim())),
       connectedGrants: server.authMode === "OAUTH_USER" && grants.status === "fulfilled" ? grantTotals.get(server.code) || 0 : null,
       enabledBindings: server.transport === "STDIO_BRIDGE"
-        ? PUBLIC_MCP_TOOL_SPECS.filter((tool) => tool.server === server.label && server.status === "CERTIFIED").length
+        ? PUBLIC_MCP_TOOL_SPECS.filter((tool) => tool.server === server.label && server.status === "CERTIFIED" && Boolean(liveBridge) && !(controls.status === "fulfilled" && controlStates.get(server.code)?.suspended)).length
         : MCP_TOOL_BINDINGS.filter((b) => b.serverCode === server.code && b.enabled).length,
-      reachable: null,
+      reachable: server.transport === "STDIO_BRIDGE" ? configuredBridge ? Boolean(liveBridge) : null : null,
       readEvidence: verifiedReads.status === "fulfilled"
         ? actualReads.get(server.code) || { successfulCalls7d: 0, latestSuccessAt: null }
         : null,
-      discovery: latest.get(server.code) || null,
+      discovery: server.transport === "STDIO_BRIDGE" ? (liveBridge ? {
+        version: liveBridge.fingerprint, compatible: true, discoveredAt: liveBridge.checkedAt,
+        toolCount: liveBridge.toolsByServer[server.label]?.length || 0,
+      } : null) : latest.get(server.code) || null,
       suspended: controls.status === "fulfilled" ? (controlStates.get(server.code)?.suspended || false) : null,
       revision: controls.status === "fulfilled" ? (controlStates.get(server.code)?.revision || 0) : null,
       audit: audit.status === "fulfilled" ? activity.get(server.code) || { successful: 0, denied: 0, failed: 0 } : null,
@@ -112,9 +120,9 @@ export async function getConsoleMcpGovernance(): Promise<ConsoleMcpGovernance> {
     bindings: [
       ...PUBLIC_MCP_TOOL_SPECS.map((spec) => ({
         code: spec.prefixed, serverCode: spec.server === "time" ? "PUBLIC_TIME" : spec.server === "brave" ? "PUBLIC_BRAVE" : "PUBLIC_FETCH",
-        enabled: getPublicMcpBridgeConfiguration().certified, mode: "READ",
-        certifiedVersion: getPublicMcpBridgeConfiguration().certified ? "BRIDGE_RUNTIME_PROBE_REQUIRED" : "NOT_CERTIFIED",
-        discoveryMatches: null, assistants: null, contexts: ["GLOBAL_CLIENT", "COMMUNITY", "DTSC_INTERNAL", "ORGANIZATION"],
+        enabled: configuredBridge && Boolean(liveBridge) && !(controls.status === "fulfilled" && controlStates.get(spec.server === "time" ? "PUBLIC_TIME" : spec.server === "brave" ? "PUBLIC_BRAVE" : "PUBLIC_FETCH")?.suspended), mode: "READ",
+        certifiedVersion: liveBridge?.fingerprint || "NOT_CERTIFIED",
+        discoveryMatches: liveBridge ? true : null, assistants: null, contexts: ["GLOBAL_CLIENT", "COMMUNITY", "DTSC_INTERNAL", "ORGANIZATION"],
         requiredModules: 0, requiredPermissions: 0,
       })),
       ...MCP_TOOL_BINDINGS.map((b) => {
