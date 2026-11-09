@@ -9,6 +9,11 @@ const paymentUi = read("components/enterprise/professional/enterprise-finance-pa
 const invoiceUi = read("components/enterprise/professional/enterprise-finance-invoices-workspace.tsx");
 const receivablesRoute = read("app/api/enterprise/[organizationId]/receivables/route.ts");
 const printRoute = read("app/api/enterprise/[organizationId]/sales-invoices/[invoiceId]/print/route.ts");
+const unvaluedRoute = read("app/api/enterprise/[organizationId]/inventory-unvalued-receipts/route.ts");
+const unvaluedPanel = read("components/enterprise/professional/inventory-unvalued-receipts-panel.tsx");
+const advancedFinanceUi = read("components/enterprise/professional/enterprise-advanced-finance-workspace.tsx");
+const receiptValuationRoute = read("app/api/enterprise/[organizationId]/stock-movements/[movementId]/value-receipt/route.ts");
+const inventoryAccountingService = read("lib/enterprise/accounting/inventory-accounting-service.ts");
 const messages = read("components/enterprise/professional/finance-professional-ui.ts");
 
 const has = (text, pattern, reason) => assert.match(text, pattern, reason);
@@ -54,9 +59,22 @@ has(invoiceUi, /<FinancePaginationControls pagination=\{collection\.pagination\}
 has(receivablesRoute, /retailFinanceReadSiteScope\(/, "Existing site isolation on receivables API");
 assert.doesNotMatch(printRoute, /organizationId: (null|undefined)/, "Print remains tenant-scoped");
 
+// Historical receipts are valued with their ACTUAL acquisition cost through
+// the existing atomic canonical posting, never by duplicating stock movements.
+has(unvaluedRoute, /authorizeFinanceRequest\\(req, organizationId, "FINANCE_INVENTORY", "view"\\)/, "Unvalued queue needs Finance Inventory permissions");
+has(unvaluedRoute, /retailInventoryVisibleSites\\(/, "No cross-shop stock valuation exposure");
+has(unvaluedRoute, /NOT EXISTS \\([\\s\\S]*EnterpriseInventoryCostLayer/, "Only genuinely unvalued receipts");
+has(unvaluedRoute, /LIMIT \\$\\{pageSize\\} OFFSET \\$\\{offset\\}/, "Server-side pagination of unvalued receipts");
+has(unvaluedPanel, /financeMutation\\(/, "Valuation UI submits actual movement, not placeholder");
+has(unvaluedPanel, /evidenceChecked/, "Human acquisition-cost attestation");
+has(advancedFinanceUi, /<InventoryUnvaluedReceiptsPanel/, "New valuation action is discoverable");
+has(receiptValuationRoute, /"FINANCE_INVENTORY", "post"/, "Posting remains behind Finance Inventory RBAC");
+has(inventoryAccountingService, /sourceMovementId: movement.id/, "Reuses original stock movement without double receipt");
+has(inventoryAccountingService, /postBusinessEventTx/, "Valuation and journal posting remain atomic and idempotent");
+
 for (const locale of ["fr", "en"]) {
   const i18n = JSON.parse(read(`locales/enterprise-finance.${locale}.json`));
-  for (const key of ["affectedStockItems", "allDueDates", "detailsLabel", "noLinkedCustomerInvoice", "printInvoicePreview"]) {
+  for (const key of ["affectedStockItems", "allDueDates", "detailsLabel", "noLinkedCustomerInvoice", "printInvoicePreview", "inventoryUnvaluedTitle", "inventoryUnvaluedPost", "inventoryUnvaluedProofRequired"]) {
     assert.equal(typeof i18n[key], "string", `${locale} missing ${key}`);
   }
 }
