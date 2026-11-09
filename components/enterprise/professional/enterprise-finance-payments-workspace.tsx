@@ -344,7 +344,7 @@ export function EnterpriseFinancePaymentsWorkspace(props: Props) {
               : detail.confirmation?.noticeCode
                 ? financeErrorMessage(new Error(detail.confirmation.noticeCode), locale)
                 : confirmationCopy.readyDescription}
-            {detail.confirmation?.blockerItems?.length ? <span className="mt-1 block text-xs font-normal">{locale === "en" ? "Affected items:" : "Articles concernés :"} {detail.confirmation.blockerItems.join(", ")}</span> : null}
+            {detail.confirmation?.blockerItems?.length ? <span className="mt-1 block text-xs font-normal">{t("affectedStockItems")} : {detail.confirmation.blockerItems.join(", ")}</span> : null}
           </p>
         </div> : null}
         <FinanceDetailGrid>
@@ -357,6 +357,7 @@ export function EnterpriseFinancePaymentsWorkspace(props: Props) {
         <div data-responsive-actions>
           {detail.linkedSalesInvoiceId ? <Button variant="outline" onClick={() => printLinkedInvoice(detail)}><Printer className="h-4 w-4" />{t("printInvoicePreview")}</Button> : null}
           {paymentActions(detail, locale).map(({ action, label, icon: Icon, destructive }) => <Button key={action} variant={destructive ? "destructive" : "outline"} disabled={busy} onClick={() => setActionTarget({ record: detail, action, label })}><Icon className="h-4 w-4" />{label}</Button>)}{detail.capabilities?.canAllocate ? <Button variant="outline" disabled={busy} onClick={() => setAllocationTarget(detail)}><CircleDollarSign className="h-4 w-4" />{t("allocatePayment")}</Button> : null}</div>
+        {detail.paymentType === "CUSTOMER_PAYMENT" && !detail.linkedSalesInvoiceId ? <p className="text-sm text-dtsc-muted">{t("noLinkedCustomerInvoice")}</p> : null}
         <FinanceCollaboration organizationId={organizationId} moduleCode="FINANCE_PAYMENTS" record={detail} locale={locale} />
       </div> : null}
     </Dialog>
