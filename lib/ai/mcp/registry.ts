@@ -96,7 +96,12 @@ function loadConfiguredServers(): McpServerDefinition[] {
 
 function mergeServerRegistry() {
   const byCode = new Map(BUILT_IN_MCP_SERVERS.map((server) => [server.code, server]));
-  for (const server of loadConfiguredServers()) byCode.set(server.code, server);
+  for (const server of loadConfiguredServers()) {
+    if (server.code === "PUBLIC_TIME" || server.code === "PUBLIC_FETCH" || server.code === "PUBLIC_BRAVE") {
+      throw new Error("MCP_GLOBAL_PUBLIC_SERVER_OVERRIDE_FORBIDDEN");
+    }
+    byCode.set(server.code, server);
+  }
   return [...byCode.values()];
 }
 
