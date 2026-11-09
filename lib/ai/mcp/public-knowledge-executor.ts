@@ -54,7 +54,7 @@ export async function validatePublicKnowledgeFetchUrl(raw: string): Promise<stri
   try { url = new URL(raw); } catch { throw new Error("MCP_FETCH_URL_INVALID"); }
   if (!["https:", "http:"].includes(url.protocol) || url.username || url.password || url.hash ||
     (url.port && !["80","443"].includes(url.port))) throw new Error("MCP_FETCH_URL_INVALID");
-  const host = url.hostname.toLowerCase().replace(/\.$/, "");
+  const host = url.hostname.toLowerCase().replace(/^\[|\]$/g, "").replace(/\.$/, "");
   if (["localhost", "metadata", "metadata.google.internal", "169.254.169.254", "100.100.100.200"].includes(host) ||
     /\.(localhost|internal|local|lan|home|test|invalid)$/.test(host)) throw new Error("MCP_FETCH_PRIVATE_ADDRESS_FORBIDDEN");
   if (isIP(host)) {
@@ -79,7 +79,7 @@ function resolveTurnKey(context: AiToolRuntimeContext) {
 function assertPublicOnly(context: AiToolRuntimeContext) {
   // Public Web results must NEVER receive confidential user or tenant material.
   const classes = new Set(context.dataClassifications || []);
-  if (classes.has("SECRET") || classes.has("SENSITIVE") || classes.has("CONFIDENTIAL")) {
+  if (["CONFIDENTIAL", "RESTRICTED", "HEALTH_SENSITIVE", "HR_SENSITIVE", "FINANCIAL_SENSITIVE", "LEGAL_SENSITIVE", "SECRET"].some((sensitivity) => classes.has(sensitivity as typeof context.dataClassifications[number]))) {
     throw new Error("MCP_PUBLIC_DATA_ONLY");
   }
 }
