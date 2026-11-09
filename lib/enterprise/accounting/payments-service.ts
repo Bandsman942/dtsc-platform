@@ -5,6 +5,8 @@ import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
 import { assertActiveClientOrganization, financeReference, money, publishFinanceEvent } from "@/lib/enterprise/accounting/helpers";
 import { postBusinessEvent, postBusinessEventTx } from "@/lib/enterprise/accounting/posting-service";
 import { reverseJournalEntryTx } from "@/lib/enterprise/accounting/reversal-service";
+import { resolveEnterpriseFinanceReadiness } from "@/lib/enterprise/accounting/finance-readiness-service";
+import { getPostingPeriod } from "@/lib/enterprise/accounting/periods";
 import { tryGrantRetailOmnichannelCashbackTx } from "@/lib/enterprise/relationship-benefits/omnichannel-cashback";
 import { withRetailTransactionRetry } from "@/lib/enterprise/retail/transaction-retry";
 import { assertRetailInvoicePaymentScopeTx, postPaidRetailInvoiceStockTx } from "@/lib/enterprise/retail/invoice-checkout";
@@ -530,6 +532,125 @@ async function confirmEnterprisePayment(organizationId: string, paymentId: strin
     return updated;
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 30000 }));
   return confirmed;
+}
+
+/**
+ * Read-only payment preflight for the DETAIL view only. The final mutation
+ * remains authoritative and revalidates everything inside its serializable
+ * transaction. Never invent stock acquisition costs from physical quantities.
+ */
+export async function inspectEnterprisePaymentConfirmation(
+  organizationId: string,
+  paymentId: string,
+  actorUserId: string,
+): Promise<{ ready: boolean; blockerCode: string | null; blockerItems: string[] }> {
+  const blocked = (blockerCode: string, blockerItems: string[] = []) => ({ ready: false, blockerCode, blockerItems });
+  const payment = await prisma.enterprisePayment.findFirst({
+    where: { id: paymentId, organizationId },
+    include: { cashSession: { select: { status: true, financialAccountId: true } } },
+  });
+  if (!payment) return blocked("PAYMENT_NOT_FOUND");
+  if (payment.status !== "APPROVED") return blocked("PAYMENT_NOT_APPROVED");
+  if (actorUserId === payment.initiatedByUserId || actorUserId === payment.approvedByUserId) {
+    return blocked(payment.paymentType === "REFUND" ? "REFUND_PAYMENT_SELF_CONFIRMATION_FORBIDDEN" : "PAYMENT_SELF_CONFIRMATION_FORBIDDEN");
+  }
+  if (!payment.financialAccountId) return blocked("PAYMENT_FINANCIAL_ACCOUNT_REQUIRED");
+  const account = await prisma.enterpriseFinancialAccount.findFirst({
+    where: { id: payment.financialAccountId, organizationId, status: "ACTIVE", archivedAt: null },
+    select: { id: true, siteId: true, accountType: true, currencyCode: true, ledgerAccountId: true },
+  });
+  if (!account || account.currencyCode !== payment.currencyCode || !account.ledgerAccountId) {
+    return blocked("PAYMENT_FINANCIAL_ACCOUNT_INVALID");
+  }
+  const cashBlocker = paymentCashSessionConfirmationBlocker(payment);
+  if (cashBlocker) return blocked(cashBlocker);
+
+  const proposal = await prisma.enterpriseRetailInvoicePaymentProposal.findFirst({
+    where: { organizationId, paymentId: payment.id },
+    select: { checkout: {
+      select: {
+        salesInvoiceId: true, siteId: true, warehouseId: true,
+        invoice: { select: { status: true, outstandingAmount: true, currencyCode: true, businessPartyId: true } },
+        lines: { select: { inventoryItemId: true, stockLotId: true, invoiceItem: { select: { description: true, quantity: true } } } },
+      },
+    } },
+  });
+  if (proposal) {
+    const checkout = proposal.checkout;
+    const invoice = checkout.invoice;
+    if (!["ISSUED", "PARTIALLY_PAID", "OVERDUE"].includes(invoice.status) ||
+      invoice.outstandingAmount.lessThan(payment.amount) || invoice.currencyCode !== payment.currencyCode ||
+      invoice.businessPartyId !== payment.businessPartyId) return blocked("RETAIL_INVOICE_PAYMENT_EXCEEDS_OUTSTANDING");
+    if (account.siteId !== checkout.siteId) return blocked("RETAIL_INVOICE_FINANCIAL_ACCOUNT_SITE_MISMATCH");
+    const receivable = await prisma.enterpriseReceivable.findFirst({
+      where: { organizationId, salesInvoiceId: checkout.salesInvoiceId, status: "OPEN" },
+      select: { outstandingAmount: true, currencyCode: true, businessPartyId: true },
+    });
+    if (!receivable || receivable.outstandingAmount.lessThan(payment.amount) ||
+      receivable.businessPartyId !== payment.businessPartyId || receivable.currencyCode !== payment.currencyCode ||
+      payment.unallocatedAmount.lessThan(payment.amount)) return blocked("RETAIL_INVOICE_PAYMENT_EXCEEDS_OUTSTANDING");
+
+    // Full settlement posts physical fulfillment and cost-of-sales in the same
+    // transaction. A quantity in stock does not imply a valid cost layer.
+    if (invoice.outstandingAmount.equals(payment.amount)) {
+      const lines = checkout.lines.filter((line) => Boolean(line.inventoryItemId));
+      const itemIds = [...new Set(lines.map((line) => line.inventoryItemId!).filter(Boolean))];
+      if (itemIds.length) {
+        const [costLayers, balances] = await Promise.all([
+          prisma.enterpriseInventoryCostLayer.findMany({
+            where: { organizationId, warehouseId: checkout.warehouseId, inventoryItemId: { in: itemIds }, remainingQuantity: { gt: 0 } },
+            select: { inventoryItemId: true, currencyCode: true, remainingQuantity: true },
+          }),
+          prisma.enterpriseInventoryBalance.findMany({
+            where: { organizationId, warehouseId: checkout.warehouseId, inventoryItemId: { in: itemIds } },
+            select: { inventoryItemId: true, stockLotId: true, quantityOnHand: true, quantityReserved: true },
+          }),
+        ]);
+        const missingCost = lines.filter((line) => {
+          const layers = costLayers.filter((layer) => layer.inventoryItemId === line.inventoryItemId);
+          return layers.reduce((sum, layer) => sum.plus(layer.remainingQuantity), new Prisma.Decimal(0)).lessThan(line.invoiceItem.quantity);
+        }).map((line) => line.invoiceItem.description);
+        if (missingCost.length) return blocked("RETAIL_INVENTORY_COST_LAYER_REQUIRED", [...new Set(missingCost)].slice(0, 8));
+        const ambiguousCost = lines.some((line) => {
+          const currencies = [...new Set(costLayers.filter((layer) => layer.inventoryItemId === line.inventoryItemId).map((layer) => layer.currencyCode))];
+          return currencies.length > 1 && !currencies.includes(payment.currencyCode);
+        });
+        if (ambiguousCost) return blocked("RETAIL_INVENTORY_VALUATION_CURRENCY_AMBIGUOUS");
+        const shortStock = lines.filter((line) => balances
+          .filter((balance) => balance.inventoryItemId === line.inventoryItemId && (line.stockLotId === null ? balance.stockLotId === null : balance.stockLotId === line.stockLotId))
+          .reduce((sum, balance) => sum.plus(balance.quantityOnHand.minus(balance.quantityReserved)), new Prisma.Decimal(0))
+          .lessThan(line.invoiceItem.quantity)).map((line) => line.invoiceItem.description);
+        if (shortStock.length) return blocked("RETAIL_INVOICE_STOCK_INSUFFICIENT", [...new Set(shortStock)].slice(0, 8));
+      }
+    }
+  }
+
+  // Posting setup can invalidate a seemingly approved payment. This check is
+  // read-only and deliberately scoped to the semantic keys of this payment.
+  const mappingKeys = payment.paymentType === "CUSTOMER_PAYMENT"
+    ? ["CUSTOMER_ADVANCES"]
+    : payment.paymentType === "SUPPLIER_PAYMENT" ? ["SUPPLIER_ADVANCES"]
+      : payment.paymentType === "PAYROLL_PAYMENT" ? ["PAYROLL_PAYABLE"] : [];
+  const journalType = account.accountType === "CASH" ? "CASH" : account.accountType === "MOBILE_MONEY" ? "MOBILE_MONEY" : "BANK";
+  const readiness = await resolveEnterpriseFinanceReadiness(prisma, organizationId, {
+    mode: "POSTING",
+    asOf: payment.paymentDate,
+    requiredMappingKeys: mappingKeys,
+    requiredJournalTypes: [journalType],
+  });
+  if (!readiness.configuration || readiness.blockers.some((diagnostic) =>
+    ["FUNCTIONAL_CURRENCY_REQUIRED", "CHART_REQUIRED", "ACTIVE_CHART_REQUIRED", "CHART_ACCOUNTS_REQUIRED",
+      "TEMPLATE_LINEAGE_REQUIRED", "TEMPLATE_SEMANTIC_COVERAGE_REQUIRED", "ORGANIZATION_MAPPINGS_REQUIRED",
+      "JOURNALS_REQUIRED"].includes(diagnostic.code))) return blocked("FINANCE_CONFIGURATION_NOT_READY");
+  try {
+    await prisma.$transaction(async (tx) => {
+      await getPostingPeriod(tx, organizationId, payment.paymentDate, { allowSoftClosed: true });
+    });
+  } catch (error) {
+    if (error instanceof EnterpriseAccountingError) return blocked(error.code);
+    throw error;
+  }
+  return { ready: true, blockerCode: null, blockerItems: [] };
 }
 
 export async function allocateEnterprisePayment(
