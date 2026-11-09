@@ -153,7 +153,10 @@ export async function executePublicKnowledgeTool({ code, args, context }: { code
       throw new Error("MCP_PUBLIC_BRIDGE_UNAVAILABLE");
     } finally { clearTimeout(timer); }
   } catch (error) {
-    reasonCode = error instanceof Error ? error.message.slice(0, 70) : "MCP_PUBLIC_FAILED";
+    const code = error instanceof Error ? error.message : "";
+    // Only stable, reviewed error codes are allowed in durable audit records.
+    // Zod/network exceptions may otherwise expose user arguments or URLs.
+    reasonCode = /^MCP_[A-Z0-9_]{3,80}$/.test(code) ? code : error instanceof z.ZodError ? "MCP_ARGS_INVALID" : "MCP_PUBLIC_FAILED";
     // Never log raw input, output, query, URL, tokens or proprietary data.
     status = /FORBIDDEN|LIMIT|ONLY|INVALID|NOT_CERTIFIED/.test(reasonCode) ? "DENIED" : "FAILED";
     throw error;
