@@ -44,8 +44,9 @@ export async function probePublicMcpBridge(): Promise<PublicMcpBridgeProbe | nul
     for (const server of PUBLIC_MCP_SERVERS) {
       const found = (data.servers as unknown[]).find((row) => row && typeof row === "object" &&
         "server" in row && row.server === server.name);
-      if (!found || typeof found !== "object" || !("tools" in found) || !Array.isArray(found.tools) ||
-        !server.tools.every((name) => found.tools.includes(name))) return null;
+      if (!found || typeof found !== "object" || !("tools" in found)) return null;
+      const discoveredTools: unknown = found.tools;
+      if (!Array.isArray(discoveredTools) || !server.tools.every((name) => discoveredTools.includes(name))) return null;
       // Only reviewed tool names are returned to the Console UI.
       toolsByServer[server.name] = [...server.tools];
     }
