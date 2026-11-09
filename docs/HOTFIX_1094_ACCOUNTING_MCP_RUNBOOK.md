@@ -7,7 +7,8 @@
 ## 1. Libellés comptables (sans réécriture ni perte de trace)
 
 - Source immuable : les `EnterpriseJournalEntry.description` et `EnterpriseJournalLine.description` comptabilisés restent tels qu'enregistrés, ainsi que les historiques, sources et références.
-- Présentation : `formatAccountingNarrative()`, commune au journal, grand livre, détail d'écriture et exports CSV/Excel/PDF du workspace, ainsi qu'au workspace Finance historique.
+- Présentation : `formatAccountingNarrative()`, commune au journal, grand livre, détail d'écriture et exports CSV/Excel/PDF des workspaces modernes et historiques.
+- Élargissement : flux RETAIL point de vente (vente, retour, annulation, cashback), recharges télécom, caisse Mobile Money (dépôt et retrait), change opérateur, remboursements clients, transferts entre comptes financiers ; français comptable clair et anglais métier.
 - Traduction strictement contrôlée, déclenchée uniquement par un motif de libellé automatiquement généré reconnu. Aucun texte libre saisi par un utilisateur n'est réécrit ou traduit à son insu.
 - Mêmes références préservées FR/EN. Exemples : `ISSUE <article>` → « Sortie de stock — article <référence> » ; `RECEIPT` → « Entrée de stock » ; `Settle receivable PAY-...` → « Affectation d’un encaissement à une créance client — paiement PAY-... » ; `Apply customer advance` → « Imputation d’une avance client — paiement ... ».
 - Les comptes affichent en priorité `nameFr` ou `nameEn` selon la langue de l'utilisateur ; un compte sans libellé de la bonne langue conserve la valeur de repli existante (n'inventer aucun intitulé comptable).
@@ -64,7 +65,7 @@ Le script de certification remplit le rapport réel sans déclarer les tests ré
 
 ## 6. Matrice de recette propriétaire (OWNER_E2E)
 
-- E01 : FR/EN, grand livre CDF, libellés `ISSUE`, `RECEIPT`, `Settle receivable`, `Apply customer advance` : phrases métier lisibles, références identiques.
+- E01 : FR/EN, grand livre CDF, libellés `ISSUE`, `RECEIPT`, `Settle receivable`, `Apply customer advance`, RETAIL POS, Mobile Money, télécom, cashback et virements internes : phrases métier lisibles, références identiques.
 - E02 : affichage des **mêmes** libellés dans la liste des écritures, le détail d'écriture et export CSV/Excel/PDF ; montant, débit/crédit et période inchangés.
 - E03 : écritures manuelles et pièces déjà POSTED : libellés sources identiques en base.
 - E04 : Console IA 3 serveurs et 5 outils, pas de vidéo/image ; lorsque l'hôte n'est pas disponible, statut désactivé/non certifié (pas de succès fictif).
