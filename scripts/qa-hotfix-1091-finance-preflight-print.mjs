@@ -35,10 +35,14 @@ for (const code of [
 has(paymentService, /enterpriseInventoryCostLayer\.findMany\(/, "Check real cost layers, not physical stock quantity alone");
 has(paymentService, /getPostingPeriod\(tx, organizationId, payment\.paymentDate/, "Account for financial period");
 has(paymentService, /resolveEnterpriseFinanceReadiness\(/, "Check accounting mappings and journals");
+has(paymentService, /const requiredByItem = new Map<string, Prisma\.Decimal>\(\)/, "Aggregate duplicate product quantities before valuation preflight");
+has(paymentService, /const available = layers\.filter\(\(layer\) => layer\.currencyCode === currency\)/, "Valuation is calculated only in the resolved cost currency");
+has(paymentService, /if \(!readiness\.ready\)/, "Never ignore a posting readiness blocker");
 assert.doesNotMatch(paymentService.slice(paymentService.indexOf("export async function inspectEnterprisePaymentConfirmation("),paymentService.indexOf("export async function allocateEnterprisePayment(")), /enterpriseInventoryCostLayer\.(create|update|upsert)|enterpriseInventoryBalance\.(create|update|upsert)/, "Preflight cannot fabricate valuation or mutate inventory");
 has(paymentUi, /function openPaymentDetail\(/, "Detail must refresh with preflight");
 has(paymentUi, /PAYMENT_CONFIRMATION_PREFLIGHT_REQUIRED/, "No false-green list preview");
 has(paymentUi, /blockerItems\.join\(", "\)/, "Named affected stock items");
+has(paymentUi, /financeDate\(detail\.paymentDate, locale\)/, "Human-readable locale date in payment detail");
 has(messages, /const safeServerMessage = extractSafeFinanceClientMessage\(error\);[\s\S]*if \(status === 409\)/, "Safe business message must be shown before generic conflict");
 has(paymentTransition, /ENTERPRISE_PAYMENT_\$\{parsed\.data\.action\}_DENIED/, "Trace failed confirmations");
 
