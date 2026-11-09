@@ -78,12 +78,13 @@ assert.equal(isPublicIp("172.16.0.12"), false);
 assert.equal(isPublicIp("192.168.0.55"), false);
 assert.equal(isPublicIp("::1"), false);
 assert.equal(isPublicIp("::ffff:127.0.0.1"), false);
+assert.equal(isPublicIp("::ffff:7f00:1"), false);
 assert.equal(isPublicIp("93.184.215.14"), true);
 const forbidden = [
   "http://localhost", "http://localhost.localdomain", "http://127.0.0.1",
   "http://10.2.3.4", "http://172.16.1.1", "http://192.168.2.3",
   "http://169.254.169.254", "http://metadata.google.internal",
-  "https://[::1]/", "https://[::ffff:127.0.0.1]/",
+  "https://[::1]/", "https://[::ffff:127.0.0.1]/", "https://[::ffff:7f00:1]/",
 ];
 for(const input of forbidden) await assert.rejects(() => assertPublicFetchUrl(input), /MCP_FETCH_/);
 await assert.rejects(() => assertPublicFetchUrl("https://rebind.example.org/", async () => [{ address: "10.1.2.3" }]), /MCP_FETCH_PRIVATE_ADDRESS_FORBIDDEN/);
