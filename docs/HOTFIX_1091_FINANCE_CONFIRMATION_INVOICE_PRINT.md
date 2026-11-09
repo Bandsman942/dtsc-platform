@@ -39,6 +39,13 @@ Le paiement `PAY-MW8ULQ8M-AB6926` (100 000 CDF, `RECONCILED`) possède une factu
 4. Quand les deux articles ont une valorisation conforme, rouvrir la fiche du paiement et revérifier son statut avant la confirmation par un **troisième acteur** autorisé.
 5. Confirmer une seule fois et contrôler l'unicité de la sortie stock, du mouvement de caisse, du mouvement de trésorerie, des allocations et des écritures de partie double.
 
+### Nouvelle action utilisateur : valoriser les entrées historiques existantes
+
+Le module **Finance → Valorisation du stock** contient maintenant **« Entrées de stock sans valorisation → Voir les entrées à valoriser »**. La file paginée est construite à partir des mouvements entrants originaux non valorisés, avec recherche par article/dépôt et contrôle FINANCE_INVENTORY.view, isolation stricte des données de boutique. Un responsable disposant du droit Finance approprié sélectionne une entrée et saisit **le coût unitaire réel** figurant sur sa facture d'achat (ou autre justificatif vérifiable), confirme l'attestation et choisit « Valoriser et comptabiliser cette entrée ». La route POST canonique `stock-movements/:movementId/value-receipt` garde sa permission `FINANCE_INVENTORY.post`, son contrôle du mode de valorisation, l'idempotence et l'écriture de contrepartie comptable dans la même transaction. **Aucune nouvelle quantité de stock** n'est créée.
+
+Cette action ne peut pas deviner le coût réel : la personne responsable doit rapprocher la pièce d'acquisition et le stock existant avant d'envoyer l'écriture. Des erreurs de journal/période/mapping restent bloquantes. Les mouvements de retour utilisent leur propre processus et sont exclus de cette file.
+
+
 ## Matrice de recette OWNER_E2E (non exécutée)
 
 | Cas | Précondition | Résultat attendu |
