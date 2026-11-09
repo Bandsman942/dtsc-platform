@@ -114,6 +114,10 @@ class StdioClient {
 const clients = new Map();
 let ready = false;
 const counters = new Map();
+function bridgeHealthy() {
+  return ready && definitions.every((item) => clients.get(item.code)?.alive === true &&
+    item.allowed.every((tool) => clients.get(item.code)?.discovered.some((entry) => entry.name === tool)));
+}
 
 function auth(request) {
   const header = request.headers.authorization || "";
@@ -189,7 +193,7 @@ function validToolArgs(body) {
 async function handleCall(body) {
   const spec = tools[body.tool];
   const client = clients.get(spec.server);
-  if (!ready || !client?.alive || !client.discovered.some((tool) => tool.name === spec.remote)) throw new Error("MCP_STDIO_UNAVAILABLE");
+  if (!bridgeHealthy() || !client?.alive || !client.discovered.some((tool) => tool.name === spec.remote)) throw new Error("MCP_STDIO_UNAVAILABLE");
   const args = validToolArgs(body);
   if (spec.server === "fetch") {
     args.url = await assertPublicFetchUrl(args.url);
@@ -208,12 +212,13 @@ function startHttp() {
   http.createServer(async (request, response) => {
     if (!auth(request)) return respond(response, 401, { error: "MCP_UNAUTHORIZED" });
     if (request.method === "GET" && request.url === "/v1/certification") {
-      return respond(response, ready ? 200 : 503, {
-        ready,
+      const live = bridgeHealthy();
+      return respond(response, live ? 200 : 503, {
+        ready: live,
         servers: definitions.map((d) => ({
           server: d.code, transport: "stdio", command: d.command,
-          args: d.args, tools: ready ? clients.get(d.code)?.discovered.map((x) => x.name) || [] : [],
-          status: ready ? "LIVE_CERTIFIED" : "UNAVAILABLE",
+          args: d.args, tools: live ? clients.get(d.code)?.discovered.map((x) => x.name) || [] : [],
+          status: live ? "LIVE_CERTIFIED" : "UNAVAILABLE",
         })),
       });
     }
