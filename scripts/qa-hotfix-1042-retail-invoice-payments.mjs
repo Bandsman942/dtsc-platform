@@ -62,7 +62,7 @@ vm.runInNewContext(transpiled, { module: mod, exports: mod.exports, Promise, Map
       return { id: "payment-A", organizationId: org, amount: money(data.amount), status: "DRAFT", unallocatedAmount: money(data.amount) };
     } };
     if (id === "@/lib/enterprise/retail/site-access") return {
-      retailInvoiceVisibleSites: async () => ({ isOwner: false, siteIds: state.allowed ? ["shop-A"] : [] }),
+      retailInvoiceVisibleSites: async () => ({ isOwner: false, siteIds: [], collectibleSiteIds: state.allowed ? ["shop-A"] : [] }),
       requireRetailSiteCapability: async (_org, _actor, site, cap, _tx, options) => {
         if (!state.allowed || site !== "shop-A" || cap !== "COLLECT_PAYMENT" || !options.requireAssignment) throw new EnterpriseRetailError("RETAIL_SITE_ACCESS_DENIED", 403);
       },

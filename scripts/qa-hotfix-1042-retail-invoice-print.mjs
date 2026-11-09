@@ -22,7 +22,6 @@ const checkout = {
   },
 };
 let visible = true;
-let checkedSite = null;
 let auditCount = 0;
 const prisma = {
   enterpriseRetailInvoiceCheckout: { findFirst: async () => checkout },
@@ -44,12 +43,7 @@ vm.runInNewContext(ts.transpileModule(route, { compilerOptions: { module: ts.Mod
       retailErrorResponse: (error) => NextResponse.json({ error: error.code || "FAILED" }, { status: error.status || 500 }),
     };
     if (name === "@/lib/enterprise/retail/site-access") return {
-      retailInvoiceVisibleSites: async () => ({ isOwner: false, siteIds: visible ? ["site-a"] : ["site-b"] }),
-      requireRetailSiteCapability: async (_org, _user, siteId, permission, _db, options) => {
-        checkedSite = siteId;
-        assert.equal(permission, "VIEW_SALES");
-        assert.equal(options.requireAssignment, true);
-      },
+      retailInvoiceVisibleSites: async () => ({ isOwner: false, siteIds: visible ? ["site-a"] : ["site-b"], collectibleSiteIds: [] }),
     };
     if (name === "@/lib/prisma") return { prisma };
     throw Error(`Unexpected import: ${name}`);
@@ -64,7 +58,6 @@ const a4 = await invoke("a4", "fr");
 assert.equal(a4.status, 200);
 assert.match(a4.headers["content-type"], /text\/html/);
 assert.equal(a4.headers["cache-control"], "private, no-store");
-assert.equal(checkedSite, "site-a");
 assert.equal(auditCount, 1);
 assert.match(a4.body, /@page\{size:A4/);
 assert.match(a4.body, /Boutiques &amp; Fils/);
@@ -85,6 +78,14 @@ const rejected = await invoke("a4", "fr");
 assert.equal(rejected.status, 404);
 assert.equal(rejected.body.error, "RETAIL_INVOICE_NOT_FOUND");
 assert.equal(auditCount, 2, "Cross-store invoice attempt cannot be audited as an authorized print");
+
+visible = true;
+checkout.invoice.status = "ISSUED";
+const collectionPrint = unit.exports.GET(
+  { url: "https://app.dtsc-platform.com/api/enterprise/tenant/retail/invoices/invoice-a/print" },
+  { params: Promise.resolve({ organizationId: "tenant", invoiceId: "invoice-a" }) },
+);
+assert.equal((await collectionPrint).status, 200);
 
 assert.match(workbench, /copy\.printA4/);
 assert.match(workbench, /copy\.printThermal/);

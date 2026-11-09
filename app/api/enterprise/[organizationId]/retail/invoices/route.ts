@@ -10,8 +10,8 @@ import { prisma } from "@/lib/prisma";
 
 type Params = { params: Promise<{ organizationId: string }> };
 
-// Owner can inspect the whole company; scoped staff see only assigned stores,
-// and only after *both* rollout flags have been explicitly enabled.
+// Owner can inspect the whole company; scoped staff see only assigned stores
+// after the controlled invoice-checkout and site-isolation activation.
 async function authorizeCheckoutAccess(req: Request, organizationId: string, mutation: boolean) {
   const auth = await authorizeRetailRequest(req, organizationId, "RETAIL_POS", mutation ? "submit" : "read", { mutation, limit: 60 });
   if (!auth.ok) return auth;
@@ -31,13 +31,18 @@ export async function GET(req: Request, { params }: Params) {
   const { page, pageSize, status } = retailListParams(req);
   const url = new URL(req.url);
   const siteId = url.searchParams.get("siteId") || undefined;
-  if (siteId && !auth.visibility.isOwner && !auth.visibility.siteIds.includes(siteId)) {
+  const collectionsOnly = url.searchParams.get("view") === "collections";
+  const search = (url.searchParams.get("q") || "").trim().slice(0, 100);
+  const permittedSites = collectionsOnly ? auth.visibility.collectibleSiteIds : auth.visibility.siteIds;
+  if (siteId && !auth.visibility.isOwner && !permittedSites.includes(siteId)) {
     return retailErrorResponse(new EnterpriseRetailError("RETAIL_SITE_ACCESS_DENIED", 403));
   }
   const where: Prisma.EnterpriseRetailInvoiceCheckoutWhereInput = {
     organizationId,
-    ...(auth.visibility.isOwner ? (siteId ? { siteId } : {}) : { siteId: siteId || { in: auth.visibility.siteIds } }),
-    ...(status ? { invoice: { status } } : {}),
+    ...(auth.visibility.isOwner ? (siteId ? { siteId } : {}) : { siteId: siteId || { in: permittedSites } }),
+    ...(collectionsOnly
+      ? { invoice: { status: { in: ["ISSUED", "PARTIALLY_PAID", "OVERDUE"] }, ...(search ? { number: { contains: search, mode: "insensitive" as const } } : {}) } }
+      : status || search ? { invoice: { ...(status ? { status } : {}), ...(search ? { number: { contains: search, mode: "insensitive" as const } } : {}) } } : {}),
   };
   const [items, total, sites, configuration] = await Promise.all([
     prisma.enterpriseRetailInvoiceCheckout.findMany({
@@ -46,7 +51,7 @@ export async function GET(req: Request, { params }: Params) {
     }),
     prisma.enterpriseRetailInvoiceCheckout.count({ where }),
     prisma.enterpriseSite.findMany({
-      where: { organizationId, status: "ACTIVE", archivedAt: null, ...(auth.visibility.isOwner ? {} : { id: { in: auth.visibility.siteIds } }) },
+      where: { organizationId, status: "ACTIVE", archivedAt: null, ...(auth.visibility.isOwner ? {} : { id: { in: permittedSites } }) },
       take: 100,
       orderBy: { name: "asc" },
       select: { id: true, name: true, code: true, warehouses: { where: { status: "ACTIVE", archivedAt: null }, select: { id: true, name: true, code: true }, orderBy: { name: "asc" } } },
@@ -60,7 +65,7 @@ export async function GET(req: Request, { params }: Params) {
     ...entry,
     canCancel: entry.invoice.status === "DRAFT" && (auth.visibility.isOwner || auth.visibility.cancellableSiteIds.includes(entry.siteId)),
     canSubmit: entry.invoice.status === "DRAFT" && entry.invoice.createdByUserId === auth.session.userId && (auth.visibility.isOwner || auth.visibility.submittableSiteIds.includes(entry.siteId)),
-    canCollect: ["ISSUED", "PARTIALLY_PAID", "OVERDUE", "PAID"].includes(entry.invoice.status) && (auth.visibility.isOwner || auth.visibility.collectibleSiteIds.includes(entry.siteId)),
+    canCollect: ["ISSUED", "PARTIALLY_PAID", "OVERDUE"].includes(entry.invoice.status) && (auth.visibility.isOwner || auth.visibility.collectibleSiteIds.includes(entry.siteId)),
   }));
   return NextResponse.json({ items: visibleItems, sites, pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) }, checkoutReady }, { headers: { "Cache-Control": "private, no-store" } });
 }

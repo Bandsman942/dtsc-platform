@@ -9,7 +9,7 @@ import { ModuleHeader, ModuleWorkspace } from "@/components/workspace/module-wor
 import { translateRetailWorkspace, type RetailWorkspaceKey } from "@/lib/i18n";
 
 export type RetailPosSectionId =
-  | "checkout" | "customers" | "sites" | "staff" | "invoices" | "offline"
+  | "checkout" | "customers" | "sites" | "staff" | "invoices" | "collections" | "offline"
   | "omnichannel" | "payments" | "equipment" | "readiness" | "activation"
   | "inventory" | "alerts" | "store-setup" | "my-stores";
 
@@ -19,30 +19,40 @@ type RetailPosSection = {
   description: RetailWorkspaceKey;
   icon: LucideIcon;
   adminOnly?: boolean;
+  requiredCapability?: string;
+  hiddenInDirectory?: boolean;
   href?: string;
 };
 
 /** A single registry powers the directory, detail headers and role-aware navigation. */
 export const RETAIL_POS_SECTIONS: readonly RetailPosSection[] = [
-  { id: "checkout", title: "counterSale", description: "counterSaleDescription", icon: ShoppingBasket },
+  { id: "checkout", title: "counterSale", description: "counterSaleDescription", icon: ShoppingBasket, requiredCapability: "PREPARE_INVOICE" },
   { id: "my-stores", title: "posNavMyStores", description: "posNavMyStoresDescription", icon: Building2 },
   { id: "store-setup", title: "posNavStoreSetup", description: "posNavStoreSetupDescription", icon: Building2, adminOnly: true },
-  { id: "customers", title: "posNavCustomers", description: "posNavCustomersDescription", icon: UsersRound },
+  // Kept as an authenticated legacy deep link, but customer selection now lives in checkout.
+  { id: "customers", title: "posNavCustomers", description: "posNavCustomersDescription", icon: UsersRound, requiredCapability: "PREPARE_INVOICE", hiddenInDirectory: true },
   { id: "sites", title: "posNavSites", description: "posNavSitesDescription", icon: Building2, adminOnly: true },
   { id: "staff", title: "posNavStaff", description: "posNavStaffDescription", icon: ShieldCheck, adminOnly: true },
-  { id: "invoices", title: "posNavInvoices", description: "posNavInvoicesDescription", icon: ReceiptText },
-  { id: "offline", title: "posNavOffline", description: "posNavOfflineDescription", icon: WifiOff },
-  { id: "omnichannel", title: "posNavOmnichannel", description: "posNavOmnichannelDescription", icon: Globe2 },
-  { id: "payments", title: "posNavPayments", description: "posNavPaymentsDescription", icon: CreditCard },
-  { id: "equipment", title: "posNavEquipment", description: "posNavEquipmentDescription", icon: MonitorSmartphone },
-  { id: "readiness", title: "posNavReadiness", description: "posNavReadinessDescription", icon: FileText },
+  { id: "invoices", title: "posNavInvoices", description: "posNavInvoicesDescription", icon: ReceiptText, requiredCapability: "PREPARE_INVOICE" },
+  { id: "collections", title: "posNavCollections", description: "posNavCollectionsDescription", icon: CreditCard, requiredCapability: "COLLECT_PAYMENT" },
+  { id: "offline", title: "posNavOffline", description: "posNavOfflineDescription", icon: WifiOff, adminOnly: true },
+  { id: "omnichannel", title: "posNavOmnichannel", description: "posNavOmnichannelDescription", icon: Globe2, adminOnly: true },
+  { id: "payments", title: "posNavPayments", description: "posNavPaymentsDescription", icon: CreditCard, adminOnly: true },
+  { id: "equipment", title: "posNavEquipment", description: "posNavEquipmentDescription", icon: MonitorSmartphone, adminOnly: true },
+  { id: "readiness", title: "posNavReadiness", description: "posNavReadinessDescription", icon: FileText, adminOnly: true },
   { id: "activation", title: "retailActivationTitle", description: "retailActivationDescription", icon: SlidersHorizontal, adminOnly: true },
-  { id: "inventory", title: "posNavInventory", description: "posNavInventoryDescription", icon: PackageCheck },
-  { id: "alerts", title: "posNavAlerts", description: "posNavAlertsDescription", icon: BellRing },
+  { id: "inventory", title: "posNavInventory", description: "posNavInventoryDescription", icon: PackageCheck, adminOnly: true },
+  { id: "alerts", title: "posNavAlerts", description: "posNavAlertsDescription", icon: BellRing, requiredCapability: "VIEW_STOCK" },
 ];
 
-export function getRetailPosSection(id: string | undefined, canManage: boolean) {
-  return RETAIL_POS_SECTIONS.find((item) => item.id === id && (!item.adminOnly || canManage));
+export function canOpenRetailPosSection(item: RetailPosSection, canManage: boolean, capabilities: ReadonlySet<string>) {
+  if (canManage) return true;
+  if (item.adminOnly) return false;
+  return !item.requiredCapability || capabilities.has(item.requiredCapability);
+}
+
+export function getRetailPosSection(id: string | undefined, canManage: boolean, capabilities: ReadonlySet<string> = new Set()) {
+  return RETAIL_POS_SECTIONS.find((item) => item.id === id && canOpenRetailPosSection(item, canManage, capabilities));
 }
 
 const POS_URL = "/enterprise-modules/RETAIL_POS";
@@ -50,18 +60,18 @@ const POS_DIRECTORY_SECTIONS: readonly RetailPosSection[] = [
   ...RETAIL_POS_SECTIONS,
   {
     id: "commercial", title: "posNavCommercial", description: "posNavCommercialDescription",
-    icon: Tags, href: `${POS_URL}/commercial`,
+    icon: Tags, href: `${POS_URL}/commercial`, adminOnly: true,
   },
 ];
 
-export function RetailPosSectionDirectory({ locale, canManage }: { locale: "fr" | "en"; canManage: boolean }) {
+export function RetailPosSectionDirectory({ locale, canManage, capabilities }: { locale: "fr" | "en"; canManage: boolean; capabilities: ReadonlySet<string> }) {
   const t = (key: RetailWorkspaceKey) => translateRetailWorkspace(locale, key);
   return (
     <ModuleWorkspace density="compact" className="pb-[calc(5rem+env(safe-area-inset-bottom))]">
       <div data-retail-pos-directory>
         <ModuleHeader eyebrow={t("shopOperations")} title={t("posNavTitle")} description={t("posNavDescription")} />
         <nav aria-label={t("posNavTitle")} className="mt-4 grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {POS_DIRECTORY_SECTIONS.filter((item) => canManage || !item.adminOnly).map((item) => {
+          {POS_DIRECTORY_SECTIONS.filter((item) => !item.hiddenInDirectory && canOpenRetailPosSection(item, canManage, capabilities)).map((item) => {
             const Icon = item.icon;
             return (
               <Link

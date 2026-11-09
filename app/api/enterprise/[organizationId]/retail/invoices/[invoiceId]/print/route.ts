@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { writeApiLog } from "@/lib/audit";
 import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
 import { authorizeRetailRequest, retailErrorResponse } from "@/lib/enterprise/retail/http";
-import { requireRetailSiteCapability, retailInvoiceVisibleSites } from "@/lib/enterprise/retail/site-access";
+import { retailInvoiceVisibleSites } from "@/lib/enterprise/retail/site-access";
 import { prisma } from "@/lib/prisma";
 
 type Params = { params: Promise<{ organizationId: string; invoiceId: string }> };
@@ -43,10 +43,17 @@ export async function GET(req: Request, { params }: Params) {
         invoice: { include: { items: { orderBy: { createdAt: "asc" } } } },
       },
     });
-    if (!checkout || (!visibility.isOwner && !visibility.siteIds.includes(checkout.siteId))) {
+    if (!checkout || (!visibility.isOwner && !visibility.siteIds.includes(checkout.siteId) && !visibility.collectibleSiteIds.includes(checkout.siteId))) {
       throw new EnterpriseRetailError("RETAIL_INVOICE_NOT_FOUND", 404);
     }
-    await requireRetailSiteCapability(organizationId, auth.session.userId, checkout.siteId, "VIEW_SALES", prisma, { requireAssignment: true });
+    // A cashier assigned only collection rights may print the invoice being
+    // paid, without inheriting stock or company-wide sales privileges.
+    if (!visibility.isOwner && !visibility.siteIds.includes(checkout.siteId)) {
+      // Collection-only staff can print issued/paid documents, never drafts.
+      if (!visibility.collectibleSiteIds.includes(checkout.siteId) || !["ISSUED", "PARTIALLY_PAID", "OVERDUE", "PAID"].includes(checkout.invoice.status)) {
+        throw new EnterpriseRetailError("RETAIL_INVOICE_NOT_FOUND", 404);
+      }
+    }
     const [organization, customer, preparer] = await Promise.all([
       prisma.organization.findFirst({ where: { id: organizationId, status: "ACTIVE", deletedAt: null }, select: { name: true, timezone: true } }),
       prisma.enterpriseBusinessParty.findFirst({ where: { organizationId, id: checkout.invoice.businessPartyId, archivedAt: null }, select: { displayName: true, legalName: true } }),

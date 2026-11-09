@@ -88,7 +88,9 @@ const salesRoute = read("app/api/enterprise/[organizationId]/retail/sales/route.
 for (const marker of ["HttpOnly", "sameSite", "getRetailActiveCustomerIdFromCookieHeader"]) check((activeCustomer + salesRoute).toLowerCase().includes(marker.toLowerCase()), `Active customer context missing ${marker}`);
 check(customerBar.includes("/business-parties"), "Quick create must use the canonical CRM business-party API");
 check(customerBar.includes("/retail/customers?search="), "POS customer search must use server-side paginated search");
-check(retailPage.includes("RetailActiveCustomerBar"), "POS page must visibly render the active customer context");
+const invoiceWorkbench = read("components/enterprise/professional/retail-invoice-flow-workbench.tsx");
+check(retailPage.includes('mode="checkout"') && invoiceWorkbench.includes("<RetailActiveCustomerBar"),
+  "The customer context must be embedded in the active invoice-checkout POS workspace");
 check(salesRoute.includes("customerContextSource"), "Sale audit must record the customer context source");
 
 const customerHistoryPath = "app/api/enterprise/[organizationId]/retail/customers/[businessPartyId]/route.ts";

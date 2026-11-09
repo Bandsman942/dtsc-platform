@@ -1,3 +1,11 @@
+## 2026-11-09 — Hotfix #1080 — POS multi-boutiques et séparation facturier/caissier (candidat v1.6.6)
+
+- Menu POS filtré par droits de boutique : écrans de gestion du réseau réservés aux propriétaires/administrateurs, URL `siteId` et API sensibles vérifiées côté serveur, aucune réouverture d'accès après révocation de boutique.
+- Poste officiel unique synchronisé avec Administration entreprise ; profil d'accès « Gestionnaire/Facturier/Caissier » propre à chaque boutique, sans créer un second emploi RH.
+- Vente comptoir compacte : client intégré, panier multi-articles, prix/taxes serveur, aperçu pro-forma imprimable avant préparation et facture réelle A4/80 mm après émission Finance.
+- File `Encaissements au comptoir` distincte pour les factures émises et impayées de la boutique autorisée ; recherche, pagination, paiements partiels/finaux et impression via les services Finance canoniques.
+- Activation du circuit conservée sous les prérequis administrés RETAIL/Finance ; compatibilité du circuit historique si non activé. Tests dédiés et scénario E2E : `docs/HOTFIX_1080_RETAIL_POS_ACCESS_AND_CASHIER.md`. Candidat **non livré** avant CI + E2E propriétaire + fusion `main`.
+
 ## 2026-11-08 — Hotfix Finance/RETAIL Design 2.0 — PR #1077, Issue #1078 (candidat v1.6.5)
 
 - RETAIL multi-boutiques : synchronisation de l'activation « Facturation et encaissement » avec les vérifications POSTING Finance réellement en vigueur et messages de blocage contextualisés.

@@ -24,7 +24,7 @@ export async function GET(req: Request, { params }: Params) {
   const { organizationId } = await params;
   const auth = await authorizeOwner(req, organizationId);
   if (!auth.ok) return auth.response;
-  const [items, sites, members, configuration] = await Promise.all([
+  const [items, sites, members, positions, configuration] = await Promise.all([
     prisma.enterpriseRetailSiteAssignment.findMany({
       where: { organizationId }, orderBy: [{ siteId: "asc" }, { createdAt: "asc" }], take: 500,
       select: { id: true, siteId: true, userId: true, roleCode: true, permissionsJson: true, isActive: true, revision: true },
@@ -32,14 +32,27 @@ export async function GET(req: Request, { params }: Params) {
     prisma.enterpriseSite.findMany({ where: { organizationId, status: "ACTIVE", archivedAt: null }, orderBy: [{ name: "asc" }], take: 500, select: { id: true, name: true, code: true } }),
     prisma.organizationMember.findMany({
       where: { organizationId, status: "ACTIVE", removedAt: null }, orderBy: [{ createdAt: "asc" }], take: 500,
-      select: { userId: true, role: true, user: { select: { name: true } } },
+      select: { userId: true, role: true, positionId: true, positionTitle: true, user: { select: { name: true } } },
+    }),
+    prisma.enterprisePosition.findMany({
+      where: { organizationId }, select: { id: true, positionCode: true, labelFr: true, labelEn: true }, take: 500,
     }),
     prisma.enterpriseRetailConfiguration.findUnique({ where: { organizationId }, select: { settingsJson: true } }),
   ]);
   await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "retail-site-assignments" } });
   return NextResponse.json({
     items: items.map((item) => ({ ...item, permissions: siteStaffCapabilities(item.roleCode, item.permissionsJson) })),
-    sites, members: members.map((member) => ({ userId: member.userId, role: member.role, name: member.user.name })),
+    sites, members: members.map((member) => {
+      const position = positions.find((entry) => entry.id === member.positionId);
+      return {
+        userId: member.userId, role: member.role, name: member.user.name,
+        // The enterprise administration position is the only professional job.
+        // A Retail assignment is only an operational access profile at a site.
+        positionId: member.positionId,
+        positionTitleFr: position?.labelFr || member.positionTitle || null,
+        positionTitleEn: position?.labelEn || member.positionTitle || null,
+      };
+    }),
     capabilities: RETAIL_SITE_CAPABILITIES, defaults: ROLE_DEFAULT_CAPABILITIES,
     isolationEnabled: retailStaffIsolationIsEnabled(configuration?.settingsJson),
   }, { headers: { "Cache-Control": "private, no-store" } });

@@ -48,6 +48,22 @@ export function retailStaffIsolationIsEnabled(settings: Prisma.JsonValue | null 
   return (settings as Prisma.JsonObject).siteStaffIsolationEnabled === true;
 }
 
+/** Existing per-store assignments are an access boundary even before the
+ * tenant-wide cutover switch is activated. Include revoked assignments so a
+ * removed operator cannot fall back to the old company-wide permissions. */
+async function retailStaffMustBeScoped(
+  organizationId: string,
+  userId: string,
+  settings: Prisma.JsonValue | null | undefined,
+  database: RetailSiteAccessReader,
+) {
+  if (retailStaffIsolationIsEnabled(settings)) return true;
+  const assignments = await database.enterpriseRetailSiteAssignment.findMany({
+    where: { organizationId, userId }, select: { siteId: true }, take: 1,
+  });
+  return assignments.length > 0;
+}
+
 export async function requireRetailSiteCapability(
   organizationId: string,
   userId: string,
@@ -67,7 +83,7 @@ export async function requireRetailSiteCapability(
   ]);
   if (!membership) throw new EnterpriseRetailError("RETAIL_SITE_ACCESS_DENIED", 403);
   if (RETAIL_OWNER_ROLES.has(membership.role)) return;
-  if (!options.requireAssignment && !retailStaffIsolationIsEnabled(configuration?.settingsJson)) return;
+  if (!options.requireAssignment && !await retailStaffMustBeScoped(organizationId, userId, configuration?.settingsJson, database)) return;
   if (!siteId) throw new EnterpriseRetailError("RETAIL_SITE_REQUIRED", 403);
   const assignment = await database.enterpriseRetailSiteAssignment.findUnique({
     where: { organizationId_siteId_userId: { organizationId, siteId, userId } },
@@ -113,7 +129,8 @@ export async function retailSitesForCapability(
   ]);
   if (!membership) throw new EnterpriseRetailError("RETAIL_SITE_ACCESS_DENIED", 403);
   if (RETAIL_OWNER_ROLES.has(membership.role)) return { isolationEnabled: false, isOwner: true, siteIds: [] };
-  if (!retailStaffIsolationIsEnabled(configuration?.settingsJson)) return { isolationEnabled: false, isOwner: false, siteIds: [] };
+  const scoped = await retailStaffMustBeScoped(organizationId, userId, configuration?.settingsJson, database);
+  if (!scoped) return { isolationEnabled: false, isOwner: false, siteIds: [] };
   const assignments = await database.enterpriseRetailSiteAssignment.findMany({
     where: { organizationId, userId, isActive: true },
     select: { siteId: true, roleCode: true, permissionsJson: true },
@@ -141,9 +158,11 @@ export async function retailPosDashboardSiteScope(
     database.enterpriseRetailConfiguration.findUnique({ where: { organizationId }, select: { settingsJson: true } }),
   ]);
   if (!membership) throw new EnterpriseRetailError("RETAIL_SITE_ACCESS_DENIED", 403);
-  if (RETAIL_OWNER_ROLES.has(membership.role) || !retailStaffIsolationIsEnabled(configuration?.settingsJson)) {
+  if (RETAIL_OWNER_ROLES.has(membership.role)) {
     return { isolationEnabled: false, visibleSiteIds: [], salesSiteIds: [], collectionSiteIds: [] };
   }
+  const scoped = await retailStaffMustBeScoped(organizationId, userId, configuration?.settingsJson, database);
+  if (!scoped) return { isolationEnabled: false, visibleSiteIds: [], salesSiteIds: [], collectionSiteIds: [] };
   const assignments = await database.enterpriseRetailSiteAssignment.findMany({
     where: { organizationId, userId, isActive: true },
     select: { siteId: true, roleCode: true, permissionsJson: true },
@@ -184,15 +203,17 @@ export async function retailInvoiceVisibleSites(
     where: { organizationId, userId, isActive: true },
     select: { siteId: true, roleCode: true, permissionsJson: true },
   });
-  const siteIds = assignments.filter((assignment) => siteStaffCapabilities(assignment.roleCode, assignment.permissionsJson).includes("VIEW_SALES"))
+  // Invoice drafts are part of the invoicer's register, not the cashier's
+  // ordinary sales dashboard. VIEW_SALES must not silently grant draft access.
+  const siteIds = assignments.filter((assignment) => siteStaffCapabilities(assignment.roleCode, assignment.permissionsJson).includes("PREPARE_INVOICE"))
     .map((assignment) => assignment.siteId);
-  if (!siteIds.length) throw new EnterpriseRetailError("RETAIL_SITE_ACCESS_DENIED", 403);
   const cancellableSiteIds = assignments.filter((assignment) => siteStaffCapabilities(assignment.roleCode, assignment.permissionsJson).includes("CANCEL_UNPAID_INVOICE"))
     .map((assignment) => assignment.siteId);
   const submittableSiteIds = assignments.filter((assignment) => siteStaffCapabilities(assignment.roleCode, assignment.permissionsJson).includes("PREPARE_INVOICE"))
     .map((assignment) => assignment.siteId);
   const collectibleSiteIds = assignments.filter((assignment) => siteStaffCapabilities(assignment.roleCode, assignment.permissionsJson).includes("COLLECT_PAYMENT"))
     .map((assignment) => assignment.siteId);
+  if (!siteIds.length && !collectibleSiteIds.length) throw new EnterpriseRetailError("RETAIL_SITE_ACCESS_DENIED", 403);
   return { isOwner: false, siteIds: [...new Set(siteIds)], cancellableSiteIds: [...new Set(cancellableSiteIds)], submittableSiteIds: [...new Set(submittableSiteIds)], collectibleSiteIds: [...new Set(collectibleSiteIds)] };
 }
 
@@ -217,7 +238,7 @@ export async function retailInventoryVisibleSites(
   ]);
   if (!membership) throw new EnterpriseRetailError("RETAIL_SITE_ACCESS_DENIED", 403);
   if (RETAIL_OWNER_ROLES.has(membership.role)) return { isolationEnabled: false, isOwner: true, siteIds: [], manageableSiteIds: [] };
-  if (!retailStaffIsolationIsEnabled(configuration?.settingsJson)) {
+  if (!await retailStaffMustBeScoped(organizationId, userId, configuration?.settingsJson, database)) {
     return { isolationEnabled: false, isOwner: false, siteIds: [], manageableSiteIds: [] };
   }
   const assignments = await database.enterpriseRetailSiteAssignment.findMany({
@@ -250,16 +271,11 @@ export async function retailFinanceReadSiteScope(
   capability: "VIEW_SALES" | "COLLECT_PAYMENT" | "CLOSE_CASH",
   database: RetailSiteAccessReader = prisma,
 ): Promise<string[] | null> {
-  const [membership, configuration] = await Promise.all([
-    database.organizationMember.findFirst({
-      where: { organizationId, userId, status: "ACTIVE", removedAt: null }, select: { role: true },
-    }),
-    database.enterpriseRetailConfiguration.findUnique({
-      where: { organizationId }, select: { settingsJson: true },
-    }),
-  ]);
+  const membership = await database.organizationMember.findFirst({
+    where: { organizationId, userId, status: "ACTIVE", removedAt: null }, select: { role: true },
+  });
   if (!membership) throw new EnterpriseRetailError("RETAIL_SITE_ACCESS_DENIED", 403);
-  if (RETAIL_OWNER_ROLES.has(membership.role) || !retailStaffIsolationIsEnabled(configuration?.settingsJson)) return null;
+  if (RETAIL_OWNER_ROLES.has(membership.role)) return null;
   const assignments = await database.enterpriseRetailSiteAssignment.findMany({
     where: { organizationId, userId },
     select: { siteId: true, isActive: true, roleCode: true, permissionsJson: true },

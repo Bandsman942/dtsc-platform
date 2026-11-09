@@ -18,11 +18,13 @@ const commercialStyles = source("components/enterprise/professional/retail-comme
 const fr = JSON.parse(source("locales/retail-workspace.fr.json"));
 const en = JSON.parse(source("locales/retail-workspace.en.json"));
 
-const sections = ["checkout", "customers", "sites", "staff", "invoices", "offline", "omnichannel", "payments", "equipment", "readiness", "activation", "inventory", "alerts"];
+const sections = ["checkout", "sites", "staff", "invoices", "collections", "offline", "omnichannel", "payments", "equipment", "readiness", "activation", "inventory", "alerts"];
 for (const section of sections) {
   assert.match(navigation, new RegExp(`id: "${section}"`), `POS is missing the ${section} section`);
   assert.match(retailPage, new RegExp(`posSection.id === "${section}"`), `${section} does not mount a dedicated workspace`);
 }
+assert.match(navigation, /id: "customers"/, "Legacy customer deep link must remain registered");
+assert.match(retailPage, /posSection\?\.id === "customers"\) redirect/, "Legacy customer link must redirect into the compact POS basket");
 assert.match(navigation, /href=\{item.href \?\? `\$\{POS_URL\}\?section=\$\{item.id\}`\}/, "POS cards must navigate to an individual URL");
 assert.match(navigation, /id: "commercial"/, "POS directory must expose commercial pricing, offers and returns");
 assert.match(navigation, /href: `\$\{POS_URL\}\/commercial`/, "Commercial card must use the existing dedicated route");

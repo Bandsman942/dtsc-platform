@@ -50,7 +50,7 @@ await assert.doesNotReject(check("COLLECT_PAYMENT", null));
 db.membership = null;
 await assert.rejects(check("COLLECT_PAYMENT"), { code: "RETAIL_SITE_ACCESS_DENIED" });
 db.membership = { role: "MEMBER" }; db.settings = {};
-await assert.doesNotReject(check("COLLECT_PAYMENT", null), "Legacy organization workflows remain unchanged until guarded cutover");
+await assert.rejects(check("COLLECT_PAYMENT", null), { code: "RETAIL_SITE_REQUIRED" }, "A staff member with an assignment cannot bypass store scope while the cutover flag is off");
 await assert.rejects(requireRetailSiteCapability("tenant", "staff", "shopA", "COLLECT_PAYMENT", prisma, { requireAssignment: true }), { code: "RETAIL_SITE_ACCESS_DENIED" }, "Forced guard on the new checkout must not depend on legacy feature flag");
 await assert.rejects(retailInvoiceVisibleSites("tenant", "staff"), { code: "RETAIL_INVOICE_CHECKOUT_NOT_ACTIVE" });
 db.settings = { siteStaffIsolationEnabled: true, invoiceCheckoutEnabled: true };
@@ -58,10 +58,12 @@ assert.deepEqual(JSON.parse(JSON.stringify(await retailInvoiceVisibleSites("tena
   isOwner: false, siteIds: ["shopA"], cancellableSiteIds: [], submittableSiteIds: ["shopA"], collectibleSiteIds: [],
 });
 db.assignments = [{ siteId: "shopA", roleCode: "CASHIER", isActive: true, permissionsJson: ["COLLECT_PAYMENT"] }];
-await assert.rejects(retailInvoiceVisibleSites("tenant", "staff"), { code: "RETAIL_SITE_ACCESS_DENIED" }, "A role without VIEW_SALES cannot see invoices");
+assert.deepEqual(JSON.parse(JSON.stringify(await retailInvoiceVisibleSites("tenant", "staff"))), {
+  isOwner: false, siteIds: [], cancellableSiteIds: [], submittableSiteIds: [], collectibleSiteIds: ["shopA"],
+}, "A collection-only cashier sees the payment queue, but not the general invoice register");
 db.assignments = [{ siteId: "shopA", roleCode: "CASHIER", isActive: true, permissionsJson: ["VIEW_SALES", "COLLECT_PAYMENT"] }];
 assert.deepEqual(JSON.parse(JSON.stringify(await retailInvoiceVisibleSites("tenant", "staff"))), {
-  isOwner: false, siteIds: ["shopA"], cancellableSiteIds: [], submittableSiteIds: [], collectibleSiteIds: ["shopA"],
+  isOwner: false, siteIds: [], cancellableSiteIds: [], submittableSiteIds: [], collectibleSiteIds: ["shopA"],
 });
 db.membership = { role: "OWNER" };
 assert.deepEqual(JSON.parse(JSON.stringify(await retailInvoiceVisibleSites("tenant", "owner"))), {
@@ -97,9 +99,11 @@ assert.deepEqual(JSON.parse(JSON.stringify(await retailStockTransferVisibleSites
 db.assignments = [{ siteId: "shopB", roleCode: "CASHIER", isActive: true, permissionsJson: null }];
 await assert.rejects(retailStockTransferVisibleSites("tenant", "staff"), { code: "RETAIL_SITE_ACCESS_DENIED", status: 403 });
 db.settings = {};
+await assert.rejects(retailStockTransferVisibleSites("tenant", "staff"), { code: "RETAIL_SITE_ACCESS_DENIED" }, "Existing assignments protect inventory even before tenant-wide activation");
+db.assignments = [];
 assert.deepEqual(JSON.parse(JSON.stringify(await retailStockTransferVisibleSites("tenant", "staff"))), {
   isolationEnabled: false, isOwner: false, siteIds: [], manageableSiteIds: [],
-}, "The legacy tenant remains unchanged while isolation is OFF");
+}, "A genuinely unassigned legacy tenant keeps the previous behavior while isolation is off");
 db.settings = { siteStaffIsolationEnabled: true };
 db.membership = { role: "OWNER" };
 assert.deepEqual(JSON.parse(JSON.stringify(await retailStockTransferVisibleSites("tenant", "owner"))), {
@@ -190,7 +194,7 @@ assert.equal(await retailFinanceReadSiteScope("tenant", "owner", "VIEW_SALES"), 
 db.membership = { role: "MEMBER" };
 db.settings = {};
 db.assignments = [{ siteId: "shopA", roleCode: "CASHIER", isActive: false, permissionsJson: null }];
-assert.equal(await retailFinanceReadSiteScope("tenant", "legacy", "COLLECT_PAYMENT"), null);
+assert.deepEqual(JSON.parse(JSON.stringify(await retailFinanceReadSiteScope("tenant", "legacy", "COLLECT_PAYMENT"))), [], "Revocation must not reopen Finance access after a legacy cutover flag is disabled");
 const financeInvoicesRoute = fs.readFileSync("app/api/enterprise/[organizationId]/sales-invoices/route.ts", "utf8");
 assert.match(financeInvoicesRoute, /retailFinanceReadSiteScope\(organizationId, auth\.session\.userId, "VIEW_SALES"\)/);
 assert.match(financeInvoicesRoute, /retailCheckout: \{ is: \{ siteId: \{ in: retailScope \} \} \}/);

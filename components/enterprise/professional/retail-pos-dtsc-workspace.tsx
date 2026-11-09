@@ -7,6 +7,7 @@ import { useAppLocale } from "@/components/i18n/locale-provider";
 import { formatEnterpriseDate } from "@/components/enterprise/core-v2/erp-v2-ui";
 import type { MobileMoneyCashSession } from "@/components/enterprise/professional/mobile-money-cash-session-manager";
 import { ProfessionalLoading } from "@/components/enterprise/professional/professional-erp-ui";
+import { RetailActiveCustomerBar } from "@/components/enterprise/professional/retail-active-customer-bar";
 import { RetailPosCashSessionManager } from "@/components/enterprise/professional/retail-pos-cash-session-manager";
 import {
   RetailErpLinks,
@@ -164,15 +165,18 @@ export function RetailPosDtscWorkspace({
         }
         if (context.tab === "REPORTS") return <RetailReportsPanel dashboard={dashboard} moduleCode="RETAIL_POS" locale={locale} />;
         return (
-          <PosOperate
-            organizationId={organizationId}
-            dashboard={dashboard}
-            preferredSiteId={preferredSiteId}
-            locale={locale}
-            busyAction={context.busyAction}
-            mutate={context.mutate}
-            reload={async () => context.setRefreshKey((value) => value + 1)}
-          />
+          <div className="min-w-0 space-y-3">
+            <RetailActiveCustomerBar organizationId={organizationId} compact />
+            <PosOperate
+              organizationId={organizationId}
+              dashboard={dashboard}
+              preferredSiteId={preferredSiteId}
+              locale={locale}
+              busyAction={context.busyAction}
+              mutate={context.mutate}
+              reload={async () => context.setRefreshKey((value) => value + 1)}
+            />
+          </div>
         );
       }}
     </RetailWorkspaceFrame>

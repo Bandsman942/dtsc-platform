@@ -26,6 +26,8 @@ let assignments = [
   { siteId: "shopB", userId: "another", roleCode: "CASHIER", permissionsJson: null, site: sites[1] },
 ];
 const db = {
+  organizationMember: { findFirst: async () => ({ positionId: "official-invoicer", positionTitle: "Agent commercial" }) },
+  enterprisePosition: { findFirst: async () => ({ labelFr: "Facturier", labelEn: "Invoicer" }) },
   enterpriseSite: { findMany: async () => sites },
   enterpriseWarehouse: { findMany: async () => [{ id: "whA", siteId: "shopA" }, { id: "whB", siteId: "shopB" }] },
   enterpriseFinancialAccount: { findMany: async () => [{ id: "accA", siteId: "shopA", currencyCode: "CDF" }, { id: "accB", siteId: "shopB", currencyCode: "USD" }] },
@@ -56,6 +58,8 @@ assert.equal(result.sites[2].ready, false, "Unconfigured store must remain incom
 assert.equal(result.sites[0].staffCount, 2);
 const mine = await service.getRetailMyStores("tenant", "clerk", "MEMBER");
 assert.deepEqual(mine.sites.map((site) => site.id), ["shopA"], "Employee must only see their shop");
+assert.equal(mine.officialPosition.fr, "Facturier", "The canonical enterprise position is the only employee job title");
+assert.equal(mine.sites[0].roleCode, "CASHIER", "Store cashier is an access profile, not a second official job");
 assignments = assignments.filter((row) => row.userId !== "clerk");
 const revoked = await service.getRetailMyStores("tenant", "clerk", "MEMBER");
 assert.equal(revoked.sites.length, 0, "Revocation must remove the shop");
