@@ -95,7 +95,7 @@ export async function GET(req: Request, { params }: Params) {
       select: { paymentId: true, checkout: { select: { salesInvoiceId: true } } },
     }),
     prisma.enterprisePaymentAllocation.findMany({
-      where: { organizationId, paymentId: { in: paymentIds }, status: "CONFIRMED", receivableId: { not: null } },
+      where: { organizationId, paymentId: { in: paymentIds }, status: { in: ["CONFIRMED", "REVERSED"] }, receivableId: { not: null } },
       select: { paymentId: true, receivableId: true },
     }),
   ]) : [[], []];
