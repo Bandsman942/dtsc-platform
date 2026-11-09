@@ -351,7 +351,7 @@ export function EnterpriseFinanceInvoicesWorkspace(props: Props) {
         {collection.error ? <ProfessionalError message={collection.error} /> : collection.loading ? <ProfessionalLoading /> : <div className="grid gap-3">
           {tab === "ageing" ? <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
             {[
-              ["", locale === "en" ? "All due dates" : "Toutes les échéances"],
+              ["", t("allDueDates")],
               ["TO_DUE", t("notDue")], ["D1_30", "1–30"], ["D31_60", "31–60"], ["D61_90", "61–90"], ["D90_PLUS", t("over90Days")],
             ].map(([id, label]) => <button type="button" key={id} aria-pressed={ageBucket === id}
               onClick={() => { setAgeBucket(id); setPage(1); }}
@@ -366,7 +366,7 @@ export function EnterpriseFinanceInvoicesWorkspace(props: Props) {
             actions={isReceivables && (endpointName === "sales-invoices" || endpointName === "receivables") ? (record) => {
               const invoiceId = endpointName === "sales-invoices" ? record.id : (record as InvoiceRecord).salesInvoiceId;
               return invoiceId ? <div data-responsive-actions className="flex min-w-0 flex-wrap gap-2">
-                <Button size="sm" variant="outline" onClick={() => setDetail(record as InvoiceRecord)}><Eye className="h-4 w-4" />{locale === "fr" ? "Détail" : "Details"}</Button>
+                <Button size="sm" variant="outline" onClick={() => setDetail(record as InvoiceRecord)}><Eye className="h-4 w-4" />{t("detailsLabel")}</Button>
                 <Button size="sm" variant="outline" onClick={() => printCustomerInvoice(invoiceId)}><Printer className="h-4 w-4" />{t("printInvoicePreview")}</Button>
               </div> : null;
             } : undefined}
