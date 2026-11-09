@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { CheckCircle2, FileMinus2, Plus, Send, ShieldCheck, XCircle } from "lucide-react";
+import { CheckCircle2, Eye, FileMinus2, Plus, Printer, Send, ShieldCheck, XCircle } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { useEnterpriseBusinessContext } from "@/components/enterprise/use-enterprise-business-context";
 import { Field, NativeSelect } from "@/components/enterprise/core-v2/erp-v2-ui";
@@ -68,6 +68,7 @@ type InvoiceRecord = FinanceRecord & {
   salesInvoiceId?: string;
   supplierInvoiceId?: string;
   items?: Array<{ id: string; description: string; quantity: string | number; unitPrice: string | number; discountAmount?: string | number }>;
+  pendingApproverName?: string | null;
   capabilities?: RecordCapabilities;
   threeWayMatch?: { status?: string; quantityVariance?: string | number; priceVariance?: string | number; totalVariance?: string | number; overrideReason?: string | null } | null;
 };
@@ -90,6 +91,7 @@ function actionLabel(action: string, locale: FinanceLocale) {
   if (action === "SUBMIT") return invoiceT(locale, "actionSubmit");
   if (action === "APPROVE") return invoiceT(locale, "actionApprove");
   if (action === "REJECT") return invoiceT(locale, "actionReject");
+  if (action === "REQUEST_CORRECTION") return invoiceT(locale, "actionRequestCorrection");
   if (action === "ISSUE") return invoiceT(locale, "actionIssueAndPost");
   if (action === "POST") return invoiceT(locale, "post");
   if (action === "REVIEW") return locale === "en" ? "Review" : "Revoir";
@@ -98,7 +100,11 @@ function actionLabel(action: string, locale: FinanceLocale) {
 
 function invoiceTransitionActions(status: string | undefined, locale: FinanceLocale, isReceivables: boolean) {
   if (status === "DRAFT" || status === "REJECTED") return [{ action: "SUBMIT", label: actionLabel("SUBMIT", locale), icon: Send }];
-  if (isReceivables && status === "PENDING_APPROVAL") return [{ action: "APPROVE", label: actionLabel("APPROVE", locale), icon: CheckCircle2 }];
+  if (isReceivables && status === "PENDING_APPROVAL") return [
+    { action: "APPROVE", label: actionLabel("APPROVE", locale), icon: CheckCircle2 },
+    { action: "REQUEST_CORRECTION", label: actionLabel("REQUEST_CORRECTION", locale), icon: Send },
+    { action: "REJECT", label: actionLabel("REJECT", locale), icon: XCircle, destructive: true },
+  ];
   if (!isReceivables && status === "PENDING_REVIEW") return [
     { action: "REVIEW", label: actionLabel("REVIEW", locale), icon: CheckCircle2 },
     { action: "REJECT", label: actionLabel("REJECT", locale), icon: XCircle, destructive: true },
@@ -127,6 +133,7 @@ function capabilityAllowsAction(record: InvoiceRecord, action: string) {
   if (action === "REVIEW") return Boolean(caps.canReview);
   if (action === "APPROVE") return Boolean(caps.canApprove);
   if (action === "REJECT") return Boolean(caps.canReject);
+  if (action === "REQUEST_CORRECTION") return Boolean(caps.canReject);
   if (action === "POST" || action === "ISSUE") return Boolean(caps.canPost);
   return false;
 }
@@ -310,7 +317,8 @@ export function EnterpriseFinanceInvoicesWorkspace(props: Props) {
   const pendingCount = isReceivables ? summary?.pendingApprovalCount || 0 : summary?.pendingDecisionCount || 0;
   const detailKind: "invoice" | "credit" = endpointName.includes("credit-notes") || Boolean(detail?.creditDate) ? "credit" : "invoice";
   const detailHasWorkflow = detailKind === "credit" || endpointName.includes("invoices");
-  const actionRequiresReason = Boolean(actionTarget && ["REJECT", "CANCEL", "VOID"].includes(actionTarget.action));
+  const actionRequiresReason = Boolean(actionTarget && ["REJECT", "REQUEST_CORRECTION", "CANCEL", "VOID"].includes(actionTarget.action));
+  const printCustomerInvoice = (id: string) => window.open(`/api/enterprise/${organizationId}/sales-invoices/${encodeURIComponent(id)}/print?lang=${locale}`, "_blank", "noopener,noreferrer");
 
   return <ModuleWorkspace>
     <ModuleHeader
@@ -338,7 +346,7 @@ export function EnterpriseFinanceInvoicesWorkspace(props: Props) {
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">{[
             ["TO_DUE", t("notDue")], ["D1_30", "1–30"], ["D31_60", "31–60"], ["D61_90", "61–90"], ["D90_PLUS", t("over90Days")],
           ].map(([id, label]) => <article key={id} className="rounded-xl border border-dtsc-border p-4"><p className="text-xs font-black uppercase text-dtsc-muted">{label}</p><p className="mt-2 text-2xl font-black text-dtsc-ink">{summary?.ageing?.[id as keyof NonNullable<typeof summary.ageing>] || 0}</p><p className="mt-1 text-sm text-dtsc-muted">{t("records")}</p></article>)}</div>
-        ) : <FinanceRecordList items={collection.items} locale={locale} emptyTitle={t("noItemInView")} emptyDescription={t("professionalFormOrFilters")} onOpen={(record) => setDetail(record as InvoiceRecord)} />}
+        ) : <FinanceRecordList items={collection.items} locale={locale} emptyTitle={t("noItemInView")} emptyDescription={t("professionalFormOrFilters")} onOpen={(record) => setDetail(record as InvoiceRecord)} actions={isReceivables && endpointName === "sales-invoices" ? (record) => <div data-responsive-actions className="flex min-w-0 flex-wrap gap-2"><Button size="sm" variant="outline" onClick={() => setDetail(record)}><Eye className="h-4 w-4" />{locale === "fr" ? "Détail" : "Details"}</Button><Button size="sm" variant="outline" onClick={() => printCustomerInvoice(record.id)}><Printer className="h-4 w-4" />{t("printInvoicePreview")}</Button></div> : undefined} />}
         {tab !== "ageing" ? <FinancePaginationControls pagination={collection.pagination} page={page} onPage={setPage} locale={locale} /> : null}
       </ModuleSection>
       <ProfessionalHelp moduleCode={moduleCode} />
@@ -385,7 +393,7 @@ export function EnterpriseFinanceInvoicesWorkspace(props: Props) {
 
     <Dialog open={Boolean(detail)} onClose={() => setDetail(null)} title={detail ? String(detail.number || detail.reference || t("financeDetails")) : ""} presentation="editor" className="max-w-5xl">
       {detail ? <div className="grid gap-5">
-        <div className="flex flex-wrap gap-2">{detail.status ? <StatusBadge tone={financeStatusTone(detail.status)}>{financeStatusLabel(detail.status, locale)}</StatusBadge> : null}{detail.currencyCode ? <StatusBadge>{String(detail.currencyCode)}</StatusBadge> : null}</div>
+        <div className="flex flex-wrap gap-2">{detail.status ? <StatusBadge tone={financeStatusTone(detail.status)}>{financeStatusLabel(detail.status, locale)}{detail.status === "PENDING_APPROVAL" && detail.pendingApproverName ? ` (${detail.pendingApproverName})` : ""}</StatusBadge> : null}{detail.currencyCode ? <StatusBadge>{String(detail.currencyCode)}</StatusBadge> : null}</div>
         <FinanceDetailGrid>
           <FinanceDetailValue label={t("date")}>{financeDate(detail.invoiceDate || detail.creditDate || detail.dueDate || detail.createdAt, locale)}</FinanceDetailValue>
           <FinanceDetailValue label={t("total")}>{financeMoney(detail.grandTotal ?? detail.originalAmount, String(detail.currencyCode || "USD"), locale)}</FinanceDetailValue>
@@ -393,7 +401,7 @@ export function EnterpriseFinanceInvoicesWorkspace(props: Props) {
           {detail.dueDate ? <FinanceDetailValue label={t("dueDate")}>{financeDate(detail.dueDate, locale)}</FinanceDetailValue> : null}
         </FinanceDetailGrid>
         {!isReceivables && detailKind === "invoice" && detail.threeWayMatch ? <section className="rounded-xl border border-dtsc-border p-4"><h3 className="font-black text-dtsc-ink">{t("poReceiptInvoiceControl")}</h3><div className="mt-3 grid gap-3 sm:grid-cols-3"><FinanceDetailValue label={t("quantity")}>{String(detail.threeWayMatch.quantityVariance ?? 0)}</FinanceDetailValue><FinanceDetailValue label={t("price")}>{String(detail.threeWayMatch.priceVariance ?? 0)}</FinanceDetailValue><FinanceDetailValue label={t("totalVariance")}>{String(detail.threeWayMatch.totalVariance ?? 0)}</FinanceDetailValue></div></section> : null}
-        {detailHasWorkflow ? <div data-responsive-actions>{(detailKind === "credit" ? creditTransitionActions(detail.status, locale) : invoiceTransitionActions(detail.status, locale, isReceivables)).filter((action) => capabilityAllowsAction(detail, action.action)).map((action) => { const Icon = action.icon; return <Button key={action.action} disabled={busy} variant={action.destructive ? "destructive" : "outline"} onClick={() => setActionTarget({ record: detail, action: action.action, kind: detailKind })}><Icon className="h-4 w-4" />{action.label}</Button>; })}{detailKind === "invoice" && detail.capabilities?.canCreateCredit ? <Button variant="outline" disabled={busy} onClick={() => setCreditTarget(detail)}><FileMinus2 className="h-4 w-4" />{t("createCreditNote")}</Button> : null}</div> : null}
+        {detailHasWorkflow ? <div data-responsive-actions>{isReceivables && detailKind === "invoice" ? <Button variant="outline" onClick={() => printCustomerInvoice(detail.id)}><Printer className="h-4 w-4" />{t("printInvoicePreview")}</Button> : null}{(detailKind === "credit" ? creditTransitionActions(detail.status, locale) : invoiceTransitionActions(detail.status, locale, isReceivables)).filter((action) => capabilityAllowsAction(detail, action.action)).map((action) => { const Icon = action.icon; return <Button key={action.action} disabled={busy} variant={action.destructive ? "destructive" : "outline"} onClick={() => setActionTarget({ record: detail, action: action.action, kind: detailKind })}><Icon className="h-4 w-4" />{action.label}</Button>; })}{detailKind === "invoice" && detail.capabilities?.canCreateCredit ? <Button variant="outline" disabled={busy} onClick={() => setCreditTarget(detail)}><FileMinus2 className="h-4 w-4" />{t("createCreditNote")}</Button> : null}</div> : null}
         <FinanceCollaboration organizationId={organizationId} moduleCode={moduleCode} record={detail} locale={locale} />
       </div> : null}
     </Dialog>

@@ -377,6 +377,8 @@
   "posNavStaffDescription": "Manage store assignments and permissions.",
   "posNavInvoices": "Invoice register",
   "posNavInvoicesDescription": "Track prepared, approved and paid invoices.",
+  "posNavApprovals": "Invoices to approve and issue",
+  "posNavApprovalsDescription": "Approve assigned invoices and issue approved invoices within my stores or Finance permissions.",
   "posNavCollections": "Collections",
   "posNavCollectionsDescription": "Collect issued and outstanding store invoices at the till.",
   "posNavOffline": "Orders & offline sales",

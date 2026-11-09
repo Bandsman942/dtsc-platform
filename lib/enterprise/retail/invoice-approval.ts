@@ -2,7 +2,7 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { resolveEnterpriseModuleAccess } from "@/lib/enterprise/module-access";
 import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
-import { requireRetailSiteCapability, retailStaffIsolationIsEnabled, RETAIL_OWNER_ROLES } from "@/lib/enterprise/retail/site-access";
+import { requireRetailSiteCapability, retailFinanceReadSiteScope, retailStaffIsolationIsEnabled, RETAIL_OWNER_ROLES } from "@/lib/enterprise/retail/site-access";
 
 type RetailApprovalReader = Pick<Prisma.TransactionClient, "enterpriseRetailInvoiceCheckout" | "enterpriseRetailInvoicePaymentProposal" | "enterpriseRetailConfiguration" | "organizationMember">;
 
@@ -39,7 +39,8 @@ export async function listRetailInvoiceFinanceApprovers(
     const access = await resolveEnterpriseModuleAccess({
       userId: member.userId, organizationId, moduleCode: target === "PAYMENT" ? "FINANCE_PAYMENTS" : "FINANCE_RECEIVABLES", action: "approve",
     });
-    return access.allowed ? {
+    const sites = access.allowed ? await retailFinanceReadSiteScope(organizationId, member.userId, "VIEW_SALES") : [];
+    return access.allowed && (sites === null || sites.includes(siteId)) ? {
       userId: member.userId, name: member.user.name, email: member.user.email,
       positionTitle: member.positionTitle, role: member.role, isRequester: false, selfApprovalOverride: false,
     } : null;

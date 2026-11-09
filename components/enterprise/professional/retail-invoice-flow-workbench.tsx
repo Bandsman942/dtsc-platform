@@ -89,6 +89,11 @@ export function RetailInvoiceFlowWorkbench({ organizationId, organizationName, l
   const [page, setPage] = useState(1);
   const [siteFilter, setSiteFilter] = useState(preferredSiteId || "");
   const [invoiceSearch, setInvoiceSearch] = useState("");
+  useEffect(() => {
+    if (mode !== "invoices") return;
+    const targetNumber = new URLSearchParams(window.location.search).get("q")?.trim();
+    if (targetNumber) setInvoiceSearch(targetNumber.slice(0, 100));
+  }, [mode]);
   const [invoiceDateFrom, setInvoiceDateFrom] = useState("");
   const [invoiceDateTo, setInvoiceDateTo] = useState("");
   const [warehouseId, setWarehouseId] = useState("");

@@ -5,7 +5,7 @@ import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
 
 export const RETAIL_SITE_STAFF_ROLES = ["MANAGER", "INVOICER", "CASHIER"] as const;
 export const RETAIL_SITE_CAPABILITIES = [
-  "VIEW_STOCK", "MANAGE_STOCK", "VIEW_SALES", "PREPARE_INVOICE", "CANCEL_UNPAID_INVOICE",
+  "VIEW_STOCK", "MANAGE_STOCK", "VIEW_SALES", "PREPARE_INVOICE", "CANCEL_UNPAID_INVOICE", "ISSUE_INVOICE",
   "COLLECT_PAYMENT", "OPEN_CASH", "CLOSE_CASH", "VIEW_REPORTS", "AUTHORIZE_TRANSFER",
   "REQUEST_INVOICE_RETURN", "APPROVE_INVOICE_RETURN",
   "RECORD_EXPENSE", "APPROVE_EXPENSE",
@@ -21,7 +21,7 @@ export const retailSiteAssignmentInputSchema = z.object({
 }).strict();
 
 export const ROLE_DEFAULT_CAPABILITIES: Readonly<Record<typeof RETAIL_SITE_STAFF_ROLES[number], readonly typeof RETAIL_SITE_CAPABILITIES[number][]>> = {
-  MANAGER: ["VIEW_STOCK", "VIEW_SALES", "PREPARE_INVOICE", "CANCEL_UNPAID_INVOICE", "COLLECT_PAYMENT", "OPEN_CASH", "CLOSE_CASH", "VIEW_REPORTS"],
+  MANAGER: ["VIEW_STOCK", "VIEW_SALES", "PREPARE_INVOICE", "CANCEL_UNPAID_INVOICE", "ISSUE_INVOICE", "COLLECT_PAYMENT", "OPEN_CASH", "CLOSE_CASH", "VIEW_REPORTS"],
   INVOICER: ["VIEW_STOCK", "VIEW_SALES", "PREPARE_INVOICE"],
   CASHIER: ["VIEW_SALES", "COLLECT_PAYMENT", "OPEN_CASH", "CLOSE_CASH"],
 };
@@ -35,7 +35,9 @@ export function siteStaffCapabilities(roleCode: string, permissions: unknown): R
   if (permissions !== null && permissions !== undefined) {
     const validated = z.array(z.enum(RETAIL_SITE_CAPABILITIES)).safeParse(permissions);
     if (!validated.success) return []; // Malformed stored policy is deny-all.
-    return [...new Set(validated.data)];
+    // ISSUE_INVOICE is a native store-manager right, including historical
+    // assignments whose explicit JSON predates this capability.
+    return [...new Set(roleCode === "MANAGER" ? [...validated.data, "ISSUE_INVOICE" as const] : validated.data)];
   }
   return [...ROLE_DEFAULT_CAPABILITIES[roleCode as typeof RETAIL_SITE_STAFF_ROLES[number]]];
 }

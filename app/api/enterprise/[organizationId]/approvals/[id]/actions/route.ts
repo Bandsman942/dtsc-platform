@@ -3,6 +3,7 @@ import { z } from "zod";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
+import { decideSalesInvoiceAssignedApproval } from "@/lib/enterprise/accounting/accounting-invoice-approval-orchestration";
 import { validateCashSessionAssignedApproval } from "@/lib/enterprise/accounting/accounting-operations-approval-orchestration";
 import { approveAssignedAccountTransfer, rejectAssignedAccountTransfer } from "@/lib/enterprise/accounting/treasury-approval-service";
 import { approveAssignedFundingOperation, rejectAssignedFundingOperation } from "@/lib/enterprise/accounting/funding-service";
@@ -37,6 +38,7 @@ const professionalApprovalActionSchema = z.object({ action: z.enum(["REQUEST_COR
 const prepareReviewSchema = z.object({ action: z.literal("PREPARE_REVIEW"), revision: z.coerce.number().int().min(1) });
 
 async function targetRevision(organizationId: string, approval: CurrentApproval) {
+  if (approval.targetEntityType === "EnterpriseSalesInvoice") return (await prisma.enterpriseSalesInvoice.findFirst({ where: { id: approval.targetEntityId, organizationId }, select: { revision: true } }))?.revision ?? null;
   if (approval.targetEntityType === "EnterpriseAccountTransfer") return (await prisma.enterpriseAccountTransfer.findFirst({ where: { id: approval.targetEntityId, organizationId }, select: { revision: true } }))?.revision ?? null;
   if (approval.targetEntityType === "EnterpriseFundingOperation") return (await prisma.enterpriseFundingOperation.findFirst({ where: { id: approval.targetEntityId, organizationId }, select: { revision: true } }))?.revision ?? null;
   if (approval.targetEntityType === "EnterpriseCashSession") return (await prisma.enterpriseCashSession.findFirst({ where: { id: approval.targetEntityId, organizationId }, select: { revision: true } }))?.revision ?? null;
@@ -58,6 +60,12 @@ async function reviewVersion(organizationId: string, current: CurrentApproval) {
 }
 
 async function decideDomainApproval(organizationId: string, current: CurrentApproval, actorUserId: string, data: { action: "APPROVE" | "REJECT" | "CANCEL"; revision: number; decisionComment?: string }, canManage: boolean) {
+  if (current.targetEntityType === "EnterpriseSalesInvoice") {
+    if (data.action === "CANCEL") throw new ApprovalCoordinationError("INVALID_STATE", 409, "Utilisez le registre des factures pour annuler cette facture.");
+    const revision = await targetRevision(organizationId, current);
+    if (revision === null) throw new ApprovalCoordinationError("TARGET_NOT_FOUND", 404, "Cette facture est introuvable.");
+    return decideSalesInvoiceAssignedApproval(organizationId, current.targetEntityId, actorUserId, { action: data.action, revision, reason: data.decisionComment });
+  }
   const args = { organizationId, approvalId: current.id, actorUserId, action: data.action, revision: data.revision, decisionComment: data.decisionComment || undefined, canManage };
   if (current.targetEntityType === "EnterprisePurchase") return decideEnterprisePurchaseApproval(args);
   if (current.targetEntityType === "EnterpriseBudget") return decideEnterpriseBudgetApproval(args);
@@ -109,6 +117,17 @@ export async function POST(req: Request, { params }: Params) {
     }
     if (professional) {
       const data = professionalApprovalActionSchema.parse(payload);
+      if (current.targetEntityType === "EnterpriseSalesInvoice") {
+        if (data.action !== "REQUEST_CORRECTION" || current.approverUserId !== session.userId) throw new ApprovalCoordinationError("FORBIDDEN", 403, "La correction de cette facture doit être demandée par son validateur désigné.");
+        const revision = await targetRevision(organizationId, current);
+        if (revision === null) throw new ApprovalCoordinationError("TARGET_NOT_FOUND", 404, "Cette facture est introuvable.");
+        await decideSalesInvoiceAssignedApproval(organizationId, current.targetEntityId, session.userId, { action: "REQUEST_CORRECTION", revision, reason: data.decisionComment });
+        const updated = await prisma.enterpriseApproval.findFirst({ where: { id, organizationId, archivedAt: null } });
+        if (current.requestedByUserId !== session.userId) await notifyUser({ userId: current.requestedByUserId, organizationId, type: "ENTERPRISE_APPROVAL", title: "Correction de facture demandée", body: data.decisionComment || "Corrigez puis soumettez de nouveau la facture.", targetUrl: `/enterprise-modules/FINANCE_RECEIVABLES?invoiceId=${encodeURIComponent(current.targetEntityId)}` });
+        await writeAuditLog({ userId: session.userId, action: "ENTERPRISE_APPROVAL_REQUEST_CORRECTION", entity: "EnterpriseApproval", entityId: id, request: req, metadata: { organizationId, targetEntityType: current.targetEntityType, targetEntityId: current.targetEntityId } });
+        await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "approvals", approvalId: id, action: data.action } });
+        return NextResponse.json({ ok: true, approval: updated });
+      }
       const result = await applyProfessionalApprovalAction({ organizationId, approvalId: id, actorUserId: session.userId, canManage: access.canManage, action: data.action, reason: data.decisionComment, delegateUserId: data.delegateUserId, revision: data.revision });
       const recipientId = data.action === "REQUEST_CORRECTION" ? current.requestedByUserId : data.action === "DELEGATE" ? result.approval.approverUserId : current.approverUserId;
       if (recipientId !== session.userId) await notifyUser({ userId: recipientId, organizationId, type: "ENTERPRISE_APPROVAL", title: data.action === "REQUEST_CORRECTION" ? "Correction demandée" : data.action === "DELEGATE" ? "Validation déléguée" : "Correction soumise", body: data.decisionComment || "Une action est attendue sur cette validation.", targetUrl: workCoordinationDeepLink("APPROVAL", id) });
@@ -125,13 +144,15 @@ export async function POST(req: Request, { params }: Params) {
       if (!data.reviewedVersionId || data.reviewedVersionId !== version.id) throw new ApprovalCoordinationError("APPROVAL_REVIEW_REQUIRED", 409, "Ouvrez la validation et relisez la version soumise avant de prendre une décision.");
     }
     await decideDomainApproval(organizationId, current, session.userId, data, access.canManage);
-    if (data.action === "APPROVE" || data.action === "REJECT") {
+    // The invoice orchestrator has already committed the approval decision
+    // alongside the Finance invoice. A second generic decision would conflict.
+    if ((data.action === "APPROVE" || data.action === "REJECT") && current.targetEntityType !== "EnterpriseSalesInvoice") {
       const decisionArgs = { organizationId, approvalId: id, actorUserId: session.userId, decision: data.action, reason: data.decisionComment, idempotencyKey: typeof payload?.idempotencyKey === "string" ? payload.idempotencyKey : null };
       if (current.targetEntityType === "EnterpriseProjectMilestone") await recordProjectMilestoneApprovalDecision(decisionArgs);
       else await recordApprovalDecision(decisionArgs);
     }
     const approval = await prisma.enterpriseApproval.findFirst({ where: { id, organizationId, archivedAt: null } });
-    if (current.requestedByUserId !== session.userId) await notifyUser({ userId: current.requestedByUserId, organizationId, type: "ENTERPRISE_APPROVAL", title: data.action === "APPROVE" ? "Validation approuvée" : data.action === "REJECT" ? "Validation rejetée" : "Validation annulée", body: data.decisionComment || "Une décision a été prise sur votre demande de validation.", targetUrl: workCoordinationDeepLink("APPROVAL", id) });
+    if (current.requestedByUserId !== session.userId) await notifyUser({ userId: current.requestedByUserId, organizationId, type: "ENTERPRISE_APPROVAL", title: data.action === "APPROVE" ? "Validation approuvée" : data.action === "REJECT" ? "Validation rejetée" : "Validation annulée", body: data.decisionComment || "Une décision a été prise sur votre demande de validation.", targetUrl: current.targetEntityType === "EnterpriseSalesInvoice" ? `/enterprise-modules/FINANCE_RECEIVABLES?invoiceId=${encodeURIComponent(current.targetEntityId)}` : workCoordinationDeepLink("APPROVAL", id) });
     await writeAuditLog({ userId: session.userId, action: `ENTERPRISE_APPROVAL_${data.action}`, entity: "EnterpriseApproval", entityId: id, request: req, metadata: { organizationId, targetEntityType: current.targetEntityType, targetEntityId: current.targetEntityId, fromStatus: current.status, toStatus: approval?.status, reviewedVersionId: data.reviewedVersionId || null } });
     await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "approvals", approvalId: id, action: data.action } });
     return NextResponse.json({ ok: true, approval });

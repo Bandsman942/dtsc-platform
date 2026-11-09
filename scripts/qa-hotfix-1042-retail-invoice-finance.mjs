@@ -167,13 +167,18 @@ assert.match(route, /auth\.visibility\.cancellableSiteIds\.includes\(entry\.site
 assert.match(route, /canSubmit: entry\.invoice\.status === "DRAFT" && entry\.invoice\.createdByUserId === auth\.session\.userId/);
 assert.match(route, /canCollect: \["ISSUED", "PARTIALLY_PAID", "OVERDUE"\]/);
 const cancelRoute = fs.readFileSync("app/api/enterprise/[organizationId]/retail/invoices/[invoiceId]/transition/route.ts", "utf8");
-assert.match(cancelRoute, /z\.literal\("CANCEL"\)/, "Retail must not expose direct approval, issuance or refund shortcuts");
+assert.match(cancelRoute, /z\.literal\("CANCEL"\)/, "Retail cancellation stays permissioned");
 assert.match(cancelRoute, /z\.literal\("SUBMIT"\)/);
-assert.doesNotMatch(cancelRoute, /z\.literal\("(APPROVE|ISSUE|VOID|REFUND)"\)/);
+assert.match(cancelRoute, /z\.literal\("APPROVE"\)/, "POS now delegates assigned approval decisions to canonical Finance");
+assert.match(cancelRoute, /z\.literal\("ISSUE"\)/, "POS now delegates issuance to canonical Finance");
+assert.doesNotMatch(cancelRoute, /z\.literal\("(VOID|REFUND)"\)/, "POS must not expose direct refund or void shortcuts");
+assert.match(cancelRoute, /decideSalesInvoiceAssignedApproval\(/);
+assert.match(cancelRoute, /action: "manage"/, "Finance issuers must have the Finance manage capability");
+assert.match(cancelRoute, /siteStaffCapabilities\(assignment\.roleCode, assignment\.permissionsJson\)\.includes\("ISSUE_INVOICE"\)/, "Store managers and explicitly delegated issuers are bounded by their own assigned store");
 assert.match(cancelRoute, /parsed\.data\.action === "CANCEL" \? "CANCEL_UNPAID_INVOICE" : "PREPARE_INVOICE"/);
 assert.match(cancelRoute, /checkout\.invoice\.status !== "DRAFT"/);
 assert.match(cancelRoute, /checkout\.invoice\.revision !== parsed\.data\.revision/);
-assert.match(cancelRoute, /transitionSalesInvoice\(organizationId, invoiceId, auth\.session\.userId, parsed\.data\)/);
+assert.match(cancelRoute, /transitionSalesInvoice\(organizationId, invoiceId, auth\.session\.userId, parsed\.data as/);
 assert.match(cancelRoute, /submitSalesInvoiceForAssignedApproval\(organizationId, invoiceId, auth\.session\.userId, parsed\.data, \{ retailInvoiceSiteId: checkout\.siteId \}\)/);
 assert.match(cancelRoute, /writeAuditLog\(/);
 const candidatesRoute = fs.readFileSync("app/api/enterprise/[organizationId]/retail/invoices/approval-candidates/route.ts", "utf8");
@@ -208,6 +213,7 @@ vm.runInNewContext(approvalCompiled, {
     if (id === "@/lib/enterprise/module-access") return { resolveEnterpriseModuleAccess: async ({ userId, action }) => ({ allowed: approvalState.allowCandidate && userId === "approver" && action === "approve" }) };
     if (id === "@/lib/enterprise/retail/site-access") return {
       RETAIL_OWNER_ROLES: new Set(["OWNER"]), retailStaffIsolationIsEnabled: (settings) => settings?.siteStaffIsolationEnabled === true,
+      retailFinanceReadSiteScope: async () => null,
       requireRetailSiteCapability: async () => { if (!approvalState.isAssigned) throw new EnterpriseRetailError("RETAIL_SITE_ACCESS_DENIED", 403); },
     };
     return require(id);

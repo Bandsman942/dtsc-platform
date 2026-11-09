@@ -23,7 +23,7 @@ export async function submitSalesInvoiceForAssignedApproval(
     const invoice = await tx.enterpriseSalesInvoice.findFirst({ where: { id: invoiceId, organizationId } });
     if (!invoice) throw new EnterpriseAccountingError("SALES_INVOICE_NOT_FOUND", 404);
     if (invoice.revision !== input.revision) throw new EnterpriseAccountingError("SALES_INVOICE_REVISION_CONFLICT", 409, { currentRevision: invoice.revision });
-    if (invoice.status !== "DRAFT") throw new EnterpriseAccountingError("SALES_INVOICE_TRANSITION_INVALID", 409);
+    if (invoice.status !== "DRAFT" && invoice.status !== "REJECTED") throw new EnterpriseAccountingError("SALES_INVOICE_TRANSITION_INVALID", 409);
     if (invoice.createdByUserId !== actorUserId) throw new EnterpriseAccountingError("SALES_INVOICE_SUBMITTER_MISMATCH", 403);
     if (options.retailInvoiceSiteId) {
       const checkout = await tx.enterpriseRetailInvoiceCheckout.findFirst({
@@ -51,7 +51,7 @@ export async function submitSalesInvoiceForAssignedApproval(
       eventType: "SALES_INVOICE_SUBMIT",
       summary: `Customer invoice ${invoice.number}: SUBMIT`,
       actorUserId,
-      fromStatus: "DRAFT",
+      fromStatus: invoice.status,
       toStatus: "PENDING_APPROVAL",
       metadataJson: { approvalId: approval.id, approverUserId: input.approverUserId },
     });
@@ -65,6 +65,20 @@ export async function approveSalesInvoiceAssignedApproval(
   actorUserId: string,
   input: { revision: number; reason?: string },
 ) {
+  return decideSalesInvoiceAssignedApproval(organizationId, invoiceId, actorUserId, { ...input, action: "APPROVE" });
+}
+
+/** Shared Finance decision for the POS, customer invoices and generic
+ * approvals: never update EnterpriseApproval without its invoice. */
+export async function decideSalesInvoiceAssignedApproval(
+  organizationId: string,
+  invoiceId: string,
+  actorUserId: string,
+  input: { revision: number; action: "APPROVE" | "REJECT" | "REQUEST_CORRECTION"; reason?: string },
+) {
+  if (input.action !== "APPROVE" && (!input.reason || input.reason.trim().length < 4)) {
+    throw new EnterpriseAccountingError("FINANCE_DECISION_REASON_TOO_SHORT", 400);
+  }
   const { approval, decision } = await requireAccountingApprovalDecision({
     organizationId,
     targetEntityType: "EnterpriseSalesInvoice",
@@ -83,24 +97,29 @@ export async function approveSalesInvoiceAssignedApproval(
       approvalId: approval.id,
       approvalRevision: approval.revision,
       actorUserId,
-      status: "APPROVED",
+      status: input.action === "APPROVE" ? "APPROVED" : "REJECTED",
       decisionComment: input.reason,
       selfApprovalOverride: decision.selfApprovalOverride,
     });
     const updated = await tx.enterpriseSalesInvoice.update({
       where: { id: invoice.id },
-      data: { status: "APPROVED", approvedAt: new Date(), approvedByUserId: actorUserId, revision: { increment: 1 } },
+      data: {
+        status: input.action === "APPROVE" ? "APPROVED" : input.action === "REJECT" ? "REJECTED" : "DRAFT",
+        approvedAt: input.action === "APPROVE" ? new Date() : null,
+        approvedByUserId: input.action === "APPROVE" ? actorUserId : null,
+        revision: { increment: 1 },
+      },
     });
     await publishFinanceEvent(tx, {
       organizationId,
       entityType: "EnterpriseSalesInvoice",
       entityId: invoice.id,
-      eventType: "SALES_INVOICE_APPROVE",
-      summary: `Customer invoice ${invoice.number}: APPROVE`,
+      eventType: `SALES_INVOICE_${input.action}`,
+      summary: `Customer invoice ${invoice.number}: ${input.action}`,
       actorUserId,
       fromStatus: "PENDING_APPROVAL",
-      toStatus: "APPROVED",
-      metadataJson: { approvalId: approval.id, selfApprovalOverride: decision.selfApprovalOverride },
+      toStatus: updated.status,
+      metadataJson: { approvalId: approval.id, selfApprovalOverride: decision.selfApprovalOverride, reason: input.reason?.slice(0, 500) },
     });
     return updated;
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });

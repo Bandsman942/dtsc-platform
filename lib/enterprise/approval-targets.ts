@@ -76,7 +76,7 @@ export function enterpriseApprovalTargetDeepLink(targetEntityType: string, targe
   if (targetEntityType === "EnterpriseFundingOperation") return `/enterprise-modules/FINANCE_TREASURY?tab=funding&fundingOperationId=${id}`;
   if (targetEntityType === "EnterpriseJournalEntry") return `/enterprise-modules/FINANCE_ACCOUNTING?tab=entries&entry=${id}`;
   if (targetEntityType === "EnterprisePayment") return `/enterprise-modules/FINANCE_PAYMENTS?payment=${id}`;
-  if (targetEntityType === "EnterpriseSalesInvoice") return `/enterprise-modules/FINANCE_RECEIVABLES?invoice=${id}`;
+  if (targetEntityType === "EnterpriseSalesInvoice") return `/enterprise-modules/FINANCE_RECEIVABLES?invoiceId=${id}`;
   if (targetEntityType === "EnterpriseSupplierInvoiceReview" || targetEntityType === "EnterpriseSupplierInvoiceApproval") return `/enterprise-modules/FINANCE_PAYABLES?invoice=${id}`;
   if (targetEntityType === "EnterpriseFinancialClose") return `/enterprise-modules/FINANCE_CLOSE?close=${id}`;
   if (targetEntityType === "EnterpriseCashSession") return `/enterprise-modules/FINANCE_CASH?session=${id}`;

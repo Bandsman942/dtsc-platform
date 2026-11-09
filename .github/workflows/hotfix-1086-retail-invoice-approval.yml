@@ -1,0 +1,130 @@
+name: "Hotfix #1086 Retail invoice approval and universal print"
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - "app/api/enterprise/**/retail/invoices/**"
+      - "app/api/enterprise/**/sales-invoices/**"
+      - "app/api/enterprise/**/approvals/**"
+      - "app/enterprise-modules/retail-page.tsx"
+      - "components/enterprise/professional/retail-invoice-approval-workbench.tsx"
+      - "components/enterprise/professional/retail-pos-section-navigation.tsx"
+      - "components/enterprise/professional/enterprise-finance-invoices-workspace.tsx"
+      - "lib/enterprise/accounting/**"
+      - "lib/enterprise/retail/**"
+      - "locales/enterprise-finance.*.json"
+      - "locales/retail-workspace.*.json"
+      - "scripts/qa-hotfix-1086-invoice-workflow.mjs"
+      - "package.json"
+      - ".github/workflows/hotfix-1086-retail-invoice-approval.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hotfix-1086-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  acceptance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: dtsc_hotfix_1086
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d dtsc_hotfix_1086"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s
+          --health-timeout=3s
+          --health-retries=10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/dtsc_hotfix_1086?schema=public
+      AUTH_SECRET: hotfix-1086-acceptance-auth-secret-with-more-than-thirty-two-characters-2026
+      APP_URL: http://127.0.0.1:3000
+      NEXT_PUBLIC_PUBLIC_URL: http://127.0.0.1:3000
+      NEXT_PUBLIC_APP_URL: http://127.0.0.1:3000
+      NEXT_PUBLIC_CONSOLE_URL: http://127.0.0.1:3000
+      NEXT_PUBLIC_ACCOUNT_URL: http://127.0.0.1:3000
+      NEXT_PUBLIC_SUPPORT_URL: http://127.0.0.1:3000
+      DEFAULT_ADMIN_BOOTSTRAP_ENABLED: "false"
+      UPSTASH_REDIS_REST_URL: http://127.0.0.1:8079
+      UPSTASH_REDIS_REST_TOKEN: dtsc-hotfix-1086-ci-${{ github.run_id }}-${{ github.run_attempt }}
+      CI_REDIS_REST_TOKEN: dtsc-hotfix-1086-ci-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Start isolated Redis REST proxy
+        run: |
+          nohup node scripts/ci-upstash-redis-rest-proxy.mjs >/tmp/dtsc-hotfix-1086-redis-rest.log 2>&1 &
+          echo $! >/tmp/dtsc-hotfix-1086-redis-rest.pid
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent --show-error -H "Authorization: Bearer ${CI_REDIS_REST_TOKEN}" http://127.0.0.1:8079/healthz >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/dtsc-hotfix-1086-redis-rest.log
+          exit 1
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Generate Prisma client
+        run: pnpm prisma:generate
+      - name: Apply migrations to isolated Postgres
+        run: pnpm prisma:deploy
+      - name: Check POS/Finance approval and print contract
+        run: pnpm qa:hotfix-1086-invoice-workflow
+      - name: Check prior Retail invoice and common Finance contracts
+        run: |
+          pnpm qa:hotfix-1042-retail-invoice-finance
+          pnpm qa:hotfix-1042-retail-invoice-issue-valuation
+          pnpm qa:hotfix-1042-retail-invoice-payments
+          pnpm qa:hotfix-1042-retail-invoice-print
+          pnpm qa:hotfix-664
+      - name: Full regression suite
+        run: pnpm qa:regression
+      - name: TypeScript
+        run: pnpm type-check
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144
+      - name: Lint
+        run: pnpm lint
+      - name: Production build (no Vercel deployment)
+        run: pnpm build
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144
+      - name: Stop Redis REST proxy
+        if: always()
+        run: |
+          if [ -f /tmp/dtsc-hotfix-1086-redis-rest.pid ]; then kill "$(cat /tmp/dtsc-hotfix-1086-redis-rest.pid)" || true; fi
+      - name: Upload diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: hotfix-1086-diagnostics
+          if-no-files-found: ignore
+          path: /tmp/dtsc-hotfix-1086-redis-rest.log
