@@ -50,7 +50,7 @@ export async function GET(req: Request, { params }: Params) {
           select: { id: true },
         }),
         prisma.enterprisePaymentAllocation.findMany({
-          where: { organizationId, paymentId, status: "CONFIRMED", receivableId: { not: null } },
+          where: { organizationId, paymentId, status: { in: ["CONFIRMED", "REVERSED"] }, receivableId: { not: null } },
           select: { receivableId: true },
         }),
       ]);
