@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle2, Eye, FilePlus2, Plus, RotateCcw, Send, XCircle } from "lucide-react";
+import { CheckCircle2, Eye, FilePlus2, Plus, RotateCcw, Send, XCircle, Wallet, BookOpenCheck } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import { BusinessList, BusinessListItem } from "@/components/workspace/business-list";
 import { ContextActions, type BusinessContextAction } from "@/components/workspace/context-actions";
@@ -62,6 +62,12 @@ type ExpenseItem = {
   supplierId: string | null;
   purchaseId: string | null;
   budgetLineId: string | null;
+  accountingTreatment?: string;
+  accountedAt?: string | null;
+  journalEntryId?: string | null;
+  settlementMode?: string;
+  paymentDueDate?: string | null;
+  preferredFinancialAccountId?: string | null;
   siteId: string | null;
   revision: number;
   budgetStatus: string;
@@ -72,7 +78,7 @@ type ExpenseItem = {
 };
 type BudgetDetail = {
   budget: BudgetItem;
-  lines: Array<{ id: string; code: string | null; name: string; category: string | null; costCenterCode: string | null; responsibleUserId: string | null; hypothesis: string | null; forecastAmount: string | number | null; plannedAmount: string | number; committedAmount: string | number; actualAmount: string | number; availableAmount: string | number }>;
+  lines: Array<{ id: string; code: string | null; name: string; category: string | null; accountCode: string | null; fundingAccountLabel?: string | null; costCenterCode: string | null; responsibleUserId: string | null; hypothesis: string | null; forecastAmount: string | number | null; plannedAmount: string | number; committedAmount: string | number; actualAmount: string | number; availableAmount: string | number }>;
   totals: { plannedAmount: string | number; committedAmount: string | number; actualAmount: string | number; availableAmount: string | number };
   alerts: Array<{ id: string; ruleCode: string; thresholdType: string; thresholdValue: string | number; currentValue: string | number | null; severity: string; status: string; triggeredAt: string }>;
   versions: Array<{ id: string; reference: string; scenarioCode: string; versionNumber: number; status: string; createdAt: string; frozenAt: string | null }>;
@@ -85,9 +91,25 @@ type ExpenseDetail = {
   documents: Array<{ id: string; title: string; documentType: string }>;
   events: Array<{ id: string; summary: string; createdAt: string }>;
   approval: { id: string; status: string; approverUserId: string; decisionComment: string | null } | null;
+  canPostExpense?: boolean;
+  canCreateSettlement?: boolean;
+  settlement?: { paidAmount: string; pendingAndPaidAmount: string; payments: Array<{ id: string; number: string; status: string; amount: string | number; currencyCode: string; paymentDate: string }> } | null;
 };
 type SummaryBucket = { currency: string; activeBudgets: number; plannedAmount: string; committedAmount: string; actualAmount: string; availableAmount: string; unbudgetedExpenseAmount: string; unbudgetedExpenseCount: number };
-type BudgetLineDraft = { name: string; code: string; category: string; plannedAmount: string; forecastAmount: string; costCenterCode: string; departmentId: string; responsibleUserId: string; hypothesis: string };
+type BudgetLineDraft = { name: string; code: string; category: string; plannedAmount: string; forecastAmount: string; costCenterCode: string; departmentId: string; responsibleUserId: string; hypothesis: string; accountCode: string; fundingFinancialAccountId: string };
+
+const expenseCategories = ["OPERATING", "HR_REIMBURSEMENT", "PURCHASE_SERVICE", "STOCK_PURCHASE", "FIXED_ASSET", "FINANCIAL_CHARGE", "TAX_PAYMENT", "COMMERCIAL", "EXCEPTIONAL"] as const;
+const expenseCategoryNames: Record<string, [string, string]> = {
+  OPERATING: ["Fonctionnement (loyer, énergie, internet)", "Operations (rent, utilities, internet)"],
+  HR_REIMBURSEMENT: ["RH : mission ou remboursement", "HR: travel or reimbursement"],
+  PURCHASE_SERVICE: ["Achat de prestation ou fourniture", "Service or supply purchase"],
+  STOCK_PURCHASE: ["Achat de stock (circuit achats)", "Inventory purchase (procurement)"],
+  FIXED_ASSET: ["Immobilisation (circuit actifs)", "Fixed asset (asset workflow)"],
+  FINANCIAL_CHARGE: ["Frais financiers", "Financial charges"],
+  TAX_PAYMENT: ["Fiscalité (circuit fiscal)", "Tax (tax workflow)"],
+  COMMERCIAL: ["Commercial et marketing", "Sales and marketing"],
+  EXCEPTIONAL: ["Charge exceptionnelle", "Exceptional expense"],
+};
 
 const budgetStatuses = ["DRAFT", "PREPARING", "PENDING_APPROVAL", "CORRECTION_REQUESTED", "ACTIVE", "FROZEN", "REVISED", "REJECTED", "CLOSED", "CANCELLED"];
 const budgetScenarios = ["BASE", "CONSERVATIVE", "OPTIMISTIC", "REVISED", "CUSTOM"];
@@ -95,10 +117,10 @@ const forecastMethods = ["MANUAL", "HISTORICAL_RUN_RATE", "IMPORTED", "AI_ASSIST
 const alertRules = ["CONSUMPTION_THRESHOLD", "OVERSPEND", "HIGH_COMMITMENT", "FORECAST_OVERSPEND", "MISSING_ACTUALS", "INACTIVE_LINE"];
 const expenseStatuses = ["DRAFT", "PENDING_APPROVAL", "APPROVED", "REJECTED", "CANCELLED"];
 const labelsFr: Record<string, string> = {
-  DRAFT: "Brouillon", PREPARING: "En préparation", CORRECTION_REQUESTED: "Correction demandée", FROZEN: "Gelé", REVISED: "Révisé", BASE: "Base", CONSERVATIVE: "Prudent", OPTIMISTIC: "Optimiste", CUSTOM: "Personnalisé", MANUAL: "Manuelle", HISTORICAL_RUN_RATE: "Rythme historique", IMPORTED: "Importée", AI_ASSISTED: "Assistée par IA", PENDING_APPROVAL: "En validation", ACTIVE: "Actif", APPROVED: "Approuvée", REJECTED: "Rejeté", CLOSED: "Clôturé", CANCELLED: "Annulé", UNBUDGETED: "Non budgétée", BUDGETED: "Budgétée", CONSUMPTION_THRESHOLD: "Seuil de consommation", OVERSPEND: "Dépassement", HIGH_COMMITMENT: "Engagement élevé", FORECAST_OVERSPEND: "Prévision de dépassement", MISSING_ACTUALS: "Réalisé manquant", INACTIVE_LINE: "Ligne inactive",
+  DRAFT: "Brouillon", PREPARING: "En préparation", CORRECTION_REQUESTED: "Correction demandée", FROZEN: "Gelé", REVISED: "Révisé", BASE: "Base", CONSERVATIVE: "Prudent", OPTIMISTIC: "Optimiste", CUSTOM: "Personnalisé", MANUAL: "Manuelle", HISTORICAL_RUN_RATE: "Rythme historique", IMPORTED: "Importée", AI_ASSISTED: "Assistée par IA", PENDING_APPROVAL: "En validation", ACTIVE: "Actif", APPROVED: "Approuvée", REJECTED: "Rejeté", CLOSED: "Clôturé", CANCELLED: "Annulé", CONFIRMED: "Confirmé", RECONCILED: "Rapproché", REVERSED: "Contrepassé", UNBUDGETED: "Non budgétée", BUDGETED: "Budgétée", IMMEDIATE: "Immédiat", DEFERRED: "Différé", INSTALLMENTS: "Échelonné", CONSUMPTION_THRESHOLD: "Seuil de consommation", OVERSPEND: "Dépassement", HIGH_COMMITMENT: "Engagement élevé", FORECAST_OVERSPEND: "Prévision de dépassement", MISSING_ACTUALS: "Réalisé manquant", INACTIVE_LINE: "Ligne inactive",
 };
 const labelsEn: Record<string, string> = {
-  DRAFT: "Draft", PREPARING: "Preparing", CORRECTION_REQUESTED: "Correction requested", FROZEN: "Frozen", REVISED: "Revised", BASE: "Base", CONSERVATIVE: "Conservative", OPTIMISTIC: "Optimistic", CUSTOM: "Custom", MANUAL: "Manual", HISTORICAL_RUN_RATE: "Historical run rate", IMPORTED: "Imported", AI_ASSISTED: "AI-assisted", PENDING_APPROVAL: "Pending approval", ACTIVE: "Active", APPROVED: "Approved", REJECTED: "Rejected", CLOSED: "Closed", CANCELLED: "Cancelled", UNBUDGETED: "Unbudgeted", BUDGETED: "Budgeted", CONSUMPTION_THRESHOLD: "Consumption threshold", OVERSPEND: "Overspend", HIGH_COMMITMENT: "High commitment", FORECAST_OVERSPEND: "Forecast overspend", MISSING_ACTUALS: "Missing actuals", INACTIVE_LINE: "Inactive line",
+  DRAFT: "Draft", PREPARING: "Preparing", CORRECTION_REQUESTED: "Correction requested", FROZEN: "Frozen", REVISED: "Revised", BASE: "Base", CONSERVATIVE: "Conservative", OPTIMISTIC: "Optimistic", CUSTOM: "Custom", MANUAL: "Manual", HISTORICAL_RUN_RATE: "Historical run rate", IMPORTED: "Imported", AI_ASSISTED: "AI-assisted", PENDING_APPROVAL: "Pending approval", ACTIVE: "Active", APPROVED: "Approved", REJECTED: "Rejected", CLOSED: "Closed", CANCELLED: "Cancelled", CONFIRMED: "Confirmed", RECONCILED: "Reconciled", REVERSED: "Reversed", UNBUDGETED: "Unbudgeted", BUDGETED: "Budgeted", IMMEDIATE: "Immediate", DEFERRED: "Deferred", INSTALLMENTS: "Installments", CONSUMPTION_THRESHOLD: "Consumption threshold", OVERSPEND: "Overspend", HIGH_COMMITMENT: "High commitment", FORECAST_OVERSPEND: "Forecast overspend", MISSING_ACTUALS: "Missing actuals", INACTIVE_LINE: "Inactive line",
 };
 function label(en: boolean, value: string) { return (en ? labelsEn : labelsFr)[value] || value.replaceAll("_", " "); }
 function tone(status: string) { return status === "ACTIVE" || status === "APPROVED" ? "success" as const : status === "PENDING_APPROVAL" ? "warning" as const : status === "REJECTED" || status === "CANCELLED" ? "danger" as const : "neutral" as const; }
@@ -106,7 +128,7 @@ function amount(value: string | number, currency: string, en: boolean) { const n
 
 export function EnterpriseFinanceWorkspaceHotfix({ organizationId, organizationName, members, departments, canCreate, canManage, locale, legacyRecords = [] }: { organizationId: string; organizationName: string; members: EnterpriseChoice[]; departments: EnterpriseChoice[]; canCreate: boolean; canManage: boolean; locale?: string | null; legacyRecords?: LegacyRecord[] }) {
   const en = locale === "en";
-  const emptyLine: BudgetLineDraft = { name: "", code: "", category: "", plannedAmount: "0", forecastAmount: "", costCenterCode: "", departmentId: "", responsibleUserId: "", hypothesis: "" };
+  const emptyLine: BudgetLineDraft = { name: "", code: "", category: "", plannedAmount: "0", forecastAmount: "", costCenterCode: "", departmentId: "", responsibleUserId: "", hypothesis: "", accountCode: "", fundingFinancialAccountId: "" };
   const [pageBudget, setPageBudget] = useState(1);
   const [pageExpense, setPageExpense] = useState(1);
   const [budgetSearch, setBudgetSearch] = useState("");
@@ -129,6 +151,9 @@ export function EnterpriseFinanceWorkspaceHotfix({ organizationId, organizationN
   const [alertBudget, setAlertBudget] = useState<BudgetItem | null>(null);
   const [lines, setLines] = useState<BudgetLineDraft[]>([{ ...emptyLine }]);
   const [purchaseSource, setPurchaseSource] = useState<FinanceReferenceOption | null>(null);
+  const [selectedExpenseCategory, setSelectedExpenseCategory] = useState("OPERATING");
+  const [postExpenseOpen, setPostExpenseOpen] = useState(false);
+  const [settleExpenseOpen, setSettleExpenseOpen] = useState(false);
   const [expenseSites, setExpenseSites] = useState<Array<{ id: string; code: string; name: string }>>([]);
   const [message, setMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
@@ -224,6 +249,7 @@ export function EnterpriseFinanceWorkspaceHotfix({ organizationId, organizationN
       documentIds: documentId ? [documentId] : [],
     };
     delete payload.documentId;
+    if (!String(form.paymentDueDate || "").trim()) delete payload.paymentDueDate;
     if (purchaseSource) {
       delete payload.supplierId;
       delete payload.budgetLineId;
@@ -234,6 +260,42 @@ export function EnterpriseFinanceWorkspaceHotfix({ organizationId, organizationN
       setPurchaseSource(null);
       setRefreshKey((value) => value + 1);
       setMessage(en ? "Expense draft created." : "Brouillon de dépense créé.");
+    } catch (error) { setErrorMessage(mutationError(error)); }
+    finally { setBusy(false); }
+  }
+
+  async function postExpense(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!expenseDetail || busy) return;
+    setBusy(true); setMessage(""); setErrorMessage("");
+    const accountingTreatment = String(new FormData(event.currentTarget).get("accountingTreatment") || "DIRECT_EXPENSE");
+    try {
+      await enterpriseV2Mutation(`/api/enterprise/${organizationId}/expenses/${expenseDetail.expense.id}/post`, "POST", { accountingTreatment, revision: expenseDetail.expense.revision });
+      setPostExpenseOpen(false);
+      await openExpense(expenseDetail.expense);
+      setRefreshKey((value) => value + 1);
+      setMessage(en ? "Expense posted to the ledger. Payment remains a separate approval." : "Dépense comptabilisée. Le règlement reste soumis à une validation distincte.");
+    } catch (error) { setErrorMessage(mutationError(error)); }
+    finally { setBusy(false); }
+  }
+
+  async function createExpenseSettlement(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!expenseDetail || busy) return;
+    setBusy(true); setMessage(""); setErrorMessage("");
+    const form = Object.fromEntries(new FormData(event.currentTarget).entries());
+    try {
+      await enterpriseV2Mutation(`/api/enterprise/${organizationId}/payments`, "POST", {
+        direction: "OUTBOUND", paymentType: "EXPENSE_SETTLEMENT", expenseId: expenseDetail.expense.id,
+        methodType: form.methodType, financialAccountId: form.financialAccountId,
+        amount: Number(form.amount), currencyCode: expenseDetail.expense.currency,
+        paymentDate: form.paymentDate, reference: expenseDetail.expense.reference,
+        idempotencyKey: `expense:${expenseDetail.expense.id}:${crypto.randomUUID()}`,
+      });
+      setSettleExpenseOpen(false);
+      await openExpense(expenseDetail.expense);
+      setRefreshKey((value) => value + 1);
+      setMessage(en ? "Payment order created. Finance must approve and confirm it before funds move." : "Ordre de règlement créé. Le service Finances doit l’approuver et le confirmer avant tout décaissement.");
     } catch (error) { setErrorMessage(mutationError(error)); }
     finally { setBusy(false); }
   }
@@ -318,7 +380,12 @@ export function EnterpriseFinanceWorkspaceHotfix({ organizationId, organizationN
       <Pager page={pageBudget} pageCount={budgets.pagination.pageCount} setPage={setPageBudget} en={en} />
     </ModuleSection>
 
-    <ModuleSection title={en ? "Expenses" : "Dépenses"} description={en ? "ERP expenses are budget consumption, not bank payments." : "Les dépenses ERP représentent une consommation budgétaire, pas un paiement bancaire."} count={`${expenses.pagination.total}`} action={canCreate ? <Button onClick={() => { setErrorMessage(""); setPurchaseSource(null); setCreateExpenseOpen(true); }}><FilePlus2 className="h-4 w-4" />{en ? "New expense" : "Nouvelle dépense"}</Button> : undefined}>
+    <ModuleSection title={en ? "Expenses" : "Dépenses"} description={en ? "Budget approval, accounting and payment are separate tracked steps. Only a confirmed payment reduces cash." : "Le budget, la comptabilisation et le règlement suivent trois validations distinctes. Seul un paiement confirmé débite la trésorerie."} count={`${expenses.pagination.total}`} action={canCreate ? <Button onClick={() => { setErrorMessage(""); setPurchaseSource(null); setSelectedExpenseCategory("OPERATING"); setCreateExpenseOpen(true); }}><FilePlus2 className="h-4 w-4" />{en ? "New expense" : "Nouvelle dépense"}</Button> : undefined}>
+      <div className="grid gap-2 rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-3 text-sm text-dtsc-muted sm:grid-cols-3">
+        <p><strong className="text-dtsc-ink">1. {en ? "Budget" : "Budget"}</strong><br />{en ? "Approved envelope and commitment, without moving money." : "Enveloppe approuvée et engagement, sans mouvement bancaire."}</p>
+        <p><strong className="text-dtsc-ink">2. {en ? "Accounting" : "Comptabilité"}</strong><br />{en ? "Post the justified expense once. Supplier invoices use their own workflow." : "Constater la charge une seule fois. Les factures fournisseurs suivent leur circuit."}</p>
+        <p><strong className="text-dtsc-ink">3. {en ? "Settlement" : "Règlement"}</strong><br />{en ? "Approve and confirm a separate payment in Finance." : "Approuver puis confirmer le paiement dans Finances."}</p>
+      </div>
       <div className="grid gap-2 border-y border-dtsc-border py-3"><div className="flex min-w-0 flex-wrap items-end gap-2"><Input className="min-w-48 flex-1" aria-label={en ? "Search expenses" : "Rechercher des dépenses"} value={expenseSearch} onChange={(event) => { setExpenseSearch(event.target.value); setPageExpense(1); }} placeholder={en ? "Search expenses…" : "Rechercher une dépense…"} /><NativeSelect value={expenseStatus} onChange={(value) => { setExpenseStatus(value); setPageExpense(1); }} items={[{ id: "", label: en ? "All statuses" : "Tous les statuts" }, ...expenseStatuses.map((id) => ({ id, label: label(en, id) }))]} /></div><div className="flex min-w-0 flex-wrap items-end gap-2"><FinanceDateFilter locale={en ? "en" : "fr"} from={expenseFrom} to={expenseTo} onChange={(from, to) => { setExpenseFrom(from); setExpenseTo(to); setPageExpense(1); }} /><FinanceExportControls endpoint={`/api/enterprise/${organizationId}/expenses`} organizationName={organizationName} title={en ? "Expenses" : "Dépenses"} locale={en ? "en" : "fr"} filters={{ search: expenseSearch, status: expenseStatus, dateFrom: expenseFrom, dateTo: expenseTo }} columns={expenseExportColumns} disabled={expenses.loading} /></div></div>
       {expenses.loading ? <p className="py-8 text-center text-sm text-dtsc-muted">{en ? "Loading…" : "Chargement…"}</p> : expenses.items.length ? <BusinessList ariaLabel="expenses">{expenses.items.map((item) => <BusinessListItem key={item.id} title={`${item.reference} · ${item.title}`} status={<StatusBadge tone={tone(item.status)}>{label(en, item.status)}</StatusBadge>} meta={`${amount(item.amount, item.currency, en)} · ${label(en, item.budgetStatus)}`} description={`${formatEnterpriseDate(item.expenseDate, locale)} · ${expenseSites.find((site) => site.id === item.siteId)?.name || (en ? "No store assigned" : "Sans boutique affectée")} · ${item.supplier?.displayName || item.supplier?.legalName || (en ? "No supplier" : "Sans fournisseur")}${item.purchase ? ` · ${item.purchase.reference}` : ""}`} onOpen={() => void openExpense(item)} actions={<ContextActions label={en ? "Expense actions" : "Actions dépense"} actions={expenseActions(item)} />} />)}</BusinessList> : <EmptyState compact title={en ? "No expenses" : "Aucune dépense"} description={expenses.error || (en ? "No expense matches the filters." : "Aucune dépense ne correspond aux filtres.")} />}
       <Pager page={pageExpense} pageCount={expenses.pagination.pageCount} setPage={setPageExpense} en={en} />
@@ -334,19 +401,35 @@ export function EnterpriseFinanceWorkspaceHotfix({ organizationId, organizationN
         <Field label="Description"><textarea name="description" disabled={busy} className="min-h-20 rounded-xl border border-dtsc-border bg-dtsc-surface p-3 text-sm disabled:opacity-60" /></Field>
         <Field label={en ? "Assumptions" : "Hypothèses"}><textarea name="assumptionsText" disabled={busy} className="min-h-20 rounded-xl border border-dtsc-border bg-dtsc-surface p-3 text-sm disabled:opacity-60" /></Field>
         <div className="grid gap-3 border-y border-dtsc-border py-3"><div className="flex items-center justify-between gap-3"><strong>{en ? "Budget lines" : "Lignes budgétaires"}</strong><Button type="button" variant="outline" disabled={busy} onClick={() => setLines((items) => [...items, { ...emptyLine }])}><Plus className="h-4 w-4" />{en ? "Add line" : "Ajouter"}</Button></div>{lines.map((line, index) => <div key={index} className="grid gap-2 rounded-xl border border-dtsc-border p-3 md:grid-cols-2 lg:grid-cols-4"><Input value={line.name} onChange={(event) => setLines((items) => items.map((item, i) => i === index ? { ...item, name: event.target.value } : item))} placeholder={en ? "Line name" : "Nom de ligne"} required disabled={busy} /><Input value={line.code} onChange={(event) => setLines((items) => items.map((item, i) => i === index ? { ...item, code: event.target.value } : item))} placeholder="Code" disabled={busy} /><Input value={line.category} onChange={(event) => setLines((items) => items.map((item, i) => i === index ? { ...item, category: event.target.value } : item))} placeholder={en ? "Category" : "Catégorie"} disabled={busy} /><Input value={line.costCenterCode} onChange={(event) => setLines((items) => items.map((item, i) => i === index ? { ...item, costCenterCode: event.target.value } : item))} placeholder={en ? "Cost center" : "Centre de coûts"} disabled={busy} /><Input value={line.plannedAmount} onChange={(event) => setLines((items) => items.map((item, i) => i === index ? { ...item, plannedAmount: event.target.value } : item))} type="number" min="0" step="0.01" required disabled={busy} /><Input value={line.forecastAmount} onChange={(event) => setLines((items) => items.map((item, i) => i === index ? { ...item, forecastAmount: event.target.value } : item))} type="number" min="0" step="0.01" placeholder={en ? "Forecast" : "Prévision"} disabled={busy} /><NativeSelect value={line.departmentId} onChange={(value) => setLines((items) => items.map((item, i) => i === index ? { ...item, departmentId: value } : item))} items={departments} disabled={busy} /><NativeSelect value={line.responsibleUserId} onChange={(value) => setLines((items) => items.map((item, i) => i === index ? { ...item, responsibleUserId: value } : item))} items={members} disabled={busy} /><textarea value={line.hypothesis} onChange={(event) => setLines((items) => items.map((item, i) => i === index ? { ...item, hypothesis: event.target.value } : item))} placeholder={en ? "Line assumption" : "Hypothèse de ligne"} disabled={busy} className="min-h-16 rounded-xl border border-dtsc-border bg-dtsc-surface p-3 text-sm disabled:opacity-60 md:col-span-2 lg:col-span-4" />{lines.length > 1 ? <Button type="button" variant="outline" disabled={busy} onClick={() => setLines((items) => items.filter((_, i) => i !== index))}>{en ? "Remove line" : "Retirer la ligne"}</Button> : null}</div>)}</div>
+        <section className="grid gap-3 border-t border-dtsc-border pt-4">
+          <strong className="text-sm text-dtsc-ink">{en ? "Accounting allocation and planned funding" : "Imputation comptable et financement prévisionnel"}</strong>
+          <p className="text-xs text-dtsc-muted">{en ? "Choose an active ledger account for each budget line and, optionally, a funding account. Budget approval never withdraws cash. These account selections must match the budget currency and company." : "Pour chaque ligne, choisissez un compte du plan comptable actif et, facultativement, une caisse/banque de financement prévue. L’approbation du budget ne retire aucun argent. Les comptes doivent appartenir à l’entreprise et correspondre à sa devise."}</p>
+          {lines.map((line, index) => <div key={`allocation-${index}`} className="grid min-w-0 gap-3 border-b border-dtsc-border pb-3 sm:grid-cols-2">
+            <div className="min-w-0 sm:col-span-2"><strong className="text-sm text-dtsc-ink">{index + 1}. {line.name || (en ? "Unnamed line" : "Ligne sans nom")}</strong></div>
+            <Field label={en ? "Ledger account" : "Compte comptable"} help={en ? "Posting account, not a bank account." : "Compte d’imputation de la charge ou de l’acquisition, pas le compte bancaire."}><FinanceReferenceSelect organizationId={organizationId} kind="expense-account" moduleCode="FINANCE_BUDGETS" name={`budgetAccount_${index}`} label={en ? "ledger account" : "compte comptable"} locale={locale} disabled={busy} onOptionChange={(option) => setLines((items) => items.map((item, i) => i === index ? { ...item, accountCode: option?.accountCode || "" } : item))} /></Field>
+            <Field label={en ? "Forecast funding account (optional)" : "Compte financier prévisionnel (facultatif)"} help={en ? "Does not restrict the eventual payment to this account." : "N’impose pas ce compte lors du paiement effectif."}><FinanceReferenceSelect organizationId={organizationId} kind="financial-account" moduleCode="FINANCE_BUDGETS" name={`budgetFunding_${index}`} label={en ? "funding account" : "compte financier"} locale={locale} disabled={busy} onOptionChange={(option) => setLines((items) => items.map((item, i) => i === index ? { ...item, fundingFinancialAccountId: option?.id || "" } : item))} /></Field>
+          </div>)}
+        </section>
         <div className="sticky bottom-0 flex justify-end gap-2 border-t border-dtsc-border bg-dtsc-surface py-3"><Button type="button" variant="outline" disabled={busy} onClick={() => setCreateBudgetOpen(false)}>{en ? "Cancel" : "Annuler"}</Button><Button type="submit" disabled={busy}>{en ? "Create draft" : "Créer le brouillon"}</Button></div>
       </form>
     </Dialog>
 
     <Dialog open={createExpenseOpen} onClose={() => { if (!busy) setCreateExpenseOpen(false); }} title={en ? "New expense" : "Nouvelle dépense"} presentation="editor" className="max-w-4xl">
       <form onSubmit={createExpense} className="grid gap-5">
-        <Field label={en ? "Title" : "Dépense"}><Input name="title" required disabled={busy} /></Field>
-        <div className="grid gap-3 md:grid-cols-2"><Field label={en ? "Expense date" : "Date"}><Input name="expenseDate" type="date" required disabled={busy} /></Field><Field label={en ? "Category" : "Catégorie"}><Input name="category" disabled={busy} /></Field></div>
+        <Field label={en ? "Title" : "Dépense"} help={en ? "Explain what the company acquired or consumed." : "Décrivez précisément ce qui est acheté, consommé ou remboursé."}><Input name="title" required disabled={busy} /></Field>
+        <div className="grid gap-3 md:grid-cols-2"><Field label={en ? "Economic date" : "Date de la dépense"} help={en ? "Date of the business event, not necessarily the payment date." : "Date du fait générateur, différente de la date de règlement si nécessaire."}><Input name="expenseDate" type="date" required disabled={busy} /></Field><Field label={en ? "Expense category" : "Nature de la dépense"} help={en ? "This selection determines the appropriate accounting workflow." : "Cette nature détermine les contrôles et le circuit comptable."}><NativeSelect name="category" value={selectedExpenseCategory} onChange={(value) => { setSelectedExpenseCategory(value); if (value === "HR_REIMBURSEMENT") setPurchaseSource(null); }} items={expenseCategories.map((id) => ({ id, label: expenseCategoryNames[id][en ? 1 : 0] }))} disabled={busy} /></Field></div>
         <Field label={en ? "Store / site attribution" : "Boutique / site concerné"}><NativeSelect name="siteId" disabled={busy} items={[{ id: "", label: en ? "Unattributed / general expense" : "Charge générale non affectée" }, ...expenseSites.map((site) => ({ id: site.id, label: `${site.code} · ${site.name}` }))]} /></Field>
-        <Field label={en ? "Purchase source" : "Achat source"}><FinanceReferenceSelect organizationId={organizationId} kind="purchase" name="purchaseId" label={en ? "purchase" : "achat"} locale={locale} disabled={busy} onOptionChange={setPurchaseSource} /></Field>
-        {purchaseSource ? <div className="rounded-xl border border-cyan-500/30 bg-cyan-500/5 px-4 py-3 text-sm text-dtsc-muted"><strong className="text-dtsc-ink">{en ? "Purchase-linked expense" : "Dépense liée à un achat"}</strong><p className="mt-1">{en ? "Supplier, budget line and currency are inherited from the purchase and revalidated by the server. Leave the amount empty to reuse the purchase total." : "Le fournisseur, la ligne budgétaire et la devise sont repris de l’achat puis revalidés par le serveur. Laissez le montant vide pour reprendre le total de l’achat."}</p></div> : <div className="grid gap-3 md:grid-cols-2"><Field label={en ? "Supplier" : "Fournisseur"}><FinanceReferenceSelect organizationId={organizationId} kind="supplier" name="supplierId" label={en ? "supplier" : "fournisseur"} locale={locale} disabled={busy} /></Field><Field label={en ? "Budget line" : "Ligne budgétaire"}><FinanceReferenceSelect organizationId={organizationId} kind="budget-line" name="budgetLineId" label={en ? "budget line" : "ligne budgétaire"} locale={locale} disabled={busy} /></Field></div>}
+        {selectedExpenseCategory !== "HR_REIMBURSEMENT" ? <Field label={en ? "Purchase source" : "Achat source"}><FinanceReferenceSelect organizationId={organizationId} kind="purchase" name="purchaseId" label={en ? "purchase" : "achat"} locale={locale} disabled={busy} onOptionChange={setPurchaseSource} /></Field> : null}
+        {purchaseSource ? <div className="rounded-xl border border-cyan-500/30 bg-cyan-500/5 px-4 py-3 text-sm text-dtsc-muted"><strong className="text-dtsc-ink">{en ? "Purchase-linked expense" : "Dépense liée à un achat"}</strong><p className="mt-1">{en ? "Supplier, budget line and currency are inherited from the purchase and revalidated by the server. Leave the amount empty to reuse the purchase total." : "Le fournisseur, la ligne budgétaire et la devise sont repris de l’achat puis revalidés par le serveur. Laissez le montant vide pour reprendre le total de l’achat."}</p></div> : <div className="grid gap-3 md:grid-cols-2">{selectedExpenseCategory !== "HR_REIMBURSEMENT" ? <Field label={en ? "Supplier" : "Fournisseur"}><FinanceReferenceSelect organizationId={organizationId} kind="supplier" name="supplierId" label={en ? "supplier" : "fournisseur"} locale={locale} disabled={busy} /></Field> : null}<Field label={en ? "Budget line" : "Ligne budgétaire"}><FinanceReferenceSelect organizationId={organizationId} kind="budget-line" name="budgetLineId" label={en ? "budget line" : "ligne budgétaire"} locale={locale} disabled={busy} /></Field></div>}
+        {selectedExpenseCategory === "HR_REIMBURSEMENT" && !purchaseSource ? <Field label={en ? "Employee beneficiary" : "Collaborateur bénéficiaire"} help={en ? "Select a colleague for reimbursement; do not choose a supplier as well." : "Identifiez le collaborateur remboursé. Ne renseignez pas également un fournisseur."}><FinanceReferenceSelect organizationId={organizationId} kind="employee" moduleCode="FINANCE_BUDGETS" name="beneficiaryEmployeeId" label={en ? "employee" : "collaborateur"} locale={locale} disabled={busy} /></Field> : null}
+        {["STOCK_PURCHASE", "FIXED_ASSET", "TAX_PAYMENT"].includes(selectedExpenseCategory) ? <p className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-3 text-sm text-dtsc-muted">{en ? "This category must be accounted through the relevant procurement, asset or tax workflow. A budget expense alone will not create a charge or move funds." : "Cette catégorie doit être comptabilisée via le circuit achats/stocks, immobilisations ou fiscalité. La dépense budgétaire seule ne crée ni charge comptable ni décaissement."}</p> : null}
         <Field label={en ? "Supporting document" : "Justificatif"}><FinanceReferenceSelect organizationId={organizationId} kind="document" name="documentId" label={en ? "supporting document" : "justificatif"} locale={locale} disabled={busy} /></Field>
         <div className="grid gap-3 md:grid-cols-2"><Field label={en ? "Amount" : "Montant"}><Input name="amount" type="number" min="0" step="0.01" disabled={busy} placeholder={purchaseSource ? (en ? "Defaults to purchase total" : "Par défaut : total achat") : undefined} /></Field><Field label={en ? "Currency" : "Devise"}><Input name="currency" maxLength={3} disabled={busy} placeholder={purchaseSource ? (en ? "Inherited from purchase" : "Reprise de l’achat") : undefined} /></Field><Field label={en ? "Department" : "Département"}><NativeSelect name="departmentId" items={departments} disabled={busy} /></Field><Field label={en ? "Variance reason" : "Motif d’écart"}><Input name="amountVarianceReason" disabled={busy} /></Field></div>
+        <div className="grid gap-3 border-t border-dtsc-border pt-3 md:grid-cols-2">
+          <Field label={en ? "Planned settlement" : "Règlement envisagé"} help={en ? "This is a plan, not a payment. Treasury changes only after approval and confirmation." : "Ce choix ne décaisse rien. La trésorerie ne bougera qu’après approbation et confirmation du règlement."}><NativeSelect name="settlementMode" defaultValue="DEFERRED" items={[{ id: "IMMEDIATE", label: en ? "Immediate (separate cash/bank approval)" : "Immédiat (validation de caisse/banque distincte)" }, { id: "DEFERRED", label: en ? "Deferred" : "Différé" }, { id: "INSTALLMENTS", label: en ? "Installments" : "Échelonné" }]} disabled={busy} /></Field>
+          <Field label={en ? "Expected due date" : "Échéance prévue"}><Input name="paymentDueDate" type="date" disabled={busy} /></Field>
+          <Field label={en ? "Preferred cash/bank account" : "Compte financier envisagé"} help={en ? "Optional funding forecast. Final treasury account is selected during payment." : "Prévision facultative : le compte réellement débité sera choisi au règlement."}><FinanceReferenceSelect organizationId={organizationId} kind="financial-account" moduleCode="FINANCE_BUDGETS" name="preferredFinancialAccountId" label={en ? "financial account" : "compte financier"} locale={locale} disabled={busy} /></Field>
+        </div>
         <Field label="Description"><textarea name="description" disabled={busy} className="min-h-20 rounded-xl border border-dtsc-border bg-dtsc-surface p-3 text-sm disabled:opacity-60" /></Field>
         <div className="sticky bottom-0 flex justify-end gap-2 border-t border-dtsc-border bg-dtsc-surface py-3"><Button type="button" variant="outline" disabled={busy} onClick={() => setCreateExpenseOpen(false)}>{en ? "Cancel" : "Annuler"}</Button><Button type="submit" disabled={busy}>{en ? "Create draft" : "Créer le brouillon"}</Button></div>
       </form>
@@ -362,10 +445,49 @@ export function EnterpriseFinanceWorkspaceHotfix({ organizationId, organizationN
 
     <Dialog open={Boolean(budgetDetail)} onClose={() => setBudgetDetail(null)} title={budgetDetail ? `${budgetDetail.budget.reference} · ${budgetDetail.budget.title}` : ""} className="h-[96dvh] max-w-5xl">
       {budgetDetail ? <div className="grid gap-5"><div className="flex flex-wrap items-center justify-between gap-3 border-y border-dtsc-border py-3 text-sm"><div><strong>{label(en, budgetDetail.budget.scenarioCode)} · v{budgetDetail.budget.versionNumber}</strong><p className="text-dtsc-muted">{budgetDetail.budget.fiscalYearCode || "—"} · {budgetDetail.budget.forecastMethod ? label(en, budgetDetail.budget.forecastMethod) : (en ? "No forecast method" : "Sans méthode de prévision")}</p></div>{canManage ? <div className="flex flex-wrap gap-2"><Button variant="outline" disabled={Boolean(busyAction)} onClick={() => void evaluateAlerts(budgetDetail.budget)}>{en ? "Evaluate alerts" : "Évaluer les alertes"}</Button><Button variant="outline" disabled={Boolean(busyAction)} onClick={() => setAlertBudget(budgetDetail.budget)}>{en ? "Configure alert" : "Configurer une alerte"}</Button></div> : null}</div><ModuleMetrics label={en ? "Budget position" : "Position budgétaire"}><ModuleMetric label={en ? "Planned" : "Planifié"} value={amount(budgetDetail.totals.plannedAmount, budgetDetail.budget.currency, en)} /><ModuleMetric label={en ? "Committed" : "Engagé"} value={amount(budgetDetail.totals.committedAmount, budgetDetail.budget.currency, en)} /><ModuleMetric label={en ? "Actual" : "Réalisé"} value={amount(budgetDetail.totals.actualAmount, budgetDetail.budget.currency, en)} /><ModuleMetric label={en ? "Available" : "Disponible"} value={amount(budgetDetail.totals.availableAmount, budgetDetail.budget.currency, en)} /></ModuleMetrics>{budgetDetail.versions.length > 1 ? <div><strong className="text-sm text-dtsc-ink">{en ? "Versions and scenarios" : "Versions et scénarios"}</strong><BusinessList ariaLabel="budget versions">{budgetDetail.versions.map((version) => <BusinessListItem key={version.id} title={`${version.reference} · v${version.versionNumber}`} status={<StatusBadge tone={tone(version.status)}>{label(en, version.status)}</StatusBadge>} meta={label(en, version.scenarioCode)} description={formatEnterpriseDate(version.createdAt, locale)} />)}</BusinessList></div> : null}{budgetDetail.alerts.length ? <div><strong className="text-sm text-dtsc-ink">{en ? "Budget alerts" : "Alertes budgétaires"}</strong><BusinessList ariaLabel="budget alerts">{budgetDetail.alerts.map((alert) => <BusinessListItem key={alert.id} title={label(en, alert.ruleCode)} status={<StatusBadge tone={alert.severity === "CRITICAL" ? "danger" : alert.severity === "WARNING" ? "warning" : "info"}>{label(en, alert.status)}</StatusBadge>} meta={`${alert.thresholdType} ${String(alert.thresholdValue)} · ${en ? "Current" : "Actuel"} ${String(alert.currentValue ?? "—")}`} description={formatEnterpriseDate(alert.triggeredAt, locale)} />)}</BusinessList></div> : null}<div><strong className="text-sm text-dtsc-ink">{en ? "Budget lines" : "Lignes budgétaires"}</strong><BusinessList ariaLabel="budget lines">{budgetDetail.lines.map((line) => <BusinessListItem key={line.id} title={`${line.code || "—"} · ${line.name}`} meta={`${en ? "Planned" : "Planifié"} ${amount(line.plannedAmount, budgetDetail.budget.currency, en)} · ${en ? "Available" : "Disponible"} ${amount(line.availableAmount, budgetDetail.budget.currency, en)}`} description={`${en ? "Committed" : "Engagé"} ${amount(line.committedAmount, budgetDetail.budget.currency, en)} · ${en ? "Actual" : "Réalisé"} ${amount(line.actualAmount, budgetDetail.budget.currency, en)}`} />)}</BusinessList></div>{budgetDetail.events.length ? <div className="border-y border-dtsc-border py-3 text-sm text-dtsc-muted"><strong className="text-dtsc-ink">{en ? "History" : "Historique"}</strong>{budgetDetail.events.slice(0, 20).map((event) => <p key={event.id}>{formatEnterpriseDate(event.createdAt, locale)} · {event.summary}</p>)}</div> : null}</div> : null}
+      {budgetDetail?.lines.some((line) => line.accountCode || line.fundingAccountLabel) ? <section className="mt-4 grid gap-2 rounded-xl border border-dtsc-border p-3 text-sm" aria-label={en ? "Budget accounts" : "Comptes liés au budget"}>
+        <strong className="text-dtsc-ink">{en ? "Ledger allocation and planned funding" : "Imputation comptable et financement prévu"}</strong>
+        <p className="text-xs text-dtsc-muted">{en ? "These are planned links. Neither budget approval nor this account choice withdraws cash." : "Ces liens sont prévisionnels : ni l’approbation du budget ni ce choix de compte ne retire des fonds."}</p>
+        {budgetDetail.lines.map((line) => <div key={line.id} className="grid gap-1 border-t border-dtsc-border py-2 sm:grid-cols-2">
+          <strong className="sm:col-span-2">{line.code || "—"} · {line.name}</strong>
+          <span>{en ? "Ledger" : "Compte comptable"} : {line.accountCode || "—"}</span>
+          <span>{en ? "Forecast account" : "Compte financier prévu"} : {line.fundingAccountLabel || "—"}</span>
+        </div>)}
+      </section> : null}
     </Dialog>
 
     <Dialog open={Boolean(expenseDetail)} onClose={() => setExpenseDetail(null)} title={expenseDetail ? `${expenseDetail.expense.reference} · ${expenseDetail.expense.title}` : ""} className="h-[96dvh] max-w-4xl">
       {expenseDetail ? <div className="grid gap-4 text-sm"><div className="grid gap-2 border-y border-dtsc-border py-3 md:grid-cols-2"><p><strong>{en ? "Amount" : "Montant"}</strong><br />{amount(expenseDetail.expense.amount, expenseDetail.expense.currency, en)}</p><p><strong>{en ? "Budget" : "Budget"}</strong><br />{expenseDetail.expense.budgetLine ? `${expenseDetail.expense.budgetLine.budget.reference} · ${expenseDetail.expense.budgetLine.name}` : label(en, "UNBUDGETED")}</p><p><strong>{en ? "Purchase" : "Achat"}</strong><br />{expenseDetail.expense.purchase?.reference || "—"}</p><p><strong>{en ? "Supplier" : "Fournisseur"}</strong><br />{expenseDetail.expense.supplier?.displayName || expenseDetail.expense.supplier?.legalName || "—"}</p></div>{expenseDetail.expense.amountVarianceReason ? <p><strong>{en ? "Amount variance" : "Écart de montant"}</strong><br />{expenseDetail.expense.amountVarianceReason}</p> : null}{expenseDetail.documents.length ? <div><strong className="text-dtsc-ink">{en ? "Supporting documents" : "Justificatifs"}</strong><BusinessList ariaLabel="expense documents">{expenseDetail.documents.map((document) => <BusinessListItem key={document.id} title={document.title} meta={document.documentType} />)}</BusinessList></div> : null}{expenseDetail.approval ? <p className="rounded-xl border border-dtsc-border p-3"><strong>{en ? "Approval" : "Validation"}</strong><br />{label(en, expenseDetail.approval.status)}{expenseDetail.approval.decisionComment ? ` · ${expenseDetail.approval.decisionComment}` : ""}</p> : null}{expenseDetail.events.length ? <div className="border-y border-dtsc-border py-3 text-dtsc-muted"><strong className="text-dtsc-ink">{en ? "History" : "Historique"}</strong>{expenseDetail.events.slice(0, 20).map((event) => <p key={event.id}>{formatEnterpriseDate(event.createdAt, locale)} · {event.summary}</p>)}</div> : null}</div> : null}
+      {expenseDetail ? <section className="mt-5 grid gap-3 border-t border-dtsc-border pt-4 text-sm" aria-label={en ? "Expense financial workflow" : "Circuit financier de la dépense"}>
+        <strong className="text-dtsc-ink">{en ? "Financial workflow" : "Parcours financier et comptable"}</strong>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <div className="rounded-lg border border-dtsc-border p-3"><p className="text-xs text-dtsc-muted">1. {en ? "Budget authorization" : "Autorisation budgétaire"}</p><StatusBadge tone={tone(expenseDetail.expense.status)}>{label(en, expenseDetail.expense.status)}</StatusBadge><p className="mt-1 text-xs text-dtsc-muted">{en ? "No cash withdrawal" : "Aucun décaissement"}</p></div>
+          <div className="rounded-lg border border-dtsc-border p-3"><p className="text-xs text-dtsc-muted">2. {en ? "Accounting" : "Comptabilité"}</p><StatusBadge tone={expenseDetail.expense.accountedAt ? "success" : "warning"}>{expenseDetail.expense.accountedAt ? (en ? "Posted" : "Comptabilisée") : (en ? "Not yet posted" : "À comptabiliser")}</StatusBadge><p className="mt-1 text-xs text-dtsc-muted">{expenseDetail.expense.journalEntryId ? (en ? "Journal entry linked" : "Écriture liée") : (en ? "No journal entry yet" : "Aucune écriture pour le moment")}</p></div>
+          <div className="rounded-lg border border-dtsc-border p-3"><p className="text-xs text-dtsc-muted">3. {en ? "Payments confirmed" : "Règlements confirmés"}</p><strong className="text-dtsc-ink">{expenseDetail.settlement ? amount(expenseDetail.settlement.paidAmount, expenseDetail.expense.currency, en) : "—"}</strong><p className="mt-1 text-xs text-dtsc-muted">{en ? "Only confirmed money movements count" : "Seuls les mouvements confirmés comptent"}</p></div>
+        </div>
+        <p className="text-xs text-dtsc-muted">{en ? "Payment terms" : "Modalité prévue"} : {label(en, expenseDetail.expense.settlementMode || "DEFERRED")}{expenseDetail.expense.paymentDueDate ? ` · ${formatEnterpriseDate(expenseDetail.expense.paymentDueDate, locale)}` : ""}</p>
+        {expenseDetail.expense.purchaseId || expenseDetail.expense.supplierId ? <p className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 text-xs text-dtsc-muted">{en ? "For supplier-invoiced purchases, create/post the supplier invoice in Payables, then pay the resulting payable. Never book the same charge twice." : "Pour un achat facturé, validez et comptabilisez la facture dans Dettes fournisseurs, puis réglez la dette. Ne comptabilisez jamais deux fois la même charge."}</p> : null}
+        {expenseDetail.canPostExpense ? <Button variant="outline" disabled={busy} onClick={() => setPostExpenseOpen(true)}><BookOpenCheck className="h-4 w-4" />{en ? "Post expense to accounting" : "Comptabiliser cette dépense"}</Button> : null}
+        {expenseDetail.canCreateSettlement && expenseDetail.settlement && Number(expenseDetail.settlement.pendingAndPaidAmount) < Number(expenseDetail.expense.amount) ? <Button disabled={busy} onClick={() => setSettleExpenseOpen(true)}><Wallet className="h-4 w-4" />{en ? "Prepare separate payment" : "Préparer un règlement distinct"}</Button> : null}
+        {expenseDetail.settlement?.payments.length ? <div className="grid gap-2"><strong>{en ? "Related payment orders" : "Ordres de règlement liés"}</strong>{expenseDetail.settlement.payments.map((payment) => <div key={payment.id} className="flex min-w-0 flex-wrap items-center justify-between gap-2 border-b border-dtsc-border py-2"><span className="min-w-0 break-words">{payment.number} · {amount(payment.amount, payment.currencyCode, en)}</span><StatusBadge tone={payment.status === "CONFIRMED" || payment.status === "RECONCILED" ? "success" : "warning"}>{label(en, payment.status)}</StatusBadge></div>)}</div> : null}
+      </section> : null}
+    </Dialog>
+    <Dialog open={postExpenseOpen} onClose={() => { if (!busy) setPostExpenseOpen(false); }} title={en ? "Accounting classification" : "Imputation comptable"} presentation="editor">
+      <form onSubmit={postExpense} className="grid gap-4">
+        <p className="text-sm text-dtsc-muted">{en ? "This creates one immutable, balanced journal entry for an approved direct expense. It does not pay anyone." : "Cette action crée une écriture équilibrée pour la dépense directe approuvée. Elle ne règle personne et ne débite aucune caisse."}</p>
+        <Field label={en ? "Accounting treatment" : "Traitement comptable"}><NativeSelect name="accountingTreatment" defaultValue={expenseDetail?.expense.category === "HR_REIMBURSEMENT" ? "EMPLOYEE_REIMBURSEMENT" : "DIRECT_EXPENSE"} items={[{ id: "DIRECT_EXPENSE", label: en ? "Direct operating expense / clearing payable" : "Charge directe / dette à rapprocher" }, { id: "EMPLOYEE_REIMBURSEMENT", label: en ? "Employee reimbursement" : "Remboursement au personnel" }, { id: "PETTY_CASH", label: en ? "Petty cash expense / pending settlement" : "Petite dépense / règlement en attente" }]} disabled={busy} /></Field>
+        <Button type="submit" disabled={busy}>{en ? "Confirm posting" : "Confirmer la comptabilisation"}</Button>
+      </form>
+    </Dialog>
+    <Dialog open={settleExpenseOpen} onClose={() => { if (!busy) setSettleExpenseOpen(false); }} title={en ? "Prepare payment" : "Préparer un règlement"} presentation="editor">
+      <form onSubmit={createExpenseSettlement} className="grid gap-4">
+        <p className="text-sm text-dtsc-muted">{en ? "A draft payment is created in Finance. It will not move money until separately approved and confirmed. Use a valid open cash session for cash payments." : "Un paiement brouillon sera créé dans Finances. Aucun fonds ne sera retiré avant son approbation et sa confirmation distinctes. Une caisse exige une session ouverte."}</p>
+        <Field label={en ? "Payment amount" : "Montant à régler"} help={en ? "Partial payments are allowed up to the remaining unsettled amount." : "Les acomptes sont permis jusqu’au solde non encore réservé ou réglé."}><Input name="amount" type="number" min="0.01" step="0.01" max={expenseDetail ? Math.max(0, Number(expenseDetail.expense.amount) - Number(expenseDetail.settlement?.pendingAndPaidAmount || 0)) : undefined} required disabled={busy} /></Field>
+        <Field label={en ? "Payment method" : "Mode de paiement"}><NativeSelect name="methodType" defaultValue="BANK_TRANSFER" items={[{ id: "BANK_TRANSFER", label: en ? "Bank transfer" : "Virement bancaire" }, { id: "CASH", label: en ? "Cash" : "Espèces" }, { id: "MOBILE_MONEY", label: "Mobile Money" }, { id: "CARD", label: en ? "Card" : "Carte" }, { id: "CHEQUE", label: en ? "Cheque" : "Chèque" }]} disabled={busy} /></Field>
+        <Field label={en ? "Account to debit" : "Compte financier à débiter"}><FinanceReferenceSelect organizationId={organizationId} kind="financial-account" moduleCode="FINANCE_BUDGETS" name="financialAccountId" label={en ? "financial account" : "compte financier"} locale={locale} required disabled={busy} /></Field>
+        <Field label={en ? "Payment date" : "Date du règlement"}><Input name="paymentDate" type="date" required disabled={busy} /></Field>
+        <Button type="submit" disabled={busy}>{en ? "Create payment draft" : "Créer l’ordre de règlement"}</Button>
+      </form>
     </Dialog>
   </div>;
 }

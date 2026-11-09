@@ -1,3 +1,11 @@
+## 2026-11-09 — Hotfix #1088 — budgets, dépenses, comptabilisation et règlements (candidat v1.7.2)
+
+- Les lignes de budget peuvent préciser un compte du plan comptable et un compte financier de financement **prévisionnel** : l'approbation du budget ne débite aucun fonds.
+- Le formulaire transversal de dépenses distingue nature (opérations, RH, achats, stock, immobilisations, fiscalité, frais financiers), site, bénéficiaire, modalités de règlement, échéance et compte financier envisagé. Les étapes du circuit sont expliquées en français et anglais.
+- Une dépense directe approuvée se comptabilise une seule fois selon ses permissions et son imputation ; les dépenses issues d'achats/fournisseurs, stocks, actifs et taxes restent dans leurs circuits spécialisés pour prévenir la double charge.
+- Un ordre canonique `EXPENSE_SETTLEMENT` supporte les règlements partiels, plafonne la réservation, attend la validation indépendante et ne retire les fonds qu'à la confirmation, avec écriture équilibrée et trésorerie atomiques.
+- Migration additive tenant-scoped, guides d'utilisation contextualisés et QA dédiée `node scripts/qa-hotfix-1088-finance-expense-settlement.mjs`. **E2E propriétaire nécessaire avant fusion et production depuis `main`.** Contrat : `docs/HOTFIX_1088_FINANCE_BUDGET_EXPENSE_PAYMENT.md`.
+
 ## 2026-11-09 — Hotfix #1086 — validation et émission des factures RETAIL, aperçu universel A4 (candidat v1.7.1)
 
 - Le POS propose une file « À valider par moi » réservée au validateur affecté, puis une file distincte « Validées · à émettre » ; actions avec raison tracée, recherche, dates exactes/plages, boutique et pagination côté serveur.

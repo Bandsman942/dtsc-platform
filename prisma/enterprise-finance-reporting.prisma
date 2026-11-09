@@ -57,6 +57,7 @@ model EnterpriseBudgetLine {
   description       String?
   category          String?
   accountCode       String?
+  fundingFinancialAccountId String?
   costCenterCode    String?
   departmentId      String?
   projectId         String?
@@ -70,6 +71,7 @@ model EnterpriseBudgetLine {
   createdAt         DateTime                     @default(now())
   updatedAt         DateTime                     @updatedAt
   budget            EnterpriseBudget             @relation(fields: [organizationId, budgetId], references: [organizationId, id], onDelete: Cascade)
+  fundingFinancialAccount EnterpriseFinancialAccount? @relation("BudgetFundingAccount", fields: [organizationId, fundingFinancialAccountId], references: [organizationId, id], onDelete: Restrict, map: "EnterpriseBudgetLine_funding_financial_account_fkey")
   commitments       EnterpriseBudgetCommitment[]
   purchases         EnterprisePurchase[]
   expenses          EnterpriseExpense[]
@@ -84,6 +86,7 @@ model EnterpriseBudgetLine {
   @@index([organizationId, costCenterCode])
   @@index([organizationId, responsibleUserId])
   @@index([organizationId, category])
+  @@index([organizationId, fundingFinancialAccountId])
 }
 
 model EnterpriseBudgetAlert {
@@ -152,6 +155,7 @@ model EnterpriseExpense {
   currency                 String                @default("USD")
   amount                   Decimal               @db.Decimal(18, 2)
   supplierId               String?
+  beneficiaryEmployeeId    String?
   purchaseId               String?
   budgetLineId             String?
   departmentId             String?
@@ -166,6 +170,9 @@ model EnterpriseExpense {
   budgetImpactAppliedAt    DateTime?
   commitmentRealizedAmount Decimal               @default(0) @db.Decimal(18, 2)
   accountingTreatment      String                @default("UNCLASSIFIED")
+  settlementMode           String                @default("DEFERRED")
+  paymentDueDate           DateTime?
+  preferredFinancialAccountId String?
   supplierInvoiceId        String?
   journalEntryId           String?
   accountedAt              DateTime?
@@ -174,6 +181,8 @@ model EnterpriseExpense {
   updatedAt                DateTime              @updatedAt
   archivedAt               DateTime?
   supplier                 EnterpriseSupplier?   @relation(fields: [organizationId, supplierId], references: [organizationId, id], onDelete: Restrict)
+  preferredFinancialAccount EnterpriseFinancialAccount? @relation("ExpensePreferredAccount", fields: [organizationId, preferredFinancialAccountId], references: [organizationId, id], onDelete: Restrict, map: "EnterpriseExpense_preferred_financial_account_fkey")
+  payments                 EnterprisePayment[] @relation("ExpenseSettlements")
   site                     EnterpriseSite?       @relation(fields: [organizationId, siteId], references: [organizationId, id], onDelete: Restrict)
   purchase                 EnterprisePurchase?   @relation(fields: [organizationId, purchaseId], references: [organizationId, id], onDelete: Restrict)
   budgetLine               EnterpriseBudgetLine? @relation(fields: [organizationId, budgetLineId], references: [organizationId, id], onDelete: Restrict)
@@ -191,6 +200,8 @@ model EnterpriseExpense {
   @@index([organizationId, currency, status])
   @@index([organizationId, accountingTreatment, accountedAt])
   @@index([organizationId, journalEntryId])
+  @@index([organizationId, beneficiaryEmployeeId])
+  @@index([organizationId, preferredFinancialAccountId])
   @@index([archivedAt])
 }
 

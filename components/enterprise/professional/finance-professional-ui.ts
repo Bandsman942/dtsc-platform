@@ -49,7 +49,7 @@ const ENUM_LABELS: Record<FinanceLocale, Record<string, string>> = {
   fr: {
     WEIGHTED_AVERAGE: "Coût moyen pondéré", FIFO: "Premier entré, premier sorti", CASH: "Caisse", BANK: "Compte bancaire", MOBILE_MONEY: "Portefeuille électronique",
     CLEARING: "Compte de transit", INBOUND: "Encaissement", OUTBOUND: "Décaissement", CUSTOMER_PAYMENT: "Encaissement client", SUPPLIER_PAYMENT: "Paiement fournisseur",
-    CUSTOMER_REFUND: "Remboursement client", SUPPLIER_REFUND: "Remboursement fournisseur", PAYROLL_PAYMENT: "Paiement de paie", EXPENSE_REIMBURSEMENT: "Remboursement de dépense",
+    CUSTOMER_REFUND: "Remboursement client", SUPPLIER_REFUND: "Remboursement fournisseur", PAYROLL_PAYMENT: "Paiement de paie", EXPENSE_SETTLEMENT: "Règlement d’une dépense comptabilisée", EXPENSE_REIMBURSEMENT: "Remboursement de dépense",
     TAX_PAYMENT: "Paiement fiscal", REFUND: "Remboursement", TRANSFER: "Transfert", FUNDING: "Financement", FUNDING_REVERSAL: "Contrepassation de financement", CAPITAL_CONTRIBUTION: "Apport en capital", SHAREHOLDER_ADVANCE: "Avance d’associé", LOAN_DRAW: "Emprunt reçu", OTHER: "Autre", BANK_TRANSFER: "Virement bancaire", CARD: "Carte", CHEQUE: "Chèque", CREDIT: "Crédit",
     ASSET: "Actif", LIABILITY: "Passif", EQUITY: "Capitaux propres", REVENUE: "Produit", EXPENSE: "Charge", OTHER_INCOME: "Autre produit", OTHER_EXPENSE: "Autre charge",
     ACCOUNTS_RECEIVABLE: "Créances clients", FIXED_ASSET: "Immobilisations", ACCUMULATED_DEPRECIATION: "Amortissements cumulés", ACCOUNTS_PAYABLE: "Dettes fournisseurs",
@@ -61,7 +61,7 @@ const ENUM_LABELS: Record<FinanceLocale, Record<string, string>> = {
   en: {
     WEIGHTED_AVERAGE: "Weighted average", FIFO: "First in, first out", CASH: "Cash", BANK: "Bank account", MOBILE_MONEY: "Electronic wallet", CLEARING: "Clearing account",
     INBOUND: "Receipt", OUTBOUND: "Disbursement", CUSTOMER_PAYMENT: "Customer receipt", SUPPLIER_PAYMENT: "Supplier payment", CUSTOMER_REFUND: "Customer refund", SUPPLIER_REFUND: "Supplier refund",
-    PAYROLL_PAYMENT: "Payroll payment", EXPENSE_REIMBURSEMENT: "Expense reimbursement", TAX_PAYMENT: "Tax payment", REFUND: "Refund", TRANSFER: "Transfer", FUNDING: "Funding", FUNDING_REVERSAL: "Funding reversal", CAPITAL_CONTRIBUTION: "Capital contribution", SHAREHOLDER_ADVANCE: "Shareholder advance", LOAN_DRAW: "Loan proceeds", OTHER: "Other",
+    PAYROLL_PAYMENT: "Payroll payment", EXPENSE_SETTLEMENT: "Posted expense settlement", EXPENSE_REIMBURSEMENT: "Expense reimbursement", TAX_PAYMENT: "Tax payment", REFUND: "Refund", TRANSFER: "Transfer", FUNDING: "Funding", FUNDING_REVERSAL: "Funding reversal", CAPITAL_CONTRIBUTION: "Capital contribution", SHAREHOLDER_ADVANCE: "Shareholder advance", LOAN_DRAW: "Loan proceeds", OTHER: "Other",
     BANK_TRANSFER: "Bank transfer", CARD: "Card", CHEQUE: "Cheque", CREDIT: "Credit", ASSET: "Asset", LIABILITY: "Liability", EQUITY: "Equity", REVENUE: "Revenue", EXPENSE: "Expense",
     ACCOUNTS_RECEIVABLE: "Accounts receivable", FIXED_ASSET: "Fixed assets", ACCUMULATED_DEPRECIATION: "Accumulated depreciation", ACCOUNTS_PAYABLE: "Accounts payable",
     TAX_PAYABLE: "Tax payable", PAYROLL_PAYABLE: "Payroll payable", RETAINED_EARNINGS: "Retained earnings", TAX_RECEIVABLE: "Tax receivable",

@@ -25,6 +25,7 @@ export const enterpriseBudgetLineSchema = z.object({
   description: optionalText(3000),
   category: optionalText(120),
   accountCode: optionalText(120),
+  fundingFinancialAccountId: optionalId,
   costCenterCode: optionalText(120),
   departmentId: optionalId,
   projectId: optionalId,
@@ -113,10 +114,14 @@ const expenseBase = z.object({
   currency: currency.optional(),
   amount: amount.optional(),
   supplierId: optionalId,
+  beneficiaryEmployeeId: optionalId,
   purchaseId: optionalId,
   budgetLineId: optionalId,
   departmentId: optionalId,
   amountVarianceReason: optionalText(3000),
+  settlementMode: z.enum(["IMMEDIATE", "DEFERRED", "INSTALLMENTS"]).default("DEFERRED"),
+  paymentDueDate: z.coerce.date().optional(),
+  preferredFinancialAccountId: optionalId,
   sourceModule: optionalText(120),
   sourceEntityType: optionalText(120),
   sourceEntityId: optionalId,
@@ -127,6 +132,7 @@ export const enterpriseExpenseCreateSchema = expenseBase.superRefine((data, ctx)
   const sourceCount = [data.sourceModule, data.sourceEntityType, data.sourceEntityId].filter(Boolean).length;
   if (sourceCount !== 0 && sourceCount !== 3) ctx.addIssue({ code: "custom", path: ["sourceEntityId"], message: "La source liée doit être complète." });
   if (!data.purchaseId && data.amount === undefined) ctx.addIssue({ code: "custom", path: ["amount"], message: "Le montant est obligatoire sans achat source." });
+  if (data.supplierId && data.beneficiaryEmployeeId) ctx.addIssue({ code: "custom", path: ["beneficiaryEmployeeId"], message: "Choisissez un fournisseur ou un collaborateur, pas les deux." });
 });
 
 export const enterpriseExpenseUpdateSchema = z.object({
@@ -139,10 +145,14 @@ export const enterpriseExpenseUpdateSchema = z.object({
   currency: currency.optional(),
   amount: amount.optional(),
   supplierId: optionalId,
+  beneficiaryEmployeeId: optionalId,
   purchaseId: optionalId,
   budgetLineId: optionalId,
   departmentId: optionalId,
   amountVarianceReason: optionalText(3000),
+  settlementMode: z.enum(["IMMEDIATE", "DEFERRED", "INSTALLMENTS"]).optional(),
+  paymentDueDate: z.coerce.date().nullable().optional(),
+  preferredFinancialAccountId: optionalId,
   documentIds: z.array(z.string().trim().min(1).max(180)).max(40).optional(),
 });
 

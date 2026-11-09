@@ -22,8 +22,38 @@ type GuideSeed = {
 
 const seeds: Record<Iteration06GuideCode, GuideSeed> = {
   FINANCE_BUDGETS: {
-    fr: { title: "Guide Budgets et dépenses", summary: "Préparer, soumettre, valider, geler et suivre des budgets reliés aux sources ERP canoniques.", audience: "Responsables budgétaires, validateurs et administrateurs autorisés", capabilities: ["Exercices et périodes", "Lignes et dimensions", "Validation commune", "Gel et révision", "Exports localisés"], steps: [["Créer un budget", "Choisissez l’exercice, le scénario, la devise, le responsable et les dimensions autorisées."], ["Soumettre et valider", "La soumission utilise le moteur commun ; le validateur peut approuver, refuser ou demander une correction."], ["Geler ou réviser", "Un budget approuvé peut être gelé. Toute modification majeure crée une nouvelle version sans écraser l’ancienne."], ["Exporter", "L’export conserve les filtres, la période, la devise, la source et l’organisation."]], limitations: ["Le budget ne remplace jamais les écritures comptables, factures, paiements ou autres sources ERP réelles."] },
-    en: { title: "Budgets and expenses guide", summary: "Prepare, submit, approve, freeze and track budgets linked to canonical ERP sources.", audience: "Budget owners, approvers and authorized administrators", capabilities: ["Fiscal periods", "Lines and dimensions", "Shared approval engine", "Freeze and revision", "Localized exports"], steps: [["Create a budget", "Choose the fiscal period, scenario, currency, owner and authorized dimensions."], ["Submit and approve", "Submission uses the shared engine; the approver may approve, reject or request corrections."], ["Freeze or revise", "An approved budget can be frozen. Major changes create a new version without overwriting history."], ["Export", "Exports retain filters, period, currency, source and organization."]], limitations: ["Budgets never replace accounting entries, invoices, payments or other real ERP sources."] },
+    fr: {
+      title: "Guide Budgets, dépenses et règlements",
+      summary: "Distinguer autorisation budgétaire, charge comptable, dette et sortie réelle de trésorerie.",
+      audience: "Responsables budgétaires, gérants, validateurs, comptables et trésoriers autorisés",
+      capabilities: ["Comptes comptables par ligne", "Financement prévisionnel non débitant", "Dépenses de plusieurs natures", "Validation commune", "Écriture unique", "Règlements partiels contrôlés"],
+      steps: [
+        ["Configurer les comptes", "Dans Comptabilité et Trésorerie, configurez le plan comptable, les journaux, les comptes financiers et, pour les espèces, une session de caisse ouverte."],
+        ["Créer le budget", "Pour chaque ligne, renseignez le montant, le compte d’imputation comptable et, si utile, le compte financier envisagé. Valider le budget ne déplace aucun argent."],
+        ["Créer et faire approuver la dépense", "Indiquez sa nature, sa boutique, sa ligne budgétaire, son justificatif et, selon le cas, son fournisseur ou son collaborateur. Cette étape consomme l’enveloppe, mais ne paie personne."],
+        ["Comptabiliser sans doublon", "Pour les charges directes approuvées, un titulaire du droit de comptabilisation enregistre une seule écriture. Pour une facture fournisseur, utilisez Dettes fournisseurs ; pour le stock, les actifs et les taxes, utilisez le circuit métier adapté."],
+        ["Préparer le règlement", "Depuis la fiche d’une charge directe comptabilisée, créez un ordre de paiement total ou partiel. Le compte financier définitif est choisi à cette étape ; les ordres en attente réservent le solde à payer."],
+        ["Faire valider et confirmer le paiement", "Dans Paiements, appliquez les permissions et la séparation des tâches. Seule la confirmation comptabilise le règlement et diminue le solde financier ; une annulation ou une contrepassation garde ses preuves."],
+        ["Suivre et exporter", "Comparez budget engagé/réalisé, charge comptabilisée, règlements en attente et paiements confirmés sans mélanger ces montants."],
+      ],
+      limitations: ["Un budget est une autorisation, pas une provision de liquidités.", "La comptabilisation d’une charge et sa liquidation peuvent avoir des dates différentes.", "Une facture fournisseur ne doit jamais être imputée deux fois via une dépense directe.", "Un paiement brouillon ou approuvé n’est pas encore un mouvement de trésorerie."],
+    },
+    en: {
+      title: "Budgets, expenses and settlement guide",
+      summary: "Understand the difference between budget authorization, expense accounting, payables and actual cash outflows.",
+      audience: "Budget owners, store managers, approvers, accountants and authorized treasury staff",
+      capabilities: ["Ledger allocation per budget line", "Non-debiting planned funding", "Multi-category expenses", "Approval workflow", "Single posting", "Controlled partial settlements"],
+      steps: [
+        ["Configure the accounts", "Set up ledger accounts, journals and financial accounts in Accounting and Treasury; cash payments also require an open cash session."],
+        ["Create the budget", "For each line, select the amount, expense ledger account and optional preferred funding account. Approval never moves cash."],
+        ["Create and approve the expense", "Enter its nature, store, budget line, evidence and supplier or employee as appropriate. Approval consumes budget but pays no one."],
+        ["Post without duplication", "Authorized Finance users post direct expenses once. Supplier invoices belong in Payables; inventory, fixed assets and taxes have dedicated workflows."],
+        ["Prepare settlement", "Create a full or partial payment order from a posted direct expense. Select the actual financial account now; pending orders reserve the remaining payable amount."],
+        ["Approve and confirm the payment", "Use the Payments module with separation of duties. Only confirmation posts settlement and reduces available cash; reversals preserve the trail."],
+        ["Track and export", "Keep committed/actual budget, posted charges, pending payments and confirmed payments distinct."],
+      ],
+      limitations: ["A budget is an authorization, not cash on hand.", "Expense posting and payment may happen on different dates.", "Never post a supplier charge twice.", "Draft or approved payments do not move funds."],
+    },
   },
   BUDGET_VERSIONS_AND_SCENARIOS: {
     fr: { title: "Guide Versions et scénarios budgétaires", summary: "Comparer des hypothèses cohérentes et conserver chaque révision approuvée.", audience: "Responsables budgétaires et validateurs", capabilities: ["BASE, prudent, optimiste et personnalisé", "Comparaison version à version", "Hypothèses documentées", "Historique immuable"], steps: [["Créer un scénario", "Définissez une hypothèse comparable sur le même périmètre, la même période et la même devise."], ["Comparer", "Vérifiez les différences de lignes, prévisions et hypothèses avant la soumission."], ["Créer une révision", "Utilisez l’action de révision pour cloner la version active et conserver la filiation."], ["Activer", "Seule une version validée peut remplacer la version active selon le workflow autorisé."]] },
@@ -82,7 +112,7 @@ function buildGuide(code: Iteration06GuideCode, locale: "fr" | "en"): Contextual
     title: seed.title,
     summary: seed.summary,
     audience: seed.audience,
-    updatedAt: "2026-08-05",
+    updatedAt: code === "FINANCE_BUDGETS" ? "2026-11-09" : "2026-08-05",
     capabilities: seed.capabilities,
     steps: seed.steps.map(([title, description]) => ({ title, description })),
     limitations: seed.limitations,

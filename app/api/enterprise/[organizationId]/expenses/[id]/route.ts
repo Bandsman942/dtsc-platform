@@ -1,6 +1,8 @@
+import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
 import { getSession } from "@/lib/auth";
+import { getEnterpriseAccountingAccess } from "@/lib/enterprise/accounting/access";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { normalizeEnterpriseCoreV2Error } from "@/lib/enterprise/core-v2/errors";
 import { enterpriseExpenseVisibilityWhere, getEnterpriseFinanceAccess } from "@/lib/enterprise/finance/access";
@@ -24,16 +26,36 @@ export async function GET(req: Request, { params }: Params) {
   const expense = await prisma.enterpriseExpense.findFirst({ where: { AND: [visibility, { id }] }, include: { supplier: true, purchase: { include: { receipts: { include: { items: true } } } }, budgetLine: { include: { budget: true } } } });
   if (!expense) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const [links, events, approval] = await Promise.all([
+  const [links, events, approval, paymentAccess, postingAccess] = await Promise.all([
     prisma.enterpriseEntityLink.findMany({ where: { organizationId, OR: [{ sourceEntityType: "EnterpriseExpense", sourceEntityId: id }, { targetEntityType: "EnterpriseExpense", targetEntityId: id }] }, orderBy: { createdAt: "desc" }, take: 100 }),
     prisma.enterpriseOperationalEvent.findMany({ where: { organizationId, entityType: "EnterpriseExpense", entityId: id }, orderBy: { createdAt: "desc" }, take: 100 }),
     prisma.enterpriseApproval.findFirst({ where: { organizationId, targetEntityType: "EnterpriseExpense", targetEntityId: id, archivedAt: null }, orderBy: { requestedAt: "desc" } }),
+    getEnterpriseAccountingAccess({ session, organizationId, moduleCode: "FINANCE_PAYMENTS", action: "create" }),
+    getEnterpriseAccountingAccess({ session, organizationId, moduleCode: "FINANCE_PAYABLES", action: "post" }),
   ]);
+  const [payments, reserved, confirmed] = paymentAccess ? await Promise.all([
+    prisma.enterprisePayment.findMany({
+      where: { organizationId, expenseId: id }, orderBy: { createdAt: "desc" }, take: 50,
+      select: { id: true, number: true, status: true, amount: true, currencyCode: true, paymentDate: true },
+    }),
+    prisma.enterprisePayment.aggregate({ where: { organizationId, expenseId: id, status: { notIn: ["CANCELLED", "REVERSED"] } }, _sum: { amount: true } }),
+    prisma.enterprisePayment.aggregate({ where: { organizationId, expenseId: id, status: { in: ["CONFIRMED", "RECONCILED"] } }, _sum: { amount: true } }),
+  ]) : [[], null, null] as const;
   const documentIds = links.filter((link) => link.sourceEntityType === "EnterpriseDocument" && link.linkType === "SUPPORTING_DOCUMENT").map((link) => link.sourceEntityId);
   const documentVisibility = await financeVisibleDocumentWhere(organizationId, session.userId);
   const documents = documentIds.length ? await prisma.enterpriseDocument.findMany({ where: { AND: [documentVisibility, { id: { in: documentIds } }] }, select: { id: true, title: true, documentType: true, visibility: true, currentVersion: true } }) : [];
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "expenses", expenseId: id } });
-  return NextResponse.json({ expense: { ...expense, budgetStatus: expense.budgetLineId ? "BUDGETED" : "UNBUDGETED" }, documents, links, events, approval, canManage: access.canManage });
+  return NextResponse.json({
+    expense: { ...expense, budgetStatus: expense.budgetLineId ? "BUDGETED" : "UNBUDGETED" },
+    documents, links, events, approval, canManage: access.canManage,
+    canPostExpense: Boolean(postingAccess) && expense.status === "APPROVED" && !expense.accountedAt && !expense.supplierInvoiceId && !expense.purchaseId && !expense.supplierId && !["STOCK_PURCHASE", "FIXED_ASSET", "TAX_PAYMENT"].includes(expense.category || ""),
+    canCreateSettlement: Boolean(paymentAccess?.canCreate) && expense.status === "APPROVED" && Boolean(expense.accountedAt) && !expense.supplierInvoiceId && !expense.purchaseId && !expense.supplierId,
+    settlement: paymentAccess ? {
+      payments,
+      pendingAndPaidAmount: (reserved?._sum.amount || new Prisma.Decimal(0)).toFixed(2),
+      paidAmount: (confirmed?._sum.amount || new Prisma.Decimal(0)).toFixed(2),
+    } : null,
+  });
 }
 
 export async function PATCH(req: Request, { params }: Params) {

@@ -219,6 +219,7 @@ export const paymentCreateSchema = z.object({
   businessPartyId: z.string().min(1).optional(),
   employeeId: z.string().min(1).optional(),
   payrollRunId: z.string().min(1).optional(),
+  expenseId: z.string().min(1).optional(),
   currencyCode: currencyCodeSchema,
   amount: positiveMoneyInputSchema,
   paymentDate: dateInputSchema,
