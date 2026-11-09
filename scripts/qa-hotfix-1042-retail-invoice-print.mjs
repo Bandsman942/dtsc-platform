@@ -25,7 +25,7 @@ let visible = true;
 let auditCount = 0;
 const prisma = {
   enterpriseRetailInvoiceCheckout: { findFirst: async () => checkout },
-  organization: { findFirst: async () => ({ name: "Boutiques & Fils", timezone: "Africa/Kinshasa" }) },
+  organization: { findFirst: async () => ({ name: "Boutiques & Fils", timezone: "Africa/Kinshasa", logoUrl: "company-logos/tenant/logo.png" }) },
   enterpriseBusinessParty: { findFirst: async () => ({ displayName: "Client <VIP>", legalName: "client" }) },
   user: { findUnique: async () => ({ name: "Agent A" }) },
 };
@@ -45,6 +45,7 @@ vm.runInNewContext(ts.transpileModule(route, { compilerOptions: { module: ts.Mod
     if (name === "@/lib/enterprise/retail/site-access") return {
       retailInvoiceVisibleSites: async () => ({ isOwner: false, siteIds: visible ? ["site-a"] : ["site-b"], collectibleSiteIds: [] }),
     };
+    if (name === "@/lib/enterprise/organization-logo-storage") return { resolveOrganizationLogoStoragePath: () => "company-logos/tenant/logo.png" };
     if (name === "@/lib/prisma") return { prisma };
     throw Error(`Unexpected import: ${name}`);
   },
@@ -61,6 +62,7 @@ assert.equal(a4.headers["cache-control"], "private, no-store");
 assert.equal(auditCount, 1);
 assert.match(a4.body, /@page\{size:A4/);
 assert.match(a4.body, /Boutiques &amp; Fils/);
+assert.match(a4.body, /<img class="company-logo" src="\/api\/enterprise\/tenant\/logo"/);
 assert.match(a4.body, /Boutique &lt;Nord&gt;/);
 assert.match(a4.body, /Client &lt;VIP&gt;/);
 assert.match(a4.body, /Lait &lt;script&gt;/);

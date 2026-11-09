@@ -37,15 +37,17 @@ function mapAssignmentError(error: unknown) {
 
 async function createAccountingApprovalNotification(
   tx: Prisma.TransactionClient,
-  input: { approvalId: string; organizationId: string; approverUserId: string },
+  input: { approvalId: string; organizationId: string; approverUserId: string; targetEntityType?: string; targetEntityId?: string },
 ) {
+  const invoice = input.targetEntityType === "EnterpriseSalesInvoice" && input.targetEntityId
+    ? await tx.enterpriseSalesInvoice.findFirst({ where: { id: input.targetEntityId, organizationId: input.organizationId }, select: { number: true } }) : null;
   const notification = await tx.notification.create({
     data: {
       userId: input.approverUserId,
       organizationId: input.organizationId,
       type: "ENTERPRISE_APPROVAL",
-      title: "Validation financière requise",
-      body: "Une opération financière vous a été attribuée et attend votre décision.",
+      title: invoice ? `Facture ${invoice.number} à valider` : "Validation financière requise",
+      body: invoice ? `Vous avez été désigné(e) pour valider la facture ${invoice.number}. Ouvrez vos validations Finance pour prendre votre décision.` : "Une opération financière vous a été attribuée et attend votre décision.",
       targetUrl: `/enterprise-modules/VALIDATIONS?approval=${encodeURIComponent(input.approvalId)}`,
     },
   });
@@ -132,6 +134,8 @@ export async function createAccountingApprovalAssignment(
       approvalId: approval.id,
       organizationId: input.organizationId,
       approverUserId: input.approverUserId,
+      targetEntityType: input.targetEntityType,
+      targetEntityId: input.targetEntityId,
     });
   }
   return approval;
@@ -161,6 +165,8 @@ export async function activateQueuedAccountingApproval(
     approvalId: queued.id,
     organizationId: input.organizationId,
     approverUserId: queued.approverUserId,
+    targetEntityType: input.targetEntityType,
+    targetEntityId: input.targetEntityId,
   });
   return queued.id;
 }

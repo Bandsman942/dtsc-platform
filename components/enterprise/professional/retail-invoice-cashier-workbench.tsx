@@ -31,8 +31,8 @@ const messages = {
     title: "Encaissements au comptoir", intro: "Uniquement les factures émises et non soldées de vos boutiques. Le facturier ne reçoit aucun moyen de paiement dans son panier.",
     noAccess: "Vous n'avez pas le droit d'encaisser pour cette boutique. Demandez une affectation de caisse à l'administrateur.",
     notReady: "Le circuit de facturation et d'encaissement séparés n'est pas encore activé pour cette entreprise. Terminez les prérequis RETAIL et Finance.",
-    all: "Toutes mes boutiques", site: "Boutique", search: "Numéro de facture", searchHelp: "Rechercher dans les factures impayées", refresh: "Actualiser",
-    empty: "Aucune facture à encaisser pour cette sélection.", loading: "Chargement des factures à encaisser…", failed: "Impossible de consulter les factures à encaisser.",
+    all: "Toutes mes boutiques", site: "Boutique", search: "Recherche intelligente", searchHelp: "N° de facture, article ou désignation", refresh: "Actualiser", from: "Du", to: "Au", exact: "Date précise", reset: "Effacer les dates",
+    empty: "Aucune facture émise et impayée pour cette sélection. Les factures « À valider » restent dans Facturation ; le validateur Finance doit d'abord les approuver, puis elles doivent être émises avant d'arriver ici.", loading: "Chargement des factures à encaisser…", failed: "Impossible de consulter les factures à encaisser.",
     total: "Montant facturé", due: "Reste à encaisser", issued: "À encaisser", partial: "Paiement partiel", overdue: "Échue",
     a4: "Facture A4", thermal: "Ticket 80 mm", previous: "Précédente", next: "Suivante", page: "Page",
   },
@@ -40,8 +40,8 @@ const messages = {
     title: "Checkout collections", intro: "Only issued and outstanding invoices from your stores. Invoicers cannot take payments from their basket.",
     noAccess: "You cannot collect for this store. Ask an administrator to grant you store till access.",
     notReady: "The separate invoice and collection workflow is not yet active for this company. Complete Retail and Finance readiness first.",
-    all: "All my stores", site: "Store", search: "Invoice number", searchHelp: "Search outstanding invoices", refresh: "Refresh",
-    empty: "No invoices to collect match this selection.", loading: "Loading outstanding invoices…", failed: "Unable to load invoices for collection.",
+    all: "All my stores", site: "Store", search: "Smart search", searchHelp: "Invoice number or item description", refresh: "Refresh", from: "From", to: "To", exact: "Exact date", reset: "Clear dates",
+    empty: "No issued and unpaid invoices match this selection. Invoices awaiting approval remain in Invoicing until Finance approves and issues them.", loading: "Loading outstanding invoices…", failed: "Unable to load invoices for collection.",
     total: "Invoiced total", due: "Outstanding", issued: "Awaiting payment", partial: "Partially paid", overdue: "Overdue",
     a4: "A4 invoice", thermal: "80 mm ticket", previous: "Previous", next: "Next", page: "Page",
   },
@@ -59,6 +59,8 @@ export function RetailInvoiceCashierWorkbench({ organizationId, locale, preferre
   const [siteId, setSiteId] = useState(preferredSiteId || "");
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -76,6 +78,8 @@ export function RetailInvoiceCashierWorkbench({ organizationId, locale, preferre
       const query = new URLSearchParams({ view: "collections", page: String(page), pageSize: "10" });
       if (siteId) query.set("siteId", siteId);
       if (debouncedSearch) query.set("q", debouncedSearch);
+      if (dateFrom) query.set("dateFrom", dateFrom);
+      if (dateTo) query.set("dateTo", dateTo);
       const response = await fetch(`/api/enterprise/${organizationId}/retail/invoices?${query}`, { cache: "no-store" });
       const payload = await response.json().catch(() => null) as (Result & { error?: string }) | null;
       if (response.status === 403) {
@@ -92,7 +96,7 @@ export function RetailInvoiceCashierWorkbench({ organizationId, locale, preferre
       setError("");
     } catch (caught) { setError(customerFacingError(caught, locale)); }
     finally { setLoading(false); }
-  }, [debouncedSearch, locale, organizationId, page, siteId, t.failed]);
+  }, [dateFrom, dateTo, debouncedSearch, locale, organizationId, page, siteId, t.failed]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -108,6 +112,12 @@ export function RetailInvoiceCashierWorkbench({ organizationId, locale, preferre
     {!forbidden ? <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-2 sm:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
       <label className="min-w-0 text-xs font-bold text-dtsc-ink">{t.site}<select value={siteId} onChange={(event) => { setSiteId(event.target.value); setPage(1); }} className="mt-1 block min-h-11 w-full min-w-0 rounded-lg border border-dtsc-border bg-dtsc-page px-3 text-sm"><option value="">{t.all}</option>{result?.sites.map((site) => <option value={site.id} key={site.id}>{site.name}</option>)}</select></label>
       <label className="min-w-0 text-xs font-bold text-dtsc-ink">{t.search}<span className="mt-1 flex min-h-11 min-w-0 items-center gap-2 rounded-lg border border-dtsc-border bg-dtsc-page px-3"><Search className="h-4 w-4 shrink-0 text-dtsc-muted"/><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t.searchHelp} className="w-full min-w-0 bg-transparent text-sm outline-none"/></span></label>
+    </div> : null}
+    {!forbidden ? <div className="flex min-w-0 flex-wrap items-end gap-2 rounded-xl bg-dtsc-page p-2">
+      <label className="min-w-32 flex-1 text-xs font-bold text-dtsc-ink">{t.from}<input type="date" value={dateFrom} max={dateTo || undefined} onChange={(event) => { setDateFrom(event.target.value); setPage(1); }} className="mt-1 min-h-11 w-full rounded-lg border border-dtsc-border bg-dtsc-surface px-2 text-sm" /></label>
+      <label className="min-w-32 flex-1 text-xs font-bold text-dtsc-ink">{t.to}<input type="date" value={dateTo} min={dateFrom || undefined} onChange={(event) => { setDateTo(event.target.value); setPage(1); }} className="mt-1 min-h-11 w-full rounded-lg border border-dtsc-border bg-dtsc-surface px-2 text-sm" /></label>
+      <Button type="button" variant="outline" onClick={() => { const value = dateFrom || dateTo || new Date().toISOString().slice(0, 10); setDateFrom(value); setDateTo(value); setPage(1); }}>{t.exact}</Button>
+      <Button type="button" variant="ghost" disabled={!dateFrom && !dateTo} onClick={() => { setDateFrom(""); setDateTo(""); setPage(1); }}>{t.reset}</Button>
     </div> : null}
     {loading ? <p role="status" className="text-sm text-dtsc-muted">{t.loading}</p> : null}
     {!loading && result && !result.items.length ? <p className="rounded-xl bg-dtsc-page p-4 text-sm text-dtsc-muted">{t.empty}</p> : null}

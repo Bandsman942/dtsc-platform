@@ -36,6 +36,11 @@ export type MobileMoneyCashSession = {
   countedClosingAmount?: string | number | null;
   discrepancyAmount?: string | number | null;
   openedAt: string;
+  openedByLabel?: string;
+  submittedAt?: string | null;
+  submittedByLabel?: string | null;
+  closedAt?: string | null;
+  closedByLabel?: string | null;
   financialAccountId: string;
   revision: number;
   financialAccount: {

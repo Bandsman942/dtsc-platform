@@ -33,6 +33,25 @@ export async function GET(req: Request, { params }: Params) {
   const siteId = url.searchParams.get("siteId") || undefined;
   const collectionsOnly = url.searchParams.get("view") === "collections";
   const search = (url.searchParams.get("q") || "").trim().slice(0, 100);
+  const dateFrom = url.searchParams.get("dateFrom") || "";
+  const dateTo = url.searchParams.get("dateTo") || "";
+  const civilDate = /^\d{4}-\d{2}-\d{2}$/;
+  const validDate = (value: string) => !value || (civilDate.test(value) && !Number.isNaN(Date.parse(`${value}T00:00:00.000Z`)) && new Date(`${value}T00:00:00.000Z`).toISOString().slice(0, 10) === value);
+  if (!validDate(dateFrom) || !validDate(dateTo) || (dateFrom && dateTo && dateFrom > dateTo)) {
+    return retailErrorResponse(new EnterpriseRetailError("RETAIL_REPORT_DATE_INVALID", 400));
+  }
+  const invoiceDate: Prisma.DateTimeFilter = {
+    ...(dateFrom ? { gte: new Date(`${dateFrom}T00:00:00.000Z`) } : {}),
+    ...(dateTo ? { lt: new Date(new Date(`${dateTo}T00:00:00.000Z`).getTime() + 86_400_000) } : {}),
+  };
+  const invoiceConditions: Prisma.EnterpriseSalesInvoiceWhereInput = {
+    ...(collectionsOnly ? { status: { in: ["ISSUED", "PARTIALLY_PAID", "OVERDUE"] } } : status ? { status } : {}),
+    ...(dateFrom || dateTo ? { invoiceDate } : {}),
+    ...(search ? { OR: [
+      { number: { contains: search, mode: "insensitive" } },
+      { items: { some: { description: { contains: search, mode: "insensitive" } } } },
+    ] } : {}),
+  };
   const permittedSites = collectionsOnly ? auth.visibility.collectibleSiteIds : auth.visibility.siteIds;
   if (siteId && !auth.visibility.isOwner && !permittedSites.includes(siteId)) {
     return retailErrorResponse(new EnterpriseRetailError("RETAIL_SITE_ACCESS_DENIED", 403));
@@ -40,9 +59,7 @@ export async function GET(req: Request, { params }: Params) {
   const where: Prisma.EnterpriseRetailInvoiceCheckoutWhereInput = {
     organizationId,
     ...(auth.visibility.isOwner ? (siteId ? { siteId } : {}) : { siteId: siteId || { in: permittedSites } }),
-    ...(collectionsOnly
-      ? { invoice: { status: { in: ["ISSUED", "PARTIALLY_PAID", "OVERDUE"] }, ...(search ? { number: { contains: search, mode: "insensitive" as const } } : {}) } }
-      : status || search ? { invoice: { ...(status ? { status } : {}), ...(search ? { number: { contains: search, mode: "insensitive" as const } } : {}) } } : {}),
+    ...(collectionsOnly || status || search || dateFrom || dateTo ? { invoice: invoiceConditions } : {}),
   };
   const [items, total, sites, configuration] = await Promise.all([
     prisma.enterpriseRetailInvoiceCheckout.findMany({
@@ -61,8 +78,24 @@ export async function GET(req: Request, { params }: Params) {
   await writeApiLog({ request: req, startedAt, statusCode: 200, userId: auth.session.userId, metadata: { organizationId, domain: "retail-checkout-invoices", page } });
   const settings = configuration?.settingsJson;
   const checkoutReady = Boolean(settings && typeof settings === "object" && !Array.isArray(settings) && settings.invoiceCheckoutEnabled === true);
+  const pendingInvoiceIds = items.filter((entry) => entry.invoice.status === "PENDING_APPROVAL").map((entry) => entry.invoice.id);
+  const approvals = pendingInvoiceIds.length ? await prisma.enterpriseApproval.findMany({
+    where: { organizationId, targetEntityType: "EnterpriseSalesInvoice", targetEntityId: { in: pendingInvoiceIds }, status: "PENDING", archivedAt: null },
+    orderBy: { requestedAt: "desc" }, select: { targetEntityId: true, approverUserId: true },
+  }) : [];
+  const approverIds = [...new Set(approvals.map((row) => row.approverUserId))];
+  const approvers = approverIds.length ? await prisma.organizationMember.findMany({
+    where: { organizationId, userId: { in: approverIds }, status: "ACTIVE", removedAt: null },
+    select: { userId: true, user: { select: { name: true, email: true } } },
+  }) : [];
+  const approverNames = new Map(approvers.map((member) => [member.userId, member.user.name || member.user.email || "—"]));
+  const pendingApprovers = new Map<string, string>();
+  for (const approval of approvals) {
+    if (!pendingApprovers.has(approval.targetEntityId)) pendingApprovers.set(approval.targetEntityId, approverNames.get(approval.approverUserId) || "—");
+  }
   const visibleItems = items.map((entry) => ({
     ...entry,
+    invoice: { ...entry.invoice, pendingApproverName: pendingApprovers.get(entry.invoice.id) || null },
     canCancel: entry.invoice.status === "DRAFT" && (auth.visibility.isOwner || auth.visibility.cancellableSiteIds.includes(entry.siteId)),
     canSubmit: entry.invoice.status === "DRAFT" && entry.invoice.createdByUserId === auth.session.userId && (auth.visibility.isOwner || auth.visibility.submittableSiteIds.includes(entry.siteId)),
     canCollect: ["ISSUED", "PARTIALLY_PAID", "OVERDUE"].includes(entry.invoice.status) && (auth.visibility.isOwner || auth.visibility.collectibleSiteIds.includes(entry.siteId)),

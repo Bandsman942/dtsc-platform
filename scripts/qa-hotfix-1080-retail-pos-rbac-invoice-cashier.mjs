@@ -101,7 +101,13 @@ assert.equal(collections.status, 200);
 assert.equal(collections.body.items[0].canCollect, true);
 assert.equal(capturedWhere.siteId.in[0], "shop-a");
 assert.deepEqual(Array.from(capturedWhere.invoice.status.in), ["ISSUED", "PARTIALLY_PAID", "OVERDUE"]);
-assert.equal(capturedWhere.invoice.number.contains, "FAC");
+assert.equal(capturedWhere.invoice.OR[0].number.contains, "FAC");
+assert.equal(capturedWhere.invoice.OR[1].items.some.description.contains, "FAC");
+
+const exact = await unit.exports.GET(new Request("https://app.dtsc-platform.com/api/enterprise/tenant/retail/invoices?view=collections&dateFrom=2026-11-09&dateTo=2026-11-09"), params);
+assert.equal(exact.status, 200);
+assert.equal(capturedWhere.invoice.invoiceDate.gte.toISOString(), "2026-11-09T00:00:00.000Z");
+assert.equal(capturedWhere.invoice.invoiceDate.lt.toISOString(), "2026-11-10T00:00:00.000Z");
 
 const general = await unit.exports.GET(new Request("https://app.dtsc-platform.com/api/enterprise/tenant/retail/invoices"), params);
 assert.equal(general.status, 200);

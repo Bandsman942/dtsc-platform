@@ -62,6 +62,12 @@ export async function GET(req: Request, { params }: Params) {
   }) : [];
   const approvalBySessionId = new Map(approvals.map((approval) => [approval.targetEntityId, approval]));
   const approverUserIds = [...new Set(approvals.map((approval) => approval.approverUserId))];
+  const operatorIds = [...new Set(rawItems.flatMap((item) => [item.cashierUserId, item.validatedByUserId].filter((id): id is string => Boolean(id))))];
+  const operators = operatorIds.length ? await prisma.organizationMember.findMany({
+    where: { organizationId, userId: { in: operatorIds } },
+    select: { userId: true, user: { select: { name: true, email: true } } },
+  }) : [];
+  const operatorNames = new Map(operators.map((member) => [member.userId, member.user.name || member.user.email || "—"]));
   const approverMembers = approverUserIds.length ? await prisma.organizationMember.findMany({
     where: { organizationId, userId: { in: approverUserIds }, status: "ACTIVE", removedAt: null },
     select: { userId: true, positionTitle: true, user: { select: { name: true, email: true } } },
@@ -82,6 +88,10 @@ export async function GET(req: Request, { params }: Params) {
     const assignedToCurrentUser = approval?.status === "PENDING" && approval.approverUserId === auth.session.userId;
     return {
       ...item,
+      openedByLabel: operatorNames.get(item.cashierUserId) || "—",
+      submittedByLabel: item.submittedAt ? operatorNames.get(item.cashierUserId) || "—" : null,
+      closedByLabel: item.validatedAt ? operatorNames.get(item.validatedByUserId || "") || "—" : null,
+      closedAt: item.validatedAt || null,
       currencyCode: item.financialAccount.currencyCode,
       expectedCurrentAmount,
       theoreticalClosingAmount: item.expectedClosingAmount ?? expectedCurrentAmount,

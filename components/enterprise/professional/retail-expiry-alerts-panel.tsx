@@ -10,7 +10,7 @@ type Alert = {
   lotNumber: string; expiryDate: string; status: "EXPIRED" | "DUE_TODAY" | "EXPIRING_SOON";
   quantityAvailable: string;
 };
-type AlertPage = { items: Alert[]; page: number; pageCount: number; total: number; policy: { warningDays: number } };
+type AlertPage = { items: Alert[]; page: number; pageCount: number; total: number; policy: { warningDays: number }; lowStock?: Array<{ warehouseId: string; warehouse: string; catalogCode: string; catalogName: string; minimumQuantity: string; quantityAvailable: string }>; lowStockTotal?: number };
 
 export function RetailExpiryAlertsPanel({ organizationId, locale }: { organizationId: string; locale: "fr" | "en" }) {
   const [page, setPage] = useState(1);
@@ -38,6 +38,7 @@ export function RetailExpiryAlertsPanel({ organizationId, locale }: { organizati
     {error ? <p role="alert" className="mt-4 rounded-xl bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-200">{error}</p> : null}
     {loading ? <p role="status" className="mt-4 text-sm text-dtsc-muted">{en ? "Loading alerts…" : "Chargement des alertes…"}</p> : null}
     {!loading && data ? <>
+      <div className="mt-4 rounded-xl border border-orange-500/25 bg-orange-500/5 p-3"><h3 className="flex items-center gap-2 text-sm font-black text-dtsc-ink"><AlertTriangle className="h-4 w-4 text-orange-600" />{en ? "Low-stock alerts" : "Alertes de stock faible"} · {data.lowStockTotal || 0}</h3><div className="mt-2 grid gap-2 sm:grid-cols-2">{data.lowStock?.map((item) => <div key={`${item.warehouseId}:${item.catalogCode}`} className="rounded-lg border border-orange-500/20 bg-dtsc-surface p-2 text-xs"><strong className="block break-words text-dtsc-ink">{item.catalogName} · {item.catalogCode}</strong><p className="mt-1 text-dtsc-muted">{item.warehouse}</p><p className="mt-1 font-bold text-orange-700 dark:text-orange-300">{en ? "Available" : "Disponible"}: {item.quantityAvailable} · {en ? "Threshold" : "Seuil"}: {item.minimumQuantity}</p></div>)}{!data.lowStock?.length ? <p className="text-xs text-dtsc-muted">{en ? "No products below the configured threshold." : "Aucun produit sous son seuil configuré."}</p> : null}</div>{(data.lowStockTotal || 0) > (data.lowStock?.length || 0) ? <p className="mt-2 text-xs text-dtsc-muted">{en ? "Showing the 80 most urgent alerts." : "Affichage des 80 alertes les plus urgentes."}</p> : null}</div>
       <p className="mt-4 rounded-xl bg-amber-500/10 px-3 py-2 text-sm font-semibold text-dtsc-ink"><AlertTriangle className="mr-2 inline h-4 w-4 text-amber-600" />{data.total} {en ? "stock balances within the alert horizon" : "stocks concernés par l'horizon d'alerte"} · {data.policy.warningDays} {en ? "days" : "jours"}</p>
       <div className="mt-3 grid gap-2">
         {data.items.map((alert) => <article key={alert.id} className="flex min-w-0 flex-wrap items-center justify-between gap-3 rounded-xl border border-dtsc-border bg-dtsc-page p-3">

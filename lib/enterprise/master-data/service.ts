@@ -135,9 +135,26 @@ export async function createEnterpriseCatalogItem(organizationId: string, actorU
   return prisma.$transaction((tx) => createEnterpriseCatalogItemTx(tx, organizationId, actorUserId, input));
 }
 
+async function createCatalogInitialLotTx(
+  tx: Prisma.TransactionClient, organizationId: string, actorUserId: string, inventoryItemId: string,
+  lot: { warehouseId: string; lotNumber: string; expiryDate?: string },
+) {
+  const warehouse = await tx.enterpriseWarehouse.findFirst({ where: { organizationId, id: lot.warehouseId, status: "ACTIVE", archivedAt: null }, select: { siteId: true } });
+  if (!warehouse) throw new EnterpriseDomainError("WAREHOUSE_NOT_FOUND", 404);
+  await requireRetailSiteCapability(organizationId, actorUserId, warehouse.siteId, "MANAGE_STOCK", tx, { requireAssignment: true });
+  await tx.enterpriseStockLot.create({ data: {
+    organizationId, inventoryItemId, warehouseId: lot.warehouseId, lotNumber: lot.lotNumber,
+    expiryDate: lot.expiryDate ? new Date(`${lot.expiryDate}T00:00:00.000Z`) : null, createdByUserId: actorUserId,
+  } });
+  // Batch registration records metadata only. Quantity is entered separately
+  // through an approved inventory receipt/adjustment, never fabricated here.
+}
+
 /** Reuses the canonical catalog write path inside a validated bulk transaction. */
 export async function createEnterpriseCatalogItemTx(tx: Prisma.TransactionClient, organizationId: string, actorUserId: string, input: CatalogItemInput) {
     await assertClientOrganization(tx, organizationId);
+    if (!input.trackInventory && (input.expiryTracking || input.lotTracking || input.initialLot)) throw new EnterpriseDomainError("CATALOG_LOT_REQUIRES_INVENTORY", 400);
+    if (input.initialLot && input.expiryTracking && !input.initialLot.expiryDate) throw new EnterpriseDomainError("STOCK_EXPIRY_DATE_REQUIRED", 400);
     const [unit, category] = await Promise.all([
       tx.enterpriseUnitOfMeasure.findFirst({ where: { id: input.unitOfMeasureId, organizationId, status: "ACTIVE", archivedAt: null }, select: { id: true } }),
       input.categoryId
@@ -194,14 +211,20 @@ export async function createEnterpriseCatalogItemTx(tx: Prisma.TransactionClient
       });
     }
     if (input.trackInventory) {
-      await tx.enterpriseInventoryItem.create({
+      const inventory = await tx.enterpriseInventoryItem.create({
         data: {
           organizationId,
           catalogItemId: item.id,
           createdByUserId: actorUserId,
+          minimumQuantity: input.minimumQuantity ?? null,
+          reorderQuantity: input.reorderQuantity ?? null,
+          lotTracking: input.lotTracking || input.expiryTracking,
+          expiryTracking: input.expiryTracking,
         },
       });
+      if (input.initialLot) await createCatalogInitialLotTx(tx, organizationId, actorUserId, inventory.id, input.initialLot);
     }
+    if (input.initialLot && !input.trackInventory) throw new EnterpriseDomainError("CATALOG_LOT_REQUIRES_INVENTORY", 400);
     await tx.enterpriseOperationalEvent.create({
       data: {
         organizationId,
@@ -487,7 +510,6 @@ export async function updateEnterpriseBusinessParty(organizationId: string, part
       },
     });
     if (updated.count !== 1) throw new Error("REVISION_CONFLICT");
-
     if (input.primaryEmail !== undefined) await syncCanonicalPrimaryContactTx(tx, organizationId, partyId, actorUserId, "EMAIL", input.primaryEmail);
     if (input.primaryPhone !== undefined) await syncCanonicalPrimaryContactTx(tx, organizationId, partyId, actorUserId, "PHONE", input.primaryPhone);
     if (input.primaryAddress !== undefined) await syncCanonicalPrimaryAddressTx(tx, organizationId, partyId, actorUserId, input.primaryAddress);
@@ -503,6 +525,7 @@ export async function updateEnterpriseCatalogItem(organizationId: string, itemId
   return prisma.$transaction(async (tx) => {
     const existing = await tx.enterpriseCatalogItem.findFirst({ where: { id: itemId, organizationId, archivedAt: null } });
     if (!existing) throw new Error("CATALOG_ITEM_NOT_FOUND");
+    if ((input.trackInventory ?? existing.trackInventory) === false && (input.expiryTracking || input.lotTracking || input.initialLot)) throw new EnterpriseDomainError("CATALOG_LOT_REQUIRES_INVENTORY", 400);
     if (input.unitOfMeasureId) {
       const unit = await tx.enterpriseUnitOfMeasure.findFirst({ where: { id: input.unitOfMeasureId, organizationId, status: "ACTIVE", archivedAt: null }, select: { id: true } });
       if (!unit) throw new Error("UNIT_OF_MEASURE_NOT_FOUND");
@@ -533,6 +556,31 @@ export async function updateEnterpriseCatalogItem(organizationId: string, itemId
       },
     });
     if (updated.count !== 1) throw new Error("REVISION_CONFLICT");
+    const inventory = await tx.enterpriseInventoryItem.findFirst({ where: { organizationId, catalogItemId: itemId } });
+    if (input.initialLot && (input.expiryTracking ?? inventory?.expiryTracking) && !input.initialLot.expiryDate) throw new EnterpriseDomainError("STOCK_EXPIRY_DATE_REQUIRED", 400);
+    if (inventory && (input.expiryTracking === true || input.lotTracking === true) && !inventory.lotTracking) {
+      const unmappedBalance = await tx.enterpriseInventoryBalance.findFirst({ where: { organizationId, inventoryItemId: inventory.id, stockLotId: null, quantityOnHand: { gt: 0 } }, select: { id: true } });
+      if (unmappedBalance) throw new EnterpriseDomainError("STOCK_BATCH_MIGRATION_REQUIRED", 409, "Des stocks de cet article existent sans lot. Régularisez ou transférez ces quantités vers des lots avant d'activer leur suivi obligatoire.");
+    }
+    if (input.trackInventory !== false && (existing.trackInventory || input.trackInventory === true) &&
+        (input.minimumQuantity !== undefined || input.reorderQuantity !== undefined || input.lotTracking !== undefined || input.expiryTracking !== undefined || !inventory)) {
+      await tx.enterpriseInventoryItem.upsert({
+        where: { organizationId_catalogItemId: { organizationId, catalogItemId: itemId } },
+        create: { organizationId, catalogItemId: itemId, createdByUserId: actorUserId, minimumQuantity: input.minimumQuantity ?? null, reorderQuantity: input.reorderQuantity ?? null, lotTracking: input.lotTracking || input.expiryTracking || false, expiryTracking: input.expiryTracking || false },
+        update: {
+          ...(input.minimumQuantity !== undefined ? { minimumQuantity: input.minimumQuantity } : {}),
+          ...(input.reorderQuantity !== undefined ? { reorderQuantity: input.reorderQuantity } : {}),
+          ...(input.lotTracking !== undefined || input.expiryTracking !== undefined ? { lotTracking: Boolean(input.lotTracking ?? inventory?.lotTracking) || Boolean(input.expiryTracking ?? inventory?.expiryTracking) } : {}),
+          ...(input.expiryTracking !== undefined ? { expiryTracking: input.expiryTracking } : {}),
+          updatedByUserId: actorUserId, revision: { increment: 1 },
+        },
+      });
+    }
+    if (input.initialLot) {
+      if (input.trackInventory === false || (!existing.trackInventory && input.trackInventory !== true)) throw new EnterpriseDomainError("CATALOG_LOT_REQUIRES_INVENTORY", 400);
+      const target = await tx.enterpriseInventoryItem.findFirstOrThrow({ where: { organizationId, catalogItemId: itemId }, select: { id: true } });
+      await createCatalogInitialLotTx(tx, organizationId, actorUserId, target.id, input.initialLot);
+    }
     if (input.currency && input.indicativeSalePrice !== undefined && input.indicativeSalePrice !== null && Number(input.indicativeSalePrice) !== Number(existing.indicativeSalePrice || 0)) {
       await tx.enterpriseCatalogPrice.updateMany({ where: { organizationId, catalogItemId: itemId, priceType: "SALE", status: "ACTIVE", effectiveUntil: null, archivedAt: null }, data: { effectiveUntil: new Date(), status: "HISTORICAL" } });
       await tx.enterpriseCatalogPrice.create({ data: { organizationId, catalogItemId: itemId, priceType: "SALE", amount: input.indicativeSalePrice, currency: input.currency, effectiveFrom: new Date(), createdByUserId: actorUserId } });

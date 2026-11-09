@@ -1,6 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { retailFinanceReadSiteScope } from "@/lib/enterprise/retail/site-access";
+import { requireRetailSiteCapability, retailFinanceReadSiteScope, retailStaffIsolationIsEnabled } from "@/lib/enterprise/retail/site-access";
 import { assertIndependentActor } from "@/lib/enterprise/accounting/access";
 import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
 import { financeReference, money, publishFinanceEvent, sumDecimals } from "@/lib/enterprise/accounting/helpers";
@@ -20,9 +20,18 @@ export async function openCashSession(organizationId: string, cashierUserId: str
     if (input.siteId && input.siteId !== account.siteId) {
       throw new EnterpriseAccountingError("CASH_ACCOUNT_SITE_MISMATCH", 409);
     }
-    const scope = await retailFinanceReadSiteScope(organizationId, cashierUserId, "CLOSE_CASH", tx);
+    const scope = await retailFinanceReadSiteScope(organizationId, cashierUserId, "OPEN_CASH", tx);
     if (scope !== null && (!account.siteId || !scope.includes(account.siteId))) {
       throw new EnterpriseAccountingError("RETAIL_SITE_ACCESS_DENIED", 403);
+    }
+    // A Finance module grant cannot bypass explicitly activated Retail store
+    // isolation: the same assignment governs both Finance and POS entry points.
+    if (account.siteId) {
+      const retailConfiguration = await tx.enterpriseRetailConfiguration.findUnique({ where: { organizationId }, select: { settingsJson: true } });
+      if (retailStaffIsolationIsEnabled(retailConfiguration?.settingsJson)) {
+        try { await requireRetailSiteCapability(organizationId, cashierUserId, account.siteId, "OPEN_CASH", tx, { requireAssignment: true }); }
+        catch { throw new EnterpriseAccountingError("RETAIL_SITE_ACCESS_DENIED", 403); }
+      }
     }
     const existing = await tx.enterpriseCashSession.findFirst({ where: { organizationId, financialAccountId: account.id, cashierUserId, status: { in: ["OPEN", "CLOSING"] } } });
     if (existing) throw new EnterpriseAccountingError("CASH_SESSION_ALREADY_ACTIVE", 409, { sessionId: existing.id });

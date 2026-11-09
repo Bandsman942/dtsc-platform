@@ -133,7 +133,9 @@ const staffInterface = fs.readFileSync("components/enterprise/professional/retai
 assert.match(staffInterface, /MANAGE_STOCK: "Gérer les mouvements/);
 assert.match(staffInterface, /MANAGE_STOCK: "Manage stock movements/);
 const expiryAlerts = fs.readFileSync("app/api/enterprise/[organizationId]/retail/inventory-alerts/route.ts", "utf8");
-assert.match(expiryAlerts, /requireRetailSiteCapability\(organizationId, auth\.session\.userId, warehouse\?\.siteId, "VIEW_STOCK"\)/);
+assert.match(expiryAlerts, /retailSitesForCapability\(organizationId, auth\.session\.userId, "VIEW_STOCK"\)/);
+assert.match(expiryAlerts, /requireRetailSiteCapability\(organizationId, auth\.session\.userId, warehouse\?\.siteId, "VIEW_STOCK", prisma, \{ requireAssignment: true \}\)/);
+assert.match(expiryAlerts, /warehouse: \{ siteId: \{ in: scope\.siteIds \} \}/);
 const inventoryList = fs.readFileSync("app/api/enterprise/[organizationId]/inventory/route.ts", "utf8");
 assert.match(inventoryList, /retailInventoryVisibleSites\(organizationId, session\.userId\)/);
 assert.match(inventoryList, /balances: \{ some: balancesScope \}/);
@@ -176,7 +178,8 @@ assert.match(reservationService, /INVENTORY_RESERVATION_IDEMPOTENCY_COLLISION/);
 
 // Finance read permission must never become a cross-store Retail data bypass.
 // A revoked last assignment returns [] (deny checkout documents), not null
-// (Finance-wide scope). Finance-only operators keep their normal Finance RBAC.
+// (Finance-wide scope). Finance-only operators outside RETAIL isolation keep
+// their normal Finance RBAC.
 db.membership = { role: "MEMBER" };
 db.settings = { siteStaffIsolationEnabled: true, invoiceCheckoutEnabled: true };
 db.assignments = [
@@ -188,7 +191,7 @@ assert.deepEqual(JSON.parse(JSON.stringify(await retailFinanceReadSiteScope("ten
 db.assignments[0].isActive = false;
 assert.deepEqual(JSON.parse(JSON.stringify(await retailFinanceReadSiteScope("tenant", "revoked", "VIEW_SALES"))), []);
 db.assignments = [];
-assert.equal(await retailFinanceReadSiteScope("tenant", "finance-only", "VIEW_SALES"), null);
+assert.deepEqual(JSON.parse(JSON.stringify(await retailFinanceReadSiteScope("tenant", "finance-only", "VIEW_SALES"))), [], "Unassigned Finance users cannot bypass active RETAIL isolation");
 db.membership = { role: "OWNER" };
 assert.equal(await retailFinanceReadSiteScope("tenant", "owner", "VIEW_SALES"), null);
 db.membership = { role: "MEMBER" };

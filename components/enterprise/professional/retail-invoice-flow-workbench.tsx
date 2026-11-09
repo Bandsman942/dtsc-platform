@@ -21,7 +21,7 @@ type Checkout = {
   canCancel: boolean;
   canSubmit: boolean;
   canCollect: boolean;
-  invoice: { id: string; revision: number; number: string; status: string; currencyCode: string; grandTotal: string; outstandingAmount: string; items: InvoiceItem[] };
+  invoice: { id: string; revision: number; number: string; status: string; pendingApproverName?: string | null; currencyCode: string; grandTotal: string; outstandingAmount: string; items: InvoiceItem[] };
   site: { id: string; name: string; code: string };
 };
 type InvoiceResponse = {
@@ -87,6 +87,9 @@ export function RetailInvoiceFlowWorkbench({ organizationId, organizationName, l
   const [error, setError] = useState("");
   const [page, setPage] = useState(1);
   const [siteFilter, setSiteFilter] = useState(preferredSiteId || "");
+  const [invoiceSearch, setInvoiceSearch] = useState("");
+  const [invoiceDateFrom, setInvoiceDateFrom] = useState("");
+  const [invoiceDateTo, setInvoiceDateTo] = useState("");
   const [warehouseId, setWarehouseId] = useState("");
   const [query, setQuery] = useState("");
   const [products, setProducts] = useState<Product[]>([]);
@@ -118,7 +121,7 @@ export function RetailInvoiceFlowWorkbench({ organizationId, organizationName, l
   const load = useCallback(async (nextPage = page, site = siteFilter) => {
     setLoading(true);
     try {
-      const queryString = new URLSearchParams({ page: String(nextPage), pageSize: "10", ...(site ? { siteId: site } : {}) });
+      const queryString = new URLSearchParams({ page: String(nextPage), pageSize: "10", ...(site ? { siteId: site } : {}), ...(invoiceSearch.trim() ? { q: invoiceSearch.trim() } : {}), ...(invoiceDateFrom ? { dateFrom: invoiceDateFrom } : {}), ...(invoiceDateTo ? { dateTo: invoiceDateTo } : {}) });
       const response = await fetch(`/api/enterprise/${organizationId}/retail/invoices?${queryString}`, { cache: "no-store" });
       if (response.status === 403) {
         const denied = await response.json().catch(() => null) as { error?: string } | null;
@@ -135,8 +138,8 @@ export function RetailInvoiceFlowWorkbench({ organizationId, organizationName, l
       setError("");
     } catch (caught) { setError(customerFacingError(caught, locale)); }
     finally { setLoading(false); }
-  }, [copy.disabled, copy.failed, locale, organizationId, page, siteFilter]);
-  useEffect(() => { void load(); }, [load]);
+  }, [copy.disabled, copy.failed, invoiceSearch, invoiceDateFrom, invoiceDateTo, locale, organizationId, page, siteFilter]);
+  useEffect(() => { const timeout = window.setTimeout(() => { void load(); }, invoiceSearch ? 220 : 0); return () => window.clearTimeout(timeout); }, [load, invoiceSearch]);
 
   useEffect(() => {
     if (mode !== "checkout") return;
@@ -320,6 +323,12 @@ export function RetailInvoiceFlowWorkbench({ organizationId, organizationName, l
     </div> : null}
     <div className="mt-5 border-t border-dtsc-border pt-4">
       <div className="flex min-w-0 flex-wrap items-center justify-between gap-3"><h3 className="text-sm font-black text-dtsc-ink">{copy.list}</h3>{data?.sites.length ? <select aria-label={copy.warehouse} className="min-h-11 max-w-full rounded-lg border border-dtsc-border bg-dtsc-page px-2 text-sm" value={siteFilter} onChange={(event) => { setSiteFilter(event.target.value); setPage(1); }}><option value="">{copy.all}</option>{data.sites.map((site) => <option key={site.id} value={site.id}>{site.name}</option>)}</select> : null}</div>
+      <div className="mt-3 grid min-w-0 gap-2 sm:grid-cols-2 lg:grid-cols-4">
+        <label className="text-xs font-bold text-dtsc-ink">{locale === "fr" ? "Recherche intelligente" : "Smart search"}<span className="mt-1 flex min-h-11 items-center gap-2 rounded-lg border border-dtsc-border bg-dtsc-page px-2"><Search className="h-4 w-4 text-dtsc-muted"/><input className="min-w-0 flex-1 bg-transparent text-sm outline-none" placeholder={locale === "fr" ? "N°, article, désignation" : "Number or item"} value={invoiceSearch} onChange={(event) => { setInvoiceSearch(event.target.value); setPage(1); }} /></span></label>
+        <label className="text-xs font-bold text-dtsc-ink">{locale === "fr" ? "Du" : "From"}<input type="date" max={invoiceDateTo || undefined} value={invoiceDateFrom} onChange={(event) => { setInvoiceDateFrom(event.target.value); setPage(1); }} className="mt-1 min-h-11 w-full rounded-lg border border-dtsc-border bg-dtsc-page px-2 text-sm" /></label>
+        <label className="text-xs font-bold text-dtsc-ink">{locale === "fr" ? "Au" : "To"}<input type="date" min={invoiceDateFrom || undefined} value={invoiceDateTo} onChange={(event) => { setInvoiceDateTo(event.target.value); setPage(1); }} className="mt-1 min-h-11 w-full rounded-lg border border-dtsc-border bg-dtsc-page px-2 text-sm" /></label>
+        <div className="flex flex-wrap items-end gap-1"><Button type="button" variant="outline" onClick={() => { const date = invoiceDateFrom || invoiceDateTo || new Date().toISOString().slice(0, 10); setInvoiceDateFrom(date); setInvoiceDateTo(date); setPage(1); }}>{locale === "fr" ? "Date précise" : "Exact date"}</Button><Button type="button" variant="ghost" onClick={() => { setInvoiceDateFrom(""); setInvoiceDateTo(""); setPage(1); }} disabled={!invoiceDateFrom && !invoiceDateTo}>{locale === "fr" ? "Effacer" : "Clear"}</Button></div>
+      </div>
       {loading ? <p role="status" className="mt-3 text-sm text-dtsc-muted">{copy.loading}</p> : null}
       {!loading && data && !data.items.length ? <p className="mt-3 rounded-xl bg-dtsc-page p-3 text-sm text-dtsc-muted">{copy.empty}</p> : null}
       <div className="mt-3 grid min-w-0 gap-2">{data?.items.map((entry) => (
@@ -329,7 +338,7 @@ export function RetailInvoiceFlowWorkbench({ organizationId, organizationName, l
               <p className="break-words text-sm font-black text-dtsc-ink">{entry.invoice.number} · {entry.site.name}</p>
               <p className="mt-1 text-xs text-dtsc-muted">{entry.invoice.items.map((item) => item.description).join(" · ")}</p>
             </div>
-            <span className="shrink-0 rounded-full bg-blue-500/10 px-2 py-1 text-xs font-bold text-blue-700 dark:text-blue-300">{invoiceStatus(entry.invoice.status, copy)}</span>
+            <span className="max-w-full rounded-full bg-blue-500/10 px-2 py-1 text-xs font-bold text-blue-700 dark:text-blue-300">{invoiceStatus(entry.invoice.status, copy)}{entry.invoice.status === "PENDING_APPROVAL" ? ` (${entry.invoice.pendingApproverName || (locale === "fr" ? "validateur à confirmer" : "approver to confirm")})` : ""}</span>
           </div>
           <div className="mt-2 flex min-w-0 flex-wrap items-center justify-between gap-3 text-xs text-dtsc-muted">
             <span>{copy.outstanding} : <strong className="text-dtsc-ink">{money(entry.invoice.outstandingAmount, entry.invoice.currencyCode, locale)}</strong></span>

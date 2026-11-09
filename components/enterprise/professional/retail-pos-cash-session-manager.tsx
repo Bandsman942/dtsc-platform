@@ -127,6 +127,7 @@ export function RetailPosCashSessionManager({
                           {selected ? <StatusBadge tone="success">{copy.active}</StatusBadge> : null}
                         </div>
                         <p className="mt-1 break-words text-sm font-black text-dtsc-ink">{session.financialAccount.name}</p>
+                        <p className="mt-1 text-xs text-dtsc-muted">{locale === "fr" ? "Ouverte par" : "Opened by"} {session.openedByLabel || "—"} · {new Date(session.openedAt).toLocaleString(locale === "fr" ? "fr-FR" : "en-US")}</p>
                         <p className="mt-1 text-xs font-semibold text-dtsc-muted">{copy.openingFloat}: {moneyValue(session.openingAmount, currency, locale)}</p>
                         <p className="text-xs font-semibold text-dtsc-muted">{copy.currentBalance}: {moneyValue(session.financialAccount.operationalBalance, currency, locale)}</p>
                       </div>

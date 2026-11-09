@@ -6,7 +6,7 @@ import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
 export const RETAIL_SITE_STAFF_ROLES = ["MANAGER", "INVOICER", "CASHIER"] as const;
 export const RETAIL_SITE_CAPABILITIES = [
   "VIEW_STOCK", "MANAGE_STOCK", "VIEW_SALES", "PREPARE_INVOICE", "CANCEL_UNPAID_INVOICE",
-  "COLLECT_PAYMENT", "CLOSE_CASH", "VIEW_REPORTS", "AUTHORIZE_TRANSFER",
+  "COLLECT_PAYMENT", "OPEN_CASH", "CLOSE_CASH", "VIEW_REPORTS", "AUTHORIZE_TRANSFER",
   "REQUEST_INVOICE_RETURN", "APPROVE_INVOICE_RETURN",
   "RECORD_EXPENSE", "APPROVE_EXPENSE",
 ] as const;
@@ -21,9 +21,9 @@ export const retailSiteAssignmentInputSchema = z.object({
 }).strict();
 
 export const ROLE_DEFAULT_CAPABILITIES: Readonly<Record<typeof RETAIL_SITE_STAFF_ROLES[number], readonly typeof RETAIL_SITE_CAPABILITIES[number][]>> = {
-  MANAGER: ["VIEW_STOCK", "VIEW_SALES", "PREPARE_INVOICE", "CANCEL_UNPAID_INVOICE", "COLLECT_PAYMENT", "CLOSE_CASH", "VIEW_REPORTS"],
+  MANAGER: ["VIEW_STOCK", "VIEW_SALES", "PREPARE_INVOICE", "CANCEL_UNPAID_INVOICE", "COLLECT_PAYMENT", "OPEN_CASH", "CLOSE_CASH", "VIEW_REPORTS"],
   INVOICER: ["VIEW_STOCK", "VIEW_SALES", "PREPARE_INVOICE"],
-  CASHIER: ["VIEW_SALES", "COLLECT_PAYMENT", "CLOSE_CASH"],
+  CASHIER: ["VIEW_SALES", "COLLECT_PAYMENT", "OPEN_CASH", "CLOSE_CASH"],
 };
 
 export const RETAIL_OWNER_ROLES = new Set(["OWNER", "ADMIN_ENTREPRISE", "ADMIN_ENTERPRISE"]);
@@ -268,7 +268,7 @@ export const retailStockTransferVisibleSites = retailInventoryVisibleSites;
 export async function retailFinanceReadSiteScope(
   organizationId: string,
   userId: string,
-  capability: "VIEW_SALES" | "COLLECT_PAYMENT" | "CLOSE_CASH",
+  capability: "VIEW_SALES" | "COLLECT_PAYMENT" | "OPEN_CASH" | "CLOSE_CASH",
   database: RetailSiteAccessReader = prisma,
 ): Promise<string[] | null> {
   const membership = await database.organizationMember.findFirst({
@@ -282,7 +282,12 @@ export async function retailFinanceReadSiteScope(
   });
   // A revoked operator must never fall back to the organization-wide Finance
   // view after losing their last active assignment.
-  if (!assignments.length) return null;
+  if (!assignments.length) {
+    const configuration = await database.enterpriseRetailConfiguration.findUnique({ where: { organizationId }, select: { settingsJson: true } });
+    // Once RETAIL isolation is enabled, a Finance module grant alone cannot
+    // disclose every shop's money to an unassigned non-owner.
+    return retailStaffIsolationIsEnabled(configuration?.settingsJson) ? [] : null;
+  }
   return [...new Set(assignments.filter((assignment) =>
     assignment.isActive && siteStaffCapabilities(assignment.roleCode, assignment.permissionsJson).includes(capability),
   ).map((assignment) => assignment.siteId))];

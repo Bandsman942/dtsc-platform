@@ -33,10 +33,16 @@ assert.equal(result.rows[2].site, "Écritures sans boutique");
 assert.equal(result.rows.every((entry) => entry.status === "PROVISOIRE — NON CERTIFIÉ"), true);
 assert.equal(result.kpis.find((entry) => entry.label === "Écritures non attribuées").value, "1");
 assert.equal(result.filters.some((entry) => entry.value === "POSTED/REVERSED"), true);
+const operational = mod.exports.buildRetailOperationsExport({ locale: "fr", from: "2026-11-01", to: "2026-11-09", currency: "CDF", sites: [{ code: "G", name: "Gombe", postedLedger: [], sales: [{ currencyCode: "CDF", total: "120", count: 2 }, { currencyCode: "USD", total: "10", count: 1 }], collections: [{ currencyCode: "CDF", total: "120", method: "CASH", count: 2 }], financeInvoices: [{ currencyCode: "CDF", issuedTotal: "500", allocatedToDate: "200", outstandingToDate: "300", count: 2 }], approvedExpenses: [] }] });
+assert.equal(operational.rows.length, 1);
+assert.equal(operational.rows[0].posSales, 120);
+assert.equal(operational.rows[0].issuedInvoices, 500);
+assert.equal(operational.rows[0].posCollections, 120);
+assert.equal(operational.rows[0].allocatedToDate, 200, "Lifetime invoice settlement must not be mistaken for POS cash in-period");
 const ui = fs.readFileSync("components/enterprise/professional/retail-site-overview.tsx", "utf8");
-assert.match(ui, /downloadProfessionalXlsx\(exportLedger\(\)\)/);
-assert.match(ui, /downloadProfessionalPdfV2\(exportLedger\(\)\)/);
-assert.match(ui, /disabled=\{loading \|\| !items.length\}/);
+assert.match(ui, /downloadProfessionalXlsx\(exportKpis\(\)\)/);
+assert.match(ui, /downloadProfessionalPdfV2\(exportKpis\(\)\)/);
+assert.match(ui, /disabled=\{loading \|\| !visibleSites.length\}/);
 // Exercise the actual shared exporters in-memory; this test must not depend
 // on browser download privileges or write financial files to the repository.
 let downloaded;

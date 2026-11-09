@@ -12,7 +12,6 @@ import {
   FinanceDetailGrid,
   FinanceDetailValue,
   FinancePaginationControls,
-  FinanceRecordList,
   financeMutation,
   useFinanceCollection,
   useFinanceLookups,
@@ -46,6 +45,11 @@ type CashSession = FinanceRecord & {
   countedClosingAmount?: string | number | null;
   discrepancyAmount?: string | number | null;
   openedAt: string;
+  openedByLabel?: string;
+  submittedAt?: string | null;
+  submittedByLabel?: string | null;
+  validatedAt?: string | null;
+  closedByLabel?: string | null;
   closedAt?: string | null;
   revision: number;
   approval?: { assigned: boolean; status: string | null; approverLabel: string | null };
@@ -216,7 +220,7 @@ export function EnterpriseFinanceCashWorkspace({ organizationId, organizationNam
       {error ? <ProfessionalError message={error} /> : null}
       {lookupData.error ? <ProfessionalError message={lookupData.error} /> : null}
       <ModuleSection title={tabs.find((item) => item.id === tab)?.label || ""} description={t("cashSectionDescription")}>
-        {collection.error ? <ProfessionalError message={collection.error} /> : collection.loading ? <ProfessionalLoading /> : <FinanceRecordList items={collection.items} locale={locale} emptyTitle={t("noItem")} emptyDescription={t("createFirstOperationOrFilters")} onOpen={(record) => openDetail(record as CashSession)} />}
+        {collection.error ? <ProfessionalError message={collection.error} /> : collection.loading ? <ProfessionalLoading /> : !collection.items.length ? <p className="rounded-xl bg-dtsc-page p-4 text-sm text-dtsc-muted">{t("noItem")}</p> : <div className="grid min-w-0 gap-2">{collection.items.map((session) => <button key={session.id} type="button" onClick={() => openDetail(session)} className="min-w-0 rounded-xl border border-dtsc-border bg-dtsc-page p-3 text-left hover:border-cyan-500 focus-visible:outline-2 focus-visible:outline-cyan-500"><div className="flex flex-wrap items-center justify-between gap-2"><strong className="break-all text-sm text-dtsc-ink">{session.number}</strong><span className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-2 py-1 text-xs font-bold text-dtsc-ink">{financeStatusLabel(session.status, locale)} · {session.status === "CLOSED" ? (session.closedByLabel || "—") : session.openedByLabel || "—"}</span></div><div className="mt-2 grid gap-1 text-xs text-dtsc-muted sm:grid-cols-2"><span>{locale === "fr" ? "Ouverture" : "Opened"} : {new Date(session.openedAt).toLocaleString(locale === "fr" ? "fr-FR" : "en-US")} · {session.openedByLabel || "—"}</span>{session.submittedAt ? <span>{locale === "fr" ? "Clôture soumise" : "Closing submitted"} : {new Date(session.submittedAt).toLocaleString(locale === "fr" ? "fr-FR" : "en-US")} · {session.submittedByLabel || "—"}</span> : null}{session.validatedAt ? <span>{locale === "fr" ? "Clôture validée" : "Closing approved"} : {new Date(session.validatedAt).toLocaleString(locale === "fr" ? "fr-FR" : "en-US")} · {session.closedByLabel || "—"}</span> : null}</div></button>)}</div>}
         <FinancePaginationControls pagination={collection.pagination} page={page} onPage={setPage} locale={locale} />
       </ModuleSection>
       <ProfessionalHelp moduleCode="FINANCE_CASH" />
@@ -235,7 +239,8 @@ export function EnterpriseFinanceCashWorkspace({ organizationId, organizationNam
 
     <Dialog open={Boolean(detail)} onClose={() => setDetail(null)} title={detail ? String(detail.number || t("financeDetails")) : ""} className="h-[94dvh] max-w-3xl">
       {detail ? <div className="grid gap-5">
-        <div className="flex flex-wrap gap-2"><StatusBadge tone={financeStatusTone(detail.status)}>{financeStatusLabel(detail.status, locale)}</StatusBadge></div>
+        <div className="flex flex-wrap gap-2"><StatusBadge tone={financeStatusTone(detail.status)}>{financeStatusLabel(detail.status, locale)} · {detail.status === "CLOSED" ? detail.closedByLabel || "—" : detail.openedByLabel || "—"}</StatusBadge></div>
+        <div className="grid gap-1 rounded-xl bg-dtsc-page p-3 text-xs text-dtsc-muted"><p>{locale === "fr" ? "Ouverte le" : "Opened on"} {new Date(detail.openedAt).toLocaleString(locale === "fr" ? "fr-FR" : "en-US")} · {detail.openedByLabel || "—"}</p>{detail.submittedAt ? <p>{locale === "fr" ? "Clôture soumise le" : "Closing submitted on"} {new Date(detail.submittedAt).toLocaleString(locale === "fr" ? "fr-FR" : "en-US")} · {detail.submittedByLabel || "—"}</p> : null}{detail.validatedAt ? <p>{locale === "fr" ? "Clôture validée le" : "Closing approved on"} {new Date(detail.validatedAt).toLocaleString(locale === "fr" ? "fr-FR" : "en-US")} · {detail.closedByLabel || "—"}</p> : null}</div>
         <FinanceDetailGrid>
           <FinanceDetailValue label={t("opening")}>{financeMoney(detail.openingAmount, String(detail.financialAccount?.currencyCode || "USD"), locale)}</FinanceDetailValue>
           {detail.theoreticalClosingAmount !== undefined ? <FinanceDetailValue label={t("theoretical")}>{financeMoney(detail.theoreticalClosingAmount, String(detail.financialAccount?.currencyCode || "USD"), locale)}</FinanceDetailValue> : null}

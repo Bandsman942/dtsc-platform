@@ -23,6 +23,7 @@ const tx = {
     findFirst: async () => null,
     create: async ({ data }) => { state.created.push(data); return { id: "session-" + state.created.length, ...data }; },
   },
+  enterpriseRetailConfiguration: { findUnique: async () => ({ settingsJson: { siteStaffIsolationEnabled: false } }) },
 };
 const prisma = { $transaction: async (fn) => fn(tx) };
 const source = fs.readFileSync("lib/enterprise/accounting/treasury-service.ts", "utf8");
@@ -42,9 +43,10 @@ vm.runInNewContext(ts.transpileModule(source, {
     };
     if (id === "@/lib/enterprise/retail/site-access") return {
       retailFinanceReadSiteScope: async (org, user, capability) => {
-        assert.equal(org, "tenant"); assert.equal(capability, "CLOSE_CASH");
+        assert.equal(org, "tenant"); assert.equal(capability, "OPEN_CASH");
         return state.allowed;
       },
+      retailStaffIsolationIsEnabled: (settings) => settings?.siteStaffIsolationEnabled === true,
     };
     return require(id);
   },

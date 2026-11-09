@@ -28,7 +28,7 @@ const dictionary = {
     activeIsolation: "Isolation stricte des boutiques active", ownerExcluded: "Les propriétaires et administrateurs d’entreprise sont gérés dans l’administration générale.",
     capability: {
       VIEW_STOCK: "Consulter les stocks", MANAGE_STOCK: "Gérer les mouvements, inventaires et ajustements de stock", VIEW_SALES: "Consulter les ventes", PREPARE_INVOICE: "Préparer les factures", CANCEL_UNPAID_INVOICE: "Annuler une facture impayée",
-      COLLECT_PAYMENT: "Encaisser les paiements", CLOSE_CASH: "Clôturer la caisse", VIEW_REPORTS: "Consulter les rapports", AUTHORIZE_TRANSFER: "Autoriser un transfert",
+      COLLECT_PAYMENT: "Encaisser les paiements", OPEN_CASH: "Ouvrir une session de caisse", CLOSE_CASH: "Clôturer la caisse", VIEW_REPORTS: "Consulter les rapports", AUTHORIZE_TRANSFER: "Autoriser un transfert",
       RECORD_EXPENSE: "Enregistrer une dépense", APPROVE_EXPENSE: "Valider une dépense",
       REQUEST_INVOICE_RETURN: "Demander un retour sur facture payée", APPROVE_INVOICE_RETURN: "Autoriser un retour sur facture (Finance indépendante)",
     },
@@ -43,7 +43,7 @@ const dictionary = {
     activeIsolation: "Strict store isolation enabled", ownerExcluded: "Owners and organization administrators are managed in general administration.",
     capability: {
       VIEW_STOCK: "View stock", MANAGE_STOCK: "Manage stock movements, counts and adjustments", VIEW_SALES: "View sales", PREPARE_INVOICE: "Prepare invoices", CANCEL_UNPAID_INVOICE: "Cancel unpaid invoice",
-      COLLECT_PAYMENT: "Collect payments", CLOSE_CASH: "Close cash register", VIEW_REPORTS: "View reports", AUTHORIZE_TRANSFER: "Authorize transfer",
+      COLLECT_PAYMENT: "Collect payments", OPEN_CASH: "Open a till session", CLOSE_CASH: "Close cash register", VIEW_REPORTS: "View reports", AUTHORIZE_TRANSFER: "Authorize transfer",
       RECORD_EXPENSE: "Record expense", APPROVE_EXPENSE: "Approve expense",
       REQUEST_INVOICE_RETURN: "Request a paid-invoice return", APPROVE_INVOICE_RETURN: "Approve an invoice return (independent Finance)",
     },
