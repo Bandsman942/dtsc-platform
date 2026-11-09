@@ -238,9 +238,19 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
         action: "CONFIRM", revision: approvedPayment.body.payment.revision,
       });
       expect(confirmed.status, JSON.stringify(confirmed.body)).toBe(200);
+      // Finance confirmation now allocates the POS invoice inside the same
+      // serializable transaction. The legacy manual endpoint is idempotent and
+      // must not create a second allocation or treasury movement.
+      const canonicalAllocations = await prisma.enterprisePaymentAllocation.findMany({
+        where: { organizationId, paymentId },
+      });
+      expect(canonicalAllocations).toHaveLength(1);
+      expect(canonicalAllocations[0].amount.equals(amount)).toBe(true);
+      expect(await prisma.enterpriseTreasuryTransaction.count({ where: { organizationId, paymentId } })).toBe(1);
       const allocated = await post(context.cashier,
         `${base}/retail/invoices/${invoiceId}/payments/${paymentId}/allocate`);
-      expect(allocated.status, JSON.stringify(allocated.body)).toBe(201);
+      expect(allocated.status, JSON.stringify(allocated.body)).toBe(200);
+      expect(allocated.body.idempotent).toBe(true);
       const replay = await post(context.cashier,
         `${base}/retail/invoices/${invoiceId}/payments/${paymentId}/allocate`);
       expect(replay.status, JSON.stringify(replay.body)).toBe(200);
