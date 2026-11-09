@@ -579,5 +579,19 @@
   "affectedStockItems": "Articles concernés",
   "allDueDates": "Toutes les échéances",
   "detailsLabel": "Détail",
-  "noLinkedCustomerInvoice": "Aucune facture client n’est liée à cet encaissement. Un reçu de paiement ne remplace pas une facture."
+  "noLinkedCustomerInvoice": "Aucune facture client n’est liée à cet encaissement. Un reçu de paiement ne remplace pas une facture.",
+  "inventoryUnvaluedTitle": "Entrées de stock sans valorisation",
+  "inventoryUnvaluedDescription": "Régularisez le coût d'acquisition des entrées existantes non valorisées, sans augmenter une seconde fois les quantités. Cette action crée une écriture comptable traçable et exige un coût réel justifié.",
+  "inventoryUnvaluedOpen": "Voir les entrées à valoriser",
+  "inventoryUnvaluedSearch": "Rechercher un article ou un dépôt",
+  "inventoryUnvaluedEmpty": "Aucune entrée sans valorisation trouvée pour ces filtres.",
+  "inventoryUnvaluedEnterCost": "Renseigner le coût réel",
+  "inventoryUnvaluedProofRequired": "Indiquez le coût d'achat unitaire réel figurant sur une facture ou une pièce justificative. N'utilisez ni prix de vente ni coût estimé : l'opération comptabilise ce mouvement et ne crée aucun stock physique supplémentaire.",
+  "inventoryUnvaluedUnitCost": "Coût unitaire réel",
+  "inventoryUnvaluedEstimatedTotal": "Valeur comptable de l'entrée",
+  "inventoryUnvaluedAttestation": "Je confirme disposer d'une pièce justificative fiable attestant le coût réel de cette entrée.",
+  "inventoryUnvaluedPost": "Valoriser et comptabiliser cette entrée",
+  "inventoryUnvaluedPostedSuccess": "Entrée existante valorisée et comptabilisée. Les quantités physiques restent inchangées.",
+  "inventoryUnvaluedLoadFailed": "Impossible de charger les entrées en attente de valorisation.",
+  "inventoryUnvaluedPostFailed": "La valorisation de cette entrée n'a pas abouti. Vérifiez le coût, la devise, les permissions et la période comptable."
 }
