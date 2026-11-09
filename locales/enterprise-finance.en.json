@@ -575,5 +575,9 @@
   "closingOperationsTitle": "Closing operations",
   "closingOperationsDescription": "Closing FX revaluation, linked reversal and fiscal year close into retained earnings.",
   "assetDisposalsTitle": "Asset disposals",
-  "assetDisposalsDescription": "Prepare and post audited asset derecognition with proceeds and gain or loss."
+  "assetDisposalsDescription": "Prepare and post audited asset derecognition with proceeds and gain or loss.",
+  "affectedStockItems": "Affected items",
+  "allDueDates": "All due dates",
+  "detailsLabel": "Details",
+  "noLinkedCustomerInvoice": "No customer invoice is linked to this receipt. A payment receipt is not a substitute for an invoice."
 }
