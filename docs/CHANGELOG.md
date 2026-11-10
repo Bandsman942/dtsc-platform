@@ -1,10 +1,18 @@
-## 2026-11-10 — Hotfix #1102 — MCP Time/Brave Console indisponibles et conversation standard (candidat v1.8.1, NON LIVRÉ)
+## 2026-11-10 — Hotfix #1102 — MCP Time/Brave Console indisponibles et conversation standard (candidat v1.8.2, NON LIVRÉ)
 
 - Time/Brave utilisent maintenant **un même handler MCP authentifié** depuis leurs routes Vercel et depuis les fonctions Node de DTSC. Les appels internes ne rebouclent plus par le firewall public Vercel et conservent le protocole `mcp-handler`/JSON-RPC réel, la validation d'endpoint et les secrets Bearer.
 - La Console IA reste **fail-closed** : découverte réelle des outils Time/Brave via `tools/list`, pas de statut certifié sur la seule base d'une variable Vercel. Cette découverte reflète les appels internes ; l'accès HTTP externe reste sujet à la politique WAF.
 - Le **chat général standard** utilise désormais le Tool Gateway existant pour les questions explicites d'heure actuelle et les recherches Brave Web/actualités ; résultat daté ou sources citées, permissions/quotas/audits conservés. Pas de donnée privée envoyée à Brave et aucun résultat inventé en cas d'échec.
 - Les assistants Agent, IA Entreprise et sectoriels héritent du transport MCP corrigé avec permissions existantes ; `PUBLIC_FETCH` reste désactivé jusqu'à certification Fly.
 - QA `pnpm qa:hotfix-1102` intégrée à la régression et aux Quality gates. **CI, E2E propriétaire, merge et Production non encore validés**. Procédure détaillée : `docs/HOTFIX_1102_MCP_TIME_BRAVE_CONSOLE_CHAT.md`.
+
+## 2026-11-10 — Hotfix #1101 — RETAIL SHOP POS consolidé (candidate v1.8.1)
+
+- Lot 1 : isolation des commandes et retours multicanaux, garde-fous boutique hors connexion et permissions d'administration des périphériques.
+- Lot 2 : vente directe historique bloquée lorsque la facture Finance est activée ; facture refusée annulable/resoumise, réservation de stock libérée à l'annulation ; caisse et comptabilité canoniques sans duplication.
+- Lot 3 : paiements Finance de factures séparés des canaux historiques et paginés ; KPI multi-boutiques et exports séparent encaissements POS/Finance par période, devise et source ; nouveaux prérequis des équipes et activations.
+- Lot 4 : comptoir allégé, registre dédié, création de boutique pays/fuseau IANA, états vides équipements et filtres FR/EN.
+- Aucune migration ou variable Production. QA : `node scripts/qa-hotfix-1101-retail-pos.mjs` et régressions Retail. **Branche candidate non fusionnée : E2E propriétaire, revue et CI requis.** Contrat : `docs/HOTFIX_1101_SHOP_POS_FOUR_LOTS.md`.
 
 ## 2026-11-10 — Programme documentation publique #1099 (candidat v1.8.0, NON LIVRÉ)
 
