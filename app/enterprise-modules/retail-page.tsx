@@ -106,7 +106,7 @@ export async function renderRetailModulePage(moduleCode: "RETAIL_POS" | "MOBILE_
               ) : posSection.id === "my-stores" ? (
                 <RetailMyStores organizationId={organizationId} userId={user.id} role={membership.role} locale={locale} />
               ) : posSection.id === "sites" ? (
-                <RetailSiteOverview organizationId={organizationId} locale={locale} timezone={organization.timezone || "UTC"} />
+                <RetailSiteOverview organizationId={organizationId} organizationName={organization.name} locale={locale} timezone={organization.timezone || "UTC"} />
               ) : posSection.id === "staff" ? (
                 <RetailSiteStaffAccess organizationId={organizationId} locale={locale} />
               ) : posSection.id === "invoices" ? (

@@ -13,6 +13,7 @@ const REPORT_TYPE_LABELS: Record<string, string> = {
   EXPENSE_SUMMARY: "Synthèse des dépenses",
   PROCUREMENT_SUMMARY: "Synthèse des achats",
   FINANCE_OVERVIEW: "Vue d’ensemble financière",
+  RETAIL_EXECUTIVE: "Pilotage financier RETAIL — Direction",
 };
 
 function cell(value: unknown) {

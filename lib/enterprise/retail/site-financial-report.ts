@@ -44,8 +44,9 @@ export async function retailPostedSiteLedger(
   from: Date,
   to: Date,
   siteIds: string[],
+  includeHistoricalSites = false,
 ): Promise<{ bySite: SitePnl[]; unallocated: SitePnl[] }> {
-  if (!siteIds.length) return { bySite: [], unallocated: [] };
+  if (!siteIds.length && !includeHistoricalSites) return { bySite: [], unallocated: [] };
   const rows = await prisma.$queryRaw<PostedPnlRow[]>(Prisma.sql`
     SELECT l."siteId" AS "siteId", e."functionalCurrencyCode" AS "currencyCode",
       a."accountType" AS "accountType", a."accountSubtype" AS "accountSubtype",
@@ -69,7 +70,7 @@ export async function retailPostedSiteLedger(
       AND e.status IN ('POSTED', 'REVERSED')
       AND e."accountingDate" BETWEEN ${from} AND ${to}
       AND a."accountType" IN ('REVENUE', 'OTHER_INCOME', 'EXPENSE', 'OTHER_EXPENSE')
-      AND (l."siteId" IS NULL OR l."siteId" IN (${Prisma.join(siteIds)}))
+      AND ${includeHistoricalSites ? Prisma.sql`TRUE` : Prisma.sql`(l."siteId" IS NULL OR l."siteId" IN (${Prisma.join(siteIds)}))`}
     GROUP BY l."siteId", e."functionalCurrencyCode", a.id, a."accountType", a."accountSubtype"
   `);
   const totals = new Map<string, PnlAccumulator>();
@@ -104,7 +105,7 @@ export async function retailPostedSiteLedger(
   });
   const all = [...totals.values()].map(serialize);
   return {
-    bySite: all.filter((row) => row.siteId !== null),
-    unallocated: all.filter((row) => row.siteId === null),
+    bySite: all.filter((row) => row.siteId !== null && siteIds.includes(row.siteId)),
+    unallocated: all.filter((row) => row.siteId === null || (includeHistoricalSites && !siteIds.includes(row.siteId))),
   };
 }

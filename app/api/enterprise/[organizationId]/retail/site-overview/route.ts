@@ -4,6 +4,11 @@ import { getSession } from "@/lib/auth";
 import { getEnterpriseCommonDomainAccess } from "@/lib/enterprise/common/access";
 import { writeApiLog } from "@/lib/audit";
 import { retailPostedSiteLedger } from "@/lib/enterprise/retail/site-financial-report";
+import { loadRetailExecutiveSources } from "@/lib/enterprise/retail/executive-sources";
+import { readRetailDashboardPreferences } from "@/lib/enterprise/retail/dashboard-preferences";
+import { summarizeRetailExecutive } from "@/lib/enterprise/retail/executive-summary";
+import { resolveEnterpriseModuleAccess } from "@/lib/enterprise/module-access";
+import { getEnterpriseFinanceAccess } from "@/lib/enterprise/finance/access";
 import { civilMidnightUtc, followingCivilDate, isCivilDate } from "@/lib/enterprise/retail/civil-date";
 import { prisma } from "@/lib/prisma";
 
@@ -27,7 +32,7 @@ export async function GET(req: Request, { params }: Params) {
   const url = new URL(req.url);
   const start = url.searchParams.get("from") || "";
   const end = url.searchParams.get("to") || "";
-  const organization = await prisma.organization.findFirst({ where: { id: organizationId }, select: { timezone: true } });
+  const organization = await prisma.organization.findFirst({ where: { id: organizationId }, select: { timezone: true, name: true } });
   const timezone = organization?.timezone || "UTC";
   const todayParts = new Intl.DateTimeFormat("en-GB", { timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date());
   const todayValue = (key: string) => todayParts.find((part) => part.type === key)?.value || "";
@@ -46,6 +51,19 @@ export async function GET(req: Request, { params }: Params) {
   if (siteId && !sites.length) return NextResponse.json({ error: "RETAIL_SITE_NOT_FOUND", message: "Cette boutique est introuvable dans votre entreprise." }, { status: 404 });
   const ids = sites.map((site) => site.id);
   const dateWhere = { gte: from, lte: to };
+  // Every optional ERP source is independently authorized. RETAIL_POS alone
+  // does not grant access to Mobile Money, Telco or Treasury balances.
+  const [agencyAccess, telcoAccess, treasuryAccess, inventoryAccess, reportsAccess, reportWriteAccess, accountingAccess, config] = await Promise.all([
+    resolveEnterpriseModuleAccess({ userId: session.userId, organizationId, moduleCode: "MOBILE_MONEY_AGENCY", action: "read" }),
+    resolveEnterpriseModuleAccess({ userId: session.userId, organizationId, moduleCode: "TELCO_TOPUPS", action: "read" }),
+    resolveEnterpriseModuleAccess({ userId: session.userId, organizationId, moduleCode: "FINANCE_TREASURY", action: "read" }),
+    resolveEnterpriseModuleAccess({ userId: session.userId, organizationId, moduleCode: "INVENTORY_LOGISTICS", action: "read" }),
+    resolveEnterpriseModuleAccess({ userId: session.userId, organizationId, moduleCode: "REPORTS", action: "read" }),
+    getEnterpriseFinanceAccess({ session, organizationId, moduleCode: "REPORTS", action: "submit" }),
+    resolveEnterpriseModuleAccess({ userId: session.userId, organizationId, moduleCode: "FINANCE_ACCOUNTING", action: "read" }),
+    prisma.enterpriseRetailConfiguration.findUnique({ where: { organizationId }, select: { settingsJson: true } }),
+  ]);
+  const preferences = readRetailDashboardPreferences(config?.settingsJson);
   const [sales, expenses, stockByWarehouse, sessions, closes] = await Promise.all([
     prisma.enterpriseRetailSale.groupBy({
       by: ["siteId", "currencyCode"],
@@ -56,10 +74,10 @@ export async function GET(req: Request, { params }: Params) {
       by: ["siteId", "currency"], where: { organizationId, siteId: { in: ids }, status: "APPROVED", expenseDate: dateWhere, archivedAt: null },
       _sum: { amount: true }, _count: { _all: true },
     }),
-    prisma.enterpriseInventoryBalance.groupBy({
+    inventoryAccess.allowed ? prisma.enterpriseInventoryBalance.groupBy({
       by: ["warehouseId"], where: { organizationId, warehouse: { siteId: { in: ids } } },
       _sum: { quantityOnHand: true, quantityReserved: true }, _count: { _all: true },
-    }),
+    }) : Promise.resolve([]),
     prisma.enterpriseCashSession.groupBy({
       by: ["siteId", "status"], where: { organizationId, siteId: { in: ids } }, _count: { _all: true },
     }),
@@ -81,7 +99,7 @@ export async function GET(req: Request, { params }: Params) {
   }>>(Prisma.sql`
     SELECT checkout."siteId" AS "siteId", invoice."currencyCode" AS "currencyCode",
       COUNT(*)::bigint AS "invoiceCount",
-      COALESCE(SUM(invoice."grandTotal"), 0) AS "gross",
+      COALESCE(SUM(invoice."grandTotal" - invoice."amountCredited"), 0) AS "gross",
       COALESCE(SUM(invoice."amountPaid"), 0) AS "allocated",
       COALESCE(SUM(invoice."outstandingAmount"), 0) AS "outstanding"
     FROM "EnterpriseRetailInvoiceCheckout" checkout
@@ -128,7 +146,33 @@ export async function GET(req: Request, { params }: Params) {
   `) : [];
   // Posted accounting is the source for provisional margin figures; never
   // invent a catalog cost or add POS sales to Finance invoice balances.
-  const postedLedger = await retailPostedSiteLedger(organizationId, from, to, ids);
+  const [postedLedger, executiveSources, receivableRows, inventoryAlerts] = await Promise.all([
+    accountingAccess.allowed ? retailPostedSiteLedger(organizationId, from, to, ids, !siteId) : Promise.resolve({ bySite: [], unallocated: [] }),
+    loadRetailExecutiveSources({ organizationId, from, to, timezone, access: { agency: agencyAccess.allowed, telco: telcoAccess.allowed, treasury: treasuryAccess.allowed } }),
+    ids.length ? prisma.$queryRaw<Array<{ siteId: string; currencyCode: string; total: Prisma.Decimal; overdue: Prisma.Decimal; count: bigint }>>(Prisma.sql`
+      SELECT checkout."siteId" AS "siteId", invoice."currencyCode" AS "currencyCode",
+        COALESCE(SUM(invoice."outstandingAmount"), 0) AS total,
+        COALESCE(SUM(CASE WHEN invoice."dueDate" < ${new Date()} THEN invoice."outstandingAmount" ELSE 0 END), 0) AS overdue,
+        COUNT(*)::bigint AS count
+      FROM "EnterpriseRetailInvoiceCheckout" checkout
+      JOIN "EnterpriseSalesInvoice" invoice ON invoice.id = checkout."salesInvoiceId" AND invoice."organizationId" = checkout."organizationId"
+      WHERE checkout."organizationId" = ${organizationId} AND checkout."siteId" IN (${Prisma.join(ids)})
+        AND invoice.status IN ('ISSUED','PARTIALLY_PAID','PAID','OVERDUE','CREDIT_NOTE') AND invoice."outstandingAmount" > 0
+      GROUP BY checkout."siteId", invoice."currencyCode"
+    `) : Promise.resolve([]),
+    inventoryAccess.allowed && ids.length ? prisma.$queryRaw<Array<{ siteId: string; lowStock: bigint; expiring: bigint; expired: bigint }>>(Prisma.sql`
+      SELECT warehouse."siteId" AS "siteId",
+        COUNT(DISTINCT CASE WHEN item."minimumQuantity" IS NOT NULL AND balance."quantityOnHand" - balance."quantityReserved" <= item."minimumQuantity" THEN item.id END)::bigint AS "lowStock",
+        COUNT(DISTINCT CASE WHEN (lot."expiryDate" AT TIME ZONE 'UTC')::date >= ${today}::date AND (lot."expiryDate" AT TIME ZONE 'UTC')::date <= (${today}::date + ${preferences.warnStockDays}::integer) AND balance."quantityOnHand" > balance."quantityReserved" THEN lot.id END)::bigint AS expiring,
+        COUNT(DISTINCT CASE WHEN (lot."expiryDate" AT TIME ZONE 'UTC')::date < ${today}::date AND balance."quantityOnHand" > balance."quantityReserved" THEN lot.id END)::bigint AS expired
+      FROM "EnterpriseInventoryBalance" balance
+      JOIN "EnterpriseWarehouse" warehouse ON warehouse.id = balance."warehouseId" AND warehouse."organizationId" = balance."organizationId"
+      JOIN "EnterpriseInventoryItem" item ON item.id = balance."inventoryItemId" AND item."organizationId" = balance."organizationId"
+      LEFT JOIN "EnterpriseStockLot" lot ON lot.id = balance."stockLotId" AND lot."organizationId" = balance."organizationId"
+      WHERE balance."organizationId" = ${organizationId} AND warehouse."siteId" IN (${Prisma.join(ids)})
+      GROUP BY warehouse."siteId"
+    `) : Promise.resolve([]),
+  ]);
   const items = sites.map((site, index) => ({
     ...site,
     sales: sales.filter((row) => row.siteId === site.id).map((row) => ({ currencyCode: row.currencyCode, total: (row._sum.grandTotal || new Prisma.Decimal(0)).toFixed(), count: row._count._all })),
@@ -143,6 +187,11 @@ export async function GET(req: Request, { params }: Params) {
     financeCollections: financeCollectionRows.filter((row) => row.siteId === site.id).map((row) => ({
       currencyCode: row.currencyCode, method: row.method, total: row.total.toFixed(), count: Number(row.paymentCount),
     })),
+    mobileMoney: executiveSources.mobileMoney.filter((row) => row.siteId === site.id),
+    telco: executiveSources.telco.filter((row) => row.siteId === site.id),
+    treasury: executiveSources.treasury.filter((row) => row.siteId === site.id),
+    receivables: receivableRows.filter((row) => row.siteId === site.id).map((row) => ({ currencyCode: row.currencyCode, total: row.total.toFixed(6), overdue: row.overdue.toFixed(6), count: Number(row.count) })),
+    stockAlerts: inventoryAlerts.find((row) => row.siteId === site.id) ? { lowStock: Number(inventoryAlerts.find((row) => row.siteId === site.id)!.lowStock), expiring: Number(inventoryAlerts.find((row) => row.siteId === site.id)!.expiring), expired: Number(inventoryAlerts.find((row) => row.siteId === site.id)!.expired) } : { lowStock: 0, expiring: 0, expired: 0 },
     inventory: stockByWarehouse.filter((row) => siteByWarehouse.get(row.warehouseId) === site.id).reduce((result, row) => ({
       quantityOnHand: result.quantityOnHand.plus(row._sum.quantityOnHand || 0),
       quantityReserved: result.quantityReserved.plus(row._sum.quantityReserved || 0),
@@ -152,5 +201,22 @@ export async function GET(req: Request, { params }: Params) {
     dailyCloses: closes.filter((row) => row.siteId === site.id).map((row) => ({ status: row.status, count: row._count._all })),
   }));
   await writeApiLog({ request: req, startedAt, statusCode: 200, userId: session.userId, metadata: { organizationId, domain: "retail-site-overview", siteCount: items.length } });
-  return NextResponse.json({ items: items.map((item) => ({ ...item, inventory: { quantityOnHand: item.inventory.quantityOnHand.toFixed(), quantityReserved: item.inventory.quantityReserved.toFixed(), balanceRows: item.inventory.balanceRows } })), period: { from, to }, scope: "OWNER_ONLY_OPERATIONAL", currencyPolicy: "SEPARATE_PER_CURRENCY", financeMarginCertified: false, postedLedgerScope: "PROVISIONAL_POSTED_ONLY", unallocatedPostedLedger: postedLedger.unallocated }, { headers: { "Cache-Control": "private, no-store" } });
+  // Company-only balances without site attribution must never leak into a
+  // single-site subtotal. Include historical closed-site journals in company
+  // P&L, but report them as unallocated to current operating stores.
+  const unallocated = {
+    mobileMoney: siteId ? [] : executiveSources.mobileMoney.filter((row) => row.siteId === null || !ids.includes(row.siteId)),
+    telco: siteId ? [] : executiveSources.telco.filter((row) => row.siteId === null || !ids.includes(row.siteId)),
+    treasury: siteId ? [] : executiveSources.treasury.filter((row) => row.siteId === null || !ids.includes(row.siteId)),
+    postedLedger: siteId ? [] : postedLedger.unallocated,
+  };
+  const summaries = items.map((item) => ({ siteId: item.id, currencies: summarizeRetailExecutive([item]) }));
+  return NextResponse.json({
+    items: items.map((item) => ({ ...item, inventory: { quantityOnHand: item.inventory.quantityOnHand.toFixed(), quantityReserved: item.inventory.quantityReserved.toFixed(), balanceRows: item.inventory.balanceRows } })),
+    period: { from, to }, organizationName: organization?.name || "", timezone,
+    scope: "OWNER_ONLY_OPERATIONAL", currencyPolicy: "SEPARATE_PER_CURRENCY", financeMarginCertified: false, postedLedgerScope: "PROVISIONAL_POSTED_ONLY", unallocatedPostedLedger: postedLedger.unallocated,
+    unallocated, summaries, corporate: summarizeRetailExecutive(items, unallocated),
+    timeline: executiveSources.timeline, sourceAvailability: { agency: agencyAccess.allowed, telco: telcoAccess.allowed, treasury: treasuryAccess.allowed, inventory: inventoryAccess.allowed, accounting: accountingAccess.allowed, reports: reportsAccess.allowed, reportCreate: Boolean(reportWriteAccess?.canCreate) },
+    preferences,
+  }, { headers: { "Cache-Control": "private, no-store" } });
 }

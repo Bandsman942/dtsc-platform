@@ -1,6 +1,6 @@
 {
   "name": "dtsc-platform",
-  "version": "1.8.2",
+  "version": "1.9.0",
   "private": true,
   "engines": {
     "node": "22.x"
@@ -39,6 +39,7 @@
     "qa:hotfix-1080-retail-pos": "node scripts/qa-hotfix-1080-retail-pos-rbac-invoice-cashier.mjs",
     "qa:hotfix-1083-retail-flows": "node scripts/qa-hotfix-1083-retail-flow-sync.mjs",
     "qa:hotfix-1101-retail-pos": "node scripts/qa-hotfix-1101-retail-pos.mjs",
+    "qa:retail-executive-1105": "node scripts/qa-retail-executive-1105.mjs",
     "qa:hotfix-1055-navigation-cards": "node scripts/qa-module-navigation-cards-1055.mjs",
     "qa:hotfix-1061-desktop-sidebar": "node scripts/qa-hotfix-1061-desktop-sidebar.mjs",
     "qa:hotfix-1064-retail-sector-packs": "node scripts/qa-hotfix-1064-retail-sector-packs.mjs",
