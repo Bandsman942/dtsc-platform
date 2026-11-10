@@ -1,19 +1,6 @@
-import { createMcpHandler } from "mcp-handler";
-import { withPublicMcpBearer } from "@/lib/ai/mcp/public-knowledge-route-auth";
-import { convertTime, convertTimeInput, currentTimeInput, getCurrentTime } from "@/lib/ai/mcp/public-knowledge-time";
+import { handlePublicTimeMcp } from "@/lib/ai/mcp/public-knowledge-time-handler";
 
-// Stateless, private MCP over Streamable HTTP. No stdio children on Vercel.
-const handler = createMcpHandler((server) => {
-  server.registerTool("get_current_time", {
-    title: "Current Time", description: "Current time in a verified IANA timezone.",
-    inputSchema: currentTimeInput,
-  }, async (args) => ({ content: [{ type: "text", text: JSON.stringify(getCurrentTime(args)) }] }));
-
-  server.registerTool("convert_time", {
-    title: "Convert Time", description: "Timezone conversion; optionally specify the source date to resolve daylight-saving rules.",
-    inputSchema: convertTimeInput,
-  }, async (args) => ({ content: [{ type: "text", text: JSON.stringify(convertTime(args)) }] }));
-});
-
-export const GET = withPublicMcpBearer(handler, "MCP_PUBLIC_TIME_TOKEN");
-export const POST = withPublicMcpBearer(handler, "MCP_PUBLIC_TIME_TOKEN");
+// Stateless MCP Streamable HTTP via mcp-handler, protected by its own bearer.
+// The same handler is dispatched in-process for trusted DTSC agents.
+export const GET = handlePublicTimeMcp;
+export const POST = handlePublicTimeMcp;
