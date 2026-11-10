@@ -69,7 +69,12 @@ assert.ok(resourcesPage.includes('href="/documentation"') && resourcesCopy.inclu
 assert.ok(sitemap.includes('path: "/documentation"') && sitemap.includes('PUBLIC_DOCUMENTATION.flatMap'), "Both public and Docs sitemaps must include the portal.");
 assert.ok(robots.includes('"/documentation"'), "Public crawlers must be allowed to index docs.");
 assert.ok(products.includes('code: "DOCS"') && products.includes('status: "ACTIVE"'), "Docs must be in canonical product registry.");
-assert.ok(/^\d+\.\d+\.\d+$/.test(version) && (() => { const [major, minor] = version.split(".").map(Number); return major > 1 || (major === 1 && minor >= 8); })(), "Documentation has been part of DTSC since v1.8.0; subsequent SemVer releases must retain it.");
+// Docs #1099 shipped with 1.8.0. Later hotfixes must keep the portal, so
+// enforce the minimum semantic version instead of pinning the whole repo to
+// the first documentation release forever.
+assert.match(version, /^\d+\.\d+\.\d+$/, "Release must use X.Y.Z semantic versioning.");
+const [major, minor] = version.split(".").map(Number);
+assert.ok(major > 1 || (major === 1 && minor >= 8), "The public documentation portal requires version 1.8.0 or later.");
 assert.ok(program.includes("FUTURE_API_ONLY"));
 assert.ok(catalog.find((entry) => entry.slug === "api-feuille-de-route")?.fr.notice.includes("En préparation"));
 console.log("PASS docs #1099: 12 curated FR/EN entries, direct public site, dual-host routing, API guard, navigation, SEO and publication matrix.");
