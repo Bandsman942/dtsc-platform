@@ -228,6 +228,9 @@ export async function POST(req: Request) {
       requestedModel,
       reasoningEffort,
       dataClassifications: routeDataClassifications,
+      // Only the literal user question may seed a PUBLIC Brave search; never
+      // use CAG, RAG, ERP records or model-generated query arguments.
+      explicitPublicUserRequest: data.content,
       budgetRequest: useTools
         ? { allowedToolModes: commercialToolModes }
         : { maxToolCalls: 0, allowedToolModes: [], allowedToolCodes: [] },
