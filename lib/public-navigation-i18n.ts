@@ -12,8 +12,8 @@ export const publicNavigationCopy = {
     requestConsultation: "Demander une consultation",
     consultation: "Consultation",
     groups: { solutions: "Solutions", platform: "Plateforme", industries: "Secteurs", resources: "Ressources", company: "Entreprise" },
-    links: { services: "Services et expertises", digital: "Solutions numériques", data: "Data et indicateurs", ai: "Intelligence artificielle", access: "Accéder à DTSC Platform", pricing: "Offres et tarifs", industry: "Secteurs d'activité", projects: "Projets et démonstrations", publications: "Publications et guides", africa: "Data en Afrique", about: "À propos", contact: "Nous contacter" },
-    sections: { "/": "Accueil", "/services": "Services", "/solutions": "Solutions", "/tarifs": "Tarifs", "/secteurs": "Secteurs", "/projets": "Projets", "/ressources": "Ressources", "/a-propos": "À propos", "/contact": "Contact" },
+    links: { services: "Services et expertises", digital: "Solutions numériques", data: "Data et indicateurs", ai: "Intelligence artificielle", access: "Accéder à DTSC Platform", pricing: "Offres et tarifs", industry: "Secteurs d'activité", projects: "Projets et démonstrations", publications: "Publications et guides", documentation: "Documentation DTSC", africa: "Data en Afrique", about: "À propos", contact: "Nous contacter" },
+    sections: { "/": "Accueil", "/services": "Services", "/solutions": "Solutions", "/tarifs": "Tarifs", "/secteurs": "Secteurs", "/projets": "Projets", "/ressources": "Ressources", "/documentation": "Documentation", "/a-propos": "À propos", "/contact": "Contact" },
   },
   en: {
     mainNavigation: "Main navigation",
@@ -28,7 +28,7 @@ export const publicNavigationCopy = {
     requestConsultation: "Request a consultation",
     consultation: "Consultation",
     groups: { solutions: "Solutions", platform: "Platform", industries: "Industries", resources: "Resources", company: "Company" },
-    links: { services: "Services and expertise", digital: "Digital solutions", data: "Data and insights", ai: "Artificial intelligence", access: "Open DTSC Platform", pricing: "Plans and pricing", industry: "Industries", projects: "Projects and demos", publications: "Articles and guides", africa: "Data in Africa", about: "About us", contact: "Contact us" },
-    sections: { "/": "Home", "/services": "Services", "/solutions": "Solutions", "/tarifs": "Pricing", "/secteurs": "Industries", "/projets": "Projects", "/ressources": "Resources", "/a-propos": "About", "/contact": "Contact" },
+    links: { services: "Services and expertise", digital: "Digital solutions", data: "Data and insights", ai: "Artificial intelligence", access: "Open DTSC Platform", pricing: "Plans and pricing", industry: "Industries", projects: "Projects and demos", publications: "Articles and guides", documentation: "DTSC documentation", africa: "Data in Africa", about: "About us", contact: "Contact us" },
+    sections: { "/": "Home", "/services": "Services", "/solutions": "Solutions", "/tarifs": "Pricing", "/secteurs": "Industries", "/projets": "Projects", "/ressources": "Resources", "/documentation": "Documentation", "/a-propos": "About", "/contact": "Contact" },
   },
 } as const;
