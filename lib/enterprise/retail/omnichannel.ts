@@ -17,6 +17,7 @@ import {
 import { resolveRetailRelationshipBenefitPricing, resolveRetailRelationshipCashbackEffects } from "@/lib/enterprise/relationship-benefits/retail-adapter";
 import { reserveRetailOmnichannelCashbackTx } from "@/lib/enterprise/relationship-benefits/omnichannel-cashback";
 import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
+import { requireRetailSiteCapability } from "@/lib/enterprise/retail/site-access";
 import { withRetailTransactionRetry } from "@/lib/enterprise/retail/transaction-retry";
 import { prisma } from "@/lib/prisma";
 
@@ -99,6 +100,9 @@ async function compensateFailedReservations(args: { organizationId: string; acto
 }
 
 export async function createRetailOmnichannelOrder(organizationId: string, actorUserId: string, input: OmnichannelInput) {
+  // A module-wide write grant never authorizes orders against another store.
+  // Recheck even idempotent replays after a collaborator has been revoked.
+  await requireRetailSiteCapability(organizationId, actorUserId, input.sourceSiteId, "PREPARE_INVOICE", prisma, { requireAssignment: true });
   const existingContext = await prisma.enterpriseRetailOrderOrchestration.findFirst({
     where: { organizationId, idempotencyKey: input.idempotencyKey, archivedAt: null },
   });
@@ -123,6 +127,10 @@ export async function createRetailOmnichannelOrder(organizationId: string, actor
   if (!site) throw new EnterpriseRetailError("RETAIL_OMNICHANNEL_SOURCE_SITE_INVALID", 409);
   if (!warehouse) throw new EnterpriseRetailError("RETAIL_OMNICHANNEL_WAREHOUSE_INVALID", 409);
   if (input.pickupSiteId && !pickupSite) throw new EnterpriseRetailError("RETAIL_OMNICHANNEL_PICKUP_SITE_INVALID", 409);
+  await requireRetailSiteCapability(organizationId, actorUserId, warehouse.siteId, "VIEW_STOCK", prisma, { requireAssignment: true });
+  if (pickupSite && pickupSite.id !== warehouse.siteId) {
+    await requireRetailSiteCapability(organizationId, actorUserId, pickupSite.id, "VIEW_STOCK", prisma, { requireAssignment: true });
+  }
   if (!party) throw new EnterpriseRetailError("RETAIL_OMNICHANNEL_CUSTOMER_INVALID", 409);
   if (new Set(input.lines.map((line) => line.catalogItemId)).size !== input.lines.length) {
     throw new EnterpriseRetailError("RETAIL_OMNICHANNEL_CATALOG_DUPLICATE", 409);
@@ -301,6 +309,7 @@ export async function cancelRetailOmnichannelOrder(
     if (!order || !orchestration) {
       throw new EnterpriseRetailError("RETAIL_OMNICHANNEL_ORDER_NOT_FOUND", 404);
     }
+    await requireRetailSiteCapability(organizationId, actorUserId, orchestration.sourceSiteId, "PREPARE_INVOICE", tx, { requireAssignment: true });
     if (order.status === "CANCELLED" && orchestration.status === "CANCELLED") {
       return { order, orchestration, idempotent: true };
     }
@@ -361,8 +370,11 @@ export async function cancelRetailOmnichannelOrder(
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 30000 });
 }
 
-export async function getRetailOmnichannelOrders(organizationId: string, page = 1, pageSize = 20) {
-  const where: Prisma.EnterpriseRetailOrderOrchestrationWhereInput = { organizationId, archivedAt: null };
+export async function getRetailOmnichannelOrders(organizationId: string, page = 1, pageSize = 20, permittedSiteIds?: string[]) {
+  const where: Prisma.EnterpriseRetailOrderOrchestrationWhereInput = {
+    organizationId, archivedAt: null,
+    ...(permittedSiteIds ? { sourceSiteId: { in: permittedSiteIds } } : {}),
+  };
   const [contexts, total] = await Promise.all([
     prisma.enterpriseRetailOrderOrchestration.findMany({ where, orderBy: [{ createdAt: "desc" }], skip: (page - 1) * pageSize, take: pageSize }),
     prisma.enterpriseRetailOrderOrchestration.count({ where }),

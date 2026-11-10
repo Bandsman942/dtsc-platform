@@ -4,6 +4,7 @@ import { z } from "zod";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { authorizeRetailRequest, retailErrorResponse } from "@/lib/enterprise/retail/http";
 import { createRetailOmnichannelOrder, getRetailOmnichannelOrders, RETAIL_OMNICHANNEL_MODES } from "@/lib/enterprise/retail/omnichannel";
+import { retailSitesForCapability } from "@/lib/enterprise/retail/site-access";
 
 const createSchema = z.object({
   idempotencyKey: z.string().trim().min(8).max(160),
@@ -34,9 +35,14 @@ export async function GET(req: Request, { params }: Params) {
   const url = new URL(req.url);
   const page = Math.max(1, Number(url.searchParams.get("page") || 1) || 1);
   const pageSize = Math.min(50, Math.max(5, Number(url.searchParams.get("pageSize") || 20) || 20));
-  const state = await getRetailOmnichannelOrders(organizationId, page, pageSize);
-  await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "retail-omnichannel-orders", page } });
-  return NextResponse.json(state);
+  try {
+    const scope = await retailSitesForCapability(organizationId, auth.session.userId, "VIEW_SALES");
+    const state = await getRetailOmnichannelOrders(organizationId, page, pageSize, scope.isolationEnabled ? scope.siteIds : undefined);
+    await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "retail-omnichannel-orders", page } });
+    return NextResponse.json(state, { headers: { "Cache-Control": "private, no-store" } });
+  } catch (error) {
+    return retailErrorResponse(error, "RETAIL_OMNICHANNEL_ORDER_LIST_FAILED");
+  }
 }
 
 export async function POST(req: Request, { params }: Params) {

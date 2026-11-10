@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { ArrowRight, CheckCircle2, CircleAlert, Store } from "lucide-react";
 import { FinanceReferenceSelect } from "@/components/enterprise/core-v2/finance-reference-select";
 import { Button } from "@/components/ui/button";
@@ -22,7 +22,7 @@ const copies = {
   fr: {
     heading: "Assistant d’ouverture d’une boutique", intro: "Progression conservée à partir des données ERP réelles. Vous pouvez quitter puis reprendre cette configuration.",
     steps: ["Boutique", "Dépôt", "Caisse", "Équipe", "Stock", "Activation"] as const,
-    newStore: "Nouvelle boutique", name: "Nom de la boutique", city: "Ville", address: "Adresse (facultatif)", createStore: "Créer la boutique", creating: "Enregistrement…",
+    newStore: "Nouvelle boutique", name: "Nom de la boutique", city: "Ville", country: "Code pays (ISO 2)", timezone: "Fuseau horaire de la boutique", address: "Adresse (facultatif)", createStore: "Créer la boutique", creating: "Enregistrement…",
     storeHelp: "Ajoutez un point de vente à cette entreprise. Chaque boutique partage la société, mais dispose de ses propres stocks et caisses.",
     warehouseName: "Nom de l’entrepôt", createWarehouse: "Créer le dépôt", warehouseDone: "Un dépôt actif existe déjà pour cette boutique.",
     cashName: "Nom de la caisse", ledger: "Compte comptable de caisse", createCash: "Créer le compte de caisse", cashDone: "Une caisse dans la devise principale est déjà reliée à la boutique.",
@@ -37,7 +37,7 @@ const copies = {
   en: {
     heading: "Store opening assistant", intro: "Progress is recovered from real ERP records. You can leave and resume setup at any time.",
     steps: ["Store", "Warehouse", "Till", "Team", "Inventory", "Activation"] as const,
-    newStore: "New store", name: "Store name", city: "City", address: "Address (optional)", createStore: "Create store", creating: "Saving…",
+    newStore: "New store", name: "Store name", city: "City", country: "Country code (ISO 2)", timezone: "Store time zone", address: "Address (optional)", createStore: "Create store", creating: "Saving…",
     storeHelp: "Add a retail site to this company. Stores share the company while keeping their own inventory and tills.",
     warehouseName: "Warehouse name", createWarehouse: "Create warehouse", warehouseDone: "An active warehouse already exists for this store.",
     cashName: "Till account name", ledger: "Cash ledger account", createCash: "Create cash account", cashDone: "A base-currency cash account is already linked to this store.",
@@ -65,6 +65,7 @@ export function RetailGuidedStoreSetup({ organizationId, locale, baseCurrency, s
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const timezones = useMemo(() => Intl.supportedValuesOf("timeZone"), []);
   const stepComplete = [Boolean(selectedSite), Boolean(selectedSite?.readiness.warehouse), Boolean(selectedSite?.readiness.cash), Boolean(selectedSite?.readiness.team), Boolean(selectedSite?.readiness.catalog && selectedSite?.readiness.stock), Boolean(selectedSite?.readiness.finance && selectedSite?.readiness.isolation && selectedSite?.readiness.checkout)];
 
   useEffect(() => {
@@ -78,7 +79,7 @@ export function RetailGuidedStoreSetup({ organizationId, locale, baseCurrency, s
     setError(""); setNotice("");
     const form = new FormData(event.currentTarget);
     const payload = target === "site"
-      ? { name: String(form.get("name") || "").trim(), siteType: "STORE", city: String(form.get("city") || "").trim(), addressLine1: String(form.get("address") || "").trim() || null, countryCode: "CD", timezone: "Africa/Kinshasa" }
+      ? { name: String(form.get("name") || "").trim(), siteType: "STORE", city: String(form.get("city") || "").trim(), addressLine1: String(form.get("address") || "").trim() || null, countryCode: String(form.get("countryCode") || "CD").trim().toUpperCase(), timezone: String(form.get("timezone") || "Africa/Kinshasa") }
       : target === "warehouse"
         ? { siteId: selectedSite?.id, name: String(form.get("name") || "").trim(), warehouseType: "RETAIL" }
         : { siteId: selectedSite?.id, name: String(form.get("name") || "").trim(), accountType: "CASH", currencyCode: baseCurrency, ledgerAccountId: String(form.get("ledgerAccountId") || ""), openingBalance: "0" };
@@ -106,7 +107,7 @@ export function RetailGuidedStoreSetup({ organizationId, locale, baseCurrency, s
     {error ? <p role="alert" className="mt-3 rounded-xl bg-rose-500/10 p-3 text-sm text-rose-700 dark:text-rose-200">{error}</p> : null}
     {notice ? <p role="status" className="mt-3 rounded-xl bg-emerald-500/10 p-3 text-sm text-emerald-700 dark:text-emerald-200">{notice}</p> : null}
     <div className="mt-4 min-w-0 rounded-xl border border-dtsc-border bg-dtsc-page p-4">
-      {stage === 0 ? <div className="grid gap-3"><p className="text-sm text-dtsc-muted">{c.storeHelp}</p><form className="grid gap-3 sm:grid-cols-2" onSubmit={(event) => void save(event, "site")}><label className="grid gap-1 text-sm font-semibold text-dtsc-ink">{c.name}<Input required minLength={2} maxLength={160} name="name" placeholder="BCN — Gombe" /></label><label className="grid gap-1 text-sm font-semibold text-dtsc-ink">{c.city}<Input required maxLength={120} name="city" defaultValue="Kinshasa" /></label><label className="grid gap-1 text-sm font-semibold text-dtsc-ink sm:col-span-2">{c.address}<Input maxLength={255} name="address" /></label><Button disabled={busy} className="w-fit">{busy ? c.creating : c.createStore}</Button></form>{sites.length ? <div className="flex flex-wrap gap-2">{sites.map((site) => <Link key={site.id} href={`${stepHref}&siteId=${encodeURIComponent(site.id)}`} className="rounded-xl border border-dtsc-border px-3 py-2 text-sm font-bold text-dtsc-blue">{site.name}</Link>)}</div> : null}</div> : null}
+      {stage === 0 ? <div className="grid gap-3"><p className="text-sm text-dtsc-muted">{c.storeHelp}</p><form className="grid gap-3 sm:grid-cols-2" onSubmit={(event) => void save(event, "site")}><label className="grid gap-1 text-sm font-semibold text-dtsc-ink">{c.name}<Input required minLength={2} maxLength={160} name="name" placeholder="BCN — Gombe" /></label><label className="grid gap-1 text-sm font-semibold text-dtsc-ink">{c.city}<Input required maxLength={120} name="city" defaultValue="Kinshasa" /></label><label className="grid gap-1 text-sm font-semibold text-dtsc-ink">{c.country}<Input required name="countryCode" maxLength={2} minLength={2} pattern="[A-Za-z]{2}" defaultValue="CD" /></label><label className="grid gap-1 text-sm font-semibold text-dtsc-ink">{c.timezone}<select required name="timezone" defaultValue="Africa/Kinshasa" className="min-h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm text-dtsc-ink"><option value="Africa/Kinshasa">Africa/Kinshasa (UTC+1)</option><option value="Africa/Lubumbashi">Africa/Lubumbashi (UTC+2)</option>{timezones.filter((zone) => !["Africa/Kinshasa", "Africa/Lubumbashi"].includes(zone)).map((zone) => <option value={zone} key={zone}>{zone}</option>)}</select></label><label className="grid gap-1 text-sm font-semibold text-dtsc-ink sm:col-span-2">{c.address}<Input maxLength={255} name="address" /></label><Button disabled={busy} className="w-fit">{busy ? c.creating : c.createStore}</Button></form>{sites.length ? <div className="flex flex-wrap gap-2">{sites.map((site) => <Link key={site.id} href={`${stepHref}&siteId=${encodeURIComponent(site.id)}`} className="rounded-xl border border-dtsc-border px-3 py-2 text-sm font-bold text-dtsc-blue">{site.name}</Link>)}</div> : null}</div> : null}
       {stage > 0 && !selectedSite ? <p className="text-sm text-amber-700 dark:text-amber-300"><CircleAlert className="mr-2 inline h-4 w-4" />{c.selectFirst}</p> : null}
       {selectedSite && stage === 1 ? <div className="grid gap-3">{stepComplete[1] ? <p className="text-sm font-bold text-emerald-700 dark:text-emerald-300">{c.warehouseDone}</p> : null}<form onSubmit={(event) => void save(event, "warehouse")} className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end"><label className="grid gap-1 text-sm font-semibold text-dtsc-ink">{c.warehouseName}<Input required name="name" maxLength={160} defaultValue={`Dépôt ${selectedSite.name}`} /></label><Button disabled={busy}>{busy ? c.creating : c.createWarehouse}</Button></form></div> : null}
       {selectedSite && stage === 2 ? <div className="grid gap-3">{stepComplete[2] ? <p className="text-sm font-bold text-emerald-700 dark:text-emerald-300">{c.cashDone}</p> : null}<p className="text-sm text-dtsc-muted">{c.financeHelp}</p><form onSubmit={(event) => void save(event, "cash")} className="grid gap-3"><label className="grid gap-1 text-sm font-semibold text-dtsc-ink">{c.cashName}<Input required name="name" maxLength={160} defaultValue={`Caisse ${selectedSite.name} · ${baseCurrency}`} /></label><p className="text-sm font-semibold text-dtsc-ink">{baseCurrency} · {locale === "fr" ? "Solde d’ouverture : 0" : "Opening balance: 0"}</p><FinanceReferenceSelect organizationId={organizationId} moduleCode="FINANCE_TREASURY" kind="ledger-account" parentId="CASH" name="ledgerAccountId" label={c.ledger} locale={locale} required disabled={busy} /><div className="flex flex-wrap gap-2"><Button disabled={busy}>{busy ? c.creating : c.createCash}</Button><Button asChild variant="outline"><Link href="/enterprise-modules/FINANCE_ACCOUNTING">{c.goFinance}</Link></Button></div></form></div> : null}

@@ -4,6 +4,7 @@ import { getSession } from "@/lib/auth";
 import { getEnterpriseCommonDomainAccess } from "@/lib/enterprise/common/access";
 import { writeApiLog } from "@/lib/audit";
 import { retailPostedSiteLedger } from "@/lib/enterprise/retail/site-financial-report";
+import { civilMidnightUtc, followingCivilDate, isCivilDate } from "@/lib/enterprise/retail/civil-date";
 import { prisma } from "@/lib/prisma";
 
 type Params = { params: Promise<{ organizationId: string }> };
@@ -26,8 +27,13 @@ export async function GET(req: Request, { params }: Params) {
   const url = new URL(req.url);
   const start = url.searchParams.get("from") || "";
   const end = url.searchParams.get("to") || "";
-  const from = start ? new Date(start) : new Date(new Date().setUTCHours(0, 0, 0, 0));
-  const to = end ? new Date(end) : new Date();
+  const organization = await prisma.organization.findFirst({ where: { id: organizationId }, select: { timezone: true } });
+  const timezone = organization?.timezone || "UTC";
+  const todayParts = new Intl.DateTimeFormat("en-GB", { timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date());
+  const todayValue = (key: string) => todayParts.find((part) => part.type === key)?.value || "";
+  const today = `${todayValue("year")}-${todayValue("month")}-${todayValue("day")}`;
+  const from = start ? (isCivilDate(start) ? civilMidnightUtc(start, timezone) : new Date(start)) : civilMidnightUtc(today, timezone);
+  const to = end ? (isCivilDate(end) ? new Date(civilMidnightUtc(followingCivilDate(end), timezone).getTime() - 1) : new Date(end)) : new Date();
   if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime()) || from > to || to.getTime() - from.getTime() > 400 * 86_400_000) {
     return NextResponse.json({ error: "RETAIL_REPORT_DATE_INVALID", message: "Choisissez une période valide, de 400 jours au maximum." }, { status: 400 });
   }
@@ -93,6 +99,33 @@ export async function GET(req: Request, { params }: Params) {
     where: { organizationId, sale: { organizationId, siteId: site.id, status: "COMPLETED", soldAt: dateWhere } },
     _sum: { amount: true }, _count: { _all: true },
   })));
+  // Canonical Finance customer payments are counted by payment date AND
+  // confirmed invoice allocation. Historical POS tenders stay separate.
+  const financeCollectionRows = ids.length ? await prisma.$queryRaw<Array<{
+    siteId: string; currencyCode: string; method: string; total: Prisma.Decimal; paymentCount: bigint;
+  }>>(Prisma.sql`
+    SELECT checkout."siteId" AS "siteId", payment."currencyCode" AS "currencyCode",
+      payment."methodType" AS "method",
+      COALESCE(SUM(allocation."amount"), 0) AS "total",
+      COUNT(DISTINCT payment."id")::bigint AS "paymentCount"
+    FROM "EnterpriseRetailInvoiceCheckout" checkout
+    JOIN "EnterpriseReceivable" receivable
+      ON receivable."salesInvoiceId" = checkout."salesInvoiceId"
+      AND receivable."organizationId" = checkout."organizationId"
+    JOIN "EnterprisePaymentAllocation" allocation
+      ON allocation."receivableId" = receivable."id"
+      AND allocation."organizationId" = checkout."organizationId"
+    JOIN "EnterprisePayment" payment
+      ON payment."id" = allocation."paymentId"
+      AND payment."organizationId" = allocation."organizationId"
+    WHERE checkout."organizationId" = ${organizationId}
+      AND checkout."siteId" IN (${Prisma.join(ids)})
+      AND payment."paymentDate" >= ${from} AND payment."paymentDate" <= ${to}
+      AND payment."status" IN ('CONFIRMED', 'RECONCILED')
+      AND payment."direction" = 'INBOUND' AND payment."paymentType" = 'CUSTOMER_PAYMENT'
+      AND allocation."status" = 'CONFIRMED' AND allocation."reversedAt" IS NULL
+    GROUP BY checkout."siteId", payment."currencyCode", payment."methodType"
+  `) : [];
   // Posted accounting is the source for provisional margin figures; never
   // invent a catalog cost or add POS sales to Finance invoice balances.
   const postedLedger = await retailPostedSiteLedger(organizationId, from, to, ids);
@@ -107,6 +140,9 @@ export async function GET(req: Request, { params }: Params) {
     postedLedger: postedLedger.bySite.filter((row) => row.siteId === site.id),
     approvedExpenses: expenses.filter((row) => row.siteId === site.id).map((row) => ({ currencyCode: row.currency, total: (row._sum.amount || new Prisma.Decimal(0)).toFixed(), count: row._count._all })),
     collections: tenderRows[index].map((row) => ({ currencyCode: row.currencyCode, method: row.methodType, total: (row._sum.amount || new Prisma.Decimal(0)).toFixed(), count: row._count._all })),
+    financeCollections: financeCollectionRows.filter((row) => row.siteId === site.id).map((row) => ({
+      currencyCode: row.currencyCode, method: row.method, total: row.total.toFixed(), count: Number(row.paymentCount),
+    })),
     inventory: stockByWarehouse.filter((row) => siteByWarehouse.get(row.warehouseId) === site.id).reduce((result, row) => ({
       quantityOnHand: result.quantityOnHand.plus(row._sum.quantityOnHand || 0),
       quantityReserved: result.quantityReserved.plus(row._sum.quantityReserved || 0),

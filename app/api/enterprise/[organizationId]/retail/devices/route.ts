@@ -5,17 +5,28 @@ import { listRetailDeviceProfiles, upsertRetailDeviceProfile } from "@/lib/enter
 import { retailDeviceProfileUpsertSchema } from "@/lib/enterprise/retail/customer-payments-schemas";
 import { authorizeRetailRequest, retailErrorResponse } from "@/lib/enterprise/retail/http";
 import { getRetailCustomerPaymentPermissions } from "@/lib/enterprise/retail/permissions";
+import { RETAIL_OWNER_ROLES } from "@/lib/enterprise/retail/site-access";
+import { prisma } from "@/lib/prisma";
 
 type Params = { params: Promise<{ organizationId: string }> };
+
+async function isRetailDeviceAdministrator(organizationId: string, userId: string) {
+  const membership = await prisma.organizationMember.findFirst({
+    where: { organizationId, userId, status: "ACTIVE", removedAt: null, role: { in: [...RETAIL_OWNER_ROLES] } },
+    select: { id: true },
+  });
+  return Boolean(membership);
+}
 
 export async function GET(req: Request, { params }: Params) {
   const startedAt = Date.now();
   const { organizationId } = await params;
   const auth = await authorizeRetailRequest(req, organizationId, "RETAIL_POS", "read");
   if (!auth.ok) return auth.response;
+  if (!await isRetailDeviceAdministrator(organizationId, auth.session.userId)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const items = await listRetailDeviceProfiles(organizationId);
   await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "retail-devices", action: "list", count: items.length } });
-  return NextResponse.json({ items });
+  return NextResponse.json({ items }, { headers: { "Cache-Control": "private, no-store" } });
 }
 
 export async function POST(req: Request, { params }: Params) {
@@ -23,6 +34,7 @@ export async function POST(req: Request, { params }: Params) {
   const { organizationId } = await params;
   const auth = await authorizeRetailRequest(req, organizationId, "RETAIL_POS", "manage", { mutation: true, limit: 60 });
   if (!auth.ok) return auth.response;
+  if (!await isRetailDeviceAdministrator(organizationId, auth.session.userId)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const permissions = await getRetailCustomerPaymentPermissions(auth.session.userId, organizationId);
   if (!permissions.canManageDevices) return NextResponse.json({ error: "Forbidden", message: "Votre fonction ne permet pas de configurer les périphériques POS." }, { status: 403 });
   const parsed = retailDeviceProfileUpsertSchema.safeParse(await req.json().catch(() => null));

@@ -4,7 +4,6 @@ import { useCallback, useEffect, useState } from "react";
 import { Building2, FileSpreadsheet, FileText, Landmark, ReceiptText, RefreshCw, ShoppingBasket, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { customerFacingError } from "@/lib/customer-facing-language";
-import { browserCivilDate, civilMidnightUtc, followingCivilDate } from "@/lib/enterprise/retail/civil-date";
 import { buildRetailOperationsExport, buildRetailPostedLedgerExport, type RetailPostedLedger } from "@/lib/enterprise/retail/site-financial-export";
 import { downloadProfessionalXlsx } from "@/lib/reporting/professional-export";
 import { downloadProfessionalPdfV2 } from "@/lib/reporting/professional-pdf-v2";
@@ -12,14 +11,14 @@ import { downloadProfessionalPdfV2 } from "@/lib/reporting/professional-pdf-v2";
 type Money = { currencyCode: string; total: string; count: number };
 type Tender = Money & { method: string };
 type FinanceInvoice = { currencyCode: string; count: number; issuedTotal: string; allocatedToDate: string; outstandingToDate: string };
-type Site = { id: string; code: string; name: string; sales: Money[]; financeInvoices: FinanceInvoice[]; postedLedger?: RetailPostedLedger[]; approvedExpenses: Money[]; collections: Tender[]; inventory: { balanceRows: number }; cashSessions: Array<{ status: string; count: number }>; dailyCloses: Array<{ status: string; count: number }> };
+type Site = { id: string; code: string; name: string; sales: Money[]; financeInvoices: FinanceInvoice[]; postedLedger?: RetailPostedLedger[]; approvedExpenses: Money[]; collections: Tender[]; financeCollections?: Tender[]; inventory: { balanceRows: number }; cashSessions: Array<{ status: string; count: number }>; dailyCloses: Array<{ status: string; count: number }> };
 
 function currencyAmount(value: string, currency: string, en: boolean) {
   try { return new Intl.NumberFormat(en ? "en-US" : "fr-FR", { maximumFractionDigits: 2 }).format(Number(value)) + " " + currency; }
   catch { return `${value} ${currency}`; }
 }
 
-export function RetailSiteOverview({ organizationId, locale }: { organizationId: string; locale: "fr" | "en" }) {
+export function RetailSiteOverview({ organizationId, locale, timezone }: { organizationId: string; locale: "fr" | "en"; timezone: string }) {
   const [days, setDays] = useState(7);
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
@@ -37,12 +36,15 @@ export function RetailSiteOverview({ organizationId, locale }: { organizationId:
     setLoading(true);
     setError("");
     try {
-      const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
-      const start = dateFrom ? civilMidnightUtc(dateFrom, timezone) : new Date();
-      if (!dateFrom) { start.setDate(start.getDate() - (days - 1)); start.setHours(0, 0, 0, 0); }
-      const end = dateTo ? new Date(civilMidnightUtc(followingCivilDate(dateTo), timezone).getTime() - 1) : new Date();
-      if (start > end) throw new Error(en ? "The end date must follow the start date." : "La date de fin doit être postérieure à la date de début.");
-      const query = new URLSearchParams({ from: start.toISOString(), to: end.toISOString() });
+      const parts = new Intl.DateTimeFormat("en-GB", { timeZone: timezone, day: "2-digit", month: "2-digit", year: "numeric" }).formatToParts(new Date());
+      const part = (key: string) => parts.find((item) => item.type === key)?.value || "";
+      const today = `${part("year")}-${part("month")}-${part("day")}`;
+      const earlier = new Date(`${today}T12:00:00Z`);
+      earlier.setUTCDate(earlier.getUTCDate() - (days - 1));
+      const from = dateFrom || earlier.toISOString().slice(0, 10);
+      const to = dateTo || today;
+      if (from > to) throw new Error(en ? "The end date must follow the start date." : "La date de fin doit être postérieure à la date de début.");
+      const query = new URLSearchParams({ from, to });
       const response = await fetch(`/api/enterprise/${organizationId}/retail/site-overview?${query}`, { cache: "no-store" });
       const payload = await response.json().catch(() => null) as { items?: Site[]; unallocatedPostedLedger?: RetailPostedLedger[]; period?: { from: string; to: string }; message?: string } | null;
       if (!response.ok || !payload?.items) throw new Error(payload?.message || (en ? "Store overview is unavailable." : "La vue multi-boutiques est indisponible."));
@@ -51,20 +53,21 @@ export function RetailSiteOverview({ organizationId, locale }: { organizationId:
       setReportPeriod(payload.period || { from: "", to: "" });
     } catch (caught) { setError(customerFacingError(caught, locale)); }
     finally { setLoading(false); }
-  }, [organizationId, days, dateFrom, dateTo, en, locale]);
+  }, [organizationId, days, dateFrom, dateTo, en, locale, timezone]);
   useEffect(() => { void load(); }, [load]);
   const visibleSites = items.filter((site) => !siteFilter || site.id === siteFilter);
   const filteredSites = visibleSites.map((site) => ({
     ...site,
     sales: site.sales.filter((row) => !currencyFilter || row.currencyCode === currencyFilter),
     collections: site.collections.filter((row) => !currencyFilter || row.currencyCode === currencyFilter),
+    financeCollections: (site.financeCollections || []).filter((row) => !currencyFilter || row.currencyCode === currencyFilter),
     financeInvoices: site.financeInvoices.filter((row) => !currencyFilter || row.currencyCode === currencyFilter),
     approvedExpenses: site.approvedExpenses.filter((row) => !currencyFilter || row.currencyCode === currencyFilter),
     postedLedger: site.postedLedger?.filter((row) => !currencyFilter || row.currencyCode === currencyFilter),
   }));
   const filteredUnallocatedLedger = unallocatedLedger.filter((row) => !currencyFilter || row.currencyCode === currencyFilter);
   const currencies = [...new Set(items.flatMap((site) => [
-    ...site.sales.map((entry) => entry.currencyCode), ...site.collections.map((entry) => entry.currencyCode),
+    ...site.sales.map((entry) => entry.currencyCode), ...site.collections.map((entry) => entry.currencyCode), ...(site.financeCollections || []).map((entry) => entry.currencyCode),
     ...site.financeInvoices.map((entry) => entry.currencyCode), ...site.approvedExpenses.map((entry) => entry.currencyCode),
   ]))].sort();
   const chartRows = visibleSites.flatMap((site) => currencies.filter((currency) => !currencyFilter || currency === currencyFilter).map((currency) => {
@@ -88,7 +91,7 @@ export function RetailSiteOverview({ organizationId, locale }: { organizationId:
       <label className="text-xs font-bold text-dtsc-muted">{en ? "Store" : "Boutique"}<select value={siteFilter} onChange={(event) => setSiteFilter(event.target.value)} className="mt-1 min-h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-page p-2 text-sm"><option value="">{en ? "All stores" : "Toutes les boutiques"}</option>{items.map((site) => <option key={site.id} value={site.id}>{site.name}</option>)}</select></label>
       <label className="text-xs font-bold text-dtsc-muted">{en ? "Currency" : "Devise"}<select value={currencyFilter} onChange={(event) => setCurrencyFilter(event.target.value)} className="mt-1 min-h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-page p-2 text-sm"><option value="">{en ? "All — separate" : "Toutes — séparées"}</option>{currencies.map((currency) => <option key={currency} value={currency}>{currency}</option>)}</select></label>
     </div>
-    <div className="mt-2 flex flex-wrap gap-2"><Button type="button" variant="outline" onClick={() => { const date = dateFrom || dateTo || browserCivilDate(); setDateFrom(date); setDateTo(date); }}>{en ? "Exact date" : "Date précise"}</Button><Button type="button" variant="ghost" onClick={() => { setDateFrom(""); setDateTo(""); }}>{en ? "Clear dates" : "Effacer les dates"}</Button></div>
+    <div className="mt-2 flex flex-wrap gap-2"><Button type="button" variant="outline" onClick={() => { const parts = new Intl.DateTimeFormat("en-GB", { timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date()); const part = (key: string) => parts.find((item) => item.type === key)?.value || ""; const date = dateFrom || dateTo || `${part("year")}-${part("month")}-${part("day")}`; setDateFrom(date); setDateTo(date); }}>{en ? "Exact date" : "Date précise"}</Button><Button type="button" variant="ghost" onClick={() => { setDateFrom(""); setDateTo(""); }}>{en ? "Clear dates" : "Effacer les dates"}</Button><span className="self-center text-xs text-dtsc-muted">{timezone}</span></div>
     <div className="mt-2 flex flex-wrap gap-2"><Button type="button" variant="ghost" disabled={loading || !visibleSites.length} onClick={() => downloadProfessionalXlsx(exportPostedLedger())}><FileSpreadsheet className="h-4 w-4" />{en ? "Provisional ledger · Excel" : "Grand livre provisoire · Excel"}</Button><Button type="button" variant="ghost" disabled={loading || !visibleSites.length} onClick={() => downloadProfessionalPdfV2(exportPostedLedger())}><FileText className="h-4 w-4" />{en ? "Provisional ledger · PDF" : "Grand livre provisoire · PDF"}</Button></div>
     {!loading && visibleSites.length ? <div className="mt-4 min-w-0 rounded-2xl border border-dtsc-border bg-dtsc-page p-3 sm:p-4"><div className="flex flex-wrap items-center justify-between gap-2"><h3 className="text-sm font-black text-dtsc-ink">{en ? "Interactive store KPIs" : "KPIs interactifs par boutique"}</h3><select aria-label={en ? "Chart metric" : "Indicateur graphique"} value={chartMetric} onChange={(event) => { setChartMetric(event.target.value as typeof chartMetric); setActiveBar(""); }} className="min-h-10 rounded-lg border border-dtsc-border bg-dtsc-surface px-2 text-sm"><option value="collections">{en ? "POS collected" : "Encaissements POS"}</option><option value="sales">{en ? "POS sales" : "Ventes POS"}</option><option value="invoices">{en ? "Finance invoices" : "Factures Finance émises"}</option><option value="expenses">{en ? "Approved expenses" : "Dépenses approuvées"}</option></select></div><div className="mt-3 grid max-h-80 gap-2 overflow-auto">{chartRows.length ? chartRows.map((row) => <button key={row.id} type="button" aria-pressed={activeBar === row.id} onClick={() => setActiveBar(row.id === activeBar ? "" : row.id)} className={`grid min-w-0 grid-cols-[minmax(0,7rem)_minmax(0,1fr)] items-center gap-3 rounded-lg p-1.5 text-left hover:bg-cyan-500/10 ${activeBar === row.id ? "bg-cyan-500/10" : ""}`}><span className="truncate text-xs font-semibold text-dtsc-ink" title={row.name}>{row.name} · {row.currency}</span><span className="relative flex min-h-9 items-center"><span className="absolute inset-y-0 left-0 rounded-lg bg-gradient-to-r from-cyan-600 to-blue-500" style={{ width: `${Math.max(4, (row.value / (maximumByCurrency.get(row.currency) || 1)) * 100)}%` }} /><span className="relative z-10 pl-2 text-xs font-black text-white drop-shadow-sm">{currencyAmount(String(row.value), row.currency, en)}</span></span></button>) : <p className="text-xs text-dtsc-muted">{en ? "No activity for the filtered period." : "Aucune activité pour cette période et ces filtres."}</p>}</div><p className="mt-2 text-xs text-dtsc-muted">{en ? "Choose a bar to highlight a store. Monetary values are never added across currencies." : "Sélectionnez une barre pour mettre une boutique en évidence. Aucun cumul entre devises."}</p></div> : null}
     {error ? <p role="alert" className="mt-4 rounded-xl bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-200">{error}</p> : null}
@@ -100,6 +103,7 @@ export function RetailSiteOverview({ organizationId, locale }: { organizationId:
         <div className="min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface p-3"><p className="flex items-center gap-2 text-xs font-bold text-dtsc-muted"><ShoppingBasket className="h-4 w-4" />{en ? "Completed sales" : "Ventes réalisées"}</p>{site.sales.length ? site.sales.map((sale) => <p key={sale.currencyCode} className="mt-2 break-words text-sm font-black text-dtsc-ink">{currencyAmount(sale.total, sale.currencyCode, en)} <span className="font-normal text-dtsc-muted">({sale.count})</span></p>) : <p className="mt-2 text-sm text-dtsc-muted">0</p>}</div>
         <div className="min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface p-3"><p className="flex items-center gap-2 text-xs font-bold text-dtsc-muted"><Wallet className="h-4 w-4" />{en ? "POS collections" : "Encaissements POS"}</p>{site.collections.length ? site.collections.map((tender) => <p key={`${tender.currencyCode}:${tender.method}`} className="mt-2 break-words text-sm font-semibold text-dtsc-ink">{currencyAmount(tender.total, tender.currencyCode, en)} <span className="text-xs font-normal text-dtsc-muted">· {tender.method}</span></p>) : <p className="mt-2 text-sm text-dtsc-muted">0</p>}</div>
       </div>
+      <div className="mt-3 rounded-xl border border-cyan-500/30 bg-dtsc-surface p-3"><p className="text-xs font-black text-dtsc-muted">{en ? "Finance invoice collections — in selected period" : "Encaissements des factures Finance — sur la période"}</p>{site.financeCollections.length ? site.financeCollections.map((payment) => <p key={`${payment.currencyCode}:${payment.method}`} className="mt-2 text-sm font-bold text-dtsc-ink">{currencyAmount(payment.total, payment.currencyCode, en)} <span className="text-xs font-normal text-dtsc-muted">· {payment.method} · {payment.count}</span></p>) : <p className="mt-2 text-sm text-dtsc-muted">0</p>}<p className="mt-2 text-xs text-dtsc-muted">{en ? "Confirmed Finance payments allocated to Retail invoices by payment date. Kept separate from historic POS tender receipts." : "Paiements Finance confirmés et affectés aux factures Retail, par date de paiement. Séparés des tickets POS historiques."}</p></div>
       <div className="mt-3 rounded-xl border border-dtsc-border bg-dtsc-surface p-3">
         <p className="flex items-center gap-2 text-xs font-bold text-dtsc-muted"><ReceiptText className="h-4 w-4" />{en ? "Issued Finance invoices — distinct from POS sales" : "Factures Finance émises — distinctes des ventes POS"}</p>
         {(site.financeInvoices || []).length ? site.financeInvoices.map((entry) =>

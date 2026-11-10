@@ -169,7 +169,9 @@ export async function transitionSalesInvoice(
     const transition = {
       SUBMIT: { from: ["DRAFT"], to: "PENDING_APPROVAL" },
       APPROVE: { from: ["PENDING_APPROVAL"], to: "APPROVED" },
-      CANCEL: { from: ["DRAFT"], to: "CANCELLED" },
+      // Rejected invoices are unposted drafts: the issuer must be able to
+      // cancel them and release any outstanding Retail stock promise.
+      CANCEL: { from: ["DRAFT", "REJECTED"], to: "CANCELLED" },
       VOID: { from: ["ISSUED", "OVERDUE"], to: "VOIDED" },
     }[input.action as Exclude<typeof input.action, "ISSUE">];
     if (!transition?.from.includes(invoice.status)) throw new EnterpriseAccountingError("SALES_INVOICE_TRANSITION_INVALID", 409);
