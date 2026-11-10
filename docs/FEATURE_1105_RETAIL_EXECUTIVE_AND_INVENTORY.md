@@ -30,7 +30,7 @@ Chaque source facultative est lue uniquement si son module est réellement autor
 - Vues **consolidée**, **par boutique**, **par devise** ; dates de début/fin, période courte, rafraîchissement. Les graphiques comparatifs filtrent une boutique par clic et les histogrammes journaliers détaillent le jour sélectionné, avec légendes et couleurs de signalement.
 - 22 métriques financières : ventes/encaissements historiques POS, factures émises, affectations à date, encaissements Finance, créances ouvertes/échues, dépenses approuvées, chiffre d'affaires/coût des ventes/marge brute/résultat comptables postés, dépôts/retraits/commissions/frais Mobile Money, ventes/coûts/marges Télécom, soldes de trésorerie opérationnelle/rapprochée/disponible.
 - Alerte orange pour créance dépassant le seuil administrateur ; rouge pour lot expiré ou perte ; vert pour indicateur favorable, selon la valeur ; texte explicatif sous les chiffres. L'absence de source n'est jamais interprétée comme un revenu nul certifié.
-- Les préférences administrateur (`dashboard-preferences`) règlent la période initiale, le KPI de graphique, le seuil d'encours, le nombre de jours avant péremption et l'affichage du POS historique. `settingsJson` est fusionné, non remplacé ; contrôle de révision + journal d'audit.
+- Les préférences administrateur (`dashboard-preferences`) règlent la période initiale, le KPI de graphique, les seuils d'encours **par devise native** (avec seuil général de repli), le nombre de jours avant péremption et l'affichage du POS historique. `settingsJson` est fusionné, non remplacé ; contrôle de révision + journal d'audit.
 
 ## Rapports officiels de l'entreprise
 

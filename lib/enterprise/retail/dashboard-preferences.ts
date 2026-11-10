@@ -6,12 +6,13 @@ export const retailDashboardPreferencesSchema = z.object({
   defaultDays: z.union([z.literal(1), z.literal(7), z.literal(30), z.literal(90)]),
   defaultMetric: z.enum(["financeCollections", "invoices", "posSales", "posCollections", "expenses", "postedRevenue", "mobileMoneyCommission", "telcoMargin"]),
   warnOutstandingAbove: z.number().min(0).max(1_000_000_000_000),
+  warnOutstandingByCurrency: z.record(z.string().regex(/^[A-Z]{3}$/), z.number().min(0).max(1_000_000_000_000)).default({}),
   warnStockDays: z.number().int().min(1).max(365),
   showLegacyPos: z.boolean(),
 }).strict();
 export type RetailDashboardPreferences = z.infer<typeof retailDashboardPreferencesSchema>;
 export const DEFAULT_RETAIL_DASHBOARD_PREFERENCES: RetailDashboardPreferences = {
-  defaultDays: 7, defaultMetric: "financeCollections", warnOutstandingAbove: 100_000,
+  defaultDays: 7, defaultMetric: "financeCollections", warnOutstandingAbove: 100_000, warnOutstandingByCurrency: {},
   warnStockDays: 30, showLegacyPos: true,
 };
 

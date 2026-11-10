@@ -15,6 +15,11 @@ const load = (path, aliases = {}) => {
 };
 const read = (path) => fs.readFileSync(path, "utf8");
 const metrics = load("lib/enterprise/retail/executive-metrics.ts");
+const prefs = load("lib/enterprise/retail/dashboard-preferences.ts");
+const previousPrefs = prefs.readRetailDashboardPreferences({ executiveDashboard: { defaultDays: 7, defaultMetric: "financeCollections", warnOutstandingAbove: 100000, warnStockDays: 30, showLegacyPos: true } });
+assert.deepEqual(Object.keys(previousPrefs.warnOutstandingByCurrency), [], "Saved preferences from before currency-specific thresholds must remain readable");
+assert.equal(prefs.retailDashboardPreferencesSchema.safeParse({ ...previousPrefs, warnOutstandingByCurrency: { CDF: 250000, USD: 100 } }).success, true, "Administrator can set independent currency-native debt thresholds");
+assert.equal(prefs.retailDashboardPreferencesSchema.safeParse({ ...previousPrefs, warnOutstandingByCurrency: { CDF: -10 } }).success, false, "Negative debt warning thresholds must be rejected");
 const execSummary = load("lib/enterprise/retail/executive-summary.ts", { "@/lib/enterprise/retail/executive-metrics": metrics });
 const exporter = load("lib/enterprise/retail/site-financial-export.ts", { "@/lib/enterprise/retail/executive-metrics": metrics });
 const base = () => ({ sales: [], collections: [], financeCollections: [], financeInvoices: [], receivables: [], approvedExpenses: [], postedLedger: [], mobileMoney: [], telco: [], treasury: [] });
