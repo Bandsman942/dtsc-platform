@@ -129,7 +129,7 @@ export async function callMcpJsonRpc<T>(input: {
   };
   if (input.server.authMode === "BEARER_ENV") {
     const envKey = input.server.authEnvKey || "";
-    const token = envKey ? process.env[envKey] : undefined;
+    const token = envKey ? process.env[envKey]?.trim() : undefined;
     if (!token) throw new Error("MCP_SERVER_AUTH_MISSING");
     headers.Authorization = `Bearer ${token}`;
   } else if (input.server.authMode === "OAUTH_USER") {
