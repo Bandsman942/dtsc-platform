@@ -28,7 +28,8 @@ export function detectPublicChatMcpIntent(content: string): PublicChatMcpIntent 
   const text = content.trim().slice(0, 1000);
   if (!text || sensitiveQueryPattern.test(text)) return null;
 
-  const asksCurrentTime = (
+  const implicitNow = /(?:quelle?\s+heure\s+est[-\s]?il|what\s+time\s+is\s+it|il\s+est\s+quelle?\s+heure)/i.test(text);
+  const asksCurrentTime = implicitNow || (
     /\b(?:heure|time)\b/i.test(text) && /\b(?:actuell(?:e|ement)?|maintenant|en ce moment|right now|current|now)\b/i.test(text)
   ) || (
     /\b(?:date|day)\b/i.test(text) &&
@@ -39,7 +40,7 @@ export function detectPublicChatMcpIntent(content: string): PublicChatMcpIntent 
   if (asksCurrentTime && text.length <= 260) {
     const specified = zones.find((entry) => entry.pattern.test(text));
     // Do not silently answer Kinshasa if another unknown city was requested.
-    const hasUnknownLocation = /\b(?:à|au|aux|in)\s+([\p{L}\s-]{3,40})\s*\??$/iu.test(text) && !specified;
+    const hasUnknownLocation = /(?:\b(?:à|au|aux|in)\s+)([A-ZÀ-ÖØ-Ý][\p{L}\s-]{2,30})\s*\??$/u.test(text) && !specified;
     if (!hasUnknownLocation) {
       return { toolCode: "MCP_TIME_GET_CURRENT_TIME", args: { timezone: specified?.zone || "Africa/Kinshasa" } };
     }
