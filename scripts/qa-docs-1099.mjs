@@ -47,6 +47,8 @@ assert.ok(domains.includes('docs: "https://docs.dtsc-platform.com"'));
 assert.ok(domains.includes('return "docs";'), "Domain resolver must identify docs host.");
 assert.ok(domains.includes('export function getDocsUrl('));
 assert.ok(middleware.includes('if (hostType === "docs")'), "Docs host must have an isolated routing branch.");
+assert.ok(middleware.includes('{ source: "/:path*", has: [{ type: "host", value: "docs.dtsc-platform.com" }] }'), "Docs hostname must have a complete host-scoped matcher, not only private paths.");
+assert.ok(middleware.includes('hostType === "docs" && isStaticAsset(pathname)'), "Static assets must bypass session verification on Docs.");
 assert.ok(middleware.includes('NextResponse.rewrite(target)'), "Docs root must map to documentation route.");
 assert.ok(middleware.includes('return NextResponse.json({ error: "Not found" }, { status: 404 });'), "Documentation host must block internal API calls.");
 assert.ok(page.includes('PUBLIC_DOCUMENTATION') && page.includes('getPublicDocumentation'));
