@@ -82,7 +82,9 @@ assert.ok(standardTool.includes("source") || standardTool.includes("Source"), "R
 assert.ok(config.includes('process.env.MCP_PUBLIC_FETCH_CERTIFIED === "true"'), "Fly Fetch remains independently disabled.");
 
 const pkg = JSON.parse(read("package.json"));
-assert.equal(pkg.version, "1.8.2");
+assert.match(pkg.version, /^\d+\.\d+\.\d+$/, "A release must keep a valid SemVer version");
+const [major, minor, patch] = pkg.version.split(".").map(Number);
+assert.ok(major > 1 || (major === 1 && (minor > 8 || minor === 8 && patch >= 2)), "The MCP #1102 fix requires release v1.8.2 or newer");
 assert.equal(pkg.scripts["qa:hotfix-1102"], "node --experimental-strip-types scripts/qa-hotfix-1102-mcp-unavailable.mjs");
 assert.ok(pkg.scripts["qa:regression"].includes("qa-hotfix-1102-mcp-unavailable.mjs"));
 

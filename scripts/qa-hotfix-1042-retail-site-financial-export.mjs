@@ -5,11 +5,14 @@ import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
 const ts = require("typescript");
+const metricSource = fs.readFileSync("lib/enterprise/retail/executive-metrics.ts", "utf8");
+const metricModule = { exports: {} };
+vm.runInNewContext(ts.transpileModule(metricSource, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, { module: metricModule, exports: metricModule.exports, require });
 const src = fs.readFileSync("lib/enterprise/retail/site-financial-export.ts", "utf8");
 const mod = { exports: {} };
 vm.runInNewContext(ts.transpileModule(src, {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
-}).outputText, { module: mod, exports: mod.exports, require, Date });
+}).outputText, { module: mod, exports: mod.exports, require: (id) => id === "@/lib/enterprise/retail/executive-metrics" ? metricModule.exports : require(id), Date });
 const row = (currencyCode, revenue, grossMargin, journalLineCount = 2) => ({
   currencyCode, revenue, grossMargin, otherIncome: "0.000000", costOfSales: "3.000000",
   operatingExpenses: "0.000000", operatingResult: grossMargin, journalLineCount,

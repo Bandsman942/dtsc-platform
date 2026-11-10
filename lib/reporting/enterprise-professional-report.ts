@@ -1,4 +1,6 @@
 import type { ProfessionalReportExportModel, ProfessionalReportInsight } from "@/lib/reporting/professional-export";
+import { buildRetailExecutiveExport } from "@/lib/enterprise/retail/site-financial-export";
+import type { RetailExecutiveSummary } from "@/lib/enterprise/retail/executive-metrics";
 
 type Dict = Record<string, unknown>;
 
@@ -158,6 +160,17 @@ export function buildEnterpriseProfessionalReport(input: BuildInput): Profession
     filters,
     accentHex: "#087EA4",
   };
+  if (schema === "retail-executive/v1") {
+    const summaries = Array.isArray(data.summaries) ? data.summaries as Array<{ site: string; currencies: RetailExecutiveSummary[] }> : [];
+    const consolidated = Array.isArray(data.consolidated) ? data.consolidated as RetailExecutiveSummary[] : [];
+    return { ...buildRetailExecutiveExport({
+      organizationName: input.organizationName || "DTSC Platform", locale: en ? "en" : "fr",
+      from: input.periodStart || "", to: input.periodEnd || "", siteFilter: "", currency: input.currency || "",
+      summaries, consolidated,
+      stockWarnings: data.stockWarnings && typeof data.stockWarnings === "object" ? data.stockWarnings as { lowStock: number; expiring: number; expired: number } : undefined,
+      unallocatedLedger: Array.isArray(data.unallocatedPostedLedger) ? data.unallocatedPostedLedger as Array<{ currencyCode: string; revenue: string; otherIncome: string; costOfSales: string; operatingExpenses: string; grossMargin: string; operatingResult: string; journalLineCount: number }> : [],
+    }), title: input.title, filenameBase: input.reference, generatedLabel: generated };
+  }
 
   if (schema.startsWith("budget-vs-actual")) {
     const currencies = list(data.currencies); const lines = list(data.lines); const singleCurrency = currencies.length === 1 ? text(currencies[0].currency, input.currency || "") : null;

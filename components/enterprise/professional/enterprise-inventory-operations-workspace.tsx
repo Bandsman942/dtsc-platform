@@ -24,6 +24,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { notifyToast } from "@/lib/client-toast";
+import { InventoryStockGovernance } from "@/components/enterprise/professional/inventory-stock-governance";
 import { BusinessList, BusinessListItem } from "@/components/workspace/business-list";
 import { ContextActions, type BusinessContextAction } from "@/components/workspace/context-actions";
 import { EmptyState } from "@/components/workspace/empty-state";
@@ -336,6 +337,7 @@ export function EnterpriseInventoryOperationsWorkspace({ organizationId, organiz
       summary={t("inventory.mobileSummary")}
     />
     <ModuleContent>
+      <InventoryStockGovernance organizationId={organizationId} locale={locale} warehouses={lookups.warehouses} />
       <ModuleSection title={tab === "STOCK" ? t("inventory.stockSection") : tab === "TRANSFERS" ? t("inventory.transferSection") : tab === "COUNTS" ? t("inventory.countSection") : t("inventory.adjustmentSection")} description={tab === "STOCK" ? t("inventory.stockDescription") : tab === "TRANSFERS" ? t("inventory.transferDescription") : tab === "COUNTS" ? t("inventory.countDescription") : t("inventory.adjustmentDescription")}>
         {activeCollection.error ? <ProfessionalError message={activeCollection.error} /> : activeCollection.loading ? <ProfessionalLoading /> : tab === "STOCK" ? (
           stock.items.length ? <BusinessList ariaLabel={t("inventory.stockAria")}>{stock.items.map((item) => <BusinessListItem key={item.id} title={`${item.catalogItem.code} · ${item.catalogItem.name}`} status={<StatusBadge tone={item.isLowStock ? "danger" : "success"}>{item.isLowStock ? t("inventory.lowStock") : t("inventory.available")}</StatusBadge>} meta={`${t("inventory.availableQuantity", { value: quantity(item.quantityAvailable, item.catalogItem.unitOfMeasure?.symbol) })} · ${t("inventory.reservedQuantity", { value: quantity(item.quantityReserved, item.catalogItem.unitOfMeasure?.symbol) })}`} description={item.balances.map((balance) => `${balance.warehouse.name}${balance.storageLocation ? ` / ${balance.storageLocation.name}` : ""}: ${quantity(balance.quantityOnHand, item.catalogItem.unitOfMeasure?.symbol)}`).join(" · ") || t("inventory.noBalance")} onOpen={() => setDetail(item)} openLabel={t("inventory.openStock", { name: item.catalogItem.name })} />)}</BusinessList> : <EmptyState compact title={t("inventory.noTrackedItem")} description={t("inventory.noTrackedItemDescription")} />
