@@ -53,6 +53,8 @@ Pour un domaine donné, la documentation API ne peut passer à `PUBLIC` qu’ave
 ## Design / architecture T1
 
 - Une seule application Next.js/Vercel continue d’héberger les surfaces ; `docs` devient un HostType reconnu avec canonical indépendant.
+- Le portail est aussi disponible **directement depuis le site public** sur `https://dtsc-platform.com/documentation` (sans connexion), avec navigation principale desktop, menu mobile, CTA sur la page d’accueil, lien depuis le journal Ressources et lien du pied de page.
+- Les parcours, filtres, recherche et changements de langue conservent le domaine de l’utilisateur ; un visiteur du site public ne bascule pas automatiquement sur le sous-domaine Docs lorsqu’il ouvre un guide.
 - `docs.dtsc-platform.com/` se réécrit vers `/documentation` sans changer l’URL visible.
 - Les API sont refusées sur le host documentation; les accès aux routes privées de l’application ne sont pas ouverts sur ce host.
 - Aucun nouvel accès DB, aucun schéma Prisma, aucun secret ni déploiement Vercel supplémentaire.
@@ -68,12 +70,12 @@ Pour un domaine donné, la documentation API ne peut passer à `PUBLIC` qu’ave
 - `pnpm qa:docs-1099`, `pnpm qa:responsive-ui`, `pnpm qa:standard-experience`, `pnpm qa:regression`, `pnpm type-check`, `pnpm lint`, `pnpm build`.
 
 ### E2E manuel propriétaire (NON EXÉCUTÉ)
-1. Ouvrir `https://docs.dtsc-platform.com/` sans session : vraie page documentaire, pas la page marketing.
+1. Ouvrir `https://docs.dtsc-platform.com/` sans session : vraie page documentaire, pas la page marketing. Ouvrir également `https://dtsc-platform.com/documentation` sans session et vérifier la même documentation depuis le menu desktop, le menu mobile et la page d’accueil.
 2. Changer FR ↔ EN : navigation, articles, alertes et boutons traduits.
-3. Rechercher « boutique » et filtrer par développeurs/utilisateurs.
+3. Rechercher « boutique » et filtrer par développeurs/utilisateurs ; vérifier que l’URL reste `/documentation` dans le site public et `/` sur le sous-domaine Docs.
 4. Ouvrir un guide, vérifier les étapes et le retour vers le catalogue.
 5. Vérifier les liens App/Support et l’absence de données internes.
-6. Confirmer que `https://docs.dtsc-platform.com/api/...` n’expose aucun endpoint.
+6. Confirmer que `https://docs.dtsc-platform.com/api/...` n’expose aucun endpoint, même avec une session connectée ; vérifier qu’une URL de documentation non reconnue ne révèle aucun contenu interne.
 7. Tester les vues de 320 à 1024 px et le mode sombre.
 8. Confirmer que l’API publique est affichée **en préparation**, jamais « disponible ».
 
