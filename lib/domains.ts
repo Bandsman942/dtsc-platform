@@ -1,4 +1,4 @@
-export type HostType = "public" | "app" | "console" | "account" | "support" | "local" | "unknown";
+export type HostType = "public" | "app" | "console" | "account" | "support" | "docs" | "local" | "unknown";
 
 const productionDefaults: Record<Exclude<HostType, "local" | "unknown">, string> = {
   public: "https://dtsc-platform.com",
@@ -6,6 +6,7 @@ const productionDefaults: Record<Exclude<HostType, "local" | "unknown">, string>
   console: "https://console.dtsc-platform.com",
   account: "https://account.dtsc-platform.com",
   support: "https://support.dtsc-platform.com",
+  docs: "https://docs.dtsc-platform.com",
 };
 
 function normalizeBaseUrl(value: string | undefined, fallback: string) {
@@ -63,6 +64,10 @@ export function getSupportBaseUrl() {
   return normalizeBaseUrl(process.env.NEXT_PUBLIC_SUPPORT_URL, productionDefaults.support);
 }
 
+export function getDocsBaseUrl() {
+  return normalizeBaseUrl(process.env.NEXT_PUBLIC_DOCS_URL, productionDefaults.docs);
+}
+
 export function getAuthCookieDomain() {
   const domain = (process.env.AUTH_COOKIE_DOMAIN || "").trim();
   return domain || undefined;
@@ -82,6 +87,7 @@ export function getCurrentHostType(host: string | null | undefined): HostType {
   const consoleHost = hostnameFromUrl(getConsoleBaseUrl());
   const accountHost = hostnameFromUrl(getAccountBaseUrl());
   const supportHost = hostnameFromUrl(getSupportBaseUrl());
+  const docsHost = hostnameFromUrl(getDocsBaseUrl());
 
   if (currentHost === publicHost || currentHost === `www.${publicHost}`) {
     return "public";
@@ -98,6 +104,9 @@ export function getCurrentHostType(host: string | null | undefined): HostType {
   if (currentHost === supportHost) {
     return "support";
   }
+  if (currentHost === docsHost) {
+    return "docs";
+  }
   return "unknown";
 }
 
@@ -109,6 +118,7 @@ export function buildUrlForHostType(type: HostType, path = "/") {
     : type === "console" ? getConsoleBaseUrl()
     : type === "account" ? getAccountBaseUrl()
     : type === "support" ? getSupportBaseUrl()
+    : type === "docs" ? getDocsBaseUrl()
     : "";
 
   return baseUrl ? `${baseUrl}${normalizedPath}` : normalizedPath;
@@ -142,6 +152,10 @@ export function getPublicUrl(path = "/") {
   return buildUrlForHostType("public", path);
 }
 
+export function getDocsUrl(path = "/") {
+  return buildUrlForHostType("docs", path);
+}
+
 export function getProductBranding(hostType: HostType, locale?: string | null) {
   const english = locale === "en";
   if (hostType === "console") {
@@ -155,6 +169,9 @@ export function getProductBranding(hostType: HostType, locale?: string | null) {
   }
   if (hostType === "app") {
     return english ? "SaaS Workspace" : "Espace SaaS";
+  }
+  if (hostType === "docs") {
+    return english ? "DTSC Documentation" : "Documentation DTSC";
   }
   return "DTSC Platform";
 }
