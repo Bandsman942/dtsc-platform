@@ -56,6 +56,7 @@ Pour un domaine donné, la documentation API ne peut passer à `PUBLIC` qu’ave
 - Le portail est aussi disponible **directement depuis le site public** sur `https://dtsc-platform.com/documentation` (sans connexion), avec navigation principale desktop, menu mobile, CTA sur la page d’accueil, lien depuis le journal Ressources et lien du pied de page.
 - Les parcours, filtres, recherche et changements de langue conservent le domaine de l’utilisateur ; un visiteur du site public ne bascule pas automatiquement sur le sous-domaine Docs lorsqu’il ouvre un guide.
 - `docs.dtsc-platform.com/` se réécrit vers `/documentation` sans changer l’URL visible.
+- Un matcher limité explicitement au host `docs.dtsc-platform.com` intercepte **tous** les chemins de ce sous-domaine, y compris de nouvelles routes publiques du site, et les redirige vers l’accueil Docs, hors fichiers statiques ; les cinq domaines antérieurs gardent leurs matchers précis. Cette séparation évite qu’une page du site marketing ou de l’application soit servie sous le host Docs.
 - Les API sont refusées sur le host documentation; les accès aux routes privées de l’application ne sont pas ouverts sur ce host.
 - Aucun nouvel accès DB, aucun schéma Prisma, aucun secret ni déploiement Vercel supplémentaire.
 - Le contenu T1 est statique, curé, consultable FR/EN, recherchable et filtrable par audience.
@@ -75,7 +76,7 @@ Pour un domaine donné, la documentation API ne peut passer à `PUBLIC` qu’ave
 3. Rechercher « boutique » et filtrer par développeurs/utilisateurs ; vérifier que l’URL reste `/documentation` dans le site public et `/` sur le sous-domaine Docs.
 4. Ouvrir un guide, vérifier les étapes et le retour vers le catalogue.
 5. Vérifier les liens App/Support et l’absence de données internes.
-6. Confirmer que `https://docs.dtsc-platform.com/api/...` n’expose aucun endpoint, même avec une session connectée ; vérifier qu’une URL de documentation non reconnue ne révèle aucun contenu interne.
+6. Confirmer que `https://docs.dtsc-platform.com/api/...` n’expose aucun endpoint, même avec une session connectée ; vérifier qu’une URL de documentation non reconnue ne révèle aucun contenu interne. Tester `https://docs.dtsc-platform.com/ressources` et `/admin` : aucune page hors portail ne doit être servie sur ce host.
 7. Tester les vues de 320 à 1024 px et le mode sombre.
 8. Confirmer que l’API publique est affichée **en préparation**, jamais « disponible ».
 
