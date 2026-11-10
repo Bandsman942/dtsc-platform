@@ -1,6 +1,6 @@
 # Hotfix #1102 — Console Time/Brave UNAVAILABLE et chat standard sans outils
 
-**Date :** 2026-11-10 · **Version candidate :** v1.8.1 · **Issue :** #1102 · **Branche :** `fix/1102-mcp-vercel-inprocess-chat-gateway`.
+**Date :** 2026-11-10 · **Version candidate :** v1.8.2 · **Issue :** #1102 · **Branche :** `fix/1102-mcp-vercel-inprocess-chat-gateway`.
 
 **Statut :** code en PR, `OWNER_E2E` non exécuté, Production non modifiée tant que l'utilisateur n'a pas validé. Aucun succès LIVE de ce hotfix ne peut être inféré d'une build CI.
 
@@ -57,6 +57,6 @@ Les flags sont des **déclarations d'exploitation**, pas des preuves de bonne r�
 | Production v1.8.0 | READY, mais Console Time/Brave UNAVAILABLE selon capture |
 | Appel sans bearer depuis diagnostic externe | 429 Edge observé (non équivalent à 401 applicatif) |
 | Appels MCP réels par assistant dans Neon | Aucune preuve récente au diagnostic initial |
-| CI v1.8.1 | À exécuter |
+| CI v1.8.2 | À exécuter |
 | E2E Time/Brave multi-assistants | **NOT_EXECUTED** |
-| Fusion / Production v1.8.1 | **NOT_EXECUTED** |
+| Fusion / Production v1.8.2 | **NOT_EXECUTED** |
