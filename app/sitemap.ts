@@ -1,6 +1,7 @@
 import type { MetadataRoute } from "next";
 import { prisma } from "@/lib/prisma";
-import { getPublicBaseUrl } from "@/lib/domains";
+import { headers } from "next/headers";
+import { getCurrentHostType, getDocsBaseUrl, getPublicBaseUrl } from "@/lib/domains";
 
 const publicRoutes = [
   { path: "/", priority: 1 },
@@ -20,6 +21,11 @@ const publicRoutes = [
 ];
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  const requestHeaders = await headers();
+  if (getCurrentHostType(requestHeaders.get("host")) === "docs") {
+    const baseUrl = getDocsBaseUrl() || "https://docs.dtsc-platform.com";
+    return [{ url: new URL("/", baseUrl).toString(), changeFrequency: "weekly", priority: 1 }];
+  }
   const publicBaseUrl = getPublicBaseUrl() || "https://dtsc-platform.com";
   const now = new Date();
   const staticEntries = publicRoutes.map((route) => ({
