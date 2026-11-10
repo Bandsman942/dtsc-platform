@@ -26,7 +26,7 @@ export default async function robots(): Promise<MetadataRoute.Robots> {
     rules: [
       {
         userAgent: "*",
-        allow: ["/", "/services", "/solutions", "/secteurs", "/projets", "/ressources", "/ressources/", "/a-propos", "/contact", "/data-afrique", "/bi-kpi", "/ia-entreprise", "/conditions-utilisation", "/politique-confidentialite", "/politique-cookies"],
+        allow: ["/", "/services", "/solutions", "/secteurs", "/projets", "/ressources", "/ressources/", "/documentation", "/a-propos", "/contact", "/data-afrique", "/bi-kpi", "/ia-entreprise", "/conditions-utilisation", "/politique-confidentialite", "/politique-cookies"],
         disallow: ["/admin", "/dashboard", "/chat", "/support", "/notifications", "/announcements", "/profile", "/settings", "/api"],
       },
     ],
