@@ -59,6 +59,8 @@ assert.ok(transport.includes('return fetch(endpoint, init)'), "All external MCP 
 assert.ok(probe.includes("callMcpJsonRpc"), "Live Console probe must use genuine tools/list.");
 assert.ok(consoleSource.includes("liveServers[server.code]"), "Console certification requires live discovery.");
 assert.ok(executor.includes("callMcpJsonRpc"), "Agent and standard chat use canonical MCP transport.");
+assert.ok(executor.includes('if (spec.server !== "time") assertPublicOnly(context)'), "Only local schema-constrained Time may execute in confidential contexts; external Brave/Fetch must remain PUBLIC_ONLY.");
+assert.ok(executor.includes('["CONFIDENTIAL", "RESTRICTED", "HEALTH_SENSITIVE"'), "Brave must still refuse confidential/health/financial content.");
 assert.ok(agent.includes('"MCP_TIME_GET_CURRENT_TIME"') && agent.includes('"MCP_BRAVE_SEARCH_NEWS"'), "Agent mode remains tool-enabled.");
 assert.ok(standardChat.includes("getStandardChatPublicMcpAnswer") && standardChat.includes('action: "chat_v2_public_mcp"'), "Standard chat must actually call the audited gateway.");
 assert.ok(standardChat.includes('X-AI-Execution": "CANONICAL_TOOL"'), "Maintain canonical chat client streaming contract.");
