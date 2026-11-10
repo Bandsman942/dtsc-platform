@@ -3,12 +3,13 @@ import {
   getAccountBaseUrl,
   getAppBaseUrl,
   getConsoleBaseUrl,
+  getDocsBaseUrl,
   getPublicBaseUrl,
   getSupportBaseUrl,
   type HostType,
 } from "@/lib/domains";
 
-export type DtscProductCode = "PUBLIC" | "ACCOUNT" | "APP" | "CONSOLE" | "SUPPORT";
+export type DtscProductCode = "PUBLIC" | "ACCOUNT" | "APP" | "CONSOLE" | "SUPPORT" | "DOCS";
 export type DtscProductStatus = "ACTIVE" | "LIMITED" | "PLANNED" | "HIDDEN";
 
 export type DtscProductDefinition = {
@@ -17,7 +18,7 @@ export type DtscProductDefinition = {
   label: { fr: string; en: string };
   description: { fr: string; en: string };
   route: string;
-  icon: "globe" | "shield" | "workspace" | "console" | "support";
+  icon: "globe" | "shield" | "workspace" | "console" | "support" | "docs";
   accent: string;
   requiresAuthentication: boolean;
   requiresDtscInternal: boolean;
@@ -97,12 +98,26 @@ export const DTSC_PRODUCT_REGISTRY: readonly DtscProductDefinition[] = [
     status: "ACTIVE",
     pwa: "limited",
   },
+  {
+    code: "DOCS",
+    hostType: "docs",
+    label: { fr: "Documentation", en: "Documentation" },
+    description: { fr: "Guides publics et intégrations futures", en: "Public guides and future integrations" },
+    route: "/",
+    icon: "docs",
+    accent: "#087e9d",
+    requiresAuthentication: false,
+    requiresDtscInternal: false,
+    visible: true,
+    status: "ACTIVE",
+    pwa: "disabled",
+  },
 ] as const;
 
-export const PLANNED_DTSC_PRODUCTS = ["DOCS", "STATUS", "ACADEMY", "PARTNERS", "COMMUNITY", "DEVELOPERS"] as const;
+export const PLANNED_DTSC_PRODUCTS = ["STATUS", "ACADEMY", "PARTNERS", "COMMUNITY", "DEVELOPERS"] as const;
 
 export function normalizeProductHostType(hostType: HostType): DtscProductDefinition["hostType"] {
-  if (hostType === "account" || hostType === "app" || hostType === "console" || hostType === "support") {
+  if (hostType === "account" || hostType === "app" || hostType === "console" || hostType === "support" || hostType === "docs") {
     return hostType;
   }
   return "public";
@@ -124,6 +139,7 @@ export function getProductBaseUrl(hostType: HostType) {
     : normalized === "console" ? getConsoleBaseUrl()
     : normalized === "account" ? getAccountBaseUrl()
     : normalized === "support" ? getSupportBaseUrl()
+    : normalized === "docs" ? getDocsBaseUrl()
     : getPublicBaseUrl();
   return value || "https://dtsc-platform.com";
 }

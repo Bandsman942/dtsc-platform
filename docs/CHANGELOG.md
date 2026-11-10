@@ -1,3 +1,12 @@
+## 2026-11-10 — Programme documentation publique #1099 (candidat v1.8.0, NON LIVRÉ)
+
+- Création d'une sixième surface DTSC : `docs.dtsc-platform.com`, hébergée dans le même projet Next.js/Vercel, routage par host, URL canonique, indexation et navigation dédiée. Aucun déploiement hors `main`.
+- **Intégration au site public** : accès à `/documentation` sur `dtsc-platform.com` par navigation desktop, mobile, pied de page, page d'accueil et Ressources. Les recherches et les guides conservent le domaine courant ; le sous-domaine Docs reste disponible en parallèle.
+- Catalogue curé de 12 guides synthétiques en français et anglais, organisés entre utilisateurs et développeurs, recherche et filtres, interface responsive et liens vers l'aide authentifiée.
+- Documentation développeurs limitée aux principes d'intégration et à la feuille de route. Les routes internes `/api/*` ne constituent **pas** une API publique partenaire ; les appels API via le domaine docs sont refusés.
+- Matrice de publication `docs/PUBLIC_DOCUMENTATION_PROGRAM.md` : séparation des sources PUBLIC_CURATED, INTERNAL_ONLY, PUBLIC_AFTER_REVIEW et FUTURE_API ; pas de publication automatique des 659 entrées `docs/`.
+- QA candidate : `pnpm qa:docs-1099`, contrôles responsive/qualité/type-check/lint/build, puis E2E final propriétaire avant fusion. **CI, E2E manuel et déploiement Production non encore validés dans cette branche.**
+
 ## 2026-11-09 — Hotfix #1097 — MCP hybride Time/Brave Vercel, Fetch Fly.io (candidat v1.7.5, NON LIVRÉ)
 
 - Time et Brave Search sont réécrits comme serveurs MCP HTTP sans état avec `mcp-handler` 2 dans Next.js Node 22 ; Time exploite `Intl` et signale les ambiguïtés DST, Brave utilise exclusivement les API officielles web/news et sa clé dans les Secrets Vercel.

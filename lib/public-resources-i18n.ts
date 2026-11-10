@@ -2,6 +2,8 @@ export const resourceCopy = {
   fr: {
     eyebrow: "Le journal DTSC", title: "Ressources, analyses et idées qui font avancer.",
     intro: "Guides, cas pratiques et perspectives sur les données, l'intelligence artificielle et la transformation numérique. Des contenus pour comprendre et agir.",
+    documentationCallout: "Besoin d’aide sur DTSC Platform ? Consultez les guides utilisateurs et la documentation des futures intégrations.",
+    documentationLink: "Ouvrir la documentation DTSC",
     featured: "À la une", lastPublications: "Publications récentes", catalog: "Toutes les publications",
     filterByCategory: "Filtrer les publications par catégorie", all: "Tous", published: "contenus publiés",
     search: "Rechercher", searchLabel: "Rechercher dans les publications", searchPlaceholder: "Rechercher un sujet ou un mot-clé",
@@ -15,6 +17,8 @@ export const resourceCopy = {
   en: {
     eyebrow: "The DTSC journal", title: "Resources, analysis and ideas that move business forward.",
     intro: "Guides, practical examples and perspectives on data, artificial intelligence and digital transformation. Insights to help you understand and act.",
+    documentationCallout: "Need help with DTSC Platform? Browse user guides and the documentation for future integrations.",
+    documentationLink: "Open DTSC documentation",
     featured: "Featured", lastPublications: "Recent publications", catalog: "All publications",
     filterByCategory: "Filter publications by category", all: "All", published: "published articles",
     search: "Search", searchLabel: "Search publications", searchPlaceholder: "Search a topic or keyword",

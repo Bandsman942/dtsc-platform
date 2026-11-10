@@ -31,6 +31,7 @@ const mobileLinkIcons = {
   "/secteurs": Building2,
   "/projets": Rocket,
   "/ressources": BookOpenText,
+  "/documentation": BookOpenText,
   "/a-propos": Users,
   "/contact": MessageCircleMore,
 } as const;
@@ -47,7 +48,7 @@ const desktopGroups = [
     { key: "industry", href: "/secteurs" }, { key: "projects", href: "/projets" },
   ] },
   { key: "resources", links: [
-    { key: "publications", href: "/ressources" }, { key: "africa", href: "/data-afrique" },
+    { key: "publications", href: "/ressources" }, { key: "documentation", href: "/documentation" }, { key: "africa", href: "/data-afrique" },
   ] },
   { key: "company", links: [
     { key: "about", href: "/a-propos" }, { key: "contact", href: "/contact" },

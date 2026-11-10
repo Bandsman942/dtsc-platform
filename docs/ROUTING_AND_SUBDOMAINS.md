@@ -1,6 +1,6 @@
 # Routage et sous-domaines DTSC Platform
 
-Derniere mise a jour: 2 juin 2026
+Dernière mise à jour : 10 novembre 2026 (programme Docs #1099 — candidat, non livré)
 
 DTSC Platform reste une seule application Next.js App Router deployee sur Vercel. Cette couche prepare la separation produit par sous-domaines sans extraction monorepo, sans suppression des routes existantes et sans migration destructive.
 
@@ -13,12 +13,13 @@ DTSC Platform reste une seule application Next.js App Router deployee sur Vercel
 | `console.dtsc-platform.com` | `/admin` comme console protegee; chemins SaaS et support rediriges vers leurs hosts | `/` vers `/admin`; non connecte vers `account` avec `next` absolu; connecte non DTSC interne vers `app/dashboard`; `/dashboard`, `/chat`, `/company`, `/calendar`, `/enterprise-admin`, `/enterprise-activities`, `/collaborators`, `/notifications`, `/announcements` vers `app`; `/support` vers `support` | Session `DTSC_INTERNAL` avec `activeOrganizationId = dtsc-internal` pour `/admin` uniquement |
 | `account.dtsc-platform.com` | `/auth/sign-in`, `/auth/sign-up` | `/` vers `/auth/sign-in`; routes privees vers leur host produit; session deja active vers `next` fiable ou destination par defaut selon contexte | Public pour auth; redirection apres connexion selon `next`, `DTSC_INTERNAL`, `ORGANIZATION` ou `GLOBAL_CLIENT` |
 | `support.dtsc-platform.com` | `/support` | `/` vers `/support`; non connecte vers `account`; `/admin` vers `console`; routes SaaS vers `app` | Session valide; les tickets restent filtres par utilisateur, contexte et `organizationId` |
+| `docs.dtsc-platform.com` | `/` vers `/documentation` (portail public guidé) | Aucune redirection de connexion ; les chemins métier non documentaires reviennent à l’accueil Docs | Public ; aucune API interne exposée sur ce host |
 | Local dev (`localhost`, `127.0.0.1`, `::1`) | Anciennes routes directes | Pas de routage force par sous-domaine | Comportement historique pour developpement |
 
 Les routes statiques et techniques ne sont pas rewritees par host:
 
 - `/_next/*`
-- `/api/*`
+- `/api/*` sur les hosts applicatifs uniquement ; sur le host Docs, les API renvoient 404
 - `/favicon.ico`
 - `/manifest.webmanifest`
 - `/icons/*`
@@ -34,6 +35,7 @@ NEXT_PUBLIC_APP_URL=https://app.dtsc-platform.com
 NEXT_PUBLIC_CONSOLE_URL=https://console.dtsc-platform.com
 NEXT_PUBLIC_ACCOUNT_URL=https://account.dtsc-platform.com
 NEXT_PUBLIC_SUPPORT_URL=https://support.dtsc-platform.com
+NEXT_PUBLIC_DOCS_URL=https://docs.dtsc-platform.com
 AUTH_COOKIE_DOMAIN=.dtsc-platform.com
 ```
 
@@ -61,6 +63,8 @@ La deconnexion expire a la fois le cookie host-only historique et le cookie de d
 - `getConsoleBaseUrl()`;
 - `getAccountBaseUrl()`;
 - `getSupportBaseUrl()`;
+- `getDocsBaseUrl()`;
+- `getDocsUrl(path)`;
 - `getCurrentHostType(host)`;
 - `buildUrlForHostType(type, path)`;
 - `getSignInUrl(next)`;
@@ -162,3 +166,7 @@ Quand les frontieres produit seront stabilisees, une migration progressive pourr
 - packages partages pour UI, auth, domaines, Prisma et RBAC.
 
 Cette extraction devra venir apres stabilisation des contrats API, des helpers de navigation et des tests de non-regression multi-tenant.
+
+## Portail public de documentation — candidat #1099
+
+Le host `docs` ajoute une sixième surface de lecture sans nouvelle application Vercel. Les guides publics sont choisis explicitement dans `lib/public-documentation.ts` et font référence aux guides internes canoniques, mais n’exposent ni runbooks, ni documents privés, ni clés, ni API partenaire non certifiée. Voir `docs/PUBLIC_DOCUMENTATION_PROGRAM.md`. Aucun déploiement depuis une branche feature.

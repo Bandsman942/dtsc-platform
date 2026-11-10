@@ -1,6 +1,8 @@
 import type { MetadataRoute } from "next";
 import { prisma } from "@/lib/prisma";
-import { getPublicBaseUrl } from "@/lib/domains";
+import { headers } from "next/headers";
+import { getCurrentHostType, getDocsBaseUrl, getPublicBaseUrl } from "@/lib/domains";
+import { PUBLIC_DOCUMENTATION } from "@/lib/public-documentation";
 
 const publicRoutes = [
   { path: "/", priority: 1 },
@@ -9,6 +11,7 @@ const publicRoutes = [
   { path: "/secteurs", priority: 0.9 },
   { path: "/projets", priority: 0.84 },
   { path: "/ressources", priority: 0.88 },
+  { path: "/documentation", priority: 0.9 },
   { path: "/a-propos", priority: 0.84 },
   { path: "/contact", priority: 0.9 },
   { path: "/data-afrique", priority: 0.86 },
@@ -20,6 +23,20 @@ const publicRoutes = [
 ];
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  const requestHeaders = await headers();
+  if (getCurrentHostType(requestHeaders.get("host")) === "docs") {
+    const baseUrl = getDocsBaseUrl() || "https://docs.dtsc-platform.com";
+    return [
+      { url: new URL("/", baseUrl).toString(), changeFrequency: "weekly", priority: 1 },
+      ...PUBLIC_DOCUMENTATION.flatMap((entry) =>
+        (["fr", "en"] as const).map((lang) => ({
+          url: new URL("/?guide=" + encodeURIComponent(entry.slug) + "&lang=" + lang, baseUrl).toString(),
+          changeFrequency: "monthly" as const,
+          priority: entry.audience === "users" ? 0.76 : 0.68,
+        }))
+      ),
+    ];
+  }
   const publicBaseUrl = getPublicBaseUrl() || "https://dtsc-platform.com";
   const now = new Date();
   const staticEntries = publicRoutes.map((route) => ({

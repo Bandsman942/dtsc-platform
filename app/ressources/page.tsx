@@ -117,6 +117,12 @@ export default async function RessourcesPage({ searchParams }: Props) {
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-dtsc-blue">{copy.eyebrow}</p>
           <h1 className="mt-3 max-w-4xl text-4xl font-semibold leading-tight tracking-tight sm:text-5xl">{copy.title}</h1>
           <p className="mt-4 max-w-2xl text-base leading-8 text-dtsc-muted sm:text-lg">{copy.intro}</p>
+          <div className="mt-6 flex w-full min-w-0 flex-wrap items-center gap-3 rounded-xl border border-dtsc-border bg-dtsc-page px-4 py-4 sm:gap-4">
+            <p className="min-w-0 flex-1 text-sm leading-6 text-dtsc-muted">{copy.documentationCallout}</p>
+            <Link href="/documentation" className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-dtsc-blue px-4 py-3 text-sm font-semibold text-white hover:opacity-90">
+              {copy.documentationLink}<ArrowRight className="h-4 w-4" aria-hidden="true" />
+            </Link>
+          </div>
         </div>
       </header>
 

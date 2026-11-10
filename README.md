@@ -12,11 +12,11 @@ Ce README est le **point d'entrée du dépôt**, pas le journal chronologique de
 
 ## Version applicative et release
 
-La version de DTSC Platform est désormais au format [Semantic Versioning (SemVer)](docs/RELEASE_VERSIONING.md) : `MAJOR.MINOR.PATCH` dans `package.json`. Elle s'applique aux cinq surfaces. Chaque PR incrémente la version selon les changements ; la GitHub Release `vX.Y.Z` est produite seulement après réussite du déploiement Vercel Production depuis `main`. La version sur une branche/PR ne constitue pas une livraison. Les historiques `prod-*` restent conservés.
+La version de DTSC Platform est désormais au format [Semantic Versioning (SemVer)](docs/RELEASE_VERSIONING.md) : `MAJOR.MINOR.PATCH` dans `package.json`. Elle s'applique aux six surfaces. Chaque PR incrémente la version selon les changements ; la GitHub Release `vX.Y.Z` est produite seulement après réussite du déploiement Vercel Production depuis `main`. La version sur une branche/PR ne constitue pas une livraison. Les historiques `prod-*` restent conservés.
 
 ## 1. Produits et parcours
 
-Les cinq surfaces sont hébergées par **un seul projet Next.js/Vercel**, avec routage selon le nom de domaine et session partagée lorsque la configuration l'autorise.
+Les six surfaces sont hébergées par **un seul projet Next.js/Vercel**, avec routage selon le nom de domaine et session partagée lorsque la configuration l'autorise.
 
 | Produit | Domaine | Capacités principales |
 | --- | --- | --- |
@@ -25,6 +25,9 @@ Les cinq surfaces sont hébergées par **un seul projet Next.js/Vercel**, avec r
 | Application | [app.dtsc-platform.com](https://app.dtsc-platform.com) | Tableau de bord, abonnement, profil, paramètres, IA, collaboration, espaces entreprise et ERP |
 | Console DTSC | [console.dtsc-platform.com](https://console.dtsc-platform.com) | Pilotage interne, entreprises clientes, abonnements, contenus, support, sécurité et activités des directions habilitées |
 | Support | [support.dtsc-platform.com](https://support.dtsc-platform.com) | Tickets, échanges et suivi des demandes dans le périmètre autorisé |
+| Documentation | [docs.dtsc-platform.com](https://docs.dtsc-platform.com) | Guides publics vérifiés, parcours développeurs et statut explicite de la future API externe |
+
+Le portail documentaire est aussi accessible **directement depuis le site public via `/documentation`**, sans authentification et depuis sa navigation principale/mobile. Il dispose d'un [programme de publication contrôlée](docs/PUBLIC_DOCUMENTATION_PROGRAM.md) : les documents techniques internes ne sont pas répliqués automatiquement ; les routes API utilisées par l'application ne sont pas des API partenaires publiques.
 
 Les routes réelles restent dans `app/` et `app/api/`. Le routage et les URL sont centralisés dans `lib/domains.ts` et `middleware.ts` ; voir [Routage et sous-domaines](docs/ROUTING_AND_SUBDOMAINS.md).
 

@@ -30,8 +30,10 @@ export async function generateMetadata(): Promise<Metadata> {
   const product = getProductDefinition(hostType);
   const baseUrl = getProductBaseUrl(hostType);
   const isPublic = product.code === "PUBLIC";
-  const title = isPublic ? "DTSC | 7 leviers numériques de performance" : `${product.label.fr} | DTSC`;
-  const description = isPublic ? "DTSC aide les organisations à améliorer leur performance grâce à sept leviers numériques complémentaires." : product.description.fr;
+  const isDocumentation = product.code === "DOCS";
+  const isIndexable = isPublic || isDocumentation;
+  const title = isDocumentation ? "Documentation officielle DTSC" : isPublic ? "DTSC | 7 leviers numériques de performance" : `${product.label.fr} | DTSC`;
+  const description = isDocumentation ? "Guides utilisateurs DTSC et informations pour les futurs développeurs et intégrateurs." : isPublic ? "DTSC aide les organisations à améliorer leur performance grâce à sept leviers numériques complémentaires." : product.description.fr;
   return {
     metadataBase: new URL(baseUrl),
     applicationName: product.code === "APP" ? "DTSC Platform" : product.label.fr,
@@ -42,10 +44,10 @@ export async function generateMetadata(): Promise<Metadata> {
     authors: isPublic ? [{ name: dtsc.fullName, url: baseUrl }] : undefined,
     creator: dtsc.fullName,
     publisher: dtsc.fullName,
-    alternates: isPublic ? { canonical: "/" } : undefined,
+    alternates: isIndexable ? { canonical: "/" } : undefined,
     openGraph: isPublic ? { type: "website", locale: "fr_CD", url: baseUrl, siteName: "DTSC", title, description, images: [{ url: "/dtsc-logo.png", width: 1536, height: 864, alt: "Logo DTSC" }] } : undefined,
     twitter: isPublic ? { card: "summary_large_image", title, description, images: ["/dtsc-logo.png"] } : undefined,
-    robots: isPublic ? { index: true, follow: true, googleBot: { index: true, follow: true, "max-image-preview": "large", "max-snippet": -1, "max-video-preview": -1 } } : { index: false, follow: false, nocache: true },
+    robots: isIndexable ? { index: true, follow: true, googleBot: { index: true, follow: true, "max-image-preview": "large", "max-snippet": -1, "max-video-preview": -1 } } : { index: false, follow: false, nocache: true },
     icons: { icon: [{ url: "/favicon.ico" }, { url: "/icons/icon-192x192.png", sizes: "192x192", type: "image/png" }, { url: "/icons/icon-512x512.png", sizes: "512x512", type: "image/png" }], apple: [{ url: "/icons/apple-touch-icon.png", sizes: "180x180", type: "image/png" }] },
     appleWebApp: product.pwa === "disabled" ? undefined : { capable: true, title: product.label.fr, statusBarStyle: "black-translucent" },
   };
