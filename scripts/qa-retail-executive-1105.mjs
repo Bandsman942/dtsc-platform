@@ -102,5 +102,6 @@ assert.match(policy, /HAS_LOTS/, "Existing batch traceability cannot be switched
 const report = read("app/api/enterprise/[organizationId]/retail/site-overview/report/route.ts");
 assert.match(report, /snapshotJson/);
 assert.match(report, /getEnterpriseFinanceAccess.*REPORTS/, "Saving a shared report requires independent Reports entitlement");
+assert.match(report, /resolveEnterpriseBusinessDate\(tx, organizationId\)/, "Report reference must follow the enterprise business calendar, not naive UTC");
 assert.match(read("lib/reporting/enterprise-professional-report.ts"), /retail-executive\/v1/, "Reports module must reuse the executive export model");
 console.log("RETAIL #1105 dashboard monetary precision, multi-store isolation, reports integration, batch governance, tenant and RBAC contracts: OK");

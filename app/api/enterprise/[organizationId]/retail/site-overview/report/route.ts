@@ -7,6 +7,7 @@ import { writeAuditLog, writeApiLog } from "@/lib/audit";
 import { getEnterpriseFinanceAccess } from "@/lib/enterprise/finance/access";
 import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
 import { addEnterpriseOperationalEvent } from "@/lib/enterprise/procurement/shared";
+import { resolveEnterpriseBusinessDate } from "@/lib/enterprise/business-context";
 import { GET as readRetailSiteOverview } from "@/app/api/enterprise/[organizationId]/retail/site-overview/route";
 import { prisma } from "@/lib/prisma";
 import { isSameOriginRequest } from "@/lib/request-security";
@@ -46,7 +47,7 @@ export async function POST(req: Request, { params }: Params) {
   const generatedAt = new Date();
   const report = await prisma.$transaction(async (tx) => {
     const entity = await tx.enterpriseReport.create({ data: {
-      organizationId, reference: `RPT-${generatedAt.toISOString().slice(0, 10).replaceAll("-", "")}-${randomUUID().slice(0, 8).toUpperCase()}`,
+      organizationId, reference: `RPT-${(await resolveEnterpriseBusinessDate(tx, organizationId)).replaceAll("-", "")}-${randomUUID().slice(0, 8).toUpperCase()}`,
       title: "Pilotage financier RETAIL — Direction", reportType: "RETAIL_EXECUTIVE", status: "GENERATED", periodStart: new Date(from), periodEnd: new Date(to),
       currency: currency || null, unitCode: currency ? `CURRENCY:${currency}` : null,
       generatedByUserId: session.userId, generatedAt, freshnessAt: generatedAt, schemaVersion: 1, calculationVersion: 1,
