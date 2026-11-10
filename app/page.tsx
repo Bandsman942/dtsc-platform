@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { cookies, headers } from "next/headers";
 import type { Metadata } from "next";
 import {
   ArrowRight,
@@ -21,6 +22,7 @@ import { ContactNewsletterSection } from "@/components/public/contact-newsletter
 import { LazyPublicAgent } from "@/components/public/lazy-public-agent";
 import { PublicFooter, PublicHeader } from "@/components/public/public-shell";
 import { getDashboardUrl } from "@/lib/domains";
+import { publicDocumentationHomeCopy } from "@/lib/public-documentation-home-i18n";
 
 export const metadata: Metadata = {
   title: "Conseil, data, IA et transformation digitale",
@@ -61,7 +63,11 @@ const methodology = [
   { step: "04", title: "Mesurer", text: "Suivre les KPI, corriger les écarts et consolider ce qui produit réellement de la valeur." },
 ];
 
-export default function HomePage() {
+export default async function HomePage() {
+  const [cookieStore, requestHeaders] = await Promise.all([cookies(), headers()]);
+  const preference = cookieStore.get("dtsc_locale")?.value || cookieStore.get("NEXT_LOCALE")?.value;
+  const lang = preference === "fr" || preference === "en" ? preference : requestHeaders.get("accept-language")?.toLowerCase().startsWith("en") ? "en" : "fr";
+  const docCopy = publicDocumentationHomeCopy[lang];
   const dashboardUrl = getDashboardUrl();
 
   return (
@@ -95,7 +101,7 @@ export default function HomePage() {
               <Link href="/services" className="inline-flex items-center gap-2 rounded-xl border border-dtsc-border bg-dtsc-surface px-5 py-3 font-semibold text-dtsc-blue transition hover:bg-dtsc-soft">
                 Explorer nos expertises
               </Link>
-              <Link href="/documentation" className="inline-flex items-center gap-2 px-2 py-3 font-semibold text-dtsc-muted hover:text-dtsc-blue"><BookOpenText className="h-4 w-4" aria-hidden="true" />Documentation DTSC</Link>
+              <Link href="/documentation" className="inline-flex items-center gap-2 px-2 py-3 font-semibold text-dtsc-muted hover:text-dtsc-blue"><BookOpenText className="h-4 w-4" aria-hidden="true" />{docCopy.hero}</Link>
               <Link href={dashboardUrl} className="inline-flex items-center gap-2 px-2 py-3 font-semibold text-dtsc-muted hover:text-dtsc-blue">
                 Ouvrir DTSC Platform
               </Link>
@@ -250,13 +256,13 @@ export default function HomePage() {
         </div>
         <div className="mt-10 grid min-w-0 gap-6 rounded-2xl border border-dtsc-border bg-dtsc-surface p-5 shadow-sm sm:p-7 lg:grid-cols-[1fr_auto] lg:items-center">
           <div className="min-w-0">
-            <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.12em] text-dtsc-blue"><BookOpenText className="h-4 w-4" aria-hidden="true" />Documentation officielle</p>
-            <h3 className="mt-3 text-xl font-semibold tracking-tight text-dtsc-ink sm:text-2xl">Un centre d’aide pour vos équipes, et des repères pour les développeurs.</h3>
-            <p className="mt-3 max-w-3xl text-sm leading-7 text-dtsc-muted">Découvrez les guides d’utilisation vérifiés de DTSC Platform. Consultez les principes d’intégration et l’évolution de notre future API, sans confondre les routes internes avec un accès public.</p>
+            <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.12em] text-dtsc-blue"><BookOpenText className="h-4 w-4" aria-hidden="true" />{docCopy.eyebrow}</p>
+            <h3 className="mt-3 text-xl font-semibold tracking-tight text-dtsc-ink sm:text-2xl">{docCopy.title}</h3>
+            <p className="mt-3 max-w-3xl text-sm leading-7 text-dtsc-muted">{docCopy.description}</p>
           </div>
           <div className="flex min-w-0 flex-wrap gap-3 lg:max-w-sm">
-            <Link href="/documentation?audience=users" className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-dtsc-blue px-4 py-3 text-sm font-semibold text-white hover:opacity-90"><BookOpenText className="h-4 w-4" aria-hidden="true" />Guides utilisateurs<ArrowRight className="h-4 w-4" aria-hidden="true" /></Link>
-            <Link href="/documentation?audience=developers" className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-dtsc-border px-4 py-3 text-sm font-semibold text-dtsc-blue hover:bg-dtsc-soft"><Code2 className="h-4 w-4" aria-hidden="true" />Développeurs & API future</Link>
+            <Link href="/documentation?audience=users" className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-dtsc-blue px-4 py-3 text-sm font-semibold text-white hover:opacity-90"><BookOpenText className="h-4 w-4" aria-hidden="true" />{docCopy.userGuides}<ArrowRight className="h-4 w-4" aria-hidden="true" /></Link>
+            <Link href="/documentation?audience=developers" className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-dtsc-border px-4 py-3 text-sm font-semibold text-dtsc-blue hover:bg-dtsc-soft"><Code2 className="h-4 w-4" aria-hidden="true" />{docCopy.developers}</Link>
           </div>
         </div>
       </section>
