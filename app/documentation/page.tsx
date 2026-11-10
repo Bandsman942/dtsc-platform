@@ -12,7 +12,8 @@ export const metadata: Metadata = {
 };
 
 type Filters = { guide?: string; audience?: string; q?: string; lang?: string };
-type PageProps = { searchParams?: Promise<Filters> };
+type IncomingFilters = { [K in keyof Filters]?: string | string[] };
+type PageProps = { searchParams?: Promise<IncomingFilters> };
 
 const translations = {
   fr: {
@@ -85,22 +86,27 @@ function buildLink(filters: Filters = {}) {
   return getDocsUrl(suffix ? "/?" + suffix : "/");
 }
 
-function normalizeQuery(value: string | undefined) {
-  return (value || "").trim().slice(0, 80);
+function first(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] || "" : value || "";
+}
+
+function normalizeQuery(value: string | string[] | undefined) {
+  return first(value).trim().slice(0, 80);
 }
 
 export default async function DocumentationPage({ searchParams }: PageProps) {
   const [params, cookieStore, requestHeaders] = await Promise.all([
-    searchParams || Promise.resolve({} as Filters),
+    searchParams || Promise.resolve({} as IncomingFilters),
     cookies(),
     headers(),
   ]);
-  const localeHint = params.lang || cookieStore.get("dtsc_locale")?.value || requestHeaders.get("accept-language")?.slice(0, 2);
+  const localeHint = first(params.lang) || cookieStore.get("dtsc_locale")?.value || requestHeaders.get("accept-language")?.slice(0, 2);
   const lang: DocumentationLanguage = localeHint === "en" ? "en" : "fr";
   const t = translations[lang];
-  const audience = params.audience === "users" || params.audience === "developers" ? params.audience : "all";
+  const requestedAudience = first(params.audience);
+  const audience = requestedAudience === "users" || requestedAudience === "developers" ? requestedAudience : "all";
   const q = normalizeQuery(params.q);
-  const article = getPublicDocumentation(params.guide);
+  const article = getPublicDocumentation(first(params.guide));
   const filtered = PUBLIC_DOCUMENTATION.filter((item) => {
     if (audience !== "all" && item.audience !== audience) return false;
     const haystack = [item[lang].title, item[lang].summary, item[lang].steps.join(" "), t.groups[item.group]].join(" ").toLocaleLowerCase();
