@@ -328,6 +328,7 @@
   "reports.type.EXPENSE_SUMMARY": "Synthèse des dépenses",
   "reports.type.PROCUREMENT_SUMMARY": "Synthèse des achats",
   "reports.type.FINANCE_OVERVIEW": "Vue financière",
+  "reports.type.RETAIL_EXECUTIVE": "Pilotage financier RETAIL — Direction",
   "reports.visibility.PERSONAL": "Personnelle",
   "reports.visibility.ORGANIZATION": "Organisation",
   "reports.family.BUDGETS": "Budgets",

@@ -49,10 +49,7 @@ const REPORT_GENERATION_MAX_POLLS = 100;
 const EMPTY_OPTIONS: EnterpriseReportGenerationOptions = { departments: [], suppliers: [], budgets: [], currencies: [], categories: [] };
 
 function reportLabel(locale: string | null | undefined, prefix: string, value: string) { return enterpriseCoreT(locale, `${prefix}.${value}` as EnterpriseCoreKey); }
-function reportTypeLabel(locale: string | null | undefined, value: string) {
-  if (value === "RETAIL_EXECUTIVE") return locale === "en" ? "RETAIL executive financial dashboard" : "Pilotage financier RETAIL — Direction";
-  return reportLabel(locale, "reports.type", value);
-}
+function reportTypeLabel(locale: string | null | undefined, value: string) { return reportLabel(locale, "reports.type", value); }
 function reportVisibilityLabel(locale: string | null | undefined, value: string) { return reportLabel(locale, "reports.visibility", value); }
 function reportFamilyLabel(locale: string | null | undefined, value: string) { return reportLabel(locale, "reports.family", value); }
 function reportSourceLabel(locale: string | null | undefined, value: string | null | undefined) { return value ? reportLabel(locale, "reports.source", value) : enterpriseCoreT(locale, "reports.canonicalSource"); }
