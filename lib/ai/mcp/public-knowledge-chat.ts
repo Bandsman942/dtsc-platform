@@ -92,7 +92,19 @@ export async function getStandardChatPublicMcpAnswer(input: {
       toolCode: intent.toolCode,
       args: intent.args,
       context: {
-        session: input.session,
+        // This route has already authorized a PERSONAL AI turn with no
+        // organization data. A user may still have an ORGANIZATION workspace
+        // selected in their signed session; narrow this public READ call to
+        // GLOBAL_CLIENT instead of accidentally requiring enterprise AI rights.
+        // Never persist or sign this derived identity; keep the real user and
+        // session ID, and only permit this fixed Time/Brave intent allowlist.
+        session: {
+          ...input.session,
+          activeContext: "GLOBAL_CLIENT",
+          activeOrganizationId: null,
+          activeOrganizationName: null,
+          activeOrganizationRole: null,
+        },
         userId: input.userId,
         organizationId: null,
         conversationId: input.conversationId,
