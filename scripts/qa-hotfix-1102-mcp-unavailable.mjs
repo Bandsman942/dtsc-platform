@@ -65,6 +65,7 @@ assert.ok(agent.includes('"MCP_TIME_GET_CURRENT_TIME"') && agent.includes('"MCP_
 assert.ok(standardChat.includes("getStandardChatPublicMcpAnswer") && standardChat.includes('action: "chat_v2_public_mcp"'), "Standard chat must actually call the audited gateway.");
 assert.ok(standardChat.includes('X-AI-Execution": "CANONICAL_TOOL"'), "Maintain canonical chat client streaming contract.");
 assert.ok(standardTool.includes("executeAiTool(") && standardTool.includes('organizationId: null') && standardTool.includes('assistantCode: "DTSC_GENERAL"'), "No company data in public chat tools.");
+assert.ok(standardTool.includes('activeContext: "GLOBAL_CLIENT"') && standardTool.includes('activeOrganizationId: null'), "Personal chat MCP calls must not inherit an unrelated organization workspace.");
 assert.ok(standardTool.includes("untrusted !== true") && standardTool.includes("new URL(hit.url)"), "Web sources must remain untrusted and URL-validated.");
 assert.ok(standardTool.includes("source") || standardTool.includes("Source"), "Results must be attributable.");
 assert.ok(config.includes('process.env.MCP_PUBLIC_FETCH_CERTIFIED === "true"'), "Fly Fetch remains independently disabled.");
