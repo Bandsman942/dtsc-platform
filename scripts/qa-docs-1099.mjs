@@ -69,7 +69,7 @@ assert.ok(resourcesPage.includes('href="/documentation"') && resourcesCopy.inclu
 assert.ok(sitemap.includes('path: "/documentation"') && sitemap.includes('PUBLIC_DOCUMENTATION.flatMap'), "Both public and Docs sitemaps must include the portal.");
 assert.ok(robots.includes('"/documentation"'), "Public crawlers must be allowed to index docs.");
 assert.ok(products.includes('code: "DOCS"') && products.includes('status: "ACTIVE"'), "Docs must be in canonical product registry.");
-assert.equal(version, "1.8.0", "This PR is the 1.8.0 feature candidate.");
+assert.ok(/^\d+\.\d+\.\d+$/.test(version) && (() => { const [major, minor] = version.split(".").map(Number); return major > 1 || (major === 1 && minor >= 8); })(), "Documentation has been part of DTSC since v1.8.0; subsequent SemVer releases must retain it.");
 assert.ok(program.includes("FUTURE_API_ONLY"));
 assert.ok(catalog.find((entry) => entry.slug === "api-feuille-de-route")?.fr.notice.includes("En préparation"));
 console.log("PASS docs #1099: 12 curated FR/EN entries, direct public site, dual-host routing, API guard, navigation, SEO and publication matrix.");
