@@ -8,6 +8,7 @@ const domains = read("lib/domains.ts");
 const middleware = read("middleware.ts");
 const page = read("app/documentation/page.tsx");
 const publicHome = read("app/page.tsx");
+const homeCopy = read("lib/public-documentation-home-i18n.ts");
 const nav = read("components/public/public-nav.tsx");
 const navLinks = read("components/public/public-links.ts");
 const navI18n = read("lib/public-navigation-i18n.ts");
@@ -57,6 +58,7 @@ assert.ok(page.includes("const link = (filters: Filters = {}) => buildLink(filte
 assert.ok(publicHome.includes('href="/documentation"'), "Public home must link to docs.");
 assert.ok(publicHome.includes('href="/documentation?audience=users"'), "User path must be promoted on home.");
 assert.ok(publicHome.includes('href="/documentation?audience=developers"'), "Developer path must be promoted on home.");
+assert.ok(publicHome.includes("docCopy.title") && homeCopy.includes("Official documentation") && homeCopy.includes("Documentation officielle"), "Homepage Docs promotion must use FR/EN dictionary.");
 assert.ok(nav.includes('href: "/documentation"'), "Desktop navigation must include Docs.");
 assert.ok(navLinks.includes('href: "/documentation"'), "Mobile navigation must include Docs.");
 assert.ok(navI18n.includes('documentation: "Documentation DTSC"') && navI18n.includes('documentation: "DTSC documentation"'), "Navigation must be bilingual.");
