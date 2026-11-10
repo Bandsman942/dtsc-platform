@@ -20,6 +20,7 @@ export type RetailPostedStore = {
 type RetailOperationsStore = RetailPostedStore & {
   sales: Array<{ currencyCode: string; total: string; count: number }>;
   collections: Array<{ currencyCode: string; total: string; method: string; count: number }>;
+  financeCollections?: Array<{ currencyCode: string; total: string; method: string; count: number }>;
   financeInvoices: Array<{ currencyCode: string; issuedTotal: string; allocatedToDate: string; outstandingToDate: string; count: number }>;
   approvedExpenses: Array<{ currencyCode: string; total: string; count: number }>;
 };
@@ -33,13 +34,14 @@ export function buildRetailOperationsExport(input: {
   const en = input.locale === "en";
   const rows = input.sites.flatMap((site) => {
     const currencies = [...new Set([
-      ...site.sales.map((row) => row.currencyCode), ...site.collections.map((row) => row.currencyCode),
+      ...site.sales.map((row) => row.currencyCode), ...site.collections.map((row) => row.currencyCode), ...(site.financeCollections || []).map((row) => row.currencyCode),
       ...site.financeInvoices.map((row) => row.currencyCode), ...site.approvedExpenses.map((row) => row.currencyCode),
     ])].filter((currency) => !input.currency || currency === input.currency);
     return currencies.map((currency) => ({
       site: `${site.code} · ${site.name}`, currency,
       posSales: site.sales.filter((row) => row.currencyCode === currency).reduce((sum, row) => sum + Number(row.total), 0),
       posCollections: site.collections.filter((row) => row.currencyCode === currency).reduce((sum, row) => sum + Number(row.total), 0),
+      financeCollections: (site.financeCollections || []).filter((row) => row.currencyCode === currency).reduce((sum, row) => sum + Number(row.total), 0),
       issuedInvoices: site.financeInvoices.filter((row) => row.currencyCode === currency).reduce((sum, row) => sum + Number(row.issuedTotal), 0),
       allocatedToDate: site.financeInvoices.filter((row) => row.currencyCode === currency).reduce((sum, row) => sum + Number(row.allocatedToDate), 0),
       outstandingToDate: site.financeInvoices.filter((row) => row.currencyCode === currency).reduce((sum, row) => sum + Number(row.outstandingToDate), 0),
@@ -57,6 +59,7 @@ export function buildRetailOperationsExport(input: {
     columns: [
       { key: "site", label: en ? "Store" : "Boutique" }, { key: "currency", label: en ? "Currency" : "Devise" },
       { key: "posSales", label: en ? "POS sales" : "Ventes POS" }, { key: "posCollections", label: en ? "POS collected" : "Encaissements POS" },
+      { key: "financeCollections", label: en ? "Finance collections during period" : "Encaissements Finance de la période" },
       { key: "issuedInvoices", label: en ? "Finance invoices issued" : "Factures Finance émises" },
       { key: "allocatedToDate", label: en ? "Invoice allocated to date" : "Factures réglées à date" },
       { key: "outstandingToDate", label: en ? "Invoice outstanding to date" : "Factures restantes à date" },

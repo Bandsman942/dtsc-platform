@@ -40,8 +40,6 @@ export function RetailDeviceReadiness({ organizationId, locale = "fr" }: Props) 
     return () => { cancelled = true; };
   }, [organizationId]);
 
-  if (!loaded || failed || devices.length === 0) return null;
-
   const labels = locale === "en"
     ? {
         title: "Checkout equipment",
@@ -71,6 +69,9 @@ export function RetailDeviceReadiness({ organizationId, locale = "fr" }: Props) 
         </div>
         <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-bold text-muted-foreground">{devices.length}</span>
       </div>
+      {!loaded ? <p role="status" className="text-sm text-muted-foreground">{locale === "en" ? "Checking connected equipment…" : "Vérification des équipements…"}</p> : null}
+      {failed ? <p role="alert" className="rounded-lg bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-200">{locale === "en" ? "Equipment could not be loaded. Check your access rights or try again." : "Impossible de consulter les équipements. Vérifiez vos droits ou réessayez."}</p> : null}
+      {loaded && !failed && devices.length === 0 ? <p className="rounded-lg border border-dashed border-dtsc-border p-3 text-sm text-dtsc-muted">{locale === "en" ? "No equipment registered. An administrator can configure a receipt printer, scanner or payment terminal for this checkout." : "Aucun équipement enregistré. Un administrateur peut configurer une imprimante à tickets, un scanner ou un terminal de paiement pour ce comptoir."}</p> : null}
       <div className="flex gap-2 overflow-x-auto pb-1">
         {devices.map((device) => {
           const state = evaluateRetailDeviceAvailability(device, capabilities);

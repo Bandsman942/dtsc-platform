@@ -18,6 +18,7 @@ import {
 import type { getRetailCommercialPermissions } from "@/lib/enterprise/retail/permissions";
 import type { retailSaleCreateSchema } from "@/lib/enterprise/retail/schemas";
 import { createRetailSale } from "@/lib/enterprise/retail/service";
+import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
 import { withRetailTransactionRetry } from "@/lib/enterprise/retail/transaction-retry";
 import { notifyUser } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
@@ -33,6 +34,15 @@ export async function executeCanonicalRetailSale(args: {
   commercialContext: RetailCommercialContext;
   permissions: RetailCommercialPermissions;
 }) {
+  // Once the canonical invoice circuit is activated, neither the old sales
+  // endpoint nor an offline replay may bypass Finance approval and collection.
+  const configuration = await prisma.enterpriseRetailConfiguration.findUnique({
+    where: { organizationId: args.organizationId }, select: { settingsJson: true },
+  });
+  const settings = configuration?.settingsJson;
+  if (settings && typeof settings === "object" && !Array.isArray(settings) && settings.invoiceCheckoutEnabled === true) {
+    throw new EnterpriseRetailError("RETAIL_LEGACY_SALE_DISABLED_USE_INVOICE", 409);
+  }
   let pricingInput = args.input;
   if (!args.commercialContext.overrideReason) {
     const preview = await previewRetailCommercialPricing(

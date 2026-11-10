@@ -38,6 +38,11 @@ const LABELS: Record<string, { fr: string; en: string }> = {
   CATALOG: { fr: "Catalogue de vente", en: "Sales catalog" },
   INVENTORY_LINKS: { fr: "Disponibilité du stock", en: "Stock availability" },
   TEAM: { fr: "Équipe autorisée", en: "Authorized team" },
+  STORE_STAFF: { fr: "Collaborateurs affectés aux boutiques", en: "Store staff assignments" },
+  STORE_INVOICERS: { fr: "Facturiers par boutique", en: "Invoicers per store" },
+  STORE_CASHIERS: { fr: "Caissiers par boutique", en: "Cashiers per store" },
+  STORE_ISOLATION: { fr: "Isolation des boutiques", en: "Store isolation" },
+  INVOICE_CHECKOUT: { fr: "Facturation Finance activée", en: "Finance invoice checkout active" },
   ACCOUNTING: { fr: "Suivi comptable des ventes", en: "Sales accounting" },
   RETAIL_CONFIGURATION: { fr: "Paramètres RETAIL", en: "Retail settings" },
 };

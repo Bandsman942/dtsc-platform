@@ -1,3 +1,11 @@
+## 2026-11-10 — Hotfix #1101 — RETAIL SHOP POS consolidé (candidate v1.8.1)
+
+- Lot 1 : isolation des commandes et retours multicanaux, garde-fous boutique hors connexion et permissions d'administration des périphériques.
+- Lot 2 : vente directe historique bloquée lorsque la facture Finance est activée ; facture refusée annulable/resoumise, réservation de stock libérée à l'annulation ; caisse et comptabilité canoniques sans duplication.
+- Lot 3 : paiements Finance de factures séparés des canaux historiques et paginés ; KPI multi-boutiques et exports séparent encaissements POS/Finance par période, devise et source ; nouveaux prérequis des équipes et activations.
+- Lot 4 : comptoir allégé, registre dédié, création de boutique pays/fuseau IANA, états vides équipements et filtres FR/EN.
+- Aucune migration ou variable Production. QA : `node scripts/qa-hotfix-1101-retail-pos.mjs` et régressions Retail. **Branche candidate non fusionnée : E2E propriétaire, revue et CI requis.** Contrat : `docs/HOTFIX_1101_SHOP_POS_FOUR_LOTS.md`.
+
 ## 2026-11-10 — Programme documentation publique #1099 (candidat v1.8.0, NON LIVRÉ)
 
 - Création d'une sixième surface DTSC : `docs.dtsc-platform.com`, hébergée dans le même projet Next.js/Vercel, routage par host, URL canonique, indexation et navigation dédiée. Aucun déploiement hors `main`.

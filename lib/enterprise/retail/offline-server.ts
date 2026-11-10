@@ -6,6 +6,7 @@ import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
 import { getRetailCommercialPermissions } from "@/lib/enterprise/retail/permissions";
 import { executeCanonicalRetailSale } from "@/lib/enterprise/retail/sale-execution";
 import { retailSaleCreateSchema } from "@/lib/enterprise/retail/schemas";
+import { requireRetailSiteCapability } from "@/lib/enterprise/retail/site-access";
 import { prisma } from "@/lib/prisma";
 
 const OFFLINE_SNAPSHOT_TTL_MS = 8 * 60 * 60 * 1000;
@@ -64,6 +65,14 @@ export async function buildRetailOfflineSnapshot(args: {
   currencyCode: string;
   maxItems: number;
 }) {
+  await requireRetailSiteCapability(args.organizationId, args.actorUserId, args.siteId, "COLLECT_PAYMENT", prisma, { requireAssignment: true });
+  const configuration = await prisma.enterpriseRetailConfiguration.findUnique({
+    where: { organizationId: args.organizationId }, select: { settingsJson: true },
+  });
+  const settings = configuration?.settingsJson;
+  if (settings && typeof settings === "object" && !Array.isArray(settings) && settings.invoiceCheckoutEnabled === true) {
+    throw new EnterpriseRetailError("RETAIL_OFFLINE_INVOICE_CHECKOUT_NOT_SUPPORTED", 409);
+  }
   const now = new Date();
   const [site, warehouse, totalCatalogItems, catalogItems, activePromotionCount, activePriceConditionCount] = await Promise.all([
     prisma.enterpriseSite.findFirst({
@@ -274,6 +283,8 @@ export async function syncRetailOfflineSale(args: {
   warehouseId: string;
   payload: unknown;
 }) {
+  // A previously downloaded snapshot cannot preserve access after revocation.
+  await requireRetailSiteCapability(args.organizationId, args.actorUserId, args.siteId, "COLLECT_PAYMENT", prisma, { requireAssignment: true });
   const payloadHash = jsonHash(args.payload);
   const existing = await prisma.enterpriseRetailOfflineSyncOperation.findFirst({ where: { organizationId: args.organizationId, operationUuid: args.operationUuid } });
   if (existing) {
@@ -293,6 +304,17 @@ export async function syncRetailOfflineSale(args: {
         receivedByUserId: args.actorUserId,
       },
     });
+  }
+
+  const configuration = await prisma.enterpriseRetailConfiguration.findUnique({
+    where: { organizationId: args.organizationId }, select: { settingsJson: true },
+  });
+  const settings = configuration?.settingsJson;
+  if (settings && typeof settings === "object" && !Array.isArray(settings) && settings.invoiceCheckoutEnabled === true) {
+    // Preserve the received UUID and payload fingerprint as a conflict for
+    // human reconciliation. Never silently convert it into a Finance invoice.
+    const operation = await updateSyncConflict(args.organizationId, args.operationUuid, "CONFLICT", "RETAIL_OFFLINE_INVOICE_CHECKOUT_NOT_SUPPORTED");
+    return { operation, idempotent: false };
   }
 
   const snapshot = await prisma.enterpriseRetailOfflineSnapshot.findFirst({
