@@ -1,15 +1,28 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { cookies, headers } from "next/headers";
 import { ArrowLeft, ArrowRight, BookOpen, Code2, ExternalLink, Search, ShieldCheck } from "lucide-react";
-import { getAppBaseUrl, getDocsBaseUrl, getDocsUrl, getPublicBaseUrl, getSupportBaseUrl } from "@/lib/domains";
+import { getAppBaseUrl, getCurrentHostType, getDocsBaseUrl, getPublicBaseUrl, getSupportBaseUrl } from "@/lib/domains";
 import { getPublicDocumentation, PUBLIC_DOCUMENTATION, type DocumentationLanguage } from "@/lib/public-documentation";
 
-export const metadata: Metadata = {
-  title: "Documentation officielle | DTSC Platform",
-  description: "Guides pour les utilisateurs et informations pour les futurs intégrateurs de DTSC Platform.",
-  alternates: { canonical: "https://docs.dtsc-platform.com/" },
-};
+export async function generateMetadata({ searchParams }: PageProps): Promise<Metadata> {
+  const [requestHeaders, params] = await Promise.all([
+    headers(),
+    searchParams || Promise.resolve({} as IncomingFilters),
+  ]);
+  const docsHost = getCurrentHostType(requestHeaders.get("host")) === "docs";
+  const entry = getPublicDocumentation(first(params.guide));
+  const lang = first(params.lang) === "en" ? "en" : "fr";
+  const base = docsHost ? getDocsBaseUrl() : getPublicBaseUrl();
+  const path = docsHost ? "/" : "/documentation";
+  const suffix = entry ? "?guide=" + encodeURIComponent(entry.slug) + "&lang=" + lang : "";
+  return {
+    title: entry ? entry[lang].title + " | DTSC Documentation" : "Documentation officielle | DTSC Platform",
+    description: entry?.[lang].summary || "Guides pour les utilisateurs et informations pour les futurs intégrateurs de DTSC Platform.",
+    alternates: { canonical: base + path + suffix },
+  };
+}
 
 type Filters = { guide?: string; audience?: string; q?: string; lang?: string };
 type IncomingFilters = { [K in keyof Filters]?: string | string[] };
@@ -76,14 +89,14 @@ const translations = {
   },
 } as const;
 
-function buildLink(filters: Filters = {}) {
+function buildLink(filters: Filters = {}, basePath = "/") {
   const query = new URLSearchParams();
   if (filters.lang) query.set("lang", filters.lang);
   if (filters.guide) query.set("guide", filters.guide);
   if (filters.audience && filters.audience !== "all") query.set("audience", filters.audience);
   if (filters.q) query.set("q", filters.q);
   const suffix = query.toString();
-  return getDocsUrl(suffix ? "/?" + suffix : "/");
+  return basePath + (suffix ? "?" + suffix : "");
 }
 
 function first(value: string | string[] | undefined) {
@@ -100,13 +113,17 @@ export default async function DocumentationPage({ searchParams }: PageProps) {
     cookies(),
     headers(),
   ]);
-  const localeHint = first(params.lang) || cookieStore.get("dtsc_locale")?.value || requestHeaders.get("accept-language")?.slice(0, 2);
+  const basePath = getCurrentHostType(requestHeaders.get("host")) === "docs" ? "/" : "/documentation";
+  const link = (filters: Filters = {}) => buildLink(filters, basePath);
+  const localeHint = first(params.lang) || cookieStore.get("dtsc_locale")?.value || requestHeaders.get("accept-language")?.toLowerCase().slice(0, 2);
   const lang: DocumentationLanguage = localeHint === "en" ? "en" : "fr";
   const t = translations[lang];
   const requestedAudience = first(params.audience);
   const audience = requestedAudience === "users" || requestedAudience === "developers" ? requestedAudience : "all";
   const q = normalizeQuery(params.q);
-  const article = getPublicDocumentation(first(params.guide));
+  const requestedGuide = first(params.guide);
+  const article = getPublicDocumentation(requestedGuide);
+  if (requestedGuide && !article) notFound();
   const filtered = PUBLIC_DOCUMENTATION.filter((item) => {
     if (audience !== "all" && item.audience !== audience) return false;
     const haystack = [item[lang].title, item[lang].summary, item[lang].steps.join(" "), t.groups[item.group]].join(" ").toLocaleLowerCase();
@@ -118,14 +135,14 @@ export default async function DocumentationPage({ searchParams }: PageProps) {
     <main className="min-h-screen w-full min-w-0 max-w-full bg-dtsc-page text-dtsc-ink" lang={lang}>
       <header className="border-b border-dtsc-border bg-dtsc-surface">
         <div className="mx-auto flex w-full min-w-0 max-w-6xl flex-wrap items-center justify-between gap-4 px-4 py-4 sm:px-6">
-          <Link href={buildLink({ lang })} className="flex min-h-11 min-w-0 items-center gap-3 rounded-xl font-bold text-dtsc-ink focus-visible:outline-2 focus-visible:outline-dtsc-blue" aria-label={t.home}>
+          <Link href={link({ lang })} className="flex min-h-11 min-w-0 items-center gap-3 rounded-xl font-bold text-dtsc-ink focus-visible:outline-2 focus-visible:outline-dtsc-blue" aria-label={t.home}>
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-dtsc-blue text-white"><BookOpen className="h-5 w-5" aria-hidden="true" /></span>
             <span className="min-w-0 break-words text-base tracking-tight sm:text-lg">{t.label}</span>
           </Link>
           <nav aria-label={t.label} className="flex min-w-0 flex-wrap items-center gap-2 text-sm">
             <Link href={getPublicBaseUrl() || "https://dtsc-platform.com"} className="min-h-11 rounded-xl px-3 py-3 text-dtsc-muted hover:text-dtsc-blue">{t.website}</Link>
             <Link href={getAppBaseUrl() || "https://app.dtsc-platform.com"} className="min-h-11 rounded-xl bg-dtsc-blue px-4 py-3 font-semibold text-white hover:opacity-90">{t.app}</Link>
-            <Link href={buildLink({ lang: lang === "fr" ? "en" : "fr", ...(article ? { guide: article.slug } : { audience, q }) })} className="min-h-11 rounded-xl border border-dtsc-border px-3 py-3 font-semibold text-dtsc-ink" lang={lang === "fr" ? "en" : "fr"} aria-label={t.language}>
+            <Link href={link({ lang: lang === "fr" ? "en" : "fr", ...(article ? { guide: article.slug } : { audience, q }) })} className="min-h-11 rounded-xl border border-dtsc-border px-3 py-3 font-semibold text-dtsc-ink" lang={lang === "fr" ? "en" : "fr"} aria-label={t.language}>
               {lang === "fr" ? "EN" : "FR"}
             </Link>
           </nav>
@@ -143,7 +160,7 @@ export default async function DocumentationPage({ searchParams }: PageProps) {
       <div className="mx-auto w-full max-w-6xl min-w-0 px-4 py-9 sm:px-6">
         {article ? (
           <section aria-labelledby="article-title" className="min-w-0">
-            <Link href={buildLink({ lang, audience: article.audience })} className="inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-dtsc-blue hover:underline"><ArrowLeft className="h-4 w-4" aria-hidden="true" />{t.back}</Link>
+            <Link href={link({ lang, audience: article.audience })} className="inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-dtsc-blue hover:underline"><ArrowLeft className="h-4 w-4" aria-hidden="true" />{t.back}</Link>
             <div className="mt-5 rounded-2xl border border-dtsc-border bg-dtsc-surface p-5 shadow-sm sm:p-9">
               <p className="text-xs font-semibold uppercase tracking-[0.14em] text-dtsc-blue">{t.groups[article.group]}</p>
               <h2 id="article-title" className="mt-3 break-words text-2xl font-bold sm:text-4xl">{article[lang].title}</h2>
@@ -165,7 +182,7 @@ export default async function DocumentationPage({ searchParams }: PageProps) {
                 {article.audience === "users" ? (
                   <Link href={getAppBaseUrl() + (article.group === "erp" ? "/help/enterprise" : "/help/standard")} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-dtsc-blue px-4 py-3 text-sm font-semibold text-white hover:opacity-90">{t.openHelp}<ExternalLink className="h-4 w-4" aria-hidden="true" /></Link>
                 ) : (
-                  <Link href={buildLink({ lang, guide: "api-feuille-de-route" })} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-dtsc-blue px-4 py-3 text-sm font-semibold text-white">{t.developers}<ArrowRight className="h-4 w-4" aria-hidden="true" /></Link>
+                  <Link href={link({ lang, guide: "api-feuille-de-route" })} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-dtsc-blue px-4 py-3 text-sm font-semibold text-white">{t.developers}<ArrowRight className="h-4 w-4" aria-hidden="true" /></Link>
                 )}
                 <Link href={getSupportBaseUrl() + "/support"} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-dtsc-border px-4 py-3 text-sm font-semibold">{t.support}</Link>
               </div>
@@ -179,12 +196,12 @@ export default async function DocumentationPage({ searchParams }: PageProps) {
                 ["users", t.users, BookOpen],
                 ["developers", t.developers, Code2],
               ] as const).map(([value, label, Icon]) => (
-                <Link key={value} href={buildLink({ lang, audience: value, q })} aria-current={audience === value ? "page" : undefined} className={audience === value ? "inline-flex min-h-11 items-center gap-2 rounded-full bg-dtsc-blue px-4 py-3 text-sm font-semibold text-white" : "inline-flex min-h-11 items-center gap-2 rounded-full border border-dtsc-border bg-dtsc-surface px-4 py-3 text-sm font-semibold hover:bg-dtsc-soft"}>
+                <Link key={value} href={link({ lang, audience: value, q })} aria-current={audience === value ? "page" : undefined} className={audience === value ? "inline-flex min-h-11 items-center gap-2 rounded-full bg-dtsc-blue px-4 py-3 text-sm font-semibold text-white" : "inline-flex min-h-11 items-center gap-2 rounded-full border border-dtsc-border bg-dtsc-surface px-4 py-3 text-sm font-semibold hover:bg-dtsc-soft"}>
                   <Icon className="h-4 w-4" aria-hidden="true" />{label}
                 </Link>
               ))}
             </div>
-            <form action="/" method="get" role="search" className="mt-6 flex w-full min-w-0 max-w-2xl items-center gap-2">
+            <form action={basePath} method="get" role="search" className="mt-6 flex w-full min-w-0 max-w-2xl items-center gap-2">
               <input type="hidden" name="lang" value={lang} />
               {audience !== "all" ? <input type="hidden" name="audience" value={audience} /> : null}
               <label htmlFor="documentation-search" className="sr-only">{t.searchLabel}</label>
@@ -208,17 +225,17 @@ export default async function DocumentationPage({ searchParams }: PageProps) {
                     <h3 className="text-lg font-bold">{t.groups[category]}</h3>
                     <div className="mt-4 grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 sm:grid-cols-2">
                       {entries.map((entry) => (
-                        <Link key={entry.slug} href={buildLink({ lang, guide: entry.slug })} className="group block min-w-0 rounded-2xl border border-dtsc-border bg-dtsc-surface p-5 shadow-sm transition hover:border-cyan-400 hover:shadow-md focus-visible:outline-2 focus-visible:outline-dtsc-blue">
+                        <Link key={entry.slug} href={link({ lang, guide: entry.slug })} className="group block min-w-0 rounded-2xl border border-dtsc-border bg-dtsc-surface p-5 shadow-sm transition hover:border-cyan-400 hover:shadow-md focus-visible:outline-2 focus-visible:outline-dtsc-blue">
                           <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-dtsc-soft text-dtsc-blue">{entry.audience === "users" ? <BookOpen className="h-5 w-5" aria-hidden="true" /> : <Code2 className="h-5 w-5" aria-hidden="true" />}</span>
                           <h4 className="mt-3 break-words text-lg font-semibold group-hover:text-dtsc-blue">{entry[lang].title}</h4>
                           <p className="mt-2 text-sm leading-6 text-dtsc-muted">{entry[lang].summary}</p>
-                          <span className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-dtsc-blue">{t.intro}<ArrowRight className="h-4 w-4" aria-hidden="true" /></span>
+                          <span className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-dtsc-blue">{t.steps}<ArrowRight className="h-4 w-4" aria-hidden="true" /></span>
                         </Link>
                       ))}
                     </div>
                   </div>
                 );
-              }) : <p className="mt-8 rounded-xl border border-dtsc-border bg-dtsc-surface p-6 text-sm">{t.empty} <Link className="font-semibold text-dtsc-blue underline" href={buildLink({ lang })}>{t.reset}</Link></p>}
+              }) : <p className="mt-8 rounded-xl border border-dtsc-border bg-dtsc-surface p-6 text-sm">{t.empty} <Link className="font-semibold text-dtsc-blue underline" href={link({ lang })}>{t.reset}</Link></p>}
             </section>
           </>
         )}
@@ -227,7 +244,7 @@ export default async function DocumentationPage({ searchParams }: PageProps) {
       <footer className="mt-8 border-t border-dtsc-border bg-dtsc-surface">
         <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-4 px-4 py-7 text-sm text-dtsc-muted sm:px-6">
           <span>© DTSC — Data and Tech Solutions Consulting</span>
-          <div className="flex flex-wrap gap-4"><Link href={getDocsBaseUrl() || "https://docs.dtsc-platform.com"} className="hover:text-dtsc-blue">{t.home}</Link><Link href={getSupportBaseUrl() + "/support"} className="hover:text-dtsc-blue">{t.support}</Link></div>
+          <div className="flex flex-wrap gap-4"><Link href={basePath} className="hover:text-dtsc-blue">{t.home}</Link><Link href={getSupportBaseUrl() + "/support"} className="hover:text-dtsc-blue">{t.support}</Link></div>
         </div>
       </footer>
     </main>
