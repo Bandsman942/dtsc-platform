@@ -27,7 +27,7 @@ Les six surfaces sont hébergées par **un seul projet Next.js/Vercel**, avec ro
 | Support | [support.dtsc-platform.com](https://support.dtsc-platform.com) | Tickets, échanges et suivi des demandes dans le périmètre autorisé |
 | Documentation | [docs.dtsc-platform.com](https://docs.dtsc-platform.com) | Guides publics vérifiés, parcours développeurs et statut explicite de la future API externe |
 
-Le portail documentaire dispose d'un [programme de publication contrôlée](docs/PUBLIC_DOCUMENTATION_PROGRAM.md) : les documents techniques internes ne sont pas répliqués automatiquement ; les routes API utilisées par l'application ne sont pas des API partenaires publiques.
+Le portail documentaire est aussi accessible **directement depuis le site public via `/documentation`**, sans authentification et depuis sa navigation principale/mobile. Il dispose d'un [programme de publication contrôlée](docs/PUBLIC_DOCUMENTATION_PROGRAM.md) : les documents techniques internes ne sont pas répliqués automatiquement ; les routes API utilisées par l'application ne sont pas des API partenaires publiques.
 
 Les routes réelles restent dans `app/` et `app/api/`. Le routage et les URL sont centralisés dans `lib/domains.ts` et `middleware.ts` ; voir [Routage et sous-domaines](docs/ROUTING_AND_SUBDOMAINS.md).
 
