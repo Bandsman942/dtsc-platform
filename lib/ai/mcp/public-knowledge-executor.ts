@@ -98,7 +98,12 @@ export async function executePublicKnowledgeTool({ code, args, context }: { code
   let status: "SUCCESS" | "DENIED" | "FAILED" = "FAILED";
   let reasonCode: string | undefined;
   try {
-    assertPublicOnly(context);
+    // Time is handled wholly in-process on DTSC Vercel: its schemas admit only
+    // IANA zone identifiers / HH:MM / calendar dates, not user or tenant data.
+    // Unlike Brave/Fetch, it makes no external request with model-derived text.
+    // Confidential enterprise contexts may therefore read the clock safely;
+    // Brave and Fetch still strictly reject non-public classifications.
+    if (spec.server !== "time") assertPublicOnly(context);
     await assertMcpServerNotSuspended(server.code);
     const countKey = `mcp-public:${context.userId}:${resolveTurnKey(context)}`;
     // Redis-backed cross-instance budget, at most 10 per user turn; 10/minute
