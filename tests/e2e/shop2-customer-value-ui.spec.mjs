@@ -140,12 +140,16 @@ test.describe.serial("Shop 2.0 customer value and payment follow-up UI", () => {
     await page.goto("/enterprise-modules/RETAIL_POS");
     await page.locator('[data-retail-pos-card="payments"]').click();
     await expect(page).toHaveURL(/\?section=payments$/);
-    const paymentFollowup = page.locator("details").filter({ hasText: "Suivi des paiements" }).first();
+    // Design 2.0 gives payment follow-up its own full-screen section, while
+    // historical channel transactions remain explicitly collapsible.
+    const paymentFollowup = page.locator('section[aria-label="Suivi des paiements"]');
     await expect(paymentFollowup).toBeVisible();
-    await paymentFollowup.locator("summary").click();
-    await expect(paymentFollowup.getByText(clientReference, { exact: true })).toBeVisible();
-    await expect(paymentFollowup.getByText("Carte", { exact: true }).first()).toBeVisible();
-    await expect(paymentFollowup.getByText("Remboursé", { exact: true }).first()).toBeVisible();
+    const historicalPayments = paymentFollowup.locator("details").filter({ hasText: "Transactions des canaux historiques" }).first();
+    await expect(historicalPayments).toBeVisible();
+    await historicalPayments.locator("summary").click();
+    await expect(historicalPayments.getByText(clientReference, { exact: true })).toBeVisible();
+    await expect(historicalPayments.getByText("Carte", { exact: true }).first()).toBeVisible();
+    await expect(historicalPayments.getByText("Remboursé", { exact: true }).first()).toBeVisible();
 
     for (const rawEnum of ["GIFT_CARD", "STORE_CREDIT", "INITIATED", "AUTHORIZED", "CAPTURED", "FAILED", "VOIDED", "REFUNDED"]) {
       await expect(page.getByText(rawEnum, { exact: true })).toHaveCount(0);
