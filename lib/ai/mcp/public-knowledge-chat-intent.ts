@@ -65,3 +65,21 @@ export function detectPublicChatMcpIntent(content: string): PublicChatMcpIntent 
     args: { query, count: 5 },
   };
 }
+
+/**
+ * Enterprise/sector assistants carry private context by default. Allow a
+ * provider-independent Brave call only for an explicit public question that
+ * was supplied directly by the signed-in user; never source a query from
+ * ERP/RAG/CAG or from the model's proposed arguments.
+ *
+ * Conservative privacy filter: false negatives are preferable to a tenant
+ * identifier, client record or personal data leaving the DTSC boundary.
+ */
+const privateEnterpriseSearch = /\b(?:notre|mon|ma|mes|nos|our|my)\s+(?:entreprise|organisation|organization|company|client|customer|employ[eé]|employee|patient|facture|invoice|compte|account|rapport|report|stock|projet|project|contrat|contract)\b|\b(?:patient|dossier|medical|m[eé]dical|facture|invoice|salaire|payroll|paie|employ[eé]|collaborateur|client|customer|contrat|contract|confidentiel|confidential|secret|interne|internal|identifiant|personal|personnel)\b|\b\d{6,}\b/i;
+
+export function detectPublicAgentSearchIntent(content: string): PublicChatMcpIntent | null {
+  if (content.length > 320 || privateEnterpriseSearch.test(content)) return null;
+  const match = detectPublicChatMcpIntent(content);
+  return match && (match.toolCode === "MCP_BRAVE_SEARCH_WEB" || match.toolCode === "MCP_BRAVE_SEARCH_NEWS")
+    ? match : null;
+}
