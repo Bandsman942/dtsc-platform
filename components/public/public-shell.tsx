@@ -6,11 +6,12 @@ import { DtscLogo } from "@/components/brand/dtsc-logo";
 import { PublicNav } from "@/components/public/public-nav";
 import { PublicScrollAnimator } from "@/components/public/public-scroll-animator";
 import { dtsc } from "@/lib/dtsc";
+import { getDocsUrl } from "@/lib/domains";
 
 const columns = [
   { title: "Entreprise", links: [["À propos", "/a-propos"], ["Secteurs", "/secteurs"], ["Projets", "/projets"], ["Tarifs DTSC Platform", "/tarifs"], ["Contact", "/contact"]] },
   { title: "Expertise", links: [["Services", "/services"], ["Solutions", "/solutions"], ["Data en Afrique", "/data-afrique"], ["BI & KPI", "/bi-kpi"], ["IA en entreprise", "/ia-entreprise"]] },
-  { title: "Ressources", links: [["Publications", "/ressources"], ["Conditions", "/conditions-utilisation"], ["Confidentialité", "/politique-confidentialite"], ["Cookies", "/politique-cookies"]] },
+  { title: "Ressources", links: [["Publications", "/ressources"], ["Documentation DTSC", getDocsUrl()], ["Conditions", "/conditions-utilisation"], ["Confidentialité", "/politique-confidentialite"], ["Cookies", "/politique-cookies"]] },
 ] as const;
 
 export async function PublicHeader() {
