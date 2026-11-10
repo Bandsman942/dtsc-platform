@@ -9,6 +9,7 @@ import { estimateAiCost } from "@/lib/ai/costs";
 import { getAiModelDefinition, isCatalogAiModelAllowed } from "@/lib/ai/catalog";
 import { getAiPlatformPolicy, isPlatformAllowedAiModel } from "@/lib/ai/platform-runtime-policy";
 import { buildConnectedAppsAvailabilityContext } from "@/lib/ai/mcp/product-guidance";
+import { getStandardChatPublicMcpAnswer } from "@/lib/ai/mcp/public-knowledge-chat";
 import { AiExecutionContextError } from "@/lib/ai/context-engine";
 import { AiProviderError, toAiReasonCode } from "@/lib/ai/errors";
 import { getAiErrorMessage } from "@/lib/ai/i18n";
@@ -166,6 +167,60 @@ export async function POST(req: Request) {
     const statusCode = error instanceof AiProviderError ? error.statusCode : 502;
     await writeApiLog({ request: req, statusCode, userId: session.userId, startedAt, metadata: { action: "chat_v2_context_failed", reasonCode, contextCode } });
     return NextResponse.json({ error: reasonCode, reasonCode, message: getAiErrorMessage(reasonCode, locale) }, { status: statusCode });
+  }
+
+  // Standard text chat has no provider tool-calling loop. For explicit current
+  // time and public Web/news requests, execute the *same* audited MCP READ
+  // tools as Agent/IA Entreprise before invoking a model. This prevents the
+  // standard assistant from falsely claiming it cannot access certified Time.
+  const publicMcpAnswer = await getStandardChatPublicMcpAnswer({
+    content: body.data.content,
+    locale,
+    session,
+    userId: session.userId,
+    conversationId: conversation.id,
+    dataClassifications: preparedTurn.routePolicy.dataClassifications,
+    request: req,
+  });
+  if (publicMcpAnswer) {
+    await Promise.all([
+      prisma.message.create({
+        data: {
+          conversationId: conversation.id,
+          organizationId,
+          role: "assistant",
+          content: publicMcpAnswer.reply,
+          model: provisionalModel,
+        },
+      }),
+      prisma.conversation.update({
+        where: { id: conversation.id },
+        data: { updatedAt: new Date() },
+      }),
+    ]);
+    await writeApiLog({
+      request: req,
+      statusCode: 200,
+      userId: session.userId,
+      startedAt,
+      metadata: {
+        action: "chat_v2_public_mcp",
+        conversationId: conversation.id,
+        toolCode: publicMcpAnswer.toolCode,
+        toolStatus: publicMcpAnswer.status,
+        ...preparedTurn.auditMetadata,
+      },
+    });
+    return new Response(publicMcpAnswer.reply, {
+      headers: {
+        "Content-Type": "text/plain; charset=utf-8",
+        "Cache-Control": "no-cache, no-transform",
+        "X-Conversation-Id": conversation.id,
+        "X-AI-Execution": "CANONICAL_TOOL",
+        "X-AI-Tool": publicMcpAnswer.toolCode,
+        "X-AI-Tool-Status": publicMcpAnswer.status,
+      },
+    });
   }
 
   const companyContext = "";
