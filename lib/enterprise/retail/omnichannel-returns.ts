@@ -28,6 +28,7 @@ import {
 } from "@/lib/enterprise/accounting/accounting-document-approval-orchestration";
 import { assertSalesCreditNoteStillPostable } from "@/lib/enterprise/accounting/credit-note-posting-preflight";
 import { resolveEnterpriseModuleCapabilities } from "@/lib/enterprise/module-access";
+import { requireRetailSiteCapability, retailFinanceReadSiteScope } from "@/lib/enterprise/retail/site-access";
 import { prisma } from "@/lib/prisma";
 
 type ReturnRequest = z.infer<typeof omnichannelReturnRequestSchema>;
@@ -35,6 +36,27 @@ type ReturnDecision = z.infer<typeof omnichannelReturnDecisionSchema>;
 const conflict = (code: string, status = 409) => new EnterpriseRetailError(code, status);
 const d = (value: Prisma.Decimal.Value) => new Prisma.Decimal(value);
 const money = (value: Prisma.Decimal.Value) => d(value).toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
+
+async function assertOmnichannelOrderStore(organizationId: string, orderId: string, actorUserId: string) {
+  const orchestration = await prisma.enterpriseRetailOrderOrchestration.findFirst({
+    where: { organizationId, salesOrderId: orderId, archivedAt: null }, select: { sourceSiteId: true },
+  });
+  if (!orchestration) throw conflict("RETAIL_OMNICHANNEL_ORDER_NOT_FOUND", 404);
+  await requireRetailSiteCapability(organizationId, actorUserId, orchestration.sourceSiteId, "VIEW_SALES", prisma, { requireAssignment: true });
+}
+
+async function assertOmnichannelReturnFinanceStore(organizationId: string, returnId: string, actorUserId: string) {
+  const retailReturn = await prisma.enterpriseRetailOmnichannelReturn.findFirst({
+    where: { organizationId, id: returnId }, select: { salesOrderId: true },
+  });
+  if (!retailReturn) throw conflict("RETAIL_OMNICHANNEL_RETURN_NOT_FOUND", 404);
+  const orchestration = await prisma.enterpriseRetailOrderOrchestration.findFirst({
+    where: { organizationId, salesOrderId: retailReturn.salesOrderId, archivedAt: null }, select: { sourceSiteId: true },
+  });
+  if (!orchestration) throw conflict("RETAIL_OMNICHANNEL_ORDER_NOT_FOUND", 404);
+  const scope = await retailFinanceReadSiteScope(organizationId, actorUserId, "VIEW_SALES");
+  if (scope !== null && !scope.includes(orchestration.sourceSiteId)) throw conflict("RETAIL_SITE_ACCESS_DENIED", 403);
+}
 
 /** Keep Finance access distinct from the Retail POS role, with no role-name bypass. */
 async function assertReturnFinanceAccess(organizationId: string, actorUserId: string, stage: "PREPARE" | "SETTLE") {
@@ -87,7 +109,8 @@ function assertEligiblePaymentSource(
   return eligible.payment;
 }
 
-export async function listRetailOmnichannelReturns(organizationId: string, salesOrderId: string) {
+export async function listRetailOmnichannelReturns(organizationId: string, salesOrderId: string, actorUserId: string) {
+  await assertOmnichannelOrderStore(organizationId, salesOrderId, actorUserId);
   return prisma.enterpriseRetailOmnichannelReturn.findMany({
     where: { organizationId, salesOrderId },
     select: {
@@ -113,6 +136,7 @@ export function retailReturnPublicView(value: {
 export async function requestRetailOmnichannelReturn(
   organizationId: string, salesOrderId: string, actorUserId: string, input: ReturnRequest,
 ) {
+  await assertOmnichannelOrderStore(organizationId, salesOrderId, actorUserId);
   const [validatorPayments, validatorReceivables, retailCandidates] = await Promise.all([
     resolveEnterpriseModuleCapabilities({ organizationId, userId: input.validatorUserId, moduleCode: "FINANCE_PAYMENTS" }),
     resolveEnterpriseModuleCapabilities({ organizationId, userId: input.validatorUserId, moduleCode: "FINANCE_RECEIVABLES" }),
@@ -243,6 +267,7 @@ export async function requestRetailOmnichannelReturn(
 export async function decideRetailOmnichannelReturn(
   organizationId: string, returnId: string, actorUserId: string, input: ReturnDecision,
 ) {
+  await assertOmnichannelReturnFinanceStore(organizationId, returnId, actorUserId);
   const [payments, receivables] = await Promise.all([
     resolveEnterpriseModuleCapabilities({ organizationId, userId: actorUserId, moduleCode: "FINANCE_PAYMENTS" }),
     resolveEnterpriseModuleCapabilities({ organizationId, userId: actorUserId, moduleCode: "FINANCE_RECEIVABLES" }),
@@ -272,6 +297,7 @@ export async function decideRetailOmnichannelReturn(
 
 /** Resumable financial preparation. Never approve a payment or credit note on behalf of the validator. */
 export async function prepareRetailOmnichannelReturnFinance(organizationId: string, returnId: string, actorUserId: string, revision: number) {
+  await assertOmnichannelReturnFinanceStore(organizationId, returnId, actorUserId);
   await assertReturnFinanceAccess(organizationId, actorUserId, "PREPARE");
   const current = await prisma.enterpriseRetailOmnichannelReturn.findFirst({ where: { organizationId, id: returnId } });
   if (!current) throw conflict("RETAIL_OMNICHANNEL_RETURN_NOT_FOUND", 404);
@@ -331,6 +357,7 @@ export async function prepareRetailOmnichannelReturnFinance(organizationId: stri
 /** Finance is settled first; stock and quota are finalized atomically and idempotently afterward. */
 export async function settleRetailOmnichannelReturnFinance(organizationId: string, returnId: string, actorUserId: string,
   input: { revision: number; receivedAndInspected: true; inspectionNotes: string }) {
+  await assertOmnichannelReturnFinanceStore(organizationId, returnId, actorUserId);
   await assertReturnFinanceAccess(organizationId, actorUserId, "SETTLE");
   const initial = await prisma.enterpriseRetailOmnichannelReturn.findFirst({ where: { organizationId, id: returnId } });
   if (!initial) throw conflict("RETAIL_OMNICHANNEL_RETURN_NOT_FOUND", 404);

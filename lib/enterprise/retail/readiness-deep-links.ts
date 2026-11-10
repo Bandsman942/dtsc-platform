@@ -7,6 +7,11 @@ export const RETAIL_READINESS_DEEP_LINKS: Record<string, string> = {
   CATALOG: "/enterprise-modules/CATALOG#catalog-items",
   INVENTORY_LINKS: "/enterprise-modules/INVENTORY_LOGISTICS#inventory-items",
   TEAM: "/enterprise-admin?section=positions",
+  STORE_STAFF: "/enterprise-modules/RETAIL_POS?section=staff",
+  STORE_INVOICERS: "/enterprise-modules/RETAIL_POS?section=staff",
+  STORE_CASHIERS: "/enterprise-modules/RETAIL_POS?section=staff",
+  STORE_ISOLATION: "/enterprise-modules/RETAIL_POS?section=activation",
+  INVOICE_CHECKOUT: "/enterprise-modules/RETAIL_POS?section=activation",
   ACCOUNTING: "/enterprise-modules/FINANCE_ACCOUNTING#accounting-readiness",
   RETAIL_CONFIGURATION: "/enterprise-modules/RETAIL_POS?section=readiness#shop-point-of-sale-configuration",
 };

@@ -17,6 +17,14 @@ const GENERIC_ERROR: Bilingual = {
 };
 
 const ERROR_MESSAGES: Record<string, Bilingual> = {
+  RETAIL_LEGACY_SALE_DISABLED_USE_INVOICE: {
+    fr: "La facturation Finance est active : préparez la facture dans Vente comptoir, faites-la valider puis émettre, et encaissez-la dans Encaissements. La vente directe historique est désactivée.",
+    en: "Finance invoice checkout is active: prepare an invoice at the counter, have it approved and issued, then collect it in Collections. Legacy direct sales are disabled.",
+  },
+  RETAIL_OFFLINE_INVOICE_CHECKOUT_NOT_SUPPORTED: {
+    fr: "La facturation Finance est active. La vente directe hors connexion n’est pas compatible avec l’approbation des factures : reconnectez-vous et utilisez Vente comptoir. Les opérations déjà enregistrées restent à examiner avant toute reprise.",
+    en: "Finance invoice checkout is active. Direct offline sales cannot skip invoice approval. Reconnect and use Counter sales; previously queued operations require review before replay.",
+  },
   RETAIL_OMNICHANNEL_RETURN_INVOICE_REQUIRED: { fr: "Aucune facture client correspondante et émise n’est disponible. Finalisez la facturation dans Finance avant le retour.", en: "A matching issued customer invoice is required. Complete invoicing in Finance first." },
   RETAIL_OMNICHANNEL_RETURN_INVOICE_UNPAID: { fr: "Cette commande ne dispose pas d’un encaissement client confirmé pouvant être remboursé.", en: "This order has no confirmed customer payment available for refund." },
   RETAIL_OMNICHANNEL_RETURN_PAID_SOURCE_REQUIRED: { fr: "Aucun encaissement confirmé ne couvre seul ce montant. Vérifiez les allocations Finance ; les paiements fractionnés nécessitent un traitement dédié.", en: "No single confirmed payment covers this refund. Check Finance allocations; split tenders require a dedicated workflow." },

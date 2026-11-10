@@ -13,7 +13,9 @@ export async function GET(req: Request, { params }: Params) {
   const { organizationId, orderId } = await params;
   const auth = await authorizeRetailRequest(req, organizationId, "RETAIL_POS", "read");
   if (!auth.ok) return auth.response;
-  const result = await listRetailOmnichannelReturns(organizationId, orderId);
+  let result: Awaited<ReturnType<typeof listRetailOmnichannelReturns>>;
+  try { result = await listRetailOmnichannelReturns(organizationId, orderId, auth.session.userId); }
+  catch (error) { return retailErrorResponse(error, "RETAIL_OMNICHANNEL_RETURN_LIST_FAILED"); }
   const [payments, receivables] = await Promise.all([
     resolveEnterpriseModuleCapabilities({ organizationId, userId: auth.session.userId, moduleCode: "FINANCE_PAYMENTS" }),
     resolveEnterpriseModuleCapabilities({ organizationId, userId: auth.session.userId, moduleCode: "FINANCE_RECEIVABLES" }),

@@ -3,6 +3,7 @@ import { getRetailAccountingReadiness } from "@/lib/enterprise/retail/accounting
 import { RETAIL_COUNTRY_PACKS } from "@/lib/enterprise/retail/country-packs";
 import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
 import { getRetailReadinessDeepLink } from "@/lib/enterprise/retail/readiness-deep-links";
+import { siteStaffCapabilities } from "@/lib/enterprise/retail/site-access";
 import { prisma } from "@/lib/prisma";
 
 type OnboardingSelection = {
@@ -23,7 +24,7 @@ async function loadOptions(organizationId: string) {
     prisma.enterpriseSite.findMany({
       where: { organizationId, status: "ACTIVE", archivedAt: null },
       orderBy: [{ code: "asc" }],
-      select: { id: true, code: true, name: true },
+      select: { id: true, code: true, name: true, siteType: true },
     }),
     prisma.enterpriseWarehouse.findMany({
       where: { organizationId, status: "ACTIVE", archivedAt: null },
@@ -37,7 +38,7 @@ async function loadOptions(organizationId: string) {
     }),
     prisma.enterpriseRetailConfiguration.findUnique({
       where: { organizationId },
-      select: { id: true, profileCode: true, baseCurrencyCode: true, status: true },
+      select: { id: true, profileCode: true, baseCurrencyCode: true, status: true, settingsJson: true },
     }),
     prisma.enterpriseRetailCountryPackActivation.findMany({
       where: { organizationId, archivedAt: null },
@@ -59,12 +60,27 @@ function isCashAccount(account: { accountType?: string | null }) {
 export async function computeRetailReadiness(organizationId: string, selection: OnboardingSelection) {
   const options = await loadOptions(organizationId);
   const accounting = await getRetailAccountingReadiness(organizationId);
-  const [catalogCount, trackedCatalogItems, inventoryCatalogIds, activeMembers] = await Promise.all([
+  const [catalogCount, trackedCatalogItems, inventoryCatalogIds, activeMembers, assignments] = await Promise.all([
     prisma.enterpriseCatalogItem.count({ where: { organizationId, status: "ACTIVE", archivedAt: null } }),
     prisma.enterpriseCatalogItem.findMany({ where: { organizationId, status: "ACTIVE", archivedAt: null, trackInventory: true }, select: { id: true } }),
     prisma.enterpriseInventoryItem.findMany({ where: { organizationId, status: "ACTIVE", archivedAt: null }, select: { catalogItemId: true } }),
     prisma.organizationMember.count({ where: { organizationId, status: "ACTIVE" } }),
+    prisma.enterpriseRetailSiteAssignment.findMany({
+      where: { organizationId, isActive: true, site: { status: "ACTIVE", archivedAt: null }, member: { status: "ACTIVE", removedAt: null } },
+      select: { siteId: true, roleCode: true, permissionsJson: true }, take: 1001,
+    }),
   ]);
+
+  const stores = options.sites.some((item) => item.siteType === "STORE")
+    ? options.sites.filter((item) => item.siteType === "STORE") : options.sites;
+  const boundedAssignments = assignments.length <= 1000;
+  const everyStoreHas = (capability: "VIEW_SALES" | "PREPARE_INVOICE" | "COLLECT_PAYMENT") =>
+    boundedAssignments && stores.length > 0 && stores.every((store) => assignments.some((assignment) =>
+      assignment.siteId === store.id && siteStaffCapabilities(assignment.roleCode, assignment.permissionsJson).includes(capability)));
+  const rawSettings = options.configuration?.settingsJson;
+  const retailSettings = rawSettings && typeof rawSettings === "object" && !Array.isArray(rawSettings) ? rawSettings : null;
+  const isolationEnabled = retailSettings?.siteStaffIsolationEnabled === true;
+  const invoiceCheckoutEnabled = retailSettings?.invoiceCheckoutEnabled === true;
 
   const activePackActivations = options.countryPackActivations.filter((activation) => ["ACTIVE_CORE", "VALIDATED"].includes(activation.status));
   const requestedCountryCode = selection.countryCode?.toUpperCase() || null;
@@ -155,6 +171,11 @@ export async function computeRetailReadiness(organizationId: string, selection: 
       detail: { trackedCatalogItems: trackedCatalogItems.length, missingInventoryLinks },
     },
     { code: "TEAM", complete: activeMembers > 0, detail: { activeMembers } },
+    { code: "STORE_STAFF", complete: everyStoreHas("VIEW_SALES"), detail: { storeCount: stores.length, assignmentCount: assignments.length } },
+    { code: "STORE_INVOICERS", complete: everyStoreHas("PREPARE_INVOICE"), detail: { storeCount: stores.length } },
+    { code: "STORE_CASHIERS", complete: everyStoreHas("COLLECT_PAYMENT"), detail: { storeCount: stores.length } },
+    { code: "STORE_ISOLATION", complete: isolationEnabled, detail: { isolationEnabled } },
+    { code: "INVOICE_CHECKOUT", complete: invoiceCheckoutEnabled, detail: { invoiceCheckoutEnabled } },
     {
       code: "ACCOUNTING",
       complete: accounting.ready,

@@ -103,6 +103,21 @@ export function retailReadinessDetail(code: string, detail: unknown, complete: b
         ? (en ? `${activeMembers} active company member${activeMembers === 1 ? "" : "s"} available.` : `${activeMembers} membre${activeMembers === 1 ? "" : "s"} actif${activeMembers === 1 ? "" : "s"} dans l’entreprise.`)
         : (en ? "Add or activate at least one company member who can use the Retail workspace." : "Ajoutez ou activez au moins un membre de l’entreprise pouvant utiliser le commerce de détail.");
     }
+    case "STORE_STAFF":
+    case "STORE_INVOICERS":
+    case "STORE_CASHIERS": {
+      const count = asCount(value.storeCount);
+      const role = code === "STORE_INVOICERS" ? (en ? "invoicer" : "facturier")
+        : code === "STORE_CASHIERS" ? (en ? "cashier" : "caissier") : (en ? "staff member" : "collaborateur");
+      return complete ? (en ? `Every one of the ${count} stores has an active authorized ${role}.` : `Les ${count} boutiques possèdent chacune un ${role} actif et autorisé.`)
+        : (en ? `Assign at least one active authorized ${role} to every store; a company owner alone does not fulfill this requirement.` : `Affectez au moins un ${role} actif et autorisé dans chaque boutique ; la présence du propriétaire seul ne suffit pas.`);
+    }
+    case "STORE_ISOLATION":
+      return complete ? (en ? "Store-by-store data isolation is active." : "L’isolation des données par boutique est active.")
+        : (en ? "Activate site staff isolation using the secured feature activation panel." : "Activez l’isolation des collaborateurs par boutique via le panneau d’activation sécurisé.");
+    case "INVOICE_CHECKOUT":
+      return complete ? (en ? "The canonical Finance invoice checkout is active." : "Le circuit de facturation Finance est activé.")
+        : (en ? "Activate invoice checkout after store roles, stock and Finance posting prerequisites pass." : "Activez la facturation après validation des rôles, du stock et des prérequis de comptabilisation Finance.");
     case "ACCOUNTING": {
       const missingMappings = asCount(value.missingMappings);
       const missingJournals = asCount(value.missingJournals);

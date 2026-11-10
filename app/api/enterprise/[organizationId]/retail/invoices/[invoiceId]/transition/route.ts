@@ -40,7 +40,7 @@ export async function POST(req: Request, { params }: Params) {
     if (["SUBMIT", "CANCEL"].includes(parsed.data.action)) {
       await requireRetailSiteCapability(organizationId, auth.session.userId, checkout.siteId,
         parsed.data.action === "CANCEL" ? "CANCEL_UNPAID_INVOICE" : "PREPARE_INVOICE", prisma, { requireAssignment: true });
-      if (checkout.invoice.status !== "DRAFT" && !(parsed.data.action === "SUBMIT" && checkout.invoice.status === "REJECTED")) throw new EnterpriseRetailError("RETAIL_INVOICE_CANCELLATION_NOT_ALLOWED", 409);
+      if (!(["DRAFT", "REJECTED"].includes(checkout.invoice.status))) throw new EnterpriseRetailError("RETAIL_INVOICE_CANCELLATION_NOT_ALLOWED", 409);
     } else if (parsed.data.action === "ISSUE") {
       // Managers inherit emission within their own assigned store. A Finance
       // poster also qualifies, but must stay inside their Finance read scope.
