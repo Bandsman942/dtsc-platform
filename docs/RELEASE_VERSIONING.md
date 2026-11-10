@@ -4,7 +4,7 @@
 
 ## Source canonique
 
-- La propriété `version` de `package.json` est la seule version applicative canonique. Les cinq surfaces DTSC (Public, Account, App, Console, Support) partagent **une version** et un SHA ; aucun module métier ne reçoit une version de produit concurrente.
+- La propriété `version` de `package.json` est la seule version applicative canonique. Les six surfaces DTSC (Public, Account, App, Console, Support, Documentation) partagent **une version** et un SHA ; aucun module métier ne reçoit une version de produit concurrente.
 - Une version candidate sur une branche ou sur `main` n'est **pas** une version livrée : seul le SHA exact déployé et confirmé `Production/success` via l'intégration native Vercel/GitHub peut créer une GitHub Release.
 - Les nouvelles GitHub Releases utilisent `vMAJOR.MINOR.PATCH` et pointent vers le SHA Production exact. Les tags `prod-YYYYMMDD-HHmm-<sha7>` historiques ne sont ni effacés ni réécrits.
 - Transition : `package.json` passait auparavant pour une valeur `1.0.0` non synchronisée aux releases horodatées. La première version SemVer candidate de gouvernance est `1.1.0` ; elle ne devient officielle qu'après Production réussie. Aucune rétro-conversion approximative des anciens tags.
