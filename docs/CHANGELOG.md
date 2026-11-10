@@ -1,6 +1,7 @@
 ## 2026-11-10 — Programme documentation publique #1099 (candidat v1.8.0, NON LIVRÉ)
 
 - Création d'une sixième surface DTSC : `docs.dtsc-platform.com`, hébergée dans le même projet Next.js/Vercel, routage par host, URL canonique, indexation et navigation dédiée. Aucun déploiement hors `main`.
+- **Intégration au site public** : accès à `/documentation` sur `dtsc-platform.com` par navigation desktop, mobile, pied de page, page d'accueil et Ressources. Les recherches et les guides conservent le domaine courant ; le sous-domaine Docs reste disponible en parallèle.
 - Catalogue curé de 12 guides synthétiques en français et anglais, organisés entre utilisateurs et développeurs, recherche et filtres, interface responsive et liens vers l'aide authentifiée.
 - Documentation développeurs limitée aux principes d'intégration et à la feuille de route. Les routes internes `/api/*` ne constituent **pas** une API publique partenaire ; les appels API via le domaine docs sont refusés.
 - Matrice de publication `docs/PUBLIC_DOCUMENTATION_PROGRAM.md` : séparation des sources PUBLIC_CURATED, INTERNAL_ONLY, PUBLIC_AFTER_REVIEW et FUTURE_API ; pas de publication automatique des 659 entrées `docs/`.
