@@ -1,4 +1,5 @@
 import "server-only";
+import { randomUUID } from "node:crypto";
 import type { AiDataClassification } from "@/lib/ai/types";
 import type { SessionPayload } from "@/lib/session";
 import { executeAiTool } from "@/lib/ai/tools/execute";
@@ -95,7 +96,7 @@ export async function getStandardChatPublicMcpAnswer(input: {
         userId: input.userId,
         organizationId: null,
         conversationId: input.conversationId,
-        turnId: `chat-v2:${crypto.randomUUID()}`,
+        turnId: `chat-v2:${randomUUID()}`,
         assistantCode: "DTSC_GENERAL",
         dataClassifications: input.dataClassifications,
         request: input.request,
