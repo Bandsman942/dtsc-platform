@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import {
+  BookOpen,
   Check,
   ChevronDown,
   Globe,
@@ -16,7 +17,7 @@ import type { HostType } from "@/lib/domains";
 import { cn } from "@/lib/utils";
 
 export type ProductDestination = {
-  key: "public" | "app" | "console" | "support" | "account";
+  key: "public" | "app" | "console" | "support" | "account" | "docs";
   label: string;
   href: string;
   visible: boolean;
@@ -28,6 +29,7 @@ const destinationIcons = {
   console: ShieldCheck,
   support: Headphones,
   account: UserCircle,
+  docs: BookOpen,
 } as const;
 
 export function ProductNavigationMenu({
