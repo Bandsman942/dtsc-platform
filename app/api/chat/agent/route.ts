@@ -187,6 +187,7 @@ export async function POST(req: Request) {
       conversationId,
       requestedModel,
       dataClassifications: preparedTurn.routePolicy.dataClassifications,
+      explicitPublicUserRequest: data.content,
       request: req,
       signal: req.signal,
       tags: ["feature:global-chat", "execution:agent-v1", `assistant:${preparedTurn.executionContext.profile.code}`, `locale:${locale}`],
