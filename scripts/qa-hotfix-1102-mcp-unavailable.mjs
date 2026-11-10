@@ -77,6 +77,7 @@ assert.ok(standardChat.includes('X-AI-Execution": "CANONICAL_TOOL"'), "Maintain 
 assert.ok(standardTool.includes("executeAiTool(") && standardTool.includes('organizationId: null') && standardTool.includes('assistantCode: "DTSC_GENERAL"'), "No company data in public chat tools.");
 assert.ok(standardTool.includes('activeContext: "GLOBAL_CLIENT"') && standardTool.includes('activeOrganizationId: null'), "Personal chat MCP calls must not inherit an unrelated organization workspace.");
 assert.ok(standardTool.includes("untrusted !== true") && standardTool.includes("new URL(hit.url)"), "Web sources must remain untrusted and URL-validated.");
+assert.ok(standardTool.includes("detectPublicAgentSearchIntent(input.content)"), "Standard chat must apply the strict enterprise-grade Brave privacy gate.");
 assert.ok(standardTool.includes("source") || standardTool.includes("Source"), "Results must be attributable.");
 assert.ok(config.includes('process.env.MCP_PUBLIC_FETCH_CERTIFIED === "true"'), "Fly Fetch remains independently disabled.");
 
