@@ -174,10 +174,15 @@ export async function middleware(request: NextRequest) {
     return NextResponse.json({ error: "Cross-origin request blocked" }, { status: 403 });
   }
 
+  const hostType = getCurrentHostType(request.headers.get("host"));
+  // Docs is a public read-only surface: do not verify or renew sessions for its static assets.
+  if (hostType === "docs" && isStaticAsset(pathname)) {
+    return NextResponse.next();
+  }
+
   const token = request.cookies.get(SESSION_COOKIE)?.value;
   const secret = process.env.AUTH_SECRET;
   const session = secret ? await verifySessionToken(token, secret) : null;
-  const hostType = getCurrentHostType(request.headers.get("host"));
 
   if (pathname.startsWith("/api/")) {
     // No internal or partner API is exposed through the documentation hostname.
@@ -263,6 +268,8 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
+    // Only the Docs hostname receives a catch-all; all other products keep their existing narrow matchers.
+    { source: "/:path*", has: [{ type: "host", value: "docs.dtsc-platform.com" }] },
     "/",
     "/dashboard/:path*",
     "/chat/:path*",
