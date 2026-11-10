@@ -125,6 +125,8 @@ jobs:
         run: pnpm qa:public-experience-v2
       - name: DTSC Docs public and developer portal contract QA
         run: pnpm qa:docs-1099
+      - name: MCP Time/Brave in-process and chat integration QA
+        run: pnpm qa:hotfix-1102
       - name: Type check
         run: pnpm type-check
         env:

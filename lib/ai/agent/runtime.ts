@@ -7,6 +7,7 @@ import { resolveAiAgentBudget, isAgentBudgetExceeded } from "@/lib/ai/agent/poli
 import { getAiPlatformPolicy } from "@/lib/ai/platform-runtime-policy";
 import { createAiAgentRun, isAiAgentCancellationRequested, recordAiAgentStep, updateAiAgentRunProgress } from "@/lib/ai/agent/persistence";
 import { listAuthorizedAgentTools } from "@/lib/ai/agent/tools";
+import { detectPublicAgentSearchIntent } from "@/lib/ai/mcp/public-knowledge-chat-intent";
 import { buildAgentToolResultMessage } from "@/lib/ai/agent/tool-result";
 import { AiAgentCancelledError, consumeAiAgentModelTurn } from "@/lib/ai/agent/turn";
 import { estimateAiCost } from "@/lib/ai/costs";
@@ -44,6 +45,10 @@ type AgentLoopInput = {
   requestedModel?: string | null;
   reasoningEffort?: AiReasoningEffort | null;
   dataClassifications: AiDataClassification[];
+  // Unmodified end-user question, provided only by an authenticated route.
+  // Used to construct an independent PUBLIC Brave search query without
+  // sending private enterprise context or trusting model-supplied arguments.
+  explicitPublicUserRequest?: string | null;
   budget: AiAgentBudget;
   currentStep: number;
   toolCallCount: number;
@@ -69,6 +74,7 @@ async function createAgentLoopStream(input: AgentLoopInput) {
     request: input.request || null,
   };
   const authorizedForScope = await listAuthorizedAgentTools({ context: toolContextBase, budget: input.budget });
+  const explicitPublicSearch = detectPublicAgentSearchIntent(input.explicitPublicUserRequest || "");
   const PERSONAL_TOOL_CODES = new Set([
     "CONNECTED_APPS_STATUS_READ", "SUPPORT_TICKET_CREATE",
     "DTSC_CONTACT_EMAIL_SEND", "TASK_DRAFT_PREPARE",
@@ -258,7 +264,31 @@ async function createAgentLoopStream(input: AgentLoopInput) {
               continue;
             }
 
-            const execution = await executeAiTool({ toolCode, args: toolCall.arguments ?? {}, context: { ...toolContextBase, turnId: `${input.runId}:${currentStep}:${toolCallCount + 1}` } });
+            const externalBrave = toolCode === "MCP_BRAVE_SEARCH_WEB" || toolCode === "MCP_BRAVE_SEARCH_NEWS";
+            const classifiedPrivate = input.dataClassifications.some((value) =>
+              ["CONFIDENTIAL", "RESTRICTED", "HEALTH_SENSITIVE", "HR_SENSITIVE", "FINANCIAL_SENSITIVE", "LEGAL_SENSITIVE", "SECRET"].includes(value),
+            );
+            // A confidential enterprise prompt may contain private RAG or ERP
+            // material. Never relay provider-proposed Brave arguments in that
+            // context. Only a separate, explicit, safe PUBLIC search request
+            // authored by the user can provide the actual outbound query.
+            if (externalBrave && classifiedPrivate &&
+              (!explicitPublicSearch || explicitPublicSearch.toolCode !== toolCode)) {
+              await recordAiAgentStep({ runId: input.runId, stepIndex: currentStep, kind: "TOOL", status: "DENIED", toolCode, reasonCode: "MCP_PUBLIC_DATA_ONLY" });
+              messages.push({ role: "tool", toolCallId: toolCall.id, name: toolCode, content: buildAgentToolResultMessage({ toolCode, status: "DENIED", reasonCode: "MCP_PUBLIC_DATA_ONLY" }) });
+              hasStructuredToolContext = true;
+              continue;
+            }
+            const isolatedPublicBrave = externalBrave && classifiedPrivate && explicitPublicSearch?.toolCode === toolCode;
+            const execution = await executeAiTool({
+              toolCode,
+              args: isolatedPublicBrave ? explicitPublicSearch.args : toolCall.arguments ?? {},
+              context: {
+                ...toolContextBase,
+                turnId: `${input.runId}:${currentStep}:${toolCallCount + 1}`,
+                ...(isolatedPublicBrave ? { dataClassifications: ["PUBLIC" as const] } : {}),
+              },
+            });
             toolCallCount += 1;
             if (authorizedTool.definition.mode === "READ") readToolCallCount += 1;
             await recordAiAgentStep({ runId: input.runId, stepIndex: currentStep, kind: "TOOL", status: execution.status, toolCode, reasonCode: execution.reasonCode || null, metadata: { auditId: execution.auditId || null, providerToolCallId: toolCall.id } });
@@ -304,6 +334,7 @@ export async function createInteractiveAiAgentStream(input: {
   session: SessionPayload; userId: string; organizationId?: string | null; scope: "GLOBAL_CHAT" | "ENTERPRISE_CHAT"; contextCode: AiContextCode; locale: string;
   messages: OpenAIInputMessage[]; instructions: string; taskType: AiTaskType; assistantCode?: string | null; conversationId?: string | null; enterpriseConversationId?: string | null;
   requestedModel?: string | null; dataClassifications: AiDataClassification[]; budgetRequest?: AiAgentBudgetRequest | null; request?: Request | null; signal?: AbortSignal; tags?: string[];
+  explicitPublicUserRequest?: string | null;
   reasoningEffort?: AiReasoningEffort | null;
   onFinished?: (result: AiAgentCompletion) => Promise<void> | void;
 }) {
@@ -311,7 +342,7 @@ export async function createInteractiveAiAgentStream(input: {
   const platformPolicy = await getAiPlatformPolicy();
   const budget = resolveAiAgentBudget({ planCode, requested: input.budgetRequest, dataClassifications: input.dataClassifications, runtimeCeilings: platformPolicy.agentCeilings[planCode] });
   const run = await createAiAgentRun({ userId: input.userId, organizationId: input.organizationId, scope: input.scope, executionClass: "INTERACTIVE", contextCode: input.contextCode, assistantCode: input.assistantCode, conversationId: input.conversationId, enterpriseConversationId: input.enterpriseConversationId, budget, metadata: { locale: input.locale, taskType: input.taskType, tags: input.tags || [], planCode, requestedModel: input.requestedModel || null } });
-  return createAgentLoopStream({ runId: run.id, session: input.session, userId: input.userId, organizationId: input.organizationId, sourceConversationId: input.enterpriseConversationId || input.conversationId || null, contextCode: input.contextCode, locale: input.locale, messages: input.messages, instructions: input.instructions, taskType: input.taskType, assistantCode: input.assistantCode, requestedModel: input.requestedModel, reasoningEffort: input.reasoningEffort, dataClassifications: input.dataClassifications, budget, currentStep: 0, toolCallCount: 0, usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0, estimatedCost: 0 }, request: input.request, signal: input.signal, tags: input.tags, onFinished: input.onFinished });
+  return createAgentLoopStream({ runId: run.id, session: input.session, userId: input.userId, organizationId: input.organizationId, sourceConversationId: input.enterpriseConversationId || input.conversationId || null, contextCode: input.contextCode, locale: input.locale, messages: input.messages, instructions: input.instructions, taskType: input.taskType, assistantCode: input.assistantCode, requestedModel: input.requestedModel, reasoningEffort: input.reasoningEffort, dataClassifications: input.dataClassifications, explicitPublicUserRequest: input.explicitPublicUserRequest, budget, currentStep: 0, toolCallCount: 0, usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0, estimatedCost: 0 }, request: input.request, signal: input.signal, tags: input.tags, onFinished: input.onFinished });
 }
 
 export async function resumeInteractiveAiAgentStream(input: {

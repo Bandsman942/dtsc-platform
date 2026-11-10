@@ -53,6 +53,51 @@ function parseSseJsonRpcResponse<T>(payload: string, expectedId: number): JsonRp
   return finalResponse;
 }
 
+/**
+ * PUBLIC_TIME and PUBLIC_BRAVE are hosted by this same Vercel Next.js app.
+ * Calling our own public hostname from a Vercel function crosses the public
+ * edge again and can be challenged with 429 by the bot firewall. For these
+ * two exact, built-in endpoints only, dispatch the *same* authenticated
+ * mcp-handler in-process using a real Request/Response.
+ *
+ * This is still JSON-RPC over the MCP SDK, not a fabricated successful
+ * discovery or direct call to the business logic. Other MCP servers (OAuth
+ * and Fly Fetch) always use the external HTTPS transport.
+ */
+async function dispatchMcpRequest(
+  server: McpServerDefinition,
+  endpoint: URL,
+  init: RequestInit,
+): Promise<Response> {
+  const expected = server.code === "PUBLIC_TIME"
+    ? { path: "/api/internal/mcp/time", token: "MCP_PUBLIC_TIME_TOKEN" }
+    : server.code === "PUBLIC_BRAVE"
+      ? { path: "/api/internal/mcp/brave", token: "MCP_PUBLIC_BRAVE_TOKEN" }
+      : null;
+
+  if (expected &&
+    server.transport === "STREAMABLE_HTTP" &&
+    server.authMode === "BEARER_ENV" &&
+    server.authEnvKey === expected.token &&
+    server.endpoint === `https://app.dtsc-platform.com${expected.path}` &&
+    server.allowedHosts.length === 1 &&
+    server.allowedHosts[0] === "app.dtsc-platform.com" &&
+    endpoint.origin === "https://app.dtsc-platform.com" &&
+    endpoint.pathname === expected.path &&
+    !endpoint.search && !endpoint.hash
+  ) {
+    const request = new Request(endpoint.toString(), init);
+    if (server.code === "PUBLIC_TIME") {
+      const { handlePublicTimeMcp } = await import("@/lib/ai/mcp/public-knowledge-time-handler");
+      return handlePublicTimeMcp(request);
+    }
+    const { handlePublicBraveMcp } = await import("@/lib/ai/mcp/public-knowledge-brave-handler");
+    return handlePublicBraveMcp(request);
+  }
+
+  return fetch(endpoint, init);
+}
+
 export type McpUserAuthContext = {
   userId: string;
   organizationId: string | null;
@@ -84,7 +129,7 @@ export async function callMcpJsonRpc<T>(input: {
   };
   if (input.server.authMode === "BEARER_ENV") {
     const envKey = input.server.authEnvKey || "";
-    const token = envKey ? process.env[envKey] : undefined;
+    const token = envKey ? process.env[envKey]?.trim() : undefined;
     if (!token) throw new Error("MCP_SERVER_AUTH_MISSING");
     headers.Authorization = `Bearer ${token}`;
   } else if (input.server.authMode === "OAUTH_USER") {
@@ -104,7 +149,7 @@ export async function callMcpJsonRpc<T>(input: {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), input.server.timeoutMs);
   try {
-    const response = await fetch(endpoint.url, {
+    const response = await dispatchMcpRequest(input.server, endpoint.url, {
       method: "POST",
       headers,
       body: JSON.stringify({
