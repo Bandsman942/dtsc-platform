@@ -12,6 +12,8 @@ const nav = read("components/public/public-nav.tsx");
 const navLinks = read("components/public/public-links.ts");
 const navI18n = read("lib/public-navigation-i18n.ts");
 const publicFooter = read("components/public/public-shell.tsx");
+const resourcesPage = read("app/ressources/page.tsx");
+const resourcesCopy = read("lib/public-resources-i18n.ts");
 const sitemap = read("app/sitemap.ts");
 const robots = read("app/robots.ts");
 const products = read("lib/product-registry.ts");
@@ -59,6 +61,7 @@ assert.ok(nav.includes('href: "/documentation"'), "Desktop navigation must inclu
 assert.ok(navLinks.includes('href: "/documentation"'), "Mobile navigation must include Docs.");
 assert.ok(navI18n.includes('documentation: "Documentation DTSC"') && navI18n.includes('documentation: "DTSC documentation"'), "Navigation must be bilingual.");
 assert.ok(publicFooter.includes('["Documentation DTSC", "/documentation"]'), "Public footer must include Docs.");
+assert.ok(resourcesPage.includes('href="/documentation"') && resourcesCopy.includes("documentationCallout:"), "Public editorial resources must link to documentation in FR/EN.");
 assert.ok(sitemap.includes('path: "/documentation"') && sitemap.includes('PUBLIC_DOCUMENTATION.flatMap'), "Both public and Docs sitemaps must include the portal.");
 assert.ok(robots.includes('"/documentation"'), "Public crawlers must be allowed to index docs.");
 assert.ok(products.includes('code: "DOCS"') && products.includes('status: "ACTIVE"'), "Docs must be in canonical product registry.");
