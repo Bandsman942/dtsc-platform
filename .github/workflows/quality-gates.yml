@@ -127,6 +127,8 @@ jobs:
         run: pnpm qa:docs-1099
       - name: MCP Time/Brave in-process and chat integration QA
         run: pnpm qa:hotfix-1102
+      - name: RETAIL executive dashboard and inventory batches QA (#1105)
+        run: pnpm qa:retail-executive-1105
       - name: Type check
         run: pnpm type-check
         env:
