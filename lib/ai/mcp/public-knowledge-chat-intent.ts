@@ -40,7 +40,7 @@ export function detectPublicChatMcpIntent(content: string): PublicChatMcpIntent 
   if (asksCurrentTime && text.length <= 260) {
     const specified = zones.find((entry) => entry.pattern.test(text));
     // Do not silently answer Kinshasa if another unknown city was requested.
-    const hasUnknownLocation = /(?:\b(?:à|au|aux|in)\s+)([A-ZÀ-ÖØ-Ý][\p{L}\s-]{2,30})\s*\??$/u.test(text) && !specified;
+    const hasUnknownLocation = /(?:\s(?:à|au|aux|in)\s+)([A-ZÀ-ÖØ-Ý][\p{L}\s-]{2,30})\s*\??$/u.test(text) && !specified;
     if (!hasUnknownLocation) {
       return { toolCode: "MCP_TIME_GET_CURRENT_TIME", args: { timezone: specified?.zone || "Africa/Kinshasa" } };
     }
