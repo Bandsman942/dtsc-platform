@@ -7,7 +7,7 @@ import { resolveAiAgentBudget, isAgentBudgetExceeded } from "@/lib/ai/agent/poli
 import { getAiPlatformPolicy } from "@/lib/ai/platform-runtime-policy";
 import { createAiAgentRun, isAiAgentCancellationRequested, recordAiAgentStep, updateAiAgentRunProgress } from "@/lib/ai/agent/persistence";
 import { listAuthorizedAgentTools } from "@/lib/ai/agent/tools";
-import { detectPublicChatMcpIntent } from "@/lib/ai/mcp/public-knowledge-chat-intent";
+import { detectPublicAgentSearchIntent } from "@/lib/ai/mcp/public-knowledge-chat-intent";
 import { buildAgentToolResultMessage } from "@/lib/ai/agent/tool-result";
 import { AiAgentCancelledError, consumeAiAgentModelTurn } from "@/lib/ai/agent/turn";
 import { estimateAiCost } from "@/lib/ai/costs";
@@ -74,7 +74,7 @@ async function createAgentLoopStream(input: AgentLoopInput) {
     request: input.request || null,
   };
   const authorizedForScope = await listAuthorizedAgentTools({ context: toolContextBase, budget: input.budget });
-  const explicitPublicSearch = detectPublicChatMcpIntent(input.explicitPublicUserRequest || "");
+  const explicitPublicSearch = detectPublicAgentSearchIntent(input.explicitPublicUserRequest || "");
   const PERSONAL_TOOL_CODES = new Set([
     "CONNECTED_APPS_STATUS_READ", "SUPPORT_TICKET_CREATE",
     "DTSC_CONTACT_EMAIL_SEND", "TASK_DRAFT_PREPARE",
