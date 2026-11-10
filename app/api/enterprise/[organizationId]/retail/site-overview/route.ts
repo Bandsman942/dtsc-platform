@@ -163,7 +163,7 @@ export async function GET(req: Request, { params }: Params) {
     inventoryAccess.allowed && ids.length ? prisma.$queryRaw<Array<{ siteId: string; lowStock: bigint; expiring: bigint; expired: bigint }>>(Prisma.sql`
       SELECT warehouse."siteId" AS "siteId",
         COUNT(DISTINCT CASE WHEN item."minimumQuantity" IS NOT NULL AND balance."quantityOnHand" - balance."quantityReserved" <= item."minimumQuantity" THEN item.id END)::bigint AS "lowStock",
-        COUNT(DISTINCT CASE WHEN (lot."expiryDate" AT TIME ZONE 'UTC')::date >= ${today}::date AND (lot."expiryDate" AT TIME ZONE 'UTC')::date <= (${today}::date + ${preferences.warnStockDays}) AND balance."quantityOnHand" > balance."quantityReserved" THEN lot.id END)::bigint AS expiring,
+        COUNT(DISTINCT CASE WHEN (lot."expiryDate" AT TIME ZONE 'UTC')::date >= ${today}::date AND (lot."expiryDate" AT TIME ZONE 'UTC')::date <= (${today}::date + ${preferences.warnStockDays}::integer) AND balance."quantityOnHand" > balance."quantityReserved" THEN lot.id END)::bigint AS expiring,
         COUNT(DISTINCT CASE WHEN (lot."expiryDate" AT TIME ZONE 'UTC')::date < ${today}::date AND balance."quantityOnHand" > balance."quantityReserved" THEN lot.id END)::bigint AS expired
       FROM "EnterpriseInventoryBalance" balance
       JOIN "EnterpriseWarehouse" warehouse ON warehouse.id = balance."warehouseId" AND warehouse."organizationId" = balance."organizationId"

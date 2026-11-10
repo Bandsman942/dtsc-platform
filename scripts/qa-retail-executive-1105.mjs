@@ -88,6 +88,7 @@ assert.match(dashboardRoute, /retailPostedSiteLedger\(organizationId, from, to, 
 assert.match(dashboardRoute, /mobileMoney: siteId \? \[\] :/, "Filtered store must exclude unallocated agency movements");
 assert.match(dashboardRoute, /sourceAvailability/, "Unsubscribed ERP data cannot be exposed silently");
 assert.match(dashboardRoute, /outstandingAmount.*> 0/s, "Receivables must come from the Finance open-balance source");
+assert.match(dashboardRoute, /\$\{today\}::date \+ \$\{preferences\.warnStockDays\}::integer/, "PostgreSQL date arithmetic must cast Prisma parameter to integer; bigint yields a runtime 500");
 const sources = read("lib/enterprise/retail/executive-sources.ts");
 assert.match(sources, /'mobileMoneyCommission'::text AS metric, SUM\(mm\."providerCommissionAmount"\)/, "Commission trend cannot include customer fees");
 assert.match(sources, /'mobileMoneyFees'::text AS metric/, "Customer fees require their own trend");
