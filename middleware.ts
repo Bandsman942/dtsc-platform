@@ -65,6 +65,19 @@ function applyHostRouting(request: NextRequest, session: Awaited<ReturnType<type
     return null;
   }
 
+  // Docs is public and isolated: it never inherits the app/console routing surface.
+  if (hostType === "docs") {
+    if (pathname === "/") {
+      const target = new URL("/documentation", request.url);
+      target.search = request.nextUrl.search;
+      return NextResponse.rewrite(target);
+    }
+    if (pathname === "/documentation") {
+      return null;
+    }
+    return redirectToHost(request, "docs", "/");
+  }
+
   if (hostType === "public") {
     if (isPathMatch(pathname, authRoutes)) {
       return redirectToHost(request, "account", requestPathWithSearch(request));
@@ -167,6 +180,10 @@ export async function middleware(request: NextRequest) {
   const hostType = getCurrentHostType(request.headers.get("host"));
 
   if (pathname.startsWith("/api/")) {
+    // No internal or partner API is exposed through the documentation hostname.
+    if (hostType === "docs") {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
     const delegatesScale7OidcToHandler = pathname === scale7OidcDelegatedAdminApiRoute
       && request.headers.get("authorization")?.startsWith("Bearer ");
     if (isPathMatch(pathname, dtscInternalApiRoutes) && !delegatesScale7OidcToHandler) {
