@@ -41,7 +41,10 @@ export function RetailSiteOverview({ organizationId, locale, timezone }: { organ
       const today = `${part("year")}-${part("month")}-${part("day")}`;
       const earlier = new Date(`${today}T12:00:00Z`);
       earlier.setUTCDate(earlier.getUTCDate() - (days - 1));
-      const from = dateFrom || earlier.toISOString().slice(0, 10);
+      // This is date-only calendar arithmetic starting from the company's
+      // actual civil date, not a UTC timestamp used as a business-day label.
+      const earlierDay = `${earlier.getUTCFullYear()}-${String(earlier.getUTCMonth() + 1).padStart(2, "0")}-${String(earlier.getUTCDate()).padStart(2, "0")}`;
+      const from = dateFrom || earlierDay;
       const to = dateTo || today;
       if (from > to) throw new Error(en ? "The end date must follow the start date." : "La date de fin doit être postérieure à la date de début.");
       const query = new URLSearchParams({ from, to });

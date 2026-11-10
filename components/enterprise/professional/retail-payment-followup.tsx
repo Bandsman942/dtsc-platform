@@ -79,6 +79,18 @@ function statusHelp(status: string, locale: CustomerFacingLocale) {
   return messages[status]?.[locale] || (locale === "en" ? "Payment status available." : "État du paiement disponible.");
 }
 
+function canonicalStatusLabel(status: string, locale: CustomerFacingLocale) {
+  const names: Record<string, { fr: string; en: string }> = {
+    DRAFT: { fr: "Brouillon", en: "Draft" },
+    PENDING_APPROVAL: { fr: "À approuver", en: "Awaiting approval" },
+    CONFIRMED: { fr: "Confirmé", en: "Confirmed" },
+    RECONCILED: { fr: "Rapproché", en: "Reconciled" },
+    CANCELLED: { fr: "Annulé", en: "Cancelled" },
+    REVERSED: { fr: "Extourné", en: "Reversed" },
+  };
+  return names[status]?.[locale] || status;
+}
+
 export function RetailPaymentFollowup({ organizationId, locale }: { organizationId: string; locale: CustomerFacingLocale }) {
   const [capabilities, setCapabilities] = useState<Capabilities | null>(null);
   const [payments, setPayments] = useState<Payment[]>([]);
@@ -200,13 +212,13 @@ export function RetailPaymentFollowup({ organizationId, locale }: { organization
         <h3 className="text-sm font-black text-dtsc-ink">{locale === "en" ? "Canonical Finance invoice payments" : "Paiements des factures Finance du comptoir"}</h3>
         <p className="mt-1 text-xs text-dtsc-muted">{locale === "en" ? "These are actual Finance payments linked to a Retail invoice, not duplicate Retail transactions. Reconcile them in Collections." : "Il s’agit des paiements Finance réellement rattachés aux factures Retail, et non de transactions Retail en double. Leur traitement se fait dans Encaissements."}</p>
         <div className="mt-3 flex flex-wrap gap-2" role="group" aria-label={locale === "en" ? "Finance payment status" : "Statut des paiements Finance"}>
-          {["", "DRAFT", "PENDING_APPROVAL", "CONFIRMED", "RECONCILED", "CANCELLED", "REVERSED"].map((state) => <button key={state || "ALL"} type="button" onClick={() => { setCanonicalStatus(state); setCanonicalPage(1); }} className={`min-h-10 rounded-full border px-3 text-xs font-bold ${canonicalStatus === state ? "border-dtsc-ink bg-dtsc-ink text-white" : "border-dtsc-border text-dtsc-ink"}`}>{state ? (state === "PENDING_APPROVAL" ? locale === "en" ? "Awaiting approval" : "À approuver" : state === "CONFIRMED" ? locale === "en" ? "Confirmed" : "Confirmé" : state === "RECONCILED" ? locale === "en" ? "Reconciled" : "Rapproché" : state === "REVERSED" ? locale === "en" ? "Reversed" : "Extourné" : state === "DRAFT" ? locale === "en" ? "Draft" : "Brouillon" : locale === "en" ? "Cancelled" : "Annulé") : copy.all}</button>)}
+          {["", "DRAFT", "PENDING_APPROVAL", "CONFIRMED", "RECONCILED", "CANCELLED", "REVERSED"].map((state) => <button key={state || "ALL"} type="button" onClick={() => { setCanonicalStatus(state); setCanonicalPage(1); }} className={`min-h-10 rounded-full border px-3 text-xs font-bold ${canonicalStatus === state ? "border-dtsc-ink bg-dtsc-ink text-white" : "border-dtsc-border text-dtsc-ink"}`}>{state ? canonicalStatusLabel(state, locale) : copy.all}</button>)}
         </div>
         {canonicalError ? <p role="alert" className="mt-3 text-sm text-red-600">{canonicalError}</p> : null}
         {canonicalLoading ? <p role="status" className="mt-3 text-sm text-dtsc-muted">{copy.loading}</p> : null}
         {!canonicalLoading && canonicalActive && !canonical.length ? <p className="mt-3 text-sm text-dtsc-muted">{copy.noPayments}</p> : null}
         <div className="mt-3 grid min-w-0 gap-2 sm:grid-cols-2">{canonical.map((payment) => <article key={payment.id} className="min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface p-3">
-          <div className="flex flex-wrap items-start justify-between gap-2"><strong className="text-sm text-dtsc-ink">{money(payment.amount, payment.currencyCode)}</strong><span className="rounded-full bg-blue-500/10 px-2 py-1 text-xs font-bold text-blue-700 dark:text-blue-300">{payment.status}</span></div>
+          <div className="flex flex-wrap items-start justify-between gap-2"><strong className="text-sm text-dtsc-ink">{money(payment.amount, payment.currencyCode)}</strong><span className="rounded-full bg-blue-500/10 px-2 py-1 text-xs font-bold text-blue-700 dark:text-blue-300">{canonicalStatusLabel(payment.status, locale)}</span></div>
           <p className="mt-1 break-all text-xs text-dtsc-muted">{payment.number} · {payment.site.name}</p>
           <p className="mt-1 text-xs text-dtsc-muted">{locale === "en" ? "Invoice" : "Facture"} : {payment.invoice.number} · {customerFacingPaymentMethod(payment.methodType, locale)}</p>
           <Link className="mt-2 inline-flex min-h-10 items-center rounded-lg border border-dtsc-border px-3 text-xs font-bold text-dtsc-blue" href="/enterprise-modules/RETAIL_POS?section=collections">{locale === "en" ? "Open collections" : "Ouvrir les encaissements"}</Link>
