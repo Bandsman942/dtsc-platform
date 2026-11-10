@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import type { AiDataClassification } from "@/lib/ai/types";
 import type { SessionPayload } from "@/lib/session";
 import { executeAiTool } from "@/lib/ai/tools/execute";
-import { detectPublicChatMcpIntent } from "@/lib/ai/mcp/public-knowledge-chat-intent";
+import { detectPublicChatMcpIntent, detectPublicAgentSearchIntent } from "@/lib/ai/mcp/public-knowledge-chat-intent";
 
 type Locale = "fr" | "en";
 type ReadResult = { tool?: unknown; content?: unknown; sources?: unknown; untrusted?: unknown };
@@ -80,7 +80,11 @@ export async function getStandardChatPublicMcpAnswer(input: {
   dataClassifications: AiDataClassification[];
   request: Request;
 }): Promise<StandardChatMcpAnswer | null> {
-  const intent = detectPublicChatMcpIntent(input.content);
+  const detected = detectPublicChatMcpIntent(input.content);
+  // Standard chat and enterprise agents use the same conservative public-Web
+  // privacy filter; private content must never become a Brave query.
+  const intent = detected?.toolCode.startsWith("MCP_BRAVE_")
+    ? detectPublicAgentSearchIntent(input.content) : detected;
   if (!intent) return null;
 
   const unavailable = input.locale === "en"
