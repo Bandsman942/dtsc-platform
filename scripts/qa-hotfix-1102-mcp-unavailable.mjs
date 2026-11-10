@@ -68,7 +68,7 @@ assert.ok(standardTool.includes("source") || standardTool.includes("Source"), "R
 assert.ok(config.includes('process.env.MCP_PUBLIC_FETCH_CERTIFIED === "true"'), "Fly Fetch remains independently disabled.");
 
 const pkg = JSON.parse(read("package.json"));
-assert.equal(pkg.version, "1.8.1");
+assert.equal(pkg.version, "1.8.2");
 assert.equal(pkg.scripts["qa:hotfix-1102"], "node --experimental-strip-types scripts/qa-hotfix-1102-mcp-unavailable.mjs");
 assert.ok(pkg.scripts["qa:regression"].includes("qa-hotfix-1102-mcp-unavailable.mjs"));
 
