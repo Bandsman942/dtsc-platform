@@ -191,7 +191,7 @@ export function RetailOfflineContinuity({ organizationId, locale }: Props) {
         }
         if (!response.ok) throw new Error(body?.message || body?.error || "RETAIL_OFFLINE_SYNC_FAILED");
       }
-      setNotice(locale === "en" ? "Offline sales have been synchronized." : "Les ventes hors connexion ont été synchronisées.");
+      setNotice(locale === "en" ? "Offline synchronization completed. Review any rejected or conflicting drafts before closing the register." : "Synchronisation terminée. Vérifiez les brouillons en conflit ou rejetés avant de clôturer la caisse.");
       await refreshLocal();
       await refreshDashboard();
     } catch (caught) {
@@ -206,7 +206,7 @@ export function RetailOfflineContinuity({ organizationId, locale }: Props) {
     setOnline(current);
     wasOnline.current = current;
     void refreshLocal();
-    if (current) void refreshDashboard();
+    if (current) { void refreshDashboard(); void syncPending(); }
     const handleOnline = () => {
       setOnline(true);
       const returnedFromOffline = !wasOnline.current;
