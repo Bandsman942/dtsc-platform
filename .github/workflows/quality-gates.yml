@@ -131,6 +131,8 @@ jobs:
         run: pnpm qa:retail-executive-1105
       - name: RETAIL posted COGS traceability and Reports QA (#1109)
         run: pnpm qa:retail-cogs-1109
+      - name: RETAIL financial KPI source traceability v2 QA (#1117)
+        run: pnpm qa:retail-financial-kpi-v2
       - name: Type check
         run: pnpm type-check
         env:
