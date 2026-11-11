@@ -23,6 +23,20 @@ const LABELS: Record<RetailFinancialTrace, [string, string]> = {
   telcoMargin: ["Marge Télécom", "Telco margin"],
   posSales: ["Ventes POS historiques", "Historical POS sales"],
 };
+const STATUS_COPY: Record<string, [string, string]> = {
+  POSTED: ["Comptabilisé", "Posted"], REVERSED: ["Contrepassé", "Reversed"],
+  ISSUED: ["Émise", "Issued"], PARTIALLY_PAID: ["Partiellement payée", "Partially paid"],
+  PAID: ["Payée", "Paid"], OVERDUE: ["Échue", "Overdue"], CREDIT_NOTE: ["Avoir", "Credit note"],
+  APPROVED: ["Approuvée", "Approved"], CONFIRMED: ["Confirmée", "Confirmed"],
+  RECONCILED: ["Rapprochée", "Reconciled"], COMPLETED: ["Réalisée", "Completed"],
+  SUCCESS: ["Réussie", "Successful"], ACTIVE: ["Actif", "Active"],
+};
+const SOURCE_COPY: Record<string, [string, string]> = {
+  DEPOSIT: ["Dépôt", "Deposit"], WITHDRAWAL: ["Retrait", "Withdrawal"],
+  TOPUP: ["Recharge", "Top-up"], POS: ["Vente au comptoir", "Point of sale"],
+  FINANCIAL_ACCOUNT: ["Compte financier", "Financial account"],
+  APPROVED: ["Dépense approuvée", "Approved expense"],
+};
 const formatAmount = (value: string | null, currency: string, en: boolean) => value === null
   ? en ? "Not determined" : "Non déterminé"
   : `${new Intl.NumberFormat(en ? "en-US" : "fr-FR", { maximumFractionDigits: 2 }).format(Number(value))} ${currency}`;
@@ -111,9 +125,9 @@ export function RetailFinancialDrilldown({ organizationId, locale, period, metri
               return <tr key={line.id} className="border-b border-dtsc-border/50 align-top">
                 <td className="p-2 text-dtsc-ink">{line.eventDate?.slice(0, 10) || (en ? "Current balance" : "Solde actuel")}</td>
                 <td className="p-2 text-dtsc-ink">{line.siteName || (en ? "Unallocated" : "Non attribuée")}</td>
-                <td className="p-2"><p className="font-semibold text-dtsc-ink">{line.reference || line.sourceLabel || (en ? "Source event" : "Opération source")}</p>{line.reference && line.sourceLabel ? <p className="mt-1 text-dtsc-muted">{line.sourceLabel}</p> : null}{href ? <Link className="mt-2 inline-flex min-h-9 items-center rounded-lg px-1 text-dtsc-blue underline underline-offset-2" href={href}>{en ? "View authorized record" : "Ouvrir la pièce autorisée"}</Link> : null}</td>
+                <td className="p-2"><p className="font-semibold text-dtsc-ink">{line.reference || (line.sourceLabel ? SOURCE_COPY[line.sourceLabel]?.[en ? 1 : 0] || line.sourceLabel : en ? "Source event" : "Opération source")}</p>{line.reference && line.sourceLabel ? <p className="mt-1 text-dtsc-muted">{SOURCE_COPY[line.sourceLabel]?.[en ? 1 : 0] || line.sourceLabel}</p> : null}{href ? <Link className="mt-2 inline-flex min-h-9 items-center rounded-lg px-1 text-dtsc-blue underline underline-offset-2" href={href}>{en ? "View authorized record" : "Ouvrir la pièce autorisée"}</Link> : null}</td>
                 <td className="p-2 font-bold tabular-nums text-dtsc-ink">{formatAmount(line.amount, line.currencyCode, en)}</td>
-                <td className="p-2 text-dtsc-muted">{line.status}</td>
+                <td className="p-2 text-dtsc-muted">{STATUS_COPY[line.status]?.[en ? 1 : 0] || (en ? "Recorded" : "Enregistré")}</td>
               </tr>;
             })}</tbody>
           </table>
