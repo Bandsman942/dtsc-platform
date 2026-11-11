@@ -7,7 +7,7 @@ type TelcoRow = ValueRow & { margin: Prisma.Decimal; operatorCost: Prisma.Decima
 type TreasuryRow = ValueRow & { accountType: string; reconciled: Prisma.Decimal; available: Prisma.Decimal | null };
 type TrendRow = { siteId: string | null; currencyCode: string; day: string; metric: string; total: Prisma.Decimal };
 
-export type ExecutiveSourceAccess = { agency: boolean; telco: boolean; treasury: boolean };
+export type ExecutiveSourceAccess = { agency: boolean; telco: boolean; treasury: boolean; financeCollections: boolean; invoices: boolean; expenses: boolean };
 
 /** No speculative site attribution: cash/float account site is the canonical
  * operational dimension. Unassigned accounts remain visible company-wide. */
@@ -51,7 +51,7 @@ export async function loadRetailExecutiveSources(args: {
       FROM "EnterpriseRetailSale" WHERE "organizationId" = ${organizationId} AND status = 'COMPLETED' AND "soldAt" ${dateRange}
       GROUP BY "siteId", "currencyCode", day
     `),
-    prisma.$queryRaw<TrendRow[]>(Prisma.sql`
+    access.financeCollections ? prisma.$queryRaw<TrendRow[]>(Prisma.sql`
       SELECT checkout."siteId" AS "siteId", payment."currencyCode" AS "currencyCode",
         (payment."paymentDate" AT TIME ZONE ${timezone})::date::text AS day,
         'financeCollections'::text AS metric, SUM(allocation.amount) AS total
@@ -63,8 +63,8 @@ export async function loadRetailExecutiveSources(args: {
         AND payment.status IN ('CONFIRMED', 'RECONCILED') AND payment.direction = 'INBOUND'
         AND payment."paymentType" = 'CUSTOMER_PAYMENT' AND allocation.status = 'CONFIRMED' AND allocation."reversedAt" IS NULL
       GROUP BY checkout."siteId", payment."currencyCode", day
-    `),
-    prisma.$queryRaw<TrendRow[]>(Prisma.sql`
+    `) : Promise.resolve([]),
+    access.invoices ? prisma.$queryRaw<TrendRow[]>(Prisma.sql`
       SELECT checkout."siteId" AS "siteId", invoice."currencyCode" AS "currencyCode",
         (invoice."issuedAt" AT TIME ZONE ${timezone})::date::text AS day,
         'invoices'::text AS metric, SUM(invoice."grandTotal" - invoice."amountCredited") AS total
@@ -73,13 +73,13 @@ export async function loadRetailExecutiveSources(args: {
       WHERE checkout."organizationId" = ${organizationId} AND invoice."issuedAt" ${dateRange}
         AND invoice.status IN ('ISSUED','PARTIALLY_PAID','PAID','OVERDUE','CREDIT_NOTE')
       GROUP BY checkout."siteId", invoice."currencyCode", day
-    `),
-    prisma.$queryRaw<TrendRow[]>(Prisma.sql`
+    `) : Promise.resolve([]),
+    access.expenses ? prisma.$queryRaw<TrendRow[]>(Prisma.sql`
       SELECT "siteId", currency AS "currencyCode", ("expenseDate" AT TIME ZONE ${timezone})::date::text AS day,
         'expenses'::text AS metric, SUM(amount) AS total
       FROM "EnterpriseExpense" WHERE "organizationId" = ${organizationId} AND status = 'APPROVED' AND "archivedAt" IS NULL AND "expenseDate" ${dateRange}
       GROUP BY "siteId", currency, day
-    `),
+    `) : Promise.resolve([]),
     access.agency ? prisma.$queryRaw<TrendRow[]>(Prisma.sql`
       SELECT cash."siteId" AS "siteId", mm."currencyCode" AS "currencyCode", (mm."occurredAt" AT TIME ZONE ${timezone})::date::text AS day,
         'mobileMoneyCommission'::text AS metric, SUM(mm."providerCommissionAmount") AS total

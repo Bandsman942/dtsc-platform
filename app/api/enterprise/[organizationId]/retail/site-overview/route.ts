@@ -153,7 +153,7 @@ export async function GET(req: Request, { params }: Params) {
   // invent a catalog cost or add POS sales to Finance invoice balances.
   const [postedLedger, executiveSources, receivableRows, inventoryAlerts] = await Promise.all([
     accountingAccess.allowed ? retailPostedSiteLedger(organizationId, from, to, ids, !siteId) : Promise.resolve({ bySite: [], unallocated: [] }),
-    loadRetailExecutiveSources({ organizationId, from, to, timezone, access: { agency: agencyAccess.allowed, telco: telcoAccess.allowed, treasury: treasuryAccess.allowed } }),
+    loadRetailExecutiveSources({ organizationId, from, to, timezone, access: { agency: agencyAccess.allowed, telco: telcoAccess.allowed, treasury: treasuryAccess.allowed, financeCollections: financeReceivablesAccess.allowed && financePaymentsAccess.allowed, invoices: financeReceivablesAccess.allowed, expenses: financeBudgetsAccess.allowed } }),
     ids.length && financeReceivablesAccess.allowed ? prisma.$queryRaw<Array<{ siteId: string; currencyCode: string; total: Prisma.Decimal; overdue: Prisma.Decimal; count: bigint }>>(Prisma.sql`
       SELECT checkout."siteId" AS "siteId", invoice."currencyCode" AS "currencyCode",
         COALESCE(SUM(invoice."outstandingAmount"), 0) AS total,

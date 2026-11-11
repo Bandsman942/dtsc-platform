@@ -98,6 +98,11 @@ assert.match(traceService, /COUNT\(\*\) FILTER \(WHERE amount IS NULL\)/, "Uncer
 assert.match(traceService, /LIMIT \$\{pageSize\} OFFSET \$\{\(page - 1\) \* pageSize\}/, "Source rows must be paginated on the server");
 assert.match(traceService, /"organizationId" = \$\{organizationId\}/, "Every source must be tenant-scoped");
 assert.match(traceService, /allocation\."reversedAt" IS NULL/, "Reversed allocations are not receipts");
+assert.match(sources, /access\.financeCollections \? prisma\.\$queryRaw<TrendRow>/, "Finance trend queries need both payment and receivables rights");
+assert.match(sources, /access\.invoices \? prisma\.\$queryRaw<TrendRow>/, "Invoice trends require receivables rights");
+assert.match(sources, /access\.expenses \? prisma\.\$queryRaw<TrendRow>/, "Expense trends require budget rights");
+assert.match(overviewRoute, /financeCollections: financeReceivablesAccess\.allowed && financePaymentsAccess\.allowed/, "Dashboard passes source entitlements into finance trends");
+
 assert.match(traceService, /e\.status IN \('POSTED','REVERSED'\)/, "The P&L must use canonical posted and reversed entries");
 assert.match(traceService, /"accountSubtype" = 'COST_OF_SALES'/, "Gross margin must exclude non-COGS expenses");
 assert.match(traceService, /"availableBalance" AS amount/, "Treasury available is never approximated by operational balance");
