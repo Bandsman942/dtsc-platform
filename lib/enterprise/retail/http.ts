@@ -24,6 +24,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   RETAIL_CLOSE_MULTISITE_FORBIDDEN: "Une clôture quotidienne doit concerner une seule boutique. Soumettez chaque boutique séparément.",
   RETAIL_SITE_REQUIRED: "Sélectionnez une boutique autorisée pour continuer.",
   RETAIL_INVOICE_CHECKOUT_NOT_ACTIVE: "La facturation en deux étapes est en préparation pour cette entreprise. Son activation est bloquée jusqu'à la validation du circuit Finance et stock.",
+  RETAIL_OFFLINE_INVOICE_CHECKOUT_NOT_SUPPORTED: "Un ancien brouillon de vente directe hors ligne ne peut pas contourner la facturation Finance. Conservez-le pour rapprochement, puis créez une nouvelle facture brouillon dans le mode hors connexion Finance.",
   RETAIL_INVOICE_RETURN_PAGE_INVALID: "La page des demandes de retour est invalide. Actualisez la liste.",
   RETAIL_INVOICE_RETURN_NOT_FOUND: "Cette demande de retour n’existe pas dans la facture et la boutique autorisées.",
   RETAIL_INVOICE_RETURN_INPUT_INVALID: "La demande de retour comporte des informations invalides.",

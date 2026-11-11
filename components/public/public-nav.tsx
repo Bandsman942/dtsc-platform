@@ -69,6 +69,16 @@ export function PublicNav({ locale }: { locale: "fr" | "en" }) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const desktopNavRef = useRef<HTMLDivElement>(null);
   const [openDesktopGroup, setOpenDesktopGroup] = useState<string | null>(null);
+  const desktopCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  function clearDesktopCloseTimer() {
+    if (desktopCloseTimer.current) clearTimeout(desktopCloseTimer.current);
+    desktopCloseTimer.current = null;
+  }
+  function closeDesktopWithDelay() {
+    clearDesktopCloseTimer();
+    desktopCloseTimer.current = setTimeout(() => setOpenDesktopGroup(null), 200);
+  }
+  useEffect(() => () => { if (desktopCloseTimer.current) clearTimeout(desktopCloseTimer.current); }, []);
 
   useEffect(() => setMounted(true), []);
   useEffect(() => setOpen(false), [pathname]);
@@ -227,12 +237,23 @@ export function PublicNav({ locale }: { locale: "fr" | "en" }) {
           const active = group.links.some((link) => isActive(pathname, link.href));
           const popupId = "public-navigation-group-" + index;
           return (
-            <div key={group.key} className="relative">
+            <div key={group.key} className="relative"
+              onPointerEnter={(event) => {
+                if (event.pointerType === "mouse" && window.matchMedia("(hover: hover)").matches) {
+                  clearDesktopCloseTimer();
+                  setOpenDesktopGroup(group.key);
+                }
+              }}
+              onPointerLeave={(event) => {
+                if (event.pointerType === "mouse") closeDesktopWithDelay();
+              }}>
               <button
                 type="button"
                 aria-expanded={expanded}
                 aria-controls={popupId}
-                onClick={() => setOpenDesktopGroup(expanded ? null : group.key)}
+                aria-haspopup="true"
+                onFocus={() => { clearDesktopCloseTimer(); setOpenDesktopGroup(group.key); }}
+                onClick={() => { clearDesktopCloseTimer(); setOpenDesktopGroup(expanded ? null : group.key); }}
                 className={cn(
                   "inline-flex min-h-10 items-center gap-1 rounded-lg px-2.5 py-2 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-dtsc-blue",
                   active || expanded ? "bg-dtsc-soft text-dtsc-blue" : "text-dtsc-ink hover:bg-dtsc-soft hover:text-dtsc-blue",

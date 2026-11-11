@@ -6,6 +6,7 @@ import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
 import { getRetailCommercialPermissions } from "@/lib/enterprise/retail/permissions";
 import { executeCanonicalRetailSale } from "@/lib/enterprise/retail/sale-execution";
 import { retailSaleCreateSchema } from "@/lib/enterprise/retail/schemas";
+import { prepareRetailInvoice } from "@/lib/enterprise/retail/invoice-checkout";
 import { requireRetailSiteCapability } from "@/lib/enterprise/retail/site-access";
 import { prisma } from "@/lib/prisma";
 
@@ -65,14 +66,13 @@ export async function buildRetailOfflineSnapshot(args: {
   currencyCode: string;
   maxItems: number;
 }) {
-  await requireRetailSiteCapability(args.organizationId, args.actorUserId, args.siteId, "COLLECT_PAYMENT", prisma, { requireAssignment: true });
   const configuration = await prisma.enterpriseRetailConfiguration.findUnique({
     where: { organizationId: args.organizationId }, select: { settingsJson: true },
   });
   const settings = configuration?.settingsJson;
-  if (settings && typeof settings === "object" && !Array.isArray(settings) && settings.invoiceCheckoutEnabled === true) {
-    throw new EnterpriseRetailError("RETAIL_OFFLINE_INVOICE_CHECKOUT_NOT_SUPPORTED", 409);
-  }
+  const financeCheckoutEnabled = Boolean(settings && typeof settings === "object" && !Array.isArray(settings) && settings.invoiceCheckoutEnabled === true);
+  await requireRetailSiteCapability(args.organizationId, args.actorUserId, args.siteId,
+    financeCheckoutEnabled ? "PREPARE_INVOICE" : "COLLECT_PAYMENT", prisma, { requireAssignment: true });
   const now = new Date();
   const [site, warehouse, totalCatalogItems, catalogItems, activePromotionCount, activePriceConditionCount] = await Promise.all([
     prisma.enterpriseSite.findFirst({
@@ -139,7 +139,7 @@ export async function buildRetailOfflineSnapshot(args: {
     inventoryItemIds.length
       ? prisma.enterpriseInventoryBalance.findMany({
           where: { organizationId: args.organizationId, warehouseId: args.warehouseId, inventoryItemId: { in: inventoryItemIds } },
-          select: { inventoryItemId: true, quantityOnHand: true, quantityReserved: true },
+          select: { inventoryItemId: true, stockLotId: true, quantityOnHand: true, quantityReserved: true },
         })
       : Promise.resolve([]),
     inventoryItemIds.length
@@ -160,6 +160,7 @@ export async function buildRetailOfflineSnapshot(args: {
   const inventoryByCatalog = new Map(inventoryItems.map((item) => [item.catalogItemId, item.id]));
   const onHandByInventory = new Map<string, Prisma.Decimal>();
   const legacyReservedByInventory = new Map<string, Prisma.Decimal>();
+  const lotManagedInventory = new Set(balances.filter((row) => Boolean(row.stockLotId)).map((row) => row.inventoryItemId));
   for (const row of balances) {
     onHandByInventory.set(row.inventoryItemId, (onHandByInventory.get(row.inventoryItemId) || decimal()).plus(row.quantityOnHand));
     legacyReservedByInventory.set(row.inventoryItemId, (legacyReservedByInventory.get(row.inventoryItemId) || decimal()).plus(row.quantityReserved));
@@ -205,7 +206,9 @@ export async function buildRetailOfflineSnapshot(args: {
       trackInventory: item.trackInventory,
       quantityAvailable: available.toFixed(),
       updatedAt: item.updatedAt.toISOString(),
-      offlineEligible: !dynamicPricingBlocked && Boolean(pricing) && (!item.trackInventory || Boolean(inventoryItemId)),
+      // Finance invoices require an explicit lot when stock is lot-managed.
+      // Until the offline envelope carries signed lot allocations, exclude those products.
+      offlineEligible: !dynamicPricingBlocked && Boolean(pricing) && (!item.trackInventory || (Boolean(inventoryItemId) && !lotManagedInventory.has(inventoryItemId!))),
     };
   });
 
@@ -226,8 +229,9 @@ export async function buildRetailOfflineSnapshot(args: {
     catalog: { total: totalCatalogItems, returned: items.length, truncated: totalCatalogItems > items.length, items },
     policy: {
       saleEnabled: !dynamicPricingBlocked,
+      checkoutMode: financeCheckoutEnabled ? "FINANCE_DRAFT" : "LEGACY_SALE",
       blockingReason,
-      allowedTenderTypes: ["CASH"],
+      allowedTenderTypes: financeCheckoutEnabled ? [] : ["CASH"],
       blockedTenderTypes: ["CARD", "MOBILE_MONEY", "TELCO", "BANK_TRANSFER", "GIFT_CARD", "STORE_CREDIT"],
       customerSelectionAllowed: false,
       couponAllowed: false,
@@ -284,7 +288,10 @@ export async function syncRetailOfflineSale(args: {
   payload: unknown;
 }) {
   // A previously downloaded snapshot cannot preserve access after revocation.
-  await requireRetailSiteCapability(args.organizationId, args.actorUserId, args.siteId, "COLLECT_PAYMENT", prisma, { requireAssignment: true });
+  const rawKind = args.payload && typeof args.payload === "object" && !Array.isArray(args.payload)
+    ? (args.payload as Record<string, unknown>).operationType : null;
+  await requireRetailSiteCapability(args.organizationId, args.actorUserId, args.siteId,
+    rawKind === "INVOICE_DRAFT" ? "PREPARE_INVOICE" : "COLLECT_PAYMENT", prisma, { requireAssignment: true });
   const payloadHash = jsonHash(args.payload);
   const existing = await prisma.enterpriseRetailOfflineSyncOperation.findFirst({ where: { organizationId: args.organizationId, operationUuid: args.operationUuid } });
   if (existing) {
@@ -296,7 +303,7 @@ export async function syncRetailOfflineSale(args: {
       data: {
         organizationId: args.organizationId,
         operationUuid: args.operationUuid,
-        operationType: "SALE",
+        operationType: rawKind === "INVOICE_DRAFT" ? "INVOICE_DRAFT" : "SALE",
         siteId: args.siteId,
         warehouseId: args.warehouseId,
         snapshotVersion: args.snapshotVersion,
@@ -310,10 +317,14 @@ export async function syncRetailOfflineSale(args: {
     where: { organizationId: args.organizationId }, select: { settingsJson: true },
   });
   const settings = configuration?.settingsJson;
-  if (settings && typeof settings === "object" && !Array.isArray(settings) && settings.invoiceCheckoutEnabled === true) {
-    // Preserve the received UUID and payload fingerprint as a conflict for
-    // human reconciliation. Never silently convert it into a Finance invoice.
+  const financeCheckoutEnabled = Boolean(settings && typeof settings === "object" && !Array.isArray(settings) && settings.invoiceCheckoutEnabled === true);
+  // Never silently replay a legacy cash sale into the canonical Finance invoice workflow.
+  if (financeCheckoutEnabled && rawKind !== "INVOICE_DRAFT") {
     const operation = await updateSyncConflict(args.organizationId, args.operationUuid, "CONFLICT", "RETAIL_OFFLINE_INVOICE_CHECKOUT_NOT_SUPPORTED");
+    return { operation, idempotent: false };
+  }
+  if (!financeCheckoutEnabled && rawKind === "INVOICE_DRAFT") {
+    const operation = await updateSyncConflict(args.organizationId, args.operationUuid, "CONFLICT", "RETAIL_INVOICE_CHECKOUT_NOT_ACTIVE");
     return { operation, idempotent: false };
   }
 
@@ -333,6 +344,67 @@ export async function syncRetailOfflineSale(args: {
       validUntil: snapshot.validUntil.toISOString(),
     });
     return { operation, idempotent: false };
+  }
+
+  if (financeCheckoutEnabled) {
+    const lines = Array.isArray(rawObject?.lines) ? rawObject.lines : [];
+    // A synced Finance draft is NOT issued, collected, posted or booked as a cash payment.
+    // We require a fresh price/tax check; the finance service owns the invoice and stock hold.
+    if (rawObject?.customerBusinessPartyId || rawObject?.couponCode || rawObject?.overrideReason
+      || !Array.isArray(rawObject?.tenders) || rawObject.tenders.length !== 0
+      || rawObject?.currencyCode !== snapshot.currencyCode) {
+      const operation = await updateSyncConflict(args.organizationId, args.operationUuid, "REJECTED", "OFFLINE_COMMERCIAL_CONTEXT_NOT_ALLOWED");
+      return { operation, idempotent: false };
+    }
+    if (!lines.length || lines.some((line) => !line || typeof line !== "object" || Array.isArray(line)
+      || (line as Record<string, unknown>).stockLotId)) {
+      const operation = await updateSyncConflict(args.organizationId, args.operationUuid, "REJECTED", "OFFLINE_SALE_PAYLOAD_INVALID");
+      return { operation, idempotent: false };
+    }
+    const invoiceInput = {
+      idempotencyKey: `offline-invoice:${args.operationUuid}`,
+      siteId: args.siteId, warehouseId: args.warehouseId,
+      businessPartyId: null,
+      currencyCode: snapshot.currencyCode,
+      lines: lines.map((line) => ({
+        catalogItemId: String((line as Record<string, unknown>).catalogItemId || ""),
+        quantity: Number((line as Record<string, unknown>).quantity),
+        stockLotId: null,
+      })),
+    };
+    try {
+      const preview = await previewRetailCommercialPricing(args.organizationId, {
+        siteId: args.siteId, customerBusinessPartyId: null, currencyCode: snapshot.currencyCode,
+        lines: invoiceInput.lines.map((line) => ({ catalogItemId: line.catalogItemId, quantity: line.quantity })),
+      }, { couponCode: null, customerSegmentCode: null, channelCode: "POS" });
+      const byCatalog = new Map(preview.lines.map((line) => [line.catalogItemId, line]));
+      const changed = lines.some((line) => {
+        const item = line as Record<string, unknown>;
+        const current = byCatalog.get(String(item.catalogItemId));
+        if (!current) return true;
+        const expected = serviceValuesFromPreview(current);
+        return !decimal(item.unitPrice as Prisma.Decimal.Value).equals(expected.serviceUnitPrice)
+          || !decimal(item.discountAmount as Prisma.Decimal.Value || 0).equals(expected.serviceDiscountAmount)
+          || !decimal(item.taxAmount as Prisma.Decimal.Value || 0).equals(current.taxAmount);
+      });
+      if (changed) {
+        const operation = await updateSyncConflict(args.organizationId, args.operationUuid, "CONFLICT", "OFFLINE_PRICING_CHANGED");
+        return { operation, idempotent: false };
+      }
+      const invoiceResult = await prepareRetailInvoice(args.organizationId, args.actorUserId, invoiceInput);
+      const operation = await prisma.enterpriseRetailOfflineSyncOperation.update({
+        where: { organizationId_operationUuid: { organizationId: args.organizationId, operationUuid: args.operationUuid } },
+        data: { status: "SYNCED", serverEntityType: "EnterpriseSalesInvoice",
+          serverEntityId: invoiceResult.invoice.id, conflictCode: null,
+          conflictJson: Prisma.JsonNull, syncedAt: new Date() },
+      });
+      return { operation, idempotent: invoiceResult.idempotent, invoice: invoiceResult.invoice };
+    } catch (error) {
+      const code = retailErrorCode(error);
+      const conflict = /STOCK|LOT|PRICE|PRIC|TAX|ACCOUNT|FINANCE|PERIOD|CURRENCY|READINESS|INVOICE/.test(code);
+      const operation = await updateSyncConflict(args.organizationId, args.operationUuid, conflict ? "CONFLICT" : "REJECTED", code);
+      return { operation, idempotent: false };
+    }
   }
 
   const parsed = retailSaleCreateSchema.safeParse({ ...(rawObject || {}), siteId: args.siteId, warehouseId: args.warehouseId, idempotencyKey: `offline:${args.operationUuid}` });

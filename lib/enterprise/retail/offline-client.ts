@@ -35,6 +35,7 @@ export type RetailOfflineSnapshotEnvelope = {
   validUntil: string;
   policy: {
     saleEnabled: boolean;
+    checkoutMode?: "LEGACY_SALE" | "FINANCE_DRAFT";
     blockingReason: string | null;
     allowedTenderTypes: string[];
     blockedTenderTypes: string[];
