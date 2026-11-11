@@ -375,7 +375,7 @@ export async function getRetailOmnichannelOrders(
   filters: { search?: string; status?: string; fulfillmentMode?: string; siteId?: string; from?: Date; to?: Date } = {},
 ) {
   const search = filters.search?.slice(0, 120);
-  const orders = search ? await prisma.enterpriseSalesOrder.findMany({
+  const matchedOrders = search ? await prisma.enterpriseSalesOrder.findMany({
     where: { organizationId, archivedAt: null, OR: [
       { reference: { contains: search, mode: "insensitive" } },
       { title: { contains: search, mode: "insensitive" } },
@@ -391,7 +391,7 @@ export async function getRetailOmnichannelOrders(
     } } : {}),
     ...(search ? { OR: [
       { idempotencyKey: { contains: search, mode: "insensitive" } },
-      { salesOrderId: { in: orders.map((order) => order.id) } },
+      { salesOrderId: { in: matchedOrders.map((order) => order.id) } },
     ] } : {}),
   };
   const [contexts, total] = await Promise.all([
