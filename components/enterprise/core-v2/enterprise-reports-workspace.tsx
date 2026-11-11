@@ -50,7 +50,6 @@ const EMPTY_OPTIONS: EnterpriseReportGenerationOptions = { departments: [], supp
 
 function reportLabel(locale: string | null | undefined, prefix: string, value: string) { return enterpriseCoreT(locale, `${prefix}.${value}` as EnterpriseCoreKey); }
 function reportTypeLabel(locale: string | null | undefined, value: string) {
-  if (value === "ENTERPRISE_ADMIN_OVERVIEW") return locale === "en" ? "Company administration overview" : "Pilotage Administration entreprise";
   return reportLabel(locale, "reports.type", value);
 }
 function reportVisibilityLabel(locale: string | null | undefined, value: string) { return reportLabel(locale, "reports.visibility", value); }
