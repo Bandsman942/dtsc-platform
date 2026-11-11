@@ -378,9 +378,9 @@ test.describe.serial("Shop 2.0 Iteration 4 global behavioral acceptance", () => 
         }
       }
       await page.goto("/enterprise-modules/RETAIL_POS?section=equipment");
-      await expect(page.getByRole("heading", { name: /Équipements du commerce de détail|Retail equipment/i })).toBeVisible();
       const equipment = page.locator('section[aria-label="Équipements d\'encaissement"]');
       await expect(equipment).toBeVisible();
+      await expect(equipment.getByRole("heading", { name: /Équipements du commerce de détail|Retail equipment/i })).toBeVisible();
       await expect(equipment.getByRole("button", { name: /CSV/i })).toBeVisible();
       await expect(equipment.getByRole("button", { name: /XLSX/i })).toBeVisible();
       await expect(equipment.getByRole("button", { name: /PDF/i })).toBeVisible();
