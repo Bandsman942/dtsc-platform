@@ -11,13 +11,14 @@
 - Chaque KPI précise sa source opérationnelle/comptable, sa base temporelle et ses limites de lecture en FR et EN.
 - Étiquettes visibles sur chaque carte : **Flux de période**, **Solde actuel**, **Émission sur période · allocation à date**.
 - Nouveau test de contrat `pnpm qa:retail-financial-kpi-v2` ; aucun test existant désactivé.
+- Première correction P0 : les comptes sans `availableBalance` n'utilisent plus `operationalBalance` comme substitut. Le serveur transmet la couverture manquante jusqu'aux consolidations, cartes et exports sous la mention « Non déterminé » ; aucun montant disponible global n'est revendiqué pour ce périmètre incomplet.
 - Le drill-down COGS validé en #1111 est conservé, sans changement de calcul ni de permission.
 
-Ces éléments ne créent aucune donnée comptable et ne modifient aucun total. Ils ne constituent pas une validation des montants existants.
+Ces éléments ne créent aucune donnée comptable et ne modifient aucune écriture ni aucun solde source. Seule la présentation des disponibilités incomplètes est corrigée. Ils ne constituent pas une validation des autres montants existants.
 
 ## 2. Écarts toujours ouverts (ne pas déclarer corrigés)
 
-1. **Trésorerie disponible** : `executive-sources.ts` utilise encore `COALESCE(availableBalance, operationalBalance)`. Remplacer par un calcul de couverture explicite ; si un compte actif manque de solde disponible, **ne pas afficher de montant consolidé disponible comme vérifié**.
+1. **Trésorerie disponible** : première correction de non-substitution et de visibilité des montants manquants effectuée. Restent à construire : lecture détaillée des comptes, rapprochements, réservations, historiques à date, taux de couverture et audit serveur indépendant.
 2. **Périmètre historique** : `site-overview/route.ts` initialise les boutiques avec `status: ACTIVE` et `archivedAt: null`. Les agrégats anciens des boutiques archivées doivent figurer séparément dans la consolidation, sans exposer de faux « sites actifs ».
 3. **Soldes à date** : créances ouvertes/échues et comptes financiers sont des soldes présents ; ne jamais les présenter comme une reconstitution historique à partir des dates `from/to`.
 4. **Avoirs sur factures de période** : `invoices` est une cohorte d'émission valorisée nette des avoirs présents ; il faut produire une vue « avoirs émis pendant la période » distincte.
