@@ -15,6 +15,7 @@
 4. **Équipements POS** : création et modification de profils depuis la vue, recherche, filtrage, pagination frontend, affectation boutique et signalement non trompeur des interfaces matérielles. Le pilote matériel et le test physique restent à implémenter.
 5. **Péremptions** : recherche serveur par nom/code article, dates d'expiration, statut de gravité ; contrôles correspondants dans l'interface, tout en préservant la pagination SQL et l'isolation de boutique.
 6. **Paiements Finance** : recherche serveur par numéro de paiement, facture ou boutique ; filtres calendaires sur le registre canonique ; interface correspondante sans créer un ledger Retail parallèle.
+7. **Commandes omnicanales** : pagination navigation UI, filtres de statut, mode de livraison, période et recherche par référence/titre côté serveur, périmètre d’entreprise/boutique préservé.
 
 ## Travaux non achevés — ne pas interpréter la branche comme une livraison des cinq lots
 
