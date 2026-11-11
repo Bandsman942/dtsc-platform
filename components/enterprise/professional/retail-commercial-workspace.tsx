@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { RetailProfessionalListExport } from "@/components/enterprise/professional/retail-professional-list-export";
 import { ArrowLeft, BadgePercent, RotateCcw, Search, Tags } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAppLocale } from "@/components/i18n/locale-provider";
@@ -309,7 +310,7 @@ function FieldLabel({ children }: { children: React.ReactNode }) {
   return <span className="block text-sm font-medium">{children}</span>;
 }
 
-export function RetailCommercialWorkspace({ organizationId }: { organizationId: string }) {
+export function RetailCommercialWorkspace({ organizationId, organizationName }: { organizationId: string; organizationName: string }) {
   const language: CustomerFacingLocale = useAppLocale() === "en" ? "en" : "fr";
   const copy: Copy = useMemo(() => buildCopy(language), [language]);
   const [tab, setTab] = useState<Tab>("PRICING");
@@ -700,6 +701,64 @@ export function RetailCommercialWorkspace({ organizationId }: { organizationId: 
         <label className="text-xs font-bold text-dtsc-muted">{language === "en" ? "Rows per page" : "Éléments/page"}<select className="mt-1 h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-2 text-sm text-dtsc-ink" value={listPageSize} onChange={(event) => { setListPageSize(Number(event.target.value)); setListPage(1); }}>{[10, 20, 50].map((size) => <option key={size} value={size}>{size}</option>)}</select></label>
         <div className="flex flex-wrap gap-2 sm:col-span-2 xl:col-span-5"><button type="button" onClick={() => { const today = new Date().toISOString().slice(0, 10); setListFrom(today); setListTo(today); setListPage(1); }} className="rounded-full border border-dtsc-border px-3 py-2 text-xs font-bold text-dtsc-blue">{language === "en" ? "Today" : "Aujourd’hui"}</button><button type="button" onClick={() => { const date = new Date(); setListFrom(new Date(date.getTime() - 6 * 86400000).toISOString().slice(0, 10)); setListTo(date.toISOString().slice(0, 10)); setListPage(1); }} className="rounded-full border border-dtsc-border px-3 py-2 text-xs font-bold text-dtsc-blue">{language === "en" ? "Last 7 days" : "7 derniers jours"}</button><button type="button" onClick={() => { setListSearch(""); setListFrom(""); setListTo(""); setListPage(1); }} className="rounded-full border border-dtsc-border px-3 py-2 text-xs font-bold text-dtsc-blue">{language === "en" ? "Clear filters" : "Effacer les filtres"}</button></div>
       </div>
+      {tab === "PRICING" ? <RetailProfessionalListExport<PriceCondition>
+        locale={language} organizationName={organizationName} title={language === "en" ? "Retail pricing conditions" : "Conditions tarifaires RETAIL"}
+        filenameBase="retail-pricing-rules"
+        sourceUrl={`/api/enterprise/${organizationId}/retail/pricing/conditions?${listQuery}`}
+        columns={[{ key: "item", label: language === "en" ? "Product" : "Article" },
+          { key: "code", label: "Code" }, { key: "amount", label: language === "en" ? "Price" : "Prix" },
+          { key: "currency", label: language === "en" ? "Currency" : "Devise" },
+          { key: "channel", label: language === "en" ? "Channel" : "Canal" },
+          { key: "min", label: language === "en" ? "Min qty" : "Qté min." },
+          { key: "max", label: language === "en" ? "Max qty" : "Qté max." },
+          { key: "status", label: language === "en" ? "Status" : "Statut" }]}
+        toRow={(item) => ({ item: item.item?.name || "", code: item.item?.code || "",
+          amount: Number(item.price?.amount || 0), currency: item.price?.currency || "",
+          channel: customerFacingSalesChannel(item.channelCode, language),
+          min: item.minQuantity || "", max: item.maxQuantity || "",
+          status: item.isActive ? (language === "en" ? "Active" : "Actif") : (language === "en" ? "Inactive" : "Inactif") })}
+        filters={[{ label: language === "en" ? "From" : "Du", value: listFrom || "—" },
+          { label: language === "en" ? "To" : "Au", value: listTo || "—" }]} /> : null}
+      {tab === "PROMOTIONS" ? <RetailProfessionalListExport<Promotion>
+        locale={language} organizationName={organizationName}
+        title={language === "en" ? "Retail offers and promotions" : "Offres et promotions RETAIL"}
+        filenameBase="retail-promotions"
+        sourceUrl={`/api/enterprise/${organizationId}/retail/promotions?${listQuery}`}
+        columns={[{ key: "code", label: "Code" }, { key: "name", label: language === "en" ? "Offer" : "Offre" },
+          { key: "kind", label: language === "en" ? "Type" : "Type" },
+          { key: "starts", label: language === "en" ? "Starts" : "Début" },
+          { key: "ends", label: language === "en" ? "Ends" : "Fin" },
+          { key: "status", label: language === "en" ? "Status" : "Statut" },
+          { key: "uses", label: language === "en" ? "Uses" : "Utilisations" },
+          { key: "discount", label: language === "en" ? "Discount granted" : "Remises accordées" },
+          { key: "currency", label: language === "en" ? "Currency" : "Devise" }]}
+        toRow={(item) => ({ code: item.code, name: language === "en" ? item.nameEn : item.nameFr,
+          kind: customerFacingPromotionType(item.promotionType, language),
+          starts: item.startsAt.slice(0, 10), ends: item.endsAt?.slice(0, 10) || "—",
+          status: customerFacingStatusLabel(item.status, language), uses: item.usage.count,
+          discount: Number(item.usage.discountAmount), currency: item.currencyCode || "" })}
+        filters={[{ label: language === "en" ? "From" : "Du", value: listFrom || "—" },
+          { label: language === "en" ? "To" : "Au", value: listTo || "—" }]} /> : null}
+      {tab === "RETURNS" ? <RetailProfessionalListExport<RetailReturn>
+        locale={language} organizationName={organizationName}
+        title={language === "en" ? "Historic Retail returns" : "Retours RETAIL historiques"}
+        description={language === "en" ? "Legacy receipt returns; canonical invoice credit notes are managed through Finance." : "Retours des tickets historiques ; les avoirs des factures canoniques sont traités dans Finance."}
+        filenameBase="retail-historic-returns"
+        sourceUrl={`/api/enterprise/${organizationId}/retail/returns?${listQuery}${returnStatus ? "&status=" + encodeURIComponent(returnStatus) : ""}`}
+        columns={[{ key: "date", label: language === "en" ? "Requested" : "Demandé le" },
+          { key: "return", label: language === "en" ? "Return" : "Retour" },
+          { key: "sale", label: language === "en" ? "Sale" : "Vente" },
+          { key: "type", label: language === "en" ? "Type" : "Type" },
+          { key: "amount", label: language === "en" ? "Amount" : "Montant" },
+          { key: "currency", label: language === "en" ? "Currency" : "Devise" },
+          { key: "status", label: language === "en" ? "Status" : "Statut" }]}
+        toRow={(item) => ({ date: new Date(item.createdAt).toLocaleString(language), return: item.number,
+          sale: item.sale.number, type: customerFacingReturnType(item.returnType, language),
+          amount: Number(item.grandTotal), currency: item.currencyCode,
+          status: customerFacingStatusLabel(item.status, language) })}
+        filters={[{ label: language === "en" ? "Status" : "Statut", value: returnStatus || (language === "en" ? "All" : "Tous") },
+          { label: language === "en" ? "From" : "Du", value: listFrom || "—" },
+          { label: language === "en" ? "To" : "Au", value: listTo || "—" }]} /> : null}
       {message ? <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm" role="status">{message}</div> : null}
       {error ? <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm" role="alert">{error}</div> : null}
 
