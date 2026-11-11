@@ -76,6 +76,7 @@ const traceService = readFileSync("lib/enterprise/retail/financial-drilldown.ts"
 const traceRoute = readFileSync("app/api/enterprise/[organizationId]/retail/financial-drilldown/route.ts", "utf8");
 const traceView = readFileSync("components/enterprise/professional/retail-financial-drilldown.tsx", "utf8");
 const overviewRoute = readFileSync("app/api/enterprise/[organizationId]/retail/site-overview/route.ts", "utf8");
+const traceExport = readFileSync("lib/enterprise/retail/financial-drilldown-export.ts", "utf8");
 const expectedTraces = [
   "financeCollections", "invoices", "outstanding", "overdue", "postedRevenue", "postedGrossMargin",
   "postedOperatingResult", "treasuryAvailable", "expenses", "mobileMoneyCommission", "telcoMargin", "posSales",
@@ -101,6 +102,11 @@ assert.match(traceService, /e\.status IN \('POSTED','REVERSED'\)/, "The P&L must
 assert.match(traceService, /"accountSubtype" = 'COST_OF_SALES'/, "Gross margin must exclude non-COGS expenses");
 assert.match(traceService, /"availableBalance" AS amount/, "Treasury available is never approximated by operational balance");
 assert.match(traceView, /buildEnterpriseObjectDeepLink/, "Source evidence must have permission-checked deep links");
+assert.match(traceView, /downloadProfessionalXlsx/, "Authorized source page supports professional Excel export");
+assert.match(traceView, /downloadProfessionalCsv/, "Authorized source page supports CSV export");
+assert.match(traceView, /downloadProfessionalPdfV2/, "Authorized source page supports premium PDF export");
+assert.match(traceExport, /analysis\\.totalLines > rows\\.length/, "Truncated export is clearly disclosed");
+assert.match(traceExport, /"NON DÉTERMINÉ"/, "Unknown treasury totals must not be exported as numeric zero");
 assert.match(traceView, /data-testid="retail-financial-drilldown"/, "Responsive trace workspace must be mounted");
 assert.match(dashboard, /<RetailFinancialDrilldown/, "The executive dashboard must open the detailed view");
 assert.match(overviewRoute, /financeReceivablesAccess\.allowed/, "The client may not display an unauthorized Finance drilldown");
@@ -109,6 +115,7 @@ assert.doesNotMatch(overviewRoute, /where: \\{ organizationId, status: "ACTIVE",
 assert.match(dashboard, /Boutique historique/, "The dashboard must distinguish historical store attribution from active stores");
 
 for (const file of [
+  "lib/enterprise/retail/financial-drilldown-export.ts",
   "lib/enterprise/retail/financial-drilldown.ts",
   "app/api/enterprise/[organizationId]/retail/financial-drilldown/route.ts",
   "components/enterprise/professional/retail-financial-drilldown.tsx",
@@ -120,5 +127,31 @@ for (const file of [
   assert.equal(sourceFile.parseDiagnostics.length, 0,
     `TypeScript syntax errors in ${file}: ${sourceFile.parseDiagnostics.map((diag) => diag.messageText).join("; ")}`);
 }
+
+
+const definitionsModule = loadTs(definitions);
+const exportModule = loadTs(traceExport, {
+  "@/lib/enterprise/retail/financial-metric-definitions": definitionsModule,
+});
+const provisional = exportModule.buildRetailFinancialDrilldownExport({
+  analysis: {
+    metric: "treasuryAvailable", timeBasis: "CURRENT_BALANCE",
+    scope: "FINANCIAL_ACCOUNTS", page: 2, pageSize: 1, totalLines: 3,
+    buckets: [
+      { siteId: "G", siteName: "Gombe", currencyCode: "CDF", amount: null, count: 2, missingAmounts: 1 },
+      { siteId: "L", siteName: "Limete", currencyCode: "USD", amount: "50.000000", count: 1, missingAmounts: 0 },
+    ],
+    lines: [{ id: "acct-2", siteId: "G", siteName: "Gombe", currencyCode: "CDF",
+      eventDate: null, reference: "CASH", sourceLabel: "FINANCIAL_ACCOUNT", amount: null,
+      status: "ACTIVE", sourceType: "EnterpriseFinancialAccount", sourceId: "acct-2" }],
+  },
+  organizationName: "SHOP BCN MULTI TEST", locale: "fr", from: "2026-11-01", to: "2026-11-11",
+});
+assert.equal(provisional.organizationName, "SHOP BCN MULTI TEST");
+assert.equal(provisional.rows.length, 1, "Only the authorized source page may be exported");
+assert.equal(provisional.rows[0].amount, "NON DÉTERMINÉ", "Missing treasury amount must remain unknown in export");
+assert.ok(provisional.insights.some((item) => item.body.includes("1 / 3")), "Page truncation must be explicit");
+assert.ok(provisional.insights.some((item) => item.body.includes("USD")), "Native separate currencies must remain in summary");
+assert.equal(provisional.columns.length, 5, "PDF remains readable with five columns");
 
 console.log(`Retail KPI definitions v2: ${keys.length} metrics, temporal badges and source interpretations validated.`);
