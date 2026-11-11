@@ -8,10 +8,12 @@ import {
 } from "@/lib/reporting/professional-export";
 import { toastError, toastSuccess } from "@/lib/client-toast";
 
-type ExportItem = Record<string, unknown>;
+type ExportItem = object;
 type ExportMode = "csv" | "xlsx" | "pdf";
 type PageResponse<T> = {
   items?: T[];
+  lowStock?: T[];
+  lowStockPagination?: { page: number; pageSize: number; total: number; pageCount: number };
   pagination?: { page: number; pageSize: number; total: number; pageCount: number };
   page?: number; pageSize?: number; total?: number; pageCount?: number;
   message?: string;
@@ -28,6 +30,8 @@ export type RetailProfessionalListExportProps<T extends ExportItem = ExportItem>
   filters?: Array<{ label: string; value: string }>;
   description?: string;
   maxRows?: number;
+  itemsKey?: "items" | "lowStock";
+  pageParam?: "page" | "lowStockPage";
 };
 
 /**
@@ -39,6 +43,7 @@ export type RetailProfessionalListExportProps<T extends ExportItem = ExportItem>
 export function RetailProfessionalListExport<T extends ExportItem = ExportItem>({
   sourceUrl, locale, organizationName, title, filenameBase,
   columns, toRow, filters = [], description, maxRows = 1500,
+  itemsKey = "items", pageParam = "page",
 }: RetailProfessionalListExportProps<T>) {
   const [busy, setBusy] = useState<ExportMode | null>(null);
   const [progress, setProgress] = useState("");
@@ -62,21 +67,22 @@ export function RetailProfessionalListExport<T extends ExportItem = ExportItem>(
       while (page <= maxPages && fetched.length < limit && !exhausted) {
         const url = new URL(sourceUrl, window.location.origin);
         if (url.origin !== window.location.origin) throw new Error("EXPORT_FOREIGN_ORIGIN_FORBIDDEN");
-        url.searchParams.set("page", String(page));
-        url.searchParams.set("pageSize", String(pageSize));
+        url.searchParams.set(pageParam, String(page));
+        url.searchParams.set(pageParam === "page" ? "pageSize" : "lowStockPageSize", String(pageSize));
         const response = await fetch(url.pathname + url.search, { cache: "no-store", credentials: "same-origin" });
         const body = await response.json().catch(() => null) as PageResponse<T> | null;
-        if (!response.ok || !body || !Array.isArray(body.items)) throw new Error("RETAIL_EXPORT_READ_FAILED");
-        const pagination = body.pagination;
-        const thisTotal = Number(pagination?.total ?? body.total ?? body.items.length);
+        const rows = body?.[itemsKey];
+        if (!response.ok || !body || !Array.isArray(rows)) throw new Error("RETAIL_EXPORT_READ_FAILED");
+        const pagination = itemsKey === "lowStock" ? body.lowStockPagination : body.pagination;
+        const thisTotal = Number(pagination?.total ?? body.total ?? rows.length);
         if (page === 1) {
           total = Number.isFinite(thisTotal) ? Math.max(0, thisTotal) : 0;
           expectedPages = Number(pagination?.pageCount ?? body.pageCount ?? Math.ceil(total / pageSize));
         }
-        if (!body.items.length) {
+        if (!rows.length) {
           exhausted = true;
         } else {
-          fetched.push(...body.items.slice(0, Math.max(0, limit - fetched.length)));
+          fetched.push(...rows.slice(0, Math.max(0, limit - fetched.length)));
           exhausted = page >= expectedPages;
         }
         setProgress(en ? `${fetched.length} rows collected` : `${fetched.length} lignes récupérées`);
