@@ -95,6 +95,9 @@ export function RetailPaymentFollowup({ organizationId, locale }: { organization
   const [capabilities, setCapabilities] = useState<Capabilities | null>(null);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [status, setStatus] = useState("");
+  const [legacySearch, setLegacySearch] = useState("");
+  const [legacyFrom, setLegacyFrom] = useState("");
+  const [legacyTo, setLegacyTo] = useState("");
   const [page, setPage] = useState(1);
   const [pagination, setPagination] = useState<Pagination | null>(null);
   const [canonical, setCanonical] = useState<CanonicalPayment[]>([]);
@@ -158,6 +161,9 @@ export function RetailPaymentFollowup({ organizationId, locale }: { organization
     try {
       const query = new URLSearchParams({ page: String(page), pageSize: "20" });
       if (status) query.set("status", status);
+      if (legacySearch.trim()) query.set("search", legacySearch.trim());
+      if (legacyFrom) query.set("from", legacyFrom);
+      if (legacyTo) query.set("to", legacyTo);
       const data = await fetch(`/api/enterprise/${organizationId}/retail/payments?${query.toString()}`, { cache: "no-store" }).then(readJson);
       setPayments((data.items || []).map((item: Payment) => ({
         id: item.id,
@@ -179,7 +185,7 @@ export function RetailPaymentFollowup({ organizationId, locale }: { organization
     } finally {
       setLoading(false);
     }
-  }, [capabilities, organizationId, locale, status, page]);
+  }, [capabilities, organizationId, locale, status, page, legacySearch, legacyFrom, legacyTo]);
 
   const loadCanonical = useCallback(async () => {
     setCanonicalLoading(true);
@@ -206,8 +212,9 @@ export function RetailPaymentFollowup({ organizationId, locale }: { organization
   }, [loadPermissions]);
 
   useEffect(() => {
-    void loadPayments();
-  }, [loadPayments]);
+    const timer = setTimeout(() => { void loadPayments(); }, legacySearch ? 250 : 0);
+    return () => clearTimeout(timer);
+  }, [loadPayments, legacySearch]);
 
   useEffect(() => { const timer = setTimeout(() => { void loadCanonical(); }, canonicalSearch ? 250 : 0); return () => clearTimeout(timer); }, [loadCanonical, canonicalSearch]);
 
@@ -232,7 +239,12 @@ export function RetailPaymentFollowup({ organizationId, locale }: { organization
           <div className="flex flex-wrap items-start justify-between gap-2"><strong className="text-sm text-dtsc-ink">{money(payment.amount, payment.currencyCode)}</strong><span className="rounded-full bg-blue-500/10 px-2 py-1 text-xs font-bold text-blue-700 dark:text-blue-300">{canonicalStatusLabel(payment.status, locale)}</span></div>
           <p className="mt-1 break-all text-xs text-dtsc-muted">{payment.number} · {payment.site.name}</p>
           <p className="mt-1 text-xs text-dtsc-muted">{locale === "en" ? "Invoice" : "Facture"} : {payment.invoice.number} · {customerFacingPaymentMethod(payment.methodType, locale)}</p>
-          <Link className="mt-2 inline-flex min-h-10 items-center rounded-lg border border-dtsc-border px-3 text-xs font-bold text-dtsc-blue" href="/enterprise-modules/RETAIL_POS?section=collections">{locale === "en" ? "Open collections" : "Ouvrir les encaissements"}</Link>
+          <details className="relative mt-2 inline-block text-xs"><summary aria-label={locale === "en" ? "Payment actions" : "Actions du paiement"} className="min-h-10 cursor-pointer list-none rounded-lg border border-dtsc-border px-3 py-2 font-bold text-dtsc-blue">⋯ <span className="sr-only">Actions</span></summary>
+            <div className="absolute left-0 z-20 mt-1 min-w-56 space-y-1 rounded-xl border border-dtsc-border bg-dtsc-surface p-2 shadow-lg">
+              <Link className="block rounded-lg px-2 py-2 hover:bg-dtsc-soft" href="/enterprise-modules/RETAIL_POS?section=collections">{locale === "en" ? "Open collections" : "Ouvrir les encaissements"}</Link>
+              <Link className="block rounded-lg px-2 py-2 hover:bg-dtsc-soft" href={`/enterprise-modules/RETAIL_POS?section=invoices&q=${encodeURIComponent(payment.invoice.number)}`}>{locale === "en" ? "Open invoice" : "Consulter la facture"}</Link>
+            </div>
+          </details>
         </article>)}</div>
         {canonicalPagination && canonicalPagination.pageCount > 1 ? <div className="mt-3 flex items-center justify-between gap-3 text-xs text-dtsc-muted"><span>{canonicalPagination.page} / {canonicalPagination.pageCount} · {canonicalPagination.total}</span><div className="flex gap-2"><button type="button" className="min-h-10 rounded-lg border border-dtsc-border px-3" disabled={canonicalPage <= 1 || canonicalLoading} onClick={() => setCanonicalPage((value) => value - 1)}>{locale === "en" ? "Previous" : "Précédente"}</button><button type="button" className="min-h-10 rounded-lg border border-dtsc-border px-3" disabled={canonicalPage >= canonicalPagination.pageCount || canonicalLoading} onClick={() => setCanonicalPage((value) => value + 1)}>{locale === "en" ? "Next" : "Suivante"}</button></div></div> : null}
       </div> : null}
@@ -247,6 +259,11 @@ export function RetailPaymentFollowup({ organizationId, locale }: { organization
           </button>
         </div>
 
+        <div className="mt-3 grid gap-2 sm:grid-cols-3">
+          <label className="text-xs font-semibold text-dtsc-muted">Recherche historique<input type="search" className="mt-1 min-h-10 w-full rounded-lg border border-dtsc-border bg-dtsc-page px-3 text-dtsc-ink" placeholder="Référence" value={legacySearch} onChange={(e) => { setLegacySearch(e.target.value); setPage(1); }} /></label>
+          <label className="text-xs font-semibold text-dtsc-muted">Du<input type="date" className="mt-1 min-h-10 w-full rounded-lg border border-dtsc-border bg-dtsc-page px-3 text-dtsc-ink" max={legacyTo || undefined} value={legacyFrom} onChange={(e) => { setLegacyFrom(e.target.value); setPage(1); }} /></label>
+          <label className="text-xs font-semibold text-dtsc-muted">Au<input type="date" className="mt-1 min-h-10 w-full rounded-lg border border-dtsc-border bg-dtsc-page px-3 text-dtsc-ink" min={legacyFrom || undefined} value={legacyTo} onChange={(e) => { setLegacyTo(e.target.value); setPage(1); }} /></label>
+        </div>
         <div className="mt-3 flex gap-2 overflow-x-auto pb-1 [touch-action:pan-x]" aria-label={locale === "en" ? "Payment filters" : "Filtres des paiements"}>
           {PAYMENT_FILTERS.map((filter) => (
             <button
