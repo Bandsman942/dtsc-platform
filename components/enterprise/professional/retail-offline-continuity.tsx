@@ -64,6 +64,7 @@ type OfflineSnapshot = RetailOfflineSnapshotEnvelope & {
 };
 
 type OfflineSalePayload = {
+  mode?: "INVOICE_DRAFT";
   warehouseId: string;
   siteId: string;
   storageLocationId: null;
@@ -91,6 +92,7 @@ type CartLine = { item: OfflineCatalogItem; quantity: number };
 type SyncResponse = {
   operation?: { status?: string; conflictCode?: string | null; serverEntityId?: string | null };
   sale?: { id?: string };
+  invoice?: { id?: string };
   error?: string;
   message?: string;
 };
@@ -185,7 +187,7 @@ export function RetailOfflineContinuity({ organizationId, locale }: Props) {
           await updateRetailOfflineQueueResult(organizationId, entry.operationUuid, {
             status: status as "SYNCED" | "CONFLICT" | "REJECTED",
             conflictCode: body?.operation?.conflictCode || null,
-            serverEntityId: body?.operation?.serverEntityId || body?.sale?.id || null,
+            serverEntityId: body?.operation?.serverEntityId || body?.invoice?.id || body?.sale?.id || null,
           });
           continue;
         }
@@ -223,7 +225,7 @@ export function RetailOfflineContinuity({ organizationId, locale }: Props) {
   async function prepareSnapshot() {
     const warehouse = dashboard?.warehouses?.find((item) => item.id === warehouseId);
     const cashSession = dashboard?.cashSession;
-    if (!warehouse || !cashSession || cashSession.status !== "OPEN") {
+    if (!warehouse) {
       setError(locale === "en" ? "Open a cash register and select a stock warehouse before enabling offline sales." : "Ouvrez une caisse et sélectionnez un dépôt de stock avant d’activer la vente hors connexion.");
       return;
     }
@@ -231,7 +233,7 @@ export function RetailOfflineContinuity({ organizationId, locale }: Props) {
     setError("");
     setNotice("");
     try {
-      const currencyCode = cashSession.financialAccount.currencyCode || dashboard?.configuration?.baseCurrencyCode || "CDF";
+      const currencyCode = cashSession?.financialAccount.currencyCode || dashboard?.configuration?.baseCurrencyCode || "CDF";
       const response = await fetch(`/api/enterprise/${organizationId}/retail/offline/snapshot`, {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -239,12 +241,18 @@ export function RetailOfflineContinuity({ organizationId, locale }: Props) {
       });
       const body = await response.json().catch(() => null) as OfflineSnapshot | { error?: string; message?: string } | null;
       if (!response.ok || !body || !("version" in body)) throw new Error((body as { message?: string; error?: string } | null)?.message || (body as { error?: string } | null)?.error || "RETAIL_OFFLINE_SNAPSHOT_FAILED");
-      const prepared = { ...(body as OfflineSnapshot), cashFinancialAccountId: cashSession.financialAccount.id, cashSessionNumber: cashSession.number };
+      const serverSnapshot = body as OfflineSnapshot;
+      if (!serverSnapshot.policy.draftOnly && (!cashSession || cashSession.status !== "OPEN")) {
+        throw new Error(locale === "fr" ? "La vente historique hors connexion exige une caisse ouverte." : "Legacy offline sales require an open cash register.");
+      }
+      const prepared = { ...serverSnapshot, cashFinancialAccountId: cashSession?.financialAccount.id, cashSessionNumber: cashSession?.number };
       await saveRetailOfflineSnapshot(organizationId, prepared);
       setSnapshot(prepared);
       setCart([]);
       setNotice(prepared.policy.saleEnabled
-        ? (locale === "en" ? "Offline sales are ready on this device." : "La vente hors connexion est prête sur cet appareil.")
+        ? prepared.policy.draftOnly
+          ? (locale === "en" ? "Encrypted offline Finance drafts are ready. No cash is collected and no invoice is issued until an online approval." : "Les brouillons Finance hors connexion sont prêts. Aucun encaissement ni aucune facture émise sans validation en ligne.")
+          : (locale === "en" ? "Offline sales are ready on this device." : "La vente hors connexion est prête sur cet appareil.")
         : blockingMessage(prepared.policy.blockingReason, locale));
     } catch (caught) {
       setError(customerFacingError(caught, locale));
@@ -299,13 +307,14 @@ export function RetailOfflineContinuity({ organizationId, locale }: Props) {
   const usable = retailOfflineIsUsable(snapshot);
 
   async function captureOfflineSale() {
-    if (!snapshot || !usable || !snapshot.cashFinancialAccountId || !cart.length || total <= 0) return;
+    if (!snapshot || !usable || (!snapshot.policy.draftOnly && !snapshot.cashFinancialAccountId) || !cart.length || total <= 0) return;
     setBusy("capture");
     setError("");
     setNotice("");
     try {
       const operationUuid = crypto.randomUUID();
       const payload: OfflineSalePayload = {
+        ...(snapshot.policy.draftOnly ? { mode: "INVOICE_DRAFT" as const } : {}),
         warehouseId: snapshot.warehouse.id,
         siteId: snapshot.site.id,
         storageLocationId: null,
@@ -325,11 +334,13 @@ export function RetailOfflineContinuity({ organizationId, locale }: Props) {
           discountAmount: amounts.serviceDiscount,
           taxAmount: amounts.taxAmount,
         })),
-        tenders: [{ methodType: "CASH", financialAccountId: snapshot.cashFinancialAccountId, amount: total, reference: null }],
+        tenders: snapshot.policy.draftOnly ? [] : [{ methodType: "CASH", financialAccountId: snapshot.cashFinancialAccountId!, amount: total, reference: null }],
       };
       await enqueueRetailOfflineSale({ organizationId, operationUuid, snapshotVersion: snapshot.version, siteId: snapshot.site.id, warehouseId: snapshot.warehouse.id, payload });
       setCart([]);
-      setNotice(locale === "en" ? "Sale saved on this device. It will synchronize automatically when the connection is available." : "Vente enregistrée sur cet appareil. Elle sera synchronisée automatiquement dès que la connexion sera disponible.");
+      setNotice(snapshot.policy.draftOnly
+        ? (locale === "en" ? "Finance draft saved locally. After synchronization, an authorized person must approve and issue its invoice before collection." : "Brouillon Finance enregistré sur cet appareil. Après synchronisation, une personne autorisée devra valider puis émettre la facture avant encaissement.")
+        : (locale === "en" ? "Sale saved locally, pending online validation." : "Vente enregistrée localement, sous réserve des contrôles en ligne."));
       await refreshLocal();
       if (online) await syncPending();
     } catch (caught) {
@@ -349,10 +360,12 @@ export function RetailOfflineContinuity({ organizationId, locale }: Props) {
           <span className="inline-flex items-center gap-1 rounded-full bg-cyan-500/10 px-2.5 py-1 text-xs font-black text-cyan-800 dark:text-cyan-200"><ShieldCheck className="h-3.5 w-3.5" />{locale === "en" ? "Local protection active" : "Protection locale active"}</span>
         </div>
         <h2 className="mt-2 text-lg font-black text-dtsc-ink">{locale === "en" ? "Offline sales" : "Vente hors connexion"}</h2>
-        <p className="mt-1 max-w-3xl text-sm text-dtsc-muted">{locale === "en" ? "Keep taking cash sales during a network interruption. Saved sales are checked and synchronized automatically when the connection returns." : "Continuez à encaisser en espèces pendant une coupure réseau. Les ventes enregistrées sont vérifiées et synchronisées automatiquement au retour de la connexion."}</p>
+        <p className="mt-1 max-w-3xl text-sm text-dtsc-muted">{snapshot?.policy.draftOnly
+          ? (locale === "en" ? "During an outage, prepare encrypted Finance drafts only. The server must recheck price, stock, permissions and taxation; no payment is recorded or invoice issued until the online workflow completes." : "Pendant une coupure, préparez des brouillons Finance chiffrés. Le serveur reverra prix, stock, droits et taxes. Aucun encaissement n'est confirmé et aucune facture n'est émise avant la validation en ligne.")
+          : (locale === "en" ? "Historical offline cash sales are provisional until server synchronization." : "Les ventes historiques hors connexion restent provisoires jusqu’à validation serveur.")}</p>
       </div>
       <div className="flex flex-wrap gap-2">
-        {online ? <Button type="button" variant="outline" disabled={Boolean(busy) || !dashboard?.cashSession} onClick={prepareSnapshot}><Download className="h-4 w-4" />{busy === "prepare" ? "…" : (locale === "en" ? "Prepare offline sales" : "Préparer la vente hors connexion")}</Button> : null}
+        {online ? <Button type="button" variant="outline" disabled={Boolean(busy) || !warehouseId} onClick={prepareSnapshot}><Download className="h-4 w-4" />{busy === "prepare" ? "…" : (locale === "en" ? "Prepare offline sales" : "Préparer la vente hors connexion")}</Button> : null}
         {online && pendingCount ? <Button type="button" disabled={Boolean(busy)} onClick={() => void syncPending()}><RefreshCw className={`h-4 w-4 ${busy === "sync" ? "animate-spin" : ""}`} />{locale === "en" ? `Sync ${pendingCount}` : `Synchroniser ${pendingCount}`}</Button> : null}
       </div>
     </div>
@@ -385,11 +398,13 @@ export function RetailOfflineContinuity({ organizationId, locale }: Props) {
         <div className="flex items-center gap-2"><ShoppingCart className="h-4 w-4" /><h3 className="font-black text-dtsc-ink">{locale === "en" ? "Offline sale" : "Vente hors connexion"}</h3></div>
         <div className="mt-3 space-y-2">{cart.map((line) => <div key={line.item.catalogItemId} className="rounded-xl border border-dtsc-border bg-dtsc-surface p-3"><div className="flex items-start justify-between gap-2"><div className="min-w-0"><p className="truncate font-bold text-dtsc-ink">{line.item.name}</p><p className="text-xs text-dtsc-muted">{money(lineAmounts(line.item, line.quantity).lineTotal, snapshot.currencyCode, locale)}</p></div><input aria-label={locale === "en" ? `Quantity ${line.item.name}` : `Quantité ${line.item.name}`} className="h-9 w-20 rounded-lg border border-dtsc-border bg-dtsc-page px-2 text-sm" type="number" min="0" step="1" value={line.quantity} onChange={(event) => changeQuantity(line.item.catalogItemId, Math.max(0, Number(event.target.value) || 0))} /></div></div>)}{!cart.length ? <p className="text-sm text-dtsc-muted">{locale === "en" ? "Add products to this sale." : "Ajoutez des produits à cette vente."}</p> : null}</div>
         <div className="mt-4 flex items-center justify-between border-t border-dtsc-border pt-4"><span className="font-bold text-dtsc-muted">Total</span><span className="text-lg font-black text-dtsc-ink">{money(total, snapshot.currencyCode, locale)}</span></div>
-        <Button className="mt-4 w-full" type="button" disabled={Boolean(busy) || !usable || !cart.length || !snapshot.cashFinancialAccountId} onClick={() => void captureOfflineSale()}>{busy === "capture" ? "…" : (locale === "en" ? "Save offline sale" : "Enregistrer la vente hors connexion")}</Button>
-        <p className="mt-2 text-xs text-dtsc-muted">{locale === "en" ? "Stock and accounting will be updated automatically after synchronization." : "Le stock et la comptabilité seront mis à jour automatiquement après synchronisation."}</p>
+        <Button className="mt-4 w-full" type="button" disabled={Boolean(busy) || !usable || !cart.length || (!snapshot.policy.draftOnly && !snapshot.cashFinancialAccountId)} onClick={() => void captureOfflineSale()}>{busy === "capture" ? "…" : snapshot.policy.draftOnly ? (locale === "en" ? "Save Finance draft" : "Enregistrer le brouillon Finance") : (locale === "en" ? "Save offline sale" : "Enregistrer la vente hors connexion")}</Button>
+        <p className="mt-2 text-xs text-dtsc-muted">{snapshot.policy.draftOnly
+          ? (locale === "en" ? "Synchronization creates an invoice DRAFT, not a receipt. Approval, issuance, payment and stock posting remain online." : "La synchronisation crée une facture BROUILLON, pas un reçu. Validation, émission, encaissement et sortie de stock restent en ligne.")
+          : (locale === "en" ? "Stock and accounting are updated only after accepted synchronization." : "Le stock et la comptabilité ne sont mis à jour qu’après synchronisation acceptée.")}</p>
       </div>
     </div> : null}
 
-    {queue.length ? <div className="mt-5 border-t border-dtsc-border pt-4"><h3 className="font-black text-dtsc-ink">{locale === "en" ? "Offline sales history" : "Historique des ventes hors connexion"}</h3><div className="mt-3 grid gap-2">{queue.slice(-10).reverse().map((entry) => <div key={entry.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm"><div><span className="font-bold text-dtsc-ink">{locale === "en" ? "Offline sale" : "Vente hors connexion"}</span><span className="ml-2 text-dtsc-muted">{new Date(entry.createdAt).toLocaleString(locale === "en" ? "en-US" : "fr-FR")}</span></div><div className="flex items-center gap-2"><span className={`rounded-full px-2 py-1 text-xs font-black ${entry.status === "SYNCED" ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : entry.status === "PENDING_SYNC" ? "bg-cyan-500/10 text-cyan-800 dark:text-cyan-200" : "bg-amber-500/10 text-amber-800 dark:text-amber-200"}`}>{customerFacingStatusLabel(entry.status, locale)}</span>{entry.conflictCode ? <span className="max-w-[320px] truncate text-xs font-semibold text-amber-800 dark:text-amber-200">{customerFacingError(entry.conflictCode, locale, { fr: "Cette vente doit être vérifiée avant validation.", en: "This sale must be reviewed before it can be completed." })}</span> : null}</div></div>)}</div></div> : null}
+    {queue.length ? <div className="mt-5 border-t border-dtsc-border pt-4"><h3 className="font-black text-dtsc-ink">{locale === "en" ? "Offline sales history" : "Historique des ventes hors connexion"}</h3><div className="mt-3 grid gap-2">{queue.slice(-10).reverse().map((entry) => <div key={entry.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm"><div><span className="font-bold text-dtsc-ink">{entry.payload.mode === "INVOICE_DRAFT" ? (locale === "en" ? "Finance draft" : "Brouillon Finance") : (locale === "en" ? "Offline sale" : "Vente hors connexion")}</span><span className="ml-2 text-dtsc-muted">{new Date(entry.createdAt).toLocaleString(locale === "en" ? "en-US" : "fr-FR")}</span></div><div className="flex items-center gap-2"><span className={`rounded-full px-2 py-1 text-xs font-black ${entry.status === "SYNCED" ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : entry.status === "PENDING_SYNC" ? "bg-cyan-500/10 text-cyan-800 dark:text-cyan-200" : "bg-amber-500/10 text-amber-800 dark:text-amber-200"}`}>{entry.status === "SYNCED" && entry.payload.mode === "INVOICE_DRAFT" ? (locale === "en" ? "Draft created — approval pending" : "Brouillon créé — validation requise") : customerFacingStatusLabel(entry.status, locale)}</span>{entry.conflictCode ? <span className="max-w-[320px] truncate text-xs font-semibold text-amber-800 dark:text-amber-200">{customerFacingError(entry.conflictCode, locale, { fr: "Cette vente doit être vérifiée avant validation.", en: "This sale must be reviewed before it can be completed." })}</span> : null}</div></div>)}</div></div> : null}
   </section>;
 }
