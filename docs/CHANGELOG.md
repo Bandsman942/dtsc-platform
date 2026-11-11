@@ -1,3 +1,13 @@
+## 2026-11-11 — Candidate 1.11.1 — Consolidation POS Retail (branche sans déploiement)
+
+- Projet en cinq lots sur `fix/retail-pos-five-lots-20261111`. Le mode hors connexion Finance prépare exclusivement une **facture brouillon** après revalidation serveur du prix et des taxes ; il ne valide, n'émet ni n'encaisse automatiquement. Les ventes directes historiques ne sont pas rejouées à travers Finance.
+- Menus publics accessibles au survol de souris avec maintien du clic et du focus clavier.
+- Profils d'équipements POS administrables dans l'interface, filtrés par boutique et droits ; aucune connexion matérielle n'est déclarée sans pilote/association réelle.
+- Suivi des paiements Finance/historique, alertes de péremption/stock et commandes omnicanales : recherche serveur, filtres et pagination par écran ; actions contextuelles ciblées.
+- Mise en service : diagnostics supplémentaires pour taxes, mode hors ligne, périphériques et numérotation ; score 15/15 désormais qualifié de **socle** et non de certification opérationnelle.
+- **Limites restantes** : navigation PWA après rechargement hors ligne, transport sécurisé des lots en mode hors ligne, attestation matérielle (WebUSB/Serial/Bluetooth/bridge), exports premium globaux, consolidation exhaustive du registre commercial et des pays hors RDC. Voir `docs/HOTFIX_20261111_RETAIL_POS_FIVE_LOTS.md`.
+- Candidat non certifié. Pas de merge ni déploiement avant CI, E2E authentifié et validation explicite du propriétaire.
+
 ## 2026-11-11 — Feature #1109 — Coût des ventes RETAIL traçable (candidat v1.11.0, NON LIVRÉ)
 
 - **Correctif CI #1111** : E2E métier propriétaire confirmé BON ; quatre acceptations navigateur bloquées avant exécution sur Ubuntu 26.04 par une panne DNS APT. Runners épinglés à Ubuntu 24.04 LTS, Chromium Playwright installé sans `--with-deps` pour ne plus dépendre d'APT ; tests navigateur maintenus sans contournement, nouvelle CI complète exigée avant fusion.
