@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { AlertTriangle, CalendarClock, ChevronLeft, ChevronRight, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import Link from "next/link";
 import { customerFacingError } from "@/lib/customer-facing-language";
 
 type Alert = {
@@ -10,10 +11,11 @@ type Alert = {
   lotNumber: string; expiryDate: string; status: "EXPIRED" | "DUE_TODAY" | "EXPIRING_SOON";
   quantityAvailable: string;
 };
-type AlertPage = { items: Alert[]; page: number; pageCount: number; total: number; policy: { warningDays: number }; lowStock?: Array<{ warehouseId: string; warehouse: string; catalogCode: string; catalogName: string; minimumQuantity: string; quantityAvailable: string }>; lowStockTotal?: number };
+type AlertPage = { items: Alert[]; page: number; pageCount: number; total: number; policy: { warningDays: number }; lowStock?: Array<{ warehouseId: string; warehouse: string; catalogCode: string; catalogName: string; minimumQuantity: string; quantityAvailable: string }>; lowStockTotal?: number; lowStockPage?: number; lowStockPageCount?: number };
 
 export function RetailExpiryAlertsPanel({ organizationId, locale }: { organizationId: string; locale: "fr" | "en" }) {
   const [page, setPage] = useState(1);
+  const [lowStockPage, setLowStockPage] = useState(1);
   const [search, setSearch] = useState("");
   const [severity, setSeverity] = useState("");
   const [from, setFrom] = useState("");
@@ -26,7 +28,7 @@ export function RetailExpiryAlertsPanel({ organizationId, locale }: { organizati
     setLoading(true);
     setError("");
     try {
-      const params = new URLSearchParams({ page: String(page), pageSize: "20" });
+      const params = new URLSearchParams({ page: String(page), pageSize: "20", lowStockPage: String(lowStockPage), lowStockPageSize: "12" });
       if (search.trim()) params.set("search", search.trim());
       if (severity) params.set("severity", severity);
       if (from) params.set("from", from);
@@ -37,7 +39,7 @@ export function RetailExpiryAlertsPanel({ organizationId, locale }: { organizati
       setData(payload);
     } catch (caught) { setError(customerFacingError(caught, locale)); }
     finally { setLoading(false); }
-  }, [organizationId, page, en, locale, search, severity, from, to]);
+  }, [organizationId, page, lowStockPage, en, locale, search, severity, from, to]);
   useEffect(() => { const timer = setTimeout(() => { void load(); }, search ? 250 : 0); return () => clearTimeout(timer); }, [load, search]);
   return <section data-testid="retail-expiry-alerts" className="min-w-0 max-w-full rounded-2xl border border-dtsc-border bg-dtsc-surface p-4 shadow-sm sm:p-5">
     <div className="flex flex-wrap items-start justify-between gap-3">
@@ -45,7 +47,7 @@ export function RetailExpiryAlertsPanel({ organizationId, locale }: { organizati
       <Button type="button" variant="outline" disabled={loading} onClick={() => void load()}><RefreshCw className="h-4 w-4" />{en ? "Refresh" : "Actualiser"}</Button>
     </div>
     <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-      <label className="text-xs font-semibold text-dtsc-muted">Recherche<input type="search" value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder="Article, référence…" className="mt-1 min-h-10 w-full rounded-lg border border-dtsc-border bg-dtsc-page px-3 text-dtsc-ink" /></label>
+      <label className="text-xs font-semibold text-dtsc-muted">Recherche<input type="search" value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); setLowStockPage(1); }} placeholder="Article, référence…" className="mt-1 min-h-10 w-full rounded-lg border border-dtsc-border bg-dtsc-page px-3 text-dtsc-ink" /></label>
       <label className="text-xs font-semibold text-dtsc-muted">Gravité<select value={severity} onChange={(event) => { setSeverity(event.target.value); setPage(1); }} className="mt-1 min-h-10 w-full rounded-lg border border-dtsc-border bg-dtsc-page px-3 text-dtsc-ink"><option value="">Toutes</option><option value="EXPIRED">Périmé</option><option value="DUE_TODAY">Aujourd’hui</option><option value="EXPIRING_SOON">À venir</option></select></label>
       <label className="text-xs font-semibold text-dtsc-muted">Expiration du<input type="date" max={to || undefined} value={from} onChange={(event) => { setFrom(event.target.value); setPage(1); }} className="mt-1 min-h-10 w-full rounded-lg border border-dtsc-border bg-dtsc-page px-3 text-dtsc-ink" /></label>
       <label className="text-xs font-semibold text-dtsc-muted">Expiration au<input type="date" min={from || undefined} value={to} onChange={(event) => { setTo(event.target.value); setPage(1); }} className="mt-1 min-h-10 w-full rounded-lg border border-dtsc-border bg-dtsc-page px-3 text-dtsc-ink" /></label>
@@ -59,9 +61,11 @@ export function RetailExpiryAlertsPanel({ organizationId, locale }: { organizati
         {data.items.map((alert) => <article key={alert.id} className="flex min-w-0 flex-wrap items-center justify-between gap-3 rounded-xl border border-dtsc-border bg-dtsc-page p-3">
           <div className="min-w-0 flex-1"><p className="break-words text-sm font-bold text-dtsc-ink">{alert.catalogCode} · {alert.catalogName}</p><p className="mt-1 break-words text-xs text-dtsc-muted">{alert.warehouse} · {en ? "Batch" : "Lot"} {alert.lotNumber} · {en ? "Available" : "Disponible"} {alert.quantityAvailable}</p></div>
           <div className="text-right"><span className={`inline-flex rounded-lg px-2 py-1 text-xs font-bold ${alert.status === "EXPIRED" ? "bg-red-500/15 text-red-700 dark:text-red-200" : alert.status === "DUE_TODAY" ? "bg-orange-500/15 text-orange-700 dark:text-orange-200" : "bg-amber-500/15 text-amber-700 dark:text-amber-200"}`}>{alert.status === "EXPIRED" ? (en ? "Expired" : "Périmé") : alert.status === "DUE_TODAY" ? (en ? "Due today" : "Expire aujourd'hui") : (en ? "Expiring soon" : "Expire bientôt")}</span><p className="mt-1 text-xs text-dtsc-muted">{new Intl.DateTimeFormat(en ? "en-US" : "fr-FR", { dateStyle: "medium" }).format(new Date(alert.expiryDate))}</p></div>
-        </article>)}
+        
+            <details className="mt-2 w-fit text-xs"><summary className="cursor-pointer rounded-lg border border-dtsc-border px-3 py-1.5 font-bold text-dtsc-blue">⋯ Actions</summary><Link className="mt-1 block rounded-lg border border-dtsc-border bg-dtsc-surface px-3 py-2 text-dtsc-blue" href="/enterprise-modules/INVENTORY_LOGISTICS">{en ? "Open stock and batches" : "Ouvrir stocks et lots"}</Link></details></article>)}
         {!data.items.length ? <p className="rounded-xl bg-emerald-500/10 p-3 text-sm text-dtsc-ink">{en ? "No batches are near expiry within the configured horizon." : "Aucun lot n'approche de la péremption dans le délai configuré."}</p> : null}
       </div>
+      {(data.lowStockPageCount || 0) > 1 ? <div className="mt-2 flex items-center justify-end gap-2 text-xs text-dtsc-muted"><span>Stock faible : {lowStockPage} / {data.lowStockPageCount}</span><Button type="button" variant="outline" size="sm" disabled={lowStockPage <= 1} onClick={() => setLowStockPage(v => v - 1)}><ChevronLeft className="h-4 w-4" /></Button><Button type="button" variant="outline" size="sm" disabled={lowStockPage >= (data.lowStockPageCount || 1)} onClick={() => setLowStockPage(v => v + 1)}><ChevronRight className="h-4 w-4" /></Button></div> : null}
       {data.pageCount > 1 ? <div className="mt-4 flex items-center justify-between gap-2 text-xs text-dtsc-muted"><span>{en ? "Page" : "Page"} {page} / {data.pageCount}</span><div className="flex gap-2"><Button type="button" variant="outline" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}><ChevronLeft className="h-4 w-4" /></Button><Button type="button" variant="outline" disabled={page >= data.pageCount} onClick={() => setPage((p) => p + 1)}><ChevronRight className="h-4 w-4" /></Button></div></div> : null}
     </> : null}
   </section>;
