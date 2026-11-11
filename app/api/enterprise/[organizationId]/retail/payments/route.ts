@@ -6,6 +6,7 @@ import { createRetailPaymentTransaction } from "@/lib/enterprise/retail/customer
 import { retailPaymentCreateSchema } from "@/lib/enterprise/retail/customer-payments-schemas";
 import { authorizeRetailRequest, retailErrorResponse, retailListParams } from "@/lib/enterprise/retail/http";
 import { getRetailCustomerPaymentPermissions } from "@/lib/enterprise/retail/permissions";
+import { readRetailListDateRange } from "@/lib/enterprise/retail/list-date-range";
 import { prisma } from "@/lib/prisma";
 
 type Params = { params: Promise<{ organizationId: string }> };
@@ -17,8 +18,17 @@ export async function GET(req: Request, { params }: Params) {
   if (!auth.ok) return auth.response;
   const permissions = await getRetailCustomerPaymentPermissions(auth.session.userId, organizationId);
   if (!permissions.canManagePayments && !permissions.canRefundPayments) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  const { page, pageSize, status, search, from, to } = retailListParams(req);
-  const inclusiveTo = to ? new Date(to.getTime() + (req.url.includes("to=") ? 86400000 - 1 : 0)) : null;
+  const { page, pageSize, status, search } = retailListParams(req);
+  let from: Date | null;
+  let toExclusive: Date | null;
+  try {
+    const range = await readRetailListDateRange(req, organizationId);
+    from = range.from;
+    toExclusive = range.toExclusive;
+  } catch (error) {
+    return retailErrorResponse(error, "RETAIL_PAYMENT_LIST_FAILED");
+  }
+  const inclusiveTo = toExclusive ? new Date(toExclusive.getTime() - 1) : null;
   const where: Prisma.EnterpriseRetailPaymentTransactionWhereInput = {
     organizationId, ...(status ? { status } : {}),
     ...(search ? { OR: [
