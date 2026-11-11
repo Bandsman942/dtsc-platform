@@ -28,6 +28,16 @@ export async function GET(req: Request, { params }: Params) {
     horizon.setUTCDate(horizon.getUTCDate() + policy.warningDays);
     const url = new URL(req.url);
     const warehouseId = url.searchParams.get("warehouseId")?.trim() || undefined;
+    const search = url.searchParams.get("search")?.trim().slice(0, 120) || "";
+    const severity = url.searchParams.get("severity")?.trim().toUpperCase() || "";
+    if (severity && !["EXPIRED", "DUE_TODAY", "EXPIRING_SOON"].includes(severity)) throw new EnterpriseRetailError("RETAIL_REFERENCE_INVALID", 400);
+    const from = url.searchParams.get("from") || "";
+    const to = url.searchParams.get("to") || "";
+    if ([from, to].some((v) => v && !/^\d{4}-\d{2}-\d{2}$/.test(v)) || (from && to && from > to)) throw new EnterpriseRetailError("RETAIL_REFERENCE_INVALID", 400);
+    const today = new Date(businessDate + "T00:00:00.000Z");
+    const tomorrow = new Date(today.getTime() + 86_400_000);
+    const severityDates = severity === "EXPIRED" ? { lt: today } : severity === "DUE_TODAY" ? { gte: today, lt: tomorrow } : severity === "EXPIRING_SOON" ? { gt: today } : {};
+
     if (warehouseId && warehouseId.length > 240) throw new EnterpriseRetailError("RETAIL_REFERENCE_INVALID", 400);
     const warehouse = warehouseId
       ? await prisma.enterpriseWarehouse.findFirst({
@@ -46,7 +56,11 @@ export async function GET(req: Request, { params }: Params) {
       organizationId,
       ...(warehouseId ? { warehouseId } : scope.isOwner ? {} : { warehouse: { siteId: { in: scope.siteIds } } }),
       quantityOnHand: { gt: 0 },
-      stockLot: { is: { archivedAt: null, expiryDate: { lte: horizon }, status: "AVAILABLE" } },
+      ...(search ? { inventoryItem: { catalogItem: { OR: [
+        { code: { contains: search, mode: "insensitive" as const } },
+        { name: { contains: search, mode: "insensitive" as const } },
+      ] } } } : {}),
+      stockLot: { is: { archivedAt: null, expiryDate: { ...severityDates, ...(from ? { gte: new Date(from + "T00:00:00.000Z") } : {}), lte: to ? new Date(to + "T00:00:00.000Z") : horizon }, status: "AVAILABLE" } },
     };
     const [balances, total] = await Promise.all([
       prisma.enterpriseInventoryBalance.findMany({
