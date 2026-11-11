@@ -14,8 +14,10 @@ export async function GET(req: Request, { params }: Params) {
   const { organizationId } = await params;
   if (!(await requireEnterpriseGovernanceAccess(session.userId, organizationId))) return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
   const url = new URL(req.url);
-  const page = Math.max(1, Number(url.searchParams.get("page") || 1) || 1);
-  const pageSize = Math.min(100, Math.max(10, Number(url.searchParams.get("pageSize") || 30) || 30));
+  const rawPage = Number(url.searchParams.get("page") || 1);
+  const page = Number.isSafeInteger(rawPage) ? Math.min(100_000, Math.max(1, rawPage)) : 1;
+  const rawPageSize = Number(url.searchParams.get("pageSize") || 30);
+  const pageSize = Number.isSafeInteger(rawPageSize) ? Math.min(100, Math.max(10, rawPageSize)) : 30;
   const action = url.searchParams.get("action")?.trim();
   const actor = url.searchParams.get("actor")?.trim();
   const entity = url.searchParams.get("entity")?.trim();
@@ -24,9 +26,14 @@ export async function GET(req: Request, { params }: Params) {
   const reasonCode = url.searchParams.get("reasonCode")?.trim();
   const from = url.searchParams.get("from");
   const to = url.searchParams.get("to");
+  const fromDate = from ? new Date(from) : null;
+  const toDate = to ? new Date(to) : null;
+  if ((fromDate && !Number.isFinite(fromDate.getTime())) || (toDate && !Number.isFinite(toDate.getTime())) || (fromDate && toDate && fromDate > toDate)) {
+    return NextResponse.json({ error: "INVALID_DATE_RANGE", message: "La période de recherche est invalide." }, { status: 400 });
+  }
   const tenantScope: Prisma.AuditLogWhereInput = { OR: [{ organizationId }, { metadata: { path: ["organizationId"], equals: organizationId } }] };
   const where: Prisma.AuditLogWhereInput = {
-    AND: [tenantScope, ...(action ? [{ action: { contains: action, mode: "insensitive" as const } }] : []), ...(actor ? [{ userId: actor }] : []), ...(entity ? [{ entity }] : []), ...(result ? [{ result }] : []), ...(risk ? [{ riskLevel: risk }] : []), ...(reasonCode ? [{ reasonCode }] : []), ...(from || to ? [{ createdAt: { ...(from ? { gte: new Date(from) } : {}), ...(to ? { lte: new Date(to) } : {}) } }] : [])],
+    AND: [tenantScope, ...(action ? [{ action: { contains: action.slice(0, 120), mode: "insensitive" as const } }] : []), ...(actor ? [{ userId: actor }] : []), ...(entity ? [{ entity }] : []), ...(result ? [{ result }] : []), ...(risk ? [{ riskLevel: risk }] : []), ...(reasonCode ? [{ reasonCode }] : []), ...(fromDate || toDate ? [{ createdAt: { ...(fromDate ? { gte: fromDate } : {}), ...(toDate ? { lte: toDate } : {}) } }] : [])],
   };
   const [items, total] = await Promise.all([
     prisma.auditLog.findMany({ where, orderBy: { createdAt: "desc" }, skip: (page - 1) * pageSize, take: pageSize, select: { id: true, userId: true, action: true, entity: true, entityId: true, result: true, reasonCode: true, riskLevel: true, requestId: true, beforeJson: true, afterJson: true, metadata: true, createdAt: true, ipAddress: true } }),

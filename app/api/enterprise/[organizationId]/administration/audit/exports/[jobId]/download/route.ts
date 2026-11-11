@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
+import { hasApprovedEnterpriseAuditExport } from "@/lib/enterprise/audit-export-approval";
 import { AUDIT_EXPORT_EVENT_TYPE } from "@/lib/enterprise/bulk-jobs/constants";
 import type { AuditExportJobPayload } from "@/lib/enterprise/bulk-jobs/queue";
 import { downloadEnterpriseBulkArtifact } from "@/lib/enterprise/bulk-jobs/storage";
@@ -23,15 +24,13 @@ export async function GET(req: Request, { params }: Params) {
   });
   if (!job) return NextResponse.json({ error: "AUDIT_EXPORT_NOT_READY" }, { status: 409 });
   const payload = job.payloadJson as AuditExportJobPayload | null;
+  if (payload?.actorUserId !== session.userId) return NextResponse.json({ error: "FORBIDDEN", reasonCode: "AUDIT_EXPORT_OWNER_ONLY" }, { status: 403 });
   if (!payload?.artifactPath || !payload.artifactExpiresAt || payload.purgedAt) return NextResponse.json({ error: "AUDIT_EXPORT_ARTIFACT_UNAVAILABLE" }, { status: 410 });
   if (new Date(payload.artifactExpiresAt).getTime() <= Date.now()) return NextResponse.json({ error: "AUDIT_EXPORT_ARTIFACT_EXPIRED" }, { status: 410 });
 
   const policy = await prisma.enterpriseOrganizationSecurityPolicy.findUnique({ where: { organizationId }, select: { sensitiveExportApproval: true } });
   if (policy?.sensitiveExportApproval) {
-    const approved = payload.approvalId ? await prisma.enterpriseApproval.findFirst({
-      where: { id: payload.approvalId, organizationId, status: "APPROVED", targetEntityType: "AuditExport", archivedAt: null },
-      select: { id: true },
-    }) : null;
+    const approved = await hasApprovedEnterpriseAuditExport({ organizationId, actorUserId: session.userId, approvalId: payload.approvalId });
     if (!approved) return NextResponse.json({ error: "FORBIDDEN", reasonCode: "AUDIT_EXPORT_APPROVAL_REQUIRED" }, { status: 403 });
   }
 

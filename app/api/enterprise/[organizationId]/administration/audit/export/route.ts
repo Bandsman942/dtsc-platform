@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
+import { hasApprovedEnterpriseAuditExport } from "@/lib/enterprise/audit-export-approval";
 import { AUDIT_EXPORT_EVENT_TYPE, ENTERPRISE_BULK_LIMITS } from "@/lib/enterprise/bulk-jobs/constants";
 import { enqueueAuditExport, enterpriseBulkJobStatus } from "@/lib/enterprise/bulk-jobs/queue";
 import { requireEnterpriseGovernanceAccess } from "@/lib/enterprise/governance/access";
@@ -29,7 +30,7 @@ export async function GET(req: Request, { params }: Params) {
   const policy = await prisma.enterpriseOrganizationSecurityPolicy.findUnique({ where: { organizationId }, select: { sensitiveExportApproval: true } });
   const approvalId = url.searchParams.get("approvalId")?.trim() || null;
   if (policy?.sensitiveExportApproval) {
-    const approved = approvalId ? await prisma.enterpriseApproval.findFirst({ where: { id: approvalId, organizationId, status: "APPROVED", targetEntityType: "AuditExport", archivedAt: null } }) : null;
+    const approved = await hasApprovedEnterpriseAuditExport({ organizationId, actorUserId: session.userId, approvalId });
     if (!approved) return NextResponse.json({ error: "FORBIDDEN", reasonCode: "AUDIT_EXPORT_APPROVAL_REQUIRED", message: "Une approbation valide est requise pour exporter le journal d’audit." }, { status: 403 });
   }
   const where: Prisma.AuditLogWhereInput = { OR: [{ organizationId }, { metadata: { path: ["organizationId"], equals: organizationId } }] };

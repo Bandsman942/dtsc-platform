@@ -13,7 +13,7 @@ const ALLOWED_SECTIONS = new Set([
   "settings",
   "security",
   "audit",
-  "templates",
+  "pending",
 ]);
 
 export function EnterpriseAdminSectionActivator({ section }: { section?: string | null }) {
@@ -26,9 +26,14 @@ export function EnterpriseAdminSectionActivator({ section }: { section?: string 
       return;
     }
     const frame = window.requestAnimationFrame(() => {
-      target.scrollIntoView({ behavior: "smooth", block: "start" });
-      target.setAttribute("tabindex", "-1");
-      target.focus({ preventScroll: true });
+      const sectionButton = target.querySelector<HTMLButtonElement>('button[data-workspace-section-header]');
+      if (sectionButton && sectionButton.getAttribute("aria-expanded") !== "true") {
+        sectionButton.click();
+      } else {
+        target.scrollIntoView({ behavior: "smooth", block: "start" });
+        target.setAttribute("tabindex", "-1");
+        target.focus({ preventScroll: true });
+      }
     });
     return () => window.cancelAnimationFrame(frame);
   }, [section]);

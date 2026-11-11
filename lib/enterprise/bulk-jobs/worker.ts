@@ -316,11 +316,10 @@ async function validateAuditExportAccess(job: ClaimedJob, payload: AuditExportJo
   }
   const policy = await prisma.enterpriseOrganizationSecurityPolicy.findUnique({ where: { organizationId: job.organizationId }, select: { sensitiveExportApproval: true } });
   if (policy?.sensitiveExportApproval) {
-    const approval = payload.approvalId ? await prisma.enterpriseApproval.findFirst({
-      where: { id: payload.approvalId, organizationId: job.organizationId, status: "APPROVED", targetEntityType: "AuditExport", archivedAt: null },
-      select: { id: true },
-    }) : null;
-    if (!approval) throw new EnterpriseBulkWorkerError("AUDIT_EXPORT_APPROVAL_REVOKED", false);
+    const { hasApprovedEnterpriseAuditExport } = await import("@/lib/enterprise/audit-export-approval");
+    if (!(await hasApprovedEnterpriseAuditExport({ organizationId: job.organizationId, actorUserId: payload.actorUserId, approvalId: payload.approvalId }))) {
+      throw new EnterpriseBulkWorkerError("AUDIT_EXPORT_APPROVAL_REVOKED", false);
+    }
   }
 }
 
