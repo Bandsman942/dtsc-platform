@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { listRetailDeviceProfiles, upsertRetailDeviceProfile } from "@/lib/enterprise/retail/customer-payments";
@@ -24,9 +25,32 @@ export async function GET(req: Request, { params }: Params) {
   const auth = await authorizeRetailRequest(req, organizationId, "RETAIL_POS", "read");
   if (!auth.ok) return auth.response;
   if (!await isRetailDeviceAdministrator(organizationId, auth.session.userId)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  const items = await listRetailDeviceProfiles(organizationId);
-  await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "retail-devices", action: "list", count: items.length } });
-  return NextResponse.json({ items }, { headers: { "Cache-Control": "private, no-store" } });
+
+  // Legacy callers remain compatible; new POS 2.0 consumers request explicit server pagination.
+  const params = new URL(req.url).searchParams;
+  if (!params.has("page") && !params.has("search") && !params.has("type")) {
+    const items = await listRetailDeviceProfiles(organizationId);
+    await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "retail-devices", action: "list", count: items.length } });
+    return NextResponse.json({ items }, { headers: { "Cache-Control": "private, no-store" } });
+  }
+  const page = Math.max(1, Math.min(1000, Number(params.get("page") || "1") || 1));
+  const pageSize = Math.max(5, Math.min(50, Number(params.get("pageSize") || "12") || 12));
+  const search = (params.get("search") || "").trim().slice(0, 120);
+  const type = (params.get("type") || "").trim().toUpperCase();
+  const where: Prisma.EnterpriseRetailDeviceProfileWhereInput = {
+    organizationId, archivedAt: null,
+    ...(type ? { deviceType: type } : {}),
+    ...(search ? { OR: [
+      { name: { contains: search, mode: "insensitive" } },
+      { code: { contains: search, mode: "insensitive" } },
+    ] } : {}),
+  };
+  const [items, total] = await Promise.all([
+    prisma.enterpriseRetailDeviceProfile.findMany({ where, orderBy: [{ siteId: "asc" }, { deviceType: "asc" }, { name: "asc" }], skip: (page - 1) * pageSize, take: pageSize }),
+    prisma.enterpriseRetailDeviceProfile.count({ where }),
+  ]);
+  await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "retail-devices", action: "list", count: items.length, page } });
+  return NextResponse.json({ items, pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) } }, { headers: { "Cache-Control": "private, no-store" } });
 }
 
 export async function POST(req: Request, { params }: Params) {
