@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { browserCivilDate } from "@/lib/enterprise/retail/civil-date";
 import { Download, FileSpreadsheet, FileText } from "lucide-react";
 import {
   downloadProfessionalCsv, downloadProfessionalPdf, downloadProfessionalXlsx,
@@ -96,7 +97,7 @@ export function RetailProfessionalListExport<T extends ExportItem = ExportItem>(
           ? "Verified data retrieved from the DTSC Retail server, using current filters and permissions."
           : "Données vérifiées depuis le serveur DTSC Retail avec les filtres et autorisations actifs."),
         organizationName,
-        filenameBase: `${filenameBase}-${new Date().toISOString().slice(0, 10)}`,
+        filenameBase: `${filenameBase}-${browserCivilDate()}`,
         generatedLabel: new Date().toISOString(),
         kpis: [
           { label: en ? "Matching records" : "Éléments correspondant aux filtres", value: String(total) },
