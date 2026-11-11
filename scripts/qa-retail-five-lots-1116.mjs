@@ -146,6 +146,8 @@ assert.equal(first.invoice.status, "DRAFT");
 assert.equal(invoiceCreates, 1);
 const retry = await sync(base);
 assert.equal(retry.idempotent, true);
+
+await assert.rejects(sync({ ...base, actorUserId: "other-cashier" }), /RETAIL_OFFLINE_UUID_ACTOR_MISMATCH/, "Offline draft cannot be replayed by another actor");
 assert.equal(invoiceCreates, 1, "Replay cannot issue a second invoice");
 await assert.rejects(sync({ ...base, siteId: "site-2" }), /RETAIL_OFFLINE_UUID_PAYLOAD_MISMATCH/, "A UUID cannot be reused across stores");
 await assert.rejects(sync({ ...base, snapshotVersion: "ofs-tampered-123456" }), /RETAIL_OFFLINE_UUID_PAYLOAD_MISMATCH/, "A UUID cannot be reused across snapshots");
