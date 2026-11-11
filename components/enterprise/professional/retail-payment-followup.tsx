@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { CalendarDays, Search } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   customerFacingError,
@@ -104,6 +105,13 @@ export function RetailPaymentFollowup({ organizationId, locale }: { organization
   const [canonicalStatus, setCanonicalStatus] = useState("");
   const [canonicalLoading, setCanonicalLoading] = useState(true);
   const [canonicalError, setCanonicalError] = useState("");
+  const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [siteId, setSiteId] = useState("");
+  const [sites, setSites] = useState<Array<{ id: string; name: string }>>([]);
+  const [pageSize, setPageSize] = useState(20);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -131,6 +139,26 @@ export function RetailPaymentFollowup({ organizationId, locale }: { organization
     close: "Fermer",
   }, [locale]);
 
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedSearch(search.trim()), 250);
+    return () => window.clearTimeout(timer);
+  }, [search]);
+  useEffect(() => {
+    let active = true;
+    fetch("/api/enterprise/" + organizationId + "/retail/dashboard?moduleCode=RETAIL_POS", { cache: "no-store" })
+      .then((response) => response.ok ? response.json() : null)
+      .then((body) => {
+        if (!active) return;
+        const unique = new Map<string, { id: string; name: string }>();
+        for (const warehouse of body?.warehouses || []) {
+          if (warehouse.site?.id) unique.set(warehouse.site.id, warehouse.site);
+        }
+        setSites([...unique.values()]);
+      }).catch(() => undefined);
+    return () => { active = false; };
+  }, [organizationId]);
+  const resetPages = () => { setPage(1); setCanonicalPage(1); };
+
   const loadPermissions = useCallback(async () => {
     try {
       const data = await fetch(`/api/enterprise/${organizationId}/retail/customer-payment-permissions`, { cache: "no-store" }).then(readJson);
@@ -153,8 +181,11 @@ export function RetailPaymentFollowup({ organizationId, locale }: { organization
     setLoading(true);
     setError("");
     try {
-      const query = new URLSearchParams({ page: String(page), pageSize: "20" });
+      const query = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
       if (status) query.set("status", status);
+      if (debouncedSearch) query.set("search", debouncedSearch);
+      if (dateFrom) query.set("from", dateFrom);
+      if (dateTo) query.set("to", dateTo);
       const data = await fetch(`/api/enterprise/${organizationId}/retail/payments?${query.toString()}`, { cache: "no-store" }).then(readJson);
       setPayments((data.items || []).map((item: Payment) => ({
         id: item.id,
@@ -176,13 +207,17 @@ export function RetailPaymentFollowup({ organizationId, locale }: { organization
     } finally {
       setLoading(false);
     }
-  }, [capabilities, organizationId, locale, status, page]);
+  }, [capabilities, organizationId, locale, status, page, pageSize, debouncedSearch, dateFrom, dateTo]);
 
   const loadCanonical = useCallback(async () => {
     setCanonicalLoading(true);
     setCanonicalError("");
     try {
-      const query = new URLSearchParams({ page: String(canonicalPage), pageSize: "20", ...(canonicalStatus ? { status: canonicalStatus } : {}) });
+      const query = new URLSearchParams({ page: String(canonicalPage), pageSize: String(pageSize), ...(canonicalStatus ? { status: canonicalStatus } : {}) });
+      if (debouncedSearch) query.set("search", debouncedSearch);
+      if (dateFrom) query.set("from", dateFrom);
+      if (dateTo) query.set("to", dateTo);
+      if (siteId) query.set("siteId", siteId);
       const data = await fetch(`/api/enterprise/${organizationId}/retail/payments/invoices?${query}`, { cache: "no-store" }).then(readJson);
       setCanonicalActive(Boolean(data.active));
       setCanonical(Array.isArray(data.items) ? data.items : []);
@@ -193,7 +228,7 @@ export function RetailPaymentFollowup({ organizationId, locale }: { organization
       }));
       setCanonical([]);
     } finally { setCanonicalLoading(false); }
-  }, [organizationId, locale, canonicalPage, canonicalStatus]);
+  }, [organizationId, locale, canonicalPage, canonicalStatus, pageSize, debouncedSearch, dateFrom, dateTo, siteId]);
 
   useEffect(() => {
     void loadPermissions();
@@ -208,6 +243,14 @@ export function RetailPaymentFollowup({ organizationId, locale }: { organization
   return (
     <section className="min-w-0 space-y-4 rounded-2xl border border-dtsc-border bg-dtsc-surface p-3 shadow-sm sm:p-4" aria-label={copy.title}>
       <header className="flex flex-wrap items-start justify-between gap-2"><h2 className="font-black text-dtsc-ink">{copy.title}</h2><button type="button" className="min-h-10 rounded-xl border border-dtsc-border px-3 text-sm font-bold text-dtsc-blue" onClick={() => { void loadPayments(); void loadCanonical(); }}>{copy.refresh}</button></header>
+      <div className="grid gap-2 rounded-xl border border-dtsc-border bg-dtsc-page p-3 sm:grid-cols-2 xl:grid-cols-6">
+        <label className="min-w-0 text-xs font-bold text-dtsc-muted xl:col-span-2">{locale === "en" ? "Smart search" : "Recherche intelligente"}<span className="mt-1 flex min-h-11 items-center gap-2 rounded-xl border border-dtsc-border bg-dtsc-surface px-3"><Search className="h-4 w-4 shrink-0 text-dtsc-blue" /><input className="min-w-0 flex-1 bg-transparent text-sm text-dtsc-ink outline-none" value={search} onChange={(event) => { setSearch(event.target.value); resetPages(); }} placeholder={locale === "en" ? "Invoice, payment, reference, store" : "Facture, paiement, référence, boutique"} /></span></label>
+        <label className="text-xs font-bold text-dtsc-muted">{locale === "en" ? "From" : "Du"}<span className="mt-1 flex min-h-11 items-center gap-1 rounded-xl border border-dtsc-border bg-dtsc-surface px-2"><CalendarDays className="h-4 w-4 shrink-0 text-dtsc-muted" /><input type="date" value={dateFrom} max={dateTo || undefined} onChange={(event) => { setDateFrom(event.target.value); resetPages(); }} className="w-full min-w-0 bg-transparent text-sm text-dtsc-ink" /></span></label>
+        <label className="text-xs font-bold text-dtsc-muted">{locale === "en" ? "To" : "Au"}<input type="date" value={dateTo} min={dateFrom || undefined} onChange={(event) => { setDateTo(event.target.value); resetPages(); }} className="mt-1 h-11 w-full min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface px-2 text-sm text-dtsc-ink" /></label>
+        <label className="text-xs font-bold text-dtsc-muted">{locale === "en" ? "Store" : "Boutique"}<select value={siteId} onChange={(event) => { setSiteId(event.target.value); resetPages(); }} className="mt-1 h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-2 text-sm text-dtsc-ink"><option value="">{locale === "en" ? "All" : "Toutes"}</option>{sites.map((site) => <option key={site.id} value={site.id}>{site.name}</option>)}</select></label>
+        <label className="text-xs font-bold text-dtsc-muted">{locale === "en" ? "Rows per page" : "Éléments/page"}<select value={pageSize} onChange={(event) => { setPageSize(Number(event.target.value)); resetPages(); }} className="mt-1 h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-2 text-sm text-dtsc-ink">{[10, 20, 50].map((size) => <option value={size} key={size}>{size}</option>)}</select></label>
+        <div className="flex flex-wrap gap-2 sm:col-span-2 xl:col-span-6"><button type="button" className="rounded-full border border-dtsc-border px-3 py-1.5 text-xs font-bold text-dtsc-blue" onClick={() => { const today = new Date().toISOString().slice(0, 10); setDateFrom(today); setDateTo(today); resetPages(); }}>{locale === "en" ? "Today" : "Aujourd’hui"}</button><button type="button" className="rounded-full border border-dtsc-border px-3 py-1.5 text-xs font-bold text-dtsc-blue" onClick={() => { const now = new Date(); const from = new Date(now.getTime() - 6 * 86400000).toISOString().slice(0, 10); setDateFrom(from); setDateTo(now.toISOString().slice(0, 10)); resetPages(); }}>{locale === "en" ? "Last 7 days" : "7 derniers jours"}</button><button type="button" className="rounded-full border border-dtsc-border px-3 py-1.5 text-xs font-bold text-dtsc-blue" onClick={() => { setSearch(""); setDateFrom(""); setDateTo(""); setSiteId(""); resetPages(); }}>{locale === "en" ? "Clear filters" : "Effacer les filtres"}</button></div>
+      </div>
       {canonicalActive || canonicalLoading || canonicalError ? <div className="rounded-xl border border-cyan-500/30 bg-dtsc-page p-3">
         <h3 className="text-sm font-black text-dtsc-ink">{locale === "en" ? "Canonical Finance invoice payments" : "Paiements des factures Finance du comptoir"}</h3>
         <p className="mt-1 text-xs text-dtsc-muted">{locale === "en" ? "These are actual Finance payments linked to a Retail invoice, not duplicate Retail transactions. Reconcile them in Collections." : "Il s’agit des paiements Finance réellement rattachés aux factures Retail, et non de transactions Retail en double. Leur traitement se fait dans Encaissements."}</p>
@@ -221,7 +264,7 @@ export function RetailPaymentFollowup({ organizationId, locale }: { organization
           <div className="flex flex-wrap items-start justify-between gap-2"><strong className="text-sm text-dtsc-ink">{money(payment.amount, payment.currencyCode)}</strong><span className="rounded-full bg-blue-500/10 px-2 py-1 text-xs font-bold text-blue-700 dark:text-blue-300">{canonicalStatusLabel(payment.status, locale)}</span></div>
           <p className="mt-1 break-all text-xs text-dtsc-muted">{payment.number} · {payment.site.name}</p>
           <p className="mt-1 text-xs text-dtsc-muted">{locale === "en" ? "Invoice" : "Facture"} : {payment.invoice.number} · {customerFacingPaymentMethod(payment.methodType, locale)}</p>
-          <Link className="mt-2 inline-flex min-h-10 items-center rounded-lg border border-dtsc-border px-3 text-xs font-bold text-dtsc-blue" href="/enterprise-modules/RETAIL_POS?section=collections">{locale === "en" ? "Open collections" : "Ouvrir les encaissements"}</Link>
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-2"><Link className="inline-flex min-h-10 items-center rounded-lg border border-dtsc-border px-3 text-xs font-bold text-dtsc-blue" href="/enterprise-modules/RETAIL_POS?section=collections">{locale === "en" ? "Open collections" : "Ouvrir les encaissements"}</Link><details className="relative"><summary className="cursor-pointer list-none rounded-lg border border-dtsc-border px-3 py-2 text-lg text-dtsc-ink" aria-label={locale === "en" ? "Payment actions" : "Actions du paiement"}>⋯</summary><div className="absolute right-0 z-20 mt-1 min-w-48 rounded-xl border border-dtsc-border bg-dtsc-surface p-2 shadow-xl"><Link className="block rounded-lg px-3 py-2 text-xs hover:bg-dtsc-soft" href={"/enterprise-modules/RETAIL_POS?section=invoices&q=" + encodeURIComponent(payment.invoice.number)}>{locale === "en" ? "Open invoice" : "Ouvrir la facture"}</Link><Link className="block rounded-lg px-3 py-2 text-xs hover:bg-dtsc-soft" href="/enterprise-modules/FINANCE_RECEIVABLES">{locale === "en" ? "Finance receivables" : "Créances Finance"}</Link></div></details></div>
         </article>)}</div>
         {canonicalPagination && canonicalPagination.pageCount > 1 ? <div className="mt-3 flex items-center justify-between gap-3 text-xs text-dtsc-muted"><span>{canonicalPagination.page} / {canonicalPagination.pageCount} · {canonicalPagination.total}</span><div className="flex gap-2"><button type="button" className="min-h-10 rounded-lg border border-dtsc-border px-3" disabled={canonicalPage <= 1 || canonicalLoading} onClick={() => setCanonicalPage((value) => value - 1)}>{locale === "en" ? "Previous" : "Précédente"}</button><button type="button" className="min-h-10 rounded-lg border border-dtsc-border px-3" disabled={canonicalPage >= canonicalPagination.pageCount || canonicalLoading} onClick={() => setCanonicalPage((value) => value + 1)}>{locale === "en" ? "Next" : "Suivante"}</button></div></div> : null}
       </div> : null}
@@ -272,7 +315,7 @@ export function RetailPaymentFollowup({ organizationId, locale }: { organization
                     <dt className="shrink-0 text-dtsc-muted">{copy.date}</dt>
                     <dd className="font-medium text-dtsc-ink">{new Date(payment.createdAt).toLocaleString(locale === "en" ? "en" : "fr")}</dd>
                   </div>
-                </dl>
+                </dl><details className="relative mt-2"><summary className="inline-flex min-h-9 cursor-pointer list-none items-center rounded-lg border border-dtsc-border px-3 text-sm font-bold text-dtsc-blue" aria-label={locale === "en" ? "Payment actions" : "Actions du paiement"}>⋯</summary><div className="mt-2 rounded-lg border border-dtsc-border bg-dtsc-surface p-2"><p className="text-xs text-dtsc-muted">{statusHelp(payment.status, locale)}</p></div></details>
               </article>
             ))}
           </div>

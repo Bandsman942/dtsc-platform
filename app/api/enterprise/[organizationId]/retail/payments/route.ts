@@ -17,8 +17,16 @@ export async function GET(req: Request, { params }: Params) {
   if (!auth.ok) return auth.response;
   const permissions = await getRetailCustomerPaymentPermissions(auth.session.userId, organizationId);
   if (!permissions.canManagePayments && !permissions.canRefundPayments) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  const { page, pageSize, status } = retailListParams(req);
-  const where: Prisma.EnterpriseRetailPaymentTransactionWhereInput = { organizationId, ...(status ? { status } : {}) };
+  const { page, pageSize, status, search, from, to } = retailListParams(req);
+  const inclusiveTo = to ? new Date(to.getTime() + (req.url.includes("to=") ? 86400000 - 1 : 0)) : null;
+  const where: Prisma.EnterpriseRetailPaymentTransactionWhereInput = {
+    organizationId, ...(status ? { status } : {}),
+    ...(search ? { OR: [
+      { clientReference: { contains: search.slice(0, 120), mode: "insensitive" } },
+      { methodType: { contains: search.slice(0, 120), mode: "insensitive" } },
+    ] } : {}),
+    ...((from || inclusiveTo) ? { createdAt: { ...(from ? { gte: from } : {}), ...(inclusiveTo ? { lte: inclusiveTo } : {}) } } : {}),
+  };
   const [items, total] = await Promise.all([
     prisma.enterpriseRetailPaymentTransaction.findMany({ where, orderBy: { createdAt: "desc" }, skip: (page - 1) * pageSize, take: pageSize }),
     prisma.enterpriseRetailPaymentTransaction.count({ where }),
