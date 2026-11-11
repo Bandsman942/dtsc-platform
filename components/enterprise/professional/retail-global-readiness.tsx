@@ -159,6 +159,29 @@ export function RetailGlobalReadiness({ organizationId, locale }: Props) {
 
       {loadError ? <div role="alert" className="mt-4 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm font-semibold text-red-700 dark:text-red-300">{loadError}</div> : null}
 
+      <div className="mt-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs leading-5 text-dtsc-ink" role="note">
+        {locale === "fr" ? "Ce score valide les 15 prérequis du parcours de vente Finance. Il ne certifie ni la vente hors connexion, ni les périphériques, les promotions, ni la conformité fiscale réglementée. Avec la facturation Finance, seules des préparations de brouillons chiffrés hors connexion sont autorisées ; émission et encaissement se font après synchronisation et validation en ligne." : "This score verifies the 15 Finance checkout prerequisites. It does not certify offline sales, devices, promotions or regulated fiscal compliance. With Finance invoicing, encrypted offline drafts are allowed, but issuing and collecting remain subject to online synchronization and approval."}
+      </div>
+      <div className="mt-3 rounded-2xl border border-dtsc-border bg-dtsc-page p-3 sm:p-4">
+        <h3 className="text-sm font-black text-dtsc-ink">{locale === "en" ? "Operational readiness — additional checks" : "Disponibilité opérationnelle — contrôles complémentaires"}</h3>
+        <p className="mt-1 text-xs text-dtsc-muted">{locale === "en" ? "These advanced capabilities are not certified by the 15-step Finance score. Use each direct link to check configuration and actual readiness." : "Ces fonctions avancées ne sont pas certifiées par le score Finance en 15 étapes. Ouvrez chaque module pour vérifier les prérequis et la disponibilité réelle."}</p>
+        <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          {([
+            { href: "/enterprise-modules/RETAIL_POS?section=offline", fr: "Brouillons hors connexion", en: "Offline drafts" },
+            { href: "/enterprise-modules/RETAIL_POS?section=equipment", fr: "Équipements et connexions", en: "Equipment and connections" },
+            { href: "/enterprise-modules/RETAIL_POS?section=inventory", fr: "Règles des stocks et FEFO", en: "Stock rules and FEFO" },
+            { href: "/enterprise-modules/RETAIL_POS?section=alerts", fr: "Péremption et stock faible", en: "Expiry and low stock" },
+            { href: "/enterprise-modules/FINANCE_TAX", fr: "Référentiel taxes et TVA", en: "Tax and VAT settings" },
+            { href: "/enterprise-modules/RETAIL_POS?section=invoices", fr: "Factures Finance et remises", en: "Finance invoices and discounts" },
+            { href: "/enterprise-modules/RETAIL_POS?section=omnichannel", fr: "Commandes multicanales", en: "Multichannel orders" },
+          ] as const).map((entry) => (
+            <Link key={entry.href} href={entry.href} className="flex min-h-11 items-center justify-between gap-2 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-xs font-bold text-dtsc-ink transition hover:border-cyan-400 hover:bg-cyan-500/5">
+              <span>{entry[locale]}</span><ArrowUpRight className="h-4 w-4 shrink-0 text-dtsc-blue" />
+            </Link>
+          ))}
+        </div>
+        <p className="mt-3 text-xs leading-5 text-amber-700 dark:text-amber-300">{locale === "en" ? "The RDC is the only activated, versioned country pack. Other jurisdictions, regulated document numbering and fiscal receipts require verified requirements; they must not be represented as available solely because the Finance score is green." : "La RDC reste le seul pack pays versionné. Les autres juridictions, la numérotation réglementaire et les tickets fiscaux exigent des exigences vérifiées et ne sont pas considérés opérationnels du seul fait que le score Finance est vert."}</p>
+      </div>
       <div className="mt-5 grid gap-4 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
         <div className="space-y-3">
           <div id="shop-country-configuration" className="scroll-mt-24 rounded-2xl border border-dtsc-border bg-dtsc-page p-4">

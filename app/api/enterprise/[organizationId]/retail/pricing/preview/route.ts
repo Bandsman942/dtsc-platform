@@ -12,6 +12,7 @@ import {
   serializeRetailPricingPreview,
 } from "@/lib/enterprise/retail/commercial-engine";
 import { retailPricingPreviewSchema } from "@/lib/enterprise/retail/commercial-schemas";
+import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
 import { authorizeRetailRequest, retailErrorResponse } from "@/lib/enterprise/retail/http";
 
 type Params = { params: Promise<{ organizationId: string }> };
@@ -62,6 +63,17 @@ export async function POST(req: Request, { params }: Params) {
       },
       commercialContext,
     );
+    // Finance invoice checkout currently persists only canonical commercial decisions.
+    // Do not show relationship discounts in its preview until Finance invoices
+    // can also persist and reverse the corresponding benefit ledger effects.
+    if (parsed.data.invoiceCheckout) {
+      if (parsed.data.couponCode || decisions.some((decision) => decision.promotions.length > 0)) {
+        throw new EnterpriseRetailError("RETAIL_FINANCE_PROMOTION_LEDGER_REQUIRED", 409);
+      }
+      const preview = serializeRetailPricingPreview(decisions, parsed.data.currencyCode);
+      await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "retail-pricing", action: "invoice-preview", lineCount: parsed.data.lines.length, relationshipBenefitCount: 0 } });
+      return NextResponse.json(preview);
+    }
     const relationshipResolution = await resolveRetailRelationshipBenefitPricing({
       organizationId,
       customerBusinessPartyId: parsed.data.customerBusinessPartyId,

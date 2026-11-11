@@ -69,13 +69,20 @@ export async function prepareRetailInvoice(organizationId: string, actorUserId: 
     // removed, even when the original request has the same fingerprint.
     await requireRetailSiteCapability(organizationId, actorUserId, earlier.siteId, "PREPARE_INVOICE", prisma, { requireAssignment: true });
     if (earlier.requestFingerprint !== requestFingerprint) throw new EnterpriseRetailError("RETAIL_INVOICE_IDEMPOTENCY_COLLISION", 409);
-    return { checkout: earlier, invoice: earlier.invoice, idempotent: true };
+    return { checkout: earlier, invoice: earlier.invoice, stockWarnings: [], idempotent: true };
   }
 
   const decisions = await resolveRetailCommercialPricingDecisions(organizationId, {
     siteId: input.siteId, customerBusinessPartyId: input.businessPartyId || null,
     currencyCode: input.currencyCode, lines: input.lines.map((line) => ({ catalogItemId: line.catalogItemId, quantity: line.quantity })),
-  }, { channelCode: "POS" });
+  }, { channelCode: "POS", couponCode: null });
+  // Finance invoices are not EnterpriseRetailSale records. The existing promotion
+  // redemption ledger requires a saleId, so an automatic/coupon promotion cannot
+  // be considered consumed here. Never grant a discount that evades usage limits
+  // or falsely appears unredeemed in Retail analytics.
+  if (decisions.some((decision) => decision.promotions.length > 0)) {
+    throw new EnterpriseRetailError("RETAIL_FINANCE_PROMOTION_LEDGER_REQUIRED", 409);
+  }
   const decisionByCatalog = new Map(decisions.map((decision) => [decision.catalogItemId, decision]));
   const calculatedTotal = decisions.reduce((sum, decision) => sum.plus(decision.lineTotal), new Prisma.Decimal(0));
 
@@ -86,7 +93,7 @@ export async function prepareRetailInvoice(organizationId: string, actorUserId: 
     if (existing) {
       await requireRetailSiteCapability(organizationId, actorUserId, existing.siteId, "PREPARE_INVOICE", tx, { requireAssignment: true });
       if (existing.requestFingerprint !== requestFingerprint) throw new EnterpriseRetailError("RETAIL_INVOICE_IDEMPOTENCY_COLLISION", 409);
-      return { checkout: existing, invoice: existing.invoice, idempotent: true };
+      return { checkout: existing, invoice: existing.invoice, stockWarnings: [], idempotent: true };
     }
     const [organization, configuration, warehouse, catalogs, inventoryItems] = await Promise.all([
       tx.organization.findFirst({ where: { id: organizationId, organizationType: "CLIENT", status: "ACTIVE", deletedAt: null, sectorCode: RETAIL_SECTOR_CODE }, select: { id: true, timezone: true } }),
@@ -131,7 +138,7 @@ export async function prepareRetailInvoice(organizationId: string, actorUserId: 
       }
       return { ...line, inventoryItemId: inventory?.id || null, itemName: item.name, decision };
     });
-    await assertRetailLotPolicyTx(tx, {
+    const stockWarnings = await assertRetailLotPolicyTx(tx, {
       organizationId, warehouseId: input.warehouseId, timezone: organization.timezone || "UTC", settings: configuration?.settingsJson,
       lines: prepared.map((line) => ({ inventoryItemId: line.inventoryItemId, stockLotId: line.stockLotId || null })),
     });
@@ -145,7 +152,19 @@ export async function prepareRetailInvoice(organizationId: string, actorUserId: 
         ...(line.decision.taxCodeId ? { taxCodeId: line.decision.taxCodeId } : {}),
       })),
     };
-    const invoice = await createSalesInvoiceTx(tx, organizationId, actorUserId, financeInput);
+    const newInvoice = await createSalesInvoiceTx(tx, organizationId, actorUserId, financeInput);
+    // WARN is an explicit, non-blocking policy. Make the issue visible to
+    // Finance validators on the canonical invoice, not only in a transient toast.
+    const invoice = stockWarnings.length
+      ? await tx.enterpriseSalesInvoice.update({
+          where: { id: newInvoice.id },
+          data: { notes: [
+            "ATTENTION DTSC RETAIL — Risque sur les lots à examiner AVANT validation/émission.",
+            ...stockWarnings.map((warning) => `${warning.code} · Inventory ${warning.inventoryItemId} · Lot ${warning.stockLotId || "non sélectionné"}`),
+          ].join("\n") },
+          include: { items: true },
+        })
+      : newInvoice;
     // Financial amounts must match the pricing engine. In particular,
     // tax-inclusive pricing must never silently double-add VAT.
     if (!invoice.grandTotal.equals(calculatedTotal)) throw new EnterpriseRetailError("RETAIL_INVOICE_PRICING_MISMATCH", 409);
@@ -171,7 +190,7 @@ export async function prepareRetailInvoice(organizationId: string, actorUserId: 
     const checkout = await tx.enterpriseRetailInvoiceCheckout.findUniqueOrThrow({
       where: { id: checkoutRecord.id }, include: { lines: true },
     });
-    return { checkout, invoice, idempotent: false };
+    return { checkout, invoice, stockWarnings, idempotent: false };
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 30000 }));
 }
 

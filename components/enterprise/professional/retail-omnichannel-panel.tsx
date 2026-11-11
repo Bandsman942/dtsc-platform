@@ -5,6 +5,7 @@ import { Box, CheckCircle2, MapPin, PackageCheck, RefreshCw, Search, ShoppingBag
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { customerFacingError, customerFacingFulfillmentMode, customerFacingOmnichannelCancellationCopy, customerFacingOmnichannelReturnCopy, customerFacingStatusLabel } from "@/lib/customer-facing-language";
+import { downloadProfessionalCsv, downloadProfessionalXlsx, downloadProfessionalPdf, type ProfessionalReportExportModel } from "@/lib/reporting/professional-export";
 
 type Props = { organizationId: string; locale: "fr" | "en" };
 type Site = { id: string; name: string };
@@ -17,7 +18,7 @@ type Fulfillment = { id: string; reference: string; status: string; createdAt: s
 type OrderItem = { id: string; description: string; quantityOrdered: string | number; catalogItem?: { trackInventory: boolean } | null };
 type Order = { id: string; reference: string; revision: number; status: string; currency: string; totalAmount: string | number; businessPartyId: string; expectedFulfillmentAt: string | null; items?: OrderItem[]; fulfillments?: Fulfillment[] };
 type Reservation = { id: string; status: string; quantity: string | number; warehouseId: string };
-type OrderContext = { id: string; salesOrderId: string; fulfillmentMode: string; sourceSiteId: string; fulfillmentWarehouseId: string; pickupSiteId: string | null; status: string; createdAt: string };
+type OrderContext = { id: string; salesOrderId: string; channelCode: string; fulfillmentMode: string; sourceSiteId: string; fulfillmentWarehouseId: string; pickupSiteId: string | null; status: string; createdAt: string };
 type OrderRow = { context: OrderContext; order: Order | null; reservations: Reservation[] };
 type OrdersResponse = { items: OrderRow[]; pagination: { page: number; pageSize: number; total: number; pageCount: number } };
 type OmnichannelReturn = { id: string; number: string; revision: number; status: string; reason: string; refundAmount: string | number; currencyCode: string; requestedByUserId: string; validatorUserId: string; approvedByUserId: string | null; preparedByUserId: string | null; lines: Array<{ id: string; quantity: string | number; salesOrderItemId: string }> };
@@ -52,7 +53,16 @@ export function RetailOmnichannelPanel({ organizationId, locale }: Props) {
   const returnCopy = customerFacingOmnichannelReturnCopy(locale);
   const [dashboard, setDashboard] = useState<Dashboard | null>(null);
   const [orders, setOrders] = useState<OrdersResponse | null>(null);
+  const [exportingOrders, setExportingOrders] = useState(false);
+  const [ordersPage, setOrdersPage] = useState(1);
+  const [ordersSearch, setOrdersSearch] = useState("");
+  const [ordersStatus, setOrdersStatus] = useState("");
+  const [ordersMode, setOrdersMode] = useState("");
+  const [ordersChannel, setOrdersChannel] = useState("");
+  const [ordersFrom, setOrdersFrom] = useState("");
+  const [ordersTo, setOrdersTo] = useState("");
   const [mode, setMode] = useState<Mode>("CLICK_COLLECT");
+  const [originChannel, setOriginChannel] = useState("POS");
   const [sourceSiteId, setSourceSiteId] = useState("");
   const [warehouseId, setWarehouseId] = useState("");
   const [pickupSiteId, setPickupSiteId] = useState("");
@@ -87,9 +97,16 @@ export function RetailOmnichannelPanel({ organizationId, locale }: Props) {
     setBusy("load");
     setError("");
     try {
+      const orderParams = new URLSearchParams({ page: String(ordersPage), pageSize: "12" });
+      if (ordersSearch.trim()) orderParams.set("search", ordersSearch.trim());
+      if (ordersStatus) orderParams.set("status", ordersStatus);
+      if (ordersMode) orderParams.set("mode", ordersMode);
+      if (ordersChannel) orderParams.set("channel", ordersChannel);
+      if (ordersFrom) orderParams.set("from", ordersFrom);
+      if (ordersTo) orderParams.set("to", ordersTo);
       const [dashboardResponse, ordersResponse] = await Promise.all([
         fetch(`/api/enterprise/${organizationId}/retail/dashboard?moduleCode=RETAIL_POS`, { cache: "no-store" }),
-        fetch(`/api/enterprise/${organizationId}/retail/omnichannel/orders?page=1&pageSize=12`, { cache: "no-store" }),
+        fetch(`/api/enterprise/${organizationId}/retail/omnichannel/orders?${orderParams}`, { cache: "no-store" }),
       ]);
       const dashboardBody = await dashboardResponse.json().catch(() => null) as Dashboard | { error?: string; message?: string } | null;
       const ordersBody = await ordersResponse.json().catch(() => null) as OrdersResponse | { error?: string; message?: string } | null;
@@ -109,9 +126,9 @@ export function RetailOmnichannelPanel({ organizationId, locale }: Props) {
     } finally {
       setBusy(null);
     }
-  }, [locale, organizationId]);
+  }, [locale, organizationId, ordersPage, ordersSearch, ordersStatus, ordersMode, ordersChannel, ordersFrom, ordersTo]);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => { const timer = setTimeout(() => { void load(); }, ordersSearch ? 250 : 0); return () => clearTimeout(timer); }, [load, ordersSearch]);
 
   const sites = useMemo(() => {
     const map = new Map<string, Site>();
@@ -202,6 +219,7 @@ export function RetailOmnichannelPanel({ organizationId, locale }: Props) {
           fulfillmentWarehouseId: warehouseId,
           pickupSiteId: pickupRequired ? pickupSiteId : null,
           fulfillmentMode: mode,
+          channelCode: originChannel,
           currencyCode: currency,
           expectedFulfillmentAt: expectedFulfillmentAt ? new Date(expectedFulfillmentAt).toISOString() : null,
           reservationExpiresAt: expectedFulfillmentAt ? new Date(expectedFulfillmentAt).toISOString() : null,
@@ -315,6 +333,82 @@ export function RetailOmnichannelPanel({ organizationId, locale }: Props) {
     });
   }
 
+  async function exportOmnichannelOrders(format: "csv" | "xlsx" | "pdf") {
+    if (exportingOrders || busy === "load") return;
+    setExportingOrders(true);
+    setError("");
+    try {
+      const records: OrderRow[] = [];
+      for (let currentPage = 1; ; currentPage++) {
+        const params = new URLSearchParams({ page: String(currentPage), pageSize: "50" });
+        if (ordersSearch.trim()) params.set("search", ordersSearch.trim());
+        if (ordersStatus) params.set("status", ordersStatus);
+        if (ordersMode) params.set("mode", ordersMode);
+        if (ordersChannel) params.set("channel", ordersChannel);
+        if (ordersFrom) params.set("from", ordersFrom);
+        if (ordersTo) params.set("to", ordersTo);
+        const response = await fetch(`/api/enterprise/${organizationId}/retail/omnichannel/orders?${params}`, { cache: "no-store" });
+        const result = await response.json().catch(() => null) as OrdersResponse & { message?: string; error?: string } | null;
+        if (!response.ok || !Array.isArray(result?.items)) {
+          throw new Error(result?.message || result?.error || (locale === "en" ? "Order export access refused." : "Accès à l'export des commandes refusé."));
+        }
+        if (result.pagination.total > 5000) {
+          throw new Error(locale === "en" ? "More than 5,000 orders: narrow the period or filters." : "Plus de 5 000 commandes : affinez la période ou les filtres.");
+        }
+        records.push(...result.items);
+        if (currentPage >= result.pagination.pageCount) break;
+      }
+      const model: ProfessionalReportExportModel = {
+        title: locale === "en" ? "Retail omnichannel order tracking" : "Suivi des commandes Retail multicanales",
+        subtitle: locale === "en" ? "DTSC Platform · authorized orders, server-filtered by store" : "DTSC Platform · commandes autorisées, filtrées par boutique côté serveur",
+        filenameBase: `dtsc-retail-orders-${new Date().toLocaleDateString("sv-SE")}`,
+        generatedLabel: new Date().toLocaleString(locale === "en" ? "en-US" : "fr-FR"),
+        columns: [
+          { key: "reference", label: locale === "en" ? "Order" : "Commande" }, { key: "channel", label: "Canal" },
+          { key: "mode", label: locale === "en" ? "Fulfillment" : "Livraison/retrait" },
+          { key: "status", label: "Statut" }, { key: "source", label: locale === "en" ? "Source store ID" : "ID boutique source" },
+          { key: "warehouse", label: locale === "en" ? "Warehouse ID" : "ID dépôt" },
+          { key: "amount", label: locale === "en" ? "Amount" : "Montant" }, { key: "currency", label: "Devise" },
+          { key: "reservations", label: locale === "en" ? "Reservations" : "Réservations" }, { key: "date", label: locale === "en" ? "Created" : "Créée le" },
+        ],
+        rows: records.map((row) => ({
+          reference: row.order?.reference || row.context.salesOrderId,
+          channel: row.context.channelCode || "POS",
+          mode: customerFacingFulfillmentMode(row.context.fulfillmentMode, locale),
+          status: customerFacingStatusLabel(row.context.status, locale),
+          source: row.context.sourceSiteId,
+          warehouse: row.context.fulfillmentWarehouseId,
+          amount: row.order ? Number(row.order.totalAmount) : null,
+          currency: row.order?.currency || "",
+          reservations: row.reservations.length,
+          date: new Date(row.context.createdAt).toLocaleString(locale === "en" ? "en-US" : "fr-FR"),
+        })),
+        kpis: [{ label: locale === "en" ? "Orders" : "Commandes", value: String(records.length) }],
+        chart: [], insights: [
+          { title: locale === "en" ? "Channels" : "Canaux",
+            body: locale === "en" ? "Origin channels may be entered manually; this does not prove a live integration."
+              : "Les canaux d'origine peuvent être saisis manuellement ; ce rapport ne prouve pas une intégration connectée." },
+        ],
+        filters: [
+          { label: locale === "en" ? "Search" : "Recherche", value: ordersSearch || "—" },
+          { label: "Statut", value: ordersStatus || "Tous" },
+          { label: "Canal", value: ordersChannel || "Tous" },
+          { label: locale === "en" ? "Mode" : "Mode", value: ordersMode || "Tous" },
+          { label: locale === "en" ? "From" : "Du", value: ordersFrom || "—" },
+          { label: locale === "en" ? "To" : "Au", value: ordersTo || "—" },
+        ],
+      };
+      if (format === "csv") downloadProfessionalCsv(model);
+      else if (format === "xlsx") downloadProfessionalXlsx(model);
+      else downloadProfessionalPdf(model);
+      setNotice(locale === "en" ? "Filtered order report generated." : "Rapport des commandes filtrées généré.");
+    } catch (caught) {
+      setError(customerFacingError(caught, locale, { fr: "Export des commandes impossible.", en: "Unable to export orders." }));
+    } finally {
+      setExportingOrders(false);
+    }
+  }
+
   return <section data-testid="retail-omnichannel-panel" className="min-w-0 max-w-full rounded-3xl border border-dtsc-border bg-dtsc-surface p-4 shadow-sm sm:p-5">
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div><div className="flex items-center gap-2"><Truck className="h-5 w-5 text-violet-600" /><h2 className="text-lg font-black text-dtsc-ink">{locale === "en" ? "Orders, pickup & delivery" : "Commandes, retraits & livraisons"}</h2></div><p className="mt-1 max-w-3xl text-sm text-dtsc-muted">{locale === "en" ? "Create a customer order from the retail store, choose where it will be prepared, then follow it through pickup or delivery." : "Créez une commande client depuis votre point de vente, choisissez où elle sera préparée, puis suivez-la jusqu’au retrait ou à la livraison."}</p></div>
@@ -326,6 +420,12 @@ export function RetailOmnichannelPanel({ organizationId, locale }: Props) {
     <div className="mt-5 grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
       <div className="space-y-4">
         <div className="rounded-2xl border border-dtsc-border bg-dtsc-page p-4">
+          <label className="mb-3 block text-xs font-bold text-dtsc-muted">{locale === "en" ? "Order origin channel (declaration)" : "Canal d'origine de la commande (déclaration)"}
+            <select value={originChannel} onChange={(event) => setOriginChannel(event.target.value)} className="mt-1 h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm text-dtsc-ink">
+              {(["POS","ONLINE","WHATSAPP","PHONE","MARKETPLACE"] as const).map((code) => <option key={code} value={code}>{code === "POS" ? (locale === "en" ? "Counter" : "Comptoir") : code === "ONLINE" ? (locale === "en" ? "Web / online" : "Site web / en ligne") : code === "PHONE" ? (locale === "en" ? "Telephone" : "Téléphone") : code === "WHATSAPP" ? "WhatsApp" : "Marketplace"}</option>)}
+            </select>
+            <span className="mt-1 block text-xs font-normal">{locale === "en" ? "Manually label the origin; this does not automatically connect WhatsApp, web shops, or marketplaces." : "Indiquez l'origine manuellement ; cela ne connecte pas automatiquement WhatsApp, le site e-commerce ou les marketplaces."}</span>
+          </label>
           <p className="text-sm font-black text-dtsc-ink">1. {locale === "en" ? "Pickup or delivery option" : "Mode de retrait ou livraison"}</p>
           <div className="mt-3 grid gap-2 sm:grid-cols-2">{MODES.map((item) => { const Icon = item.icon; return <button key={item.code} type="button" onClick={() => setMode(item.code)} className={`flex items-center gap-2 rounded-xl border p-3 text-left text-sm font-bold transition ${mode === item.code ? "border-violet-500 bg-violet-500/10 text-violet-800 dark:text-violet-200" : "border-dtsc-border bg-dtsc-surface text-dtsc-ink"}`}><Icon className="h-4 w-4" />{customerFacingFulfillmentMode(item.code, locale)}</button>; })}</div>
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
@@ -360,6 +460,21 @@ export function RetailOmnichannelPanel({ organizationId, locale }: Props) {
 
     <div className="mt-6 border-t border-dtsc-border pt-5">
       <div className="flex items-center justify-between gap-3"><div><h3 className="font-black text-dtsc-ink">{locale === "en" ? "Order tracking" : "Suivi des commandes"}</h3><p className="text-xs text-dtsc-muted">{locale === "en" ? "Follow each order from reserved stock through pickup or delivery." : "Suivez chaque commande depuis la réservation du stock jusqu’au retrait ou à la livraison."}</p></div><span className="rounded-full bg-dtsc-page px-2.5 py-1 text-xs font-black text-dtsc-muted">{orders?.pagination.total || 0}</span></div>
+      <div className="mt-3 flex flex-wrap items-center justify-end gap-2" aria-label={locale === "en" ? "Order exports" : "Exports des commandes"}>
+        <span className="mr-auto text-xs text-dtsc-muted">{locale === "en" ? "Current filters · up to 5,000 authorized orders" : "Filtres actuels · jusqu'à 5 000 commandes autorisées"}</span>
+        {(["csv", "xlsx", "pdf"] as const).map((format) => (
+          <Button key={format} type="button" size="sm" variant="outline" disabled={Boolean(busy) || exportingOrders || !orders}
+            onClick={() => void exportOmnichannelOrders(format)}>{format.toUpperCase()}</Button>
+        ))}
+      </div>
+      <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
+        <label className="text-xs font-semibold text-dtsc-muted">Recherche<Input value={ordersSearch} onChange={(e) => { setOrdersSearch(e.target.value); setOrdersPage(1); }} placeholder="Référence ou titre…" className="mt-1" /></label>
+        <label className="text-xs font-semibold text-dtsc-muted">Statut<select className="mt-1 h-10 w-full rounded-lg border border-dtsc-border bg-dtsc-page px-2 text-dtsc-ink" value={ordersStatus} onChange={(e) => { setOrdersStatus(e.target.value); setOrdersPage(1); }}><option value="">Tous</option>{["RESERVED","RESERVATION_FAILED","CANCELLED","FULFILLED"].map(v => <option key={v} value={v}>{customerFacingStatusLabel(v,locale)}</option>)}</select></label>
+        <label className="text-xs font-semibold text-dtsc-muted">{locale === "en" ? "Channel" : "Canal"}<select className="mt-1 h-10 w-full rounded-lg border border-dtsc-border bg-dtsc-page px-2 text-dtsc-ink" value={ordersChannel} onChange={(e) => { setOrdersChannel(e.target.value); setOrdersPage(1); }}><option value="">{locale === "en" ? "All" : "Tous"}</option>{["POS","ONLINE","WHATSAPP","PHONE","MARKETPLACE"].map((code) => <option key={code} value={code}>{code}</option>)}</select></label>
+        <label className="text-xs font-semibold text-dtsc-muted">Mode<select className="mt-1 h-10 w-full rounded-lg border border-dtsc-border bg-dtsc-page px-2 text-dtsc-ink" value={ordersMode} onChange={(e) => { setOrdersMode(e.target.value); setOrdersPage(1); }}><option value="">Tous</option>{MODES.map(v => <option key={v.code} value={v.code}>{customerFacingFulfillmentMode(v.code,locale)}</option>)}</select></label>
+        <label className="text-xs font-semibold text-dtsc-muted">Du<input type="date" value={ordersFrom} max={ordersTo || undefined} onChange={(e) => { setOrdersFrom(e.target.value); setOrdersPage(1); }} className="mt-1 h-10 w-full rounded-lg border border-dtsc-border bg-dtsc-page px-2 text-dtsc-ink" /></label>
+        <label className="text-xs font-semibold text-dtsc-muted">Au<input type="date" value={ordersTo} min={ordersFrom || undefined} onChange={(e) => { setOrdersTo(e.target.value); setOrdersPage(1); }} className="mt-1 h-10 w-full rounded-lg border border-dtsc-border bg-dtsc-page px-2 text-dtsc-ink" /></label>
+      </div>
       <div className="mt-3 grid grid-cols-[minmax(0,1fr)] gap-2">
         {(orders?.items || []).map((row) => {
           const order = row.order;
@@ -373,6 +488,7 @@ export function RetailOmnichannelPanel({ organizationId, locale }: Props) {
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="break-words font-black text-dtsc-ink">{order?.reference || row.context.salesOrderId}</span>
                     <span className={`rounded-full px-2 py-1 text-[11px] font-black ${statusClass(row.context.status)}`}>{customerFacingStatusLabel(row.context.status, locale)}</span>
+                    <span className="rounded-full bg-cyan-500/10 px-2 py-1 text-[11px] font-black text-cyan-800 dark:text-cyan-200">{row.context.channelCode || "POS"}</span>
                     <span className="rounded-full bg-violet-500/10 px-2 py-1 text-[11px] font-black text-violet-700 dark:text-violet-300">{customerFacingFulfillmentMode(row.context.fulfillmentMode, locale)}</span>
                   </div>
                   <p className="mt-1 text-xs text-dtsc-muted">
@@ -383,13 +499,20 @@ export function RetailOmnichannelPanel({ organizationId, locale }: Props) {
                 </div>
                 <div className="flex flex-wrap items-start gap-2 sm:flex-col sm:items-end">
                   <p className="text-xs font-semibold text-dtsc-muted">{new Date(row.context.createdAt).toLocaleString(locale === "en" ? "en-US" : "fr-FR")}</p>
-                  {canCancel ? (
-                    <Button type="button" size="sm" variant="outline" disabled={cancellationBusy || Boolean(busy)} onClick={() => {
-                      setCancellingOrderId(order!.id);
-                      setCancellationReason("");
-                    }}><X className="h-4 w-4" />{cancelCopy.cancel}</Button>
-                  ) : null}
-                  {canReturn ? <Button type="button" size="sm" variant="outline" disabled={returnBusy || Boolean(busy)} onClick={() => void openReturns(order!)}><PackageCheck className="h-4 w-4" />{returnCopy.open}</Button> : null}
+                  <details className="relative text-xs">
+                    <summary aria-label={locale === "en" ? "Order actions" : "Actions de la commande"} className="min-h-10 cursor-pointer list-none rounded-xl border border-dtsc-border px-3 py-2 font-black text-dtsc-blue">⋯ {locale === "en" ? "Actions" : "Actions"}</summary>
+                    <div className="absolute right-0 z-20 mt-1 min-w-60 space-y-2 rounded-xl border border-dtsc-border bg-dtsc-surface p-3 shadow-lg">
+                      <p className="text-xs font-semibold text-dtsc-muted">{locale === "en" ? "Reservations" : "Réservations de stock"} : {row.reservations.length}</p>
+                      {canCancel ? (
+                        <Button type="button" size="sm" variant="outline" disabled={cancellationBusy || Boolean(busy)} onClick={() => {
+                          setCancellingOrderId(order!.id);
+                          setCancellationReason("");
+                        }}><X className="h-4 w-4" />{cancelCopy.cancel}</Button>
+                      ) : null}
+                      {canReturn ? <Button type="button" size="sm" variant="outline" disabled={returnBusy || Boolean(busy)} onClick={() => void openReturns(order!)}><PackageCheck className="h-4 w-4" />{returnCopy.open}</Button> : null}
+                      {!canCancel && !canReturn ? <p className="text-dtsc-muted">{locale === "en" ? "No transition authorized at this stage." : "Aucune transition autorisée à cette étape."}</p> : null}
+                    </div>
+                  </details>
                 </div>
               </div>
               {order && cancellingOrderId === order.id && canCancel ? (
@@ -407,8 +530,12 @@ export function RetailOmnichannelPanel({ organizationId, locale }: Props) {
             </div>
           );
         })}
-        {!orders?.items.length ? <p className="text-sm text-dtsc-muted">{locale === "en" ? "No customer order yet." : "Aucune commande client pour le moment."}</p> : null}
+        {!orders?.items.length ? <p className="text-sm text-dtsc-muted">{locale === "en" ? "No customer order matches these filters." : "Aucune commande client ne correspond à ces filtres."}</p> : null}
       </div>
+      {orders && orders.pagination.pageCount > 1 ? <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-dtsc-muted">
+        <span>Page {orders.pagination.page} / {orders.pagination.pageCount} · {orders.pagination.total} commandes</span>
+        <div className="flex gap-2"><Button type="button" variant="outline" size="sm" disabled={ordersPage <= 1 || Boolean(busy)} onClick={() => setOrdersPage(v => v - 1)}>Précédent</Button><Button type="button" variant="outline" size="sm" disabled={ordersPage >= orders.pagination.pageCount || Boolean(busy)} onClick={() => setOrdersPage(v => v + 1)}>Suivant</Button></div>
+      </div> : null}
     </div>
     {returningOrder ? <div role="presentation" data-no-group-swipe className="fixed inset-0 z-[90] flex min-w-0 items-start justify-center overflow-y-auto bg-black/65 p-3 pb-[max(1rem,env(safe-area-inset-bottom))] pt-[max(1rem,env(safe-area-inset-top))] sm:p-6">
       <div role="dialog" aria-modal="true" aria-label={returnCopy.title} className="my-auto w-full min-w-0 max-w-3xl space-y-4 rounded-2xl border border-dtsc-border bg-dtsc-surface p-4 text-dtsc-ink shadow-2xl sm:p-6">

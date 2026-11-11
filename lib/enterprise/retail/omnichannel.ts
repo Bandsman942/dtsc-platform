@@ -23,6 +23,8 @@ import { prisma } from "@/lib/prisma";
 
 export const RETAIL_OMNICHANNEL_MODES = ["CLICK_COLLECT", "PICKUP_OTHER_STORE", "SHIP_FROM_STORE", "CUSTOMER_DELIVERY"] as const;
 export type RetailOmnichannelMode = (typeof RETAIL_OMNICHANNEL_MODES)[number];
+export const RETAIL_OMNICHANNEL_CHANNELS = ["POS", "ONLINE", "WHATSAPP", "PHONE", "MARKETPLACE"] as const;
+export type RetailOmnichannelChannel = (typeof RETAIL_OMNICHANNEL_CHANNELS)[number];
 
 type OmnichannelInput = {
   idempotencyKey: string;
@@ -31,6 +33,7 @@ type OmnichannelInput = {
   fulfillmentWarehouseId: string;
   pickupSiteId?: string | null;
   fulfillmentMode: RetailOmnichannelMode;
+  channelCode?: RetailOmnichannelChannel;
   currencyCode: string;
   expectedFulfillmentAt?: Date | null;
   reservationExpiresAt?: Date | null;
@@ -47,6 +50,7 @@ function assertSameOmnichannelRequest(
     fulfillmentWarehouseId: string;
     pickupSiteId: string | null;
     fulfillmentMode: string;
+    channelCode: string;
   },
   order: {
     businessPartyId: string;
@@ -60,6 +64,7 @@ function assertSameOmnichannelRequest(
     context.fulfillmentWarehouseId !== input.fulfillmentWarehouseId ||
     (context.pickupSiteId || null) !== (input.pickupSiteId || null) ||
     context.fulfillmentMode !== input.fulfillmentMode ||
+    (context.channelCode || "POS") !== (input.channelCode || "POS") ||
     order.businessPartyId !== input.customerBusinessPartyId ||
     order.currency.toUpperCase() !== input.currencyCode.toUpperCase() ||
     requestedLines.size !== input.lines.length ||
@@ -139,23 +144,24 @@ export async function createRetailOmnichannelOrder(organizationId: string, actor
   if (input.fulfillmentMode === "PICKUP_OTHER_STORE" && (!input.pickupSiteId || pickupSite?.id === site.id)) throw new EnterpriseRetailError("RETAIL_OMNICHANNEL_OTHER_STORE_REQUIRED", 409);
   if (input.fulfillmentMode === "CLICK_COLLECT" && pickupSite && pickupSite.id !== warehouse.siteId) throw new EnterpriseRetailError("RETAIL_OMNICHANNEL_PICKUP_WAREHOUSE_MISMATCH", 409);
 
+  const channelCode = input.channelCode || "POS";
   const decisions = await resolveRetailCommercialPricingDecisions(
     organizationId,
     { siteId: input.sourceSiteId, customerBusinessPartyId: input.customerBusinessPartyId, currencyCode: input.currencyCode, soldAt: new Date(), lines: input.lines },
-    { couponCode: null, customerSegmentCode: null, channelCode: "POS" },
+    { couponCode: null, customerSegmentCode: null, channelCode },
   );
   const relationshipResolution = await resolveRetailRelationshipBenefitPricing({
     organizationId,
     customerBusinessPartyId: input.customerBusinessPartyId,
     currencyCode: input.currencyCode,
     siteId: input.sourceSiteId,
-    channelCode: "POS",
+    channelCode,
     decisions,
   });
   const pricedDecisions = applyRetailRelationshipBenefitPricing(decisions, relationshipResolution.adjustment);
   const cashbackEffects = await resolveRetailRelationshipCashbackEffects({
     organizationId, customerBusinessPartyId: input.customerBusinessPartyId,
-    currencyCode: input.currencyCode, siteId: input.sourceSiteId, channelCode: "POS",
+    currencyCode: input.currencyCode, siteId: input.sourceSiteId, channelCode,
     decisions: pricedDecisions,
   });
   const catalogById = new Map(catalog.map((item) => [item.id, item]));
@@ -221,7 +227,7 @@ export async function createRetailOmnichannelOrder(organizationId: string, actor
       lineTotal: line.lineTotal,
     })),
     eventMetadata: {
-      channelCode: "POS", fulfillmentMode: input.fulfillmentMode, sourceSiteId: site.id,
+      channelCode, fulfillmentMode: input.fulfillmentMode, sourceSiteId: site.id,
       fulfillmentWarehouseId: warehouse.id, pickupSiteId: pickupSite?.id || null,
       relationshipBenefitIds: [...new Set([...relationshipResolution.effects, ...cashbackEffects].map((effect) => effect.benefitId))],
     },
@@ -239,7 +245,7 @@ export async function createRetailOmnichannelOrder(organizationId: string, actor
       await tx.enterpriseRetailOrderOrchestration.create({
         data: {
           organizationId, salesOrderId: orderId, idempotencyKey: input.idempotencyKey,
-          channelCode: "POS", fulfillmentMode: input.fulfillmentMode,
+          channelCode, fulfillmentMode: input.fulfillmentMode,
           sourceSiteId: site.id, fulfillmentWarehouseId: warehouse.id,
           pickupSiteId: pickupSite?.id || null, status: "RESERVING",
           createdByUserId: actorUserId,
@@ -370,10 +376,27 @@ export async function cancelRetailOmnichannelOrder(
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 30000 });
 }
 
-export async function getRetailOmnichannelOrders(organizationId: string, page = 1, pageSize = 20, permittedSiteIds?: string[]) {
+export async function getRetailOmnichannelOrders(organizationId: string, page = 1, pageSize = 20, permittedSiteIds?: string[], filters?: { status?: string; mode?: string; channel?: string; search?: string; from?: Date; toExclusive?: Date }) {
+  const matches = filters?.search ? await prisma.enterpriseSalesOrder.findMany({
+    where: { organizationId, archivedAt: null, OR: [
+      { reference: { contains: filters.search, mode: "insensitive" } },
+      { title: { contains: filters.search, mode: "insensitive" } },
+    ] },
+    select: { id: true },
+    take: 1001,
+  }) : null;
+  if (matches && matches.length > 1000) throw new EnterpriseRetailError("RETAIL_SEARCH_TOO_BROAD", 422);
   const where: Prisma.EnterpriseRetailOrderOrchestrationWhereInput = {
     organizationId, archivedAt: null,
     ...(permittedSiteIds ? { sourceSiteId: { in: permittedSiteIds } } : {}),
+    ...(filters?.status ? { status: filters.status } : {}),
+    ...(filters?.mode ? { fulfillmentMode: filters.mode } : {}),
+    ...(filters?.channel ? { channelCode: filters.channel } : {}),
+    ...(matches ? { salesOrderId: { in: matches.map((row) => row.id) } } : {}),
+    ...(filters?.from || filters?.toExclusive ? { createdAt: {
+      ...(filters.from ? { gte: filters.from } : {}),
+      ...(filters.toExclusive ? { lt: filters.toExclusive } : {}),
+    } } : {}),
   };
   const [contexts, total] = await Promise.all([
     prisma.enterpriseRetailOrderOrchestration.findMany({ where, orderBy: [{ createdAt: "desc" }], skip: (page - 1) * pageSize, take: pageSize }),

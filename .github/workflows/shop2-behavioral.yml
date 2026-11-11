@@ -47,6 +47,8 @@ on:
       - "scripts/seed-shop2-behavioral-e2e.mjs"
       - "scripts/seed-shop2-commercial-e2e.mjs"
       - "scripts/qa-shop2-inventory-schema-parity.mjs"
+      - "scripts/qa-retail-five-lots-1116.mjs"
+      - "lib/enterprise/retail/offline-invoice.ts"
       - "scripts/qa-shop2-retail-frontend-contract.mjs"
       - "scripts/qa-shop2-commercial-engine.mjs"
       - "scripts/qa-hotfix-786-relationship-benefits-enforcement.mjs"
