@@ -65,14 +65,13 @@ export async function buildRetailOfflineSnapshot(args: {
   currencyCode: string;
   maxItems: number;
 }) {
-  await requireRetailSiteCapability(args.organizationId, args.actorUserId, args.siteId, "COLLECT_PAYMENT", prisma, { requireAssignment: true });
   const configuration = await prisma.enterpriseRetailConfiguration.findUnique({
     where: { organizationId: args.organizationId }, select: { settingsJson: true },
   });
   const settings = configuration?.settingsJson;
-  if (settings && typeof settings === "object" && !Array.isArray(settings) && settings.invoiceCheckoutEnabled === true) {
-    throw new EnterpriseRetailError("RETAIL_OFFLINE_INVOICE_CHECKOUT_NOT_SUPPORTED", 409);
-  }
+  const invoiceDraftMode = Boolean(settings && typeof settings === "object" && !Array.isArray(settings) && settings.invoiceCheckoutEnabled === true);
+  await requireRetailSiteCapability(args.organizationId, args.actorUserId, args.siteId,
+    invoiceDraftMode ? "PREPARE_INVOICE" : "COLLECT_PAYMENT", prisma, { requireAssignment: true });
   const now = new Date();
   const [site, warehouse, totalCatalogItems, catalogItems, activePromotionCount, activePriceConditionCount] = await Promise.all([
     prisma.enterpriseSite.findFirst({
@@ -139,7 +138,7 @@ export async function buildRetailOfflineSnapshot(args: {
     inventoryItemIds.length
       ? prisma.enterpriseInventoryBalance.findMany({
           where: { organizationId: args.organizationId, warehouseId: args.warehouseId, inventoryItemId: { in: inventoryItemIds } },
-          select: { inventoryItemId: true, quantityOnHand: true, quantityReserved: true },
+          select: { inventoryItemId: true, stockLotId: true, quantityOnHand: true, quantityReserved: true },
         })
       : Promise.resolve([]),
     inventoryItemIds.length
@@ -158,6 +157,7 @@ export async function buildRetailOfflineSnapshot(args: {
 
   const pricingByItem = new Map((pricingPreview?.lines || []).map((line) => [line.catalogItemId, line]));
   const inventoryByCatalog = new Map(inventoryItems.map((item) => [item.catalogItemId, item.id]));
+  const lotTrackedInventory = new Set(balances.filter((row) => row.stockLotId).map((row) => row.inventoryItemId));
   const onHandByInventory = new Map<string, Prisma.Decimal>();
   const legacyReservedByInventory = new Map<string, Prisma.Decimal>();
   for (const row of balances) {
@@ -205,7 +205,7 @@ export async function buildRetailOfflineSnapshot(args: {
       trackInventory: item.trackInventory,
       quantityAvailable: available.toFixed(),
       updatedAt: item.updatedAt.toISOString(),
-      offlineEligible: !dynamicPricingBlocked && Boolean(pricing) && (!item.trackInventory || Boolean(inventoryItemId)),
+      offlineEligible: !dynamicPricingBlocked && Boolean(pricing) && (!item.trackInventory || Boolean(inventoryItemId) && !lotTrackedInventory.has(inventoryItemId)),
     };
   });
 
@@ -226,8 +226,9 @@ export async function buildRetailOfflineSnapshot(args: {
     catalog: { total: totalCatalogItems, returned: items.length, truncated: totalCatalogItems > items.length, items },
     policy: {
       saleEnabled: !dynamicPricingBlocked,
+      draftOnly: invoiceDraftMode,
       blockingReason,
-      allowedTenderTypes: ["CASH"],
+      allowedTenderTypes: invoiceDraftMode ? [] : ["CASH"],
       blockedTenderTypes: ["CARD", "MOBILE_MONEY", "TELCO", "BANK_TRANSFER", "GIFT_CARD", "STORE_CREDIT"],
       customerSelectionAllowed: false,
       couponAllowed: false,
