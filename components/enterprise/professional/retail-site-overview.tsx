@@ -11,10 +11,12 @@ import { downloadProfessionalCsv, downloadProfessionalXlsx } from "@/lib/reporti
 import { downloadProfessionalPdfV2 } from "@/lib/reporting/professional-pdf-v2";
 import { RETAIL_EXECUTIVE_METRICS, type RetailExecutiveMetric, type RetailExecutiveSummary } from "@/lib/enterprise/retail/executive-metrics";
 import { retailMetricTimeCaption } from "@/lib/enterprise/retail/financial-metric-definitions";
+import type { RetailFinancialTrace } from "@/lib/enterprise/retail/financial-drilldown";
 import { DEFAULT_RETAIL_DASHBOARD_PREFERENCES, type RetailDashboardPreferences } from "@/lib/enterprise/retail/dashboard-preferences";
 import { buildRetailExecutiveExport } from "@/lib/enterprise/retail/site-financial-export";
 import { notifyToast } from "@/lib/client-toast";
 const RetailCogsWorkspace = dynamic(() => import("@/components/enterprise/professional/retail-cogs-workspace").then((module) => module.RetailCogsWorkspace));
+const RetailFinancialDrilldown = dynamic(() => import("@/components/enterprise/professional/retail-financial-drilldown").then((view) => view.RetailFinancialDrilldown));
 
 type Money = { currencyCode: string; total: string; count: number };
 type Tender = Money & { method: string };
@@ -66,6 +68,9 @@ export function RetailSiteOverview({ organizationId, organizationName, locale, t
   const [cogsOpen, setCogsOpen] = useState(false);
   const [cogsSite, setCogsSite] = useState("");
   const [cogsCurrency, setCogsCurrency] = useState("");
+  const [traceMetric, setTraceMetric] = useState<RetailFinancialTrace | null>(null);
+  const [traceSite, setTraceSite] = useState("");
+  const [traceCurrency, setTraceCurrency] = useState("");
   const [prefsRevision, setPrefsRevision] = useState(0);
   const [preferences, setPreferences] = useState<RetailDashboardPreferences>(DEFAULT_RETAIL_DASHBOARD_PREFERENCES);
   const [prefsLoaded, setPrefsLoaded] = useState(false);
@@ -73,7 +78,7 @@ export function RetailSiteOverview({ organizationId, organizationName, locale, t
   const [summaries, setSummaries] = useState<Array<{ siteId: string; currencies: RetailExecutiveSummary[] }>>([]);
   const [corporate, setCorporate] = useState<RetailExecutiveSummary[]>([]);
   const [unallocated, setUnallocated] = useState<{ mobileMoney: Site["mobileMoney"]; telco: Site["telco"]; treasury: Site["treasury"] }>({ mobileMoney: [], telco: [], treasury: [] });
-  const [sourceAvailability, setSourceAvailability] = useState({ agency: false, telco: false, treasury: false, inventory: false, accounting: false, reports: false, reportCreate: false });
+  const [sourceAvailability, setSourceAvailability] = useState({ agency: false, telco: false, treasury: false, inventory: false, accounting: false, financeReceivables: false, financePayments: false, financeBudgets: false, reports: false, reportCreate: false });
   const [items, setItems] = useState<Site[]>([]);
   const [unallocatedLedger, setUnallocatedLedger] = useState<RetailPostedLedger[]>([]);
   const [reportPeriod, setReportPeriod] = useState({ from: "", to: "" });
@@ -133,7 +138,7 @@ export function RetailSiteOverview({ organizationId, organizationName, locale, t
       setUnallocatedLedger(payload.unallocatedPostedLedger || []);
       setReportPeriod(payload.period || { from: "", to: "" });
       setTrend(payload.timeline || []); setSummaries(payload.summaries || []); setCorporate(payload.corporate || []); setUnallocated(payload.unallocated || { mobileMoney: [], telco: [], treasury: [] });
-      setSourceAvailability(payload.sourceAvailability || { agency: false, telco: false, treasury: false, inventory: false, accounting: false, reports: false, reportCreate: false });
+      setSourceAvailability(payload.sourceAvailability || { agency: false, telco: false, treasury: false, inventory: false, accounting: false, financeReceivables: false, financePayments: false, financeBudgets: false, reports: false, reportCreate: false });
     } catch (caught) { setError(customerFacingError(caught, locale)); }
     finally { setLoading(false); }
   }, [organizationId, days, dateFrom, dateTo, en, locale, timezone]);
@@ -182,6 +187,20 @@ export function RetailSiteOverview({ organizationId, organizationName, locale, t
     period={reportPeriod} initialSiteId={cogsSite} initialCurrency={cogsCurrency}
     sites={items.map((site) => ({ id: site.id, name: site.name }))} canSaveReport={sourceAvailability.reportCreate}
     onBack={() => setCogsOpen(false)} />;
+  const canInspectMetric = (value: RetailExecutiveMetric) => {
+    if (value === "postedCogs") return sourceAvailability.accounting;
+    if (value === "postedRevenue" || value === "postedGrossMargin" || value === "postedOperatingResult") return sourceAvailability.accounting;
+    if (value === "financeCollections") return sourceAvailability.financeReceivables && sourceAvailability.financePayments;
+    if (value === "invoices" || value === "outstanding" || value === "overdue") return sourceAvailability.financeReceivables;
+    if (value === "treasuryAvailable") return sourceAvailability.treasury;
+    if (value === "expenses") return sourceAvailability.financeBudgets;
+    if (value === "mobileMoneyCommission") return sourceAvailability.agency;
+    if (value === "telcoMargin") return sourceAvailability.telco;
+    return value === "posSales";
+  };
+  if (traceMetric) return <RetailFinancialDrilldown organizationId={organizationId} locale={locale}
+    metric={traceMetric} period={reportPeriod} initialSiteId={traceSite} initialCurrency={traceCurrency}
+    sites={items.map((site) => ({ id: site.id, name: site.name }))} onBack={() => setTraceMetric(null)} />;
   return <section data-testid="retail-multisite-overview" className="min-w-0 rounded-2xl border border-dtsc-border bg-dtsc-surface p-4 shadow-sm sm:p-5">
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div className="flex min-w-0 items-start gap-3"><Building2 className="mt-1 h-5 w-5 shrink-0 text-dtsc-blue" /><div className="min-w-0"><h2 className="font-black text-dtsc-ink">{en ? "Store management overview" : "Pilotage des boutiques"}</h2><p className="mt-1 text-sm text-dtsc-muted">{en ? "Operational activity by store and currency; only the company owner/admin can access this comparison." : "Activités par boutique et par devise, réservées au propriétaire et à l'administration."}</p></div></div>
@@ -233,7 +252,7 @@ export function RetailSiteOverview({ organizationId, organizationName, locale, t
             <p className={`mt-2 break-words text-base font-black tabular-nums sm:text-lg ${Number(raw) < 0 ? "text-red-600 dark:text-red-300" : "text-dtsc-ink"}`}>{unavailable ? (en ? "Not determined" : "Non déterminé") : currencyAmount(raw, bucket.currencyCode, en)}</p>
             <span className="mt-1 inline-flex rounded-full border border-dtsc-border bg-dtsc-page px-2 py-0.5 text-[10px] font-semibold text-dtsc-muted">{retailMetricTimeCaption(metric, locale)}</span>
             <p className="mt-1 text-[10px] leading-relaxed text-dtsc-muted">{METRIC_COPY[metric][en ? 3 : 2]}</p>
-            {metric === "postedCogs" ? <button type="button" className="absolute inset-0 rounded-xl focus-visible:outline-2 focus-visible:outline-cyan-500 hover:ring-2 hover:ring-cyan-500/60" aria-label={en ? `Inspect posted cost of sales in ${bucket.currencyCode}` : `Consulter le détail du coût des ventes en ${bucket.currencyCode}`} onClick={() => { setCogsSite(siteFilter); setCogsCurrency(bucket.currencyCode); setCogsOpen(true); }}><span className="sr-only">{en ? "Open accounting trace" : "Ouvrir la traçabilité comptable"}</span></button> : null}
+            {canInspectMetric(metric) ? <button type="button" className="absolute inset-0 rounded-xl focus-visible:outline-2 focus-visible:outline-cyan-500 hover:ring-2 hover:ring-cyan-500/60" aria-label={en ? `Inspect ${METRIC_COPY[metric][1]} in ${bucket.currencyCode}` : `Consulter ${METRIC_COPY[metric][0]} en ${bucket.currencyCode}`} onClick={() => { if (metric === "postedCogs") { setCogsSite(siteFilter); setCogsCurrency(bucket.currencyCode); setCogsOpen(true); } else { setTraceMetric(metric as RetailFinancialTrace); setTraceSite(siteFilter); setTraceCurrency(bucket.currencyCode); } }}><span className="sr-only">{en ? "Open source details" : "Ouvrir les pièces sources"}</span></button> : null}
           </div>;
         })}</div>
       </div>) : <p className="rounded-xl border border-dtsc-border bg-dtsc-page p-3 text-sm text-dtsc-muted">{en ? "No financial event for the selected scope. Balances may still exist in other stores or currencies." : "Aucune opération financière dans ce périmètre. Des soldes peuvent exister dans d'autres boutiques ou devises."}</p>}
