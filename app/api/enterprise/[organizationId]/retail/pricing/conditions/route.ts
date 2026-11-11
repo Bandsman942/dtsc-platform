@@ -18,7 +18,7 @@ export async function GET(req: Request, { params }: Params) {
     const page = Math.max(1, Math.min(1000, Number(params.get("page") || "1") || 1));
     const pageSize = Math.max(5, Math.min(100, Number(params.get("pageSize") || "20") || 20));
     const from = params.get("from") || "", to = params.get("to") || "";
-    if ([from, to].some((v) => v && (!/^\\d{4}-\\d{2}-\\d{2}$/.test(v) || !Number.isFinite(Date.parse(v + "T00:00:00.000Z")))) || (from && to && from > to)) {
+    if ([from, to].some((v) => v && (!/^\d{4}-\d{2}-\d{2}$/.test(v) || !Number.isFinite(Date.parse(v + "T00:00:00.000Z")))) || (from && to && from > to)) {
       return NextResponse.json({ error: "RETAIL_DATE_RANGE_INVALID", message: "Vérifiez la période des règles." }, { status: 400 });
     }
     const result = await listRetailPriceConditions(organizationId, {
