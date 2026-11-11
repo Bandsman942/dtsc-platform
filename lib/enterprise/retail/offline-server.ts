@@ -205,7 +205,7 @@ export async function buildRetailOfflineSnapshot(args: {
       trackInventory: item.trackInventory,
       quantityAvailable: available.toFixed(),
       updatedAt: item.updatedAt.toISOString(),
-      offlineEligible: !dynamicPricingBlocked && Boolean(pricing) && (!item.trackInventory || Boolean(inventoryItemId) && !lotTrackedInventory.has(inventoryItemId)),
+      offlineEligible: !dynamicPricingBlocked && Boolean(pricing) && (!item.trackInventory || (inventoryItemId !== null && !lotTrackedInventory.has(inventoryItemId))),
     };
   });
 
