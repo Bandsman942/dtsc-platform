@@ -151,7 +151,9 @@ export function RetailDeviceReadiness({ organizationId, locale = "fr" }: { organ
   return (
     <section className="space-y-4 rounded-2xl border border-dtsc-border bg-dtsc-surface p-4 sm:p-5" aria-label="Équipements d'encaissement">
       <header className="flex flex-wrap items-start justify-between gap-3">
-        <div><h2 className="text-lg font-black text-dtsc-ink">{locale === "en" ? "Retail equipment" : "Équipements du commerce de détail"}</h2><p className="text-sm text-dtsc-muted">{locale === "en" ? "Register device profiles, then verify real hardware connectivity." : "Enregistrez les profils des appareils puis vérifiez leur connexion matérielle réelle."}</p></div>
+        <div><h2 className="text-lg font-black text-dtsc-ink">{locale === "en" ? "Retail equipment" : "Équipements du commerce de détail"}</h2>
+          <p className="text-xs font-bold text-dtsc-blue">{locale === "en" ? "Checkout equipment" : "Équipements d’encaissement"}</p>
+          <p className="text-sm text-dtsc-muted">{locale === "en" ? "Register device profiles, then verify real hardware connectivity." : "Enregistrez les profils des appareils puis vérifiez leur connexion matérielle réelle."}</p></div>
         <div className="flex flex-wrap gap-2">
           {!forbidden && (["csv", "xlsx", "pdf"] as const).map((format) => (
             <button key={format} type="button" disabled={exporting || !loaded || failed}
@@ -204,7 +206,7 @@ export function RetailDeviceReadiness({ organizationId, locale = "fr" }: { organ
               <button type="button" className="mt-2 rounded-lg border px-3 py-1" onClick={() => setTestingScannerId(null)}>Fermer le test</button>
             </div>}
             <p className="mt-2 text-xs text-dtsc-muted">{optionLabels[device.connectionMode]} · {device.status === "ACTIVE" ? "Profil actif" : "Désactivé"}</p>
-            <span className={`mt-2 inline-flex rounded-lg px-2 py-1 text-xs font-bold ${state.reason === "DISABLED" ? "bg-slate-500/10 text-dtsc-muted" : "bg-amber-500/10 text-amber-700 dark:text-amber-300"}`}>{state.reason === "AVAILABLE" ? "Interface disponible — connexion non testée" : state.reason === "EXTERNAL_BRIDGE" ? "Adaptateur externe à vérifier" : state.reason === "MANUAL_FALLBACK" ? "Utilisation manuelle" : state.reason === "DISABLED" ? "Désactivé" : "Interface non disponible sur ce navigateur"}</span>
+            <span className={`mt-2 inline-flex rounded-lg px-2 py-1 text-xs font-bold ${state.reason === "DISABLED" ? "bg-slate-500/10 text-dtsc-muted" : "bg-amber-500/10 text-amber-700 dark:text-amber-300"}`}>{state.reason === "AVAILABLE" ? "Interface disponible — connexion non testée" : state.reason === "EXTERNAL_BRIDGE" ? "Adaptateur externe à vérifier" : state.reason === "MANUAL_FALLBACK" ? "Utilisation manuelle possible" : state.reason === "DISABLED" ? "Désactivé" : "Interface non disponible sur ce navigateur"}</span>
           </article>;
         })}</div>
         {pagination.total > pagination.pageSize && <div className="flex items-center justify-between text-xs text-dtsc-muted"><span>{pagination.total} équipements · Page {Math.min(page, pageCount)}/{pageCount}</span><div className="flex gap-2"><button type="button" className="rounded-lg border border-dtsc-border px-3 py-2" disabled={page <= 1} onClick={() => setPage((v) => v - 1)}>Précédent</button><button type="button" className="rounded-lg border border-dtsc-border px-3 py-2" disabled={page >= pageCount} onClick={() => setPage((v) => v + 1)}>Suivant</button></div></div>}
