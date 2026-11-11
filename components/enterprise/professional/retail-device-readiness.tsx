@@ -9,7 +9,7 @@ import { toastError, toastSuccess } from "@/lib/client-toast";
 type DeviceType = "BARCODE_SCANNER" | "RECEIPT_PRINTER" | "CASH_DRAWER" | "PAYMENT_TERMINAL" | "CUSTOMER_DISPLAY" | "SCALE";
 type ConnectionMode = "BROWSER" | "WEBUSB" | "WEBBLUETOOTH" | "WEBSERIAL" | "NETWORK" | "NATIVE_BRIDGE" | "MANUAL";
 type Device = { id: string; code: string; name: string; deviceType: DeviceType; connectionMode: ConnectionMode; status: "ACTIVE" | "DISABLED"; siteId: string | null };
-type Form = { id?: string; code: string; name: string; deviceType: DeviceType; connectionMode: ConnectionMode; status: "ACTIVE" | "DISABLED" };
+type Form = { id?: string; siteId?: string | null; code: string; name: string; deviceType: DeviceType; connectionMode: ConnectionMode; status: "ACTIVE" | "DISABLED" };
 const EMPTY: Form = { code: "", name: "", deviceType: "RECEIPT_PRINTER", connectionMode: "BROWSER", status: "ACTIVE" };
 const types: DeviceType[] = ["RECEIPT_PRINTER", "BARCODE_SCANNER", "CASH_DRAWER", "PAYMENT_TERMINAL", "CUSTOMER_DISPLAY", "SCALE"];
 const modes: ConnectionMode[] = ["BROWSER", "WEBUSB", "WEBBLUETOOTH", "WEBSERIAL", "NETWORK", "NATIVE_BRIDGE", "MANUAL"];
@@ -21,6 +21,7 @@ const optionLabels: Record<ConnectionMode, string> = {
 
 export function RetailDeviceReadiness({ organizationId, locale = "fr" }: { organizationId: string; locale?: "fr" | "en" }) {
   const [devices, setDevices] = useState<Device[]>([]);
+  const [sites, setSites] = useState<Array<{ id: string; name: string }>>([]);
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
   const [forbidden, setForbidden] = useState(false);
@@ -45,6 +46,18 @@ export function RetailDeviceReadiness({ organizationId, locale = "fr" }: { organ
     finally { setLoaded(true); }
   }, [organizationId]);
   useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    let active = true;
+    fetch(`/api/enterprise/${organizationId}/retail/dashboard?moduleCode=RETAIL_POS`, { cache: "no-store" })
+      .then((r) => r.ok ? r.json() : null)
+      .then((data: { warehouses?: Array<{ site: { id: string; name: string } }> } | null) => {
+        if (!active) return;
+        const unique = new Map<string, { id: string; name: string }>();
+        for (const item of data?.warehouses || []) if (item.site) unique.set(item.site.id, item.site);
+        setSites([...unique.values()]);
+      }).catch(() => undefined);
+    return () => { active = false; };
+  }, [organizationId]);
 
   const filtered = useMemo(() => devices.filter((device) => {
     const needle = search.trim().toLocaleLowerCase();
@@ -60,7 +73,7 @@ export function RetailDeviceReadiness({ organizationId, locale = "fr" }: { organ
     try {
       const response = await fetch(`/api/enterprise/${encodeURIComponent(organizationId)}/retail/devices`, {
         method: "POST", headers: { "content-type": "application/json" },
-        body: JSON.stringify({ ...form, siteId: null }),
+        body: JSON.stringify({ ...form, siteId: form.siteId || null }),
       });
       const body = await response.json().catch(() => null) as { message?: string; error?: string } | null;
       if (!response.ok) throw new Error(body?.message || body?.error || "Impossible d’enregistrer cet équipement.");
@@ -94,7 +107,7 @@ export function RetailDeviceReadiness({ organizationId, locale = "fr" }: { organ
           const state = evaluateRetailDeviceAvailability(device, capabilities);
           return <article key={device.id} className="rounded-xl border border-dtsc-border bg-dtsc-page p-3">
             <div className="flex items-start justify-between gap-2"><div className="min-w-0"><strong className="block truncate text-sm text-dtsc-ink">{device.name}</strong><p className="text-xs text-dtsc-muted">{device.code} · {customerFacingDeviceType(device.deviceType, locale)}</p></div>
-              <button type="button" aria-label={`Configurer ${device.name}`} className="rounded-lg border border-dtsc-border p-2 text-dtsc-blue" onClick={() => setForm({ id: device.id, code: device.code, name: device.name, deviceType: device.deviceType, connectionMode: device.connectionMode, status: device.status })}><Settings2 className="h-4 w-4" /></button>
+              <button type="button" aria-label={`Configurer ${device.name}`} className="rounded-lg border border-dtsc-border p-2 text-dtsc-blue" onClick={() => setForm({ id: device.id, siteId: device.siteId, code: device.code, name: device.name, deviceType: device.deviceType, connectionMode: device.connectionMode, status: device.status })}><Settings2 className="h-4 w-4" /></button>
             </div><p className="mt-2 text-xs text-dtsc-muted">{optionLabels[device.connectionMode]} · {device.status === "ACTIVE" ? "Profil actif" : "Désactivé"}</p>
             <span className={`mt-2 inline-flex rounded-lg px-2 py-1 text-xs font-bold ${state.reason === "DISABLED" ? "bg-slate-500/10 text-dtsc-muted" : "bg-amber-500/10 text-amber-700 dark:text-amber-300"}`}>{state.reason === "AVAILABLE" ? "Interface disponible — connexion non testée" : state.reason === "EXTERNAL_BRIDGE" ? "Adaptateur externe à vérifier" : state.reason === "MANUAL_FALLBACK" ? "Utilisation manuelle" : state.reason === "DISABLED" ? "Désactivé" : "Interface non disponible sur ce navigateur"}</span>
           </article>;
@@ -108,6 +121,7 @@ export function RetailDeviceReadiness({ organizationId, locale = "fr" }: { organ
           <label className="text-xs font-semibold">Nom *<input className={commonField} required value={form.name} onChange={(e) => setForm((v) => v && { ...v, name: e.target.value })} /></label>
           <label className="text-xs font-semibold">Type *<select className={commonField} value={form.deviceType} onChange={(e) => setForm((v) => v && { ...v, deviceType: e.target.value as DeviceType })}>{types.map((t) => <option key={t} value={t}>{customerFacingDeviceType(t, locale)}</option>)}</select></label>
           <label className="text-xs font-semibold">Connexion *<select className={commonField} value={form.connectionMode} onChange={(e) => setForm((v) => v && { ...v, connectionMode: e.target.value as ConnectionMode })}>{modes.map((m) => <option key={m} value={m}>{optionLabels[m]}</option>)}</select></label>
+          <label className="text-xs font-semibold">Boutique<select className={commonField} value={form.siteId || ""} onChange={(e) => setForm((v) => v && { ...v, siteId: e.target.value || null })}><option value="">Commun à l'entreprise</option>{sites.map((site) => <option key={site.id} value={site.id}>{site.name}</option>)}</select></label>
           <label className="text-xs font-semibold">Statut<select className={commonField} value={form.status} onChange={(e) => setForm((v) => v && { ...v, status: e.target.value as Form["status"] })}><option value="ACTIVE">Actif</option><option value="DISABLED">Désactivé</option></select></label>
         </div>
         <p className="mt-3 text-xs text-dtsc-muted">Les paramètres spécifiques au modèle et à la boutique seront pris en charge par les adaptateurs compatibles. Aucun périphérique inconnu n'est automatiquement piloté par ce formulaire.</p>
