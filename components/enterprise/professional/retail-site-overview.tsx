@@ -85,6 +85,8 @@ export function RetailSiteOverview({ organizationId, organizationName, locale, t
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const en = locale === "en";
+  const orderedHighlightMetrics = [...HIGHLIGHT_METRICS].sort((first, second) => Number(preferences.favoriteMetrics.includes(second)) - Number(preferences.favoriteMetrics.includes(first)));
+
   useEffect(() => {
     const controller = new AbortController();
     void fetch(`/api/enterprise/${organizationId}/retail/dashboard-preferences`, { cache: "no-store", signal: controller.signal }).then(async (response) => {
@@ -233,6 +235,14 @@ export function RetailSiteOverview({ organizationId, organizationName, locale, t
         {currencies.map((currency) => <label key={currency} className="text-xs font-bold text-dtsc-muted">{en ? `Outstanding warning · ${currency}` : `Alerte créances · ${currency}`}<input type="number" min="0" step="1" max="1000000000000" className="mt-1 min-h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-surface p-2" value={preferences.warnOutstandingByCurrency[currency] ?? preferences.warnOutstandingAbove} onChange={(event) => setPreferences((value) => ({ ...value, warnOutstandingByCurrency: { ...value.warnOutstandingByCurrency, [currency]: Number(event.target.value) } }))} /></label>)}
         <label className="text-xs font-bold text-dtsc-muted">{en ? "Expiry warning days" : "Alerte péremption (jours)"}<input type="number" min="1" max="365" step="1" className="mt-1 min-h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-surface p-2" value={preferences.warnStockDays} onChange={(event) => setPreferences((value) => ({ ...value, warnStockDays: Number(event.target.value) }))} /></label>
         <label className="flex min-h-11 items-center gap-2 text-sm font-semibold text-dtsc-ink"><input type="checkbox" checked={preferences.showLegacyPos} onChange={(event) => setPreferences((value) => ({ ...value, showLegacyPos: event.target.checked }))} />{en ? "Show historical POS blocks" : "Afficher les flux POS historiques"}</label>
+        <fieldset className="min-w-0 sm:col-span-2 lg:col-span-4">
+          <legend className="text-xs font-bold text-dtsc-ink">{en ? "Priority indicators · display first" : "Indicateurs prioritaires · affichés en premier"}</legend>
+          <p className="mt-1 text-xs text-dtsc-muted">{en ? "Preferences only reorder the cards; they never change amounts or access rights." : "Les favoris modifient uniquement l'ordre des cartes, sans changer les montants ni les droits d'accès."}</p>
+          <div className="mt-2 flex flex-wrap gap-2">{HIGHLIGHT_METRICS.map((metric) => <label key={metric} className={`inline-flex min-h-11 items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold ${preferences.favoriteMetrics.includes(metric) ? "border-cyan-500 bg-cyan-500/10 text-dtsc-ink" : "border-dtsc-border bg-dtsc-surface text-dtsc-muted"}`}>
+            <input type="checkbox" checked={preferences.favoriteMetrics.includes(metric)} onChange={(event) => setPreferences((value) => ({ ...value, favoriteMetrics: event.target.checked ? [...value.favoriteMetrics, metric] : value.favoriteMetrics.filter((code) => code !== metric) }))} />
+            {METRIC_COPY[metric][en ? 1 : 0]}
+          </label>)}</div>
+        </fieldset>
       </div>
       <div className="mt-3 flex justify-end gap-2"><Button type="button" variant="outline" onClick={() => setShowSettings(false)}>{en ? "Cancel" : "Annuler"}</Button><Button type="button" disabled={savingSettings || !prefsLoaded} onClick={() => void savePreferences()}>{savingSettings ? (en ? "Saving…" : "Enregistrement…") : (en ? "Save settings" : "Enregistrer les paramètres")}</Button></div>
     </div> : null}
@@ -245,7 +255,7 @@ export function RetailSiteOverview({ organizationId, organizationName, locale, t
       </div> : null}
       {summaryRows.length ? summaryRows.map((bucket) => <div key={bucket.currencyCode} className="rounded-2xl border border-dtsc-border bg-dtsc-page p-3 sm:p-4">
         <div className="mb-3 flex flex-wrap items-center gap-2"><span className="rounded-full bg-cyan-500/15 px-3 py-1 text-xs font-black text-cyan-800 dark:text-cyan-200">{bucket.currencyCode}</span><span className="text-xs text-dtsc-muted">{en ? "Native currency · no cross-currency sum" : "Devise d'origine · aucun cumul entre devises"}</span></div>
-        <div className="grid min-w-0 grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-4">{HIGHLIGHT_METRICS.filter((metric) => (metric !== "posSales" || preferences.showLegacyPos) && (metric !== "mobileMoneyCommission" || sourceAvailability.agency) && (metric !== "telcoMargin" || sourceAvailability.telco) && (!metric.startsWith("posted") || sourceAvailability.accounting) && (metric !== "treasuryAvailable" || sourceAvailability.treasury)).map((metric) => {
+        <div className="grid min-w-0 grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-4">{orderedHighlightMetrics.filter((metric) => (metric !== "posSales" || preferences.showLegacyPos) && (metric !== "mobileMoneyCommission" || sourceAvailability.agency) && (metric !== "telcoMargin" || sourceAvailability.telco) && (!metric.startsWith("posted") || sourceAvailability.accounting) && (metric !== "treasuryAvailable" || sourceAvailability.treasury)).map((metric) => {
           const raw = bucket.values[metric]; const unavailable = bucket.unavailableMetrics?.includes(metric) ?? false; const warning = unavailable || metric === "overdue" && Number(raw) > 0 || metric === "outstanding" && Number(raw) >= (preferences.warnOutstandingByCurrency[bucket.currencyCode] ?? preferences.warnOutstandingAbove) && Number(raw) > 0;
           return <div key={metric} className={`relative min-w-0 rounded-xl border p-3 ${warning ? "border-amber-500/50 bg-amber-500/10" : metric === "financeCollections" || metric === "postedGrossMargin" ? "border-emerald-500/25 bg-emerald-500/5" : "border-dtsc-border bg-dtsc-surface"}`} title={METRIC_COPY[metric][en ? 3 : 2]}>
             <p className="flex items-start gap-1 text-[11px] font-bold text-dtsc-muted">{warning ? <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-600" /> : null}{METRIC_COPY[metric][en ? 1 : 0]}</p>
