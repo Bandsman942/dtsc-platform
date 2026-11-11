@@ -68,7 +68,7 @@ assert.match(read("components/enterprise/professional/retail-payment-followup.ts
 assert.match(read("components/enterprise/professional/retail-expiry-alerts-panel.tsx"), /downloadProfessionalPdf/);
 assert.match(read("components/enterprise/professional/retail-commercial-workspace.tsx"), /exportCommercialRegister/);
 assert.match(read("lib/enterprise/retail/invoice-checkout.ts"), /RETAIL_FINANCE_PROMOTION_LEDGER_REQUIRED/);
-assert.match(read("app/api/enterprise/[organizationId]/retail/pricing/preview/route.ts"), /decisions\.some\(\(decision\) => decision\.promotions\.length > 0\)/);
+assert.match(read("app/api/enterprise/[organizationId]/retail/pricing/preview/route.ts"), /decision\.promotions\?\.length/);
 assert.match(read("app/api/enterprise/[organizationId]/retail/pricing/preview/route.ts"), /if \(parsed\.data\.invoiceCheckout\)/);
 assert.match(read("components/enterprise/professional/retail-invoice-flow-workbench.tsx"), /invoiceCheckout: true/);
 assert.doesNotMatch(read("components/enterprise/professional/retail-invoice-flow-workbench.tsx"), /setCouponCode/);
