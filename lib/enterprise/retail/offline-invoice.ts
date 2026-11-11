@@ -54,6 +54,9 @@ export async function syncRetailOfflineInvoiceDraft(args: {
   const existing = await prisma.enterpriseRetailOfflineSyncOperation.findFirst({
     where: { organizationId, operationUuid },
   });
+  if (existing && existing.receivedByUserId !== actorUserId) {
+    throw new EnterpriseRetailError("RETAIL_OFFLINE_UUID_ACTOR_MISMATCH", 409);
+  }
   if (existing?.payloadHash !== undefined && existing.payloadHash !== payloadHash) {
     throw new EnterpriseRetailError("RETAIL_OFFLINE_UUID_PAYLOAD_MISMATCH", 409);
   }
@@ -77,7 +80,7 @@ export async function syncRetailOfflineInvoiceDraft(args: {
       // A second browser tab may have inserted the same UUID. Never overwrite it.
       if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== "P2002") throw error;
       const raced = await prisma.enterpriseRetailOfflineSyncOperation.findFirst({ where: { organizationId, operationUuid } });
-      if (!raced || raced.payloadHash !== payloadHash || raced.operationType !== "INVOICE_DRAFT"
+      if (!raced || raced.receivedByUserId !== actorUserId || raced.payloadHash !== payloadHash || raced.operationType !== "INVOICE_DRAFT"
         || raced.siteId !== args.siteId || raced.warehouseId !== args.warehouseId || raced.snapshotVersion !== args.snapshotVersion) {
         throw new EnterpriseRetailError("RETAIL_OFFLINE_UUID_PAYLOAD_MISMATCH", 409);
       }
