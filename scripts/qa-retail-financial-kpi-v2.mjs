@@ -105,7 +105,7 @@ assert.match(traceView, /buildEnterpriseObjectDeepLink/, "Source evidence must h
 assert.match(traceView, /downloadProfessionalXlsx/, "Authorized source page supports professional Excel export");
 assert.match(traceView, /downloadProfessionalCsv/, "Authorized source page supports CSV export");
 assert.match(traceView, /downloadProfessionalPdfV2/, "Authorized source page supports premium PDF export");
-assert.match(traceExport, /analysis\\.totalLines > rows\\.length/, "Truncated export is clearly disclosed");
+assert.match(traceExport, /analysis\.totalLines > rows\.length/, "Truncated export is clearly disclosed");
 assert.match(traceExport, /"NON DÉTERMINÉ"/, "Unknown treasury totals must not be exported as numeric zero");
 assert.match(traceView, /data-testid="retail-financial-drilldown"/, "Responsive trace workspace must be mounted");
 assert.match(dashboard, /<RetailFinancialDrilldown/, "The executive dashboard must open the detailed view");
@@ -116,8 +116,8 @@ assert.match(overviewRoute, /ids\.length && financeReceivablesAccess\.allowed &&
 assert.match(overviewRoute, /ids\.length && financeReceivablesAccess\.allowed \? prisma\.\$queryRaw<Array<\{ siteId: string; currencyCode: string; total:/, "Open receivables must honor module entitlement");
 assert.match(dashboard, /metric !== "expenses" \|\| sourceAvailability\.financeBudgets/, "Disallowed expenses must not appear in UI");
 
-assert.match(overviewRoute, /select: \\{ id: true, code: true, name: true, status: true, archivedAt: true \\}/, "Historic stores must retain their status and archived marker");
-assert.doesNotMatch(overviewRoute, /where: \\{ organizationId, status: "ACTIVE", archivedAt: null, \\.\\.\\.\\(siteId/, "The consolidated Retail view must not silently omit historical closed stores");
+assert.match(overviewRoute, /select: \{ id: true, code: true, name: true, status: true, archivedAt: true \}/, "Historic stores must retain their status and archived marker");
+assert.doesNotMatch(overviewRoute, /where: \{ organizationId, status: "ACTIVE", archivedAt: null, \.\.\.\(siteId/, "The consolidated Retail view must not silently omit historical closed stores");
 assert.match(dashboard, /Boutique historique/, "The dashboard must distinguish historical store attribution from active stores");
 
 for (const file of [
