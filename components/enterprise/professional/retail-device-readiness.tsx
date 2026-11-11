@@ -28,6 +28,9 @@ export function RetailDeviceReadiness({ organizationId, locale = "fr" }: { organ
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<Form | null>(null);
   const [search, setSearch] = useState("");
+  const [testingScannerId, setTestingScannerId] = useState<string | null>(null);
+  const [scannerValue, setScannerValue] = useState("");
+  const [scannerResult, setScannerResult] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
   const [page, setPage] = useState(1);
   const pageSize = 12;
@@ -108,7 +111,19 @@ export function RetailDeviceReadiness({ organizationId, locale = "fr" }: { organ
           return <article key={device.id} className="rounded-xl border border-dtsc-border bg-dtsc-page p-3">
             <div className="flex items-start justify-between gap-2"><div className="min-w-0"><strong className="block truncate text-sm text-dtsc-ink">{device.name}</strong><p className="text-xs text-dtsc-muted">{device.code} · {customerFacingDeviceType(device.deviceType, locale)}</p></div>
               <button type="button" aria-label={`Configurer ${device.name}`} className="rounded-lg border border-dtsc-border p-2 text-dtsc-blue" onClick={() => setForm({ id: device.id, siteId: device.siteId, code: device.code, name: device.name, deviceType: device.deviceType, connectionMode: device.connectionMode, status: device.status })}><Settings2 className="h-4 w-4" /></button>
-            </div><p className="mt-2 text-xs text-dtsc-muted">{optionLabels[device.connectionMode]} · {device.status === "ACTIVE" ? "Profil actif" : "Désactivé"}</p>
+            </div>
+            {device.status === "ACTIVE" && device.connectionMode === "BROWSER" && device.deviceType === "BARCODE_SCANNER"
+              ? <button type="button" className="mt-2 rounded-lg border border-dtsc-border px-3 py-2 text-xs font-bold text-dtsc-blue" onClick={() => { setTestingScannerId(device.id); setScannerValue(""); setScannerResult(""); }}>Tester la lecture clavier</button>
+              : null}
+            {device.status === "ACTIVE" && device.connectionMode === "BROWSER" && device.deviceType === "RECEIPT_PRINTER"
+              ? <button type="button" className="mt-2 rounded-lg border border-dtsc-border px-3 py-2 text-xs font-bold text-dtsc-blue" onClick={() => window.print()}>Ouvrir l'impression système</button>
+              : null}
+            {testingScannerId === device.id && <div className="mt-2 rounded-xl border border-cyan-500/30 bg-dtsc-surface p-3 text-xs">
+              <label className="block font-bold">Scanner un code-barres et terminer par Entrée<input autoFocus className="mt-2 h-11 w-full rounded-lg border border-dtsc-border bg-dtsc-page px-3" value={scannerValue} onChange={(event) => setScannerValue(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); setScannerResult(scannerValue.trim()); } }} /></label>
+              {scannerResult ? <p role="status" className="mt-2 font-bold text-emerald-700">Lecture reçue : {scannerResult}. Cela ne certifie pas la disponibilité de toutes les fonctions du scanner.</p> : null}
+              <button type="button" className="mt-2 rounded-lg border px-3 py-1" onClick={() => setTestingScannerId(null)}>Fermer le test</button>
+            </div>}
+            <p className="mt-2 text-xs text-dtsc-muted">{optionLabels[device.connectionMode]} · {device.status === "ACTIVE" ? "Profil actif" : "Désactivé"}</p>
             <span className={`mt-2 inline-flex rounded-lg px-2 py-1 text-xs font-bold ${state.reason === "DISABLED" ? "bg-slate-500/10 text-dtsc-muted" : "bg-amber-500/10 text-amber-700 dark:text-amber-300"}`}>{state.reason === "AVAILABLE" ? "Interface disponible — connexion non testée" : state.reason === "EXTERNAL_BRIDGE" ? "Adaptateur externe à vérifier" : state.reason === "MANUAL_FALLBACK" ? "Utilisation manuelle" : state.reason === "DISABLED" ? "Désactivé" : "Interface non disponible sur ce navigateur"}</span>
           </article>;
         })}</div>
