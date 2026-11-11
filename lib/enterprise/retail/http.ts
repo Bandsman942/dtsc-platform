@@ -20,6 +20,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   RETAIL_OFFLINE_ACTOR_SCOPE_REQUIRED: "Une session utilisateur identifiée est nécessaire pour accéder à la copie locale des ventes.",
   RETAIL_OFFLINE_UNRESOLVED_LOCAL_OPERATIONS: "Il reste des brouillons hors connexion non synchronisés ou en conflit. Ils ne peuvent pas être effacés : réconciliez-les d'abord.",
   RETAIL_OFFLINE_UUID_PAYLOAD_MISMATCH: "Cette référence hors connexion a déjà été utilisée avec d'autres informations. Vérifiez les opérations sur cet appareil.",
+  RETAIL_OFFLINE_UUID_ACTOR_MISMATCH: "Cette opération hors connexion appartient à un autre collaborateur. Connectez le compte qui l’a préparée et vérifiez les droits actuels.",
 
   RETAIL_CATALOG_ITEM_INVALID: "Un article du ticket est introuvable ou inactif.",
   RETAIL_INVENTORY_ITEM_REQUIRED: "Un article suivi en stock doit disposer d’un article d’inventaire actif.",
