@@ -10,6 +10,7 @@ import { buildRetailOperationsExport, buildRetailPostedLedgerExport, type Retail
 import { downloadProfessionalCsv, downloadProfessionalXlsx } from "@/lib/reporting/professional-export";
 import { downloadProfessionalPdfV2 } from "@/lib/reporting/professional-pdf-v2";
 import { RETAIL_EXECUTIVE_METRICS, type RetailExecutiveMetric, type RetailExecutiveSummary } from "@/lib/enterprise/retail/executive-metrics";
+import { retailMetricTimeCaption } from "@/lib/enterprise/retail/financial-metric-definitions";
 import { DEFAULT_RETAIL_DASHBOARD_PREFERENCES, type RetailDashboardPreferences } from "@/lib/enterprise/retail/dashboard-preferences";
 import { buildRetailExecutiveExport } from "@/lib/enterprise/retail/site-financial-export";
 import { notifyToast } from "@/lib/client-toast";
@@ -228,6 +229,7 @@ export function RetailSiteOverview({ organizationId, organizationName, locale, t
           return <div key={metric} className={`relative min-w-0 rounded-xl border p-3 ${warning ? "border-amber-500/50 bg-amber-500/10" : metric === "financeCollections" || metric === "postedGrossMargin" ? "border-emerald-500/25 bg-emerald-500/5" : "border-dtsc-border bg-dtsc-surface"}`} title={METRIC_COPY[metric][en ? 3 : 2]}>
             <p className="flex items-start gap-1 text-[11px] font-bold text-dtsc-muted">{warning ? <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-600" /> : null}{METRIC_COPY[metric][en ? 1 : 0]}</p>
             <p className={`mt-2 break-words text-base font-black tabular-nums sm:text-lg ${Number(raw) < 0 ? "text-red-600 dark:text-red-300" : "text-dtsc-ink"}`}>{currencyAmount(raw, bucket.currencyCode, en)}</p>
+            <span className="mt-1 inline-flex rounded-full border border-dtsc-border bg-dtsc-page px-2 py-0.5 text-[10px] font-semibold text-dtsc-muted">{retailMetricTimeCaption(metric, locale)}</span>
             <p className="mt-1 text-[10px] leading-relaxed text-dtsc-muted">{METRIC_COPY[metric][en ? 3 : 2]}</p>
             {metric === "postedCogs" ? <button type="button" className="absolute inset-0 rounded-xl focus-visible:outline-2 focus-visible:outline-cyan-500 hover:ring-2 hover:ring-cyan-500/60" aria-label={en ? `Inspect posted cost of sales in ${bucket.currencyCode}` : `Consulter le détail du coût des ventes en ${bucket.currencyCode}`} onClick={() => { setCogsSite(siteFilter); setCogsCurrency(bucket.currencyCode); setCogsOpen(true); }}><span className="sr-only">{en ? "Open accounting trace" : "Ouvrir la traçabilité comptable"}</span></button> : null}
           </div>;
