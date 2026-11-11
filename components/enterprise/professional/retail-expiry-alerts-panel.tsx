@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { RetailProfessionalListExport } from "@/components/enterprise/professional/retail-professional-list-export";
 import { useCallback, useEffect, useState } from "react";
 import { AlertTriangle, CalendarClock, ChevronLeft, ChevronRight, RefreshCw, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -20,7 +21,7 @@ type AlertPage = {
   lowStock?: LowStock[]; lowStockTotal?: number; lowStockPagination?: Pagination;
 };
 type Warehouse = { id: string; name: string; site?: { name: string } };
-export function RetailExpiryAlertsPanel({ organizationId, locale }: { organizationId: string; locale: "fr" | "en" }) {
+export function RetailExpiryAlertsPanel({ organizationId, locale, organizationName }: { organizationId: string; locale: "fr" | "en"; organizationName: string }) {
   const en = locale === "en";
   const [page, setPage] = useState(1);
   const [lowStockPage, setLowStockPage] = useState(1);
@@ -91,6 +92,36 @@ export function RetailExpiryAlertsPanel({ organizationId, locale }: { organizati
     <div className="flex flex-wrap gap-2" role="group" aria-label={en ? "Expiry status" : "Filtres des péremptions"}>
       {["", "EXPIRED", "DUE_TODAY", "EXPIRING_SOON"].map((item) => <button type="button" key={item || "ALL"} className={"rounded-full border px-3 py-2 text-xs font-bold " + (status === item ? "border-cyan-500 bg-cyan-500/15 text-dtsc-blue" : "border-dtsc-border text-dtsc-ink")} onClick={() => { setStatus(item); resetPages(); }}>{item === "" ? (en ? "All" : "Tous") : item === "EXPIRED" ? (en ? "Expired" : "Périmés") : item === "DUE_TODAY" ? (en ? "Today" : "Aujourd’hui") : (en ? "Soon" : "Bientôt")}</button>)}
       <button type="button" onClick={clear} className="rounded-full border border-dtsc-border px-3 py-2 text-xs font-bold text-dtsc-blue">{en ? "Clear" : "Effacer"}</button>
+    </div>
+    <div className="flex flex-wrap gap-3">
+      <RetailProfessionalListExport<Alert> organizationName={organizationName} locale={locale}
+        title={en ? "Expiry watch — Retail" : "Surveillance des lots et péremptions"}
+        filenameBase="retail-expiry"
+        sourceUrl={`/api/enterprise/${organizationId}/retail/inventory-alerts?${new URLSearchParams({
+          ...(search ? { search } : {}), ...(status ? { status } : {}), ...(warehouseId ? { warehouseId } : {}),
+          ...(dateFrom ? { dateFrom } : {}), ...(dateTo ? { dateTo } : {}),
+        })}`}
+        columns={[{ key: "item", label: en ? "Product" : "Article" }, { key: "code", label: "Code" },
+          { key: "warehouse", label: en ? "Warehouse" : "Dépôt" }, { key: "lot", label: "Lot" },
+          { key: "expiry", label: en ? "Expiry" : "Péremption" }, { key: "available", label: en ? "Available" : "Disponible" },
+          { key: "status", label: en ? "Status" : "Statut" }]}
+        toRow={(item) => ({ item: item.catalogName, code: item.catalogCode, warehouse: item.warehouse,
+          lot: item.lotNumber, expiry: item.expiryDate.slice(0, 10), available: Number(item.quantityAvailable), status: item.status })}
+        filters={[{ label: en ? "From" : "Du", value: dateFrom || "—" },
+          { label: en ? "To" : "Au", value: dateTo || "—" }]} />
+      <RetailProfessionalListExport<LowStock> organizationName={organizationName} locale={locale}
+        itemsKey="lowStock" pageParam="lowStockPage"
+        title={en ? "Low-stock warnings — Retail" : "Alertes de stock faible"}
+        filenameBase="retail-low-stock"
+        sourceUrl={`/api/enterprise/${organizationId}/retail/inventory-alerts?${new URLSearchParams({
+          ...(search ? { search } : {}), ...(warehouseId ? { warehouseId } : {}),
+        })}`}
+        columns={[{ key: "item", label: en ? "Product" : "Article" }, { key: "code", label: "Code" },
+          { key: "warehouse", label: en ? "Warehouse" : "Dépôt" }, { key: "available", label: en ? "Available" : "Disponible" },
+          { key: "minimum", label: en ? "Threshold" : "Seuil" }]}
+        toRow={(item) => ({ item: item.catalogName, code: item.catalogCode, warehouse: item.warehouse,
+          available: Number(item.quantityAvailable), minimum: Number(item.minimumQuantity) })}
+        filters={[{ label: en ? "Warehouse" : "Dépôt", value: warehouses.find((w) => w.id === warehouseId)?.name || (en ? "All" : "Tous") }]} />
     </div>
     {error ? <p role="alert" className="rounded-xl bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-200">{error}</p> : null}
     {loading ? <p role="status" className="text-sm text-dtsc-muted">{en ? "Loading alerts…" : "Chargement des alertes…"}</p> : null}
