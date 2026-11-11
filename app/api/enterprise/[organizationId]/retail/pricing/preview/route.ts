@@ -67,7 +67,7 @@ export async function POST(req: Request, { params }: Params) {
     // Do not show relationship discounts in its preview until Finance invoices
     // can also persist and reverse the corresponding benefit ledger effects.
     if (parsed.data.invoiceCheckout) {
-      if (parsed.data.couponCode || decisions.some((decision) => decision.promotions.length > 0)) {
+      if (parsed.data.couponCode || decisions.some((decision) => (decision.promotions?.length || 0) > 0)) {
         throw new EnterpriseRetailError("RETAIL_FINANCE_PROMOTION_LEDGER_REQUIRED", 409);
       }
       const preview = serializeRetailPricingPreview(decisions, parsed.data.currencyCode);
