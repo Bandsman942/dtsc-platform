@@ -35,9 +35,21 @@ export async function GET(req: Request, { params }: Params) {
   const url = new URL(req.url);
   const page = Math.max(1, Number(url.searchParams.get("page") || 1) || 1);
   const pageSize = Math.min(50, Math.max(5, Number(url.searchParams.get("pageSize") || 20) || 20));
+  const status = (url.searchParams.get("status") || "").trim().slice(0, 60);
+  const mode = (url.searchParams.get("mode") || "").trim().slice(0, 60);
+  const search = (url.searchParams.get("search") || "").trim().slice(0, 120);
+  const from = url.searchParams.get("from") || "";
+  const to = url.searchParams.get("to") || "";
+  if ((mode && !RETAIL_OMNICHANNEL_MODES.includes(mode as (typeof RETAIL_OMNICHANNEL_MODES)[number])) || [from, to].some((v) => v && !/^\d{4}-\d{2}-\d{2}$/.test(v)) || (from && to && from > to)) {
+    return NextResponse.json({ error: "RETAIL_FILTER_INVALID", message: "Les filtres de commande sont invalides." }, { status: 400 });
+  }
   try {
     const scope = await retailSitesForCapability(organizationId, auth.session.userId, "VIEW_SALES");
-    const state = await getRetailOmnichannelOrders(organizationId, page, pageSize, scope.isolationEnabled ? scope.siteIds : undefined);
+    const state = await getRetailOmnichannelOrders(organizationId, page, pageSize, scope.isolationEnabled ? scope.siteIds : undefined, {
+      status, mode, search,
+      ...(from ? { from: new Date(from + "T00:00:00.000Z") } : {}),
+      ...(to ? { toExclusive: new Date(new Date(to + "T00:00:00.000Z").getTime() + 86_400_000) } : {}),
+    });
     await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "retail-omnichannel-orders", page } });
     return NextResponse.json(state, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
