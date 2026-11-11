@@ -35,6 +35,8 @@ export type RetailOfflineSnapshotEnvelope = {
   validUntil: string;
   policy: {
     saleEnabled: boolean;
+    /** Finance draft mode never confirms a tender or posts stock/accounting offline. */
+    draftOnly?: boolean;
     blockingReason: string | null;
     allowedTenderTypes: string[];
     blockedTenderTypes: string[];
