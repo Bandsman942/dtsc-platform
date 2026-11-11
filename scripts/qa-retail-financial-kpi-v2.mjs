@@ -104,6 +104,10 @@ assert.match(traceView, /buildEnterpriseObjectDeepLink/, "Source evidence must h
 assert.match(traceView, /data-testid="retail-financial-drilldown"/, "Responsive trace workspace must be mounted");
 assert.match(dashboard, /<RetailFinancialDrilldown/, "The executive dashboard must open the detailed view");
 assert.match(overviewRoute, /financeReceivablesAccess\.allowed/, "The client may not display an unauthorized Finance drilldown");
+assert.match(overviewRoute, /select: \\{ id: true, code: true, name: true, status: true, archivedAt: true \\}/, "Historic stores must retain their status and archived marker");
+assert.doesNotMatch(overviewRoute, /where: \\{ organizationId, status: "ACTIVE", archivedAt: null, \\.\\.\\.\\(siteId/, "The consolidated Retail view must not silently omit historical closed stores");
+assert.match(dashboard, /Boutique historique/, "The dashboard must distinguish historical store attribution from active stores");
+
 for (const file of [
   "lib/enterprise/retail/financial-drilldown.ts",
   "app/api/enterprise/[organizationId]/retail/financial-drilldown/route.ts",
