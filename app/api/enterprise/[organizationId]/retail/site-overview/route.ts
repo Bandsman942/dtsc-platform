@@ -53,7 +53,7 @@ export async function GET(req: Request, { params }: Params) {
   const dateWhere = { gte: from, lte: to };
   // Every optional ERP source is independently authorized. RETAIL_POS alone
   // does not grant access to Mobile Money, Telco or Treasury balances.
-  const [agencyAccess, telcoAccess, treasuryAccess, inventoryAccess, reportsAccess, reportWriteAccess, accountingAccess, config] = await Promise.all([
+  const [agencyAccess, telcoAccess, treasuryAccess, inventoryAccess, reportsAccess, reportWriteAccess, accountingAccess, financeReceivablesAccess, financePaymentsAccess, financeBudgetsAccess, config] = await Promise.all([
     resolveEnterpriseModuleAccess({ userId: session.userId, organizationId, moduleCode: "MOBILE_MONEY_AGENCY", action: "read" }),
     resolveEnterpriseModuleAccess({ userId: session.userId, organizationId, moduleCode: "TELCO_TOPUPS", action: "read" }),
     resolveEnterpriseModuleAccess({ userId: session.userId, organizationId, moduleCode: "FINANCE_TREASURY", action: "read" }),
@@ -61,6 +61,9 @@ export async function GET(req: Request, { params }: Params) {
     resolveEnterpriseModuleAccess({ userId: session.userId, organizationId, moduleCode: "REPORTS", action: "read" }),
     getEnterpriseFinanceAccess({ session, organizationId, moduleCode: "REPORTS", action: "submit" }),
     resolveEnterpriseModuleAccess({ userId: session.userId, organizationId, moduleCode: "FINANCE_ACCOUNTING", action: "read" }),
+    resolveEnterpriseModuleAccess({ userId: session.userId, organizationId, moduleCode: "FINANCE_RECEIVABLES", action: "read" }),
+    resolveEnterpriseModuleAccess({ userId: session.userId, organizationId, moduleCode: "FINANCE_PAYMENTS", action: "read" }),
+    resolveEnterpriseModuleAccess({ userId: session.userId, organizationId, moduleCode: "FINANCE_BUDGETS", action: "read" }),
     prisma.enterpriseRetailConfiguration.findUnique({ where: { organizationId }, select: { settingsJson: true } }),
   ]);
   const preferences = readRetailDashboardPreferences(config?.settingsJson);
@@ -216,7 +219,7 @@ export async function GET(req: Request, { params }: Params) {
     period: { from, to }, organizationName: organization?.name || "", timezone,
     scope: "OWNER_ONLY_OPERATIONAL", currencyPolicy: "SEPARATE_PER_CURRENCY", financeMarginCertified: false, postedLedgerScope: "PROVISIONAL_POSTED_ONLY", unallocatedPostedLedger: postedLedger.unallocated,
     unallocated, summaries, corporate: summarizeRetailExecutive(items, unallocated),
-    timeline: executiveSources.timeline, sourceAvailability: { agency: agencyAccess.allowed, telco: telcoAccess.allowed, treasury: treasuryAccess.allowed, inventory: inventoryAccess.allowed, accounting: accountingAccess.allowed, reports: reportsAccess.allowed, reportCreate: Boolean(reportWriteAccess?.canCreate) },
+    timeline: executiveSources.timeline, sourceAvailability: { agency: agencyAccess.allowed, telco: telcoAccess.allowed, treasury: treasuryAccess.allowed, inventory: inventoryAccess.allowed, accounting: accountingAccess.allowed, financeReceivables: financeReceivablesAccess.allowed, financePayments: financePaymentsAccess.allowed, financeBudgets: financeBudgetsAccess.allowed, reports: reportsAccess.allowed, reportCreate: Boolean(reportWriteAccess?.canCreate) },
     preferences,
   }, { headers: { "Cache-Control": "private, no-store" } });
 }

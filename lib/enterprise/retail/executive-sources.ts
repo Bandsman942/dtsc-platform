@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 type ValueRow = { siteId: string | null; currencyCode: string; total: Prisma.Decimal; count: bigint };
 type AgencyRow = ValueRow & { transactionType: string; principal: Prisma.Decimal; commission: Prisma.Decimal; fees: Prisma.Decimal };
 type TelcoRow = ValueRow & { margin: Prisma.Decimal; operatorCost: Prisma.Decimal };
-type TreasuryRow = ValueRow & { accountType: string; reconciled: Prisma.Decimal; available: Prisma.Decimal };
+type TreasuryRow = ValueRow & { accountType: string; reconciled: Prisma.Decimal; available: Prisma.Decimal | null };
 type TrendRow = { siteId: string | null; currencyCode: string; day: string; metric: string; total: Prisma.Decimal };
 
 export type ExecutiveSourceAccess = { agency: boolean; telco: boolean; treasury: boolean };
@@ -38,7 +38,9 @@ export async function loadRetailExecutiveSources(args: {
     `) : Promise.resolve([]),
     access.treasury ? prisma.$queryRaw<TreasuryRow[]>(Prisma.sql`
       SELECT "siteId", "currencyCode", "accountType", SUM("operationalBalance") AS total,
-        SUM("reconciledBalance") AS reconciled, SUM(COALESCE("availableBalance", "operationalBalance")) AS available,
+        SUM("reconciledBalance") AS reconciled,
+        CASE WHEN COUNT(*) FILTER (WHERE "availableBalance" IS NULL) > 0 THEN NULL
+          ELSE SUM("availableBalance") END AS available,
         COUNT(*)::bigint AS count
       FROM "EnterpriseFinancialAccount" WHERE "organizationId" = ${organizationId} AND status = 'ACTIVE' AND "archivedAt" IS NULL
       GROUP BY "siteId", "currencyCode", "accountType"
@@ -104,7 +106,7 @@ export async function loadRetailExecutiveSources(args: {
   return {
     mobileMoney: agency.map((row) => ({ ...asMoney(row), transactionType: row.transactionType, principal: row.principal.toFixed(6), commission: row.commission.toFixed(6), fees: row.fees.toFixed(6) })),
     telco: telco.map((row) => ({ ...asMoney(row), margin: row.margin.toFixed(6), operatorCost: row.operatorCost.toFixed(6) })),
-    treasury: treasury.map((row) => ({ ...asMoney(row), accountType: row.accountType, reconciled: row.reconciled.toFixed(6), available: row.available.toFixed(6) })),
+    treasury: treasury.map((row) => ({ ...asMoney(row), accountType: row.accountType, reconciled: row.reconciled.toFixed(6), available: row.available?.toFixed(6) ?? null })),
     timeline: [...posTrend, ...financeTrend, ...invoiceTrend, ...expenseTrend, ...agencyTrend, ...agencyFeesTrend, ...telcoTrend].map((row) => ({ ...row, total: row.total.toFixed(6) })),
   };
 }
