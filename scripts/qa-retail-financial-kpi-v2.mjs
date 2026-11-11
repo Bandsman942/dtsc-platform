@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import vm from "node:vm";
+import { createRequire } from "node:module";
 
 /**
  * Static contract test for the first tranche of Retail KPI traceability v2.
@@ -32,4 +34,41 @@ for (const period of ["financeCollections", "invoices", "postedRevenue", "posted
 assert.match(dashboard, /import \{ retailMetricTimeCaption \} from "@\/lib\/enterprise\/retail\/financial-metric-definitions"/);
 assert.match(dashboard, /retailMetricTimeCaption\(metric, locale\)/);
 assert.match(definitions, /Missing availability must not be inferred from operational balance/);
+
+const sources = readFileSync("lib/enterprise/retail/executive-sources.ts", "utf8");
+const summarySource = readFileSync("lib/enterprise/retail/executive-summary.ts", "utf8");
+const exportSource = readFileSync("lib/enterprise/retail/site-financial-export.ts", "utf8");
+assert.doesNotMatch(sources, /COALESCE\("availableBalance", "operationalBalance"\)/, "Never infer available cash from operational balance");
+assert.match(sources, /COUNT\(\*\) FILTER \(WHERE "availableBalance" IS NULL\)/, "Every missing account availability must be detected");
+assert.match(dashboard, /Non déterminé/, "Current balance without reliable evidence must not display as zero");
+assert.match(exportSource, /NON DÉTERMINÉ/, "Exports must share the same unknown status as the dashboard");
+
+const require = createRequire(import.meta.url);
+const ts = require("typescript");
+const loadTs = (source, aliases = {}) => {
+  const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } });
+  const loaded = { exports: {} };
+  vm.runInNewContext(compiled.outputText, {
+    module: loaded, exports: loaded.exports, require: (id) => aliases[id] || require(id), Date,
+  });
+  return loaded.exports;
+};
+const metrics = loadTs(metricsFile);
+const summary = loadTs(summarySource, { "@/lib/enterprise/retail/executive-metrics": metrics });
+const base = () => ({ sales: [], collections: [], financeCollections: [], financeInvoices: [], receivables: [], approvedExpenses: [], postedLedger: [], mobileMoney: [], telco: [], treasury: [] });
+const store = { ...base(), treasury: [
+  { currencyCode: "CDF", total: "100", reconciled: "80", available: "60" },
+  { currencyCode: "CDF", total: "20", reconciled: "10", available: null },
+] };
+const cdf = summary.summarizeRetailExecutive([store])[0];
+assert.equal(cdf.values.treasuryBalance, "120.000000");
+assert.ok(cdf.unavailableMetrics.includes("treasuryAvailable"), "Any missing financial account balance marks the currency unavailable");
+assert.equal(cdf.values.treasuryAvailable, "60.000000", "Known partial amount is retained as evidence, not presented as an available total");
+const known = summary.summarizeRetailExecutive([{ ...base(), treasury: [{ currencyCode: "CDF", total: "100", reconciled: "80", available: "60" }] }])[0];
+assert.equal(known.unavailableMetrics.length, 0);
+assert.equal(known.values.treasuryAvailable, "60.000000");
+const company = summary.summarizeRetailExecutive([{ ...base(), treasury: [{ currencyCode: "CDF", total: "1", reconciled: "1", available: "1" }] }],
+  { mobileMoney: [], telco: [], postedLedger: [], treasury: [{ currencyCode: "CDF", total: "20", reconciled: "10", available: null }] });
+assert.ok(company[0].unavailableMetrics.includes("treasuryAvailable"), "Unallocated accounts must influence the company-wide availability status");
+
 console.log(`Retail KPI definitions v2: ${keys.length} metrics, temporal badges and source interpretations validated.`);
