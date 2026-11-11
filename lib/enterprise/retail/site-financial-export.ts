@@ -175,7 +175,8 @@ export function buildRetailExecutiveExport(input: {
         : metric.startsWith("posted") ? (en ? "Posted accounting — provisional" : "Comptabilité postée — provisoire")
           : metric.startsWith("mobileMoney") ? "Mobile Money" : metric.startsWith("telco") ? (en ? "Telco" : "Télécom") : (en ? "Treasury" : "Trésorerie");
   const expand = (scope: string, row: RetailExecutiveSummary) => RETAIL_EXECUTIVE_METRICS.map((metric) => ({
-    scope, currency: row.currencyCode, category: classify(metric), indicator: metricLabels[metric][en ? 1 : 0], value: row.values[metric],
+    scope, currency: row.currencyCode, category: classify(metric), indicator: metricLabels[metric][en ? 1 : 0],
+    value: row.unavailableMetrics?.includes(metric) ? (en ? "NOT DETERMINED" : "NON DÉTERMINÉ") : row.values[metric],
   }));
   const rows: ProfessionalReportExportModel["rows"] = [
     ...input.consolidated.flatMap((row) => expand(input.siteFilter || (en ? "Company (including unattributed)" : "Entreprise (dont non attribué)"), row)),
