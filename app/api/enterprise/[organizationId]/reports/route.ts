@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog } from "@/lib/audit";
 import { enterpriseReportVisibilityWhere, getEnterpriseFinanceAccess } from "@/lib/enterprise/finance/access";
+import { resolveEnterpriseModuleAccess } from "@/lib/enterprise/module-access";
 import { prisma } from "@/lib/prisma";
 
 type Params = { params: Promise<{ organizationId: string }> };
@@ -27,6 +28,11 @@ export async function GET(req: Request, { params }: Params) {
 
   const visibility = enterpriseReportVisibilityWhere({ organizationId, userId: session.userId, canSeeAll: access.canSeeAll });
   const filters: Prisma.EnterpriseReportWhereInput[] = [visibility];
+  const [cogsAccounting, cogsInventory] = await Promise.all([
+    resolveEnterpriseModuleAccess({ userId: session.userId, organizationId, moduleCode: "FINANCE_ACCOUNTING", action: "read" }),
+    resolveEnterpriseModuleAccess({ userId: session.userId, organizationId, moduleCode: "INVENTORY_LOGISTICS", action: "read" }),
+  ]);
+  if (!cogsAccounting.allowed || !cogsInventory.allowed) filters.push({ reportType: { not: "RETAIL_COGS_RECONCILIATION" } });
   if (reportType) filters.push({ reportType });
   if (status) filters.push({ status });
   if (creator) filters.push({ generatedByUserId: creator });
@@ -61,8 +67,8 @@ export async function GET(req: Request, { params }: Params) {
       take: pageSize,
     }),
     prisma.enterpriseReport.count({ where }),
-    prisma.enterpriseReport.count({ where: { ...visibility, status: "PUBLISHED" } }),
-    prisma.enterpriseReport.findFirst({ where: visibility, orderBy: { generatedAt: "desc" }, select: { generatedAt: true } }),
+    prisma.enterpriseReport.count({ where: { AND: [visibility, { status: "PUBLISHED" }, ...(!cogsAccounting.allowed || !cogsInventory.allowed ? [{ reportType: { not: "RETAIL_COGS_RECONCILIATION" } }] : [])] } }),
+    prisma.enterpriseReport.findFirst({ where: { AND: [visibility, ...(!cogsAccounting.allowed || !cogsInventory.allowed ? [{ reportType: { not: "RETAIL_COGS_RECONCILIATION" } }] : [])] }, orderBy: { generatedAt: "desc" }, select: { generatedAt: true } }),
   ]);
 
   const items = rows.map((item) => ({

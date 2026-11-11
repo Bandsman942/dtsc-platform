@@ -30,7 +30,9 @@ concurrency:
 jobs:
   acceptance:
     name: Sector creation, ERP navigation and workspace acceptance
-    runs-on: ubuntu-latest
+    # Pin the browser runner to the supported Ubuntu LTS image. The 26.04
+    # latest image repeatedly failed APT DNS resolution before any E2E ran.
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     services:
       postgres:
@@ -125,7 +127,9 @@ jobs:
         env:
           NODE_OPTIONS: --max-old-space-size=6144
       - name: Install Playwright Chromium
-        run: pnpm exec playwright install --with-deps chromium
+        # The hosted 24.04 image already contains browser system libraries;
+        # avoid an APT dependency that can fail before tests even start.
+        run: pnpm exec playwright install chromium
       - name: Start production application
         run: |
           nohup pnpm exec next start -H 127.0.0.1 -p 3000 >/tmp/dtsc-hotfix-657-next.log 2>&1 &

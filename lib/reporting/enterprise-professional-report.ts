@@ -1,5 +1,7 @@
 import type { ProfessionalReportExportModel, ProfessionalReportInsight } from "@/lib/reporting/professional-export";
 import { buildRetailExecutiveExport } from "@/lib/enterprise/retail/site-financial-export";
+import { buildRetailCogsExport } from "@/lib/enterprise/retail/cogs-export";
+import type { CogsAnalysis } from "@/lib/enterprise/retail/cogs-analysis";
 import type { RetailExecutiveSummary } from "@/lib/enterprise/retail/executive-metrics";
 
 type Dict = Record<string, unknown>;
@@ -169,6 +171,17 @@ export function buildEnterpriseProfessionalReport(input: BuildInput): Profession
       summaries, consolidated,
       stockWarnings: data.stockWarnings && typeof data.stockWarnings === "object" ? data.stockWarnings as { lowStock: number; expiring: number; expired: number } : undefined,
       unallocatedLedger: Array.isArray(data.unallocatedPostedLedger) ? data.unallocatedPostedLedger as Array<{ currencyCode: string; revenue: string; otherIncome: string; costOfSales: string; operatingExpenses: string; grossMargin: string; operatingResult: string; journalLineCount: number }> : [],
+    }), title: input.title, filenameBase: input.reference, generatedLabel: generated };
+  }
+
+  if (schema === "retail-cogs/v1") {
+    const analysis = data.analysis as CogsAnalysis;
+    const reportFilters = record(input.filters);
+    return { ...buildRetailCogsExport({
+      organizationName: input.organizationName || "DTSC Platform", locale: en ? "en" : "fr",
+      from: String(data.from || ""), to: String(data.to || ""),
+      siteName: String(reportFilters.siteId || ""), currency: input.currency || "",
+      analysis,
     }), title: input.title, filenameBase: input.reference, generatedLabel: generated };
   }
 

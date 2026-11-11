@@ -329,6 +329,7 @@
   "reports.type.PROCUREMENT_SUMMARY": "Procurement summary",
   "reports.type.FINANCE_OVERVIEW": "Finance overview",
   "reports.type.RETAIL_EXECUTIVE": "RETAIL executive financial dashboard",
+  "reports.type.RETAIL_COGS_RECONCILIATION": "RETAIL cost of sales — traceability and reconciliation",
   "reports.visibility.PERSONAL": "Personal",
   "reports.visibility.ORGANIZATION": "Organization",
   "reports.family.BUDGETS": "Budgets",

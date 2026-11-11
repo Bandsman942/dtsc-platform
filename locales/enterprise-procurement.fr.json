@@ -329,6 +329,7 @@
   "reports.type.PROCUREMENT_SUMMARY": "Synthèse des achats",
   "reports.type.FINANCE_OVERVIEW": "Vue financière",
   "reports.type.RETAIL_EXECUTIVE": "Pilotage financier RETAIL — Direction",
+  "reports.type.RETAIL_COGS_RECONCILIATION": "Coût des ventes RETAIL — traçabilité et rapprochement",
   "reports.visibility.PERSONAL": "Personnelle",
   "reports.visibility.ORGANIZATION": "Organisation",
   "reports.family.BUDGETS": "Budgets",

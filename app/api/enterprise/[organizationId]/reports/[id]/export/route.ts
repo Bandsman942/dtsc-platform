@@ -3,6 +3,7 @@ import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { ENTERPRISE_BULK_LIMITS } from "@/lib/enterprise/bulk-jobs/constants";
 import { enterpriseReportVisibilityWhere, getEnterpriseFinanceAccess } from "@/lib/enterprise/finance/access";
+import { resolveEnterpriseModuleAccess } from "@/lib/enterprise/module-access";
 import { prisma } from "@/lib/prisma";
 import { buildEnterpriseProfessionalReport } from "@/lib/reporting/enterprise-professional-report";
 
@@ -14,6 +15,7 @@ const REPORT_TYPE_LABELS: Record<string, string> = {
   PROCUREMENT_SUMMARY: "Synthèse des achats",
   FINANCE_OVERVIEW: "Vue d’ensemble financière",
   RETAIL_EXECUTIVE: "Pilotage financier RETAIL — Direction",
+  RETAIL_COGS_RECONCILIATION: "Coût des ventes RETAIL — traçabilité et rapprochement",
   ENTERPRISE_ADMIN_OVERVIEW: "Pilotage Administration entreprise",
 };
 
@@ -37,6 +39,13 @@ export async function GET(req: Request, { params }: Params) {
     prisma.organization.findFirst({ where: { id: organizationId }, select: { name: true } }),
   ]);
   if (!report) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (report.reportType === "RETAIL_COGS_RECONCILIATION") {
+    const [accounting, inventory] = await Promise.all([
+      resolveEnterpriseModuleAccess({ userId: session.userId, organizationId, moduleCode: "FINANCE_ACCOUNTING", action: "read" }),
+      resolveEnterpriseModuleAccess({ userId: session.userId, organizationId, moduleCode: "INVENTORY_LOGISTICS", action: "read" }),
+    ]);
+    if (!accounting.allowed || !inventory.allowed) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
   const model = buildEnterpriseProfessionalReport({
     locale: "fr",

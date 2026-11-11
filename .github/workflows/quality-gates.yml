@@ -129,6 +129,8 @@ jobs:
         run: pnpm qa:hotfix-1102
       - name: RETAIL executive dashboard and inventory batches QA (#1105)
         run: pnpm qa:retail-executive-1105
+      - name: RETAIL posted COGS traceability and Reports QA (#1109)
+        run: pnpm qa:retail-cogs-1109
       - name: Type check
         run: pnpm type-check
         env:

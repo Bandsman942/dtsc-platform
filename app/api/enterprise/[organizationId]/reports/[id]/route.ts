@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog } from "@/lib/audit";
 import { enterpriseReportVisibilityWhere, getEnterpriseFinanceAccess } from "@/lib/enterprise/finance/access";
+import { resolveEnterpriseModuleAccess } from "@/lib/enterprise/module-access";
 import { prisma } from "@/lib/prisma";
 
 type Params = { params: Promise<{ organizationId: string; id: string }> };
@@ -24,6 +25,13 @@ export async function GET(req: Request, { params }: Params) {
   const visibility = enterpriseReportVisibilityWhere({ organizationId, userId: session.userId, canSeeAll: access.canSeeAll });
   const report = await prisma.enterpriseReport.findFirst({ where: { AND: [visibility, { id }] } });
   if (!report) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (report.reportType === "RETAIL_COGS_RECONCILIATION") {
+    const [accounting, inventory] = await Promise.all([
+      resolveEnterpriseModuleAccess({ userId: session.userId, organizationId, moduleCode: "FINANCE_ACCOUNTING", action: "read" }),
+      resolveEnterpriseModuleAccess({ userId: session.userId, organizationId, moduleCode: "INVENTORY_LOGISTICS", action: "read" }),
+    ]);
+    if (!accounting.allowed || !inventory.allowed) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
   const filters = asObject(report.filtersJson);
   const departmentId = stringValue(filters.departmentId);

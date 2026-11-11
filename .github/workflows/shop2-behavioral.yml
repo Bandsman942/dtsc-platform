@@ -76,7 +76,8 @@ concurrency:
 jobs:
   behavioral:
     name: Retail POS accounting, concurrency, payments & global readiness
-    runs-on: ubuntu-latest
+    # Avoid the 26.04 APT DNS regression in browser acceptance jobs.
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     services:
       postgres:
@@ -191,7 +192,8 @@ jobs:
         env:
           NODE_OPTIONS: --max-old-space-size=6144
       - name: Install Playwright Chromium
-        run: pnpm exec playwright install --with-deps chromium
+        # Download the pinned Playwright browser without invoking APT.
+        run: pnpm exec playwright install chromium
       - name: Start production application
         run: |
           nohup pnpm exec next start -H 127.0.0.1 -p 3000 >/tmp/dtsc-shop2-next.log 2>&1 &
