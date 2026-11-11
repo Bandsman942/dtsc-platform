@@ -13,6 +13,12 @@
 - Nouveau test de contrat `pnpm qa:retail-financial-kpi-v2` ; aucun test existant désactivé.
 - Première correction P0 : les comptes sans `availableBalance` n'utilisent plus `operationalBalance` comme substitut. Le serveur transmet la couverture manquante jusqu'aux consolidations, cartes et exports sous la mention « Non déterminé » ; aucun montant disponible global n'est revendiqué pour ce périmètre incomplet.
 - Le drill-down COGS validé en #1111 est conservé, sans changement de calcul ni de permission.
+- **Lot 2, tranche A :** API GET `/api/enterprise/[organizationId]/retail/financial-drilldown`, lecture seule et pagination bornée des douze autres cartes (invoices, allocations, créances, recettes Finance, écritures postées, trésorerie, dépenses, commissions, marge Télécom et POS historique).
+- **Lot 2, tranche B :** composant `RetailFinancialDrilldown` accessible depuis les cartes autorisées, filtres dates/boutique/devise/recherche, sous-totaux indépendants des pages, colonnes de preuves, liens vers les modules concernés via `buildEnterpriseObjectDeepLink`.
+- **Contrôle serveur indépendant par métrique :** rôle OWNER/ADMIN entreprise et droit RETAIL_POS, puis modules souscrits : FINANCE_ACCOUNTING / FINANCE_RECEIVABLES / FINANCE_PAYMENTS / FINANCE_BUDGETS / FINANCE_TREASURY / MOBILE_MONEY_AGENCY / TELCO_TOPUPS.
+- **Boutiques historiques :** l'API de détail accepte les boutiques archivées de l'organisation et leur conserve leur nom ; ne supprime pas les archives. Aucun droit de consultation inter-tenant n'est déduit d'un identifiant fourni par le navigateur.
+
+**Important :** ce détail reproduit les sources et filtres existants, mais n'est pas encore un rapprochement certifié ni un E2E. L'écran affiche des montants distincts en devise native et une somme non déterminée pour la trésorerie incomplète. Les exports exhaustifs restent hors de ce lot et relèvent de #1110.
 
 Ces éléments ne créent aucune donnée comptable et ne modifient aucune écriture ni aucun solde source. Seule la présentation des disponibilités incomplètes est corrigée. Ils ne constituent pas une validation des autres montants existants.
 
@@ -31,7 +37,7 @@ Définir, avec les sources ERP réelles, `PERIOD_FLOW`, `CURRENT_BALANCE` et les
 
 **Critères de passage :** tests unitaires des formules, cas nuls, différences de devise, avoirs, rétroactivité, fermetures boutique et vérification des propriétés de réconciliation.
 
-## 4. Lot 2 — Détails des 12 cartes restantes
+## 4. Lot 2 — Détails des 12 cartes restantes (première implémentation en cours)
 
 - `financeCollections` → paiement, allocation, facture, compte, rapprochement ;
 - `invoices` → facture, lignes, TVA/HT/TTC, remise, avoirs et journal ;
