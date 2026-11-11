@@ -14,6 +14,10 @@ type AlertPage = { items: Alert[]; page: number; pageCount: number; total: numbe
 
 export function RetailExpiryAlertsPanel({ organizationId, locale }: { organizationId: string; locale: "fr" | "en" }) {
   const [page, setPage] = useState(1);
+  const [search, setSearch] = useState("");
+  const [severity, setSeverity] = useState("");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
   const [data, setData] = useState<AlertPage | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -22,18 +26,29 @@ export function RetailExpiryAlertsPanel({ organizationId, locale }: { organizati
     setLoading(true);
     setError("");
     try {
-      const response = await fetch(`/api/enterprise/${organizationId}/retail/inventory-alerts?page=${page}&pageSize=20`, { cache: "no-store" });
+      const params = new URLSearchParams({ page: String(page), pageSize: "20" });
+      if (search.trim()) params.set("search", search.trim());
+      if (severity) params.set("severity", severity);
+      if (from) params.set("from", from);
+      if (to) params.set("to", to);
+      const response = await fetch(`/api/enterprise/${organizationId}/retail/inventory-alerts?${params}`, { cache: "no-store" });
       const payload = await response.json().catch(() => null) as (AlertPage & { message?: string }) | null;
       if (!response.ok || !payload?.items) throw new Error(payload?.message || (en ? "The expiry alerts are unavailable." : "Les alertes de péremption sont indisponibles."));
       setData(payload);
     } catch (caught) { setError(customerFacingError(caught, locale)); }
     finally { setLoading(false); }
-  }, [organizationId, page, en, locale]);
-  useEffect(() => { void load(); }, [load]);
+  }, [organizationId, page, en, locale, search, severity, from, to]);
+  useEffect(() => { const timer = setTimeout(() => { void load(); }, search ? 250 : 0); return () => clearTimeout(timer); }, [load, search]);
   return <section data-testid="retail-expiry-alerts" className="min-w-0 max-w-full rounded-2xl border border-dtsc-border bg-dtsc-surface p-4 shadow-sm sm:p-5">
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div className="flex min-w-0 items-start gap-3"><CalendarClock aria-hidden="true" className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" /><div className="min-w-0"><h2 className="font-black text-dtsc-ink">{en ? "Batch expiry watch" : "Surveillance des lots et péremptions"}</h2><p className="mt-1 text-sm text-dtsc-muted">{en ? "Available batches approaching their expiry date, by warehouse." : "Lots disponibles dont la date de péremption approche, par dépôt."}</p></div></div>
       <Button type="button" variant="outline" disabled={loading} onClick={() => void load()}><RefreshCw className="h-4 w-4" />{en ? "Refresh" : "Actualiser"}</Button>
+    </div>
+    <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+      <label className="text-xs font-semibold text-dtsc-muted">Recherche<input type="search" value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder="Article, référence…" className="mt-1 min-h-10 w-full rounded-lg border border-dtsc-border bg-dtsc-page px-3 text-dtsc-ink" /></label>
+      <label className="text-xs font-semibold text-dtsc-muted">Gravité<select value={severity} onChange={(event) => { setSeverity(event.target.value); setPage(1); }} className="mt-1 min-h-10 w-full rounded-lg border border-dtsc-border bg-dtsc-page px-3 text-dtsc-ink"><option value="">Toutes</option><option value="EXPIRED">Périmé</option><option value="DUE_TODAY">Aujourd’hui</option><option value="EXPIRING_SOON">À venir</option></select></label>
+      <label className="text-xs font-semibold text-dtsc-muted">Expiration du<input type="date" max={to || undefined} value={from} onChange={(event) => { setFrom(event.target.value); setPage(1); }} className="mt-1 min-h-10 w-full rounded-lg border border-dtsc-border bg-dtsc-page px-3 text-dtsc-ink" /></label>
+      <label className="text-xs font-semibold text-dtsc-muted">Expiration au<input type="date" min={from || undefined} value={to} onChange={(event) => { setTo(event.target.value); setPage(1); }} className="mt-1 min-h-10 w-full rounded-lg border border-dtsc-border bg-dtsc-page px-3 text-dtsc-ink" /></label>
     </div>
     {error ? <p role="alert" className="mt-4 rounded-xl bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-200">{error}</p> : null}
     {loading ? <p role="status" className="mt-4 text-sm text-dtsc-muted">{en ? "Loading alerts…" : "Chargement des alertes…"}</p> : null}
