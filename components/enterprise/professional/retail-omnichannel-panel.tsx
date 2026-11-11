@@ -52,6 +52,12 @@ export function RetailOmnichannelPanel({ organizationId, locale }: Props) {
   const returnCopy = customerFacingOmnichannelReturnCopy(locale);
   const [dashboard, setDashboard] = useState<Dashboard | null>(null);
   const [orders, setOrders] = useState<OrdersResponse | null>(null);
+  const [ordersPage, setOrdersPage] = useState(1);
+  const [ordersSearch, setOrdersSearch] = useState("");
+  const [ordersStatus, setOrdersStatus] = useState("");
+  const [ordersMode, setOrdersMode] = useState("");
+  const [ordersFrom, setOrdersFrom] = useState("");
+  const [ordersTo, setOrdersTo] = useState("");
   const [mode, setMode] = useState<Mode>("CLICK_COLLECT");
   const [sourceSiteId, setSourceSiteId] = useState("");
   const [warehouseId, setWarehouseId] = useState("");
@@ -87,9 +93,15 @@ export function RetailOmnichannelPanel({ organizationId, locale }: Props) {
     setBusy("load");
     setError("");
     try {
+      const orderParams = new URLSearchParams({ page: String(ordersPage), pageSize: "12" });
+      if (ordersSearch.trim()) orderParams.set("search", ordersSearch.trim());
+      if (ordersStatus) orderParams.set("status", ordersStatus);
+      if (ordersMode) orderParams.set("mode", ordersMode);
+      if (ordersFrom) orderParams.set("from", ordersFrom);
+      if (ordersTo) orderParams.set("to", ordersTo);
       const [dashboardResponse, ordersResponse] = await Promise.all([
         fetch(`/api/enterprise/${organizationId}/retail/dashboard?moduleCode=RETAIL_POS`, { cache: "no-store" }),
-        fetch(`/api/enterprise/${organizationId}/retail/omnichannel/orders?page=1&pageSize=12`, { cache: "no-store" }),
+        fetch(`/api/enterprise/${organizationId}/retail/omnichannel/orders?${orderParams}`, { cache: "no-store" }),
       ]);
       const dashboardBody = await dashboardResponse.json().catch(() => null) as Dashboard | { error?: string; message?: string } | null;
       const ordersBody = await ordersResponse.json().catch(() => null) as OrdersResponse | { error?: string; message?: string } | null;
@@ -109,9 +121,9 @@ export function RetailOmnichannelPanel({ organizationId, locale }: Props) {
     } finally {
       setBusy(null);
     }
-  }, [locale, organizationId]);
+  }, [locale, organizationId, ordersPage, ordersSearch, ordersStatus, ordersMode, ordersFrom, ordersTo]);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => { const timer = setTimeout(() => { void load(); }, ordersSearch ? 250 : 0); return () => clearTimeout(timer); }, [load, ordersSearch]);
 
   const sites = useMemo(() => {
     const map = new Map<string, Site>();
@@ -360,6 +372,13 @@ export function RetailOmnichannelPanel({ organizationId, locale }: Props) {
 
     <div className="mt-6 border-t border-dtsc-border pt-5">
       <div className="flex items-center justify-between gap-3"><div><h3 className="font-black text-dtsc-ink">{locale === "en" ? "Order tracking" : "Suivi des commandes"}</h3><p className="text-xs text-dtsc-muted">{locale === "en" ? "Follow each order from reserved stock through pickup or delivery." : "Suivez chaque commande depuis la réservation du stock jusqu’au retrait ou à la livraison."}</p></div><span className="rounded-full bg-dtsc-page px-2.5 py-1 text-xs font-black text-dtsc-muted">{orders?.pagination.total || 0}</span></div>
+      <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
+        <label className="text-xs font-semibold text-dtsc-muted">Recherche<Input value={ordersSearch} onChange={(e) => { setOrdersSearch(e.target.value); setOrdersPage(1); }} placeholder="Référence ou titre…" className="mt-1" /></label>
+        <label className="text-xs font-semibold text-dtsc-muted">Statut<select className="mt-1 h-10 w-full rounded-lg border border-dtsc-border bg-dtsc-page px-2 text-dtsc-ink" value={ordersStatus} onChange={(e) => { setOrdersStatus(e.target.value); setOrdersPage(1); }}><option value="">Tous</option>{["RESERVED","RESERVATION_FAILED","CANCELLED","FULFILLED"].map(v => <option key={v} value={v}>{customerFacingStatusLabel(v,locale)}</option>)}</select></label>
+        <label className="text-xs font-semibold text-dtsc-muted">Mode<select className="mt-1 h-10 w-full rounded-lg border border-dtsc-border bg-dtsc-page px-2 text-dtsc-ink" value={ordersMode} onChange={(e) => { setOrdersMode(e.target.value); setOrdersPage(1); }}><option value="">Tous</option>{MODES.map(v => <option key={v.code} value={v.code}>{customerFacingFulfillmentMode(v.code,locale)}</option>)}</select></label>
+        <label className="text-xs font-semibold text-dtsc-muted">Du<input type="date" value={ordersFrom} max={ordersTo || undefined} onChange={(e) => { setOrdersFrom(e.target.value); setOrdersPage(1); }} className="mt-1 h-10 w-full rounded-lg border border-dtsc-border bg-dtsc-page px-2 text-dtsc-ink" /></label>
+        <label className="text-xs font-semibold text-dtsc-muted">Au<input type="date" value={ordersTo} min={ordersFrom || undefined} onChange={(e) => { setOrdersTo(e.target.value); setOrdersPage(1); }} className="mt-1 h-10 w-full rounded-lg border border-dtsc-border bg-dtsc-page px-2 text-dtsc-ink" /></label>
+      </div>
       <div className="mt-3 grid grid-cols-[minmax(0,1fr)] gap-2">
         {(orders?.items || []).map((row) => {
           const order = row.order;
@@ -407,8 +426,12 @@ export function RetailOmnichannelPanel({ organizationId, locale }: Props) {
             </div>
           );
         })}
-        {!orders?.items.length ? <p className="text-sm text-dtsc-muted">{locale === "en" ? "No customer order yet." : "Aucune commande client pour le moment."}</p> : null}
+        {!orders?.items.length ? <p className="text-sm text-dtsc-muted">{locale === "en" ? "No customer order matches these filters." : "Aucune commande client ne correspond à ces filtres."}</p> : null}
       </div>
+      {orders && orders.pagination.pageCount > 1 ? <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-dtsc-muted">
+        <span>Page {orders.pagination.page} / {orders.pagination.pageCount} · {orders.pagination.total} commandes</span>
+        <div className="flex gap-2"><Button type="button" variant="outline" size="sm" disabled={ordersPage <= 1 || Boolean(busy)} onClick={() => setOrdersPage(v => v - 1)}>Précédent</Button><Button type="button" variant="outline" size="sm" disabled={ordersPage >= orders.pagination.pageCount || Boolean(busy)} onClick={() => setOrdersPage(v => v + 1)}>Suivant</Button></div>
+      </div> : null}
     </div>
     {returningOrder ? <div role="presentation" data-no-group-swipe className="fixed inset-0 z-[90] flex min-w-0 items-start justify-center overflow-y-auto bg-black/65 p-3 pb-[max(1rem,env(safe-area-inset-bottom))] pt-[max(1rem,env(safe-area-inset-top))] sm:p-6">
       <div role="dialog" aria-modal="true" aria-label={returnCopy.title} className="my-auto w-full min-w-0 max-w-3xl space-y-4 rounded-2xl border border-dtsc-border bg-dtsc-surface p-4 text-dtsc-ink shadow-2xl sm:p-6">
