@@ -1,8 +1,8 @@
 # RETAIL — Traçabilité financière v2 (issue #1117)
 
-**Statut : lots 1 et 2 partiellement codés, non livrable / E2E non validé.**  
-**Branche de livraison conforme :** `feat/1117-retail-financial-kpi-traceability-v2` (synthèse de la branche de travail initiale, conservée à titre d'archive).  
-**Base :** `main@c85b8f845a148bc3c9df64cdb5fc9d07b8e446c9` (PR #1111 fusionnée).  
+**Statut : lots 1 et 2 partiellement codés, non livrable / E2E non validé.**
+**Branche de livraison conforme :** `feat/1117-retail-financial-kpi-traceability-v2` (synthèse de la branche de travail initiale, conservée à titre d'archive).
+**Base :** `main@c85b8f845a148bc3c9df64cdb5fc9d07b8e446c9` (PR #1111 fusionnée).
 **Dépendances parallèles :** PR #1114 et #1115. Pas de fusion, preview, migration ou déploiement de cette branche.
 
 ## 1. Ce qui est réellement réalisé
