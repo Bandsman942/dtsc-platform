@@ -75,10 +75,10 @@ export async function GET(req: Request, { params }: Params) {
       where: { organizationId, siteId: { in: ids }, status: "COMPLETED", soldAt: dateWhere },
       _sum: { grandTotal: true }, _count: { _all: true },
     }),
-    prisma.enterpriseExpense.groupBy({
+    financeBudgetsAccess.allowed ? prisma.enterpriseExpense.groupBy({
       by: ["siteId", "currency"], where: { organizationId, siteId: { in: ids }, status: "APPROVED", expenseDate: dateWhere, archivedAt: null },
       _sum: { amount: true }, _count: { _all: true },
-    }),
+    }) : Promise.resolve([]),
     inventoryAccess.allowed ? prisma.enterpriseInventoryBalance.groupBy({
       by: ["warehouseId"], where: { organizationId, warehouse: { siteId: { in: ids } } },
       _sum: { quantityOnHand: true, quantityReserved: true }, _count: { _all: true },
@@ -98,7 +98,7 @@ export async function GET(req: Request, { params }: Params) {
   // Finance and classic POS are separate sale channels. Do not sum these
   // columns or label lifetime invoice allocations as current-period cashflow.
   // Group on the source site and currency in SQL: no capped list or cross-FX sum.
-  const invoiceRows = ids.length ? await prisma.$queryRaw<Array<{
+  const invoiceRows = ids.length && financeReceivablesAccess.allowed ? await prisma.$queryRaw<Array<{
     siteId: string; currencyCode: string; invoiceCount: bigint;
     gross: Prisma.Decimal; allocated: Prisma.Decimal; outstanding: Prisma.Decimal;
   }>>(Prisma.sql`
@@ -124,7 +124,7 @@ export async function GET(req: Request, { params }: Params) {
   })));
   // Canonical Finance customer payments are counted by payment date AND
   // confirmed invoice allocation. Historical POS tenders stay separate.
-  const financeCollectionRows = ids.length ? await prisma.$queryRaw<Array<{
+  const financeCollectionRows = ids.length && financeReceivablesAccess.allowed && financePaymentsAccess.allowed ? await prisma.$queryRaw<Array<{
     siteId: string; currencyCode: string; method: string; total: Prisma.Decimal; paymentCount: bigint;
   }>>(Prisma.sql`
     SELECT checkout."siteId" AS "siteId", payment."currencyCode" AS "currencyCode",
@@ -154,7 +154,7 @@ export async function GET(req: Request, { params }: Params) {
   const [postedLedger, executiveSources, receivableRows, inventoryAlerts] = await Promise.all([
     accountingAccess.allowed ? retailPostedSiteLedger(organizationId, from, to, ids, !siteId) : Promise.resolve({ bySite: [], unallocated: [] }),
     loadRetailExecutiveSources({ organizationId, from, to, timezone, access: { agency: agencyAccess.allowed, telco: telcoAccess.allowed, treasury: treasuryAccess.allowed } }),
-    ids.length ? prisma.$queryRaw<Array<{ siteId: string; currencyCode: string; total: Prisma.Decimal; overdue: Prisma.Decimal; count: bigint }>>(Prisma.sql`
+    ids.length && financeReceivablesAccess.allowed ? prisma.$queryRaw<Array<{ siteId: string; currencyCode: string; total: Prisma.Decimal; overdue: Prisma.Decimal; count: bigint }>>(Prisma.sql`
       SELECT checkout."siteId" AS "siteId", invoice."currencyCode" AS "currencyCode",
         COALESCE(SUM(invoice."outstandingAmount"), 0) AS total,
         COALESCE(SUM(CASE WHEN invoice."dueDate" < ${new Date()} THEN invoice."outstandingAmount" ELSE 0 END), 0) AS overdue,

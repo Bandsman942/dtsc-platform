@@ -110,6 +110,12 @@ assert.match(traceExport, /"NON DÉTERMINÉ"/, "Unknown treasury totals must not
 assert.match(traceView, /data-testid="retail-financial-drilldown"/, "Responsive trace workspace must be mounted");
 assert.match(dashboard, /<RetailFinancialDrilldown/, "The executive dashboard must open the detailed view");
 assert.match(overviewRoute, /financeReceivablesAccess\.allowed/, "The client may not display an unauthorized Finance drilldown");
+assert.match(overviewRoute, /financeBudgetsAccess\.allowed \? prisma\.enterpriseExpense\.groupBy/, "Disallowed budgets must not be queried in the company summary");
+assert.match(overviewRoute, /ids\.length && financeReceivablesAccess\.allowed \?/, "Disallowed customer invoices must never be queried");
+assert.match(overviewRoute, /ids\.length && financeReceivablesAccess\.allowed && financePaymentsAccess\.allowed \?/, "Allocations need both Receivables and Payments permission");
+assert.match(overviewRoute, /ids\.length && financeReceivablesAccess\.allowed \? prisma\.\$queryRaw<Array<\{ siteId: string; currencyCode: string; total:/, "Open receivables must honor module entitlement");
+assert.match(dashboard, /metric !== "expenses" \|\| sourceAvailability\.financeBudgets/, "Disallowed expenses must not appear in UI");
+
 assert.match(overviewRoute, /select: \\{ id: true, code: true, name: true, status: true, archivedAt: true \\}/, "Historic stores must retain their status and archived marker");
 assert.doesNotMatch(overviewRoute, /where: \\{ organizationId, status: "ACTIVE", archivedAt: null, \\.\\.\\.\\(siteId/, "The consolidated Retail view must not silently omit historical closed stores");
 assert.match(dashboard, /Boutique historique/, "The dashboard must distinguish historical store attribution from active stores");
