@@ -200,7 +200,7 @@ export function RetailSiteOverview({ organizationId, organizationName, locale, t
     if (value === "telcoMargin") return sourceAvailability.telco;
     return value === "posSales";
   };
-  if (traceMetric) return <RetailFinancialDrilldown organizationId={organizationId} locale={locale}
+  if (traceMetric) return <RetailFinancialDrilldown organizationId={organizationId} organizationName={organizationName} locale={locale}
     metric={traceMetric} period={reportPeriod} initialSiteId={traceSite} initialCurrency={traceCurrency}
     sites={items.map((site) => ({ id: site.id, name: site.name }))} onBack={() => setTraceMetric(null)} />;
   return <section data-testid="retail-multisite-overview" className="min-w-0 rounded-2xl border border-dtsc-border bg-dtsc-surface p-4 shadow-sm sm:p-5">
