@@ -182,6 +182,7 @@ jobs:
           node scripts/qa-shop2-fulfillment-reservations.mjs
           node scripts/qa-shop2-active-customer-cookie.mjs
           node scripts/qa-retail-product-coherence.mjs
+          node scripts/qa-retail-five-lots-20261111.mjs
           node --experimental-strip-types scripts/qa-session-cookie-security.mjs
           node scripts/qa-ci-auth-rate-limit-provisioning.mjs
       - name: Build production application

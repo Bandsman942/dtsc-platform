@@ -227,7 +227,41 @@ export async function getCanonicalRetailReadiness(organizationId: string) {
 export async function getRetailSelfServiceOnboarding(organizationId: string) {
   const latestRun = await latestSelection(organizationId);
   const readiness = await computeRetailReadiness(organizationId, latestRun || {});
-  return { latestRun, readiness, countryPackRegistry: RETAIL_COUNTRY_PACKS };
+  const now = new Date();
+  const [taxableItems, activeDeviceProfiles, activePromotions, priceConditions] = await Promise.all([
+    prisma.enterpriseCatalogItem.findMany({
+      where: { organizationId, taxable: true, status: "ACTIVE", archivedAt: null },
+      select: { taxCode: true }, take: 5001,
+    }),
+    prisma.enterpriseRetailDeviceProfile.count({ where: { organizationId, status: "ACTIVE", archivedAt: null } }),
+    prisma.enterpriseRetailPromotion.count({ where: { organizationId, status: "ACTIVE", archivedAt: null,
+      startsAt: { lte: now }, OR: [{ endsAt: null }, { endsAt: { gte: now } }] } }),
+    prisma.enterpriseRetailPriceCondition.count({ where: { organizationId, isActive: true } }),
+  ]);
+  const requiredCodes = [...new Set(taxableItems.map((item) => item.taxCode).filter((code): code is string => Boolean(code)))];
+  const codes = requiredCodes.length ? await prisma.enterpriseTaxCode.findMany({
+    where: { organizationId, code: { in: requiredCodes }, isActive: true }, select: { id: true, code: true },
+  }) : [];
+  const rates = codes.length ? await prisma.enterpriseTaxRate.findMany({
+    where: { organizationId, taxCodeId: { in: codes.map((code) => code.id) }, status: "ACTIVE",
+      effectiveFrom: { lte: now }, OR: [{ effectiveTo: null }, { effectiveTo: { gte: now } }] },
+    select: { taxCodeId: true },
+  }) : [];
+  const coveredCodes = new Set(codes.filter((code) => rates.some((rate) => rate.taxCodeId === code.id)).map((code) => code.code));
+  const missingTaxItems = taxableItems.filter((item) => !item.taxCode || !coveredCodes.has(item.taxCode)).length;
+  const invoiceActive = readiness.items.some((item) => item.code === "INVOICE_CHECKOUT" && item.complete);
+  const diagnostics = {
+    tax: { status: taxableItems.length > 5000 ? "NOT_ATTESTED" : missingTaxItems ? "CONFIGURATION_REQUIRED" : "READY",
+      taxableItems: taxableItems.length, missingTaxItems, deepLink: "/enterprise-modules/FINANCE_TAX" },
+    offline: { status: activePromotions + priceConditions ? "CONFIGURATION_REQUIRED" : "READY",
+      mode: invoiceActive ? "FINANCE_DRAFT" : "LEGACY_SALE",
+      dynamicPricingRules: activePromotions + priceConditions,
+      deepLink: "/enterprise-modules/RETAIL_POS?section=offline" },
+    devices: { status: "NOT_ATTESTED", configuredProfiles: activeDeviceProfiles,
+      deepLink: "/enterprise-modules/RETAIL_POS?section=equipment" },
+    numbering: { status: "NOT_ATTESTED", deepLink: null },
+  };
+  return { latestRun, readiness, countryPackRegistry: RETAIL_COUNTRY_PACKS, diagnostics };
 }
 
 export async function saveRetailSelfServiceOnboarding(args: { organizationId: string; actorUserId: string; selection: OnboardingSelection }) {

@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { writeApiLog } from "@/lib/audit";
 import { authorizeRetailRequest, retailErrorResponse, retailListParams } from "@/lib/enterprise/retail/http";
 import { retailInvoiceVisibleSites } from "@/lib/enterprise/retail/site-access";
+import { readRetailListDateRange } from "@/lib/enterprise/retail/list-date-range";
 import { prisma } from "@/lib/prisma";
 
 type Params = { params: Promise<{ organizationId: string }> };
@@ -23,8 +24,10 @@ export async function GET(req: Request, { params }: Params) {
       return NextResponse.json({ active: false, items: [], pagination: { page: 1, pageSize: 20, total: 0, pageCount: 1 } }, { headers: { "Cache-Control": "private, no-store" } });
     }
     const visibility = await retailInvoiceVisibleSites(organizationId, auth.session.userId);
-    const { page, pageSize, status } = retailListParams(req);
+    const { page, pageSize, status, search } = retailListParams(req);
     const siteId = new URL(req.url).searchParams.get("siteId") || undefined;
+    const { from, toExclusive } = await readRetailListDateRange(req, organizationId);
+    const inclusiveTo = toExclusive ? new Date(toExclusive.getTime() - 1) : null;
     if (siteId && !visibility.isOwner && !visibility.collectibleSiteIds.includes(siteId)) {
       return NextResponse.json({ error: "RETAIL_SITE_ACCESS_DENIED" }, { status: 403 });
     }
@@ -34,6 +37,13 @@ export async function GET(req: Request, { params }: Params) {
         ? (siteId ? { siteId } : {})
         : { siteId: siteId || { in: visibility.collectibleSiteIds } }) },
       ...(status ? { payment: { status } } : {}),
+      ...((from || inclusiveTo) ? { createdAt: { ...(from ? { gte: from } : {}), ...(inclusiveTo ? { lte: inclusiveTo } : {}) } } : {}),
+      ...(search ? { OR: [
+        { payment: { number: { contains: search.slice(0, 120), mode: "insensitive" } } },
+        { payment: { reference: { contains: search.slice(0, 120), mode: "insensitive" } } },
+        { checkout: { invoice: { number: { contains: search.slice(0, 120), mode: "insensitive" } } } },
+        { checkout: { site: { name: { contains: search.slice(0, 120), mode: "insensitive" } } } },
+      ] } : {}),
     };
     const [proposals, total] = await Promise.all([
       prisma.enterpriseRetailInvoicePaymentProposal.findMany({

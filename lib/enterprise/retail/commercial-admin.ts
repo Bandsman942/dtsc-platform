@@ -83,6 +83,55 @@ export async function listRetailPriceConditions(organizationId: string) {
   });
 }
 
+
+export async function listRetailPriceConditionsPage(
+  organizationId: string,
+  filters: { page: number; pageSize: number; search?: string; from?: Date | null; to?: Date | null },
+) {
+  const needle = filters.search?.slice(0, 120).trim() || "";
+  const priceIds = needle ? (await prisma.enterpriseCatalogPrice.findMany({
+    where: { organizationId, catalogItem: { OR: [
+      { code: { contains: needle, mode: "insensitive" } },
+      { name: { contains: needle, mode: "insensitive" } },
+      { sku: { contains: needle, mode: "insensitive" } },
+    ] } },
+    select: { id: true },
+  })).map((price) => price.id) : null;
+  const where: Prisma.EnterpriseRetailPriceConditionWhereInput = {
+    organizationId,
+    ...(priceIds !== null ? { catalogPriceId: { in: priceIds } } : {}),
+    ...((filters.from || filters.to) ? { createdAt: {
+      ...(filters.from ? { gte: filters.from } : {}),
+      ...(filters.to ? { lte: filters.to } : {}),
+    } } : {}),
+  };
+  const [conditions, total] = await Promise.all([
+    prisma.enterpriseRetailPriceCondition.findMany({ where, orderBy: [{ priority: "desc" }, { updatedAt: "desc" }],
+      skip: (filters.page - 1) * filters.pageSize, take: filters.pageSize }),
+    prisma.enterpriseRetailPriceCondition.count({ where }),
+  ]);
+  const ids = [...new Set(conditions.map((condition) => condition.catalogPriceId))];
+  const prices = ids.length ? await prisma.enterpriseCatalogPrice.findMany({
+    where: { organizationId, id: { in: ids } },
+    select: { id: true, catalogItemId: true, amount: true, currency: true,
+      effectiveFrom: true, effectiveUntil: true, taxIncluded: true, status: true },
+  }) : [];
+  const itemIds = [...new Set(prices.map((price) => price.catalogItemId))];
+  const items = itemIds.length ? await prisma.enterpriseCatalogItem.findMany({
+    where: { organizationId, id: { in: itemIds } }, select: { id: true, code: true, name: true },
+  }) : [];
+  const byPrice = new Map(prices.map((price) => [price.id, price]));
+  const byItem = new Map(items.map((item) => [item.id, item]));
+  return {
+    items: conditions.map((condition) => {
+      const price = byPrice.get(condition.catalogPriceId) || null;
+      return { ...condition, price, item: price ? byItem.get(price.catalogItemId) || null : null };
+    }),
+    pagination: { page: filters.page, pageSize: filters.pageSize,
+      total, pageCount: Math.max(1, Math.ceil(total / filters.pageSize)) },
+  };
+}
+
 export async function upsertRetailPromotion(organizationId: string, actorUserId: string, input: PromotionInput) {
   return prisma.$transaction(async (tx) => {
     await assertOptionalRetailReferences(tx, organizationId, { siteId: input.siteId });
@@ -112,8 +161,22 @@ export async function upsertRetailPromotion(organizationId: string, actorUserId:
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 }
 
-export async function listRetailPromotions(organizationId: string, page = 1, pageSize = 50) {
-  const where = { organizationId };
+export async function listRetailPromotions(
+  organizationId: string, page = 1, pageSize = 50,
+  filters: { search?: string; from?: Date | null; to?: Date | null } = {},
+) {
+  const needle = filters.search?.slice(0, 120).trim() || "";
+  const where: Prisma.EnterpriseRetailPromotionWhereInput = { organizationId,
+    ...(needle ? { OR: [
+      { code: { contains: needle, mode: "insensitive" } },
+      { nameFr: { contains: needle, mode: "insensitive" } },
+      { nameEn: { contains: needle, mode: "insensitive" } },
+    ] } : {}),
+    ...((filters.from || filters.to) ? { createdAt: {
+      ...(filters.from ? { gte: filters.from } : {}),
+      ...(filters.to ? { lte: filters.to } : {}),
+    } } : {}),
+  };
   const [items, total] = await Promise.all([
     prisma.enterpriseRetailPromotion.findMany({ where, orderBy: [{ status: "asc" }, { priority: "desc" }, { startsAt: "desc" }], skip: (page - 1) * pageSize, take: pageSize }),
     prisma.enterpriseRetailPromotion.count({ where }),

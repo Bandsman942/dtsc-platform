@@ -5,6 +5,7 @@ import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { authorizeRetailRequest, retailErrorResponse } from "@/lib/enterprise/retail/http";
 import { createRetailOmnichannelOrder, getRetailOmnichannelOrders, RETAIL_OMNICHANNEL_MODES } from "@/lib/enterprise/retail/omnichannel";
 import { retailSitesForCapability } from "@/lib/enterprise/retail/site-access";
+import { readRetailListDateRange } from "@/lib/enterprise/retail/list-date-range";
 
 const createSchema = z.object({
   idempotencyKey: z.string().trim().min(8).max(160),
@@ -35,9 +36,24 @@ export async function GET(req: Request, { params }: Params) {
   const url = new URL(req.url);
   const page = Math.max(1, Number(url.searchParams.get("page") || 1) || 1);
   const pageSize = Math.min(50, Math.max(5, Number(url.searchParams.get("pageSize") || 20) || 20));
+  const search = (url.searchParams.get("search") || "").trim().slice(0, 120);
+  const status = (url.searchParams.get("status") || "").trim().toUpperCase();
+  const fulfillmentMode = (url.searchParams.get("fulfillmentMode") || "").trim().toUpperCase();
+  const siteId = (url.searchParams.get("siteId") || "").trim();
+  if (fulfillmentMode && !RETAIL_OMNICHANNEL_MODES.includes(fulfillmentMode as typeof RETAIL_OMNICHANNEL_MODES[number])) {
+    return NextResponse.json({ error: "RETAIL_REFERENCE_INVALID" }, { status: 400 });
+  }
   try {
     const scope = await retailSitesForCapability(organizationId, auth.session.userId, "VIEW_SALES");
-    const state = await getRetailOmnichannelOrders(organizationId, page, pageSize, scope.isolationEnabled ? scope.siteIds : undefined);
+    const { from, toExclusive } = await readRetailListDateRange(req, organizationId);
+    if (siteId && scope.isolationEnabled && !scope.siteIds.includes(siteId)) {
+      return NextResponse.json({ error: "RETAIL_SITE_ACCESS_DENIED" }, { status: 403 });
+    }
+    const state = await getRetailOmnichannelOrders(organizationId, page, pageSize,
+      scope.isolationEnabled ? scope.siteIds : undefined,
+      { search, status, fulfillmentMode, siteId,
+        from: from || undefined,
+        to: toExclusive ? new Date(toExclusive.getTime() - 1) : undefined });
     await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "retail-omnichannel-orders", page } });
     return NextResponse.json(state, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {

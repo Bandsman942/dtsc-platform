@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
-import { listRetailPriceConditions, upsertRetailPriceCondition } from "@/lib/enterprise/retail/commercial-admin";
+import { listRetailPriceConditionsPage, upsertRetailPriceCondition } from "@/lib/enterprise/retail/commercial-admin";
 import { retailPriceConditionUpsertSchema } from "@/lib/enterprise/retail/commercial-schemas";
-import { authorizeRetailRequest, retailErrorResponse } from "@/lib/enterprise/retail/http";
+import { authorizeRetailRequest, retailErrorResponse, retailListParams } from "@/lib/enterprise/retail/http";
 import { getRetailCommercialPermissions } from "@/lib/enterprise/retail/permissions";
+import { readRetailListDateRange } from "@/lib/enterprise/retail/list-date-range";
 
 type Params = { params: Promise<{ organizationId: string }> };
 
@@ -14,9 +15,13 @@ export async function GET(req: Request, { params }: Params) {
   const auth = await authorizeRetailRequest(req, organizationId, "RETAIL_POS", "read");
   if (!auth.ok) return auth.response;
   try {
-    const items = await listRetailPriceConditions(organizationId);
-    await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "retail-pricing", action: "list-conditions", count: items.length } });
-    return NextResponse.json({ items });
+    const { page, pageSize, search } = retailListParams(req);
+    const { from, toExclusive } = await readRetailListDateRange(req, organizationId);
+    const data = await listRetailPriceConditionsPage(organizationId, { page, pageSize, search, from,
+      to: toExclusive ? new Date(toExclusive.getTime() - 1) : null });
+    await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt,
+      metadata: { organizationId, domain: "retail-pricing", action: "list-conditions", count: data.items.length, page } });
+    return NextResponse.json(data);
   } catch (error) {
     return retailErrorResponse(error, "RETAIL_PRICE_CONDITIONS_LOAD_FAILED");
   }

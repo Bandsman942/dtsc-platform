@@ -39,7 +39,8 @@ export function evaluateRetailDeviceAvailability(profile: RetailDeviceProfileSum
       return { available: true, degraded: true, reason: "MANUAL_FALLBACK" };
     case "NETWORK":
     case "NATIVE_BRIDGE":
-      return { available: true, degraded: false, reason: "EXTERNAL_BRIDGE" };
+      // A saved profile does not attest that a bridge is installed or connected.
+      return { available: false, degraded: true, reason: "EXTERNAL_BRIDGE" };
     case "WEBUSB":
       return capabilities.webUsb ? { available: true, degraded: false, reason: "AVAILABLE" } : { available: false, degraded: true, reason: "BROWSER_API_UNAVAILABLE" };
     case "WEBBLUETOOTH":

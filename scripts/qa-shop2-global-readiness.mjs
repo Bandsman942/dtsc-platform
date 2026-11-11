@@ -111,7 +111,7 @@ for (const forbidden of ["enterpriseFinancialAccount.create", "enterpriseSite.cr
 const readinessLanguage = read("lib/enterprise/retail/readiness-language.ts");
 for (const marker of ["retailReadinessDetail", "Compte d’encaissement", "Clôturer une session de caisse", "Vue d’ensemble financière", "Sites, entrepôts et emplacements"]) check(readinessLanguage.includes(marker), `Actionable Retail readiness copy missing ${marker}`);
 const readinessUi = read("components/enterprise/professional/retail-global-readiness.tsx");
-for (const marker of ["Mise en service du commerce de détail", "Configuration pays", "Prêt à vendre", "Compte d’encaissement", "customerFacingCapabilityLabel", "customerFacingStatusLabel", "retailReadinessDetail", "/retail/onboarding", "/retail/country-packs"]) check(readinessUi.includes(marker), `Visible country/onboarding readiness UI missing ${marker}`);
+for (const marker of ["Mise en service du commerce de détail", "Configuration pays", "Socle de vente prêt", "Diagnostics opérationnels", "Compte d’encaissement", "customerFacingCapabilityLabel", "customerFacingStatusLabel", "retailReadinessDetail", "/retail/onboarding", "/retail/country-packs"]) check(readinessUi.includes(marker), `Visible country/onboarding readiness UI missing ${marker}`);
 for (const forbidden of ["Activate proven core only", "Operational evidence", "COMMERCIAL_READY_GLOBAL", "Country pack"]) check(!readinessUi.includes(forbidden), `Customer onboarding UI must not expose governance wording: ${forbidden}`);
 
 const retailPage = read("app/enterprise-modules/retail-page.tsx");

@@ -100,6 +100,8 @@ export function RetailInventoryPolicySettings({ organizationId, locale }: { orga
             </select>
             <span className="mt-1 block text-xs font-normal leading-5 text-dtsc-muted">{copy.transferHelp}</span>
           </label>
+          {policy.expiryMode === "ALLOW" ? <p role="status" className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs font-bold text-amber-700 dark:text-amber-200 sm:col-span-2">{locale === "en" ? "Expiry protection is not enforced. Switch to BLOCK to reject expired lots after verifying your lot data." : "La protection de péremption n’est pas appliquée. Choisissez BLOQUER pour refuser les lots périmés après vérification des données."}</p> : null}
+          {policy.expiryMode === "WARN" ? <p role="status" className="rounded-xl border border-orange-500/30 bg-orange-500/10 p-3 text-xs font-bold text-orange-700 dark:text-orange-200 sm:col-span-2">{locale === "en" ? "Warning mode is advisory; only BLOCK guarantees server rejection." : "Le mode avertissement reste indicatif ; seul BLOQUER garantit le rejet côté serveur."}</p> : null}
           <div className="flex min-w-0 flex-wrap items-center justify-between gap-3 sm:col-span-2">
             <p className="flex min-w-0 items-start gap-2 text-xs text-dtsc-muted"><AlertTriangle aria-hidden="true" className="h-4 w-4 shrink-0 text-amber-600" />{copy.legacyNotice}</p>
             {state?.canManage ? <Button type="button" disabled={saving || policy.warningDays < 1 || policy.warningDays > 365 || !Number.isInteger(policy.warningDays)} onClick={() => void save()}>{saving ? copy.saving : copy.save}</Button> : null}

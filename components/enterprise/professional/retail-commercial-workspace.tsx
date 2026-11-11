@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft, BadgePercent, RotateCcw, Tags } from "lucide-react";
+import { browserCivilDate } from "@/lib/enterprise/retail/civil-date";
+import { RetailProfessionalListExport } from "@/components/enterprise/professional/retail-professional-list-export";
+import { ArrowLeft, BadgePercent, RotateCcw, Search, Tags } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAppLocale } from "@/components/i18n/locale-provider";
 import styles from "./retail-commercial-workspace.module.css";
@@ -309,7 +311,7 @@ function FieldLabel({ children }: { children: React.ReactNode }) {
   return <span className="block text-sm font-medium">{children}</span>;
 }
 
-export function RetailCommercialWorkspace({ organizationId }: { organizationId: string }) {
+export function RetailCommercialWorkspace({ organizationId, organizationName }: { organizationId: string; organizationName: string }) {
   const language: CustomerFacingLocale = useAppLocale() === "en" ? "en" : "fr";
   const copy: Copy = useMemo(() => buildCopy(language), [language]);
   const [tab, setTab] = useState<Tab>("PRICING");
@@ -319,6 +321,15 @@ export function RetailCommercialWorkspace({ organizationId }: { organizationId: 
   const [promotions, setPromotions] = useState<Promotion[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
   const [returns, setReturns] = useState<RetailReturn[]>([]);
+  const [listPage, setListPage] = useState(1);
+  const [listPageSize, setListPageSize] = useState(20);
+  const [listSearch, setListSearch] = useState("");
+  const [debouncedListSearch, setDebouncedListSearch] = useState("");
+  const [listFrom, setListFrom] = useState("");
+  const [listTo, setListTo] = useState("");
+  const [conditionsPagination, setConditionsPagination] = useState({ page: 1, pageCount: 1, total: 0 });
+  const [promotionsPagination, setPromotionsPagination] = useState({ page: 1, pageCount: 1, total: 0 });
+  const [returnsPagination, setReturnsPagination] = useState({ page: 1, pageCount: 1, total: 0 });
   const [accounts, setAccounts] = useState<RefundAccount[]>([]);
   const [returnStatus, setReturnStatus] = useState("PENDING_APPROVAL");
   const [decisionReasons, setDecisionReasons] = useState<Record<string, string>>({});
@@ -378,6 +389,18 @@ export function RetailCommercialWorkspace({ organizationId }: { organizationId: 
     [prices, priceForm.catalogPriceId],
   );
 
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedListSearch(listSearch.trim()), 250);
+    return () => window.clearTimeout(timer);
+  }, [listSearch]);
+  const listQuery = useMemo(() => {
+    const query = new URLSearchParams({ page: String(listPage), pageSize: String(listPageSize) });
+    if (debouncedListSearch) query.set("search", debouncedListSearch);
+    if (listFrom) query.set("from", listFrom);
+    if (listTo) query.set("to", listTo);
+    return query.toString();
+  }, [listPage, listPageSize, debouncedListSearch, listFrom, listTo]);
+  const currentPagination = tab === "PRICING" ? conditionsPagination : tab === "PROMOTIONS" ? promotionsPagination : returnsPagination;
   const showError = useCallback((caught: unknown, fallback: { fr: string; en: string }) => {
     setError(customerFacingError(caught, language, fallback));
   }, [language]);
@@ -389,15 +412,17 @@ export function RetailCommercialWorkspace({ organizationId }: { organizationId: 
       const [permissionData, priceData, conditionData, promotionData, saleData, accountData] = await Promise.all([
         fetch(`/api/enterprise/${organizationId}/retail/commercial-permissions`).then(readJson),
         fetch(`/api/enterprise/${organizationId}/retail/pricing/catalog?pageSize=100`).then(readJson),
-        fetch(`/api/enterprise/${organizationId}/retail/pricing/conditions`).then(readJson),
-        fetch(`/api/enterprise/${organizationId}/retail/promotions?pageSize=100`).then(readJson),
+        fetch(`/api/enterprise/${organizationId}/retail/pricing/conditions?${listQuery}`).then(readJson),
+        fetch(`/api/enterprise/${organizationId}/retail/promotions?${listQuery}`).then(readJson),
         fetch(`/api/enterprise/${organizationId}/retail/sales?pageSize=50&status=COMPLETED`).then(readJson),
         fetch(`/api/enterprise/${organizationId}/retail/refund-accounts`).then(readJson),
       ]);
       setCapabilities(permissionData.capabilities);
       setPrices(priceData.items || []);
       setConditions(conditionData.items || []);
+      setConditionsPagination(conditionData.pagination || { page: 1, pageCount: 1, total: (conditionData.items || []).length });
       setPromotions(promotionData.items || []);
+      setPromotionsPagination(promotionData.pagination || { page: 1, pageCount: 1, total: (promotionData.items || []).length });
       setSales(saleData.items || []);
       setAccounts(accountData.items || []);
       setPriceForm((current) => ({
@@ -421,20 +446,21 @@ export function RetailCommercialWorkspace({ organizationId }: { organizationId: 
     } finally {
       setLoading(false);
     }
-  }, [organizationId, showError]);
+  }, [organizationId, showError, listQuery]);
 
   const loadReturns = useCallback(async () => {
     try {
       const suffix = returnStatus ? `&status=${encodeURIComponent(returnStatus)}` : "";
-      const data = await fetch(`/api/enterprise/${organizationId}/retail/returns?pageSize=100${suffix}`).then(readJson);
+      const data = await fetch(`/api/enterprise/${organizationId}/retail/returns?${listQuery}${suffix}`).then(readJson);
       setReturns(data.items || []);
+      setReturnsPagination(data.pagination || { page: 1, pageCount: 1, total: (data.items || []).length });
     } catch (caught) {
       showError(caught, {
         fr: "Les demandes de retour ne sont pas disponibles pour le moment.",
         en: "Return requests are not available right now.",
       });
     }
-  }, [organizationId, returnStatus, showError]);
+  }, [organizationId, returnStatus, showError, listQuery]);
 
   useEffect(() => {
     void loadCore();
@@ -467,8 +493,9 @@ export function RetailCommercialWorkspace({ organizationId }: { organizationId: 
         }),
       }).then(readJson);
       setMessage(copy.saveSuccess);
-      const data = await fetch(`/api/enterprise/${organizationId}/retail/pricing/conditions`).then(readJson);
+      const data = await fetch(`/api/enterprise/${organizationId}/retail/pricing/conditions?${listQuery}`).then(readJson);
       setConditions(data.items || []);
+      setConditionsPagination(data.pagination || { page: 1, pageCount: 1, total: (data.items || []).length });
     } catch (caught) {
       showError(caught, {
         fr: "Cette règle de prix n’a pas pu être enregistrée. Vérifiez le prix, les quantités et le canal de vente.",
@@ -528,8 +555,9 @@ export function RetailCommercialWorkspace({ organizationId }: { organizationId: 
         }),
       }).then(readJson);
       setMessage(copy.saveSuccess);
-      const data = await fetch(`/api/enterprise/${organizationId}/retail/promotions?pageSize=100`).then(readJson);
+      const data = await fetch(`/api/enterprise/${organizationId}/retail/promotions?${listQuery}`).then(readJson);
       setPromotions(data.items || []);
+      setPromotionsPagination(data.pagination || { page: 1, pageCount: 1, total: (data.items || []).length });
     } catch (caught) {
       showError(caught, {
         fr: "Cette promotion n’a pas pu être enregistrée. Vérifiez les produits, les dates et les conditions de l’offre.",
@@ -657,7 +685,7 @@ export function RetailCommercialWorkspace({ organizationId }: { organizationId: 
           <button
             key={item}
             type="button"
-            onClick={() => setTab(item)}
+            onClick={() => { setTab(item); setListPage(1); }}
             aria-current={tab === item ? "page" : undefined}
             className={`inline-flex min-h-11 shrink-0 items-center gap-2 whitespace-nowrap rounded-xl border px-4 py-2 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 ${tab === item ? "border-cyan-500/50 bg-dtsc-soft text-dtsc-blue shadow-sm" : "border-dtsc-border bg-dtsc-surface text-dtsc-muted hover:bg-dtsc-soft hover:text-dtsc-ink"}`}
           >
@@ -667,9 +695,75 @@ export function RetailCommercialWorkspace({ organizationId }: { organizationId: 
         ))}
       </nav>
 
+      <div className="grid gap-2 rounded-2xl border border-dtsc-border bg-dtsc-page p-3 sm:grid-cols-2 xl:grid-cols-5">
+        <label className="min-w-0 text-xs font-bold text-dtsc-muted xl:col-span-2">{language === "en" ? "Smart search" : "Recherche intelligente"}<span className="mt-1 flex min-h-11 items-center gap-2 rounded-xl border border-dtsc-border bg-dtsc-surface px-3"><Search className="h-4 w-4 text-dtsc-blue" /><input className="w-full min-w-0 bg-transparent text-sm text-dtsc-ink outline-none" placeholder={language === "en" ? "Product, rule, promotion, return…" : "Article, règle, promotion, retour…"} value={listSearch} onChange={(event) => { setListSearch(event.target.value); setListPage(1); }} /></span></label>
+        <label className="text-xs font-bold text-dtsc-muted">{language === "en" ? "From" : "Du"}<input type="date" className="mt-1 h-11 w-full min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface px-2 text-sm text-dtsc-ink" value={listFrom} max={listTo || undefined} onChange={(event) => { setListFrom(event.target.value); setListPage(1); }} /></label>
+        <label className="text-xs font-bold text-dtsc-muted">{language === "en" ? "To" : "Au"}<input type="date" className="mt-1 h-11 w-full min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface px-2 text-sm text-dtsc-ink" value={listTo} min={listFrom || undefined} onChange={(event) => { setListTo(event.target.value); setListPage(1); }} /></label>
+        <label className="text-xs font-bold text-dtsc-muted">{language === "en" ? "Rows per page" : "Éléments/page"}<select className="mt-1 h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-2 text-sm text-dtsc-ink" value={listPageSize} onChange={(event) => { setListPageSize(Number(event.target.value)); setListPage(1); }}>{[10, 20, 50].map((size) => <option key={size} value={size}>{size}</option>)}</select></label>
+        <div className="flex flex-wrap gap-2 sm:col-span-2 xl:col-span-5"><button type="button" onClick={() => { const today = browserCivilDate(); setListFrom(today); setListTo(today); setListPage(1); }} className="rounded-full border border-dtsc-border px-3 py-2 text-xs font-bold text-dtsc-blue">{language === "en" ? "Today" : "Aujourd’hui"}</button><button type="button" onClick={() => { const date = new Date(); setListFrom(browserCivilDate(new Date(new Date(date).setDate(date.getDate() - 6)))); setListTo(browserCivilDate(date)); setListPage(1); }} className="rounded-full border border-dtsc-border px-3 py-2 text-xs font-bold text-dtsc-blue">{language === "en" ? "Last 7 days" : "7 derniers jours"}</button><button type="button" onClick={() => { setListSearch(""); setListFrom(""); setListTo(""); setListPage(1); }} className="rounded-full border border-dtsc-border px-3 py-2 text-xs font-bold text-dtsc-blue">{language === "en" ? "Clear filters" : "Effacer les filtres"}</button></div>
+      </div>
+      {tab === "PRICING" ? <RetailProfessionalListExport<PriceCondition>
+        locale={language} organizationName={organizationName} title={language === "en" ? "Retail pricing conditions" : "Conditions tarifaires RETAIL"}
+        filenameBase="retail-pricing-rules"
+        sourceUrl={`/api/enterprise/${organizationId}/retail/pricing/conditions?${listQuery}`}
+        columns={[{ key: "item", label: language === "en" ? "Product" : "Article" },
+          { key: "code", label: "Code" }, { key: "amount", label: language === "en" ? "Price" : "Prix" },
+          { key: "currency", label: language === "en" ? "Currency" : "Devise" },
+          { key: "channel", label: language === "en" ? "Channel" : "Canal" },
+          { key: "min", label: language === "en" ? "Min qty" : "Qté min." },
+          { key: "max", label: language === "en" ? "Max qty" : "Qté max." },
+          { key: "status", label: language === "en" ? "Status" : "Statut" }]}
+        toRow={(item) => ({ item: item.item?.name || "", code: item.item?.code || "",
+          amount: Number(item.price?.amount || 0), currency: item.price?.currency || "",
+          channel: customerFacingSalesChannel(item.channelCode, language),
+          min: item.minQuantity || "", max: item.maxQuantity || "",
+          status: item.isActive ? (language === "en" ? "Active" : "Actif") : (language === "en" ? "Inactive" : "Inactif") })}
+        filters={[{ label: language === "en" ? "From" : "Du", value: listFrom || "—" },
+          { label: language === "en" ? "To" : "Au", value: listTo || "—" }]} /> : null}
+      {tab === "PROMOTIONS" ? <RetailProfessionalListExport<Promotion>
+        locale={language} organizationName={organizationName}
+        title={language === "en" ? "Retail offers and promotions" : "Offres et promotions RETAIL"}
+        filenameBase="retail-promotions"
+        sourceUrl={`/api/enterprise/${organizationId}/retail/promotions?${listQuery}`}
+        columns={[{ key: "code", label: "Code" }, { key: "name", label: language === "en" ? "Offer" : "Offre" },
+          { key: "kind", label: language === "en" ? "Type" : "Type" },
+          { key: "starts", label: language === "en" ? "Starts" : "Début" },
+          { key: "ends", label: language === "en" ? "Ends" : "Fin" },
+          { key: "status", label: language === "en" ? "Status" : "Statut" },
+          { key: "uses", label: language === "en" ? "Uses" : "Utilisations" },
+          { key: "discount", label: language === "en" ? "Discount granted" : "Remises accordées" },
+          { key: "currency", label: language === "en" ? "Currency" : "Devise" }]}
+        toRow={(item) => ({ code: item.code, name: language === "en" ? item.nameEn : item.nameFr,
+          kind: customerFacingPromotionType(item.promotionType, language),
+          starts: item.startsAt.slice(0, 10), ends: item.endsAt?.slice(0, 10) || "—",
+          status: customerFacingStatusLabel(item.status, language), uses: item.usage.count,
+          discount: Number(item.usage.discountAmount), currency: item.currencyCode || "" })}
+        filters={[{ label: language === "en" ? "From" : "Du", value: listFrom || "—" },
+          { label: language === "en" ? "To" : "Au", value: listTo || "—" }]} /> : null}
+      {tab === "RETURNS" ? <RetailProfessionalListExport<RetailReturn>
+        locale={language} organizationName={organizationName}
+        title={language === "en" ? "Historic Retail returns" : "Retours RETAIL historiques"}
+        description={language === "en" ? "Legacy receipt returns; canonical invoice credit notes are managed through Finance." : "Retours des tickets historiques ; les avoirs des factures canoniques sont traités dans Finance."}
+        filenameBase="retail-historic-returns"
+        sourceUrl={`/api/enterprise/${organizationId}/retail/returns?${listQuery}${returnStatus ? "&status=" + encodeURIComponent(returnStatus) : ""}`}
+        columns={[{ key: "date", label: language === "en" ? "Requested" : "Demandé le" },
+          { key: "return", label: language === "en" ? "Return" : "Retour" },
+          { key: "sale", label: language === "en" ? "Sale" : "Vente" },
+          { key: "type", label: language === "en" ? "Type" : "Type" },
+          { key: "amount", label: language === "en" ? "Amount" : "Montant" },
+          { key: "currency", label: language === "en" ? "Currency" : "Devise" },
+          { key: "status", label: language === "en" ? "Status" : "Statut" }]}
+        toRow={(item) => ({ date: new Date(item.createdAt).toLocaleString(language), return: item.number,
+          sale: item.sale.number, type: customerFacingReturnType(item.returnType, language),
+          amount: Number(item.grandTotal), currency: item.currencyCode,
+          status: customerFacingStatusLabel(item.status, language) })}
+        filters={[{ label: language === "en" ? "Status" : "Statut", value: returnStatus || (language === "en" ? "All" : "Tous") },
+          { label: language === "en" ? "From" : "Du", value: listFrom || "—" },
+          { label: language === "en" ? "To" : "Au", value: listTo || "—" }]} /> : null}
       {message ? <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm" role="status">{message}</div> : null}
       {error ? <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm" role="alert">{error}</div> : null}
 
+      {tab === "RETURNS" ? <p className="rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-3 text-sm text-dtsc-ink">{language === "en" ? "The list below concerns historical Retail receipts. Modern Finance invoice returns and credit notes are managed from the canonical invoice register." : "La liste ci-dessous concerne les tickets Retail historiques. Les retours de factures Finance et leurs avoirs se traitent depuis le registre canonique des factures."} <Link href="/enterprise-modules/RETAIL_POS?section=invoices" className="font-bold text-dtsc-blue underline">{language === "en" ? "Open invoice register" : "Ouvrir le registre des factures"}</Link></p> : null}
       {tab === "PRICING" ? (
         <section className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(320px,0.65fr)]">
           <div className="space-y-4">
@@ -697,6 +791,7 @@ export function RetailCommercialWorkspace({ organizationId }: { organizationId: 
                     <div className="flex flex-wrap items-center gap-2 text-xs">
                       <span className="rounded-full border px-2 py-1">{copy.order} {condition.priority}</span>
                       <span className="rounded-full border px-2 py-1">{condition.isActive ? copy.active : copy.inactive}</span>
+                      <details className="relative"><summary className="cursor-pointer list-none rounded-lg border border-dtsc-border px-2.5 py-1.5 text-lg" aria-label={language === "en" ? "Rule actions" : "Actions de la règle"}>⋯</summary><div className="absolute right-0 z-20 mt-1 min-w-44 rounded-xl border border-dtsc-border bg-dtsc-surface p-2 shadow-xl"><Link href="/enterprise-modules/CATALOG" className="block rounded-lg px-3 py-2 text-xs text-dtsc-blue hover:bg-dtsc-soft">{language === "en" ? "Open product catalog" : "Ouvrir le catalogue"}</Link></div></details>
                     </div>
                   </div>
                 ))}
@@ -782,7 +877,7 @@ export function RetailCommercialWorkspace({ organizationId }: { organizationId: 
                         </p>
                         {promotion.couponCode ? <p className="mt-1 text-xs text-muted-foreground">{copy.coupon}: {promotion.couponCode}</p> : null}
                       </div>
-                      <span className="rounded-full border px-2 py-1 text-xs">{customerFacingStatusLabel(promotion.status, language)}</span>
+                      <div className="flex items-center gap-2"><span className="rounded-full border px-2 py-1 text-xs">{customerFacingStatusLabel(promotion.status, language)}</span><details className="relative"><summary aria-label={language === "en" ? "Promotion actions" : "Actions de la promotion"} className="cursor-pointer list-none rounded-lg border border-dtsc-border px-2 py-1 text-lg">⋯</summary><div className="absolute right-0 z-20 mt-1 min-w-40 rounded-xl border border-dtsc-border bg-dtsc-surface p-2 shadow-xl"><p className="break-words p-2 text-xs text-dtsc-muted">{promotion.code}</p><Link href="/enterprise-modules/CATALOG" className="block rounded-lg px-3 py-2 text-xs text-dtsc-blue hover:bg-dtsc-soft">{language === "en" ? "Product catalog" : "Catalogue des articles"}</Link></div></details></div>
                     </div>
                     <p className="mt-3 text-xs text-muted-foreground">
                       {promotion.usage.count} {copy.usage} · {money(promotion.usage.discountAmount, promotion.currencyCode)} {copy.discountGranted}
@@ -1025,8 +1120,8 @@ export function RetailCommercialWorkspace({ organizationId }: { organizationId: 
 
             <div className="space-y-3">
               <div className="flex gap-2 overflow-x-auto pb-1 [touch-action:pan-x]">
-                <button type="button" onClick={() => setReturnStatus("PENDING_APPROVAL")} className={`min-h-10 shrink-0 rounded-full border px-3 py-2 text-sm transition ${returnStatus === "PENDING_APPROVAL" ? "border-cyan-500/50 bg-dtsc-soft font-semibold text-dtsc-blue" : "border-dtsc-border bg-dtsc-surface text-dtsc-muted hover:bg-dtsc-soft"}`}>{copy.pendingOnly}</button>
-                <button type="button" onClick={() => setReturnStatus("")} className={`min-h-10 shrink-0 rounded-full border px-3 py-2 text-sm transition ${returnStatus === "" ? "border-cyan-500/50 bg-dtsc-soft font-semibold text-dtsc-blue" : "border-dtsc-border bg-dtsc-surface text-dtsc-muted hover:bg-dtsc-soft"}`}>{copy.allReturns}</button>
+                <button type="button" onClick={() => { setReturnStatus("PENDING_APPROVAL"); setListPage(1); }} className={`min-h-10 shrink-0 rounded-full border px-3 py-2 text-sm transition ${returnStatus === "PENDING_APPROVAL" ? "border-cyan-500/50 bg-dtsc-soft font-semibold text-dtsc-blue" : "border-dtsc-border bg-dtsc-surface text-dtsc-muted hover:bg-dtsc-soft"}`}>{copy.pendingOnly}</button>
+                <button type="button" onClick={() => { setReturnStatus(""); setListPage(1); }} className={`min-h-10 shrink-0 rounded-full border px-3 py-2 text-sm transition ${returnStatus === "" ? "border-cyan-500/50 bg-dtsc-soft font-semibold text-dtsc-blue" : "border-dtsc-border bg-dtsc-surface text-dtsc-muted hover:bg-dtsc-soft"}`}>{copy.allReturns}</button>
               </div>
 
               {returns.length ? returns.map((item) => (
@@ -1039,7 +1134,7 @@ export function RetailCommercialWorkspace({ organizationId }: { organizationId: 
                       </p>
                       <p className="mt-1 text-xs text-muted-foreground">{customerFacingRefundMethod(item.refundMethod, language)}</p>
                     </div>
-                    <span className="w-fit rounded-full border px-2 py-1 text-xs">{customerFacingStatusLabel(item.status, language)}</span>
+                    <div className="flex items-center gap-2"><span className="w-fit rounded-full border px-2 py-1 text-xs">{customerFacingStatusLabel(item.status, language)}</span><details className="relative"><summary aria-label={language === "en" ? "Return actions" : "Actions du retour"} className="cursor-pointer list-none rounded-lg border border-dtsc-border px-2.5 py-1.5 text-lg">⋯</summary><div className="absolute right-0 z-20 mt-1 min-w-40 rounded-xl border border-dtsc-border bg-dtsc-surface p-2 shadow-xl"><p className="break-words p-2 text-xs text-dtsc-muted">{item.number}</p><Link href="/enterprise-modules/RETAIL_POS?section=invoices" className="block rounded-lg px-3 py-2 text-xs text-dtsc-blue hover:bg-dtsc-soft">{language === "en" ? "Canonical Finance invoices" : "Factures Finance"}</Link></div></details></div>
                   </div>
 
                   <p className="mt-3 text-sm">{item.reason}</p>
@@ -1072,6 +1167,7 @@ export function RetailCommercialWorkspace({ organizationId }: { organizationId: 
           </div>
         </section>
       ) : null}
+      {currentPagination.pageCount > 1 ? <nav aria-label={language === "en" ? "Commercial pagination" : "Pagination commerciale"} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-dtsc-border bg-dtsc-page p-3 text-xs text-dtsc-muted"><span>{language === "en" ? "Page" : "Page"} {currentPagination.page}/{currentPagination.pageCount} · {currentPagination.total}</span><div className="flex gap-2"><button type="button" className="rounded-lg border border-dtsc-border px-3 py-2 font-semibold text-dtsc-blue disabled:opacity-50" disabled={listPage <= 1} onClick={() => setListPage((value) => value - 1)}>{language === "en" ? "Previous" : "Précédente"}</button><button type="button" className="rounded-lg border border-dtsc-border px-3 py-2 font-semibold text-dtsc-blue disabled:opacity-50" disabled={listPage >= currentPagination.pageCount} onClick={() => setListPage((value) => value + 1)}>{language === "en" ? "Next" : "Suivante"}</button></div></nav> : null}
     </div>
   );
 }
