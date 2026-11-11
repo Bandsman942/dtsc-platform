@@ -163,8 +163,8 @@ export function RetailDeviceReadiness({ organizationId, locale = "fr" }: { organ
           {!forbidden && <button type="button" onClick={() => setForm({ ...EMPTY })} className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-dtsc-blue px-3 text-sm font-bold text-white"><Plus className="h-4 w-4" />Ajouter</button>}
         </div>
       </header>
-      <p className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-dtsc-ink">Un profil actif ou une API navigateur détectée ne prouve pas que le périphérique est connecté. Les connexions réseau et logiciel compagnon exigent un adaptateur réellement installé et testé ; aucun paiement n'est confirmé ici.</p>
-      {forbidden ? <p role="alert" className="rounded-xl bg-amber-500/10 p-3 text-sm">Administration réservée aux responsables autorisés. Consultez votre administrateur pour l'affectation des appareils.</p> : null}
+      <p className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-dtsc-ink">Un profil actif ou une API navigateur détectée ne prouve pas que le périphérique est connecté. Les connexions réseau et logiciel compagnon exigent un adaptateur réellement installé et testé ; aucun paiement n’est confirmé ici.</p>
+      {forbidden ? <p role="alert" className="rounded-xl bg-amber-500/10 p-3 text-sm">Administration réservée aux responsables autorisés. Consultez votre administrateur pour l’affectation des appareils.</p> : null}
       {failed ? <p role="alert" className="rounded-xl bg-red-500/10 p-3 text-sm text-red-600">Impossible de charger les équipements. Vérifiez les droits et réessayez.</p> : null}
       {!loaded ? <p role="status" className="text-sm text-dtsc-muted">Chargement des équipements…</p> : null}
       {!forbidden && <>
@@ -196,7 +196,7 @@ export function RetailDeviceReadiness({ organizationId, locale = "fr" }: { organ
               ? <button type="button" className="mt-2 rounded-lg border border-dtsc-border px-3 py-2 text-xs font-bold text-dtsc-blue" onClick={() => { setTestingScannerId(device.id); setScannerValue(""); setScannerResult(""); }}>Tester la lecture clavier</button>
               : null}
             {device.status === "ACTIVE" && device.connectionMode === "BROWSER" && device.deviceType === "RECEIPT_PRINTER"
-              ? <button type="button" className="mt-2 rounded-lg border border-dtsc-border px-3 py-2 text-xs font-bold text-dtsc-blue" onClick={() => window.print()}>Ouvrir l'impression système</button>
+              ? <button type="button" className="mt-2 rounded-lg border border-dtsc-border px-3 py-2 text-xs font-bold text-dtsc-blue" onClick={() => window.print()}>Ouvrir l’impression système</button>
               : null}
             {testingScannerId === device.id && <div className="mt-2 rounded-xl border border-cyan-500/30 bg-dtsc-surface p-3 text-xs">
               <label className="block font-bold">Scanner un code-barres et terminer par Entrée<input autoFocus className="mt-2 h-11 w-full rounded-lg border border-dtsc-border bg-dtsc-page px-3" value={scannerValue} onChange={(event) => setScannerValue(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); setScannerResult(scannerValue.trim()); } }} /></label>
@@ -216,10 +216,10 @@ export function RetailDeviceReadiness({ organizationId, locale = "fr" }: { organ
           <label className="text-xs font-semibold">Nom *<input className={commonField} required value={form.name} onChange={(e) => setForm((v) => v && { ...v, name: e.target.value })} /></label>
           <label className="text-xs font-semibold">Type *<select className={commonField} value={form.deviceType} onChange={(e) => setForm((v) => v && { ...v, deviceType: e.target.value as DeviceType })}>{types.map((t) => <option key={t} value={t}>{customerFacingDeviceType(t, locale)}</option>)}</select></label>
           <label className="text-xs font-semibold">Connexion *<select className={commonField} value={form.connectionMode} onChange={(e) => setForm((v) => v && { ...v, connectionMode: e.target.value as ConnectionMode })}>{modes.map((m) => <option key={m} value={m}>{optionLabels[m]}</option>)}</select></label>
-          <label className="text-xs font-semibold">Boutique<select className={commonField} value={form.siteId || ""} onChange={(e) => setForm((v) => v && { ...v, siteId: e.target.value || null })}><option value="">Commun à l'entreprise</option>{sites.map((site) => <option key={site.id} value={site.id}>{site.name}</option>)}</select></label>
+          <label className="text-xs font-semibold">Boutique<select className={commonField} value={form.siteId || ""} onChange={(e) => setForm((v) => v && { ...v, siteId: e.target.value || null })}><option value="">Commun à l’entreprise</option>{sites.map((site) => <option key={site.id} value={site.id}>{site.name}</option>)}</select></label>
           <label className="text-xs font-semibold">Statut<select className={commonField} value={form.status} onChange={(e) => setForm((v) => v && { ...v, status: e.target.value as Form["status"] })}><option value="ACTIVE">Actif</option><option value="DISABLED">Désactivé</option></select></label>
         </div>
-        <p className="mt-3 text-xs text-dtsc-muted">Les paramètres spécifiques au modèle et à la boutique seront pris en charge par les adaptateurs compatibles. Aucun périphérique inconnu n'est automatiquement piloté par ce formulaire.</p>
+        <p className="mt-3 text-xs text-dtsc-muted">Les paramètres spécifiques au modèle et à la boutique seront pris en charge par les adaptateurs compatibles. Aucun périphérique inconnu n’est automatiquement piloté par ce formulaire.</p>
         <div className="mt-4 flex justify-end gap-2"><button className="rounded-lg border border-dtsc-border px-4 py-2 text-sm" type="button" onClick={() => setForm(null)}>Annuler</button><button type="button" className="rounded-lg bg-dtsc-blue px-4 py-2 text-sm font-bold text-white disabled:opacity-50" disabled={saving || !form.code.trim() || form.name.trim().length < 2} onClick={() => void save()}>{saving ? "Enregistrement…" : "Enregistrer le profil"}</button></div>
       </div>}
     </section>
