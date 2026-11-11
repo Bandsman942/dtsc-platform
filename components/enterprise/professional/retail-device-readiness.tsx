@@ -1,98 +1,118 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Plus, RefreshCw, Settings2, Search, X } from "lucide-react";
 import { detectRetailBrowserDeviceCapabilities, evaluateRetailDeviceAvailability } from "@/lib/enterprise/retail/device-capabilities";
 import { customerFacingDeviceType } from "@/lib/customer-facing-language";
+import { toastError, toastSuccess } from "@/lib/client-toast";
 
-type Device = {
-  id: string;
-  code: string;
-  name: string;
-  deviceType: string;
-  connectionMode: string;
-  status: string;
+type DeviceType = "BARCODE_SCANNER" | "RECEIPT_PRINTER" | "CASH_DRAWER" | "PAYMENT_TERMINAL" | "CUSTOMER_DISPLAY" | "SCALE";
+type ConnectionMode = "BROWSER" | "WEBUSB" | "WEBBLUETOOTH" | "WEBSERIAL" | "NETWORK" | "NATIVE_BRIDGE" | "MANUAL";
+type Device = { id: string; code: string; name: string; deviceType: DeviceType; connectionMode: ConnectionMode; status: "ACTIVE" | "DISABLED"; siteId: string | null };
+type Form = { id?: string; code: string; name: string; deviceType: DeviceType; connectionMode: ConnectionMode; status: "ACTIVE" | "DISABLED" };
+const EMPTY: Form = { code: "", name: "", deviceType: "RECEIPT_PRINTER", connectionMode: "BROWSER", status: "ACTIVE" };
+const types: DeviceType[] = ["RECEIPT_PRINTER", "BARCODE_SCANNER", "CASH_DRAWER", "PAYMENT_TERMINAL", "CUSTOMER_DISPLAY", "SCALE"];
+const modes: ConnectionMode[] = ["BROWSER", "WEBUSB", "WEBBLUETOOTH", "WEBSERIAL", "NETWORK", "NATIVE_BRIDGE", "MANUAL"];
+const optionLabels: Record<ConnectionMode, string> = {
+  BROWSER: "Navigateur / clavier / impression système",
+  WEBUSB: "WebUSB", WEBBLUETOOTH: "WebBluetooth", WEBSERIAL: "WebSerial",
+  NETWORK: "Réseau — adaptateur requis", NATIVE_BRIDGE: "Logiciel compagnon — adaptateur requis", MANUAL: "Manuel",
 };
 
-type Props = { organizationId: string; locale?: "fr" | "en" };
-
-export function RetailDeviceReadiness({ organizationId, locale = "fr" }: Props) {
+export function RetailDeviceReadiness({ organizationId, locale = "fr" }: { organizationId: string; locale?: "fr" | "en" }) {
   const [devices, setDevices] = useState<Device[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [forbidden, setForbidden] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState<Form | null>(null);
+  const [search, setSearch] = useState("");
+  const [typeFilter, setTypeFilter] = useState("");
+  const [page, setPage] = useState(1);
+  const pageSize = 12;
   const capabilities = useMemo(() => detectRetailBrowserDeviceCapabilities(), []);
 
-  useEffect(() => {
-    let cancelled = false;
-    fetch(`/api/enterprise/${encodeURIComponent(organizationId)}/retail/devices`, { cache: "no-store" })
-      .then(async (response) => {
-        if (!response.ok) throw new Error("devices unavailable");
-        return response.json() as Promise<{ items?: Device[] }>;
-      })
-      .then((payload) => {
-        if (!cancelled) setDevices(Array.isArray(payload.items) ? payload.items : []);
-      })
-      .catch(() => {
-        if (!cancelled) setFailed(true);
-      })
-      .finally(() => {
-        if (!cancelled) setLoaded(true);
-      });
-    return () => { cancelled = true; };
+  const load = useCallback(async () => {
+    setFailed(false);
+    try {
+      const response = await fetch(`/api/enterprise/${encodeURIComponent(organizationId)}/retail/devices`, { cache: "no-store" });
+      if (response.status === 403) { setForbidden(true); setDevices([]); return; }
+      if (!response.ok) throw new Error("RETAIL_DEVICE_READ_FAILED");
+      const payload = await response.json() as { items?: Device[] };
+      setDevices(Array.isArray(payload.items) ? payload.items : []);
+      setForbidden(false);
+    } catch { setFailed(true); }
+    finally { setLoaded(true); }
   }, [organizationId]);
+  useEffect(() => { void load(); }, [load]);
 
-  const labels = locale === "en"
-    ? {
-        title: "Checkout equipment",
-        subtitle: "See which connected tools are ready to use at this point of sale.",
-        ready: "Ready",
-        degraded: "Alternative available",
-        unavailable: "Needs attention",
-        manual: "Manual use available",
-        bridge: "Connected through companion software",
-      }
-    : {
-        title: "Équipements d’encaissement",
-        subtitle: "Vérifiez rapidement quels équipements sont prêts à être utilisés sur ce point de vente.",
-        ready: "Prêt",
-        degraded: "Alternative disponible",
-        unavailable: "À vérifier",
-        manual: "Utilisation manuelle possible",
-        bridge: "Connecté via le logiciel compagnon",
-      };
+  const filtered = useMemo(() => devices.filter((device) => {
+    const needle = search.trim().toLocaleLowerCase();
+    return (!typeFilter || device.deviceType === typeFilter)
+      && (!needle || [device.name, device.code, device.deviceType].some((value) => value.toLocaleLowerCase().includes(needle)));
+  }), [devices, search, typeFilter]);
+  const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const visible = filtered.slice((Math.min(page, pageCount) - 1) * pageSize, Math.min(page, pageCount) * pageSize);
 
+  async function save() {
+    if (!form || saving) return;
+    setSaving(true);
+    try {
+      const response = await fetch(`/api/enterprise/${encodeURIComponent(organizationId)}/retail/devices`, {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ ...form, siteId: null }),
+      });
+      const body = await response.json().catch(() => null) as { message?: string; error?: string } | null;
+      if (!response.ok) throw new Error(body?.message || body?.error || "Impossible d’enregistrer cet équipement.");
+      toastSuccess(form.id ? "Profil équipement mis à jour." : "Profil équipement créé. Testez ensuite la connexion physique.");
+      setForm(null);
+      await load();
+    } catch (error) { toastError(error instanceof Error ? error.message : "Enregistrement impossible."); }
+    finally { setSaving(false); }
+  }
+  const commonField = "mt-1 min-h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 text-sm text-dtsc-ink";
   return (
-    <section className="rounded-2xl border border-border/70 bg-card/70 p-3 shadow-sm" aria-label={labels.title}>
-      <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="text-sm font-semibold">{labels.title}</h2>
-          <p className="mt-1 text-xs leading-5 text-muted-foreground">{labels.subtitle}</p>
+    <section className="space-y-4 rounded-2xl border border-dtsc-border bg-dtsc-surface p-4 sm:p-5" aria-label="Équipements d'encaissement">
+      <header className="flex flex-wrap items-start justify-between gap-3">
+        <div><h2 className="text-lg font-black text-dtsc-ink">{locale === "en" ? "Retail equipment" : "Équipements du commerce de détail"}</h2><p className="text-sm text-dtsc-muted">{locale === "en" ? "Register device profiles, then verify real hardware connectivity." : "Enregistrez les profils des appareils puis vérifiez leur connexion matérielle réelle."}</p></div>
+        <div className="flex gap-2">
+          <button type="button" onClick={() => void load()} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-dtsc-border px-3 text-sm text-dtsc-ink"><RefreshCw className="h-4 w-4" />Actualiser</button>
+          {!forbidden && <button type="button" onClick={() => setForm({ ...EMPTY })} className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-dtsc-blue px-3 text-sm font-bold text-white"><Plus className="h-4 w-4" />Ajouter</button>}
         </div>
-        <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-bold text-muted-foreground">{devices.length}</span>
-      </div>
-      {!loaded ? <p role="status" className="text-sm text-muted-foreground">{locale === "en" ? "Checking connected equipment…" : "Vérification des équipements…"}</p> : null}
-      {failed ? <p role="alert" className="rounded-lg bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-200">{locale === "en" ? "Equipment could not be loaded. Check your access rights or try again." : "Impossible de consulter les équipements. Vérifiez vos droits ou réessayez."}</p> : null}
-      {loaded && !failed && devices.length === 0 ? <p className="rounded-lg border border-dashed border-dtsc-border p-3 text-sm text-dtsc-muted">{locale === "en" ? "No equipment registered. An administrator can configure a receipt printer, scanner or payment terminal for this checkout." : "Aucun équipement enregistré. Un administrateur peut configurer une imprimante à tickets, un scanner ou un terminal de paiement pour ce comptoir."}</p> : null}
-      <div className="flex gap-2 overflow-x-auto pb-1">
-        {devices.map((device) => {
+      </header>
+      <p className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-dtsc-ink">Un profil actif ou une API navigateur détectée ne prouve pas que le périphérique est connecté. Les connexions réseau et logiciel compagnon exigent un adaptateur réellement installé et testé ; aucun paiement n'est confirmé ici.</p>
+      {forbidden ? <p role="alert" className="rounded-xl bg-amber-500/10 p-3 text-sm">Administration réservée aux responsables autorisés. Consultez votre administrateur pour l'affectation des appareils.</p> : null}
+      {failed ? <p role="alert" className="rounded-xl bg-red-500/10 p-3 text-sm text-red-600">Impossible de charger les équipements. Vérifiez les droits et réessayez.</p> : null}
+      {!loaded ? <p role="status" className="text-sm text-dtsc-muted">Chargement des équipements…</p> : null}
+      {!forbidden && <>
+        <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,240px)]">
+          <label className="text-xs font-semibold text-dtsc-muted">Recherche intelligente<div className="relative"><Search className="absolute left-3 top-4 h-4 w-4" /><input className={commonField + " pl-9"} value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder="Nom, code, type…" /></div></label>
+          <label className="text-xs font-semibold text-dtsc-muted">Type<select className={commonField} value={typeFilter} onChange={(event) => { setTypeFilter(event.target.value); setPage(1); }}><option value="">Tous</option>{types.map((value) => <option key={value} value={value}>{customerFacingDeviceType(value, locale)}</option>)}</select></label>
+        </div>
+        {loaded && devices.length === 0 ? <p className="rounded-xl border border-dashed border-dtsc-border p-4 text-sm text-dtsc-muted">Aucun équipement enregistré. Utilisez « Ajouter » pour créer un profil de périphérique, puis vérifiez sa compatibilité et sa connexion.</p> : null}
+        <div className="grid gap-2 md:grid-cols-2">{visible.map((device) => {
           const state = evaluateRetailDeviceAvailability(device, capabilities);
-          const statusLabel = state.reason === "MANUAL_FALLBACK"
-            ? labels.manual
-            : state.reason === "EXTERNAL_BRIDGE"
-              ? labels.bridge
-              : state.available && !state.degraded
-                ? labels.ready
-                : state.degraded
-                  ? labels.degraded
-                  : labels.unavailable;
-          return (
-            <div key={device.id} className="min-w-[190px] rounded-xl border border-border/60 bg-background/80 px-3 py-2.5">
-              <div className="truncate text-sm font-semibold">{device.name}</div>
-              <div className="mt-1 text-xs text-muted-foreground">{customerFacingDeviceType(device.deviceType, locale)}</div>
-              <div className="mt-2 text-xs font-semibold text-foreground">{statusLabel}</div>
-            </div>
-          );
-        })}
-      </div>
+          return <article key={device.id} className="rounded-xl border border-dtsc-border bg-dtsc-page p-3">
+            <div className="flex items-start justify-between gap-2"><div className="min-w-0"><strong className="block truncate text-sm text-dtsc-ink">{device.name}</strong><p className="text-xs text-dtsc-muted">{device.code} · {customerFacingDeviceType(device.deviceType, locale)}</p></div>
+              <button type="button" aria-label={`Configurer ${device.name}`} className="rounded-lg border border-dtsc-border p-2 text-dtsc-blue" onClick={() => setForm({ id: device.id, code: device.code, name: device.name, deviceType: device.deviceType, connectionMode: device.connectionMode, status: device.status })}><Settings2 className="h-4 w-4" /></button>
+            </div><p className="mt-2 text-xs text-dtsc-muted">{optionLabels[device.connectionMode]} · {device.status === "ACTIVE" ? "Profil actif" : "Désactivé"}</p>
+            <span className={`mt-2 inline-flex rounded-lg px-2 py-1 text-xs font-bold ${state.reason === "DISABLED" ? "bg-slate-500/10 text-dtsc-muted" : "bg-amber-500/10 text-amber-700 dark:text-amber-300"}`}>{state.reason === "AVAILABLE" ? "Interface disponible — connexion non testée" : state.reason === "EXTERNAL_BRIDGE" ? "Adaptateur externe à vérifier" : state.reason === "MANUAL_FALLBACK" ? "Utilisation manuelle" : state.reason === "DISABLED" ? "Désactivé" : "Interface non disponible sur ce navigateur"}</span>
+          </article>;
+        })}</div>
+        {filtered.length > pageSize && <div className="flex items-center justify-between text-xs text-dtsc-muted"><span>{filtered.length} équipements · Page {Math.min(page, pageCount)}/{pageCount}</span><div className="flex gap-2"><button type="button" className="rounded-lg border border-dtsc-border px-3 py-2" disabled={page <= 1} onClick={() => setPage((v) => v - 1)}>Précédent</button><button type="button" className="rounded-lg border border-dtsc-border px-3 py-2" disabled={page >= pageCount} onClick={() => setPage((v) => v + 1)}>Suivant</button></div></div>}
+      </>}
+      {form && <div className="rounded-2xl border border-cyan-500/40 bg-dtsc-page p-4">
+        <div className="flex items-center justify-between"><h3 className="font-black text-dtsc-ink">{form.id ? "Modifier un équipement" : "Ajouter un équipement"}</h3><button type="button" aria-label="Fermer" onClick={() => setForm(null)}><X className="h-5 w-5" /></button></div>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <label className="text-xs font-semibold">Code *<input className={commonField} maxLength={80} required value={form.code} onChange={(e) => setForm((v) => v && { ...v, code: e.target.value.toUpperCase() })} /></label>
+          <label className="text-xs font-semibold">Nom *<input className={commonField} required value={form.name} onChange={(e) => setForm((v) => v && { ...v, name: e.target.value })} /></label>
+          <label className="text-xs font-semibold">Type *<select className={commonField} value={form.deviceType} onChange={(e) => setForm((v) => v && { ...v, deviceType: e.target.value as DeviceType })}>{types.map((t) => <option key={t} value={t}>{customerFacingDeviceType(t, locale)}</option>)}</select></label>
+          <label className="text-xs font-semibold">Connexion *<select className={commonField} value={form.connectionMode} onChange={(e) => setForm((v) => v && { ...v, connectionMode: e.target.value as ConnectionMode })}>{modes.map((m) => <option key={m} value={m}>{optionLabels[m]}</option>)}</select></label>
+          <label className="text-xs font-semibold">Statut<select className={commonField} value={form.status} onChange={(e) => setForm((v) => v && { ...v, status: e.target.value as Form["status"] })}><option value="ACTIVE">Actif</option><option value="DISABLED">Désactivé</option></select></label>
+        </div>
+        <p className="mt-3 text-xs text-dtsc-muted">Les paramètres spécifiques au modèle et à la boutique seront pris en charge par les adaptateurs compatibles. Aucun périphérique inconnu n'est automatiquement piloté par ce formulaire.</p>
+        <div className="mt-4 flex justify-end gap-2"><button className="rounded-lg border border-dtsc-border px-4 py-2 text-sm" type="button" onClick={() => setForm(null)}>Annuler</button><button type="button" className="rounded-lg bg-dtsc-blue px-4 py-2 text-sm font-bold text-white disabled:opacity-50" disabled={saving || !form.code.trim() || form.name.trim().length < 2} onClick={() => void save()}>{saving ? "Enregistrement…" : "Enregistrer le profil"}</button></div>
+      </div>}
     </section>
   );
 }
