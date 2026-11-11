@@ -21,6 +21,7 @@ const optionLabels: Record<ConnectionMode, string> = {
 
 export function RetailDeviceReadiness({ organizationId, locale = "fr" }: { organizationId: string; locale?: "fr" | "en" }) {
   const [devices, setDevices] = useState<Device[]>([]);
+  const [pagination, setPagination] = useState({ page: 1, pageSize: 12, total: 0, pageCount: 1 });
   const [sites, setSites] = useState<Array<{ id: string; name: string }>>([]);
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -33,22 +34,25 @@ export function RetailDeviceReadiness({ organizationId, locale = "fr" }: { organ
   const [scannerResult, setScannerResult] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
   const [page, setPage] = useState(1);
-  const pageSize = 12;
   const capabilities = useMemo(() => detectRetailBrowserDeviceCapabilities(), []);
 
   const load = useCallback(async () => {
     setFailed(false);
     try {
-      const response = await fetch(`/api/enterprise/${encodeURIComponent(organizationId)}/retail/devices`, { cache: "no-store" });
+      const query = new URLSearchParams({ page: String(page), pageSize: "12" });
+      if (search.trim()) query.set("search", search.trim());
+      if (typeFilter) query.set("type", typeFilter);
+      const response = await fetch(`/api/enterprise/${encodeURIComponent(organizationId)}/retail/devices?${query}`, { cache: "no-store" });
       if (response.status === 403) { setForbidden(true); setDevices([]); return; }
       if (!response.ok) throw new Error("RETAIL_DEVICE_READ_FAILED");
-      const payload = await response.json() as { items?: Device[] };
+      const payload = await response.json() as { items?: Device[]; pagination?: { page: number; pageSize: number; total: number; pageCount: number } };
       setDevices(Array.isArray(payload.items) ? payload.items : []);
+      if (payload.pagination) setPagination(payload.pagination);
       setForbidden(false);
     } catch { setFailed(true); }
     finally { setLoaded(true); }
-  }, [organizationId]);
-  useEffect(() => { void load(); }, [load]);
+  }, [organizationId, page, search, typeFilter]);
+  useEffect(() => { const timer = setTimeout(() => { void load(); }, search ? 250 : 0); return () => clearTimeout(timer); }, [load, search]);
   useEffect(() => {
     let active = true;
     fetch(`/api/enterprise/${organizationId}/retail/dashboard?moduleCode=RETAIL_POS`, { cache: "no-store" })
@@ -62,13 +66,8 @@ export function RetailDeviceReadiness({ organizationId, locale = "fr" }: { organ
     return () => { active = false; };
   }, [organizationId]);
 
-  const filtered = useMemo(() => devices.filter((device) => {
-    const needle = search.trim().toLocaleLowerCase();
-    return (!typeFilter || device.deviceType === typeFilter)
-      && (!needle || [device.name, device.code, device.deviceType].some((value) => value.toLocaleLowerCase().includes(needle)));
-  }), [devices, search, typeFilter]);
-  const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
-  const visible = filtered.slice((Math.min(page, pageCount) - 1) * pageSize, Math.min(page, pageCount) * pageSize);
+  const pageCount = pagination.pageCount;
+  const visible = devices;
 
   async function save() {
     if (!form || saving) return;
@@ -105,7 +104,7 @@ export function RetailDeviceReadiness({ organizationId, locale = "fr" }: { organ
           <label className="text-xs font-semibold text-dtsc-muted">Recherche intelligente<div className="relative"><Search className="absolute left-3 top-4 h-4 w-4" /><input className={commonField + " pl-9"} value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder="Nom, code, type…" /></div></label>
           <label className="text-xs font-semibold text-dtsc-muted">Type<select className={commonField} value={typeFilter} onChange={(event) => { setTypeFilter(event.target.value); setPage(1); }}><option value="">Tous</option>{types.map((value) => <option key={value} value={value}>{customerFacingDeviceType(value, locale)}</option>)}</select></label>
         </div>
-        {loaded && devices.length === 0 ? <p className="rounded-xl border border-dashed border-dtsc-border p-4 text-sm text-dtsc-muted">Aucun équipement enregistré. Utilisez « Ajouter » pour créer un profil de périphérique, puis vérifiez sa compatibilité et sa connexion.</p> : null}
+        {loaded && devices.length === 0 ? <p className="rounded-xl border border-dashed border-dtsc-border p-4 text-sm text-dtsc-muted">Aucun équipement ne correspond aux filtres. Ajoutez un profil, modifiez les filtres ou actualisez la liste.</p> : null}
         <div className="grid gap-2 md:grid-cols-2">{visible.map((device) => {
           const state = evaluateRetailDeviceAvailability(device, capabilities);
           return <article key={device.id} className="rounded-xl border border-dtsc-border bg-dtsc-page p-3">
@@ -127,7 +126,7 @@ export function RetailDeviceReadiness({ organizationId, locale = "fr" }: { organ
             <span className={`mt-2 inline-flex rounded-lg px-2 py-1 text-xs font-bold ${state.reason === "DISABLED" ? "bg-slate-500/10 text-dtsc-muted" : "bg-amber-500/10 text-amber-700 dark:text-amber-300"}`}>{state.reason === "AVAILABLE" ? "Interface disponible — connexion non testée" : state.reason === "EXTERNAL_BRIDGE" ? "Adaptateur externe à vérifier" : state.reason === "MANUAL_FALLBACK" ? "Utilisation manuelle" : state.reason === "DISABLED" ? "Désactivé" : "Interface non disponible sur ce navigateur"}</span>
           </article>;
         })}</div>
-        {filtered.length > pageSize && <div className="flex items-center justify-between text-xs text-dtsc-muted"><span>{filtered.length} équipements · Page {Math.min(page, pageCount)}/{pageCount}</span><div className="flex gap-2"><button type="button" className="rounded-lg border border-dtsc-border px-3 py-2" disabled={page <= 1} onClick={() => setPage((v) => v - 1)}>Précédent</button><button type="button" className="rounded-lg border border-dtsc-border px-3 py-2" disabled={page >= pageCount} onClick={() => setPage((v) => v + 1)}>Suivant</button></div></div>}
+        {pagination.total > pagination.pageSize && <div className="flex items-center justify-between text-xs text-dtsc-muted"><span>{pagination.total} équipements · Page {Math.min(page, pageCount)}/{pageCount}</span><div className="flex gap-2"><button type="button" className="rounded-lg border border-dtsc-border px-3 py-2" disabled={page <= 1} onClick={() => setPage((v) => v - 1)}>Précédent</button><button type="button" className="rounded-lg border border-dtsc-border px-3 py-2" disabled={page >= pageCount} onClick={() => setPage((v) => v + 1)}>Suivant</button></div></div>}
       </>}
       {form && <div className="rounded-2xl border border-cyan-500/40 bg-dtsc-page p-4">
         <div className="flex items-center justify-between"><h3 className="font-black text-dtsc-ink">{form.id ? "Modifier un équipement" : "Ajouter un équipement"}</h3><button type="button" aria-label="Fermer" onClick={() => setForm(null)}><X className="h-5 w-5" /></button></div>
