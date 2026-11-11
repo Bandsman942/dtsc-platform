@@ -44,11 +44,13 @@ export async function GET(req: Request, { params }: Params) {
   }
   const siteId = url.searchParams.get("siteId") || undefined;
   const sites = await prisma.enterpriseSite.findMany({
-    where: { organizationId, status: "ACTIVE", archivedAt: null, ...(siteId ? { id: siteId } : {}) },
+    where: { organizationId, ...(siteId ? { id: siteId } : {}) },
     orderBy: [{ code: "asc" }],
-    select: { id: true, code: true, name: true },
+    select: { id: true, code: true, name: true, status: true, archivedAt: true },
   });
   if (siteId && !sites.length) return NextResponse.json({ error: "RETAIL_SITE_NOT_FOUND", message: "Cette boutique est introuvable dans votre entreprise." }, { status: 404 });
+  // Preserve historic Retail sales, invoices and journals attributed to archived stores.
+  // The historical store remains visible and marked, never silently reallocated.
   const ids = sites.map((site) => site.id);
   const dateWhere = { gte: from, lte: to };
   // Every optional ERP source is independently authorized. RETAIL_POS alone
@@ -205,8 +207,8 @@ export async function GET(req: Request, { params }: Params) {
   }));
   await writeApiLog({ request: req, startedAt, statusCode: 200, userId: session.userId, metadata: { organizationId, domain: "retail-site-overview", siteCount: items.length } });
   // Company-only balances without site attribution must never leak into a
-  // single-site subtotal. Include historical closed-site journals in company
-  // P&L, but report them as unallocated to current operating stores.
+  // single-site subtotal. Historical closed-site journals stay attributed to their
+  // own archived store, while truly missing site dimensions remain unallocated.
   const unallocated = {
     mobileMoney: siteId ? [] : executiveSources.mobileMoney.filter((row) => row.siteId === null || !ids.includes(row.siteId)),
     telco: siteId ? [] : executiveSources.telco.filter((row) => row.siteId === null || !ids.includes(row.siteId)),
