@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertTriangle, CheckCircle2, Monitor, Plus, RefreshCw, Search, Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { RetailProfessionalListExport } from "@/components/enterprise/professional/retail-professional-list-export";
 import { Input } from "@/components/ui/input";
 import { toastError, toastSuccess } from "@/lib/client-toast";
 import { customerFacingDeviceType, customerFacingError } from "@/lib/customer-facing-language";
@@ -16,13 +17,13 @@ type Device = {
 type Pagination = { page: number; pageSize: number; pageCount: number; total: number };
 type DeviceResponse = { items: Device[]; pagination: Pagination; canManage: boolean };
 type Site = { id: string; name: string };
-type Props = { organizationId: string; locale?: "fr" | "en" };
+type Props = { organizationId: string; locale?: "fr" | "en"; organizationName: string };
 type Form = { code: string; name: string; siteId: string; deviceType: string; connectionMode: string; status: "ACTIVE" | "DISABLED" };
 const deviceTypes = ["BARCODE_SCANNER", "RECEIPT_PRINTER", "CASH_DRAWER", "PAYMENT_TERMINAL", "CUSTOMER_DISPLAY", "SCALE"] as const;
 const connectionModes = ["BROWSER", "WEBUSB", "WEBBLUETOOTH", "WEBSERIAL", "NETWORK", "NATIVE_BRIDGE", "MANUAL"] as const;
 const emptyForm: Form = { code: "", name: "", siteId: "", deviceType: "RECEIPT_PRINTER", connectionMode: "BROWSER", status: "ACTIVE" };
 
-export function RetailDeviceReadiness({ organizationId, locale = "fr" }: Props) {
+export function RetailDeviceReadiness({ organizationId, locale = "fr", organizationName }: Props) {
   const en = locale === "en";
   const [data, setData] = useState<DeviceResponse | null>(null);
   const [sites, setSites] = useState<Site[]>([]);
@@ -128,6 +129,21 @@ export function RetailDeviceReadiness({ organizationId, locale = "fr" }: Props) 
       <label className="text-xs font-semibold text-dtsc-muted">{en ? "Equipment type" : "Type"}<select className="mt-1 h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-page px-2" value={deviceType} onChange={(event) => { setPage(1); setDeviceType(event.target.value); }}><option value="">{en ? "All types" : "Tous"}</option>{deviceTypes.map((type) => <option key={type} value={type}>{customerFacingDeviceType(type, locale)}</option>)}</select></label>
       <div className="grid grid-cols-2 gap-2"><label className="text-xs font-semibold text-dtsc-muted">{en ? "From" : "Du"}<input type="date" className="mt-1 h-11 w-full min-w-0 rounded-xl border border-dtsc-border bg-dtsc-page px-2" value={dateFrom} onChange={(event) => { setPage(1); setDateFrom(event.target.value); }} /></label><label className="text-xs font-semibold text-dtsc-muted">{en ? "To" : "Au"}<input type="date" className="mt-1 h-11 w-full min-w-0 rounded-xl border border-dtsc-border bg-dtsc-page px-2" value={dateTo} onChange={(event) => { setPage(1); setDateTo(event.target.value); }} /></label></div>
     </div>
+    <RetailProfessionalListExport<Device> organizationName={organizationName} locale={locale}
+      title={en ? "Retail equipment register" : "Registre des équipements RETAIL"} filenameBase="retail-equipment"
+      sourceUrl={`/api/enterprise/${organizationId}/retail/devices?${new URLSearchParams({
+        ...(search ? { search } : {}), ...(siteId ? { siteId } : {}), ...(deviceType ? { deviceType } : {}),
+        ...(dateFrom ? { from: dateFrom } : {}), ...(dateTo ? { to: dateTo } : {}),
+      })}`}
+      columns={[{ key: "code", label: "Code" }, { key: "name", label: en ? "Equipment" : "Équipement" },
+        { key: "store", label: en ? "Store" : "Boutique" }, { key: "type", label: "Type" },
+        { key: "connection", label: en ? "Connection" : "Connexion" },
+        { key: "status", label: en ? "Status" : "Statut" }]}
+      toRow={(item) => ({ code: item.code, name: item.name, store: siteName(item.siteId),
+        type: customerFacingDeviceType(item.deviceType, locale), connection: item.connectionMode,
+        status: item.status === "ACTIVE" ? (en ? "Profile active, not certified" : "Profil actif, connexion non attestée") : (en ? "Disabled" : "Désactivé") })}
+      filters={[{ label: en ? "Store" : "Boutique", value: siteId ? siteName(siteId) : (en ? "All" : "Toutes") }]}
+    />
     {error ? <p role="alert" className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-600">{error}</p> : null}
     {loading ? <p role="status" className="text-sm text-dtsc-muted">{en ? "Loading equipment…" : "Chargement des équipements…"}</p> : null}
     {!loading && data?.items.length === 0 ? <div className="rounded-xl border border-dashed border-dtsc-border p-5 text-sm text-dtsc-muted"><AlertTriangle className="mb-2 h-5 w-5 text-amber-500" />{en ? "No equipment matches the selected filters." : "Aucun équipement ne correspond aux filtres sélectionnés."}{data.canManage ? <Button type="button" variant="outline" className="ml-3" onClick={startCreate}>{en ? "Configure now" : "Configurer maintenant"}</Button> : null}</div> : null}
