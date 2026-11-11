@@ -27,7 +27,12 @@ type Readiness = {
   selected: { countryCode: string | null; currencyCode: string | null; siteId: string | null; warehouseId: string | null; cashFinancialAccountId: string | null };
   options: { organization: { country: string | null }; sites: Option[]; warehouses: Option[]; accounts: Option[]; countryPackActivations: Activation[] };
 };
-type State = { latestRun: Run | null; readiness: Readiness; countryPackRegistry: Pack[] };
+type State = { latestRun: Run | null; readiness: Readiness; countryPackRegistry: Pack[];
+  diagnostics?: { tax: { status: string; taxableItems: number; missingTaxItems: number; deepLink: string };
+    offline: { status: string; mode: string; dynamicPricingRules: number; deepLink: string };
+    devices: { status: string; configuredProfiles: number; deepLink: string };
+    numbering: { status: string; deepLink: string | null } };
+};
 
 const LABELS: Record<string, { fr: string; en: string }> = {
   COUNTRY_PACK: { fr: "Configuration pays", en: "Country configuration" },
@@ -154,11 +159,22 @@ export function RetailGlobalReadiness({ organizationId, locale }: Props) {
           <div className="flex items-center gap-2"><Globe2 className="h-5 w-5 text-cyan-600" /><h2 className="text-lg font-black text-dtsc-ink">{locale === "en" ? "Retail setup" : "Mise en service du commerce de détail"}</h2></div>
           <p className="mt-1 max-w-3xl text-sm text-dtsc-muted">{locale === "en" ? "Choose the company resources used by this point of sale. The checklist below recognizes existing configuration and explains any remaining action." : "Choisissez les ressources utilisées par ce point de vente. La checklist ci-dessous reconnaît la configuration existante et explique toute action restante."}</p>
         </div>
-        <div className={`rounded-full px-3 py-1.5 text-xs font-black ${state.readiness.ready ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : "bg-amber-500/10 text-amber-800 dark:text-amber-200"}`}>{state.readiness.completed}/{state.readiness.total} · {state.readiness.ready ? (locale === "en" ? "Ready to sell" : "Prêt à vendre") : (locale === "en" ? "Setup to finish" : "Mise en service à finaliser")}</div>
+        <div className={`rounded-full px-3 py-1.5 text-xs font-black ${state.readiness.ready ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : "bg-amber-500/10 text-amber-800 dark:text-amber-200"}`}>{state.readiness.completed}/{state.readiness.total} · {state.readiness.ready ? (locale === "en" ? "Core checkout ready" : "Socle de vente prêt") : (locale === "en" ? "Core setup incomplete" : "Socle à finaliser")}</div>
       </div>
 
       {loadError ? <div role="alert" className="mt-4 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm font-semibold text-red-700 dark:text-red-300">{loadError}</div> : null}
 
+      {state.diagnostics ? <section className="mt-4 rounded-2xl border border-dtsc-border bg-dtsc-page p-3" aria-label={locale === "en" ? "Operational readiness" : "Diagnostic opérationnel"}>
+        <h3 className="text-sm font-black text-dtsc-ink">{locale === "en" ? "Operational diagnostics — not included in the 15 core steps" : "Diagnostics opérationnels — hors des 15 étapes du socle"}</h3>
+        <p className="mt-1 text-xs text-dtsc-muted">{locale === "en" ? "Core readiness does not certify tax compliance, peripherals or offline operation." : "La préparation du socle ne certifie ni la conformité fiscale, ni les périphériques, ni le fonctionnement hors connexion."}</p>
+        <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+          <Link href={state.diagnostics.tax.deepLink} className="rounded-xl border border-dtsc-border bg-dtsc-surface p-3 text-xs"><span className="block font-black text-dtsc-ink">{locale === "en" ? "Taxes" : "Taxes et fiscalité"}</span><span className="mt-1 block text-dtsc-muted">{state.diagnostics.tax.status === "NOT_ATTESTED" ? (locale === "en" ? "Inventory too large to certify" : "Catalogue trop étendu pour attestation") : state.diagnostics.tax.missingTaxItems ? (locale === "en" ? "Items missing valid tax: " : "Articles sans taux valide : ") + state.diagnostics.tax.missingTaxItems : (locale === "en" ? "Active taxable items have tax mappings" : "Références fiscales actives détectées")}</span></Link>
+          <Link href={state.diagnostics.offline.deepLink} className="rounded-xl border border-dtsc-border bg-dtsc-surface p-3 text-xs"><span className="block font-black text-dtsc-ink">{locale === "en" ? "Offline operation" : "Vente hors connexion"}</span><span className="mt-1 block text-dtsc-muted">{state.diagnostics.offline.mode === "FINANCE_DRAFT" ? (locale === "en" ? "Finance drafts only" : "Brouillons Finance uniquement") : (locale === "en" ? "Legacy cash sales" : "Ventes espèces historiques")} · {state.diagnostics.offline.dynamicPricingRules} {locale === "en" ? "dynamic rules" : "règles dynamiques"}</span></Link>
+          <Link href={state.diagnostics.devices.deepLink} className="rounded-xl border border-dtsc-border bg-dtsc-surface p-3 text-xs"><span className="block font-black text-dtsc-ink">{locale === "en" ? "Equipment" : "Équipements"}</span><span className="mt-1 block text-dtsc-muted">{state.diagnostics.devices.configuredProfiles} {locale === "en" ? "profiles — physical connection not certified" : "profils — connexion physique non attestée"}</span></Link>
+          <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-3 text-xs"><span className="block font-black text-dtsc-ink">{locale === "en" ? "Numbering" : "Numérotation"}</span><span className="mt-1 block text-dtsc-muted">{locale === "en" ? "Not certified by this checklist" : "Non certifiée par cette checklist"}</span></div>
+        </div>
+      </section> : null}
+      {state.countryPackRegistry.length === 1 ? <p className="mt-3 rounded-xl border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-dtsc-ink">{locale === "en" ? "Only the DRC Retail Core pack is available; no other country is represented as certified." : "Seul le pack Retail Core RDC est disponible ; aucun autre pays n’est présenté comme certifié."}</p> : null}
       <div className="mt-5 grid gap-4 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
         <div className="space-y-3">
           <div id="shop-country-configuration" className="scroll-mt-24 rounded-2xl border border-dtsc-border bg-dtsc-page p-4">
