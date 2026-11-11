@@ -1,6 +1,6 @@
 {
   "name": "dtsc-platform",
-  "version": "1.10.0",
+  "version": "1.11.0",
   "private": true,
   "engines": {
     "node": "22.x"
@@ -40,6 +40,7 @@
     "qa:hotfix-1083-retail-flows": "node scripts/qa-hotfix-1083-retail-flow-sync.mjs",
     "qa:hotfix-1101-retail-pos": "node scripts/qa-hotfix-1101-retail-pos.mjs",
     "qa:retail-executive-1105": "node scripts/qa-retail-executive-1105.mjs",
+    "qa:retail-cogs-1109": "node scripts/qa-retail-cogs-traceability-1109.mjs",
     "qa:enterprise-admin-design2-1107": "node scripts/qa-enterprise-admin-design2-1107.mjs",
     "qa:hotfix-1055-navigation-cards": "node scripts/qa-module-navigation-cards-1055.mjs",
     "qa:hotfix-1061-desktop-sidebar": "node scripts/qa-hotfix-1061-desktop-sidebar.mjs",

@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Activity, AlertTriangle, BarChart3, Building2, FileSpreadsheet, FileText, Landmark, ReceiptText, RefreshCw, Settings2, ShoppingBasket, Wallet } from "lucide-react";
+import { Activity, AlertTriangle, BarChart3, Building2, FileSpreadsheet, FileText, GitBranch, Landmark, ReceiptText, RefreshCw, Settings2, ShoppingBasket, Wallet } from "lucide-react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { Button } from "@/components/ui/button";
 import { customerFacingError } from "@/lib/customer-facing-language";
 import { buildRetailOperationsExport, buildRetailPostedLedgerExport, type RetailPostedLedger } from "@/lib/enterprise/retail/site-financial-export";
@@ -12,6 +13,7 @@ import { RETAIL_EXECUTIVE_METRICS, type RetailExecutiveMetric, type RetailExecut
 import { DEFAULT_RETAIL_DASHBOARD_PREFERENCES, type RetailDashboardPreferences } from "@/lib/enterprise/retail/dashboard-preferences";
 import { buildRetailExecutiveExport } from "@/lib/enterprise/retail/site-financial-export";
 import { notifyToast } from "@/lib/client-toast";
+const RetailCogsWorkspace = dynamic(() => import("@/components/enterprise/professional/retail-cogs-workspace").then((module) => module.RetailCogsWorkspace));
 
 type Money = { currencyCode: string; total: string; count: number };
 type Tender = Money & { method: string };
@@ -42,7 +44,7 @@ const METRIC_COPY: Record<RetailExecutiveMetric, [string, string, string, string
   treasuryReconciled: ["Solde rapproché", "Reconciled balances", "Partie rapprochée des soldes des comptes financiers actifs.", "Reconciled positions across active financial accounts."],
   treasuryAvailable: ["Trésorerie disponible", "Available treasury", "Solde disponible déclaré par les comptes financiers ; contrôlez les mouvements non rapprochés.", "Available financial account balance; verify unreconciled movements."],
 };
-const HIGHLIGHT_METRICS: RetailExecutiveMetric[] = ["financeCollections", "invoices", "outstanding", "overdue", "postedRevenue", "postedGrossMargin", "postedOperatingResult", "treasuryAvailable", "expenses", "mobileMoneyCommission", "telcoMargin", "posSales"];
+const HIGHLIGHT_METRICS: RetailExecutiveMetric[] = ["financeCollections", "invoices", "outstanding", "overdue", "postedRevenue", "postedCogs", "postedGrossMargin", "postedOperatingResult", "treasuryAvailable", "expenses", "mobileMoneyCommission", "telcoMargin", "posSales"];
 
 function currencyAmount(value: string, currency: string, en: boolean) {
   try { return new Intl.NumberFormat(en ? "en-US" : "fr-FR", { maximumFractionDigits: 2 }).format(Number(value)) + " " + currency; }
@@ -60,6 +62,9 @@ export function RetailSiteOverview({ organizationId, organizationName, locale, t
   const [showSettings, setShowSettings] = useState(false);
   const [savingSettings, setSavingSettings] = useState(false);
   const [savingReport, setSavingReport] = useState(false);
+  const [cogsOpen, setCogsOpen] = useState(false);
+  const [cogsSite, setCogsSite] = useState("");
+  const [cogsCurrency, setCogsCurrency] = useState("");
   const [prefsRevision, setPrefsRevision] = useState(0);
   const [preferences, setPreferences] = useState<RetailDashboardPreferences>(DEFAULT_RETAIL_DASHBOARD_PREFERENCES);
   const [prefsLoaded, setPrefsLoaded] = useState(false);
@@ -170,6 +175,10 @@ export function RetailSiteOverview({ organizationId, organizationName, locale, t
     consolidated: summaryRows, unallocatedLedger: siteFilter ? [] : filteredUnallocatedLedger,
     stockWarnings: sourceAvailability.inventory ? stockWarnings : undefined,
   });
+  if (cogsOpen) return <RetailCogsWorkspace organizationId={organizationId} organizationName={organizationName} locale={locale}
+    period={reportPeriod} initialSiteId={cogsSite} initialCurrency={cogsCurrency}
+    sites={items.map((site) => ({ id: site.id, name: site.name }))} canSaveReport={sourceAvailability.reportCreate}
+    onBack={() => setCogsOpen(false)} />;
   return <section data-testid="retail-multisite-overview" className="min-w-0 rounded-2xl border border-dtsc-border bg-dtsc-surface p-4 shadow-sm sm:p-5">
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div className="flex min-w-0 items-start gap-3"><Building2 className="mt-1 h-5 w-5 shrink-0 text-dtsc-blue" /><div className="min-w-0"><h2 className="font-black text-dtsc-ink">{en ? "Store management overview" : "Pilotage des boutiques"}</h2><p className="mt-1 text-sm text-dtsc-muted">{en ? "Operational activity by store and currency; only the company owner/admin can access this comparison." : "Activités par boutique et par devise, réservées au propriétaire et à l'administration."}</p></div></div>
@@ -216,10 +225,11 @@ export function RetailSiteOverview({ organizationId, organizationName, locale, t
         <div className="mb-3 flex flex-wrap items-center gap-2"><span className="rounded-full bg-cyan-500/15 px-3 py-1 text-xs font-black text-cyan-800 dark:text-cyan-200">{bucket.currencyCode}</span><span className="text-xs text-dtsc-muted">{en ? "Native currency · no cross-currency sum" : "Devise d'origine · aucun cumul entre devises"}</span></div>
         <div className="grid min-w-0 grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-4">{HIGHLIGHT_METRICS.filter((metric) => (metric !== "posSales" || preferences.showLegacyPos) && (metric !== "mobileMoneyCommission" || sourceAvailability.agency) && (metric !== "telcoMargin" || sourceAvailability.telco) && (!metric.startsWith("posted") || sourceAvailability.accounting) && (metric !== "treasuryAvailable" || sourceAvailability.treasury)).map((metric) => {
           const raw = bucket.values[metric]; const warning = metric === "overdue" && Number(raw) > 0 || metric === "outstanding" && Number(raw) >= (preferences.warnOutstandingByCurrency[bucket.currencyCode] ?? preferences.warnOutstandingAbove) && Number(raw) > 0;
-          return <div key={metric} className={`min-w-0 rounded-xl border p-3 ${warning ? "border-amber-500/50 bg-amber-500/10" : metric === "financeCollections" || metric === "postedGrossMargin" ? "border-emerald-500/25 bg-emerald-500/5" : "border-dtsc-border bg-dtsc-surface"}`} title={METRIC_COPY[metric][en ? 3 : 2]}>
+          return <div key={metric} className={`relative min-w-0 rounded-xl border p-3 ${warning ? "border-amber-500/50 bg-amber-500/10" : metric === "financeCollections" || metric === "postedGrossMargin" ? "border-emerald-500/25 bg-emerald-500/5" : "border-dtsc-border bg-dtsc-surface"}`} title={METRIC_COPY[metric][en ? 3 : 2]}>
             <p className="flex items-start gap-1 text-[11px] font-bold text-dtsc-muted">{warning ? <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-600" /> : null}{METRIC_COPY[metric][en ? 1 : 0]}</p>
             <p className={`mt-2 break-words text-base font-black tabular-nums sm:text-lg ${Number(raw) < 0 ? "text-red-600 dark:text-red-300" : "text-dtsc-ink"}`}>{currencyAmount(raw, bucket.currencyCode, en)}</p>
             <p className="mt-1 text-[10px] leading-relaxed text-dtsc-muted">{METRIC_COPY[metric][en ? 3 : 2]}</p>
+            {metric === "postedCogs" ? <button type="button" className="absolute inset-0 rounded-xl focus-visible:outline-2 focus-visible:outline-cyan-500 hover:ring-2 hover:ring-cyan-500/60" aria-label={en ? `Inspect posted cost of sales in ${bucket.currencyCode}` : `Consulter le détail du coût des ventes en ${bucket.currencyCode}`} onClick={() => { setCogsSite(siteFilter); setCogsCurrency(bucket.currencyCode); setCogsOpen(true); }}><span className="sr-only">{en ? "Open accounting trace" : "Ouvrir la traçabilité comptable"}</span></button> : null}
           </div>;
         })}</div>
       </div>) : <p className="rounded-xl border border-dtsc-border bg-dtsc-page p-3 text-sm text-dtsc-muted">{en ? "No financial event for the selected scope. Balances may still exist in other stores or currencies." : "Aucune opération financière dans ce périmètre. Des soldes peuvent exister dans d'autres boutiques ou devises."}</p>}
@@ -267,7 +277,7 @@ export function RetailSiteOverview({ organizationId, organizationName, locale, t
           <p className="text-xs font-bold text-dtsc-muted">{entry.currencyCode} · {entry.journalLineCount} {en ? "posted P&L lines" : "lignes de résultat postées"}</p>
           <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-2 text-xs sm:grid-cols-3">
             <div><dt className="text-dtsc-muted">{en ? "Revenue" : "Produits"}</dt><dd className="font-bold text-emerald-700 dark:text-emerald-300">{currencyAmount(entry.revenue, entry.currencyCode, en)}</dd></div>
-            <div><dt className="text-dtsc-muted">{en ? "Cost of sales" : "Coût des ventes"}</dt><dd className="font-bold text-dtsc-ink">{currencyAmount(entry.costOfSales, entry.currencyCode, en)}</dd></div>
+            <div><dt className="text-dtsc-muted">{en ? "Cost of sales" : "Coût des ventes"}</dt><dd><button type="button" className="inline-flex min-h-10 items-center gap-1 rounded-lg text-left font-bold text-dtsc-blue underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-cyan-500" onClick={() => { setCogsSite(site.id); setCogsCurrency(entry.currencyCode); setCogsOpen(true); }}>{currencyAmount(entry.costOfSales, entry.currencyCode, en)}<GitBranch className="h-3.5 w-3.5" /></button></dd></div>
             <div><dt className="text-dtsc-muted">{en ? "Other expenses" : "Autres charges"}</dt><dd className="font-bold text-dtsc-ink">{currencyAmount(entry.operatingExpenses, entry.currencyCode, en)}</dd></div>
             <div><dt className="text-dtsc-muted">{en ? "Other income" : "Autres produits"}</dt><dd className="font-bold text-dtsc-ink">{currencyAmount(entry.otherIncome, entry.currencyCode, en)}</dd></div>
             <div><dt className="text-dtsc-muted">{en ? "Gross margin" : "Marge brute"}</dt><dd className="font-black text-dtsc-blue">{currencyAmount(entry.grossMargin, entry.currencyCode, en)}</dd></div>
