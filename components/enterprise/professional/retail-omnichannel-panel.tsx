@@ -3,10 +3,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Box, CheckCircle2, MapPin, PackageCheck, RefreshCw, Search, ShoppingBag, Truck, UserRound, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { RetailProfessionalListExport } from "@/components/enterprise/professional/retail-professional-list-export";
 import { Input } from "@/components/ui/input";
 import { customerFacingError, customerFacingFulfillmentMode, customerFacingOmnichannelCancellationCopy, customerFacingOmnichannelReturnCopy, customerFacingStatusLabel } from "@/lib/customer-facing-language";
 
-type Props = { organizationId: string; locale: "fr" | "en" };
+type Props = { organizationId: string; locale: "fr" | "en"; organizationName: string };
 type Site = { id: string; name: string };
 type Warehouse = { id: string; name: string; code?: string; site: Site };
 type Dashboard = { configuration: { baseCurrencyCode: string } | null; warehouses?: Warehouse[] };
@@ -47,7 +48,7 @@ function statusClass(status: string) {
   return "bg-amber-500/10 text-amber-800 dark:text-amber-200";
 }
 
-export function RetailOmnichannelPanel({ organizationId, locale }: Props) {
+export function RetailOmnichannelPanel({ organizationId, locale, organizationName }: Props) {
   const cancelCopy = customerFacingOmnichannelCancellationCopy(locale);
   const returnCopy = customerFacingOmnichannelReturnCopy(locale);
   const [dashboard, setDashboard] = useState<Dashboard | null>(null);
@@ -379,6 +380,28 @@ export function RetailOmnichannelPanel({ organizationId, locale }: Props) {
 
     <div className="mt-6 border-t border-dtsc-border pt-5">
       <div className="flex items-center justify-between gap-3"><div><h3 className="font-black text-dtsc-ink">{locale === "en" ? "Order tracking" : "Suivi des commandes"}</h3><p className="text-xs text-dtsc-muted">{locale === "en" ? "Follow each order from reserved stock through pickup or delivery." : "Suivez chaque commande depuis la réservation du stock jusqu’au retrait ou à la livraison."}</p></div><span className="rounded-full bg-dtsc-page px-2.5 py-1 text-xs font-black text-dtsc-muted">{orders?.pagination.total || 0}</span></div>
+      <div className="mt-3"><RetailProfessionalListExport<OrderRow>
+        organizationName={organizationName} locale={locale}
+        title={locale === "en" ? "Omnichannel Retail orders" : "Commandes omnicanales RETAIL"}
+        filenameBase="retail-omnichannel"
+        sourceUrl={`/api/enterprise/${organizationId}/retail/omnichannel/orders?${new URLSearchParams({
+          ...(debouncedOrdersSearch ? { search: debouncedOrdersSearch } : {}),
+          ...(ordersStatus ? { status: ordersStatus } : {}), ...(ordersSite ? { siteId: ordersSite } : {}),
+          ...(ordersFrom ? { from: ordersFrom } : {}), ...(ordersTo ? { to: ordersTo } : {}),
+        })}`}
+        columns={[{ key: "date", label: locale === "en" ? "Created" : "Créé le" },
+          { key: "reference", label: locale === "en" ? "Order" : "Commande" },
+          { key: "method", label: locale === "en" ? "Fulfillment" : "Retrait/livraison" },
+          { key: "amount", label: locale === "en" ? "Amount" : "Montant" },
+          { key: "currency", label: locale === "en" ? "Currency" : "Devise" },
+          { key: "status", label: locale === "en" ? "Status" : "Statut" }]}
+        toRow={(item) => ({ date: new Date(item.context.createdAt).toLocaleString(locale),
+          reference: item.order?.reference || item.context.salesOrderId,
+          method: customerFacingFulfillmentMode(item.context.fulfillmentMode, locale),
+          amount: Number(item.order?.totalAmount || 0), currency: item.order?.currency || "",
+          status: customerFacingStatusLabel(item.context.status, locale) })}
+        filters={[{ label: locale === "en" ? "From" : "Du", value: ordersFrom || "—" },
+          { label: locale === "en" ? "To" : "Au", value: ordersTo || "—" }]} /></div>
       <div className="mt-3 grid gap-2 rounded-xl border border-dtsc-border bg-dtsc-page p-3 sm:grid-cols-2 xl:grid-cols-5">
         <label className="text-xs font-bold text-dtsc-muted xl:col-span-2">{locale === "en" ? "Smart search" : "Recherche intelligente"}<Input className="mt-1" value={ordersSearch} onChange={(event) => { setOrdersSearch(event.target.value); setOrdersPage(1); }} placeholder={locale === "en" ? "Order reference, customer" : "Référence, client"} /></label>
         <label className="text-xs font-bold text-dtsc-muted">{locale === "en" ? "Store" : "Boutique"}<select className="mt-1 h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-2" value={ordersSite} onChange={(event) => { setOrdersSite(event.target.value); setOrdersPage(1); }}><option value="">{locale === "en" ? "All stores" : "Toutes"}</option>{sites.map((site) => <option key={site.id} value={site.id}>{site.name}</option>)}</select></label>
