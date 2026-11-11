@@ -10,7 +10,7 @@ type OverviewSite = {
   postedLedger: Array<{ currencyCode: string; revenue: string; costOfSales: string; grossMargin: string; operatingResult: string }>;
   mobileMoney: Array<{ currencyCode: string; transactionType: string; principal: string; commission: string; fees: string }>;
   telco: Array<{ currencyCode: string; total: string; operatorCost: string; margin: string }>;
-  treasury: Array<{ currencyCode: string; total: string; reconciled: string; available: string }>;
+  treasury: Array<{ currencyCode: string; total: string; reconciled: string; available: string | null }>;
 };
 type Unallocated = { mobileMoney: OverviewSite["mobileMoney"]; telco: OverviewSite["telco"]; treasury: OverviewSite["treasury"]; postedLedger?: OverviewSite["postedLedger"] };
 
@@ -22,6 +22,12 @@ function monetaryMap() {
  * Operational payment channels and accrual P&L are deliberately NOT netted. */
 export function summarizeRetailExecutive(sites: OverviewSite[], unallocated?: Unallocated): RetailExecutiveSummary[] {
   const totals = new Map<string, Record<RetailExecutiveMetric, Prisma.Decimal>>();
+  const unavailable = new Map<string, Set<RetailExecutiveMetric>>();
+  const markUnavailable = (currency: string, metric: RetailExecutiveMetric) => {
+    const values = unavailable.get(currency) || new Set<RetailExecutiveMetric>();
+    values.add(metric);
+    unavailable.set(currency, values);
+  };
   const add = (currency: string, metric: RetailExecutiveMetric, value: string) => {
     const row = totals.get(currency) || monetaryMap();
     row[metric] = row[metric].plus(value);
@@ -42,12 +48,22 @@ export function summarizeRetailExecutive(sites: OverviewSite[], unallocated?: Un
       add(row.currencyCode, "mobileMoneyFees", row.fees);
     }
     for (const row of site.telco) { add(row.currencyCode, "telcoSales", row.total); add(row.currencyCode, "telcoCost", row.operatorCost); add(row.currencyCode, "telcoMargin", row.margin); }
-    for (const row of site.treasury) { add(row.currencyCode, "treasuryBalance", row.total); add(row.currencyCode, "treasuryReconciled", row.reconciled); add(row.currencyCode, "treasuryAvailable", row.available); }
+    for (const row of site.treasury) {
+      add(row.currencyCode, "treasuryBalance", row.total);
+      add(row.currencyCode, "treasuryReconciled", row.reconciled);
+      if (row.available === null) markUnavailable(row.currencyCode, "treasuryAvailable");
+      else add(row.currencyCode, "treasuryAvailable", row.available);
+    }
   }
   if (unallocated) {
     summarizeRetailExecutive([{ sales: [], collections: [], financeCollections: [], financeInvoices: [], receivables: [], approvedExpenses: [], postedLedger: [], ...unallocated }]).forEach((row) => {
       for (const metric of RETAIL_EXECUTIVE_METRICS) add(row.currencyCode, metric, row.values[metric]);
+      for (const metric of row.unavailableMetrics || []) markUnavailable(row.currencyCode, metric);
     });
   }
-  return [...totals.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([currencyCode, values]) => ({ currencyCode, values: Object.fromEntries(RETAIL_EXECUTIVE_METRICS.map((metric) => [metric, values[metric].toFixed(6)])) as Record<RetailExecutiveMetric, string> }));
+  return [...totals.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([currencyCode, values]) => ({
+    currencyCode,
+    values: Object.fromEntries(RETAIL_EXECUTIVE_METRICS.map((metric) => [metric, values[metric].toFixed(6)])) as Record<RetailExecutiveMetric, string>,
+    unavailableMetrics: [...(unavailable.get(currencyCode) || new Set<RetailExecutiveMetric>())].sort(),
+  }));
 }
