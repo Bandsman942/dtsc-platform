@@ -159,6 +159,9 @@ export function RetailGlobalReadiness({ organizationId, locale }: Props) {
 
       {loadError ? <div role="alert" className="mt-4 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm font-semibold text-red-700 dark:text-red-300">{loadError}</div> : null}
 
+      <div className="mt-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs leading-5 text-dtsc-ink" role="note">
+        {locale === "fr" ? "Ce score valide les 15 prérequis du parcours de vente Finance. Il ne certifie ni la vente hors connexion, ni les périphériques, les promotions, ni la conformité fiscale réglementée. La facturation Finance activée bloque actuellement la vente directe hors connexion." : "This score verifies the 15 Finance checkout prerequisites. It does not certify offline sales, devices, promotions or regulated fiscal compliance. Finance invoice checkout currently blocks direct offline sales."}
+      </div>
       <div className="mt-5 grid gap-4 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
         <div className="space-y-3">
           <div id="shop-country-configuration" className="scroll-mt-24 rounded-2xl border border-dtsc-border bg-dtsc-page p-4">
