@@ -35,9 +35,26 @@ export async function GET(req: Request, { params }: Params) {
   const url = new URL(req.url);
   const page = Math.max(1, Number(url.searchParams.get("page") || 1) || 1);
   const pageSize = Math.min(50, Math.max(5, Number(url.searchParams.get("pageSize") || 20) || 20));
+  const search = (url.searchParams.get("search") || "").trim().slice(0, 120);
+  const status = (url.searchParams.get("status") || "").trim().toUpperCase();
+  const fulfillmentMode = (url.searchParams.get("fulfillmentMode") || "").trim().toUpperCase();
+  const siteId = (url.searchParams.get("siteId") || "").trim();
+  const from = (url.searchParams.get("from") || "").trim();
+  const to = (url.searchParams.get("to") || "").trim();
+  if ((fulfillmentMode && !RETAIL_OMNICHANNEL_MODES.includes(fulfillmentMode as typeof RETAIL_OMNICHANNEL_MODES[number]))
+    || ((from || to) && [from, to].some((value) => value && !/^\d{4}-\d{2}-\d{2}$/.test(value)))) {
+    return NextResponse.json({ error: "RETAIL_REFERENCE_INVALID" }, { status: 400 });
+  }
   try {
     const scope = await retailSitesForCapability(organizationId, auth.session.userId, "VIEW_SALES");
-    const state = await getRetailOmnichannelOrders(organizationId, page, pageSize, scope.isolationEnabled ? scope.siteIds : undefined);
+    if (siteId && scope.isolationEnabled && !scope.siteIds.includes(siteId)) {
+      return NextResponse.json({ error: "RETAIL_SITE_ACCESS_DENIED" }, { status: 403 });
+    }
+    const state = await getRetailOmnichannelOrders(organizationId, page, pageSize,
+      scope.isolationEnabled ? scope.siteIds : undefined,
+      { search, status, fulfillmentMode, siteId,
+        from: from ? new Date(from + "T00:00:00.000Z") : undefined,
+        to: to ? new Date(to + "T23:59:59.999Z") : undefined });
     await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "retail-omnichannel-orders", page } });
     return NextResponse.json(state, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
