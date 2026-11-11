@@ -27,16 +27,16 @@ export async function GET(req: Request, { params }: Params) {
   if (!await isRetailDeviceAdministrator(organizationId, auth.session.userId)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   // Legacy callers remain compatible; new POS 2.0 consumers request explicit server pagination.
-  const params = new URL(req.url).searchParams;
-  if (!params.has("page") && !params.has("search") && !params.has("type")) {
+  const queryParams = new URL(req.url).searchParams;
+  if (!queryParams.has("page") && !queryParams.has("search") && !queryParams.has("type")) {
     const items = await listRetailDeviceProfiles(organizationId);
     await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "retail-devices", action: "list", count: items.length } });
     return NextResponse.json({ items }, { headers: { "Cache-Control": "private, no-store" } });
   }
-  const page = Math.max(1, Math.min(1000, Number(params.get("page") || "1") || 1));
-  const pageSize = Math.max(5, Math.min(50, Number(params.get("pageSize") || "12") || 12));
-  const search = (params.get("search") || "").trim().slice(0, 120);
-  const type = (params.get("type") || "").trim().toUpperCase();
+  const page = Math.max(1, Math.min(1000, Number(queryParams.get("page") || "1") || 1));
+  const pageSize = Math.max(5, Math.min(50, Number(queryParams.get("pageSize") || "12") || 12));
+  const search = (queryParams.get("search") || "").trim().slice(0, 120);
+  const type = (queryParams.get("type") || "").trim().toUpperCase();
   const where: Prisma.EnterpriseRetailDeviceProfileWhereInput = {
     organizationId, archivedAt: null,
     ...(type ? { deviceType: type } : {}),
