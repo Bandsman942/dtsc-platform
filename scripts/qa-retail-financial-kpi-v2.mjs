@@ -71,4 +71,50 @@ const company = summary.summarizeRetailExecutive([{ ...base(), treasury: [{ curr
   { mobileMoney: [], telco: [], postedLedger: [], treasury: [{ currencyCode: "CDF", total: "20", reconciled: "10", available: null }] });
 assert.ok(company[0].unavailableMetrics.includes("treasuryAvailable"), "Unallocated accounts must influence the company-wide availability status");
 
+
+const traceService = readFileSync("lib/enterprise/retail/financial-drilldown.ts", "utf8");
+const traceRoute = readFileSync("app/api/enterprise/[organizationId]/retail/financial-drilldown/route.ts", "utf8");
+const traceView = readFileSync("components/enterprise/professional/retail-financial-drilldown.tsx", "utf8");
+const overviewRoute = readFileSync("app/api/enterprise/[organizationId]/retail/site-overview/route.ts", "utf8");
+const expectedTraces = [
+  "financeCollections", "invoices", "outstanding", "overdue", "postedRevenue", "postedGrossMargin",
+  "postedOperatingResult", "treasuryAvailable", "expenses", "mobileMoneyCommission", "telcoMargin", "posSales",
+];
+const traceList = traceService.match(/RETAIL_FINANCIAL_TRACES\\s*=\\s*\\[([^\\]]+)\\] as const/s);
+assert.ok(traceList, "All drill-down targets must be in an allow-list");
+const traced = [...traceList[1].matchAll(/"([a-zA-Z]+)"/g)].map((match) => match[1]);
+assert.deepEqual(traced, expectedTraces, "All 12 remaining highlighted KPI sources must be supported");
+assert.match(traceRoute, /getEnterpriseCommonDomainAccess/, "Tenant RETAIL access must be checked");
+assert.match(traceRoute, /organizationMember\\.findFirst/, "Only active enterprise owner/admin can inspect finance traces");
+assert.match(traceRoute, /requiredModules\\(filter\\.metric\\)/, "Module entitlement must be rechecked for each KPI");
+assert.match(traceRoute, /FINANCE_ACCOUNTING/, "GL traces need accounting permission");
+assert.match(traceRoute, /FINANCE_RECEIVABLES/, "Invoices/receivables need Finance permission");
+assert.match(traceRoute, /FINANCE_PAYMENTS/, "Confirmed collections need payment permission");
+assert.match(traceRoute, /FINANCE_TREASURY/, "Account availability needs treasury permission");
+assert.match(traceRoute, /FINANCE_BUDGETS/, "Expenses need budget permission");
+assert.match(traceRoute, /id: filter\\.siteId, organizationId/, "Archived site identifiers must be scoped to the tenant");
+assert.match(traceService, /COUNT\\(\\*\\) FILTER \\(WHERE amount IS NULL\\)/, "Uncertain balances must not be silently zeroed");
+assert.match(traceService, /LIMIT \\$\\{pageSize\\} OFFSET \\$\\{\\(page - 1\\) \\* pageSize\\}/, "Source rows must be paginated on the server");
+assert.match(traceService, /"organizationId" = \\$\\{organizationId\\}/, "Every source must be tenant-scoped");
+assert.match(traceService, /allocation\\."reversedAt" IS NULL/, "Reversed allocations are not receipts");
+assert.match(traceService, /e\\.status IN \\('POSTED','REVERSED'\\)/, "The P&L must use canonical posted and reversed entries");
+assert.match(traceService, /"accountSubtype" = 'COST_OF_SALES'/, "Gross margin must exclude non-COGS expenses");
+assert.match(traceService, /"availableBalance" AS amount/, "Treasury available is never approximated by operational balance");
+assert.match(traceView, /buildEnterpriseObjectDeepLink/, "Source evidence must have permission-checked deep links");
+assert.match(traceView, /data-testid="retail-financial-drilldown"/, "Responsive trace workspace must be mounted");
+assert.match(dashboard, /<RetailFinancialDrilldown/, "The executive dashboard must open the detailed view");
+assert.match(overviewRoute, /financeReceivablesAccess\\.allowed/, "The client may not display an unauthorized Finance drilldown");
+for (const file of [
+  "lib/enterprise/retail/financial-drilldown.ts",
+  "app/api/enterprise/[organizationId]/retail/financial-drilldown/route.ts",
+  "components/enterprise/professional/retail-financial-drilldown.tsx",
+  "components/enterprise/professional/retail-site-overview.tsx",
+  "lib/enterprise/retail/financial-metric-definitions.ts",
+]) {
+  const sourceFile = ts.createSourceFile(file, readFileSync(file, "utf8"), ts.ScriptTarget.Latest, true,
+    file.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
+  assert.equal(sourceFile.parseDiagnostics.length, 0,
+    `TypeScript syntax errors in ${file}: ${sourceFile.parseDiagnostics.map((diag) => diag.messageText).join("; ")}`);
+}
+
 console.log(`Retail KPI definitions v2: ${keys.length} metrics, temporal badges and source interpretations validated.`);
