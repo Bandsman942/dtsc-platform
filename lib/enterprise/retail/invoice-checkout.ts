@@ -80,7 +80,7 @@ export async function prepareRetailInvoice(organizationId: string, actorUserId: 
   // redemption ledger requires a saleId, so an automatic/coupon promotion cannot
   // be considered consumed here. Never grant a discount that evades usage limits
   // or falsely appears unredeemed in Retail analytics.
-  if (decisions.some((decision) => decision.promotions.length > 0)) {
+  if (decisions.some((decision) => (decision.promotions?.length || 0) > 0)) {
     throw new EnterpriseRetailError("RETAIL_FINANCE_PROMOTION_LEDGER_REQUIRED", 409);
   }
   const decisionByCatalog = new Map(decisions.map((decision) => [decision.catalogItemId, decision]));
