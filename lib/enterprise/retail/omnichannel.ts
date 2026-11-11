@@ -370,10 +370,25 @@ export async function cancelRetailOmnichannelOrder(
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 30000 });
 }
 
-export async function getRetailOmnichannelOrders(organizationId: string, page = 1, pageSize = 20, permittedSiteIds?: string[]) {
+export async function getRetailOmnichannelOrders(organizationId: string, page = 1, pageSize = 20, permittedSiteIds?: string[], filters?: { status?: string; mode?: string; search?: string; from?: Date; toExclusive?: Date }) {
+  const matches = filters?.search ? await prisma.enterpriseSalesOrder.findMany({
+    where: { organizationId, archivedAt: null, OR: [
+      { reference: { contains: filters.search, mode: "insensitive" } },
+      { title: { contains: filters.search, mode: "insensitive" } },
+    ] },
+    select: { id: true },
+    take: 1000,
+  }) : null;
   const where: Prisma.EnterpriseRetailOrderOrchestrationWhereInput = {
     organizationId, archivedAt: null,
     ...(permittedSiteIds ? { sourceSiteId: { in: permittedSiteIds } } : {}),
+    ...(filters?.status ? { status: filters.status } : {}),
+    ...(filters?.mode ? { fulfillmentMode: filters.mode } : {}),
+    ...(matches ? { salesOrderId: { in: matches.map((row) => row.id) } } : {}),
+    ...(filters?.from || filters?.toExclusive ? { createdAt: {
+      ...(filters.from ? { gte: filters.from } : {}),
+      ...(filters.toExclusive ? { lt: filters.toExclusive } : {}),
+    } } : {}),
   };
   const [contexts, total] = await Promise.all([
     prisma.enterpriseRetailOrderOrchestration.findMany({ where, orderBy: [{ createdAt: "desc" }], skip: (page - 1) * pageSize, take: pageSize }),
