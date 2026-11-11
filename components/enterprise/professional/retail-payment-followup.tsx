@@ -102,6 +102,9 @@ export function RetailPaymentFollowup({ organizationId, locale }: { organization
   const [canonicalPage, setCanonicalPage] = useState(1);
   const [canonicalPagination, setCanonicalPagination] = useState<Pagination | null>(null);
   const [canonicalStatus, setCanonicalStatus] = useState("");
+  const [canonicalSearch, setCanonicalSearch] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [canonicalLoading, setCanonicalLoading] = useState(true);
   const [canonicalError, setCanonicalError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -183,6 +186,9 @@ export function RetailPaymentFollowup({ organizationId, locale }: { organization
     setCanonicalError("");
     try {
       const query = new URLSearchParams({ page: String(canonicalPage), pageSize: "20", ...(canonicalStatus ? { status: canonicalStatus } : {}) });
+      if (canonicalSearch.trim()) query.set("search", canonicalSearch.trim());
+      if (dateFrom) query.set("from", dateFrom);
+      if (dateTo) query.set("to", dateTo);
       const data = await fetch(`/api/enterprise/${organizationId}/retail/payments/invoices?${query}`, { cache: "no-store" }).then(readJson);
       setCanonicalActive(Boolean(data.active));
       setCanonical(Array.isArray(data.items) ? data.items : []);
@@ -193,7 +199,7 @@ export function RetailPaymentFollowup({ organizationId, locale }: { organization
       }));
       setCanonical([]);
     } finally { setCanonicalLoading(false); }
-  }, [organizationId, locale, canonicalPage, canonicalStatus]);
+  }, [organizationId, locale, canonicalPage, canonicalStatus, canonicalSearch, dateFrom, dateTo]);
 
   useEffect(() => {
     void loadPermissions();
@@ -203,7 +209,7 @@ export function RetailPaymentFollowup({ organizationId, locale }: { organization
     void loadPayments();
   }, [loadPayments]);
 
-  useEffect(() => { void loadCanonical(); }, [loadCanonical]);
+  useEffect(() => { const timer = setTimeout(() => { void loadCanonical(); }, canonicalSearch ? 250 : 0); return () => clearTimeout(timer); }, [loadCanonical, canonicalSearch]);
 
   return (
     <section className="min-w-0 space-y-4 rounded-2xl border border-dtsc-border bg-dtsc-surface p-3 shadow-sm sm:p-4" aria-label={copy.title}>
@@ -211,6 +217,11 @@ export function RetailPaymentFollowup({ organizationId, locale }: { organization
       {canonicalActive || canonicalLoading || canonicalError ? <div className="rounded-xl border border-cyan-500/30 bg-dtsc-page p-3">
         <h3 className="text-sm font-black text-dtsc-ink">{locale === "en" ? "Canonical Finance invoice payments" : "Paiements des factures Finance du comptoir"}</h3>
         <p className="mt-1 text-xs text-dtsc-muted">{locale === "en" ? "These are actual Finance payments linked to a Retail invoice, not duplicate Retail transactions. Reconcile them in Collections." : "Il s’agit des paiements Finance réellement rattachés aux factures Retail, et non de transactions Retail en double. Leur traitement se fait dans Encaissements."}</p>
+        <div className="mt-3 grid gap-2 sm:grid-cols-3">
+          <label className="text-xs font-semibold text-dtsc-muted">Recherche<input type="search" placeholder="N° paiement, facture, boutique" className="mt-1 min-h-10 w-full rounded-lg border border-dtsc-border bg-dtsc-surface px-3 text-dtsc-ink" value={canonicalSearch} onChange={(event) => { setCanonicalSearch(event.target.value); setCanonicalPage(1); }} /></label>
+          <label className="text-xs font-semibold text-dtsc-muted">Du<input type="date" className="mt-1 min-h-10 w-full rounded-lg border border-dtsc-border bg-dtsc-surface px-3 text-dtsc-ink" max={dateTo || undefined} value={dateFrom} onChange={(event) => { setDateFrom(event.target.value); setCanonicalPage(1); }} /></label>
+          <label className="text-xs font-semibold text-dtsc-muted">Au<input type="date" className="mt-1 min-h-10 w-full rounded-lg border border-dtsc-border bg-dtsc-surface px-3 text-dtsc-ink" min={dateFrom || undefined} value={dateTo} onChange={(event) => { setDateTo(event.target.value); setCanonicalPage(1); }} /></label>
+        </div>
         <div className="mt-3 flex flex-wrap gap-2" role="group" aria-label={locale === "en" ? "Finance payment status" : "Statut des paiements Finance"}>
           {["", "DRAFT", "PENDING_APPROVAL", "CONFIRMED", "RECONCILED", "CANCELLED", "REVERSED"].map((state) => <button key={state || "ALL"} type="button" onClick={() => { setCanonicalStatus(state); setCanonicalPage(1); }} className={`min-h-10 rounded-full border px-3 text-xs font-bold ${canonicalStatus === state ? "border-dtsc-ink bg-dtsc-ink text-white" : "border-dtsc-border text-dtsc-ink"}`}>{state ? canonicalStatusLabel(state, locale) : copy.all}</button>)}
         </div>
