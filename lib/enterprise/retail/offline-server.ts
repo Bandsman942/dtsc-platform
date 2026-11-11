@@ -289,6 +289,9 @@ export async function syncRetailOfflineSale(args: {
   const payloadHash = jsonHash(args.payload);
   const existing = await prisma.enterpriseRetailOfflineSyncOperation.findFirst({ where: { organizationId: args.organizationId, operationUuid: args.operationUuid } });
   if (existing) {
+    if (existing.receivedByUserId !== args.actorUserId || existing.siteId !== args.siteId
+      || existing.warehouseId !== args.warehouseId || existing.snapshotVersion !== args.snapshotVersion
+      || existing.operationType !== "SALE") throw new EnterpriseRetailError("RETAIL_OFFLINE_UUID_PAYLOAD_MISMATCH", 409);
     if (existing.payloadHash !== payloadHash) throw new EnterpriseRetailError("RETAIL_OFFLINE_UUID_PAYLOAD_MISMATCH", 409);
     if (existing.status === "SYNCED") return { operation: existing, idempotent: true };
     if (["CONFLICT", "REJECTED"].includes(existing.status)) return { operation: existing, idempotent: true };
