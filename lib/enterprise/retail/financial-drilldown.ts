@@ -38,7 +38,7 @@ export async function readRetailFinancialTrace(input: {
   const now = input.now || new Date();
   const ledger = metric === "postedRevenue" || metric === "postedGrossMargin" || metric === "postedOperatingResult";
   const isBalance = metric === "outstanding" || metric === "overdue" || metric === "treasuryAvailable";
-  const timeBasis = isBalance ? "CURRENT_BALANCE" : metric === "invoiceAllocated" ? "ISSUANCE_PERIOD_CURRENT_ALLOCATION" : "PERIOD_FLOW";
+  const timeBasis = isBalance ? "CURRENT_BALANCE" : "PERIOD_FLOW";
   let source: Prisma.Sql;
   if (ledger) {
     const cogs = Prisma.sql`(a."accountSubtype" = 'COST_OF_SALES' OR EXISTS (
@@ -63,10 +63,9 @@ export async function readRetailFinancialTrace(input: {
       WHERE l."organizationId" = ${organizationId} AND e.status IN ('POSTED','REVERSED')
         AND e."accountingDate" BETWEEN ${from} AND ${to} AND ${accountScope}
     `;
-  } else if (metric === "invoices" || metric === "invoiceAllocated" || metric === "outstanding" || metric === "overdue") {
+  } else if (metric === "invoices" || metric === "outstanding" || metric === "overdue") {
     const value = metric === "invoices" ? Prisma.sql`invoice."grandTotal" - invoice."amountCredited"`
-      : metric === "invoiceAllocated" ? Prisma.sql`invoice."amountPaid"`
-        : Prisma.sql`invoice."outstandingAmount"`;
+      : Prisma.sql`invoice."outstandingAmount"`;
     source = Prisma.sql`
       SELECT invoice.id, checkout."siteId", site.name AS "siteName", invoice."currencyCode" AS "currencyCode",
         invoice."issuedAt" AS "eventDate", invoice.number AS reference,
@@ -85,7 +84,7 @@ export async function readRetailFinancialTrace(input: {
   } else if (metric === "financeCollections") {
     source = Prisma.sql`
       SELECT allocation.id, checkout."siteId", site.name AS "siteName", payment."currencyCode" AS "currencyCode",
-        payment."paymentDate" AS "eventDate", invoice.number AS reference,
+        payment."paymentDate" AS "eventDate", (payment.number || ' · ' || invoice.number) AS reference,
         payment."methodType"::text AS "sourceLabel", allocation.amount AS amount, payment.status::text AS status,
         'EnterprisePayment'::text AS "sourceType", payment.id AS "sourceId"
       FROM "EnterpriseRetailInvoiceCheckout" checkout
@@ -106,7 +105,7 @@ export async function readRetailFinancialTrace(input: {
   } else if (metric === "expenses") {
     source = Prisma.sql`
       SELECT expense.id, expense."siteId", site.name AS "siteName", expense.currency AS "currencyCode",
-        expense."expenseDate" AS "eventDate", NULL::text AS reference,
+        expense."expenseDate" AS "eventDate", expense.reference AS reference,
         'APPROVED'::text AS "sourceLabel", expense.amount AS amount, expense.status::text AS status,
         'EnterpriseExpense'::text AS "sourceType", expense.id AS "sourceId"
       FROM "EnterpriseExpense" expense
@@ -128,7 +127,7 @@ export async function readRetailFinancialTrace(input: {
   } else if (metric === "mobileMoneyCommission") {
     source = Prisma.sql`
       SELECT mm.id, cash."siteId", site.name AS "siteName", mm."currencyCode" AS "currencyCode",
-        mm."occurredAt" AS "eventDate", NULL::text AS reference,
+        mm."occurredAt" AS "eventDate", mm.number AS reference,
         mm."transactionType"::text AS "sourceLabel", mm."providerCommissionAmount" AS amount, mm.status::text AS status,
         'EnterpriseMobileMoneyTransaction'::text AS "sourceType", mm.id AS "sourceId"
       FROM "EnterpriseMobileMoneyTransaction" mm
@@ -140,7 +139,7 @@ export async function readRetailFinancialTrace(input: {
   } else if (metric === "telcoMargin") {
     source = Prisma.sql`
       SELECT topup.id, account."siteId", site.name AS "siteName", topup."currencyCode" AS "currencyCode",
-        topup."occurredAt" AS "eventDate", NULL::text AS reference,
+        topup."occurredAt" AS "eventDate", topup.number AS reference,
         'TOPUP'::text AS "sourceLabel", topup."marginAmount" AS amount, topup.status::text AS status,
         'EnterpriseTelcoTopup'::text AS "sourceType", topup.id AS "sourceId"
       FROM "EnterpriseTelcoTopup" topup
@@ -152,7 +151,7 @@ export async function readRetailFinancialTrace(input: {
   } else {
     source = Prisma.sql`
       SELECT account.id, account."siteId", site.name AS "siteName", account."currencyCode" AS "currencyCode",
-        NULL::timestamptz AS "eventDate", account."accountType"::text AS reference,
+        NULL::timestamptz AS "eventDate", (account.code || ' · ' || account.name) AS reference,
         'FINANCIAL_ACCOUNT'::text AS "sourceLabel", account."availableBalance" AS amount, account.status::text AS status,
         'EnterpriseFinancialAccount'::text AS "sourceType", account.id AS "sourceId"
       FROM "EnterpriseFinancialAccount" account
