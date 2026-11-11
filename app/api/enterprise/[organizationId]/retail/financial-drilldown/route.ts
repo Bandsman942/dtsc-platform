@@ -30,7 +30,7 @@ function requiredModules(metric: z.infer<typeof querySchema>["metric"]): string[
   if (metric === "expenses") return ["FINANCE_BUDGETS"];
   if (metric === "mobileMoneyCommission") return ["MOBILE_MONEY_AGENCY"];
   if (metric === "telcoMargin") return ["TELCO_TOPUPS"];
-  return metric === "invoiceAllocated" ? ["FINANCE_RECEIVABLES", "FINANCE_PAYMENTS"] : [];
+  return [];
 }
 
 /** No browser-provided monetary value, role, or store scope can authorize a read.
