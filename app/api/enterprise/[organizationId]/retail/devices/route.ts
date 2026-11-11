@@ -1,11 +1,12 @@
+import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
-import { listRetailDeviceProfiles, upsertRetailDeviceProfile } from "@/lib/enterprise/retail/customer-payments";
+import { upsertRetailDeviceProfile } from "@/lib/enterprise/retail/customer-payments";
 import { retailDeviceProfileUpsertSchema } from "@/lib/enterprise/retail/customer-payments-schemas";
 import { authorizeRetailRequest, retailErrorResponse } from "@/lib/enterprise/retail/http";
 import { getRetailCustomerPaymentPermissions } from "@/lib/enterprise/retail/permissions";
-import { RETAIL_OWNER_ROLES } from "@/lib/enterprise/retail/site-access";
+import { RETAIL_OWNER_ROLES, retailSitesForCapability } from "@/lib/enterprise/retail/site-access";
 import { prisma } from "@/lib/prisma";
 
 type Params = { params: Promise<{ organizationId: string }> };
@@ -23,10 +24,42 @@ export async function GET(req: Request, { params }: Params) {
   const { organizationId } = await params;
   const auth = await authorizeRetailRequest(req, organizationId, "RETAIL_POS", "read");
   if (!auth.ok) return auth.response;
-  if (!await isRetailDeviceAdministrator(organizationId, auth.session.userId)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  const items = await listRetailDeviceProfiles(organizationId);
-  await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "retail-devices", action: "list", count: items.length } });
-  return NextResponse.json({ items }, { headers: { "Cache-Control": "private, no-store" } });
+  const admin = await isRetailDeviceAdministrator(organizationId, auth.session.userId);
+  const scope = admin ? null : await retailSitesForCapability(organizationId, auth.session.userId, "VIEW_SALES");
+  const url = new URL(req.url);
+  const page = Math.max(1, Math.min(1000, Number(url.searchParams.get("page") || 1) || 1));
+  const pageSize = Math.min(100, Math.max(1, Number(url.searchParams.get("pageSize") || 12) || 12));
+  const search = (url.searchParams.get("search") || "").trim().slice(0, 120);
+  const siteId = (url.searchParams.get("siteId") || "").trim();
+  const deviceType = (url.searchParams.get("deviceType") || "").trim();
+  const from = url.searchParams.get("from");
+  const to = url.searchParams.get("to");
+  if (siteId && !admin && !scope?.siteIds.includes(siteId)) return NextResponse.json({ error: "RETAIL_SITE_ACCESS_DENIED" }, { status: 403 });
+  const where: Prisma.EnterpriseRetailDeviceProfileWhereInput = {
+    organizationId, archivedAt: null,
+    ...(admin ? (siteId ? { siteId } : {}) : { siteId: siteId || { in: scope?.siteIds || [] } }),
+    ...(deviceType ? { deviceType } : {}),
+    ...(search ? { OR: [{ code: { contains: search, mode: "insensitive" } },
+      { name: { contains: search, mode: "insensitive" } },
+      { deviceType: { contains: search, mode: "insensitive" } }] } : {}),
+    ...((from || to) ? { createdAt: { ...(from && /^\d{4}-\d{2}-\d{2}$/.test(from) ? { gte: new Date(from + "T00:00:00.000Z") } : {}),
+      ...(to && /^\d{4}-\d{2}-\d{2}$/.test(to) ? { lte: new Date(to + "T23:59:59.999Z") } : {}) } } : {}),
+  };
+  const [items, total] = await Promise.all([
+    prisma.enterpriseRetailDeviceProfile.findMany({
+      where, orderBy: [{ updatedAt: "desc" }, { id: "asc" }],
+      skip: (page - 1) * pageSize, take: pageSize,
+      select: { id: true, code: true, name: true, siteId: true, deviceType: true, connectionMode: true,
+        status: true, lastSeenAt: true, createdAt: true, updatedAt: true },
+    }),
+    prisma.enterpriseRetailDeviceProfile.count({ where }),
+  ]);
+  const permissions = admin ? await getRetailCustomerPaymentPermissions(auth.session.userId, organizationId) : null;
+  await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt,
+    metadata: { organizationId, domain: "retail-devices", action: "list", page, pageSize, total } });
+  return NextResponse.json({ items, canManage: Boolean(admin && permissions?.canManageDevices),
+    pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) } },
+    { headers: { "Cache-Control": "private, no-store" } });
 }
 
 export async function POST(req: Request, { params }: Params) {
