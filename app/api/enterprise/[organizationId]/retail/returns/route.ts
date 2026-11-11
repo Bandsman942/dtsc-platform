@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { writeApiLog } from "@/lib/audit";
 import { authorizeRetailRequest, retailErrorResponse, retailListParams } from "@/lib/enterprise/retail/http";
 import { retailSitesForCapability } from "@/lib/enterprise/retail/site-access";
+import { readRetailListDateRange } from "@/lib/enterprise/retail/list-date-range";
 import { prisma } from "@/lib/prisma";
 
 type Params = { params: Promise<{ organizationId: string }> };
@@ -14,8 +15,17 @@ export async function GET(req: Request, { params }: Params) {
   let scope: Awaited<ReturnType<typeof retailSitesForCapability>>;
   try { scope = await retailSitesForCapability(organizationId, auth.session.userId, "VIEW_SALES"); }
   catch (error) { return retailErrorResponse(error, "RETAIL_SITE_ACCESS_DENIED"); }
-  const { page, pageSize, status, search, from, to } = retailListParams(req);
-  const inclusiveTo = to ? new Date(to.getTime() + 86400000 - 1) : null;
+  const { page, pageSize, status, search } = retailListParams(req);
+  let from: Date | null;
+  let toExclusive: Date | null;
+  try {
+    const range = await readRetailListDateRange(req, organizationId);
+    from = range.from;
+    toExclusive = range.toExclusive;
+  } catch (error) {
+    return retailErrorResponse(error, "RETAIL_RETURN_LIST_FAILED");
+  }
+  const inclusiveTo = toExclusive ? new Date(toExclusive.getTime() - 1) : null;
   const where = {
     organizationId,
     ...((from || inclusiveTo) ? { createdAt: {
