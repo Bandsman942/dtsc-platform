@@ -1,5 +1,6 @@
 ## 2026-11-11 — Feature #1109 — Coût des ventes RETAIL traçable (candidat v1.11.0, NON LIVRÉ)
 
+- **Correctif CI #1111** : E2E métier propriétaire confirmé BON ; quatre acceptations navigateur bloquées avant exécution sur Ubuntu 26.04 par une panne DNS APT. Runners épinglés à Ubuntu 24.04 LTS, Chromium Playwright installé sans `--with-deps` pour ne plus dépendre d'APT ; tests navigateur maintenus sans contournement, nouvelle CI complète exigée avant fusion.
 - Accès au détail du KPI COGS depuis le pilotage entreprise et chaque boutique, rapprochement par devise entre écritures postées reliées au stock, sans lien ou ambiguës ; contrepassations signées et vues non attribuées conservées.
 - Design 2.0 : filtres avancés, légendes, histogramme quotidien interactif, pagination serveur, accès séparés Comptabilité/Stock/Rapports, exports premium CSV/Excel/PDF avec limites annoncées.
 - Enregistrement d'un rapport durable `RETAIL_COGS_RECONCILIATION` dans Rapports, bilan de couverture des sorties valorisées, audit des rapports et documentation E2E.

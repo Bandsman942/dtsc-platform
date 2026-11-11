@@ -1,6 +1,6 @@
 # RETAIL — Traçabilité et rapprochement du coût des ventes (#1109)
 
-**Candidat v1.11.0 · 11 novembre 2026 · OWNER E2E en attente · non fusionné / non déployé.**
+**Candidat v1.11.0 · 11 novembre 2026 · OWNER E2E #1111 BON · CI navigateur complémentaire en reprise · non fusionné / non déployé.**
 
 ## Source de vérité et interprétation
 
@@ -31,6 +31,13 @@ Contrôle arithmétique : `COGS grand livre = relié au stock + sans lien + à r
 - Les exports manuels représentent **les lignes de la page sélectionnée** et indiquent toujours le nombre de lignes total. Pour un audit intégral volumineux, utiliser la pagination ; la génération asynchrone de fichiers exhaustifs volumineux et signés est tracée dans l'issue de dette [#1110](https://github.com/Bandsman942/dtsc-platform/issues/1110), avant commercialisation comme « export intégral ».
 - Une correspondance `journalEntryId` unique ne prouve pas que sa valorisation native est égale à son montant fonctionnel GL. Les FX, les multi-lignes et la contrepassation empêchent toute certification automatique sans réconciliation plus stricte.
 - Aucun schéma Prisma, migration, variable secrète ni écriture de stock/comptabilité n'est ajouté ou modifié.
+
+### Correctif CI complémentaire #1111 — acceptations navigateur
+
+- L'E2E métier final a été confirmé « BON » par le propriétaire le 11 novembre 2026. Le premier pipeline Quality Gates (gouvernance, migration, qualité, build) a réussi, mais quatre jobs d'acceptation navigateur échouaient avant les scénarios à l'étape `playwright install --with-deps chromium`.
+- Les logs des quatre jobs indiquent `Temporary failure resolving` pour `azure.archive.ubuntu.com`, `archive.ubuntu.com` et `security.ubuntu.com` sur le runner `ubuntu-latest` passé à Ubuntu 26.04 ; une relance des jobs a reproduit la panne. Ce problème de téléchargement APT ne constitue **pas** une réussite ni un échec des scénarios métier.
+- Les quatre jobs concernés (`hotfix-657-erp-navigation-workspaces`, `shop2-behavioral`, `hotfix-659-cash-guides-business-presentation`, `hotfix-662-cash-orphan-approval-recovery`) sont fixés à l'image LTS `ubuntu-24.04` et installent le navigateur correspondant au package Playwright verrouillé via `pnpm exec playwright install chromium`, sans téléchargement de dépendances système via APT. Aucune assertion ni aucun scénario E2E n'est retiré, et les étapes de build restent obligatoires.
+- Avant fusion, vérifier que le navigateur se lance réellement et que **tous les tests navigateur préexistants réussissent** sur les nouveaux runners. En cas de bibliothèque manquante, réparer l'environnement de test sans neutraliser les scénarios. Le pipeline Production reste exclusivement déclenché après fusion dans `main`.
 
 ## Recette propriétaire E2E — nécessaire avant fusion
 

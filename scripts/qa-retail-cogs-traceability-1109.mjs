@@ -133,4 +133,17 @@ assert.equal(readModel.coverage[0].valuedMovements, 1);
 assert(queries[0].sql.includes('WITH inventoryLinks AS'), "The SQL query preaggregates inventory events once for the GL scope");
 assert(queries[0].values.includes("org-1"), "Every reconciliation query is parameterized by tenant");
 
+// Browser CI must never silently drop tests when hosted runner APT is broken.
+for (const path of [
+  ".github/workflows/hotfix-657-erp-navigation-workspaces.yml",
+  ".github/workflows/shop2-behavioral.yml",
+  ".github/workflows/hotfix-659-cash-guides-business-presentation.yml",
+  ".github/workflows/hotfix-662-cash-orphan-approval-recovery.yml",
+]) {
+  const workflow = read(path);
+  assert.match(workflow, /runs-on: ubuntu-24\.04/, `${path}: browser CI uses a supported pinned Ubuntu runner`);
+  assert.match(workflow, /run: pnpm exec playwright install chromium/, `${path}: browser install must not depend on APT DNS`);
+  assert.match(workflow, /run: \|[\s\S]*pnpm exec playwright test/, `${path}: the actual E2E suite remains enabled`);
+}
+
 console.log("RETAIL #1109 COGS posted GL traceability, rights, 6-decimal signed reconciliation, FX separation, PDF/Excel/CSV and Reports integration: OK");
