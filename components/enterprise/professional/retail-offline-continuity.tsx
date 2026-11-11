@@ -129,7 +129,6 @@ function lineAmounts(item: OfflineCatalogItem, quantity: number) {
 export function RetailOfflineContinuity({ organizationId, locale }: Props) {
   const [online, setOnline] = useState(true);
   const [dashboard, setDashboard] = useState<Dashboard | null>(null);
-  const [serverCheckoutMode, setServerCheckoutMode] = useState<"LEGACY_SALE" | "FINANCE_DRAFT" | null>(null);
   const [warehouseId, setWarehouseId] = useState("");
   const [snapshot, setSnapshot] = useState<OfflineSnapshot | null>(null);
   const [queue, setQueue] = useState<Array<RetailOfflineQueueEntry<OfflineSalePayload>>>([]);
@@ -248,7 +247,6 @@ export function RetailOfflineContinuity({ organizationId, locale }: Props) {
       if (!response.ok || !body || !("version" in body)) throw new Error((body as { message?: string; error?: string } | null)?.message || (body as { error?: string } | null)?.error || "RETAIL_OFFLINE_SNAPSHOT_FAILED");
       const prepared = { ...(body as OfflineSnapshot),
         cashFinancialAccountId: cashSession?.financialAccount.id, cashSessionNumber: cashSession?.number };
-      setServerCheckoutMode(prepared.policy.checkoutMode || "LEGACY_SALE");
       if (prepared.policy.checkoutMode !== "FINANCE_DRAFT" && cashSession?.status !== "OPEN") {
         throw new Error(locale === "en" ? "Open a cash register before preparing legacy cash sales." : "Ouvrez une caisse avant de préparer des ventes historiques en espèces.");
       }

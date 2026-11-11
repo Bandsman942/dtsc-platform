@@ -2,7 +2,7 @@
 
 ## Politique de livraison
 
-Branche `fix/retail-pos-five-lots-20261111` uniquement. Ne jamais déployer une branche de travail vers Vercel (production uniquement depuis `main`, previews désactivées). Le candidat attend les tests CI, les E2E métier et une validation humaine explicite avant fusion. Cette documentation distingue les capacités implémentées des limites restantes.
+Branche `feat/1112-retail-pos-five-lots` uniquement. Ne jamais déployer une branche de travail vers Vercel (production uniquement depuis `main`, previews désactivées). Le candidat attend les tests CI, les E2E métier et une validation humaine explicite avant fusion. Cette documentation distingue les capacités implémentées des limites restantes.
 
 ## Lot 1 — Offline sécurisé et facturation Finance
 
