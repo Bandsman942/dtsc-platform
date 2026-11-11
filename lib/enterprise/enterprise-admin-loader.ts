@@ -72,10 +72,16 @@ export async function getEnterpriseAdministrationDataset(
   const english = locale === "en";
   const now = new Date();
   const recentThreshold = new Date(now.getTime() - 30 * 86400000);
-  const todayStart = new Date(now);
-  todayStart.setHours(0, 0, 0, 0);
-  const tomorrowStart = new Date(todayStart);
-  tomorrowStart.setDate(tomorrowStart.getDate() + 1);
+  const companyTimeZone = organization.timezone || "UTC";
+  // Legacy settings can contain an obsolete or invalid zone. Never block the
+  // entire administration dashboard because of one malformed preference.
+  let companyDate: Intl.DateTimeFormat;
+  try {
+    companyDate = new Intl.DateTimeFormat("en-CA", { timeZone: companyTimeZone, year: "numeric", month: "2-digit", day: "2-digit" });
+  } catch {
+    companyDate = new Intl.DateTimeFormat("en-CA", { timeZone: "UTC", year: "numeric", month: "2-digit", day: "2-digit" });
+  }
+  const todayKey = companyDate.format(now);
 
   const [
     members,
@@ -101,6 +107,12 @@ export async function getEnterpriseAdministrationDataset(
     auditItems,
     securityIncidentsCount,
     recentAdministrativeActionsCount,
+    memberStatusCounts,
+    activeAdminCount,
+    requestStatusCounts,
+    recentRequestsExactCount,
+    taskStatusCounts,
+    overdueTasksExactCount,
   ] = await Promise.all([
     getEnterpriseMembersDataset(organizationId),
     getEnterpriseModulesDataset(organizationId, entitlements),
@@ -140,6 +152,12 @@ export async function getEnterpriseAdministrationDataset(
     prisma.auditLog.findMany({ where: { OR: [{ organizationId }, { metadata: { path: ["organizationId"], equals: organizationId } }] }, orderBy: { createdAt: "desc" }, take: 25, select: { id: true, userId: true, action: true, entity: true, entityId: true, result: true, reasonCode: true, riskLevel: true, requestId: true, metadata: true, createdAt: true } }),
     prisma.auditLog.count({ where: { OR: [{ organizationId }, { metadata: { path: ["organizationId"], equals: organizationId } }], createdAt: { gte: recentThreshold }, riskLevel: { in: ["HIGH", "CRITICAL"] }, result: { in: ["DENIED", "FAILED", "PARTIAL"] } } }),
     prisma.auditLog.count({ where: { OR: [{ organizationId }, { metadata: { path: ["organizationId"], equals: organizationId } }], createdAt: { gte: recentThreshold }, action: { startsWith: "ENTERPRISE_" } } }),
+    prisma.organizationMember.groupBy({ by: ["status"], where: { organizationId, removedAt: null }, _count: { _all: true } }),
+    prisma.organizationMember.count({ where: { organizationId, removedAt: null, status: "ACTIVE", role: { in: ["OWNER", "ADMIN_ENTREPRISE", "ADMIN_ENTERPRISE"] } } }),
+    prisma.enterpriseRequest.groupBy({ by: ["status"], where: { organizationId, archivedAt: null }, _count: { _all: true } }),
+    prisma.enterpriseRequest.count({ where: { organizationId, archivedAt: null, createdAt: { gte: recentThreshold } } }),
+    prisma.enterpriseTask.groupBy({ by: ["status"], where: { organizationId, archivedAt: null }, _count: { _all: true } }),
+    prisma.enterpriseTask.count({ where: { organizationId, archivedAt: null, status: { in: ["TODO", "IN_PROGRESS", "BLOCKED"] }, dueAt: { lt: now } } }),
   ]);
 
   const configurationIssues = rawConfigurationIssues.map((issue) => ({
@@ -148,10 +166,12 @@ export async function getEnterpriseAdministrationDataset(
   }));
   const openTaskStatuses = new Set(["TODO", "IN_PROGRESS", "BLOCKED"]);
   const openRequestStatuses = new Set(["SUBMITTED", "IN_REVIEW", "IN_PROGRESS", "PENDING", "BLOCKED"]);
+  const memberCount = (status: string) => memberStatusCounts.find((item) => item.status === status)?._count._all || 0;
+  const requestCount = (status: string) => requestStatusCounts.find((item) => item.status === status)?._count._all || 0;
+  const taskCount = (status: string) => taskStatusCounts.find((item) => item.status === status)?._count._all || 0;
   const registryModules = moduleDataset.modules.filter((enterpriseModule) => enterpriseModule.registryKnown && enterpriseModule.implementationStatus !== "PLANNED" && enterpriseModule.implementationStatus !== "HIDDEN" && enterpriseModule.routeKind !== "ADMIN_SECTION");
   const hiddenIncompatibleModulesCount = moduleDataset.modules.filter((enterpriseModule) => enterpriseModule.isEnabled && (!enterpriseModule.registryKnown || !enterpriseModule.sectorCompatible || !enterpriseModule.accessAllowed)).length;
-  const activeMembersCount = members.filter((member) => member.status === "ACTIVE").length;
-  const activeAdminCount = members.filter((member) => member.status === "ACTIVE" && ["OWNER", "ADMIN_ENTREPRISE", "ADMIN_ENTERPRISE"].includes(member.role)).length;
+  const activeMembersCount = memberCount("ACTIVE");
   const activeModulesCount = registryModules.filter((enterpriseModule) => enterpriseModule.isEnabled && enterpriseModule.accessAllowed).length;
   const enabledModuleCodes = new Set(registryModules.filter((item) => item.isEnabled).map((item) => normalizeEnterpriseModuleCode(item.moduleCode)));
   const financeEnabled = Array.from(enabledModuleCodes).some((code) => code.startsWith("FINANCE_"));
@@ -369,27 +389,28 @@ export async function getEnterpriseAdministrationDataset(
   return toJson<EnterpriseAdminDataset>({
     organization,
     dashboard: {
-      membersCount: members.length,
+      membersCount: memberStatusCounts.reduce((sum, item) => sum + item._count._all, 0),
+      activeMembersCount,
       activeModulesCount,
       modulesCount: registryModules.length,
       hiddenIncompatibleModulesCount,
       configurationIssuesCount: configurationIssues.length,
-      openRequestsCount: requests.filter((requestRecord) => openRequestStatuses.has(requestRecord.status)).length,
-      recentRequestsCount: requests.filter((requestRecord) => requestRecord.createdAt >= recentThreshold).length,
-      submittedRequestsCount: requests.filter((requestRecord) => requestRecord.status === "SUBMITTED").length,
-      inReviewRequestsCount: requests.filter((requestRecord) => requestRecord.status === "IN_REVIEW").length,
-      openTasksCount: tasks.filter((task) => openTaskStatuses.has(task.status)).length,
-      overdueTasksCount: tasks.filter((task) => openTaskStatuses.has(task.status) && task.dueAt && task.dueAt < now).length,
-      blockedTasksCount: tasks.filter((task) => task.status === "BLOCKED").length,
+      openRequestsCount: Array.from(openRequestStatuses).reduce((sum, status) => sum + requestCount(status), 0),
+      recentRequestsCount: recentRequestsExactCount,
+      submittedRequestsCount: requestCount("SUBMITTED"),
+      inReviewRequestsCount: requestCount("IN_REVIEW"),
+      openTasksCount: Array.from(openTaskStatuses).reduce((sum, status) => sum + taskCount(status), 0),
+      overdueTasksCount: overdueTasksExactCount,
+      blockedTasksCount: taskCount("BLOCKED"),
       pendingValidationsCount,
-      todayMeetingsCount: meetings.filter((meeting) => meeting.status !== "CANCELLED" && meeting.startAt >= todayStart && meeting.startAt < tomorrowStart).length,
+      todayMeetingsCount: meetings.filter((meeting) => meeting.status !== "CANCELLED" && companyDate.format(meeting.startAt) === todayKey).length,
       upcomingMeetingsCount: meetings.filter((meeting) => meeting.status !== "CANCELLED" && meeting.startAt >= now).length,
       recentDocumentsCount,
       activeBudgetsCount,
       activeSuppliersCount,
       generatedReportsCount,
       publishedReportsCount,
-      pendingInvitationsCount: members.filter((member) => member.status === "INVITED").length,
+      pendingInvitationsCount: memberCount("INVITED"),
       securityIncidentsCount,
       recentAdministrativeActionsCount,
     },

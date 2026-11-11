@@ -20,6 +20,7 @@ type EnterpriseCoordinationSupplementKey =
   | "documents.sourceUnavailable"
   | "reports.actionFailed"
   | "reports.loadFailed"
+  | "reports.type.ENTERPRISE_ADMIN_OVERVIEW"
   | "reports.generationStatusTitle"
   | "reports.generationQueued"
   | "reports.generationProcessing"
@@ -110,6 +111,7 @@ const coordinationSupplements: Record<"fr" | "en", Record<EnterpriseCoordination
     "documents.sourceUnavailable": "La source de ce document ne possède pas de module canonique reconnu. Le document n’a pas été créé.",
     "reports.actionFailed": "Cette action n’a pas pu être terminée. Vérifiez les informations puis réessayez.",
     "reports.loadFailed": "Le rapport n’a pas pu être chargé. Actualisez la liste puis réessayez.",
+    "reports.type.ENTERPRISE_ADMIN_OVERVIEW": "Pilotage Administration entreprise",
     "reports.generationStatusTitle": "Génération du rapport",
     "reports.generationQueued": "Rapport placé en attente de génération.",
     "reports.generationProcessing": "Génération du rapport en cours.",
@@ -195,6 +197,7 @@ const coordinationSupplements: Record<"fr" | "en", Record<EnterpriseCoordination
     "documents.sourceUnavailable": "This document source has no recognized canonical module. The document was not created.",
     "reports.actionFailed": "This action could not be completed. Check the information and try again.",
     "reports.loadFailed": "The report could not be loaded. Refresh the list and try again.",
+    "reports.type.ENTERPRISE_ADMIN_OVERVIEW": "Company administration overview",
     "reports.generationStatusTitle": "Report generation",
     "reports.generationQueued": "The report is queued for generation.",
     "reports.generationProcessing": "The report is being generated.",

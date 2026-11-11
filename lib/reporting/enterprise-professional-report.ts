@@ -172,6 +172,38 @@ export function buildEnterpriseProfessionalReport(input: BuildInput): Profession
     }), title: input.title, filenameBase: input.reference, generatedLabel: generated };
   }
 
+  if (schema === "enterprise-admin-overview/v1") {
+    const rows = list(data.rows);
+    const translations: Record<string, [string, string]> = {
+      activeMembersCount: ["Collaborateurs actifs", "Active collaborators"],
+      pendingInvitationsCount: ["Invitations en attente", "Pending invitations"],
+      activeModulesCount: ["Modules actifs", "Active modules"],
+      configurationIssuesCount: ["Incohérences de configuration", "Configuration issues"],
+      openRequestsCount: ["Demandes ouvertes", "Open requests"],
+      openTasksCount: ["Tâches ouvertes", "Open tasks"],
+      overdueTasksCount: ["Tâches en retard", "Overdue tasks"],
+      blockedTasksCount: ["Tâches bloquées", "Blocked tasks"],
+      pendingValidationsCount: ["Validations en attente", "Pending approvals"],
+      securityIncidentsCount: ["Alertes de sécurité", "Security warnings"],
+      generatedReportsCount: ["Rapports générés", "Generated reports"],
+      publishedReportsCount: ["Rapports publiés", "Published reports"],
+    };
+    const label = (code: string) => translations[code]?.[en ? 1 : 0] || code.replace(/Count$/, "").replace(/([a-z])([A-Z])/g, "$1 $2");
+    const value = (code: string) => number(rows.find((row) => row.code === code)?.value);
+    const headlineCodes = ["activeMembersCount", "activeModulesCount", "pendingValidationsCount", "overdueTasksCount", "securityIncidentsCount"];
+    const alerts = list(data.alerts);
+    const insights: ProfessionalReportInsight[] = [];
+    if (value("securityIncidentsCount") > 0) insights.push({ title: en ? "Security requires attention" : "Sécurité à examiner", body: en ? "Recent security warnings require a review in the company audit module." : "Des alertes récentes exigent une revue dans le module Audit de l’entreprise.", tone: "danger" });
+    if (value("overdueTasksCount") > 0) insights.push({ title: en ? "Overdue operations" : "Opérations en retard", body: en ? "Open the Tasks module to review overdue assignments." : "Consultez le module Tâches pour traiter les échéances dépassées.", tone: "warning" });
+    if (alerts.length) insights.push({ title: en ? "Configuration issues" : "Incohérences de configuration", body: en ? `${alerts.length} configuration checks require attention.` : `${alerts.length} contrôles de configuration demandent une intervention.`, tone: "warning" });
+    if (!insights.length) insights.push({ title: en ? "No flagged alerts" : "Alerte non détectée", body: en ? "No security or configuration warnings were counted at generation time." : "Aucune alerte de sécurité ou de configuration n’a été comptée au moment de la génération.", tone: "success" });
+    return { ...base, kpis: headlineCodes.map((code) => ({ label: label(code), value: String(value(code)), numericValue: value(code) })),
+      chartTitle: en ? "Company administration indicators" : "Indicateurs d’administration de l’entreprise",
+      chart: headlineCodes.map((code) => ({ label: label(code), value: value(code) })),
+      columns: [{ key: "indicator", label: en ? "Indicator" : "Indicateur" }, { key: "count", label: en ? "Count" : "Nombre" }],
+      rows: rows.map((row) => ({ indicator: label(text(row.code, "")), count: number(row.value) })), insights };
+  }
+
   if (schema.startsWith("budget-vs-actual")) {
     const currencies = list(data.currencies); const lines = list(data.lines); const singleCurrency = currencies.length === 1 ? text(currencies[0].currency, input.currency || "") : null;
     const first = currencies[0] || {};

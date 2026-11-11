@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useAppLocale } from "@/components/i18n/locale-provider";
+import { EnterpriseAdminExportMenu, EnterpriseAdminListToolbar, EnterpriseAdminPagination } from "@/components/enterprise/enterprise-admin-list-toolbar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { EmptyState } from "@/components/workspace/empty-state";
@@ -15,6 +16,7 @@ import type {
   EnterpriseSecurityPolicyItem,
 } from "@/lib/enterprise/enterprise-admin-types";
 import { getEnterpriseModuleDefinition, normalizeEnterpriseModuleCode } from "@/lib/enterprise/module-registry";
+import type { ProfessionalReportExportModel } from "@/lib/reporting/professional-export";
 
 function listFromText(value: FormDataEntryValue | null) {
   return String(value || "").split(/[\n,]/).map((item) => item.trim()).filter(Boolean);
@@ -28,7 +30,7 @@ async function responseMessage(response: Response, fallbackOk = "Action enregist
 type GuidedAction = "read" | "submit" | "write" | "approve" | "manage";
 const guidedActions: GuidedAction[] = ["read", "submit", "write", "approve", "manage"];
 
-export function EnterpriseRolesPermissionsPanel({ organizationId, roles, members, modules }: { organizationId: string; roles: EnterpriseOrganizationRoleItem[]; members: EnterpriseMemberItem[]; modules: EnterpriseModuleItem[] }) {
+export function EnterpriseRolesPermissionsPanel({ organizationId, organizationName, roles, members, modules }: { organizationId: string; organizationName?: string; roles: EnterpriseOrganizationRoleItem[]; members: EnterpriseMemberItem[]; modules: EnterpriseModuleItem[] }) {
   const router = useRouter();
   const rawLocale = useAppLocale();
   const locale = rawLocale === "en" ? "en" : "fr";
@@ -38,6 +40,10 @@ export function EnterpriseRolesPermissionsPanel({ organizationId, roles, members
   const [capabilities, setCapabilities] = useState<Record<string, GuidedAction[]>>({});
   const [selfApprovalModules, setSelfApprovalModules] = useState<string[]>([]);
   const [policyLoading, setPolicyLoading] = useState(true);
+  const [roleSearch, setRoleSearch] = useState("");
+  const [roleFilter, setRoleFilter] = useState("ALL");
+  const [rolePage, setRolePage] = useState(1);
+  const [editingRole, setEditingRole] = useState<EnterpriseOrganizationRoleItem | null>(null);
 
   const copy = english ? {
     system: "SYSTEM", active: "ACTIVE", inactive: "INACTIVE", noDescription: "Organization role without a description.", services: "services", assignments: "assignments",
@@ -63,6 +69,34 @@ export function EnterpriseRolesPermissionsPanel({ organizationId, roles, members
     const definition = getEnterpriseModuleDefinition(code);
     return Boolean(definition && definition.permissionPrefixes.length && definition.accessPolicy !== "EXPLICIT_DENY");
   }), [modules]);
+  const filteredRoles = roles.filter((role) => (roleFilter === "ALL" || (roleFilter === "SYSTEM" ? role.isSystem : roleFilter === "ACTIVE" ? role.isActive : !role.isActive)) && `${role.code} ${role.labelFr} ${role.labelEn} ${role.descriptionFr || ""}`.toLocaleLowerCase().includes(roleSearch.trim().toLocaleLowerCase()));
+  const rolePageCount = Math.max(1, Math.ceil(filteredRoles.length / 12));
+  const pageRoles = filteredRoles.slice((rolePage - 1) * 12, rolePage * 12);
+  const roleReport: ProfessionalReportExportModel = {
+    title: english ? "Organization roles" : "Registre des rôles", organizationName: organizationName || "DTSC Platform",
+    filenameBase: `dtsc-administration-roles-${organizationId}`, generatedLabel: new Date().toLocaleString(english ? "en" : "fr"),
+    kpis: [{ label: english ? "Filtered roles" : "Rôles filtrés", value: String(filteredRoles.length) }], chart: [],
+    columns: [{ key: "name", label: english ? "Role" : "Rôle" }, { key: "code", label: "Code" }, { key: "status", label: english ? "Status" : "Statut" }, { key: "members", label: english ? "Assignments" : "Affectations" }],
+    rows: filteredRoles.map((role) => ({ name: english ? role.labelEn : role.labelFr, code: role.code, status: role.isSystem ? copy.system : role.isActive ? copy.active : copy.inactive, members: role.assignments.length })),
+    insights: [{ title: english ? "Security" : "Sécurité", body: english ? "System roles are protected; assignments and permissions are enforced on the server." : "Les rôles système sont protégés ; affectations et permissions restent contrôlées côté serveur." }],
+    filters: [{ label: english ? "Status" : "Statut", value: roleFilter }, { label: english ? "Search" : "Recherche", value: roleSearch || "—" }],
+  };
+
+  async function saveRole(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!editingRole) return;
+    const data = new FormData(event.currentTarget);
+    try {
+      const response = await fetch(`/api/enterprise/${organizationId}/administration/roles/${editingRole.id}`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ labelFr: data.get("labelFr"), labelEn: data.get("labelEn"), descriptionFr: data.get("descriptionFr"), descriptionEn: data.get("descriptionEn"), isActive: data.get("isActive") === "true" }),
+      });
+      setMessage(await responseMessage(response, english ? "Role updated." : "Rôle mis à jour.", english ? "Unable to update role." : "Modification du rôle impossible."));
+      if (response.ok) { setEditingRole(null); router.refresh(); }
+    } catch {
+      setMessage(english ? "Network interrupted while saving the role." : "Connexion interrompue pendant l’enregistrement du rôle.");
+    }
+  }
 
   useEffect(() => {
     let active = true;
@@ -145,21 +179,41 @@ export function EnterpriseRolesPermissionsPanel({ organizationId, roles, members
   return (
     <div className="space-y-5">
       {message ? <p role="status" className="rounded-xl border border-dtsc-border bg-dtsc-page p-3 text-sm font-bold text-dtsc-ink">{message}</p> : null}
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-        {roles.map((role) => {
+      <EnterpriseAdminListToolbar search={roleSearch} onSearchChange={(value) => { setRoleSearch(value); setRolePage(1); }} searchPlaceholder={english ? "Find a role or permission code…" : "Rechercher un rôle ou son code…"}
+        filters={[{ value: "ALL", label: english ? "All" : "Tous", count: roles.length }, { value: "ACTIVE", label: english ? "Active" : "Actifs", count: roles.filter((role) => role.isActive).length }, { value: "INACTIVE", label: english ? "Inactive" : "Inactifs", count: roles.filter((role) => !role.isActive).length }, { value: "SYSTEM", label: english ? "System" : "Système", count: roles.filter((role) => role.isSystem).length }]}
+        filter={roleFilter} onFilterChange={(value) => { setRoleFilter(value); setRolePage(1); }} resultCount={filteredRoles.length} locale={locale}>
+        <EnterpriseAdminExportMenu model={roleReport} locale={locale} />
+      </EnterpriseAdminListToolbar>
+      <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+        {pageRoles.map((role) => {
           const roleModules = Array.isArray(role.modulesJson) ? role.modulesJson.filter((item): item is string => typeof item === "string") : [];
           return (
-            <article key={role.id} className="rounded-2xl border border-dtsc-border bg-dtsc-surface p-4">
+            <article key={role.id} className="rounded-xl border border-dtsc-border bg-dtsc-surface p-3">
               <div className="flex items-start justify-between gap-3">
                 <div><p className="font-black text-dtsc-ink">{english ? role.labelEn : role.labelFr}</p></div>
                 <StatusBadge tone={role.isSystem ? "info" : role.isActive ? "success" : "neutral"}>{role.isSystem ? copy.system : role.isActive ? copy.active : copy.inactive}</StatusBadge>
               </div>
               <p className="mt-3 text-sm text-dtsc-muted">{(english ? role.descriptionEn : role.descriptionFr) || copy.noDescription}</p>
               <p className="mt-3 text-xs font-bold text-dtsc-muted">{roleModules.length} {copy.services} · {role.assignments.length} {copy.assignments}</p>
+              <button type="button" onClick={() => setEditingRole(role)} className="mt-2 min-h-10 rounded-lg border border-dtsc-border px-3 text-xs font-black text-dtsc-ink">{english ? "Details / edit" : "Détails / modifier"}</button>
             </article>
           );
         })}
       </div>
+      <EnterpriseAdminPagination page={rolePage} pageCount={rolePageCount} onPageChange={setRolePage} locale={locale} />
+
+      {editingRole && <div role="dialog" aria-modal="true" aria-label={english ? "Edit role" : "Modifier le rôle"} className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/60 p-3">
+        <form onSubmit={saveRole} className="max-h-[92dvh] w-full max-w-xl space-y-3 overflow-y-auto rounded-2xl border border-dtsc-border bg-dtsc-surface p-4 shadow-2xl">
+          <h3 className="text-lg font-black text-dtsc-ink">{english ? "Edit role" : "Modifier le rôle"} · {editingRole.code}</h3>
+          <p className="text-xs text-dtsc-muted">{editingRole.isSystem ? (english ? "System role: technical permissions and archiving are protected." : "Rôle système : les permissions techniques et l’archivage sont protégés.") : (english ? "Business permissions remain unchanged. Use controlled assignments below for members." : "Les permissions métier restent inchangées. Utilisez les affectations contrôlées ci-dessous pour les membres.")}</p>
+          <div className="grid gap-3 sm:grid-cols-2"><label className="text-xs font-bold text-dtsc-muted">Français<Input name="labelFr" required defaultValue={editingRole.labelFr} /></label><label className="text-xs font-bold text-dtsc-muted">English<Input name="labelEn" required defaultValue={editingRole.labelEn} /></label></div>
+          <label className="block text-xs font-bold text-dtsc-muted">{english ? "Description (French)" : "Description (français)"}<Input name="descriptionFr" defaultValue={editingRole.descriptionFr || ""} /></label>
+          <label className="block text-xs font-bold text-dtsc-muted">{english ? "Description (English)" : "Description (anglais)"}<Input name="descriptionEn" defaultValue={editingRole.descriptionEn || ""} /></label>
+          {!editingRole.isSystem && <label className="block text-xs font-bold text-dtsc-muted">{english ? "Status" : "Statut"}<select name="isActive" defaultValue={editingRole.isActive ? "true" : "false"} className="mt-1 min-h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm text-dtsc-ink"><option value="true">{copy.active}</option><option value="false">{copy.inactive}</option></select></label>}
+          {editingRole.isSystem && <input type="hidden" name="isActive" value={String(editingRole.isActive)} />}
+          <div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={() => setEditingRole(null)}>{english ? "Cancel" : "Annuler"}</Button><Button type="submit">{english ? "Save changes" : "Enregistrer"}</Button></div>
+        </form>
+      </div>}
 
       <div className="grid gap-4 xl:grid-cols-2">
         <form onSubmit={createRole} className="rounded-2xl border border-dtsc-border bg-dtsc-surface p-4" aria-label={copy.newRole}>

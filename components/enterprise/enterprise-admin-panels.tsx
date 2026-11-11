@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { useAppLocale } from "@/components/i18n/locale-provider";
+import { EnterpriseAdminListToolbar, EnterpriseAdminPagination } from "@/components/enterprise/enterprise-admin-list-toolbar";
 import { Ban, Building2, CalendarDays, Edit3, ExternalLink, MailPlus, Plus, RotateCcw, Route, Save, ShieldCheck, SlidersHorizontal, ToggleLeft, ToggleRight, Trash2, UserCog } from "lucide-react";
 import { HealthcareAdminWorkspace } from "@/components/enterprise/healthcare-admin-workspace";
 import { PharmacyAdminWorkspace } from "@/components/enterprise/pharmacy-admin-workspace";
@@ -27,6 +28,8 @@ import { RETAIL_PERMISSION_CATALOG } from "@/lib/enterprise/retail/constants";
 import { isRetailOptionalExtensionModule } from "@/lib/enterprise/retail/extension-policy";
 import { ENTERPRISE_INVITABLE_ROLE_OPTIONS, isEnterprisePrivilegedRole } from "@/lib/enterprise/member-invitation-roles";
 import { translate } from "@/lib/i18n";
+import { downloadProfessionalCsv, downloadProfessionalXlsx, type ProfessionalReportExportModel } from "@/lib/reporting/professional-export";
+import { downloadProfessionalPdfV2 } from "@/lib/reporting/professional-pdf-v2";
 
 export const healthcareModuleCodes = new Set([
   "PATIENTS",
@@ -443,29 +446,127 @@ export function EnterpriseCalendarPanel({
 }
 
 export function EnterpriseMembersPanel({
+  organizationId,
+  organizationName,
   members,
-  pendingMembers,
-  activeMembers,
   positions,
   inviteMember,
   updateMember,
   removeMember,
 }: {
+  organizationId: string;
+  organizationName: string;
   members: EnterpriseMemberItem[];
-  pendingMembers: EnterpriseMemberItem[];
-  activeMembers: EnterpriseMemberItem[];
   positions: EnterprisePositionItem[];
   inviteMember: InviteMemberHandler;
-  updateMember: (memberId: string, payload: Record<string, unknown>, successMessage: string) => void | Promise<void>;
-  removeMember: (memberId: string) => void | Promise<void>;
+  updateMember: (memberId: string, payload: Record<string, unknown>, successMessage: string) => Promise<boolean>;
+  removeMember: (memberId: string) => Promise<boolean>;
 }) {
   const locale = useAppLocale();
+  const english = locale === "en";
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("ALL");
+  const [page, setPage] = useState(1);
+  const [pageCount, setPageCount] = useState(1);
+  const [total, setTotal] = useState(members.length);
+  const [directory, setDirectory] = useState(members);
+  const [statusCounts, setStatusCounts] = useState<Record<string, number>>({});
+  const [loadingMembers, setLoadingMembers] = useState(false);
+  const [listError, setListError] = useState("");
+  const [reloadIndex, setReloadIndex] = useState(0);
+  const [memberError, setMemberError] = useState("");
+  const [exporting, setExporting] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteError, setInviteError] = useState("");
   const [inviteFieldErrors, setInviteFieldErrors] = useState<Record<string, string>>({});
   const [inviting, setInviting] = useState(false);
   const [editingMember, setEditingMember] = useState<EnterpriseMemberItem | null>(null);
   const [memberToRemove, setMemberToRemove] = useState<EnterpriseMemberItem | null>(null);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      setLoadingMembers(true);
+      try {
+        const query = new URLSearchParams({ page: String(page), pageSize: "20", search, status: statusFilter });
+        const response = await fetch(`/api/enterprise/${organizationId}/members?${query}`, { cache: "no-store", signal: controller.signal });
+        const body = await response.json().catch(() => null) as { items?: EnterpriseMemberItem[]; pagination?: { total: number; pageCount: number }; counts?: Record<string, number> } | null;
+        if (!response.ok || !body?.items || !body.pagination) throw new Error("MEMBERS_DIRECTORY_UNAVAILABLE");
+        setDirectory(body.items);
+        setTotal(body.pagination.total);
+        setPageCount(body.pagination.pageCount);
+        setStatusCounts(body.counts || {});
+        setListError("");
+      } catch {
+        if (!controller.signal.aborted) setListError(english ? "Unable to load collaborators. Try again." : "Impossible de charger les collaborateurs. Réessayez.");
+      } finally {
+        if (!controller.signal.aborted) setLoadingMembers(false);
+      }
+    }, search ? 250 : 0);
+    return () => { controller.abort(); window.clearTimeout(timer); };
+  }, [organizationId, page, search, statusFilter, reloadIndex, english]);
+
+  const filterOptions = [
+    { value: "ALL", label: english ? "All" : "Tous", count: Object.values(statusCounts).reduce((sum, value) => sum + value, 0) },
+    { value: "ACTIVE", label: english ? "Active" : "Actifs", count: statusCounts.ACTIVE || 0 },
+    { value: "INVITED", label: english ? "Invited" : "Invités", count: statusCounts.INVITED || 0 },
+    { value: "SUSPENDED", label: english ? "Suspended" : "Suspendus", count: statusCounts.SUSPENDED || 0 },
+  ];
+
+  async function exportDirectory(format: "CSV" | "EXCEL" | "PDF") {
+    if (exporting) return;
+    setExporting(true);
+    setListError("");
+    try {
+      const perPage = 100;
+      const firstQuery = new URLSearchParams({ page: "1", pageSize: String(perPage), search, status: statusFilter });
+      const response = await fetch(`/api/enterprise/${organizationId}/members?${firstQuery}`, { cache: "no-store" });
+      const first = await response.json().catch(() => null) as { items?: EnterpriseMemberItem[]; pagination?: { total: number; pageCount: number } } | null;
+      if (!response.ok || !first?.items || !first.pagination) throw new Error("DIRECTORY_EXPORT_FETCH_FAILED");
+      if (first.pagination.total > 5_000) throw new Error("DIRECTORY_EXPORT_TOO_LARGE");
+      const all = [...first.items];
+      for (let start = 2; start <= first.pagination.pageCount; start += 4) {
+        const batch = await Promise.all(Array.from({ length: Math.min(4, first.pagination.pageCount - start + 1) }, async (_, index) => {
+          const params = new URLSearchParams({ page: String(start + index), pageSize: String(perPage), search, status: statusFilter });
+          const pageResponse = await fetch(`/api/enterprise/${organizationId}/members?${params}`, { cache: "no-store" });
+          const body = await pageResponse.json().catch(() => null) as { items?: EnterpriseMemberItem[] } | null;
+          if (!pageResponse.ok || !body?.items) throw new Error("DIRECTORY_EXPORT_FETCH_FAILED");
+          return body.items;
+        }));
+        all.push(...batch.flat());
+      }
+      const model: ProfessionalReportExportModel = {
+        title: english ? "Company collaborators" : "Registre des collaborateurs",
+        organizationName, filenameBase: `dtsc-administration-collaborateurs-${organizationId}`,
+        generatedLabel: new Date().toLocaleString(english ? "en" : "fr"),
+        kpis: [{ label: english ? "Exported collaborators" : "Collaborateurs exportés", value: String(all.length) }], chart: [],
+        columns: [{ key: "name", label: english ? "Name" : "Nom" }, { key: "email", label: "Email" }, { key: "role", label: english ? "Role" : "Rôle" }, { key: "position", label: english ? "Position" : "Poste" }, { key: "status", label: english ? "Status" : "Statut" }],
+        rows: all.map((member) => ({ name: member.user.name, email: member.user.email, role: member.role, position: member.positionTitle || "—", status: member.status })),
+        insights: [{ title: english ? "Scope" : "Périmètre", body: english ? "All matching collaborators are included, including suspended accounts; access is governed by company permissions." : "Tous les collaborateurs correspondant aux filtres sont inclus, y compris les comptes suspendus. L’accès dépend des permissions de l’entreprise." }],
+        filters: [{ label: english ? "Status" : "Statut", value: statusFilter }, { label: english ? "Search" : "Recherche", value: search || "—" }],
+      };
+      if (format === "CSV") downloadProfessionalCsv(model);
+      else if (format === "EXCEL") downloadProfessionalXlsx(model);
+      else downloadProfessionalPdfV2(model);
+    } catch (error) {
+      setListError(error instanceof Error && error.message === "DIRECTORY_EXPORT_TOO_LARGE"
+        ? (english ? "More than 5,000 results. Narrow the filters before exporting." : "Plus de 5 000 résultats. Affinez les filtres avant l’export.")
+        : (english ? "Unable to export the complete directory. Please retry." : "Impossible d’exporter l’annuaire complet. Réessayez."));
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  async function confirmSuspend(member: EnterpriseMemberItem) {
+    const { confirmSensitiveAction } = await import("@/lib/client-confirmation");
+    const decision = await confirmSensitiveAction({
+      title: english ? "Suspend collaborator" : "Suspendre le collaborateur",
+      description: english ? `${member.user.name} will lose access to this company until reactivated.` : `${member.user.name} perdra l’accès à cette entreprise jusqu’à sa réactivation.`,
+      confirmLabel: english ? "Suspend" : "Suspendre", cancelLabel: english ? "Cancel" : "Annuler", tone: "warning",
+    });
+    if (!decision.confirmed) return;
+    if (await updateMember(member.id, { action: "suspend" }, english ? "Collaborator suspended." : "Collaborateur suspendu.")) setReloadIndex((value) => value + 1);
+  }
 
   async function submitInvite(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -477,6 +578,9 @@ export function EnterpriseMembersPanel({
       const result = await inviteMember(event);
       if (result.ok) {
         setInviteOpen(false);
+        setStatusFilter("INVITED");
+        setPage(1);
+        setReloadIndex((value) => value + 1);
       } else {
         setInviteError(result.message || (locale === "en" ? "Please check the invitation fields." : "Vérifiez les champs d'invitation."));
         setInviteFieldErrors(result.fieldErrors || {});
@@ -504,7 +608,8 @@ export function EnterpriseMembersPanel({
     if (!editingMember) return;
     const form = new FormData(event.currentTarget);
     const nextStatus = form.get("status");
-    await updateMember(
+    setMemberError("");
+    const saved = await updateMember(
       editingMember.id,
       {
         action: "update",
@@ -512,29 +617,41 @@ export function EnterpriseMembersPanel({
         ...(typeof nextStatus === "string" && nextStatus ? { status: nextStatus } : {}),
         positionId: String(form.get("positionId") || ""),
       },
-      "Collaborateur mis à jour."
+      english ? "Collaborator updated." : "Collaborateur mis à jour."
     );
-    setEditingMember(null);
+    if (saved) {
+      setEditingMember(null);
+      setReloadIndex((value) => value + 1);
+    } else {
+      setMemberError(english ? "The changes were not saved. Check the fields and try again." : "La modification n'a pas été enregistrée. Vérifiez les champs et réessayez.");
+    }
   }
 
   return (
     <section className="rounded-2xl border border-dtsc-border bg-dtsc-page p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-xs font-black uppercase tracking-[0.16em] text-cyan-600">Collaborateurs et affectations</p>
-          <h2 className="mt-1 text-lg font-black text-dtsc-ink">Accès, rôles et postes</h2>
+          <p className="text-xs font-black uppercase tracking-[0.16em] text-cyan-600">{english ? "Collaborators and assignments" : "Collaborateurs et affectations"}</p>
+          <h2 className="mt-1 text-lg font-black text-dtsc-ink">{english ? "Access, roles and positions" : "Accès, rôles et postes"}</h2>
           <p className="mt-1 max-w-3xl text-sm font-semibold leading-6 text-dtsc-muted">
-            Invitez les membres, affectez un poste et gardez les permissions lisibles depuis un centre de contrôle unique.
+            {english ? "Invite team members, assign a position and inspect their permissions from one workspace." : "Invitez les membres, affectez un poste et gardez les permissions lisibles depuis un centre de contrôle unique."}
           </p>
         </div>
         <Button type="button" onClick={() => setInviteOpen(true)} className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">
           <MailPlus className="h-4 w-4" />
-          Inviter / affecter
+          {english ? "Invite / assign" : "Inviter / affecter"}
         </Button>
       </div>
 
-      <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-        {[...pendingMembers, ...activeMembers].map((member) => {
+      <div className="mt-4">
+        <EnterpriseAdminListToolbar search={search} onSearchChange={(value) => { setSearch(value); setPage(1); }} searchPlaceholder={english ? "Name, email, position or role…" : "Nom, email, poste ou rôle…"} filters={filterOptions} filter={statusFilter} onFilterChange={(value) => { setStatusFilter(value); setPage(1); }} resultCount={total} locale={locale}>
+          <details className="relative shrink-0"><summary className="flex min-h-11 cursor-pointer list-none items-center rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-xs font-bold text-dtsc-ink [&::-webkit-details-marker]:hidden">{exporting ? (english ? "Exporting…" : "Export…") : (english ? "Export all" : "Tout exporter")}</summary><div className="absolute right-0 z-40 mt-2 w-36 rounded-xl border border-dtsc-border bg-dtsc-surface p-2 shadow-xl">{(["EXCEL", "CSV", "PDF"] as const).map((format) => <button key={format} type="button" disabled={exporting || loadingMembers} onClick={() => void exportDirectory(format)} className="block min-h-10 w-full rounded-lg px-3 text-left text-xs font-bold text-dtsc-ink hover:bg-dtsc-page disabled:opacity-40">{format === "EXCEL" ? "Excel" : format}</button>)}</div></details>
+        </EnterpriseAdminListToolbar>
+      </div>
+      {listError ? <p role="alert" className="mt-3 rounded-xl bg-rose-500/10 p-3 text-sm text-rose-700 dark:text-rose-300">{listError}</p> : null}
+      {loadingMembers ? <p role="status" className="mt-2 text-xs text-dtsc-muted">{english ? "Loading…" : "Chargement…"}</p> : null}
+      <div className="mt-3 grid gap-2">
+        {directory.map((member) => {
           const assignedPosition = positions.find((position) => position.id === member.positionId) || null;
           return (
             <MemberCard
@@ -542,14 +659,15 @@ export function EnterpriseMembersPanel({
               member={member}
               position={assignedPosition}
               onEdit={() => setEditingMember(member)}
-              onSuspend={() => void updateMember(member.id, { action: "suspend" }, "Collaborateur suspendu.")}
-              onRestore={() => void updateMember(member.id, { action: "restore" }, "Collaborateur réactivé.")}
+              onSuspend={() => void confirmSuspend(member)}
+              onRestore={() => void updateMember(member.id, { action: "restore" }, english ? "Collaborator reactivated." : "Collaborateur réactivé.").then((saved) => { if (saved) setReloadIndex((value) => value + 1); })}
               onRemove={() => setMemberToRemove(member)}
             />
           );
         })}
-        {!members.length && <EmptyState text="Aucun collaborateur ou invitation pour cette entreprise." />}
+        {!loadingMembers && !directory.length && !listError ? <EmptyState text={english ? "No collaborator matches the selected filters." : "Aucun collaborateur ne correspond aux filtres sélectionnés."} /> : null}
       </div>
+      <div className="mt-3"><EnterpriseAdminPagination page={page} pageCount={pageCount} onPageChange={setPage} locale={locale} /></div>
 
       <Dialog open={inviteOpen} title={locale === "en" ? "Invite a collaborator" : "Inviter un collaborateur"} description={locale === "en" ? "The collaborator must accept before joining this company." : "Le collaborateur devra accepter l'invitation avant d'accéder à l'entreprise."} onClose={() => { if (!inviting) { setInviteOpen(false); setInviteError(""); setInviteFieldErrors({}); } }} className="h-[92dvh] max-w-4xl">
         <form onSubmit={(event) => void submitInvite(event)} className="grid min-w-0 max-w-full gap-4 md:grid-cols-2">
@@ -577,9 +695,10 @@ export function EnterpriseMembersPanel({
         </form>
       </Dialog>
 
-      <Dialog open={Boolean(editingMember)} title="Modifier le collaborateur" description="Mettez à jour son rôle global, son statut et son poste métier." onClose={() => setEditingMember(null)} className="h-[92dvh] max-w-4xl">
+      <Dialog open={Boolean(editingMember)} title={english ? "Edit collaborator" : "Modifier le collaborateur"} description={english ? "Update the company role, status and position." : "Mettez à jour son rôle global, son statut et son poste métier."} onClose={() => { setEditingMember(null); setMemberError(""); }} className="h-[92dvh] max-w-4xl">
         {editingMember && (
           <form onSubmit={(event) => void submitMemberUpdate(event)} className="grid gap-4 md:grid-cols-2">
+            {memberError ? <p role="alert" className="rounded-xl bg-rose-500/10 p-3 text-sm text-rose-600 md:col-span-2">{memberError}</p> : null}
             <InfoCard label="Collaborateur" value={`${editingMember.user.name} · ${editingMember.user.email}`} />
             <RoleSelect defaultValue={editingMember.role} />
             {editingMember.status === "INVITED" ? (
@@ -590,7 +709,7 @@ export function EnterpriseMembersPanel({
             <PositionSelect positions={positions} defaultValue={editingMember.positionId || ""} />
             <Button className="w-fit rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">
               <UserCog className="h-4 w-4" />
-              Enregistrer
+              {english ? "Save" : "Enregistrer"}
             </Button>
           </form>
         )}
@@ -604,7 +723,7 @@ export function EnterpriseMembersPanel({
         footer={(
           <>
             <Button type="button" variant="secondary" onClick={() => setMemberToRemove(null)}>Annuler</Button>
-            <Button type="button" variant="destructive" onClick={() => { if (memberToRemove) void removeMember(memberToRemove.id); setMemberToRemove(null); }}>Retirer</Button>
+            <Button type="button" variant="destructive" onClick={() => { if (memberToRemove) void removeMember(memberToRemove.id).then((saved) => { if (saved) { setMemberToRemove(null); setReloadIndex((value) => value + 1); } }); }}>Retirer</Button>
           </>
         )}
       >

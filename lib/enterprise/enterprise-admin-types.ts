@@ -18,6 +18,7 @@ export type EnterpriseAdminOrganization = {
 
 export type EnterpriseAdminDashboard = {
   membersCount: number;
+  activeMembersCount: number;
   activeModulesCount: number;
   modulesCount: number;
   hiddenIncompatibleModulesCount: number;

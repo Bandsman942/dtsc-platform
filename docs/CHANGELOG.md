@@ -1,3 +1,11 @@
+## 2026-11-11 — Feature #1107 — Administration entreprise Design 2.0 (candidat v1.10.0, NON LIVRÉ)
+
+- **Lot 1 — Fiabilité et sécurité** : annuaire collaborateur tenant-scoped paginé et filtré, restauration accessible des suspendus, KPIs exacts au-delà des vues de 80 lignes, gestion des erreurs sans fermeture de formulaire, navigation `pending` et validation d’export d’audit par demandes/approbations ERP canoniques.
+- **Lot 2 — UI/UX Design 2.0** : navigation compacte mobile/desktop, checklist repliable, quotas contextualisés, filtres intelligents et rails colorés, recherche, pagination, détails et états lisibles.
+- **Lot 3 — Onze sections** : registres modules, postes, départements, rôles et collaborateurs enrichis ; audit avec filtres action/risque/période ; actions en cours filtrables ; fuseaux horaires IANA complets ; exports Excel/CSV/PDF premiums, périmètres précisés sans troncature silencieuse.
+- **Lot 4 — Rapports & ERP** : génération manuelle d’un snapshot d’administration daté dans `EnterpriseReport` et exports professionnels depuis le module Rapports, permission dédiée `REPORTS.submit`, source serveur, audit des opérations ; pas de duplication des données métiers.
+- Aucun changement Prisma, aucune migration ni variable d’environnement. Documentation, matrice E2E propriétaire et QA : [`FEATURE_1107_ENTERPRISE_ADMIN_DESIGN_2.md`](FEATURE_1107_ENTERPRISE_ADMIN_DESIGN_2.md) et `node scripts/qa-enterprise-admin-design2-1107.mjs`. **E2E final et CI encore requis, pas de merge ni production avant validation explicite.**
+
 ## 2026-11-10 — RETAIL #1105 — Pilotage exécutif multi-boutiques et gouvernance du stock (candidat v1.9.0, NON LIVRÉ)
 
 - **Lot A — Données financières** : sources tenant-scoped pour factures Finance nettes d'avoirs, encaissements réellement confirmés et affectés, créances ouvertes/échues, dépenses approuvées, écritures de résultat postées, opérations Mobile Money (principal distinct des commissions/frais), marges Télécom, trésorerie, ventes historiques POS et alertes de stock. Aucune double comptabilisation ni conversion improvisée de devises ; les lignes comptables non affectées/anciennes boutiques restent dans le consolidé et sont isolées des vues par magasin.

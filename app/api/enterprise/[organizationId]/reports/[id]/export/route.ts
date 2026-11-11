@@ -14,6 +14,7 @@ const REPORT_TYPE_LABELS: Record<string, string> = {
   PROCUREMENT_SUMMARY: "Synthèse des achats",
   FINANCE_OVERVIEW: "Vue d’ensemble financière",
   RETAIL_EXECUTIVE: "Pilotage financier RETAIL — Direction",
+  ENTERPRISE_ADMIN_OVERVIEW: "Pilotage Administration entreprise",
 };
 
 function cell(value: unknown) {

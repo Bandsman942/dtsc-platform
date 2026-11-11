@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { UserStatus } from "@prisma/client";
+import { Prisma, UserStatus } from "@prisma/client";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { sendEnterpriseInvitationEmail } from "@/lib/enterprise-invitations-mail";
@@ -15,6 +15,63 @@ type Params = { params: Promise<{ organizationId: string }> };
 
 function allowedDomains(value: unknown) {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string").map((item) => item.toLowerCase()) : [];
+}
+
+// The administration directory is queried independently of its dashboard snapshot.
+// A fixed `take` on the dashboard must never hide a suspended member or distort totals.
+export async function GET(req: Request, { params }: Params) {
+  const startedAt = Date.now();
+  const session = await getSession();
+  if (!session) return NextResponse.json({ error: "UNAUTHENTICATED" }, { status: 401 });
+  const { organizationId } = await params;
+  const access = await resolveEnterpriseModuleAccess({
+    userId: session.userId,
+    organizationId,
+    moduleCode: "COLLABORATORS_POSITIONS",
+    action: "manage",
+  });
+  if (!access.allowed) return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
+
+  const url = new URL(req.url);
+  const rawPage = Number(url.searchParams.get("page") || 1);
+  const page = Number.isSafeInteger(rawPage) ? Math.min(100_000, Math.max(1, rawPage)) : 1;
+  const rawPageSize = Number(url.searchParams.get("pageSize") || 20);
+  const pageSize = Number.isSafeInteger(rawPageSize) ? Math.min(100, Math.max(10, rawPageSize)) : 20;
+  const search = (url.searchParams.get("search") || "").trim().slice(0, 120);
+  const requestedStatus = (url.searchParams.get("status") || "ALL").toUpperCase();
+  const status = ["ACTIVE", "INVITED", "SUSPENDED"].includes(requestedStatus) ? requestedStatus : null;
+  const where: Prisma.OrganizationMemberWhereInput = {
+    organizationId,
+    removedAt: null,
+    ...(status ? { status } : {}),
+    ...(search ? { OR: [
+      { user: { is: { name: { contains: search, mode: "insensitive" } } } },
+      { user: { is: { email: { contains: search, mode: "insensitive" } } } },
+      { positionTitle: { contains: search, mode: "insensitive" } },
+      { role: { contains: search, mode: "insensitive" } },
+    ] } : {}),
+  };
+  const [items, total, statuses] = await Promise.all([
+    prisma.organizationMember.findMany({
+      where,
+      orderBy: [{ user: { name: "asc" } }, { id: "asc" }],
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+      include: { user: { select: { id: true, name: true, email: true } } },
+    }),
+    prisma.organizationMember.count({ where }),
+    prisma.organizationMember.groupBy({
+      by: ["status"],
+      where: { organizationId, removedAt: null },
+      _count: { _all: true },
+    }),
+  ]);
+  await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, page, pageSize, status: status || "ALL" } });
+  return NextResponse.json({
+    items,
+    pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) },
+    counts: Object.fromEntries(statuses.map((entry) => [entry.status, entry._count._all])),
+  }, { headers: { "Cache-Control": "private, no-store" } });
 }
 
 // Legacy QA marker: canManageEnterpriseAdministration

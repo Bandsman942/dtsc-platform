@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, type FormEvent } from "react";
+import { EnterpriseAdminExportMenu, EnterpriseAdminListToolbar, EnterpriseAdminPagination } from "@/components/enterprise/enterprise-admin-list-toolbar";
 import { Pencil, Plus, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
@@ -8,12 +9,14 @@ import { Input } from "@/components/ui/input";
 import { StatusBadge } from "@/components/workspace/status-badge";
 import type { EnterpriseDepartmentItem, EnterpriseModuleItem, EnterprisePositionItem } from "@/lib/enterprise/enterprise-admin-types";
 import { getEnterpriseModuleDefinition, normalizeEnterpriseModuleCode } from "@/lib/enterprise/module-registry";
+import type { ProfessionalReportExportModel } from "@/lib/reporting/professional-export";
 
 type GuidedAction = "read" | "submit" | "write" | "approve" | "manage";
 type Capability = { moduleCode: string; actions: GuidedAction[] };
 
 type Props = {
   organizationId: string;
+  organizationName?: string;
   departments: EnterpriseDepartmentItem[];
   positions: EnterprisePositionItem[];
   modules: EnterpriseModuleItem[];
@@ -65,18 +68,33 @@ function actionLabel(locale: string | null | undefined, action: GuidedAction) {
   return tx(locale, "Administrer", "Administer");
 }
 
-export function EnterprisePositionsGuidedPanel({ organizationId, departments, positions, modules, locale, onSaved, reloadOnSave = true, allowPermissionsEdit = true }: Props) {
+export function EnterprisePositionsGuidedPanel({ organizationId, organizationName, departments, positions, modules, locale, onSaved, reloadOnSave = true, allowPermissionsEdit = true }: Props) {
   const [editing, setEditing] = useState<EnterprisePositionItem | null>(null);
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [selectedCapabilities, setSelectedCapabilities] = useState<Capability[]>([]);
+  const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState("ALL");
+  const [page, setPage] = useState(1);
 
   const availableModules = useMemo(() => modules.filter((module) => {
     if (!module.isEnabled || !module.registryKnown || module.accessAllowed === false || module.routeKind === "ADMIN_SECTION") return false;
     const definition = getEnterpriseModuleDefinition(normalizeEnterpriseModuleCode(module.canonicalCode || module.moduleCode));
     return Boolean(definition?.permissionPrefixes.length);
   }), [modules]);
+  const filtered = positions.filter((position) => (filter === "ALL" || (filter === "ACTIVE" ? position.isActive : filter === "KEY" ? position.isKeyPosition : !position.isActive)) && `${position.labelFr} ${position.labelEn} ${position.positionCode} ${position.department?.labelFr || ""}`.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()));
+  const pageCount = Math.max(1, Math.ceil(filtered.length / 12));
+  const pageItems = filtered.slice((page - 1) * 12, page * 12);
+  const report: ProfessionalReportExportModel = {
+    title: tx(locale, "Registre des postes", "Position register"), organizationName: organizationName || "DTSC Platform",
+    filenameBase: `dtsc-administration-postes-${organizationId}`, generatedLabel: new Date().toLocaleString(locale === "en" ? "en" : "fr"),
+    kpis: [{ label: tx(locale, "Postes filtrés", "Filtered positions"), value: String(filtered.length) }], chart: [],
+    columns: [{ key: "label", label: tx(locale, "Poste", "Position") }, { key: "department", label: tx(locale, "Département", "Department") }, { key: "status", label: tx(locale, "Statut", "Status") }, { key: "level", label: tx(locale, "Niveau", "Level") }, { key: "key", label: tx(locale, "Poste clé", "Key position") }],
+    rows: filtered.map((item) => ({ label: locale === "en" ? item.labelEn : item.labelFr, department: locale === "en" ? item.department?.labelEn || "—" : item.department?.labelFr || "—", status: item.isActive ? tx(locale, "Actif", "Active") : tx(locale, "Inactif", "Inactive"), level: item.hierarchyLevel, key: item.isKeyPosition ? tx(locale, "Oui", "Yes") : tx(locale, "Non", "No") })),
+    insights: [{ title: tx(locale, "Gouvernance", "Governance"), body: tx(locale, "Les droits effectifs sont calculés à partir des postes, rôles, abonnements et restrictions par module.", "Effective rights depend on positions, roles, subscription and module restrictions.") }],
+    filters: [{ label: tx(locale, "Recherche", "Search"), value: search || "—" }, { label: tx(locale, "Statut", "Status"), value: filter }],
+  };
 
   function openEditor(position: EnterprisePositionItem | null) {
     setEditing(position);
@@ -161,12 +179,18 @@ export function EnterprisePositionsGuidedPanel({ organizationId, departments, po
 
     {message ? <p role="status" className="rounded-xl border border-dtsc-border bg-dtsc-page p-3 text-sm font-bold text-dtsc-ink">{message}</p> : null}
 
-    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-      {positions.map((position) => {
+    <EnterpriseAdminListToolbar search={search} onSearchChange={(value) => { setSearch(value); setPage(1); }} searchPlaceholder={tx(locale, "Rechercher un poste, un département…", "Search positions or departments…")}
+      filters={[{ value: "ALL", label: tx(locale, "Tous", "All"), count: positions.length }, { value: "ACTIVE", label: tx(locale, "Actifs", "Active"), count: positions.filter((item) => item.isActive).length }, { value: "INACTIVE", label: tx(locale, "Inactifs", "Inactive"), count: positions.filter((item) => !item.isActive).length }, { value: "KEY", label: tx(locale, "Postes clés", "Key positions"), count: positions.filter((item) => item.isKeyPosition).length }]}
+      filter={filter} onFilterChange={(value) => { setFilter(value); setPage(1); }} resultCount={filtered.length} locale={locale}>
+      <EnterpriseAdminExportMenu model={report} locale={locale} />
+    </EnterpriseAdminListToolbar>
+
+    <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+      {pageItems.map((position) => {
         const count = permissions(position).length;
         const label = locale === "en" ? position.labelEn : position.labelFr;
         const department = position.department ? (locale === "en" ? position.department.labelEn : position.department.labelFr) : null;
-        return <article key={position.id} className="rounded-2xl border border-dtsc-border bg-dtsc-surface p-4">
+        return <article key={position.id} className="rounded-xl border border-dtsc-border bg-dtsc-surface p-3">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0"><p className="truncate font-black text-dtsc-ink">{label}</p><p className="mt-1 text-xs text-dtsc-muted">{department || tx(locale, "Sans département par défaut", "No default department")}</p></div>
             <StatusBadge tone={position.isActive ? "success" : "neutral"}>{position.isActive ? tx(locale, "Actif", "Active") : tx(locale, "Inactif", "Inactive")}</StatusBadge>
@@ -177,6 +201,7 @@ export function EnterprisePositionsGuidedPanel({ organizationId, departments, po
         </article>;
       })}
     </div>
+    <EnterpriseAdminPagination page={page} pageCount={pageCount} onPageChange={setPage} locale={locale} />
 
     <Dialog open={open} onClose={() => setOpen(false)} title={editing ? tx(locale, "Modifier le poste", "Edit position") : tx(locale, "Nouveau poste", "New position")} description={allowPermissionsEdit ? tx(locale, "Les autorisations sont traduites en droits techniques par le backend et restent limitées à cette entreprise.", "Permissions are translated into technical rights by the backend and remain limited to this company.") : tx(locale, "Les autorisations existantes restent inchangées.", "Existing permissions remain unchanged.")} className="h-[94dvh] max-w-5xl overflow-x-hidden">
       <form onSubmit={submit} className="grid gap-5">

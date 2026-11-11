@@ -51,3 +51,7 @@ La politique couvre durée d’inactivité, domaines autorisés, expiration et v
 ## Audit
 
 Les administrateurs autorisés peuvent filtrer les événements de leur organisation. Les exports sont limités, horodatés, localisés, audités et soumis à approbation si la politique de sécurité l’exige.
+
+Depuis #1107, l’approbation de l’export sensible passe par une demande Core v2 `AUDIT_EXPORT` et une validation canonique sur `EnterpriseRequest`. L’export exige la décision `APPROVED` liée au demandeur et à son entreprise, vérifiée au déclenchement, dans le worker et au téléchargement. L’export complet du journal reste CSV sécurisé ; les exports Excel/PDF interactifs du navigateur sont explicitement des extraits de page.
+
+Le tableau de bord peut être enregistré en snapshot `ENTERPRISE_ADMIN_OVERVIEW` dans le module Rapports par un utilisateur disposant aussi de `REPORTS.submit`. Il ne peut pas renseigner ses propres chiffres : les indicateurs sont recalculés côté serveur. Les rapports générés, leur identité de créateur et leur export restent régis par le modèle `EnterpriseReport` et le RBAC existants.
