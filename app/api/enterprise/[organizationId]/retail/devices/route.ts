@@ -7,6 +7,7 @@ import { retailDeviceProfileUpsertSchema } from "@/lib/enterprise/retail/custome
 import { authorizeRetailRequest, retailErrorResponse } from "@/lib/enterprise/retail/http";
 import { getRetailCustomerPaymentPermissions } from "@/lib/enterprise/retail/permissions";
 import { RETAIL_OWNER_ROLES, retailSitesForCapability } from "@/lib/enterprise/retail/site-access";
+import { readRetailListDateRange } from "@/lib/enterprise/retail/list-date-range";
 import { prisma } from "@/lib/prisma";
 
 type Params = { params: Promise<{ organizationId: string }> };
@@ -32,8 +33,9 @@ export async function GET(req: Request, { params }: Params) {
   const search = (url.searchParams.get("search") || "").trim().slice(0, 120);
   const siteId = (url.searchParams.get("siteId") || "").trim();
   const deviceType = (url.searchParams.get("deviceType") || "").trim();
-  const from = url.searchParams.get("from");
-  const to = url.searchParams.get("to");
+  let range: Awaited<ReturnType<typeof readRetailListDateRange>>;
+  try { range = await readRetailListDateRange(req, organizationId); }
+  catch (error) { return retailErrorResponse(error, "RETAIL_DEVICE_LIST_FAILED"); }
   if (siteId && !admin && !scope?.siteIds.includes(siteId)) return NextResponse.json({ error: "RETAIL_SITE_ACCESS_DENIED" }, { status: 403 });
   const where: Prisma.EnterpriseRetailDeviceProfileWhereInput = {
     organizationId, archivedAt: null,
@@ -42,8 +44,8 @@ export async function GET(req: Request, { params }: Params) {
     ...(search ? { OR: [{ code: { contains: search, mode: "insensitive" } },
       { name: { contains: search, mode: "insensitive" } },
       { deviceType: { contains: search, mode: "insensitive" } }] } : {}),
-    ...((from || to) ? { createdAt: { ...(from && /^\d{4}-\d{2}-\d{2}$/.test(from) ? { gte: new Date(from + "T00:00:00.000Z") } : {}),
-      ...(to && /^\d{4}-\d{2}-\d{2}$/.test(to) ? { lte: new Date(to + "T23:59:59.999Z") } : {}) } } : {}),
+    ...((range.from || range.toExclusive) ? { createdAt: { ...(range.from ? { gte: range.from } : {}),
+      ...(range.toExclusive ? { lt: range.toExclusive } : {}) } } : {}),
   };
   const [items, total] = await Promise.all([
     prisma.enterpriseRetailDeviceProfile.findMany({
