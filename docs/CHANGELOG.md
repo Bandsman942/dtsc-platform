@@ -1,4 +1,4 @@
-## 2026-11-11 — Candidate 1.11.1 — Consolidation POS Retail (branche sans déploiement)
+## 2026-11-11 — Candidate 1.12.0 — Consolidation POS Retail (branche sans déploiement)
 
 - Projet en cinq lots sur `fix/retail-pos-five-lots-20261111`. Le mode hors connexion Finance prépare exclusivement une **facture brouillon** après revalidation serveur du prix et des taxes ; il ne valide, n'émet ni n'encaisse automatiquement. Les ventes directes historiques ne sont pas rejouées à travers Finance.
 - Menus publics accessibles au survol de souris avec maintien du clic et du focus clavier.

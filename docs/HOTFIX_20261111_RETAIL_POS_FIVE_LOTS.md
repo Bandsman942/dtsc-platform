@@ -1,4 +1,4 @@
-# Consolidation RETAIL POS — cinq lots, candidat 1.11.1 du 11 novembre 2026
+# Consolidation RETAIL POS — cinq lots, candidat 1.12.0 du 11 novembre 2026
 
 ## Politique de livraison
 
