@@ -14,7 +14,7 @@
 3. **Mise en service** : le score 15/15 est présenté comme la validation des prérequis Finance, et non une garantie générale d'offline, équipements ou conformité.
 4. **Équipements POS** : création et modification de profils depuis la vue, recherche, filtrage, pagination frontend, affectation boutique et signalement non trompeur des interfaces matérielles. Le pilote matériel et le test physique restent à implémenter.
 5. **Péremptions** : recherche serveur par nom/code article, dates d'expiration, statut de gravité ; contrôles correspondants dans l'interface, tout en préservant la pagination SQL et l'isolation de boutique.
-6. **Paiements Finance** : recherche serveur par numéro de paiement, facture ou boutique ; filtres calendaires sur le registre canonique ; interface correspondante sans créer un ledger Retail parallèle.
+6. **Paiements Finance et historiques** : recherche et filtres calendaires côté serveur ; menus contextuels de consultation de facture et encaissements pour les paiements Finance ; aucun nouveau ledger.
 7. **Commandes omnicanales** : pagination navigation UI, filtres de statut, mode de livraison, période et recherche par référence/titre côté serveur, périmètre d’entreprise/boutique préservé.
 
 ## Travaux non achevés — ne pas interpréter la branche comme une livraison des cinq lots
@@ -30,7 +30,7 @@
 - [ ] Unification source de commande et vente pour POS, omnicanal et facture Finance ; transitions et états séparés.
 - [ ] Historique fiable des promotions/remises/taxes appliquées sur les factures canoniques.
 - [ ] Unification retours et avoirs POS historiques/Finance/omnicanal sans double remboursement.
-- [ ] Recherche, dates et pagination de l'ensemble du suivi et non uniquement des paiements Finance.
+- [x] Recherche, dates et pagination des deux registres de paiement ; restent à ajouter les exports et actions contextuelles complètes.
 
 ### Lot 3 — Stock et équipement
 - [ ] Avertissement stock WARN réellement propagé dans toutes les opérations et permissions.
