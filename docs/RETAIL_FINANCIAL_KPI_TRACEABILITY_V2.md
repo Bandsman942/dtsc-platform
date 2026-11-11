@@ -16,7 +16,7 @@
 - **Lot 2, tranche A (implémentée, non certifiée) :** API GET `/api/enterprise/[organizationId]/retail/financial-drilldown`, lecture seule et pagination bornée des douze autres cartes (invoices, allocations, créances, recettes Finance, écritures postées, trésorerie, dépenses, commissions, marge Télécom et POS historique).
 - **Lot 2, tranche B (implémentée, non certifiée) :** composant `RetailFinancialDrilldown` accessible depuis les cartes autorisées, filtres dates/boutique/devise/recherche, sous-totaux indépendants des pages, colonnes de preuves, liens vers les modules concernés via `buildEnterpriseObjectDeepLink`.
 - **Contrôle serveur indépendant par métrique :** rôle OWNER/ADMIN entreprise et droit RETAIL_POS, puis modules souscrits : FINANCE_ACCOUNTING / FINANCE_RECEIVABLES / FINANCE_PAYMENTS / FINANCE_BUDGETS / FINANCE_TREASURY / MOBILE_MONEY_AGENCY / TELCO_TOPUPS.
-- **Boutiques historiques :** l'API de détail accepte les boutiques archivées de l'organisation et leur conserve leur nom ; ne supprime pas les archives. Aucun droit de consultation inter-tenant n'est déduit d'un identifiant fourni par le navigateur.
+- **Boutiques historiques :** l'API de détail et le tableau de bord principal conservent les boutiques archivées dans leurs agrégats historiques, avec statut explicite. Aucun droit de consultation inter-tenant n'est déduit d'un identifiant fourni par le navigateur.
 
 **Important :** ce détail reproduit les sources et filtres existants, mais n'est pas encore un rapprochement certifié ni un E2E. L'écran affiche des montants distincts en devise native et une somme non déterminée pour la trésorerie incomplète. Les exports exhaustifs restent hors de ce lot et relèvent de #1110.
 
@@ -25,7 +25,7 @@ Ces éléments ne créent aucune donnée comptable et ne modifient aucune écrit
 ## 2. Écarts toujours ouverts (ne pas déclarer corrigés)
 
 1. **Trésorerie disponible** : première correction de non-substitution et de visibilité des montants manquants effectuée. Restent à construire : lecture détaillée des comptes, rapprochements, réservations, historiques à date, taux de couverture et audit serveur indépendant.
-2. **Périmètre historique** : `site-overview/route.ts` initialise les boutiques avec `status: ACTIVE` et `archivedAt: null`. Les agrégats anciens des boutiques archivées doivent figurer séparément dans la consolidation, sans exposer de faux « sites actifs ».
+2. **Périmètre historique** : correction d’exclusion des boutiques archivées effectuée dans le dashboard principal. Les sites historiques sont identifiés et conservent leurs agrégats sous leur véritable boutique. Restent à vérifier sur fixtures réelles : états de stock actuels vs flux historiques, ventilation comptable et pagination des boutiques en grand volume.
 3. **Soldes à date** : créances ouvertes/échues et comptes financiers sont des soldes présents ; ne jamais les présenter comme une reconstitution historique à partir des dates `from/to`.
 4. **Avoirs sur factures de période** : `invoices` est une cohorte d'émission valorisée nette des avoirs présents ; il faut produire une vue « avoirs émis pendant la période » distincte.
 5. **Comptes non attribués** : pas d'attribution boutique inventée, et rapprochement ledger/boutiques par devise.
