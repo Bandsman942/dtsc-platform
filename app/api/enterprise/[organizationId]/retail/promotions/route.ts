@@ -13,9 +13,10 @@ export async function GET(req: Request, { params }: Params) {
   const { organizationId } = await params;
   const auth = await authorizeRetailRequest(req, organizationId, "RETAIL_POS", "read");
   if (!auth.ok) return auth.response;
-  const { page, pageSize } = retailListParams(req);
+  const { page, pageSize, search, from, to } = retailListParams(req);
   try {
-    const result = await listRetailPromotions(organizationId, page, pageSize);
+    const result = await listRetailPromotions(organizationId, page, pageSize, { search, from,
+      to: to ? new Date(to.getTime() + 86400000 - 1) : null });
     await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "retail-promotions", action: "list", page } });
     return NextResponse.json(result);
   } catch (error) {

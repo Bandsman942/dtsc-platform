@@ -14,9 +14,13 @@ export async function GET(req: Request, { params }: Params) {
   let scope: Awaited<ReturnType<typeof retailSitesForCapability>>;
   try { scope = await retailSitesForCapability(organizationId, auth.session.userId, "VIEW_SALES"); }
   catch (error) { return retailErrorResponse(error, "RETAIL_SITE_ACCESS_DENIED"); }
-  const { page, pageSize, status, search } = retailListParams(req);
+  const { page, pageSize, status, search, from, to } = retailListParams(req);
+  const inclusiveTo = to ? new Date(to.getTime() + 86400000 - 1) : null;
   const where = {
     organizationId,
+    ...((from || inclusiveTo) ? { createdAt: {
+      ...(from ? { gte: from } : {}), ...(inclusiveTo ? { lte: inclusiveTo } : {}),
+    } } : {}),
     ...(scope.isolationEnabled ? { sale: { siteId: { in: scope.siteIds } } } : {}),
     ...(status ? { status } : {}),
     ...(search ? { OR: [{ number: { contains: search, mode: "insensitive" as const } }, { sale: { number: { contains: search, mode: "insensitive" as const } } }] } : {}),
