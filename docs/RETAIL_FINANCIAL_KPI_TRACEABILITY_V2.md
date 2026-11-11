@@ -1,7 +1,7 @@
 # RETAIL — Traçabilité financière v2 (issue #1117)
 
-**Statut : première tranche développée, non livrable / E2E non validé.**  
-**Branche isolée :** `feat/retail-financial-kpi-traceability-v2`  
+**Statut : lots 1 et 2 partiellement codés, non livrable / E2E non validé.**  
+**Branche de livraison conforme :** `feat/1117-retail-financial-kpi-traceability-v2` (synthèse de la branche de travail initiale, conservée à titre d'archive).  
 **Base :** `main@c85b8f845a148bc3c9df64cdb5fc9d07b8e446c9` (PR #1111 fusionnée).  
 **Dépendances parallèles :** PR #1114 et #1115. Pas de fusion, preview, migration ou déploiement de cette branche.
 
@@ -13,8 +13,8 @@
 - Nouveau test de contrat `pnpm qa:retail-financial-kpi-v2` ; aucun test existant désactivé.
 - Première correction P0 : les comptes sans `availableBalance` n'utilisent plus `operationalBalance` comme substitut. Le serveur transmet la couverture manquante jusqu'aux consolidations, cartes et exports sous la mention « Non déterminé » ; aucun montant disponible global n'est revendiqué pour ce périmètre incomplet.
 - Le drill-down COGS validé en #1111 est conservé, sans changement de calcul ni de permission.
-- **Lot 2, tranche A :** API GET `/api/enterprise/[organizationId]/retail/financial-drilldown`, lecture seule et pagination bornée des douze autres cartes (invoices, allocations, créances, recettes Finance, écritures postées, trésorerie, dépenses, commissions, marge Télécom et POS historique).
-- **Lot 2, tranche B :** composant `RetailFinancialDrilldown` accessible depuis les cartes autorisées, filtres dates/boutique/devise/recherche, sous-totaux indépendants des pages, colonnes de preuves, liens vers les modules concernés via `buildEnterpriseObjectDeepLink`.
+- **Lot 2, tranche A (implémentée, non certifiée) :** API GET `/api/enterprise/[organizationId]/retail/financial-drilldown`, lecture seule et pagination bornée des douze autres cartes (invoices, allocations, créances, recettes Finance, écritures postées, trésorerie, dépenses, commissions, marge Télécom et POS historique).
+- **Lot 2, tranche B (implémentée, non certifiée) :** composant `RetailFinancialDrilldown` accessible depuis les cartes autorisées, filtres dates/boutique/devise/recherche, sous-totaux indépendants des pages, colonnes de preuves, liens vers les modules concernés via `buildEnterpriseObjectDeepLink`.
 - **Contrôle serveur indépendant par métrique :** rôle OWNER/ADMIN entreprise et droit RETAIL_POS, puis modules souscrits : FINANCE_ACCOUNTING / FINANCE_RECEIVABLES / FINANCE_PAYMENTS / FINANCE_BUDGETS / FINANCE_TREASURY / MOBILE_MONEY_AGENCY / TELCO_TOPUPS.
 - **Boutiques historiques :** l'API de détail accepte les boutiques archivées de l'organisation et leur conserve leur nom ; ne supprime pas les archives. Aucun droit de consultation inter-tenant n'est déduit d'un identifiant fourni par le navigateur.
 
