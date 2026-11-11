@@ -1,11 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { ArrowLeft, FileSearch, RefreshCw, Search, ShieldCheck } from "lucide-react";
+import { ArrowLeft, FileSpreadsheet, FileText, FileSearch, RefreshCw, Search, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { customerFacingError } from "@/lib/customer-facing-language";
 import { buildEnterpriseObjectDeepLink } from "@/lib/enterprise/cross-module/deep-links";
+import { buildRetailFinancialDrilldownExport } from "@/lib/enterprise/retail/financial-drilldown-export";
+import { downloadProfessionalCsv, downloadProfessionalXlsx } from "@/lib/reporting/professional-export";
+import { downloadProfessionalPdfV2 } from "@/lib/reporting/professional-pdf-v2";
 import { RETAIL_METRIC_DEFINITIONS, retailMetricTimeCaption } from "@/lib/enterprise/retail/financial-metric-definitions";
 import type { RetailFinancialTrace, RetailTraceResult } from "@/lib/enterprise/retail/financial-drilldown";
 
@@ -41,8 +44,8 @@ const formatAmount = (value: string | null, currency: string, en: boolean) => va
   ? en ? "Not determined" : "Non déterminé"
   : `${new Intl.NumberFormat(en ? "en-US" : "fr-FR", { maximumFractionDigits: 2 }).format(Number(value))} ${currency}`;
 
-export function RetailFinancialDrilldown({ organizationId, locale, period, metric, initialSiteId, initialCurrency, sites, onBack }: {
-  organizationId: string; locale: "fr" | "en"; metric: RetailFinancialTrace;
+export function RetailFinancialDrilldown({ organizationId, organizationName, locale, period, metric, initialSiteId, initialCurrency, sites, onBack }: {
+  organizationId: string; organizationName: string; locale: "fr" | "en"; metric: RetailFinancialTrace;
   period: { from: string; to: string }; initialSiteId: string; initialCurrency: string;
   sites: Array<{ id: string; name: string }>; onBack: () => void;
 }) {
@@ -82,6 +85,16 @@ export function RetailFinancialDrilldown({ organizationId, locale, period, metri
   const uniqueSites = [...new Map(allSites.map((site) => [site.id, site])).values()];
   const currencies = [...new Set([initialCurrency, ...(data?.buckets || []).map((item) => item.currencyCode)].filter(Boolean))].sort();
   const totalPages = Math.max(1, Math.ceil((data?.totalLines || 0) / pageSize));
+  const download = (format: "csv" | "xlsx" | "pdf") => {
+    if (!data) return;
+    const model = buildRetailFinancialDrilldownExport({
+      analysis: data, organizationName, locale, from, to, search: submittedSearch,
+      siteName: uniqueSites.find((site) => site.id === siteId)?.name, currency,
+    });
+    if (format === "csv") downloadProfessionalCsv(model);
+    else if (format === "xlsx") downloadProfessionalXlsx(model);
+    else downloadProfessionalPdfV2(model);
+  };
 
   return <section className="min-w-0 space-y-4 rounded-2xl border border-dtsc-border bg-dtsc-surface p-3 sm:p-5" data-testid="retail-financial-drilldown">
     <header className="flex flex-wrap items-start justify-between gap-2">
@@ -105,6 +118,12 @@ export function RetailFinancialDrilldown({ organizationId, locale, period, metri
       <label className="text-xs font-semibold text-dtsc-muted">{en ? "Rows per page" : "Lignes/page"}<select value={pageSize} onChange={(event) => { setPageSize(Number(event.target.value)); setPage(1); }} className="mt-1 min-h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-page px-2 text-sm">{[25, 50, 100].map((size) => <option key={size} value={size}>{size}</option>)}</select></label>
       <div className="min-w-0"><label htmlFor="retail-financial-trace-search" className="text-xs font-semibold text-dtsc-muted">{en ? "Search source" : "Rechercher une pièce"}</label><div className="mt-1 flex gap-1"><input id="retail-financial-trace-search" value={search} maxLength={90} onChange={(event) => setSearch(event.target.value)} className="min-h-11 min-w-0 flex-1 rounded-xl border border-dtsc-border bg-dtsc-page px-2 text-sm" /><Button type="submit" variant="outline" aria-label={en ? "Search" : "Rechercher"}><Search className="h-4 w-4" /></Button></div></div>
     </form>
+    <div className="flex flex-wrap gap-2" aria-label={en ? "Export displayed source page" : "Exporter la page de pièces sources"}>
+      <Button type="button" variant="outline" disabled={!data || loading} onClick={() => download("xlsx")}><FileSpreadsheet className="h-4 w-4" />Excel</Button>
+      <Button type="button" variant="outline" disabled={!data || loading} onClick={() => download("csv")}>CSV</Button>
+      <Button type="button" variant="outline" disabled={!data || loading} onClick={() => download("pdf")}><FileText className="h-4 w-4" />PDF</Button>
+      <span className="self-center text-xs text-dtsc-muted">{en ? "Current page only, full totals in summary" : "Page courante uniquement, totaux complets dans la synthèse"}</span>
+    </div>
     {error ? <p role="alert" className="rounded-xl border border-rose-500/40 bg-rose-500/10 p-3 text-sm text-rose-800 dark:text-rose-200">{error}</p> : null}
     {loading ? <p role="status" className="text-sm text-dtsc-muted">{en ? "Reading authorized sources…" : "Lecture des sources autorisées…"}</p> : null}
     {data ? <>
