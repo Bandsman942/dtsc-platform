@@ -19,14 +19,20 @@ export default async function RetailCommercialControlPage() {
     action: "read",
   });
   if (!access.allowed) redirect("/enterprise-modules/RETAIL_POS");
-  const member = await prisma.organizationMember.findFirst({
-    where: { organizationId, userId: user.id, status: "ACTIVE", removedAt: null },
-    select: { role: true },
-  });
-  if (!member || !RETAIL_OWNER_ROLES.has(member.role)) notFound();
+  const [member, organization] = await Promise.all([
+    prisma.organizationMember.findFirst({
+      where: { organizationId, userId: user.id, status: "ACTIVE", removedAt: null },
+      select: { role: true },
+    }),
+    prisma.organization.findFirst({
+      where: { id: organizationId, organizationType: "CLIENT", status: "ACTIVE", deletedAt: null },
+      select: { name: true },
+    }),
+  ]);
+  if (!member || !organization || !RETAIL_OWNER_ROLES.has(member.role)) notFound();
   return (
     <AppShell user={user} hideContextualBack>
-      <RetailCommercialWorkspace organizationId={organizationId} />
+      <RetailCommercialWorkspace organizationId={organizationId} organizationName={organization.name} />
     </AppShell>
   );
 }
