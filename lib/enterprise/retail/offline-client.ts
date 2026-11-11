@@ -120,19 +120,31 @@ async function openRetailOfflineDb() {
   return requestResult(request);
 }
 
-async function getOrCreateOrganizationKey(db: IDBDatabase, organizationId: string): Promise<CryptoKey> {
-  const transaction = db.transaction(KEY_STORE, "readonly");
-  const done = transactionDone(transaction);
-  const existing = await requestResult(transaction.objectStore(KEY_STORE).get(organizationId) as IDBRequest<{ id: string; key: CryptoKey } | undefined>);
-  await done;
-  if (existing?.key) return existing.key;
+async function getOrCreateOrganizationKey(db: IDBDatabase, ownerScope: string): Promise<CryptoKey> {
+  async function readExisting(): Promise<CryptoKey | null> {
+    const transaction = db.transaction(KEY_STORE, "readonly");
+    const done = transactionDone(transaction);
+    const row = await requestResult(transaction.objectStore(KEY_STORE).get(ownerScope) as IDBRequest<{ id: string; key: CryptoKey } | undefined>);
+    await done;
+    return row?.key || null;
+  }
+  const existing = await readExisting();
+  if (existing) return existing;
 
-  const key = await crypto.subtle.generateKey({ name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
-  const write = db.transaction(KEY_STORE, "readwrite");
-  const writeDone = transactionDone(write);
-  write.objectStore(KEY_STORE).put({ id: organizationId, key, createdAt: new Date().toISOString() });
-  await writeDone;
-  return key;
+  const candidate = await crypto.subtle.generateKey({ name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
+  try {
+    const transaction = db.transaction(KEY_STORE, "readwrite");
+    const done = transactionDone(transaction);
+    // add() is deliberate: put() could silently overwrite the key created
+    // concurrently in another tab and make its encrypted queue unreadable.
+    transaction.objectStore(KEY_STORE).add({ id: ownerScope, key: candidate, createdAt: new Date().toISOString() });
+    await done;
+    return candidate;
+  } catch (error) {
+    const raced = await readExisting();
+    if (raced) return raced;
+    throw error;
+  }
 }
 
 async function encryptJson(key: CryptoKey, value: unknown): Promise<EncryptedValue> {
