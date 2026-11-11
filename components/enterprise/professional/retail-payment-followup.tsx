@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { RetailProfessionalListExport } from "@/components/enterprise/professional/retail-professional-list-export";
 import { CalendarDays, Search } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -92,7 +93,7 @@ function canonicalStatusLabel(status: string, locale: CustomerFacingLocale) {
   return names[status]?.[locale] || status;
 }
 
-export function RetailPaymentFollowup({ organizationId, locale }: { organizationId: string; locale: CustomerFacingLocale }) {
+export function RetailPaymentFollowup({ organizationId, locale, organizationName }: { organizationId: string; locale: CustomerFacingLocale; organizationName: string }) {
   const [capabilities, setCapabilities] = useState<Capabilities | null>(null);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [status, setStatus] = useState("");
@@ -253,6 +254,35 @@ export function RetailPaymentFollowup({ organizationId, locale }: { organization
       </div>
       {canonicalActive || canonicalLoading || canonicalError ? <div className="rounded-xl border border-cyan-500/30 bg-dtsc-page p-3">
         <h3 className="text-sm font-black text-dtsc-ink">{locale === "en" ? "Canonical Finance invoice payments" : "Paiements des factures Finance du comptoir"}</h3>
+        <div className="mt-2"><RetailProfessionalListExport<CanonicalPayment>
+          organizationName={organizationName} locale={locale}
+          title={locale === "en" ? "Retail invoice payments — Finance" : "Paiements des factures RETAIL — Finance"}
+          filenameBase="retail-finance-payments"
+          sourceUrl={`/api/enterprise/${organizationId}/retail/payments/invoices?${new URLSearchParams({
+            ...(canonicalStatus ? { status: canonicalStatus } : {}),
+            ...(debouncedSearch ? { search: debouncedSearch } : {}),
+            ...(dateFrom ? { from: dateFrom } : {}), ...(dateTo ? { to: dateTo } : {}),
+            ...(siteId ? { siteId } : {}),
+          })}`}
+          columns={[
+            { key: "createdAt", label: locale === "en" ? "Created" : "Créé le" },
+            { key: "payment", label: locale === "en" ? "Payment" : "Paiement" },
+            { key: "invoice", label: locale === "en" ? "Invoice" : "Facture" },
+            { key: "site", label: locale === "en" ? "Store" : "Boutique" },
+            { key: "amount", label: locale === "en" ? "Amount" : "Montant" },
+            { key: "currency", label: locale === "en" ? "Currency" : "Devise" },
+            { key: "method", label: locale === "en" ? "Method" : "Moyen" },
+            { key: "status", label: locale === "en" ? "Status" : "Statut" },
+          ]}
+          toRow={(item) => ({ createdAt: new Date(item.createdAt).toLocaleString(locale), payment: item.number,
+            invoice: item.invoice.number, site: item.site.name, amount: Number(item.amount),
+            currency: item.currencyCode, method: customerFacingPaymentMethod(item.methodType, locale),
+            status: canonicalStatusLabel(item.status, locale) })}
+          filters={[{ label: locale === "en" ? "From" : "Du", value: dateFrom || "—" },
+            { label: locale === "en" ? "To" : "Au", value: dateTo || "—" },
+            { label: locale === "en" ? "Status" : "Statut", value: canonicalStatus || (locale === "en" ? "All" : "Tous") },
+            { label: locale === "en" ? "Store" : "Boutique", value: sites.find((site) => site.id === siteId)?.name || (locale === "en" ? "All" : "Toutes") }]}
+        /></div>
         <p className="mt-1 text-xs text-dtsc-muted">{locale === "en" ? "These are actual Finance payments linked to a Retail invoice, not duplicate Retail transactions. Reconcile them in Collections." : "Il s’agit des paiements Finance réellement rattachés aux factures Retail, et non de transactions Retail en double. Leur traitement se fait dans Encaissements."}</p>
         <div className="mt-3 flex flex-wrap gap-2" role="group" aria-label={locale === "en" ? "Finance payment status" : "Statut des paiements Finance"}>
           {["", "DRAFT", "PENDING_APPROVAL", "CONFIRMED", "RECONCILED", "CANCELLED", "REVERSED"].map((state) => <button key={state || "ALL"} type="button" onClick={() => { setCanonicalStatus(state); setCanonicalPage(1); }} className={`min-h-10 rounded-full border px-3 text-xs font-bold ${canonicalStatus === state ? "border-dtsc-ink bg-dtsc-ink text-white" : "border-dtsc-border text-dtsc-ink"}`}>{state ? canonicalStatusLabel(state, locale) : copy.all}</button>)}
@@ -272,6 +302,31 @@ export function RetailPaymentFollowup({ organizationId, locale }: { organization
         <summary className="flex min-h-12 cursor-pointer items-center justify-between gap-3 px-3 py-2 text-sm font-black text-dtsc-ink"><span>{locale === "en" ? "Legacy channel transactions" : "Transactions des canaux historiques"}</span><span className="text-xs text-dtsc-muted">{locale === "en" ? "Expand" : "Déplier"}</span></summary>
       <div className="border-t border-dtsc-border p-3">
       <section aria-label={locale === "en" ? "Legacy payment channels" : "Canaux de paiement historiques"}>
+        <RetailProfessionalListExport<Payment>
+          organizationName={organizationName} locale={locale}
+          title={locale === "en" ? "Historic Retail channel transactions" : "Transactions historiques des canaux RETAIL"}
+          filenameBase="retail-historic-payments"
+          sourceUrl={`/api/enterprise/${organizationId}/retail/payments?${new URLSearchParams({
+            ...(status ? { status } : {}),
+            ...(debouncedSearch ? { search: debouncedSearch } : {}),
+            ...(dateFrom ? { from: dateFrom } : {}), ...(dateTo ? { to: dateTo } : {}),
+          })}`}
+          columns={[
+            { key: "createdAt", label: locale === "en" ? "Created" : "Créé le" },
+            { key: "reference", label: locale === "en" ? "Reference" : "Référence" },
+            { key: "amount", label: locale === "en" ? "Amount" : "Montant" },
+            { key: "currency", label: locale === "en" ? "Currency" : "Devise" },
+            { key: "method", label: locale === "en" ? "Method" : "Moyen" },
+            { key: "status", label: locale === "en" ? "Status" : "Statut" },
+          ]}
+          toRow={(item) => ({ createdAt: new Date(item.createdAt).toLocaleString(locale),
+            reference: item.clientReference, amount: Number(item.amount), currency: item.currencyCode,
+            method: customerFacingPaymentMethod(item.methodType, locale),
+            status: customerFacingPaymentStatus(item.status, locale) })}
+          filters={[{ label: locale === "en" ? "From" : "Du", value: dateFrom || "—" },
+            { label: locale === "en" ? "To" : "Au", value: dateTo || "—" },
+            { label: locale === "en" ? "Status" : "Statut", value: status || (locale === "en" ? "All" : "Tous") }]}
+        />
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <p className="max-w-3xl text-xs leading-5 text-dtsc-muted">{copy.intro}</p>
           <button type="button" onClick={() => void loadPayments()} className="min-h-10 w-full rounded-xl border border-dtsc-border px-3 text-sm font-bold text-dtsc-ink hover:bg-black/5 sm:w-auto">

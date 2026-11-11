@@ -118,11 +118,11 @@ export async function renderRetailModulePage(moduleCode: "RETAIL_POS" | "MOBILE_
               ) : posSection.id === "offline" ? (
                 <RetailOfflineContinuity organizationId={organizationId} locale={locale} />
               ) : posSection.id === "omnichannel" ? (
-                <RetailOmnichannelPanel organizationId={organizationId} locale={locale} />
+                <RetailOmnichannelPanel organizationId={organizationId} locale={locale} organizationName={organization.name} />
               ) : posSection.id === "payments" ? (
-                <RetailPaymentFollowup organizationId={organizationId} locale={locale} />
+                <RetailPaymentFollowup organizationId={organizationId} locale={locale} organizationName={organization.name} />
               ) : posSection.id === "equipment" ? (
-                <RetailDeviceReadiness organizationId={organizationId} locale={locale} />
+                <RetailDeviceReadiness organizationId={organizationId} locale={locale} organizationName={organization.name} />
               ) : posSection.id === "readiness" ? (
                 <RetailGlobalReadiness organizationId={organizationId} locale={locale} />
               ) : posSection.id === "activation" ? (
@@ -130,7 +130,7 @@ export async function renderRetailModulePage(moduleCode: "RETAIL_POS" | "MOBILE_
               ) : posSection.id === "inventory" ? (
                 <RetailInventoryPolicySettings organizationId={organizationId} locale={locale} />
               ) : posSection.id === "alerts" ? (
-                <RetailExpiryAlertsPanel organizationId={organizationId} locale={locale} />
+                <RetailExpiryAlertsPanel organizationId={organizationId} locale={locale} organizationName={organization.name} />
               ) : null}
             </RetailPosSectionDetail>
           ) : <RetailPosSectionDirectory locale={locale} canManage={canManagePos} capabilities={posCapabilities} />
