@@ -5,6 +5,7 @@ import { listRetailPriceConditionsPage, upsertRetailPriceCondition } from "@/lib
 import { retailPriceConditionUpsertSchema } from "@/lib/enterprise/retail/commercial-schemas";
 import { authorizeRetailRequest, retailErrorResponse, retailListParams } from "@/lib/enterprise/retail/http";
 import { getRetailCommercialPermissions } from "@/lib/enterprise/retail/permissions";
+import { readRetailListDateRange } from "@/lib/enterprise/retail/list-date-range";
 
 type Params = { params: Promise<{ organizationId: string }> };
 
@@ -14,9 +15,10 @@ export async function GET(req: Request, { params }: Params) {
   const auth = await authorizeRetailRequest(req, organizationId, "RETAIL_POS", "read");
   if (!auth.ok) return auth.response;
   try {
-    const { page, pageSize, search, from, to } = retailListParams(req);
+    const { page, pageSize, search } = retailListParams(req);
+    const { from, toExclusive } = await readRetailListDateRange(req, organizationId);
     const data = await listRetailPriceConditionsPage(organizationId, { page, pageSize, search, from,
-      to: to ? new Date(to.getTime() + 86400000 - 1) : null });
+      to: toExclusive ? new Date(toExclusive.getTime() - 1) : null });
     await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt,
       metadata: { organizationId, domain: "retail-pricing", action: "list-conditions", count: data.items.length, page } });
     return NextResponse.json(data);
