@@ -45,6 +45,10 @@ const ERROR_MESSAGES: Record<string, Bilingual> = {
     fr: "Impossible d'effacer les données locales : des brouillons restent en attente, rejetés ou en conflit. Réconciliez-les d'abord.",
     en: "Local data cannot be cleared: some drafts remain pending, rejected or in conflict. Reconcile them first.",
   },
+  RETAIL_OFFLINE_UUID_ACTOR_MISMATCH: {
+    fr: "Cette opération hors connexion appartient à un autre collaborateur. Sa synchronisation nécessite la session de son préparateur et des droits actifs.",
+    en: "This offline operation belongs to another staff member. Synchronize with its original creator's session and active permissions.",
+  },
   RETAIL_OFFLINE_UUID_PAYLOAD_MISMATCH: {
     fr: "Cette référence hors connexion a déjà été utilisée avec une autre vente ou boutique. Vérifiez le journal avant de réessayer.",
     en: "This offline reference was already used with a different sale or store. Review the operation log before retrying.",
