@@ -5,6 +5,7 @@ import { listRetailPromotions, upsertRetailPromotion } from "@/lib/enterprise/re
 import { retailPromotionUpsertSchema } from "@/lib/enterprise/retail/commercial-schemas";
 import { authorizeRetailRequest, retailErrorResponse, retailListParams } from "@/lib/enterprise/retail/http";
 import { getRetailCommercialPermissions } from "@/lib/enterprise/retail/permissions";
+import { readRetailListDateRange } from "@/lib/enterprise/retail/list-date-range";
 
 type Params = { params: Promise<{ organizationId: string }> };
 
@@ -13,10 +14,11 @@ export async function GET(req: Request, { params }: Params) {
   const { organizationId } = await params;
   const auth = await authorizeRetailRequest(req, organizationId, "RETAIL_POS", "read");
   if (!auth.ok) return auth.response;
-  const { page, pageSize, search, from, to } = retailListParams(req);
+  const { page, pageSize, search } = retailListParams(req);
   try {
+    const { from, toExclusive } = await readRetailListDateRange(req, organizationId);
     const result = await listRetailPromotions(organizationId, page, pageSize, { search, from,
-      to: to ? new Date(to.getTime() + 86400000 - 1) : null });
+      to: toExclusive ? new Date(toExclusive.getTime() - 1) : null });
     await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "retail-promotions", action: "list", page } });
     return NextResponse.json(result);
   } catch (error) {
