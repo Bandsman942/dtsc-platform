@@ -4,6 +4,8 @@ import Link from "next/link";
 import { BadgeCheck, ScanLine, ShieldAlert } from "lucide-react";
 import { useAppLocale } from "@/components/i18n/locale-provider";
 import { useToastMessage } from "@/components/ui/use-toast-message";
+import { HirmsEnvironmentSwitch } from "./hirms-environment-switch";
+import type { HirmsEnvironment } from "@/lib/enterprise/health-insurance-connectors/environments";
 
 type Result = {
   verified: boolean; memberName: string | null; planName: string | null;
@@ -18,9 +20,10 @@ const translations: Record<string, [string, string]> = {
   NotAllowed: ["Prestataire non autorisé", "Provider not allowed"],
 };
 
-export function InsuranceMemberVerifyWorkspace({ organizationId, sector }: { organizationId: string; sector: "HEALTH_CARE" | "PHARMACY" }) {
+export function InsuranceMemberVerifyWorkspace({ organizationId, sector, initialEnvironment = "UAT" }: { organizationId: string; sector: "HEALTH_CARE" | "PHARMACY"; initialEnvironment?: HirmsEnvironment }) {
   const en = useAppLocale() === "en";
   const tx = (fr: string, english: string) => en ? english : fr;
+  const [environment, setEnvironment] = useState<HirmsEnvironment>(initialEnvironment);
   const [memberNumber, setMemberNumber] = useState("");
   const [cardReference, setCardReference] = useState("");
   const [serviceCode, setServiceCode] = useState("");
@@ -35,7 +38,7 @@ export function InsuranceMemberVerifyWorkspace({ organizationId, sector }: { org
     try {
       const response = await fetch(`/api/enterprise/${organizationId}/insurance-connectors/verify`, {
         method: "POST", cache: "no-store", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ memberNumber: memberNumber.trim(), cardReference, ...(serviceCode.trim() ? { serviceCode: serviceCode.trim(), codeSystem } : {}), ...(serviceDate ? { serviceDate } : {}) }),
+        body: JSON.stringify({ environment, memberNumber: memberNumber.trim(), cardReference, ...(serviceCode.trim() ? { serviceCode: serviceCode.trim(), codeSystem } : {}), ...(serviceDate ? { serviceDate } : {}) }),
       });
       const payload = await response.json() as { message?: string; result?: Result };
       if (!response.ok || !payload.result) { setNotice(payload.message || tx("Vérification indisponible.", "Verification unavailable.")); return; }
@@ -53,10 +56,12 @@ export function InsuranceMemberVerifyWorkspace({ organizationId, sector }: { org
         <div>
           <p className="text-xs font-semibold text-dtsc-muted">{tx("Assurances santé · MSO / HIRMS", "Health insurance · MSO / HIRMS")}</p>
           <h1 className="mt-1 text-2xl font-black tracking-tight text-dtsc-ink">{tx("Vérifier un adhérent", "Verify a member")}</h1>
-          <p className="mt-1 text-sm text-dtsc-muted">{tx("Contrôle réel en environnement HSL UAT. Aucun remboursement n'est garanti par cette vérification.", "Live verification against HSL UAT. This check does not guarantee reimbursement.")}</p>
+          <p className="mt-1 text-sm text-dtsc-muted">{tx(`Vérification HSL ${environment}. Aucun remboursement n’est garanti par ce contrôle.`, `HSL ${environment} verification. This check does not guarantee reimbursement.`)}</p>
         </div>
         <Link href={sector === "HEALTH_CARE" ? "/enterprise-modules/INSURANCE_COVERAGE" : "/enterprise-modules/SALES_DISPENSATION"} className="self-start rounded-xl border border-dtsc-border px-3 py-2 text-sm font-bold text-dtsc-ink">{tx("Retour au module", "Back to module")}</Link>
       </header>
+      <HirmsEnvironmentSwitch value={environment} onChange={next=>{setEnvironment(next);setResult(null);setCardReference("");setMemberNumber("");}} disabled={pending}/>
+      {environment==="PRODUCTION" && <p role="note" className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-dtsc-ink">{tx("Contrôle sur le service réel. N’utilisez que les données d’un adhérent autorisées pour cette prestation.", "Live HSL service. Use only authorized member data for this care.")}</p>}
       <div className="grid gap-4 md:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
         <form onSubmit={verify} className="min-w-0 space-y-4 rounded-2xl border border-dtsc-border bg-dtsc-surface p-4 sm:p-5">
           <h2 className="flex items-center gap-2 font-bold text-dtsc-ink"><ScanLine className="h-5 w-5 text-cyan-600" aria-hidden="true"/>{tx("Carte et prestation", "Card and service")}</h2>
