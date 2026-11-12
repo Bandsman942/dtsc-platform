@@ -278,6 +278,17 @@ export function EnterpriseAdministrationModule(
             ) : null}
             <EnterpriseAdministrationBrandingPanel organization={organization} locale={locale} />
             <EnterpriseFiscalSettingsPanel organizationId={organization.id} country={organization.country} locale={locale} />
+            {(organization.sectorCode === "HEALTH_CARE" || organization.sectorCode === "PHARMACY") ? (
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-cyan-500/30 bg-cyan-500/5 p-4">
+                <div className="min-w-0">
+                  <p className="font-bold text-dtsc-ink">{tx(locale, "Assurances santé — Connecteurs partenaires", "Health insurance — Partner connectors")}</p>
+                  <p className="mt-1 text-xs text-dtsc-muted">{tx(locale, "Configurer le lien sécurisé avec MSO / HIRMS, les établissements et les droits HSL.", "Configure the secure MSO / HIRMS link, facilities and HSL permissions.")}</p>
+                </div>
+                <Link href="/enterprise-insurance/connectors" className="inline-flex min-h-11 items-center rounded-xl border border-dtsc-border bg-dtsc-surface px-4 text-sm font-bold text-dtsc-ink hover:bg-dtsc-page">
+                  {tx(locale, "Configurer HIRMS", "Configure HIRMS")}
+                </Link>
+              </div>
+            ) : null}
             <EnterpriseRelationshipCodePanel code={organization.slug} locale={locale} />
             <div className="mt-4"><Accordion><EnterpriseCalendarPanel organizationName={organization.name} calendarEvents={calendarEvents} locale={locale} /></Accordion></div>
           </ModuleSection>
