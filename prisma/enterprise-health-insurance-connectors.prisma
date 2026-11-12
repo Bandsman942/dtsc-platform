@@ -20,7 +20,7 @@ model EnterpriseHealthInsuranceConnector {
   verifications        EnterpriseHealthInsuranceVerification[]
   submissions          EnterpriseHealthInsuranceInvoiceSubmission[]
 
-  @@unique([organizationId, adapterCode, environment])
+  @@unique([organizationId, adapterCode, environment], map: "EHIConnector_org_adapter_env_key")
   @@unique([organizationId, id])
   @@index([organizationId, status])
 }
@@ -69,8 +69,8 @@ model EnterpriseHealthInsuranceInvoiceSubmission {
   updatedAt         DateTime @updatedAt
   connector         EnterpriseHealthInsuranceConnector @relation(fields: [organizationId, connectorId], references: [organizationId, id], onDelete: Restrict)
 
-  @@unique([organizationId, adapterCode, environment, salesInvoiceId])
-  @@index([organizationId, environment, submittedAt])
-  @@index([organizationId, environment, batchId])
-  @@index([organizationId, environment, transportStatus, submittedAt])
+  @@unique([organizationId, adapterCode, environment, salesInvoiceId], map: "EHIInvoiceSubmission_org_adapter_env_invoice_key")
+  @@index([organizationId, environment, submittedAt], map: "EHIInvoiceSubmission_org_env_date_idx")
+  @@index([organizationId, environment, batchId], map: "EHIInvoiceSubmission_org_env_batch_idx")
+  @@index([organizationId, environment, transportStatus, submittedAt], map: "EHIInvoiceSubmission_org_env_status_date_idx")
 }
