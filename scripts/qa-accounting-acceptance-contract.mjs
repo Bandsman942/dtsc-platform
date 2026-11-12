@@ -55,7 +55,7 @@ for (const file of strictPositivePostingFiles) {
   if (read(file).includes(".isPositive()")) failures.push(`Accounting acceptance: ${file} must use strict gt(0) checks so +0 never creates a posting line`);
 }
 requireTokens("lib/enterprise/accounting/core-posting-builders.ts", ["invoice.taxTotal.gt(0)", "credit.taxTotal.gt(0)", "allocated.gt(0)", "payment.unallocatedAmount.gt(0)", "line.debit.gt(0) ? line.debit : line.credit"]);
-requireTokens("lib/enterprise/accounting/domain-posting-builders.ts", ["credit.taxTotal.gt(0)", "retained.gt(0)"]);
+requireTokens("lib/enterprise/accounting/domain-posting-builders.ts", ["item.taxAmount.gt(0)", "item.taxRecoveryRequested", "retained.gt(0)"]);
 requireTokens("lib/enterprise/accounting/sector-adapters/pharmacy.ts", ["event.totalValue.gt(0)"]);
 
 if (exists(templatePath)) {
