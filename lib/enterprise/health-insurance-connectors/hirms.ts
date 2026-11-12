@@ -84,3 +84,8 @@ async function verify(credentials: { username: string; secret: string }, input: 
 export const hirmsAdapter: HealthInsuranceAdapter = {
   code: "HIRMS_HSL", checkConnection: async (credentials) => { await getToken(credentials, true); }, verify,
 };
+
+/** Reuse the approved HSL OAuth flow for invoice transport. */
+export async function getHirmsAccessToken(credentials: { username: string; secret: string }, force = false) {
+  return getToken(credentials, force);
+}
