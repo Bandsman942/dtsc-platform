@@ -23,7 +23,7 @@ export async function GET(req: Request, { params }: Params) {
     organizationId,
     ...(dates.from || dates.to ? { createdAt: { ...(dates.from ? { gte: dates.from } : {}), ...(dates.to ? { lte: dates.to } : {}) } } : {}),
     ...(recordId ? { id: recordId } : {}),
-    ...(status ? { status } : {}),
+    ...(status === "ACTIVE" ? { isActive: true } : status === "INACTIVE" ? { isActive: false } : {}),
     ...(search ? { OR: [
       { code: { contains: search, mode: "insensitive" } },
       { nameFr: { contains: search, mode: "insensitive" } },
@@ -43,7 +43,7 @@ export async function GET(req: Request, { params }: Params) {
     prisma.enterpriseTaxCode.count({ where }),
   ]);
   await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "taxes", recordId: recordId || null, hasSearch: Boolean(search) } });
-  return NextResponse.json({ items, pagination: { page: recordId ? 1 : page, pageSize: recordId ? 1 : pageSize, total, pageCount: recordId ? 1 : Math.max(1, Math.ceil(total / pageSize)) }, disclaimer: "Operational configurable tax summaries; jurisdiction-specific legal filing is not automated." });
+  return NextResponse.json({ items: items.map((item) => ({ ...item, status: item.isActive ? "ACTIVE" : "INACTIVE" })), pagination: { page: recordId ? 1 : page, pageSize: recordId ? 1 : pageSize, total, pageCount: recordId ? 1 : Math.max(1, Math.ceil(total / pageSize)) }, disclaimer: "Operational configurable tax summaries; jurisdiction-specific legal filing is not automated." });
 }
 
 export async function POST(req: Request, { params }: Params) {
