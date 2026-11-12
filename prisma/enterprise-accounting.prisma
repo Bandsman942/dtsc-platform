@@ -1164,6 +1164,10 @@ model EnterpriseTaxCode {
   nameEn                   String
   category                 String
   jurisdiction             String?
+  sourceTemplateCode       String?
+  sourceTemplateVersion    String?
+  autoApply                Boolean              @default(false)
+  taxTreatment             String               @default("STANDARD")
   payableAccountId         String?
   recoverableAccountId     String?
   roundingRule             String               @default("HALF_UP")
@@ -1181,6 +1185,7 @@ model EnterpriseTaxCode {
   @@unique([organizationId, id])
   @@unique([organizationId, code])
   @@index([organizationId, category, isActive])
+  @@index([organizationId, isActive, autoApply])
 }
 
 model EnterpriseTaxRate {
