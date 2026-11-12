@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import { assertHirmsInvoiceSendEnabled, type HirmsEnvironment } from "./environments";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { openHirmsCredentials } from "./crypto";
@@ -8,7 +9,7 @@ import { postHirmsInvoices, HirmsInvoiceTransportError } from "./hirms-invoices"
 
 export type HirmsDispatchMode = "single" | "bulk";
 
-type Validated = { invoices: HirmsInvoice[]; connectorId: string; sourceType: string; credentials: string };
+type Validated = { invoices: HirmsInvoice[]; connectorId: string; environment: HirmsEnvironment; sourceType: string; credentials: string };
 
 function reject(code: string, httpStatus = 409): never {
   throw new InsuranceConnectorError(code, httpStatus);
@@ -17,15 +18,15 @@ function equivalent(a: Prisma.Decimal | number, b: number) {
   try { return new Prisma.Decimal(a).eq(new Prisma.Decimal(b)); } catch { return false; }
 }
 
-async function validateAgainstErp(organizationId: string, mode: HirmsDispatchMode, input: unknown): Promise<Validated> {
+async function validateAgainstErp(organizationId: string, environment: HirmsEnvironment, mode: HirmsDispatchMode, input: unknown): Promise<Validated> {
   const parsed = mode === "bulk" ? hirmsInvoiceBulkSchema.safeParse(input) : hirmsInvoiceSchema.safeParse(input);
   if (!parsed.success) reject("HIRMS_INVOICE_JSON_INVALID", 400);
   const invoices = (mode === "bulk" ? parsed.data : [parsed.data]) as HirmsInvoice[];
   if (!invoices.length || invoices.length > 500) reject("HIRMS_INVOICE_BATCH_SIZE_INVALID", 400);
   const connector = await prisma.enterpriseHealthInsuranceConnector.findUnique({
-    where: { organizationId_adapterCode: { organizationId, adapterCode: "HIRMS_HSL" } },
+    where: { organizationId_adapterCode_environment: { organizationId, adapterCode: "HIRMS_HSL", environment } },
   });
-  if (!connector || !connector.credentialsEncrypted || connector.status !== "READY" || connector.environment !== "UAT")
+  if (!connector || !connector.credentialsEncrypted || connector.status !== "READY" || connector.environment !== environment)
     reject("HIRMS_CONNECTOR_NOT_AUTHORIZED", 409);
   if (!connector.hslServiceProviderId || connector.hslServiceProviderId <= 0)
     reject("HIRMS_SERVICE_PROVIDER_MAPPING_REQUIRED", 409);
@@ -75,34 +76,33 @@ async function validateAgainstErp(organizationId: string, mode: HirmsDispatchMod
       // Do not guess a conversion here. QA/UAT will certify the mapping.
     }
     const existing = await prisma.enterpriseHealthInsuranceInvoiceSubmission.findUnique({
-      where: { organizationId_adapterCode_salesInvoiceId: { organizationId, adapterCode: "HIRMS_HSL", salesInvoiceId: invoice.InvoiceID } },
+      where: { organizationId_adapterCode_environment_salesInvoiceId: { organizationId, adapterCode: "HIRMS_HSL", environment, salesInvoiceId: invoice.InvoiceID } },
       select: { transportStatus: true },
     });
     if (existing) reject("HIRMS_INVOICE_ALREADY_TRANSMITTED_OR_UNRESOLVED", 409);
   }
-  return { invoices, connectorId: connector.id, sourceType: org.sectorCode, credentials: connector.credentialsEncrypted };
+  return { invoices, connectorId: connector.id, environment, sourceType: org.sectorCode, credentials: connector.credentialsEncrypted };
 }
 
-export async function preflightHirmsInvoiceSubmission(organizationId: string, mode: HirmsDispatchMode, input: unknown) {
-  const validation = await validateAgainstErp(organizationId, mode, input);
+export async function preflightHirmsInvoiceSubmission(organizationId: string, environment: HirmsEnvironment, mode: HirmsDispatchMode, input: unknown) {
+  const validation = await validateAgainstErp(organizationId, environment, mode, input);
   return {
-    ok: true, mode, count: validation.invoices.length,
+    ok: true, environment, mode, count: validation.invoices.length,
     invoiceNumbers: validation.invoices.map(i=>i.InvoiceNumber),
-    message: "Factures liées à l'ERP et prêtes pour une transmission UAT après confirmation.",
+    message: `Factures liées à l'ERP et prêtes pour une transmission ${environment} après confirmation.`, 
   };
 }
 
-export async function submitHirmsInvoices(organizationId: string, userId: string, mode: HirmsDispatchMode, input: unknown) {
-  if (process.env.HEALTH_INSURANCE_HIRMS_UAT_INVOICE_SEND_ENABLED !== "true")
-    reject("HIRMS_UAT_INVOICE_SENDING_DISABLED", 403);
-  const validated = await validateAgainstErp(organizationId, mode, input);
+export async function submitHirmsInvoices(organizationId: string, userId: string, environment: HirmsEnvironment, mode: HirmsDispatchMode, input: unknown) {
+  assertHirmsInvoiceSendEnabled(environment);
+  const validated = await validateAgainstErp(organizationId, environment, mode, input);
   const batchId = randomUUID();
   const digest = (invoice: HirmsInvoice) => createHash("sha256").update(JSON.stringify(invoice)).digest("hex");
   // Unique key makes retries and concurrent submissions fail closed instead of charging twice.
   try {
     await prisma.enterpriseHealthInsuranceInvoiceSubmission.createMany({
       data: validated.invoices.map(invoice=>({
-        organizationId, connectorId: validated.connectorId, adapterCode: "HIRMS_HSL",
+        organizationId, connectorId: validated.connectorId, adapterCode: "HIRMS_HSL", environment,
         salesInvoiceId: invoice.InvoiceID, invoiceNumber: invoice.InvoiceNumber,
         batchId, payloadDigest: digest(invoice), transportStatus: "SENDING", createdByUserId: userId,
       })),
@@ -114,20 +114,20 @@ export async function submitHirmsInvoices(organizationId: string, userId: string
   }
   try {
     const result = await postHirmsInvoices(openHirmsCredentials(validated.credentials),
-      mode === "bulk" ? validated.invoices : validated.invoices[0], mode === "bulk");
+      mode === "bulk" ? validated.invoices : validated.invoices[0], mode === "bulk", environment);
     const status = result.queued ? "QUEUED" : "RECEIVED";
     await prisma.enterpriseHealthInsuranceInvoiceSubmission.updateMany({
-      where: { organizationId, connectorId: validated.connectorId, batchId },
+      where: { organizationId, connectorId: validated.connectorId, environment, batchId },
       data: { transportStatus: status, httpStatus: result.httpStatus, externalReference: result.externalReference },
     });
-    return { ok: true, batchId, count: validated.invoices.length, transportStatus: status, httpStatus: result.httpStatus,
+    return { ok: true, environment, batchId, count: validated.invoices.length, transportStatus: status, httpStatus: result.httpStatus,
       message: "Réception technique HIRMS enregistrée. Aucune décision de remboursement ou paiement n'est présumée." };
   } catch (error) {
     const expected = error instanceof HirmsInvoiceTransportError;
     const code = expected ? error.code : "HIRMS_INVOICE_OUTCOME_UNKNOWN";
     const status = expected && !error.unknownOutcome ? "REJECTED" : "UNKNOWN_OUTCOME";
     await prisma.enterpriseHealthInsuranceInvoiceSubmission.updateMany({
-      where: { organizationId, connectorId: validated.connectorId, batchId },
+      where: { organizationId, connectorId: validated.connectorId, environment, batchId },
       data: { transportStatus: status, httpStatus: expected ? error.httpStatus : null, errorCode: code },
     });
     if (expected) throw error;
@@ -135,9 +135,9 @@ export async function submitHirmsInvoices(organizationId: string, userId: string
   }
 }
 
-export async function listHirmsInvoiceSubmissions(organizationId: string, page = 1) {
+export async function listHirmsInvoiceSubmissions(organizationId: string, environment: HirmsEnvironment, page = 1) {
   const safePage = Math.min(Math.max(1,Math.floor(page) || 1),10000);
-  const where = { organizationId, adapterCode: "HIRMS_HSL" };
+  const where = { organizationId, adapterCode: "HIRMS_HSL", environment };
   const [total,items] = await Promise.all([
     prisma.enterpriseHealthInsuranceInvoiceSubmission.count({ where }),
     prisma.enterpriseHealthInsuranceInvoiceSubmission.findMany({
