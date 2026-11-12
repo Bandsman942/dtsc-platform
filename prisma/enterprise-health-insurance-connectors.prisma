@@ -5,6 +5,7 @@ model EnterpriseHealthInsuranceConnector {
   adapterCode          String   @default("HIRMS_HSL")
   environment          String   @default("UAT")
   siteId               String?
+  hslServiceProviderId Int?
   status               String   @default("DRAFT")
   credentialsEncrypted String?
   credentialsUpdatedAt DateTime?
@@ -17,6 +18,7 @@ model EnterpriseHealthInsuranceConnector {
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
   verifications        EnterpriseHealthInsuranceVerification[]
+  submissions          EnterpriseHealthInsuranceInvoiceSubmission[]
 
   @@unique([organizationId, adapterCode])
   @@unique([organizationId, id])
@@ -43,4 +45,31 @@ model EnterpriseHealthInsuranceVerification {
   @@index([organizationId, createdAt])
   @@index([organizationId, connectorId, createdAt])
   @@index([organizationId, patientId, createdAt])
+}
+
+/** Transport outbox only. ERP SalesInvoice remains the sole financial source of truth.
+ * No medical narrative or complete HIRMS JSON is persisted here.
+ */
+model EnterpriseHealthInsuranceInvoiceSubmission {
+  id                String   @id @default(cuid())
+  organizationId    String
+  connectorId       String
+  adapterCode       String   @default("HIRMS_HSL")
+  salesInvoiceId    String
+  invoiceNumber     String
+  batchId           String?
+  payloadDigest     String
+  transportStatus   String   @default("SENDING")
+  httpStatus        Int?
+  errorCode         String?
+  externalReference String?
+  createdByUserId   String
+  submittedAt       DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  connector         EnterpriseHealthInsuranceConnector @relation(fields: [organizationId, connectorId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, adapterCode, salesInvoiceId])
+  @@index([organizationId, submittedAt])
+  @@index([organizationId, batchId])
+  @@index([organizationId, transportStatus, submittedAt])
 }
