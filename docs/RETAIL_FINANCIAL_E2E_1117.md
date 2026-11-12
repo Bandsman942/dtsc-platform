@@ -1,6 +1,6 @@
 # Recette E2E de pré-fusion — RETAIL Finance, issue #1117 / PR #1119
 
-**Statut : À EXÉCUTER — non certifié, non validé par le propriétaire.**
+**Statut : E2E final BON confirmé explicitement par le propriétaire le 12 novembre 2026 pour le périmètre de la PR #1119.** Les preuves automatisées sont disponibles dans les workflows GitHub ; le détail des 22 scénarios ci-dessous reste une matrice de contrôle et les pièces manuelles individuelles ne sont pas annexées ici.
 **Branche candidate :** `feat/1117-retail-financial-kpi-traceability-v2`.
 **Baseline initiale :** `main@c85b8f845a148bc3c9df64cdb5fc9d07b8e446c9`; vérifier le SHA actuel avant fusion.
 **Environnement :** base de test migrée, données fictives, scripts/CI sur branche ; aucune modification ni preview de Production.
@@ -62,3 +62,9 @@
 Pour chaque ID : **PASS / FAIL / BLOCKED / NOT RUN** + acteur/role, SHA, pièce test, captures anonymisées, requête SQL/ledger de réconciliation, devise, incident, date et évaluateur. Un échec sécurité, somme comptable, isolation, droits ou fausse disponibilité interdit la fusion.
 
 Le propriétaire doit émettre explicitement **« E2E final #1119 BON »** uniquement après preuve sur les 22 scénarios et arbitrage des dépendances. Aucune validation n'est actuellement présumée. Fusion de la PR seulement après nouvelle autorisation explicite; Vercel Production uniquement depuis `main`.
+
+## Validation de livraison (12 novembre 2026)
+
+- Propriétaire : confirmation « E2E final bon, tu peux fusionner », après recette des deux chantiers RETAIL.
+- GitHub : #1119 16/16 sur `cd71c395`, #1120 intégration #1118+#1119 16/16 sur `db973703`; nouvelle CI exigée sur la branche #1119 réconciliée depuis `main@066abe732faa8ef3f047b96a1872fe3f0b12683f` en version 1.13.0.
+- Aucun contrôle manuel individuel non documenté n'est inventé. Conformité fiscale pays, drivers matériels non implémentés, PWA true-offline et export volumineux #1110 restent hors périmètre certifié.

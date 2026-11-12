@@ -17,6 +17,8 @@ export const retailReturnProductConditions = ["SELLABLE", "OPENED", "DAMAGED", "
 export const retailRefundMethods = ["ORIGINAL_TENDER", "CASH", "MOBILE_MONEY", "BANK_TRANSFER", "CARD"] as const;
 
 export const retailPriceConditionUpsertSchema = z.object({
+  id: id.optional(),
+  revision: z.coerce.number().int().positive().optional(),
   catalogPriceId: id,
   siteId: id.optional().nullable(),
   customerBusinessPartyId: id.optional().nullable(),
@@ -27,6 +29,9 @@ export const retailPriceConditionUpsertSchema = z.object({
   priority: z.coerce.number().int().min(-1000).max(1000).default(0),
   isActive: z.boolean().default(true),
 }).superRefine((input, ctx) => {
+  if (input.id && !input.revision) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "La révision est requise pour modifier une règle existante.", path: ["revision"] });
+  }
   if (input.minQuantity && input.maxQuantity && input.minQuantity > input.maxQuantity) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: "La quantité minimale ne peut pas dépasser la quantité maximale.", path: ["maxQuantity"] });
   }
@@ -81,6 +86,7 @@ export const retailCommercialContextSchema = z.object({
 });
 
 export const retailPricingPreviewSchema = retailCommercialContextSchema.extend({
+  invoiceCheckout: z.boolean().optional().default(false),
   siteId: id.optional().nullable(),
   customerBusinessPartyId: id.optional().nullable(),
   currencyCode: currency,

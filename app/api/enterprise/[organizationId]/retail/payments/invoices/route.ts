@@ -24,7 +24,15 @@ export async function GET(req: Request, { params }: Params) {
     }
     const visibility = await retailInvoiceVisibleSites(organizationId, auth.session.userId);
     const { page, pageSize, status } = retailListParams(req);
-    const siteId = new URL(req.url).searchParams.get("siteId") || undefined;
+    const params = new URL(req.url).searchParams;
+    const siteId = params.get("siteId") || undefined;
+    const search = (params.get("search") || "").trim().slice(0, 120);
+    const from = params.get("from") || "";
+    const to = params.get("to") || "";
+    const validDate = (value: string) => !value || /^\d{4}-\d{2}-\d{2}$/.test(value);
+    if (!validDate(from) || !validDate(to) || (from && to && from > to)) {
+      return NextResponse.json({ error: "RETAIL_DATE_RANGE_INVALID", message: "Vérifiez la période de recherche." }, { status: 400 });
+    }
     if (siteId && !visibility.isOwner && !visibility.collectibleSiteIds.includes(siteId)) {
       return NextResponse.json({ error: "RETAIL_SITE_ACCESS_DENIED" }, { status: 403 });
     }
@@ -34,6 +42,15 @@ export async function GET(req: Request, { params }: Params) {
         ? (siteId ? { siteId } : {})
         : { siteId: siteId || { in: visibility.collectibleSiteIds } }) },
       ...(status ? { payment: { status } } : {}),
+      ...(search ? { OR: [
+        { payment: { number: { contains: search, mode: "insensitive" } } },
+        { checkout: { invoice: { number: { contains: search, mode: "insensitive" } } } },
+        { checkout: { site: { name: { contains: search, mode: "insensitive" } } } },
+      ] } : {}),
+      ...(from || to ? { createdAt: {
+        ...(from ? { gte: new Date(from + "T00:00:00.000Z") } : {}),
+        ...(to ? { lt: new Date(new Date(to + "T00:00:00.000Z").getTime() + 86_400_000) } : {}),
+      } } : {}),
     };
     const [proposals, total] = await Promise.all([
       prisma.enterpriseRetailInvoicePaymentProposal.findMany({

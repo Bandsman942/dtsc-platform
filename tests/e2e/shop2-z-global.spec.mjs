@@ -354,4 +354,97 @@ test.describe.serial("Shop 2.0 Iteration 4 global behavioral acceptance", () => 
     const fulfilledRow = crossChannel.body?.items?.find((row) => row.order?.id === clickOrderId);
     expect(fulfilledRow?.order?.fulfillments?.[0]?.status).toBe("COMPLETED");
   });
+
+  test("Retail five-lot filters, equipment exports and public navigation hover", async ({ browser }) => {
+    const authenticated = await browser.newContext({ baseURL: baseUrl, viewport: { width: 1440, height: 900 } });
+    const page = await authenticated.newPage();
+    try {
+      await signIn(page);
+      const base = `/api/enterprise/${organizationId}/retail`;
+      for (const endpoint of [
+        "devices?page=1&pageSize=12&search=SHOP",
+        "pricing/conditions?page=1&pageSize=20&from=2026-01-01&to=2026-12-31",
+        "promotions?page=1&pageSize=20&from=2026-01-01&to=2026-12-31",
+        "returns?page=1&pageSize=20&from=2026-01-01&to=2026-12-31",
+        "omnichannel/orders?page=1&pageSize=20&channel=POS",
+        "inventory-alerts?page=1&pageSize=20&lowStockPage=1&lowStockPageSize=12",
+      ]) {
+        const result = await apiGet(page, `${base}/${endpoint}`);
+        expect(result.response.ok(), `${endpoint}: ${JSON.stringify(result.body)}`).toBeTruthy();
+        expect(result.body).toBeTruthy();
+        if (result.body.pagination) {
+          expect(result.body.pagination.page).toBe(1);
+          expect(result.body.pagination.pageCount).toBeGreaterThanOrEqual(1);
+        }
+      }
+      await page.goto("/enterprise-modules/RETAIL_POS?section=equipment");
+      const equipment = page.locator('section[aria-label="Équipements d\'encaissement"]');
+      await expect(equipment).toBeVisible();
+      await expect(equipment.getByRole("heading", { name: /Équipements du commerce de détail|Retail equipment/i })).toBeVisible();
+      await expect(equipment.getByRole("button", { name: /CSV/i })).toBeVisible();
+      await expect(equipment.getByRole("button", { name: /XLSX/i })).toBeVisible();
+      await expect(equipment.getByRole("button", { name: /PDF/i })).toBeVisible();
+    } finally {
+      await authenticated.close();
+    }
+
+    const publicContext = await browser.newContext({ baseURL: baseUrl, viewport: { width: 1440, height: 900 }, hasTouch: false });
+    const publicPage = await publicContext.newPage();
+    try {
+      await publicPage.goto("/");
+      const firstGroup = publicPage.locator('button[aria-controls^="public-navigation-group-"]').first();
+      await expect(firstGroup).toBeVisible();
+      await firstGroup.hover();
+      await expect(firstGroup).toHaveAttribute("aria-expanded", "true");
+      await expect(publicPage.locator("#public-navigation-group-0 a").first()).toBeVisible();
+    } finally {
+      await publicContext.close();
+    }
+  });
+
+
+  test("pricing conditions keep separate store and channel rules under revision-safe writes", async ({ browser }) => {
+    const context = await browser.newContext({ baseURL: baseUrl });
+    const page = await context.newPage();
+    const createdRuleIds = [];
+    try {
+      await signIn(page);
+      const price = await prisma.enterpriseCatalogPrice.findFirst({
+        where: { organizationId, catalogItemId: fixture.catalogItemId, status: "ACTIVE", archivedAt: null },
+        select: { id: true },
+      });
+      expect(price, "E2E catalogue price required for pricing rules").toBeTruthy();
+      const base = `/api/enterprise/${organizationId}/retail/pricing/conditions`;
+      const data = { catalogPriceId: price.id, siteId: fixture.siteId, minQuantity: 987654,
+        maxQuantity: 987655, priority: 33, isActive: false };
+      const counter = await apiPost(page, base, { ...data, channelCode: "POS" });
+      expect(counter.response.status(), JSON.stringify(counter.body)).toBe(200);
+      createdRuleIds.push(counter.body.condition.id);
+      const online = await apiPost(page, base, { ...data, channelCode: "ONLINE" });
+      expect(online.response.status(), JSON.stringify(online.body)).toBe(200);
+      createdRuleIds.push(online.body.condition.id);
+      expect(createdRuleIds[0]).not.toBe(createdRuleIds[1]);
+
+      const edit = await apiPost(page, base, { ...data, id: createdRuleIds[0],
+        revision: counter.body.condition.revision, channelCode: "POS", priority: 34 });
+      expect(edit.response.status(), JSON.stringify(edit.body)).toBe(200);
+      expect(edit.body.condition.revision).toBe(counter.body.condition.revision + 1);
+      const second = await prisma.enterpriseRetailPriceCondition.findUniqueOrThrow({ where: { id: createdRuleIds[1] } });
+      expect(second.priority).toBe(33);
+      expect(second.channelCode).toBe("ONLINE");
+
+      const stale = await apiPost(page, base, { ...data, id: createdRuleIds[0],
+        revision: counter.body.condition.revision, channelCode: "POS", priority: 35 });
+      expect(stale.response.status(), JSON.stringify(stale.body)).toBe(409);
+      const refreshed = await apiGet(page, `${base}?page=1&pageSize=20&active=false`);
+      expect(refreshed.response.ok(), JSON.stringify(refreshed.body)).toBeTruthy();
+      expect(refreshed.body.pagination.page).toBe(1);
+    } finally {
+      if (createdRuleIds.length) await prisma.enterpriseRetailPriceCondition.deleteMany({
+        where: { organizationId, id: { in: createdRuleIds } },
+      });
+      await context.close();
+    }
+  });
+
 });

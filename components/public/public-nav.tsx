@@ -69,8 +69,13 @@ export function PublicNav({ locale }: { locale: "fr" | "en" }) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const desktopNavRef = useRef<HTMLDivElement>(null);
   const [openDesktopGroup, setOpenDesktopGroup] = useState<string | null>(null);
+  const desktopCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hoverCapable = () => typeof window !== "undefined" && window.matchMedia("(hover: hover) and (pointer: fine)").matches;
+  const cancelDesktopClose = () => { if (desktopCloseTimer.current) clearTimeout(desktopCloseTimer.current); desktopCloseTimer.current = null; };
+  const scheduleDesktopClose = () => { cancelDesktopClose(); desktopCloseTimer.current = setTimeout(() => setOpenDesktopGroup(null), 220); };
 
   useEffect(() => setMounted(true), []);
+  useEffect(() => () => { if (desktopCloseTimer.current) clearTimeout(desktopCloseTimer.current); }, []);
   useEffect(() => setOpen(false), [pathname]);
   useEffect(() => setOpenDesktopGroup(null), [pathname]);
   useEffect(() => {
@@ -227,12 +232,12 @@ export function PublicNav({ locale }: { locale: "fr" | "en" }) {
           const active = group.links.some((link) => isActive(pathname, link.href));
           const popupId = "public-navigation-group-" + index;
           return (
-            <div key={group.key} className="relative">
+            <div key={group.key} className="relative" onPointerEnter={(event) => { if (event.pointerType === "mouse" && hoverCapable()) { cancelDesktopClose(); setOpenDesktopGroup(group.key); } }} onPointerLeave={(event) => { if (event.pointerType === "mouse" && hoverCapable()) scheduleDesktopClose(); }} onFocusCapture={() => { cancelDesktopClose(); setOpenDesktopGroup(group.key); }} onBlurCapture={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) scheduleDesktopClose(); }}>
               <button
                 type="button"
                 aria-expanded={expanded}
                 aria-controls={popupId}
-                onClick={() => setOpenDesktopGroup(expanded ? null : group.key)}
+                onClick={() => { cancelDesktopClose(); setOpenDesktopGroup(expanded ? null : group.key); }}
                 className={cn(
                   "inline-flex min-h-10 items-center gap-1 rounded-lg px-2.5 py-2 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-dtsc-blue",
                   active || expanded ? "bg-dtsc-soft text-dtsc-blue" : "text-dtsc-ink hover:bg-dtsc-soft hover:text-dtsc-blue",
@@ -246,7 +251,7 @@ export function PublicNav({ locale }: { locale: "fr" | "en" }) {
                   id={popupId}
                   aria-label={copy.explore + " " + copy.groups[group.key]}
                   className={cn(
-                    "absolute top-[calc(100%+0.75rem)] z-[110] w-72 rounded-2xl border border-dtsc-border bg-dtsc-surface p-2 shadow-[var(--dtsc-shadow-lg)]",
+                    "absolute top-full z-[110] mt-0 w-72 rounded-2xl border border-dtsc-border bg-dtsc-surface p-2 shadow-[var(--dtsc-shadow-lg)]",
                     index >= 3 ? "right-0" : "left-0",
                   )}
                 >
@@ -254,7 +259,7 @@ export function PublicNav({ locale }: { locale: "fr" | "en" }) {
                     <Link
                       key={group.key + link.href}
                       href={link.href}
-                      onClick={() => setOpenDesktopGroup(null)}
+                      onClick={() => { cancelDesktopClose(); setOpenDesktopGroup(null); }}
                       aria-current={isActive(pathname, link.href) ? "page" : undefined}
                       className="block rounded-xl px-3 py-3 text-sm font-medium text-dtsc-ink transition-colors hover:bg-dtsc-soft hover:text-dtsc-blue focus-visible:outline-2 focus-visible:outline-dtsc-blue"
                     >

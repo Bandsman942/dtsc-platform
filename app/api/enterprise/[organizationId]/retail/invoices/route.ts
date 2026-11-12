@@ -125,7 +125,7 @@ export async function POST(req: Request, { params }: Params) {
     const result = await prepareRetailInvoice(organizationId, auth.session.userId, parsed.data);
     await writeAuditLog({
       userId: auth.session.userId, action: "ENTERPRISE_RETAIL_INVOICE_PREPARED", entity: "EnterpriseSalesInvoice", entityId: result.invoice.id,
-      request: req, metadata: { organizationId, siteId: result.checkout.siteId, warehouseId: result.checkout.warehouseId, idempotent: result.idempotent, invoiceStatus: result.invoice.status },
+      request: req, metadata: { organizationId, siteId: result.checkout.siteId, warehouseId: result.checkout.warehouseId, idempotent: result.idempotent, invoiceStatus: result.invoice.status, stockWarningCount: result.stockWarnings.length },
     });
     await writeApiLog({ request: req, startedAt, statusCode: result.idempotent ? 200 : 201, userId: auth.session.userId, metadata: { organizationId, domain: "retail-checkout-invoices", action: "prepare", idempotent: result.idempotent } });
     return NextResponse.json(result, { status: result.idempotent ? 200 : 201 });

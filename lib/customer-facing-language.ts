@@ -21,6 +21,38 @@ const ERROR_MESSAGES: Record<string, Bilingual> = {
     fr: "La facturation Finance est active : préparez la facture dans Vente comptoir, faites-la valider puis émettre, et encaissez-la dans Encaissements. La vente directe historique est désactivée.",
     en: "Finance invoice checkout is active: prepare an invoice at the counter, have it approved and issued, then collect it in Collections. Legacy direct sales are disabled.",
   },
+  RETAIL_FINANCE_PROMOTION_LEDGER_REQUIRED: {
+    fr: "Une promotion Retail affecte ce panier. Les promotions ne sont pas encore reliées au registre Finance des remises utilisées et des avoirs. Désactivez l'offre ou utilisez un article sans promotion ; aucune remise non tracée ne sera appliquée.",
+    en: "A Retail promotion applies to this basket. Promotions are not yet connected to the Finance redemption and credit-note ledger. Disable the offer or use an item without a promotion; untracked discounts cannot be granted.",
+  },
+  RETAIL_PRICE_CONDITION_DUPLICATE: {
+    fr: "Une condition tarifaire identique existe déjà pour cet article, cette boutique et ce canal. Modifiez l'existante ou changez les conditions.",
+    en: "An identical pricing condition already exists for this item, store and channel. Edit that rule or change the conditions.",
+  },
+  RETAIL_PRICE_CONDITION_STALE: {
+    fr: "Cette règle tarifaire a été modifiée depuis votre dernière consultation. Actualisez avant de réessayer.",
+    en: "This pricing rule has changed since you opened it. Refresh before editing again.",
+  },
+  RETAIL_SEARCH_TOO_BROAD: {
+    fr: "La recherche est trop large. Précisez le nom ou la référence pour afficher les résultats complets.",
+    en: "The search is too broad. Refine the product name or code to retrieve complete results.",
+  },
+  RETAIL_OFFLINE_ACTOR_SCOPE_REQUIRED: {
+    fr: "La copie locale de la vente exige une session utilisateur identifiée. Reconnectez-vous avec votre compte.",
+    en: "Offline storage requires an identified user session. Sign in with your own account.",
+  },
+  RETAIL_OFFLINE_UNRESOLVED_LOCAL_OPERATIONS: {
+    fr: "Impossible d'effacer les données locales : des brouillons restent en attente, rejetés ou en conflit. Réconciliez-les d'abord.",
+    en: "Local data cannot be cleared: some drafts remain pending, rejected or in conflict. Reconcile them first.",
+  },
+  RETAIL_OFFLINE_UUID_ACTOR_MISMATCH: {
+    fr: "Cette opération hors connexion appartient à un autre collaborateur. Sa synchronisation nécessite la session de son préparateur et des droits actifs.",
+    en: "This offline operation belongs to another staff member. Synchronize with its original creator's session and active permissions.",
+  },
+  RETAIL_OFFLINE_UUID_PAYLOAD_MISMATCH: {
+    fr: "Cette référence hors connexion a déjà été utilisée avec une autre vente ou boutique. Vérifiez le journal avant de réessayer.",
+    en: "This offline reference was already used with a different sale or store. Review the operation log before retrying.",
+  },
   RETAIL_OFFLINE_INVOICE_CHECKOUT_NOT_SUPPORTED: {
     fr: "La facturation Finance est active. La vente directe hors connexion n’est pas compatible avec l’approbation des factures : reconnectez-vous et utilisez Vente comptoir. Les opérations déjà enregistrées restent à examiner avant toute reprise.",
     en: "Finance invoice checkout is active. Direct offline sales cannot skip invoice approval. Reconnect and use Counter sales; previously queued operations require review before replay.",

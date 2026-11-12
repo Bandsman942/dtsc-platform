@@ -1,6 +1,6 @@
 {
   "name": "dtsc-platform",
-  "version": "1.12.0",
+  "version": "1.13.0",
   "private": true,
   "engines": {
     "node": "22.x"
@@ -39,9 +39,9 @@
     "qa:hotfix-1080-retail-pos": "node scripts/qa-hotfix-1080-retail-pos-rbac-invoice-cashier.mjs",
     "qa:hotfix-1083-retail-flows": "node scripts/qa-hotfix-1083-retail-flow-sync.mjs",
     "qa:hotfix-1101-retail-pos": "node scripts/qa-hotfix-1101-retail-pos.mjs",
+    "qa:retail-five-lots-1116": "node scripts/qa-retail-five-lots-1116.mjs",
     "qa:retail-executive-1105": "node scripts/qa-retail-executive-1105.mjs",
     "qa:retail-cogs-1109": "node scripts/qa-retail-cogs-traceability-1109.mjs",
-    "qa:retail-financial-kpi-v2": "node scripts/qa-retail-financial-kpi-v2.mjs",
     "qa:enterprise-admin-design2-1107": "node scripts/qa-enterprise-admin-design2-1107.mjs",
     "qa:hotfix-1055-navigation-cards": "node scripts/qa-module-navigation-cards-1055.mjs",
     "qa:hotfix-1061-desktop-sidebar": "node scripts/qa-hotfix-1061-desktop-sidebar.mjs",
@@ -442,7 +442,8 @@
     "qa:hotfix-1068-ai-conversation-design2": "node scripts/qa-hotfix-1068-ai-conversation-design2.mjs",
     "qa:hotfix-1069-console-workspaces": "node scripts/qa-hotfix-1069-console-workspaces.mjs",
     "qa:integration-1067-1069": "node scripts/qa-integration-1067-1069.mjs",
-    "qa:docs-1099": "node scripts/qa-docs-1099.mjs"
+    "qa:docs-1099": "node scripts/qa-docs-1099.mjs",
+    "qa:retail-financial-kpi-v2": "node scripts/qa-retail-financial-kpi-v2.mjs"
   },
   "dependencies": {
     "@ai-sdk/gateway": "2.0.27",

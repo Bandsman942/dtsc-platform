@@ -76,6 +76,8 @@ const shop2Stages = [
   "Shop 2 invoice and global multistore acceptance",
   "Reset isolated Redis state before Shop 2 three-actor Finance acceptance",
   "Shop 2 independent Finance lifecycle acceptance",
+  "Reset isolated Redis before Retail offline Finance draft acceptance",
+  "Retail offline Finance draft replay acceptance",
   "Reset isolated Redis before Retail financial trace acceptance",
   "Retail financial KPI source evidence acceptance",
 ];
@@ -85,15 +87,15 @@ for (const stage of shop2Stages) {
   if (index <= previousStageIndex) throw new Error(`Shop 2 CI authentication isolation stage missing or out of order: ${stage}`);
   previousStageIndex = index;
 }
-if ((shop2Workflow.match(/--data '\["FLUSHDB"\]'/g) || []).length !== 4) {
-  throw new Error("Shop 2 CI must reset only disposable Redis between its five browser acceptance groups");
+if ((shop2Workflow.match(/--data '\["FLUSHDB"\]'/g) || []).length !== 5) {
+  throw new Error("Shop 2 CI must reset only disposable Redis between its six browser acceptance groups");
 }
 const shop2Specs = [
   "accounting-atomic-retail-posting", "issue-786-relationship-benefits-enforcement",
   "issue-910-relationship-credit", "scale5b-retail-dashboard-cache",
   "shop2-commercial", "shop2-customer-payments", "shop2-customer-value-ui",
   "shop2-daily-close-ui", "shop2-final-coherence-ui", "shop2-retail", "shop2-z-global",
-  "shop2-invoice-finance-lifecycle", "retail-financial-kpi-1117",
+  "shop2-invoice-finance-lifecycle", "retail-offline-finance-1116", "retail-financial-kpi-1117",
 ];
 const acceptanceRuns = shop2Workflow.split("\n").filter((line) =>
   line.includes("run: pnpm exec playwright test tests/e2e/"),

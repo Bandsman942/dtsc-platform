@@ -3,7 +3,7 @@ import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http"
 import { z } from "zod";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { authorizeRetailRequest, retailErrorResponse } from "@/lib/enterprise/retail/http";
-import { createRetailOmnichannelOrder, getRetailOmnichannelOrders, RETAIL_OMNICHANNEL_MODES } from "@/lib/enterprise/retail/omnichannel";
+import { createRetailOmnichannelOrder, getRetailOmnichannelOrders, RETAIL_OMNICHANNEL_MODES, RETAIL_OMNICHANNEL_CHANNELS } from "@/lib/enterprise/retail/omnichannel";
 import { retailSitesForCapability } from "@/lib/enterprise/retail/site-access";
 
 const createSchema = z.object({
@@ -13,6 +13,7 @@ const createSchema = z.object({
   fulfillmentWarehouseId: z.string().trim().min(1).max(240),
   pickupSiteId: z.string().trim().min(1).max(240).optional().nullable(),
   fulfillmentMode: z.enum(RETAIL_OMNICHANNEL_MODES),
+  channelCode: z.enum(RETAIL_OMNICHANNEL_CHANNELS).default("POS"),
   currencyCode: z.string().trim().length(3).transform((value) => value.toUpperCase()),
   expectedFulfillmentAt: z.coerce.date().optional().nullable(),
   reservationExpiresAt: z.coerce.date().optional().nullable(),
@@ -33,11 +34,24 @@ export async function GET(req: Request, { params }: Params) {
   const auth = await authorizeRetailRequest(req, organizationId, "RETAIL_POS", "read");
   if (!auth.ok) return auth.response;
   const url = new URL(req.url);
-  const page = Math.max(1, Number(url.searchParams.get("page") || 1) || 1);
+  const page = Math.min(1000, Math.max(1, Math.floor(Number(url.searchParams.get("page") || 1) || 1)));
   const pageSize = Math.min(50, Math.max(5, Number(url.searchParams.get("pageSize") || 20) || 20));
+  const status = (url.searchParams.get("status") || "").trim().slice(0, 60);
+  const mode = (url.searchParams.get("mode") || "").trim().slice(0, 60);
+  const channel = (url.searchParams.get("channel") || "").trim().toUpperCase();
+  const search = (url.searchParams.get("search") || "").trim().slice(0, 120);
+  const from = url.searchParams.get("from") || "";
+  const to = url.searchParams.get("to") || "";
+  if ((channel && !RETAIL_OMNICHANNEL_CHANNELS.includes(channel as (typeof RETAIL_OMNICHANNEL_CHANNELS)[number])) || (mode && !RETAIL_OMNICHANNEL_MODES.includes(mode as (typeof RETAIL_OMNICHANNEL_MODES)[number])) || [from, to].some((v) => v && !/^\d{4}-\d{2}-\d{2}$/.test(v)) || (from && to && from > to)) {
+    return NextResponse.json({ error: "RETAIL_FILTER_INVALID", message: "Les filtres de commande sont invalides." }, { status: 400 });
+  }
   try {
     const scope = await retailSitesForCapability(organizationId, auth.session.userId, "VIEW_SALES");
-    const state = await getRetailOmnichannelOrders(organizationId, page, pageSize, scope.isolationEnabled ? scope.siteIds : undefined);
+    const state = await getRetailOmnichannelOrders(organizationId, page, pageSize, scope.isolationEnabled ? scope.siteIds : undefined, {
+      status, mode, channel, search,
+      ...(from ? { from: new Date(from + "T00:00:00.000Z") } : {}),
+      ...(to ? { toExclusive: new Date(new Date(to + "T00:00:00.000Z").getTime() + 86_400_000) } : {}),
+    });
     await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "retail-omnichannel-orders", page } });
     return NextResponse.json(state, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
@@ -59,7 +73,7 @@ export async function POST(req: Request, { params }: Params) {
       action: "ENTERPRISE_RETAIL_OMNICHANNEL_ORDER_CREATED",
       entity: "EnterpriseSalesOrder",
       entityId: result.order.id,
-      metadata: { organizationId, fulfillmentMode: result.orchestration.fulfillmentMode, warehouseId: result.orchestration.fulfillmentWarehouseId, reservationCount: result.reservations.length, idempotent: result.idempotent },
+      metadata: { organizationId, channelCode: result.orchestration.channelCode, fulfillmentMode: result.orchestration.fulfillmentMode, warehouseId: result.orchestration.fulfillmentWarehouseId, reservationCount: result.reservations.length, idempotent: result.idempotent },
       request: req,
     });
     await writeApiLog({ request: req, statusCode: result.idempotent ? 200 : 201, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "retail-omnichannel-orders", salesOrderId: result.order.id, idempotent: result.idempotent } });

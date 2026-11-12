@@ -4,6 +4,7 @@ import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { authorizeRetailRequest, retailErrorResponse } from "@/lib/enterprise/retail/http";
 import { retailOfflineSyncSchema } from "@/lib/enterprise/retail/offline-schemas";
 import { syncRetailOfflineSale } from "@/lib/enterprise/retail/offline-server";
+import { syncRetailOfflineInvoiceDraft } from "@/lib/enterprise/retail/offline-invoice";
 
 type Params = { params: Promise<{ organizationId: string }> };
 
@@ -15,10 +16,15 @@ export async function POST(req: Request, { params }: Params) {
   const parsed = retailOfflineSyncSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "RETAIL_OFFLINE_SYNC_INPUT_INVALID", req);
   try {
-    const result = await syncRetailOfflineSale({ organizationId, actorUserId: auth.session.userId, ...parsed.data });
+    const draftMode = parsed.data.payload && typeof parsed.data.payload === "object"
+      && !Array.isArray(parsed.data.payload)
+      && (parsed.data.payload as Record<string, unknown>).mode === "INVOICE_DRAFT";
+    const result = draftMode
+      ? await syncRetailOfflineInvoiceDraft({ organizationId, actorUserId: auth.session.userId, ...parsed.data })
+      : await syncRetailOfflineSale({ organizationId, actorUserId: auth.session.userId, ...parsed.data });
     const status = result.operation.status;
     const statusCode = status === "SYNCED" ? 200 : status === "CONFLICT" ? 409 : status === "REJECTED" ? 422 : 202;
-    await writeAuditLog({ userId: auth.session.userId, action: `ENTERPRISE_RETAIL_OFFLINE_${status}`, entity: "EnterpriseRetailOfflineSyncOperation", entityId: result.operation.id, request: req, metadata: { organizationId, operationUuid: parsed.data.operationUuid, snapshotVersion: parsed.data.snapshotVersion, status, conflictCode: result.operation.conflictCode, serverEntityId: result.operation.serverEntityId, idempotent: result.idempotent } });
+    await writeAuditLog({ userId: auth.session.userId, action: `ENTERPRISE_RETAIL_OFFLINE_${status}`, entity: "EnterpriseRetailOfflineSyncOperation", entityId: result.operation.id, request: req, metadata: { organizationId, operationUuid: parsed.data.operationUuid, snapshotVersion: parsed.data.snapshotVersion, status, conflictCode: result.operation.conflictCode, serverEntityId: result.operation.serverEntityId, idempotent: result.idempotent, mode: draftMode ? "INVOICE_DRAFT" : "SALE" } });
     await writeApiLog({ request: req, statusCode, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "retail-offline", action: "sync", operationUuid: parsed.data.operationUuid, status, conflictCode: result.operation.conflictCode } });
     return NextResponse.json(result, { status: statusCode, headers: { "cache-control": "private, no-store" } });
   } catch (error) {

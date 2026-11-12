@@ -131,6 +131,8 @@ jobs:
         run: pnpm qa:retail-executive-1105
       - name: RETAIL posted COGS traceability and Reports QA (#1109)
         run: pnpm qa:retail-cogs-1109
+      - name: Retail five-lot canonical Finance offline draft safeguards (#1116)
+        run: pnpm qa:retail-five-lots-1116
       - name: RETAIL financial KPI source traceability v2 QA (#1117)
         run: pnpm qa:retail-financial-kpi-v2
       - name: Type check

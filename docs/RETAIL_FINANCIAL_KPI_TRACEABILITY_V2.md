@@ -1,6 +1,6 @@
 # RETAIL — Traçabilité financière v2 (issue #1117)
 
-**Statut : lots 1 et 2 partiellement codés, non livrable / E2E non validé.**
+**Statut : lots codés livrables dans leur périmètre déclaré, E2E final BON confirmé par le propriétaire le 12 novembre 2026 ; autres évolutions restant suivies en #1117/#1110. Version candidate v1.13.0, Production en attente.**
 **Branche de livraison conforme :** `feat/1117-retail-financial-kpi-traceability-v2` (synthèse de la branche de travail initiale, conservée à titre d'archive).
 **Base :** `main@c85b8f845a148bc3c9df64cdb5fc9d07b8e446c9` (PR #1111 fusionnée).
 **Dépendances parallèles :** PR #1114 et #1115. Pas de fusion, preview, migration ou déploiement de cette branche.
@@ -68,3 +68,7 @@ Indicateurs complémentaires conditionnels aux sources souscrites : CA HT, taux 
 - `git diff --check`, `pnpm prisma:generate`, `pnpm type-check`, `pnpm lint`, `pnpm qa:regression`, QA métier, `pnpm build`, CI GitHub et E2E propriétaire.
 - Réexaminer le dernier `origin/main` après la fusion de l'autre chantier, résoudre explicitement les conflits, relancer toute la CI.
 - **Ne jamais fusionner ni déployer cette branche avant E2E final propriétaire « BON ».**
+
+## Réconciliation pré-fusion — 12 novembre 2026
+
+La fonctionnalité #1119 est reportée par delta sur le `main` qui inclut le squash merge #1118 (`066abe732faa8ef3f047b96a1872fe3f0b12683f`), sans remplacement d'anciens fichiers de Production. Les quatre fichiers de CI communs sont réconciliés avec la version testée en #1120, et la version SemVer est 1.13.0. Le résultat CI complet du nouveau SHA reste obligatoire avant squash merge. Les composants et tests de la branche POS sont intégralement conservés.
