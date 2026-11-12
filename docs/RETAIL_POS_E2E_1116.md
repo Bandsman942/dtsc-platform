@@ -1,6 +1,6 @@
 # Recette E2E de pré-fusion — RETAIL POS, issue #1116 / PR #1118
 
-**Statut : À EXÉCUTER — non certifié, non validé par le propriétaire.**
+**Statut : E2E final BON confirmé par le propriétaire le 12 novembre 2026 ; PR #1118 fusionnée dans `main` via squash `066abe732`.** Les scénarios ci-dessous restent la recette de référence ; aucune certification de fonctionnalités explicitement hors périmètre n'est présumée.
 **Baseline :** `main@c85b8f845a148bc3c9df64cdb5fc9d07b8e446c9` (recontrôler `origin/main` avant toute fusion).
 **Branche candidate :** `fix/1116-retail-pos-five-lots`.
 **Environnement :** branche locale isolée + base PostgreSQL de test migrée, données fictives; jamais Production ni données clients réelles. Les previews Vercel sont désactivées.

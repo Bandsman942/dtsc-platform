@@ -44,16 +44,18 @@ export async function GET(req: Request, { params }: Params) {
   }
   const siteId = url.searchParams.get("siteId") || undefined;
   const sites = await prisma.enterpriseSite.findMany({
-    where: { organizationId, status: "ACTIVE", archivedAt: null, ...(siteId ? { id: siteId } : {}) },
+    where: { organizationId, ...(siteId ? { id: siteId } : {}) },
     orderBy: [{ code: "asc" }],
-    select: { id: true, code: true, name: true },
+    select: { id: true, code: true, name: true, status: true, archivedAt: true },
   });
   if (siteId && !sites.length) return NextResponse.json({ error: "RETAIL_SITE_NOT_FOUND", message: "Cette boutique est introuvable dans votre entreprise." }, { status: 404 });
+  // Preserve historic Retail sales, invoices and journals attributed to archived stores.
+  // The historical store remains visible and marked, never silently reallocated.
   const ids = sites.map((site) => site.id);
   const dateWhere = { gte: from, lte: to };
   // Every optional ERP source is independently authorized. RETAIL_POS alone
   // does not grant access to Mobile Money, Telco or Treasury balances.
-  const [agencyAccess, telcoAccess, treasuryAccess, inventoryAccess, reportsAccess, reportWriteAccess, accountingAccess, config] = await Promise.all([
+  const [agencyAccess, telcoAccess, treasuryAccess, inventoryAccess, reportsAccess, reportWriteAccess, accountingAccess, financeReceivablesAccess, financePaymentsAccess, financeBudgetsAccess, config] = await Promise.all([
     resolveEnterpriseModuleAccess({ userId: session.userId, organizationId, moduleCode: "MOBILE_MONEY_AGENCY", action: "read" }),
     resolveEnterpriseModuleAccess({ userId: session.userId, organizationId, moduleCode: "TELCO_TOPUPS", action: "read" }),
     resolveEnterpriseModuleAccess({ userId: session.userId, organizationId, moduleCode: "FINANCE_TREASURY", action: "read" }),
@@ -61,6 +63,9 @@ export async function GET(req: Request, { params }: Params) {
     resolveEnterpriseModuleAccess({ userId: session.userId, organizationId, moduleCode: "REPORTS", action: "read" }),
     getEnterpriseFinanceAccess({ session, organizationId, moduleCode: "REPORTS", action: "submit" }),
     resolveEnterpriseModuleAccess({ userId: session.userId, organizationId, moduleCode: "FINANCE_ACCOUNTING", action: "read" }),
+    resolveEnterpriseModuleAccess({ userId: session.userId, organizationId, moduleCode: "FINANCE_RECEIVABLES", action: "read" }),
+    resolveEnterpriseModuleAccess({ userId: session.userId, organizationId, moduleCode: "FINANCE_PAYMENTS", action: "read" }),
+    resolveEnterpriseModuleAccess({ userId: session.userId, organizationId, moduleCode: "FINANCE_BUDGETS", action: "read" }),
     prisma.enterpriseRetailConfiguration.findUnique({ where: { organizationId }, select: { settingsJson: true } }),
   ]);
   const preferences = readRetailDashboardPreferences(config?.settingsJson);
@@ -70,10 +75,10 @@ export async function GET(req: Request, { params }: Params) {
       where: { organizationId, siteId: { in: ids }, status: "COMPLETED", soldAt: dateWhere },
       _sum: { grandTotal: true }, _count: { _all: true },
     }),
-    prisma.enterpriseExpense.groupBy({
+    financeBudgetsAccess.allowed ? prisma.enterpriseExpense.groupBy({
       by: ["siteId", "currency"], where: { organizationId, siteId: { in: ids }, status: "APPROVED", expenseDate: dateWhere, archivedAt: null },
       _sum: { amount: true }, _count: { _all: true },
-    }),
+    }) : Promise.resolve([]),
     inventoryAccess.allowed ? prisma.enterpriseInventoryBalance.groupBy({
       by: ["warehouseId"], where: { organizationId, warehouse: { siteId: { in: ids } } },
       _sum: { quantityOnHand: true, quantityReserved: true }, _count: { _all: true },
@@ -93,7 +98,7 @@ export async function GET(req: Request, { params }: Params) {
   // Finance and classic POS are separate sale channels. Do not sum these
   // columns or label lifetime invoice allocations as current-period cashflow.
   // Group on the source site and currency in SQL: no capped list or cross-FX sum.
-  const invoiceRows = ids.length ? await prisma.$queryRaw<Array<{
+  const invoiceRows = ids.length && financeReceivablesAccess.allowed ? await prisma.$queryRaw<Array<{
     siteId: string; currencyCode: string; invoiceCount: bigint;
     gross: Prisma.Decimal; allocated: Prisma.Decimal; outstanding: Prisma.Decimal;
   }>>(Prisma.sql`
@@ -119,7 +124,7 @@ export async function GET(req: Request, { params }: Params) {
   })));
   // Canonical Finance customer payments are counted by payment date AND
   // confirmed invoice allocation. Historical POS tenders stay separate.
-  const financeCollectionRows = ids.length ? await prisma.$queryRaw<Array<{
+  const financeCollectionRows = ids.length && financeReceivablesAccess.allowed && financePaymentsAccess.allowed ? await prisma.$queryRaw<Array<{
     siteId: string; currencyCode: string; method: string; total: Prisma.Decimal; paymentCount: bigint;
   }>>(Prisma.sql`
     SELECT checkout."siteId" AS "siteId", payment."currencyCode" AS "currencyCode",
@@ -148,8 +153,8 @@ export async function GET(req: Request, { params }: Params) {
   // invent a catalog cost or add POS sales to Finance invoice balances.
   const [postedLedger, executiveSources, receivableRows, inventoryAlerts] = await Promise.all([
     accountingAccess.allowed ? retailPostedSiteLedger(organizationId, from, to, ids, !siteId) : Promise.resolve({ bySite: [], unallocated: [] }),
-    loadRetailExecutiveSources({ organizationId, from, to, timezone, access: { agency: agencyAccess.allowed, telco: telcoAccess.allowed, treasury: treasuryAccess.allowed } }),
-    ids.length ? prisma.$queryRaw<Array<{ siteId: string; currencyCode: string; total: Prisma.Decimal; overdue: Prisma.Decimal; count: bigint }>>(Prisma.sql`
+    loadRetailExecutiveSources({ organizationId, from, to, timezone, access: { agency: agencyAccess.allowed, telco: telcoAccess.allowed, treasury: treasuryAccess.allowed, financeCollections: financeReceivablesAccess.allowed && financePaymentsAccess.allowed, invoices: financeReceivablesAccess.allowed, expenses: financeBudgetsAccess.allowed } }),
+    ids.length && financeReceivablesAccess.allowed ? prisma.$queryRaw<Array<{ siteId: string; currencyCode: string; total: Prisma.Decimal; overdue: Prisma.Decimal; count: bigint }>>(Prisma.sql`
       SELECT checkout."siteId" AS "siteId", invoice."currencyCode" AS "currencyCode",
         COALESCE(SUM(invoice."outstandingAmount"), 0) AS total,
         COALESCE(SUM(CASE WHEN invoice."dueDate" < ${new Date()} THEN invoice."outstandingAmount" ELSE 0 END), 0) AS overdue,
@@ -202,8 +207,8 @@ export async function GET(req: Request, { params }: Params) {
   }));
   await writeApiLog({ request: req, startedAt, statusCode: 200, userId: session.userId, metadata: { organizationId, domain: "retail-site-overview", siteCount: items.length } });
   // Company-only balances without site attribution must never leak into a
-  // single-site subtotal. Include historical closed-site journals in company
-  // P&L, but report them as unallocated to current operating stores.
+  // single-site subtotal. Historical closed-site journals stay attributed to their
+  // own archived store, while truly missing site dimensions remain unallocated.
   const unallocated = {
     mobileMoney: siteId ? [] : executiveSources.mobileMoney.filter((row) => row.siteId === null || !ids.includes(row.siteId)),
     telco: siteId ? [] : executiveSources.telco.filter((row) => row.siteId === null || !ids.includes(row.siteId)),
@@ -216,7 +221,7 @@ export async function GET(req: Request, { params }: Params) {
     period: { from, to }, organizationName: organization?.name || "", timezone,
     scope: "OWNER_ONLY_OPERATIONAL", currencyPolicy: "SEPARATE_PER_CURRENCY", financeMarginCertified: false, postedLedgerScope: "PROVISIONAL_POSTED_ONLY", unallocatedPostedLedger: postedLedger.unallocated,
     unallocated, summaries, corporate: summarizeRetailExecutive(items, unallocated),
-    timeline: executiveSources.timeline, sourceAvailability: { agency: agencyAccess.allowed, telco: telcoAccess.allowed, treasury: treasuryAccess.allowed, inventory: inventoryAccess.allowed, accounting: accountingAccess.allowed, reports: reportsAccess.allowed, reportCreate: Boolean(reportWriteAccess?.canCreate) },
+    timeline: executiveSources.timeline, sourceAvailability: { agency: agencyAccess.allowed, telco: telcoAccess.allowed, treasury: treasuryAccess.allowed, inventory: inventoryAccess.allowed, accounting: accountingAccess.allowed, financeReceivables: financeReceivablesAccess.allowed, financePayments: financePaymentsAccess.allowed, financeBudgets: financeBudgetsAccess.allowed, reports: reportsAccess.allowed, reportCreate: Boolean(reportWriteAccess?.canCreate) },
     preferences,
   }, { headers: { "Cache-Control": "private, no-store" } });
 }

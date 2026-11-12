@@ -1,4 +1,5 @@
 import type { Prisma } from "@prisma/client";
+import { RETAIL_EXECUTIVE_METRICS } from "@/lib/enterprise/retail/executive-metrics";
 import { z } from "zod";
 
 /** Owner-controlled display preferences; never affect ledger values or access. */
@@ -9,11 +10,12 @@ export const retailDashboardPreferencesSchema = z.object({
   warnOutstandingByCurrency: z.record(z.string().regex(/^[A-Z]{3}$/), z.number().min(0).max(1_000_000_000_000)).default({}),
   warnStockDays: z.number().int().min(1).max(365),
   showLegacyPos: z.boolean(),
+  favoriteMetrics: z.array(z.enum(RETAIL_EXECUTIVE_METRICS)).max(13).refine((values) => new Set(values).size === values.length, "Indicateurs en double").default([]),
 }).strict();
 export type RetailDashboardPreferences = z.infer<typeof retailDashboardPreferencesSchema>;
 export const DEFAULT_RETAIL_DASHBOARD_PREFERENCES: RetailDashboardPreferences = {
   defaultDays: 7, defaultMetric: "financeCollections", warnOutstandingAbove: 100_000, warnOutstandingByCurrency: {},
-  warnStockDays: 30, showLegacyPos: true,
+  warnStockDays: 30, showLegacyPos: true, favoriteMetrics: [],
 };
 
 function record(value: unknown): Record<string, unknown> { return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {}; }

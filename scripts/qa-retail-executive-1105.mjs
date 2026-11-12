@@ -15,7 +15,7 @@ const load = (path, aliases = {}) => {
 };
 const read = (path) => fs.readFileSync(path, "utf8");
 const metrics = load("lib/enterprise/retail/executive-metrics.ts");
-const prefs = load("lib/enterprise/retail/dashboard-preferences.ts");
+const prefs = load("lib/enterprise/retail/dashboard-preferences.ts", { "@/lib/enterprise/retail/executive-metrics": metrics });
 const previousPrefs = prefs.readRetailDashboardPreferences({ executiveDashboard: { defaultDays: 7, defaultMetric: "financeCollections", warnOutstandingAbove: 100000, warnStockDays: 30, showLegacyPos: true } });
 assert.deepEqual(Object.keys(previousPrefs.warnOutstandingByCurrency), [], "Saved preferences from before currency-specific thresholds must remain readable");
 assert.equal(prefs.retailDashboardPreferencesSchema.safeParse({ ...previousPrefs, warnOutstandingByCurrency: { CDF: 250000, USD: 100 } }).success, true, "Administrator can set independent currency-native debt thresholds");

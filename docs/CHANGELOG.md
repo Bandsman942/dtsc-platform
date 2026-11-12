@@ -1,3 +1,17 @@
+## 2026-11-12 — Feature #1117 — Traçabilité des 12 KPI financiers RETAIL (candidat v1.13.0)
+
+- Après fusion et validation propriétaire E2E BON du POS #1118 (v1.12.0), reprise du lot Finance #1119 sur ce nouveau `main` : aucun correctif POS ni aucune QA perdue.
+- Registre de lecture des 22 KPI, drill-down en lecture seule de 12 sources, contrôles multi-tenant, permissions par domaine, montants par devise native et distinction solde/flux de période.
+- 16/16 workflows verts isolément pour #1119 et 16/16 tests d’intégration combinés #1120 ; les deux suites Playwright couvrent le brouillon POS/Finance et les sources des indicateurs sur PostgreSQL isolé.
+- E2E final confirmé BON par le propriétaire le 12 novembre 2026. Périmètre non livré hors scope : certification de périphériques non implémentés, PWA entièrement redémarrable hors réseau, exports financiers exhaustifs asynchrones #1110 et certification fiscale/comptable externe.
+- Version unifiée candidate `1.13.0` ; aucune nouvelle migration ni variable d'environnement. **Production et Release seulement après preuve Vercel READY du nouveau `main`**.
+
+## 2026-11-12 — Feature #1116 — POS RETAIL / Finance (fusion #1118, v1.12.0)
+
+- POS Design 2.0, sécurité IndexedDB de la file de brouillons hors connexion, suppression des tentatives d'encaissement/comptabilisation locale, validation des permissions au rejeu et fonctions de recherche/filtrage multi-boutiques.
+- 16/16 workflows CI réussis et E2E final BON reçu avant squash merge `066abe732faa8ef3f047b96a1872fe3f0b12683f` sur `main`.
+- Fonctionnalités futures et limites documentées en #1116 et `docs/RETAIL_POS_E2E_1116.md` ; aucune prétention de certification matérielle non testée.
+
 ## 2026-11-11 — Feature #1109 — Coût des ventes RETAIL traçable (candidat v1.11.0, NON LIVRÉ)
 
 - **Correctif CI #1111** : E2E métier propriétaire confirmé BON ; quatre acceptations navigateur bloquées avant exécution sur Ubuntu 26.04 par une panne DNS APT. Runners épinglés à Ubuntu 24.04 LTS, Chromium Playwright installé sans `--with-deps` pour ne plus dépendre d'APT ; tests navigateur maintenus sans contournement, nouvelle CI complète exigée avant fusion.

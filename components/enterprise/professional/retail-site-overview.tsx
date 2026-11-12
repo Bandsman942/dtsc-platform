@@ -10,15 +10,18 @@ import { buildRetailOperationsExport, buildRetailPostedLedgerExport, type Retail
 import { downloadProfessionalCsv, downloadProfessionalXlsx } from "@/lib/reporting/professional-export";
 import { downloadProfessionalPdfV2 } from "@/lib/reporting/professional-pdf-v2";
 import { RETAIL_EXECUTIVE_METRICS, type RetailExecutiveMetric, type RetailExecutiveSummary } from "@/lib/enterprise/retail/executive-metrics";
+import { retailMetricTimeCaption } from "@/lib/enterprise/retail/financial-metric-definitions";
+import type { RetailFinancialTrace } from "@/lib/enterprise/retail/financial-drilldown";
 import { DEFAULT_RETAIL_DASHBOARD_PREFERENCES, type RetailDashboardPreferences } from "@/lib/enterprise/retail/dashboard-preferences";
 import { buildRetailExecutiveExport } from "@/lib/enterprise/retail/site-financial-export";
 import { notifyToast } from "@/lib/client-toast";
 const RetailCogsWorkspace = dynamic(() => import("@/components/enterprise/professional/retail-cogs-workspace").then((module) => module.RetailCogsWorkspace));
+const RetailFinancialDrilldown = dynamic(() => import("@/components/enterprise/professional/retail-financial-drilldown").then((view) => view.RetailFinancialDrilldown));
 
 type Money = { currencyCode: string; total: string; count: number };
 type Tender = Money & { method: string };
 type FinanceInvoice = { currencyCode: string; count: number; issuedTotal: string; allocatedToDate: string; outstandingToDate: string };
-type Site = { id: string; code: string; name: string; sales: Money[]; financeInvoices: FinanceInvoice[]; postedLedger?: RetailPostedLedger[]; approvedExpenses: Money[]; collections: Tender[]; financeCollections: Tender[]; mobileMoney: Array<{ currencyCode: string; transactionType: string; principal: string; commission: string; fees: string; count: number }>; telco: Array<{ currencyCode: string; total: string; operatorCost: string; margin: string; count: number }>; treasury: Array<{ currencyCode: string; total: string; reconciled: string; available: string; accountType: string; count: number }>; receivables: Array<{ currencyCode: string; total: string; overdue: string; count: number }>; stockAlerts: { lowStock: number; expiring: number; expired: number }; inventory: { balanceRows: number }; cashSessions: Array<{ status: string; count: number }>; dailyCloses: Array<{ status: string; count: number }> };
+type Site = { id: string; code: string; name: string; status: string; archivedAt: string | null; sales: Money[]; financeInvoices: FinanceInvoice[]; postedLedger?: RetailPostedLedger[]; approvedExpenses: Money[]; collections: Tender[]; financeCollections: Tender[]; mobileMoney: Array<{ currencyCode: string; transactionType: string; principal: string; commission: string; fees: string; count: number }>; telco: Array<{ currencyCode: string; total: string; operatorCost: string; margin: string; count: number }>; treasury: Array<{ currencyCode: string; total: string; reconciled: string; available: string | null; accountType: string; count: number }>; receivables: Array<{ currencyCode: string; total: string; overdue: string; count: number }>; stockAlerts: { lowStock: number; expiring: number; expired: number }; inventory: { balanceRows: number }; cashSessions: Array<{ status: string; count: number }>; dailyCloses: Array<{ status: string; count: number }> };
 type Trend = { siteId: string | null; currencyCode: string; day: string; metric: string; total: string };
 const METRIC_COPY: Record<RetailExecutiveMetric, [string, string, string, string]> = {
   posSales: ["Ventes POS historiques", "Historical POS sales", "Tickets clôturés avant le circuit Finance ; ne pas cumuler avec les factures.", "Closed tickets from the legacy POS channel; do not add to Finance invoices."],
@@ -65,6 +68,9 @@ export function RetailSiteOverview({ organizationId, organizationName, locale, t
   const [cogsOpen, setCogsOpen] = useState(false);
   const [cogsSite, setCogsSite] = useState("");
   const [cogsCurrency, setCogsCurrency] = useState("");
+  const [traceMetric, setTraceMetric] = useState<RetailFinancialTrace | null>(null);
+  const [traceSite, setTraceSite] = useState("");
+  const [traceCurrency, setTraceCurrency] = useState("");
   const [prefsRevision, setPrefsRevision] = useState(0);
   const [preferences, setPreferences] = useState<RetailDashboardPreferences>(DEFAULT_RETAIL_DASHBOARD_PREFERENCES);
   const [prefsLoaded, setPrefsLoaded] = useState(false);
@@ -72,13 +78,15 @@ export function RetailSiteOverview({ organizationId, organizationName, locale, t
   const [summaries, setSummaries] = useState<Array<{ siteId: string; currencies: RetailExecutiveSummary[] }>>([]);
   const [corporate, setCorporate] = useState<RetailExecutiveSummary[]>([]);
   const [unallocated, setUnallocated] = useState<{ mobileMoney: Site["mobileMoney"]; telco: Site["telco"]; treasury: Site["treasury"] }>({ mobileMoney: [], telco: [], treasury: [] });
-  const [sourceAvailability, setSourceAvailability] = useState({ agency: false, telco: false, treasury: false, inventory: false, accounting: false, reports: false, reportCreate: false });
+  const [sourceAvailability, setSourceAvailability] = useState({ agency: false, telco: false, treasury: false, inventory: false, accounting: false, financeReceivables: false, financePayments: false, financeBudgets: false, reports: false, reportCreate: false });
   const [items, setItems] = useState<Site[]>([]);
   const [unallocatedLedger, setUnallocatedLedger] = useState<RetailPostedLedger[]>([]);
   const [reportPeriod, setReportPeriod] = useState({ from: "", to: "" });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const en = locale === "en";
+  const orderedHighlightMetrics = [...HIGHLIGHT_METRICS].sort((first, second) => Number(preferences.favoriteMetrics.includes(second)) - Number(preferences.favoriteMetrics.includes(first)));
+
   useEffect(() => {
     const controller = new AbortController();
     void fetch(`/api/enterprise/${organizationId}/retail/dashboard-preferences`, { cache: "no-store", signal: controller.signal }).then(async (response) => {
@@ -132,7 +140,7 @@ export function RetailSiteOverview({ organizationId, organizationName, locale, t
       setUnallocatedLedger(payload.unallocatedPostedLedger || []);
       setReportPeriod(payload.period || { from: "", to: "" });
       setTrend(payload.timeline || []); setSummaries(payload.summaries || []); setCorporate(payload.corporate || []); setUnallocated(payload.unallocated || { mobileMoney: [], telco: [], treasury: [] });
-      setSourceAvailability(payload.sourceAvailability || { agency: false, telco: false, treasury: false, inventory: false, accounting: false, reports: false, reportCreate: false });
+      setSourceAvailability(payload.sourceAvailability || { agency: false, telco: false, treasury: false, inventory: false, accounting: false, financeReceivables: false, financePayments: false, financeBudgets: false, reports: false, reportCreate: false });
     } catch (caught) { setError(customerFacingError(caught, locale)); }
     finally { setLoading(false); }
   }, [organizationId, days, dateFrom, dateTo, en, locale, timezone]);
@@ -156,9 +164,11 @@ export function RetailSiteOverview({ organizationId, organizationName, locale, t
     ...site.mobileMoney.map((entry) => entry.currencyCode), ...site.telco.map((entry) => entry.currencyCode), ...site.treasury.map((entry) => entry.currencyCode), ...site.receivables.map((entry) => entry.currencyCode), ...(site.postedLedger || []).map((entry) => entry.currencyCode),
   ]).concat(corporate.map((row) => row.currencyCode)))].sort();
   const chartRows = visibleSites.flatMap((site) => currencies.filter((currency) => !currencyFilter || currency === currencyFilter).map((currency) => {
-    const value = Number(summaries.find((row) => row.siteId === site.id)?.currencies.find((row) => row.currencyCode === currency)?.values[chartMetric] || 0);
-    return { id: `${site.id}:${currency}`, name: site.name, currency, value };
-  })).filter((row) => row.value !== 0);
+    const summary = summaries.find((row) => row.siteId === site.id)?.currencies.find((row) => row.currencyCode === currency);
+    const unavailable = summary?.unavailableMetrics?.includes(chartMetric) ?? false;
+    const value = unavailable ? 0 : Number(summary?.values[chartMetric] || 0);
+    return { id: `${site.id}:${currency}`, name: site.name, currency, value, unavailable };
+  })).filter((row) => !row.unavailable && row.value !== 0);
   const trendRows = trend.filter((row) => row.metric === chartMetric && (!siteFilter || row.siteId === siteFilter) && (!currencyFilter || row.currencyCode === currencyFilter));
   const periodByCurrency = currencies.filter((currency) => !currencyFilter || currency === currencyFilter).map((currency) => ({
     currency, points: [...new Set(trendRows.filter((row) => row.currencyCode === currency).map((row) => row.day))].sort().map((day) => ({ day, value: trendRows.filter((row) => row.currencyCode === currency && (!siteFilter || row.siteId === siteFilter)).reduce((sum, row) => sum + Number(row.total), 0) })),
@@ -179,6 +189,20 @@ export function RetailSiteOverview({ organizationId, organizationName, locale, t
     period={reportPeriod} initialSiteId={cogsSite} initialCurrency={cogsCurrency}
     sites={items.map((site) => ({ id: site.id, name: site.name }))} canSaveReport={sourceAvailability.reportCreate}
     onBack={() => setCogsOpen(false)} />;
+  const canInspectMetric = (value: RetailExecutiveMetric) => {
+    if (value === "postedCogs") return sourceAvailability.accounting;
+    if (value === "postedRevenue" || value === "postedGrossMargin" || value === "postedOperatingResult") return sourceAvailability.accounting;
+    if (value === "financeCollections") return sourceAvailability.financeReceivables && sourceAvailability.financePayments;
+    if (value === "invoices" || value === "outstanding" || value === "overdue") return sourceAvailability.financeReceivables;
+    if (value === "treasuryAvailable") return sourceAvailability.treasury;
+    if (value === "expenses") return sourceAvailability.financeBudgets;
+    if (value === "mobileMoneyCommission") return sourceAvailability.agency;
+    if (value === "telcoMargin") return sourceAvailability.telco;
+    return value === "posSales";
+  };
+  if (traceMetric) return <RetailFinancialDrilldown organizationId={organizationId} organizationName={organizationName} locale={locale}
+    metric={traceMetric} period={reportPeriod} initialSiteId={traceSite} initialCurrency={traceCurrency}
+    sites={items.map((site) => ({ id: site.id, name: site.name }))} onBack={() => setTraceMetric(null)} />;
   return <section data-testid="retail-multisite-overview" className="min-w-0 rounded-2xl border border-dtsc-border bg-dtsc-surface p-4 shadow-sm sm:p-5">
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div className="flex min-w-0 items-start gap-3"><Building2 className="mt-1 h-5 w-5 shrink-0 text-dtsc-blue" /><div className="min-w-0"><h2 className="font-black text-dtsc-ink">{en ? "Store management overview" : "Pilotage des boutiques"}</h2><p className="mt-1 text-sm text-dtsc-muted">{en ? "Operational activity by store and currency; only the company owner/admin can access this comparison." : "Activités par boutique et par devise, réservées au propriétaire et à l'administration."}</p></div></div>
@@ -187,7 +211,7 @@ export function RetailSiteOverview({ organizationId, organizationName, locale, t
     <div className="mt-3 grid min-w-0 gap-2 sm:grid-cols-2 lg:grid-cols-4">
       <label className="text-xs font-bold text-dtsc-muted">{en ? "Exact / start date" : "Date précise / début"}<input type="date" value={dateFrom} max={dateTo || undefined} onChange={(event) => setDateFrom(event.target.value)} className="mt-1 min-h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-page p-2 text-sm" /></label>
       <label className="text-xs font-bold text-dtsc-muted">{en ? "End date" : "Date de fin"}<input type="date" value={dateTo} min={dateFrom || undefined} onChange={(event) => setDateTo(event.target.value)} className="mt-1 min-h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-page p-2 text-sm" /></label>
-      <label className="text-xs font-bold text-dtsc-muted">{en ? "Store" : "Boutique"}<select value={siteFilter} onChange={(event) => setSiteFilter(event.target.value)} className="mt-1 min-h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-page p-2 text-sm"><option value="">{en ? "All stores" : "Toutes les boutiques"}</option>{items.map((site) => <option key={site.id} value={site.id}>{site.name}</option>)}</select></label>
+      <label className="text-xs font-bold text-dtsc-muted">{en ? "Store" : "Boutique"}<select value={siteFilter} onChange={(event) => setSiteFilter(event.target.value)} className="mt-1 min-h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-page p-2 text-sm"><option value="">{en ? "All stores" : "Toutes les boutiques"}</option>{items.map((site) => <option key={site.id} value={site.id}>{site.name}{site.archivedAt || site.status !== "ACTIVE" ? (en ? " · historical" : " · historique") : ""}</option>)}</select></label>
       <label className="text-xs font-bold text-dtsc-muted">{en ? "Currency" : "Devise"}<select value={currencyFilter} onChange={(event) => setCurrencyFilter(event.target.value)} className="mt-1 min-h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-page p-2 text-sm"><option value="">{en ? "All — separate" : "Toutes — séparées"}</option>{currencies.map((currency) => <option key={currency} value={currency}>{currency}</option>)}</select></label>
     </div>
     <div className="mt-2 flex flex-wrap gap-2"><Button type="button" variant="outline" onClick={() => { const parts = new Intl.DateTimeFormat("en-GB", { timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date()); const part = (key: string) => parts.find((item) => item.type === key)?.value || ""; const date = dateFrom || dateTo || `${part("year")}-${part("month")}-${part("day")}`; setDateFrom(date); setDateTo(date); }}>{en ? "Exact date" : "Date précise"}</Button><Button type="button" variant="ghost" onClick={() => { setDateFrom(""); setDateTo(""); }}>{en ? "Clear dates" : "Effacer les dates"}</Button><span className="self-center text-xs text-dtsc-muted">{timezone}</span></div>
@@ -211,6 +235,14 @@ export function RetailSiteOverview({ organizationId, organizationName, locale, t
         {currencies.map((currency) => <label key={currency} className="text-xs font-bold text-dtsc-muted">{en ? `Outstanding warning · ${currency}` : `Alerte créances · ${currency}`}<input type="number" min="0" step="1" max="1000000000000" className="mt-1 min-h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-surface p-2" value={preferences.warnOutstandingByCurrency[currency] ?? preferences.warnOutstandingAbove} onChange={(event) => setPreferences((value) => ({ ...value, warnOutstandingByCurrency: { ...value.warnOutstandingByCurrency, [currency]: Number(event.target.value) } }))} /></label>)}
         <label className="text-xs font-bold text-dtsc-muted">{en ? "Expiry warning days" : "Alerte péremption (jours)"}<input type="number" min="1" max="365" step="1" className="mt-1 min-h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-surface p-2" value={preferences.warnStockDays} onChange={(event) => setPreferences((value) => ({ ...value, warnStockDays: Number(event.target.value) }))} /></label>
         <label className="flex min-h-11 items-center gap-2 text-sm font-semibold text-dtsc-ink"><input type="checkbox" checked={preferences.showLegacyPos} onChange={(event) => setPreferences((value) => ({ ...value, showLegacyPos: event.target.checked }))} />{en ? "Show historical POS blocks" : "Afficher les flux POS historiques"}</label>
+        <fieldset className="min-w-0 sm:col-span-2 lg:col-span-4">
+          <legend className="text-xs font-bold text-dtsc-ink">{en ? "Priority indicators · display first" : "Indicateurs prioritaires · affichés en premier"}</legend>
+          <p className="mt-1 text-xs text-dtsc-muted">{en ? "Preferences only reorder the cards; they never change amounts or access rights." : "Les favoris modifient uniquement l'ordre des cartes, sans changer les montants ni les droits d'accès."}</p>
+          <div className="mt-2 flex flex-wrap gap-2">{HIGHLIGHT_METRICS.map((metric) => <label key={metric} className={`inline-flex min-h-11 items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold ${preferences.favoriteMetrics.includes(metric) ? "border-cyan-500 bg-cyan-500/10 text-dtsc-ink" : "border-dtsc-border bg-dtsc-surface text-dtsc-muted"}`}>
+            <input type="checkbox" checked={preferences.favoriteMetrics.includes(metric)} onChange={(event) => setPreferences((value) => ({ ...value, favoriteMetrics: event.target.checked ? [...value.favoriteMetrics, metric] : value.favoriteMetrics.filter((code) => code !== metric) }))} />
+            {METRIC_COPY[metric][en ? 1 : 0]}
+          </label>)}</div>
+        </fieldset>
       </div>
       <div className="mt-3 flex justify-end gap-2"><Button type="button" variant="outline" onClick={() => setShowSettings(false)}>{en ? "Cancel" : "Annuler"}</Button><Button type="button" disabled={savingSettings || !prefsLoaded} onClick={() => void savePreferences()}>{savingSettings ? (en ? "Saving…" : "Enregistrement…") : (en ? "Save settings" : "Enregistrer les paramètres")}</Button></div>
     </div> : null}
@@ -223,22 +255,23 @@ export function RetailSiteOverview({ organizationId, organizationName, locale, t
       </div> : null}
       {summaryRows.length ? summaryRows.map((bucket) => <div key={bucket.currencyCode} className="rounded-2xl border border-dtsc-border bg-dtsc-page p-3 sm:p-4">
         <div className="mb-3 flex flex-wrap items-center gap-2"><span className="rounded-full bg-cyan-500/15 px-3 py-1 text-xs font-black text-cyan-800 dark:text-cyan-200">{bucket.currencyCode}</span><span className="text-xs text-dtsc-muted">{en ? "Native currency · no cross-currency sum" : "Devise d'origine · aucun cumul entre devises"}</span></div>
-        <div className="grid min-w-0 grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-4">{HIGHLIGHT_METRICS.filter((metric) => (metric !== "posSales" || preferences.showLegacyPos) && (metric !== "mobileMoneyCommission" || sourceAvailability.agency) && (metric !== "telcoMargin" || sourceAvailability.telco) && (!metric.startsWith("posted") || sourceAvailability.accounting) && (metric !== "treasuryAvailable" || sourceAvailability.treasury)).map((metric) => {
-          const raw = bucket.values[metric]; const warning = metric === "overdue" && Number(raw) > 0 || metric === "outstanding" && Number(raw) >= (preferences.warnOutstandingByCurrency[bucket.currencyCode] ?? preferences.warnOutstandingAbove) && Number(raw) > 0;
+        <div className="grid min-w-0 grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-4">{orderedHighlightMetrics.filter((metric) => ((metric !== "financeCollections") || (sourceAvailability.financeReceivables && sourceAvailability.financePayments)) && !((metric === "invoices" || metric === "outstanding" || metric === "overdue") && !sourceAvailability.financeReceivables) && (metric !== "expenses" || sourceAvailability.financeBudgets) && (metric !== "posSales" || preferences.showLegacyPos) && (metric !== "mobileMoneyCommission" || sourceAvailability.agency) && (metric !== "telcoMargin" || sourceAvailability.telco) && (!metric.startsWith("posted") || sourceAvailability.accounting) && (metric !== "treasuryAvailable" || sourceAvailability.treasury)).map((metric) => {
+          const raw = bucket.values[metric]; const unavailable = bucket.unavailableMetrics?.includes(metric) ?? false; const warning = unavailable || metric === "overdue" && Number(raw) > 0 || metric === "outstanding" && Number(raw) >= (preferences.warnOutstandingByCurrency[bucket.currencyCode] ?? preferences.warnOutstandingAbove) && Number(raw) > 0;
           return <div key={metric} className={`relative min-w-0 rounded-xl border p-3 ${warning ? "border-amber-500/50 bg-amber-500/10" : metric === "financeCollections" || metric === "postedGrossMargin" ? "border-emerald-500/25 bg-emerald-500/5" : "border-dtsc-border bg-dtsc-surface"}`} title={METRIC_COPY[metric][en ? 3 : 2]}>
             <p className="flex items-start gap-1 text-[11px] font-bold text-dtsc-muted">{warning ? <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-600" /> : null}{METRIC_COPY[metric][en ? 1 : 0]}</p>
-            <p className={`mt-2 break-words text-base font-black tabular-nums sm:text-lg ${Number(raw) < 0 ? "text-red-600 dark:text-red-300" : "text-dtsc-ink"}`}>{currencyAmount(raw, bucket.currencyCode, en)}</p>
+            <p className={`mt-2 break-words text-base font-black tabular-nums sm:text-lg ${Number(raw) < 0 ? "text-red-600 dark:text-red-300" : "text-dtsc-ink"}`}>{unavailable ? (en ? "Not determined" : "Non déterminé") : currencyAmount(raw, bucket.currencyCode, en)}</p>
+            <span className="mt-1 inline-flex rounded-full border border-dtsc-border bg-dtsc-page px-2 py-0.5 text-[10px] font-semibold text-dtsc-muted">{retailMetricTimeCaption(metric, locale)}</span>
             <p className="mt-1 text-[10px] leading-relaxed text-dtsc-muted">{METRIC_COPY[metric][en ? 3 : 2]}</p>
-            {metric === "postedCogs" ? <button type="button" className="absolute inset-0 rounded-xl focus-visible:outline-2 focus-visible:outline-cyan-500 hover:ring-2 hover:ring-cyan-500/60" aria-label={en ? `Inspect posted cost of sales in ${bucket.currencyCode}` : `Consulter le détail du coût des ventes en ${bucket.currencyCode}`} onClick={() => { setCogsSite(siteFilter); setCogsCurrency(bucket.currencyCode); setCogsOpen(true); }}><span className="sr-only">{en ? "Open accounting trace" : "Ouvrir la traçabilité comptable"}</span></button> : null}
+            {canInspectMetric(metric) ? <button type="button" className="absolute inset-0 rounded-xl focus-visible:outline-2 focus-visible:outline-cyan-500 hover:ring-2 hover:ring-cyan-500/60" aria-label={en ? `Inspect ${METRIC_COPY[metric][1]} in ${bucket.currencyCode}` : `Consulter ${METRIC_COPY[metric][0]} en ${bucket.currencyCode}`} onClick={() => { if (metric === "postedCogs") { setCogsSite(siteFilter); setCogsCurrency(bucket.currencyCode); setCogsOpen(true); } else { setTraceMetric(metric as RetailFinancialTrace); setTraceSite(siteFilter); setTraceCurrency(bucket.currencyCode); } }}><span className="sr-only">{en ? "Open source details" : "Ouvrir les pièces sources"}</span></button> : null}
           </div>;
         })}</div>
       </div>) : <p className="rounded-xl border border-dtsc-border bg-dtsc-page p-3 text-sm text-dtsc-muted">{en ? "No financial event for the selected scope. Balances may still exist in other stores or currencies." : "Aucune opération financière dans ce périmètre. Des soldes peuvent exister dans d'autres boutiques ou devises."}</p>}
-      {!siteFilter && (unallocated.mobileMoney.length || unallocated.telco.length || unallocated.treasury.length) ? <div role="status" className="rounded-xl border border-amber-500/35 bg-amber-500/10 p-3 text-xs text-amber-900 dark:text-amber-200"><AlertTriangle className="mr-1 inline h-4 w-4" />{en ? "Some Mobile Money, Telco or treasury amounts have no active store assignment. They are included in company totals but excluded from store comparisons." : "Des opérations Mobile Money, Télécom ou comptes de trésorerie n'ont pas de boutique active attribuée. Elles figurent dans les totaux entreprise, mais pas dans les comparaisons entre boutiques."}</div> : null}
+      {!siteFilter && (unallocated.mobileMoney.length || unallocated.telco.length || unallocated.treasury.length) ? <div role="status" className="rounded-xl border border-amber-500/35 bg-amber-500/10 p-3 text-xs text-amber-900 dark:text-amber-200"><AlertTriangle className="mr-1 inline h-4 w-4" />{en ? "Some Mobile Money, Telco or treasury amounts have no store attribution. They are included in company totals but excluded from store comparisons." : "Des opérations Mobile Money, Télécom ou comptes de trésorerie n'ont pas de boutique attribuée. Elles figurent dans les totaux entreprise, mais pas dans les comparaisons entre boutiques."}</div> : null}
       <p className="text-xs text-dtsc-muted">{en ? "Interpretation: invoices and approved expenses are period events; open receivables and treasury are current positions; accounting margins are posted-only and provisional. Mobile Money customer principal is not revenue." : "Lecture : factures et dépenses approuvées = flux de période ; créances et trésorerie = positions actuelles ; marges comptables = écritures postées provisoires. Les dépôts/retraits Mobile Money ne sont pas des revenus."}</p>
     </section> : null}
     {!loading && visibleSites.length ? <div className="mt-4 min-w-0 rounded-2xl border border-dtsc-border bg-dtsc-page p-3 sm:p-4" data-testid="retail-executive-charts">
       <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="flex items-center gap-2 text-sm font-black text-dtsc-ink"><BarChart3 className="h-4 w-4 text-cyan-600" />{en ? "Interactive trends and store comparisons" : "Évolution et comparaison interactive des boutiques"}</h3>
-        <select aria-label={en ? "Chart metric" : "Indicateur graphique"} value={chartMetric} onChange={(event) => { setChartMetric(event.target.value as RetailExecutiveMetric); setActiveBar(""); }} className="min-h-11 max-w-full rounded-lg border border-dtsc-border bg-dtsc-surface px-2 text-sm">{RETAIL_EXECUTIVE_METRICS.filter((metric) => (metric !== "posSales" && metric !== "posCollections" || preferences.showLegacyPos) && (!metric.startsWith("mobileMoney") || sourceAvailability.agency) && (!metric.startsWith("telco") || sourceAvailability.telco) && (!metric.startsWith("posted") || sourceAvailability.accounting) && (!metric.startsWith("treasury") || sourceAvailability.treasury)).map((metric) => <option key={metric} value={metric}>{METRIC_COPY[metric][en ? 1 : 0]}</option>)}</select>
+        <select aria-label={en ? "Chart metric" : "Indicateur graphique"} value={chartMetric} onChange={(event) => { setChartMetric(event.target.value as RetailExecutiveMetric); setActiveBar(""); }} className="min-h-11 max-w-full rounded-lg border border-dtsc-border bg-dtsc-surface px-2 text-sm">{RETAIL_EXECUTIVE_METRICS.filter((metric) => ((metric !== "financeCollections") || (sourceAvailability.financeReceivables && sourceAvailability.financePayments)) && !((metric === "invoices" || metric === "outstanding" || metric === "overdue") && !sourceAvailability.financeReceivables) && (metric !== "expenses" || sourceAvailability.financeBudgets) && (metric !== "posSales" && metric !== "posCollections" || preferences.showLegacyPos) && (!metric.startsWith("mobileMoney") || sourceAvailability.agency) && (!metric.startsWith("telco") || sourceAvailability.telco) && (!metric.startsWith("posted") || sourceAvailability.accounting) && (!metric.startsWith("treasury") || sourceAvailability.treasury)).map((metric) => <option key={metric} value={metric}>{METRIC_COPY[metric][en ? 1 : 0]}</option>)}</select>
       </div>
       <p className="mt-2 rounded-lg bg-dtsc-surface p-2 text-xs text-dtsc-muted">{METRIC_COPY[chartMetric][en ? 3 : 2]}</p>
       {periodByCurrency.length ? <div className="mt-3 grid min-w-0 gap-3 lg:grid-cols-2">{periodByCurrency.map(({ currency, points }) => {
@@ -253,9 +286,9 @@ export function RetailSiteOverview({ organizationId, organizationName, locale, t
     </div> : null}
     {error ? <p role="alert" className="mt-4 rounded-xl bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-200">{error}</p> : null}
     {loading ? <p role="status" className="mt-4 text-sm text-dtsc-muted">{en ? "Loading stores…" : "Chargement des boutiques…"}</p> : null}
-    {!loading && !items.length ? <p className="mt-4 rounded-xl bg-dtsc-page p-3 text-sm text-dtsc-muted">{en ? "No active store has been set up. Create sites and their warehouses from Enterprise master data." : "Aucune boutique active. Créez les sites et leurs dépôts depuis les Référentiels ERP."}</p> : null}
+    {!loading && !items.length ? <p className="mt-4 rounded-xl bg-dtsc-page p-3 text-sm text-dtsc-muted">{en ? "No store has been set up. Create sites and their warehouses from Enterprise master data." : "Aucune boutique enregistrée. Créez les sites et leurs dépôts depuis les Référentiels ERP."}</p> : null}
     {!loading && visibleSites.length ? <div className="mt-4 grid min-w-0 gap-3 lg:grid-cols-2">{filteredSites.map((site) => <article key={site.id} className="min-w-0 rounded-2xl border border-dtsc-border bg-dtsc-page p-4">
-      <div className="flex items-center gap-2"><Landmark className="h-4 w-4 text-dtsc-blue" /><h3 className="min-w-0 break-words font-black text-dtsc-ink">{site.code} · {site.name}</h3></div>
+      <div className="flex items-center gap-2"><Landmark className="h-4 w-4 text-dtsc-blue" /><h3 className="min-w-0 break-words font-black text-dtsc-ink">{site.code} · {site.name}</h3>{site.archivedAt || site.status !== "ACTIVE" ? <span className="rounded-full bg-amber-500/15 px-2 py-1 text-[10px] font-black text-amber-800 dark:text-amber-200">{en ? "Historical store" : "Boutique historique"}</span> : null}</div>
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
         {preferences.showLegacyPos ? <div className="min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface p-3"><p className="flex items-center gap-2 text-xs font-bold text-dtsc-muted"><ShoppingBasket className="h-4 w-4" />{en ? "Historical completed POS sales" : "Ventes POS historiques réalisées"}</p>{site.sales.length ? site.sales.map((sale) => <p key={sale.currencyCode} className="mt-2 break-words text-sm font-black text-dtsc-ink">{currencyAmount(sale.total, sale.currencyCode, en)} <span className="font-normal text-dtsc-muted">({sale.count})</span></p>) : <p className="mt-2 text-sm text-dtsc-muted">0</p>}</div> : null}
         {preferences.showLegacyPos ? <div className="min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface p-3"><p className="flex items-center gap-2 text-xs font-bold text-dtsc-muted"><Wallet className="h-4 w-4" />{en ? "Historical POS collections" : "Encaissements POS historiques"}</p>{site.collections.length ? site.collections.map((tender) => <p key={`${tender.currencyCode}:${tender.method}`} className="mt-2 break-words text-sm font-semibold text-dtsc-ink">{currencyAmount(tender.total, tender.currencyCode, en)} <span className="text-xs font-normal text-dtsc-muted">· {tender.method === "CASH" ? en ? "Cash" : "Espèces" : tender.method === "BANK_TRANSFER" ? en ? "Bank transfer" : "Virement" : tender.method === "MOBILE_MONEY" ? "Mobile Money" : tender.method === "CARD" ? en ? "Card" : "Carte" : en ? "Other" : "Autre"}</span></p>) : <p className="mt-2 text-sm text-dtsc-muted">0</p>}</div> : null}
