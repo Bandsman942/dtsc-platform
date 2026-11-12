@@ -3,7 +3,7 @@
  * activates a tax for a tenant. Legal applicability and fiscal-device compliance
  * must be confirmed by the organization before opting in.
  *
- * Source: DGI RDC, https://dgi.gouv.cd/teledeclaration/ (verified 2026-11-12).
+ * Source: DGI RDC, https://dgi.gouv.cd/taxe-sur-la-valeur-ajoutee-tva/ (verified 2026-11-12).
  * Rates are decimal fractions: "0.16" means sixteen percent.
  */
 export type DtscTaxTemplate = Readonly<{
@@ -33,7 +33,7 @@ export const DTSC_TAX_TEMPLATES: readonly DtscTaxTemplate[] = Object.freeze([
     rate: "0.16",
     effectiveFrom: "2026-11-12",
     sourceAuthority: "Direction générale des impôts (RDC)",
-    sourceUrl: "https://dgi.gouv.cd/teledeclaration/",
+    sourceUrl: "https://dgi.gouv.cd/taxe-sur-la-valeur-ajoutee-tva/",
     verifiedAt: "2026-11-12",
     guidanceFr: "Proposition réservée aux entreprises assujetties et opérations effectivement taxables. Vérifiez le régime, les exonérations et les exigences de facture normalisée.",
     guidanceEn: "Suggested only for VAT-registered businesses and actually taxable operations. Check exemptions and fiscal-invoice requirements.",
