@@ -108,3 +108,9 @@
 - Scénarios stock/paiement : PENDING_SYNC / CONFLICT / REJECTED / SYNCED, facture rejetée/resoumise, dédoublement interdit, paiement partiel/complet, TVA et remise, avoir et retour.
 - Vérification des migrations additives et de la compatibilité de production, sans migration appliquée à la production pour l'essai.
 - **Statut actuel : travaux partiels, CI non vérifiée, E2E finale non délivrée.**
+
+### Durcissement supplémentaire de la file locale (#1118)
+
+- La capture d'une opération hors connexion utilise désormais l'ajout IndexedDB exclusif (`add`) plutôt que l'écrasement (`put`) : un UUID réutilisé par erreur ou simultanément dans plusieurs onglets ne peut plus remplacer silencieusement une opération financière en attente.
+- Une réponse HTTP ancienne ou un autre onglet ne peut plus rétrograder un brouillon déjà confirmé `SYNCED` vers `CONFLICT` ou `REJECTED` dans la file locale.
+- Le QA ciblé vérifie explicitement ces deux invariants. Leur présence dans le code **ne vaut pas** certification navigateur, multionglets ou E2E physique ; scénarios POS-02, POS-05 et POS-07 restent à exécuter.
