@@ -20,7 +20,7 @@ model EnterpriseHealthInsuranceConnector {
   verifications        EnterpriseHealthInsuranceVerification[]
   submissions          EnterpriseHealthInsuranceInvoiceSubmission[]
 
-  @@unique([organizationId, adapterCode])
+  @@unique([organizationId, adapterCode, environment])
   @@unique([organizationId, id])
   @@index([organizationId, status])
 }
@@ -56,6 +56,7 @@ model EnterpriseHealthInsuranceInvoiceSubmission {
   connectorId       String
   adapterCode       String   @default("HIRMS_HSL")
   salesInvoiceId    String
+  environment       String   @default("UAT")
   invoiceNumber     String
   batchId           String?
   payloadDigest     String
@@ -68,8 +69,8 @@ model EnterpriseHealthInsuranceInvoiceSubmission {
   updatedAt         DateTime @updatedAt
   connector         EnterpriseHealthInsuranceConnector @relation(fields: [organizationId, connectorId], references: [organizationId, id], onDelete: Restrict)
 
-  @@unique([organizationId, adapterCode, salesInvoiceId])
-  @@index([organizationId, submittedAt])
-  @@index([organizationId, batchId])
-  @@index([organizationId, transportStatus, submittedAt])
+  @@unique([organizationId, adapterCode, environment, salesInvoiceId])
+  @@index([organizationId, environment, submittedAt])
+  @@index([organizationId, environment, batchId])
+  @@index([organizationId, environment, transportStatus, submittedAt])
 }
