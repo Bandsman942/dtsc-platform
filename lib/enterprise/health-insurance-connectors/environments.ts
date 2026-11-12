@@ -44,3 +44,14 @@ export function assertHirmsInvoiceSendEnabled(environment: HirmsEnvironment, org
     throw new InsuranceConnectorError("HIRMS_INVOICE_SENDING_DISABLED", 403);
   }
 }
+
+/** OCR upload requires independent authorization, in addition to Production gates. */
+export function assertHirmsOcrUploadEnabled(environment: HirmsEnvironment, organizationId: string) {
+  assertHirmsEnvironmentEnabled(environment, organizationId);
+  const key = environment === "PRODUCTION"
+    ? "HEALTH_INSURANCE_HIRMS_PRODUCTION_OCR_ENABLED"
+    : "HEALTH_INSURANCE_HIRMS_UAT_OCR_ENABLED";
+  if (process.env[key] !== "true") {
+    throw new InsuranceConnectorError("HIRMS_OCR_UPLOAD_DISABLED", 403);
+  }
+}
