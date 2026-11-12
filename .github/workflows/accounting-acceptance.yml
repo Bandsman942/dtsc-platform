@@ -194,6 +194,15 @@ jobs:
         run: |
           set -o pipefail
           pnpm exec playwright test tests/e2e/sector-tax-compliance.spec.mjs --workers=1 2>&1 | tee /tmp/dtsc-sector-tax-playwright.log
+      # Each browser suite is independent; keep production-like login throttling
+      # intact while clearing only the ephemeral Redis container used by CI.
+      - name: Reset isolated Redis state before ERP cross-module acceptance
+        run: |
+          curl --fail --silent --show-error \\
+            -H "Authorization: Bearer ${CI_REDIS_REST_TOKEN}" \\
+            -H "Content-Type: application/json" \\
+            --data '["FLUSHDB"]' \\
+            http://127.0.0.1:8079/ >/dev/null
       - name: ERP cross-module Finance acceptance
         shell: bash
         run: |
