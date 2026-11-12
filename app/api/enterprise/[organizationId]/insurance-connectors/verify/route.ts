@@ -38,17 +38,18 @@ export async function POST(req: Request, { params }: Params) {
   try {
     const result = await verifyInsuranceMember(organizationId, session.userId, parsed.data);
     await writeAuditLog({ userId: session.userId, action: "HEALTH_INSURANCE_MEMBER_VERIFIED", entity: "EnterpriseHealthInsuranceVerification", request: req,
-      metadata: { organizationId, adapterCode: "HIRMS_HSL", verified: result.verified, serviceStatus: result.service, coverStatus: result.cover } });
-    await writeApiLog({ request: req, startedAt, statusCode: 200, userId: session.userId, metadata: { organizationId, domain: "health-insurance-connectors", action: "verify" } });
+      metadata: { organizationId, adapterCode: "HIRMS_HSL", environment: parsed.data.environment, verified: result.verified, serviceStatus: result.service, coverStatus: result.cover } });
+    await writeApiLog({ request: req, startedAt, statusCode: 200, userId: session.userId, metadata: { organizationId, domain: "health-insurance-connectors", action: "verify", environment: parsed.data.environment } });
     return NextResponse.json({ ok: true, result }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     const code = error instanceof InsuranceConnectorError ? error.code : "HIRMS_VERIFICATION_FAILED";
     const status = error instanceof InsuranceConnectorError ? error.httpStatus : 503;
     const retryAfter = error instanceof InsuranceConnectorError ? error.retryAfter : undefined;
-    await writeApiLog({ request: req, startedAt, statusCode: status, userId: session.userId, metadata: { organizationId, domain: "health-insurance-connectors", action: "verify", errorCode: code } });
+    await writeApiLog({ request: req, startedAt, statusCode: status, userId: session.userId, metadata: { organizationId, domain: "health-insurance-connectors", action: "verify", environment: parsed.data.environment, errorCode: code } });
     return NextResponse.json({ error: code, message: code === "HIRMS_RATE_LIMITED" ? "Le service MSO a atteint sa limite temporaire." :
         code === "HIRMS_ACTION_NOT_GRANTED" ? "Ce compte HSL n'est pas autorisé à vérifier les adhérents." :
-        code === "HEALTH_CONNECTOR_NOT_READY" ? "Connectez et testez d'abord le service HIRMS dans Administration entreprise." :
+        code === "HEALTH_CONNECTOR_NOT_READY" ? "Connectez et testez d’abord le service HIRMS pour cet environnement dans Administration entreprise." :
+        code === "HIRMS_PRODUCTION_NOT_ENABLED" ? "Les opérations HIRMS de Production doivent d’abord être habilitées par DTSC." :
         "Vérification indisponible. Contrôlez la connexion et réessayez." },
       { status, headers: { "Cache-Control": "no-store", ...(retryAfter ? { "Retry-After": String(retryAfter) } : {}) } });
   }
