@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { resolveDefaultSalesTaxes, validatedInvoiceTaxRate } from "@/lib/enterprise/accounting/tax-engine";
+import { resolveDefaultSalesTaxes, calculateDocumentTaxApplications, recordPostedTaxApplicationsTx, snapshotCalculatedTaxes } from "@/lib/enterprise/accounting/tax-engine";
+import type { CalculatedDocumentTax } from "@/lib/enterprise/accounting/tax-engine";
 import { normalizeTaxCountryCode } from "@/lib/enterprise/accounting/tax-jurisdictions";
 import { assertIndependentActor } from "@/lib/enterprise/accounting/access";
 import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
@@ -20,6 +21,7 @@ type CalculatedItem = SalesInvoiceInput["items"][number] & {
   taxRateApplied: Prisma.Decimal;
   taxJurisdiction: string | null;
   taxTemplateVersion: string | null;
+  taxBreakdown: CalculatedDocumentTax[];
   totalAmount: Prisma.Decimal;
 };
 
@@ -28,11 +30,14 @@ async function calculateItems(
   organizationId: string,
   documentDate: Date,
   items: SalesInvoiceInput["items"],
+  siteId?: string | null,
 ): Promise<CalculatedItem[]> {
   const calculated: CalculatedItem[] = [];
   let autoTaxCandidates: Awaited<ReturnType<typeof resolveDefaultSalesTaxes>> | null = null;
   const organization = await tx.organization.findUnique({ where: { id: organizationId }, select: { country: true } });
-  const invoiceJurisdiction = normalizeTaxCountryCode(organization?.country);
+  const site = siteId ? await tx.enterpriseSite.findFirst({ where: { organizationId, id: siteId, status: "ACTIVE", archivedAt: null }, select: { countryCode: true } }) : null;
+  if (siteId && !site) throw new EnterpriseAccountingError("SALES_INVOICE_TAX_SITE_INVALID", 409);
+  const invoiceJurisdiction = normalizeTaxCountryCode(site?.countryCode || organization?.country);
   for (const item of items) {
     const quantityDecimal = new Prisma.Decimal(item.quantity);
     const unitPriceDecimal = new Prisma.Decimal(item.unitPrice);
@@ -48,9 +53,8 @@ async function calculateItems(
     const gross = money(quantityDecimal.times(unitPriceDecimal));
     if (discountDecimal.greaterThan(gross)) throw new EnterpriseAccountingError("SALES_INVOICE_DISCOUNT_EXCEEDS_GROSS", 409);
     const netAmount = money(gross.minus(discountDecimal));
-    let rate = new Prisma.Decimal(0);
     let taxCodeId = item.taxCodeId || null;
-    if (!taxCodeId && catalog?.taxable) {
+    if (!taxCodeId && !item.additionalTaxCodeIds?.length && catalog?.taxable) {
       if (catalog.taxCode) {
         const selected = await tx.enterpriseTaxCode.findFirst({ where: { organizationId, code: catalog.taxCode, isActive: true }, select: { id: true } });
         if (!selected) throw new EnterpriseAccountingError("SALES_INVOICE_TAX_CONFIGURATION_REQUIRED", 409);
@@ -63,33 +67,20 @@ async function calculateItems(
         taxCodeId = autoTaxCandidates[0].id;
       }
     }
-    let taxJurisdiction: string | null = null;
-    let taxTemplateVersion: string | null = null;
-    if (taxCodeId) {
-      const taxRate = await tx.enterpriseTaxRate.findFirst({
-        where: {
-          organizationId,
-          taxCodeId,
-          status: "ACTIVE",
-          effectiveFrom: { lte: documentDate },
-          OR: [{ effectiveTo: null }, { effectiveTo: { gte: documentDate } }],
-          taxCode: { isActive: true },
-        },
-        orderBy: { effectiveFrom: "desc" },
-        include: { taxCode: { select: { jurisdiction: true, sourceTemplateVersion: true, taxTreatment: true, category: true } } },
-      });
-      if (!taxRate) throw new EnterpriseAccountingError("SALES_INVOICE_TAX_RATE_INVALID", 409);
-      taxJurisdiction = taxRate.taxCode.jurisdiction;
-      taxTemplateVersion = taxRate.taxCode.sourceTemplateVersion;
-      const validated = validatedInvoiceTaxRate({ category: taxRate.taxCode.category,
-        treatment: taxRate.taxCode.taxTreatment, rate: taxRate.rate,
-        taxJurisdiction: taxRate.taxCode.jurisdiction, invoiceJurisdiction });
-      if (validated === null) throw new EnterpriseAccountingError("SALES_INVOICE_TAX_JURISDICTION_OR_TREATMENT_INVALID", 409);
-      rate = validated;
-    }
-    const taxAmount = money(netAmount.times(rate));
+    if (item.taxRecoveryRequested) throw new EnterpriseAccountingError("SALES_INVOICE_INPUT_TAX_FLAG_INVALID", 409);
+    const taxCodeIds = [...(taxCodeId ? [taxCodeId] : []), ...(item.additionalTaxCodeIds || [])];
+    const taxBreakdown = await calculateDocumentTaxApplications(tx, {
+      organizationId, effectiveAt: documentDate, invoiceJurisdiction,
+      taxCodeIds, netAmount, sourceType: "SALES_INVOICE",
+      calculationMode: item.taxCalculationMode, evidenceReference: item.taxEvidenceReference,
+    });
+    const rate = taxBreakdown[0]?.rate || new Prisma.Decimal(0);
+    const taxJurisdiction = taxBreakdown[0]?.jurisdiction || null;
+    const taxTemplateVersion = taxBreakdown[0]?.templateVersion || null;
+    const taxAmount = money(sumDecimals(taxBreakdown.map((entry) => entry.amount)));
     calculated.push({ ...item, taxCodeId: taxCodeId || undefined, quantityDecimal, unitPriceDecimal, discountDecimal, netAmount,
-      taxRateApplied: rate, taxJurisdiction, taxTemplateVersion, taxAmount, totalAmount: money(netAmount.plus(taxAmount)) });
+      taxRateApplied: rate, taxJurisdiction, taxTemplateVersion, taxBreakdown, taxAmount,
+      totalAmount: money(netAmount.plus(taxAmount)) });
   }
   return calculated;
 }
@@ -97,7 +88,7 @@ async function calculateItems(
 // The transaction-scoped variant lets sector adapters create their *link* to
 // the canonical Finance invoice atomically. A failure must not strand an
 // unlinked invoice or create a second invoice authority.
-export async function createSalesInvoiceTx(tx: Prisma.TransactionClient, organizationId: string, actorUserId: string, input: SalesInvoiceInput) {
+export async function createSalesInvoiceTx(tx: Prisma.TransactionClient, organizationId: string, actorUserId: string, input: SalesInvoiceInput, siteId?: string | null) {
     await assertActiveClientOrganization(tx, organizationId);
     const customer = await tx.enterpriseBusinessParty.findFirst({
       where: { id: input.businessPartyId, organizationId, status: "ACTIVE", archivedAt: null, roles: { some: { roleCode: "CUSTOMER", status: "ACTIVE", archivedAt: null } } },
@@ -110,7 +101,7 @@ export async function createSalesInvoiceTx(tx: Prisma.TransactionClient, organiz
       const duplicate = await tx.enterpriseSalesInvoice.findFirst({ where: { organizationId, salesOrderId: input.salesOrderId, status: { notIn: ["CANCELLED", "VOIDED"] } } });
       if (duplicate) throw new EnterpriseAccountingError("SALES_ORDER_ALREADY_INVOICED", 409, { invoiceId: duplicate.id });
     }
-    const calculated = await calculateItems(tx, organizationId, input.invoiceDate, input.items);
+    const calculated = await calculateItems(tx, organizationId, input.invoiceDate, input.items, siteId);
     const subtotal = money(sumDecimals(calculated.map((item) => item.quantityDecimal.times(item.unitPriceDecimal))));
     const discountTotal = money(sumDecimals(calculated.map((item) => item.discountDecimal)));
     const taxTotal = money(sumDecimals(calculated.map((item) => item.taxAmount)));
@@ -148,6 +139,9 @@ export async function createSalesInvoiceTx(tx: Prisma.TransactionClient, organiz
             taxRateApplied: item.taxRateApplied,
             taxJurisdiction: item.taxJurisdiction,
             taxTemplateVersion: item.taxTemplateVersion,
+            taxEvidenceReference: item.taxEvidenceReference || null,
+            taxCalculationMode: item.taxCalculationMode || "NET",
+            taxBreakdownJson: item.taxBreakdown.length ? snapshotCalculatedTaxes(item.taxBreakdown, input.invoiceDate) : Prisma.JsonNull,
             taxAmount: item.taxAmount,
             totalAmount: item.totalAmount,
             revenueAccountId: item.revenueAccountId || null,
@@ -187,6 +181,8 @@ export async function transitionSalesInvoice(
       const posting = await postBusinessEventTx(tx, organizationId, actorUserId, {
         postingEvent: "SALES_INVOICE_POSTED", sourceEntityType: "EnterpriseSalesInvoice", sourceEntityId: invoice.id,
       });
+      const invoiceLines = await tx.enterpriseSalesInvoiceItem.findMany({ where: { organizationId, salesInvoiceId: invoice.id }, select: { id: true, taxBreakdownJson: true } });
+      await recordPostedTaxApplicationsTx(tx, { organizationId, sourceEntityType: "EnterpriseSalesInvoiceItem", currencyCode: invoice.currencyCode, items: invoiceLines });
       const receivable = await tx.enterpriseReceivable.upsert({
         where: { salesInvoiceId: invoice.id },
         update: {},

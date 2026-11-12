@@ -176,3 +176,52 @@ export async function calculateDocumentTaxApplications(
   }
   return result;
 }
+
+// TaxLine is the operational tax journal: never insert a draft's estimated tax.
+export async function recordPostedTaxApplicationsTx(
+  tx: Pick<Prisma.TransactionClient, "enterpriseTaxLine">,
+  input: {
+    organizationId: string;
+    sourceEntityType: "EnterpriseSalesInvoiceItem" | "EnterpriseSupplierInvoiceItem";
+    currencyCode: string;
+    items: Array<{ id: string; taxBreakdownJson: Prisma.JsonValue | null; taxRecoveryRequested?: boolean }>;
+  },
+) {
+  type Snapshot = { taxCodeId: string; rate: string; base: string; amount: string;
+    jurisdiction: string | null; treatment: string; templateVersion: string | null;
+    evidenceReference: string | null; basisMode: string; applicationOrder: number; effectiveAt: string };
+  const posted = input.items.flatMap((item) => {
+    if (item.taxBreakdownJson === null) return [];
+    if (!Array.isArray(item.taxBreakdownJson)) throw new EnterpriseAccountingError("TAX_SNAPSHOT_CORRUPT", 409);
+    return item.taxBreakdownJson.map((raw) => {
+      if (!raw || typeof raw !== "object" || Array.isArray(raw)) throw new EnterpriseAccountingError("TAX_SNAPSHOT_CORRUPT", 409);
+      const snapshot = raw as Snapshot;
+      if (typeof snapshot.taxCodeId !== "string" || typeof snapshot.amount !== "string" || typeof snapshot.base !== "string"
+        || typeof snapshot.rate !== "string" || typeof snapshot.effectiveAt !== "string") throw new EnterpriseAccountingError("TAX_SNAPSHOT_CORRUPT", 409);
+      const direction = input.sourceEntityType === "EnterpriseSalesInvoiceItem" ? "OUTPUT"
+        : item.taxRecoveryRequested ? "INPUT" : "INPUT_NONRECOVERABLE";
+      return {
+        organizationId: input.organizationId,
+        sourceEntityType: input.sourceEntityType, sourceEntityId: item.id,
+        taxCodeId: snapshot.taxCodeId, taxableAmount: new Prisma.Decimal(snapshot.base),
+        taxRate: new Prisma.Decimal(snapshot.rate), taxAmount: new Prisma.Decimal(snapshot.amount),
+        currencyCode: input.currencyCode, direction,
+        jurisdiction: snapshot.jurisdiction, taxTreatment: snapshot.treatment,
+        evidenceReference: snapshot.evidenceReference, templateVersion: snapshot.templateVersion,
+        basisMode: snapshot.basisMode, applicationOrder: snapshot.applicationOrder,
+        effectiveAt: new Date(snapshot.effectiveAt),
+      };
+    });
+  });
+  if (posted.length) await tx.enterpriseTaxLine.createMany({ data: posted, skipDuplicates: true });
+}
+
+export function snapshotCalculatedTaxes(applications: CalculatedDocumentTax[], effectiveAt: Date) {
+  return applications.map((entry) => ({
+    taxCodeId: entry.taxCodeId, rate: entry.rate.toFixed(8), base: entry.base.toFixed(6),
+    amount: entry.amount.toFixed(6), jurisdiction: entry.jurisdiction,
+    treatment: entry.treatment, templateVersion: entry.templateVersion,
+    evidenceReference: entry.evidenceReference, basisMode: entry.basisMode,
+    applicationOrder: entry.applicationOrder, effectiveAt: effectiveAt.toISOString(),
+  }));
+}
