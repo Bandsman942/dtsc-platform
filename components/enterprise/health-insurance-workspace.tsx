@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import {
   useCallback,
@@ -249,6 +250,11 @@ export function HealthInsuranceWorkspace({
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          {d?.permissions?.canCreate && (
+            <Link href="/enterprise-insurance/verify" className="inline-flex min-h-10 items-center rounded-xl border border-cyan-500/40 bg-cyan-500/10 px-3 text-sm font-bold text-dtsc-ink hover:bg-cyan-500/15">
+              Vérifier une carte MSO
+            </Link>
+          )}
           {d?.permissions?.canManageProviders && (
             <Button onClick={() => start("provider")} variant="outline">
               <Plus />
