@@ -1,0 +1,46 @@
+// Generic health-insurance integration boundary. No clinical data or plaintext credentials.
+model EnterpriseHealthInsuranceConnector {
+  id                   String   @id @default(cuid())
+  organizationId       String
+  adapterCode          String   @default("HIRMS_HSL")
+  environment          String   @default("UAT")
+  siteId               String?
+  status               String   @default("DRAFT")
+  credentialsEncrypted String?
+  credentialsUpdatedAt DateTime?
+  lastAuthCheckAt      DateTime?
+  lastVerifiedAt       DateTime?
+  lastErrorCode        String?
+  revision             Int      @default(1)
+  createdByUserId      String
+  updatedByUserId      String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  verifications        EnterpriseHealthInsuranceVerification[]
+
+  @@unique([organizationId, adapterCode])
+  @@unique([organizationId, id])
+  @@index([organizationId, status])
+}
+
+model EnterpriseHealthInsuranceVerification {
+  id                String   @id @default(cuid())
+  organizationId    String
+  connectorId       String
+  patientId         String?
+  memberLastFour    String
+  serviceCode       String?
+  codeSystem        String?
+  serviceDate       String?
+  verified          Boolean
+  coverStatus       String?
+  serviceStatus     String?
+  networkStatus     String?
+  createdByUserId   String
+  createdAt         DateTime @default(now())
+  connector         EnterpriseHealthInsuranceConnector @relation(fields: [organizationId, connectorId], references: [organizationId, id], onDelete: Restrict)
+
+  @@index([organizationId, createdAt])
+  @@index([organizationId, connectorId, createdAt])
+  @@index([organizationId, patientId, createdAt])
+}
