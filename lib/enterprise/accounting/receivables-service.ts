@@ -83,7 +83,7 @@ async function calculateItems(
         ? new Prisma.Decimal(0) : taxRate.rate;
     }
     const taxAmount = money(netAmount.times(rate));
-    calculated.push({ ...item, taxCodeId, quantityDecimal, unitPriceDecimal, discountDecimal, netAmount,
+    calculated.push({ ...item, taxCodeId: taxCodeId || undefined, quantityDecimal, unitPriceDecimal, discountDecimal, netAmount,
       taxRateApplied: rate, taxJurisdiction, taxTemplateVersion, taxAmount, totalAmount: money(netAmount.plus(taxAmount)) });
   }
   return calculated;
