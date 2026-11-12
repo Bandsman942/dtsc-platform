@@ -450,6 +450,7 @@ model EnterpriseSalesInvoiceItem {
   taxTemplateVersion String?
   taxEvidenceReference String?
   taxCalculationMode String                 @default("NET")
+  taxBreakdownJson   Json?
   taxAmount          Decimal                @default(0) @db.Decimal(20, 6)
   totalAmount        Decimal                @db.Decimal(20, 6)
   revenueAccountId   String?
@@ -614,6 +615,7 @@ model EnterpriseSupplierInvoiceItem {
   taxEvidenceReference    String?
   taxCalculationMode      String                   @default("NET")
   taxRecoveryRequested    Boolean                  @default(false)
+  taxBreakdownJson        Json?
   taxAmount               Decimal                   @default(0) @db.Decimal(20, 6)
   totalAmount             Decimal                   @db.Decimal(20, 6)
   expenseAccountId        String?
