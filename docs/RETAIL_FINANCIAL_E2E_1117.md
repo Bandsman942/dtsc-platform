@@ -44,6 +44,12 @@
 | KPI-21 | Actualiser après facture, paiement partiel, avoir, rapprochement et fermeture boutique C | Source métier → détail → indicateur → export se réconcilient; pas de cache donnant l'ancien total |
 | KPI-22 | Grand volume (plusieurs pages), 0 ligne, montant NULL, taux inconnu | Performance et pagination correctes; « Non déterminé » lorsque preuve incomplète; pas de faux zéro; exports volumineux async #1110 restent hors scope annoncé |
 
+## Contrôle automatisé supplémentaire (à vérifier sur CI du SHA final)
+
+- `tests/e2e/retail-financial-kpi-1117.spec.mjs`, ajouté au workflow `Shop 2 behavioral gates` après les recettes Finance sur PostgreSQL/Chromium isolés.
+- Il interroge les 12 sources avec le propriétaire de l'organisation et un membre non-administrateur, compare droits de module et réponses HTTP, confronte les sommes par pièce aux sous-totaux lorsque la fenêtre tient sur une page, vérifie le multi-tenant par une boutique étrangère réelle, les filtres, la pagination et l'absence de création de factures, paiements ou journaux lors des lectures.
+- Ces preuves API ne remplacent pas les rapprochements comptables détaillés manuels, les scénarios multi-devises historiques, la qualité de l'interface FR/EN/mobile ou les essais volumineux des exports.
+
 ## Blocages et arbitrages nécessaires
 
 1. Un test de QA basé sur l'ancienne signature `$queryRaw<TrendRow>` a été aligné avec la signature réelle `$queryRaw<TrendRow[]>(Prisma.sql...)` **sans retirer les assertions de droits**. Exiger un nouveau run Quality sur le dernier SHA ; pas de PASS supposé.
