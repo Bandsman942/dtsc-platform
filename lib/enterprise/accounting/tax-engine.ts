@@ -68,3 +68,22 @@ export async function resolveDefaultSalesTaxesForRetail(input: {
 }) {
   return resolveDefaultSalesTaxes(prisma, input);
 }
+
+// Explicit fiscal selections are validated by the same pure policy in Finance
+// and POS. An unqualified jurisdiction or a withholding tax may never be
+// silently treated as VAT on the invoice's amount payable.
+export function validatedInvoiceTaxRate(input: {
+  category: string;
+  treatment: string;
+  rate: Prisma.Decimal;
+  taxJurisdiction: string | null;
+  invoiceJurisdiction: string | null;
+}): Prisma.Decimal | null {
+  const territory = normalizeTaxCountryCode(input.taxJurisdiction);
+  if (input.taxJurisdiction && (!territory || !input.invoiceJurisdiction || territory !== input.invoiceJurisdiction)) return null;
+  if (!input.rate.isFinite() || input.rate.isNegative() || input.rate.gt(1)) return null;
+  if (input.category === "WITHHOLDING") return null; // Settlement/withholding liability, not output VAT.
+  if (["EXEMPT", "ZERO_RATED", "OUT_OF_SCOPE"].includes(input.treatment)
+      || ["EXEMPT", "ZERO_RATED"].includes(input.category)) return new Prisma.Decimal(0);
+  return input.treatment === "STANDARD" ? input.rate : null;
+}

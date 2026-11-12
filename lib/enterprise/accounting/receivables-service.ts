@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { resolveDefaultSalesTaxes } from "@/lib/enterprise/accounting/tax-engine";
+import { resolveDefaultSalesTaxes, validatedInvoiceTaxRate } from "@/lib/enterprise/accounting/tax-engine";
+import { normalizeTaxCountryCode } from "@/lib/enterprise/accounting/tax-jurisdictions";
 import { assertIndependentActor } from "@/lib/enterprise/accounting/access";
 import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
 import { assertActiveClientOrganization, financeReference, money, publishFinanceEvent, sumDecimals } from "@/lib/enterprise/accounting/helpers";
@@ -30,6 +31,8 @@ async function calculateItems(
 ): Promise<CalculatedItem[]> {
   const calculated: CalculatedItem[] = [];
   let autoTaxCandidates: Awaited<ReturnType<typeof resolveDefaultSalesTaxes>> | null = null;
+  const organization = await tx.organization.findUnique({ where: { id: organizationId }, select: { country: true } });
+  const invoiceJurisdiction = normalizeTaxCountryCode(organization?.country);
   for (const item of items) {
     const quantityDecimal = new Prisma.Decimal(item.quantity);
     const unitPriceDecimal = new Prisma.Decimal(item.unitPrice);
@@ -78,9 +81,11 @@ async function calculateItems(
       if (!taxRate) throw new EnterpriseAccountingError("SALES_INVOICE_TAX_RATE_INVALID", 409);
       taxJurisdiction = taxRate.taxCode.jurisdiction;
       taxTemplateVersion = taxRate.taxCode.sourceTemplateVersion;
-      rate = ["EXEMPT", "ZERO_RATED", "OUT_OF_SCOPE"].includes(taxRate.taxCode.taxTreatment)
-        || ["EXEMPT", "ZERO_RATED"].includes(taxRate.taxCode.category)
-        ? new Prisma.Decimal(0) : taxRate.rate;
+      const validated = validatedInvoiceTaxRate({ category: taxRate.taxCode.category,
+        treatment: taxRate.taxCode.taxTreatment, rate: taxRate.rate,
+        taxJurisdiction: taxRate.taxCode.jurisdiction, invoiceJurisdiction });
+      if (validated === null) throw new EnterpriseAccountingError("SALES_INVOICE_TAX_JURISDICTION_OR_TREATMENT_INVALID", 409);
+      rate = validated;
     }
     const taxAmount = money(netAmount.times(rate));
     calculated.push({ ...item, taxCodeId: taxCodeId || undefined, quantityDecimal, unitPriceDecimal, discountDecimal, netAmount,

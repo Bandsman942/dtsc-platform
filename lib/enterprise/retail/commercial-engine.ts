@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
-import { resolveDefaultSalesTaxesForRetail } from "@/lib/enterprise/accounting/tax-engine";
+import { resolveDefaultSalesTaxesForRetail, validatedInvoiceTaxRate } from "@/lib/enterprise/accounting/tax-engine";
+import { normalizeTaxCountryCode } from "@/lib/enterprise/accounting/tax-jurisdictions";
 import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
 import type { retailSaleCreateSchema } from "@/lib/enterprise/retail/schemas";
 import { prisma } from "@/lib/prisma";
@@ -251,7 +252,13 @@ async function resolveTaxByItem(
   const selectedDefault = automatic[0]?.code || null;
   const requiredCodes = Array.from(new Set(items.filter((item) => item.taxable).map((item) => item.taxCode || selectedDefault).filter((value): value is string => Boolean(value))));
   if (!requiredCodes.length) return new Map(items.map((item) => [item.id, { taxCodeId: null as string | null, taxRate: decimal(0) }]));
-  const taxCodes = await prisma.enterpriseTaxCode.findMany({ where: { organizationId, code: { in: requiredCodes }, isActive: true }, select: { id: true, code: true } });
+  const [organization, site] = await Promise.all([
+    prisma.organization.findUnique({ where: { id: organizationId }, select: { country: true } }),
+    siteId ? prisma.enterpriseSite.findFirst({ where: { organizationId, id: siteId, status: "ACTIVE", archivedAt: null }, select: { countryCode: true } }) : Promise.resolve(null),
+  ]);
+  if (siteId && !site) throw new EnterpriseRetailError("RETAIL_TAX_SITE_INVALID", 409);
+  const invoiceJurisdiction = normalizeTaxCountryCode(site?.countryCode || organization?.country);
+  const taxCodes = await prisma.enterpriseTaxCode.findMany({ where: { organizationId, code: { in: requiredCodes }, isActive: true }, select: { id: true, code: true, jurisdiction: true, taxTreatment: true, category: true } });
   if (taxCodes.length !== requiredCodes.length) throw new EnterpriseRetailError("RETAIL_TAX_CONFIGURATION_REQUIRED", 409);
   const rates = await prisma.enterpriseTaxRate.findMany({
     where: {
@@ -275,7 +282,10 @@ async function resolveTaxByItem(
     const taxCode = (item.taxCode || selectedDefault) ? taxCodeByCode.get((item.taxCode || selectedDefault) as string) : null;
     const rate = taxCode ? latestRateByCodeId.get(taxCode.id) : null;
     if (!taxCode || !rate) throw new EnterpriseRetailError("RETAIL_TAX_RATE_REQUIRED", 409, { taxCode: item.taxCode });
-    result.set(item.id, { taxCodeId: taxCode.id, taxRate: rate.rate });
+    const validated = validatedInvoiceTaxRate({ category: taxCode.category, treatment: taxCode.taxTreatment,
+      rate: rate.rate, taxJurisdiction: taxCode.jurisdiction, invoiceJurisdiction });
+    if (validated === null) throw new EnterpriseRetailError("RETAIL_TAX_JURISDICTION_OR_TREATMENT_INVALID", 409, { taxCode: taxCode.code });
+    result.set(item.id, { taxCodeId: taxCode.id, taxRate: validated });
   }
   return result;
 }

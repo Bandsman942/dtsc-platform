@@ -1,5 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { validatedInvoiceTaxRate } from "@/lib/enterprise/accounting/tax-engine";
+import { normalizeTaxCountryCode } from "@/lib/enterprise/accounting/tax-jurisdictions";
 import { assertIndependentActor } from "@/lib/enterprise/accounting/access";
 import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
 import { assertActiveClientOrganization, financeReference, money, publishFinanceEvent, sumDecimals } from "@/lib/enterprise/accounting/helpers";
@@ -45,6 +47,8 @@ async function calculateSupplierItems(
 ): Promise<CalculatedSupplierItem[]> {
   await assertExpenseAccounts(tx, organizationId, items);
   const calculated: CalculatedSupplierItem[] = [];
+  const organization = await tx.organization.findUnique({ where: { id: organizationId }, select: { country: true } });
+  const invoiceJurisdiction = normalizeTaxCountryCode(organization?.country);
   for (const item of items) {
     const quantityDecimal = new Prisma.Decimal(item.quantity);
     const unitPriceDecimal = new Prisma.Decimal(item.unitPrice);
@@ -59,9 +63,14 @@ async function calculateSupplierItems(
       const taxRate = await tx.enterpriseTaxRate.findFirst({
         where: { organizationId, taxCodeId: item.taxCodeId, status: "ACTIVE", effectiveFrom: { lte: invoiceDate }, OR: [{ effectiveTo: null }, { effectiveTo: { gte: invoiceDate } }], taxCode: { isActive: true } },
         orderBy: { effectiveFrom: "desc" },
+        include: { taxCode: { select: { jurisdiction: true, taxTreatment: true, category: true } } },
       });
       if (!taxRate) throw new EnterpriseAccountingError("SUPPLIER_INVOICE_TAX_RATE_INVALID", 409);
-      rate = taxRate.rate;
+      const validated = validatedInvoiceTaxRate({ category: taxRate.taxCode.category,
+        treatment: taxRate.taxCode.taxTreatment, rate: taxRate.rate,
+        taxJurisdiction: taxRate.taxCode.jurisdiction, invoiceJurisdiction });
+      if (validated === null) throw new EnterpriseAccountingError("SUPPLIER_INVOICE_TAX_JURISDICTION_OR_TREATMENT_INVALID", 409);
+      rate = validated;
     }
     const taxAmount = money(netAmount.times(rate));
     calculated.push({ ...item, quantityDecimal, unitPriceDecimal, netAmount, taxAmount, totalAmount: money(netAmount.plus(taxAmount)) });
