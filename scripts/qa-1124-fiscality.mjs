@@ -65,4 +65,3 @@ requireTokens("components/enterprise/health-medical-billing-workspace.tsx", ["ta
 requireTokens("components/enterprise/pharmacy-sales-workspace.tsx", ["additionalTaxCodeIds", "taxCalculationMode", "taxEvidenceReference"]);
 if (missing.length) { console.error("QA fiscal sector #1124 FAILED:\n"+missing.join("\n"));process.exit(1); }
 console.log("QA fiscal sector #1124 static contracts passed; behavioral claims require CI Playwright and owner E2E.");
-
