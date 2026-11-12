@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import { useAppLocale } from "@/components/i18n/locale-provider";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import {
   useCallback,
@@ -113,6 +114,7 @@ export function HealthInsuranceWorkspace({
 }: {
   organizationId: string;
 }) {
+  const locale = useAppLocale();
   const [d, setD] = useState<any>(null),
     [tab, setTab] = useState("requests"),
     [open, setOpen] = useState(""),
@@ -252,7 +254,7 @@ export function HealthInsuranceWorkspace({
         <div className="flex flex-wrap gap-2">
           {d?.permissions?.canCreate && (
             <Link href="/enterprise-insurance/verify" className="inline-flex min-h-10 items-center rounded-xl border border-cyan-500/40 bg-cyan-500/10 px-3 text-sm font-bold text-dtsc-ink hover:bg-cyan-500/15">
-              Vérifier une carte MSO
+              {locale === "en" ? "Verify an MSO card" : "Vérifier une carte MSO"}
             </Link>
           )}
           {d?.permissions?.canManageProviders && (
