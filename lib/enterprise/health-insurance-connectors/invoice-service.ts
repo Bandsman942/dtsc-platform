@@ -89,7 +89,7 @@ export async function preflightHirmsInvoiceSubmission(organizationId: string, en
   return {
     ok: true, environment, mode, count: validation.invoices.length,
     invoiceNumbers: validation.invoices.map(i=>i.InvoiceNumber),
-    message: `Factures liées à l'ERP et prêtes pour une transmission ${environment} après confirmation.`, 
+    message: `Factures liées à l'ERP et prêtes pour une transmission ${environment} après confirmation.`,
   };
 }
 
