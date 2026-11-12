@@ -24,6 +24,7 @@
     "qa:hotfix-1022-console-auto-reload": "node scripts/qa-hotfix-1022-console-auto-reload.mjs",
     "qa:hotfix-1026-chrome-mfa-session-loop": "node scripts/qa-hotfix-1026-chrome-mfa-session-loop.mjs",
     "qa:semver": "node scripts/qa-semver.mjs",
+    "qa:hirms-contract": "node --experimental-strip-types scripts/qa-hirms-invoice-contract-01.mjs",
     "qa:hotfix-1088-finance-expenses": "node scripts/qa-hotfix-1088-finance-expense-settlement.mjs",
     "qa:hotfix-1091": "node scripts/qa-hotfix-1091-finance-preflight-print.mjs",
     "qa:hotfix-1094": "node scripts/qa-hotfix-1094-accounting-mcp.mjs",
