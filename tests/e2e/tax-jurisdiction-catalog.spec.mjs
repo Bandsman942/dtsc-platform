@@ -45,7 +45,9 @@ test.describe.serial("Fiscal jurisdictions, opt-in tax templates and tenant safe
     expect([401, 403]).toContain(anonymous.status());
   });
 
-  test("Authorized enterprise can inspect the DGI template and reject forged country", async ({ page }) => {
+  test("Authorized tax setup: catalog, jurisdiction, opt-in, duplicates and status list", async ({ page }) => {
+    // A single authenticated session avoids masking tax regressions with unrelated
+    // login rate limits when these checks follow accounting onboarding acceptance.
     await signIn(page);
     const catalog = await get(page, route);
     expect(catalog.status, JSON.stringify(catalog.body)).toBe(200);
@@ -56,14 +58,7 @@ test.describe.serial("Fiscal jurisdictions, opt-in tax templates and tenant safe
     expect(vat.sourceAuthority).toBeTruthy();
     const foreign = await post(page, route, { code: "ZZ-VAT-INVALID", version: vat.version });
     expect(foreign.status).toBe(409);
-  });
 
-  test("Opt-in creates one versioned inactive-for-automation tax and blocks duplicate", async ({ page }) => {
-    await signIn(page);
-    const catalog = await get(page, route);
-    expect(catalog.status, JSON.stringify(catalog.body)).toBe(200);
-    const vat = catalog.body.templates.find((entry) => entry.code === "CD-VAT-STANDARD");
-    expect(vat).toBeTruthy();
     const existing = catalog.body.adopted.some((entry) => entry.sourceTemplateCode === vat.code);
     const adopted = await post(page, route, { code: vat.code, version: vat.version, applyAutomatically: false });
     expect(adopted.status, JSON.stringify(adopted.body)).toBe(existing ? 409 : 201);
@@ -74,10 +69,7 @@ test.describe.serial("Fiscal jurisdictions, opt-in tax templates and tenant safe
     const record = await prisma.enterpriseTaxCode.findFirst({ where: { organizationId, code: vat.code } });
     expect(record?.autoApply).toBe(false);
     expect(record?.sourceTemplateVersion).toBe(vat.version);
-  });
 
-  test("Tax list uses existing active flag rather than fictional status column", async ({ page }) => {
-    await signIn(page);
     const response = await get(page, `/api/enterprise/${organizationId}/taxes?status=ACTIVE&pageSize=10`);
     expect(response.status, JSON.stringify(response.body)).toBe(200);
     expect(response.body.items.every((item) => item.isActive === true && item.status === "ACTIVE")).toBeTruthy();
