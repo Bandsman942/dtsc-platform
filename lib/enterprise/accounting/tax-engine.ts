@@ -183,7 +183,7 @@ export async function recordPostedTaxApplicationsTx(
   tx: Pick<Prisma.TransactionClient, "enterpriseTaxLine">,
   input: {
     organizationId: string;
-    sourceEntityType: "EnterpriseSalesInvoiceItem" | "EnterpriseSupplierInvoiceItem";
+    sourceEntityType: "EnterpriseSalesInvoiceItem" | "EnterpriseSupplierInvoiceItem" | "EnterpriseSalesCreditNoteItem" | "EnterpriseSupplierCreditNoteItem";
     currencyCode: string;
     items: Array<{ id: string; taxBreakdownJson: Prisma.JsonValue | null; taxRecoveryRequested?: boolean }>;
   },
@@ -200,7 +200,10 @@ export async function recordPostedTaxApplicationsTx(
       if (typeof snapshot.taxCodeId !== "string" || typeof snapshot.amount !== "string" || typeof snapshot.base !== "string"
         || typeof snapshot.rate !== "string" || typeof snapshot.effectiveAt !== "string") throw new EnterpriseAccountingError("TAX_SNAPSHOT_CORRUPT", 409);
       const direction = input.sourceEntityType === "EnterpriseSalesInvoiceItem" ? "OUTPUT"
-        : item.taxRecoveryRequested ? "INPUT" : "INPUT_NONRECOVERABLE";
+        : input.sourceEntityType === "EnterpriseSalesCreditNoteItem" ? "OUTPUT_REVERSAL"
+        : input.sourceEntityType === "EnterpriseSupplierCreditNoteItem"
+          ? item.taxRecoveryRequested ? "INPUT_REVERSAL" : "INPUT_NONRECOVERABLE_REVERSAL"
+          : item.taxRecoveryRequested ? "INPUT" : "INPUT_NONRECOVERABLE";
       return {
         organizationId: input.organizationId,
         sourceEntityType: input.sourceEntityType, sourceEntityId: item.id,

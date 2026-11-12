@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import { allocateHistoricalCreditLines } from "@/lib/enterprise/accounting/historical-credit-tax";
 import { prisma } from "@/lib/prisma";
 import { resolveDefaultSalesTaxes, calculateDocumentTaxApplications, recordPostedTaxApplicationsTx, snapshotCalculatedTaxes } from "@/lib/enterprise/accounting/tax-engine";
 import type { CalculatedDocumentTax } from "@/lib/enterprise/accounting/tax-engine";
@@ -6,7 +7,7 @@ import { normalizeTaxCountryCode } from "@/lib/enterprise/accounting/tax-jurisdi
 import { assertIndependentActor } from "@/lib/enterprise/accounting/access";
 import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
 import { assertActiveClientOrganization, financeReference, money, publishFinanceEvent, sumDecimals } from "@/lib/enterprise/accounting/helpers";
-import { postBusinessEvent, postBusinessEventTx } from "@/lib/enterprise/accounting/posting-service";
+import { postBusinessEventTx } from "@/lib/enterprise/accounting/posting-service";
 import type { creditNoteCreateSchema, salesInvoiceCreateSchema } from "@/lib/enterprise/accounting/schemas";
 import type { z } from "zod";
 
@@ -231,7 +232,12 @@ export async function createSalesCreditNote(organizationId: string, actorUserId:
       select: { id: true },
     });
     if (retailCheckout) throw new EnterpriseAccountingError("RETAIL_INVOICE_RETURN_WORKFLOW_REQUIRED", 409);
-    const calculated = await calculateItems(tx, organizationId, input.creditDate, input.items);
+    const [originalLines, olderNotes] = await Promise.all([
+      tx.enterpriseSalesInvoiceItem.findMany({ where: { organizationId, salesInvoiceId: invoice.id } }),
+      tx.enterpriseSalesCreditNote.findMany({ where: { organizationId, salesInvoiceId: invoice.id, status: { notIn: ["REJECTED", "CANCELLED"] } }, select: { id: true } }),
+    ]);
+    const olderItems = olderNotes.length ? await tx.enterpriseSalesCreditNoteItem.findMany({ where: { organizationId, salesCreditNoteId: { in: olderNotes.map((note) => note.id) } } }) : [];
+    const calculated = allocateHistoricalCreditLines(originalLines, olderItems, input.items, input.creditDate);
     const subtotal = money(sumDecimals(calculated.map((item) => item.netAmount)));
     const taxTotal = money(sumDecimals(calculated.map((item) => item.taxAmount)));
     const grandTotal = money(sumDecimals(calculated.map((item) => item.totalAmount)));
@@ -248,7 +254,10 @@ export async function createSalesCreditNote(organizationId: string, actorUserId:
         taxTotal,
         grandTotal,
         createdByUserId: actorUserId,
-        items: { create: calculated.map((item) => ({ description: item.description, quantity: item.quantityDecimal, unitPrice: item.unitPriceDecimal, netAmount: item.netAmount, taxAmount: item.taxAmount, totalAmount: item.totalAmount })) },
+        items: { create: calculated.map((item) => ({ sourceInvoiceItemId: item.sourceInvoiceItemId,
+          description: item.description, quantity: item.quantity, unitPrice: item.unitPrice,
+          netAmount: item.netAmount, taxAmount: item.taxAmount, totalAmount: item.totalAmount,
+          taxBreakdownJson: item.taxBreakdown.length ? item.taxBreakdown : Prisma.JsonNull })) },
       },
       include: { items: true },
     });
@@ -272,7 +281,6 @@ export async function approveAndPostSalesCreditNote(organizationId: string, cred
     return tx.enterpriseSalesCreditNote.update({ where: { id: credit.id }, data: { status: "APPROVED", approvedAt: new Date(), approvedByUserId: actorUserId, revision: { increment: 1 } } });
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
   if (approved.status === "POSTED") return approved;
-  const posting = await postBusinessEvent(organizationId, actorUserId, { postingEvent: "SALES_CREDIT_NOTE_POSTED", sourceEntityType: "EnterpriseSalesCreditNote", sourceEntityId: approved.id });
   return prisma.$transaction(async (tx) => {
     await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterpriseSalesCreditNote" WHERE id = ${approved.id} AND "organizationId" = ${organizationId} FOR UPDATE`);
     const credit = await tx.enterpriseSalesCreditNote.findFirst({ where: { id: approved.id, organizationId }, include: { salesInvoice: { include: { receivable: true } } } });
@@ -280,6 +288,9 @@ export async function approveAndPostSalesCreditNote(organizationId: string, cred
     if (credit.status === "POSTED") return credit;
     const receivable = credit.salesInvoice.receivable;
     if (credit.grandTotal.greaterThan(receivable.outstandingAmount)) throw new EnterpriseAccountingError("CREDIT_NOTE_EXCEEDS_OPEN_RECEIVABLE", 409);
+    const posting = await postBusinessEventTx(tx, organizationId, actorUserId, { postingEvent: "SALES_CREDIT_NOTE_POSTED", sourceEntityType: "EnterpriseSalesCreditNote", sourceEntityId: credit.id });
+    const creditItems = await tx.enterpriseSalesCreditNoteItem.findMany({ where: { organizationId, salesCreditNoteId: credit.id }, select: { id: true, taxBreakdownJson: true } });
+    await recordPostedTaxApplicationsTx(tx, { organizationId, sourceEntityType: "EnterpriseSalesCreditNoteItem", currencyCode: credit.currencyCode, items: creditItems });
     const outstanding = money(receivable.outstandingAmount.minus(credit.grandTotal));
     await tx.enterpriseReceivableAllocation.create({ data: { organizationId, receivableId: receivable.id, sourceType: "SALES_CREDIT_NOTE", sourceId: credit.id, amount: credit.grandTotal, allocationDate: credit.creditDate, createdByUserId: actorUserId } });
     await tx.enterpriseReceivable.update({ where: { id: receivable.id }, data: { creditedAmount: { increment: credit.grandTotal }, outstandingAmount: outstanding, status: outstanding.isZero() ? "CLOSED" : "OPEN" } });
