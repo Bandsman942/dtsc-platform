@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { HIRMS_ENVIRONMENTS, assertHirmsEnvironmentEnabled, type HirmsEnvironment } from "./environments";
+import { HIRMS_ENVIRONMENTS, assertHirmsEnvironmentEnabled, isHirmsProductionApprovedForOrganization, type HirmsEnvironment } from "./environments";
 import { prisma } from "@/lib/prisma";
 import { sealHirmsCredentials, openHirmsCredentials } from "./crypto";
 import { hirmsAdapter } from "./hirms";
@@ -42,9 +42,9 @@ export async function getInsuranceConnectorDashboard(organizationId: string, env
       lastAuthCheckAt: entry.lastAuthCheckAt, lastVerifiedAt: entry.lastVerifiedAt, lastErrorCode: entry.lastErrorCode, revision: entry.revision,
     } : null,
     sites, environment,
-    productionEnabled: process.env.HEALTH_INSURANCE_HIRMS_PRODUCTION_ENABLED === "true",
+    productionEnabled: process.env.HEALTH_INSURANCE_HIRMS_PRODUCTION_ENABLED === "true" && isHirmsProductionApprovedForOrganization(organizationId),
     uatInvoiceSendEnabled: process.env.HEALTH_INSURANCE_HIRMS_UAT_INVOICE_SEND_ENABLED === "true",
-    productionInvoiceSendEnabled: process.env.HEALTH_INSURANCE_HIRMS_PRODUCTION_ENABLED === "true" && process.env.HEALTH_INSURANCE_HIRMS_PRODUCTION_INVOICE_SEND_ENABLED === "true",
+    productionInvoiceSendEnabled: process.env.HEALTH_INSURANCE_HIRMS_PRODUCTION_ENABLED === "true" && isHirmsProductionApprovedForOrganization(organizationId) && process.env.HEALTH_INSURANCE_HIRMS_PRODUCTION_INVOICE_SEND_ENABLED === "true",
   };
 }
 
@@ -74,18 +74,18 @@ export async function saveInsuranceConnector(organizationId: string, userId: str
 }
 
 export async function checkInsuranceConnector(organizationId: string, environment: HirmsEnvironment) {
-  assertHirmsEnvironmentEnabled(environment);
+  assertHirmsEnvironmentEnabled(environment, organizationId);
   const entry = await prisma.enterpriseHealthInsuranceConnector.findUnique({ where: { organizationId_adapterCode_environment: { organizationId, adapterCode: "HIRMS_HSL", environment } } });
   if (!entry || !entry.credentialsEncrypted) throw new InsuranceConnectorError("HEALTH_CONNECTOR_CREDENTIALS_REQUIRED", 409);
 
   const credentials = openHirmsCredentials(entry.credentialsEncrypted);
-  await hirmsAdapter.checkConnection(credentials, environment);
+  await hirmsAdapter.checkConnection(credentials, environment, organizationId);
   await prisma.enterpriseHealthInsuranceConnector.update({ where: { id: entry.id }, data: { lastAuthCheckAt: new Date(), lastErrorCode: null, status: "READY" } });
   return { ok: true };
 }
 
 export async function verifyInsuranceMember(organizationId: string, userId: string, data: z.infer<typeof memberVerificationSchema>) {
-  assertHirmsEnvironmentEnabled(data.environment);
+  assertHirmsEnvironmentEnabled(data.environment, organizationId);
   const entry = await prisma.enterpriseHealthInsuranceConnector.findUnique({ where: { organizationId_adapterCode_environment: { organizationId, adapterCode: "HIRMS_HSL", environment: data.environment } } });
   if (!entry || entry.status !== "READY" || !entry.credentialsEncrypted) throw new InsuranceConnectorError("HEALTH_CONNECTOR_NOT_READY", 409);
 
@@ -99,7 +99,7 @@ export async function verifyInsuranceMember(organizationId: string, userId: stri
     ...(data.codeSystem ? { codeSystem: data.codeSystem } : {}),
     ...(data.serviceDate ? { serviceDate: data.serviceDate } : {}),
   };
-  const result = await hirmsAdapter.verify(openHirmsCredentials(entry.credentialsEncrypted), input, data.environment);
+  const result = await hirmsAdapter.verify(openHirmsCredentials(entry.credentialsEncrypted), input, data.environment, organizationId);
   await prisma.$transaction([
     prisma.enterpriseHealthInsuranceVerification.create({ data: {
       organizationId, connectorId: entry.id, patientId: data.patientId || null,
