@@ -281,7 +281,7 @@ function Detail({ sale, products, action }: { sale: Sale; products: Map<string, 
   </div>;
 }
 
-function SaleForm({ organizationId, open, close, form, setForm, data, updateLine, save }: { organizationId: string; open: boolean; close: () => void; form: Form; setForm: React.Dispatch<React.SetStateAction<Form>>; data: Data | null; updateLine: (index: number, key: keyof FLine, value: string) => void; save: (event: FormEvent) => Promise<void> }) {
+function SaleForm({ organizationId, open, close, form, setForm, data, updateLine, save }: { organizationId: string; open: boolean; close: () => void; form: Form; setForm: React.Dispatch<React.SetStateAction<Form>>; data: Data | null; updateLine: (index: number, key: keyof FLine, value: string | string[]) => void; save: (event: FormEvent) => Promise<void> }) {
   return <Dialog open={open} title="Nouvelle vente / dispensation" description="Formulaire plein écran avec lots vendables FEFO." onClose={close} className="h-[96dvh] max-w-6xl">
     <form onSubmit={save} className="grid min-w-0 gap-4 overflow-x-hidden">
       <Section title="Informations vente">
