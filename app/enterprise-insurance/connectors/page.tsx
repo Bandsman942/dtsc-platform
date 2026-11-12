@@ -6,7 +6,9 @@ import { requireUser, getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { resolveEnterpriseModuleAccess } from "@/lib/enterprise/module-access";
 
-export default async function EnterpriseInsuranceConnectorsPage() {
+export default async function EnterpriseInsuranceConnectorsPage({ searchParams }: { searchParams: Promise<{ environment?: string }> }) {
+  const query = await searchParams;
+  const initialEnvironment = query.environment === "PRODUCTION" ? "PRODUCTION" : "UAT";
   const user = await requireUser();
   const session = await getSession();
   const organizationId = session?.activeContext === "ORGANIZATION" ? session.activeOrganizationId : null;
@@ -17,6 +19,6 @@ export default async function EnterpriseInsuranceConnectorsPage() {
   ]);
   if (!org || !access.allowed) redirect("/enterprise-admin");
   return <AppShell user={user}><LocaleProvider locale={user.locale === "en" ? "en" : "fr"}>
-    <HealthInsuranceConnectorWorkspace organizationId={organizationId}/>
+    <HealthInsuranceConnectorWorkspace organizationId={organizationId} initialEnvironment={initialEnvironment}/>
   </LocaleProvider></AppShell>;
 }
