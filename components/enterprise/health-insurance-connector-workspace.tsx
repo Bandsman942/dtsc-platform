@@ -30,7 +30,7 @@ export function HealthInsuranceConnectorWorkspace({ organizationId }: { organiza
     setData(payload);
     setSiteId(payload.connector?.siteId || "");
   }, [organizationId]);
-  useEffect(() => { void load().catch(() => setNotice(tx("Chargement du connecteur indisponible.", "Connector could not be loaded."))); }, [load]); // locale is not a dependency of the fetch
+  useEffect(() => { void load().catch(() => setNotice("Chargement du connecteur indisponible.")); }, [load]);
 
   async function send(payload: Record<string, unknown>, success: string) {
     setPending(true); setNotice("");
