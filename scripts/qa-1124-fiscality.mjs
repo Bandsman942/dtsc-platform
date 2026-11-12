@@ -37,8 +37,8 @@ requireTokens("lib/enterprise/accounting/accounting-document-approval-orchestrat
 for(const reporter of ["lib/enterprise/accounting/statements-service.ts","lib/ai/tools/executors/finance.ts"]) {
   requireTokens(reporter, ["OUTPUT_REVERSAL", "INPUT_REVERSAL", "ELSE 0 END", "WHEN t.direction IN ('OUTPUT','INPUT') THEN t."]);
 }
-requireTokens("lib/enterprise/sector-convergence/health-billing-service.ts", ["HEALTH_TAX_LINE_PROVENANCE_REQUIRED"]);
-requireTokens("lib/enterprise/sector-convergence/pharmacy-finance-service.ts", ["PHARMACY_TAX_LINE_PROVENANCE_REQUIRED"]);
+requireTokens("lib/enterprise/sector-convergence/health-billing-service.ts", ["HEALTH_TAX_LINE_PROVENANCE_REQUIRED", "assertSectorLineTaxProvenance", "taxBreakdownJson"]);
+requireTokens("lib/enterprise/sector-convergence/pharmacy-finance-service.ts", ["PHARMACY_TAX_LINE_PROVENANCE_REQUIRED", "assertSectorLineTaxProvenance", "taxBreakdownJson"]);
 requireTokens("lib/enterprise/accounting/dgi-fiscalization-readiness.ts", [
   'certificationState: "NOT_HOMOLOGATED"', "canTransmit: false", "canClaimNormalizedInvoice: false",
   "SELLER_RCCM", "SELLER_NIF", "BUYER_TAX_NUMBER",
@@ -61,3 +61,6 @@ requireTokens("prisma/migrations/20261112213000_sector_tax_evidence_and_breakdow
 requireTokens("docs/ISSUE_1124_FISCALITY_SECTOR_DGI.md", ["NOT_HOMOLOGATED", "e-DEF", "25 février 2026"]);
 if (missing.length) { console.error("QA fiscal sector #1124 FAILED:\n"+missing.join("\n"));process.exit(1); }
 console.log("QA fiscal sector #1124 static contracts passed; behavioral claims require CI Playwright and owner E2E.");
+
+requireTokens("lib/enterprise/sector-convergence/sector-line-fiscal.ts", ["calculateSectorSourceTax", "assertSectorLineTaxProvenance", "SECTOR_TAX_HEADER_NOT_SUPPORTED_WITHOUT_LINE_EVIDENCE"]);
+requireTokens("prisma/migrations/20261112222000_health_pharmacy_line_fiscal_provenance/migration.sql", ["HealthMedicalInvoiceItem", "PharmacySaleLine", "taxBreakdownJson"]);

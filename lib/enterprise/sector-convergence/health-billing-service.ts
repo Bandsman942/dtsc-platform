@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { financeReference, money, publishFinanceEvent, sumDecimals } from "@/lib/enterprise/accounting/helpers";
 import { prisma } from "@/lib/prisma";
+import { assertSectorLineTaxProvenance } from "@/lib/enterprise/sector-convergence/sector-line-fiscal";
 import { EnterpriseSectorConvergenceError } from "@/lib/enterprise/sector-convergence/errors";
 import { isSectorConvergenceEnabled, SECTOR_CONVERGENCE_FLAGS } from "@/lib/enterprise/sector-convergence/flags";
 import { beginSectorSync, completeSectorSync, failSectorSync } from "@/lib/enterprise/sector-convergence/sync-service";
@@ -28,9 +29,8 @@ export async function convergeHealthMedicalInvoice(
   if (!source) throw new EnterpriseSectorConvergenceError("HEALTH_MEDICAL_INVOICE_NOT_FOUND", 404);
   if (["CANCELLED", "VOIDED"].includes(source.status)) throw new EnterpriseSectorConvergenceError("HEALTH_MEDICAL_INVOICE_NOT_CONVERGIBLE", 409);
   if (!source.items.length || !source.totalAmount.isPositive()) throw new EnterpriseSectorConvergenceError("HEALTH_MEDICAL_INVOICE_TOTAL_INVALID", 409);
-  // Health line items do not currently persist a fiscal code/tax per line.
-  // A positive header tax must not become an unmatched Finance tax journal.
-  if (source.taxAmount.gt(0)) throw new EnterpriseSectorConvergenceError("HEALTH_TAX_LINE_PROVENANCE_REQUIRED", 409);
+  try { assertSectorLineTaxProvenance(source.items, source.taxAmount, "HEALTH_TAX_LINE_PROVENANCE_REQUIRED"); }
+  catch { throw new EnterpriseSectorConvergenceError("HEALTH_TAX_LINE_PROVENANCE_REQUIRED", 409); }
   const patientProfile = await prisma.healthPatientFinancialProfile.findFirst({ where: { organizationId, healthPatientId: source.patientId } });
   if (!patientProfile) throw new EnterpriseSectorConvergenceError("HEALTH_PATIENT_FINANCIAL_PROFILE_REQUIRED", 409);
   const serviceIds = source.items.map((item) => item.serviceCatalogId).filter((value): value is string => Boolean(value));
@@ -66,7 +66,9 @@ export async function convergeHealthMedicalInvoice(
       const current = await tx.healthMedicalInvoice.findFirst({ where: { id: source.id, organizationId }, include: { items: { orderBy: [{ createdAt: "asc" }, { id: "asc" }] } } });
       if (!current) throw new EnterpriseSectorConvergenceError("HEALTH_MEDICAL_INVOICE_NOT_FOUND", 404);
       const itemTotal = money(sumDecimals(current.items.map((item) => item.totalAmount)));
-      if (itemTotal.minus(current.totalAmount).abs().greaterThan(new Prisma.Decimal("0.01"))) throw new EnterpriseSectorConvergenceError("HEALTH_INVOICE_ITEM_TOTAL_MISMATCH", 409, { invoiceTotal: current.totalAmount.toFixed(), itemTotal: itemTotal.toFixed() });
+      if (itemTotal.minus(current.discountAmount).plus(current.taxAmount).minus(current.totalAmount).abs().greaterThan(new Prisma.Decimal("0.01"))) throw new EnterpriseSectorConvergenceError("HEALTH_INVOICE_ITEM_TOTAL_MISMATCH", 409, { invoiceTotal: current.totalAmount.toFixed(), itemTotal: itemTotal.toFixed() });
+      try { assertSectorLineTaxProvenance(current.items, current.taxAmount, "HEALTH_TAX_LINE_PROVENANCE_REQUIRED"); }
+      catch { throw new EnterpriseSectorConvergenceError("HEALTH_TAX_LINE_PROVENANCE_REQUIRED", 409); }
       const invoiceItems: Prisma.EnterpriseSalesInvoiceItemCreateWithoutSalesInvoiceInput[] = current.items.map((item) => ({
         catalogItemId: catalogByService.get(item.serviceCatalogId!),
         description: catalogNameById.get(catalogByService.get(item.serviceCatalogId!)!)!,
@@ -74,8 +76,15 @@ export async function convergeHealthMedicalInvoice(
         unitPrice: item.unitPrice,
         discountAmount: item.discountAmount,
         netAmount: item.totalAmount,
-        taxAmount: 0,
-        totalAmount: item.totalAmount,
+        taxCodeId: item.taxCodeId,
+        taxRateApplied: item.taxRateApplied,
+        taxJurisdiction: item.taxJurisdiction,
+        taxTemplateVersion: item.taxTemplateVersion,
+        taxEvidenceReference: item.taxEvidenceReference,
+        taxCalculationMode: item.taxCalculationMode,
+        taxBreakdownJson: item.taxBreakdownJson ?? Prisma.JsonNull,
+        taxAmount: item.taxAmount,
+        totalAmount: money(item.totalAmount.plus(item.taxAmount)),
       }));
       const invoice = await tx.enterpriseSalesInvoice.create({
         data: {

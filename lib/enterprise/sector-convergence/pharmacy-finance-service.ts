@@ -19,6 +19,7 @@ import {
 } from "@/lib/enterprise/accounting/accounting-document-approval-orchestration";
 import { assertSalesCreditNoteStillPostable } from "@/lib/enterprise/accounting/credit-note-posting-preflight";
 import { prisma } from "@/lib/prisma";
+import { assertSectorLineTaxProvenance } from "@/lib/enterprise/sector-convergence/sector-line-fiscal";
 import { resolveEnterpriseModuleCapabilities } from "@/lib/enterprise/module-access";
 import { ensureCanonicalFinanceModulesForOrganization } from "@/lib/enterprise/finance-modules";
 import { EnterpriseSectorConvergenceError } from "@/lib/enterprise/sector-convergence/errors";
@@ -133,15 +134,14 @@ export async function convergePharmacySaleInvoice(
       const party = await ensurePharmacyCustomerParty(tx, organizationId, current, actorUserId);
       const lineTotals = current.lines.map((line) => money(line.totalLine));
       const itemTotal = money(sumDecimals(lineTotals));
-      const difference = money(current.totalAmount.minus(itemTotal));
-      if (difference.abs().greaterThan(new Prisma.Decimal("0.01"))) throw new EnterpriseSectorConvergenceError("PHARMACY_SALE_LINE_TOTAL_MISMATCH", 409, { saleTotal: current.totalAmount.toFixed(), lineTotal: itemTotal.toFixed() });
-      const discountTotal = current.globalDiscount && current.globalDiscount.isPositive() ? money(current.globalDiscount) : money(0);
+      const discountTotal = current.globalDiscount && current.globalDiscount.isPositive() ? money(itemTotal.times(current.globalDiscount).div(100)) : money(0);
       const taxTotal = money(current.taxAmount || 0);
-      // PharmacySaleLine stores no tax code/rate/jurisdiction per line. Do not
-      // project an aggregate positive tax as untraceable Finance VAT.
-      if (taxTotal.gt(0)) throw new EnterpriseSectorConvergenceError("PHARMACY_TAX_LINE_PROVENANCE_REQUIRED", 409);
-      const subtotal = money(current.totalAmount.plus(discountTotal).minus(taxTotal));
-      if (subtotal.isNegative()) throw new EnterpriseSectorConvergenceError("PHARMACY_SALE_SUBTOTAL_INVALID", 409);
+      if (money(itemTotal.minus(discountTotal).plus(taxTotal)).minus(current.totalAmount).abs().greaterThan(new Prisma.Decimal("0.01"))) {
+        throw new EnterpriseSectorConvergenceError("PHARMACY_SALE_LINE_TOTAL_MISMATCH", 409, { saleTotal: current.totalAmount.toFixed(), lineTotal: itemTotal.toFixed() });
+      }
+      try { assertSectorLineTaxProvenance(current.lines, taxTotal, "PHARMACY_TAX_LINE_PROVENANCE_REQUIRED"); }
+      catch { throw new EnterpriseSectorConvergenceError("PHARMACY_TAX_LINE_PROVENANCE_REQUIRED", 409); }
+      const subtotal = itemTotal;
       const invoiceItems: Prisma.EnterpriseSalesInvoiceItemCreateWithoutSalesInvoiceInput[] = current.lines.map((line) => ({
         catalogItemId: catalogByProduct.get(line.productId),
         description: catalogNameById.get(catalogByProduct.get(line.productId)!)!,
@@ -149,8 +149,15 @@ export async function convergePharmacySaleInvoice(
         unitPrice: line.unitPrice,
         discountAmount: money(line.quantity.times(line.unitPrice).minus(line.totalLine).greaterThan(0) ? line.quantity.times(line.unitPrice).minus(line.totalLine) : 0),
         netAmount: money(line.totalLine),
-        taxAmount: money(0),
-        totalAmount: money(line.totalLine),
+        taxCodeId: line.taxCodeId,
+        taxRateApplied: line.taxRateApplied,
+        taxJurisdiction: line.taxJurisdiction,
+        taxTemplateVersion: line.taxTemplateVersion,
+        taxEvidenceReference: line.taxEvidenceReference,
+        taxCalculationMode: line.taxCalculationMode,
+        taxBreakdownJson: line.taxBreakdownJson ?? Prisma.JsonNull,
+        taxAmount: line.taxAmount,
+        totalAmount: money(line.totalLine.plus(line.taxAmount)),
       }));
       const invoice = await tx.enterpriseSalesInvoice.create({
         data: {

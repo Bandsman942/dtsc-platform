@@ -36,3 +36,11 @@ Aucun QR DGI, numéro DEF, code d'autorisation, signature, certificat ou transmi
 7. Endpoint de pré-contrôle DGI retourne toujours NOT_HOMOLOGATED et n'émet aucun code officiel.
 
 **Politique :** une PR DRAFT et `OWNER_E2E: NOT_EXECUTED` jusqu'à validation explicite. Aucun déploiement hors `main`.
+
+## Provenance fiscale sectorielle ajoutée
+
+Les nouvelles lignes `HealthMedicalInvoiceItem` et `PharmacySaleLine` conservent désormais le code, le taux appliqué, la juridiction, la version du modèle, la référence documentaire, le montant et l'instantané détaillé calculés par le **moteur fiscal commun**. L'absence de code ne déclenche aucune TVA implicite. Les valeurs de taxe globale isolées sans ventilation sont refusées. Le taux d'une facture existante n'est jamais recalculé lors de la convergence.
+
+Le montant de remise Pharmacie est une remise **en pourcentage**, convertie en montant monétaire avant projection Finance (correction de la confusion historique). Les remises globales diminuent l'assiette des taxes au moment de la création du document source. L'émission Finance conserve la mécanique de validation et le journal fiscal canonique.
+
+Les anciens documents sans tax provenance restent lisibles, mais une taxe positive non ventilée empêche volontairement la convergence. L'interface sectorielle doit afficher les champs supplémentaires du contrat d'API (code et justificatif) ; une homologation réglementaire n'en découle pas.
