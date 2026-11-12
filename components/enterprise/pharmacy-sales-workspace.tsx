@@ -193,6 +193,9 @@ export function PharmacySalesWorkspace({ organizationId }: { organizationId: str
         <Link href="/enterprise-insurance/verify" className="inline-flex min-h-11 items-center justify-center rounded-xl border border-cyan-500/40 bg-cyan-500/10 px-3 text-sm font-bold text-dtsc-ink hover:bg-cyan-500/15">
           {locale === "en" ? "Verify MSO card" : "Vérifier carte MSO"}
         </Link>
+        <Link href="/enterprise-insurance/invoices" className="inline-flex min-h-11 items-center justify-center rounded-xl border border-dtsc-border px-3 text-sm font-bold text-dtsc-ink hover:bg-dtsc-page">
+          {locale === "en" ? "HIRMS invoices" : "Factures HIRMS"}
+        </Link>
         <Button disabled={!data?.currency} onClick={() => { setForm(emptyForm(data)); setOpen(true); }} className="w-full bg-[#002b5b] text-white sm:w-auto"><Plus />Nouvelle vente</Button>
       </div>
     </div>
