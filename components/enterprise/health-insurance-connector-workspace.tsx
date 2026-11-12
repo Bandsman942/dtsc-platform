@@ -125,10 +125,13 @@ export function HealthInsuranceConnectorWorkspace({ organizationId }: { organiza
             <div className="flex items-center gap-2"><CircleHelp className="h-5 w-5 text-dtsc-muted" aria-hidden="true"/><h2 className="font-bold text-dtsc-ink">{tx("Avant d'utiliser MSO", "Before using MSO")}</h2></div>
             <p className="text-xs text-dtsc-muted">{tx("HSL doit avoir approuvé le client et autorisé VerifyMembers. La connexion réussie ne garantit pas l'accès à toutes les opérations.", "HSL must approve this client and grant VerifyMembers. Successful authentication does not grant every operation.")}</p>
             <Link href="/enterprise-insurance/verify" className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-dtsc-border px-3 py-2 text-sm font-bold text-dtsc-ink hover:bg-dtsc-page"><Stethoscope className="h-4 w-4" aria-hidden="true"/>{tx("Ouvrir la vérification adhérent", "Open member verification")}</Link>
+            <Link href="/enterprise-insurance/invoices" className="mt-2 inline-flex min-h-11 items-center gap-2 rounded-xl border border-dtsc-border px-3 py-2 text-sm font-bold text-dtsc-ink hover:bg-dtsc-page">
+              {tx("Contrôler et transmettre les factures HSL", "Preflight and submit HSL invoices")}
+            </Link>
           </section>
         </aside>
       </div>
-      <p className="text-xs text-dtsc-muted">{tx("Les transmissions de factures et de justificatifs restent désactivées tant que leur contrat OpenAPI détaillé n’est pas certifié en UAT.", "Invoice and document submissions remain disabled until their detailed OpenAPI contract is certified in UAT.")}</p>
+      <p className="text-xs text-dtsc-muted">{tx("Les factures peuvent être contrôlées en UAT. Leur transmission reste désactivée par défaut et nécessite l’autorisation UploadInvoices de HSL. Les justificatifs OCR ne sont pas encore intégrés.", "Invoices can be preflighted in UAT. Sending is disabled by default and requires HSL UploadInvoices authorization. OCR documents are not integrated yet.")}</p>
     </main>
   );
 }
