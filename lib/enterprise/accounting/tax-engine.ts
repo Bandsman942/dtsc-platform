@@ -7,7 +7,7 @@ import { normalizeTaxCountryCode } from "@/lib/enterprise/accounting/tax-jurisdi
  * limited to a single unambiguous jurisdiction-matching active standard tax.
  * Cross-border, exempt and special-sector cases require an explicit treatment.
  */
-type TaxReadDb = Pick<Prisma.TransactionClient, "organization" | "enterpriseSite" | "enterpriseTaxCode">;
+type TaxReadDb = Pick<Prisma.TransactionClient, "organization" | "enterpriseSite" | "enterpriseTaxCode" | "enterpriseFinanceConfiguration">;
 export type ResolvedDefaultSalesTax = { id: string; code: string; rate: Prisma.Decimal };
 
 export async function resolveDefaultSalesTaxes(db: TaxReadDb, input: {
@@ -15,6 +15,13 @@ export async function resolveDefaultSalesTaxes(db: TaxReadDb, input: {
   effectiveAt: Date;
   siteId?: string | null;
 }): Promise<ResolvedDefaultSalesTax[]> {
+  const configuration = await db.enterpriseFinanceConfiguration.findUnique({
+    where: { organizationId: input.organizationId },
+    select: { taxPolicyJson: true },
+  });
+  const taxPolicy = configuration?.taxPolicyJson;
+  if (!taxPolicy || typeof taxPolicy !== "object" || Array.isArray(taxPolicy)
+    || (taxPolicy as Record<string, unknown>).automaticSalesTaxEnabled !== true) return [];
   const organization = await db.organization.findUnique({
     where: { id: input.organizationId },
     select: { country: true },
