@@ -53,6 +53,10 @@ assert.match(read("components/public/public-nav.tsx"), /onPointerEnter=/);
 assert.match(read("lib/enterprise/retail/offline-client.ts"), /function offlineLocalScope/);
 assert.match(read("lib/enterprise/retail/offline-client.ts"), /if \(!organizationId \|\| !actorUserId\.trim\(\)\)/);
 assert.match(read("lib/enterprise/retail/offline-client.ts"), /RETAIL_OFFLINE_UNRESOLVED_LOCAL_OPERATIONS/);
+assert.match(read("lib/enterprise/retail/offline-client.ts"), /objectStore\(QUEUE_STORE\)\.add\(stored\)/,
+  "A duplicate local operation UUID must not silently overwrite queued Finance work");
+assert.match(read("lib/enterprise/retail/offline-client.ts"), /row\.status === "SYNCED" && result\.status !== "SYNCED"/,
+  "A delayed response must not demote a synchronized Finance draft");
 assert.match(read("components/enterprise/professional/retail-offline-continuity.tsx"), /clearDeviceData/);
 assert.match(read("components/enterprise/professional/retail-device-readiness.tsx"), /exportDevices/);
 assert.match(read("components/enterprise/professional/retail-omnichannel-panel.tsx"), /exportOmnichannelOrders/);
