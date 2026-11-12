@@ -7,7 +7,9 @@ import { getHealthInsuranceAccess } from "@/lib/health-insurance-access";
 import { canAccessPharmacySales } from "@/lib/pharmacy-sale-access";
 import { requireEnterpriseMembership } from "@/lib/enterprise-sector-templates";
 
-export default async function InsuranceInvoiceSubmitPage() {
+export default async function InsuranceInvoiceSubmitPage({ searchParams }: { searchParams: Promise<{ environment?: string }> }) {
+  const query = await searchParams;
+  const initialEnvironment = query.environment === "PRODUCTION" ? "PRODUCTION" : "UAT";
   const user = await requireUser();
   const session = await getSession();
   const organizationId = session?.activeContext === "ORGANIZATION" ? session.activeOrganizationId : null;
@@ -19,6 +21,6 @@ export default async function InsuranceInvoiceSubmitPage() {
     : sector === "PHARMACY" ? await canAccessPharmacySales(session.userId,organizationId,"confirm") : false;
   if (!allowed) redirect("/dashboard");
   return <AppShell user={user}><LocaleProvider locale={user.locale === "en" ? "en" : "fr"}>
-    <HirmsInvoiceSubmissionWorkspace organizationId={organizationId}/>
+    <HirmsInvoiceSubmissionWorkspace organizationId={organizationId} initialEnvironment={initialEnvironment}/>
   </LocaleProvider></AppShell>;
 }
