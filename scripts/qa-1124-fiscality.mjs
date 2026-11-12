@@ -59,8 +59,10 @@ requireTokens("prisma/migrations/20261112213000_sector_tax_evidence_and_breakdow
   "taxBreakdownJson", "sourceInvoiceItemId", "taxRecoveryVerifiedAt", "taxRecoveryRequested",
 ]);
 requireTokens("docs/ISSUE_1124_FISCALITY_SECTOR_DGI.md", ["NOT_HOMOLOGATED", "e-DEF", "25 février 2026"]);
+requireTokens("lib/enterprise/sector-convergence/sector-line-fiscal.ts", ["calculateSectorSourceTax", "assertSectorLineTaxProvenance", "SECTOR_TAX_HEADER_NOT_SUPPORTED_WITHOUT_LINE_EVIDENCE"]);
+requireTokens("prisma/migrations/20261112222000_health_pharmacy_line_fiscal_provenance/migration.sql", ["HealthMedicalInvoiceItem", "PharmacySaleLine", "taxBreakdownJson"]);
+requireTokens("components/enterprise/health-medical-billing-workspace.tsx", ["taxCodeId", "taxEvidenceReference", "taxCodes"]);
+requireTokens("components/enterprise/pharmacy-sales-workspace.tsx", ["additionalTaxCodeIds", "taxCalculationMode", "taxEvidenceReference"]);
 if (missing.length) { console.error("QA fiscal sector #1124 FAILED:\n"+missing.join("\n"));process.exit(1); }
 console.log("QA fiscal sector #1124 static contracts passed; behavioral claims require CI Playwright and owner E2E.");
 
-requireTokens("lib/enterprise/sector-convergence/sector-line-fiscal.ts", ["calculateSectorSourceTax", "assertSectorLineTaxProvenance", "SECTOR_TAX_HEADER_NOT_SUPPORTED_WITHOUT_LINE_EVIDENCE"]);
-requireTokens("prisma/migrations/20261112222000_health_pharmacy_line_fiscal_provenance/migration.sql", ["HealthMedicalInvoiceItem", "PharmacySaleLine", "taxBreakdownJson"]);

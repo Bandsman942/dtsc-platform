@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
+import { normalizeTaxCountryCode } from "@/lib/enterprise/accounting/tax-jurisdictions";
 import { enterpriseDomainErrorResponse, enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
 import { getSession } from "@/lib/auth"; import { writeApiLog, writeAuditLog } from "@/lib/audit"; import { canAccessPharmacySales } from "@/lib/pharmacy-sale-access"; import { pharmacySaleSchema } from "@/lib/pharmacy-sale-validators"; import { createSale, getSalesDataset, validateSaleReferences } from "@/lib/pharmacy-sales"; import { getRateLimitKey, rateLimit } from "@/lib/rate-limit"; import { isSameOriginRequest } from "@/lib/request-security";
 type Params = { params: Promise<{ organizationId: string }> };
@@ -17,8 +19,12 @@ export async function GET(req: Request, { params }: Params) {
   const view = allowedViews.find((candidate) => candidate === requestedView) || "dashboard";
   try {
     const data = await getSalesDataset(organizationId, { page, pageSize, query, view });
+    const organization = await prisma.organization.findUnique({ where: { id: organizationId }, select: { country: true } });
+    const country = normalizeTaxCountryCode(organization?.country);
+    const now = new Date();
+    const taxCodes = country ? await prisma.enterpriseTaxCode.findMany({ where: { organizationId, isActive: true, jurisdiction: country, category: { in: ["VAT", "GST", "SALES_TAX", "LOCAL_LEVY", "EXEMPT", "ZERO_RATED"] }, rates: { some: { status: "ACTIVE", effectiveFrom: { lte: now }, OR: [{ effectiveTo: null }, { effectiveTo: { gte: now } }] } } }, select: { id: true, code: true, nameFr: true, nameEn: true, category: true, taxTreatment: true }, orderBy: { code: "asc" } }) : [];
     await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt });
-    return NextResponse.json(data);
+    return NextResponse.json({ ...data, taxCodes });
   } catch (error) {
     const response = enterpriseDomainErrorResponse(error, "PHARMACY_SALES_READ_FAILED", req);
     await writeApiLog({ request: req, statusCode: response.status, userId: session.userId, startedAt });

@@ -33,8 +33,9 @@ type SaleReference = { id: string; title: string; stockUnit?: string; referenceS
 type SaleReferenceResult = { items: SaleReference[]; selected: SaleReference | null; page: number; pageCount: number; total: number };
 type Line = { id: string; productId: string; batchId: string; quantity: string; unit: string; unitPrice: string; totalLine: string; requiresPrescription: boolean; requiresPharmacistValidation: boolean };
 type Sale = { id: string; saleNumber: string; saleType: string; customerName: string | null; prescriptionId: string | null; cashierId: string; saleDate: string; currency: string; totalAmount: string; paidAmount: string; remainingAmount: string; paymentMethod: string | null; paymentStatus: string; pharmacistValidationStatus: string; status: string; stockImpactApplied: boolean; lines: Line[]; refunds: unknown[]; anomalies: unknown[] };
-type Data = { metrics: Record<string, number | null>; financialKpiReliable: { today: boolean; month: boolean }; currency: string; sales: Sale[]; pagination: { page: number; pageSize: number; total: number; totalUnfiltered: number; pageCount: number }; products: Opt[]; members: Opt[]; departments: Opt[]; movements: Array<{ id: string; movementType: string; quantity: string; createdAt: string }> };
-type FLine = { productId: string; batchId: string; quantity: string; unit: string; unitPrice: string; lineDiscount: string; notes: string };
+type TaxChoice = { id: string; code: string; nameFr: string; nameEn: string };
+type Data = { taxCodes?: TaxChoice[]; metrics: Record<string, number | null>; financialKpiReliable: { today: boolean; month: boolean }; currency: string; sales: Sale[]; pagination: { page: number; pageSize: number; total: number; totalUnfiltered: number; pageCount: number }; products: Opt[]; members: Opt[]; departments: Opt[]; movements: Array<{ id: string; movementType: string; quantity: string; createdAt: string }> };
+type FLine = { taxCodeId: string; additionalTaxCodeIds: string[]; taxCalculationMode: "NET" | "SEQUENTIAL"; taxEvidenceReference: string; productId: string; batchId: string; quantity: string; unit: string; unitPrice: string; lineDiscount: string; notes: string };
 type Form = { saleNumber: string; saleType: string; customerName: string; customerPhone: string; customerType: string; prescriptionId: string; prescriberName: string; cashierId: string; departmentId: string; saleDate: string; currency: string; globalDiscount: string; taxAmount: string; paidAmount: string; paymentMethod: string; paymentReference: string; notes: string; lines: FLine[] };
 type Tab = "dashboard" | "new" | "today" | "history" | "lines" | "validation" | "refunds" | "exceptional" | "receipts" | "anomalies" | "movements";
 
@@ -82,6 +83,10 @@ const emptyLine = (product?: Opt): FLine => ({
   unit: product?.stockUnit || "unité",
   unitPrice: product?.referenceSalePrice || "0",
   lineDiscount: "0",
+  taxCodeId: "",
+  additionalTaxCodeIds: [],
+  taxCalculationMode: "NET",
+  taxEvidenceReference: "",
   notes: "",
 });
 const emptyForm = (data: Data | null): Form => ({
@@ -169,7 +174,7 @@ export function PharmacySalesWorkspace({ organizationId }: { organizationId: str
     }
   }
 
-  function updateLine(index: number, key: keyof FLine, value: string) {
+  function updateLine(index: number, key: keyof FLine, value: string | string[]) {
     setForm((current) => ({ ...current, lines: current.lines.map((line, lineIndex) => lineIndex === index ? { ...line, [key]: value } : line) }));
   }
 
@@ -298,6 +303,10 @@ function SaleForm({ organizationId, open, close, form, setForm, data, updateLine
           <ReferenceChoice key={`batch-${index}-${line.productId}`} organizationId={organizationId} open={open} kind="batches" labelText="Lot vendable FEFO" productId={line.productId} value={line.batchId} onChange={(value) => updateLine(index, "batchId", value)} />
           <Field name="quantity" labelText="Quantité"><Input required type="number" min="0.001" step="any" value={line.quantity} onChange={(event) => updateLine(index, "quantity", event.target.value)} /></Field>
           <Field name="unitPrice" labelText={`Prix unitaire (${form.currency})`}><Input required type="number" min="0" step="0.01" value={line.unitPrice} onChange={(event) => updateLine(index, "unitPrice", event.target.value)} /></Field>
+          <Field name="taxCodeId" labelText="Taxe appliquée à la ligne"><select className="h-10 w-full rounded-lg border border-dtsc-border bg-dtsc-surface px-2" value={line.taxCodeId} onChange={(event) => updateLine(index, "taxCodeId", event.target.value)}><option value="">Sans taxe explicite</option>{(data?.taxCodes || []).map(tax => <option key={tax.id} value={tax.id}>{tax.code} · {tax.nameFr}</option>)}</select></Field>
+          <Field name="additionalTaxCodeIds" labelText="Taxe complémentaire"><select className="h-10 w-full rounded-lg border border-dtsc-border bg-dtsc-surface px-2" value={line.additionalTaxCodeIds[0] || ""} onChange={(event) => updateLine(index, "additionalTaxCodeIds", event.target.value ? [event.target.value] : [])}><option value="">Aucune</option>{(data?.taxCodes || []).filter(tax=>tax.id!==line.taxCodeId).map(tax => <option key={tax.id} value={tax.id}>{tax.code} · {tax.nameFr}</option>)}</select></Field>
+          <Field name="taxCalculationMode" labelText="Assiette fiscale"><select className="h-10 w-full rounded-lg border border-dtsc-border bg-dtsc-surface px-2" value={line.taxCalculationMode} onChange={(event) => updateLine(index, "taxCalculationMode", event.target.value)}><option value="NET">Même assiette nette</option><option value="SEQUENTIAL">Cumul séquentiel (règle approuvée)</option></select></Field>
+          <Field name="taxEvidenceReference" labelText="Justificatif de taxe"><Input value={line.taxEvidenceReference} placeholder="Référence légale / document" onChange={(event) => updateLine(index, "taxEvidenceReference", event.target.value)} /></Field>
         </div>)}
         <Button type="button" variant="outline" onClick={() => setForm((current) => ({ ...current, lines: [...current.lines, emptyLine()] }))}><Plus />Ajouter un produit</Button>
       </Section>
