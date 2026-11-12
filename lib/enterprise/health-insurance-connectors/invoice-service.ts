@@ -94,7 +94,7 @@ export async function preflightHirmsInvoiceSubmission(organizationId: string, en
 }
 
 export async function submitHirmsInvoices(organizationId: string, userId: string, environment: HirmsEnvironment, mode: HirmsDispatchMode, input: unknown) {
-  assertHirmsInvoiceSendEnabled(environment);
+  assertHirmsInvoiceSendEnabled(environment, organizationId);
   const validated = await validateAgainstErp(organizationId, environment, mode, input);
   const batchId = randomUUID();
   const digest = (invoice: HirmsInvoice) => createHash("sha256").update(JSON.stringify(invoice)).digest("hex");
@@ -114,7 +114,7 @@ export async function submitHirmsInvoices(organizationId: string, userId: string
   }
   try {
     const result = await postHirmsInvoices(openHirmsCredentials(validated.credentials),
-      mode === "bulk" ? validated.invoices : validated.invoices[0], mode === "bulk", environment);
+      mode === "bulk" ? validated.invoices : validated.invoices[0], mode === "bulk", environment, organizationId);
     const status = result.queued ? "QUEUED" : "RECEIVED";
     await prisma.enterpriseHealthInsuranceInvoiceSubmission.updateMany({
       where: { organizationId, connectorId: validated.connectorId, environment, batchId },
