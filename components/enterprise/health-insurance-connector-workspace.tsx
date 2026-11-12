@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { BadgeCheck, CircleHelp, KeyRound, PlugZap, RefreshCw, ShieldCheck, Stethoscope } from "lucide-react";
 import { useAppLocale } from "@/components/i18n/locale-provider";
@@ -20,6 +20,7 @@ export function HealthInsuranceConnectorWorkspace({ organizationId, initialEnvir
   const en = locale === "en";
   const tx = (fr: string, english: string) => en ? english : fr;
   const [environment, setEnvironment] = useState<HirmsEnvironment>(initialEnvironment);
+  const requestEpoch = useRef(0);
   const [data, setData] = useState<Dataset | null>(null);
   const [siteId, setSiteId] = useState("");
   const [serviceProviderId, setServiceProviderId] = useState("");
@@ -29,9 +30,11 @@ export function HealthInsuranceConnectorWorkspace({ organizationId, initialEnvir
   const [notice, setNotice] = useState("");
   useToastMessage(notice);
   const load = useCallback(async () => {
+    const currentRequest = ++requestEpoch.current;
     const response = await fetch(`/api/enterprise/${organizationId}/insurance-connectors?environment=${environment}`, { cache: "no-store" });
     if (!response.ok) throw new Error("LOAD_FAILED");
     const payload = await response.json() as Dataset;
+    if (currentRequest !== requestEpoch.current || payload.environment !== environment) return;
     setData(payload);
     setSiteId(payload.connector?.siteId || "");
     setServiceProviderId(payload.connector?.hslServiceProviderId ? String(payload.connector.hslServiceProviderId) : "");
@@ -86,7 +89,7 @@ export function HealthInsuranceConnectorWorkspace({ organizationId, initialEnvir
         </div>
       </section>
 
-      <HirmsEnvironmentSwitch value={environment} onChange={setEnvironment} disabled={pending} />
+      <HirmsEnvironmentSwitch value={environment} onChange={next=>{requestEpoch.current++;setEnvironment(next);setData(null);setUsername("");setSecret("");}} disabled={pending} />
       {environment === "PRODUCTION" && <div role="note" className="rounded-xl border border-amber-500/50 bg-amber-500/10 p-3 text-sm text-dtsc-ink">{tx("Environnement réel. Utilisez exclusivement les identifiants de Production remis par HSL. Les appels sont bloqués tant que DTSC n’a pas habilité la Production.", "Live environment. Use only Production credentials issued by HSL. Outbound calls are blocked until DTSC enables Production.")}</div>}
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1.5fr)_minmax(280px,1fr)]">
         <form onSubmit={save} className="min-w-0 space-y-4 rounded-2xl border border-dtsc-border bg-dtsc-surface p-4 sm:p-5">
