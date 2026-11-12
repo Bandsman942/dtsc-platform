@@ -1,3 +1,9 @@
+## 2026-11-12 — Issue #1127 — Connecteurs assurances santé / HIRMS (candidat v1.16.0, NON LIVRÉ)
+
+- Socle générique des connecteurs d'assurance, premier adaptateur HIRMS/MSO limité à UAT ; credentials HSL chiffrés, OAuth Authentik et vérification réelle des adhérents par `VerifyMembers`.
+- Interface Design 2.0 Administration entreprise, Santé et Pharmacie, isolation `organizationId`, RBAC, rate limit, historique minimal expurgé et migration additive.
+- **Ni facture HSL, ni OCR, ni production, ni garantie de remboursement activés.** Précondition : OpenAPI complet, compte HSL autorisé, Quality Gates, QA et E2E propriétaire. Runbook : `docs/HEALTH_INSURANCE_CONNECTORS_HIRMS_01.md` ; PR #1128 en brouillon.
+
 ## 2026-11-12 — Issue #1124 — Fiscalité sectorielle avancée (candidat v1.15.0, NON LIVRÉ)
 
 - Moteur fiscal multi-taxes explicite, assiettes de même base ou séquentielles selon règle approuvée indépendamment, codes et taux tenant-scoped, justificatifs obligatoires pour traitements spéciaux ; retenues hors périmètre automatisé tant que le flux de paiement et les comptes dédiés ne sont pas qualifiés.
