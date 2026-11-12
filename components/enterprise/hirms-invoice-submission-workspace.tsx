@@ -43,8 +43,8 @@ export function HirmsInvoiceSubmissionWorkspace({organizationId,initialEnvironme
   function switchEnvironment(next:HirmsEnvironment){setEnvironment(next);setPreflight(null);setConfirmed(false);setProductionConfirmation("");setJson("");setHistory(null);setPage(1)}
   async function readJson(event:ChangeEvent<HTMLInputElement>){
     const file=event.target.files?.[0];if(!file)return;
-    if(!file.name.toLowerCase().endsWith(".json")||file.size>8*1024*1024){
-      setNotice(tx("Sélectionnez un fichier JSON de moins de 8 Mo.", "Select a JSON file smaller than 8 MB."));return;
+    if(!file.name.toLowerCase().endsWith(".json")||file.size>4*1024*1024){
+      setNotice(tx("Sélectionnez un fichier JSON de moins de 4 Mo.", "Select a JSON file smaller than 4 MB."));return;
     }
     try{reset(await file.text())}catch{setNotice(tx("Lecture du fichier impossible.", "Unable to read file."))}
     event.target.value="";
