@@ -152,7 +152,7 @@ export async function prepareRetailInvoice(organizationId: string, actorUserId: 
         ...(line.decision.taxCodeId ? { taxCodeId: line.decision.taxCodeId } : {}),
       })),
     };
-    const newInvoice = await createSalesInvoiceTx(tx, organizationId, actorUserId, financeInput);
+    const newInvoice = await createSalesInvoiceTx(tx, organizationId, actorUserId, financeInput, input.siteId);
     // WARN is an explicit, non-blocking policy. Make the issue visible to
     // Finance validators on the canonical invoice, not only in a transient toast.
     const invoice = stockWarnings.length

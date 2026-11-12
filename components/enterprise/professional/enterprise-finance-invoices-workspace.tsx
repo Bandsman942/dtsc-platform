@@ -80,12 +80,18 @@ type InvoiceLine = {
   unitPrice: string;
   discountAmount: string;
   expenseAccountId: string;
+  taxCodeId: string;
+  additionalTaxCodeIds: string[];
+  taxCalculationMode: "NET" | "SEQUENTIAL";
+  taxEvidenceReference: string;
+  taxRecoveryRequested: boolean;
 };
+type AvailableTax = { id: string; code: string; nameFr: string; nameEn: string; taxTreatment: string; category: string };
 type ActionTarget = { record: InvoiceRecord; action: string; kind: "invoice" | "credit" };
 
 const invoiceT = (locale: FinanceLocale, key: EnterpriseFinanceKey) => translateEnterpriseFinance(locale, key);
 const copy = invoiceT;
-const newLine = (index: number): InvoiceLine => ({ key: `invoice-${Date.now()}-${index}`, catalogItemId: "", description: "", quantity: "1", unitPrice: "0", discountAmount: "0", expenseAccountId: "" });
+const newLine = (index: number): InvoiceLine => ({ key: `invoice-${Date.now()}-${index}`, catalogItemId: "", description: "", quantity: "1", unitPrice: "0", discountAmount: "0", expenseAccountId: "", taxCodeId: "", additionalTaxCodeIds: [], taxCalculationMode: "NET", taxEvidenceReference: "", taxRecoveryRequested: false });
 
 function actionLabel(action: string, locale: FinanceLocale) {
   if (action === "SUBMIT") return invoiceT(locale, "actionSubmit");
@@ -159,6 +165,8 @@ export function EnterpriseFinanceInvoicesWorkspace(props: Props) {
   const [actionTarget, setActionTarget] = useState<ActionTarget | null>(null);
   const [creditTarget, setCreditTarget] = useState<InvoiceRecord | null>(null);
   const [lines, setLines] = useState<InvoiceLine[]>([newLine(0)]);
+  const [availableTaxes, setAvailableTaxes] = useState<AvailableTax[]>([]);
+  const [taxSelectorMessage, setTaxSelectorMessage] = useState("");
   const [selectedPartyId, setSelectedPartyId] = useState("");
   const [selectedSupplierId, setSelectedSupplierId] = useState("");
   const [selectedSupplierPartyId, setSelectedSupplierPartyId] = useState("");
@@ -169,6 +177,19 @@ export function EnterpriseFinanceInvoicesWorkspace(props: Props) {
   const [errorMessage, setErrorMessage] = useState("");
   useToastMessage(message, "success");
   useToastMessage(errorMessage, "error");
+
+  useEffect(() => {
+    if (!createOpen) return;
+    const controller = new AbortController();
+    void fetch(`/api/enterprise/${organizationId}/taxes?pageSize=100`, { cache: "no-store", signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("FINANCE_TAX_VIEW_REQUIRED");
+        return response.json() as Promise<{ items?: AvailableTax[] }>;
+      })
+      .then((data) => { if (!controller.signal.aborted) { setAvailableTaxes(data.items || []); setTaxSelectorMessage(""); } })
+      .catch((error: unknown) => { if (!(error instanceof Error && error.name === "AbortError")) setTaxSelectorMessage(locale === "en" ? "Tax catalog access requires Finance Tax permission." : "Accès au référentiel fiscal soumis à la permission Finance Taxes."); });
+    return () => controller.abort();
+  }, [createOpen, organizationId, locale]);
 
   const endpointName = useMemo(() => {
     if (tab === "credits") return isReceivables ? "sales-credit-notes" : "supplier-credit-notes";
@@ -241,6 +262,11 @@ export function EnterpriseFinanceInvoicesWorkspace(props: Props) {
         unitPrice: line.unitPrice,
         discountAmount: line.discountAmount,
         expenseAccountId: !isReceivables && line.expenseAccountId ? line.expenseAccountId : undefined,
+        taxCodeId: line.taxCodeId || undefined,
+        additionalTaxCodeIds: line.additionalTaxCodeIds.length ? line.additionalTaxCodeIds : undefined,
+        taxCalculationMode: line.taxCalculationMode === "SEQUENTIAL" ? "SEQUENTIAL" : undefined,
+        taxEvidenceReference: line.taxEvidenceReference.trim() || undefined,
+        taxRecoveryRequested: !isReceivables && line.taxRecoveryRequested ? true : undefined,
       })),
     };
     const payload = isReceivables ? {
@@ -284,6 +310,7 @@ export function EnterpriseFinanceInvoicesWorkspace(props: Props) {
       payload.approverUserId = String(form.get("approverUserId") || "");
     }
     if (action === "SUBMIT" && isCredit) payload.approverUserId = String(form.get("approverUserId") || "");
+    if (!isCredit && !isReceivables && action === "REVIEW") payload.verifyInputTaxEvidence = form.get("verifyInputTaxEvidence") === "on";
     setBusy(true); setErrorMessage("");
     try {
       await financeMutation(path, payload);
@@ -303,7 +330,7 @@ export function EnterpriseFinanceInvoicesWorkspace(props: Props) {
         invoiceId: creditTarget.id,
         reason: String(form.get("reason") || ""),
         creditDate: String(form.get("creditDate") || ""),
-        items: creditTarget.items.map((item) => ({ description: item.description, quantity: String(item.quantity), unitPrice: String(item.unitPrice), discountAmount: String(item.discountAmount || 0) })),
+        items: creditTarget.items.map((item) => ({ sourceInvoiceItemId: item.id, description: item.description, quantity: String(item.quantity), unitPrice: String(item.unitPrice), discountAmount: String(item.discountAmount || 0) })),
       });
       setCreditTarget(null); setDetail(null); setTab("credits"); setRefreshKey((value) => value + 1); setMessage(t("creditNoteCreated"));
     } catch (error) {
@@ -401,6 +428,7 @@ export function EnterpriseFinanceInvoicesWorkspace(props: Props) {
           {isReceivables ? <Field label={t("paymentTerms")}><Input name="paymentTerms" disabled={busy} /></Field> : null}
         </ProfessionalFormSection>
         <ProfessionalFormSection title={t("invoiceLines")}>
+          {taxSelectorMessage ? <p role="status" className="text-sm text-amber-600 md:col-span-2">{taxSelectorMessage}</p> : null}
           <div className="grid gap-3 md:col-span-2">{lines.map((line, index) => <div key={line.key} className="grid gap-3 rounded-xl border border-dtsc-border p-3 md:grid-cols-12">
             <div className="md:col-span-4"><Field label={`${t("productOrService")} ${index + 1}`}><FinanceReferenceSelect organizationId={organizationId} moduleCode={moduleCode} kind="catalog-item" name={`catalog-${line.key}`} label={t("productOrService")} locale={rawLocale} disabled={busy} onOptionChange={(option) => updateLine(line.key, { catalogItemId: option?.id || "", ...(option ? { description: option.label, unitPrice: option.amount !== null && option.amount !== undefined ? String(option.amount) : line.unitPrice } : {}) })} /></Field></div>
             <div className="md:col-span-4"><Field label={`${t("description")} ${index + 1}`}><Input value={line.description} onChange={(event) => updateLine(line.key, { description: event.target.value })} required disabled={busy} /></Field></div>
@@ -408,6 +436,23 @@ export function EnterpriseFinanceInvoicesWorkspace(props: Props) {
             <div className="md:col-span-2"><Field label={t("quantityShort")}><Input type="number" min="0.000001" step="0.000001" value={line.quantity} onChange={(event) => updateLine(line.key, { quantity: event.target.value })} required disabled={busy} /></Field></div>
             <div className="md:col-span-2"><Field label={t("price")}><Input type="number" min="0" step="0.01" value={line.unitPrice} onChange={(event) => updateLine(line.key, { unitPrice: event.target.value })} required disabled={busy} /></Field></div>
             <div className="md:col-span-2"><Field label={t("discount")}><Input type="number" min="0" step="0.01" value={line.discountAmount} onChange={(event) => updateLine(line.key, { discountAmount: event.target.value })} disabled={busy} /></Field></div>
+            <div className="md:col-span-4"><Field label={locale === "en" ? "Primary tax" : "Taxe principale"}>
+              <NativeSelect value={line.taxCodeId} onChange={(value) => updateLine(line.key, { taxCodeId: value, additionalTaxCodeIds: line.additionalTaxCodeIds.filter((id) => id !== value) })}
+                items={[{ id: "", label: locale === "en" ? "Use item tax policy" : "Règle fiscale de l'article" }, ...availableTaxes.map((tax) => ({ id: tax.id, label: `${tax.code} — ${locale === "en" ? tax.nameEn : tax.nameFr}` }))]} />
+            </Field></div>
+            <div className="md:col-span-4"><Field label={locale === "en" ? "Additional tax" : "Taxe complémentaire"}>
+              <NativeSelect value={line.additionalTaxCodeIds[0] || ""} onChange={(value) => updateLine(line.key, { additionalTaxCodeIds: value ? [value] : [] })}
+                items={[{ id: "", label: locale === "en" ? "None" : "Aucune" }, ...availableTaxes.filter((tax) => tax.id !== line.taxCodeId).map((tax) => ({ id: tax.id, label: `${tax.code} — ${locale === "en" ? tax.nameEn : tax.nameFr}` }))]} />
+            </Field></div>
+            <div className="md:col-span-4"><Field label={locale === "en" ? "Tax basis" : "Assiette fiscale"}>
+              <NativeSelect value={line.taxCalculationMode} onChange={(value) => updateLine(line.key, { taxCalculationMode: value === "SEQUENTIAL" ? "SEQUENTIAL" : "NET" })}
+                items={[{ id: "NET", label: locale === "en" ? "Same net amount" : "Même montant HT" }, { id: "SEQUENTIAL", label: locale === "en" ? "Sequential (approved rule)" : "Cumul séquentiel (règle approuvée)" }]} />
+            </Field></div>
+            <div className="md:col-span-7"><Field label={locale === "en" ? "Tax evidence reference" : "Référence justificative fiscale"}>
+              <Input value={line.taxEvidenceReference} maxLength={180} disabled={busy} placeholder={locale === "en" ? "Document / decision / legal reference" : "Document / décision / référence légale"} onChange={(event) => updateLine(line.key, { taxEvidenceReference: event.target.value })}/>
+            </Field></div>
+            {!isReceivables ? <label className="flex items-center gap-2 rounded-lg border border-dtsc-border p-2 text-sm md:col-span-5"><input type="checkbox" checked={line.taxRecoveryRequested} disabled={busy} onChange={(event) => updateLine(line.key, { taxRecoveryRequested: event.target.checked })}/><span>{locale === "en" ? "Request input VAT recovery (proof + review)" : "Demander la TVA récupérable (preuve et revue exigées)"}</span></label> : null}
+            <p className="text-xs text-dtsc-muted md:col-span-12">{locale === "en" ? "Codes are company-specific. Withholding, unsupported cross-border regimes remain blocked." : "Codes propres à l'entreprise. Retenues et régimes transfrontaliers non qualifiés restent bloqués."}</p>
             <div className="flex items-end md:col-span-2"><Button type="button" variant="outline" disabled={busy || lines.length === 1} onClick={() => setLines((current) => current.filter((item) => item.key !== line.key))}>{t("remove")}</Button></div>
           </div>)}<Button type="button" variant="outline" disabled={busy} onClick={() => setLines((current) => [...current, newLine(current.length)])}><Plus className="h-4 w-4" />{t("addLine")}</Button></div>
         </ProfessionalFormSection>
@@ -437,6 +482,7 @@ export function EnterpriseFinanceInvoicesWorkspace(props: Props) {
         {actionTarget.action === "SUBMIT" && actionTarget.kind === "invoice" && isReceivables && canSubmit ? <EnterpriseApproverSelect organizationId={organizationId} moduleCode="FINANCE_RECEIVABLES" locale={rawLocale} /> : null}
         {actionTarget.action === "SUBMIT" && actionTarget.kind === "invoice" && !isReceivables && canSubmit ? <><EnterpriseApproverSelect organizationId={organizationId} moduleCode="FINANCE_PAYABLES" locale={rawLocale} name="reviewerUserId" label={locale === "en" ? "Reviewer" : "Responsable de revue"} /><EnterpriseApproverSelect organizationId={organizationId} moduleCode="FINANCE_PAYABLES" locale={rawLocale} name="approverUserId" label={locale === "en" ? "Final approver" : "Approbateur final"} /></> : null}
         {actionTarget.action === "SUBMIT" && actionTarget.kind === "credit" ? <EnterpriseApproverSelect organizationId={organizationId} moduleCode={moduleCode} locale={rawLocale} /> : null}
+        {actionTarget.action === "REVIEW" && actionTarget.kind === "invoice" && !isReceivables ? <label className="flex items-start gap-3 rounded-xl border border-dtsc-border p-3 text-sm"><input type="checkbox" name="verifyInputTaxEvidence" className="mt-1" /><span>{locale === "en" ? "I checked the supplier invoice and input tax evidence." : "Je confirme la vérification de la facture fournisseur et des justificatifs fiscaux."}</span></label> : null}
         {actionTarget.action !== "POST" && actionTarget.action !== "ISSUE" ? <Field label={t("decisionReasonComment")}><textarea name="reason" rows={4} minLength={actionRequiresReason ? 4 : undefined} required={actionRequiresReason} disabled={busy} className="w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 disabled:opacity-60" /><p className="mt-2 text-xs leading-5 text-dtsc-muted">{t(actionRequiresReason ? "rejectionReasonMinimumHint" : "decisionCommentOptionalHint")}</p></Field> : null}
         <div className="flex justify-end gap-2"><Button type="button" variant="outline" disabled={busy} onClick={() => setActionTarget(null)}>{t("cancel")}</Button><Button type="submit" disabled={busy || (actionTarget.action === "APPROVE" && !canApprove) || (["POST", "ISSUE"].includes(actionTarget.action) && !canManage)}>{busy ? (locale === "en" ? "Processing…" : "Traitement…") : t("confirmAction")}</Button></div>
       </form> : null}

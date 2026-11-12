@@ -54,7 +54,7 @@ requireTokens(posting, [
   "status: \"POSTED\"",
 ]);
 requireTokens(procurement, [
-  "postBusinessEvent(organizationId, actorUserId",
+  "postBusinessEventTx(tx, organizationId, actorUserId",
   "postingEvent: \"SUPPLIER_INVOICE_POSTED\"",
   "sourceEntityType: \"EnterpriseSupplierInvoice\"",
   "enterprisePayable.upsert",

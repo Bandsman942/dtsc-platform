@@ -5,12 +5,40 @@ import type { PostingDocument } from "@/lib/enterprise/accounting/posting-regist
 export async function buildSupplierCreditNotePosting(tx: Prisma.TransactionClient, input: { organizationId: string; sourceEntityType: string; sourceEntityId: string }): Promise<PostingDocument> {
   const credit = await tx.enterpriseSupplierCreditNote.findFirst({ where: { id: input.sourceEntityId, organizationId: input.organizationId, status: { in: ["APPROVED", "POSTED"] } }, include: { supplierInvoice: true } });
   if (!credit) throw new EnterpriseAccountingError("SUPPLIER_CREDIT_NOTE_NOT_POSTABLE", 409);
+  const items = await tx.enterpriseSupplierCreditNoteItem.findMany({ where: { organizationId: input.organizationId, supplierCreditNoteId: credit.id } });
+  if (!items.length) throw new EnterpriseAccountingError("SUPPLIER_CREDIT_LINES_REQUIRED", 409);
+  const originalIds = items.map((line) => line.sourceInvoiceItemId).filter((id): id is string => Boolean(id));
+  if (originalIds.length !== items.length) throw new EnterpriseAccountingError("SUPPLIER_CREDIT_ORIGIN_REQUIRED", 409);
+  const originals = await tx.enterpriseSupplierInvoiceItem.findMany({
+    where: { organizationId: input.organizationId, supplierInvoiceId: credit.supplierInvoiceId, id: { in: originalIds } },
+    select: { id: true, expenseAccountId: true },
+  });
+  if (originals.length !== new Set(originalIds).size) throw new EnterpriseAccountingError("SUPPLIER_CREDIT_ORIGIN_INVALID", 409);
+  const originById = new Map(originals.map((item) => [item.id, item]));
   const lines: PostingDocument["lines"] = [
     { accountMappingKey: "ACCOUNTS_PAYABLE", description: `Payable credit ${credit.number}`, debit: credit.grandTotal, transactionCurrencyCode: credit.currencyCode, transactionAmount: credit.grandTotal, businessPartyId: credit.supplierInvoice.businessPartyId, projectId: credit.supplierInvoice.projectId },
-    { accountMappingKey: credit.supplierInvoice.purchaseReceiptId ? "GOODS_RECEIVED_CLEARING" : credit.supplierInvoice.assetId ? "FIXED_ASSET" : "OPERATING_EXPENSE", description: `Supplier credit ${credit.number}`, credit: credit.subtotal, transactionCurrencyCode: credit.currencyCode, transactionAmount: credit.subtotal, businessPartyId: credit.supplierInvoice.businessPartyId, projectId: credit.supplierInvoice.projectId, assetId: credit.supplierInvoice.assetId },
   ];
-  if (credit.taxTotal.gt(0)) lines.push({ accountMappingKey: "TAX_RECEIVABLE", description: `Recoverable tax credit ${credit.number}`, credit: credit.taxTotal, transactionCurrencyCode: credit.currencyCode, transactionAmount: credit.taxTotal, businessPartyId: credit.supplierInvoice.businessPartyId });
-  return { organizationId: input.organizationId, journalType: "PURCHASES", accountingDate: credit.creditDate, documentDate: credit.creditDate, reference: credit.number, description: `Supplier credit note ${credit.number}`, sourceModule: "FINANCE_PAYABLES", sourceEntityType: "EnterpriseSupplierCreditNote", sourceEntityId: credit.id, currencyCode: credit.currencyCode, lines };
+  for (const item of items) {
+    const original = originById.get(item.sourceInvoiceItemId!);
+    if (!original) throw new EnterpriseAccountingError("SUPPLIER_CREDIT_ORIGIN_INVALID", 409);
+    const baseKey = credit.supplierInvoice.purchaseReceiptId ? "GOODS_RECEIVED_CLEARING"
+      : credit.supplierInvoice.assetId ? "FIXED_ASSET"
+      : original.expenseAccountId ? `ACCOUNT_ID:${original.expenseAccountId}` : "OPERATING_EXPENSE";
+    lines.push({ accountMappingKey: baseKey, description: `Supplier credit ${credit.number}: ${item.description}`,
+      credit: item.netAmount, transactionCurrencyCode: credit.currencyCode, transactionAmount: item.netAmount,
+      businessPartyId: credit.supplierInvoice.businessPartyId, projectId: credit.supplierInvoice.projectId,
+      assetId: credit.supplierInvoice.assetId });
+    if (item.taxAmount.gt(0)) lines.push({ accountMappingKey: item.taxRecoveryRequested ? "TAX_RECEIVABLE" : credit.supplierInvoice.purchaseReceiptId ? "INVENTORY"
+        : credit.supplierInvoice.assetId ? "FIXED_ASSET" : baseKey,
+      description: `Supplier tax reversal ${credit.number}: ${item.description}`,
+      credit: item.taxAmount, transactionCurrencyCode: credit.currencyCode, transactionAmount: item.taxAmount,
+      businessPartyId: credit.supplierInvoice.businessPartyId, projectId: credit.supplierInvoice.projectId,
+      assetId: credit.supplierInvoice.assetId });
+  }
+  return { organizationId: input.organizationId, journalType: "PURCHASES", accountingDate: credit.creditDate,
+    documentDate: credit.creditDate, reference: credit.number, description: `Supplier credit note ${credit.number}`,
+    sourceModule: "FINANCE_PAYABLES", sourceEntityType: "EnterpriseSupplierCreditNote", sourceEntityId: credit.id,
+    currencyCode: credit.currencyCode, lines };
 }
 
 export async function buildExpensePosting(tx: Prisma.TransactionClient, input: { organizationId: string; sourceEntityType: string; sourceEntityId: string }): Promise<PostingDocument> {

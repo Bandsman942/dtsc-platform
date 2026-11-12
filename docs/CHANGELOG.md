@@ -1,3 +1,13 @@
+## 2026-11-12 — Issue #1124 — Fiscalité sectorielle avancée (candidat v1.15.0, NON LIVRÉ)
+
+- Moteur fiscal multi-taxes explicite, assiettes de même base ou séquentielles selon règle approuvée indépendamment, codes et taux tenant-scoped, justificatifs obligatoires pour traitements spéciaux ; retenues hors périmètre automatisé tant que le flux de paiement et les comptes dédiés ne sont pas qualifiés.
+- Factures fournisseurs : TVA récupérable demandée, compte fiscal vérifié, preuves et revue indépendante ; taxe non récupérable imputée au coût. Comptabilisation de la taxe uniquement à la comptabilisation du document, non au brouillon.
+- Avoirs clients et fournisseurs liés aux lignes d'origine avec préservation des taux et montants historiques, calcul prorata et anti-double remboursement ; contrepassation du journal fiscal.
+- États fiscaux : TVA nette après avoirs, hors taxe d'entrée non récupérable, date fiscale effective et séparation par devise.
+- Santé et pharmacie : blocage prudent de la conversion de taxes globales non ventilées dans les factures Finance, jusqu'à ventilation validée par ligne.
+- Pré-vérification en lecture seule des données de facture pour DGI DEF/e-DEF, **sans homologation ni transmission, QR ou certificat prétendus**. Sources primaires, limites et E2E : `docs/ISSUE_1124_FISCALITY_SECTOR_DGI.md`.
+- Contrat QA `pnpm qa:fiscal-sector` et Playwright `sector-tax-compliance.spec.mjs`. Branche `feat/1124-sector-tax-compliance`, PR #1125 en brouillon ; CI et E2E propriétaire obligatoires avant toute fusion `main`. Aucune migration en production à ce stade.
+
 ## 2026-11-12 — Candidat fiscalité multi-juridictions (NON LIVRÉ)
 
 - Correctifs du module Taxes : catégories traduites FR/EN, filtres actifs/inactifs cohérents, fiche de détail avec taux/comptes/règles, sélecteur juridiction ISO et titre de formulaire explicite.
