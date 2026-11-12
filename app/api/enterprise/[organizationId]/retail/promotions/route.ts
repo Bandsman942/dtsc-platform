@@ -14,8 +14,18 @@ export async function GET(req: Request, { params }: Params) {
   const auth = await authorizeRetailRequest(req, organizationId, "RETAIL_POS", "read");
   if (!auth.ok) return auth.response;
   const { page, pageSize } = retailListParams(req);
+  const queryParams = new URL(req.url).searchParams;
+  const from = queryParams.get("from") || "", to = queryParams.get("to") || "";
+  if ([from, to].some((v) => v && (!/^\d{4}-\d{2}-\d{2}$/.test(v) || !Number.isFinite(Date.parse(v + "T00:00:00.000Z")))) || (from && to && from > to)) {
+    return NextResponse.json({ error: "RETAIL_DATE_RANGE_INVALID", message: "Vérifiez la période des promotions." }, { status: 400 });
+  }
   try {
-    const result = await listRetailPromotions(organizationId, page, pageSize);
+    const result = await listRetailPromotions(organizationId, page, pageSize, {
+      search: queryParams.get("search") || "",
+      status: queryParams.get("status") || "",
+      ...(from ? { from: new Date(from + "T00:00:00.000Z") } : {}),
+      ...(to ? { toExclusive: new Date(Date.parse(to + "T00:00:00.000Z") + 86_400_000) } : {}),
+    });
     await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "retail-promotions", action: "list", page } });
     return NextResponse.json(result);
   } catch (error) {

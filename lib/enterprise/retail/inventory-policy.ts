@@ -58,6 +58,12 @@ export function lotIsExpired(expiryDate: Date | null, businessDate: string): boo
   return Boolean(expiryDate && retailLotExpiryDateKey(expiryDate) < businessDate);
 }
 
+export type RetailLotPolicyWarning = {
+  code: "RETAIL_STOCK_LOT_EXPIRED_WARNING" | "RETAIL_STOCK_LOT_UNDATED_WARNING";
+  inventoryItemId: string;
+  stockLotId: string | null;
+};
+
 export async function assertRetailLotPolicyTx(
   tx: Prisma.TransactionClient,
   args: {
@@ -69,9 +75,10 @@ export async function assertRetailLotPolicyTx(
   },
 ) {
   const policy = readRetailInventoryPolicy(args.settings);
-  if (policy.expiryMode !== "BLOCK" && !policy.enforceFefo) return;
+  const warnings: RetailLotPolicyWarning[] = [];
+  if (policy.expiryMode === "ALLOW" && !policy.enforceFefo) return warnings;
   const inventoryIds = [...new Set(args.lines.map((line) => line.inventoryItemId).filter((value): value is string => Boolean(value)))];
-  if (!inventoryIds.length) return;
+  if (!inventoryIds.length) return warnings;
   const lots = await tx.enterpriseStockLot.findMany({
     where: { organizationId: args.organizationId, warehouseId: args.warehouseId, inventoryItemId: { in: inventoryIds }, archivedAt: null },
     select: { id: true, inventoryItemId: true, status: true, expiryDate: true },
@@ -97,14 +104,20 @@ export async function assertRetailLotPolicyTx(
         throw new EnterpriseRetailError("RETAIL_STOCK_LOT_REQUIRED", 409);
       }
       if (policy.enforceFefo && availableLots.length) throw new EnterpriseRetailError("RETAIL_STOCK_LOT_REQUIRED", 409);
+      if (policy.expiryMode === "WARN" && availableLots.some((lot) => lot.expiryDate)) warnings.push({
+        code: "RETAIL_STOCK_LOT_UNDATED_WARNING", inventoryItemId: line.inventoryItemId, stockLotId: null,
+      });
       continue;
     }
     const selected = lotById.get(line.stockLotId);
     if (!selected || selected.inventoryItemId !== line.inventoryItemId || selected.status !== "AVAILABLE") {
       throw new EnterpriseRetailError("RETAIL_STOCK_LOT_INVALID", 409);
     }
-    if (policy.expiryMode === "BLOCK" && lotIsExpired(selected.expiryDate, today)) {
-      throw new EnterpriseRetailError("RETAIL_STOCK_LOT_EXPIRED", 409);
+    if (lotIsExpired(selected.expiryDate, today)) {
+      if (policy.expiryMode === "BLOCK") throw new EnterpriseRetailError("RETAIL_STOCK_LOT_EXPIRED", 409);
+      if (policy.expiryMode === "WARN") warnings.push({
+        code: "RETAIL_STOCK_LOT_EXPIRED_WARNING", inventoryItemId: line.inventoryItemId, stockLotId: selected.id,
+      });
     }
     if (!policy.enforceFefo) continue;
     const usable = availableLots.filter((lot) => !lotIsExpired(lot.expiryDate, today));
@@ -115,4 +128,5 @@ export async function assertRetailLotPolicyTx(
     candidates.sort((a, b) => (a.expiryDate?.getTime() ?? Number.MAX_SAFE_INTEGER) - (b.expiryDate?.getTime() ?? Number.MAX_SAFE_INTEGER));
     if (candidates.length && candidates[0].id !== selected.id) throw new EnterpriseRetailError("RETAIL_FEFO_LOT_REQUIRED", 409);
   }
+  return warnings;
 }

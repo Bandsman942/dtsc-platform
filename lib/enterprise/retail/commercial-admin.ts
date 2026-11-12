@@ -28,46 +28,86 @@ export async function upsertRetailPriceCondition(organizationId: string, actorUs
     });
     if (!price) throw new EnterpriseRetailError("RETAIL_PRICE_NOT_CONFIGURED", 404, { catalogPriceId: input.catalogPriceId });
     await assertOptionalRetailReferences(tx, organizationId, input);
-    const existing = await tx.enterpriseRetailPriceCondition.findFirst({ where: { organizationId, catalogPriceId: input.catalogPriceId } });
-    if (existing) {
-      return tx.enterpriseRetailPriceCondition.update({
-        where: { id: existing.id },
-        data: {
-          siteId: input.siteId || null,
-          customerBusinessPartyId: input.customerBusinessPartyId || null,
-          customerSegmentCode: input.customerSegmentCode || null,
-          minQuantity: input.minQuantity === null || input.minQuantity === undefined ? null : new Prisma.Decimal(input.minQuantity),
-          maxQuantity: input.maxQuantity === null || input.maxQuantity === undefined ? null : new Prisma.Decimal(input.maxQuantity),
-          channelCode: input.channelCode,
-          priority: input.priority,
-          isActive: input.isActive,
-          revision: { increment: 1 },
-        },
+    // Distinct quantity/channel/store rules must not overwrite the first rule
+    // for a product. Update by rule id + optimistic revision, or create a new
+    // distinct rule. The catalog price is not itself the rule's identity.
+    const ruleValues = {
+      catalogPriceId: input.catalogPriceId,
+      siteId: input.siteId || null,
+      customerBusinessPartyId: input.customerBusinessPartyId || null,
+      customerSegmentCode: input.customerSegmentCode || null,
+      minQuantity: input.minQuantity == null ? null : new Prisma.Decimal(input.minQuantity),
+      maxQuantity: input.maxQuantity == null ? null : new Prisma.Decimal(input.maxQuantity),
+      channelCode: input.channelCode,
+      priority: input.priority,
+      isActive: input.isActive,
+    };
+    const duplicate = await tx.enterpriseRetailPriceCondition.findFirst({
+      where: {
+        organizationId,
+        ...(input.id ? { id: { not: input.id } } : {}),
+        catalogPriceId: ruleValues.catalogPriceId,
+        siteId: ruleValues.siteId,
+        customerBusinessPartyId: ruleValues.customerBusinessPartyId,
+        customerSegmentCode: ruleValues.customerSegmentCode,
+        minQuantity: ruleValues.minQuantity,
+        maxQuantity: ruleValues.maxQuantity,
+        channelCode: ruleValues.channelCode,
+      },
+      select: { id: true },
+    });
+    if (duplicate) throw new EnterpriseRetailError("RETAIL_PRICE_CONDITION_DUPLICATE", 409);
+    if (input.id) {
+      const changed = await tx.enterpriseRetailPriceCondition.updateMany({
+        where: { id: input.id, organizationId, revision: input.revision },
+        data: { ...ruleValues, revision: { increment: 1 } },
       });
+      if (changed.count !== 1) throw new EnterpriseRetailError("RETAIL_PRICE_CONDITION_STALE", 409);
+      return tx.enterpriseRetailPriceCondition.findFirstOrThrow({ where: { organizationId, id: input.id } });
     }
     return tx.enterpriseRetailPriceCondition.create({
-      data: {
-        organizationId,
-        catalogPriceId: input.catalogPriceId,
-        siteId: input.siteId || null,
-        customerBusinessPartyId: input.customerBusinessPartyId || null,
-        customerSegmentCode: input.customerSegmentCode || null,
-        minQuantity: input.minQuantity === null || input.minQuantity === undefined ? null : new Prisma.Decimal(input.minQuantity),
-        maxQuantity: input.maxQuantity === null || input.maxQuantity === undefined ? null : new Prisma.Decimal(input.maxQuantity),
-        channelCode: input.channelCode,
-        priority: input.priority,
-        isActive: input.isActive,
-        createdByUserId: actorUserId,
-      },
+      data: { organizationId, ...ruleValues, createdByUserId: actorUserId },
     });
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 }
 
-export async function listRetailPriceConditions(organizationId: string) {
-  const conditions = await prisma.enterpriseRetailPriceCondition.findMany({
-    where: { organizationId },
-    orderBy: [{ priority: "desc" }, { updatedAt: "desc" }],
-  });
+export async function listRetailPriceConditions(organizationId: string, opts?: {
+  page?: number; pageSize?: number; search?: string; from?: Date; toExclusive?: Date; active?: boolean;
+}) {
+  const search = opts?.search?.trim().slice(0, 120);
+  const productMatches = search ? await prisma.enterpriseCatalogItem.findMany({
+    where: { organizationId, OR: [
+      { name: { contains: search, mode: "insensitive" } },
+      { code: { contains: search, mode: "insensitive" } },
+    ] },
+    select: { id: true }, take: 1001,
+  }) : null;
+  if (productMatches && productMatches.length > 1000) {
+    throw new EnterpriseRetailError("RETAIL_SEARCH_TOO_BROAD", 422);
+  }
+  const matchingPrices = productMatches ? await prisma.enterpriseCatalogPrice.findMany({
+    where: { organizationId, catalogItemId: { in: productMatches.map((item) => item.id) } },
+    select: { id: true }, take: 2001,
+  }) : null;
+  if (matchingPrices && matchingPrices.length > 2000) {
+    throw new EnterpriseRetailError("RETAIL_SEARCH_TOO_BROAD", 422);
+  }
+  const where: Prisma.EnterpriseRetailPriceConditionWhereInput = {
+    organizationId,
+    ...(matchingPrices ? { catalogPriceId: { in: matchingPrices.map((price) => price.id) } } : {}),
+    ...(opts?.active !== undefined ? { isActive: opts.active } : {}),
+    ...(opts?.from || opts?.toExclusive ? { createdAt: {
+      ...(opts?.from ? { gte: opts.from } : {}),
+      ...(opts?.toExclusive ? { lt: opts.toExclusive } : {}),
+    } } : {}),
+  };
+  const [conditions, total] = await Promise.all([
+    prisma.enterpriseRetailPriceCondition.findMany({
+      where, orderBy: [{ priority: "desc" }, { updatedAt: "desc" }],
+      ...(opts?.page && opts?.pageSize ? { skip: (opts.page - 1) * opts.pageSize, take: opts.pageSize } : {}),
+    }),
+    opts?.page && opts?.pageSize ? prisma.enterpriseRetailPriceCondition.count({ where }) : Promise.resolve(0),
+  ]);
   const priceIds = Array.from(new Set(conditions.map((condition) => condition.catalogPriceId)));
   const prices = priceIds.length ? await prisma.enterpriseCatalogPrice.findMany({
     where: { organizationId, id: { in: priceIds } },
@@ -77,10 +117,13 @@ export async function listRetailPriceConditions(organizationId: string) {
   const items = itemIds.length ? await prisma.enterpriseCatalogItem.findMany({ where: { organizationId, id: { in: itemIds } }, select: { id: true, code: true, name: true } }) : [];
   const priceById = new Map(prices.map((price) => [price.id, price]));
   const itemById = new Map(items.map((item) => [item.id, item]));
-  return conditions.map((condition) => {
+  const result = conditions.map((condition) => {
     const price = priceById.get(condition.catalogPriceId) || null;
     return { ...condition, price, item: price ? itemById.get(price.catalogItemId) || null : null };
   });
+  return opts?.page && opts?.pageSize
+    ? { items: result, pagination: { page: opts.page, pageSize: opts.pageSize, total, pageCount: Math.max(1, Math.ceil(total / opts.pageSize)) } }
+    : { items: result };
 }
 
 export async function upsertRetailPromotion(organizationId: string, actorUserId: string, input: PromotionInput) {
@@ -112,8 +155,23 @@ export async function upsertRetailPromotion(organizationId: string, actorUserId:
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 }
 
-export async function listRetailPromotions(organizationId: string, page = 1, pageSize = 50) {
-  const where = { organizationId };
+export async function listRetailPromotions(organizationId: string, page = 1, pageSize = 50, filters?: {
+  search?: string; status?: string; from?: Date; toExclusive?: Date;
+}) {
+  const search = filters?.search?.trim().slice(0, 120);
+  const where: Prisma.EnterpriseRetailPromotionWhereInput = {
+    organizationId,
+    ...(filters?.status ? { status: filters.status } : {}),
+    ...(search ? { OR: [
+      { code: { contains: search, mode: "insensitive" } },
+      { nameFr: { contains: search, mode: "insensitive" } },
+      { nameEn: { contains: search, mode: "insensitive" } },
+    ] } : {}),
+    ...(filters?.from || filters?.toExclusive ? { createdAt: {
+      ...(filters.from ? { gte: filters.from } : {}),
+      ...(filters.toExclusive ? { lt: filters.toExclusive } : {}),
+    } } : {}),
+  };
   const [items, total] = await Promise.all([
     prisma.enterpriseRetailPromotion.findMany({ where, orderBy: [{ status: "asc" }, { priority: "desc" }, { startsAt: "desc" }], skip: (page - 1) * pageSize, take: pageSize }),
     prisma.enterpriseRetailPromotion.count({ where }),

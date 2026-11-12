@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { downloadProfessionalCsv, downloadProfessionalPdf, downloadProfessionalXlsx, type ProfessionalReportExportModel } from "@/lib/reporting/professional-export";
 import { ArrowLeft, BadgePercent, RotateCcw, Tags } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAppLocale } from "@/components/i18n/locale-provider";
@@ -42,6 +43,7 @@ type CatalogPrice = {
 
 type PriceCondition = {
   id: string;
+  revision: number;
   catalogPriceId: string;
   siteId: string | null;
   customerBusinessPartyId: string | null;
@@ -305,6 +307,17 @@ function localDateTimeInput(date = new Date()) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
+function RegisterPager({ page, total, pageCount, setPage, language }: {
+  page: number; total: number; pageCount: number; setPage: (page: number) => void; language: CustomerFacingLocale;
+}) {
+  return <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-dtsc-muted" role="navigation" aria-label={language === "en" ? "Pagination" : "Pagination de la liste"}>
+    <span>{total} {language === "en" ? "items" : "éléments"} · {page} / {pageCount}</span>
+    <div className="flex gap-2"><button type="button" disabled={page <= 1} onClick={() => setPage(page - 1)} className="min-h-10 rounded-lg border border-dtsc-border px-3 disabled:opacity-40">{language === "en" ? "Previous" : "Précédent"}</button>
+      <button type="button" disabled={page >= pageCount} onClick={() => setPage(page + 1)} className="min-h-10 rounded-lg border border-dtsc-border px-3 disabled:opacity-40">{language === "en" ? "Next" : "Suivant"}</button>
+    </div>
+  </div>;
+}
+
 function FieldLabel({ children }: { children: React.ReactNode }) {
   return <span className="block text-sm font-medium">{children}</span>;
 }
@@ -320,6 +333,22 @@ export function RetailCommercialWorkspace({ organizationId }: { organizationId: 
   const [sales, setSales] = useState<Sale[]>([]);
   const [returns, setReturns] = useState<RetailReturn[]>([]);
   const [accounts, setAccounts] = useState<RefundAccount[]>([]);
+  const [conditionPage, setConditionPage] = useState(1);
+  const [conditionSearch, setConditionSearch] = useState("");
+  const [conditionActive, setConditionActive] = useState("");
+  const [conditionPagination, setConditionPagination] = useState({ page: 1, pageSize: 20, total: 0, pageCount: 1 });
+  const [promotionPage, setPromotionPage] = useState(1);
+  const [promotionSearch, setPromotionSearch] = useState("");
+  const [promotionStatus, setPromotionStatus] = useState("");
+  const [promotionFrom, setPromotionFrom] = useState("");
+  const [promotionTo, setPromotionTo] = useState("");
+  const [promotionPagination, setPromotionPagination] = useState({ page: 1, pageSize: 20, total: 0, pageCount: 1 });
+  const [returnPage, setReturnPage] = useState(1);
+  const [returnSearch, setReturnSearch] = useState("");
+  const [returnFrom, setReturnFrom] = useState("");
+  const [returnTo, setReturnTo] = useState("");
+  const [returnPagination, setReturnPagination] = useState({ page: 1, pageSize: 20, total: 0, pageCount: 1 });
+  const [exporting, setExporting] = useState(false);
   const [returnStatus, setReturnStatus] = useState("PENDING_APPROVAL");
   const [decisionReasons, setDecisionReasons] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
@@ -327,7 +356,11 @@ export function RetailCommercialWorkspace({ organizationId }: { organizationId: 
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
+  const [availableStores, setAvailableStores] = useState<Array<{ id: string; name: string }>>([]);
   const [priceForm, setPriceForm] = useState({
+    id: "",
+    revision: 0,
+    siteId: "",
     catalogPriceId: "",
     minQuantity: "1",
     maxQuantity: "",
@@ -382,22 +415,31 @@ export function RetailCommercialWorkspace({ organizationId }: { organizationId: 
     setError(customerFacingError(caught, language, fallback));
   }, [language]);
 
+  useEffect(() => {
+    let active = true;
+    fetch(`/api/enterprise/${organizationId}/retail/dashboard?moduleCode=RETAIL_POS`, { cache: "no-store" })
+      .then((response) => response.ok ? response.json() : null)
+      .then((data: { warehouses?: Array<{ site?: { id: string; name: string } }> } | null) => {
+        if (!active) return;
+        const sites = new Map<string, { id: string; name: string }>();
+        for (const warehouse of data?.warehouses || []) if (warehouse.site) sites.set(warehouse.site.id, warehouse.site);
+        setAvailableStores([...sites.values()]);
+      }).catch(() => undefined);
+    return () => { active = false; };
+  }, [organizationId]);
+
   const loadCore = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
-      const [permissionData, priceData, conditionData, promotionData, saleData, accountData] = await Promise.all([
+      const [permissionData, priceData, saleData, accountData] = await Promise.all([
         fetch(`/api/enterprise/${organizationId}/retail/commercial-permissions`).then(readJson),
         fetch(`/api/enterprise/${organizationId}/retail/pricing/catalog?pageSize=100`).then(readJson),
-        fetch(`/api/enterprise/${organizationId}/retail/pricing/conditions`).then(readJson),
-        fetch(`/api/enterprise/${organizationId}/retail/promotions?pageSize=100`).then(readJson),
         fetch(`/api/enterprise/${organizationId}/retail/sales?pageSize=50&status=COMPLETED`).then(readJson),
         fetch(`/api/enterprise/${organizationId}/retail/refund-accounts`).then(readJson),
       ]);
       setCapabilities(permissionData.capabilities);
       setPrices(priceData.items || []);
-      setConditions(conditionData.items || []);
-      setPromotions(promotionData.items || []);
       setSales(saleData.items || []);
       setAccounts(accountData.items || []);
       setPriceForm((current) => ({
@@ -423,26 +465,59 @@ export function RetailCommercialWorkspace({ organizationId }: { organizationId: 
     }
   }, [organizationId, showError]);
 
+  const loadConditions = useCallback(async () => {
+    try {
+      const params = new URLSearchParams({ page: String(conditionPage), pageSize: "20" });
+      if (conditionSearch.trim()) params.set("search", conditionSearch.trim());
+      if (conditionActive) params.set("active", conditionActive);
+      const result = await fetch(`/api/enterprise/${organizationId}/retail/pricing/conditions?${params}`, { cache: "no-store" }).then(readJson);
+      setConditions(result.items || []);
+      if (result.pagination) setConditionPagination(result.pagination);
+    } catch (caught) {
+      showError(caught, { fr: "Les règles de prix filtrées ne sont pas disponibles.", en: "Filtered price rules are unavailable." });
+    }
+  }, [organizationId, conditionPage, conditionSearch, conditionActive, showError]);
+
+  const loadPromotions = useCallback(async () => {
+    try {
+      const params = new URLSearchParams({ page: String(promotionPage), pageSize: "20" });
+      if (promotionSearch.trim()) params.set("search", promotionSearch.trim());
+      if (promotionStatus) params.set("status", promotionStatus);
+      if (promotionFrom) params.set("from", promotionFrom);
+      if (promotionTo) params.set("to", promotionTo);
+      const result = await fetch(`/api/enterprise/${organizationId}/retail/promotions?${params}`, { cache: "no-store" }).then(readJson);
+      setPromotions(result.items || []);
+      if (result.pagination) setPromotionPagination(result.pagination);
+    } catch (caught) {
+      showError(caught, { fr: "Les promotions filtrées ne sont pas disponibles.", en: "Filtered promotions are unavailable." });
+    }
+  }, [organizationId, promotionPage, promotionSearch, promotionStatus, promotionFrom, promotionTo, showError]);
+
   const loadReturns = useCallback(async () => {
     try {
-      const suffix = returnStatus ? `&status=${encodeURIComponent(returnStatus)}` : "";
-      const data = await fetch(`/api/enterprise/${organizationId}/retail/returns?pageSize=100${suffix}`).then(readJson);
+      const params = new URLSearchParams({ page: String(returnPage), pageSize: "20" });
+      if (returnStatus) params.set("status", returnStatus);
+      if (returnSearch.trim()) params.set("search", returnSearch.trim());
+      if (returnFrom) params.set("from", returnFrom);
+      if (returnTo) params.set("to", returnTo);
+      const data = await fetch(`/api/enterprise/${organizationId}/retail/returns?${params}`, { cache: "no-store" }).then(readJson);
       setReturns(data.items || []);
+      if (data.pagination) setReturnPagination(data.pagination);
     } catch (caught) {
       showError(caught, {
         fr: "Les demandes de retour ne sont pas disponibles pour le moment.",
         en: "Return requests are not available right now.",
       });
     }
-  }, [organizationId, returnStatus, showError]);
+  }, [organizationId, returnPage, returnStatus, returnSearch, returnFrom, returnTo, showError]);
 
   useEffect(() => {
     void loadCore();
   }, [loadCore]);
 
-  useEffect(() => {
-    void loadReturns();
-  }, [loadReturns]);
+  useEffect(() => { const timer = setTimeout(() => { void loadConditions(); }, conditionSearch ? 250 : 0); return () => clearTimeout(timer); }, [loadConditions, conditionSearch]);
+  useEffect(() => { const timer = setTimeout(() => { void loadPromotions(); }, promotionSearch ? 250 : 0); return () => clearTimeout(timer); }, [loadPromotions, promotionSearch]);
+  useEffect(() => { const timer = setTimeout(() => { void loadReturns(); }, returnSearch ? 250 : 0); return () => clearTimeout(timer); }, [loadReturns, returnSearch]);
 
   async function submitPriceRule(event: React.FormEvent) {
     event.preventDefault();
@@ -458,6 +533,8 @@ export function RetailCommercialWorkspace({ organizationId }: { organizationId: 
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
+          ...(priceForm.id ? { id: priceForm.id, revision: priceForm.revision } : {}),
+          siteId: priceForm.siteId || null,
           catalogPriceId: priceForm.catalogPriceId,
           minQuantity: priceForm.minQuantity ? Number(priceForm.minQuantity) : null,
           maxQuantity: priceForm.maxQuantity ? Number(priceForm.maxQuantity) : null,
@@ -467,8 +544,8 @@ export function RetailCommercialWorkspace({ organizationId }: { organizationId: 
         }),
       }).then(readJson);
       setMessage(copy.saveSuccess);
-      const data = await fetch(`/api/enterprise/${organizationId}/retail/pricing/conditions`).then(readJson);
-      setConditions(data.items || []);
+      setPriceForm((current) => ({ ...current, id: "", revision: 0, minQuantity: "1", maxQuantity: "", priority: "0" }));
+      await loadConditions();
     } catch (caught) {
       showError(caught, {
         fr: "Cette règle de prix n’a pas pu être enregistrée. Vérifiez le prix, les quantités et le canal de vente.",
@@ -528,8 +605,7 @@ export function RetailCommercialWorkspace({ organizationId }: { organizationId: 
         }),
       }).then(readJson);
       setMessage(copy.saveSuccess);
-      const data = await fetch(`/api/enterprise/${organizationId}/retail/promotions?pageSize=100`).then(readJson);
-      setPromotions(data.items || []);
+      await loadPromotions();
     } catch (caught) {
       showError(caught, {
         fr: "Cette promotion n’a pas pu être enregistrée. Vérifiez les produits, les dates et les conditions de l’offre.",
@@ -632,6 +708,79 @@ export function RetailCommercialWorkspace({ organizationId }: { organizationId: 
     }));
   }
 
+  async function exportCommercialRegister(format: "csv" | "xlsx" | "pdf") {
+    if (exporting) return;
+    setExporting(true);
+    setError("");
+    try {
+      const params = new URLSearchParams({ pageSize: "100" });
+      let endpoint = "";
+      let columns: ProfessionalReportExportModel["columns"] = [];
+      if (tab === "PRICING") {
+        endpoint = "pricing/conditions";
+        if (conditionSearch.trim()) params.set("search", conditionSearch.trim());
+        if (conditionActive) params.set("active", conditionActive);
+        columns = [{ key: "code", label: "Article" }, { key: "amount", label: "Prix" }, { key: "currency", label: "Devise" }, { key: "quantity", label: "Quantité min" }, { key: "channel", label: "Canal" }, { key: "status", label: "Statut" }];
+      } else if (tab === "PROMOTIONS") {
+        endpoint = "promotions";
+        if (promotionSearch.trim()) params.set("search", promotionSearch.trim());
+        if (promotionStatus) params.set("status", promotionStatus);
+        if (promotionFrom) params.set("from", promotionFrom);
+        if (promotionTo) params.set("to", promotionTo);
+        columns = [{ key: "code", label: "Code" }, { key: "name", label: "Offre" }, { key: "type", label: "Type" }, { key: "status", label: "Statut" }, { key: "currency", label: "Devise" }, { key: "start", label: "Début" }, { key: "end", label: "Fin" }];
+      } else {
+        endpoint = "returns";
+        if (returnSearch.trim()) params.set("search", returnSearch.trim());
+        if (returnStatus) params.set("status", returnStatus);
+        if (returnFrom) params.set("from", returnFrom);
+        if (returnTo) params.set("to", returnTo);
+        columns = [{ key: "number", label: "Retour" }, { key: "sale", label: "Vente" }, { key: "amount", label: "Montant" }, { key: "currency", label: "Devise" }, { key: "status", label: "Statut" }, { key: "reason", label: "Motif" }];
+      }
+      const records: Array<Record<string, unknown>> = [];
+      for (let next = 1; ; next++) {
+        params.set("page", String(next));
+        const response = await fetch(`/api/enterprise/${organizationId}/retail/${endpoint}?${params}`, { cache: "no-store" });
+        const body = await readJson(response);
+        if ((body.pagination?.total || 0) > 5000) throw new Error(language === "en"
+          ? "More than 5,000 results. Narrow the filters before exporting."
+          : "Plus de 5 000 résultats. Affinez les filtres pour exporter.");
+        records.push(...(body.items || []));
+        if (!body.pagination || next >= body.pagination.pageCount) break;
+      }
+      const rows: ProfessionalReportExportModel["rows"] = records.map((record) => {
+        if (tab === "PRICING") {
+          const condition = record as unknown as PriceCondition;
+          return { code: condition.item?.name || condition.catalogPriceId, amount: Number(condition.price?.amount || 0),
+            currency: condition.price?.currency || "", quantity: condition.minQuantity || "", channel: condition.channelCode,
+            status: condition.isActive ? copy.active : copy.inactive };
+        }
+        if (tab === "PROMOTIONS") {
+          const offer = record as unknown as Promotion;
+          return { code: offer.code, name: language === "en" ? offer.nameEn : offer.nameFr,
+            type: customerFacingPromotionType(offer.promotionType, language), status: customerFacingStatusLabel(offer.status, language),
+            currency: offer.currencyCode || "", start: offer.startsAt?.slice(0, 10) || "", end: offer.endsAt?.slice(0, 10) || "" };
+        }
+        const item = record as unknown as RetailReturn;
+        return { number: item.number, sale: item.sale?.number || "", amount: Number(item.grandTotal),
+          currency: item.currencyCode, status: customerFacingStatusLabel(item.status, language), reason: item.reason };
+      });
+      const model: ProfessionalReportExportModel = {
+        title: `DTSC Retail — ${tab === "PRICING" ? copy.pricing : tab === "PROMOTIONS" ? copy.promotions : copy.returns}`,
+        subtitle: language === "en" ? "Filtered and access-controlled commercial register" : "Registre commercial filtré et soumis aux droits d'accès",
+        filenameBase: `dtsc-retail-${tab.toLowerCase()}-${new Date().toLocaleDateString("sv-SE")}`,
+        generatedLabel: new Date().toLocaleString(language === "en" ? "en-US" : "fr-FR"),
+        kpis: [{ label: language === "en" ? "Records" : "Enregistrements", value: String(rows.length) }],
+        chart: [], columns, rows, insights: [],
+        filters: [{ label: "Section", value: tab }, { label: "Recherche", value: tab === "PRICING" ? conditionSearch : tab === "PROMOTIONS" ? promotionSearch : returnSearch }],
+      };
+      if (format === "csv") downloadProfessionalCsv(model);
+      else if (format === "xlsx") downloadProfessionalXlsx(model);
+      else downloadProfessionalPdf(model);
+    } catch (caught) {
+      showError(caught, { fr: "L'export commercial n'a pas pu être généré. Vérifiez les filtres et vos droits d'accès.", en: "Commercial export failed. Check filters and access rights." });
+    } finally { setExporting(false); }
+  }
+
   if (loading) {
     return <div className="dtsc-card mx-auto max-w-7xl p-5 text-sm text-dtsc-muted" role="status">{copy.loading}</div>;
   }
@@ -667,6 +816,10 @@ export function RetailCommercialWorkspace({ organizationId }: { organizationId: 
         ))}
       </nav>
 
+      <div className="flex flex-wrap items-center justify-end gap-2 rounded-xl border border-dtsc-border bg-dtsc-page p-2" aria-label={language === "en" ? "Commercial export" : "Export commercial"}>
+        <span className="mr-auto text-xs font-semibold text-dtsc-muted">{language === "en" ? "Filtered register · max 5,000 rows" : "Registre filtré · maximum 5 000 lignes"}</span>
+        {(["csv","xlsx","pdf"] as const).map((format) => <button key={format} type="button" disabled={exporting || loading} onClick={() => void exportCommercialRegister(format)} className="min-h-10 rounded-lg border border-dtsc-border px-3 text-xs font-black uppercase text-dtsc-blue disabled:opacity-50">{format}</button>)}
+      </div>
       {message ? <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm" role="status">{message}</div> : null}
       {error ? <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm" role="alert">{error}</div> : null}
 
@@ -680,6 +833,10 @@ export function RetailCommercialWorkspace({ organizationId }: { organizationId: 
                 {copy.catalogLink}
               </Link>
             </div>
+            <div className="grid gap-2 rounded-2xl border border-dtsc-border bg-dtsc-page p-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,180px)]">
+              <label className="text-xs font-semibold text-dtsc-muted">{language === "en" ? "Search rules" : "Rechercher des règles"}<input type="search" value={conditionSearch} onChange={(e) => { setConditionSearch(e.target.value); setConditionPage(1); }} className="mt-1 min-h-10 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-dtsc-ink" placeholder={language === "en" ? "Product or code" : "Article ou code"} /></label>
+              <label className="text-xs font-semibold text-dtsc-muted">{language === "en" ? "Status" : "Statut"}<select value={conditionActive} onChange={(e) => { setConditionActive(e.target.value); setConditionPage(1); }} className="mt-1 min-h-10 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-dtsc-ink"><option value="">{copy.allReturns}</option><option value="true">{copy.active}</option><option value="false">{copy.inactive}</option></select></label>
+            </div>
 
             {conditions.length ? (
               <div className="divide-y rounded-2xl border bg-background">
@@ -690,6 +847,7 @@ export function RetailCommercialWorkspace({ organizationId }: { organizationId: 
                       <p className="mt-1 text-sm text-muted-foreground">
                         {condition.price ? money(condition.price.amount, condition.price.currency) : "—"}
                         {" · "}{customerFacingSalesChannel(condition.channelCode, language)}
+                        {" · "}{condition.siteId ? availableStores.find((site) => site.id === condition.siteId)?.name || condition.siteId : (language === "en" ? "All stores" : "Toutes les boutiques")}
                         {" · "}{copy.minQty}: {condition.minQuantity || "—"}
                         {condition.maxQuantity ? ` · ${copy.maxQty}: ${condition.maxQuantity}` : ""}
                       </p>
@@ -697,6 +855,12 @@ export function RetailCommercialWorkspace({ organizationId }: { organizationId: 
                     <div className="flex flex-wrap items-center gap-2 text-xs">
                       <span className="rounded-full border px-2 py-1">{copy.order} {condition.priority}</span>
                       <span className="rounded-full border px-2 py-1">{condition.isActive ? copy.active : copy.inactive}</span>
+                      <details className="relative"><summary aria-label="Actions" className="min-h-9 cursor-pointer list-none rounded-lg border border-dtsc-border px-3 py-2 font-bold text-dtsc-blue">⋯</summary>
+                        <div className="absolute right-0 z-10 min-w-44 rounded-lg border border-dtsc-border bg-dtsc-surface p-2 shadow-lg">
+                          {capabilities?.canManagePricing ? <button type="button" className="block w-full px-2 py-2 text-left hover:bg-dtsc-soft" onClick={() => { setPriceForm({ id: condition.id, revision: condition.revision, siteId: condition.siteId || "", catalogPriceId: condition.catalogPriceId, minQuantity: condition.minQuantity || "1", maxQuantity: condition.maxQuantity || "", channelCode: condition.channelCode, priority: String(condition.priority), isActive: condition.isActive }); document.getElementById("retail-price-form")?.scrollIntoView({ behavior: "smooth", block: "start" }); }}>{language === "en" ? "Edit rule" : "Modifier la règle"}</button> : null}
+                          <Link href="/enterprise-modules/CATALOG" className="block rounded-lg px-2 py-2 hover:bg-dtsc-soft">{copy.catalogLink}</Link>
+                        </div>
+                      </details>
                     </div>
                   </div>
                 ))}
@@ -704,10 +868,14 @@ export function RetailCommercialWorkspace({ organizationId }: { organizationId: 
             ) : (
               <div className="rounded-2xl border border-dashed p-6 text-sm text-muted-foreground">{copy.noRules}</div>
             )}
+            <RegisterPager page={conditionPage} pageCount={conditionPagination.pageCount} total={conditionPagination.total} setPage={setConditionPage} language={language} />
           </div>
 
-          <aside className="dtsc-card p-4 sm:p-5">
-            <h2 className="font-semibold">{copy.availablePrices}</h2>
+          <aside id="retail-price-form" className="dtsc-card scroll-mt-24 p-4 sm:p-5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="font-semibold">{priceForm.id ? (language === "en" ? "Edit pricing condition" : "Modifier une condition tarifaire") : copy.availablePrices}</h2>
+              {priceForm.id ? <button type="button" className="min-h-10 rounded-lg border border-dtsc-border px-3 text-xs font-bold text-dtsc-blue" onClick={() => setPriceForm({ id: "", revision: 0, siteId: "", catalogPriceId: "", minQuantity: "1", maxQuantity: "", channelCode: "POS", priority: "0", isActive: true })}>{language === "en" ? "New rule" : "Nouvelle règle"}</button> : null}
+            </div>
             {!prices.length ? (
               <div className="mt-3 space-y-3">
                 <p className="text-sm text-muted-foreground">{copy.noPrices}</p>
@@ -715,6 +883,16 @@ export function RetailCommercialWorkspace({ organizationId }: { organizationId: 
               </div>
             ) : capabilities?.canManagePricing ? (
               <form className="mt-4 space-y-4" onSubmit={submitPriceRule}>
+                <label className="block">
+                  <FieldLabel>{language === "en" ? "Store scope" : "Portée boutique"}</FieldLabel>
+                  <select value={priceForm.siteId} onChange={(event) => setPriceForm({ ...priceForm, siteId: event.target.value })} className="mt-1 min-h-11 w-full rounded-xl border bg-background px-3">
+                    <option value="">{language === "en" ? "All stores" : "Toutes les boutiques"}</option>
+                    {availableStores.map((site) => <option key={site.id} value={site.id}>{site.name}</option>)}
+                    {priceForm.siteId && !availableStores.some((site) => site.id === priceForm.siteId)
+                      ? <option value={priceForm.siteId}>{priceForm.siteId}</option> : null}
+                  </select>
+                  <span className="mt-1 block text-xs text-dtsc-muted">{language === "en" ? "Select a store for a store-specific rule, or all stores for a common rule." : "Choisissez une boutique pour une règle locale, ou toutes pour une règle commune."}</span>
+                </label>
                 <label className="block">
                   <FieldLabel>{copy.price}</FieldLabel>
                   <select value={priceForm.catalogPriceId} onChange={(event) => setPriceForm({ ...priceForm, catalogPriceId: event.target.value })} className="mt-1 min-h-11 w-full rounded-xl border bg-background px-3">
@@ -753,7 +931,7 @@ export function RetailCommercialWorkspace({ organizationId }: { organizationId: 
                   {copy.active}
                 </label>
                 <button disabled={saving || !priceForm.catalogPriceId} className="min-h-11 w-full rounded-xl bg-foreground px-4 py-2 font-medium text-background disabled:opacity-50">
-                  {copy.addRule}
+                  {priceForm.id ? (language === "en" ? "Save rule changes" : "Enregistrer les modifications") : copy.addRule}
                 </button>
               </form>
             ) : (
@@ -770,6 +948,12 @@ export function RetailCommercialWorkspace({ organizationId }: { organizationId: 
               <h2 className="text-lg font-semibold">{copy.promoControl}</h2>
               <p className="mt-1 text-sm leading-6 text-muted-foreground">{copy.promoHint}</p>
             </div>
+            <div className="grid gap-2 rounded-2xl border border-dtsc-border bg-dtsc-page p-3 sm:grid-cols-2">
+              <label className="text-xs font-semibold text-dtsc-muted">{language === "en" ? "Search offers" : "Rechercher des offres"}<input type="search" value={promotionSearch} onChange={(e) => { setPromotionSearch(e.target.value); setPromotionPage(1); }} className="mt-1 min-h-10 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-dtsc-ink" placeholder={language === "en" ? "Code or name" : "Code ou nom"} /></label>
+              <label className="text-xs font-semibold text-dtsc-muted">{copy.status}<select value={promotionStatus} onChange={(e) => { setPromotionStatus(e.target.value); setPromotionPage(1); }} className="mt-1 min-h-10 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-dtsc-ink"><option value="">{copy.allReturns}</option>{["ACTIVE","INACTIVE","DRAFT","ARCHIVED"].map((value) => <option key={value} value={value}>{customerFacingStatusLabel(value,language)}</option>)}</select></label>
+              <label className="text-xs font-semibold text-dtsc-muted">{language === "en" ? "Created from" : "Créées du"}<input type="date" value={promotionFrom} max={promotionTo || undefined} onChange={(e) => { setPromotionFrom(e.target.value); setPromotionPage(1); }} className="mt-1 min-h-10 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-dtsc-ink" /></label>
+              <label className="text-xs font-semibold text-dtsc-muted">{language === "en" ? "Created to" : "Créées au"}<input type="date" value={promotionTo} min={promotionFrom || undefined} onChange={(e) => { setPromotionTo(e.target.value); setPromotionPage(1); }} className="mt-1 min-h-10 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-dtsc-ink" /></label>
+            </div>
             {promotions.length ? (
               <div className="divide-y rounded-2xl border bg-background">
                 {promotions.map((promotion) => (
@@ -782,7 +966,7 @@ export function RetailCommercialWorkspace({ organizationId }: { organizationId: 
                         </p>
                         {promotion.couponCode ? <p className="mt-1 text-xs text-muted-foreground">{copy.coupon}: {promotion.couponCode}</p> : null}
                       </div>
-                      <span className="rounded-full border px-2 py-1 text-xs">{customerFacingStatusLabel(promotion.status, language)}</span>
+                      <div className="flex items-center gap-2"><span className="rounded-full border px-2 py-1 text-xs">{customerFacingStatusLabel(promotion.status, language)}</span><details className="relative"><summary aria-label="Actions" className="min-h-9 cursor-pointer list-none rounded-lg border px-3 py-2 text-sm text-dtsc-blue">⋯</summary><div className="absolute right-0 z-10 min-w-48 rounded-lg border border-dtsc-border bg-dtsc-surface p-3 text-xs shadow-lg"><strong>{promotion.code}</strong><p>{promotion.couponCode ? `${copy.coupon}: ${promotion.couponCode}` : customerFacingPromotionType(promotion.promotionType, language)}</p><p>{new Date(promotion.startsAt).toLocaleDateString(language)} — {promotion.endsAt ? new Date(promotion.endsAt).toLocaleDateString(language) : "∞"}</p></div></details></div>
                     </div>
                     <p className="mt-3 text-xs text-muted-foreground">
                       {promotion.usage.count} {copy.usage} · {money(promotion.usage.discountAmount, promotion.currencyCode)} {copy.discountGranted}
@@ -793,6 +977,7 @@ export function RetailCommercialWorkspace({ organizationId }: { organizationId: 
             ) : (
               <div className="rounded-2xl border border-dashed p-6 text-sm text-muted-foreground">{copy.noPromos}</div>
             )}
+            <RegisterPager page={promotionPage} pageCount={promotionPagination.pageCount} total={promotionPagination.total} setPage={setPromotionPage} language={language} />
           </div>
 
           <aside className="dtsc-card p-4 sm:p-5">
@@ -925,6 +1110,8 @@ export function RetailCommercialWorkspace({ organizationId }: { organizationId: 
           <div>
             <h2 className="text-lg font-semibold">{copy.returnQueue}</h2>
             <p className="mt-1 max-w-3xl text-sm leading-6 text-muted-foreground">{copy.returnHint}</p>
+            <p className="mt-2 rounded-xl border border-cyan-500/20 bg-cyan-500/5 px-3 py-2 text-xs text-dtsc-ink">{language === "en" ? "This queue manages legacy Retail returns. Returns linked to Finance invoices must be processed in the invoice register to preserve credit notes and accounting." : "Ce registre traite les retours Retail historiques. Les retours liés aux factures Finance doivent être traités dans le registre des factures pour conserver les avoirs et la comptabilité."}</p>
+            <Link href="/enterprise-modules/RETAIL_POS?section=invoices" className="mt-2 inline-flex text-sm font-bold text-dtsc-blue underline">{language === "en" ? "Open Finance invoices" : "Ouvrir les factures Finance"}</Link>
           </div>
 
           <div className="grid gap-6 lg:grid-cols-[minmax(340px,0.8fr)_minmax(0,1fr)]">
@@ -1024,9 +1211,14 @@ export function RetailCommercialWorkspace({ organizationId }: { organizationId: 
             </aside>
 
             <div className="space-y-3">
+              <div className="grid gap-2 sm:grid-cols-3">
+                <label className="text-xs font-semibold text-dtsc-muted">{language === "en" ? "Search returns" : "Rechercher des retours"}<input type="search" value={returnSearch} onChange={(e) => { setReturnSearch(e.target.value); setReturnPage(1); }} placeholder={language === "en" ? "Return or receipt number" : "N° retour ou vente"} className="mt-1 min-h-10 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-dtsc-ink" /></label>
+                <label className="text-xs font-semibold text-dtsc-muted">{language === "en" ? "From" : "Du"}<input type="date" value={returnFrom} max={returnTo || undefined} onChange={(e) => { setReturnFrom(e.target.value); setReturnPage(1); }} className="mt-1 min-h-10 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-dtsc-ink" /></label>
+                <label className="text-xs font-semibold text-dtsc-muted">{language === "en" ? "To" : "Au"}<input type="date" value={returnTo} min={returnFrom || undefined} onChange={(e) => { setReturnTo(e.target.value); setReturnPage(1); }} className="mt-1 min-h-10 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-dtsc-ink" /></label>
+              </div>
               <div className="flex gap-2 overflow-x-auto pb-1 [touch-action:pan-x]">
-                <button type="button" onClick={() => setReturnStatus("PENDING_APPROVAL")} className={`min-h-10 shrink-0 rounded-full border px-3 py-2 text-sm transition ${returnStatus === "PENDING_APPROVAL" ? "border-cyan-500/50 bg-dtsc-soft font-semibold text-dtsc-blue" : "border-dtsc-border bg-dtsc-surface text-dtsc-muted hover:bg-dtsc-soft"}`}>{copy.pendingOnly}</button>
-                <button type="button" onClick={() => setReturnStatus("")} className={`min-h-10 shrink-0 rounded-full border px-3 py-2 text-sm transition ${returnStatus === "" ? "border-cyan-500/50 bg-dtsc-soft font-semibold text-dtsc-blue" : "border-dtsc-border bg-dtsc-surface text-dtsc-muted hover:bg-dtsc-soft"}`}>{copy.allReturns}</button>
+                <button type="button" onClick={() => { setReturnStatus("PENDING_APPROVAL"); setReturnPage(1); }} className={`min-h-10 shrink-0 rounded-full border px-3 py-2 text-sm transition ${returnStatus === "PENDING_APPROVAL" ? "border-cyan-500/50 bg-dtsc-soft font-semibold text-dtsc-blue" : "border-dtsc-border bg-dtsc-surface text-dtsc-muted hover:bg-dtsc-soft"}`}>{copy.pendingOnly}</button>
+                <button type="button" onClick={() => { setReturnStatus(""); setReturnPage(1); }} className={`min-h-10 shrink-0 rounded-full border px-3 py-2 text-sm transition ${returnStatus === "" ? "border-cyan-500/50 bg-dtsc-soft font-semibold text-dtsc-blue" : "border-dtsc-border bg-dtsc-surface text-dtsc-muted hover:bg-dtsc-soft"}`}>{copy.allReturns}</button>
               </div>
 
               {returns.length ? returns.map((item) => (
@@ -1039,7 +1231,7 @@ export function RetailCommercialWorkspace({ organizationId }: { organizationId: 
                       </p>
                       <p className="mt-1 text-xs text-muted-foreground">{customerFacingRefundMethod(item.refundMethod, language)}</p>
                     </div>
-                    <span className="w-fit rounded-full border px-2 py-1 text-xs">{customerFacingStatusLabel(item.status, language)}</span>
+                    <div className="flex items-center gap-2"><span className="w-fit rounded-full border px-2 py-1 text-xs">{customerFacingStatusLabel(item.status, language)}</span><details className="relative"><summary aria-label="Actions" className="min-h-9 cursor-pointer list-none rounded-lg border border-dtsc-border px-3 py-2 font-bold text-dtsc-blue">⋯</summary><div className="absolute right-0 z-10 min-w-48 rounded-lg border border-dtsc-border bg-dtsc-surface p-2 shadow-lg"><Link href="/enterprise-modules/RETAIL_POS?section=returns" className="block rounded-lg px-2 py-2 text-xs text-dtsc-blue">{language === "en" ? "Open returns register" : "Ouvrir le registre des retours"}</Link><Link href="/enterprise-modules/FINANCE_TREASURY" className="block rounded-lg px-2 py-2 text-xs text-dtsc-blue">{language === "en" ? "Open treasury" : "Ouvrir la trésorerie"}</Link></div></details></div>
                   </div>
 
                   <p className="mt-3 text-sm">{item.reason}</p>
@@ -1068,6 +1260,7 @@ export function RetailCommercialWorkspace({ organizationId }: { organizationId: 
               )) : (
                 <div className="rounded-2xl border border-dashed p-6 text-sm text-muted-foreground">{copy.noReturns}</div>
               )}
+              <RegisterPager page={returnPage} pageCount={returnPagination.pageCount} total={returnPagination.total} setPage={setReturnPage} language={language} />
             </div>
           </div>
         </section>

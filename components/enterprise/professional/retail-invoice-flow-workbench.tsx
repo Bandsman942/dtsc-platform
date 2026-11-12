@@ -8,7 +8,7 @@ import { RetailActiveCustomerBar } from "@/components/enterprise/professional/re
 import { RetailInvoiceReturnDialog } from "@/components/enterprise/professional/retail-invoice-return-dialog";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
-import { toastError, toastSuccess } from "@/lib/client-toast";
+import { toastError, toastSuccess, notifyToast } from "@/lib/client-toast";
 import { customerFacingError } from "@/lib/customer-facing-language";
 import { browserCivilDate } from "@/lib/enterprise/retail/civil-date";
 
@@ -175,7 +175,7 @@ export function RetailInvoiceFlowWorkbench({ organizationId, organizationName, l
       try {
         const response = await fetch(`/api/enterprise/${organizationId}/retail/pricing/preview`, {
           method: "POST", headers: { "content-type": "application/json" }, signal: controller.signal,
-          body: JSON.stringify({ siteId: chosenWarehouse.siteId, customerBusinessPartyId: customerId, currencyCode, channelCode: "POS", lines: lines.map((line) => ({ catalogItemId: line.catalogItemId, quantity: line.quantity })) }),
+          body: JSON.stringify({ siteId: chosenWarehouse.siteId, customerBusinessPartyId: customerId, currencyCode, channelCode: "POS", invoiceCheckout: true, lines: lines.map((line) => ({ catalogItemId: line.catalogItemId, quantity: line.quantity })) }),
         });
         const payload = await response.json().catch(() => null) as (PricePreview & { message?: string }) | null;
         if (!response.ok || !payload?.grandTotal) throw new Error(payload?.message || copy.previewError);
@@ -250,9 +250,19 @@ export function RetailInvoiceFlowWorkbench({ organizationId, organizationName, l
           lines: lines.map((line) => ({ catalogItemId: line.catalogItemId, stockLotId: line.stockLotId, quantity: line.quantity })),
         }),
       });
-      const payload = await response.json().catch(() => null) as { message?: string; idempotent?: boolean } | null;
+      const payload = await response.json().catch(() => null) as { message?: string; idempotent?: boolean; stockWarnings?: Array<{ code: string; stockLotId: string | null }> } | null;
       if (!response.ok) throw new Error(payload?.message || copy.failed);
       toastSuccess(payload?.idempotent ? copy.duplicate : copy.saved);
+      if (payload?.stockWarnings?.length) {
+        notifyToast({
+          tone: "warning",
+          title: locale === "en" ? "Stock batch requires Finance review" : "Lot de stock à examiner par Finance",
+          description: locale === "en"
+            ? `${payload.stockWarnings.length} stock warning(s) recorded in the draft invoice notes. Review before approval/issuance.`
+            : `${payload.stockWarnings.length} avertissement(s) de stock enregistrés dans les notes de la facture brouillon. Vérifiez-les avant validation/émission.`,
+          durationMs: 12_000,
+        });
+      }
       setLines([]); setLots([]); idempotencyKey.current = "";
       setPreviewOpen(false);
       await fetch(`/api/enterprise/${organizationId}/retail/active-customer`, { method: "DELETE" }).catch(() => null);
@@ -320,6 +330,11 @@ export function RetailInvoiceFlowWorkbench({ organizationId, organizationName, l
             <label className="flex min-w-0 items-center gap-2 text-xs font-semibold text-dtsc-muted">{copy.quantity}<input type="number" min="0.001" max="1000000" step="0.001" value={line.quantity} onChange={(event) => { idempotencyKey.current = ""; setLines((current) => current.map((entry) => entry.catalogItemId === line.catalogItemId ? { ...entry, quantity: Number(event.target.value) } : entry)); }} className="min-h-10 w-24 min-w-0 rounded-lg border border-dtsc-border bg-dtsc-page px-2 text-sm" /><strong className="ml-auto text-dtsc-ink">{money(pricing?.lines.find((item) => item.catalogItemId === line.catalogItemId)?.lineTotal || String(Number(line.unitPrice) * line.quantity), line.currencyCode, locale)}</strong></label>
             {line.inventoryItemId && lots.some((lot) => lot.inventoryItemId === line.inventoryItemId) ? <label className="block min-w-0 text-xs font-semibold text-dtsc-muted">{copy.lot}<select value={line.stockLotId || ""} onChange={(event) => { idempotencyKey.current = ""; setLines((current) => current.map((entry) => entry.catalogItemId === line.catalogItemId ? { ...entry, stockLotId: event.target.value || null } : entry)); }} className="mt-1 block min-h-10 w-full min-w-0 rounded-lg border border-dtsc-border bg-dtsc-page px-2 text-sm"><option value="">{copy.chooseLot}</option>{lots.filter((lot) => lot.inventoryItemId === line.inventoryItemId && Number(lot.quantityAvailable) > 0).map((lot) => <option key={lot.id} value={lot.id}>{lot.lotNumber} · {lot.quantityAvailable}</option>)}</select></label> : null}
           </div>)}
+          <p role="note" className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs leading-5 text-dtsc-ink">
+            {locale === "en"
+              ? "Finance invoices use server-validated prices and VAT. Retail promotions and coupons are temporarily unavailable in this flow until their redemption ledger can be linked to Finance invoices without bypassing usage limits."
+              : "Les factures Finance utilisent les prix et la TVA vérifiés par le serveur. Les promotions et coupons Retail restent indisponibles dans ce circuit tant que leur registre d’utilisation n’est pas relié aux factures Finance, sans contourner les limites."}
+          </p>
           {pricingLoading ? <p role="status" className="text-xs text-dtsc-muted">{locale === "fr" ? "Calcul des prix et taxes…" : "Calculating prices and taxes…"}</p> : null}
           {pricingError ? <p role="alert" className="text-xs font-semibold text-red-700 dark:text-red-300">{pricingError}</p> : null}
           <div className="flex items-center justify-between gap-2 border-t border-dtsc-border pt-3"><span className="text-sm font-black text-dtsc-ink">{copy.total}</span><strong className="text-lg text-dtsc-blue">{money(pricing?.grandTotal || "0", currencyCode, locale)}</strong></div>

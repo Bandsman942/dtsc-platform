@@ -14,9 +14,21 @@ export async function GET(req: Request, { params }: Params) {
   const auth = await authorizeRetailRequest(req, organizationId, "RETAIL_POS", "read");
   if (!auth.ok) return auth.response;
   try {
-    const items = await listRetailPriceConditions(organizationId);
-    await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "retail-pricing", action: "list-conditions", count: items.length } });
-    return NextResponse.json({ items });
+    const params = new URL(req.url).searchParams;
+    const page = Math.max(1, Math.min(1000, Number(params.get("page") || "1") || 1));
+    const pageSize = Math.max(5, Math.min(100, Number(params.get("pageSize") || "20") || 20));
+    const from = params.get("from") || "", to = params.get("to") || "";
+    if ([from, to].some((v) => v && (!/^\d{4}-\d{2}-\d{2}$/.test(v) || !Number.isFinite(Date.parse(v + "T00:00:00.000Z")))) || (from && to && from > to)) {
+      return NextResponse.json({ error: "RETAIL_DATE_RANGE_INVALID", message: "Vérifiez la période des règles." }, { status: 400 });
+    }
+    const result = await listRetailPriceConditions(organizationId, {
+      page, pageSize, search: params.get("search") || "",
+      ...(params.get("active") === "true" ? { active: true } : params.get("active") === "false" ? { active: false } : {}),
+      ...(from ? { from: new Date(from + "T00:00:00.000Z") } : {}),
+      ...(to ? { toExclusive: new Date(Date.parse(to + "T00:00:00.000Z") + 86_400_000) } : {}),
+    });
+    await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "retail-pricing", action: "list-conditions", page, count: result.items.length } });
+    return NextResponse.json(result, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
     return retailErrorResponse(error, "RETAIL_PRICE_CONDITIONS_LOAD_FAILED");
   }

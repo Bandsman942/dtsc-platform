@@ -116,7 +116,7 @@ export async function renderRetailModulePage(moduleCode: "RETAIL_POS" | "MOBILE_
               ) : posSection.id === "collections" ? (
                 <RetailInvoiceCashierWorkbench organizationId={organizationId} locale={locale} preferredSiteId={options?.siteId} />
               ) : posSection.id === "offline" ? (
-                <RetailOfflineContinuity organizationId={organizationId} locale={locale} />
+                <RetailOfflineContinuity key={`${organizationId}:${user.id}`} organizationId={organizationId} actorUserId={user.id} locale={locale} />
               ) : posSection.id === "omnichannel" ? (
                 <RetailOmnichannelPanel organizationId={organizationId} locale={locale} />
               ) : posSection.id === "payments" ? (

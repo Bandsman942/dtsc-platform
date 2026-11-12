@@ -28,6 +28,31 @@ export async function GET(req: Request, { params }: Params) {
     horizon.setUTCDate(horizon.getUTCDate() + policy.warningDays);
     const url = new URL(req.url);
     const warehouseId = url.searchParams.get("warehouseId")?.trim() || undefined;
+    const search = url.searchParams.get("search")?.trim().slice(0, 120) || "";
+    const severity = url.searchParams.get("severity")?.trim().toUpperCase() || "";
+    if (severity && !["EXPIRED", "DUE_TODAY", "EXPIRING_SOON"].includes(severity)) throw new EnterpriseRetailError("RETAIL_REFERENCE_INVALID", 400);
+    const from = url.searchParams.get("from") || "";
+    const to = url.searchParams.get("to") || "";
+    if ([from, to].some((v) => v && !/^\d{4}-\d{2}-\d{2}$/.test(v)) || (from && to && from > to)) throw new EnterpriseRetailError("RETAIL_REFERENCE_INVALID", 400);
+    const today = new Date(businessDate + "T00:00:00.000Z");
+    const tomorrow = new Date(today.getTime() + 86_400_000);
+
+    const requestedStart = from ? new Date(from + "T00:00:00.000Z") : null;
+    const requestedEndExclusive = to ? new Date(new Date(to + "T00:00:00.000Z").getTime() + 86_400_000) : null;
+    const severityStart = severity === "DUE_TODAY" ? today : severity === "EXPIRING_SOON" ? tomorrow : null;
+    const severityEndExclusive = severity === "EXPIRED" ? today
+      : severity === "DUE_TODAY" ? tomorrow
+        : new Date(horizon.getTime() + 86_400_000);
+    const dateStart = requestedStart && severityStart
+      ? new Date(Math.max(requestedStart.getTime(), severityStart.getTime()))
+      : requestedStart || severityStart;
+    const dateEndExclusive = requestedEndExclusive
+      ? new Date(Math.min(requestedEndExclusive.getTime(), severityEndExclusive.getTime()))
+      : severityEndExclusive;
+    const lowStockPage = Math.max(1, Math.min(1000, Number(url.searchParams.get("lowStockPage") || "1") || 1));
+    const lowStockPageSize = Math.max(5, Math.min(80, Number(url.searchParams.get("lowStockPageSize") || "20") || 20));
+
+
     if (warehouseId && warehouseId.length > 240) throw new EnterpriseRetailError("RETAIL_REFERENCE_INVALID", 400);
     const warehouse = warehouseId
       ? await prisma.enterpriseWarehouse.findFirst({
@@ -46,7 +71,11 @@ export async function GET(req: Request, { params }: Params) {
       organizationId,
       ...(warehouseId ? { warehouseId } : scope.isOwner ? {} : { warehouse: { siteId: { in: scope.siteIds } } }),
       quantityOnHand: { gt: 0 },
-      stockLot: { is: { archivedAt: null, expiryDate: { lte: horizon }, status: "AVAILABLE" } },
+      ...(search ? { inventoryItem: { catalogItem: { OR: [
+        { code: { contains: search, mode: "insensitive" as const } },
+        { name: { contains: search, mode: "insensitive" as const } },
+      ] } } } : {}),
+      stockLot: { is: { archivedAt: null, expiryDate: { ...(dateStart ? { gte: dateStart } : {}), lt: dateEndExclusive }, status: "AVAILABLE" } },
     };
     const [balances, total] = await Promise.all([
       prisma.enterpriseInventoryBalance.findMany({
@@ -82,10 +111,11 @@ export async function GET(req: Request, { params }: Params) {
       WHERE i."organizationId" = ${organizationId} AND i."status" = 'ACTIVE' AND i."archivedAt" IS NULL
         AND c."archivedAt" IS NULL AND c."trackInventory" = true AND i."minimumQuantity" > 0
         ${siteClause}
+        ${search ? Prisma.sql`AND (c."code" ILIKE ${`%${search}%`} OR c."name" ILIKE ${`%${search}%`})` : Prisma.empty}
       GROUP BY w."id", w."name", c."id", c."code", c."name", i."id", i."minimumQuantity"
       HAVING COALESCE(SUM(b."quantityOnHand" - b."quantityReserved"), 0) <= i."minimumQuantity"
       ORDER BY "available" ASC, c."name" ASC
-      LIMIT 80
+      LIMIT ${lowStockPageSize} OFFSET ${(lowStockPage - 1) * lowStockPageSize}
     `);
     const items = balances.map((balance) => ({
       id: balance.id,
@@ -102,7 +132,7 @@ export async function GET(req: Request, { params }: Params) {
       quantityAvailable: balance.quantityOnHand.minus(balance.quantityReserved).toFixed(),
     }));
     await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "retail-expiry-alerts", warehouseId, page } });
-    return NextResponse.json({ items, page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)), policy, businessDate, lowStock: lowStock.map((row) => ({ warehouseId: row.warehouseId, warehouse: row.warehouse, catalogCode: row.code, catalogName: row.name, minimumQuantity: row.minimum.toFixed(), quantityAvailable: row.available.toFixed() })), lowStockTotal: Number(lowStock[0]?.total || 0) }, { headers: { "Cache-Control": "private, no-store" } });
+    return NextResponse.json({ items, page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)), policy, businessDate, lowStock: lowStock.map((row) => ({ warehouseId: row.warehouseId, warehouse: row.warehouse, catalogCode: row.code, catalogName: row.name, minimumQuantity: row.minimum.toFixed(), quantityAvailable: row.available.toFixed() })), lowStockTotal: Number(lowStock[0]?.total || 0), lowStockPage, lowStockPageSize, lowStockPageCount: Math.max(1, Math.ceil(Number(lowStock[0]?.total || 0) / lowStockPageSize)) }, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
     return retailErrorResponse(error, "RETAIL_EXPIRY_ALERTS_FAILED");
   }
