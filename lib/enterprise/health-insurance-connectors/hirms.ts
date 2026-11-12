@@ -1,9 +1,10 @@
 import { z } from "zod";
+import { createHash } from "node:crypto";
+import { assertHirmsEnvironmentEnabled, hirmsEndpoints, type HirmsEnvironment } from "./environments";
 import { type HealthInsuranceAdapter, type InsuranceMemberVerification, type InsuranceVerificationResult, InsuranceConnectorError } from "./registry";
 
 // HSL endpoints are a constant allow-list. User-supplied URLs are never accepted.
-const BASE = "https://hslapi.alatlabs.com";
-const AUTH = "https://hslauth.alatlabs.com/application/o/token/";
+
 const outputSchema = z.object({
   verified: z.boolean(),
   memberName: z.string().nullable().optional(),
@@ -15,10 +16,12 @@ const outputSchema = z.object({
 });
 type Entry = { token: string; expiresAt: number };
 const accessTokens = new Map<string, Entry>();
-const keyFor = (username: string) => username;
+const keyFor = (environment: HirmsEnvironment, username: string, secret: string) =>
+  createHash("sha256").update(JSON.stringify([environment, username, secret])).digest("hex");
 
-async function getToken({ username, secret }: { username: string; secret: string }, force = false): Promise<string> {
-  const key = keyFor(username);
+async function getToken({ username, secret }: { username: string; secret: string }, environment: HirmsEnvironment, force = false): Promise<string> {
+  assertHirmsEnvironmentEnabled(environment);
+  const key = keyFor(environment, username, secret);
   const cached = accessTokens.get(key);
   if (!force && cached && cached.expiresAt > Date.now() + 30_000) return cached.token;
   const form = new URLSearchParams({
@@ -27,7 +30,7 @@ async function getToken({ username, secret }: { username: string; secret: string
   });
   let response: Response;
   try {
-    response = await fetch(AUTH, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: form, cache: "no-store", signal: AbortSignal.timeout(10_000) });
+    response = await fetch(hirmsEndpoints(environment).token, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: form, cache: "no-store", signal: AbortSignal.timeout(10_000) });
   } catch {
     throw new InsuranceConnectorError("HIRMS_AUTH_UNREACHABLE", 503);
   }
@@ -42,11 +45,11 @@ async function getToken({ username, secret }: { username: string; secret: string
   return token.data.access_token;
 }
 
-async function verify(credentials: { username: string; secret: string }, input: InsuranceMemberVerification): Promise<InsuranceVerificationResult> {
+async function verify(credentials: { username: string; secret: string }, input: InsuranceMemberVerification, environment: HirmsEnvironment): Promise<InsuranceVerificationResult> {
   async function call(force = false) {
-    const token = await getToken(credentials, force);
+    const token = await getToken(credentials, environment, force);
     try {
-      return await fetch(BASE + "/api/members/verify", {
+      return await fetch(hirmsEndpoints(environment).api + "/api/members/verify", {
         method: "POST", cache: "no-store", signal: AbortSignal.timeout(12_000),
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", "Accept-Language": "fr" },
         body: JSON.stringify(input),
@@ -82,10 +85,10 @@ async function verify(credentials: { username: string; secret: string }, input: 
 }
 
 export const hirmsAdapter: HealthInsuranceAdapter = {
-  code: "HIRMS_HSL", checkConnection: async (credentials) => { await getToken(credentials, true); }, verify,
+  code: "HIRMS_HSL", checkConnection: async (credentials, environment) => { await getToken(credentials, environment, true); }, verify,
 };
 
 /** Reuse the approved HSL OAuth flow for invoice transport. */
-export async function getHirmsAccessToken(credentials: { username: string; secret: string }, force = false) {
-  return getToken(credentials, force);
+export async function getHirmsAccessToken(credentials: { username: string; secret: string }, environment: HirmsEnvironment, force = false) {
+  return getToken(credentials, environment, force);
 }
