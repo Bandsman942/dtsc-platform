@@ -8,7 +8,7 @@ import { HirmsEnvironmentSwitch } from "./hirms-environment-switch";
 import type { HirmsEnvironment } from "@/lib/enterprise/health-insurance-connectors/environments";
 
 type Submission = { id: string; invoiceNumber: string; batchId: string | null; transportStatus: string; httpStatus: number | null; submittedAt: string; errorCode: string | null };
-type History = { items: Submission[]; total: number; page: number; pageCount: number };
+type History = { items: Submission[]; total: number; page: number; pageCount: number; environment: HirmsEnvironment };
 type Preflight = { ok: boolean; count: number; invoiceNumbers: string[] };
 const STATUSES: Record<string,[string,string]> = {
   RECEIVED:["Reçue techniquement","Received by transport"],
@@ -34,9 +34,11 @@ export function HirmsInvoiceSubmissionWorkspace({organizationId,initialEnvironme
   const load = useCallback(async (currentPage:number)=>{
     const response = await fetch(`/api/enterprise/${organizationId}/insurance-connectors/invoices?environment=${environment}&page=${currentPage}`,{cache:"no-store"});
     if(!response.ok) throw Error("HISTORY_FAILED");
-    setHistory(await response.json() as History);
+    const payload = await response.json() as Omit<History, "environment">;
+    setHistory({ ...payload, environment });
   },[organizationId,environment]);
   useEffect(()=>{ void load(page).catch(()=>{}); },[load,page]);
+  const visibleHistory = history?.environment === environment ? history : null;
   function reset(value:string,newMode:"single"|"bulk"=mode){setJson(value);setPreflight(null);setConfirmed(false);setProductionConfirmation("");setMode(newMode)}
   function switchEnvironment(next:HirmsEnvironment){setEnvironment(next);setPreflight(null);setConfirmed(false);setProductionConfirmation("");setJson("");setHistory(null);setPage(1)}
   async function readJson(event:ChangeEvent<HTMLInputElement>){
@@ -133,17 +135,17 @@ export function HirmsInvoiceSubmissionWorkspace({organizationId,initialEnvironme
             <button type="button" onClick={()=>void load(page).catch(()=>setNotice(tx("Historique indisponible.","History unavailable.")))} aria-label={tx("Actualiser","Refresh")} className="rounded-lg border border-dtsc-border p-2 text-dtsc-ink"><RefreshCw className="h-4 w-4"/></button>
           </div>
           <div className="mt-2 max-h-[440px] space-y-2 overflow-y-auto">
-            {history?.items.map(item=><div key={item.id} className="rounded-xl border border-dtsc-border p-3">
+            {visibleHistory?.items.map(item=><div key={item.id} className="rounded-xl border border-dtsc-border p-3">
               <p className="break-all text-sm font-bold text-dtsc-ink">{item.invoiceNumber}</p>
               <p className="mt-1 text-xs text-dtsc-muted">{STATUSES[item.transportStatus]?.[en?1:0] || item.transportStatus} · {new Date(item.submittedAt).toLocaleString(en?"en":"fr")}</p>
               {item.errorCode?<p className="mt-1 break-all text-xs text-amber-700 dark:text-amber-300">{item.errorCode}</p>:null}
             </div>)}
-            {!history?.items.length?<p className="py-6 text-center text-xs text-dtsc-muted">{tx("Aucune transmission enregistrée.","No submissions recorded.")}</p>:null}
+            {!visibleHistory?.items.length?<p className="py-6 text-center text-xs text-dtsc-muted">{tx("Aucune transmission enregistrée.","No submissions recorded.")}</p>:null}
           </div>
           <div className="mt-3 flex items-center justify-between gap-2 border-t border-dtsc-border pt-3 text-xs text-dtsc-muted">
             <button type="button" disabled={page<=1} onClick={()=>setPage(p=>p-1)} className="min-h-10 rounded-lg border border-dtsc-border px-3 disabled:opacity-40">{tx("Précédent","Previous")}</button>
-            <span>{page}/{history?.pageCount||1}</span>
-            <button type="button" disabled={page>=(history?.pageCount||1)} onClick={()=>setPage(p=>p+1)} className="min-h-10 rounded-lg border border-dtsc-border px-3 disabled:opacity-40">{tx("Suivant","Next")}</button>
+            <span>{page}/{visibleHistory?.pageCount||1}</span>
+            <button type="button" disabled={page>=(visibleHistory?.pageCount||1)} onClick={()=>setPage(p=>p+1)} className="min-h-10 rounded-lg border border-dtsc-border px-3 disabled:opacity-40">{tx("Suivant","Next")}</button>
           </div>
         </section>
       </aside>
