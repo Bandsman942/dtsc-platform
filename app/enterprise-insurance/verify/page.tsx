@@ -7,7 +7,9 @@ import { getHealthInsuranceAccess } from "@/lib/health-insurance-access";
 import { canAccessPharmacySales } from "@/lib/pharmacy-sale-access";
 import { requireEnterpriseMembership } from "@/lib/enterprise-sector-templates";
 
-export default async function InsuranceMemberVerifyPage() {
+export default async function InsuranceMemberVerifyPage({ searchParams }: { searchParams: Promise<{ environment?: string }> }) {
+  const query = await searchParams;
+  const initialEnvironment = query.environment === "PRODUCTION" ? "PRODUCTION" : "UAT";
   const user = await requireUser();
   const session = await getSession();
   const organizationId = session?.activeContext === "ORGANIZATION" ? session.activeOrganizationId : null;
@@ -22,7 +24,7 @@ export default async function InsuranceMemberVerifyPage() {
   return (
     <AppShell user={user}>
       <LocaleProvider locale={user.locale === "en" ? "en" : "fr"}>
-        <InsuranceMemberVerifyWorkspace organizationId={organizationId} sector={sector as "HEALTH_CARE" | "PHARMACY"} />
+        <InsuranceMemberVerifyWorkspace organizationId={organizationId} sector={sector as "HEALTH_CARE" | "PHARMACY"} initialEnvironment={initialEnvironment} />
       </LocaleProvider>
     </AppShell>
   );
