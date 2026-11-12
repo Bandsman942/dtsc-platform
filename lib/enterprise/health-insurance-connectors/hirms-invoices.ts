@@ -1,4 +1,5 @@
 import { InsuranceConnectorError } from "./registry";
+import { assertHirmsEnvironmentEnabled, hirmsEndpoints, type HirmsEnvironment } from "./environments";
 import { getHirmsAccessToken } from "./hirms";
 import type { HirmsInvoice, HirmsInvoiceBulk } from "./invoice-contract";
 
@@ -14,17 +15,18 @@ export class HirmsInvoiceTransportError extends InsuranceConnectorError {
     super(code, httpStatus);
   }
 }
-const API = "https://hslapi.alatlabs.com";
+
 const MAX_BYTES = 8 * 1024 * 1024; // lower than HSL's 64 MiB request limit (protect Vercel routes)
 
-export async function postHirmsInvoices(credentials: Credentials, invoices: HirmsInvoice | HirmsInvoiceBulk, bulk: boolean): Promise<TransportResult> {
+export async function postHirmsInvoices(credentials: Credentials, invoices: HirmsInvoice | HirmsInvoiceBulk, bulk: boolean, environment: HirmsEnvironment): Promise<TransportResult> {
+  assertHirmsEnvironmentEnabled(environment);
   const json = JSON.stringify(invoices);
   if (Buffer.byteLength(json, "utf8") > MAX_BYTES)
     throw new HirmsInvoiceTransportError("HIRMS_INVOICE_REQUEST_TOO_LARGE", 413, false);
-  const endpoint = API + (bulk ? "/api/invoices/bulk" : "/api/invoices");
+  const endpoint = hirmsEndpoints(environment).api + (bulk ? "/api/invoices/bulk" : "/api/invoices");
   let sentAtLeastOnce = false;
   async function send(force = false): Promise<Response> {
-    const token = await getHirmsAccessToken(credentials, force);
+    const token = await getHirmsAccessToken(credentials, environment, force);
     sentAtLeastOnce = true;
     try {
       return await fetch(endpoint, {
