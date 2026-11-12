@@ -255,6 +255,9 @@ export function HealthInsuranceWorkspace({
               Vérifier une carte MSO
             </Link>
           )}
+          {d?.permissions?.canSubmit && (
+            <Link href="/enterprise-insurance/invoices" className="inline-flex min-h-10 items-center rounded-xl border border-dtsc-border px-3 text-sm font-bold text-dtsc-ink hover:bg-dtsc-page">Transmissions HIRMS</Link>
+          )}
           {d?.permissions?.canManageProviders && (
             <Button onClick={() => start("provider")} variant="outline">
               <Plus />
