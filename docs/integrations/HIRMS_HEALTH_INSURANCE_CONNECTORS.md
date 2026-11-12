@@ -57,3 +57,7 @@ Les retours 400, 403, 429, 5xx doivent être distingués. Le fournisseur peut re
 ## Contrôles
 node --experimental-strip-types scripts/qa-hirms-invoice-contract-01.mjs
 pnpm prisma generate ; pnpm type-check ; pnpm lint ; pnpm qa:regression ; pnpm build (en CI quand disponibles).
+
+## HIRMS OCR — UploadDocuments
+L'envoi OCR HSL et le suivi documentaire sont disponibles en branche via `/enterprise-insurance/ocr` pour les deux environnements. Le proxy direct Vercel reste limité à 4 MiB par fichier. HSL autorise 50 Mo, mais il faut un pipeline distinct de gros fichiers, non livré ici. Les documents et les données médicales extraites ne sont pas enregistrés dans l'outbox. `UploadDocuments` est une permission HSL spécifique ; activer `HEALTH_INSURANCE_HIRMS_UAT_OCR_ENABLED` ou `HEALTH_INSURANCE_HIRMS_PRODUCTION_OCR_ENABLED` indépendamment des flags de facturation. La Production exige également une autorisation d'entreprise explicite dans `HEALTH_INSURANCE_HIRMS_PRODUCTION_ORGANIZATION_IDS`.
+Le rapprochement read-only `GET /api/invoices/status/{invoiceId}` est accessible depuis l'historique des factures. Les schémas de réponse doivent être certifiés ; aucune notification ne doit déclencher un paiement ou une écriture. Voir [la documentation du pipeline OCR](HIRMS_OCR_PIPELINE.md).
