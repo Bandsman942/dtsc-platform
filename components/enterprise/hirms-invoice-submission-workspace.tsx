@@ -61,7 +61,7 @@ export function HirmsInvoiceSubmissionWorkspace({organizationId,initialEnvironme
         setNotice(tx("Contrôlez puis confirmez explicitement les factures.", "Preflight and explicitly confirm the invoices first."));return;
       }
       const response=await fetch(`/api/enterprise/${organizationId}/insurance-connectors/invoices`,{
-        method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({environment,operation,mode,payload}),
+        method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({environment,operation,mode,payload, ...(environment === "PRODUCTION" && operation === "submit" ? {productionConfirmation} : {})}),
       });
       const data=await response.json() as {message?:string;ok?:boolean;count?:number;invoiceNumbers?:string[];transportStatus?:string};
       if(!response.ok){setPreflight(null);setConfirmed(false);setNotice(data.message||tx("Contrôle impossible.", "Validation failed."));return}
