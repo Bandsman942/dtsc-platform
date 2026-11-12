@@ -2518,3 +2518,10 @@ Hotfix #861 (complément) : un secret CRON_SECRET Production commun réveille po
 - Historique, empreintes et prévention des doublons séparés par environnement ; les états incertains restent bloqués jusqu'au rapprochement.
 - Interfaces Design 2.0 : sélecteur UAT/PRODUCTION partagé, confirmation explicite d'un envoi réel, aides et liens profonds conservant la destination.
 - Variables serveur HEALTH_INSURANCE_HIRMS_PRODUCTION_ENABLED et HEALTH_INSURANCE_HIRMS_PRODUCTION_INVOICE_SEND_ENABLED = false par défaut ; aucun appel réel ni déploiement de cette branche en Production.
+
+### HIRMS-01 — Pipeline OCR et suivi HSL (branche #1128, non fusionné)
+- OAuth HSL UAT/Production à autorisation par entreprise ; verrouillages séparés UploadInvoices et UploadDocuments.
+- Nouvel historique d'outbox OCR sans octets ni texte médical ; endpoint HSL multipart PDF/image, date de facture, polling OCR par job.
+- Interface OCR responsive Design 2.0, pagination, filtrage par environnement, confirmation de l'envoi Production.
+- Suivi manuel du statut des factures HSL, strictement informatif (aucun règlement, créance ou posting).
+- Proxy direct limité à 4 MiB ; HSL 50 Mo ; circuit volumineux et certification des statuts reportés, sans simulation de succès.
