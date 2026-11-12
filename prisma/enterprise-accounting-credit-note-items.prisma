@@ -2,6 +2,8 @@ model EnterpriseSupplierCreditNoteItem {
   id                   String   @id @default(cuid())
   organizationId       String
   supplierCreditNoteId String
+  sourceInvoiceItemId String?
+  taxRecoveryRequested Boolean @default(false)
   catalogItemId        String?
   description          String
   quantity             Decimal  @db.Decimal(18, 6)
@@ -13,5 +15,6 @@ model EnterpriseSupplierCreditNoteItem {
 
   @@unique([organizationId, id])
   @@index([organizationId, supplierCreditNoteId])
+  @@index([organizationId, sourceInvoiceItemId])
   @@index([organizationId, catalogItemId])
 }

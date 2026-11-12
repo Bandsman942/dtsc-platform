@@ -448,6 +448,8 @@ model EnterpriseSalesInvoiceItem {
   taxRateApplied     Decimal?               @db.Decimal(12, 8)
   taxJurisdiction    String?
   taxTemplateVersion String?
+  taxEvidenceReference String?
+  taxCalculationMode String                 @default("NET")
   taxAmount          Decimal                @default(0) @db.Decimal(20, 6)
   totalAmount        Decimal                @db.Decimal(20, 6)
   revenueAccountId   String?
@@ -493,6 +495,7 @@ model EnterpriseSalesCreditNoteItem {
   id                 String                    @id @default(cuid())
   organizationId     String
   salesCreditNoteId  String
+  sourceInvoiceItemId String?
   description        String
   quantity           Decimal                   @db.Decimal(20, 6)
   unitPrice          Decimal                   @db.Decimal(20, 6)
@@ -504,6 +507,7 @@ model EnterpriseSalesCreditNoteItem {
 
   @@unique([organizationId, id])
   @@index([organizationId, salesCreditNoteId])
+  @@index([organizationId, sourceInvoiceItemId])
 }
 
 model EnterpriseReceivable {
@@ -604,6 +608,12 @@ model EnterpriseSupplierInvoiceItem {
   unitPrice               Decimal                   @db.Decimal(20, 6)
   netAmount               Decimal                   @db.Decimal(20, 6)
   taxCodeId               String?
+  taxRateApplied          Decimal?                  @db.Decimal(12, 8)
+  taxJurisdiction         String?
+  taxTemplateVersion      String?
+  taxEvidenceReference    String?
+  taxCalculationMode      String                   @default("NET")
+  taxRecoveryRequested    Boolean                  @default(false)
   taxAmount               Decimal                   @default(0) @db.Decimal(20, 6)
   totalAmount             Decimal                   @db.Decimal(20, 6)
   expenseAccountId        String?
@@ -617,6 +627,7 @@ model EnterpriseSupplierInvoiceItem {
   @@unique([organizationId, id])
   @@index([organizationId, supplierInvoiceId])
   @@index([organizationId, catalogItemId])
+  @@index([organizationId, taxRecoveryRequested])
 }
 
 model EnterpriseSupplierCreditNote {
@@ -1230,6 +1241,13 @@ model EnterpriseTaxLine {
   sourceEntityType   String
   sourceEntityId     String
   taxCodeId          String
+  applicationOrder   Int      @default(0)
+  basisMode          String   @default("NET")
+  jurisdiction       String?
+  taxTreatment       String   @default("STANDARD")
+  evidenceReference  String?
+  templateVersion    String?
+  effectiveAt        DateTime?
   taxableAmount      Decimal  @db.Decimal(20, 6)
   taxRate            Decimal  @db.Decimal(12, 8)
   taxAmount          Decimal  @db.Decimal(20, 6)
