@@ -9,6 +9,7 @@ import { EnterpriseRolesPermissionsPanel } from "@/components/enterprise/enterpr
 import { EnterpriseAdministrationSummary } from "@/components/enterprise/enterprise-administration-summary";
 import { EnterpriseRelationshipCodePanel } from "@/components/enterprise/identity-links/enterprise-relationship-code-panel";
 import { EnterprisePositionsGuidedPanel } from "@/components/enterprise/enterprise-positions-guided-panel";
+import { EnterpriseFiscalSettingsPanel } from "@/components/enterprise/professional/enterprise-fiscal-settings-panel";
 import {
   EnterpriseAdministrationAuditPanel,
   EnterpriseAdministrationBrandingPanel,
@@ -37,7 +38,7 @@ const ADMIN_SECTIONS = [
   { code: "permissions", fr: "Rôles & permissions", en: "Roles & permissions" },
   { code: "modules", fr: "Modules", en: "Modules" },
   { code: "subscription", fr: "Abonnement & limites", en: "Subscription & limits" },
-  { code: "settings", fr: "Paramètres entreprise", en: "Company settings" },
+  { code: "settings", fr: "Paramètres entreprise & finances", en: "Company & finance settings" },
   { code: "security", fr: "Sécurité", en: "Security" },
   { code: "audit", fr: "Audit & historique", en: "Audit & history" },
   { code: "pending", fr: "Actions en cours", en: "Pending actions" },
@@ -270,6 +271,7 @@ export function EnterpriseAdministrationModule(
         <div id="enterprise-admin-settings" className="scroll-mt-24 outline-none">
           <ModuleSection title={tx(locale, "Paramètres entreprise", "Company settings")} description={tx(locale, "Identité, logo depuis l’appareil, couleur visuelle et paramètres généraux enregistrés pour l’entreprise.", "Identity, device logo upload, visual color choice and general settings saved for the company.")}>
             <EnterpriseAdministrationBrandingPanel organization={organization} locale={locale} />
+            <EnterpriseFiscalSettingsPanel organizationId={organization.id} country={organization.country} locale={locale} />
             <EnterpriseRelationshipCodePanel code={organization.slug} locale={locale} />
             <div className="mt-4"><Accordion><EnterpriseCalendarPanel organizationName={organization.name} calendarEvents={calendarEvents} locale={locale} /></Accordion></div>
           </ModuleSection>
