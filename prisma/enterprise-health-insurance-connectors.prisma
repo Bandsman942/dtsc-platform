@@ -64,6 +64,9 @@ model EnterpriseHealthInsuranceInvoiceSubmission {
   httpStatus        Int?
   errorCode         String?
   externalReference String?
+  remoteStatus      String?
+  lastStatusCheckedAt DateTime?
+  lastStatusErrorCode String?
   createdByUserId   String
   submittedAt       DateTime @default(now())
   updatedAt         DateTime @updatedAt
