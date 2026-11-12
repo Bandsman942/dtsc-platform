@@ -6,6 +6,7 @@
     "node": "22.x"
   },
   "scripts": {
+    "qa:health-insurance-hirms-01": "node scripts/qa-health-insurance-hirms-01.mjs",
     "dev": "next dev",
     "build": "next build",
     "vercel-build": "prisma migrate deploy && next build",
