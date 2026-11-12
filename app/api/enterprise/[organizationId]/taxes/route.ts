@@ -38,7 +38,7 @@ export async function GET(req: Request, { params }: Params) {
       orderBy: { code: "asc" },
       skip: recordId ? 0 : (page - 1) * pageSize,
       take: recordId ? 1 : pageSize,
-      include: { rates: { orderBy: { effectiveFrom: "desc" } }, rules: true },
+      include: { rates: { orderBy: { effectiveFrom: "desc" } }, rules: true, payableAccount: { select: { code: true, nameFr: true, nameEn: true } }, recoverableAccount: { select: { code: true, nameFr: true, nameEn: true } } },
     }),
     prisma.enterpriseTaxCode.count({ where }),
   ]);
