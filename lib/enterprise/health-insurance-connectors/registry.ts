@@ -6,7 +6,7 @@ export const HEALTH_INSURANCE_ADAPTERS = [{
   labelFr: "MSO / HIRMS",
   labelEn: "MSO / HIRMS",
   sectors: ["HEALTH_CARE", "PHARMACY"],
-  actions: ["VerifyMembers", "UploadInvoices"],
+  actions: ["VerifyMembers", "UploadInvoices", "UploadDocuments"],
   environments: ["UAT", "PRODUCTION"],
   status: "PILOT",
 }] as const;
