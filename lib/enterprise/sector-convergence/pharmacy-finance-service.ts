@@ -137,6 +137,9 @@ export async function convergePharmacySaleInvoice(
       if (difference.abs().greaterThan(new Prisma.Decimal("0.01"))) throw new EnterpriseSectorConvergenceError("PHARMACY_SALE_LINE_TOTAL_MISMATCH", 409, { saleTotal: current.totalAmount.toFixed(), lineTotal: itemTotal.toFixed() });
       const discountTotal = current.globalDiscount && current.globalDiscount.isPositive() ? money(current.globalDiscount) : money(0);
       const taxTotal = money(current.taxAmount || 0);
+      // PharmacySaleLine stores no tax code/rate/jurisdiction per line. Do not
+      // project an aggregate positive tax as untraceable Finance VAT.
+      if (taxTotal.gt(0)) throw new EnterpriseSectorConvergenceError("PHARMACY_TAX_LINE_PROVENANCE_REQUIRED", 409);
       const subtotal = money(current.totalAmount.plus(discountTotal).minus(taxTotal));
       if (subtotal.isNegative()) throw new EnterpriseSectorConvergenceError("PHARMACY_SALE_SUBTOTAL_INVALID", 409);
       const invoiceItems: Prisma.EnterpriseSalesInvoiceItemCreateWithoutSalesInvoiceInput[] = current.lines.map((line) => ({

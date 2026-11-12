@@ -28,6 +28,9 @@ export async function convergeHealthMedicalInvoice(
   if (!source) throw new EnterpriseSectorConvergenceError("HEALTH_MEDICAL_INVOICE_NOT_FOUND", 404);
   if (["CANCELLED", "VOIDED"].includes(source.status)) throw new EnterpriseSectorConvergenceError("HEALTH_MEDICAL_INVOICE_NOT_CONVERGIBLE", 409);
   if (!source.items.length || !source.totalAmount.isPositive()) throw new EnterpriseSectorConvergenceError("HEALTH_MEDICAL_INVOICE_TOTAL_INVALID", 409);
+  // Health line items do not currently persist a fiscal code/tax per line.
+  // A positive header tax must not become an unmatched Finance tax journal.
+  if (source.taxAmount.gt(0)) throw new EnterpriseSectorConvergenceError("HEALTH_TAX_LINE_PROVENANCE_REQUIRED", 409);
   const patientProfile = await prisma.healthPatientFinancialProfile.findFirst({ where: { organizationId, healthPatientId: source.patientId } });
   if (!patientProfile) throw new EnterpriseSectorConvergenceError("HEALTH_PATIENT_FINANCIAL_PROFILE_REQUIRED", 409);
   const serviceIds = source.items.map((item) => item.serviceCatalogId).filter((value): value is string => Boolean(value));
