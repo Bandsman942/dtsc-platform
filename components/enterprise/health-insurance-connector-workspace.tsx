@@ -4,18 +4,22 @@ import Link from "next/link";
 import { BadgeCheck, CircleHelp, KeyRound, PlugZap, RefreshCw, ShieldCheck, Stethoscope } from "lucide-react";
 import { useAppLocale } from "@/components/i18n/locale-provider";
 import { useToastMessage } from "@/components/ui/use-toast-message";
+import { HirmsEnvironmentSwitch } from "./hirms-environment-switch";
+import type { HirmsEnvironment } from "@/lib/enterprise/health-insurance-connectors/environments";
 
 type Connector = {
   id: string; status: string; environment: string; siteId: string | null; hslServiceProviderId: number | null;
   credentialsConfigured: boolean; lastAuthCheckAt: string | null; lastVerifiedAt: string | null;
   credentialsUpdatedAt: string | null; lastErrorCode: string | null;
 };
-type Dataset = { connector: Connector | null; sites: Array<{ id: string; name: string; code: string }> };
+type Dataset = { connector: Connector | null; sites: Array<{ id: string; name: string; code: string }>;
+  environment: HirmsEnvironment; productionEnabled: boolean; uatInvoiceSendEnabled: boolean; productionInvoiceSendEnabled: boolean };
 
-export function HealthInsuranceConnectorWorkspace({ organizationId }: { organizationId: string }) {
+export function HealthInsuranceConnectorWorkspace({ organizationId, initialEnvironment = "UAT" }: { organizationId: string; initialEnvironment?: HirmsEnvironment }) {
   const locale = useAppLocale() || "fr";
   const en = locale === "en";
   const tx = (fr: string, english: string) => en ? english : fr;
+  const [environment, setEnvironment] = useState<HirmsEnvironment>(initialEnvironment);
   const [data, setData] = useState<Dataset | null>(null);
   const [siteId, setSiteId] = useState("");
   const [serviceProviderId, setServiceProviderId] = useState("");
@@ -25,20 +29,23 @@ export function HealthInsuranceConnectorWorkspace({ organizationId }: { organiza
   const [notice, setNotice] = useState("");
   useToastMessage(notice);
   const load = useCallback(async () => {
-    const response = await fetch(`/api/enterprise/${organizationId}/insurance-connectors`, { cache: "no-store" });
+    const response = await fetch(`/api/enterprise/${organizationId}/insurance-connectors?environment=${environment}`, { cache: "no-store" });
     if (!response.ok) throw new Error("LOAD_FAILED");
     const payload = await response.json() as Dataset;
     setData(payload);
     setSiteId(payload.connector?.siteId || "");
     setServiceProviderId(payload.connector?.hslServiceProviderId ? String(payload.connector.hslServiceProviderId) : "");
-  }, [organizationId]);
-  useEffect(() => { void load().catch(() => setNotice("Chargement du connecteur indisponible.")); }, [load]);
+  }, [organizationId, environment]);
+  useEffect(() => {
+    setData(null); setUsername(""); setSecret(""); setSiteId(""); setServiceProviderId("");
+    void load().catch(() => setNotice("Chargement du connecteur indisponible."));
+  }, [load]);
 
   async function send(payload: Record<string, unknown>, success: string) {
     setPending(true); setNotice("");
     try {
       const response = await fetch(`/api/enterprise/${organizationId}/insurance-connectors`, {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload),
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...payload, environment }),
       });
       const body = await response.json() as { message?: string };
       if (!response.ok) { setNotice(body.message || tx("Opération impossible.", "Operation failed.")); return; }
@@ -52,7 +59,7 @@ export function HealthInsuranceConnectorWorkspace({ organizationId }: { organiza
   function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     void send({ siteId: siteId || null, hslServiceProviderId: serviceProviderId ? Number(serviceProviderId) : null, ...(username && secret ? { username, secret } : {}) },
-      tx("Configuration UAT enregistrée. Testez maintenant l’authentification HSL.", "UAT configuration saved. Test HSL authentication now."));
+      tx(`Configuration ${environment} enregistrée. Testez maintenant l’authentification HSL.`, `${environment} configuration saved. Test HSL authentication now.`));
   }
   return (
     <main className="mx-auto w-full max-w-6xl space-y-4 px-4 py-5 sm:px-6">
@@ -69,7 +76,7 @@ export function HealthInsuranceConnectorWorkspace({ organizationId }: { organiza
         <div className="flex min-w-0 flex-1 items-center gap-3">
           <div className="rounded-xl bg-cyan-500/10 p-3 text-cyan-600"><ShieldCheck className="h-6 w-6" aria-hidden="true"/></div>
           <div className="min-w-0">
-            <h2 className="font-black text-dtsc-ink">MSO / HIRMS <span className="ml-1 rounded-full border border-amber-500/40 px-2 py-0.5 text-xs text-amber-700 dark:text-amber-300">UAT</span></h2>
+            <h2 className="font-black text-dtsc-ink">MSO / HIRMS <span className="ml-1 rounded-full border border-amber-500/40 px-2 py-0.5 text-xs text-amber-700 dark:text-amber-300">{environment}</span></h2>
             <p className="text-xs text-dtsc-muted">{tx("Adaptateur HSL · Vérification des adhérents · Phase pilote", "HSL adapter · Member verification · Pilot phase")}</p>
           </div>
         </div>
@@ -79,10 +86,12 @@ export function HealthInsuranceConnectorWorkspace({ organizationId }: { organiza
         </div>
       </section>
 
+      <HirmsEnvironmentSwitch value={environment} onChange={setEnvironment} disabled={pending} />
+      {environment === "PRODUCTION" && <div role="note" className="rounded-xl border border-amber-500/50 bg-amber-500/10 p-3 text-sm text-dtsc-ink">{tx("Environnement réel. Utilisez exclusivement les identifiants de Production remis par HSL. Les appels sont bloqués tant que DTSC n’a pas habilité la Production.", "Live environment. Use only Production credentials issued by HSL. Outbound calls are blocked until DTSC enables Production.")}</div>}
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1.5fr)_minmax(280px,1fr)]">
         <form onSubmit={save} className="min-w-0 space-y-4 rounded-2xl border border-dtsc-border bg-dtsc-surface p-4 sm:p-5">
           <div className="flex items-center gap-2"><KeyRound className="h-5 w-5 text-cyan-600" aria-hidden="true"/><h2 className="font-black text-dtsc-ink">{tx("Configuration sécurisée", "Secure setup")}</h2></div>
-          <p className="text-sm text-dtsc-muted">{tx("Utilisez uniquement le compte et le secret fournis par HSL pour l’environnement de test.", "Use only the account and secret issued by HSL for the test environment.")}</p>
+          <p className="text-sm text-dtsc-muted">{tx(`Utilisez uniquement les identifiants HSL propres à ${environment}.`, `Use HSL credentials issued specifically for ${environment}.`)}</p>
           <label className="block space-y-1 text-sm font-semibold text-dtsc-ink">
             <span>{tx("Établissement relié", "Linked facility")}</span>
             <select value={siteId} onChange={(event)=>setSiteId(event.target.value)} className="min-h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 text-sm">
@@ -105,7 +114,7 @@ export function HealthInsuranceConnectorWorkspace({ organizationId }: { organiza
           </label>
           <div className="flex flex-wrap gap-2">
             <button type="submit" disabled={pending || Boolean(username) !== Boolean(secret)} className="min-h-11 rounded-xl bg-cyan-600 px-4 text-sm font-bold text-white hover:bg-cyan-700 disabled:opacity-50">{pending ? tx("Traitement…", "Processing…") : tx("Enregistrer", "Save")}</button>
-            <button type="button" disabled={pending || !data?.connector?.credentialsConfigured} onClick={()=>void send({ action: "check" }, tx("Authentification HSL confirmée en UAT.", "HSL authentication confirmed in UAT."))} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-dtsc-border px-4 text-sm font-bold text-dtsc-ink hover:bg-dtsc-page disabled:opacity-50"><PlugZap className="h-4 w-4" aria-hidden="true"/>{tx("Tester l’authentification", "Test authentication")}</button>
+            <button type="button" disabled={pending || !data?.connector?.credentialsConfigured || (environment === "PRODUCTION" && !data?.productionEnabled)} onClick={()=>void send({ action: "check" }, tx(`Authentification HSL confirmée en ${environment}.`, `HSL authentication confirmed in ${environment}.`))} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-dtsc-border px-4 text-sm font-bold text-dtsc-ink hover:bg-dtsc-page disabled:opacity-50"><PlugZap className="h-4 w-4" aria-hidden="true"/>{tx("Tester l’authentification", "Test authentication")}</button>
           </div>
           <p className="text-xs text-dtsc-muted">{tx("Pour modifier le compte HSL, renseignez à nouveau le compte et le nouveau secret. Aucun secret enregistré n’est réaffiché.", "To change credentials, enter both the account and new secret. Stored secrets are never displayed.")}</p>
         </form>
@@ -113,7 +122,7 @@ export function HealthInsuranceConnectorWorkspace({ organizationId }: { organiza
           <section className="space-y-3 rounded-2xl border border-dtsc-border bg-dtsc-surface p-4">
             <div className="flex items-center gap-2"><BadgeCheck className="h-5 w-5 text-emerald-600" aria-hidden="true"/><h2 className="font-black text-dtsc-ink">{tx("État du connecteur", "Connector status")}</h2></div>
             {[
-              [tx("Environnement", "Environment"), "UAT"],
+              [tx("Environnement", "Environment"), environment],
               [tx("Prestataire HSL", "HSL provider"), data?.connector?.hslServiceProviderId ? String(data.connector.hslServiceProviderId) : tx("À configurer", "Missing")],
               [tx("Identifiants", "Credentials"), data?.connector?.credentialsConfigured ? tx("Enregistrés et chiffrés", "Stored encrypted") : tx("À renseigner", "Missing")],
               [tx("Dernier test", "Last test"), data?.connector?.lastAuthCheckAt ? new Date(data.connector.lastAuthCheckAt).toLocaleString(en ? "en" : "fr") : "—"],
@@ -124,14 +133,14 @@ export function HealthInsuranceConnectorWorkspace({ organizationId }: { organiza
           <section className="space-y-2 rounded-2xl border border-dtsc-border bg-dtsc-surface p-4">
             <div className="flex items-center gap-2"><CircleHelp className="h-5 w-5 text-dtsc-muted" aria-hidden="true"/><h2 className="font-bold text-dtsc-ink">{tx("Avant d'utiliser MSO", "Before using MSO")}</h2></div>
             <p className="text-xs text-dtsc-muted">{tx("HSL doit avoir approuvé le client et autorisé VerifyMembers. La connexion réussie ne garantit pas l'accès à toutes les opérations.", "HSL must approve this client and grant VerifyMembers. Successful authentication does not grant every operation.")}</p>
-            <Link href="/enterprise-insurance/verify" className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-dtsc-border px-3 py-2 text-sm font-bold text-dtsc-ink hover:bg-dtsc-page"><Stethoscope className="h-4 w-4" aria-hidden="true"/>{tx("Ouvrir la vérification adhérent", "Open member verification")}</Link>
-            <Link href="/enterprise-insurance/invoices" className="mt-2 inline-flex min-h-11 items-center gap-2 rounded-xl border border-dtsc-border px-3 py-2 text-sm font-bold text-dtsc-ink hover:bg-dtsc-page">
+            <Link href={`/enterprise-insurance/verify?environment=${environment}`} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-dtsc-border px-3 py-2 text-sm font-bold text-dtsc-ink hover:bg-dtsc-page"><Stethoscope className="h-4 w-4" aria-hidden="true"/>{tx("Ouvrir la vérification adhérent", "Open member verification")}</Link>
+            <Link href={`/enterprise-insurance/invoices?environment=${environment}`} className="mt-2 inline-flex min-h-11 items-center gap-2 rounded-xl border border-dtsc-border px-3 py-2 text-sm font-bold text-dtsc-ink hover:bg-dtsc-page">
               {tx("Contrôler et transmettre les factures HSL", "Preflight and submit HSL invoices")}
             </Link>
           </section>
         </aside>
       </div>
-      <p className="text-xs text-dtsc-muted">{tx("Les factures peuvent être contrôlées en UAT. Leur transmission reste désactivée par défaut et nécessite l’autorisation UploadInvoices de HSL. Les justificatifs OCR ne sont pas encore intégrés.", "Invoices can be preflighted in UAT. Sending is disabled by default and requires HSL UploadInvoices authorization. OCR documents are not integrated yet.")}</p>
+      <p className="text-xs text-dtsc-muted">{tx("Les contrôles et transmissions sont séparés entre UAT et Production. Chaque environnement possède ses propres identifiants et habilitations HSL ; les appels réels sont désactivés par défaut. Les justificatifs OCR ne sont pas encore intégrés.", "Preflight and submissions are separated between UAT and Production. Each environment has its own HSL credentials and permissions; live calls are disabled by default. OCR documents are not integrated yet.")}</p>
     </main>
   );
 }
