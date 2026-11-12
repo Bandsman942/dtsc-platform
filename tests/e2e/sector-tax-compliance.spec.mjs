@@ -42,7 +42,7 @@ test.describe.serial("Sector tax #1124 — multi-tax, proofs and DGI readiness",
       const tax = existing || await prisma.enterpriseTaxCode.create({ data: {
         organizationId, code, nameFr: code, nameEn: code, category, jurisdiction: "CD", taxTreatment: "STANDARD",
         autoApply: false, isActive: true, rates: { create: {
-          organizationId, rate, status: "ACTIVE", effectiveFrom: new Date("2026-01-01T00:00:00.000Z"),
+          rate, status: "ACTIVE", effectiveFrom: new Date("2026-01-01T00:00:00.000Z"),
           createdByUserId: admin.id,
         } },
       } });
