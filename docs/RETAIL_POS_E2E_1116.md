@@ -53,6 +53,13 @@
 | POS-19 | Accéder aux boutiques/comptes d'autrui, désactiver un entitlement, falsifier siteId/organizationId | Refus serveur 403/404 approprié; aucun agrégat ou export inter-tenant |
 | POS-20 | Mise en service : activer modules, sites, rôles, fiscalité, numérotation, appareils | Checklist précise; score Finance 15/15 ne prétend ni certifier matériel/offline ni réglementation d'un pays non vérifié |
 
+## Contrôle automatisé supplémentaire (à vérifier sur CI du SHA final)
+
+- `tests/e2e/retail-offline-finance-1116.spec.mjs`, lancé par `Shop 2 behavioral gates` après la recette Finance indépendante, sur PostgreSQL/Chromium isolés.
+- Vérifie l'accès à une vraie boutique et un vrai catalogue de test, la préparation d'un snapshot `draftOnly`, l'émission d'une **seule facture DRAFT**, le rejeu idempotent, le refus d'un tender local et l'absence de nouvelles écritures `POSTED`, paiements ou consommation de stock.
+- `scripts/qa-retail-five-lots-1116.mjs` contrôle en plus l'immutabilité des opérations IndexedDB et la protection contre les réponses tardives.
+- Ces tests automatisés ne remplacent ni la coupure du réseau dans un véritable navigateur ni les essais des périphériques physiques, du mode multionglets ou de la certification réglementaire.
+
 ## Preuves et décision de fusion
 
 - Pour chaque ID : **PASS/FAIL/BLOCKED/NOT RUN**, acteur, date et build SHA, pièces comparées, captures anonymisées, incident lié.
