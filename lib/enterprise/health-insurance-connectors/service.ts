@@ -6,7 +6,7 @@ import { type InsuranceMemberVerification, InsuranceConnectorError } from "./reg
 
 export const connectorSettingsSchema = z.object({
   siteId: z.string().cuid().nullable().optional(),
-  username: z.string().trim().regex(/^hirms-api-[a-zA-Z0-9_-]{20,64}$/, "Compte HSL invalide").optional(),
+  username: z.string().trim().regex(/^hirms-api-[a-zA-Z0-9_-]{32}$/, "Compte HSL invalide").optional(),
   secret: z.string().min(12).max(1000).optional(),
 }).strict().refine((value) => Boolean(value.username) === Boolean(value.secret), {
   message: "Le compte et le secret HSL doivent être fournis ensemble.",
