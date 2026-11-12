@@ -6,6 +6,7 @@ import { type InsuranceMemberVerification, InsuranceConnectorError } from "./reg
 
 export const connectorSettingsSchema = z.object({
   siteId: z.string().cuid().nullable().optional(),
+  hslServiceProviderId: z.number().int().positive().nullable().optional(),
   username: z.string().trim().regex(/^hirms-api-[a-zA-Z0-9_-]{32}$/, "Compte HSL invalide").optional(),
   secret: z.string().min(12).max(1000).optional(),
 }).strict().refine((value) => Boolean(value.username) === Boolean(value.secret), {
@@ -27,13 +28,13 @@ export async function getInsuranceConnectorDashboard(organizationId: string) {
   const [entry, sites] = await Promise.all([
     prisma.enterpriseHealthInsuranceConnector.findUnique({
       where: { organizationId_adapterCode: { organizationId, adapterCode: "HIRMS_HSL" } },
-      select: { id: true, adapterCode: true, environment: true, siteId: true, status: true, credentialsEncrypted: true, credentialsUpdatedAt: true, lastAuthCheckAt: true, lastVerifiedAt: true, lastErrorCode: true, revision: true },
+      select: { id: true, adapterCode: true, environment: true, siteId: true, hslServiceProviderId: true, status: true, credentialsEncrypted: true, credentialsUpdatedAt: true, lastAuthCheckAt: true, lastVerifiedAt: true, lastErrorCode: true, revision: true },
     }),
     prisma.enterpriseSite.findMany({ where: { organizationId, status: "ACTIVE", archivedAt: null }, orderBy: { name: "asc" }, select: { id: true, name: true, code: true } }),
   ]);
   return {
     connector: entry ? {
-      id: entry.id, adapterCode: entry.adapterCode, environment: entry.environment, siteId: entry.siteId,
+      id: entry.id, adapterCode: entry.adapterCode, environment: entry.environment, siteId: entry.siteId, hslServiceProviderId: entry.hslServiceProviderId,
       status: entry.status, credentialsConfigured: Boolean(entry.credentialsEncrypted), credentialsUpdatedAt: entry.credentialsUpdatedAt,
       lastAuthCheckAt: entry.lastAuthCheckAt, lastVerifiedAt: entry.lastVerifiedAt, lastErrorCode: entry.lastErrorCode, revision: entry.revision,
     } : null,
@@ -53,11 +54,12 @@ export async function saveInsuranceConnector(organizationId: string, userId: str
     where: { organizationId_adapterCode: { organizationId, adapterCode: "HIRMS_HSL" } },
     create: {
       organizationId, adapterCode: "HIRMS_HSL", environment: "UAT", siteId: settings.siteId || null,
-      status: "DRAFT", credentialsEncrypted: ciphertext || null, credentialsUpdatedAt: ciphertext ? new Date() : null, createdByUserId: userId,
+      status: "DRAFT", hslServiceProviderId: settings.hslServiceProviderId || null, credentialsEncrypted: ciphertext || null, credentialsUpdatedAt: ciphertext ? new Date() : null, createdByUserId: userId,
     },
     update: {
       siteId: settings.siteId === undefined ? existing?.siteId || null : settings.siteId,
-      status: ciphertext || (settings.siteId !== undefined && settings.siteId !== existing?.siteId) ? "DRAFT" : existing?.status || "DRAFT",
+      hslServiceProviderId: settings.hslServiceProviderId === undefined ? existing?.hslServiceProviderId || null : settings.hslServiceProviderId,
+      status: ciphertext || (settings.siteId !== undefined && settings.siteId !== existing?.siteId) || (settings.hslServiceProviderId !== undefined && settings.hslServiceProviderId !== existing?.hslServiceProviderId) ? "DRAFT" : existing?.status || "DRAFT",
       ...(ciphertext ? { credentialsEncrypted: ciphertext, credentialsUpdatedAt: new Date() } : {}),
       updatedByUserId: userId, revision: { increment: 1 },
     },
