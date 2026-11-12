@@ -1,11 +1,12 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { validatedInvoiceTaxRate } from "@/lib/enterprise/accounting/tax-engine";
+import { calculateDocumentTaxApplications, recordPostedTaxApplicationsTx, snapshotCalculatedTaxes } from "@/lib/enterprise/accounting/tax-engine";
+import type { CalculatedDocumentTax } from "@/lib/enterprise/accounting/tax-engine";
 import { normalizeTaxCountryCode } from "@/lib/enterprise/accounting/tax-jurisdictions";
 import { assertIndependentActor } from "@/lib/enterprise/accounting/access";
 import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
 import { assertActiveClientOrganization, financeReference, money, publishFinanceEvent, sumDecimals } from "@/lib/enterprise/accounting/helpers";
-import { postBusinessEvent } from "@/lib/enterprise/accounting/posting-service";
+import { postBusinessEventTx } from "@/lib/enterprise/accounting/posting-service";
 import type { supplierInvoiceCreateSchema } from "@/lib/enterprise/accounting/schemas";
 import type { z } from "zod";
 
@@ -15,6 +16,11 @@ type CalculatedSupplierItem = SupplierInvoiceInput["items"][number] & {
   unitPriceDecimal: Prisma.Decimal;
   netAmount: Prisma.Decimal;
   taxAmount: Prisma.Decimal;
+  taxRateApplied: Prisma.Decimal;
+  taxJurisdiction: string | null;
+  taxTemplateVersion: string | null;
+  taxBreakdown: CalculatedDocumentTax[];
+  taxRecoveryRequested: boolean;
   totalAmount: Prisma.Decimal;
 };
 
@@ -58,22 +64,24 @@ async function calculateSupplierItems(
       if (!catalog) throw new EnterpriseAccountingError("SUPPLIER_INVOICE_CATALOG_ITEM_INVALID", 409);
     }
     const netAmount = money(quantityDecimal.times(unitPriceDecimal));
-    let rate = new Prisma.Decimal(0);
-    if (item.taxCodeId) {
-      const taxRate = await tx.enterpriseTaxRate.findFirst({
-        where: { organizationId, taxCodeId: item.taxCodeId, status: "ACTIVE", effectiveFrom: { lte: invoiceDate }, OR: [{ effectiveTo: null }, { effectiveTo: { gte: invoiceDate } }], taxCode: { isActive: true } },
-        orderBy: { effectiveFrom: "desc" },
-        include: { taxCode: { select: { jurisdiction: true, taxTreatment: true, category: true } } },
-      });
-      if (!taxRate) throw new EnterpriseAccountingError("SUPPLIER_INVOICE_TAX_RATE_INVALID", 409);
-      const validated = validatedInvoiceTaxRate({ category: taxRate.taxCode.category,
-        treatment: taxRate.taxCode.taxTreatment, rate: taxRate.rate,
-        taxJurisdiction: taxRate.taxCode.jurisdiction, invoiceJurisdiction });
-      if (validated === null) throw new EnterpriseAccountingError("SUPPLIER_INVOICE_TAX_JURISDICTION_OR_TREATMENT_INVALID", 409);
-      rate = validated;
+    const taxBreakdown = await calculateDocumentTaxApplications(tx, {
+      organizationId, effectiveAt: invoiceDate, invoiceJurisdiction,
+      taxCodeIds: [...(item.taxCodeId ? [item.taxCodeId] : []), ...(item.additionalTaxCodeIds || [])],
+      netAmount, sourceType: "SUPPLIER_INVOICE",
+      calculationMode: item.taxCalculationMode, evidenceReference: item.taxEvidenceReference,
+    });
+    const taxRecoveryRequested = item.taxRecoveryRequested === true;
+    if (taxRecoveryRequested && (!item.taxEvidenceReference || !taxBreakdown.length
+      || taxBreakdown.some((entry) => !["VAT", "GST"].includes(entry.category)
+        || entry.treatment !== "STANDARD" || !entry.recoverableAccountId))) {
+      throw new EnterpriseAccountingError("SUPPLIER_INPUT_TAX_PROOF_OR_ACCOUNT_REQUIRED", 409);
     }
-    const taxAmount = money(netAmount.times(rate));
-    calculated.push({ ...item, quantityDecimal, unitPriceDecimal, netAmount, taxAmount, totalAmount: money(netAmount.plus(taxAmount)) });
+    const taxAmount = money(sumDecimals(taxBreakdown.map((entry) => entry.amount)));
+    calculated.push({ ...item, quantityDecimal, unitPriceDecimal, netAmount, taxAmount,
+      taxRateApplied: taxBreakdown[0]?.rate || new Prisma.Decimal(0),
+      taxJurisdiction: taxBreakdown[0]?.jurisdiction || null,
+      taxTemplateVersion: taxBreakdown[0]?.templateVersion || null, taxBreakdown,
+      taxRecoveryRequested, totalAmount: money(netAmount.plus(taxAmount)) });
   }
   return calculated;
 }
@@ -151,6 +159,13 @@ export async function createSupplierInvoice(organizationId: string, actorUserId:
             unitPrice: item.unitPriceDecimal,
             netAmount: item.netAmount,
             taxCodeId: item.taxCodeId || null,
+            taxRateApplied: item.taxRateApplied,
+            taxJurisdiction: item.taxJurisdiction,
+            taxTemplateVersion: item.taxTemplateVersion,
+            taxEvidenceReference: item.taxEvidenceReference || null,
+            taxCalculationMode: item.taxCalculationMode || "NET",
+            taxRecoveryRequested: item.taxRecoveryRequested,
+            taxBreakdownJson: item.taxBreakdown.length ? snapshotCalculatedTaxes(item.taxBreakdown, input.invoiceDate) : Prisma.JsonNull,
             taxAmount: item.taxAmount,
             totalAmount: item.totalAmount,
             expenseAccountId: item.expenseAccountId || null,
@@ -174,7 +189,7 @@ export async function transitionSupplierInvoice(
   organizationId: string,
   invoiceId: string,
   actorUserId: string,
-  input: { action: "SUBMIT" | "REVIEW" | "APPROVE" | "POST" | "REJECT" | "CANCEL"; reason?: string; revision: number },
+  input: { action: "SUBMIT" | "REVIEW" | "APPROVE" | "POST" | "REJECT" | "CANCEL"; reason?: string; revision: number; verifyInputTaxEvidence?: boolean },
 ) {
   if (input.action === "POST") {
     const initial = await prisma.enterpriseSupplierInvoice.findFirst({ where: { id: invoiceId, organizationId }, include: { threeWayMatch: true } });
@@ -182,11 +197,15 @@ export async function transitionSupplierInvoice(
     if (["POSTED", "PARTIALLY_PAID", "PAID"].includes(initial.status)) return initial;
     if (initial.status !== "APPROVED" || initial.revision !== input.revision) throw new EnterpriseAccountingError("SUPPLIER_INVOICE_NOT_APPROVED", 409);
     if (initial.threeWayMatch?.status === "VARIANCE" && !initial.threeWayMatch.overrideReason) throw new EnterpriseAccountingError("THREE_WAY_MATCH_VARIANCE_UNRESOLVED", 409);
-    const posting = await postBusinessEvent(organizationId, actorUserId, { postingEvent: "SUPPLIER_INVOICE_POSTED", sourceEntityType: "EnterpriseSupplierInvoice", sourceEntityId: initial.id });
     return prisma.$transaction(async (tx) => {
       await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterpriseSupplierInvoice" WHERE id = ${invoiceId} AND "organizationId" = ${organizationId} FOR UPDATE`);
       const invoice = await tx.enterpriseSupplierInvoice.findFirst({ where: { id: invoiceId, organizationId } });
       if (!invoice) throw new EnterpriseAccountingError("SUPPLIER_INVOICE_NOT_FOUND", 404);
+      if (invoice.status !== "APPROVED" || invoice.revision !== input.revision) throw new EnterpriseAccountingError("SUPPLIER_INVOICE_NOT_APPROVED", 409);
+      const supplierLines = await tx.enterpriseSupplierInvoiceItem.findMany({ where: { organizationId, supplierInvoiceId: invoice.id }, select: { id: true, taxBreakdownJson: true, taxRecoveryRequested: true } });
+      if (supplierLines.some((line) => line.taxRecoveryRequested) && !invoice.taxRecoveryVerifiedAt) throw new EnterpriseAccountingError("SUPPLIER_INPUT_TAX_REVIEW_REQUIRED", 409);
+      const posting = await postBusinessEventTx(tx, organizationId, actorUserId, { postingEvent: "SUPPLIER_INVOICE_POSTED", sourceEntityType: "EnterpriseSupplierInvoice", sourceEntityId: invoice.id });
+      await recordPostedTaxApplicationsTx(tx, { organizationId, sourceEntityType: "EnterpriseSupplierInvoiceItem", currencyCode: invoice.currencyCode, items: supplierLines });
       const payable = await tx.enterprisePayable.upsert({
         where: { supplierInvoiceId: invoice.id },
         update: {},
@@ -220,12 +239,16 @@ export async function transitionSupplierInvoice(
       CANCEL: { from: ["DRAFT", "PENDING_REVIEW"], to: "CANCELLED" },
     }[action];
     if (!transition?.from.includes(invoice.status)) throw new EnterpriseAccountingError("SUPPLIER_INVOICE_TRANSITION_INVALID", 409);
-    if (action === "REVIEW") assertIndependentActor({ actorUserId, relatedUserIds: [invoice.createdByUserId], errorCode: "SUPPLIER_INVOICE_SELF_REVIEW_FORBIDDEN" });
+    if (action === "REVIEW") {
+      assertIndependentActor({ actorUserId, relatedUserIds: [invoice.createdByUserId], errorCode: "SUPPLIER_INVOICE_SELF_REVIEW_FORBIDDEN" });
+      const requested = await tx.enterpriseSupplierInvoiceItem.count({ where: { organizationId, supplierInvoiceId: invoice.id, taxRecoveryRequested: true } });
+      if (requested && input.verifyInputTaxEvidence !== true) throw new EnterpriseAccountingError("SUPPLIER_INPUT_TAX_PROOF_REVIEW_REQUIRED", 409);
+    }
     if (action === "APPROVE") {
       assertIndependentActor({ actorUserId, relatedUserIds: [invoice.createdByUserId, invoice.reviewedByUserId], errorCode: "SUPPLIER_INVOICE_SELF_APPROVAL_FORBIDDEN" });
       if (invoice.threeWayMatch?.status === "VARIANCE" && !invoice.threeWayMatch.overrideReason) throw new EnterpriseAccountingError("THREE_WAY_MATCH_VARIANCE_UNRESOLVED", 409);
     }
-    const updated = await tx.enterpriseSupplierInvoice.update({ where: { id: invoice.id }, data: { status: transition.to, reviewedByUserId: action === "REVIEW" ? actorUserId : invoice.reviewedByUserId, approvedByUserId: action === "APPROVE" ? actorUserId : invoice.approvedByUserId, approvedAt: action === "APPROVE" ? new Date() : invoice.approvedAt, revision: { increment: 1 } } });
+    const updated = await tx.enterpriseSupplierInvoice.update({ where: { id: invoice.id }, data: { status: transition.to, reviewedByUserId: action === "REVIEW" ? actorUserId : invoice.reviewedByUserId, taxRecoveryVerifiedAt: action === "REVIEW" && input.verifyInputTaxEvidence === true ? new Date() : invoice.taxRecoveryVerifiedAt, taxRecoveryVerifiedByUserId: action === "REVIEW" && input.verifyInputTaxEvidence === true ? actorUserId : invoice.taxRecoveryVerifiedByUserId, approvedByUserId: action === "APPROVE" ? actorUserId : invoice.approvedByUserId, approvedAt: action === "APPROVE" ? new Date() : invoice.approvedAt, revision: { increment: 1 } } });
     await publishFinanceEvent(tx, { organizationId, entityType: "EnterpriseSupplierInvoice", entityId: invoice.id, eventType: `SUPPLIER_INVOICE_${action}`, summary: `Supplier invoice ${invoice.number}: ${action}`, actorUserId, fromStatus: invoice.status, toStatus: transition.to, metadataJson: input.reason ? { reason: input.reason.slice(0, 500) } : undefined });
     return updated;
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });

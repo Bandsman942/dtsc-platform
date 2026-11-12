@@ -75,7 +75,18 @@ export const buildSupplierInvoicePosting: PostingBuilder = async (tx, input) => 
         }));
 
   const lines: PostingLineDraft[] = [...debitLines];
-  if (invoice.taxTotal.gt(0)) lines.push({ accountMappingKey: "TAX_RECEIVABLE", description: `Recoverable tax ${invoice.number}`, debit: invoice.taxTotal, transactionCurrencyCode: invoice.currencyCode, transactionAmount: invoice.taxTotal, businessPartyId: invoice.businessPartyId });
+  const recoverableTax = invoice.items.filter((item) => item.taxRecoveryRequested)
+    .reduce((sum, item) => sum.plus(item.taxAmount), new Prisma.Decimal(0));
+  if (recoverableTax.gt(0) && !invoice.taxRecoveryVerifiedAt) throw new EnterpriseAccountingError("SUPPLIER_INPUT_TAX_REVIEW_REQUIRED", 409);
+  if (recoverableTax.gt(0)) lines.push({ accountMappingKey: "TAX_RECEIVABLE", description: `Verified input tax ${invoice.number}`, debit: recoverableTax, transactionCurrencyCode: invoice.currencyCode, transactionAmount: recoverableTax, businessPartyId: invoice.businessPartyId });
+  for (const item of invoice.items) {
+    if (item.taxRecoveryRequested || !item.taxAmount.gt(0)) continue;
+    const nonRecoverableKey = invoice.purchaseReceiptId ? "INVENTORY" : invoice.assetId ? "FIXED_ASSET"
+      : item.expenseAccountId ? `ACCOUNT_ID:${item.expenseAccountId}` : "OPERATING_EXPENSE";
+    lines.push({ accountMappingKey: nonRecoverableKey, description: `Non-recoverable input tax: ${item.description}`,
+      debit: item.taxAmount, transactionCurrencyCode: invoice.currencyCode, transactionAmount: item.taxAmount,
+      businessPartyId: invoice.businessPartyId, projectId: item.projectId || invoice.projectId, assetId: invoice.assetId });
+  }
   lines.push({ accountMappingKey: "ACCOUNTS_PAYABLE", description: `Payable ${invoice.number}`, credit: invoice.grandTotal, transactionCurrencyCode: invoice.currencyCode, transactionAmount: invoice.grandTotal, businessPartyId: invoice.businessPartyId });
   return { organizationId: input.organizationId, journalType: "PURCHASES", accountingDate: invoice.invoiceDate, documentDate: invoice.invoiceDate, reference: invoice.number, description: `Supplier invoice ${invoice.number}`, sourceModule: "FINANCE_PAYABLES", sourceEntityType: "EnterpriseSupplierInvoice", sourceEntityId: invoice.id, currencyCode: invoice.currencyCode, lines };
 };

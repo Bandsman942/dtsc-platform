@@ -183,7 +183,7 @@ export async function reviewSupplierInvoiceAssignedStep(
   organizationId: string,
   invoiceId: string,
   actorUserId: string,
-  input: { revision: number; reason?: string },
+  input: { revision: number; reason?: string; verifyInputTaxEvidence?: boolean },
 ) {
   const [{ approval: reviewApproval, decision }, queuedApproval] = await Promise.all([
     requireAccountingApprovalDecision({
@@ -217,6 +217,8 @@ export async function reviewSupplierInvoiceAssignedStep(
     if (!invoice) throw new EnterpriseAccountingError("SUPPLIER_INVOICE_NOT_FOUND", 404);
     if (invoice.revision !== input.revision) throw new EnterpriseAccountingError("SUPPLIER_INVOICE_REVISION_CONFLICT", 409, { currentRevision: invoice.revision });
     if (invoice.status !== "PENDING_REVIEW") throw new EnterpriseAccountingError("SUPPLIER_INVOICE_TRANSITION_INVALID", 409);
+    const recoveryRequested = await tx.enterpriseSupplierInvoiceItem.count({ where: { organizationId, supplierInvoiceId: invoice.id, taxRecoveryRequested: true } });
+    if (recoveryRequested && input.verifyInputTaxEvidence !== true) throw new EnterpriseAccountingError("SUPPLIER_INPUT_TAX_PROOF_REVIEW_REQUIRED", 409);
 
     await decideAccountingApproval(tx, {
       organizationId,
@@ -234,7 +236,10 @@ export async function reviewSupplierInvoiceAssignedStep(
     });
     const updated = await tx.enterpriseSupplierInvoice.update({
       where: { id: invoice.id },
-      data: { status: "PENDING_APPROVAL", reviewedByUserId: actorUserId, revision: { increment: 1 } },
+      data: { status: "PENDING_APPROVAL", reviewedByUserId: actorUserId,
+        taxRecoveryVerifiedAt: recoveryRequested ? new Date() : null,
+        taxRecoveryVerifiedByUserId: recoveryRequested ? actorUserId : null,
+        revision: { increment: 1 } },
     });
     await publishFinanceEvent(tx, {
       organizationId,
