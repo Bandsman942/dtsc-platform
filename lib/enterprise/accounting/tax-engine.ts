@@ -1,5 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
+import { money } from "@/lib/enterprise/accounting/helpers";
 import { normalizeTaxCountryCode } from "@/lib/enterprise/accounting/tax-jurisdictions";
 
 /** Shared, tenant-scoped rate resolution for Retail/POS and common Finance invoices.
@@ -86,4 +88,91 @@ export function validatedInvoiceTaxRate(input: {
   if (["EXEMPT", "ZERO_RATED", "OUT_OF_SCOPE"].includes(input.treatment)
       || ["EXEMPT", "ZERO_RATED"].includes(input.category)) return new Prisma.Decimal(0);
   return input.treatment === "STANDARD" ? input.rate : null;
+}
+
+/**
+ * Explicit, tenant-scoped per-line tax breakdown for the canonical Finance
+ * invoices. Values are snapshotted at document creation, NOT inserted into
+ * EnterpriseTaxLine until the invoice is actually issued / posted.
+ * A documented compound base requires a configured, active TaxRule.
+ */
+export type CalculatedDocumentTax = {
+  taxCodeId: string;
+  rate: Prisma.Decimal;
+  base: Prisma.Decimal;
+  amount: Prisma.Decimal;
+  jurisdiction: string | null;
+  treatment: string;
+  templateVersion: string | null;
+  evidenceReference: string | null;
+  basisMode: "NET" | "SEQUENTIAL";
+  applicationOrder: number;
+  recoverableAccountId: string | null;
+};
+
+export async function calculateDocumentTaxApplications(
+  tx: Pick<Prisma.TransactionClient, "enterpriseTaxCode">,
+  input: {
+    organizationId: string;
+    effectiveAt: Date;
+    invoiceJurisdiction: string | null;
+    taxCodeIds: string[];
+    netAmount: Prisma.Decimal;
+    sourceType: "SALES_INVOICE" | "SUPPLIER_INVOICE";
+    calculationMode?: "NET" | "SEQUENTIAL";
+    evidenceReference?: string | null;
+  },
+): Promise<CalculatedDocumentTax[]> {
+  const ids = input.taxCodeIds;
+  if (ids.length > 5 || new Set(ids).size !== ids.length) throw new EnterpriseAccountingError("TAX_LINE_SELECTION_INVALID", 409);
+  if (!ids.length) return [];
+  const mode = input.calculationMode || "NET";
+  const proof = input.evidenceReference?.trim() || null;
+  if (mode === "SEQUENTIAL" && (!proof || ids.length < 2)) throw new EnterpriseAccountingError("TAX_COMPOUND_PROOF_REQUIRED", 409);
+  const codes = await tx.enterpriseTaxCode.findMany({
+    where: { organizationId: input.organizationId, id: { in: ids }, isActive: true },
+    include: {
+      rates: { where: {
+        status: "ACTIVE", effectiveFrom: { lte: input.effectiveAt },
+        OR: [{ effectiveTo: null }, { effectiveTo: { gte: input.effectiveAt } }],
+      }, orderBy: { effectiveFrom: "desc" }, take: 1 },
+      rules: { where: { isActive: true, sourceType: input.sourceType }, orderBy: { priority: "desc" } },
+    },
+  });
+  if (codes.length !== ids.length) throw new EnterpriseAccountingError("TAX_CODE_INACTIVE_OR_OUT_OF_TENANT", 409);
+  const byId = new Map(codes.map((code) => [code.id, code]));
+  const result: CalculatedDocumentTax[] = [];
+  let runningTax = new Prisma.Decimal(0);
+  for (const [index, taxCodeId] of ids.entries()) {
+    const code = byId.get(taxCodeId)!;
+    const rate = code.rates[0]?.rate;
+    if (!rate) throw new EnterpriseAccountingError("TAX_RATE_NOT_EFFECTIVE", 409);
+    const verified = validatedInvoiceTaxRate({
+      category: code.category, treatment: code.taxTreatment, rate,
+      taxJurisdiction: code.jurisdiction, invoiceJurisdiction: input.invoiceJurisdiction,
+    });
+    if (verified === null) throw new EnterpriseAccountingError("TAX_JURISDICTION_OR_TREATMENT_UNSUPPORTED", 409);
+    if ((code.taxTreatment !== "STANDARD" || ["EXEMPT", "ZERO_RATED"].includes(code.category)) && !proof) {
+      throw new EnterpriseAccountingError("TAX_SPECIAL_TREATMENT_PROOF_REQUIRED", 409);
+    }
+    if (mode === "SEQUENTIAL" && index > 0) {
+      const allowed = code.rules.some((rule) => {
+        const criteria = rule.criteriaJson;
+        return criteria && typeof criteria === "object" && !Array.isArray(criteria)
+          && criteria.calculationMode === "SEQUENTIAL"
+          && typeof criteria.legalReference === "string" && criteria.legalReference.trim().length >= 6;
+      });
+      if (!allowed) throw new EnterpriseAccountingError("TAX_COMPOUND_RULE_REQUIRED", 409);
+    }
+    const base = mode === "SEQUENTIAL" && index > 0 ? money(input.netAmount.plus(runningTax)) : input.netAmount;
+    const amount = money(base.times(verified));
+    runningTax = money(runningTax.plus(amount));
+    result.push({
+      taxCodeId, rate: verified, base, amount,
+      jurisdiction: code.jurisdiction, treatment: code.taxTreatment,
+      templateVersion: code.sourceTemplateVersion, evidenceReference: proof,
+      basisMode: mode, applicationOrder: index, recoverableAccountId: code.recoverableAccountId,
+    });
+  }
+  return result;
 }
