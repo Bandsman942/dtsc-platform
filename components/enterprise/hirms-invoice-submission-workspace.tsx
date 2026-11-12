@@ -4,6 +4,8 @@ import Link from "next/link";
 import { FileJson, RefreshCw, ShieldAlert, Send, SearchCheck } from "lucide-react";
 import { useAppLocale } from "@/components/i18n/locale-provider";
 import { useToastMessage } from "@/components/ui/use-toast-message";
+import { HirmsEnvironmentSwitch } from "./hirms-environment-switch";
+import type { HirmsEnvironment } from "@/lib/enterprise/health-insurance-connectors/environments";
 
 type Submission = { id: string; invoiceNumber: string; batchId: string | null; transportStatus: string; httpStatus: number | null; submittedAt: string; errorCode: string | null };
 type History = { items: Submission[]; total: number; page: number; pageCount: number };
@@ -15,9 +17,11 @@ const STATUSES: Record<string,[string,string]> = {
   UNKNOWN_OUTCOME:["État à rapprocher","Outcome unknown"],
   SENDING:["Transmission engagée","Sending"],
 };
-export function HirmsInvoiceSubmissionWorkspace({organizationId}:{organizationId:string}) {
+export function HirmsInvoiceSubmissionWorkspace({organizationId,initialEnvironment="UAT"}:{organizationId:string;initialEnvironment?:HirmsEnvironment}) {
   const en = useAppLocale() === "en";
   const tx = (fr:string,english:string)=>en ? english : fr;
+  const [environment,setEnvironment] = useState<HirmsEnvironment>(initialEnvironment);
+  const [productionConfirmation,setProductionConfirmation] = useState("");
   const [mode,setMode] = useState<"single"|"bulk">("single");
   const [json,setJson] = useState("");
   const [preflight,setPreflight] = useState<Preflight|null>(null);
@@ -28,12 +32,13 @@ export function HirmsInvoiceSubmissionWorkspace({organizationId}:{organizationId
   const [notice,setNotice] = useState("");
   useToastMessage(notice);
   const load = useCallback(async (currentPage:number)=>{
-    const response = await fetch(`/api/enterprise/${organizationId}/insurance-connectors/invoices?page=${currentPage}`,{cache:"no-store"});
+    const response = await fetch(`/api/enterprise/${organizationId}/insurance-connectors/invoices?environment=${environment}&page=${currentPage}`,{cache:"no-store"});
     if(!response.ok) throw Error("HISTORY_FAILED");
     setHistory(await response.json() as History);
-  },[organizationId]);
+  },[organizationId,environment]);
   useEffect(()=>{ void load(page).catch(()=>{}); },[load,page]);
-  function reset(value:string,newMode:"single"|"bulk"=mode){setJson(value);setPreflight(null);setConfirmed(false);setMode(newMode)}
+  function reset(value:string,newMode:"single"|"bulk"=mode){setJson(value);setPreflight(null);setConfirmed(false);setProductionConfirmation("");setMode(newMode)}
+  function switchEnvironment(next:HirmsEnvironment){setEnvironment(next);setPreflight(null);setConfirmed(false);setProductionConfirmation("");setJson("");setHistory(null);setPage(1)}
   async function readJson(event:ChangeEvent<HTMLInputElement>){
     const file=event.target.files?.[0];if(!file)return;
     if(!file.name.toLowerCase().endsWith(".json")||file.size>8*1024*1024){
@@ -52,11 +57,11 @@ export function HirmsInvoiceSubmissionWorkspace({organizationId}:{organizationId
       if(mode==="single" && (Array.isArray(payload)||!payload||typeof payload!=="object")){
         setNotice(tx("L'envoi individuel exige un seul objet JSON.", "Single submission requires one JSON object."));return;
       }
-      if(operation==="submit" && (!preflight || !confirmed)){
+      if(operation==="submit" && (!preflight || !confirmed || (environment==="PRODUCTION" && productionConfirmation!=="PRODUCTION"))){
         setNotice(tx("Contrôlez puis confirmez explicitement les factures.", "Preflight and explicitly confirm the invoices first."));return;
       }
       const response=await fetch(`/api/enterprise/${organizationId}/insurance-connectors/invoices`,{
-        method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({operation,mode,payload}),
+        method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({environment,operation,mode,payload}),
       });
       const data=await response.json() as {message?:string;ok?:boolean;count?:number;invoiceNumbers?:string[];transportStatus?:string};
       if(!response.ok){setPreflight(null);setConfirmed(false);setNotice(data.message||tx("Contrôle impossible.", "Validation failed."));return}
@@ -73,15 +78,16 @@ export function HirmsInvoiceSubmissionWorkspace({organizationId}:{organizationId
   }
   return <main className="mx-auto w-full max-w-6xl space-y-4 px-4 py-5 sm:px-6">
     <header className="flex flex-wrap items-start justify-between gap-3">
-      <div><p className="text-xs font-semibold text-dtsc-muted">{tx("Assurances santé · Connecteur HIRMS · UAT", "Health insurance · HIRMS adapter · UAT")}</p>
+      <div><p className="text-xs font-semibold text-dtsc-muted">{tx(`Assurances santé · Connecteur HIRMS · ${environment}`, `Health insurance · HIRMS adapter · ${environment}`)}</p>
         <h1 className="mt-1 text-2xl font-black tracking-tight text-dtsc-ink">{tx("Transmettre des factures à HIRMS", "Submit invoices to HIRMS")}</h1>
         <p className="mt-1 text-sm text-dtsc-muted">{tx("Pilotage technique : les factures doivent déjà exister et être émises dans l'ERP DTSC.", "Technical pilot: invoices must already exist and be issued in DTSC ERP.")}</p>
       </div>
       <Link href="/enterprise-admin" className="rounded-xl border border-dtsc-border px-3 py-2 text-sm font-bold text-dtsc-ink">{tx("Retour à l’administration","Back to administration")}</Link>
     </header>
+    <HirmsEnvironmentSwitch value={environment} onChange={switchEnvironment} disabled={pending}/>
     <section className="flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 text-sm text-dtsc-ink">
       <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" aria-hidden="true"/>
-      <div><p className="font-bold">{tx("Environnement UAT — Aucun paiement créé", "UAT environment — No payments created")}</p>
+      <div><p className="font-bold">{tx(`Environnement ${environment} — Aucun paiement créé`, `${environment} environment — No payments created`)}</p>
         <p className="mt-1 text-xs text-dtsc-muted">{tx("Ce premier parcours importe un JSON HSL complet, contrôle les liens ERP, puis transmet après votre accord. Aucun champ clinique, autorisation, paiement ou taux de change n'est inventé.", "This pilot imports a complete HSL JSON payload, checks ERP links and sends it only after confirmation. No clinical, approval, payment or exchange-rate fields are invented.")}</p>
       </div>
     </section>
@@ -103,7 +109,7 @@ export function HirmsInvoiceSubmissionWorkspace({organizationId}:{organizationId
         </label>
         <div className="flex flex-wrap gap-2">
           <button type="button" disabled={pending || !json.trim()} onClick={()=>void execute("preflight")} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-dtsc-border px-4 text-sm font-bold text-dtsc-ink disabled:opacity-50"><SearchCheck className="h-4 w-4"/>{tx("Contrôler avec l’ERP","Preflight with ERP")}</button>
-          <button type="button" disabled={pending || !preflight || !confirmed} onClick={()=>void execute("submit")} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-cyan-600 px-4 text-sm font-bold text-white disabled:opacity-50"><Send className="h-4 w-4"/>{tx("Transmettre en UAT","Submit in UAT")}</button>
+          <button type="button" disabled={pending || !preflight || !confirmed || (environment==="PRODUCTION" && productionConfirmation!=="PRODUCTION")} onClick={()=>void execute("submit")} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-cyan-600 px-4 text-sm font-bold text-white disabled:opacity-50"><Send className="h-4 w-4"/>{tx(`Transmettre en ${environment}`,`Submit to ${environment}`)}</button>
         </div>
       </div>
       <aside className="min-w-0 space-y-3">
@@ -116,6 +122,10 @@ export function HirmsInvoiceSubmissionWorkspace({organizationId}:{organizationId
               <input type="checkbox" checked={confirmed} onChange={e=>setConfirmed(e.target.checked)} className="mt-1 h-4 w-4"/>
               {tx("Je confirme les références, prestations, montants et habilitations HSL de ce dossier.", "I confirm references, services, amounts and HSL authorization for this submission.")}
             </label>
+            {environment==="PRODUCTION" && <label className="block space-y-1 text-sm font-semibold text-amber-700 dark:text-amber-300">
+              <span>{tx("Pour confirmer un envoi réel, saisissez PRODUCTION", "Type PRODUCTION to confirm a live submission")}</span>
+              <input autoComplete="off" value={productionConfirmation} onChange={e=>setProductionConfirmation(e.target.value)} placeholder="PRODUCTION" className="min-h-11 w-full rounded-xl border border-amber-500/50 bg-dtsc-page px-3 text-sm text-dtsc-ink"/>
+            </label>}
           </div>:<p className="mt-3 text-sm text-dtsc-muted">{tx("Importer ou coller le JSON puis effectuer le contrôle ERP.", "Import or paste JSON, then run the ERP preflight.")}</p>}
         </section>
         <section className="rounded-2xl border border-dtsc-border bg-dtsc-surface p-4">
