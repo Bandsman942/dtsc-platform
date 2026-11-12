@@ -15,9 +15,12 @@ ALTER TABLE "EnterpriseSupplierInvoiceItem"
   ADD COLUMN "taxCalculationMode" TEXT NOT NULL DEFAULT 'NET',
   ADD COLUMN "taxRecoveryRequested" BOOLEAN NOT NULL DEFAULT false,
   ADD COLUMN "taxBreakdownJson" JSONB;
-ALTER TABLE "EnterpriseSalesCreditNoteItem" ADD COLUMN "sourceInvoiceItemId" TEXT;
+ALTER TABLE "EnterpriseSalesCreditNoteItem"
+  ADD COLUMN "sourceInvoiceItemId" TEXT,
+  ADD COLUMN "taxBreakdownJson" JSONB;
 ALTER TABLE "EnterpriseSupplierCreditNoteItem"
   ADD COLUMN "sourceInvoiceItemId" TEXT,
+  ADD COLUMN "taxBreakdownJson" JSONB,
   ADD COLUMN "taxRecoveryRequested" BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE "EnterpriseTaxLine"
   ADD COLUMN "applicationOrder" INTEGER NOT NULL DEFAULT 0,

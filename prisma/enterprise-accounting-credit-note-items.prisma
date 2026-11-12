@@ -3,6 +3,7 @@ model EnterpriseSupplierCreditNoteItem {
   organizationId       String
   supplierCreditNoteId String
   sourceInvoiceItemId String?
+  taxBreakdownJson Json?
   taxRecoveryRequested Boolean @default(false)
   catalogItemId        String?
   description          String

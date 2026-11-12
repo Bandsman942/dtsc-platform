@@ -497,6 +497,7 @@ model EnterpriseSalesCreditNoteItem {
   organizationId     String
   salesCreditNoteId  String
   sourceInvoiceItemId String?
+  taxBreakdownJson   Json?
   description        String
   quantity           Decimal                   @db.Decimal(20, 6)
   unitPrice          Decimal                   @db.Decimal(20, 6)
