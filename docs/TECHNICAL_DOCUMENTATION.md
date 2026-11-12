@@ -803,3 +803,6 @@ Le socle générique d'intégration des assurances santé et son premier adaptat
 ## Health insurance interop HIRMS/MSO (HIRMS-01, UAT + Production configurables)
 
 Le socle multi-tenant et l'adaptateur HSL de vérification et facturation individuelle/bulk sont documentés dans [HIRMS_HEALTH_INSURANCE_CONNECTORS.md](integrations/HIRMS_HEALTH_INSURANCE_CONNECTORS.md). Les transmissions sont des événements de transport, pas des paiements ni des décisions d'assurance. UAT et Production sont isolés par configuration, secret, endpoints et outbox. La Production requiert deux validations serveur distinctes (accès général et envoi de factures), désactivées par défaut ; voir le runbook intégration.
+
+## HIRMS OCR et rapprochement HSL (PR #1128, non livré)
+L'interface `/enterprise-insurance/ocr` couvre UploadDocuments en UAT et Production, sous flags serveur et autorisation organisationnelle. Document multipart contrôlé (PDF/PNG/JPEG/WebP ≤4 MiB), hash et métadonnées d'outbox sans document brut, job HSL et consultation du statut. L'historique des factures peut interroger indépendamment leur statut externe sans modifier les finances ERP. Le guide opérationnel est [HIRMS_OCR_PIPELINE.md](integrations/HIRMS_OCR_PIPELINE.md). Les réponses et transitions HSL, l'antivirus de fichiers volumineux et la recette partenaire ne sont pas certifiés.
