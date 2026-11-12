@@ -16,7 +16,7 @@ export class HirmsInvoiceTransportError extends InsuranceConnectorError {
   }
 }
 
-const MAX_BYTES = 8 * 1024 * 1024; // lower than HSL's 64 MiB request limit (protect Vercel routes)
+const MAX_BYTES = 4 * 1024 * 1024; // conservative Vercel request limit; HSL itself allows 64 MiB
 
 export async function postHirmsInvoices(credentials: Credentials, invoices: HirmsInvoice | HirmsInvoiceBulk, bulk: boolean, environment: HirmsEnvironment, organizationId: string): Promise<TransportResult> {
   assertHirmsEnvironmentEnabled(environment, organizationId);
