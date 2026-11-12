@@ -1,11 +1,13 @@
+import type { HirmsEnvironment } from "./environments";
+
 // Extend this registry for future insurers without changing ERP Health/Pharmacy workflows.
 export const HEALTH_INSURANCE_ADAPTERS = [{
   code: "HIRMS_HSL",
   labelFr: "MSO / HIRMS",
   labelEn: "MSO / HIRMS",
   sectors: ["HEALTH_CARE", "PHARMACY"],
-  actions: ["VerifyMembers"],
-  environment: "UAT",
+  actions: ["VerifyMembers", "UploadInvoices"],
+  environments: ["UAT", "PRODUCTION"],
   status: "PILOT",
 }] as const;
 
@@ -29,8 +31,8 @@ export type InsuranceVerificationResult = {
 
 export type HealthInsuranceAdapter = {
   code: string;
-  checkConnection(credentials: { username: string; secret: string }): Promise<void>;
-  verify(credentials: { username: string; secret: string }, input: InsuranceMemberVerification): Promise<InsuranceVerificationResult>;
+  checkConnection(credentials: { username: string; secret: string }, environment: HirmsEnvironment): Promise<void>;
+  verify(credentials: { username: string; secret: string }, input: InsuranceMemberVerification, environment: HirmsEnvironment): Promise<InsuranceVerificationResult>;
 };
 
 export class InsuranceConnectorError extends Error {
