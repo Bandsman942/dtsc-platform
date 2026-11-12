@@ -31,7 +31,7 @@ Aucun QR DGI, numéro DEF, code d'autorisation, signature, certificat ou transmi
 2. Facture de vente multi-taxes additive et séquentielle autorisée ; erreur si preuve/règle absente, ou retenue inappropriée.
 3. Facture fournisseur avec TVA récupérable versus coût non récupérable, validation par revue indépendante, journal et balances.
 4. Avoir client et fournisseur partiel puis total, remboursement idem source, plafonds originaux, taxe inversée.
-5. Santé/Pharmacie sans taxe et avec taxe agrégée > 0 bloquée, sans divulgation patient.
+5. Santé/Pharmacie : sans taxe, avec taxe positive justifiée par ligne et avec taxe agrégée non ventilée (bloquée), sans divulgation patient.
 6. Vérification des états TVA par devise et période, droits et multitenancy, E2E authentifié.
 7. Endpoint de pré-contrôle DGI retourne toujours NOT_HOMOLOGATED et n'émet aucun code officiel.
 
@@ -43,4 +43,4 @@ Les nouvelles lignes `HealthMedicalInvoiceItem` et `PharmacySaleLine` conservent
 
 Le montant de remise Pharmacie est une remise **en pourcentage**, convertie en montant monétaire avant projection Finance (correction de la confusion historique). Les remises globales diminuent l'assiette des taxes au moment de la création du document source. L'émission Finance conserve la mécanique de validation et le journal fiscal canonique.
 
-Les anciens documents sans tax provenance restent lisibles, mais une taxe positive non ventilée empêche volontairement la convergence. L'interface sectorielle doit afficher les champs supplémentaires du contrat d'API (code et justificatif) ; une homologation réglementaire n'en découle pas.
+Les anciens documents sans tax provenance restent lisibles, mais une taxe positive non ventilée empêche volontairement la convergence. Les formulaires de facturation Santé et de vente Pharmacie proposent désormais les codes fiscaux actifs, les cumuls explicites et les justificatifs, dans le périmètre de l'entreprise et de sa juridiction. Le serveur recalcule les montants et rejette tout total global dépourvu de ventilation, sans prétendre à une homologation réglementaire.
