@@ -4,6 +4,9 @@ ALTER TABLE "EnterpriseSalesInvoiceItem"
   ADD COLUMN "taxEvidenceReference" TEXT,
   ADD COLUMN "taxCalculationMode" TEXT NOT NULL DEFAULT 'NET',
   ADD COLUMN "taxBreakdownJson" JSONB;
+ALTER TABLE "EnterpriseSupplierInvoice"
+  ADD COLUMN "taxRecoveryVerifiedAt" TIMESTAMP(3),
+  ADD COLUMN "taxRecoveryVerifiedByUserId" TEXT;
 ALTER TABLE "EnterpriseSupplierInvoiceItem"
   ADD COLUMN "taxRateApplied" DECIMAL(12,8),
   ADD COLUMN "taxJurisdiction" TEXT,

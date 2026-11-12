@@ -98,6 +98,7 @@ export function validatedInvoiceTaxRate(input: {
  */
 export type CalculatedDocumentTax = {
   taxCodeId: string;
+  category: string;
   rate: Prisma.Decimal;
   base: Prisma.Decimal;
   amount: Prisma.Decimal;
@@ -168,7 +169,7 @@ export async function calculateDocumentTaxApplications(
     const amount = money(base.times(verified));
     runningTax = money(runningTax.plus(amount));
     result.push({
-      taxCodeId, rate: verified, base, amount,
+      taxCodeId, category: code.category, rate: verified, base, amount,
       jurisdiction: code.jurisdiction, treatment: code.taxTreatment,
       templateVersion: code.sourceTemplateVersion, evidenceReference: proof,
       basisMode: mode, applicationOrder: index, recoverableAccountId: code.recoverableAccountId,

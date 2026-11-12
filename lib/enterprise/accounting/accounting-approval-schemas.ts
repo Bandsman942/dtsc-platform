@@ -44,7 +44,7 @@ export const assignedSupplierInvoiceTransitionSchema = z.discriminatedUnion("act
     approverUserId: id,
     reason: optionalComment,
   }),
-  z.object({ action: z.literal("REVIEW"), revision, reason: optionalComment }),
+  z.object({ action: z.literal("REVIEW"), revision, reason: optionalComment, verifyInputTaxEvidence: z.boolean().optional() }),
   z.object({ action: z.literal("APPROVE"), revision, reason: optionalComment }),
   z.object({ action: z.literal("POST"), revision, reason: optionalComment }),
   z.object({ action: z.literal("REJECT"), revision, reason: requiredReason }),

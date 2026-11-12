@@ -581,6 +581,8 @@ model EnterpriseSupplierInvoice {
   postedAt              DateTime?
   createdByUserId       String
   reviewedByUserId      String?
+  taxRecoveryVerifiedAt DateTime?
+  taxRecoveryVerifiedByUserId String?
   approvedByUserId      String?
   revision              Int                            @default(1)
   createdAt             DateTime                       @default(now())
