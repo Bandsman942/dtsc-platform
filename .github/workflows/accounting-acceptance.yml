@@ -198,10 +198,10 @@ jobs:
       # intact while clearing only the ephemeral Redis container used by CI.
       - name: Reset isolated Redis state before ERP cross-module acceptance
         run: |
-          curl --fail --silent --show-error \\
-            -H "Authorization: Bearer ${CI_REDIS_REST_TOKEN}" \\
-            -H "Content-Type: application/json" \\
-            --data '["FLUSHDB"]' \\
+          curl --fail --silent --show-error \
+            -H "Authorization: Bearer ${CI_REDIS_REST_TOKEN}" \
+            -H "Content-Type: application/json" \
+            --data '["FLUSHDB"]' \
             http://127.0.0.1:8079/ >/dev/null
       - name: ERP cross-module Finance acceptance
         shell: bash
