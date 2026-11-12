@@ -301,7 +301,7 @@ async function tax(organizationId: string, toolName: FinanceAiToolCode, args: Fi
   const { limit, start, end } = windowFor(args);
   const rows = await prisma.$queryRaw<Array<{ code: string; category: string; currencyCode: string; taxableAmount: Prisma.Decimal; outputTax: Prisma.Decimal; inputTax: Prisma.Decimal; netTax: Prisma.Decimal }>>(Prisma.sql`
     SELECT c.code, c.category, t."currencyCode",
-      SUM(CASE WHEN t.direction IN ('OUTPUT_REVERSAL','INPUT_REVERSAL','INPUT_NONRECOVERABLE_REVERSAL') THEN -t."taxableAmount" ELSE t."taxableAmount" END) AS "taxableAmount",
+      SUM(CASE WHEN t.direction IN ('OUTPUT_REVERSAL','INPUT_REVERSAL') THEN -t."taxableAmount" WHEN t.direction IN ('OUTPUT','INPUT') THEN t."taxableAmount" ELSE 0 END) AS "taxableAmount",
       SUM(CASE WHEN t.direction = 'OUTPUT' THEN t."taxAmount" WHEN t.direction = 'OUTPUT_REVERSAL' THEN -t."taxAmount" ELSE 0 END) AS "outputTax",
       SUM(CASE WHEN t.direction = 'INPUT' THEN t."taxAmount" WHEN t.direction = 'INPUT_REVERSAL' THEN -t."taxAmount" ELSE 0 END) AS "inputTax",
       SUM(CASE WHEN t.direction = 'OUTPUT' THEN t."taxAmount" WHEN t.direction = 'OUTPUT_REVERSAL' THEN -t."taxAmount"

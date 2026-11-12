@@ -35,7 +35,7 @@ requireTokens("lib/enterprise/accounting/accounting-document-approval-orchestrat
   'sourceEntityType: "EnterpriseSupplierCreditNoteItem"',
 ]);
 for(const reporter of ["lib/enterprise/accounting/statements-service.ts","lib/ai/tools/executors/finance.ts"]) {
-  requireTokens(reporter, ["OUTPUT_REVERSAL", "INPUT_REVERSAL", "ELSE 0 END"]);
+  requireTokens(reporter, ["OUTPUT_REVERSAL", "INPUT_REVERSAL", "ELSE 0 END", "WHEN t.direction IN ('OUTPUT','INPUT') THEN t."]);
 }
 requireTokens("lib/enterprise/sector-convergence/health-billing-service.ts", ["HEALTH_TAX_LINE_PROVENANCE_REQUIRED"]);
 requireTokens("lib/enterprise/sector-convergence/pharmacy-finance-service.ts", ["PHARMACY_TAX_LINE_PROVENANCE_REQUIRED"]);
