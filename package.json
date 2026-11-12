@@ -442,7 +442,8 @@
     "qa:hotfix-1068-ai-conversation-design2": "node scripts/qa-hotfix-1068-ai-conversation-design2.mjs",
     "qa:hotfix-1069-console-workspaces": "node scripts/qa-hotfix-1069-console-workspaces.mjs",
     "qa:integration-1067-1069": "node scripts/qa-integration-1067-1069.mjs",
-    "qa:docs-1099": "node scripts/qa-docs-1099.mjs"
+    "qa:docs-1099": "node scripts/qa-docs-1099.mjs",
+    "qa:retail-financial-kpi-v2": "node scripts/qa-retail-financial-kpi-v2.mjs"
   },
   "dependencies": {
     "@ai-sdk/gateway": "2.0.27",

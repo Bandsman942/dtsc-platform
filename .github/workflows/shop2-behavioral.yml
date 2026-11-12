@@ -44,11 +44,13 @@ on:
       - "tests/e2e/shop2-final-coherence-ui.spec.mjs"
       - "tests/e2e/shop2-z-global.spec.mjs"
       - "tests/e2e/retail-offline-finance-1116.spec.mjs"
+      - "tests/e2e/retail-financial-kpi-1117.spec.mjs"
       - "playwright.config.mjs"
       - "scripts/seed-shop2-behavioral-e2e.mjs"
       - "scripts/seed-shop2-commercial-e2e.mjs"
       - "scripts/qa-shop2-inventory-schema-parity.mjs"
       - "scripts/qa-retail-five-lots-1116.mjs"
+      - "scripts/qa-retail-financial-kpi-v2.mjs"
       - "lib/enterprise/retail/offline-invoice.ts"
       - "scripts/qa-shop2-retail-frontend-contract.mjs"
       - "scripts/qa-shop2-commercial-engine.mjs"
@@ -249,6 +251,15 @@ jobs:
             http://127.0.0.1:8079/ >/dev/null
       - name: Retail offline Finance draft replay acceptance
         run: pnpm exec playwright test tests/e2e/retail-offline-finance-1116.spec.mjs
+      - name: Reset isolated Redis before Retail financial trace acceptance
+        run: |
+          curl --fail --silent --show-error \
+            -H "Authorization: Bearer ${CI_REDIS_REST_TOKEN}" \
+            -H "Content-Type: application/json" \
+            --data '["FLUSHDB"]' \
+            http://127.0.0.1:8079/ >/dev/null
+      - name: Retail financial KPI source evidence acceptance
+        run: pnpm exec playwright test tests/e2e/retail-financial-kpi-1117.spec.mjs
       - name: Stop application and Redis REST proxy
         if: always()
         run: |
