@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { HIRMS_ENVIRONMENTS } from "@/lib/enterprise/health-insurance-connectors/environments";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { getHealthInsuranceAccess } from "@/lib/health-insurance-access";
@@ -12,6 +13,7 @@ import { HirmsInvoiceTransportError } from "@/lib/enterprise/health-insurance-co
 import { preflightHirmsInvoiceSubmission, submitHirmsInvoices, listHirmsInvoiceSubmissions } from "@/lib/enterprise/health-insurance-connectors/invoice-service";
 type Params = { params: Promise<{ organizationId: string }> };
 const commandSchema = z.object({
+  environment: z.enum(HIRMS_ENVIRONMENTS),
   operation: z.enum(["preflight","submit"]),
   mode: z.enum(["single","bulk"]),
   payload: z.unknown(),
@@ -41,7 +43,8 @@ function errorResponse(error: unknown) {
     : code === "HIRMS_INVOICE_ALREADY_TRANSMITTED_OR_UNRESOLVED" ? "Cette facture possède déjà une tentative : consultez son suivi avant toute nouvelle transmission."
     : code === "HIRMS_INVOICE_CONTRACT_REJECTED" ? "HIRMS a rejeté le contrat de facture. Corrigez les données ; ne renvoyez pas le même fichier."
     : code === "HIRMS_INVOICE_OUTCOME_UNKNOWN" ? "Le résultat de la transmission est incertain. Vérifiez l'historique HIRMS avant toute nouvelle tentative."
-    : code === "HIRMS_UAT_INVOICE_SENDING_DISABLED" ? "L'envoi de factures est désactivé. DTSC doit d'abord autoriser les essais UAT."
+    : code === "HIRMS_INVOICE_SENDING_DISABLED" ? "L’envoi de factures est désactivé pour l’environnement choisi. Contactez l’administration DTSC."
+    : code === "HIRMS_PRODUCTION_NOT_ENABLED" ? "La connexion de Production doit être habilitée par DTSC avant tout appel réel."
     : code === "HIRMS_SERVICE_PROVIDER_MAPPING_REQUIRED" ? "Renseignez l'identifiant officiel du prestataire communiqué par HSL."
     : "Transmission impossible : contrôlez la facture, les droits HSL et la configuration du connecteur.";
   return NextResponse.json({ error: code, message: friendly }, { status, headers: { "Cache-Control": "no-store" } });
@@ -52,8 +55,11 @@ export async function GET(req: Request, { params }: Params) {
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { organizationId } = await params;
   if (!(await access(organizationId,session,false))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  const page = Number(new URL(req.url).searchParams.get("page") || "1");
-  return NextResponse.json(await listHirmsInvoiceSubmissions(organizationId,page), { headers: { "Cache-Control": "no-store" } });
+  const url = new URL(req.url);
+  const environment = z.enum(HIRMS_ENVIRONMENTS).safeParse(url.searchParams.get("environment") || "UAT");
+  if (!environment.success) return NextResponse.json({ error: "HIRMS_ENVIRONMENT_INVALID" }, { status: 400 });
+  const page = Number(url.searchParams.get("page") || "1");
+  return NextResponse.json(await listHirmsInvoiceSubmissions(organizationId,environment.data,page), { headers: { "Cache-Control": "no-store" } });
 }
 export async function POST(req: Request, { params }: Params) {
   const startedAt = Date.now();
@@ -68,22 +74,22 @@ export async function POST(req: Request, { params }: Params) {
     return NextResponse.json({ error: "HIRMS_INVOICE_REQUEST_TOO_LARGE" }, { status: 413 });
   const parsed = commandSchema.safeParse(await req.json().catch(()=>null));
   if (!parsed.success) return NextResponse.json({ error: "HIRMS_INVOICE_COMMAND_INVALID", message: "Choisissez l'envoi individuel ou groupé et transmettez le JSON des factures." }, { status: 400 });
-  const {operation,mode,payload} = parsed.data;
+  const {environment,operation,mode,payload} = parsed.data;
   try {
     const result = operation === "preflight"
-      ? await preflightHirmsInvoiceSubmission(organizationId,mode,payload)
-      : await submitHirmsInvoices(organizationId,session.userId,mode,payload);
+      ? await preflightHirmsInvoiceSubmission(organizationId,environment,mode,payload)
+      : await submitHirmsInvoices(organizationId,session.userId,environment,mode,payload);
     await writeAuditLog({ userId: session.userId, action: operation === "preflight" ? "HIRMS_INVOICE_PREFLIGHT_OK" : "HIRMS_INVOICE_TRANSPORT_ACCEPTED",
       entity: "EnterpriseHealthInsuranceInvoiceSubmission", request: req, metadata: {
-        organizationId, mode, count: result.count, ...(operation === "submit" && "batchId" in result ? { batchId: result.batchId } : {}),
+        organizationId, environment, mode, count: result.count, ...(operation === "submit" && "batchId" in result ? { batchId: result.batchId } : {}),
       }});
     await writeApiLog({ request: req, startedAt, statusCode: 200, userId: session.userId,
-      metadata: { organizationId, domain: "health-insurance-connectors", operation, mode, count: result.count } });
+      metadata: { organizationId, domain: "health-insurance-connectors", environment, operation, mode, count: result.count } });
     return NextResponse.json(result,{headers:{ "Cache-Control":"no-store" }});
   } catch(error) {
     const response = errorResponse(error);
     await writeApiLog({ request: req, startedAt, statusCode: response.status, userId: session.userId,
-      metadata: { organizationId, domain:"health-insurance-connectors", operation, mode, errorCode: error instanceof InsuranceConnectorError ? error.code : "UNKNOWN" } });
+      metadata: { organizationId, domain:"health-insurance-connectors", environment, operation, mode, errorCode: error instanceof InsuranceConnectorError ? error.code : "UNKNOWN" } });
     return response;
   }
 }
