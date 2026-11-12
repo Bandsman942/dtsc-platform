@@ -15,10 +15,15 @@ function sniffMime(bytes: Uint8Array): OcrMime | null {
   if (bytes.length >= 12 && String.fromCharCode(...bytes.slice(0,4)) === "RIFF" && String.fromCharCode(...bytes.slice(8,12)) === "WEBP") return "image/webp";
   return null;
 }
-const dateOnly = /^\d{4}-\d{2}-\d{2}$/;
+const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/;
 function parseInvoiceDate(value: string) {
-  if (!dateOnly.test(value) || Number.isNaN(Date.parse(value + "T00:00:00.000Z"))
-    || new Date(value + "T00:00:00.000Z").toISOString().slice(0,10) !== value) {
+  // Validate a calendar date as a civil day, never converting it to UTC.
+  const parts = dateOnly.exec(value);
+  if (!parts) reject("HIRMS_OCR_INVOICE_DATE_INVALID", 400);
+  const year = Number(parts[1]), month = Number(parts[2]), day = Number(parts[3]);
+  const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  const days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  if (year < 1900 || year > 2100 || month < 1 || month > 12 || day < 1 || day > days[month - 1]) {
     reject("HIRMS_OCR_INVOICE_DATE_INVALID", 400);
   }
   return value;
