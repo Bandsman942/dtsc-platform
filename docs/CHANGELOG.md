@@ -2497,3 +2497,11 @@ Hotfix #861 (complément) : un secret CRON_SECRET Production commun réveille po
 - Tarification, offres et retours : reprise de l'écran entier dans `AppShell`, navigation et retour DTSC, thème 2.0 clair/sombre, onglets accessibles, formulaires et contrôles de focus harmonisés, logique de prix, promotions et remboursements intacte.
 - Mes collaborateurs : suppression du retour extérieur à l'espace immersif, retour compact au niveau de la liste, fil et compositeur protégés des superpositions du bouton flottant. Aucune modification de la messagerie serveur.
 - Documentation et recette : [HOTFIX_1046_RETAIL_POS_COLLABORATORS_UI.md](HOTFIX_1046_RETAIL_POS_COLLABORATORS_UI.md). Aucun déploiement ni E2E propriétaire validé à ce stade.
+
+
+### 2026-11-12 — HIRMS-01 (branche feature, non livrée en Production)
+
+- Socle générique des connecteurs d'assurance santé pour HEALTH_CARE et PHARMACY; adaptateur MSO/HSL UAT.
+- Identifiants HSL chiffrés et par entreprise; vérification adhérent et parcours Design 2.0 dédiés.
+- Contrat JSON HSL strict pour facture individuelle et bulk (500 max), préflight ERP, outbox idempotente, envoi UAT explicitement activable, suivi paginé.
+- Aucun impact financier et aucun déploiement Production; mapping des codes et du schéma détaillé à certifier avec HSL.
