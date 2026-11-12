@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import { normalizeTaxCountryCode } from "@/lib/enterprise/accounting/tax-jurisdictions";
 import { prisma } from "@/lib/prisma";
 import { getChartTemplate } from "@/lib/enterprise/accounting/chart-template-registry";
 import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
@@ -142,6 +143,9 @@ export async function createTaxCodeTx(
   actorUserId: string,
   input: { code: string; nameFr: string; nameEn: string; category: string; jurisdiction?: string; payableAccountId?: string; recoverableAccountId?: string; roundingRule: string; rate: string; effectiveFrom: Date; autoApply?: boolean; taxTreatment?: string; sourceTemplateCode?: string; sourceTemplateVersion?: string },
 ) {
+    if (input.autoApply && (!normalizeTaxCountryCode(input.jurisdiction) || !["VAT", "SALES_TAX", "GST"].includes(input.category) || (input.taxTreatment && input.taxTreatment !== "STANDARD"))) {
+      throw new EnterpriseAccountingError("TAX_AUTOMATIC_SCOPE_INVALID", 409);
+    }
     for (const accountId of [input.payableAccountId, input.recoverableAccountId].filter(Boolean) as string[]) {
       const account = await tx.enterpriseLedgerAccount.findFirst({ where: { id: accountId, organizationId, isActive: true, archivedAt: null } });
       if (!account) throw new EnterpriseAccountingError("TAX_LEDGER_ACCOUNT_INVALID", 409);
