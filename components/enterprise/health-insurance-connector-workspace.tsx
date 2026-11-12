@@ -6,7 +6,7 @@ import { useAppLocale } from "@/components/i18n/locale-provider";
 import { useToastMessage } from "@/components/ui/use-toast-message";
 
 type Connector = {
-  id: string; status: string; environment: string; siteId: string | null;
+  id: string; status: string; environment: string; siteId: string | null; hslServiceProviderId: number | null;
   credentialsConfigured: boolean; lastAuthCheckAt: string | null; lastVerifiedAt: string | null;
   credentialsUpdatedAt: string | null; lastErrorCode: string | null;
 };
@@ -18,6 +18,7 @@ export function HealthInsuranceConnectorWorkspace({ organizationId }: { organiza
   const tx = (fr: string, english: string) => en ? english : fr;
   const [data, setData] = useState<Dataset | null>(null);
   const [siteId, setSiteId] = useState("");
+  const [serviceProviderId, setServiceProviderId] = useState("");
   const [username, setUsername] = useState("");
   const [secret, setSecret] = useState("");
   const [pending, setPending] = useState(false);
@@ -29,6 +30,7 @@ export function HealthInsuranceConnectorWorkspace({ organizationId }: { organiza
     const payload = await response.json() as Dataset;
     setData(payload);
     setSiteId(payload.connector?.siteId || "");
+    setServiceProviderId(payload.connector?.hslServiceProviderId ? String(payload.connector.hslServiceProviderId) : "");
   }, [organizationId]);
   useEffect(() => { void load().catch(() => setNotice("Chargement du connecteur indisponible.")); }, [load]);
 
@@ -49,7 +51,7 @@ export function HealthInsuranceConnectorWorkspace({ organizationId }: { organiza
   }
   function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    void send({ siteId: siteId || null, ...(username && secret ? { username, secret } : {}) },
+    void send({ siteId: siteId || null, hslServiceProviderId: serviceProviderId ? Number(serviceProviderId) : null, ...(username && secret ? { username, secret } : {}) },
       tx("Configuration UAT enregistrée. Testez maintenant l’authentification HSL.", "UAT configuration saved. Test HSL authentication now."));
   }
   return (
@@ -89,6 +91,11 @@ export function HealthInsuranceConnectorWorkspace({ organizationId }: { organiza
             </select>
           </label>
           <label className="block space-y-1 text-sm font-semibold text-dtsc-ink">
+            <span>{tx("Identifiant officiel du prestataire HSL", "Official HSL service provider ID")}</span>
+            <input type="number" min="1" step="1" inputMode="numeric" value={serviceProviderId} onChange={(event)=>setServiceProviderId(event.target.value)} placeholder={tx("ServiceProviderID fourni par HSL", "ServiceProviderID provided by HSL")} className="min-h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 text-sm" />
+            <span className="block text-xs font-normal text-dtsc-muted">{tx("Obligatoire avant l’envoi des factures. Ne devinez pas cet identifiant.", "Required for invoice submission. Do not guess this ID.")}</span>
+          </label>
+          <label className="block space-y-1 text-sm font-semibold text-dtsc-ink">
             <span>{tx("Compte technique HSL", "HSL technical account")}</span>
             <input autoComplete="off" spellCheck={false} value={username} onChange={(event)=>setUsername(event.target.value)} placeholder={tx("Compte remis par HSL", "Account issued by HSL")} className="min-h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 text-sm" />
           </label>
@@ -107,6 +114,7 @@ export function HealthInsuranceConnectorWorkspace({ organizationId }: { organiza
             <div className="flex items-center gap-2"><BadgeCheck className="h-5 w-5 text-emerald-600" aria-hidden="true"/><h2 className="font-black text-dtsc-ink">{tx("État du connecteur", "Connector status")}</h2></div>
             {[
               [tx("Environnement", "Environment"), "UAT"],
+              [tx("Prestataire HSL", "HSL provider"), data?.connector?.hslServiceProviderId ? String(data.connector.hslServiceProviderId) : tx("À configurer", "Missing")],
               [tx("Identifiants", "Credentials"), data?.connector?.credentialsConfigured ? tx("Enregistrés et chiffrés", "Stored encrypted") : tx("À renseigner", "Missing")],
               [tx("Dernier test", "Last test"), data?.connector?.lastAuthCheckAt ? new Date(data.connector.lastAuthCheckAt).toLocaleString(en ? "en" : "fr") : "—"],
               [tx("Dernière vérification", "Last member check"), data?.connector?.lastVerifiedAt ? new Date(data.connector.lastVerifiedAt).toLocaleString(en ? "en" : "fr") : "—"],
