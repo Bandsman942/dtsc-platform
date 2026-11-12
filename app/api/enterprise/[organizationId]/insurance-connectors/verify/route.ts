@@ -7,7 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { memberVerificationSchema, verifyInsuranceMember } from "@/lib/enterprise/health-insurance-connectors/service";
 import { InsuranceConnectorError } from "@/lib/enterprise/health-insurance-connectors/registry";
 import { isSameOriginRequest } from "@/lib/request-security";
-import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
+import { rateLimit } from "@/lib/rate-limit";
 
 type Params = { params: Promise<{ organizationId: string }> };
 
@@ -29,8 +29,8 @@ export async function POST(req: Request, { params }: Params) {
   if (!allowed) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   // HSL caps VerifyMembers at 120 per minute per client. Keep tenant/client below it.
   const [organizationLimit, userLimit] = await Promise.all([
-    rateLimit(getRateLimitKey(req, `hirms-verify-org:${organizationId}`), 100, 60000),
-    rateLimit(getRateLimitKey(req, `hirms-verify-user:${session.userId}`), 30, 60000),
+    rateLimit(`hirms-verify-org:${organizationId}`, 100, 60000, { failureMode: "closed" }),
+    rateLimit(`hirms-verify-user:${session.userId}`, 30, 60000, { failureMode: "closed" }),
   ]);
   if (!organizationLimit.ok || !userLimit.ok) return NextResponse.json({ error: "HIRMS_LOCAL_RATE_LIMIT", message: "Trop de vérifications. Réessayez dans une minute." }, { status: 429 });
   const parsed = memberVerificationSchema.safeParse(await req.json().catch(() => null));
