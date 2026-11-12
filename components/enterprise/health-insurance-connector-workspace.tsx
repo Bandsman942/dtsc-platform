@@ -6,7 +6,7 @@ import { useAppLocale } from "@/components/i18n/locale-provider";
 import { useToastMessage } from "@/components/ui/use-toast-message";
 
 type Connector = {
-  id: string; status: string; environment: string; siteId: string | null;
+  id: string; status: string; environment: string; siteId: string | null; hslServiceProviderId: number | null;
   credentialsConfigured: boolean; lastAuthCheckAt: string | null; lastVerifiedAt: string | null;
   credentialsUpdatedAt: string | null; lastErrorCode: string | null;
 };
@@ -18,6 +18,7 @@ export function HealthInsuranceConnectorWorkspace({ organizationId }: { organiza
   const tx = (fr: string, english: string) => en ? english : fr;
   const [data, setData] = useState<Dataset | null>(null);
   const [siteId, setSiteId] = useState("");
+  const [serviceProviderId, setServiceProviderId] = useState("");
   const [username, setUsername] = useState("");
   const [secret, setSecret] = useState("");
   const [pending, setPending] = useState(false);
@@ -29,6 +30,7 @@ export function HealthInsuranceConnectorWorkspace({ organizationId }: { organiza
     const payload = await response.json() as Dataset;
     setData(payload);
     setSiteId(payload.connector?.siteId || "");
+    setServiceProviderId(payload.connector?.hslServiceProviderId ? String(payload.connector.hslServiceProviderId) : "");
   }, [organizationId]);
   useEffect(() => { void load().catch(() => setNotice("Chargement du connecteur indisponible.")); }, [load]);
 
@@ -49,7 +51,7 @@ export function HealthInsuranceConnectorWorkspace({ organizationId }: { organiza
   }
   function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    void send({ siteId: siteId || null, ...(username && secret ? { username, secret } : {}) },
+    void send({ siteId: siteId || null, hslServiceProviderId: serviceProviderId ? Number(serviceProviderId) : null, ...(username && secret ? { username, secret } : {}) },
       tx("Configuration UAT enregistrée. Testez maintenant l’authentification HSL.", "UAT configuration saved. Test HSL authentication now."));
   }
   return (
@@ -89,6 +91,11 @@ export function HealthInsuranceConnectorWorkspace({ organizationId }: { organiza
             </select>
           </label>
           <label className="block space-y-1 text-sm font-semibold text-dtsc-ink">
+            <span>{tx("Identifiant officiel du prestataire HSL", "Official HSL service provider ID")}</span>
+            <input type="number" min="1" step="1" inputMode="numeric" value={serviceProviderId} onChange={(event)=>setServiceProviderId(event.target.value)} placeholder={tx("ServiceProviderID fourni par HSL", "ServiceProviderID provided by HSL")} className="min-h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 text-sm" />
+            <span className="block text-xs font-normal text-dtsc-muted">{tx("Obligatoire avant l’envoi des factures. Ne devinez pas cet identifiant.", "Required for invoice submission. Do not guess this ID.")}</span>
+          </label>
+          <label className="block space-y-1 text-sm font-semibold text-dtsc-ink">
             <span>{tx("Compte technique HSL", "HSL technical account")}</span>
             <input autoComplete="off" spellCheck={false} value={username} onChange={(event)=>setUsername(event.target.value)} placeholder={tx("Compte remis par HSL", "Account issued by HSL")} className="min-h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 text-sm" />
           </label>
@@ -107,6 +114,7 @@ export function HealthInsuranceConnectorWorkspace({ organizationId }: { organiza
             <div className="flex items-center gap-2"><BadgeCheck className="h-5 w-5 text-emerald-600" aria-hidden="true"/><h2 className="font-black text-dtsc-ink">{tx("État du connecteur", "Connector status")}</h2></div>
             {[
               [tx("Environnement", "Environment"), "UAT"],
+              [tx("Prestataire HSL", "HSL provider"), data?.connector?.hslServiceProviderId ? String(data.connector.hslServiceProviderId) : tx("À configurer", "Missing")],
               [tx("Identifiants", "Credentials"), data?.connector?.credentialsConfigured ? tx("Enregistrés et chiffrés", "Stored encrypted") : tx("À renseigner", "Missing")],
               [tx("Dernier test", "Last test"), data?.connector?.lastAuthCheckAt ? new Date(data.connector.lastAuthCheckAt).toLocaleString(en ? "en" : "fr") : "—"],
               [tx("Dernière vérification", "Last member check"), data?.connector?.lastVerifiedAt ? new Date(data.connector.lastVerifiedAt).toLocaleString(en ? "en" : "fr") : "—"],
@@ -117,10 +125,13 @@ export function HealthInsuranceConnectorWorkspace({ organizationId }: { organiza
             <div className="flex items-center gap-2"><CircleHelp className="h-5 w-5 text-dtsc-muted" aria-hidden="true"/><h2 className="font-bold text-dtsc-ink">{tx("Avant d'utiliser MSO", "Before using MSO")}</h2></div>
             <p className="text-xs text-dtsc-muted">{tx("HSL doit avoir approuvé le client et autorisé VerifyMembers. La connexion réussie ne garantit pas l'accès à toutes les opérations.", "HSL must approve this client and grant VerifyMembers. Successful authentication does not grant every operation.")}</p>
             <Link href="/enterprise-insurance/verify" className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-dtsc-border px-3 py-2 text-sm font-bold text-dtsc-ink hover:bg-dtsc-page"><Stethoscope className="h-4 w-4" aria-hidden="true"/>{tx("Ouvrir la vérification adhérent", "Open member verification")}</Link>
+            <Link href="/enterprise-insurance/invoices" className="mt-2 inline-flex min-h-11 items-center gap-2 rounded-xl border border-dtsc-border px-3 py-2 text-sm font-bold text-dtsc-ink hover:bg-dtsc-page">
+              {tx("Contrôler et transmettre les factures HSL", "Preflight and submit HSL invoices")}
+            </Link>
           </section>
         </aside>
       </div>
-      <p className="text-xs text-dtsc-muted">{tx("Les transmissions de factures et de justificatifs restent désactivées tant que leur contrat OpenAPI détaillé n’est pas certifié en UAT.", "Invoice and document submissions remain disabled until their detailed OpenAPI contract is certified in UAT.")}</p>
+      <p className="text-xs text-dtsc-muted">{tx("Les factures peuvent être contrôlées en UAT. Leur transmission reste désactivée par défaut et nécessite l’autorisation UploadInvoices de HSL. Les justificatifs OCR ne sont pas encore intégrés.", "Invoices can be preflighted in UAT. Sending is disabled by default and requires HSL UploadInvoices authorization. OCR documents are not integrated yet.")}</p>
     </main>
   );
 }
