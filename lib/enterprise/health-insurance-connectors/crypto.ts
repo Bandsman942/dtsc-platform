@@ -2,7 +2,7 @@ import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 
 type HirmsCredentials = { username: string; secret: string };
 
-// Server-side envelope encryption; the key must come from the protected environment.
+// AES-256-GCM server-side envelope encryption; the key must come from the protected environment.
 function encryptionKey() {
   const raw = process.env.HEALTH_INSURANCE_CREDENTIALS_KEY || "";
   const bytes = /^[a-f0-9]{64}$/i.test(raw) ? Buffer.from(raw, "hex") : Buffer.from(raw, "base64");
