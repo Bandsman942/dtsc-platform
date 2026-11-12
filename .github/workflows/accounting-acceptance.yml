@@ -48,6 +48,7 @@ on:
       - "scripts/ci-upstash-redis-rest-proxy.mjs"
       - "scripts/qa-ci-auth-rate-limit-provisioning.mjs"
       - "tests/e2e/accounting-onboarding.spec.mjs"
+      - "tests/e2e/tax-jurisdiction-catalog.spec.mjs"
       - "tests/e2e/erp-cross-module-finance.spec.mjs"
       - "tests/e2e/pharmacy-refund-finance-convergence.spec.mjs"
       - "tests/e2e/accounting-c5-closing.spec.mjs"
@@ -182,6 +183,11 @@ jobs:
         run: |
           set -o pipefail
           pnpm exec playwright test tests/e2e/accounting-onboarding.spec.mjs --workers=1 2>&1 | tee /tmp/dtsc-accounting-onboarding-playwright.log
+      - name: Fiscal jurisdictions and tax catalog browser acceptance
+        shell: bash
+        run: |
+          set -o pipefail
+          pnpm exec playwright test tests/e2e/tax-jurisdiction-catalog.spec.mjs --workers=1 2>&1 | tee /tmp/dtsc-tax-jurisdiction-playwright.log
       - name: ERP cross-module Finance acceptance
         shell: bash
         run: |
@@ -255,6 +261,7 @@ jobs:
             /tmp/dtsc-accounting-next.log
             /tmp/dtsc-accounting-next-close.log
             /tmp/dtsc-accounting-onboarding-playwright.log
+            /tmp/dtsc-tax-jurisdiction-playwright.log
             /tmp/dtsc-erp-cross-module-playwright.log
             /tmp/dtsc-pharmacy-refund-playwright.log
             /tmp/dtsc-accounting-c5-playwright.log

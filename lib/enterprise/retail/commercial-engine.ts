@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import { resolveDefaultSalesTaxesForRetail } from "@/lib/enterprise/accounting/tax-engine";
 import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
 import type { retailSaleCreateSchema } from "@/lib/enterprise/retail/schemas";
 import { prisma } from "@/lib/prisma";
@@ -240,9 +241,15 @@ async function resolveTaxByItem(
   organizationId: string,
   items: Array<{ id: string; taxable: boolean; taxCode: string | null }>,
   effectiveAt: Date,
+  siteId?: string | null,
 ) {
-  const requiredCodes = Array.from(new Set(items.filter((item) => item.taxable).map((item) => item.taxCode).filter((value): value is string => Boolean(value))));
-  if (items.some((item) => item.taxable && !item.taxCode)) throw new EnterpriseRetailError("RETAIL_TAX_CONFIGURATION_REQUIRED", 409);
+  const missingTaxCode = items.some((item) => item.taxable && !item.taxCode);
+  const automatic = missingTaxCode ? await resolveDefaultSalesTaxesForRetail({ organizationId, effectiveAt, siteId }) : [];
+  if (missingTaxCode && automatic.length !== 1) {
+    throw new EnterpriseRetailError(automatic.length > 1 ? "RETAIL_TAX_CONFIGURATION_AMBIGUOUS" : "RETAIL_TAX_CONFIGURATION_REQUIRED", 409);
+  }
+  const selectedDefault = automatic[0]?.code || null;
+  const requiredCodes = Array.from(new Set(items.filter((item) => item.taxable).map((item) => item.taxCode || selectedDefault).filter((value): value is string => Boolean(value))));
   if (!requiredCodes.length) return new Map(items.map((item) => [item.id, { taxCodeId: null as string | null, taxRate: decimal(0) }]));
   const taxCodes = await prisma.enterpriseTaxCode.findMany({ where: { organizationId, code: { in: requiredCodes }, isActive: true }, select: { id: true, code: true } });
   if (taxCodes.length !== requiredCodes.length) throw new EnterpriseRetailError("RETAIL_TAX_CONFIGURATION_REQUIRED", 409);
@@ -265,7 +272,7 @@ async function resolveTaxByItem(
       result.set(item.id, { taxCodeId: null, taxRate: decimal(0) });
       continue;
     }
-    const taxCode = item.taxCode ? taxCodeByCode.get(item.taxCode) : null;
+    const taxCode = (item.taxCode || selectedDefault) ? taxCodeByCode.get((item.taxCode || selectedDefault) as string) : null;
     const rate = taxCode ? latestRateByCodeId.get(taxCode.id) : null;
     if (!taxCode || !rate) throw new EnterpriseRetailError("RETAIL_TAX_RATE_REQUIRED", 409, { taxCode: item.taxCode });
     result.set(item.id, { taxCodeId: taxCode.id, taxRate: rate.rate });
@@ -296,7 +303,7 @@ async function resolvePricingDecisions(
   });
   if (items.length !== catalogItemIds.length) throw new EnterpriseRetailError("RETAIL_CATALOG_ITEM_INVALID", 409);
   const itemById = new Map(items.map((item) => [item.id, item]));
-  const taxByItemId = await resolveTaxByItem(organizationId, items, effectiveAt);
+  const taxByItemId = await resolveTaxByItem(organizationId, items, effectiveAt, input.siteId);
 
   const prices = await prisma.enterpriseCatalogPrice.findMany({
     where: {

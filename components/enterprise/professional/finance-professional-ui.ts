@@ -56,6 +56,7 @@ const ENUM_LABELS: Record<FinanceLocale, Record<string, string>> = {
     TAX_PAYABLE: "Taxes à payer", PAYROLL_PAYABLE: "Dettes salariales", RETAINED_EARNINGS: "Résultats reportés", TAX_RECEIVABLE: "Taxes à récupérer",
     COST_OF_SALES: "Coût des ventes", OPERATING_EXPENSE: "Charges d’exploitation",
     SALES: "Ventes", PURCHASES: "Achats", PAYROLL: "Paie", INVENTORY: "Stocks", ASSETS: "Immobilisations", TAX: "Fiscalité", OPENING: "Ouverture", ADJUSTMENT: "Ajustement", GENERAL: "Opérations générales",
+    VAT: "TVA — Taxe sur la valeur ajoutée", SALES_TAX: "Taxe sur les ventes", GST: "Taxe générale sur les biens et services", WITHHOLDING: "Retenue fiscale à la source", EXCISE: "Droits d’accise", STAMP_DUTY: "Droits de timbre", CUSTOMS: "Droits et taxes douaniers", ENVIRONMENTAL: "Taxe environnementale", TOURISM: "Taxe touristique", LOCAL_LEVY: "Taxe locale", EXEMPT: "Exonération (historique)", ZERO_RATED: "Taux zéro (historique)",
     BALANCE_SHEET: "Bilan", INCOME_STATEMENT: "Compte de résultat", DEBIT: "Débit", CREDIT_BALANCE: "Crédit"
   },
   en: {
@@ -67,7 +68,7 @@ const ENUM_LABELS: Record<FinanceLocale, Record<string, string>> = {
     TAX_PAYABLE: "Tax payable", PAYROLL_PAYABLE: "Payroll payable", RETAINED_EARNINGS: "Retained earnings", TAX_RECEIVABLE: "Tax receivable",
     COST_OF_SALES: "Cost of sales", OPERATING_EXPENSE: "Operating expenses",
     OTHER_INCOME: "Other income", OTHER_EXPENSE: "Other expense", SALES: "Sales", PURCHASES: "Purchases", PAYROLL: "Payroll", INVENTORY: "Inventory", ASSETS: "Fixed assets", TAX: "Tax",
-    OPENING: "Opening", ADJUSTMENT: "Adjustment", GENERAL: "General operations", BALANCE_SHEET: "Balance sheet", INCOME_STATEMENT: "Income statement", DEBIT: "Debit", CREDIT_BALANCE: "Credit"
+    OPENING: "Opening", ADJUSTMENT: "Adjustment", GENERAL: "General operations", VAT: "Value-added tax", SALES_TAX: "Sales tax", GST: "Goods and services tax", WITHHOLDING: "Withholding tax", EXCISE: "Excise duty", STAMP_DUTY: "Stamp duty", CUSTOMS: "Customs duties", ENVIRONMENTAL: "Environmental tax", TOURISM: "Tourism tax", LOCAL_LEVY: "Local levy", EXEMPT: "Exempt (legacy)", ZERO_RATED: "Zero-rated (legacy)", BALANCE_SHEET: "Balance sheet", INCOME_STATEMENT: "Income statement", DEBIT: "Debit", CREDIT_BALANCE: "Credit"
   }
 };
 
@@ -75,6 +76,12 @@ export const FINANCE_ERROR_MESSAGES: Record<FinanceLocale, Record<string, string
   fr: {
     PAYMENT_ALLOCATION_EXCEEDS_UNALLOCATED: "Le montant affecté dépasse la partie encore disponible de ce paiement.",
     FINANCE_INPUT_INVALID: "Certaines informations sont invalides ou incomplètes. Corrigez les champs signalés puis réessayez.",
+    TAX_TEMPLATE_JURISDICTION_MISMATCH: "Ce modèle fiscal ne correspond pas au pays déclaré de l’entreprise. Corrigez la juridiction dans les paramètres.",
+    TAX_TEMPLATE_ALREADY_ADOPTED: "Ce modèle fiscal est déjà configuré dans votre entreprise.",
+    TAX_AUTOMATIC_SCOPE_INVALID: "L’application automatique exige une juridiction reconnue, une taxe standard sur les ventes et des règles applicables.",
+    SALES_INVOICE_TAX_AMBIGUOUS: "Plusieurs taxes automatiques correspondent à cette vente. Configurez une règle précise avant d’émettre la facture.",
+    SALES_INVOICE_TAX_CONFIGURATION_REQUIRED: "Configurez une taxe applicable aux articles imposables avant la facturation.",
+    RETAIL_TAX_CONFIGURATION_AMBIGUOUS: "Plusieurs taxes automatiques sont éligibles à cette vente. Choisissez une règle fiscale non ambiguë.",
     FINANCE_DECISION_REASON_TOO_SHORT: "Le motif de cette décision doit contenir au moins 4 caractères.",
     FINANCE_DECISION_REASON_TOO_LONG: "Le motif de cette décision ne peut pas dépasser 1 000 caractères.",
     PAYMENT_NOT_FOUND: "Ce paiement n’existe pas ou n’est plus disponible dans cette entreprise.",
@@ -215,6 +222,12 @@ export const FINANCE_ERROR_MESSAGES: Record<FinanceLocale, Record<string, string
     FINANCE_NETWORK_UNAVAILABLE: "La connexion a été interrompue. Votre opération n'est pas confirmée ; vérifiez son statut avant de réessayer."
   },
   en: {
+    TAX_TEMPLATE_JURISDICTION_MISMATCH: "This tax template does not match the company fiscal country.",
+    TAX_TEMPLATE_ALREADY_ADOPTED: "This tax template is already configured in your company.",
+    TAX_AUTOMATIC_SCOPE_INVALID: "Automatic taxes need a recognized jurisdiction, standard sales-tax category and eligible rules.",
+    SALES_INVOICE_TAX_AMBIGUOUS: "Several automatic taxes match this invoice. Configure an unambiguous rule before issuing it.",
+    SALES_INVOICE_TAX_CONFIGURATION_REQUIRED: "Configure an applicable tax for taxable items before invoicing.",
+    RETAIL_TAX_CONFIGURATION_AMBIGUOUS: "Several automatic taxes could apply to this sale. Configure an explicit fiscal rule.",
     PAYMENT_ALLOCATION_EXCEEDS_UNALLOCATED: "The allocated amount exceeds the remaining available payment amount.",
     FINANCE_INPUT_INVALID: "Some information is invalid or incomplete. Correct the highlighted fields and try again.",
     FINANCE_DECISION_REASON_TOO_SHORT: "The reason for this decision must contain at least 4 characters.",

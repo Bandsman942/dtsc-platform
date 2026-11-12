@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { resolveDefaultSalesTaxes } from "@/lib/enterprise/accounting/tax-engine";
 import { assertIndependentActor } from "@/lib/enterprise/accounting/access";
 import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
 import { assertActiveClientOrganization, financeReference, money, publishFinanceEvent, sumDecimals } from "@/lib/enterprise/accounting/helpers";
@@ -15,6 +16,9 @@ type CalculatedItem = SalesInvoiceInput["items"][number] & {
   discountDecimal: Prisma.Decimal;
   netAmount: Prisma.Decimal;
   taxAmount: Prisma.Decimal;
+  taxRateApplied: Prisma.Decimal;
+  taxJurisdiction: string | null;
+  taxTemplateVersion: string | null;
   totalAmount: Prisma.Decimal;
 };
 
@@ -25,6 +29,7 @@ async function calculateItems(
   items: SalesInvoiceInput["items"],
 ): Promise<CalculatedItem[]> {
   const calculated: CalculatedItem[] = [];
+  let autoTaxCandidates: Awaited<ReturnType<typeof resolveDefaultSalesTaxes>> | null = null;
   for (const item of items) {
     const quantityDecimal = new Prisma.Decimal(item.quantity);
     const unitPriceDecimal = new Prisma.Decimal(item.unitPrice);
@@ -32,31 +37,54 @@ async function calculateItems(
     if (!quantityDecimal.greaterThan(0) || unitPriceDecimal.isNegative() || discountDecimal.isNegative()) {
       throw new EnterpriseAccountingError("SALES_INVOICE_LINE_INVALID", 400);
     }
+    let catalog: { taxable: boolean; taxCode: string | null } | null = null;
     if (item.catalogItemId) {
-      const catalog = await tx.enterpriseCatalogItem.findFirst({ where: { id: item.catalogItemId, organizationId, status: "ACTIVE", archivedAt: null } });
+      catalog = await tx.enterpriseCatalogItem.findFirst({ where: { id: item.catalogItemId, organizationId, status: "ACTIVE", archivedAt: null }, select: { taxable: true, taxCode: true } });
       if (!catalog) throw new EnterpriseAccountingError("SALES_INVOICE_CATALOG_ITEM_INVALID", 409);
     }
     const gross = money(quantityDecimal.times(unitPriceDecimal));
     if (discountDecimal.greaterThan(gross)) throw new EnterpriseAccountingError("SALES_INVOICE_DISCOUNT_EXCEEDS_GROSS", 409);
     const netAmount = money(gross.minus(discountDecimal));
     let rate = new Prisma.Decimal(0);
-    if (item.taxCodeId) {
+    let taxCodeId = item.taxCodeId || null;
+    if (!taxCodeId && catalog?.taxable) {
+      if (catalog.taxCode) {
+        const selected = await tx.enterpriseTaxCode.findFirst({ where: { organizationId, code: catalog.taxCode, isActive: true }, select: { id: true } });
+        if (!selected) throw new EnterpriseAccountingError("SALES_INVOICE_TAX_CONFIGURATION_REQUIRED", 409);
+        taxCodeId = selected.id;
+      } else {
+        if (!autoTaxCandidates) autoTaxCandidates = await resolveDefaultSalesTaxes(tx, { organizationId, effectiveAt: documentDate });
+        if (autoTaxCandidates.length !== 1) {
+          throw new EnterpriseAccountingError(autoTaxCandidates.length > 1 ? "SALES_INVOICE_TAX_AMBIGUOUS" : "SALES_INVOICE_TAX_CONFIGURATION_REQUIRED", 409);
+        }
+        taxCodeId = autoTaxCandidates[0].id;
+      }
+    }
+    let taxJurisdiction: string | null = null;
+    let taxTemplateVersion: string | null = null;
+    if (taxCodeId) {
       const taxRate = await tx.enterpriseTaxRate.findFirst({
         where: {
           organizationId,
-          taxCodeId: item.taxCodeId,
+          taxCodeId,
           status: "ACTIVE",
           effectiveFrom: { lte: documentDate },
           OR: [{ effectiveTo: null }, { effectiveTo: { gte: documentDate } }],
           taxCode: { isActive: true },
         },
         orderBy: { effectiveFrom: "desc" },
+        include: { taxCode: { select: { jurisdiction: true, sourceTemplateVersion: true, taxTreatment: true, category: true } } },
       });
       if (!taxRate) throw new EnterpriseAccountingError("SALES_INVOICE_TAX_RATE_INVALID", 409);
-      rate = taxRate.rate;
+      taxJurisdiction = taxRate.taxCode.jurisdiction;
+      taxTemplateVersion = taxRate.taxCode.sourceTemplateVersion;
+      rate = ["EXEMPT", "ZERO_RATED", "OUT_OF_SCOPE"].includes(taxRate.taxCode.taxTreatment)
+        || ["EXEMPT", "ZERO_RATED"].includes(taxRate.taxCode.category)
+        ? new Prisma.Decimal(0) : taxRate.rate;
     }
     const taxAmount = money(netAmount.times(rate));
-    calculated.push({ ...item, quantityDecimal, unitPriceDecimal, discountDecimal, netAmount, taxAmount, totalAmount: money(netAmount.plus(taxAmount)) });
+    calculated.push({ ...item, taxCodeId: taxCodeId || undefined, quantityDecimal, unitPriceDecimal, discountDecimal, netAmount,
+      taxRateApplied: rate, taxJurisdiction, taxTemplateVersion, taxAmount, totalAmount: money(netAmount.plus(taxAmount)) });
   }
   return calculated;
 }
@@ -112,6 +140,9 @@ export async function createSalesInvoiceTx(tx: Prisma.TransactionClient, organiz
             discountAmount: item.discountDecimal,
             netAmount: item.netAmount,
             taxCodeId: item.taxCodeId || null,
+            taxRateApplied: item.taxRateApplied,
+            taxJurisdiction: item.taxJurisdiction,
+            taxTemplateVersion: item.taxTemplateVersion,
             taxAmount: item.taxAmount,
             totalAmount: item.totalAmount,
             revenueAccountId: item.revenueAccountId || null,
