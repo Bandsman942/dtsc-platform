@@ -798,3 +798,8 @@ L'assistant `RetailGuidedStoreSetup` crée `EnterpriseSite`, `EnterpriseWarehous
 ## Health insurance connectors / HIRMS HSL (UAT-first)
 
 Le socle générique d'intégration des assurances santé et son premier adaptateur HIRMS sont documentés dans [HEALTH_INSURANCE_CONNECTORS_HIRMS_01.md](HEALTH_INSURANCE_CONNECTORS_HIRMS_01.md). Configuration sur /enterprise-admin/health-insurance-connectors, vérification des adhérents sur /enterprise-insurance/verify, credentials chiffrés côté serveur, limites, API, prérequis HSL et fonctionnalités non encore activées (facturation, OCR, Production).
+
+
+## Health insurance interop HIRMS/MSO (HIRMS-01, UAT only)
+
+Le socle multi-tenant et l'adaptateur HSL de vérification et facturation individuelle/bulk sont documentés dans [HIRMS_HEALTH_INSURANCE_CONNECTORS.md](integrations/HIRMS_HEALTH_INSURANCE_CONNECTORS.md). Les transmissions sont des événements de transport, pas des paiements ni des décisions d'assurance. L'envoi UAT reste désactivé par défaut côté serveur et ne peut pas viser Production.
