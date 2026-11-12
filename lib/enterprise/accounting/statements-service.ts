@@ -141,9 +141,10 @@ async function budgetVsActual(organizationId: string, periodStart: Date, periodE
 async function taxStatement(organizationId: string, periodStart: Date, periodEnd: Date) {
   return prisma.$queryRaw<Array<{ taxCodeId: string; code: string; category: string; currencyCode: string; taxableAmount: Prisma.Decimal; outputTax: Prisma.Decimal; inputTax: Prisma.Decimal; netTax: Prisma.Decimal }>>(Prisma.sql`
     SELECT t."taxCodeId", c.code, c.category, t."currencyCode", SUM(t."taxableAmount") AS "taxableAmount",
-      SUM(CASE WHEN t.direction = 'OUTPUT' THEN t."taxAmount" ELSE 0 END) AS "outputTax",
-      SUM(CASE WHEN t.direction = 'INPUT' THEN t."taxAmount" ELSE 0 END) AS "inputTax",
-      SUM(CASE WHEN t.direction = 'OUTPUT' THEN t."taxAmount" ELSE -t."taxAmount" END) AS "netTax"
+      SUM(CASE WHEN t.direction = 'OUTPUT' THEN t."taxAmount" WHEN t.direction = 'OUTPUT_REVERSAL' THEN -t."taxAmount" ELSE 0 END) AS "outputTax",
+      SUM(CASE WHEN t.direction = 'INPUT' THEN t."taxAmount" WHEN t.direction = 'INPUT_REVERSAL' THEN -t."taxAmount" ELSE 0 END) AS "inputTax",
+      SUM(CASE WHEN t.direction = 'OUTPUT' THEN t."taxAmount" WHEN t.direction = 'OUTPUT_REVERSAL' THEN -t."taxAmount"
+        WHEN t.direction = 'INPUT' THEN -t."taxAmount" WHEN t.direction = 'INPUT_REVERSAL' THEN t."taxAmount" ELSE 0 END) AS "netTax"
     FROM "EnterpriseTaxLine" t
     INNER JOIN "EnterpriseTaxCode" c ON c.id = t."taxCodeId" AND c."organizationId" = t."organizationId"
     WHERE t."organizationId" = ${organizationId} AND t."createdAt" BETWEEN ${periodStart} AND ${periodEnd}
