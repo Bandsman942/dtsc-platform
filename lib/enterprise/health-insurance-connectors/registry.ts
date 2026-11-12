@@ -31,8 +31,8 @@ export type InsuranceVerificationResult = {
 
 export type HealthInsuranceAdapter = {
   code: string;
-  checkConnection(credentials: { username: string; secret: string }, environment: HirmsEnvironment): Promise<void>;
-  verify(credentials: { username: string; secret: string }, input: InsuranceMemberVerification, environment: HirmsEnvironment): Promise<InsuranceVerificationResult>;
+  checkConnection(credentials: { username: string; secret: string }, environment: HirmsEnvironment, organizationId: string): Promise<void>;
+  verify(credentials: { username: string; secret: string }, input: InsuranceMemberVerification, environment: HirmsEnvironment, organizationId: string): Promise<InsuranceVerificationResult>;
 };
 
 export class InsuranceConnectorError extends Error {
