@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 
 import type * as React from "react";
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
@@ -188,7 +189,12 @@ export function PharmacySalesWorkspace({ organizationId }: { organizationId: str
         <h3 className="text-lg font-black text-dtsc-ink">Sorties, ventes & dispensation</h3>
         <p className="text-sm text-dtsc-muted">Panier, contrôle pharmacien, paiement léger et sortie stock FEFO.</p>
       </div>
-      <Button disabled={!data?.currency} onClick={() => { setForm(emptyForm(data)); setOpen(true); }} className="w-full bg-[#002b5b] text-white sm:w-auto"><Plus />Nouvelle vente</Button>
+      <div className="flex flex-wrap gap-2">
+        <Link href="/enterprise-insurance/verify" className="inline-flex min-h-11 items-center justify-center rounded-xl border border-cyan-500/40 bg-cyan-500/10 px-3 text-sm font-bold text-dtsc-ink hover:bg-cyan-500/15">
+          Vérifier carte MSO
+        </Link>
+        <Button disabled={!data?.currency} onClick={() => { setForm(emptyForm(data)); setOpen(true); }} className="w-full bg-[#002b5b] text-white sm:w-auto"><Plus />Nouvelle vente</Button>
+      </div>
     </div>
     {data && !data.currency && <p role="alert" className="mt-2 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">Configurez la devise principale de la pharmacie avant de créer une vente.</p>}
     <div className="mt-4 flex gap-2 overflow-x-auto pb-2">
