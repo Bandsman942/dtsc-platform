@@ -270,6 +270,12 @@ export function EnterpriseAdministrationModule(
 
         <div id="enterprise-admin-settings" className="scroll-mt-24 outline-none">
           <ModuleSection title={tx(locale, "Paramètres entreprise", "Company settings")} description={tx(locale, "Identité, logo depuis l’appareil, couleur visuelle et paramètres généraux enregistrés pour l’entreprise.", "Identity, device logo upload, visual color choice and general settings saved for the company.")}>
+            {(organization.sectorCode === "HEALTH_CARE" || organization.sectorCode === "PHARMACY") ? (
+              <Link href="/enterprise-admin/health-insurance-connectors" className="mb-3 flex min-h-11 items-center justify-between gap-3 rounded-xl border border-cyan-500/40 bg-cyan-500/10 px-4 py-3 text-sm font-bold text-dtsc-ink hover:bg-cyan-500/15">
+                <span>{tx(locale, "Connecteurs d’assurances santé · MSO / HIRMS", "Health insurance connectors · MSO / HIRMS")}</span>
+                <span aria-hidden="true">›</span>
+              </Link>
+            ) : null}
             <EnterpriseAdministrationBrandingPanel organization={organization} locale={locale} />
             <EnterpriseFiscalSettingsPanel organizationId={organization.id} country={organization.country} locale={locale} />
             <EnterpriseRelationshipCodePanel code={organization.slug} locale={locale} />
