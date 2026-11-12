@@ -26,7 +26,9 @@ export async function POST(req: Request, { params }: Params) {
     const taxCode = await prisma.enterpriseTaxCode.findFirst({
       where: { organizationId, id: parsed.data.taxCodeId, isActive: true }, select: { category: true, taxTreatment: true, jurisdiction: true },
     });
-    if (!taxCode || !["VAT", "GST", "SALES_TAX"].includes(taxCode.category) || taxCode.taxTreatment !== "STANDARD" || !taxCode.jurisdiction) {
+    // Legally documented local levies are eligible for explicit, independently
+    // approved compound calculations; withheld tax remains outside VAT/TTC.
+    if (!taxCode || !["VAT", "GST", "SALES_TAX", "LOCAL_LEVY"].includes(taxCode.category) || taxCode.taxTreatment !== "STANDARD" || !taxCode.jurisdiction) {
       throw new EnterpriseAccountingError("TAX_RULE_SCOPE_INVALID", 409);
     }
     // Active tax calculation requires a DIFFERENT reviewer. No direct

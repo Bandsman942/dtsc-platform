@@ -29,7 +29,7 @@ export function TaxRulesPanel({ organizationId, locale, canCreate, canManage, on
       if (!rulesResponse.ok || !taxResponse.ok) throw new Error("TAX_RULE_PERMISSION_REQUIRED");
       const [taxData, ruleData] = await Promise.all([taxResponse.json(), rulesResponse.json()]);
       setCodes((taxData.items || []).filter((tax: TaxCode) =>
-        ["VAT", "GST", "SALES_TAX"].includes(tax.category) && tax.taxTreatment === "STANDARD" && Boolean(tax.jurisdiction)));
+        ["VAT", "GST", "SALES_TAX", "LOCAL_LEVY"].includes(tax.category) && tax.taxTreatment === "STANDARD" && Boolean(tax.jurisdiction)));
       setRules(ruleData.items || []);
     } catch { setError(locale === "en" ? "Cannot read the fiscal rules; check your tax permissions." : "Lecture des règles fiscales impossible : vérifiez vos permissions."); }
   }, [root, locale]);

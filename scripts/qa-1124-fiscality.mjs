@@ -44,7 +44,7 @@ requireTokens("lib/enterprise/accounting/dgi-fiscalization-readiness.ts", [
   "SELLER_RCCM", "SELLER_NIF", "BUYER_TAX_NUMBER",
 ]);
 requireTokens("app/api/enterprise/[organizationId]/taxes/rules/route.ts", [
-  '"FINANCE_TAX"', "isActive: false", "proposedByUserId", "writeAuditLog",
+  '"FINANCE_TAX"', "isActive: false", "proposedByUserId", "writeAuditLog", "LOCAL_LEVY",
 ]);
 requireTokens("app/api/enterprise/[organizationId]/taxes/rules/[ruleId]/route.ts", [
   "TAX_RULE_SELF_APPROVAL_FORBIDDEN", "TransactionIsolationLevel.Serializable",
