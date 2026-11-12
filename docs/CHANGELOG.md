@@ -2503,3 +2503,11 @@ Hotfix #861 (complément) : un secret CRON_SECRET Production commun réveille po
 - Tarification, offres et retours : reprise de l'écran entier dans `AppShell`, navigation et retour DTSC, thème 2.0 clair/sombre, onglets accessibles, formulaires et contrôles de focus harmonisés, logique de prix, promotions et remboursements intacte.
 - Mes collaborateurs : suppression du retour extérieur à l'espace immersif, retour compact au niveau de la liste, fil et compositeur protégés des superpositions du bouton flottant. Aucune modification de la messagerie serveur.
 - Documentation et recette : [HOTFIX_1046_RETAIL_POS_COLLABORATORS_UI.md](HOTFIX_1046_RETAIL_POS_COLLABORATORS_UI.md). Aucun déploiement ni E2E propriétaire validé à ce stade.
+
+
+### Complément HIRMS-01 — Contrat de facturation UAT (non livré)
+- JSON individuel et bulk reçu, noms de champs conservés, contrat Zod, 500 factures maximum par lot.
+- Préflight de chaque facture contre EnterpriseSalesInvoice, lien obligatoire Health/Pharmacy et ServiceProviderID HSL.
+- Outbox idempotente par facture, suivi des états QUEUED/RECEIVED/REJECTED/UNKNOWN_OUTCOME ; aucune écriture comptable déclenchée.
+- Console UAT import JSON, contrôles puis confirmation ; envoi distant bloqué par défaut.
+- Exigence de certification HSL maintenue pour les noms d'identifiants, la sémantique des montants, les dates, les codes et le suivi des statuts.
