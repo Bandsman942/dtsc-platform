@@ -55,12 +55,15 @@ test("offline Finance replay produces one DRAFT, no payment, posting or stock co
     expect(product, "The Finance fixture product must be present in the offline snapshot").toBeTruthy();
     expect(product.offlineEligible, "Fixture must support a lot-free Finance draft").toBe(true);
 
+    const inventory = await prisma.enterpriseInventoryItem.findFirstOrThrow({
+      where: { organizationId, catalogItemId: item.id }, select: { id: true },
+    });
     const before = {
       invoices: await prisma.enterpriseSalesInvoice.count({ where: { organizationId } }),
       payments: await prisma.enterprisePayment.count({ where: { organizationId } }),
       journals: await prisma.enterpriseJournalEntry.count({ where: { organizationId } }),
       stock: await prisma.enterpriseInventoryBalance.findFirstOrThrow({
-        where: { organizationId, warehouseId: warehouse.id, inventoryItem: { catalogItemId: item.id }, stockLotId: null },
+        where: { organizationId, warehouseId: warehouse.id, inventoryItemId: inventory.id, stockLotId: null },
       }),
     };
 
