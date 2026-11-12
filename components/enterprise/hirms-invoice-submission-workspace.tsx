@@ -7,7 +7,7 @@ import { useToastMessage } from "@/components/ui/use-toast-message";
 import { HirmsEnvironmentSwitch } from "./hirms-environment-switch";
 import type { HirmsEnvironment } from "@/lib/enterprise/health-insurance-connectors/environments";
 
-type Submission = { id: string; invoiceNumber: string; batchId: string | null; transportStatus: string; httpStatus: number | null; submittedAt: string; errorCode: string | null };
+type Submission = { id: string; invoiceNumber: string; batchId: string | null; transportStatus: string; httpStatus: number | null; submittedAt: string; errorCode: string | null; remoteStatus: string | null; lastStatusErrorCode: string | null };
 type History = { items: Submission[]; total: number; page: number; pageCount: number; environment: HirmsEnvironment };
 type Preflight = { ok: boolean; count: number; invoiceNumbers: string[] };
 const STATUSES: Record<string,[string,string]> = {
@@ -78,6 +78,18 @@ export function HirmsInvoiceSubmissionWorkspace({organizationId,initialEnvironme
     }catch{setNotice(tx("JSON non valide ou connexion interrompue.", "Invalid JSON or network failure."))}
     finally{setPending(false)}
   }
+  async function reconcile(id:string){
+    setPending(true);setNotice("");
+    try {
+      const response=await fetch(`/api/enterprise/${organizationId}/insurance-connectors/invoices/status`,{
+        method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({environment,submissionId:id}),
+      });
+      const data=await response.json() as {message?:string;error?:string};
+      setNotice(data.message||data.error||tx("Statut HSL indisponible.","HSL status unavailable."));
+      await load(page);
+    }catch{setNotice(tx("Connexion HSL indisponible.","HSL connection unavailable."));}
+    finally{setPending(false);}
+  }
   return <main className="mx-auto w-full max-w-6xl space-y-4 px-4 py-5 sm:px-6">
     <header className="flex flex-wrap items-start justify-between gap-3">
       <div><p className="text-xs font-semibold text-dtsc-muted">{tx(`Assurances santé · Connecteur HIRMS · ${environment}`, `Health insurance · HIRMS adapter · ${environment}`)}</p>
@@ -139,7 +151,10 @@ export function HirmsInvoiceSubmissionWorkspace({organizationId,initialEnvironme
             {visibleHistory?.items.map(item=><div key={item.id} className="rounded-xl border border-dtsc-border p-3">
               <p className="break-all text-sm font-bold text-dtsc-ink">{item.invoiceNumber}</p>
               <p className="mt-1 text-xs text-dtsc-muted">{STATUSES[item.transportStatus]?.[en?1:0] || item.transportStatus} · {new Date(item.submittedAt).toLocaleString(en?"en":"fr")}</p>
+              {item.remoteStatus && <p className="mt-1 break-all text-xs font-semibold text-cyan-700 dark:text-cyan-300">HSL: {item.remoteStatus}</p>}
               {item.errorCode?<p className="mt-1 break-all text-xs text-amber-700 dark:text-amber-300">{item.errorCode}</p>:null}
+              {item.lastStatusErrorCode && <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">{item.lastStatusErrorCode}</p>}
+              <button type="button" disabled={pending} onClick={()=>void reconcile(item.id)} className="mt-2 min-h-10 rounded-lg border border-dtsc-border px-3 text-xs font-bold text-dtsc-ink disabled:opacity-50">{tx("Vérifier le statut HSL","Check HSL status")}</button>
             </div>)}
             {!visibleHistory?.items.length?<p className="py-6 text-center text-xs text-dtsc-muted">{tx("Aucune transmission enregistrée.","No submissions recorded.")}</p>:null}
           </div>
