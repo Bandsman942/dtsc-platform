@@ -44,11 +44,20 @@ const files={
   api:"app/api/enterprise/[organizationId]/insurance-connectors/invoices/route.ts",
   migration:"prisma/migrations/20261112231000_hirms_invoice_transport/migration.sql",
   docs:"docs/integrations/HIRMS_HEALTH_INSURANCE_CONNECTORS.md",
+  env:"lib/enterprise/health-insurance-connectors/environments.ts",
+  schema:"prisma/enterprise-health-insurance-connectors.prisma",
+  migrationDual:"prisma/migrations/20261112234000_hirms_two_environments/migration.sql",
+  invoicesUi:"components/enterprise/hirms-invoice-submission-workspace.tsx",
 };
 const sources=Object.fromEntries(Object.entries(files).map(([name,path])=>[name,readFileSync(new URL("../"+path,import.meta.url),"utf8")]));
 for (const term of ['"/api/invoices/bulk"','"/api/invoices"',"Authorization:","HIRMS_INVOICE_OUTCOME_UNKNOWN"]) assert.ok(sources.sender.includes(term),term);
 for (const term of ["HEALTH_INSURANCE_HIRMS_UAT_INVOICE_SEND_ENABLED","healthBillingExtension","pharmacySalesExtension","enterpriseSalesInvoice.findMany","enterpriseHealthInsuranceInvoiceSubmission.createMany","InvoiceNumber","ServiceProviderID","ClaimAmount","payloadDigest"]) assert.ok(sources.service.includes(term),term);
 for (const term of ["isSameOriginRequest","getSession","activeOrganizationId","rateLimit","writeAuditLog","writeApiLog"]) assert.ok(sources.api.includes(term),term);
 assert.match(sources.migration,/UNIQUE INDEX/);
-assert.match(sources.docs,/UAT-only/);
-console.log("HIRMS-01: JSON single/bulk, validations, tenant ERP links, UAT gate, audit, idempotence OK");
+for (const marker of ["PRODUCTION", "UAT", "HEALTH_INSURANCE_HIRMS_PRODUCTION_ENABLED"]) assert.ok(sources.docs.includes(marker), marker);
+for (const marker of ["HIRMS_ENVIRONMENTS", "hirmsapi.healthsystemlink.com", "hslapi.alatlabs.com", "assertHirmsEnvironmentEnabled", "assertHirmsInvoiceSendEnabled"]) assert.ok(sources.env.includes(marker), marker);
+for (const marker of ["EHIConnector_org_adapter_env_key", "EHIInvoiceSubmission_org_adapter_env_invoice_key"]) assert.ok(sources.schema.includes(marker) && sources.migrationDual.includes(marker), marker);
+assert.ok(sources.service.includes("assertHirmsInvoiceSendEnabled(environment)"));
+assert.ok(sources.sender.includes("hirmsEndpoints(environment).api"));
+assert.ok(sources.invoicesUi.includes("productionConfirmation") && sources.invoicesUi.includes("HirmsEnvironmentSwitch"), "Live sends must require explicit confirmation");
+console.log("HIRMS-01: JSON single/bulk, validations, tenant ERP links, UAT gate, audit, environment-isolated idempotence and UAT/Production flags OK");
