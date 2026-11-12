@@ -19,8 +19,8 @@ const accessTokens = new Map<string, Entry>();
 const keyFor = (environment: HirmsEnvironment, username: string, secret: string) =>
   createHash("sha256").update(JSON.stringify([environment, username, secret])).digest("hex");
 
-async function getToken({ username, secret }: { username: string; secret: string }, environment: HirmsEnvironment, force = false): Promise<string> {
-  assertHirmsEnvironmentEnabled(environment);
+async function getToken({ username, secret }: { username: string; secret: string }, environment: HirmsEnvironment, organizationId: string, force = false): Promise<string> {
+  assertHirmsEnvironmentEnabled(environment, organizationId);
   const key = keyFor(environment, username, secret);
   const cached = accessTokens.get(key);
   if (!force && cached && cached.expiresAt > Date.now() + 30_000) return cached.token;
@@ -45,9 +45,9 @@ async function getToken({ username, secret }: { username: string; secret: string
   return token.data.access_token;
 }
 
-async function verify(credentials: { username: string; secret: string }, input: InsuranceMemberVerification, environment: HirmsEnvironment): Promise<InsuranceVerificationResult> {
+async function verify(credentials: { username: string; secret: string }, input: InsuranceMemberVerification, environment: HirmsEnvironment, organizationId: string): Promise<InsuranceVerificationResult> {
   async function call(force = false) {
-    const token = await getToken(credentials, environment, force);
+    const token = await getToken(credentials, environment, organizationId, force);
     try {
       return await fetch(hirmsEndpoints(environment).api + "/api/members/verify", {
         method: "POST", cache: "no-store", signal: AbortSignal.timeout(12_000),
@@ -85,10 +85,10 @@ async function verify(credentials: { username: string; secret: string }, input: 
 }
 
 export const hirmsAdapter: HealthInsuranceAdapter = {
-  code: "HIRMS_HSL", checkConnection: async (credentials, environment) => { await getToken(credentials, environment, true); }, verify,
+  code: "HIRMS_HSL", checkConnection: async (credentials, environment, organizationId) => { await getToken(credentials, environment, organizationId, true); }, verify,
 };
 
 /** Reuse the approved HSL OAuth flow for invoice transport. */
-export async function getHirmsAccessToken(credentials: { username: string; secret: string }, environment: HirmsEnvironment, force = false) {
-  return getToken(credentials, environment, force);
+export async function getHirmsAccessToken(credentials: { username: string; secret: string }, environment: HirmsEnvironment, organizationId: string, force = false) {
+  return getToken(credentials, environment, organizationId, force);
 }
