@@ -55,7 +55,7 @@ export function InsuranceMemberVerifyWorkspace({ organizationId, sector }: { org
           <h1 className="mt-1 text-2xl font-black tracking-tight text-dtsc-ink">{tx("Vérifier un adhérent", "Verify a member")}</h1>
           <p className="mt-1 text-sm text-dtsc-muted">{tx("Contrôle réel en environnement HSL UAT. Aucun remboursement n'est garanti par cette vérification.", "Live verification against HSL UAT. This check does not guarantee reimbursement.")}</p>
         </div>
-        <Link href={sector === "HEALTH_CARE" ? "/enterprise-modules/INSURANCE_COVERAGE" : "/enterprise-modules/PHARMACY_SALES"} className="self-start rounded-xl border border-dtsc-border px-3 py-2 text-sm font-bold text-dtsc-ink">{tx("Retour au module", "Back to module")}</Link>
+        <Link href={sector === "HEALTH_CARE" ? "/enterprise-modules/INSURANCE_COVERAGE" : "/enterprise-modules/SALES_DISPENSATION"} className="self-start rounded-xl border border-dtsc-border px-3 py-2 text-sm font-bold text-dtsc-ink">{tx("Retour au module", "Back to module")}</Link>
       </header>
       <div className="grid gap-4 md:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
         <form onSubmit={verify} className="min-w-0 space-y-4 rounded-2xl border border-dtsc-border bg-dtsc-surface p-4 sm:p-5">
