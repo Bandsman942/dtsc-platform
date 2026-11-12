@@ -55,6 +55,8 @@ export async function POST(req: Request, { params }: Params) {
   const date = z.string().max(10).safeParse(form.get("invoiceDate"));
   const invoice = z.string().cuid().optional().safeParse(form.get("salesInvoiceId") || undefined);
   const file = form.get("file");
+  if (env.success && env.data === "PRODUCTION" && form.get("productionConfirmation") !== "PRODUCTION")
+    return NextResponse.json({ error: "HIRMS_PRODUCTION_CONFIRMATION_REQUIRED" }, { status: 409 });
   if (!env.success || !date.success || !invoice.success || !(file instanceof File))
     return NextResponse.json({ error: "HIRMS_OCR_FORM_INVALID" }, { status: 400 });
   try {
