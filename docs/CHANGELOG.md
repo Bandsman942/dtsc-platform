@@ -1,3 +1,10 @@
+## 2026-11-12 — Candidat fiscalité multi-juridictions (NON LIVRÉ)
+
+- Correctifs du module Taxes : catégories traduites FR/EN, filtres actifs/inactifs cohérents, fiche de détail avec taux/comptes/règles, sélecteur juridiction ISO et titre de formulaire explicite.
+- Catalogue fiscal DTSC de modèles réglementaires versionnés et adoption volontaire par chaque entreprise ; première fiche de TVA normale RDC à 16 % avec source DGI et contrôle de pays.
+- Paramètres fiscaux contrôlés dans Administration entreprise, double opt-in (entreprise + taxe) et moteur de résolution partagé avec POS et factures clients pour les articles explicitement imposables. Toute ambiguïté bloque l’automatisation.
+- Instantanés fiscaux sur les lignes de factures, deux migrations Prisma non destructives, nouvelle QA statique intégrée à `qa:regression`, scénarios E2E et documentation. **PR en validation, pas de production, pas de certification fiscale déclarée**. Voir `docs/TAX_JURISDICTIONS_ENGINE.md`.
+
 ## 2026-11-12 — Feature #1117 — Traçabilité des 12 KPI financiers RETAIL (candidat v1.13.0)
 
 - Après fusion et validation propriétaire E2E BON du POS #1118 (v1.12.0), reprise du lot Finance #1119 sur ce nouveau `main` : aucun correctif POS ni aucune QA perdue.
