@@ -230,7 +230,9 @@ export async function enqueueRetailOfflineSale<T>(args: { organizationId: string
     };
     const transaction = db.transaction(QUEUE_STORE, "readwrite");
     const done = transactionDone(transaction);
-    transaction.objectStore(QUEUE_STORE).put(stored);
+    // An operation UUID is immutable locally: never overwrite a different queued sale
+    // from another tab or an accidental UUID reuse. The caller must preserve it.
+    transaction.objectStore(QUEUE_STORE).add(stored);
     await done;
     return operationUuid;
   } finally {
@@ -275,7 +277,11 @@ export async function updateRetailOfflineQueueResult(organizationId: string, ope
     const done = transactionDone(transaction);
     const store = transaction.objectStore(QUEUE_STORE);
     const row = await requestResult(store.get(id) as IDBRequest<StoredQueueEntry | undefined>);
-    if (row) store.put({ ...row, status: result.status, conflictCode: result.conflictCode ?? null, serverEntityId: result.serverEntityId ?? null, updatedAt: new Date().toISOString() });
+    if (row && !(row.status === "SYNCED" && result.status !== "SYNCED")) {
+      // Delayed failures from another tab or an older HTTP response may not
+      // demote a server-acknowledged Finance draft back to a local conflict.
+      store.put({ ...row, status: result.status, conflictCode: result.conflictCode ?? null, serverEntityId: result.serverEntityId ?? null, updatedAt: new Date().toISOString() });
+    }
     await done;
   } finally {
     db.close();
