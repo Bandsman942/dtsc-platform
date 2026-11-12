@@ -2511,3 +2511,10 @@ Hotfix #861 (complément) : un secret CRON_SECRET Production commun réveille po
 - Outbox idempotente par facture, suivi des états QUEUED/RECEIVED/REJECTED/UNKNOWN_OUTCOME ; aucune écriture comptable déclenchée.
 - Console UAT import JSON, contrôles puis confirmation ; envoi distant bloqué par défaut.
 - Exigence de certification HSL maintenue pour les noms d'identifiants, la sémantique des montants, les dates, les codes et le suivi des statuts.
+
+### HIRMS-01 — Sélection UAT ou PRODUCTION (branche non livrée)
+- Registre, OAuth, vérification d'adhérents et facturation individuelle/bulk reliés aux deux environnements officiels HSL.
+- Configurations et secrets distincts par organisation + adaptateur + environnement ; aucune migration automatique des identifiants UAT vers Production.
+- Historique, empreintes et prévention des doublons séparés par environnement ; les états incertains restent bloqués jusqu'au rapprochement.
+- Interfaces Design 2.0 : sélecteur UAT/PRODUCTION partagé, confirmation explicite d'un envoi réel, aides et liens profonds conservant la destination.
+- Variables serveur HEALTH_INSURANCE_HIRMS_PRODUCTION_ENABLED et HEALTH_INSURANCE_HIRMS_PRODUCTION_INVOICE_SEND_ENABLED = false par défaut ; aucun appel réel ni déploiement de cette branche en Production.
