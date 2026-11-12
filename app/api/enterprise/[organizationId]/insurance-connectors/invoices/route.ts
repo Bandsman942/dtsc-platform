@@ -17,6 +17,7 @@ const commandSchema = z.object({
   operation: z.enum(["preflight","submit"]),
   mode: z.enum(["single","bulk"]),
   payload: z.unknown(),
+  productionConfirmation: z.literal("PRODUCTION").optional(),
 }).strict();
 
 async function access(organizationId: string, session: NonNullable<Awaited<ReturnType<typeof getSession>>>, mutate: boolean) {
@@ -74,7 +75,9 @@ export async function POST(req: Request, { params }: Params) {
     return NextResponse.json({ error: "HIRMS_INVOICE_REQUEST_TOO_LARGE" }, { status: 413 });
   const parsed = commandSchema.safeParse(await req.json().catch(()=>null));
   if (!parsed.success) return NextResponse.json({ error: "HIRMS_INVOICE_COMMAND_INVALID", message: "Choisissez l'envoi individuel ou groupé et transmettez le JSON des factures." }, { status: 400 });
-  const {environment,operation,mode,payload} = parsed.data;
+  const {environment,operation,mode,payload,productionConfirmation} = parsed.data;
+  if (environment === "PRODUCTION" && operation === "submit" && productionConfirmation !== "PRODUCTION")
+    return NextResponse.json({ error: "HIRMS_PRODUCTION_CONFIRMATION_REQUIRED", message: "Confirmez explicitement la transmission réelle avant l’envoi." }, { status: 409 });
   try {
     const result = operation === "preflight"
       ? await preflightHirmsInvoiceSubmission(organizationId,environment,mode,payload)
