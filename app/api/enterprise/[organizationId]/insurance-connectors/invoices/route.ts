@@ -71,7 +71,7 @@ export async function POST(req: Request, { params }: Params) {
   if (!(await access(organizationId,session,true))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const limited = await rateLimit(getRateLimitKey(req, `health-insurance-invoice-send:${organizationId}:${session.userId}`), 12, 3600000);
   if (!limited.ok) return NextResponse.json({ error: "HIRMS_INVOICE_LOCAL_RATE_LIMIT" }, { status: 429 });
-  if (Number(req.headers.get("content-length") || 0) > 8 * 1024 * 1024)
+  if (Number(req.headers.get("content-length") || 0) > 4 * 1024 * 1024)
     return NextResponse.json({ error: "HIRMS_INVOICE_REQUEST_TOO_LARGE" }, { status: 413 });
   const parsed = commandSchema.safeParse(await req.json().catch(()=>null));
   if (!parsed.success) return NextResponse.json({ error: "HIRMS_INVOICE_COMMAND_INVALID", message: "Choisissez l'envoi individuel ou groupé et transmettez le JSON des factures." }, { status: 400 });
