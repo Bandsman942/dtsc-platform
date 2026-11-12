@@ -8,7 +8,8 @@ import {
 import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
 import { assertSalesCreditNoteStillPostable } from "@/lib/enterprise/accounting/credit-note-posting-preflight";
 import { money, publishFinanceEvent } from "@/lib/enterprise/accounting/helpers";
-import { postBusinessEvent } from "@/lib/enterprise/accounting/posting-service";
+import { postBusinessEvent, postBusinessEventTx } from "@/lib/enterprise/accounting/posting-service";
+import { recordPostedTaxApplicationsTx } from "@/lib/enterprise/accounting/tax-engine";
 
 type AssignedDocumentSubmitInput = {
   revision: number;
@@ -263,11 +264,6 @@ export async function postApprovedSalesCreditNote(
   // Preflight before posting prevents any Finance journal on an unreconciled Retail sale.
   await assertSalesCreditNoteStillPostable(organizationId, creditNoteId, revision);
 
-  const posting = await postBusinessEvent(organizationId, actorUserId, {
-    postingEvent: "SALES_CREDIT_NOTE_POSTED",
-    sourceEntityType: "EnterpriseSalesCreditNote",
-    sourceEntityId: initial.id,
-  });
   return prisma.$transaction(async (tx) => {
     await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterpriseSalesCreditNote" WHERE id = ${creditNoteId} AND "organizationId" = ${organizationId} FOR UPDATE`);
     const credit = await tx.enterpriseSalesCreditNote.findFirst({ where: { id: creditNoteId, organizationId }, include: { salesInvoice: { include: { receivable: true } } } });
@@ -280,6 +276,9 @@ export async function postApprovedSalesCreditNote(
     if (credit.status !== "APPROVED" || credit.revision !== revision) throw new EnterpriseAccountingError("SALES_CREDIT_NOTE_NOT_APPROVED", 409);
     const receivable = credit.salesInvoice.receivable;
     if (credit.grandTotal.greaterThan(receivable.outstandingAmount)) throw new EnterpriseAccountingError("CREDIT_NOTE_EXCEEDS_OPEN_RECEIVABLE", 409);
+    const posting = await postBusinessEventTx(tx, organizationId, actorUserId, { postingEvent: "SALES_CREDIT_NOTE_POSTED", sourceEntityType: "EnterpriseSalesCreditNote", sourceEntityId: credit.id });
+    const creditTaxLines = await tx.enterpriseSalesCreditNoteItem.findMany({ where: { organizationId, salesCreditNoteId: credit.id }, select: { id: true, taxBreakdownJson: true } });
+    await recordPostedTaxApplicationsTx(tx, { organizationId, sourceEntityType: "EnterpriseSalesCreditNoteItem", currencyCode: credit.currencyCode, items: creditTaxLines });
     const outstanding = money(receivable.outstandingAmount.minus(credit.grandTotal));
     await tx.enterpriseReceivableAllocation.create({
       data: { organizationId, receivableId: receivable.id, sourceType: "SALES_CREDIT_NOTE", sourceId: credit.id, amount: credit.grandTotal, allocationDate: credit.creditDate, createdByUserId: actorUserId },
@@ -405,11 +404,6 @@ export async function postApprovedSupplierCreditNote(
   if (initial.status === "POSTED") return initial;
   if (initial.status !== "APPROVED" || initial.revision !== revision) throw new EnterpriseAccountingError("SUPPLIER_CREDIT_NOTE_NOT_APPROVED", 409);
 
-  const posting = await postBusinessEvent(organizationId, actorUserId, {
-    postingEvent: "SUPPLIER_CREDIT_NOTE_POSTED",
-    sourceEntityType: "EnterpriseSupplierCreditNote",
-    sourceEntityId: initial.id,
-  });
   return prisma.$transaction(async (tx) => {
     await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterpriseSupplierCreditNote" WHERE id = ${creditNoteId} AND "organizationId" = ${organizationId} FOR UPDATE`);
     const credit = await tx.enterpriseSupplierCreditNote.findFirst({ where: { id: creditNoteId, organizationId }, include: { supplierInvoice: { include: { payable: true } } } });
@@ -417,6 +411,10 @@ export async function postApprovedSupplierCreditNote(
     if (credit.status === "POSTED") return credit;
     if (credit.status !== "APPROVED" || credit.revision !== revision) throw new EnterpriseAccountingError("SUPPLIER_CREDIT_NOTE_NOT_APPROVED", 409);
     const payable = credit.supplierInvoice.payable;
+    if (credit.grandTotal.greaterThan(payable.outstandingAmount)) throw new EnterpriseAccountingError("SUPPLIER_CREDIT_EXCEEDS_OPEN_PAYABLE", 409);
+    const posting = await postBusinessEventTx(tx, organizationId, actorUserId, { postingEvent: "SUPPLIER_CREDIT_NOTE_POSTED", sourceEntityType: "EnterpriseSupplierCreditNote", sourceEntityId: credit.id });
+    const creditTaxLines = await tx.enterpriseSupplierCreditNoteItem.findMany({ where: { organizationId, supplierCreditNoteId: credit.id }, select: { id: true, taxBreakdownJson: true, taxRecoveryRequested: true } });
+    await recordPostedTaxApplicationsTx(tx, { organizationId, sourceEntityType: "EnterpriseSupplierCreditNoteItem", currencyCode: credit.currencyCode, items: creditTaxLines });
     const outstanding = money(payable.outstandingAmount.minus(credit.grandTotal));
     await tx.enterprisePayableAllocation.create({
       data: { organizationId, payableId: payable.id, sourceType: "SUPPLIER_CREDIT_NOTE", sourceId: credit.id, amount: credit.grandTotal, allocationDate: credit.creditDate, createdByUserId: actorUserId },
