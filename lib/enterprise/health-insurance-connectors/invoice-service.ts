@@ -6,6 +6,8 @@ import { openHirmsCredentials } from "./crypto";
 import { type HirmsInvoice, hirmsInvoiceSchema, hirmsInvoiceBulkSchema } from "./invoice-contract";
 import { InsuranceConnectorError } from "./registry";
 import { postHirmsInvoices, HirmsInvoiceTransportError } from "./hirms-invoices";
+import { assertHirmsEnvironmentEnabled } from "./environments";
+import { getHirmsRemoteInvoiceStatus } from "./hirms-status";
 
 export type HirmsDispatchMode = "single" | "bulk";
 
@@ -143,8 +145,49 @@ export async function listHirmsInvoiceSubmissions(organizationId: string, enviro
     prisma.enterpriseHealthInsuranceInvoiceSubmission.findMany({
       where, orderBy: { submittedAt: "desc" }, skip: (safePage-1)*20, take: 20,
       select: { id: true, invoiceNumber: true, batchId: true, transportStatus: true, httpStatus: true,
-        errorCode: true, externalReference: true, submittedAt: true },
+        errorCode: true, externalReference: true, remoteStatus: true, lastStatusCheckedAt: true, lastStatusErrorCode: true, submittedAt: true },
     }),
   ]);
   return { items, total, page: safePage, pageCount: Math.max(1,Math.ceil(total/20)) };
+}
+
+/** Explicit manual remote-status read. Never converts an HSL code into payment,
+ * coverage, credit allocation or a journal entry.
+ */
+export async function reconcileHirmsInvoiceStatus(
+  organizationId: string, environment: HirmsEnvironment, submissionId: string,
+) {
+  assertHirmsEnvironmentEnabled(environment, organizationId);
+  const row = await prisma.enterpriseHealthInsuranceInvoiceSubmission.findFirst({
+    where: { organizationId, adapterCode: "HIRMS_HSL", environment, id: submissionId },
+    select: { id: true, salesInvoiceId: true, externalReference: true, connectorId: true },
+  });
+  if (!row) reject("HIRMS_INVOICE_SUBMISSION_NOT_FOUND", 404);
+  const connector = await prisma.enterpriseHealthInsuranceConnector.findFirst({
+    where: { id: row.connectorId, organizationId, environment, adapterCode: "HIRMS_HSL", status: "READY" },
+    select: { credentialsEncrypted: true },
+  });
+  if (!connector?.credentialsEncrypted) reject("HIRMS_CONNECTOR_NOT_AUTHORIZED", 409);
+  try {
+    const external = await getHirmsRemoteInvoiceStatus(
+      openHirmsCredentials(connector.credentialsEncrypted),
+      environment, organizationId, row.externalReference || row.salesInvoiceId,
+    );
+    await prisma.enterpriseHealthInsuranceInvoiceSubmission.updateMany({
+      where: { id: row.id, organizationId, environment, connectorId: row.connectorId },
+      data: { remoteStatus: external.remoteStatus, lastStatusCheckedAt: new Date(), lastStatusErrorCode: external.schemaRecognized ? null : "HIRMS_STATUS_SCHEMA_UNCONFIRMED" },
+    });
+    return {
+      ok: true, environment, remoteStatus: external.remoteStatus, schemaRecognized: external.schemaRecognized,
+      message: external.schemaRecognized
+        ? "Code d'état HSL reçu ; ne constitue ni une preuve de paiement, ni une décision d'assurance."
+        : "HSL a répondu mais le schéma de statut reste à certifier. Aucune décision métier n'est déduite.",
+    };
+  } catch (error) {
+    await prisma.enterpriseHealthInsuranceInvoiceSubmission.updateMany({
+      where: { id: row.id, organizationId, environment, connectorId: row.connectorId },
+      data: { lastStatusCheckedAt: new Date(), lastStatusErrorCode: error instanceof InsuranceConnectorError ? error.code : "HIRMS_INVOICE_STATUS_UNAVAILABLE" },
+    });
+    throw error;
+  }
 }
