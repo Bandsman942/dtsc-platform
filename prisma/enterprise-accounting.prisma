@@ -445,6 +445,9 @@ model EnterpriseSalesInvoiceItem {
   discountAmount     Decimal                @default(0) @db.Decimal(20, 6)
   netAmount          Decimal                @db.Decimal(20, 6)
   taxCodeId          String?
+  taxRateApplied     Decimal?               @db.Decimal(12, 8)
+  taxJurisdiction    String?
+  taxTemplateVersion String?
   taxAmount          Decimal                @default(0) @db.Decimal(20, 6)
   totalAmount        Decimal                @db.Decimal(20, 6)
   revenueAccountId   String?
