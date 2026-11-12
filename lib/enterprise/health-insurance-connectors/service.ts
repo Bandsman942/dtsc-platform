@@ -1,10 +1,12 @@
 import { z } from "zod";
+import { HIRMS_ENVIRONMENTS, assertHirmsEnvironmentEnabled, type HirmsEnvironment } from "./environments";
 import { prisma } from "@/lib/prisma";
 import { sealHirmsCredentials, openHirmsCredentials } from "./crypto";
 import { hirmsAdapter } from "./hirms";
 import { type InsuranceMemberVerification, InsuranceConnectorError } from "./registry";
 
 export const connectorSettingsSchema = z.object({
+  environment: z.enum(HIRMS_ENVIRONMENTS),
   siteId: z.string().cuid().nullable().optional(),
   hslServiceProviderId: z.number().int().positive().nullable().optional(),
   username: z.string().trim().regex(/^hirms-api-[a-zA-Z0-9_-]{32}$/, "Compte HSL invalide").optional(),
@@ -14,6 +16,7 @@ export const connectorSettingsSchema = z.object({
 });
 
 export const memberVerificationSchema = z.object({
+  environment: z.enum(HIRMS_ENVIRONMENTS),
   memberNumber: z.string().trim().min(4).max(100),
   cardReference: z.string().min(6).max(600),
   serviceCode: z.string().trim().min(1).max(80).optional(),
@@ -24,10 +27,10 @@ export const memberVerificationSchema = z.object({
   message: "Un code de prestation est requis lorsque le système de codification est choisi.",
 });
 
-export async function getInsuranceConnectorDashboard(organizationId: string) {
+export async function getInsuranceConnectorDashboard(organizationId: string, environment: HirmsEnvironment) {
   const [entry, sites] = await Promise.all([
     prisma.enterpriseHealthInsuranceConnector.findUnique({
-      where: { organizationId_adapterCode: { organizationId, adapterCode: "HIRMS_HSL" } },
+      where: { organizationId_adapterCode_environment: { organizationId, adapterCode: "HIRMS_HSL", environment } },
       select: { id: true, adapterCode: true, environment: true, siteId: true, hslServiceProviderId: true, status: true, credentialsEncrypted: true, credentialsUpdatedAt: true, lastAuthCheckAt: true, lastVerifiedAt: true, lastErrorCode: true, revision: true },
     }),
     prisma.enterpriseSite.findMany({ where: { organizationId, status: "ACTIVE", archivedAt: null }, orderBy: { name: "asc" }, select: { id: true, name: true, code: true } }),
@@ -38,12 +41,15 @@ export async function getInsuranceConnectorDashboard(organizationId: string) {
       status: entry.status, credentialsConfigured: Boolean(entry.credentialsEncrypted), credentialsUpdatedAt: entry.credentialsUpdatedAt,
       lastAuthCheckAt: entry.lastAuthCheckAt, lastVerifiedAt: entry.lastVerifiedAt, lastErrorCode: entry.lastErrorCode, revision: entry.revision,
     } : null,
-    sites,
+    sites, environment,
+    productionEnabled: process.env.HEALTH_INSURANCE_HIRMS_PRODUCTION_ENABLED === "true",
+    uatInvoiceSendEnabled: process.env.HEALTH_INSURANCE_HIRMS_UAT_INVOICE_SEND_ENABLED === "true",
+    productionInvoiceSendEnabled: process.env.HEALTH_INSURANCE_HIRMS_PRODUCTION_ENABLED === "true" && process.env.HEALTH_INSURANCE_HIRMS_PRODUCTION_INVOICE_SEND_ENABLED === "true",
   };
 }
 
 export async function saveInsuranceConnector(organizationId: string, userId: string, settings: z.infer<typeof connectorSettingsSchema>) {
-  const existing = await prisma.enterpriseHealthInsuranceConnector.findUnique({ where: { organizationId_adapterCode: { organizationId, adapterCode: "HIRMS_HSL" } } });
+  const existing = await prisma.enterpriseHealthInsuranceConnector.findUnique({ where: { organizationId_adapterCode_environment: { organizationId, adapterCode: "HIRMS_HSL", environment: settings.environment } } });
   if (settings.siteId) {
     const valid = await prisma.enterpriseSite.findFirst({ where: { organizationId, id: settings.siteId, status: "ACTIVE", archivedAt: null }, select: { id: true } });
     if (!valid) throw new InsuranceConnectorError("HEALTH_CONNECTOR_SITE_INVALID", 400);
@@ -51,9 +57,9 @@ export async function saveInsuranceConnector(organizationId: string, userId: str
   if (!settings.username && !existing?.credentialsEncrypted) throw new InsuranceConnectorError("HEALTH_CONNECTOR_CREDENTIALS_REQUIRED", 400);
   const ciphertext = settings.username && settings.secret ? sealHirmsCredentials({ username: settings.username, secret: settings.secret }) : undefined;
   await prisma.enterpriseHealthInsuranceConnector.upsert({
-    where: { organizationId_adapterCode: { organizationId, adapterCode: "HIRMS_HSL" } },
+    where: { organizationId_adapterCode_environment: { organizationId, adapterCode: "HIRMS_HSL", environment: settings.environment } },
     create: {
-      organizationId, adapterCode: "HIRMS_HSL", environment: "UAT", siteId: settings.siteId || null,
+      organizationId, adapterCode: "HIRMS_HSL", environment: settings.environment, siteId: settings.siteId || null,
       status: "DRAFT", hslServiceProviderId: settings.hslServiceProviderId || null, credentialsEncrypted: ciphertext || null, credentialsUpdatedAt: ciphertext ? new Date() : null, createdByUserId: userId,
     },
     update: {
@@ -64,23 +70,25 @@ export async function saveInsuranceConnector(organizationId: string, userId: str
       updatedByUserId: userId, revision: { increment: 1 },
     },
   });
-  return getInsuranceConnectorDashboard(organizationId);
+  return getInsuranceConnectorDashboard(organizationId, settings.environment);
 }
 
-export async function checkInsuranceConnector(organizationId: string) {
-  const entry = await prisma.enterpriseHealthInsuranceConnector.findUnique({ where: { organizationId_adapterCode: { organizationId, adapterCode: "HIRMS_HSL" } } });
+export async function checkInsuranceConnector(organizationId: string, environment: HirmsEnvironment) {
+  assertHirmsEnvironmentEnabled(environment);
+  const entry = await prisma.enterpriseHealthInsuranceConnector.findUnique({ where: { organizationId_adapterCode_environment: { organizationId, adapterCode: "HIRMS_HSL", environment } } });
   if (!entry || !entry.credentialsEncrypted) throw new InsuranceConnectorError("HEALTH_CONNECTOR_CREDENTIALS_REQUIRED", 409);
-  if (entry.environment !== "UAT") throw new InsuranceConnectorError("HEALTH_CONNECTOR_PRODUCTION_NOT_APPROVED", 403);
+
   const credentials = openHirmsCredentials(entry.credentialsEncrypted);
-  await hirmsAdapter.checkConnection(credentials);
+  await hirmsAdapter.checkConnection(credentials, environment);
   await prisma.enterpriseHealthInsuranceConnector.update({ where: { id: entry.id }, data: { lastAuthCheckAt: new Date(), lastErrorCode: null, status: "READY" } });
   return { ok: true };
 }
 
 export async function verifyInsuranceMember(organizationId: string, userId: string, data: z.infer<typeof memberVerificationSchema>) {
-  const entry = await prisma.enterpriseHealthInsuranceConnector.findUnique({ where: { organizationId_adapterCode: { organizationId, adapterCode: "HIRMS_HSL" } } });
+  assertHirmsEnvironmentEnabled(data.environment);
+  const entry = await prisma.enterpriseHealthInsuranceConnector.findUnique({ where: { organizationId_adapterCode_environment: { organizationId, adapterCode: "HIRMS_HSL", environment: data.environment } } });
   if (!entry || entry.status !== "READY" || !entry.credentialsEncrypted) throw new InsuranceConnectorError("HEALTH_CONNECTOR_NOT_READY", 409);
-  if (entry.environment !== "UAT") throw new InsuranceConnectorError("HEALTH_CONNECTOR_PRODUCTION_NOT_APPROVED", 403);
+
   if (data.patientId) {
     const patient = await prisma.healthPatient.findFirst({ where: { organizationId, id: data.patientId }, select: { id: true } });
     if (!patient) throw new InsuranceConnectorError("HEALTH_CONNECTOR_PATIENT_INVALID", 400);
@@ -91,7 +99,7 @@ export async function verifyInsuranceMember(organizationId: string, userId: stri
     ...(data.codeSystem ? { codeSystem: data.codeSystem } : {}),
     ...(data.serviceDate ? { serviceDate: data.serviceDate } : {}),
   };
-  const result = await hirmsAdapter.verify(openHirmsCredentials(entry.credentialsEncrypted), input);
+  const result = await hirmsAdapter.verify(openHirmsCredentials(entry.credentialsEncrypted), input, data.environment);
   await prisma.$transaction([
     prisma.enterpriseHealthInsuranceVerification.create({ data: {
       organizationId, connectorId: entry.id, patientId: data.patientId || null,
