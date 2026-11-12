@@ -56,6 +56,7 @@ const ENUM_LABELS: Record<FinanceLocale, Record<string, string>> = {
     TAX_PAYABLE: "Taxes à payer", PAYROLL_PAYABLE: "Dettes salariales", RETAINED_EARNINGS: "Résultats reportés", TAX_RECEIVABLE: "Taxes à récupérer",
     COST_OF_SALES: "Coût des ventes", OPERATING_EXPENSE: "Charges d’exploitation",
     SALES: "Ventes", PURCHASES: "Achats", PAYROLL: "Paie", INVENTORY: "Stocks", ASSETS: "Immobilisations", TAX: "Fiscalité", OPENING: "Ouverture", ADJUSTMENT: "Ajustement", GENERAL: "Opérations générales",
+    VAT: "TVA — Taxe sur la valeur ajoutée", SALES_TAX: "Taxe sur les ventes", GST: "Taxe générale sur les biens et services", WITHHOLDING: "Retenue fiscale à la source", EXCISE: "Droits d’accise", STAMP_DUTY: "Droits de timbre", CUSTOMS: "Droits et taxes douaniers", ENVIRONMENTAL: "Taxe environnementale", TOURISM: "Taxe touristique", LOCAL_LEVY: "Taxe locale", EXEMPT: "Exonération (historique)", ZERO_RATED: "Taux zéro (historique)",
     BALANCE_SHEET: "Bilan", INCOME_STATEMENT: "Compte de résultat", DEBIT: "Débit", CREDIT_BALANCE: "Crédit"
   },
   en: {
@@ -67,7 +68,7 @@ const ENUM_LABELS: Record<FinanceLocale, Record<string, string>> = {
     TAX_PAYABLE: "Tax payable", PAYROLL_PAYABLE: "Payroll payable", RETAINED_EARNINGS: "Retained earnings", TAX_RECEIVABLE: "Tax receivable",
     COST_OF_SALES: "Cost of sales", OPERATING_EXPENSE: "Operating expenses",
     OTHER_INCOME: "Other income", OTHER_EXPENSE: "Other expense", SALES: "Sales", PURCHASES: "Purchases", PAYROLL: "Payroll", INVENTORY: "Inventory", ASSETS: "Fixed assets", TAX: "Tax",
-    OPENING: "Opening", ADJUSTMENT: "Adjustment", GENERAL: "General operations", BALANCE_SHEET: "Balance sheet", INCOME_STATEMENT: "Income statement", DEBIT: "Debit", CREDIT_BALANCE: "Credit"
+    OPENING: "Opening", ADJUSTMENT: "Adjustment", GENERAL: "General operations", VAT: "Value-added tax", SALES_TAX: "Sales tax", GST: "Goods and services tax", WITHHOLDING: "Withholding tax", EXCISE: "Excise duty", STAMP_DUTY: "Stamp duty", CUSTOMS: "Customs duties", ENVIRONMENTAL: "Environmental tax", TOURISM: "Tourism tax", LOCAL_LEVY: "Local levy", EXEMPT: "Exempt (legacy)", ZERO_RATED: "Zero-rated (legacy)", BALANCE_SHEET: "Balance sheet", INCOME_STATEMENT: "Income statement", DEBIT: "Debit", CREDIT_BALANCE: "Credit"
   }
 };
 
