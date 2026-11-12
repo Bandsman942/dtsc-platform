@@ -86,6 +86,7 @@ export function HirmsInvoiceSubmissionWorkspace({organizationId,initialEnvironme
       </div>
       <Link href="/enterprise-admin" className="rounded-xl border border-dtsc-border px-3 py-2 text-sm font-bold text-dtsc-ink">{tx("Retour à l’administration","Back to administration")}</Link>
     </header>
+    <Link href={`/enterprise-insurance/ocr?environment=${environment}`} className="inline-flex min-h-11 items-center rounded-xl border border-dtsc-border px-3 py-2 text-sm font-bold text-dtsc-ink">{tx("Documents et suivi OCR","OCR documents and tracking")}</Link>
     <HirmsEnvironmentSwitch value={environment} onChange={switchEnvironment} disabled={pending}/>
     <section className="flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 text-sm text-dtsc-ink">
       <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" aria-hidden="true"/>
