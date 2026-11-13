@@ -6,6 +6,7 @@ import { getHealthQualityAccess } from "@/lib/health-quality-access";
 import { createHealthQualityIncident } from "@/lib/health-quality";
 import { healthQualityIncidentCreateSchema } from "@/lib/health-quality-validators";
 import { prisma } from "@/lib/prisma";
+import { redactHealthQualityIncident } from "@/lib/health-quality-redaction";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
 
@@ -36,7 +37,9 @@ export async function GET(_: Request, { params }: Params) {
     prisma.enterpriseDepartment.findMany({ where: { organizationId, isActive: true }, select: { id: true, labelFr: true } }),
     prisma.organizationMember.findMany({ where: { organizationId, status: "ACTIVE", removedAt: null }, select: { userId: true, user: { select: { name: true, email: true } } } }),
   ]);
-  const clean = incidents.map((incident) => access.canViewSensitive || incident.reportedById === session.userId || incident.assignedToId === session.userId ? incident : { ...incident, internalNotes: null, witnesses: null, confidentialityReason: null, investigationSummary: null, immediateCause: null, rootCause: null, contributingFactors: null, investigationConclusion: null, recommendations: null });
+  const clean=incidents.map(incident=>redactHealthQualityIncident(incident,
+    access.canViewSensitive || incident.reportedById===session.userId || incident.assignedToId===session.userId ||
+    incident.correctiveActions.some(action=>action.responsibleUserId===session.userId)));
   const now = Date.now(), month = new Date().getMonth(), year = new Date().getFullYear();
   const metrics = {
     open: incidents.filter((item) => !["CLOSED", "ARCHIVED", "CANCELLED", "REJECTED"].includes(item.status)).length,
@@ -49,7 +52,7 @@ export async function GET(_: Request, { params }: Params) {
     closedMonth: incidents.filter((item) => item.closedAt?.getMonth() === month && item.closedAt?.getFullYear() === year).length,
   };
   const permissions = { canViewAll: access.canViewAll, canViewSensitive: access.canViewSensitive, canViewConfidential: access.canViewConfidential, canCreate: access.canCreate, canUpdate: access.canUpdate, canQualify: access.canQualify, canAssign: access.canAssign, canInvestigate: access.canInvestigate, canClose: access.canClose, canReopen: access.canReopen, canArchive: access.canArchive, canManageActions: access.canManageActions, canValidateActions: access.canValidateActions, canViewReports: access.canViewReports };
-  return NextResponse.json({ incidents: clean, metrics, patients, appointments, consultations, medicalRecords, labs, dispensations, movements, invoices, coverages, staff, departments, members, currentUserId: session.userId, permissions });
+  return NextResponse.json({ incidents: clean, metrics, patients:access.canCreate?patients.map(patient=>({...patient,fullName:access.canViewSensitive?patient.fullName:patient.patientNumber})):[], appointments, consultations, medicalRecords, labs, dispensations, movements:access.canViewSensitive?movements:movements.map(item=>({...item,reason:null})), invoices, coverages, staff, departments, members, currentUserId: session.userId, permissions },{headers:{"Cache-Control":"private, no-store"}});
 }
 
 export async function POST(req: Request, { params }: Params) {
