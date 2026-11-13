@@ -12,6 +12,7 @@ const prisma = new PrismaClient();
 const load = workflowTestLoader({ "@/lib/prisma": { prisma } });
 const { enqueueAdminBroadcast } = load("@/lib/mail/admin-broadcast-queue");
 const { webPushQueueOrganizationId } = load("@/lib/push/constants");
+const { DTSC_INTERNAL_ORGANIZATION_ID } = load("@/lib/organizations");
 const prefix = `global-outbox-${randomUUID()}`;
 const users = Array.from({ length: 3 }, (_, i) => ({
   id: `${prefix}-user-${i}`,
@@ -23,11 +24,17 @@ const users = Array.from({ length: 3 }, (_, i) => ({
 const organizationId = `${prefix}-tenant`;
 const broadcasts = [];
 const createdEvents = [];
+let createdInternalOrganization = false;
 try {
-  assert.equal(webPushQueueOrganizationId(null), null);
-  assert.equal(webPushQueueOrganizationId(undefined), null);
+  assert.equal(webPushQueueOrganizationId(null), DTSC_INTERNAL_ORGANIZATION_ID);
+  assert.equal(webPushQueueOrganizationId(undefined), DTSC_INTERNAL_ORGANIZATION_ID);
   assert.equal(webPushQueueOrganizationId(organizationId), organizationId);
 
+  const internal = await prisma.organization.findUnique({ where: { id: DTSC_INTERNAL_ORGANIZATION_ID }, select: { id: true } });
+  if (!internal) {
+    await prisma.organization.create({ data: { id: DTSC_INTERNAL_ORGANIZATION_ID, name: "DTSC QA internal tenant", organizationType: "DTSC_INTERNAL" } });
+    createdInternalOrganization = true;
+  }
   await prisma.user.createMany({ data: users });
   await prisma.organization.create({ data: { id: organizationId, name: "QA Outbox tenant" } });
   const recipients = users.map(({ id, email, name, notifyBroadcastEnabled }) => ({ id, email, name, notifyBroadcastEnabled }));
@@ -65,7 +72,7 @@ try {
     where: { eventType: "PLATFORM_WEB_PUSH_NOTIFICATION", entityId: { in: notifications.map((item) => item.id) } },
   });
   assert.equal(push.length, 4);
-  assert.ok(push.every((item) => item.organizationId === null && item.processingStatus === "PENDING"));
+  assert.ok(push.every((item) => item.organizationId === DTSC_INTERNAL_ORGANIZATION_ID && item.processingStatus === "PENDING"));
   for (const broadcastId of broadcasts) {
     const jobs = await prisma.enterpriseDomainEvent.findMany({ where: {
       entityId: { startsWith: broadcastId },
@@ -73,7 +80,7 @@ try {
     } });
     const expected = broadcastId === grouped.broadcastId ? 2 : 4;
     assert.equal(jobs.length, expected);
-    assert.ok(jobs.every((job) => job.organizationId === null));
+    assert.ok(jobs.every((job) => job.organizationId === DTSC_INTERNAL_ORGANIZATION_ID));
     assert.equal(jobs.filter((job) => job.eventType === "PLATFORM_ADMIN_BROADCAST_EMAIL_PAYLOAD").length, 1);
     assert.equal(jobs.filter((job) => job.eventType === "PLATFORM_ADMIN_BROADCAST_EMAIL_DELIVERY").length, expected - 1);
   }
@@ -90,13 +97,20 @@ try {
     entityType: "QA", entityId: prefix, idempotencyKey: `${prefix}-bad-fk`,
   } }), (error) => error.code === "P2003");
 
-  // A NULL tenant context is allowed ONLY for the three platform event types.
+  // Nullable scope must remain disallowed for all queue rows.
   await assert.rejects(prisma.enterpriseDomainEvent.create({ data: {
     organizationId: null, eventType: "QA_ENTERPRISE_ONLY",
     entityType: "QA", entityId: prefix, idempotencyKey: `${prefix}-bad-global`,
-  } }), "Global scope allow-list constraint must reject tenant event types");
+  } }), "Prisma tenant scope must remain required");
 
-  console.log("PASS HOTFIX global outbox PostgreSQL: group/personalized delivery, push, NULL scope, tenant FK, allow-list, idempotent keys");
+  // Global broadcast email jobs cannot be scoped to a customer tenant.
+  await assert.rejects(prisma.enterpriseDomainEvent.create({ data: {
+    organizationId, eventType: "PLATFORM_ADMIN_BROADCAST_EMAIL_DELIVERY",
+    entityType: "AdminBroadcastEmailDelivery", entityId: prefix,
+    idempotencyKey: `${prefix}-bad-broadcast-owner`,
+  } }), "DB must guard broadcast owner against a customer tenant");
+
+  console.log("PASS HOTFIX global outbox PostgreSQL: group/personalized delivery, push, real internal tenant, tenant FK and broadcast owner guard");
 } finally {
   const notifications = await prisma.notification.findMany({
     where: { userId: { in: users.map((user) => user.id) } }, select: { id: true },
@@ -109,5 +123,6 @@ try {
   await prisma.notification.deleteMany({ where: { userId: { in: users.map((user) => user.id) } } }).catch(() => undefined);
   await prisma.user.deleteMany({ where: { id: { in: users.map((user) => user.id) } } }).catch(() => undefined);
   await prisma.organization.deleteMany({ where: { id: organizationId } }).catch(() => undefined);
+  if (createdInternalOrganization) await prisma.organization.deleteMany({ where: { id: DTSC_INTERNAL_ORGANIZATION_ID } }).catch(() => undefined);
   await prisma.$disconnect();
 }
