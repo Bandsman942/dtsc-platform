@@ -1,11 +1,12 @@
 {
   "name": "dtsc-platform",
-  "version": "1.16.2",
+  "version": "1.17.0",
   "private": true,
   "engines": {
     "node": "22.x"
   },
   "scripts": {
+    "qa:routing-scalability": "node scripts/qa-routes-dispatch-parity.mjs && node scripts/qa-routes-dispatch-behavior.mjs && node scripts/qa-routes-scalability.mjs --assert",
     "qa:global-outbox": "node scripts/qa-hotfix-global-outbox-contract.mjs",
     "qa:global-outbox:postgres": "node scripts/qa-hotfix-global-outbox-postgres.mjs",
     "qa:hirms-design2-1132": "node --experimental-strip-types scripts/qa-hirms-design2-1132.mjs",

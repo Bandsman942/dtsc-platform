@@ -41,7 +41,7 @@ invalid(altered,"missing CPT value blocked");
 const files={
   sender:"lib/enterprise/health-insurance-connectors/hirms-invoices.ts",
   service:"lib/enterprise/health-insurance-connectors/invoice-service.ts",
-  api:"app/api/enterprise/[organizationId]/insurance-connectors/invoices/route.ts",
+  api:"app/api/enterprise/[organizationId]/insurance-connectors/invoices/handler.ts",
   migration:"prisma/migrations/20261112231000_hirms_invoice_transport/migration.sql",
   docs:"docs/integrations/HIRMS_HEALTH_INSURANCE_CONNECTORS.md",
   env:"lib/enterprise/health-insurance-connectors/environments.ts",

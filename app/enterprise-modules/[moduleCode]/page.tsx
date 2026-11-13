@@ -16,6 +16,8 @@ import { EnterpriseSalesOperationsWorkspace } from "@/components/enterprise/prof
 import { EnterpriseSitesWorkspace } from "@/components/enterprise/professional/enterprise-sites-workspace";
 import { EnterpriseTimeAttendanceWorkspace } from "@/components/enterprise/professional/enterprise-time-attendance-workspace";
 import { EnterpriseModuleWorkspace } from "@/components/enterprise/enterprise-module-workspace";
+import { EnterpriseFinanceModulePage } from "@/components/enterprise/enterprise-finance-module-page";
+import type { EnterpriseFinanceModuleCode } from "@/lib/enterprise/accounting/constants";
 import { EnterpriseSectorModuleWorkspace } from "@/components/enterprise/enterprise-sector-module-workspace";
 import { AppShell } from "@/components/layout/app-shell";
 import { getSession, requireUser } from "@/lib/auth";
@@ -36,17 +38,42 @@ import { prisma } from "@/lib/prisma";
 
 type Params = { params: Promise<{ moduleCode: string }> };
 
+const FINANCE_ROUTE_CODES: ReadonlySet<string> = new Set([
+  "FINANCE_ACCOUNTING",
+  "FINANCE_ASSETS",
+  "FINANCE_BANK",
+  "FINANCE_CASH",
+  "FINANCE_CLOSE",
+  "FINANCE_INVENTORY",
+  "FINANCE_OVERVIEW",
+  "FINANCE_PAYABLES",
+  "FINANCE_PAYMENTS",
+  "FINANCE_RECEIVABLES",
+  "FINANCE_RECONCILIATION",
+  "FINANCE_STATEMENTS",
+  "FINANCE_TAX",
+  "FINANCE_TREASURY"
+]);
+
+
 // Legacy QA markers retained during migration to the canonical registry:
 // canAccessEnterpriseModule / requireEnterpriseMembership / organizationId_moduleCode / !enterpriseModule.isCore
 // enterpriseModule.moduleCode === "AI_ASSISTANT"
 // The executable route now uses canonical capability resolution and explicit routeKind/workspace allow-lists.
 export default async function EnterpriseModulePage({ params }: Params) {
+  const { moduleCode: requestedModuleCode } = await params;
+  // ROUTES-03: Same historical /enterprise-modules/FINANCE_* URLs, now
+  // handled by the existing dynamic page. The original finance server component
+  // performs all its own tenant, entitlement, permission and status checks.
+  if (FINANCE_ROUTE_CODES.has(requestedModuleCode)) {
+    return <EnterpriseFinanceModulePage moduleCode={requestedModuleCode as EnterpriseFinanceModuleCode} />;
+  }
   const user = await requireUser();
   const session = await getSession();
   const organizationId = session?.activeContext === "ORGANIZATION" ? session.activeOrganizationId : null;
   if (!session || !organizationId) redirect("/dashboard");
 
-  const { moduleCode: requestedModuleCode } = await params;
+
   const canonicalModuleCode = normalizeEnterpriseModuleCode(requestedModuleCode);
   const routeResolution = resolveEnterpriseModuleRoute(requestedModuleCode);
   if (!routeResolution) notFound();

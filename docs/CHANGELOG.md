@@ -1,3 +1,14 @@
+## 2026-11-13 — ROUTES-01→04 (#1135) — v1.17.0 (PR non fusionnée)
+
+- Audit routage : compteur de fichiers source et preuve build Vercel séparés, baseline et garde-fou CI.
+- API HIRMS et exports Console regroupés en handlers dynamiques avec allowlist ; 33 contenus d'origine inchangés (9 HIRMS/Console + 24 Gaming) et audit/RBAC conservés.
+- 14 pages Finance redondantes consolidées vers le workspace dynamique existant sans changer les URLs ni les permissions.
+- ADR de séparation future des builds Vercel ; aucune extraction de trafic/DNS ni déploiement depuis la branche.
+- Économie de **44 fichiers de routes Next.js** (915 → 871 sur la base du snapshot main), nombre de règles Vercel à confirmer post-merge.
+- Reprise PR #1136 : refus des séparateurs encodés dans un segment HIRMS ; contrôle des blobs Git compatible avec les checkouts Windows ; contrat exécutable des 47 délégations HTTP et E2E isolé des 33 URL API / 14 pages Finance.
+- Protocole de validation propriétaire : `docs/qa/PR_1136_OWNER_E2E.md`. Rapport navigateur publié dans l’artefact CI `routes-1135-e2e` ; validation manuelle toujours distincte.
+- Référence : `docs/ROUTING_SCALABILITY_ROUTES_01_04.md` et Issue #1135.
+
 ## 2026-11-13 — Hotfix diffusion globale DTSC / Web Push — candidat v1.16.2 (NON FUSIONNÉ)
 
 - Cause racine : Prisma P2003, `EnterpriseDomainEvent_organizationId_fkey`, sentinelle `__DTSC_PLATFORM__` inexistante, transaction de diffusion annulée.

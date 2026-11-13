@@ -16,8 +16,8 @@ for(const dangerous of ["=1+1","+SUM(A1:A2)","-1+2","@cmd","  =HYPERLINK(1)"]) {
 }
 assert.equal(hirmsCsvCell('a"b'),'"a""b"');
 
-const invoice=read("app/api/enterprise/[organizationId]/insurance-connectors/invoices/route.ts");
-const ocr=read("app/api/enterprise/[organizationId]/insurance-connectors/ocr/route.ts");
+const invoice=read("app/api/enterprise/[organizationId]/insurance-connectors/invoices/handler.ts");
+const ocr=read("app/api/enterprise/[organizationId]/insurance-connectors/ocr/handler.ts");
 for(const route of [invoice,ocr]){
   for(const marker of ["parseHirmsHistoryQuery","hirmsCsv","writeAuditLog","organizationId","getSession","statusCounts"]) {
     if(marker==="statusCounts")continue; // generated in the scoped service
