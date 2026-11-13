@@ -1,6 +1,6 @@
 # HOTFIX — Diffusions globales DTSC / Web Push (13/11/2026)
 
-Candidat **v1.16.2**, PR #1137 **ouverte, NON FUSIONNÉE, NON DÉPLOYÉE**.
+Candidat **v1.16.2**, PR #1139 / Issue #1138 **ouverte, NON FUSIONNÉE, NON DÉPLOYÉE**.
 E2E manuel propriétaire : **NON EXÉCUTÉ**.
 
 ## Diagnostic confirmé
