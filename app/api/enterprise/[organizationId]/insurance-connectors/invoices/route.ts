@@ -11,6 +11,7 @@ import { isSameOriginRequest } from "@/lib/request-security";
 import { InsuranceConnectorError } from "@/lib/enterprise/health-insurance-connectors/registry";
 import { HirmsInvoiceTransportError } from "@/lib/enterprise/health-insurance-connectors/hirms-invoices";
 import { preflightHirmsInvoiceSubmission, submitHirmsInvoices, listHirmsInvoiceSubmissions } from "@/lib/enterprise/health-insurance-connectors/invoice-service";
+import { hirmsCsv, parseHirmsHistoryQuery } from "@/lib/enterprise/health-insurance-connectors/history-filters";
 type Params = { params: Promise<{ organizationId: string }> };
 const commandSchema = z.object({
   environment: z.enum(HIRMS_ENVIRONMENTS),
@@ -59,8 +60,23 @@ export async function GET(req: Request, { params }: Params) {
   const url = new URL(req.url);
   const environment = z.enum(HIRMS_ENVIRONMENTS).safeParse(url.searchParams.get("environment") || "UAT");
   if (!environment.success) return NextResponse.json({ error: "HIRMS_ENVIRONMENT_INVALID" }, { status: 400 });
+  const filters = parseHirmsHistoryQuery(url);
+  if (!filters) return NextResponse.json({error:"HIRMS_HISTORY_FILTERS_INVALID",message:"Recherche, statut ou plage de dates invalide."},{status:400});
   const page = Number(url.searchParams.get("page") || "1");
-  return NextResponse.json(await listHirmsInvoiceSubmissions(organizationId,environment.data,page), { headers: { "Cache-Control": "no-store" } });
+  if (filters.format === "csv") {
+    const limit=await rateLimit(getRateLimitKey(req,`hirms-export-invoices:${organizationId}:${session.userId}`),6,60000,{failureMode:"closed"});
+    if (!limit.ok) return NextResponse.json({error:"HIRMS_EXPORT_RATE_LIMITED"},{status:429});
+    const data=await listHirmsInvoiceSubmissions(organizationId,environment.data,1,filters,500);
+    const csv=hirmsCsv(
+      ["Environnement","Numéro facture","Lot","Statut transport","Statut HSL","Code HTTP","Référence HSL","Code erreur","Date transmission UTC","Dernier contrôle UTC"],
+      data.items.map(row=>[environment.data,row.invoiceNumber,row.batchId,row.transportStatus,row.remoteStatus,row.httpStatus,row.externalReference,row.errorCode,row.submittedAt,row.lastStatusCheckedAt]),
+    );
+    await writeAuditLog({userId:session.userId,action:"HIRMS_INVOICE_HISTORY_EXPORTED",entity:"EnterpriseHealthInsuranceInvoiceSubmission",request:req,
+      metadata:{organizationId,environment:environment.data,rows:data.items.length,total:data.total}});
+    return new Response(csv,{headers:{"Content-Type":"text/csv; charset=utf-8","Content-Disposition":`attachment; filename="DTSC-HIRMS-factures-${environment.data}.csv"`,
+      "Cache-Control":"no-store","X-Export-Limit":"500","X-Export-Truncated":String(data.total>500)}});
+  }
+  return NextResponse.json(await listHirmsInvoiceSubmissions(organizationId,environment.data,page,filters), { headers: { "Cache-Control": "no-store" } });
 }
 export async function POST(req: Request, { params }: Params) {
   const startedAt = Date.now();
