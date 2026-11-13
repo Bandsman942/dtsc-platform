@@ -11,6 +11,7 @@ import { HIRMS_ENVIRONMENTS } from "@/lib/enterprise/health-insurance-connectors
 import { InsuranceConnectorError } from "@/lib/enterprise/health-insurance-connectors/registry";
 import { HIRMS_OCR_PROXY_MAX_BYTES } from "@/lib/enterprise/health-insurance-connectors/hirms-ocr";
 import { uploadHirmsOcrForTenant, listHirmsOcrJobs } from "@/lib/enterprise/health-insurance-connectors/ocr-service";
+import { hirmsCsv, parseHirmsHistoryQuery } from "@/lib/enterprise/health-insurance-connectors/history-filters";
 
 export const runtime = "nodejs";
 type Params = { params: Promise<{ organizationId: string }> };
@@ -35,7 +36,23 @@ export async function GET(req: Request, { params }: Params) {
   const url = new URL(req.url);
   const env = z.enum(HIRMS_ENVIRONMENTS).safeParse(url.searchParams.get("environment") || "UAT");
   if (!env.success) return NextResponse.json({ error: "HIRMS_ENVIRONMENT_INVALID" }, { status: 400 });
-  return NextResponse.json(await listHirmsOcrJobs(organizationId, env.data, Number(url.searchParams.get("page") || "1")), { headers: { "Cache-Control": "no-store" } });
+  const filters = parseHirmsHistoryQuery(url);
+  if (!filters) return NextResponse.json({error:"HIRMS_HISTORY_FILTERS_INVALID",message:"Recherche, statut ou plage de dates invalide."},{status:400});
+  if (filters.format === "csv") {
+    const limit=await rateLimit(getRateLimitKey(req,`hirms-export-ocr:${organizationId}:${session.userId}`),6,60000,{failureMode:"closed"});
+    if (!limit.ok) return NextResponse.json({error:"HIRMS_EXPORT_RATE_LIMITED"},{status:429});
+    const data=await listHirmsOcrJobs(organizationId,env.data,1,filters,500);
+    const csv=hirmsCsv(
+      ["Environnement","Facture ERP","ID travail HSL","Type fichier","Taille octets","Date facture","Statut transport","Statut OCR HSL","Code erreur","Date transmission UTC","Dernier suivi UTC"],
+      data.items.map(row=>[env.data,row.salesInvoiceId,row.externalJobId,row.mimeType,row.bytes,row.invoiceDate,row.transportStatus,row.remoteStatus,row.errorCode,row.submittedAt,row.lastPolledAt]),
+    );
+    await writeAuditLog({userId:session.userId,action:"HIRMS_OCR_HISTORY_EXPORTED",entity:"EnterpriseHealthInsuranceOcrJob",request:req,
+      metadata:{organizationId,environment:env.data,rows:data.items.length,total:data.total}});
+    return new Response(csv,{headers:{"Content-Type":"text/csv; charset=utf-8","Content-Disposition":`attachment; filename="DTSC-HIRMS-OCR-${env.data}.csv"`,
+      "Cache-Control":"no-store","X-Export-Limit":"500","X-Export-Truncated":String(data.total>500)}});
+  }
+  return NextResponse.json(await listHirmsOcrJobs(organizationId,env.data,Number(url.searchParams.get("page") || "1"),filters),
+    {headers:{"Cache-Control":"no-store"}});
 }
 export async function POST(req: Request, { params }: Params) {
   if (!isSameOriginRequest(req)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
