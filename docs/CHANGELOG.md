@@ -1,3 +1,7 @@
+## 2026-11-13 — HEALTH-02 #1147 — Design 2.0 navigation (NON FUSIONNÉ)
+
+- Répertoire Santé compact, recherche FR/EN, ouverture détaillée plein écran, retour et sélecteur de module ; aucun KPI issu du registre limité à 300 entrées. Le reste des onze modules est suivi dans #1147.
+
 ## 2026-11-13 — HEALTH-01 / #1146 — candidat v1.17.2 (NON FUSIONNÉ)
 
 - Contrôles P0 : résultats laboratoire par examen, autorisation clinique distincte du rôle administratif, protections de mise à jour patient, KPI canoniques indépendants des 300 enregistrements legacy, minimisation des nouvelles projections Santé.
