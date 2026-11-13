@@ -2,7 +2,7 @@
 
 - Le valideur sélectionne le compte financier DTSC ayant effectivement reçu les fonds et confirme leur réception ; contrôle de l'attestation dans l'API **et** le service métier, MFA et séparation des fonctions préservés.
 - Verrou DB et revalidation du compte réel actif, type/devise, exclusions des comptes automatiques, anomalies de rapprochement; aucune création automatique pendant l'approbation.
-- Lien nullable du compte réel au dossier de paiement, migration additive, aucune régularisation historique; rapprochement MaishaPay et contrôle PSP restent ouverts dans #992.
+- Lien nullable du compte réel et horodatage nullable de l'attestation humaine sur le dossier de paiement, migration additive, aucune régularisation historique; rapprochement MaishaPay et contrôle PSP restent ouverts dans #992.
 - QA contractuelle et PostgreSQL isolée + documentation, E2E propriétaire restant à valider avant fusion main.
 
 ## 2026-11-13 — HEALTH-01→06 — candidat d'intégration des six tranches, NON FUSIONNÉ
