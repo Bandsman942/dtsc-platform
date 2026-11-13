@@ -39,7 +39,8 @@ function patientNumber() {
 }
 
 // Dedicated HealthPatient owns PII. Never replicate names or clinical detail to ERP legacy.
-function legacyPayload(): Prisma.InputJsonObject {
+function legacyPayload(_data?: PatientInput): Prisma.InputJsonObject {
+  void _data;
   return { authority: "HealthPatient" };
 }
 
