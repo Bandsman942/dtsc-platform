@@ -1,0 +1,55 @@
+import fs from "node:fs";
+import path from "node:path";
+import assert from "node:assert/strict";
+
+const root=process.cwd();
+const read=(p)=>fs.readFileSync(path.join(root,p),"utf8");
+const lab=read("lib/health-laboratory.ts");
+const schema=read("lib/health-laboratory-validators.ts");
+const ui=read("components/enterprise/health-laboratory-workspace.tsx");
+const auth=read("lib/health-consultation-access.ts");
+const patient=read("lib/health-patient-access.ts");
+const patientUpdate=read("app/api/enterprise/[organizationId]/healthcare/patients/[patientId]/route.ts");
+const kpi=read("app/api/enterprise/[organizationId]/healthcare/dashboard/route.ts");
+const dashboard=read("components/enterprise/healthcare-admin-workspace.tsx");
+const appointment=read("lib/health-appointments.ts");
+const consultation=read("lib/health-consultations.ts");
+const medicalRecord=read("lib/health-medical-records.ts");
+const labApi=read("app/api/enterprise/[organizationId]/healthcare/laboratory/[requestId]/actions/route.ts");
+
+assert.match(schema,/itemResults:\s*z\.array/,"Result request must accept item-scoped results");
+assert.match(lab,/RESULT_ITEMS_INCOMPLETE/,"Incomplete multi-test results must be rejected");
+assert.match(lab,/RESULT_ITEM_INVALID/,"Unknown item identifiers must be rejected");
+assert.match(lab,/new Set\(results\.map\(result=>result\.itemId\)\)/,"Duplicate per-test identifiers rejected");
+assert.match(lab,/results\.length!==items\.length/,"Every requested test must have a distinct result");
+assert.match(lab,/for\(const result of results\)/,"Results must be written individually");
+assert.match(lab,/tx\.healthLabRequestItem\.update\(\{where:\{id:result\.itemId\}/,"Result must update its own item");
+assert.doesNotMatch(lab,/healthLabRequestItem\.updateMany\([^\n]*resultText:/,"No result replication via updateMany");
+assert.match(lab,/if\(guarded\.count!==1\)throw new Error\("STATE_CHANGED"\)/,"Concurrent status change must fail");
+assert.match(lab,/isolationLevel:"Serializable"/,"Lab transition must use serializable transaction");
+assert.match(lab,/items\.some\(item=>!item\.resultText\?\.trim\(\)\)/,"Validation requires every result");
+assert.match(lab,/TEST_CATALOG_LOCKED_AFTER_SAMPLING/,"Tests cannot be silently replaced after sampling");
+assert.match(labApi,/RESULT_ITEMS_INCOMPLETE/,"User-facing error for partial results");
+assert.match(ui,/request\.items\.map\(item=>/,"Every test gets an individual result input");
+assert.match(ui,/itemResults/,"Frontend sends per-item results");
+assert.match(auth,/getHealthStaffMedicalPermissions/,"Clinical access must use explicit staff permissions");
+assert.match(auth,/positionCode:\s*\{\s*in:\s*\[/,"Medical writing must require qualified position");
+assert.doesNotMatch(auth,/canCreate:\s*canManage/,"Manager must not automatically create medical consultation");
+assert.match(patient,/medicalPermissions\.includes/,"Patient sensitive read requires clinical permissions");
+assert.match(patientUpdate,/CLINICAL_PERMISSION_REQUIRED/,"Administrative updates cannot write clinical fields");
+assert.match(patientUpdate,/title: item\.moduleCode, summary: null/,"Administrative patient links do not include clinical text");
+for(const [file,code] of [["lib/health-appointments.ts","Rendez-vous"],["lib/health-consultations.ts","Consultation"],["lib/health-medical-records.ts","Dossier médical"],["lib/health-laboratory.ts","Examen"]]){
+  const source=read(file);
+  assert.ok(source.includes(code+" · ${number}"),file+" must minimize mirrored clinical titles");
+}
+assert.match(kpi,/prisma\.healthPatient\.count/,"Canonical patient KPI required");
+assert.match(kpi,/prisma\.healthLabRequest\.count/,"Canonical laboratory KPI required");
+assert.match(kpi,/prisma\.healthMedicalInvoice\.count/,"Canonical billing KPI required");
+assert.match(kpi,/enterpriseBusinessCalendarWindows/,"KPI timezone must be organization-local");
+assert.match(kpi,/resolveEnterpriseModuleAccess/,"KPI requires server-side admin permission");
+assert.match(kpi,/no-store, private/,"KPI cannot be cached publicly");
+assert.match(dashboard,/healthcare\/dashboard/,"Dashboard consumes canonical endpoint");
+assert.doesNotMatch(dashboard,/function HealthcareDashboard\(\{ records \}/,"Dashboard must not count capped legacy records");
+assert.match(read("scripts/qa-regression-checks.mjs"),/qa-health-01-clinical-safety-20261113/);
+assert.match(read("package.json"),/"qa:health-01"/);
+console.log("✅ HEALTH-01 P0: independent lab results, clinical authorization, PHI-minimized projection, tenant-safe canonical metrics");

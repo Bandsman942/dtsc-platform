@@ -1,6 +1,6 @@
 {
   "name": "dtsc-platform",
-  "version": "1.17.1",
+  "version": "1.17.2",
   "private": true,
   "engines": {
     "node": "22.x"
@@ -454,7 +454,8 @@
     "qa:docs-1099": "node scripts/qa-docs-1099.mjs",
     "qa:retail-financial-kpi-v2": "node scripts/qa-retail-financial-kpi-v2.mjs",
     "qa:fiscal-sector": "node scripts/qa-1124-fiscality.mjs",
-    "qa:catalog-roundtrip": "node scripts/qa-hotfix-catalog-roundtrip-20261113.mjs"
+    "qa:catalog-roundtrip": "node scripts/qa-hotfix-catalog-roundtrip-20261113.mjs",
+    "qa:health-01": "node scripts/qa-health-01-clinical-safety-20261113.mjs"
   },
   "dependencies": {
     "@ai-sdk/gateway": "2.0.27",

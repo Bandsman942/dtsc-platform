@@ -1,3 +1,8 @@
+## 2026-11-13 — HEALTH-01 / #1146 — candidat v1.17.2 (NON FUSIONNÉ)
+
+- Contrôles P0 : résultats laboratoire par examen, autorisation clinique distincte du rôle administratif, protections de mise à jour patient, KPI canoniques indépendants des 300 enregistrements legacy, minimisation des nouvelles projections Santé.
+- QA et protocole de recette dans `docs/HOTFIX_HEALTH_01_SECURITY_20261113.md`. Régression et E2E propriétaire obligatoires avant toute fusion.
+
 ## 2026-11-13 — Hotfix catalogue réimportable #1143, candidat v1.17.1 (NON FUSIONNÉ)
 
 - Après la fusion du routage #1136 (ROUTES-01→04), correctif isolé de l'import RETAIL/ERP : modèles CSV et Excel servis par le backend avec contrat de 12 colonnes commun au parseur ExcelJS, codes propres à l'organisation et aucun produit de démonstration.

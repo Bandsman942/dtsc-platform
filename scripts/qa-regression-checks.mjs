@@ -125,3 +125,4 @@ await import("./qa-education-academic-structure.mjs");
 await import("./qa-education-admissions.mjs");
 await import("./qa-hotfix-1075-forms-catalog-import-toasts.mjs");
 await import("./qa-hotfix-catalog-roundtrip-20261113.mjs");
+await import("./qa-health-01-clinical-safety-20261113.mjs");
