@@ -266,31 +266,14 @@ export async function middleware(request: NextRequest) {
   return response;
 }
 
+// Keep these patterns static: Next.js compiles each separate matcher to Vercel
+// routing entries. A single named-group matcher replaces nineteen identical
+// prefix entries without changing the original protected route coverage.
 export const config = {
   matcher: [
-    // Only the Docs hostname receives a catch-all; all other products keep their existing narrow matchers.
     { source: "/:path*", has: [{ type: "host", value: "docs.dtsc-platform.com" }] },
     "/",
-    "/dashboard/:path*",
-    "/chat/:path*",
-    "/billing/:path*",
-    "/company/:path*",
-    "/calendar/:path*",
-    "/documents/:path*",
-    "/activities/:path*",
-    "/enterprise-admin/:path*",
-    "/enterprise-activities/:path*",
-    "/enterprise-invitations/:path*",
-    "/enterprise-modules/:path*",
-    "/collaborators/:path*",
-    "/profile/:path*",
-    "/settings/:path*",
-    "/support/:path*",
-    "/notifications/:path*",
-    "/announcements/:path*",
-    "/admin/:path*",
-    "/api/:path*",
-    "/auth/sign-in",
-    "/auth/sign-up",
+    "/:surface(dashboard|chat|billing|company|calendar|documents|activities|enterprise-admin|enterprise-activities|enterprise-invitations|enterprise-modules|collaborators|profile|settings|support|notifications|announcements|admin|api)/:path*",
+    "/auth/:action(sign-in|sign-up)",
   ],
 };
