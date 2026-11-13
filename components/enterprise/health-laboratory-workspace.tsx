@@ -108,8 +108,37 @@ export function HealthLaboratoryWorkspace({organizationId}:{organizationId:strin
   function openEdit(item:Lab){setEditing(item);setForm({...empty(),...Object.fromEntries(Object.keys(empty()).map(key=>[key,key==="testIds"?item.items.map(row=>row.testCatalogId).filter(Boolean) as string[]:item[key]===null||item[key]===undefined?"":String(item[key])]))});setFormOpen(true)}
   async function save(event:FormEvent){event.preventDefault();const response=await fetch(editing?`/api/enterprise/${organizationId}/healthcare/laboratory/${editing.id}`:`/api/enterprise/${organizationId}/healthcare/laboratory`,{method:editing?"PATCH":"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(form)});const body=await response.json().catch(()=>null) as {message?:string}|null;setMessage(response.ok?(editing?t("lab.updated"):t("lab.created")):body?.message||t("lab.saveFailed"));if(response.ok){setFormOpen(false);setDetail(null);await load()}}
   async function openDetail(item:Lab){const response=await fetch(`/api/enterprise/${organizationId}/healthcare/laboratory/${item.id}`,{cache:"no-store"});const body=await response.json().catch(()=>null) as {request?:Lab;message?:string}|null;const savedRequest=body?.request;if(response.ok&&savedRequest)setDetail(savedRequest);else setMessage(body?.message||t("lab.detailUnavailable"))}
-  function openAction(item:Lab,action:string){setActionTarget(item);setActionForm({...emptyAction(),action,sampleType:item.sampleType||"BLOOD",resultText:item.resultText||"",resultUnit:item.resultUnit||"",referenceRange:item.referenceRange||"",resultInterpretation:item.resultInterpretation||"",abnormalityLevel:item.abnormalityLevel||"NORMAL",laboratoryNotes:String(item.laboratoryNotes||"")})}
-  async function runAction(event:FormEvent){event.preventDefault();if(!actionTarget)return;const response=await fetch(`/api/enterprise/${organizationId}/healthcare/laboratory/${actionTarget.id}/actions`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(actionForm)});const body=await response.json().catch(()=>null) as {message?:string}|null;setMessage(response.ok?(body?.message||t("lab.actionSuccess")):body?.message||t("lab.actionFailed"));if(response.ok){setActionTarget(null);setDetail(null);await load()}}
+  function openAction(item:Lab,action:string){
+    const resultFields=Object.fromEntries(item.items.flatMap(row=>[
+      [`resultText__${row.id}`,row.resultText||""],[`resultUnit__${row.id}`,row.unit||""],
+      [`referenceRange__${row.id}`,row.referenceRange||""],[`resultInterpretation__${row.id}`,row.interpretation||""],
+      [`abnormalityLevel__${row.id}`,row.abnormalityLevel||"NORMAL"],
+    ]));
+    setActionTarget(item);
+    setActionForm({...emptyAction(),action,sampleType:item.sampleType||"BLOOD",
+      resultText:item.resultText||"",resultUnit:item.resultUnit||"",
+      referenceRange:item.referenceRange||"",resultInterpretation:item.resultInterpretation||"",
+      abnormalityLevel:item.abnormalityLevel||"NORMAL",laboratoryNotes:String(item.laboratoryNotes||""),...resultFields});
+  }
+  async function runAction(event:FormEvent){
+    event.preventDefault();
+    if(!actionTarget)return;
+    const itemResults=actionForm.action==="enter_result" ? actionTarget.items.map(item=>({
+      itemId:item.id,
+      resultText:String(actionForm[`resultText__${item.id}`]||"").trim(),
+      unit:String(actionForm[`resultUnit__${item.id}`]||""),
+      referenceRange:String(actionForm[`referenceRange__${item.id}`]||""),
+      interpretation:String(actionForm[`resultInterpretation__${item.id}`]||""),
+      abnormalityLevel:String(actionForm[`abnormalityLevel__${item.id}`]||"NORMAL"),
+    })) : undefined;
+    const response=await fetch(`/api/enterprise/${organizationId}/healthcare/laboratory/${actionTarget.id}/actions`,{
+      method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({...actionForm,...(itemResults?{itemResults}:{})}),
+    });
+    const body=await response.json().catch(()=>null) as {message?:string}|null;
+    setMessage(response.ok?(body?.message||t("lab.actionSuccess")):body?.message||t("lab.actionFailed"));
+    if(response.ok){setActionTarget(null);setDetail(null);await load()}
+  }
   async function createCatalog(event:FormEvent<HTMLFormElement>){event.preventDefault();const data=Object.fromEntries(new FormData(event.currentTarget));const response=await fetch(`/api/enterprise/${organizationId}/healthcare/laboratory`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({...data,entity:"catalog"})});setMessage(response.ok?t("lab.catalogCreated"):t("lab.catalogCreateFailed"));if(response.ok){setCatalogOpen(false);await load()}}
 
   return <section className="min-w-0 space-y-4 overflow-hidden overflow-x-hidden rounded-2xl border border-dtsc-border bg-dtsc-surface p-3 sm:p-5">
@@ -121,7 +150,7 @@ export function HealthLaboratoryWorkspace({organizationId}:{organizationId:strin
     {!loading&&!filtered.length&&<Empty text={t("lab.empty")}/>}
     <Dialog open={formOpen} onClose={()=>setFormOpen(false)} title={editing?t("lab.dialog.requestEdit"):t("lab.dialog.requestCreate")} description={t("lab.dialog.requestDescription")} className="h-[94dvh] max-w-6xl"><RequestForm form={form} change={change} save={save} editing={editing} patients={patients} consultations={consultations} staff={staff} catalog={catalog} locale={locale} t={t}/></Dialog>
     <Dialog open={Boolean(detail)} onClose={()=>setDetail(null)} title={detail?`${detail.labRequestNumber} · ${detail.patient.fullName}`:t("lab.dialog.detailFallback")} description={t("lab.dialog.detailDescription")} className="h-[94dvh] max-w-7xl">{detail&&<LabDetail item={detail} permissions={permissions} locale={locale} t={t} edit={openEdit} action={openAction}/>}</Dialog>
-    <Dialog open={Boolean(actionTarget)} onClose={()=>setActionTarget(null)} title={actionTitle(locale,String(actionForm.action))} description={t("lab.dialog.actionDescription")} className="h-[90dvh] max-w-4xl"><ActionForm form={actionForm} set={(key,value)=>setActionForm(current=>({...current,[key]:value}))} save={runAction} staff={staff} locale={locale} t={t}/></Dialog>
+    <Dialog open={Boolean(actionTarget)} onClose={()=>setActionTarget(null)} title={actionTitle(locale,String(actionForm.action))} description={t("lab.dialog.actionDescription")} className="h-[90dvh] max-w-4xl"><ActionForm form={actionForm} request={actionTarget} set={(key,value)=>setActionForm(current=>({...current,[key]:value}))} save={runAction} staff={staff} locale={locale} t={t}/></Dialog>
     <Dialog open={catalogOpen} onClose={()=>setCatalogOpen(false)} title={t("lab.dialog.catalogTitle")} description={t("lab.dialog.catalogDescription")} className="h-[90dvh] max-w-3xl"><CatalogForm save={createCatalog} locale={locale} t={t}/></Dialog>
   </section>;
 }
@@ -158,9 +187,42 @@ function LabDetail({item,permissions,locale,t,edit,action}:{item:Lab;permissions
   </div>;
 }
 
-function ActionForm({form,set,save,staff,locale,t}:{form:Form;set:(key:string,value:string)=>void;save:(event:FormEvent)=>Promise<void>;staff:Staff[];locale:HealthClinicalLocale;t:T}) {
-  const action=String(form.action), sample=action==="collect_sample"||action==="reject_sample", result=action==="enter_result"||action==="correct_result", reason=["cancel","reject_request","reject_sample","correct_result"].includes(action);
-  return <form onSubmit={save} className="grid min-w-0 gap-4 overflow-x-hidden">{sample&&<Section title={t("lab.section.sampleInfo")}><Grid><F label={t("lab.field.sampleDateTime")} help={t("lab.help.sampleDateTime")}><Input type="datetime-local" value={String(form.sampledAt)} onChange={e=>set("sampledAt",e.target.value)}/></F><F label={t("lab.field.sampler")} help={t("lab.help.sampler")}><StaffSelect value={String(form.sampledById)} set={value=>set("sampledById",value)} staff={staff} t={t}/></F><F label={t("lab.field.sampleType")} help={t("lab.help.sampleType")}><Choice value={String(form.sampleType)} set={value=>set("sampleType",value)} options={SAMPLE_KEYS} locale={locale}/></F><F label={t("lab.field.sampleQuality")} help={t("lab.help.sampleQuality")}><Choice value={String(form.sampleQuality)} set={value=>set("sampleQuality",value)} options={QUALITY_KEYS} locale={locale}/></F><F label={t("lab.field.sampleNotes")} help={t("lab.help.sampleNotes")}><Area value={String(form.sampleNotes)} set={value=>set("sampleNotes",value)}/></F></Grid></Section>}{result&&<Section title={t("lab.section.labResult")}><Grid><F label={t("lab.field.result")} help={t("lab.help.result")}><Area required value={String(form.resultText)} set={value=>set("resultText",value)}/></F><F label={t("lab.field.interpretation")} help={t("lab.help.interpretation")}><Area value={String(form.resultInterpretation)} set={value=>set("resultInterpretation",value)}/></F><F label={t("lab.field.unit")} help={t("lab.help.unit")}><Input value={String(form.resultUnit)} onChange={e=>set("resultUnit",e.target.value)}/></F><F label={t("lab.field.referenceValues")} help={t("lab.help.referenceValues")}><Input value={String(form.referenceRange)} onChange={e=>set("referenceRange",e.target.value)}/></F><F label={t("lab.field.abnormality")} help={t("lab.help.abnormality")}><Choice value={String(form.abnormalityLevel)} set={value=>set("abnormalityLevel",value)} options={ABNORMALITY_KEYS} locale={locale}/></F><F label={t("lab.field.laboratoryComment")} help={t("lab.help.laboratoryComment")}><Area value={String(form.laboratoryNotes)} set={value=>set("laboratoryNotes",value)}/></F></Grid></Section>}{reason&&<F label={t("lab.field.requiredReason")} help={t("lab.help.requiredReason")}><Area required value={String(form.reason)} set={value=>set("reason",value)}/></F>}<Button className="bg-[#002b5b] text-white">{t("lab.button.confirmAction")}</Button></form>;
+function ActionForm({form,request,set,save,staff,locale,t}:{form:Form;request:Lab|null;set:(key:string,value:string)=>void;save:(event:FormEvent)=>Promise<void>;staff:Staff[];locale:HealthClinicalLocale;t:T}) {
+  const action=String(form.action);
+  const sample=action==="collect_sample"||action==="reject_sample";
+  const result=action==="enter_result";
+  const reason=["cancel","reject_request","reject_sample","correct_result"].includes(action);
+  return <form onSubmit={save} className="grid min-w-0 gap-4 overflow-x-hidden">
+    {sample&&<Section title={t("lab.section.sampleInfo")}><Grid>
+      <F label={t("lab.field.sampleDateTime")} help={t("lab.help.sampleDateTime")}><Input type="datetime-local" value={String(form.sampledAt)} onChange={e=>set("sampledAt",e.target.value)}/></F>
+      <F label={t("lab.field.sampler")} help={t("lab.help.sampler")}><StaffSelect value={String(form.sampledById)} set={value=>set("sampledById",value)} staff={staff} t={t}/></F>
+      <F label={t("lab.field.sampleType")} help={t("lab.help.sampleType")}><Choice value={String(form.sampleType)} set={value=>set("sampleType",value)} options={SAMPLE_KEYS} locale={locale}/></F>
+      <F label={t("lab.field.sampleQuality")} help={t("lab.help.sampleQuality")}><Choice value={String(form.sampleQuality)} set={value=>set("sampleQuality",value)} options={QUALITY_KEYS} locale={locale}/></F>
+      <F label={t("lab.field.sampleNotes")} help={t("lab.help.sampleNotes")}><Area value={String(form.sampleNotes)} set={value=>set("sampleNotes",value)}/></F>
+    </Grid></Section>}
+    {result&&<Section title={t("lab.section.labResult")}>
+      <p className="mb-3 text-sm text-dtsc-muted">
+        {locale==="en"?"Record a distinct result for every requested test.":"Renseignez un résultat distinct pour chaque examen demandé."}
+      </p>
+      <div className="grid min-w-0 gap-3">
+        {request?.items.map(item=><section key={item.id} className="min-w-0 rounded-2xl border border-dtsc-border bg-dtsc-page p-3 sm:p-4">
+          <h4 className="mb-3 break-words font-black text-dtsc-ink">{item.testLabel}</h4>
+          <Grid>
+            <F label={t("lab.field.result")} help={t("lab.help.result")}><Area required value={String(form[`resultText__${item.id}`]||"")} set={value=>set(`resultText__${item.id}`,value)}/></F>
+            <F label={t("lab.field.interpretation")} help={t("lab.help.interpretation")}><Area value={String(form[`resultInterpretation__${item.id}`]||"")} set={value=>set(`resultInterpretation__${item.id}`,value)}/></F>
+            <F label={t("lab.field.unit")} help={t("lab.help.unit")}><Input value={String(form[`resultUnit__${item.id}`]||"")} onChange={e=>set(`resultUnit__${item.id}`,e.target.value)}/></F>
+            <F label={t("lab.field.referenceValues")} help={t("lab.help.referenceValues")}><Input value={String(form[`referenceRange__${item.id}`]||"")} onChange={e=>set(`referenceRange__${item.id}`,e.target.value)}/></F>
+            <F label={t("lab.field.abnormality")} help={t("lab.help.abnormality")}><Choice value={String(form[`abnormalityLevel__${item.id}`]||"NORMAL")} set={value=>set(`abnormalityLevel__${item.id}`,value)} options={ABNORMALITY_KEYS} locale={locale}/></F>
+          </Grid>
+        </section>)}
+      </div>
+      <div className="mt-3"><F label={t("lab.field.laboratoryComment")} help={t("lab.help.laboratoryComment")}>
+        <Area value={String(form.laboratoryNotes)} set={value=>set("laboratoryNotes",value)}/>
+      </F></div>
+    </Section>}
+    {reason&&<F label={t("lab.field.requiredReason")} help={t("lab.help.requiredReason")}><Area required value={String(form.reason)} set={value=>set("reason",value)}/></F>}
+    <Button className="bg-[#002b5b] text-white">{t("lab.button.confirmAction")}</Button>
+  </form>;
 }
 
 function CatalogForm({save,locale,t}:{save:(event:FormEvent<HTMLFormElement>)=>Promise<void>;locale:HealthClinicalLocale;t:T}) {
