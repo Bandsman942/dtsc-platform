@@ -25,6 +25,7 @@ Ce test exige une application locale isolée. Il n’appelle pas HSL ni ne soume
 - HTTP réel : GET/HEAD/POST/PATCH/PUT/DELETE/OPTIONS pour les 33 URL API historiques ; refus 401, 403, 404, 405 ; OPTIONS et Allow par endpoint lorsque le middleware autorise la requête.
 - Refus des chemins inconnus, surnuméraires et séparateurs HIRMS encodés ; refus same-origin et inter-tenant ; aucun accès Console accordé au propriétaire d’un tenant client.
 - Les 14 liens Finance affichent leur workspace d’origine avec le propriétaire du tenant de test. Finance overview est contrôlé à 320, 360, 375, 390, 414, 768 et 1024 px.
+- Les cas positifs activent les dépendances récursives depuis le registre canonique dans la seule base de fixtures : le seed ERP partagé ne suffit pas pour Actifs/Stocks. Un refus `notFound()` streamé peut conserver HTTP 200 ; les cas négatifs vérifient donc le rendu de refus et l’absence du workspace privé, pas seulement le code HTTP.
 - Un module Finance désactivé et un membership retiré ne permettent pas de rouvrir le lien profond ; les fixtures sont restaurées dans `finally` et les mutations de test exigent la base locale dédiée `dtsc_gaming_646_acceptance`.
 - Les suites Gaming existantes conservent les parcours métier, états, factures, paiements et idempotence.
 

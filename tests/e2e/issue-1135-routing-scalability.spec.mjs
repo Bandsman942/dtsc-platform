@@ -1,12 +1,33 @@
 import { expect, test } from "@playwright/test";
 import { PrismaClient } from "@prisma/client";
 import { apiRoutes, financeCodes, routeCase } from "../fixtures/routing-1135.mjs";
+import { workflowTestLoader } from "../../scripts/lib/workflow-test-loader.mjs";
 
 const baseUrl = process.env.E2E_BASE_URL || "http://127.0.0.1:3000";
 const organizationId = process.env.E2E_ORGANIZATION_ID || "e2e-erp-professional-org";
 const headers = { origin: baseUrl, referer: baseUrl + "/auth/sign-in" };
 const verbs = ["GET", "HEAD", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"];
 const prisma = new PrismaClient();
+const { getEnterpriseModuleDefinition } = workflowTestLoader({})("@/lib/enterprise/module-registry");
+
+async function prepareFinanceDependencies() {
+  // Positive route tests require the same complete dependency graph as the app.
+  // The shared seed enables only overview/treasury; ASSETS also needs asset management.
+  const visited = new Set();
+  async function enable(code) {
+    if (visited.has(code)) return;
+    visited.add(code);
+    const definition = getEnterpriseModuleDefinition(code);
+    if (!definition) throw new Error("Unknown canonical fixture module: " + code);
+    for (const dependency of definition.dependencies) await enable(dependency);
+    const data = { isEnabled: true, requiresPlanLevel: definition.minimumPlan };
+    await prisma.enterpriseModule.upsert({
+      where: { organizationId_moduleCode: { organizationId, moduleCode: code } }, update: data,
+      create: { organizationId, moduleCode: code, labelFr: definition.labelFr, labelEn: definition.labelEn, moduleCategory: definition.domain, isCore: code.startsWith("FINANCE_"), ...data },
+    });
+  }
+  for (const code of financeCodes) await enable(code);
+}
 
 test.beforeAll(() => {
   if (process.env.E2E_ROUTING_1135_ISOLATED !== "true" || !["localhost", "127.0.0.1"].includes(new URL(baseUrl).hostname)) {
@@ -57,6 +78,7 @@ test.describe.serial("Authenticated Finance URLs and tenant boundaries", () => {
   let context;
   let page;
   test.beforeAll(async ({ browser }) => {
+    await prepareFinanceDependencies();
     context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
     page = await context.newPage();
     const response = await context.request.post(baseUrl + "/api/auth/sign-in", {
@@ -102,8 +124,11 @@ test.describe.serial("Authenticated Finance URLs and tenant boundaries", () => {
     const original = await prisma.enterpriseModule.findUniqueOrThrow({ where });
     try {
       await prisma.enterpriseModule.update({ where, data: { isEnabled: false } });
-      const response = await page.goto(`${baseUrl}/enterprise-modules/FINANCE_ASSETS`, { waitUntil: "networkidle" });
-      expect(response.status()).toBe(404);
+      await page.goto(`${baseUrl}/enterprise-modules/FINANCE_ASSETS`, { waitUntil: "networkidle" });
+      // Async App Router notFound() may be streamed with HTTP 200. Assert the
+      // denied UI as well as the absence of the private workspace.
+      await expect(page.getByRole("heading", { name: "Page introuvable", exact: true })).toBeVisible();
+      await expect(page.locator("[data-module-workspace]")).toHaveCount(0);
     } finally {
       await prisma.enterpriseModule.update({ where, data: { isEnabled: original.isEnabled } });
     }
@@ -115,8 +140,13 @@ test.describe.serial("Authenticated Finance URLs and tenant boundaries", () => {
     try {
       await prisma.organizationMember.update({ where, data: { removedAt: new Date() } });
       const url = `${baseUrl}/enterprise-modules/FINANCE_OVERVIEW`;
-      const response = await page.goto(url, { waitUntil: "networkidle" });
-      expect(response.status() === 404 || page.url() !== url).toBeTruthy();
+      await page.goto(url, { waitUntil: "networkidle" });
+      if (page.url() === url) {
+        await expect(page.getByRole("heading", { name: "Page introuvable", exact: true })).toBeVisible();
+        await expect(page.locator("[data-module-workspace]")).toHaveCount(0);
+      } else {
+        expect(["/dashboard", "/auth/sign-in"]).toContain(new URL(page.url()).pathname);
+      }
     } finally {
       await prisma.organizationMember.update({ where, data: { removedAt: original.removedAt } });
     }
