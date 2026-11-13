@@ -8,8 +8,11 @@ const DEDICATED_HEALTH_MODULES = new Set([
   "QUALITY_INCIDENTS","MEDICAL_DOCUMENTS",
 ]);
 export function safeHealthLegacyProjection<T extends {
-  moduleCode: string; title: string; summary: string | null; payloadJson: unknown;
+  moduleCode: string; title: string; summary?: string | null; payloadJson?: unknown;
 }>(record:T):T {
   if(!DEDICATED_HEALTH_MODULES.has(record.moduleCode))return record;
-  return {...record,title:`${record.moduleCode} · historique`,summary:null,payloadJson:{}} as T;
+  return {...record,title:`${record.moduleCode} · historique`,
+    ...("summary" in record ? {summary:null} : {}),
+    ...("payloadJson" in record ? {payloadJson:{}} : {}),
+  } as T;
 }
