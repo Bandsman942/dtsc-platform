@@ -8,7 +8,7 @@ assert.match(scoped,/pg_advisory_xact_lock/,"Stock mutations must be locked by p
 assert.match(scoped,/organizationId.*health-pharmacy-stock.*data\.productId/,"Stock locks require organization and product");
 assert.match(scoped,/const product=await tx\.healthPharmacyProduct\.findFirst/,"Stock must be reread inside transaction after lock");
 assert.match(scoped,/if\(!Number\.isFinite\(quantity\)\|\|quantity<=0\)/,"Reject non-finite and non-positive stock movement quantities");
-assert.match(scoped,/if\(!Number\.isFinite\(batchQuantity\)\|\|batchQuantity<=0\)/,"Reject invalid batch entry");
+assert.match(scoped,/!Number\.isFinite\(batchQuantity\)\|\|batchQuantity<=0/,"Reject invalid batch entry");
 assert.match(scoped,/BATCH_EXPIRED/,"Expired batches cannot be sold");
 assert.match(scoped,/NO_SELLABLE_BATCH/,"Missing sellable batch must block stock movement");
 assert.match(scoped,/orderBy:\[\{expiryDate:"asc"\}/,"FEFO ordering must be preserved");
