@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { UserRole, UserStatus } from "@prisma/client";
 import { getSession } from "@/lib/auth";
@@ -49,6 +50,8 @@ export async function POST(req: Request) {
       type: body.data.type,
     });
 
+    // The outbox transaction has committed. An audit transport failure must not
+    // turn an accepted broadcast into HTTP 500 and invite duplicate retries.
     await writeApiLog({
       request: req,
       statusCode: 202,
@@ -62,7 +65,10 @@ export async function POST(req: Request) {
         emailJobsQueued: queued.emailJobsQueued,
         personalized: queued.personalized,
       },
-    });
+    }).catch((logError) => console.error("Admin broadcast accepted but audit failed", {
+      broadcastId: queued.broadcastId,
+      logError,
+    }));
 
     return NextResponse.json(
       {
@@ -77,21 +83,22 @@ export async function POST(req: Request) {
       { status: 202 },
     );
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unexpected broadcast queue failure";
-    console.error("Admin broadcast queue failed", error);
+    const incidentId = randomUUID();
+    // Full provider/DB details remain in protected server logs, never in the API response.
+    console.error("Admin broadcast queue failed", { incidentId, error });
     await writeApiLog({
       request: req,
       statusCode: 500,
       userId: sessionUserId,
       startedAt,
-      metadata: { reason: message.slice(0, 240) },
-    });
+      metadata: { reason: "ADMIN_BROADCAST_QUEUE_FAILED", incidentId },
+    }).catch((logError) => console.error("Admin broadcast audit failed", { incidentId, logError }));
 
     return NextResponse.json(
       {
         error: "Broadcast queue failed",
-        message: "La diffusion n'a pas pu être mise en file durable. Vérifiez les logs Vercel et la base de données.",
-        details: message,
+        message: "La diffusion n'a pas pu être mise en file. Aucun e-mail n'a été accepté pour cette tentative.",
+        incidentId,
       },
       { status: 500 },
     );

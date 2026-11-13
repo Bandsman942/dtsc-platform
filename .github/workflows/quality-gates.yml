@@ -105,6 +105,8 @@ jobs:
         run: node scripts/qa-workflow-846-postgres.mjs
       - name: WF-06S2C inert readiness and anti-flood PostgreSQL integration
         run: node scripts/qa-workflow-848-postgres.mjs
+      - name: Global broadcast and Push outbox PostgreSQL integration
+        run: pnpm qa:global-outbox:postgres
       - name: WF-06S2D inert receipt PostgreSQL integration
         run: node scripts/qa-workflow-850-postgres.mjs
       - name: WF-06S2E1 inert locked dispatch inventory QA
