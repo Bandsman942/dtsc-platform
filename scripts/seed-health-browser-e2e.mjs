@@ -6,6 +6,7 @@ if(!/^(postgresql|postgres):\/\/[^/]+@(localhost|127\.0\.0\.1):5432\/dtsc_health
   throw new Error("Healthcare E2E seeding is allowed ONLY on localhost/dtsc_health_e2e_test");
 const prisma=new PrismaClient();
 const organizationId=process.env.E2E_HEALTH_ORGANIZATION_ID||"e2e-healthcare-1160-org";
+const reporterId="e2e-healthcare-reporter-1160";
 const userId="e2e-healthcare-admin-1160",email=process.env.E2E_HEALTH_ADMIN_EMAIL||"health-admin@example.test";
 const password=process.env.E2E_HEALTH_ADMIN_PASSWORD||"E2eHealthOnly2026!";
 const patientId="e2e-healthcare-synthetic-patient-1160";
@@ -29,6 +30,9 @@ function passwordHash(raw){
 try{
   const admin=await prisma.user.upsert({where:{email},update:{name:"ADMIN SYNTHETIQUE SANTÉ",passwordHash:passwordHash(password),status:"ACTIVE",locale:"fr",role:"CLIENT"},
     create:{id:userId,name:"ADMIN SYNTHETIQUE SANTÉ",email,passwordHash:passwordHash(password),status:"ACTIVE",locale:"fr",role:"CLIENT"}});
+  await prisma.user.upsert({where:{email:"health-reporter@example.test"},update:{name:"REPORTER SYNTHETIQUE SANTÉ",status:"ACTIVE"},
+    create:{id:reporterId,name:"REPORTER SYNTHETIQUE SANTÉ",email:"health-reporter@example.test",
+      passwordHash:"isolated-test-only",status:"ACTIVE",role:"CLIENT"}});
   await prisma.organization.upsert({where:{id:organizationId},
     update:{name:"HÔPITAL SYNTHÉTIQUE DTSC",slug:"e2e-healthcare-1160",sectorCode:"HEALTH_CARE",status:"ACTIVE",organizationType:"CLIENT",timezone:"Africa/Kinshasa",deletedAt:null},
     create:{id:organizationId,name:"HÔPITAL SYNTHÉTIQUE DTSC",slug:"e2e-healthcare-1160",sectorCode:"HEALTH_CARE",status:"ACTIVE",organizationType:"CLIENT",timezone:"Africa/Kinshasa",createdByDtscUserId:admin.id}});
@@ -36,8 +40,8 @@ try{
     update:{role:"OWNER",status:"ACTIVE",removedAt:null,joinedAt:new Date()},
     create:{organizationId,userId:admin.id,role:"OWNER",status:"ACTIVE",joinedAt:new Date()}});
   const plan=await prisma.billingPlan.upsert({where:{id:"e2e-healthcare-1160-plan"},
-    update:{isActive:true,name:"Enterprise HEALTH E2E",slug:"health-e2e-1160"},
-    create:{id:"e2e-healthcare-1160-plan",name:"Enterprise HEALTH E2E",slug:"health-e2e-1160",description:"Données fictives, PostgreSQL local exclusivement",priceUsd:0,dailyMessageLimit:1000,dailyTokenLimit:1000000,maxDocuments:100,isActive:true,sortOrder:996}});
+    update:{isActive:true,name:"Enterprise HEALTH E2E",slug:"enterprise"},
+    create:{id:"e2e-healthcare-1160-plan",name:"Enterprise HEALTH E2E",slug:"enterprise",description:"Données fictives, PostgreSQL local exclusivement",priceUsd:0,dailyMessageLimit:1000,dailyTokenLimit:1000000,maxDocuments:100,isActive:true,sortOrder:996}});
   await prisma.organizationSubscription.upsert({where:{id:"e2e-healthcare-1160-subscription"},
     update:{planId:plan.id,status:"ACTIVE",expiresAt:new Date(Date.now()+30*86400000)},
     create:{id:"e2e-healthcare-1160-subscription",organizationId,planId:plan.id,status:"ACTIVE",startedAt:new Date(Date.now()-86400000),expiresAt:new Date(Date.now()+30*86400000),createdByDtscUserId:admin.id,updatedByDtscUserId:admin.id}});
@@ -62,7 +66,7 @@ try{
     update:{title:"FAUX INCIDENT : DONNÉES SENSIBLES TEST",description:"FAUSSE OBSERVATION CLINIQUE À MASQUER"},
     create:{id:incidentsId,organizationId,incidentNumber:"IQ-E2E-1160",title:"FAUX INCIDENT : DONNÉES SENSIBLES TEST",
       description:"FAUSSE OBSERVATION CLINIQUE À MASQUER",incidentType:"PATIENT_SAFETY",
-      initialSeverity:"MODERATE",initialCriticality:"HIGH",reportedById:admin.id,createdById:admin.id,
+      initialSeverity:"MODERATE",initialCriticality:"HIGH",reportedById:reporterId,createdById:reporterId,
       patientId,containsSensitiveMedicalData:true,confidentialityLevel:"MEDICAL_SENSITIVE",status:"REPORTED"}});
   await prisma.healthDocument.upsert({where:{id:documentId},
     update:{title:"Document synthétique public à l'administration"},
