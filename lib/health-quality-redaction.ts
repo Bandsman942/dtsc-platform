@@ -17,12 +17,16 @@ export function redactHealthQualityIncident<T extends {
     observedConsequences:null,immediateActions:null,qualificationNotes:null,
     investigationSummary:null,immediateCause:null,rootCause:null,
     contributingFactors:null,investigationConclusion:null,recommendations:null,
-    finalConclusion:null,
+    finalConclusion:null,closureNotes:null,reopenReason:null,archiveReason:null,
+    patientId:null,appointmentId:null,consultationId:null,medicalRecordId:null,
+    labRequestId:null,pharmacyDispensationId:null,pharmacyStockMovementId:null,
+    invoiceId:null,coverageRequestId:null,
     events:[],
     correctiveActions:("correctiveActions" in incident&&Array.isArray(incident.correctiveActions))
       ?incident.correctiveActions.map((action:Record<string,unknown>)=>({
-        ...action,description:null,implementationNotes:null,validationNotes:null,
-        evidenceReference:null,
+        ...action,title:"Action corrective",description:"",
+        evidenceUrl:null,completionComment:null,validationComment:null,
+        rejectionReason:null,cancellationReason:null,
       }))
       :undefined,
   } as T;
