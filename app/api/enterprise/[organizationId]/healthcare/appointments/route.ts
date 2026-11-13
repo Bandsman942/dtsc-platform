@@ -43,7 +43,7 @@ export async function GET(req: Request, { params }: Params) {
     prisma.enterpriseDepartment.findMany({ where: { organizationId, isActive: true }, orderBy: { labelFr: "asc" }, select: { id: true, labelFr: true } }),
   ]);
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, moduleCode: "APPOINTMENTS" } });
-  return NextResponse.json({ appointments: appointments.map((item) => access.canViewSensitive ? item : { ...item, internalNotes: null }), patients, members: members.map((item) => ({ ...item.user, role: item.enterprisePosition.labelFr, availabilityStatus: item.availabilityStatus, department: item.enterpriseDepartment.labelFr, specialty: item.healthSpecialty?.labelFr || null })), departments, permissions: { canCreate: access.canCreate, canUpdate: access.canUpdate, canTransition: access.canTransition, canCancel: access.canCancel, canConvert: access.canConvert, canViewSensitive: access.canViewSensitive } });
+  return NextResponse.json({ appointments: appointments.map((item) => access.canViewSensitive ? item : { ...item, reason: null, description: null, internalNotes: null }), patients, members: members.map((item) => ({ ...item.user, role: item.enterprisePosition.labelFr, availabilityStatus: item.availabilityStatus, department: item.enterpriseDepartment.labelFr, specialty: item.healthSpecialty?.labelFr || null })), departments, permissions: { canCreate: access.canCreate, canUpdate: access.canUpdate, canTransition: access.canTransition, canCancel: access.canCancel, canConvert: access.canConvert, canViewSensitive: access.canViewSensitive } });
 }
 
 export async function POST(req: Request, { params }: Params) {

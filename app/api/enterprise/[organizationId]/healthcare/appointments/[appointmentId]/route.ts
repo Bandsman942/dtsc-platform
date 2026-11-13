@@ -23,7 +23,7 @@ export async function GET(req: Request, { params }: Params) {
   });
   if (!appointment) return NextResponse.json({ error: "Not found" }, { status: 404 });
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, moduleCode: "APPOINTMENTS" } });
-  return NextResponse.json({ appointment: access.canViewSensitive ? appointment : { ...appointment, internalNotes: null }, permissions: { canUpdate: access.canUpdate, canTransition: access.canTransition, canCancel: access.canCancel, canConvert: access.canConvert, canViewSensitive: access.canViewSensitive } });
+  return NextResponse.json({ appointment: access.canViewSensitive ? appointment : { ...appointment, reason: null, description: null, internalNotes: null, events: [] }, permissions: { canUpdate: access.canUpdate, canTransition: access.canTransition, canCancel: access.canCancel, canConvert: access.canConvert, canViewSensitive: access.canViewSensitive } });
 }
 
 export async function PATCH(req: Request, { params }: Params) {
