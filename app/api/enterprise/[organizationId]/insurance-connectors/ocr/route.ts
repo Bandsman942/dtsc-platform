@@ -52,15 +52,17 @@ export async function POST(req: Request, { params }: Params) {
   const form = await req.formData().catch(() => null);
   if (!form) return NextResponse.json({ error: "HIRMS_OCR_FORM_INVALID" }, { status: 400 });
   const env = z.enum(HIRMS_ENVIRONMENTS).safeParse(form.get("environment"));
-  const date = z.string().max(10).safeParse(form.get("invoiceDate"));
+  const date = z.string().max(10).optional().safeParse(form.get("invoiceDate") || undefined);
+  const providerId = z.string().uuid().optional().safeParse(form.get("providerId") || undefined);
+  const note = z.string().max(300).optional().safeParse(form.get("note") || undefined);
   const invoice = z.string().cuid().optional().safeParse(form.get("salesInvoiceId") || undefined);
   const file = form.get("file");
   if (env.success && env.data === "PRODUCTION" && form.get("productionConfirmation") !== "PRODUCTION")
     return NextResponse.json({ error: "HIRMS_PRODUCTION_CONFIRMATION_REQUIRED" }, { status: 409 });
-  if (!env.success || !date.success || !invoice.success || !(file instanceof File))
+  if (!env.success || !date.success || !providerId.success || !note.success || !invoice.success || !(file instanceof File))
     return NextResponse.json({ error: "HIRMS_OCR_FORM_INVALID" }, { status: 400 });
   try {
-    const result = await uploadHirmsOcrForTenant(organizationId, session.userId, env.data, file, date.data, invoice.data);
+    const result = await uploadHirmsOcrForTenant(organizationId, session.userId, env.data, file, date.data, invoice.data, providerId.data, note.data);
     await writeAuditLog({ userId: session.userId, action: "HIRMS_OCR_DOCUMENT_SUBMITTED", entity: "EnterpriseHealthInsuranceOcrJob", request: req, metadata: { organizationId, environment: env.data, ocrJobId: result.id, status: result.transportStatus } });
     return NextResponse.json(result, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
