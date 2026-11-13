@@ -1,3 +1,10 @@
+## 2026-11-13 — Hotfix catalogue réimportable #1143, candidat v1.17.1 (NON FUSIONNÉ)
+
+- Après la fusion du routage #1136 (ROUTES-01→04), correctif isolé de l'import RETAIL/ERP : modèles CSV et Excel servis par le backend avec contrat de 12 colonnes commun au parseur ExcelJS, codes propres à l'organisation et aucun produit de démonstration.
+- Prévisualisation de toutes les lignes et champs avant import avec recherche, filtres et pagination ; diagnostic des doublons SKU et nom+type, revalidation atomique `Serializable`.
+- RBAC, limites 200 lignes/2 Mo, ZIP contrôlé et interdiction de formules/liens conservés ; guide FR/EN et QA de boucle téléchargement-import ajoutée à la régression.
+- PR #1144 en brouillon, tests et E2E propriétaire requis, aucun déploiement. Runbook : `docs/HOTFIX_CATALOG_ROUNDTRIP_PREVIEW_20261113.md`.
+
 ## 2026-11-13 — ROUTES-01→04 (#1135) — v1.17.0 (PR non fusionnée)
 
 - Audit routage : compteur de fichiers source et preuve build Vercel séparés, baseline et garde-fou CI.
