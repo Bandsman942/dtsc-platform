@@ -2,7 +2,7 @@
 
 **Programme :** [#370](https://github.com/Bandsman942/dtsc-platform/issues/370) · **itération :** [#371](https://github.com/Bandsman942/dtsc-platform/issues/371) · **baseline auditée :** `main@ac168a3df1294eb1e5e2449f3d64f4e0192b2ae2` (1er novembre 2026).
 
-**Portée de cette livraison :** diagnostic et règles d'intégration, sans migration, nouveau provider, mutation financière ou changement du runtime. Les éléments marqués **CIBLE** ne sont pas des fonctionnalités déclarées opérationnelles. La QA PAY-0 contrôle le contrat documentaire ; elle ne certifie pas les paiements réels, l'E2E, les secrets PSP ni la Production.
+**Mise à jour candidate #1041 (14/11/2026) :** réconciliation ciblée de l'ancienne PR #1040 depuis le dernier main ; garde serveur du compte effectivement crédité, rattachement nullable, tests PostgreSQL isolés et E2E propriétaire requis. Aucune activation ni rapprochement MaishaPay déclarés opérationnels. Voir [runbook](HOTFIX_1041_SETTLEMENT_REAL_ACCOUNT_20261114.md).\n\n**Portée de cette livraison :** diagnostic et règles d'intégration, sans migration, nouveau provider, mutation financière ou changement du runtime. Les éléments marqués **CIBLE** ne sont pas des fonctionnalités déclarées opérationnelles. La QA PAY-0 contrôle le contrat documentaire ; elle ne certifie pas les paiements réels, l'E2E, les secrets PSP ni la Production.
 
 ## 1. Conformité contribution / AGENTS
 
