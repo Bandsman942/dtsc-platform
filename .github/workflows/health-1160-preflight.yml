@@ -55,7 +55,11 @@ jobs:
         run: pnpm qa:health-preflight
       - name: TypeScript
         run: pnpm type-check
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144
       - name: Lint
         run: pnpm lint
       - name: Build
         run: pnpm build
+        env:
+          NODE_OPTIONS: --max-old-space-size=8192
