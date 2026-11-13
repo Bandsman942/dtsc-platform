@@ -35,7 +35,7 @@ async function callWithOauth(credentials: Credentials, environment: HirmsEnviron
 }
 export async function uploadHirmsOcrDocument(
   credentials: Credentials, environment: HirmsEnvironment, organizationId: string,
-  bytes: Uint8Array, mime: "application/pdf" | "image/png" | "image/jpeg" | "image/webp", invoiceDate: string,
+  bytes: Uint8Array, mime: "application/pdf" | "image/png" | "image/jpeg" | "image/webp", invoiceDate?: string, providerId?: string, note?: string,
 ) {
   if (bytes.byteLength < 1 || bytes.byteLength > HIRMS_OCR_PROXY_MAX_BYTES) {
     throw new HirmsOcrTransportError("HIRMS_OCR_FILE_SIZE_INVALID", 413, false);
@@ -43,7 +43,9 @@ export async function uploadHirmsOcrDocument(
   const form = new FormData();
   const name = mime === "application/pdf" ? "document.pdf" : mime === "image/png" ? "document.png" : mime === "image/webp" ? "document.webp" : "document.jpg";
   form.append("file", new Blob([new Uint8Array(bytes)], { type: mime }), name);
-  form.append("invoiceDate", invoiceDate);
+  if (invoiceDate) form.append("invoiceDate", invoiceDate);
+  if (providerId) form.append("providerId", providerId);
+  if (note) form.append("note", note);
   const response = await callWithOauth(credentials, environment, organizationId, (token) =>
     fetch(hirmsEndpoints(environment).api + "/api/ocr/documents", {
       method: "POST", cache: "no-store", signal: AbortSignal.timeout(30_000),
