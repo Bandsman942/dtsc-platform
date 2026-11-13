@@ -266,8 +266,8 @@ assert.equal(state.operations.filter((entry) => entry === "payment:confirmed").l
 assert.equal(state.operations.filter((entry) => entry === "stock:return-in").length, 1);
 assert.equal(state.operations.filter((entry) => entry === "credit:posted-journal").length, 1);
 assert.equal((await settle("settler", 2)).idempotent, true);
-const financePrepareRoute = fs.readFileSync("app/api/enterprise/[organizationId]/retail/invoices/[invoiceId]/returns/[requestId]/prepare/route.ts", "utf8");
-const financeSettleRoute = fs.readFileSync("app/api/enterprise/[organizationId]/retail/invoices/[invoiceId]/returns/[requestId]/settle/route.ts", "utf8");
+const financePrepareRoute = fs.readFileSync("app/api/enterprise/[organizationId]/retail/invoices/[invoiceId]/returns/[requestId]/prepare/handler.ts", "utf8");
+const financeSettleRoute = fs.readFileSync("app/api/enterprise/[organizationId]/retail/invoices/[invoiceId]/returns/[requestId]/settle/handler.ts", "utf8");
 assert.match(financePrepareRoute, /authorizeFinanceRequest\(req, organizationId, "FINANCE_PAYMENTS", "submit", \{ mutation: true/);
 assert.match(financeSettleRoute, /authorizeFinanceRequest\(req, organizationId, "FINANCE_PAYMENTS", "update", \{ mutation: true/);
 assert.doesNotMatch(financePrepareRoute + financeSettleRoute, /authorizeRetailRequest|"RETAIL_POS"/,

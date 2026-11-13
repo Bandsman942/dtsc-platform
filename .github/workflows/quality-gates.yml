@@ -242,14 +242,18 @@ jobs:
           DTSC_CI_STATIC_CHECKS_PASSED: "true"
           NODE_OPTIONS: --max-old-space-size=8192
       - name: ROUTES-01/03 source budget and original handler parity
-        run: pnpm qa:routing-scalability
+        run: |
+          pnpm qa:routing-scalability
+          node scripts/qa-routes-retail-build.mjs --require-build
       - name: Publish routing budget evidence
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: routes-01-build-budget
           if-no-files-found: warn
-          path: artifacts/routing/route-budget.json
+          path: |
+            artifacts/routing/route-budget.json
+            artifacts/routing/retail-functions-1145.json
 
   migration:
     name: Migration

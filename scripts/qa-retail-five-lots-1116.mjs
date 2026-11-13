@@ -27,13 +27,13 @@ const sources = [
   "components/public/public-nav.tsx",
   "app/api/enterprise/[organizationId]/retail/offline/sync/route.ts",
   "app/api/enterprise/[organizationId]/retail/inventory-alerts/route.ts",
-  "app/api/enterprise/[organizationId]/retail/pricing/conditions/route.ts",
+  "app/api/enterprise/[organizationId]/retail/pricing/conditions/handler.ts",
   "app/api/enterprise/[organizationId]/retail/promotions/route.ts",
-  "app/api/enterprise/[organizationId]/retail/pricing/preview/route.ts",
+  "app/api/enterprise/[organizationId]/retail/pricing/preview/handler.ts",
   "app/api/enterprise/[organizationId]/retail/returns/route.ts",
   "app/api/enterprise/[organizationId]/retail/devices/route.ts",
   "app/api/enterprise/[organizationId]/retail/payments/invoices/route.ts",
-  "app/api/enterprise/[organizationId]/retail/omnichannel/orders/route.ts",
+  "app/api/enterprise/[organizationId]/retail/omnichannel/orders/handler.ts",
 ];
 for (const path of sources) {
   const result = ts.transpileModule(read(path), {
@@ -66,14 +66,14 @@ assert.match(read("lib/enterprise/retail/invoice-checkout.ts"), /stockWarnings\.
 assert.match(read("app/api/enterprise/[organizationId]/retail/invoices/route.ts"), /stockWarningCount/);
 assert.match(read("lib/enterprise/retail/omnichannel.ts"), /RETAIL_OMNICHANNEL_CHANNELS/);
 assert.match(read("lib/enterprise/retail/omnichannel.ts"), /channelCode: filters\.channel/);
-assert.match(read("app/api/enterprise/[organizationId]/retail/omnichannel/orders/route.ts"), /channelCode: z\.enum\(RETAIL_OMNICHANNEL_CHANNELS\)/);
+assert.match(read("app/api/enterprise/[organizationId]/retail/omnichannel/orders/handler.ts"), /channelCode: z\.enum\(RETAIL_OMNICHANNEL_CHANNELS\)/);
 assert.match(read("components/enterprise/professional/retail-omnichannel-panel.tsx"), /channelCode: originChannel/);
 assert.match(read("components/enterprise/professional/retail-payment-followup.tsx"), /downloadProfessionalXlsx/);
 assert.match(read("components/enterprise/professional/retail-expiry-alerts-panel.tsx"), /downloadProfessionalPdf/);
 assert.match(read("components/enterprise/professional/retail-commercial-workspace.tsx"), /exportCommercialRegister/);
 assert.match(read("lib/enterprise/retail/invoice-checkout.ts"), /RETAIL_FINANCE_PROMOTION_LEDGER_REQUIRED/);
-assert.match(read("app/api/enterprise/[organizationId]/retail/pricing/preview/route.ts"), /decision\.promotions\?\.length/);
-assert.match(read("app/api/enterprise/[organizationId]/retail/pricing/preview/route.ts"), /if \(parsed\.data\.invoiceCheckout\)/);
+assert.match(read("app/api/enterprise/[organizationId]/retail/pricing/preview/handler.ts"), /decision\.promotions\?\.length/);
+assert.match(read("app/api/enterprise/[organizationId]/retail/pricing/preview/handler.ts"), /if \(parsed\.data\.invoiceCheckout\)/);
 assert.match(read("components/enterprise/professional/retail-invoice-flow-workbench.tsx"), /invoiceCheckout: true/);
 assert.doesNotMatch(read("components/enterprise/professional/retail-invoice-flow-workbench.tsx"), /setCouponCode/);
 assert.match(read("lib/enterprise/retail/browser-device-connect.ts"), /requestDevice|requestPort/);
