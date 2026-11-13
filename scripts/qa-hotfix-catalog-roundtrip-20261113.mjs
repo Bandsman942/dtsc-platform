@@ -84,14 +84,14 @@ for (const locale of ["fr", "en"]) {
   assert.equal(fullRows.length, 200, "Full XLSX import must accept 200 articles");
   const fullValidation = await importer.prepareCatalogImport("org-1", fullRows, locale);
   assert.ok(fullValidation.every((row) => row.errors.length === 0), "All 200 generated XLSX rows must validate");
+  sheet.getRow(2).getCell(1).value = { formula: "1+1", result: "malicious" };
+  const formulaWorkbook = Buffer.from(await workbook.xlsx.writeBuffer());
+  await assert.rejects(importer.parseCatalogFile(new File([formulaWorkbook], "catalog-formula.xlsx"), locale), /formul|formula/i);
+  sheet.getRow(2).getCell(1).value = "Article test 2";
   const extra = ["Article test 202", "PRODUCT", "CAT-201", "", "BCN-ACC", "BCN-PIECE", 12, 9, "CDF", "Non", "", "Oui"];
   extra.forEach((value, column) => { sheet.getRow(202).getCell(column + 1).value = value; });
   const overflow = Buffer.from(await workbook.xlsx.writeBuffer());
   await assert.rejects(importer.parseCatalogFile(new File([overflow], "catalog-201.xlsx"), locale), /200/);
-  sheet.getRow(202).getCell(1).value = null;
-  sheet.getRow(2).getCell(1).value = { formula: "1+1", result: "malicious" };
-  const formulaWorkbook = Buffer.from(await workbook.xlsx.writeBuffer());
-  await assert.rejects(importer.parseCatalogFile(new File([formulaWorkbook], "catalog-formula.xlsx"), locale), /formul|formula/i);
 }
 
 const dupe = [
