@@ -29,8 +29,8 @@ const checkoutCommands = read("lib/enterprise/gaming/checkout-commands.ts");
 const sessionCheckout = read("lib/enterprise/gaming/session-checkout-state.ts");
 const professionalUi = read("components/enterprise/professional/professional-erp-ui.tsx");
 const checkoutHttp = read("lib/enterprise/gaming/checkout-http.ts");
-const checkoutCollectionRoute = read("app/api/enterprise/[organizationId]/gaming/checkouts/route.ts");
-const checkoutDetailRoute = read("app/api/enterprise/[organizationId]/gaming/checkouts/[checkoutId]/route.ts");
+const checkoutCollectionRoute = read("app/api/enterprise/[organizationId]/gaming/checkouts/handler.ts");
+const checkoutDetailRoute = read("app/api/enterprise/[organizationId]/gaming/checkouts/[checkoutId]/handler.ts");
 
 for (const action of expectedActions) {
   if (!domain.includes(`"${action}"`)) fail(`GAMING_SESSION_ACTIONS ne contient pas ${action}`);

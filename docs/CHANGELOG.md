@@ -1,10 +1,10 @@
 ## 2026-11-13 — ROUTES-01→04 (#1135) — v1.17.0 (PR non fusionnée)
 
 - Audit routage : compteur de fichiers source et preuve build Vercel séparés, baseline et garde-fou CI.
-- API HIRMS et exports Console regroupés en handlers dynamiques avec allowlist ; 9 contenus d'origine inchangés et audit/RBAC conservés.
+- API HIRMS et exports Console regroupés en handlers dynamiques avec allowlist ; 33 contenus d'origine inchangés (9 HIRMS/Console + 24 Gaming) et audit/RBAC conservés.
 - 14 pages Finance redondantes consolidées vers le workspace dynamique existant sans changer les URLs ni les permissions.
 - ADR de séparation future des builds Vercel ; aucune extraction de trafic/DNS ni déploiement depuis la branche.
-- Économie de **21 fichiers de routes Next.js** (915 → 894 sur la base du snapshot main), nombre de règles Vercel à confirmer post-merge.
+- Économie de **44 fichiers de routes Next.js** (915 → 871 sur la base du snapshot main), nombre de règles Vercel à confirmer post-merge.
 - Référence : `docs/ROUTING_SCALABILITY_ROUTES_01_04.md` et Issue #1135.
 
 ## 2026-11-13 — Hotfix diffusion globale DTSC / Web Push — candidat v1.16.2 (NON FUSIONNÉ)

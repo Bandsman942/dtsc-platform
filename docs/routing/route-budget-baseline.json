@@ -19,7 +19,7 @@
   },
   "policy": {
     "maxSourceRouteFiles": 900,
-    "minFreedFromBaseline": 20,
+    "minFreedFromBaseline": 40,
     "maximumVercelBuildOutputRules": 2048,
     "note": "File count is NOT Vercel rule count. Vercel rule count is only exact if .vercel/output/config.json is present. Production READY does not reveal the number of rules."
   }

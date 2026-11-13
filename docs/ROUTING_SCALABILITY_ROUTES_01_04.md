@@ -15,7 +15,7 @@
 - `scripts/qa-routes-scalability.mjs` : compte les fichiers pages/routes, répartit les API par domaine et publie `artifacts/routing/route-budget.json`.
 - Si un build fournit `.next/server/app-paths-manifest.json` / `.next/routes-manifest.json`, leurs totaux sont ajoutés sous **NEXT_BUILD_ONLY**, distincts des règles réelles Vercel.
 - Si `.vercel/output/config.json` existe, le script compte explicitement `routes.length` sous **VERCEL_OUTPUT_CONFIG**, sans transformer cela en une affirmation d'activation Production.
-- Référence historique : `docs/routing/route-budget-baseline.json`. Garde de cette phase : au moins 20 fichiers routables supprimés et plafond de 900 après consolidation, validés en CI Quality.
+- Référence historique : `docs/routing/route-budget-baseline.json`. Garde de cette phase : au moins 40 fichiers routables supprimés et plafond de 900 après consolidation, validés en CI Quality.
 - Une nouvelle augmentation de surface au-delà du budget exige une consolidation supplémentaire et une mise à jour documentée du budget, pas un contournement des tests.
 - Validation réelle Vercel : après OWNER_E2E, merge `main`, contrôler déploiement `READY` et vérifier absence de `too_many_routes`. Consigner le nombre réel seulement s'il est fourni par le build/fournisseur.
 
@@ -26,6 +26,8 @@
 - Exports Console : `/api/admin/exports/{audit|organizations|payments|users}` → un `[dataset]/route.ts`, **quatre handlers inchangés**.
 - Le dispatcher possède une allowlist de chemins/méthodes *statique*, pas de chemins importés depuis la requête; les anciennes validations RBAC, tenant, status HTTP, audit, rateLimit, secrets et idempotence restent exécutées dans les handlers originaux.
 - Vérification de non-altération : `scripts/qa-routes-dispatch-parity.mjs` compare les SHA git blob SHA-1 de chaque handler original déplacé, contrôle la présence des méthodes, la liste stricte et les routes disparues.
+
+**Deuxième pilote (Gaming)** : 24 routes Gaming et paramètres dynamiques regroupés en un dispatcher statique allowlisté, avec 24 handlers byte-pour-byte immuables, méthodes GET/POST/PATCH/OPTIONS, même contexte `organizationId` et identifiants (`sessionId`, `stationId`, `tournamentId`, etc.).
 
 **Étapes suivantes sans extrapolation** : attaquer une famille de 20–50 endpoints RETAIL, puis Pharmacie, Santé, Gaming et Administration; chaque famille doit disposer de preuves GET/POST/PATCH/DELETE, params dynamiques, multipart, webhooks, E2E navigateur et interdiction des fuites multi-tenant **avant** migration. Ne pas déplacer aveuglément 545 routes API entreprise en une passe, ne pas modifier les contracts HTTP.
 
@@ -73,9 +75,9 @@ API interne ERP ou workers
 | HIRMS child endpoints | 5 | 1 | 4 |
 | Exports Console | 4 | 1 | 3 |
 | Finance pages wrappers | 14 | 0 (resolver commun existant) | 14 |
-| **Total** | **23** | **2** | **21** |
+| **Total** | **23** | **2** | **44** |
 
-Projection source : 915 → **894**. Ceci **ne représente pas un chiffre Vercel**. Les contrôles CI et la mesure d'un futur déploiement pourront le confirmer/invalider.
+Projection source : 915 → **871**. Ceci **ne représente pas un chiffre Vercel**. Les contrôles CI et la mesure d'un futur déploiement pourront le confirmer/invalider.
 
 ## Matrice de validation et rollback
 
