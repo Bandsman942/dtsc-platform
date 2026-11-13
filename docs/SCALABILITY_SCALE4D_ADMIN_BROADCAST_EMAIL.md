@@ -48,3 +48,14 @@ Ce lot réduit la latence interactive et rend les diffusions rejouables. Il ne c
 ## QA
 
 `scripts/qa-scale4d-admin-broadcast-email.mjs` verrouille le contrat : transaction, absence d'appel Zoho dans la requête interactive, vérité de l'état « mis en file », audience vide, cron, claim multi-instance, concurrence bornée, retries/DLQ, erreurs fournisseur normalisées, observabilité et isolation des workers.
+
+## Correctif 13/11/2026 — Diffusion globale (candidat v1.16.2)
+
+L'API a échoué avec Prisma P2003 sur `EnterpriseDomainEvent_organizationId_fkey` :
+le payload maître et les jobs e-mail utilisaient le faux ID
+`__DTSC_PLATFORM__`. Ils emploient désormais `organizationId = NULL`
+dans la transaction existante ; une contrainte CHECK limite cette portée
+aux jobs e-mail de diffusion et Web Push. Les événements tenant-scoped
+restent liés par la FK à une organisation réelle. Erreur publique expurgée
+avec référence d'incident ; pas de promesse de livraison avant le worker.
+Voir `docs/HOTFIX_GLOBAL_OUTBOX_SCOPE_20261113.md`.
