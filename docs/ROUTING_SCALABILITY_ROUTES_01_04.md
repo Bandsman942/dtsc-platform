@@ -26,6 +26,9 @@
 - Exports Console : `/api/admin/exports/{audit|organizations|payments|users}` → un `[dataset]/route.ts`, **quatre handlers inchangés**.
 - Le dispatcher possède une allowlist de chemins/méthodes *statique*, pas de chemins importés depuis la requête; les anciennes validations RBAC, tenant, status HTTP, audit, rateLimit, secrets et idempotence restent exécutées dans les handlers originaux.
 - Vérification de non-altération : `scripts/qa-routes-dispatch-parity.mjs` compare les SHA git blob SHA-1 de chaque handler original déplacé, contrôle la présence des méthodes, la liste stricte et les routes disparues.
+- Le hash passe par `git hash-object --path` sur le fichier de travail : les filtres Git normalisent les fins de ligne Windows, mais une modification de contenu reste détectée. Le contrôle ne se limite pas à l’index ou au dernier commit.
+- `scripts/qa-routes-dispatch-behavior.mjs` exécute les trois vrais dispatchers avec les seuls handlers d’origine substitués : 33 chemins, 47 délégations, paramètres dynamiques/tenant, identité Request/Response, flux non consommés, 404/405/OPTIONS. Ce contrat ne simule pas une validation RBAC ou un appel HSL réel.
+- Les segments HIRMS décodés contenant `/` sont refusés avec `404` : `ocr%2Fstatus` ne doit pas devenir l’URL historique `ocr/status`. Les erreurs de méthode connues restent `405` ; Next.js conserve l’implémentation automatique HEAD et les méthodes non exportées. Les contrôles middleware, notamment Console et same-origin, s’appliquent en premier.
 
 **Deuxième pilote (Gaming)** : 24 routes Gaming et paramètres dynamiques regroupés en un dispatcher statique allowlisté, avec 24 handlers byte-pour-byte immuables, méthodes GET/POST/PATCH/OPTIONS, même contexte `organizationId` et identifiants (`sessionId`, `stationId`, `tournamentId`, etc.).
 
@@ -92,3 +95,5 @@ Correctif : `pnpm type-check` et `pnpm lint` restent des étapes obligatoires av
 - Vérifier réponses et méthodes sur les URLs historiques, erreurs 400/401/403/404/405/429, export CSV, auth HSL UAT/Production, non-duplication des transactions, paramètres JSON et historique comptable.
 - Rollback PR avant merge : fermer sans fusion. Après merge approuvé : revert coordonné dans `main` en conservant les données/migrations ; Vercel redeploie `main`. Aucune migration Prisma nécessaire.
 - Ne pas fusionner avant E2E propriétaire BON ; ne pas déployer de branche.
+- Recette automatisée : `tests/e2e/issue-1135-routing-scalability.spec.mjs` dans Gaming 646, sur Next build et base ERP isolée. Elle vérifie les sept méthodes HTTP usuelles pour les 33 endpoints, les formes inconnues/encodées, same-origin, refus Console/inter-tenant et les 14 liens Finance ; le workspace Finance overview est rendu aux sept largeurs contractuelles. Rapport publié en artefact `routes-1135-e2e`, indépendamment du résultat des suites Gaming suivantes.
+- Recette manuelle et limites des preuves : [PR #1136 — E2E final propriétaire](qa/PR_1136_OWNER_E2E.md). Aucun test de branche ne prouve l’état Production ni ne confirme l’acceptation du propriétaire.

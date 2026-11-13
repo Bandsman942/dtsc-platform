@@ -11,6 +11,10 @@ function methodNotAllowed(allowed: string[]) {
 }
 async function dispatch(req: Request, { params }: Params, method: Method): Promise<Response> {
   const { organizationId, operation } = await params;
+  // A decoded slash inside one segment must not impersonate two URL segments.
+  if (!organizationId || !Array.isArray(operation) || operation.some(part => !part || part.includes("/"))) {
+    return Response.json({error:"Not found"}, {status:404,headers:{"Cache-Control":"no-store"}});
+  }
   const key = operation.join("/");
   const ctx = { params: Promise.resolve({ organizationId }) };
   switch (key) {

@@ -1,9 +1,12 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import crypto from "node:crypto";
+import { execFileSync } from "node:child_process";
 const root=process.cwd();
 const read=p=>fs.readFileSync(root+"/"+p,"utf8");
 const exists=p=>fs.existsSync(root+"/"+p);
+// Hash the working tree through Git's clean filters, just like a commit.
+// This still detects edits, while accepting core.autocrlf checkouts on Windows.
+const blobSha = p => execFileSync("git", ["hash-object", "--path=" + p, p], { encoding: "utf8" }).trim();
 const shas={
   "app/api/admin/exports/audit/route.ts": "f3cd1ce75389673088b3218f72de957ed4ac103e",
   "app/api/admin/exports/organizations/route.ts": "dabb3f3cc3c84d3abedb29eac8526959b3e78835",
@@ -19,9 +22,7 @@ for(const [original,expected] of Object.entries(shas)){
   const moved=original.replace(/route\.ts$/,"handler.ts");
   assert.ok(!exists(original),"Legacy routable endpoint still exists: "+original);
   assert.ok(exists(moved),"Missing original handler: "+moved);
-  const source=read(moved);
-  const buffer=Buffer.from(source,"utf8");
-  const hash=crypto.createHash("sha1").update("blob "+buffer.byteLength+"\0").update(buffer).digest("hex");
+  const hash=blobSha(moved);
   assert.equal(hash,expected,"ROUTES-02 altered legacy handler behavior: "+moved);
 }
 const admin=read("app/api/admin/exports/[dataset]/route.ts");
@@ -75,9 +76,7 @@ for (const [oldPath, originalSha] of Object.entries(gamingOriginalShas)) {
   const moved = oldPath.replace(/route\.ts$/, "handler.ts");
   assert.ok(!exists(oldPath), "Gaming routable original still present: " + oldPath);
   assert.ok(exists(moved), "Gaming handler missing: " + moved);
-  const bytes = Buffer.from(read(moved), "utf8");
-  const blobSha = crypto.createHash("sha1").update("blob " + bytes.length + "\0").update(bytes).digest("hex");
-  assert.equal(blobSha, originalSha, "Gaming handler modified: " + moved);
+  assert.equal(blobSha(moved), originalSha, "Gaming handler modified: " + moved);
   const rel = oldPath.slice("app/api/enterprise/[organizationId]/gaming/".length, -"/route.ts".length);
   assert.ok(gamingDispatcher.includes('gaming/' + rel + '/handler'), "Gaming import not allowlisted: " + rel);
 }
