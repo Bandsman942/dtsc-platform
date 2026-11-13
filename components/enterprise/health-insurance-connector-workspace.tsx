@@ -6,6 +6,8 @@ import { useAppLocale } from "@/components/i18n/locale-provider";
 import { useToastMessage } from "@/components/ui/use-toast-message";
 import { HirmsEnvironmentSwitch } from "./hirms-environment-switch";
 import { HirmsWorkspaceNavigation } from "./hirms-workspace-navigation";
+import { ModuleMetric, ModuleMetrics } from "@/components/workspace/module-metrics";
+import { StatusBadge } from "@/components/workspace/status-badge";
 import type { HirmsEnvironment } from "@/lib/enterprise/health-insurance-connectors/environments";
 
 type Connector = {
@@ -14,7 +16,7 @@ type Connector = {
   credentialsUpdatedAt: string | null; lastErrorCode: string | null;
 };
 type Dataset = { connector: Connector | null; sites: Array<{ id: string; name: string; code: string }>;
-  environment: HirmsEnvironment; productionEnabled: boolean; uatInvoiceSendEnabled: boolean; productionInvoiceSendEnabled: boolean };
+  environment: HirmsEnvironment; productionEnabled: boolean; uatInvoiceSendEnabled: boolean; productionInvoiceSendEnabled: boolean; uatOcrEnabled: boolean; productionOcrEnabled: boolean };
 
 export function HealthInsuranceConnectorWorkspace({ organizationId, initialEnvironment = "UAT" }: { organizationId: string; initialEnvironment?: HirmsEnvironment }) {
   const locale = useAppLocale() || "fr";
@@ -92,6 +94,13 @@ export function HealthInsuranceConnectorWorkspace({ organizationId, initialEnvir
 
       <HirmsEnvironmentSwitch value={environment} onChange={next=>{requestEpoch.current++;setEnvironment(next);setData(null);setUsername("");setSecret("");}} disabled={pending} />
       <HirmsWorkspaceNavigation active="connectors" environment={environment}/>
+      <ModuleMetrics label={tx("Préparation du connecteur HSL","HSL connector readiness")}>
+        <ModuleMetric label={tx("Identifiants chiffrés","Encrypted credentials")} value={data?.connector?.credentialsConfigured?"✓":"—"} hint={data?.connector?.credentialsConfigured?tx("Enregistrés","Saved"):tx("À configurer","Not configured")}/>
+        <ModuleMetric label={tx("Authentification HSL","HSL authentication")} value={data?.connector?.status==="READY"?"✓":"—"} hint={data?.connector?.status==="READY"?tx("Test réussi","Verified"):tx("Test nécessaire","Test required")}/>
+        <ModuleMetric label={tx("Facturation","Invoicing")} value={data?.connector?.hslServiceProviderId?"✓":"—"} hint={data?.connector?.hslServiceProviderId?tx("Prestataire identifié","Provider mapped"):tx("ServiceProviderID requis","ServiceProviderID required")}/>
+        <ModuleMetric label={tx("Droits de transmission","Submission permissions")} value={(environment==="UAT"?data?.uatInvoiceSendEnabled:data?.productionInvoiceSendEnabled)?"✓":"—"} hint={(environment==="UAT"?data?.uatOcrEnabled:data?.productionOcrEnabled)?tx("Factures + OCR activés","Invoices + OCR enabled"):tx("Vérifiez les droits HSL et DTSC","Check HSL and DTSC access")}/>
+      </ModuleMetrics>
+      {data?.connector?.lastErrorCode && <div role="status" className="flex flex-wrap items-center gap-2 text-xs text-dtsc-ink"><StatusBadge tone="warning">{tx("À vérifier","Needs attention")}</StatusBadge><span>{data.connector.lastErrorCode}</span></div>}
       {environment === "PRODUCTION" && <div role="note" className="rounded-xl border border-amber-500/50 bg-amber-500/10 p-3 text-sm text-dtsc-ink">{tx("Environnement réel. Utilisez exclusivement les identifiants de Production remis par HSL. Les appels sont bloqués tant que DTSC n’a pas habilité la Production.", "Live environment. Use only Production credentials issued by HSL. Outbound calls are blocked until DTSC enables Production.")}</div>}
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1.5fr)_minmax(280px,1fr)]">
         <form onSubmit={save} className="min-w-0 space-y-4 rounded-2xl border border-dtsc-border bg-dtsc-surface p-4 sm:p-5">
@@ -146,7 +155,7 @@ export function HealthInsuranceConnectorWorkspace({ organizationId, initialEnvir
           </section>
         </aside>
       </div>
-      <p className="text-xs text-dtsc-muted">{tx("Les contrôles et transmissions sont séparés entre UAT et Production. Chaque environnement possède ses propres identifiants et habilitations HSL ; les appels réels sont désactivés par défaut. Les justificatifs OCR ne sont pas encore intégrés.", "Preflight and submissions are separated between UAT and Production. Each environment has its own HSL credentials and permissions; live calls are disabled by default. OCR documents are not integrated yet.")}</p>
+      <p className="text-xs text-dtsc-muted">{tx("Les contrôles et transmissions sont séparés entre UAT et Production. Chaque environnement possède ses propres identifiants et habilitations HSL ; les appels réels sont désactivés par défaut. Les documents OCR et leur suivi sont disponibles dans l’onglet dédié ; le traitement 4–50 Mo et le mapping automatique des factures nécessitent encore une certification HSL.", "Preflight and submissions are separated between UAT and Production. Each environment has its own HSL credentials and permissions; live calls are disabled by default. OCR documents and status tracking are available in the dedicated tab; 4–50 MB uploads and automatic invoice mapping still require HSL certification.")}</p>
     </main>
   );
 }
