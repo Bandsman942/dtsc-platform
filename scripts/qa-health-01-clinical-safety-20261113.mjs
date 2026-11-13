@@ -79,4 +79,6 @@ assert.doesNotMatch(read("app/api/enterprise/[organizationId]/healthcare/patient
 assert.match(read("lib/health-patients.ts"),/events: Array\.isArray\(patient\.events\)/,"Patient event summaries must not leak to administrative readers");
 assert.match(read("lib/health-consultations.ts"),/labRequests: \[\], events: \[\]/,"Clinical activity and events must be hidden without explicit permission");
 assert.match(read("lib/health-laboratory.ts"),/items:\[\],events:\[\]/,"Laboratory audit narrative must be hidden without clinical permission");
+assert.doesNotMatch(read("lib/health-appointments.ts"),/title: \`\\$\\{appointment\\.patient\\.fullName\\}/,"Appointment updates must not reintroduce PHI into legacy titles");
+assert.doesNotMatch(read("lib/health-consultations.ts"),/summary: consultation\\.chiefComplaint/,"Consultation updates must not reintroduce clinical complaints into legacy summaries");
 console.log("✅ HEALTH-01 P0: independent lab results, clinical authorization, PHI-minimized projection, tenant-safe canonical metrics");

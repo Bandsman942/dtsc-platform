@@ -147,8 +147,8 @@ export async function updateHealthAppointment(organizationId: string, appointmen
       await tx.enterpriseSectorRecord.update({
         where: { id: existing.legacyRecordId },
         data: {
-          title: `${appointment.patient.fullName} · ${appointment.reason}`,
-          summary: appointment.description,
+          title: `Rendez-vous · ${appointment.appointmentNumber}`,
+          summary: null,
           priority: appointment.priority,
           assignedToUserId: appointment.professionalId,
           updatedById: actorUserId,

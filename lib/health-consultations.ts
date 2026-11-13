@@ -99,7 +99,7 @@ export async function updateHealthConsultation(organizationId: string, consultat
       bmi: bmi(data.weight ?? existing.weight ?? undefined, data.height ?? existing.height ?? undefined), updatedById: actorUserId,
     }, include: { patient: true, appointment: true } });
     if (existing.legacyRecordId && consultation.patient.legacyRecordId) await tx.enterpriseSectorRecord.update({ where: { id: existing.legacyRecordId }, data: {
-      title: `Consultation · ${consultation.patient.fullName}`, summary: consultation.chiefComplaint, priority: consultation.priority, assignedToUserId: consultation.professionalId, updatedById: actorUserId,
+      title: `Consultation · ${consultation.consultationNumber}`, summary: null, priority: consultation.priority, assignedToUserId: consultation.professionalId, updatedById: actorUserId,
       payloadJson: legacyPayload({ ...consultation, consultationDate: consultation.consultationDate } as HealthConsultationInput, consultation.patient.legacyRecordId, consultation.appointment?.legacyRecordId || null, consultation.consultationNumber),
     } });
     await tx.healthConsultationEvent.create({ data: { organizationId, consultationId: consultation.id, eventType: "UPDATED", summary: "Informations cliniques mises à jour.", fromStatus: consultation.status, toStatus: consultation.status, actorUserId } });
