@@ -8,6 +8,7 @@ import { InsuranceConnectorError } from "./registry";
 import { postHirmsInvoices, HirmsInvoiceTransportError } from "./hirms-invoices";
 import { assertHirmsEnvironmentEnabled } from "./environments";
 import { getHirmsRemoteInvoiceStatus } from "./hirms-status";
+import { type HirmsHistoryFilters, utcSubmittedAtRange } from "./history-filters";
 
 export type HirmsDispatchMode = "single" | "bulk";
 
@@ -137,18 +138,34 @@ export async function submitHirmsInvoices(organizationId: string, userId: string
   }
 }
 
-export async function listHirmsInvoiceSubmissions(organizationId: string, environment: HirmsEnvironment, page = 1) {
-  const safePage = Math.min(Math.max(1,Math.floor(page) || 1),10000);
-  const where = { organizationId, adapterCode: "HIRMS_HSL", environment };
-  const [total,items] = await Promise.all([
+export async function listHirmsInvoiceSubmissions(
+  organizationId: string, environment: HirmsEnvironment, page = 1,
+  filters: HirmsHistoryFilters = {}, pageSize = 20,
+) {
+  const safePage = Math.min(Math.max(1, Math.floor(page) || 1), 10000);
+  const safeSize = Math.min(Math.max(1, Math.floor(pageSize) || 20), 500);
+  const common: Prisma.EnterpriseHealthInsuranceInvoiceSubmissionWhereInput = {
+    organizationId, adapterCode: "HIRMS_HSL", environment,
+    ...(filters.search ? {invoiceNumber:{contains:filters.search,mode:"insensitive"}} : {}),
+    ...(utcSubmittedAtRange(filters) ? {submittedAt:utcSubmittedAtRange(filters)} : {}),
+  };
+  const where: Prisma.EnterpriseHealthInsuranceInvoiceSubmissionWhereInput = {
+    ...common, ...(filters.status ? {transportStatus: filters.status} : {}),
+  };
+  const [total,items,aggregates] = await Promise.all([
     prisma.enterpriseHealthInsuranceInvoiceSubmission.count({ where }),
     prisma.enterpriseHealthInsuranceInvoiceSubmission.findMany({
-      where, orderBy: { submittedAt: "desc" }, skip: (safePage-1)*20, take: 20,
+      where, orderBy: { submittedAt: "desc" }, skip: (safePage - 1) * safeSize, take: safeSize,
       select: { id: true, invoiceNumber: true, batchId: true, transportStatus: true, httpStatus: true,
-        errorCode: true, externalReference: true, remoteStatus: true, lastStatusCheckedAt: true, lastStatusErrorCode: true, submittedAt: true },
+        errorCode: true, externalReference: true, remoteStatus: true, lastStatusCheckedAt: true,
+        lastStatusErrorCode: true, submittedAt: true },
+    }),
+    prisma.enterpriseHealthInsuranceInvoiceSubmission.groupBy({
+      by: ["transportStatus"], where: common, _count: {_all:true},
     }),
   ]);
-  return { items, total, page: safePage, pageCount: Math.max(1,Math.ceil(total/20)) };
+  const statusCounts = Object.fromEntries(aggregates.map(row=>[row.transportStatus,row._count._all]));
+  return { items,total,statusCounts,page:safePage,pageCount:Math.max(1,Math.ceil(total/safeSize)) };
 }
 
 /** Explicit manual remote-status read. Never converts an HSL code into payment,

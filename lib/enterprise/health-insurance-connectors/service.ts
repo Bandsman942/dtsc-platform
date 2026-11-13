@@ -44,6 +44,8 @@ export async function getInsuranceConnectorDashboard(organizationId: string, env
     sites, environment,
     productionEnabled: process.env.HEALTH_INSURANCE_HIRMS_PRODUCTION_ENABLED === "true" && isHirmsProductionApprovedForOrganization(organizationId),
     uatInvoiceSendEnabled: process.env.HEALTH_INSURANCE_HIRMS_UAT_INVOICE_SEND_ENABLED === "true",
+    uatOcrEnabled: process.env.HEALTH_INSURANCE_HIRMS_UAT_OCR_ENABLED === "true",
+    productionOcrEnabled: process.env.HEALTH_INSURANCE_HIRMS_PRODUCTION_ENABLED === "true" && isHirmsProductionApprovedForOrganization(organizationId) && process.env.HEALTH_INSURANCE_HIRMS_PRODUCTION_OCR_ENABLED === "true",
     productionInvoiceSendEnabled: process.env.HEALTH_INSURANCE_HIRMS_PRODUCTION_ENABLED === "true" && isHirmsProductionApprovedForOrganization(organizationId) && process.env.HEALTH_INSURANCE_HIRMS_PRODUCTION_INVOICE_SEND_ENABLED === "true",
   };
 }
