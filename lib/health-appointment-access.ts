@@ -1,6 +1,7 @@
 import { canAccessEnterpriseModule, ENTERPRISE_MANAGER_ROLES, requireEnterpriseMembership } from "@/lib/enterprise-sector-templates";
 import type { SessionPayload } from "@/lib/session";
 import { getHealthStaffMedicalPermissions } from "@/lib/health-staff-access";
+import { getHealthConsultationAccess } from "@/lib/health-consultation-access";
 
 export async function getHealthAppointmentAccess({ session, organizationId, action }: { session: SessionPayload; organizationId: string; action: "read" | "submit" | "write" | "manage" }) {
   const membership = await requireEnterpriseMembership(session, organizationId);
@@ -9,13 +10,16 @@ export async function getHealthAppointmentAccess({ session, organizationId, acti
   const canManage = ENTERPRISE_MANAGER_ROLES.has(membership.role);
   const clinicalPermissions = await getHealthStaffMedicalPermissions(session.userId, organizationId);
   const clinicalAccess = clinicalPermissions.includes("health.consultations.view_sensitive");
+  // Conversion creates a clinical record. Require the target module and
+  // professional authorization rather than a generic appointment role.
+  const consultationAccess = await getHealthConsultationAccess({session,organizationId,action:"read"});
   return {
     membership,
     canCreate: membership.role !== "GUEST",
     canUpdate: canManage,
     canTransition: canManage,
     canCancel: canManage,
-    canConvert: clinicalAccess,
+    canConvert: Boolean(consultationAccess?.canCreate),
     canViewSensitive: clinicalAccess,
   };
 }

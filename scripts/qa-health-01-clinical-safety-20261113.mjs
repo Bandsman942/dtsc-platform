@@ -66,7 +66,7 @@ const appointmentAccess=read("lib/health-appointment-access.ts");
 const recordAccess=read("lib/health-medical-record-access.ts");
 assert.match(labAccess,/canValidate:permissions\.includes\("health\.laboratory\.validate_result"\)/,"Administrative manager must not validate lab result without clinical permission");
 assert.match(labAccess,/canViewSensitive:permissions\.includes\("health\.laboratory\.view_sensitive"\)/,"Administrative manager cannot read lab values by role");
-assert.match(appointmentAccess,/canConvert: clinicalAccess/,"Only clinicians may convert an appointment into a consultation");
+assert.match(appointmentAccess,/canConvert: Boolean\(consultationAccess\?\.canCreate\)/,"Only explicitly authorized consultation creators may convert appointments");
 assert.match(recordAccess,/canUpdate: canEditClinical/,"Medical record editing must use clinical permissions");
 const activityLoader=read("lib/enterprise/enterprise-activity-healthcare-loader.ts");
 const modulePage=read("app/enterprise-modules/[moduleCode]/page.tsx");
