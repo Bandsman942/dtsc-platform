@@ -50,6 +50,8 @@ export async function POST(req: Request) {
       type: body.data.type,
     });
 
+    // The outbox transaction has committed. An audit transport failure must not
+    // turn an accepted broadcast into HTTP 500 and invite duplicate retries.
     await writeApiLog({
       request: req,
       statusCode: 202,
@@ -63,7 +65,10 @@ export async function POST(req: Request) {
         emailJobsQueued: queued.emailJobsQueued,
         personalized: queued.personalized,
       },
-    });
+    }).catch((logError) => console.error("Admin broadcast accepted but audit failed", {
+      broadcastId: queued.broadcastId,
+      logError,
+    }));
 
     return NextResponse.json(
       {
