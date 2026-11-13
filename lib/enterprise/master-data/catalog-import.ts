@@ -68,8 +68,12 @@ export function assertSafeZip(buffer: Buffer) {
 function excelCellText(value: ExcelJS.CellValue): string {
   if (value == null) return "";
   if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") return String(value);
-  // Formulas and links are never executed or imported as catalog values.
-  throw new CatalogImportError("Spreadsheet formulas, links and rich cells are not permitted in the import data.");
+  // Excel/LibreOffice can create harmless rich text when a user formats a cell.
+  // Flatten visible text only. Formula and hyperlink objects remain forbidden.
+  if (typeof value === "object" && "richText" in value && Array.isArray(value.richText)) {
+    return value.richText.map((part) => part.text).join("");
+  }
+  throw new CatalogImportError("Spreadsheet formulas, hyperlinks or unsupported cell types are not permitted in import data.");
 }
 
 export async function parseCatalogFile(file: File, locale: Locale): Promise<Array<{ line: number; cells: string[] }>> {
@@ -103,7 +107,9 @@ export async function parseCatalogFile(file: File, locale: Locale): Promise<Arra
       });
     } catch (error) {
       if (error instanceof CatalogImportError && error.message === "TOO_MANY_ROWS") throw new CatalogImportError(tr(locale, "Le fichier dépasse 200 articles. Divisez-le en plusieurs lots.", "The file exceeds 200 items. Split it into smaller batches."));
-      if (error instanceof CatalogImportError && error.message.includes("formulas")) throw new CatalogImportError(tr(locale, "Les formules Excel, liens et cellules enrichies ne sont pas autorisés dans les lignes importées.", "Excel formulas, links and rich cells are not allowed in imported rows."));
+      if (error instanceof CatalogImportError && error.message.includes("formulas")) throw new CatalogImportError(tr(locale, "Les formules Excel, liens et types de cellule non pris en charge sont interdits dans les lignes importées.", "Excel formulas, links and unsupported cell types are not allowed in imported rows."));
+      if (error instanceof CatalogImportError && error.message.includes("XLSX expanded")) throw new CatalogImportError(tr(locale, "Le classeur Excel dépasse les limites de sécurité.", "The Excel workbook exceeds the security limits."));
+      if (error instanceof CatalogImportError && error.message.includes("Invalid XLSX")) throw new CatalogImportError(tr(locale, "La structure ZIP du fichier Excel est invalide.", "The Excel file has an invalid ZIP structure."));
       throw new CatalogImportError(tr(locale, "Le fichier Excel est endommagé, non pris en charge ou non sûr. Téléchargez un nouveau modèle DTSC.", "The Excel file is damaged, unsupported or unsafe. Download a new DTSC template."));
     }
   } else {
@@ -153,8 +159,8 @@ export async function prepareCatalogImport(organizationId: string, records: Arra
   });
   const existingNames = new Set(existing.map((item) => `${item.itemType}:${item.normalizedName}`));
   const existingSkus = new Set(existing.map((item) => item.sku?.toLowerCase()).filter(Boolean));
-  const fileNames = new Set<string>();
-  const fileSkus = new Set<string>();
+  const fileNames = new Map<string, number>();
+  const fileSkus = new Map<string, number>();
 
   return records.map(({ line, cells }) => {
     const [nameRaw, typeRaw, skuRaw, description, categoryRaw, unitRaw, saleRaw, costRaw, currencyRaw, taxableRaw, taxRaw, inventoryRaw] = cells.map((cell) => cell.trim());
@@ -176,10 +182,14 @@ export async function prepareCatalogImport(organizationId: string, records: Arra
     if (itemType === "SERVICE" && trackInventory) errors.push(tr(locale, "Un service ne peut pas activer le suivi de stock.", "A service cannot enable inventory tracking."));
     const nameKey = `${itemType}:${normalizeName(name)}`;
     const skuKey = sku?.toLowerCase();
-    if (existingNames.has(nameKey) || fileNames.has(nameKey) || (skuKey && (existingSkus.has(skuKey) || fileSkus.has(skuKey)))) {
-      errors.push(tr(locale, "Article déjà présent dans ce fichier ou dans le catalogue.", "Item already exists in this file or in the catalog."));
-    }
-    fileNames.add(nameKey); if (skuKey) fileSkus.add(skuKey);
+    if (existingNames.has(nameKey)) errors.push(tr(locale, "Ce nom et ce type existent déjà dans le catalogue.", "This name and item type already exist in the catalog."));
+    const sameNameLine = fileNames.get(nameKey);
+    if (sameNameLine != null) errors.push(tr(locale, `Nom et type déjà utilisés à la ligne ${sameNameLine}.`, `Name and item type already used on row ${sameNameLine}.`));
+    if (skuKey && existingSkus.has(skuKey)) errors.push(tr(locale, "Cette référence SKU existe déjà dans le catalogue.", "This SKU already exists in the catalog."));
+    const sameSkuLine = skuKey ? fileSkus.get(skuKey) : undefined;
+    if (sameSkuLine != null) errors.push(tr(locale, `SKU déjà utilisé à la ligne ${sameSkuLine}.`, `SKU already used on row ${sameSkuLine}.`));
+    if (!fileNames.has(nameKey)) fileNames.set(nameKey, line);
+    if (skuKey && !fileSkus.has(skuKey)) fileSkus.set(skuKey, line);
     const parsed = catalogItemCreateSchema.safeParse({
       name, itemType, sku, description: description || null,
       categoryId: categoryByCode.get(categoryCode) || null,
