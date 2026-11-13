@@ -13,10 +13,14 @@ type PreviewRow = {
   name: string;
   itemType: string;
   sku: string;
+  description: string;
   categoryCode: string;
   unitCode: string;
   salePrice: string;
+  cost: string;
   currency: string;
+  taxable: string;
+  taxCode: string;
   trackInventory: string;
   errors: string[];
 };
@@ -164,23 +168,28 @@ export function CatalogImportControls({ organizationId, organizationName, locale
                 <strong className="min-w-0 break-words text-dtsc-ink">{t("catalog.importRow", { line: row.line, name: row.name || "—" })}</strong>
                 <span className={row.errors.length ? "text-red-600 dark:text-red-300" : "text-emerald-600 dark:text-emerald-300"}>{row.errors.length ? t("catalog.previewInvalid") : t("catalog.previewValid")}</span>
               </div>
-              <div className="mt-1 break-words text-xs text-dtsc-muted">{row.itemType} · {row.sku || "—"} · {row.categoryCode || "—"} · {row.unitCode || "—"} · {row.salePrice || "—"} {row.currency}</div>
+              <div className="mt-1 break-words text-xs text-dtsc-muted">{row.itemType === "PRODUCT" ? t("catalog.products") : t("catalog.services")} · {row.sku || "—"} · {row.categoryCode || "—"} · {row.unitCode || "—"}<br />{t("catalog.salePrice")}: {row.salePrice || "—"} {row.currency} · {t("catalog.purchaseCost")}: {row.cost || "—"}<br />{t("catalog.taxable")}: {row.taxable || "—"} · {t("catalog.taxCode")}: {row.taxCode || "—"} · {t("catalog.trackInventory")}: {row.trackInventory || "—"}{row.description ? <p className="mt-2 break-words">{row.description}</p> : null}</div>
               {row.errors.length ? <ul className="mt-2 list-disc pl-5 text-xs text-red-700 dark:text-red-300">{row.errors.map((message, index) => <li key={index}>{message}</li>)}</ul> : null}
             </div>)}
             <div className="hidden min-w-0 overflow-x-auto lg:block" role="region" tabIndex={0} aria-label={t("catalog.previewTable")}>
-              <table className="w-full min-w-[850px] border-collapse text-left text-xs">
+              <table className="w-full min-w-[1250px] border-collapse text-left text-xs">
                 <thead className="sticky top-0 bg-dtsc-surface text-dtsc-muted"><tr>
-                  {[t("catalog.previewLine"), t("catalog.name"), t("catalog.type"), t("catalog.sku"), t("catalog.category"), t("catalog.unit"), t("catalog.salePrice"), t("catalog.currency"), t("catalog.previewStatus")].map((heading) => <th key={heading} scope="col" className="border-b border-dtsc-border p-2 font-semibold">{heading}</th>)}
+                  {[t("catalog.previewLine"), t("catalog.name"), t("catalog.type"), t("catalog.sku"), t("catalog.description"), t("catalog.category"), t("catalog.unit"), t("catalog.salePrice"), t("catalog.purchaseCost"), t("catalog.currency"), t("catalog.taxable"), t("catalog.taxCode"), t("catalog.trackInventory"), t("catalog.previewStatus")].map((heading) => <th key={heading} scope="col" className="border-b border-dtsc-border p-2 font-semibold">{heading}</th>)}
                 </tr></thead>
                 <tbody>{visibleRows.map((row) => <tr key={row.line} className={row.errors.length ? "bg-red-500/5" : "bg-emerald-500/5"}>
                   <td className="border-b border-dtsc-border p-2">{row.line}</td>
                   <td className="max-w-52 break-words border-b border-dtsc-border p-2 font-semibold">{row.name || "—"}</td>
-                  <td className="border-b border-dtsc-border p-2">{row.itemType}</td>
+                  <td className="border-b border-dtsc-border p-2">{row.itemType === "PRODUCT" ? t("catalog.products") : t("catalog.services")}</td>
                   <td className="max-w-36 break-all border-b border-dtsc-border p-2">{row.sku || "—"}</td>
+                  <td className="max-w-52 break-words border-b border-dtsc-border p-2">{row.description || "—"}</td>
                   <td className="border-b border-dtsc-border p-2">{row.categoryCode || "—"}</td>
                   <td className="border-b border-dtsc-border p-2">{row.unitCode || "—"}</td>
                   <td className="border-b border-dtsc-border p-2">{row.salePrice || "—"}</td>
+                  <td className="border-b border-dtsc-border p-2">{row.cost || "—"}</td>
                   <td className="border-b border-dtsc-border p-2">{row.currency || "—"}</td>
+                  <td className="border-b border-dtsc-border p-2">{row.taxable || "—"}</td>
+                  <td className="border-b border-dtsc-border p-2">{row.taxCode || "—"}</td>
+                  <td className="border-b border-dtsc-border p-2">{row.trackInventory || "—"}</td>
                   <td className="border-b border-dtsc-border p-2"><span className={row.errors.length ? "font-semibold text-red-600 dark:text-red-300" : "font-semibold text-emerald-600 dark:text-emerald-300"}>{row.errors.length ? t("catalog.previewInvalid") : t("catalog.previewValid")}</span>{row.errors.length ? <ul className="mt-1 list-disc space-y-1 pl-4 text-red-700 dark:text-red-300">{row.errors.map((message, index) => <li key={index}>{message}</li>)}</ul> : null}</td>
                 </tr>)}</tbody>
               </table>
