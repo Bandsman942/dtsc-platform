@@ -2,6 +2,7 @@
 
 import { useMemo, useState, type ReactNode } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { HealthAppointmentsWorkspace } from "@/components/enterprise/health-appointments-workspace";
 import { HealthConsultationsWorkspace } from "@/components/enterprise/health-consultations-workspace";
 import { HealthDocumentsWorkspace } from "@/components/enterprise/health-documents-workspace";
@@ -60,9 +61,9 @@ function HealthSectorNavigation({moduleCode,enabledModuleCodes,locale,onOpen}:{
   return <nav data-health-sector-nav aria-label={en?"Healthcare navigation":"Navigation des modules Santé"}
     className="sticky top-0 z-20 min-w-0 rounded-2xl border border-dtsc-border bg-dtsc-surface/95 p-2 shadow-sm backdrop-blur-xl sm:p-3">
     <div className="flex min-w-0 flex-wrap items-center gap-2">
-      <a href="/enterprise-modules" className="inline-flex min-h-10 shrink-0 items-center rounded-xl border border-dtsc-border px-3 text-xs font-bold text-dtsc-ink hover:bg-dtsc-page focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-500">
+      <Link href="/enterprise-modules" className="inline-flex min-h-10 shrink-0 items-center rounded-xl border border-dtsc-border px-3 text-xs font-bold text-dtsc-ink hover:bg-dtsc-page focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-500">
         <span aria-hidden className="mr-1">←</span>{en?"All modules":"Tous les modules"}
-      </a>
+      </Link>
       <p className="min-w-0 flex-1 break-words text-sm font-black text-dtsc-ink">{active?(en?active.en:active.fr):moduleCode}</p>
       <button type="button" aria-expanded={expanded} aria-controls={panelId}
         onClick={()=>setExpanded(v=>!v)}
