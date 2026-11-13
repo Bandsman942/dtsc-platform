@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNo
 import { useRouter } from "next/navigation";
 import {
   Activity,
+  ArrowLeft,
+  ChevronRight,
   AlertTriangle,
   BadgeCheck,
   CalendarClock,
@@ -202,6 +204,24 @@ const submodules: Array<{
   { code: "HEALTH_SETTINGS", label: "Paramètres santé", description: "Préfixes, services actifs, établissement, unités, verrouillage et rôles autorisés.", icon: Settings2, createLabel: "Nouveau paramètre" },
   { code: "HEALTH_REPORTS", label: "Rapports santé", description: "Rapports d'activité, difficultés, recommandations et synthèses par service.", icon: FilePenLine, createLabel: "Nouveau rapport" },
 ];
+
+const englishHealthSections: Partial<Record<HealthcareModuleCode,{label:string;description:string}>> = {
+  HEALTH_DASHBOARD:{label:"Healthcare dashboard",description:"Patient pathways, care quality, laboratory, billing and operations."},
+  PATIENTS:{label:"Patients",description:"Identities, contacts, admission details and administrative records."},
+  APPOINTMENTS:{label:"Appointments",description:"Schedules, attendance, confirmation and clinical visits."},
+  CONSULTATIONS:{label:"Consultations",description:"Clinical assessments, vital signs, diagnoses and treatment plans."},
+  MEDICAL_RECORDS:{label:"Medical records",description:"Patient history, allergies, medication and longitudinal notes."},
+  CARE_TEAM:{label:"Medical team",description:"Care professionals, roles, services and availability."},
+  LABORATORY:{label:"Laboratory",description:"Test requests, specimens, results and validation."},
+  INTERNAL_PHARMACY:{label:"Internal pharmacy",description:"Medications, batches, expiry dates and dispensing."},
+  MEDICAL_BILLING:{label:"Medical billing",description:"Medical services, invoices, receivables and payments."},
+  INSURANCE_COVERAGE:{label:"Insurance & coverage",description:"Payers, authorizations, coverage and claims."},
+  QUALITY_INCIDENTS:{label:"Quality incidents",description:"Patient safety incidents, severity and corrective actions."},
+  MEDICAL_DOCUMENTS:{label:"Medical documents",description:"Clinical reports, prescriptions, certificates and versions."},
+  MEDICAL_CONFIDENTIALITY:{label:"Medical confidentiality",description:"Access rules, confidentiality and review."},
+  HEALTH_SETTINGS:{label:"Healthcare settings",description:"Facility settings, units and professional roles."},
+  HEALTH_REPORTS:{label:"Healthcare reports",description:"Activity trends, service reports and quality indicators."},
+};
 
 const statusLabels: Record<string, string> = {
   DRAFT: "Brouillon",
@@ -419,6 +439,7 @@ export function HealthcareAdminWorkspace({
   const router = useRouter();
   const t = useCallback((key: string) => translate(locale, key), [locale]);
   const [activeModuleCode, setActiveModuleCode] = useState<HealthcareModuleCode>("HEALTH_DASHBOARD");
+  const [moduleSearch,setModuleSearch] = useState("");
   const [formOpen, setFormOpen] = useState(false);
   const [detailsRecord, setDetailsRecord] = useState<EnterpriseSectorRecordItem | null>(null);
   const [deleteRecord, setDeleteRecord] = useState<EnterpriseSectorRecordItem | null>(null);
@@ -435,7 +456,17 @@ export function HealthcareAdminWorkspace({
     () => submodules.filter((item) => item.code === "HEALTH_DASHBOARD" || activeModuleCodes.has(item.code)),
     [activeModuleCodes],
   );
+  useEffect(()=>{
+    if(!enabledSubmodules.some(item=>item.code===activeModuleCode))setActiveModuleCode("HEALTH_DASHBOARD");
+  },[enabledSubmodules,activeModuleCode]);
   const activeSubmodule = enabledSubmodules.find((item) => item.code === activeModuleCode) || enabledSubmodules[0] || submodules[0];
+  const inEnglish = locale?.toLowerCase().startsWith("en") === true;
+  const healthLabel = (code: HealthcareModuleCode) => inEnglish
+    ? englishHealthSections[code]?.label || submodules.find(item=>item.code===code)?.label || code
+    : submodules.find(item=>item.code===code)?.label || code;
+  const healthDescription = (code: HealthcareModuleCode) => inEnglish
+    ? englishHealthSections[code]?.description || submodules.find(item=>item.code===code)?.description || ""
+    : submodules.find(item=>item.code===code)?.description || "";
   const visibleRecords = useMemo(() => records.filter((record) => record.moduleCode === activeModuleCode), [activeModuleCode, records]);
   const patientOptions = useMemo(() => records.filter((record) => record.moduleCode === "PATIENTS" && record.status !== "ARCHIVED"), [records]);
   const appointmentOptions = useMemo(() => records.filter((record) => record.moduleCode === "APPOINTMENTS" && !["ARCHIVED", "CANCELLED"].includes(record.status)), [records]);
@@ -560,12 +591,12 @@ export function HealthcareAdminWorkspace({
   const canCreate = activeModuleCode !== "HEALTH_DASHBOARD" && activeModuleCode !== "PATIENTS" && activeModuleCode !== "APPOINTMENTS" && activeModuleCode !== "CONSULTATIONS" && activeModuleCode !== "MEDICAL_RECORDS" && activeModuleCode !== "CARE_TEAM" && activeModuleCode !== "LABORATORY" && activeModuleCode !== "INTERNAL_PHARMACY" && activeModuleCode !== "MEDICAL_BILLING" && activeModuleCode !== "INSURANCE_COVERAGE" && activeModuleCode !== "QUALITY_INCIDENTS" && activeModuleCode !== "MEDICAL_DOCUMENTS";
 
   return (
-    <section className="space-y-4 rounded-[1.5rem] border border-cyan-300/25 bg-cyan-400/10 p-3 shadow-[0_20px_70px_rgba(0,23,54,0.16)] backdrop-blur-xl sm:p-5">
+    <section className="min-w-0 space-y-4 rounded-2xl border border-dtsc-border bg-dtsc-page p-3 sm:p-4 lg:p-5">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div className="min-w-0">
           <p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-600">{t("enterpriseHealthcare.eyebrow")}</p>
           <h2 className="mt-1 text-2xl font-black text-dtsc-ink">{t("enterpriseHealthcare.title")}</h2>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-dtsc-muted">{t("enterpriseHealthcare.description")}</p>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-dtsc-muted">{activeModuleCode==="HEALTH_DASHBOARD"?t("enterpriseHealthcare.description"):healthDescription(activeSubmodule.code)}</p>
         </div>
         {canCreate && (
           <Button type="button" onClick={() => openCreate(activeModuleCode)} className="rounded-2xl bg-[#00c2ff] text-[#001736] hover:bg-cyan-300">
@@ -575,34 +606,56 @@ export function HealthcareAdminWorkspace({
         )}
       </div>
 
-      <div className="flex gap-2 overflow-x-auto pb-2">
-        {enabledSubmodules.map((submodule) => {
-          const Icon = submodule.icon;
-          const active = submodule.code === activeModuleCode;
-          const count = submodule.code === "HEALTH_DASHBOARD" ? records.length : records.filter((record) => record.moduleCode === submodule.code).length;
-          return (
-            <button
-              key={submodule.code}
-              type="button"
-              onClick={() => setActiveModuleCode(submodule.code)}
-              className={`w-64 shrink-0 rounded-2xl border p-4 text-left transition ${
-                active ? "border-cyan-300 bg-cyan-300/20 shadow-[0_18px_50px_rgba(34,211,238,0.18)]" : "border-dtsc-border bg-dtsc-surface hover:border-cyan-300/60"
-              }`}
-            >
-              <div className="flex items-start gap-3">
-                <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-[#001f46] text-cyan-300">
-                  <Icon className="h-5 w-5" />
-                </span>
-                <span className="min-w-0">
-                  <span className="block truncate text-sm font-black text-dtsc-ink">{submodule.label}</span>
-                  <span className="mt-1 line-clamp-2 text-xs font-semibold leading-5 text-dtsc-muted">{submodule.description}</span>
-                  <span className="mt-2 inline-flex rounded-full bg-dtsc-page px-2 py-1 text-[0.68rem] font-black text-cyan-600">{count} élément(s)</span>
-                </span>
-              </div>
-            </button>
-          );
-        })}
-      </div>
+      {activeModuleCode==="HEALTH_DASHBOARD" && (
+        <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <label className="min-w-0 flex-1 sm:max-w-sm">
+            <span className="mb-1 block text-xs font-bold text-dtsc-muted">{inEnglish?"Find a healthcare module":"Rechercher un module Santé"}</span>
+            <Input value={moduleSearch} onChange={event=>setModuleSearch(event.target.value)}
+              placeholder={inEnglish?"Search services and workflows…":"Rechercher un service, un parcours…"}
+              aria-label={inEnglish?"Search healthcare modules":"Recherche des modules Santé"}/>
+          </label>
+          {moduleSearch&&<Button type="button" variant="outline" onClick={()=>setModuleSearch("")}>{inEnglish?"Reset search":"Effacer la recherche"}</Button>}
+        </div>
+      )}
+      {activeModuleCode==="HEALTH_DASHBOARD" ? (
+        <nav aria-label={inEnglish?"Healthcare modules":"Modules du secteur Santé"} className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+          {enabledSubmodules.filter(item=>item.code!=="HEALTH_DASHBOARD" && (
+            (healthLabel(item.code)+" "+healthDescription(item.code)).toLocaleLowerCase().includes(moduleSearch.trim().toLocaleLowerCase())
+          )).map((submodule)=>{
+            const Icon=submodule.icon;
+            return <button key={submodule.code} type="button"
+              onClick={()=>setActiveModuleCode(submodule.code)}
+              aria-label={healthLabel(submodule.code)}
+              className="group flex min-w-0 items-start gap-3 rounded-2xl border border-dtsc-border bg-dtsc-surface p-3 text-left transition hover:-translate-y-0.5 hover:border-cyan-400/70 hover:shadow-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-500 active:translate-y-0">
+              <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-cyan-500/10 text-cyan-600 group-hover:bg-cyan-500/20"><Icon className="size-5" aria-hidden/></span>
+              <span className="min-w-0 flex-1"><span className="block break-words text-sm font-black text-dtsc-ink">{healthLabel(submodule.code)}</span>
+                <span className="mt-0.5 block break-words text-xs leading-5 text-dtsc-muted">{healthDescription(submodule.code)}</span>
+              </span>
+              <ChevronRight className="mt-1 size-4 shrink-0 text-dtsc-muted transition group-hover:translate-x-0.5" aria-hidden/>
+            </button>;
+          })}
+          {moduleSearch && !enabledSubmodules.some(item=>item.code!=="HEALTH_DASHBOARD" && (
+            (healthLabel(item.code)+" "+healthDescription(item.code)).toLocaleLowerCase().includes(moduleSearch.trim().toLocaleLowerCase())
+          )) && <p className="col-span-full rounded-xl border border-dtsc-border bg-dtsc-surface p-4 text-sm text-dtsc-muted">
+            {inEnglish?"No healthcare module matches this search.":"Aucun module Santé ne correspond à cette recherche."}
+          </p>}
+        </nav>
+      ) : (
+        <nav aria-label={inEnglish?"Healthcare navigation":"Navigation Santé"} className="sticky top-0 z-20 flex min-w-0 flex-wrap items-center gap-2 rounded-xl border border-dtsc-border bg-dtsc-surface/95 p-2 backdrop-blur-xl sm:gap-3">
+          <Button type="button" variant="outline" className="shrink-0" onClick={()=>setActiveModuleCode("HEALTH_DASHBOARD")}>
+            <ArrowLeft className="size-4" aria-hidden/>{inEnglish?"Back to modules":"Retour aux modules"}
+          </Button>
+          <span className="hidden h-5 w-px bg-dtsc-border sm:block" aria-hidden/>
+          <h3 className="min-w-0 flex-1 break-words text-sm font-black text-dtsc-ink">{healthLabel(activeSubmodule.code)}</h3>
+          <label className="flex min-w-0 flex-col gap-1 text-[0.65rem] font-bold text-dtsc-muted sm:w-64">
+            <span>{inEnglish?"Switch module":"Changer de module"}</span>
+            <select value={activeModuleCode} onChange={event=>setActiveModuleCode(event.target.value as HealthcareModuleCode)}
+              className="min-h-10 w-full min-w-0 rounded-lg border border-dtsc-border bg-dtsc-page px-3 text-sm text-dtsc-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-500">
+              {enabledSubmodules.map(item=><option key={item.code} value={item.code}>{healthLabel(item.code)}</option>)}
+            </select>
+          </label>
+        </nav>
+      )}
 
       {activeModuleCode === "HEALTH_DASHBOARD" ? (
         <HealthcareDashboard organizationId={organizationId} locale={locale} />

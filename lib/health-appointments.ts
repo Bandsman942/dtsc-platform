@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { createHealthConsultation } from "@/lib/health-consultations";
 import { prisma } from "@/lib/prisma";
 import { validateAssignableHealthProfessional } from "@/lib/health-staff";
@@ -71,6 +71,37 @@ export async function validateHealthAppointmentReferences(organizationId: string
   return { patient };
 }
 
+const DEFAULT_APPOINTMENT_MINUTES=30;
+const MAX_APPOINTMENT_MINUTES=1440;
+const BLOCKING_APPOINTMENT_STATUSES=["SCHEDULED","CONFIRMED","WAITING","IN_PROGRESS"];
+
+/**
+ * Serialize every booking for a healthcare professional inside the tenant.
+ * Intervals are half-open [start,end) so adjacent appointments are allowed.
+ * Missing endAt in historical records is interpreted from its duration or
+ * the documented 30-minute default, without rewriting legacy records.
+ */
+async function assertProfessionalSlotAvailable(tx:Prisma.TransactionClient,organizationId:string,
+  professionalId:string|null,startAt:Date,durationMinutes:number,exceptAppointmentId?:string){
+  if(!professionalId)return;
+  if(!Number.isInteger(durationMinutes)||durationMinutes<5||durationMinutes>MAX_APPOINTMENT_MINUTES)throw new Error("APPOINTMENT_DURATION_INVALID");
+  const endAt=new Date(startAt.getTime()+durationMinutes*60000);
+  if(!Number.isFinite(startAt.getTime())||!Number.isFinite(endAt.getTime()))throw new Error("APPOINTMENT_TIME_INVALID");
+  const lockKey=`${organizationId}:health-appointment:${professionalId}`;
+  await tx.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${lockKey})::bigint)`);
+  const earliest=new Date(startAt.getTime()-MAX_APPOINTMENT_MINUTES*60000);
+  const candidates=await tx.healthAppointment.findMany({where:{
+    organizationId,professionalId,
+    status:{in:BLOCKING_APPOINTMENT_STATUSES},
+    appointmentDate:{gte:earliest,lt:endAt},
+    ...(exceptAppointmentId?{id:{not:exceptAppointmentId}}:{}),
+  },select:{id:true,appointmentDate:true,endAt:true,estimatedDurationMinutes:true}});
+  for(const booked of candidates){
+    const bookedEnd=booked.endAt||new Date(booked.appointmentDate.getTime()+
+      (booked.estimatedDurationMinutes??DEFAULT_APPOINTMENT_MINUTES)*60000);
+    if(booked.appointmentDate<endAt&&bookedEnd>startAt)throw new Error("APPOINTMENT_TIME_CONFLICT");
+  }
+}
 export async function createHealthAppointment(organizationId: string, actorUserId: string, data: HealthAppointmentInput) {
   const references = await validateHealthAppointmentReferences(organizationId, data);
   if (references.error || !references.patient?.legacyRecordId) throw new Error("INVALID_REFERENCE");
@@ -79,7 +110,9 @@ export async function createHealthAppointment(organizationId: string, actorUserI
   if (!patientLegacyRecordId) throw new Error("INVALID_REFERENCE");
   return prisma.$transaction(async (tx) => {
     const number = appointmentNumber();
-    const endAt = data.estimatedDurationMinutes ? new Date(data.appointmentDate.getTime() + data.estimatedDurationMinutes * 60000) : null;
+    const duration=data.estimatedDurationMinutes??DEFAULT_APPOINTMENT_MINUTES;
+    const endAt=new Date(data.appointmentDate.getTime()+duration*60000);
+    await assertProfessionalSlotAvailable(tx,organizationId,nil(data.professionalId),data.appointmentDate,duration);
     const legacy = await tx.enterpriseSectorRecord.create({
       data: {
         organizationId,
@@ -105,7 +138,7 @@ export async function createHealthAppointment(organizationId: string, actorUserI
         departmentId: nil(data.departmentId),
         appointmentDate: data.appointmentDate,
         endAt,
-        estimatedDurationMinutes: data.estimatedDurationMinutes,
+        estimatedDurationMinutes: duration,
         reason: data.reason,
         description: nil(data.description),
         appointmentType: data.appointmentType,
@@ -117,7 +150,7 @@ export async function createHealthAppointment(organizationId: string, actorUserI
     });
     await tx.healthAppointmentEvent.create({ data: { organizationId, appointmentId: appointment.id, eventType: "CREATED", summary: "Rendez-vous créé.", toStatus: appointment.status, actorUserId } });
     return appointment;
-  });
+  },{isolationLevel:"Serializable"});
 }
 
 export async function updateHealthAppointment(organizationId: string, appointmentId: string, actorUserId: string, data: Partial<HealthAppointmentInput>) {
@@ -128,7 +161,9 @@ export async function updateHealthAppointment(organizationId: string, appointmen
   if (references.error) throw new Error("INVALID_REFERENCE");
   return prisma.$transaction(async (tx) => {
     const appointmentDate = data.appointmentDate || existing.appointmentDate;
-    const duration = data.estimatedDurationMinutes ?? existing.estimatedDurationMinutes;
+    const duration = data.estimatedDurationMinutes ?? existing.estimatedDurationMinutes ?? DEFAULT_APPOINTMENT_MINUTES;
+    const professionalId=data.professionalId===undefined?existing.professionalId:nil(data.professionalId);
+    await assertProfessionalSlotAvailable(tx,organizationId,professionalId,appointmentDate,duration,existing.id);
     const appointment = await tx.healthAppointment.update({
       where: { id: existing.id },
       data: {
@@ -138,7 +173,8 @@ export async function updateHealthAppointment(organizationId: string, appointmen
         description: data.description === "" ? null : data.description,
         administrativeNotes: data.administrativeNotes === "" ? null : data.administrativeNotes,
         internalNotes: data.internalNotes === "" ? null : data.internalNotes,
-        endAt: duration ? new Date(appointmentDate.getTime() + duration * 60000) : null,
+        endAt: new Date(appointmentDate.getTime() + duration * 60000),
+        estimatedDurationMinutes: duration,
         updatedById: actorUserId,
       },
       include: { patient: { select: { legacyRecordId: true, fullName: true } } },
@@ -163,7 +199,7 @@ export async function updateHealthAppointment(organizationId: string, appointmen
     }
     await tx.healthAppointmentEvent.create({ data: { organizationId, appointmentId: appointment.id, eventType: "UPDATED", summary: "Rendez-vous modifié.", fromStatus: appointment.status, toStatus: appointment.status, actorUserId } });
     return appointment;
-  });
+  },{isolationLevel:"Serializable"});
 }
 
 export async function transitionHealthAppointment(organizationId: string, appointmentId: string, actorUserId: string, action: string, reason?: string) {
