@@ -39,6 +39,7 @@ type RequestItem = {
   validator: { id: string; name: string };
   invoice?: { id: string; number: string; status: string; emailSentAt?: string | null } | null;
   settlementAccount?: { id: string; name: string; currency: string | null; accountType: string } | null;
+  fundsVerifiedAt?: string | null;
 };
 type SettlementAccount = { id: string; name: string; accountType: string; currency: string | null };
 type Dataset = {
@@ -235,6 +236,7 @@ export function ManualSubscriptionPaymentsAdmin({ canManage, currentUserId, focu
               <BusinessDetailField label={english ? "Method" : "Mode de paiement"} value={referenceChoiceLabel("paymentMethod", selectedRequest.paymentMethod, "fr")} />
               <BusinessDetailField label={english ? "External reference" : "Référence externe"} value={<span className="break-all">{selectedRequest.externalReference || "—"}</span>} />
               <BusinessDetailField label={english ? "Settlement account" : "Compte de destination"} value={selectedRequest.settlementAccount?.name || (english ? "Not recorded (legacy or pending)" : "Non renseigné (historique ou en attente)")} />
+              <BusinessDetailField label={english ? "Funds confirmation" : "Attestation de réception"} value={selectedRequest.fundsVerifiedAt ? dateLabel(selectedRequest.fundsVerifiedAt) : (english ? "Not recorded" : "Non attestée")} />
               <BusinessDetailField label={english ? "Requested on" : "Date de demande"} value={dateLabel(selectedRequest.requestedAt)} />
               <BusinessDetailField label={english ? "Reason" : "Motif"} value={selectedRequest.reason} wide />
             </BusinessDetailGrid>
