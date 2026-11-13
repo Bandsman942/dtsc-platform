@@ -18,4 +18,11 @@ assert.ok(admin.includes('Aucun module Santé ne correspond'),"Section search em
 assert.ok(!admin.includes('w-64 shrink-0 rounded-2xl border p-4 text-left transition'),"Legacy scroll-only navigation must not remain");
 assert.ok(admin.includes('setActiveModuleCode("HEALTH_DASHBOARD")'),"Entitlement change must reset active section");
 assert.ok(read("scripts/qa-regression-checks.mjs").includes("qa-health-02-design.mjs"),"Regression runner must include HEALTH-02");
+const sectorRouter=read("components/enterprise/enterprise-sector-module-workspace.tsx");
+assert.match(sectorRouter,/data-health-sector-nav/,"Actual module routes must render the common health navigation");
+assert.match(sectorRouter,/definition\.routeKind === "SECTOR_HEALTH"/,"Health navigation must never render for Pharmacy or other sectors");
+assert.match(sectorRouter,/enabledModuleCodes\.includes\(m\.code\)/,"Health navigation can only show entitled modules");
+assert.match(sectorRouter,/aria-current=\{module\.code===moduleCode/,"Accessible current health module marker required");
+assert.match(sectorRouter,/role="status"/,"Search empty-state feedback required");
+for(const code of modules)assert.ok(sectorRouter.includes('{code:"'+code+'"'),"Healthcare section missing from real routes: "+code);
 console.log("✅ HEALTH-02 navigation : 11 modules, cartes compactes, recherche, clavier et accès responsive");

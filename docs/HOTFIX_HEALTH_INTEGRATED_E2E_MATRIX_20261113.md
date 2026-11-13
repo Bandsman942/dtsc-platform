@@ -32,3 +32,7 @@ Cette PR est un candidat d'**intégration Draft**. Ne pas fusionner ni déployer
 
 ## Preuve intermédiaire non-E2E
 Le 13/11/2026, les assertions contractuelles HEALTH-01 à HEALTH-06 ont été inspectées par lecture des fichiers de cette branche. Le véritable service `actionHealthLabRequest`, exécuté avec une transaction Prisma simulée, a validé six scénarios : résultats indépendants par examen, validation, correction préservant l'historique, rejet d'examens manquants, isolation entre organisations et rollback sur état périmé. Cela **ne certifie pas** la migration PostgreSQL, la CI globale, le navigateur ni l'E2E client.
+
+## Banc PostgreSQL et route réelle (ajout au candidat)
+- `pnpm qa:health-03-postgres` utilise un PostgreSQL local éphémère exclusivement et des identités synthétiques. Il exerce le vrai service TypeScript `createHealthAppointment` / `updateHealthAppointment` et le vrai Prisma avec conflits, limites de créneau, concurrents et tenants.
+- Les onze routes réellement utilisées, `/enterprise-modules/:moduleCode`, reçoivent désormais la navigation compacte; le simple panneau administratif historique n'est pas considéré comme une preuve d'UX fonctionnelle.

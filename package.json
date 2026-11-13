@@ -461,7 +461,8 @@
     "qa:health-04": "node scripts/qa-health-04-stock-specimen.mjs",
     "qa:health-05": "node scripts/qa-health-05-payments.mjs",
     "qa:health-06": "node scripts/qa-health-06-privacy-kpis.mjs",
-    "qa:health-preflight": "pnpm qa:health-01 && pnpm qa:health-02 && pnpm qa:health-03 && pnpm qa:health-04 && pnpm qa:health-05 && pnpm qa:health-06"
+    "qa:health-preflight": "pnpm qa:health-01 && pnpm qa:health-02 && pnpm qa:health-03 && pnpm qa:health-04 && pnpm qa:health-05 && pnpm qa:health-06",
+    "qa:health-03-postgres": "node scripts/qa-health-03-appointments-postgres.mjs"
   },
   "dependencies": {
     "@ai-sdk/gateway": "2.0.27",

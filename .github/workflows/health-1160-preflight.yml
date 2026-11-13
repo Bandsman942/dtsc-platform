@@ -53,6 +53,8 @@ jobs:
         run: pnpm prisma:deploy
       - name: HEALTH 01-06 contract and behavioral tests
         run: pnpm qa:health-preflight
+      - name: HEALTH-03 real PostgreSQL appointment concurrency
+        run: pnpm qa:health-03-postgres
       - name: TypeScript
         run: pnpm type-check
         env:

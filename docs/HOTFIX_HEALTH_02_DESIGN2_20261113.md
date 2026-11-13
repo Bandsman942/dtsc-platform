@@ -23,3 +23,5 @@ L'interface ne confère jamais de permissions supplémentaires. Les données de 
 
 ## Tests
 `pnpm qa:health-02`, QA régression, TypeScript, lint, build, navigateur FR/EN mobile, E2E propriétaire. Les contrôles n'ont pas encore été certifiés pour ce SHA.
+### Correction structurelle : navigation sur les véritables routes des onze modules
+La version initiale améliorait `HealthcareAdminWorkspace`, qui n'est pas le point d'entrée effectif des pages /enterprise-modules/:moduleCode. Cette tranche étend `EnterpriseSectorModuleWorkspace`, chemin réellement rendu pour chacun des onze modules. En tête de module : retour au catalogue, titre, menu compact accessible, recherche FR/EN de sous-modules activés et navigation sans changement de droits. Le composant reste désactivé pour le secteur PHARMACY. Le contrat QA doit échouer si l'amélioration ne touche pas le routeur réel.
