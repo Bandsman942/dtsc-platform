@@ -29,3 +29,6 @@ Version candidate : 1.17.3 · Date : 13/11/2026 · **Non fusionnée, non déploy
 
 ## Politique de livraison
 Cette PR est un candidat d'**intégration Draft**. Ne pas fusionner ni déployer tant que tous les critères ouverts ne sont pas satisfaits et que le propriétaire n'a pas donné son E2E final BON. Les hotfixes par tranche restent tracés séparément.
+
+## Preuve intermédiaire non-E2E
+Le 13/11/2026, les assertions contractuelles HEALTH-01 à HEALTH-06 ont été inspectées par lecture des fichiers de cette branche. Le véritable service `actionHealthLabRequest`, exécuté avec une transaction Prisma simulée, a validé six scénarios : résultats indépendants par examen, validation, correction préservant l'historique, rejet d'examens manquants, isolation entre organisations et rollback sur état périmé. Cela **ne certifie pas** la migration PostgreSQL, la CI globale, le navigateur ni l'E2E client.
