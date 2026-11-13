@@ -92,7 +92,7 @@ model EnterpriseHealthInsuranceOcrJob {
   documentDigest      String
   mimeType            String
   bytes               Int
-  invoiceDate         String
+  invoiceDate         String?
   externalJobId       String?
   transportStatus     String   @default("UPLOADING")
   httpStatus          Int?
