@@ -19,7 +19,7 @@ export async function createHealthMedicalRecord(organizationId: string, actorUse
     const number = recordNumber();
     const legacy = await tx.enterpriseSectorRecord.create({ data: {
       organizationId, sectorCode: "HEALTH_CARE", moduleCode: "MEDICAL_RECORDS", recordType: "MEDICAL_RECORD",
-      title: `Dossier médical · ${patient.fullName}`, summary: nil(data.summary), status: "ACTIVE", priority: "NORMAL", createdById: actorUserId,
+      title: `Dossier médical · ${number}`, summary: null, status: "ACTIVE", priority: "NORMAL", createdById: actorUserId,
       payloadJson: { patientRecordId: patient.legacyRecordId, patientCode: patient.patientNumber, confidentialityLevel: data.confidentialityLevel },
     } });
     const record = await tx.healthMedicalRecord.create({ data: {
@@ -40,7 +40,7 @@ export async function updateHealthMedicalRecord(organizationId: string, recordId
   if (data.patientId && data.patientId !== existing.patientId) throw new Error("PATIENT_IMMUTABLE");
   return prisma.$transaction(async (tx) => {
     const record = await tx.healthMedicalRecord.update({ where: { id: existing.id }, data: { ...data, updatedById: actorUserId } });
-    if (existing.legacyRecordId) await tx.enterpriseSectorRecord.update({ where: { id: existing.legacyRecordId }, data: { summary: nil(record.summary || undefined), updatedById: actorUserId, payloadJson: { patientRecordId: existing.patient.legacyRecordId, patientCode: existing.patient.patientNumber, confidentialityLevel: record.confidentialityLevel } } });
+    if (existing.legacyRecordId) await tx.enterpriseSectorRecord.update({ where: { id: existing.legacyRecordId }, data: { summary: null, updatedById: actorUserId, payloadJson: { patientRecordId: existing.patient.legacyRecordId, patientCode: existing.patient.patientNumber, confidentialityLevel: record.confidentialityLevel } } });
     await tx.healthMedicalRecordEvent.create({ data: { organizationId, medicalRecordId: record.id, eventType: "UPDATED", summary: "Synthèse du dossier médical mise à jour.", actorUserId } });
     return record;
   });

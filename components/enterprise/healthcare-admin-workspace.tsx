@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import {
   Activity,
@@ -618,7 +618,7 @@ export function HealthcareAdminWorkspace({
       </div>
 
       {activeModuleCode === "HEALTH_DASHBOARD" ? (
-        <HealthcareDashboard records={records} />
+        <HealthcareDashboard organizationId={organizationId} locale={locale} />
       ) : activeModuleCode === "PATIENTS" ? (
         <HealthPatientsWorkspace organizationId={organizationId} activeModuleCodes={activeModuleCodes} onOpenRelated={openRelatedPatientModule} />
       ) : activeModuleCode === "APPOINTMENTS" ? (
@@ -742,101 +742,60 @@ export function HealthcareAdminWorkspace({
   );
 }
 
-function HealthcareDashboard({ records }: { records: EnterpriseSectorRecordItem[] }) {
-  const kpis = useMemo(() => {
-    const patients = records.filter((record) => record.moduleCode === "PATIENTS" && record.status !== "ARCHIVED");
-    const appointments = records.filter((record) => record.moduleCode === "APPOINTMENTS");
-    const consultations = records.filter((record) => record.moduleCode === "CONSULTATIONS");
-    const medicalRecords = records.filter((record) => record.moduleCode === "MEDICAL_RECORDS");
-    const invoices = records.filter((record) => record.moduleCode === "MEDICAL_BILLING");
-    const coverages = records.filter((record) => record.moduleCode === "INSURANCE_COVERAGE");
-    const incidents = records.filter((record) => record.moduleCode === "QUALITY_INCIDENTS");
-    const pharmacyItems = records.filter((record) => record.moduleCode === "INTERNAL_PHARMACY");
-    const labRequests = records.filter((record) => record.moduleCode === "LABORATORY");
-    return [
-      { label: "Patients", value: patients.length, hint: "Total actifs et suivis", tone: "cyan" },
-      { label: "Patients créés ce mois", value: patients.filter((record) => isThisMonth(record.createdAt)).length, hint: "Nouveaux profils", tone: "emerald" },
-      { label: "Rendez-vous du jour", value: appointments.filter((record) => isToday(payloadText(record, "appointmentDate"))).length, hint: "Planning opérationnel", tone: "blue" },
-      { label: "Rendez-vous confirmés", value: appointments.filter((record) => record.status === "CONFIRMED").length, hint: "Patients attendus", tone: "emerald" },
-      { label: "Rendez-vous en attente", value: appointments.filter((record) => record.status === "WAITING").length, hint: "Accueil en cours", tone: "amber" },
-      { label: "Rendez-vous annulés", value: appointments.filter((record) => record.status === "CANCELLED").length, hint: "Suivi administratif", tone: "red" },
-      { label: "Patients absents", value: appointments.filter((record) => record.status === "NO_SHOW").length, hint: "Absences enregistrées", tone: "red" },
-      { label: "Convertis en consultation", value: appointments.filter((record) => record.status === "CONVERTED").length, hint: "Parcours de soin", tone: "violet" },
-      { label: "Consultations du jour", value: consultations.filter((record) => isToday(payloadText(record, "appointmentDate")) || isToday(record.createdAt)).length, hint: "Actes médicaux", tone: "violet" },
-      { label: "Consultations en cours", value: consultations.filter((record) => record.status === "IN_PROGRESS").length, hint: "Prises en charge actives", tone: "violet" },
-      { label: "En attente d’examens", value: consultations.filter((record) => record.status === "PENDING_EXAMS").length, hint: "Résultats attendus", tone: "amber" },
-      { label: "Consultations à revoir", value: consultations.filter((record) => record.status === "REVIEW").length, hint: "Suivi clinique", tone: "amber" },
-      { label: "Consultations clôturées", value: consultations.filter((record) => record.status === "CLOSED").length, hint: "Actes finalisés", tone: "emerald" },
-      { label: "Consultations annulées", value: consultations.filter((record) => record.status === "CANCELLED").length, hint: "Annulations historisées", tone: "red" },
-      { label: "Dossiers incomplets", value: medicalRecords.filter((record) => !record.summary || !payloadText(record, "medicalHistory")).length, hint: "Complétude dossier", tone: "amber" },
-      { label: "Factures en attente", value: invoices.filter((record) => ["DRAFT", "ISSUED", "PARTIAL_PAID"].includes(record.status)).length, hint: "Recouvrement", tone: "blue" },
-      { label: "Prises en charge en attente", value: coverages.filter((record) => ["DRAFT", "SUBMITTED", "WAITING"].includes(record.status)).length, hint: "Assurances", tone: "cyan" },
-      { label: "Incidents ouverts", value: incidents.filter((record) => !["RESOLVED", "CLOSED", "CANCELLED"].includes(record.status)).length, hint: "Qualité & risques", tone: "red" },
-      { label: "Alertes pharmacie", value: pharmacyItems.filter((record) => ["LOW_STOCK", "OUT_OF_STOCK", "EXPIRED"].includes(record.status)).length, hint: "Stock et péremption", tone: "red" },
-      { label: "Alertes laboratoire", value: labRequests.filter((record) => !["VALIDATED", "CANCELLED"].includes(record.status)).length, hint: "Résultats à suivre", tone: "violet" },
-    ];
-  }, [records]);
-
-  const statusGroups = useMemo(
-    () => [
-      { label: "Consultations", records: records.filter((record) => record.moduleCode === "CONSULTATIONS") },
-      { label: "Rendez-vous", records: records.filter((record) => record.moduleCode === "APPOINTMENTS") },
-      { label: "Factures", records: records.filter((record) => record.moduleCode === "MEDICAL_BILLING") },
-      { label: "Incidents", records: records.filter((record) => record.moduleCode === "QUALITY_INCIDENTS") },
-    ],
-    [records],
-  );
-
-  return (
-    <div className="space-y-4">
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {kpis.map((kpi) => (
-          <div key={kpi.label} className="rounded-2xl border border-dtsc-border bg-dtsc-surface p-4">
-            <p className="text-xs font-black uppercase tracking-[0.14em] text-dtsc-muted">{kpi.label}</p>
-            <p className="mt-2 text-3xl font-black text-dtsc-ink">{kpi.value}</p>
-            <p className="mt-1 text-xs font-semibold text-dtsc-muted">{kpi.hint}</p>
-          </div>
-        ))}
-      </div>
-      <div className="grid gap-3 lg:grid-cols-2">
-        {statusGroups.map((group) => (
-          <StatusDistribution key={group.label} label={group.label} records={group.records} />
-        ))}
-      </div>
+/**
+ * Canonical health analytics: never use the legacy EnterpriseSectorRecord
+ * preview (capped at 300) as a source for operational KPIs.
+ */
+function HealthcareDashboard({organizationId,locale}:{organizationId:string;locale?:string|null}){
+  const en=locale==="en";
+  const [metrics,setMetrics]=useState<Record<string,number>|null>(null);
+  const [businessDate,setBusinessDate]=useState("");
+  const [error,setError]=useState(false);
+  const [refreshKey,setRefreshKey]=useState(0);
+  useEffect(()=>{
+    const controller=new AbortController();
+    setError(false);
+    fetch(`/api/enterprise/${organizationId}/healthcare/dashboard`,{cache:"no-store",signal:controller.signal})
+      .then(async response=>{
+        if(!response.ok)throw new Error("HEALTH_KPI_UNAVAILABLE");
+        return response.json() as Promise<{metrics:Record<string,number>;businessDate:string}>;
+      })
+      .then(body=>{if(!controller.signal.aborted){setMetrics(body.metrics);setBusinessDate(body.businessDate)}})
+      .catch(()=>{if(!controller.signal.aborted){setError(true);setMetrics(null)}});
+    return ()=>controller.abort();
+  },[organizationId,refreshKey]);
+  const stats=[
+    ["patients","Patients","Patients", "cyan"],
+    ["newPatientsMonth","Patients inscrits ce mois","New patients this month","emerald"],
+    ["appointmentsToday","Rendez-vous aujourd’hui","Appointments today","blue"],
+    ["appointmentsWaiting","Rendez-vous en attente","Appointments waiting","amber"],
+    ["consultationsToday","Consultations aujourd’hui","Consultations today","violet"],
+    ["consultationsActive","Consultations en cours","Active consultations","violet"],
+    ["consultationsPendingExams","Examens attendus","Pending examinations","amber"],
+    ["medicalRecords","Dossiers actifs","Active medical records","cyan"],
+    ["laboratoryPending","Demandes laboratoire à traiter","Pending lab requests","blue"],
+    ["pharmacyOutOfStock","Produits en rupture","Out-of-stock medications","red"],
+    ["pharmacyExpiredBatches","Lots périmés disponibles","Expired batches remaining","red"],
+    ["medicalInvoicesOpen","Factures médicales ouvertes","Open medical invoices","amber"],
+    ["insurancePending","Prises en charge en attente","Pending claims","blue"],
+    ["qualityOpen","Incidents qualité ouverts","Open quality incidents","red"],
+  ] as const;
+  return <section className="grid min-w-0 gap-4" aria-label={en?"Healthcare operational dashboard":"Pilotage opérationnel Santé"}>
+    <div className="flex flex-wrap items-center justify-between gap-2">
+      <div><h3 className="text-lg font-black text-dtsc-ink">{en?"Operational indicators":"Indicateurs opérationnels"}</h3>
+        <p className="text-xs text-dtsc-muted">{businessDate}{en?" · Full database counts, no partial list totals.":" · Totaux issus des registres métier, sans plafonnement de liste."}</p></div>
+      <Button type="button" variant="outline" onClick={()=>setRefreshKey(current=>current+1)}>{en?"Refresh":"Actualiser"}</Button>
     </div>
-  );
-}
-
-function StatusDistribution({ label, records }: { label: string; records: EnterpriseSectorRecordItem[] }) {
-  const groups = Object.entries(
-    records.reduce<Record<string, number>>((acc, record) => {
-      acc[record.status] = (acc[record.status] || 0) + 1;
-      return acc;
-    }, {}),
-  );
-  const max = Math.max(1, ...groups.map(([, count]) => count));
-  return (
-    <div className="rounded-2xl border border-dtsc-border bg-dtsc-surface p-4">
-      <h3 className="font-black text-dtsc-ink">{label} par statut</h3>
-      <div className="mt-3 space-y-3">
-        {groups.length ? (
-          groups.map(([status, count]) => (
-            <div key={status}>
-              <div className="mb-1 flex items-center justify-between text-xs font-bold text-dtsc-muted">
-                <span>{statusLabels[status] || status}</span>
-                <span>{count}</span>
-              </div>
-              <div className="h-2 overflow-hidden rounded-full bg-dtsc-page">
-                <div className="h-full rounded-full bg-cyan-400" style={{ width: `${Math.max(8, (count / max) * 100)}%` }} />
-              </div>
-            </div>
-          ))
-        ) : (
-          <p className="rounded-xl border border-dashed border-dtsc-border bg-dtsc-page p-3 text-sm font-semibold text-dtsc-muted">Aucune donnée à afficher.</p>
-        )}
-      </div>
-    </div>
-  );
+    {error&&<p role="alert" className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-600">
+      {en?"Metrics unavailable. Do not interpret old estimates.":"Indicateurs indisponibles. Les anciennes estimations ne sont pas affichées."}</p>}
+    {!metrics&&!error&&<p role="status" className="rounded-xl border border-dtsc-border p-4 text-sm text-dtsc-muted">{en?"Loading validated indicators…":"Chargement des indicateurs vérifiés…"}</p>}
+    {metrics&&<div className="grid min-w-0 gap-2 sm:grid-cols-2 xl:grid-cols-4">{stats.map(([key,fr,english,tone])=><article key={key}
+        className="min-w-0 rounded-2xl border border-dtsc-border bg-dtsc-surface p-4">
+        <p className="text-xs font-black uppercase text-dtsc-muted">{en?english:fr}</p>
+        <p className={`mt-2 text-3xl font-black ${tone==="red"?"text-red-600":tone==="amber"?"text-amber-600":tone==="emerald"?"text-emerald-600":"text-cyan-600"}`}>
+          {metrics[key]??"—"}</p>
+      </article>)}</div>}
+  </section>;
 }
 
 function HealthcareRecordForm({

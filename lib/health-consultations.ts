@@ -64,7 +64,7 @@ export async function createHealthConsultation(organizationId: string, actorUser
     const number = consultationNumber();
     const legacy = await tx.enterpriseSectorRecord.create({ data: {
       organizationId, sectorCode: "HEALTH_CARE", moduleCode: "CONSULTATIONS", recordType: "CONSULTATION",
-      title: `Consultation · ${patient.fullName}`, summary: data.chiefComplaint, status: "DRAFT", priority: data.priority,
+      title: `Consultation · ${number}`, summary: null, status: "DRAFT", priority: data.priority,
       assignedToUserId: data.professionalId, createdById: actorUserId,
       payloadJson: legacyPayload(data, patient.legacyRecordId!, appointment?.legacyRecordId || null, number),
     } });
