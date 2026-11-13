@@ -37,7 +37,7 @@ assert.match(auth,/positionCode:\s*\{\s*in:\s*\[/,"Medical writing must require 
 assert.doesNotMatch(auth,/canCreate:\s*canManage/,"Manager must not automatically create medical consultation");
 assert.match(patient,/medicalPermissions\.includes/,"Patient sensitive read requires clinical permissions");
 assert.match(patientUpdate,/CLINICAL_PERMISSION_REQUIRED/,"Administrative updates cannot write clinical fields");
-assert.match(patientUpdate,/title: item\.moduleCode, summary: null/,"Administrative patient links do not include clinical text");
+assert.match(patientUpdate,/related\.map\(\(item\) => safeHealthLegacyProjection\(item\)\)/,"Patient activity must redact legacy text for all readers");
 for(const [file,code] of [["lib/health-appointments.ts","Rendez-vous"],["lib/health-consultations.ts","Consultation"],["lib/health-medical-records.ts","Dossier médical"],["lib/health-laboratory.ts","Examen"]]){
   const source=read(file);
   assert.ok(source.includes(code+" · ${number}"),file+" must minimize mirrored clinical titles");
@@ -68,4 +68,11 @@ assert.match(labAccess,/canValidate:permissions\.includes\("health\.laboratory\.
 assert.match(labAccess,/canViewSensitive:permissions\.includes\("health\.laboratory\.view_sensitive"\)/,"Administrative manager cannot read lab values by role");
 assert.match(appointmentAccess,/canConvert: clinicalAccess/,"Only clinicians may convert an appointment into a consultation");
 assert.match(recordAccess,/canUpdate: canEditClinical/,"Medical record editing must use clinical permissions");
+const activityLoader=read("lib/enterprise/enterprise-activity-healthcare-loader.ts");
+const modulePage=read("app/enterprise-modules/[moduleCode]/page.tsx");
+const aiContext=read("lib/ai/context-engine.ts");
+assert.match(activityLoader,/records\.map\(safeHealthLegacyProjection\)/,"Activity loader must redact historical clinical data");
+assert.match(modulePage,/betaRecords\.map\(safeHealthLegacyProjection\)/,"Module route must redact legacy Health previews");
+assert.match(aiContext,/staffMedicalPermissions\.includes\("health\.medical_records\.view_sensitive"\)/,"AI context cannot access clinical data from module-level read alone");
+assert.doesNotMatch(read("app/api/enterprise/[organizationId]/healthcare/patients/route.ts"),/select: \{ id: true, title: true, status: true, updatedAt: true, payloadJson: true \}/,"Patient lists must not fetch clinical titles from mirrors");
 console.log("✅ HEALTH-01 P0: independent lab results, clinical authorization, PHI-minimized projection, tenant-safe canonical metrics");

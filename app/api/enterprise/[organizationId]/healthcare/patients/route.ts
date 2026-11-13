@@ -49,13 +49,13 @@ export async function GET(req: Request, { params }: Params) {
   const consultations = legacyIds.length ? await prisma.enterpriseSectorRecord.findMany({
     where: { organizationId, sectorCode: "HEALTH_CARE", moduleCode: "CONSULTATIONS", deletedAt: null, OR: legacyIds.map((legacyId) => ({ payloadJson: { path: ["patientRecordId"], equals: legacyId } })) },
     orderBy: { updatedAt: "desc" },
-    select: { id: true, title: true, status: true, updatedAt: true, payloadJson: true },
+    select: { id: true, title: false, status: true, updatedAt: true, payloadJson: true },
   }).catch(() => []) : [];
   const lastConsultationByPatient = new Map<string, { id: string; title: string; status: string; updatedAt: Date }>();
   for (const consultation of consultations) {
     const payload = consultation.payloadJson && typeof consultation.payloadJson === "object" && !Array.isArray(consultation.payloadJson) ? consultation.payloadJson : {};
     const patientRecordId = typeof payload.patientRecordId === "string" ? payload.patientRecordId : null;
-    if (patientRecordId && !lastConsultationByPatient.has(patientRecordId)) lastConsultationByPatient.set(patientRecordId, consultation);
+    if (patientRecordId && !lastConsultationByPatient.has(patientRecordId)) lastConsultationByPatient.set(patientRecordId, { id: consultation.id, title: "Consultation", status: consultation.status, updatedAt: consultation.updatedAt });
   }
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, moduleCode: "PATIENTS" } });
   return NextResponse.json({

@@ -35,3 +35,6 @@ Date : 2026-11-13 · Candidat : v1.17.2 · **NON FUSIONNÉ — aucun déploiemen
 - HEALTH-P0-14 `pnpm prisma generate`, `pnpm type-check`, `pnpm lint`, `pnpm qa:health-01`, `pnpm qa:regression`, `pnpm build`, E2E réel et feu vert propriétaire.
 
 La QA statique ne remplace pas les tests de bout en bout ni la certification patient/labo. Toute fonction inachevée reste ouverte dans l'issue.
+
+### Lecture indirecte minimisée (délivré dans le hotfix)
+Les loaders Administration Santé, Activités Santé, routes historiques dédiées et vues BETA de module expurgent les contenus des onze modules dédiés. L'index de consultation du patient ne lit plus les titres historiques. Le moteur d'IA ne déclare `canReadClinicalData` que si l'accès module ET l'autorisation de lecture médicale explicite sont présents. Les autres lectures directes et les copies historiques restent à auditer avant E2E final.

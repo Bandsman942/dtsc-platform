@@ -6,6 +6,7 @@ import { getHealthPharmacyAccess } from "@/lib/health-pharmacy-access";
 import { healthPatientUpdateSchema } from "@/lib/health-patient-validators";
 import { maskHealthPatientSensitive, updateHealthPatient } from "@/lib/health-patients";
 import { prisma } from "@/lib/prisma";
+import { safeHealthLegacyProjection } from "@/lib/health-legacy-projection";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
 
@@ -33,7 +34,7 @@ export async function GET(req: Request, { params }: Params) {
     select: { id: true, moduleCode: true, title: true, summary: true, status: true, updatedAt: true },
   }) : Promise.resolve([]), pharmacyAccess ? prisma.healthPharmacyDispensation.findMany({ where: { organizationId, patientId, ...(pharmacyAccess.canViewSensitive ? {} : { product: { isSensitive: false } }) }, orderBy: { dispensedAt: "desc" }, take: 20, select: { id: true, quantity: true, dispensedAt: true, billingStatus: true, product: { select: { name: true, productCode: true, unit: true } }, consultation: { select: { consultationNumber: true } }, dispensedBy: { select: { name: true } } } }) : Promise.resolve([])]);
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, moduleCode: "PATIENTS" } });
-  return NextResponse.json({ patient: maskHealthPatientSensitive(patient, access.canViewSensitive), related: related.map((item) => access.canViewSensitive ? item : { ...item, title: item.moduleCode, summary: null }), dispensations: dispensations.map((item) => ({ ...item, quantity: Number(item.quantity) })), permissions: { canUpdate: access.canUpdate, canArchive: access.canArchive, canViewSensitive: access.canViewSensitive } });
+  return NextResponse.json({ patient: maskHealthPatientSensitive(patient, access.canViewSensitive), related: related.map((item) => safeHealthLegacyProjection(item)), dispensations: dispensations.map((item) => ({ ...item, quantity: Number(item.quantity) })), permissions: { canUpdate: access.canUpdate, canArchive: access.canArchive, canViewSensitive: access.canViewSensitive } });
 }
 
 export async function PATCH(req: Request, { params }: Params) {
