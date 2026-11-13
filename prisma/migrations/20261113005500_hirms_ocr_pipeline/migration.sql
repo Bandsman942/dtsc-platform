@@ -9,7 +9,7 @@ CREATE TABLE "EnterpriseHealthInsuranceOcrJob" (
  "documentDigest" TEXT NOT NULL,
  "mimeType" TEXT NOT NULL,
  "bytes" INTEGER NOT NULL,
- "invoiceDate" TEXT NOT NULL,
+ "invoiceDate" TEXT,
  "externalJobId" TEXT,
  "transportStatus" TEXT NOT NULL DEFAULT 'UPLOADING',
  "httpStatus" INTEGER,
