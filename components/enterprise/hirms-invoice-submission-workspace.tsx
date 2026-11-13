@@ -1,23 +1,19 @@
 "use client";
-import { useCallback, useEffect, useState, type ChangeEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "react";
 import Link from "next/link";
 import { FileJson, RefreshCw, ShieldAlert, Send, SearchCheck } from "lucide-react";
 import { useAppLocale } from "@/components/i18n/locale-provider";
 import { useToastMessage } from "@/components/ui/use-toast-message";
 import { HirmsEnvironmentSwitch } from "./hirms-environment-switch";
 import { HirmsWorkspaceNavigation } from "./hirms-workspace-navigation";
+import { HirmsHistoryControls, type HirmsHistoryControlsValue } from "./hirms-history-controls";
+import { HirmsStatusIndicator } from "./hirms-status-indicator";
+import { downloadHirmsCsv, hirmsHistoryParams } from "./hirms-history-client";
 import type { HirmsEnvironment } from "@/lib/enterprise/health-insurance-connectors/environments";
 
 type Submission = { id: string; invoiceNumber: string; batchId: string | null; transportStatus: string; httpStatus: number | null; submittedAt: string; errorCode: string | null; remoteStatus: string | null; lastStatusErrorCode: string | null };
-type History = { items: Submission[]; total: number; page: number; pageCount: number; environment: HirmsEnvironment };
+type History = { items: Submission[]; total: number; page: number; pageCount: number; environment: HirmsEnvironment; statusCounts: Record<string,number>; scopeKey: string };
 type Preflight = { ok: boolean; count: number; invoiceNumbers: string[] };
-const STATUSES: Record<string,[string,string]> = {
-  RECEIVED:["Reçue techniquement","Received by transport"],
-  QUEUED:["Traitement en attente","Queued"],
-  REJECTED:["Rejetée par HIRMS","Rejected by HIRMS"],
-  UNKNOWN_OUTCOME:["État à rapprocher","Outcome unknown"],
-  SENDING:["Transmission engagée","Sending"],
-};
 export function HirmsInvoiceSubmissionWorkspace({organizationId,initialEnvironment="UAT"}:{organizationId:string;initialEnvironment?:HirmsEnvironment}) {
   const en = useAppLocale() === "en";
   const tx = (fr:string,english:string)=>en ? english : fr;
@@ -30,18 +26,29 @@ export function HirmsInvoiceSubmissionWorkspace({organizationId,initialEnvironme
   const [pending,setPending] = useState(false);
   const [history,setHistory] = useState<History|null>(null);
   const [page,setPage] = useState(1);
+  const requestEpoch = useRef(0);
+  const [filters,setFilters] = useState<HirmsHistoryControlsValue>({search:"",status:"",from:"",to:""});
   const [notice,setNotice] = useState("");
   useToastMessage(notice);
   const load = useCallback(async (currentPage:number)=>{
-    const response = await fetch(`/api/enterprise/${organizationId}/insurance-connectors/invoices?environment=${environment}&page=${currentPage}`,{cache:"no-store"});
+    const epoch = ++requestEpoch.current;
+    const scopeKey = hirmsHistoryParams(environment,currentPage,filters);
+    const response = await fetch(`/api/enterprise/${organizationId}/insurance-connectors/invoices?${scopeKey}`,{cache:"no-store"});
     if(!response.ok) throw Error("HISTORY_FAILED");
-    const payload = await response.json() as Omit<History, "environment">;
-    setHistory({ ...payload, environment });
-  },[organizationId,environment]);
-  useEffect(()=>{ void load(page).catch(()=>{}); },[load,page]);
-  const visibleHistory = history?.environment === environment ? history : null;
+    const payload = await response.json() as Omit<History, "environment" | "scopeKey">;
+    if(requestEpoch.current===epoch)setHistory({...payload,environment,scopeKey});
+  },[organizationId,environment,filters]);
+  useEffect(()=>{void load(page).catch(()=>setNotice(tx("Historique indisponible.","History unavailable.")));},[load,page]);
+  const visibleHistory = history?.environment===environment && history.scopeKey===hirmsHistoryParams(environment,page,filters) ? history : null;
+  function applyFilters(next:HirmsHistoryControlsValue){requestEpoch.current++;setFilters(next);setHistory(null);setPage(1);}
+  async function exportHistory(){
+    setNotice("");
+    try{
+      await downloadHirmsCsv(`/api/enterprise/${organizationId}/insurance-connectors/invoices?${hirmsHistoryParams(environment,1,filters,"csv")}`,`DTSC-HIRMS-factures-${environment}.csv`);
+    }catch{setNotice(tx("Export impossible : contrôlez vos droits ou réessayez.","Export unavailable: check permissions or try again."));}
+  }
   function reset(value:string,newMode:"single"|"bulk"=mode){setJson(value);setPreflight(null);setConfirmed(false);setProductionConfirmation("");setMode(newMode)}
-  function switchEnvironment(next:HirmsEnvironment){setEnvironment(next);setPreflight(null);setConfirmed(false);setProductionConfirmation("");setJson("");setHistory(null);setPage(1)}
+  function switchEnvironment(next:HirmsEnvironment){requestEpoch.current++;setEnvironment(next);setPreflight(null);setConfirmed(false);setProductionConfirmation("");setJson("");setHistory(null);setPage(1);setFilters({search:"",status:"",from:"",to:""});}
   async function readJson(event:ChangeEvent<HTMLInputElement>){
     const file=event.target.files?.[0];if(!file)return;
     if(!file.name.toLowerCase().endsWith(".json")||file.size>4*1024*1024){
@@ -108,6 +115,7 @@ export function HirmsInvoiceSubmissionWorkspace({organizationId,initialEnvironme
         <p className="mt-1 text-xs text-dtsc-muted">{tx("Ce premier parcours importe un JSON HSL complet, contrôle les liens ERP, puis transmet après votre accord. Aucun champ clinique, autorisation, paiement ou taux de change n'est inventé.", "This pilot imports a complete HSL JSON payload, checks ERP links and sends it only after confirmation. No clinical, approval, payment or exchange-rate fields are invented.")}</p>
       </div>
     </section>
+    <HirmsHistoryControls value={filters} onChange={applyFilters} statusCounts={visibleHistory?.statusCounts||{}} total={visibleHistory?.total||0} onExport={()=>void exportHistory()} pending={pending}/>
     <section className="grid gap-4 lg:grid-cols-[minmax(0,1.5fr)_minmax(300px,1fr)]">
       <div className="min-w-0 space-y-4 rounded-2xl border border-dtsc-border bg-dtsc-surface p-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -152,7 +160,7 @@ export function HirmsInvoiceSubmissionWorkspace({organizationId,initialEnvironme
           <div className="mt-2 max-h-[440px] space-y-2 overflow-y-auto">
             {visibleHistory?.items.map(item=><div key={item.id} className="rounded-xl border border-dtsc-border p-3">
               <p className="break-all text-sm font-bold text-dtsc-ink">{item.invoiceNumber}</p>
-              <p className="mt-1 text-xs text-dtsc-muted">{STATUSES[item.transportStatus]?.[en?1:0] || item.transportStatus} · {new Date(item.submittedAt).toLocaleString(en?"en":"fr")}</p>
+              <div className="mt-1 flex flex-wrap items-center gap-2"><HirmsStatusIndicator code={item.transportStatus}/><span className="text-xs text-dtsc-muted">{new Date(item.submittedAt).toLocaleString(en?"en":"fr")}</span></div>
               {item.remoteStatus && <p className="mt-1 break-all text-xs font-semibold text-cyan-700 dark:text-cyan-300">HSL: {item.remoteStatus}</p>}
               {item.errorCode?<p className="mt-1 break-all text-xs text-amber-700 dark:text-amber-300">{item.errorCode}</p>:null}
               {item.lastStatusErrorCode && <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">{item.lastStatusErrorCode}</p>}
