@@ -33,6 +33,7 @@ export function AdminSettingsPanel({
   const router = useRouter();
   const [settingsMessage, setSettingsMessage] = useState("");
   const [broadcastMessage, setBroadcastMessage] = useState("");
+  const [broadcastSubmitting, setBroadcastSubmitting] = useState(false);
   const [newsletterBroadcastMessage, setNewsletterBroadcastMessage] = useState("");
   const broadcastBodyRef = useRef<HTMLDivElement>(null);
   const newsletterContentRef = useRef<HTMLDivElement>(null);
@@ -80,30 +81,37 @@ export function AdminSettingsPanel({
 
   async function broadcast(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (broadcastSubmitting) return;
     setBroadcastMessage("");
+    setBroadcastSubmitting(true);
     const form = event.currentTarget;
     const payload = Object.fromEntries(new FormData(form).entries());
-    const response = await fetch("/api/admin/broadcast", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    const body = await response.json().catch(() => null);
-    if (response.ok) {
-      setBroadcastMessage(
-        body?.zoho?.queued
-          ? body.zoho.personalized
-            ? "Notification créée et diffusion email personnalisée mise en file pour les utilisateurs actifs."
-            : "Notification créée et diffusion email mise en file pour les utilisateurs actifs en CCI."
-          : body?.zoho?.sent
-            ? body.zoho.personalized
-              ? "Notification créée et diffusion email personnalisée transmise aux utilisateurs actifs."
-              : "Notification créée et diffusion email transmise aux utilisateurs actifs en CCI."
-            : "Notification créée. Configurez l'API Zoho Mail ou le webhook mail sortant pour l'envoi direct aux destinataires."
-      );
-      form.reset();
-    } else {
-      setBroadcastMessage(body?.message || body?.details || "Impossible d'envoyer la diffusion.");
+
+    try {
+      const response = await fetch("/api/admin/broadcast", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const body = await response.json().catch(() => null);
+      if (response.ok && body?.queued) {
+        const count = Number.isFinite(body.recipientCount) ? body.recipientCount : 0;
+        setBroadcastMessage(
+          `Diffusion mise en file pour ${count} utilisateur(s). ${body?.zoho?.personalized
+            ? "L'envoi personnalisé sera traité en arrière-plan."
+            : "L'envoi groupé en CCI sera traité en arrière-plan."} Ce message ne confirme pas encore la livraison des e-mails.`,
+        );
+        form.reset();
+      } else {
+        const reference = typeof body?.incidentId === "string" ? ` Référence incident : ${body.incidentId}.` : "";
+        setBroadcastMessage(
+          `${body?.message || "Impossible de mettre en file cette diffusion. Aucun envoi n'est confirmé."}${reference}`,
+        );
+      }
+    } catch {
+      setBroadcastMessage("Connexion momentanément indisponible. Vérifiez l'état de la diffusion avant de réessayer pour éviter un doublon.");
+    } finally {
+      setBroadcastSubmitting(false);
     }
   }
 
@@ -223,7 +231,7 @@ export function AdminSettingsPanel({
           <p className="text-xs leading-6 text-dtsc-muted">
             Sans <span className="font-bold text-dtsc-ink">{"{user}"}</span>, l&apos;envoi est groupé en CCI. Avec <span className="font-bold text-dtsc-ink">{"{user}"}</span>, chaque destinataire reçoit une version personnalisée.
           </p>
-          <Button disabled={!canEdit} title={canEdit ? "Créer une notification et mettre l'email en file pour les utilisateurs actifs." : "Modification réservée au rôle ADMIN."} className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">Notifier et mettre en file</Button>
+          <Button disabled={!canEdit || broadcastSubmitting} title={canEdit ? "Créer une notification et mettre l'email en file pour les utilisateurs actifs." : "Modification réservée au rôle ADMIN."} className="rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">{broadcastSubmitting ? "Mise en file en cours..." : "Notifier et mettre en file"}</Button>
         </form>
       </div>
 
