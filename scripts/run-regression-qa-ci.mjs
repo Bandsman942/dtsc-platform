@@ -73,6 +73,7 @@ commands.unshift("node scripts/qa-health-clinical-i18n-439.mjs");
 commands.unshift("node scripts/qa-scale4a-workflow-worker.mjs");
 commands.unshift("node scripts/qa-health-clinical-catalog-443.mjs");
 commands.unshift("node scripts/qa-scale4b-projection-worker.mjs");
+commands.unshift("node scripts/qa-hotfix-global-outbox-contract.mjs");
 commands.unshift("node scripts/qa-scale4c-web-push-worker.mjs");
 commands.unshift("node scripts/qa-scale4d-admin-broadcast-email.mjs");
 commands.unshift("node scripts/qa-scale4e-knowledge-index-worker.mjs");
