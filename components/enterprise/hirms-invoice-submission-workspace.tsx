@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "react";
 import Link from "next/link";
-import { FileJson, RefreshCw, ShieldAlert, Send, SearchCheck } from "lucide-react";
+import { Download, FileJson, RefreshCw, ShieldAlert, Send, SearchCheck } from "lucide-react";
 import { useAppLocale } from "@/components/i18n/locale-provider";
 import { useToastMessage } from "@/components/ui/use-toast-message";
 import { HirmsEnvironmentSwitch } from "./hirms-environment-switch";
@@ -41,6 +41,12 @@ export function HirmsInvoiceSubmissionWorkspace({organizationId,initialEnvironme
   useEffect(()=>{void load(page).catch(()=>setNotice(tx("Historique indisponible.","History unavailable.")));},[load,page]);
   const visibleHistory = history?.environment===environment && history.scopeKey===hirmsHistoryParams(environment,page,filters) ? history : null;
   function applyFilters(next:HirmsHistoryControlsValue){requestEpoch.current++;setFilters(next);setHistory(null);setPage(1);}
+  async function downloadTemplate(){
+    setNotice("");
+    try{
+      await downloadHirmsCsv(`/api/enterprise/${organizationId}/insurance-connectors/invoices?environment=${environment}&template=official`,`DTSC-HIRMS-modele-HSL-${environment}.xlsx`);
+    }catch{setNotice(tx("Modèle officiel indisponible. Vérifiez la connexion HSL et le droit UploadInvoices.","Official template unavailable. Check the HSL connection and UploadInvoices permission."));}
+  }
   async function exportHistory(){
     setNotice("");
     try{
@@ -120,10 +126,13 @@ export function HirmsInvoiceSubmissionWorkspace({organizationId,initialEnvironme
       <div className="min-w-0 space-y-4 rounded-2xl border border-dtsc-border bg-dtsc-surface p-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="flex items-center gap-2 font-black text-dtsc-ink"><FileJson className="h-5 w-5 text-cyan-600" aria-hidden="true"/>{tx("Fichier de facturation HSL", "HSL invoice payload")}</h2>
+          <div className="flex flex-wrap gap-2">
+          <button type="button" onClick={()=>void downloadTemplate()} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-dtsc-border px-3 text-xs font-bold text-dtsc-ink"><Download className="h-4 w-4"/>{tx("Modèle officiel HSL","Official HSL template")}</button>
           <label className="inline-flex min-h-11 cursor-pointer items-center rounded-xl border border-dtsc-border px-3 text-sm font-bold text-dtsc-ink">
             {tx("Importer .json", "Import .json")}
             <input type="file" accept=".json,application/json" onChange={readJson} className="sr-only"/>
           </label>
+          </div>
         </div>
         <div className="flex gap-2">
           {(["single","bulk"] as const).map(kind=><button key={kind} type="button" onClick={()=>reset("",kind)} className={`min-h-11 flex-1 rounded-xl border px-3 text-sm font-bold ${mode===kind?"border-cyan-500 bg-cyan-500/10 text-cyan-700 dark:text-cyan-300":"border-dtsc-border text-dtsc-ink"}`}>{kind==="single"?tx("Une facture","One invoice"):tx("Lot ≤ 500", "Batch ≤ 500")}</button>)}
