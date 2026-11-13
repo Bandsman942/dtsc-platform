@@ -28,7 +28,7 @@ for (const file of [
   "app/api/enterprise/[organizationId]/retail/offline/sync/route.ts",
   "app/api/enterprise/[organizationId]/retail/inventory/availability/route.ts",
   "app/api/enterprise/[organizationId]/retail/inventory/reservations/route.ts",
-  "app/api/enterprise/[organizationId]/retail/omnichannel/orders/route.ts",
+  "app/api/enterprise/[organizationId]/retail/omnichannel/orders/handler.ts",
   "app/api/enterprise/[organizationId]/retail/country-packs/route.ts",
   "app/api/enterprise/[organizationId]/retail/onboarding/route.ts",
 ]) check(exists(file), `Missing Shop 2 iteration 4 capability: ${file}`);

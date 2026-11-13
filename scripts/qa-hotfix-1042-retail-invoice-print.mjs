@@ -4,7 +4,7 @@ import vm from "node:vm";
 import ts from "typescript";
 
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
-const route = read("app/api/enterprise/[organizationId]/retail/invoices/[invoiceId]/print/route.ts");
+const route = read("app/api/enterprise/[organizationId]/retail/invoices/[invoiceId]/print/handler.ts");
 const workbench = read("components/enterprise/professional/retail-invoice-flow-workbench.tsx");
 
 class NextResponse {

@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { sourceRouteCapacity, vercelBuildCapacity } from "./lib/route-capacity.mjs";
 
 // ROUTES-01: deterministic source routing inventory. Never claim that the
 // source-file count equals the Vercel deployment routing-rule count.
@@ -60,6 +61,8 @@ const report={
   // rules) proves the final effective deployment rule count.
   productionDeploymentStateAtBaseline:baseline.buildEvidence.productionState,
   productionEffectiveRuleCount:"UNVERIFIED",
+  sourceCapacity: sourceRouteCapacity({ baseline: baseline.source.total, current: sourceTotal, maxSourceFiles: baseline.policy.maxSourceRouteFiles, minimumFreed: baseline.policy.minFreedFromBaseline }),
+  vercelBuildCapacity: vercelBuildCapacity(actualRules, baseline.policy.maximumVercelBuildOutputRules),
 };
 const target=path.join(root,"artifacts/routing/route-budget.json");
 fs.mkdirSync(path.dirname(target),{recursive:true});

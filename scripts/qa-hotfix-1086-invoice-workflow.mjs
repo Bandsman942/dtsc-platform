@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 
 const read = (path) => fs.readFileSync(path, "utf8");
-const route = read("app/api/enterprise/[organizationId]/retail/invoices/[invoiceId]/transition/route.ts");
-const queue = read("app/api/enterprise/[organizationId]/retail/invoices/workflow/route.ts");
+const route = read("app/api/enterprise/[organizationId]/retail/invoices/[invoiceId]/transition/handler.ts");
+const queue = read("app/api/enterprise/[organizationId]/retail/invoices/workflow/handler.ts");
 const service = read("lib/enterprise/accounting/accounting-invoice-approval-orchestration.ts");
 const posting = read("lib/enterprise/accounting/receivables-service.ts");
 const generic = read("app/api/enterprise/[organizationId]/approvals/[id]/actions/route.ts");

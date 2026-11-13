@@ -166,7 +166,7 @@ assert.match(route, /canCancel: \["DRAFT", "REJECTED"\]\.includes\(entry\.invoic
 assert.match(route, /auth\.visibility\.cancellableSiteIds\.includes\(entry\.siteId\)/);
 assert.match(route, /canSubmit: \["DRAFT", "REJECTED"\]\.includes\(entry\.invoice\.status\) && entry\.invoice\.createdByUserId === auth\.session\.userId/, "Only the issuing actor can resubmit a draft or rejected invoice");
 assert.match(route, /canCollect: \["ISSUED", "PARTIALLY_PAID", "OVERDUE"\]/);
-const cancelRoute = fs.readFileSync("app/api/enterprise/[organizationId]/retail/invoices/[invoiceId]/transition/route.ts", "utf8");
+const cancelRoute = fs.readFileSync("app/api/enterprise/[organizationId]/retail/invoices/[invoiceId]/transition/handler.ts", "utf8");
 assert.match(cancelRoute, /z\.literal\("CANCEL"\)/, "Retail cancellation stays permissioned");
 assert.match(cancelRoute, /z\.literal\("SUBMIT"\)/);
 assert.match(cancelRoute, /z\.literal\("APPROVE"\)/, "POS now delegates assigned approval decisions to canonical Finance");
@@ -181,7 +181,7 @@ assert.match(cancelRoute, /checkout\.invoice\.revision !== parsed\.data\.revisio
 assert.match(cancelRoute, /transitionSalesInvoice\(organizationId, invoiceId, auth\.session\.userId, parsed\.data as/);
 assert.match(cancelRoute, /submitSalesInvoiceForAssignedApproval\(organizationId, invoiceId, auth\.session\.userId, parsed\.data, \{ retailInvoiceSiteId: checkout\.siteId \}\)/);
 assert.match(cancelRoute, /writeAuditLog\(/);
-const candidatesRoute = fs.readFileSync("app/api/enterprise/[organizationId]/retail/invoices/approval-candidates/route.ts", "utf8");
+const candidatesRoute = fs.readFileSync("app/api/enterprise/[organizationId]/retail/invoices/approval-candidates/handler.ts", "utf8");
 assert.match(candidatesRoute, /retailInvoiceVisibleSites/);
 assert.match(candidatesRoute, /listRetailInvoiceFinanceApprovers/);
 assert.match(candidatesRoute, /visibility\.siteIds\.includes\(parsed\.data\)/);

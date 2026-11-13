@@ -81,8 +81,8 @@ const accounting = read("lib/enterprise/retail/accounting.ts");
 for (const marker of ["finalizeRetailReturnAccounting", "RETAIL_POS_RETURN_POSTED", "valueRetailInventoryReturn"]) check(accounting.includes(marker), `Retail return accounting orchestration missing ${marker}`);
 
 for (const route of [
-  "app/api/enterprise/[organizationId]/retail/pricing/preview/route.ts",
-  "app/api/enterprise/[organizationId]/retail/pricing/conditions/route.ts",
+  "app/api/enterprise/[organizationId]/retail/pricing/preview/handler.ts",
+  "app/api/enterprise/[organizationId]/retail/pricing/conditions/handler.ts",
   "app/api/enterprise/[organizationId]/retail/promotions/route.ts",
   "app/api/enterprise/[organizationId]/retail/sales/[saleId]/returns/route.ts",
   "app/api/enterprise/[organizationId]/retail/returns/[returnId]/decision/route.ts",

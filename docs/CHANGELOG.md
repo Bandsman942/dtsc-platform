@@ -1,11 +1,18 @@
-## 2026-11-13 — Hotfix catalogue réimportable #1143, candidat v1.17.1 (NON FUSIONNÉ)
+## 2026-11-13 — ROUTES-05A Retail (#1145) — v1.17.2 candidat (NON LIVRÉ)
+
+- 24 API Retail de facturation, retours/paiements, omnicanal et tarification regroupées en trois dispatchers à URL stable ; gestionnaires d’origine inchangés et collection invoices racine conservée.
+- Gain source de 21 fichiers routables : 871 → 850, Retail 92 → 71 ; marge source effective sous les deux garde-fous CI : 4 → 25.
+- Contrats exécutables des paramètres et flux, tests HTTP sans navigateur sur base isolée, rapport des traces de fonctions Next ; aucune estimation présentée comme compte exact de règles Vercel.
+- Référence : `docs/routing/ROUTES_05A_RETAIL.md` ; parent #1140 conservé pour les lots suivants. Aucun merge ni déploiement autorisé par la validation de #1136.
+
+## 2026-11-13 — Hotfix catalogue réimportable #1143 — v1.17.1 livrée (#1144)
 
 - Après la fusion du routage #1136 (ROUTES-01→04), correctif isolé de l'import RETAIL/ERP : modèles CSV et Excel servis par le backend avec contrat de 12 colonnes commun au parseur ExcelJS, codes propres à l'organisation et aucun produit de démonstration.
 - Prévisualisation de toutes les lignes et champs avant import avec recherche, filtres et pagination ; diagnostic des doublons SKU et nom+type, revalidation atomique `Serializable`.
 - RBAC, limites 200 lignes/2 Mo, ZIP contrôlé et interdiction de formules/liens conservés ; guide FR/EN et QA de boucle téléchargement-import ajoutée à la régression.
-- PR #1144 en brouillon, tests et E2E propriétaire requis, aucun déploiement. Runbook : `docs/HOTFIX_CATALOG_ROUNDTRIP_PREVIEW_20261113.md`.
+- PR #1144 fusionnée sur `101e903abe2c8ce5f6c4428c1ee6315f2202cfe6` ; Release/tag v1.17.1 et Vercel Production READY vérifiés sur ce même SHA. Runbook historique : `docs/HOTFIX_CATALOG_ROUNDTRIP_PREVIEW_20261113.md`.
 
-## 2026-11-13 — ROUTES-01→04 (#1135) — v1.17.0 (PR non fusionnée)
+## 2026-11-13 — ROUTES-01→04 (#1135) — v1.17.0 livrée (#1136)
 
 - Audit routage : compteur de fichiers source et preuve build Vercel séparés, baseline et garde-fou CI.
 - API HIRMS et exports Console regroupés en handlers dynamiques avec allowlist ; 33 contenus d'origine inchangés (9 HIRMS/Console + 24 Gaming) et audit/RBAC conservés.
