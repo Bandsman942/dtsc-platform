@@ -46,21 +46,21 @@ const profiles = {
     has("lib/console/console-users.ts", "parseConsolePagination");
     has("lib/console/console-user-protection.ts", "LAST_ADMIN_PROTECTED");
     for (const file of ["role", "status", "limits"]) has(`app/api/admin/users/[id]/${file}/route.ts`, "requireConsoleCapability");
-    has("app/api/admin/exports/users/route.ts", "CONSOLE_USERS_EXPORTED");
+    has("app/api/admin/exports/users/handler.ts", "CONSOLE_USERS_EXPORTED");
   },
   organizations() {
     has("lib/console/console-organizations.ts", "parseConsolePagination");
     has("app/api/admin/client-organizations/route.ts", "status: \"INVITED\"");
     has("app/api/enterprise/invitations/[id]/route.ts", "Invitation administrateur acceptée");
     has("app/api/admin/client-organizations/[id]/route.ts", "LAST_ADMIN_PROTECTED");
-    has("app/api/admin/exports/organizations/route.ts", "CONSOLE_ORGANIZATIONS_EXPORTED");
+    has("app/api/admin/exports/organizations/handler.ts", "CONSOLE_ORGANIZATIONS_EXPORTED");
   },
   subscriptions() {
     has("prisma/schema.prisma", "model BillingPlanVersion");
     has("app/api/admin/billing-plans/[id]/route.ts", "billingPlanVersion");
     has("app/api/admin/billing/reconcile/route.ts", "CONSOLE_CAPABILITIES.RECONCILE_BILLING");
     has("app/api/admin/billing/reconcile/route.ts", "consoleOperationJob");
-    has("app/api/admin/exports/payments/route.ts", "CONSOLE_PAYMENTS_EXPORTED");
+    has("app/api/admin/exports/payments/handler.ts", "CONSOLE_PAYMENTS_EXPORTED");
   },
   support() {
     has("lib/console/console-support.ts", "parseConsolePagination");
@@ -93,7 +93,7 @@ const profiles = {
     has("lib/console/console-audit.ts", "parseConsolePagination");
     has("app/api/admin/webhooks/[id]/retry/route.ts", "WEBHOOK_ALREADY_APPLIED");
     has("prisma/schema.prisma", "idempotencyKey");
-    has("app/api/admin/exports/audit/route.ts", "CONSOLE_AUDIT_EXPORTED");
+    has("app/api/admin/exports/audit/handler.ts", "CONSOLE_AUDIT_EXPORTED");
   },
   rbac() {
     has("lib/console/console-capability-catalog.ts", "CONSOLE_USERS_MANAGE");

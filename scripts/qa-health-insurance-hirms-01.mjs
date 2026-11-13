@@ -10,7 +10,7 @@ const environments = read("lib/enterprise/health-insurance-connectors/environmen
 const dualMigration = read("prisma/migrations/20261112234000_hirms_two_environments/migration.sql");
 const service = read("lib/enterprise/health-insurance-connectors/service.ts");
 const route = read("app/api/enterprise/[organizationId]/insurance-connectors/route.ts");
-const verify = read("app/api/enterprise/[organizationId]/insurance-connectors/verify/route.ts");
+const verify = read("app/api/enterprise/[organizationId]/insurance-connectors/verify/handler.ts");
 const ui = read("components/enterprise/health-insurance-connector-workspace.tsx");
 const memberUi = read("components/enterprise/insurance-member-verify-workspace.tsx");
 
