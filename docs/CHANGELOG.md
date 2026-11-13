@@ -1,4 +1,13 @@
-## 2026-11-13 — Hotfix diffusion globale DTSC / Web Push — candidat v1.16.2 (NON FUSIONNÉ)\n\n- Cause racine : Prisma P2003, `EnterpriseDomainEvent_organizationId_fkey`, sentinelle `__DTSC_PLATFORM__` inexistante, transaction de diffusion annulée.\n- Migration additive : `EnterpriseDomainEvent.organizationId` nullable uniquement pour les événements globaux Push / e-mail, CHECK allow-list, FK entreprise conservée.\n- Services : mails groupés/personnalisés et Web Push globals scope `NULL` ; consommateurs ERP tenant-only protégés.\n- Console : erreur expurgée avec identifiant incident, feedback de mise en file distinct de livraison, double soumission évitée.\n- QA : contrat statique + intégration PostgreSQL Quality Gates, validation manuelle E2E requise ; pas de déploiement avant fusion `main`.\n- Runbook : `docs/HOTFIX_GLOBAL_OUTBOX_SCOPE_20261113.md`.\n\n## 2026-11-12 — Issue #1127 — Connecteurs assurances santé / HIRMS (candidat v1.16.0, NON LIVRÉ)
+## 2026-11-13 — Hotfix diffusion globale DTSC / Web Push — candidat v1.16.2 (NON FUSIONNÉ)
+
+- Cause racine : Prisma P2003, `EnterpriseDomainEvent_organizationId_fkey`, sentinelle `__DTSC_PLATFORM__` inexistante, transaction de diffusion annulée.
+- Migration additive : CHECK garantissant la propriété DTSC des jobs e-mail globaux, sans modifier `organizationId NOT NULL`, la FK ni la clé composite Prisma.
+- Services : mails groupés/personnalisés et Push globaux utilisent l'organisation interne réelle `dtsc-internal` ; Push spécifiques conservent leur tenant client ; notification globale `organizationId = NULL` inchangée.
+- Console : erreur expurgée avec identifiant incident, état mise en file distinct de livraison, double soumission UI évitée, 202 conservé si journalisation échoue après commit.
+- QA : contrat statique + intégration PostgreSQL Quality Gates, validation manuelle E2E requise ; pas de déploiement avant fusion `main`.
+- Runbook : `docs/HOTFIX_GLOBAL_OUTBOX_SCOPE_20261113.md`.
+
+## 2026-11-12 — Issue #1127 — Connecteurs assurances santé / HIRMS (candidat v1.16.0, NON LIVRÉ)
 
 - Socle générique des connecteurs d'assurance, premier adaptateur HIRMS/MSO limité à UAT ; credentials HSL chiffrés, OAuth Authentik et vérification réelle des adhérents par `VerifyMembers`.
 - Interface Design 2.0 Administration entreprise, Santé et Pharmacie, isolation `organizationId`, RBAC, rate limit, historique minimal expurgé et migration additive.
