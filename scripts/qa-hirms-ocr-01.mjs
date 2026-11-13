@@ -20,7 +20,7 @@ for (const marker of ["EnterpriseHealthInsuranceOcrJob", "documentDigest", "exte
 for (const marker of ["https://hirmsapi.healthsystemlink.com", "https://hslapi.alatlabs.com", "HEALTH_INSURANCE_HIRMS_UAT_OCR_ENABLED", "HEALTH_INSURANCE_HIRMS_PRODUCTION_OCR_ENABLED", "HEALTH_INSURANCE_HIRMS_PRODUCTION_ORGANIZATION_IDS"]) {
   assert.ok(parts.env.includes(marker), "Missing environment gate "+marker);
 }
-for (const marker of ['"/api/ocr/documents"', '"/api/ocr/jobs/"', "Authorization:", "form.append", "invoiceDate", "getHirmsAccessToken", "HIRMS_OCR_PROXY_MAX_BYTES"]) {
+for (const marker of ['"/api/ocr/documents"', '"/api/ocr/jobs/"', "Authorization:", "form.append", "invoiceDate", "providerId", "note", "getHirmsAccessToken", "HIRMS_OCR_PROXY_MAX_BYTES"]) {
   assert.ok(parts.transport.includes(marker), "Missing HSL OCR contract "+marker);
 }
 for (const marker of ["sha256", "sniffMime", "assertHirmsOcrUploadEnabled", "enterpriseHealthInsuranceOcrJob.create", "enterpriseHealthInsuranceOcrJob.updateMany", "UNKNOWN_OUTCOME", "environment"]) {
@@ -37,4 +37,8 @@ for (const marker of ["HirmsEnvironmentSwitch","PRODUCTION","FileScan","invoiceD
 for (const marker of ['"/api/invoices/status/"', "assertHirmsEnvironmentEnabled", "getHirmsAccessToken"]) assert.ok(parts.invoiceStatus.includes(marker), marker);
 assert.ok(parts.invoiceReconcile.includes("reconcileHirmsInvoiceStatus"), "No independent invoice status reconciliation");
 assert.ok(!parts.service.includes("rawText") && !parts.service.includes("documentBody"), "Never store OCR contents");
+assert.ok(!parts.service.includes("new Date(value +"), "Do not synthesize UTC invoice dates");
+assert.ok(parts.service.includes("invoiceDate: invoiceDate || null"), "Invoice date is optional in the HSL request");
+assert.ok(parts.service.includes("providerId?: string") && parts.service.includes("note?: string"), "OCR partner supports optional facility GUID and note");
+assert.ok(!parts.schema.includes("  note              String"), "Never persist medical notes");
 console.log("✅ HIRMS OCR-01: PDF/image -> multipart upload -> job ID -> status, tenant RBAC, immutable hosts, 4 MiB limit, no clinical payload persistence.");
