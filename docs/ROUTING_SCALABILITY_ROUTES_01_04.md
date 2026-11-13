@@ -80,6 +80,12 @@ API interne ERP ou workers
 
 Projection source : 915 → **871**. Ceci **ne représente pas un chiffre Vercel**. Les contrôles CI et la mesure d'un futur déploiement pourront le confirmer/invalider.
 
+## Stabilisation mémoire — Gaming 646
+
+Le passage de CI du second pilote a révélé un **OOM V8 dans le build Gaming 646**, pas un échec de code métier. Gaming 646 utilisait `NODE_OPTIONS=--max-old-space-size=6144` et répétait les vérifications statiques au sein de `next build`, alors que Quality et Gaming 645 réussissaient avec des contrôles TypeScript/ESLint séparés et 8192 MiB au build.
+
+Correctif : `pnpm type-check` et `pnpm lint` restent des étapes obligatoires avant compilation ; le build emploie ensuite `DTSC_CI_STATIC_CHECKS_PASSED=true` et `NODE_OPTIONS=--max-old-space-size=8192`. Aucun test n'a été supprimé ; une nouvelle CI devra apporter la preuve du succès. Ce budget CI ne démontre pas la taille future d'une fonction Vercel, qui reste à mesurer au déploiement.
+
 ## Matrice de validation et rollback
 
 - QA dispatch et budget; TypeScript; lint; Prisma generate; régressions Finance/HIRMS et Console; build; tests navigateur et validation OWNER_E2E.
