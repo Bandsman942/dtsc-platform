@@ -23,7 +23,7 @@ export async function GET(req:Request,{params}:Params){
   prisma.healthLabTestCatalog.findMany({where:{organizationId,isActive:true},orderBy:[{sortOrder:"asc"},{labelFr:"asc"}]}),
  ]);
  await writeApiLog({request:req,statusCode:200,userId:session.userId,startedAt,metadata:{organizationId,moduleCode:"LABORATORY"}});
- return NextResponse.json({requests:requests.map(item=>maskHealthLabSensitive(item,access.canViewSensitive)),patients,consultations,staff:staff.map(item=>({...item.user,positionCode:item.enterprisePosition.positionCode,role:item.enterprisePosition.labelFr,department:item.enterpriseDepartment.labelFr})),catalog,permissions:{canCreate:access.canCreate,canUpdate:access.canUpdate,canCancel:access.canCancel,canCollect:access.canCollect,canEnterResult:access.canEnterResult,canValidate:access.canValidate,canCorrect:access.canCorrect,canTransmit:access.canTransmit,canManageCatalog:access.canManageCatalog,canViewSensitive:access.canViewSensitive}});
+ return NextResponse.json({requests:requests.map(item=>maskHealthLabSensitive(item,access.canViewSensitive)),patients:access.canCreate?patients:[],consultations:access.canViewSensitive?consultations:[],staff:staff.map(item=>({...item.user,positionCode:item.enterprisePosition.positionCode,role:item.enterprisePosition.labelFr,department:item.enterpriseDepartment.labelFr})),catalog,permissions:{canCreate:access.canCreate,canUpdate:access.canUpdate,canCancel:access.canCancel,canCollect:access.canCollect,canEnterResult:access.canEnterResult,canValidate:access.canValidate,canCorrect:access.canCorrect,canTransmit:access.canTransmit,canManageCatalog:access.canManageCatalog,canViewSensitive:access.canViewSensitive}});
 }
 
 export async function POST(req:Request,{params}:Params){

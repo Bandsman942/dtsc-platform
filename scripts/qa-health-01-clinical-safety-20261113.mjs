@@ -83,4 +83,7 @@ assert.doesNotMatch(read("lib/health-appointments.ts"),/title:.*appointment\.pat
 assert.doesNotMatch(read("lib/health-consultations.ts"),/summary: consultation\.chiefComplaint/,"Consultation updates must not reintroduce clinical complaints into legacy summaries");
 assert.match(read("app/api/enterprise/[organizationId]/healthcare/appointments/route.ts"),/reason: null, description: null, internalNotes: null/,"Administrative appointment lists must not disclose clinical reasons");
 assert.match(read("app/api/enterprise/[organizationId]/healthcare/appointments/[appointmentId]/route.ts"),/reason: null, description: null, internalNotes: null, events: \[\]/,"Administrative appointment detail must hide reason and history");
+assert.match(read("app/api/enterprise/[organizationId]/healthcare/laboratory/route.ts"),/consultations:access.canViewSensitive\?consultations:\[\]/,"Unqualified lab viewer cannot fetch unrelated consultation complaints");
+assert.match(read("app/api/enterprise/[organizationId]/healthcare/laboratory/route.ts"),/patients:access.canCreate\?patients:\[\]/,"Lab viewer cannot enumerate all patients without clinical request permission");
+assert.match(read("lib/health-laboratory.ts"),/chiefComplaint:null,provisionalDiagnosis:null/,"Nested consultations must hide clinical complaints");
 console.log("✅ HEALTH-01 P0: independent lab results, clinical authorization, PHI-minimized projection, tenant-safe canonical metrics");
