@@ -1,6 +1,13 @@
 import type { NextConfig } from "next";
 
+// Only the two GitHub workflows can set this after mandatory pnpm type-check + lint.
+// Vercel production and developer builds retain Next.js built-in checks.
+const ciStaticChecksPassed =
+  process.env.CI === "true" && process.env.DTSC_CI_STATIC_CHECKS_PASSED === "true";
+
 const nextConfig: NextConfig = {
+  typescript: { ignoreBuildErrors: ciStaticChecksPassed },
+  eslint: { ignoreDuringBuilds: ciStaticChecksPassed },
   productionBrowserSourceMaps: false,
   outputFileTracingIncludes: {
     "/*": ["./docs/CHANGELOG.md", "./docs/changelog/*.md"],
