@@ -69,6 +69,8 @@ on:
       - "scripts/qa-retail-product-coherence.mjs"
       - "scripts/ci-upstash-redis-rest-proxy.mjs"
       - "scripts/qa-ci-auth-rate-limit-provisioning.mjs"
+      - "scripts/qa-routes-retail-http.mjs"
+      - "docs/routing/routes-05a-retail-manifest.json"
       - ".github/workflows/shop2-behavioral.yml"
 
 permissions:
