@@ -29,7 +29,7 @@
 
 **Deuxième pilote (Gaming)** : 24 routes Gaming et paramètres dynamiques regroupés en un dispatcher statique allowlisté, avec 24 handlers byte-pour-byte immuables, méthodes GET/POST/PATCH/OPTIONS, même contexte `organizationId` et identifiants (`sessionId`, `stationId`, `tournamentId`, etc.).
 
-**Étapes suivantes sans extrapolation** : attaquer une famille de 20–50 endpoints RETAIL, puis Pharmacie, Santé, Gaming et Administration; chaque famille doit disposer de preuves GET/POST/PATCH/DELETE, params dynamiques, multipart, webhooks, E2E navigateur et interdiction des fuites multi-tenant **avant** migration. Ne pas déplacer aveuglément 545 routes API entreprise en une passe, ne pas modifier les contracts HTTP.
+**Étapes suivantes sans extrapolation** : attaquer une famille de 20–50 endpoints RETAIL, puis Pharmacie, Santé et Administration; chaque famille doit disposer de preuves GET/POST/PATCH/DELETE, params dynamiques, multipart, webhooks, E2E navigateur et interdiction des fuites multi-tenant **avant** migration. Ne pas déplacer aveuglément 545 routes API entreprise en une passe, ne pas modifier les contracts HTTP.
 
 ## ROUTES-03 — workspaces dynamiques à UI conservée
 
@@ -75,7 +75,8 @@ API interne ERP ou workers
 | HIRMS child endpoints | 5 | 1 | 4 |
 | Exports Console | 4 | 1 | 3 |
 | Finance pages wrappers | 14 | 0 (resolver commun existant) | 14 |
-| **Total** | **23** | **2** | **44** |
+| Gaming endpoints | 24 | 1 | 23 |
+| **Total** | **47** | **3** | **44** |
 
 Projection source : 915 → **871**. Ceci **ne représente pas un chiffre Vercel**. Les contrôles CI et la mesure d'un futur déploiement pourront le confirmer/invalider.
 
