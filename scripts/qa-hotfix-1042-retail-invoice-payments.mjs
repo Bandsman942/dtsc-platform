@@ -140,9 +140,9 @@ const orchestration = fs.readFileSync("lib/enterprise/accounting/accounting-huma
 assert.match(orchestration, /retailPaymentSiteId: options\.retailPaymentSiteId/);
 assert.match(orchestration, /payment\.initiatedByUserId !== actorUserId/);
 const routes = [
-  "app/api/enterprise/[organizationId]/retail/invoices/[invoiceId]/payments/route.ts",
-  "app/api/enterprise/[organizationId]/retail/invoices/[invoiceId]/payments/[paymentId]/transition/route.ts",
-  "app/api/enterprise/[organizationId]/retail/invoices/[invoiceId]/payments/[paymentId]/allocate/route.ts",
+  "app/api/enterprise/[organizationId]/retail/invoices/[invoiceId]/payments/handler.ts",
+  "app/api/enterprise/[organizationId]/retail/invoices/[invoiceId]/payments/[paymentId]/transition/handler.ts",
+  "app/api/enterprise/[organizationId]/retail/invoices/[invoiceId]/payments/[paymentId]/allocate/handler.ts",
 ];
 for (const path of routes) {
   const content = fs.readFileSync(path, "utf8");

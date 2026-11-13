@@ -68,7 +68,13 @@ if (resetIndex === -1 || closeIndex === -1 || resetIndex > closeIndex) {
  // same loopback IP. Keep security-critical auth limiting unchanged: split the
  // independent acceptance groups across explicit resets of CI-only Redis.
 const shop2Workflow = read(files.shop2);
+requireToken(shop2Workflow, '"scripts/qa-routes-retail-http.mjs"', "Retail HTTP acceptance path trigger");
+requireToken(shop2Workflow, '"docs/routing/routes-05a-retail-manifest.json"', "Retail HTTP manifest path trigger");
+requireToken(shop2Workflow, 'E2E_ROUTING_RETAIL_ISOLATED: "true"', "isolated-only Retail HTTP activation");
+requireToken(shop2Workflow, "run: pnpm qa:routing-retail-http", "Retail HTTP acceptance command");
 const shop2Stages = [
+  "ROUTES-05A Retail HTTP acceptance without a browser",
+  "Reset isolated Redis after Retail HTTP acceptance",
   "Shop 2 POS behavioral acceptance - finance and relationships",
   "Reset isolated Redis state before Shop 2 retail experience acceptance",
   "Shop 2 retail experience acceptance",
@@ -87,8 +93,8 @@ for (const stage of shop2Stages) {
   if (index <= previousStageIndex) throw new Error(`Shop 2 CI authentication isolation stage missing or out of order: ${stage}`);
   previousStageIndex = index;
 }
-if ((shop2Workflow.match(/--data '\["FLUSHDB"\]'/g) || []).length !== 5) {
-  throw new Error("Shop 2 CI must reset only disposable Redis between its six browser acceptance groups");
+if ((shop2Workflow.match(/--data '\["FLUSHDB"\]'/g) || []).length !== 6) {
+  throw new Error("Shop 2 CI must reset only disposable Redis after Retail HTTP acceptance and between its six historical browser acceptance groups");
 }
 const shop2Specs = [
   "accounting-atomic-retail-posting", "issue-786-relationship-benefits-enforcement",

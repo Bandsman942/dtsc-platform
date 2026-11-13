@@ -16,7 +16,7 @@ const catalog = read("lib/enterprise/master-data/service.ts");
 const stock = read("lib/enterprise/inventory/service.ts");
 const inventoryAlerts = read("app/api/enterprise/[organizationId]/retail/inventory-alerts/route.ts");
 const dashboard = read("components/enterprise/professional/retail-site-overview.tsx");
-const print = read("app/api/enterprise/[organizationId]/retail/invoices/[invoiceId]/print/route.ts");
+const print = read("app/api/enterprise/[organizationId]/retail/invoices/[invoiceId]/print/handler.ts");
 const dates = { exports: {} };
 vm.runInNewContext(ts.transpileModule(read("lib/enterprise/retail/civil-date.ts"), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },

@@ -1,0 +1,279 @@
+{
+  "schemaVersion": 1,
+  "issue": 1145,
+  "parentIssue": 1140,
+  "baselineCommit": "101e903abe2c8ce5f6c4428c1ee6315f2202cfe6",
+  "baselineVersion": "1.17.1",
+  "capturedAt": "2026-11-13",
+  "baseline": {
+    "sourceFiles": 871,
+    "pages": 86,
+    "routeHandlers": 785,
+    "retailHandlers": 92,
+    "effectiveSourceCeiling": 875,
+    "sourceHeadroom": 4
+  },
+  "expected": {
+    "movedHandlers": 24,
+    "dispatchers": 3,
+    "freedSourceFiles": 21,
+    "sourceFiles": 850,
+    "retailHandlers": 71,
+    "sourceHeadroom": 25
+  },
+  "vercel": {
+    "deploymentId": "dpl_8pNrCAn2zxEKzPCX8PRYpoFaZjnZ",
+    "state": "READY",
+    "exactRules": null,
+    "exactHeadroom": null,
+    "maximumBuildOutputRules": 2048,
+    "evidence": "READY is not an exact rule count"
+  },
+  "routes": [
+    {
+      "family": "invoices",
+      "path": "[invoiceId]/payments/[paymentId]/allocate",
+      "methods": [
+        "POST"
+      ],
+      "originalPath": "app/api/enterprise/[organizationId]/retail/invoices/[invoiceId]/payments/[paymentId]/allocate/route.ts",
+      "handlerPath": "app/api/enterprise/[organizationId]/retail/invoices/[invoiceId]/payments/[paymentId]/allocate/handler.ts",
+      "originalBlobSha": "89dbb7b94b3f86c90927f0338f6b148335d44c3b"
+    },
+    {
+      "family": "invoices",
+      "path": "[invoiceId]/payments/[paymentId]/transition",
+      "methods": [
+        "POST"
+      ],
+      "originalPath": "app/api/enterprise/[organizationId]/retail/invoices/[invoiceId]/payments/[paymentId]/transition/route.ts",
+      "handlerPath": "app/api/enterprise/[organizationId]/retail/invoices/[invoiceId]/payments/[paymentId]/transition/handler.ts",
+      "originalBlobSha": "61a2c62703000616466b683e2547f1d64bfe8d0f"
+    },
+    {
+      "family": "invoices",
+      "path": "[invoiceId]/payments/approval-candidates",
+      "methods": [
+        "GET"
+      ],
+      "originalPath": "app/api/enterprise/[organizationId]/retail/invoices/[invoiceId]/payments/approval-candidates/route.ts",
+      "handlerPath": "app/api/enterprise/[organizationId]/retail/invoices/[invoiceId]/payments/approval-candidates/handler.ts",
+      "originalBlobSha": "1ec336d7db283571a06e7b1bb837be6648ce15c9"
+    },
+    {
+      "family": "invoices",
+      "path": "[invoiceId]/payments",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "originalPath": "app/api/enterprise/[organizationId]/retail/invoices/[invoiceId]/payments/route.ts",
+      "handlerPath": "app/api/enterprise/[organizationId]/retail/invoices/[invoiceId]/payments/handler.ts",
+      "originalBlobSha": "b3f86cdbec80bc2d2e22c4bab0fc9a1bb4538811"
+    },
+    {
+      "family": "invoices",
+      "path": "[invoiceId]/print",
+      "methods": [
+        "GET"
+      ],
+      "originalPath": "app/api/enterprise/[organizationId]/retail/invoices/[invoiceId]/print/route.ts",
+      "handlerPath": "app/api/enterprise/[organizationId]/retail/invoices/[invoiceId]/print/handler.ts",
+      "originalBlobSha": "bf4142fd5327e51d7c985bc39fe5184730d52e7b"
+    },
+    {
+      "family": "invoices",
+      "path": "[invoiceId]/returns/[requestId]/decision",
+      "methods": [
+        "POST"
+      ],
+      "originalPath": "app/api/enterprise/[organizationId]/retail/invoices/[invoiceId]/returns/[requestId]/decision/route.ts",
+      "handlerPath": "app/api/enterprise/[organizationId]/retail/invoices/[invoiceId]/returns/[requestId]/decision/handler.ts",
+      "originalBlobSha": "f618f14f5a702aa3dec20e757c01c62f3fcf204d"
+    },
+    {
+      "family": "invoices",
+      "path": "[invoiceId]/returns/[requestId]/inspection",
+      "methods": [
+        "POST"
+      ],
+      "originalPath": "app/api/enterprise/[organizationId]/retail/invoices/[invoiceId]/returns/[requestId]/inspection/route.ts",
+      "handlerPath": "app/api/enterprise/[organizationId]/retail/invoices/[invoiceId]/returns/[requestId]/inspection/handler.ts",
+      "originalBlobSha": "c8e8d400a8d426d1802e56c29e35d8c16313ed6c"
+    },
+    {
+      "family": "invoices",
+      "path": "[invoiceId]/returns/[requestId]/prepare",
+      "methods": [
+        "POST"
+      ],
+      "originalPath": "app/api/enterprise/[organizationId]/retail/invoices/[invoiceId]/returns/[requestId]/prepare/route.ts",
+      "handlerPath": "app/api/enterprise/[organizationId]/retail/invoices/[invoiceId]/returns/[requestId]/prepare/handler.ts",
+      "originalBlobSha": "4c04d1427cd1fb02fe70b37ecb32fe1c620b7fca"
+    },
+    {
+      "family": "invoices",
+      "path": "[invoiceId]/returns/[requestId]/settle",
+      "methods": [
+        "POST"
+      ],
+      "originalPath": "app/api/enterprise/[organizationId]/retail/invoices/[invoiceId]/returns/[requestId]/settle/route.ts",
+      "handlerPath": "app/api/enterprise/[organizationId]/retail/invoices/[invoiceId]/returns/[requestId]/settle/handler.ts",
+      "originalBlobSha": "8dc3d98b0c3a5d4b59be113e55264dd626b9bcbd"
+    },
+    {
+      "family": "invoices",
+      "path": "[invoiceId]/returns",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "originalPath": "app/api/enterprise/[organizationId]/retail/invoices/[invoiceId]/returns/route.ts",
+      "handlerPath": "app/api/enterprise/[organizationId]/retail/invoices/[invoiceId]/returns/handler.ts",
+      "originalBlobSha": "a6b0748092043e66eb3e642a52e8cf82e8adfa73"
+    },
+    {
+      "family": "invoices",
+      "path": "[invoiceId]/transition",
+      "methods": [
+        "POST"
+      ],
+      "originalPath": "app/api/enterprise/[organizationId]/retail/invoices/[invoiceId]/transition/route.ts",
+      "handlerPath": "app/api/enterprise/[organizationId]/retail/invoices/[invoiceId]/transition/handler.ts",
+      "originalBlobSha": "75fca0ad73bb0f58fbb59926dc939a37276e784f"
+    },
+    {
+      "family": "invoices",
+      "path": "approval-candidates",
+      "methods": [
+        "GET"
+      ],
+      "originalPath": "app/api/enterprise/[organizationId]/retail/invoices/approval-candidates/route.ts",
+      "handlerPath": "app/api/enterprise/[organizationId]/retail/invoices/approval-candidates/handler.ts",
+      "originalBlobSha": "6c37aa27fb097e5513d99589f78e838d1a8e1666"
+    },
+    {
+      "family": "invoices",
+      "path": "return-approval-candidates",
+      "methods": [
+        "GET"
+      ],
+      "originalPath": "app/api/enterprise/[organizationId]/retail/invoices/return-approval-candidates/route.ts",
+      "handlerPath": "app/api/enterprise/[organizationId]/retail/invoices/return-approval-candidates/handler.ts",
+      "originalBlobSha": "dfe8703359c0c63a60416267a7262bf0aaef34aa"
+    },
+    {
+      "family": "invoices",
+      "path": "workflow",
+      "methods": [
+        "GET"
+      ],
+      "originalPath": "app/api/enterprise/[organizationId]/retail/invoices/workflow/route.ts",
+      "handlerPath": "app/api/enterprise/[organizationId]/retail/invoices/workflow/handler.ts",
+      "originalBlobSha": "049faac8cb709fb304b02df084591c9f3eb8373e"
+    },
+    {
+      "family": "omnichannel",
+      "path": "orders/[orderId]/cancel",
+      "methods": [
+        "POST"
+      ],
+      "originalPath": "app/api/enterprise/[organizationId]/retail/omnichannel/orders/[orderId]/cancel/route.ts",
+      "handlerPath": "app/api/enterprise/[organizationId]/retail/omnichannel/orders/[orderId]/cancel/handler.ts",
+      "originalBlobSha": "f143d0bd22ee2f848e98fa52637a5bb5f4142ad2"
+    },
+    {
+      "family": "omnichannel",
+      "path": "orders/[orderId]/returns",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "originalPath": "app/api/enterprise/[organizationId]/retail/omnichannel/orders/[orderId]/returns/route.ts",
+      "handlerPath": "app/api/enterprise/[organizationId]/retail/omnichannel/orders/[orderId]/returns/handler.ts",
+      "originalBlobSha": "107a6b6d4c8d54978f109ba4a8a11573abe7608e"
+    },
+    {
+      "family": "omnichannel",
+      "path": "orders",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "originalPath": "app/api/enterprise/[organizationId]/retail/omnichannel/orders/route.ts",
+      "handlerPath": "app/api/enterprise/[organizationId]/retail/omnichannel/orders/handler.ts",
+      "originalBlobSha": "c87f846e797dd618a883e2a6dfdb618910e404a7"
+    },
+    {
+      "family": "omnichannel",
+      "path": "returns/[returnId]/decision",
+      "methods": [
+        "POST"
+      ],
+      "originalPath": "app/api/enterprise/[organizationId]/retail/omnichannel/returns/[returnId]/decision/route.ts",
+      "handlerPath": "app/api/enterprise/[organizationId]/retail/omnichannel/returns/[returnId]/decision/handler.ts",
+      "originalBlobSha": "f756914f173bf4ab1760a321dd6c352bab58fa24"
+    },
+    {
+      "family": "omnichannel",
+      "path": "returns/[returnId]/prepare",
+      "methods": [
+        "POST"
+      ],
+      "originalPath": "app/api/enterprise/[organizationId]/retail/omnichannel/returns/[returnId]/prepare/route.ts",
+      "handlerPath": "app/api/enterprise/[organizationId]/retail/omnichannel/returns/[returnId]/prepare/handler.ts",
+      "originalBlobSha": "d0ce7a071dead8dbccbd2c7572efaa8b0705a6b1"
+    },
+    {
+      "family": "omnichannel",
+      "path": "returns/[returnId]/settle",
+      "methods": [
+        "POST"
+      ],
+      "originalPath": "app/api/enterprise/[organizationId]/retail/omnichannel/returns/[returnId]/settle/route.ts",
+      "handlerPath": "app/api/enterprise/[organizationId]/retail/omnichannel/returns/[returnId]/settle/handler.ts",
+      "originalBlobSha": "db9124b20515cca3a8d28cbfb9df0a2da6b80fb0"
+    },
+    {
+      "family": "omnichannel",
+      "path": "returns/validators",
+      "methods": [
+        "GET"
+      ],
+      "originalPath": "app/api/enterprise/[organizationId]/retail/omnichannel/returns/validators/route.ts",
+      "handlerPath": "app/api/enterprise/[organizationId]/retail/omnichannel/returns/validators/handler.ts",
+      "originalBlobSha": "3507867cd206a87f7eda62d2e2a78bfd895d1747"
+    },
+    {
+      "family": "pricing",
+      "path": "catalog",
+      "methods": [
+        "GET"
+      ],
+      "originalPath": "app/api/enterprise/[organizationId]/retail/pricing/catalog/route.ts",
+      "handlerPath": "app/api/enterprise/[organizationId]/retail/pricing/catalog/handler.ts",
+      "originalBlobSha": "cbc30f1d8f14504dc6adade37f4954337dcb92cc"
+    },
+    {
+      "family": "pricing",
+      "path": "conditions",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "originalPath": "app/api/enterprise/[organizationId]/retail/pricing/conditions/route.ts",
+      "handlerPath": "app/api/enterprise/[organizationId]/retail/pricing/conditions/handler.ts",
+      "originalBlobSha": "e0f2184a3b47ca404e382710ee244b2f1bde55a3"
+    },
+    {
+      "family": "pricing",
+      "path": "preview",
+      "methods": [
+        "POST"
+      ],
+      "originalPath": "app/api/enterprise/[organizationId]/retail/pricing/preview/route.ts",
+      "handlerPath": "app/api/enterprise/[organizationId]/retail/pricing/preview/handler.ts",
+      "originalBlobSha": "e6933357a408869777e250d3deba6359877d6206"
+    }
+  ]
+}

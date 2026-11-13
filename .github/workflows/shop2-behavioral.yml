@@ -69,6 +69,8 @@ on:
       - "scripts/qa-retail-product-coherence.mjs"
       - "scripts/ci-upstash-redis-rest-proxy.mjs"
       - "scripts/qa-ci-auth-rate-limit-provisioning.mjs"
+      - "scripts/qa-routes-retail-http.mjs"
+      - "docs/routing/routes-05a-retail-manifest.json"
       - ".github/workflows/shop2-behavioral.yml"
 
 permissions:
@@ -219,6 +221,25 @@ jobs:
           done
           cat /tmp/dtsc-shop2-next.log
           exit 1
+      - name: ROUTES-05A Retail HTTP acceptance without a browser
+        id: retail_routing_http
+        env:
+          E2E_ROUTING_RETAIL_ISOLATED: "true"
+        run: pnpm qa:routing-retail-http
+      - name: Upload ROUTES-05A HTTP evidence
+        if: ${{ always() && steps.retail_routing_http.outcome != '' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: routes-05a-retail-http
+          if-no-files-found: warn
+          path: artifacts/routing/retail-http-1145.json
+      - name: Reset isolated Redis after Retail HTTP acceptance
+        run: |
+          curl --fail --silent --show-error \
+            -H "Authorization: Bearer ${CI_REDIS_REST_TOKEN}" \
+            -H "Content-Type: application/json" \
+            --data '["FLUSHDB"]' \
+            http://127.0.0.1:8079/ >/dev/null
       - name: Shop 2 POS behavioral acceptance - finance and relationships
         run: pnpm exec playwright test tests/e2e/accounting-atomic-retail-posting.spec.mjs tests/e2e/issue-786-relationship-benefits-enforcement.spec.mjs tests/e2e/issue-910-relationship-credit.spec.mjs tests/e2e/scale5b-retail-dashboard-cache.spec.mjs
       # Only this job's disposable Redis is cleared: production sign-in still

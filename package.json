@@ -6,7 +6,7 @@
     "node": "22.x"
   },
   "scripts": {
-    "qa:routing-scalability": "node scripts/qa-routes-dispatch-parity.mjs && node scripts/qa-routes-dispatch-behavior.mjs && node scripts/qa-routes-scalability.mjs --assert",
+    "qa:routing-scalability": "node scripts/qa-routes-dispatch-parity.mjs && node scripts/qa-routes-dispatch-behavior.mjs && node scripts/qa-routes-retail-parity.mjs && node scripts/qa-routes-retail-behavior.mjs && node scripts/qa-routes-scalability.mjs --assert",
     "qa:global-outbox": "node scripts/qa-hotfix-global-outbox-contract.mjs",
     "qa:global-outbox:postgres": "node scripts/qa-hotfix-global-outbox-postgres.mjs",
     "qa:hirms-design2-1132": "node --experimental-strip-types scripts/qa-hirms-design2-1132.mjs",
@@ -455,6 +455,7 @@
     "qa:retail-financial-kpi-v2": "node scripts/qa-retail-financial-kpi-v2.mjs",
     "qa:fiscal-sector": "node scripts/qa-1124-fiscality.mjs",
     "qa:catalog-roundtrip": "node scripts/qa-hotfix-catalog-roundtrip-20261113.mjs",
+    "qa:routing-retail-http": "node scripts/qa-routes-retail-http.mjs",
     "qa:health-01": "node scripts/qa-health-01-clinical-safety-20261113.mjs && node scripts/qa-health-01-lab-behavior.mjs",
     "qa:health-02": "node scripts/qa-health-02-design.mjs",
     "qa:health-03": "node scripts/qa-health-03-appointments.mjs",
