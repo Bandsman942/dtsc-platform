@@ -73,6 +73,25 @@ for (const locale of ["fr", "en"]) {
   const csvParsed = await importer.parseCatalogFile(new File([csvFilled], "catalog.csv"), locale);
   const csvValidated = await importer.prepareCatalogImport("org-1", csvParsed, locale);
   assert.equal(csvValidated[0].errors.length, 0, "Generated CSV template must import without validation errors");
+
+  // The production boundary is 200 useful lines, not merely 200 blank validated cells.
+  for (let index = 2; index <= 201; index += 1) {
+    const cells = ["Article test " + index, "PRODUCT", "CAT-200-" + index, "", "BCN-ACC", "BCN-PIECE", 9.99, 6.5, "CDF", "Non", "", "Oui"];
+    cells.forEach((value, column) => { sheet.getRow(index).getCell(column + 1).value = value; });
+  }
+  const fullBatch = Buffer.from(await workbook.xlsx.writeBuffer());
+  const fullRows = await importer.parseCatalogFile(new File([fullBatch], "catalog-200.xlsx"), locale);
+  assert.equal(fullRows.length, 200, "Full XLSX import must accept 200 articles");
+  const fullValidation = await importer.prepareCatalogImport("org-1", fullRows, locale);
+  assert.ok(fullValidation.every((row) => row.errors.length === 0), "All 200 generated XLSX rows must validate");
+  const extra = ["Article test 202", "PRODUCT", "CAT-201", "", "BCN-ACC", "BCN-PIECE", 12, 9, "CDF", "Non", "", "Oui"];
+  extra.forEach((value, column) => { sheet.getRow(202).getCell(column + 1).value = value; });
+  const overflow = Buffer.from(await workbook.xlsx.writeBuffer());
+  await assert.rejects(importer.parseCatalogFile(new File([overflow], "catalog-201.xlsx"), locale), /200/);
+  sheet.getRow(202).getCell(1).value = null;
+  sheet.getRow(2).getCell(1).value = { formula: "1+1", result: "malicious" };
+  const formulaWorkbook = Buffer.from(await workbook.xlsx.writeBuffer());
+  await assert.rejects(importer.parseCatalogFile(new File([formulaWorkbook], "catalog-formula.xlsx"), locale), /formul|formula/i);
 }
 
 const dupe = [
