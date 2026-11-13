@@ -1,3 +1,10 @@
+## 2026-11-13 — Hotfix Catalogue CSV/XLSX et prévisualisation complète (NON FUSIONNÉ)
+
+- SHOP BCN : le fichier CSV du lot pilote passe avec 200/200 lignes ; génération des modèles importables désormais dédiée, côté serveur, au même moteur ExcelJS que le parseur, avec contrat de 12 colonnes partagé, codes tenant-scoped et feuille d'interprétation. Pas de mutation des exports de rapport existants.
+- Prévisualisation détaillée des lignes avant création : recherche, filtre Valide / À corriger, pages de 20, erreurs de doublons existants ou internes avec numéro de ligne, cartes mobiles et tableau desktop FR/EN.
+- Sécurité conservée : permission CATALOG.write, rate limit, 200 lignes/2 Mo, anti-formule/liens, validation sur confirmation, transaction Serializable, audit et isolation entreprise. QA aller-retour des templates XLSX/CSV en FR/EN.
+- Branche dédiée, fusion **après** le chantier de routage ROUTES-01→04 et après Quality Gates + validation E2E propriétaire. Voir `docs/HOTFIX_CATALOG_ROUNDTRIP_PREVIEW_20261113.md`. Aucune migration, aucun secret, aucune production.
+
 ## 2026-11-13 — Hotfix diffusion globale DTSC / Web Push — candidat v1.16.2 (NON FUSIONNÉ)
 
 - Cause racine : Prisma P2003, `EnterpriseDomainEvent_organizationId_fkey`, sentinelle `__DTSC_PLATFORM__` inexistante, transaction de diffusion annulée.
