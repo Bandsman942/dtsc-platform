@@ -12,6 +12,7 @@ import { InsuranceConnectorError } from "@/lib/enterprise/health-insurance-conne
 import { HirmsInvoiceTransportError } from "@/lib/enterprise/health-insurance-connectors/hirms-invoices";
 import { preflightHirmsInvoiceSubmission, submitHirmsInvoices, listHirmsInvoiceSubmissions } from "@/lib/enterprise/health-insurance-connectors/invoice-service";
 import { hirmsCsv, parseHirmsHistoryQuery } from "@/lib/enterprise/health-insurance-connectors/history-filters";
+import { downloadOfficialHirmsInvoiceTemplate } from "@/lib/enterprise/health-insurance-connectors/hirms-invoice-template";
 type Params = { params: Promise<{ organizationId: string }> };
 const commandSchema = z.object({
   environment: z.enum(HIRMS_ENVIRONMENTS),
@@ -60,6 +61,18 @@ export async function GET(req: Request, { params }: Params) {
   const url = new URL(req.url);
   const environment = z.enum(HIRMS_ENVIRONMENTS).safeParse(url.searchParams.get("environment") || "UAT");
   if (!environment.success) return NextResponse.json({ error: "HIRMS_ENVIRONMENT_INVALID" }, { status: 400 });
+  if(url.searchParams.get("template")==="official") {
+    const limited=await rateLimit(getRateLimitKey(req,`hirms-template:${organizationId}:${session.userId}`),8,60000,{failureMode:"closed"});
+    if(!limited.ok)return NextResponse.json({error:"HIRMS_TEMPLATE_RATE_LIMITED"},{status:429});
+    try{
+      const template=await downloadOfficialHirmsInvoiceTemplate(organizationId,environment.data);
+      await writeAuditLog({userId:session.userId,action:"HIRMS_OFFICIAL_TEMPLATE_DOWNLOADED",entity:"EnterpriseHealthInsuranceConnector",request:req,
+        metadata:{organizationId,environment:environment.data}});
+      return new Response(template.body,{headers:{"Content-Type":template.mime,
+        "Content-Disposition":`attachment; filename="${template.filename}"`,
+        "Cache-Control":"no-store","X-Content-Type-Options":"nosniff"}});
+    }catch(error){return errorResponse(error);}
+  }
   const filters = parseHirmsHistoryQuery(url);
   if (!filters) return NextResponse.json({error:"HIRMS_HISTORY_FILTERS_INVALID",message:"Recherche, statut ou plage de dates invalide."},{status:400});
   const page = Number(url.searchParams.get("page") || "1");
