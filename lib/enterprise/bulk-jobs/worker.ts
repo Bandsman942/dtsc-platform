@@ -429,6 +429,8 @@ async function purgeExpiredArtifacts() {
   });
   let purged = 0;
   for (const event of events) {
+    // Only tenant-scoped artifacts can be purged through enterprise storage.
+    if (!event.organizationId) continue;
     const payload = asObject(event.payloadJson);
     const path = event.eventType === BANK_STATEMENT_IMPORT_EVENT_TYPE ? String(payload.stagingPath || "") : String(payload.artifactPath || "");
     if (!path) continue;
