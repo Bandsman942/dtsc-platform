@@ -13,7 +13,7 @@ type ClaimedPushEvent = {
   attemptCount: number;
   entityId: string;
   entityType: string;
-  organizationId: string | null;
+  organizationId: string;
 };
 
 type QueueSnapshotRow = {
