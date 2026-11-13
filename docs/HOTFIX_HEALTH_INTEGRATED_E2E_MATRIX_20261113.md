@@ -36,3 +36,10 @@ Le 13/11/2026, les assertions contractuelles HEALTH-01 à HEALTH-06 ont été in
 ## Banc PostgreSQL et route réelle (ajout au candidat)
 - `pnpm qa:health-03-postgres` utilise un PostgreSQL local éphémère exclusivement et des identités synthétiques. Il exerce le vrai service TypeScript `createHealthAppointment` / `updateHealthAppointment` et le vrai Prisma avec conflits, limites de créneau, concurrents et tenants.
 - Les onze routes réellement utilisées, `/enterprise-modules/:moduleCode`, reçoivent désormais la navigation compacte; le simple panneau administratif historique n'est pas considéré comme une preuve d'UX fonctionnelle.
+
+## Décision de validation propriétaire — 13 novembre 2026
+- Validation E2E finale **BON**, déclarée explicitement par le propriétaire dans la conversation.
+- Suivi GitHub de la **livraison partielle intégrée** : #1161, PR #1160.
+- Les six dossiers de travail #1146 à #1151 restent **ouverts** : les chantiers non implémentés (ERP stock canonique, Finance/HIRMS, LIS, SIH, Design 2.0 interne complet) ne sont pas réputés livrés.
+- Condition technique distincte : GitHub Actions Quality gates complet, build, RBAC et migrations doivent être verts avant la fusion. Le statut « E2E BON » du propriétaire ne contourne aucune étape de CI.
+- Fusion exclusivement vers main, jamais de déploiement manuel sur branche.
