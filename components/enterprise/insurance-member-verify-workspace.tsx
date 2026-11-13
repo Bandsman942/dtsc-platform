@@ -5,6 +5,7 @@ import { BadgeCheck, ScanLine, ShieldAlert } from "lucide-react";
 import { useAppLocale } from "@/components/i18n/locale-provider";
 import { useToastMessage } from "@/components/ui/use-toast-message";
 import { HirmsEnvironmentSwitch } from "./hirms-environment-switch";
+import { HirmsWorkspaceNavigation } from "./hirms-workspace-navigation";
 import type { HirmsEnvironment } from "@/lib/enterprise/health-insurance-connectors/environments";
 
 type Result = {
@@ -61,6 +62,7 @@ export function InsuranceMemberVerifyWorkspace({ organizationId, sector, initial
         <Link href={sector === "HEALTH_CARE" ? "/enterprise-modules/INSURANCE_COVERAGE" : "/enterprise-modules/SALES_DISPENSATION"} className="self-start rounded-xl border border-dtsc-border px-3 py-2 text-sm font-bold text-dtsc-ink">{tx("Retour au module", "Back to module")}</Link>
       </header>
       <HirmsEnvironmentSwitch value={environment} onChange={next=>{setEnvironment(next);setResult(null);setCardReference("");setMemberNumber("");}} disabled={pending}/>
+      <HirmsWorkspaceNavigation active="verify" environment={environment}/>
       {environment==="PRODUCTION" && <p role="note" className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-dtsc-ink">{tx("Contrôle sur le service réel. N’utilisez que les données d’un adhérent autorisées pour cette prestation.", "Live HSL service. Use only authorized member data for this care.")}</p>}
       <div className="grid gap-4 md:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
         <form onSubmit={verify} className="min-w-0 space-y-4 rounded-2xl border border-dtsc-border bg-dtsc-surface p-4 sm:p-5">
