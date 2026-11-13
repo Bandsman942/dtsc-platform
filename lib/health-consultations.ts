@@ -31,7 +31,7 @@ export function maskHealthConsultationSensitive<T extends Record<string, unknown
   };
 }
 function legacyPayload(data: HealthConsultationInput, patientRecordId: string, appointmentRecordId: string | null, number: string): Prisma.InputJsonObject {
-  return { consultationNumber: number, patientRecordId, appointmentRecordId, appointmentType: data.consultationType, appointmentDate: (data.consultationDate || new Date()).toISOString(), departmentId: nil(data.departmentId), service: data.reason };
+  return { consultationNumber: number, patientRecordId, appointmentRecordId, appointmentType: data.consultationType, appointmentDate: (data.consultationDate || new Date()).toISOString(), departmentId: nil(data.departmentId), service: "CONSULTATION" };
 }
 
 export async function validateHealthConsultationReferences(organizationId: string, data: Partial<HealthConsultationInput>, existingPatientId?: string) {

@@ -38,19 +38,9 @@ function patientNumber() {
   return `PAT-${new Date().getFullYear()}-${randomUUID().slice(0, 8).toUpperCase()}`;
 }
 
-function legacyPayload(data: PatientInput): Prisma.InputJsonObject {
-  return {
-    patientName: data.fullName,
-    sex: data.sex,
-    birthDateOrAge: data.birthDate instanceof Date ? data.birthDate.toISOString().slice(0, 10) : null,
-    contactPhone: data.phonePrimary,
-    address: data.address,
-    emergencyContact: data.emergencyContactName,
-    emergencyPhone: data.emergencyContactPhone,
-    email: nil(data.email),
-    profession: nil(data.profession),
-    maritalStatus: nil(data.maritalStatus),
-  };
+// Dedicated HealthPatient owns PII. Never replicate names or clinical detail to ERP legacy.
+function legacyPayload(_data: PatientInput): Prisma.InputJsonObject {
+  return { authority: "HealthPatient" };
 }
 
 export function maskHealthPatientSensitive<T extends Record<string, unknown>>(patient: T, canViewSensitive: boolean) {
@@ -74,7 +64,7 @@ export async function createHealthPatient(organizationId: string, actorUserId: s
         sectorCode: "HEALTH_CARE",
         moduleCode: "PATIENTS",
         recordType: "PATIENT_PROFILE",
-        title: data.fullName,
+        title: `Patient · ${number}`,
         summary: null,
         status: data.status,
         priority: "NORMAL",
@@ -168,7 +158,7 @@ export async function updateHealthPatient(organizationId: string, patientId: str
       });
       await tx.enterpriseSectorRecord.update({
         where: { id: existing.legacyRecordId },
-        data: { title: patient.fullName, summary: null, status: patient.status, payloadJson: { ...payload, patientCode: patient.patientNumber }, updatedById: actorUserId, deletedAt: patient.status === "ARCHIVED" ? patient.archivedAt : null },
+        data: { title: `Patient · ${patient.patientNumber}`, summary: null, status: patient.status, payloadJson: { ...payload, patientCode: patient.patientNumber }, updatedById: actorUserId, deletedAt: patient.status === "ARCHIVED" ? patient.archivedAt : null },
       });
     }
     await tx.healthPatientEvent.create({

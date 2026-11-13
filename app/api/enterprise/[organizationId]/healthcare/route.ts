@@ -3,6 +3,7 @@ import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { resolveEnterpriseModuleAccess } from "@/lib/enterprise/module-access";
 import { prisma } from "@/lib/prisma";
+import { safeHealthLegacyProjection } from "@/lib/health-legacy-projection";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
 import { enterpriseHealthcareRecordSchema } from "@/lib/validators";
@@ -96,7 +97,7 @@ export async function GET(req: Request, { params }: Params) {
   });
   return NextResponse.json({
     organization,
-    records: page,
+    records: page.map(safeHealthLegacyProjection),
     nextCursor: hasMore ? page.at(-1)?.id || null : null,
     legacyReadOnly: true,
     legacyPolicy: LEGACY_SECTOR_READ_ONLY,

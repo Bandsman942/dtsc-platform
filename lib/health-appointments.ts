@@ -50,7 +50,7 @@ function legacyPayload(data: HealthAppointmentInput, patientLegacyRecordId: stri
     patientRecordId: patientLegacyRecordId,
     appointmentDate: data.appointmentDate.toISOString(),
     appointmentType: data.appointmentType,
-    service: data.reason,
+    service: "APPOINTMENT",
     departmentId: nil(data.departmentId),
   };
 }
