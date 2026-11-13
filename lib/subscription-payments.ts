@@ -99,7 +99,7 @@ export async function activateOrganizationSubscriptionFromPayment(paymentReferen
   return { ok: true, payment: refreshed, subscription: refreshed.organizationSubscription, invoice, incomeTransaction: income, mail } as const;
 }
 
-export async function finalizeManualSubscriptionPayment(requestId: string, actor: { userId: string; role: UserRole }, action: "APPROVE" | "REJECT", validationComment?: string, settlementAccountId?: string) {
+export async function finalizeManualSubscriptionPayment(requestId: string, actor: { userId: string; role: UserRole }, action: "APPROVE" | "REJECT", validationComment?: string, settlementAccountId?: string, fundsVerified?: boolean) {
   const request = await prisma.manualSubscriptionPayment.findUnique({
     where: { id: requestId },
     include: { plan: true, user: true, organization: true, payment: true, invoice: true },
@@ -117,6 +117,7 @@ export async function finalizeManualSubscriptionPayment(requestId: string, actor
   }
   if (request.status === "REJECTED") throw new Error("MANUAL_PAYMENT_ALREADY_REJECTED");
   if (action === "APPROVE" && request.status !== "APPROVED" && !settlementAccountId) throw new Error("MANUAL_SETTLEMENT_ACCOUNT_REQUIRED");
+  if (action === "APPROVE" && request.status !== "APPROVED" && fundsVerified !== true) throw new Error("MANUAL_SETTLEMENT_FUNDS_NOT_ATTESTED");
   if (action === "APPROVE" && request.status !== "APPROVED" && !request.externalReference && (!validationComment || validationComment.trim().length < 10)) throw new Error("MANUAL_PAYMENT_EVIDENCE_REQUIRED");
   if (request.scope === "PERSONAL") return finalizePersonalManualPayment(request.id, actor.userId, validationComment, settlementAccountId);
   if (request.scope === "ORGANIZATION") return finalizeOrganizationManualPayment(request.id, actor.userId, validationComment, settlementAccountId);
