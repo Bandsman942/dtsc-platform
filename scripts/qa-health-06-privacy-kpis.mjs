@@ -28,4 +28,9 @@ assert.match(versionService,/current\.currentVersionNumber\+1/,"Next version mus
 assert.match(versionService,/isolationLevel:"Serializable"/,"Document versioning must use serializable transaction");
 assert.match(versionService,/DOCUMENT_LOCKED/,"Archived documents cannot be replaced");
 assert.match(versionRoute,/DOCUMENT_LOCKED/,"Friendly archived version error required");
+const access=read("lib/health-document-access.ts");
+assert.match(access,/return a\.canViewRestricted/,"Restricted medical documents require explicit permission");
+assert.match(access,/return a\.canViewSensitive/,"Sensitive medical documents require explicit permission");
+assert.doesNotMatch(access,/record\.createdById===userId\|\|record\.validatorUserId===userId\)return true/,"Former creator/validator must not bypass revoked clinical permissions");
+assert.match(docs,/p\.data\.containsSensitiveMedicalData/,"Sensitive upload flag must require clinical right");
 console.log("✅ HEALTH-06: quality PHI redaction, private document metadata, exact KPI database aggregation");
