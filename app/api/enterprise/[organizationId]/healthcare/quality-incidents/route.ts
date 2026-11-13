@@ -65,7 +65,15 @@ export async function GET(_: Request, { params }: Params) {
   ]);
   const metrics={open,critical,month,patient,confidentiality,investigation,overdueActions,closedMonth};
   const permissions = { canViewAll: access.canViewAll, canViewSensitive: access.canViewSensitive, canViewConfidential: access.canViewConfidential, canCreate: access.canCreate, canUpdate: access.canUpdate, canQualify: access.canQualify, canAssign: access.canAssign, canInvestigate: access.canInvestigate, canClose: access.canClose, canReopen: access.canReopen, canArchive: access.canArchive, canManageActions: access.canManageActions, canValidateActions: access.canValidateActions, canViewReports: access.canViewReports };
-  return NextResponse.json({ incidents: clean, metrics, pageInfo:{shown:incidents.length,total:totalCount,limit:500,hasMore:totalCount>incidents.length}, patients:access.canCreate?patients.map(patient=>({...patient,fullName:access.canViewSensitive?patient.fullName:patient.patientNumber})):[], appointments, consultations, medicalRecords, labs, dispensations, movements:access.canViewSensitive?movements:movements.map(item=>({...item,reason:null})), invoices, coverages, staff, departments, members, currentUserId: session.userId, permissions },{headers:{"Cache-Control":"private, no-store"}});
+  return NextResponse.json({ incidents: clean, metrics, pageInfo:{shown:incidents.length,total:totalCount,limit:500,hasMore:totalCount>incidents.length}, patients:access.canCreate?patients.map(patient=>({...patient,fullName:access.canViewSensitive?patient.fullName:patient.patientNumber})):[], appointments:access.canViewSensitive?appointments:[],
+  consultations:access.canViewSensitive?consultations:[],
+  medicalRecords:access.canViewSensitive?medicalRecords:[],
+  labs:access.canViewSensitive?labs:[],
+  dispensations:access.canViewSensitive?dispensations:[],
+  movements:access.canViewSensitive?movements:[],
+  invoices:access.canViewSensitive?invoices:[],
+  coverages:access.canViewSensitive?coverages:[],
+  staff, departments, members, currentUserId: session.userId, permissions },{headers:{"Cache-Control":"private, no-store"}});
 }
 
 export async function POST(req: Request, { params }: Params) {
