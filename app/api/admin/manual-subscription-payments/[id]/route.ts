@@ -43,7 +43,7 @@ export async function PATCH(req: Request, { params }: Params) {
   try {
     const validator = await prisma.user.findFirst({ where: { id: session.userId, status: "ACTIVE", hrcfoEmployee: { is: { status: "ACTIVE" } }, organizationMemberships: { some: { organizationId: DTSC_INTERNAL_ORGANIZATION_ID, status: "ACTIVE", removedAt: null } } }, select: { id: true } });
     if (!validator) return NextResponse.json({ error: "VALIDATOR_INACTIVE", message: "Le statut de collaborateur actif est nécessaire pour approuver." }, { status: 403 });
-    const result = await finalizeManualSubscriptionPayment(id, { userId: session.userId, role: session.role }, parsed.data.action, parsed.data.validationComment, parsed.data.settlementAccountId);
+    const result = await finalizeManualSubscriptionPayment(id, { userId: session.userId, role: session.role }, parsed.data.action, parsed.data.validationComment, parsed.data.settlementAccountId, parsed.data.fundsVerified);
     await writeAuditLog({ userId: session.userId, action: `MANUAL_SUBSCRIPTION_PAYMENT_${parsed.data.action}D`, entity: "ManualSubscriptionPayment", entityId: id, request: req, metadata: { validationComment: parsed.data.validationComment || null, settlementAccountId: parsed.data.action === "APPROVE" ? parsed.data.settlementAccountId : null, fundsVerified: parsed.data.action === "APPROVE" && parsed.data.fundsVerified === true } });
     const payment = await prisma.manualSubscriptionPayment.findUnique({ where: { id }, select: { requestedByUserId: true, userId: true, organizationId: true, status: true } });
     let notificationPending = false;
@@ -63,7 +63,7 @@ export async function PATCH(req: Request, { params }: Params) {
     return NextResponse.json({ ok: true, result, notificationPending });
   } catch (error) {
     const code = error instanceof Error ? error.message : "INTERNAL_ERROR";
-    const status = code.includes("NOT_FOUND") ? 404 : code === "MANUAL_PAYMENT_EVIDENCE_REQUIRED" || code.startsWith("MANUAL_SETTLEMENT_") ? 422 : code.includes("REQUIRED") || code.includes("FORBIDDEN") ? 403 : code.includes("ALREADY") ? 409 : 500;
+    const status = code.includes("NOT_FOUND") ? 404 : code === "MANUAL_SETTLEMENT_ACCOUNT_CONFLICT" ? 409 : code === "MANUAL_PAYMENT_EVIDENCE_REQUIRED" || code.startsWith("MANUAL_SETTLEMENT_") ? 422 : code.includes("REQUIRED") || code.includes("FORBIDDEN") ? 403 : code.includes("ALREADY") ? 409 : 500;
     await writeApiLog({ request: req, statusCode: status, userId: session.userId, startedAt, metadata: { code } });
     return NextResponse.json({ error: code, message: code === "MANUAL_PAYMENT_SELF_APPROVAL_FORBIDDEN" ? "Vous ne pouvez pas approuver votre propre demande." : code === "MANUAL_PAYMENT_EVIDENCE_REQUIRED" ? "Référence absente : consignez une justification vérifiable d'au moins 10 caractères." : code.startsWith("MANUAL_SETTLEMENT_") ? "Compte de destination absent, incompatible ou non vérifié. Sélectionnez un compte actif réel et réessayez." : status === 500 ? "Impossible de finaliser ce paiement. Vérifiez son état avant de réessayer." : "Cette décision ne peut pas être appliquée." }, { status });
   }
