@@ -127,3 +127,8 @@ await import("./qa-hotfix-1075-forms-catalog-import-toasts.mjs");
 await import("./qa-hotfix-catalog-roundtrip-20261113.mjs");
 await import("./qa-health-01-clinical-safety-20261113.mjs");
 await import("./qa-health-01-lab-behavior.mjs");
+await import("./qa-health-02-design.mjs");
+await import("./qa-health-03-appointments.mjs");
+await import("./qa-health-04-stock-specimen.mjs");
+await import("./qa-health-05-payments.mjs");
+await import("./qa-health-06-privacy-kpis.mjs");

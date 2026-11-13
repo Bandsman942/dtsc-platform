@@ -455,7 +455,13 @@
     "qa:retail-financial-kpi-v2": "node scripts/qa-retail-financial-kpi-v2.mjs",
     "qa:fiscal-sector": "node scripts/qa-1124-fiscality.mjs",
     "qa:catalog-roundtrip": "node scripts/qa-hotfix-catalog-roundtrip-20261113.mjs",
-    "qa:health-01": "node scripts/qa-health-01-clinical-safety-20261113.mjs && node scripts/qa-health-01-lab-behavior.mjs"
+    "qa:health-01": "node scripts/qa-health-01-clinical-safety-20261113.mjs && node scripts/qa-health-01-lab-behavior.mjs",
+    "qa:health-02": "node scripts/qa-health-02-design.mjs",
+    "qa:health-03": "node scripts/qa-health-03-appointments.mjs",
+    "qa:health-04": "node scripts/qa-health-04-stock-specimen.mjs",
+    "qa:health-05": "node scripts/qa-health-05-payments.mjs",
+    "qa:health-06": "node scripts/qa-health-06-privacy-kpis.mjs",
+    "qa:health-preflight": "pnpm qa:health-01 && pnpm qa:health-02 && pnpm qa:health-03 && pnpm qa:health-04 && pnpm qa:health-05 && pnpm qa:health-06"
   },
   "dependencies": {
     "@ai-sdk/gateway": "2.0.27",

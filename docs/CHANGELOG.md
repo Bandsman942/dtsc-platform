@@ -1,3 +1,9 @@
+## 2026-11-13 — HEALTH-01→06 — candidat d'intégration des six tranches, NON FUSIONNÉ
+
+- Sécurité clinique, laboratoire par examen, navigation Santé 2.0, garde des rendez-vous, pharmacie FEFO sérialisée, paiements médicaux et incidents/documents protégés.
+- Version candidate 1.17.2, aucune affirmation de conformité SIH ou E2E final : matrice dans `docs/HOTFIX_HEALTH_INTEGRATED_E2E_MATRIX_20261113.md`.
+- Lots #1146–#1151 ouverts, travaux supplémentaires documentés dans les dossiers individuels.
+
 ## 2026-11-13 — HEALTH-01 / #1146 — candidat v1.17.2 (NON FUSIONNÉ)
 
 - Contrôles P0 : résultats laboratoire par examen, autorisation clinique distincte du rôle administratif, protections de mise à jour patient, KPI canoniques indépendants des 300 enregistrements legacy, minimisation des nouvelles projections Santé.
