@@ -10,13 +10,13 @@ export async function getHealthMedicalRecordAccess({ session, organizationId, ac
   const canViewSensitive = medicalPermissions.includes("health.medical_records.view_sensitive");
   // Clinical mutation is not an enterprise administrator capability. The
   // assignment is already filtered by ACTIVE in getHealthStaffMedicalPermissions.
-  const canEditClinical = canViewSensitive;
+  const canEditClinical = canViewSensitive && medicalPermissions.includes("health.medical_records.update");
   const canManageConfidentialNotes = medicalPermissions.includes("health.medical_records.confidential_notes");
   return {
     membership,
-    canCreate: canEditClinical,
+    canCreate: canViewSensitive && medicalPermissions.includes("health.medical_records.create"),
     canUpdate: canEditClinical,
-    canArchive: canEditClinical,
+    canArchive: canViewSensitive && medicalPermissions.includes("health.medical_records.archive"),
     canManageStructuredItems: canEditClinical,
     canViewSensitive,
     canManageConfidentialNotes,

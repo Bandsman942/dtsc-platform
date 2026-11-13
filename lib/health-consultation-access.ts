@@ -14,18 +14,19 @@ export async function getHealthConsultationAccess({ session, organizationId, act
   const staff = await prisma.healthStaffAssignment.findFirst({
     where: { organizationId, userId: session.userId, status: "ACTIVE",
       availabilityStatus: { not: "SUSPENDED" },
-      enterprisePosition: { positionCode: { in: ["DOCTOR","SPECIALIST_DOCTOR","MEDICAL_DIRECTOR"] } } },
-    select: { id: true },
+      },
+    select: { id: true, enterprisePosition: { select: { positionCode: true } } },
   });
   const canViewSensitive = permissions.includes("health.consultations.view_sensitive");
-  const canEdit = Boolean(staff && canViewSensitive);
+  const qualifiedProfessional = Boolean(staff && canViewSensitive);
+  const maySign = qualifiedProfessional && ["DOCTOR","SPECIALIST_DOCTOR","MEDICAL_DIRECTOR"].includes(staff?.enterprisePosition.positionCode || "");
   return {
     membership,
-    canCreate: canEdit,
-    canUpdate: canEdit,
-    canClose: canEdit,
-    canReopen: canEdit,
-    canCancel: canEdit,
+    canCreate: Boolean(maySign && permissions.includes("health.consultations.create")),
+    canUpdate: Boolean(qualifiedProfessional && permissions.includes("health.consultations.update")),
+    canClose: Boolean(maySign && permissions.includes("health.consultations.close")),
+    canReopen: Boolean(maySign && permissions.includes("health.consultations.reopen")),
+    canCancel: Boolean(maySign && permissions.includes("health.consultations.cancel")),
     canViewSensitive,
   };
 }

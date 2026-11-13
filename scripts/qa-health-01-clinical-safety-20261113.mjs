@@ -33,7 +33,7 @@ assert.match(labApi,/RESULT_ITEMS_INCOMPLETE/,"User-facing error for partial res
 assert.match(ui,/request\?\.items\.map\(item=>/,"Every test gets an individual result input");
 assert.match(ui,/itemResults/,"Frontend sends per-item results");
 assert.match(auth,/getHealthStaffMedicalPermissions/,"Clinical access must use explicit staff permissions");
-assert.match(auth,/positionCode:\s*\{\s*in:\s*\[/,"Medical writing must require qualified position");
+assert.match(auth,/const maySign = qualifiedProfessional &&/,"Clinical signing must be restricted to qualified clinicians");
 assert.doesNotMatch(auth,/canCreate:\s*canManage/,"Manager must not automatically create medical consultation");
 assert.match(patient,/medicalPermissions\.includes/,"Patient sensitive read requires clinical permissions");
 assert.match(patientUpdate,/CLINICAL_PERMISSION_REQUIRED/,"Administrative updates cannot write clinical fields");
@@ -69,6 +69,10 @@ assert.match(labAccess,/canValidate:permissions\.includes\("health\.laboratory\.
 assert.match(labAccess,/canViewSensitive:permissions\.includes\("health\.laboratory\.view_sensitive"\)/,"Administrative manager cannot read lab values by role");
 assert.match(appointmentAccess,/canConvert: Boolean\(consultationAccess\?\.canCreate\)/,"Only explicitly authorized consultation creators may convert appointments");
 assert.match(recordAccess,/canUpdate: canEditClinical/,"Medical record editing must use clinical permissions");
+assert.match(recordAccess,/health\.medical_records\.archive/,"Medical record archive requires separate clinical permission");
+assert.match(recordAccess,/health\.medical_records\.create/,"Medical record create requires separate clinical permission");
+assert.match(auth,/health\.consultations\.close/,"Closing encounter requires explicit clinical scope");
+assert.match(auth,/health\.consultations\.reopen/,"Reopening encounter requires explicit clinical scope");
 const activityLoader=read("lib/enterprise/enterprise-activity-healthcare-loader.ts");
 const modulePage=read("app/enterprise-modules/[moduleCode]/page.tsx");
 const aiContext=read("lib/ai/context-engine.ts");
