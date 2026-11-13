@@ -1,19 +1,16 @@
--- Global platform broadcasts and Web Push notifications are not enterprise data.
--- Keep the existing organization FK for tenant-scoped rows; NULL identifies only
--- the three whitelisted platform job families.
+-- Platform broadcast email delivery uses the canonical DTSC internal organization.
+-- No schema column or foreign key is removed; the existing multi-tenant outbox
+-- retains organizationId NOT NULL and Organization(id) referential integrity.
+-- Web Push can use a real client organization or dtsc-internal for global Push.
 ALTER TABLE "EnterpriseDomainEvent"
-  ALTER COLUMN "organizationId" DROP NOT NULL;
-
-ALTER TABLE "EnterpriseDomainEvent"
-  ADD CONSTRAINT "EnterpriseDomainEvent_platform_scope_check"
+  ADD CONSTRAINT "EnterpriseDomainEvent_global_broadcast_owner_check"
   CHECK (
-    "organizationId" IS NOT NULL
-    OR "eventType" IN (
-      'PLATFORM_WEB_PUSH_NOTIFICATION',
+    "eventType" NOT IN (
       'PLATFORM_ADMIN_BROADCAST_EMAIL_PAYLOAD',
       'PLATFORM_ADMIN_BROADCAST_EMAIL_DELIVERY'
     )
+    OR "organizationId" = 'dtsc-internal'
   ) NOT VALID;
 
 ALTER TABLE "EnterpriseDomainEvent"
-  VALIDATE CONSTRAINT "EnterpriseDomainEvent_platform_scope_check";
+  VALIDATE CONSTRAINT "EnterpriseDomainEvent_global_broadcast_owner_check";
