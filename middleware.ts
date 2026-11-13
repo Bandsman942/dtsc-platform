@@ -6,7 +6,7 @@ import { shouldUseSecureSessionCookie } from "@/lib/session-cookie-security";
 import { sessionCookieMaxAgeSeconds } from "@/lib/session-policy";
 import { createSessionToken, SESSION_COOKIE, verifySessionToken } from "@/lib/session";
 
-const privateRoutes = ["/dashboard", "/chat", "/billing", "/company", "/calendar", "/documents", "/activities", "/enterprise-admin", "/enterprise-activities", "/enterprise-invitations", "/enterprise-modules", "/collaborators", "/profile", "/settings", "/support", "/notifications", "/announcements"];
+const privateRoutes = ["/dashboard", "/chat", "/billing", "/company", "/calendar", "/documents", "/activities", "/enterprise-admin", "/enterprise-insurance", "/enterprise-activities", "/enterprise-invitations", "/enterprise-modules", "/collaborators", "/profile", "/settings", "/support", "/notifications", "/announcements"];
 const adminRoutes = ["/admin"];
 const dtscInternalRoutes = ["/admin", "/activities"];
 const dtscInternalApiRoutes = ["/api/admin", "/api/activities"];
@@ -15,7 +15,7 @@ const externalWebhookRoutes = ["/api/billing/maishapay/callback", "/api/webhooks
 const safeMethods = ["GET", "HEAD", "OPTIONS"];
 const DTSC_INTERNAL_ORGANIZATION_ID = "dtsc-internal";
 const authRoutes = ["/auth/sign-in", "/auth/sign-up"];
-const appOnlyRedirectRoutes = ["/dashboard", "/chat", "/billing", "/company", "/calendar", "/documents", "/enterprise-admin", "/enterprise-activities", "/enterprise-invitations", "/enterprise-modules", "/collaborators", "/profile", "/settings", "/notifications", "/announcements"];
+const appOnlyRedirectRoutes = ["/dashboard", "/chat", "/billing", "/company", "/calendar", "/documents", "/enterprise-admin", "/enterprise-insurance", "/enterprise-activities", "/enterprise-invitations", "/enterprise-modules", "/collaborators", "/profile", "/settings", "/notifications", "/announcements"];
 const staticAssetPrefixes = ["/_next/", "/icons/"];
 const staticAssetPaths = ["/favicon.ico", "/manifest.webmanifest", "/offline", "/offline.html", "/sw.js", "/robots.txt", "/sitemap.xml"];
 
@@ -266,31 +266,14 @@ export async function middleware(request: NextRequest) {
   return response;
 }
 
+// Keep these patterns static: Next.js compiles each separate matcher to Vercel
+// routing entries. A single named-group matcher replaces the individual
+// prefix entries without changing the original protected route coverage.
 export const config = {
   matcher: [
-    // Only the Docs hostname receives a catch-all; all other products keep their existing narrow matchers.
     { source: "/:path*", has: [{ type: "host", value: "docs.dtsc-platform.com" }] },
     "/",
-    "/dashboard/:path*",
-    "/chat/:path*",
-    "/billing/:path*",
-    "/company/:path*",
-    "/calendar/:path*",
-    "/documents/:path*",
-    "/activities/:path*",
-    "/enterprise-admin/:path*",
-    "/enterprise-activities/:path*",
-    "/enterprise-invitations/:path*",
-    "/enterprise-modules/:path*",
-    "/collaborators/:path*",
-    "/profile/:path*",
-    "/settings/:path*",
-    "/support/:path*",
-    "/notifications/:path*",
-    "/announcements/:path*",
-    "/admin/:path*",
-    "/api/:path*",
-    "/auth/sign-in",
-    "/auth/sign-up",
+    "/:surface(dashboard|chat|billing|company|calendar|documents|activities|enterprise-admin|enterprise-insurance|enterprise-activities|enterprise-invitations|enterprise-modules|collaborators|profile|settings|support|notifications|announcements|admin|api)/:path*",
+    "/auth/:action(sign-in|sign-up)",
   ],
 };

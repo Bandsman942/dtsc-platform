@@ -1308,7 +1308,9 @@ check(
 
 check(
   "Enterprise invitations: route privee protegee et workflow groupes collaborateurs separe",
-  containsAll(middleware, ['"/enterprise-invitations"', '"/enterprise-invitations/:path*"'])
+  containsAll(middleware, ['"/enterprise-invitations"'])
+    && (middleware.includes('"/enterprise-invitations/:path*"')
+      || (middleware.includes('"/:surface(') && middleware.includes('|enterprise-invitations|')))
     && containsAll(read("app/api/collaborators/invitations/[id]/route.ts"), ["collaborationInvitationResponseSchema", "collaborationGroupInvitation", "COLLABORATION"])
 );
 

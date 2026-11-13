@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { Prisma } from "@prisma/client";
+import { type HirmsHistoryFilters, utcSubmittedAtRange } from "./history-filters";
 import { prisma } from "@/lib/prisma";
 import { openHirmsCredentials } from "./crypto";
 import { InsuranceConnectorError } from "./registry";
@@ -104,21 +105,39 @@ export async function uploadHirmsOcrForTenant(
     reject("HIRMS_OCR_OUTCOME_UNKNOWN", 503);
   }
 }
-export async function listHirmsOcrJobs(organizationId: string, environment: HirmsEnvironment, page = 1) {
+export async function listHirmsOcrJobs(
+  organizationId: string, environment: HirmsEnvironment, page = 1,
+  filters: HirmsHistoryFilters = {}, pageSize = 20,
+) {
   const safePage = Math.min(10000, Math.max(1, Math.floor(page) || 1));
-  const where = { organizationId, environment, adapterCode: "HIRMS_HSL" };
-  const [total, items] = await Promise.all([
-    prisma.enterpriseHealthInsuranceOcrJob.count({ where }),
+  const safeSize = Math.min(500, Math.max(1, Math.floor(pageSize) || 20));
+  const common: Prisma.EnterpriseHealthInsuranceOcrJobWhereInput = {
+    organizationId, environment, adapterCode: "HIRMS_HSL",
+    ...(filters.search ? {OR:[
+      {salesInvoiceId:{contains:filters.search,mode:"insensitive"}},
+      {externalJobId:{contains:filters.search,mode:"insensitive"}},
+    ]} : {}),
+    ...(utcSubmittedAtRange(filters) ? {submittedAt:utcSubmittedAtRange(filters)} : {}),
+  };
+  const where: Prisma.EnterpriseHealthInsuranceOcrJobWhereInput = {
+    ...common, ...(filters.status ? {transportStatus:filters.status} : {}),
+  };
+  const [total,items,aggregates] = await Promise.all([
+    prisma.enterpriseHealthInsuranceOcrJob.count({where}),
     prisma.enterpriseHealthInsuranceOcrJob.findMany({
-      where, orderBy: { submittedAt: "desc" }, skip: (safePage-1)*20, take: 20,
+      where, orderBy:{submittedAt:"desc"}, skip:(safePage-1)*safeSize, take:safeSize,
       select: {
-        id: true, salesInvoiceId: true, mimeType: true, bytes: true, invoiceDate: true,
-        externalJobId: true, transportStatus: true, remoteStatus: true, errorCode: true,
-        lastPolledAt: true, submittedAt: true,
+        id:true,salesInvoiceId:true,mimeType:true,bytes:true,invoiceDate:true,
+        externalJobId:true,transportStatus:true,remoteStatus:true,errorCode:true,
+        lastPolledAt:true,submittedAt:true,
       },
     }),
+    prisma.enterpriseHealthInsuranceOcrJob.groupBy({
+      by:["transportStatus"],where:common,_count:{_all:true},
+    }),
   ]);
-  return { total, page: safePage, pageCount: Math.max(1, Math.ceil(total/20)), items };
+  const statusCounts = Object.fromEntries(aggregates.map(row=>[row.transportStatus,row._count._all]));
+  return {items,total,statusCounts,page:safePage,pageCount:Math.max(1,Math.ceil(total/safeSize))};
 }
 export async function pollHirmsOcrJob(organizationId: string, environment: HirmsEnvironment, jobId: string) {
   assertHirmsEnvironmentEnabled(environment, organizationId);

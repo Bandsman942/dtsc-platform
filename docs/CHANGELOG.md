@@ -2525,3 +2525,9 @@ Hotfix #861 (complément) : un secret CRON_SECRET Production commun réveille po
 - Interface OCR responsive Design 2.0, pagination, filtrage par environnement, confirmation de l'envoi Production.
 - Suivi manuel du statut des factures HSL, strictement informatif (aucun règlement, créance ou posting).
 - Proxy direct limité à 4 MiB ; HSL 50 Mo ; circuit volumineux et certification des statuts reportés, sans simulation de succès.
+
+### Hotfix #1132 — Vercel route budget / HIRMS Design 2.0 (en validation)
+- Correction du dépassement Vercel `too_many_routes` (2064 pour 2048) par consolidation des matchers middleware sans supprimer de droits ou de routes métier.
+- HIRMS Santé/Pharmacie : navigation UAT/PRODUCTION unifiée, KPI de prérequis, historiques factures/OCR filtrables, badges interprétables, dates, pagination et export CSV audité.
+- Téléchargement du modèle standard HSL via OAuth entreprise existant ; pas de champ médical fabriqué ni de rapprochement de paiement automatique.
+- Référence : `docs/HOTFIX_1132_VERCEL_ROUTES_HIRMS_DESIGN2.md` ; aucune fusion avant E2E propriétaire.
