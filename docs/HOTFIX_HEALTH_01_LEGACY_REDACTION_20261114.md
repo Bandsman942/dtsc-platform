@@ -42,6 +42,6 @@ La suppression de textes cliniques d'une projection historique est une transform
 
 ## Évidence et conditions de fermeture de #1146
 
-- `pnpm qa:health-01` inclut `scripts/qa-health-01-legacy-redaction.mjs` ; CI, Prisma, type-check, lint, régression et build restent obligatoires.
+- `pnpm qa:health-01` inclut `scripts/qa-health-01-legacy-redaction.mjs` ; la Quality CI exécute aussi `scripts/qa-health-01-legacy-postgres.mjs` contre son PostgreSQL localhost isolé (fixtures fictives, deux tenants, dry-run, gates, idempotence, concurrence). Prisma, type-check, lint, régression et build restent obligatoires.
 - Cette PR rembourse seulement la **préparation contrôlée du backfill historique** ; elle **ne ferme pas** #1146 sans audit exhaustif des lecteurs, test PostgreSQL réel, preuve de sauvegarde/restore, E2E propriétaire et recette Production.
 - Aucune donnée client n'est modifiée par une PR ou par son merge.
