@@ -5,6 +5,7 @@ import { FileJson, RefreshCw, ShieldAlert, Send, SearchCheck } from "lucide-reac
 import { useAppLocale } from "@/components/i18n/locale-provider";
 import { useToastMessage } from "@/components/ui/use-toast-message";
 import { HirmsEnvironmentSwitch } from "./hirms-environment-switch";
+import { HirmsWorkspaceNavigation } from "./hirms-workspace-navigation";
 import type { HirmsEnvironment } from "@/lib/enterprise/health-insurance-connectors/environments";
 
 type Submission = { id: string; invoiceNumber: string; batchId: string | null; transportStatus: string; httpStatus: number | null; submittedAt: string; errorCode: string | null; remoteStatus: string | null; lastStatusErrorCode: string | null };
@@ -100,6 +101,7 @@ export function HirmsInvoiceSubmissionWorkspace({organizationId,initialEnvironme
     </header>
     <Link href={`/enterprise-insurance/ocr?environment=${environment}`} className="inline-flex min-h-11 items-center rounded-xl border border-dtsc-border px-3 py-2 text-sm font-bold text-dtsc-ink">{tx("Documents et suivi OCR","OCR documents and tracking")}</Link>
     <HirmsEnvironmentSwitch value={environment} onChange={switchEnvironment} disabled={pending}/>
+      <HirmsWorkspaceNavigation active="invoices" environment={environment}/>
     <section className="flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 text-sm text-dtsc-ink">
       <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" aria-hidden="true"/>
       <div><p className="font-bold">{tx(`Environnement ${environment} — Aucun paiement créé`, `${environment} environment — No payments created`)}</p>
