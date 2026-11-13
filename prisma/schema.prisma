@@ -7394,6 +7394,7 @@ model ManualSubscriptionPayment {
   organizationSubscriptionId String?
   paymentId                  String?  @unique
   settlementAccountId        String?
+  fundsVerifiedAt            DateTime?
   amount                     Decimal  @db.Decimal(10, 2)
   currency                   String   @default("USD")
   paymentMethod              String
