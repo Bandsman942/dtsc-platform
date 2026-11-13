@@ -30,7 +30,7 @@ assert.match(lab,/isolationLevel:"Serializable"/,"Lab transition must use serial
 assert.match(lab,/items\.some\(item=>!item\.resultText\?\.trim\(\)\)/,"Validation requires every result");
 assert.match(lab,/TEST_CATALOG_LOCKED_AFTER_SAMPLING/,"Tests cannot be silently replaced after sampling");
 assert.match(labApi,/RESULT_ITEMS_INCOMPLETE/,"User-facing error for partial results");
-assert.match(ui,/request\.items\.map\(item=>/,"Every test gets an individual result input");
+assert.match(ui,/request\?\.items\.map\(item=>/,"Every test gets an individual result input");
 assert.match(ui,/itemResults/,"Frontend sends per-item results");
 assert.match(auth,/getHealthStaffMedicalPermissions/,"Clinical access must use explicit staff permissions");
 assert.match(auth,/positionCode:\s*\{\s*in:\s*\[/,"Medical writing must require qualified position");
@@ -52,4 +52,13 @@ assert.match(dashboard,/healthcare\/dashboard/,"Dashboard consumes canonical end
 assert.doesNotMatch(dashboard,/function HealthcareDashboard\(\{ records \}/,"Dashboard must not count capped legacy records");
 assert.match(read("scripts/qa-regression-checks.mjs"),/qa-health-01-clinical-safety-20261113/);
 assert.match(read("package.json"),/"qa:health-01"/);
+const legacyAdapter=read("lib/health-legacy-projection.ts");
+const legacyLoader=read("lib/enterprise/enterprise-healthcare-loader.ts");
+const legacyRoute=read("app/api/enterprise/[organizationId]/healthcare/route.ts");
+assert.match(legacyLoader,/records\.map\(safeHealthLegacyProjection\)/,"Enterprise loader must redact historic clinical text");
+assert.match(legacyRoute,/page\.map\(safeHealthLegacyProjection\)/,"Legacy API must redact historic clinical text");
+assert.match(legacyAdapter,/summary:null,payloadJson:\{\}/,"Historic clinical JSON must not reach shared ERP pages");
+assert.doesNotMatch(read("lib/health-patients.ts"),/title: data\.fullName/,"No patient name in new legacy titles");
+assert.doesNotMatch(read("lib/health-appointments.ts"),/service: data\.reason/,"No appointment motive in ERP mirrors");
+assert.doesNotMatch(read("lib/health-consultations.ts"),/service: data\.reason/,"No clinical motive in ERP mirrors");
 console.log("✅ HEALTH-01 P0: independent lab results, clinical authorization, PHI-minimized projection, tenant-safe canonical metrics");
