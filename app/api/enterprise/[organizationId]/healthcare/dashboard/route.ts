@@ -30,8 +30,8 @@ export async function GET(_req:Request,{params}:Params){
     prisma.healthLabRequest.count({where:{organizationId,status:{in:["REQUESTED","PENDING_SAMPLE","SAMPLED","ANALYZING","RESULT_ENTERED","PENDING_VALIDATION"]}}}),
     prisma.healthPharmacyProduct.count({where:{organizationId,status:"ACTIVE",currentStock:{lte:0}}}),
     prisma.healthPharmacyBatch.count({where:{organizationId,expiryDate:{lt:new Date()},availableQuantity:{gt:0}}}),
-    prisma.healthMedicalInvoice.count({where:{organizationId,status:{in:["DRAFT","ISSUED","PARTIAL_PAID"]}}}),
-    prisma.healthCoverageRequest.count({where:{organizationId,status:{in:["DRAFT","SUBMITTED","WAITING","PENDING"]}}}),
+    prisma.healthMedicalInvoice.count({where:{organizationId,status:{in:["DRAFT","ISSUED","PARTIAL_PAID","PENDING_INSURANCE"]}}}),
+    prisma.healthCoverageRequest.count({where:{organizationId,status:{in:["DRAFT","SUBMITTED","MISSING_DOCUMENTS","INTERNAL_REVIEW","WAITING_INSURER"]}}}),
     prisma.healthQualityIncident.count({where:{organizationId,status:{notIn:["CLOSED","ARCHIVED","CANCELLED","RESOLVED"]}}}),
   ]);
   return NextResponse.json({businessDate:windows.businessDate,metrics:{
