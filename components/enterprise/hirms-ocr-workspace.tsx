@@ -8,7 +8,7 @@ import type { HirmsEnvironment } from "@/lib/enterprise/health-insurance-connect
 import { HirmsEnvironmentSwitch } from "./hirms-environment-switch";
 
 type OcrRow = {
-  id: string; mimeType: string; bytes: number; invoiceDate: string; submittedAt: string;
+  id: string; mimeType: string; bytes: number; invoiceDate: string | null; submittedAt: string;
   transportStatus: string; remoteStatus: string|null; externalJobId: string|null;
   errorCode: string|null; salesInvoiceId: string|null;
 };
@@ -23,6 +23,8 @@ export function HirmsOcrWorkspace({organizationId,initialEnvironment="UAT"}:{
   const [environment,setEnvironment]=useState<HirmsEnvironment>(initialEnvironment);
   const [file,setFile]=useState<File|null>(null);
   const [invoiceDate,setInvoiceDate]=useState("");
+  const [providerId,setProviderId]=useState("");
+  const [note,setNote]=useState("");
   const [salesInvoiceId,setSalesInvoiceId]=useState("");
   const [confirmProd,setConfirmProd]=useState("");
   const [pending,setPending]=useState(false);
@@ -41,7 +43,7 @@ export function HirmsOcrWorkspace({organizationId,initialEnvironment="UAT"}:{
   useEffect(()=>{void load(page).catch(()=>{});},[load,page]);
   const shown=history?.environment===environment?history:null;
   function switchEnvironment(next:HirmsEnvironment){
-    epoch.current++;setEnvironment(next);setHistory(null);setFile(null);setInvoiceDate("");setSalesInvoiceId("");setConfirmProd("");setPage(1);
+    epoch.current++;setEnvironment(next);setHistory(null);setFile(null);setInvoiceDate("");setSalesInvoiceId("");setProviderId("");setNote("");setConfirmProd("");setPage(1);
   }
   async function upload(event:FormEvent<HTMLFormElement>){
     event.preventDefault();setNotice("");
@@ -54,13 +56,16 @@ export function HirmsOcrWorkspace({organizationId,initialEnvironment="UAT"}:{
     setPending(true);
     try{
       const form=new FormData();form.append("environment",environment);
-      form.append("invoiceDate",invoiceDate);form.append("file",file,file.name);
+      if(invoiceDate)form.append("invoiceDate",invoiceDate);
+      if(providerId.trim())form.append("providerId",providerId.trim());
+      if(note.trim())form.append("note",note.trim());
+      form.append("file",file,file.name);
       if(salesInvoiceId.trim())form.append("salesInvoiceId",salesInvoiceId.trim());
       if(environment==="PRODUCTION")form.append("productionConfirmation",confirmProd);
       const response=await fetch(`/api/enterprise/${organizationId}/insurance-connectors/ocr`,{method:"POST",body:form});
       const data=await response.json() as {message?:string;error?:string;ok?:boolean};
       if(!response.ok){setNotice(data.message||data.error||tx("Envoi OCR refusé.","OCR upload rejected."));await load(1);return;}
-      setFile(null);setConfirmProd("");setSalesInvoiceId("");setInvoiceDate("");
+      setFile(null);setConfirmProd("");setSalesInvoiceId("");setInvoiceDate("");setProviderId("");setNote("");
       setNotice(data.message||tx("Document reçu pour traitement OCR.","Document received for OCR processing."));
       setPage(1);await load(1);
     }catch{setNotice(tx("Résultat du transfert incertain. Consultez l'historique avant toute nouvelle tentative.","Upload outcome uncertain. Check history before retrying."));}
@@ -103,8 +108,8 @@ export function HirmsOcrWorkspace({organizationId,initialEnvironment="UAT"}:{
           <span className="block text-xs font-normal text-dtsc-muted">{file ? `${file.name} · ${(file.size/1024/1024).toFixed(2)} Mo` : tx("Fichier unique, 4 Mo maximum","One file, 4 MB maximum")}</span>
         </label>
         <label className="block space-y-1 text-sm font-bold text-dtsc-ink">
-          <span>{tx("Date de la facture","Invoice date")} *</span>
-          <input required type="date" value={invoiceDate} onChange={event=>setInvoiceDate(event.target.value)}
+          <span>{tx("Date de la facture (facultative)","Invoice date (optional)")}</span>
+          <input type="date" value={invoiceDate} onChange={event=>setInvoiceDate(event.target.value)}
             className="min-h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 text-sm"/>
         </label>
         <label className="block space-y-1 text-sm font-bold text-dtsc-ink">
@@ -112,12 +117,25 @@ export function HirmsOcrWorkspace({organizationId,initialEnvironment="UAT"}:{
           <input value={salesInvoiceId} onChange={event=>setSalesInvoiceId(event.target.value)}
             className="min-h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 text-sm"/>
         </label>
+        <label className="block space-y-1 text-sm font-bold text-dtsc-ink">
+          <span>{tx("GUID d’établissement HSL (si nécessaire)","HSL facility GUID (if needed)")}</span>
+          <input value={providerId} onChange={event=>setProviderId(event.target.value)}
+            placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+            className="min-h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 text-sm"/>
+          <span className="block text-xs font-normal text-dtsc-muted">{tx("Champ providerId : requis par HSL si le compte possède plusieurs établissements ; ne pas le confondre avec le ServiceProviderID numérique des factures.","providerId is required by HSL for multi-facility accounts and differs from the numeric invoice ServiceProviderID.")}</span>
+        </label>
+        <label className="block space-y-1 text-sm font-bold text-dtsc-ink">
+          <span>{tx("Note HSL (facultative)","HSL note (optional)")}</span>
+          <textarea rows={2} maxLength={300} value={note} onChange={event=>setNote(event.target.value)}
+            className="w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-sm"/>
+          <span className="block text-xs font-normal text-dtsc-muted">{tx("Transmise uniquement à HSL, non conservée dans l’historique DTSC.","Sent only to HSL; not stored in the DTSC history.")}</span>
+        </label>
         {environment==="PRODUCTION"&&<label className="block space-y-1 text-sm font-bold text-amber-700 dark:text-amber-300">
           <span>{tx("Saisissez PRODUCTION pour confirmer l'envoi réel","Type PRODUCTION to confirm live upload")}</span>
           <input value={confirmProd} onChange={event=>setConfirmProd(event.target.value)} placeholder="PRODUCTION"
             className="min-h-11 w-full rounded-xl border border-amber-500/50 bg-dtsc-page px-3 text-sm text-dtsc-ink"/>
         </label>}
-        <button type="submit" disabled={pending||!file||!invoiceDate||(environment==="PRODUCTION"&&confirmProd!=="PRODUCTION")}
+        <button type="submit" disabled={pending||!file||(environment==="PRODUCTION"&&confirmProd!=="PRODUCTION")}
           className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-cyan-600 px-4 text-sm font-bold text-white disabled:opacity-50">
           <FileScan className="h-4 w-4"/>{pending?tx("Traitement…","Working…"):tx(`Envoyer à HSL · ${environment}`,`Upload to HSL · ${environment}`)}
         </button>
@@ -130,7 +148,7 @@ export function HirmsOcrWorkspace({organizationId,initialEnvironment="UAT"}:{
         </div>
         <div className="max-h-[500px] space-y-2 overflow-y-auto">
           {shown?.items.map(item=><article key={item.id} className="rounded-xl border border-dtsc-border p-3">
-            <p className="text-xs font-bold text-dtsc-ink">{item.mimeType} · {(item.bytes/1024).toFixed(0)} Ko · {item.invoiceDate}</p>
+            <p className="text-xs font-bold text-dtsc-ink">{item.mimeType} · {(item.bytes/1024).toFixed(0)} Ko · {item.invoiceDate || "—"}</p>
             <p className="mt-1 text-xs text-dtsc-muted">{item.transportStatus} · {new Date(item.submittedAt).toLocaleString(en?"en":"fr")}</p>
             {item.remoteStatus&&<p className="mt-1 break-all text-xs font-bold text-cyan-700 dark:text-cyan-300">HSL: {item.remoteStatus}</p>}
             {item.errorCode&&<p className="mt-1 text-xs text-amber-700 dark:text-amber-300">{item.errorCode}</p>}
