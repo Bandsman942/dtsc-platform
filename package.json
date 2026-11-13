@@ -455,7 +455,7 @@
     "qa:retail-financial-kpi-v2": "node scripts/qa-retail-financial-kpi-v2.mjs",
     "qa:fiscal-sector": "node scripts/qa-1124-fiscality.mjs",
     "qa:catalog-roundtrip": "node scripts/qa-hotfix-catalog-roundtrip-20261113.mjs",
-    "qa:health-01": "node scripts/qa-health-01-clinical-safety-20261113.mjs"
+    "qa:health-01": "node scripts/qa-health-01-clinical-safety-20261113.mjs && node scripts/qa-health-01-lab-behavior.mjs"
   },
   "dependencies": {
     "@ai-sdk/gateway": "2.0.27",

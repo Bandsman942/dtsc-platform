@@ -7,7 +7,8 @@ Date : 2026-11-13 · Candidat : v1.17.2 · **NON FUSIONNÉ — aucun déploiemen
 3. Laboratoire : `HealthLabRequestItem` reçoit ses résultats **par identifiant d'examen**. Une demande multi-examens exige un résultat indépendant par ligne, refuse les IDs en double/hors demande, interdit la validation d'éléments manquants et conserve les résultats lors d'une correction motivée. Écriture avec contrôle d'état et transaction `Serializable`. Le formulaire affiche un bloc par examen.
 4. Registres Santé : les nouvelles projections historiques portent un numéro neutre, sans nom patient, motif ni résumé clinique. Les anciennes projections sont maintenant expurgées à la lecture via l'API générique et le loader Admin pour les onze modules dédiés. Les copies stockées en base et autres lecteurs directs nécessitent toujours un backfill sûr et une revue d'accès.
 5. Tableau de bord : nouveaux KPI `GET .../healthcare/dashboard`, agrégations Prisma sur les tables Santé canoniques, date d'entreprise résolue dans son timezone. Le panneau ne montre aucun chiffre extrapolé depuis une sélection partielle de 300 objets historiques.
-6. QA contractuelle `pnpm qa:health-01`, régression et documentation ajoutées.
+6. QA statique et tests comportementaux sur le vrai service TS avec Prisma simulé et transactions atomiques, puis CI/régression. Ces tests ne remplacent pas la recette PostgreSQL ni l'E2E métier.
+7. QA contractuelle `pnpm qa:health-01`, régression et documentation ajoutées.
 
 ## Restes bloquants pour clôturer #1146
 - [ ] Anonymiser les anciennes projections `EnterpriseSectorRecord` avec script dry-run, sauvegarde, audit des consommateurs et opération réversible.
