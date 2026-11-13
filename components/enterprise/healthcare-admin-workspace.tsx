@@ -399,19 +399,6 @@ function formFromRecord(record: EnterpriseSectorRecordItem): HealthcareFormState
   };
 }
 
-function isToday(dateValue: string) {
-  if (!dateValue) {
-    return false;
-  }
-  const today = new Date().toISOString().slice(0, 10);
-  return dateValue.slice(0, 10) === today;
-}
-
-function isThisMonth(dateValue: string) {
-  const month = new Date().toISOString().slice(0, 7);
-  return dateValue.slice(0, 7) === month;
-}
-
 export function HealthcareAdminWorkspace({
   organizationId,
   records,

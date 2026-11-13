@@ -39,7 +39,7 @@ function patientNumber() {
 }
 
 // Dedicated HealthPatient owns PII. Never replicate names or clinical detail to ERP legacy.
-function legacyPayload(_data: PatientInput): Prisma.InputJsonObject {
+function legacyPayload(): Prisma.InputJsonObject {
   return { authority: "HealthPatient" };
 }
 
@@ -72,7 +72,7 @@ export async function createHealthPatient(organizationId: string, actorUserId: s
         status: data.status,
         priority: "NORMAL",
         createdById: actorUserId,
-        payloadJson: { ...legacyPayload(data), patientCode: number },
+        payloadJson: { ...legacyPayload(), patientCode: number },
       },
     });
     const patient = await tx.healthPatient.create({
