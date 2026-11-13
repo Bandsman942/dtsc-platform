@@ -1,3 +1,7 @@
+## 2026-11-13 — HEALTH-06 #1151 — sécurité Qualité/Documents (NON FUSIONNÉ)
+
+- Masquage contextualisé des incidents qualité et des clés privées des documents, KPI Qualité complets par requêtes canonique et fuseau de l'entreprise; interopérabilité et parcours SIH encore ouverts (#1151).
+
 ## 2026-11-13 — HEALTH-01 / #1146 — candidat v1.17.2 (NON FUSIONNÉ)
 
 - Contrôles P0 : résultats laboratoire par examen, autorisation clinique distincte du rôle administratif, protections de mise à jour patient, KPI canoniques indépendants des 300 enregistrements legacy, minimisation des nouvelles projections Santé.
