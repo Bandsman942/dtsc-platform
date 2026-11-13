@@ -12,7 +12,7 @@ assert.equal(parseHirmsHistoryQuery(new URL("https://dtsc-platform.com/?status=I
 assert.equal(parseHirmsHistoryQuery(new URL("https://dtsc-platform.com/?from=2026-02-30")),null);
 assert.equal(parseHirmsHistoryQuery(new URL("https://dtsc-platform.com/?from=2026-11-13&to=2026-11-01")),null);
 for(const dangerous of ["=1+1","+SUM(A1:A2)","-1+2","@cmd","  =HYPERLINK(1)"]) {
-  assert.ok(hirmsCsvCell(dangerous).includes("'${dangerous.replaceAll('"','""')}"),"CSV formula injection: "+dangerous);
+  assert.ok(hirmsCsvCell(dangerous).includes("\'" + dangerous),"CSV formula injection: "+dangerous);
 }
 assert.equal(hirmsCsvCell('a"b'),'"a""b"');
 
