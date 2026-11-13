@@ -33,4 +33,8 @@ assert.match(access,/return a\.canViewRestricted/,"Restricted medical documents 
 assert.match(access,/return a\.canViewSensitive/,"Sensitive medical documents require explicit permission");
 assert.doesNotMatch(access,/record\.createdById===userId\|\|record\.validatorUserId===userId\)return true/,"Former creator/validator must not bypass revoked clinical permissions");
 assert.match(docs,/p\.data\.containsSensitiveMedicalData/,"Sensitive upload flag must require clinical right");
+assert.match(helper,/evidenceUrl:null,completionComment:null/,"Corrective action evidence must not leak to nonclinical viewers");
+assert.match(helper,/patientId:null,appointmentId:null,consultationId:null/,"Clinical cross references must be hidden");
+assert.match(quality,/labs:access\.canViewSensitive\?labs:\[\]/,"Quality directory must not leak lab test details");
+assert.match(quality,/consultations:access\.canViewSensitive\?consultations:\[\]/,"Quality directory must not leak clinical references");
 console.log("✅ HEALTH-06: quality PHI redaction, private document metadata, exact KPI database aggregation");
