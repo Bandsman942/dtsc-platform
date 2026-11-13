@@ -107,6 +107,8 @@ jobs:
         run: node scripts/qa-workflow-848-postgres.mjs
       - name: Global broadcast and Push outbox PostgreSQL integration
         run: pnpm qa:global-outbox:postgres
+      - name: P0 manual SaaS settlement account PostgreSQL integration
+        run: pnpm qa:hotfix-1041-settlement:postgres
       - name: WF-06S2D inert receipt PostgreSQL integration
         run: node scripts/qa-workflow-850-postgres.mjs
       - name: WF-06S2E1 inert locked dispatch inventory QA
