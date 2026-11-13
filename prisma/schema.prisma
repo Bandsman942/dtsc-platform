@@ -5825,6 +5825,7 @@ model FinancialAccount {
   budgets        HrcfoBudget[]
   transactions   HrcfoExpense[]
   payrolls       HrcfoPayroll[]
+  manualSubscriptionSettlements ManualSubscriptionPayment[] @relation("ManualSubscriptionSettlementAccount")
 
   @@index([status, accountType])
   @@index([currency, status])
@@ -7392,6 +7393,7 @@ model ManualSubscriptionPayment {
   subscriptionId             String?
   organizationSubscriptionId String?
   paymentId                  String?  @unique
+  settlementAccountId        String?
   amount                     Decimal  @db.Decimal(10, 2)
   currency                   String   @default("USD")
   paymentMethod              String
@@ -7413,6 +7415,7 @@ model ManualSubscriptionPayment {
   subscription               Subscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
   organizationSubscription   OrganizationSubscription? @relation(fields: [organizationSubscriptionId], references: [id], onDelete: SetNull)
   payment                    Payment? @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+  settlementAccount          FinancialAccount? @relation("ManualSubscriptionSettlementAccount", fields: [settlementAccountId], references: [id], onDelete: Restrict)
   requestedBy                User     @relation("ManualSubscriptionPaymentRequester", fields: [requestedByUserId], references: [id], onDelete: Restrict)
   validator                  User     @relation("ManualSubscriptionPaymentValidator", fields: [validatorUserId], references: [id], onDelete: Restrict)
   invoice                    Invoice?
@@ -7421,6 +7424,7 @@ model ManualSubscriptionPayment {
   @@index([userId, status, requestedAt])
   @@index([organizationId, status, requestedAt])
   @@index([validatorUserId, status, requestedAt])
+  @@index([settlementAccountId, status])
 }
 
 model AiPlatformRuntimePolicy {
