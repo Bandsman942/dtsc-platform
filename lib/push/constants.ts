@@ -1,3 +1,5 @@
+import { DTSC_INTERNAL_ORGANIZATION_ID } from "@/lib/organizations";
+
 export const WEB_PUSH_DOMAIN_EVENT_TYPE = "PLATFORM_WEB_PUSH_NOTIFICATION";
 export const WEB_PUSH_DOMAIN_ENTITY_TYPE = "Notification";
 
@@ -9,5 +11,5 @@ export const WEB_PUSH_QUEUE_LIMITS = {
 } as const;
 
 export function webPushQueueOrganizationId(organizationId: string | null | undefined) {
-  return organizationId ?? null;
+  return organizationId ?? DTSC_INTERNAL_ORGANIZATION_ID;
 }
