@@ -1,3 +1,7 @@
+## 2026-11-13 — HEALTH-03 #1148, garde de rendez-vous (NON FUSIONNÉ)
+
+- Réservation par médecin, transaction sérialisée et contrôle anti-chevauchement, message conflict HTTP 409; documentation et QA; dossier complet HEALTH-03 encore ouvert.
+
 ## 2026-11-13 — HEALTH-01 / #1146 — candidat v1.17.2 (NON FUSIONNÉ)
 
 - Contrôles P0 : résultats laboratoire par examen, autorisation clinique distincte du rôle administratif, protections de mise à jour patient, KPI canoniques indépendants des 300 enregistrements legacy, minimisation des nouvelles projections Santé.

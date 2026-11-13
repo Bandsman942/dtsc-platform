@@ -61,7 +61,16 @@ export async function POST(req: Request, { params }: Params) {
   const data = parsed.data;
   const references = await validateHealthAppointmentReferences(organizationId, data);
   if (references.error) return NextResponse.json({ error: "Invalid reference", message: references.error }, { status: 400 });
-  const appointment = await createHealthAppointment(organizationId, session.userId, access.canViewSensitive ? data : { ...data, internalNotes: "" });
+  let appointment:Awaited<ReturnType<typeof createHealthAppointment>>;
+  try {
+    appointment = await createHealthAppointment(organizationId, session.userId, access.canViewSensitive ? data : { ...data, internalNotes: "" });
+  } catch(error) {
+    if(error instanceof Error && error.message==="APPOINTMENT_TIME_CONFLICT")
+      return NextResponse.json({error:"APPOINTMENT_TIME_CONFLICT",message:"Ce professionnel possède déjà un rendez-vous sur ce créneau. Sélectionnez un autre horaire."},{status:409});
+    if(error instanceof Error && ["APPOINTMENT_DURATION_INVALID","APPOINTMENT_TIME_INVALID"].includes(error.message))
+      return NextResponse.json({error:"APPOINTMENT_TIME_INVALID",message:"La durée ou l'horaire sélectionné est invalide."},{status:400});
+    return NextResponse.json({error:"APPOINTMENT_CREATE_FAILED",message:"Enregistrement du rendez-vous impossible."},{status:409});
+  }
   await writeAuditLog({ userId: session.userId, action: "HEALTH_APPOINTMENT_CREATED", entity: "HealthAppointment", entityId: appointment.id, request: req, metadata: { organizationId, appointmentNumber: appointment.appointmentNumber } });
   await writeApiLog({ request: req, statusCode: 201, userId: session.userId, startedAt, metadata: { organizationId, moduleCode: "APPOINTMENTS" } });
   return NextResponse.json({ ok: true, appointment }, { status: 201 });

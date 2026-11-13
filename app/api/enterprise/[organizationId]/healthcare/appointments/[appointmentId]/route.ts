@@ -48,7 +48,13 @@ export async function PATCH(req: Request, { params }: Params) {
     await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, moduleCode: "APPOINTMENTS" } });
     return NextResponse.json({ ok: true, appointment });
   } catch (error) {
-    const message = error instanceof Error && error.message === "APPOINTMENT_LOCKED" ? "Un rendez-vous réalisé, annulé ou converti ne peut plus être modifié librement." : "Modification du rendez-vous impossible.";
-    return NextResponse.json({ error: "Update failed", message }, { status: 409 });
+    const code=error instanceof Error?error.message:"APPOINTMENT_UPDATE_FAILED";
+    const messages:Record<string,string>={
+      APPOINTMENT_LOCKED:"Un rendez-vous réalisé, annulé ou converti ne peut plus être modifié librement.",
+      APPOINTMENT_TIME_CONFLICT:"Ce professionnel possède déjà un rendez-vous sur ce créneau. Sélectionnez un autre horaire.",
+      APPOINTMENT_DURATION_INVALID:"La durée du rendez-vous est invalide.",
+      APPOINTMENT_TIME_INVALID:"L'horaire du rendez-vous est invalide.",
+    };
+    return NextResponse.json({error:code in messages?code:"APPOINTMENT_UPDATE_FAILED",message:messages[code]||"Modification du rendez-vous impossible."},{status:409});
   }
 }
