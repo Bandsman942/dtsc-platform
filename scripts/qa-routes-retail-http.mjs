@@ -34,7 +34,7 @@ for (const route of routes) {
   }
 }
 for (const path of ["invoices/workflow%2Fextra", "invoices/id/print/extra", "omnichannel/orders%2Fid/cancel", "omnichannel/unknown", "pricing/catalog%2Fpreview", "pricing/conditions/extra"]) {
-  for (const method of ["GET", "POST", "OPTIONS"]) await checked("unknown path shape", `/api/enterprise/${organizationId}/retail/${path}`, method, 404);
+  for (const method of ["GET", "HEAD", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"]) await checked("unknown path shape", `/api/enterprise/${organizationId}/retail/${path}`, method, 404);
 }
 await checked("decoded dynamic invoice ID still reaches legacy auth", `/api/enterprise/${organizationId}/retail/invoices/id%2Fpart/print`, "GET", 401);
 await checked("unmoved invoice collection", `/api/enterprise/${organizationId}/retail/invoices`, "GET", 401);

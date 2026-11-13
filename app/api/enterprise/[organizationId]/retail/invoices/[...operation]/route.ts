@@ -3,7 +3,7 @@
  * Preserve the original Request/Response streams and tenant-scoped parameters.
  */
 type Context = { params: Promise<{ organizationId: string; operation: string[] }> };
-type Method = "GET" | "POST" | "OPTIONS";
+type Method = "GET" | "POST" | "PATCH" | "PUT" | "DELETE" | "OPTIONS";
 function notFound() {
   return Response.json({ error: "Not found" }, { status: 404, headers: { "Cache-Control": "no-store" } });
 }
@@ -145,4 +145,7 @@ async function dispatch(req: Request, { params }: Context, method: Method): Prom
 }
 export function GET(req: Request, ctx: Context) { return dispatch(req, ctx, "GET"); }
 export function POST(req: Request, ctx: Context) { return dispatch(req, ctx, "POST"); }
+export function PATCH(req: Request, ctx: Context) { return dispatch(req, ctx, "PATCH"); }
+export function PUT(req: Request, ctx: Context) { return dispatch(req, ctx, "PUT"); }
+export function DELETE(req: Request, ctx: Context) { return dispatch(req, ctx, "DELETE"); }
 export function OPTIONS(req: Request, ctx: Context) { return dispatch(req, ctx, "OPTIONS"); }

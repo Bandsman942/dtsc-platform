@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import { autoImplementMethods } from "next/dist/server/route-modules/app-route/helpers/auto-implement-methods.js";
 import { workflowTestLoader } from "./lib/workflow-test-loader.mjs";
 
 const { routes } = JSON.parse(fs.readFileSync("docs/routing/routes-05a-retail-manifest.json", "utf8"));
@@ -16,6 +17,7 @@ for (const route of routes) overrides["@/" + route.handlerPath.slice(0, -3)] = O
 }]));
 const load = workflowTestLoader(overrides);
 const dispatchers = Object.fromEntries(["invoices", "omnichannel", "pricing"].map(f => [f, load(`@/app/api/enterprise/[organizationId]/retail/${f}/[...operation]/route`)]));
+const nextDispatchers = Object.fromEntries(Object.entries(dispatchers).map(([family, handlers]) => [family, autoImplementMethods(handlers)]));
 function sample(route, tenant = "routing-tenant-a") {
   const original = { organizationId: tenant };
   const operation = route.path.split("/").map(segment => {
@@ -51,8 +53,8 @@ for (const route of routes) {
   assert.equal(options.status, 204);
   const expected = [...route.methods, ...(route.methods.includes("GET") ? ["HEAD"] : []), "OPTIONS"].sort();
   assert.deepEqual(options.headers.get("Allow").split(/,\s*/).sort(), expected);
-  for (const method of ["GET", "POST"].filter(m => !route.methods.includes(m))) {
-    const response = await dispatcher[method](new Request(url, { method }), entry.ctx);
+  for (const method of ["GET", "POST", "PATCH", "PUT", "DELETE"].filter(m => !route.methods.includes(m))) {
+    const response = await nextDispatchers[route.family][method](new Request(url, { method }), entry.ctx);
     assert.equal(response.status, 405);
     assert.equal(response.headers.get("Allow"), options.headers.get("Allow"));
   }
@@ -62,9 +64,9 @@ for (const [family, operations] of Object.entries({
   invoices: [[], ["workflow/extra"], ["invoice", "print", "extra"], ["invoice", "payments", "payment", "allocate", "extra"], ["constructor"], ["__proto__"]],
   omnichannel: [[], ["unknown"], ["orders/id", "cancel"], ["returns", "validators", "extra"]],
   pricing: [[], ["catalog/preview"], ["conditions", "extra"], ["constructor"]],
-})) for (const operation of operations) for (const method of ["GET", "POST", "OPTIONS"]) {
+})) for (const operation of operations) for (const method of ["GET", "HEAD", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"]) {
   calls = [];
-  const response = await dispatchers[family][method](new Request("http://localhost/api/test", { method }), { params: Promise.resolve({ organizationId: "tenant-b", operation }) });
+  const response = await nextDispatchers[family][method](new Request("http://localhost/api/test", { method }), { params: Promise.resolve({ organizationId: "tenant-b", operation }) });
   assert.equal(response.status, 404, family + "/" + operation.join("/"));
   assert.equal(calls.length, 0);
 }

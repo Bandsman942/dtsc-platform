@@ -26,8 +26,8 @@ La matrice exhaustive chemins / verbes / SHA d’origine est `docs/routing/route
 - Les URI, méthodes GET/POST, paramètres `organizationId`, `invoiceId`, `paymentId`, `requestId`, `orderId`, `returnId`, query strings et flux Request/Response sont transmis aux gestionnaires originaux.
 - L’authentification, le contexte actif, membership, module, entitlement, permissions, visibilité, same-origin, Zod, rate limit, services financiers/inventaire, transactions, audit et idempotence demeurent dans les handlers d’origine.
 - Les réponses métier et erreurs originales sont retournées sans interception : 200/201/202/204, erreurs de saisie, 401/403/404/409/413/422/429/503 selon l’API existante. Les exports/impressions conservent leur type et leurs en-têtes.
-- Les chemins de la liste qui reçoivent un verbe non autorisé répondent 405 ; OPTIONS répond 204 et expose les méthodes propres au chemin. Next.js conserve les méthodes non exportées et HEAD automatique ; les tests HTTP vérifient le corps vide de HEAD.
-- Les formes inconnues répondent 404 et les segments statiques encodés ne deviennent pas plusieurs segments. Un identifiant dynamique décodé reste transmis à son handler d’origine, qui garde sa validation et ses refus d’accès.
+- Les chemins de la liste qui reçoivent un verbe non autorisé répondent 405 avec leur Allow propre ; OPTIONS répond 204 et expose les méthodes propres au chemin. PATCH/PUT/DELETE passent par la sélection fermée sans pouvoir appeler un gestionnaire métier ; Next.js conserve HEAD automatique et les tests HTTP vérifient son corps vide.
+- Les formes inconnues répondent 404 pour les sept méthodes HTTP Next.js, et les segments statiques encodés ne deviennent pas plusieurs segments. Les tests utilisent aussi le vrai mécanisme automatique de méthodes Next.js pour éviter le repli 405 d’une méthode non exportée. Un identifiant dynamique décodé reste transmis à son handler d’origine, qui garde sa validation et ses refus d’accès.
 - Aucun schéma Prisma, migration, paramètre applicatif, secret, cookie, webhook, UI ou permission commerciale ne change.
 
 ## Preuves à exécuter
