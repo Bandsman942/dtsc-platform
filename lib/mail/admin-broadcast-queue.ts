@@ -7,6 +7,7 @@ import {
   ADMIN_BROADCAST_EMAIL_DELIVERY_EVENT_TYPE,
   ADMIN_BROADCAST_EMAIL_PAYLOAD_ENTITY_TYPE,
   ADMIN_BROADCAST_EMAIL_PAYLOAD_EVENT_TYPE,
+  ADMIN_BROADCAST_PLATFORM_ORGANIZATION_ID,
 } from "@/lib/mail/broadcast-constants";
 
 type AdminBroadcastRecipient = {
@@ -88,7 +89,7 @@ export async function enqueueAdminBroadcast({
 
   const payloadEvent = {
     id: payloadEventId,
-    organizationId: null,
+    organizationId: ADMIN_BROADCAST_PLATFORM_ORGANIZATION_ID,
     eventType: ADMIN_BROADCAST_EMAIL_PAYLOAD_EVENT_TYPE,
     entityType: ADMIN_BROADCAST_EMAIL_PAYLOAD_ENTITY_TYPE,
     entityId: broadcastId,
@@ -102,7 +103,7 @@ export async function enqueueAdminBroadcast({
   const deliveryEvents = hasUserPlaceholder
     ? recipients.map((recipient) => ({
         id: deliveryEventId(broadcastId, recipient.id),
-        organizationId: null,
+        organizationId: ADMIN_BROADCAST_PLATFORM_ORGANIZATION_ID,
         eventType: ADMIN_BROADCAST_EMAIL_DELIVERY_EVENT_TYPE,
         entityType: ADMIN_BROADCAST_EMAIL_DELIVERY_ENTITY_TYPE,
         entityId: `${broadcastId}:${recipient.id}`,
@@ -118,7 +119,7 @@ export async function enqueueAdminBroadcast({
       }))
     : [{
         id: deliveryEventId(broadcastId, "group"),
-        organizationId: null,
+        organizationId: ADMIN_BROADCAST_PLATFORM_ORGANIZATION_ID,
         eventType: ADMIN_BROADCAST_EMAIL_DELIVERY_EVENT_TYPE,
         entityType: ADMIN_BROADCAST_EMAIL_DELIVERY_ENTITY_TYPE,
         entityId: `${broadcastId}:group`,
