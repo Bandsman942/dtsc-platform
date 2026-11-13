@@ -1,0 +1,23 @@
+import assert from "node:assert/strict";
+import {readFileSync} from "node:fs";
+
+const read=(file)=>readFileSync(new URL("../"+file,import.meta.url),"utf8");
+const service=read("lib/health-appointments.ts");
+const create=read("app/api/enterprise/[organizationId]/healthcare/appointments/route.ts");
+const update=read("app/api/enterprise/[organizationId]/healthcare/appointments/[appointmentId]/route.ts");
+const schema=read("lib/health-appointment-validators.ts");
+assert.ok(service.includes("assertProfessionalSlotAvailable"),"Create/update must use same conflict guard");
+assert.match(service,/pg_advisory_xact_lock/,"Create and update must be serialized per professional");
+assert.match(service,/organizationId.*health-appointment.*professionalId/,"The lock must include tenant and professional");
+assert.match(service,/appointmentDate:\{gte:earliest,lt:endAt\}/,"Query should fetch overlapping candidate intervals");
+assert.match(service,/booked\.appointmentDate<endAt&&bookedEnd>startAt/,"Adjacent slots should not falsely conflict");
+assert.match(service,/exceptAppointmentId\?\{id:\{not:exceptAppointmentId\}\}/,"Update must exclude its own appointment");
+assert.match(service,/APPOINTMENT_TIME_CONFLICT/,"Professional conflict must be rejected");
+assert.match(service,/DEFAULT_APPOINTMENT_MINUTES=30/,"Legacy appointments without endAt must have documented fallback duration");
+assert.match(service,/status:\{in:BLOCKING_APPOINTMENT_STATUSES\}/,"Cancelled/absent meetings must not block");
+assert.match(service,/isolationLevel:"Serializable"/,"Create/update must use serializable transactions");
+assert.match(create,/APPOINTMENT_TIME_CONFLICT/,"POST must return safe collision message");
+assert.match(update,/APPOINTMENT_TIME_CONFLICT/,"PATCH must return safe collision message");
+assert.match(schema,/\.min\(5\)\.max\(1440\)/,"Duration must be bounded");
+assert.match(read("scripts/qa-regression-checks.mjs"),/qa-health-03-appointments/);
+console.log("✅ HEALTH-03: conflicts guarded by tenant/professional advisory lock, accurate intervals, serializable write, error messaging");

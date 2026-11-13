@@ -1,5 +1,6 @@
 import { getOrganizationEntitlements } from "@/lib/billing/entitlements";
 import { prisma } from "@/lib/prisma";
+import { safeHealthLegacyProjection } from "@/lib/health-legacy-projection";
 
 const HEALTHCARE_SECTOR_CODE = "HEALTH_CARE";
 
@@ -13,7 +14,7 @@ export async function getEnterpriseActivityHealthcareRecords(organizationId: str
     return [];
   }
 
-  return prisma.enterpriseSectorRecord.findMany({
+  const records = await prisma.enterpriseSectorRecord.findMany({
     where: { organizationId, sectorCode: HEALTHCARE_SECTOR_CODE, moduleCode: { in: allowedModuleCodes }, deletedAt: null },
     orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
     take: 300,
@@ -25,4 +26,5 @@ export async function getEnterpriseActivityHealthcareRecords(organizationId: str
       payloadJson: true,
     },
   });
+  return records.map(safeHealthLegacyProjection);
 }

@@ -1,4 +1,4 @@
-import { canAccessEnterpriseModule, ENTERPRISE_MANAGER_ROLES, requireEnterpriseMembership } from "@/lib/enterprise-sector-templates";
+import { canAccessEnterpriseModule, requireEnterpriseMembership } from "@/lib/enterprise-sector-templates";
 import type { SessionPayload } from "@/lib/session";
 import { getHealthStaffMedicalPermissions } from "@/lib/health-staff-access";
 
@@ -6,16 +6,18 @@ export async function getHealthMedicalRecordAccess({ session, organizationId, ac
   const membership = await requireEnterpriseMembership(session, organizationId);
   if (!membership || membership.organization.sectorCode !== "HEALTH_CARE") return null;
   if (!(await canAccessEnterpriseModule(session.userId, organizationId, "MEDICAL_RECORDS", action))) return null;
-  const canManage = ENTERPRISE_MANAGER_ROLES.has(membership.role);
   const medicalPermissions = await getHealthStaffMedicalPermissions(session.userId, organizationId);
   const canViewSensitive = medicalPermissions.includes("health.medical_records.view_sensitive");
+  // Clinical mutation is not an enterprise administrator capability. The
+  // assignment is already filtered by ACTIVE in getHealthStaffMedicalPermissions.
+  const canEditClinical = canViewSensitive && medicalPermissions.includes("health.medical_records.update");
   const canManageConfidentialNotes = medicalPermissions.includes("health.medical_records.confidential_notes");
   return {
     membership,
-    canCreate: canManage,
-    canUpdate: canManage,
-    canArchive: canManage,
-    canManageStructuredItems: canManage,
+    canCreate: canViewSensitive && medicalPermissions.includes("health.medical_records.create"),
+    canUpdate: canEditClinical,
+    canArchive: canViewSensitive && medicalPermissions.includes("health.medical_records.archive"),
+    canManageStructuredItems: canEditClinical,
     canViewSensitive,
     canManageConfidentialNotes,
   };

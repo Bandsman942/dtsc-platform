@@ -28,10 +28,11 @@ export function maskHealthConsultationSensitive<T extends Record<string, unknown
     generalCondition: null, cardiovascularExam: null, respiratoryExam: null, abdominalExam: null, neurologicalExam: null, entExam: null, dermatologicalExam: null, musculoskeletalExam: null, otherExamNotes: null, clinicalConclusion: null,
     provisionalDiagnosis: null, finalDiagnosis: null, differentialDiagnoses: null, diagnosisCertainty: null, diagnosisCode: null, diagnosisNotes: null,
     managementPlan: null, treatmentPlan: null, prescriptionText: null, requestedTests: null, referralNotes: null, patientAdvice: null, warningSigns: null, lifestyleRecommendations: null, returnInstructions: null,
+    labRequests: [], events: [],
   };
 }
 function legacyPayload(data: HealthConsultationInput, patientRecordId: string, appointmentRecordId: string | null, number: string): Prisma.InputJsonObject {
-  return { consultationNumber: number, patientRecordId, appointmentRecordId, appointmentType: data.consultationType, appointmentDate: (data.consultationDate || new Date()).toISOString(), departmentId: nil(data.departmentId), service: data.reason };
+  return { consultationNumber: number, patientRecordId, appointmentRecordId, appointmentType: data.consultationType, appointmentDate: (data.consultationDate || new Date()).toISOString(), departmentId: nil(data.departmentId), service: "CONSULTATION" };
 }
 
 export async function validateHealthConsultationReferences(organizationId: string, data: Partial<HealthConsultationInput>, existingPatientId?: string) {
@@ -64,7 +65,7 @@ export async function createHealthConsultation(organizationId: string, actorUser
     const number = consultationNumber();
     const legacy = await tx.enterpriseSectorRecord.create({ data: {
       organizationId, sectorCode: "HEALTH_CARE", moduleCode: "CONSULTATIONS", recordType: "CONSULTATION",
-      title: `Consultation · ${patient.fullName}`, summary: data.chiefComplaint, status: "DRAFT", priority: data.priority,
+      title: `Consultation · ${number}`, summary: null, status: "DRAFT", priority: data.priority,
       assignedToUserId: data.professionalId, createdById: actorUserId,
       payloadJson: legacyPayload(data, patient.legacyRecordId!, appointment?.legacyRecordId || null, number),
     } });
@@ -98,7 +99,7 @@ export async function updateHealthConsultation(organizationId: string, consultat
       bmi: bmi(data.weight ?? existing.weight ?? undefined, data.height ?? existing.height ?? undefined), updatedById: actorUserId,
     }, include: { patient: true, appointment: true } });
     if (existing.legacyRecordId && consultation.patient.legacyRecordId) await tx.enterpriseSectorRecord.update({ where: { id: existing.legacyRecordId }, data: {
-      title: `Consultation · ${consultation.patient.fullName}`, summary: consultation.chiefComplaint, priority: consultation.priority, assignedToUserId: consultation.professionalId, updatedById: actorUserId,
+      title: `Consultation · ${consultation.consultationNumber}`, summary: null, priority: consultation.priority, assignedToUserId: consultation.professionalId, updatedById: actorUserId,
       payloadJson: legacyPayload({ ...consultation, consultationDate: consultation.consultationDate } as HealthConsultationInput, consultation.patient.legacyRecordId, consultation.appointment?.legacyRecordId || null, consultation.consultationNumber),
     } });
     await tx.healthConsultationEvent.create({ data: { organizationId, consultationId: consultation.id, eventType: "UPDATED", summary: "Informations cliniques mises à jour.", fromStatus: consultation.status, toStatus: consultation.status, actorUserId } });

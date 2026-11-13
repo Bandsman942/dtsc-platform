@@ -35,6 +35,7 @@ import { listCatalogAiModelsForUi } from "@/lib/ai/catalog";
 import { filterPlatformAllowedAiModels, getAiPlatformPolicy } from "@/lib/ai/platform-runtime-policy";
 import { getCanonicalAiUsageLimits } from "@/lib/billing/ai-usage-limits";
 import { prisma } from "@/lib/prisma";
+import { safeHealthLegacyProjection } from "@/lib/health-legacy-projection";
 
 type Params = { params: Promise<{ moduleCode: string }> };
 
@@ -140,7 +141,7 @@ export default async function EnterpriseModulePage({ params }: Params) {
           locale={user.locale}
           definition={definition}
           enabledModuleCodes={enabledModules.map((item) => normalizeEnterpriseModuleCode(item.moduleCode))}
-          records={JSON.parse(JSON.stringify(betaRecords))}
+          records={JSON.parse(JSON.stringify(organization.sectorCode === "HEALTH_CARE" ? betaRecords.map(safeHealthLegacyProjection) : betaRecords))}
         />
       </AppShell>
     );

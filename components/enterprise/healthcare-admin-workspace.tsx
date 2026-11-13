@@ -1,9 +1,11 @@
 "use client";
 
-import { useCallback, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import {
   Activity,
+  ArrowLeft,
+  ChevronRight,
   AlertTriangle,
   BadgeCheck,
   CalendarClock,
@@ -203,6 +205,24 @@ const submodules: Array<{
   { code: "HEALTH_REPORTS", label: "Rapports santé", description: "Rapports d'activité, difficultés, recommandations et synthèses par service.", icon: FilePenLine, createLabel: "Nouveau rapport" },
 ];
 
+const englishHealthSections: Partial<Record<HealthcareModuleCode,{label:string;description:string}>> = {
+  HEALTH_DASHBOARD:{label:"Healthcare dashboard",description:"Patient pathways, care quality, laboratory, billing and operations."},
+  PATIENTS:{label:"Patients",description:"Identities, contacts, admission details and administrative records."},
+  APPOINTMENTS:{label:"Appointments",description:"Schedules, attendance, confirmation and clinical visits."},
+  CONSULTATIONS:{label:"Consultations",description:"Clinical assessments, vital signs, diagnoses and treatment plans."},
+  MEDICAL_RECORDS:{label:"Medical records",description:"Patient history, allergies, medication and longitudinal notes."},
+  CARE_TEAM:{label:"Medical team",description:"Care professionals, roles, services and availability."},
+  LABORATORY:{label:"Laboratory",description:"Test requests, specimens, results and validation."},
+  INTERNAL_PHARMACY:{label:"Internal pharmacy",description:"Medications, batches, expiry dates and dispensing."},
+  MEDICAL_BILLING:{label:"Medical billing",description:"Medical services, invoices, receivables and payments."},
+  INSURANCE_COVERAGE:{label:"Insurance & coverage",description:"Payers, authorizations, coverage and claims."},
+  QUALITY_INCIDENTS:{label:"Quality incidents",description:"Patient safety incidents, severity and corrective actions."},
+  MEDICAL_DOCUMENTS:{label:"Medical documents",description:"Clinical reports, prescriptions, certificates and versions."},
+  MEDICAL_CONFIDENTIALITY:{label:"Medical confidentiality",description:"Access rules, confidentiality and review."},
+  HEALTH_SETTINGS:{label:"Healthcare settings",description:"Facility settings, units and professional roles."},
+  HEALTH_REPORTS:{label:"Healthcare reports",description:"Activity trends, service reports and quality indicators."},
+};
+
 const statusLabels: Record<string, string> = {
   DRAFT: "Brouillon",
   ACTIVE: "Actif",
@@ -399,19 +419,6 @@ function formFromRecord(record: EnterpriseSectorRecordItem): HealthcareFormState
   };
 }
 
-function isToday(dateValue: string) {
-  if (!dateValue) {
-    return false;
-  }
-  const today = new Date().toISOString().slice(0, 10);
-  return dateValue.slice(0, 10) === today;
-}
-
-function isThisMonth(dateValue: string) {
-  const month = new Date().toISOString().slice(0, 7);
-  return dateValue.slice(0, 7) === month;
-}
-
 export function HealthcareAdminWorkspace({
   organizationId,
   records,
@@ -432,6 +439,7 @@ export function HealthcareAdminWorkspace({
   const router = useRouter();
   const t = useCallback((key: string) => translate(locale, key), [locale]);
   const [activeModuleCode, setActiveModuleCode] = useState<HealthcareModuleCode>("HEALTH_DASHBOARD");
+  const [moduleSearch,setModuleSearch] = useState("");
   const [formOpen, setFormOpen] = useState(false);
   const [detailsRecord, setDetailsRecord] = useState<EnterpriseSectorRecordItem | null>(null);
   const [deleteRecord, setDeleteRecord] = useState<EnterpriseSectorRecordItem | null>(null);
@@ -448,7 +456,17 @@ export function HealthcareAdminWorkspace({
     () => submodules.filter((item) => item.code === "HEALTH_DASHBOARD" || activeModuleCodes.has(item.code)),
     [activeModuleCodes],
   );
+  useEffect(()=>{
+    if(!enabledSubmodules.some(item=>item.code===activeModuleCode))setActiveModuleCode("HEALTH_DASHBOARD");
+  },[enabledSubmodules,activeModuleCode]);
   const activeSubmodule = enabledSubmodules.find((item) => item.code === activeModuleCode) || enabledSubmodules[0] || submodules[0];
+  const inEnglish = locale?.toLowerCase().startsWith("en") === true;
+  const healthLabel = (code: HealthcareModuleCode) => inEnglish
+    ? englishHealthSections[code]?.label || submodules.find(item=>item.code===code)?.label || code
+    : submodules.find(item=>item.code===code)?.label || code;
+  const healthDescription = (code: HealthcareModuleCode) => inEnglish
+    ? englishHealthSections[code]?.description || submodules.find(item=>item.code===code)?.description || ""
+    : submodules.find(item=>item.code===code)?.description || "";
   const visibleRecords = useMemo(() => records.filter((record) => record.moduleCode === activeModuleCode), [activeModuleCode, records]);
   const patientOptions = useMemo(() => records.filter((record) => record.moduleCode === "PATIENTS" && record.status !== "ARCHIVED"), [records]);
   const appointmentOptions = useMemo(() => records.filter((record) => record.moduleCode === "APPOINTMENTS" && !["ARCHIVED", "CANCELLED"].includes(record.status)), [records]);
@@ -573,12 +591,12 @@ export function HealthcareAdminWorkspace({
   const canCreate = activeModuleCode !== "HEALTH_DASHBOARD" && activeModuleCode !== "PATIENTS" && activeModuleCode !== "APPOINTMENTS" && activeModuleCode !== "CONSULTATIONS" && activeModuleCode !== "MEDICAL_RECORDS" && activeModuleCode !== "CARE_TEAM" && activeModuleCode !== "LABORATORY" && activeModuleCode !== "INTERNAL_PHARMACY" && activeModuleCode !== "MEDICAL_BILLING" && activeModuleCode !== "INSURANCE_COVERAGE" && activeModuleCode !== "QUALITY_INCIDENTS" && activeModuleCode !== "MEDICAL_DOCUMENTS";
 
   return (
-    <section className="space-y-4 rounded-[1.5rem] border border-cyan-300/25 bg-cyan-400/10 p-3 shadow-[0_20px_70px_rgba(0,23,54,0.16)] backdrop-blur-xl sm:p-5">
+    <section className="min-w-0 space-y-4 rounded-2xl border border-dtsc-border bg-dtsc-page p-3 sm:p-4 lg:p-5">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div className="min-w-0">
           <p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-600">{t("enterpriseHealthcare.eyebrow")}</p>
           <h2 className="mt-1 text-2xl font-black text-dtsc-ink">{t("enterpriseHealthcare.title")}</h2>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-dtsc-muted">{t("enterpriseHealthcare.description")}</p>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-dtsc-muted">{activeModuleCode==="HEALTH_DASHBOARD"?t("enterpriseHealthcare.description"):healthDescription(activeSubmodule.code)}</p>
         </div>
         {canCreate && (
           <Button type="button" onClick={() => openCreate(activeModuleCode)} className="rounded-2xl bg-[#00c2ff] text-[#001736] hover:bg-cyan-300">
@@ -588,37 +606,59 @@ export function HealthcareAdminWorkspace({
         )}
       </div>
 
-      <div className="flex gap-2 overflow-x-auto pb-2">
-        {enabledSubmodules.map((submodule) => {
-          const Icon = submodule.icon;
-          const active = submodule.code === activeModuleCode;
-          const count = submodule.code === "HEALTH_DASHBOARD" ? records.length : records.filter((record) => record.moduleCode === submodule.code).length;
-          return (
-            <button
-              key={submodule.code}
-              type="button"
-              onClick={() => setActiveModuleCode(submodule.code)}
-              className={`w-64 shrink-0 rounded-2xl border p-4 text-left transition ${
-                active ? "border-cyan-300 bg-cyan-300/20 shadow-[0_18px_50px_rgba(34,211,238,0.18)]" : "border-dtsc-border bg-dtsc-surface hover:border-cyan-300/60"
-              }`}
-            >
-              <div className="flex items-start gap-3">
-                <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-[#001f46] text-cyan-300">
-                  <Icon className="h-5 w-5" />
-                </span>
-                <span className="min-w-0">
-                  <span className="block truncate text-sm font-black text-dtsc-ink">{submodule.label}</span>
-                  <span className="mt-1 line-clamp-2 text-xs font-semibold leading-5 text-dtsc-muted">{submodule.description}</span>
-                  <span className="mt-2 inline-flex rounded-full bg-dtsc-page px-2 py-1 text-[0.68rem] font-black text-cyan-600">{count} élément(s)</span>
-                </span>
-              </div>
-            </button>
-          );
-        })}
-      </div>
+      {activeModuleCode==="HEALTH_DASHBOARD" && (
+        <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <label className="min-w-0 flex-1 sm:max-w-sm">
+            <span className="mb-1 block text-xs font-bold text-dtsc-muted">{inEnglish?"Find a healthcare module":"Rechercher un module Santé"}</span>
+            <Input value={moduleSearch} onChange={event=>setModuleSearch(event.target.value)}
+              placeholder={inEnglish?"Search services and workflows…":"Rechercher un service, un parcours…"}
+              aria-label={inEnglish?"Search healthcare modules":"Recherche des modules Santé"}/>
+          </label>
+          {moduleSearch&&<Button type="button" variant="outline" onClick={()=>setModuleSearch("")}>{inEnglish?"Reset search":"Effacer la recherche"}</Button>}
+        </div>
+      )}
+      {activeModuleCode==="HEALTH_DASHBOARD" ? (
+        <nav aria-label={inEnglish?"Healthcare modules":"Modules du secteur Santé"} className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+          {enabledSubmodules.filter(item=>item.code!=="HEALTH_DASHBOARD" && (
+            (healthLabel(item.code)+" "+healthDescription(item.code)).toLocaleLowerCase().includes(moduleSearch.trim().toLocaleLowerCase())
+          )).map((submodule)=>{
+            const Icon=submodule.icon;
+            return <button key={submodule.code} type="button"
+              onClick={()=>setActiveModuleCode(submodule.code)}
+              aria-label={healthLabel(submodule.code)}
+              className="group flex min-w-0 items-start gap-3 rounded-2xl border border-dtsc-border bg-dtsc-surface p-3 text-left transition hover:-translate-y-0.5 hover:border-cyan-400/70 hover:shadow-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-500 active:translate-y-0">
+              <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-cyan-500/10 text-cyan-600 group-hover:bg-cyan-500/20"><Icon className="size-5" aria-hidden/></span>
+              <span className="min-w-0 flex-1"><span className="block break-words text-sm font-black text-dtsc-ink">{healthLabel(submodule.code)}</span>
+                <span className="mt-0.5 block break-words text-xs leading-5 text-dtsc-muted">{healthDescription(submodule.code)}</span>
+              </span>
+              <ChevronRight className="mt-1 size-4 shrink-0 text-dtsc-muted transition group-hover:translate-x-0.5" aria-hidden/>
+            </button>;
+          })}
+          {moduleSearch && !enabledSubmodules.some(item=>item.code!=="HEALTH_DASHBOARD" && (
+            (healthLabel(item.code)+" "+healthDescription(item.code)).toLocaleLowerCase().includes(moduleSearch.trim().toLocaleLowerCase())
+          )) && <p className="col-span-full rounded-xl border border-dtsc-border bg-dtsc-surface p-4 text-sm text-dtsc-muted">
+            {inEnglish?"No healthcare module matches this search.":"Aucun module Santé ne correspond à cette recherche."}
+          </p>}
+        </nav>
+      ) : (
+        <nav aria-label={inEnglish?"Healthcare navigation":"Navigation Santé"} className="sticky top-0 z-20 flex min-w-0 flex-wrap items-center gap-2 rounded-xl border border-dtsc-border bg-dtsc-surface/95 p-2 backdrop-blur-xl sm:gap-3">
+          <Button type="button" variant="outline" className="shrink-0" onClick={()=>setActiveModuleCode("HEALTH_DASHBOARD")}>
+            <ArrowLeft className="size-4" aria-hidden/>{inEnglish?"Back to modules":"Retour aux modules"}
+          </Button>
+          <span className="hidden h-5 w-px bg-dtsc-border sm:block" aria-hidden/>
+          <h3 className="min-w-0 flex-1 break-words text-sm font-black text-dtsc-ink">{healthLabel(activeSubmodule.code)}</h3>
+          <label className="flex min-w-0 flex-col gap-1 text-[0.65rem] font-bold text-dtsc-muted sm:w-64">
+            <span>{inEnglish?"Switch module":"Changer de module"}</span>
+            <select value={activeModuleCode} onChange={event=>setActiveModuleCode(event.target.value as HealthcareModuleCode)}
+              className="min-h-10 w-full min-w-0 rounded-lg border border-dtsc-border bg-dtsc-page px-3 text-sm text-dtsc-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-500">
+              {enabledSubmodules.map(item=><option key={item.code} value={item.code}>{healthLabel(item.code)}</option>)}
+            </select>
+          </label>
+        </nav>
+      )}
 
       {activeModuleCode === "HEALTH_DASHBOARD" ? (
-        <HealthcareDashboard records={records} />
+        <HealthcareDashboard organizationId={organizationId} locale={locale} />
       ) : activeModuleCode === "PATIENTS" ? (
         <HealthPatientsWorkspace organizationId={organizationId} activeModuleCodes={activeModuleCodes} onOpenRelated={openRelatedPatientModule} />
       ) : activeModuleCode === "APPOINTMENTS" ? (
@@ -742,101 +782,60 @@ export function HealthcareAdminWorkspace({
   );
 }
 
-function HealthcareDashboard({ records }: { records: EnterpriseSectorRecordItem[] }) {
-  const kpis = useMemo(() => {
-    const patients = records.filter((record) => record.moduleCode === "PATIENTS" && record.status !== "ARCHIVED");
-    const appointments = records.filter((record) => record.moduleCode === "APPOINTMENTS");
-    const consultations = records.filter((record) => record.moduleCode === "CONSULTATIONS");
-    const medicalRecords = records.filter((record) => record.moduleCode === "MEDICAL_RECORDS");
-    const invoices = records.filter((record) => record.moduleCode === "MEDICAL_BILLING");
-    const coverages = records.filter((record) => record.moduleCode === "INSURANCE_COVERAGE");
-    const incidents = records.filter((record) => record.moduleCode === "QUALITY_INCIDENTS");
-    const pharmacyItems = records.filter((record) => record.moduleCode === "INTERNAL_PHARMACY");
-    const labRequests = records.filter((record) => record.moduleCode === "LABORATORY");
-    return [
-      { label: "Patients", value: patients.length, hint: "Total actifs et suivis", tone: "cyan" },
-      { label: "Patients créés ce mois", value: patients.filter((record) => isThisMonth(record.createdAt)).length, hint: "Nouveaux profils", tone: "emerald" },
-      { label: "Rendez-vous du jour", value: appointments.filter((record) => isToday(payloadText(record, "appointmentDate"))).length, hint: "Planning opérationnel", tone: "blue" },
-      { label: "Rendez-vous confirmés", value: appointments.filter((record) => record.status === "CONFIRMED").length, hint: "Patients attendus", tone: "emerald" },
-      { label: "Rendez-vous en attente", value: appointments.filter((record) => record.status === "WAITING").length, hint: "Accueil en cours", tone: "amber" },
-      { label: "Rendez-vous annulés", value: appointments.filter((record) => record.status === "CANCELLED").length, hint: "Suivi administratif", tone: "red" },
-      { label: "Patients absents", value: appointments.filter((record) => record.status === "NO_SHOW").length, hint: "Absences enregistrées", tone: "red" },
-      { label: "Convertis en consultation", value: appointments.filter((record) => record.status === "CONVERTED").length, hint: "Parcours de soin", tone: "violet" },
-      { label: "Consultations du jour", value: consultations.filter((record) => isToday(payloadText(record, "appointmentDate")) || isToday(record.createdAt)).length, hint: "Actes médicaux", tone: "violet" },
-      { label: "Consultations en cours", value: consultations.filter((record) => record.status === "IN_PROGRESS").length, hint: "Prises en charge actives", tone: "violet" },
-      { label: "En attente d’examens", value: consultations.filter((record) => record.status === "PENDING_EXAMS").length, hint: "Résultats attendus", tone: "amber" },
-      { label: "Consultations à revoir", value: consultations.filter((record) => record.status === "REVIEW").length, hint: "Suivi clinique", tone: "amber" },
-      { label: "Consultations clôturées", value: consultations.filter((record) => record.status === "CLOSED").length, hint: "Actes finalisés", tone: "emerald" },
-      { label: "Consultations annulées", value: consultations.filter((record) => record.status === "CANCELLED").length, hint: "Annulations historisées", tone: "red" },
-      { label: "Dossiers incomplets", value: medicalRecords.filter((record) => !record.summary || !payloadText(record, "medicalHistory")).length, hint: "Complétude dossier", tone: "amber" },
-      { label: "Factures en attente", value: invoices.filter((record) => ["DRAFT", "ISSUED", "PARTIAL_PAID"].includes(record.status)).length, hint: "Recouvrement", tone: "blue" },
-      { label: "Prises en charge en attente", value: coverages.filter((record) => ["DRAFT", "SUBMITTED", "WAITING"].includes(record.status)).length, hint: "Assurances", tone: "cyan" },
-      { label: "Incidents ouverts", value: incidents.filter((record) => !["RESOLVED", "CLOSED", "CANCELLED"].includes(record.status)).length, hint: "Qualité & risques", tone: "red" },
-      { label: "Alertes pharmacie", value: pharmacyItems.filter((record) => ["LOW_STOCK", "OUT_OF_STOCK", "EXPIRED"].includes(record.status)).length, hint: "Stock et péremption", tone: "red" },
-      { label: "Alertes laboratoire", value: labRequests.filter((record) => !["VALIDATED", "CANCELLED"].includes(record.status)).length, hint: "Résultats à suivre", tone: "violet" },
-    ];
-  }, [records]);
-
-  const statusGroups = useMemo(
-    () => [
-      { label: "Consultations", records: records.filter((record) => record.moduleCode === "CONSULTATIONS") },
-      { label: "Rendez-vous", records: records.filter((record) => record.moduleCode === "APPOINTMENTS") },
-      { label: "Factures", records: records.filter((record) => record.moduleCode === "MEDICAL_BILLING") },
-      { label: "Incidents", records: records.filter((record) => record.moduleCode === "QUALITY_INCIDENTS") },
-    ],
-    [records],
-  );
-
-  return (
-    <div className="space-y-4">
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {kpis.map((kpi) => (
-          <div key={kpi.label} className="rounded-2xl border border-dtsc-border bg-dtsc-surface p-4">
-            <p className="text-xs font-black uppercase tracking-[0.14em] text-dtsc-muted">{kpi.label}</p>
-            <p className="mt-2 text-3xl font-black text-dtsc-ink">{kpi.value}</p>
-            <p className="mt-1 text-xs font-semibold text-dtsc-muted">{kpi.hint}</p>
-          </div>
-        ))}
-      </div>
-      <div className="grid gap-3 lg:grid-cols-2">
-        {statusGroups.map((group) => (
-          <StatusDistribution key={group.label} label={group.label} records={group.records} />
-        ))}
-      </div>
+/**
+ * Canonical health analytics: never use the legacy EnterpriseSectorRecord
+ * preview (capped at 300) as a source for operational KPIs.
+ */
+function HealthcareDashboard({organizationId,locale}:{organizationId:string;locale?:string|null}){
+  const en=locale==="en";
+  const [metrics,setMetrics]=useState<Record<string,number>|null>(null);
+  const [businessDate,setBusinessDate]=useState("");
+  const [error,setError]=useState(false);
+  const [refreshKey,setRefreshKey]=useState(0);
+  useEffect(()=>{
+    const controller=new AbortController();
+    setError(false);
+    fetch(`/api/enterprise/${organizationId}/healthcare/dashboard`,{cache:"no-store",signal:controller.signal})
+      .then(async response=>{
+        if(!response.ok)throw new Error("HEALTH_KPI_UNAVAILABLE");
+        return response.json() as Promise<{metrics:Record<string,number>;businessDate:string}>;
+      })
+      .then(body=>{if(!controller.signal.aborted){setMetrics(body.metrics);setBusinessDate(body.businessDate)}})
+      .catch(()=>{if(!controller.signal.aborted){setError(true);setMetrics(null)}});
+    return ()=>controller.abort();
+  },[organizationId,refreshKey]);
+  const stats=[
+    ["patients","Patients","Patients", "cyan"],
+    ["newPatientsMonth","Patients inscrits ce mois","New patients this month","emerald"],
+    ["appointmentsToday","Rendez-vous aujourd’hui","Appointments today","blue"],
+    ["appointmentsWaiting","Rendez-vous en attente","Appointments waiting","amber"],
+    ["consultationsToday","Consultations aujourd’hui","Consultations today","violet"],
+    ["consultationsActive","Consultations en cours","Active consultations","violet"],
+    ["consultationsPendingExams","Examens attendus","Pending examinations","amber"],
+    ["medicalRecords","Dossiers actifs","Active medical records","cyan"],
+    ["laboratoryPending","Demandes laboratoire à traiter","Pending lab requests","blue"],
+    ["pharmacyOutOfStock","Produits en rupture","Out-of-stock medications","red"],
+    ["pharmacyExpiredBatches","Lots périmés disponibles","Expired batches remaining","red"],
+    ["medicalInvoicesOpen","Factures médicales ouvertes","Open medical invoices","amber"],
+    ["insurancePending","Prises en charge en attente","Pending claims","blue"],
+    ["qualityOpen","Incidents qualité ouverts","Open quality incidents","red"],
+  ] as const;
+  return <section className="grid min-w-0 gap-4" aria-label={en?"Healthcare operational dashboard":"Pilotage opérationnel Santé"}>
+    <div className="flex flex-wrap items-center justify-between gap-2">
+      <div><h3 className="text-lg font-black text-dtsc-ink">{en?"Operational indicators":"Indicateurs opérationnels"}</h3>
+        <p className="text-xs text-dtsc-muted">{businessDate}{en?" · Full database counts, no partial list totals.":" · Totaux issus des registres métier, sans plafonnement de liste."}</p></div>
+      <Button type="button" variant="outline" onClick={()=>setRefreshKey(current=>current+1)}>{en?"Refresh":"Actualiser"}</Button>
     </div>
-  );
-}
-
-function StatusDistribution({ label, records }: { label: string; records: EnterpriseSectorRecordItem[] }) {
-  const groups = Object.entries(
-    records.reduce<Record<string, number>>((acc, record) => {
-      acc[record.status] = (acc[record.status] || 0) + 1;
-      return acc;
-    }, {}),
-  );
-  const max = Math.max(1, ...groups.map(([, count]) => count));
-  return (
-    <div className="rounded-2xl border border-dtsc-border bg-dtsc-surface p-4">
-      <h3 className="font-black text-dtsc-ink">{label} par statut</h3>
-      <div className="mt-3 space-y-3">
-        {groups.length ? (
-          groups.map(([status, count]) => (
-            <div key={status}>
-              <div className="mb-1 flex items-center justify-between text-xs font-bold text-dtsc-muted">
-                <span>{statusLabels[status] || status}</span>
-                <span>{count}</span>
-              </div>
-              <div className="h-2 overflow-hidden rounded-full bg-dtsc-page">
-                <div className="h-full rounded-full bg-cyan-400" style={{ width: `${Math.max(8, (count / max) * 100)}%` }} />
-              </div>
-            </div>
-          ))
-        ) : (
-          <p className="rounded-xl border border-dashed border-dtsc-border bg-dtsc-page p-3 text-sm font-semibold text-dtsc-muted">Aucune donnée à afficher.</p>
-        )}
-      </div>
-    </div>
-  );
+    {error&&<p role="alert" className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-600">
+      {en?"Metrics unavailable. Do not interpret old estimates.":"Indicateurs indisponibles. Les anciennes estimations ne sont pas affichées."}</p>}
+    {!metrics&&!error&&<p role="status" className="rounded-xl border border-dtsc-border p-4 text-sm text-dtsc-muted">{en?"Loading validated indicators…":"Chargement des indicateurs vérifiés…"}</p>}
+    {metrics&&<div className="grid min-w-0 gap-2 sm:grid-cols-2 xl:grid-cols-4">{stats.map(([key,fr,english,tone])=><article key={key}
+        className="min-w-0 rounded-2xl border border-dtsc-border bg-dtsc-surface p-4">
+        <p className="text-xs font-black uppercase text-dtsc-muted">{en?english:fr}</p>
+        <p className={`mt-2 text-3xl font-black ${tone==="red"?"text-red-600":tone==="amber"?"text-amber-600":tone==="emerald"?"text-emerald-600":"text-cyan-600"}`}>
+          {metrics[key]??"—"}</p>
+      </article>)}</div>}
+  </section>;
 }
 
 function HealthcareRecordForm({

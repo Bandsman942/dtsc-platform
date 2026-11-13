@@ -9,5 +9,17 @@ export async function getHealthLaboratoryAccess({session,organizationId,action}:
   const permissions=await getHealthStaffMedicalPermissions(session.userId,organizationId);
   const manager=ENTERPRISE_MANAGER_ROLES.has(membership.role);
   const has=(permission:string)=>manager||permissions.includes(permission);
-  return {membership,canViewSensitive:has("health.laboratory.view_sensitive"),canCreate:has("health.laboratory.create_request"),canUpdate:has("health.laboratory.update_request"),canCancel:has("health.laboratory.cancel_request"),canCollect:has("health.laboratory.collect_sample"),canEnterResult:has("health.laboratory.enter_result"),canValidate:has("health.laboratory.validate_result"),canCorrect:has("health.laboratory.correct_validated_result"),canTransmit:has("health.laboratory.transmit_result"),canManageCatalog:has("health.laboratory.manage_catalog")};
+  // Clinical/laboratory execution and result reading require an active staff
+  // assignment permission; enterprise manager status is administrative only.
+  return {membership,
+    canViewSensitive:permissions.includes("health.laboratory.view_sensitive"),
+    canCreate:permissions.includes("health.laboratory.create_request"),
+    canUpdate:permissions.includes("health.laboratory.update_request"),
+    canCancel:permissions.includes("health.laboratory.cancel_request"),
+    canCollect:permissions.includes("health.laboratory.collect_sample"),
+    canEnterResult:permissions.includes("health.laboratory.enter_result"),
+    canValidate:permissions.includes("health.laboratory.validate_result"),
+    canCorrect:permissions.includes("health.laboratory.correct_validated_result"),
+    canTransmit:permissions.includes("health.laboratory.transmit_result"),
+    canManageCatalog:has("health.laboratory.manage_catalog")};
 }

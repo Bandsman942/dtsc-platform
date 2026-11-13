@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { HealthAppointmentsWorkspace } from "@/components/enterprise/health-appointments-workspace";
 import { HealthConsultationsWorkspace } from "@/components/enterprise/health-consultations-workspace";
 import { HealthDocumentsWorkspace } from "@/components/enterprise/health-documents-workspace";
@@ -32,6 +33,67 @@ import { EmptyState } from "@/components/workspace/empty-state";
 import type { EnterpriseSectorRecordItem } from "@/lib/enterprise/enterprise-admin-types";
 import type { EnterpriseModuleDefinition } from "@/lib/enterprise/module-registry";
 
+const HEALTH_SECTOR_MODULES = [
+  {code:"PATIENTS",fr:"Patients",en:"Patients"},
+  {code:"APPOINTMENTS",fr:"Rendez-vous",en:"Appointments"},
+  {code:"CONSULTATIONS",fr:"Consultations",en:"Consultations"},
+  {code:"MEDICAL_RECORDS",fr:"Dossiers médicaux",en:"Medical records"},
+  {code:"CARE_TEAM",fr:"Équipe médicale",en:"Medical team"},
+  {code:"LABORATORY",fr:"Laboratoire",en:"Laboratory"},
+  {code:"INTERNAL_PHARMACY",fr:"Pharmacie interne",en:"Internal pharmacy"},
+  {code:"MEDICAL_BILLING",fr:"Facturation médicale",en:"Medical billing"},
+  {code:"INSURANCE_COVERAGE",fr:"Assurances & prises en charge",en:"Insurance & coverage"},
+  {code:"QUALITY_INCIDENTS",fr:"Incidents qualité",en:"Quality incidents"},
+  {code:"MEDICAL_DOCUMENTS",fr:"Documents médicaux",en:"Medical documents"},
+] as const;
+
+function HealthSectorNavigation({moduleCode,enabledModuleCodes,locale,onOpen}:{
+  moduleCode:string;enabledModuleCodes:string[];locale?:string|null;
+  onOpen:(code:string)=>void;
+}){
+  const [expanded,setExpanded]=useState(false);
+  const [search,setSearch]=useState("");
+  const en=locale?.toLowerCase().startsWith("en")===true;
+  const available=HEALTH_SECTOR_MODULES.filter(m=>enabledModuleCodes.includes(m.code));
+  const active=available.find(m=>m.code===moduleCode);
+  const shown=available.filter(m=>(en?m.en:m.fr).toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()));
+  const panelId="health-sector-module-switcher";
+  return <nav data-health-sector-nav aria-label={en?"Healthcare navigation":"Navigation des modules Santé"}
+    className="sticky top-0 z-20 min-w-0 rounded-2xl border border-dtsc-border bg-dtsc-surface/95 p-2 shadow-sm backdrop-blur-xl sm:p-3">
+    <div className="flex min-w-0 flex-wrap items-center gap-2">
+      <Link href="/enterprise-modules" className="inline-flex min-h-10 shrink-0 items-center rounded-xl border border-dtsc-border px-3 text-xs font-bold text-dtsc-ink hover:bg-dtsc-page focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-500">
+        <span aria-hidden className="mr-1">←</span>{en?"All modules":"Tous les modules"}
+      </Link>
+      <p className="min-w-0 flex-1 break-words text-sm font-black text-dtsc-ink">{active?(en?active.en:active.fr):moduleCode}</p>
+      <button type="button" aria-expanded={expanded} aria-controls={panelId}
+        onClick={()=>setExpanded(v=>!v)}
+        className="inline-flex min-h-10 shrink-0 items-center justify-center rounded-xl bg-cyan-600 px-3 text-xs font-black text-white hover:bg-cyan-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-500">
+        {expanded?(en?"Close navigation":"Fermer"):(en?"Change module":"Changer de module")}
+        <span aria-hidden className="ml-2">{expanded?"×":"☰"}</span>
+      </button>
+    </div>
+    {expanded&&<div id={panelId} className="mt-3 min-w-0 rounded-xl border border-dtsc-border bg-dtsc-page p-2 sm:p-3">
+      <label className="block min-w-0 text-xs font-bold text-dtsc-muted">
+        {en?"Find a healthcare module":"Rechercher un module Santé"}
+        <input type="search" value={search} onChange={event=>setSearch(event.target.value)}
+          aria-label={en?"Find a healthcare module":"Rechercher un module Santé"}
+          className="mt-1 min-h-10 w-full min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm text-dtsc-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-500"
+          placeholder={en?"Patient, laboratory, billing…":"Patients, laboratoire, facturation…"} />
+      </label>
+      <div className="mt-2 grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+        {shown.map(module=><button key={module.code} type="button"
+          aria-current={module.code===moduleCode?"page":undefined}
+          disabled={module.code===moduleCode}
+          onClick={()=>onOpen(module.code)}
+          className="min-h-11 min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface p-3 text-left text-xs font-bold text-dtsc-ink transition hover:border-cyan-400 hover:shadow-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-500 disabled:border-cyan-500 disabled:bg-cyan-500/10 disabled:text-cyan-700">
+          <span className="block break-words">{en?module.en:module.fr}</span>
+        </button>)}
+      </div>
+      {!shown.length&&<p role="status" className="p-3 text-sm text-dtsc-muted">{en?"No enabled healthcare module matches.":"Aucun module Santé actif ne correspond."}</p>}
+    </div>}
+  </nav>;
+}
+
 type HealthRelatedModule = "APPOINTMENTS" | "CONSULTATIONS" | "MEDICAL_RECORDS" | "MEDICAL_DOCUMENTS";
 
 export function EnterpriseSectorModuleWorkspace(props: {
@@ -59,6 +121,12 @@ export function EnterpriseSectorModuleWorkspace(props: {
   function withHelp(workspace: ReactNode) {
     return (
       <div className="min-w-0 space-y-4">
+        {definition.routeKind === "SECTOR_HEALTH" && <HealthSectorNavigation
+          moduleCode={definition.code}
+          enabledModuleCodes={enabledModuleCodes}
+          locale={locale}
+          onOpen={code=>router.push(`/enterprise-modules/${encodeURIComponent(code)}`)}
+        />}
         {workspace}
         <ProfessionalHelp moduleCode={definition.code} />
       </div>

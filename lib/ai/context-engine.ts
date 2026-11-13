@@ -5,6 +5,7 @@ import { getCanonicalAiUsageLimits } from "@/lib/billing/ai-usage-limits";
 import { listNavigableEnterpriseModules, resolveEnterpriseModuleAccess } from "@/lib/enterprise/module-access";
 import { DTSC_INTERNAL_ORGANIZATION_ID } from "@/lib/organizations";
 import { prisma } from "@/lib/prisma";
+import { getHealthStaffMedicalPermissions } from "@/lib/health-staff-access";
 
 export type AiExecutionContext = {
   userId: string;
@@ -176,7 +177,11 @@ export async function buildAiExecutionContext({
   const clinicalAccess = sectorCode === "HEALTH_CARE"
     ? await resolveEnterpriseModuleAccess({ userId, organizationId, moduleCode: "MEDICAL_RECORDS", action: "read" }).catch(() => null)
     : null;
-  const canReadClinicalData = Boolean(clinicalAccess?.allowed);
+  const staffMedicalPermissions = sectorCode === "HEALTH_CARE"
+    ? await getHealthStaffMedicalPermissions(userId, organizationId)
+    : [];
+  const canReadClinicalData = Boolean(clinicalAccess?.allowed)
+    && staffMedicalPermissions.includes("health.medical_records.view_sensitive");
 
   const contextVersion = shortHash({
     organizationId,
