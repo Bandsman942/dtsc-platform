@@ -21,4 +21,11 @@ assert.match(documentDetail,/storageKey:a\.canDownload\?record\.storageKey:null/
 assert.match(docs,/patients:a\.canCreate\?patients\.map/,"Document patient directory must be purpose-limited");
 assert.match(docs,/consultations:a\.canViewSensitive\?consultations:\[\]/,"Clinical consultation references must not leak");
 assert.match(read("scripts/qa-regression-checks.mjs"),/qa-health-06-privacy-kpis/);
+const versionService=read("lib/health-documents.ts");
+const versionRoute=read("app/api/enterprise/[organizationId]/healthcare/documents/[documentId]/versions/route.ts");
+assert.match(versionService,/pg_advisory_xact_lock/,"Version assignment must be serial per document");
+assert.match(versionService,/current\.currentVersionNumber\+1/,"Next version must use locked fresh state");
+assert.match(versionService,/isolationLevel:"Serializable"/,"Document versioning must use serializable transaction");
+assert.match(versionService,/DOCUMENT_LOCKED/,"Archived documents cannot be replaced");
+assert.match(versionRoute,/DOCUMENT_LOCKED/,"Friendly archived version error required");
 console.log("✅ HEALTH-06: quality PHI redaction, private document metadata, exact KPI database aggregation");

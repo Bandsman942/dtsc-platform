@@ -1,3 +1,4 @@
+- HEALTH-06 complément : versions documentaires immuables numérotées sous verrou tenant/document et rejet des modifications d'archives.
 ## 2026-11-13 — HEALTH-06 #1151 — sécurité Qualité/Documents (NON FUSIONNÉ)
 
 - Masquage contextualisé des incidents qualité et des clés privées des documents, KPI Qualité complets par requêtes canonique et fuseau de l'entreprise; interopérabilité et parcours SIH encore ouverts (#1151).
