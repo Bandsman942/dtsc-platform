@@ -11,6 +11,7 @@ Date : 13 novembre 2026 · NON FUSIONNÉ / aucun déploiement Production.
 - Une consultation sans droit de téléchargement ne reçoit pas les clés physiques de stockage des documents ou versions.
 - Les journaux d'accès restent réservés aux rôles autorisés, ainsi que le téléphone et la date de naissance des patients et les références cliniques sensibles.
 - Les noms des incidents liés aux documents sont masqués pour un lecteur non clinique.
+- Le fait d'être auteur ou validateur historique ne contourne plus les droits médicaux après révocation. Le statut « contient des données médicales sensibles » impose les droits cliniques dès l'upload.
 - Les nouvelles versions documentaires sont numérotées sous verrou transactionnel par organisation/document, avec lecture de l'état frais, refus de remplacement sur document archivé et messages d'erreur contextualisés. L'upload réseau s'effectue avant le verrou; une politique de nettoyage des objets non rattachés reste nécessaire.
 
 ## Critères encore ouverts (#1151)
