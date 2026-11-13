@@ -61,4 +61,11 @@ assert.match(legacyAdapter,/summary:null,payloadJson:\{\}/,"Historic clinical JS
 assert.doesNotMatch(read("lib/health-patients.ts"),/title: data\.fullName/,"No patient name in new legacy titles");
 assert.doesNotMatch(read("lib/health-appointments.ts"),/service: data\.reason/,"No appointment motive in ERP mirrors");
 assert.doesNotMatch(read("lib/health-consultations.ts"),/service: data\.reason/,"No clinical motive in ERP mirrors");
+const labAccess=read("lib/health-laboratory-access.ts");
+const appointmentAccess=read("lib/health-appointment-access.ts");
+const recordAccess=read("lib/health-medical-record-access.ts");
+assert.match(labAccess,/canValidate:permissions\.includes\("health\.laboratory\.validate_result"\)/,"Administrative manager must not validate lab result without clinical permission");
+assert.match(labAccess,/canViewSensitive:permissions\.includes\("health\.laboratory\.view_sensitive"\)/,"Administrative manager cannot read lab values by role");
+assert.match(appointmentAccess,/canConvert: clinicalAccess/,"Only clinicians may convert an appointment into a consultation");
+assert.match(recordAccess,/canUpdate: canEditClinical/,"Medical record editing must use clinical permissions");
 console.log("✅ HEALTH-01 P0: independent lab results, clinical authorization, PHI-minimized projection, tenant-safe canonical metrics");
