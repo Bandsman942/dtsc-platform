@@ -66,6 +66,10 @@ try {
     SELECT is_nullable AS nullable FROM information_schema.columns
     WHERE table_name='ManualSubscriptionPayment' AND column_name='settlementAccountId'`;
   assert.equal(column[0]?.nullable,"YES","Historical requests must remain nullable");
+  const verifiedColumn = await db.$queryRaw`
+    SELECT is_nullable AS nullable FROM information_schema.columns
+    WHERE table_name='ManualSubscriptionPayment' AND column_name='fundsVerifiedAt'`;
+  assert.equal(verifiedColumn[0]?.nullable,"YES","Existing approvals must not be backfilled as verified");
 
   console.log("PASS #1041 PostgreSQL: account lock and policy, bank/cash/mobile USD/CDF, negative cases, nullable historical FK.");
 } finally {
