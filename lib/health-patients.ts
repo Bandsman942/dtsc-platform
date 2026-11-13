@@ -52,6 +52,9 @@ export function maskHealthPatientSensitive<T extends Record<string, unknown>>(pa
     importantHistory: null,
     chronicTreatments: null,
     medicalNotes: null,
+    events: Array.isArray(patient.events) ? patient.events.map((event) =>
+      typeof event === "object" && event !== null ? {...event,summary:null} : event
+    ) : patient.events,
   };
 }
 

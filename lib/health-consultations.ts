@@ -28,6 +28,7 @@ export function maskHealthConsultationSensitive<T extends Record<string, unknown
     generalCondition: null, cardiovascularExam: null, respiratoryExam: null, abdominalExam: null, neurologicalExam: null, entExam: null, dermatologicalExam: null, musculoskeletalExam: null, otherExamNotes: null, clinicalConclusion: null,
     provisionalDiagnosis: null, finalDiagnosis: null, differentialDiagnoses: null, diagnosisCertainty: null, diagnosisCode: null, diagnosisNotes: null,
     managementPlan: null, treatmentPlan: null, prescriptionText: null, requestedTests: null, referralNotes: null, patientAdvice: null, warningSigns: null, lifestyleRecommendations: null, returnInstructions: null,
+    labRequests: [], events: [],
   };
 }
 function legacyPayload(data: HealthConsultationInput, patientRecordId: string, appointmentRecordId: string | null, number: string): Prisma.InputJsonObject {

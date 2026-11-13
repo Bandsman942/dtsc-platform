@@ -10,7 +10,7 @@ const nil=(value?:string)=>value?.trim()||null;
 const requestNumber=()=>`LAB-${new Date().getFullYear()}-${randomUUID().slice(0,8).toUpperCase()}`;
 const activeStatuses=["DRAFT","REQUESTED","PENDING_SAMPLE","SAMPLED","ANALYZING","RESULT_ENTERED","PENDING_VALIDATION"];
 
-export function maskHealthLabSensitive<T extends Record<string,unknown>>(item:T,canViewSensitive:boolean){if(canViewSensitive)return item;return {...item,clinicalIndication:null,medicalNotes:null,resultText:null,resultValuesJson:null,resultUnit:null,referenceRange:null,resultInterpretation:null,abnormalityLevel:null,resultFileUrl:null,internalNotes:null,laboratoryNotes:null,items:[]};}
+export function maskHealthLabSensitive<T extends Record<string,unknown>>(item:T,canViewSensitive:boolean){if(canViewSensitive)return item;return {...item,clinicalIndication:null,medicalNotes:null,resultText:null,resultValuesJson:null,resultUnit:null,referenceRange:null,resultInterpretation:null,abnormalityLevel:null,resultFileUrl:null,internalNotes:null,laboratoryNotes:null,items:[],events:[]};}
 
 export async function validateHealthLabReferences(organizationId:string,data:Partial<HealthLabInput>,existingPatientId?:string){
   const patientId=data.patientId||existingPatientId;

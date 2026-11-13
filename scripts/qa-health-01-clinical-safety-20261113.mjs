@@ -75,4 +75,7 @@ assert.match(activityLoader,/records\.map\(safeHealthLegacyProjection\)/,"Activi
 assert.match(modulePage,/betaRecords\.map\(safeHealthLegacyProjection\)/,"Module route must redact legacy Health previews");
 assert.match(aiContext,/staffMedicalPermissions\.includes\("health\.medical_records\.view_sensitive"\)/,"AI context cannot access clinical data from module-level read alone");
 assert.doesNotMatch(read("app/api/enterprise/[organizationId]/healthcare/patients/route.ts"),/select: \{ id: true, title: true, status: true, updatedAt: true, payloadJson: true \}/,"Patient lists must not fetch clinical titles from mirrors");
+assert.match(read("lib/health-patients.ts"),/events: Array\.isArray\(patient\.events\)/,"Patient event summaries must not leak to administrative readers");
+assert.match(read("lib/health-consultations.ts"),/labRequests: \[\], events: \[\]/,"Clinical activity and events must be hidden without explicit permission");
+assert.match(read("lib/health-laboratory.ts"),/items:\[\],events:\[\]/,"Laboratory audit narrative must be hidden without clinical permission");
 console.log("✅ HEALTH-01 P0: independent lab results, clinical authorization, PHI-minimized projection, tenant-safe canonical metrics");
