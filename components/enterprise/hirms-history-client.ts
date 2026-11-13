@@ -3,7 +3,7 @@ export async function downloadHirmsCsv(url:string,filename:string) {
   if (!response.ok) throw new Error("HIRMS_EXPORT_FAILED");
   const blob = await response.blob();
   const contentDisposition = response.headers.get("Content-Disposition") || "";
-  const offeredName = /filename="(DTSC-HIRMS-[A-Za-z0-9_.-]+\\.(?:xlsx|xls|json|csv))"/.exec(contentDisposition)?.[1];
+  const offeredName = /filename="(DTSC-HIRMS-[A-Za-z0-9_.-]+[.](?:xlsx|xls|json|csv))"/.exec(contentDisposition)?.[1];
   const href = URL.createObjectURL(blob);
   try {
     const link = document.createElement("a");
