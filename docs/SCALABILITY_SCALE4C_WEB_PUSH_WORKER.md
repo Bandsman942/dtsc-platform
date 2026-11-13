@@ -22,7 +22,7 @@ Les jobs Push utilisent :
 - `idempotencyKey = platform:web-push:<notification.id>` ;
 - aucun `payloadJson` métier.
 
-Pour une notification sans organisation, le scope technique de queue est `__DTSC_PLATFORM__`. Cette valeur n'est jamais présentée au client. Au dispatch, le worker relit la notification et vérifie que son `organizationId` normalisé correspond exactement au scope du job avant d'utiliser la relation vers l'utilisateur.
+**Correctif du 13/11/2026 (candidat v1.16.2)** : une `Notification` globale garde `organizationId = NULL`, mais son **événement Push outbox** utilise l'organisation DTSC interne **réelle** `dtsc-internal`. La sentinelle inexistante `__DTSC_PLATFORM__` déclenchait la FK. Au dispatch, le worker normalise le scope de la notification et le compare à celui du job. Les Push d'entreprise utilisent toujours leur `organizationId` réel. La FK et les relations Prisma composites restent intactes.
 
 ## Atomicité
 
