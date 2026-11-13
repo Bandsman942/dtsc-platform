@@ -6,7 +6,7 @@
 
 - Déploiement main v1.16.1 `dpl_4ZDFFtdXs2Q17qVoiUbFRQBrbrUY` : **READY**.
 - Incident historique avant hotfix #1134 : Vercel `too_many_routes`, 2 064 règles pour une limite 2 048.
-- Inventaire git origin/main pré-changement : **99 pages et 815 fichiers route.ts**, dont **814 routes API** et **545 routes API entreprise**.
+- Inventaire git origin/main pré-changement : **100 pages et 815 fichiers route.ts**, dont **814 routes API** et **545 routes API entreprise**.
 - **Le compte de fichiers n'est PAS le compte de règles Vercel**. Les routes générées, les matchers, redirects, rewrites, filesystem et fonctions peuvent se multiplier. Le endpoint de *Project Routes* Vercel décrit une autre couche de routage et ne permet pas de déduire le compte du déploiement.
 - Aucune assertion d'un nombre exact de règles après fusion n'est autorisée sans `.vercel/output/config.json` du build correspondant ou diagnostic fournisseur vérifié.
 
@@ -75,7 +75,7 @@ API interne ERP ou workers
 | Finance pages wrappers | 14 | 0 (resolver commun existant) | 14 |
 | **Total** | **23** | **2** | **21** |
 
-Projection source : 914 → **893**. Ceci **ne représente pas un chiffre Vercel**. Les contrôles CI et la mesure d'un futur déploiement pourront le confirmer/invalider.
+Projection source : 915 → **894**. Ceci **ne représente pas un chiffre Vercel**. Les contrôles CI et la mesure d'un futur déploiement pourront le confirmer/invalider.
 
 ## Matrice de validation et rollback
 

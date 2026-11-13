@@ -43,5 +43,5 @@ for(const code of ["FINANCE_ACCOUNTING","FINANCE_ASSETS","FINANCE_BANK","FINANCE
 }
 assert.ok(page.includes("EnterpriseFinanceModulePage") && page.includes("FINANCE_ROUTE_CODES.has(requestedModuleCode)"),"Original finance security/UX not preserved");
 const baseline=JSON.parse(read("docs/routing/route-budget-baseline.json"));
-assert.equal(baseline.source.total,914);
+assert.equal(baseline.source.total,915);
 console.log("ROUTES-02/03 parity OK: 9 immutable handlers, 14 Finance URLs preserved by dynamic route.");

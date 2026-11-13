@@ -3,9 +3,9 @@
   "capturedAt": "2026-11-13",
   "sourceCommit": "09d6a1e53c8134e2e3ae4b5310fe180411e2a187",
   "source": {
-    "pageFiles": 99,
+    "pageFiles": 100,
     "routeHandlerFiles": 815,
-    "total": 914,
+    "total": 915,
     "apiFiles": 814,
     "enterpriseApiFiles": 545
   },
