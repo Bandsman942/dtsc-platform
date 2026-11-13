@@ -6,6 +6,7 @@ import { getHealthQualityAccess } from "@/lib/health-quality-access";
 import { healthQualityIncidentAction, updateHealthQualityIncident } from "@/lib/health-quality";
 import { healthQualityIncidentActionSchema, healthQualityIncidentUpdateSchema } from "@/lib/health-quality-validators";
 import { prisma } from "@/lib/prisma";
+import { redactHealthQualityIncident } from "@/lib/health-quality-redaction";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
 
@@ -21,7 +22,9 @@ export async function GET(_: Request, { params }: Params) {
   const record = await prisma.healthQualityIncident.findFirst({ where: { id: incidentId, organizationId }, include: { correctiveActions: { orderBy: { dueDate: "asc" } }, events: { orderBy: { createdAt: "desc" } } } });
   if (!record) return NextResponse.json({ error: "Not found" }, { status: 404 });
   if (!visible(record, session.userId, access)) return NextResponse.json({ error: "Forbidden", message: record.confidentialityIncident ? "Cet incident est confidentiel." : "Vous n’avez pas la permission de consulter cet incident." }, { status: 403 });
-  return NextResponse.json({ record });
+  return NextResponse.json({record:redactHealthQualityIncident(record,
+    access.canViewSensitive || record.reportedById===session.userId || record.assignedToId===session.userId ||
+    record.correctiveActions.some(item=>item.responsibleUserId===session.userId))},{headers:{"Cache-Control":"private, no-store"}});
 }
 export async function PATCH(req: Request, { params }: Params) {
   if (!isSameOriginRequest(req)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });

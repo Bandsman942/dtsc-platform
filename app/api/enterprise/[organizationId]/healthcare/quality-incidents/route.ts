@@ -6,6 +6,8 @@ import { getHealthQualityAccess } from "@/lib/health-quality-access";
 import { createHealthQualityIncident } from "@/lib/health-quality";
 import { healthQualityIncidentCreateSchema } from "@/lib/health-quality-validators";
 import { prisma } from "@/lib/prisma";
+import { enterpriseBusinessCalendarWindows } from "@/lib/enterprise/business-context";
+import { redactHealthQualityIncident } from "@/lib/health-quality-redaction";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
 
@@ -36,20 +38,34 @@ export async function GET(_: Request, { params }: Params) {
     prisma.enterpriseDepartment.findMany({ where: { organizationId, isActive: true }, select: { id: true, labelFr: true } }),
     prisma.organizationMember.findMany({ where: { organizationId, status: "ACTIVE", removedAt: null }, select: { userId: true, user: { select: { name: true, email: true } } } }),
   ]);
-  const clean = incidents.map((incident) => access.canViewSensitive || incident.reportedById === session.userId || incident.assignedToId === session.userId ? incident : { ...incident, internalNotes: null, witnesses: null, confidentialityReason: null, investigationSummary: null, immediateCause: null, rootCause: null, contributingFactors: null, investigationConclusion: null, recommendations: null });
-  const now = Date.now(), month = new Date().getMonth(), year = new Date().getFullYear();
-  const metrics = {
-    open: incidents.filter((item) => !["CLOSED", "ARCHIVED", "CANCELLED", "REJECTED"].includes(item.status)).length,
-    critical: incidents.filter((item) => (item.confirmedCriticality || item.initialCriticality) === "CRITICAL").length,
-    month: incidents.filter((item) => item.reportedAt.getMonth() === month && item.reportedAt.getFullYear() === year).length,
-    patient: incidents.filter((item) => item.patientId).length,
-    confidentiality: incidents.filter((item) => item.confidentialityIncident).length,
-    investigation: incidents.filter((item) => item.status === "IN_INVESTIGATION").length,
-    overdueActions: incidents.flatMap((item) => item.correctiveActions).filter((item) => openActionStatuses.includes(item.status) && item.dueDate.getTime() < now).length,
-    closedMonth: incidents.filter((item) => item.closedAt?.getMonth() === month && item.closedAt?.getFullYear() === year).length,
-  };
+  const clean=incidents.map(incident=>redactHealthQualityIncident(incident,
+    access.canViewSensitive || incident.reportedById===session.userId || incident.assignedToId===session.userId ||
+    incident.correctiveActions.some(action=>action.responsibleUserId===session.userId)));
+  // KPI counts are independent of the 500-record visual preview and
+  // use the exact same access scope as the incident listing.
+  const organization=await prisma.organization.findFirst({
+    where:{id:organizationId},
+    select:{timezone:true},
+  });
+  const windows=enterpriseBusinessCalendarWindows(new Date(),organization?.timezone||"UTC");
+  const where={organizationId,AND:scope};
+  const [totalCount,open,critical,month,patient,confidentiality,investigation,overdueActions,closedMonth]=await Promise.all([
+    prisma.healthQualityIncident.count({where}),
+    prisma.healthQualityIncident.count({where:{...where,status:{notIn:["CLOSED","ARCHIVED","CANCELLED","REJECTED"]}}}),
+    prisma.healthQualityIncident.count({where:{...where,OR:[{confirmedCriticality:"CRITICAL"},{initialCriticality:"CRITICAL"}]}}),
+    prisma.healthQualityIncident.count({where:{...where,reportedAt:windows.month}}),
+    prisma.healthQualityIncident.count({where:{...where,patientId:{not:null}}}),
+    prisma.healthQualityIncident.count({where:{...where,confidentialityIncident:true}}),
+    prisma.healthQualityIncident.count({where:{...where,status:"IN_INVESTIGATION"}}),
+    prisma.healthQualityCorrectiveAction.count({where:{
+      organizationId,status:{in:openActionStatuses},dueDate:{lt:new Date()},
+      incident:where,
+    }}),
+    prisma.healthQualityIncident.count({where:{...where,closedAt:windows.month}}),
+  ]);
+  const metrics={open,critical,month,patient,confidentiality,investigation,overdueActions,closedMonth};
   const permissions = { canViewAll: access.canViewAll, canViewSensitive: access.canViewSensitive, canViewConfidential: access.canViewConfidential, canCreate: access.canCreate, canUpdate: access.canUpdate, canQualify: access.canQualify, canAssign: access.canAssign, canInvestigate: access.canInvestigate, canClose: access.canClose, canReopen: access.canReopen, canArchive: access.canArchive, canManageActions: access.canManageActions, canValidateActions: access.canValidateActions, canViewReports: access.canViewReports };
-  return NextResponse.json({ incidents: clean, metrics, patients, appointments, consultations, medicalRecords, labs, dispensations, movements, invoices, coverages, staff, departments, members, currentUserId: session.userId, permissions });
+  return NextResponse.json({ incidents: clean, metrics, pageInfo:{shown:incidents.length,total:totalCount,limit:500,hasMore:totalCount>incidents.length}, patients:access.canCreate?patients.map(patient=>({...patient,fullName:access.canViewSensitive?patient.fullName:patient.patientNumber})):[], appointments, consultations, medicalRecords, labs, dispensations, movements:access.canViewSensitive?movements:movements.map(item=>({...item,reason:null})), invoices, coverages, staff, departments, members, currentUserId: session.userId, permissions },{headers:{"Cache-Control":"private, no-store"}});
 }
 
 export async function POST(req: Request, { params }: Params) {
