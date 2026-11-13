@@ -119,13 +119,16 @@ jobs:
         run: pnpm type-check
         env:
           NODE_OPTIONS: --max-old-space-size=6144
+      - name: Lint before production build
+        run: pnpm lint
       - name: Build production application
         shell: bash
         run: |
           set -o pipefail
           pnpm build 2>&1 | tee /tmp/dtsc-hotfix-657-build.log
         env:
-          NODE_OPTIONS: --max-old-space-size=6144
+          DTSC_CI_STATIC_CHECKS_PASSED: "true"
+          NODE_OPTIONS: --max-old-space-size=8192
       - name: Install Playwright Chromium
         # The hosted 24.04 image already contains browser system libraries;
         # avoid an APT dependency that can fail before tests even start.

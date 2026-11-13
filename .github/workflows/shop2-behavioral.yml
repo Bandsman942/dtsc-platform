@@ -189,13 +189,21 @@ jobs:
           node scripts/qa-retail-product-coherence.mjs
           node --experimental-strip-types scripts/qa-session-cookie-security.mjs
           node scripts/qa-ci-auth-rate-limit-provisioning.mjs
+      - name: Type check before production build
+        run: pnpm type-check
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144
+      - name: Lint before production build
+        run: pnpm lint
       - name: Build production application
+        # Next's built-in duplicate checking is disabled only after BOTH steps above pass.
         shell: bash
         run: |
           set -o pipefail
           pnpm build 2>&1 | tee /tmp/dtsc-shop2-build.log
         env:
-          NODE_OPTIONS: --max-old-space-size=6144
+          DTSC_CI_STATIC_CHECKS_PASSED: "true"
+          NODE_OPTIONS: --max-old-space-size=8192
       - name: Install Playwright Chromium
         # Download the pinned Playwright browser without invoking APT.
         run: pnpm exec playwright install chromium

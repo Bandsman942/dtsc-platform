@@ -1,3 +1,9 @@
+## 2026-11-12 — Issue #1127 — Connecteurs assurances santé / HIRMS (candidat v1.16.0, NON LIVRÉ)
+
+- Socle générique des connecteurs d'assurance, premier adaptateur HIRMS/MSO limité à UAT ; credentials HSL chiffrés, OAuth Authentik et vérification réelle des adhérents par `VerifyMembers`.
+- Interface Design 2.0 Administration entreprise, Santé et Pharmacie, isolation `organizationId`, RBAC, rate limit, historique minimal expurgé et migration additive.
+- **Ni facture HSL, ni OCR, ni production, ni garantie de remboursement activés.** Précondition : OpenAPI complet, compte HSL autorisé, Quality Gates, QA et E2E propriétaire. Runbook : `docs/HEALTH_INSURANCE_CONNECTORS_HIRMS_01.md` ; PR #1128 en brouillon.
+
 ## 2026-11-12 — Issue #1124 — Fiscalité sectorielle avancée (candidat v1.15.0, NON LIVRÉ)
 
 - Moteur fiscal multi-taxes explicite, assiettes de même base ou séquentielles selon règle approuvée indépendamment, codes et taux tenant-scoped, justificatifs obligatoires pour traitements spéciaux ; retenues hors périmètre automatisé tant que le flux de paiement et les comptes dédiés ne sont pas qualifiés.
@@ -2497,3 +2503,25 @@ Hotfix #861 (complément) : un secret CRON_SECRET Production commun réveille po
 - Tarification, offres et retours : reprise de l'écran entier dans `AppShell`, navigation et retour DTSC, thème 2.0 clair/sombre, onglets accessibles, formulaires et contrôles de focus harmonisés, logique de prix, promotions et remboursements intacte.
 - Mes collaborateurs : suppression du retour extérieur à l'espace immersif, retour compact au niveau de la liste, fil et compositeur protégés des superpositions du bouton flottant. Aucune modification de la messagerie serveur.
 - Documentation et recette : [HOTFIX_1046_RETAIL_POS_COLLABORATORS_UI.md](HOTFIX_1046_RETAIL_POS_COLLABORATORS_UI.md). Aucun déploiement ni E2E propriétaire validé à ce stade.
+
+
+### Complément HIRMS-01 — Contrat de facturation UAT (non livré)
+- JSON individuel et bulk reçu, noms de champs conservés, contrat Zod, 500 factures maximum par lot.
+- Préflight de chaque facture contre EnterpriseSalesInvoice, lien obligatoire Health/Pharmacy et ServiceProviderID HSL.
+- Outbox idempotente par facture, suivi des états QUEUED/RECEIVED/REJECTED/UNKNOWN_OUTCOME ; aucune écriture comptable déclenchée.
+- Console UAT import JSON, contrôles puis confirmation ; envoi distant bloqué par défaut.
+- Exigence de certification HSL maintenue pour les noms d'identifiants, la sémantique des montants, les dates, les codes et le suivi des statuts.
+
+### HIRMS-01 — Sélection UAT ou PRODUCTION (branche non livrée)
+- Registre, OAuth, vérification d'adhérents et facturation individuelle/bulk reliés aux deux environnements officiels HSL.
+- Configurations et secrets distincts par organisation + adaptateur + environnement ; aucune migration automatique des identifiants UAT vers Production.
+- Historique, empreintes et prévention des doublons séparés par environnement ; les états incertains restent bloqués jusqu'au rapprochement.
+- Interfaces Design 2.0 : sélecteur UAT/PRODUCTION partagé, confirmation explicite d'un envoi réel, aides et liens profonds conservant la destination.
+- Variables serveur HEALTH_INSURANCE_HIRMS_PRODUCTION_ENABLED et HEALTH_INSURANCE_HIRMS_PRODUCTION_INVOICE_SEND_ENABLED = false par défaut ; aucun appel réel ni déploiement de cette branche en Production.
+
+### HIRMS-01 — Pipeline OCR et suivi HSL (branche #1128, non fusionné)
+- OAuth HSL UAT/Production à autorisation par entreprise ; verrouillages séparés UploadInvoices et UploadDocuments.
+- Nouvel historique d'outbox OCR sans octets ni texte médical ; endpoint HSL multipart PDF/image, date de facture, polling OCR par job.
+- Interface OCR responsive Design 2.0, pagination, filtrage par environnement, confirmation de l'envoi Production.
+- Suivi manuel du statut des factures HSL, strictement informatif (aucun règlement, créance ou posting).
+- Proxy direct limité à 4 MiB ; HSL 50 Mo ; circuit volumineux et certification des statuts reportés, sans simulation de succès.

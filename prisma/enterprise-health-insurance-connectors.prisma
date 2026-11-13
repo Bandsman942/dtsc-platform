@@ -1,0 +1,110 @@
+// Generic health-insurance integration boundary. No clinical data or plaintext credentials.
+model EnterpriseHealthInsuranceConnector {
+  id                   String   @id @default(cuid())
+  organizationId       String
+  adapterCode          String   @default("HIRMS_HSL")
+  environment          String   @default("UAT")
+  siteId               String?
+  hslServiceProviderId Int?
+  status               String   @default("DRAFT")
+  credentialsEncrypted String?
+  credentialsUpdatedAt DateTime?
+  lastAuthCheckAt      DateTime?
+  lastVerifiedAt       DateTime?
+  lastErrorCode        String?
+  revision             Int      @default(1)
+  createdByUserId      String
+  updatedByUserId      String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  verifications        EnterpriseHealthInsuranceVerification[]
+  submissions          EnterpriseHealthInsuranceInvoiceSubmission[]
+  ocrJobs              EnterpriseHealthInsuranceOcrJob[]
+
+  @@unique([organizationId, adapterCode, environment], map: "EHIConnector_org_adapter_env_key")
+  @@unique([organizationId, id])
+  @@index([organizationId, status])
+}
+
+model EnterpriseHealthInsuranceVerification {
+  id                String   @id @default(cuid())
+  organizationId    String
+  connectorId       String
+  patientId         String?
+  memberLastFour    String
+  serviceCode       String?
+  codeSystem        String?
+  serviceDate       String?
+  verified          Boolean
+  coverStatus       String?
+  serviceStatus     String?
+  networkStatus     String?
+  createdByUserId   String
+  createdAt         DateTime @default(now())
+  connector         EnterpriseHealthInsuranceConnector @relation(fields: [organizationId, connectorId], references: [organizationId, id], onDelete: Restrict)
+
+  @@index([organizationId, createdAt])
+  @@index([organizationId, connectorId, createdAt])
+  @@index([organizationId, patientId, createdAt])
+}
+
+/** Transport outbox only. ERP SalesInvoice remains the sole financial source of truth.
+ * No medical narrative or complete HIRMS JSON is persisted here.
+ */
+model EnterpriseHealthInsuranceInvoiceSubmission {
+  id                String   @id @default(cuid())
+  organizationId    String
+  connectorId       String
+  adapterCode       String   @default("HIRMS_HSL")
+  salesInvoiceId    String
+  environment       String   @default("UAT")
+  invoiceNumber     String
+  batchId           String?
+  payloadDigest     String
+  transportStatus   String   @default("SENDING")
+  httpStatus        Int?
+  errorCode         String?
+  externalReference String?
+  remoteStatus      String?
+  lastStatusCheckedAt DateTime?
+  lastStatusErrorCode String?
+  createdByUserId   String
+  submittedAt       DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  connector         EnterpriseHealthInsuranceConnector @relation(fields: [organizationId, connectorId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, adapterCode, environment, salesInvoiceId], map: "EHIInvoiceSubmission_org_adapter_env_invoice_key")
+  @@index([organizationId, environment, submittedAt], map: "EHIInvoiceSubmission_org_env_date_idx")
+  @@index([organizationId, environment, batchId], map: "EHIInvoiceSubmission_org_env_batch_idx")
+  @@index([organizationId, environment, transportStatus, submittedAt], map: "EHIInvoiceSubmission_org_env_status_date_idx")
+}
+
+/** HSL OCR outbox: only digest, server reference, status codes and aggregate metadata.
+ * Never persist submitted document bytes, extracted clinical text or filename.
+ */
+model EnterpriseHealthInsuranceOcrJob {
+  id                  String   @id @default(cuid())
+  organizationId      String
+  connectorId         String
+  adapterCode         String   @default("HIRMS_HSL")
+  environment         String   @default("UAT")
+  salesInvoiceId      String?
+  documentDigest      String
+  mimeType            String
+  bytes               Int
+  invoiceDate         String?
+  externalJobId       String?
+  transportStatus     String   @default("UPLOADING")
+  httpStatus          Int?
+  remoteStatus        String?
+  lastPolledAt        DateTime?
+  errorCode           String?
+  createdByUserId     String
+  submittedAt         DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  connector           EnterpriseHealthInsuranceConnector @relation(fields: [organizationId, connectorId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, adapterCode, environment, documentDigest], map: "EHIOcr_org_adapter_env_digest_key")
+  @@index([organizationId, environment, submittedAt], map: "EHIOcr_org_env_date_idx")
+  @@index([organizationId, externalJobId], map: "EHIOcr_org_remote_id_idx")
+}

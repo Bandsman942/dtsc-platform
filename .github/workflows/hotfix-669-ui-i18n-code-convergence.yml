@@ -117,7 +117,8 @@ jobs:
           set -o pipefail
           pnpm build 2>&1 | tee /tmp/dtsc-hotfix-669-build.log
         env:
-          NODE_OPTIONS: --max-old-space-size=6144
+          DTSC_CI_STATIC_CHECKS_PASSED: "true"
+          NODE_OPTIONS: --max-old-space-size=8192
       - name: Stop Redis REST proxy
         if: always()
         run: |

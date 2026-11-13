@@ -233,9 +233,12 @@ jobs:
       - name: Lint
         run: pnpm lint
       - name: Build
+        # Type check and ESLint have already passed as mandatory separate steps.
+        # Avoid running them again in next build: the duplicate checker OOMs at 6 GiB.
         run: pnpm build
         env:
-          NODE_OPTIONS: --max-old-space-size=6144
+          DTSC_CI_STATIC_CHECKS_PASSED: "true"
+          NODE_OPTIONS: --max-old-space-size=8192
 
   migration:
     name: Migration

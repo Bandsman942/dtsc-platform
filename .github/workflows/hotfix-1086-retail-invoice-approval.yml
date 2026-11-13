@@ -116,7 +116,8 @@ jobs:
       - name: Production build (no Vercel deployment)
         run: pnpm build
         env:
-          NODE_OPTIONS: --max-old-space-size=6144
+          DTSC_CI_STATIC_CHECKS_PASSED: "true"
+          NODE_OPTIONS: --max-old-space-size=8192
       - name: Stop Redis REST proxy
         if: always()
         run: |
