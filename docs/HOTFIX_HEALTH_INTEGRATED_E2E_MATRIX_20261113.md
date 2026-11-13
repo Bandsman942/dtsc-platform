@@ -1,5 +1,5 @@
 # DTSC HEALTH CARE — Matrice d'intégration des six hotfixes
-Version candidate : 1.17.2 · Date : 13/11/2026 · **Non fusionnée, non déployée**
+Version candidate : 1.17.3 · Date : 13/11/2026 · **Non fusionnée, non déployée**
 
 ## Périmètre implémenté
 - #1146 HEALTH-01 : autorisations cliniques distinctes, résultats laboratoire individuels, masquage des projections et KPI canoniques.
