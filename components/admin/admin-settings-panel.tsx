@@ -94,7 +94,7 @@ export function AdminSettingsPanel({
         body: JSON.stringify(payload),
       });
       const body = await response.json().catch(() => null);
-      if (response.ok && body?.queued) {
+      if (response.ok && body?.queued && body?.zoho?.queued) {
         const count = Number.isFinite(body.recipientCount) ? body.recipientCount : 0;
         setBroadcastMessage(
           `Diffusion mise en file pour ${count} utilisateur(s). ${body?.zoho?.personalized
