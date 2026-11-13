@@ -19,7 +19,7 @@ async function dispatch(req: Request, { params }: Params, method: Method): Promi
       if (method === "OPTIONS") return new Response(null, {status:204, headers:{"Allow":allowed.join(", "), "Cache-Control":"no-store"}});
       if (!["POST"].includes(method)) return methodNotAllowed(allowed);
       const original = await import("@/app/api/enterprise/[organizationId]/insurance-connectors/verify/handler");
-      
+
       if (method === "POST") return original.POST(req, ctx);
       return methodNotAllowed(allowed);
     }
@@ -37,7 +37,7 @@ async function dispatch(req: Request, { params }: Params, method: Method): Promi
       if (method === "OPTIONS") return new Response(null, {status:204, headers:{"Allow":allowed.join(", "), "Cache-Control":"no-store"}});
       if (!["POST"].includes(method)) return methodNotAllowed(allowed);
       const original = await import("@/app/api/enterprise/[organizationId]/insurance-connectors/ocr/status/handler");
-      
+
       if (method === "POST") return original.POST(req, ctx);
       return methodNotAllowed(allowed);
     }
@@ -55,7 +55,7 @@ async function dispatch(req: Request, { params }: Params, method: Method): Promi
       if (method === "OPTIONS") return new Response(null, {status:204, headers:{"Allow":allowed.join(", "), "Cache-Control":"no-store"}});
       if (!["POST"].includes(method)) return methodNotAllowed(allowed);
       const original = await import("@/app/api/enterprise/[organizationId]/insurance-connectors/invoices/status/handler");
-      
+
       if (method === "POST") return original.POST(req, ctx);
       return methodNotAllowed(allowed);
     }
