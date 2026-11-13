@@ -158,13 +158,20 @@ jobs:
           node scripts/qa-hotfix-745-finance-ui-backend-convergence.mjs
           node scripts/qa-hotfix-728-pharmacy-refund-finance-convergence.mjs
           node scripts/qa-ci-auth-rate-limit-provisioning.mjs
+      - name: Type check before production build
+        run: pnpm type-check
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144
+      - name: Lint before production build
+        run: pnpm lint
       - name: Build production application
         shell: bash
         run: |
           set -o pipefail
           pnpm build 2>&1 | tee /tmp/dtsc-accounting-build.log
         env:
-          NODE_OPTIONS: --max-old-space-size=6144
+          DTSC_CI_STATIC_CHECKS_PASSED: "true"
+          NODE_OPTIONS: --max-old-space-size=8192
       - name: Install Playwright Chromium
         run: pnpm exec playwright install --with-deps chromium
       - name: Start production application
