@@ -1,3 +1,7 @@
+## 2026-11-13 — HEALTH-04 #1149 — disponibilité stock et prélèvements (NON FUSIONNÉ)
+
+- Sérialisation des mutations pharmacie; demande laboratoire refuse les prélèvements incompatibles. Convergence Inventaire ERP et LIS complet restant dans #1149.
+
 ## 2026-11-13 — HEALTH-01 / #1146 — candidat v1.17.2 (NON FUSIONNÉ)
 
 - Contrôles P0 : résultats laboratoire par examen, autorisation clinique distincte du rôle administratif, protections de mise à jour patient, KPI canoniques indépendants des 300 enregistrements legacy, minimisation des nouvelles projections Santé.
