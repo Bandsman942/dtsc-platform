@@ -39,6 +39,11 @@ export async function validateHealthLabReferences(organizationId:string,data:Par
   if(data.requestedById&&!requester)return {error:"Le demandeur médical n’est pas un professionnel actif de cette entreprise."};
   if(data.assignedLabStaffId&&!assignee)return {error:"Le professionnel laboratoire assigné n’est pas actif dans cette entreprise."};
   if(testIds.length&&tests.length!==new Set(testIds).size)return {error:"Un examen sélectionné n’appartient pas au catalogue actif de cette entreprise."};
+  // Until multi-specimen tracking exists, refuse one collection event that
+  // claims to cover tests requiring incompatible specimen types.
+  const specimenTypes=new Set(tests.map(test=>test.sampleType));
+  if(specimenTypes.size>1)return {error:"Ces examens nécessitent des prélèvements de types différents. Créez une demande séparée par type de prélèvement."};
+  if(data.sampleType&&specimenTypes.size===1&&!specimenTypes.has(data.sampleType))return {error:"Le type de prélèvement sélectionné ne correspond pas aux examens demandés."};
   if(data.mainTestId&&!tests.some(test=>test.id===data.mainTestId))return {error:"L’examen principal doit faire partie des examens demandés."};
   return {patient,consultation,tests,medicalRecord};
 }
@@ -61,6 +66,7 @@ export async function updateHealthLabRequest(organizationId:string,requestId:str
   if(existing.sampledAt&&(data.patientId&&data.patientId!==existing.patientId||data.consultationId!==undefined&&nil(data.consultationId)!==existing.consultationId))throw new Error("RELATION_LOCKED");
   if(data.testIds&&(!["DRAFT","REQUESTED","PENDING_SAMPLE"].includes(existing.status)||Boolean(existing.sampledAt)))throw new Error("TEST_CATALOG_LOCKED_AFTER_SAMPLING");
   const refs=await validateHealthLabReferences(organizationId,data,existing.patientId);if(refs.error)throw new Error("INVALID_REFERENCE");
+  if(data.sampleType&&!data.testIds&&existing.items.some(item=>item.sampleType!==data.sampleType))throw new Error("INVALID_SAMPLE_TYPE");
   const main=data.mainTestId?refs.tests?.find(test=>test.id===data.mainTestId):undefined;
   return prisma.$transaction(async tx=>{
     const request=await tx.healthLabRequest.update({where:{id:existing.id},data:{patientId:data.patientId,consultationId:data.consultationId===undefined?undefined:nil(data.consultationId),requestedById:data.requestedById,assignedLabStaffId:data.assignedLabStaffId===undefined?undefined:nil(data.assignedLabStaffId),mainTestId:data.mainTestId,testLabel:main?.labelFr,clinicalIndication:data.clinicalIndication===undefined?undefined:nil(data.clinicalIndication),medicalNotes:data.medicalNotes===undefined?undefined:nil(data.medicalNotes),sampleType:data.sampleType,priority:data.priority,confidentialityLevel:data.confidentialityLevel,expectedSampleAt:data.expectedSampleAt,internalNotes:data.internalNotes===undefined?undefined:nil(data.internalNotes),laboratoryNotes:data.laboratoryNotes===undefined?undefined:nil(data.laboratoryNotes),updatedById:actorUserId}});
