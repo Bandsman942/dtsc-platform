@@ -10,27 +10,23 @@ const pushQueue = read("lib/push/queue.ts");
 const pushConstants = read("lib/push/constants.ts");
 const sender = read("lib/push/sender.ts");
 const pushWorker = read("lib/push/worker.ts");
-const workflowEngine = read("lib/enterprise/workflows/engine.ts");
-const projection = read("lib/enterprise/cross-module/projection-service.ts");
-const bulk = read("lib/enterprise/bulk-jobs/worker.ts");
 
 const domainEventModel = schema.slice(schema.indexOf("model EnterpriseDomainEvent {"));
-assert.match(domainEventModel, /organizationId\s+String\?/, "Global outbox must model NULL platform scope");
-assert.match(migration, /ALTER COLUMN "organizationId" DROP NOT NULL/, "Additive migration must allow NULL");
-assert.match(migration, /EnterpriseDomainEvent_platform_scope_check/, "Platform NULL scope must be allow-listed");
-for (const type of ["PLATFORM_WEB_PUSH_NOTIFICATION", "PLATFORM_ADMIN_BROADCAST_EMAIL_PAYLOAD", "PLATFORM_ADMIN_BROADCAST_EMAIL_DELIVERY"])
-  assert.ok(migration.includes(type), `Missing platform job type in scope guard: ${type}`);
-assert.doesNotMatch(migration, /DROP (?:TABLE|CONSTRAINT)|DELETE FROM|TRUNCATE/i, "Do not drop any tenant FK, table or data");
-assert.doesNotMatch(emailQueue + emailConstants + pushQueue + pushConstants, /__DTSC_PLATFORM__|ADMIN_BROADCAST_PLATFORM_ORGANIZATION_ID|WEB_PUSH_PLATFORM_ORGANIZATION_ID/,
-  "Do not enqueue platform jobs with a synthetic foreign-key value");
-assert.match(emailQueue, /organizationId: null/, "Platform email jobs must be unscoped");
-assert.match(emailQueue, /prisma\.\$transaction/, "Broadcast email + notifications + push must remain atomic");
-assert.match(pushConstants, /return organizationId \?\? null;/, "Global push scope must roundtrip as NULL");
-assert.match(pushQueue, /organizationId: webPushQueueOrganizationId\(organizationId\)/);
-assert.match(sender, /expectedQueueOrganizationId: string \| null/, "Push scope verifier must accept nullable scope");
-assert.match(sender, /webPushQueueOrganizationId\(notification\.organizationId\) !== expectedQueueOrganizationId/, "Push must verify canonical notification scope");
-assert.match(pushWorker, /organizationId: string \| null/, "Push worker claim must represent platform scope");
-assert.match(workflowEngine, /if \(!event\.organizationId\) return \[\];/, "Tenant workflows must ignore global platform events");
-assert.match(projection, /if \(!event\?\.organizationId\)/, "Tenant projections must reject global platform events");
-assert.match(bulk, /if \(!event\.organizationId\) continue;/, "Tenant bulk cleanup must not touch global jobs");
-console.log("PASS global outbox static contract: guarded NULL platform scope, tenant isolation, original worker invariants");
+assert.match(domainEventModel, /organizationId\s+String\b(?!\?)/, "Outbox owner remains required by Prisma compound unique / tenant relations");
+assert.match(domainEventModel, /@@unique\(\[organizationId, id\]\)/, "Keep composite tenant-safe relation unique");
+assert.match(migration, /EnterpriseDomainEvent_global_broadcast_owner_check/, "Migration must enforce global broadcast ownership");
+assert.match(migration, /"organizationId" = 'dtsc-internal'/, "Global email payload/delivery must belong to real internal organization");
+assert.doesNotMatch(migration, /DROP (?:TABLE|CONSTRAINT|NOT NULL)|DELETE FROM|TRUNCATE/i, "Do not weaken the tenant FK, composite constraint or delete rows");
+for (const type of ["PLATFORM_ADMIN_BROADCAST_EMAIL_PAYLOAD", "PLATFORM_ADMIN_BROADCAST_EMAIL_DELIVERY"])
+  assert.ok(migration.includes(type), `Missing guarded mail type: ${type}`);
+assert.doesNotMatch(emailQueue + emailConstants + pushQueue + pushConstants, /__DTSC_PLATFORM__/, "Synthetic FK sentinel must be eliminated");
+assert.match(emailConstants, /ADMIN_BROADCAST_PLATFORM_ORGANIZATION_ID = DTSC_INTERNAL_ORGANIZATION_ID/, "Email uses canonical owner ID");
+assert.match(emailQueue, /organizationId: ADMIN_BROADCAST_PLATFORM_ORGANIZATION_ID/, "Email must have real organization ID");
+assert.match(emailQueue, /prisma\.\$transaction/, "Notifications, Push and mail jobs remain atomic");
+assert.match(emailQueue, /userId: recipient\.id,\s+organizationId: null,/, "Global user notifications retain null organizationId");
+assert.match(pushConstants, /return organizationId \?\? DTSC_INTERNAL_ORGANIZATION_ID;/, "Global Push must map to real internal owner");
+assert.match(pushQueue, /organizationId: webPushQueueOrganizationId\(organizationId\)/, "Push enqueues canonical scope");
+assert.match(sender, /expectedQueueOrganizationId: string;/, "Push verifier continues to require a real tenant");
+assert.match(sender, /webPushQueueOrganizationId\(notification\.organizationId\) !== expectedQueueOrganizationId/, "Push sender checks notification scope");
+assert.match(pushWorker, /organizationId: string;/, "Push claim remains non-nullable");
+console.log("PASS global outbox static contract: real DTSC owner, FK/Prisma compatibility, worker isolation and mail atomicity");
