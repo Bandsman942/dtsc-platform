@@ -6,6 +6,7 @@ import { useAppLocale } from "@/components/i18n/locale-provider";
 import { useToastMessage } from "@/components/ui/use-toast-message";
 import type { HirmsEnvironment } from "@/lib/enterprise/health-insurance-connectors/environments";
 import { HirmsEnvironmentSwitch } from "./hirms-environment-switch";
+import { HirmsWorkspaceNavigation } from "./hirms-workspace-navigation";
 
 type OcrRow = {
   id: string; mimeType: string; bytes: number; invoiceDate: string | null; submittedAt: string;
@@ -92,6 +93,7 @@ export function HirmsOcrWorkspace({organizationId,initialEnvironment="UAT"}:{
       <Link href={`/enterprise-insurance/connectors?environment=${environment}`} className="rounded-xl border border-dtsc-border px-3 py-2 text-sm font-bold text-dtsc-ink">{tx("Configuration HSL","HSL settings")}</Link>
     </header>
     <HirmsEnvironmentSwitch value={environment} onChange={switchEnvironment} disabled={pending}/>
+      <HirmsWorkspaceNavigation active="ocr" environment={environment}/>
     <section className="flex items-start gap-2 rounded-xl border border-amber-500/40 bg-amber-500/5 p-3 text-xs text-dtsc-ink">
       <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" aria-hidden="true"/>
       <p>{tx("HSL accepte 50 Mo par document ; ce transfert direct est limité à 4 Mo sur Vercel. Autorisation UploadDocuments requise. Ni reconnaissance OCR ni traitement terminé ne valent validation de facture ou paiement.",
