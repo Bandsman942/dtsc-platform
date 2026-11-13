@@ -53,9 +53,9 @@ Ce lot réduit la latence interactive et rend les diffusions rejouables. Il ne c
 
 L'API a échoué avec Prisma P2003 sur `EnterpriseDomainEvent_organizationId_fkey` :
 le payload maître et les jobs e-mail utilisaient le faux ID
-`__DTSC_PLATFORM__`. Ils emploient désormais `organizationId = NULL`
-dans la transaction existante ; une contrainte CHECK limite cette portée
-aux jobs e-mail de diffusion et Web Push. Les événements tenant-scoped
-restent liés par la FK à une organisation réelle. Erreur publique expurgée
+`__DTSC_PLATFORM__`. Ils utilisent désormais l'organisation réelle `dtsc-internal`
+(`DTSC_INTERNAL_ORGANIZATION_ID`) dans la transaction ; une contrainte
+CHECK empêche d'attacher des jobs e-mail globaux à un tenant client.
+La FK et l'unique composite Prisma restent inchangées. Erreur publique expurgée
 avec référence d'incident ; pas de promesse de livraison avant le worker.
 Voir `docs/HOTFIX_GLOBAL_OUTBOX_SCOPE_20261113.md`.
