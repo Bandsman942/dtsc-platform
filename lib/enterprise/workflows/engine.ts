@@ -381,8 +381,6 @@ export async function resumeWaitingRuns(batchSize: number = WORKFLOW_LIMITS.work
 export async function processWorkflowDomainEvent(eventId: string) {
   const event = await prisma.enterpriseDomainEvent.findUnique({ where: { id: eventId } });
   if (!event) throw new EnterpriseWorkflowError("Événement métier introuvable.", 404, "WORKFLOW_DOMAIN_EVENT_NOT_FOUND", "BUSINESS");
-  // Platform notification/mail events never belong to an enterprise workflow.
-  if (!event.organizationId) return [];
   const payload = payloadObject(event.payloadJson);
   if (event.entityType === "EnterpriseApproval" && ["ENTERPRISE_APPROVAL_APPROVED", "ENTERPRISE_APPROVAL_REJECTED", "ENTERPRISE_APPROVAL_CANCELLED"].includes(event.eventType)) {
     await resumeWorkflowFromApproval(event.entityId, typeof payload.actorUserId === "string" ? payload.actorUserId : null);
