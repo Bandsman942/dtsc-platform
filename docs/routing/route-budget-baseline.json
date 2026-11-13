@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "capturedAt": "2026-11-13",
+  "sourceCommit": "09d6a1e53c8134e2e3ae4b5310fe180411e2a187",
+  "source": {
+    "pageFiles": 99,
+    "routeHandlerFiles": 815,
+    "total": 914,
+    "apiFiles": 814,
+    "enterpriseApiFiles": 545
+  },
+  "buildEvidence": {
+    "productionDeployment": "dpl_4ZDFFtdXs2Q17qVoiUbFRQBrbrUY",
+    "productionState": "READY",
+    "verifiedVercelRuleCount": null,
+    "incident": "too_many_routes",
+    "incidentReportedRules": 2064,
+    "incidentMaxRules": 2048
+  },
+  "policy": {
+    "maxSourceRouteFiles": 900,
+    "minFreedFromBaseline": 20,
+    "maximumVercelBuildOutputRules": 2048,
+    "note": "File count is NOT Vercel rule count. Vercel rule count is only exact if .vercel/output/config.json is present. Production READY does not reveal the number of rules."
+  }
+}

@@ -1,3 +1,12 @@
+## 2026-11-13 — ROUTES-01→04 (#1135) — v1.17.0 (PR non fusionnée)
+
+- Audit routage : compteur de fichiers source et preuve build Vercel séparés, baseline et garde-fou CI.
+- API HIRMS et exports Console regroupés en handlers dynamiques avec allowlist ; 9 contenus d'origine inchangés et audit/RBAC conservés.
+- 14 pages Finance redondantes consolidées vers le workspace dynamique existant sans changer les URLs ni les permissions.
+- ADR de séparation future des builds Vercel ; aucune extraction de trafic/DNS ni déploiement depuis la branche.
+- Économie de **21 fichiers de routes Next.js** (914 → 893 sur la base du snapshot main), nombre de règles Vercel à confirmer post-merge.
+- Référence : `docs/ROUTING_SCALABILITY_ROUTES_01_04.md` et Issue #1135.
+
 ## 2026-11-12 — Issue #1127 — Connecteurs assurances santé / HIRMS (candidat v1.16.0, NON LIVRÉ)
 
 - Socle générique des connecteurs d'assurance, premier adaptateur HIRMS/MSO limité à UAT ; credentials HSL chiffrés, OAuth Authentik et vérification réelle des adhérents par `VerifyMembers`.

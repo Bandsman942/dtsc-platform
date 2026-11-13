@@ -1,11 +1,12 @@
 {
   "name": "dtsc-platform",
-  "version": "1.16.1",
+  "version": "1.17.0",
   "private": true,
   "engines": {
     "node": "22.x"
   },
   "scripts": {
+    "qa:routing-scalability": "node scripts/qa-routes-dispatch-parity.mjs && node scripts/qa-routes-scalability.mjs --assert",
     "qa:hirms-design2-1132": "node --experimental-strip-types scripts/qa-hirms-design2-1132.mjs",
     "qa:vercel-route-budget-1132": "node scripts/qa-hotfix-1132-route-budget.mjs",
     "qa:health-insurance-hirms-01": "node scripts/qa-health-insurance-hirms-01.mjs",
