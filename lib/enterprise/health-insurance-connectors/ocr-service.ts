@@ -31,10 +31,15 @@ function parseInvoiceDate(value: string) {
 
 export async function uploadHirmsOcrForTenant(
   organizationId: string, userId: string, environment: HirmsEnvironment,
-  file: File, invoiceDate: string, salesInvoiceId?: string,
+  file: File, invoiceDate?: string, salesInvoiceId?: string, providerId?: string, note?: string,
 ) {
   assertHirmsOcrUploadEnabled(environment, organizationId);
-  parseInvoiceDate(invoiceDate);
+  if (invoiceDate) parseInvoiceDate(invoiceDate);
+  // providerId is HSL’s external facility GUID, NOT the numeric ServiceProviderID used for invoices.
+  if (providerId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(providerId))
+    reject("HIRMS_OCR_PROVIDER_GUID_INVALID", 400);
+  if (note && (note.length > 300 || /[\x00-\x08\x0b\x0c\x0e-\x1f]/.test(note)))
+    reject("HIRMS_OCR_NOTE_INVALID", 400);
   if (file.size < 1 || file.size > HIRMS_OCR_PROXY_MAX_BYTES) reject("HIRMS_OCR_PROXY_FILE_TOO_LARGE", 413);
   const declared = file.type;
   if (!["application/pdf","image/png","image/jpeg","image/webp"].includes(declared)) reject("HIRMS_OCR_TYPE_UNSUPPORTED", 415);
@@ -61,7 +66,7 @@ export async function uploadHirmsOcrForTenant(
       data: {
         organizationId, connectorId: connector.id, adapterCode: "HIRMS_HSL", environment,
         salesInvoiceId: salesInvoiceId || null, documentDigest: digest,
-        mimeType: actual, bytes: buffer.byteLength, invoiceDate, createdByUserId: userId,
+        mimeType: actual, bytes: buffer.byteLength, invoiceDate: invoiceDate || null, createdByUserId: userId,
         transportStatus: "UPLOADING",
       },
       select: { id: true },
@@ -73,7 +78,7 @@ export async function uploadHirmsOcrForTenant(
   }
   try {
     const result = await uploadHirmsOcrDocument(openHirmsCredentials(connector.credentialsEncrypted),
-      environment, organizationId, buffer, actual, invoiceDate);
+      environment, organizationId, buffer, actual, invoiceDate, providerId, note);
     const transportStatus = result.jobId ? (result.httpStatus===202 ? "QUEUED" : "RECEIVED") : "REFERENCE_UNCONFIRMED";
     await prisma.enterpriseHealthInsuranceOcrJob.updateMany({
       where: { id: job.id, organizationId, environment, connectorId: connector.id },
