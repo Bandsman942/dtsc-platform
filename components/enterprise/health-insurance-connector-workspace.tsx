@@ -5,6 +5,7 @@ import { BadgeCheck, CircleHelp, KeyRound, PlugZap, RefreshCw, ShieldCheck, Stet
 import { useAppLocale } from "@/components/i18n/locale-provider";
 import { useToastMessage } from "@/components/ui/use-toast-message";
 import { HirmsEnvironmentSwitch } from "./hirms-environment-switch";
+import { HirmsWorkspaceNavigation } from "./hirms-workspace-navigation";
 import type { HirmsEnvironment } from "@/lib/enterprise/health-insurance-connectors/environments";
 
 type Connector = {
@@ -90,6 +91,7 @@ export function HealthInsuranceConnectorWorkspace({ organizationId, initialEnvir
       </section>
 
       <HirmsEnvironmentSwitch value={environment} onChange={next=>{requestEpoch.current++;setEnvironment(next);setData(null);setUsername("");setSecret("");}} disabled={pending} />
+      <HirmsWorkspaceNavigation active="connectors" environment={environment}/>
       {environment === "PRODUCTION" && <div role="note" className="rounded-xl border border-amber-500/50 bg-amber-500/10 p-3 text-sm text-dtsc-ink">{tx("Environnement réel. Utilisez exclusivement les identifiants de Production remis par HSL. Les appels sont bloqués tant que DTSC n’a pas habilité la Production.", "Live environment. Use only Production credentials issued by HSL. Outbound calls are blocked until DTSC enables Production.")}</div>}
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1.5fr)_minmax(280px,1fr)]">
         <form onSubmit={save} className="min-w-0 space-y-4 rounded-2xl border border-dtsc-border bg-dtsc-surface p-4 sm:p-5">
