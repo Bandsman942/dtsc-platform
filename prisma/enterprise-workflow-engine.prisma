@@ -291,7 +291,8 @@ model EnterpriseWorkflowScheduleOccurrence {
 
 model EnterpriseDomainEvent {
   id               String   @id @default(cuid())
-  organizationId   String
+  // NULL is reserved for platform-level jobs; tenant events keep a valid Organization FK.
+  organizationId   String?
   eventType        String
   entityType       String
   entityId         String
