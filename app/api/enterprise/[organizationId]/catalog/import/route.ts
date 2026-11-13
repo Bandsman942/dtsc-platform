@@ -81,10 +81,14 @@ export async function POST(req: Request, { params }: Params) {
     const preview = { count: rows.length, valid: rows.length - invalid.length, invalid: invalid.length, rows: rows.map(({ line, name, itemType, errors }, index) => ({
       line, name: name.slice(0, 240), itemType, errors,
       sku: (records[index]?.cells[2] || "").slice(0, 120),
+      description: (records[index]?.cells[3] || "").slice(0, 240),
       categoryCode: (records[index]?.cells[4] || "").slice(0, 40),
       unitCode: (records[index]?.cells[5] || "").slice(0, 40),
       salePrice: (records[index]?.cells[6] || "").slice(0, 40),
+      cost: (records[index]?.cells[7] || "").slice(0, 40),
       currency: (records[index]?.cells[8] || "").slice(0, 8),
+      taxable: (records[index]?.cells[9] || "").slice(0, 12),
+      taxCode: (records[index]?.cells[10] || "").slice(0, 80),
       trackInventory: (records[index]?.cells[11] || "").slice(0, 10),
     })) };
     if (mode === "preview" || invalid.length) {
