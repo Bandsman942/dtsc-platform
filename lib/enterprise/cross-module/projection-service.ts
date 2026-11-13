@@ -16,7 +16,7 @@ export class EnterpriseCrossModuleProjectionError extends Error {
   }
 }
 
-type DomainEventRecord = Awaited<ReturnType<typeof prisma.enterpriseDomainEvent.findUniqueOrThrow>> & { organizationId: string };
+type DomainEventRecord = Awaited<ReturnType<typeof prisma.enterpriseDomainEvent.findUniqueOrThrow>>;
 type ProjectionTarget = { targetEntityType: string; targetEntityId: string; targetModule: string };
 type ProjectionFailure = { code: string; message: string; retryable: boolean };
 type ProjectionRunResult = { projection: EnterpriseCrossModuleProjection; skipped: boolean; targets: ProjectionTarget[]; error?: ProjectionFailure };
@@ -278,7 +278,7 @@ async function runProjection(projectionId: string, definition: CrossModuleEventD
   });
   if (claimed.count !== 1) return { projection: await prisma.enterpriseCrossModuleProjection.findUniqueOrThrow({ where: { id: projection.id } }), skipped: true, targets: [] as ProjectionTarget[] };
   const event = await prisma.enterpriseDomainEvent.findFirst({ where: { id: projection.domainEventId, organizationId: projection.organizationId } });
-  if (!event?.organizationId) {
+  if (!event) {
     const failure: ProjectionFailure = { code: "DOMAIN_EVENT_NOT_FOUND", message: "L’événement métier source est introuvable.", retryable: false };
     const failed: EnterpriseCrossModuleProjection = await prisma.enterpriseCrossModuleProjection.update({ where: { id: projection.id }, data: { status: "DEAD", failedAt: new Date(), lastErrorCode: failure.code, lastErrorMessage: failure.message } });
     return { projection: failed, skipped: false, targets: [] as ProjectionTarget[], error: failure };
@@ -328,7 +328,7 @@ async function runProjection(projectionId: string, definition: CrossModuleEventD
 
 export async function processCrossModuleProjections(domainEventId: string) {
   const event = await prisma.enterpriseDomainEvent.findUnique({ where: { id: domainEventId } });
-  if (!event?.organizationId) return { eventId: domainEventId, projections: [], failures: 0 };
+  if (!event) return { eventId: domainEventId, projections: [], failures: 0 };
   const definitions = crossModuleDefinitionsFor(event.eventType);
   const projections = [];
   for (const definition of definitions) {
