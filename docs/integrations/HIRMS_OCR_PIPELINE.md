@@ -6,14 +6,14 @@ Synchroniser les documents de facturation PDF/image avec l'OCR HSL sans confondr
 ## Contrat HSL confirmé par le guide client
 - UAT API : https://hslapi.alatlabs.com ; Production : https://hirmsapi.healthsystemlink.com.
 - Autorisation HSL : `UploadDocuments`, séparée de `UploadInvoices` et `VerifyMembers`.
-- `POST /api/ocr/documents` : `multipart/form-data`, un seul champ `file` PDF ou image et `invoiceDate=yyyy-MM-dd`.
+- `POST /api/ocr/documents` : `multipart/form-data` avec `file` PDF/image ; `providerId` (GUID d’établissement HSL, requis si plusieurs établissements), `invoiceDate` (`yyyy-MM-dd`) et `note` facultatifs. `providerId` est distinct du `ServiceProviderID` numérique des factures.
 - `GET /api/ocr/jobs/{jobId}` : suivi asynchrone du traitement ; 202 indique une réception en cours, **pas** une approbation médicale ou financière.
 - HSL annonce 50 Mo maximum par document. Le proxy direct Next.js/Vercel implémenté limite chaque fichier à **4 MiB** : son enveloppe HTTP est contrôlée avant lecture ; ne jamais afficher 50 Mo comme limite de notre interface.
 - Les noms exacts des propriétés du JSON de réponse, les codes d'état et le comportement de reprise restent **non certifiés** sans modèle OpenAPI et essais HSL. Le code reconnaît un nombre limité de références de job ; une réponse sans référence exploitable reste `REFERENCE_UNCONFIRMED` et ne doit pas être renvoyée automatiquement.
 
 ## Parcours DTSC
 1. Admin Santé/Pharmacie configure un connecteur UAT ou Production **indépendant**, chiffré, vérifié via HSL.
-2. Responsable accède à `/enterprise-insurance/ocr?environment=UAT|PRODUCTION`, choisit un PDF/PNG/JPEG/WebP, renseigne la date et éventuellement l'identifiant d'une facture ERP déjà émise.
+2. Responsable accède à `/enterprise-insurance/ocr?environment=UAT|PRODUCTION`, choisit un PDF/PNG/JPEG/WebP, peut préciser le GUID d'établissement HSL, la date de facture, une note et éventuellement l'identifiant d'une facture ERP déjà émise.
 3. Contrôles tenant + secteur + RBAC + CSRF + limite de débit + organisation Production autorisée + flag `UploadDocuments` (DTSC) + signature réelle du fichier + taille.
 4. Une ligne d'outbox `EnterpriseHealthInsuranceOcrJob` est créée **avant** l'appel externe ; unicité entreprise + adaptateur + environnement + SHA-256 du document.
 5. Transmission HSL en HTTPS (OAuth actualisé une fois sur 401). Un succès réseau enregistre seulement la référence éventuelle du job et son code d'état. Timeout et 5xx ambiguës restent `UNKNOWN_OUTCOME` ; aucun retry implicite.
@@ -22,7 +22,7 @@ Synchroniser les documents de facturation PDF/image avec l'OCR HSL sans confondr
 
 ## Routes
 - `GET /api/enterprise/[organizationId]/insurance-connectors/ocr?environment=UAT&page=1` : liste de 20 statuts du même tenant et du même environnement.
-- `POST /api/enterprise/[organizationId]/insurance-connectors/ocr` : multipart `environment`, `invoiceDate`, `file`, `salesInvoiceId` optionnel ; en Production `productionConfirmation=PRODUCTION`.
+- `POST /api/enterprise/[organizationId]/insurance-connectors/ocr` : multipart `environment`, `file`, avec `providerId`, `invoiceDate`, `note` et `salesInvoiceId` facultatifs ; en Production `productionConfirmation=PRODUCTION`.
 - `POST /api/enterprise/[organizationId]/insurance-connectors/ocr/status` : JSON `{ "environment":"UAT", "id":"<identifiant d'outbox DTSC>" }`; l'ID HSL n'est jamais pris directement du navigateur.
 - `POST /api/enterprise/[organizationId]/insurance-connectors/invoices/status` : suivi distinct d'une transmission de facture HSL, sans assimilation à la comptabilité.
 
