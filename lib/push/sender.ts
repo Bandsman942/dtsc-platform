@@ -32,7 +32,7 @@ export async function dispatchStoredPushNotification({
   expectedQueueOrganizationId,
 }: {
   notificationId: string;
-  expectedQueueOrganizationId: string;
+  expectedQueueOrganizationId: string | null;
 }): Promise<WebPushDispatchSummary> {
   const configuration = getWebPushConfigurationState();
   if (!configuration.configured || !configuration.config) {
