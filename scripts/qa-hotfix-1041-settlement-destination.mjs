@@ -23,6 +23,7 @@ assert.equal((service.match(/assertSubscriptionSettlementAccount\(tx,/g)||[]).le
 assert.match(service,/settlementAccountId: account\.id/);
 assert.match(service,/MANUAL_SETTLEMENT_ACCOUNT_CONFLICT/);
 assert.match(service,/MANUAL_SETTLEMENT_FUNDS_NOT_ATTESTED/);
+assert.equal((service.match(/current\.validatorUserId !== actorUserId/g)||[]).length,2,"Validator must be rechecked inside each locked transaction");
 assert.equal((service.match(/fundsVerifiedAt: new Date\(\)/g)||[]).length,2);
 assert.doesNotMatch(service.slice(service.indexOf("async function finalizePersonalManualPayment")),/ensureSubscriptionSettlementAccount\(/);
 assert.match(decision,/hasRecentStepUp/);
