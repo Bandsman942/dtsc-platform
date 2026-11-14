@@ -115,6 +115,8 @@ jobs:
         run: pnpm qa:health-05:finance-preflight-postgres
       - name: PAY-4 PSP provider reconciliation preflight PostgreSQL integration
         run: pnpm qa:provider-settlement-preflight:postgres
+      - name: PAY-4B authenticated MaishaPay callbacks PostgreSQL integration
+        run: pnpm qa:maishapay-callback-1176:postgres
       - name: WF-06S2D inert receipt PostgreSQL integration
         run: node scripts/qa-workflow-850-postgres.mjs
       - name: WF-06S2E1 inert locked dispatch inventory QA
