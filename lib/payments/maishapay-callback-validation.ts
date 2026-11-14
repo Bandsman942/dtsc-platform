@@ -1,17 +1,21 @@
-import { createHash, timingSafeEqual } from "node:crypto";
+import { createHmac, timingSafeEqual } from "node:crypto";
 
 /**
- * PAY-4B: a configured callback secret is mandatory. SHA-256 digests provide
- * equal-length buffers for constant-time comparison and never enter logs.
+ * MaishaPay documents an HMAC-SHA256 signature of the unmodified HTTP request
+ * body in X-MaishaPay-Signature, formatted sha256=<64 hex characters>.
+ * NEVER sign JSON.stringify(parsedBody), a normalized object, or an API key.
  */
 export function isAuthorizedMaishaPayCallback(
   configuredSecret: string | null | undefined,
-  suppliedSecret: string | null | undefined,
+  rawBody: Uint8Array | string,
+  signature: string | null | undefined,
 ): boolean {
-  if (!configuredSecret?.trim() || !suppliedSecret) return false;
-  const expected = createHash("sha256").update(configuredSecret, "utf8").digest();
-  const actual = createHash("sha256").update(suppliedSecret, "utf8").digest();
-  return timingSafeEqual(expected, actual);
+  if (!configuredSecret?.trim() || !signature || !/^sha256=[0-9a-f]{64}$/i.test(signature)) return false;
+  const supplied = Buffer.from(signature.slice(7), "hex");
+  const expected = createHmac("sha256", configuredSecret)
+    .update(rawBody)
+    .digest();
+  return timingSafeEqual(supplied, expected);
 }
 
 const paidValues = new Set(["200", "success", "successful", "paid", "completed", "confirmed"]);
@@ -20,10 +24,70 @@ const rejectedStatuses = new Set(["failed", "failure", "error", "rejected", "dec
 export function isConfirmedMaishaPayStatus(data: { status?: string | number; statusCode?: string | number }): boolean {
   const status = data.status == null ? "" : String(data.status).trim().toLowerCase();
   const code = data.statusCode == null ? "" : String(data.statusCode).trim().toLowerCase();
-  // An explicit negative/pending payment status takes precedence over the
-  // HTTP-like statusCode 200 so callbacks cannot report contradictory success.
   if (status && rejectedStatuses.has(status)) return false;
   return (status ? paidValues.has(status) : false) || (!status && paidValues.has(code));
+}
+
+export type MaishaPayPaymentNotification = {
+  transactionReference?: string;
+  originatingTransactionId?: string;
+  transactionId?: string;
+  status?: string | number;
+  statusCode?: string | number;
+  amount?: string | number;
+  currency?: string;
+};
+
+function record(value: unknown): Record<string, unknown> | null {
+  return value !== null && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+function textField(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+function numericField(value: unknown): string | number | undefined {
+  return typeof value === "string" || (typeof value === "number" && Number.isFinite(value)) ? value : undefined;
+}
+
+/**
+ * Supports both MaishaPay's documented v2 envelope
+ * {type:"transaction.success",data:{reference,transaction_id,amount,currency,payment_status}}
+ * and its merchant callback {event:"payment.success", transactionReference,...}.
+ * Unrecognized/conflicting event types never become a successful payment.
+ */
+export function normalizeMaishaPayWebhook(input: unknown): MaishaPayPaymentNotification | null {
+  const event = record(input);
+  if (!event) return null;
+  const nested = record(event.data);
+  const source = nested ?? event;
+  const eventName = textField(event.type) ?? textField(event.event);
+  const permittedEvents = new Set([
+    "transaction.success", "transaction.failed", "transaction.pending", "transaction.cancelled",
+    "payment.success", "payment.failed", "payment.pending", "payment.cancelled",
+  ]);
+  if (eventName && !permittedEvents.has(eventName)) return null;
+  if (nested && !eventName) return null;
+  const rawStatus = numericField(source.payment_status ?? source.status ?? event.status);
+  const eventStatus = eventName
+    ? eventName.endsWith(".success") ? "SUCCESS" : eventName.split(".").at(-1)?.toUpperCase()
+    : undefined;
+  const status = rawStatus ?? eventStatus;
+  // Do not treat an event claiming "success" as paid when its payment_status
+  // contradicts the event type, or vice versa.
+  if (rawStatus && eventStatus &&
+      isConfirmedMaishaPayStatus({status: rawStatus}) !== isConfirmedMaishaPayStatus({status: eventStatus})) {
+    return null;
+  }
+  return {
+    transactionReference: textField(source.transactionReference ?? source.reference ?? source.transaction_reference),
+    originatingTransactionId: textField(source.originatingTransactionId),
+    transactionId: textField(source.transactionId ?? source.transaction_id),
+    status,
+    statusCode: numericField(source.statusCode),
+    amount: numericField(source.amount),
+    currency: textField(source.currency),
+  };
 }
 
 function monetaryCents(value: unknown): bigint | null {
@@ -50,4 +114,26 @@ export function validateMaishaPayPaymentEvidence(
     return "PAYMENT_PROVIDER_REFERENCE_MISMATCH";
   }
   return null;
+}
+
+/**
+ * Persist immutable signed evidence, not a bare untrusted "verified":true flag.
+ * The dispatcher recomputes the HMAC from the original exact body on replay.
+ */
+export type MaishaPaySignedEvent = {
+  signedBody: string;
+  signature: string;
+};
+export function readVerifiedMaishaPayEvent(
+  payload: unknown,
+  secret: string | null | undefined,
+): MaishaPayPaymentNotification | null {
+  const envelope = record(payload);
+  if (!envelope || typeof envelope.signedBody !== "string" || typeof envelope.signature !== "string") return null;
+  if (!isAuthorizedMaishaPayCallback(secret, Buffer.from(envelope.signedBody, "utf8"), envelope.signature)) return null;
+  try {
+    return normalizeMaishaPayWebhook(JSON.parse(envelope.signedBody));
+  } catch {
+    return null;
+  }
 }
