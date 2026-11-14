@@ -111,6 +111,8 @@ jobs:
         run: node scripts/qa-health-01-legacy-postgres.mjs
       - name: P0 manual SaaS settlement account PostgreSQL integration
         run: pnpm qa:hotfix-1041-settlement:postgres
+      - name: PAY-4 PSP provider reconciliation preflight PostgreSQL integration
+        run: pnpm qa:provider-settlement-preflight:postgres
       - name: WF-06S2D inert receipt PostgreSQL integration
         run: node scripts/qa-workflow-850-postgres.mjs
       - name: WF-06S2E1 inert locked dispatch inventory QA
