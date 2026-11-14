@@ -17,7 +17,7 @@ import {
 const BATCH_SIZE = 100;
 const MAX_SCAN = 10000;
 const ACCEPTED = new Set([
-  "organization-id", "max-scanned", "apply", "snapshot-ref", "ack",
+  "organization-id", "max-scanned", "offset", "apply", "snapshot-ref", "ack",
 ]);
 function parseOptions(argv) {
   const options = new Map();
@@ -36,6 +36,12 @@ function parseOptions(argv) {
   if (!Number.isSafeInteger(maxScanned) || maxScanned < 1 || maxScanned > MAX_SCAN) {
     throw new Error("INVALID_SCAN_LIMIT");
   }
+  // Offset-based continuation avoids printing any database row identifier.
+  // Every batch also uses a stable keyset cursor within the same invocation.
+  const offset = Number(options.get("offset") ?? 0);
+  if (!Number.isSafeInteger(offset) || offset < 0 || offset > 10_000_000) {
+    throw new Error("INVALID_OFFSET");
+  }
   const apply = options.get("apply") === true;
   if (!apply && (options.has("ack") || options.has("snapshot-ref"))) {
     throw new Error("APPLY_FLAGS_WITHOUT_APPLY");
@@ -48,11 +54,11 @@ function parseOptions(argv) {
       throw new Error("SNAPSHOT_AND_OPERATOR_APPROVAL_REQUIRED");
     }
   }
-  return { organizationId, maxScanned, apply };
+  return { organizationId, maxScanned, apply, offset };
 }
 
 async function main() {
-  const { organizationId, maxScanned, apply } = parseOptions(process.argv.slice(2));
+  const { organizationId, maxScanned, apply, offset } = parseOptions(process.argv.slice(2));
   const prisma = new PrismaClient();
   const totals = { scanned: 0, candidates: 0, redacted: 0, concurrent: 0, batches: 0 };
   let cursor;
@@ -71,6 +77,7 @@ async function main() {
           title: true, summary: true, payloadJson: true, updatedAt: true,
         },
         orderBy: { id: "asc" },
+        ...(cursor ? {} : { skip: offset }),
         take,
       });
       if (!rows.length) break;
@@ -103,6 +110,7 @@ async function main() {
       redacted: totals.redacted,
       concurrent: totals.concurrent,
       batches: totals.batches,
+      nextOffset: offset + totals.scanned,
       scanLimitReached: totals.scanned >= maxScanned,
       note: apply
         ? "Verify zero candidates via a fresh dry run; restore only from a tested private snapshot under incident control."
