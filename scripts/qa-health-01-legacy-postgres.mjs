@@ -56,6 +56,10 @@ try {
   assert.equal(dry.mode, "DRY_RUN");
   assert.equal(dry.candidates, 1);
   assert.equal(dry.redacted, 0);
+  assert.equal(dry.nextOffset, 1,"Next page must use numeric offset without exposing identifiers");
+  const following = parseReport(run(["--offset=1"]));
+  assert.equal(following.scanned, 0,"Second page must not restart at first record");
+  assert.equal(following.nextOffset, 1);
   const before = await prisma.enterpriseSectorRecord.findUniqueOrThrow({ where: { id: ids.clinical } });
   assert.equal(before.title, "FICTIONAL_QA_NAME", "Dry-run must not mutate");
 
