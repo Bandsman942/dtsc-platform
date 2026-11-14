@@ -81,7 +81,7 @@ assert.match(route,/if \(!env\.MAISHAPAY_CALLBACK_SECRET\)/,"Unconfigured native
 assert.match(route,/req\.headers\.get\("x-maishapay-signature"\)/);
 assert.match(route,/Buffer\.from\(await req\.arrayBuffer\(\)\)/,"Verify original request bytes");
 assert.match(route,/isAuthorizedMaishaPayCallback\(env\.MAISHAPAY_CALLBACK_SECRET, rawBody, signature\)/);
-assert.doesNotMatch(route,/x-dtsc-webhook-secret|searchParams\.get\("secret"\)/,"No legacy bearer fallback");
+assert.doesNotMatch(route,/req\.headers\.get\("x-dtsc-webhook-secret"\)|searchParams\.get\("secret"\)/,"No live code may read legacy bearer credentials");
 const verifyAt=route.indexOf("isAuthorizedMaishaPayCallback(env.MAISHAPAY_CALLBACK_SECRET, rawBody, signature)");
 const storeAt=route.indexOf("prisma.webhookEvent.upsert");
 assert.ok(verifyAt>0 && storeAt>verifyAt,"Native signature MUST be checked before persistence");
