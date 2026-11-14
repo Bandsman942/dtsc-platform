@@ -1,3 +1,11 @@
+## 2026-11-14 — P0 PAY-4B #1176 — validation des callbacks MaishaPay (candidat v1.17.8, NON FUSIONNÉ)
+
+- Rejet par défaut des callbacks MaishaPay si `MAISHAPAY_CALLBACK_SECRET` n'est pas configuré ; comparaison sûre du secret et compatibilité transitoire avec l'ancien paramètre URL.
+- Avant toute activation via webhook ou relecture, le service valide en centimes exacts le montant, la devise et le provider du paiement DTSC. Les statuts explicites `FAILED/PENDING` prévalent sur un code de succès générique.
+- QA de contrat et PostgreSQL à deux tenants fictifs ; aucune migration, aucun changement comptable ou rapprochement bancaire.
+- Attention déploiement : secret de callback Production à confirmer avant E2E et fusion ; ce lot ne certifie pas la signature native du prestataire ni les comptes effectivement crédités.
+- Documentation : `docs/HOTFIX_PAY4B_MAISHAPAY_CALLBACK_1176_20261114.md`. Parents #1170 / #992 ouverts.
+
 ## 2026-11-14 — P0 PAY-4 #1170 — audit privé des règlements MaishaPay (candidat v1.17.7, NON FUSIONNÉ)
 
 - Outil **en lecture seule** pour détecter paiements d'abonnement organisation PAID sans écriture Finance, écritures multiples, comptes de réception synthétiques, discordances de montant/devise et preuves locales manquantes.
