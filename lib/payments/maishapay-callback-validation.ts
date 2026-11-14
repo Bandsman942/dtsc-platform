@@ -121,7 +121,7 @@ export function validateMaishaPayPaymentEvidence(
  * The dispatcher recomputes the HMAC from the original exact body on replay.
  */
 export type MaishaPaySignedEvent = {
-  signedBody: string;
+  bodyBase64: string;
   signature: string;
 };
 export function readVerifiedMaishaPayEvent(
@@ -129,10 +129,12 @@ export function readVerifiedMaishaPayEvent(
   secret: string | null | undefined,
 ): MaishaPayPaymentNotification | null {
   const envelope = record(payload);
-  if (!envelope || typeof envelope.signedBody !== "string" || typeof envelope.signature !== "string") return null;
-  if (!isAuthorizedMaishaPayCallback(secret, Buffer.from(envelope.signedBody, "utf8"), envelope.signature)) return null;
+  if (!envelope || typeof envelope.bodyBase64 !== "string" || typeof envelope.signature !== "string") return null;
+  // Reconstruct the exact original bytes; JSON reserialization is not a valid signature input.
+  const signedBytes = Buffer.from(envelope.bodyBase64, "base64");
+  if (!isAuthorizedMaishaPayCallback(secret, signedBytes, envelope.signature)) return null;
   try {
-    return normalizeMaishaPayWebhook(JSON.parse(envelope.signedBody));
+    return normalizeMaishaPayWebhook(JSON.parse(signedBytes.toString("utf8")));
   } catch {
     return null;
   }
