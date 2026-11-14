@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { activateSubscriptionFromPayment } from "@/lib/billing";
 import { prisma } from "@/lib/prisma";
 import { maishaPayCallbackSchema } from "@/lib/validators";
+import { isConfirmedMaishaPayStatus, validateMaishaPayPaymentEvidence } from "@/lib/payments/maishapay-callback-validation";
 
 const retryableStatuses = ["FAILED", "ERROR", "RETRY_REQUIRED", "UNMATCHED"];
 
@@ -26,6 +27,24 @@ export async function processStoredWebhookEvent(eventId: string, options: { manu
     if (!payload.success) throw new Error("Stored payload no longer matches the provider contract.");
     const reference = payload.data.transactionReference || payload.data.originatingTransactionId;
     if (!reference) throw new Error("Stored payment reference is missing.");
+    // The same validation also applies to operator-driven retries of stored
+    // events, not just to the public callback route.
+    const payment = await prisma.payment.findUnique({
+      where: { reference },
+      select: { provider: true, amount: true, currency: true, providerReference: true },
+    });
+    const evidenceError = !isConfirmedMaishaPayStatus(payload.data)
+      ? "PAYMENT_NOT_CONFIRMED"
+      : !payment
+        ? "PAYMENT_NOT_FOUND"
+        : validateMaishaPayPaymentEvidence(payload.data, payment);
+    if (evidenceError) {
+      await prisma.webhookEvent.update({
+        where: { id: event.id },
+        data: { status: "UNMATCHED", lastError: evidenceError, processedAt: new Date(), nextRetryAt: null },
+      });
+      return { ok: false as const, reasonCode: evidenceError };
+    }
     const result = await activateSubscriptionFromPayment(reference, payload.data);
     if (!result.ok) {
       await prisma.webhookEvent.update({ where: { id: event.id }, data: { status: "UNMATCHED", lastError: result.reason, processedAt: new Date(), nextRetryAt: new Date(Date.now() + 15 * 60 * 1000) } });
