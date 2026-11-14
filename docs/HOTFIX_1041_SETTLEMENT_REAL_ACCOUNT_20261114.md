@@ -1,6 +1,6 @@
 # P0 #992 — Compte de réception des règlements manuels SaaS DTSC
 
-**Version candidate : 1.17.4** · **État : réconciliation du delta #1040 depuis main 1c9ad02 ; brouillon non fusionné.**
+**Version candidate : 1.17.5** · **État : réconciliation du delta #1040 depuis main a910a97 ; brouillon non fusionné.**
 
 ## Contrat de sécurité
 
@@ -30,6 +30,13 @@ Après CI verte et OWNER_E2E BON, fusionner sur main seulement ; livraison Verce
 ## Réconciliation depuis l'ancienne PR #1040
 
 - Source initiale vérifiée : `fix/992-internal-subscription-settlement-account`, PR #1040, ses deltas limités aux champs/service/API/UI/contrats. `main` du départ : `1c9ad02b3402eb4300bc6420f2d0f70b08e1286d`.
-- Nouvelle branche `fix/1041-manual-settlement-main-reconciliation`, migration additive datée du 14/11/2026, version candidate 1.17.4. L'ancienne migration du 6 novembre non fusionnée ne doit pas être appliquée à nouveau sous un autre nom ; elle reste hors du main.
+- Nouvelle branche `fix/1041-manual-settlement-main-reconciliation`, migration additive datée du 14/11/2026, version candidate 1.17.5. L'ancienne migration du 6 novembre non fusionnée ne doit pas être appliquée à nouveau sous un autre nom ; elle reste hors du main.
 - La PR historique #1040 reste en brouillon jusqu'à clôture administrative après validation des différences et correction des gates ; **pas de fusion automatique**.
 - Cas test manquant avant acceptation finale : paiement personnel et entreprise avec vrais rôles, facture, abonnement, compte RH/CFO, contrepassements, contre-épreuves de concurrence et confirmation du propriétaire (lien E2E à ajouter).
+
+## Reprise après fusion Santé #1163
+
+- La PR historique #1165 avait Quality Gates SUCCESS sur SHA `4633f78c` ; sa branche dérivait de `main@1c9ad02` et entre en conflit avec la version Santé 1.17.4.
+- Cette nouvelle branche est née de `main@a910a97bf3f623fc16432eb2871859e56615626a` ; la livraison Finance candidate est **v1.17.5**.
+- Reprise des 11 fichiers Finance intacts + fusion raisonnée des trois chemins communs `package.json`, `docs/CHANGELOG.md` et `.github/workflows/quality-gates.yml`, en conservant QA HEALTH-01 et version.
+- Les preuves CI historiques ne valent **pas** validation de cette reprise : une nouvelle Quality Gates, une nouvelle E2E propriétaire et l'autorisation séparée de fusion sont exigées.
