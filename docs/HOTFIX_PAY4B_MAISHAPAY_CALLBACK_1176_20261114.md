@@ -1,39 +1,44 @@
-# P0 PAY-4B #1176 — Authentification et vérification des callbacks MaishaPay
+# P0 PAY-4B #1176 — Signature HMAC native des webhooks MaishaPay
 
-**Livraison candidate v1.17.8, PR NON FUSIONNÉE. Aucun paiement Production exécuté ou rejoué.**
+**Candidat v1.17.8 / PR #1177 NON FUSIONNÉE. Aucun callback ni paiement Production exécuté.**
 
-## Diagnostic (main 1bd71898, 14 novembre 2026)
+## Source primaire consultée (14 novembre 2026)
 
-La route `POST /api/billing/maishapay/callback` était permissive en l'absence de `MAISHAPAY_CALLBACK_SECRET`. Le dispatcher `processStoredWebhookEvent` ne vérifiait pas le montant, la devise ni le prestataire stockés dans `Payment` avant `activateSubscriptionFromPayment` ; une relecture administrateur pouvait donc activer un paiement discordant.
+- https://docs.maishapay.net/ — section « Webhooks & Notifications » : en-tête `X-MaishaPay-Signature`, valeur au format `sha256=<hex>`, calcul `HMAC-SHA256(secret, raw HTTP body)`. L'exemple officiel utilise les octets du corps avant désérialisation (`php://input`) et `hash_equals`.
+- https://docs.maishapay.net/front/webhooks — détails de l'API webhook encore indiqués **en cours de développement**. Contacter `support@maishapay.online` pour obtenir/confirmer le secret du webhook, son périmètre Sandbox/Live et l'inscription du callback.
+- https://mail.maishapay.net/help?lang=fr — second exemple officiel de notification **plate** (`event:"payment.success"`, `transactionReference`, `transactionId`, `amount`, `currency`, `status`). La page principale montre aussi une enveloppe `type:"transaction.success"`, `data.reference`, `data.transaction_id`, `data.payment_status`. Les deux variantes sont acceptées explicitement, sans interpréter comme succès un statut contradictoire.
 
-L'existence d'un `WebhookEvent` ou d'un statut de notification `paid` ne **prouve pas** un règlement bancaire ni une écriture comptable rapprochée. La correction ne prétend pas vérifier la signature native/HMAC MaishaPay : le contrat exact du prestataire doit encore être vérifié.
+Les sources publiques ne documentent pas encore l'échange effectif de clés, les règles de rotation, la stratégie d'anti-rejeu temporel ni un webhook Live garanti. Ces points restent **à confirmer avec le support MaishaPay**.
 
-## Changements bornés
+## Correction implantée
 
-- En l'absence de `MAISHAPAY_CALLBACK_SECRET`, le webhook renvoie `503` sans stocker ni accepter un callback. Si le secret transmis est absent/invalide, réponse `401` avec comparaison en temps constant de condensats SHA-256.
-- La compatibilité **transitoire** avec `?secret=...` est conservée pour les webhooks déjà configurés ; privilégier impérativement `x-dtsc-webhook-secret`. Le paramètre URL peut fuiter dans les journaux de proxy : le retirer lors d'une release ultérieure après validation du prestataire et rotation du secret.
-- La vérification est également exécutée **dans le dispatcher de relecture** avant toute activation : provider `MAISHAPAY`, montant exact en centimes (BigInt), devise et identifiant PSP lorsqu'il est présent des deux côtés.
-- Une contradiction entre `status=FAILED/PENDING` et `statusCode=200` ne vaut plus confirmation payée.
-- Un événement discordant est classé `UNMATCHED` avec un code d'erreur stable, sans changer `Payment`, `Invoice`, `Subscription` ou le compte financier.
-- Aucun champ, migration SQL, nouveau secret ou nouvelle table créé.
+1. `POST /api/billing/maishapay/callback` exige `MAISHAPAY_CALLBACK_SECRET` ; absent → **503**, sans stockage d'événement ni modification financière.
+2. Le handler lit une seule fois le corps **brut** via `req.arrayBuffer()` (limité à 256 KiB). Il vérifie `X-MaishaPay-Signature: sha256=<64 caractères hexadécimaux>` en utilisant `createHmac("sha256", secret).update(rawBytes)` et `timingSafeEqual`. Aucune sérialisation JSON ni normalisation avant calcul.
+3. Le secret nu dans `?secret=...` ou `x-dtsc-webhook-secret` **n'authentifie plus rien** : valeur absente/invalide → **401**, aucune écriture ni log du secret.
+4. Seuls les messages signés avec événement/formats reconnus sont normalisés, puis les champs sont validés par le schéma DTSC. Des messages avec évènements contradictoires, incomplets ou non reconnus sont refusés.
+5. Les événements persistés utilisent un identifiant idempotent dérivé du digest SHA-256 du **corps brut**. Leur charge utile contient les octets signés en base64 et la signature (pas la clé secrète). Les réceptions répétées ne peuvent plus écraser la preuve signée d'un événement précédent.
+6. `processStoredWebhookEvent` revérifie la signature sur les octets originaux avant les contrôles de statut, montant, devise, provider et référence, **y compris pendant une relecture administrateur**. Un ancien événement sans preuve signée valide passe en `UNMATCHED` et ne peut activer un abonnement.
+7. Une notification `PENDING/FAILED` authentifiée est seulement enregistrée comme non payée ; elle ne modifie plus directement `Payment.callbackPayload` et n'active aucun abonnement.
 
-## Préconditions critiques avant validation E2E et fusion
+## Préconditions opérationnelles avant E2E et fusion
 
-1. **Vérifier la présence de `MAISHAPAY_CALLBACK_SECRET` dans l'environnement Production de Vercel**, sans lire ni diffuser sa valeur. Un inventaire de variables projet à cette date n'exposait pas de clé MaishaPay ; confirmer également les variables partagées, les scopes et la configuration effective.
-2. Si nécessaire, provisionner une nouvelle valeur aléatoire privée d'au moins 24 caractères, configurée **à l'identique** côté callback du prestataire et dans Vercel Production, sans inscription dans Git, tickets, logs ou URL.
-3. Vérifier sur la documentation/console MaishaPay officielle le mécanisme d'authenticité des callbacks, les champs `status`, `statusCode`, `amount`, `currency`, `transactionId`, la prise en charge du header et les devises réelles. **Aucune garantie d'une signature native MaishaPay n'est revendiquée.**
-4. Tester d'abord dans le sandbox et dans une base PostgreSQL isolée. Si le provider ne transmet pas les champs de preuve exigés, le paiement doit rester non activé jusqu'à conception approuvée d'une vérification serveur côté PSP.
-5. Prévoir une procédure opérateur pour callbacks refusés, alertes `401/503/422`, événement `UNMATCHED` et reprises, ainsi qu'un retour arrière par PR sans marquer artificiellement des paiements comme PAID.
+- **Configurer le secret webhook réellement attribué ou validé par MaishaPay.** Ce n'est pas automatiquement `MAISHAPAY_SECRET_API_KEY` : ne pas réutiliser la clé API secrète sans confirmation officielle.
+- Dans Vercel Production, `MAISHAPAY_CALLBACK_SECRET` doit exister **dans l'environnement effectif du projet**, et correspondre à la valeur de signature du partenaire. Ne jamais l'inscrire dans GitHub, dans les tickets ou dans les logs. Un inventaire des seules variables de projet précédemment consultées ne montrait pas cette clé ; vérifier aussi les variables partagées/scopes.
+- Confirmer avec le partenaire le support de `X-MaishaPay-Signature`, la forme `sha256=<hex>` et la signature du corps brut réellement émis. L'ancienne méthode avec secret dans l'URL n'est **pas** compatible avec ce hotfix. Sans coordination, les callbacks Live seront refusés — **NO GO**.
+- Vérifier en Sandbox avec de vraies notifications *signées* du prestataire ; ne jamais produire de faux règlements en Production. Tester success, pending, failed, facture, double livraison/retry, réorganisation des champs/espaces JSON, montant/devise faux, secret absent, signature incorrecte, erreur de parser et reprise d'anciens événements sans preuve.
+- Faire un relevé baseline des taux `401` / `503` / `422` / événements `UNMATCHED` et disposer d'un runbook d'incident. **Ne jamais désactiver la vérification pour « débloquer » un paiement.**
 
-## QA / recette
+## Tests
 
-- `pnpm qa:maishapay-callback-1176` : secrets absent/incorrect/correct, statuts contradictoires, exactitude des centimes, montant/devise/référence mismatches, vérification du dispatcher avant activation, contrat de refus.
-- `pnpm qa:maishapay-callback-1176:postgres` : paiements fictifs de deux entreprises dans PostgreSQL local, comparaison de `Prisma.Decimal`, isolation tenant, absence de changement de statut et d'émission de facture **dans le test de validation pure**.
-- Quality Gates habituelles : gouvernance, Prisma, migrations, TypeScript, régression complète, lint et build.
-- E2E propriétaire requis sur webhook sandbox authentifié, souscription personnelle et entreprise, retries, cas montant et devise malveillants, secret absent, sans émission d'une facture sur refus.
+- `pnpm qa:maishapay-callback-1176` — vecteurs HMAC calculés à partir du corps brut, mutations de quelques octets et espaces, formats officiels v1/v2, statuts contradictoires, compatibilité du montant en centimes, relecture signée et refus des événements non signés.
+- `pnpm qa:maishapay-callback-1176:postgres` — PostgreSQL local isolé, deux tenants fictifs, preuve persistée avec signature, refus des anciens événements non signés, aucun paiement marqué PAID lors des tests de vérification pure.
+- CI complète GitHub : Prisma, migrations, PostgreSQL, TypeScript, régression, lint, build. **Les résultats du SHA précédent ne certifient pas le nouveau code HMAC**.
+- `OWNER_E2E final BON` puis autorisation de fusion distincte, Production uniquement depuis `main`.
 
-## Dette P0 maintenue
+## Limites et dette P0
 
-Ce lot n'introduit pas de compte de règlement PSP réel ni de rapprochement bancaire, ne répare pas l'atomicité des états `Payment` / `OrganizationSubscription` / `Invoice` / `HrcfoExpense`, et ne supprime pas les risques de replay d'un événement déjà conservé. **Parents #1170 et #992 restent OPEN.**
+La signature HMAC vérifie l'authenticité/intégrité du message signé et le secret partagé ; **elle ne prouve pas que les fonds sont réglés auprès d'une banque ou d'un wallet**. Les limites de synchronisation, le rapprochement financier, les soldes réels, la vérification indépendante PSP, la rotation de clés et les remboursements restent à traiter sous #1170 / #992.
 
-La Production demeure réservée à `main`, après CI complète, E2E propriétaire et autorisation de fusion distincte. Aucune exécution de callback réel ne fait partie de ce hotfix en cours de préparation.
+## Repli
+
+Aucun schéma DB modifié ; revert Git possible après revue sécurité. Ne pas revenir à la branche permissive en Production. Préférer corriger le secret / la configuration côté prestataire et reproposer la livraison après les tests, plutôt que réactiver un callback non authentifié.
