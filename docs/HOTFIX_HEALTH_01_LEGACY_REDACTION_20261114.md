@@ -7,7 +7,7 @@
 - Table unique cible : `EnterpriseSectorRecord`, secteur `HEALTH_CARE`, 11 modules dédiés Santé connus ; aucun autre secteur, module ou objet clinique canonique ne peut être modifié par cet outil.
 - Champs anonymisés : `title = "<MODULE> · historique"`, `summary = null`, `payloadJson = {}`. Identifiants, liens historiques, statuts, auteurs et dates de création sont conservés.
 - Toutes les recherches et modifications sont filtrées par `organizationId`, secteur et module ; l'écriture utilise le `updatedAt` précédemment observé afin de détecter une modification concurrente.
-- Traitement borné (100 lignes par page, maximum 10 000 examinées par exécution) ; reprise sûre et redaction idempotente.
+- Traitement borné (100 lignes par page, maximum 10 000 examinées par exécution) ; continuation par `--offset` et `nextOffset` **numériques**, sans afficher les identifiants des enregistrements, avec réexécution idempotente.
 - Journaux : exclusivement des compteurs agrégés. Jamais de titres, diagnostics, identifiants patients, JSON cliniques ou références de lignes dans les journaux.
 - **Le programme est en lecture seule par défaut**. L'écriture exige simultanément `--apply`, `--snapshot-ref`, `--ack` et la variable opérateur `HEALTH_LEGACY_REDACTION_ENABLE=true`.
 
@@ -32,9 +32,16 @@ node scripts/health-legacy-projection-redact.mjs \
   --ack=REDACT_LEGACY_CLINICAL_TEXT
 ```
 
-5. Refaire un audit : `candidates=0`, `concurrent=0`. Avec plus de 5 000 lignes, répéter à fenêtres bornées jusqu'au rapport complet, sans extrapoler un audit tronqué.
-6. Contrôler les vues, historiques, documents, IA, exports, notification, RBAC, deux tenants et l'intégrité des tables Santé canoniques.
-7. **Production** : aucune exécution avant validation E2E propriétaire, sauvegarde testée, runbook de réparation et approbation opérateur explicite. Aucun cron ni déploiement de branche ; seules les modifications de code passent par `main`.
+5. Pour un tenant dépassant la fenêtre choisie, relever exclusivement le `nextOffset` **numérique** du rapport ; relancer avec `--offset=N` pour la tranche suivante. Ne jamais imprimer d'identifiant de dossier. Répéter jusqu'à `scanned` inférieur à la limite choisie ou à une fenêtre vide. Le catalogue legacy est en lecture seule : ne pas faire de nouvelles insertions pendant l'opération.
+
+```bash
+node scripts/health-legacy-projection-redact.mjs \
+  --organization-id=TENANT_TEST --max-scanned=5000 --offset=5000
+```
+
+6. Refaire l'audit **sur l'ensemble des fenêtres**, à partir de `--offset=0`, après toute application : toutes les fenêtres doivent avoir `candidates=0`, `concurrent=0`. Un seul retour `candidates=0` sur une fenêtre ne certifie pas toute l'entreprise.
+7. Contrôler les vues, historiques, documents, IA, exports, notification, RBAC, deux tenants et l'intégrité des tables Santé canoniques.
+8. **Production** : aucune exécution avant validation E2E propriétaire, sauvegarde testée, runbook de réparation et approbation opérateur explicite. Aucun cron ni déploiement de branche ; seules les modifications de code passent par `main`.
 
 ## Reprise et rollback
 
