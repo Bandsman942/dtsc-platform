@@ -1,3 +1,10 @@
+## 2026-11-14 — P0 PAY-4 #1170 — audit privé des règlements MaishaPay (candidat v1.17.6, NON FUSIONNÉ)
+
+- Outil **en lecture seule** pour détecter paiements d'abonnement organisation PAID sans écriture Finance, écritures multiples, comptes de réception synthétiques, discordances de montant/devise et preuves locales manquantes.
+- Périmètre entreprise explicite, pagination bornée, agrégats sans référence sensible et tests PostgreSQL à deux tenants fictifs. Aucun callback, compte, solde ou abonnement réel n'est modifié.
+- Le diagnostic ne certifie ni règlement PSP ni rapprochement bancaire ni posting comptable : parent #992 et sous-lot #1170 restent ouverts.
+- Documentation : `docs/HOTFIX_PAY4_PSP_SETTLEMENT_PREFLIGHT_20261114.md`. E2E propriétaire et Quality Gates sur SHA final exigés avant fusion.
+
 ## 2026-11-14 — P0 #1041 / #992 — compte réel de règlement manuel DTSC (candidat v1.17.5, NON FUSIONNÉ / E2E EN ATTENTE)
 
 - Le valideur sélectionne le compte financier DTSC ayant effectivement reçu les fonds et confirme leur réception ; contrôle de l'attestation dans l'API **et** le service métier, MFA et séparation des fonctions préservés.
