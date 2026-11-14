@@ -11,6 +11,7 @@ import { DTSC_INTERNAL_ORGANIZATION_ID, isDtscInternalSession } from "@/lib/orga
 import { manualSubscriptionApprovalNotificationTarget } from "@/lib/notification-targets";
 import { notifyUser } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
+import { isConfiguredSubscriptionSettlementAccount } from "@/lib/subscription-settlement";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
 
@@ -49,6 +50,7 @@ const requestInclude = {
   requestedBy: { select: { id: true, name: true } },
   validator: { select: { id: true, name: true } },
   invoice: { select: { id: true, number: true, status: true, emailSentAt: true } },
+  settlementAccount: { select: { id: true, name: true, currency: true, accountType: true } },
 } satisfies Prisma.ManualSubscriptionPaymentInclude;
 
 export async function GET(req: Request) {
@@ -102,6 +104,13 @@ export async function GET(req: Request) {
     const focus = await prisma.manualSubscriptionPayment.findFirst({ where: { id: focusId, ...(assignedOnly ? { validatorUserId: session.userId } : {}) }, include: requestInclude });
     if (focus) requests.unshift(focus);
   }
+  // DTSC financial accounts are private. Expose choices only to a Console
+  // subscription manager or to an active user assigned a pending decision.
+  const subscriptionManagerAllowed = !assignedOnly && !(await requireConsoleCapability(CONSOLE_CAPABILITIES.SUBSCRIPTIONS_MANAGE)).response;
+  const canPickSettlementAccount = subscriptionManagerAllowed || requests.some((request) => request.status === "PENDING_VALIDATION" && request.validatorUserId === session.userId);
+  const settlementAccounts = canPickSettlementAccount
+    ? await prisma.financialAccount.findMany({ where: { status: "ACTIVE", reconciliationIssue: null, currency: { not: null }, accountType: { in: ["BANK", "CASH", "MOBILE_MONEY"] } }, select: { id: true, name: true, accountType: true, currency: true, reconciliationIssue: true, status: true }, orderBy: [{ currency: "asc" }, { name: "asc" }], take: 500 })
+    : [];
   const statusCounts = { all: statusGroups.reduce((sum, group) => sum + group._count._all, 0), pending: 0, approved: 0, rejected: 0 };
   for (const group of statusGroups) {
     if (group.status === "PENDING_VALIDATION") statusCounts.pending = group._count._all;
@@ -109,7 +118,7 @@ export async function GET(req: Request) {
     if (group.status === "REJECTED") statusCounts.rejected = group._count._all;
   }
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { count: requests.length, assignedOnly, page, pageSize } });
-  return NextResponse.json({ requests, validators, users, organizations, plans: plans.map((plan) => ({ ...plan, priceUsd: Number(plan.priceUsd) })), assignedOnly, pagination: { page, pageSize, pageCount, total }, statusCounts });
+  return NextResponse.json({ requests, validators, users, organizations, plans: plans.map((plan) => ({ ...plan, priceUsd: Number(plan.priceUsd) })), settlementAccounts: settlementAccounts.filter(isConfiguredSubscriptionSettlementAccount).map(({ id, name, currency, accountType }) => ({ id, name, currency, accountType })), assignedOnly, pagination: { page, pageSize, pageCount, total }, statusCounts });
 }
 
 export async function POST(req: Request) {
