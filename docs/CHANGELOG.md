@@ -1,7 +1,7 @@
 ## 2026-11-14 — PAY-4B / #1174 — authentification fail-closed des callbacks MaishaPay (candidat v1.17.7, NON FUSIONNÉ)
 
 - En Production, un `MAISHAPAY_CALLBACK_SECRET` absent ou vide bloque le callback avec HTTP 503 **avant toute écriture** ; jeton incorrect renvoie 401.
-- Comparaison de jeton avec `timingSafeEqual` sur empreintes SHA-256 ; priorité au header, paramètre legacy conservé sous secret configuré. QA exécute la route contre mocks et atteste zéro écriture en cas de refus.
+- Vérification native `X-MaishaPay-Signature` HMAC-SHA256 sur le corps brut, `timingSafeEqual` et absence de downgrade vers le jeton partagé lorsque la signature est invalide ; transports legacy conservés sous secret configuré jusqu'à certification du prestataire. QA exécute la route contre mocks, y compris payload falsifié, et atteste zéro écriture en cas de refus.
 - Aucun changement PSP, bancaire, comptable ni de l'environnement Production ; déploiement soumis à vérification de la variable, E2E fournisseur et validation propriétaire. Parent #1170/#992 restent P0.
 - Runbook : `docs/HOTFIX_PAY4B_MAISHAPAY_CALLBACK_AUTH_20261114.md`.
 
