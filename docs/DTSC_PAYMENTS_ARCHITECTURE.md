@@ -92,6 +92,8 @@ Toute nouvelle route mutante doit contrôler, **côté serveur**, session → co
 
 `lib/maishapay.ts` contient l'adapter HTTP existant. Les routes checkout appelent cet adapter **côté serveur** ; `lib/env.ts` définit les variables actuellement utilisées : `MAISHAPAY_API_URL`, `MAISHAPAY_GATEWAY_MODE`, `MAISHAPAY_PUBLIC_API_KEY`, `MAISHAPAY_SECRET_API_KEY`, `MAISHAPAY_DEFAULT_PROVIDER`, `MAISHAPAY_CALLBACK_SECRET`. Les noms génériques suggérés initialement dans #375 ne doivent **pas** dupliquer ces variables sans décision de migration.
 
+**Candidat PAY-4B #1176 (14/11/2026, non fusionné) :** la route et le dispatcher sont durcis sur une branche dédiée : secret de callback obligatoire, comparaison de secret en temps constant, preuve montant/devise/provider dans les relectures. Les callbacks sans secret passent en refus `503`, les refus d'authentification en `401`, et les incohérences en `UNMATCHED`. Ces changements ne valent ni signature native MaishaPay, ni règlement bancaire vérifié. Le runbook [PAY-4B](HOTFIX_PAY4B_MAISHAPAY_CALLBACK_1176_20261114.md) détaille le prérequis de secret Vercel et la recette sandbox.
+
 **Bloqueurs à vérifier et traiter en PAY-4 avant la certification provider :**
 
 - la route callback n'exige le secret que **s'il est configuré** (`MAISHAPAY_CALLBACK_SECRET` conditionnel) ; en mode de paiement actif, une configuration sans secret/signature valide doit échouer fermée ;
