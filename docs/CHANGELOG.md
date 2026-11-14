@@ -1,11 +1,18 @@
-## 2026-11-14 — P0 HEALTH-05 / #1167 — préflight factures Santé / Finance (candidat v1.17.6, NON FUSIONNÉ)
+## 2026-11-14 — P0 PAY-4 #1170 — audit privé des règlements MaishaPay (candidat v1.17.7, NON FUSIONNÉ)
+
+- Outil **en lecture seule** pour détecter paiements d'abonnement organisation PAID sans écriture Finance, écritures multiples, comptes de réception synthétiques, discordances de montant/devise et preuves locales manquantes.
+- Périmètre entreprise explicite, pagination bornée, agrégats sans référence sensible et tests PostgreSQL à deux tenants fictifs. Aucun callback, compte, solde ou abonnement réel n'est modifié.
+- Le diagnostic ne certifie ni règlement PSP ni rapprochement bancaire ni posting comptable : parent #992 et sous-lot #1170 restent ouverts.
+- Documentation : `docs/HOTFIX_PAY4_PSP_SETTLEMENT_PREFLIGHT_20261114.md`. E2E propriétaire et Quality Gates sur SHA final exigés avant fusion.
+
+## 2026-11-14 — P0 HEALTH-05 / #1167 — préflight factures Santé / Finance (fusionnée #1169, v1.17.6)
 
 - Outil de diagnostic uniquement en lecture seule, par entreprise, des incohérences de montants et de paiements spécialisés Santé ; valeurs précises en centimes avec `BigInt`, pagination numérique bornée et agrégats sans PHI.
 - Aucune facturation ERP Finance créée, aucun paiement enregistré ni contrepassation ; `PAID` Santé ne certifie pas un ledger Finance ou un rapprochement bancaire.
 - QA contractuelle et PostgreSQL localhost à deux tenants fictifs, documentation de cutover dans `docs/HOTFIX_HEALTH_05_FINANCE_PREFLIGHT_20261114.md`.
-- La fusion exige Quality Gates sur dernier SHA, E2E propriétaire, SemVer unique sur le nouveau main et autorisation de fusion ; le parent #1150 reste OPEN.
+- Quality Gates #43585839432 et E2E #1169 BON ; fusion sur `main@c2cf94d4` en v1.17.6. Le parent #1150 reste OPEN.
 
-## 2026-11-14 — P0 #1041 / #992 — compte réel de règlement manuel DTSC (candidat v1.17.5, NON FUSIONNÉ / E2E EN ATTENTE)
+## 2026-11-14 — P0 #1041 / #992 — compte réel de règlement manuel DTSC (fusionnée #1166, v1.17.5)
 
 - Le valideur sélectionne le compte financier DTSC ayant effectivement reçu les fonds et confirme leur réception ; contrôle de l'attestation dans l'API **et** le service métier, MFA et séparation des fonctions préservés.
 - Verrou DB et revalidation du compte réel actif, type/devise, exclusions des comptes automatiques, anomalies de rapprochement; aucune création automatique pendant l'approbation.
