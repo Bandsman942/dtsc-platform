@@ -1,5 +1,5 @@
 # HEALTH-01 / Issue #1146 — Sécurité clinique et intégrité (hotfix)
-Date : 2026-11-13 · Candidat : v1.17.2 · **NON FUSIONNÉ — aucun déploiement Production**.
+Date : 2026-11-13 · Candidat : v1.17.2 · **Socle intégré via PR #1160 ; Issue #1146 toujours ouverte.**
 
 ## Risques et corrections embarquées
 1. Consultations, saisie/validation des résultats laboratoire, conversion des rendez-vous en consultation et modification des dossiers médicaux ne sont plus des droits automatiques du seul rôle administratif. L'utilisateur doit avoir une affectation clinique Santé active (DOCTOR, SPECIALIST_DOCTOR, MEDICAL_DIRECTOR) et l'autorisation `health.consultations.view_sensitive`. Les administrateurs sans habilitation restent hors de ce droit.
@@ -38,3 +38,7 @@ La QA statique ne remplace pas les tests de bout en bout ni la certification pat
 
 ### Lecture indirecte minimisée (délivré dans le hotfix)
 Les loaders Administration Santé, Activités Santé, routes historiques dédiées et vues BETA de module expurgent les contenus des onze modules dédiés. L'index de consultation du patient ne lit plus les titres historiques. Le moteur d'IA ne déclare `canReadClinicalData` que si l'accès module ET l'autorisation de lecture médicale explicite sont présents. Les autres lectures directes et les copies historiques restent à auditer avant E2E final.
+
+## 2026-11-14 — PR de suivi (données historiques)
+
+Un outil par organisation, borné et en lecture seule par défaut, prépare l'assainissement des anciennes lignes `EnterpriseSectorRecord` : `scripts/health-legacy-projection-redact.mjs`. L'activation en écriture exige une sauvegarde restaurable attestée et un accord opérateur distinct. Voir `docs/HOTFIX_HEALTH_01_LEGACY_REDACTION_20261114.md`. Ni l'exécution Production, ni la revue complète des lecteurs, ni l'E2E propriétaire ne sont réalisés par ce changement. L'Issue #1146 reste ouverte.
