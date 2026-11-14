@@ -109,6 +109,8 @@ jobs:
         run: pnpm qa:global-outbox:postgres
       - name: HEALTH-01 legacy redaction isolated PostgreSQL integration
         run: node scripts/qa-health-01-legacy-postgres.mjs
+      - name: HEALTH-05 medical billing finance preflight PostgreSQL integration
+        run: pnpm qa:health-05:finance-preflight-postgres
       - name: WF-06S2D inert receipt PostgreSQL integration
         run: node scripts/qa-workflow-850-postgres.mjs
       - name: WF-06S2E1 inert locked dispatch inventory QA
