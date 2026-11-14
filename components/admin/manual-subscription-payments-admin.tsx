@@ -38,15 +38,18 @@ type RequestItem = {
   requestedBy: { id: string; name: string };
   validator: { id: string; name: string };
   invoice?: { id: string; number: string; status: string; emailSentAt?: string | null } | null;
+  settlementAccount?: { id: string; name: string; currency: string | null; accountType: string } | null;
+  fundsVerifiedAt?: string | null;
 };
+type SettlementAccount = { id: string; name: string; accountType: string; currency: string | null };
 type Dataset = {
-  requests: RequestItem[]; validators: Option[]; users: Option[]; organizations: Option[]; plans: Plan[]; assignedOnly?: boolean;
+  requests: RequestItem[]; validators: Option[]; users: Option[]; organizations: Option[]; plans: Plan[]; settlementAccounts: SettlementAccount[]; assignedOnly?: boolean;
   pagination: { page: number; pageSize: number; pageCount: number; total: number };
   statusCounts: { all: number; pending: number; approved: number; rejected: number };
 };
 
 const emptyDataset: Dataset = {
-  requests: [], validators: [], users: [], organizations: [], plans: [],
+  requests: [], validators: [], users: [], organizations: [], plans: [], settlementAccounts: [],
   pagination: { page: 1, pageSize: 20, pageCount: 1, total: 0 },
   statusCounts: { all: 0, pending: 0, approved: 0, rejected: 0 },
 };
@@ -125,19 +128,22 @@ export function ManualSubscriptionPaymentsAdmin({ canManage, currentUserId, focu
     setBusy(true);
     const form = new FormData(event.currentTarget);
     const validationComment = String(form.get("validationComment") || "");
+    const settlementAccountId = decision.action === "APPROVE" ? String(form.get("settlementAccountId") || "") : undefined;
+    const fundsVerified = decision.action === "APPROVE" ? form.get("fundsVerified") === "on" : undefined;
     try { await performFinanceCriticalStepUp(form, "APPROVE"); }
     catch (securityError) {
       setBusy(false);
       setMessage(securityError instanceof Error ? securityError.message : "Vérification de sécurité refusée.");
       return;
     }
-    const response = await fetch(`/api/admin/manual-subscription-payments/${decision.request.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: decision.action, validationComment }) });
+    const response = await fetch(`/api/admin/manual-subscription-payments/${decision.request.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: decision.action, validationComment, settlementAccountId, fundsVerified }) });
     const body = await response.json().catch(() => null) as { message?: string; result?: { mail?: { sent: boolean } } } | null;
     setBusy(false);
     setMessage(response.ok ? (decision.action === "APPROVE" ? (body?.result?.mail?.sent ? "Paiement approuvé et comptabilisé. Facture envoyée." : "Paiement approuvé et comptabilisé. Facture créée ; envoi e-mail à vérifier.") : "Paiement manuel rejeté.") : body?.message || "Décision impossible.");
     if (response.ok) { setDecision(null); setSelectedRequest(null); await load(); }
   }
 
+  const validAccounts = (item: RequestItem) => dataset.settlementAccounts.filter((account) => account.currency === item.currency && account.accountType === ({ BANK_TRANSFER: "BANK", CARD: "BANK", CHECK: "BANK", CASH: "CASH", MOBILE_MONEY: "MOBILE_MONEY" } as Record<string, string>)[item.paymentMethod]);
   const beneficiaryName = (item: RequestItem) => (item.scope === "PERSONAL" ? item.user?.name : item.organization?.name) || (english ? "Beneficiary" : "Bénéficiaire");
   const canValidate = (item: RequestItem) => item.status === "PENDING_VALIDATION" && item.validatorUserId === currentUserId;
   const dateLabel = (date: string) => new Date(date).toLocaleString(english ? "en-US" : "fr-FR");
@@ -229,6 +235,8 @@ export function ManualSubscriptionPaymentsAdmin({ canManage, currentUserId, focu
             <BusinessDetailGrid>
               <BusinessDetailField label={english ? "Method" : "Mode de paiement"} value={referenceChoiceLabel("paymentMethod", selectedRequest.paymentMethod, "fr")} />
               <BusinessDetailField label={english ? "External reference" : "Référence externe"} value={<span className="break-all">{selectedRequest.externalReference || "—"}</span>} />
+              <BusinessDetailField label={english ? "Settlement account" : "Compte de destination"} value={selectedRequest.settlementAccount?.name || (english ? "Not recorded (legacy or pending)" : "Non renseigné (historique ou en attente)")} />
+              <BusinessDetailField label={english ? "Funds confirmation" : "Attestation de réception"} value={selectedRequest.fundsVerifiedAt ? dateLabel(selectedRequest.fundsVerifiedAt) : (english ? "Not recorded" : "Non attestée")} />
               <BusinessDetailField label={english ? "Requested on" : "Date de demande"} value={dateLabel(selectedRequest.requestedAt)} />
               <BusinessDetailField label={english ? "Reason" : "Motif"} value={selectedRequest.reason} wide />
             </BusinessDetailGrid>
@@ -269,9 +277,19 @@ export function ManualSubscriptionPaymentsAdmin({ canManage, currentUserId, focu
             <p className="mt-1 break-all text-xs text-dtsc-muted">{referenceChoiceLabel("paymentMethod", decision.request.paymentMethod, "fr")} · {decision.request.externalReference || "—"}</p>
           </div>
           <p className="text-sm leading-6 text-dtsc-muted">{decision.action === "APPROVE" ? "Cette action active ou prolonge l’abonnement et comptabilise atomiquement le paiement avec sa facture. L’envoi e-mail intervient ensuite." : "Le paiement restera sans impact sur l’abonnement et le chiffre d’affaires."}</p>
+          {decision.action === "APPROVE" ? <>
+            <FormField label={english ? "Actual receiving account" : "Compte réel de réception"} hint={english ? "Select the DTSC account that actually received this payment; legacy automatic accounts are excluded." : "Choisissez le compte DTSC qui a réellement reçu les fonds. Les comptes automatiques historiques sont exclus."}>
+              <select name="settlementAccountId" defaultValue="" required className="h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm text-dtsc-ink">
+                <option value="">{english ? "Select a verified account…" : "Sélectionner un compte vérifié…"}</option>
+                {validAccounts(decision.request).map((account) => <option key={account.id} value={account.id}>{account.name} · {account.accountType} · {account.currency}</option>)}
+              </select>
+            </FormField>
+            {!validAccounts(decision.request).length ? <p role="alert" className="text-sm text-amber-700">{english ? "No matching account: ask HR & CFO to configure a real one before approval." : "Aucun compte réel compatible : configurez-le dans RH & CFO avant validation."}</p> : null}
+            <label className="flex items-start gap-2 text-xs text-dtsc-muted"><input type="checkbox" name="fundsVerified" required className="mt-1" /><span>{english ? "I verified the external payment evidence and confirmed that funds arrived in the selected account." : "J’ai vérifié la preuve externe du versement et constaté que les fonds sont réellement arrivés sur le compte choisi."}</span></label>
+          </> : null}
           <FormField label="Commentaire de validation" hint="Le refus doit être motivé pour l’audit."><Input name="validationComment" maxLength={500} required={decision.action === "REJECT"} /></FormField>
           <FinanceCriticalStepUpFields action="APPROVE" locale={english ? "en" : "fr"} />
-          <div className="flex min-w-0 flex-wrap justify-end gap-2"><Button type="button" variant="outline" disabled={busy} onClick={() => setDecision(null)}>Annuler</Button><Button disabled={busy} className={decision.action === "REJECT" ? "bg-red-700 text-white hover:bg-red-800" : ""}>{decision.action === "APPROVE" ? "Confirmer la validation" : "Confirmer le refus"}</Button></div>
+          <div className="flex min-w-0 flex-wrap justify-end gap-2"><Button type="button" variant="outline" disabled={busy} onClick={() => setDecision(null)}>Annuler</Button><Button disabled={busy || (decision.action === "APPROVE" && validAccounts(decision.request).length === 0)} className={decision.action === "REJECT" ? "bg-red-700 text-white hover:bg-red-800" : ""}>{decision.action === "APPROVE" ? "Confirmer la validation" : "Confirmer le refus"}</Button></div>
         </form> : null}
       </Dialog>
     </section>
