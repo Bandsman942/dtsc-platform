@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { env } from "@/lib/env";
+import { authorizeMaishaPayCallback } from "@/lib/maishapay-callback-auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { processStoredWebhookEvent } from "@/lib/console/console-webhooks";
 import { prisma } from "@/lib/prisma";
@@ -13,13 +14,33 @@ function isPaidStatus(value: unknown) {
 export async function POST(req: Request) {
   const startedAt = Date.now();
   const requestId = req.headers.get("x-request-id") || req.headers.get("x-vercel-id") || null;
-  const secret = new URL(req.url).searchParams.get("secret") || req.headers.get("x-dtsc-webhook-secret");
-  if (env.MAISHAPAY_CALLBACK_SECRET && secret !== env.MAISHAPAY_CALLBACK_SECRET) {
-    await writeApiLog({ request: req, statusCode: 401, startedAt });
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  // Production must fail closed without even consuming the payload when no
+  // webhook secret is configured. Do not log secrets or raw callback bodies.
+  if (process.env.NODE_ENV === "production" && !env.MAISHAPAY_CALLBACK_SECRET?.trim()) {
+    await writeApiLog({ request: req, statusCode: 503, startedAt });
+    return NextResponse.json({ error: "MaishaPay callback authentication unavailable" }, { status: 503 });
   }
 
-  const rawPayload = await req.json().catch(() => null);
+  // Authenticate the EXACT raw UTF-8 body against the provider's
+  // X-MaishaPay-Signature HMAC. Legacy shared-token transport is retained
+  // only as a fallback when a provider signature header is absent.
+  const rawBody = await req.text().catch(() => "");
+  const secret = req.headers.get("x-dtsc-webhook-secret") || new URL(req.url).searchParams.get("secret");
+  const auth = authorizeMaishaPayCallback({
+    expectedSecret: env.MAISHAPAY_CALLBACK_SECRET,
+    suppliedSecret: secret,
+    signature: req.headers.get("x-maishapay-signature"),
+    rawBody,
+    production: process.env.NODE_ENV === "production",
+  });
+  if (!auth.ok) {
+    const status = auth.reason === "CONFIGURATION_MISSING" ? 503 : 401;
+    // Never expose or log the supplied token, the expected token or the query.
+    await writeApiLog({ request: req, statusCode: status, startedAt });
+    return NextResponse.json({ error: "MaishaPay callback authentication unavailable" }, { status });
+  }
+
+  const rawPayload = (() => { try { return JSON.parse(rawBody); } catch { return null; } })();
   const payload = maishaPayCallbackSchema.safeParse(rawPayload);
   if (!payload.success) {
     await writeApiLog({ request: req, statusCode: 400, startedAt });
