@@ -31,7 +31,7 @@ function monetaryCents(value: unknown): bigint | null {
   const raw = String(value).trim();
   if (!/^\d+(?:\.\d{1,2})?$/.test(raw)) return null;
   const [whole, fractional = ""] = raw.split(".");
-  return BigInt(whole) * 100n + BigInt((fractional + "00").slice(0, 2));
+  return BigInt(whole) * BigInt(100) + BigInt((fractional + "00").slice(0, 2));
 }
 
 export function validateMaishaPayPaymentEvidence(
@@ -41,7 +41,7 @@ export function validateMaishaPayPaymentEvidence(
   if (payment.provider !== "MAISHAPAY") return "PAYMENT_PROVIDER_MISMATCH";
   const expectedAmount = monetaryCents(payment.amount);
   const reportedAmount = monetaryCents(callback.amount);
-  if (reportedAmount === null || expectedAmount === null || expectedAmount <= 0n || reportedAmount !== expectedAmount) {
+  if (reportedAmount === null || expectedAmount === null || expectedAmount <= BigInt(0) || reportedAmount !== expectedAmount) {
     return "PAYMENT_AMOUNT_MISMATCH";
   }
   const currency = typeof callback.currency === "string" ? callback.currency.trim().toUpperCase() : "";
