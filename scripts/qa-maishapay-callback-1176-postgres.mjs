@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
-import { randomUUID } from "node:crypto";
+import { createHmac, randomUUID } from "node:crypto";
 import { PrismaClient } from "@prisma/client";
 import {
   isAuthorizedMaishaPayCallback,
+  readVerifiedMaishaPayEvent,
   validateMaishaPayPaymentEvidence,
 } from "../lib/payments/maishapay-callback-validation.ts";
 
@@ -34,7 +35,35 @@ try {
   assert.equal(validateMaishaPayPaymentEvidence({amount:"31.00",currency:"USD",transactionId:"QA1176-PROVIDER-A"},a),"PAYMENT_AMOUNT_MISMATCH");
   assert.equal(validateMaishaPayPaymentEvidence({amount:"30.00",currency:"CDF",transactionId:"QA1176-PROVIDER-A"},a),"PAYMENT_CURRENCY_MISMATCH");
   assert.equal(validateMaishaPayPaymentEvidence({amount:"30.00",currency:"USD",transactionId:"UNRELATED"},a),"PAYMENT_PROVIDER_REFERENCE_MISMATCH");
-  assert.equal(isAuthorizedMaishaPayCallback(undefined,"WRONG"),false);
+  const signedBody = JSON.stringify({
+    event:"payment.success",transactionReference:"QA1176-REF-A-"+suffix,
+    transactionId:"QA1176-PROVIDER-A",amount:30,currency:"USD",status:"COMPLETED",
+  });
+  const signingSecret = "fake-hmac-secret-only-used-for-isolated-qa";
+  const signingBytes = Buffer.from(signedBody,"utf8");
+  const signature = "sha256="+createHmac("sha256",signingSecret).update(signingBytes).digest("hex");
+  assert.equal(isAuthorizedMaishaPayCallback(signingSecret,signingBytes,signature),true);
+  assert.equal(isAuthorizedMaishaPayCallback(undefined,signingBytes,signature),false);
+  assert.equal(isAuthorizedMaishaPayCallback(signingSecret,Buffer.from(signedBody+" "),signature),false);
+  const signedEvent = await db.webhookEvent.create({
+    data:{
+      provider:"maishapay",eventType:"payment-callback",status:"RECEIVED",
+      idempotencyKey:"qa1176-signed-"+suffix,
+      payload:{bodyBase64:signingBytes.toString("base64"),signature},
+    },
+  });
+  const stored = await db.webhookEvent.findUniqueOrThrow({where:{id:signedEvent.id}});
+  assert.equal(readVerifiedMaishaPayEvent(stored.payload,signingSecret)?.transactionReference,"QA1176-REF-A-"+suffix);
+  assert.equal(readVerifiedMaishaPayEvent(stored.payload,"different-secret"),null);
+  const unsignedLegacyEvent = await db.webhookEvent.create({
+    data:{
+      provider:"maishapay",eventType:"payment-callback",status:"UNMATCHED",
+      idempotencyKey:"qa1176-legacy-"+suffix,
+      payload:{transactionReference:"QA1176-REF-A-"+suffix,status:"paid"},
+    },
+  });
+  assert.equal(readVerifiedMaishaPayEvent(unsignedLegacyEvent.payload,signingSecret),null,
+    "Old unsigned events must not be trusted on manual replay");
   assert.equal((await db.payment.findMany({where:{organizationId:orgA},select:{id:true}})).length,1);
   assert.equal((await db.payment.findMany({where:{organizationId:orgB},select:{id:true}})).length,1);
   const after=await db.payment.findUniqueOrThrow({where:{id:payA}});
@@ -43,6 +72,7 @@ try {
   assert.equal(await db.invoice.count({where:{paymentId:payA}}),0,"No invoice on rejected evidence");
   console.log("PASS PAY-4B isolated PostgreSQL: stored decimals, tenant scoping, no automatic PAID/invoice.");
 } finally {
+  await db.webhookEvent.deleteMany({where:{idempotencyKey:{in:["qa1176-signed-"+suffix,"qa1176-legacy-"+suffix]}}});
   await db.payment.deleteMany({where:{id:{in:[payA,payB]}}});
   await db.organization.deleteMany({where:{id:{in:[orgA,orgB]}}});
   await db.user.deleteMany({where:{id:userId}});
