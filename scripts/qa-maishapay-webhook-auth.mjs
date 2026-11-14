@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHmac } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { workflowTestLoader } from "./lib/workflow-test-loader.mjs";
 
@@ -60,7 +61,7 @@ assert.deepEqual(authorizeMaishaPayCallback({
 
 const priorEnv=process.env.NODE_ENV;
 process.env.NODE_ENV = "production";
-function syntheticRequest({ querySecret, headerSecret }={}) {
+function syntheticRequest({ querySecret, headerSecret, signature, status="paid" }={}) {
   const url = "https://api.invalid/api/billing/maishapay/callback" +
     (querySecret ? "?secret=" + encodeURIComponent(querySecret) : "");
   return new Request(url, {
@@ -68,8 +69,9 @@ function syntheticRequest({ querySecret, headerSecret }={}) {
     headers: {
       "Content-Type": "application/json",
       ...(headerSecret ? { "x-dtsc-webhook-secret": headerSecret } : {}),
+      ...(signature ? { "x-maishapay-signature": signature } : {}),
     },
-    body: JSON.stringify({ status: "paid", transactionReference: "QA_SYNTHETIC_REF" }),
+    body: JSON.stringify({ status, transactionReference: "QA_SYNTHETIC_REF" }),
   });
 }
 try {
@@ -98,15 +100,34 @@ try {
   }));
   assert.equal(invalidHeaderWins.status,401,"Explicit header must take precedence");
   assert.equal(eventUpserts,2);
+
+  // Real provider signature uses HMAC of exact raw request body.
+  const raw=JSON.stringify({status:"paid",transactionReference:"QA_SYNTHETIC_REF"});
+  const signature="sha256="+createHmac("sha256",secret).update(raw,"utf8").digest("hex");
+  const signed=await POST(syntheticRequest({signature}));
+  assert.equal(signed.status,200,"Correct MaishaPay HMAC must authorize the route");
+  assert.equal(eventUpserts,3);
+
+  const badHmac=await POST(syntheticRequest({
+    signature:"sha256="+("0".repeat(64)), headerSecret:secret,
+  }));
+  assert.equal(badHmac.status,401,"Present invalid HMAC must not fall back to correct bearer token");
+  assert.equal(eventUpserts,3);
+
+  const tamperedBody=await POST(syntheticRequest({signature,status:"failed"}));
+  assert.equal(tamperedBody.status,401,"HMAC must bind the exact payload");
+  assert.equal(eventUpserts,3);
   assert.equal(processCalls,0,"Synthetic already-processed events never replay");
 
   const source=readFileSync("app/api/billing/maishapay/callback/route.ts","utf8");
-  assert.ok(source.indexOf("authorizeMaishaPayCallback(") < source.indexOf("req.json()"));
+  assert.ok(source.indexOf("authorizeMaishaPayCallback(") < source.indexOf("JSON.parse(rawBody)"));
   assert.ok(source.indexOf("authorizeMaishaPayCallback(") < source.indexOf("webhookEvent.upsert"));
   assert.doesNotMatch(source,/if \(env\.MAISHAPAY_CALLBACK_SECRET &&/);
   const authSrc=readFileSync("lib/maishapay-callback-auth.ts","utf8");
   assert.match(authSrc,/timingSafeEqual/);
-  assert.deepEqual(audits.map(x=>x.status),[503,401,401,200,200,401]);
+  assert.match(authSrc,/createHmac/);
+  assert.match(source,/x-maishapay-signature/);
+  assert.deepEqual(audits.map(x=>x.status),[503,401,401,200,200,401,200,401,401]);
   console.log("PASS PAY-4B: unconfigured Production fails closed, invalid tokens rejected, no queued mutations, legacy transport explicit.");
 } finally {
   if(priorEnv===undefined)delete process.env.NODE_ENV;
