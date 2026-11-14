@@ -38,6 +38,9 @@ assert.match(runner, /organizationId,\s*sectorCode: "HEALTH_CARE"/, "Tenant and 
 assert.match(runner, /HEALTH_LEGACY_REDACTION_ENABLE/, "Environment gate required");
 assert.match(runner, /SNAPSHOT_AND_OPERATOR_APPROVAL_REQUIRED/, "Snapshot and explicit approval required");
 assert.match(runner, /maxScanned > MAX_SCAN/, "Bounded scan required");
+assert.match(runner, /"offset"/, "Numeric privacy-safe pagination required");
+assert.match(runner, /skip: offset/, "Pagination must resume at previous numeric offset");
+assert.match(runner, /nextOffset: offset \+ totals\.scanned/, "Progress must be reported without row IDs");
 assert.match(runner, /updatedAt: row\.updatedAt/, "Optimistic concurrency required");
 assert.match(runner, /if \(!apply\) continue;/, "Dry run must not write");
 assert.doesNotMatch(runner, /console\.log\([^\n]*row\./, "Do not log PHI or source row identifiers");
