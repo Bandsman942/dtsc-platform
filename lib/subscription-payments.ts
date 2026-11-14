@@ -132,6 +132,10 @@ async function finalizePersonalManualPayment(requestId: string, actorUserId: str
     await tx.$queryRaw`SELECT "id" FROM "ManualSubscriptionPayment" WHERE "id" = ${requestId} FOR UPDATE`;
     await tx.$queryRaw`SELECT "id" FROM "User" WHERE "id" = ${request.userId!} FOR UPDATE`;
     const current = await tx.manualSubscriptionPayment.findUniqueOrThrow({ where: { id: requestId } });
+    // Re-check separation of duties after locking the request row:
+    // a decision must never use a stale pre-transaction validator snapshot.
+    if (current.validatorUserId !== actorUserId) throw new Error("MANUAL_PAYMENT_VALIDATOR_REQUIRED");
+    if (current.requestedByUserId === actorUserId) throw new Error("MANUAL_PAYMENT_SELF_APPROVAL_FORBIDDEN");
     if (current.status === "REJECTED") throw new Error("MANUAL_PAYMENT_ALREADY_REJECTED");
     if (current.status === "APPROVED") {
       if (settlementAccountId && current.settlementAccountId !== settlementAccountId) throw new Error("MANUAL_SETTLEMENT_ACCOUNT_CONFLICT");
@@ -174,6 +178,10 @@ async function finalizeOrganizationManualPayment(requestId: string, actorUserId:
     await tx.$queryRaw`SELECT "id" FROM "ManualSubscriptionPayment" WHERE "id" = ${requestId} FOR UPDATE`;
     await tx.$queryRaw`SELECT "id" FROM "Organization" WHERE "id" = ${request.organizationId!} FOR UPDATE`;
     const current = await tx.manualSubscriptionPayment.findUniqueOrThrow({ where: { id: requestId } });
+    // Re-check separation of duties after locking the request row:
+    // a decision must never use a stale pre-transaction validator snapshot.
+    if (current.validatorUserId !== actorUserId) throw new Error("MANUAL_PAYMENT_VALIDATOR_REQUIRED");
+    if (current.requestedByUserId === actorUserId) throw new Error("MANUAL_PAYMENT_SELF_APPROVAL_FORBIDDEN");
     if (current.status === "REJECTED") throw new Error("MANUAL_PAYMENT_ALREADY_REJECTED");
     if (current.status === "APPROVED") {
       if (settlementAccountId && current.settlementAccountId !== settlementAccountId) throw new Error("MANUAL_SETTLEMENT_ACCOUNT_CONFLICT");
