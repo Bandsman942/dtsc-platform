@@ -2,6 +2,7 @@ import { InvoiceStatus, PaymentStatus, SubscriptionStatus, UserRole } from "@pri
 import { buildInvoiceNumber, getNextBillingPeriod, resolveOrganizationInvoiceRecipient, sendInvoiceEmail } from "@/lib/billing";
 import { reconcileOrganizationModulesWithSubscription } from "@/lib/enterprise/module-subscription-reconciliation";
 import { createValidatedTransaction, createValidatedTransactionInTx, ensureSubscriptionSettlementAccount } from "@/lib/hr-cfo-finance";
+import { assertSubscriptionSettlementAccount } from "@/lib/subscription-settlement";
 import { prisma } from "@/lib/prisma";
 
 const LIVE_ORGANIZATION_STATUSES = ["ACTIVE", "TRIAL", "PENDING_PAYMENT", "PAST_DUE", "SUSPENDED"];
@@ -98,7 +99,7 @@ export async function activateOrganizationSubscriptionFromPayment(paymentReferen
   return { ok: true, payment: refreshed, subscription: refreshed.organizationSubscription, invoice, incomeTransaction: income, mail } as const;
 }
 
-export async function finalizeManualSubscriptionPayment(requestId: string, actor: { userId: string; role: UserRole }, action: "APPROVE" | "REJECT", validationComment?: string) {
+export async function finalizeManualSubscriptionPayment(requestId: string, actor: { userId: string; role: UserRole }, action: "APPROVE" | "REJECT", validationComment?: string, settlementAccountId?: string, fundsVerified?: boolean) {
   const request = await prisma.manualSubscriptionPayment.findUnique({
     where: { id: requestId },
     include: { plan: true, user: true, organization: true, payment: true, invoice: true },
@@ -115,28 +116,36 @@ export async function finalizeManualSubscriptionPayment(requestId: string, actor
     return latest;
   }
   if (request.status === "REJECTED") throw new Error("MANUAL_PAYMENT_ALREADY_REJECTED");
+  if (action === "APPROVE" && request.status !== "APPROVED" && !settlementAccountId) throw new Error("MANUAL_SETTLEMENT_ACCOUNT_REQUIRED");
+  if (action === "APPROVE" && request.status !== "APPROVED" && fundsVerified !== true) throw new Error("MANUAL_SETTLEMENT_FUNDS_NOT_ATTESTED");
   if (action === "APPROVE" && request.status !== "APPROVED" && !request.externalReference && (!validationComment || validationComment.trim().length < 10)) throw new Error("MANUAL_PAYMENT_EVIDENCE_REQUIRED");
-  if (request.scope === "PERSONAL") return finalizePersonalManualPayment(request.id, actor.userId, validationComment);
-  if (request.scope === "ORGANIZATION") return finalizeOrganizationManualPayment(request.id, actor.userId, validationComment);
+  if (request.scope === "PERSONAL") return finalizePersonalManualPayment(request.id, actor.userId, validationComment, settlementAccountId);
+  if (request.scope === "ORGANIZATION") return finalizeOrganizationManualPayment(request.id, actor.userId, validationComment, settlementAccountId);
   throw new Error("MANUAL_PAYMENT_SCOPE_INVALID");
 }
 
-async function finalizePersonalManualPayment(requestId: string, actorUserId: string, validationComment?: string) {
+async function finalizePersonalManualPayment(requestId: string, actorUserId: string, validationComment?: string, settlementAccountId?: string) {
   const request = await prisma.manualSubscriptionPayment.findUnique({ where: { id: requestId }, include: { plan: true, user: true, payment: true, invoice: true } });
   if (!request?.user) throw new Error("MANUAL_PAYMENT_USER_REQUIRED");
-  const account = await ensureSubscriptionSettlementAccount(request.paymentMethod, request.currency);
   const { start } = getNextBillingPeriod();
   const outcome = await prisma.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT "id" FROM "ManualSubscriptionPayment" WHERE "id" = ${requestId} FOR UPDATE`;
     await tx.$queryRaw`SELECT "id" FROM "User" WHERE "id" = ${request.userId!} FOR UPDATE`;
     const current = await tx.manualSubscriptionPayment.findUniqueOrThrow({ where: { id: requestId } });
+    // Re-check separation of duties after locking the request row:
+    // a decision must never use a stale pre-transaction validator snapshot.
+    if (current.validatorUserId !== actorUserId) throw new Error("MANUAL_PAYMENT_VALIDATOR_REQUIRED");
+    if (current.requestedByUserId === actorUserId) throw new Error("MANUAL_PAYMENT_SELF_APPROVAL_FORBIDDEN");
     if (current.status === "REJECTED") throw new Error("MANUAL_PAYMENT_ALREADY_REJECTED");
     if (current.status === "APPROVED") {
+      if (settlementAccountId && current.settlementAccountId !== settlementAccountId) throw new Error("MANUAL_SETTLEMENT_ACCOUNT_CONFLICT");
       if (!current.paymentId || !current.subscriptionId) throw new Error("MANUAL_PAYMENT_APPROVAL_INCOMPLETE");
       const existingInvoice = await tx.invoice.findUnique({ where: { manualPaymentId: requestId } });
       if (!existingInvoice?.hrcfoTransactionId) throw new Error("MANUAL_PAYMENT_APPROVAL_INCOMPLETE");
       return { invoice: existingInvoice, income: await tx.hrcfoExpense.findUniqueOrThrow({ where: { id: existingInvoice.hrcfoTransactionId } }) };
     }
+    if (current.status !== "PENDING_VALIDATION") throw new Error("MANUAL_PAYMENT_STATE_INVALID");
+    const account = await assertSubscriptionSettlementAccount(tx, { accountId: settlementAccountId, paymentMethod: current.paymentMethod, currency: current.currency });
     const existing = await tx.subscription.findFirst({ where: { userId: request.userId!, planId: request.planId, status: SubscriptionStatus.ACTIVE, currentPeriodEnd: { gt: start } }, orderBy: { currentPeriodEnd: "desc" } });
     let subscription;
     if (existing) {
@@ -151,7 +160,7 @@ async function finalizePersonalManualPayment(requestId: string, actorUserId: str
     let invoice = await tx.invoice.create({ data: { number: `DTSC-M-${request.id}`, userId: request.userId!, planId: request.planId, subscriptionId: subscription.id, paymentId: payment.id, manualPaymentId: request.id, category: "PERSONAL_SUBSCRIPTION", recipientEmail: request.user!.email, planName: request.plan.name, amount: request.amount, currency: request.currency, status: InvoiceStatus.PAID, paidAt: new Date() } });
     const income = await createValidatedTransactionInTx(tx, { title: `Abonnement personnel ${request.user!.name || request.user!.email}`, requesterName: request.user!.name || request.user!.email, category: "IN", transactionCategory: "IN", transactionType: "SUBSCRIPTION", amount: Number(request.amount), currency: request.currency, accountId: account.id, paymentMethod: request.paymentMethod, sourceType: "PAYMENT", sourceId: payment.id, clientUserId: request.userId!, createdById: actorUserId, status: "VALIDATED", skipInvoice: true });
     invoice = await tx.invoice.update({ where: { id: invoice.id }, data: { hrcfoTransactionId: income.id } });
-    await tx.manualSubscriptionPayment.update({ where: { id: requestId }, data: { status: "APPROVED", subscriptionId: subscription.id, paymentId: payment.id, validatedAt: new Date(), validatedByUserId: actorUserId, validationComment: validationComment || null } });
+    await tx.manualSubscriptionPayment.update({ where: { id: requestId }, data: { status: "APPROVED", settlementAccountId: account.id, fundsVerifiedAt: new Date(), subscriptionId: subscription.id, paymentId: payment.id, validatedAt: new Date(), validatedByUserId: actorUserId, validationComment: validationComment || null } });
     return { invoice, income };
   }, { maxWait: 10_000, timeout: 30_000 });
   const { invoice, income } = outcome;
@@ -159,24 +168,30 @@ async function finalizePersonalManualPayment(requestId: string, actorUserId: str
   return { request: await prisma.manualSubscriptionPayment.findUnique({ where: { id: request.id } }), invoice, incomeTransaction: income, mail };
 }
 
-async function finalizeOrganizationManualPayment(requestId: string, actorUserId: string, validationComment?: string) {
+async function finalizeOrganizationManualPayment(requestId: string, actorUserId: string, validationComment?: string, settlementAccountId?: string) {
   const request = await prisma.manualSubscriptionPayment.findUnique({ where: { id: requestId }, include: { plan: true, organization: true, payment: true, invoice: true } });
   if (!request?.organization) throw new Error("MANUAL_PAYMENT_ORGANIZATION_REQUIRED");
   const recipient = await resolveOrganizationInvoiceRecipient(request.organization.id);
   if (!recipient) throw new Error("ORGANIZATION_INVOICE_RECIPIENT_NOT_FOUND");
-  const account = await ensureSubscriptionSettlementAccount(request.paymentMethod, request.currency);
   const { start } = getNextBillingPeriod();
   const outcome = await prisma.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT "id" FROM "ManualSubscriptionPayment" WHERE "id" = ${requestId} FOR UPDATE`;
     await tx.$queryRaw`SELECT "id" FROM "Organization" WHERE "id" = ${request.organizationId!} FOR UPDATE`;
     const current = await tx.manualSubscriptionPayment.findUniqueOrThrow({ where: { id: requestId } });
+    // Re-check separation of duties after locking the request row:
+    // a decision must never use a stale pre-transaction validator snapshot.
+    if (current.validatorUserId !== actorUserId) throw new Error("MANUAL_PAYMENT_VALIDATOR_REQUIRED");
+    if (current.requestedByUserId === actorUserId) throw new Error("MANUAL_PAYMENT_SELF_APPROVAL_FORBIDDEN");
     if (current.status === "REJECTED") throw new Error("MANUAL_PAYMENT_ALREADY_REJECTED");
     if (current.status === "APPROVED") {
+      if (settlementAccountId && current.settlementAccountId !== settlementAccountId) throw new Error("MANUAL_SETTLEMENT_ACCOUNT_CONFLICT");
       if (!current.paymentId || !current.organizationSubscriptionId) throw new Error("MANUAL_PAYMENT_APPROVAL_INCOMPLETE");
       const existingInvoice = await tx.invoice.findUnique({ where: { manualPaymentId: requestId } });
       if (!existingInvoice?.hrcfoTransactionId) throw new Error("MANUAL_PAYMENT_APPROVAL_INCOMPLETE");
       return { invoice: existingInvoice, income: await tx.hrcfoExpense.findUniqueOrThrow({ where: { id: existingInvoice.hrcfoTransactionId } }) };
     }
+    if (current.status !== "PENDING_VALIDATION") throw new Error("MANUAL_PAYMENT_STATE_INVALID");
+    const account = await assertSubscriptionSettlementAccount(tx, { accountId: settlementAccountId, paymentMethod: current.paymentMethod, currency: current.currency });
     const existing = await tx.organizationSubscription.findFirst({ where: { organizationId: request.organizationId!, planId: request.planId, status: "ACTIVE", expiresAt: { gt: start } }, orderBy: { expiresAt: "desc" } });
     let subscription;
     if (existing) {
@@ -193,7 +208,7 @@ async function finalizeOrganizationManualPayment(requestId: string, actorUserId:
     let invoice = await tx.invoice.create({ data: { number: `DTSC-M-${request.id}`, userId: recipient.userId, organizationId: request.organizationId, organizationSubscriptionId: subscription.id, paymentId: payment.id, manualPaymentId: request.id, category: "ORGANIZATION_SUBSCRIPTION", recipientEmail: recipient.emails[0], planId: request.planId, planName: request.plan.name, amount: request.amount, currency: request.currency, status: InvoiceStatus.PAID, paidAt: new Date() } });
     const income = await createValidatedTransactionInTx(tx, { title: `Abonnement entreprise ${request.organization!.name}`, requesterName: request.organization!.name, category: "IN", transactionCategory: "IN", transactionType: "SUBSCRIPTION", amount: Number(request.amount), currency: request.currency, accountId: account.id, paymentMethod: request.paymentMethod, sourceType: "ORGANIZATION_SUBSCRIPTION_MANUAL_PAYMENT", sourceId: request.id, clientUserId: recipient.userId, createdById: actorUserId, status: "VALIDATED", skipInvoice: true });
     invoice = await tx.invoice.update({ where: { id: invoice.id }, data: { hrcfoTransactionId: income.id } });
-    await tx.manualSubscriptionPayment.update({ where: { id: requestId }, data: { status: "APPROVED", organizationSubscriptionId: subscription.id, paymentId: payment.id, validatedAt: new Date(), validatedByUserId: actorUserId, validationComment: validationComment || null } });
+    await tx.manualSubscriptionPayment.update({ where: { id: requestId }, data: { status: "APPROVED", settlementAccountId: account.id, fundsVerifiedAt: new Date(), organizationSubscriptionId: subscription.id, paymentId: payment.id, validatedAt: new Date(), validatedByUserId: actorUserId, validationComment: validationComment || null } });
     return { invoice, income };
   }, { maxWait: 10_000, timeout: 30_000 });
   const { invoice, income } = outcome;

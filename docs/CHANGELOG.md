@@ -1,8 +1,15 @@
-## 2026-11-14 — HEALTH-01 / #1146 — préparation P0 données historiques (NON FUSIONNÉ)
+## 2026-11-14 — P0 #1041 / #992 — compte réel de règlement manuel DTSC (candidat v1.17.5, NON FUSIONNÉ / E2E EN ATTENTE)
+
+- Le valideur sélectionne le compte financier DTSC ayant effectivement reçu les fonds et confirme leur réception ; contrôle de l'attestation dans l'API **et** le service métier, MFA et séparation des fonctions préservés.
+- Verrou DB et revalidation du compte réel actif, type/devise, exclusions des comptes automatiques, anomalies de rapprochement; aucune création automatique pendant l'approbation.
+- Lien nullable du compte réel et horodatage nullable de l'attestation humaine sur le dossier de paiement, migration additive, aucune régularisation historique; rapprochement MaishaPay et contrôle PSP restent ouverts dans #992.
+- QA contractuelle et PostgreSQL isolée + documentation, E2E propriétaire restant à valider avant fusion main.
+
+## 2026-11-14 — HEALTH-01 / #1146 — préparation P0 données historiques (fusionnée #1163, v1.17.4)
 
 - Script de diagnostic tenant-scoped des anciennes projections médicales, sans accès aux tables Santé canoniques et sans écriture par défaut.
 - Mode d'assainissement séparé : sauvegarde Neon préalablement vérifiée, confirmation opérateur, limite de volume, garde de concurrence et compteurs sans PHI.
-- QA ajoutée à `qa:health-01` et runbook `docs/HOTFIX_HEALTH_01_LEGACY_REDACTION_20261114.md` ; ne vaut ni application Production, ni E2E final, ni fermeture de #1146.
+- QA ajoutée à `qa:health-01` et runbook `docs/HOTFIX_HEALTH_01_LEGACY_REDACTION_20261114.md` ; ne vaut ni anonymisation des données de Production ni fermeture de #1146 ; E2E final de l'outillage #1163 BON.
 
 ## 2026-11-13 — HEALTH-01→06 — candidat d'intégration des six tranches, NON FUSIONNÉ
 
