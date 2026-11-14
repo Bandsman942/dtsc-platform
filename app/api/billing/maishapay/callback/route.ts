@@ -14,12 +14,23 @@ function isPaidStatus(value: unknown) {
 export async function POST(req: Request) {
   const startedAt = Date.now();
   const requestId = req.headers.get("x-request-id") || req.headers.get("x-vercel-id") || null;
-  // Header is preferred; legacy ?secret= remains temporarily accepted until
-  // the provider certifies a header-only or cryptographically signed callback.
+  // Production must fail closed without even consuming the payload when no
+  // webhook secret is configured. Do not log secrets or raw callback bodies.
+  if (process.env.NODE_ENV === "production" && !env.MAISHAPAY_CALLBACK_SECRET?.trim()) {
+    await writeApiLog({ request: req, statusCode: 503, startedAt });
+    return NextResponse.json({ error: "MaishaPay callback authentication unavailable" }, { status: 503 });
+  }
+
+  // Authenticate the EXACT raw UTF-8 body against the provider's
+  // X-MaishaPay-Signature HMAC. Legacy shared-token transport is retained
+  // only as a fallback when a provider signature header is absent.
+  const rawBody = await req.text().catch(() => "");
   const secret = req.headers.get("x-dtsc-webhook-secret") || new URL(req.url).searchParams.get("secret");
   const auth = authorizeMaishaPayCallback({
     expectedSecret: env.MAISHAPAY_CALLBACK_SECRET,
     suppliedSecret: secret,
+    signature: req.headers.get("x-maishapay-signature"),
+    rawBody,
     production: process.env.NODE_ENV === "production",
   });
   if (!auth.ok) {
@@ -29,7 +40,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "MaishaPay callback authentication unavailable" }, { status });
   }
 
-  const rawPayload = await req.json().catch(() => null);
+  const rawPayload = (() => { try { return JSON.parse(rawBody); } catch { return null; } })();
   const payload = maishaPayCallbackSchema.safeParse(rawPayload);
   if (!payload.success) {
     await writeApiLog({ request: req, statusCode: 400, startedAt });
