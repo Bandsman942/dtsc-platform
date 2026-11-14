@@ -1,3 +1,10 @@
+## 2026-11-14 — P0 HEALTH-05 / #1167 — préflight factures Santé / Finance (candidat v1.17.6, NON FUSIONNÉ)
+
+- Outil de diagnostic uniquement en lecture seule, par entreprise, des incohérences de montants et de paiements spécialisés Santé ; valeurs précises en centimes avec `BigInt`, pagination numérique bornée et agrégats sans PHI.
+- Aucune facturation ERP Finance créée, aucun paiement enregistré ni contrepassation ; `PAID` Santé ne certifie pas un ledger Finance ou un rapprochement bancaire.
+- QA contractuelle et PostgreSQL localhost à deux tenants fictifs, documentation de cutover dans `docs/HOTFIX_HEALTH_05_FINANCE_PREFLIGHT_20261114.md`.
+- La fusion exige Quality Gates sur dernier SHA, E2E propriétaire, SemVer unique sur le nouveau main et autorisation de fusion ; le parent #1150 reste OPEN.
+
 ## 2026-11-14 — P0 #1041 / #992 — compte réel de règlement manuel DTSC (candidat v1.17.5, NON FUSIONNÉ / E2E EN ATTENTE)
 
 - Le valideur sélectionne le compte financier DTSC ayant effectivement reçu les fonds et confirme leur réception ; contrôle de l'attestation dans l'API **et** le service métier, MFA et séparation des fonctions préservés.
