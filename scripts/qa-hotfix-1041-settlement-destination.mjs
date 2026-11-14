@@ -32,6 +32,7 @@ assert.match(decision,/parsed\.data\.settlementAccountId/);
 assert.match(list,/isConfiguredSubscriptionSettlementAccount/);
 assert.match(list,/settlementAccounts/);
 assert.match(list,/canPickSettlementAccount/);
+assert.match(list,/requireConsoleCapability\(CONSOLE_CAPABILITIES\.SUBSCRIPTIONS_MANAGE\)/,"Read-only Console users must not see treasury accounts");
 assert.match(list,/request\.validatorUserId === session\.userId/);
 assert.match(ui,/name="settlementAccountId"/);
 assert.match(ui,/name="fundsVerified"/);
