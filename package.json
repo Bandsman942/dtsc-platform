@@ -1,6 +1,6 @@
 {
   "name": "dtsc-platform",
-  "version": "1.17.5",
+  "version": "1.17.6",
   "private": true,
   "engines": {
     "node": "22.x"
@@ -460,12 +460,13 @@
     "qa:health-02": "node scripts/qa-health-02-design.mjs",
     "qa:health-03": "node scripts/qa-health-03-appointments.mjs",
     "qa:health-04": "node scripts/qa-health-04-stock-specimen.mjs",
-    "qa:health-05": "node scripts/qa-health-05-payments.mjs",
+    "qa:health-05": "node scripts/qa-health-05-payments.mjs && node scripts/qa-health-05-finance-preflight.mjs",
     "qa:health-06": "node scripts/qa-health-06-privacy-kpis.mjs",
     "qa:health-preflight": "pnpm qa:health-01 && pnpm qa:health-02 && pnpm qa:health-03 && pnpm qa:health-04 && pnpm qa:health-05 && pnpm qa:health-06",
     "qa:health-03-postgres": "node scripts/qa-health-03-appointments-postgres.mjs",
     "qa:hotfix-1041-settlement": "node scripts/qa-hotfix-1041-settlement-destination.mjs",
-    "qa:hotfix-1041-settlement:postgres": "node scripts/qa-hotfix-1041-settlement-postgres.mjs"
+    "qa:hotfix-1041-settlement:postgres": "node scripts/qa-hotfix-1041-settlement-postgres.mjs",
+    "qa:health-05:finance-preflight-postgres": "node scripts/qa-health-05-finance-preflight-postgres.mjs"
   },
   "dependencies": {
     "@ai-sdk/gateway": "2.0.27",
