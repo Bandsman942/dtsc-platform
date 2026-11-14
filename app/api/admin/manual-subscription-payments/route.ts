@@ -106,7 +106,8 @@ export async function GET(req: Request) {
   }
   // DTSC financial accounts are private. Expose choices only to a Console
   // subscription manager or to an active user assigned a pending decision.
-  const canPickSettlementAccount = !assignedOnly || requests.some((request) => request.status === "PENDING_VALIDATION" && request.validatorUserId === session.userId);
+  const subscriptionManagerAllowed = !assignedOnly && !(await requireConsoleCapability(CONSOLE_CAPABILITIES.SUBSCRIPTIONS_MANAGE)).response;
+  const canPickSettlementAccount = subscriptionManagerAllowed || requests.some((request) => request.status === "PENDING_VALIDATION" && request.validatorUserId === session.userId);
   const settlementAccounts = canPickSettlementAccount
     ? await prisma.financialAccount.findMany({ where: { status: "ACTIVE", reconciliationIssue: null, currency: { not: null }, accountType: { in: ["BANK", "CASH", "MOBILE_MONEY"] } }, select: { id: true, name: true, accountType: true, currency: true, reconciliationIssue: true, status: true }, orderBy: [{ currency: "asc" }, { name: "asc" }], take: 500 })
     : [];
