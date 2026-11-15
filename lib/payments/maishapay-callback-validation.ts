@@ -51,6 +51,22 @@ function numericField(value: unknown): string | number | undefined {
 }
 
 /**
+ * API v2 transaction.* envelopes use integer minor units (centimes);
+ * merchant payment.* callbacks show decimal major units. Never use floats to
+ * convert amounts: a misidentified unit must fail closed, not mark PAID.
+ */
+function minorUnitsToMajor(value: unknown): string | undefined {
+  const raw = typeof value === "number"
+    ? Number.isSafeInteger(value) && value >= 0 ? String(value) : null
+    : typeof value === "string" ? value.trim() : null;
+  if (!raw || !/^\d+$/.test(raw)) return undefined;
+  const cents = BigInt(raw);
+  const units = cents / BigInt(100);
+  const fraction = (cents % BigInt(100)).toString().padStart(2, "0");
+  return `${units.toString()}.${fraction}`;
+}
+
+/**
  * Supports both MaishaPay's documented v2 envelope
  * {type:"transaction.success",data:{reference,transaction_id,amount,currency,payment_status}}
  * and its merchant callback {event:"payment.success", transactionReference,...}.
@@ -68,6 +84,7 @@ export function normalizeMaishaPayWebhook(input: unknown): MaishaPayPaymentNotif
   ]);
   if (eventName && !permittedEvents.has(eventName)) return null;
   if (nested && !eventName) return null;
+  if (nested && !eventName?.startsWith("transaction.")) return null;
   const rawStatus = numericField(source.payment_status ?? source.status ?? event.status);
   const eventStatus = eventName
     ? eventName.endsWith(".success") ? "SUCCESS" : eventName.split(".").at(-1)?.toUpperCase()
@@ -85,7 +102,7 @@ export function normalizeMaishaPayWebhook(input: unknown): MaishaPayPaymentNotif
     transactionId: textField(source.transactionId ?? source.transaction_id),
     status,
     statusCode: numericField(source.statusCode),
-    amount: numericField(source.amount),
+    amount: nested ? minorUnitsToMajor(source.amount) : numericField(source.amount),
     currency: textField(source.currency),
   };
 }
@@ -110,7 +127,7 @@ export function validateMaishaPayPaymentEvidence(
   }
   const currency = typeof callback.currency === "string" ? callback.currency.trim().toUpperCase() : "";
   if (!currency || currency !== payment.currency.trim().toUpperCase()) return "PAYMENT_CURRENCY_MISMATCH";
-  if (payment.providerReference && callback.transactionId && callback.transactionId !== payment.providerReference) {
+  if (payment.providerReference && callback.transactionId !== payment.providerReference) {
     return "PAYMENT_PROVIDER_REFERENCE_MISMATCH";
   }
   return null;
