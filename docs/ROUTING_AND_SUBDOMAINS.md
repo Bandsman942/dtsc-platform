@@ -170,3 +170,8 @@ Cette extraction devra venir apres stabilisation des contrats API, des helpers d
 ## Portail public de documentation — candidat #1099
 
 Le host `docs` ajoute une sixième surface de lecture sans nouvelle application Vercel. Les guides publics sont choisis explicitement dans `lib/public-documentation.ts` et font référence aux guides internes canoniques, mais n’exposent ni runbooks, ni documents privés, ni clés, ni API partenaire non certifiée. Voir `docs/PUBLIC_DOCUMENTATION_PROGRAM.md`. Aucun déploiement depuis une branche feature.
+
+
+## Installation DTSC Platform depuis le site public (#1178)
+
+Le site `dtsc-platform.com` propose dans le hero, la navigation et un bloc dédié un lien vers `https://app.dtsc-platform.com/install`. Cette route APP est accessible sans session uniquement pour l'onboarding d'installation PWA ; le manifeste APP conserve `start_url: /dashboard` et ses contrôles d'authentification. Il ne faut jamais installer depuis l'origine du site public, dont le manifeste désigne le site vitrine. Documentation et E2E : `docs/PUBLIC_APP_INSTALL_ONBOARDING_20261115.md`.

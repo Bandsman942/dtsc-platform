@@ -1,125 +1,67 @@
-"use client";
-
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import { ArrowRight, Download, MonitorSmartphone, ShieldCheck, Wifi } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Dialog } from "@/components/ui/dialog";
-import { getSignInUrl } from "@/lib/domains";
+import { ArrowRight, Download, Laptop, MonitorSmartphone, ShieldCheck, Smartphone } from "lucide-react";
+import { getAppBaseUrl } from "@/lib/domains";
 
-type BeforeInstallPromptEvent = Event & {
-  prompt: () => Promise<void>;
-  userChoice: Promise<{ outcome: "accepted" | "dismissed"; platform: string }>;
-};
-
-export function PublicPWAInstallCard() {
-  const [installEvent, setInstallEvent] = useState<BeforeInstallPromptEvent | null>(null);
-  const [installed, setInstalled] = useState(false);
-  const [guideOpen, setGuideOpen] = useState(false);
-
-  useEffect(() => {
-    const navigatorWithStandalone = window.navigator as Navigator & { standalone?: boolean };
-    setInstalled(window.matchMedia("(display-mode: standalone)").matches || Boolean(navigatorWithStandalone.standalone));
-
-    function handleBeforeInstallPrompt(event: Event) {
-      event.preventDefault();
-      setInstallEvent(event as BeforeInstallPromptEvent);
-    }
-
-    function handleInstalled() {
-      setInstalled(true);
-      setInstallEvent(null);
-    }
-
-    window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
-    window.addEventListener("appinstalled", handleInstalled);
-
-    return () => {
-      window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
-      window.removeEventListener("appinstalled", handleInstalled);
-    };
-  }, []);
-
-  async function installApp() {
-    if (!installEvent) {
-      setGuideOpen(true);
-      return;
-    }
-
-    await installEvent.prompt();
-    const choice = await installEvent.userChoice;
-    if (choice.outcome === "accepted") {
-      setInstalled(true);
-    }
-    setInstallEvent(null);
-  }
+/**
+ * Marketing site CTA only: never prompt installation on dtsc-platform.com.
+ * The browser's install permission belongs to the APP origin and its manifest.
+ */
+export function PublicPWAInstallCard({ locale = "fr" }: { locale?: "fr" | "en" }) {
+  const english = locale === "en";
+  const installUrl = `${getAppBaseUrl()}/install`;
 
   return (
-    <section className="border-b border-dtsc-border bg-dtsc-surface">
-      <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
-        <div className="grid gap-6 overflow-hidden rounded-[1.75rem] border border-cyan-400/30 bg-[radial-gradient(circle_at_10%_0%,rgba(0,194,255,0.18),transparent_30%),linear-gradient(135deg,#001736,#002b5b_48%,#0B1220)] p-6 text-white shadow-[0_24px_80px_rgba(0,43,91,0.22)] lg:grid-cols-[1fr_auto] lg:items-center lg:p-8">
-          <div className="flex items-start gap-4">
-            <div className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-cyan-300 text-[#001736] shadow-[0_14px_34px_rgba(0,194,255,0.25)]">
-              <MonitorSmartphone className="h-7 w-7" />
-            </div>
-            <div>
-              <p className="text-sm font-black uppercase tracking-[0.18em] text-cyan-200">Application DTSC Platform</p>
-              <h2 className="mt-2 max-w-3xl text-3xl font-black leading-tight">
-                Installez DTSC Platform sur votre mobile et accédez plus vite à votre espace client.
+    <section id="installer-dtsc-platform" aria-labelledby="dtsc-install-public-heading" className="border-y border-dtsc-border bg-dtsc-surface">
+      <div className="mx-auto max-w-[92rem] px-4 py-8 sm:px-6 sm:py-10 lg:px-8">
+        <div className="relative isolate overflow-hidden rounded-[1.65rem] border border-cyan-400/25 bg-[linear-gradient(135deg,#001736,#00366e_65%,#08223e)] p-5 text-white shadow-[0_18px_60px_rgba(0,25,55,0.14)] sm:p-8 lg:p-10">
+          <div className="pointer-events-none absolute -right-20 -top-24 h-64 w-64 rounded-full bg-cyan-400/15 blur-3xl" aria-hidden="true" />
+          <div className="relative grid min-w-0 gap-6 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center lg:gap-8">
+            <div className="min-w-0">
+              <p className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-[0.16em] text-cyan-200">
+                <MonitorSmartphone aria-hidden="true" className="h-4 w-4" />
+                {english ? "DTSC Platform · Installable app" : "DTSC Platform · Application installable"}
+              </p>
+              <h2 id="dtsc-install-public-heading" className="mt-3 max-w-3xl text-2xl font-black tracking-tight sm:text-3xl">
+                {english ? "Your workspace, one tap away on mobile and desktop." : "Votre espace DTSC à portée de main, sur mobile et ordinateur."}
               </h2>
               <p className="mt-3 max-w-3xl text-sm leading-7 text-blue-100">
-                L&apos;application installable ouvre directement votre tableau de bord, garde l&apos;authentification obligatoire et facilite l&apos;accès au chatbot, aux tickets, aux documents et aux notifications.
+                {english
+                  ? "Install DTSC Platform from your browser, then sign in securely to access your workspace. No APK or EXE file is required."
+                  : "Installez DTSC Platform depuis votre navigateur, puis connectez-vous à votre espace sécurisé. Aucun fichier APK ou EXE n'est nécessaire."}
               </p>
-              <div className="mt-5 grid gap-3 text-sm font-bold text-blue-50 sm:grid-cols-3">
-                <span className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/10 px-4 py-3">
-                  <Download className="h-4 w-4 text-cyan-200" />
-                  Installation rapide
+              <div className="mt-5 flex flex-wrap gap-2 text-xs font-semibold text-blue-50">
+                <span className="inline-flex items-center gap-2 rounded-lg border border-white/15 bg-white/10 px-3 py-2">
+                  <Smartphone className="h-4 w-4 text-cyan-200" aria-hidden="true" />
+                  {english ? "Android · iPhone / iPad" : "Android · iPhone / iPad"}
                 </span>
-                <span className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/10 px-4 py-3">
-                  <ShieldCheck className="h-4 w-4 text-cyan-200" />
-                  Espace sécurisé
+                <span className="inline-flex items-center gap-2 rounded-lg border border-white/15 bg-white/10 px-3 py-2">
+                  <Laptop className="h-4 w-4 text-cyan-200" aria-hidden="true" />
+                  {english ? "Windows · macOS · Linux" : "Windows · macOS · Linux"}
                 </span>
-                <span className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/10 px-4 py-3">
-                  <Wifi className="h-4 w-4 text-cyan-200" />
-                  Page hors ligne
+                <span className="inline-flex items-center gap-2 rounded-lg border border-white/15 bg-white/10 px-3 py-2">
+                  <ShieldCheck className="h-4 w-4 text-cyan-200" aria-hidden="true" />
+                  {english ? "Guided and secure setup" : "Installation guidée et sécurisée"}
                 </span>
               </div>
             </div>
-          </div>
-
-          <div className="flex flex-col gap-3 sm:flex-row lg:flex-col">
-            <Button
-              type="button"
-              onClick={installApp}
-              disabled={installed}
-              className="rounded-xl bg-cyan-300 px-6 text-[#001736] hover:bg-white disabled:cursor-default disabled:opacity-80"
-            >
-              <Download className="h-4 w-4" />
-              {installed ? "Application installée" : "Installer l'application"}
-            </Button>
-            <Button asChild variant="outline" className="rounded-xl border-white/20 bg-white/10 px-6 text-white hover:bg-white/15">
-              <Link href={getSignInUrl("/dashboard")}>
-                Ouvrir l&apos;espace client
-                <ArrowRight className="h-4 w-4" />
+            <div className="flex min-w-0 flex-col gap-3 sm:flex-row lg:flex-col">
+              <Link
+                href={installUrl}
+                className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-cyan-300 px-5 py-3 text-center text-sm font-black text-[#001736] shadow-lg shadow-cyan-950/20 transition hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300"
+              >
+                <Download aria-hidden="true" className="h-5 w-5" />
+                {english ? "Install DTSC Platform" : "Installer DTSC Platform"}
+                <ArrowRight aria-hidden="true" className="h-4 w-4" />
               </Link>
-            </Button>
+              <p className="max-w-xs text-center text-xs leading-5 text-blue-100 lg:text-left">
+                {english
+                  ? "Opens our app site to install the correct workspace, with steps for your device."
+                  : "Ouvre notre site applicatif pour installer le bon espace, avec un guide adapté à votre appareil."}
+              </p>
+            </div>
           </div>
         </div>
       </div>
-
-      <Dialog open={guideOpen} title="Installer DTSC Platform" onClose={() => setGuideOpen(false)}>
-        <div className="space-y-3 text-sm leading-7 text-dtsc-muted">
-          <p>
-            Si votre navigateur n&apos;affiche pas encore le bouton natif d&apos;installation, ouvrez le menu du navigateur puis choisissez
-            <span className="font-black text-dtsc-ink"> Ajouter à l&apos;écran d&apos;accueil</span> ou
-            <span className="font-black text-dtsc-ink"> Installer l&apos;application</span>.
-          </p>
-          <p>
-            Sur iPhone ou iPad, utilisez le bouton de partage de Safari puis sélectionnez
-            <span className="font-black text-dtsc-ink"> Sur l&apos;écran d&apos;accueil</span>.
-          </p>
-        </div>
-      </Dialog>
     </section>
   );
 }

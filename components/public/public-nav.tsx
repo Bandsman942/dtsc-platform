@@ -8,6 +8,7 @@ import {
   BookOpenText,
   BriefcaseBusiness,
   Building2,
+  Download,
   Home,
   Layers3,
   Menu,
@@ -20,7 +21,7 @@ import { useEffect, useRef, useState } from "react";
 import { ProductPreferencesControls } from "@/components/layout/product-preferences-controls";
 import { PublicSearchDialog } from "@/components/public/public-search-dialog";
 import { publicLinks } from "@/components/public/public-links";
-import { getSignInUrl } from "@/lib/domains";
+import { getAppBaseUrl, getSignInUrl } from "@/lib/domains";
 import { cn } from "@/lib/utils";
 import { publicNavigationCopy } from "@/lib/public-navigation-i18n";
 
@@ -214,6 +215,14 @@ export function PublicNav({ locale }: { locale: "fr" | "en" }) {
                     >
                       Demander une consultation
                     </Link>
+                    <Link
+                      href={`${getAppBaseUrl()}/install`}
+                      onClick={() => setOpen(false)}
+                      className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-cyan-300/60 bg-cyan-300/10 px-4 py-3 text-center font-semibold text-cyan-100 transition-colors hover:bg-cyan-300/20 sm:col-span-2"
+                    >
+                      <Download className="h-4 w-4" aria-hidden="true" />
+                      {locale === "en" ? "Install DTSC Platform" : "Installer DTSC Platform"}
+                    </Link>
                   </div>
                 </div>
               </div>
@@ -277,6 +286,10 @@ export function PublicNav({ locale }: { locale: "fr" | "en" }) {
         <ProductPreferencesControls />
         <Link href={getSignInUrl("/dashboard")} className="rounded-lg border border-dtsc-border px-3 py-2 text-sm font-medium text-dtsc-blue transition-colors hover:bg-dtsc-soft">
           Accès client
+        </Link>
+        <Link href={`${getAppBaseUrl()}/install`} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-cyan-500/40 px-3 py-2 text-sm font-semibold text-dtsc-blue transition-colors hover:bg-dtsc-soft">
+          <Download className="h-4 w-4" aria-hidden="true" />
+          {locale === "en" ? "Install" : "Installer"}
         </Link>
         <Link href="/contact" className="rounded-lg bg-dtsc-blue px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[var(--dtsc-brand-secondary-hover)]">
           Consultation
