@@ -1,4 +1,4 @@
-## 2026-11-15 — #1187 RETAIL avoirs partiels/services/mixte — v1.18.4 candidate (E2E requis)
+## 2026-11-15 — #1187 RETAIL avoirs partiels/services/mixte — v1.19.0 candidate (E2E requis)
 
 - Séparation stricte entre **avoir comptable** et **remboursement de caisse** ; remboursement plafonné au trop-perçu déjà encaissé, absent si simple diminution de créance.
 - Service sans stock, produit jamais livré (réservation libérée), produit livré (inspection puis retour physique) : conditions et libellés distincts.

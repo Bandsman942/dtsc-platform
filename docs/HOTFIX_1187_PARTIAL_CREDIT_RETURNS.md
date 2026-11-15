@@ -1,4 +1,4 @@
-# #1187 — Avoirs, paiements partiels et retours RETAIL (candidat v1.18.4)
+# #1187 — Avoirs, paiements partiels et retours RETAIL (candidat v1.19.0)
 
 **État :** code sur branche `fix/1187-retail-partial-credit-refund-engine`, non déployé et E2E propriétaire non validé.
 
