@@ -73,9 +73,13 @@ export async function POST(req: Request, { params }: Params) {
         ? await decideSalesInvoiceAssignedApproval(organizationId, invoiceId, auth.session.userId, parsed.data as { action: "APPROVE" | "REJECT" | "REQUEST_CORRECTION"; revision: number; reason?: string })
         : await transitionSalesInvoice(organizationId, invoiceId, auth.session.userId, parsed.data as { action: "CANCEL" | "ISSUE"; revision: number; reason?: string });
     await writeAuditLog({
-      userId: auth.session.userId, action: `ENTERPRISE_RETAIL_INVOICE_${parsed.data.action}`,
+      userId: auth.session.userId, organizationId, action: `ENTERPRISE_RETAIL_INVOICE_${parsed.data.action}`,
       entity: "EnterpriseSalesInvoice", entityId: invoice.id, request: req,
-      metadata: { organizationId, siteId: checkout.siteId, reason: parsed.data.reason, approverUserId: parsed.data.action === "SUBMIT" ? parsed.data.approverUserId : undefined },
+      riskLevel: parsed.data.action === "APPROVE" && checkout.invoice.createdByUserId === auth.session.userId ? "HIGH" : "MEDIUM",
+      reasonCode: parsed.data.action === "APPROVE" && checkout.invoice.createdByUserId === auth.session.userId ? "RETAIL_OWNER_GRANTED_SELF_APPROVAL" : undefined,
+      metadata: { organizationId, siteId: checkout.siteId, invoiceNumber: checkout.invoice.number,
+        ownerGrantedSelfApproval: parsed.data.action === "APPROVE" && checkout.invoice.createdByUserId === auth.session.userId,
+        reason: parsed.data.reason, approverUserId: parsed.data.action === "SUBMIT" ? parsed.data.approverUserId : undefined },
     });
     if (["APPROVE", "REJECT", "REQUEST_CORRECTION", "ISSUE"].includes(parsed.data.action) && checkout.invoice.createdByUserId !== auth.session.userId) {
       const title = parsed.data.action === "ISSUE" ? "Facture émise" : parsed.data.action === "APPROVE" ? "Facture approuvée" : parsed.data.action === "REJECT" ? "Facture refusée" : "Correction de facture demandée";
