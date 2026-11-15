@@ -24,7 +24,7 @@ export async function assertRetailInvoiceReturnSettlementReadinessTx(
   const request = await tx.enterpriseRetailInvoiceReturnRequest.findFirst({
     where: { organizationId, id: requestId, checkout: { salesInvoiceId: invoiceId } },
     select: {
-      id: true, checkoutId: true, status: true, refundAmount: true,
+      id: true, checkoutId: true, status: true, refundAmount: true, refundPayoutAmount: true,
       requestedByUserId: true, approverUserId: true, decidedByUserId: true,
       inspectedByUserId: true, inspectedAt: true, inspectionNotes: true,
       lines: { select: { id: true, checkoutLineId: true, quantity: true, refundAmount: true,
@@ -47,20 +47,26 @@ export async function assertRetailInvoiceReturnSettlementReadinessTx(
   });
   if (!request) throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_NOT_FOUND", 404);
   const { checkout } = request;
+  const independentlyVerified = new Set([request.requestedByUserId, request.approverUserId, request.inspectedByUserId]).size === 3 ||
+    (request.requestedByUserId === request.approverUserId && request.inspectedByUserId !== request.approverUserId);
   if (request.status !== expectedStatus || !request.inspectedAt ||
       !request.inspectedByUserId || !request.inspectionNotes || request.inspectionNotes.trim().length < 5 ||
       !request.decidedByUserId || request.decidedByUserId !== request.approverUserId ||
-      new Set([request.requestedByUserId, request.approverUserId, request.inspectedByUserId]).size !== 3) {
+      !independentlyVerified) {
     throw conflict("RETAIL_INVOICE_RETURN_SETTLEMENT_APPROVAL_REQUIRED");
   }
-  if (!checkout.stockPostedAt ||
-      !["PAID", "CREDIT_NOTE", "PARTIALLY_PAID"].includes(checkout.invoice.status) ||
-      !checkout.invoice.receivable ||
-      !checkout.invoice.amountPaid.plus(checkout.invoice.amountCredited).equals(checkout.invoice.grandTotal) ||
-      !checkout.invoice.outstandingAmount.isZero()) {
+  const invoice = checkout.invoice;
+  if (!["PAID", "CREDIT_NOTE", "PARTIALLY_PAID", "ISSUED", "OVERDUE"].includes(invoice.status) ||
+      !invoice.receivable || invoice.outstandingAmount.isNegative() ||
+      !invoice.amountPaid.plus(invoice.amountCredited).plus(invoice.outstandingAmount).equals(invoice.grandTotal)) {
     throw conflict("RETAIL_INVOICE_RETURN_SETTLEMENT_SOURCE_INVALID");
   }
-  const refundAmount = request.refundAmount;
+  const refundAmount = request.refundAmount; // Credit-note face value, not necessarily cash paid out.
+  const payoutAmount = Prisma.Decimal.max(0, refundAmount.minus(invoice.outstandingAmount));
+  if ((request.refundPayoutAmount !== null && request.refundPayoutAmount !== undefined &&
+      !request.refundPayoutAmount.equals(payoutAmount)) || !payoutAmount.equals(cents(payoutAmount))) {
+    throw conflict("RETAIL_INVOICE_RETURN_SETTLEMENT_PAYOUT_CONFLICT");
+  }
   if (!refundAmount.greaterThan(0) || !refundAmount.equals(cents(refundAmount)) ||
       !checkout.invoice.grandTotal.equals(cents(checkout.invoice.grandTotal)) ||
       refundAmount.greaterThan(checkout.invoice.grandTotal) ||
@@ -146,7 +152,7 @@ export async function assertRetailInvoiceReturnSettlementReadinessTx(
       account?.siteId === checkout.siteId && account.currencyCode === payment.currencyCode;
   });
   const refundable = sum(eligibleAllocations.map((allocation) => allocation.amount));
-  if (refundable.lessThan(refundAmount)) throw conflict("RETAIL_INVOICE_RETURN_SETTLEMENT_FUNDS_INSUFFICIENT");
+  if (refundable.lessThan(payoutAmount)) throw conflict("RETAIL_INVOICE_RETURN_SETTLEMENT_FUNDS_INSUFFICIENT");
   // Finance must never silently round a source allocation while reversing
   // only part of it. Stable order also prevents an actor choosing a different
   // payment/account from the verified source when the final transaction runs.
@@ -154,7 +160,7 @@ export async function assertRetailInvoiceReturnSettlementReadinessTx(
     allocationId: string; paymentId: string; financialAccountId: string;
     amount: Prisma.Decimal;
   }> = [];
-  let financeRemaining = refundAmount;
+  let financeRemaining = payoutAmount;
   for (const allocation of eligibleAllocations) {
     if (!allocation.amount.greaterThan(0) || !allocation.amount.equals(cents(allocation.amount))) {
       throw conflict("RETAIL_INVOICE_RETURN_SETTLEMENT_ALLOCATION_PRECISION_INVALID");
@@ -190,6 +196,11 @@ export async function assertRetailInvoiceReturnSettlementReadinessTx(
     }
   }
 
+  if (!checkout.stockPostedAt && originalMovements.length) {
+    // A partially paid and unfulfilled invoice must never have stray physical
+    // fulfillment movements; these require manual reconciliation first.
+    throw conflict("RETAIL_INVOICE_RETURN_SETTLEMENT_STOCK_INVALID");
+  }
   // Deterministic source trace for the future atomic stock settlement. Every
   // disposition retains its original cost/lot provenance; RESTOCK alone is
   // eligible to increase saleable inventory. This plan creates NO movements.
@@ -199,6 +210,7 @@ export async function assertRetailInvoiceReturnSettlementReadinessTx(
     quantity: Prisma.Decimal; stockDisposition: string;
   }> = [];
   for (const line of stockLines) {
+    if (!checkout.stockPostedAt) continue; // Undelivered goods release stock promises; never add stock.
     const source = invoiceLines.get(line.checkoutLineId)!;
     const related = originalMovements.filter((movement) => movement.sourceLineId === line.invoiceItemId);
     const movements = related.filter((movement) =>
@@ -243,7 +255,7 @@ export async function assertRetailInvoiceReturnSettlementReadinessTx(
   }
   return {
     requestId: request.id, checkoutId: checkout.id, siteId: checkout.siteId,
-    receivableId: checkout.invoice.receivable.id, refundAmount,
+    receivableId: checkout.invoice.receivable.id, refundAmount, payoutAmount,
     currencyCode: checkout.invoice.currencyCode, stockLineCount: stockLines.length,
     financeSourcePlan, stockSourcePlan,
   };

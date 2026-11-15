@@ -80,7 +80,8 @@ model EnterpriseRetailInvoiceReturnRequest {
   number            String
   status            String   @default("SUBMITTED")
   reason            String
-  refundAmount      Decimal  @db.Decimal(20, 6)
+  refundAmount      Decimal  @db.Decimal(20, 6) // Historical property: total CREDIT NOTE face amount.
+  refundPayoutAmount Decimal? @db.Decimal(20, 6) // Actual cash refund, zero if credit only. Null on legacy records.
   idempotencyKey    String
   requestFingerprint String
   requestedByUserId String
