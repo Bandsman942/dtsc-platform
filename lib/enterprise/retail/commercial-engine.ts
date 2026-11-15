@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import { resolveExchangeRateDetails } from "@/lib/enterprise/accounting/currency";
 import { resolveDefaultSalesTaxesForRetail, validatedInvoiceTaxRate } from "@/lib/enterprise/accounting/tax-engine";
 import { normalizeTaxCountryCode } from "@/lib/enterprise/accounting/tax-jurisdictions";
 import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
@@ -13,6 +14,8 @@ type CommercialContext = {
   customerSegmentCode?: string | null;
   channelCode?: string | null;
   overrideReason?: string | null;
+  /** Only Finance-backed invoice checkout uses product-currency conversion. */
+  invoiceCheckoutFx?: boolean;
 };
 
 type CommercialPermissions = {
@@ -313,6 +316,20 @@ async function resolvePricingDecisions(
   });
   if (items.length !== catalogItemIds.length) throw new EnterpriseRetailError("RETAIL_CATALOG_ITEM_INVALID", 409);
   const itemById = new Map(items.map((item) => [item.id, item]));
+  const sourceCurrencyByItem = new Map(items.map((item) => [item.id, item.currency || input.currencyCode]));
+  const sourceCurrencies = [...new Set(sourceCurrencyByItem.values())];
+  const hasForeign = sourceCurrencies.some((code) => code !== input.currencyCode);
+  if (context.invoiceCheckoutFx && hasForeign) {
+    const configuration = await prisma.enterpriseFinanceConfiguration.findUnique({ where: { organizationId }, select: { functionalCurrencyCode: true } });
+    if (!configuration || configuration.functionalCurrencyCode !== input.currencyCode) throw new EnterpriseRetailError("RETAIL_INVOICE_FUNCTIONAL_CURRENCY_REQUIRED", 409);
+  }
+  const ratesBySource = new Map<string, Awaited<ReturnType<typeof resolveExchangeRateDetails>>>();
+  if (context.invoiceCheckoutFx) {
+    for (const sourceCurrencyCode of sourceCurrencies) {
+      const rate = await resolveExchangeRateDetails(prisma, { organizationId, sourceCurrencyCode, targetCurrencyCode: input.currencyCode, rateDate: effectiveAt });
+      ratesBySource.set(sourceCurrencyCode, rate);
+    }
+  }
   const taxByItemId = await resolveTaxByItem(organizationId, items, effectiveAt, input.siteId);
 
   const prices = await prisma.enterpriseCatalogPrice.findMany({
@@ -320,7 +337,7 @@ async function resolvePricingDecisions(
       organizationId,
       catalogItemId: { in: catalogItemIds },
       priceType: "SALE",
-      currency: input.currencyCode,
+      currency: context.invoiceCheckoutFx ? { in: sourceCurrencies } : input.currencyCode,
       status: "ACTIVE",
       archivedAt: null,
       effectiveFrom: { lte: effectiveAt },
@@ -356,9 +373,11 @@ async function resolvePricingDecisions(
   const baseLines = input.lines.map((line) => {
     const item = itemById.get(line.catalogItemId);
     if (!item) throw new EnterpriseRetailError("RETAIL_CATALOG_ITEM_INVALID", 409);
-    if (item.currency && item.currency !== input.currencyCode) throw new EnterpriseRetailError("RETAIL_CURRENCY_MISMATCH", 409, { catalogItemId: item.id });
+    if (item.currency && item.currency !== input.currencyCode && !context.invoiceCheckoutFx) throw new EnterpriseRetailError("RETAIL_CURRENCY_MISMATCH", 409, { catalogItemId: item.id });
     const quantity = decimal(line.quantity);
-    const candidates = (pricesByItemId.get(item.id) || []).flatMap((price) => {
+    const sourceCurrency = sourceCurrencyByItem.get(item.id) || input.currencyCode;
+    const conversion = ratesBySource.get(sourceCurrency);
+    const candidates = (pricesByItemId.get(item.id) || []).filter((price) => price.currency === sourceCurrency).flatMap((price) => {
       const priceConditions = conditionsByPriceId.get(price.id) || [];
       if (!priceConditions.length) return [{ price, score: 0 }];
       return priceConditions
@@ -368,7 +387,9 @@ async function resolvePricingDecisions(
     const selected = candidates[0]?.price || null;
     const fallback = item.indicativeSalePrice;
     if (!selected && fallback === null) throw new EnterpriseRetailError("RETAIL_PRICE_NOT_CONFIGURED", 409, { catalogItemId: item.id });
-    const baseUnitPrice = selected ? selected.amount : decimal(fallback!);
+    const originalUnitPrice = selected ? selected.amount : decimal(fallback!);
+    if (context.invoiceCheckoutFx && !conversion) throw new EnterpriseRetailError("FINANCE_EXCHANGE_RATE_REQUIRED", 409);
+    const baseUnitPrice = conversion ? money(originalUnitPrice.times(conversion.rate)) : originalUnitPrice;
     const requestedUnitPrice = line.requestedUnitPrice === undefined ? baseUnitPrice : decimal(line.requestedUnitPrice);
     let resolvedUnitPrice = baseUnitPrice;
     let pricingSource = selected ? "CATALOG_PRICE" : "INDICATIVE_FALLBACK";
@@ -379,7 +400,8 @@ async function resolvePricingDecisions(
       pricingSource = "MANUAL_OVERRIDE";
       priceOverride = true;
     }
-    return { line, item, quantity, selected, baseUnitPrice, resolvedUnitPrice, pricingSource, priceOverride, gross: money(quantity.times(resolvedUnitPrice)) };
+    return { line, item, quantity, selected, baseUnitPrice, resolvedUnitPrice, pricingSource, priceOverride, gross: money(quantity.times(resolvedUnitPrice)),
+      fx: context.invoiceCheckoutFx && conversion ? { sourceCurrencyCode: sourceCurrency, targetCurrencyCode: input.currencyCode, originalUnitPrice: originalUnitPrice.toFixed(), rate: conversion.rate.toFixed(), rateId: conversion.rateId, rateDate: conversion.rateDate.toISOString(), direction: conversion.direction, rateSource: conversion.source } : null };
   });
   const cartSubtotal = money(baseLines.reduce((sum, line) => sum.plus(line.gross), decimal(0)));
 
@@ -503,6 +525,7 @@ async function resolvePricingDecisions(
         priceOverride: base.priceOverride,
         discountOverride,
         taxOverride,
+        ...(base.fx ? { invoiceFx: base.fx } : {}),
       },
       inventoryItemId: base.line.inventoryItemId,
       stockLotId: base.line.stockLotId,
@@ -607,6 +630,7 @@ export function serializeRetailPricingPreview(
       taxAmount: decision.taxAmount.toFixed(),
       lineTotal: decision.lineTotal.toFixed(),
       pricingSource: decision.pricingSource,
+      ...(decision.context.invoiceFx ? { invoiceFx: decision.context.invoiceFx } : {}),
       promotions: decision.promotions.map((promotion) => ({
         ...promotion,
         discountAmount: promotion.discountAmount.toFixed(),
