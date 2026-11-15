@@ -2,6 +2,8 @@ import { Prisma } from "@prisma/client";
 import { activateSubscriptionFromPayment } from "@/lib/billing";
 import { prisma } from "@/lib/prisma";
 import { maishaPayCallbackSchema } from "@/lib/validators";
+import { isConfirmedMaishaPayStatus, readVerifiedMaishaPayEvent, validateMaishaPayPaymentEvidence } from "@/lib/payments/maishapay-callback-validation";
+import { env } from "@/lib/env";
 
 const retryableStatuses = ["FAILED", "ERROR", "RETRY_REQUIRED", "UNMATCHED"];
 
@@ -22,10 +24,38 @@ export async function processStoredWebhookEvent(eventId: string, options: { manu
     if (event.provider.toLowerCase() !== "maishapay" || event.eventType !== "payment-callback") {
       throw new Error("No reliable dispatcher is registered for this provider and event type.");
     }
-    const payload = maishaPayCallbackSchema.safeParse(event.payload);
-    if (!payload.success) throw new Error("Stored payload no longer matches the provider contract.");
+    // Never trust a legacy unsigned WebhookEvent, including manual admin replay.
+    // Recompute HMAC over the original signed bytes retained at ingestion.
+    const verified = readVerifiedMaishaPayEvent(event.payload, env.MAISHAPAY_CALLBACK_SECRET);
+    if (!verified) {
+      await prisma.webhookEvent.update({
+        where: { id: event.id },
+        data: { status: "UNMATCHED", lastError: "WEBHOOK_SIGNATURE_UNVERIFIED", processedAt: new Date(), nextRetryAt: null },
+      });
+      return { ok: false as const, reasonCode: "WEBHOOK_SIGNATURE_UNVERIFIED" };
+    }
+    const payload = maishaPayCallbackSchema.safeParse(verified);
+    if (!payload.success) throw new Error("Verified provider payload does not match the callback contract.");
     const reference = payload.data.transactionReference || payload.data.originatingTransactionId;
     if (!reference) throw new Error("Stored payment reference is missing.");
+    // The same validation also applies to operator-driven retries of stored
+    // events, not just to the public callback route.
+    const payment = await prisma.payment.findUnique({
+      where: { reference },
+      select: { provider: true, amount: true, currency: true, providerReference: true },
+    });
+    const evidenceError = !isConfirmedMaishaPayStatus(payload.data)
+      ? "PAYMENT_NOT_CONFIRMED"
+      : !payment
+        ? "PAYMENT_NOT_FOUND"
+        : validateMaishaPayPaymentEvidence(payload.data, payment);
+    if (evidenceError) {
+      await prisma.webhookEvent.update({
+        where: { id: event.id },
+        data: { status: "UNMATCHED", lastError: evidenceError, processedAt: new Date(), nextRetryAt: null },
+      });
+      return { ok: false as const, reasonCode: evidenceError };
+    }
     const result = await activateSubscriptionFromPayment(reference, payload.data);
     if (!result.ok) {
       await prisma.webhookEvent.update({ where: { id: event.id }, data: { status: "UNMATCHED", lastError: result.reason, processedAt: new Date(), nextRetryAt: new Date(Date.now() + 15 * 60 * 1000) } });

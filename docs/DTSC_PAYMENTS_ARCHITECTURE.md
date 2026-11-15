@@ -92,6 +92,8 @@ Toute nouvelle route mutante doit contrôler, **côté serveur**, session → co
 
 `lib/maishapay.ts` contient l'adapter HTTP existant. Les routes checkout appelent cet adapter **côté serveur** ; `lib/env.ts` définit les variables actuellement utilisées : `MAISHAPAY_API_URL`, `MAISHAPAY_GATEWAY_MODE`, `MAISHAPAY_PUBLIC_API_KEY`, `MAISHAPAY_SECRET_API_KEY`, `MAISHAPAY_DEFAULT_PROVIDER`, `MAISHAPAY_CALLBACK_SECRET`. Les noms génériques suggérés initialement dans #375 ne doivent **pas** dupliquer ces variables sans décision de migration.
 
+**Candidat PAY-4B #1176 (14/11/2026, non fusionné) :** authentification de chaque webhook par la signature native MaishaPay `X-MaishaPay-Signature: sha256=<hex>` calculée sur le **corps brut HTTP avant désérialisation**. `MAISHAPAY_CALLBACK_SECRET` obligatoire (503 si absent, 401 si signature invalide). Les anciennes méthodes `?secret` et `x-dtsc-webhook-secret` sont supprimées. Les octets signés et la signature sont conservés pour être revérifiés lors des reprises administrateur, y compris pour refuser les événements historiques non authentifiés. Montant, devise et provider sont vérifiés avant activation. Le partenaire doit confirmer le secret et le format HMAC en Sandbox avant fusion ; ce lot ne prouve ni règlement bancaire ni réconciliation PSP. Voir [runbook PAY-4B](HOTFIX_PAY4B_MAISHAPAY_CALLBACK_1176_20261114.md).
+
 **Bloqueurs à vérifier et traiter en PAY-4 avant la certification provider :**
 
 - la route callback n'exige le secret que **s'il est configuré** (`MAISHAPAY_CALLBACK_SECRET` conditionnel) ; en mode de paiement actif, une configuration sans secret/signature valide doit échouer fermée ;
