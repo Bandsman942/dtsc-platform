@@ -372,7 +372,7 @@ export function RetailInvoiceFlowWorkbench({ organizationId, organizationName, l
             {data.checkoutReady && entry.canCancel ? <Button type="button" variant="outline" onClick={() => { setCancelTarget(entry); setCancelReason(""); }}><XCircle className="h-4 w-4 text-amber-600" />{copy.cancelDraft}</Button> : null}
             {data.checkoutReady && entry.canSubmit ? <Button type="button" onClick={() => setSubmitTarget(entry)}><Send className="h-4 w-4" />{copy.submitDraft}</Button> : null}
             {/* Collection is intentionally absent: only the cashier workstation can present it. */}
-            {data.checkoutReady && entry.stockPostedAt ? <RetailInvoiceReturnDialog organizationId={organizationId} invoiceId={entry.invoice.id} invoiceNumber={entry.invoice.number} siteId={entry.siteId} currencyCode={entry.invoice.currencyCode} checkoutLines={entry.lines} invoiceItems={entry.invoice.items} locale={locale} onChanged={() => { void load(page, siteFilter); }} /> : null}
+            {data.checkoutReady && ["ISSUED", "OVERDUE", "PARTIALLY_PAID", "PAID", "CREDIT_NOTE"].includes(entry.invoice.status) ? <RetailInvoiceReturnDialog organizationId={organizationId} invoiceId={entry.invoice.id} invoiceNumber={entry.invoice.number} siteId={entry.siteId} currencyCode={entry.invoice.currencyCode} checkoutLines={entry.lines} invoiceItems={entry.invoice.items} locale={locale} onChanged={() => { void load(page, siteFilter); }} /> : null}
           </div>
         </article>
       ))}</div>

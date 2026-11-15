@@ -24,6 +24,7 @@ contract("lib/enterprise/retail/invoice-return-finance.ts", ["refundPayoutAmount
 contract("lib/enterprise/retail/invoice-checkout.ts", ["returnLines", "fulfilableLines", "remaining"]);
 contract("lib/enterprise/retail/invoice-stock-holds.ts", ['status: "COMPLETED"', "Prisma.Decimal.max"]);
 contract("components/enterprise/professional/retail-invoice-return-dialog.tsx", ["UNDELIVERED_CREDIT", "SERVICE_CREDIT", "financeApproverUserId", "requiresPhysicalInspection"]);
+contract("components/enterprise/professional/retail-invoice-flow-workbench.tsx", ['"PARTIALLY_PAID", "PAID", "CREDIT_NOTE"', "RetailInvoiceReturnDialog"]);
 const unit = { exports: {} };
 vm.runInNewContext(ts.transpileModule(fs.readFileSync("lib/enterprise/retail/invoice-return-settlement-preflight.ts", "utf8"), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
