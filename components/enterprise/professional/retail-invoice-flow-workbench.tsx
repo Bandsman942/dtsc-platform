@@ -186,7 +186,7 @@ export function RetailInvoiceFlowWorkbench({ organizationId, organizationName, l
     const timer = window.setTimeout(async () => {
       setPricingLoading(true);
       try {
-        const response = await fetch(`/api/enterprise/${organizationId}/retail/pricing/preview`, {
+        const response = await fetch(`/api/enterprise/${organizationId}/retail/invoice-fx-preview`, {
           method: "POST", headers: { "content-type": "application/json" }, signal: controller.signal,
           body: JSON.stringify({ siteId: chosenWarehouse.siteId, customerBusinessPartyId: customerId, currencyCode, channelCode: "POS", invoiceCheckout: true, lines: lines.map((line) => ({ catalogItemId: line.catalogItemId, quantity: line.quantity })) }),
         });
