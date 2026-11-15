@@ -15,7 +15,7 @@ Caissier autorisé : DRAFT → SUBMIT avec soi-même comme approbateur → APPRO
 Les paiements de remboursement, les dépenses et les paiements d'autres secteurs ne sont pas concernés.
 
 ## 4. Facture encaissée / annulation motivée
-Aucune suppression d'une facture payée ni du grand livre. Le gérant habilité peut demander puis approuver sa propre demande de retour/annulation, **après une inspection physique indépendante**. Il doit disposer des droits RETAIL REQUEST_INVOICE_RETURN + APPROVE_INVOICE_RETURN, du droit propre SELF_APPROVE_INVOICE_RETURN accordé par OWNER, ainsi que des approbations FINANCE_RECEIVABLES et FINANCE_PAYMENTS requises par le circuit existant.
+Aucune suppression d'une facture payée ni du grand livre. Le gérant habilité peut demander puis approuver sa propre demande de retour/annulation, **après une inspection physique indépendante**. Il doit disposer des droits RETAIL REQUEST_INVOICE_RETURN + APPROVE_INVOICE_RETURN et de la dérogation propre SELF_APPROVE_INVOICE_RETURN accordée par OWNER. **Cette délégation suffit uniquement pour approuver sa propre demande**, sans lui accorder le droit global d'approuver les paiements Finance. Tout autre approbateur demeure soumis aux droits FINANCE_RECEIVABLES et FINANCE_PAYMENTS.
 
 Les opérations postérieures d'avoir/remboursement et de réintégration/quarantaine/destruction du stock restent assurées par des acteurs distincts. Les prélèvements proviennent des comptes d'origine, avec contrôles de montant/devise, créance et posting atomique.
 
