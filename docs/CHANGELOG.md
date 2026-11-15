@@ -1,4 +1,4 @@
-## 2026-11-15 — UX #1178 — installation DTSC Platform depuis l'accueil public (candidat v1.17.8, NON FUSIONNÉ)
+## 2026-11-15 — UX #1178 — installation DTSC Platform depuis l'accueil public (candidat v1.18.0, NON FUSIONNÉ)
 
 - Complément UI/UX : connexion Account rénovée en Design 2.0 avec photographie illustrative d'un environnement de pilotage ERP, panneau d'identification clair, repères de progression, champs/espaces compactés et mise en page mobile ; flux MFA, mots de passe, cookies et redirection inchangés.
 - Rétablissement du bouton d'installation dans le hero public, d'une carte mobile/desktop et d'un lien dans la navigation publique.
