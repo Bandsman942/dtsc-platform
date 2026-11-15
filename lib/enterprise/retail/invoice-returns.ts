@@ -122,7 +122,8 @@ export async function listRetailInvoiceReturnRequests(
         salesCreditNote: { select: { status: true } },
         inspectedAt: true, inspectionNotes: true, decidedAt: true, decisionReason: true,
         revision: true, createdAt: true,
-        lines: { select: { id: true, checkoutLineId: true, quantity: true, refundAmount: true, stockDisposition: true } },
+        lines: { select: { id: true, checkoutLineId: true, quantity: true, refundAmount: true, stockDisposition: true,
+          checkoutLine: { select: { inventoryItemId: true } } } },
       },
     }),
     prisma.enterpriseRetailInvoiceReturnRequest.count({ where }),
@@ -143,6 +144,9 @@ export async function listRetailInvoiceReturnRequests(
         canApprove: siteStaffCapabilities(siteAssignment!.roleCode, siteAssignment!.permissionsJson).includes("APPROVE_INVOICE_RETURN"),
       }
     : { canRequest: false, canInspect: false, canApprove: false };
+  const independentFinanceVerifier = await resolveEnterpriseModuleAccess({
+    organizationId, userId: actorUserId, moduleCode: "FINANCE_RECEIVABLES", action: "approve",
+  });
   const finance = capabilities.canApprove ? await Promise.all([
     resolveEnterpriseModuleAccess({ organizationId, userId: actorUserId, moduleCode: "FINANCE_RECEIVABLES", action: "approve" }),
     resolveEnterpriseModuleAccess({ organizationId, userId: actorUserId, moduleCode: "FINANCE_PAYMENTS", action: "approve" }),
@@ -180,7 +184,10 @@ export async function listRetailInvoiceReturnRequests(
         item.salesCreditNote?.status === "APPROVED" &&
         ![item.requestedByUserId, item.approverUserId, item.inspectedByUserId,
           item.preparedByUserId].includes(actorUserId),
-      canInspect: capabilities.canInspect && item.status === "SUBMITTED" &&
+      requiresPhysicalInspection: Boolean(checkout.stockPostedAt) && item.lines.some((line) => Boolean(line.checkoutLine.inventoryItemId)),
+      canInspect: (capabilities.canInspect ||
+          ((!checkout.stockPostedAt || item.lines.every((line) => !line.checkoutLine.inventoryItemId)) && independentFinanceVerifier.allowed)) &&
+        item.status === "SUBMITTED" &&
         item.requestedByUserId !== actorUserId && item.approverUserId !== actorUserId,
       canDecide: capabilities.canApprove &&
         (finance?.every((entry) => entry.allowed) === true || (item.requestedByUserId === actorUserId && selfCanDecide)) &&
@@ -477,12 +484,29 @@ export async function inspectRetailInvoiceReturnRequest(
     const request = await tx.enterpriseRetailInvoiceReturnRequest.findFirst({
       where: { id: requestId, organizationId, checkout: { salesInvoiceId: invoiceId } },
       include: { checkout: { select: { siteId: true, stockPostedAt: true,
-        invoice: { select: { status: true } } } } },
+        invoice: { select: { status: true } } } },
+        lines: { select: { checkoutLine: { select: { inventoryItemId: true } } } } },
     });
     if (!request) throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_NOT_FOUND", 404);
+    const physicallyDeliveredGoods = Boolean(request.checkout.stockPostedAt) &&
+      request.lines.some((line) => Boolean(line.checkoutLine.inventoryItemId));
+    // Always bind the verifier to this store first. Independent Finance users
+    // may verify a service or undelivered cancellation without inventing a
+    // physical-stock inspection, but never inspect a posted goods return.
     await requireRetailSiteCapability(
-      organizationId, actorUserId, request.checkout.siteId, "MANAGE_STOCK", tx, { requireAssignment: true },
+      organizationId, actorUserId, request.checkout.siteId, "VIEW_SALES", tx, { requireAssignment: true },
     );
+    const [verifier, membership] = await Promise.all([
+      tx.enterpriseRetailSiteAssignment.findUnique({ where: { organizationId_siteId_userId: { organizationId, siteId: request.checkout.siteId, userId: actorUserId } }, select: { isActive: true, roleCode: true, permissionsJson: true } }),
+      tx.organizationMember.findFirst({ where: { organizationId, userId: actorUserId, status: "ACTIVE", removedAt: null }, select: { role: true } }),
+    ]);
+    const canInspectGoods = Boolean(membership && (RETAIL_OWNER_ROLES.has(membership.role) ||
+      (verifier?.isActive && siteStaffCapabilities(verifier.roleCode, verifier.permissionsJson).includes("MANAGE_STOCK"))));
+    if (physicallyDeliveredGoods && !canInspectGoods) throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_INSPECTOR_INELIGIBLE", 403);
+    if (!physicallyDeliveredGoods && !canInspectGoods) {
+      const finance = await resolveEnterpriseModuleAccess({ organizationId, userId: actorUserId, moduleCode: "FINANCE_RECEIVABLES", action: "approve" });
+      if (!finance.allowed) throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_INSPECTOR_INELIGIBLE", 403);
+    }
     if (actorUserId === request.requestedByUserId || actorUserId === request.approverUserId) {
       throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_INSPECTOR_INELIGIBLE", 403);
     }
@@ -499,7 +523,7 @@ export async function inspectRetailInvoiceReturnRequest(
     await publishFinanceEvent(tx, {
       organizationId, entityType: "EnterpriseRetailInvoiceReturnRequest", entityId: request.id,
       eventType: "RETAIL_INVOICE_RETURN_INSPECTED",
-      summary: "Retail return or service cancellation independently verified",
+      summary: physicallyDeliveredGoods ? "Retail physical return independently inspected" : "Retail service/undelivered credit independently verified",
       actorUserId, fromStatus: "SUBMITTED", toStatus: "INSPECTED",
       metadataJson: { invoiceId, siteId: request.checkout.siteId },
     });
