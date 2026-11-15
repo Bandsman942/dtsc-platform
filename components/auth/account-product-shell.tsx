@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import { DtscLogo } from "@/components/brand/dtsc-logo";
 import { ProductNavigation } from "@/components/layout/product-navigation";
 import { ProductPreferencesControls } from "@/components/layout/product-preferences-controls";
-import { getAppBaseUrl, getPublicUrl, getSupportUrl, type HostType } from "@/lib/domains";
+import { getPublicUrl, getSupportUrl, type HostType } from "@/lib/domains";
 
 type AccountProductShellProps = {
   eyebrow: string;
@@ -128,8 +128,8 @@ export function AccountProductShell({
                 <p className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-[0.12em] text-dtsc-blue">
                   <ShieldCheck className="h-4 w-4" aria-hidden="true" /> {t.formEyebrow}
                 </p>
-                <Link href={getAppBaseUrl()} className="inline-flex min-h-10 items-center gap-1 text-xs font-semibold text-dtsc-muted transition hover:text-dtsc-blue">
-                  DTSC <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+                <Link href={getPublicUrl("/solutions")} className="inline-flex min-h-10 items-center gap-1 text-xs font-semibold text-dtsc-muted transition hover:text-dtsc-blue">
+                  {t.link} <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
                 </Link>
               </div>
               <div className="rounded-[1.75rem] border border-dtsc-border bg-dtsc-surface p-5 shadow-[0_22px_75px_rgba(0,23,54,0.08)] sm:p-7 xl:p-9">
