@@ -54,6 +54,7 @@ export async function GET(req: Request, { params }: Params) {
       };
     }),
     capabilities: RETAIL_SITE_CAPABILITIES, defaults: ROLE_DEFAULT_CAPABILITIES,
+    canDelegateSelfApproval: members.some((member) => member.userId === auth.session.userId && member.role === "OWNER"),
     isolationEnabled: retailStaffIsolationIsEnabled(configuration?.settingsJson),
   }, { headers: { "Cache-Control": "private, no-store" } });
 }

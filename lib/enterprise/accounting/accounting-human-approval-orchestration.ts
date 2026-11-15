@@ -8,6 +8,7 @@ import {
 } from "@/lib/enterprise/accounting/accounting-approval-service";
 import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
 import { publishFinanceEvent } from "@/lib/enterprise/accounting/helpers";
+import { retailSelfApprovalAllowed } from "@/lib/enterprise/retail/site-access";
 
 export async function submitJournalEntryForAssignedApproval(
   organizationId: string,
@@ -190,6 +191,11 @@ export async function approvePaymentAssignedApproval(
     if (!payment) throw new EnterpriseAccountingError("PAYMENT_NOT_FOUND", 404);
     if (payment.revision !== input.revision) throw new EnterpriseAccountingError("PAYMENT_REVISION_CONFLICT", 409, { currentRevision: payment.revision });
     if (payment.status !== "PENDING_APPROVAL") throw new EnterpriseAccountingError("PAYMENT_TRANSITION_INVALID", 409);
+    if (approval.requestedByUserId === actorUserId) {
+      const proposal = await tx.enterpriseRetailInvoicePaymentProposal.findFirst({ where: { organizationId, paymentId }, select: { checkout: { select: { siteId: true } } } });
+      if (proposal && !await retailSelfApprovalAllowed(organizationId, actorUserId, proposal.checkout.siteId, "SELF_APPROVE_PAYMENT", tx))
+        throw new EnterpriseAccountingError("ACCOUNTING_SELF_APPROVAL_FORBIDDEN", 403);
+    }
 
     await decideAccountingApproval(tx, {
       organizationId,

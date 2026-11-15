@@ -10,6 +10,7 @@ import {
 } from "@/lib/enterprise/accounting/accounting-approval-service";
 import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
 import { publishFinanceEvent } from "@/lib/enterprise/accounting/helpers";
+import { retailSelfApprovalAllowed } from "@/lib/enterprise/retail/site-access";
 
 export async function submitSalesInvoiceForAssignedApproval(
   organizationId: string,
@@ -91,6 +92,11 @@ export async function decideSalesInvoiceAssignedApproval(
     if (!invoice) throw new EnterpriseAccountingError("SALES_INVOICE_NOT_FOUND", 404);
     if (invoice.revision !== input.revision) throw new EnterpriseAccountingError("SALES_INVOICE_REVISION_CONFLICT", 409, { currentRevision: invoice.revision });
     if (invoice.status !== "PENDING_APPROVAL") throw new EnterpriseAccountingError("SALES_INVOICE_TRANSITION_INVALID", 409);
+    if (approval.requestedByUserId === actorUserId) {
+      const checkout = await tx.enterpriseRetailInvoiceCheckout.findFirst({ where: { organizationId, salesInvoiceId: invoiceId }, select: { siteId: true } });
+      if (checkout && !await retailSelfApprovalAllowed(organizationId, actorUserId, checkout.siteId, "SELF_APPROVE_INVOICE", tx))
+        throw new EnterpriseAccountingError("ACCOUNTING_SELF_APPROVAL_FORBIDDEN", 403);
+    }
 
     await decideAccountingApproval(tx, {
       organizationId,

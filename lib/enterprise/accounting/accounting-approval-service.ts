@@ -216,11 +216,14 @@ export async function requireAccountingApprovalDecision(input: {
             select: { checkout: { select: { siteId: true } } },
           }) : null;
     const siteId = retail && ("siteId" in retail ? retail.siteId : retail.checkout.siteId);
-    if (siteId && await retailSelfApprovalAllowed(
-      input.organizationId, input.actorUserId, siteId,
-      input.targetEntityType === "EnterpriseSalesInvoice" ? "SELF_APPROVE_INVOICE" : "SELF_APPROVE_PAYMENT",
-    )) return { approval, decision: { selfApprovalOverride: true }, moduleCode };
-    throw new EnterpriseAccountingError("ACCOUNTING_SELF_APPROVAL_FORBIDDEN", 403);
+    if (siteId) {
+      if (await retailSelfApprovalAllowed(
+        input.organizationId, input.actorUserId, siteId,
+        input.targetEntityType === "EnterpriseSalesInvoice" ? "SELF_APPROVE_INVOICE" : "SELF_APPROVE_PAYMENT",
+      )) return { approval, decision: { selfApprovalOverride: true }, moduleCode };
+      throw new EnterpriseAccountingError("ACCOUNTING_SELF_APPROVAL_FORBIDDEN", 403);
+    }
+    // Other, non-Retail Finance self-approvals retain the existing centralized fallback policy.
   }
   try {
     const decision = await assertEnterpriseApprovalDecision({
