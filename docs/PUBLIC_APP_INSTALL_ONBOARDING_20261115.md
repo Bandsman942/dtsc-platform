@@ -1,6 +1,6 @@
 # DTSC Platform — Installation PWA depuis le site public (UX #1178)
 
-**Statut : candidat v1.17.8, non fusionné, aucun déploiement Production.** Cette livraison rétablit la découverte de la PWA et son onboarding sur mobile/desktop. Ce n'est **pas** un package Android APK, iOS IPA, Windows EXE/MSIX ou macOS DMG et aucun lien de téléchargement de binaire n'est inventé.
+**Statut : candidat v1.18.0, non fusionné, aucun déploiement Production.** Cette livraison rétablit la découverte de la PWA et son onboarding sur mobile/desktop. Ce n'est **pas** un package Android APK, iOS IPA, Windows EXE/MSIX ou macOS DMG et aucun lien de téléchargement de binaire n'est inventé.
 
 ## Constat initial et décision
 
