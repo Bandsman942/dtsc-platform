@@ -56,8 +56,11 @@ export async function assertRetailInvoiceReturnSettlementReadinessTx(
     throw conflict("RETAIL_INVOICE_RETURN_SETTLEMENT_APPROVAL_REQUIRED");
   }
   const invoice = checkout.invoice;
+  // Capture the relation key before Promise.all closures to preserve Prisma's
+  // nullable-relation guard under strict TypeScript narrowing.
+  const receivableId = invoice.receivable?.id;
   if (!["PAID", "CREDIT_NOTE", "PARTIALLY_PAID", "ISSUED", "OVERDUE"].includes(invoice.status) ||
-      !invoice.receivable || invoice.outstandingAmount.isNegative() ||
+      !receivableId || invoice.outstandingAmount.isNegative() ||
       !invoice.amountPaid.plus(invoice.amountCredited).plus(invoice.outstandingAmount).equals(invoice.grandTotal)) {
     throw conflict("RETAIL_INVOICE_RETURN_SETTLEMENT_SOURCE_INVALID");
   }
@@ -116,7 +119,7 @@ export async function assertRetailInvoiceReturnSettlementReadinessTx(
   }
   const [confirmedAllocations, originalMovements, previouslyCompleted] = await Promise.all([
     tx.enterprisePaymentAllocation.findMany({
-      where: { organizationId, receivableId: checkout.invoice.receivable.id, status: "CONFIRMED" },
+      where: { organizationId, receivableId: receivableId, status: "CONFIRMED" },
       orderBy: [{ allocatedAt: "asc" }, { id: "asc" }],
       select: { id: true, paymentId: true, amount: true, payment: { select: {
         status: true, direction: true, paymentType: true, businessPartyId: true,
@@ -258,7 +261,7 @@ export async function assertRetailInvoiceReturnSettlementReadinessTx(
   }
   return {
     requestId: request.id, checkoutId: checkout.id, siteId: checkout.siteId,
-    receivableId: checkout.invoice.receivable.id, refundAmount, payoutAmount,
+    receivableId: receivableId, refundAmount, payoutAmount,
     currencyCode: checkout.invoice.currencyCode, stockLineCount: stockLines.length,
     financeSourcePlan, stockSourcePlan,
   };
