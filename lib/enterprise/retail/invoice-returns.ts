@@ -72,13 +72,17 @@ async function requireReturnApproverTx(
   tx: Prisma.TransactionClient, organizationId: string,
   actorUserId: string, approverUserId: string, siteId: string,
 ) {
-  if (actorUserId === approverUserId &&
-      !await hasRetailSelfApprovalGrant(organizationId, actorUserId, siteId, "RETURN", tx)) {
+  const selfAllowed = actorUserId === approverUserId &&
+    await hasRetailSelfApprovalGrant(organizationId, actorUserId, siteId, "RETURN", tx);
+  if (actorUserId === approverUserId && !selfAllowed) {
     throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_SELF_APPROVAL_FORBIDDEN", 403);
   }
   await requireRetailSiteCapability(
     organizationId, approverUserId, siteId, "APPROVE_INVOICE_RETURN", tx, { requireAssignment: true },
   );
+  // The OWNER's per-store grant replaces only the request-decision entitlement.
+  // Physical inspection, refund Finance approval and settlement remain independent.
+  if (selfAllowed) return;
   const [receivables, payments] = await Promise.all([
     resolveEnterpriseModuleAccess({
       organizationId, userId: approverUserId, moduleCode: "FINANCE_RECEIVABLES", action: "approve",
@@ -177,7 +181,8 @@ export async function listRetailInvoiceReturnRequests(
           item.preparedByUserId].includes(actorUserId),
       canInspect: capabilities.canInspect && item.status === "SUBMITTED" &&
         item.requestedByUserId !== actorUserId && item.approverUserId !== actorUserId,
-      canDecide: capabilities.canApprove && finance?.every((entry) => entry.allowed) === true &&
+      canDecide: capabilities.canApprove &&
+        (finance?.every((entry) => entry.allowed) === true || (item.requestedByUserId === actorUserId && selfCanDecide)) &&
         ["SUBMITTED", "INSPECTED"].includes(item.status) && item.approverUserId === actorUserId &&
         (item.requestedByUserId !== actorUserId || selfCanDecide) && item.inspectedByUserId !== actorUserId,
     }; }),
@@ -218,7 +223,12 @@ export async function listRetailInvoiceReturnApprovers(
   });
   const selfReturnGrant = await hasRetailSelfApprovalGrant(organizationId, actorUserId, siteId, "RETURN");
   const candidates = await Promise.all(eligible.map(async (member) => {
-    if (member.userId === actorUserId && !selfReturnGrant) return null;
+    if (member.userId === actorUserId) {
+      return selfReturnGrant ? {
+        userId: member.userId, name: member.user.name, positionTitle: member.positionTitle,
+        role: member.role, isRequester: true, selfApprovalOverride: true,
+      } : null;
+    }
     const access = await Promise.all([
       resolveEnterpriseModuleAccess({ organizationId, userId: member.userId, moduleCode: "FINANCE_RECEIVABLES", action: "approve" }),
       resolveEnterpriseModuleAccess({ organizationId, userId: member.userId, moduleCode: "FINANCE_PAYMENTS", action: "approve" }),
@@ -406,11 +416,13 @@ export async function decideRetailInvoiceReturnRequest(
           !await hasRetailSelfApprovalGrant(organizationId, actorUserId, request.checkout.siteId, "RETURN", tx))) {
       throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_APPROVER_INELIGIBLE", 403);
     }
+    const selfReturnDecision = request.requestedByUserId === actorUserId &&
+      await hasRetailSelfApprovalGrant(organizationId, actorUserId, request.checkout.siteId, "RETURN", tx);
     const finance = await Promise.all([
       resolveEnterpriseModuleAccess({ organizationId, userId: actorUserId, moduleCode: "FINANCE_RECEIVABLES", action: "approve" }),
       resolveEnterpriseModuleAccess({ organizationId, userId: actorUserId, moduleCode: "FINANCE_PAYMENTS", action: "approve" }),
     ]);
-    if (!finance.every((entry) => entry.allowed)) {
+    if (!selfReturnDecision && !finance.every((entry) => entry.allowed)) {
       throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_APPROVER_INELIGIBLE", 403);
     }
     if (request.revision !== input.revision ||
