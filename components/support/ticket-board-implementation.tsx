@@ -51,17 +51,18 @@ function ticketVisuals(ticket: TicketWithUser, now = Date.now()) {
   return { age, due, overdue, palette, statusClass };
 }
 
-function TicketDates({ ticket }: { ticket: TicketWithUser }) {
+function TicketDates({ ticket, locale }: { ticket: TicketWithUser; locale: "fr" | "en" }) {
   const meta = ticketVisuals(ticket);
-  const locale = "fr-FR";
-  const dateLabel = (value: Date | string) => new Date(value).toLocaleDateString(locale, { day: "2-digit", month: "short", year: "numeric" });
+  const en = locale === "en";
+  const dateLocale = en ? "en-GB" : "fr-FR";
+  const dateLabel = (value: Date | string) => new Date(value).toLocaleDateString(dateLocale, { day: "2-digit", month: "short", year: "numeric" });
   return (
-    <div className="mt-3 flex flex-wrap gap-1.5 text-[0.7rem] font-semibold text-dtsc-muted" aria-label="Délais du ticket">
-      <span className="rounded-lg border border-dtsc-border px-2 py-1">Envoyé : {dateLabel(ticket.createdAt)}</span>
-      <span className="rounded-lg border border-dtsc-border px-2 py-1">Échéance : {ticket.slaResolutionDueAt ? dateLabel(ticket.slaResolutionDueAt) : "Non fixée"}</span>
-      <span className="rounded-lg border border-dtsc-border px-2 py-1">Ancienneté : {meta.age} j</span>
+    <div className="mt-3 flex flex-wrap gap-1.5 text-[0.7rem] font-semibold text-dtsc-muted" aria-label={en ? "Ticket deadlines" : "Délais du ticket"}>
+      <span className="rounded-lg border border-dtsc-border px-2 py-1">{en ? "Sent" : "Envoyé"} : {dateLabel(ticket.createdAt)}</span>
+      <span className="rounded-lg border border-dtsc-border px-2 py-1">{en ? "Due" : "Échéance"} : {ticket.slaResolutionDueAt ? dateLabel(ticket.slaResolutionDueAt) : (en ? "Not set" : "Non fixée")}</span>
+      <span className="rounded-lg border border-dtsc-border px-2 py-1">{en ? "Age" : "Ancienneté"} : {meta.age} {en ? "days" : "j"}</span>
       <span className={`rounded-lg px-2 py-1 ${meta.overdue ? "bg-rose-500/15 text-rose-700 dark:text-rose-300" : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"}`}>
-        {meta.overdue ? "Délai de résolution dépassé" : ticket.slaPausedAt ? "Délai suspendu" : "Sans retard de résolution"}
+        {meta.overdue ? (en ? "Resolution overdue" : "Délai de résolution dépassé") : ticket.slaPausedAt ? (en ? "Deadline paused" : "Délai suspendu") : (en ? "On schedule" : "Sans retard de résolution")}
       </span>
     </div>
   );
@@ -74,8 +75,10 @@ export function TicketBoard({
   currentUserId,
   focusTicketId,
   assignees = [],
+  locale = "fr",
 }: {
   tickets: TicketWithUser[];
+  locale?: "fr" | "en";
   canManage?: boolean;
   currentUserId: string;
   focusTicketId?: string | null;
@@ -137,11 +140,11 @@ export function TicketBoard({
           <div className="flex min-w-0 flex-col justify-between gap-3 lg:flex-row lg:items-start">
             <div className="min-w-0">
               <p className="break-words text-xs font-black uppercase tracking-[0.18em] text-dtsc-muted [overflow-wrap:anywhere]">
-                {ticket.user?.email || "Utilisateur"} · {formatEnumLabel(ticket.priority)}{ticket.priority === "URGENT" ? " · 🔴 Urgent" : ""}
+                {ticket.user?.email || "Utilisateur"} · {formatEnumLabel(ticket.priority)}{ticket.priority === "URGENT" ? (locale === "en" ? " · 🔴 Urgent" : " · 🔴 Urgent") : ""}
               </p>
               <h3 className="mt-1 break-words font-black text-dtsc-ink">{ticket.subject}</h3>
               <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-dtsc-muted">{ticket.description}</p>
-              <TicketDates ticket={ticket} />
+              <TicketDates ticket={ticket} locale={locale} />
               {ticket.attachments?.length ? <div className="mt-3 flex flex-wrap gap-2">{ticket.attachments.map((photo) => <a key={photo.id} href={`/api/support/tickets/${ticket.id}/attachments/${photo.id}`} target="_blank" rel="noopener noreferrer" className="group inline-flex min-w-0 items-center gap-2 rounded-xl border border-dtsc-border bg-dtsc-page p-2 text-xs font-semibold text-dtsc-blue hover:border-cyan-400"><Image src={`/api/support/tickets/${ticket.id}/attachments/${photo.id}`} alt={photo.originalName} width={56} height={56} unoptimized className="h-14 w-14 rounded-lg object-cover" /><span className="max-w-32 truncate">{photo.originalName}</span></a>)}</div> : null}
               {ticket.resolution ? (
                 <p className="mt-3 break-words rounded-xl bg-dtsc-soft p-3 text-sm font-semibold text-dtsc-blue">Résolution : {ticket.resolution}</p>
