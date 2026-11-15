@@ -154,7 +154,12 @@ const allocation = fs.readFileSync(routes[2], "utf8");
 assert.match(allocation, /amount: proposal\.payment\.unallocatedAmount\.toFixed\(6\)/);
 assert.doesNotMatch(allocation, /await req\.json\(/, "No client-provided target or settlement amount");
 const transition = fs.readFileSync(routes[1], "utf8");
-assert.doesNotMatch(transition, /z\.literal\("APPROVE"\)|z\.literal\("CONFIRM"\)/, "No cashier self-approval/confirmation");
+// Self-approval is exceptional, explicitly granted by the owner and checked on the server.
+assert.match(transition, /z\.literal\("APPROVE"\)/, "Owner-authorized payment approval is explicit");
+assert.match(transition, /z\.literal\("CONFIRM"\)/, "Owner-authorized payment confirmation is explicit");
+assert.match(transition, /hasRetailSelfApprovalGrant/, "Self actions cannot bypass the current store assignment");
+assert.match(transition, /approvePaymentAssignedApproval/, "Payment approval stays on canonical Finance");
+assert.match(transition, /retailSelfCheckoutSiteId/, "Confirmation is tied to the source store");
 const migration = fs.readFileSync("prisma/migrations/20261107110000_retail_invoice_payment_proposals/migration.sql", "utf8");
 assert.match(migration, /CREATE TABLE "EnterpriseRetailInvoicePaymentProposal"/);
 assert.match(migration, /UNIQUE INDEX .*organizationId_payme_key/);

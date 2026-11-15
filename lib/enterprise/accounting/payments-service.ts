@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import { hasRetailSelfApprovalGrant } from "@/lib/enterprise/retail/site-access";
 import { prisma } from "@/lib/prisma";
 import { assertIndependentActor } from "@/lib/enterprise/accounting/access";
 import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
@@ -344,8 +345,9 @@ export async function transitionEnterprisePayment(
   paymentId: string,
   actorUserId: string,
   input: { action: "SUBMIT" | "APPROVE" | "CONFIRM" | "RECONCILE" | "CANCEL" | "REVERSE"; reason?: string; revision: number },
+  options: { retailSelfCheckoutSiteId?: string } = {},
 ) {
-  if (input.action === "CONFIRM") return confirmEnterprisePayment(organizationId, paymentId, actorUserId, input.revision);
+  if (input.action === "CONFIRM") return confirmEnterprisePayment(organizationId, paymentId, actorUserId, input.revision, options);
   return prisma.$transaction(async (tx) => {
     await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterprisePayment" WHERE id = ${paymentId} AND "organizationId" = ${organizationId} FOR UPDATE`);
     const payment = await tx.enterprisePayment.findFirst({ where: { id: paymentId, organizationId } });
@@ -465,7 +467,7 @@ export async function transitionEnterprisePayment(
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 }
 
-async function confirmEnterprisePayment(organizationId: string, paymentId: string, actorUserId: string, revision: number) {
+async function confirmEnterprisePayment(organizationId: string, paymentId: string, actorUserId: string, revision: number, options: { retailSelfCheckoutSiteId?: string } = {}) {
   const confirmed = await withRetailTransactionRetry(() => prisma.$transaction(async (tx) => {
     await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterprisePayment" WHERE id = ${paymentId} AND "organizationId" = ${organizationId} FOR UPDATE`);
     const payment = await tx.enterprisePayment.findFirst({ where: { id: paymentId, organizationId } });
@@ -473,7 +475,23 @@ async function confirmEnterprisePayment(organizationId: string, paymentId: strin
     if (["CONFIRMED", "RECONCILED"].includes(payment.status)) return payment;
     if (payment.paymentType === "REFUND") throw new EnterpriseAccountingError("REFUND_SPECIALIZED_CONFIRMATION_REQUIRED", 409);
     if (payment.status !== "APPROVED" || payment.revision !== revision) throw new EnterpriseAccountingError("PAYMENT_NOT_APPROVED", 409);
-    assertIndependentActor({ actorUserId, relatedUserIds: [payment.initiatedByUserId, payment.approvedByUserId], errorCode: "PAYMENT_SELF_CONFIRMATION_FORBIDDEN" });
+    // Only the original cashier, who also approved under the owner-granted
+    // exception, may self-confirm this SAME store's customer collection.
+    const isSelfActor = [payment.initiatedByUserId, payment.approvedByUserId].includes(actorUserId);
+    if (isSelfActor) {
+      const proposal = options.retailSelfCheckoutSiteId ? await tx.enterpriseRetailInvoicePaymentProposal.findFirst({
+        where: { organizationId, paymentId, checkout: { siteId: options.retailSelfCheckoutSiteId } },
+        select: { checkout: { select: { siteId: true } }, recordedByUserId: true },
+      }) : null;
+      if (!proposal || payment.paymentType !== "CUSTOMER_PAYMENT" || payment.direction !== "INBOUND" ||
+          payment.initiatedByUserId !== actorUserId || payment.approvedByUserId !== actorUserId ||
+          proposal.recordedByUserId !== actorUserId ||
+          !await hasRetailSelfApprovalGrant(organizationId, actorUserId, proposal.checkout.siteId, "PAYMENT", tx)) {
+        throw new EnterpriseAccountingError("PAYMENT_SELF_CONFIRMATION_FORBIDDEN", 403);
+      }
+    } else {
+      assertIndependentActor({ actorUserId, relatedUserIds: [payment.initiatedByUserId, payment.approvedByUserId], errorCode: "PAYMENT_SELF_CONFIRMATION_FORBIDDEN" });
+    }
     if (!payment.financialAccountId) throw new EnterpriseAccountingError("PAYMENT_FINANCIAL_ACCOUNT_REQUIRED", 409);
     const account = await tx.enterpriseFinancialAccount.findFirst({ where: { id: payment.financialAccountId, organizationId, status: "ACTIVE", archivedAt: null } });
     if (!account || account.currencyCode !== payment.currencyCode) throw new EnterpriseAccountingError("PAYMENT_FINANCIAL_ACCOUNT_INVALID", 409);

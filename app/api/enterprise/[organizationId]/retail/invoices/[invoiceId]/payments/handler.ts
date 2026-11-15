@@ -5,6 +5,7 @@ import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http"
 import { authorizeRetailRequest, retailErrorResponse } from "@/lib/enterprise/retail/http";
 import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
 import { retailInvoicePaymentOptions, retailInvoicePaymentProposalSchema, proposeRetailInvoicePayment } from "@/lib/enterprise/retail/invoice-payments";
+import { hasRetailSelfApprovalGrant } from "@/lib/enterprise/retail/site-access";
 import { prisma } from "@/lib/prisma";
 
 type Params = { params: Promise<{ organizationId: string; invoiceId: string }> };
@@ -25,18 +26,32 @@ export async function GET(req: Request, { params }: Params) {
       prisma.enterpriseRetailInvoicePaymentProposal.findMany({
         where, orderBy: { createdAt: "desc" }, skip: (pageInput.data - 1) * 30, take: 30,
         select: { id: true, recordedByUserId: true, createdAt: true,
-          payment: { select: { id: true, number: true, status: true, amount: true, currencyCode: true, unallocatedAmount: true, revision: true, methodType: true, financialAccountId: true, initiatedByUserId: true } } },
+          payment: { select: { id: true, number: true, status: true, amount: true, currencyCode: true, unallocatedAmount: true, revision: true, methodType: true, financialAccountId: true, initiatedByUserId: true, approvedByUserId: true } } },
       }),
       prisma.enterpriseRetailInvoicePaymentProposal.count({ where }),
     ]);
     await writeApiLog({ request: req, startedAt, statusCode: 200, userId: auth.session.userId, metadata: { organizationId, domain: "retail-invoice-payment-proposals", page: pageInput.data } });
+    const checkout = await prisma.enterpriseRetailInvoiceCheckout.findFirst({ where: { organizationId, salesInvoiceId: invoiceId }, select: { siteId: true } });
+    const selfApprovalAllowed = checkout ? await hasRetailSelfApprovalGrant(organizationId, auth.session.userId, checkout.siteId, "PAYMENT") : false;
+    const personalPendingApprovals = selfApprovalAllowed ? await prisma.enterpriseApproval.findMany({
+      where: { organizationId, targetEntityType: "EnterprisePayment", status: "PENDING", archivedAt: null,
+        requestedByUserId: auth.session.userId, approverUserId: auth.session.userId,
+        targetEntityId: { in: proposals.map((item) => item.payment.id) } },
+      select: { targetEntityId: true },
+    }) : [];
+    const personallyAssignedPaymentIds = new Set(personalPendingApprovals.map((approval) => approval.targetEntityId));
     const visibleProposals = proposals.map((item) => ({
       ...item,
       canSubmit: item.recordedByUserId === auth.session.userId && item.payment.status === "DRAFT",
       canCancel: item.recordedByUserId === auth.session.userId && item.payment.status === "DRAFT",
+      canApprove: selfApprovalAllowed && item.recordedByUserId === auth.session.userId &&
+        personallyAssignedPaymentIds.has(item.payment.id) && item.payment.status === "PENDING_APPROVAL",
+      canConfirm: selfApprovalAllowed && item.recordedByUserId === auth.session.userId &&
+        item.payment.approvedByUserId === auth.session.userId && item.payment.initiatedByUserId === auth.session.userId &&
+        item.payment.status === "APPROVED",
       canAllocate: ["CONFIRMED", "RECONCILED"].includes(item.payment.status) && item.payment.unallocatedAmount.isPositive(),
     }));
-    return NextResponse.json({ ...options, proposals: visibleProposals, pagination: { page: pageInput.data, pageSize: 30, total, pageCount: Math.max(1, Math.ceil(total / 30)) } }, { headers: { "Cache-Control": "private, no-store" } });
+    return NextResponse.json({ ...options, selfApprovalAllowed, proposals: visibleProposals, pagination: { page: pageInput.data, pageSize: 30, total, pageCount: Math.max(1, Math.ceil(total / 30)) } }, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
     return retailErrorResponse(error, "RETAIL_INVOICE_PAYMENT_LIST_FAILED");
   }

@@ -9,6 +9,7 @@ import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
 import { enqueueWebPushNotification } from "@/lib/push/queue";
 import { enterpriseApprovalTargetDeepLink } from "@/lib/enterprise/approval-targets";
 import { assertRetailInvoiceFinanceApproverTx, assertRetailPaymentFinanceApproverTx } from "@/lib/enterprise/retail/invoice-approval";
+import { hasRetailSelfApprovalGrant } from "@/lib/enterprise/retail/site-access";
 
 export const ACCOUNTING_APPROVAL_MODULE_BY_TARGET: Readonly<Record<string, EnterpriseFinanceModuleCode>> = {
   EnterpriseJournalEntry: "FINANCE_ACCOUNTING",
@@ -201,6 +202,27 @@ export async function requireAccountingApprovalDecision(input: {
   if (!approval) throw new EnterpriseAccountingError("ACCOUNTING_APPROVAL_NOT_ASSIGNED", 409);
 
   try {
+    // Only the creator/assigned approver of an actual Retail checkout may use
+    // an owner-granted self-approval; unrelated Finance targets are untouched.
+    if (approval.requestedByUserId === input.actorUserId && approval.approverUserId === input.actorUserId &&
+        ["EnterpriseSalesInvoice", "EnterprisePayment"].includes(input.targetEntityType)) {
+      const invoiceTarget = input.targetEntityType === "EnterpriseSalesInvoice";
+      const siteId = invoiceTarget
+        ? (await prisma.enterpriseRetailInvoiceCheckout.findFirst({
+            where: { organizationId: input.organizationId, salesInvoiceId: input.targetEntityId }, select: { siteId: true },
+          }))?.siteId
+        : (await prisma.enterpriseRetailInvoicePaymentProposal.findFirst({
+            where: { organizationId: input.organizationId, paymentId: input.targetEntityId },
+            select: { checkout: { select: { siteId: true } } },
+          }))?.checkout.siteId;
+      if (siteId) {
+        const kind = invoiceTarget ? "INVOICE" : "PAYMENT";
+        if (!await hasRetailSelfApprovalGrant(input.organizationId, input.actorUserId, siteId, kind)) {
+          throw new EnterpriseAccountingError("ACCOUNTING_SELF_APPROVAL_FORBIDDEN", 403);
+        }
+        return { approval, decision: { selfApprovalOverride: true }, moduleCode };
+      }
+    }
     const decision = await assertEnterpriseApprovalDecision({
       organizationId: input.organizationId,
       requesterUserId: approval.requestedByUserId,

@@ -4,7 +4,7 @@ import { z } from "zod";
 import { publishFinanceEvent } from "@/lib/enterprise/accounting/helpers";
 import { resolveEnterpriseModuleAccess, resolveEnterpriseModuleCapabilities } from "@/lib/enterprise/module-access";
 import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
-import { requireRetailSiteCapability, RETAIL_OWNER_ROLES, siteStaffCapabilities } from "@/lib/enterprise/retail/site-access";
+import { requireRetailSiteCapability, RETAIL_OWNER_ROLES, siteStaffCapabilities, hasRetailSelfApprovalGrant } from "@/lib/enterprise/retail/site-access";
 import { withRetailTransactionRetry } from "@/lib/enterprise/retail/transaction-retry";
 import { prisma } from "@/lib/prisma";
 
@@ -72,12 +72,17 @@ async function requireReturnApproverTx(
   tx: Prisma.TransactionClient, organizationId: string,
   actorUserId: string, approverUserId: string, siteId: string,
 ) {
-  if (actorUserId === approverUserId) {
+  const selfAllowed = actorUserId === approverUserId &&
+    await hasRetailSelfApprovalGrant(organizationId, actorUserId, siteId, "RETURN", tx);
+  if (actorUserId === approverUserId && !selfAllowed) {
     throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_SELF_APPROVAL_FORBIDDEN", 403);
   }
   await requireRetailSiteCapability(
     organizationId, approverUserId, siteId, "APPROVE_INVOICE_RETURN", tx, { requireAssignment: true },
   );
+  // The OWNER's per-store grant replaces only the request-decision entitlement.
+  // Physical inspection, refund Finance approval and settlement remain independent.
+  if (selfAllowed) return;
   const [receivables, payments] = await Promise.all([
     resolveEnterpriseModuleAccess({
       organizationId, userId: approverUserId, moduleCode: "FINANCE_RECEIVABLES", action: "approve",
@@ -146,6 +151,7 @@ export async function listRetailInvoiceReturnRequests(
     resolveEnterpriseModuleCapabilities({ organizationId, userId: actorUserId, moduleCode: "FINANCE_PAYMENTS" }),
     resolveEnterpriseModuleCapabilities({ organizationId, userId: actorUserId, moduleCode: "FINANCE_RECEIVABLES" }),
   ]);
+  const selfCanDecide = await hasRetailSelfApprovalGrant(organizationId, actorUserId, checkout.siteId, "RETURN");
   const canPrepareFinance = paymentCapabilities.canCreate && paymentCapabilities.canSubmit &&
     receivableCapabilities.canCreate && receivableCapabilities.canSubmit;
   const canSettleFinance = paymentCapabilities.canWrite && receivableCapabilities.canManage;
@@ -175,9 +181,10 @@ export async function listRetailInvoiceReturnRequests(
           item.preparedByUserId].includes(actorUserId),
       canInspect: capabilities.canInspect && item.status === "SUBMITTED" &&
         item.requestedByUserId !== actorUserId && item.approverUserId !== actorUserId,
-      canDecide: capabilities.canApprove && finance?.every((entry) => entry.allowed) === true &&
+      canDecide: capabilities.canApprove &&
+        (finance?.every((entry) => entry.allowed) === true || (item.requestedByUserId === actorUserId && selfCanDecide)) &&
         ["SUBMITTED", "INSPECTED"].includes(item.status) && item.approverUserId === actorUserId &&
-        item.requestedByUserId !== actorUserId && item.inspectedByUserId !== actorUserId,
+        (item.requestedByUserId !== actorUserId || selfCanDecide) && item.inspectedByUserId !== actorUserId,
     }; }),
     canRequest: capabilities.canRequest && ["PAID", "CREDIT_NOTE"].includes(checkout.invoice.status) &&
       checkout.invoice.amountPaid.plus(checkout.invoice.amountCredited).equals(checkout.invoice.grandTotal) &&
@@ -200,7 +207,7 @@ export async function listRetailInvoiceReturnApprovers(
     organizationId, actorUserId, siteId, "REQUEST_INVOICE_RETURN", prisma, { requireAssignment: true },
   );
   const members = await prisma.organizationMember.findMany({
-    where: { organizationId, status: "ACTIVE", removedAt: null, userId: { not: actorUserId } },
+    where: { organizationId, status: "ACTIVE", removedAt: null },
     take: 250, orderBy: { user: { name: "asc" } },
     select: { userId: true, role: true, positionTitle: true, user: { select: { name: true } } },
   });
@@ -214,14 +221,21 @@ export async function listRetailInvoiceReturnApprovers(
     const assignment = siteAccess.get(member.userId);
     return Boolean(assignment && siteStaffCapabilities(assignment.roleCode, assignment.permissionsJson).includes("APPROVE_INVOICE_RETURN"));
   });
+  const selfReturnGrant = await hasRetailSelfApprovalGrant(organizationId, actorUserId, siteId, "RETURN");
   const candidates = await Promise.all(eligible.map(async (member) => {
+    if (member.userId === actorUserId) {
+      return selfReturnGrant ? {
+        userId: member.userId, name: member.user.name, positionTitle: member.positionTitle,
+        role: member.role, isRequester: true, selfApprovalOverride: true,
+      } : null;
+    }
     const access = await Promise.all([
       resolveEnterpriseModuleAccess({ organizationId, userId: member.userId, moduleCode: "FINANCE_RECEIVABLES", action: "approve" }),
       resolveEnterpriseModuleAccess({ organizationId, userId: member.userId, moduleCode: "FINANCE_PAYMENTS", action: "approve" }),
     ]);
     return access.every((entry) => entry.allowed) ? {
       userId: member.userId, name: member.user.name, positionTitle: member.positionTitle,
-      role: member.role, isRequester: false, selfApprovalOverride: false,
+      role: member.role, isRequester: member.userId === actorUserId, selfApprovalOverride: member.userId === actorUserId,
     } : null;
   }));
   return { candidates: candidates.filter((candidate): candidate is NonNullable<typeof candidate> => Boolean(candidate)) };
@@ -397,14 +411,18 @@ export async function decideRetailInvoiceReturnRequest(
     await requireRetailSiteCapability(
       organizationId, actorUserId, request.checkout.siteId, "APPROVE_INVOICE_RETURN", tx, { requireAssignment: true },
     );
-    if (request.approverUserId !== actorUserId || request.requestedByUserId === actorUserId) {
+    if (request.approverUserId !== actorUserId ||
+        (request.requestedByUserId === actorUserId &&
+          !await hasRetailSelfApprovalGrant(organizationId, actorUserId, request.checkout.siteId, "RETURN", tx))) {
       throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_APPROVER_INELIGIBLE", 403);
     }
+    const selfReturnDecision = request.requestedByUserId === actorUserId &&
+      await hasRetailSelfApprovalGrant(organizationId, actorUserId, request.checkout.siteId, "RETURN", tx);
     const finance = await Promise.all([
       resolveEnterpriseModuleAccess({ organizationId, userId: actorUserId, moduleCode: "FINANCE_RECEIVABLES", action: "approve" }),
       resolveEnterpriseModuleAccess({ organizationId, userId: actorUserId, moduleCode: "FINANCE_PAYMENTS", action: "approve" }),
     ]);
-    if (!finance.every((entry) => entry.allowed)) {
+    if (!selfReturnDecision && !finance.every((entry) => entry.allowed)) {
       throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_APPROVER_INELIGIBLE", 403);
     }
     if (request.revision !== input.revision ||
@@ -433,7 +451,9 @@ export async function decideRetailInvoiceReturnRequest(
       eventType: "RETAIL_INVOICE_RETURN_" + nextStatus,
       summary: "Retail invoice return reviewed: " + nextStatus,
       actorUserId, fromStatus: request.status, toStatus: nextStatus,
-      metadataJson: { invoiceId, siteId: request.checkout.siteId, ...(input.reason ? { reason: input.reason } : {}) },
+      metadataJson: { invoiceId, siteId: request.checkout.siteId,
+        ownerGrantedSelfApproval: request.requestedByUserId === actorUserId,
+        ...(input.reason ? { reason: input.reason } : {}) },
     });
     return updated;
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 30000 }));

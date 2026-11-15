@@ -5,7 +5,7 @@ import { civilMidnightUtc, followingCivilDate, isCivilDate } from "@/lib/enterpr
 import { authorizeRetailRequest, retailErrorResponse, retailListParams } from "@/lib/enterprise/retail/http";
 import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
 import { resolveEnterpriseModuleAccess } from "@/lib/enterprise/module-access";
-import { retailFinanceReadSiteScope, RETAIL_OWNER_ROLES, siteStaffCapabilities } from "@/lib/enterprise/retail/site-access";
+import { retailFinanceReadSiteScope, RETAIL_OWNER_ROLES, siteStaffCapabilities, hasRetailSelfApprovalGrant } from "@/lib/enterprise/retail/site-access";
 import { prisma } from "@/lib/prisma";
 
 type Params = { params: Promise<{ organizationId: string }> };
@@ -31,7 +31,7 @@ export async function GET(req: Request, { params }: Params) {
       prisma.organizationMember.findFirst({ where: { organizationId, userId: auth.session.userId, status: "ACTIVE", removedAt: null }, select: { role: true } }),
       prisma.organization.findFirst({ where: { id: organizationId, deletedAt: null }, select: { timezone: true } }),
       siteId ? prisma.enterpriseSite.findFirst({ where: { organizationId, id: siteId, status: "ACTIVE", archivedAt: null }, select: { timezone: true } }) : Promise.resolve(null),
-      prisma.enterpriseRetailSiteAssignment.findMany({ where: { organizationId, userId: auth.session.userId, isActive: true }, select: { siteId: true, roleCode: true, permissionsJson: true } }),
+      prisma.enterpriseRetailSiteAssignment.findMany({ where: { organizationId, userId: auth.session.userId, isActive: true }, select: { siteId: true, roleCode: true, permissionsJson: true, isActive: true } }),
       resolveEnterpriseModuleAccess({ userId: auth.session.userId, organizationId, moduleCode: "FINANCE_RECEIVABLES", action: view === "issue" ? "manage" : "approve" }),
     ]);
     if (!membership || !organization) throw new EnterpriseRetailError("RETAIL_SITE_ACCESS_DENIED", 403);
@@ -39,15 +39,20 @@ export async function GET(req: Request, { params }: Params) {
     const owners = RETAIL_OWNER_ROLES.has(membership.role);
     const financeScope = financeAccess.allowed ? await retailFinanceReadSiteScope(organizationId, auth.session.userId, "VIEW_SALES") : [];
     const issuerSites = assignments.filter((assignment) => siteStaffCapabilities(assignment.roleCode, assignment.permissionsJson).includes("ISSUE_INVOICE")).map((assignment) => assignment.siteId);
-    if (view === "approvals" && !financeAccess.allowed) throw new EnterpriseRetailError("RETAIL_SITE_ACCESS_DENIED", 403);
+    const selfSites = (await Promise.all(assignments.map(async (assignment) =>
+      await hasRetailSelfApprovalGrant(organizationId, auth.session.userId, assignment.siteId, "INVOICE") ? assignment.siteId : null,
+    ))).filter((id): id is string => id !== null);
+    if (view === "approvals" && !financeAccess.allowed && !selfSites.length) throw new EnterpriseRetailError("RETAIL_SITE_ACCESS_DENIED", 403);
     if (view === "issue" && !owners && !issuerSites.length && !financeAccess.allowed) throw new EnterpriseRetailError("RETAIL_SITE_ACCESS_DENIED", 403);
 
     // Finance is company-wide only for users without a scoped Retail
     // assignment. Scoped Finance access cannot hop to another store.
-    const allSitesAllowed = view === "issue" && (owners || (financeAccess.allowed && financeScope === null));
+    const allSitesAllowed = view === "issue"
+      ? owners || (financeAccess.allowed && financeScope === null)
+      : financeAccess.allowed && financeScope === null;
     const allowedSites = view === "issue"
       ? [...new Set([...issuerSites, ...(Array.isArray(financeScope) ? financeScope : [])])]
-      : financeScope;
+      : [...new Set([...(Array.isArray(financeScope) ? financeScope : []), ...selfSites])];
     const conditions: Prisma.Sql[] = [
       Prisma.sql`c."organizationId" = ${organizationId}`,
       Prisma.sql`i."organizationId" = ${organizationId}`,
@@ -57,6 +62,14 @@ export async function GET(req: Request, { params }: Params) {
     if (!allSitesAllowed && allowedSites !== null) {
       if (!allowedSites.length) return NextResponse.json({ items: [], sites: [], pagination: { page, pageSize, total: 0, pageCount: 1 } });
       conditions.push(Prisma.sql`c."siteId" IN (${Prisma.join(allowedSites)})`);
+    }
+    if (view === "approvals" && !allSitesAllowed) {
+      // Per-store self-approval never reveals OTHER employees' invoices.
+      const independent = financeAccess.allowed && Array.isArray(financeScope) && financeScope.length
+        ? Prisma.sql`c."siteId" IN (${Prisma.join(financeScope)})` : Prisma.sql`FALSE`;
+      const own = selfSites.length
+        ? Prisma.sql`(c."siteId" IN (${Prisma.join(selfSites)}) AND i."createdByUserId" = ${auth.session.userId})` : Prisma.sql`FALSE`;
+      conditions.push(Prisma.sql`(${independent} OR ${own})`);
     }
     if (siteId) conditions.push(Prisma.sql`c."siteId" = ${siteId}`);
     if (search) {
