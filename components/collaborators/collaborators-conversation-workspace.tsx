@@ -308,6 +308,16 @@ export function CollaboratorsConversationWorkspace(props: Props) {
     setVoices(Object.fromEntries((body.voices || []).map((voice) => [voice.messageId, voice])));
   }, []);
 
+  // Keep the server-side unread flag in sync when navigating away from the
+  // current document (as well as when using the explicit conversation back).
+  useEffect(() => {
+    const acknowledgeOnPageExit = () => {
+      if (activeGroupId) void fetch(`/api/collaborators/groups/${activeGroupId}/read`, { method: "POST", keepalive: true }).catch(() => undefined);
+    };
+    window.addEventListener("pagehide", acknowledgeOnPageExit);
+    return () => window.removeEventListener("pagehide", acknowledgeOnPageExit);
+  }, [activeGroupId]);
+
   useEffect(() => { void loadExperience(); }, [loadExperience]);
   useEffect(() => { void loadContactRequests(); }, [loadContactRequests]);
   useEffect(() => {

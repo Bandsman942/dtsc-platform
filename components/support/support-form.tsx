@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { ImagePlus, Sparkles, Send, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
@@ -114,7 +115,7 @@ export function SupportForm({ locale = "fr" }: { locale?: string }) {
             <label htmlFor="support-photo-input" className="mb-2 flex items-center gap-2 text-sm font-bold text-dtsc-ink"><ImagePlus className="h-4 w-4" />{en ? "Attach an optional photo" : "Joindre une photo (facultatif)"}</label>
             <input id="support-photo-input" type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => choosePhoto(event.target.files?.[0] || null)} className="block w-full min-w-0 text-sm text-dtsc-muted" />
             <p className="mt-1 text-xs text-dtsc-muted">{en ? "JPEG, PNG, WebP — max 8 MB. Private, visible only to authorized support agents." : "JPEG, PNG, WebP — 8 Mo maximum. Photo privée, visible uniquement par le support autorisé."}</p>
-            {photo && previewUrl ? <div className="mt-3 flex items-start gap-3"><img src={previewUrl} alt={en ? "Selected photo preview" : "Aperçu de la photo sélectionnée"} className="h-24 w-32 rounded-xl border border-dtsc-border object-cover" /><span className="min-w-0 flex-1 break-all text-xs text-dtsc-muted">{photo.name}</span><Button size="icon" variant="outline" type="button" onClick={() => setPhoto(null)} aria-label={en ? "Remove photo" : "Retirer la photo"}><X className="h-4 w-4" /></Button></div> : null}
+            {photo && previewUrl ? <div className="mt-3 flex items-start gap-3"><Image src={previewUrl} alt={en ? "Selected photo preview" : "Aperçu de la photo sélectionnée"} width={128} height={96} unoptimized className="h-24 w-32 rounded-xl border border-dtsc-border object-cover" /><span className="min-w-0 flex-1 break-all text-xs text-dtsc-muted">{photo.name}</span><Button size="icon" variant="outline" type="button" onClick={() => setPhoto(null)} aria-label={en ? "Remove photo" : "Retirer la photo"}><X className="h-4 w-4" /></Button></div> : null}
           </div>
           <Button className="w-full rounded-xl bg-dtsc-blue text-white sm:w-fit" disabled={isPending || Boolean(aiPending)}><Send className="h-4 w-4" />{isPending ? (en ? "Sending…" : "Envoi…") : (en ? "Approve and send ticket" : "Approuver et envoyer le ticket")}</Button>
         </form>

@@ -469,7 +469,8 @@
     "qa:health-05:finance-preflight-postgres": "node scripts/qa-health-05-finance-preflight-postgres.mjs",
     "qa:provider-settlement-preflight": "node scripts/qa-provider-settlement-preflight.mjs",
     "qa:provider-settlement-preflight:postgres": "node scripts/qa-provider-settlement-preflight-postgres.mjs",
-    "qa:public-app-install-1178": "node scripts/qa-public-app-install-1178.mjs"
+    "qa:public-app-install-1178": "node scripts/qa-public-app-install-1178.mjs",
+    "qa:hotfix-support-collaboration": "node scripts/qa-hotfix-support-collaboration-20261115.mjs"
   },
   "dependencies": {
     "@ai-sdk/gateway": "2.0.27",

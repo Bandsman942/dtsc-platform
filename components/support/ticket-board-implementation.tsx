@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { SupportTicket, User, UserRole } from "@prisma/client";
 import { Copy, MessageCircle, Pencil, Send, Trash2 } from "lucide-react";
@@ -141,7 +142,7 @@ export function TicketBoard({
               <h3 className="mt-1 break-words font-black text-dtsc-ink">{ticket.subject}</h3>
               <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-dtsc-muted">{ticket.description}</p>
               <TicketDates ticket={ticket} />
-              {ticket.attachments?.length ? <div className="mt-3 flex flex-wrap gap-2">{ticket.attachments.map((photo) => <a key={photo.id} href={`/api/support/tickets/${ticket.id}/attachments/${photo.id}`} target="_blank" rel="noopener noreferrer" className="group inline-flex min-w-0 items-center gap-2 rounded-xl border border-dtsc-border bg-dtsc-page p-2 text-xs font-semibold text-dtsc-blue hover:border-cyan-400"><img src={`/api/support/tickets/${ticket.id}/attachments/${photo.id}`} alt={photo.originalName} loading="lazy" className="h-14 w-14 rounded-lg object-cover" /><span className="max-w-32 truncate">{photo.originalName}</span></a>)}</div> : null}
+              {ticket.attachments?.length ? <div className="mt-3 flex flex-wrap gap-2">{ticket.attachments.map((photo) => <a key={photo.id} href={`/api/support/tickets/${ticket.id}/attachments/${photo.id}`} target="_blank" rel="noopener noreferrer" className="group inline-flex min-w-0 items-center gap-2 rounded-xl border border-dtsc-border bg-dtsc-page p-2 text-xs font-semibold text-dtsc-blue hover:border-cyan-400"><Image src={`/api/support/tickets/${ticket.id}/attachments/${photo.id}`} alt={photo.originalName} width={56} height={56} unoptimized className="h-14 w-14 rounded-lg object-cover" /><span className="max-w-32 truncate">{photo.originalName}</span></a>)}</div> : null}
               {ticket.resolution ? (
                 <p className="mt-3 break-words rounded-xl bg-dtsc-soft p-3 text-sm font-semibold text-dtsc-blue">Résolution : {ticket.resolution}</p>
               ) : null}
