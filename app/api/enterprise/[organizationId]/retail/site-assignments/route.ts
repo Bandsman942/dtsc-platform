@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
 import { authorizeRetailRequest, retailErrorResponse } from "@/lib/enterprise/retail/http";
-import { RETAIL_OWNER_ROLES, RETAIL_SITE_CAPABILITIES, ROLE_DEFAULT_CAPABILITIES, retailSiteAssignmentInputSchema, retailStaffIsolationIsEnabled, siteStaffCapabilities } from "@/lib/enterprise/retail/site-access";
+import { RETAIL_OWNER_ROLES, RETAIL_SELF_APPROVAL_CAPABILITIES, RETAIL_SITE_CAPABILITIES, ROLE_DEFAULT_CAPABILITIES, retailSiteAssignmentInputSchema, retailStaffIsolationIsEnabled, siteStaffCapabilities } from "@/lib/enterprise/retail/site-access";
 import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
 import { prisma } from "@/lib/prisma";
 
@@ -13,7 +13,7 @@ async function authorizeOwner(req: Request, organizationId: string, mutation = f
   if (!auth.ok) return auth;
   const owner = await prisma.organizationMember.findFirst({
     where: { organizationId, userId: auth.session.userId, status: "ACTIVE", removedAt: null, role: { in: [...RETAIL_OWNER_ROLES] } },
-    select: { id: true },
+    select: { id: true, role: true },
   });
   if (!owner) return { ok: false as const, response: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
   return auth;
@@ -74,9 +74,25 @@ export async function PUT(req: Request, { params }: Params) {
     if (!site || !member || RETAIL_OWNER_ROLES.has(member.role)) throw new EnterpriseRetailError("RETAIL_SITE_ASSIGNMENT_TARGET_INVALID", 409);
     const existing = await prisma.enterpriseRetailSiteAssignment.findUnique({
       where: { organizationId_siteId_userId: { organizationId, siteId: input.siteId, userId: input.userId } },
-      select: { id: true, revision: true },
+      select: { id: true, revision: true, permissionsJson: true, roleCode: true, isActive: true },
     });
     if ((existing && existing.revision !== input.revision) || (!existing && input.revision)) throw new EnterpriseRetailError("RETAIL_SITE_ASSIGNMENT_CONFLICT", 409);
+    // Only the actual organization OWNER may grant, retain or revoke a self-approval exception.
+    const oldRights = existing ? siteStaffCapabilities(existing.roleCode, existing.permissionsJson) : [];
+    const newRights = input.permissions ?? ROLE_DEFAULT_CAPABILITIES[input.roleCode];
+    if (RETAIL_SELF_APPROVAL_CAPABILITIES.some((permission) => oldRights.includes(permission) || newRights.includes(permission))) {
+      const principal = await prisma.organizationMember.findFirst({
+        where: { organizationId, userId: auth.session.userId, status: "ACTIVE", removedAt: null, role: "OWNER" },
+        select: { id: true },
+      });
+      if (!principal) throw new EnterpriseRetailError("RETAIL_SITE_SELF_APPROVAL_OWNER_ONLY", 403);
+    }
+    if (newRights.includes("SELF_APPROVE_INVOICE") && !newRights.includes("PREPARE_INVOICE") ||
+        newRights.includes("SELF_APPROVE_PAYMENT") && !newRights.includes("COLLECT_PAYMENT") ||
+        newRights.includes("SELF_APPROVE_INVOICE_RETURN") &&
+        (input.roleCode !== "MANAGER" || !newRights.includes("REQUEST_INVOICE_RETURN") || !newRights.includes("APPROVE_INVOICE_RETURN"))) {
+      throw new EnterpriseRetailError("RETAIL_SITE_SELF_APPROVAL_DEPENDENCY", 400);
+    }
     const row = existing
       ? await prisma.enterpriseRetailSiteAssignment.updateMany({
           where: { id: existing.id, organizationId, revision: existing.revision },
@@ -95,7 +111,12 @@ export async function PUT(req: Request, { params }: Params) {
             permissionsJson: input.permissions ?? undefined, isActive: input.isActive, createdByUserId: auth.session.userId,
           },
         });
-    await writeAuditLog({ userId: auth.session.userId, action: existing ? "RETAIL_SITE_ASSIGNMENT_UPDATED" : "RETAIL_SITE_ASSIGNMENT_CREATED", entity: "EnterpriseRetailSiteAssignment", entityId: row.id, request: req, metadata: { organizationId, siteId: row.siteId, userId: row.userId, roleCode: row.roleCode, isActive: row.isActive, revision: row.revision } });
+    await writeAuditLog({ userId: auth.session.userId, organizationId, action: existing ? "RETAIL_SITE_ASSIGNMENT_UPDATED" : "RETAIL_SITE_ASSIGNMENT_CREATED", entity: "EnterpriseRetailSiteAssignment", entityId: row.id, request: req,
+      riskLevel: RETAIL_SELF_APPROVAL_CAPABILITIES.some((permission) => oldRights.includes(permission) || newRights.includes(permission)) ? "HIGH" : "MEDIUM",
+      before: existing ? { roleCode: existing.roleCode, isActive: existing.isActive, permissions: oldRights, revision: existing.revision } : undefined,
+      after: { roleCode: row.roleCode, isActive: row.isActive, permissions: siteStaffCapabilities(row.roleCode, row.permissionsJson), revision: row.revision },
+      metadata: { organizationId, siteId: row.siteId, userId: row.userId, roleCode: row.roleCode, isActive: row.isActive, revision: row.revision,
+        selfApprovalGrants: RETAIL_SELF_APPROVAL_CAPABILITIES.filter((permission) => newRights.includes(permission)) } });
     await writeApiLog({ request: req, statusCode: existing ? 200 : 201, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "retail-site-assignments", action: existing ? "update" : "create" } });
     return NextResponse.json({ item: { ...row, permissions: siteStaffCapabilities(row.roleCode, row.permissionsJson) } }, { status: existing ? 200 : 201 });
   } catch (error) {
