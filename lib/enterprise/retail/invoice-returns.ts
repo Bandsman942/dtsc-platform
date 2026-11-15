@@ -4,7 +4,7 @@ import { z } from "zod";
 import { publishFinanceEvent } from "@/lib/enterprise/accounting/helpers";
 import { resolveEnterpriseModuleAccess, resolveEnterpriseModuleCapabilities } from "@/lib/enterprise/module-access";
 import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
-import { requireRetailSiteCapability, RETAIL_OWNER_ROLES, siteStaffCapabilities } from "@/lib/enterprise/retail/site-access";
+import { requireRetailSiteCapability, retailSelfApprovalAllowed, RETAIL_OWNER_ROLES, siteStaffCapabilities } from "@/lib/enterprise/retail/site-access";
 import { withRetailTransactionRetry } from "@/lib/enterprise/retail/transaction-retry";
 import { prisma } from "@/lib/prisma";
 
@@ -72,7 +72,7 @@ async function requireReturnApproverTx(
   tx: Prisma.TransactionClient, organizationId: string,
   actorUserId: string, approverUserId: string, siteId: string,
 ) {
-  if (actorUserId === approverUserId) {
+  if (actorUserId === approverUserId && !await retailSelfApprovalAllowed(organizationId, actorUserId, siteId, "SELF_APPROVE_INVOICE_RETURN", tx)) {
     throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_SELF_APPROVAL_FORBIDDEN", 403);
   }
   await requireRetailSiteCapability(
@@ -138,6 +138,7 @@ export async function listRetailInvoiceReturnRequests(
         canApprove: siteStaffCapabilities(siteAssignment!.roleCode, siteAssignment!.permissionsJson).includes("APPROVE_INVOICE_RETURN"),
       }
     : { canRequest: false, canInspect: false, canApprove: false };
+  const selfReturnAllowed = await retailSelfApprovalAllowed(organizationId, actorUserId, checkout.siteId, "SELF_APPROVE_INVOICE_RETURN");
   const finance = capabilities.canApprove ? await Promise.all([
     resolveEnterpriseModuleAccess({ organizationId, userId: actorUserId, moduleCode: "FINANCE_RECEIVABLES", action: "approve" }),
     resolveEnterpriseModuleAccess({ organizationId, userId: actorUserId, moduleCode: "FINANCE_PAYMENTS", action: "approve" }),
@@ -177,7 +178,7 @@ export async function listRetailInvoiceReturnRequests(
         item.requestedByUserId !== actorUserId && item.approverUserId !== actorUserId,
       canDecide: capabilities.canApprove && finance?.every((entry) => entry.allowed) === true &&
         ["SUBMITTED", "INSPECTED"].includes(item.status) && item.approverUserId === actorUserId &&
-        item.requestedByUserId !== actorUserId && item.inspectedByUserId !== actorUserId,
+        (item.requestedByUserId !== actorUserId || selfReturnAllowed) && item.inspectedByUserId !== actorUserId,
     }; }),
     canRequest: capabilities.canRequest && ["PAID", "CREDIT_NOTE"].includes(checkout.invoice.status) &&
       checkout.invoice.amountPaid.plus(checkout.invoice.amountCredited).equals(checkout.invoice.grandTotal) &&
@@ -224,7 +225,16 @@ export async function listRetailInvoiceReturnApprovers(
       role: member.role, isRequester: false, selfApprovalOverride: false,
     } : null;
   }));
-  return { candidates: candidates.filter((candidate): candidate is NonNullable<typeof candidate> => Boolean(candidate)) };
+  const selfAllowed = await retailSelfApprovalAllowed(organizationId, actorUserId, siteId, "SELF_APPROVE_INVOICE_RETURN");
+  const selfMember = selfAllowed ? await prisma.organizationMember.findFirst({ where: { organizationId, userId: actorUserId, status: "ACTIVE", removedAt: null }, select: { userId: true, role: true, positionTitle: true, user: { select: { name: true } } } }) : null;
+  const selfFinance = selfMember ? await Promise.all([
+    resolveEnterpriseModuleAccess({ organizationId, userId: actorUserId, moduleCode: "FINANCE_RECEIVABLES", action: "approve" }),
+    resolveEnterpriseModuleAccess({ organizationId, userId: actorUserId, moduleCode: "FINANCE_PAYMENTS", action: "approve" }),
+  ]) : [];
+  const selfCandidate = selfMember && selfFinance.every((item) => item.allowed)
+    ? [{ userId: selfMember.userId, name: selfMember.user.name, positionTitle: selfMember.positionTitle,
+      role: selfMember.role, isRequester: true, selfApprovalOverride: true }] : [];
+  return { candidates: [...candidates.filter((candidate): candidate is NonNullable<typeof candidate> => Boolean(candidate)), ...selfCandidate] };
 }
 
 export async function createRetailInvoiceReturnRequest(
@@ -397,7 +407,8 @@ export async function decideRetailInvoiceReturnRequest(
     await requireRetailSiteCapability(
       organizationId, actorUserId, request.checkout.siteId, "APPROVE_INVOICE_RETURN", tx, { requireAssignment: true },
     );
-    if (request.approverUserId !== actorUserId || request.requestedByUserId === actorUserId) {
+    const selfAllowed = request.requestedByUserId === actorUserId && await retailSelfApprovalAllowed(organizationId, actorUserId, request.checkout.siteId, "SELF_APPROVE_INVOICE_RETURN", tx);
+    if (request.approverUserId !== actorUserId || (request.requestedByUserId === actorUserId && !selfAllowed)) {
       throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_APPROVER_INELIGIBLE", 403);
     }
     const finance = await Promise.all([
@@ -433,7 +444,7 @@ export async function decideRetailInvoiceReturnRequest(
       eventType: "RETAIL_INVOICE_RETURN_" + nextStatus,
       summary: "Retail invoice return reviewed: " + nextStatus,
       actorUserId, fromStatus: request.status, toStatus: nextStatus,
-      metadataJson: { invoiceId, siteId: request.checkout.siteId, ...(input.reason ? { reason: input.reason } : {}) },
+      metadataJson: { invoiceId, siteId: request.checkout.siteId, selfApprovalOverride: Boolean(selfAllowed), ...(input.reason ? { reason: input.reason } : {}) },
     });
     return updated;
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 30000 }));
