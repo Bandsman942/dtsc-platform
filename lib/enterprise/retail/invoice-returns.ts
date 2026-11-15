@@ -186,9 +186,8 @@ export async function listRetailInvoiceReturnRequests(
         ["SUBMITTED", "INSPECTED"].includes(item.status) && item.approverUserId === actorUserId &&
         (item.requestedByUserId !== actorUserId || selfCanDecide) && item.inspectedByUserId !== actorUserId,
     }; }),
-    canRequest: capabilities.canRequest && ["PAID", "CREDIT_NOTE"].includes(checkout.invoice.status) &&
-      checkout.invoice.amountPaid.plus(checkout.invoice.amountCredited).equals(checkout.invoice.grandTotal) &&
-      checkout.invoice.outstandingAmount.isZero() && Boolean(checkout.stockPostedAt),
+    canRequest: capabilities.canRequest && ["PAID", "CREDIT_NOTE", "PARTIALLY_PAID", "ISSUED", "OVERDUE"].includes(checkout.invoice.status) &&
+      checkout.invoice.amountPaid.plus(checkout.invoice.amountCredited).plus(checkout.invoice.outstandingAmount).equals(checkout.invoice.grandTotal),
     pagination: { page, pageSize: 25, total, pageCount: Math.max(1, Math.ceil(total / 25)) },
   };
 }
@@ -268,9 +267,9 @@ export async function createRetailInvoiceReturnRequest(
       }
       return { request: existing, idempotent: true };
     }
-    if (!["PAID", "CREDIT_NOTE"].includes(checkout.invoice.status) || !checkout.stockPostedAt ||
-        !checkout.invoice.amountPaid.plus(checkout.invoice.amountCredited).equals(checkout.invoice.grandTotal) ||
-        !checkout.invoice.outstandingAmount.isZero()) {
+    if (!["PAID", "CREDIT_NOTE", "PARTIALLY_PAID", "ISSUED", "OVERDUE"].includes(checkout.invoice.status) ||
+        checkout.invoice.outstandingAmount.isNegative() ||
+        !checkout.invoice.amountPaid.plus(checkout.invoice.amountCredited).plus(checkout.invoice.outstandingAmount).equals(checkout.invoice.grandTotal)) {
       throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_PAID_REQUIRED", 409);
     }
     if (!checkout.invoice.grandTotal.equals(financeMoney(checkout.invoice.grandTotal))) {
@@ -481,7 +480,7 @@ export async function inspectRetailInvoiceReturnRequest(
       throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_INSPECTOR_INELIGIBLE", 403);
     }
     if (request.status !== "SUBMITTED" || request.revision !== input.revision ||
-      request.checkout.invoice.status !== "PAID" || !request.checkout.stockPostedAt) {
+      !["PAID", "CREDIT_NOTE", "PARTIALLY_PAID", "ISSUED", "OVERDUE"].includes(request.checkout.invoice.status)) {
       throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_REVISION_CONFLICT", 409);
     }
     const inspected = await tx.enterpriseRetailInvoiceReturnRequest.update({
@@ -493,7 +492,7 @@ export async function inspectRetailInvoiceReturnRequest(
     await publishFinanceEvent(tx, {
       organizationId, entityType: "EnterpriseRetailInvoiceReturnRequest", entityId: request.id,
       eventType: "RETAIL_INVOICE_RETURN_INSPECTED",
-      summary: "Retail invoice return physically received and inspected",
+      summary: "Retail return or service cancellation independently verified",
       actorUserId, fromStatus: "SUBMITTED", toStatus: "INSPECTED",
       metadataJson: { invoiceId, siteId: request.checkout.siteId },
     });
