@@ -4,7 +4,7 @@ import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { transitionSalesInvoice } from "@/lib/enterprise/accounting/receivables-service";
 import { decideSalesInvoiceAssignedApproval, submitSalesInvoiceForAssignedApproval } from "@/lib/enterprise/accounting/accounting-invoice-approval-orchestration";
 import { resolveEnterpriseModuleAccess } from "@/lib/enterprise/module-access";
-import { retailFinanceReadSiteScope, siteStaffCapabilities } from "@/lib/enterprise/retail/site-access";
+import { retailFinanceReadSiteScope, siteStaffCapabilities, hasRetailSelfApprovalGrant } from "@/lib/enterprise/retail/site-access";
 import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
 import { authorizeRetailRequest, retailErrorResponse } from "@/lib/enterprise/retail/http";
 import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
@@ -58,7 +58,10 @@ export async function POST(req: Request, { params }: Params) {
       // A designated Finance approver is mandatory even for a store manager.
       const finance = await resolveEnterpriseModuleAccess({ userId: auth.session.userId, organizationId, moduleCode: "FINANCE_RECEIVABLES", action: "approve" });
       const scoped = await retailFinanceReadSiteScope(organizationId, auth.session.userId, "VIEW_SALES");
-      if (!finance.allowed || (scoped !== null && !scoped.includes(checkout.siteId))) throw new EnterpriseRetailError("RETAIL_SITE_ACCESS_DENIED", 403);
+      const financeAllowed = finance.allowed && (scoped === null || scoped.includes(checkout.siteId));
+       const selfAllowed = parsed.data.action === "APPROVE" && checkout.invoice.createdByUserId === auth.session.userId &&
+         await hasRetailSelfApprovalGrant(organizationId, auth.session.userId, checkout.siteId, "INVOICE");
+       if (!financeAllowed && !selfAllowed) throw new EnterpriseRetailError("RETAIL_SITE_ACCESS_DENIED", 403);
     }
     if (checkout.invoice.revision !== parsed.data.revision) throw new EnterpriseRetailError("RETAIL_INVOICE_REVISION_CONFLICT", 409);
 

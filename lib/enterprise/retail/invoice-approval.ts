@@ -2,7 +2,7 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { resolveEnterpriseModuleAccess } from "@/lib/enterprise/module-access";
 import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
-import { requireRetailSiteCapability, retailFinanceReadSiteScope, retailStaffIsolationIsEnabled, RETAIL_OWNER_ROLES } from "@/lib/enterprise/retail/site-access";
+import { requireRetailSiteCapability, retailFinanceReadSiteScope, retailStaffIsolationIsEnabled, RETAIL_OWNER_ROLES, hasRetailSelfApprovalGrant } from "@/lib/enterprise/retail/site-access";
 
 type RetailApprovalReader = Pick<Prisma.TransactionClient, "enterpriseRetailInvoiceCheckout" | "enterpriseRetailInvoicePaymentProposal" | "enterpriseRetailConfiguration" | "organizationMember">;
 
@@ -31,11 +31,17 @@ export async function listRetailInvoiceFinanceApprovers(
   await requireRetailSiteCapability(organizationId, requesterUserId, siteId, target === "PAYMENT" ? "COLLECT_PAYMENT" : "PREPARE_INVOICE", database, { requireAssignment: true });
 
   const members = await database.organizationMember.findMany({
-    where: { organizationId, status: "ACTIVE", removedAt: null, userId: { not: requesterUserId } },
+    where: { organizationId, status: "ACTIVE", removedAt: null },
     take: 250, orderBy: { user: { name: "asc" } },
     select: { userId: true, role: true, positionTitle: true, user: { select: { name: true, email: true } } },
   });
   const candidates = await Promise.all(members.map(async (member) => {
+    if (member.userId === requesterUserId) {
+      return await hasRetailSelfApprovalGrant(organizationId, requesterUserId, siteId, target, database) ? {
+        userId: member.userId, name: member.user.name, email: member.user.email,
+        positionTitle: member.positionTitle, role: member.role, isRequester: true, selfApprovalOverride: true,
+      } : null;
+    }
     const access = await resolveEnterpriseModuleAccess({
       userId: member.userId, organizationId, moduleCode: target === "PAYMENT" ? "FINANCE_PAYMENTS" : "FINANCE_RECEIVABLES", action: "approve",
     });
@@ -45,7 +51,8 @@ export async function listRetailInvoiceFinanceApprovers(
       positionTitle: member.positionTitle, role: member.role, isRequester: false, selfApprovalOverride: false,
     } : null;
   }));
-  return { candidates: candidates.filter((candidate): candidate is NonNullable<typeof candidate> => Boolean(candidate)), selfApprovalOverrideAvailable: false };
+  return { candidates: candidates.filter((candidate): candidate is NonNullable<typeof candidate> => Boolean(candidate)),
+    selfApprovalOverrideAvailable: candidates.some((candidate) => candidate?.selfApprovalOverride === true) };
 }
 
 export async function listRetailInvoicePaymentFinanceApprovers(
@@ -64,7 +71,12 @@ export async function assertRetailPaymentFinanceApproverTx(
     select: { recordedByUserId: true },
   });
   if (!proposal || proposal.recordedByUserId !== input.requesterUserId) throw new EnterpriseRetailError("RETAIL_INVOICE_PAYMENT_NOT_FOUND", 404);
-  if (input.requesterUserId === input.approverUserId) throw new EnterpriseRetailError("RETAIL_INVOICE_SELF_APPROVAL_FORBIDDEN", 403);
+  if (input.requesterUserId === input.approverUserId) {
+    if (!await hasRetailSelfApprovalGrant(input.organizationId, input.requesterUserId, input.siteId, "PAYMENT", tx)) {
+      throw new EnterpriseRetailError("RETAIL_INVOICE_SELF_APPROVAL_FORBIDDEN", 403);
+    }
+    return;
+  }
   const result = await listRetailInvoicePaymentFinanceApprovers(input.organizationId, input.requesterUserId, input.siteId, tx);
   if (!result.candidates.some((candidate) => candidate.userId === input.approverUserId)) throw new EnterpriseRetailError("RETAIL_INVOICE_APPROVER_NOT_ELIGIBLE", 403);
 }
@@ -80,7 +92,12 @@ export async function assertRetailInvoiceFinanceApproverTx(
     select: { id: true },
   });
   if (!checkout) throw new EnterpriseRetailError("RETAIL_INVOICE_NOT_FOUND", 404);
-  if (input.requesterUserId === input.approverUserId) throw new EnterpriseRetailError("RETAIL_INVOICE_SELF_APPROVAL_FORBIDDEN", 403);
+  if (input.requesterUserId === input.approverUserId) {
+    if (!await hasRetailSelfApprovalGrant(input.organizationId, input.requesterUserId, input.siteId, "INVOICE", tx)) {
+      throw new EnterpriseRetailError("RETAIL_INVOICE_SELF_APPROVAL_FORBIDDEN", 403);
+    }
+    return;
+  }
   const result = await listRetailInvoiceFinanceApprovers(input.organizationId, input.requesterUserId, input.siteId, tx);
   if (!result.candidates.some((candidate) => candidate.userId === input.approverUserId)) {
     throw new EnterpriseRetailError("RETAIL_INVOICE_APPROVER_NOT_ELIGIBLE", 403);
