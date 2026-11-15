@@ -5,6 +5,7 @@ import { EnterpriseAdminExportMenu, EnterpriseAdminListToolbar, EnterpriseAdminP
 import { StatusBadge } from "@/components/workspace/status-badge";
 import type { EnterpriseAuditItem, EnterpriseMemberItem, EnterpriseModuleConfigurationIssue } from "@/lib/enterprise/enterprise-admin-types";
 import type { ProfessionalReportExportModel } from "@/lib/reporting/professional-export";
+import { auditActionLabel, auditEntityLabel, auditSearchCode, auditValueLabel } from "@/lib/enterprise/audit-event-i18n";
 
 type AuditPage = { items: EnterpriseAuditItem[]; pagination: { total: number; pageCount: number } };
 
@@ -18,6 +19,7 @@ export function EnterpriseAdminAuditHistory({ organizationId, organizationName, 
   locale?: string | null;
 }) {
   const english = locale === "en";
+  const displayLocale = english ? "en" : "fr";
   const [search, setSearch] = useState("");
   const [risk, setRisk] = useState<string>("ALL");
   const [from, setFrom] = useState("");
@@ -34,7 +36,7 @@ export function EnterpriseAdminAuditHistory({ organizationId, organizationName, 
       setBusy(true);
       try {
         const params = new URLSearchParams({ page: String(page), pageSize: "30" });
-        if (search.trim()) params.set("action", search.trim());
+        if (search.trim()) params.set("action", auditSearchCode(search, displayLocale));
         if (risk !== "ALL") params.set("risk", risk);
         if (from) params.set("from", `${from}T00:00:00.000Z`);
         if (to) params.set("to", `${to}T23:59:59.999Z`);
@@ -62,20 +64,20 @@ export function EnterpriseAdminAuditHistory({ organizationId, organizationName, 
     chart: [], columns: [
       { key: "at", label: english ? "Date" : "Date" }, { key: "actor", label: english ? "Actor" : "Acteur" },
       { key: "action", label: "Action" }, { key: "result", label: english ? "Result" : "Résultat" },
-      { key: "risk", label: english ? "Risk" : "Risque" }, { key: "reason", label: "Reason code" },
+      { key: "risk", label: english ? "Risk" : "Risque" }, { key: "reason", label: english ? "Reason" : "Motif" },
     ],
-    rows: items.map((item) => ({ at: new Date(item.createdAt).toLocaleString(english ? "en" : "fr"), actor: names.get(item.userId || "") || item.userId || "—", action: item.action, result: item.result, risk: item.riskLevel || "—", reason: item.reasonCode || "—" })),
+    rows: items.map((item) => ({ at: new Date(item.createdAt).toLocaleString(english ? "en" : "fr"), actor: names.get(item.userId || "") || item.userId || "—", action: auditActionLabel(item.action, displayLocale), result: auditValueLabel(item.result, displayLocale), risk: auditValueLabel(item.riskLevel, displayLocale), reason: auditValueLabel(item.reasonCode, displayLocale) })),
     insights: [{ title: english ? "Export scope" : "Périmètre de l’export", body: english ? "This document contains only the displayed page; use the complete secured CSV export for the full audit." : "Ce document contient uniquement la page affichée ; utilisez l’export CSV sécurisé pour l’historique intégral." }],
-    filters: [{ label: "Action", value: search || "—" }, { label: english ? "Risk" : "Risque", value: risk }, { label: english ? "From" : "Du", value: from || "—" }, { label: english ? "Until" : "Au", value: to || "—" }],
+    filters: [{ label: "Action", value: search || "—" }, { label: english ? "Risk" : "Risque", value: auditValueLabel(risk, displayLocale) }, { label: english ? "From" : "Du", value: from || "—" }, { label: english ? "Until" : "Au", value: to || "—" }],
   };
 
   return <div className="space-y-3">
     {issues.length ? <details className="rounded-xl border border-amber-500/40 bg-amber-500/5 p-3">
       <summary className="min-h-8 cursor-pointer text-sm font-black text-amber-800 dark:text-amber-300">{issues.length} {english ? "configuration warnings" : "points de cohérence à vérifier"}</summary>
-      <div className="mt-2 space-y-2">{issues.map((issue, index) => <div key={`${issue.code}-${index}`} className="rounded-lg border border-dtsc-border bg-dtsc-surface p-3 text-xs text-dtsc-ink"><StatusBadge tone={issue.severity === "ERROR" ? "danger" : "warning"}>{issue.severity}</StatusBadge><span className="ml-2 font-bold">{issue.moduleLabel || issue.code}</span><p className="mt-1 text-dtsc-muted">{issue.message}</p></div>)}</div>
+      <div className="mt-2 space-y-2">{issues.map((issue, index) => <div key={`${issue.code}-${index}`} className="rounded-lg border border-dtsc-border bg-dtsc-surface p-3 text-xs text-dtsc-ink"><StatusBadge tone={issue.severity === "ERROR" ? "danger" : "warning"}>{auditValueLabel(issue.severity, displayLocale)}</StatusBadge><span className="ml-2 font-bold">{issue.moduleLabel || issue.code}</span><p className="mt-1 text-dtsc-muted">{issue.message}</p></div>)}</div>
     </details> : <p className="rounded-xl bg-emerald-500/10 p-3 text-xs font-bold text-emerald-700 dark:text-emerald-300">{english ? "No detected module configuration inconsistencies." : "Aucune incohérence de configuration des modules détectée."}</p>}
     <EnterpriseAdminListToolbar search={search} onSearchChange={(value) => { setSearch(value); setPage(1); }} searchPlaceholder={english ? "Search audit actions…" : "Rechercher une action d’audit…"}
-      filters={riskCodes.map((code) => ({ value: code, label: code === "ALL" ? (english ? "All risks" : "Tous les risques") : code }))}
+      filters={riskCodes.map((code) => ({ value: code, label: code === "ALL" ? (english ? "All risks" : "Tous les risques") : auditValueLabel(code, displayLocale) }))}
       filter={risk} onFilterChange={(value) => { setRisk(value); setPage(1); }} resultCount={data?.pagination.total} locale={locale}>
       <EnterpriseAdminExportMenu model={exportModel} locale={locale} />
     </EnterpriseAdminListToolbar>
@@ -90,8 +92,8 @@ export function EnterpriseAdminAuditHistory({ organizationId, organizationName, 
       {busy && <p role="status" className="p-3 text-sm text-dtsc-muted">{english ? "Loading audit events…" : "Chargement de l’audit…"}</p>}
       {!busy && !items.length && !error && <p className="rounded-xl bg-dtsc-page p-4 text-sm text-dtsc-muted">{english ? "No event matches these filters." : "Aucun événement ne correspond à ces filtres."}</p>}
       {items.map((item) => <article key={item.id} className="flex flex-wrap items-start justify-between gap-2 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2.5">
-        <div className="min-w-0 flex-1"><p className="break-words text-sm font-black text-dtsc-ink">{item.action.replaceAll("_", " ")}</p><p className="mt-1 text-xs text-dtsc-muted">{names.get(item.userId || "") || (english ? "Authorized actor" : "Acteur autorisé")} · {new Date(item.createdAt).toLocaleString(english ? "en" : "fr")} · {item.entity}</p><p className="mt-1 text-xs text-dtsc-muted">{item.reasonCode || "—"}</p></div>
-        <div className="flex gap-1"><StatusBadge tone={item.result === "FAILED" || item.result === "DENIED" ? "danger" : "success"}>{item.result}</StatusBadge><StatusBadge tone={item.riskLevel === "HIGH" || item.riskLevel === "CRITICAL" ? "warning" : "neutral"}>{item.riskLevel || "—"}</StatusBadge></div>
+        <div className="min-w-0 flex-1"><p className="break-words text-sm font-black text-dtsc-ink">{auditActionLabel(item.action, displayLocale)}</p><p className="mt-1 text-xs text-dtsc-muted">{names.get(item.userId || "") || (english ? "Authorized actor" : "Acteur autorisé")} · {new Date(item.createdAt).toLocaleString(english ? "en" : "fr")} · {auditEntityLabel(item.entity, displayLocale)}</p><p className="mt-1 text-xs text-dtsc-muted">{auditValueLabel(item.reasonCode, displayLocale)}</p><details className="mt-2 rounded-lg border border-dtsc-border/70 p-2 text-xs"><summary className="cursor-pointer font-semibold text-dtsc-blue">{english ? "Technical details and traceability" : "Détails techniques et traçabilité"}</summary><div className="mt-2 grid min-w-0 gap-1 text-dtsc-muted"><p>{english ? "Action code" : "Code action"} : <code>{item.action}</code></p><p>{english ? "Document" : "Document"} : {item.entityId || "—"}</p><p>{english ? "Reason code" : "Code motif"} : <code>{item.reasonCode || "—"}</code></p><p>{english ? "Trace" : "Trace"} : {item.requestId || "—"}</p>{item.metadata ? <pre className="max-h-44 overflow-auto whitespace-pre-wrap break-all rounded-md bg-dtsc-page p-2 text-xs">{JSON.stringify(item.metadata, null, 2)}</pre> : null}</div></details></div>
+        <div className="flex gap-1"><StatusBadge tone={item.result === "FAILED" || item.result === "DENIED" ? "danger" : "success"}>{auditValueLabel(item.result, displayLocale)}</StatusBadge><StatusBadge tone={item.riskLevel === "HIGH" || item.riskLevel === "CRITICAL" ? "warning" : "neutral"}>{auditValueLabel(item.riskLevel, displayLocale)}</StatusBadge></div>
       </article>)}
     </div>
     <EnterpriseAdminPagination page={page} pageCount={data?.pagination.pageCount || 1} onPageChange={setPage} locale={locale} />
