@@ -19,7 +19,7 @@ export const retailInvoiceReturnRequestSchema = z.object({
   lines: z.array(z.object({
     checkoutLineId: z.string().trim().min(1).max(191),
     quantity,
-    stockDisposition: z.enum(["RESTOCK", "QUARANTINE", "DISPOSE", "SERVICE_CREDIT"]),
+    stockDisposition: z.enum(["RESTOCK", "QUARANTINE", "DISPOSE", "SERVICE_CREDIT", "UNDELIVERED_CREDIT"]),
   }).strict()).min(1).max(100),
 }).strict();
 export const retailInvoiceReturnDecisionSchema = z.object({
@@ -187,6 +187,7 @@ export async function listRetailInvoiceReturnRequests(
         ["SUBMITTED", "INSPECTED"].includes(item.status) && item.approverUserId === actorUserId &&
         (item.requestedByUserId !== actorUserId || selfCanDecide) && item.inspectedByUserId !== actorUserId,
     }; }),
+    stockPostedAt: Boolean(checkout.stockPostedAt),
     canRequest: capabilities.canRequest && ["PAID", "CREDIT_NOTE", "PARTIALLY_PAID", "ISSUED", "OVERDUE"].includes(checkout.invoice.status) &&
       checkout.invoice.amountPaid.plus(checkout.invoice.amountCredited).plus(checkout.invoice.outstandingAmount).equals(checkout.invoice.grandTotal),
     pagination: { page, pageSize: 25, total, pageCount: Math.max(1, Math.ceil(total / 25)) },
@@ -325,8 +326,12 @@ export async function createRetailInvoiceReturnRequest(
       if (line.inventoryItemId && value.decimalPlaces() > 3) {
         throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_STOCK_QUANTITY_PRECISION", 409);
       }
-      if ((entry.stockDisposition === "RESTOCK" && !line.inventoryItemId) ||
-          (entry.stockDisposition === "SERVICE_CREDIT" && line.inventoryItemId)) {
+      // Never report a phantom physical return or put goods back in stock
+      // if their original invoice has not yet posted a sale-fulfilment exit.
+      const expectedUnfulfilled = Boolean(line.inventoryItemId) && !checkout.stockPostedAt;
+      if ((!line.inventoryItemId && entry.stockDisposition !== "SERVICE_CREDIT") ||
+          (expectedUnfulfilled && entry.stockDisposition !== "UNDELIVERED_CREDIT") ||
+          (line.inventoryItemId && checkout.stockPostedAt && !["RESTOCK", "QUARANTINE", "DISPOSE"].includes(entry.stockDisposition))) {
         throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_STOCK_DISPOSITION_INVALID", 409);
       }
       const invoiceItem = line.invoiceItem;

@@ -86,8 +86,10 @@ export async function assertRetailInvoiceReturnSettlementReadinessTx(
     if (!source || ids.has(source.id) || !line.quantity.greaterThan(0) ||
         line.quantity.greaterThan(source.invoiceItem.quantity) ||
         !line.refundAmount.greaterThan(0) || !line.refundAmount.equals(cents(line.refundAmount)) ||
-        !["RESTOCK", "QUARANTINE", "DISPOSE", "SERVICE_CREDIT"].includes(line.stockDisposition) ||
-        (line.stockDisposition === "SERVICE_CREDIT" && Boolean(source.inventoryItemId))) {
+        !["RESTOCK", "QUARANTINE", "DISPOSE", "SERVICE_CREDIT", "UNDELIVERED_CREDIT"].includes(line.stockDisposition) ||
+        (!source.inventoryItemId && line.stockDisposition !== "SERVICE_CREDIT") ||
+        (source.inventoryItemId && !checkout.stockPostedAt && line.stockDisposition !== "UNDELIVERED_CREDIT") ||
+        (source.inventoryItemId && checkout.stockPostedAt && !["RESTOCK", "QUARANTINE", "DISPOSE"].includes(line.stockDisposition))) {
       throw conflict("RETAIL_INVOICE_RETURN_SETTLEMENT_LINE_INVALID");
     }
     if (line.refundNetAmount === null || line.refundTaxAmount === null ||
@@ -107,7 +109,7 @@ export async function assertRetailInvoiceReturnSettlementReadinessTx(
       throw conflict("RETAIL_INVOICE_RETURN_STOCK_QUANTITY_PRECISION");
     }
     ids.add(source.id);
-    if (source.inventoryItemId) stockLines.push({
+    if (source.inventoryItemId && checkout.stockPostedAt) stockLines.push({
       returnLineId: line.id, checkoutLineId: source.id, invoiceItemId: source.invoiceItemId,
       quantity: line.quantity, stockDisposition: line.stockDisposition,
     });
