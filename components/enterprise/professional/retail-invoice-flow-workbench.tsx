@@ -36,7 +36,7 @@ type InvoiceResponse = {
 type Product = { id: string; name: string; code: string; sku?: string | null; currency: string | null; indicativeSalePrice: string | null; inventoryItemId: string | null; trackInventory: boolean; availableQuantity: string | null };
 type Line = { catalogItemId: string; name: string; code: string; quantity: number; currencyCode: string; unitPrice: string; inventoryItemId: string | null; stockLotId: string | null };
 type Lot = { id: string; inventoryItemId: string; lotNumber: string; expiryDate: string | null; quantityAvailable: string };
-type PricePreview = { subtotal: string; discountTotal: string; taxTotal: string; grandTotal: string; currencyCode: string; lines: { catalogItemId: string; resolvedUnitPrice: string; discountAmount: string; lineTotal: string }[] };
+type PricePreview = { subtotal: string; discountTotal: string; taxTotal: string; grandTotal: string; currencyCode: string; lines: { catalogItemId: string; resolvedUnitPrice: string; discountAmount: string; lineTotal: string; invoiceFx?: { sourceCurrencyCode: string; targetCurrencyCode: string; originalUnitPrice: string; rate: string; rateDate: string; rateId: string | null } }[] };
 
 const language = {
   fr: {
@@ -105,6 +105,19 @@ export function RetailInvoiceFlowWorkbench({ organizationId, organizationName, l
   const [customerId, setCustomerId] = useState<string | null>(null);
   const [customerName, setCustomerName] = useState("");
   const [pricing, setPricing] = useState<PricePreview | null>(null);
+  const [invoiceCurrency, setInvoiceCurrency] = useState("");
+  const [invoiceCurrencyError, setInvoiceCurrencyError] = useState("");
+  useEffect(() => {
+    if (mode !== "checkout") return;
+    let active = true;
+    void fetch(`/api/enterprise/${organizationId}/retail/invoice-currency`, { cache: "no-store" })
+      .then(async (response) => { const body = await response.json().catch(() => null) as { currencyCode?: string; message?: string } | null;
+        if (!response.ok || !body?.currencyCode) throw new Error(body?.message || (locale === "fr" ? "Configurez la devise fonctionnelle dans Finance." : "Configure the company's functional currency in Finance."));
+        if (active) { setInvoiceCurrency(body.currencyCode); setInvoiceCurrencyError(""); }
+      })
+      .catch((error) => { if (active) { setInvoiceCurrency(""); setInvoiceCurrencyError(customerFacingError(error, locale)); } });
+    return () => { active = false; };
+  }, [mode, organizationId, locale]);
   const [pricingLoading, setPricingLoading] = useState(false);
   const [pricingError, setPricingError] = useState("");
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -123,7 +136,7 @@ export function RetailInvoiceFlowWorkbench({ organizationId, organizationName, l
       ? current : warehouses.find((warehouse) => warehouse.siteId === preferredSiteId)?.id || "");
   }, [preferredSiteId, warehouses]);
   const chosenWarehouse = useMemo(() => warehouses.find((warehouse) => warehouse.id === warehouseId), [warehouseId, warehouses]);
-  const currencyCode = lines[0]?.currencyCode || "CDF";
+  const currencyCode = invoiceCurrency;
 
   const load = useCallback(async (nextPage = page, site = siteFilter) => {
     setLoading(true);
@@ -166,7 +179,7 @@ export function RetailInvoiceFlowWorkbench({ organizationId, organizationName, l
   }, [mode, organizationId]);
 
   useEffect(() => {
-    if (mode !== "checkout" || !data?.checkoutReady || !chosenWarehouse || !lines.length) {
+    if (mode !== "checkout" || !data?.checkoutReady || !chosenWarehouse || !lines.length || !invoiceCurrency) {
       setPricing(null); setPricingError(""); return;
     }
     const controller = new AbortController();
@@ -211,9 +224,7 @@ export function RetailInvoiceFlowWorkbench({ organizationId, organizationName, l
   }, [lines, organizationId, warehouseId]);
 
   function addProduct(product: Product) {
-    if (lines.length && lines[0].currencyCode !== (product.currency || "CDF")) {
-      setError(copy.currencyMismatch); return;
-    }
+    if (!invoiceCurrency) { setError(invoiceCurrencyError || (locale === "fr" ? "La devise de l’entreprise doit être configurée dans Finance." : "Company currency must be configured in Finance.")); return; }
     if (product.trackInventory && Number(product.availableQuantity || "0") <= 0) return;
     setLines((current) => current.some((line) => line.catalogItemId === product.id)
       ? current.map((line) => line.catalogItemId === product.id ? { ...line, quantity: line.quantity + 1 } : line)
@@ -228,7 +239,9 @@ export function RetailInvoiceFlowWorkbench({ organizationId, organizationName, l
     const esc = (value: unknown) => String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#39;");
     const rows = lines.map((line) => {
       const priced = pricing.lines.find((item) => item.catalogItemId === line.catalogItemId);
-      return `<tr><td>${esc(line.name)}<small>${esc(line.code)}</small></td><td class="num">${esc(line.quantity)}</td><td class="num">${esc(priced?.resolvedUnitPrice || line.unitPrice)}</td><td class="num">${esc(priced?.lineTotal || "0")}</td></tr>`;
+      const fx = priced?.invoiceFx;
+      const fxLabel = fx && fx.sourceCurrencyCode !== currencyCode ? `${fx.originalUnitPrice} ${fx.sourceCurrencyCode} × ${fx.rate} (${fx.rateDate.slice(0, 10)}) → ${currencyCode}` : "";
+      return `<tr><td>${esc(line.name)}<small>${esc(line.code)} ${esc(fxLabel)}</small></td><td class="num">${esc(line.quantity)}</td><td class="num">${esc(priced?.resolvedUnitPrice || "0")} ${esc(currencyCode)}</td><td class="num">${esc(priced?.lineTotal || "0")} ${esc(currencyCode)}</td></tr>`;
     }).join("");
     const html = `<!doctype html><html lang="${locale}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(copy.previewTitle)}</title><style>*{box-sizing:border-box}body{font-family:system-ui,Arial,sans-serif;max-width:790px;margin:0 auto;padding:24px;color:#14314c;background:white}.brand{border-bottom:3px solid #147ab7;padding-bottom:15px}.brand strong{color:#116da9;font-size:21px}.muted{color:#68788a;font-size:12px}.watermark{margin:18px 0;padding:10px;text-align:center;border:2px solid #d97706;color:#92400e;font-weight:800}table{width:100%;border-collapse:collapse;margin-top:20px;font-size:13px}td,th{border-bottom:1px solid #dce5ed;padding:9px 6px;text-align:left}th{background:#eaf4fc}small{display:block;color:#68788a}.num{text-align:right;font-variant-numeric:tabular-nums}.totals{max-width:310px;margin:20px 0 0 auto}.totals div{display:flex;justify-content:space-between;padding:5px 0}.grand{font-size:18px;font-weight:800;border-top:2px solid #147ab7}.print{background:#147ab7;color:white;padding:10px 18px;border:0;border-radius:9px;cursor:pointer}@page{size:A4;margin:12mm}@media print{body{padding:0}.print{display:none}}</style></head><body><header class="brand"><strong>${esc(organizationName || "DTSC Retail")}</strong><p>${esc(chosenWarehouse.siteName)} · ${esc(chosenWarehouse.name)}</p><p class="muted">${esc(customerName || (locale === "fr" ? "Client de passage" : "Walk-in customer"))}</p></header><div class="watermark">PRO FORMA · ${esc(copy.previewHint)}</div><table><thead><tr><th>${esc(copy.product)}</th><th class="num">${esc(copy.quantity)}</th><th class="num">${esc(locale === "fr" ? "Prix unitaire" : "Unit price")}</th><th class="num">${esc(copy.total)}</th></tr></thead><tbody>${rows}</tbody></table><div class="totals"><div><span>${esc(copy.subtotal)}</span><strong>${esc(money(pricing.subtotal, currencyCode, locale))}</strong></div><div><span>${esc(copy.discounts)}</span><strong>${esc(money(pricing.discountTotal, currencyCode, locale))}</strong></div><div><span>${esc(copy.tax)}</span><strong>${esc(money(pricing.taxTotal, currencyCode, locale))}</strong></div><div class="grand"><span>${esc(copy.total)}</span><strong>${esc(money(pricing.grandTotal, currencyCode, locale))}</strong></div></div><p class="muted">${esc(copy.invoiceOnly)}</p><button class="print" onclick="window.print()">${esc(locale === "fr" ? "Imprimer" : "Print")}</button></body></html>`;
     const url = URL.createObjectURL(new Blob([html], { type: "text/html;charset=utf-8" }));
@@ -237,7 +250,7 @@ export function RetailInvoiceFlowWorkbench({ organizationId, organizationName, l
   }
 
   async function prepare() {
-    if (!data?.checkoutReady || !chosenWarehouse || !lines.length || !pricing || pricingLoading || submitting) return;
+    if (!data?.checkoutReady || !chosenWarehouse || !lines.length || !pricing || !invoiceCurrency || pricingLoading || submitting) return;
     setSubmitting(true);
     try {
       if (!idempotencyKey.current) idempotencyKey.current = crypto.randomUUID();
@@ -326,8 +339,8 @@ export function RetailInvoiceFlowWorkbench({ organizationId, organizationName, l
           <h3 className="flex items-center gap-2 text-sm font-black text-dtsc-ink"><ShoppingBasket className="h-4 w-4 text-dtsc-blue" />{copy.lines} <span className="ml-auto text-xs text-dtsc-muted">{lines.length}</span></h3>
           {!lines.length ? <p className="rounded-lg bg-dtsc-page p-3 text-sm text-dtsc-muted">{copy.noLines}</p> : null}
           {lines.map((line) => <div key={line.catalogItemId} className="min-w-0 space-y-2 border-b border-dtsc-border pb-2">
-            <div className="flex min-w-0 items-start justify-between gap-2"><div className="min-w-0"><p className="break-words text-sm font-bold text-dtsc-ink">{line.name}</p><p className="text-xs text-dtsc-muted">{line.code} · {money(pricing?.lines.find((item) => item.catalogItemId === line.catalogItemId)?.resolvedUnitPrice || line.unitPrice, line.currencyCode, locale)}</p></div><Button type="button" size="sm" variant="outline" onClick={() => { idempotencyKey.current = ""; setLines((current) => current.filter((item) => item.catalogItemId !== line.catalogItemId)); }}><XCircle className="h-4 w-4" /></Button></div>
-            <label className="flex min-w-0 items-center gap-2 text-xs font-semibold text-dtsc-muted">{copy.quantity}<input type="number" min="0.001" max="1000000" step="0.001" value={line.quantity} onChange={(event) => { idempotencyKey.current = ""; setLines((current) => current.map((entry) => entry.catalogItemId === line.catalogItemId ? { ...entry, quantity: Number(event.target.value) } : entry)); }} className="min-h-10 w-24 min-w-0 rounded-lg border border-dtsc-border bg-dtsc-page px-2 text-sm" /><strong className="ml-auto text-dtsc-ink">{money(pricing?.lines.find((item) => item.catalogItemId === line.catalogItemId)?.lineTotal || String(Number(line.unitPrice) * line.quantity), line.currencyCode, locale)}</strong></label>
+            <div className="flex min-w-0 items-start justify-between gap-2"><div className="min-w-0"><p className="break-words text-sm font-bold text-dtsc-ink">{line.name}</p><p className="text-xs text-dtsc-muted">{line.code} · {money(line.unitPrice, line.currencyCode, locale)}{pricing?.lines.find((item) => item.catalogItemId === line.catalogItemId)?.invoiceFx && line.currencyCode !== currencyCode ? ` → ${money(pricing?.lines.find((item) => item.catalogItemId === line.catalogItemId)?.resolvedUnitPrice || "0", currencyCode, locale)}` : ""}</p></div><Button type="button" size="sm" variant="outline" onClick={() => { idempotencyKey.current = ""; setLines((current) => current.filter((item) => item.catalogItemId !== line.catalogItemId)); }}><XCircle className="h-4 w-4" /></Button></div>
+            <label className="flex min-w-0 items-center gap-2 text-xs font-semibold text-dtsc-muted">{copy.quantity}<input type="number" min="0.001" max="1000000" step="0.001" value={line.quantity} onChange={(event) => { idempotencyKey.current = ""; setLines((current) => current.map((entry) => entry.catalogItemId === line.catalogItemId ? { ...entry, quantity: Number(event.target.value) } : entry)); }} className="min-h-10 w-24 min-w-0 rounded-lg border border-dtsc-border bg-dtsc-page px-2 text-sm" /><strong className="ml-auto text-dtsc-ink">{money(pricing?.lines.find((item) => item.catalogItemId === line.catalogItemId)?.lineTotal || "0", currencyCode || line.currencyCode, locale)}</strong></label>
             {line.inventoryItemId && lots.some((lot) => lot.inventoryItemId === line.inventoryItemId) ? <label className="block min-w-0 text-xs font-semibold text-dtsc-muted">{copy.lot}<select value={line.stockLotId || ""} onChange={(event) => { idempotencyKey.current = ""; setLines((current) => current.map((entry) => entry.catalogItemId === line.catalogItemId ? { ...entry, stockLotId: event.target.value || null } : entry)); }} className="mt-1 block min-h-10 w-full min-w-0 rounded-lg border border-dtsc-border bg-dtsc-page px-2 text-sm"><option value="">{copy.chooseLot}</option>{lots.filter((lot) => lot.inventoryItemId === line.inventoryItemId && Number(lot.quantityAvailable) > 0).map((lot) => <option key={lot.id} value={lot.id}>{lot.lotNumber} · {lot.quantityAvailable}</option>)}</select></label> : null}
           </div>)}
           <p role="note" className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs leading-5 text-dtsc-ink">
@@ -335,6 +348,8 @@ export function RetailInvoiceFlowWorkbench({ organizationId, organizationName, l
               ? "Finance invoices use server-validated prices and VAT. Retail promotions and coupons are temporarily unavailable in this flow until their redemption ledger can be linked to Finance invoices without bypassing usage limits."
               : "Les factures Finance utilisent les prix et la TVA vérifiés par le serveur. Les promotions et coupons Retail restent indisponibles dans ce circuit tant que leur registre d’utilisation n’est pas relié aux factures Finance, sans contourner les limites."}
           </p>
+          {invoiceCurrencyError ? <p role="alert" className="text-xs font-semibold text-red-600">{invoiceCurrencyError}</p> : null}
+          {invoiceCurrency ? <p className="text-xs font-semibold text-cyan-700 dark:text-cyan-300">{locale === "fr" ? "Devise de la facture définie dans Finance" : "Invoice currency from Finance"} : {invoiceCurrency}. {locale === "fr" ? "Les articles en devises différentes sont convertis au taux enregistré." : "Foreign-currency items use registered Finance rates."}</p> : null}
           {pricingLoading ? <p role="status" className="text-xs text-dtsc-muted">{locale === "fr" ? "Calcul des prix et taxes…" : "Calculating prices and taxes…"}</p> : null}
           {pricingError ? <p role="alert" className="text-xs font-semibold text-red-700 dark:text-red-300">{pricingError}</p> : null}
           <div className="flex items-center justify-between gap-2 border-t border-dtsc-border pt-3"><span className="text-sm font-black text-dtsc-ink">{copy.total}</span><strong className="text-lg text-dtsc-blue">{money(pricing?.grandTotal || "0", currencyCode, locale)}</strong></div>
