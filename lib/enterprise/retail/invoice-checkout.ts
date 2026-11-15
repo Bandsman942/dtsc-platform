@@ -248,7 +248,8 @@ export async function postPaidRetailInvoiceStockTx(
   });
   if (!checkout || checkout.stockPostedAt) return;
   if (!["PAID", "CREDIT_NOTE"].includes(checkout.invoice.status) || !checkout.invoice.outstandingAmount.isZero() ||
-      !checkout.invoice.amountPaid.plus(checkout.invoice.amountCredited).equals(checkout.invoice.grandTotal)) {
+      (checkout.invoice.status === "CREDIT_NOTE" &&
+        !checkout.invoice.amountPaid.plus(checkout.invoice.amountCredited).equals(checkout.invoice.grandTotal))) {
     throw new EnterpriseRetailError("RETAIL_INVOICE_NOT_FULLY_PAID", 409);
   }
 

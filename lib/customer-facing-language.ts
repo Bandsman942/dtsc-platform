@@ -17,6 +17,8 @@ const GENERIC_ERROR: Bilingual = {
 };
 
 const ERROR_MESSAGES: Record<string, Bilingual> = {
+  RETAIL_INVOICE_RETURN_FINANCE_APPROVER_INDEPENDENT_REQUIRED: { fr: "Désignez un autre validateur Finance autorisé pour les créances et remboursements de cette boutique.", en: "Select a separate Finance approver authorized for this store's receivables and refunds." },
+  RETAIL_INVOICE_RETURN_SETTLEMENT_PAYOUT_CONFLICT: { fr: "Le trop-perçu a évolué depuis la préparation Finance. Réconciliez les paiements et actualisez la demande.", en: "The refundable excess has changed since Finance preparation. Reconcile payments and refresh the request." },
   RETAIL_LEGACY_SALE_DISABLED_USE_INVOICE: {
     fr: "La facturation Finance est active : préparez la facture dans Vente comptoir, faites-la valider puis émettre, et encaissez-la dans Encaissements. La vente directe historique est désactivée.",
     en: "Finance invoice checkout is active: prepare an invoice at the counter, have it approved and issued, then collect it in Collections. Legacy direct sales are disabled.",

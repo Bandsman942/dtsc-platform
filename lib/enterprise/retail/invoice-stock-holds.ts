@@ -40,7 +40,7 @@ export async function readActiveRetailInvoiceStockHoldsTx(
     stockLotId: line.stockLotId,
     warehouseId: line.checkout.warehouseId,
     quantity: Prisma.Decimal.max(0, new Prisma.Decimal(line.invoiceItem.quantity).minus(
-      line.returnLines.reduce((total, entry) => total.plus(entry.quantity), new Prisma.Decimal(0)),
+      (line.returnLines || []).reduce((total, entry) => total.plus(entry.quantity), new Prisma.Decimal(0)),
     )),
   })).filter((line) => line.quantity.greaterThan(0));
 }
