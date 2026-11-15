@@ -5,7 +5,7 @@ import { civilMidnightUtc, followingCivilDate, isCivilDate } from "@/lib/enterpr
 import { authorizeRetailRequest, retailErrorResponse, retailListParams } from "@/lib/enterprise/retail/http";
 import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
 import { resolveEnterpriseModuleAccess } from "@/lib/enterprise/module-access";
-import { retailFinanceReadSiteScope, RETAIL_OWNER_ROLES, siteStaffCapabilities, hasExplicitRetailSelfApproval } from "@/lib/enterprise/retail/site-access";
+import { retailFinanceReadSiteScope, RETAIL_OWNER_ROLES, siteStaffCapabilities, hasRetailSelfApprovalGrant } from "@/lib/enterprise/retail/site-access";
 import { prisma } from "@/lib/prisma";
 
 type Params = { params: Promise<{ organizationId: string }> };
@@ -39,7 +39,9 @@ export async function GET(req: Request, { params }: Params) {
     const owners = RETAIL_OWNER_ROLES.has(membership.role);
     const financeScope = financeAccess.allowed ? await retailFinanceReadSiteScope(organizationId, auth.session.userId, "VIEW_SALES") : [];
     const issuerSites = assignments.filter((assignment) => siteStaffCapabilities(assignment.roleCode, assignment.permissionsJson).includes("ISSUE_INVOICE")).map((assignment) => assignment.siteId);
-    const selfSites = assignments.filter((assignment) => hasExplicitRetailSelfApproval(assignment, "INVOICE")).map((assignment) => assignment.siteId);
+    const selfSites = (await Promise.all(assignments.map(async (assignment) =>
+      await hasRetailSelfApprovalGrant(organizationId, auth.session.userId, assignment.siteId, "INVOICE") ? assignment.siteId : null,
+    ))).filter((id): id is string => id !== null);
     if (view === "approvals" && !financeAccess.allowed && !selfSites.length) throw new EnterpriseRetailError("RETAIL_SITE_ACCESS_DENIED", 403);
     if (view === "issue" && !owners && !issuerSites.length && !financeAccess.allowed) throw new EnterpriseRetailError("RETAIL_SITE_ACCESS_DENIED", 403);
 

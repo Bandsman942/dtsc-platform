@@ -54,6 +54,10 @@ export async function GET(req: Request, { params }: Params) {
       };
     }),
     capabilities: RETAIL_SITE_CAPABILITIES, defaults: ROLE_DEFAULT_CAPABILITIES,
+    canGrantSelfApproval: Boolean(await prisma.organizationMember.findFirst({
+      where: { organizationId, userId: auth.session.userId, role: "OWNER", status: "ACTIVE", removedAt: null },
+      select: { id: true },
+    })),
     isolationEnabled: retailStaffIsolationIsEnabled(configuration?.settingsJson),
   }, { headers: { "Cache-Control": "private, no-store" } });
 }
