@@ -30,7 +30,7 @@ check("Grant is owner only", [assignment], [/role: "OWNER"/, /RETAIL_SITE_SELF_A
 check("Grant dependencies validated", [assignment], [/RETAIL_SITE_SELF_APPROVAL_DEPENDENCY/, /PREPARE_INVOICE/, /COLLECT_PAYMENT/]);
 check("Grant before/after audit", [assignment], [/riskLevel:/, /before: existing/, /after: \{ roleCode:/, /selfApprovalGrants/]);
 check("Owner only self UI", [ui], [/canGrantSelfApproval/, /disabled=\{capability.startsWith\("SELF_APPROVE_"\)/]);
-check("FR/EN self rights", [ui], [/Valider soi-même/, /Approve own invoices/, /Auto-/]);
+check("FR/EN self rights", [ui], [/Valider soi-même/, /Approve own invoices/, /owner-granted exception/]);
 check("Retail invoice candidates include authorized self", [invoice], [/hasRetailSelfApprovalGrant/, /isRequester: true/, /selfApprovalOverride: true/]);
 check("Invoice and payment guards in transaction", [invoice], [/assertRetailInvoiceFinanceApproverTx/, /assertRetailPaymentFinanceApproverTx/, /"PAYMENT", tx/, /"INVOICE", tx/]);
 check("Finance decision rechecks Retail site", [approval], [/enterpriseRetailInvoiceCheckout.findFirst/, /enterpriseRetailInvoicePaymentProposal.findFirst/, /hasRetailSelfApprovalGrant/]);
