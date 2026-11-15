@@ -19,7 +19,7 @@ export const retailInvoiceReturnRequestSchema = z.object({
   lines: z.array(z.object({
     checkoutLineId: z.string().trim().min(1).max(191),
     quantity,
-    stockDisposition: z.enum(["RESTOCK", "QUARANTINE", "DISPOSE"]),
+    stockDisposition: z.enum(["RESTOCK", "QUARANTINE", "DISPOSE", "SERVICE_CREDIT"]),
   }).strict()).min(1).max(100),
 }).strict();
 export const retailInvoiceReturnDecisionSchema = z.object({
@@ -115,7 +115,7 @@ export async function listRetailInvoiceReturnRequests(
     prisma.enterpriseRetailInvoiceReturnRequest.findMany({
       where, orderBy: { createdAt: "desc" }, skip: (page - 1) * 25, take: 25,
       select: {
-        id: true, number: true, status: true, reason: true, refundAmount: true,
+        id: true, number: true, status: true, reason: true, refundAmount: true, refundPayoutAmount: true,
         requestedByUserId: true, approverUserId: true, inspectedByUserId: true,
         preparedByUserId: true, refundPayment: { select: { status: true } },
         refundLegs: { select: { refundPayment: { select: { status: true } } } },
@@ -163,7 +163,7 @@ export async function listRetailInvoiceReturnRequests(
       const approvedPayouts = payoutStatuses.filter((status) => status === "APPROVED").length;
       return {
       id: item.id, number: item.number, status: item.status, reason: item.reason,
-      refundAmount: item.refundAmount, inspectedAt: item.inspectedAt,
+      refundAmount: item.refundAmount, refundPayoutAmount: item.refundPayoutAmount, inspectedAt: item.inspectedAt,
       inspectionNotes: item.inspectionNotes, decidedAt: item.decidedAt,
       decisionReason: item.decisionReason, revision: item.revision,
       createdAt: item.createdAt, lines: item.lines,
@@ -175,7 +175,8 @@ export async function listRetailInvoiceReturnRequests(
       canPrepareFinance: canPrepareFinance && item.status === "APPROVED" &&
         item.requestedByUserId !== actorUserId && item.approverUserId !== actorUserId,
       canSettleFinance: canSettleFinance && item.status === "FINANCE_PENDING" &&
-        payoutStatuses.length > 0 && approvedPayouts === payoutStatuses.length &&
+        (item.refundPayoutAmount?.isZero() || payoutStatuses.length > 0) &&
+        approvedPayouts === payoutStatuses.length &&
         item.salesCreditNote?.status === "APPROVED" &&
         ![item.requestedByUserId, item.approverUserId, item.inspectedByUserId,
           item.preparedByUserId].includes(actorUserId),
@@ -324,7 +325,8 @@ export async function createRetailInvoiceReturnRequest(
       if (line.inventoryItemId && value.decimalPlaces() > 3) {
         throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_STOCK_QUANTITY_PRECISION", 409);
       }
-      if (entry.stockDisposition === "RESTOCK" && !line.inventoryItemId) {
+      if ((entry.stockDisposition === "RESTOCK" && !line.inventoryItemId) ||
+          (entry.stockDisposition === "SERVICE_CREDIT" && line.inventoryItemId)) {
         throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_STOCK_DISPOSITION_INVALID", 409);
       }
       const invoiceItem = line.invoiceItem;

@@ -86,7 +86,8 @@ export async function assertRetailInvoiceReturnSettlementReadinessTx(
     if (!source || ids.has(source.id) || !line.quantity.greaterThan(0) ||
         line.quantity.greaterThan(source.invoiceItem.quantity) ||
         !line.refundAmount.greaterThan(0) || !line.refundAmount.equals(cents(line.refundAmount)) ||
-        !["RESTOCK", "QUARANTINE", "DISPOSE"].includes(line.stockDisposition)) {
+        !["RESTOCK", "QUARANTINE", "DISPOSE", "SERVICE_CREDIT"].includes(line.stockDisposition) ||
+        (line.stockDisposition === "SERVICE_CREDIT" && Boolean(source.inventoryItemId))) {
       throw conflict("RETAIL_INVOICE_RETURN_SETTLEMENT_LINE_INVALID");
     }
     if (line.refundNetAmount === null || line.refundTaxAmount === null ||
