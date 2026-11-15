@@ -1,3 +1,11 @@
+## 2026-11-15 — #1187 Retail FX, propriétaire et commandes fournisseurs — v1.18.3 candidate (E2E requis)
+
+- Correctif d'identification du propriétaire réel dans POS > Accès du personnel, pour délégations par boutique.
+- Cotation de factures Retail avec catalogues en devises mixtes et taux de Finance datés, snapshot de conversion par ligne et pro forma enrichie. Aucun taux deviné.
+- Commandes fournisseurs : actions de validation assignées, revue préalable des pièces, design 2.0 avec statuts, filtres, dates et exports premium.
+- **Issue #1187 non close** : les annulations de factures partiellement encaissées, les acomptes et le split avoir/remboursement requièrent un moteur transactionnel supplémentaire, sans contourner les contrôles Finance.
+- Documentation `docs/HOTFIX_1187_RETAIL_FX_PROCUREMENT.md` ; aucune fusion ni mise en production avant validation.
+
 ## 2026-11-15 — HOTFIX RETAIL #1184 — v1.18.2 candidate (E2E propriétaire requis)
 
 - POS > Accès des collaborateurs : trois habilitations explicitement réservées au propriétaire et OFF par défaut, limitées à l'affectation par boutique : auto-approbation de facture, d'encaissement, et décision du gérant sur son annulation payée.
