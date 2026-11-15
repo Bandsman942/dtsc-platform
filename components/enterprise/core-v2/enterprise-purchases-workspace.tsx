@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle2, Eye, FilePlus2, PackageCheck, Pencil, Plus, Send, ShoppingCart, XCircle } from "lucide-react";
+import { CheckCircle2, Eye, FilePlus2, PackageCheck, Pencil, Plus, Send, ShoppingCart, XCircle, ShieldCheck, ShieldX } from "lucide-react";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { BusinessList, BusinessListItem } from "@/components/workspace/business-list";
 import { ContextActions, type BusinessContextAction } from "@/components/workspace/context-actions";
@@ -25,15 +25,16 @@ import {
 } from "@/components/enterprise/core-v2/erp-v2-ui";
 import { enterpriseV2Mutation, useEnterpriseV2Collection } from "@/components/enterprise/core-v2/use-enterprise-v2-collection";
 import { EnterpriseApproverSelect } from "@/components/enterprise/enterprise-approver-select";
+import { FinanceDateFilter, FinanceExportControls } from "@/components/enterprise/professional/finance-design2-controls";
 import type { ProcurementUiCapabilities } from "@/components/enterprise/professional/enterprise-procurement-operations-workspace";
 import { enterpriseCoreT, type EnterpriseCoreKey } from "@/lib/enterprise-core-i18n";
 import { purchaseFormGuidance, type PurchaseFormGuidanceKey } from "@/lib/enterprise/purchase-form-i18n";
 
-type PurchaseListItem = { id: string; reference: string; title: string; description: string | null; status: string; priority: string; supplierId: string | null; requestedByUserId: string; buyerUserId: string | null; createdByUserId: string; departmentId: string | null; requestId: string | null; budgetLineId: string | null; currency: string; totalAmount: string | number; expectedAt: string | null; revision: number; createdAt: string; supplier: { id: string; legalName: string; displayName: string | null; status: string } | null; budgetLine: { id: string; name: string; budget: { id: string; reference: string; title: string; currency: string; status: string } } | null; _count: { items: number; receipts: number } };
+type PurchaseListItem = { pendingAssignedApproval?: { id: string; revision: number } | null; id: string; reference: string; title: string; description: string | null; status: string; priority: string; supplierId: string | null; requestedByUserId: string; buyerUserId: string | null; createdByUserId: string; departmentId: string | null; requestId: string | null; budgetLineId: string | null; currency: string; totalAmount: string | number; expectedAt: string | null; revision: number; createdAt: string; supplier: { id: string; legalName: string; displayName: string | null; status: string } | null; budgetLine: { id: string; name: string; budget: { id: string; reference: string; title: string; currency: string; status: string } } | null; _count: { items: number; receipts: number } };
 type PurchaseDetail = PurchaseListItem & { items: Array<{ id: string; description: string; quantity: string | number; unit: string; unitPrice: string | number; taxRate: string | number; lineTotal: string | number }>; receipts: Array<{ id: string; reference: string; receivedAt: string; items: Array<{ purchaseItemId: string; quantityReceived: string | number }> }>; supplier: PurchaseListItem["supplier"] };
 type PurchaseOperationalLink = { id: string; siteId: string | null; destinationWarehouseId: string | null; expectedReceiptType: string } | null;
 type PurchaseItemCatalogLink = { purchaseItemId: string; catalogItemId: string | null; unitOfMeasureId: string | null; expectedItemType: string };
-type DetailPayload = { purchase: PurchaseDetail; approvals: Array<{ id: string; status: string; approverUserId: string; decisionComment: string | null }>; events: Array<{ id: string; summary: string; createdAt: string }>; comments: Array<{ id: string; content: string; createdAt: string }>; operationalLink: PurchaseOperationalLink; itemCatalogLinks: PurchaseItemCatalogLink[] };
+type DetailPayload = { purchase: PurchaseDetail; approvals: Array<{ id: string; status: string; revision: number; approverUserId: string; decisionComment: string | null }>; events: Array<{ id: string; summary: string; createdAt: string }>; comments: Array<{ id: string; content: string; createdAt: string }>; operationalLink: PurchaseOperationalLink; itemCatalogLinks: PurchaseItemCatalogLink[] };
 type SupplierChoice = EnterpriseChoice & { status?: string };
 type LegacyRecord = { id: string; title: string; description: string | null; status: string; updatedAt: string };
 type CatalogChoice = { id: string; code: string; sku: string | null; name: string; itemType: string; currency: string | null; indicativeCost: string | number | null; unitOfMeasure: { id: string; code: string; symbol: string; name: string } };
@@ -46,13 +47,20 @@ type PendingPurchaseAction = { item: PurchaseListItem; action: "ORDER" | "CLOSE"
 const purchaseStatuses = ["DRAFT", "PENDING_APPROVAL", "APPROVED", "ORDERED", "PARTIALLY_RECEIVED", "RECEIVED", "CLOSED", "REJECTED", "CANCELLED"];
 const emptyDraftItem = (): DraftItem => ({ catalogItemId: "", description: "", quantity: "1", unit: "", unitPrice: "0", taxRate: "0" });
 
-export function EnterprisePurchasesWorkspace({ organizationId, members, departments, capabilities, locale, legacyRecords = [] }: { organizationId: string; members: EnterpriseChoice[]; departments: EnterpriseChoice[]; capabilities: ProcurementUiCapabilities; locale?: string | null; legacyRecords?: LegacyRecord[] }) {
+export function EnterprisePurchasesWorkspace({ organizationId, organizationName = "Entreprise", members, departments, capabilities, locale, legacyRecords = [] }: { organizationId: string; organizationName?: string; members: EnterpriseChoice[]; departments: EnterpriseChoice[]; capabilities: ProcurementUiCapabilities; locale?: string | null; legacyRecords?: LegacyRecord[] }) {
   const t = (key: EnterpriseCoreKey, vars?: Record<string, string | number>) => enterpriseCoreT(locale, key, vars);
   const guide = (key: PurchaseFormGuidanceKey) => purchaseFormGuidance(locale, key);
+  const displayLocale = locale === "en" ? "en" : "fr";
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
   const [supplierFilter, setSupplierFilter] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [reviewTarget, setReviewTarget] = useState<{ purchase: PurchaseListItem; detail: DetailPayload; approval: { id: string; revision: number } } | null>(null);
+  const [reviewChecked, setReviewChecked] = useState(false);
+  const [reviewReason, setReviewReason] = useState("");
+  const [reviewBusy, setReviewBusy] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const [createOpen, setCreateOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<DetailPayload | null>(null);
@@ -99,7 +107,7 @@ export function EnterprisePurchasesWorkspace({ organizationId, members, departme
     });
   }, [organizationId, refreshKey, locale]);
 
-  const params = useMemo(() => { const value = new URLSearchParams({ page: String(page), pageSize: "20" }); if (search.trim()) value.set("search", search.trim()); if (status) value.set("status", status); if (supplierFilter) value.set("supplier", supplierFilter); return value; }, [page, search, status, supplierFilter]);
+  const params = useMemo(() => { const value = new URLSearchParams({ page: String(page), pageSize: "20" }); if (search.trim()) value.set("search", search.trim()); if (status) value.set("status", status); if (supplierFilter) value.set("supplier", supplierFilter); if (dateFrom) value.set("from", dateFrom); if (dateTo) value.set("to", dateTo); return value; }, [page, search, status, supplierFilter, dateFrom, dateTo]);
   const collection = useEnterpriseV2Collection<PurchaseListItem>({ endpoint: `/api/enterprise/${organizationId}/purchases`, params, refreshKey });
   const metrics = collection.meta.metrics || {};
   const catalogChoices = useMemo(() => catalogItems.map((item) => ({ id: item.id, label: `${item.code}${item.sku ? ` / ${item.sku}` : ""} · ${item.name}` })), [catalogItems]);
@@ -182,6 +190,32 @@ export function EnterprisePurchasesWorkspace({ organizationId, members, departme
     finally { setActionSubmitting(false); }
   }
 
+  async function startReview(item: PurchaseListItem) {
+    if (!item.pendingAssignedApproval || item.status !== "PENDING_APPROVAL") return;
+    try {
+      const detail = await loadDetail(item);
+      const found = detail.approvals.find((approval) => approval.id === item.pendingAssignedApproval?.id && approval.approverUserId === collection.meta.currentUserId && approval.status === "PENDING");
+      if (!found) throw new Error(displayLocale === "fr" ? "Cette commande n’est plus assignée à votre validation." : "This order is no longer assigned to you.");
+      setReviewTarget({ purchase: item, detail, approval: { id: found.id, revision: found.revision } });
+      setReviewChecked(false); setReviewReason("");
+    } catch (error) { setMessage(error instanceof Error ? error.message : "APPROVAL_LOAD_FAILED"); }
+  }
+
+  async function decidePurchase(action: "APPROVE" | "REJECT") {
+    if (!reviewTarget || reviewBusy || !reviewChecked || (action === "REJECT" && reviewReason.trim().length < 4)) return;
+    setReviewBusy(true);
+    try {
+      const url = `/api/enterprise/${organizationId}/approvals/${encodeURIComponent(reviewTarget.approval.id)}/actions`;
+      const prepared = await enterpriseV2Mutation(url, "POST", { action: "PREPARE_REVIEW", revision: reviewTarget.approval.revision });
+      const version = prepared?.submissionVersion as { id?: string } | undefined;
+      if (!version?.id) throw new Error(displayLocale === "fr" ? "La version à approuver est indisponible." : "The submitted review version is unavailable.");
+      await enterpriseV2Mutation(url, "POST", { action, revision: reviewTarget.approval.revision, reviewedVersionId: version.id, decisionComment: reviewReason.trim() });
+      setReviewTarget(null); setReviewChecked(false); setReviewReason(""); setRefreshKey((value) => value + 1);
+      setMessage(action === "APPROVE" ? displayLocale === "fr" ? "Commande approuvée dans le circuit de validation." : "Order approved in the workflow." : displayLocale === "fr" ? "Commande refusée avec motif enregistré." : "Order rejected with a recorded reason.");
+    } catch (error) { setMessage(error instanceof Error ? error.message : "APPROVAL_DECISION_FAILED"); }
+    finally { setReviewBusy(false); }
+  }
+
   async function startReceive(item: PurchaseListItem) {
     try {
       const body = await loadDetail(item);
@@ -220,6 +254,7 @@ export function EnterprisePurchasesWorkspace({ organizationId, members, departme
     return [
       { id: "open", label: t("purchases.action.open"), icon: Eye, onSelect: () => void openDetail(item) },
       ...(item.status === "DRAFT" && canAct ? [{ id: "edit", label: t("common.edit"), icon: Pencil, onSelect: () => void openEdit(item) }, { id: "submit", label: t("purchases.action.submit"), icon: Send, onSelect: () => setApprovalTarget(item) }] : []),
+      ...(item.status === "PENDING_APPROVAL" && item.pendingAssignedApproval && capabilities.canApprove ? [{ id: "review", label: displayLocale === "fr" ? "Examiner et décider" : "Review and decide", icon: ShieldCheck, onSelect: () => void startReview(item) }] : []),
       ...(item.status === "APPROVED" && canBuyerAct ? [{ id: "order", label: t("purchases.action.order"), icon: ShoppingCart, onSelect: () => setPendingAction({ item, action: "ORDER", label: t("purchases.action.order") }) }] : []),
       ...(["ORDERED", "PARTIALLY_RECEIVED", "RECEIVED", "CLOSED"].includes(item.status) ? [{ id: "payable", label: t("documents.type.SUPPLIER_INVOICE"), icon: FilePlus2, onSelect: () => { window.location.href = `/enterprise-modules/FINANCE_PAYABLES?purchaseId=${encodeURIComponent(item.id)}`; } }] : []),
       ...(["ORDERED", "PARTIALLY_RECEIVED"].includes(item.status) && canBuyerAct ? [{ id: "receive", label: t("purchases.action.receive"), icon: PackageCheck, onSelect: () => void startReceive(item) }] : []),
@@ -235,12 +270,32 @@ export function EnterprisePurchasesWorkspace({ organizationId, members, departme
   return <div className="grid min-w-0 gap-5">
     <ModuleMetrics label={t("purchases.indicators")}><ModuleMetric label={t("purchases.metric.drafts")} value={metrics.drafts || 0} /><ModuleMetric label={t("purchases.metric.pending")} value={metrics.pending || 0} /><ModuleMetric label={t("purchases.metric.ordered")} value={metrics.ordered || 0} /><ModuleMetric label={t("purchases.metric.receiving")} value={metrics.receiving || 0} /><ModuleMetric label={t("purchases.metric.received")} value={metrics.received || 0} /></ModuleMetrics>
     <ModuleSection title={t("purchases.section.title")} description={t("purchases.section.description")} count={`${collection.pagination.total}`} action={capabilities.canWrite ? <Button onClick={startCreate} className="bg-dtsc-blue text-white"><Plus className="h-4 w-4" />{t("purchases.new")}</Button> : undefined}>
-      <div className="grid gap-2 border-y border-dtsc-border py-3 md:grid-cols-3"><Input value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder={t("purchases.search")} /><NativeSelect value={status} onChange={setStatus} items={purchaseStatuses.map((id) => ({ id, label: statusLabel(locale, id) }))} /><NativeSelect value={supplierFilter} onChange={setSupplierFilter} items={suppliers} /></div>
+      <div data-purchase-design2 className="grid gap-3 border-y border-dtsc-border py-3">
+        <div role="group" aria-label={displayLocale === "fr" ? "Filtres des statuts" : "Status filters"} className="flex min-w-0 gap-2 overflow-x-auto pb-1">{["", ...purchaseStatuses].map((value) => <button type="button" key={value} aria-pressed={status === value} onClick={() => { setStatus(value); setPage(1); }} className={`min-h-10 shrink-0 rounded-full border px-3 text-xs font-bold focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-500 ${status === value ? "border-dtsc-blue bg-dtsc-blue text-white" : "border-dtsc-border bg-dtsc-page text-dtsc-ink"}`}>{value ? statusLabel(locale, value) : displayLocale === "fr" ? "Toutes" : "All"}</button>)}</div>
+        <div className="grid gap-2 md:grid-cols-2"><Input value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} aria-label={displayLocale === "fr" ? "Recherche de commandes" : "Search purchase orders"} placeholder={t("purchases.search")} /><NativeSelect value={supplierFilter} onChange={(value) => { setSupplierFilter(value); setPage(1); }} items={suppliers} /></div>
+        <div className="flex min-w-0 flex-wrap items-end justify-between gap-2"><FinanceDateFilter locale={displayLocale} from={dateFrom} to={dateTo} onChange={(from, to) => { setDateFrom(from); setDateTo(to); setPage(1); }} />
+          <FinanceExportControls endpoint={`/api/enterprise/${organizationId}/purchases`} organizationName={organizationName} title={displayLocale === "fr" ? "Commandes fournisseurs" : "Purchase orders"} locale={displayLocale} filters={{ search, status, supplier: supplierFilter, from: dateFrom, to: dateTo }} columns={[
+            { key: "reference", labelFr: "Référence", labelEn: "Reference", get: (row) => String(row.reference || "") },
+            { key: "title", labelFr: "Commande", labelEn: "Order", get: (row) => String(row.title || "") },
+            { key: "status", labelFr: "Statut", labelEn: "Status", get: (row) => statusLabel(locale, String(row.status || "")) },
+            { key: "currency", labelFr: "Devise", labelEn: "Currency", get: (row) => String(row.currency || "") },
+            { key: "totalAmount", labelFr: "Montant", labelEn: "Amount", get: (row) => String(row.totalAmount || "0") },
+            { key: "createdAt", labelFr: "Date de création", labelEn: "Created", get: (row) => String(row.createdAt || "") },
+          ]} />
+        </div>
+      </div>
       {collection.loading ? <p className="py-8 text-center text-sm text-dtsc-muted">{t("common.loading")}</p> : collection.items.length ? <BusinessList ariaLabel={t("purchases.aria")}>{collection.items.map((item) => <BusinessListItem key={item.id} title={`${item.reference} · ${item.title}`} status={<StatusBadge tone={statusTone(item.status)}>{statusLabel(locale, item.status)}</StatusBadge>} meta={`${item.supplier?.displayName || item.supplier?.legalName || t("purchases.supplierPending")} · ${formatEnterpriseAmount(item.totalAmount, item.currency, locale)}`} description={`${t("purchases.itemsCount", { count: item._count.items })}${item.budgetLine ? ` · ${item.budgetLine.budget.reference} / ${item.budgetLine.name}` : ` · ${t("purchases.unbudgeted")}`}${item.expectedAt ? ` · ${t("purchases.expected", { date: formatEnterpriseDate(item.expectedAt, locale) })}` : ""}`} onOpen={() => void openDetail(item)} openLabel={t("purchases.openNamed", { reference: item.reference })} actions={<ContextActions label={t("purchases.actions")} actions={actionsFor(item)} />} />)}</BusinessList> : <EmptyState compact title={t("purchases.noPurchases")} description={collection.error || t("purchases.noMatch")} />}
       <div className="mt-3 flex justify-between border-t border-dtsc-border pt-3 text-sm text-dtsc-muted"><span>{t("common.page", { current: collection.pagination.page, total: collection.pagination.pageCount })}</span><div className="flex gap-2"><Button variant="outline" disabled={page <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>{t("common.previous")}</Button><Button variant="outline" disabled={page >= collection.pagination.pageCount} onClick={() => setPage((value) => value + 1)}>{t("common.next")}</Button></div></div>
     </ModuleSection>
     {legacyRecords.length ? <ModuleSection title={t("purchases.historical.title")} description={t("purchases.historical.description")}><BusinessList ariaLabel={t("purchases.historical.aria")}>{legacyRecords.map((item) => <BusinessListItem key={item.id} title={item.title} status={<StatusBadge>{t("purchases.historyBadge")}</StatusBadge>} description={item.description || statusLabel(locale, item.status)} />)}</BusinessList></ModuleSection> : null}
 
+    <Dialog open={Boolean(reviewTarget)} onClose={() => { if (!reviewBusy) setReviewTarget(null); }} title={displayLocale === "fr" ? "Validation de commande fournisseur" : "Purchase order approval"} description={reviewTarget?.purchase.reference} presentation="editor" className="max-w-3xl">{reviewTarget ? <div data-purchase-review className="grid min-w-0 gap-4">
+      <div className="rounded-xl border border-dtsc-border bg-dtsc-page p-3"><strong className="text-dtsc-ink">{reviewTarget.purchase.reference} · {reviewTarget.purchase.title}</strong><p className="mt-1 text-sm text-dtsc-muted">{reviewTarget.purchase.supplier?.displayName || reviewTarget.purchase.supplier?.legalName || "—"} · {formatEnterpriseAmount(reviewTarget.purchase.totalAmount, reviewTarget.purchase.currency, locale)}</p><p className="mt-2 text-xs text-amber-800 dark:text-amber-300">{displayLocale === "fr" ? "L’approbation autorise le passage à la commande. Elle ne déclenche ni réception de stock ni règlement." : "Approval authorizes ordering but does not receive stock or make a payment."}</p></div>
+      <div className="max-h-56 space-y-2 overflow-y-auto rounded-xl border border-dtsc-border p-3">{reviewTarget.detail.purchase.items.map((item) => <div key={item.id} className="flex flex-wrap justify-between gap-2 border-b border-dtsc-border pb-2 text-sm"><span className="min-w-0 flex-1 break-words">{item.description} · {item.quantity} {item.unit}</span><strong>{formatEnterpriseAmount(item.lineTotal, reviewTarget.purchase.currency, locale)}</strong></div>)}</div>
+      <label className="flex items-start gap-2 rounded-xl bg-cyan-500/5 p-3 text-sm text-dtsc-ink"><input type="checkbox" className="mt-0.5 h-5 w-5 shrink-0 accent-cyan-600" checked={reviewChecked} onChange={(event) => setReviewChecked(event.target.checked)} />{displayLocale === "fr" ? "J’ai vérifié le fournisseur, les articles, les montants et la devise de la commande soumise." : "I reviewed the supplier, items, amounts and currency of the submitted order."}</label>
+      <label className="grid gap-1 text-sm font-semibold text-dtsc-ink">{displayLocale === "fr" ? "Motif ou commentaire" : "Decision reason or comment"}<textarea maxLength={3000} className="min-h-24 rounded-xl border border-dtsc-border bg-dtsc-page p-3 text-base" value={reviewReason} onChange={(event) => setReviewReason(event.target.value)} disabled={reviewBusy} /></label>
+      <div data-responsive-actions className="flex flex-wrap justify-end gap-2"><Button type="button" variant="outline" disabled={reviewBusy} onClick={() => setReviewTarget(null)}>{displayLocale === "fr" ? "Retour" : "Back"}</Button><Button type="button" variant="outline" disabled={!reviewChecked || reviewBusy || reviewReason.trim().length < 4} onClick={() => void decidePurchase("REJECT")}><ShieldX className="h-4 w-4" />{displayLocale === "fr" ? "Refuser avec motif" : "Reject with reason"}</Button><Button type="button" disabled={!reviewChecked || reviewBusy} onClick={() => void decidePurchase("APPROVE")}><ShieldCheck className="h-4 w-4" />{displayLocale === "fr" ? "Approuver la commande" : "Approve order"}</Button></div>
+      </div> : null}</Dialog>
     <Dialog open={createOpen || Boolean(editTarget)} onClose={closePurchaseForm} title={formTarget ? `${t("common.edit")} · ${formTarget.reference}` : t("purchases.form.title")} presentation="editor" className="max-w-5xl">
       <form key={formTarget?.id || "new"} onSubmit={submitPurchase} className="grid min-w-0 max-w-full grid-cols-[minmax(0,1fr)] gap-5" data-dtsc-guided-form="purchase">
         <Field label={t("purchases.form.subject")} help={guide("subject")} required><Input name="title" defaultValue={formTarget?.title || ""} required /></Field>

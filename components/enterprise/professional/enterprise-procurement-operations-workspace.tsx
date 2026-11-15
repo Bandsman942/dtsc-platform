@@ -68,7 +68,7 @@ export function EnterpriseProcurementOperationsWorkspace({
           <EnterpriseSuppliersWorkspace organizationId={organizationId} canManage={capabilities.canWrite} locale={locale} />
         </ModuleSection>
         <ModuleSection title="Demandes, commandes et réceptions" description="Soumettre, approuver, commander et réceptionner partiellement ou complètement sans double comptabilisation.">
-          <EnterprisePurchasesWorkspace organizationId={organizationId} members={members} departments={departments} capabilities={capabilities} locale={locale} />
+          <EnterprisePurchasesWorkspace organizationId={organizationId} organizationName={organizationName} members={members} departments={departments} capabilities={capabilities} locale={locale} />
         </ModuleSection>
         <ProfessionalHelp moduleCode="SUPPLIERS_PURCHASES" />
       </ModuleContent>
