@@ -275,5 +275,37 @@
       "handlerPath": "app/api/enterprise/[organizationId]/retail/pricing/preview/handler.ts",
       "originalBlobSha": "e6933357a408869777e250d3deba6359877d6206"
     }
+  ],
+  "approvedHandlerChanges": [
+    {
+      "issue": 1184,
+      "handlerPath": "app/api/enterprise/[organizationId]/retail/invoices/[invoiceId]/payments/[paymentId]/transition/handler.ts",
+      "blobSha": "1ddb0165b3229cec2780505c723fc49847fc1808",
+      "reason": "Owner-scoped payment APPROVE/CONFIRM through canonical Finance"
+    },
+    {
+      "issue": 1184,
+      "handlerPath": "app/api/enterprise/[organizationId]/retail/invoices/[invoiceId]/payments/handler.ts",
+      "blobSha": "390bf129be3fd6d6dd757f1e46c4c1f2a374b7e7",
+      "reason": "Only assigned store self-approval actions become visible"
+    },
+    {
+      "issue": 1184,
+      "handlerPath": "app/api/enterprise/[organizationId]/retail/invoices/[invoiceId]/returns/[requestId]/decision/handler.ts",
+      "blobSha": "7fa66959699d470e1dcbb233c79a51ddfee20273",
+      "reason": "High-risk manager return-decision audit"
+    },
+    {
+      "issue": 1184,
+      "handlerPath": "app/api/enterprise/[organizationId]/retail/invoices/[invoiceId]/transition/handler.ts",
+      "blobSha": "9e7fb85117503e65e9ac5e090c5ed3fb2f4560c6",
+      "reason": "Own-invoice approval permission and high-risk audit"
+    },
+    {
+      "issue": 1184,
+      "handlerPath": "app/api/enterprise/[organizationId]/retail/invoices/workflow/handler.ts",
+      "blobSha": "b74ed3723e84ca81db5b318de5f1ce92b329fe04",
+      "reason": "Own-invoice approval queue is scoped to assigned store"
+    }
   ]
 }
