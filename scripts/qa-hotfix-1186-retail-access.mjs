@@ -29,6 +29,8 @@ check("app/api/enterprise/[organizationId]/retail/invoices/[invoiceId]/payments/
 ]);
 check("app/api/enterprise/[organizationId]/retail/invoices/[invoiceId]/payments/handler.ts", [/canSelfApprove/, /retailSelfApprovalAllowed/]);
 check("lib/enterprise/retail/invoice-returns.ts", [/SELF_APPROVE_INVOICE_RETURN/, /selfApprovalOverride/, /inspectedByUserId/, /FINANCE_PAYMENTS/]);
+check("lib/enterprise/retail/invoice-return-finance.ts", [/financeApproverUserId/, /FINANCE_APPROVER_INDEPENDENT_REQUIRED/, /credit.approvedByUserId/, /retailFinanceReadSiteScope/]);
+check("lib/enterprise/retail/invoice-return-settlement-preflight.ts", [/delegatedManagerDecision/, /independentActors/, /inspectedByUserId/]);
 check("components/enterprise/professional/retail-site-staff-access.tsx", [/SELF_APPROVE_INVOICE/, /SELF_APPROVE_PAYMENT/, /SELF_APPROVE_INVOICE_RETURN/]);
 check("components/enterprise/professional/retail-invoice-payment-dialog.tsx", [/canSelfApprove/, /selfApprove/]);
 check("lib/enterprise/audit-event-i18n.ts", [/auditActionLabel/, /auditValueLabel/, /auditSearchCode/, /RETAIL_SITE_ASSIGNMENT_UPDATED/]);

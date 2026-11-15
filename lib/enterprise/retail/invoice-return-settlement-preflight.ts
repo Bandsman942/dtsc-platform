@@ -47,10 +47,18 @@ export async function assertRetailInvoiceReturnSettlementReadinessTx(
   });
   if (!request) throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_NOT_FOUND", 404);
   const { checkout } = request;
+  // Approval of the business cancellation may be delegated to the requesting
+  // manager. The physical inspector MUST still be a different person; the
+  // downstream refund and credit approvals are handled by independent Finance.
+  // An already decided request remains valid if the owner later revokes this
+  // delegation; that revocation blocks new decisions, not historical approvals.
+  const independentActors = new Set([request.requestedByUserId, request.approverUserId, request.inspectedByUserId]).size === 3;
+  const delegatedManagerDecision = request.requestedByUserId === request.approverUserId &&
+    request.inspectedByUserId !== request.approverUserId;
   if (request.status !== expectedStatus || !request.inspectedAt ||
       !request.inspectedByUserId || !request.inspectionNotes || request.inspectionNotes.trim().length < 5 ||
       !request.decidedByUserId || request.decidedByUserId !== request.approverUserId ||
-      new Set([request.requestedByUserId, request.approverUserId, request.inspectedByUserId]).size !== 3) {
+      (!independentActors && !delegatedManagerDecision)) {
     throw conflict("RETAIL_INVOICE_RETURN_SETTLEMENT_APPROVAL_REQUIRED");
   }
   if (!checkout.stockPostedAt ||
