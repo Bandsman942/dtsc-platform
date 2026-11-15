@@ -186,6 +186,7 @@ export default async function CollaboratorsPage({ searchParams }: { searchParams
             startMutedByDefault: user.startMutedByDefault,
             startCameraOffByDefault: user.startCameraOffByDefault,
             callSoundVolume: user.callSoundVolume,
+            incomingCallRingtone: user.incomingCallRingtone,
             callAlertDisplayDuration: user.callAlertDisplayDuration,
           }}
         />

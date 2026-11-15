@@ -11,14 +11,20 @@ import { invalidateCollaborationCallSettingsCache } from "@/lib/collaboration-ca
 import { getActiveOrganizationId } from "@/lib/organizations";
 import { prisma } from "@/lib/prisma";
 import { accountPreferencesSchema } from "@/lib/validators";
+import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
+import { isSameOriginRequest } from "@/lib/request-security";
 
 export async function PATCH(req: Request) {
   const startedAt = Date.now();
+  if (!isSameOriginRequest(req)) return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
   const session = await getSession();
   if (!session) {
     await writeApiLog({ request: req, statusCode: 401, startedAt });
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const limit = await rateLimit(getRateLimitKey(req, `account-preferences:${session.userId}`), 60, 60 * 60 * 1000);
+  if (!limit.ok) return NextResponse.json({ error: "RATE_LIMITED" }, { status: 429 });
 
   const user = await prisma.user.findUnique({
     where: { id: session.userId },
@@ -65,6 +71,7 @@ export async function PATCH(req: Request) {
       notifySupportEnabled: body.data.notifySupportEnabled,
       notifyUsageEnabled: body.data.notifyUsageEnabled,
       notifyBroadcastEnabled: body.data.notifyBroadcastEnabled,
+      pushNotificationsEnabled: body.data.pushNotificationsEnabled,
       interfaceDensity: body.data.interfaceDensity,
       startPage: body.data.startPage,
       locale: body.data.locale,
@@ -80,6 +87,7 @@ export async function PATCH(req: Request) {
       startMutedByDefault: body.data.startMutedByDefault,
       startCameraOffByDefault: body.data.startCameraOffByDefault,
       callSoundVolume: body.data.callSoundVolume,
+      incomingCallRingtone: body.data.incomingCallRingtone,
       callAlertDisplayDuration: body.data.callAlertDisplayDuration,
       preferredAudioInputId: body.data.preferredAudioInputId || null,
       preferredVideoInputId: body.data.preferredVideoInputId || null,

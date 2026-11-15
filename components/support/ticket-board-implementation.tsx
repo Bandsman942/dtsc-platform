@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { SupportTicket, User, UserRole } from "@prisma/client";
 import { Copy, MessageCircle, Pencil, Send, Trash2 } from "lucide-react";
@@ -16,6 +17,7 @@ import { formatEnumLabel } from "@/lib/labels";
 type TicketWithUser = SupportTicket & {
   user?: Pick<User, "name" | "email" | "role">;
   messages?: TicketCommentItem[];
+  attachments?: Array<{ id: string; originalName: string; mimeType: string; sizeBytes: number }>;
 };
 
 type TicketCommentItem = {
@@ -29,6 +31,42 @@ type TicketCommentItem = {
 };
 
 type MentionCandidate = { id: string; name: string; role?: UserRole };
+
+function ticketVisuals(ticket: TicketWithUser, now = Date.now()) {
+  const completedAt = ticket.resolvedAt || ticket.closedAt;
+  const due = ticket.slaResolutionDueAt ? new Date(ticket.slaResolutionDueAt).getTime() : null;
+  const age = Math.max(0, Math.floor((now - new Date(ticket.createdAt).getTime()) / 86_400_000));
+  const overdue = due !== null && !ticket.slaPausedAt && (completedAt ? new Date(completedAt).getTime() : now) > due;
+  const completed = ticket.status === "RESOLVED" || ticket.status === "CLOSED";
+  const urgent = ticket.priority === "URGENT";
+  const palette = completed
+    ? "border-l-4 border-l-emerald-500"
+    : urgent ? "border-l-4 border-l-rose-500"
+    : ticket.priority === "HIGH" ? "border-l-4 border-l-amber-500" : "border-l-4 border-l-sky-500";
+  const statusClass = completed
+    ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+    : overdue ? "bg-rose-500/10 text-rose-700 dark:text-rose-300"
+    : ticket.status === "IN_PROGRESS" ? "bg-blue-500/10 text-blue-700 dark:text-blue-300"
+    : "bg-slate-500/10 text-dtsc-ink";
+  return { age, due, overdue, palette, statusClass };
+}
+
+function TicketDates({ ticket }: { ticket: TicketWithUser }) {
+  const meta = ticketVisuals(ticket);
+  const locale = "fr-FR";
+  const dateLabel = (value: Date | string) => new Date(value).toLocaleDateString(locale, { day: "2-digit", month: "short", year: "numeric" });
+  return (
+    <div className="mt-3 flex flex-wrap gap-1.5 text-[0.7rem] font-semibold text-dtsc-muted" aria-label="Délais du ticket">
+      <span className="rounded-lg border border-dtsc-border px-2 py-1">Envoyé : {dateLabel(ticket.createdAt)}</span>
+      <span className="rounded-lg border border-dtsc-border px-2 py-1">Échéance : {ticket.slaResolutionDueAt ? dateLabel(ticket.slaResolutionDueAt) : "Non fixée"}</span>
+      <span className="rounded-lg border border-dtsc-border px-2 py-1">Ancienneté : {meta.age} j</span>
+      <span className={`rounded-lg px-2 py-1 ${meta.overdue ? "bg-rose-500/15 text-rose-700 dark:text-rose-300" : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"}`}>
+        {meta.overdue ? "Délai de résolution dépassé" : ticket.slaPausedAt ? "Délai suspendu" : "Sans retard de résolution"}
+      </span>
+    </div>
+  );
+}
+
 
 export function TicketBoard({
   tickets,
@@ -95,19 +133,21 @@ export function TicketBoard({
         />
       ) : null}
       {ticketList.paginatedItems.map((ticket) => (
-        <article key={ticket.id} data-ticket-id={ticket.id} className="dtsc-glass-list-item min-w-0 overflow-hidden rounded-2xl p-4 transition sm:p-5">
+        <article key={ticket.id} data-ticket-id={ticket.id} className={`dtsc-glass-list-item min-w-0 overflow-hidden rounded-2xl p-4 transition sm:p-5 ${ticketVisuals(ticket).palette}`}>
           <div className="flex min-w-0 flex-col justify-between gap-3 lg:flex-row lg:items-start">
             <div className="min-w-0">
               <p className="break-words text-xs font-black uppercase tracking-[0.18em] text-dtsc-muted [overflow-wrap:anywhere]">
-                {ticket.user?.email || "Utilisateur"} · {formatEnumLabel(ticket.priority)}
+                {ticket.user?.email || "Utilisateur"} · {formatEnumLabel(ticket.priority)}{ticket.priority === "URGENT" ? " · 🔴 Urgent" : ""}
               </p>
               <h3 className="mt-1 break-words font-black text-dtsc-ink">{ticket.subject}</h3>
               <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-dtsc-muted">{ticket.description}</p>
+              <TicketDates ticket={ticket} />
+              {ticket.attachments?.length ? <div className="mt-3 flex flex-wrap gap-2">{ticket.attachments.map((photo) => <a key={photo.id} href={`/api/support/tickets/${ticket.id}/attachments/${photo.id}`} target="_blank" rel="noopener noreferrer" className="group inline-flex min-w-0 items-center gap-2 rounded-xl border border-dtsc-border bg-dtsc-page p-2 text-xs font-semibold text-dtsc-blue hover:border-cyan-400"><Image src={`/api/support/tickets/${ticket.id}/attachments/${photo.id}`} alt={photo.originalName} width={56} height={56} unoptimized className="h-14 w-14 rounded-lg object-cover" /><span className="max-w-32 truncate">{photo.originalName}</span></a>)}</div> : null}
               {ticket.resolution ? (
                 <p className="mt-3 break-words rounded-xl bg-dtsc-soft p-3 text-sm font-semibold text-dtsc-blue">Résolution : {ticket.resolution}</p>
               ) : null}
             </div>
-            <span className="max-w-full shrink-0 self-start break-words rounded-full bg-dtsc-soft px-3 py-1 text-xs font-black text-dtsc-blue">{formatEnumLabel(ticket.status)}</span>
+            <span className={`max-w-full shrink-0 self-start break-words rounded-full px-3 py-1 text-xs font-black ${ticketVisuals(ticket).statusClass}`}>{formatEnumLabel(ticket.status)}</span>
           </div>
 
           <div className="mt-5 min-w-0 border-t border-dtsc-border pt-4">

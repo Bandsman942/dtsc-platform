@@ -54,6 +54,20 @@ export async function GET(req: Request, { params }: Params) {
   const url = new URL(req.url);
   const limit = Math.min(Math.max(Number(url.searchParams.get("limit") || 30), 1), 50);
   const cursor = url.searchParams.get("cursor") || undefined;
+  // An ordinary open begins at the oldest unread message, not the previous scroll position.
+  // Explicit messageId deep-links still take priority.
+  const preferFirstUnread = !cursor && url.searchParams.get("firstUnread") === "1" && !url.searchParams.has("messageId");
+  const firstUnread = preferFirstUnread ? await prisma.collaborationGroupMessage.findFirst({
+    where: {
+      groupId: id,
+      authorId: { not: session.userId },
+      deletedAt: null,
+      messageType: { not: "SYSTEM" },
+      reads: { none: { userId: session.userId } },
+    },
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    select: { id: true },
+  }) : null;
   const [initialRecords, receiptMembers] = await Promise.all([
     prisma.collaborationGroupMessage.findMany({
       where: { groupId: id, ...(cursor ? { createdAt: { lt: new Date(cursor) } } : {}) },
@@ -67,7 +81,7 @@ export async function GET(req: Request, { params }: Params) {
     }),
   ]);
   let records = initialRecords;
-  const focusedMessageId = url.searchParams.get("messageId") || undefined;
+  const focusedMessageId = url.searchParams.get("messageId") || firstUnread?.id || undefined;
   let hasMore = records.length > limit;
   if (focusedMessageId && !cursor && !records.some((message) => message.id === focusedMessageId)) {
     const target = await prisma.collaborationGroupMessage.findFirst({ where: { id: focusedMessageId, groupId: id }, select: { id: true, createdAt: true } });
@@ -163,7 +177,7 @@ export async function GET(req: Request, { params }: Params) {
   const nextCursor = hasMore ? records[limit - 1]?.createdAt.toISOString() : null;
   await markGroupMessagesRead({ groupId: id, userId: session.userId, messageIds: messages.map((message) => message.id) });
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt });
-  return NextResponse.json({ messages, nextCursor, hasMore });
+  return NextResponse.json({ messages, nextCursor, hasMore, firstUnreadMessageId: firstUnread?.id || null });
 }
 
 export async function POST(req: Request, { params }: Params) {

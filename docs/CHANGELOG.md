@@ -1,3 +1,12 @@
+## 2026-11-15 — Hotfix Support, collaboration, appels et préférences (validation E2E requise)
+
+- Support : tickets enrichis (date d'envoi, échéance SLA, ancienneté, retard réel, couleur statut/priorité), photos privées avec prévisualisation, accès serveur contrôlé et rédaction IA assistée avec aperçu avant application.
+- L'outil Agent `SUPPORT_TICKET_CREATE` reste soumis à confirmation obligatoire avant envoi, y compris pour les utilisateurs DTSC internes.
+- Collaboration : ouverture sur le premier message non lu (ou dernier message), suppression persistante des anciens badges non lus à la sortie de la conversation, accusés de lecture conservés.
+- Appels : quatre sonneries mélodiques originales (Classique, Douce, Numérique, Mélodique), pré-écoute et préférence enregistrée ; respect des politiques audio du navigateur.
+- Paramètres du compte : rubriques DTSC 2.0 avec navigation par panneaux et formulaires réels persistants, notifications push enregistrées.
+- Schéma : migration additive `20261115141000_support_ticket_media_ringtone`. Aucune fusion ou mise en production sans CI et validation E2E finale.
+
 ## 2026-11-15 — UX #1178 — installation DTSC Platform depuis l'accueil public (candidat v1.18.0, NON FUSIONNÉ)
 
 - Complément UI/UX : connexion Account rénovée en Design 2.0 avec photographie illustrative d'un environnement de pilotage ERP, panneau d'identification clair, repères de progression, champs/espaces compactés et mise en page mobile ; flux MFA, mots de passe, cookies et redirection inchangés.

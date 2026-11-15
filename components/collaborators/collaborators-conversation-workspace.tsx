@@ -47,7 +47,7 @@ import {
 } from "@/components/collaborators/collaboration-meeting-message-content";
 import { GroupPresenceJournalDialog } from "@/components/collaborators/group-presence-journal-dialog";
 import { GroupCallRoom } from "@/components/collaborators/collaborators-workspace";
-import { playCallSound } from "@/components/calls/call-sounds";
+import { playCallSound, stopCallRingtone, type CallRingtone } from "@/components/calls/call-sounds";
 import { ActionMenu, type ActionMenuItem } from "@/components/ui/action-menu";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
@@ -99,6 +99,7 @@ type CallPreferences = {
   startMutedByDefault?: boolean;
   startCameraOffByDefault?: boolean;
   callSoundVolume?: number | null;
+  incomingCallRingtone?: CallRingtone | string;
   callAlertDisplayDuration?: number | null;
 };
 type MessageReaction = { id: string; userId: string; reactionType: string; user?: { id: string; name: string } };
@@ -205,6 +206,7 @@ export function CollaboratorsConversationWorkspace(props: Props) {
   const [joinedCall, setJoinedCall] = useState<JoinedCall | null>(null);
   const [callJoining, setCallJoining] = useState(false);
   const initialJoinHandledRef = useRef(false);
+  const seenIncomingCallIdsRef = useRef(new Set<string>());
   const [editMessage, setEditMessage] = useState<GroupMessage | null>(null);
   const [editContent, setEditContent] = useState("");
   const [readInfo, setReadInfo] = useState<ReadInfo | null>(null);
@@ -226,6 +228,19 @@ export function CollaboratorsConversationWorkspace(props: Props) {
   const activePreference = activeGroup ? preferences[activeGroup.id] || defaultPreference(activeGroup.id, currentUserId) : null;
   const directPeer = activeGroup?.groupType === "DIRECT" ? activeGroup.members.find((member) => member.userId !== currentUserId) || null : null;
   const voiceByMessage = voices;
+
+  // The immersive collaborators view hides the global toast: it must play
+  // its own actual incoming ringtone when a new call starts.
+  useEffect(() => {
+    const ringingCalls = groups.flatMap((group) => group.calls || [])
+      .filter((call) => call.status === "RINGING" && call.startedById !== currentUserId);
+    const newCall = ringingCalls.find((call) => !seenIncomingCallIdsRef.current.has(call.id));
+    ringingCalls.forEach((call) => seenIncomingCallIdsRef.current.add(call.id));
+    if (newCall && props.callPreferences.callSoundsEnabled !== false) {
+      void playCallSound("incoming", props.callPreferences.callSoundVolume ?? 45, (props.callPreferences.incomingCallRingtone || "CLASSIC") as CallRingtone);
+    }
+    if (!ringingCalls.length) stopCallRingtone();
+  }, [currentUserId, groups, props.callPreferences.callSoundsEnabled, props.callPreferences.callSoundVolume, props.callPreferences.incomingCallRingtone]);
 
   const refreshGroups = useCallback(async () => {
     const response = await fetch("/api/collaborators/groups", { cache: "no-store" });
@@ -292,6 +307,16 @@ export function CollaboratorsConversationWorkspace(props: Props) {
     const body = await response.json() as { voices?: Voice[] };
     setVoices(Object.fromEntries((body.voices || []).map((voice) => [voice.messageId, voice])));
   }, []);
+
+  // Keep the server-side unread flag in sync when navigating away from the
+  // current document (as well as when using the explicit conversation back).
+  useEffect(() => {
+    const acknowledgeOnPageExit = () => {
+      if (activeGroupId) void fetch(`/api/collaborators/groups/${activeGroupId}/read`, { method: "POST", keepalive: true }).catch(() => undefined);
+    };
+    window.addEventListener("pagehide", acknowledgeOnPageExit);
+    return () => window.removeEventListener("pagehide", acknowledgeOnPageExit);
+  }, [activeGroupId]);
 
   useEffect(() => { void loadExperience(); }, [loadExperience]);
   useEffect(() => { void loadContactRequests(); }, [loadContactRequests]);
@@ -719,6 +744,9 @@ export function CollaboratorsConversationWorkspace(props: Props) {
     setCallJoining(false);
     if (!response.ok) return setFeedback(body?.message || (collaborationExperienceT(userPreferences.locale, "conversationUiUnableToStartTheCall")));
     const nextCall = body?.call || body?.activeCall;
+    if (nextCall && props.callPreferences.callSoundsEnabled !== false) {
+      void playCallSound("incoming", props.callPreferences.callSoundVolume ?? 45, (props.callPreferences.incomingCallRingtone || "CLASSIC") as CallRingtone);
+    }
     await refreshGroups();
     if (nextCall) await joinGroupCall(nextCall);
   }
@@ -757,7 +785,7 @@ export function CollaboratorsConversationWorkspace(props: Props) {
     const response = await fetch(`/api/collaborators/calls/${call.id}/reject`, { method: "POST" });
     const body = await response.json().catch(() => null) as { message?: string } | null;
     setFeedback(response.ok ? (collaborationExperienceT(userPreferences.locale, "conversationUiCallDeclined")) : body?.message || (collaborationExperienceT(userPreferences.locale, "conversationUiUnableToDeclineTheCall")));
-    if (response.ok) await refreshGroups();
+    if (response.ok) { stopCallRingtone(); await refreshGroups(); }
   }
 
   async function leaveJoinedCall() {
@@ -768,6 +796,7 @@ export function CollaboratorsConversationWorkspace(props: Props) {
   }
 
   async function endGroupCall(call: GroupCall) {
+    stopCallRingtone();
     const response = await fetch(`/api/collaborators/calls/${call.id}/end`, { method: "POST" });
     const body = await response.json().catch(() => null) as { message?: string } | null;
     if (!response.ok) return setFeedback(body?.message || (collaborationExperienceT(userPreferences.locale, "conversationUiUnableToEndTheCall")));
