@@ -35,7 +35,7 @@ check("app/api/enterprise/[organizationId]/retail/invoice-currency/route.ts", [
 ]);
 check("components/enterprise/professional/retail-invoice-flow-workbench.tsx", [
   "invoice-fx-preview", "invoice-currency", "invoiceFx", "originalUnitPrice",
-  "pricing?.grandTotal", "currencyCode: currencyCode",
+  "pricing?.grandTotal", "const currencyCode = invoiceCurrency",
 ]);
 check("app/api/enterprise/[organizationId]/purchases/route.ts", [
   "pendingAssignedApproval", 'targetEntityType: "EnterprisePurchase"',
