@@ -51,7 +51,17 @@ const vendorV2 = {
 const normalized = normalizeMaishaPayWebhook(vendorV2);
 assert.equal(normalized?.transactionReference,"ORDER-FAKE");
 assert.equal(normalized?.transactionId,"txn_MP_FAKE");
-assert.equal(normalized?.amount,500000);
+assert.equal(normalized?.amount,"5000.00","v2 transaction envelope uses minor units, not an unscaled major amount");
+assert.equal(normalizeMaishaPayWebhook({...vendorV2,data:{...vendorV2.data,amount:"500001"}})?.amount,"5000.01");
+assert.equal(normalizeMaishaPayWebhook({...vendorV2,data:{...vendorV2.data,amount:"5000.01"}})?.amount,undefined,
+  "Fractional v2 minor units must fail closed");
+assert.equal(normalizeMaishaPayWebhook({...vendorV2,data:{...vendorV2.data,amount:Number.MAX_SAFE_INTEGER+1}})?.amount,undefined,
+  "Unsafe JS integers must not be rounded");
+assert.equal(normalizeMaishaPayWebhook({...vendorV2,data:{...vendorV2.data,amount:-1}})?.amount,undefined);
+assert.equal(validateMaishaPayPaymentEvidence(normalized,{provider:"MAISHAPAY",amount:"5000.00",currency:"CDF",providerReference:"txn_MP_FAKE"}),null,
+  "Documented v2 amount 500000 minor units matches payment 5000.00 CDF");
+assert.equal(validateMaishaPayPaymentEvidence(normalized,{provider:"MAISHAPAY",amount:"500000.00",currency:"CDF",providerReference:"txn_MP_FAKE"}),"PAYMENT_AMOUNT_MISMATCH",
+  "Never accept a 100x inflated financial amount from v2");
 assert.equal(normalized?.status,"SUCCESS");
 assert.equal(isConfirmedMaishaPayStatus(normalized),true);
 assert.equal(normalizeMaishaPayWebhook({...vendorV2,type:"b2c.transfer.success"}),null);
@@ -72,6 +82,8 @@ assert.equal(validateMaishaPayPaymentEvidence({...payload,amount:"3e1"},payment)
 assert.equal(validateMaishaPayPaymentEvidence({...payload,currency:"CDF"},payment),"PAYMENT_CURRENCY_MISMATCH");
 assert.equal(validateMaishaPayPaymentEvidence({...payload,currency:undefined},payment),"PAYMENT_CURRENCY_MISMATCH");
 assert.equal(validateMaishaPayPaymentEvidence({...payload,transactionId:"different"},payment),"PAYMENT_PROVIDER_REFERENCE_MISMATCH");
+assert.equal(validateMaishaPayPaymentEvidence({...payload,transactionId:undefined},payment),"PAYMENT_PROVIDER_REFERENCE_MISMATCH",
+  "An established PSP transaction ID must not be omitted to bypass matching");
 assert.equal(validateMaishaPayPaymentEvidence(payload,{...payment,provider:"OTHER"}),"PAYMENT_PROVIDER_MISMATCH");
 assert.equal(validateMaishaPayPaymentEvidence(payload,{...payment,amount:"-30"}),"PAYMENT_AMOUNT_MISMATCH");
 
