@@ -124,6 +124,8 @@ vm.runInNewContext(ts.transpileModule(source, {
     if (id === "@/lib/enterprise/retail/site-access") return {
       RETAIL_OWNER_ROLES: new Set(["OWNER", "ADMIN_ENTREPRISE", "ADMIN_ENTERPRISE"]),
       siteStaffCapabilities: (_role, permissions) => permissions || [],
+      // Historical regression fixtures carry NO owner-granted self-return permission.
+      hasRetailSelfApprovalGrant: async () => false,
       requireRetailSiteCapability: async (_org, user, site, capability) => {
         assert.equal(site, "store-A");
         if ((state.revoked && user === "requester") ||
