@@ -214,6 +214,7 @@ vm.runInNewContext(approvalCompiled, {
     if (id === "@/lib/enterprise/retail/site-access") return {
       RETAIL_OWNER_ROLES: new Set(["OWNER"]), retailStaffIsolationIsEnabled: (settings) => settings?.siteStaffIsolationEnabled === true,
       retailFinanceReadSiteScope: async () => null,
+      retailSelfApprovalAllowed: async () => false, // Independently approved legacy fixture: no owner delegation.
       requireRetailSiteCapability: async () => { if (!approvalState.isAssigned) throw new EnterpriseRetailError("RETAIL_SITE_ACCESS_DENIED", 403); },
     };
     return require(id);
