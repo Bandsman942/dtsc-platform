@@ -26,10 +26,10 @@ check("Explicit invoice self grant", [access], [/SELF_APPROVE_INVOICE/, /hasReta
 check("Explicit payment self grant", [access], [/SELF_APPROVE_PAYMENT/, /COLLECT_PAYMENT/]);
 check("Explicit return-manager self grant", [access], [/SELF_APPROVE_INVOICE_RETURN/, /kind === "RETURN" && assignment.roleCode !== "MANAGER"/]);
 check("No default self approval", [access], [/MANAGER: \[/, /INVOICER: \[/, /CASHIER: \[/, /RETAIL_SELF_APPROVAL_CAPABILITIES/]);
-check("Grant is owner only", [assignment], [/role: "OWNER"/, /RETAIL_SITE_SELF_APPROVAL_OWNER_ONLY/]);
+check("Grant is verified proprietor only", [assignment], [/isRetailEnterpriseProprietor/, /organization\.ownerUserId === userId/, /membership\.role === "OWNER"/, /RETAIL_SITE_SELF_APPROVAL_OWNER_ONLY/]);
 check("Grant dependencies validated", [assignment], [/RETAIL_SITE_SELF_APPROVAL_DEPENDENCY/, /PREPARE_INVOICE/, /COLLECT_PAYMENT/]);
 check("Grant before/after audit", [assignment], [/riskLevel:/, /before: existing/, /after: \{ roleCode:/, /selfApprovalGrants/]);
-check("Owner only self UI", [ui], [/canGrantSelfApproval/, /disabled=\{capability.startsWith\("SELF_APPROVE_"\)/]);
+check("Owner only self UI", [ui], [/canGrantSelfApproval/, /canSelectDelegation\(capability\)/, /disabled=\{!canSelectDelegation\(capability\)\}/]);
 check("FR/EN self rights", [ui], [/Valider soi-même/, /Approve own invoices/, /owner-granted exception/]);
 check("Retail invoice candidates include authorized self", [invoice], [/hasRetailSelfApprovalGrant/, /isRequester: true/, /selfApprovalOverride: true/]);
 check("Invoice and payment guards in transaction", [invoice], [/assertRetailInvoiceFinanceApproverTx/, /assertRetailPaymentFinanceApproverTx/, /"PAYMENT", tx/, /"INVOICE", tx/]);
