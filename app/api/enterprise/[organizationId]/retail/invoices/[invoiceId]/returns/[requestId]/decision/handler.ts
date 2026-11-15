@@ -16,8 +16,9 @@ export async function POST(req: Request, { params }: Params) {
   try {
     const request = await decideRetailInvoiceReturnRequest(organizationId, invoiceId, requestId, auth.session.userId, parsed.data);
     await writeAuditLog({ userId: auth.session.userId, action: "ENTERPRISE_RETAIL_INVOICE_RETURN_" + parsed.data.decision,
-      entity: "EnterpriseRetailInvoiceReturnRequest", entityId: request.id, request: req,
-      metadata: { organizationId, invoiceId, requestId, status: request.status, reason: parsed.data.reason } });
+      entity: "EnterpriseRetailInvoiceReturnRequest", entityId: request.id, request: req, organizationId,
+      riskLevel: "HIGH", metadata: { organizationId, invoiceId, requestId, status: request.status,
+        reason: parsed.data.reason, decisionByUserId: auth.session.userId } });
     await writeApiLog({ request: req, startedAt, statusCode: 200, userId: auth.session.userId,
       metadata: { organizationId, domain: "retail-invoice-return-requests", action: parsed.data.decision } });
     return NextResponse.json({ request }, { headers: { "Cache-Control": "private, no-store" } });
