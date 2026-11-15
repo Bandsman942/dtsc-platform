@@ -147,6 +147,8 @@ jobs:
         run: pnpm qa:retail-five-lots-1116
       - name: RETAIL financial KPI source traceability v2 QA (#1117)
         run: pnpm qa:retail-financial-kpi-v2
+      - name: HOTFIX #1186 store self-approval and FR/EN audit source contracts
+        run: pnpm qa:hotfix-1186-retail-access
       - name: Type check
         run: pnpm type-check
         env:

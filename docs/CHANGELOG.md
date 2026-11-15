@@ -1,3 +1,10 @@
+## 2026-11-15 — HOTFIX #1186 RETAIL : délégations d'auto-approbation et audit FR/EN (candidat v1.18.2, E2E requis)
+
+- Délégations distinctes par propriétaire et boutique pour l’auto-approbation de factures et des encaissements ; aucun droit implicite, contrôles serveur au moment de la décision.
+- Possibilité exceptionnelle pour un gérant habilité d’approuver sa propre demande d’annulation/retour après encaissement, avec inspection et liquidation Finance indépendantes ; avoir, remboursement et comptabilité inchangés dans leur circuit canonique.
+- Administration entreprise : journal lisible en français/anglais selon les paramètres, export et détails techniques conservés ; codes bruts immuables.
+- Documentation : `docs/HOTFIX_1186_RETAIL_OWNER_DELEGATIONS_AUDIT_FR_EN.md`. Pas de fusion ou production avant CI et E2E propriétaire.
+
 ## 2026-11-15 — Hotfix Support, collaboration, appels et préférences (validation E2E requise)
 
 - Support : tickets enrichis (date d'envoi, échéance SLA, ancienneté, retard réel, couleur statut/priorité), photos privées avec prévisualisation, accès serveur contrôlé et rédaction IA assistée avec aperçu avant application.
