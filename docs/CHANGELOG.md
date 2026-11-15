@@ -1,11 +1,19 @@
-## 2026-11-15 — UX #1178 — installation DTSC Platform depuis l'accueil public (candidat v1.18.0, NON FUSIONNÉ)
+## 2026-11-14 — P0 PAY-4B #1176 — signature HMAC native MaishaPay (candidat v1.18.1, NON FUSIONNÉ)
+
+- Validation native `X-MaishaPay-Signature: sha256=<hex>` avec HMAC-SHA256 du corps HTTP brut (non du JSON normalisé), comparaison `timingSafeEqual`. Secret webhook Production obligatoire, aucun fallback par URL ou header bearer.
+- Deux formats d'événement documentés (enveloppe `transaction.success` / callback plat `payment.success`) reconnus explicitement. Une signature invalide ou un statut contradictoire n'active jamais un abonnement.
+- Preuves signées conservées sans réécriture et revérifiées lors de chaque reprise ; anciens WebhookEvent sans preuve signée refusés ; montant/devise/provider toujours contrôlés.
+- QA unitaires et PostgreSQL à deux tenants fictifs, aucune migration ni donnée financière réelle modifiée. Vraie notification Sandbox + secret provisionné exigés avant OWNER_E2E et fusion.
+- Les parents #1170 et #992 restent ouverts pour la confirmation PSP et la réconciliation financière.
+
+## 2026-11-15 — UX #1178 — installation DTSC Platform depuis l'accueil public (fusionnée PR #1179, v1.18.0, E2E BON)
 
 - Complément UI/UX : connexion Account rénovée en Design 2.0 avec photographie illustrative d'un environnement de pilotage ERP, panneau d'identification clair, repères de progression, champs/espaces compactés et mise en page mobile ; flux MFA, mots de passe, cookies et redirection inchangés.
 - Rétablissement du bouton d'installation dans le hero public, d'une carte mobile/desktop et d'un lien dans la navigation publique.
 - Redirection vers `app.dtsc-platform.com/install` : seul le manifeste PWA de l'application métier est proposé, jamais celui du site vitrine.
 - Onboarding adapté Android Chrome/Samsung Internet, iOS/iPadOS, Windows, macOS et Linux, français/anglais, installation native si disponible et parcours manuel sinon ; suivi fiable des états `appinstalled`/standalone.
 - Aucun APK/EXE fictif, aucune nouvelle API ou permission, aucune mise en cache des données privées. QA ciblée et matrice E2E mobile/desktop documentées.
-- Voir `docs/PUBLIC_APP_INSTALL_ONBOARDING_20261115.md`. Fusion exclusivement après CI, E2E propriétaire et autorisation distincte.
+- Voir `docs/PUBLIC_APP_INSTALL_ONBOARDING_20261115.md`. Quality Gates et E2E #1179 BON ; fusion main le 15/11/2026.
 
 ## 2026-11-14 — P0 PAY-4 #1170 — audit privé des règlements MaishaPay (candidat v1.17.7, NON FUSIONNÉ)
 
