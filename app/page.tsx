@@ -10,6 +10,7 @@ import {
   BrainCircuit,
   ClipboardCheck,
   Database,
+  Download,
   FileText,
   GraduationCap,
   Layers3,
@@ -21,7 +22,8 @@ import {
 import { ContactNewsletterSection } from "@/components/public/contact-newsletter-section";
 import { LazyPublicAgent } from "@/components/public/lazy-public-agent";
 import { PublicFooter, PublicHeader } from "@/components/public/public-shell";
-import { getDashboardUrl } from "@/lib/domains";
+import { PublicPWAInstallCard } from "@/components/pwa/public-pwa-install-card";
+import { getAppBaseUrl, getDashboardUrl } from "@/lib/domains";
 import { publicDocumentationHomeCopy } from "@/lib/public-documentation-home-i18n";
 
 export const metadata: Metadata = {
@@ -69,6 +71,7 @@ export default async function HomePage() {
   const lang = preference === "fr" || preference === "en" ? preference : requestHeaders.get("accept-language")?.toLowerCase().startsWith("en") ? "en" : "fr";
   const docCopy = publicDocumentationHomeCopy[lang];
   const dashboardUrl = getDashboardUrl();
+  const installUrl = `${getAppBaseUrl()}/install`;
 
   return (
     <main className="min-h-screen overflow-x-clip bg-dtsc-page text-dtsc-ink">
@@ -105,6 +108,10 @@ export default async function HomePage() {
               <Link href={dashboardUrl} className="inline-flex items-center gap-2 px-2 py-3 font-semibold text-dtsc-muted hover:text-dtsc-blue">
                 Ouvrir DTSC Platform
               </Link>
+              <Link href={installUrl} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-cyan-400/50 bg-cyan-50 px-4 py-2 font-semibold text-[#003366] transition hover:bg-cyan-100 focus-visible:outline-2 focus-visible:outline-dtsc-blue dark:bg-cyan-300 dark:text-[#001736] dark:hover:bg-cyan-200">
+                <Download className="h-4 w-4" aria-hidden="true" />
+                {lang === "en" ? "Install DTSC app" : "Installer l'application DTSC"}
+              </Link>
             </div>
 
             <div className="mt-10 grid max-w-2xl gap-3 sm:grid-cols-3">
@@ -140,6 +147,8 @@ export default async function HomePage() {
           </aside>
         </div>
       </section>
+
+      <PublicPWAInstallCard locale={lang} />
 
       <section className="mx-auto max-w-[92rem] px-4 py-16 sm:px-6 lg:px-8 lg:py-24">
         <div className="grid gap-10 lg:grid-cols-[0.72fr_1.28fr]">

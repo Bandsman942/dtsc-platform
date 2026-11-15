@@ -1,3 +1,12 @@
+## 2026-11-15 — UX #1178 — installation DTSC Platform depuis l'accueil public (candidat v1.17.8, NON FUSIONNÉ)
+
+- Complément UI/UX : connexion Account rénovée en Design 2.0 avec photographie illustrative d'un environnement de pilotage ERP, panneau d'identification clair, repères de progression, champs/espaces compactés et mise en page mobile ; flux MFA, mots de passe, cookies et redirection inchangés.
+- Rétablissement du bouton d'installation dans le hero public, d'une carte mobile/desktop et d'un lien dans la navigation publique.
+- Redirection vers `app.dtsc-platform.com/install` : seul le manifeste PWA de l'application métier est proposé, jamais celui du site vitrine.
+- Onboarding adapté Android Chrome/Samsung Internet, iOS/iPadOS, Windows, macOS et Linux, français/anglais, installation native si disponible et parcours manuel sinon ; suivi fiable des états `appinstalled`/standalone.
+- Aucun APK/EXE fictif, aucune nouvelle API ou permission, aucune mise en cache des données privées. QA ciblée et matrice E2E mobile/desktop documentées.
+- Voir `docs/PUBLIC_APP_INSTALL_ONBOARDING_20261115.md`. Fusion exclusivement après CI, E2E propriétaire et autorisation distincte.
+
 ## 2026-11-14 — P0 PAY-4 #1170 — audit privé des règlements MaishaPay (candidat v1.17.7, NON FUSIONNÉ)
 
 - Outil **en lecture seule** pour détecter paiements d'abonnement organisation PAID sans écriture Finance, écritures multiples, comptes de réception synthétiques, discordances de montant/devise et preuves locales manquantes.

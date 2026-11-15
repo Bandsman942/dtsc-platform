@@ -133,6 +133,8 @@ jobs:
         run: pnpm qa:public-ux-01
       - name: PUBLIC-UX-07 public V2 contract QA
         run: pnpm qa:public-experience-v2
+      - name: PUBLIC-APP-INSTALL-1178 onboarding contract QA
+        run: pnpm qa:public-app-install-1178
       - name: DTSC Docs public and developer portal contract QA
         run: pnpm qa:docs-1099
       - name: MCP Time/Brave in-process and chat integration QA

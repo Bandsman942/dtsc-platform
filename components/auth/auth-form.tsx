@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { type FormEvent, useState } from "react";
-import { ArrowRight, Building2, ShieldCheck } from "lucide-react";
+import { ArrowRight, Building2, CheckCircle2, LockKeyhole, Mail, ShieldCheck } from "lucide-react";
 import { MandatoryMfaEnrollment } from "@/components/auth/mandatory-mfa-enrollment";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -256,7 +256,20 @@ export function AuthForm({ mode, uiLocale = "fr" }: { mode: "sign-in" | "sign-up
   }
 
   return (
-    <form onSubmit={onSubmit} className="space-y-5" noValidate>
+    <form onSubmit={onSubmit} className={isSignUp ? "space-y-5" : "space-y-4"} noValidate>
+      {!isSignUp && !pendingRegistration ? (
+        <div className="grid grid-cols-3 gap-2 pb-2" aria-label={uiLocale === "en" ? "Sign in steps" : "Étapes de connexion"}>
+          {[
+            { number: "01", title: uiLocale === "en" ? "Credentials" : "Identifiants", active: true },
+            { number: "02", title: uiLocale === "en" ? "Workspace" : "Espace", active: organizationsLoaded },
+            { number: "03", title: uiLocale === "en" ? "Security" : "Sécurité", active: false },
+          ].map((step) => (
+            <div key={step.number} className={`flex min-w-0 items-center gap-2 rounded-lg border px-2.5 py-2 text-[11px] font-semibold ${step.active ? "border-cyan-400/35 bg-cyan-400/10 text-dtsc-blue" : "border-dtsc-border text-dtsc-muted"}`}>
+              <span className="font-black">{step.number}</span><span className="truncate">{step.title}</span>
+            </div>
+          ))}
+        </div>
+      ) : null}
       {sessionExpired ? (
         <p className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm font-semibold text-amber-800 dark:text-amber-200">
           {SESSION_EXPIRED_NOTICE}
@@ -302,12 +315,14 @@ export function AuthForm({ mode, uiLocale = "fr" }: { mode: "sign-in" | "sign-up
       ) : (
         <>
           <label className="grid gap-2 text-sm font-semibold text-dtsc-ink">
-            Email professionnel
+            <span className="inline-flex items-center gap-2"><Mail aria-hidden="true" className="h-4 w-4 text-dtsc-blue" /> {uiLocale === "en" ? "Work email" : "Email professionnel"}</span>
             <Input
               name="email"
               type="email"
               autoComplete="email"
               required
+              className="min-h-12 rounded-xl border-dtsc-border bg-dtsc-page px-4 text-base focus-visible:border-cyan-400"
+              placeholder={uiLocale === "en" ? "name@company.com" : "nom@entreprise.com"}
               value={emailValue}
               onChange={(event) => {
                 setEmailValue(event.target.value);
@@ -316,12 +331,15 @@ export function AuthForm({ mode, uiLocale = "fr" }: { mode: "sign-in" | "sign-up
             />
           </label>
           <label className="grid gap-2 text-sm font-semibold text-dtsc-ink">
-            Mot de passe
+            <span className="inline-flex items-center gap-2"><LockKeyhole aria-hidden="true" className="h-4 w-4 text-dtsc-blue" /> {uiLocale === "en" ? "Password" : "Mot de passe"}</span>
             <PasswordInput
               name="password"
               autoComplete={isSignUp ? "new-password" : "current-password"}
               required
               minLength={isSignUp ? 12 : undefined}
+              className="min-h-12 rounded-xl border-dtsc-border bg-dtsc-page px-4 text-base focus-visible:border-cyan-400"
+              showPasswordLabel={uiLocale === "en" ? "Show password" : "Afficher le mot de passe"}
+              hidePasswordLabel={uiLocale === "en" ? "Hide password" : "Masquer le mot de passe"}
               value={passwordValue}
               onChange={(event) => {
                 setPasswordValue(event.target.value);
@@ -345,15 +363,17 @@ export function AuthForm({ mode, uiLocale = "fr" }: { mode: "sign-in" | "sign-up
               </label>
             </>
           ) : (
-            <div className="space-y-4 rounded-2xl border border-dtsc-border bg-dtsc-page p-4">
+            <div className="space-y-4 rounded-2xl border border-dtsc-border bg-dtsc-page p-4 sm:p-5">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div className="min-w-0">
                   <p className="flex items-center gap-2 text-sm font-semibold text-dtsc-ink">
                     <Building2 className="h-4 w-4 shrink-0 text-dtsc-blue" />
-                    Choisir mon espace
+                    {uiLocale === "en" ? "Choose your workspace" : "Choisir mon espace"}
                   </p>
                   <p className="mt-1 text-xs leading-5 text-dtsc-muted">
-                    Chargez les espaces disponibles avec votre compte, puis choisissez où vous souhaitez travailler.
+                    {uiLocale === "en"
+                      ? "Find the workspaces associated with your account, then choose where to continue."
+                      : "Retrouvez les espaces de votre compte, puis choisissez où poursuivre votre travail."}
                   </p>
                 </div>
                 <Button
@@ -363,25 +383,25 @@ export function AuthForm({ mode, uiLocale = "fr" }: { mode: "sign-in" | "sign-up
                   disabled={organizationLoading || !emailValue.trim().includes("@") || !passwordValue}
                   className="w-full rounded-xl sm:w-auto sm:shrink-0"
                 >
-                  {organizationLoading ? "Recherche…" : organizationsLoaded ? "Actualiser" : "Charger mes espaces"}
+                  {organizationLoading ? (uiLocale === "en" ? "Searching…" : "Recherche…") : organizationsLoaded ? (uiLocale === "en" ? "Refresh" : "Actualiser") : (uiLocale === "en" ? "Find my spaces" : "Charger mes espaces")}
                 </Button>
               </div>
 
               {organizationsLoaded ? (
                 <div className="space-y-2">
                   <label className="grid gap-2 text-xs font-semibold text-dtsc-muted">
-                    Espace de travail
+                    {uiLocale === "en" ? "Workspace" : "Espace de travail"}
                     <select
                       name="organizationId"
                       value={selectedOrganizationId}
                       onChange={(event) => setSelectedOrganizationId(event.target.value)}
-                      className="h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink outline-none focus:border-cyan-400"
+                      className="min-h-12 w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink outline-none focus:border-cyan-400"
                       required
                     >
                       <option value={UNSELECTED_WORKSPACE} disabled>
-                        Choisissez votre espace
+                        {uiLocale === "en" ? "Select your workspace" : "Choisissez votre espace"}
                       </option>
-                      <option value="">Mon espace personnel</option>
+                      <option value="">{uiLocale === "en" ? "My personal workspace" : "Mon espace personnel"}</option>
                       {organizations.map((organization) => (
                         <option key={organization.id} value={organization.id}>
                           {organization.name}
@@ -390,12 +410,12 @@ export function AuthForm({ mode, uiLocale = "fr" }: { mode: "sign-in" | "sign-up
                     </select>
                   </label>
                   {organizations.length === 0 ? (
-                    <p className="text-xs leading-5 text-dtsc-muted">Vous pouvez continuer dans votre espace personnel.</p>
+                    <p className="inline-flex items-center gap-2 text-xs leading-5 text-dtsc-muted"><CheckCircle2 className="h-4 w-4 text-emerald-600" aria-hidden="true" />{uiLocale === "en" ? "You can continue in your personal workspace." : "Vous pouvez continuer dans votre espace personnel."}</p>
                   ) : null}
                 </div>
               ) : (
                 <p className="rounded-xl border border-dashed border-dtsc-border px-3 py-2 text-xs leading-5 text-dtsc-muted">
-                  Vos espaces s’afficheront ici après avoir choisi « Charger mes espaces ».
+                  {uiLocale === "en" ? "Your workspaces will appear here after clicking “Find my spaces”." : "Vos espaces s’afficheront ici après avoir choisi « Charger mes espaces »."}
                 </p>
               )}
 
@@ -412,7 +432,7 @@ export function AuthForm({ mode, uiLocale = "fr" }: { mode: "sign-in" | "sign-up
 
       <Button
         type="submit"
-        className="h-11 w-full rounded-xl bg-dtsc-blue text-white shadow-[var(--dtsc-shadow-md)] hover:bg-[var(--dtsc-brand-secondary-hover)]"
+        className="min-h-12 w-full rounded-xl bg-dtsc-blue text-white shadow-[var(--dtsc-shadow-md)] transition hover:bg-[var(--dtsc-brand-secondary-hover)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-dtsc-blue"
         disabled={isPending || (!isSignUp && !pendingRegistration && !signInReady)}
       >
         {isPending ? "Connexion…" : pendingRegistration ? "Vérifier et créer le compte" : isSignUp ? "Créer mon compte" : "Se connecter"}
