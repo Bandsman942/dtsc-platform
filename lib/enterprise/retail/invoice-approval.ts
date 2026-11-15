@@ -2,7 +2,7 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { resolveEnterpriseModuleAccess } from "@/lib/enterprise/module-access";
 import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
-import { requireRetailSiteCapability, retailFinanceReadSiteScope, retailStaffIsolationIsEnabled, RETAIL_OWNER_ROLES } from "@/lib/enterprise/retail/site-access";
+import { requireRetailSiteCapability, retailFinanceReadSiteScope, retailStaffIsolationIsEnabled, retailSelfApprovalAllowed, RETAIL_OWNER_ROLES } from "@/lib/enterprise/retail/site-access";
 
 type RetailApprovalReader = Pick<Prisma.TransactionClient, "enterpriseRetailInvoiceCheckout" | "enterpriseRetailInvoicePaymentProposal" | "enterpriseRetailConfiguration" | "organizationMember">;
 
@@ -30,6 +30,11 @@ export async function listRetailInvoiceFinanceApprovers(
   }
   await requireRetailSiteCapability(organizationId, requesterUserId, siteId, target === "PAYMENT" ? "COLLECT_PAYMENT" : "PREPARE_INVOICE", database, { requireAssignment: true });
 
+
+  const selfAllowed = await retailSelfApprovalAllowed(
+    organizationId, requesterUserId, siteId,
+    target === "PAYMENT" ? "SELF_APPROVE_PAYMENT" : "SELF_APPROVE_INVOICE", database,
+  );
   const members = await database.organizationMember.findMany({
     where: { organizationId, status: "ACTIVE", removedAt: null, userId: { not: requesterUserId } },
     take: 250, orderBy: { user: { name: "asc" } },
@@ -45,7 +50,8 @@ export async function listRetailInvoiceFinanceApprovers(
       positionTitle: member.positionTitle, role: member.role, isRequester: false, selfApprovalOverride: false,
     } : null;
   }));
-  return { candidates: candidates.filter((candidate): candidate is NonNullable<typeof candidate> => Boolean(candidate)), selfApprovalOverrideAvailable: false };
+  const self = selfAllowed ? await database.organizationMember.findFirst({ where: { organizationId, userId: requesterUserId, status: "ACTIVE", removedAt: null }, select: { userId: true, role: true, positionTitle: true, user: { select: { name: true, email: true } } } }) : null;
+  return { candidates: [...candidates.filter((candidate): candidate is NonNullable<typeof candidate> => Boolean(candidate)), ...(self ? [{ userId: self.userId, name: self.user.name, email: self.user.email, positionTitle: self.positionTitle, role: self.role, isRequester: true, selfApprovalOverride: true }] : [])], selfApprovalOverrideAvailable: Boolean(self) };
 }
 
 export async function listRetailInvoicePaymentFinanceApprovers(
@@ -64,7 +70,7 @@ export async function assertRetailPaymentFinanceApproverTx(
     select: { recordedByUserId: true },
   });
   if (!proposal || proposal.recordedByUserId !== input.requesterUserId) throw new EnterpriseRetailError("RETAIL_INVOICE_PAYMENT_NOT_FOUND", 404);
-  if (input.requesterUserId === input.approverUserId) throw new EnterpriseRetailError("RETAIL_INVOICE_SELF_APPROVAL_FORBIDDEN", 403);
+  if (input.requesterUserId === input.approverUserId && !await retailSelfApprovalAllowed(input.organizationId, input.requesterUserId, input.siteId, "SELF_APPROVE_PAYMENT", tx)) throw new EnterpriseRetailError("RETAIL_INVOICE_SELF_APPROVAL_FORBIDDEN", 403);
   const result = await listRetailInvoicePaymentFinanceApprovers(input.organizationId, input.requesterUserId, input.siteId, tx);
   if (!result.candidates.some((candidate) => candidate.userId === input.approverUserId)) throw new EnterpriseRetailError("RETAIL_INVOICE_APPROVER_NOT_ELIGIBLE", 403);
 }
@@ -80,7 +86,7 @@ export async function assertRetailInvoiceFinanceApproverTx(
     select: { id: true },
   });
   if (!checkout) throw new EnterpriseRetailError("RETAIL_INVOICE_NOT_FOUND", 404);
-  if (input.requesterUserId === input.approverUserId) throw new EnterpriseRetailError("RETAIL_INVOICE_SELF_APPROVAL_FORBIDDEN", 403);
+  if (input.requesterUserId === input.approverUserId && !await retailSelfApprovalAllowed(input.organizationId, input.requesterUserId, input.siteId, "SELF_APPROVE_INVOICE", tx)) throw new EnterpriseRetailError("RETAIL_INVOICE_SELF_APPROVAL_FORBIDDEN", 403);
   const result = await listRetailInvoiceFinanceApprovers(input.organizationId, input.requesterUserId, input.siteId, tx);
   if (!result.candidates.some((candidate) => candidate.userId === input.approverUserId)) {
     throw new EnterpriseRetailError("RETAIL_INVOICE_APPROVER_NOT_ELIGIBLE", 403);

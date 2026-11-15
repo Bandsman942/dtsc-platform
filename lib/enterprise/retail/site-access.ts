@@ -9,6 +9,7 @@ export const RETAIL_SITE_CAPABILITIES = [
   "COLLECT_PAYMENT", "OPEN_CASH", "CLOSE_CASH", "VIEW_REPORTS", "AUTHORIZE_TRANSFER",
   "REQUEST_INVOICE_RETURN", "APPROVE_INVOICE_RETURN",
   "RECORD_EXPENSE", "APPROVE_EXPENSE",
+  "SELF_APPROVE_INVOICE", "SELF_APPROVE_PAYMENT", "SELF_APPROVE_INVOICE_RETURN",
 ] as const;
 
 export const retailSiteAssignmentInputSchema = z.object({
@@ -40,6 +41,34 @@ export function siteStaffCapabilities(roleCode: string, permissions: unknown): R
     return [...new Set(roleCode === "MANAGER" ? [...validated.data, "ISSUE_INVOICE" as const] : validated.data)];
   }
   return [...ROLE_DEFAULT_CAPABILITIES[roleCode as typeof RETAIL_SITE_STAFF_ROLES[number]]];
+}
+
+
+/** Only explicit active single-store owner delegations allow dual control.
+ * Rechecked on nomination, submission and decision. Default is always off. */
+export async function retailSelfApprovalAllowed(
+  organizationId: string, userId: string, siteId: string,
+  capability: "SELF_APPROVE_INVOICE" | "SELF_APPROVE_PAYMENT" | "SELF_APPROVE_INVOICE_RETURN",
+  database: RetailSiteAccessReader = prisma,
+): Promise<boolean> {
+  const [member, configuration, assignment] = await Promise.all([
+    database.organizationMember.findFirst({ where: { organizationId, userId, status: "ACTIVE", removedAt: null }, select: { role: true } }),
+    database.enterpriseRetailConfiguration.findUnique({ where: { organizationId }, select: { settingsJson: true } }),
+    database.enterpriseRetailSiteAssignment.findUnique({
+      where: { organizationId_siteId_userId: { organizationId, siteId, userId } },
+      select: { isActive: true, roleCode: true, permissionsJson: true },
+    }),
+  ]);
+  if (!member || RETAIL_OWNER_ROLES.has(member.role) || !assignment?.isActive) return false;
+  const settings = configuration?.settingsJson;
+  if (!retailStaffIsolationIsEnabled(settings) || !settings || typeof settings !== "object" || Array.isArray(settings) ||
+      (settings as Prisma.JsonObject).invoiceCheckoutEnabled !== true) return false;
+  const granted = siteStaffCapabilities(assignment.roleCode, assignment.permissionsJson);
+  const prerequisite = capability === "SELF_APPROVE_INVOICE" ? "PREPARE_INVOICE"
+    : capability === "SELF_APPROVE_PAYMENT" ? "COLLECT_PAYMENT" : "APPROVE_INVOICE_RETURN";
+  return granted.includes(capability) && granted.includes(prerequisite) &&
+    (capability !== "SELF_APPROVE_INVOICE_RETURN" ||
+      (assignment.roleCode === "MANAGER" && granted.includes("REQUEST_INVOICE_RETURN")));
 }
 
 // Intentionally off for existing tenants. Activation is controlled per tenant

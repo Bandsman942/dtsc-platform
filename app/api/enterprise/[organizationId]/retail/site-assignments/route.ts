@@ -72,11 +72,35 @@ export async function PUT(req: Request, { params }: Params) {
       prisma.organizationMember.findFirst({ where: { organizationId, userId: input.userId, status: "ACTIVE", removedAt: null }, select: { role: true } }),
     ]);
     if (!site || !member || RETAIL_OWNER_ROLES.has(member.role)) throw new EnterpriseRetailError("RETAIL_SITE_ASSIGNMENT_TARGET_INVALID", 409);
+
+    const restricted = ["SELF_APPROVE_INVOICE", "SELF_APPROVE_PAYMENT", "SELF_APPROVE_INVOICE_RETURN"];
+    const requested: string[] = input.permissions || [...ROLE_DEFAULT_CAPABILITIES[input.roleCode]];
+    if ((requested.includes("SELF_APPROVE_INVOICE") && !requested.includes("PREPARE_INVOICE")) ||
+        (requested.includes("SELF_APPROVE_PAYMENT") && !requested.includes("COLLECT_PAYMENT")) ||
+        (requested.includes("SELF_APPROVE_INVOICE_RETURN") &&
+          (input.roleCode !== "MANAGER" || !requested.includes("REQUEST_INVOICE_RETURN") || !requested.includes("APPROVE_INVOICE_RETURN")))) {
+      throw new EnterpriseRetailError("RETAIL_SELF_APPROVAL_PREREQUISITE_REQUIRED", 400);
+    }
+    if (requested.some((capability) => restricted.includes(capability))) {
+      const owner = await prisma.organizationMember.findFirst({
+        where: { organizationId, userId: auth.session.userId, status: "ACTIVE", removedAt: null, role: "OWNER" },
+        select: { id: true },
+      });
+      if (!owner) throw new EnterpriseRetailError("RETAIL_SELF_APPROVAL_OWNER_REQUIRED", 403);
+    }
     const existing = await prisma.enterpriseRetailSiteAssignment.findUnique({
       where: { organizationId_siteId_userId: { organizationId, siteId: input.siteId, userId: input.userId } },
-      select: { id: true, revision: true },
+      select: { id: true, revision: true, permissionsJson: true, roleCode: true },
     });
     if ((existing && existing.revision !== input.revision) || (!existing && input.revision)) throw new EnterpriseRetailError("RETAIL_SITE_ASSIGNMENT_CONFLICT", 409);
+
+    if (existing && siteStaffCapabilities(existing.roleCode, existing.permissionsJson).some((capability) => restricted.includes(capability))) {
+      const owner = await prisma.organizationMember.findFirst({
+        where: { organizationId, userId: auth.session.userId, status: "ACTIVE", removedAt: null, role: "OWNER" },
+        select: { id: true },
+      });
+      if (!owner) throw new EnterpriseRetailError("RETAIL_SELF_APPROVAL_OWNER_REQUIRED", 403);
+    }
     const row = existing
       ? await prisma.enterpriseRetailSiteAssignment.updateMany({
           where: { id: existing.id, organizationId, revision: existing.revision },
@@ -95,7 +119,7 @@ export async function PUT(req: Request, { params }: Params) {
             permissionsJson: input.permissions ?? undefined, isActive: input.isActive, createdByUserId: auth.session.userId,
           },
         });
-    await writeAuditLog({ userId: auth.session.userId, action: existing ? "RETAIL_SITE_ASSIGNMENT_UPDATED" : "RETAIL_SITE_ASSIGNMENT_CREATED", entity: "EnterpriseRetailSiteAssignment", entityId: row.id, request: req, metadata: { organizationId, siteId: row.siteId, userId: row.userId, roleCode: row.roleCode, isActive: row.isActive, revision: row.revision } });
+    await writeAuditLog({ userId: auth.session.userId, action: existing ? "RETAIL_SITE_ASSIGNMENT_UPDATED" : "RETAIL_SITE_ASSIGNMENT_CREATED", entity: "EnterpriseRetailSiteAssignment", entityId: row.id, request: req, metadata: { organizationId, siteId: row.siteId, userId: row.userId, roleCode: row.roleCode, isActive: row.isActive, revision: row.revision, permissionsBefore: existing?.permissionsJson ?? null, permissionsAfter: siteStaffCapabilities(row.roleCode, row.permissionsJson), delegatedByOwnerUserId: auth.session.userId } });
     await writeApiLog({ request: req, statusCode: existing ? 200 : 201, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "retail-site-assignments", action: existing ? "update" : "create" } });
     return NextResponse.json({ item: { ...row, permissions: siteStaffCapabilities(row.roleCode, row.permissionsJson) } }, { status: existing ? 200 : 201 });
   } catch (error) {
