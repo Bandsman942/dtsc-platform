@@ -66,6 +66,7 @@ export const accountPreferencesSchema = z.object({
   startMutedByDefault: z.coerce.boolean().default(false),
   startCameraOffByDefault: z.coerce.boolean().default(true),
   callSoundVolume: z.coerce.number().int().min(0).max(100).default(45),
+  incomingCallRingtone: z.enum(["CLASSIC", "SOFT", "DIGITAL", "MELODIC"]).default("CLASSIC"),
   callAlertDisplayDuration: z.coerce.number().int().min(2500).max(15000).default(6000),
   preferredAudioInputId: z.string().max(240).optional().nullable().or(z.literal("")),
   preferredVideoInputId: z.string().max(240).optional().nullable().or(z.literal("")),
