@@ -16,6 +16,7 @@ import { assertRetailInvoiceReturnSettlementReadinessTx } from "@/lib/enterprise
 import { retailFinanceReadSiteScope } from "@/lib/enterprise/retail/site-access";
 import { withRetailTransactionRetry } from "@/lib/enterprise/retail/transaction-retry";
 import { valueRetailInventoryReturnTx } from "@/lib/enterprise/retail/accounting";
+import { postPaidRetailInvoiceStockTx } from "@/lib/enterprise/retail/invoice-checkout";
 import { prisma } from "@/lib/prisma";
 
 export const retailInvoiceReturnFinancePrepareSchema = z.object({
@@ -433,6 +434,10 @@ export async function settleRetailInvoiceReturnFinance(
         status: "COMPLETED", settledByUserId: actorUserId, completedAt: new Date(), revision: { increment: 1 },
       },
     });
+    // If the credit closes the remaining receivable, fulfill only the
+    // uncredited goods. Full cancellations release stock promises without an
+    // inventory movement; partially cancelled orders retain their valuation.
+    if (nextOutstanding.isZero()) await postPaidRetailInvoiceStockTx(tx, organizationId, invoiceId, actorUserId);
     await publishFinanceEvent(tx, {
       organizationId, entityType: "EnterpriseRetailInvoiceReturnRequest", entityId: request.id,
       eventType: "RETAIL_INVOICE_RETURN_COMPLETED",
