@@ -51,6 +51,7 @@ export async function POST(req: Request, { params }: Params) {
       couponCode: parsed.data.couponCode,
       customerSegmentCode: parsed.data.customerSegmentCode,
       channelCode: parsed.data.channelCode,
+      invoiceCheckoutFx: parsed.data.invoiceCheckout === true,
     };
     const decisions = await resolveRetailCommercialPricingDecisions(
       organizationId,

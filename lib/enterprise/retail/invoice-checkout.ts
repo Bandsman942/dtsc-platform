@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { createSalesInvoiceTx } from "@/lib/enterprise/accounting/receivables-service";
+import { resolveExchangeRateDetails, snapshotExchangeRate } from "@/lib/enterprise/accounting/currency";
 import { resolveRetailCommercialPricingDecisions } from "@/lib/enterprise/retail/commercial-engine";
 import { valueRetailInvoiceFulfillmentIssueTx } from "@/lib/enterprise/retail/accounting";
 import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
@@ -75,7 +76,7 @@ export async function prepareRetailInvoice(organizationId: string, actorUserId: 
   const decisions = await resolveRetailCommercialPricingDecisions(organizationId, {
     siteId: input.siteId, customerBusinessPartyId: input.businessPartyId || null,
     currencyCode: input.currencyCode, lines: input.lines.map((line) => ({ catalogItemId: line.catalogItemId, quantity: line.quantity })),
-  }, { channelCode: "POS", couponCode: null });
+  }, { channelCode: "POS", couponCode: null, invoiceCheckoutFx: true });
   // Finance invoices are not EnterpriseRetailSale records. The existing promotion
   // redemption ledger requires a saleId, so an automatic/coupon promotion cannot
   // be considered consumed here. Never grant a discount that evades usage limits
@@ -120,7 +121,8 @@ export async function prepareRetailInvoice(organizationId: string, actorUserId: 
     const prepared = input.lines.map((line) => {
       const item = byCatalog.get(line.catalogItemId);
       const decision = decisionByCatalog.get(line.catalogItemId);
-      if (!item || !decision || (item.currency && item.currency !== input.currencyCode)) throw new EnterpriseRetailError("RETAIL_CURRENCY_MISMATCH", 409);
+      const invoiceFx = decision?.context.invoiceFx as { sourceCurrencyCode?: string } | undefined;
+      if (!item || !decision || (item.currency && item.currency !== input.currencyCode && invoiceFx?.sourceCurrencyCode !== item.currency)) throw new EnterpriseRetailError("RETAIL_CURRENCY_MISMATCH", 409);
       const inventory = item.trackInventory ? inventoryByCatalog.get(item.id) : null;
       if (item.trackInventory && !inventory) throw new EnterpriseRetailError("RETAIL_INVENTORY_ITEM_REQUIRED", 409);
       if (line.stockLotId && (!inventory || lotById.get(line.stockLotId)?.inventoryItemId !== inventory.id)) throw new EnterpriseRetailError("RETAIL_STOCK_LOT_INVALID", 409);
@@ -153,6 +155,21 @@ export async function prepareRetailInvoice(organizationId: string, actorUserId: 
       })),
     };
     const newInvoice = await createSalesInvoiceTx(tx, organizationId, actorUserId, financeInput, input.siteId);
+    // Freeze the dated Finance rate per canonical invoice LINE. A stale rate
+    // between pricing preview and the serializable write invalidates the
+    // checkout, rather than silently booking another amount.
+    for (const line of prepared) {
+      const fx = line.decision.context.invoiceFx as { sourceCurrencyCode: string; targetCurrencyCode: string; rate: string; rateId: string | null; originalUnitPrice: string } | undefined;
+      if (!fx || fx.sourceCurrencyCode === input.currencyCode) continue;
+      const invoiceItemId = newInvoice.items.find((item) => item.catalogItemId === line.catalogItemId)?.id;
+      if (!invoiceItemId) throw new EnterpriseRetailError("RETAIL_INVOICE_LINE_MISSING", 409);
+      const current = await resolveExchangeRateDetails(tx, { organizationId, sourceCurrencyCode: fx.sourceCurrencyCode, targetCurrencyCode: input.currencyCode, rateDate: newInvoice.invoiceDate });
+      if (!current.rate.equals(new Prisma.Decimal(fx.rate)) || current.rateId !== fx.rateId) throw new EnterpriseRetailError("RETAIL_INVOICE_EXCHANGE_RATE_STALE", 409);
+      await snapshotExchangeRate(tx, { organizationId, sourceEntityType: "EnterpriseSalesInvoiceItem", sourceEntityId: invoiceItemId,
+        sourceCurrencyCode: fx.sourceCurrencyCode, targetCurrencyCode: input.currencyCode, rateDate: current.rateDate, rate: current.rate,
+        source: `RETAIL_INVOICE_ORIGINAL_UNIT:${fx.originalUnitPrice}:FINANCE_RATE:${current.rateId || "NONE"}:${current.direction}`,
+      });
+    }
     // WARN is an explicit, non-blocking policy. Make the issue visible to
     // Finance validators on the canonical invoice, not only in a transient toast.
     const invoice = stockWarnings.length
