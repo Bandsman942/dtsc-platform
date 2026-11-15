@@ -143,7 +143,7 @@ export function RetailInvoicePaymentDialog({ organizationId, invoiceId, invoiceN
     <Dialog open={Boolean(approval)} onClose={() => { if (!busy) setApproval(null); }} title={t.submitTitle} description={t.submitHint} presentation="editor" className="max-w-xl">
       {approval ? <form className="grid min-w-0 gap-3" onSubmit={(event) => { event.preventDefault(); const form = new FormData(event.currentTarget); void mutate(`${base}/${encodeURIComponent(approval.payment.id)}/transition`, { action: "SUBMIT", revision: approval.payment.revision, approverUserId: String(form.get("approverUserId") || ""), reason: String(form.get("reason") || "") }, t.submittedOk).then((ok) => { if (ok) setApproval(null); }); }}>
         <strong className="text-sm text-dtsc-ink">{approval.payment.number}</strong>
-        <EnterpriseApproverSelect organizationId={organizationId} moduleCode="FINANCE_PAYMENTS" locale={locale} label={t.approver} disabled={busy} candidatesEndpoint={`${base}/approval-candidates`} />
+        <EnterpriseApproverSelect organizationId={organizationId} moduleCode="FINANCE_PAYMENTS" ownerControlledSelfApproval locale={locale} label={t.approver} disabled={busy} candidatesEndpoint={`${base}/approval-candidates`} />
         <label className="grid min-w-0 gap-1 text-sm font-semibold text-dtsc-ink">{t.submitNote}<textarea name="reason" maxLength={1000} className="min-h-20 w-full min-w-0 rounded-lg border border-dtsc-border bg-dtsc-page p-2 text-base" disabled={busy} /></label>
         <div data-responsive-actions className="flex flex-wrap justify-end gap-2"><Button type="button" variant="outline" disabled={busy} onClick={() => setApproval(null)}>{t.back}</Button><Button type="submit" disabled={busy}>{t.submitButton}</Button></div>
       </form> : null}
