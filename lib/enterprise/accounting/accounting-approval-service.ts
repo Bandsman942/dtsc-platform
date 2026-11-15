@@ -206,12 +206,17 @@ export async function requireAccountingApprovalDecision(input: {
     // an owner-granted self-approval; unrelated Finance targets are untouched.
     if (approval.requestedByUserId === input.actorUserId && approval.approverUserId === input.actorUserId &&
         ["EnterpriseSalesInvoice", "EnterprisePayment"].includes(input.targetEntityType)) {
-      const checkout = input.targetEntityType === "EnterpriseSalesInvoice"
-        ? await prisma.enterpriseRetailInvoiceCheckout.findFirst({ where: { organizationId: input.organizationId, salesInvoiceId: input.targetEntityId }, select: { siteId: true } })
-        : await prisma.enterpriseRetailInvoicePaymentProposal.findFirst({ where: { organizationId: input.organizationId, paymentId: input.targetEntityId }, select: { checkout: { select: { siteId: true } } } });
-      const siteId = checkout && "siteId" in checkout ? checkout.siteId : checkout?.checkout.siteId;
+      const invoiceTarget = input.targetEntityType === "EnterpriseSalesInvoice";
+      const siteId = invoiceTarget
+        ? (await prisma.enterpriseRetailInvoiceCheckout.findFirst({
+            where: { organizationId: input.organizationId, salesInvoiceId: input.targetEntityId }, select: { siteId: true },
+          }))?.siteId
+        : (await prisma.enterpriseRetailInvoicePaymentProposal.findFirst({
+            where: { organizationId: input.organizationId, paymentId: input.targetEntityId },
+            select: { checkout: { select: { siteId: true } } },
+          }))?.checkout.siteId;
       if (siteId) {
-        const kind = input.targetEntityType === "EnterpriseSalesInvoice" ? "INVOICE" : "PAYMENT";
+        const kind = invoiceTarget ? "INVOICE" : "PAYMENT";
         if (!await hasRetailSelfApprovalGrant(input.organizationId, input.actorUserId, siteId, kind)) {
           throw new EnterpriseAccountingError("ACCOUNTING_SELF_APPROVAL_FORBIDDEN", 403);
         }
