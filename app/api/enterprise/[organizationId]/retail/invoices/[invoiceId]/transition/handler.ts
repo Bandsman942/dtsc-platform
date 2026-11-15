@@ -4,7 +4,7 @@ import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { transitionSalesInvoice } from "@/lib/enterprise/accounting/receivables-service";
 import { decideSalesInvoiceAssignedApproval, submitSalesInvoiceForAssignedApproval } from "@/lib/enterprise/accounting/accounting-invoice-approval-orchestration";
 import { resolveEnterpriseModuleAccess } from "@/lib/enterprise/module-access";
-import { retailFinanceReadSiteScope, siteStaffCapabilities } from "@/lib/enterprise/retail/site-access";
+import { retailFinanceReadSiteScope, siteStaffCapabilities, retailSelfApprovalAllowed } from "@/lib/enterprise/retail/site-access";
 import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
 import { authorizeRetailRequest, retailErrorResponse } from "@/lib/enterprise/retail/http";
 import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
@@ -58,7 +58,8 @@ export async function POST(req: Request, { params }: Params) {
       // A designated Finance approver is mandatory even for a store manager.
       const finance = await resolveEnterpriseModuleAccess({ userId: auth.session.userId, organizationId, moduleCode: "FINANCE_RECEIVABLES", action: "approve" });
       const scoped = await retailFinanceReadSiteScope(organizationId, auth.session.userId, "VIEW_SALES");
-      if (!finance.allowed || (scoped !== null && !scoped.includes(checkout.siteId))) throw new EnterpriseRetailError("RETAIL_SITE_ACCESS_DENIED", 403);
+      const selfAllowed = parsed.data.action === "APPROVE" && checkout.invoice.createdByUserId === auth.session.userId && await retailSelfApprovalAllowed(organizationId, auth.session.userId, checkout.siteId, "SELF_APPROVE_INVOICE");
+      if (!selfAllowed && (!finance.allowed || (scoped !== null && !scoped.includes(checkout.siteId)))) throw new EnterpriseRetailError("RETAIL_SITE_ACCESS_DENIED", 403);
     }
     if (checkout.invoice.revision !== parsed.data.revision) throw new EnterpriseRetailError("RETAIL_INVOICE_REVISION_CONFLICT", 409);
 
@@ -72,7 +73,7 @@ export async function POST(req: Request, { params }: Params) {
     await writeAuditLog({
       userId: auth.session.userId, action: `ENTERPRISE_RETAIL_INVOICE_${parsed.data.action}`,
       entity: "EnterpriseSalesInvoice", entityId: invoice.id, request: req,
-      metadata: { organizationId, siteId: checkout.siteId, reason: parsed.data.reason, approverUserId: parsed.data.action === "SUBMIT" ? parsed.data.approverUserId : undefined },
+      metadata: { organizationId, siteId: checkout.siteId, invoiceId, selfApprovalOverride: parsed.data.action === "APPROVE" && checkout.invoice.createdByUserId === auth.session.userId, reason: parsed.data.reason, approverUserId: parsed.data.action === "SUBMIT" ? parsed.data.approverUserId : undefined },
     });
     if (["APPROVE", "REJECT", "REQUEST_CORRECTION", "ISSUE"].includes(parsed.data.action) && checkout.invoice.createdByUserId !== auth.session.userId) {
       const title = parsed.data.action === "ISSUE" ? "Facture émise" : parsed.data.action === "APPROVE" ? "Facture approuvée" : parsed.data.action === "REJECT" ? "Facture refusée" : "Correction de facture demandée";

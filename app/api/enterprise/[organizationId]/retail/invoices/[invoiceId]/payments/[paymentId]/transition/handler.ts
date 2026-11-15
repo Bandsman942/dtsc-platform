@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
-import { submitPaymentForAssignedApproval } from "@/lib/enterprise/accounting/accounting-human-approval-orchestration";
+import { approvePaymentAssignedApproval, submitPaymentForAssignedApproval } from "@/lib/enterprise/accounting/accounting-human-approval-orchestration";
+import { retailSelfApprovalAllowed } from "@/lib/enterprise/retail/site-access";
 import { transitionEnterprisePayment } from "@/lib/enterprise/accounting/payments-service";
 import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
 import { authorizeRetailRequest, retailErrorResponse } from "@/lib/enterprise/retail/http";
@@ -13,6 +14,7 @@ type Params = { params: Promise<{ organizationId: string; invoiceId: string; pay
 const schema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("SUBMIT"), revision: z.number().int().positive(), approverUserId: z.string().trim().min(1).max(191), reason: z.string().trim().max(1000).optional() }).strict(),
   z.object({ action: z.literal("CANCEL"), revision: z.number().int().positive(), reason: z.string().trim().min(4).max(1000) }).strict(),
+  z.object({ action: z.literal("APPROVE"), revision: z.number().int().positive(), reason: z.string().trim().max(1000).optional() }).strict(),
 ]);
 
 /** Retail may submit its own draft for an INDEPENDENT Finance approver, or
@@ -34,12 +36,16 @@ export async function POST(req: Request, { params }: Params) {
       throw new EnterpriseRetailError("RETAIL_INVOICE_PAYMENT_NOT_FOUND", 404);
     }
     if (proposal.payment.revision !== parsed.data.revision) throw new EnterpriseRetailError("RETAIL_INVOICE_PAYMENT_REVISION_CONFLICT", 409);
-    if (proposal.payment.status !== "DRAFT") throw new EnterpriseRetailError("RETAIL_INVOICE_PAYMENT_NOT_DRAFT", 409);
+    if (parsed.data.action === "APPROVE") {
+      if (proposal.payment.status !== "PENDING_APPROVAL" || !await retailSelfApprovalAllowed(organizationId, auth.session.userId, proposal.checkout.siteId, "SELF_APPROVE_PAYMENT")) throw new EnterpriseRetailError("RETAIL_SITE_ACCESS_DENIED", 403);
+    } else if (proposal.payment.status !== "DRAFT") throw new EnterpriseRetailError("RETAIL_INVOICE_PAYMENT_NOT_DRAFT", 409);
     const payment = parsed.data.action === "SUBMIT"
       ? await submitPaymentForAssignedApproval(organizationId, paymentId, auth.session.userId, parsed.data, { retailPaymentSiteId: proposal.checkout.siteId })
-      : await transitionEnterprisePayment(organizationId, paymentId, auth.session.userId, { action: "CANCEL", revision: parsed.data.revision, reason: parsed.data.reason });
+      : parsed.data.action === "APPROVE"
+        ? await approvePaymentAssignedApproval(organizationId, paymentId, auth.session.userId, parsed.data)
+        : await transitionEnterprisePayment(organizationId, paymentId, auth.session.userId, { action: "CANCEL", revision: parsed.data.revision, reason: parsed.data.reason });
     await writeAuditLog({ userId: auth.session.userId, action: `ENTERPRISE_RETAIL_INVOICE_PAYMENT_${parsed.data.action}`, entity: "EnterprisePayment", entityId: paymentId,
-      request: req, metadata: { organizationId, invoiceId, siteId: proposal.checkout.siteId, approverUserId: parsed.data.action === "SUBMIT" ? parsed.data.approverUserId : undefined } });
+      request: req, metadata: { organizationId, invoiceId, siteId: proposal.checkout.siteId, selfApprovalOverride: parsed.data.action === "APPROVE", approverUserId: parsed.data.action === "SUBMIT" ? parsed.data.approverUserId : undefined } });
     await writeApiLog({ request: req, startedAt, statusCode: 200, userId: auth.session.userId, metadata: { organizationId, domain: "retail-invoice-payment-proposals", action: parsed.data.action } });
     return NextResponse.json({ ok: true, payment }, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {

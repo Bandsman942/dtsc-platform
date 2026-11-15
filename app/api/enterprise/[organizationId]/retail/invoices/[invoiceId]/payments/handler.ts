@@ -5,6 +5,7 @@ import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http"
 import { authorizeRetailRequest, retailErrorResponse } from "@/lib/enterprise/retail/http";
 import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
 import { retailInvoicePaymentOptions, retailInvoicePaymentProposalSchema, proposeRetailInvoicePayment } from "@/lib/enterprise/retail/invoice-payments";
+import { retailSelfApprovalAllowed } from "@/lib/enterprise/retail/site-access";
 import { prisma } from "@/lib/prisma";
 
 type Params = { params: Promise<{ organizationId: string; invoiceId: string }> };
@@ -21,6 +22,8 @@ export async function GET(req: Request, { params }: Params) {
     const pageInput = z.coerce.number().int().min(1).max(10000).safeParse(new URL(req.url).searchParams.get("page") || "1");
     if (!pageInput.success) throw new EnterpriseRetailError("RETAIL_INVOICE_PAYMENT_PAGE_INVALID", 400);
     const where = { organizationId, checkout: { salesInvoiceId: invoiceId } };
+    const checkout = await prisma.enterpriseRetailInvoiceCheckout.findFirst({ where: { organizationId, salesInvoiceId: invoiceId }, select: { siteId: true } });
+    const selfAllowed = Boolean(checkout && await retailSelfApprovalAllowed(organizationId, auth.session.userId, checkout.siteId, "SELF_APPROVE_PAYMENT"));
     const [proposals, total] = await Promise.all([
       prisma.enterpriseRetailInvoicePaymentProposal.findMany({
         where, orderBy: { createdAt: "desc" }, skip: (pageInput.data - 1) * 30, take: 30,
@@ -33,6 +36,7 @@ export async function GET(req: Request, { params }: Params) {
     const visibleProposals = proposals.map((item) => ({
       ...item,
       canSubmit: item.recordedByUserId === auth.session.userId && item.payment.status === "DRAFT",
+      canSelfApprove: selfAllowed && item.recordedByUserId === auth.session.userId && item.payment.status === "PENDING_APPROVAL",
       canCancel: item.recordedByUserId === auth.session.userId && item.payment.status === "DRAFT",
       canAllocate: ["CONFIRMED", "RECONCILED"].includes(item.payment.status) && item.payment.unallocatedAmount.isPositive(),
     }));

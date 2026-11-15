@@ -5,7 +5,7 @@ import { civilMidnightUtc, followingCivilDate, isCivilDate } from "@/lib/enterpr
 import { authorizeRetailRequest, retailErrorResponse, retailListParams } from "@/lib/enterprise/retail/http";
 import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
 import { resolveEnterpriseModuleAccess } from "@/lib/enterprise/module-access";
-import { retailFinanceReadSiteScope, RETAIL_OWNER_ROLES, siteStaffCapabilities } from "@/lib/enterprise/retail/site-access";
+import { retailFinanceReadSiteScope, retailSelfApprovalAllowed, RETAIL_OWNER_ROLES, siteStaffCapabilities } from "@/lib/enterprise/retail/site-access";
 import { prisma } from "@/lib/prisma";
 
 type Params = { params: Promise<{ organizationId: string }> };
@@ -39,15 +39,18 @@ export async function GET(req: Request, { params }: Params) {
     const owners = RETAIL_OWNER_ROLES.has(membership.role);
     const financeScope = financeAccess.allowed ? await retailFinanceReadSiteScope(organizationId, auth.session.userId, "VIEW_SALES") : [];
     const issuerSites = assignments.filter((assignment) => siteStaffCapabilities(assignment.roleCode, assignment.permissionsJson).includes("ISSUE_INVOICE")).map((assignment) => assignment.siteId);
-    if (view === "approvals" && !financeAccess.allowed) throw new EnterpriseRetailError("RETAIL_SITE_ACCESS_DENIED", 403);
+    const selfSites = view === "approvals" ? (await Promise.all(assignments.map(async (assignment) => (
+      await retailSelfApprovalAllowed(organizationId, auth.session.userId, assignment.siteId, "SELF_APPROVE_INVOICE") ? assignment.siteId : null
+    )))).filter((id): id is string => Boolean(id)) : [];
+    if (view === "approvals" && !financeAccess.allowed && !selfSites.length) throw new EnterpriseRetailError("RETAIL_SITE_ACCESS_DENIED", 403);
     if (view === "issue" && !owners && !issuerSites.length && !financeAccess.allowed) throw new EnterpriseRetailError("RETAIL_SITE_ACCESS_DENIED", 403);
 
     // Finance is company-wide only for users without a scoped Retail
     // assignment. Scoped Finance access cannot hop to another store.
-    const allSitesAllowed = view === "issue" && (owners || (financeAccess.allowed && financeScope === null));
+    const allSitesAllowed = (view === "issue" && (owners || (financeAccess.allowed && financeScope === null))) || (view === "approvals" && financeAccess.allowed && financeScope === null);
     const allowedSites = view === "issue"
       ? [...new Set([...issuerSites, ...(Array.isArray(financeScope) ? financeScope : [])])]
-      : financeScope;
+      : [...new Set([...(Array.isArray(financeScope) ? financeScope : []), ...selfSites])];
     const conditions: Prisma.Sql[] = [
       Prisma.sql`c."organizationId" = ${organizationId}`,
       Prisma.sql`i."organizationId" = ${organizationId}`,
