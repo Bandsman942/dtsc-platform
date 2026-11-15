@@ -10,7 +10,7 @@ import { financeReference, publishFinanceEvent } from "@/lib/enterprise/accounti
 import { createEnterprisePaymentTx } from "@/lib/enterprise/accounting/payments-service";
 import { postBusinessEventTx } from "@/lib/enterprise/accounting/posting-service";
 import { applyStockMovementTx } from "@/lib/enterprise/inventory/service";
-import { resolveEnterpriseModuleCapabilities } from "@/lib/enterprise/module-access";
+import { resolveEnterpriseModuleAccess, resolveEnterpriseModuleCapabilities } from "@/lib/enterprise/module-access";
 import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
 import { assertRetailInvoiceReturnSettlementReadinessTx } from "@/lib/enterprise/retail/invoice-return-settlement-preflight";
 import { retailFinanceReadSiteScope } from "@/lib/enterprise/retail/site-access";
@@ -20,6 +20,7 @@ import { prisma } from "@/lib/prisma";
 
 export const retailInvoiceReturnFinancePrepareSchema = z.object({
   revision: z.number().int().positive(),
+  financeApproverUserId: z.string().trim().min(1).max(191).optional(),
 }).strict();
 export const retailInvoiceReturnFinanceSettlementSchema = z.object({
   revision: z.number().int().positive(),
@@ -79,7 +80,9 @@ export async function prepareRetailInvoiceReturnFinance(
     if (allowedSites !== null && !allowedSites.includes(request.checkout.siteId)) {
       throw fail("RETAIL_SITE_ACCESS_DENIED", 403);
     }
-    if (request.status === "FINANCE_PENDING" && request.refundPaymentId && request.salesCreditNoteId &&
+    if (request.status === "FINANCE_PENDING" && request.salesCreditNoteId &&
+        (request.refundPaymentId || request.refundPayoutAmount?.isZero()) &&
+        (!input.financeApproverUserId || input.financeApproverUserId === (request.financeApproverUserId || request.approverUserId)) &&
         request.preparedByUserId === actorUserId && request.revision === input.revision + 1) {
       return { request, idempotent: true };
     }
@@ -87,9 +90,26 @@ export async function prepareRetailInvoiceReturnFinance(
         actorUserId === request.approverUserId || actorUserId === request.requestedByUserId) {
       throw fail("RETAIL_INVOICE_RETURN_FINANCE_CONFLICT");
     }
+    const financeApproverUserId = input.financeApproverUserId || request.approverUserId;
+    if ((request.approverUserId === request.requestedByUserId && !input.financeApproverUserId) ||
+        [request.requestedByUserId, request.inspectedByUserId, actorUserId].includes(financeApproverUserId)) {
+      throw fail("RETAIL_INVOICE_RETURN_FINANCE_APPROVER_INDEPENDENT_REQUIRED", 403);
+    }
+    const [receivableApprove, paymentApprove, receivableScope, paymentScope] = await Promise.all([
+      resolveEnterpriseModuleAccess({ organizationId, userId: financeApproverUserId, moduleCode: "FINANCE_RECEIVABLES", action: "approve" }),
+      resolveEnterpriseModuleAccess({ organizationId, userId: financeApproverUserId, moduleCode: "FINANCE_PAYMENTS", action: "approve" }),
+      retailFinanceReadSiteScope(organizationId, financeApproverUserId, "VIEW_SALES", tx),
+      retailFinanceReadSiteScope(organizationId, financeApproverUserId, "COLLECT_PAYMENT", tx),
+    ]);
+    if (!receivableApprove.allowed || !paymentApprove.allowed ||
+        (receivableScope !== null && !receivableScope.includes(request.checkout.siteId)) ||
+        (paymentScope !== null && !paymentScope.includes(request.checkout.siteId))) {
+      throw fail("RETAIL_INVOICE_RETURN_FINANCE_APPROVER_INDEPENDENT_REQUIRED", 403);
+    }
     const preview = await assertRetailInvoiceReturnSettlementReadinessTx(tx, organizationId, invoiceId, requestId);
+    const payoutAmount = preview.payoutAmount ?? preview.refundAmount;
     const accountIds = new Set(preview.financeSourcePlan.map((source) => source.financialAccountId));
-    if (preview.financeSourcePlan.length === 0) throw fail("RETAIL_INVOICE_RETURN_FINANCE_SOURCE_MISMATCH");
+    if (payoutAmount.greaterThan(0) && preview.financeSourcePlan.length === 0) throw fail("RETAIL_INVOICE_RETURN_FINANCE_SOURCE_MISMATCH");
     const payments = await tx.enterprisePayment.findMany({
       where: { organizationId, id: { in: [...new Set(preview.financeSourcePlan.map((source) => source.paymentId))] } },
       select: { id: true, methodType: true, financialAccountId: true, businessPartyId: true,
@@ -127,7 +147,7 @@ export async function prepareRetailInvoiceReturnFinance(
       });
     }
     const payoutPlan = [...grouped.values()];
-    if (!payoutPlan.reduce((total, leg) => total.plus(leg.amount), new Prisma.Decimal(0)).equals(preview.refundAmount)) {
+    if (!payoutPlan.reduce((total, leg) => total.plus(leg.amount), new Prisma.Decimal(0)).equals(payoutAmount)) {
       throw fail("RETAIL_INVOICE_RETURN_FINANCE_SOURCE_MISMATCH");
     }
 
@@ -200,7 +220,7 @@ export async function prepareRetailInvoiceReturnFinance(
     for (const payment of refundPayments) {
       const paymentApproval = await createAccountingApprovalAssignment(tx, {
         organizationId, targetEntityType: "EnterprisePayment", targetEntityId: payment.id,
-        requesterUserId: actorUserId, approverUserId: request.approverUserId,
+        requesterUserId: actorUserId, approverUserId: financeApproverUserId,
       });
       await tx.enterprisePayment.update({ where: { id: payment.id },
         data: { status: "PENDING_APPROVAL", revision: { increment: 1 } } });
@@ -212,24 +232,25 @@ export async function prepareRetailInvoiceReturnFinance(
       await publishFinanceEvent(tx, { organizationId, entityType: "EnterprisePayment", entityId: payment.id,
         eventType: "PAYMENT_SUBMIT", summary: `Payment ${payment.number}: SUBMIT`, actorUserId,
         fromStatus: "DRAFT", toStatus: "PENDING_APPROVAL",
-        metadataJson: { approvalId: paymentApproval.id, approverUserId: request.approverUserId, returnRequestId: request.id },
+        metadataJson: { approvalId: paymentApproval.id, approverUserId: financeApproverUserId, returnRequestId: request.id },
       });
     }
     const creditApproval = await createAccountingApprovalAssignment(tx, {
       organizationId, targetEntityType: "EnterpriseSalesCreditNoteApproval", targetEntityId: credit.id,
-      requesterUserId: actorUserId, approverUserId: request.approverUserId,
+      requesterUserId: actorUserId, approverUserId: financeApproverUserId,
     });
     await tx.enterpriseSalesCreditNote.update({ where: { id: credit.id },
       data: { status: "PENDING_APPROVAL", revision: { increment: 1 } } });
     await publishFinanceEvent(tx, { organizationId, entityType: "EnterpriseSalesCreditNote", entityId: credit.id,
       eventType: "SALES_CREDIT_NOTE_SUBMITTED", summary: `Credit note ${credit.number} submitted for approval`,
       actorUserId, fromStatus: "DRAFT", toStatus: "PENDING_APPROVAL",
-      metadataJson: { approvalId: creditApproval.id, approverUserId: request.approverUserId, returnRequestId: request.id },
+      metadataJson: { approvalId: creditApproval.id, approverUserId: financeApproverUserId, returnRequestId: request.id },
     });
 
     const updated = await tx.enterpriseRetailInvoiceReturnRequest.update({
       where: { id: request.id, organizationId }, data: {
-        status: "FINANCE_PENDING", refundPaymentId: refundPayments[0].id, salesCreditNoteId: credit.id,
+        status: "FINANCE_PENDING", refundPaymentId: refundPayments[0]?.id || null, salesCreditNoteId: credit.id,
+        refundPayoutAmount: payoutAmount, financeApproverUserId,
         preparedByUserId: actorUserId, preparedAt: new Date(), revision: { increment: 1 },
       },
     });
@@ -237,9 +258,9 @@ export async function prepareRetailInvoiceReturnFinance(
       organizationId, entityType: "EnterpriseRetailInvoiceReturnRequest", entityId: request.id,
       eventType: "RETAIL_INVOICE_RETURN_FINANCE_PREPARED", summary: "Retail invoice return bound to two Finance approvals",
       actorUserId, fromStatus: "APPROVED", toStatus: "FINANCE_PENDING",
-      metadataJson: { invoiceId, siteId: preview.siteId, paymentId: refundPayments[0].id,
+      metadataJson: { invoiceId, siteId: preview.siteId, paymentId: refundPayments[0]?.id || null,
         payoutPaymentIds: refundPayments.map((payment) => payment.id),
-        creditNoteId: credit.id, amount: preview.refundAmount.toFixed(2) },
+        creditNoteId: credit.id, creditAmount: preview.refundAmount.toFixed(2), payoutAmount: payoutAmount.toFixed(2), financeApproverUserId },
     });
     return { request: updated, idempotent: false };
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 45000 }));
