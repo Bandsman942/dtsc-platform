@@ -149,6 +149,8 @@ jobs:
         run: pnpm qa:retail-financial-kpi-v2
       - name: HOTFIX #1186 store self-approval and FR/EN audit source contracts
         run: pnpm qa:hotfix-1186-retail-access
+      - name: HOTFIX #1186 delegated access behavioral regressions
+        run: pnpm qa:hotfix-1186-retail-behavior
       - name: Type check
         run: pnpm type-check
         env:

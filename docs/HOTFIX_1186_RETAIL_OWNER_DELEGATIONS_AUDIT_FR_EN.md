@@ -36,7 +36,7 @@ Les journaux canoniques conservent leurs codes techniques stables et se traduise
 
 ## Preuves automatisées
 
-Le script `pnpm qa:hotfix-1186-retail-access` valide **des contrats source statiques**, non un test d'intégration. `Quality gates`, `Migration`, scripts RETAIL existants, `type-check`, `lint`, `build` et E2E propriétaire sont obligatoires avant merge. Aucune migration Prisma ni nouvelle variable d'environnement. Aucun déploiement manuel Vercel.
+Le script `pnpm qa:hotfix-1186-retail-access` valide **des contrats source statiques**, non un test d'intégration. `pnpm qa:hotfix-1186-retail-behavior` teste les décisions et révocations des délégations par boutique dans un environnement isolé (sans écriture en base réelle), ainsi que la localisation des événements. `Quality gates`, `Migration`, scripts RETAIL existants, `type-check`, `lint`, `build` et E2E propriétaire sont obligatoires avant merge. Aucune migration Prisma ni nouvelle variable d'environnement. Aucun déploiement manuel Vercel.
 
 ## Retour arrière
 
