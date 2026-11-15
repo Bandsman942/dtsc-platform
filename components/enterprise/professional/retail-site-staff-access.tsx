@@ -30,7 +30,8 @@ const dictionary = {
       VIEW_STOCK: "Consulter les stocks", MANAGE_STOCK: "Gérer les mouvements, inventaires et ajustements de stock", VIEW_SALES: "Consulter les ventes", PREPARE_INVOICE: "Préparer les factures", CANCEL_UNPAID_INVOICE: "Annuler une facture impayée", ISSUE_INVOICE: "Émettre les factures approuvées (droit natif du gérant)",
       COLLECT_PAYMENT: "Encaisser les paiements", OPEN_CASH: "Ouvrir une session de caisse", CLOSE_CASH: "Clôturer la caisse", VIEW_REPORTS: "Consulter les rapports", AUTHORIZE_TRANSFER: "Autoriser un transfert",
       RECORD_EXPENSE: "Enregistrer une dépense", APPROVE_EXPENSE: "Valider une dépense",
-      REQUEST_INVOICE_RETURN: "Demander un retour sur facture payée", APPROVE_INVOICE_RETURN: "Autoriser un retour sur facture (Finance indépendante)",
+      REQUEST_INVOICE_RETURN: "Demander l’annulation / le retour d’une facture encaissée", APPROVE_INVOICE_RETURN: "Approuver une demande d’annulation / retour",
+      SELF_APPROVE_INVOICE: "Approuver ses propres factures (sur délégation du propriétaire)", SELF_APPROVE_PAYMENT: "Approuver ses propres encaissements (sur délégation du propriétaire)", SELF_APPROVE_INVOICE_RETURN: "Gérant : approuver sa propre demande d’annulation, hors liquidation Finance",
     },
   },
   en: {
@@ -45,13 +46,15 @@ const dictionary = {
       VIEW_STOCK: "View stock", MANAGE_STOCK: "Manage stock movements, counts and adjustments", VIEW_SALES: "View sales", PREPARE_INVOICE: "Prepare invoices", CANCEL_UNPAID_INVOICE: "Cancel unpaid invoice", ISSUE_INVOICE: "Issue approved invoices (native manager right)",
       COLLECT_PAYMENT: "Collect payments", OPEN_CASH: "Open a till session", CLOSE_CASH: "Close cash register", VIEW_REPORTS: "View reports", AUTHORIZE_TRANSFER: "Authorize transfer",
       RECORD_EXPENSE: "Record expense", APPROVE_EXPENSE: "Approve expense",
-      REQUEST_INVOICE_RETURN: "Request a paid-invoice return", APPROVE_INVOICE_RETURN: "Approve an invoice return (independent Finance)",
+      REQUEST_INVOICE_RETURN: "Request cancellation / return of a paid invoice", APPROVE_INVOICE_RETURN: "Approve a cancellation / return request",
+      SELF_APPROVE_INVOICE: "Approve own invoices (owner-delegated)", SELF_APPROVE_PAYMENT: "Approve own collections (owner-delegated)", SELF_APPROVE_INVOICE_RETURN: "Manager: approve own cancellation request, excluding Finance settlement",
     },
   },
 } as const;
 
 export function RetailSiteStaffAccess({ organizationId, locale }: { organizationId: string; locale: "fr" | "en" }) {
   const copy = dictionary[locale];
+  const privileged = new Set(["SELF_APPROVE_INVOICE", "SELF_APPROVE_PAYMENT", "SELF_APPROVE_INVOICE_RETURN"]);
   const [data, setData] = useState<Data | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -123,7 +126,7 @@ export function RetailSiteStaffAccess({ organizationId, locale }: { organization
           <p className="text-xs font-bold text-dtsc-muted">{copy.officialPosition}</p>
           <p className="mt-1 break-words font-black text-dtsc-ink">{(locale === "en" ? selectedMember.positionTitleEn : selectedMember.positionTitleFr) || copy.noPosition}</p>
         </div> : null}
-        <fieldset className="mt-4 min-w-0"><legend className="text-sm font-black text-dtsc-ink">{copy.permissions}</legend><div className="mt-2 grid min-w-0 gap-2 sm:grid-cols-2">{data.capabilities.map((capability) => <label key={capability} className="flex min-w-0 items-center gap-3 rounded-lg border border-dtsc-border bg-dtsc-page p-2 text-sm text-dtsc-ink"><input type="checkbox" checked={permissions.includes(capability)} onChange={(event) => setPermissions((current) => event.target.checked ? [...new Set([...current, capability])] : current.filter((entry) => entry !== capability))} className="h-4 w-4 accent-cyan-600" />{copy.capability[capability as keyof typeof copy.capability]}</label>)}</div></fieldset>
+        <fieldset className="mt-4 min-w-0"><legend className="text-sm font-black text-dtsc-ink">{copy.permissions}</legend><p className="mt-1 text-xs leading-5 text-amber-700 dark:text-amber-300">{locale === "fr" ? "Délégations exceptionnelles : désactivées par défaut, attribuées uniquement par le propriétaire et limitées à cette boutique. L’approbation ne confirme pas automatiquement un paiement ni un remboursement." : "Exceptional delegations: off by default, owner-granted and limited to this store. Approval never automatically confirms payments or refunds."}</p><div className="mt-2 grid min-w-0 gap-2 sm:grid-cols-2">{data.capabilities.map((capability) => <label key={capability} className={`flex min-w-0 items-center gap-3 rounded-lg border p-2 text-sm text-dtsc-ink ${privileged.has(capability) ? "border-amber-500/40 bg-amber-500/5" : "border-dtsc-border bg-dtsc-page"}`}><input type="checkbox" checked={permissions.includes(capability)} onChange={(event) => setPermissions((current) => event.target.checked ? [...new Set([...current, capability])] : current.filter((entry) => entry !== capability))} className="h-4 w-4 accent-cyan-600" />{copy.capability[capability as keyof typeof copy.capability]}</label>)}</div></fieldset>
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3"><label className="flex items-center gap-2 text-sm font-semibold text-dtsc-ink"><input type="checkbox" checked={isActive} onChange={(event) => setIsActive(event.target.checked)} className="h-4 w-4 accent-cyan-600" />{copy.active}</label><Button disabled={!siteId || !userId || saving} onClick={() => void save()}>{saving ? copy.saving : copy.save}</Button></div>
         <div className="mt-5 border-t border-dtsc-border pt-4"><h3 className="flex items-center gap-2 text-sm font-black text-dtsc-ink"><ShieldCheck aria-hidden="true" className="h-4 w-4 text-emerald-600" />{copy.list}</h3><p className="mt-1 text-xs text-dtsc-muted">{copy.ownerExcluded}</p><div className="mt-3 grid gap-2 sm:grid-cols-2">{data.items.length ? data.items.map((row) => <button type="button" key={row.id} onClick={() => choose(row.siteId, row.userId)} className="flex min-w-0 flex-wrap items-center justify-between gap-2 rounded-xl border border-dtsc-border bg-dtsc-page p-3 text-left text-sm text-dtsc-ink transition hover:border-dtsc-blue focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-500"><span className="min-w-0"><span className="block truncate font-bold">{data.members.find((member) => member.userId === row.userId)?.name || copy.member}</span><span className="mt-0.5 block text-xs text-dtsc-muted">{data.sites.find((site) => site.id === row.siteId)?.name || copy.site} · {row.roleCode === "MANAGER" ? copy.manager : row.roleCode === "INVOICER" ? copy.invoicer : copy.cashier}</span></span><span className={row.isActive ? "rounded-full bg-emerald-500/10 px-2 py-1 text-xs font-bold text-emerald-700 dark:text-emerald-300" : "rounded-full bg-slate-500/10 px-2 py-1 text-xs font-bold text-dtsc-muted"}>{row.isActive ? copy.enabled : copy.disabled}</span></button>) : <p className="text-sm text-dtsc-muted">{copy.empty}</p>}</div></div>
       </> : null}
