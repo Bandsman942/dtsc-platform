@@ -315,7 +315,12 @@ export function CollaboratorsConversationWorkspace(props: Props) {
       if (activeGroupId) void fetch(`/api/collaborators/groups/${activeGroupId}/read`, { method: "POST", keepalive: true }).catch(() => undefined);
     };
     window.addEventListener("pagehide", acknowledgeOnPageExit);
-    return () => window.removeEventListener("pagehide", acknowledgeOnPageExit);
+    return () => {
+      window.removeEventListener("pagehide", acknowledgeOnPageExit);
+      // Also runs when Next.js unmounts the conversation during SPA navigation.
+      // The explicit mobile back and group-switch handlers give immediate UI feedback.
+      acknowledgeOnPageExit();
+    };
   }, [activeGroupId]);
 
   useEffect(() => { void loadExperience(); }, [loadExperience]);
