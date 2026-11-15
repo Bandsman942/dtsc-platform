@@ -299,7 +299,7 @@ export async function settleRetailInvoiceReturnFinance(
       return { request, idempotent: true };
     }
     if (request.status !== "FINANCE_PENDING" || request.revision !== input.revision ||
-        !request.refundPaymentId || !request.salesCreditNoteId || !request.preparedByUserId ||
+        !request.salesCreditNoteId || !request.preparedByUserId ||
         [request.requestedByUserId, request.inspectedByUserId, request.approverUserId,
           request.preparedByUserId].includes(actorUserId)) {
       throw fail("RETAIL_INVOICE_RETURN_FINANCE_CONFLICT");
@@ -307,8 +307,15 @@ export async function settleRetailInvoiceReturnFinance(
     const plan = await assertRetailInvoiceReturnSettlementReadinessTx(
       tx, organizationId, invoiceId, requestId, "FINANCE_PENDING",
     );
+    const payoutAmount = plan.payoutAmount ?? plan.refundAmount;
+    const financeApproverUserId = request.financeApproverUserId || request.approverUserId;
+    if ((payoutAmount.greaterThan(0) && !request.refundPaymentId) ||
+        (payoutAmount.isZero() && request.refundPaymentId) ||
+        [request.requestedByUserId, request.inspectedByUserId, request.preparedByUserId].includes(financeApproverUserId)) {
+      throw fail("RETAIL_INVOICE_RETURN_FINANCE_CONFLICT");
+    }
     const [payment, credit, invoice, receivable] = await Promise.all([
-      tx.enterprisePayment.findFirst({ where: { organizationId, id: request.refundPaymentId } }),
+      request.refundPaymentId ? tx.enterprisePayment.findFirst({ where: { organizationId, id: request.refundPaymentId } }) : Promise.resolve(null),
       tx.enterpriseSalesCreditNote.findFirst({ where: { organizationId, id: request.salesCreditNoteId } }),
       tx.enterpriseSalesInvoice.findFirst({ where: { organizationId, id: invoiceId } }),
       tx.enterpriseReceivable.findFirst({ where: { organizationId, id: plan.receivableId } }),
@@ -326,19 +333,20 @@ export async function settleRetailInvoiceReturnFinance(
       expectedByAccount.set(source.financialAccountId,
         (expectedByAccount.get(source.financialAccountId) || new Prisma.Decimal(0)).plus(source.amount));
     }
-    if (!payment || !credit || !invoice || !receivable || !payouts.length ||
-        payouts.length !== accountIds.size || (multiAccount && !payouts.some((leg) => leg.payment.id === payment.id)) ||
+    if (!credit || !invoice || !receivable ||
+        (payoutAmount.greaterThan(0) && (!payment || !payouts.length)) ||
+        payouts.length !== accountIds.size || (multiAccount && !payouts.some((leg) => leg.payment.id === payment?.id)) ||
         new Set(payouts.map((leg) => leg.accountId)).size !== accountIds.size ||
-        !payouts.reduce((total, leg) => total.plus(leg.amount), new Prisma.Decimal(0)).equals(plan.refundAmount) ||
+        !payouts.reduce((total, leg) => total.plus(leg.amount), new Prisma.Decimal(0)).equals(payoutAmount) ||
         payouts.some((leg) => !expectedByAccount.get(leg.accountId)?.equals(leg.amount) ||
           leg.payment.financialAccountId !== leg.accountId || !leg.payment.amount.equals(leg.amount) ||
-          leg.payment.status !== "APPROVED" || leg.payment.approvedByUserId !== request.approverUserId ||
+          leg.payment.status !== "APPROVED" || leg.payment.approvedByUserId !== financeApproverUserId ||
           leg.payment.initiatedByUserId !== request.preparedByUserId ||
           leg.payment.direction !== "OUTBOUND" || leg.payment.paymentType !== "REFUND" ||
           leg.payment.businessPartyId !== invoice.businessPartyId ||
           leg.payment.currencyCode !== invoice.currencyCode) ||
         credit.status !== "APPROVED" ||
-        credit.approvedByUserId !== request.approverUserId ||
+        credit.approvedByUserId !== financeApproverUserId ||
         credit.createdByUserId !== request.preparedByUserId ||
         credit.currencyCode !== invoice.currencyCode ||
         credit.salesInvoiceId !== invoiceId ||
@@ -430,9 +438,9 @@ export async function settleRetailInvoiceReturnFinance(
       eventType: "RETAIL_INVOICE_RETURN_COMPLETED",
       summary: "Retail invoice return settled atomically in Finance and Inventory",
       actorUserId, fromStatus: "FINANCE_PENDING", toStatus: "COMPLETED",
-      metadataJson: { invoiceId, siteId: plan.siteId, refundPaymentId: payment.id,
+      metadataJson: { invoiceId, siteId: plan.siteId, refundPaymentId: payment?.id || null,
         payoutPaymentIds: payouts.map((leg) => leg.payment.id),
-        creditNoteId: credit.id, amount: plan.refundAmount.toFixed(2),
+        creditNoteId: credit.id, creditAmount: plan.refundAmount.toFixed(2), payoutAmount: payoutAmount.toFixed(2),
         restockedMovementCount: restockedCount,
         nonRestockedLineCount: plan.stockSourcePlan.filter((source) => source.stockDisposition !== "RESTOCK").length },
     });
