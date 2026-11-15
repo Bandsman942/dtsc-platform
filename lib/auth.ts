@@ -98,6 +98,7 @@ export async function getCurrentUser(sessionOverride?: SessionPayload) {
         startMutedByDefault: true,
         startCameraOffByDefault: true,
         callSoundVolume: true,
+        incomingCallRingtone: true,
         callAlertDisplayDuration: true,
         preferredAudioInputId: true,
         preferredVideoInputId: true,
