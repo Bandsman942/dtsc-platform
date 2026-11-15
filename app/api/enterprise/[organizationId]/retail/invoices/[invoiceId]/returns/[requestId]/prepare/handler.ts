@@ -22,7 +22,7 @@ export async function POST(req: Request, { params }: Params) {
     );
     await writeAuditLog({ userId: auth.session.userId, action: "ENTERPRISE_RETAIL_INVOICE_RETURN_FINANCE_PREPARE",
       entity: "EnterpriseRetailInvoiceReturnRequest", entityId: requestId, request: req,
-      metadata: { organizationId, invoiceId, idempotent: result.idempotent, status: result.request.status } });
+      metadata: { organizationId, invoiceId, requestId, financeApproverUserId: parsed.data.financeApproverUserId || null, idempotent: result.idempotent, status: result.request.status } });
     await writeApiLog({ request: req, startedAt, statusCode: result.idempotent ? 200 : 201,
       userId: auth.session.userId, metadata: { organizationId, domain: "retail-invoice-return-requests",
         action: "finance-prepare", idempotent: result.idempotent } });

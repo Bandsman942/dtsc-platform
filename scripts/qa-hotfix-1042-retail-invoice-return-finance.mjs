@@ -122,10 +122,13 @@ const mocks = {
   "@prisma/client": { Prisma },
   "zod": { z },
   "@/lib/enterprise/retail/errors": { EnterpriseRetailError },
-  "@/lib/enterprise/module-access": { resolveEnterpriseModuleCapabilities: async () => ({
-    canCreate: state.financeAllowed, canSubmit: state.financeAllowed,
-    canWrite: state.financeAllowed, canManage: state.financeAllowed,
-  }) },
+  "@/lib/enterprise/module-access": {
+    resolveEnterpriseModuleAccess: async () => ({ allowed: state.financeAllowed }),
+    resolveEnterpriseModuleCapabilities: async () => ({
+      canCreate: state.financeAllowed, canSubmit: state.financeAllowed,
+      canWrite: state.financeAllowed, canManage: state.financeAllowed,
+    }),
+  },
   "@/lib/enterprise/retail/site-access": {
     retailFinanceReadSiteScope: async () => state.siteAllowed ? ["shop-A"] : ["shop-B"],
   },

@@ -17,6 +17,11 @@ const GENERIC_ERROR: Bilingual = {
 };
 
 const ERROR_MESSAGES: Record<string, Bilingual> = {
+  RETAIL_SELF_APPROVAL_OWNER_REQUIRED: { fr: "Seul le propriétaire peut attribuer ou retirer cette délégation dans la boutique.", en: "Only the owner may grant or revoke this store self-approval delegation." },
+  RETAIL_SELF_APPROVAL_PREREQUISITE_REQUIRED: { fr: "Activez les droits nécessaires de facturation, d’encaissement ou de retour avant de déléguer l’auto-approbation.", en: "Enable the required invoicing, collection or return rights before delegating self-approval." },
+  RETAIL_INVOICE_RETURN_FINANCE_APPROVER_INDEPENDENT_REQUIRED: { fr: "Sélectionnez un validateur Finance indépendant, habilité pour les créances et paiements de cette boutique.", en: "Select an independent Finance approver with both receivables and payments rights for this store." },
+  RETAIL_INVOICE_RETURN_SELF_APPROVAL_FORBIDDEN: { fr: "Le gérant doit disposer d’une délégation propriétaire active pour approuver sa propre demande d’annulation.", en: "The manager needs an active owner delegation to approve their own cancellation request." },
+  RETAIL_INVOICE_SELF_APPROVAL_FORBIDDEN: { fr: "Vous ne pouvez pas approuver votre propre facture sans délégation active pour cette boutique.", en: "You may not approve your own invoice without an active delegation for this store." },
   RETAIL_LEGACY_SALE_DISABLED_USE_INVOICE: {
     fr: "La facturation Finance est active : préparez la facture dans Vente comptoir, faites-la valider puis émettre, et encaissez-la dans Encaissements. La vente directe historique est désactivée.",
     en: "Finance invoice checkout is active: prepare an invoice at the counter, have it approved and issued, then collect it in Collections. Legacy direct sales are disabled.",
