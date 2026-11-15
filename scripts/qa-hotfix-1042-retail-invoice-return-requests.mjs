@@ -51,7 +51,9 @@ const tx = {
     findMany: async ({ select }) => {
       assert.ok(select.refundLegs?.select?.refundPayment?.select?.status,
         "Retail return list must select each canonical refund payment approval");
-      return state.saved ? [{ ...state.saved, refundLegs: state.listRefundLegs || [],
+      return state.saved ? [{ ...state.saved,
+        lines: (state.saved.lines || []).map((line) => ({ ...line, checkoutLine: { inventoryItemId: "item-A" } })),
+        refundLegs: state.listRefundLegs || [],
         refundPayment: state.listRefundPayment || null,
         salesCreditNote: state.listCreditNote || null }] : [];
     },
@@ -197,6 +199,7 @@ await assert.rejects(createRetailInvoiceReturnRequest("tenant", "invoice-A", "re
 state.featureEnabled = true;
 state.review = { id: "request-A", revision: 1, checkoutId: "checkout-A", status: "SUBMITTED",
   requestedByUserId: "requester", approverUserId: "reviewer",
+  lines: [{ checkoutLine: { inventoryItemId: "item-A" } }],
   checkout: { siteId: "store-A", stockPostedAt: new Date(), invoice: { status: "PAID" } } };
 state.financeAllowed = false;
 await assert.rejects(decideRetailInvoiceReturnRequest("tenant", "invoice-A", "request-A", "reviewer", { revision: 1, decision: "APPROVE" }),
