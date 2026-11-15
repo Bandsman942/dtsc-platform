@@ -28,4 +28,5 @@ must("components/settings/settings-panel.tsx", /data-account-preferences-workspa
 must("components/settings/settings-panel.tsx", /name="incomingCallRingtone"/, "User ringtone selector");
 must("app/api/account/preferences/route.ts", /incomingCallRingtone: body.data.incomingCallRingtone/, "Ringtone persisted");
 must("app/api/account/preferences/route.ts", /pushNotificationsEnabled: body.data.pushNotificationsEnabled/, "Notification preference persisted");
-console.log("OK — 22 Support/Collaboration/Calls/Preferences hotfix contract checks");
+must("lib/ai/tools/executors/private-actions.ts", /calculateSupportSla\(priority, createdAt\)/, "Agent ticket reuses canonical SLA");
+console.log("OK — 23 Support/Collaboration/Calls/Preferences hotfix contract checks");
