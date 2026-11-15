@@ -47,7 +47,7 @@ import {
 } from "@/components/collaborators/collaboration-meeting-message-content";
 import { GroupPresenceJournalDialog } from "@/components/collaborators/group-presence-journal-dialog";
 import { GroupCallRoom } from "@/components/collaborators/collaborators-workspace";
-import { playCallSound } from "@/components/calls/call-sounds";
+import { playCallSound, stopCallRingtone, type CallRingtone } from "@/components/calls/call-sounds";
 import { ActionMenu, type ActionMenuItem } from "@/components/ui/action-menu";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
@@ -99,6 +99,7 @@ type CallPreferences = {
   startMutedByDefault?: boolean;
   startCameraOffByDefault?: boolean;
   callSoundVolume?: number | null;
+  incomingCallRingtone?: CallRingtone | string;
   callAlertDisplayDuration?: number | null;
 };
 type MessageReaction = { id: string; userId: string; reactionType: string; user?: { id: string; name: string } };
@@ -205,6 +206,7 @@ export function CollaboratorsConversationWorkspace(props: Props) {
   const [joinedCall, setJoinedCall] = useState<JoinedCall | null>(null);
   const [callJoining, setCallJoining] = useState(false);
   const initialJoinHandledRef = useRef(false);
+  const seenIncomingCallIdsRef = useRef(new Set<string>());
   const [editMessage, setEditMessage] = useState<GroupMessage | null>(null);
   const [editContent, setEditContent] = useState("");
   const [readInfo, setReadInfo] = useState<ReadInfo | null>(null);
@@ -214,7 +216,6 @@ export function CollaboratorsConversationWorkspace(props: Props) {
   const [sending, setSending] = useState(false);
   const [directBlock, setDirectBlock] = useState<{ blockedByMe: boolean; blockedMe: boolean } | null>(null);
   const messageListRef = useRef<HTMLDivElement | null>(null);
-  const [initialScrollTarget, setInitialScrollTarget] = useState<string | null>(null);
   const historyExpandedRef = useRef(false);
   const attachmentInputRef = useRef<HTMLInputElement | null>(null);
   const pendingTextClientIdRef = useRef<string | null>(null);
@@ -227,6 +228,19 @@ export function CollaboratorsConversationWorkspace(props: Props) {
   const activePreference = activeGroup ? preferences[activeGroup.id] || defaultPreference(activeGroup.id, currentUserId) : null;
   const directPeer = activeGroup?.groupType === "DIRECT" ? activeGroup.members.find((member) => member.userId !== currentUserId) || null : null;
   const voiceByMessage = voices;
+
+  // The immersive collaborators view hides the global toast: it must play
+  // its own actual incoming ringtone when a new call starts.
+  useEffect(() => {
+    const ringingCalls = groups.flatMap((group) => group.calls || [])
+      .filter((call) => call.status === "RINGING" && call.startedById !== currentUserId);
+    const newCall = ringingCalls.find((call) => !seenIncomingCallIdsRef.current.has(call.id));
+    ringingCalls.forEach((call) => seenIncomingCallIdsRef.current.add(call.id));
+    if (newCall && props.callPreferences.callSoundsEnabled !== false) {
+      void playCallSound("incoming", props.callPreferences.callSoundVolume ?? 45, (props.callPreferences.incomingCallRingtone || "CLASSIC") as CallRingtone);
+    }
+    if (!ringingCalls.length) stopCallRingtone();
+  }, [currentUserId, groups, props.callPreferences.callSoundsEnabled, props.callPreferences.callSoundVolume, props.callPreferences.incomingCallRingtone]);
 
   const refreshGroups = useCallback(async () => {
     const response = await fetch("/api/collaborators/groups", { cache: "no-store" });
@@ -254,7 +268,7 @@ export function CollaboratorsConversationWorkspace(props: Props) {
     setCustomFilters(body.filters || []);
   }, []);
 
-  const loadMessages = useCallback(async (groupId: string, cursor?: string | null, focusedMessageId?: string | null, preserveHistory = false, preferUnread = false) => {
+  const loadMessages = useCallback(async (groupId: string, cursor?: string | null, focusedMessageId?: string | null, preserveHistory = false) => {
     if (!groupId) return;
     const list = messageListRef.current;
     const previousHeight = list?.scrollHeight || 0;
@@ -262,11 +276,10 @@ export function CollaboratorsConversationWorkspace(props: Props) {
     if (cursor) setLoadingOlder(true);
     const params = new URLSearchParams({ limit: "30" });
     if (cursor) params.set("cursor", cursor);
-    const targetMessageId = focusedMessageId || (preferUnread ? initialMessageId : null);
+    const targetMessageId = focusedMessageId || initialMessageId;
     if (!cursor && targetMessageId) params.set("messageId", targetMessageId);
-    else if (!cursor && preferUnread) params.set("firstUnread", "1");
     const response = await fetch(`/api/collaborators/groups/${groupId}/messages?${params.toString()}`, { cache: "no-store" });
-    const body = await response.json().catch(() => null) as { messages?: GroupMessage[]; nextCursor?: string | null; hasMore?: boolean; firstUnreadMessageId?: string | null } | null;
+    const body = await response.json().catch(() => null) as { messages?: GroupMessage[]; nextCursor?: string | null; hasMore?: boolean } | null;
     if (response.ok && body) {
       const incoming = body.messages || [];
       setMessages((current) => cursor
@@ -275,7 +288,6 @@ export function CollaboratorsConversationWorkspace(props: Props) {
           ? mergeMessages(current, incoming)
           : incoming);
       if (cursor) historyExpandedRef.current = true;
-      if (preferUnread) setInitialScrollTarget(targetMessageId || body.firstUnreadMessageId || "__BOTTOM__");
       setNextCursor(body.nextCursor || null);
       setHasMore(Boolean(body.hasMore));
       if (cursor) {
@@ -313,13 +325,11 @@ export function CollaboratorsConversationWorkspace(props: Props) {
     return () => { controller.abort(); window.clearTimeout(timer); };
   }, [directOpen, directSearch]);
   useEffect(() => {
-    setMessages([]);
-    setInitialScrollTarget(null);
-    if (!activeGroupId) { setVoices({}); return; }
+    if (!activeGroupId) { setMessages([]); setVoices({}); return; }
     setNextCursor(null);
     setHasMore(false);
     historyExpandedRef.current = false;
-    void Promise.all([loadMessages(activeGroupId, null, null, false, true), loadVoices(activeGroupId)]);
+    void Promise.all([loadMessages(activeGroupId), loadVoices(activeGroupId)]);
   }, [activeGroupId, loadMessages, loadVoices]);
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -351,19 +361,12 @@ export function CollaboratorsConversationWorkspace(props: Props) {
     return true;
   }, []);
 
-  // Scroll only on the initial open. Never force a user who is reading history
-  // back to the bottom when the 7-second refresh loads new messages.
   useEffect(() => {
     const element = messageListRef.current;
-    if (!element || !initialScrollTarget || !messages.length) return;
-    const target = initialScrollTarget;
-    const frame = window.requestAnimationFrame(() => {
-      if (target === "__BOTTOM__") element.scrollTop = element.scrollHeight;
-      else focusMessageById(target, "auto");
-      setInitialScrollTarget(null);
-    });
-    return () => window.cancelAnimationFrame(frame);
-  }, [focusMessageById, initialScrollTarget, messages]);
+    if (!element || !messages.length) return;
+    if (initialMessageId && focusMessageById(initialMessageId, "auto")) return;
+    element.scrollTop = element.scrollHeight;
+  }, [activeGroupId, focusMessageById, initialMessageId, messages.length]);
 
   const visibleGroups = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -731,6 +734,9 @@ export function CollaboratorsConversationWorkspace(props: Props) {
     setCallJoining(false);
     if (!response.ok) return setFeedback(body?.message || (collaborationExperienceT(userPreferences.locale, "conversationUiUnableToStartTheCall")));
     const nextCall = body?.call || body?.activeCall;
+    if (nextCall && props.callPreferences.callSoundsEnabled !== false) {
+      void playCallSound("incoming", props.callPreferences.callSoundVolume ?? 45, (props.callPreferences.incomingCallRingtone || "CLASSIC") as CallRingtone);
+    }
     await refreshGroups();
     if (nextCall) await joinGroupCall(nextCall);
   }
@@ -769,7 +775,7 @@ export function CollaboratorsConversationWorkspace(props: Props) {
     const response = await fetch(`/api/collaborators/calls/${call.id}/reject`, { method: "POST" });
     const body = await response.json().catch(() => null) as { message?: string } | null;
     setFeedback(response.ok ? (collaborationExperienceT(userPreferences.locale, "conversationUiCallDeclined")) : body?.message || (collaborationExperienceT(userPreferences.locale, "conversationUiUnableToDeclineTheCall")));
-    if (response.ok) await refreshGroups();
+    if (response.ok) { stopCallRingtone(); await refreshGroups(); }
   }
 
   async function leaveJoinedCall() {
@@ -780,6 +786,7 @@ export function CollaboratorsConversationWorkspace(props: Props) {
   }
 
   async function endGroupCall(call: GroupCall) {
+    stopCallRingtone();
     const response = await fetch(`/api/collaborators/calls/${call.id}/end`, { method: "POST" });
     const body = await response.json().catch(() => null) as { message?: string } | null;
     if (!response.ok) return setFeedback(body?.message || (collaborationExperienceT(userPreferences.locale, "conversationUiUnableToEndTheCall")));
@@ -853,18 +860,7 @@ export function CollaboratorsConversationWorkspace(props: Props) {
     await refreshGroups();
   }
 
-  const markConversationClosed = useCallback((groupId: string) => {
-    if (!groupId) return;
-    setGroups((current) => current.map((group) => group.id === groupId
-      ? { ...group, unreadMessageCount: 0, unreadMentionCount: 0, unreadMentionPreview: null }
-      : group));
-    void fetch(`/api/collaborators/groups/${groupId}/read`, { method: "POST", keepalive: true })
-      .then((response) => { if (response.ok) void refreshGroups(); })
-      .catch(() => undefined);
-  }, [refreshGroups]);
-
   function selectGroup(groupId: string) {
-    if (activeGroupId && activeGroupId !== groupId) markConversationClosed(activeGroupId);
     setActiveGroupId(groupId);
     setMobileListOpen(false);
   }
@@ -946,7 +942,7 @@ export function CollaboratorsConversationWorkspace(props: Props) {
       <main data-collaborators-conversation-pane className={cn("h-full min-h-0 min-w-0 max-w-full flex-col overflow-hidden bg-dtsc-page", activeGroup && !mobileListOpen ? "flex" : "hidden lg:flex")}>
         {activeGroup ? (
           <>
-            <ConversationHeader compact backLabel={t("conversationUiBackToDiscussions")} title={activeGroup.name} subtitle={`${activeGroup.members.length} ${t("members")} · ${activeGroup.groupType.replaceAll("_", " ")}`} avatarUrl={profiles[activeGroup.id]} type="group" onBack={() => { markConversationClosed(activeGroup.id); setMobileListOpen(true); }} onTitleClick={() => setInfoOpen(true)} actions={<><Button type="button" variant="outline" size="icon" className="rounded-full" disabled={callJoining} onClick={() => void startGroupCall("AUDIO")} aria-label={collaborationExperienceT(userPreferences.locale, "conversationUiStartAudioCall")}><Phone className="h-4 w-4" /></Button><Button type="button" variant="outline" size="icon" className="rounded-full" disabled={callJoining} onClick={() => void startGroupCall("VIDEO")} aria-label={collaborationExperienceT(userPreferences.locale, "conversationUiStartVideoCall")}><Video className="h-4 w-4" /></Button><ActionMenu label={t("conversationUiGroupActions")} items={groupMenu} /></>} />
+            <ConversationHeader compact backLabel={t("conversationUiBackToDiscussions")} title={activeGroup.name} subtitle={`${activeGroup.members.length} ${t("members")} · ${activeGroup.groupType.replaceAll("_", " ")}`} avatarUrl={profiles[activeGroup.id]} type="group" onBack={() => setMobileListOpen(true)} onTitleClick={() => setInfoOpen(true)} actions={<><Button type="button" variant="outline" size="icon" className="rounded-full" disabled={callJoining} onClick={() => void startGroupCall("AUDIO")} aria-label={collaborationExperienceT(userPreferences.locale, "conversationUiStartAudioCall")}><Phone className="h-4 w-4" /></Button><Button type="button" variant="outline" size="icon" className="rounded-full" disabled={callJoining} onClick={() => void startGroupCall("VIDEO")} aria-label={collaborationExperienceT(userPreferences.locale, "conversationUiStartVideoCall")}><Video className="h-4 w-4" /></Button><ActionMenu label={t("conversationUiGroupActions")} items={groupMenu} /></>} />
             {activeGroup.calls?.find((call) => call.status === "RINGING" || call.status === "ACTIVE") ? (() => {
               const activeCall = activeGroup.calls!.find((call) => call.status === "RINGING" || call.status === "ACTIVE")!;
               return <div className="mx-3 mt-3 flex flex-wrap items-center gap-2 rounded-2xl border border-cyan-400/50 bg-cyan-400/10 px-3 py-2 text-sm sm:mx-5"><span className="min-w-0 flex-1 font-bold text-dtsc-ink">{activeCall.callType === "VIDEO" ? (collaborationExperienceT(userPreferences.locale, "conversationUiVideoCallInProgress")) : (collaborationExperienceT(userPreferences.locale, "conversationUiAudioCallInProgress"))}</span><Button type="button" size="sm" disabled={callJoining} onClick={() => void joinGroupCall(activeCall)} className="rounded-full">{callJoining ? "…" : collaborationExperienceT(userPreferences.locale, "conversationUiJoin")}</Button>{activeCall.startedById === currentUserId || canManage ? <Button type="button" size="sm" variant="outline" onClick={() => void endGroupCall(activeCall)} className="rounded-full">{collaborationExperienceT(userPreferences.locale, "conversationUiEnd")}</Button> : <Button type="button" size="sm" variant="outline" onClick={() => void rejectGroupCall(activeCall)} className="rounded-full">{collaborationExperienceT(userPreferences.locale, "decline")}</Button>}</div>;

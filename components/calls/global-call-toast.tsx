@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { PhoneCall, Video, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { playCallSound } from "@/components/calls/call-sounds";
+import { playCallSound, stopCallRingtone, type CallRingtone } from "@/components/calls/call-sounds";
 import { PersistentCallHost } from "@/components/calls/persistent-call-host";
 import { cn } from "@/lib/utils";
 
@@ -32,6 +32,7 @@ type CallToastSettings = {
   connectionIssueSoundsEnabled: boolean;
   callAlertDisplayDuration: number;
   callSoundVolume: number;
+  incomingCallRingtone?: CallRingtone;
 };
 
 const CALL_EVENT_IDLE_POLL_MS = 12_000;
@@ -90,9 +91,13 @@ export function GlobalCallToast() {
         const soundEnabled = body.settings?.callSoundsEnabled !== false && body.settings?.callAlertSoundEnabled !== false;
         if (soundEnabled) {
           const eventType = nextEvents[0]?.eventType;
-          const kind = eventType === "CALL_ENDED" ? "ended" : eventType === "CALL_LEFT" || eventType === "USER_LEFT" ? "left" : eventType === "CALL_INTERRUPTED" ? "warning" : eventType === "CALL_RECONNECTED" ? "connected" : "incoming";
-          if (kind !== "warning" || body.settings?.connectionIssueSoundsEnabled !== false) {
-            void playCallSound(kind, body.settings?.callSoundVolume ?? 45);
+          const kind = eventType === "CALL_STARTED" ? "incoming"
+            : eventType === "CALL_ENDED" || eventType === "CALL_MISSED" ? "ended"
+            : eventType === "CALL_LEFT" || eventType === "USER_LEFT" ? "left"
+            : eventType === "CALL_INTERRUPTED" ? "warning"
+            : eventType === "CALL_RECONNECTED" || eventType === "CALL_JOINED" ? "connected" : null;
+          if (kind && (kind !== "warning" || body.settings?.connectionIssueSoundsEnabled !== false)) {
+            void playCallSound(kind, body.settings?.callSoundVolume ?? 45, body.settings?.incomingCallRingtone || "CLASSIC");
           }
         }
         return true;
@@ -169,7 +174,7 @@ export function GlobalCallToast() {
                     <Link href={event.actionUrl} className="rounded-xl border border-dtsc-border bg-dtsc-page px-3 py-2 text-xs font-black text-dtsc-blue transition hover:border-cyan-300">Voir le groupe</Link>
                   </div>
                 </div>
-                <Button type="button" size="icon" variant="ghost" onClick={() => setEvents((current) => current.filter((item) => item.id !== event.id))} className="h-8 w-8 shrink-0 rounded-full text-dtsc-muted">
+                <Button type="button" size="icon" variant="ghost" onClick={() => { stopCallRingtone(); setEvents((current) => current.filter((item) => item.id !== event.id)); }} className="h-8 w-8 shrink-0 rounded-full text-dtsc-muted">
                   <X className="h-4 w-4" />
                   <span className="sr-only">Ignorer</span>
                 </Button>

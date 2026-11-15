@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { fillExperienceTemplate, getExperienceCopy } from "@/lib/experience-i18n";
 import { cn } from "@/lib/utils";
+import { playCallSound, stopCallRingtone, type CallRingtone } from "@/components/calls/call-sounds";
 
 type SettingsUser = {
   name: string;
@@ -38,6 +39,7 @@ type SettingsUser = {
   startMutedByDefault?: boolean;
   startCameraOffByDefault?: boolean;
   callSoundVolume?: number | null;
+  incomingCallRingtone?: string | null;
   callAlertDisplayDuration?: number | null;
   preferredAudioInputId?: string | null;
   preferredVideoInputId?: string | null;
@@ -63,7 +65,8 @@ export function SettingsPanel({
   const [preferencesMessage, setPreferencesMessage] = useState("");
   const [profileDialogOpen, setProfileDialogOpen] = useState(false);
   const [pushEnabled, setPushEnabled] = useState(Boolean(user.pushNotificationsEnabled));
-  const [openMobileSection, setOpenMobileSection] = useState("profile");
+  const [openMobileSection, setOpenMobileSection] = useState("preferences");
+  const [ringtonePreview, setRingtonePreview] = useState<CallRingtone>((user.incomingCallRingtone || "CLASSIC") as CallRingtone);
   const canUseInternalCalendar = user.role !== "CLIENT";
   const startPageValue = !canUseInternalCalendar && user.startPage === "/calendar" ? "/dashboard" : user.startPage || "/dashboard";
 
@@ -143,7 +146,8 @@ export function SettingsPanel({
       connectionIssueSoundsEnabled: formData.get("connectionIssueSoundsEnabled") === "on",
       startMutedByDefault: formData.get("startMutedByDefault") === "on",
       startCameraOffByDefault: formData.get("startCameraOffByDefault") === "on",
-      callSoundVolume: Number(formData.get("callSoundVolume") || user.callSoundVolume || 45),
+      callSoundVolume: Number(formData.get("callSoundVolume") ?? user.callSoundVolume ?? 45),
+      incomingCallRingtone: String(formData.get("incomingCallRingtone") || user.incomingCallRingtone || "CLASSIC"),
       callAlertDisplayDuration: Number(formData.get("callAlertDisplayDuration") || user.callAlertDisplayDuration || 6000),
       preferredAudioInputId: String(formData.get("preferredAudioInputId") || ""),
       preferredVideoInputId: String(formData.get("preferredVideoInputId") || ""),
@@ -386,6 +390,19 @@ export function SettingsPanel({
                 {callToggles.map(([name, label, description, checked]) => (
                   <CallToggle key={name} name={name} label={label} description={description} checked={checked} />
                 ))}
+                <label className="grid min-w-0 gap-2 rounded-xl border border-dtsc-border bg-dtsc-page px-4 py-3">
+                  <span className="font-bold text-dtsc-ink">{user.locale === "en" ? "Incoming call ringtone" : "Sonnerie des appels entrants"}</span>
+                  <select name="incomingCallRingtone" value={ringtonePreview} onChange={(event) => { stopCallRingtone(); setRingtonePreview(event.target.value as CallRingtone); }} className="min-h-11 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm text-dtsc-ink">
+                    <option value="CLASSIC">{user.locale === "en" ? "Classic DTSC" : "Classique DTSC"}</option>
+                    <option value="SOFT">{user.locale === "en" ? "Soft melody" : "Mélodie douce"}</option>
+                    <option value="DIGITAL">{user.locale === "en" ? "Digital" : "Numérique"}</option>
+                    <option value="MELODIC">{user.locale === "en" ? "Melodic" : "Mélodique"}</option>
+                  </select>
+                  <div className="flex flex-wrap gap-2">
+                    <Button type="button" size="sm" variant="outline" onClick={() => void playCallSound("incoming", user.callSoundVolume ?? 45, ringtonePreview)}>{user.locale === "en" ? "Preview ringtone" : "Écouter la sonnerie"}</Button>
+                    <Button type="button" size="sm" variant="ghost" onClick={stopCallRingtone}>{user.locale === "en" ? "Stop preview" : "Arrêter"}</Button>
+                  </div>
+                </label>
                 <label className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-2 rounded-xl border border-dtsc-border bg-dtsc-page px-4 py-3">
                   <span className="flex min-w-0 items-center gap-2 font-bold text-dtsc-ink"><Volume2 className="h-4 w-4 shrink-0 text-cyan-500" /> <span className="break-words">{copy.soundVolume}</span></span>
                   <input name="callSoundVolume" type="range" min={0} max={100} defaultValue={user.callSoundVolume ?? 45} className="accent-cyan-500" />
@@ -472,6 +489,7 @@ function CallPreferenceHiddenFields({ user }: { user: SettingsUser }) {
       {user.startMutedByDefault ? <input type="hidden" name="startMutedByDefault" value="on" /> : null}
       {user.startCameraOffByDefault ?? true ? <input type="hidden" name="startCameraOffByDefault" value="on" /> : null}
       <input type="hidden" name="callSoundVolume" value={user.callSoundVolume ?? 45} />
+      <input type="hidden" name="incomingCallRingtone" value={user.incomingCallRingtone || "CLASSIC"} />
       <input type="hidden" name="callAlertDisplayDuration" value={user.callAlertDisplayDuration ?? 6000} />
       <input type="hidden" name="preferredAudioInputId" value={user.preferredAudioInputId || ""} />
       <input type="hidden" name="preferredVideoInputId" value={user.preferredVideoInputId || ""} />

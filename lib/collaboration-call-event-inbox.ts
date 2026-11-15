@@ -17,6 +17,7 @@ export type CollaborationCallToastSettings = {
   connectionIssueSoundsEnabled: boolean;
   callAlertDisplayDuration: number;
   callSoundVolume: number;
+  incomingCallRingtone: string;
 };
 
 export type CollaborationCallInboxEvent = {
@@ -62,6 +63,7 @@ function normalizedSettings(user: Partial<CollaborationCallToastSettings> | null
     connectionIssueSoundsEnabled: user?.connectionIssueSoundsEnabled ?? true,
     callAlertDisplayDuration: user?.callAlertDisplayDuration ?? 6000,
     callSoundVolume: user?.callSoundVolume ?? 45,
+    incomingCallRingtone: user?.incomingCallRingtone ?? "CLASSIC",
   };
 }
 
@@ -186,6 +188,7 @@ export async function getCollaborationCallToastSettings(userId: string) {
       connectionIssueSoundsEnabled: true,
       callAlertDisplayDuration: true,
       callSoundVolume: true,
+      incomingCallRingtone: true,
     },
   });
   const settings = normalizedSettings(user);
