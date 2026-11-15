@@ -6,7 +6,7 @@ import {
   ArrowRight, BadgeCheck, CheckCircle2, Download, Globe2, Laptop, MonitorSmartphone,
   ShieldCheck, Smartphone, WifiOff,
 } from "lucide-react";
-import { getSignInUrl } from "@/lib/domains";
+import { getPublicUrl, getSignInUrl } from "@/lib/domains";
 
 type InstallPlatform = "android" | "ios" | "windows" | "mac" | "linux";
 type BrowserInstallPrompt = Event & {
@@ -190,7 +190,7 @@ export function AppInstallOnboarding({ locale }: { locale: "fr" | "en" }) {
     <div className="min-h-screen overflow-x-clip bg-dtsc-page text-dtsc-ink">
       <header className="border-b border-dtsc-border bg-dtsc-surface">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-4 sm:px-6">
-          <Link href="/" className="inline-flex items-center gap-2 text-lg font-black text-dtsc-blue" aria-label="DTSC Platform">
+          <Link href={getPublicUrl("/")} className="inline-flex items-center gap-2 text-lg font-black text-dtsc-blue" aria-label="DTSC Platform">
             <MonitorSmartphone className="h-6 w-6" aria-hidden="true" />
             DTSC Platform
           </Link>
