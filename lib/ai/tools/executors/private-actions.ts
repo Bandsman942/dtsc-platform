@@ -5,6 +5,8 @@ import { DTSC_INTERNAL_ORGANIZATION_ID } from "@/lib/organizations";
 import { prisma } from "@/lib/prisma";
 import { sendZohoOutboundMail } from "@/lib/zoho-mail";
 import { notifyUsers } from "@/lib/notifications";
+import { calculateSupportSla } from "@/lib/support-sla";
+import { supportNotificationTarget } from "@/lib/notification-targets";
 import type { AiToolExecutor } from "@/lib/ai/tools/types";
 
 function ticketPriority(value: unknown): TicketPriority {
@@ -74,13 +76,21 @@ const sendContactEmail: AiToolExecutor = async ({ args, context }) => {
 
 const createSupportTicket: AiToolExecutor = async ({ args, context }) => {
   const input = args as { subject: string; message: string; priority: string };
+  const createdAt = new Date();
+  const priority = ticketPriority(input.priority);
+  const sla = calculateSupportSla(priority, createdAt);
   const ticket = await prisma.supportTicket.create({
     data: {
       userId: context.userId,
       organizationId: context.organizationId || null,
       subject: input.subject,
       description: input.message,
-      priority: ticketPriority(input.priority),
+      priority,
+      category: "GENERAL",
+      source: context.organizationId ? "ORGANIZATION_PORTAL" : "USER_PORTAL",
+      createdAt,
+      slaFirstResponseDueAt: sla.firstResponseDueAt,
+      slaResolutionDueAt: sla.resolutionDueAt,
     },
   });
 
@@ -98,7 +108,7 @@ const createSupportTicket: AiToolExecutor = async ({ args, context }) => {
       title: "Nouveau ticket support",
       body: input.subject,
       type: "SUPPORT",
-      targetUrl: "/support",
+      targetUrl: supportNotificationTarget(ticket.id),
       organizationId: DTSC_INTERNAL_ORGANIZATION_ID,
     });
   } catch (error) {

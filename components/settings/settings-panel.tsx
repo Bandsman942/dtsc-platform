@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { fillExperienceTemplate, getExperienceCopy } from "@/lib/experience-i18n";
 import { cn } from "@/lib/utils";
+import { playCallSound, stopCallRingtone, type CallRingtone } from "@/components/calls/call-sounds";
 
 type SettingsUser = {
   name: string;
@@ -38,6 +39,7 @@ type SettingsUser = {
   startMutedByDefault?: boolean;
   startCameraOffByDefault?: boolean;
   callSoundVolume?: number | null;
+  incomingCallRingtone?: string | null;
   callAlertDisplayDuration?: number | null;
   preferredAudioInputId?: string | null;
   preferredVideoInputId?: string | null;
@@ -63,7 +65,8 @@ export function SettingsPanel({
   const [preferencesMessage, setPreferencesMessage] = useState("");
   const [profileDialogOpen, setProfileDialogOpen] = useState(false);
   const [pushEnabled, setPushEnabled] = useState(Boolean(user.pushNotificationsEnabled));
-  const [openMobileSection, setOpenMobileSection] = useState("profile");
+  const [openMobileSection, setOpenMobileSection] = useState("preferences");
+  const [ringtonePreview, setRingtonePreview] = useState<CallRingtone>((user.incomingCallRingtone || "CLASSIC") as CallRingtone);
   const canUseInternalCalendar = user.role !== "CLIENT";
   const startPageValue = !canUseInternalCalendar && user.startPage === "/calendar" ? "/dashboard" : user.startPage || "/dashboard";
 
@@ -143,7 +146,8 @@ export function SettingsPanel({
       connectionIssueSoundsEnabled: formData.get("connectionIssueSoundsEnabled") === "on",
       startMutedByDefault: formData.get("startMutedByDefault") === "on",
       startCameraOffByDefault: formData.get("startCameraOffByDefault") === "on",
-      callSoundVolume: Number(formData.get("callSoundVolume") || user.callSoundVolume || 45),
+      callSoundVolume: Number(formData.get("callSoundVolume") ?? user.callSoundVolume ?? 45),
+      incomingCallRingtone: String(formData.get("incomingCallRingtone") || user.incomingCallRingtone || "CLASSIC"),
       callAlertDisplayDuration: Number(formData.get("callAlertDisplayDuration") || user.callAlertDisplayDuration || 6000),
       preferredAudioInputId: String(formData.get("preferredAudioInputId") || ""),
       preferredVideoInputId: String(formData.get("preferredVideoInputId") || ""),
@@ -199,12 +203,40 @@ export function SettingsPanel({
     ["startCameraOffByDefault", copy.startCameraOff, copy.startCameraOffDescription, user.startCameraOffByDefault ?? true],
   ] as const;
 
+  const preferenceSections = [
+    { key: "profile", label: copy.professionalIdentity, hint: copy.professionalIdentityDescription, icon: UserCog },
+    { key: "security", label: copy.accountSecurity, hint: copy.accountSecurityDescription, icon: Lock },
+    { key: "preferences", label: copy.privatePreferences, hint: copy.privatePreferencesDescription, icon: SlidersHorizontal },
+    { key: "appearance", label: copy.appearance, hint: copy.appearanceDescription, icon: Monitor },
+    { key: "notifications", label: copy.notifications, hint: copy.notificationsDescription, icon: Bell },
+    { key: "calls", label: copy.callSettings, hint: copy.callSettingsDescription, icon: PhoneCall },
+  ] as const;
+
   return (
-    <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,360px)]">
-      <div className="min-w-0 space-y-6">
-        <section className="dtsc-card min-w-0 p-6">
+    <div className="min-w-0 space-y-3" data-account-preferences-workspace data-workspace-density="compact" data-responsive-scope>
+      <nav aria-label={user.locale === "en" ? "Personal preferences areas" : "Rubriques des préférences personnelles"} className="grid min-w-0 grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-6">
+        {preferenceSections.map(({ key, label, hint, icon: Icon }) => {
+          const selected = openMobileSection === key;
+          return (
+            <button key={key} type="button" id={`preferences-switch-${key}`}
+              aria-pressed={selected} aria-controls={`preferences-panel-${key}`}
+              onClick={() => { stopCallRingtone(); setOpenMobileSection(key); }}
+              className={cn("flex min-h-14 min-w-0 items-start gap-2 rounded-xl border px-3 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/70", selected
+                ? "border-cyan-500/60 bg-cyan-500/10 text-dtsc-blue"
+                : "border-dtsc-border bg-dtsc-surface text-dtsc-ink hover:border-cyan-400/50 hover:bg-dtsc-soft")}>
+              <Icon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+              <span className="min-w-0 flex-1">
+                <span className="block break-words text-xs font-bold leading-5 sm:text-sm">{label}</span>
+                <span className="mt-0.5 hidden text-xs leading-4 text-dtsc-muted sm:block">{hint}</span>
+              </span>
+            </button>
+          );
+        })}
+      </nav>
+      <div className="min-w-0 space-y-3">
+        <section id="preferences-panel-profile" aria-labelledby="preferences-switch-profile" className={cn("min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface/70 p-3 sm:p-4 lg:p-5", openMobileSection !== "profile" && "hidden")}>
           <SettingsSectionHeader id="profile" icon={UserCog} title={copy.professionalIdentity} description={copy.professionalIdentityDescription} openId={openMobileSection} onToggle={setOpenMobileSection} />
-          <div className={cn(openMobileSection === "profile" ? "block" : "hidden", "md:block")}>
+          <div className={cn(openMobileSection === "profile" ? "block" : "hidden")}>
             <div className="mt-5 min-w-0 rounded-2xl border border-dtsc-border bg-dtsc-page p-4">
               <p className="break-words font-black text-dtsc-ink">{user.name}</p>
               <p className="mt-1 break-words text-sm text-dtsc-muted" data-email-value>{user.email}</p>
@@ -218,9 +250,9 @@ export function SettingsPanel({
           </div>
         </section>
 
-        <section className="dtsc-card min-w-0 p-6">
+        <section id="preferences-panel-security" aria-labelledby="preferences-switch-security" className={cn("min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface/70 p-3 sm:p-4 lg:p-5", openMobileSection !== "security" && "hidden")}>
           <SettingsSectionHeader id="security" icon={Lock} title={copy.accountSecurity} description={copy.accountSecurityDescription} openId={openMobileSection} onToggle={setOpenMobileSection} />
-          <div className={cn(openMobileSection === "security" ? "block" : "hidden", "md:block")}>
+          <div className={cn(openMobileSection === "security" ? "block" : "hidden")}>
             <form onSubmit={updatePassword} className="mt-5 grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 md:grid-cols-2">
               <PasswordInput name="currentPassword" placeholder={copy.currentPassword} autoComplete="current-password" required />
               <PasswordInput name="newPassword" placeholder={copy.newPassword} autoComplete="new-password" required />
@@ -234,9 +266,9 @@ export function SettingsPanel({
           </div>
         </section>
 
-        <section className="dtsc-card min-w-0 p-6">
+        <section id="preferences-panel-preferences" aria-labelledby="preferences-switch-preferences" className={cn("min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface/70 p-3 sm:p-4 lg:p-5", openMobileSection !== "preferences" && "hidden")}>
           <SettingsSectionHeader id="preferences" icon={SlidersHorizontal} title={copy.privatePreferences} description={copy.privatePreferencesDescription} openId={openMobileSection} onToggle={setOpenMobileSection} />
-          <div className={cn(openMobileSection === "preferences" ? "block" : "hidden", "md:block")}>
+          <div className={cn(openMobileSection === "preferences" ? "block" : "hidden")}>
             <SettingsDialogCard title={copy.privatePreferences} description={copy.privatePreferencesDialogDescription} buttonLabel={copy.configurePreferences}>
               <form id="account-preferences-form" onSubmit={updatePreferences} className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 md:grid-cols-2">
                 <input type="hidden" name="preferredModel" value={user.preferredModel || ""} />
@@ -316,10 +348,10 @@ export function SettingsPanel({
         </section>
       </div>
 
-      <aside className="min-w-0 space-y-6">
-        <section className="dtsc-card min-w-0 p-6">
+      <aside className="min-w-0 space-y-3">
+        <section id="preferences-panel-appearance" aria-labelledby="preferences-switch-appearance" className={cn("min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface/70 p-3 sm:p-4 lg:p-5", openMobileSection !== "appearance" && "hidden")}>
           <SettingsSectionHeader id="appearance" icon={Monitor} title={copy.appearance} description={copy.appearanceDescription} openId={openMobileSection} onToggle={setOpenMobileSection} />
-          <div className={cn(openMobileSection === "appearance" ? "block" : "hidden", "md:block")}>
+          <div className={cn(openMobileSection === "appearance" ? "block" : "hidden")}>
             <SettingsDialogCard title={copy.appearance} description={copy.appearanceDialogDescription} buttonLabel={copy.configureAppearance}>
               <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-2">
                 {[
@@ -345,9 +377,9 @@ export function SettingsPanel({
           </div>
         </section>
 
-        <section className="dtsc-card min-w-0 p-6">
+        <section id="preferences-panel-notifications" aria-labelledby="preferences-switch-notifications" className={cn("min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface/70 p-3 sm:p-4 lg:p-5", openMobileSection !== "notifications" && "hidden")}>
           <SettingsSectionHeader id="notifications" icon={Bell} title={copy.notifications} description={copy.notificationsDescription} openId={openMobileSection} onToggle={setOpenMobileSection} />
-          <div className={cn(openMobileSection === "notifications" ? "block" : "hidden", "md:block")}>
+          <div className={cn(openMobileSection === "notifications" ? "block" : "hidden")}>
             <SettingsDialogCard title={copy.notifications} description={copy.notificationsDialogDescription} buttonLabel={copy.configureNotifications}>
               <form onSubmit={updatePreferences} className="min-w-0 space-y-3 text-sm text-dtsc-muted">
                 <GeneralPreferenceHiddenFields user={user} />
@@ -376,9 +408,9 @@ export function SettingsPanel({
           </div>
         </section>
 
-        <section className="dtsc-card min-w-0 p-6">
+        <section id="preferences-panel-calls" aria-labelledby="preferences-switch-calls" className={cn("min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface/70 p-3 sm:p-4 lg:p-5", openMobileSection !== "calls" && "hidden")}>
           <SettingsSectionHeader id="calls" icon={PhoneCall} title={copy.callSettings} description={copy.callSettingsDescription} openId={openMobileSection} onToggle={setOpenMobileSection} />
-          <div className={cn(openMobileSection === "calls" ? "block" : "hidden", "md:block")}>
+          <div className={cn(openMobileSection === "calls" ? "block" : "hidden")}>
             <SettingsDialogCard title={copy.callSettings} description={copy.callSettingsDialogDescription} buttonLabel={copy.configureCalls}>
               <form onSubmit={updatePreferences} className="min-w-0 space-y-3 text-sm text-dtsc-muted">
                 <GeneralPreferenceHiddenFields user={user} includeNotificationFlags />
@@ -386,6 +418,19 @@ export function SettingsPanel({
                 {callToggles.map(([name, label, description, checked]) => (
                   <CallToggle key={name} name={name} label={label} description={description} checked={checked} />
                 ))}
+                <label className="grid min-w-0 gap-2 rounded-xl border border-dtsc-border bg-dtsc-page px-4 py-3">
+                  <span className="font-bold text-dtsc-ink">{user.locale === "en" ? "Incoming call ringtone" : "Sonnerie des appels entrants"}</span>
+                  <select name="incomingCallRingtone" value={ringtonePreview} onChange={(event) => { stopCallRingtone(); setRingtonePreview(event.target.value as CallRingtone); }} className="min-h-11 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm text-dtsc-ink">
+                    <option value="CLASSIC">{user.locale === "en" ? "DTSC Classic" : "Classique DTSC"}</option>
+                    <option value="SOFT">{user.locale === "en" ? "Soft melody" : "Mélodie douce"}</option>
+                    <option value="DIGITAL">{user.locale === "en" ? "Digital" : "Numérique"}</option>
+                    <option value="MELODIC">{user.locale === "en" ? "Melodic" : "Mélodique"}</option>
+                  </select>
+                  <div className="flex flex-wrap gap-2">
+                    <Button type="button" size="sm" variant="outline" onClick={() => void playCallSound("incoming", user.callSoundVolume ?? 45, ringtonePreview)}>{user.locale === "en" ? "Preview ringtone" : "Écouter la sonnerie"}</Button>
+                    <Button type="button" size="sm" variant="ghost" onClick={stopCallRingtone}>{user.locale === "en" ? "Stop preview" : "Arrêter"}</Button>
+                  </div>
+                </label>
                 <label className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-2 rounded-xl border border-dtsc-border bg-dtsc-page px-4 py-3">
                   <span className="flex min-w-0 items-center gap-2 font-bold text-dtsc-ink"><Volume2 className="h-4 w-4 shrink-0 text-cyan-500" /> <span className="break-words">{copy.soundVolume}</span></span>
                   <input name="callSoundVolume" type="range" min={0} max={100} defaultValue={user.callSoundVolume ?? 45} className="accent-cyan-500" />
@@ -472,6 +517,7 @@ function CallPreferenceHiddenFields({ user }: { user: SettingsUser }) {
       {user.startMutedByDefault ? <input type="hidden" name="startMutedByDefault" value="on" /> : null}
       {user.startCameraOffByDefault ?? true ? <input type="hidden" name="startCameraOffByDefault" value="on" /> : null}
       <input type="hidden" name="callSoundVolume" value={user.callSoundVolume ?? 45} />
+      <input type="hidden" name="incomingCallRingtone" value={user.incomingCallRingtone || "CLASSIC"} />
       <input type="hidden" name="callAlertDisplayDuration" value={user.callAlertDisplayDuration ?? 6000} />
       <input type="hidden" name="preferredAudioInputId" value={user.preferredAudioInputId || ""} />
       <input type="hidden" name="preferredVideoInputId" value={user.preferredVideoInputId || ""} />
@@ -491,20 +537,14 @@ function SettingsDialogCard({
   buttonLabel: string;
   children: ReactNode;
 }) {
-  const [open, setOpen] = useState(false);
   return (
-    <>
-      <div className="mt-5 min-w-0 rounded-2xl border border-dtsc-border bg-dtsc-page p-4">
-        <p className="break-words text-sm font-semibold leading-6 text-dtsc-muted">{description}</p>
-        <Button type="button" onClick={() => setOpen(true)} className="mt-4 rounded-xl bg-[#002b5b] text-white hover:bg-[#001736]">
-          <SlidersHorizontal className="h-4 w-4" />
-          {buttonLabel}
-        </Button>
+    <div className="mt-3 min-w-0 rounded-xl border border-dtsc-border bg-dtsc-page p-3 sm:p-4" aria-label={buttonLabel}>
+      <div className="mb-4 min-w-0">
+        <strong className="block break-words text-sm font-bold text-dtsc-ink">{title}</strong>
+        <p className="mt-1 break-words text-xs leading-5 text-dtsc-muted">{description}</p>
       </div>
-      <Dialog open={open} title={title} description={description} onClose={() => setOpen(false)} className="h-[92dvh] max-w-4xl">
-        {children}
-      </Dialog>
-    </>
+      {children}
+    </div>
   );
 }
 

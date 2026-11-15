@@ -108,7 +108,7 @@ const STATIC_AI_TOOL_REGISTRY: AiToolDefinition[] = [
     descriptionKey: "ai.tools.supportTicketCreate.description",
     inputSchema: { type: "object", required: ["subject", "message", "priority"], properties: { subject: { type: "string" }, message: { type: "string" }, priority: { enum: ["LOW", "MEDIUM", "HIGH", "URGENT"] } }, additionalProperties: false },
     outputSchema: OBJECT_OUTPUT,
-    contexts: ["GLOBAL_CLIENT", "COMMUNITY", "ORGANIZATION"],
+    contexts: ["GLOBAL_CLIENT", "COMMUNITY", "ORGANIZATION", "DTSC_INTERNAL"],
     requiredModuleCodes: [],
     requiredPermissions: [],
     mode: "MUTATE",

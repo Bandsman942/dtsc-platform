@@ -113,6 +113,7 @@ model User {
   startMutedByDefault                   Boolean                           @default(false)
   startCameraOffByDefault               Boolean                           @default(true)
   callSoundVolume                       Int                               @default(45)
+  incomingCallRingtone                  String                            @default("CLASSIC")
   callAlertDisplayDuration              Int                               @default(6000)
   preferredAudioInputId                 String?
   preferredVideoInputId                 String?
@@ -5118,6 +5119,21 @@ model ContactMessage {
   @@index([source, createdAt])
 }
 
+model SupportTicketAttachment {
+  id            String        @id @default(cuid())
+  ticketId      String
+  uploadedById  String
+  storageBucket String
+  storagePath   String        @unique
+  originalName  String
+  mimeType      String
+  sizeBytes     Int
+  createdAt     DateTime      @default(now())
+  ticket        SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId, createdAt])
+}
+
 model SupportTicket {
   id                   String          @id @default(cuid())
   userId               String
@@ -5147,6 +5163,7 @@ model SupportTicket {
   user                 User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   organization         Organization?   @relation(fields: [organizationId], references: [id], onDelete: SetNull)
   messages             TicketMessage[]
+  attachments          SupportTicketAttachment[]
 
   @@index([userId, status])
   @@index([organizationId, status, createdAt])

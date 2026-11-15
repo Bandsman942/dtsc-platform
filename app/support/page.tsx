@@ -83,6 +83,7 @@ export default async function SupportPage({ searchParams }: PageProps) {
 
   const ticketInclude = {
     user: { select: { name: true, email: true, role: true } },
+    attachments: { select: { id: true, originalName: true, mimeType: true, sizeBytes: true }, orderBy: { createdAt: "desc" }, take: 5 },
     messages: { orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 21, include: { user: { select: { id: true, name: true, role: true } }, replyTo: { select: { id: true, content: true, deletedAt: true, user: { select: { name: true } } } } } },
   } satisfies Prisma.SupportTicketInclude;
   const [ticketCount, tickets, focusedTicket, assignees, openCount, inProgressCount, completedCount] = await Promise.all([
@@ -112,7 +113,7 @@ export default async function SupportPage({ searchParams }: PageProps) {
         <ProductSectionNavigation productLabel="Support DTSC" title={locale === "en" ? "Support sections" : "Sections Support"} groups={productNavigation.groups} sections={productNavigation.sections} activeSection={params.ticketId || page > 1 || status || priority || q ? "tickets" : "new-ticket"} mobileButtonLabel={locale === "en" ? "Open Support sections" : "Ouvrir les sections Support"} />
         <ModuleMetrics label="Indicateurs du support"><ModuleMetric label="Résultats" value={ticketCount} hint="Filtres actifs" /><ModuleMetric label="Ouverts" value={openCount} hint="À prendre en charge" /><ModuleMetric label="En traitement" value={inProgressCount} hint="Suivi actif" /><ModuleMetric label="Résolus / clos" value={completedCount} hint="Traitement terminé" /></ModuleMetrics>
         <ModuleContent>
-          <ModuleSection id="new-ticket" title="Nouvelle demande" description="Décrivez le contexte, l’impact, les étapes déjà testées et les contraintes connues."><SupportForm /></ModuleSection>
+          <ModuleSection id="new-ticket" title="Nouvelle demande" description="Décrivez le contexte, l’impact, les étapes déjà testées et les contraintes connues."><SupportForm locale={locale} /></ModuleSection>
           <ModuleSection id="tickets" title={canManageTickets ? "Tickets utilisateurs" : "Mes tickets"} count={`${ticketCount}`} description="La liste est paginée côté serveur et peut être filtrée sans charger tout l’historique.">
             <form method="get" action="/support#tickets" className="mb-5 grid gap-3 rounded-2xl border border-dtsc-border bg-dtsc-page p-4 sm:grid-cols-[minmax(0,1fr)_12rem_12rem_auto]">
               <label className="grid gap-1 text-xs font-bold text-dtsc-muted">Recherche<input name="q" defaultValue={q} placeholder="Objet ou description" className="h-11 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm text-dtsc-ink" /></label>
@@ -120,7 +121,7 @@ export default async function SupportPage({ searchParams }: PageProps) {
               <label className="grid gap-1 text-xs font-bold text-dtsc-muted">Priorité<select name="priority" defaultValue={priority || ""} className="h-11 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm text-dtsc-ink"><option value="">Toutes</option><option value="URGENT">Urgente</option><option value="HIGH">Haute</option><option value="MEDIUM">Normale</option><option value="LOW">Faible</option></select></label>
               <button className="self-end rounded-xl bg-dtsc-blue px-4 py-3 text-sm font-semibold text-white hover:bg-[var(--dtsc-brand-secondary-hover)]">Filtrer</button>
             </form>
-            <TicketBoard tickets={JSON.parse(JSON.stringify(visibleTickets))} canManage={canManageTickets} currentUserId={user.id} focusTicketId={params.ticketId} assignees={assignees} />
+            <TicketBoard tickets={JSON.parse(JSON.stringify(visibleTickets))} canManage={canManageTickets} currentUserId={user.id} focusTicketId={params.ticketId} assignees={assignees} locale={locale} />
             <SupportPagination page={Math.min(page, pageCount)} pageCount={pageCount} query={{ q, status, priority }} />
           </ModuleSection>
           <ModuleSection id="support-guide" title="Guides et ressources utiles" description="Consultez l’aide native ou une publication réelle avant de créer une nouvelle demande." action={<ContextualUserGuide guide={guide} />}>
