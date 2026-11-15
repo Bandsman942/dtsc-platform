@@ -202,6 +202,8 @@ jobs:
           node scripts/qa-hotfix-1042-retail-invoice-return-finance.mjs
           node scripts/qa-hotfix-1042-finance-strict-positive.mjs
           node scripts/qa-hotfix-1042-cahier-traceability.mjs
+      - name: "HOTFIX #1184 owner-granted Retail self-approval and audit locale contract"
+        run: pnpm qa:hotfix-1184
       - name: "RETAIL #1050 POS dashboard boutique confidentiality QA"
         run: node scripts/qa-retail-pos-dashboard-site-isolation.mjs
       - name: "HOTFIX #1080 POS multi-boutiques, poste canonique et caisse séparée QA"

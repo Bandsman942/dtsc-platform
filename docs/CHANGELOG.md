@@ -1,3 +1,11 @@
+## 2026-11-15 — HOTFIX RETAIL #1184 — v1.18.2 candidate (E2E propriétaire requis)
+
+- POS > Accès des collaborateurs : trois habilitations explicitement réservées au propriétaire et OFF par défaut, limitées à l'affectation par boutique : auto-approbation de facture, d'encaissement, et décision du gérant sur son annulation payée.
+- Même service Finance canonique pour soumettre/approuver/émettre et créer/approuver/confirmer un paiement, avec contrôle serveur lors de la décision, de la confirmation et après révocation. Les écritures et affectations de créance restent atomiques et uniques.
+- Les factures déjà encaissées ne sont jamais effacées : demande motivée, inspection indépendante, validation par le gérant habilité, puis préparation distincte, validation et liquidation financière (avoir/remboursement/stock), sans auto-inspection ni auto-liquidation.
+- Administration entreprise > Audit et cohérence : actions, résultats, risques, motifs et exports traduits selon FR/EN, codes sources conservés et traçabilité du changement de droits.
+- Contrats QA intégrés à Quality Gates ; aucun changement du schéma Prisma ni nouvelle variable d'environnement. PR + E2E propriétaire BON avant toute fusion dans main.
+
 ## 2026-11-15 — Hotfix Support, collaboration, appels et préférences (validation E2E requise)
 
 - Support : tickets enrichis (date d'envoi, échéance SLA, ancienneté, retard réel, couleur statut/priorité), photos privées avec prévisualisation, accès serveur contrôlé et rédaction IA assistée avec aperçu avant application.
