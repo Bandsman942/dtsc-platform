@@ -23,6 +23,7 @@ type Props = {
   defaultValue?: string;
   className?: string;
   candidatesEndpoint?: string;
+  ownerControlledSelfApproval?: boolean;
 };
 
 function tx(locale: string | null | undefined, fr: string, en: string) {
@@ -40,6 +41,7 @@ export function EnterpriseApproverSelect({
   defaultValue = "",
   className = "min-h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 text-sm text-dtsc-ink",
   candidatesEndpoint,
+  ownerControlledSelfApproval = false,
 }: Props) {
   const selectId = useId();
   const [candidates, setCandidates] = useState<Candidate[]>([]);
@@ -75,10 +77,12 @@ export function EnterpriseApproverSelect({
 
   const optionLabel = useMemo(() => (candidate: Candidate) => {
     const suffix = candidate.selfApprovalOverride
-      ? tx(locale, " · vous-même (dérogation administrateur)", " · you (administrator override)")
+      ? ownerControlledSelfApproval
+        ? tx(locale, " · vous-même (accord du propriétaire)", " · you (owner-authorized)")
+        : tx(locale, " · vous-même (dérogation administrateur)", " · you (administrator override)")
       : "";
     return `${candidate.name}${candidate.positionTitle ? ` · ${candidate.positionTitle}` : ""}${suffix}`;
-  }, [locale]);
+  }, [locale, ownerControlledSelfApproval]);
 
   return <div className="grid min-w-0 gap-1.5">
     {label ? <label htmlFor={selectId} className="text-sm font-semibold text-dtsc-ink">{label}</label> : null}
@@ -86,6 +90,8 @@ export function EnterpriseApproverSelect({
       <option value="">{loading ? tx(locale, "Recherche des validateurs autorisés…", "Looking for authorized approvers…") : tx(locale, "Sélectionner un validateur", "Select an approver")}</option>
       {candidates.map((candidate) => <option key={candidate.userId} value={candidate.userId}>{optionLabel(candidate)}</option>)}
     </select>
-    {!loading && !candidates.length ? <p className="text-xs font-semibold text-amber-700 dark:text-amber-300">{error || tx(locale, "Aucun autre validateur autorisé n’est disponible. Un administrateur peut habiliter un collaborateur ou activer la dérogation d’auto-validation pour ce service.", "No authorized approver is available. A company administrator can grant access to another collaborator or enable the self-approval override for this service.")}</p> : null}
+    {!loading && !candidates.length ? <p className="text-xs font-semibold text-amber-700 dark:text-amber-300">{error || (ownerControlledSelfApproval
+      ? tx(locale, "Aucun validateur. Le propriétaire peut accorder le droit propre à cette boutique ou habiliter un autre validateur Finance.", "No eligible approver. The owner can grant store-specific self-approval or assign another Finance approver.")
+      : tx(locale, "Aucun autre validateur autorisé n’est disponible. Un administrateur peut habiliter un collaborateur ou activer la dérogation d’auto-validation pour ce service.", "No authorized approver is available. A company administrator can grant access to another collaborator or enable the self-approval override for this service."))}</p> : null}
   </div>;
 }
