@@ -78,6 +78,9 @@ async function requireReturnApproverTx(
   await requireRetailSiteCapability(
     organizationId, approverUserId, siteId, "APPROVE_INVOICE_RETURN", tx, { requireAssignment: true },
   );
+  // Approving a business cancellation is not the approval of its refund or
+  // credit note. Owner-delegated managers must NOT gain company-wide Finance.
+  if (actorUserId === approverUserId) return;
   const [receivables, payments] = await Promise.all([
     resolveEnterpriseModuleAccess({
       organizationId, userId: approverUserId, moduleCode: "FINANCE_RECEIVABLES", action: "approve",
@@ -176,7 +179,7 @@ export async function listRetailInvoiceReturnRequests(
           item.preparedByUserId].includes(actorUserId),
       canInspect: capabilities.canInspect && item.status === "SUBMITTED" &&
         item.requestedByUserId !== actorUserId && item.approverUserId !== actorUserId,
-      canDecide: capabilities.canApprove && finance?.every((entry) => entry.allowed) === true &&
+      canDecide: capabilities.canApprove && (finance?.every((entry) => entry.allowed) === true || selfReturnAllowed) &&
         ["SUBMITTED", "INSPECTED"].includes(item.status) && item.approverUserId === actorUserId &&
         (item.requestedByUserId !== actorUserId || selfReturnAllowed) && item.inspectedByUserId !== actorUserId,
     }; }),
@@ -227,11 +230,7 @@ export async function listRetailInvoiceReturnApprovers(
   }));
   const selfAllowed = await retailSelfApprovalAllowed(organizationId, actorUserId, siteId, "SELF_APPROVE_INVOICE_RETURN");
   const selfMember = selfAllowed ? await prisma.organizationMember.findFirst({ where: { organizationId, userId: actorUserId, status: "ACTIVE", removedAt: null }, select: { userId: true, role: true, positionTitle: true, user: { select: { name: true } } } }) : null;
-  const selfFinance = selfMember ? await Promise.all([
-    resolveEnterpriseModuleAccess({ organizationId, userId: actorUserId, moduleCode: "FINANCE_RECEIVABLES", action: "approve" }),
-    resolveEnterpriseModuleAccess({ organizationId, userId: actorUserId, moduleCode: "FINANCE_PAYMENTS", action: "approve" }),
-  ]) : [];
-  const selfCandidate = selfMember && selfFinance.every((item) => item.allowed)
+  const selfCandidate = selfMember
     ? [{ userId: selfMember.userId, name: selfMember.user.name, positionTitle: selfMember.positionTitle,
       role: selfMember.role, isRequester: true, selfApprovalOverride: true }] : [];
   return { candidates: [...candidates.filter((candidate): candidate is NonNullable<typeof candidate> => Boolean(candidate)), ...selfCandidate] };
@@ -415,7 +414,7 @@ export async function decideRetailInvoiceReturnRequest(
       resolveEnterpriseModuleAccess({ organizationId, userId: actorUserId, moduleCode: "FINANCE_RECEIVABLES", action: "approve" }),
       resolveEnterpriseModuleAccess({ organizationId, userId: actorUserId, moduleCode: "FINANCE_PAYMENTS", action: "approve" }),
     ]);
-    if (!finance.every((entry) => entry.allowed)) {
+    if (!selfAllowed && !finance.every((entry) => entry.allowed)) {
       throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_APPROVER_INELIGIBLE", 403);
     }
     if (request.revision !== input.revision ||
