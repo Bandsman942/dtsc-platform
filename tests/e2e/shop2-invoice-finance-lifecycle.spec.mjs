@@ -158,6 +158,9 @@ async function financeFixture() {
 }
 
 test("#1042 real Finance settlement and five-actor credit, refund and inventory return", async ({ browser }) => {
+  // #1187 adds two independent cancellation flows and the FX invoice journal
+  // to the same serializable PostgreSQL scenario. Keep the timeout local.
+  test.setTimeout(240_000);
   if (process.env.CI !== "true" || !/\/dtsc_shop2_behavioral(?:\?|$)/.test(process.env.DATABASE_URL || "")) {
     throw new Error("RETAIL_1042_FINANCE_LIFECYCLE_REQUIRES_EPHEMERAL_CI_DATABASE");
   }
