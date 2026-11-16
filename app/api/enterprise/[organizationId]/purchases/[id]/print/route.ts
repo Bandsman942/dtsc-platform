@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { enterprisePurchaseVisibilityWhere, getEnterpriseProcurementAccess } from "@/lib/enterprise/procurement/access";
 import { prisma } from "@/lib/prisma";
+import { resolveOrganizationLogoStoragePath } from "@/lib/enterprise/organization-logo-storage";
 
 type Params = { params: Promise<{ organizationId: string; id: string }> };
 function escape(value: unknown): string {
@@ -22,7 +23,7 @@ export async function GET(req: Request, { params }: Params) {
   const access = await getEnterpriseProcurementAccess({ session, organizationId, moduleCode: "SUPPLIERS_PURCHASES", action: "read" });
   if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const [organization, purchase] = await Promise.all([
-    prisma.organization.findFirst({ where: { id: organizationId, status: "ACTIVE", deletedAt: null }, select: { name: true } }),
+    prisma.organization.findFirst({ where: { id: organizationId, status: "ACTIVE", deletedAt: null }, select: { name: true, logoUrl: true, address: true, city: true, country: true, phone: true, email: true, timezone: true } }),
     prisma.enterprisePurchase.findFirst({
       where: { ...enterprisePurchaseVisibilityWhere({ organizationId, userId: session.userId, canSeeAll: access.canSeeAll }), id },
       include: {
@@ -37,7 +38,11 @@ export async function GET(req: Request, { params }: Params) {
   const txt = (fr: string, english: string) => en ? english : fr;
   const money = (value: unknown) => Number(value ?? 0).toLocaleString(en ? "en-GB" : "fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const number = (value: unknown) => Number(value ?? 0).toLocaleString(en ? "en-GB" : "fr-FR", { maximumFractionDigits: 3 });
-  const date = (value: Date | null) => value ? new Intl.DateTimeFormat(en ? "en-GB" : "fr-FR", { dateStyle: "medium", timeZone: "UTC" }).format(value) : "—";
+  const date = (value: Date | null) => {
+    if (!value) return "—";
+    try { return new Intl.DateTimeFormat(en ? "en-GB" : "fr-FR", { dateStyle: "medium", timeZone: organization.timezone || "UTC" }).format(value); }
+    catch { return new Intl.DateTimeFormat(en ? "en-GB" : "fr-FR", { dateStyle: "medium", timeZone: "UTC" }).format(value); }
+  };
   const voided = ["REJECTED", "CANCELLED"].includes(purchase.status);
   const pending = ["DRAFT", "PENDING_APPROVAL"].includes(purchase.status);
   const warning = voided ? txt("DOCUMENT ANNULÉ OU REFUSÉ — NE PAS EXÉCUTER", "CANCELLED OR REJECTED — DO NOT EXECUTE")
@@ -54,12 +59,14 @@ export async function GET(req: Request, { params }: Params) {
   const supplierName = supplier ? (supplier.displayName || supplier.legalName) : txt("Non renseigné", "Not specified");
   const supplierInfo = supplier ? [supplier.addressLine, supplier.city, supplier.country, supplier.phone, supplier.email, supplier.taxIdentifier].filter(Boolean).join(" · ") : "";
   const nonce = randomBytes(18).toString("base64");
+  const logo = resolveOrganizationLogoStoragePath({ organizationId, logoUrl: organization.logoUrl }) ? '<img class="company-logo" src="/api/enterprise/' + encodeURIComponent(organizationId) + '/logo" alt="">' : "";
+  const companyInfo = [organization.address, organization.city, organization.country, organization.phone, organization.email].filter(Boolean).join(" · ");
   const css = [
     ':root{color-scheme:light}*{box-sizing:border-box}body{margin:0 auto;padding:15px;max-width:900px;background:#eaf3f8;color:#153750;font:12px system-ui,Arial,sans-serif}',
     '.toolbar{display:flex;justify-content:flex-end;margin-bottom:12px}button{background:#086994;color:white;border:0;border-radius:8px;padding:10px 16px;cursor:pointer}',
     '.paper{min-height:268mm;background:#fff;padding:28px 32px;box-shadow:0 9px 36px #143a582b}',
     'header{border-bottom:4px solid #0579a8;display:flex;justify-content:space-between;gap:16px;padding-bottom:18px}',
-    '.brand{font-size:23px;font-weight:900;color:#006289}.muted{color:#5b7687;font-size:10px;line-height:1.7}',
+    '.company-brand{display:flex;gap:13px;align-items:center;min-width:0}.company-logo{height:66px;width:66px;object-fit:contain;flex-shrink:0}.brand{font-size:23px;font-weight:900;color:#006289;overflow-wrap:anywhere}.muted{color:#5b7687;font-size:10px;line-height:1.7;overflow-wrap:anywhere}',
     'h1{font-size:22px;margin:24px 0 10px}.status{padding:8px 13px;background:#e6f6fb;border-radius:40px;font-weight:800;display:inline-block}',
     '.warning{margin-top:12px;background:#fff1d1;border:1px solid #c39032;color:#754b08;padding:12px;text-align:center;font-weight:800}',
     '.warning.voided{background:#ffedf0;border-color:#bb4357;color:#9b2a3e}',
@@ -83,8 +90,8 @@ export async function GET(req: Request, { params }: Params) {
   const html = '<!doctype html><html lang="' + (en ? 'en' : 'fr') + '"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>' +
     escape(txt("Bon de commande", "Purchase order")) + ' ' + escape(purchase.reference) + '</title><style nonce="' + nonce + '">' + css +
     '</style></head><body><div class="toolbar"><button id="print" type="button">' + escape(txt("Imprimer / Enregistrer en PDF", "Print / Save as PDF")) +
-    '</button></div><main class="paper"><header><div><div class="muted">DTSC PLATFORM · ERP</div><div class="brand">' +
-    escape(organization.name) + '</div></div><div class="muted">' + escape(txt("Copie issue du registre achats", "Copy from procurement register")) +
+    '</button></div><main class="paper"><header><div class="company-brand">' + logo + '<div><div class="muted">DTSC PLATFORM · ERP</div><div class="brand">' +
+    escape(organization.name) + '</div><div class="muted">' + escape(companyInfo) + '</div></div></div><div class="muted">' + escape(txt("Copie issue du registre achats", "Copy from procurement register")) +
     '<div>' + escape(date(new Date())) + '</div></div></header><h1>' + escape(txt("BON DE COMMANDE FOURNISSEUR", "SUPPLIER PURCHASE ORDER")) +
     '</h1><p class="muted">' + escape(txt("Référence", "Reference")) + ': <b>' + escape(purchase.reference) + '</b></p><div class="status">' +
     escape(labels[purchase.status]?.[index] || purchase.status) + '</div>' +
@@ -108,6 +115,6 @@ export async function GET(req: Request, { params }: Params) {
   return new NextResponse(html, { headers: {
     "Content-Type": "text/html; charset=utf-8", "Cache-Control": "private, no-store, max-age=0",
     "X-Content-Type-Options": "nosniff", "Referrer-Policy": "no-referrer",
-    "Content-Security-Policy": "default-src 'none'; base-uri 'none'; frame-ancestors 'self'; style-src 'nonce-" + nonce + "'; script-src 'nonce-" + nonce + "'; form-action 'none'; connect-src 'none'",
+    "Content-Security-Policy": "default-src 'none'; base-uri 'none'; frame-ancestors 'self'; style-src 'nonce-" + nonce + "'; script-src 'nonce-" + nonce + "'; img-src 'self'; form-action 'none'; connect-src 'none'",
   } });
 }
