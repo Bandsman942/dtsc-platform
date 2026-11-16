@@ -528,11 +528,18 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
       const legs = await prisma.enterpriseRetailInvoiceReturnRefundLeg.findMany({
         where: { organizationId, returnRequestId: req.id }, include: { refundPayment: true },
       });
-      expect(legs).toHaveLength(partlyPaid ? 1 : 0);
+      // The canonical return engine creates a separate leg table only when
+      // refunding to multiple accounts. A single-account payout is linked by
+      // request.refundPaymentId, and a credit-only return has neither.
+      expect(legs).toHaveLength(0);
+      expect(Boolean(req.refundPaymentId)).toBe(partlyPaid);
+      const refundPayment = req.refundPaymentId
+        ? await prisma.enterprisePayment.findUniqueOrThrow({ where: { id: req.refundPaymentId } })
+        : null;
       const credit = await prisma.enterpriseSalesCreditNote.findUniqueOrThrow({ where: { id: req.salesCreditNoteId } });
-      for (const leg of legs) {
-        const paymentApproval = await post(context.owner, `${base}/payments/${leg.refundPaymentId}/transition`, {
-          action: "APPROVE", revision: leg.refundPayment.revision,
+      if (refundPayment) {
+        const paymentApproval = await post(context.owner, `${base}/payments/${refundPayment.id}/transition`, {
+          action: "APPROVE", revision: refundPayment.revision,
         });
         expect(paymentApproval.status, JSON.stringify(paymentApproval.body)).toBe(200);
       }
@@ -565,12 +572,12 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
       });
       expect(after.quantityOnHand.equals(amountBefore.quantityOnHand)).toBe(true);
       const refundTransactions = await prisma.enterpriseTreasuryTransaction.findMany({
-        where: { organizationId, paymentId: { in: legs.map((leg) => leg.refundPaymentId) } },
+        where: { organizationId, paymentId: { in: refundPayment ? [refundPayment.id] : [] } },
       });
       expect(refundTransactions).toHaveLength(partlyPaid ? 1 : 0);
       if (partlyPaid) {
         expect(refundTransactions[0].amount.equals(partialAmount)).toBe(true);
-        expect(legs[0].refundPayment.financialAccountId).toBe(fixture.bank.id);
+        expect(refundPayment?.financialAccountId).toBe(fixture.bank.id);
       }
     }
     await exerciseUnfulfilledCredit({ partlyPaid: false });
