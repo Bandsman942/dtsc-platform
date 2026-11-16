@@ -1,6 +1,7 @@
 "use client";
 
 import { ErpDesign2Metric, ErpDesign2RegisterSection } from "@/components/enterprise/professional/erp-design2-register";
+import { HrDesign2Tools } from "@/components/enterprise/professional/hr-design2-tools";
 
 import Link from "next/link";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
@@ -125,6 +126,8 @@ export function EnterprisePayrollOperationsWorkspace({ organizationId, organizat
 
   const [tab, setTab] = useState<PayrollTab>("RUNS");
   const [status, setStatus] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [page, setPage] = useState(1);
   const [refreshKey, setRefreshKey] = useState(0);
   const [lookups, setLookups] = useState<Lookups>({ employees: [], approvers: [], payrollPeriods: [], currencies: [] });
@@ -155,8 +158,10 @@ export function EnterprisePayrollOperationsWorkspace({ organizationId, organizat
   const params = useMemo(() => {
     const value = new URLSearchParams({ page: String(page), pageSize: "25" });
     if (status) value.set("status", status);
+    if (dateFrom) value.set("dateFrom", dateFrom);
+    if (dateTo) value.set("dateTo", dateTo);
     return value;
-  }, [page, status]);
+  }, [dateFrom, dateTo, page, status]);
   const periods = useProfessionalCollection<PayrollPeriod>({ endpoint: `/api/enterprise/${organizationId}/payroll-periods`, params, refreshKey });
   const runs = useProfessionalCollection<PayrollRun>({ endpoint: `/api/enterprise/${organizationId}/payroll-runs`, params, refreshKey });
   const activeCollection = tab === "RUNS" ? runs : periods;
@@ -292,10 +297,15 @@ export function EnterprisePayrollOperationsWorkspace({ organizationId, organizat
       </Link>
     </div>
     <ModuleMetrics label={t("payroll.metrics")}><ErpDesign2Metric tone="sky" label={t("payroll.openPeriods")} value={periods.metrics.open || 0} /><ErpDesign2Metric tone="amber" label={t("payroll.toApprove")} value={runs.metrics.pendingApproval || 0} /><ErpDesign2Metric tone="emerald" label={t("payroll.approvedRuns")} value={runs.metrics.approved || 0} /><ErpDesign2Metric tone="violet" label={t("payroll.activePopulation")} value={lookups.employees.length} /></ModuleMetrics>
-    <ModuleToolbar controls={<><ProfessionalTabs value={tab} onChange={(value) => { setTab(value); setStatus(""); setPage(1); }} items={[{ id: "RUNS", label: t("payroll.runsTab"), count: runs.pagination.total }, { id: "PERIODS", label: t("payroll.periodsTab"), count: periods.pagination.total }]} /><NativeSelect value={status} onChange={(value) => { setStatus(value); setPage(1); }} items={statusItems} /></>} summary={copy.financeBoundary} />
+    <ModuleToolbar controls={<><ProfessionalTabs value={tab} onChange={(value) => { setTab(value); setStatus(""); setDateFrom(""); setDateTo(""); setPage(1); }} items={[{ id: "RUNS", label: t("payroll.runsTab"), count: runs.pagination.total }, { id: "PERIODS", label: t("payroll.periodsTab"), count: periods.pagination.total }]} /></>} summary={copy.financeBoundary} />
     <ModuleContent density="compact">
       {error && !periodOpen && !prepareOpen && !submitTarget && !decisionTarget && !cancelTarget ? <ProfessionalError message={error} /> : null}
       <ErpDesign2RegisterSection title={tab === "RUNS" ? t("payroll.runsSection") : t("payroll.periodsSection")} description={tab === "RUNS" ? t("payroll.runsDescription") : t("payroll.periodsDescription")}>
+        <HrDesign2Tools kind={tab === "RUNS" ? "payroll-runs" : "payroll-periods"} organizationId={organizationId} organizationName={organizationName}
+          title={tab === "RUNS" ? t("payroll.runsSection") : t("payroll.periodsSection")} locale={locale}
+          filters={params} status={status} statuses={statusItems}
+          onStatusChange={(next) => { setStatus(next); setPage(1); }} dateFrom={dateFrom} dateTo={dateTo}
+          onDateChange={(from, to) => { setDateFrom(from); setDateTo(to); setPage(1); }} />
         {activeCollection.error ? <ProfessionalError message={activeCollection.error} /> : activeCollection.loading ? <ProfessionalLoading /> : tab === "RUNS" ? (
           runs.items.length ? <BusinessList ariaLabel={t("payroll.runsSection")}>{runs.items.map((run) => <BusinessListItem key={run.id} title={`${run.reference} · ${run.payrollPeriod.name}`} status={<StatusBadge tone={statusTone(run.status)}>{professionalErpEnumLabel(locale, "payrollStatus", run.status)}</StatusBadge>} meta={t("payroll.employeeCountNet", { count: run.employeeCount, suffix: suffix(run.employeeCount), amount: professionalErpMoney(run.netAmount, run.currency, locale) })} description={t("payroll.amountSummary", { gross: professionalErpMoney(run.grossAmount, run.currency, locale), bonus: professionalErpMoney(run.bonusAmount, run.currency, locale), deduction: professionalErpMoney(run.deductionAmount, run.currency, locale) })} onOpen={() => setDetail(run)} actions={<ContextActions label={t("payroll.actions")} actions={actionsFor(run)} />} />)}</BusinessList> : <EmptyState compact title={t("payroll.noRun")} description={t("payroll.noRunDescription")} />
         ) : periods.items.length ? <BusinessList ariaLabel={t("payroll.periodsSection")}>{periods.items.map((period) => <BusinessListItem key={period.id} title={`${period.code} · ${period.name}`} status={<StatusBadge tone={statusTone(period.status)}>{professionalErpEnumLabel(locale, "payrollStatus", period.status)}</StatusBadge>} meta={`${professionalErpDate(period.periodStart, locale)} – ${professionalErpDate(period.periodEnd, locale)}`} description={`${t("payroll.runCount", { count: period._count.payrollRuns, suffix: suffix(period._count.payrollRuns) })}${period.payDate ? t("payroll.paymentPlanned", { date: professionalErpDate(period.payDate, locale) }) : ""}`} />)}</BusinessList> : <EmptyState compact title={t("payroll.noPeriod")} description={t("payroll.noPeriodDescription")} />}
