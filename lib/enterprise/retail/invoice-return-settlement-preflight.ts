@@ -1,4 +1,9 @@
 import { Prisma } from "@prisma/client";
+
+// @prisma/client Decimal does not expose the static Decimal.min/max helpers.
+const decimalMin = (...values: Prisma.Decimal[]): Prisma.Decimal => values.reduce((a, b) => a.lte(b) ? a : b);
+const decimalMax = (...values: Prisma.Decimal[]): Prisma.Decimal => values.reduce((a, b) => a.gte(b) ? a : b);
+
 import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
 
 const conflict = (code: string) => new EnterpriseRetailError(code, 409);
@@ -173,7 +178,7 @@ export async function assertRetailInvoiceReturnSettlementReadinessTx(
       throw conflict("RETAIL_INVOICE_RETURN_SETTLEMENT_ALLOCATION_PRECISION_INVALID");
     }
     if (financeRemaining.isZero()) continue;
-    const portion = Prisma.Decimal.min(allocation.amount, financeRemaining);
+    const portion = decimalMin(allocation.amount, financeRemaining);
     financeSourcePlan.push({
       allocationId: allocation.id, paymentId: allocation.paymentId,
       financialAccountId: allocation.payment.financialAccountId!, amount: portion,
@@ -248,7 +253,7 @@ export async function assertRetailInvoiceReturnSettlementReadinessTx(
       }
       const available = movement.quantity.minus(skip);
       skip = new Prisma.Decimal(0);
-      const portion = Prisma.Decimal.min(remaining, available);
+      const portion = decimalMin(remaining, available);
       if (!portion.greaterThan(0)) continue;
       stockSourcePlan.push({
         returnLineId: line.returnLineId, originalMovementId: movement.id,

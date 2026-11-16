@@ -1,5 +1,10 @@
 import { createHash } from "node:crypto";
 import { Prisma } from "@prisma/client";
+
+// @prisma/client Decimal does not expose the static Decimal.min/max helpers.
+const decimalMin = (...values: Prisma.Decimal[]): Prisma.Decimal => values.reduce((a, b) => a.lte(b) ? a : b);
+const decimalMax = (...values: Prisma.Decimal[]): Prisma.Decimal => values.reduce((a, b) => a.gte(b) ? a : b);
+
 import { z } from "zod";
 import { createSalesInvoiceTx } from "@/lib/enterprise/accounting/receivables-service";
 import { resolveRetailCommercialPricingDecisions } from "@/lib/enterprise/retail/commercial-engine";
@@ -261,7 +266,7 @@ export async function postPaidRetailInvoiceStockTx(
   // completed cancellation quantities before committing cost-of-goods sold.
   const fulfilableLines = checkout.lines.map((line) => ({
     line,
-    remaining: Prisma.Decimal.max(0, line.invoiceItem.quantity.minus(
+    remaining: decimalMax(new Prisma.Decimal(0), line.invoiceItem.quantity.minus(
       (line.returnLines || []).reduce((total, entry) => total.plus(entry.quantity), new Prisma.Decimal(0)),
     )),
   })).filter(({ line, remaining }) => Boolean(line.inventoryItemId) && remaining.greaterThan(0));
@@ -310,11 +315,11 @@ export async function postPaidRetailInvoiceStockTx(
       const specificReserved = activeReservations
         .filter((reservation) => reservation.storageLocationId && reservation.storageLocationId === balance.storageLocationId)
         .reduce((sum, reservation) => sum.plus(reservation.quantity.minus(reservation.fulfilledQuantity)), new Prisma.Decimal(0));
-      const physicallyFree = Prisma.Decimal.max(0, balance.quantityOnHand.minus(balance.quantityReserved).minus(specificReserved));
-      const unscopedTakenHere = Prisma.Decimal.min(unscopedReserved, physicallyFree);
+      const physicallyFree = decimalMax(new Prisma.Decimal(0), balance.quantityOnHand.minus(balance.quantityReserved).minus(specificReserved));
+      const unscopedTakenHere = decimalMin(unscopedReserved, physicallyFree);
       unscopedReserved = unscopedReserved.minus(unscopedTakenHere);
       const free = physicallyFree.minus(unscopedTakenHere);
-      const take = Prisma.Decimal.min(stillNeeded, free);
+      const take = decimalMin(stillNeeded, free);
       if (!take.greaterThan(0)) continue;
       const issued = await applyStockMovementTx(tx, organizationId, actorUserId, {
         inventoryItemId: line.inventoryItemId,

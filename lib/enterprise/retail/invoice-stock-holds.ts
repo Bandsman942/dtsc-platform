@@ -1,5 +1,10 @@
 import { Prisma } from "@prisma/client";
 
+// @prisma/client Decimal does not expose the static Decimal.min/max helpers.
+const decimalMin = (...values: Prisma.Decimal[]): Prisma.Decimal => values.reduce((a, b) => a.lte(b) ? a : b);
+const decimalMax = (...values: Prisma.Decimal[]): Prisma.Decimal => values.reduce((a, b) => a.gte(b) ? a : b);
+
+
 /** A prepared Retail invoice is a stock promise, not a stock movement.
  * The canonical invoice/checkout line is the sole source of that promise:
  * it becomes free again when Finance cancels/voids the invoice, and is
@@ -39,7 +44,7 @@ export async function readActiveRetailInvoiceStockHoldsTx(
     inventoryItemId: line.inventoryItemId!,
     stockLotId: line.stockLotId,
     warehouseId: line.checkout.warehouseId,
-    quantity: Prisma.Decimal.max(0, new Prisma.Decimal(line.invoiceItem.quantity).minus(
+    quantity: decimalMax(new Prisma.Decimal(0), new Prisma.Decimal(line.invoiceItem.quantity).minus(
       (line.returnLines || []).reduce((total, entry) => total.plus(entry.quantity), new Prisma.Decimal(0)),
     )),
   })).filter((line) => line.quantity.greaterThan(0));

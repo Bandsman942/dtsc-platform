@@ -1,5 +1,10 @@
 import { createHash, randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
+
+// @prisma/client Decimal does not expose the static Decimal.min/max helpers.
+const decimalMin = (...values: Prisma.Decimal[]): Prisma.Decimal => values.reduce((a, b) => a.lte(b) ? a : b);
+const decimalMax = (...values: Prisma.Decimal[]): Prisma.Decimal => values.reduce((a, b) => a.gte(b) ? a : b);
+
 import { z } from "zod";
 import { publishFinanceEvent } from "@/lib/enterprise/accounting/helpers";
 import { resolveEnterpriseModuleAccess, resolveEnterpriseModuleCapabilities } from "@/lib/enterprise/module-access";
@@ -360,13 +365,13 @@ export async function createRetailInvoiceReturnRequest(
       const proportional = monetary(invoiceItem.totalAmount.times(value).div(invoiceItem.quantity));
       // Preserve the last-cent remainder on the final quantity return. Three
       // successive 1/3 returns of 100.00 therefore yield 33.33, 33.33, 33.34.
-      const amount = value.equals(left) ? remainingAmount : Prisma.Decimal.min(financeMoney(proportional), remainingAmount);
+      const amount = value.equals(left) ? remainingAmount : decimalMin(financeMoney(proportional), remainingAmount);
       if (!amount.greaterThan(0)) {
         throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_AMOUNT_BELOW_MINOR_UNIT", 409);
       }
       const taxProportional = financeMoney(invoiceItem.taxAmount.times(value).div(invoiceItem.quantity));
       const refundTaxAmount = value.equals(left) ? remainingTax :
-        Prisma.Decimal.min(taxProportional, remainingTax, amount);
+        decimalMin(taxProportional, remainingTax, amount);
       const refundNetAmount = amount.minus(refundTaxAmount);
       if (refundNetAmount.lessThan(0) || refundNetAmount.greaterThan(remainingNet) ||
           !refundNetAmount.plus(refundTaxAmount).equals(amount)) {
