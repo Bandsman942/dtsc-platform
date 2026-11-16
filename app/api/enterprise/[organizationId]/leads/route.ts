@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { getEnterpriseCommonDomainAccess } from "@/lib/enterprise/common/access";
+import { financeBusinessDateRange } from "@/lib/enterprise/accounting/http";
 import { enterpriseDomainErrorResponse } from "@/lib/enterprise/common/http";
 import { createCanonicalLeadFromLegacyInput } from "@/lib/enterprise/crm-sales/canonical-lead-onboarding";
 import { leadCreateSchema } from "@/lib/enterprise/crm-sales/schemas";
@@ -24,9 +25,13 @@ export async function GET(req: Request, { params }: Params) {
   const page = Math.max(1, Number(url.searchParams.get("page") || 1) || 1);
   const pageSize = Math.min(50, Math.max(5, Number(url.searchParams.get("pageSize") || 20) || 20));
   const search = url.searchParams.get("search")?.trim() || "";
+  const dates = financeBusinessDateRange(req);
+  if (!dates.ok) return dates.response;
+  if (search.length > 120) return NextResponse.json({ error: "SEARCH_TOO_LONG", message: "Limitez la recherche à 120 caractères." }, { status: 400 });
   const status = url.searchParams.get("status")?.trim().toUpperCase() || "";
   const ownerUserId = url.searchParams.get("ownerUserId")?.trim() || "";
   const where: Prisma.EnterpriseLeadWhereInput = {
+    ...((dates.from || dates.to) ? { createdAt: { ...(dates.from ? { gte: dates.from } : {}), ...(dates.to ? { lte: dates.to } : {}) } } : {}),
     organizationId,
     archivedAt: null,
     ...(search ? { OR: [{ legalName: { contains: search, mode: "insensitive" } }, { displayName: { contains: search, mode: "insensitive" } }, { companyName: { contains: search, mode: "insensitive" } }, { reference: { contains: search, mode: "insensitive" } }] } : {}),
