@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArchiveRestore, ArrowRightLeft, BookCheck, CalendarClock } from "lucide-react";
 import { notFound, redirect } from "next/navigation";
+import { EnterpriseFinanceRelatedLinks } from "@/components/enterprise/enterprise-finance-related-links";
 import { EnterpriseAdvancedFinanceWorkspace } from "@/components/enterprise/professional/enterprise-advanced-finance-workspace";
 import { EnterpriseFinanceAccountingWorkspace } from "@/components/enterprise/professional/enterprise-finance-accounting-workspace";
 import { EnterpriseFinanceAdvancedWorkspace } from "@/components/enterprise/professional/enterprise-finance-advanced-workspace";
@@ -51,6 +52,7 @@ export async function EnterpriseFinanceModulePage({ moduleCode }: { moduleCode: 
 
   return (
     <AppShell user={user}>
+      {["FINANCE_CLOSE", "FINANCE_STATEMENTS", "FINANCE_ASSETS", "FINANCE_INVENTORY"].includes(moduleCode) ? <EnterpriseFinanceRelatedLinks organizationId={organizationId} fromCode={moduleCode} locale={user.locale} /> : null}
       {moduleCode === "FINANCE_TREASURY" ? (
         <div className="mx-auto mb-4 w-full max-w-[1600px] px-4 sm:px-6 lg:px-8">
           <Link href="/enterprise-modules/FINANCE_TREASURY/exchange-rates" className="flex min-w-0 items-center justify-between gap-4 rounded-2xl border border-cyan-400/30 bg-cyan-400/10 px-4 py-3 text-dtsc-ink transition hover:border-cyan-400/60">

@@ -78,6 +78,8 @@ export function EnterpriseReportsWorkspace({ organizationId, organizationName, o
   const [search, setSearch] = useState("");
   const [type, setType] = useState("");
   const [status, setStatus] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
   const [createOpen, setCreateOpen] = useState(false);
   const [saveViewOpen, setSaveViewOpen] = useState(false);
@@ -99,7 +101,7 @@ export function EnterpriseReportsWorkspace({ organizationId, organizationName, o
   useToastMessage(errorMessage, "error");
 
   const generationStorageKey = useMemo(() => `dtsc:finance-report-generation:${organizationId}`, [organizationId]);
-  const params = useMemo(() => { const value = new URLSearchParams({ page: String(page), pageSize: "20" }); if (search.trim()) value.set("search", search.trim()); if (type) value.set("type", type); if (status) value.set("status", status); return value; }, [page, search, type, status]);
+  const params = useMemo(() => { const value = new URLSearchParams({ page: String(page), pageSize: "20" }); if (search.trim()) value.set("search", search.trim()); if (type) value.set("type", type); if (status) value.set("status", status); if (dateFrom) value.set("from", dateFrom); if (dateTo) value.set("to", dateTo); return value; }, [page, search, type, status, dateFrom, dateTo]);
   const reports = useEnterpriseV2Collection<ReportItem>({ endpoint: `/api/enterprise/${organizationId}/reports`, params, refreshKey });
   const reportTypeChoices = useMemo(() => catalog.map((item) => ({ id: item.code, label: reportTypeLabel(locale, item.code) })), [catalog, locale]);
   const selectedCatalog = useMemo(() => catalog.find((item) => item.code === newReportType) || null, [catalog, newReportType]);
@@ -260,7 +262,18 @@ export function EnterpriseReportsWorkspace({ organizationId, organizationName, o
     {catalog.length ? <EnterpriseReportSchedules organizationId={organizationId} canManage={canManage} locale={locale} catalog={catalog} options={generationOptions} /> : null}
 
     <ModuleSection title={t("reports.section.title")} description={t("reports.section.description")} count={`${reports.pagination.total}`} action={<div className="flex flex-wrap gap-2"><Button variant="outline" disabled={!catalog.length} onClick={() => setSaveViewOpen(true)}>{t("reports.saveView")}</Button>{canCreate ? <Button disabled={Boolean(generationStatusUrl) || !catalog.length} onClick={() => { setNewReportType((current) => current || catalog[0]?.code || ""); setCreateOpen(true); }}><Plus className="h-4 w-4" />{t("reports.generateReport")}</Button> : null}</div>}>
-      <div className="grid gap-2 border-y border-dtsc-border py-3 md:grid-cols-3"><Input value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder={t("reports.search")} /><NativeSelect value={type} onChange={setType} items={reportTypeChoices} /><NativeSelect value={status} onChange={setStatus} items={statuses.map((id) => ({ id, label: statusLabel(locale, id) }))} /></div>
+      <div className="space-y-3 border-y border-dtsc-border py-3">
+        <div className="grid min-w-0 gap-2 sm:grid-cols-2"><label className="grid min-w-0 gap-1 text-xs font-bold text-dtsc-muted">{t("reports.filter.search")}<Input value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder={t("reports.search")} /></label><label className="grid min-w-0 gap-1 text-xs font-bold text-dtsc-muted">{t("reports.filter.family")}<NativeSelect value={type} onChange={(value) => { setType(value); setPage(1); }} items={reportTypeChoices} /></label></div>
+        <div className="grid min-w-0 gap-2 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+          <label className="grid min-w-0 gap-1 text-xs font-bold text-dtsc-muted">{t("reports.filter.from")}<Input type="date" value={dateFrom} max={dateTo || undefined} onChange={(event) => { setDateFrom(event.target.value); setPage(1); }} /></label>
+          <label className="grid min-w-0 gap-1 text-xs font-bold text-dtsc-muted">{t("reports.filter.to")}<Input type="date" value={dateTo} min={dateFrom || undefined} onChange={(event) => { setDateTo(event.target.value); setPage(1); }} /></label>
+          <Button type="button" variant="outline" onClick={() => { setSearch(""); setType(""); setStatus(""); setDateFrom(""); setDateTo(""); setPage(1); }} className="self-end"><RotateCcw className="h-4 w-4" />{t("reports.filter.clear")}</Button>
+        </div>
+        <nav aria-label={t("reports.filter.statusRail")} className="flex min-w-0 touch-pan-x gap-2 overflow-x-auto py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {["", ...statuses].map((value) => <button key={value || "all"} type="button" aria-pressed={status === value} onClick={() => { setStatus(value); setPage(1); }} className={`min-h-10 shrink-0 rounded-full border px-3 text-xs font-extrabold transition focus-visible:ring-2 focus-visible:ring-cyan-400 ${status === value ? "border-dtsc-blue bg-dtsc-blue text-white" : "border-dtsc-border bg-dtsc-surface text-dtsc-ink hover:bg-dtsc-soft"}`}>{value ? statusLabel(locale, value) : (t("reports.filter.allStatuses"))}</button>)}
+        </nav>
+        <p className="text-xs leading-5 text-dtsc-muted">{t("reports.filter.dateHelp")}</p>
+      </div>
       {reports.loading ? <p className="py-8 text-center text-sm text-dtsc-muted">{t("common.loading")}</p> : reports.items.length ? <BusinessList ariaLabel={t("reports.aria")}>{reports.items.map((item) => <BusinessListItem key={item.id} title={`${item.reference} · ${item.title}`} status={<StatusBadge tone={tone(item.status)}>{statusLabel(locale, item.status)}</StatusBadge>} meta={`${reportTypeLabel(locale, item.reportType)}${item.currency ? ` · ${item.currency}` : ""}`} description={`${item.freshnessAt ? t("reports.fresh", { date: formatEnterpriseDate(item.freshnessAt, locale) }) : t("reports.freshnessUnavailable")} · ${formatEnterpriseDate(item.generatedAt, locale)}${item.periodStart ? ` · ${formatEnterpriseDate(item.periodStart, locale)} – ${formatEnterpriseDate(item.periodEnd, locale)}` : ""}`} onOpen={() => void open(item)} actions={<ContextActions label={t("reports.actions")} actions={actions(item)} />} />)}</BusinessList> : <EmptyState compact title={t("reports.noReports")} description={reports.error || t("reports.noReportsDescription")} />}
       <div className="mt-3 flex justify-between border-t border-dtsc-border pt-3 text-sm text-dtsc-muted"><span>{t("common.page", { current: reports.pagination.page, total: reports.pagination.pageCount })}</span><div className="flex gap-2"><Button variant="outline" disabled={page <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>{t("common.previous")}</Button><Button variant="outline" disabled={page >= reports.pagination.pageCount} onClick={() => setPage((value) => value + 1)}>{t("common.next")}</Button></div></div>
     </ModuleSection>

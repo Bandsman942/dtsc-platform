@@ -593,5 +593,12 @@
   "inventoryUnvaluedPost": "Value and post this receipt",
   "inventoryUnvaluedPostedSuccess": "Existing receipt valued and posted. Physical stock quantities are unchanged.",
   "inventoryUnvaluedLoadFailed": "Unable to load receipts awaiting cost valuation.",
-  "inventoryUnvaluedPostFailed": "Unable to value this receipt. Check acquisition cost, currency, permissions, and fiscal period."
+  "inventoryUnvaluedPostFailed": "Unable to value this receipt. Check acquisition cost, currency, permissions, and fiscal period.",
+  "advancedGuideTax": "Configure tax rules and mapped ledger accounts before automatic application.",
+  "advancedGuideClose": "Prepare a checklist for an open period. Blockers, approvals and closing rights are verified on the server.",
+  "advancedGuideStatements": "Choose a statement type, period and currency. Published versions are immutable and rely on posted accounting entries.",
+  "advancedGuideAssets": "Select the asset, depreciation basis and mapped accounts. Capitalization must not duplicate the operational asset.",
+  "inventoryLiveDescription": "Live weighted-average valuation. Stock movement quantities remain managed in Inventory; published period snapshots belong to Financial statements.",
+  "inventoryLiveSourceNote": "Source of physical quantities: Inventory. Source of accounting cost: posted weighted-average cost layers. No invented historical valuation.",
+  "relatedFinanceWorkflows": "Related workflows"
 }

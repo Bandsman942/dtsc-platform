@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog } from "@/lib/audit";
+import { civilMidnightUtc, followingCivilDate, isCivilDate } from "@/lib/enterprise/retail/civil-date";
 import { enterpriseReportVisibilityWhere, getEnterpriseFinanceAccess } from "@/lib/enterprise/finance/access";
 import { resolveEnterpriseModuleAccess } from "@/lib/enterprise/module-access";
 import { prisma } from "@/lib/prisma";
@@ -23,8 +24,14 @@ export async function GET(req: Request, { params }: Params) {
   const status = url.searchParams.get("status")?.trim();
   const creator = url.searchParams.get("creator")?.trim();
   const search = url.searchParams.get("search")?.trim();
-  const from = url.searchParams.get("from");
-  const to = url.searchParams.get("to");
+  const from = url.searchParams.get("from") || "";
+  const to = url.searchParams.get("to") || "";
+  if ((from && !isCivilDate(from)) || (to && !isCivilDate(to)) || (from && to && from > to)) {
+    return NextResponse.json({ error: "REPORT_DATE_RANGE_INVALID", message: "La plage de dates est invalide." }, { status: 400 });
+  }
+  const timezone = from || to
+    ? (await prisma.organization.findUnique({ where: { id: organizationId }, select: { timezone: true } }))?.timezone || "UTC"
+    : "UTC";
 
   const visibility = enterpriseReportVisibilityWhere({ organizationId, userId: session.userId, canSeeAll: access.canSeeAll });
   const filters: Prisma.EnterpriseReportWhereInput[] = [visibility];
@@ -37,7 +44,7 @@ export async function GET(req: Request, { params }: Params) {
   if (status) filters.push({ status });
   if (creator) filters.push({ generatedByUserId: creator });
   if (search) filters.push({ OR: [{ reference: { contains: search, mode: "insensitive" } }, { title: { contains: search, mode: "insensitive" } }, { description: { contains: search, mode: "insensitive" } }] });
-  if (from || to) filters.push({ generatedAt: { ...(from ? { gte: new Date(from) } : {}), ...(to ? { lte: new Date(to) } : {}) } });
+  if (from || to) filters.push({ generatedAt: { ...(from ? { gte: civilMidnightUtc(from, timezone) } : {}), ...(to ? { lt: civilMidnightUtc(followingCivilDate(to), timezone) } : {}) } });
 
   const where: Prisma.EnterpriseReportWhereInput = { AND: filters };
   const [rows, total, publishedCount, latest] = await Promise.all([

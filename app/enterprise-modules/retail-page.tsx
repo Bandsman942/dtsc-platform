@@ -28,7 +28,7 @@ import { prisma } from "@/lib/prisma";
 import { siteStaffCapabilities } from "@/lib/enterprise/retail/site-access";
 import { hasShopHistoricalImportAccess } from "@/lib/enterprise/retail/shop-history-availability";
 
-export async function renderRetailModulePage(moduleCode: "RETAIL_POS" | "MOBILE_MONEY_AGENCY" | "TELCO_TOPUPS" | "RETAIL_DAILY_CLOSE", options?: { section?: string; siteId?: string }) {
+export async function renderRetailModulePage(moduleCode: "RETAIL_POS" | "MOBILE_MONEY_AGENCY" | "TELCO_TOPUPS" | "RETAIL_DAILY_CLOSE", options?: { section?: string; siteId?: string; invoiceId?: string; invoiceNumber?: string }) {
   const user = await requireUser();
   const session = await getSession();
   const organizationId = session?.activeContext === "ORGANIZATION" ? session.activeOrganizationId : null;
@@ -117,7 +117,7 @@ export async function renderRetailModulePage(moduleCode: "RETAIL_POS" | "MOBILE_
               ) : posSection.id === "approvals" ? (
                 <RetailInvoiceApprovalWorkbench organizationId={organizationId} locale={locale} preferredSiteId={options?.siteId} />
               ) : posSection.id === "collections" ? (
-                <RetailInvoiceCashierWorkbench organizationId={organizationId} locale={locale} preferredSiteId={options?.siteId} />
+                <RetailInvoiceCashierWorkbench organizationId={organizationId} locale={locale} preferredSiteId={options?.siteId} targetInvoiceId={options?.invoiceId} targetInvoiceNumber={options?.invoiceNumber} />
               ) : posSection.id === "offline" ? (
                 <RetailOfflineContinuity key={`${organizationId}:${user.id}`} organizationId={organizationId} actorUserId={user.id} locale={locale} />
               ) : posSection.id === "omnichannel" ? (

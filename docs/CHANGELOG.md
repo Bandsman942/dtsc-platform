@@ -1,3 +1,10 @@
+## 2026-11-16 — Hotfix POS factures → Encaissements et Finance/Reports 2.0 #1208 — v1.23.2 candidate (OWNER_E2E requis)
+
+- RETAIL POS : un lien sur chaque facture émise non soldée renvoie à l'encaissement de cette facture seulement si l'utilisateur dispose de `COLLECT_PAYMENT` sur sa boutique ; la liste RETAIL reste figée par ROUTES-05A ; recherche par numéro sur boutiques autorisées puis correspondance stricte ID + numéro en caisse, suivie des contrôles serveur de paiement (entreprise, boutique, statut, solde et affectations).
+- Finance 2.0 : rails de statuts tactiles et formulaires guidés Clôture financière, États financiers, Immobilisations ; contexte de valorisation au coût moyen pondéré sans modifier le stock réel ; liens conditionnés par les permissions entre les cinq modules financiers et Rapports.
+- Rapports : recherche, statut, dates de génération, pagination et exports premium ; correction des bornes dates civiles pour inclure entièrement le jour local de fin.
+- Aucun nouveau moteur comptable, modèle Prisma, secret ou déploiement de branche ; QA contractuelle intégrée à la suite et dossier [runbook + OWNER_E2E](HOTFIX_20261116_RETAIL_INVOICE_FINANCE_DESIGN2.md). Fusion seulement après Quality Gates et `E2E final #PR BON`.
+
 ## 2026-11-16 — Hotfix RETAIL P0 #1205 « Clôture magasin » — v1.23.1 candidate (E2E propriétaire requis)
 
 - **Soumission par coupures** : le décompte d'espèces par quantités prédéfinies CDF/USD et coupure personnalisée remplace la chaîne libre ; total compté et écart calculés immédiatement, justification requise en cas de différence. Les comptes Mobile Money/Clearing conservent leur rapprochement séparé.

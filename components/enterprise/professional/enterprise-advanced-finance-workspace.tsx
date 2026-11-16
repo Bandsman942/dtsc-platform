@@ -297,6 +297,10 @@ export function EnterpriseAdvancedFinanceWorkspace({ organizationId, organizatio
       {sections.map((section) => <button key={section.key} type="button" onClick={() => selectSection(section.key)} className={`shrink-0 rounded-full border px-4 py-2 text-sm font-black transition ${section.key === activeKey ? "border-dtsc-blue bg-dtsc-blue text-white" : "border-dtsc-border bg-dtsc-page text-dtsc-ink hover:bg-dtsc-soft"}`}>{t(section.labelKey)}</button>)}
     </nav>
 
+    {definition.code === "FINANCE_INVENTORY" ? <div role="note" className="flex min-w-0 flex-wrap items-center gap-2 border-y border-dtsc-border bg-dtsc-page/60 px-3 py-3 text-xs font-semibold leading-6 text-dtsc-muted">
+      <ShieldCheck className="h-4 w-4 shrink-0 text-dtsc-blue" aria-hidden="true" />
+      <span className="min-w-0"><strong className="block text-dtsc-ink">{t("inventoryLiveDescription")}</strong>{t("inventoryLiveSourceNote")}</span>
+    </div> : null}
     {Object.keys(metrics).length ? <ModuleMetrics label={t("accountingMetrics")}>{Object.entries(metrics).slice(0, 8).map(([key, value]) => <ModuleMetric key={key} label={key === "TOTAL" ? t("total") : businessLabel(key, locale)} value={value} />)}</ModuleMetrics> : null}
     <ModuleToolbar
       search={<div className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-dtsc-muted" /><Input value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder={t("accountingSearchPlaceholder")} className="pl-9" /></div>}

@@ -593,5 +593,12 @@
   "inventoryUnvaluedPost": "Valoriser et comptabiliser cette entrée",
   "inventoryUnvaluedPostedSuccess": "Entrée existante valorisée et comptabilisée. Les quantités physiques restent inchangées.",
   "inventoryUnvaluedLoadFailed": "Impossible de charger les entrées en attente de valorisation.",
-  "inventoryUnvaluedPostFailed": "La valorisation de cette entrée n'a pas abouti. Vérifiez le coût, la devise, les permissions et la période comptable."
+  "inventoryUnvaluedPostFailed": "La valorisation de cette entrée n'a pas abouti. Vérifiez le coût, la devise, les permissions et la période comptable.",
+  "advancedGuideTax": "Renseignez les règles fiscales et les comptes avant toute application automatique.",
+  "advancedGuideClose": "Préparez la checklist d'une période ouverte. Les blocages, validations et autorisations de clôture sont vérifiés côté serveur.",
+  "advancedGuideStatements": "Choisissez le type d'état, une période et une devise. Une version publiée est immuable et s'appuie sur les écritures comptabilisées.",
+  "advancedGuideAssets": "Sélectionnez l'immobilisation, sa valeur amortissable et les comptes associés. La capitalisation ne doit pas créer une seconde immobilisation opérationnelle.",
+  "inventoryLiveDescription": "Valorisation en direct au coût moyen pondéré. Les mouvements et quantités restent gérés dans Stocks ; les versions périodiques publiées relèvent des États financiers.",
+  "inventoryLiveSourceNote": "Quantités physiques : module Stocks. Coûts comptables : couches de coût moyen pondéré validées. Aucun historique de valorisation inventé.",
+  "relatedFinanceWorkflows": "Parcours liés"
 }
