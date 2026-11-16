@@ -1,9 +1,9 @@
 # Hotfix — Facture RETAIL → Encaissements ciblés et Finance/Reports DTSC 2.0
 
-**Date :** 16 novembre 2026  
-**Issue :** #1208  
-**Version candidate :** 1.23.2  
-**Branche :** `fix/1208-retail-invoices-finance-design2`  
+**Date :** 16 novembre 2026
+**Issue :** #1208
+**Version candidate :** 1.23.2
+**Branche :** `fix/1208-retail-invoices-finance-design2`
 **Statut :** candidat en validation, sans fusion ni déploiement Production avant Quality Gates + OWNER_E2E BON.
 
 ## Périmètre et comportement POS
