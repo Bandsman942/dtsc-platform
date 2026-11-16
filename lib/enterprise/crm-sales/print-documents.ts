@@ -107,7 +107,7 @@ function renderPrintHtml(args: {
     try { return new Intl.DateTimeFormat(locale === "fr" ? "fr-FR" : "en-GB", { dateStyle: "medium", timeZone: timezone }).format(value); }
     catch { return new Intl.DateTimeFormat(locale === "fr" ? "fr-FR" : "en-GB", { dateStyle: "medium", timeZone: "UTC" }).format(value); }
   };
-  const label = (value: string) => STATUS[value]?.[locale === "fr" ? 0 : 1] || value;
+  const label = (value: string) => STATUS[value]?.[locale === "fr" ? 0 : 1] || (locale === "fr" ? "Statut indisponible" : "Status unavailable");
   const invalid = ["REJECTED", "EXPIRED", "CANCELLED"].includes(document.status);
   const provisional = document.status === "DRAFT";
   const pending = document.status === "PENDING_APPROVAL";
@@ -274,6 +274,7 @@ export async function printCommercialDocument(
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt,
     metadata: { organizationId, documentType: kind, domain: "sales-commercial-print", reference: printable.reference, status: printable.status },
   });
+  const downloadName = recordId.replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 80) || "document";
   return new NextResponse(html, {
     status: 200, headers: {
       "content-type": "text/html; charset=utf-8",
@@ -281,7 +282,7 @@ export async function printCommercialDocument(
       "x-content-type-options": "nosniff",
       "referrer-policy": "no-referrer",
       "content-security-policy": "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'",
-      "content-disposition": `inline; filename="${kind}-${recordId}.html"`,
+      "content-disposition": `inline; filename="${kind}-${downloadName}.html"`,
     },
   });
 }
