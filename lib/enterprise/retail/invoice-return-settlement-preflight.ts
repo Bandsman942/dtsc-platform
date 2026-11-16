@@ -69,17 +69,19 @@ export async function assertRetailInvoiceReturnSettlementReadinessTx(
     throw conflict("RETAIL_INVOICE_RETURN_SETTLEMENT_SOURCE_INVALID");
   }
   const refundAmount = request.refundAmount; // Credit-note face value, not necessarily cash paid out.
-  const availableToRefund = refundAmount.minus(invoice.outstandingAmount);
-  const payoutAmount = availableToRefund.greaterThan(0) ? availableToRefund : new Prisma.Decimal(0);
-  if ((request.refundPayoutAmount !== null && request.refundPayoutAmount !== undefined &&
-      !request.refundPayoutAmount.equals(payoutAmount)) || !payoutAmount.equals(cents(payoutAmount))) {
-    throw conflict("RETAIL_INVOICE_RETURN_SETTLEMENT_PAYOUT_CONFLICT");
-  }
+  // Validate the documentary credit first. An invalid credit value must
+  // never be reported as a stale payout snapshot.
   if (!refundAmount.greaterThan(0) || !refundAmount.equals(cents(refundAmount)) ||
       !checkout.invoice.grandTotal.equals(cents(checkout.invoice.grandTotal)) ||
       refundAmount.greaterThan(checkout.invoice.grandTotal) ||
       !sum(request.lines.map((line) => line.refundAmount)).equals(refundAmount)) {
     throw conflict("RETAIL_INVOICE_RETURN_SETTLEMENT_AMOUNT_INVALID");
+  }
+  const availableToRefund = refundAmount.minus(invoice.outstandingAmount);
+  const payoutAmount = availableToRefund.greaterThan(0) ? availableToRefund : new Prisma.Decimal(0);
+  if ((request.refundPayoutAmount !== null && request.refundPayoutAmount !== undefined &&
+      !request.refundPayoutAmount.equals(payoutAmount)) || !payoutAmount.equals(cents(payoutAmount))) {
+    throw conflict("RETAIL_INVOICE_RETURN_SETTLEMENT_PAYOUT_CONFLICT");
   }
   if (!request.lines.length) throw conflict("RETAIL_INVOICE_RETURN_SETTLEMENT_LINE_INVALID");
 
