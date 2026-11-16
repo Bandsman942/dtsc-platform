@@ -2,12 +2,15 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Banknote, Building2, CheckCircle2, ClipboardCheck, RefreshCw, XCircle } from "lucide-react";
+import { Banknote, Building2, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, ClipboardCheck, Download, Search, RefreshCw, XCircle } from "lucide-react";
 import { useAppLocale } from "@/components/i18n/locale-provider";
 import { Field, formatEnterpriseDate } from "@/components/enterprise/core-v2/erp-v2-ui";
 import { ProfessionalError, ProfessionalLoading } from "@/components/enterprise/professional/professional-erp-ui";
 import { ContextualUserGuide } from "@/components/user-guides/contextual-user-guide";
 import { EnterpriseApproverSelect } from "@/components/enterprise/enterprise-approver-select";
+import { cashCountsFromDailyCloseForm, RetailDailyCloseCashCount } from "@/components/enterprise/professional/retail-daily-close-cash-count";
+import { useToastMessage } from "@/components/ui/use-toast-message";
+import type { ToastNotice } from "@/lib/client-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { BusinessList, BusinessListItem } from "@/components/workspace/business-list";
@@ -89,18 +92,6 @@ type CloseListResponse = {
 type CloseSummary = { date: string; rows: Array<{ siteId: string | null; status: string; closeCount: number; varianceCount: number }> };
 type AdminStore = { id: string; name: string; code: string };
 
-function parseDenominations(value: string) {
-  return value
-    .split(",")
-    .map((chunk) => chunk.trim())
-    .filter(Boolean)
-    .map((chunk) => {
-      const [denomination, quantity] = chunk.split(/[x×*]/).map((part) => part.trim());
-      return { denomination: Number(denomination || 0), quantity: Number(quantity || 0) };
-    })
-    .filter((item) => item.denomination > 0 && Number.isInteger(item.quantity) && item.quantity >= 0);
-}
-
 function statusTone(status: string) {
   if (["APPROVED", "CLOSED", "COMPLETED"].includes(status)) return "success" as const;
   if (["SUBMITTED", "PENDING_VALIDATION", "CLOSING"].includes(status)) return "warning" as const;
@@ -142,7 +133,13 @@ export function RetailDailyCloseWorkspace({
   const [closeList, setCloseList] = useState<CloseListResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [message, setMessage] = useState("");
+  const [notice, setNotice] = useState<ToastNotice | null>(null);
+  useToastMessage(notice);
+  const [historyPage, setHistoryPage] = useState(1);
+  const [searchDraft, setSearchDraft] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [guideOpen, setGuideOpen] = useState(false);
@@ -158,7 +155,10 @@ export function RetailDailyCloseWorkspace({
     setLoading(true);
     setError("");
     try {
-      const params = new URLSearchParams({ page: "1", pageSize: "50" });
+      const params = new URLSearchParams({ page: String(historyPage), pageSize: "50" });
+      if (searchQuery) params.set("q", searchQuery);
+      if (dateFrom) params.set("from", dateFrom);
+      if (dateTo) params.set("to", dateTo);
       if (statusFilter !== "ALL") params.set("status", statusFilter);
       if (siteFilter !== "ALL") params.set("siteId", siteFilter);
       const [dashboardResponse, closesResponse, summaryResponse] = await Promise.all([
@@ -185,7 +185,7 @@ export function RetailDailyCloseWorkspace({
     } finally {
       setLoading(false);
     }
-  }, [adminStores, locale, organizationId, siteFilter, statusFilter, summaryDate]);
+  }, [adminStores, locale, organizationId, siteFilter, statusFilter, summaryDate, historyPage, searchQuery, dateFrom, dateTo]);
 
   useEffect(() => {
     void load();
@@ -199,7 +199,7 @@ export function RetailDailyCloseWorkspace({
   async function post(action: string, endpoint: string, payload: Record<string, unknown>, success: string, idempotent = false) {
     if (busyAction) return null;
     setBusyAction(action);
-    setMessage("");
+    setNotice(null);
     try {
       const response = await fetch(endpoint, {
         method: "POST",
@@ -209,14 +209,14 @@ export function RetailDailyCloseWorkspace({
       const body = await response.json().catch(() => null) as ({ message?: string; error?: string } & Record<string, unknown>) | null;
       if (!response.ok) throw new Error(body?.message || body?.error || "RETAIL_DAILY_CLOSE_ACTION_FAILED");
       if (idempotent) delete mutationKeys.current[action];
-      setMessage(success);
+      setNotice({ tone: "success", description: success });
       setRefreshKey((value) => value + 1);
       return body || {};
     } catch (caught) {
-      setMessage(customerFacingError(caught, locale, {
+      setNotice({ tone: "error", description: customerFacingError(caught, locale, {
         fr: translateRetailWorkspace("fr", "retailActionError"),
         en: translateRetailWorkspace("en", "retailActionError"),
-      }));
+      }) });
       return null;
     } finally {
       setBusyAction(null);
@@ -249,25 +249,49 @@ export function RetailDailyCloseWorkspace({
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     if (storeSelectionRequired) {
-      setMessage(locale === "fr" ? "Sélectionnez une boutique précise : une clôture ne peut pas regrouper plusieurs boutiques." : "Select one store: a daily close cannot combine multiple stores.");
+      setNotice({ tone: "warning", description: locale === "fr" ? "Sélectionnez une boutique précise : une clôture ne peut pas regrouper plusieurs boutiques." : "Select one store: a daily close cannot combine multiple stores." });
       return;
     }
-    const lines = closeAccounts
-      .filter((account) => form.get(`include-${account.id}`) === "on")
-      .map((account) => ({
+    const lines: Array<{ financialAccountId: string; accountType: string; declaredBalance: number; varianceReason: string | null; denominations: Array<{ denomination: number; quantity: number }> }> = [];
+    for (const account of closeAccounts.filter((candidate) => form.get(`include-${candidate.id}`) === "on")) {
+      const physicalCount = account.accountType === "CASH"
+        ? cashCountsFromDailyCloseForm(form, account.id, account.currencyCode)
+        : null;
+      if (account.accountType === "CASH" && !physicalCount) {
+        setNotice({ tone: "error", description: locale === "fr"
+          ? `Vérifiez les coupures et les quantités de la caisse ${account.name}.`
+          : `Check the cash denominations and quantities for ${account.name}.` });
+        return;
+      }
+      const declaredBalance = account.accountType === "CASH"
+        ? (physicalCount?.declaredBalance ?? 0)
+        : Number(form.get(`declared-${account.id}`) || 0);
+      if (!Number.isFinite(declaredBalance) || declaredBalance < 0) {
+        setNotice({ tone: "error", description: locale === "fr" ? "Le solde déclaré doit être un montant valide." : "Declared balance must be a valid amount." });
+        return;
+      }
+      const varianceReason = String(form.get(`reason-${account.id}`) || "").trim() || null;
+      if (Math.abs(declaredBalance - Number(account.operationalBalance)) > 0.005 && (!varianceReason || varianceReason.length < 3)) {
+        setNotice({ tone: "error", description: locale === "fr"
+          ? `Justifiez l'écart de ${account.name} avant la soumission.`
+          : `Explain the variance for ${account.name} before submitting.` });
+        return;
+      }
+      lines.push({
         financialAccountId: account.id,
         accountType: account.accountType,
-        declaredBalance: Number(form.get(`declared-${account.id}`) || 0),
-        varianceReason: String(form.get(`reason-${account.id}`) || "").trim() || null,
-        denominations: account.accountType === "CASH" ? parseDenominations(String(form.get(`denominations-${account.id}`) || "")) : [],
-      }));
+        declaredBalance,
+        varianceReason,
+        denominations: physicalCount?.counts ?? [],
+      });
+    }
     if (!lines.length) {
-      setMessage(translateRetailWorkspace(locale, "dailyCloseSelectAtLeastOneAccountToClose"));
+      setNotice({ tone: "warning", description: translateRetailWorkspace(locale, "dailyCloseSelectAtLeastOneAccountToClose") });
       return;
     }
     const approverUserId = String(form.get("approverUserId") || "").trim();
     if (lines.some((line) => line.accountType === "CASH") && !approverUserId) {
-      setMessage(translateRetailWorkspace(locale, "dailyCloseApproverRequired"));
+      setNotice({ tone: "warning", description: translateRetailWorkspace(locale, "dailyCloseApproverRequired") });
       return;
     }
     const businessDate = String(form.get("businessDate") || defaultBusinessDate);
@@ -302,9 +326,10 @@ export function RetailDailyCloseWorkspace({
   }
 
   return (
-    <ModuleWorkspace>
+    <ModuleWorkspace density="compact">
       <ModuleHeader
-        eyebrow={`${translateRetailWorkspace(locale, "shopControl")} · ${organizationName}`}
+        eyebrow={`${locale === "fr" ? "Clôture magasin" : "Store daily closing"} · ${organizationName}`}
+        count={closeList ? `${closeList.pagination.total} ${locale === "fr" ? "clôtures" : "closes"}` : undefined}
         title={locale === "en" ? definition.labelEn : definition.labelFr}
         description={translateRetailWorkspace(locale, "dailyCloseCountTheTillAndOperationalBalancesExplainVariancesThenSubmitTheDay")}
         primaryAction={(
@@ -320,10 +345,10 @@ export function RetailDailyCloseWorkspace({
 
       {dashboard ? (
         <ModuleMetrics label={translateRetailWorkspace(locale, "dailyCloseDailyCloseIndicators")}>
-          <ModuleMetric label={translateRetailWorkspace(locale, "till")} value={currentCashSession?.status === "OPEN" ? (translateRetailWorkspace(locale, "dailyCloseOpen")) : (translateRetailWorkspace(locale, "dailyCloseNotOpen"))} />
-          <ModuleMetric label={translateRetailWorkspace(locale, "dailyCloseBalancesToReview")} value={closeAccounts.length} />
-          <ModuleMetric label={translateRetailWorkspace(locale, "dailyCloseAwaitingReview")} value={pendingCount} />
-          <ModuleMetric label={translateRetailWorkspace(locale, "dailyCloseVariancesInView")} value={varianceCount} />
+          <ModuleMetric icon={<Banknote className="h-4 w-4 text-emerald-500" />} label={translateRetailWorkspace(locale, "till")} value={currentCashSession?.status === "OPEN" ? (translateRetailWorkspace(locale, "dailyCloseOpen")) : (translateRetailWorkspace(locale, "dailyCloseNotOpen"))} />
+          <ModuleMetric icon={<Building2 className="h-4 w-4 text-blue-500" />} label={translateRetailWorkspace(locale, "dailyCloseBalancesToReview")} value={closeAccounts.length} />
+          <ModuleMetric icon={<ClipboardCheck className="h-4 w-4 text-amber-500" />} label={translateRetailWorkspace(locale, "dailyCloseAwaitingReview")} value={pendingCount} hint={locale === "fr" ? "Sur la page consultée" : "On current page"} />
+          <ModuleMetric icon={<CalendarDays className="h-4 w-4 text-rose-500" />} label={translateRetailWorkspace(locale, "dailyCloseVariancesInView")} value={varianceCount} hint={locale === "fr" ? "Sur la page consultée" : "On current page"} />
         </ModuleMetrics>
       ) : null}
 
@@ -341,7 +366,7 @@ export function RetailDailyCloseWorkspace({
       />
 
       <ModuleContent>
-        {message ? <div role="status" className="rounded-xl border border-dtsc-border bg-dtsc-page px-4 py-3 text-sm font-semibold text-dtsc-ink">{message}</div> : null}
+        {notice ? <p role="status" className="sr-only">{notice.description}</p> : null}
         {error ? <ProfessionalError message={error} /> : loading ? <ProfessionalLoading rows={5} /> : !dashboard ? (
           <EmptyState title={translateRetailWorkspace(locale, "dailyCloseDailyCloseUnavailable")} description={translateRetailWorkspace(locale, "refreshToRetry")} />
         ) : (
