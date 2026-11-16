@@ -225,7 +225,7 @@ function promotionDiscount(
   }
   if (promotion.promotionType === "FIXED_AMOUNT") {
     const amount = numberValue(action.amount);
-    return amount && amount > 0 ? money(decimalMin(line.gross, amount)) : decimal(0);
+    return amount && amount > 0 ? money(decimalMin(line.gross, new Prisma.Decimal(amount))) : decimal(0);
   }
   if (promotion.promotionType === "QUANTITY_BREAK") {
     const minimum = numberValue(action.minQuantity);
