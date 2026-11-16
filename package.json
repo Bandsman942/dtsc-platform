@@ -1,11 +1,12 @@
 {
   "name": "dtsc-platform",
-  "version": "1.20.0",
+  "version": "1.21.0",
   "private": true,
   "engines": {
     "node": "22.x"
   },
   "scripts": {
+    "qa:erp-commercial-design2-1198": "node scripts/qa-erp-commercial-design2-1198.mjs",
     "qa:sales-design2-1195": "node scripts/qa-sales-design2-1195.mjs",
     "qa:hotfix-1184": "node scripts/qa-hotfix-1184-retail-self-approval-audit.mjs",
     "qa:hotfix-1187": "node scripts/qa-hotfix-1187.mjs",
