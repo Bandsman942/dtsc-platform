@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
+import { financeBusinessDateRange } from "@/lib/enterprise/accounting/http";
 import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
@@ -21,10 +22,16 @@ export async function GET(req: Request, { params }: Params) {
   const access = await getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode: "TIME_ATTENDANCE", action: "read" });
   if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const url = new URL(req.url);
+  const businessPeriod = financeBusinessDateRange(req);
+  if (!businessPeriod.ok) return businessPeriod.response;
+  const businessDateFilter = businessPeriod.from || businessPeriod.to
+    ? { effectiveFrom: { gte: businessPeriod.from || undefined, lte: businessPeriod.to || undefined } }
+    : {};
+
   const page = Math.max(1, Number(url.searchParams.get("page") || 1) || 1);
   const pageSize = Math.min(100, Math.max(5, Number(url.searchParams.get("pageSize") || 25) || 25));
   const employeeId = url.searchParams.get("employeeId")?.trim() || "";
-  const where: Prisma.EnterpriseWorkScheduleWhereInput = { organizationId, archivedAt: null, ...(employeeId ? { employeeId } : {}) };
+  const where: Prisma.EnterpriseWorkScheduleWhereInput = { organizationId, ...businessDateFilter, archivedAt: null, ...(employeeId ? { employeeId } : {}) };
   const [items, total, active] = await Promise.all([
     prisma.enterpriseWorkSchedule.findMany({ where, orderBy: [{ effectiveFrom: "desc" }, { createdAt: "desc" }], skip: (page - 1) * pageSize, take: pageSize, include: { employee: { select: { id: true, employeeNumber: true, displayName: true } } } }),
     prisma.enterpriseWorkSchedule.count({ where }),
