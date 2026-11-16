@@ -171,7 +171,7 @@ export function EnterpriseModuleWorkspace({
         ) : enterpriseModule.code === "REPORTS" ? (
           <EnterpriseReportsWorkspace organizationId={organizationId} organizationName={organizationName} organizationLogoUrl={organizationLogoUrl} canCreate={canCreate} canManage={canManage} locale={locale} legacyRecords={coreRecords.filter((record) => record.recordType === "REPORT")} />
         ) : enterpriseModule.code === "WORKFLOWS" ? (
-          <EnterpriseWorkflowsWorkspace organizationId={organizationId} canManage={canManage} locale={locale} members={memberChoices} departments={departmentChoices} legacyWorkflows={coreData.workflows} />
+          <EnterpriseWorkflowsWorkspace organizationId={organizationId} organizationName={organizationName} canManage={canManage} locale={locale} members={memberChoices} departments={departmentChoices} legacyWorkflows={coreData.workflows} />
         ) : commonDefinition ? (
           <EnterpriseCoreWorkspace
             organizationId={organizationId}
