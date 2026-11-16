@@ -116,3 +116,33 @@ export function RetailDailyCloseCashCount({
     </div>
   );
 }
+
+export function RetailDailyCloseNonCashCount({
+  accountId, currencyCode, expectedAmount, locale, disabled,
+}: {
+  accountId: string; currencyCode: string; expectedAmount: number; locale: Locale; disabled: boolean;
+}) {
+  const [declared, setDeclared] = useState(String(expectedAmount));
+  const [reason, setReason] = useState("");
+  const difference = Number((Number(declared || 0) - expectedAmount).toFixed(2));
+  const needsReason = Number.isFinite(difference) && Math.abs(difference) > 0.005;
+  return (
+    <div className="grid min-w-0 gap-3 sm:grid-cols-2" data-daily-close-account-reconciliation={accountId}>
+      <Field label={locale === "fr" ? "Solde déclaré" : "Declared balance"}>
+        <Input type="number" min="0" step="0.01" name={`declared-${accountId}`}
+          value={declared} onChange={(event) => setDeclared(event.target.value)} disabled={disabled} required />
+      </Field>
+      <div className={`rounded-xl border p-3 ${needsReason ? "border-amber-500/40 bg-amber-500/10" : "border-emerald-500/40 bg-emerald-500/10"}`}>
+        <p className="text-xs font-bold uppercase text-dtsc-muted">{locale === "fr" ? "Écart" : "Variance"}</p>
+        <p className="text-base font-black text-dtsc-ink">{moneyValue(difference, currencyCode, locale)}</p>
+        <p className="mt-1 text-xs text-dtsc-muted">{locale === "fr" ? "Solde système" : "System balance"}: {moneyValue(expectedAmount, currencyCode, locale)}</p>
+      </div>
+      <div className="sm:col-span-2">
+        <Field label={locale === "fr" ? "Justification de l'écart" : "Variance explanation"}>
+          <Input name={`reason-${accountId}`} value={reason} onChange={(event) => setReason(event.target.value)}
+            required={needsReason} minLength={needsReason ? 3 : undefined} maxLength={1000} disabled={disabled} />
+        </Field>
+      </div>
+    </div>
+  );
+}
