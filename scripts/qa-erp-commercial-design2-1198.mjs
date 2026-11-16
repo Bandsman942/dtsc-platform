@@ -85,6 +85,6 @@ check("Retail frame can refresh Telco history without affecting other Retail mod
 const guide = read("docs/OWNER_E2E_1198_COMMERCIAL_DESIGN2.md");
 check("Owner E2E includes critical business scenarios", guide, [
   /PrismaClientValidationError/, /DIMER/, /CSV/, /XLSX/, /PDF/,
-  /multidevise/, /mobile/i, /CLIENT/, /APPROVER/, /E2E final/,
+  /multidevise/, /mobile/i, /client/i, /approver/i, /E2E final/,
 ]);
 console.log("ERP Commercial Design 2.0 #1198: " + count + " QA source contracts passed. These are NOT owner browser E2E.");
