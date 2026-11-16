@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { CreditCard, Printer, RefreshCw, Search } from "lucide-react";
 import { RetailInvoicePaymentDialog } from "@/components/enterprise/professional/retail-invoice-payment-dialog";
 import { Button } from "@/components/ui/button";
@@ -52,8 +53,8 @@ function money(value: string, currency: string, locale: "fr" | "en") {
   return `${new Intl.NumberFormat(locale === "fr" ? "fr-FR" : "en-US", { maximumFractionDigits: 2 }).format(Number(value))} ${currency}`;
 }
 
-export function RetailInvoiceCashierWorkbench({ organizationId, locale, preferredSiteId }: {
-  organizationId: string; locale: "fr" | "en"; preferredSiteId?: string;
+export function RetailInvoiceCashierWorkbench({ organizationId, locale, preferredSiteId, targetInvoiceId }: {
+  organizationId: string; locale: "fr" | "en"; preferredSiteId?: string; targetInvoiceId?: string;
 }) {
   const t = messages[locale];
   const [result, setResult] = useState<Result | null>(null);
@@ -78,6 +79,7 @@ export function RetailInvoiceCashierWorkbench({ organizationId, locale, preferre
     try {
       const query = new URLSearchParams({ view: "collections", page: String(page), pageSize: "10" });
       if (siteId) query.set("siteId", siteId);
+      if (targetInvoiceId) query.set("invoiceId", targetInvoiceId);
       if (debouncedSearch) query.set("q", debouncedSearch);
       if (dateFrom) query.set("dateFrom", dateFrom);
       if (dateTo) query.set("dateTo", dateTo);
@@ -97,7 +99,7 @@ export function RetailInvoiceCashierWorkbench({ organizationId, locale, preferre
       setError("");
     } catch (caught) { setError(customerFacingError(caught, locale)); }
     finally { setLoading(false); }
-  }, [dateFrom, dateTo, debouncedSearch, locale, organizationId, page, siteId, t.failed]);
+  }, [dateFrom, dateTo, debouncedSearch, locale, organizationId, page, siteId, t.failed, targetInvoiceId]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -106,6 +108,7 @@ export function RetailInvoiceCashierWorkbench({ organizationId, locale, preferre
       <div className="min-w-0 flex-1"><h2 className="flex items-center gap-2 text-lg font-black text-dtsc-ink"><CreditCard className="h-5 w-5 text-emerald-600" />{t.title}</h2><p className="mt-1 text-xs leading-5 text-dtsc-muted">{t.intro}</p></div>
       <Button type="button" variant="outline" disabled={loading} onClick={() => void load()}><RefreshCw className="h-4 w-4" />{t.refresh}</Button>
     </header>
+    {targetInvoiceId ? <div className="flex min-w-0 flex-wrap items-center justify-between gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm"><span className="font-semibold text-dtsc-ink">{locale === "fr" ? "Facture ciblée : encaissement sécurisé selon vos droits de boutique." : "Selected invoice: collection restricted to your store permissions."}</span><Link href="/enterprise-modules/RETAIL_POS?section=collections" className="font-bold text-dtsc-blue underline-offset-4 hover:underline">{locale === "fr" ? "Toutes les factures à encaisser" : "All collectible invoices"}</Link></div> : null}
     {forbidden ? <p role="alert" className="rounded-xl bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-200">{t.noAccess}</p> : null}
     {notReady ? <p role="status" className="rounded-xl bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-200">{t.notReady}</p> : null}
     {error ? <p role="alert" className="rounded-xl bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-200">{error}</p> : null}
@@ -128,7 +131,7 @@ export function RetailInvoiceCashierWorkbench({ organizationId, locale, preferre
       <div data-responsive-actions className="mt-3 flex flex-wrap items-center justify-end gap-2 border-t border-dtsc-border pt-3">
         <Button type="button" variant="outline" onClick={() => window.open(`/api/enterprise/${organizationId}/retail/invoices/${encodeURIComponent(entry.invoice.id)}/print?paper=a4&lang=${locale}`, "_blank", "noopener,noreferrer")}><Printer className="h-4 w-4" />{t.a4}</Button>
         <Button type="button" variant="outline" onClick={() => window.open(`/api/enterprise/${organizationId}/retail/invoices/${encodeURIComponent(entry.invoice.id)}/print?paper=thermal&lang=${locale}`, "_blank", "noopener,noreferrer")}><Printer className="h-4 w-4" />{t.thermal}</Button>
-        {result?.checkoutReady && entry.canCollect ? <RetailInvoicePaymentDialog organizationId={organizationId} invoiceId={entry.invoice.id} invoiceNumber={entry.invoice.number} siteName={entry.site.name} invoiceStatus={entry.invoice.status} locale={locale} onChanged={() => void load()} /> : null}
+        {result?.checkoutReady && entry.canCollect ? <RetailInvoicePaymentDialog organizationId={organizationId} invoiceId={entry.invoice.id} invoiceNumber={entry.invoice.number} siteName={entry.site.name} invoiceStatus={entry.invoice.status} locale={locale} onChanged={() => void load()} initialOpen={Boolean(targetInvoiceId && entry.invoice.id === targetInvoiceId)} /> : null}
       </div>
     </article>)}</div>
     {result && result.pagination.pageCount > 1 ? <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-dtsc-muted"><span>{t.page} {result.pagination.page} / {result.pagination.pageCount} · {result.pagination.total}</span><div className="flex gap-2"><Button type="button" variant="outline" disabled={loading || page <= 1} onClick={() => setPage((current) => current - 1)}>{t.previous}</Button><Button type="button" variant="outline" disabled={loading || page >= result.pagination.pageCount} onClick={() => setPage((current) => current + 1)}>{t.next}</Button></div></div> : null}
