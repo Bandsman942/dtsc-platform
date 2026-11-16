@@ -63,8 +63,8 @@ export function EnterpriseActivitiesModule({ organization, blocks, requests, mem
       />
       <ModuleMetrics label={english ? "Enterprise activity indicators" : "Indicateurs des activités entreprise"}>
         <ErpDesign2Metric tone="sky" label={english ? "Available actions" : "Actions disponibles"} value={blocks.length} />
-        <ErpDesign2Metric tone="amber" label={english ? "Pending requests" : "Demandes à traiter"} value={pending} />
-        <ErpDesign2Metric tone="emerald" label={english ? "My requests" : "Demandes visibles"} value={requests.length} />
+        <ErpDesign2Metric tone="amber" label={english ? "Pending (recent)" : "En attente (récentes)"} value={pending} />
+        <ErpDesign2Metric tone="emerald" label={english ? "Recent requests" : "Demandes récentes"} value={requests.length} />
         <ErpDesign2Metric tone="violet" label={english ? "Workflows" : "Workflows"} value={workflows.length} />
       </ModuleMetrics>
       <ModuleToolbar
@@ -91,7 +91,7 @@ export function EnterpriseActivitiesModule({ organization, blocks, requests, mem
         )}
         {view === "REQUESTS" && (
           <ModuleSection title={english ? "Submitted requests" : "Demandes soumises"} description={english ? "Follow their real server-side status." : "Suivez leur état réel après soumission."}>
-            <EnterpriseRequestsPanel requests={requests} focusActivityId={initialActivityId} />
+            <EnterpriseRequestsPanel organizationId={organization.id} organizationName={organization.name} focusActivityId={initialActivityId} />
           </ModuleSection>
         )}
         {view === "WORKFLOWS" && (
