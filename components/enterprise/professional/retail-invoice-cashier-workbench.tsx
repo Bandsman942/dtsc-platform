@@ -35,7 +35,7 @@ const messages = {
     notReady: "Le circuit de facturation et d'encaissement séparés n'est pas encore activé pour cette entreprise. Terminez les prérequis RETAIL et Finance.",
     all: "Toutes mes boutiques", site: "Boutique", search: "Recherche intelligente", searchHelp: "N° de facture, article ou désignation", refresh: "Actualiser", from: "Du", to: "Au", exact: "Date précise", reset: "Effacer les dates",
     empty: "Aucune facture émise et impayée pour cette sélection. Les factures « À valider » restent dans Facturation ; le validateur Finance doit d'abord les approuver, puis elles doivent être émises avant d'arriver ici.", loading: "Chargement des factures à encaisser…", failed: "Impossible de consulter les factures à encaisser.",
-    focusedInvoice: "Facture ciblée : encaissement sécurisé selon vos droits de boutique.", allCollections: "Toutes les factures à encaisser",
+    focusedInvoice: "Facture ciblée : encaissement sécurisé selon vos droits de boutique.", focusedUnavailable: "Cette facture n’est plus à encaisser ou n’est pas accessible avec vos droits actuels.", allCollections: "Toutes les factures à encaisser",
     total: "Montant facturé", due: "Reste à encaisser", issued: "À encaisser", partial: "Paiement partiel", overdue: "Échue",
     a4: "Facture A4", thermal: "Ticket 80 mm", previous: "Précédente", next: "Suivante", page: "Page",
   },
@@ -45,7 +45,7 @@ const messages = {
     notReady: "The separate invoice and collection workflow is not yet active for this company. Complete Retail and Finance readiness first.",
     all: "All my stores", site: "Store", search: "Smart search", searchHelp: "Invoice number or item description", refresh: "Refresh", from: "From", to: "To", exact: "Exact date", reset: "Clear dates",
     empty: "No issued and unpaid invoices match this selection. Invoices awaiting approval remain in Invoicing until Finance approves and issues them.", loading: "Loading outstanding invoices…", failed: "Unable to load invoices for collection.",
-    focusedInvoice: "Selected invoice: collection restricted to your store permissions.", allCollections: "All collectible invoices",
+    focusedInvoice: "Selected invoice: collection restricted to your store permissions.", focusedUnavailable: "This invoice is no longer collectible or is unavailable under your current permissions.", allCollections: "All collectible invoices",
     total: "Invoiced total", due: "Outstanding", issued: "Awaiting payment", partial: "Partially paid", overdue: "Overdue",
     a4: "A4 invoice", thermal: "80 mm ticket", previous: "Previous", next: "Next", page: "Page",
   },
@@ -55,10 +55,11 @@ function money(value: string, currency: string, locale: "fr" | "en") {
   return `${new Intl.NumberFormat(locale === "fr" ? "fr-FR" : "en-US", { maximumFractionDigits: 2 }).format(Number(value))} ${currency}`;
 }
 
-export function RetailInvoiceCashierWorkbench({ organizationId, locale, preferredSiteId, targetInvoiceId }: {
-  organizationId: string; locale: "fr" | "en"; preferredSiteId?: string; targetInvoiceId?: string;
+export function RetailInvoiceCashierWorkbench({ organizationId, locale, preferredSiteId, targetInvoiceId, targetInvoiceNumber }: {
+  organizationId: string; locale: "fr" | "en"; preferredSiteId?: string; targetInvoiceId?: string; targetInvoiceNumber?: string;
 }) {
   const t = messages[locale];
+  const focused = Boolean(targetInvoiceId && targetInvoiceNumber);
   const [result, setResult] = useState<Result | null>(null);
   const [siteId, setSiteId] = useState(preferredSiteId || "");
   const [search, setSearch] = useState("");
@@ -79,12 +80,12 @@ export function RetailInvoiceCashierWorkbench({ organizationId, locale, preferre
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const query = new URLSearchParams({ view: "collections", page: String(page), pageSize: "10" });
+      const query = new URLSearchParams({ view: "collections", page: focused ? "1" : String(page), pageSize: focused ? "100" : "10" });
       if (siteId) query.set("siteId", siteId);
-      if (targetInvoiceId) query.set("invoiceId", targetInvoiceId);
-      if (debouncedSearch) query.set("q", debouncedSearch);
-      if (dateFrom) query.set("dateFrom", dateFrom);
-      if (dateTo) query.set("dateTo", dateTo);
+      if (focused && targetInvoiceNumber) query.set("q", targetInvoiceNumber);
+      else if (debouncedSearch) query.set("q", debouncedSearch);
+      if (!focused && dateFrom) query.set("dateFrom", dateFrom);
+      if (!focused && dateTo) query.set("dateTo", dateTo);
       const response = await fetch(`/api/enterprise/${organizationId}/retail/invoices?${query}`, { cache: "no-store" });
       const payload = await response.json().catch(() => null) as (Result & { error?: string }) | null;
       if (response.status === 403) {
@@ -95,13 +96,18 @@ export function RetailInvoiceCashierWorkbench({ organizationId, locale, preferre
         return;
       }
       if (!response.ok || !payload?.items || !payload.sites) throw new Error(payload?.message || t.failed);
-      setResult(payload);
+      if (focused) {
+        // The frozen ROUTES-05A listing API supports q=invoice number; never weaken its source parity.
+        // Only render/open the invoice whose ID AND number both match the signed-in store-scoped response.
+        const match = payload.items.find((entry) => entry.invoice.id === targetInvoiceId && entry.invoice.number === targetInvoiceNumber && entry.canCollect && Number(entry.invoice.outstandingAmount) > 0);
+        setResult({ ...payload, items: match ? [match] : [], pagination: { page: 1, pageCount: 1, total: match ? 1 : 0 } });
+      } else setResult(payload);
       setForbidden(false);
       setNotReady(false);
       setError("");
     } catch (caught) { setError(customerFacingError(caught, locale)); }
     finally { setLoading(false); }
-  }, [dateFrom, dateTo, debouncedSearch, locale, organizationId, page, siteId, t.failed, targetInvoiceId]);
+  }, [dateFrom, dateTo, debouncedSearch, focused, locale, organizationId, page, siteId, t.failed, targetInvoiceId, targetInvoiceNumber]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -115,18 +121,18 @@ export function RetailInvoiceCashierWorkbench({ organizationId, locale, preferre
     {notReady ? <p role="status" className="rounded-xl bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-200">{t.notReady}</p> : null}
     {error ? <p role="alert" className="rounded-xl bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-200">{error}</p> : null}
     {result && !result.checkoutReady ? <p role="status" className="rounded-xl bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-200">{t.notReady}</p> : null}
-    {!forbidden ? <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-2 sm:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
+    {!forbidden && !focused ? <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-2 sm:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
       <label className="min-w-0 text-xs font-bold text-dtsc-ink">{t.site}<select value={siteId} onChange={(event) => { setSiteId(event.target.value); setPage(1); }} className="mt-1 block min-h-11 w-full min-w-0 rounded-lg border border-dtsc-border bg-dtsc-page px-3 text-sm"><option value="">{t.all}</option>{result?.sites.map((site) => <option value={site.id} key={site.id}>{site.name}</option>)}</select></label>
       <label className="min-w-0 text-xs font-bold text-dtsc-ink">{t.search}<span className="mt-1 flex min-h-11 min-w-0 items-center gap-2 rounded-lg border border-dtsc-border bg-dtsc-page px-3"><Search className="h-4 w-4 shrink-0 text-dtsc-muted"/><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t.searchHelp} className="w-full min-w-0 bg-transparent text-sm outline-none"/></span></label>
     </div> : null}
-    {!forbidden ? <div className="flex min-w-0 flex-wrap items-end gap-2 rounded-xl bg-dtsc-page p-2">
+    {!forbidden && !focused ? <div className="flex min-w-0 flex-wrap items-end gap-2 rounded-xl bg-dtsc-page p-2">
       <label className="min-w-32 flex-1 text-xs font-bold text-dtsc-ink">{t.from}<input type="date" value={dateFrom} max={dateTo || undefined} onChange={(event) => { setDateFrom(event.target.value); setPage(1); }} className="mt-1 min-h-11 w-full rounded-lg border border-dtsc-border bg-dtsc-surface px-2 text-sm" /></label>
       <label className="min-w-32 flex-1 text-xs font-bold text-dtsc-ink">{t.to}<input type="date" value={dateTo} min={dateFrom || undefined} onChange={(event) => { setDateTo(event.target.value); setPage(1); }} className="mt-1 min-h-11 w-full rounded-lg border border-dtsc-border bg-dtsc-surface px-2 text-sm" /></label>
       <Button type="button" variant="outline" onClick={() => { const value = dateFrom || dateTo || browserCivilDate(); setDateFrom(value); setDateTo(value); setPage(1); }}>{t.exact}</Button>
       <Button type="button" variant="ghost" disabled={!dateFrom && !dateTo} onClick={() => { setDateFrom(""); setDateTo(""); setPage(1); }}>{t.reset}</Button>
     </div> : null}
     {loading ? <p role="status" className="text-sm text-dtsc-muted">{t.loading}</p> : null}
-    {!loading && result && !result.items.length ? <p className="rounded-xl bg-dtsc-page p-4 text-sm text-dtsc-muted">{t.empty}</p> : null}
+    {!loading && result && !result.items.length ? <p className="rounded-xl bg-dtsc-page p-4 text-sm text-dtsc-muted">{focused ? t.focusedUnavailable : t.empty}</p> : null}
     <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-2">{result?.items.map((entry) => <article key={entry.id} className="min-w-0 rounded-xl border border-dtsc-border bg-dtsc-page p-3">
       <div className="flex min-w-0 flex-wrap items-start justify-between gap-2"><div className="min-w-0 flex-1"><h3 className="break-words text-sm font-black text-dtsc-ink">{entry.invoice.number}</h3><p className="text-xs text-dtsc-muted">{entry.site.name} · {entry.invoice.items.map((item) => `${item.description} × ${Number(item.quantity)}`).join(" · ")}</p></div><span className={`rounded-full px-2 py-1 text-xs font-bold ${entry.invoice.status === "PARTIALLY_PAID" ? "bg-amber-500/10 text-amber-700 dark:text-amber-300" : entry.invoice.status === "OVERDUE" ? "bg-rose-500/10 text-rose-700 dark:text-rose-300" : "bg-blue-500/10 text-blue-700 dark:text-blue-300"}`}>{entry.invoice.status === "PARTIALLY_PAID" ? t.partial : entry.invoice.status === "OVERDUE" ? t.overdue : t.issued}</span></div>
       <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-dtsc-muted"><span>{t.total} : {money(entry.invoice.grandTotal, entry.invoice.currencyCode, locale)}</span><strong className="text-sm text-dtsc-ink">{t.due} : {money(entry.invoice.outstandingAmount, entry.invoice.currencyCode, locale)}</strong></div>
