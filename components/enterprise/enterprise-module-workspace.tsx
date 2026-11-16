@@ -152,13 +152,13 @@ export function EnterpriseModuleWorkspace({
 
       <ModuleContent density={["TASKS_OPERATIONS", "INTERNAL_REQUESTS", "VALIDATIONS", "MEETINGS", "WORKFLOWS"].includes(enterpriseModule.code) ? "compact" : "comfortable"}>
         {enterpriseModule.code === "TASKS_OPERATIONS" ? (
-          <EnterpriseTasksWorkspace organizationId={organizationId} members={memberChoices} departments={departmentChoices} canCreate={canCreate} canManage={canManage} locale={locale} legacyRecords={coreRecords} />
+          <EnterpriseTasksWorkspace organizationId={organizationId} organizationName={organizationName} members={memberChoices} departments={departmentChoices} canCreate={canCreate} canManage={canManage} locale={locale} legacyRecords={coreRecords} />
         ) : enterpriseModule.code === "INTERNAL_REQUESTS" ? (
-          <EnterpriseRequestsWorkspace organizationId={organizationId} members={memberChoices} departments={departmentChoices} canCreate={canCreate} canManage={canManage} locale={locale} legacyRecords={coreRecords} />
+          <EnterpriseRequestsWorkspace organizationId={organizationId} organizationName={organizationName} members={memberChoices} departments={departmentChoices} canCreate={canCreate} canManage={canManage} locale={locale} legacyRecords={coreRecords} />
         ) : enterpriseModule.code === "VALIDATIONS" ? (
-          <EnterpriseApprovalsWorkspace organizationId={organizationId} locale={locale} legacyRecords={coreRecords} />
+          <EnterpriseApprovalsWorkspace organizationId={organizationId} organizationName={organizationName} locale={locale} legacyRecords={coreRecords} />
         ) : enterpriseModule.code === "MEETINGS" ? (
-          <EnterpriseMeetingsWorkspace organizationId={organizationId} members={memberChoices} departments={departmentChoices} canCreate={canCreate} canManage={canManage} locale={locale} legacyRecords={coreRecords} />
+          <EnterpriseMeetingsWorkspace organizationId={organizationId} organizationName={organizationName} members={memberChoices} departments={departmentChoices} canCreate={canCreate} canManage={canManage} locale={locale} legacyRecords={coreRecords} />
         ) : enterpriseModule.code === "DOCUMENTS" ? (
           <EnterpriseDocumentsWorkspace organizationId={organizationId} organizationName={organizationName} members={memberChoices} departments={departmentChoices} canCreate={canCreate} canManage={canManage} locale={locale} legacyRecords={coreRecords.filter((record) => record.recordType === "DOCUMENT")} />
         ) : enterpriseModule.code === "SUPPLIERS_PURCHASES" ? (
