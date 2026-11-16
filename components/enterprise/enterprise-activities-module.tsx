@@ -6,6 +6,7 @@ import { useMemo, useState } from "react";
 import { useAppLocale } from "@/components/i18n/locale-provider";
 import { ContextualUserGuide } from "@/components/user-guides/contextual-user-guide";
 import { notifyToast } from "@/lib/client-toast";
+import { translateActivities } from "@/lib/i18n";
 import { ITERATION04_USER_GUIDES } from "@/lib/user-guides/iteration04-guides";
 import { ModuleWorkspace, ModuleHeader, ModuleContent, ModuleSection, ModuleToolbar } from "@/components/workspace/module-workspace";
 import { ModuleMetrics } from "@/components/workspace/module-metrics";
@@ -63,8 +64,8 @@ export function EnterpriseActivitiesModule({ organization, blocks, requests, mem
       />
       <ModuleMetrics label={english ? "Enterprise activity indicators" : "Indicateurs des activités entreprise"}>
         <ErpDesign2Metric tone="sky" label={english ? "Available actions" : "Actions disponibles"} value={blocks.length} />
-        <ErpDesign2Metric tone="amber" label={english ? "Pending (recent)" : "En attente (récentes)"} value={pending} />
-        <ErpDesign2Metric tone="emerald" label={english ? "Recent requests" : "Demandes récentes"} value={requests.length} />
+        <ErpDesign2Metric tone="amber" label={translateActivities(locale, "enterprisePendingRecent")} value={pending} />
+        <ErpDesign2Metric tone="emerald" label={translateActivities(locale, "enterpriseRequestsRecent")} value={requests.length} />
         <ErpDesign2Metric tone="violet" label={english ? "Workflows" : "Workflows"} value={workflows.length} />
       </ModuleMetrics>
       <ModuleToolbar
