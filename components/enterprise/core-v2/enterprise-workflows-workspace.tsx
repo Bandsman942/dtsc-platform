@@ -1,3 +1,4 @@
+import { ErpDesign2Metric } from "@/components/enterprise/professional/erp-design2-register";
 "use client";
 import { WorkflowVisualStudio } from "@/components/enterprise/core-v2/workflow-visual-studio";
 import { applyWorkflowVisualPositions } from "@/lib/enterprise/workflows/visual-projection";
@@ -13,7 +14,7 @@ import { confirmSensitiveAction } from "@/lib/client-confirmation";
 import { Input } from "@/components/ui/input";
 import { BusinessList, BusinessListItem } from "@/components/workspace/business-list";
 import { EmptyState } from "@/components/workspace/empty-state";
-import { ModuleMetric, ModuleMetrics } from "@/components/workspace/module-metrics";
+import { ModuleMetrics } from "@/components/workspace/module-metrics";
 import { StatusBadge } from "@/components/workspace/status-badge";
 import { WorkflowPublishReview } from "@/components/enterprise/core-v2/workflow-publish-review";
 import { toastError, toastSuccess } from "@/lib/client-toast";
@@ -533,10 +534,10 @@ export function EnterpriseWorkflowsWorkspace({ organizationId, locale, departmen
 
   return <div className="grid min-w-0 gap-4">
     <ModuleMetrics label={en ? "Workflow indicators" : "Indicateurs workflows"}>
-      <ModuleMetric label={en ? "Published" : "Publiés"} value={definitions.filter((item) => item.status === "ACTIVE").length} hint={<CheckCircle2 className="h-3.5 w-3.5" />} />
-      <ModuleMetric label={en ? "Running" : "En cours"} value={(metrics.RUNNING || 0) + (metrics.QUEUED || 0)} hint={<Activity className="h-3.5 w-3.5" />} />
-      <ModuleMetric label={en ? "Waiting approval" : "En validation"} value={metrics.WAITING_APPROVAL || 0} hint={<PauseCircle className="h-3.5 w-3.5" />} />
-      <ModuleMetric label={en ? "Blocked / failed" : "Bloqués / échecs"} value={(metrics.BLOCKED || 0) + (metrics.FAILED || 0)} hint={<ShieldAlert className="h-3.5 w-3.5" />} />
+      <ErpDesign2Metric tone="sky" label={en ? "Published" : "Publiés"} value={definitions.filter((item) => item.status === "ACTIVE").length} hint={<CheckCircle2 className="h-3.5 w-3.5" />} />
+      <ErpDesign2Metric tone="amber" label={en ? "Running" : "En cours"} value={(metrics.RUNNING || 0) + (metrics.QUEUED || 0)} hint={<Activity className="h-3.5 w-3.5" />} />
+      <ErpDesign2Metric tone="emerald" label={en ? "Waiting approval" : "En validation"} value={metrics.WAITING_APPROVAL || 0} hint={<PauseCircle className="h-3.5 w-3.5" />} />
+      <ErpDesign2Metric tone="violet" label={en ? "Blocked / failed" : "Bloqués / échecs"} value={(metrics.BLOCKED || 0) + (metrics.FAILED || 0)} hint={<ShieldAlert className="h-3.5 w-3.5" />} />
     </ModuleMetrics>
 
     <div className="flex min-w-0 gap-1 overflow-x-auto border-b border-dtsc-border pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
