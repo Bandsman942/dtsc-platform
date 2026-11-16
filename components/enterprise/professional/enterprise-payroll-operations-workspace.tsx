@@ -56,7 +56,8 @@ type PayrollRun = { id: string; payrollPeriodId: string; reference: string; stat
 type PayrollTab = "RUNS" | "PERIODS";
 type DecisionTarget = { run: PayrollRun; decision: "APPROVE" | "REJECT" };
 
-const PAYROLL_STATUSES = ["OPEN", "CLOSED", "PREPARED", "PENDING_APPROVAL", "APPROVED", "REJECTED", "CANCELLED", "GENERATED"];
+const PAYROLL_PERIOD_STATUSES = ["OPEN", "CLOSED"];
+const PAYROLL_RUN_STATUSES = ["PREPARED", "PENDING_APPROVAL", "APPROVED", "REJECTED", "CANCELLED", "GENERATED"];
 const DEFAULT_PAYROLL_REJECTION_AUDIT_COMMENT = "Paie rejetée";
 const DEFAULT_PAYROLL_APPROVAL_AUDIT_COMMENT = "Paie contrôlée";
 
@@ -172,7 +173,7 @@ export function EnterprisePayrollOperationsWorkspace({ organizationId, organizat
   }, [detail, runs.items]);
   const payrollReportModel = useMemo(() => detail ? buildPayrollProfessionalReport({ organizationName, locale, run: detail, previousRun: previousPayrollRun }) : null, [detail, locale, organizationName, previousPayrollRun]);
 
-  const statusItems = [{ id: "", label: t("people.allStatuses") }, ...PAYROLL_STATUSES.map((id) => ({ id, label: professionalErpEnumLabel(locale, "payrollStatus", id) }))];
+  const statusItems = [{ id: "", label: t("people.allStatuses") }, ...(tab === "PERIODS" ? PAYROLL_PERIOD_STATUSES : PAYROLL_RUN_STATUSES).map((id) => ({ id, label: professionalErpEnumLabel(locale, "payrollStatus", id) }))];
   const openPeriods = lookups.payrollPeriods.filter((period) => period.status === "OPEN");
   const currencyItems = lookups.currencies.map((id) => ({ id, label: id }));
   const approverItems = [{ id: "", label: lookups.approvers.length ? (locale === "en" ? "Select an authorized approver" : "Choisir un validateur autorisé") : copy.noApprover }, ...lookups.approvers.map((member) => ({ id: member.userId, label: memberLabel(member) }))];
