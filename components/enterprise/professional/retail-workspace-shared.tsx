@@ -399,7 +399,7 @@ export function RetailWorkspaceFrame({
   ], [includeConfigurationTab, locale]);
 
   return (
-    <ModuleWorkspace>
+    <ModuleWorkspace density={moduleCode === "TELCO_TOPUPS" ? "compact" : "comfortable"}>
       <ModuleHeader
         hideBack={hideHeaderBack}
         eyebrow={`${retailText(locale, "shopOperations")} · ${organizationName}`}
@@ -419,6 +419,7 @@ export function RetailWorkspaceFrame({
       {context.dashboard && moduleCode === "RETAIL_POS" ? <CashSessionBar session={context.dashboard.cashSession} locale={locale} /> : null}
       {context.dashboard ? <RetailMetrics moduleCode={moduleCode} dashboard={context.dashboard} locale={locale} /> : null}
       <ModuleToolbar
+        density={moduleCode === "TELCO_TOPUPS" ? "compact" : "comfortable"}
         controls={(
           <div className="grid min-w-0 gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
             <ProfessionalTabs value={context.tab} onChange={context.setTab} items={tabs} label={retailText(locale, "shopModuleNavigation")} />
@@ -431,7 +432,7 @@ export function RetailWorkspaceFrame({
         )}
         summary={retailText(locale, "sharedErpSummary")}
       />
-      <ModuleContent>
+      <ModuleContent density={moduleCode === "TELCO_TOPUPS" ? "compact" : "comfortable"}>
         {context.message ? <div role="status" className="rounded-xl border border-dtsc-border bg-dtsc-page px-4 py-3 text-sm font-semibold text-dtsc-ink">{context.message}</div> : null}
         {context.error ? <ProfessionalError message={context.error} /> : context.loading ? <ProfessionalLoading rows={4} /> : !context.dashboard ? (
           <EmptyState title={retailText(locale, "shopUnavailable")} description={retailText(locale, "refreshToRetry")} />
@@ -499,8 +500,8 @@ export function RetailMetrics({ moduleCode, dashboard, locale }: { moduleCode: R
           <ModuleMetric key={`${row.currencyCode}-com`} label={`${retailText(locale, "commission")} · ${row.currencyCode}`} value={moneyValue(row.commission, row.currencyCode, locale)} />,
         ])
       : (dashboard.metricsByCurrency.telco || []).flatMap((row) => [
-          <ModuleMetric key={`${row.currencyCode}-rev`} label={`${retailText(locale, "topupSales")} · ${row.currencyCode}`} value={moneyValue(row.revenue, row.currencyCode, locale)} />,
-          <ModuleMetric key={`${row.currencyCode}-margin`} label={`${retailText(locale, "margin")} · ${row.currencyCode}`} value={moneyValue(row.margin, row.currencyCode, locale)} />,
+          <ModuleMetric key={`${row.currencyCode}-rev`} className="border-l-sky-500" label={`${retailText(locale, "topupSales")} · ${row.currencyCode}`} value={moneyValue(row.revenue, row.currencyCode, locale)} />,
+          <ModuleMetric key={`${row.currencyCode}-margin`} className="border-l-emerald-500" label={`${retailText(locale, "margin")} · ${row.currencyCode}`} value={moneyValue(row.margin, row.currencyCode, locale)} />,
         ]);
   return <ModuleMetrics label={retailText(locale, "shopIndicatorsByCurrency")}>{nodes.length ? nodes : <ModuleMetric label={retailText(locale, "activity")} value="—" />}</ModuleMetrics>;
 }
