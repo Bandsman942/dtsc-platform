@@ -1,3 +1,4 @@
+import { ErpDesign2Metric } from "@/components/enterprise/professional/erp-design2-register";
 "use client";
 
 import { useMemo, useState } from "react";
@@ -6,7 +7,7 @@ import { ContextualUserGuide } from "@/components/user-guides/contextual-user-gu
 import { notifyToast } from "@/lib/client-toast";
 import { ITERATION04_USER_GUIDES } from "@/lib/user-guides/iteration04-guides";
 import { ModuleWorkspace, ModuleHeader, ModuleContent, ModuleSection, ModuleToolbar } from "@/components/workspace/module-workspace";
-import { ModuleMetrics, ModuleMetric } from "@/components/workspace/module-metrics";
+import { ModuleMetrics } from "@/components/workspace/module-metrics";
 import { ProfessionalTabs } from "@/components/enterprise/professional/professional-erp-ui";
 import {
   EnterpriseActivityBlocksPanel,
@@ -50,7 +51,7 @@ export function EnterpriseActivitiesModule({ organization, blocks, requests, mem
   if (organization.sectorCode === "PHARMACY") return <PharmacyActivitiesWorkspace organizationId={organization.id} />;
 
   return (
-    <ModuleWorkspace>
+    <ModuleWorkspace density="compact">
       <ModuleHeader
         eyebrow={english ? "Enterprise activities" : "Activités entreprise"}
         title={`${english ? "Activities" : "Activités"} ${organization.name}`}
@@ -60,16 +61,16 @@ export function EnterpriseActivitiesModule({ organization, blocks, requests, mem
         count={sectorLabel}
       />
       <ModuleMetrics label={english ? "Enterprise activity indicators" : "Indicateurs des activités entreprise"}>
-        <ModuleMetric label={english ? "Available actions" : "Actions disponibles"} value={blocks.length} />
-        <ModuleMetric label={english ? "Pending requests" : "Demandes à traiter"} value={pending} />
-        <ModuleMetric label={english ? "My requests" : "Demandes visibles"} value={requests.length} />
-        <ModuleMetric label={english ? "Workflows" : "Workflows"} value={workflows.length} />
+        <ErpDesign2Metric tone="sky" label={english ? "Available actions" : "Actions disponibles"} value={blocks.length} />
+        <ErpDesign2Metric tone="amber" label={english ? "Pending requests" : "Demandes à traiter"} value={pending} />
+        <ErpDesign2Metric tone="emerald" label={english ? "My requests" : "Demandes visibles"} value={requests.length} />
+        <ErpDesign2Metric tone="violet" label={english ? "Workflows" : "Workflows"} value={workflows.length} />
       </ModuleMetrics>
       <ModuleToolbar
         controls={<ProfessionalTabs value={view} onChange={(value) => setView(value as ActivityView)} items={tabs} label={english ? "Activity views" : "Vues des activités"} />}
         summary={english ? "Actions create a tracked request, not an automatic business transaction." : "Chaque action crée une demande suivie, jamais une transaction métier implicite."}
       />
-      <ModuleContent>
+      <ModuleContent density="compact">
         {view === "ACTIONS" && (
           <ModuleSection title={english ? "Submit an activity" : "Soumettre une activité"} description={english ? "Choose the specific action, then complete its dedicated fields." : "Sélectionnez une action et complétez son formulaire métier adapté."}>
             <EnterpriseActivityBlocksPanel
