@@ -93,7 +93,7 @@ jobs:
         run: pnpm prisma:generate
       - name: Apply migrations for quality checks
         run: pnpm prisma:deploy
-      - name: ERP #1198 PostgreSQL quote creation and conversion regression
+      - name: "ERP #1198 PostgreSQL quote creation and conversion regression"
         run: pnpm qa:erp-quote-prisma-postgres-1198
       - name: Workflow ERP contracts PostgreSQL integration
         run: node scripts/qa-workflow-814-postgres.mjs
@@ -155,7 +155,7 @@ jobs:
         run: pnpm qa:hotfix-1187-returns
       - name: ERP sales #1195 Design 2.0 and premium A4 print contracts
         run: pnpm qa:sales-design2-1195
-      - name: ERP commercial #1198 Prisma quote creation and five Design 2.0 modules
+      - name: "ERP commercial #1198 Prisma quote creation and five Design 2.0 modules"
         run: pnpm qa:erp-commercial-design2-1198
       - name: Type check
         run: pnpm type-check
