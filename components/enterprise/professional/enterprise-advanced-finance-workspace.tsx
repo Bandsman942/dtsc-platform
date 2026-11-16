@@ -288,9 +288,7 @@ export function EnterpriseAdvancedFinanceWorkspace({ organizationId, organizatio
     <ModuleHeader
       eyebrow={`${organizationName} · ${t("advancedFinance")}`}
       title={locale === "fr" ? definition.labelFr : definition.labelEn}
-      description={definition.code === "FINANCE_INVENTORY"
-        ? (locale === "en" ? "Live weighted-average valuation. Stock movement quantities remain managed in Inventory; published period snapshots belong to Financial statements." : "Valorisation en direct au coût moyen pondéré. Les mouvements et quantités restent gérés dans Stocks ; les versions périodiques publiées relèvent des États financiers.")
-        : t("advancedFinanceDescription")}
+      description={definition.code === "FINANCE_INVENTORY" ? t("inventoryLiveDescription") : t("advancedFinanceDescription")}
       primaryAction={actionAvailable ? <Button onClick={() => { setShowForm((current) => !current); setReversalEntryId(""); setReopenClose(null); setApprovalSubmit(null); }}><Plus className="h-4 w-4" />{showForm ? t("close") : t("professionalAction")}</Button> : undefined}
       secondaryActions={<Button variant="outline" onClick={() => void load()} disabled={loading}><RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />{t("refresh")}</Button>}
     />
@@ -301,7 +299,7 @@ export function EnterpriseAdvancedFinanceWorkspace({ organizationId, organizatio
 
     {definition.code === "FINANCE_INVENTORY" ? <div role="note" className="flex min-w-0 flex-wrap items-center gap-2 border-y border-dtsc-border bg-dtsc-page/60 px-3 py-3 text-xs font-semibold leading-6 text-dtsc-muted">
       <ShieldCheck className="h-4 w-4 shrink-0 text-dtsc-blue" aria-hidden="true" />
-      <span>{locale === "en" ? "Source of physical quantities: Inventory. Source of accounting cost: posted weighted-average cost layers. No invented historical valuation." : "Quantités physiques : module Stocks. Coûts comptables : couches de coût moyen pondéré validées. Aucun historique de valorisation inventé."}</span>
+      <span>{t("inventoryLiveSourceNote")}</span>
     </div> : null}
     {Object.keys(metrics).length ? <ModuleMetrics label={t("accountingMetrics")}>{Object.entries(metrics).slice(0, 8).map(([key, value]) => <ModuleMetric key={key} label={key === "TOTAL" ? t("total") : businessLabel(key, locale)} value={value} />)}</ModuleMetrics> : null}
     <ModuleToolbar
