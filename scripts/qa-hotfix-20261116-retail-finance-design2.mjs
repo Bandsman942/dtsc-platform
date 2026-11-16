@@ -32,7 +32,7 @@ has(invoiceRoute, /collectibleSiteIds/, "collections must filter permitted store
 has(invoiceRoute, /"ISSUED", "PARTIALLY_PAID", "OVERDUE"/, "backend must exclude draft/approved-only invoices");
 
 const links = "components/enterprise/enterprise-finance-related-links.tsx";
-has(links, /session\.activeContext !== "ORGANIZATION"/, "cross-module links must require active organization context");
+has(links, /session\?\.activeContext !== "ORGANIZATION"/, "cross-module links must require active organization context");
 has(links, /resolveEnterpriseModuleAccess\(\{ userId: session\.userId, organizationId, moduleCode: code, action: "read" \}\)/, "cross-module destinations must check effective backend rights");
 for (const code of ["FINANCE_CLOSE", "FINANCE_STATEMENTS", "FINANCE_ASSETS", "FINANCE_INVENTORY", "REPORTS"]) {
   assert.ok(read(links).includes(`${code}:`), `missing related-module navigation for ${code}`);
