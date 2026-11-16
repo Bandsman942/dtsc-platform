@@ -364,6 +364,7 @@ export function useRetailOperationalWorkspace({
     period,
     setPeriod,
     setRefreshKey,
+    refreshKey,
     mutate,
   };
 }
