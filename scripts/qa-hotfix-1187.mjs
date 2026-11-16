@@ -9,11 +9,11 @@ function check(path, tokens) {
   }
 }
 check("app/api/enterprise/[organizationId]/retail/site-assignments/route.ts", [
-  "isRetailEnterpriseProprietor", "organization.ownerUserId === userId", 'role: true', 'status: "ACTIVE"',
-  "canGrantSelfApproval:", "RETAIL_SITE_SELF_APPROVAL_OWNER_ONLY",
+  "canAdministerRetailSelfApproval", "RETAIL_OWNER_ROLES.has(membership.role)", 'role: true', 'status: "ACTIVE"',
+  "canGrantSelfApproval:", "RETAIL_SITE_SELF_APPROVAL_ADMIN_ONLY",
 ]);
 check("components/enterprise/professional/retail-site-staff-access.tsx", [
-  "canSelectDelegation", "updateCapability", "SELF_APPROVE_INVOICE",
+  "Réservé à l’administrateur d’entreprise", "Enterprise administrator only", "canSelectDelegation", "updateCapability", "SELF_APPROVE_INVOICE",
   "SELF_APPROVE_PAYMENT", "SELF_APPROVE_INVOICE_RETURN", 'next.add("PREPARE_INVOICE")',
   'next.add("COLLECT_PAYMENT")', 'next.delete("SELF_APPROVE_INVOICE")',
 ]);
