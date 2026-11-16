@@ -4,6 +4,7 @@ import { enterpriseDomainErrorResponse, enterpriseValidationErrorResponse } from
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { getEnterpriseCommonDomainAccess } from "@/lib/enterprise/common/access";
+import { financeBusinessDateRange } from "@/lib/enterprise/accounting/http";
 import { assertSiteCanBecomeInactive, locationIntegrityMessage } from "@/lib/enterprise/master-data/location-integrity";
 import { siteCreateSchema, siteUpdateSchema } from "@/lib/enterprise/master-data/schemas";
 import { createEnterpriseSite, updateEnterpriseSite } from "@/lib/enterprise/master-data/service";
@@ -32,6 +33,8 @@ export async function GET(req: Request, { params }: Params) {
   const search = url.searchParams.get("search")?.trim() || "";
   const siteType = url.searchParams.get("siteType")?.trim().toUpperCase() || "";
   const status = url.searchParams.get("status")?.trim().toUpperCase() || "";
+  const dates = financeBusinessDateRange(req);
+  if (!dates.ok) return dates.response;
   const where: Prisma.EnterpriseSiteWhereInput = {
     organizationId,
     archivedAt: null,
@@ -39,6 +42,7 @@ export async function GET(req: Request, { params }: Params) {
     ...(search ? { OR: [{ name: { contains: search, mode: "insensitive" } }, { code: { contains: search, mode: "insensitive" } }, { city: { contains: search, mode: "insensitive" } }] } : {}),
     ...(siteType ? { siteType } : {}),
     ...(status ? { status } : {}),
+    ...((dates.from || dates.to) ? { createdAt: { ...(dates.from ? { gte: dates.from } : {}), ...(dates.to ? { lte: dates.to } : {}) } } : {}),
   };
   const [items, total, active, warehouses] = await Promise.all([
     prisma.enterpriseSite.findMany({ where, orderBy: [{ name: "asc" }], skip: (page - 1) * pageSize, take: pageSize, include: { warehouses: { where: { archivedAt: null }, orderBy: { name: "asc" }, take: 10 } } }),
