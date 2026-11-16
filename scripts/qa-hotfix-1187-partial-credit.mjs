@@ -22,7 +22,7 @@ contract("prisma/migrations/20261115194500_retail_partial_credit_refund_split/mi
 contract("lib/enterprise/retail/invoice-returns.ts", ["UNDELIVERED_CREDIT", "SERVICE_CREDIT", "requiresPhysicalInspection", "independentFinanceVerifier"]);
 contract("lib/enterprise/retail/invoice-return-finance.ts", ["refundPayoutAmount: payoutAmount", "financeApproverUserId", "postPaidRetailInvoiceStockTx", "TransactionIsolationLevel.Serializable"]);
 contract("lib/enterprise/retail/invoice-checkout.ts", ["returnLines", "fulfilableLines", "remaining"]);
-contract("lib/enterprise/retail/invoice-stock-holds.ts", ['status: "COMPLETED"', "Prisma.Decimal.max"]);
+contract("lib/enterprise/retail/invoice-stock-holds.ts", ['status: "COMPLETED"', "decimalMax"]);
 contract("components/enterprise/professional/retail-invoice-return-dialog.tsx", ["UNDELIVERED_CREDIT", "SERVICE_CREDIT", "financeApproverUserId", "requiresPhysicalInspection"]);
 contract("components/enterprise/professional/retail-invoice-flow-workbench.tsx", ['"PARTIALLY_PAID", "PAID", "CREDIT_NOTE"', "RetailInvoiceReturnDialog"]);
 const unit = { exports: {} };
@@ -98,4 +98,9 @@ await assert.rejects(preflight(fixture({ completed: [{ checkoutLineId: "cl", qua
   refundAmount: d("100"), refundNetAmount: d("90"), refundTaxAmount: d("10") }] }), "org", "inv", "ret"),
   { code: "RETAIL_INVOICE_RETURN_SETTLEMENT_LINE_INVALID" });
 checked++;
+for (const file of ["lib/enterprise/retail/invoice-returns.ts", "lib/enterprise/retail/invoice-checkout.ts",
+  "lib/enterprise/retail/invoice-stock-holds.ts", "lib/enterprise/retail/invoice-return-settlement-preflight.ts"]) {
+  assert.doesNotMatch(fs.readFileSync(file, "utf8"), /Prisma\\.Decimal\\.(min|max)\\(/, "Unsupported static Decimal minimum/maximum: " + file);
+  checked++;
+}
 console.log("#1187 " + checked + " static and real Decimal-preflight tests passed; PostgreSQL and owner E2E still required.");
