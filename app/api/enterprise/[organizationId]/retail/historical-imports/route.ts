@@ -4,6 +4,7 @@ import { historicalImportDraftSchema } from "@/lib/enterprise/retail/historical-
 import { createHistoricalImportDraft } from "@/lib/enterprise/retail/historical-import-service";
 import { getHistoricalImportWorkspaceView } from "@/lib/enterprise/retail/historical-import-workspace-service";
 import { authorizeRetailRequest, retailErrorResponse } from "@/lib/enterprise/retail/http";
+import { shopHistoricalImportDenial } from "@/lib/enterprise/retail/shop-history-availability";
 
 type Params = { params: Promise<{ organizationId: string }> };
 
@@ -12,6 +13,8 @@ export async function GET(req: Request, { params }: Params) {
   const { organizationId } = await params;
   const auth = await authorizeRetailRequest(req, organizationId, "RETAIL_DAILY_CLOSE", "read");
   if (!auth.ok) return auth.response;
+  const shopDenied = await shopHistoricalImportDenial(organizationId);
+  if (shopDenied) return shopDenied;
   try {
     const workspace = await getHistoricalImportWorkspaceView(organizationId, auth.session.userId);
     await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "retail-history", action: "list" } });
@@ -26,6 +29,8 @@ export async function POST(req: Request, { params }: Params) {
   const { organizationId } = await params;
   const auth = await authorizeRetailRequest(req, organizationId, "RETAIL_DAILY_CLOSE", "manage", { mutation: true, limit: 30 });
   if (!auth.ok) return auth.response;
+  const shopDenied = await shopHistoricalImportDenial(organizationId);
+  if (shopDenied) return shopDenied;
   const parsed = historicalImportDraftSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {
     return NextResponse.json({
