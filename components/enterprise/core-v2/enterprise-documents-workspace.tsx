@@ -6,7 +6,8 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { BusinessList, BusinessListItem } from "@/components/workspace/business-list";
 import { ContextActions, type BusinessContextAction } from "@/components/workspace/context-actions";
 import { EmptyState } from "@/components/workspace/empty-state";
-import { ModuleMetric, ModuleMetrics } from "@/components/workspace/module-metrics";
+import { ModuleMetrics } from "@/components/workspace/module-metrics";
+import { ErpDesign2Metric, ErpDesign2RegisterSection, ErpDesign2RegisterTools } from "@/components/enterprise/professional/erp-design2-register";
 import { ModuleSection } from "@/components/workspace/module-workspace";
 import { StatusBadge } from "@/components/workspace/status-badge";
 import { Button } from "@/components/ui/button";
@@ -37,7 +38,7 @@ function linkTargetLabel(locale: string | null | undefined, target: LinkTargetCh
   return [target.reference, target.title, relatedType, target.status ? statusLabel(locale, target.status) : "", target.date ? formatEnterpriseDate(target.date, locale) : ""].filter(Boolean).join(" · ") || enterpriseCoreT(locale, "common.notSpecified");
 }
 
-export function EnterpriseDocumentsWorkspace({ organizationId, members, departments, canCreate, canManage, locale, legacyRecords = [] }: { organizationId: string; members: EnterpriseChoice[]; departments: EnterpriseChoice[]; canCreate: boolean; canManage: boolean; locale?: string | null; legacyRecords?: LegacyRecord[] }) {
+export function EnterpriseDocumentsWorkspace({ organizationId, organizationName = "Entreprise", members, departments, canCreate, canManage, locale, legacyRecords = [] }: { organizationId: string; organizationName?: string; members: EnterpriseChoice[]; departments: EnterpriseChoice[]; canCreate: boolean; canManage: boolean; locale?: string | null; legacyRecords?: LegacyRecord[] }) {
   const t = (key: EnterpriseCoreKey, vars?: Record<string, string | number>) => enterpriseCoreT(locale, key, vars);
   const searchParams = useSearchParams();
   const sourceEntityType = searchParams.get("sourceEntityType") || "";
@@ -49,6 +50,8 @@ export function EnterpriseDocumentsWorkspace({ organizationId, members, departme
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [visibility, setVisibility] = useState("");
   const [type, setType] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
@@ -82,7 +85,7 @@ export function EnterpriseDocumentsWorkspace({ organizationId, members, departme
     return () => { active = false; };
   }, [organizationId, linkEntityType, linkTarget]);
 
-  const params = useMemo(() => { const value = new URLSearchParams({ page: String(page), pageSize: "20" }); if (search.trim()) value.set("search", search.trim()); if (status) value.set("status", status); if (visibility) value.set("visibility", visibility); if (type) value.set("type", type); return value; }, [page, search, status, visibility, type]);
+  const params = useMemo(() => { const value = new URLSearchParams({ page: String(page), pageSize: "20" }); if (search.trim()) value.set("search", search.trim()); if (status) value.set("status", status); if (visibility) value.set("visibility", visibility); if (type) value.set("type", type); if (dateFrom) value.set("from", dateFrom); if (dateTo) value.set("to", dateTo); return value; }, [page, search, status, visibility, type, dateFrom, dateTo]);
   const collection = useEnterpriseV2Collection<DocumentItem>({ endpoint: `/api/enterprise/${organizationId}/documents`, params, refreshKey });
   const metrics = collection.meta.metrics || {};
 
@@ -152,12 +155,26 @@ export function EnterpriseDocumentsWorkspace({ organizationId, members, departme
 
   return <div className="grid min-w-0 gap-5">
     {linkedContext ? <div className="rounded-2xl border border-cyan-500/30 bg-cyan-500/10 p-4 text-sm leading-6 text-dtsc-ink"><strong className="block">{t("documents.form.linkedTitle", { reference: linkedReference })}</strong><span className="text-dtsc-muted">{t("documents.linked.description")}</span>{canCreate ? <Button type="button" className="mt-3" onClick={() => setCreateOpen(true)}><Upload className="h-4 w-4" />{t("documents.linked.upload")}</Button> : null}</div> : null}
-    <ModuleMetrics label={t("documents.indicators")}><ModuleMetric label={t("documents.metric.active")} value={metrics.active || 0} /><ModuleMetric label={t("documents.metric.recent")} value={metrics.recent || 0} /><ModuleMetric label={t("documents.metric.expiring")} value={metrics.expiring || 0} /><ModuleMetric label={t("documents.metric.archived")} value={metrics.archived || 0} /></ModuleMetrics>
-    <ModuleSection title={t("documents.section.title")} description={t("documents.section.description")} count={`${collection.pagination.total}`} action={canCreate ? <Button onClick={() => setCreateOpen(true)} className="bg-dtsc-blue text-white"><Plus className="h-4 w-4" />{linkedContext ? t("documents.linked.upload") : t("documents.form.newTitle")}</Button> : undefined}>
-      <div className="grid gap-2 border-y border-dtsc-border py-3 sm:grid-cols-2 xl:grid-cols-4"><Input value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder={t("documents.search")} /><NativeSelect value={status} onChange={setStatus} items={[{ id: "", label: t("documents.filter.allStatuses") }, ...["DRAFT", "ACTIVE"].map((id) => ({ id, label: statusLabel(locale, id) }))]} /><NativeSelect value={visibility} onChange={setVisibility} items={[{ id: "", label: t("documents.filter.allVisibility") }, ...visibilityChoices]} /><NativeSelect value={type} onChange={setType} items={[{ id: "", label: t("documents.filter.allTypes") }, ...documentTypes]} /></div>
+    <ModuleMetrics label={t("documents.indicators")}><ErpDesign2Metric tone="emerald" label={t("documents.metric.active")} value={metrics.active || 0} /><ErpDesign2Metric tone="sky" label={t("documents.metric.recent")} value={metrics.recent || 0} /><ErpDesign2Metric tone="amber" label={t("documents.metric.expiring")} value={metrics.expiring || 0} /><ErpDesign2Metric tone="slate" label={t("documents.metric.archived")} value={metrics.archived || 0} /></ModuleMetrics>
+    <ErpDesign2RegisterSection title={t("documents.section.title")} description={t("documents.section.description")} count={`${collection.pagination.total}`} action={canCreate ? <Button onClick={() => setCreateOpen(true)} className="bg-dtsc-blue text-white"><Plus className="h-4 w-4" />{linkedContext ? t("documents.linked.upload") : t("documents.form.newTitle")}</Button> : undefined}>
+      <div className="grid gap-2 py-3 md:grid-cols-3"><Input aria-label={t("documents.search")} value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder={t("documents.search")} /><NativeSelect value={visibility} onChange={(value) => { setVisibility(value); setPage(1); }} items={[{ id: "", label: t("documents.filter.allVisibility") }, ...visibilityChoices]} /><NativeSelect value={type} onChange={(value) => { setType(value); setPage(1); }} items={[{ id: "", label: t("documents.filter.allTypes") }, ...documentTypes]} /></div>
+      <ErpDesign2RegisterTools locale={locale === "en" ? "en" : "fr"} title={t("documents.section.title")} organizationName={organizationName}
+        endpoint={`/api/enterprise/${organizationId}/documents`} filters={{ search, status, visibility, type, from: dateFrom, to: dateTo }}
+        status={status} statuses={[{ id: "", label: t("documents.filter.allStatuses") }, ...["DRAFT", "ACTIVE"].map((id) => ({ id, label: statusLabel(locale, id) }))]}
+        onStatusChange={(value) => { setStatus(value); setPage(1); }}
+        dateFrom={dateFrom} dateTo={dateTo} onDateChange={(from, to) => { setDateFrom(from); setDateTo(to); setPage(1); }}
+        columns={[
+          { key: "title", labelFr: "Titre", labelEn: "Title", get: (row) => String(row.title || "") },
+          { key: "type", labelFr: "Type", labelEn: "Type", get: (row) => documentTypeLabel(locale, String(row.documentType || "")) },
+          { key: "status", labelFr: "Statut", labelEn: "Status", get: (row) => statusLabel(locale, String(row.status || "")) },
+          { key: "visibility", labelFr: "Visibilité", labelEn: "Visibility", get: (row) => visibilityLabel(locale, String(row.visibility || "")) },
+          { key: "version", labelFr: "Version", labelEn: "Version", get: (row) => Number(row.currentVersion || 0) },
+          { key: "expires", labelFr: "Expiration", labelEn: "Expiry", get: (row) => String(row.expiresAt || "") },
+          { key: "updated", labelFr: "Mis à jour", labelEn: "Updated", get: (row) => String(row.updatedAt || "") },
+        ]} />
       {collection.loading ? <p className="py-8 text-center text-sm text-dtsc-muted">{t("common.loading")}</p> : collection.items.length ? <BusinessList ariaLabel={t("documents.aria")}>{collection.items.map((item) => <BusinessListItem key={item.id} title={item.title} status={<StatusBadge tone={statusTone(item.status)}>{statusLabel(locale, item.status)}</StatusBadge>} meta={`${documentTypeLabel(locale, item.documentType)} · v${item.currentVersion} · ${visibilityLabel(locale, item.visibility)}`} description={`${item.description || ""}${item.expiresAt ? ` · ${t("documents.expires", { date: formatEnterpriseDate(item.expiresAt, locale) })}` : ""}`} onOpen={() => setDetail(item)} openLabel={t("documents.openNamed", { title: item.title })} actions={<ContextActions label={t("documents.actions")} actions={actionsFor(item)} />} />)}</BusinessList> : <EmptyState compact title={t("documents.noDocuments")} description={collection.error || t("documents.noMatch")} />}
       <div className="mt-3 flex justify-between border-t border-dtsc-border pt-3 text-sm text-dtsc-muted"><span>{t("common.page", { current: collection.pagination.page, total: collection.pagination.pageCount })}</span><div className="flex gap-2"><Button variant="outline" disabled={page <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>{t("common.previous")}</Button><Button variant="outline" disabled={page >= collection.pagination.pageCount} onClick={() => setPage((value) => value + 1)}>{t("common.next")}</Button></div></div>
-    </ModuleSection>
+    </ErpDesign2RegisterSection>
     {legacyRecords.length ? <ModuleSection title={t("documents.historical.title")} description={t("documents.historical.description")}><BusinessList ariaLabel={t("documents.historical.aria")}>{legacyRecords.map((item) => <BusinessListItem key={item.id} title={item.title} status={<StatusBadge>{t("documents.historyBadge")}</StatusBadge>} description={item.description || formatEnterpriseDate(item.updatedAt, locale)} />)}</BusinessList></ModuleSection> : null}
 
     <Dialog open={createOpen} onClose={() => { if (!busy) setCreateOpen(false); }} title={linkedContext ? t("documents.form.linkedTitle", { reference: linkedReference }) : t("documents.form.newTitle")} presentation="editor" className="max-w-3xl"><form onSubmit={createDocument} className="grid gap-4"><DocumentMetadataFields t={t} documentTypes={documentTypes} visibilityChoices={visibilityChoices} members={members} departments={departments} linkedContext={linkedContext} sourceEntityType={sourceEntityType} sourceReference={sourceReference} /><Button disabled={busy} className="bg-dtsc-blue text-white"><FileText className="h-4 w-4" />{busy ? t("common.loading") : linkedContext ? t("documents.form.createThenUpload") : t("documents.form.createMetadata")}</Button></form></Dialog>
