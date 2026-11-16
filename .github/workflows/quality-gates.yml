@@ -93,6 +93,8 @@ jobs:
         run: pnpm prisma:generate
       - name: Apply migrations for quality checks
         run: pnpm prisma:deploy
+      - name: ERP #1198 PostgreSQL quote creation and conversion regression
+        run: pnpm qa:erp-quote-prisma-postgres-1198
       - name: Workflow ERP contracts PostgreSQL integration
         run: node scripts/qa-workflow-814-postgres.mjs
       - name: Workflow crash recovery on PostgreSQL
