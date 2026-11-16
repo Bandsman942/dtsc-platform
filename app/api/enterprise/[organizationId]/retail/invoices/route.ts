@@ -33,6 +33,10 @@ export async function GET(req: Request, { params }: Params) {
   const url = new URL(req.url);
   const siteId = url.searchParams.get("siteId") || undefined;
   const collectionsOnly = url.searchParams.get("view") === "collections";
+  const invoiceId = collectionsOnly ? (url.searchParams.get("invoiceId") || "").trim() : "";
+  if (invoiceId && !/^[A-Za-z0-9_-]{1,100}$/.test(invoiceId)) {
+    return retailErrorResponse(new EnterpriseRetailError("RETAIL_INVOICE_ID_INVALID", 400));
+  }
   const search = (url.searchParams.get("q") || "").trim().slice(0, 100);
   const dateFrom = url.searchParams.get("dateFrom") || "";
   const dateTo = url.searchParams.get("dateTo") || "";
@@ -56,6 +60,7 @@ export async function GET(req: Request, { params }: Params) {
     ...(dateTo ? { lt: civilMidnightUtc(followingCivilDate(dateTo), timezone) } : {}),
   };
   const invoiceConditions: Prisma.EnterpriseSalesInvoiceWhereInput = {
+    ...(invoiceId ? { id: invoiceId } : {}),
     ...(collectionsOnly ? { status: { in: ["ISSUED", "PARTIALLY_PAID", "OVERDUE"] } } : status ? { status } : {}),
     ...(dateFrom || dateTo ? { invoiceDate } : {}),
     ...(search ? { OR: [
