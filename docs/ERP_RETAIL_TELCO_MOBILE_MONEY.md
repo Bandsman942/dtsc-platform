@@ -468,3 +468,10 @@ La certification finale sera fondée sur des preuves CI/E2E et une acceptation e
 - `docs/ISSUE_307_MOBILE_MONEY_MULTICURRENCY_ACCOUNTS.md` — contrat détaillé du hotfix multi-devise ;
 - issue #307 — implémentation multi-devise ;
 - issue #309 — retrait futur du champ legacy `mobileMoneyFloatAccountId` après preuve du cutover production.
+
+
+## Novembre 2026 — Historique Télécom Design 2.0 (#1198)
+
+L'onglet **Télécom & forfaits → Historique** interroge directement le registre des recharges de l'entreprise, plutôt que de limiter l'affichage à quelques dernières opérations du tableau de bord. Il offre recherche, rail SUCCESS/FAILED/REVERSED, calendrier (date précise ou période), pagination et exports professionnels Excel/CSV/PDF (jusqu'à 1000 lignes autorisées par export). Le numéro destinataire reste masqué dans les écrans et exports.
+
+L'identité du réseau, le montant de vente, le coût opérateur, la marge et la devise sont exportés distinctement, sans conversion ni somme implicites de CDF et USD. L'émission, l'annulation, le rapprochement, le float et la caisse restent dans les services opérationnels RETAIL et Finance existants : un export ne modifie ni transaction, ni compte, ni écriture. Vérifier le périmètre boutique et entreprise avec les rôles réels. Recette `docs/OWNER_E2E_1198_COMMERCIAL_DESIGN2.md`.
