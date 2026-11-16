@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { CheckCircle2, Eye, PackageCheck, Plus, RefreshCcw, Send, ShoppingCart, XCircle } from "lucide-react";
+import { BadgeCheck, Boxes, CheckCircle2, Eye, FilePenLine, FileText, PackageCheck, Plus, Printer, RefreshCcw, Send, ShoppingCart, Truck, XCircle } from "lucide-react";
+import Link from "next/link";
 import { currencyChoices, Field, NativeSelect } from "@/components/enterprise/core-v2/erp-v2-ui";
 import { commercialHotfixCopy } from "@/components/enterprise/professional/commercial-hotfix-copy";
+import { FinanceDateFilter, FinanceExportControls, type FinanceExportColumn } from "@/components/enterprise/professional/finance-design2-controls";
 import {
   ProfessionalError,
   ProfessionalFormSection,
@@ -54,13 +56,15 @@ type Quote = {
   businessParty: BusinessPartySummary | null;
   status: string;
   currency: string;
-  subtotal: string | number;
-  discountTotal: string | number;
-  taxTotal: string | number;
+  subtotalAmount: string | number;
+  discountAmount: string | number;
+  taxAmount: string | number;
+  createdAt: string;
+  terms: string | null;
   totalAmount: string | number;
   validUntil: string | null;
   revision: number;
-  items: Array<{ id: string; description: string; quantity: string | number; unitPrice: string | number; lineTotal: string | number }>;
+  items: Array<{ id: string; description: string; quantity: string | number; unitPrice: string | number; discountAmount: string | number; taxAmount: string | number; lineTotal: string | number }>;
 };
 
 type SalesOrder = {
@@ -73,8 +77,13 @@ type SalesOrder = {
   currency: string;
   totalAmount: string | number;
   expectedFulfillmentAt: string | null;
+  quoteId: string | null;
+  createdAt: string;
+  subtotalAmount: string | number;
+  discountAmount: string | number;
+  taxAmount: string | number;
   revision: number;
-  items: Array<{ id: string; description: string; quantityOrdered: string | number; quantityFulfilled: string | number; quantityRemaining: string | number }>;
+  items: Array<{ id: string; description: string; quantityOrdered: string | number; quantityFulfilled: string | number; quantityRemaining: string | number; unitPrice: string | number; discountAmount: string | number; taxAmount: string | number; lineTotal: string | number }>;
   fulfillments: Array<{ id: string; reference: string; status: string; createdAt: string }>;
 };
 
@@ -122,6 +131,8 @@ export function EnterpriseSalesOperationsWorkspace({
   const [tab, setTab] = useState("QUOTES");
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [page, setPage] = useState(1);
   const [refreshKey, setRefreshKey] = useState(0);
   const [createOpen, setCreateOpen] = useState(false);
@@ -183,11 +194,34 @@ export function EnterpriseSalesOperationsWorkspace({
     const value = new URLSearchParams({ page: String(page), pageSize: "25" });
     if (search.trim()) value.set("search", search.trim());
     if (status) value.set("status", status);
+    if (dateFrom) value.set("dateFrom", dateFrom);
+    if (dateTo) value.set("dateTo", dateTo);
     return value;
-  }, [page, search, status]);
+  }, [page, search, status, dateFrom, dateTo]);
   const quotes = useProfessionalCollection<Quote>({ endpoint: `/api/enterprise/${organizationId}/quotes`, params, refreshKey });
   const orders = useProfessionalCollection<SalesOrder>({ endpoint: `/api/enterprise/${organizationId}/sales-orders`, params, refreshKey });
   const activeCollection = tab === "QUOTES" ? quotes : orders;
+  const activeFilters = { search, status, dateFrom, dateTo };
+  const exportColumns: FinanceExportColumn[] = [
+    { key: "reference", labelFr: "Référence", labelEn: "Reference", get: (row) => String(row.reference || "") },
+    { key: "customer", labelFr: "Client", labelEn: "Customer", get: (row) => {
+      const customer = row.businessParty as { displayName?: string | null; legalName?: string } | null;
+      return customer?.displayName || customer?.legalName || "";
+    } },
+    { key: "title", labelFr: "Objet", labelEn: "Subject", get: (row) => String(row.title || "") },
+    { key: "status", labelFr: "Statut", labelEn: "Status", get: (row) => statusLabel(String(row.status || "")) },
+    { key: "date", labelFr: "Création", labelEn: "Created", get: (row) => row.createdAt ? professionalErpDate(String(row.createdAt), locale) : "" },
+    { key: "currency", labelFr: "Devise", labelEn: "Currency", get: (row) => String(row.currency || "") },
+    { key: "subtotal", labelFr: "Sous-total HT", labelEn: "Subtotal", get: (row) => Number(row.subtotalAmount || 0) },
+    { key: "discount", labelFr: "Remises", labelEn: "Discounts", get: (row) => Number(row.discountAmount || 0) },
+    { key: "tax", labelFr: "Taxes", labelEn: "Taxes", get: (row) => Number(row.taxAmount || 0) },
+    { key: "amount", labelFr: "Total", labelEn: "Total", get: (row) => Number(row.totalAmount || 0) },
+  ];
+  const commercialPrintUrl = (kind: "quote" | "order", id: string) =>
+    `/api/enterprise/${encodeURIComponent(organizationId)}/${kind === "quote" ? "quotes" : "sales-orders"}/${encodeURIComponent(id)}/print?lang=${locale}`;
+  function printCommercial(kind: "quote" | "order", id: string) {
+    window.open(commercialPrintUrl(kind, id), "_blank", "noopener,noreferrer");
+  }
   const currencyItems = lookups.currencies.length
     ? lookups.currencies.map((code) => ({ id: code, label: code }))
     : currencyChoices(locale);
@@ -365,6 +399,7 @@ export function EnterpriseSalesOperationsWorkspace({
   function quoteActions(quote: Quote): BusinessContextAction[] {
     return [
       { id: "open", label: t("sales.open"), icon: Eye, onSelect: () => setQuoteDetail(quote) },
+      { id: "print", label: t("sales.printPreview"), icon: Printer, onSelect: () => printCommercial("quote", quote.id) },
       ...(quote.status === "DRAFT" ? [{ id: "send", label: t("sales.send"), icon: Send, onSelect: () => void transitionQuote(quote, "SENT") }] : []),
       ...(quote.status === "SENT" ? [
         { id: "accept", label: t("sales.markAccepted"), icon: CheckCircle2, onSelect: () => void transitionQuote(quote, "ACCEPTED") },
@@ -378,6 +413,7 @@ export function EnterpriseSalesOperationsWorkspace({
   function orderActions(order: SalesOrder): BusinessContextAction[] {
     return [
       { id: "open", label: t("sales.open"), icon: Eye, onSelect: () => setOrderDetail(order) },
+      { id: "print", label: t("sales.printPreview"), icon: Printer, onSelect: () => printCommercial("order", order.id) },
       ...(["CONFIRMED", "PARTIALLY_FULFILLED"].includes(order.status) ? [{ id: "fulfill", label: t("sales.recordDelivery"), icon: PackageCheck, onSelect: () => openFulfillment(order) }] : []),
     ];
   }
@@ -385,7 +421,7 @@ export function EnterpriseSalesOperationsWorkspace({
   const statusItems = (tab === "QUOTES" ? QUOTE_STATUSES : ORDER_STATUSES).map((id) => ({ id, label: statusLabel(id) }));
 
   return (
-    <ModuleWorkspace>
+    <ModuleWorkspace density="compact">
       <ModuleHeader
         eyebrow={t("sales.eyebrow", { organization: organizationName })}
         title={t("sales.title")}
@@ -393,19 +429,36 @@ export function EnterpriseSalesOperationsWorkspace({
         count={t("sales.count", { quotes: quotes.pagination.total, orders: orders.pagination.total })}
         primaryAction={quotes.canWrite ? <Button onClick={openCreate} className="bg-dtsc-blue text-white"><Plus className="h-4 w-4" />{t("sales.newQuote")}</Button> : undefined}
       />
-      <ModuleMetrics label={t("sales.metrics")}>
-        <ModuleMetric label={t("sales.metricDraftQuotes")} value={quotes.metrics.draft || 0} />
-        <ModuleMetric label={t("sales.metricSentQuotes")} value={quotes.metrics.sent || 0} />
-        <ModuleMetric label={t("sales.metricAcceptedQuotes")} value={quotes.metrics.accepted || 0} />
-        <ModuleMetric label={t("sales.metricConfirmedOrders")} value={orders.metrics.confirmed || 0} />
-        <ModuleMetric label={t("sales.metricPartial")} value={orders.metrics.partial || 0} />
+      <ModuleMetrics label={t("sales.metrics")} className="lg:[&>div]:grid-cols-5">
+        <ModuleMetric icon={<FilePenLine className="h-4 w-4 text-slate-500" />} className="border-l-slate-400" label={t("sales.metricDraftQuotes")} value={quotes.metrics.draft || 0} />
+        <ModuleMetric icon={<Send className="h-4 w-4 text-sky-500" />} className="border-l-sky-500" label={t("sales.metricSentQuotes")} value={quotes.metrics.sent || 0} />
+        <ModuleMetric icon={<BadgeCheck className="h-4 w-4 text-emerald-500" />} className="border-l-emerald-500" label={t("sales.metricAcceptedQuotes")} value={quotes.metrics.accepted || 0} />
+        <ModuleMetric icon={<Boxes className="h-4 w-4 text-indigo-500" />} className="border-l-indigo-500" label={t("sales.metricConfirmedOrders")} value={orders.metrics.confirmed || 0} />
+        <ModuleMetric icon={<Truck className="h-4 w-4 text-amber-500" />} className="border-l-amber-500" label={t("sales.metricPartial")} value={orders.metrics.partial || 0} />
       </ModuleMetrics>
       <ModuleToolbar
         search={<ProfessionalSearch value={search} onChange={(value) => { setSearch(value); setPage(1); }} placeholder={t("sales.search")} />}
-        controls={<><ProfessionalTabs value={tab} onChange={(value) => { setTab(value); setStatus(""); setPage(1); }} items={[{ id: "QUOTES", label: t("sales.quotes"), count: quotes.pagination.total }, { id: "ORDERS", label: t("sales.orders"), count: orders.pagination.total }]} /><NativeSelect value={status} onChange={(value) => { setStatus(value); setPage(1); }} items={[{ id: "", label: t("sales.allStatuses") }, ...statusItems]} /></>}
+        density="compact"
+        controls={<ProfessionalTabs value={tab} onChange={(value) => { setTab(value); setStatus(""); setPage(1); }} items={[{ id: "QUOTES", label: t("sales.quotes"), count: quotes.pagination.total }, { id: "ORDERS", label: t("sales.orders"), count: orders.pagination.total }]} />}
+        activeFilters={<div className="grid min-w-0 gap-3">
+          <div data-horizontal-rail className="-mx-1 flex min-w-0 max-w-full touch-pan-x gap-1.5 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" aria-label={t("sales.statusRail")}>
+            {[{ id: "", label: t("sales.allStatuses") }, ...statusItems].map((option) => <button key={option.id || "all"} type="button" aria-pressed={status === option.id} onClick={() => { setStatus(option.id); setPage(1); }}
+              className={`shrink-0 rounded-full border px-3 py-2 text-xs font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 ${status === option.id ? "border-sky-500 bg-sky-500/15 text-dtsc-blue shadow-sm" : "border-dtsc-border bg-dtsc-surface text-dtsc-muted hover:border-sky-500/40 hover:text-dtsc-ink"}`}>{option.label}</button>)}
+          </div>
+          <div className="flex min-w-0 flex-wrap items-end justify-between gap-3">
+            <FinanceDateFilter locale={locale} from={dateFrom} to={dateTo} onChange={(from, to) => { setDateFrom(from); setDateTo(to); setPage(1); }} />
+            <FinanceExportControls endpoint={`/api/enterprise/${organizationId}/${tab === "QUOTES" ? "quotes" : "sales-orders"}`} organizationName={organizationName}
+              title={tab === "QUOTES" ? t("sales.quotesTitle") : t("sales.ordersTitle")} locale={locale} filters={activeFilters} columns={exportColumns}
+              subtitleFr="DTSC Platform · Chaîne commerciale, devis et livraisons" subtitleEn="DTSC Platform · Commercial quotes and fulfillment" />
+          </div>
+        </div>}
         summary={t("sales.toolbarSummary")}
       />
-      <ModuleContent>
+      <ModuleContent density="compact">
+        <nav aria-label={t("sales.connectedModules")} className="flex min-w-0 max-w-full flex-wrap items-center gap-2 rounded-xl border border-cyan-500/20 bg-cyan-500/5 px-3 py-2 text-xs">
+          <span className="font-black text-dtsc-ink">{t("sales.connectedModules")}</span>
+          {([["CRM_CUSTOMERS", "sales.linkCustomers"], ["CATALOG", "sales.linkCatalog"], ["INVENTORY_LOGISTICS", "sales.linkInventory"], ["FINANCE_RECEIVABLES", "sales.linkFinance"]] as const).map(([code, label]) => <Link key={code} href={`/enterprise-modules/${code}`} className="rounded-lg border border-dtsc-border bg-dtsc-surface px-2.5 py-1.5 font-semibold text-dtsc-blue transition hover:border-cyan-500/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400">{t(label)}</Link>)}
+        </nav>
         {message && !createOpen && !fulfillTarget && !quoteActionTarget ? <ProfessionalError message={message} /> : null}
         <ModuleSection title={tab === "QUOTES" ? t("sales.quotesTitle") : t("sales.ordersTitle")} description={tab === "QUOTES" ? t("sales.quotesDescription") : t("sales.ordersDescription")}>
           {activeCollection.error ? <ProfessionalError message={activeCollection.error} /> : activeCollection.loading ? <ProfessionalLoading /> : tab === "QUOTES" ? (
