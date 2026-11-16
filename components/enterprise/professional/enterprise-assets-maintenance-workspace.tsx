@@ -27,7 +27,8 @@ import { useToastMessage } from "@/components/ui/use-toast-message";
 import { BusinessList, BusinessListItem } from "@/components/workspace/business-list";
 import { ContextActions, type BusinessContextAction } from "@/components/workspace/context-actions";
 import { EmptyState } from "@/components/workspace/empty-state";
-import { ModuleMetric, ModuleMetrics } from "@/components/workspace/module-metrics";
+import { ModuleMetrics } from "@/components/workspace/module-metrics";
+import { ErpDesign2Metric, ErpDesign2RegisterSection, ErpDesign2RegisterTools } from "@/components/enterprise/professional/erp-design2-register";
 import { ModuleContent, ModuleHeader, ModuleSection, ModuleToolbar, ModuleWorkspace } from "@/components/workspace/module-workspace";
 import { StatusBadge } from "@/components/workspace/status-badge";
 import type { EnterpriseModuleDefinition } from "@/lib/enterprise/module-registry";
@@ -67,6 +68,8 @@ export function EnterpriseAssetsMaintenanceWorkspace({ organizationId, organizat
   const tr = (fr: string, en: string) => locale === "en" ? en : fr;
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [page, setPage] = useState(1);
   const [refreshKey, setRefreshKey] = useState(0);
   const [lookups, setLookups] = useState<Lookups>({ employees: [], members: [], departments: [], sites: [], locations: [], suppliers: [], assetCategories: [], purchases: [] });
@@ -111,7 +114,7 @@ export function EnterpriseAssetsMaintenanceWorkspace({ organizationId, organizat
     return () => { active = false; };
   }, [organizationId, locale]);
 
-  const params = useMemo(() => { const value = new URLSearchParams({ page: String(page), pageSize: "25" }); if (search.trim()) value.set("search", search.trim()); if (status) value.set("status", status); return value; }, [page, search, status]);
+  const params = useMemo(() => { const value = new URLSearchParams({ page: String(page), pageSize: "25" }); if (search.trim()) value.set("search", search.trim()); if (status) value.set("status", status); if (dateFrom) value.set("dateFrom", dateFrom); if (dateTo) value.set("dateTo", dateTo); return value; }, [page, search, status, dateFrom, dateTo]);
   const assets = useProfessionalCollection<AssetListItem>({ endpoint: `/api/enterprise/${organizationId}/assets`, params, refreshKey });
   const statusItems = [{ id: "", label: t("assets.allStatuses") }, ...ASSET_STATUSES.map((id) => ({ id, label: professionalErpEnumLabel(locale, "assetStatus", id) }))];
   const conditionItems = ASSET_CONDITIONS.map((id) => ({ id, label: professionalErpEnumLabel(locale, "assetCondition", id) }));
@@ -214,18 +217,33 @@ export function EnterpriseAssetsMaintenanceWorkspace({ organizationId, organizat
   const reviewRequiresComment = Boolean(review && (review.kind === "INCIDENT" || (review.kind === "MAINTENANCE" && review.action === "CANCEL")));
   const departmentName = (id: string | null) => lookups.departments.find((department) => department.id === id)?.[locale === "en" ? "labelEn" : "labelFr"] || lookups.departments.find((department) => department.id === id)?.labelFr || tr("Département", "Department");
 
-  return <ModuleWorkspace>
+  return <ModuleWorkspace density="compact">
     <ModuleHeader eyebrow={t("assets.eyebrow", { organization: organizationName })} title={t("assets.title")} description={`${locale === "en" ? definition.descriptionEn : definition.descriptionFr} ${tr("Le statut de l’actif est synchronisé depuis ses affectations, maintenances et incidents actifs.", "Asset status is synchronized from active assignments, maintenance and incidents.")}`} count={t("assets.count", { count: assets.pagination.total, suffix: assets.pagination.total === 1 ? "" : "s" })} primaryAction={assets.canWrite ? <Button disabled={Boolean(busyAction)} onClick={() => setAssetOpen(true)}><Plus className="h-4 w-4" />{t("assets.newAsset")}</Button> : undefined} />
-    <ModuleMetrics label={t("assets.metrics")}><ModuleMetric label={t("assets.registered")} value={assets.pagination.total} /><ModuleMetric label={t("assets.assigned")} value={assets.metrics.assigned || 0} /><ModuleMetric label={t("assets.inMaintenance")} value={assets.metrics.maintenance || 0} /><ModuleMetric label={t("assets.openIncidents")} value={assets.metrics.openIncidents || 0} /></ModuleMetrics>
-    <ModuleToolbar search={<ProfessionalSearch value={search} onChange={(value) => { setSearch(value); setPage(1); }} placeholder={t("assets.search")} />} controls={<NativeSelect value={status} onChange={(value) => { setStatus(value); setPage(1); }} items={statusItems} />} summary={tr("Registre des actifs, affectations, retours, maintenances et incidents avec historique conservé.", "Register of assets, assignments, returns, maintenance and incidents with preserved history.")} />
-    <ModuleContent>
+    <ModuleMetrics label={t("assets.metrics")}><ErpDesign2Metric tone="sky" label={t("assets.registered")} value={assets.pagination.total} /><ErpDesign2Metric tone="emerald" label={t("assets.assigned")} value={assets.metrics.assigned || 0} /><ErpDesign2Metric tone="amber" label={t("assets.inMaintenance")} value={assets.metrics.maintenance || 0} /><ErpDesign2Metric tone="rose" label={t("assets.openIncidents")} value={assets.metrics.openIncidents || 0} /></ModuleMetrics>
+    <ModuleToolbar search={<ProfessionalSearch value={search} onChange={(value) => { setSearch(value); setPage(1); }} placeholder={t("assets.search")} />} summary={tr("Registre des actifs, affectations, retours, maintenances et incidents avec historique conservé.", "Register of assets, assignments, returns, maintenance and incidents with preserved history.")} />
+    <ModuleContent density="compact">
       {message ? <div role="status" className="rounded-xl border border-dtsc-border bg-dtsc-page px-4 py-3 text-sm font-semibold">{message}</div> : null}
-      <ModuleSection title={t("assets.register")} description={t("assets.registerDescription")}>
-        {assets.error ? <ProfessionalError message={assets.error} /> : assets.loading ? <ProfessionalLoading /> : assets.items.length ? <>
+      <ErpDesign2RegisterSection title={t("assets.register")} description={t("assets.registerDescription")} count={assets.pagination.total}>
+        <ErpDesign2RegisterTools locale={locale} organizationName={organizationName} title={t("assets.register")}
+          endpoint={`/api/enterprise/${organizationId}/assets`} filters={{ search, status, dateFrom, dateTo }}
+          status={status} statuses={statusItems} onStatusChange={(value) => { setStatus(value); setPage(1); }}
+          dateFrom={dateFrom} dateTo={dateTo} onDateChange={(from, to) => { setDateFrom(from); setDateTo(to); setPage(1); }}
+          columns={[
+            { key: "code", labelFr: "Code actif", labelEn: "Asset code", get: (row) => String(row.code || "") },
+            { key: "name", labelFr: "Actif", labelEn: "Asset", get: (row) => String(row.name || "") },
+            { key: "serial", labelFr: "Numéro de série", labelEn: "Serial", get: (row) => String(row.serialNumber || "") },
+            { key: "status", labelFr: "Statut", labelEn: "Status", get: (row) => professionalErpEnumLabel(locale, "assetStatus", String(row.status || "")) },
+            { key: "condition", labelFr: "État", labelEn: "Condition", get: (row) => professionalErpEnumLabel(locale, "assetCondition", String(row.condition || "")) },
+            { key: "category", labelFr: "Catégorie", labelEn: "Category", get: (row) => String((row.category as { name?: string } | null)?.name || "") },
+            { key: "site", labelFr: "Site", labelEn: "Site", get: (row) => String((row.site as { name?: string } | null)?.name || "") },
+            { key: "value", labelFr: "Valeur indicative", labelEn: "Indicative value", get: (row) => Number(row.indicativeValue || 0) },
+            { key: "currency", labelFr: "Devise", labelEn: "Currency", get: (row) => String(row.currency || "") },
+          ]} />
+         {assets.error ? <ProfessionalError message={assets.error} /> : assets.loading ? <ProfessionalLoading /> : assets.items.length ? <>
           <BusinessList ariaLabel={t("assets.registerAria")}>{assets.items.map((asset) => <BusinessListItem key={asset.id} title={`${asset.code} · ${asset.name}`} status={<StatusBadge tone={statusTone(asset.status)}>{professionalErpEnumLabel(locale, "assetStatus", asset.status)}</StatusBadge>} meta={`${asset.category?.name || t("assets.noCategory")} · ${professionalErpEnumLabel(locale, "assetCondition", asset.condition)} · ${professionalErpMoney(asset.indicativeValue, asset.currency, locale)}`} description={`${asset.site?.name || t("assets.noSite")}${asset.serialNumber ? ` · ${t("assets.serial", { serial: asset.serialNumber })}` : ""} · ${t("assets.maintenanceCount", { count: asset._count.maintenanceRecords, suffix: asset._count.maintenanceRecords === 1 ? "" : "s" })} · ${t("assets.incidentCount", { count: asset._count.incidents, suffix: asset._count.incidents === 1 ? "" : "s" })}`} onOpen={() => void openAsset(asset)} openLabel={t("assets.openAsset", { code: asset.code })} actions={<ContextActions label={t("assets.assetActions")} actions={actionsFor(asset)} />} />)}</BusinessList>
           <ProfessionalPager pagination={assets.pagination} onPageChange={setPage} locale={locale} />
         </> : <EmptyState compact title={t("assets.noAsset")} description={t("assets.noAssetDescription")} />}
-      </ModuleSection>
+      </ErpDesign2RegisterSection>
       <ProfessionalHelp moduleCode="ASSETS_MAINTENANCE" />
     </ModuleContent>
 
