@@ -397,5 +397,13 @@
   "purchases.export.amount": "Amount",
   "purchases.export.created": "Created",
   "purchases.action.print": "Print commercial copy",
-  "purchases.action.previewA4": "A4 preview / Print"
+  "purchases.action.previewA4": "A4 preview / Print",
+  "reports.filter.search": "Smart search",
+  "reports.filter.family": "Report family",
+  "reports.filter.from": "Generated from",
+  "reports.filter.to": "Generated through",
+  "reports.filter.clear": "Clear filters",
+  "reports.filter.statusRail": "Report status filters",
+  "reports.filter.allStatuses": "All statuses",
+  "reports.filter.dateHelp": "Date filters refer to report generation, not the accounting period represented inside a report."
 }
