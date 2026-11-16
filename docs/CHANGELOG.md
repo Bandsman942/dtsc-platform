@@ -1,3 +1,13 @@
+## 2026-11-16 — ERP P1 #1198 — v1.21.0 candidate, attente E2E propriétaire
+
+- **Hotfix devis** : corrige la `PrismaClientValidationError` `Unknown argument organizationId` dans les nested writes `EnterpriseQuoteItem` et `EnterpriseSalesOrderItem` lors de la création/conversion. La clé tenant est héritée de la relation parente et les contrôles client/catalogue restent obligatoires. QA PostgreSQL réel avec 2 lignes et total 629 100 CDF, transaction volontairement annulée.
+- **Tiers, prospects et clients** : KPI colorés, statut actif/inactif, filtres dates, exports professionnels et liens CRM/contrats/devis ; gestion des consentements préservée.
+- **Produits et services** : Design 2.0 produits/services, filtres date/statut, prix/SKU/catégorie, imports/templates préservés, exports CSV/XLSX/PDF ; stock, lots et péremptions exclusivement dans le module Stock.
+- **Prospects et opportunités** : pipeline et statut par étape, recherche du client canonique, dates, export des prospects et opportunités avec devise, probabilité et suivi.
+- **Contrats commerciaux** : 8 statuts pilotés par le serveur, dates de création, exports contrat/contrepartie/échéance/version, validation indépendante et pièces privées préservées.
+- **Télécom & forfaits** : historique paginé et filtré par serveur et non échantillon dashboard, dates de recharge, statuts, exports opérateur/coût/marge par devise, téléphone masqué, sans nouveau posting Finance.
+- **Sécurité et livraison** : filtrage tenant/RBAC et 1000 lignes max par export ; composant de filtre partagé Design 2.0 ; aucune migration, nouvelle variable ou double comptabilité. Documentation `docs/ERP_COMMERCIAL_DESIGN2_1198.md`, scénario `docs/OWNER_E2E_1198_COMMERCIAL_DESIGN2.md`. **Issue #1196 stock non Retail maintenue hors scope.** Pas de merge ni production avant E2E final BON et Quality Gates vertes.
+
 ## 2026-11-16 — ERP Ventes #1195 — v1.20.0 candidate (E2E propriétaire requis)
 
 - **Design DTSC 2.0** : registre « Devis, commandes et livraisons » compact, états colorés, barres de statuts tactiles, métriques adaptatives, recherche de clients dans le référentiel commun, dates exactes et intervalles, pagination accessible.

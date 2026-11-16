@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import { financeBusinessDateRange } from "@/lib/enterprise/accounting/http";
 import { NextResponse } from "next/server";
 import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
@@ -9,6 +10,7 @@ import { retailFailureOutcome, retailPendingOutcome, retailSuccessOutcome } from
 import { createConnectedTelcoTopupOperation } from "@/lib/enterprise/retail/operator-orchestration";
 import { telcoTopupCreateSchema } from "@/lib/enterprise/retail/schemas";
 import { createTelcoTopupWithPosting } from "@/lib/enterprise/retail/service";
+import { retailFinanceReadSiteScope } from "@/lib/enterprise/retail/site-access";
 import { prisma } from "@/lib/prisma";
 
 type Params = { params: Promise<{ organizationId: string }> };
@@ -18,19 +20,38 @@ export async function GET(req: Request, { params }: Params) {
   const { organizationId } = await params;
   const auth = await authorizeRetailRequest(req, organizationId, "TELCO_TOPUPS", "read");
   if (!auth.ok) return auth.response;
+  // RETAIL store-isolated staff cannot export another boutique's operator
+  // transactions. The topup has no siteId: attribute it only via its
+  // canonical tender financial account's siteId, never by client-side hints.
+  let visibleSites: Awaited<ReturnType<typeof retailFinanceReadSiteScope>>;
+  try { visibleSites = await retailFinanceReadSiteScope(organizationId, auth.session.userId, "VIEW_SALES"); }
+  catch (error) { return retailErrorResponse(error, "RETAIL_SITE_ACCESS_DENIED"); }
+  const permittedTenderAccountIds = visibleSites === null ? null : (await prisma.enterpriseFinancialAccount.findMany({
+    where: { organizationId, siteId: { in: visibleSites }, archivedAt: null },
+    select: { id: true },
+  })).map((item) => item.id);
   const { page, pageSize, status, providerCode, search, from, to } = retailListParams(req);
+  const dates = financeBusinessDateRange(req);
+  if (!dates.ok) return dates.response;
+  if (search.length > 120) return NextResponse.json({ error: "TELCO_SEARCH_TOO_LONG", message: "Limitez la recherche à 120 caractères." }, { status: 400 });
+  if (status && !["SUCCESS", "FAILED", "REVERSED"].includes(status)) {
+    return NextResponse.json({ error: "TELCO_STATUS_INVALID", message: "Choisissez un statut Télécom valide." }, { status: 400 });
+  }
+  const effectiveFrom = dates.from || from;
+  const effectiveTo = dates.to || to;
   const where: Prisma.EnterpriseTelcoTopupWhereInput = {
     organizationId,
+    ...(permittedTenderAccountIds !== null ? { tenderFinancialAccountId: { in: permittedTenderAccountIds } } : {}),
     ...(status ? { status } : {}),
     ...(providerCode ? { providerCode } : {}),
-    ...(from || to ? { occurredAt: { ...(from ? { gte: from } : {}), ...(to ? { lte: to } : {}) } } : {}),
+    ...(effectiveFrom || effectiveTo ? { occurredAt: { ...(effectiveFrom ? { gte: effectiveFrom } : {}), ...(effectiveTo ? { lte: effectiveTo } : {}) } } : {}),
     ...(search ? { OR: [{ number: { contains: search, mode: "insensitive" } }, { offerLabel: { contains: search, mode: "insensitive" } }, { externalReference: { contains: search, mode: "insensitive" } }, { destinationPhone: { contains: search } }] } : {}),
   };
   const [items, total] = await Promise.all([
     prisma.enterpriseTelcoTopup.findMany({ where, orderBy: { occurredAt: "desc" }, skip: (page - 1) * pageSize, take: pageSize }),
     prisma.enterpriseTelcoTopup.count({ where }),
   ]);
-  const masked = items.map((item) => ({ ...item, destinationPhone: item.destinationPhone.length > 6 ? `${item.destinationPhone.slice(0, 4)}••••${item.destinationPhone.slice(-3)}` : item.destinationPhone }));
+  const masked = items.map((item) => { const phone = item.destinationPhone.length > 6 ? `${item.destinationPhone.slice(0, 4)}••••${item.destinationPhone.slice(-3)}` : item.destinationPhone; return { ...item, destinationPhone: phone, destinationPhoneMasked: phone }; });
   await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "telco-topups", page } });
   return NextResponse.json({ items: masked, pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) } });
 }

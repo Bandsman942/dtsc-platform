@@ -2,6 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode, type SelectHTMLAttributes } from "react";
 import { CheckCircle2, RadioTower, RefreshCw, RotateCcw, Settings2 } from "lucide-react";
+import { CommercialDesign2Controls, CommercialDesign2Connections } from "@/components/enterprise/professional/commercial-design2-controls";
+import type { FinanceExportColumn } from "@/components/enterprise/professional/finance-design2-controls";
+import { ProfessionalError, ProfessionalLoading, ProfessionalSearch, useProfessionalCollection } from "@/components/enterprise/professional/professional-erp-ui";
 import { useAppLocale } from "@/components/i18n/locale-provider";
 import { formatEnterpriseDate } from "@/components/enterprise/core-v2/erp-v2-ui";
 import {
@@ -272,7 +275,7 @@ export function TelcoTopupsWorkspace({
           context.setRefreshKey((value) => value + 1);
         };
         if (context.tab === "HISTORY") {
-          return <TelcoHistory organizationId={organizationId} dashboard={dashboard} locale={locale} busyAction={context.busyAction} mutate={context.mutate} />;
+          return <TelcoHistory organizationId={organizationId} organizationName={organizationName} dashboard={dashboard} locale={locale} busyAction={context.busyAction} refreshKey={context.refreshKey} mutate={context.mutate} />;
         }
         if (context.tab === "CONFIG") {
           return <TelcoConfigurationPanel organizationId={organizationId} dashboard={dashboard} locale={locale} configuration={configuration} configurationBusy={configurationBusy} configurationError={configurationError} reload={reload} busyAction={context.busyAction} mutate={context.mutate} />;
@@ -666,19 +669,56 @@ function ReviewItem({ label, value }: { label: string; value: string }) {
 
 function TelcoHistory({
   organizationId,
+  organizationName,
   dashboard,
   locale,
   busyAction,
+  refreshKey,
   mutate,
 }: {
   organizationId: string;
+  organizationName: string;
   dashboard: TelcoDashboard;
   locale: "fr" | "en";
   busyAction: string | null;
+  refreshKey: number;
   mutate: RetailMutation;
 }) {
   const copy = COPY[locale];
-  const items = dashboard.recent.topups || [];
+  const [search, setSearch] = useState("");
+  const [recordStatus, setRecordStatus] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [page, setPage] = useState(1);
+  const params = useMemo(() => {
+    const value = new URLSearchParams({ page: String(page), pageSize: "30" });
+    if (search.trim()) value.set("search", search.trim());
+    if (recordStatus) value.set("status", recordStatus);
+    if (dateFrom) value.set("dateFrom", dateFrom);
+    if (dateTo) value.set("dateTo", dateTo);
+    return value;
+  }, [page, search, recordStatus, dateFrom, dateTo]);
+  // History and exported rows come from the same authenticated, tenant-scoped
+  // Retail endpoint. Dashboard.recent is only a small operational sample.
+  const collection = useProfessionalCollection<TelcoTopup>({
+    endpoint: `/api/enterprise/${organizationId}/retail/telco-topups`,
+    params, refreshKey,
+  });
+  const items = collection.items;
+  const exportFilters = { search, status: recordStatus, dateFrom, dateTo };
+  const exportColumns: FinanceExportColumn[] = [
+    { key: "number", labelFr: "Référence", labelEn: "Reference", get: row => String(row.number || "") },
+    { key: "provider", labelFr: "Opérateur", labelEn: "Provider", get: row => String(row.providerCode || "") },
+    { key: "offer", labelFr: "Offre ou forfait", labelEn: "Offer / bundle", get: row => String(row.offerLabel || "") },
+    { key: "phone", labelFr: "Téléphone masqué", labelEn: "Masked phone", get: row => String(row.destinationPhoneMasked || "") },
+    { key: "status", labelFr: "Statut", labelEn: "Status", get: row => customerFacingStatusLabel(String(row.status || ""), locale) },
+    { key: "sale", labelFr: "Prix de vente", labelEn: "Sale amount", get: row => Number(row.saleAmount || 0) },
+    { key: "cost", labelFr: "Coût opérateur", labelEn: "Operator cost", get: row => Number(row.operatorCost || 0) },
+    { key: "margin", labelFr: "Marge", labelEn: "Margin", get: row => Number(row.marginAmount || 0) },
+    { key: "currency", labelFr: "Devise", labelEn: "Currency", get: row => String(row.currencyCode || "") },
+    { key: "operatorReference", labelFr: "Référence opérateur", labelEn: "Operator reference", get: row => String(row.externalReference || "") },
+    { key: "date", labelFr: "Date de l'opération", labelEn: "Operation date", get: row => String(row.occurredAt || "").slice(0, 19) },
+  ];
   const [reversal, setReversal] = useState<ReversalDraft | null>(null);
   const [reason, setReason] = useState("");
   const [reasonError, setReasonError] = useState("");
@@ -706,9 +746,27 @@ function TelcoHistory({
   }
 
   return (
-    <div className="grid min-w-0 gap-5">
-      <ModuleSection title={copy.history}>
-        {items.length ? (
+    <div className="grid min-w-0 gap-3">
+      <CommercialDesign2Connections locale={locale} items={[
+        { module: "RETAIL_POS", labelFr: "Point de vente", labelEn: "Point of sale" },
+        { module: "CATALOG", labelFr: "Offres du catalogue", labelEn: "Catalog offers" },
+        { module: "FINANCE_TREASURY", labelFr: "Trésorerie", labelEn: "Treasury" },
+        { module: "FINANCE_CASH", labelFr: "Caisses", labelEn: "Cash" },
+      ]} />
+      <section data-telco-history-design2 className="grid min-w-0 gap-3 rounded-2xl border border-dtsc-border bg-dtsc-surface p-3 shadow-sm sm:p-4">
+        <h2 className="border-l-[3px] border-cyan-500 pl-3 text-lg font-black text-dtsc-ink">{copy.history}
+          <span className="ml-2 rounded-full bg-cyan-500/10 px-2 py-1 text-xs text-dtsc-blue">{collection.pagination.total}</span>
+        </h2>
+        <ProfessionalSearch value={search} onChange={(value) => { setSearch(value); setPage(1); }}
+          placeholder={locale === "en" ? "Reference, offer, provider or phone…" : "Référence, forfait, opérateur ou téléphone…"} />
+        <CommercialDesign2Controls locale={locale} organizationName={organizationName} title={copy.history}
+          endpoint={`/api/enterprise/${organizationId}/retail/telco-topups`} filters={exportFilters} columns={exportColumns}
+          from={dateFrom} to={dateTo} onDateChange={(from, to) => { setDateFrom(from); setDateTo(to); setPage(1); }}
+          status={recordStatus} onStatusChange={(next) => { setRecordStatus(next); setPage(1); }}
+          choices={[{ id: "", label: locale === "en" ? "All statuses" : "Tous les statuts" }, ...["SUCCESS", "FAILED", "REVERSED"].map(id => ({ id, label: customerFacingStatusLabel(id, locale) }))]}
+          noteFr="Historique complet, filtré par le serveur avant pagination. Montants par devise d’origine ; aucun mélange ni conversion implicite."
+          noteEn="Full server-filtered history before pagination. Amounts keep their original currencies; no implicit conversion." />
+        {collection.error ? <ProfessionalError message={collection.error} /> : collection.loading ? <ProfessionalLoading /> : items.length ? (
           <BusinessList ariaLabel={copy.history}>
             {items.map((item: TelcoTopup) => (
               <BusinessListItem
@@ -722,7 +780,12 @@ function TelcoHistory({
             ))}
           </BusinessList>
         ) : <EmptyState compact title={copy.noTopup} description={copy.noTopupDescription} />}
-      </ModuleSection>
+        <div className="flex min-w-0 items-center justify-between gap-2">
+          <Button type="button" variant="outline" disabled={page <= 1 || collection.loading} onClick={() => setPage(value => Math.max(1, value - 1))}>{locale === "en" ? "Previous" : "Précédent"}</Button>
+          <span className="text-xs font-semibold text-dtsc-muted">{locale === "en" ? "Page" : "Page"} {collection.pagination.page} / {collection.pagination.pageCount}</span>
+          <Button type="button" variant="outline" disabled={page >= collection.pagination.pageCount || collection.loading} onClick={() => setPage(value => value + 1)}>{locale === "en" ? "Next" : "Suivant"}</Button>
+        </div>
+      </section>
 
       <Dialog
         open={Boolean(reversal)}

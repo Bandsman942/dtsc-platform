@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { getEnterpriseCommonDomainAccess } from "@/lib/enterprise/common/access";
+import { financeBusinessDateRange } from "@/lib/enterprise/accounting/http";
 import { enterpriseDomainErrorResponse } from "@/lib/enterprise/common/http";
 import { opportunityCreateSchema } from "@/lib/enterprise/crm-sales/schemas";
 import { createEnterpriseOpportunity } from "@/lib/enterprise/crm-sales/service";
@@ -24,13 +25,29 @@ export async function GET(req: Request, { params }: Params) {
   const page = Math.max(1, Number(url.searchParams.get("page") || 1) || 1);
   const pageSize = Math.min(50, Math.max(5, Number(url.searchParams.get("pageSize") || 20) || 20));
   const search = url.searchParams.get("search")?.trim() || "";
+  const dates = financeBusinessDateRange(req);
+  if (!dates.ok) return dates.response;
+  if (search.length > 120) return NextResponse.json({ error: "SEARCH_TOO_LONG", message: "Limitez la recherche à 120 caractères." }, { status: 400 });
   const status = url.searchParams.get("status")?.trim().toUpperCase() || "";
   const ownerUserId = url.searchParams.get("ownerUserId")?.trim() || "";
   const businessPartyId = url.searchParams.get("businessPartyId")?.trim() || "";
+  // Include matching canonical customer names without widening the tenant boundary.
+  const customerMatches = search ? await prisma.enterpriseBusinessParty.findMany({
+    where: { organizationId, archivedAt: null, OR: [
+      { legalName: { contains: search, mode: "insensitive" } },
+      { displayName: { contains: search, mode: "insensitive" } },
+      { code: { contains: search, mode: "insensitive" } },
+    ] }, select: { id: true }, take: 1001,
+  }) : [];
+  if (customerMatches.length > 1000) return NextResponse.json({
+    error: "COMMERCIAL_SEARCH_TOO_BROAD", message: "Trop de clients correspondent. Affinez votre recherche.",
+  }, { status: 422 });
+  const customerIds = customerMatches.map((item) => item.id);
   const where: Prisma.EnterpriseOpportunityWhereInput = {
+    ...((dates.from || dates.to) ? { createdAt: { ...(dates.from ? { gte: dates.from } : {}), ...(dates.to ? { lte: dates.to } : {}) } } : {}),
     organizationId,
     archivedAt: null,
-    ...(search ? { OR: [{ name: { contains: search, mode: "insensitive" } }, { reference: { contains: search, mode: "insensitive" } }] } : {}),
+    ...(search ? { OR: [{ name: { contains: search, mode: "insensitive" } }, { reference: { contains: search, mode: "insensitive" } }, ...(customerIds.length ? [{ businessPartyId: { in: customerIds } }] : [])] } : {}),
     ...(status ? { status } : {}),
     ...(ownerUserId ? { ownerUserId } : {}),
     ...(businessPartyId ? { businessPartyId } : {}),

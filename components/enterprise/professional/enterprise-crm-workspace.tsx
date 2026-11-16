@@ -5,6 +5,9 @@ import { BriefcaseBusiness, Eye, Plus, RefreshCcw, UserRound } from "lucide-reac
 import { EnterpriseIdentityLinkChoice, type EnterpriseIdentityLinkChoiceValue } from "@/components/enterprise/identity-links/identity-link-choice";
 import { currencyChoices, Field, NativeSelect } from "@/components/enterprise/core-v2/erp-v2-ui";
 import { commercialHotfixCopy } from "@/components/enterprise/professional/commercial-hotfix-copy";
+import { CommercialDesign2Controls, CommercialDesign2Connections } from "@/components/enterprise/professional/commercial-design2-controls";
+import type { FinanceExportColumn } from "@/components/enterprise/professional/finance-design2-controls";
+import { LEAD_STATUSES } from "@/lib/enterprise/crm-sales/constants";
 import { publishEnterpriseCrmUpdate, subscribeEnterpriseCrmUpdates } from "@/lib/enterprise/crm-sales/client-sync";
 import { professionalMutation, ProfessionalError, ProfessionalFormSection, ProfessionalHelp, ProfessionalLoading, ProfessionalSearch, ProfessionalTabs, useProfessionalCollection } from "@/components/enterprise/professional/professional-erp-ui";
 import { professionalErpDate, professionalErpEnumLabel, professionalErpMoney, professionalErpT, useProfessionalErpLocale } from "@/components/enterprise/professional/professional-erp-i18n";
@@ -71,6 +74,9 @@ export function EnterpriseCrmWorkspace({ organizationId, organizationName, defin
   };
   const [view, setView] = useState("PIPELINE");
   const [search, setSearch] = useState("");
+  const [recordStatus, setRecordStatus] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [page, setPage] = useState(1);
   const [refreshKey, setRefreshKey] = useState(0);
   const [lookups, setLookups] = useState<Lookups>({ members: [], departments: [], parties: [], currencies: [] });
@@ -115,13 +121,31 @@ export function EnterpriseCrmWorkspace({ organizationId, organizationName, defin
     return () => { active = false; };
   }, [organizationId, refreshKey, locale]);
 
-  const params = useMemo(() => { const value = new URLSearchParams({ page: String(page), pageSize: "50" }); if (search.trim()) value.set("search", search.trim()); return value; }, [page, search]);
-  const leads = useProfessionalCollection<Lead>({ endpoint: `/api/enterprise/${organizationId}/leads`, params, refreshKey });
-  const opportunities = useProfessionalCollection<Opportunity>({ endpoint: `/api/enterprise/${organizationId}/opportunities`, params, refreshKey });
+  const baseParams = useMemo(() => { const value = new URLSearchParams({ page: String(page), pageSize: "50" }); if (search.trim()) value.set("search", search.trim()); if (dateFrom) value.set("dateFrom", dateFrom); if (dateTo) value.set("dateTo", dateTo); return value; }, [page, search, dateFrom, dateTo]);
+  const leadParams = useMemo(() => { const value = new URLSearchParams(baseParams); if (recordStatus && view === "LEADS") value.set("status", recordStatus); return value; }, [baseParams, recordStatus, view]);
+  const opportunityParams = useMemo(() => { const value = new URLSearchParams(baseParams); if (recordStatus && view !== "LEADS") value.set("status", recordStatus); return value; }, [baseParams, recordStatus, view]);
+  const leads = useProfessionalCollection<Lead>({ endpoint: `/api/enterprise/${organizationId}/leads`, params: leadParams, refreshKey });
+  const opportunities = useProfessionalCollection<Opportunity>({ endpoint: `/api/enterprise/${organizationId}/opportunities`, params: opportunityParams, refreshKey });
   useEffect(() => subscribeEnterpriseCrmUpdates(organizationId, () => setRefreshKey((value) => value + 1)), [organizationId]);
   const canWrite = leads.canWrite || opportunities.canWrite;
   const grouped = useMemo(() => Object.fromEntries(STAGES.map((stage) => [stage, opportunities.items.filter((item) => item.status === stage)])) as Record<string, Opportunity[]>, [opportunities.items]);
-  const visibleValue = opportunities.items.reduce((sum, item) => sum + Number(item.estimatedValue || 0), 0);
+  // A mixed USD/CDF pipeline cannot be displayed as a single amount.
+  const visibleTotalsByCurrency = useMemo(() => {
+    const totals = new Map<string, number>();
+    for (const item of opportunities.items) {
+      const code = (item.currency || "").trim().toUpperCase() || "—";
+      totals.set(code, (totals.get(code) || 0) + Number(item.estimatedValue || 0));
+    }
+    return [...totals.entries()].sort(([a], [b]) => a.localeCompare(b));
+  }, [opportunities.items]);
+  const visibleValueLabel = visibleTotalsByCurrency.length > 1
+    ? (locale === "en" ? "Multiple currencies" : "Plusieurs devises")
+    : visibleTotalsByCurrency.length === 1
+      ? professionalErpMoney(visibleTotalsByCurrency[0][1], visibleTotalsByCurrency[0][0], locale)
+      : professionalErpMoney(0, null, locale);
+  const visibleValueBreakdown = visibleTotalsByCurrency.length > 1
+    ? visibleTotalsByCurrency.map(([currency, amount]) => professionalErpMoney(amount, currency, locale)).join(" · ")
+    : undefined;
   const currencies = lookups.currencies.length ? lookups.currencies.map((code) => ({ id: code, label: code })) : currencyChoices(locale);
   const sources = SOURCES.map((code) => ({ id: code, label: professionalErpEnumLabel(locale, "source", code) }));
 
@@ -239,11 +263,38 @@ export function EnterpriseCrmWorkspace({ organizationId, organizationName, defin
   const views = [{ id: "PIPELINE", label: t("crm.viewPipeline"), count: opportunities.pagination.total }, { id: "OPPORTUNITIES", label: t("crm.viewOpportunities"), count: opportunities.pagination.total }, { id: "LEADS", label: t("crm.viewLeads"), count: leads.pagination.total }];
   const activePages = view === "LEADS" ? leads.pagination : opportunities.pagination;
 
-  return <ModuleWorkspace>
+  const statusChoices = view === "LEADS" ? LEAD_STATUSES : STAGES;
+  const activeExportEndpoint = `/api/enterprise/${organizationId}/${view === "LEADS" ? "leads" : "opportunities"}`;
+  const exportFilters = { search, status: recordStatus, dateFrom, dateTo };
+  const exportColumns: FinanceExportColumn[] = [
+    { key: "reference", labelFr: "Référence", labelEn: "Reference", get: row => String(row.reference || "") },
+    { key: "customer", labelFr: "Tiers / prospect", labelEn: "Customer / lead", get: row => {
+      const party = row.businessParty as { displayName?: string | null; legalName?: string } | null;
+      return party?.displayName || party?.legalName || String(row.displayName || row.legalName || "");
+    } },
+    { key: "subject", labelFr: "Objet / nom", labelEn: "Subject / name", get: row => String(row.name || row.companyName || row.legalName || "") },
+    { key: "status", labelFr: "Statut", labelEn: "Status", get: row => professionalErpEnumLabel(locale, view === "LEADS" ? "leadStatus" : "opportunityStage", String(row.status || "")) },
+    { key: "amount", labelFr: "Valeur indicative", labelEn: "Estimated value", get: row => Number(row.estimatedValue ?? row.expectedValue ?? 0) },
+    { key: "currency", labelFr: "Devise", labelEn: "Currency", get: row => String(row.currency || "") },
+    { key: "probability", labelFr: "Probabilité (%)", labelEn: "Probability (%)", get: row => Number(row.probabilityPercent || 0) },
+    { key: "next", labelFr: "Prochaine action", labelEn: "Next action", get: row => String(row.nextAction || "") },
+    { key: "created", labelFr: "Création", labelEn: "Created", get: row => String(row.createdAt || "").slice(0, 10) },
+  ];
+  return <ModuleWorkspace density="compact">
     <ModuleHeader eyebrow={t("crm.eyebrow", { organization: organizationName })} title={t("crm.title")} description={locale === "en" ? definition.descriptionEn : definition.descriptionFr} count={t("crm.opportunityCount", { count: opportunities.pagination.total, suffix: opportunities.pagination.total === 1 ? "" : "s" })} primaryAction={canWrite ? <div className="flex flex-wrap gap-2"><Button variant="outline" onClick={() => { resetFeedback(); setLeadMode("NEW"); setLeadPartyType("PERSON"); setLeadPartyId(""); setCreateKind("LEAD"); }}><UserRound className="h-4 w-4" />{t("crm.newLead")}</Button><Button onClick={() => { resetFeedback(); setCreateKind("OPPORTUNITY"); }}><Plus className="h-4 w-4" />{t("crm.newOpportunity")}</Button></div> : undefined} />
-    <ModuleMetrics label={t("crm.metricsLabel")}><ModuleMetric label={t("crm.metricOpenPipeline")} value={opportunities.metrics.open || 0} /><ModuleMetric label={t("crm.metricVisibleValue")} value={professionalErpMoney(visibleValue, opportunities.items.find((item) => item.currency)?.currency, locale)} /><ModuleMetric label={t("crm.metricProposals")} value={opportunities.metrics.proposal || 0} /><ModuleMetric label={t("crm.metricWon")} value={opportunities.metrics.won || 0} /></ModuleMetrics>
-    <ModuleToolbar search={<ProfessionalSearch value={search} onChange={(value) => { setSearch(value); setPage(1); }} placeholder={t("crm.searchPlaceholder")} />} controls={<ProfessionalTabs value={view} onChange={(value) => { setView(value); setPage(1); }} items={views} label={t("crm.viewsLabel")} />} summary={t("common.pageOf", { page: activePages.page, pageCount: activePages.pageCount })} />
-    <ModuleContent>
+    <ModuleMetrics label={t("crm.metricsLabel")}><ModuleMetric className="border-l-sky-500" icon={<BriefcaseBusiness className="h-4 w-4 text-sky-500" />} label={t("crm.metricOpenPipeline")} value={opportunities.metrics.open || 0} /><ModuleMetric className="border-l-indigo-500" label={t("crm.metricVisibleValue")} value={visibleValueLabel} hint={visibleValueBreakdown} /><ModuleMetric className="border-l-amber-500" icon={<Eye className="h-4 w-4 text-amber-500" />} label={t("crm.metricProposals")} value={opportunities.metrics.proposal || 0} /><ModuleMetric className="border-l-emerald-500" icon={<BriefcaseBusiness className="h-4 w-4 text-emerald-500" />} label={t("crm.metricWon")} value={opportunities.metrics.won || 0} /></ModuleMetrics>
+    <ModuleToolbar density="compact" search={<ProfessionalSearch value={search} onChange={(value) => { setSearch(value); setPage(1); }} placeholder={t("crm.searchPlaceholder")} />}
+      controls={<ProfessionalTabs value={view} onChange={(value) => { setView(value); setRecordStatus(""); setPage(1); }} items={views} label={t("crm.viewsLabel")} />}
+      activeFilters={<CommercialDesign2Controls locale={locale} organizationName={organizationName} title={t("crm.title")}
+        endpoint={activeExportEndpoint} filters={exportFilters} columns={exportColumns}
+        from={dateFrom} to={dateTo} onDateChange={(from, to) => { setDateFrom(from); setDateTo(to); setPage(1); }}
+        status={recordStatus} onStatusChange={(next) => { setRecordStatus(next); setPage(1); }}
+        choices={[{ id: "", label: locale === "en" ? "All stages" : "Toutes les étapes" }, ...statusChoices.map(id => ({ id, label: view === "LEADS" ? professionalErpEnumLabel(locale, "leadStatus", id) : stageLabel(id) }))]}
+        noteFr="Le pipeline s’appuie sur les tiers du CRM. Les devis, contrats et factures restent dans leurs modules respectifs."
+        noteEn="Pipeline records use the canonical CRM parties. Quotes, contracts and invoices stay in their respective modules." />}
+      summary={t("common.pageOf", { page: activePages.page, pageCount: activePages.pageCount })} />
+    <ModuleContent density="compact">
+      <CommercialDesign2Connections locale={locale} items={[{ module: "CRM_CUSTOMERS", labelFr: "Tiers & clients", labelEn: "Parties & customers" }, { module: "SALES_QUOTES_ORDERS", labelFr: "Devis & commandes", labelEn: "Quotes & orders" }, { module: "CONTRACTS", labelFr: "Contrats", labelEn: "Contracts" }]} />
       {message && !createKind && !lostLead && !lostOpportunity && !conversion ? <ProfessionalError message={message} /> : null}
       {view === "PIPELINE" ? <ModuleSection title={t("crm.pipelineTitle")} description={t("crm.pipelineDescription")}><p className="mb-3 rounded-xl border border-dtsc-border bg-dtsc-soft px-4 py-3 text-sm text-dtsc-muted">{hotfix.pipelinePageNotice}</p>{opportunities.loading ? <ProfessionalLoading /> : opportunities.error ? <ProfessionalError message={opportunities.error} /> : <div className="flex max-w-full snap-x gap-4 overflow-x-auto pb-3">{STAGES.map((stage) => <section key={stage} className="w-[min(88vw,21rem)] shrink-0 snap-start border-t-4 border-dtsc-blue bg-dtsc-surface p-3"><h3 className="font-black text-dtsc-ink">{stageLabel(stage)}</h3><div className="mt-3 grid gap-3">{(grouped[stage] || []).map((item) => <article key={item.id} className="border-y border-dtsc-border bg-dtsc-soft p-3"><button type="button" className="w-full text-left" onClick={() => setDetailOpportunity(item)}><span className="font-black text-dtsc-ink">{item.name}</span><span className="mt-1 block text-xs text-dtsc-muted">{item.businessParty?.displayName || item.businessParty?.legalName || t("common.thirdPartyToReview")}</span><span className="mt-2 block text-xs">{professionalErpMoney(item.estimatedValue, item.currency, locale)} · {item.probabilityPercent}%</span></button>{canWrite ? <div className="mt-3 flex flex-wrap gap-2">{(NEXT_STAGE[item.status] || []).slice(0, 3).map((next) => <Button key={next} size="sm" variant="outline" disabled={busy} onClick={() => next === "LOST" ? setLostOpportunity(item) : void transitionOpportunity(item, next)}>{stageLabel(next)}</Button>)}</div> : null}</article>)}</div></section>)}</div>}</ModuleSection> : null}
       {view === "OPPORTUNITIES" ? <ModuleSection title={t("crm.viewOpportunities")} description={t("crm.opportunityListDescription")}>{opportunities.loading ? <ProfessionalLoading /> : opportunities.error ? <ProfessionalError message={opportunities.error} /> : opportunities.items.length ? <BusinessList ariaLabel={t("crm.opportunitiesAria")}>{opportunities.items.map((item) => <BusinessListItem key={item.id} title={item.name} leading={<BriefcaseBusiness className="h-5 w-5 text-dtsc-blue" />} status={<StatusBadge tone={statusTone(item.status)}>{stageLabel(item.status)}</StatusBadge>} meta={`${item.reference} · ${professionalErpMoney(item.estimatedValue, item.currency, locale)} · ${item.probabilityPercent}%`} description={item.businessParty?.displayName || item.businessParty?.legalName || t("common.thirdPartyToReview")} onOpen={() => setDetailOpportunity(item)} openLabel={t("crm.openNamed", { name: item.name })} actions={<Button size="sm" variant="outline" onClick={() => setDetailOpportunity(item)}><Eye className="h-4 w-4" />{t("common.details")}</Button>} />)}</BusinessList> : <EmptyState compact title={t("crm.noOpportunityTitle")} description={t("crm.noOpportunityDescription")} />}</ModuleSection> : null}

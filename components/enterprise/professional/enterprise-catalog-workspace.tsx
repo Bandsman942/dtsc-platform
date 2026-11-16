@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react
 import { Boxes, Layers3, Pencil, Plus, Ruler, ShoppingBag } from "lucide-react";
 import { currencyChoices, Field, NativeSelect } from "@/components/enterprise/core-v2/erp-v2-ui";
 import { commercialHotfixCopy } from "@/components/enterprise/professional/commercial-hotfix-copy";
+import { CommercialDesign2Controls, CommercialDesign2Connections } from "@/components/enterprise/professional/commercial-design2-controls";
+import type { FinanceExportColumn } from "@/components/enterprise/professional/finance-design2-controls";
 import { CatalogImportControls } from "@/components/enterprise/professional/catalog-import-controls";
 import { ProfessionalError, ProfessionalFormSection, ProfessionalHelp, ProfessionalLoading, ProfessionalSearch, ProfessionalTabs, professionalMutation, useProfessionalCollection } from "@/components/enterprise/professional/professional-erp-ui";
 import { professionalErpDate, professionalErpEnumLabel, professionalErpMoney, professionalErpT, useProfessionalErpLocale, type ProfessionalErpLocale } from "@/components/enterprise/professional/professional-erp-i18n";
@@ -36,6 +38,9 @@ export function EnterpriseCatalogWorkspace({ organizationId, organizationName, d
   const t = useCallback((key: Parameters<typeof professionalErpT>[1], values?: Record<string, string | number>) => professionalErpT(locale, key, values), [locale]);
   const [tab, setTab] = useState("ALL");
   const [search, setSearch] = useState("");
+  const [recordStatus, setRecordStatus] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [page, setPage] = useState(1);
   const [refreshKey, setRefreshKey] = useState(0);
   const [dialogMode, setDialogMode] = useState<"ITEM" | "CATEGORY" | "UNIT" | null>(null);
@@ -61,7 +66,7 @@ export function EnterpriseCatalogWorkspace({ organizationId, organizationName, d
     return () => { active = false; };
   }, [organizationId, refreshKey, reportError, t]);
 
-  const params = useMemo(() => { const value = new URLSearchParams({ page: String(page), pageSize: "20" }); if (search.trim()) value.set("search", search.trim()); if (tab === "PRODUCT" || tab === "SERVICE") value.set("itemType", tab); return value; }, [page, search, tab]);
+  const params = useMemo(() => { const value = new URLSearchParams({ page: String(page), pageSize: "20" }); if (search.trim()) value.set("search", search.trim()); if (tab === "PRODUCT" || tab === "SERVICE") value.set("itemType", tab); if (recordStatus) value.set("status", recordStatus); if (dateFrom) value.set("dateFrom", dateFrom); if (dateTo) value.set("dateTo", dateTo); return value; }, [page, search, tab, recordStatus, dateFrom, dateTo]);
   const collection = useProfessionalCollection<CatalogItem, CatalogExtra>({ endpoint: `/api/enterprise/${organizationId}/catalog`, params, refreshKey });
   const units = useMemo(() => collection.extra.units || [], [collection.extra.units]);
   const categories = collection.extra.categories || [];
@@ -109,14 +114,38 @@ export function EnterpriseCatalogWorkspace({ organizationId, organizationName, d
     catch (error) { reportError(error, t("common.createFailed")); } finally { setBusy(false); }
   }
 
+  const exportFilters = { search, itemType: tab === "PRODUCT" || tab === "SERVICE" ? tab : "", status: recordStatus, dateFrom, dateTo };
+  const exportColumns: FinanceExportColumn[] = [
+    { key: "code", labelFr: "Code", labelEn: "Code", get: row => String(row.code || "") },
+    { key: "sku", labelFr: "Référence produit (SKU)", labelEn: "SKU", get: row => String(row.sku || "") },
+    { key: "name", labelFr: "Désignation", labelEn: "Name", get: row => String(row.name || "") },
+    { key: "type", labelFr: "Type", labelEn: "Type", get: row => professionalErpEnumLabel(locale, "itemType", String(row.itemType || "")) },
+    { key: "category", labelFr: "Catégorie", labelEn: "Category", get: row => String((row.category as { name?: string } | null)?.name || "") },
+    { key: "sale", labelFr: "Prix de vente", labelEn: "Sale price", get: row => Number(row.indicativeSalePrice || 0) },
+    { key: "cost", labelFr: "Coût indicatif", labelEn: "Indicative cost", get: row => Number(row.indicativeCost || 0) },
+    { key: "currency", labelFr: "Devise", labelEn: "Currency", get: row => String(row.currency || "") },
+    { key: "stock", labelFr: "Suivi de stock", labelEn: "Stock tracking", get: row => row.trackInventory ? (locale === "en" ? "Yes" : "Oui") : (locale === "en" ? "No" : "Non") },
+    { key: "status", labelFr: "Statut", labelEn: "Status", get: row => professionalErpEnumLabel(locale, "status", String(row.status || "")) },
+  ];
   const categoriesView = tab === "CATEGORY";
   const unitsView = tab === "UNIT";
-  return <ModuleWorkspace>
+  return <ModuleWorkspace density="compact">
     <ModuleHeader eyebrow={t("catalog.eyebrow", { organization: organizationName })} title={t("catalog.title")} description={locale === "en" ? definition.descriptionEn : definition.descriptionFr} count={t("catalog.count", { count: collection.pagination.total, suffix: collection.pagination.total === 1 ? "" : "s" })} primaryAction={canWrite ? <Button onClick={() => { clearFeedback(); setDialogMode("ITEM"); }}><Plus className="h-4 w-4" />{t("catalog.newItem")}</Button> : undefined} secondaryActions={canWrite ? <><Button variant="outline" onClick={() => { clearFeedback(); setDialogMode("CATEGORY"); }}><Layers3 className="h-4 w-4" />{t("catalog.category")}</Button><Button variant="outline" onClick={openUnitDialog}><Ruler className="h-4 w-4" />{t("catalog.unit")}</Button></> : undefined} />
-    <ModuleMetrics label={t("catalog.metrics")}><ModuleMetric label={t("catalog.activeProducts")} value={collection.metrics.products || 0} /><ModuleMetric label={t("catalog.activeServices")} value={collection.metrics.services || 0} /><ModuleMetric label={t("catalog.stockTracked")} value={collection.metrics.tracked || 0} /><ModuleMetric label={t("catalog.categories")} value={categories.length} /></ModuleMetrics>
+    <ModuleMetrics label={t("catalog.metrics")}><ModuleMetric className="border-l-emerald-500" icon={<ShoppingBag className="h-4 w-4 text-emerald-500" />} label={t("catalog.activeProducts")} value={collection.metrics.products || 0} /><ModuleMetric className="border-l-sky-500" icon={<Boxes className="h-4 w-4 text-sky-500" />} label={t("catalog.activeServices")} value={collection.metrics.services || 0} /><ModuleMetric className="border-l-indigo-500" icon={<Layers3 className="h-4 w-4 text-indigo-500" />} label={t("catalog.stockTracked")} value={collection.metrics.tracked || 0} /><ModuleMetric className="border-l-amber-500" icon={<Ruler className="h-4 w-4 text-amber-500" />} label={t("catalog.categories")} value={categories.length} /></ModuleMetrics>
     <CatalogImportControls organizationId={organizationId} organizationName={organizationName} locale={locale} canWrite={canWrite} units={units} categories={categories} onImported={() => { setPage(1); setRefreshKey((value) => value + 1); }} />
-    <ModuleToolbar search={<ProfessionalSearch value={search} onChange={(value) => { setSearch(value); setPage(1); }} placeholder={t("catalog.search")} />} controls={<ProfessionalTabs value={tab} onChange={(value) => { setTab(value); setPage(1); }} label={t("catalog.views")} items={[{ id: "ALL", label: t("catalog.all"), count: collection.pagination.total }, { id: "PRODUCT", label: t("catalog.products"), count: collection.metrics.products }, { id: "SERVICE", label: t("catalog.services"), count: collection.metrics.services }, { id: "CATEGORY", label: t("catalog.categories"), count: categories.length }, { id: "UNIT", label: t("catalog.units"), count: units.length }]} />} />
-    <ModuleContent>
+    <ModuleToolbar density="compact" search={<ProfessionalSearch value={search} onChange={(value) => { setSearch(value); setPage(1); }} placeholder={t("catalog.search")} />}
+      controls={<ProfessionalTabs value={tab} onChange={(value) => { setTab(value); setPage(1); }} label={t("catalog.views")} items={[{ id: "ALL", label: t("catalog.all"), count: collection.pagination.total }, { id: "PRODUCT", label: t("catalog.products"), count: collection.metrics.products }, { id: "SERVICE", label: t("catalog.services"), count: collection.metrics.services }, { id: "CATEGORY", label: t("catalog.categories"), count: categories.length }, { id: "UNIT", label: t("catalog.units"), count: units.length }]} />}
+      activeFilters={categoriesView || unitsView ? <p className="text-xs text-dtsc-muted">{locale === "en" ? "Categories and units are reference registers. Choose Products or Services for dated filters and exports." : "Les catégories et unités sont des référentiels. Sélectionnez Produits ou Services pour les filtres datés et exports."}</p>
+        : <CommercialDesign2Controls locale={locale} organizationName={organizationName} title={t("catalog.title")}
+          endpoint={`/api/enterprise/${organizationId}/catalog`} filters={exportFilters} columns={exportColumns}
+          from={dateFrom} to={dateTo} onDateChange={(from, to) => { setDateFrom(from); setDateTo(to); setPage(1); }}
+          status={recordStatus} onStatusChange={(next) => { setRecordStatus(next); setPage(1); }}
+          choices={[{ id: "", label: locale === "en" ? "All statuses" : "Tous les statuts" }, { id: "ACTIVE", label: locale === "en" ? "Active" : "Actifs" }, { id: "INACTIVE", label: locale === "en" ? "Inactive" : "Inactifs" }]}
+          noteFr="Prix de référence du catalogue : le stock, les lots et les péremptions se gèrent dans Logistique & stock."
+          noteEn="Catalog reference prices only: stock, batches and expiration are managed in Inventory." />}
+    />
+    <ModuleContent density="compact">
+      <CommercialDesign2Connections locale={locale} items={[{ module: "INVENTORY_LOGISTICS", labelFr: "Stocks & lots", labelEn: "Inventory & batches" }, { module: "SALES_QUOTES_ORDERS", labelFr: "Devis & commandes", labelEn: "Quotes & orders" }, { module: "TELCO_TOPUPS", labelFr: "Télécom", labelEn: "Telco" }]} />
       {message && !dialogMode && !edit ? <ProfessionalError message={message} /> : null}
       <ModuleSection title={categoriesView ? t("catalog.categories") : unitsView ? t("catalog.unitsOfMeasure") : t("catalog.operational")} description={t("catalog.scopeDescription")}>
         {collection.error ? <ProfessionalError message={collection.error} /> : collection.loading ? <ProfessionalLoading /> : categoriesView ? (categories.length ? <BusinessList ariaLabel={t("catalog.categoriesAria")}>{categories.map((category) => <BusinessListItem key={category.id} title={category.name} status={<StatusBadge tone={category.status === "ACTIVE" ? "success" : "neutral"}>{professionalErpEnumLabel(locale, "status", category.status)}</StatusBadge>} meta={category.code} description={category.description || t("catalog.noCategoryDescription")} />)}</BusinessList> : <EmptyState title={t("catalog.noCategoryTitle")} description={t("catalog.noCategoryHelp")} />) : unitsView ? (units.length ? <BusinessList ariaLabel={t("catalog.unitsAria")}>{units.map((unit) => <BusinessListItem key={unit.id} title={`${unit.name}${unit.symbol ? ` (${unit.symbol})` : ""}`} status={<StatusBadge>{unitCategoryLabel(unit.category, locale)}</StatusBadge>} meta={unit.code} description={t("catalog.precision", { count: unit.decimalScale, suffix: unit.decimalScale === 1 ? "" : "s" })} />)}</BusinessList> : <EmptyState title={t("catalog.noUnitTitle")} description={t("catalog.noUnitHelp")} />) : collection.items.length ? <BusinessList ariaLabel={t("catalog.itemsAria")}>{collection.items.map((item) => <BusinessListItem key={item.id} title={item.name} leading={item.itemType === "PRODUCT" ? <ShoppingBag className="h-5 w-5 text-dtsc-blue" /> : <Boxes className="h-5 w-5 text-dtsc-blue" />} status={<StatusBadge tone={item.status === "ACTIVE" ? "success" : "neutral"}>{professionalErpEnumLabel(locale, "itemType", item.itemType)}</StatusBadge>} meta={`${item.code}${item.sku ? ` · ${t("catalog.sku")} ${item.sku}` : ""} · ${item.category?.name || t("catalog.noCategory")}`} description={`${professionalErpMoney(item.indicativeSalePrice, item.currency, locale)} · ${item.unitOfMeasure.name}${item.trackInventory ? ` · ${t("catalog.stockTracking")}` : ""}`} onOpen={() => setDetail(item)} openLabel={t("catalog.open", { name: item.name })} />)}</BusinessList> : <EmptyState title={t("catalog.emptyTitle")} description={t("catalog.emptyHelp")} />}

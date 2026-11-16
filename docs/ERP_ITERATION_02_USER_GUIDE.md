@@ -39,3 +39,16 @@ Créez un prospect, affectez un responsable et une prochaine action. Utilisez la
 ## Créer et valider un contrat
 
 Sélectionnez le client, renseignez les dates, la valeur et le renouvellement, puis enregistrez. Soumettez ensuite à l’approbateur désigné. Les actions disponibles dépendent du statut et de vos permissions.
+
+
+## Novembre 2026 — Design DTSC 2.0 des référentiels commerciaux (#1198)
+
+Les modules **Tiers, prospects et clients**, **Produits et services**, **Prospects et opportunités** et **Contrats commerciaux** disposent de barres de recherche, rails de filtres de statuts, calendrier de dates de création et exports **Excel, CSV, PDF**. Les exports incluent toutes les lignes autorisées correspondant à la recherche et aux dates, dans la limite annoncée de 1000 lignes ; le téléchargement comporte l'identité de l'entreprise et les colonnes du référentiel. Les catégories et unités demeurent des onglets de configuration distincts, non des produits datés.
+
+- **Tiers** : ne créez pas de compte DTSC juste pour disposer d'une fiche client. Les liaisons demandent consentement, révocation et contrôle entreprise.
+- **Catalogue** : renseignez prix, référence, devise et unité ; les lots et péremptions se gèrent dans Stock, jamais dans le formulaire d'article.
+- **Pipeline** : sélectionnez la vue Prospect ou Opportunité avant de choisir le statut ; les liens vers devis et clients conservent le tiers métier de référence.
+- **Contrats** : les actions de validation et renouvellement sont décidées côté serveur par l'approbateur habilité ; l'export ne vaut ni signature ni validation.
+- **Création de devis** : correction du rattachement Prisma de lignes, contrôlée par tests PostgreSQL ; utilisez le formulaire habituel et conservez votre référence de support en cas d'anomalie.
+
+Consultez `docs/ERP_COMMERCIAL_DESIGN2_1198.md` et `docs/OWNER_E2E_1198_COMMERCIAL_DESIGN2.md`.

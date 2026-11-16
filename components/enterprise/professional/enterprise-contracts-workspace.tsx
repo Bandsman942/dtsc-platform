@@ -6,8 +6,10 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Archive, CheckCircle2, Eye, FileCheck2, PauseCircle, Pencil, Plus, RefreshCcw, RotateCcw, Send, XCircle } from "lucide-react";
 import { currencyChoices, Field, NativeSelect } from "@/components/enterprise/core-v2/erp-v2-ui";
 import { commercialHotfixCopy } from "@/components/enterprise/professional/commercial-hotfix-copy";
+import { CommercialDesign2Controls, CommercialDesign2Connections } from "@/components/enterprise/professional/commercial-design2-controls";
+import type { FinanceExportColumn } from "@/components/enterprise/professional/finance-design2-controls";
 import { ProfessionalWorkflowComments } from "@/components/enterprise/professional/professional-workflow-comments";
-import { ProfessionalError, ProfessionalFormSection, ProfessionalHelp, ProfessionalLoading, ProfessionalSearch, ProfessionalTabs, professionalMutation, useProfessionalCollection } from "@/components/enterprise/professional/professional-erp-ui";
+import { ProfessionalError, ProfessionalFormSection, ProfessionalHelp, ProfessionalLoading, ProfessionalSearch, professionalMutation, useProfessionalCollection } from "@/components/enterprise/professional/professional-erp-ui";
 import { professionalErpDate, professionalErpEnumLabel, professionalErpMoney, professionalErpT, type ProfessionalErpLocale, useProfessionalErpLocale } from "@/components/enterprise/professional/professional-erp-i18n";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
@@ -90,6 +92,8 @@ export function EnterpriseContractsWorkspace({ organizationId, organizationName,
   const t = (key: Parameters<typeof professionalErpT>[1], values?: Record<string, string | number>) => professionalErpT(locale, key, values);
   const [tab, setTab] = useState("ALL");
   const [search, setSearch] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [page, setPage] = useState(1);
   const [refreshKey, setRefreshKey] = useState(0);
   const [lookups, setLookups] = useState<Lookups>({ members: [], departments: [], parties: [], currencies: [] });
@@ -103,6 +107,7 @@ export function EnterpriseContractsWorkspace({ organizationId, organizationName,
   const [busy, setBusy] = useState(false);
   const searchParams = useSearchParams();
   useToastMessage(success, "success");
+  useToastMessage(message, "error");
 
   useEffect(() => {
     let active = true;
@@ -118,8 +123,10 @@ export function EnterpriseContractsWorkspace({ organizationId, organizationName,
     const value = new URLSearchParams({ page: String(page), pageSize: "50" });
     if (search.trim()) value.set("search", search.trim());
     if (tab !== "ALL") value.set("status", tab);
+    if (dateFrom) value.set("dateFrom", dateFrom);
+    if (dateTo) value.set("dateTo", dateTo);
     return value;
-  }, [page, search, tab]);
+  }, [page, search, tab, dateFrom, dateTo]);
   const collection = useProfessionalCollection<Contract>({ endpoint: `/api/enterprise/${organizationId}/contracts`, params, refreshKey });
   const currencies = lookups.currencies.length ? lookups.currencies.map((code) => ({ id: code, label: code })) : currencyChoices(locale);
 
@@ -195,11 +202,38 @@ export function EnterpriseContractsWorkspace({ organizationId, organizationName,
     { id: "TERMINATED", label: t("contracts.tabTerminated"), count: collection.metrics.terminated },
   ];
 
-  return <ModuleWorkspace>
+  const exportFilters = { search, status: tab === "ALL" ? "" : tab, dateFrom, dateTo };
+  const exportColumns: FinanceExportColumn[] = [
+    { key: "reference", labelFr: "Référence", labelEn: "Reference", get: row => String(row.reference || "") },
+    { key: "title", labelFr: "Intitulé", labelEn: "Title", get: row => String(row.title || "") },
+    { key: "party", labelFr: "Contrepartie", labelEn: "Counterparty", get: row => {
+      const p = row.businessParty as { displayName?: string | null; legalName?: string } | null;
+      return p?.displayName || p?.legalName || "";
+    } },
+    { key: "type", labelFr: "Type de contrat", labelEn: "Contract type", get: row => professionalErpEnumLabel(locale, "contractType", String(row.contractType || "")) },
+    { key: "status", labelFr: "Statut", labelEn: "Status", get: row => professionalErpEnumLabel(locale, "status", String(row.status || "")) },
+    { key: "amount", labelFr: "Valeur indicative", labelEn: "Indicative amount", get: row => Number(row.indicativeAmount || 0) },
+    { key: "currency", labelFr: "Devise", labelEn: "Currency", get: row => String(row.currency || "") },
+    { key: "start", labelFr: "Début", labelEn: "Start", get: row => String(row.startDate || "").slice(0, 10) },
+    { key: "end", labelFr: "Échéance", labelEn: "End", get: row => String(row.endDate || "").slice(0, 10) },
+    { key: "revision", labelFr: "Version", labelEn: "Revision", get: row => Number(row.revision || 0) },
+  ];
+  return <ModuleWorkspace density="compact">
     <ModuleHeader eyebrow={t("contracts.eyebrow", { organization: organizationName })} title={t("contracts.title")} description={locale === "en" ? definition.descriptionEn : definition.descriptionFr} count={t("contracts.count", { count: collection.pagination.total, suffix: collection.pagination.total === 1 ? "" : "s" })} primaryAction={collection.canWrite ? <Button onClick={() => { clearFeedback(); setCreateOpen(true); }}><Plus className="h-4 w-4" />{t("contracts.new")}</Button> : undefined} />
-    <ModuleMetrics label={t("contracts.metrics")}><ModuleMetric label={t("contracts.metricDrafts")} value={collection.metrics.draft || 0} /><ModuleMetric label={t("contracts.metricPending")} value={collection.metrics.pendingApproval || 0} /><ModuleMetric label={t("contracts.metricActive")} value={collection.metrics.active || 0} /><ModuleMetric label={t("contracts.metricExpiring")} value={collection.metrics.expiring || 0} /><ModuleMetric label={t("contracts.metricTerminated")} value={collection.metrics.terminated || 0} /></ModuleMetrics>
-    <ModuleToolbar search={<ProfessionalSearch value={search} onChange={(value) => { setSearch(value); setPage(1); }} placeholder={t("contracts.search")} />} controls={<ProfessionalTabs value={tab} onChange={(value) => { setTab(value); setPage(1); }} items={tabs} label={t("contracts.tabsLabel")} />} summary={t("common.results", { count: collection.pagination.total, suffix: collection.pagination.total === 1 ? "" : "s" })} />
-    <ModuleContent>
+    <ModuleMetrics label={t("contracts.metrics")} className="lg:[&>div]:grid-cols-5"><ModuleMetric className="border-l-slate-400" icon={<FileCheck2 className="h-4 w-4 text-slate-500" />} label={t("contracts.metricDrafts")} value={collection.metrics.draft || 0} /><ModuleMetric className="border-l-amber-500" icon={<Send className="h-4 w-4 text-amber-500" />} label={t("contracts.metricPending")} value={collection.metrics.pendingApproval || 0} /><ModuleMetric className="border-l-emerald-500" icon={<CheckCircle2 className="h-4 w-4 text-emerald-500" />} label={t("contracts.metricActive")} value={collection.metrics.active || 0} /><ModuleMetric className="border-l-sky-500" icon={<RotateCcw className="h-4 w-4 text-sky-500" />} label={t("contracts.metricExpiring")} value={collection.metrics.expiring || 0} /><ModuleMetric className="border-l-rose-500" icon={<XCircle className="h-4 w-4 text-rose-500" />} label={t("contracts.metricTerminated")} value={collection.metrics.terminated || 0} /></ModuleMetrics>
+    <ModuleToolbar density="compact" search={<ProfessionalSearch value={search} onChange={(value) => { setSearch(value); setPage(1); }} placeholder={t("contracts.search")} />}
+      activeFilters={<CommercialDesign2Controls locale={locale} organizationName={organizationName} title={t("contracts.title")}
+        endpoint={`/api/enterprise/${organizationId}/contracts`} filters={exportFilters} columns={exportColumns}
+        from={dateFrom} to={dateTo} onDateChange={(from, to) => { setDateFrom(from); setDateTo(to); setPage(1); }}
+        status={tab === "ALL" ? "" : tab} onStatusChange={(next) => { setTab(next || "ALL"); setPage(1); }}
+        choices={[{ id: "", label: t("contracts.tabAll") }, ...tabs.filter(item => item.id !== "ALL").map(item => ({ id: item.id, label: item.label })),
+          { id: "APPROVED", label: professionalErpEnumLabel(locale, "status", "APPROVED") },
+          { id: "CANCELLED", label: professionalErpEnumLabel(locale, "status", "CANCELLED") }]}
+        noteFr="Le calendrier filtre les dates de création. Validation et renouvellement restent soumis aux approbations indépendantes."
+        noteEn="The date picker filters creation dates. Approval and renewal remain subject to independent decisions." />}
+      summary={t("common.results", { count: collection.pagination.total, suffix: collection.pagination.total === 1 ? "" : "s" })} />
+    <ModuleContent density="compact">
+      <CommercialDesign2Connections locale={locale} items={[{ module: "CRM_CUSTOMERS", labelFr: "Tiers & clients", labelEn: "Parties & customers" }, { module: "CRM_PIPELINE", labelFr: "Prospects & opportunités", labelEn: "Leads & opportunities" }, { module: "SALES_QUOTES_ORDERS", labelFr: "Devis & commandes", labelEn: "Quotes & orders" }, { module: "DOCUMENTS", labelFr: "Documents privés", labelEn: "Private documents" }]} />
       {message && !createOpen && !edit ? <ProfessionalError message={message} /> : null}
       <ModuleSection title={t("contracts.portfolio")} description={t("contracts.portfolioDescription")}>
         {collection.error ? <ProfessionalError message={collection.error} /> : collection.loading ? <ProfessionalLoading /> : collection.items.length ? <BusinessList ariaLabel={t("contracts.listAria")}>{collection.items.map((contract) => <BusinessListItem key={contract.id} title={contract.title} leading={<FileCheck2 className="h-5 w-5 text-dtsc-blue" />} status={<StatusBadge tone={statusTone(contract.status)}>{professionalErpEnumLabel(locale, "status", contract.status)}</StatusBadge>} meta={`${contract.reference} · ${professionalErpEnumLabel(locale, "contractType", contract.contractType)} · ${professionalErpMoney(contract.indicativeAmount, contract.currency, locale)}`} description={`${contract.businessParty?.displayName || contract.businessParty?.legalName || t("contracts.partyToReview")} · ${professionalErpDate(contract.startDate, locale)} → ${professionalErpDate(contract.endDate, locale)}`} onOpen={() => setDetail(contract)} openLabel={t("contracts.open", { name: contract.title })} actions={<Button size="sm" variant="outline" onClick={() => setDetail(contract)}><Eye className="h-4 w-4" />{t("common.details")}</Button>} />)}</BusinessList> : <EmptyState compact title={t("contracts.emptyTitle")} description={t("contracts.emptyDescription")} />}
