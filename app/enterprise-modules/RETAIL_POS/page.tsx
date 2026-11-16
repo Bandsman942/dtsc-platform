@@ -1,6 +1,6 @@
 import { renderRetailModulePage } from "@/app/enterprise-modules/retail-page";
 
-export default async function RetailPosPage({ searchParams }: { searchParams?: Promise<{ section?: string; siteId?: string; invoiceId?: string }> }) {
+export default async function RetailPosPage({ searchParams }: { searchParams?: Promise<{ section?: string; siteId?: string; invoiceId?: string; invoiceNumber?: string }> }) {
   const params = await searchParams;
-  return renderRetailModulePage("RETAIL_POS", { section: params?.section, siteId: params?.siteId, invoiceId: params?.invoiceId });
+  return renderRetailModulePage("RETAIL_POS", { section: params?.section, siteId: params?.siteId, invoiceId: params?.invoiceId, invoiceNumber: params?.invoiceNumber });
 }
