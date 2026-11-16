@@ -1,7 +1,7 @@
 "use client";
 
 import { ErpDesign2Metric, ErpDesign2RegisterSection } from "@/components/enterprise/professional/erp-design2-register";
-import { CoordinationDesign2Tools } from "@/components/enterprise/professional/coordination-design2-tools";
+import { CoordinationDesign2Tools, coordinationDesign2Locale } from "@/components/enterprise/professional/coordination-design2-tools";
 import { MEETING_STATUSES } from "@/lib/enterprise/core-v2/constants";
 
 import { enterpriseCoreT } from "@/lib/enterprise-core-i18n";
@@ -155,7 +155,7 @@ export function EnterpriseMeetingsWorkspace({ organizationId, organizationName =
 
       </div>
       <CoordinationDesign2Tools kind="meetings" organizationId={organizationId} organizationName={organizationName}
-        title={enterpriseCoreT(locale, "meetings.meetings.minutes")} locale={locale === "en" ? "en" : "fr"} filters={params}
+        title={enterpriseCoreT(locale, "meetings.meetings.minutes")} locale={coordinationDesign2Locale(locale)} filters={params}
         status={status} statuses={[{ id: "", label: enterpriseCoreT(locale, "requests.all.statuses") }, ...MEETING_STATUSES.map((id) => ({ id, label: statusLabel(locale, id) }))]}
         onStatusChange={(next) => { setStatus(next); if (next) setView("all"); setPage(1); }} dateFrom={dateFrom} dateTo={dateTo}
         onDateChange={(from, to) => { setDateFrom(from); setDateTo(to); if (from || to) setView("all"); setPage(1); }} />
