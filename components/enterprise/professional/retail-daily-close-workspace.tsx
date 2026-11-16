@@ -424,7 +424,7 @@ export function RetailDailyCloseWorkspace({
           <EmptyState title={translateRetailWorkspace(locale, "dailyCloseDailyCloseUnavailable")} description={translateRetailWorkspace(locale, "refreshToRetry")} />
         ) : (
           <div className="grid min-w-0 gap-5">
-            {adminStores ? <ModuleSection
+            {adminStores ? <ModuleSection density="compact" id="retail-close-consolidated"
               title={locale === "fr" ? "Clôture multiboutique consolidée" : "Consolidated multi-store closing"}
               description={locale === "fr" ? "Relevé complet des clôtures enregistrées à la date choisie. Les montants restent dans leurs comptes et leurs devises d’origine." : "Complete daily close count for the chosen business date. Amounts remain in their original accounts and currencies."}
             >
@@ -451,7 +451,7 @@ export function RetailDailyCloseWorkspace({
                 return total ? <div className="rounded-2xl border border-amber-500/40 bg-amber-500/10 p-4"><h4 className="font-black text-amber-800 dark:text-amber-200">{locale === "fr" ? "Sites historiques ou non rattachés" : "Historical or unassigned sites"}</h4><p className="mt-2 text-sm text-dtsc-ink">{locale === "fr" ? "Clôtures" : "Closes"} : {total} · {locale === "fr" ? "Lignes avec écart" : "Lines with variance"} : {unmatched.reduce((count, row) => count + row.varianceCount, 0)}</p><p className="mt-2 text-xs text-dtsc-muted">{locale === "fr" ? "Vérifiez les références de site dans l’historique Finance." : "Check site references in Finance history."}</p></div> : null;
               })()}</div> : null}
             </ModuleSection> : null}
-            <ModuleSection title={locale === "fr" ? "Boutique de travail" : "Working store"} description={locale === "fr" ? "Choisissez une boutique avant de soumettre une clôture : aucun mélange entre les magasins." : "Choose one store before submitting a close; never combine multiple stores."}>
+            <ModuleSection density="compact" id="retail-close-store" title={locale === "fr" ? "Boutique de travail" : "Working store"} description={locale === "fr" ? "Choisissez une boutique avant de soumettre une clôture : aucun mélange entre les magasins." : "Choose one store before submitting a close; never combine multiple stores."}>
               <select aria-label={locale === "fr" ? "Filtrer les clôtures par boutique" : "Filter closes by store"} value={siteFilter} onChange={(event) => { setSiteFilter(event.target.value); setHistoryPage(1); setSelectedAccountIds([]); }} className="min-h-11 w-full max-w-lg rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink">
                 <option value="ALL">{locale === "fr" ? "Toutes les boutiques — consultation uniquement" : "All stores — read only"}</option>
                 {selectableSites.map((site) => <option key={site.id} value={site.id}>{site.label}</option>)}
@@ -459,7 +459,7 @@ export function RetailDailyCloseWorkspace({
               {storeSelectionRequired ? <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">{locale === "fr" ? "Une boutique doit être choisie pour créer une clôture." : "Choose one store to submit a close."}</p> : null}
               {legacyUnassignedAccounts && effectiveSiteId === "ALL" ? <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">{locale === "fr" ? "Mode historique : les comptes sans boutique sont acceptés tant que l’isolation n’est pas activée. Affectez-les à une boutique dès que possible." : "Legacy mode: unassigned accounts remain usable while isolation is off. Link them to a store as soon as possible."}</p> : null}
             </ModuleSection>
-            <ModuleSection
+            <ModuleSection density="compact" id="retail-close-till"
               title={translateRetailWorkspace(locale, "dailyCloseTillTreasuryHandoff")}
               description={translateRetailWorkspace(locale, "dailyCloseUseFinanceToManageTheUnderlyingAccountsUseThisWorkspaceToPerform")}
             >
@@ -518,9 +518,9 @@ export function RetailDailyCloseWorkspace({
               ) : null}
             </ModuleSection>
 
-            <ModuleSection
+            <ModuleSection density="compact" id="retail-close-balances"
               title={translateRetailWorkspace(locale, "dailyCloseBalancesToCount")}
-              description={translateRetailWorkspace(locale, "dailyCloseOnlyTheAccountsRelevantToTheShopCloseArePresentedHereTheir")}
+              description={locale === "fr" ? "Comptes liés à la boutique sélectionnée. Les montants et les devises restent distincts." : "Accounts for the selected store. Amounts and currencies stay separate."}
             >
               {closeAccounts.length ? (
                 <div className="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -536,7 +536,7 @@ export function RetailDailyCloseWorkspace({
               ) : <EmptyState compact title={translateRetailWorkspace(locale, "dailyCloseNoBalanceToClose")} description={translateRetailWorkspace(locale, "dailyCloseConfigureTheRelevantCashOrPaymentAccountInFinanceFirst")} />}
             </ModuleSection>
 
-            <ModuleSection
+            <ModuleSection density="compact" id="retail-close-submit"
               title={translateRetailWorkspace(locale, "dailyCloseSubmitTheDailyClose")}
               description={translateRetailWorkspace(locale, "dailyCloseSelectTheBalancesYouCountedEveryVarianceShouldHaveAClearBusiness")}
             >
@@ -591,8 +591,9 @@ export function RetailDailyCloseWorkspace({
               </form>
             </ModuleSection>
 
-            <ModuleSection
+            <ModuleSection density="compact" id="retail-close-history"
               title={translateRetailWorkspace(locale, "dailyCloseDailyCloseHistory")}
+              action={<Button variant="outline" size="sm" disabled={!closes.length} onClick={exportCurrentPageCsv}><Download className="h-4 w-4" />{locale === "fr" ? "Exporter CSV · page" : "Export CSV · page"}</Button>}
               description={closeList ? `${closeList.pagination.total} ${translateRetailWorkspace(locale, "dailyCloseCloseS")}` : undefined}
             >
               {closes.length ? (
@@ -623,6 +624,19 @@ export function RetailDailyCloseWorkspace({
                   })}
                 </BusinessList>
               ) : <EmptyState compact title={translateRetailWorkspace(locale, "dailyCloseNoDailyClose")} description={translateRetailWorkspace(locale, "dailyCloseSubmittedClosesWillAppearHereWithTheirVariancesAndReviewStatus")} />}
+              {closeList && closeList.pagination.total > 0 ? (
+                <div className="mt-4 flex min-w-0 flex-wrap items-center justify-between gap-3 border-t border-dtsc-border pt-3">
+                  <p className="text-xs font-bold text-dtsc-muted">{locale === "fr" ? "Page" : "Page"} {closeList.pagination.page} / {closeList.pagination.pageCount} · {closeList.pagination.total} {locale === "fr" ? "résultats" : "results"}</p>
+                  <div className="flex gap-2">
+                    <Button size="sm" variant="outline" disabled={Boolean(busyAction) || historyPage <= 1} onClick={() => setHistoryPage((page) => Math.max(1, page - 1))}>
+                      <ChevronLeft className="h-4 w-4" />{locale === "fr" ? "Précédent" : "Previous"}
+                    </Button>
+                    <Button size="sm" variant="outline" disabled={Boolean(busyAction) || historyPage >= closeList.pagination.pageCount} onClick={() => setHistoryPage((page) => Math.min(closeList.pagination.pageCount, page + 1))}>
+                      {locale === "fr" ? "Suivant" : "Next"}<ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
             </ModuleSection>
           </div>
         )}
