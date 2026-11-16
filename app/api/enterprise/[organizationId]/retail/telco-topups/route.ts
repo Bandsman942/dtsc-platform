@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import { financeBusinessDateRange } from "@/lib/enterprise/accounting/http";
 import { NextResponse } from "next/server";
 import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
@@ -19,18 +20,26 @@ export async function GET(req: Request, { params }: Params) {
   const auth = await authorizeRetailRequest(req, organizationId, "TELCO_TOPUPS", "read");
   if (!auth.ok) return auth.response;
   const { page, pageSize, status, providerCode, search, from, to } = retailListParams(req);
+  const dates = financeBusinessDateRange(req);
+  if (!dates.ok) return dates.response;
+  if (search.length > 120) return NextResponse.json({ error: "TELCO_SEARCH_TOO_LONG", message: "Limitez la recherche à 120 caractères." }, { status: 400 });
+  if (status && !["SUCCESS", "FAILED", "REVERSED"].includes(status)) {
+    return NextResponse.json({ error: "TELCO_STATUS_INVALID", message: "Choisissez un statut Télécom valide." }, { status: 400 });
+  }
+  const effectiveFrom = dates.from || from;
+  const effectiveTo = dates.to || to;
   const where: Prisma.EnterpriseTelcoTopupWhereInput = {
     organizationId,
     ...(status ? { status } : {}),
     ...(providerCode ? { providerCode } : {}),
-    ...(from || to ? { occurredAt: { ...(from ? { gte: from } : {}), ...(to ? { lte: to } : {}) } } : {}),
+    ...(effectiveFrom || effectiveTo ? { occurredAt: { ...(effectiveFrom ? { gte: effectiveFrom } : {}), ...(effectiveTo ? { lte: effectiveTo } : {}) } } : {}),
     ...(search ? { OR: [{ number: { contains: search, mode: "insensitive" } }, { offerLabel: { contains: search, mode: "insensitive" } }, { externalReference: { contains: search, mode: "insensitive" } }, { destinationPhone: { contains: search } }] } : {}),
   };
   const [items, total] = await Promise.all([
     prisma.enterpriseTelcoTopup.findMany({ where, orderBy: { occurredAt: "desc" }, skip: (page - 1) * pageSize, take: pageSize }),
     prisma.enterpriseTelcoTopup.count({ where }),
   ]);
-  const masked = items.map((item) => ({ ...item, destinationPhone: item.destinationPhone.length > 6 ? `${item.destinationPhone.slice(0, 4)}••••${item.destinationPhone.slice(-3)}` : item.destinationPhone }));
+  const masked = items.map((item) => { const phone = item.destinationPhone.length > 6 ? `${item.destinationPhone.slice(0, 4)}••••${item.destinationPhone.slice(-3)}` : item.destinationPhone; return { ...item, destinationPhone: phone, destinationPhoneMasked: phone }; });
   await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "telco-topups", page } });
   return NextResponse.json({ items: masked, pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) } });
 }
