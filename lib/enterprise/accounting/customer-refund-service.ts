@@ -1,4 +1,9 @@
 import { Prisma } from "@prisma/client";
+
+// Decimal.js-light (Prisma.Decimal) exposes instance comparisons, not static min/max.
+const decimalMin = (a: Prisma.Decimal, b: Prisma.Decimal): Prisma.Decimal => a.lte(b) ? a : b;
+const decimalMax = (a: Prisma.Decimal, b: Prisma.Decimal): Prisma.Decimal => a.gte(b) ? a : b;
+
 import { assertIndependentActor } from "@/lib/enterprise/accounting/access";
 import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
 import { financeReference, publishFinanceEvent } from "@/lib/enterprise/accounting/helpers";
@@ -217,9 +222,9 @@ export async function reverseCustomerPaymentAllocationsForRefund(
       });
     }
 
-    const nextAllocated = money(Prisma.Decimal.max(0, receivable.allocatedAmount.minus(reversedAmount)));
+    const nextAllocated = money(decimalMax(new Prisma.Decimal(0), receivable.allocatedAmount.minus(reversedAmount)));
     const nextOutstanding = money(receivable.outstandingAmount.plus(reversedAmount));
-    const nextPaid = money(Prisma.Decimal.max(0, receivable.salesInvoice.amountPaid.minus(reversedAmount)));
+    const nextPaid = money(decimalMax(new Prisma.Decimal(0), receivable.salesInvoice.amountPaid.minus(reversedAmount)));
     await tx.enterpriseReceivable.update({
       where: { id: receivable.id },
       data: { allocatedAmount: nextAllocated, outstandingAmount: nextOutstanding, status: "OPEN" },
@@ -396,7 +401,7 @@ export async function reverseCustomerPaymentAllocationsForRefundAmountTx(
     for (const allocation of eligible) {
       if (remaining.isZero()) break;
       await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterprisePayment" WHERE id = ${allocation.paymentId} AND "organizationId" = ${organizationId} FOR UPDATE`);
-      const reversalAmount = money(Prisma.Decimal.min(allocation.amount, remaining));
+      const reversalAmount = money(decimalMin(allocation.amount, remaining));
       const nextAllocationAmount = money(allocation.amount.minus(reversalAmount));
       const journal = await tx.enterpriseJournalEntry.findFirst({
         where: {
@@ -476,9 +481,9 @@ export async function reverseCustomerPaymentAllocationsForRefundAmountTx(
 
     if (!remaining.isZero()) throw new EnterpriseAccountingError("REFUND_ALLOCATION_REVERSAL_INCOMPLETE", 409);
 
-    const nextAllocated = money(Prisma.Decimal.max(0, receivable.allocatedAmount.minus(amount)));
+    const nextAllocated = money(decimalMax(new Prisma.Decimal(0), receivable.allocatedAmount.minus(amount)));
     const nextOutstanding = money(receivable.outstandingAmount.plus(amount));
-    const nextPaid = money(Prisma.Decimal.max(0, receivable.salesInvoice.amountPaid.minus(amount)));
+    const nextPaid = money(decimalMax(new Prisma.Decimal(0), receivable.salesInvoice.amountPaid.minus(amount)));
     await tx.enterpriseReceivable.update({
       where: { id: receivable.id },
       data: { allocatedAmount: nextAllocated, outstandingAmount: nextOutstanding, status: "OPEN" },
@@ -665,7 +670,7 @@ export async function prepareSalesCreditNoteForRefundAmount(
     const committedCredit = money(invoice.creditNotes
       .filter((credit) => !["CANCELLED", "REJECTED"].includes(credit.status))
       .reduce((total, credit) => total.plus(credit.grandTotal), new Prisma.Decimal(0)));
-    const creditable = money(Prisma.Decimal.max(0, invoice.grandTotal.minus(committedCredit)));
+    const creditable = money(decimalMax(new Prisma.Decimal(0), invoice.grandTotal.minus(committedCredit)));
     if (amount.greaterThan(creditable)) {
       throw new EnterpriseAccountingError("CREDIT_NOTE_EXCEEDS_REFUNDABLE_INVOICE", 409, {
         requestedAmount: amount.toFixed(),
