@@ -26,6 +26,15 @@ for (const [name, path, endpoint] of models) {
 }
 check("Purchase lifecycle, premium filters and printable copy", "components/enterprise/core-v2/enterprise-purchases-workspace.tsx",
   "ErpDesign2Metric", "ErpDesign2RegisterSection", "FinanceDateFilter", "FinanceExportControls", "openPrintablePurchase");
+// Keep print actions type-safe in both source locale dictionaries. The JSON keys form EnterpriseCoreKey.
+for (const lang of ["fr", "en"]) {
+  const translations = JSON.parse(read(`locales/enterprise-procurement.${lang}.json`));
+  for (const key of ["purchases.action.print", "purchases.action.previewA4"]) {
+    assert.ok(typeof translations[key] === "string" && translations[key].trim(), `${lang} translation missing: ${key}`);
+    checks += 1;
+  }
+}
+console.log("PASS typed procurement A4 action translations FR/EN");
 check("Purchase wrapper", "components/enterprise/professional/enterprise-procurement-operations-workspace.tsx",
   "ProfessionalTabs", "SUPPLIERS", "PURCHASES", "EnterprisePurchasesWorkspace", "EnterpriseSuppliersWorkspace");
 const routes = [
