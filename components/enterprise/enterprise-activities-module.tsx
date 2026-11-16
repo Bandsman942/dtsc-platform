@@ -1,5 +1,6 @@
-import { ErpDesign2Metric } from "@/components/enterprise/professional/erp-design2-register";
 "use client";
+
+import { ErpDesign2Metric } from "@/components/enterprise/professional/erp-design2-register";
 
 import { useMemo, useState } from "react";
 import { useAppLocale } from "@/components/i18n/locale-provider";
