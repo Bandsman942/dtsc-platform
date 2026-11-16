@@ -1,7 +1,7 @@
 "use client";
 
 import { ErpDesign2Metric, ErpDesign2RegisterSection } from "@/components/enterprise/professional/erp-design2-register";
-import { CoordinationDesign2Tools } from "@/components/enterprise/professional/coordination-design2-tools";
+import { CoordinationDesign2Tools, coordinationDesign2Locale } from "@/components/enterprise/professional/coordination-design2-tools";
 
 import { priorityChoices as corePriorityChoices } from "@/components/enterprise/core-v2/erp-v2-ui";
 import { EnterpriseApproverSelect } from "@/components/enterprise/enterprise-approver-select";
@@ -137,7 +137,7 @@ export function EnterpriseRequestsWorkspace({ organizationId, organizationName =
         <NativeSelect value={department} onChange={(value) => { setDepartment(value); setPage(1); }} items={departments} />
       </div>
       <CoordinationDesign2Tools kind="requests" organizationId={organizationId} organizationName={organizationName}
-        title={enterpriseCoreT(locale, "requests.internal.requests")} locale={locale === "en" ? "en" : "fr"} filters={params}
+        title={enterpriseCoreT(locale, "requests.internal.requests")} locale={coordinationDesign2Locale(locale)} filters={params}
         status={status} statuses={[{ id: "", label: enterpriseCoreT(locale, "requests.all.statuses") }, ...REQUEST_STATUSES.map((id) => ({ id, label: statusLabel(locale, id) }))]}
         onStatusChange={(next) => { setStatus(next); setPage(1); }} dateFrom={dateFrom} dateTo={dateTo}
         onDateChange={(from, to) => { setDateFrom(from); setDateTo(to); setPage(1); }} />
