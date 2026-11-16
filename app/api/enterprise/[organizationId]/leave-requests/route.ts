@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { financeBusinessDateRange } from "@/lib/enterprise/accounting/http";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { getEnterpriseCommonDomainAccess } from "@/lib/enterprise/common/access";
@@ -20,11 +21,14 @@ export async function GET(req: Request, { params }: Params) {
   if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const approvalAccess = await getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode: "TIME_ATTENDANCE", action: "approve" });
   const url = new URL(req.url);
+  const businessPeriod = financeBusinessDateRange(req);
+  if (!businessPeriod.ok) return businessPeriod.response;
+  const businessDateFilter = businessPeriod.from || businessPeriod.to ? { startDate: { gte: businessPeriod.from || undefined, lte: businessPeriod.to || undefined } } : {};
   const page = Math.max(1, Number(url.searchParams.get("page") || 1) || 1);
   const pageSize = Math.min(100, Math.max(5, Number(url.searchParams.get("pageSize") || 25) || 25));
   const employeeId = url.searchParams.get("employeeId")?.trim() || "";
   const status = url.searchParams.get("status")?.trim() || "";
-  const where = { organizationId, archivedAt: null, ...(employeeId ? { employeeId } : {}), ...(status ? { status } : {}) };
+  const where = { organizationId, ...businessDateFilter, archivedAt: null, ...(employeeId ? { employeeId } : {}), ...(status ? { status } : {}) };
   const [rawItems, total, pending, approved] = await Promise.all([
     prisma.enterpriseLeaveRequest.findMany({ where, orderBy: [{ startDate: "desc" }, { createdAt: "desc" }], skip: (page - 1) * pageSize, take: pageSize, include: { employee: { select: { id: true, employeeNumber: true, displayName: true } } } }),
     prisma.enterpriseLeaveRequest.count({ where }),
