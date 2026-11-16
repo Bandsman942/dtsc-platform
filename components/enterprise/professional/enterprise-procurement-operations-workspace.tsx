@@ -4,7 +4,8 @@ import { useEffect, useState } from "react";
 import { EnterprisePurchasesWorkspace } from "@/components/enterprise/core-v2/enterprise-purchases-workspace";
 import { EnterpriseSuppliersWorkspace } from "@/components/enterprise/core-v2/enterprise-suppliers-workspace";
 import { ProfessionalError, ProfessionalHelp } from "@/components/enterprise/professional/professional-erp-ui";
-import { ModuleContent, ModuleHeader, ModuleSection, ModuleWorkspace } from "@/components/workspace/module-workspace";
+import { ProfessionalTabs } from "@/components/enterprise/professional/professional-navigation";
+import { ModuleContent, ModuleHeader, ModuleToolbar, ModuleWorkspace } from "@/components/workspace/module-workspace";
 import type { EnterpriseModuleDefinition } from "@/lib/enterprise/module-registry";
 
 type Choice = { id: string; label: string };
@@ -37,6 +38,8 @@ export function EnterpriseProcurementOperationsWorkspace({
   const [members, setMembers] = useState<Choice[]>([]);
   const [departments, setDepartments] = useState<Choice[]>([]);
   const [error, setError] = useState("");
+  const [tab, setTab] = useState<"PURCHASES" | "SUPPLIERS">("PURCHASES");
+  const en = locale === "en";
 
   useEffect(() => {
     let active = true;
@@ -55,21 +58,23 @@ export function EnterpriseProcurementOperationsWorkspace({
   }, [organizationId]);
 
   return (
-    <ModuleWorkspace>
+    <ModuleWorkspace density="compact">
       <ModuleHeader
-        eyebrow={`Chaîne achats · ${organizationName}`}
-        title="Fournisseurs, commandes et réceptions"
-        description={`${definition.descriptionFr} La réception reste rattachée à la commande et prépare le rapprochement commande-réception-facture.`}
-        count="Processus contrôlé"
+        eyebrow={`${en ? "Procurement chain" : "Chaîne achats"} · ${organizationName}`}
+        title={en ? "Suppliers, orders and receipts" : "Fournisseurs, commandes et réceptions"}
+        description={`${en ? definition.descriptionEn : definition.descriptionFr} ${en ? "Receipt remains linked to the purchase order and supports invoice matching." : "La réception reste liée à la commande et prépare le rapprochement commande-réception-facture."}`}
+        count={en ? "Controlled workflow" : "Processus contrôlé"}
       />
-      <ModuleContent>
+      <ModuleToolbar controls={<ProfessionalTabs value={tab} onChange={(value) => setTab(value as "PURCHASES" | "SUPPLIERS")} label={en ? "Procurement navigation" : "Navigation des achats"}
+        items={[{ id: "PURCHASES", label: en ? "Orders & receipts" : "Commandes & réceptions" }, { id: "SUPPLIERS", label: en ? "Suppliers" : "Fournisseurs" }]} />}
+        summary={en ? "Canonical supplier → approved purchase → receipt → supplier invoice; no automatic payment." : "Fournisseur canonique → achat approuvé → réception → facture fournisseur ; aucun paiement automatique."} />
+      <ModuleContent density="compact">
         {error ? <ProfessionalError message={error} /> : null}
-        <ModuleSection title="Référentiel fournisseurs" description="Les organisations fournisseurs restent distinctes des comptes personnels de leurs représentants.">
-          <EnterpriseSuppliersWorkspace organizationId={organizationId} canManage={capabilities.canWrite} locale={locale} />
-        </ModuleSection>
-        <ModuleSection title="Demandes, commandes et réceptions" description="Soumettre, approuver, commander et réceptionner partiellement ou complètement sans double comptabilisation.">
+        {tab === "SUPPLIERS" ? <section aria-label={en ? "Suppliers register" : "Référentiel des fournisseurs"}>
+          <EnterpriseSuppliersWorkspace organizationId={organizationId} organizationName={organizationName} canManage={capabilities.canWrite} locale={locale} />
+        </section> : <section aria-label={en ? "Purchases and receipts" : "Achats et réceptions"}>
           <EnterprisePurchasesWorkspace organizationId={organizationId} organizationName={organizationName} members={members} departments={departments} capabilities={capabilities} locale={locale} />
-        </ModuleSection>
+        </section>}
         <ProfessionalHelp moduleCode="SUPPLIERS_PURCHASES" />
       </ModuleContent>
     </ModuleWorkspace>
