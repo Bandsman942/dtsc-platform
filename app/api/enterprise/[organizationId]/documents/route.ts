@@ -8,6 +8,7 @@ import { enterpriseDocumentCreateSchema } from "@/lib/enterprise/procurement/val
 import { prisma } from "@/lib/prisma";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
+import { isValidEnterpriseActivityCivilDate } from "@/lib/enterprise/enterprise-activity-civil-date";
 
 type Params = { params: Promise<{ organizationId: string }> };
 
@@ -42,11 +43,7 @@ export async function GET(req: Request, { params }: Params) {
   if (department) filters.push({ departmentId: department });
   if (owner) filters.push({ ownerUserId: owner });
   if (from || to) {
-    const isCivilDate = (value: string) => {
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
-      const date = new Date(`${value}T00:00:00.000Z`);
-      return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
-    };
+    const isCivilDate = isValidEnterpriseActivityCivilDate;
     if ((from && !isCivilDate(from)) || (to && !isCivilDate(to)) || (from && to && from > to)) {
       return NextResponse.json({ error: "DOCUMENT_DATE_RANGE_INVALID", message: "Vérifiez la date de début et la date de fin." }, { status: 400 });
     }
