@@ -43,7 +43,7 @@ export function siteStaffCapabilities(roleCode: string, permissions: unknown): R
   return [...ROLE_DEFAULT_CAPABILITIES[roleCode as typeof RETAIL_SITE_STAFF_ROLES[number]]];
 }
 
-/** Owner-granted, per-store exception to the standard Finance four-eyes rule.
+/** Enterprise-admin-granted, per-store exception to the standard Finance four-eyes rule.
  * No role default grants any self-approval. Legacy/malformed policies fail closed. */
 export type RetailSelfApprovalKind = "INVOICE" | "PAYMENT" | "RETURN";
 const RETAIL_SELF_CAPABILITY: Record<RetailSelfApprovalKind, RetailSiteCapability> = {

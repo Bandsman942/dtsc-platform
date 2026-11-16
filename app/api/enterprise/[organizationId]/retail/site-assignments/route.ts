@@ -8,18 +8,19 @@ import { prisma } from "@/lib/prisma";
 
 type Params = { params: Promise<{ organizationId: string }> };
 
-/** The actual proprietor can be stored as Organization.ownerUserId even when
- * a historical member row has a non-OWNER administrative role. Fail closed for
- * ordinary admins, and require an ACTIVE member of this exact organization. */
-async function isRetailEnterpriseProprietor(organizationId: string, userId: string): Promise<boolean> {
+/** An active enterprise administrator (OWNER or ADMIN_ENTREPRISE/ADMIN_ENTERPRISE)
+ * can delegate these store-scoped exceptions. The organization's legal ownerUserId
+ * is not an additional gate: it may differ from the account managing the tenant.
+ * Never grant authority based on global DTSC roles or inactive memberships. */
+async function canAdministerRetailSelfApproval(organizationId: string, userId: string): Promise<boolean> {
   const [membership, organization] = await Promise.all([
     prisma.organizationMember.findFirst({ where: { organizationId, userId, status: "ACTIVE", removedAt: null }, select: { role: true } }),
-    prisma.organization.findFirst({ where: { id: organizationId, deletedAt: null }, select: { ownerUserId: true } }),
+    prisma.organization.findFirst({ where: { id: organizationId, deletedAt: null }, select: { id: true } }),
   ]);
-  return Boolean(membership && organization && (membership.role === "OWNER" || organization.ownerUserId === userId));
+  return Boolean(membership && organization && RETAIL_OWNER_ROLES.has(membership.role));
 }
 
-async function authorizeOwner(req: Request, organizationId: string, mutation = false) {
+async function authorizeEnterpriseAdministrator(req: Request, organizationId: string, mutation = false) {
   const auth = await authorizeRetailRequest(req, organizationId, "RETAIL_POS", mutation ? "manage" : "read", { mutation, limit: 40 });
   if (!auth.ok) return auth;
   const owner = await prisma.organizationMember.findFirst({
@@ -33,7 +34,7 @@ async function authorizeOwner(req: Request, organizationId: string, mutation = f
 export async function GET(req: Request, { params }: Params) {
   const startedAt = Date.now();
   const { organizationId } = await params;
-  const auth = await authorizeOwner(req, organizationId);
+  const auth = await authorizeEnterpriseAdministrator(req, organizationId);
   if (!auth.ok) return auth.response;
   const [items, sites, members, positions, configuration] = await Promise.all([
     prisma.enterpriseRetailSiteAssignment.findMany({
@@ -65,7 +66,7 @@ export async function GET(req: Request, { params }: Params) {
       };
     }),
     capabilities: RETAIL_SITE_CAPABILITIES, defaults: ROLE_DEFAULT_CAPABILITIES,
-    canGrantSelfApproval: await isRetailEnterpriseProprietor(organizationId, auth.session.userId),
+    canGrantSelfApproval: await canAdministerRetailSelfApproval(organizationId, auth.session.userId),
     isolationEnabled: retailStaffIsolationIsEnabled(configuration?.settingsJson),
   }, { headers: { "Cache-Control": "private, no-store" } });
 }
@@ -73,7 +74,7 @@ export async function GET(req: Request, { params }: Params) {
 export async function PUT(req: Request, { params }: Params) {
   const startedAt = Date.now();
   const { organizationId } = await params;
-  const auth = await authorizeOwner(req, organizationId, true);
+  const auth = await authorizeEnterpriseAdministrator(req, organizationId, true);
   if (!auth.ok) return auth.response;
   const parsed = retailSiteAssignmentInputSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "RETAIL_SITE_ASSIGNMENT_INPUT_INVALID", req);
@@ -89,12 +90,12 @@ export async function PUT(req: Request, { params }: Params) {
       select: { id: true, revision: true, permissionsJson: true, roleCode: true, isActive: true },
     });
     if ((existing && existing.revision !== input.revision) || (!existing && input.revision)) throw new EnterpriseRetailError("RETAIL_SITE_ASSIGNMENT_CONFLICT", 409);
-    // Only the actual organization OWNER may grant, retain or revoke a self-approval exception.
+    // Only an active enterprise administrator may grant, retain or revoke a store-scoped self-approval exception.
     const oldRights = existing ? siteStaffCapabilities(existing.roleCode, existing.permissionsJson) : [];
     const newRights = input.permissions ?? ROLE_DEFAULT_CAPABILITIES[input.roleCode];
     if (RETAIL_SELF_APPROVAL_CAPABILITIES.some((permission) => oldRights.includes(permission) || newRights.includes(permission))) {
-      if (!await isRetailEnterpriseProprietor(organizationId, auth.session.userId)) {
-        throw new EnterpriseRetailError("RETAIL_SITE_SELF_APPROVAL_OWNER_ONLY", 403);
+      if (!await canAdministerRetailSelfApproval(organizationId, auth.session.userId)) {
+        throw new EnterpriseRetailError("RETAIL_SITE_SELF_APPROVAL_ADMIN_ONLY", 403);
       }
     }
     if (newRights.includes("SELF_APPROVE_INVOICE") && !newRights.includes("PREPARE_INVOICE") ||

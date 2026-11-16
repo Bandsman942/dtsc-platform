@@ -1,3 +1,9 @@
+## 2026-11-16 — RETAIL — Délégation des exceptions d’auto-validation par l’administrateur entreprise (candidat E2E)
+
+- POS > Personnel et accès par boutique : les administrateurs actifs d’entreprise (OWNER, ADMIN_ENTREPRISE, ADMIN_ENTERPRISE) disposant du droit de gestion RETAIL_POS peuvent désormais accorder, modifier et révoquer les trois exceptions d’auto-validation ; la correspondance avec le propriétaire juridique `ownerUserId` n’est plus exigée.
+- Libellés FR/EN et refus utilisateur alignés ; périmètre boutique, dépendances métier, audit avant/après et séparation des validations Finance maintenus ; aucun nouveau droit automatique.
+- Contrats QA #1184/#1187 adaptés ; documentation et recette E2E dans `docs/HOTFIX_RETAIL_ADMIN_SELF_APPROVAL_20261116.md`. Déploiement uniquement après validation finale et fusion `main`.
+
 ## 2026-11-15 — #1187 RETAIL avoirs partiels/services/mixte — v1.19.0 candidate (E2E requis)
 
 - Séparation stricte entre **avoir comptable** et **remboursement de caisse** ; remboursement plafonné au trop-perçu déjà encaissé, absent si simple diminution de créance.

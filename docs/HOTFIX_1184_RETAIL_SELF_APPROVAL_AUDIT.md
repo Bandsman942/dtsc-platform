@@ -1,4 +1,6 @@
 # HOTFIX #1184 — RETAIL POS : auto-validation contrôlée et audit bilingue
+
+> Historique au 15 novembre 2026 : la restriction « OWNER seul » décrite ci-dessous a été remplacée par le hotfix du 16 novembre 2026 autorisant les administrateurs d’entreprise actifs (`OWNER`, `ADMIN_ENTREPRISE`, `ADMIN_ENTERPRISE`) à gérer ces délégations. Voir `docs/HOTFIX_RETAIL_ADMIN_SELF_APPROVAL_20261116.md`. Les anciens scénarios de recette sont conservés à titre de trace historique.
 **Version candidate : v1.18.2 · 15 novembre 2026 · E2E final du propriétaire requis.**
 
 ## 1. Affectations par boutique

@@ -145,7 +145,7 @@ const words: Record<string,string> = {
 const translated: Record<string,[string,string]> = {
   SUCCESS: ["Réussi","Successful"], FAILED: ["Échec","Failed"], DENIED: ["Refusé","Denied"], PARTIAL: ["Partiel","Partial"],
   LOW: ["Faible","Low"], MEDIUM: ["Modéré","Medium"], HIGH: ["Élevé","High"], CRITICAL: ["Critique","Critical"],
-  RETAIL_OWNER_GRANTED_SELF_APPROVAL: ["Auto-validation accordée par le propriétaire","Owner-granted self-approval"],
+  RETAIL_OWNER_GRANTED_SELF_APPROVAL: ["Dérogation d’auto-validation accordée par l’administration de l’entreprise","Self-approval exception granted by enterprise administration"],
   SELF_APPROVAL_OVERRIDE: ["Exception d'auto-validation","Self-approval exception"],
   AUDIT_LOG_VIEW: ["Consultation du journal d'audit","Audit history viewed"],
 };

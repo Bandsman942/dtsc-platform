@@ -27,6 +27,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   RETAIL_INVENTORY_POLICY_INVALID: "Les règles de péremption du magasin sont invalides. Demandez à un administrateur de les reconfigurer.",
   RETAIL_SITE_ASSIGNMENT_TARGET_INVALID: "La boutique ou le collaborateur n'est plus actif, ou ce compte possède déjà les droits d'administration globale.",
   RETAIL_SITE_ASSIGNMENT_CONFLICT: "Les attributions de droits ont changé. Actualisez la liste avant d'enregistrer.",
+  RETAIL_SITE_SELF_APPROVAL_ADMIN_ONLY: "Seul un administrateur actif de cette entreprise peut accorder, modifier ou retirer une dérogation d’auto-validation pour une boutique.",
   RETAIL_SITE_ACCESS_DENIED: "Vous n'êtes pas autorisé à effectuer cette action dans cette boutique.",
   CASH_ACCOUNT_SITE_MISMATCH: "La boutique sélectionnée ne correspond pas au compte financier de la caisse. Choisissez un compte affecté à cette boutique.",
   RETAIL_CLOSE_ACCOUNT_SITE_MISMATCH: "Cette clôture contient un compte ou une session de caisse appartenant à une autre boutique. Séparez les opérations par boutique.",
