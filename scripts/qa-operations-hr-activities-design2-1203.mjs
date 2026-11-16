@@ -11,7 +11,7 @@ const root = "components/enterprise/";
 const ops = ["tasks", "requests", "approvals", "meetings"];
 for (const name of ops) {
   check(`${root}core-v2/enterprise-${name}-workspace.tsx`, "ErpDesign2Metric", "ErpDesign2RegisterSection", "CoordinationDesign2Tools", "dateFrom", "dateTo", "onDateChange", "onStatusChange");
-  check(`app/api/enterprise/[organizationId]/${name}/route.ts`, "financeBusinessDateRange", "organizationId", "businessPeriod");
+  check(`app/api/enterprise/[organizationId]/${name}/route.ts`, "financeBusinessDateRange", "organizationId", "civilRange");
 }
 check(`${root}core-v2/enterprise-workflows-workspace.tsx`, "ErpDesign2Metric", "ErpDesign2RegisterTools", "runFrom", "runTo", "onDateChange");
 check("app/api/enterprise/[organizationId]/workflow-runs/route.ts", "financeBusinessDateRange", "visibleRuns", "items: visibleRuns", "sourceEntityType: { in: permittedEntityTypes }");
