@@ -58,6 +58,7 @@ vm.runInNewContext(compiled, {
     if (id === "@/lib/prisma") return { prisma };
     if (id === "@/lib/enterprise/retail/errors") return { EnterpriseRetailError };
     if (id === "@/lib/enterprise/retail/constants") return { RETAIL_SECTOR_CODE: "COMMERCE_RETAIL" };
+    if (id === "@/lib/enterprise/accounting/currency") return { resolveExchangeRateDetails: async () => ({ rate: decimal(1), rateId: null, rateDate: new Date(), direction: "IDENTITY" }), snapshotExchangeRate: async () => ({}) };
     if (id === "@/lib/enterprise/retail/commercial-engine") return { resolveRetailCommercialPricingDecisions: async () => [{ catalogItemId: "product", lineTotal: decimal(10) }] };
     if (id === "@/lib/enterprise/retail/inventory-policy") return { assertRetailLotPolicyTx: async () => {} };
     if (id === "@/lib/enterprise/retail/invoice-stock-holds") return { readActiveRetailInvoiceStockHoldsTx: async () => [] };

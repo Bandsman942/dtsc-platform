@@ -8,6 +8,17 @@ import { prisma } from "@/lib/prisma";
 
 type Params = { params: Promise<{ organizationId: string }> };
 
+/** The actual proprietor can be stored as Organization.ownerUserId even when
+ * a historical member row has a non-OWNER administrative role. Fail closed for
+ * ordinary admins, and require an ACTIVE member of this exact organization. */
+async function isRetailEnterpriseProprietor(organizationId: string, userId: string): Promise<boolean> {
+  const [membership, organization] = await Promise.all([
+    prisma.organizationMember.findFirst({ where: { organizationId, userId, status: "ACTIVE", removedAt: null }, select: { role: true } }),
+    prisma.organization.findFirst({ where: { id: organizationId, deletedAt: null }, select: { ownerUserId: true } }),
+  ]);
+  return Boolean(membership && organization && (membership.role === "OWNER" || organization.ownerUserId === userId));
+}
+
 async function authorizeOwner(req: Request, organizationId: string, mutation = false) {
   const auth = await authorizeRetailRequest(req, organizationId, "RETAIL_POS", mutation ? "manage" : "read", { mutation, limit: 40 });
   if (!auth.ok) return auth;
@@ -54,10 +65,7 @@ export async function GET(req: Request, { params }: Params) {
       };
     }),
     capabilities: RETAIL_SITE_CAPABILITIES, defaults: ROLE_DEFAULT_CAPABILITIES,
-    canGrantSelfApproval: Boolean(await prisma.organizationMember.findFirst({
-      where: { organizationId, userId: auth.session.userId, role: "OWNER", status: "ACTIVE", removedAt: null },
-      select: { id: true },
-    })),
+    canGrantSelfApproval: await isRetailEnterpriseProprietor(organizationId, auth.session.userId),
     isolationEnabled: retailStaffIsolationIsEnabled(configuration?.settingsJson),
   }, { headers: { "Cache-Control": "private, no-store" } });
 }
@@ -85,11 +93,9 @@ export async function PUT(req: Request, { params }: Params) {
     const oldRights = existing ? siteStaffCapabilities(existing.roleCode, existing.permissionsJson) : [];
     const newRights = input.permissions ?? ROLE_DEFAULT_CAPABILITIES[input.roleCode];
     if (RETAIL_SELF_APPROVAL_CAPABILITIES.some((permission) => oldRights.includes(permission) || newRights.includes(permission))) {
-      const principal = await prisma.organizationMember.findFirst({
-        where: { organizationId, userId: auth.session.userId, status: "ACTIVE", removedAt: null, role: "OWNER" },
-        select: { id: true },
-      });
-      if (!principal) throw new EnterpriseRetailError("RETAIL_SITE_SELF_APPROVAL_OWNER_ONLY", 403);
+      if (!await isRetailEnterpriseProprietor(organizationId, auth.session.userId)) {
+        throw new EnterpriseRetailError("RETAIL_SITE_SELF_APPROVAL_OWNER_ONLY", 403);
+      }
     }
     if (newRights.includes("SELF_APPROVE_INVOICE") && !newRights.includes("PREPARE_INVOICE") ||
         newRights.includes("SELF_APPROVE_PAYMENT") && !newRights.includes("COLLECT_PAYMENT") ||

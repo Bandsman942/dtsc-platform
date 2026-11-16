@@ -1,4 +1,10 @@
 import { Prisma } from "@prisma/client";
+
+// Prisma.Decimal (decimal.js-light) does not provide static min/max.
+const decimalMin = (a: Prisma.Decimal, b: Prisma.Decimal): Prisma.Decimal => a.lessThan(b) ? a : b;
+const decimalMax = (a: Prisma.Decimal, b: Prisma.Decimal): Prisma.Decimal => a.greaterThan(b) ? a : b;
+
+import { resolveExchangeRateDetails } from "@/lib/enterprise/accounting/currency";
 import { resolveDefaultSalesTaxesForRetail, validatedInvoiceTaxRate } from "@/lib/enterprise/accounting/tax-engine";
 import { normalizeTaxCountryCode } from "@/lib/enterprise/accounting/tax-jurisdictions";
 import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
@@ -13,6 +19,8 @@ type CommercialContext = {
   customerSegmentCode?: string | null;
   channelCode?: string | null;
   overrideReason?: string | null;
+  /** Only Finance-backed invoice checkout uses product-currency conversion. */
+  invoiceCheckoutFx?: boolean;
 };
 
 type CommercialPermissions = {
@@ -79,7 +87,7 @@ export function applyRetailRelationshipBenefitPricing(
         ? new Prisma.Decimal(0)
         : decision.discountAmount;
     const discountAmount = money(
-      Prisma.Decimal.min(customerGross, startingDiscount.plus(relationDiscount)),
+      decimalMin(customerGross, startingDiscount.plus(relationDiscount)),
     );
     const afterDiscountCustomerTotal = money(customerGross.minus(discountAmount));
     const divisor = new Prisma.Decimal(1).plus(decision.taxRate);
@@ -217,13 +225,13 @@ function promotionDiscount(
   }
   if (promotion.promotionType === "FIXED_AMOUNT") {
     const amount = numberValue(action.amount);
-    return amount && amount > 0 ? money(Prisma.Decimal.min(line.gross, amount)) : decimal(0);
+    return amount && amount > 0 ? money(decimalMin(line.gross, new Prisma.Decimal(amount))) : decimal(0);
   }
   if (promotion.promotionType === "QUANTITY_BREAK") {
     const minimum = numberValue(action.minQuantity);
     if (!minimum || line.quantity.lessThan(minimum)) return decimal(0);
     const unitPrice = numberValue(action.unitPrice);
-    if (unitPrice !== null && unitPrice >= 0) return money(Prisma.Decimal.max(0, line.gross.minus(line.quantity.times(unitPrice))));
+    if (unitPrice !== null && unitPrice >= 0) return money(decimalMax(new Prisma.Decimal(0), line.gross.minus(line.quantity.times(unitPrice))));
     const percent = numberValue(action.percent);
     return percent && percent > 0 ? money(line.gross.times(percent).div(100)) : decimal(0);
   }
@@ -233,7 +241,7 @@ function promotionDiscount(
     if (!buyQuantity || !getQuantity || buyQuantity <= 0 || getQuantity <= 0) return decimal(0);
     const groupSize = buyQuantity + getQuantity;
     const freeQuantity = Math.floor(line.quantity.toNumber() / groupSize) * getQuantity;
-    return money(Prisma.Decimal.min(line.gross, line.unitPrice.times(freeQuantity)));
+    return money(decimalMin(line.gross, line.unitPrice.times(freeQuantity)));
   }
   return decimal(0);
 }
@@ -313,6 +321,20 @@ async function resolvePricingDecisions(
   });
   if (items.length !== catalogItemIds.length) throw new EnterpriseRetailError("RETAIL_CATALOG_ITEM_INVALID", 409);
   const itemById = new Map(items.map((item) => [item.id, item]));
+  const sourceCurrencyByItem = new Map(items.map((item) => [item.id, item.currency || input.currencyCode]));
+  const sourceCurrencies = [...new Set(sourceCurrencyByItem.values())];
+  const hasForeign = sourceCurrencies.some((code) => code !== input.currencyCode);
+  if (context.invoiceCheckoutFx && hasForeign) {
+    const configuration = await prisma.enterpriseFinanceConfiguration.findUnique({ where: { organizationId }, select: { functionalCurrencyCode: true } });
+    if (!configuration || configuration.functionalCurrencyCode !== input.currencyCode) throw new EnterpriseRetailError("RETAIL_INVOICE_FUNCTIONAL_CURRENCY_REQUIRED", 409);
+  }
+  const ratesBySource = new Map<string, Awaited<ReturnType<typeof resolveExchangeRateDetails>>>();
+  if (context.invoiceCheckoutFx) {
+    for (const sourceCurrencyCode of sourceCurrencies) {
+      const rate = await resolveExchangeRateDetails(prisma, { organizationId, sourceCurrencyCode, targetCurrencyCode: input.currencyCode, rateDate: effectiveAt });
+      ratesBySource.set(sourceCurrencyCode, rate);
+    }
+  }
   const taxByItemId = await resolveTaxByItem(organizationId, items, effectiveAt, input.siteId);
 
   const prices = await prisma.enterpriseCatalogPrice.findMany({
@@ -320,7 +342,7 @@ async function resolvePricingDecisions(
       organizationId,
       catalogItemId: { in: catalogItemIds },
       priceType: "SALE",
-      currency: input.currencyCode,
+      currency: context.invoiceCheckoutFx ? { in: sourceCurrencies } : input.currencyCode,
       status: "ACTIVE",
       archivedAt: null,
       effectiveFrom: { lte: effectiveAt },
@@ -356,9 +378,11 @@ async function resolvePricingDecisions(
   const baseLines = input.lines.map((line) => {
     const item = itemById.get(line.catalogItemId);
     if (!item) throw new EnterpriseRetailError("RETAIL_CATALOG_ITEM_INVALID", 409);
-    if (item.currency && item.currency !== input.currencyCode) throw new EnterpriseRetailError("RETAIL_CURRENCY_MISMATCH", 409, { catalogItemId: item.id });
+    if (item.currency && item.currency !== input.currencyCode && !context.invoiceCheckoutFx) throw new EnterpriseRetailError("RETAIL_CURRENCY_MISMATCH", 409, { catalogItemId: item.id });
     const quantity = decimal(line.quantity);
-    const candidates = (pricesByItemId.get(item.id) || []).flatMap((price) => {
+    const sourceCurrency = sourceCurrencyByItem.get(item.id) || input.currencyCode;
+    const conversion = ratesBySource.get(sourceCurrency);
+    const candidates = (pricesByItemId.get(item.id) || []).filter((price) => price.currency === sourceCurrency).flatMap((price) => {
       const priceConditions = conditionsByPriceId.get(price.id) || [];
       if (!priceConditions.length) return [{ price, score: 0 }];
       return priceConditions
@@ -368,7 +392,9 @@ async function resolvePricingDecisions(
     const selected = candidates[0]?.price || null;
     const fallback = item.indicativeSalePrice;
     if (!selected && fallback === null) throw new EnterpriseRetailError("RETAIL_PRICE_NOT_CONFIGURED", 409, { catalogItemId: item.id });
-    const baseUnitPrice = selected ? selected.amount : decimal(fallback!);
+    const originalUnitPrice = selected ? selected.amount : decimal(fallback!);
+    if (context.invoiceCheckoutFx && !conversion) throw new EnterpriseRetailError("FINANCE_EXCHANGE_RATE_REQUIRED", 409);
+    const baseUnitPrice = conversion ? money(originalUnitPrice.times(conversion.rate)) : originalUnitPrice;
     const requestedUnitPrice = line.requestedUnitPrice === undefined ? baseUnitPrice : decimal(line.requestedUnitPrice);
     let resolvedUnitPrice = baseUnitPrice;
     let pricingSource = selected ? "CATALOG_PRICE" : "INDICATIVE_FALLBACK";
@@ -379,7 +405,8 @@ async function resolvePricingDecisions(
       pricingSource = "MANUAL_OVERRIDE";
       priceOverride = true;
     }
-    return { line, item, quantity, selected, baseUnitPrice, resolvedUnitPrice, pricingSource, priceOverride, gross: money(quantity.times(resolvedUnitPrice)) };
+    return { line, item, quantity, selected, baseUnitPrice, resolvedUnitPrice, pricingSource, priceOverride, gross: money(quantity.times(resolvedUnitPrice)),
+      fx: context.invoiceCheckoutFx && conversion ? { sourceCurrencyCode: sourceCurrency, targetCurrencyCode: input.currencyCode, originalUnitPrice: originalUnitPrice.toFixed(), rate: conversion.rate.toFixed(), rateId: conversion.rateId, rateDate: conversion.rateDate.toISOString(), direction: conversion.direction, rateSource: conversion.source } : null };
   });
   const cartSubtotal = money(baseLines.reduce((sum, line) => sum.plus(line.gross), decimal(0)));
 
@@ -397,7 +424,7 @@ async function resolvePricingDecisions(
     if (productIds.length < 2 || bundlePrice === null || bundlePrice <= 0 || !productIds.every((id) => baseLines.some((line) => line.item.id === id))) continue;
     const participating = baseLines.filter((line) => productIds.includes(line.item.id));
     const participatingGross = participating.reduce((sum, line) => sum.plus(line.gross), decimal(0));
-    const totalDiscount = money(Prisma.Decimal.max(0, participatingGross.minus(bundlePrice)));
+    const totalDiscount = money(decimalMax(new Prisma.Decimal(0), participatingGross.minus(bundlePrice)));
     if (totalDiscount.isZero()) continue;
     let allocated = decimal(0);
     participating.forEach((line, index) => {
@@ -434,7 +461,7 @@ async function resolvePricingDecisions(
     const stackable = promotionCandidates.filter((candidate) => candidate.promotion.stackMode === "STACKABLE");
     const exclusive = promotionCandidates.filter((candidate) => candidate.promotion.stackMode !== "STACKABLE").sort((a, b) => b.amount.comparedTo(a.amount));
     const applied = [...stackable, ...(exclusive[0] ? [exclusive[0]] : [])];
-    const automaticDiscount = money(Prisma.Decimal.min(base.gross, applied.reduce((sum, candidate) => sum.plus(candidate.amount), decimal(0))));
+    const automaticDiscount = money(decimalMin(base.gross, applied.reduce((sum, candidate) => sum.plus(candidate.amount), decimal(0))));
     const requestedDiscount = decimal(base.line.requestedDiscountAmount || 0);
     let discountAmount = automaticDiscount;
     let discountOverride = false;
@@ -503,6 +530,7 @@ async function resolvePricingDecisions(
         priceOverride: base.priceOverride,
         discountOverride,
         taxOverride,
+        ...(base.fx ? { invoiceFx: base.fx } : {}),
       },
       inventoryItemId: base.line.inventoryItemId,
       stockLotId: base.line.stockLotId,
@@ -607,6 +635,7 @@ export function serializeRetailPricingPreview(
       taxAmount: decision.taxAmount.toFixed(),
       lineTotal: decision.lineTotal.toFixed(),
       pricingSource: decision.pricingSource,
+      ...(decision.context.invoiceFx ? { invoiceFx: decision.context.invoiceFx } : {}),
       promotions: decision.promotions.map((promotion) => ({
         ...promotion,
         discountAmount: promotion.discountAmount.toFixed(),
