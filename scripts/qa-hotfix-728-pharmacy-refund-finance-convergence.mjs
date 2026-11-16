@@ -73,7 +73,7 @@ check(
 
 for (const token of [
   "reverseCustomerPaymentAllocationsForRefundAmount",
-  "Prisma.Decimal.min",
+  "decimalMin(allocation.amount, remaining)",
   "nextAllocationAmount",
   "PAYMENT_ALLOCATION_CONFIRMED",
   "postingVersion:",
@@ -91,6 +91,9 @@ for (const token of [
   "REFUND_LEGACY_ALLOCATION_RECOVERY_AMBIGUOUS",
   'recovery: "LEGACY_REVERSED_ALLOCATIONS"',
 ]) check(commonRefund.includes(token), `bounded common refund primitive missing: ${token}`);
+
+check(!commonRefund.includes("Prisma.Decimal.min(") && !commonRefund.includes("Prisma.Decimal.max("),
+  "Common refund must not invoke unavailable static Prisma.Decimal.min/max methods");
 
 check(
   commonRefund.includes("resolveCashSessionForConfirmation(tx, current, actorUserId)"),

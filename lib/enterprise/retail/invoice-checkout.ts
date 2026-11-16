@@ -264,10 +264,14 @@ export async function postPaidRetailInvoiceStockTx(
 ) {
   const checkout = await tx.enterpriseRetailInvoiceCheckout.findFirst({
     where: { organizationId, salesInvoiceId },
-    include: { invoice: true, lines: { include: { invoiceItem: true } } },
+    include: { invoice: true, lines: { include: { invoiceItem: true,
+      returnLines: { where: { request: { status: "COMPLETED" } }, select: { quantity: true } },
+    } } },
   });
   if (!checkout || checkout.stockPostedAt) return;
-  if (checkout.invoice.status !== "PAID" || !checkout.invoice.outstandingAmount.isZero()) {
+  if (!["PAID", "CREDIT_NOTE"].includes(checkout.invoice.status) || !checkout.invoice.outstandingAmount.isZero() ||
+      (checkout.invoice.status === "CREDIT_NOTE" &&
+        !checkout.invoice.amountPaid.plus(checkout.invoice.amountCredited).equals(checkout.invoice.grandTotal))) {
     throw new EnterpriseRetailError("RETAIL_INVOICE_NOT_FULLY_PAID", 409);
   }
 
@@ -275,6 +279,14 @@ export async function postPaidRetailInvoiceStockTx(
     tx.enterpriseRetailConfiguration.findUnique({ where: { organizationId }, select: { settingsJson: true } }),
     tx.organization.findUnique({ where: { id: organizationId }, select: { timezone: true } }),
   ]);
+  // If a partial invoice was credited before physical fulfillment, remove
+  // completed cancellation quantities before committing cost-of-goods sold.
+  const fulfilableLines = checkout.lines.map((line) => ({
+    line,
+    remaining: decimalMax(new Prisma.Decimal(0), line.invoiceItem.quantity.minus(
+      (line.returnLines || []).reduce((total, entry) => total.plus(entry.quantity), new Prisma.Decimal(0)),
+    )),
+  })).filter(({ line, remaining }) => Boolean(line.inventoryItemId) && remaining.greaterThan(0));
   // The owner may deactivate future checkouts; previously issued invoices
   // still have to be fulfilled, subject to current lot safety rules.
   await assertRetailLotPolicyTx(tx, {
@@ -282,11 +294,11 @@ export async function postPaidRetailInvoiceStockTx(
     warehouseId: checkout.warehouseId,
     timezone: organization?.timezone || "UTC",
     settings: configuration?.settingsJson,
-    lines: checkout.lines.map((line) => ({ inventoryItemId: line.inventoryItemId, stockLotId: line.stockLotId })),
+    lines: fulfilableLines.map(({ line }) => ({ inventoryItemId: line.inventoryItemId, stockLotId: line.stockLotId })),
   });
 
-  for (const line of checkout.lines) {
-    if (!line.inventoryItemId) continue; // Service, not a physical good.
+  for (const { line, remaining } of fulfilableLines) {
+    if (!line.inventoryItemId) continue; // Services never debit inventory.
     const balances = await tx.enterpriseInventoryBalance.findMany({
       where: {
         organizationId, warehouseId: checkout.warehouseId, inventoryItemId: line.inventoryItemId,
@@ -304,7 +316,7 @@ export async function postPaidRetailInvoiceStockTx(
       organizationId, warehouseId: checkout.warehouseId, inventoryItemIds: [line.inventoryItemId],
       excludeSalesInvoiceId: checkout.salesInvoiceId,
     })]);
-    let stillNeeded = line.invoiceItem.quantity;
+    let stillNeeded = remaining;
     let unscopedReserved = activeReservations
       .filter((reservation) => !reservation.storageLocationId)
       .reduce((sum, reservation) => sum.plus(reservation.quantity.minus(reservation.fulfilledQuantity)), new Prisma.Decimal(0));

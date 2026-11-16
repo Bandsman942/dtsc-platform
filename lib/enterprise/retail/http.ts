@@ -59,6 +59,8 @@ const ERROR_MESSAGES: Record<string, string> = {
   RETAIL_INVOICE_RETURN_FINANCE_PREPARE_INVALID: "La demande de préparation financière est invalide. Actualisez le retour.",
   RETAIL_INVOICE_RETURN_FINANCE_SETTLE_INVALID: "Précisez une justification valide et actualisez la demande avant de terminer le remboursement.",
   RETAIL_INVOICE_RETURN_FINANCE_PERMISSION_REQUIRED: "Cette étape nécessite les autorisations Finance des paiements et des créances clients. Vérifiez votre rôle ou demandez l'intervention d'un responsable habilité.",
+  RETAIL_INVOICE_RETURN_FINANCE_APPROVER_INDEPENDENT_REQUIRED: "Sélectionnez un validateur Finance indépendant du demandeur, de l'inspecteur et du préparateur, autorisé à approuver les avoirs et remboursements de cette boutique.",
+  RETAIL_INVOICE_RETURN_SETTLEMENT_PAYOUT_CONFLICT: "Le solde de la facture ou le trop-perçu a changé pendant la validation. Réexaminez les pièces Finance avant de liquider le dossier.",
   RETAIL_INVOICE_RETURN_FINANCE_CONFLICT: "Ce retour a changé ou les pièces Finance sont déjà préparées. Actualisez le dossier.",
   RETAIL_INVOICE_RETURN_MULTIPLE_REFUND_ACCOUNTS_UNSUPPORTED: "Les paiements de cette facture proviennent de plusieurs comptes financiers. Le remboursement doit être traité par un circuit multi-comptes dédié.",
   RETAIL_INVOICE_RETURN_FINANCE_SOURCE_MISMATCH: "La source financière du règlement ne permet pas ce remboursement. Vérifiez le compte et le moyen de paiement d'origine.",

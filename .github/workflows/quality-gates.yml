@@ -149,6 +149,8 @@ jobs:
         run: pnpm qa:retail-financial-kpi-v2
       - name: HOTFIX #1187 owner permissions, Retail FX quote and purchase review contracts
         run: pnpm qa:hotfix-1187
+      - name: HOTFIX #1187 canonical partial-credit and zero-refund Decimal preflight QA
+        run: pnpm qa:hotfix-1187-returns
       - name: Type check
         run: pnpm type-check
         env:

@@ -1,6 +1,6 @@
 {
   "name": "dtsc-platform",
-  "version": "1.18.3",
+  "version": "1.19.0",
   "private": true,
   "engines": {
     "node": "22.x"
@@ -8,6 +8,7 @@
   "scripts": {
     "qa:hotfix-1184": "node scripts/qa-hotfix-1184-retail-self-approval-audit.mjs",
     "qa:hotfix-1187": "node scripts/qa-hotfix-1187.mjs",
+    "qa:hotfix-1187-returns": "node scripts/qa-hotfix-1187-partial-credit.mjs",
     "qa:routing-scalability": "node scripts/qa-routes-dispatch-parity.mjs && node scripts/qa-routes-dispatch-behavior.mjs && node scripts/qa-routes-retail-parity.mjs && node scripts/qa-routes-retail-behavior.mjs && node scripts/qa-routes-scalability.mjs --assert",
     "qa:global-outbox": "node scripts/qa-hotfix-global-outbox-contract.mjs",
     "qa:global-outbox:postgres": "node scripts/qa-hotfix-global-outbox-postgres.mjs",
