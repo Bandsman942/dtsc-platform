@@ -35,6 +35,7 @@ const messages = {
     notReady: "Le circuit de facturation et d'encaissement séparés n'est pas encore activé pour cette entreprise. Terminez les prérequis RETAIL et Finance.",
     all: "Toutes mes boutiques", site: "Boutique", search: "Recherche intelligente", searchHelp: "N° de facture, article ou désignation", refresh: "Actualiser", from: "Du", to: "Au", exact: "Date précise", reset: "Effacer les dates",
     empty: "Aucune facture émise et impayée pour cette sélection. Les factures « À valider » restent dans Facturation ; le validateur Finance doit d'abord les approuver, puis elles doivent être émises avant d'arriver ici.", loading: "Chargement des factures à encaisser…", failed: "Impossible de consulter les factures à encaisser.",
+    focusedInvoice: "Facture ciblée : encaissement sécurisé selon vos droits de boutique.", allCollections: "Toutes les factures à encaisser",
     total: "Montant facturé", due: "Reste à encaisser", issued: "À encaisser", partial: "Paiement partiel", overdue: "Échue",
     a4: "Facture A4", thermal: "Ticket 80 mm", previous: "Précédente", next: "Suivante", page: "Page",
   },
@@ -44,6 +45,7 @@ const messages = {
     notReady: "The separate invoice and collection workflow is not yet active for this company. Complete Retail and Finance readiness first.",
     all: "All my stores", site: "Store", search: "Smart search", searchHelp: "Invoice number or item description", refresh: "Refresh", from: "From", to: "To", exact: "Exact date", reset: "Clear dates",
     empty: "No issued and unpaid invoices match this selection. Invoices awaiting approval remain in Invoicing until Finance approves and issues them.", loading: "Loading outstanding invoices…", failed: "Unable to load invoices for collection.",
+    focusedInvoice: "Selected invoice: collection restricted to your store permissions.", allCollections: "All collectible invoices",
     total: "Invoiced total", due: "Outstanding", issued: "Awaiting payment", partial: "Partially paid", overdue: "Overdue",
     a4: "A4 invoice", thermal: "80 mm ticket", previous: "Previous", next: "Next", page: "Page",
   },
@@ -108,7 +110,7 @@ export function RetailInvoiceCashierWorkbench({ organizationId, locale, preferre
       <div className="min-w-0 flex-1"><h2 className="flex items-center gap-2 text-lg font-black text-dtsc-ink"><CreditCard className="h-5 w-5 text-emerald-600" />{t.title}</h2><p className="mt-1 text-xs leading-5 text-dtsc-muted">{t.intro}</p></div>
       <Button type="button" variant="outline" disabled={loading} onClick={() => void load()}><RefreshCw className="h-4 w-4" />{t.refresh}</Button>
     </header>
-    {targetInvoiceId ? <div className="flex min-w-0 flex-wrap items-center justify-between gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm"><span className="font-semibold text-dtsc-ink">{locale === "fr" ? "Facture ciblée : encaissement sécurisé selon vos droits de boutique." : "Selected invoice: collection restricted to your store permissions."}</span><Link href="/enterprise-modules/RETAIL_POS?section=collections" className="font-bold text-dtsc-blue underline-offset-4 hover:underline">{locale === "fr" ? "Toutes les factures à encaisser" : "All collectible invoices"}</Link></div> : null}
+    {targetInvoiceId ? <div className="flex min-w-0 flex-wrap items-center justify-between gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm"><span className="font-semibold text-dtsc-ink">{t.focusedInvoice}</span><Link href="/enterprise-modules/RETAIL_POS?section=collections" className="font-bold text-dtsc-blue underline-offset-4 hover:underline">{t.allCollections}</Link></div> : null}
     {forbidden ? <p role="alert" className="rounded-xl bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-200">{t.noAccess}</p> : null}
     {notReady ? <p role="status" className="rounded-xl bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-200">{t.notReady}</p> : null}
     {error ? <p role="alert" className="rounded-xl bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-200">{error}</p> : null}
