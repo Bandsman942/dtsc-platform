@@ -31,7 +31,7 @@ import { BusinessList, BusinessListItem } from "@/components/workspace/business-
 import { ContextActions, type BusinessContextAction } from "@/components/workspace/context-actions";
 import { EmptyState } from "@/components/workspace/empty-state";
 import { ModuleMetric, ModuleMetrics } from "@/components/workspace/module-metrics";
-import { ModuleContent, ModuleHeader, ModuleSection, ModuleToolbar, ModuleWorkspace } from "@/components/workspace/module-workspace";
+import { ModuleContent, ModuleHeader, ModuleToolbar, ModuleWorkspace } from "@/components/workspace/module-workspace";
 import { StatusBadge } from "@/components/workspace/status-badge";
 import type { EnterpriseModuleDefinition } from "@/lib/enterprise/module-registry";
 
@@ -151,6 +151,7 @@ export function EnterpriseSalesOperationsWorkspace({
   const [busy, setBusy] = useState(false);
 
   useToastMessage(successMessage, "success");
+  useToastMessage(message, "error");
 
   useEffect(() => {
     let active = true;
@@ -460,12 +461,19 @@ export function EnterpriseSalesOperationsWorkspace({
           {([["CRM_CUSTOMERS", "sales.linkCustomers"], ["CATALOG", "sales.linkCatalog"], ["INVENTORY_LOGISTICS", "sales.linkInventory"], ["FINANCE_RECEIVABLES", "sales.linkFinance"]] as const).map(([code, label]) => <Link key={code} href={`/enterprise-modules/${code}`} className="rounded-lg border border-dtsc-border bg-dtsc-surface px-2.5 py-1.5 font-semibold text-dtsc-blue transition hover:border-cyan-500/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400">{t(label)}</Link>)}
         </nav>
         {message && !createOpen && !fulfillTarget && !quoteActionTarget ? <ProfessionalError message={message} /> : null}
-        <ModuleSection title={tab === "QUOTES" ? t("sales.quotesTitle") : t("sales.ordersTitle")} description={tab === "QUOTES" ? t("sales.quotesDescription") : t("sales.ordersDescription")}>
+        <section data-sales-register aria-label={tab === "QUOTES" ? t("sales.quotesTitle") : t("sales.ordersTitle")} className="min-w-0 rounded-2xl border border-dtsc-border bg-dtsc-surface p-3 shadow-sm sm:p-5">
+          <div className="mb-4 flex min-w-0 flex-wrap items-start justify-between gap-3 border-l-[3px] border-cyan-500 pl-3">
+            <div className="min-w-0">
+              <h2 className="text-lg font-black tracking-tight text-dtsc-ink">{tab === "QUOTES" ? t("sales.quotesTitle") : t("sales.ordersTitle")}</h2>
+              <p className="mt-1 text-sm text-dtsc-muted">{tab === "QUOTES" ? t("sales.quotesDescription") : t("sales.ordersDescription")}</p>
+            </div>
+            <span className="rounded-full border border-dtsc-border bg-dtsc-page px-3 py-1 text-xs font-extrabold text-dtsc-ink">{activeCollection.pagination.total}</span>
+          </div>
           {activeCollection.error ? <ProfessionalError message={activeCollection.error} /> : activeCollection.loading ? <ProfessionalLoading /> : tab === "QUOTES" ? (
             quotes.items.length ? <BusinessList ariaLabel={t("sales.quotesAria")}>{quotes.items.map((quote) => { const lineSuffix = locale === "en" ? (quote.items.length === 1 ? "" : "s") : (quote.items.length > 1 ? "s" : ""); return <BusinessListItem key={quote.id} title={`${quote.reference} · ${quote.title}`} status={<StatusBadge tone={statusTone(quote.status)}>{statusLabel(quote.status)}</StatusBadge>} meta={`${professionalErpMoney(quote.totalAmount, quote.currency, locale)}${quote.validUntil ? ` · ${t("sales.validUntil", { date: professionalErpDate(quote.validUntil, locale) })}` : ""}`} description={`${quote.businessParty?.displayName || quote.businessParty?.legalName || t("common.thirdPartyToReview")} · ${t("sales.lines", { count: quote.items.length, suffix: lineSuffix })}`} onOpen={() => setQuoteDetail(quote)} openLabel={t("sales.openQuote", { reference: quote.reference })} actions={<ContextActions label={t("sales.quoteActions")} actions={quoteActions(quote)} />} />; })}</BusinessList> : <EmptyState compact title={t("sales.noQuote")} description={t("sales.noQuoteHelp")} />
           ) : orders.items.length ? <BusinessList ariaLabel={t("sales.ordersAria")}>{orders.items.map((order) => { const lineSuffix = locale === "en" ? (order.items.length === 1 ? "" : "s") : (order.items.length > 1 ? "s" : ""); const deliverySuffix = locale === "en" ? (order.fulfillments.length === 1 ? "y" : "ies") : (order.fulfillments.length > 1 ? "s" : ""); return <BusinessListItem key={order.id} title={`${order.reference} · ${order.title}`} status={<StatusBadge tone={statusTone(order.status)}>{statusLabel(order.status)}</StatusBadge>} meta={`${professionalErpMoney(order.totalAmount, order.currency, locale)} · ${t("sales.lines", { count: order.items.length, suffix: lineSuffix })}`} description={`${order.businessParty?.displayName || order.businessParty?.legalName || t("common.thirdPartyToReview")} · ${t("sales.deliveries", { count: order.fulfillments.length, suffix: deliverySuffix })}`} onOpen={() => setOrderDetail(order)} openLabel={t("sales.openOrder", { reference: order.reference })} actions={<ContextActions label={t("sales.orderActions")} actions={orderActions(order)} />} />; })}</BusinessList> : <EmptyState compact title={t("sales.noOrder")} description={t("sales.noOrderHelp")} />}
           <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-dtsc-border pt-3 text-sm text-dtsc-muted"><span>{t("sales.page", { page: activeCollection.pagination.page, pageCount: activeCollection.pagination.pageCount })}</span><div className="flex gap-2"><Button variant="outline" disabled={page <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>{t("common.previous")}</Button><Button variant="outline" disabled={page >= activeCollection.pagination.pageCount} onClick={() => setPage((value) => value + 1)}>{t("common.next")}</Button></div></div>
-        </ModuleSection>
+        </section>
         <ProfessionalHelp moduleCode="SALES_QUOTES_ORDERS" />
       </ModuleContent>
 
@@ -499,11 +507,34 @@ export function EnterpriseSalesOperationsWorkspace({
       </Dialog>
 
       <Dialog open={Boolean(quoteDetail)} onClose={() => setQuoteDetail(null)} title={quoteDetail ? `${quoteDetail.reference} · ${quoteDetail.title}` : t("sales.quoteDetail")} className="h-[92dvh] max-w-4xl">
-        {quoteDetail ? <div className="grid gap-5"><div className="flex flex-wrap gap-2"><StatusBadge tone={statusTone(quoteDetail.status)}>{statusLabel(quoteDetail.status)}</StatusBadge><StatusBadge>{professionalErpMoney(quoteDetail.totalAmount, quoteDetail.currency, locale)}</StatusBadge></div><p className="text-sm font-bold text-dtsc-ink">{quoteDetail.businessParty?.displayName || quoteDetail.businessParty?.legalName || t("common.thirdPartyToReview")}</p><BusinessList ariaLabel={t("sales.quoteLines")}>{quoteDetail.items.map((item) => <BusinessListItem key={item.id} title={item.description} meta={`${item.quantity} × ${professionalErpMoney(item.unitPrice, quoteDetail.currency, locale)}`} status={<StatusBadge>{professionalErpMoney(item.lineTotal, quoteDetail.currency, locale)}</StatusBadge>} />)}</BusinessList><div data-responsive-actions>{quoteActions(quoteDetail).filter((action) => action.id !== "open").map((action) => <Button key={action.id} type="button" variant={action.destructive ? "outline" : "default"} disabled={busy} onClick={() => action.onSelect?.()}>{action.label}</Button>)}</div></div> : null}
+        {quoteDetail ? <div className="grid gap-5"><div className="flex flex-wrap items-center justify-between gap-2"><div className="flex flex-wrap gap-2"><StatusBadge tone={statusTone(quoteDetail.status)}>{statusLabel(quoteDetail.status)}</StatusBadge><StatusBadge>{professionalErpMoney(quoteDetail.totalAmount, quoteDetail.currency, locale)}</StatusBadge></div>
+          <Button type="button" variant="outline" onClick={() => printCommercial("quote", quoteDetail.id)}><Printer className="h-4 w-4" />{t("sales.printPreview")}</Button></div>
+          <p className="text-sm font-bold text-dtsc-ink">{quoteDetail.businessParty?.displayName || quoteDetail.businessParty?.legalName || t("common.thirdPartyToReview")}</p><BusinessList ariaLabel={t("sales.quoteLines")}>{quoteDetail.items.map((item) => <BusinessListItem key={item.id} title={item.description} meta={`${item.quantity} × ${professionalErpMoney(item.unitPrice, quoteDetail.currency, locale)}`} status={<StatusBadge>{professionalErpMoney(item.lineTotal, quoteDetail.currency, locale)}</StatusBadge>} />)}</BusinessList>
+          <div className="grid grid-cols-2 gap-2 rounded-xl border border-dtsc-border bg-dtsc-soft p-3 text-sm sm:grid-cols-4">
+            <div><span className="block text-xs text-dtsc-muted">{t("sales.subtotal")}</span><strong>{professionalErpMoney(quoteDetail.subtotalAmount, quoteDetail.currency, locale)}</strong></div>
+            <div><span className="block text-xs text-dtsc-muted">{t("sales.discountTotal")}</span><strong>{professionalErpMoney(quoteDetail.discountAmount, quoteDetail.currency, locale)}</strong></div>
+            <div><span className="block text-xs text-dtsc-muted">{t("sales.taxTotal")}</span><strong>{professionalErpMoney(quoteDetail.taxAmount, quoteDetail.currency, locale)}</strong></div>
+            <div><span className="block text-xs text-dtsc-muted">{t("sales.documentTotal")}</span><strong className="text-dtsc-blue">{professionalErpMoney(quoteDetail.totalAmount, quoteDetail.currency, locale)}</strong></div>
+          </div>
+          <p className="text-xs leading-5 text-dtsc-muted">{t("sales.printHelp")}</p>
+          <div data-responsive-actions>{quoteActions(quoteDetail).filter((action) => action.id !== "open").map((action) => <Button key={action.id} type="button" variant={action.destructive ? "outline" : "default"} disabled={busy} onClick={() => action.onSelect?.()}>{action.label}</Button>)}</div></div> : null}
       </Dialog>
 
       <Dialog open={Boolean(orderDetail)} onClose={() => setOrderDetail(null)} title={orderDetail ? `${orderDetail.reference} · ${orderDetail.title}` : t("sales.orderDetail")} className="h-[92dvh] max-w-4xl">
-        {orderDetail ? <div className="grid gap-5"><div className="flex flex-wrap gap-2"><StatusBadge tone={statusTone(orderDetail.status)}>{statusLabel(orderDetail.status)}</StatusBadge><StatusBadge>{professionalErpMoney(orderDetail.totalAmount, orderDetail.currency, locale)}</StatusBadge></div><p className="text-sm font-bold text-dtsc-ink">{orderDetail.businessParty?.displayName || orderDetail.businessParty?.legalName || t("common.thirdPartyToReview")}</p><BusinessList ariaLabel={t("sales.orderQuantities")}>{orderDetail.items.map((item) => <BusinessListItem key={item.id} title={item.description} meta={t("sales.orderedDelivered", { ordered: item.quantityOrdered, fulfilled: item.quantityFulfilled })} status={<StatusBadge tone={Number(item.quantityRemaining) > 0 ? "warning" : "success"}>{t("sales.remaining", { remaining: item.quantityRemaining })}</StatusBadge>} />)}</BusinessList>{["CONFIRMED", "PARTIALLY_FULFILLED"].includes(orderDetail.status) ? <Button onClick={() => openFulfillment(orderDetail)}><PackageCheck className="h-4 w-4" />{t("sales.recordDelivery")}</Button> : null}</div> : null}
+        {orderDetail ? <div className="grid gap-5"><div className="flex flex-wrap items-center justify-between gap-2"><div className="flex flex-wrap gap-2"><StatusBadge tone={statusTone(orderDetail.status)}>{statusLabel(orderDetail.status)}</StatusBadge><StatusBadge>{professionalErpMoney(orderDetail.totalAmount, orderDetail.currency, locale)}</StatusBadge></div>
+          <Button type="button" variant="outline" onClick={() => printCommercial("order", orderDetail.id)}><Printer className="h-4 w-4" />{t("sales.printPreview")}</Button></div>
+          <p className="text-sm font-bold text-dtsc-ink">{orderDetail.businessParty?.displayName || orderDetail.businessParty?.legalName || t("common.thirdPartyToReview")}</p><BusinessList ariaLabel={t("sales.orderQuantities")}>{orderDetail.items.map((item) => <BusinessListItem key={item.id} title={item.description} meta={t("sales.orderedDelivered", { ordered: item.quantityOrdered, fulfilled: item.quantityFulfilled })} status={<StatusBadge tone={Number(item.quantityRemaining) > 0 ? "warning" : "success"}>{t("sales.remaining", { remaining: item.quantityRemaining })}</StatusBadge>} />)}</BusinessList>
+          <div className="grid grid-cols-2 gap-2 rounded-xl border border-dtsc-border bg-dtsc-soft p-3 text-sm sm:grid-cols-4">
+            <div><span className="block text-xs text-dtsc-muted">{t("sales.subtotal")}</span><strong>{professionalErpMoney(orderDetail.subtotalAmount, orderDetail.currency, locale)}</strong></div>
+            <div><span className="block text-xs text-dtsc-muted">{t("sales.discountTotal")}</span><strong>{professionalErpMoney(orderDetail.discountAmount, orderDetail.currency, locale)}</strong></div>
+            <div><span className="block text-xs text-dtsc-muted">{t("sales.taxTotal")}</span><strong>{professionalErpMoney(orderDetail.taxAmount, orderDetail.currency, locale)}</strong></div>
+            <div><span className="block text-xs text-dtsc-muted">{t("sales.documentTotal")}</span><strong className="text-dtsc-blue">{professionalErpMoney(orderDetail.totalAmount, orderDetail.currency, locale)}</strong></div>
+          </div>
+          <div className="flex min-w-0 flex-wrap items-center gap-2 rounded-xl border border-sky-500/25 bg-sky-500/5 p-3 text-sm">
+            <FileText className="h-4 w-4 shrink-0 text-sky-600" /><span className="min-w-0 flex-1 text-dtsc-muted">{t("sales.financeHandoffHelp")}</span>
+            <Link href="/enterprise-modules/FINANCE_RECEIVABLES" className="rounded-lg border border-dtsc-border bg-dtsc-surface px-3 py-2 font-bold text-dtsc-blue transition hover:border-sky-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400">{t("sales.openCustomerInvoices")}</Link>
+          </div>
+          {["CONFIRMED", "PARTIALLY_FULFILLED"].includes(orderDetail.status) ? <Button onClick={() => openFulfillment(orderDetail)}><PackageCheck className="h-4 w-4" />{t("sales.recordDelivery")}</Button> : null}</div> : null}
       </Dialog>
 
       <Dialog
