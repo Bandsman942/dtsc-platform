@@ -100,7 +100,7 @@ await assert.rejects(preflight(fixture({ completed: [{ checkoutLineId: "cl", qua
 checked++;
 for (const file of ["lib/enterprise/retail/invoice-returns.ts", "lib/enterprise/retail/invoice-checkout.ts",
   "lib/enterprise/retail/invoice-stock-holds.ts", "lib/enterprise/retail/invoice-return-settlement-preflight.ts"]) {
-  assert.doesNotMatch(fs.readFileSync(file, "utf8"), /Prisma\\.Decimal\\.(min|max)\\(/, "Unsupported static Decimal minimum/maximum: " + file);
+  assert.doesNotMatch(fs.readFileSync(file, "utf8"), new RegExp("Prisma[.]Decimal[.](min|max)[(]"), "Unsupported static Decimal minimum/maximum: " + file);
   checked++;
 }
 console.log("#1187 " + checked + " static and real Decimal-preflight tests passed; PostgreSQL and owner E2E still required.");
