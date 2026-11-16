@@ -42,12 +42,12 @@ const METHODS: { type: MethodType; fr: string; en: string; account: string }[] =
   { type: "CHEQUE", fr: "Chèque", en: "Cheque", account: "BANK" },
 ];
 
-export function RetailInvoicePaymentDialog({ organizationId, invoiceId, invoiceNumber, siteName, invoiceStatus, locale, onChanged }: {
-  organizationId: string; invoiceId: string; invoiceNumber: string; siteName: string; invoiceStatus: string; locale: "fr" | "en"; onChanged: () => void;
+export function RetailInvoicePaymentDialog({ organizationId, invoiceId, invoiceNumber, siteName, invoiceStatus, locale, onChanged, initialOpen = false }: {
+  organizationId: string; invoiceId: string; invoiceNumber: string; siteName: string; invoiceStatus: string; locale: "fr" | "en"; onChanged: () => void; initialOpen?: boolean;
 }) {
   const t = copy[locale];
   const base = `/api/enterprise/${organizationId}/retail/invoices/${encodeURIComponent(invoiceId)}/payments`;
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(initialOpen);
   const [overview, setOverview] = useState<PaymentOverview | null>(null);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
