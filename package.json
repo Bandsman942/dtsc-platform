@@ -7,6 +7,7 @@
   },
   "scripts": {
     "qa:erp-commercial-design2-1198": "node scripts/qa-erp-commercial-design2-1198.mjs",
+    "qa:erp-quote-prisma-postgres-1198": "node scripts/qa-erp-quote-prisma-postgres-1198.mjs",
     "qa:sales-design2-1195": "node scripts/qa-sales-design2-1195.mjs",
     "qa:hotfix-1184": "node scripts/qa-hotfix-1184-retail-self-approval-audit.mjs",
     "qa:hotfix-1187": "node scripts/qa-hotfix-1187.mjs",
