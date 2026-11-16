@@ -36,6 +36,8 @@
 14. Exporter CSV/XLSX/PDF des recharges filtrées : opérateur, offre, prix, coût, marge, devise, statut, date, référence et numéro masqué. Vérifier aucune révélation de téléphone complet, aucune combinaison USD + CDF sans règle explicite, jamais de mutation déclenchée par l'export.
 15. Vérifier la saisie d'une recharge idempotente et une annulation autorisée ; l'historique se rafraîchit, les effets caisse/float/Finance viennent du service canonique et le retry ne poste pas deux fois. Confirmer les liens vers catalogue, POS, caisse, trésorerie.
 
+**Contrôle multidevise obligatoire :** vérifier séparément CDF et USD dans les indicateurs et exports, sans consolidation implicite de montants non convertis.
+
 ## 7. UX, permissions et sécurité
 16. Essayer sur desktop Chrome et mobile Samsung Internet / PWA à 320, 360, 375, 390, 414, 768, 1024px en **clair/sombre FR/EN**. Tester navigation latérale, retour, menus, rails tactiles défilant sans scroll global, formulaire plein écran, focus clavier, toasts de succès/erreur et performance sur connexion lente.
 17. Tester le compte lecture seule : extraction uniquement des listes autorisées, aucune création/modification. Tester l'entreprise B : toute URL directe, recherche, filtre et export doit être refusé pour A (403 ou 404). Aucune fuite par un endpoint client ou télécom ; code et rôle de l'entreprise vérifiés côté API.
