@@ -46,7 +46,7 @@ const workspaces = [
   ["components/enterprise/professional/enterprise-crm-workspace.tsx", ["/professional-lookups?module=CRM_PIPELINE", "/leads", "/opportunities", "/transition", "/convert", "revision: item.revision"]],
   ["components/enterprise/professional/enterprise-contracts-workspace.tsx", ["/professional-lookups?module=CONTRACTS", "/contracts", "/transition", "revision: actionTarget.contract.revision", '"SUBMIT"', '"APPROVE"', '"REQUEST_CORRECTION"', '"ACTIVATE"', '"RENEW"', '"TERMINATE"']],
   ["components/enterprise/professional/enterprise-catalog-workspace.tsx", ["/catalog", "/catalog-categories", "/units-of-measure", "revision: edit.revision", "trackInventory", "taxable"]],
-  ["components/enterprise/professional/enterprise-sales-operations-workspace.tsx", ["/professional-lookups?module=SALES_QUOTES_ORDERS", "/catalog?${params.toString()}", "/quotes", "/sales-orders", "/transition", "/convert", "/fulfill", 'fulfillmentType: "PRODUCT_DELIVERY"', "idempotencyKey: fulfillmentKey", "revision: fulfillTarget.revision"]],
+  ["components/enterprise/professional/enterprise-sales-operations-workspace.tsx", ["/professional-lookups?module=SALES_QUOTES_ORDERS", "/catalog?${params.toString()}", "/quotes", "/sales-orders", "/transition", "/convert", "/fulfill", 'fulfillmentType: String(form.get("fulfillmentType") || "PRODUCT_DELIVERY")', '"SERVICE_DELIVERY"', 'name="fulfillmentType"', "idempotencyKey: fulfillmentKey", "revision: fulfillTarget.revision"]],
 ];
 
 for (const [file, contracts] of workspaces) {
