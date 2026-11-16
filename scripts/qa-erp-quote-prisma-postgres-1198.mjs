@@ -15,6 +15,20 @@ const actor = `qa-actor-${randomUUID()}`;
 const client = `qa-client-${randomUUID()}`;
 try {
   await prisma.$transaction(async (tx) => {
+    const unit = await tx.enterpriseUnitOfMeasure.create({
+      data: { organizationId: tenant, code: "QA-PIECE", name: "Pièce", symbol: "pc" },
+    });
+    const catalog = await Promise.all(["Chargeur 20 W", "Chargeur Anker"].map((name, index) =>
+      tx.enterpriseCatalogItem.create({
+        data: {
+          organizationId: tenant, code: `QA-CAT-${index}`,
+          name, normalizedName: name.toLowerCase(),
+          itemType: "PRODUCT", unitOfMeasureId: unit.id,
+          indicativeSalePrice: index === 0 ? 45000 : 19900,
+          currency: "CDF", createdByUserId: actor,
+        },
+      }),
+    ));
     const lines = [
       { description: "Chargeur 20 W", quantity: 10, unitPrice: 45000, lineSubtotal: 450000, lineTotal: 450000 },
       { description: "Chargeur Anker", quantity: 9, unitPrice: 19900, lineSubtotal: 179100, lineTotal: 179100 },
@@ -33,6 +47,7 @@ try {
         createdByUserId: actor,
         items: {
           create: lines.map((item, index) => ({
+            catalogItemId: catalog[index].id,
             description: item.description,
             quantity: item.quantity,
             unitPrice: item.unitPrice,
@@ -46,6 +61,8 @@ try {
     assert.equal(quote.items.length, 2, "Quote must persist both nested lines");
     assert.equal(quote.items[0].organizationId, tenant, "Tenant must inherit from parent relation");
     assert.equal(quote.items[1].organizationId, tenant);
+    assert.equal(quote.items[0].catalogItemId, catalog[0].id, "First catalog link must survive nested create");
+    assert.equal(quote.items[1].catalogItemId, catalog[1].id, "Second catalog link must survive nested create");
     assert.equal(Number(quote.totalAmount), 629100);
     assert.equal(Number(quote.items[0].lineTotal.plus(quote.items[1].lineTotal)), 629100);
 
