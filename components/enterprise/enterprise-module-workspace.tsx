@@ -100,7 +100,7 @@ export function EnterpriseModuleWorkspace({
   const guide = iteration06Guide || getIteration04UserGuide(guideCode);
 
   return (
-    <ModuleWorkspace>
+    <ModuleWorkspace density={["TASKS_OPERATIONS", "INTERNAL_REQUESTS", "VALIDATIONS", "MEETINGS", "WORKFLOWS"].includes(enterpriseModule.code) ? "compact" : "comfortable"}>
       <ModuleHeader
         eyebrow={enterpriseModule.isCore ? tw("commonFoundation") : enterpriseModule.category}
         title={enterpriseModule.label}
@@ -150,7 +150,7 @@ export function EnterpriseModuleWorkspace({
         </ModuleMetrics>
       ) : null}
 
-      <ModuleContent>
+      <ModuleContent density={["TASKS_OPERATIONS", "INTERNAL_REQUESTS", "VALIDATIONS", "MEETINGS", "WORKFLOWS"].includes(enterpriseModule.code) ? "compact" : "comfortable"}>
         {enterpriseModule.code === "TASKS_OPERATIONS" ? (
           <EnterpriseTasksWorkspace organizationId={organizationId} members={memberChoices} departments={departmentChoices} canCreate={canCreate} canManage={canManage} locale={locale} legacyRecords={coreRecords} />
         ) : enterpriseModule.code === "INTERNAL_REQUESTS" ? (
