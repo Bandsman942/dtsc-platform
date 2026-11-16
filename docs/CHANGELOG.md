@@ -1,4 +1,4 @@
-## 2026-11-16 — Hotfix POS factures → Encaissements et Finance/Reports 2.0 (candidat, OWNER_E2E requis)
+## 2026-11-16 — Hotfix POS factures → Encaissements et Finance/Reports 2.0 #1208 — v1.23.2 candidate (OWNER_E2E requis)
 
 - RETAIL POS : un lien sur chaque facture émise non soldée renvoie à l'encaissement de cette facture seulement si l'utilisateur dispose de `COLLECT_PAYMENT` sur sa boutique ; le serveur conserve les contrôles d'entreprise, boutique, statut, solde et affectations.
 - Finance 2.0 : rails de statuts tactiles et formulaires guidés Clôture financière, États financiers, Immobilisations ; contexte de valorisation au coût moyen pondéré sans modifier le stock réel ; liens conditionnés par les permissions entre les cinq modules financiers et Rapports.
