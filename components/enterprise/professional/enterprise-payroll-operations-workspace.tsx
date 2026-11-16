@@ -33,7 +33,7 @@ import { BusinessList, BusinessListItem } from "@/components/workspace/business-
 import { ContextActions, type BusinessContextAction } from "@/components/workspace/context-actions";
 import { EmptyState } from "@/components/workspace/empty-state";
 import { ModuleMetrics } from "@/components/workspace/module-metrics";
-import { ModuleContent, ModuleHeader, ModuleSection, ModuleToolbar, ModuleWorkspace } from "@/components/workspace/module-workspace";
+import { ModuleContent, ModuleHeader, ModuleToolbar, ModuleWorkspace } from "@/components/workspace/module-workspace";
 import { StatusBadge } from "@/components/workspace/status-badge";
 import { ProfessionalReportView } from "@/components/reports/professional-report-view";
 import type { EnterpriseModuleDefinition } from "@/lib/enterprise/module-registry";
