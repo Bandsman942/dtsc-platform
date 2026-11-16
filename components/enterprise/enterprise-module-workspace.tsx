@@ -5,6 +5,7 @@ import { EnterpriseDocumentsWorkspace } from "@/components/enterprise/core-v2/en
 import { EnterpriseFinanceWorkspace } from "@/components/enterprise/core-v2/enterprise-finance-workspace";
 import { EnterpriseMeetingsWorkspace } from "@/components/enterprise/core-v2/enterprise-meetings-workspace";
 import { EnterprisePurchasesWorkspace } from "@/components/enterprise/core-v2/enterprise-purchases-workspace";
+import { EnterpriseFinanceRelatedLinks } from "@/components/enterprise/enterprise-finance-related-links";
 import { EnterpriseReportsWorkspace } from "@/components/enterprise/core-v2/enterprise-reports-workspace";
 import { EnterpriseRequestsWorkspace } from "@/components/enterprise/core-v2/enterprise-requests-workspace";
 import { EnterpriseSuppliersWorkspace } from "@/components/enterprise/core-v2/enterprise-suppliers-workspace";
@@ -150,6 +151,7 @@ export function EnterpriseModuleWorkspace({
         </ModuleMetrics>
       ) : null}
 
+      {enterpriseModule.code === "REPORTS" ? <EnterpriseFinanceRelatedLinks organizationId={organizationId} fromCode="REPORTS" locale={locale} /> : null}
       <ModuleContent density={["TASKS_OPERATIONS", "INTERNAL_REQUESTS", "VALIDATIONS", "MEETINGS", "WORKFLOWS"].includes(enterpriseModule.code) ? "compact" : "comfortable"}>
         {enterpriseModule.code === "TASKS_OPERATIONS" ? (
           <EnterpriseTasksWorkspace organizationId={organizationId} organizationName={organizationName} members={memberChoices} departments={departmentChoices} canCreate={canCreate} canManage={canManage} locale={locale} legacyRecords={coreRecords} />
