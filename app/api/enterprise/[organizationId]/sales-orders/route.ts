@@ -23,7 +23,7 @@ export async function GET(req: Request, { params }: Params) {
   const businessPartyId = url.searchParams.get("businessPartyId")?.trim() || "";
   const dates = financeBusinessDateRange(req);
   if (!dates.ok) return dates.response;
-  const allowedStatuses = new Set(["DRAFT","PENDING_APPROVAL","CONFIRMED","PARTIALLY_FULFILLED","FULFILLED","CLOSED","CANCELLED"]);
+  const allowedStatuses = new Set(["DRAFT","PENDING_APPROVAL","CONFIRMED","IN_FULFILLMENT","PARTIALLY_FULFILLED","FULFILLED","CLOSED","CANCELLED"]);
   if (status && !allowedStatuses.has(status)) {
     return NextResponse.json({ error: "SALES_STATUS_INVALID", message: "Sélectionnez un statut reconnu." }, { status: 400 });
   }
