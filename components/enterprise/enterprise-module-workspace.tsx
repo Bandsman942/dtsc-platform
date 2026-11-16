@@ -160,7 +160,7 @@ export function EnterpriseModuleWorkspace({
         ) : enterpriseModule.code === "MEETINGS" ? (
           <EnterpriseMeetingsWorkspace organizationId={organizationId} members={memberChoices} departments={departmentChoices} canCreate={canCreate} canManage={canManage} locale={locale} legacyRecords={coreRecords} />
         ) : enterpriseModule.code === "DOCUMENTS" ? (
-          <EnterpriseDocumentsWorkspace organizationId={organizationId} members={memberChoices} departments={departmentChoices} canCreate={canCreate} canManage={canManage} locale={locale} legacyRecords={coreRecords.filter((record) => record.recordType === "DOCUMENT")} />
+          <EnterpriseDocumentsWorkspace organizationId={organizationId} organizationName={organizationName} members={memberChoices} departments={departmentChoices} canCreate={canCreate} canManage={canManage} locale={locale} legacyRecords={coreRecords.filter((record) => record.recordType === "DOCUMENT")} />
         ) : enterpriseModule.code === "SUPPLIERS_PURCHASES" ? (
           <div className="grid gap-8">
             <EnterpriseSuppliersWorkspace organizationId={organizationId} canManage={capabilities.canWrite} locale={locale} legacyRecords={coreRecords.filter((record) => record.recordType === "SUPPLIER")} />
