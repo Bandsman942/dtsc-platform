@@ -1,4 +1,6 @@
 "use client";
+
+import { ErpDesign2Metric, ErpDesign2RegisterTools } from "@/components/enterprise/professional/erp-design2-register";
 import { WorkflowVisualStudio } from "@/components/enterprise/core-v2/workflow-visual-studio";
 import { applyWorkflowVisualPositions } from "@/lib/enterprise/workflows/visual-projection";
 import { workflowStepSchema, workflowVersionSchema, type WorkflowVersionInput } from "@/lib/enterprise/workflows/validators";
@@ -13,7 +15,7 @@ import { confirmSensitiveAction } from "@/lib/client-confirmation";
 import { Input } from "@/components/ui/input";
 import { BusinessList, BusinessListItem } from "@/components/workspace/business-list";
 import { EmptyState } from "@/components/workspace/empty-state";
-import { ModuleMetric, ModuleMetrics } from "@/components/workspace/module-metrics";
+import { ModuleMetrics } from "@/components/workspace/module-metrics";
 import { StatusBadge } from "@/components/workspace/status-badge";
 import { WorkflowPublishReview } from "@/components/enterprise/core-v2/workflow-publish-review";
 import { toastError, toastSuccess } from "@/lib/client-toast";
@@ -40,13 +42,13 @@ type AssignmentOptions = {
   roles: Array<{ id: string; label: string }>;
   departments: Array<{ id: string; label: string; hasEligibleManager: boolean }>;
 };
-type Props = { organizationId: string; canManage: boolean; locale?: string | null; members: Array<{ id: string; label: string }>; departments: Array<{ id: string; label: string }>; legacyWorkflows: Array<{ id: string; labelFr: string; isEnabled: boolean; updatedAt: Date }> };
+type Props = { organizationId: string; organizationName?: string; canManage: boolean; locale?: string | null; members: Array<{ id: string; label: string }>; departments: Array<{ id: string; label: string }>; legacyWorkflows: Array<{ id: string; labelFr: string; isEnabled: boolean; updatedAt: Date }> };
 
 const STEP_TYPES = ["START", "CONDITION", "ASSIGN", "CREATE_APPROVAL", "CREATE_TASK", "DOMAIN_ACTION", "NOTIFICATION", "WAIT_UNTIL", "END"];
 const OUTCOMES = ["DEFAULT", "TRUE", "FALSE", "APPROVED", "REJECTED", "CANCELLED"];
 const ASSIGNMENTS = ["SPECIFIC_USER", "SPECIFIC_ROLE", "DEPARTMENT_MANAGER", "ENTITY_REQUESTER", "ENTITY_ASSIGNEE", "ENTITY_BUYER", "ENTITY_CREATOR", "PREVIOUS_STEP_ACTOR"];
 
-export function EnterpriseWorkflowsWorkspace({ organizationId, locale, departments, legacyWorkflows }: Props) {
+export function EnterpriseWorkflowsWorkspace({ organizationId, organizationName = "Entreprise", locale, departments, legacyWorkflows }: Props) {
   const en = locale === "en";
   const [tab, setTab] = useState<"definitions" | "runs" | "monitoring">("definitions");
   const [definitions, setDefinitions] = useState<Definition[]>([]);
@@ -58,6 +60,8 @@ export function EnterpriseWorkflowsWorkspace({ organizationId, locale, departmen
   const [runPageCount, setRunPageCount] = useState(1);
   const [runTotal, setRunTotal] = useState(0);
   const [runFilter, setRunFilter] = useState("");
+  const [runFrom, setRunFrom] = useState("");
+  const [runTo, setRunTo] = useState("");
   const [startDefinition, setStartDefinition] = useState<Definition | null>(null);
   const [startOptions, setStartOptions] = useState<Array<{ id: string; label: string; status: string }>>([]);
   const [startEmptyReason, setStartEmptyReason] = useState<WorkflowManualEmptyReason>(null);
@@ -101,7 +105,7 @@ export function EnterpriseWorkflowsWorkspace({ organizationId, locale, departmen
     setLoading(true);
     const [definitionResponse, runResponse] = await Promise.all([
       fetch(`/api/enterprise/${organizationId}/workflows`),
-      fetch(`/api/enterprise/${organizationId}/workflow-runs?pageSize=20&page=${runPage}${runFilter ? `&status=${encodeURIComponent(runFilter)}` : ""}`),
+      fetch(`/api/enterprise/${organizationId}/workflow-runs?pageSize=20&page=${runPage}${runFilter ? `&status=${encodeURIComponent(runFilter)}` : ""}${runFrom ? `&dateFrom=${encodeURIComponent(runFrom)}` : ""}${runTo ? `&dateTo=${encodeURIComponent(runTo)}` : ""}`),
     ]);
     const definitionBody = await definitionResponse.json().catch(() => null);
     const runBody = await runResponse.json().catch(() => null);
@@ -121,7 +125,7 @@ export function EnterpriseWorkflowsWorkspace({ organizationId, locale, departmen
       setPermissions((current) => ({ ...current, ...(runBody?.permissions || {}) }));
     }
     setLoading(false);
-  }, [en, organizationId, runPage, runFilter]);
+  }, [en, organizationId, runFrom, runPage, runTo, runFilter]);
 
   useEffect(() => {
     void load();
@@ -533,10 +537,10 @@ export function EnterpriseWorkflowsWorkspace({ organizationId, locale, departmen
 
   return <div className="grid min-w-0 gap-4">
     <ModuleMetrics label={en ? "Workflow indicators" : "Indicateurs workflows"}>
-      <ModuleMetric label={en ? "Published" : "Publiés"} value={definitions.filter((item) => item.status === "ACTIVE").length} hint={<CheckCircle2 className="h-3.5 w-3.5" />} />
-      <ModuleMetric label={en ? "Running" : "En cours"} value={(metrics.RUNNING || 0) + (metrics.QUEUED || 0)} hint={<Activity className="h-3.5 w-3.5" />} />
-      <ModuleMetric label={en ? "Waiting approval" : "En validation"} value={metrics.WAITING_APPROVAL || 0} hint={<PauseCircle className="h-3.5 w-3.5" />} />
-      <ModuleMetric label={en ? "Blocked / failed" : "Bloqués / échecs"} value={(metrics.BLOCKED || 0) + (metrics.FAILED || 0)} hint={<ShieldAlert className="h-3.5 w-3.5" />} />
+      <ErpDesign2Metric tone="sky" label={en ? "Published" : "Publiés"} value={definitions.filter((item) => item.status === "ACTIVE").length} hint={<CheckCircle2 className="h-3.5 w-3.5" />} />
+      <ErpDesign2Metric tone="amber" label={en ? "Running" : "En cours"} value={(metrics.RUNNING || 0) + (metrics.QUEUED || 0)} hint={<Activity className="h-3.5 w-3.5" />} />
+      <ErpDesign2Metric tone="emerald" label={en ? "Waiting approval" : "En validation"} value={metrics.WAITING_APPROVAL || 0} hint={<PauseCircle className="h-3.5 w-3.5" />} />
+      <ErpDesign2Metric tone="violet" label={en ? "Blocked / failed" : "Bloqués / échecs"} value={(metrics.BLOCKED || 0) + (metrics.FAILED || 0)} hint={<ShieldAlert className="h-3.5 w-3.5" />} />
     </ModuleMetrics>
 
     <div className="flex min-w-0 gap-1 overflow-x-auto border-b border-dtsc-border pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -588,6 +592,24 @@ export function EnterpriseWorkflowsWorkspace({ organizationId, locale, departmen
       document.body,
     ) : null}
 
+    {tab === "runs" ? <ErpDesign2RegisterTools
+      locale={en ? "en" : "fr"} title={en ? "Workflow executions" : "Exécutions des workflows"} organizationName={organizationName}
+      endpoint={`/api/enterprise/${organizationId}/workflow-runs`}
+      columns={[
+        { key: "name", labelFr: "Workflow", labelEn: "Workflow", get: (row) => {
+          const definition = row.definition;
+          return definition && typeof definition === "object" && "name" in definition ? String((definition as { name?: unknown }).name ?? "") : "";
+        } },
+        { key: "status", labelFr: "Statut", labelEn: "Status", get: (row) => String(row.status ?? "") },
+        { key: "sourceEntityType", labelFr: "Objet métier", labelEn: "Business object", get: (row) => String(row.sourceEntityType ?? "") },
+        { key: "startedAt", labelFr: "Démarré le", labelEn: "Started", get: (row) => String(row.startedAt ?? "").slice(0, 16).replace("T", " ") },
+      ]}
+      filters={{ ...(runFilter ? { status: runFilter } : {}), ...(runFrom ? { dateFrom: runFrom } : {}), ...(runTo ? { dateTo: runTo } : {}) }}
+      status={runFilter} statuses={[{ id: "", label: en ? "All statuses" : "Tous les statuts" }, ...["RUNNING", "WAITING_APPROVAL", "WAITING_TIME", "BLOCKED", "FAILED", "COMPLETED", "CANCELLED"].map((id) => ({ id, label: statusLabel(id, en) }))]}
+      onStatusChange={(next) => { setRunFilter(next); setRunPage(1); }}
+      dateFrom={runFrom} dateTo={runTo}
+      onDateChange={(from, to) => { setRunFrom(from); setRunTo(to); setRunPage(1); }}
+    /> : null}
     {tab === "runs" ? <section className="grid gap-3"><div className="flex flex-wrap items-center justify-between gap-2"><label className="text-sm text-dtsc-muted">{en ? "Filter by status" : "Filtrer par statut"} <select className="ml-2 h-10 rounded-xl border border-dtsc-border bg-dtsc-page px-3" value={runFilter} onChange={(event) => { setRunPage(1); setRunFilter(event.target.value); }}><option value="">{en ? "All" : "Tous"}</option>{["RUNNING", "WAITING_APPROVAL", "WAITING_TIME", "BLOCKED", "FAILED", "COMPLETED", "CANCELLED"].map((status) => <option key={status} value={status}>{statusLabel(status, en)}</option>)}</select></label><span className="text-xs text-dtsc-muted">{runTotal} {en ? "visible runs" : "exécutions visibles"}</span></div>{runs.length ? <BusinessList ariaLabel={en ? "Workflow runs" : "Exécutions de workflow"}>{runs.map((run) => <BusinessListItem key={run.id} title={run.definition.name} description={`${entityLabel(run.sourceEntityType, en)} · ${new Date(run.startedAt).toLocaleString(en ? "en-US" : "fr-FR")} · v${run.version.versionNumber}`} status={<StatusBadge>{statusLabel(run.status, en)}</StatusBadge>} actions={<ActionMenu label="Run" items={[{ key: "open", label: en ? "Open timeline" : "Ouvrir la timeline", icon: Eye, onSelect: () => void openRun(run.id) }, ...(permissions.canRetry && ["BLOCKED", "FAILED"].includes(run.status) ? [{ key: "retry", label: en ? "Retry step" : "Réessayer l’étape", icon: RotateCcw, onSelect: () => setRunAction({ run, action: "retry" as const }) }] : []), ...(permissions.canCancel && !["COMPLETED", "REJECTED", "FAILED", "CANCELLED"].includes(run.status) ? [{ key: "cancel", label: en ? "Cancel run" : "Annuler l’exécution", icon: XCircle, destructive: true, onSelect: () => setRunAction({ run, action: "cancel" as const }) }] : [])]} />} />)}</BusinessList> : <EmptyState compact title={en ? "No workflow run" : "Aucune exécution"} description={en ? "Runs appear after a manual start or a matching business event." : "Les exécutions apparaissent après un lancement manuel ou un événement métier correspondant."} />}<nav aria-label={en ? "Run pages" : "Pages des exécutions"} className="flex items-center justify-between gap-2"><Button type="button" variant="outline" size="sm" disabled={runPage <= 1 || loading} onClick={() => setRunPage((page) => Math.max(1, page - 1))}>{en ? "Previous" : "Précédent"}</Button><span aria-live="polite" className="text-xs text-dtsc-muted">{runPage} / {runPageCount}</span><Button type="button" variant="outline" size="sm" disabled={runPage >= runPageCount || loading} onClick={() => setRunPage((page) => page + 1)}>{en ? "Next" : "Suivant"}</Button></nav></section> : null}
 
     {tab === "monitoring" ? <section className="grid gap-3">{observability ? <div className="grid min-w-0 gap-3 rounded-2xl border border-dtsc-border bg-dtsc-surface p-3" aria-label={en ? "Workflow runtime statistics" : "Statistiques des workflows"}><div className="flex flex-wrap items-center justify-between gap-2 text-xs text-dtsc-muted"><strong className="text-dtsc-ink">{en ? "Recent completed run latency" : "Durée des exécutions terminées"}</strong><span>{en ? "Sampled" : "Échantillonné"} : {new Date(observability.sampledAt).toLocaleString(en ? "en-US" : "fr-FR")}</span></div><div className="grid grid-cols-2 gap-3 sm:grid-cols-4">{(["p50", "p95", "p99"] as const).map((key) => <div key={key}><div className="text-xs uppercase text-dtsc-muted">{key}</div><strong className="text-base text-dtsc-ink">{observability.completedLatency[key] === null ? "—" : `${(observability.completedLatency[key]! / 1000).toFixed(1)} s`}</strong></div>)}<div><div className="text-xs text-dtsc-muted">{en ? "Oldest waiting" : "Plus ancienne attente"}</div><strong className="text-base text-dtsc-ink">{observability.oldestWaitingAgeMs === null ? "—" : `${Math.round(observability.oldestWaitingAgeMs / 60000)} min`}</strong></div></div><p className="text-xs text-dtsc-muted">{observability.completedSamples} {en ? "completed runs" : "exécutions terminées"} / {observability.sampleSize} {en ? "visible runs sampled across" : "exécutions visibles examinées sur"} {observability.windowDays} {en ? "days" : "jours"}{observability.capped ? (en ? " — Capped sample, not exhaustive." : " — Échantillon plafonné, non exhaustif.") : "."} {en ? "Missing values are not zero." : "Une donnée absente ne vaut pas zéro."}</p></div> : null}{monitored.length ? monitored.map((run) => <article key={run.id} className="rounded-2xl border border-dtsc-border bg-dtsc-surface p-3"><div className="flex items-start gap-3"><span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-amber-500/10 text-amber-700"><AlertTriangle className="h-4 w-4" /></span><div className="min-w-0 flex-1"><strong className="block truncate text-sm text-dtsc-ink">{run.definition.name}</strong><span className="block text-xs text-dtsc-muted">{statusLabel(run.status, en)} · {getWorkflowRecoveryMessage(run.failureCode, locale) || run.failureMessage || (en ? "Awaiting the next authorized action." : "En attente de la prochaine action autorisée.")}</span></div><Button size="sm" variant="outline" onClick={() => void openRun(run.id)}>{en ? "Inspect" : "Inspecter"}</Button></div></article>) : <EmptyState compact title={en ? "Nothing to monitor" : "Rien à surveiller"} description={en ? "No blocked, failed or abnormally waiting run." : "Aucune exécution bloquée, en échec ou en attente anormale."} />}</section> : null}

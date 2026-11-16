@@ -1,4 +1,6 @@
 import { Prisma } from "@prisma/client";
+import { financeBusinessDateRange } from "@/lib/enterprise/accounting/http";
+import { MEETING_STATUSES } from "@/lib/enterprise/core-v2/constants";
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
@@ -24,15 +26,22 @@ export async function GET(req: Request, { params }: Params) {
   const page = Math.max(1, Number(url.searchParams.get("page") || 1) || 1);
   const pageSize = Math.min(50, Math.max(5, Number(url.searchParams.get("pageSize") || 20) || 20));
   const view = url.searchParams.get("view") || "upcoming";
+  const status = url.searchParams.get("status")?.trim() || "";
+  if (status && !new Set<string>(MEETING_STATUSES).has(status)) return NextResponse.json({ error: "INVALID_STATUS", message: "Ce statut de réunion est inconnu." }, { status: 400 });
   const participant = url.searchParams.get("participant")?.trim() || "";
   const department = url.searchParams.get("department")?.trim() || "";
   const search = url.searchParams.get("search")?.trim() || "";
   const date = url.searchParams.get("date")?.trim() || "";
   const now = new Date();
   const filters: Prisma.EnterpriseMeetingWhereInput[] = [];
+  const civilRange = financeBusinessDateRange(req);
+  if (!civilRange.ok) return civilRange.response;
+  if (civilRange.from || civilRange.to) filters.push({ startAt: { gte: civilRange.from || undefined, lte: civilRange.to || undefined } });
+
   if (view === "upcoming") filters.push({ startAt: { gte: now }, status: { not: "CANCELLED" } });
   if (view === "past") filters.push({ OR: [{ endAt: { lt: now } }, { status: "COMPLETED" }] });
   if (view === "cancelled") filters.push({ status: "CANCELLED" });
+  if (status) filters.push({ status });
   if (participant) filters.push({ participants: { some: { userId: participant } } });
   if (department) filters.push({ departmentId: department });
   if (search) filters.push({ OR: [{ title: { contains: search, mode: "insensitive" } }, { agenda: { contains: search, mode: "insensitive" } }, { physicalLocation: { contains: search, mode: "insensitive" } }] });

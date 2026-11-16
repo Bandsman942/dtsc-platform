@@ -100,7 +100,7 @@ export function EnterpriseModuleWorkspace({
   const guide = iteration06Guide || getIteration04UserGuide(guideCode);
 
   return (
-    <ModuleWorkspace>
+    <ModuleWorkspace density={["TASKS_OPERATIONS", "INTERNAL_REQUESTS", "VALIDATIONS", "MEETINGS", "WORKFLOWS"].includes(enterpriseModule.code) ? "compact" : "comfortable"}>
       <ModuleHeader
         eyebrow={enterpriseModule.isCore ? tw("commonFoundation") : enterpriseModule.category}
         title={enterpriseModule.label}
@@ -150,15 +150,15 @@ export function EnterpriseModuleWorkspace({
         </ModuleMetrics>
       ) : null}
 
-      <ModuleContent>
+      <ModuleContent density={["TASKS_OPERATIONS", "INTERNAL_REQUESTS", "VALIDATIONS", "MEETINGS", "WORKFLOWS"].includes(enterpriseModule.code) ? "compact" : "comfortable"}>
         {enterpriseModule.code === "TASKS_OPERATIONS" ? (
-          <EnterpriseTasksWorkspace organizationId={organizationId} members={memberChoices} departments={departmentChoices} canCreate={canCreate} canManage={canManage} locale={locale} legacyRecords={coreRecords} />
+          <EnterpriseTasksWorkspace organizationId={organizationId} organizationName={organizationName} members={memberChoices} departments={departmentChoices} canCreate={canCreate} canManage={canManage} locale={locale} legacyRecords={coreRecords} />
         ) : enterpriseModule.code === "INTERNAL_REQUESTS" ? (
-          <EnterpriseRequestsWorkspace organizationId={organizationId} members={memberChoices} departments={departmentChoices} canCreate={canCreate} canManage={canManage} locale={locale} legacyRecords={coreRecords} />
+          <EnterpriseRequestsWorkspace organizationId={organizationId} organizationName={organizationName} members={memberChoices} departments={departmentChoices} canCreate={canCreate} canManage={canManage} locale={locale} legacyRecords={coreRecords} />
         ) : enterpriseModule.code === "VALIDATIONS" ? (
-          <EnterpriseApprovalsWorkspace organizationId={organizationId} locale={locale} legacyRecords={coreRecords} />
+          <EnterpriseApprovalsWorkspace organizationId={organizationId} organizationName={organizationName} locale={locale} legacyRecords={coreRecords} />
         ) : enterpriseModule.code === "MEETINGS" ? (
-          <EnterpriseMeetingsWorkspace organizationId={organizationId} members={memberChoices} departments={departmentChoices} canCreate={canCreate} canManage={canManage} locale={locale} legacyRecords={coreRecords} />
+          <EnterpriseMeetingsWorkspace organizationId={organizationId} organizationName={organizationName} members={memberChoices} departments={departmentChoices} canCreate={canCreate} canManage={canManage} locale={locale} legacyRecords={coreRecords} />
         ) : enterpriseModule.code === "DOCUMENTS" ? (
           <EnterpriseDocumentsWorkspace organizationId={organizationId} organizationName={organizationName} members={memberChoices} departments={departmentChoices} canCreate={canCreate} canManage={canManage} locale={locale} legacyRecords={coreRecords.filter((record) => record.recordType === "DOCUMENT")} />
         ) : enterpriseModule.code === "SUPPLIERS_PURCHASES" ? (
@@ -171,7 +171,7 @@ export function EnterpriseModuleWorkspace({
         ) : enterpriseModule.code === "REPORTS" ? (
           <EnterpriseReportsWorkspace organizationId={organizationId} organizationName={organizationName} organizationLogoUrl={organizationLogoUrl} canCreate={canCreate} canManage={canManage} locale={locale} legacyRecords={coreRecords.filter((record) => record.recordType === "REPORT")} />
         ) : enterpriseModule.code === "WORKFLOWS" ? (
-          <EnterpriseWorkflowsWorkspace organizationId={organizationId} canManage={canManage} locale={locale} members={memberChoices} departments={departmentChoices} legacyWorkflows={coreData.workflows} />
+          <EnterpriseWorkflowsWorkspace organizationId={organizationId} organizationName={organizationName} canManage={canManage} locale={locale} members={memberChoices} departments={departmentChoices} legacyWorkflows={coreData.workflows} />
         ) : commonDefinition ? (
           <EnterpriseCoreWorkspace
             organizationId={organizationId}

@@ -1,5 +1,8 @@
 "use client";
 
+import { ErpDesign2Metric, ErpDesign2RegisterSection } from "@/components/enterprise/professional/erp-design2-register";
+import { HrDesign2Tools } from "@/components/enterprise/professional/hr-design2-tools";
+
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Ban, CalendarClock, CalendarDays, CheckCircle2, Clock3, Eye, UserCheck, XCircle } from "lucide-react";
 import { Field, NativeSelect } from "@/components/enterprise/core-v2/erp-v2-ui";
@@ -26,8 +29,8 @@ import { useToastMessage } from "@/components/ui/use-toast-message";
 import { BusinessList, BusinessListItem } from "@/components/workspace/business-list";
 import { ContextActions, type BusinessContextAction } from "@/components/workspace/context-actions";
 import { EmptyState } from "@/components/workspace/empty-state";
-import { ModuleMetric, ModuleMetrics } from "@/components/workspace/module-metrics";
-import { ModuleContent, ModuleHeader, ModuleSection, ModuleToolbar, ModuleWorkspace } from "@/components/workspace/module-workspace";
+import { ModuleMetrics } from "@/components/workspace/module-metrics";
+import { ModuleContent, ModuleHeader, ModuleToolbar, ModuleWorkspace } from "@/components/workspace/module-workspace";
 import { StatusBadge } from "@/components/workspace/status-badge";
 import type { EnterpriseModuleDefinition } from "@/lib/enterprise/module-registry";
 
@@ -140,6 +143,8 @@ export function EnterpriseTimeAttendanceWorkspace({ organizationId, organization
   }, []);
   const [page, setPage] = useState(1);
   const [status, setStatus] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
   const [lookups, setLookups] = useState<Lookups>({ employees: [], approvers: [], projects: [], tasks: [], sites: [] });
   const [scheduleOpen, setScheduleOpen] = useState(false);
@@ -174,9 +179,11 @@ export function EnterpriseTimeAttendanceWorkspace({ organizationId, organization
 
   const params = useMemo(() => {
     const value = new URLSearchParams({ page: String(page), pageSize: "25" });
-    if (status && tab !== "SCHEDULES") value.set("status", status);
+    if (status && tab !== "SELF_SERVICE") value.set("status", status);
+    if (dateFrom) value.set("dateFrom", dateFrom);
+    if (dateTo) value.set("dateTo", dateTo);
     return value;
-  }, [page, status, tab]);
+  }, [dateFrom, dateTo, page, status, tab]);
   const schedules = useProfessionalCollection<WorkSchedule>({ endpoint: `/api/enterprise/${organizationId}/work-schedules`, params, refreshKey });
   const attendance = useProfessionalCollection<Attendance>({ endpoint: `/api/enterprise/${organizationId}/attendance`, params, refreshKey });
   const leaves = useProfessionalCollection<LeaveRequest>({ endpoint: `/api/enterprise/${organizationId}/leave-requests`, params, refreshKey });
@@ -407,7 +414,7 @@ export function EnterpriseTimeAttendanceWorkspace({ organizationId, organization
   const employeeItems = [{ id: "", label: lookups.employees.length ? copy.selectEmployee : copy.noEmployee }, ...lookups.employees.map((employee) => ({ id: employee.id, label: employeeLabel(employee) }))];
   const approverItems = [{ id: "", label: lookups.approvers.length ? copy.selectApprover : copy.noApprover }, ...lookups.approvers.map((member) => ({ id: member.userId, label: memberLabel(member) }))];
 
-  return <ModuleWorkspace>
+  return <ModuleWorkspace density="compact">
     <ModuleHeader
       eyebrow={t("time.eyebrow", { organization: organizationName })}
       title={t("time.title")}
@@ -421,15 +428,21 @@ export function EnterpriseTimeAttendanceWorkspace({ organizationId, organization
       </div>}
     />
     <ModuleMetrics label={t("time.metrics")}>
-      <ModuleMetric label={copy.activeSchedules} value={schedules.metrics.active || 0} />
-      <ModuleMetric label={copy.observedPresence} value={attendance.metrics.present || 0} />
-      <ModuleMetric label={t("time.leavePending")} value={leaves.metrics.pending || 0} />
-      <ModuleMetric label={t("time.approvedTime")} value={minutesLabel(Number(timesheets.metrics.approvedMinutes || 0))} />
+      <ErpDesign2Metric tone="sky" label={copy.activeSchedules} value={schedules.metrics.active || 0} />
+      <ErpDesign2Metric tone="amber" label={copy.observedPresence} value={attendance.metrics.present || 0} />
+      <ErpDesign2Metric tone="emerald" label={t("time.leavePending")} value={leaves.metrics.pending || 0} />
+      <ErpDesign2Metric tone="violet" label={t("time.approvedTime")} value={minutesLabel(Number(timesheets.metrics.approvedMinutes || 0))} />
     </ModuleMetrics>
-    <ModuleToolbar controls={<><ProfessionalTabs value={tab} onChange={(value) => { setTab(value); setStatus(""); setPage(1); }} items={tabs} />{tab !== "SCHEDULES" && tab !== "SELF_SERVICE" ? <NativeSelect value={status} onChange={(value) => { setStatus(value); setPage(1); }} items={currentStatusItems} /> : null}</>} summary={copy.separation} />
-    <ModuleContent>
+    <ModuleToolbar controls={<ProfessionalTabs value={tab} onChange={(value) => { setTab(value); setStatus(""); setDateFrom(""); setDateTo(""); setPage(1); }} items={tabs} />} summary={copy.separation} />
+    <ModuleContent density="compact">
       {error && !scheduleOpen && !attendanceOpen && !leaveOpen && !timesheetOpen && !decisionTarget && !cancelTarget && !scheduleEndTarget ? <ProfessionalError message={error} /> : null}
-      {tab === "SELF_SERVICE" ? <EnterpriseMyHrSelfService organizationId={organizationId} relatedModules={relatedModules} onOpenTimeTab={(nextTab) => { setTab(nextTab); setStatus(""); setPage(1); }} /> : <ModuleSection title={tab === "SCHEDULES" ? copy.scheduleSection : tab === "ATTENDANCE" ? copy.attendanceSection : tab === "LEAVE" ? t("time.leaveSection") : t("time.timesheetSection")} description={tab === "SCHEDULES" ? copy.scheduleDescription : tab === "ATTENDANCE" ? copy.attendanceDescription : tab === "LEAVE" ? t("time.leaveSectionDescription") : t("time.timesheetSectionDescription")}>
+      {tab === "SELF_SERVICE" ? <EnterpriseMyHrSelfService organizationId={organizationId} relatedModules={relatedModules} onOpenTimeTab={(nextTab) => { setTab(nextTab); setStatus(""); setPage(1); }} /> : <ErpDesign2RegisterSection title={tab === "SCHEDULES" ? copy.scheduleSection : tab === "ATTENDANCE" ? copy.attendanceSection : tab === "LEAVE" ? t("time.leaveSection") : t("time.timesheetSection")} description={tab === "SCHEDULES" ? copy.scheduleDescription : tab === "ATTENDANCE" ? copy.attendanceDescription : tab === "LEAVE" ? t("time.leaveSectionDescription") : t("time.timesheetSectionDescription")}>
+        <HrDesign2Tools kind={tab === "SCHEDULES" ? "schedules" : tab === "ATTENDANCE" ? "attendance" : tab === "LEAVE" ? "leave" : "timesheets"} organizationId={organizationId} organizationName={organizationName}
+          title={tab === "SCHEDULES" ? copy.scheduleSection : tab === "ATTENDANCE" ? copy.attendanceSection : tab === "LEAVE" ? t("time.leaveSection") : t("time.timesheetSection")}
+          locale={locale} filters={params} status={status}
+          statuses={tab === "SCHEDULES" ? [{ id: "", label: t("people.allStatuses") }, ...["ACTIVE", "ENDED"].map((id) => ({ id, label: id === "ACTIVE" ? (locale === "en" ? "Active" : "Actif") : (locale === "en" ? "Ended" : "Clôturé") }))] : currentStatusItems}
+          onStatusChange={(next) => { setStatus(next); setPage(1); }} dateFrom={dateFrom} dateTo={dateTo}
+          onDateChange={(from, to) => { setDateFrom(from); setDateTo(to); setPage(1); }} />
         {activeCollection.error ? <ProfessionalError message={activeCollection.error} /> : activeCollection.loading ? <ProfessionalLoading /> : tab === "SCHEDULES" ? (
           schedules.items.length ? <BusinessList ariaLabel={copy.scheduleSection}>{schedules.items.map((item) => {
             const day = item.scheduleType === "WEEKLY" ? copy.days[Math.max(0, (item.dayOfWeek || 1) - 1)] : (item.scheduleDate ? professionalErpDate(item.scheduleDate, locale) : copy.date);
@@ -445,7 +458,7 @@ export function EnterpriseTimeAttendanceWorkspace({ organizationId, organization
           leaves.items.length ? <BusinessList ariaLabel={t("time.leaveSection")}>{leaves.items.map((item) => <BusinessListItem key={item.id} title={`${item.reference} · ${item.employee.displayName}`} leading={<CalendarDays className="h-5 w-5 text-dtsc-blue" />} status={<StatusBadge tone={statusTone(item.status)}>{professionalErpEnumLabel(locale, "timeStatus", item.status)}</StatusBadge>} meta={t("time.leaveRange", { type: professionalErpEnumLabel(locale, "leaveType", item.leaveType), start: professionalErpDate(item.startDate, locale), end: professionalErpDate(item.endDate, locale) })} description={item.reason || (item.partialDay ? t("time.halfDay") : t("time.fullDay"))} onOpen={() => setDetail(item)} actions={<ContextActions label={t("time.leaveActions")} actions={actionsFor(item)} />} />)}</BusinessList> : <EmptyState compact title={t("time.noLeave")} description={t("time.noLeaveDescription")} />
         ) : timesheets.items.length ? <BusinessList ariaLabel={t("time.timesheetSection")}>{timesheets.items.map((item) => <BusinessListItem key={item.id} title={`${item.reference} · ${item.employee.displayName}`} leading={<Clock3 className="h-5 w-5 text-dtsc-blue" />} status={<StatusBadge tone={statusTone(item.status)}>{professionalErpEnumLabel(locale, "timeStatus", item.status)}</StatusBadge>} meta={`${professionalErpDate(item.periodStart, locale)} – ${professionalErpDate(item.periodEnd, locale)}`} description={t("time.declaredApproved", { declared: minutesLabel(item.totalDeclaredMinutes), approved: minutesLabel(item.totalApprovedMinutes) })} onOpen={() => setDetail(item)} actions={<ContextActions label={t("time.timesheetActions")} actions={actionsFor(item)} />} />)}</BusinessList> : <EmptyState compact title={t("time.noTimesheet")} description={t("time.noTimesheetDescription")} />}
         <PaginationControls page={activeCollection.pagination.page} pageCount={activeCollection.pagination.pageCount} onChange={setPage} copy={copy} />
-      </ModuleSection>}
+      </ErpDesign2RegisterSection>}
       <ProfessionalHelp moduleCode="TIME_ATTENDANCE" />
     </ModuleContent>
 

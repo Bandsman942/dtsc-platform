@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
+import { financeBusinessDateRange } from "@/lib/enterprise/accounting/http";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { getEnterpriseCommonDomainAccess } from "@/lib/enterprise/common/access";
@@ -25,6 +26,9 @@ export async function GET(req: Request, { params }: Params) {
     getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode: "PAYROLL_OPERATIONS", action: "manage" }),
   ]);
   const url = new URL(req.url);
+  const businessPeriod = financeBusinessDateRange(req);
+  if (!businessPeriod.ok) return businessPeriod.response;
+  const businessDateFilter = businessPeriod.from || businessPeriod.to ? { createdAt: { gte: businessPeriod.from || undefined, lte: businessPeriod.to || undefined } } : {};
   const page = Math.max(1, Number(url.searchParams.get("page") || 1) || 1);
   const pageSize = Math.min(100, Math.max(5, Number(url.searchParams.get("pageSize") || 25) || 25));
   const status = url.searchParams.get("status")?.trim() || "";
@@ -38,7 +42,7 @@ export async function GET(req: Request, { params }: Params) {
     ],
   };
   const where: Prisma.EnterprisePayrollRunWhereInput = {
-    organizationId, archivedAt: null, ...actorScope,
+    organizationId, ...businessDateFilter, archivedAt: null, ...actorScope,
     ...(status ? { status } : {}), ...(payrollPeriodId ? { payrollPeriodId } : {}),
   };
   if (!manageAccess && !approvalAccess && !writeAccess) {

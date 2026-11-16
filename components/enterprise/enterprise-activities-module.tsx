@@ -1,12 +1,15 @@
 "use client";
 
+import { ErpDesign2Metric, ErpDesign2RegisterSection } from "@/components/enterprise/professional/erp-design2-register";
+
 import { useMemo, useState } from "react";
 import { useAppLocale } from "@/components/i18n/locale-provider";
 import { ContextualUserGuide } from "@/components/user-guides/contextual-user-guide";
 import { notifyToast } from "@/lib/client-toast";
+import { translateActivities } from "@/lib/i18n";
 import { ITERATION04_USER_GUIDES } from "@/lib/user-guides/iteration04-guides";
 import { ModuleWorkspace, ModuleHeader, ModuleContent, ModuleSection, ModuleToolbar } from "@/components/workspace/module-workspace";
-import { ModuleMetrics, ModuleMetric } from "@/components/workspace/module-metrics";
+import { ModuleMetrics } from "@/components/workspace/module-metrics";
 import { ProfessionalTabs } from "@/components/enterprise/professional/professional-erp-ui";
 import {
   EnterpriseActivityBlocksPanel,
@@ -50,7 +53,7 @@ export function EnterpriseActivitiesModule({ organization, blocks, requests, mem
   if (organization.sectorCode === "PHARMACY") return <PharmacyActivitiesWorkspace organizationId={organization.id} />;
 
   return (
-    <ModuleWorkspace>
+    <ModuleWorkspace density="compact">
       <ModuleHeader
         eyebrow={english ? "Enterprise activities" : "Activités entreprise"}
         title={`${english ? "Activities" : "Activités"} ${organization.name}`}
@@ -60,18 +63,18 @@ export function EnterpriseActivitiesModule({ organization, blocks, requests, mem
         count={sectorLabel}
       />
       <ModuleMetrics label={english ? "Enterprise activity indicators" : "Indicateurs des activités entreprise"}>
-        <ModuleMetric label={english ? "Available actions" : "Actions disponibles"} value={blocks.length} />
-        <ModuleMetric label={english ? "Pending requests" : "Demandes à traiter"} value={pending} />
-        <ModuleMetric label={english ? "My requests" : "Demandes visibles"} value={requests.length} />
-        <ModuleMetric label={english ? "Workflows" : "Workflows"} value={workflows.length} />
+        <ErpDesign2Metric tone="sky" label={english ? "Available actions" : "Actions disponibles"} value={blocks.length} />
+        <ErpDesign2Metric tone="amber" label={translateActivities(locale, "enterprisePendingRecent")} value={pending} />
+        <ErpDesign2Metric tone="emerald" label={translateActivities(locale, "enterpriseRequestsRecent")} value={requests.length} />
+        <ErpDesign2Metric tone="violet" label={english ? "Workflows" : "Workflows"} value={workflows.length} />
       </ModuleMetrics>
       <ModuleToolbar
         controls={<ProfessionalTabs value={view} onChange={(value) => setView(value as ActivityView)} items={tabs} label={english ? "Activity views" : "Vues des activités"} />}
         summary={english ? "Actions create a tracked request, not an automatic business transaction." : "Chaque action crée une demande suivie, jamais une transaction métier implicite."}
       />
-      <ModuleContent>
+      <ModuleContent density="compact">
         {view === "ACTIONS" && (
-          <ModuleSection title={english ? "Submit an activity" : "Soumettre une activité"} description={english ? "Choose the specific action, then complete its dedicated fields." : "Sélectionnez une action et complétez son formulaire métier adapté."}>
+          <ErpDesign2RegisterSection title={english ? "Submit an activity" : "Soumettre une activité"} description={english ? "Choose the specific action, then complete its dedicated fields." : "Sélectionnez une action et complétez son formulaire métier adapté."}>
             <EnterpriseActivityBlocksPanel
               sectorCode={organization.sectorCode}
               businessSubtypeCode={organization.businessSubtypeCode}
@@ -85,17 +88,17 @@ export function EnterpriseActivitiesModule({ organization, blocks, requests, mem
             <div className="mt-5">
               <ContextualUserGuide guide={ITERATION04_USER_GUIDES.ENTERPRISE_ACTIVITIES} compact />
             </div>
-          </ModuleSection>
+          </ErpDesign2RegisterSection>
         )}
         {view === "REQUESTS" && (
-          <ModuleSection title={english ? "Submitted requests" : "Demandes soumises"} description={english ? "Follow their real server-side status." : "Suivez leur état réel après soumission."}>
-            <EnterpriseRequestsPanel requests={requests} focusActivityId={initialActivityId} />
-          </ModuleSection>
+          <ErpDesign2RegisterSection title={english ? "Submitted requests" : "Demandes soumises"} description={english ? "Follow their real server-side status." : "Suivez leur état réel après soumission."}>
+            <EnterpriseRequestsPanel organizationId={organization.id} organizationName={organization.name} focusActivityId={initialActivityId} />
+          </ErpDesign2RegisterSection>
         )}
         {view === "WORKFLOWS" && (
-          <ModuleSection title={english ? "Shared workflows" : "Workflows partagés"} description={english ? "Only workflows authorized for your organization are listed." : "Seuls les workflows autorisés pour votre entreprise sont présentés."}>
+          <ErpDesign2RegisterSection title={english ? "Shared workflows" : "Workflows partagés"} description={english ? "Only workflows authorized for your organization are listed." : "Seuls les workflows autorisés pour votre entreprise sont présentés."}>
             <EnterpriseWorkflowsPanel workflows={workflows} />
-          </ModuleSection>
+          </ErpDesign2RegisterSection>
         )}
         {view === "ACTIONS" && organization.sectorCode === "HEALTH_CARE" && (
           <ModuleSection title={english ? "Healthcare operations" : "Opérations Santé"} description={english ? "Specialized workspaces remain subject to medical permissions." : "Ces espaces spécialisés restent soumis aux permissions médicales."}>

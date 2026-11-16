@@ -1,5 +1,8 @@
 "use client";
 
+import { ErpDesign2Metric, ErpDesign2RegisterSection } from "@/components/enterprise/professional/erp-design2-register";
+import { CoordinationDesign2Tools, coordinationDesign2Locale } from "@/components/enterprise/professional/coordination-design2-tools";
+
 import { priorityChoices as corePriorityChoices } from "@/components/enterprise/core-v2/erp-v2-ui";
 import { EnterpriseApproverSelect } from "@/components/enterprise/enterprise-approver-select";
 import { enterpriseCoreT } from "@/lib/enterprise-core-i18n";
@@ -11,7 +14,7 @@ import { useMemo, useState, type FormEvent } from "react";
 import { BusinessList, BusinessListItem } from "@/components/workspace/business-list";
 import { ContextActions, type BusinessContextAction } from "@/components/workspace/context-actions";
 import { EmptyState } from "@/components/workspace/empty-state";
-import { ModuleMetric, ModuleMetrics } from "@/components/workspace/module-metrics";
+import { ModuleMetrics } from "@/components/workspace/module-metrics";
 import { ModuleSection } from "@/components/workspace/module-workspace";
 import { StatusBadge } from "@/components/workspace/status-badge";
 import { Button } from "@/components/ui/button";
@@ -27,9 +30,11 @@ type RequestItem = { id: string; requestType: string; title: string; description
 type LegacyRecord = { id: string; title: string; description: string | null; status: string; priority: string; updatedAt: string };
 type PendingRequestAction = { request: RequestItem; action: string };
 
-export function EnterpriseRequestsWorkspace({ organizationId, members, departments, canCreate, canManage, locale, legacyRecords = [] }: { organizationId: string; members: EnterpriseChoice[]; departments: EnterpriseChoice[]; canCreate: boolean; canManage: boolean; locale?: string | null; legacyRecords?: LegacyRecord[] }) {
+export function EnterpriseRequestsWorkspace({ organizationId, organizationName = "Entreprise", members, departments, canCreate, canManage, locale, legacyRecords = [] }: { organizationId: string; organizationName?: string; members: EnterpriseChoice[]; departments: EnterpriseChoice[]; canCreate: boolean; canManage: boolean; locale?: string | null; legacyRecords?: LegacyRecord[] }) {
   const searchParams = useSearchParams();
   const deepLinkedRequestId = searchParams.get("request");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
@@ -56,8 +61,10 @@ export function EnterpriseRequestsWorkspace({ organizationId, members, departmen
     if (type) value.set("type", type);
     if (priority) value.set("priority", priority);
     if (department) value.set("department", department);
+    if (dateFrom) value.set("dateFrom", dateFrom);
+    if (dateTo) value.set("dateTo", dateTo);
     return value;
-  }, [deepLinkedRequestId, department, page, priority, search, status, type]);
+  }, [dateFrom, dateTo, deepLinkedRequestId, department, page, priority, search, status, type]);
   const collection = useEnterpriseV2Collection<RequestItem>({ endpoint: `/api/enterprise/${organizationId}/requests`, params, refreshKey });
   const focusedRequest = deepLinkedRequestId && dismissedDeepLinkId !== deepLinkedRequestId
     ? collection.items.find((item) => item.id === deepLinkedRequestId) || null
@@ -116,22 +123,27 @@ export function EnterpriseRequestsWorkspace({ organizationId, members, departmen
 
   return <div className="grid min-w-0 gap-5">
     <ModuleMetrics label={enterpriseCoreT(locale, "requests.request.indicators")}>
-      <ModuleMetric label={enterpriseCoreT(locale, "tasks.visible")} value={collection.pagination.total} />
-      <ModuleMetric label={enterpriseCoreT(locale, "requests.submitted")} value={collection.items.filter((item) => item.status === "SUBMITTED").length} />
-      <ModuleMetric label={statusLabel(locale, "IN_REVIEW")} value={collection.items.filter((item) => item.status === "IN_REVIEW").length} />
-      <ModuleMetric label={enterpriseCoreT(locale, "tasks.historicalMetric")} value={legacyRecords.length} />
+      <ErpDesign2Metric tone="sky" label={enterpriseCoreT(locale, "tasks.visible")} value={collection.pagination.total} />
+      <ErpDesign2Metric tone="amber" label={enterpriseCoreT(locale, "requests.submitted")} value={collection.items.filter((item) => item.status === "SUBMITTED").length} />
+      <ErpDesign2Metric tone="emerald" label={statusLabel(locale, "IN_REVIEW")} value={collection.items.filter((item) => item.status === "IN_REVIEW").length} />
+      <ErpDesign2Metric tone="violet" label={enterpriseCoreT(locale, "tasks.historicalMetric")} value={legacyRecords.length} />
     </ModuleMetrics>
-    <ModuleSection title={enterpriseCoreT(locale, "requests.internal.requests")} description={enterpriseCoreT(locale, "requests.self.service.requests.with.information.resolution.closure.and")} count={`${collection.pagination.total}`} action={canCreate ? <Button onClick={() => setCreateOpen(true)} className="bg-dtsc-blue text-white"><Plus className="h-4 w-4" />{enterpriseCoreT(locale, "requests.new.request")}</Button> : undefined}>
+    <ErpDesign2RegisterSection title={enterpriseCoreT(locale, "requests.internal.requests")} description={enterpriseCoreT(locale, "requests.self.service.requests.with.information.resolution.closure.and")} count={`${collection.pagination.total}`} action={canCreate ? <Button onClick={() => setCreateOpen(true)} className="bg-dtsc-blue text-white"><Plus className="h-4 w-4" />{enterpriseCoreT(locale, "requests.new.request")}</Button> : undefined}>
       <div className="grid gap-2 border-y border-dtsc-border py-3 md:grid-cols-3 xl:grid-cols-5">
         <Input value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder={enterpriseCoreT(locale, "requests.search.requests")} />
-        <NativeSelect value={status} onChange={(value) => { setStatus(value); setPage(1); }} items={[{ id: "", label: enterpriseCoreT(locale, "requests.all.statuses") }, ...REQUEST_STATUSES.map((id) => ({ id, label: statusLabel(locale, id) }))]} />
+
         <NativeSelect value={type} onChange={(value) => { setType(value); setPage(1); }} items={[{ id: "", label: enterpriseCoreT(locale, "requests.request.type") }, ...requestTypeChoices(locale)]} />
         <NativeSelect value={priority} onChange={(value) => { setPriority(value); setPage(1); }} items={corePriorityChoices(locale)} />
         <NativeSelect value={department} onChange={(value) => { setDepartment(value); setPage(1); }} items={departments} />
       </div>
+      <CoordinationDesign2Tools kind="requests" organizationId={organizationId} organizationName={organizationName}
+        title={enterpriseCoreT(locale, "requests.internal.requests")} locale={coordinationDesign2Locale(locale)} filters={params}
+        status={status} statuses={[{ id: "", label: enterpriseCoreT(locale, "requests.all.statuses") }, ...REQUEST_STATUSES.map((id) => ({ id, label: statusLabel(locale, id) }))]}
+        onStatusChange={(next) => { setStatus(next); setPage(1); }} dateFrom={dateFrom} dateTo={dateTo}
+        onDateChange={(from, to) => { setDateFrom(from); setDateTo(to); setPage(1); }} />
       {collection.loading ? <p className="py-8 text-center text-sm text-dtsc-muted">{enterpriseCoreT(locale, "common.loading")}</p> : collection.items.length ? <BusinessList ariaLabel={enterpriseCoreT(locale, "requests.requests")}>{collection.items.map((requestRecord) => <BusinessListItem key={requestRecord.id} title={requestRecord.title} status={<StatusBadge tone={statusTone(requestRecord.status)}>{statusLabel(locale, requestRecord.status)}</StatusBadge>} meta={`${requestTypeLabel(locale, requestRecord.requestType)} · ${priorityLabel(locale, requestRecord.priority)} · ${formatEnterpriseDate(requestRecord.createdAt, locale)}`} description={requestRecord.description} onOpen={() => setDetail(requestRecord)} openLabel={enterpriseCoreT(locale, "requests.open.named", { title: requestRecord.title })} actions={<ContextActions label={enterpriseCoreT(locale, "requests.request.actions")} actions={actionsFor(requestRecord, canManage, locale, setDetail, setEdit, setApprovalTarget, setPendingAction)} />} />)}</BusinessList> : <EmptyState compact title={enterpriseCoreT(locale, "requests.no.requests")} description={collection.error || (deepLinkedRequestId ? enterpriseCoreT(locale, "requests.this.request.is.unavailable.or.no.longer.accessible") : enterpriseCoreT(locale, "requests.no.request.matches.the.current.filters"))} />}
       <div className="mt-3 flex items-center justify-between border-t border-dtsc-border pt-3 text-sm text-dtsc-muted"><span>{enterpriseCoreT(locale, "common.page", { current: collection.pagination.page, total: collection.pagination.pageCount })}</span><div className="flex gap-2"><Button variant="outline" disabled={page <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>{enterpriseCoreT(locale, "common.previous")}</Button><Button variant="outline" disabled={page >= collection.pagination.pageCount} onClick={() => setPage((value) => value + 1)}>{enterpriseCoreT(locale, "common.next")}</Button></div></div>
-    </ModuleSection>
+    </ErpDesign2RegisterSection>
     {legacyRecords.length ? <ModuleSection title={enterpriseCoreT(locale, "requests.historical.requests")} description={enterpriseCoreT(locale, "requests.legacy.requests.remain.readable.and.read.only")}><BusinessList ariaLabel={enterpriseCoreT(locale, "requests.legacy.aria")}>{legacyRecords.map((record) => <BusinessListItem key={record.id} title={record.title} status={<StatusBadge>{enterpriseCoreT(locale, "tasks.historyBadge")}</StatusBadge>} meta={`${statusLabel(locale, record.status)} · ${priorityLabel(locale, record.priority)}`} description={record.description || formatEnterpriseDate(record.updatedAt, locale)} />)}</BusinessList></ModuleSection> : null}
     <Dialog open={createOpen} onClose={() => setCreateOpen(false)} title={enterpriseCoreT(locale, "requests.new.internal.request")} presentation="editor" className="max-w-4xl"><EnterpriseRequestForm locale={locale} members={members} departments={departments} onSubmit={submitCreate} /></Dialog>
     <Dialog open={Boolean(edit)} onClose={() => setEdit(null)} title={enterpriseCoreT(locale, "requests.edit.request")} presentation="editor" className="max-w-4xl">{edit ? <EnterpriseRequestForm locale={locale} members={members} departments={departments} value={edit} onSubmit={submitEdit} /> : null}</Dialog>

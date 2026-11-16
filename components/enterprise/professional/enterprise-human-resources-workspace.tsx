@@ -1,5 +1,8 @@
 "use client";
 
+import { ErpDesign2Metric, ErpDesign2RegisterSection } from "@/components/enterprise/professional/erp-design2-register";
+import { HrDesign2Tools } from "@/components/enterprise/professional/hr-design2-tools";
+
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import dynamic from "next/dynamic";
 import { Archive, CheckCircle2, ChevronRight, Eye, FileText, Pencil, Plus, RotateCcw, UsersRound, XCircle } from "lucide-react";
@@ -30,7 +33,7 @@ import { Input } from "@/components/ui/input";
 import { useToastMessage } from "@/components/ui/use-toast-message";
 import { BusinessList, BusinessListItem } from "@/components/workspace/business-list";
 import { EmptyState } from "@/components/workspace/empty-state";
-import { ModuleMetric, ModuleMetrics } from "@/components/workspace/module-metrics";
+import { ModuleMetrics } from "@/components/workspace/module-metrics";
 import { ModuleContent, ModuleHeader, ModuleSection, ModuleToolbar, ModuleWorkspace } from "@/components/workspace/module-workspace";
 import { StatusBadge } from "@/components/workspace/status-badge";
 import type { EnterpriseDepartmentItem, EnterpriseMemberItem, EnterpriseModuleItem, EnterprisePositionItem } from "@/lib/enterprise/enterprise-admin-types";
@@ -159,6 +162,9 @@ export function EnterpriseHumanResourcesWorkspace({ organizationId, organization
   const [tab, setTab] = useState<Tab>("CONTRACTS");
   const [page, setPage] = useState(1);
   const [status, setStatus] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [search, setSearch] = useState("");
   const [archivedView, setArchivedView] = useState(false);
   const [archiveAction, setArchiveAction] = useState<{ contract: Contract; mode: "ARCHIVE" | "RESTORE" } | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -227,8 +233,11 @@ export function EnterpriseHumanResourcesWorkspace({ organizationId, organization
     const query = new URLSearchParams({ page: String(page), pageSize: "25" });
     if (status) query.set("status", status);
     if (archivedView) query.set("archived", "1");
+    if (dateFrom) query.set("dateFrom", dateFrom);
+    if (dateTo) query.set("dateTo", dateTo);
+    if (search.trim()) query.set("search", search.trim());
     return query;
-  }, [page, status, archivedView]);
+  }, [archivedView, dateFrom, dateTo, page, search, status]);
   const collection = useProfessionalCollection<Contract>({ endpoint: `/api/enterprise/${organizationId}/employment-contracts`, params, refreshKey });
 
   // Governance CRUD stays behind the canonical administration permission and endpoints.
@@ -482,7 +491,7 @@ export function EnterpriseHumanResourcesWorkspace({ organizationId, organization
 
   return <div className="grid gap-8">
     <EnterpriseEmployeesIdentityWorkspace organizationId={organizationId} organizationName={organizationName} definition={definition} focusedEmployeeId={focusedEmployeeId} onFocusConsumed={() => setFocusedEmployeeId(null)} />
-    <ModuleWorkspace>
+    <ModuleWorkspace density="compact">
       <ModuleHeader
         eyebrow={locale === "en" ? "HR governance" : "Gouvernance RH"}
         title={locale === "en" ? "Contracts & organization" : "Contrats & organisation"}
@@ -491,9 +500,9 @@ export function EnterpriseHumanResourcesWorkspace({ organizationId, organization
         primaryAction={collection.canManage && tab === "CONTRACTS" ? <Button onClick={openCreate} className="bg-dtsc-blue text-white"><Plus className="h-4 w-4" />{locale === "en" ? "New contract" : "Nouveau contrat"}</Button> : undefined}
       />
       <ModuleMetrics label="RH">
-        <ModuleMetric label={locale === "en" ? "Active contracts" : "Contrats actifs"} value={collection.metrics.active || 0} />
-        <ModuleMetric label={locale === "en" ? "Pending approval" : "En attente de validation"} value={collection.metrics.pendingApproval || 0} />
-        <ModuleMetric label={locale === "en" ? "Company collaborators" : "Collaborateurs entreprise"} value={lookups.members.length} />
+        <ErpDesign2Metric tone="sky" label={locale === "en" ? "Active contracts" : "Contrats actifs"} value={collection.metrics.active || 0} />
+        <ErpDesign2Metric tone="amber" label={locale === "en" ? "Pending approval" : "En attente de validation"} value={collection.metrics.pendingApproval || 0} />
+        <ErpDesign2Metric tone="emerald" label={locale === "en" ? "Company collaborators" : "Collaborateurs entreprise"} value={lookups.members.length} />
       </ModuleMetrics>
       <ModuleToolbar
         controls={<ProfessionalTabs value={tab} onChange={(value) => { setTab(value); setPage(1); }} items={[
@@ -502,13 +511,18 @@ export function EnterpriseHumanResourcesWorkspace({ organizationId, organization
         ]} />}
         summary={tab === "CONTRACTS" ? (locale === "en" ? "No free-text position: contract assignment comes from enterprise reference data." : "Aucun poste en texte libre : l’affectation contractuelle vient des référentiels entreprise.") : (locale === "en" ? "Organization chart built from canonical HR assignments." : "Organisation construite à partir des affectations RH canoniques.")}
       />
-      <ModuleContent>
+      <ModuleContent density="compact">
         {error && !formOpen && !decision ? <ProfessionalError message={error} /> : null}
-        {tab === "CONTRACTS" ? <ModuleSection
+        {tab === "CONTRACTS" ? <ErpDesign2RegisterSection
           title={locale === "en" ? "Employment contracts" : "Contrats de travail"}
           description={locale === "en" ? "Search by workflow status and open a record before taking a sensitive decision." : "Filtrez par statut et ouvrez une fiche avant toute décision sensible."}
           action={<NativeSelect value={status} onChange={(value) => { setStatus(value); setPage(1); }} items={[{ id: "", label: locale === "en" ? "All statuses" : "Tous les statuts" }, ...["DRAFT", "PENDING_APPROVAL", "ACTIVE", "REJECTED", "ENDED", "CANCELLED"].map((id) => ({ id, label: professionalErpEnumLabel(locale, "employmentContractStatus", id) }))]} />}
         >
+          <div className="mb-2"><Input value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder={locale === "en" ? "Search contracts by reference or employee..." : "Rechercher un contrat par référence ou collaborateur..."} aria-label={locale === "en" ? "Search contracts" : "Rechercher un contrat"} /></div>
+          <HrDesign2Tools kind="contracts" organizationId={organizationId} organizationName={organizationName} title={locale === "en" ? "Employment contracts" : "Contrats de travail"} locale={locale}
+            filters={params} status={status} statuses={[{ id: "", label: locale === "en" ? "All statuses" : "Tous les statuts" }, ...["DRAFT", "PENDING_APPROVAL", "ACTIVE", "REJECTED", "ENDED", "CANCELLED"].map((id) => ({ id, label: professionalErpEnumLabel(locale, "employmentContractStatus", id) }))]}
+            onStatusChange={(next) => { setStatus(next); setPage(1); }} dateFrom={dateFrom} dateTo={dateTo}
+            onDateChange={(from, to) => { setDateFrom(from); setDateTo(to); setPage(1); }} />
           {collection.canManage ? <div className="mb-3 flex flex-wrap justify-end"><Button size="sm" variant={archivedView ? "default" : "outline"} onClick={() => { setArchivedView(!archivedView); setStatus(""); setPage(1); }}><Archive className="h-4 w-4" />{archivedView ? (locale === "en" ? "Current contracts" : "Contrats courants") : (locale === "en" ? "View archive" : "Voir les archives")}</Button></div> : null}
           {collection.error ? <ProfessionalError message={collection.error} /> : collection.loading ? <ProfessionalLoading /> : collection.items.length ? <>
             <BusinessList ariaLabel={locale === "en" ? "Employment contracts" : "Contrats de travail"}>
@@ -535,7 +549,7 @@ export function EnterpriseHumanResourcesWorkspace({ organizationId, organization
             </BusinessList>
             <ProfessionalPager pagination={collection.pagination} onPageChange={setPage} locale={locale} />
           </> : <EmptyState compact title={locale === "en" ? "No contract" : "Aucun contrat"} description={locale === "en" ? "Create a contract for an active collaborator from Company administration." : "Créez un contrat pour un collaborateur actif d’Administration entreprise."} />}
-        </ModuleSection> : <ModuleSection title={t("hr.orgSection")} description={locale === "en" ? "Department grouping uses canonical HR department identifiers." : "Le regroupement par département utilise les identifiants RH canoniques."}>
+        </ErpDesign2RegisterSection> : <ModuleSection title={t("hr.orgSection")} description={locale === "en" ? "Department grouping uses canonical HR department identifiers." : "Le regroupement par département utilise les identifiants RH canoniques."}>
           {grouped.length ? <div className="grid min-w-0 gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
             {grouped.map(([departmentId, employees], index) => <details key={departmentId} open={index === 0} className="group min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface p-3 sm:p-4">
               <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 font-bold text-dtsc-ink outline-none focus-visible:ring-2 focus-visible:ring-dtsc-blue [&::-webkit-details-marker]:hidden">

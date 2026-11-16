@@ -159,6 +159,8 @@ jobs:
         run: pnpm qa:erp-commercial-design2-1198
       - name: "ERP seven modules #1200 Design 2.0, printed purchasing and secured exports"
         run: pnpm qa:erp-seven-design2-1200
+      - name: "Design 2.0 #1203 Operations HR and enterprise activities"
+        run: pnpm qa:operations-hr-activities-design2-1203
       - name: Type check
         run: pnpm type-check
         env:

@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import { financeBusinessDateRange } from "@/lib/enterprise/accounting/http";
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
@@ -71,6 +72,10 @@ export async function GET(req: Request, { params }: Params) {
   const startedAt = Date.now(); const session = await getSession(); if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { organizationId } = await params; const access = await getEnterpriseCoreV2Access({ session, organizationId, moduleCode: "VALIDATIONS", action: "read" }); if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const url = new URL(req.url); const page = Math.max(1, Number(url.searchParams.get("page") || 1) || 1); const pageSize = Math.min(50, Math.max(5, Number(url.searchParams.get("pageSize") || 20) || 20)); const queue = url.searchParams.get("queue") || "pending"; const explicitStatus = url.searchParams.get("status")?.trim() || ""; const targetEntityType = url.searchParams.get("entityType")?.trim() || ""; const search = url.searchParams.get("search")?.trim() || ""; const from = url.searchParams.get("from"); const to = url.searchParams.get("to"); const filters: Prisma.EnterpriseApprovalWhereInput[] = [];
+  const civilRange = financeBusinessDateRange(req);
+  if (!civilRange.ok) return civilRange.response;
+  if (civilRange.from || civilRange.to) filters.push({ requestedAt: { gte: civilRange.from || undefined, lte: civilRange.to || undefined } });
+
   if (queue === "pending") filters.push({ approverUserId: session.userId, status: "PENDING" });
   if (queue === "corrections") filters.push({ OR: [{ requestedByUserId: session.userId, status: "CORRECTION_REQUESTED" }, { approverUserId: session.userId, status: "CORRECTION_REQUESTED" }] });
   if (queue === "treated") filters.push({ approverUserId: session.userId, status: { in: ["APPROVED", "REJECTED", "CANCELLED"] } });

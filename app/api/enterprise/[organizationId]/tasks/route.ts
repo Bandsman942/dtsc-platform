@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import { financeBusinessDateRange } from "@/lib/enterprise/accounting/http";
 import { NextResponse } from "next/server";
 import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
 import { getSession } from "@/lib/auth";
@@ -44,6 +45,10 @@ export async function GET(req: Request, { params }: Params) {
   const now = new Date();
 
   const filters: Prisma.EnterpriseTaskWhereInput[] = [];
+  const civilRange = financeBusinessDateRange(req);
+  if (!civilRange.ok) return civilRange.response;
+  if (civilRange.from || civilRange.to) filters.push({ dueAt: { gte: civilRange.from || undefined, lte: civilRange.to || undefined } });
+
   if (id) filters.push({ id });
   if (search) filters.push({ OR: [{ title: { contains: search, mode: "insensitive" } }, { description: { contains: search, mode: "insensitive" } }] });
   if (status) filters.push({ status });

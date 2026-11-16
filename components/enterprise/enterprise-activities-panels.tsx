@@ -2,6 +2,7 @@
 
 import { useMemo, useState, type FormEvent } from "react";
 import { useAppLocale } from "@/components/i18n/locale-provider";
+import { translateActivities } from "@/lib/i18n";
 import { getBusinessActivityFields, resolveEnterpriseActivityAction } from "@/lib/enterprise/enterprise-activity-form-contract";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -21,7 +22,9 @@ import type {
   EnterpriseActivitySectorRecordItem,
   EnterpriseActivityWorkflowItem,
 } from "@/lib/enterprise/enterprise-activities-types";
-import { useSmartList } from "@/lib/hooks/use-smart-list";
+import { useEnterpriseV2Collection } from "@/components/enterprise/core-v2/use-enterprise-v2-collection";
+import { ErpDesign2RegisterTools } from "@/components/enterprise/professional/erp-design2-register";
+import { StatusBadge } from "@/components/workspace/status-badge";
 
 type ActivityField = {
   name: string;
@@ -286,28 +289,51 @@ export function EnterpriseWorkflowsPanel({ workflows }: { workflows: EnterpriseA
   );
 }
 
-export function EnterpriseRequestsPanel({ requests, focusActivityId }: { requests: EnterpriseActivityRequestItem[]; focusActivityId?: string | null }) {
+export function EnterpriseRequestsPanel({ organizationId, organizationName, focusActivityId }: { organizationId: string; organizationName: string; focusActivityId?: string | null }) {
   const locale = useAppLocale();
   const english = locale === "en";
-  const list = useSmartList({
-    items: focusActivityId ? [...requests].sort((a, b) => Number(b.id === focusActivityId) - Number(a.id === focusActivityId)) : requests,
-    pageSize: 8,
-    getSearchText: (request) => `${request.title} ${request.description} ${request.workflowLink?.canonicalRequestStatus || request.status} ${request.priority} ${request.blockCode}`,
+  const [query, setQuery] = useState("");
+  const [page, setPage] = useState(1);
+  const [status, setStatus] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [focusOnly, setFocusOnly] = useState(Boolean(focusActivityId));
+  const params = useMemo(() => {
+    const value = new URLSearchParams({ page: String(page), pageSize: "20" });
+    if (focusOnly && focusActivityId) value.set("id", focusActivityId);
+    if (query.trim()) value.set("search", query.trim());
+    if (status) value.set("status", status);
+    if (dateFrom) value.set("dateFrom", dateFrom);
+    if (dateTo) value.set("dateTo", dateTo);
+    return value;
+  }, [dateFrom, dateTo, focusActivityId, focusOnly, page, query, status]);
+  const collection = useEnterpriseV2Collection<EnterpriseActivityRequestItem>({
+    endpoint: `/api/enterprise/${organizationId}/activity-requests`, params,
   });
+  const reset = () => { setPage(1); setFocusOnly(false); };
+  const exportColumns = [
+    { key: "title", labelFr: "Activité", labelEn: "Activity", get: (row: Record<string, unknown>) => String(row.title ?? "") },
+    { key: "status", labelFr: "Statut", labelEn: "Status", get: (row: Record<string, unknown>) => String(row.status ?? "") },
+    { key: "priority", labelFr: "Priorité", labelEn: "Priority", get: (row: Record<string, unknown>) => String(row.priority ?? "") },
+    { key: "createdAt", labelFr: "Créée le", labelEn: "Created", get: (row: Record<string, unknown>) => String(row.createdAt ?? "").slice(0, 10) },
+  ];
   return (
     <div className="min-w-0">
-      <ListControls
-        query={list.query}
-        onQueryChange={list.setQuery}
-        page={list.page}
-        pageCount={list.pageCount}
-        totalCount={list.totalCount}
-        filteredCount={list.filteredCount}
+      <ErpDesign2RegisterTools locale={english ? "en" : "fr"} title={translateActivities(locale, "enterpriseRequestsTitle")}
+        organizationName={organizationName} endpoint={`/api/enterprise/${organizationId}/activity-requests`}
+        filters={Object.fromEntries(params.entries())} columns={exportColumns}
+        status={status} statuses={[{ id: "", label: translateActivities(locale, "enterpriseRequestsAllStatuses") }, ...["DRAFT", "SUBMITTED", "ASSIGNED", "IN_REVIEW", "IN_PROGRESS", "WAITING_REQUESTER", "APPROVED", "REJECTED", "RESOLVED", "FULFILLED", "REOPENED", "CLOSED", "COMPLETED", "CANCELLED"].map((id) => ({ id, label: requestStage(id, english) }))]}
+        onStatusChange={(next) => { setStatus(next); reset(); }} dateFrom={dateFrom} dateTo={dateTo}
+        onDateChange={(from, to) => { setDateFrom(from); setDateTo(to); reset(); }} />
+      <ListControls query={query} onQueryChange={(next) => { setQuery(next); reset(); }}
+        page={collection.pagination.page} pageCount={collection.pagination.pageCount}
+        totalCount={collection.pagination.total} filteredCount={collection.pagination.total}
         placeholder={english ? "Search an activity…" : "Rechercher une activité..."}
-        onPageChange={list.setPage}
-      />
+        onPageChange={(next) => { setPage(next); setFocusOnly(false); }} />
+      {collection.loading ? <p className="py-4 text-center text-sm text-dtsc-muted">{translateActivities(locale, "enterpriseRequestsLoading")}</p> : null}
+      {collection.error ? <p role="alert" className="py-3 text-sm text-rose-600">{translateActivities(locale, "enterpriseRequestsLoadFailed")}</p> : null}
       <div className="mt-3 grid min-w-0 gap-3">
-        {list.paginatedItems.map((request) => {
+        {collection.items.map((request) => {
           const canonical = request.workflowLink;
           const status = canonical?.canonicalRequestStatus || request.status;
           return (
@@ -318,7 +344,7 @@ export function EnterpriseRequestsPanel({ requests, focusActivityId }: { request
                   <h3 className="mt-1 break-words font-black text-dtsc-ink">{request.title}</h3>
                   <p className="mt-1 line-clamp-2 break-words text-sm text-dtsc-muted">{request.description}</p>
                 </div>
-                <span className="max-w-full rounded-full border border-dtsc-border bg-dtsc-page px-3 py-1 text-xs font-bold text-dtsc-ink">{requestStage(status, english)}</span>
+                <StatusBadge tone={["REJECTED", "CANCELLED"].includes(status) ? "danger" : ["CLOSED", "COMPLETED", "RESOLVED", "FULFILLED", "APPROVED"].includes(status) ? "success" : ["SUBMITTED", "IN_REVIEW", "WAITING_REQUESTER"].includes(status) ? "warning" : "neutral"}>{requestStage(status, english)}</StatusBadge>
               </div>
               {canonical?.workflowState ? (
                 <div className="mt-3 rounded-xl border border-dtsc-border bg-dtsc-page p-3 text-sm text-dtsc-muted">
@@ -342,7 +368,7 @@ export function EnterpriseRequestsPanel({ requests, focusActivityId }: { request
             </article>
           );
         })}
-        {!list.filteredCount && <p className="rounded-2xl border border-dtsc-border bg-dtsc-page p-4 text-sm text-dtsc-muted">{english ? "No business request found." : "Aucune activité entreprise pour le moment."}</p>}
+        {!collection.loading && !collection.pagination.total && <p className="rounded-2xl border border-dtsc-border bg-dtsc-page p-4 text-sm text-dtsc-muted">{english ? "No business request found." : "Aucune activité entreprise pour le moment."}</p>}
       </div>
     </div>
   );

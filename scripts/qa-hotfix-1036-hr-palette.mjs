@@ -39,7 +39,10 @@ assert.match(self, /copy\[locale === "en" \? "en" : "fr"\]/);
 assert.match(workspace, /type TimeTab = .*"SELF_SERVICE"/);
 assert.match(workspace, /id: "SELF_SERVICE" as const, label: copy\.selfService/);
 assert.match(workspace, /tab === "SELF_SERVICE" \? <EnterpriseMyHrSelfService/);
-assert.match(workspace, /tab !== "SCHEDULES" && tab !== "SELF_SERVICE"/);
+// Design 2.0 replaces the old select with status rails for each professional register.
+// Personal HR stays a distinct branch and never renders the operational status controls.
+assert.match(workspace, /<HrDesign2Tools kind=\{tab === "SCHEDULES" \? "schedules"/);
+assert.match(workspace, /statuses=\{tab === "SCHEDULES" \?/);
 assert.doesNotMatch(workspace, /<EnterpriseMyHrSelfService organizationId=\{organizationId\} \/>\s*<ModuleMetrics/);
 
 // Each private history is paginated independently on the server, including an
