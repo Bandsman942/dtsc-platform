@@ -60,11 +60,11 @@ const CONFIG: Record<ModuleCode, { endpoint: string; deepLink: string; help: str
   FINANCE_STATEMENTS: { endpoint: "financial-statements", deepLink: "statementId", help: "FINANCE_STATEMENTS" },
   FINANCE_ASSETS: { endpoint: "asset-accounting", deepLink: "assetProfileId", help: "FINANCE_ASSETS" },
 };
-const FORM_GUIDANCE: Record<ModuleCode, { fr: string; en: string }> = {
-  FINANCE_TAX: { fr: "Renseignez les règles fiscales et les comptes avant toute application automatique.", en: "Configure tax rules and mapped ledger accounts before automatic application." },
-  FINANCE_CLOSE: { fr: "Préparez la checklist d'une période ouverte. Les blocages, validations et autorisations de clôture sont vérifiés côté serveur.", en: "Prepare a checklist for an open period. Blockers, approvals and closing rights are verified on the server." },
-  FINANCE_STATEMENTS: { fr: "Choisissez le type d'état, une période et une devise. Une version publiée est immuable et s'appuie sur les écritures comptabilisées.", en: "Choose a statement type, period and currency. Published versions are immutable and rely on posted accounting entries." },
-  FINANCE_ASSETS: { fr: "Sélectionnez l'immobilisation, sa valeur amortissable et les comptes associés. La capitalisation ne doit pas créer une seconde immobilisation opérationnelle.", en: "Select the asset, depreciation basis and mapped accounts. Capitalization must not duplicate the operational asset." },
+const FORM_GUIDANCE: Record<ModuleCode, EnterpriseFinanceKey> = {
+  FINANCE_TAX: "advancedGuideTax",
+  FINANCE_CLOSE: "advancedGuideClose",
+  FINANCE_STATEMENTS: "advancedGuideStatements",
+  FINANCE_ASSETS: "advancedGuideAssets",
 };
 
 const FINANCE_STATUSES: Record<ModuleCode, string[]> = {
@@ -187,7 +187,7 @@ export function EnterpriseFinanceAdvancedWorkspace(props: Props) {
     </ModuleSection><ProfessionalHelp moduleCode={config.help} /></ModuleContent>
 
     <Dialog open={formOpen} onClose={() => { if (!busy) setFormOpen(false); }} title={moduleCode === "FINANCE_TAX" ? (locale === "en" ? "Create a tax" : "Créer une taxe") : t("professionalAction")} description={t("finalControlsServer")} presentation="editor" className="max-w-5xl"><form onSubmit={submitCreate} className="grid gap-5 sm:grid-cols-2">
-      <p role="note" className="min-w-0 rounded-xl border border-dtsc-border bg-dtsc-page px-4 py-3 text-sm leading-6 text-dtsc-muted sm:col-span-2">{FORM_GUIDANCE[moduleCode][locale]}</p>
+      <p role="note" className="min-w-0 rounded-xl border border-dtsc-border bg-dtsc-page px-4 py-3 text-sm leading-6 text-dtsc-muted sm:col-span-2">{t(FORM_GUIDANCE[moduleCode])}</p>
       {moduleCode === "FINANCE_TAX" ? <>
         <label className="grid min-w-0 gap-1 text-sm font-bold">{t("code")} *<Input name="code" placeholder={t("code")} required disabled={busy} /></label>
         <label className="grid min-w-0 gap-1 text-sm font-bold">{t("frenchLabel")} *<Input name="nameFr" required disabled={busy} /></label>
