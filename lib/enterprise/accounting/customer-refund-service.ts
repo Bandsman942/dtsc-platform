@@ -896,16 +896,17 @@ export async function markCustomerRefundFinancialInverseReadyTx(
     const retailCheckout = await tx.enterpriseRetailInvoiceCheckout.findFirst({
       where: { organizationId, salesInvoiceId: receivable.salesInvoiceId }, select: { id: true },
     });
+    let retailBound: { refundAmount: Prisma.Decimal; refundPayoutAmount: Prisma.Decimal | null } | null = null;
     if (retailCheckout) {
-      const bound = retailReturnRequestId ? await tx.enterpriseRetailInvoiceReturnRequest.findFirst({
+      retailBound = retailReturnRequestId ? await tx.enterpriseRetailInvoiceReturnRequest.findFirst({
         where: {
           organizationId, id: retailReturnRequestId, checkoutId: retailCheckout.id,
           status: "FINANCE_PENDING", salesCreditNoteId: creditNoteId,
           OR: [{ refundPaymentId }, { refundLegs: { some: { refundPaymentId } } }],
           preparedByUserId: { not: null },
-        }, select: { id: true },
+        }, select: { refundAmount: true, refundPayoutAmount: true },
       }) : null;
-      if (!bound) throw new EnterpriseAccountingError("RETAIL_INVOICE_RETURN_WORKFLOW_REQUIRED", 409);
+      if (!retailBound) throw new EnterpriseAccountingError("RETAIL_INVOICE_RETURN_WORKFLOW_REQUIRED", 409);
       await assertRetailInvoiceRefundAccountTx(tx, organizationId, receivable.salesInvoiceId, actorUserId, refundPayment);
     }
     const credit = await tx.enterpriseSalesCreditNote.findFirst({
@@ -922,9 +923,23 @@ export async function markCustomerRefundFinancialInverseReadyTx(
     }) : [];
     const matchingLeg = refundLegs.find((leg) => leg.refundPaymentId === refundPayment.id);
     const aggregateRefund = refundLegs.reduce((total, leg) => total.plus(leg.amount), new Prisma.Decimal(0));
-    if (!credit || (refundLegs.length
-      ? (!matchingLeg || !matchingLeg.amount.equals(refundPayment.amount) || !credit.grandTotal.equals(aggregateRefund))
-      : !credit.grandTotal.equals(refundPayment.amount))) {
+    // An invoice credit also extinguishes the unpaid receivable. Only the
+    // portion that was actually collected is a cash refund. For a verified
+    // RETAIL return, therefore, the posted credit and payout need not be equal.
+    // All non-RETAIL refunds keep their historical 1:1 amount requirement.
+    const retailPayout = retailBound?.refundPayoutAmount;
+    const expectedRefund = retailBound
+      ? (Boolean(retailPayout?.greaterThan(0)) &&
+        Boolean(retailPayout?.lessThanOrEqualTo(credit?.grandTotal || 0)) &&
+        Boolean(credit?.grandTotal.equals(retailBound.refundAmount)) &&
+        (refundLegs.length
+          ? (Boolean(matchingLeg?.amount.equals(refundPayment.amount)) && aggregateRefund.equals(retailPayout!))
+          : refundPayment.amount.equals(retailPayout!)))
+      : (refundLegs.length
+          ? (Boolean(matchingLeg?.amount.equals(refundPayment.amount)) &&
+            Boolean(credit?.grandTotal.equals(aggregateRefund)))
+          : Boolean(credit?.grandTotal.equals(refundPayment.amount)));
+    if (!credit || !expectedRefund) {
       throw new EnterpriseAccountingError("REFUND_CREDIT_NOTE_NOT_READY", 409, {
         creditNoteId,
         refundAmount: refundPayment.amount.toFixed(),
