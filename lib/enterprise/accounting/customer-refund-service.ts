@@ -927,7 +927,11 @@ export async function markCustomerRefundFinancialInverseReadyTx(
     // portion that was actually collected is a cash refund. For a verified
     // RETAIL return, therefore, the posted credit and payout need not be equal.
     // All non-RETAIL refunds keep their historical 1:1 amount requirement.
-    const retailPayout = retailBound?.refundPayoutAmount;
+    // NULL belongs to pre-migration returns, whose cash payout equalled
+    // the whole credit. New returns always record their independent payout.
+    const retailPayout = retailBound
+      ? (retailBound.refundPayoutAmount ?? retailBound.refundAmount)
+      : null;
     const expectedRefund = retailBound
       ? (Boolean(retailPayout?.greaterThan(0)) &&
         Boolean(retailPayout?.lessThanOrEqualTo(credit?.grandTotal || 0)) &&
