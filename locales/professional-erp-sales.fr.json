@@ -112,5 +112,10 @@
   "sales.taxTotal": "Taxes",
   "sales.documentTotal": "Total du document",
   "sales.financeHandoffHelp": "Commande, livraison et facture sont des pièces distinctes. Depuis Factures clients, sélectionnez cette commande comme source avant de soumettre et comptabiliser.",
-  "sales.openCustomerInvoices": "Ouvrir Factures clients"
+  "sales.openCustomerInvoices": "Ouvrir Factures clients",
+  "status.IN_FULFILLMENT": "En cours de livraison",
+  "sales.fulfillmentType": "Nature de la livraison",
+  "sales.fulfillmentTypeHelp": "Sélectionnez une livraison de produits ou une prestation de service. Les services ne créent aucun mouvement de stock ; les produits stockés suivent le circuit logistique applicable.",
+  "sales.productDelivery": "Livraison de produits",
+  "sales.serviceDelivery": "Prestation / livraison de service"
 }
