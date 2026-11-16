@@ -10,6 +10,7 @@ import { retailFailureOutcome, retailPendingOutcome, retailSuccessOutcome } from
 import { createConnectedTelcoTopupOperation } from "@/lib/enterprise/retail/operator-orchestration";
 import { telcoTopupCreateSchema } from "@/lib/enterprise/retail/schemas";
 import { createTelcoTopupWithPosting } from "@/lib/enterprise/retail/service";
+import { retailFinanceReadSiteScope } from "@/lib/enterprise/retail/site-access";
 import { prisma } from "@/lib/prisma";
 
 type Params = { params: Promise<{ organizationId: string }> };
@@ -19,6 +20,16 @@ export async function GET(req: Request, { params }: Params) {
   const { organizationId } = await params;
   const auth = await authorizeRetailRequest(req, organizationId, "TELCO_TOPUPS", "read");
   if (!auth.ok) return auth.response;
+  // RETAIL store-isolated staff cannot export another boutique's operator
+  // transactions. The topup has no siteId: attribute it only via its
+  // canonical tender financial account's siteId, never by client-side hints.
+  let visibleSites: Awaited<ReturnType<typeof retailFinanceReadSiteScope>>;
+  try { visibleSites = await retailFinanceReadSiteScope(organizationId, auth.session.userId, "VIEW_SALES"); }
+  catch (error) { return retailErrorResponse(error, "RETAIL_SITE_ACCESS_DENIED"); }
+  const permittedTenderAccountIds = visibleSites === null ? null : (await prisma.enterpriseFinancialAccount.findMany({
+    where: { organizationId, siteId: { in: visibleSites }, archivedAt: null },
+    select: { id: true },
+  })).map((item) => item.id);
   const { page, pageSize, status, providerCode, search, from, to } = retailListParams(req);
   const dates = financeBusinessDateRange(req);
   if (!dates.ok) return dates.response;
@@ -30,6 +41,7 @@ export async function GET(req: Request, { params }: Params) {
   const effectiveTo = dates.to || to;
   const where: Prisma.EnterpriseTelcoTopupWhereInput = {
     organizationId,
+    ...(permittedTenderAccountIds !== null ? { tenderFinancialAccountId: { in: permittedTenderAccountIds } } : {}),
     ...(status ? { status } : {}),
     ...(providerCode ? { providerCode } : {}),
     ...(effectiveFrom || effectiveTo ? { occurredAt: { ...(effectiveFrom ? { gte: effectiveFrom } : {}), ...(effectiveTo ? { lte: effectiveTo } : {}) } } : {}),
