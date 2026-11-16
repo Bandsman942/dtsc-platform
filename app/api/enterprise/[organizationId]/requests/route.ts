@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import { financeBusinessDateRange } from "@/lib/enterprise/accounting/http";
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
@@ -38,6 +39,10 @@ export async function GET(req: Request, { params }: Params) {
   const from = url.searchParams.get("from");
   const to = url.searchParams.get("to");
   const filters: Prisma.EnterpriseRequestWhereInput[] = [];
+  const civilRange = financeBusinessDateRange(req);
+  if (!civilRange.ok) return civilRange.response;
+  if (civilRange.from || civilRange.to) filters.push({ createdAt: { gte: civilRange.from || undefined, lte: civilRange.to || undefined } });
+
   if (id) filters.push({ id });
   if (search) filters.push({ OR: [{ title: { contains: search, mode: "insensitive" } }, { description: { contains: search, mode: "insensitive" } }, { requestType: { contains: search, mode: "insensitive" } }] });
   if (status) filters.push({ status });
