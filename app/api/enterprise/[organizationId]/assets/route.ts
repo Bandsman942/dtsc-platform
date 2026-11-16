@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { getEnterpriseCommonDomainAccess } from "@/lib/enterprise/common/access";
+import { financeBusinessDateRange } from "@/lib/enterprise/accounting/http";
 import { enterpriseDomainErrorResponse, enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
 import {
   enterprisePurchaseVisibilityWhere,
@@ -31,7 +32,9 @@ export async function GET(req: Request, { params }: Params) {
   const pageSize = Math.min(100, Math.max(5, Number(url.searchParams.get("pageSize") || 25) || 25));
   const search = url.searchParams.get("search")?.trim() || "";
   const status = url.searchParams.get("status")?.trim() || "";
-  const where: Prisma.EnterpriseAssetWhereInput = { organizationId, archivedAt: null, ...(status ? { status } : {}), ...(search ? { OR: [{ code: { contains: search, mode: "insensitive" } }, { name: { contains: search, mode: "insensitive" } }, { serialNumber: { contains: search, mode: "insensitive" } }] } : {}) };
+  const dates = financeBusinessDateRange(req);
+  if (!dates.ok) return dates.response;
+  const where: Prisma.EnterpriseAssetWhereInput = { organizationId, archivedAt: null,    ...((dates.from || dates.to) ? { createdAt: { ...(dates.from ? { gte: dates.from } : {}), ...(dates.to ? { lte: dates.to } : {}) } } : {}), ...(status ? { status } : {}), ...(search ? { OR: [{ code: { contains: search, mode: "insensitive" } }, { name: { contains: search, mode: "insensitive" } }, { serialNumber: { contains: search, mode: "insensitive" } }] } : {}) };
   const [items, total, assigned, maintenance, incidents] = await Promise.all([
     prisma.enterpriseAsset.findMany({ where, orderBy: [{ status: "asc" }, { name: "asc" }], skip: (page - 1) * pageSize, take: pageSize, include: { category: true, site: true, assignments: { where: { status: "ACTIVE" }, take: 1 }, _count: { select: { maintenanceRecords: true, incidents: true } } } }),
     prisma.enterpriseAsset.count({ where }),
