@@ -102,11 +102,11 @@ type Lookups = { parties: Party[]; warehouses: Warehouse[]; currencies: string[]
 type QuoteActionTarget = { quote: Quote; targetStatus: "REJECTED" | "CANCELLED" };
 
 const QUOTE_STATUSES = ["DRAFT", "SENT", "ACCEPTED", "REJECTED", "EXPIRED", "CONVERTED", "CANCELLED"] as const;
-const ORDER_STATUSES = ["DRAFT", "PENDING_APPROVAL", "CONFIRMED", "PARTIALLY_FULFILLED", "FULFILLED", "CLOSED", "CANCELLED"] as const;
+const ORDER_STATUSES = ["DRAFT", "PENDING_APPROVAL", "CONFIRMED", "IN_FULFILLMENT", "PARTIALLY_FULFILLED", "FULFILLED", "CLOSED", "CANCELLED"] as const;
 
 function statusTone(status: string) {
   if (["ACCEPTED", "CONVERTED", "FULFILLED", "CLOSED"].includes(status)) return "success" as const;
-  if (["SENT", "PENDING_APPROVAL", "CONFIRMED", "PARTIALLY_FULFILLED"].includes(status)) return "warning" as const;
+  if (["SENT", "PENDING_APPROVAL", "CONFIRMED", "IN_FULFILLMENT", "PARTIALLY_FULFILLED"].includes(status)) return "warning" as const;
   if (["REJECTED", "EXPIRED", "CANCELLED"].includes(status)) return "danger" as const;
   return "neutral" as const;
 }
@@ -377,8 +377,8 @@ export function EnterpriseSalesOperationsWorkspace({
     setBusy(true);
     try {
       await professionalMutation(`/api/enterprise/${organizationId}/sales-orders/${fulfillTarget.id}/fulfill`, {
-        fulfillmentType: "PRODUCT_DELIVERY",
-        warehouseId: String(form.get("warehouseId") || "") || null,
+        fulfillmentType: String(form.get("fulfillmentType") || "PRODUCT_DELIVERY"),
+        warehouseId: form.get("fulfillmentType") === "SERVICE_DELIVERY" ? null : String(form.get("warehouseId") || "") || null,
         acceptedByCustomer: form.get("acceptedByCustomer") === "on",
         acceptanceNotes: String(form.get("acceptanceNotes") || "") || null,
         idempotencyKey: fulfillmentKey,
@@ -415,7 +415,7 @@ export function EnterpriseSalesOperationsWorkspace({
     return [
       { id: "open", label: t("sales.open"), icon: Eye, onSelect: () => setOrderDetail(order) },
       { id: "print", label: t("sales.printPreview"), icon: Printer, onSelect: () => printCommercial("order", order.id) },
-      ...(["CONFIRMED", "PARTIALLY_FULFILLED"].includes(order.status) ? [{ id: "fulfill", label: t("sales.recordDelivery"), icon: PackageCheck, onSelect: () => openFulfillment(order) }] : []),
+      ...(["CONFIRMED", "IN_FULFILLMENT", "PARTIALLY_FULFILLED"].includes(order.status) ? [{ id: "fulfill", label: t("sales.recordDelivery"), icon: PackageCheck, onSelect: () => openFulfillment(order) }] : []),
     ];
   }
 
@@ -534,7 +534,7 @@ export function EnterpriseSalesOperationsWorkspace({
             <FileText className="h-4 w-4 shrink-0 text-sky-600" /><span className="min-w-0 flex-1 text-dtsc-muted">{t("sales.financeHandoffHelp")}</span>
             <Link href="/enterprise-modules/FINANCE_RECEIVABLES" className="rounded-lg border border-dtsc-border bg-dtsc-surface px-3 py-2 font-bold text-dtsc-blue transition hover:border-sky-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400">{t("sales.openCustomerInvoices")}</Link>
           </div>
-          {["CONFIRMED", "PARTIALLY_FULFILLED"].includes(orderDetail.status) ? <Button onClick={() => openFulfillment(orderDetail)}><PackageCheck className="h-4 w-4" />{t("sales.recordDelivery")}</Button> : null}</div> : null}
+          {["CONFIRMED", "IN_FULFILLMENT", "PARTIALLY_FULFILLED"].includes(orderDetail.status) ? <Button onClick={() => openFulfillment(orderDetail)}><PackageCheck className="h-4 w-4" />{t("sales.recordDelivery")}</Button> : null}</div> : null}
       </Dialog>
 
       <Dialog
@@ -546,7 +546,7 @@ export function EnterpriseSalesOperationsWorkspace({
         presentation="editor"
         footer={<><Button type="button" variant="outline" disabled={busy} onClick={() => { setFulfillTarget(null); setFulfillmentKey(""); }}>{t("common.cancel")}</Button><Button type="submit" form="order-fulfillment-form" disabled={busy}><RefreshCcw className="h-4 w-4" />{busy ? t("common.saving") : t("sales.saveDelivery")}</Button></>}
       >
-        {fulfillTarget ? <form id="order-fulfillment-form" onSubmit={fulfillOrder} className="grid gap-5 p-4 sm:p-5">{message ? <ProfessionalError message={message} /> : null}<p className="rounded-xl border border-dtsc-border bg-dtsc-soft px-4 py-3 text-sm text-dtsc-muted">{hotfix.deliveryRetrySafe}</p><ProfessionalFormSection title={t("sales.originReceipt")}><Field label={t("sales.warehouse")}><NativeSelect name="warehouseId" items={[{ id: "", label: t("sales.noWarehouseService") }, ...lookups.warehouses.map((warehouse) => ({ id: warehouse.id, label: `${warehouse.code} · ${warehouse.name}` }))]} /></Field><Field label={t("sales.idempotentReference")}><Input value={fulfillmentKey || t("sales.generatedAutomatically")} disabled /></Field></ProfessionalFormSection><ProfessionalFormSection title={t("sales.deliveredQuantities")}><div className="md:col-span-2 grid gap-3">{fulfillTarget.items.map((item) => <div key={item.id} className="grid gap-3 rounded-xl border border-dtsc-border p-3 md:grid-cols-3"><div className="md:col-span-2"><p className="font-black text-dtsc-ink">{item.description}</p><p className="text-sm text-dtsc-muted">{t("sales.remainder", { remaining: item.quantityRemaining })}</p></div><Field label={t("sales.deliveredQuantity")}><Input name={`quantity_${item.id}`} type="number" min="0" max={Number(item.quantityRemaining)} step="0.01" defaultValue="0" /></Field></div>)}</div></ProfessionalFormSection><ProfessionalFormSection title={t("sales.proofConfirmation")}><Field label={t("sales.notes")}><textarea name="notes" rows={3} className="w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-base" /></Field><Field label={t("sales.customerConfirmation")}><label className="mt-3 flex min-h-11 items-center gap-2"><input name="acceptedByCustomer" type="checkbox" />{t("sales.recipientConfirms")}</label></Field><Field label={t("sales.recipientNotes")}><Input name="acceptanceNotes" /></Field></ProfessionalFormSection></form> : null}
+        {fulfillTarget ? <form id="order-fulfillment-form" onSubmit={fulfillOrder} className="grid gap-5 p-4 sm:p-5">{message ? <ProfessionalError message={message} /> : null}<p className="rounded-xl border border-dtsc-border bg-dtsc-soft px-4 py-3 text-sm text-dtsc-muted">{hotfix.deliveryRetrySafe}</p><ProfessionalFormSection title={t("sales.originReceipt")}><Field label={t("sales.fulfillmentType")} help={t("sales.fulfillmentTypeHelp")}><NativeSelect name="fulfillmentType" items={[{ id: "PRODUCT_DELIVERY", label: t("sales.productDelivery") }, { id: "SERVICE_DELIVERY", label: t("sales.serviceDelivery") }]} /></Field><Field label={t("sales.warehouse")}><NativeSelect name="warehouseId" items={[{ id: "", label: t("sales.noWarehouseService") }, ...lookups.warehouses.map((warehouse) => ({ id: warehouse.id, label: `${warehouse.code} · ${warehouse.name}` }))]} /></Field><Field label={t("sales.idempotentReference")}><Input value={fulfillmentKey || t("sales.generatedAutomatically")} disabled /></Field></ProfessionalFormSection><ProfessionalFormSection title={t("sales.deliveredQuantities")}><div className="md:col-span-2 grid gap-3">{fulfillTarget.items.map((item) => <div key={item.id} className="grid gap-3 rounded-xl border border-dtsc-border p-3 md:grid-cols-3"><div className="md:col-span-2"><p className="font-black text-dtsc-ink">{item.description}</p><p className="text-sm text-dtsc-muted">{t("sales.remainder", { remaining: item.quantityRemaining })}</p></div><Field label={t("sales.deliveredQuantity")}><Input name={`quantity_${item.id}`} type="number" min="0" max={Number(item.quantityRemaining)} step="0.01" defaultValue="0" /></Field></div>)}</div></ProfessionalFormSection><ProfessionalFormSection title={t("sales.proofConfirmation")}><Field label={t("sales.notes")}><textarea name="notes" rows={3} className="w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-base" /></Field><Field label={t("sales.customerConfirmation")}><label className="mt-3 flex min-h-11 items-center gap-2"><input name="acceptedByCustomer" type="checkbox" />{t("sales.recipientConfirms")}</label></Field><Field label={t("sales.recipientNotes")}><Input name="acceptanceNotes" /></Field></ProfessionalFormSection></form> : null}
       </Dialog>
 
       <Dialog open={Boolean(quoteActionTarget)} onClose={() => { if (!busy) setQuoteActionTarget(null); }} title={hotfix.confirmQuoteAction} description={hotfix.confirmQuoteActionHelp} className="max-w-xl">
