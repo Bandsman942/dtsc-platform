@@ -1,6 +1,6 @@
 {
   "name": "dtsc-platform",
-  "version": "1.23.0",
+  "version": "1.23.1",
   "private": true,
   "engines": {
     "node": "22.x"
@@ -55,6 +55,7 @@
     "qa:hotfix-1083-retail-flows": "node scripts/qa-hotfix-1083-retail-flow-sync.mjs",
     "qa:hotfix-1101-retail-pos": "node scripts/qa-hotfix-1101-retail-pos.mjs",
     "qa:retail-five-lots-1116": "node scripts/qa-retail-five-lots-1116.mjs",
+    "qa:retail-daily-close-design2-1205": "node scripts/qa-retail-daily-close-design2-1205.mjs",
     "qa:retail-executive-1105": "node scripts/qa-retail-executive-1105.mjs",
     "qa:retail-cogs-1109": "node scripts/qa-retail-cogs-traceability-1109.mjs",
     "qa:enterprise-admin-design2-1107": "node scripts/qa-enterprise-admin-design2-1107.mjs",

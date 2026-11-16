@@ -3,6 +3,7 @@ import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { historicalImportApplySchema } from "@/lib/enterprise/retail/historical-import-schemas";
 import { applyHistoricalImport } from "@/lib/enterprise/retail/historical-import-service";
 import { authorizeRetailRequest, retailErrorResponse } from "@/lib/enterprise/retail/http";
+import { shopHistoricalImportDenial } from "@/lib/enterprise/retail/shop-history-availability";
 
 type Params = { params: Promise<{ organizationId: string; importId: string }> };
 
@@ -11,6 +12,8 @@ export async function POST(req: Request, { params }: Params) {
   const { organizationId, importId } = await params;
   const auth = await authorizeRetailRequest(req, organizationId, "RETAIL_DAILY_CLOSE", "manage", { mutation: true, limit: 20 });
   if (!auth.ok) return auth.response;
+  const shopDenied = await shopHistoricalImportDenial(organizationId);
+  if (shopDenied) return shopDenied;
   const parsed = historicalImportApplySchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {
     return NextResponse.json({ error: "RETAIL_HISTORY_INVALID_INPUT", message: "Actualisez la reprise avant de l'appliquer." }, { status: 400 });

@@ -26,6 +26,7 @@ import { resolveEnterpriseModuleAccess } from "@/lib/enterprise/module-access";
 import { requireEnterpriseMembership } from "@/lib/enterprise-sector-templates";
 import { prisma } from "@/lib/prisma";
 import { siteStaffCapabilities } from "@/lib/enterprise/retail/site-access";
+import { hasShopHistoricalImportAccess } from "@/lib/enterprise/retail/shop-history-availability";
 
 export async function renderRetailModulePage(moduleCode: "RETAIL_POS" | "MOBILE_MONEY_AGENCY" | "TELCO_TOPUPS" | "RETAIL_DAILY_CLOSE", options?: { section?: string; siteId?: string }) {
   const user = await requireUser();
@@ -48,6 +49,8 @@ export async function renderRetailModulePage(moduleCode: "RETAIL_POS" | "MOBILE_
   ]);
   if (!membership || !organization) notFound();
 
+  const showShopHistoricalImports = moduleCode === "RETAIL_DAILY_CLOSE"
+    ? await hasShopHistoricalImportAccess(organizationId) : false;
   const locale: "fr" | "en" = user.locale === "en" ? "en" : "fr";
   const canManagePos = ["OWNER", "ADMIN_ENTREPRISE", "ADMIN_ENTERPRISE"].includes(membership.role);
   const posAssignments = moduleCode === "RETAIL_POS" && !canManagePos
@@ -148,7 +151,7 @@ export async function renderRetailModulePage(moduleCode: "RETAIL_POS" | "MOBILE_
           />
         )}
 
-        {moduleCode === "RETAIL_DAILY_CLOSE" ? (
+        {moduleCode === "RETAIL_DAILY_CLOSE" && showShopHistoricalImports ? (
           <RetailHistoricalImportPanel organizationId={organizationId} canManage={Boolean(manageAccess?.allowed)} />
         ) : null}
 

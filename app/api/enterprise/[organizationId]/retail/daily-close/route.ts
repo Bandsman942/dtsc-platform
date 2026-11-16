@@ -14,13 +14,16 @@ export async function GET(req: Request, { params }: Params) {
   const { organizationId } = await params;
   const auth = await authorizeRetailRequest(req, organizationId, "RETAIL_DAILY_CLOSE", "read");
   if (!auth.ok) return auth.response;
-  const { page, pageSize, status, from, to } = retailListParams(req);
+  const { page, pageSize, search, status, from, to } = retailListParams(req);
+  const endOfDay = to ? new Date(to.getTime() + 86_400_000 - 1) : null;
   const siteId = new URL(req.url).searchParams.get("siteId")?.trim() || null;
   const closeScope = await retailFinanceReadSiteScope(organizationId, auth.session.userId, "CLOSE_CASH");
   const where: Prisma.EnterpriseRetailDailyCloseWhereInput = { organizationId,
     ...(siteId ? { siteId: closeScope !== null && !closeScope.includes(siteId) ? { in: [] } : siteId }
       : closeScope !== null ? { siteId: { in: closeScope } } : {}),
-    ...(status ? { status } : {}), ...(from || to ? { businessDate: { ...(from ? { gte: from } : {}), ...(to ? { lte: to } : {}) } } : {}) };
+    ...(status ? { status } : {}),
+    ...(search ? { OR: [{ number: { contains: search, mode: "insensitive" } }, { notes: { contains: search, mode: "insensitive" } }] } : {}),
+    ...(from || endOfDay ? { businessDate: { ...(from ? { gte: from } : {}), ...(endOfDay ? { lte: endOfDay } : {}) } } : {}) };
   const [rawItems, total] = await Promise.all([
     prisma.enterpriseRetailDailyClose.findMany({ where, orderBy: [{ businessDate: "desc" }, { createdAt: "desc" }], skip: (page - 1) * pageSize, take: pageSize, include: { lines: true } }),
     prisma.enterpriseRetailDailyClose.count({ where }),

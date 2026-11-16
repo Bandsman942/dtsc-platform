@@ -618,6 +618,8 @@ export async function createRetailDailyClose(organizationId: string, actorUserId
       return { close: existing, idempotent: true };
     }
     const accountSites = new Set<string>();
+    // A single daily close must never group assigned and unassigned accounts or different stores.
+    const accountSiteIdentities = new Set<string | null>();
     const seen = new Set<string>();
     const preparedLines: Array<{ financialAccountId: string; accountType: string; currencyCode: string; cashSessionId: string | null; systemClosingBalance: Prisma.Decimal; declaredBalance: Prisma.Decimal; differenceAmount: Prisma.Decimal; varianceReason: string | null; countDetailsJson?: Prisma.InputJsonValue }> = [];
     for (const line of input.lines) {
@@ -630,6 +632,7 @@ export async function createRetailDailyClose(organizationId: string, actorUserId
         throw new EnterpriseRetailError("RETAIL_SITE_ACCESS_DENIED", 403);
       }
       if (account.siteId) accountSites.add(account.siteId);
+      accountSiteIdentities.add(account.siteId);
       const declared = money(decimal(line.declaredBalance));
       if (account.accountType === "CASH") {
         await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterpriseCashSession" WHERE "organizationId" = ${organizationId} AND "financialAccountId" = ${account.id} AND "cashierUserId" = ${actorUserId} AND status = 'OPEN' FOR UPDATE`);
@@ -676,7 +679,9 @@ export async function createRetailDailyClose(organizationId: string, actorUserId
         preparedLines.push({ financialAccountId: account.id, accountType: account.accountType, currencyCode: account.currencyCode, cashSessionId: null, systemClosingBalance: expected, declaredBalance: declared, differenceAmount: difference, varianceReason: line.varianceReason || null });
       }
     }
-    if (strictSites && accountSites.size !== 1) throw new EnterpriseRetailError("RETAIL_CLOSE_MULTISITE_FORBIDDEN", 409);
+    if (accountSiteIdentities.size > 1 || (strictSites && accountSites.size !== 1)) {
+      throw new EnterpriseRetailError("RETAIL_CLOSE_MULTISITE_FORBIDDEN", 409);
+    }
     const canonicalSite = accountSites.size === 1 ? [...accountSites][0] : null;
     const close = await tx.enterpriseRetailDailyClose.create({ data: { organizationId, number: retailReference("CLOSE"), businessDate: input.businessDate, siteId: input.siteId || canonicalSite, status: "SUBMITTED", submittedByUserId: actorUserId, notes: input.notes || null, idempotencyKey: input.idempotencyKey, lines: { create: preparedLines } }, include: { lines: true } });
     await publishFinanceEvent(tx, { organizationId, entityType: "EnterpriseRetailDailyClose", entityId: close.id, eventType: "RETAIL_DAILY_CLOSE_SUBMITTED", summary: `Clôture ${close.number} soumise`, actorUserId, toStatus: "SUBMITTED", metadataJson: { businessDate: close.businessDate.toISOString(), lineCount: close.lines.length, totalVariance: money(sumDecimals(close.lines.map((line) => line.differenceAmount.abs()))).toFixed() } });

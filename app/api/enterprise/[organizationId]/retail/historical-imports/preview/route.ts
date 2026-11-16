@@ -3,6 +3,7 @@ import { writeApiLog } from "@/lib/audit";
 import { historicalImportDraftSchema } from "@/lib/enterprise/retail/historical-import-schemas";
 import { previewHistoricalImport } from "@/lib/enterprise/retail/historical-import-service";
 import { authorizeRetailRequest, retailErrorResponse } from "@/lib/enterprise/retail/http";
+import { shopHistoricalImportDenial } from "@/lib/enterprise/retail/shop-history-availability";
 
 type Params = { params: Promise<{ organizationId: string }> };
 
@@ -11,6 +12,8 @@ export async function POST(req: Request, { params }: Params) {
   const { organizationId } = await params;
   const auth = await authorizeRetailRequest(req, organizationId, "RETAIL_DAILY_CLOSE", "manage", { mutation: true, limit: 60 });
   if (!auth.ok) return auth.response;
+  const shopDenied = await shopHistoricalImportDenial(organizationId);
+  if (shopDenied) return shopDenied;
   const parsed = historicalImportDraftSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {
     return NextResponse.json({

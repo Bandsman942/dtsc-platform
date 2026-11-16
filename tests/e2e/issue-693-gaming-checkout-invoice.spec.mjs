@@ -656,7 +656,8 @@ test.describe.serial("Issue #693 Gaming checkout invoice nested write", () => {
       },
     );
     const sameApproverConfirmBody = await sameApproverConfirm.json().catch(() => null);
-    expect(sameApproverConfirm.status(), JSON.stringify(sameApproverConfirmBody)).toBe(409);
+    // Finance intentionally returns 403 for forbidden same-actor confirmation (not a 409 revision conflict).
+    expect(sameApproverConfirm.status(), JSON.stringify(sameApproverConfirmBody)).toBe(403);
     expect(sameApproverConfirmBody?.error).toBe("PAYMENT_SELF_CONFIRMATION_FORBIDDEN");
 
     const confirmResponse = await confirmerContext.request.post(
