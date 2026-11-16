@@ -2,6 +2,7 @@
 
 import { useMemo, useState, type FormEvent } from "react";
 import { useAppLocale } from "@/components/i18n/locale-provider";
+import { translateActivities } from "@/lib/i18n";
 import { getBusinessActivityFields, resolveEnterpriseActivityAction } from "@/lib/enterprise/enterprise-activity-form-contract";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -318,10 +319,10 @@ export function EnterpriseRequestsPanel({ organizationId, organizationName, focu
   ];
   return (
     <div className="min-w-0">
-      <ErpDesign2RegisterTools locale={english ? "en" : "fr"} title={english ? "Company activity requests" : "Demandes d’activités entreprise"}
+      <ErpDesign2RegisterTools locale={english ? "en" : "fr"} title={translateActivities(locale, "enterpriseRequestsTitle")}
         organizationName={organizationName} endpoint={`/api/enterprise/${organizationId}/activity-requests`}
         filters={Object.fromEntries(params.entries())} columns={exportColumns}
-        status={status} statuses={[{ id: "", label: english ? "All statuses" : "Tous les statuts" }, ...["DRAFT", "SUBMITTED", "ASSIGNED", "IN_REVIEW", "IN_PROGRESS", "WAITING_REQUESTER", "APPROVED", "REJECTED", "RESOLVED", "FULFILLED", "REOPENED", "CLOSED", "COMPLETED", "CANCELLED"].map((id) => ({ id, label: requestStage(id, english) }))]}
+        status={status} statuses={[{ id: "", label: translateActivities(locale, "enterpriseRequestsAllStatuses") }, ...["DRAFT", "SUBMITTED", "ASSIGNED", "IN_REVIEW", "IN_PROGRESS", "WAITING_REQUESTER", "APPROVED", "REJECTED", "RESOLVED", "FULFILLED", "REOPENED", "CLOSED", "COMPLETED", "CANCELLED"].map((id) => ({ id, label: requestStage(id, english) }))]}
         onStatusChange={(next) => { setStatus(next); reset(); }} dateFrom={dateFrom} dateTo={dateTo}
         onDateChange={(from, to) => { setDateFrom(from); setDateTo(to); reset(); }} />
       <ListControls query={query} onQueryChange={(next) => { setQuery(next); reset(); }}
@@ -329,8 +330,8 @@ export function EnterpriseRequestsPanel({ organizationId, organizationName, focu
         totalCount={collection.pagination.total} filteredCount={collection.pagination.total}
         placeholder={english ? "Search an activity…" : "Rechercher une activité..."}
         onPageChange={(next) => { setPage(next); setFocusOnly(false); }} />
-      {collection.loading ? <p className="py-4 text-center text-sm text-dtsc-muted">{english ? "Loading requests…" : "Chargement des demandes…"}</p> : null}
-      {collection.error ? <p role="alert" className="py-3 text-sm text-rose-600">{english ? "Unable to load requests." : "Impossible de charger les demandes."}</p> : null}
+      {collection.loading ? <p className="py-4 text-center text-sm text-dtsc-muted">{translateActivities(locale, "enterpriseRequestsLoading")}</p> : null}
+      {collection.error ? <p role="alert" className="py-3 text-sm text-rose-600">{translateActivities(locale, "enterpriseRequestsLoadFailed")}</p> : null}
       <div className="mt-3 grid min-w-0 gap-3">
         {collection.items.map((request) => {
           const canonical = request.workflowLink;
