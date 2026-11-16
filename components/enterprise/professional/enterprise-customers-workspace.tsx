@@ -9,6 +9,8 @@ import { Field, NativeSelect } from "@/components/enterprise/core-v2/erp-v2-ui";
 import { BusinessPartyCommercialPanel } from "@/components/enterprise/professional/business-party-commercial-panel";
 import { publishEnterpriseCrmUpdate, subscribeEnterpriseCrmUpdates } from "@/lib/enterprise/crm-sales/client-sync";
 import { commercialHotfixCopy } from "@/components/enterprise/professional/commercial-hotfix-copy";
+import { CommercialDesign2Controls, CommercialDesign2Connections } from "@/components/enterprise/professional/commercial-design2-controls";
+import type { FinanceExportColumn } from "@/components/enterprise/professional/finance-design2-controls";
 import { ProfessionalError, ProfessionalFormSection, ProfessionalHelp, ProfessionalLoading, ProfessionalSearch, ProfessionalTabs, professionalMutation, useProfessionalCollection } from "@/components/enterprise/professional/professional-erp-ui";
 import { professionalErpEnumLabel, professionalErpT, useProfessionalErpLocale } from "@/components/enterprise/professional/professional-erp-i18n";
 import { BusinessPartyIdentityFields, type BusinessPartyIdentityLabels } from "@/components/enterprise/shared/business-party-identity-fields";
@@ -62,6 +64,9 @@ export function EnterpriseCustomersWorkspace({ organizationId, organizationName,
   };
   const [tab, setTab] = useState("ALL");
   const [search, setSearch] = useState("");
+  const [recordStatus, setRecordStatus] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [page, setPage] = useState(1);
   const [navigationStateReady, setNavigationStateReady] = useState(false);
   // Preserve the CRM list context in the URL for contextual return and browser navigation.
@@ -109,7 +114,7 @@ export function EnterpriseCustomersWorkspace({ organizationId, organizationName,
   useToastMessage(success, "success");
   useToastMessage(warning, "warning");
 
-  const params = useMemo(() => { const value = new URLSearchParams({ page: String(page), pageSize: "20" }); if (search.trim()) value.set("search", search.trim()); const role = roleFilter(tab); if (role) value.set("role", role); if (tab === "PERSON" || tab === "ORGANIZATION") value.set("partyType", tab); return value; }, [page, search, tab]);
+  const params = useMemo(() => { const value = new URLSearchParams({ page: String(page), pageSize: "20" }); if (search.trim()) value.set("search", search.trim()); const role = roleFilter(tab); if (role) value.set("role", role); if (tab === "PERSON" || tab === "ORGANIZATION") value.set("partyType", tab); if (recordStatus) value.set("status", recordStatus); if (dateFrom) value.set("dateFrom", dateFrom); if (dateTo) value.set("dateTo", dateTo); return value; }, [page, search, tab, recordStatus, dateFrom, dateTo]);
   const collection = useProfessionalCollection<Party>({ endpoint: `/api/enterprise/${organizationId}/business-parties`, params, refreshKey });
 
   function resetForm() { setIdentityChoice("MANUAL_ONLY"); setPartyType("PERSON"); setSelectedRoles(["PROSPECT"]); setDuplicates([]); setMessage(""); }
@@ -168,13 +173,34 @@ export function EnterpriseCustomersWorkspace({ organizationId, organizationName,
   }
 
   function openEdit(party: Party) { resetFeedback(); setDetail(null); setEdit(party); }
+  const exportColumns: FinanceExportColumn[] = [
+    { key: "code", labelFr: "Code tiers", labelEn: "Party code", get: row => String(row.code || "") },
+    { key: "name", labelFr: "Nom / raison sociale", labelEn: "Person / organization", get: row => String(row.displayName || row.legalName || "") },
+    { key: "type", labelFr: "Nature", labelEn: "Kind", get: row => professionalErpEnumLabel(locale, "partyType", String(row.partyType || "")) },
+    { key: "roles", labelFr: "Rôles", labelEn: "Roles", get: row => (Array.isArray(row.roles) ? row.roles : []).map(role => professionalErpEnumLabel(locale, "role", String((role as { roleCode?: string }).roleCode || ""))).join(" · ") },
+    { key: "status", labelFr: "Statut", labelEn: "Status", get: row => professionalErpEnumLabel(locale, "status", String(row.status || "")) },
+    { key: "email", labelFr: "Email", labelEn: "Email", get: row => String(row.primaryEmail || "") },
+    { key: "phone", labelFr: "Téléphone", labelEn: "Phone", get: row => String(row.primaryPhone || "") },
+    { key: "created", labelFr: "Création", labelEn: "Created", get: row => String(row.createdAt || "").slice(0, 10) },
+  ];
+  const exportFilters = { search, role: roleFilter(tab), partyType: tab === "PERSON" || tab === "ORGANIZATION" ? tab : "", status: recordStatus, dateFrom, dateTo };
   const tabs = [{ id: "ALL", label: t("customers.tabAll"), count: collection.metrics.total }, { id: "PROSPECT", label: t("customers.tabProspects"), count: collection.metrics.prospects }, { id: "CUSTOMER", label: t("customers.tabCustomers"), count: collection.metrics.customers }, { id: "ORGANIZATION", label: t("customers.tabOrganizations"), count: collection.metrics.organizations }, { id: "PERSON", label: t("customers.tabPeople"), count: collection.metrics.persons }, { id: "PARTNER", label: t("customers.tabPartners") }];
 
-  return <ModuleWorkspace>
+  return <ModuleWorkspace density="compact">
     <ModuleHeader eyebrow={t("customers.eyebrow", { organization: organizationName })} title={t("customers.title")} description={locale === "en" ? definition.descriptionEn : definition.descriptionFr} count={t("common.records", { count: collection.pagination.total, suffix: collection.pagination.total === 1 ? "" : "s" })} primaryAction={collection.canWrite || collection.canManage ? <Button onClick={() => { resetForm(); resetFeedback(); setCreateOpen(true); }}><Plus className="h-4 w-4" />{t("customers.newRecord")}</Button> : undefined} />
-    <ModuleMetrics label={t("customers.metricsLabel")}><ModuleMetric label={t("customers.metricActiveCustomers")} value={collection.metrics.customers || 0} /><ModuleMetric label={t("customers.metricProspects")} value={collection.metrics.prospects || 0} /><ModuleMetric label={t("customers.metricOrganizations")} value={collection.metrics.organizations || 0} /><ModuleMetric label={t("customers.metricPendingIdentity")} value={collection.metrics.pendingIdentity || 0} /></ModuleMetrics>
-    <ModuleToolbar search={<ProfessionalSearch value={search} onChange={(value) => { setSearch(value); setPage(1); }} placeholder={t("customers.searchPlaceholder")} />} controls={<ProfessionalTabs value={tab} onChange={(value) => { setTab(value); setPage(1); }} items={tabs} label={t("customers.viewsLabel")} />} summary={t("common.pageOf", { page: collection.pagination.page, pageCount: collection.pagination.pageCount })} />
-    <ModuleContent>
+    <ModuleMetrics label={t("customers.metricsLabel")}><ModuleMetric className="border-l-emerald-500" icon={<UserRound className="h-4 w-4 text-emerald-500" />} label={t("customers.metricActiveCustomers")} value={collection.metrics.customers || 0} /><ModuleMetric className="border-l-sky-500" icon={<UserRound className="h-4 w-4 text-sky-500" />} label={t("customers.metricProspects")} value={collection.metrics.prospects || 0} /><ModuleMetric className="border-l-indigo-500" icon={<Building2 className="h-4 w-4 text-indigo-500" />} label={t("customers.metricOrganizations")} value={collection.metrics.organizations || 0} /><ModuleMetric className="border-l-amber-500" icon={<Link2 className="h-4 w-4 text-amber-500" />} label={t("customers.metricPendingIdentity")} value={collection.metrics.pendingIdentity || 0} /></ModuleMetrics>
+    <ModuleToolbar density="compact" search={<ProfessionalSearch value={search} onChange={(value) => { setSearch(value); setPage(1); }} placeholder={t("customers.searchPlaceholder")} />}
+      controls={<ProfessionalTabs value={tab} onChange={(value) => { setTab(value); setPage(1); }} items={tabs} label={t("customers.viewsLabel")} />}
+      activeFilters={<CommercialDesign2Controls locale={locale} organizationName={organizationName} title={t("customers.title")}
+        endpoint={`/api/enterprise/${organizationId}/business-parties`} filters={exportFilters} columns={exportColumns}
+        from={dateFrom} to={dateTo} onDateChange={(from, to) => { setDateFrom(from); setDateTo(to); setPage(1); }}
+        status={recordStatus} onStatusChange={(next) => { setRecordStatus(next); setPage(1); }}
+        choices={[{ id: "", label: locale === "en" ? "All statuses" : "Tous les statuts" }, { id: "ACTIVE", label: locale === "en" ? "Active" : "Actifs" }, { id: "INACTIVE", label: locale === "en" ? "Inactive" : "Inactifs" }]}
+        noteFr="Référentiel unique : la fiche du tiers reste disponible aux autres modules ERP sans compte DTSC obligatoire."
+        noteEn="Single party register: business profiles remain available to ERP modules without requiring a DTSC account." />}
+      summary={t("common.pageOf", { page: collection.pagination.page, pageCount: collection.pagination.pageCount })} />
+    <ModuleContent density="compact">
+      <CommercialDesign2Connections locale={locale} items={[{ module: "CRM_PIPELINE", labelFr: "Opportunités", labelEn: "Opportunities" }, { module: "SALES_QUOTES_ORDERS", labelFr: "Devis & commandes", labelEn: "Quotes & orders" }, { module: "CONTRACTS", labelFr: "Contrats", labelEn: "Contracts" }]} />
       {message && !createOpen && !edit && !detail ? <ProfessionalError message={message} /> : null}
       <ModuleSection title={t("customers.section360")} description={t("customers.section360Description")}>{collection.loading ? <ProfessionalLoading /> : collection.error ? <ProfessionalError message={collection.error} /> : collection.items.length ? <BusinessList ariaLabel={t("customers.listAria")}>{collection.items.map((item) => <BusinessListItem key={item.id} title={item.displayName || item.legalName} leading={item.partyType === "PERSON" ? <UserRound className="h-5 w-5 text-dtsc-blue" /> : <Building2 className="h-5 w-5 text-dtsc-blue" />} status={<StatusBadge tone={item.status === "ACTIVE" ? "success" : "neutral"}>{professionalErpEnumLabel(locale, "status", item.status)}</StatusBadge>} meta={`${item.code} · ${item.roles.map((role) => professionalErpEnumLabel(locale, "role", role.roleCode)).join(" · ") || t("common.noRole")}`} description={[item.primaryEmail, item.primaryPhone, item.addresses[0]?.city].filter(Boolean).join(" · ") || t("common.contactToComplete")} onOpen={() => { resetFeedback(); setDetail(item); }} openLabel={t("customers.openRecord", { name: item.displayName || item.legalName })} actions={item.identityLink ? <StatusBadge tone={identityTone(item.identityLink.status)}>{professionalErpEnumLabel(locale, "identityStatus", item.identityLink.status)}</StatusBadge> : <StatusBadge><Link2 className="mr-1 h-3.5 w-3.5" />{t("customers.notLinked")}</StatusBadge>} />)}</BusinessList> : <EmptyState title={t("customers.emptyTitle")} description={t("customers.emptyDescription")} />}
         <div className="mt-4 flex items-center justify-between gap-2"><Button variant="outline" disabled={page <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>{t("common.previous")}</Button><Button variant="outline" disabled={page >= collection.pagination.pageCount} onClick={() => setPage((value) => value + 1)}>{t("common.next")}</Button></div>
