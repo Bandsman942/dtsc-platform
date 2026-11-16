@@ -1,7 +1,7 @@
 "use client";
 
 import { ErpDesign2Metric, ErpDesign2RegisterSection } from "@/components/enterprise/professional/erp-design2-register";
-import { CoordinationDesign2Tools } from "@/components/enterprise/professional/coordination-design2-tools";
+import { CoordinationDesign2Tools, coordinationDesign2Locale } from "@/components/enterprise/professional/coordination-design2-tools";
 
 import { enterpriseCoreT } from "@/lib/enterprise-core-i18n";
 import { enterpriseApprovalTargetLabel as canonicalApprovalTargetLabel } from "@/lib/enterprise/approval-targets";
@@ -87,7 +87,7 @@ export function EnterpriseApprovalsWorkspace({ organizationId, organizationName 
         <Input value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder={enterpriseCoreT(locale, "approvals.search.context")} />
       </div>
       <CoordinationDesign2Tools kind="approvals" organizationId={organizationId} organizationName={organizationName}
-        title={enterpriseCoreT(locale, "approvals.approval.queue")} locale={locale === "en" ? "en" : "fr"} filters={params}
+        title={enterpriseCoreT(locale, "approvals.approval.queue")} locale={coordinationDesign2Locale(locale)} filters={params}
         status={status} statuses={[{ id: "", label: enterpriseCoreT(locale, "requests.all.statuses") }, ...["PENDING", "CORRECTION_REQUESTED", "APPROVED", "REJECTED", "CANCELLED"].map((id) => ({ id, label: statusLabel(locale, id) }))]}
         onStatusChange={(next) => { setStatus(next); if (next === "PENDING") setQueue("pending"); else if (next === "CORRECTION_REQUESTED") setQueue("corrections"); else if (next) setQueue("treated"); setPage(1); }} dateFrom={dateFrom} dateTo={dateTo}
         onDateChange={(from, to) => { setDateFrom(from); setDateTo(to); setPage(1); }} />
