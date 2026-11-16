@@ -51,7 +51,9 @@ const tx = {
     findMany: async ({ select }) => {
       assert.ok(select.refundLegs?.select?.refundPayment?.select?.status,
         "Retail return list must select each canonical refund payment approval");
-      return state.saved ? [{ ...state.saved, refundLegs: state.listRefundLegs || [],
+      return state.saved ? [{ ...state.saved,
+        lines: (state.saved.lines || []).map((line) => ({ ...line, checkoutLine: { inventoryItemId: "item-A" } })),
+        refundLegs: state.listRefundLegs || [],
         refundPayment: state.listRefundPayment || null,
         salesCreditNote: state.listCreditNote || null }] : [];
     },
@@ -180,10 +182,28 @@ state.reserved = [{ checkoutLineId: "line-A", quantity: D(2), refundAmount: D(20
 await assert.rejects(createRetailInvoiceReturnRequest("tenant", "invoice-A", "requester", input),
   { code: "RETAIL_INVOICE_RETURN_QUANTITY_EXCEEDED" });
 state.reserved = [];
+// #1187: an unfulfilled invoice may be credited even when nothing was paid.
+// A physical RESTOCK/QUARANTINE/DISPOSE claim is still forbidden before delivery.
 state.checkout.stockPostedAt = null;
 await assert.rejects(createRetailInvoiceReturnRequest("tenant", "invoice-A", "requester", input),
-  { code: "RETAIL_INVOICE_RETURN_PAID_REQUIRED" });
+  { code: "RETAIL_INVOICE_RETURN_STOCK_DISPOSITION_INVALID" });
+const originalInvoice = state.checkout.invoice;
+const originalSaved = state.saved, originalCreated = state.created, originalLines = state.lines;
+const operationsBeforeUnfulfilled = state.operations.length, eventsBeforeUnfulfilled = state.events.length;
+state.checkout.invoice = { ...originalInvoice, status: "ISSUED", amountPaid: D(0), outstandingAmount: D(30) };
+const unfulfilledInput = {
+  ...input, idempotencyKey: "shop-return-not-delivered-001",
+  lines: [{ ...input.lines[0], stockDisposition: "UNDELIVERED_CREDIT" }],
+};
+const unfulfilled = await createRetailInvoiceReturnRequest("tenant", "invoice-A", "requester", unfulfilledInput);
+assert.equal(unfulfilled.request.refundAmount.toFixed(2), "20.00");
+assert.equal(unfulfilled.request.lines[0].stockDisposition, "UNDELIVERED_CREDIT");
+assert.equal(unfulfilled.request.status, "SUBMITTED");
+state.checkout.invoice = originalInvoice;
 state.checkout.stockPostedAt = new Date();
+state.saved = originalSaved; state.created = originalCreated; state.lines = originalLines;
+state.operations.length = operationsBeforeUnfulfilled;
+state.events.length = eventsBeforeUnfulfilled;
 await assert.rejects(createRetailInvoiceReturnRequest("tenant", "invoice-A", "requester", {
   ...input, idempotencyKey: "shop-return-stock-precision-001",
   lines: [{ ...input.lines[0], quantity: "0.0001" }],
@@ -197,6 +217,7 @@ await assert.rejects(createRetailInvoiceReturnRequest("tenant", "invoice-A", "re
 state.featureEnabled = true;
 state.review = { id: "request-A", revision: 1, checkoutId: "checkout-A", status: "SUBMITTED",
   requestedByUserId: "requester", approverUserId: "reviewer",
+  lines: [{ checkoutLine: { inventoryItemId: "item-A" } }],
   checkout: { siteId: "store-A", stockPostedAt: new Date(), invoice: { status: "PAID" } } };
 state.financeAllowed = false;
 await assert.rejects(decideRetailInvoiceReturnRequest("tenant", "invoice-A", "request-A", "reviewer", { revision: 1, decision: "APPROVE" }),

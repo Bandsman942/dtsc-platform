@@ -15,13 +15,15 @@ const state = {
   feature: true, siteAllowed: true, financeAllowed: true, accountBalance: d(100),
   accountSite: "shop-A", sourceAccounts: ["cash-A"], operations: [], requestStatus: "APPROVED",
   requestRevision: 1, refundPaymentId: null, salesCreditNoteId: null, preparedByUserId: null,
-  settledByUserId: null, creditStatus: "PENDING_APPROVAL", paymentStatus: "PENDING_APPROVAL",
+  settledByUserId: null, refundPayoutAmount: null, zeroPayout: false,
+  creditStatus: "PENDING_APPROVAL", paymentStatus: "PENDING_APPROVAL",
   approvedByUserId: null, receivableOutstanding: d(0), throwStock: false, refundLegs: [],
 };
 const currentRequest = () => ({
   id: "return-A", number: "RIR-A", organizationId: "tenant", checkoutId: "checkout-A",
   status: state.requestStatus, revision: state.requestRevision,
-  refundAmount: d("33.33"), reason: "Défectueux", requestedByUserId: "requester",
+  refundAmount: d("33.33"), refundPayoutAmount: state.refundPayoutAmount,
+  reason: "Défectueux", requestedByUserId: "requester",
   inspectedByUserId: "inspector", approverUserId: "approver",
   preparedByUserId: state.preparedByUserId, settledByUserId: state.settledByUserId,
   refundPaymentId: state.refundPaymentId, salesCreditNoteId: state.salesCreditNoteId,
@@ -33,11 +35,12 @@ const currentRequest = () => ({
 const preview = () => ({
   requestId: "return-A", siteId: "shop-A", receivableId: "receivable-A",
   refundAmount: d("33.33"), currencyCode: "CDF",
-  financeSourcePlan: state.sourceAccounts.map((account, index) => ({
+  payoutAmount: d(state.zeroPayout ? 0 : "33.33"),
+  financeSourcePlan: state.zeroPayout ? [] : state.sourceAccounts.map((account, index) => ({
     allocationId: `allocation-${index}`, paymentId: `source-payment-${index}`,
     financialAccountId: account, amount: d(state.sourceAccounts.length > 1 ? (index === 0 ? "16.67" : "16.66") : "33.33"),
   })),
-  stockSourcePlan: [{ returnLineId: "line-A", originalMovementId: "movement-A",
+  stockSourcePlan: state.zeroPayout ? [] : [{ returnLineId: "line-A", originalMovementId: "movement-A",
     inventoryItemId: "item-A", warehouseId: "warehouse-A", stockLotId: "lot-A",
     storageLocationId: "shelf-A", stockDisposition: "RESTOCK", quantity: d(1) }],
 });
@@ -55,6 +58,7 @@ const tx = {
       state.operations.push(`return:${data.status}`);
       state.requestStatus = data.status;
       state.requestRevision++;
+      if (Object.hasOwn(data, "refundPayoutAmount")) state.refundPayoutAmount = data.refundPayoutAmount;
       if (data.refundPaymentId) state.refundPaymentId = data.refundPaymentId;
       if (data.salesCreditNoteId) state.salesCreditNoteId = data.salesCreditNoteId;
       if (data.preparedByUserId) state.preparedByUserId = data.preparedByUserId;
@@ -122,14 +126,18 @@ const mocks = {
   "@prisma/client": { Prisma },
   "zod": { z },
   "@/lib/enterprise/retail/errors": { EnterpriseRetailError },
-  "@/lib/enterprise/module-access": { resolveEnterpriseModuleCapabilities: async () => ({
-    canCreate: state.financeAllowed, canSubmit: state.financeAllowed,
-    canWrite: state.financeAllowed, canManage: state.financeAllowed,
-  }) },
+  "@/lib/enterprise/module-access": {
+    resolveEnterpriseModuleAccess: async () => ({ allowed: state.financeAllowed }),
+    resolveEnterpriseModuleCapabilities: async () => ({
+      canCreate: state.financeAllowed, canSubmit: state.financeAllowed,
+      canWrite: state.financeAllowed, canManage: state.financeAllowed,
+    }),
+  },
   "@/lib/enterprise/retail/site-access": {
     retailFinanceReadSiteScope: async () => state.siteAllowed ? ["shop-A"] : ["shop-B"],
   },
   "@/lib/enterprise/retail/transaction-retry": { withRetailTransactionRetry: (call) => call() },
+  "@/lib/enterprise/retail/invoice-checkout": { postPaidRetailInvoiceStockTx: async () => { state.operations.push("stock:remaining-fulfilled"); } },
   "@/lib/enterprise/retail/invoice-return-settlement-preflight": {
     assertRetailInvoiceReturnSettlementReadinessTx: async (_tx, org, invoice, id, status) => {
       assert.equal(org, "tenant"); assert.equal(invoice, "invoice-A"); assert.equal(id, "return-A");
@@ -264,6 +272,32 @@ await settle();
 assert.equal(state.operations.filter((entry) => entry === "payment:reverse-allocations").length, 2);
 assert.equal(state.operations.filter((entry) => entry === "payment:confirmed").length, 2);
 assert.equal(state.operations.filter((entry) => entry === "stock:return-in").length, 1);
+assert.equal(state.operations.filter((entry) => entry === "credit:posted-journal").length, 1);
+assert.equal((await settle("settler", 2)).idempotent, true);
+
+// Credit-only settlement: a customer has only an outstanding receivable.
+// A real credit note is posted but NO outbound Finance payment, refund event,
+// source-account allocation reversal or phantom physical stock movement exists.
+Object.assign(state, {
+  sourceAccounts: [], zeroPayout: true, operations: [], requestStatus: "APPROVED",
+  requestRevision: 1, refundPaymentId: null, refundPayoutAmount: null, salesCreditNoteId: null,
+  preparedByUserId: null, settledByUserId: null, refundLegs: [],
+  paymentStatus: "PENDING_APPROVAL", creditStatus: "PENDING_APPROVAL",
+  approvedByUserId: null, receivableOutstanding: d("33.33"),
+});
+const creditOnly = await prep();
+assert.equal(creditOnly.request.status, "FINANCE_PENDING");
+assert.equal(creditOnly.request.refundPaymentId, null);
+assert.equal(creditOnly.request.refundPayoutAmount.toFixed(2), "0.00");
+assert.equal(state.operations.filter((entry) => entry === "payment:create").length, 0);
+assert.deepEqual(state.operations.filter((entry) => entry.startsWith("approval:")), ["approval:EnterpriseSalesCreditNoteApproval"]);
+assert.equal((await prep("preparer", 1)).idempotent, true);
+state.creditStatus = "APPROVED"; state.approvedByUserId = "approver"; state.operations = [];
+const settledCreditOnly = await settle();
+assert.equal(settledCreditOnly.request.status, "COMPLETED");
+assert.equal(state.operations.filter((entry) => entry === "payment:reverse-allocations").length, 0);
+assert.equal(state.operations.filter((entry) => entry === "payment:confirmed").length, 0);
+assert.equal(state.operations.filter((entry) => entry === "stock:return-in").length, 0);
 assert.equal(state.operations.filter((entry) => entry === "credit:posted-journal").length, 1);
 assert.equal((await settle("settler", 2)).idempotent, true);
 const financePrepareRoute = fs.readFileSync("app/api/enterprise/[organizationId]/retail/invoices/[invoiceId]/returns/[requestId]/prepare/handler.ts", "utf8");

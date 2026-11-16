@@ -1,3 +1,11 @@
+## 2026-11-15 — #1187 RETAIL avoirs partiels/services/mixte — v1.19.0 candidate (E2E requis)
+
+- Séparation stricte entre **avoir comptable** et **remboursement de caisse** ; remboursement plafonné au trop-perçu déjà encaissé, absent si simple diminution de créance.
+- Service sans stock, produit jamais livré (réservation libérée), produit livré (inspection puis retour physique) : conditions et libellés distincts.
+- Validation Finance indépendante du contrôleur métier, génération d'avoirs et de paiements par comptes sources, règlement atomique avec stocks.
+- Migration additive nullable pour montant remboursé et identité du validateur financier, régressions historiques préservées.
+- Documentation `docs/HOTFIX_1187_PARTIAL_CREDIT_RETURNS.md` ; aucun merge ni déploiement avant E2E final propriétaire BON.
+
 ## 2026-11-15 — #1187 Retail FX, propriétaire et commandes fournisseurs — v1.18.3 candidate (E2E requis)
 
 - Correctif d'identification du propriétaire réel dans POS > Accès du personnel, pour délégations par boutique.

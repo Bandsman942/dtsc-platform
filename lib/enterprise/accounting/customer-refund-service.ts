@@ -1,4 +1,9 @@
 import { Prisma } from "@prisma/client";
+
+// Decimal.js-light (Prisma.Decimal) exposes instance comparisons, not static min/max.
+const decimalMin = (a: Prisma.Decimal, b: Prisma.Decimal): Prisma.Decimal => a.lessThan(b) ? a : b;
+const decimalMax = (a: Prisma.Decimal, b: Prisma.Decimal): Prisma.Decimal => a.greaterThan(b) ? a : b;
+
 import { assertIndependentActor } from "@/lib/enterprise/accounting/access";
 import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
 import { financeReference, publishFinanceEvent } from "@/lib/enterprise/accounting/helpers";
@@ -217,9 +222,9 @@ export async function reverseCustomerPaymentAllocationsForRefund(
       });
     }
 
-    const nextAllocated = money(Prisma.Decimal.max(0, receivable.allocatedAmount.minus(reversedAmount)));
+    const nextAllocated = money(decimalMax(new Prisma.Decimal(0), receivable.allocatedAmount.minus(reversedAmount)));
     const nextOutstanding = money(receivable.outstandingAmount.plus(reversedAmount));
-    const nextPaid = money(Prisma.Decimal.max(0, receivable.salesInvoice.amountPaid.minus(reversedAmount)));
+    const nextPaid = money(decimalMax(new Prisma.Decimal(0), receivable.salesInvoice.amountPaid.minus(reversedAmount)));
     await tx.enterpriseReceivable.update({
       where: { id: receivable.id },
       data: { allocatedAmount: nextAllocated, outstandingAmount: nextOutstanding, status: "OPEN" },
@@ -396,7 +401,7 @@ export async function reverseCustomerPaymentAllocationsForRefundAmountTx(
     for (const allocation of eligible) {
       if (remaining.isZero()) break;
       await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterprisePayment" WHERE id = ${allocation.paymentId} AND "organizationId" = ${organizationId} FOR UPDATE`);
-      const reversalAmount = money(Prisma.Decimal.min(allocation.amount, remaining));
+      const reversalAmount = money(decimalMin(allocation.amount, remaining));
       const nextAllocationAmount = money(allocation.amount.minus(reversalAmount));
       const journal = await tx.enterpriseJournalEntry.findFirst({
         where: {
@@ -476,9 +481,9 @@ export async function reverseCustomerPaymentAllocationsForRefundAmountTx(
 
     if (!remaining.isZero()) throw new EnterpriseAccountingError("REFUND_ALLOCATION_REVERSAL_INCOMPLETE", 409);
 
-    const nextAllocated = money(Prisma.Decimal.max(0, receivable.allocatedAmount.minus(amount)));
+    const nextAllocated = money(decimalMax(new Prisma.Decimal(0), receivable.allocatedAmount.minus(amount)));
     const nextOutstanding = money(receivable.outstandingAmount.plus(amount));
-    const nextPaid = money(Prisma.Decimal.max(0, receivable.salesInvoice.amountPaid.minus(amount)));
+    const nextPaid = money(decimalMax(new Prisma.Decimal(0), receivable.salesInvoice.amountPaid.minus(amount)));
     await tx.enterpriseReceivable.update({
       where: { id: receivable.id },
       data: { allocatedAmount: nextAllocated, outstandingAmount: nextOutstanding, status: "OPEN" },
@@ -665,7 +670,7 @@ export async function prepareSalesCreditNoteForRefundAmount(
     const committedCredit = money(invoice.creditNotes
       .filter((credit) => !["CANCELLED", "REJECTED"].includes(credit.status))
       .reduce((total, credit) => total.plus(credit.grandTotal), new Prisma.Decimal(0)));
-    const creditable = money(Prisma.Decimal.max(0, invoice.grandTotal.minus(committedCredit)));
+    const creditable = money(decimalMax(new Prisma.Decimal(0), invoice.grandTotal.minus(committedCredit)));
     if (amount.greaterThan(creditable)) {
       throw new EnterpriseAccountingError("CREDIT_NOTE_EXCEEDS_REFUNDABLE_INVOICE", 409, {
         requestedAmount: amount.toFixed(),
@@ -891,16 +896,17 @@ export async function markCustomerRefundFinancialInverseReadyTx(
     const retailCheckout = await tx.enterpriseRetailInvoiceCheckout.findFirst({
       where: { organizationId, salesInvoiceId: receivable.salesInvoiceId }, select: { id: true },
     });
+    let retailBound: { refundAmount: Prisma.Decimal; refundPayoutAmount: Prisma.Decimal | null } | null = null;
     if (retailCheckout) {
-      const bound = retailReturnRequestId ? await tx.enterpriseRetailInvoiceReturnRequest.findFirst({
+      retailBound = retailReturnRequestId ? await tx.enterpriseRetailInvoiceReturnRequest.findFirst({
         where: {
           organizationId, id: retailReturnRequestId, checkoutId: retailCheckout.id,
           status: "FINANCE_PENDING", salesCreditNoteId: creditNoteId,
           OR: [{ refundPaymentId }, { refundLegs: { some: { refundPaymentId } } }],
           preparedByUserId: { not: null },
-        }, select: { id: true },
+        }, select: { refundAmount: true, refundPayoutAmount: true },
       }) : null;
-      if (!bound) throw new EnterpriseAccountingError("RETAIL_INVOICE_RETURN_WORKFLOW_REQUIRED", 409);
+      if (!retailBound) throw new EnterpriseAccountingError("RETAIL_INVOICE_RETURN_WORKFLOW_REQUIRED", 409);
       await assertRetailInvoiceRefundAccountTx(tx, organizationId, receivable.salesInvoiceId, actorUserId, refundPayment);
     }
     const credit = await tx.enterpriseSalesCreditNote.findFirst({
@@ -917,9 +923,27 @@ export async function markCustomerRefundFinancialInverseReadyTx(
     }) : [];
     const matchingLeg = refundLegs.find((leg) => leg.refundPaymentId === refundPayment.id);
     const aggregateRefund = refundLegs.reduce((total, leg) => total.plus(leg.amount), new Prisma.Decimal(0));
-    if (!credit || (refundLegs.length
-      ? (!matchingLeg || !matchingLeg.amount.equals(refundPayment.amount) || !credit.grandTotal.equals(aggregateRefund))
-      : !credit.grandTotal.equals(refundPayment.amount))) {
+    // An invoice credit also extinguishes the unpaid receivable. Only the
+    // portion that was actually collected is a cash refund. For a verified
+    // RETAIL return, therefore, the posted credit and payout need not be equal.
+    // All non-RETAIL refunds keep their historical 1:1 amount requirement.
+    // NULL belongs to pre-migration returns, whose cash payout equalled
+    // the whole credit. New returns always record their independent payout.
+    const retailPayout = retailBound
+      ? (retailBound.refundPayoutAmount ?? retailBound.refundAmount)
+      : null;
+    const expectedRefund = retailBound
+      ? (Boolean(retailPayout?.greaterThan(0)) &&
+        Boolean(retailPayout?.lessThanOrEqualTo(credit?.grandTotal || 0)) &&
+        Boolean(credit?.grandTotal.equals(retailBound.refundAmount)) &&
+        (refundLegs.length
+          ? (Boolean(matchingLeg?.amount.equals(refundPayment.amount)) && aggregateRefund.equals(retailPayout!))
+          : refundPayment.amount.equals(retailPayout!)))
+      : (refundLegs.length
+          ? (Boolean(matchingLeg?.amount.equals(refundPayment.amount)) &&
+            Boolean(credit?.grandTotal.equals(aggregateRefund)))
+          : Boolean(credit?.grandTotal.equals(refundPayment.amount)));
+    if (!credit || !expectedRefund) {
       throw new EnterpriseAccountingError("REFUND_CREDIT_NOTE_NOT_READY", 409, {
         creditNoteId,
         refundAmount: refundPayment.amount.toFixed(),

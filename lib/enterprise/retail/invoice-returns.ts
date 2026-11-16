@@ -1,5 +1,9 @@
 import { createHash, randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
+
+// @prisma/client Decimal does not expose the static Decimal.min/max helpers.
+const decimalMin = (...values: Prisma.Decimal[]): Prisma.Decimal => values.reduce((a, b) => a.lessThan(b) ? a : b);
+
 import { z } from "zod";
 import { publishFinanceEvent } from "@/lib/enterprise/accounting/helpers";
 import { resolveEnterpriseModuleAccess, resolveEnterpriseModuleCapabilities } from "@/lib/enterprise/module-access";
@@ -19,7 +23,7 @@ export const retailInvoiceReturnRequestSchema = z.object({
   lines: z.array(z.object({
     checkoutLineId: z.string().trim().min(1).max(191),
     quantity,
-    stockDisposition: z.enum(["RESTOCK", "QUARANTINE", "DISPOSE"]),
+    stockDisposition: z.enum(["RESTOCK", "QUARANTINE", "DISPOSE", "SERVICE_CREDIT", "UNDELIVERED_CREDIT"]),
   }).strict()).min(1).max(100),
 }).strict();
 export const retailInvoiceReturnDecisionSchema = z.object({
@@ -115,14 +119,15 @@ export async function listRetailInvoiceReturnRequests(
     prisma.enterpriseRetailInvoiceReturnRequest.findMany({
       where, orderBy: { createdAt: "desc" }, skip: (page - 1) * 25, take: 25,
       select: {
-        id: true, number: true, status: true, reason: true, refundAmount: true,
+        id: true, number: true, status: true, reason: true, refundAmount: true, refundPayoutAmount: true,
         requestedByUserId: true, approverUserId: true, inspectedByUserId: true,
         preparedByUserId: true, refundPayment: { select: { status: true } },
         refundLegs: { select: { refundPayment: { select: { status: true } } } },
         salesCreditNote: { select: { status: true } },
         inspectedAt: true, inspectionNotes: true, decidedAt: true, decisionReason: true,
         revision: true, createdAt: true,
-        lines: { select: { id: true, checkoutLineId: true, quantity: true, refundAmount: true, stockDisposition: true } },
+        lines: { select: { id: true, checkoutLineId: true, quantity: true, refundAmount: true, stockDisposition: true,
+          checkoutLine: { select: { inventoryItemId: true } } } },
       },
     }),
     prisma.enterpriseRetailInvoiceReturnRequest.count({ where }),
@@ -143,6 +148,9 @@ export async function listRetailInvoiceReturnRequests(
         canApprove: siteStaffCapabilities(siteAssignment!.roleCode, siteAssignment!.permissionsJson).includes("APPROVE_INVOICE_RETURN"),
       }
     : { canRequest: false, canInspect: false, canApprove: false };
+  const independentFinanceVerifier = await resolveEnterpriseModuleAccess({
+    organizationId, userId: actorUserId, moduleCode: "FINANCE_RECEIVABLES", action: "approve",
+  });
   const finance = capabilities.canApprove ? await Promise.all([
     resolveEnterpriseModuleAccess({ organizationId, userId: actorUserId, moduleCode: "FINANCE_RECEIVABLES", action: "approve" }),
     resolveEnterpriseModuleAccess({ organizationId, userId: actorUserId, moduleCode: "FINANCE_PAYMENTS", action: "approve" }),
@@ -163,7 +171,7 @@ export async function listRetailInvoiceReturnRequests(
       const approvedPayouts = payoutStatuses.filter((status) => status === "APPROVED").length;
       return {
       id: item.id, number: item.number, status: item.status, reason: item.reason,
-      refundAmount: item.refundAmount, inspectedAt: item.inspectedAt,
+      refundAmount: item.refundAmount, refundPayoutAmount: item.refundPayoutAmount, inspectedAt: item.inspectedAt,
       inspectionNotes: item.inspectionNotes, decidedAt: item.decidedAt,
       decisionReason: item.decisionReason, revision: item.revision,
       createdAt: item.createdAt, lines: item.lines,
@@ -175,20 +183,24 @@ export async function listRetailInvoiceReturnRequests(
       canPrepareFinance: canPrepareFinance && item.status === "APPROVED" &&
         item.requestedByUserId !== actorUserId && item.approverUserId !== actorUserId,
       canSettleFinance: canSettleFinance && item.status === "FINANCE_PENDING" &&
-        payoutStatuses.length > 0 && approvedPayouts === payoutStatuses.length &&
+        (item.refundPayoutAmount?.isZero() || payoutStatuses.length > 0) &&
+        approvedPayouts === payoutStatuses.length &&
         item.salesCreditNote?.status === "APPROVED" &&
         ![item.requestedByUserId, item.approverUserId, item.inspectedByUserId,
           item.preparedByUserId].includes(actorUserId),
-      canInspect: capabilities.canInspect && item.status === "SUBMITTED" &&
+      requiresPhysicalInspection: Boolean(checkout.stockPostedAt) && item.lines.some((line) => Boolean(line.checkoutLine.inventoryItemId)),
+      canInspect: (capabilities.canInspect ||
+          ((!checkout.stockPostedAt || item.lines.every((line) => !line.checkoutLine.inventoryItemId)) && independentFinanceVerifier.allowed)) &&
+        item.status === "SUBMITTED" &&
         item.requestedByUserId !== actorUserId && item.approverUserId !== actorUserId,
       canDecide: capabilities.canApprove &&
         (finance?.every((entry) => entry.allowed) === true || (item.requestedByUserId === actorUserId && selfCanDecide)) &&
         ["SUBMITTED", "INSPECTED"].includes(item.status) && item.approverUserId === actorUserId &&
         (item.requestedByUserId !== actorUserId || selfCanDecide) && item.inspectedByUserId !== actorUserId,
     }; }),
-    canRequest: capabilities.canRequest && ["PAID", "CREDIT_NOTE"].includes(checkout.invoice.status) &&
-      checkout.invoice.amountPaid.plus(checkout.invoice.amountCredited).equals(checkout.invoice.grandTotal) &&
-      checkout.invoice.outstandingAmount.isZero() && Boolean(checkout.stockPostedAt),
+    stockPostedAt: Boolean(checkout.stockPostedAt),
+    canRequest: capabilities.canRequest && ["PAID", "CREDIT_NOTE", "PARTIALLY_PAID", "ISSUED", "OVERDUE"].includes(checkout.invoice.status) &&
+      checkout.invoice.amountPaid.plus(checkout.invoice.amountCredited).plus(checkout.invoice.outstandingAmount).equals(checkout.invoice.grandTotal),
     pagination: { page, pageSize: 25, total, pageCount: Math.max(1, Math.ceil(total / 25)) },
   };
 }
@@ -268,9 +280,9 @@ export async function createRetailInvoiceReturnRequest(
       }
       return { request: existing, idempotent: true };
     }
-    if (!["PAID", "CREDIT_NOTE"].includes(checkout.invoice.status) || !checkout.stockPostedAt ||
-        !checkout.invoice.amountPaid.plus(checkout.invoice.amountCredited).equals(checkout.invoice.grandTotal) ||
-        !checkout.invoice.outstandingAmount.isZero()) {
+    if (!["PAID", "CREDIT_NOTE", "PARTIALLY_PAID", "ISSUED", "OVERDUE"].includes(checkout.invoice.status) ||
+        checkout.invoice.outstandingAmount.isNegative() ||
+        !checkout.invoice.amountPaid.plus(checkout.invoice.amountCredited).plus(checkout.invoice.outstandingAmount).equals(checkout.invoice.grandTotal)) {
       throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_PAID_REQUIRED", 409);
     }
     if (!checkout.invoice.grandTotal.equals(financeMoney(checkout.invoice.grandTotal))) {
@@ -325,7 +337,12 @@ export async function createRetailInvoiceReturnRequest(
       if (line.inventoryItemId && value.decimalPlaces() > 3) {
         throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_STOCK_QUANTITY_PRECISION", 409);
       }
-      if (entry.stockDisposition === "RESTOCK" && !line.inventoryItemId) {
+      // Never report a phantom physical return or put goods back in stock
+      // if their original invoice has not yet posted a sale-fulfilment exit.
+      const expectedUnfulfilled = Boolean(line.inventoryItemId) && !checkout.stockPostedAt;
+      if ((!line.inventoryItemId && entry.stockDisposition !== "SERVICE_CREDIT") ||
+          (expectedUnfulfilled && entry.stockDisposition !== "UNDELIVERED_CREDIT") ||
+          (line.inventoryItemId && checkout.stockPostedAt && !["RESTOCK", "QUARANTINE", "DISPOSE"].includes(entry.stockDisposition))) {
         throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_STOCK_DISPOSITION_INVALID", 409);
       }
       const invoiceItem = line.invoiceItem;
@@ -347,13 +364,13 @@ export async function createRetailInvoiceReturnRequest(
       const proportional = monetary(invoiceItem.totalAmount.times(value).div(invoiceItem.quantity));
       // Preserve the last-cent remainder on the final quantity return. Three
       // successive 1/3 returns of 100.00 therefore yield 33.33, 33.33, 33.34.
-      const amount = value.equals(left) ? remainingAmount : Prisma.Decimal.min(financeMoney(proportional), remainingAmount);
+      const amount = value.equals(left) ? remainingAmount : decimalMin(financeMoney(proportional), remainingAmount);
       if (!amount.greaterThan(0)) {
         throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_AMOUNT_BELOW_MINOR_UNIT", 409);
       }
       const taxProportional = financeMoney(invoiceItem.taxAmount.times(value).div(invoiceItem.quantity));
       const refundTaxAmount = value.equals(left) ? remainingTax :
-        Prisma.Decimal.min(taxProportional, remainingTax, amount);
+        decimalMin(taxProportional, remainingTax, amount);
       const refundNetAmount = amount.minus(refundTaxAmount);
       if (refundNetAmount.lessThan(0) || refundNetAmount.greaterThan(remainingNet) ||
           !refundNetAmount.plus(refundTaxAmount).equals(amount)) {
@@ -471,17 +488,39 @@ export async function inspectRetailInvoiceReturnRequest(
     const request = await tx.enterpriseRetailInvoiceReturnRequest.findFirst({
       where: { id: requestId, organizationId, checkout: { salesInvoiceId: invoiceId } },
       include: { checkout: { select: { siteId: true, stockPostedAt: true,
-        invoice: { select: { status: true } } } } },
+        invoice: { select: { status: true } } } },
+        lines: { select: { checkoutLine: { select: { inventoryItemId: true } } } } },
     });
     if (!request) throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_NOT_FOUND", 404);
+    const physicallyDeliveredGoods = Boolean(request.checkout.stockPostedAt) &&
+      request.lines.some((line) => Boolean(line.checkoutLine.inventoryItemId));
+    // Always bind the verifier to this store first. Independent Finance users
+    // may verify a service or undelivered cancellation without inventing a
+    // physical-stock inspection, but never inspect a posted goods return.
     await requireRetailSiteCapability(
-      organizationId, actorUserId, request.checkout.siteId, "MANAGE_STOCK", tx, { requireAssignment: true },
+      organizationId, actorUserId, request.checkout.siteId, "VIEW_SALES", tx, { requireAssignment: true },
     );
+    if (physicallyDeliveredGoods) {
+      await requireRetailSiteCapability(
+        organizationId, actorUserId, request.checkout.siteId, "MANAGE_STOCK", tx, { requireAssignment: true },
+      );
+    }
+    const [verifier, membership] = await Promise.all([
+      tx.enterpriseRetailSiteAssignment.findUnique({ where: { organizationId_siteId_userId: { organizationId, siteId: request.checkout.siteId, userId: actorUserId } }, select: { isActive: true, roleCode: true, permissionsJson: true } }),
+      tx.organizationMember.findFirst({ where: { organizationId, userId: actorUserId, status: "ACTIVE", removedAt: null }, select: { role: true } }),
+    ]);
+    const canInspectGoods = Boolean(membership && (RETAIL_OWNER_ROLES.has(membership.role) ||
+      (verifier?.isActive && siteStaffCapabilities(verifier.roleCode, verifier.permissionsJson).includes("MANAGE_STOCK"))));
+    if (physicallyDeliveredGoods && !canInspectGoods) throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_INSPECTOR_INELIGIBLE", 403);
+    if (!physicallyDeliveredGoods && !canInspectGoods) {
+      const finance = await resolveEnterpriseModuleAccess({ organizationId, userId: actorUserId, moduleCode: "FINANCE_RECEIVABLES", action: "approve" });
+      if (!finance.allowed) throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_INSPECTOR_INELIGIBLE", 403);
+    }
     if (actorUserId === request.requestedByUserId || actorUserId === request.approverUserId) {
       throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_INSPECTOR_INELIGIBLE", 403);
     }
     if (request.status !== "SUBMITTED" || request.revision !== input.revision ||
-      request.checkout.invoice.status !== "PAID" || !request.checkout.stockPostedAt) {
+      !["PAID", "CREDIT_NOTE", "PARTIALLY_PAID", "ISSUED", "OVERDUE"].includes(request.checkout.invoice.status)) {
       throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_REVISION_CONFLICT", 409);
     }
     const inspected = await tx.enterpriseRetailInvoiceReturnRequest.update({
@@ -493,7 +532,7 @@ export async function inspectRetailInvoiceReturnRequest(
     await publishFinanceEvent(tx, {
       organizationId, entityType: "EnterpriseRetailInvoiceReturnRequest", entityId: request.id,
       eventType: "RETAIL_INVOICE_RETURN_INSPECTED",
-      summary: "Retail invoice return physically received and inspected",
+      summary: physicallyDeliveredGoods ? "Retail physical return independently inspected" : "Retail service/undelivered credit independently verified",
       actorUserId, fromStatus: "SUBMITTED", toStatus: "INSPECTED",
       metadataJson: { invoiceId, siteId: request.checkout.siteId },
     });

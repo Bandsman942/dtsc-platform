@@ -197,9 +197,11 @@ state.completed = [{ checkoutLineId: "checkoutline-A", quantity: D(3), refundAmo
 await assert.rejects(preview(), { code: "RETAIL_INVOICE_RETURN_SETTLEMENT_LINE_INVALID" });
 state.completed = [];
 
+// A service or non-stock line may only receive SERVICE_CREDIT, never a
+// fabricated RESTOCK. This is a line-classification error before ledger reads.
 state.request.lines[0].stockDisposition = "RESTOCK";
 state.request.checkout.lines[0].inventoryItemId = null;
-await assert.rejects(preview(), { code: "RETAIL_INVOICE_RETURN_SETTLEMENT_STOCK_INVALID" });
+await assert.rejects(preview(), { code: "RETAIL_INVOICE_RETURN_SETTLEMENT_LINE_INVALID" });
 state.request.checkout.lines[0].inventoryItemId = "item-A";
 state.request.lines[0].quantity = D(0);
 await assert.rejects(preview(), { code: "RETAIL_INVOICE_RETURN_SETTLEMENT_LINE_INVALID" });
