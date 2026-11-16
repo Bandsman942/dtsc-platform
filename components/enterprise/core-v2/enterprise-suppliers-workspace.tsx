@@ -8,7 +8,8 @@ import { BusinessPartyIdentityFields, type BusinessPartyIdentityLabels } from "@
 import { BusinessList, BusinessListItem } from "@/components/workspace/business-list";
 import { ContextActions, type BusinessContextAction } from "@/components/workspace/context-actions";
 import { EmptyState } from "@/components/workspace/empty-state";
-import { ModuleMetric, ModuleMetrics } from "@/components/workspace/module-metrics";
+import { ModuleMetrics } from "@/components/workspace/module-metrics";
+import { ErpDesign2Metric, ErpDesign2RegisterSection, ErpDesign2RegisterTools } from "@/components/enterprise/professional/erp-design2-register";
 import { ModuleSection } from "@/components/workspace/module-workspace";
 import { StatusBadge } from "@/components/workspace/status-badge";
 import { Button } from "@/components/ui/button";
@@ -39,11 +40,13 @@ function supplierCategoryLabel(locale: string | null | undefined, category: stri
   return ENTERPRISE_SUPPLIER_CATEGORIES.some((code) => code === category) ? enterpriseCoreT(locale, `suppliers.category.${category}` as EnterpriseCoreKey) : category;
 }
 
-export function EnterpriseSuppliersWorkspace({ organizationId, canManage, locale, legacyRecords = [] }: { organizationId: string; canManage: boolean; locale?: string | null; legacyRecords?: LegacyRecord[] }) {
+export function EnterpriseSuppliersWorkspace({ organizationId, organizationName = "Entreprise", canManage, locale, legacyRecords = [] }: { organizationId: string; organizationName?: string; canManage: boolean; locale?: string | null; legacyRecords?: LegacyRecord[] }) {
   const t = (key: EnterpriseCoreKey, vars?: Record<string, string | number>) => enterpriseCoreT(locale, key, vars);
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [country, setCountry] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
   const [createOpen, setCreateOpen] = useState(false);
@@ -71,7 +74,7 @@ export function EnterpriseSuppliersWorkspace({ organizationId, canManage, locale
   useToastMessage(createError, "error");
   useToastMessage(warning, "warning");
 
-  const params = useMemo(() => { const value = new URLSearchParams({ page: String(page), pageSize: "20" }); if (search.trim()) value.set("search", search.trim()); if (statusFilter) value.set("status", statusFilter); if (country.trim()) value.set("country", country.trim()); return value; }, [page, search, statusFilter, country]);
+  const params = useMemo(() => { const value = new URLSearchParams({ page: String(page), pageSize: "20" }); if (search.trim()) value.set("search", search.trim()); if (statusFilter) value.set("status", statusFilter); if (country.trim()) value.set("country", country.trim()); if (dateFrom) value.set("dateFrom", dateFrom); if (dateTo) value.set("dateTo", dateTo); return value; }, [page, search, statusFilter, country, dateFrom, dateTo]);
   const collection = useEnterpriseV2Collection<SupplierItem>({ endpoint: `/api/enterprise/${organizationId}/suppliers`, params, refreshKey });
   const metrics = collection.meta.metrics || {};
 
@@ -198,12 +201,26 @@ export function EnterpriseSuppliersWorkspace({ organizationId, canManage, locale
   const partySelectItems = [{ id: "", label: t("suppliers.onboarding.choosePartyPlaceholder") }, ...availablePartyOptions.map((party) => ({ id: party.id, label: `${party.displayName || party.legalName} · ${party.code}${party.primaryEmail ? ` · ${party.primaryEmail}` : ""}` }))];
 
   return <div className="grid min-w-0 gap-5">
-    <ModuleMetrics label={t("suppliers.indicators")}><ModuleMetric label={t("suppliers.metric.active")} value={metrics.active || 0} /><ModuleMetric label={t("suppliers.metric.suspended")} value={metrics.suspended || 0} /><ModuleMetric label={t("suppliers.metric.recent")} value={metrics.recent || 0} /></ModuleMetrics>
-    <ModuleSection title={t("suppliers.section.title")} description={t("suppliers.section.description")} count={`${collection.pagination.total}`} action={canManage ? <Button onClick={() => { resetCreate(); setCreateOpen(true); }} className="bg-dtsc-blue text-white"><Plus className="h-4 w-4" />{t("suppliers.new")}</Button> : undefined}>
-      <div className="grid gap-2 border-y border-dtsc-border py-3 md:grid-cols-3"><Input value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder={t("suppliers.search")} /><NativeSelect value={statusFilter} onChange={setStatusFilter} items={[{ id: "", label: t("suppliers.allStatuses") }, ...supplierStatuses.map((id) => ({ id, label: statusLabel(locale, id) }))]} /><Input value={country} onChange={(event) => setCountry(event.target.value)} placeholder={t("suppliers.country")} /></div>
+    <ModuleMetrics label={t("suppliers.indicators")}><ErpDesign2Metric tone="emerald" label={t("suppliers.metric.active")} value={metrics.active || 0} /><ErpDesign2Metric tone="rose" label={t("suppliers.metric.suspended")} value={metrics.suspended || 0} /><ErpDesign2Metric tone="sky" label={t("suppliers.metric.recent")} value={metrics.recent || 0} /></ModuleMetrics>
+    <ErpDesign2RegisterSection title={t("suppliers.section.title")} description={t("suppliers.section.description")} count={`${collection.pagination.total}`} action={canManage ? <Button onClick={() => { resetCreate(); setCreateOpen(true); }} className="bg-dtsc-blue text-white"><Plus className="h-4 w-4" />{t("suppliers.new")}</Button> : undefined}>
+      <div className="grid gap-2 py-2 md:grid-cols-2"><Input aria-label={t("suppliers.search")} value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder={t("suppliers.search")} /><Input aria-label={t("suppliers.country")} value={country} onChange={(event) => { setCountry(event.target.value); setPage(1); }} placeholder={t("suppliers.country")} /></div>
+      <ErpDesign2RegisterTools locale={locale === "en" ? locale : "fr"} title={t("suppliers.section.title")} organizationName={organizationName}
+        endpoint={`/api/enterprise/${organizationId}/suppliers`} filters={{ search, status: statusFilter, country, dateFrom, dateTo }}
+        status={statusFilter} statuses={[{ id: "", label: t("suppliers.allStatuses") }, ...supplierStatuses.map((id) => ({ id, label: statusLabel(locale, id) }))]}
+        onStatusChange={(value) => { setStatusFilter(value); setPage(1); }} dateFrom={dateFrom} dateTo={dateTo}
+        onDateChange={(from, to) => { setDateFrom(from); setDateTo(to); setPage(1); }}
+        columns={[
+          { key: "supplier", labelFr: "Fournisseur", labelEn: "Supplier", get: (row) => String(row.displayName || row.legalName || "") },
+          { key: "category", labelFr: "Catégorie", labelEn: "Category", get: (row) => supplierCategoryLabel(locale, String(row.category || "")) },
+          { key: "status", labelFr: "Statut", labelEn: "Status", get: (row) => statusLabel(locale, String(row.status || "")) },
+          { key: "country", labelFr: "Pays", labelEn: "Country", get: (row) => String(row.country || "") },
+          { key: "email", labelFr: "Courriel", labelEn: "Email", get: (row) => String(row.email || "") },
+          { key: "phone", labelFr: "Téléphone", labelEn: "Phone", get: (row) => String(row.phone || "") },
+          { key: "purchases", labelFr: "Achats", labelEn: "Purchases", get: (row) => Number((row._count as { purchases?: number } | null)?.purchases || 0) },
+        ]} />
       {collection.loading ? <p className="py-8 text-center text-sm text-dtsc-muted">{t("common.loading")}</p> : collection.items.length ? <BusinessList ariaLabel={t("suppliers.aria")}>{collection.items.map((item) => <BusinessListItem key={item.id} title={item.displayName || item.legalName} status={<StatusBadge>{statusLabel(locale, item.status)}</StatusBadge>} meta={`${supplierTypeLabel(locale, item.supplierType)} · ${supplierCategoryLabel(locale, item.category)} · ${t("suppliers.purchasesCount", { count: item._count.purchases })}`} description={item.contacts[0] ? `${item.contacts[0].name}${item.contacts[0].title ? ` · ${item.contacts[0].title}` : ""}` : item.email || item.phone || ""} onOpen={() => setDetail(item)} openLabel={t("suppliers.openNamed", { name: item.legalName })} actions={<div className="flex items-center gap-2">{item.identityLink ? <StatusBadge tone={identityTone(item.identityLink.status)}>{identityStatusLabel(locale, item.identityLink.status)}</StatusBadge> : null}<ContextActions label={t("suppliers.actions")} actions={actionsFor(item)} /></div>} />)}</BusinessList> : <EmptyState compact title={t("suppliers.noSuppliers")} description={collection.error || t("suppliers.noMatch")} />}
       <div className="mt-3 flex justify-between border-t border-dtsc-border pt-3 text-sm text-dtsc-muted"><span>{t("common.page", { current: collection.pagination.page, total: collection.pagination.pageCount })}</span><div className="flex gap-2"><Button variant="outline" disabled={page <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>{t("common.previous")}</Button><Button variant="outline" disabled={page >= collection.pagination.pageCount} onClick={() => setPage((value) => value + 1)}>{t("common.next")}</Button></div></div>
-    </ModuleSection>
+    </ErpDesign2RegisterSection>
     {legacyRecords.length ? <ModuleSection title={t("suppliers.historical.title")} description={t("suppliers.historical.description")}><BusinessList ariaLabel={t("suppliers.historical.aria")}>{legacyRecords.map((item) => <BusinessListItem key={item.id} title={item.title} status={<StatusBadge>{t("suppliers.historyBadge")}</StatusBadge>} description={item.description || statusLabel(locale, item.status)} />)}</BusinessList></ModuleSection> : null}
 
     <Dialog open={createOpen} onClose={() => { if (!busy) { setCreateOpen(false); resetCreate(); } }} title={t("suppliers.onboarding.title")} description={t("suppliers.onboarding.description")} className="h-[94dvh] max-w-5xl" presentation="editor" footer={<><Button variant="outline" disabled={busy} onClick={() => { setCreateOpen(false); resetCreate(); }}>{t("suppliers.form.cancel")}</Button><Button type="submit" form="supplier-onboarding-form" disabled={busy || (mode === "EXISTING" && !businessPartyId)}>{busy ? t("suppliers.onboarding.creating") : t("suppliers.onboarding.create")}</Button></>}>

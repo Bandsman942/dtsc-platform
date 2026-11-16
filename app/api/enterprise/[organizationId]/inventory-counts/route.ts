@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { getEnterpriseCommonDomainAccess } from "@/lib/enterprise/common/access";
+import { financeBusinessDateRange } from "@/lib/enterprise/accounting/http";
 import { retailErrorResponse } from "@/lib/enterprise/retail/http";
 import { retailInventoryVisibleSites } from "@/lib/enterprise/retail/site-access";
 import { requireRetailWarehouseCapability } from "@/lib/enterprise/retail/site-access";
@@ -30,6 +31,9 @@ export async function GET(req: Request, { params }: Params) {
   const page = Math.max(1, Number(url.searchParams.get("page") || 1) || 1);
   const pageSize = Math.min(50, Math.max(5, Number(url.searchParams.get("pageSize") || 20) || 20));
   const status = url.searchParams.get("status")?.trim().toUpperCase() || "";
+  const search = url.searchParams.get("search")?.trim() || "";
+  const dates = financeBusinessDateRange(req);
+  if (!dates.ok) return dates.response;
   const warehouseId = url.searchParams.get("warehouseId")?.trim() || "";
   // InventoryCount stores warehouseId as a scalar (no Prisma warehouse
   // relation). Resolve authorized warehouse IDs before filtering any rows.
@@ -44,7 +48,7 @@ export async function GET(req: Request, { params }: Params) {
     : {};
   const baseWhere: Prisma.EnterpriseInventoryCountWhereInput = { organizationId, archivedAt: null, ...siteScope };
   const where: Prisma.EnterpriseInventoryCountWhereInput = {
-    AND: [baseWhere, { ...(status ? { status } : {}), ...(warehouseId ? { warehouseId } : {}) }],
+    AND: [baseWhere, { ...(status ? { status } : {}), ...(warehouseId ? { warehouseId } : {}), ...(search ? { reference: { contains: search, mode: "insensitive" } } : {}), ...((dates.from || dates.to) ? { createdAt: { ...(dates.from ? { gte: dates.from } : {}), ...(dates.to ? { lte: dates.to } : {}) } } : {}) }],
   };
   const [items, total, pending, completed] = await Promise.all([
     prisma.enterpriseInventoryCount.findMany({ where, orderBy: [{ createdAt: "desc" }], skip: (page - 1) * pageSize, take: pageSize, include: { lines: { orderBy: { createdAt: "asc" } } } }),

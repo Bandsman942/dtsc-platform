@@ -8,6 +8,7 @@ import { enterpriseDocumentCreateSchema } from "@/lib/enterprise/procurement/val
 import { prisma } from "@/lib/prisma";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
+import { isValidEnterpriseActivityCivilDate } from "@/lib/enterprise/enterprise-activity-civil-date";
 
 type Params = { params: Promise<{ organizationId: string }> };
 
@@ -42,9 +43,13 @@ export async function GET(req: Request, { params }: Params) {
   if (department) filters.push({ departmentId: department });
   if (owner) filters.push({ ownerUserId: owner });
   if (from || to) {
-    const createdAt: { gte?: Date; lte?: Date } = {};
-    if (from) createdAt.gte = new Date(from);
-    if (to) createdAt.lte = new Date(to);
+    const isCivilDate = isValidEnterpriseActivityCivilDate;
+    if ((from && !isCivilDate(from)) || (to && !isCivilDate(to)) || (from && to && from > to)) {
+      return NextResponse.json({ error: "DOCUMENT_DATE_RANGE_INVALID", message: "Vérifiez la date de début et la date de fin." }, { status: 400 });
+    }
+    const createdAt: { gte?: Date; lt?: Date } = {};
+    if (from) createdAt.gte = new Date(`${from}T00:00:00.000Z`);
+    if (to) { const exclusive = new Date(`${to}T00:00:00.000Z`); exclusive.setUTCDate(exclusive.getUTCDate() + 1); createdAt.lt = exclusive; }
     filters.push({ createdAt });
   }
   if (expiring) filters.push({ expiresAt: { gte: new Date(), lte: new Date(Date.now() + 30 * 86400000) } });

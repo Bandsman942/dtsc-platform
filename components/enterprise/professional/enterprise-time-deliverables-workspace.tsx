@@ -26,8 +26,9 @@ import { useToastMessage } from "@/components/ui/use-toast-message";
 import { BusinessList, BusinessListItem } from "@/components/workspace/business-list";
 import { ContextActions, type BusinessContextAction } from "@/components/workspace/context-actions";
 import { EmptyState } from "@/components/workspace/empty-state";
-import { ModuleMetric, ModuleMetrics } from "@/components/workspace/module-metrics";
-import { ModuleContent, ModuleHeader, ModuleSection, ModuleToolbar, ModuleWorkspace } from "@/components/workspace/module-workspace";
+import { ModuleMetrics } from "@/components/workspace/module-metrics";
+import { ErpDesign2Metric, ErpDesign2RegisterSection, ErpDesign2RegisterTools } from "@/components/enterprise/professional/erp-design2-register";
+import { ModuleContent, ModuleHeader, ModuleToolbar, ModuleWorkspace } from "@/components/workspace/module-workspace";
 import { StatusBadge } from "@/components/workspace/status-badge";
 import type { EnterpriseModuleDefinition } from "@/lib/enterprise/module-registry";
 
@@ -87,6 +88,8 @@ export function EnterpriseTimeDeliverablesWorkspace({
   const tr = (fr: string, en: string) => locale === "en" ? en : fr;
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [page, setPage] = useState(1);
   const [refreshKey, setRefreshKey] = useState(0);
   const [lookups, setLookups] = useState<Lookups>({ projects: [], documents: [], members: [], canReadDocuments: false });
@@ -115,8 +118,10 @@ export function EnterpriseTimeDeliverablesWorkspace({
     const value = new URLSearchParams({ page: String(page), pageSize: "25" });
     if (search.trim()) value.set("search", search.trim());
     if (status) value.set("status", status);
+    if (dateFrom) value.set("dateFrom", dateFrom);
+    if (dateTo) value.set("dateTo", dateTo);
     return value;
-  }, [page, search, status]);
+  }, [page, search, status, dateFrom, dateTo]);
   const deliverables = useProfessionalCollection<Deliverable>({ endpoint: `/api/enterprise/${organizationId}/deliverables`, params, refreshKey });
   // #878: show the actual private deliverable editor only if its own domain
   // API authorizes creation. A query parameter cannot bypass the API checks.
@@ -205,7 +210,7 @@ export function EnterpriseTimeDeliverablesWorkspace({
   const reviewNeedsComment = Boolean(review && ["REQUEST_CHANGES", "REJECT"].includes(review.action));
   const reviewActionLabel = review?.action === "SUBMIT" ? t("projects.submit") : review?.action === "ACCEPT" ? t("projects.accept") : review?.action === "REQUEST_CHANGES" ? t("projects.requestChanges") : t("projects.reject");
 
-  return <ModuleWorkspace>
+  return <ModuleWorkspace density="compact">
     <ModuleHeader
       eyebrow={t("projects.eyebrow", { organization: organizationName })}
       title={t("projects.titleDeliverables")}
@@ -214,19 +219,31 @@ export function EnterpriseTimeDeliverablesWorkspace({
       primaryAction={deliverables.canWrite ? <Button disabled={Boolean(busyAction)} onClick={() => setCreateOpen(true)}><Plus className="h-4 w-4" />{t("projects.newDeliverable")}</Button> : undefined}
     />
     <ModuleMetrics label={t("projects.metrics")}>
-      <ModuleMetric label={tr("À revoir", "Awaiting review")} value={deliverables.metrics.submitted || 0} />
-      <ModuleMetric label={tr("Acceptés", "Accepted")} value={deliverables.metrics.accepted || 0} />
-      <ModuleMetric label={t("projects.overdue")} value={deliverables.metrics.overdue || 0} />
+      <ErpDesign2Metric tone="amber" label={tr("À revoir", "Awaiting review")} value={deliverables.metrics.submitted || 0} />
+      <ErpDesign2Metric tone="emerald" label={tr("Acceptés", "Accepted")} value={deliverables.metrics.accepted || 0} />
+      <ErpDesign2Metric tone="rose" label={t("projects.overdue")} value={deliverables.metrics.overdue || 0} />
     </ModuleMetrics>
     <ModuleToolbar
       search={<ProfessionalSearch value={search} onChange={(value) => { setSearch(value); setPage(1); }} placeholder={t("projects.search")} />}
-      controls={<NativeSelect value={status} onChange={(value) => { setStatus(value); setPage(1); }} items={statusItems} />}
       summary={tr("Registre consolidé des livrables, revues et temps projet approuvés.", "Consolidated register of deliverables, reviews and approved project time.")}
     />
-    <ModuleContent>
+    <ModuleContent density="compact">
       {message ? <div role="status" className="rounded-xl border border-dtsc-border bg-dtsc-page px-4 py-3 text-sm font-semibold">{message}</div> : null}
-      <ModuleSection title={t("projects.tabDeliverables")} description={tr("La revue est indépendante du créateur et toutes les transitions sont versionnées côté serveur.", "Review is independent from the creator and every transition is server-versioned.")}>
-        {deliverables.error ? <ProfessionalError message={deliverables.error} /> : deliverables.loading ? <ProfessionalLoading /> : deliverables.items.length ? <>
+      <ErpDesign2RegisterSection title={t("projects.tabDeliverables")} description={tr("La revue est indépendante du créateur et toutes les transitions sont versionnées côté serveur.", "Review is independent from the creator and every transition is server-versioned.")} count={deliverables.pagination.total}>
+        <ErpDesign2RegisterTools locale={locale} organizationName={organizationName} title={t("projects.tabDeliverables")}
+          endpoint={`/api/enterprise/${organizationId}/deliverables`} filters={{ search, status, dateFrom, dateTo }}
+          status={status} statuses={statusItems} onStatusChange={(value) => { setStatus(value); setPage(1); }}
+          dateFrom={dateFrom} dateTo={dateTo} onDateChange={(from, to) => { setDateFrom(from); setDateTo(to); setPage(1); }}
+          columns={[
+            { key: "reference", labelFr: "Référence", labelEn: "Reference", get: (row) => String(row.reference || "") },
+            { key: "name", labelFr: "Livrable", labelEn: "Deliverable", get: (row) => String(row.name || "") },
+            { key: "project", labelFr: "Projet lié", labelEn: "Linked project", get: (row) => String((row.project as { reference?: string; name?: string } | null)?.name || "") },
+            { key: "status", labelFr: "Statut", labelEn: "Status", get: (row) => professionalErpEnumLabel(locale, "projectStatus", String(row.status || "")) },
+            { key: "due", labelFr: "Échéance", labelEn: "Due date", get: (row) => String(row.dueDate || "") },
+            { key: "approvedMinutes", labelFr: "Minutes approuvées", labelEn: "Approved minutes", get: (row) => Number(row.approvedMinutes || 0) },
+            { key: "billableMinutes", labelFr: "Minutes facturables", labelEn: "Billable minutes", get: (row) => Number(row.billableMinutes || 0) },
+          ]} />
+         {deliverables.error ? <ProfessionalError message={deliverables.error} /> : deliverables.loading ? <ProfessionalLoading /> : deliverables.items.length ? <>
           <BusinessList ariaLabel={t("projects.deliverablesAria")}>
             {deliverables.items.map((item) => {
               const actions = actionsFor(item);
@@ -243,7 +260,7 @@ export function EnterpriseTimeDeliverablesWorkspace({
           </BusinessList>
           <ProfessionalPager pagination={deliverables.pagination} onPageChange={setPage} locale={locale} />
         </> : <EmptyState compact title={t("projects.noDeliverable")} description={t("projects.noDeliverableDescription")} />}
-      </ModuleSection>
+      </ErpDesign2RegisterSection>
       <ProfessionalHelp moduleCode="TIME_DELIVERABLES" />
     </ModuleContent>
 

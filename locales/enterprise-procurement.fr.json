@@ -395,5 +395,7 @@
   "purchases.export.status": "Statut",
   "purchases.export.currency": "Devise",
   "purchases.export.amount": "Montant",
-  "purchases.export.created": "Date de création"
+  "purchases.export.created": "Date de création",
+  "purchases.action.print": "Imprimer la copie commerciale",
+  "purchases.action.previewA4": "Aperçu A4 / Imprimer"
 }

@@ -28,7 +28,8 @@ import { useToastMessage } from "@/components/ui/use-toast-message";
 import { BusinessList, BusinessListItem } from "@/components/workspace/business-list";
 import { ContextActions, type BusinessContextAction } from "@/components/workspace/context-actions";
 import { EmptyState } from "@/components/workspace/empty-state";
-import { ModuleMetric, ModuleMetrics } from "@/components/workspace/module-metrics";
+import { ModuleMetrics } from "@/components/workspace/module-metrics";
+import { ErpDesign2Metric, ErpDesign2RegisterSection, ErpDesign2RegisterTools } from "@/components/enterprise/professional/erp-design2-register";
 import { ModuleContent, ModuleHeader, ModuleSection, ModuleToolbar, ModuleWorkspace } from "@/components/workspace/module-workspace";
 import { StatusBadge } from "@/components/workspace/status-badge";
 import { useEnterpriseBusinessContext } from "@/components/enterprise/use-enterprise-business-context";
@@ -82,6 +83,8 @@ export function EnterpriseProjectsServicesWorkspace({ organizationId, organizati
   const { context: businessContext } = useEnterpriseBusinessContext(organizationId);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [page, setPage] = useState(1);
   const [refreshKey, setRefreshKey] = useState(0);
   const [lookups, setLookups] = useState<Lookups>({ employees: [], members: [], parties: [], departments: [], sites: [], contracts: [], budgets: [], documents: [], canReadBudgets: false, canReadDocuments: false });
@@ -115,8 +118,10 @@ export function EnterpriseProjectsServicesWorkspace({ organizationId, organizati
     const value = new URLSearchParams({ page: String(page), pageSize: "25" });
     if (search.trim()) value.set("search", search.trim());
     if (status) value.set("status", status);
+    if (dateFrom) value.set("dateFrom", dateFrom);
+    if (dateTo) value.set("dateTo", dateTo);
     return value;
-  }, [page, search, status]);
+  }, [page, search, status, dateFrom, dateTo]);
   const projects = useProfessionalCollection<ProjectListItem>({ endpoint: `/api/enterprise/${organizationId}/projects`, params, refreshKey });
   const statusItems = [{ id: "", label: t("projects.allStatuses") }, ...PROJECT_STATUSES.map((id) => ({ id, label: professionalErpEnumLabel(locale, "projectStatus", id) }))];
   const projectTypeItems = PROJECT_TYPES.map((id) => ({ id, label: professionalErpEnumLabel(locale, "projectType", id) }));
@@ -219,18 +224,32 @@ export function EnterpriseProjectsServicesWorkspace({ organizationId, organizati
 
   const transitionNeedsReason = Boolean(transition && ["MARK_AT_RISK", "BLOCK", "CANCEL"].includes(transition.action));
 
-  return <ModuleWorkspace>
+  return <ModuleWorkspace density="compact">
     <ModuleHeader eyebrow={t("projects.eyebrow", { organization: organizationName })} title={t("projects.titleProjects")} description={`${locale === "en" ? definition.descriptionEn : definition.descriptionFr} ${t("projects.descriptionSuffix")}`} count={t("projects.count", { count: projects.pagination.total, suffix: projects.pagination.total === 1 ? "" : "s" })} primaryAction={projects.canWrite ? <Button disabled={Boolean(busyAction)} onClick={() => setProjectOpen(true)}><Plus className="h-4 w-4" />{t("projects.newProject")}</Button> : undefined} />
-    <ModuleMetrics label={t("projects.metrics")}><ModuleMetric label={t("projects.active")} value={projects.metrics.active || 0} /><ModuleMetric label={t("projects.overdue")} value={projects.metrics.overdue || 0} /><ModuleMetric label={t("projects.highRisks")} value={projects.metrics.highRisks || 0} /></ModuleMetrics>
-    <ModuleToolbar search={<ProfessionalSearch value={search} onChange={(value) => { setSearch(value); setPage(1); }} placeholder={t("projects.search")} />} controls={<NativeSelect value={status} onChange={(value) => { setStatus(value); setPage(1); }} items={statusItems} />} summary={tr("Portefeuille, équipe, jalons, risques, incidents et livrables avec cycle de vie versionné.", "Portfolio, team, milestones, risks, issues and deliverables with a versioned lifecycle.")} />
-    <ModuleContent>
+    <ModuleMetrics label={t("projects.metrics")}><ErpDesign2Metric tone="emerald" label={t("projects.active")} value={projects.metrics.active || 0} /><ErpDesign2Metric tone="amber" label={t("projects.overdue")} value={projects.metrics.overdue || 0} /><ErpDesign2Metric tone="rose" label={t("projects.highRisks")} value={projects.metrics.highRisks || 0} /></ModuleMetrics>
+    <ModuleToolbar search={<ProfessionalSearch value={search} onChange={(value) => { setSearch(value); setPage(1); }} placeholder={t("projects.search")} />} summary={tr("Portefeuille, équipe, jalons, risques, incidents et livrables avec cycle de vie versionné.", "Portfolio, team, milestones, risks, issues and deliverables with a versioned lifecycle.")} />
+    <ModuleContent density="compact">
       {message ? <div role="status" className="rounded-xl border border-dtsc-border bg-dtsc-page px-4 py-3 text-sm font-semibold">{message}</div> : null}
-      <ModuleSection title={t("projects.portfolio")} description={t("projects.portfolioDescription")}>
-        {projects.error ? <ProfessionalError message={projects.error} /> : projects.loading ? <ProfessionalLoading /> : projects.items.length ? <>
+      <ErpDesign2RegisterSection title={t("projects.portfolio")} description={t("projects.portfolioDescription")} count={projects.pagination.total}>
+        <ErpDesign2RegisterTools locale={locale} organizationName={organizationName} title={t("projects.portfolio")}
+          endpoint={`/api/enterprise/${organizationId}/projects`} filters={{ search, status, dateFrom, dateTo }}
+          status={status} statuses={statusItems} onStatusChange={(value) => { setStatus(value); setPage(1); }}
+          dateFrom={dateFrom} dateTo={dateTo} onDateChange={(from, to) => { setDateFrom(from); setDateTo(to); setPage(1); }}
+          columns={[
+            { key: "reference", labelFr: "Référence", labelEn: "Reference", get: (row) => String(row.reference || "") },
+            { key: "name", labelFr: "Projet", labelEn: "Project", get: (row) => String(row.name || "") },
+            { key: "type", labelFr: "Type", labelEn: "Type", get: (row) => professionalErpEnumLabel(locale, "projectType", String(row.projectType || "")) },
+            { key: "status", labelFr: "Statut", labelEn: "Status", get: (row) => professionalErpEnumLabel(locale, "projectStatus", String(row.status || "")) },
+            { key: "progress", labelFr: "Avancement (%)", labelEn: "Progress (%)", get: (row) => Number(row.progressPercent || 0) },
+            { key: "budget", labelFr: "Budget indicatif", labelEn: "Indicative budget", get: (row) => Number(row.indicativeBudget || 0) },
+            { key: "currency", labelFr: "Devise", labelEn: "Currency", get: (row) => String(row.currency || "") },
+            { key: "target", labelFr: "Échéance cible", labelEn: "Target date", get: (row) => String(row.targetEndDate || "") },
+          ]} />
+         {projects.error ? <ProfessionalError message={projects.error} /> : projects.loading ? <ProfessionalLoading /> : projects.items.length ? <>
           <BusinessList ariaLabel={t("projects.projectsAria")}>{projects.items.map((project) => <BusinessListItem key={project.id} title={`${project.reference} · ${project.name}`} leading={<Flag className="h-5 w-5 text-dtsc-blue" />} status={<StatusBadge tone={statusTone(project.status)}>{professionalErpEnumLabel(locale, "projectStatus", project.status)}</StatusBadge>} meta={`${professionalErpEnumLabel(locale, "projectType", project.projectType)} · ${professionalErpMoney(project.indicativeBudget, project.currency, locale)}`} description={`${t("projects.members", { count: project._count.members, suffix: project._count.members === 1 ? "" : "s" })} · ${t("projects.milestones", { count: project._count.milestones, suffix: project._count.milestones === 1 ? "" : "s" })} · ${t("projects.deliverables", { count: project._count.deliverables, suffix: project._count.deliverables === 1 ? "" : "s" })} · ${project.progressPercent}%`} onOpen={() => void openProject(project)} openLabel={t("projects.openProject", { reference: project.reference })} actions={<ContextActions label={t("projects.projectActions")} actions={[{ id: "open", label: t("projects.open"), icon: Eye, onSelect: () => void openProject(project) }]} />} />)}</BusinessList>
           <ProfessionalPager pagination={projects.pagination} onPageChange={setPage} locale={locale} />
         </> : <EmptyState compact title={t("projects.noProject")} description={t("projects.noProjectDescription")} />}
-      </ModuleSection>
+      </ErpDesign2RegisterSection>
       <ProfessionalHelp moduleCode="PROJECTS_SERVICES" />
     </ModuleContent>
 

@@ -5,6 +5,7 @@ import { EnterpriseDomainError } from "@/lib/enterprise/common/errors";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { getEnterpriseCommonDomainAccess } from "@/lib/enterprise/common/access";
+import { financeBusinessDateRange } from "@/lib/enterprise/accounting/http";
 import { assertStorageLocationCanBecomeInactive, locationIntegrityMessage } from "@/lib/enterprise/master-data/location-integrity";
 import { storageLocationCreateSchema, storageLocationUpdateSchema } from "@/lib/enterprise/master-data/schemas";
 import { createEnterpriseStorageLocation, updateEnterpriseStorageLocation } from "@/lib/enterprise/master-data/service";
@@ -33,12 +34,15 @@ export async function GET(req: Request, { params }: Params) {
   const warehouseId = url.searchParams.get("warehouseId")?.trim() || "";
   const search = url.searchParams.get("search")?.trim() || "";
   const status = url.searchParams.get("status")?.trim().toUpperCase() || "";
+  const dates = financeBusinessDateRange(req);
+  if (!dates.ok) return dates.response;
   const where: Prisma.EnterpriseStorageLocationWhereInput = {
     organizationId,
     archivedAt: null,
     ...(warehouseId ? { warehouseId } : {}),
     ...(scope.isolationEnabled ? { warehouse: { siteId: { in: scope.siteIds } } } : {}),
     ...(status ? { status } : {}),
+    ...((dates.from || dates.to) ? { createdAt: { ...(dates.from ? { gte: dates.from } : {}), ...(dates.to ? { lte: dates.to } : {}) } } : {}),
     ...(search ? { OR: [{ code: { contains: search, mode: "insensitive" } }, { name: { contains: search, mode: "insensitive" } }, { barcode: { contains: search, mode: "insensitive" } }] } : {}),
   };
   const [items, total] = await Promise.all([

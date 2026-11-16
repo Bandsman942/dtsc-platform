@@ -4,6 +4,7 @@ import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http"
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { getEnterpriseCommonDomainAccess } from "@/lib/enterprise/common/access";
+import { financeBusinessDateRange } from "@/lib/enterprise/accounting/http";
 import { retailErrorResponse } from "@/lib/enterprise/retail/http";
 import { retailStockTransferVisibleSites } from "@/lib/enterprise/retail/site-access";
 import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
@@ -27,6 +28,9 @@ export async function GET(req: Request, { params }: Params) {
   const page = Math.max(1, Number(url.searchParams.get("page") || 1) || 1);
   const pageSize = Math.min(50, Math.max(5, Number(url.searchParams.get("pageSize") || 20) || 20));
   const status = url.searchParams.get("status")?.trim().toUpperCase() || "";
+  const search = url.searchParams.get("search")?.trim() || "";
+  const dates = financeBusinessDateRange(req);
+  if (!dates.ok) return dates.response;
   const warehouseId = url.searchParams.get("warehouseId")?.trim() || "";
   let scope: Awaited<ReturnType<typeof retailStockTransferVisibleSites>>;
   try {
@@ -46,7 +50,7 @@ export async function GET(req: Request, { params }: Params) {
   const where: Prisma.EnterpriseStockTransferWhereInput = {
     AND: [
       baseWhere,
-      { ...(status ? { status } : {}), ...(warehouseId ? { OR: [{ sourceWarehouseId: warehouseId }, { destinationWarehouseId: warehouseId }] } : {}) },
+      { ...(status ? { status } : {}), ...(warehouseId ? { OR: [{ sourceWarehouseId: warehouseId }, { destinationWarehouseId: warehouseId }] } : {}), ...(search ? { reference: { contains: search, mode: "insensitive" } } : {}), ...((dates.from || dates.to) ? { requestedAt: { ...(dates.from ? { gte: dates.from } : {}), ...(dates.to ? { lte: dates.to } : {}) } } : {}) },
     ],
   };
   const [items, total, pending, completed] = await Promise.all([

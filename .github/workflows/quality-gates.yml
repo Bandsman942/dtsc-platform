@@ -157,6 +157,8 @@ jobs:
         run: pnpm qa:sales-design2-1195
       - name: "ERP commercial #1198 Prisma quote creation and five Design 2.0 modules"
         run: pnpm qa:erp-commercial-design2-1198
+      - name: "ERP seven modules #1200 Design 2.0, printed purchasing and secured exports"
+        run: pnpm qa:erp-seven-design2-1200
       - name: Type check
         run: pnpm type-check
         env:

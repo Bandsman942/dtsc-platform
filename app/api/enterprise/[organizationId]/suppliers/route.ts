@@ -5,6 +5,7 @@ import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { normalizeEnterpriseCoreV2Error } from "@/lib/enterprise/core-v2/errors";
 import { getEnterpriseProcurementAccess } from "@/lib/enterprise/procurement/access";
+import { financeBusinessDateRange } from "@/lib/enterprise/accounting/http";
 import { createEnterpriseSupplier } from "@/lib/enterprise/procurement/supplier-service";
 import { enterpriseSupplierCreateSchema } from "@/lib/enterprise/procurement/validators";
 import { prisma } from "@/lib/prisma";
@@ -27,6 +28,8 @@ export async function GET(req: Request, { params }: Params) {
   const category = url.searchParams.get("category")?.trim() || "";
   const status = url.searchParams.get("status")?.trim() || "";
   const country = url.searchParams.get("country")?.trim() || "";
+  const dates = financeBusinessDateRange(req);
+  if (!dates.ok) return dates.response;
   const where: Prisma.EnterpriseSupplierWhereInput = {
     organizationId,
     archivedAt: null,
@@ -34,6 +37,7 @@ export async function GET(req: Request, { params }: Params) {
     ...(category ? { category: { contains: category, mode: "insensitive" } } : {}),
     ...(status ? { status } : {}),
     ...(country ? { country: { contains: country, mode: "insensitive" } } : {}),
+    ...((dates.from || dates.to) ? { createdAt: { ...(dates.from ? { gte: dates.from } : {}), ...(dates.to ? { lte: dates.to } : {}) } } : {}),
   };
   const recentSince = new Date(Date.now() - 30 * 86400000);
   const [rawItems, total, active, suspended, recent] = await Promise.all([
