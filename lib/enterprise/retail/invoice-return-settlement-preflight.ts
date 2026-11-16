@@ -65,7 +65,8 @@ export async function assertRetailInvoiceReturnSettlementReadinessTx(
     throw conflict("RETAIL_INVOICE_RETURN_SETTLEMENT_SOURCE_INVALID");
   }
   const refundAmount = request.refundAmount; // Credit-note face value, not necessarily cash paid out.
-  const payoutAmount = Prisma.Decimal.max(0, refundAmount.minus(invoice.outstandingAmount));
+  const availableToRefund = refundAmount.minus(invoice.outstandingAmount);
+  const payoutAmount = availableToRefund.greaterThan(0) ? availableToRefund : new Prisma.Decimal(0);
   if ((request.refundPayoutAmount !== null && request.refundPayoutAmount !== undefined &&
       !request.refundPayoutAmount.equals(payoutAmount)) || !payoutAmount.equals(cents(payoutAmount))) {
     throw conflict("RETAIL_INVOICE_RETURN_SETTLEMENT_PAYOUT_CONFLICT");
