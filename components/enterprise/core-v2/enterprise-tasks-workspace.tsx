@@ -1,6 +1,7 @@
 "use client";
 
 import { ErpDesign2Metric, ErpDesign2RegisterSection } from "@/components/enterprise/professional/erp-design2-register";
+import { CoordinationDesign2Tools } from "@/components/enterprise/professional/coordination-design2-tools";
 
 import { Archive, CheckCircle2, Eye, PauseCircle, Pencil, Play, Plus, RotateCcw, XCircle } from "lucide-react";
 import { useSearchParams } from "next/navigation";
@@ -25,9 +26,11 @@ type Task = { id: string; taskType: string; title: string; description: string |
 type LegacyRecord = { id: string; recordType: string; title: string; description: string | null; status: string; priority: string; updatedAt: string };
 type PendingAction = { task: Task; action: string; label: string };
 
-export function EnterpriseTasksWorkspace({ organizationId, members, departments, canCreate, canManage, locale, legacyRecords = [] }: { organizationId: string; members: EnterpriseChoice[]; departments: EnterpriseChoice[]; canCreate: boolean; canManage: boolean; locale?: string | null; legacyRecords?: LegacyRecord[] }) {
+export function EnterpriseTasksWorkspace({ organizationId, organizationName = "Entreprise", members, departments, canCreate, canManage, locale, legacyRecords = [] }: { organizationId: string; organizationName?: string; members: EnterpriseChoice[]; departments: EnterpriseChoice[]; canCreate: boolean; canManage: boolean; locale?: string | null; legacyRecords?: LegacyRecord[] }) {
   const searchParams = useSearchParams();
   const deepLinkedTaskId = searchParams.get("task");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
@@ -55,8 +58,10 @@ export function EnterpriseTasksWorkspace({ organizationId, members, departments,
     if (assignee) value.set("assignee", assignee);
     if (department) value.set("department", department);
     if (overdue) value.set("overdue", "true");
+    if (dateFrom) value.set("dateFrom", dateFrom);
+    if (dateTo) value.set("dateTo", dateTo);
     return value;
-  }, [assignee, deepLinkedTaskId, department, overdue, page, priority, search, status]);
+  }, [assignee, dateFrom, dateTo, deepLinkedTaskId, department, overdue, page, priority, search, status]);
   const collection = useEnterpriseV2Collection<Task>({ endpoint: `/api/enterprise/${organizationId}/tasks`, params, refreshKey });
   const focusedTask = deepLinkedTaskId && dismissedDeepLinkId !== deepLinkedTaskId
     ? collection.items.find((item) => item.id === deepLinkedTaskId) || null
@@ -121,12 +126,17 @@ export function EnterpriseTasksWorkspace({ organizationId, members, departments,
     <ErpDesign2RegisterSection title={enterpriseCoreT(locale, "tasks.sectionTitle")} description={enterpriseCoreT(locale, "tasks.sectionDescription")} count={`${collection.pagination.total}`} action={canCreate ? <Button onClick={() => setCreateOpen(true)} className="bg-dtsc-blue text-white"><Plus className="h-4 w-4" />{enterpriseCoreT(locale, "tasks.newTask")}</Button> : undefined}>
       <div className="grid gap-2 border-y border-dtsc-border py-3 md:grid-cols-3 xl:grid-cols-6">
         <Input value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder={enterpriseCoreT(locale, "tasks.searchPlaceholder")} />
-        <NativeSelect value={status} onChange={(value) => { setStatus(value); setPage(1); }} items={["TODO", "IN_PROGRESS", "BLOCKED", "DONE", "CANCELLED"].map((id) => ({ id, label: statusLabel(locale, id) }))} />
+
         <NativeSelect value={priority} onChange={(value) => { setPriority(value); setPage(1); }} items={priorityChoices(locale)} />
         <NativeSelect value={assignee} onChange={(value) => { setAssignee(value); setPage(1); }} items={members} />
         <NativeSelect value={department} onChange={(value) => { setDepartment(value); setPage(1); }} items={departments} />
         <Button variant={overdue ? "default" : "outline"} onClick={() => { setOverdue((value) => !value); setPage(1); }}>{enterpriseCoreT(locale, "tasks.overdue")}</Button>
       </div>
+      <CoordinationDesign2Tools kind="tasks" organizationId={organizationId} organizationName={organizationName}
+        title={enterpriseCoreT(locale, "tasks.sectionTitle")} locale={locale === "en" ? "en" : "fr"} filters={params}
+        status={status} statuses={[{ id: "", label: locale === "en" ? "All statuses" : "Tous les statuts" }, ...["TODO", "IN_PROGRESS", "BLOCKED", "DONE", "CANCELLED"].map((id) => ({ id, label: statusLabel(locale, id) }))]}
+        onStatusChange={(next) => { setStatus(next); setPage(1); }} dateFrom={dateFrom} dateTo={dateTo}
+        onDateChange={(from, to) => { setDateFrom(from); setDateTo(to); setPage(1); }} />
       {collection.loading ? <p className="py-8 text-center text-sm text-dtsc-muted">{enterpriseCoreT(locale, "common.loading")}</p> : collection.items.length ? <BusinessList ariaLabel={enterpriseCoreT(locale, "tasks.ariaLabel")}>{collection.items.map((task) => <BusinessListItem key={task.id} title={task.title} status={<StatusBadge tone={statusTone(task.status)}>{statusLabel(locale, task.status)}</StatusBadge>} meta={`${taskTypeLabel(locale, task.taskType)} · ${priorityLabel(locale, task.priority)} · ${formatEnterpriseDate(task.dueAt, locale)}`} description={task.description || enterpriseCoreT(locale, "common.noDescription")} onOpen={() => setDetail(task)} openLabel={enterpriseCoreT(locale, "tasks.openLabel", { title: task.title })} actions={<ContextActions label={enterpriseCoreT(locale, "tasks.actionsLabel")} actions={actionsFor(task, canManage, locale, setDetail, setEdit, setPendingAction)} />} />)}</BusinessList> : <EmptyState compact title={enterpriseCoreT(locale, "tasks.noTasks")} description={collection.error || (deepLinkedTaskId ? enterpriseCoreT(locale, "tasks.unavailable") : enterpriseCoreT(locale, "tasks.noMatch"))} />}
       <div className="mt-3 flex items-center justify-between border-t border-dtsc-border pt-3 text-sm text-dtsc-muted"><span>{enterpriseCoreT(locale, "common.page", { current: collection.pagination.page, total: collection.pagination.pageCount })}</span><div className="flex gap-2"><Button variant="outline" disabled={page <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>{enterpriseCoreT(locale, "common.previous")}</Button><Button variant="outline" disabled={page >= collection.pagination.pageCount} onClick={() => setPage((value) => value + 1)}>{enterpriseCoreT(locale, "common.next")}</Button></div></div>
     </ErpDesign2RegisterSection>
