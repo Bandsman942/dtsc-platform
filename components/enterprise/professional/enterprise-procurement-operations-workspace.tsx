@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { EnterprisePurchasesWorkspace } from "@/components/enterprise/core-v2/enterprise-purchases-workspace";
 import { EnterpriseSuppliersWorkspace } from "@/components/enterprise/core-v2/enterprise-suppliers-workspace";
 import { ProfessionalError, ProfessionalHelp } from "@/components/enterprise/professional/professional-erp-ui";
-import { ProfessionalTabs } from "@/components/enterprise/professional/professional-navigation";
+import { ProfessionalTabs } from "@/components/enterprise/professional/professional-erp-ui";
 import { ModuleContent, ModuleHeader, ModuleToolbar, ModuleWorkspace } from "@/components/workspace/module-workspace";
 import type { EnterpriseModuleDefinition } from "@/lib/enterprise/module-registry";
 
