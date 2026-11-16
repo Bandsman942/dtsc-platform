@@ -129,7 +129,23 @@ export function EnterpriseCrmWorkspace({ organizationId, organizationName, defin
   useEffect(() => subscribeEnterpriseCrmUpdates(organizationId, () => setRefreshKey((value) => value + 1)), [organizationId]);
   const canWrite = leads.canWrite || opportunities.canWrite;
   const grouped = useMemo(() => Object.fromEntries(STAGES.map((stage) => [stage, opportunities.items.filter((item) => item.status === stage)])) as Record<string, Opportunity[]>, [opportunities.items]);
-  const visibleValue = opportunities.items.reduce((sum, item) => sum + Number(item.estimatedValue || 0), 0);
+  // A mixed USD/CDF pipeline cannot be displayed as a single amount.
+  const visibleTotalsByCurrency = useMemo(() => {
+    const totals = new Map<string, number>();
+    for (const item of opportunities.items) {
+      const code = (item.currency || "").trim().toUpperCase() || "—";
+      totals.set(code, (totals.get(code) || 0) + Number(item.estimatedValue || 0));
+    }
+    return [...totals.entries()].sort(([a], [b]) => a.localeCompare(b));
+  }, [opportunities.items]);
+  const visibleValueLabel = visibleTotalsByCurrency.length > 1
+    ? (locale === "en" ? "Multiple currencies" : "Plusieurs devises")
+    : visibleTotalsByCurrency.length === 1
+      ? professionalErpMoney(visibleTotalsByCurrency[0][1], visibleTotalsByCurrency[0][0], locale)
+      : professionalErpMoney(0, null, locale);
+  const visibleValueBreakdown = visibleTotalsByCurrency.length > 1
+    ? visibleTotalsByCurrency.map(([currency, amount]) => professionalErpMoney(amount, currency, locale)).join(" · ")
+    : undefined;
   const currencies = lookups.currencies.length ? lookups.currencies.map((code) => ({ id: code, label: code })) : currencyChoices(locale);
   const sources = SOURCES.map((code) => ({ id: code, label: professionalErpEnumLabel(locale, "source", code) }));
 
@@ -266,7 +282,7 @@ export function EnterpriseCrmWorkspace({ organizationId, organizationName, defin
   ];
   return <ModuleWorkspace density="compact">
     <ModuleHeader eyebrow={t("crm.eyebrow", { organization: organizationName })} title={t("crm.title")} description={locale === "en" ? definition.descriptionEn : definition.descriptionFr} count={t("crm.opportunityCount", { count: opportunities.pagination.total, suffix: opportunities.pagination.total === 1 ? "" : "s" })} primaryAction={canWrite ? <div className="flex flex-wrap gap-2"><Button variant="outline" onClick={() => { resetFeedback(); setLeadMode("NEW"); setLeadPartyType("PERSON"); setLeadPartyId(""); setCreateKind("LEAD"); }}><UserRound className="h-4 w-4" />{t("crm.newLead")}</Button><Button onClick={() => { resetFeedback(); setCreateKind("OPPORTUNITY"); }}><Plus className="h-4 w-4" />{t("crm.newOpportunity")}</Button></div> : undefined} />
-    <ModuleMetrics label={t("crm.metricsLabel")}><ModuleMetric className="border-l-sky-500" icon={<BriefcaseBusiness className="h-4 w-4 text-sky-500" />} label={t("crm.metricOpenPipeline")} value={opportunities.metrics.open || 0} /><ModuleMetric className="border-l-indigo-500" label={t("crm.metricVisibleValue")} value={professionalErpMoney(visibleValue, opportunities.items.find((item) => item.currency)?.currency, locale)} /><ModuleMetric className="border-l-amber-500" icon={<Eye className="h-4 w-4 text-amber-500" />} label={t("crm.metricProposals")} value={opportunities.metrics.proposal || 0} /><ModuleMetric className="border-l-emerald-500" icon={<BriefcaseBusiness className="h-4 w-4 text-emerald-500" />} label={t("crm.metricWon")} value={opportunities.metrics.won || 0} /></ModuleMetrics>
+    <ModuleMetrics label={t("crm.metricsLabel")}><ModuleMetric className="border-l-sky-500" icon={<BriefcaseBusiness className="h-4 w-4 text-sky-500" />} label={t("crm.metricOpenPipeline")} value={opportunities.metrics.open || 0} /><ModuleMetric className="border-l-indigo-500" label={t("crm.metricVisibleValue")} value={visibleValueLabel} hint={visibleValueBreakdown} /><ModuleMetric className="border-l-amber-500" icon={<Eye className="h-4 w-4 text-amber-500" />} label={t("crm.metricProposals")} value={opportunities.metrics.proposal || 0} /><ModuleMetric className="border-l-emerald-500" icon={<BriefcaseBusiness className="h-4 w-4 text-emerald-500" />} label={t("crm.metricWon")} value={opportunities.metrics.won || 0} /></ModuleMetrics>
     <ModuleToolbar density="compact" search={<ProfessionalSearch value={search} onChange={(value) => { setSearch(value); setPage(1); }} placeholder={t("crm.searchPlaceholder")} />}
       controls={<ProfessionalTabs value={view} onChange={(value) => { setView(value); setRecordStatus(""); setPage(1); }} items={views} label={t("crm.viewsLabel")} />}
       activeFilters={<CommercialDesign2Controls locale={locale} organizationName={organizationName} title={t("crm.title")}
