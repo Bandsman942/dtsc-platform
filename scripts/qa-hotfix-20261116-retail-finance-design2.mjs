@@ -56,6 +56,16 @@ has(reports, /value\.set\("to", dateTo\)/, "reports must submit to-date filter")
 has(reports, /aria-pressed=\{status === value\}/, "reports must provide accessible status filter");
 has(reports, /<FullscreenEntityDetail/, "premium report detail must remain available");
 has(reports, /downloadProfessionalPdfV2/, "real PDF export must remain available");
+
+has(reports, /t\("reports\.filter\.statusRail"\)/, "Report status rail must use canonical translations");
+assert.doesNotMatch(read(reports), /locale\s*===\s*["']en["']\s*\?\s*["'`]/, "Reports must not add local language ternaries");
+for (const locale of ["fr", "en"]) {
+  const translations = JSON.parse(read(`locales/enterprise-procurement.${locale}.json`));
+  for (const key of ["reports.filter.search", "reports.filter.family", "reports.filter.from", "reports.filter.to", "reports.filter.clear", "reports.filter.statusRail", "reports.filter.allStatuses", "reports.filter.dateHelp"]) {
+    assert.ok(typeof translations[key] === "string" && translations[key].trim(), `Missing report translation ${locale}/${key}`);
+  }
+}
+
 const api = "app/api/enterprise/[organizationId]/reports/route.ts";
 has(api, /isCivilDate\(from\)/, "report dates must validate civil date");
 has(api, /from > to/, "inverted report intervals must be rejected");
