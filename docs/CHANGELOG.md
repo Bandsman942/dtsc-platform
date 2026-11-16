@@ -1,3 +1,11 @@
+## 2026-11-16 — Hotfix RETAIL P0 #1205 « Clôture magasin » — v1.23.1 candidate (E2E propriétaire requis)
+
+- **Soumission par coupures** : le décompte d'espèces par quantités prédéfinies CDF/USD et coupure personnalisée remplace la chaîne libre ; total compté et écart calculés immédiatement, justification requise en cas de différence. Les comptes Mobile Money/Clearing conservent leur rapprochement séparé.
+- **Design 2.0** : navigation compacte, indicateurs de clôture, formulaires et en-têtes harmonisés, filtres de boutique/date/statut, recherche, pagination côté serveur, export CSV de la page affichée, messages contextuels et responsive FR/EN.
+- **Isolement SHOP** : les sections « Reprise de l'historique du Shop » et « Reprises enregistrées » sont masquées dans le RETAIL général ; les API de reprises historiques y répondent aussi 403.
+- **Finance et sécurité** : calcul serveur, validation indépendante, audit, idempotence, protection RBAC/multi-tenant, boutique/devise et sessions de caisse conservés. Aucune migration Prisma ni variable additionnelle.
+- **Recette** : QA contractuelle `qa:retail-daily-close-design2-1205`, documentation `docs/HOTFIX_1205_RETAIL_DAILY_CLOSE_DESIGN2.md` et matrice `docs/OWNER_E2E_1205_RETAIL_DAILY_CLOSE_DESIGN2.md`. PR #1206 candidate, pas de fusion ni de production avant contrôles CI et `E2E final #1206 BON` du propriétaire.
+
 ## 2026-11-16 — Design DTSC 2.0 transversal #1203 — v1.23.0 candidate (E2E propriétaire requis)
 
 - **Opérations** : 5 workspaces Tâches/opérations, Demandes internes, Validations, Réunions et Workflows harmonisés en Design 2.0 ; densité compacte, KPI colorés, rails de statuts, dates exactes/intervalles, exports CSV/XLSX/PDF appliquant les filtres côté API.
