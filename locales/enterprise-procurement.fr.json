@@ -397,5 +397,13 @@
   "purchases.export.amount": "Montant",
   "purchases.export.created": "Date de création",
   "purchases.action.print": "Imprimer la copie commerciale",
-  "purchases.action.previewA4": "Aperçu A4 / Imprimer"
+  "purchases.action.previewA4": "Aperçu A4 / Imprimer",
+  "reports.filter.search": "Recherche intelligente",
+  "reports.filter.family": "Type de rapport",
+  "reports.filter.from": "Généré du",
+  "reports.filter.to": "Généré au",
+  "reports.filter.clear": "Effacer les filtres",
+  "reports.filter.statusRail": "Filtres par statut",
+  "reports.filter.allStatuses": "Tous les statuts",
+  "reports.filter.dateHelp": "Les dates filtrent la génération des rapports, et non la période comptable décrite à l’intérieur de chaque rapport."
 }
