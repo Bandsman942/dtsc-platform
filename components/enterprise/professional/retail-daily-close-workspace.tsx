@@ -8,7 +8,7 @@ import { Field, formatEnterpriseDate } from "@/components/enterprise/core-v2/erp
 import { ProfessionalError, ProfessionalLoading } from "@/components/enterprise/professional/professional-erp-ui";
 import { ContextualUserGuide } from "@/components/user-guides/contextual-user-guide";
 import { EnterpriseApproverSelect } from "@/components/enterprise/enterprise-approver-select";
-import { cashCountsFromDailyCloseForm, RetailDailyCloseCashCount } from "@/components/enterprise/professional/retail-daily-close-cash-count";
+import { cashCountsFromDailyCloseForm, RetailDailyCloseCashCount, RetailDailyCloseNonCashCount } from "@/components/enterprise/professional/retail-daily-close-cash-count";
 import { useToastMessage } from "@/components/ui/use-toast-message";
 import type { ToastNotice } from "@/lib/client-toast";
 import { Button } from "@/components/ui/button";
@@ -156,7 +156,7 @@ export function RetailDailyCloseWorkspace({
     setError("");
     try {
       const params = new URLSearchParams({ page: String(historyPage), pageSize: "50" });
-      if (searchQuery) params.set("q", searchQuery);
+      if (searchQuery) params.set("search", searchQuery);
       if (dateFrom) params.set("from", dateFrom);
       if (dateTo) params.set("to", dateTo);
       if (statusFilter !== "ALL") params.set("status", statusFilter);
@@ -353,13 +353,42 @@ export function RetailDailyCloseWorkspace({
       ) : null}
 
       <ModuleToolbar
+        density="compact"
+        search={(
+          <form onSubmit={(event) => { event.preventDefault(); setHistoryPage(1); setSearchQuery(searchDraft.trim()); }} className="flex min-w-0 gap-2">
+            <Input type="search" aria-label={locale === "fr" ? "Rechercher une clôture" : "Search closing"}
+              placeholder={locale === "fr" ? "Rechercher par numéro ou note…" : "Search by number or note…"}
+              value={searchDraft} onChange={(event) => setSearchDraft(event.target.value)} />
+            <Button type="submit" variant="outline" aria-label={locale === "fr" ? "Lancer la recherche" : "Run search"}>
+              <Search className="h-4 w-4" />{locale === "fr" ? "Rechercher" : "Search"}
+            </Button>
+          </form>
+        )}
         controls={(
-          <div className="flex min-w-0 gap-2 overflow-x-auto [touch-action:pan-x]">
+          <div className="flex min-w-0 gap-2 overflow-x-auto [touch-action:pan-x]" aria-label={locale === "fr" ? "Filtrer par statut" : "Filter by status"}>
             {["ALL", "SUBMITTED", "APPROVED", "REJECTED"].map((status) => (
-              <Button key={status} size="sm" variant={statusFilter === status ? "default" : "outline"} onClick={() => setStatusFilter(status)}>
-                {status === "ALL" ? (translateRetailWorkspace(locale, "dailyCloseAllCloses")) : customerFacingStatusLabel(status, locale)}
+              <Button key={status} size="sm" variant={statusFilter === status ? "default" : "outline"}
+                onClick={() => { setHistoryPage(1); setStatusFilter(status); }}>
+                {status === "ALL" ? translateRetailWorkspace(locale, "dailyCloseAllCloses") : customerFacingStatusLabel(status, locale)}
               </Button>
             ))}
+          </div>
+        )}
+        activeFilters={(
+          <div className="flex flex-wrap items-end gap-2">
+            <Field label={locale === "fr" ? "Du" : "From"}>
+              <Input type="date" aria-label={locale === "fr" ? "Date de début" : "Start date"} value={dateFrom}
+                onChange={(event) => { setHistoryPage(1); setDateFrom(event.target.value); }} />
+            </Field>
+            <Field label={locale === "fr" ? "Au" : "To"}>
+              <Input type="date" aria-label={locale === "fr" ? "Date de fin" : "End date"} value={dateTo}
+                onChange={(event) => { setHistoryPage(1); setDateTo(event.target.value); }} />
+            </Field>
+            {(searchQuery || dateFrom || dateTo || statusFilter !== "ALL") ? (
+              <Button size="sm" variant="outline" onClick={() => {
+                setSearchDraft(""); setSearchQuery(""); setDateFrom(""); setDateTo(""); setStatusFilter("ALL"); setHistoryPage(1);
+              }}>{locale === "fr" ? "Effacer les filtres" : "Clear filters"}</Button>
+            ) : null}
           </div>
         )}
         summary={translateRetailWorkspace(locale, "dailyCloseFinanceRemainsTheSourceOfTruthForTillsBalancesAndTreasury")}
@@ -494,20 +523,25 @@ export function RetailDailyCloseWorkspace({
                 </div>
                 <div className="grid min-w-0 gap-3">
                   {closeAccounts.map((account) => (
-                    <div key={account.id} className="grid min-w-0 gap-3 rounded-2xl border border-dtsc-border bg-dtsc-page p-4 md:grid-cols-[minmax(0,0.9fr)_minmax(0,0.7fr)_minmax(0,0.8fr)_minmax(0,1fr)] md:items-end">
-                      <label className="flex min-h-11 min-w-0 items-center gap-2 text-sm font-black text-dtsc-ink">
-                        <input type="checkbox" name={`include-${account.id}`} />
-                        <span className="min-w-0 break-words">{account.name}<span className="block text-xs font-semibold text-dtsc-muted">{customerFacingFinancialAccountType(account.accountType, locale)} · {account.currencyCode}</span></span>
+                    <div key={account.id} className="min-w-0 rounded-2xl border border-dtsc-border bg-dtsc-page p-3 shadow-sm sm:p-4">
+                      <label className="mb-3 flex min-h-11 min-w-0 items-center gap-3 rounded-xl border border-dtsc-border bg-dtsc-surface p-3 text-sm font-black text-dtsc-ink">
+                        <input type="checkbox" name={`include-${account.id}`} className="h-4 w-4 accent-cyan-500" disabled={Boolean(busyAction)} />
+                        <span className="min-w-0 flex-1 break-words">{account.name}
+                          <span className="mt-0.5 block text-xs font-semibold text-dtsc-muted">{customerFacingFinancialAccountType(account.accountType, locale)} · {account.currencyCode}</span>
+                        </span>
+                        <span className="shrink-0 rounded-full bg-dtsc-soft px-2 py-1 text-xs font-black text-dtsc-blue">{account.currencyCode}</span>
                       </label>
-                      <Field label={translateRetailWorkspace(locale, "dailyCloseDeclaredBalance")}><Input name={`declared-${account.id}`} type="number" min="0" step="0.01" defaultValue={String(account.operationalBalance)} /></Field>
                       {account.accountType === "CASH" ? (
-                        <Field label={translateRetailWorkspace(locale, "dailyCloseDenominations")}><Input name={`denominations-${account.id}`} placeholder="50000x2,20000x3" /></Field>
+                        <RetailDailyCloseCashCount key={`${account.id}-${account.currencyCode}`}
+                          accountId={account.id} currencyCode={account.currencyCode}
+                          expectedAmount={Number(account.operationalBalance)} locale={locale}
+                          disabled={Boolean(busyAction) || !dashboard.access.canWrite || storeSelectionRequired} />
                       ) : (
-                        <div className="min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2 text-xs font-semibold text-dtsc-muted">
-                          {translateRetailWorkspace(locale, "dailyCloseSystemBalance")}: {moneyValue(account.operationalBalance, account.currencyCode, locale)}
-                        </div>
+                        <RetailDailyCloseNonCashCount key={`${account.id}-${account.currencyCode}`}
+                          accountId={account.id} currencyCode={account.currencyCode}
+                          expectedAmount={Number(account.operationalBalance)} locale={locale}
+                          disabled={Boolean(busyAction) || !dashboard.access.canWrite || storeSelectionRequired} />
                       )}
-                      <Field label={translateRetailWorkspace(locale, "dailyCloseVarianceReason")}><Input name={`reason-${account.id}`} maxLength={1000} /></Field>
                     </div>
                   ))}
                 </div>
