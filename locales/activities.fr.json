@@ -152,5 +152,11 @@
   "work.location.hybrid": "Hybride",
   "work.location.external": "Externe",
   "work.location.mission": "Mission",
-  "work.location.undefined": "Non défini"
+  "work.location.undefined": "Non défini",
+  "enterprisePendingRecent": "En attente (récentes)",
+  "enterpriseRequestsRecent": "Demandes récentes",
+  "enterpriseRequestsTitle": "Demandes d’activités entreprise",
+  "enterpriseRequestsAllStatuses": "Tous les statuts",
+  "enterpriseRequestsLoading": "Chargement des demandes…",
+  "enterpriseRequestsLoadFailed": "Impossible de charger les demandes."
 }
