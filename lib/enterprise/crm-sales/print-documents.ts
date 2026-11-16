@@ -51,6 +51,7 @@ const STATUS: Record<string, [string, string]> = {
   CANCELLED: ["Annulé", "Cancelled"],
   PENDING_APPROVAL: ["En attente de validation", "Pending approval"],
   CONFIRMED: ["À préparer", "Confirmed / to prepare"],
+  IN_FULFILLMENT: ["En cours de livraison", "Delivery in progress"],
   PARTIALLY_FULFILLED: ["Partiellement livré", "Partially fulfilled"],
   FULFILLED: ["Livré", "Fulfilled"],
   CLOSED: ["Clôturé", "Closed"],
