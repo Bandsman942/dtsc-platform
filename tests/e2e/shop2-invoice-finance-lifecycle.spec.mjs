@@ -572,6 +572,91 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
     }
     await exerciseUnfulfilledCredit({ partlyPaid: false });
     await exerciseUnfulfilledCredit({ partlyPaid: true });
+    // #1190 + #1191 joint acceptance: Finance rate, mixed catalog currencies,
+    // one invoice currency, and durable per-line FX evidence in PostgreSQL.
+    const functional = fixture.currencyCode;
+    const foreign = functional === "CDF" ? "USD" : "CDF";
+    const serviceItems = [];
+    for (const { code, currency, unit } of [
+      { code: "SHOP2-E2E-FX-FUNCTIONAL", currency: functional, unit: 20 },
+      { code: "SHOP2-E2E-FX-FOREIGN", currency: foreign, unit: 10 },
+    ]) {
+      const item = await prisma.enterpriseCatalogItem.upsert({
+        where: { organizationId_code: { organizationId, code } },
+        update: { status: "ACTIVE", archivedAt: null, itemType: "SERVICE",
+          currency, trackInventory: false, taxable: false, indicativeSalePrice: unit },
+        create: { organizationId, code, sku: code,
+          name: "FX E2E service " + code, normalizedName: ("fx e2e service " + code).toLowerCase(),
+          itemType: "SERVICE", unitOfMeasureId: fixture.product.unitOfMeasureId,
+          currency, trackInventory: false, taxable: false, indicativeSalePrice: unit,
+          createdByUserId: fixture.owner.id },
+      });
+      serviceItems.push(item);
+    }
+    const activeRate = await prisma.enterpriseExchangeRate.create({
+      data: { organizationId, sourceCurrencyCode: foreign,
+        targetCurrencyCode: functional, rate: new Prisma.Decimal("2.5"),
+        rateDate: new Date(Date.now() - 120000), source: "RETAIL_1187_REAL_E2E",
+        status: "ACTIVE", createdByUserId: fixture.owner.id },
+    });
+    const quote = await post(context.cashier, base + "/retail/invoice-fx-preview", {
+      siteId: fixture.site.id, currencyCode: functional,
+      channelCode: "POS", invoiceCheckout: true,
+      lines: serviceItems.map((item) => ({ catalogItemId: item.id, quantity: 1 })),
+    });
+    expect(quote.status, JSON.stringify(quote.body)).toBe(200);
+    expect(quote.body.currencyCode).toBe(functional);
+    expect(new Prisma.Decimal(quote.body.grandTotal).equals(45)).toBe(true);
+    const convertedLine = quote.body.lines.find((line) => line.catalogItemId === serviceItems[1].id);
+    expect(convertedLine).toBeTruthy();
+    expect(convertedLine.invoiceFx.sourceCurrencyCode).toBe(foreign);
+    expect(convertedLine.invoiceFx.targetCurrencyCode).toBe(functional);
+    expect(new Prisma.Decimal(convertedLine.invoiceFx.rate).equals("2.5")).toBe(true);
+    expect(convertedLine.invoiceFx.rateId).toBe(activeRate.id);
+    const mixedCreated = await post(context.cashier, base + "/retail/invoices", {
+      idempotencyKey: `shop2-fx-mixed-${Date.now()}`,
+      siteId: fixture.site.id, warehouseId: fixture.warehouse.id,
+      currencyCode: functional,
+      lines: serviceItems.map((item) => ({ catalogItemId: item.id, quantity: 1 })),
+    });
+    expect(mixedCreated.status, JSON.stringify(mixedCreated.body)).toBe(201);
+    const mixedId = mixedCreated.body.invoice.id;
+    const mixedInvoice = await prisma.enterpriseSalesInvoice.findUniqueOrThrow({
+      where: { id: mixedId }, include: { items: true },
+    });
+    expect(mixedInvoice.currencyCode).toBe(functional);
+    expect(mixedInvoice.grandTotal.equals(45)).toBe(true);
+    const foreignItem = mixedInvoice.items.find((item) => item.catalogItemId === serviceItems[1].id);
+    expect(foreignItem).toBeTruthy();
+    const snapshot = await prisma.enterpriseExchangeRateSnapshot.findFirst({
+      where: { organizationId, sourceEntityType: "EnterpriseSalesInvoiceItem",
+        sourceEntityId: foreignItem.id, sourceCurrencyCode: foreign,
+        targetCurrencyCode: functional },
+    });
+    expect(snapshot).toBeTruthy();
+    expect(snapshot.rate.equals("2.5")).toBe(true);
+    expect(snapshot.source).toContain(activeRate.id);
+    const mixedSubmitted = await post(context.cashier, `${base}/retail/invoices/${mixedId}/transition`, {
+      action: "SUBMIT", revision: mixedCreated.body.invoice.revision,
+      approverUserId: fixture.owner.id,
+    });
+    expect(mixedSubmitted.status, JSON.stringify(mixedSubmitted.body)).toBe(200);
+    const mixedApproved = await post(context.owner, `${base}/sales-invoices/${mixedId}/transition`, {
+      action: "APPROVE", revision: mixedSubmitted.body.invoice.revision,
+    });
+    expect(mixedApproved.status, JSON.stringify(mixedApproved.body)).toBe(200);
+    const mixedIssued = await post(context.owner, `${base}/sales-invoices/${mixedId}/transition`, {
+      action: "ISSUE", revision: mixedApproved.body.invoice.revision,
+    });
+    expect(mixedIssued.status, JSON.stringify(mixedIssued.body)).toBe(200);
+    const fxLedger = await prisma.enterpriseJournalEntry.findFirstOrThrow({
+      where: { organizationId, sourceEntityType: "EnterpriseSalesInvoice",
+        sourceEntityId: mixedId, status: "POSTED" },
+      include: { lines: true },
+    });
+    expect(fxLedger.lines.length).toBeGreaterThan(0);
+    expect(fxLedger.lines.every((line) => line.siteId === fixture.site.id)).toBe(true);
+    expect(fxLedger.totalDebit.equals(fxLedger.totalCredit)).toBe(true);
   } finally {
     if (originalSettings !== undefined) await prisma.enterpriseRetailConfiguration.update({
       where: { organizationId }, data: { settingsJson: originalSettings === null ? Prisma.DbNull : originalSettings,
