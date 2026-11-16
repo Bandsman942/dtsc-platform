@@ -47,4 +47,5 @@ const api = read("app/api/enterprise/[organizationId]/retail/daily-close/route.t
 assert.ok(api.includes("search, status, from, to") && api.includes('mode: "insensitive"') && api.includes("endOfDay"), "History filters must apply server-side");
 assert.ok(api.includes("cashApproverById") && api.includes("auth.access.canManage"), "Independent approval must remain protected");
 assert.ok(read("lib/enterprise/retail/service.ts").includes("RETAIL_CASH_COUNT_TOTAL_MISMATCH"), "Server cash-count reconciliation must remain authoritative");
+assert.match(read("lib/enterprise/retail/service.ts"), /accountSiteIdentities\.size > 1/, "Every daily close must reject cross-store mixes even without staff-isolation mode");
 console.log("RETAIL #1205 Design 2.0, cash count, SHOP scope, Finance/RBAC regressions: PASS");
