@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { getEnterpriseCommonDomainAccess } from "@/lib/enterprise/common/access";
+import { financeBusinessDateRange } from "@/lib/enterprise/accounting/http";
 import { enterpriseDomainErrorResponse } from "@/lib/enterprise/common/http";
 import { businessPartyCreateSchema, businessPartyUpdateSchema } from "@/lib/enterprise/master-data/schemas";
 import { createEnterpriseBusinessParty, updateEnterpriseBusinessParty } from "@/lib/enterprise/master-data/service";
@@ -24,10 +25,14 @@ export async function GET(req: Request, { params }: Params) {
   const page = Math.max(1, Number(url.searchParams.get("page") || 1) || 1);
   const pageSize = Math.min(50, Math.max(5, Number(url.searchParams.get("pageSize") || 20) || 20));
   const search = url.searchParams.get("search")?.trim() || "";
+  const dates = financeBusinessDateRange(req);
+  if (!dates.ok) return dates.response;
+  if (search.length > 120) return NextResponse.json({ error: "SEARCH_TOO_LONG", message: "Limitez la recherche à 120 caractères." }, { status: 400 });
   const role = url.searchParams.get("role")?.trim().toUpperCase() || "";
   const partyType = url.searchParams.get("partyType")?.trim().toUpperCase() || "";
   const status = url.searchParams.get("status")?.trim().toUpperCase() || "";
   const where: Prisma.EnterpriseBusinessPartyWhereInput = {
+    ...((dates.from || dates.to) ? { createdAt: { ...(dates.from ? { gte: dates.from } : {}), ...(dates.to ? { lte: dates.to } : {}) } } : {}),
     organizationId,
     archivedAt: null,
     ...(search ? { OR: [{ legalName: { contains: search, mode: "insensitive" } }, { displayName: { contains: search, mode: "insensitive" } }, { code: { contains: search, mode: "insensitive" } }, { primaryEmail: { contains: search, mode: "insensitive" } }] } : {}),
