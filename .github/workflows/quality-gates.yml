@@ -149,7 +149,7 @@ jobs:
         run: pnpm qa:retail-five-lots-1116
       - name: RETAIL financial KPI source traceability v2 QA (#1117)
         run: pnpm qa:retail-financial-kpi-v2
-      - name: RETAIL #1205 daily close Design 2.0, cash count and SHOP scope QA
+      - name: "RETAIL #1205 daily close Design 2.0, cash count and SHOP scope QA"
         run: pnpm qa:retail-daily-close-design2-1205
       - name: HOTFIX #1187 owner permissions, Retail FX quote and purchase review contracts
         run: pnpm qa:hotfix-1187
