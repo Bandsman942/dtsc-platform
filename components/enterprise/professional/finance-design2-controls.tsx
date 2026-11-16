@@ -65,7 +65,7 @@ export function FinanceDateFilter({ locale, from, to, onChange, disabledReason }
 export type FinanceExportColumn = { key: string; labelFr: string; labelEn: string; get: (row: Record<string, unknown>) => string | number };
 
 /** Downloads the FULL authorized, filtered result up to the safe export cap; never silently exports only the visible page. */
-export function FinanceExportControls({ endpoint, organizationName, title, locale, filters, columns, disabled }: {
+export function FinanceExportControls({ endpoint, organizationName, title, locale, filters, columns, disabled, subtitleFr, subtitleEn }: {
   endpoint: string;
   organizationName: string;
   title: string;
@@ -73,6 +73,8 @@ export function FinanceExportControls({ endpoint, organizationName, title, local
   filters?: Record<string, string>;
   columns: FinanceExportColumn[];
   disabled?: boolean;
+  subtitleFr?: string;
+  subtitleEn?: string;
 }) {
   const [busy, setBusy] = useState<"CSV" | "Excel" | "PDF" | null>(null);
   const en = locale === "en";
@@ -84,7 +86,7 @@ export function FinanceExportControls({ endpoint, organizationName, title, local
       const params = new URLSearchParams({ ...filters, page: "1", pageSize: "100" });
       const first = await fetch(`${endpoint}${endpoint.includes("?") ? "&" : "?"}${params}`, { cache: "no-store" });
       const body = await first.json().catch(() => null) as { items?: Record<string, unknown>[]; pagination?: { pageCount?: number; total?: number }; message?: string } | null;
-      if (!first.ok || !body || !Array.isArray(body.items)) throw new Error(body?.message || tr("L’export des données comptables a échoué.", "Accounting export failed."));
+      if (!first.ok || !body || !Array.isArray(body.items)) throw new Error(body?.message || tr("L’export des données a échoué.", "Data export failed."));
       const total = body.pagination?.total ?? body.items.length;
       const pages = body.pagination?.pageCount ?? 1;
       // Some Finance APIs cap pageSize at 50; still retrieve every eligible row.
@@ -105,7 +107,7 @@ export function FinanceExportControls({ endpoint, organizationName, title, local
       // Date/status filters are validated and enforced by each module API, not a browser-only projection.
       const now = new Intl.DateTimeFormat(en ? "en-GB" : "fr-FR", { dateStyle: "long", timeStyle: "short" }).format(new Date());
       const model: ProfessionalReportExportModel = {
-        organizationName, title, subtitle: tr("DTSC Platform · Comptabilité & conformité", "DTSC Platform · Accounting & compliance"),
+        organizationName, title, subtitle: tr(subtitleFr || "DTSC Platform · Comptabilité & conformité", subtitleEn || "DTSC Platform · Accounting & compliance"),
         filenameBase: `DTSC-${title.replace(/\s+/g, "-")}-${localToday()}`,
         generatedLabel: `${tr("Édité le", "Generated on")} ${now}`,
         kpis: [{ label: tr("Enregistrements", "Records"), value: String(all.length), numericValue: all.length }],

@@ -1,3 +1,12 @@
+## 2026-11-16 — ERP Ventes #1195 — v1.20.0 candidate (E2E propriétaire requis)
+
+- **Design DTSC 2.0** : registre « Devis, commandes et livraisons » compact, états colorés, barres de statuts tactiles, métriques adaptatives, recherche de clients dans le référentiel commun, dates exactes et intervalles, pagination accessible.
+- **Copies commerciales premium** : aperçu A4 authentifié et imprimable pour chaque statut des devis et commandes ; identité entreprise, logo, client, devis d’origine ou commande liée, lignes, quantités livrées, remises, taxes, totaux persistés et mentions provisoire/invalide. Impression ou enregistrement PDF via navigateur, jamais assimilé à une facture fiscale.
+- **Exports professionnels** : CSV/Excel/PDF de la liste filtrée et autorisée avec en-têtes d'entreprise et 1000 lignes maximum ; réutilisation du moteur d'exports DTSC existant.
+- **Convergence sans double écriture** : liens d'accès vers CRM/tiers, Catalogue, Logistique et Factures clients ; conversion idempotente devis→commande, livraisons et commandes restées canoniques (limitation des mouvements de stock non Retail relevée dans #1196), facturation Finance via `salesOrderId`, sans facture/paiement/posting déclenché par la copie.
+- **Sécurité** : lecture et impression `organizationId` tenant-scoped, RBAC, HTML échappé, CSP, cache privé, audit ; pas de migration ni nouvelle variable.
+- **Validation** : QA ciblée `pnpm qa:sales-design2-1195` et Quality Gates ; scénario humain `docs/OWNER_E2E_SALES_DESIGN2_1195.md`. Aucun merge ni déploiement avant E2E final BON explicite.
+
 ## 2026-11-16 — RETAIL — Délégation des exceptions d’auto-validation par l’administrateur entreprise (candidat E2E)
 
 - POS > Personnel et accès par boutique : les administrateurs actifs d’entreprise (OWNER, ADMIN_ENTREPRISE, ADMIN_ENTERPRISE) disposant du droit de gestion RETAIL_POS peuvent désormais accorder, modifier et révoquer les trois exceptions d’auto-validation ; la correspondance avec le propriétaire juridique `ownerUserId` n’est plus exigée.
