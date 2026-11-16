@@ -1,8 +1,8 @@
 import { Prisma } from "@prisma/client";
 
 // Decimal.js-light (Prisma.Decimal) exposes instance comparisons, not static min/max.
-const decimalMin = (a: Prisma.Decimal, b: Prisma.Decimal): Prisma.Decimal => a.lte(b) ? a : b;
-const decimalMax = (a: Prisma.Decimal, b: Prisma.Decimal): Prisma.Decimal => a.gte(b) ? a : b;
+const decimalMin = (a: Prisma.Decimal, b: Prisma.Decimal): Prisma.Decimal => a.lessThan(b) ? a : b;
+const decimalMax = (a: Prisma.Decimal, b: Prisma.Decimal): Prisma.Decimal => a.greaterThan(b) ? a : b;
 
 import { assertIndependentActor } from "@/lib/enterprise/accounting/access";
 import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";

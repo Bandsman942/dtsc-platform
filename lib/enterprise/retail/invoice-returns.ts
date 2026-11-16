@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 
 // @prisma/client Decimal does not expose the static Decimal.min/max helpers.
-const decimalMin = (...values: Prisma.Decimal[]): Prisma.Decimal => values.reduce((a, b) => a.lte(b) ? a : b);
+const decimalMin = (...values: Prisma.Decimal[]): Prisma.Decimal => values.reduce((a, b) => a.lessThan(b) ? a : b);
 
 import { z } from "zod";
 import { publishFinanceEvent } from "@/lib/enterprise/accounting/helpers";

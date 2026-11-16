@@ -1,7 +1,7 @@
 import { Prisma } from "@prisma/client";
 
 // @prisma/client Decimal does not expose the static Decimal.min/max helpers.
-const decimalMin = (...values: Prisma.Decimal[]): Prisma.Decimal => values.reduce((a, b) => a.lte(b) ? a : b);
+const decimalMin = (...values: Prisma.Decimal[]): Prisma.Decimal => values.reduce((a, b) => a.lessThan(b) ? a : b);
 
 import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
 

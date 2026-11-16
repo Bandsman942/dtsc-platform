@@ -1,7 +1,7 @@
 import { Prisma } from "@prisma/client";
 
 // @prisma/client Decimal does not expose the static Decimal.min/max helpers.
-const decimalMax = (...values: Prisma.Decimal[]): Prisma.Decimal => values.reduce((a, b) => a.gte(b) ? a : b);
+const decimalMax = (...values: Prisma.Decimal[]): Prisma.Decimal => values.reduce((a, b) => a.greaterThan(b) ? a : b);
 
 
 /** A prepared Retail invoice is a stock promise, not a stock movement.
