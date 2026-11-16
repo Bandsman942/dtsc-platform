@@ -39,7 +39,7 @@ check("Printable totals are persisted server values, not browser recomputation",
 ]);
 check("Print has A4 layout, FR-EN status, draft and invalid warnings", print, [
   /@page\{size:A4/, /DRAFT/, /PENDING_APPROVAL/, /REJECTED/, /EXPIRED/, /CANCELLED/,
-  /CONVERTED/, /PARTIALLY_FULFILLED/, /FULFILLED/, /CLOSED/, /lang=/,
+  /CONVERTED/, /IN_FULFILLMENT/, /PARTIALLY_FULFILLED/, /FULFILLED/, /CLOSED/, /lang=/,
 ]);
 check("Print escapes customer-supplied content and blocks caching / embedding", print, [
   /replaceAll\("&", "&amp;"\)/, /safe\(line.description\)/, /safe\(organization.name\)/,
@@ -60,6 +60,10 @@ check("Design 2.0 register exposes all-status print, colored KPI, date and expor
   /data-sales-register/, /lg:\[&>div\]:grid-cols-5/,
   /printCommercial\("quote", quote.id\)/, /printCommercial\("order", order.id\)/,
   /FinanceDateFilter/, /FinanceExportControls/, /statusRail/, /data-horizontal-rail/,
+]);
+check("Product vs service fulfillment and active order status", ui, [
+  /fulfillmentType: String\(form.get\("fulfillmentType"\)/, /SERVICE_DELIVERY/, /name="fulfillmentType"/,
+  /IN_FULFILLMENT/, /idempotencyKey: fulfillmentKey/,
 ]);
 check("Module does not fork invoices, payments, accounts or stock ledgers", ui, [
   /\/quotes/, /\/sales-orders/, /\/fulfill/, /FINANCE_RECEIVABLES/, /INVENTORY_LOGISTICS/,
