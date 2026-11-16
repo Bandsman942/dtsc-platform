@@ -165,7 +165,7 @@ h1{font-size:27px;letter-spacing:-.7px;margin:23px 0 5px;color:#0e3455}.subtitle
 .panel p{margin:4px 0;font-size:11px;color:#344a60;line-height:1.5;overflow-wrap:anywhere}.panel .primary{font-size:14px;font-weight:850;color:#102b48}
 .facts{border-top:1px solid #e4edf4;padding:12px 0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 24px}
 .facts p{display:flex;justify-content:space-between;gap:12px;margin:0;font-size:11px}.facts span{color:#667b8d}.facts b{color:#163b5c;text-align:right}
-table{border-collapse:collapse;width:100%;font-size:10.5px;margin-top:22px}thead{background:#095984;color:white}th{text-align:left;padding:12px 7px}td{border-bottom:1px solid #dfebf2;padding:11px 7px;vertical-align:top;overflow-wrap:anywhere}
+.table-wrap{max-width:100%;overflow-x:auto;overscroll-behavior-inline:contain}table{border-collapse:collapse;width:100%;min-width:620px;font-size:10.5px;margin-top:22px}thead{background:#095984;color:white}th{text-align:left;padding:12px 7px}td{border-bottom:1px solid #dfebf2;padding:11px 7px;vertical-align:top;overflow-wrap:anywhere}
 .numeric{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}.strong{font-weight:850;color:#0b5788}.row-index{color:#7893a8}
 .sum{margin:21px 0 18px auto;max-width:410px}.total{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:8px 0;border-bottom:1px solid #e0eaf1;font-size:12px}.total small{font-weight:650;color:#5b778f}
 .major{padding:14px 0 12px;border-top:3px solid #1186bb;color:#06598f;font-size:17px;font-weight:900}.terms,.delivery{margin:21px 0;padding:14px 17px;border-radius:9px;background:#f4f8fb;border:1px solid #e1ebf3}
@@ -174,7 +174,7 @@ table{border-collapse:collapse;width:100%;font-size:10.5px;margin-top:22px}thead
 .footer{border-top:2px solid #d9e7f2;margin-top:28px;padding-top:14px;font-size:10px;color:#60758a;line-height:1.7}
 @page{size:A4;margin:12mm}
 @media(max-width:620px){body{padding:8px}.sheet{padding:16px;border-radius:0;min-height:auto}.header{flex-wrap:wrap}.meta{grid-template-columns:1fr}.facts{grid-template-columns:1fr}table{font-size:9px}th,td{padding:8px 4px}}
-@media print{html,body{background:#fff!important;max-width:none;padding:0;margin:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}.toolbar{display:none}.sheet{box-shadow:none;border:0;min-height:0;border-radius:0;padding:0}.header,.panel,.terms,.delivery,.sum{break-inside:avoid}thead{display:table-header-group}tr{break-inside:avoid}h1{break-after:avoid}}
+@media print{html,body{background:#fff!important;max-width:none;padding:0;margin:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}.toolbar{display:none}.sheet{box-shadow:none;border:0;min-height:0;border-radius:0;padding:0}.table-wrap{overflow:visible}table{min-width:0}.header,.panel,.terms,.delivery,.sum{break-inside:avoid}thead{display:table-header-group}tr{break-inside:avoid}h1{break-after:avoid}}
 </style></head>
 <body><div class="toolbar"><button class="print" type="button" onclick="window.print()">${safe(tr.print)}</button></div>
 <main class="sheet">
@@ -189,7 +189,7 @@ ${banner ? `<div class="banner ${invalid ? "invalid" : ""}">${safe(banner)}</div
 <div class="facts"><p><span>${tr.date}</span><b>${safe(date(document.createdAt))}</b></p><p><span>${tr.status}</span><b>${safe(label(document.status))}</b></p>
 ${document.validUntil ? `<p><span>${tr.validity}</span><b>${safe(date(document.validUntil))}</b></p>` : ""}
 ${document.expectedFulfillmentAt ? `<p><span>${tr.expected}</span><b>${safe(date(document.expectedFulfillmentAt))}</b></p>` : ""}${crossReferences}</div>
-<table><thead><tr><th>#</th><th>${tr.designation}</th><th class="numeric">${tr.qty}</th>${document.kind === "order" ? `<th class="numeric">${tr.fulfilled}</th>` : ""}<th class="numeric">${tr.unit}</th><th class="numeric">${tr.discount}</th><th class="numeric">${tr.tax}</th><th class="numeric">${tr.amount}</th></tr></thead><tbody>${rows}</tbody></table>
+<div class="table-wrap"><table><thead><tr><th>#</th><th>${tr.designation}</th><th class="numeric">${tr.qty}</th>${document.kind === "order" ? `<th class="numeric">${tr.fulfilled}</th>` : ""}<th class="numeric">${tr.unit}</th><th class="numeric">${tr.discount}</th><th class="numeric">${tr.tax}</th><th class="numeric">${tr.amount}</th></tr></thead><tbody>${rows}</tbody></table></div>
 <div class="sum">${totalRows}</div>
 ${document.description ? `<section class="terms"><h2>${tr.note}</h2><p>${safe(document.description)}</p></section>` : ""}
 ${document.terms ? `<section class="terms"><h2>${tr.terms}</h2><p>${safe(document.terms)}</p></section>` : ""}
