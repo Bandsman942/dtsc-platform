@@ -1,5 +1,6 @@
-import { ErpDesign2Metric } from "@/components/enterprise/professional/erp-design2-register";
 "use client";
+
+import { ErpDesign2Metric } from "@/components/enterprise/professional/erp-design2-register";
 import { WorkflowVisualStudio } from "@/components/enterprise/core-v2/workflow-visual-studio";
 import { applyWorkflowVisualPositions } from "@/lib/enterprise/workflows/visual-projection";
 import { workflowStepSchema, workflowVersionSchema, type WorkflowVersionInput } from "@/lib/enterprise/workflows/validators";
