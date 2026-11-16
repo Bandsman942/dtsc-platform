@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
+import { financeBusinessDateRange } from "@/lib/enterprise/accounting/http";
 import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
@@ -28,6 +29,9 @@ export async function GET(req: Request, { params }: Params) {
     getActiveEnterpriseSelfEmployee(session, organizationId),
   ]);
   const url = new URL(req.url);
+  const businessPeriod = financeBusinessDateRange(req);
+  if (!businessPeriod.ok) return businessPeriod.response;
+  const businessDateFilter = businessPeriod.from || businessPeriod.to ? { periodStart: { gte: businessPeriod.from || undefined, lte: businessPeriod.to || undefined } } : {};
   const page = Math.max(1, Number(url.searchParams.get("page") || 1) || 1);
   const pageSize = Math.min(100, Math.max(5, Number(url.searchParams.get("pageSize") || 25) || 25));
   const employeeId = url.searchParams.get("employeeId")?.trim() || "";
@@ -39,7 +43,7 @@ export async function GET(req: Request, { params }: Params) {
     ],
   };
   const where: Prisma.EnterpriseTimesheetWhereInput = {
-    organizationId, archivedAt: null,
+    organizationId, ...businessDateFilter, archivedAt: null,
     ...(selfEmployee || approvalAccess || manageAccess ? actorScope : { id: "__none__" }),
     ...(employeeId ? { employeeId } : {}), ...(status ? { status } : {}),
   };
