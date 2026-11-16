@@ -1,3 +1,11 @@
+## 2026-11-16 — ERP communs #1200 — v1.22.0 candidate (attente E2E propriétaire)
+
+- **Achats et ressources** : refonte DTSC 2.0 des modules Fournisseurs et achats, Sites et entrepôts, Documents, Stocks et logistique. Registres toujours visibles, onglets compacts, KPI à couleurs sémantiques, rails de statuts, dates civiles et exports de registres CSV/Excel/PDF des résultats autorisés.
+- **Projets et actifs** : refonte des modules Projets et services, Temps et livrables, Actifs et maintenance. Filtres côté serveur, pagination, exports métier avec statuts, dates, budgets indicatifs, minutes approuvées et actifs sans inventer de sources de vérité parallèles.
+- **Impression fournisseur** : copie professionnelle A4 depuis l'historique et la fiche commande pour tous les statuts (brouillon, attente, approuvé, commandé, reçu partiellement, reçu, clôturé, annulé, rejeté), avec avertissements non validé/non exécutable, lignes, taxes, quantités reçues ; protection multi-tenant + RBAC + CSP.
+- **Sécurité** : filtres réappliqués par les API au périmètre entreprise/boutique, métadonnées seules dans les exports Documents, aucun accès au contenu privé ni URL signée exportée ; aucune migration Prisma, nouveau secret, écriture Finance ou mouvement de stock déclenché par les exports.
+- **Livraison** : nouvelle QA contractuelle `qa:erp-seven-design2-1200`, guides métier et `docs/OWNER_E2E_1200_SEVEN_ERP_DESIGN2.md`. **Pas de fusion ni déploiement avant validation E2E finale.** Limite historique de stock faible paginé et issue #1196 hors scope.
+
 ## 2026-11-16 — ERP P1 #1198 — v1.21.0 candidate, attente E2E propriétaire
 
 - **Hotfix devis** : corrige la `PrismaClientValidationError` `Unknown argument organizationId` dans les nested writes `EnterpriseQuoteItem` et `EnterpriseSalesOrderItem` lors de la création/conversion. La clé tenant est héritée de la relation parente et les contrôles client/catalogue restent obligatoires. QA PostgreSQL réel avec 2 lignes et total 629 100 CDF, transaction volontairement annulée.
