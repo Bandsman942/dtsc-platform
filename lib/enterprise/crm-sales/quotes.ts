@@ -76,7 +76,7 @@ export async function createEnterpriseQuote(organizationId: string, actorUserId:
         createdByUserId: actorUserId,
         items: {
           create: calculatedItems.map((item) => ({
-            organizationId,
+            // Prisma propagates tenant/parent keys via the nested relation.
             catalogItemId: item.catalogItemId || null,
             description: item.description,
             quantity: item.quantity,
@@ -180,7 +180,7 @@ export async function convertEnterpriseQuoteToOrder(organizationId: string, quot
         createdByUserId: actorUserId,
         items: {
           create: quote.items.map((item) => ({
-            organizationId,
+            // The compound parent relation supplies organizationId; do not duplicate it.
             catalogItemId: item.catalogItemId,
             description: item.description,
             quantityOrdered: item.quantity,
