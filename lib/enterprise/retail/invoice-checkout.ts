@@ -2,8 +2,8 @@ import { createHash } from "node:crypto";
 import { Prisma } from "@prisma/client";
 
 // Prisma.Decimal (decimal.js-light) does not provide static min/max.
-const decimalMin = (a: Prisma.Decimal, b: Prisma.Decimal): Prisma.Decimal => a.lte(b) ? a : b;
-const decimalMax = (a: Prisma.Decimal, b: Prisma.Decimal): Prisma.Decimal => a.gte(b) ? a : b;
+const decimalMin = (a: Prisma.Decimal, b: Prisma.Decimal): Prisma.Decimal => a.lessThan(b) ? a : b;
+const decimalMax = (a: Prisma.Decimal, b: Prisma.Decimal): Prisma.Decimal => a.greaterThan(b) ? a : b;
 
 import { z } from "zod";
 import { createSalesInvoiceTx } from "@/lib/enterprise/accounting/receivables-service";
