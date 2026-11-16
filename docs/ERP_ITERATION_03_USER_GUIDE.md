@@ -143,3 +143,14 @@ Une paie annulée peut être recréée pour la même période. Une paie approuv�
 ## Aide et support
 
 Chaque workspace comporte un bloc d’aide. En cas de problème persistant, créer un ticket Support en précisant : entreprise, module, objet, étapes, résultat attendu, résultat obtenu et capture d’écran.
+
+
+## Refonte Design 2.0 et copies commerciales imprimables (novembre 2026)
+
+Dans **Devis, commandes et livraisons**, utilisez les onglets **Devis** et **Commandes**, les filtres de statut, la recherche par référence/titre/client et le calendrier pour choisir une date ou une période. Les exports **Excel, CSV et PDF** reprennent les lignes filtrées et autorisées.
+
+Pour chaque devis ou commande, quel que soit son statut, ouvrez le menu d'actions « … » puis **Aperçu A4 / Imprimer**, ou ouvrez la fiche et utilisez le même bouton. Le document s'ouvre dans un nouvel onglet ; choisissez **Imprimer** ou **Enregistrer en PDF**. Les copies de brouillons et documents refusés/annulés/expirés indiquent clairement leur statut. Une commande imprimée ne remplace jamais une facture ni un reçu.
+
+Le circuit reste : client du référentiel CRM → devis chiffré → acceptation → conversion contrôlée en commande → préparation/livraison → facture client créée dans **Factures clients** avec la commande source sélectionnée → validation/émission → créance et encaissement Finance. Aucune vente comptable n'est déclenchée par une impression ou un devis envoyé.
+
+Si un client n'apparaît pas, vérifiez ses coordonnées dans **Tiers, clients et prospects** et affinez la recherche. Si l'impression est refusée, vérifiez l'accès au module et à l'entreprise active. Pour un document dont le statut change pendant l'utilisation, fermez puis rouvrez l'aperçu : il reprend toujours les données actuelles du serveur.
