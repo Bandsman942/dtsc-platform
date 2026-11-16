@@ -4,6 +4,7 @@ import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http"
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { getEnterpriseCommonDomainAccess } from "@/lib/enterprise/common/access";
+import { financeBusinessDateRange } from "@/lib/enterprise/accounting/http";
 import { retailErrorResponse } from "@/lib/enterprise/retail/http";
 import { retailInventoryVisibleSites } from "@/lib/enterprise/retail/site-access";
 import { requireRetailWarehouseCapability } from "@/lib/enterprise/retail/site-access";
@@ -31,6 +32,9 @@ export async function GET(req: Request, { params }: Params) {
   const page = Math.max(1, Number(url.searchParams.get("page") || 1) || 1);
   const pageSize = Math.min(50, Math.max(5, Number(url.searchParams.get("pageSize") || 20) || 20));
   const status = url.searchParams.get("status")?.trim().toUpperCase() || "";
+  const search = url.searchParams.get("search")?.trim() || "";
+  const dates = financeBusinessDateRange(req);
+  if (!dates.ok) return dates.response;
   const scopedWarehouseIds = scope.isolationEnabled
     ? (await prisma.enterpriseWarehouse.findMany({
         where: { organizationId, siteId: { in: scope.siteIds }, archivedAt: null },
@@ -40,7 +44,7 @@ export async function GET(req: Request, { params }: Params) {
   const siteScope: Prisma.EnterpriseStockAdjustmentWhereInput = scope.isolationEnabled
     ? { warehouseId: { in: scopedWarehouseIds } }
     : {};
-  const where: Prisma.EnterpriseStockAdjustmentWhereInput = { organizationId, ...siteScope, ...(status ? { status } : {}) };
+  const where: Prisma.EnterpriseStockAdjustmentWhereInput = { organizationId, ...siteScope, ...(status ? { status } : {}), ...(search ? { OR: [{ reference: { contains: search, mode: "insensitive" } }, { reason: { contains: search, mode: "insensitive" } }] } : {}), ...((dates.from || dates.to) ? { createdAt: { ...(dates.from ? { gte: dates.from } : {}), ...(dates.to ? { lte: dates.to } : {}) } } : {}) };
   const [items, total, pending, completed] = await Promise.all([
     prisma.enterpriseStockAdjustment.findMany({
       where,
