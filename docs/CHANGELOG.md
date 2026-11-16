@@ -1,3 +1,11 @@
+## 2026-11-16 — Design DTSC 2.0 transversal #1203 — v1.23.0 candidate (E2E propriétaire requis)
+
+- **Opérations** : 5 workspaces Tâches/opérations, Demandes internes, Validations, Réunions et Workflows harmonisés en Design 2.0 ; densité compacte, KPI colorés, rails de statuts, dates exactes/intervalles, exports CSV/XLSX/PDF appliquant les filtres côté API.
+- **Ressources humaines** : 3 modules et leurs sous-registres (collaborateurs/contrats/organisation, horaires/présences/congés/timesheets, paie/périodes) avec status rails et calendriers ; export de métadonnées autorisées, sans bulletin individuel, clauses salariales ou motifs médicaux.
+- **Activités entreprise** : demandes paginées côté serveur au-delà de l'aperçu limité aux 80 récentes, statut, recherche, date et export filtré avec contrôle d'organisation/abonnement/rôle ; actions et workflows sectoriels conservés.
+- **Gouvernance** : source canonique unique, aucune migration ni variable ; validations indépendantes et séparation paie/paiement inchangées. QA `qa:operations-hr-activities-design2-1203`, guides et `docs/OWNER_E2E_1203_OPERATIONS_HR_ACTIVITIES_DESIGN2.md`.
+- **Livraison** : PR candidate sur branche dédiée, aucune fusion ni déploiement Vercel avant Quality Gates vertes et `E2E final #PR BON` du propriétaire.
+
 ## 2026-11-16 — ERP communs #1200 — v1.22.0 candidate (attente E2E propriétaire)
 
 - **Achats et ressources** : refonte DTSC 2.0 des modules Fournisseurs et achats, Sites et entrepôts, Documents, Stocks et logistique. Registres toujours visibles, onglets compacts, KPI à couleurs sémantiques, rails de statuts, dates civiles et exports de registres CSV/Excel/PDF des résultats autorisés.
