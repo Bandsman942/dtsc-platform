@@ -18,7 +18,7 @@
 6. Sur A4 et « Enregistrer en PDF », vérifier l'entreprise A, son logo enregistré, client réel, référence/titre, dates, validité, lignes, quantités, prix unitaires, remises, taxes, total du serveur, conditions rédigées avec sauts de ligne, pied de page, lisibilité multi-pages et absence de débordement.
 7. Modifier le statut d'un devis via le parcours métier autorisé, rouvrir l'aperçu : il doit montrer **le nouvel état** sans ancienne copie servie depuis le cache. Vérifier que l'impression seule ne crée ni commande, ni facture, ni écriture, ni paiement.
 
-## 3. Commandes et livraisons — sept statuts
+## 3. Commandes et livraisons — huit statuts
 8. Ouvrir des commandes réellement présentes aux états `DRAFT`, `PENDING_APPROVAL`, `CONFIRMED`, `IN_FULFILLMENT`, `PARTIALLY_FULFILLED`, `FULFILLED`, `CLOSED`, `CANCELLED`. Si un état n'est pas atteignable sans fixture, le noter NON EXÉCUTÉ et ne pas inventer le succès.
 9. Imprimer chaque bon de commande (menu, fiche) : titre « Bon de commande client », état explicite, numéro, client, devise, quantités commandées/livrées, totaux historiques et références de livraisons réellement enregistrées. Statut brouillon/en attente/annulé avec avertissement approprié.
 10. Pour une commande confirmée, enregistrer une livraison partielle d'article via l'entrepôt réel. Contrôler le reliquat, la livraison idempotente, les mouvements d'inventaire, lots/stock selon politiques existantes ; tenter un dépassement et un second envoi du même identifiant : pas de double mouvement. Réimprimer la commande après livraison.
