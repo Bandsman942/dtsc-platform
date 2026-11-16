@@ -1,6 +1,8 @@
 "use client";
 
 import { ErpDesign2Metric, ErpDesign2RegisterSection } from "@/components/enterprise/professional/erp-design2-register";
+import { CoordinationDesign2Tools } from "@/components/enterprise/professional/coordination-design2-tools";
+import { MEETING_STATUSES } from "@/lib/enterprise/core-v2/constants";
 
 import { enterpriseCoreT } from "@/lib/enterprise-core-i18n";
 
@@ -28,14 +30,16 @@ type Decision = { id: string; title: string; description: string | null; decided
 type Meeting = { id: string; title: string; agenda: string | null; organizerUserId: string; startAt: string; endAt: string; status: string; locationMode: string; physicalLocation: string | null; meetingLink: string | null; minutes: string | null; departmentId: string | null; revision: number; participants: Participant[]; decisions: Decision[] };
 type LegacyRecord = { id: string; recordType: string; title: string; description: string | null; status: string; updatedAt: string };
 
-export function EnterpriseMeetingsWorkspace({ organizationId, members, departments, canCreate, canManage, locale, legacyRecords = [] }: { organizationId: string; members: EnterpriseChoice[]; departments: EnterpriseChoice[]; canCreate: boolean; canManage: boolean; locale?: string | null; legacyRecords?: LegacyRecord[] }) {
+export function EnterpriseMeetingsWorkspace({ organizationId, organizationName = "Entreprise", members, departments, canCreate, canManage, locale, legacyRecords = [] }: { organizationId: string; organizationName?: string; members: EnterpriseChoice[]; departments: EnterpriseChoice[]; canCreate: boolean; canManage: boolean; locale?: string | null; legacyRecords?: LegacyRecord[] }) {
   const searchParams = useSearchParams();
   const deepLinkedMeetingId = searchParams.get("meeting");
   const [view, setView] = useState("upcoming");
   const [search, setSearch] = useState("");
   const [participant, setParticipant] = useState("");
   const [department, setDepartment] = useState("");
-  const [date, setDate] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [status, setStatus] = useState("");
   const [page, setPage] = useState(1);
   const [refreshKey, setRefreshKey] = useState(0);
   const [createOpen, setCreateOpen] = useState(false);
@@ -54,9 +58,11 @@ export function EnterpriseMeetingsWorkspace({ organizationId, members, departmen
     if (search.trim()) value.set("search", search.trim());
     if (participant) value.set("participant", participant);
     if (department) value.set("department", department);
-    if (date) value.set("date", date);
+    if (status) value.set("status", status);
+    if (dateFrom) value.set("dateFrom", dateFrom);
+    if (dateTo) value.set("dateTo", dateTo);
     return value;
-  }, [date, department, page, participant, search, view]);
+  }, [dateFrom, dateTo, department, page, participant, search, status, view]);
   const collection = useEnterpriseV2Collection<Meeting>({ endpoint: `/api/enterprise/${organizationId}/meetings`, params, refreshKey });
   const currentUserId = collection.meta.currentUserId || "";
 
@@ -146,8 +152,13 @@ export function EnterpriseMeetingsWorkspace({ organizationId, members, departmen
         <Input value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder={enterpriseCoreT(locale, "meetings.search.meetings")} />
         <NativeSelect value={participant} onChange={(value) => { setParticipant(value); setPage(1); }} items={members} />
         <NativeSelect value={department} onChange={(value) => { setDepartment(value); setPage(1); }} items={departments} />
-        <Input type="date" value={date} onChange={(event) => { setDate(event.target.value); setPage(1); }} />
+
       </div>
+      <CoordinationDesign2Tools kind="meetings" organizationId={organizationId} organizationName={organizationName}
+        title={enterpriseCoreT(locale, "meetings.meetings.minutes")} locale={locale === "en" ? "en" : "fr"} filters={params}
+        status={status} statuses={[{ id: "", label: locale === "en" ? "All statuses" : "Tous les statuts" }, ...MEETING_STATUSES.map((id) => ({ id, label: statusLabel(locale, id) }))]}
+        onStatusChange={(next) => { setStatus(next); setPage(1); }} dateFrom={dateFrom} dateTo={dateTo}
+        onDateChange={(from, to) => { setDateFrom(from); setDateTo(to); setPage(1); }} />
       {collection.loading ? <p className="py-8 text-center text-sm text-dtsc-muted">{enterpriseCoreT(locale, "common.loading")}</p> : collection.items.length ? <BusinessList ariaLabel={enterpriseCoreT(locale, "meetings.meetings")}>{collection.items.map((meeting) => <BusinessListItem key={meeting.id} title={meeting.title} status={<StatusBadge tone={statusTone(meeting.status)}>{statusLabel(locale, meeting.status)}</StatusBadge>} meta={`${formatEnterpriseDate(meeting.startAt, locale)} · ${meetingLocationModeLabel(locale, meeting.locationMode)} · ${meeting.participants.length} ${enterpriseCoreT(locale, "meetings.participants")}`} description={meeting.agenda || enterpriseCoreT(locale, "meetings.no.agenda")} onOpen={() => setDetail(meeting)} openLabel={enterpriseCoreT(locale, "meetings.open.named", { title: meeting.title })} actions={<ContextActions label={enterpriseCoreT(locale, "meetings.meeting.actions")} actions={meetingActions(meeting, Boolean(collection.meta.canManage ?? canManage), currentUserId, locale, setDetail, setEdit, setDecisionMeeting, openAction)} />} />)}</BusinessList> : <EmptyState compact title={enterpriseCoreT(locale, "meetings.no.meetings")} description={collection.error || enterpriseCoreT(locale, "meetings.no.meeting.matches.this.view")} />}
       <div className="mt-3 flex items-center justify-between border-t border-dtsc-border pt-3 text-sm text-dtsc-muted"><span>{enterpriseCoreT(locale, "common.page", { current: collection.pagination.page, total: collection.pagination.pageCount })}</span><div className="flex gap-2"><Button variant="outline" disabled={page <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>{enterpriseCoreT(locale, "common.previous")}</Button><Button variant="outline" disabled={page >= collection.pagination.pageCount} onClick={() => setPage((value) => value + 1)}>{enterpriseCoreT(locale, "common.next")}</Button></div></div>
     </ErpDesign2RegisterSection>
