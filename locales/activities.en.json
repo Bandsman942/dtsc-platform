@@ -152,5 +152,11 @@
   "work.location.hybrid": "Hybrid",
   "work.location.external": "External",
   "work.location.mission": "Mission",
-  "work.location.undefined": "Undefined"
+  "work.location.undefined": "Undefined",
+  "enterprisePendingRecent": "Pending (recent)",
+  "enterpriseRequestsRecent": "Recent requests",
+  "enterpriseRequestsTitle": "Company activity requests",
+  "enterpriseRequestsAllStatuses": "All statuses",
+  "enterpriseRequestsLoading": "Loading requests…",
+  "enterpriseRequestsLoadFailed": "Unable to load requests."
 }
