@@ -74,7 +74,7 @@ check("Telco History uses the complete canonical API rather than dashboard.recen
 absent("Telco history must not treat dashboard sample as the source", telcoUi, /const items = dashboard\.recent\.topups \|\| \[\]/);
 const telcoRoute = read("app/api/enterprise/[organizationId]/retail/telco-topups/route.ts");
 check("Telco API date filters and masked phone remain server-side and tenant-scoped", telcoRoute, [
-  /authorizeRetailRequest/, /financeBusinessDateRange\(req\)/,
+  /authorizeRetailRequest/, /retailFinanceReadSiteScope/, /tenderFinancialAccountId: \{ in: permittedTenderAccountIds \}/, /financeBusinessDateRange\(req\)/,
   /effectiveFrom/, /effectiveTo/, /occurredAt: \{/, /destinationPhoneMasked/,
   /organizationId,/, /REVERSED/,
 ]);
