@@ -43,7 +43,7 @@ export async function GET(request: Request, { params }: Params) {
     ...(canSeeAll ? {} : { OR: [{ createdById: session.userId }, { assignedToUserId: session.userId }] }),
     ...(id ? { id } : {}),
     ...(status ? { status } : {}),
-    ...(search ? { AND: [{ OR: [{ title: { contains: search, mode: "insensitive" } }, { description: { contains: search, mode: "insensitive" } }, { blockCode: { contains: search, mode: "insensitive" } }] }] } : {}),
+    ...(search ? { AND: [{ OR: [{ title: { contains: search, mode: "insensitive" as const } }, { description: { contains: search, mode: "insensitive" as const } }, { blockCode: { contains: search, mode: "insensitive" as const } }] }] } : {}),
     ...(range.from || range.to ? { createdAt: { gte: range.from || undefined, lte: range.to || undefined } } : {}),
   };
   const [items, total] = await Promise.all([
