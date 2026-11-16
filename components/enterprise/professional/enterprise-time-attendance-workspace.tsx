@@ -1,6 +1,7 @@
 "use client";
 
 import { ErpDesign2Metric, ErpDesign2RegisterSection } from "@/components/enterprise/professional/erp-design2-register";
+import { HrDesign2Tools } from "@/components/enterprise/professional/hr-design2-tools";
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Ban, CalendarClock, CalendarDays, CheckCircle2, Clock3, Eye, UserCheck, XCircle } from "lucide-react";
@@ -142,6 +143,8 @@ export function EnterpriseTimeAttendanceWorkspace({ organizationId, organization
   }, []);
   const [page, setPage] = useState(1);
   const [status, setStatus] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
   const [lookups, setLookups] = useState<Lookups>({ employees: [], approvers: [], projects: [], tasks: [], sites: [] });
   const [scheduleOpen, setScheduleOpen] = useState(false);
@@ -176,9 +179,11 @@ export function EnterpriseTimeAttendanceWorkspace({ organizationId, organization
 
   const params = useMemo(() => {
     const value = new URLSearchParams({ page: String(page), pageSize: "25" });
-    if (status && tab !== "SCHEDULES") value.set("status", status);
+    if (status && tab !== "SELF_SERVICE") value.set("status", status);
+    if (dateFrom) value.set("dateFrom", dateFrom);
+    if (dateTo) value.set("dateTo", dateTo);
     return value;
-  }, [page, status, tab]);
+  }, [dateFrom, dateTo, page, status, tab]);
   const schedules = useProfessionalCollection<WorkSchedule>({ endpoint: `/api/enterprise/${organizationId}/work-schedules`, params, refreshKey });
   const attendance = useProfessionalCollection<Attendance>({ endpoint: `/api/enterprise/${organizationId}/attendance`, params, refreshKey });
   const leaves = useProfessionalCollection<LeaveRequest>({ endpoint: `/api/enterprise/${organizationId}/leave-requests`, params, refreshKey });
@@ -428,10 +433,16 @@ export function EnterpriseTimeAttendanceWorkspace({ organizationId, organization
       <ErpDesign2Metric tone="emerald" label={t("time.leavePending")} value={leaves.metrics.pending || 0} />
       <ErpDesign2Metric tone="violet" label={t("time.approvedTime")} value={minutesLabel(Number(timesheets.metrics.approvedMinutes || 0))} />
     </ModuleMetrics>
-    <ModuleToolbar controls={<><ProfessionalTabs value={tab} onChange={(value) => { setTab(value); setStatus(""); setPage(1); }} items={tabs} />{tab !== "SCHEDULES" && tab !== "SELF_SERVICE" ? <NativeSelect value={status} onChange={(value) => { setStatus(value); setPage(1); }} items={currentStatusItems} /> : null}</>} summary={copy.separation} />
+    <ModuleToolbar controls={<ProfessionalTabs value={tab} onChange={(value) => { setTab(value); setStatus(""); setDateFrom(""); setDateTo(""); setPage(1); }} items={tabs} />} summary={copy.separation} />
     <ModuleContent density="compact">
       {error && !scheduleOpen && !attendanceOpen && !leaveOpen && !timesheetOpen && !decisionTarget && !cancelTarget && !scheduleEndTarget ? <ProfessionalError message={error} /> : null}
       {tab === "SELF_SERVICE" ? <EnterpriseMyHrSelfService organizationId={organizationId} relatedModules={relatedModules} onOpenTimeTab={(nextTab) => { setTab(nextTab); setStatus(""); setPage(1); }} /> : <ErpDesign2RegisterSection title={tab === "SCHEDULES" ? copy.scheduleSection : tab === "ATTENDANCE" ? copy.attendanceSection : tab === "LEAVE" ? t("time.leaveSection") : t("time.timesheetSection")} description={tab === "SCHEDULES" ? copy.scheduleDescription : tab === "ATTENDANCE" ? copy.attendanceDescription : tab === "LEAVE" ? t("time.leaveSectionDescription") : t("time.timesheetSectionDescription")}>
+        <HrDesign2Tools kind={tab === "SCHEDULES" ? "schedules" : tab === "ATTENDANCE" ? "attendance" : tab === "LEAVE" ? "leave" : "timesheets"} organizationId={organizationId} organizationName={organizationName}
+          title={tab === "SCHEDULES" ? copy.scheduleSection : tab === "ATTENDANCE" ? copy.attendanceSection : tab === "LEAVE" ? t("time.leaveSection") : t("time.timesheetSection")}
+          locale={locale} filters={params} status={status}
+          statuses={tab === "SCHEDULES" ? [{ id: "", label: t("people.allStatuses") }, ...["ACTIVE", "ENDED"].map((id) => ({ id, label: id === "ACTIVE" ? (locale === "en" ? "Active" : "Actif") : (locale === "en" ? "Ended" : "Clôturé") }))] : currentStatusItems}
+          onStatusChange={(next) => { setStatus(next); setPage(1); }} dateFrom={dateFrom} dateTo={dateTo}
+          onDateChange={(from, to) => { setDateFrom(from); setDateTo(to); setPage(1); }} />
         {activeCollection.error ? <ProfessionalError message={activeCollection.error} /> : activeCollection.loading ? <ProfessionalLoading /> : tab === "SCHEDULES" ? (
           schedules.items.length ? <BusinessList ariaLabel={copy.scheduleSection}>{schedules.items.map((item) => {
             const day = item.scheduleType === "WEEKLY" ? copy.days[Math.max(0, (item.dayOfWeek || 1) - 1)] : (item.scheduleDate ? professionalErpDate(item.scheduleDate, locale) : copy.date);
