@@ -16,7 +16,7 @@ Le lien est présenté **uniquement** lorsque :
 3. la facture a le statut `ISSUED`, `PARTIALLY_PAID` ou `OVERDUE` ;
 4. le solde restant à encaisser est positif.
 
-Le lien porte les paramètres `section=collections`, `siteId`, `invoiceId` (avec encodage). Le serveur `RETAIL_POS` protège l'accès à `section=collections` par la capacité réelle `COLLECT_PAYMENT`, le membership tenant et l'affectation de boutique. La liste de caisse réutilise `GET /api/enterprise/:organizationId/retail/invoices?view=collections&invoiceId=:id`, avec filtres **entreprise + boutiques autorisées + statuts émis**. Le dialogue d'encaissement existant s'ouvre exclusivement sur la facture correspondante ; sa propre API revalide les droits et le solde.
+Le lien porte les paramètres `section=collections`, `siteId`, `invoiceId` et `invoiceNumber` (avec encodage). Le serveur `RETAIL_POS` protège l'accès à `section=collections` par `COLLECT_PAYMENT`, l'organisation et l'affectation de boutique. Le fichier racine de l'API factures étant figé par le contrat d'architecture ROUTES-05A, il n'est **pas modifié** : la caisse réutilise `GET /api/enterprise/:organizationId/retail/invoices?view=collections&siteId=:site&q=:invoiceNumber`, avec les filtres métier **entreprise + boutiques autorisées + statuts émis** existants. Le client n'affiche et n'ouvre le dialogue que lorsque **l'identifiant et le numéro** de la réponse autorisée correspondent tous deux au lien, avec `canCollect` et solde positif. L'API du paiement revérifie la boutique, le droit, le statut et le solde. Le numéro de facture n'est pas une preuve d'autorisation.
 
 **Séparation des tâches** : le registre n'encaisse pas directement. Un paiement suit toujours le workflow Finance partagé (préparation, soumission éventuelle, approbation indépendante ou exception explicitement autorisée, confirmation, affectation). Aucun événement financier ne découle du clic sur le lien.
 
@@ -63,7 +63,7 @@ OWNER_E2E à réaliser sur une entreprise RETAIL test disposant de deux boutique
 2. Donner au facturier l'accès `COLLECT_PAYMENT` sur sa boutique, rafraîchir : le raccourci apparaît uniquement pour les factures émises impayées.
 3. Ouvrir la facture depuis le lien : vérifier boutique, numéro, devise et solde ; le dialogue de paiement de **cette** facture doit s'ouvrir sans recherche.
 4. Tester versement partiel, approbation/confirmation, rapprochement et solde ; le lien subsiste si montant dû positif, disparaît lorsque la facture est soldée.
-5. Tester brouillon, rejet, annulation, facture déjà payée et boutique inaccessible ; le lien est absent ou l'accès est refusé côté serveur. Modifier `invoiceId` et `siteId` dans l'URL pour vérifier le 403/404 sans fuite.
+5. Tester brouillon, rejet, annulation, facture déjà payée et boutique inaccessible ; le lien est absent ou l'accès est refusé côté serveur. Modifier `invoiceId`, `invoiceNumber` et `siteId` dans l'URL : l'UI ne doit afficher aucune autre facture ni ouvrir le paiement, et les API protégées doivent refuser les accès non autorisés.
 6. Comparer vue mobile/desktop, lecteur sans droit, filtre d'une date précise, sélection de boutique, historique et contrôles de caisse.
 7. Dans chaque module Finance : tester filtres de statuts, recherche, dates, prérequis du formulaire, actions réellement autorisées, exports, liens conditionnels et responsive FR/EN.
 8. Rapports : filtrer un jour local, créer des rapports le matin et le soir du jour de fin ; les deux doivent apparaître. Inverser les dates : réponse 400.
