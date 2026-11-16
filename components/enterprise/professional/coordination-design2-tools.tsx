@@ -3,6 +3,10 @@
 import { ErpDesign2RegisterTools, type ErpDesign2StatusOption } from "@/components/enterprise/professional/erp-design2-register";
 import type { FinanceExportColumn } from "@/components/enterprise/professional/finance-design2-controls";
 
+export function coordinationDesign2Locale(locale: string | null | undefined): "fr" | "en" {
+  return locale === "en" ? "en" : "fr";
+}
+
 type Kind = "tasks" | "requests" | "approvals" | "meetings";
 
 const fields: Record<Kind, FinanceExportColumn[]> = {
