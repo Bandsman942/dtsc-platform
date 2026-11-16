@@ -1,4 +1,9 @@
 import { Prisma } from "@prisma/client";
+
+// Prisma.Decimal (decimal.js-light) does not provide static min/max.
+const decimalMin = (a: Prisma.Decimal, b: Prisma.Decimal): Prisma.Decimal => a.lte(b) ? a : b;
+const decimalMax = (a: Prisma.Decimal, b: Prisma.Decimal): Prisma.Decimal => a.gte(b) ? a : b;
+
 import { resolveExchangeRateDetails } from "@/lib/enterprise/accounting/currency";
 import { resolveDefaultSalesTaxesForRetail, validatedInvoiceTaxRate } from "@/lib/enterprise/accounting/tax-engine";
 import { normalizeTaxCountryCode } from "@/lib/enterprise/accounting/tax-jurisdictions";
@@ -82,7 +87,7 @@ export function applyRetailRelationshipBenefitPricing(
         ? new Prisma.Decimal(0)
         : decision.discountAmount;
     const discountAmount = money(
-      Prisma.Decimal.min(customerGross, startingDiscount.plus(relationDiscount)),
+      decimalMin(customerGross, startingDiscount.plus(relationDiscount)),
     );
     const afterDiscountCustomerTotal = money(customerGross.minus(discountAmount));
     const divisor = new Prisma.Decimal(1).plus(decision.taxRate);
@@ -220,13 +225,13 @@ function promotionDiscount(
   }
   if (promotion.promotionType === "FIXED_AMOUNT") {
     const amount = numberValue(action.amount);
-    return amount && amount > 0 ? money(Prisma.Decimal.min(line.gross, amount)) : decimal(0);
+    return amount && amount > 0 ? money(decimalMin(line.gross, amount)) : decimal(0);
   }
   if (promotion.promotionType === "QUANTITY_BREAK") {
     const minimum = numberValue(action.minQuantity);
     if (!minimum || line.quantity.lessThan(minimum)) return decimal(0);
     const unitPrice = numberValue(action.unitPrice);
-    if (unitPrice !== null && unitPrice >= 0) return money(Prisma.Decimal.max(0, line.gross.minus(line.quantity.times(unitPrice))));
+    if (unitPrice !== null && unitPrice >= 0) return money(decimalMax(new Prisma.Decimal(0), line.gross.minus(line.quantity.times(unitPrice))));
     const percent = numberValue(action.percent);
     return percent && percent > 0 ? money(line.gross.times(percent).div(100)) : decimal(0);
   }
@@ -236,7 +241,7 @@ function promotionDiscount(
     if (!buyQuantity || !getQuantity || buyQuantity <= 0 || getQuantity <= 0) return decimal(0);
     const groupSize = buyQuantity + getQuantity;
     const freeQuantity = Math.floor(line.quantity.toNumber() / groupSize) * getQuantity;
-    return money(Prisma.Decimal.min(line.gross, line.unitPrice.times(freeQuantity)));
+    return money(decimalMin(line.gross, line.unitPrice.times(freeQuantity)));
   }
   return decimal(0);
 }
@@ -419,7 +424,7 @@ async function resolvePricingDecisions(
     if (productIds.length < 2 || bundlePrice === null || bundlePrice <= 0 || !productIds.every((id) => baseLines.some((line) => line.item.id === id))) continue;
     const participating = baseLines.filter((line) => productIds.includes(line.item.id));
     const participatingGross = participating.reduce((sum, line) => sum.plus(line.gross), decimal(0));
-    const totalDiscount = money(Prisma.Decimal.max(0, participatingGross.minus(bundlePrice)));
+    const totalDiscount = money(decimalMax(new Prisma.Decimal(0), participatingGross.minus(bundlePrice)));
     if (totalDiscount.isZero()) continue;
     let allocated = decimal(0);
     participating.forEach((line, index) => {
@@ -456,7 +461,7 @@ async function resolvePricingDecisions(
     const stackable = promotionCandidates.filter((candidate) => candidate.promotion.stackMode === "STACKABLE");
     const exclusive = promotionCandidates.filter((candidate) => candidate.promotion.stackMode !== "STACKABLE").sort((a, b) => b.amount.comparedTo(a.amount));
     const applied = [...stackable, ...(exclusive[0] ? [exclusive[0]] : [])];
-    const automaticDiscount = money(Prisma.Decimal.min(base.gross, applied.reduce((sum, candidate) => sum.plus(candidate.amount), decimal(0))));
+    const automaticDiscount = money(decimalMin(base.gross, applied.reduce((sum, candidate) => sum.plus(candidate.amount), decimal(0))));
     const requestedDiscount = decimal(base.line.requestedDiscountAmount || 0);
     let discountAmount = automaticDiscount;
     let discountOverride = false;

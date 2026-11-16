@@ -1,5 +1,10 @@
 import { createHash } from "node:crypto";
 import { Prisma } from "@prisma/client";
+
+// Prisma.Decimal (decimal.js-light) does not provide static min/max.
+const decimalMin = (a: Prisma.Decimal, b: Prisma.Decimal): Prisma.Decimal => a.lte(b) ? a : b;
+const decimalMax = (a: Prisma.Decimal, b: Prisma.Decimal): Prisma.Decimal => a.gte(b) ? a : b;
+
 import { z } from "zod";
 import { createSalesInvoiceTx } from "@/lib/enterprise/accounting/receivables-service";
 import { resolveExchangeRateDetails, snapshotExchangeRate } from "@/lib/enterprise/accounting/currency";
@@ -315,11 +320,11 @@ export async function postPaidRetailInvoiceStockTx(
       const specificReserved = activeReservations
         .filter((reservation) => reservation.storageLocationId && reservation.storageLocationId === balance.storageLocationId)
         .reduce((sum, reservation) => sum.plus(reservation.quantity.minus(reservation.fulfilledQuantity)), new Prisma.Decimal(0));
-      const physicallyFree = Prisma.Decimal.max(0, balance.quantityOnHand.minus(balance.quantityReserved).minus(specificReserved));
-      const unscopedTakenHere = Prisma.Decimal.min(unscopedReserved, physicallyFree);
+      const physicallyFree = decimalMax(new Prisma.Decimal(0), balance.quantityOnHand.minus(balance.quantityReserved).minus(specificReserved));
+      const unscopedTakenHere = decimalMin(unscopedReserved, physicallyFree);
       unscopedReserved = unscopedReserved.minus(unscopedTakenHere);
       const free = physicallyFree.minus(unscopedTakenHere);
-      const take = Prisma.Decimal.min(stillNeeded, free);
+      const take = decimalMin(stillNeeded, free);
       if (!take.greaterThan(0)) continue;
       const issued = await applyStockMovementTx(tx, organizationId, actorUserId, {
         inventoryItemId: line.inventoryItemId,

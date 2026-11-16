@@ -52,4 +52,8 @@ assert.equal(manifest.routes.length, 24, "All original consolidated Retail handl
 passed++;
 assert.ok(manifest.routes.some((entry) => entry.handlerPath.endsWith("/pricing/preview/handler.ts")));
 passed++;
+for (const file of ["lib/enterprise/retail/commercial-engine.ts", "lib/enterprise/retail/invoice-checkout.ts"]) {
+  assert.doesNotMatch(fs.readFileSync(file, "utf8"), new RegExp("Prisma[.]Decimal[.](min|max)[(]"), "Unsafe Prisma Decimal helper in " + file);
+  passed++;
+}
 console.log("HOTFIX #1187 " + passed + "/" + passed + " static source checks passed; dynamic, CI and E2E still mandatory.");
