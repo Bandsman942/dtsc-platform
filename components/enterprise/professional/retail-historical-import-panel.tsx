@@ -6,6 +6,7 @@ import { useAppLocale } from "@/components/i18n/locale-provider";
 import { Field, formatEnterpriseDate } from "@/components/enterprise/core-v2/erp-v2-ui";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useToastMessage } from "@/components/ui/use-toast-message";
 import { BusinessList, BusinessListItem } from "@/components/workspace/business-list";
 import { EmptyState } from "@/components/workspace/empty-state";
 import { ModuleSection } from "@/components/workspace/module-workspace";
@@ -219,6 +220,8 @@ export function RetailHistoricalImportPanel({ organizationId, canManage }: { org
   const [busy, setBusy] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const feedback = useMemo(() => error ? { tone: "error" as const, description: error } : message ? { tone: "success" as const, description: message } : null, [error, message]);
+  useToastMessage(feedback);
   const [sourceLabel, setSourceLabel] = useState("");
   const [periodStart, setPeriodStart] = useState("");
   const [periodEnd, setPeriodEnd] = useState("");
@@ -459,7 +462,7 @@ export function RetailHistoricalImportPanel({ organizationId, canManage }: { org
 
   return (
     <div className="mt-5 grid min-w-0 gap-5">
-      <ModuleSection
+      <ModuleSection density="compact" id="retail-shop-history-import"
         title={copy.title}
         description={copy.description}
       >
@@ -658,7 +661,7 @@ export function RetailHistoricalImportPanel({ organizationId, canManage }: { org
         </div>
       </ModuleSection>
 
-      <ModuleSection
+      <ModuleSection density="compact" id="retail-shop-history-records"
         title={copy.historyTitle}
         description={copy.independentReview}
       >
