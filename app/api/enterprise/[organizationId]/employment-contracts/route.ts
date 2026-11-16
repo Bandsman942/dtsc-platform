@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
+import { financeBusinessDateRange } from "@/lib/enterprise/accounting/http";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { getEnterpriseCommonDomainAccess } from "@/lib/enterprise/common/access";
@@ -24,13 +25,19 @@ export async function GET(req: Request, { params }: Params) {
     getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode: "HUMAN_RESOURCES", action: "manage" }),
   ]);
   const url = new URL(req.url);
+  const businessPeriod = financeBusinessDateRange(req);
+  if (!businessPeriod.ok) return businessPeriod.response;
+  const businessDateFilter = businessPeriod.from || businessPeriod.to
+    ? { startDate: { gte: businessPeriod.from || undefined, lte: businessPeriod.to || undefined } }
+    : {};
+
   const page = Math.max(1, Number(url.searchParams.get("page") || 1) || 1);
   const pageSize = Math.min(100, Math.max(5, Number(url.searchParams.get("pageSize") || 25) || 25));
   const employeeId = url.searchParams.get("employeeId")?.trim() || "";
   const status = url.searchParams.get("status")?.trim() || "";
   const archived = url.searchParams.get("archived") === "1";
   if (archived && !managerAccess) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  const where: Prisma.EnterpriseEmploymentContractWhereInput = { organizationId, archivedAt: archived ? { not: null } : null, ...(employeeId ? { employeeId } : {}), ...(status ? { status } : {}) };
+  const where: Prisma.EnterpriseEmploymentContractWhereInput = { organizationId, ...businessDateFilter, archivedAt: archived ? { not: null } : null, ...(employeeId ? { employeeId } : {}), ...(status ? { status } : {}) };
   const [items, total, active, pendingApproval] = await Promise.all([
     prisma.enterpriseEmploymentContract.findMany({ where, orderBy: [{ status: "asc" }, { startDate: "desc" }], skip: (page - 1) * pageSize, take: pageSize, include: { employee: { select: { id: true, employeeNumber: true, displayName: true, employmentStatus: true } } } }),
     prisma.enterpriseEmploymentContract.count({ where }),
