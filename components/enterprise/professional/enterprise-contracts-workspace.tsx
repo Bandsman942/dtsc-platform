@@ -9,7 +9,7 @@ import { commercialHotfixCopy } from "@/components/enterprise/professional/comme
 import { CommercialDesign2Controls, CommercialDesign2Connections } from "@/components/enterprise/professional/commercial-design2-controls";
 import type { FinanceExportColumn } from "@/components/enterprise/professional/finance-design2-controls";
 import { ProfessionalWorkflowComments } from "@/components/enterprise/professional/professional-workflow-comments";
-import { ProfessionalError, ProfessionalFormSection, ProfessionalHelp, ProfessionalLoading, ProfessionalSearch, ProfessionalTabs, professionalMutation, useProfessionalCollection } from "@/components/enterprise/professional/professional-erp-ui";
+import { ProfessionalError, ProfessionalFormSection, ProfessionalHelp, ProfessionalLoading, ProfessionalSearch, professionalMutation, useProfessionalCollection } from "@/components/enterprise/professional/professional-erp-ui";
 import { professionalErpDate, professionalErpEnumLabel, professionalErpMoney, professionalErpT, type ProfessionalErpLocale, useProfessionalErpLocale } from "@/components/enterprise/professional/professional-erp-i18n";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
