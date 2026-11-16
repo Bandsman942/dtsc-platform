@@ -38,7 +38,7 @@ check("Printable totals are persisted server values, not browser recomputation",
   /total: quote.totalAmount/, /subtotal: order.subtotalAmount/, /total: order.totalAmount/,
 ]);
 check("Print has A4 layout, FR-EN status, draft and invalid warnings", print, [
-  /@page\{size:A4/, /DRAFT/, /PENDING_APPROVAL/, /REJECTED/, /EXPIRED/, /CANCELLED/,
+  /@page\{size:A4/, /table-wrap\{max-width:100%;overflow-x:auto/, /@media print/, /DRAFT/, /PENDING_APPROVAL/, /REJECTED/, /EXPIRED/, /CANCELLED/,
   /CONVERTED/, /IN_FULFILLMENT/, /PARTIALLY_FULFILLED/, /FULFILLED/, /CLOSED/, /lang=/,
 ]);
 check("Print escapes customer-supplied content and blocks caching / embedding", print, [
