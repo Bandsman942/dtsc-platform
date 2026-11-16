@@ -1,5 +1,6 @@
-import { ErpDesign2Metric, ErpDesign2RegisterSection } from "@/components/enterprise/professional/erp-design2-register";
 "use client";
+
+import { ErpDesign2Metric, ErpDesign2RegisterSection } from "@/components/enterprise/professional/erp-design2-register";
 
 import Link from "next/link";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
