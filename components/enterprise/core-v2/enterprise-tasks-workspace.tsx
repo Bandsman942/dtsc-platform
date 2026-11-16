@@ -1,5 +1,6 @@
-import { ErpDesign2Metric, ErpDesign2RegisterSection } from "@/components/enterprise/professional/erp-design2-register";
 "use client";
+
+import { ErpDesign2Metric, ErpDesign2RegisterSection } from "@/components/enterprise/professional/erp-design2-register";
 
 import { Archive, CheckCircle2, Eye, PauseCircle, Pencil, Play, Plus, RotateCcw, XCircle } from "lucide-react";
 import { useSearchParams } from "next/navigation";
