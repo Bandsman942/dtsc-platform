@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog } from "@/lib/audit";
 import { getEnterpriseCommonDomainAccess } from "@/lib/enterprise/common/access";
+import { financeBusinessDateRange } from "@/lib/enterprise/accounting/http";
 import { prisma } from "@/lib/prisma";
 
 type Params = { params: Promise<{ organizationId: string }> };
@@ -20,10 +21,39 @@ export async function GET(req: Request, { params }: Params) {
   const search = url.searchParams.get("search")?.trim() || "";
   const status = url.searchParams.get("status")?.trim().toUpperCase() || "";
   const businessPartyId = url.searchParams.get("businessPartyId")?.trim() || "";
+  const dates = financeBusinessDateRange(req);
+  if (!dates.ok) return dates.response;
+  const allowedStatuses = new Set(["DRAFT","PENDING_APPROVAL","CONFIRMED","PARTIALLY_FULFILLED","FULFILLED","CLOSED","CANCELLED"]);
+  if (status && !allowedStatuses.has(status)) {
+    return NextResponse.json({ error: "SALES_STATUS_INVALID", message: "Sélectionnez un statut reconnu." }, { status: 400 });
+  }
+  if (search.length > 120) {
+    return NextResponse.json({ error: "SALES_SEARCH_TOO_LONG", message: "Limitez la recherche à 120 caractères." }, { status: 400 });
+  }
+  // The quote/order stores only businessPartyId; resolve names against the
+  // canonical enterprise party register, within the same organization.
+  const matchingParties = search ? await prisma.enterpriseBusinessParty.findMany({
+    where: { organizationId, archivedAt: null, OR: [
+      { legalName: { contains: search, mode: "insensitive" } },
+      { displayName: { contains: search, mode: "insensitive" } },
+      { code: { contains: search, mode: "insensitive" } },
+    ] },
+    select: { id: true },
+    take: 1001,
+  }) : [];
+  if (matchingParties.length > 1000) {
+    return NextResponse.json({ error: "SALES_SEARCH_TOO_BROAD", message: "Trop de clients correspondent : affinez la recherche." }, { status: 422 });
+  }
+  const clientIds = matchingParties.map((party) => party.id);
   const where: Prisma.EnterpriseSalesOrderWhereInput = {
     organizationId,
     archivedAt: null,
-    ...(search ? { OR: [{ title: { contains: search, mode: "insensitive" } }, { reference: { contains: search, mode: "insensitive" } }] } : {}),
+    ...(search ? { OR: [
+      { title: { contains: search, mode: "insensitive" } },
+      { reference: { contains: search, mode: "insensitive" } },
+      ...(clientIds.length ? [{ businessPartyId: { in: clientIds } }] : []),
+    ] } : {}),
+    ...((dates.from || dates.to) ? { createdAt: { ...(dates.from ? { gte: dates.from } : {}), ...(dates.to ? { lte: dates.to } : {}) } } : {}),
     ...(status ? { status } : {}),
     ...(businessPartyId ? { businessPartyId } : {}),
   };
