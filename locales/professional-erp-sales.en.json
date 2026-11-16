@@ -112,5 +112,10 @@
   "sales.taxTotal": "Taxes",
   "sales.documentTotal": "Document total",
   "sales.financeHandoffHelp": "The order, fulfillment and invoice are separate records. In Customer invoices, select this order as the source before submitting and posting.",
-  "sales.openCustomerInvoices": "Open customer invoices"
+  "sales.openCustomerInvoices": "Open customer invoices",
+  "status.IN_FULFILLMENT": "Delivery in progress",
+  "sales.fulfillmentType": "Fulfillment type",
+  "sales.fulfillmentTypeHelp": "Choose product delivery or service fulfillment. Services never create physical stock movements; stocked products follow the applicable inventory workflow.",
+  "sales.productDelivery": "Product delivery",
+  "sales.serviceDelivery": "Service fulfillment"
 }
