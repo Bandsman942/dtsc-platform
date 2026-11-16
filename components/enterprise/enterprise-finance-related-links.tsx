@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArrowUpRight, Network } from "lucide-react";
 import { getSession } from "@/lib/auth";
+import { translateEnterpriseFinance } from "@/lib/i18n";
 import { resolveEnterpriseModuleAccess } from "@/lib/enterprise/module-access";
 
 /** Server-only navigation: never reveal destinations without effective tenant access. */
@@ -31,7 +32,7 @@ export async function EnterpriseFinanceRelatedLinks({
       <div className="flex min-w-0 flex-wrap items-center gap-2 border-y border-dtsc-border py-3">
         <span className="flex shrink-0 items-center gap-2 pr-2 text-xs font-extrabold uppercase tracking-wide text-dtsc-muted">
           <Network className="h-4 w-4 text-dtsc-blue" aria-hidden="true" />
-          {locale === "en" ? "Related workflows" : "Parcours liés"}
+          {translateEnterpriseFinance(locale, "relatedFinanceWorkflows")}
         </span>
         <div className="flex min-w-0 flex-1 touch-pan-x gap-2 overflow-x-auto py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {links.map((item) => (
