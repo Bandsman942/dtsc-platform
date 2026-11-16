@@ -68,6 +68,6 @@ Toutes les opérations vérifient session, contexte, organisation, membership, a
 
 ### QA et acceptance propriétaire
 - QA ciblée `pnpm qa:sales-design2-1195` + régressions devis/commandes, tests de sécurité, type-check, lint, build.
-- Matrice détaillée `docs/OWNER_E2E_SALES_DESIGN2_1195.md` : 14 états de documents, deux entreprises, quatre rôles, 320–1024 px, FR/EN, mode clair/sombre, CSV/XLSX/PDF, Factures clients et stocks.
+- Matrice détaillée `docs/OWNER_E2E_SALES_DESIGN2_1195.md` : 15 états de documents (7 devis, 8 commandes), deux entreprises, quatre rôles, 320–1024 px, FR/EN, mode clair/sombre, CSV/XLSX/PDF, Factures clients et stocks.
 - Ne pas fusionner avant Quality Gates vertes sur SHA final **et** validation explicite `E2E final #<PR> BON`. Production uniquement après merge sur main, via Vercel automatique, sans preview ni déploiement manuel.
 - Pas de migration Prisma, de nouvelle variable Vercel ni de backfill.
