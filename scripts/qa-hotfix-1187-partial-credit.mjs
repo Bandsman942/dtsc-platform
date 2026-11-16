@@ -19,7 +19,7 @@ function contract(file, tokens) {
 }
 contract("prisma/enterprise-retail-invoice-checkout.prisma", ["refundPayoutAmount Decimal?", "financeApproverUserId String?"]);
 contract("prisma/migrations/20261115194500_retail_partial_credit_refund_split/migration.sql", ['"refundPayoutAmount" DECIMAL(20,6)', '"financeApproverUserId" TEXT']);
-contract("prisma/migrations/20261116072500_retail_credit_disposition_constraints/migration.sql", ["retail_invoice_return_line_disposition_check", "'SERVICE_CREDIT'", "'UNDELIVERED_CREDIT'"]);
+contract("prisma/migrations/20261116072500_retail_credit_disposition_constraints/migration.sql", ["retail_invoice_return_line_disposition_check", "'SERVICE_CREDIT'", "'UNDELIVERED_CREDIT'", "retail_invoice_return_finance_pending_check", "retail_invoice_return_completed_finance_check", 'COALESCE("refundPayoutAmount" = 0, FALSE)']);
 contract("lib/enterprise/retail/invoice-returns.ts", ["UNDELIVERED_CREDIT", "SERVICE_CREDIT", "requiresPhysicalInspection", "independentFinanceVerifier"]);
 contract("lib/enterprise/retail/invoice-return-finance.ts", ["refundPayoutAmount: payoutAmount", "financeApproverUserId", "postPaidRetailInvoiceStockTx", "TransactionIsolationLevel.Serializable"]);
 contract("lib/enterprise/retail/invoice-checkout.ts", ["returnLines", "fulfilableLines", "remaining"]);
