@@ -39,7 +39,7 @@ export async function GET(req: Request, { params }: Params) {
   const search = url.searchParams.get("search")?.trim() || "";
   if (search.length > 120) return NextResponse.json({ error: "SEARCH_TOO_LONG", message: "Affinez votre recherche (120 caractères maximum)." }, { status: 400 });
   if (archived && !managerAccess) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  const where: Prisma.EnterpriseEmploymentContractWhereInput = { organizationId, ...businessDateFilter, archivedAt: archived ? { not: null } : null, ...(employeeId ? { employeeId } : {}), ...(status ? { status } : {}), ...(search ? { OR: [{ reference: { contains: search, mode: "insensitive" } }, { employee: { displayName: { contains: search, mode: "insensitive" } } }] } : {}) };
+  const where: Prisma.EnterpriseEmploymentContractWhereInput = { organizationId, ...businessDateFilter, archivedAt: archived ? { not: null } : null, ...(employeeId ? { employeeId } : {}), ...(status ? { status } : {}), ...(search ? { OR: [{ reference: { contains: search, mode: "insensitive" as const } }, { employee: { displayName: { contains: search, mode: "insensitive" as const } } }] } : {}) };
   const [items, total, active, pendingApproval] = await Promise.all([
     prisma.enterpriseEmploymentContract.findMany({ where, orderBy: [{ status: "asc" }, { startDate: "desc" }], skip: (page - 1) * pageSize, take: pageSize, include: { employee: { select: { id: true, employeeNumber: true, displayName: true, employmentStatus: true } } } }),
     prisma.enterpriseEmploymentContract.count({ where }),
