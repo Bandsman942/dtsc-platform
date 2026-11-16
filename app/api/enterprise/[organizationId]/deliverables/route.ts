@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog } from "@/lib/audit";
 import { getEnterpriseCommonDomainAccess } from "@/lib/enterprise/common/access";
+import { financeBusinessDateRange } from "@/lib/enterprise/accounting/http";
 import { prisma } from "@/lib/prisma";
 
 type Params = { params: Promise<{ organizationId: string }> };
@@ -30,10 +31,13 @@ export async function GET(req: Request, { params }: Params) {
   const pageSize = Math.min(100, Math.max(5, Number(url.searchParams.get("pageSize") || 25) || 25));
   const search = url.searchParams.get("search")?.trim() || "";
   const status = url.searchParams.get("status")?.trim() || "";
+  const dates = financeBusinessDateRange(req);
+  if (!dates.ok) return dates.response;
   const projectId = url.searchParams.get("projectId")?.trim() || "";
   const where: Prisma.EnterpriseProjectDeliverableWhereInput = {
     organizationId,
     project: { archivedAt: null },
+    ...((dates.from || dates.to) ? { createdAt: { ...(dates.from ? { gte: dates.from } : {}), ...(dates.to ? { lte: dates.to } : {}) } } : {}),
     ...(status ? { status } : {}),
     ...(projectId ? { projectId } : {}),
     ...(search
