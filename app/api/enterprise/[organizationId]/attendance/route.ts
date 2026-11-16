@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
+import { financeBusinessDateRange } from "@/lib/enterprise/accounting/http";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { getEnterpriseCommonDomainAccess } from "@/lib/enterprise/common/access";
@@ -21,6 +22,12 @@ export async function GET(req: Request, { params }: Params) {
   const access = await getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode: "TIME_ATTENDANCE", action: "read" });
   if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const url = new URL(req.url);
+  const businessPeriod = financeBusinessDateRange(req);
+  if (!businessPeriod.ok) return businessPeriod.response;
+  const businessDateFilter = businessPeriod.from || businessPeriod.to
+    ? { attendanceDate: { gte: businessPeriod.from || undefined, lte: businessPeriod.to || undefined } }
+    : {};
+
   const page = Math.max(1, Number(url.searchParams.get("page") || 1) || 1);
   const pageSize = Math.min(100, Math.max(5, Number(url.searchParams.get("pageSize") || 25) || 25));
   const employeeId = url.searchParams.get("employeeId")?.trim() || "";
@@ -30,7 +37,7 @@ export async function GET(req: Request, { params }: Params) {
     getActiveEnterpriseSelfEmployee(session, organizationId),
   ]);
   const actorScope: Prisma.EnterpriseAttendanceWhereInput = manageAccess ? {} : { employeeId: selfEmployee?.id || "__none__" };
-  const where: Prisma.EnterpriseAttendanceWhereInput = { organizationId, ...(employeeId ? { employeeId } : {}), ...(status ? { status } : {}), ...actorScope };
+  const where: Prisma.EnterpriseAttendanceWhereInput = { organizationId, ...businessDateFilter, ...(employeeId ? { employeeId } : {}), ...(status ? { status } : {}), ...actorScope };
   const [items, total, present, absent] = await Promise.all([
     prisma.enterpriseAttendance.findMany({ where, orderBy: [{ attendanceDate: "desc" }, { createdAt: "desc" }], skip: (page - 1) * pageSize, take: pageSize, include: { employee: { select: { id: true, employeeNumber: true, displayName: true, siteId: true } } } }),
     prisma.enterpriseAttendance.count({ where }),
