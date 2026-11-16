@@ -1,5 +1,6 @@
-import { ErpDesign2Metric, ErpDesign2RegisterSection } from "@/components/enterprise/professional/erp-design2-register";
 "use client";
+
+import { ErpDesign2Metric, ErpDesign2RegisterSection } from "@/components/enterprise/professional/erp-design2-register";
 
 import { priorityChoices as corePriorityChoices } from "@/components/enterprise/core-v2/erp-v2-ui";
 import { EnterpriseApproverSelect } from "@/components/enterprise/enterprise-approver-select";
