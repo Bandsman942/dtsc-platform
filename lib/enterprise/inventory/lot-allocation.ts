@@ -10,7 +10,12 @@ export type LotAllocationCandidate = {
 };
 
 export function lotExpiryDateKey(expiryDate: Date): string {
-  return expiryDate.toISOString().slice(0, 10);
+  // Expiry is a date-only label stored at UTC midnight, not the current
+  // business date. Decode its calendar fields without shifting time zones.
+  const year = String(expiryDate.getUTCFullYear()).padStart(4, "0");
+  const month = String(expiryDate.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(expiryDate.getUTCDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 /** Physical allocation, not accounting valuation. No mutation or invented lot.

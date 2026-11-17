@@ -47,7 +47,7 @@ export function validateLotReclassificationAllocations(allocations: Allocation[]
   return total;
 }
 
-async function requireOrganizationWideScope(tx: Prisma.TransactionClient, organizationId: string, userId: string) {
+export async function requireLotReclassificationOrganizationWideScope(tx: Prisma.TransactionClient, organizationId: string, userId: string) {
   const membership = await tx.organizationMember.findFirst({ where: { organizationId, userId, status: "ACTIVE", removedAt: null }, select: { id: true } });
   if (!membership) throw new EnterpriseDomainError("STOCK_RECLASS_PERMISSION_DENIED", 403);
   try {
@@ -60,7 +60,7 @@ async function requireOrganizationWideScope(tx: Prisma.TransactionClient, organi
 async function validateSourceTx(tx: Prisma.TransactionClient, organizationId: string, actorUserId: string, input: { sourceBalanceId: string; sourceBalanceRevision: number; itemRevision: number; allocations: Allocation[] }) {
   const source = await tx.enterpriseInventoryBalance.findFirst({ where: { organizationId, id: input.sourceBalanceId, stockLotId: null }, include: { inventoryItem: { include: { catalogItem: { select: { id: true, name: true, code: true, trackInventory: true, status: true, archivedAt: true } } } }, warehouse: { select: { name: true, code: true, status: true, archivedAt: true } }, storageLocation: { select: { name: true, code: true, status: true, archivedAt: true } } } });
   if (!source || source.inventoryItem.archivedAt || source.inventoryItem.status !== "ACTIVE" || !source.inventoryItem.catalogItem.trackInventory || source.inventoryItem.catalogItem.status !== "ACTIVE" || source.inventoryItem.catalogItem.archivedAt || source.warehouse.status !== "ACTIVE" || source.warehouse.archivedAt || (source.storageLocation && (source.storageLocation.status !== "ACTIVE" || source.storageLocation.archivedAt))) throw new EnterpriseDomainError("STOCK_RECLASS_SOURCE_INVALID", 404);
-  await requireOrganizationWideScope(tx, organizationId, actorUserId);
+  await requireLotReclassificationOrganizationWideScope(tx, organizationId, actorUserId);
   await requireInventoryStockAuthorityTx(tx, organizationId, actorUserId, source.warehouseId);
   if (source.revision !== input.sourceBalanceRevision || source.inventoryItem.revision !== input.itemRevision || !source.quantityOnHand.gt(0)) throw new EnterpriseDomainConflictError("STOCK_RECLASS_SOURCE_CHANGED");
   const coordinates = { organizationId, inventoryItemId: source.inventoryItemId, warehouseId: source.warehouseId };
@@ -91,8 +91,8 @@ export async function submitStockLotReclassification(organizationId: string, act
   if (actorUserId === input.approverUserId) throw new EnterpriseDomainError("SELF_APPROVAL_FORBIDDEN", 403);
   await assertInventoryApprovalCandidate({ organizationId, requesterUserId: actorUserId, approverUserId: input.approverUserId });
   return retryConflict(() => prisma.$transaction(async (tx) => {
-    await requireOrganizationWideScope(tx, organizationId, actorUserId);
-    await requireOrganizationWideScope(tx, organizationId, input.approverUserId);
+    await requireLotReclassificationOrganizationWideScope(tx, organizationId, actorUserId);
+    await requireLotReclassificationOrganizationWideScope(tx, organizationId, input.approverUserId);
     const existing = await tx.enterpriseStockLotReclassification.findFirst({ where: { organizationId, idempotencyKey: input.idempotencyKey } });
     if (existing) {
       const approval = await tx.enterpriseApproval.findFirst({ where: { organizationId, targetEntityType: target, targetEntityId: existing.id, archivedAt: null } });
@@ -120,7 +120,7 @@ export async function decideStockLotReclassification(args: { organizationId: str
   } else if (candidate.requestedByUserId !== actorUserId) throw new EnterpriseDomainError("STOCK_RECLASS_PERMISSION_DENIED", 403);
   if (args.action === "REJECT" && !args.decisionComment?.trim()) throw new EnterpriseDomainError("STOCK_RECLASS_REASON_REQUIRED", 400);
   return retryConflict(() => prisma.$transaction(async (tx) => {
-    await requireOrganizationWideScope(tx, organizationId, actorUserId);
+    await requireLotReclassificationOrganizationWideScope(tx, organizationId, actorUserId);
     const approval = await tx.enterpriseApproval.findFirst({ where: { organizationId, id: approvalId, targetEntityType: target, status: "PENDING", archivedAt: null, revision: args.revision } });
     if (!approval || (args.action === "CANCEL" ? approval.requestedByUserId !== actorUserId : approval.approverUserId !== actorUserId || approval.requestedByUserId === actorUserId)) throw new EnterpriseDomainConflictError("STOCK_RECLASS_SOURCE_CHANGED");
     const request = await tx.enterpriseStockLotReclassification.findFirst({ where: { organizationId, id: approval.targetEntityId, status: "PENDING_APPROVAL" } });

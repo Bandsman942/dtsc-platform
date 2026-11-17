@@ -19,7 +19,7 @@ import { decideEnterpriseLeaveRequest } from "@/lib/enterprise/hr-payroll/leave"
 import { decideEnterprisePayrollRun } from "@/lib/enterprise/hr-payroll/payroll";
 import { decideEnterpriseTimesheet } from "@/lib/enterprise/hr-payroll/timesheets";
 import { decideEnterpriseInventoryCount, decideEnterpriseStockTransfer } from "@/lib/enterprise/inventory/service";
-import { decideStockLotReclassification } from "@/lib/enterprise/inventory/lot-reclassification";
+import { decideStockLotReclassification, requireLotReclassificationOrganizationWideScope } from "@/lib/enterprise/inventory/lot-reclassification";
 import { decideEnterpriseStockAdjustment } from "@/lib/enterprise/inventory/adjustment-service";
 import { cancelEnterpriseProjectMilestoneApproval } from "@/lib/enterprise/projects-assets/milestone-approval-cancel";
 import { ensureProjectMilestoneApprovalSubmissionVersion, recordProjectMilestoneApprovalDecision } from "@/lib/enterprise/projects-assets/milestone-approval-coordination";
@@ -107,6 +107,9 @@ export async function POST(req: Request, { params }: Params) {
   const current = await prisma.enterpriseApproval.findFirst({ where: { id, organizationId, archivedAt: null } }); if (!current) return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
 
   try {
+    if (current.targetEntityType === "EnterpriseStockLotReclassification") {
+      await requireLotReclassificationOrganizationWideScope(prisma, organizationId, session.userId);
+    }
     if (prepareReview) {
       const data = prepareReviewSchema.parse(payload);
       if (current.status !== "PENDING") throw new ApprovalCoordinationError("INVALID_STATE", 409, "Cette validation n’est plus en attente de revue.");

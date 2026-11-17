@@ -5,6 +5,7 @@ import { listEnterpriseApprovalCandidates } from "@/lib/enterprise/approval-assi
 import { enterpriseApprovalModuleForTarget, enterpriseApprovalTargetDeepLink } from "@/lib/enterprise/approval-targets";
 import { enterpriseApprovalVisibilityWhere, getEnterpriseCoreV2Access } from "@/lib/enterprise/core-v2/access";
 import { prisma } from "@/lib/prisma";
+import { requireLotReclassificationOrganizationWideScope } from "@/lib/enterprise/inventory/lot-reclassification";
 import { supportsProfessionalApprovalCorrection } from "@/lib/standard-work-coordination/approval-coordination";
 
 type Params = { params: Promise<{ organizationId: string; id: string }> };
@@ -20,6 +21,10 @@ export async function GET(req: Request, { params }: Params) {
     where: { id, ...enterpriseApprovalVisibilityWhere({ organizationId, userId: session.userId, canSeeAll: access.canSeeAll }) },
   });
   if (!approval) return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
+  if (approval.targetEntityType === "EnterpriseStockLotReclassification") {
+    try { await requireLotReclassificationOrganizationWideScope(prisma, organizationId, session.userId); }
+    catch { return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 }); }
+  }
 
   const [versions, decisions, comments] = await Promise.all([
     prisma.enterpriseApprovalSubmissionVersion.findMany({ where: { organizationId, approvalId: id }, orderBy: { versionNumber: "desc" }, take: 100 }),
