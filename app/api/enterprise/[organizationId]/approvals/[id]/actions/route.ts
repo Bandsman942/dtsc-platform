@@ -19,6 +19,7 @@ import { decideEnterpriseLeaveRequest } from "@/lib/enterprise/hr-payroll/leave"
 import { decideEnterprisePayrollRun } from "@/lib/enterprise/hr-payroll/payroll";
 import { decideEnterpriseTimesheet } from "@/lib/enterprise/hr-payroll/timesheets";
 import { decideEnterpriseInventoryCount, decideEnterpriseStockTransfer } from "@/lib/enterprise/inventory/service";
+import { decideStockLotReclassification } from "@/lib/enterprise/inventory/lot-reclassification";
 import { decideEnterpriseStockAdjustment } from "@/lib/enterprise/inventory/adjustment-service";
 import { cancelEnterpriseProjectMilestoneApproval } from "@/lib/enterprise/projects-assets/milestone-approval-cancel";
 import { ensureProjectMilestoneApprovalSubmissionVersion, recordProjectMilestoneApprovalDecision } from "@/lib/enterprise/projects-assets/milestone-approval-coordination";
@@ -67,6 +68,7 @@ async function decideDomainApproval(organizationId: string, current: CurrentAppr
     return decideSalesInvoiceAssignedApproval(organizationId, current.targetEntityId, actorUserId, { action: data.action, revision, reason: data.decisionComment });
   }
   const args = { organizationId, approvalId: current.id, actorUserId, action: data.action, revision: data.revision, decisionComment: data.decisionComment || undefined, canManage };
+  if (current.targetEntityType === "EnterpriseStockLotReclassification") return decideStockLotReclassification(args);
   if (current.targetEntityType === "EnterprisePurchase") return decideEnterprisePurchaseApproval(args);
   if (current.targetEntityType === "EnterpriseBudget") return decideEnterpriseBudgetApproval(args);
   if (current.targetEntityType === "EnterpriseExpense") return decideEnterpriseExpenseApproval(args);
@@ -117,6 +119,7 @@ export async function POST(req: Request, { params }: Params) {
     }
     if (professional) {
       const data = professionalApprovalActionSchema.parse(payload);
+      if (current.targetEntityType === "EnterpriseStockLotReclassification") throw new ApprovalCoordinationError("TARGET_ACTION_NOT_SUPPORTED", 409, "Annulez ou rejetez cette répartition avant d’en soumettre une nouvelle.");
       if (current.targetEntityType === "EnterpriseSalesInvoice") {
         if (data.action !== "REQUEST_CORRECTION" || current.approverUserId !== session.userId) throw new ApprovalCoordinationError("FORBIDDEN", 403, "La correction de cette facture doit être demandée par son validateur désigné.");
         const revision = await targetRevision(organizationId, current);

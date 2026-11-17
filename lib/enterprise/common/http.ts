@@ -4,6 +4,17 @@ import { NextResponse } from "next/server";
 import { EnterpriseDomainError } from "@/lib/enterprise/common/errors";
 
 const BUSINESS_ERROR_MESSAGES: Record<string, { fr: string; en: string }> = {
+  STOCK_RECLASS_ALLOCATION_INVALID: { fr: "Vérifiez les numéros réels, dates et quantités de lots, sans doublon.", en: "Check actual batch numbers, dates and quantities, without duplicates." },
+  STOCK_RECLASS_QUANTITY_MISMATCH: { fr: "La répartition doit couvrir exactement le stock historique sélectionné.", en: "The allocation must exactly match the selected historical balance." },
+  STOCK_RECLASS_SOURCE_INVALID: { fr: "Ce stock historique ou son dépôt n’est plus disponible.", en: "This historical balance or its warehouse is unavailable." },
+  STOCK_RECLASS_SOURCE_CHANGED: { fr: "Le stock ou les règles ont changé. Actualisez avant une nouvelle demande.", en: "Stock or rules changed. Refresh before submitting again." },
+  STOCK_RECLASS_PERMISSION_DENIED: { fr: "La régularisation exige une autorisation globale de stock et un validateur distinct.", en: "Reclassification requires company-wide stock access and an independent approver." },
+  STOCK_RECLASS_SECTOR_AUTHORITY: { fr: "Cet article dépend d’un registre sectoriel. Utilisez son circuit de traçabilité spécialisé.", en: "This item belongs to a sector ledger. Use its specialized traceability workflow." },
+  STOCK_RECLASS_OPEN_OPERATIONS: { fr: "Clôturez les opérations, réservations ou retenues de cet article avant sa répartition.", en: "Resolve stock operations, reservations or holds for this item before allocation." },
+  STOCK_RECLASS_LOT_CONFLICT: { fr: "Le lot existe avec des coordonnées ou des dates incompatibles. Vérifiez sa fiche.", en: "The batch already exists with incompatible coordinates or dates. Review its details." },
+  STOCK_RECLASS_IDEMPOTENCY_COLLISION: { fr: "Ce numéro de demande est déjà utilisé pour une autre opération.", en: "This request key has already been used for another operation." },
+  STOCK_RECLASS_ALREADY_PENDING: { fr: "Une répartition est déjà en attente de validation pour ce stock.", en: "An allocation is already awaiting approval for this balance." },
+  STOCK_RECLASS_REASON_REQUIRED: { fr: "Précisez le motif du rejet.", en: "Enter a reason for rejection." },
   RECEIPT_BATCH_LINE_INVALID: { fr: "Les lots doivent correspondre à des lignes de cette réception, sans doublon.", en: "Batches must match receipt lines, without duplicates." },
   RECEIPT_BATCH_SERVICE_INVALID: { fr: "Une prestation de service ne possède pas de lot physique.", en: "A service does not have a physical batch." },
   RECEIPT_BATCH_REQUIRED: { fr: "Renseignez les lots réellement reçus pour cet article.", en: "Enter the batches actually received for this item." },

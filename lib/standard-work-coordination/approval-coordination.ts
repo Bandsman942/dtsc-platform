@@ -121,6 +121,16 @@ async function approvalTargetSnapshot(tx: Prisma.TransactionClient, organization
     const item = await tx.enterpriseInventoryCount.findFirst({ where: { id: entityId, organizationId, archivedAt: null }, select: { id: true, reference: true, status: true, countType: true, warehouseId: true, storageLocationId: true, notes: true, requestedByUserId: true, approvedByUserId: true, revision: true, updatedAt: true, lines: { select: { id: true, inventoryItemId: true, stockLotId: true, expectedQuantity: true, countedQuantity: true, varianceQuantity: true } } } });
     if (!item) throw new ApprovalCoordinationError("TARGET_NOT_FOUND", 404, "Inventaire source introuvable."); return serializeSnapshot(item);
   }
+  if (entityType === "EnterpriseStockLotReclassification") {
+    const item = await tx.enterpriseStockLotReclassification.findFirst({ where: { organizationId, id: entityId } });
+    if (!item) throw new ApprovalCoordinationError("TARGET_NOT_FOUND", 404, "Régularisation source introuvable.");
+    const [inventory, warehouse, location] = await Promise.all([
+      tx.enterpriseInventoryItem.findFirst({ where: { organizationId, id: item.inventoryItemId }, select: { catalogItem: { select: { code: true, name: true } } } }),
+      tx.enterpriseWarehouse.findFirst({ where: { organizationId, id: item.warehouseId }, select: { code: true, name: true } }),
+      item.storageLocationId ? tx.enterpriseStorageLocation.findFirst({ where: { organizationId, id: item.storageLocationId }, select: { code: true, name: true } }) : Promise.resolve(null),
+    ]);
+    return serializeSnapshot({ reference: item.reference, status: item.status, article: inventory?.catalogItem, warehouse, location, quantity: item.quantity, allocations: item.allocations, reason: item.reason, revision: item.revision });
+  }
   if (entityType === "EnterpriseStockAdjustment") {
     const item = await tx.enterpriseStockAdjustment.findFirst({ where: { id: entityId, organizationId }, select: { id: true, reference: true, status: true, adjustmentType: true, inventoryItemId: true, warehouseId: true, storageLocationId: true, stockLotId: true, quantity: true, reason: true, requestedByUserId: true, approvedByUserId: true, revision: true, updatedAt: true } });
     if (!item) throw new ApprovalCoordinationError("TARGET_NOT_FOUND", 404, "Ajustement de stock source introuvable."); return serializeSnapshot(item);

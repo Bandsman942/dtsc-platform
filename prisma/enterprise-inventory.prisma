@@ -253,3 +253,32 @@ model EnterpriseStockAdjustment {
   @@index([organizationId, warehouseId, status])
   @@index([organizationId, requestedByUserId, status])
 }
+
+
+model EnterpriseStockLotReclassification {
+  id                    String   @id @default(cuid())
+  organizationId        String
+  reference             String
+  sourceBalanceId       String
+  sourceBalanceRevision Int
+  inventoryItemId       String
+  itemRevision          Int
+  warehouseId           String
+  storageLocationId     String?
+  quantity              Decimal  @db.Decimal(18, 3)
+  allocations           Json
+  reason                String
+  requestedByUserId     String
+  status                String   @default("PENDING_APPROVAL")
+  revision              Int      @default(1)
+  idempotencyKey        String
+  decidedAt             DateTime?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, reference])
+  @@unique([organizationId, idempotencyKey], map: "EnterpriseLotReclass_idempotency_key")
+  @@index([organizationId, sourceBalanceId, status], map: "EnterpriseLotReclass_source_status_idx")
+  @@index([organizationId, warehouseId, status], map: "EnterpriseLotReclass_warehouse_status_idx")
+}

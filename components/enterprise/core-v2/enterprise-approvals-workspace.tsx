@@ -33,6 +33,7 @@ const APPROVAL_TARGET_TYPES = [
   "EnterpriseStockTransfer",
   "EnterpriseInventoryCount",
   "EnterpriseStockAdjustment",
+  "EnterpriseStockLotReclassification",
   "EnterpriseBudget",
   "EnterpriseExpense",
   "EnterpriseAccountTransfer",

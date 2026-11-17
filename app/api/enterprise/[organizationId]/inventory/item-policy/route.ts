@@ -7,7 +7,8 @@ import { z } from "zod";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { getEnterpriseCommonDomainAccess } from "@/lib/enterprise/common/access";
-import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
+import { lotReclassificationSchema, submitStockLotReclassification } from "@/lib/enterprise/inventory/lot-reclassification";
+import { enterpriseDomainErrorResponse, enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
 import { prisma } from "@/lib/prisma";
 import { isSameOriginRequest } from "@/lib/request-security";
 
@@ -65,4 +66,25 @@ export async function PUT(req: Request, { params }: Params) {
   await writeAuditLog({ userId: session.userId, organizationId, action: "ENTERPRISE_INVENTORY_ITEM_POLICY_UPDATED", entity: "EnterpriseInventoryItem", entityId: input.inventoryItemId, request: req, metadata: { revision: input.revision + 1, lotTracking: input.lotTracking, expiryTracking: input.expiryTracking } });
   await writeApiLog({ request: req, startedAt, statusCode: 200, userId: session.userId, metadata: { organizationId, domain: "inventory-item-policy" } });
   return NextResponse.json({ ok: true, revision: input.revision + 1 });
+}
+
+/** Submit a zero-sum assignment of an existing untracked balance. The
+ * designated independent approver decides it from the common Validations. */
+export async function POST(req: Request, { params }: Params) {
+  const startedAt = Date.now();
+  if (!isSameOriginRequest(req)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const session = await getSession();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { organizationId } = await params;
+  const access = await getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode: "INVENTORY_LOGISTICS", action: "manage" });
+  if (!access?.canAdminister) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!(await rateLimit("inventory-lot-reclass:" + organizationId + ":" + session.userId, 30, 60_000)).ok) return NextResponse.json({ error: "RATE_LIMITED" }, { status: 429 });
+  const parsed = lotReclassificationSchema.safeParse(await req.json().catch(() => null));
+  if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "STOCK_RECLASS_ALLOCATION_INVALID", req);
+  try {
+    const result = await submitStockLotReclassification(organizationId, session.userId, parsed.data);
+    await writeAuditLog({ userId: session.userId, organizationId, action: "STOCK_LOT_RECLASS_SUBMITTED", entity: "EnterpriseStockLotReclassification", entityId: result.request.id, request: req, metadata: { approvalId: result.approval.id, idempotent: result.idempotent } });
+    await writeApiLog({ request: req, startedAt, userId: session.userId, statusCode: result.idempotent ? 200 : 201, metadata: { organizationId, domain: "inventory-lot-reclass" } });
+    return NextResponse.json({ ok: true, reference: result.request.reference, approvalId: result.approval.id, idempotent: result.idempotent }, { status: result.idempotent ? 200 : 201 });
+  } catch (error) { return enterpriseDomainErrorResponse(error, "STOCK_RECLASS_FAILED", req); }
 }

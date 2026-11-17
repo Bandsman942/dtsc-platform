@@ -18,6 +18,11 @@
 - Validation Retail de la demande totale par lot et article, y compris livraison finale après crédit partiel ; exclusion des retenues de la facture en cours. Conservation du contrat facture (une ligne par article) : allocation automatique multi-lots de la facture reste à réaliser avec une provenance adaptée. Les réservations sans lot sont déduites conservativement sur chaque lot, comme les contrôles Retail historiques ; leur allocation exacte reste bloquante.
 - QA comportementale sur quantités 20+20, lot retenu, date civile et quarantaine. Exécution requise sur SHA final. FEFO ne change pas les couches de coût moyen pondéré par article/dépôt/devise.
 
+## Réaffectation historique — service et approbation (en validation)
+- Demande persistée, migration additive sans backfill, validation commune par un autre collaborateur, revue versionnée, transaction Serializable à révision du solde/fiche avec contrôle des opérations ouvertes et séparation des registres sectoriels.
+- Mouvements compensés `LOT_RECLASSIFICATION_OUT/IN` à quantité exacte, même article/dépôt/emplacement, journal immuable, aucune modification de couches de coût ou d’écriture; valorisation interdite pour ces mouvements. Le suivi des lots s’active séparément après traitement de tous les soldes.
+- Interface de soumission et recette PostgreSQL/UI à compléter. Pas d’exécution sur données clientes.
+
 ## Restant (bloquant)
 Assistant de réaffectation historique transactionnel avec approbation et valeur conservée; certification achats et valorisation, réservations/livraisons multi-lots; moteur FEFO commun et POS; pertes, rappels et comptabilité; Design 2.0 et tests multisectoriels. Voir issue #1212. Ne pas merger avant clôture de tous les points.
 
