@@ -8,6 +8,7 @@ import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http"
 import { retailInventoryVisibleSites, requireRetailWarehouseCapability } from "@/lib/enterprise/retail/site-access";
 import { retailErrorResponse } from "@/lib/enterprise/retail/http";
 import { prisma } from "@/lib/prisma";
+import { rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
 
 type Params = { params: Promise<{ organizationId: string }> };
@@ -52,12 +53,13 @@ export async function POST(req: Request, { params }: Params) {
   const { organizationId } = await params;
   const access = await getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode: "INVENTORY_LOGISTICS", action: "write" });
   if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!(await rateLimit(`inventory-lot-write:${organizationId}:${session.userId}`, 60, 60_000)).ok) return NextResponse.json({ error: "RATE_LIMITED" }, { status: 429 });
   const parsed = createSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "INVENTORY_LOT_INPUT_INVALID", req);
   const input = parsed.data;
   try { await requireRetailWarehouseCapability(organizationId, session.userId, input.warehouseId, "MANAGE_STOCK"); } catch (error) { return retailErrorResponse(error, "RETAIL_SITE_ACCESS_DENIED"); }
   const [item, warehouse] = await Promise.all([
-    prisma.enterpriseInventoryItem.findFirst({ where: { id: input.inventoryItemId, organizationId, status: "ACTIVE", archivedAt: null }, select: { id: true, lotTracking: true, expiryTracking: true } }),
+    prisma.enterpriseInventoryItem.findFirst({ where: { id: input.inventoryItemId, organizationId, status: "ACTIVE", archivedAt: null, catalogItem: { organizationId, status: "ACTIVE", archivedAt: null, trackInventory: true } }, select: { id: true, lotTracking: true, expiryTracking: true } }),
     prisma.enterpriseWarehouse.findFirst({ where: { id: input.warehouseId, organizationId, status: "ACTIVE", archivedAt: null }, select: { id: true } }),
   ]);
   if (!item || !warehouse) return NextResponse.json({ error: "INVENTORY_LOT_REFERENCES_INVALID", message: "Choisissez un article de stock et un dépôt actifs de votre entreprise." }, { status: 404 });
@@ -78,6 +80,7 @@ export async function PATCH(req: Request, { params }: Params) {
   const { organizationId } = await params;
   const access = await getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode: "INVENTORY_LOGISTICS", action: "write" });
   if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!(await rateLimit(`inventory-lot-write:${organizationId}:${session.userId}`, 60, 60_000)).ok) return NextResponse.json({ error: "RATE_LIMITED" }, { status: 429 });
   const parsed = patchSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "INVENTORY_LOT_INPUT_INVALID", req);
   const input = parsed.data;
