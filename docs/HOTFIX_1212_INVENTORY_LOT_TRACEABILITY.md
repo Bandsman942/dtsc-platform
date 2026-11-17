@@ -23,6 +23,13 @@
 - Mouvements compensés `LOT_RECLASSIFICATION_OUT/IN` à quantité exacte, même article/dépôt/emplacement, journal immuable, aucune modification de couches de coût ou d’écriture; valorisation interdite pour ces mouvements. Le suivi des lots s’active séparément après traitement de tous les soldes.
 - Interface de soumission depuis les contrôles par article, sélection des soldes, calcul indicatif du restant, validation indépendante, lien vers Validations et revue affichant tous les lots. QA des règles 100 = 30+70, doublons, données et séparation des acteurs; recette PostgreSQL/UI complète à exécuter. Pas d’exécution sur données clientes.
 
+## Réservations ventilées et consommation par lot (en validation)
+- Migration additive nullable `lotAllocations` sur la réservation canonique : aucun backfill de promesses historiques non identifiées. Les coordonnées de solde, lot et emplacement ainsi que les quantités initiales et livrées sont contrôlées dans une transaction Serializable ; pas de deuxième registre.
+- Allocation des stocks suivis en FEFO strict : pas de lot expiré, bloqué ou archivé ; quantité de la commande encore disponible ; réservations explicites et retenues de facture déduites. Les réservations historiques restent protégées conservativement jusqu’à leur libération et nouvelle affectation.
+- Livraisons omnicanal : plusieurs mouvements physiques par réservation, consommation partielle, identifiant stable par solde, coût des ventes calculé par le moteur Finance existant sur chaque mouvement. La libération de la promesse consommée et l’émission du mouvement sont atomiques.
+- La sortie générique protège les lots promis, y compris lors d’un transfert, d’un ajustement ou d’une vente POS. Le contrôle Retail et le sélecteur de lots intègrent les allocations exactes. Tests comportementaux ajoutés (30+20, livraison 30+10, reliquat 10, deux emplacements et une seule retenue).
+- Pas encore d'API de réservation commune hors Retail, d'extension du flux de livraison ERP hors orchestration Retail, ni d'allocation multi-lots automatique sur une ligne de facture POS. Ces travaux restent bloquants.
+ 
 ## Restant (bloquant)
 Certification de la réaffectation historique sur PostgreSQL + navigateur et valeur inchangée; certification achats et valorisation, réservations/livraisons multi-lots; moteur FEFO commun et POS; pertes, rappels et comptabilité; Design 2.0 et tests multisectoriels. Voir issue #1212. Ne pas merger avant clôture de tous les points.
 

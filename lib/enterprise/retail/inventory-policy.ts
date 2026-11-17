@@ -1,7 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
-import { lotExpiryDateKey, planFefoLots } from "@/lib/enterprise/inventory/lot-allocation";
+import { lotExpiryDateKey, planFefoLots, reservationLegacyRemaining, reservationLotRemaining } from "@/lib/enterprise/inventory/lot-allocation";
 import { readActiveRetailInvoiceStockHoldsTx } from "@/lib/enterprise/retail/invoice-stock-holds";
 
 export const retailInventoryPolicySchema = z.object({
@@ -96,7 +96,7 @@ export async function assertRetailLotPolicyTx(
 
   const [holds, reservations] = policy.enforceFefo ? await Promise.all([
     readActiveRetailInvoiceStockHoldsTx(tx, { organizationId: args.organizationId, warehouseId: args.warehouseId, inventoryItemIds: inventoryIds, excludeSalesInvoiceId: args.excludeSalesInvoiceId }),
-    tx.enterpriseInventoryReservation.findMany({ where: { organizationId: args.organizationId, warehouseId: args.warehouseId, inventoryItemId: { in: inventoryIds }, status: "ACTIVE", OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] }, select: { inventoryItemId: true, quantity: true, fulfilledQuantity: true } }),
+    tx.enterpriseInventoryReservation.findMany({ where: { organizationId: args.organizationId, warehouseId: args.warehouseId, inventoryItemId: { in: inventoryIds }, status: "ACTIVE", OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] }, select: { inventoryItemId: true, quantity: true, fulfilledQuantity: true, lotAllocations: true } }),
   ]) : [[], []];
   for (const line of args.lines) {
     if (!line.inventoryItemId) continue;
@@ -140,11 +140,11 @@ export async function assertRetailLotPolicyTx(
         candidates: lots.filter((lot) => lot.inventoryItemId === inventoryItemId).map((lot) => {
           const rows = balances.filter((row) => row.inventoryItemId === inventoryItemId && row.stockLotId === lot.id);
           return { ...lot, quantityOnHand: rows.reduce((sum, row) => sum.plus(row.quantityOnHand), zero()),
-            quantityReserved: rows.reduce((sum, row) => sum.plus(row.quantityReserved), zero()),
+            quantityReserved: rows.reduce((sum, row) => sum.plus(row.quantityReserved), zero()).plus(reservations.filter((row) => row.inventoryItemId === inventoryItemId).reduce((sum, row) => sum.plus(reservationLotRemaining(row, lot.id).minus(reservationLegacyRemaining(row))), zero())),
             quantityHeld: holds.filter((row) => row.inventoryItemId === inventoryItemId && row.stockLotId === lot.id).reduce((sum, row) => sum.plus(row.quantity), zero()) };
         }),
         quantity, businessDate: today, expiryMode: policy.expiryMode,
-        unallocatedReserved: reservations.filter((row) => row.inventoryItemId === inventoryItemId).reduce((sum, row) => sum.plus(row.quantity.minus(row.fulfilledQuantity)), zero()),
+        unallocatedReserved: reservations.filter((row) => row.inventoryItemId === inventoryItemId).reduce((sum, row) => sum.plus(reservationLegacyRemaining(row)), zero()),
       });
       if (plan.shortfall.gt(0)) throw new EnterpriseRetailError("NEGATIVE_STOCK_FORBIDDEN", 409);
       if (plan.allocations.length !== demand.size || plan.allocations.some((allocation) => !demand.get(allocation.stockLotId)?.equals(allocation.quantity))) {

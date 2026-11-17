@@ -11,6 +11,7 @@ import { resolveExchangeRateDetails, snapshotExchangeRate } from "@/lib/enterpri
 import { resolveRetailCommercialPricingDecisions } from "@/lib/enterprise/retail/commercial-engine";
 import { valueRetailInvoiceFulfillmentIssueTx } from "@/lib/enterprise/retail/accounting";
 import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
+import { reservationExactBalanceRemaining, reservationLegacyRemaining, reservationLotRemaining } from "@/lib/enterprise/inventory/lot-allocation";
 import { assertRetailLotPolicyTx } from "@/lib/enterprise/retail/inventory-policy";
 import { readActiveRetailInvoiceStockHoldsTx } from "@/lib/enterprise/retail/invoice-stock-holds";
 import { applyStockMovementTx } from "@/lib/enterprise/inventory/service";
@@ -119,7 +120,7 @@ export async function prepareRetailInvoice(organizationId: string, actorUserId: 
     const [lots, balances, reservations, retailHolds] = await Promise.all([
       selectedLots.length ? tx.enterpriseStockLot.findMany({ where: { organizationId, warehouseId: input.warehouseId, id: { in: selectedLots }, status: "AVAILABLE", archivedAt: null }, select: { id: true, inventoryItemId: true } }) : Promise.resolve([]),
       tx.enterpriseInventoryBalance.findMany({ where: { organizationId, warehouseId: input.warehouseId, inventoryItemId: { in: inventoryItems.map((item) => item.id) } }, select: { inventoryItemId: true, stockLotId: true, quantityOnHand: true, quantityReserved: true } }),
-      tx.enterpriseInventoryReservation.findMany({ where: { organizationId, warehouseId: input.warehouseId, inventoryItemId: { in: inventoryItems.map((item) => item.id) }, status: "ACTIVE", OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] }, select: { inventoryItemId: true, quantity: true, fulfilledQuantity: true } }),
+      tx.enterpriseInventoryReservation.findMany({ where: { organizationId, warehouseId: input.warehouseId, inventoryItemId: { in: inventoryItems.map((item) => item.id) }, status: "ACTIVE", OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] }, select: { inventoryItemId: true, quantity: true, fulfilledQuantity: true, lotAllocations: true } }),
       readActiveRetailInvoiceStockHoldsTx(tx, { organizationId, warehouseId: input.warehouseId, inventoryItemIds: inventoryItems.map((item) => item.id) }),
     ]);
     const lotById = new Map(lots.map((lot) => [lot.id, lot]));
@@ -139,7 +140,7 @@ export async function prepareRetailInvoice(organizationId: string, actorUserId: 
           throw new EnterpriseRetailError("RETAIL_STOCK_LOT_REQUIRED", 409);
         }
         const available = rows.reduce((sum, row) => sum.plus(row.quantityOnHand.minus(row.quantityReserved)), new Prisma.Decimal(0))
-          .minus(reservations.filter((row) => row.inventoryItemId === inventory.id).reduce((sum, row) => sum.plus(row.quantity.minus(row.fulfilledQuantity)), new Prisma.Decimal(0)))
+          .minus(reservations.filter((row) => row.inventoryItemId === inventory.id).reduce((sum, row) => sum.plus(reservationLotRemaining(row, line.stockLotId || null)), new Prisma.Decimal(0)))
           .minus(retailHolds.filter((hold) => hold.inventoryItemId === inventory.id && hold.stockLotId === (line.stockLotId || null)).reduce((sum, hold) => sum.plus(hold.quantity), new Prisma.Decimal(0)));
         if (available.lessThan(line.quantity)) throw new EnterpriseRetailError("NEGATIVE_STOCK_FORBIDDEN", 409);
       }
@@ -312,7 +313,7 @@ export async function postPaidRetailInvoiceStockTx(
         organizationId, warehouseId: checkout.warehouseId, inventoryItemId: line.inventoryItemId,
         status: "ACTIVE", OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
       },
-      select: { quantity: true, fulfilledQuantity: true, storageLocationId: true },
+      select: { quantity: true, fulfilledQuantity: true, storageLocationId: true, lotAllocations: true },
     }), readActiveRetailInvoiceStockHoldsTx(tx, {
       organizationId, warehouseId: checkout.warehouseId, inventoryItemIds: [line.inventoryItemId],
       excludeSalesInvoiceId: checkout.salesInvoiceId,
@@ -320,7 +321,7 @@ export async function postPaidRetailInvoiceStockTx(
     let stillNeeded = remaining;
     let unscopedReserved = activeReservations
       .filter((reservation) => !reservation.storageLocationId)
-      .reduce((sum, reservation) => sum.plus(reservation.quantity.minus(reservation.fulfilledQuantity)), new Prisma.Decimal(0));
+      .reduce((sum, reservation) => sum.plus(reservationLegacyRemaining(reservation)), new Prisma.Decimal(0));
     // Another unpaid invoice owns this physical quantity. This checkout's
     // own promise must not block its eventual fulfillment.
     unscopedReserved = unscopedReserved.plus(otherRetailHolds
@@ -330,9 +331,7 @@ export async function postPaidRetailInvoiceStockTx(
     // is a separate legacy field, so these two sources must both be counted.
     for (const balance of balances) {
       if (stillNeeded.isZero()) break;
-      const specificReserved = activeReservations
-        .filter((reservation) => reservation.storageLocationId && reservation.storageLocationId === balance.storageLocationId)
-        .reduce((sum, reservation) => sum.plus(reservation.quantity.minus(reservation.fulfilledQuantity)), new Prisma.Decimal(0));
+      const specificReserved = activeReservations.reduce((sum, reservation) => sum.plus(reservationExactBalanceRemaining(reservation, balance.id)).plus(reservation.storageLocationId && reservation.storageLocationId === balance.storageLocationId ? reservationLegacyRemaining(reservation) : 0), new Prisma.Decimal(0));
       const physicallyFree = decimalMax(new Prisma.Decimal(0), balance.quantityOnHand.minus(balance.quantityReserved).minus(specificReserved));
       const unscopedTakenHere = decimalMin(unscopedReserved, physicallyFree);
       unscopedReserved = unscopedReserved.minus(unscopedTakenHere);

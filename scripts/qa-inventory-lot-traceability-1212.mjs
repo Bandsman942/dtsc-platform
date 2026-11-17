@@ -128,3 +128,28 @@ assert.throws(() => reclass.validateLotReclassificationAllocations([batches[0], 
 assert.throws(() => reclass.validateLotReclassificationAllocations([batches[0], { ...batches[1], expiryDate: null }], d(100), true), { code: "STOCK_RECLASS_ALLOCATION_INVALID" });
 await assert.rejects(reclass.submitStockLotReclassification("org", "same-user", { approverUserId: "same-user" }), { code: "SELF_APPROVAL_FORBIDDEN" });
 console.log("Historical batch allocation: quantity conservation, real dates, duplicate guard and independent approver OK");
+
+const allocationTools = load("lib/enterprise/inventory/lot-allocation.ts");
+const physical = (id, stockLotId, expiry, quantity, status = "AVAILABLE", storageLocationId = null) => ({ id, stockLotId, storageLocationId, quantityOnHand: d(quantity), quantityReserved: d(0), stockLot: { status, archivedAt: null, expiryDate: new Date(expiry + "T00:00:00Z") } });
+const stock = [physical("a", "early", "2027-01-01", 30), physical("b", "late", "2027-02-01", 70), physical("c", "expired", "2026-11-16", 100), physical("d", "quarantine", "2027-01-01", 100, "QUARANTINED")];
+const parameters = { balances: stock, reservations: [], holds: [], quantity: 50, businessDate: "2026-11-17", requireExpiry: true };
+const assigned = allocationTools.planReservationLotAllocations(parameters);
+assert.equal(assigned.shortfall.toFixed(), "0");
+assert.equal(assigned.allocations.map(row => row.stockLotId + ":" + row.quantity).join(","), "early:30,late:20");
+const promise = { quantity: d(50), fulfilledQuantity: d(0), lotAllocations: assigned.allocations };
+assert.equal(allocationTools.reservationLotRemaining(promise, "early").toFixed(), "30");
+assert.equal(allocationTools.reservationLotRemaining(promise, "late").toFixed(), "20");
+assert.equal(allocationTools.reservationLegacyRemaining(promise).toFixed(), "0");
+const again = allocationTools.planReservationLotAllocations({ ...parameters, reservations: [promise], quantity: 50 });
+assert.equal(again.allocations.map(row => row.stockLotId + ":" + row.quantity).join(","), "late:50");
+const delivery = allocationTools.consumeReservationLotAllocations(assigned.allocations, d(40));
+assert.equal(delivery.movements.map(row => row.stockLotId + ":" + row.consumedQuantity).join(","), "early:30,late:10");
+const partial = { ...promise, fulfilledQuantity: d(40), lotAllocations: delivery.next };
+assert.equal(allocationTools.reservationLotRemaining(partial, "early").toFixed(), "0");
+assert.equal(allocationTools.reservationLotRemaining(partial, "late").toFixed(), "10");
+assert.throws(() => allocationTools.readReservationLotAllocations({ ...partial, fulfilledQuantity: d(39) }), /INVENTORY_RESERVATION_ALLOCATION_INVALID/);
+const shelves = [physical("s1", "same", "2027-01-01", 20, "AVAILABLE", "loc1"), physical("s2", "same", "2027-01-01", 20, "AVAILABLE", "loc2")];
+const held = allocationTools.planReservationLotAllocations({ ...parameters, balances: shelves, holds: [{ stockLotId: "same", quantity: d(10) }], quantity: 30 });
+assert.equal(held.shortfall.toFixed(), "0", "One invoice hold across two shelves must be deducted only once");
+assert.equal(held.allocations.map(row => row.quantity).join(","), "10,20");
+console.log("Reservation batch allocation and partial delivery: exact balance coordinates, FEFO, holds and no duplicate quantities OK");

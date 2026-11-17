@@ -6,6 +6,8 @@ import type { inventoryReservationCreateSchema } from "@/lib/enterprise/inventor
 import { applyStockMovementTx, requireInventoryStockAuthorityTx } from "@/lib/enterprise/inventory/service";
 import { readActiveRetailInvoiceStockHoldsTx } from "@/lib/enterprise/retail/invoice-stock-holds";
 import { prisma } from "@/lib/prisma";
+import { consumeReservationLotAllocations, planReservationLotAllocations, readReservationLotAllocations } from "@/lib/enterprise/inventory/lot-allocation";
+import { businessDateKey, lotIsExpired } from "@/lib/enterprise/retail/inventory-policy";
 
 type ReservationCreateInput = z.infer<typeof inventoryReservationCreateSchema>;
 
@@ -139,7 +141,7 @@ export async function createEnterpriseInventoryReservation(organizationId: strin
     await requireInventoryStockAuthorityTx(tx, organizationId, actorUserId, input.warehouseId);
     const existing = await tx.enterpriseInventoryReservation.findFirst({ where: { organizationId, idempotencyKey: input.idempotencyKey } });
     if (existing) {
-      if (existing.warehouseId !== input.warehouseId || existing.salesOrderId !== input.salesOrderId
+      if (existing.warehouseId !== input.warehouseId || existing.storageLocationId !== (input.storageLocationId || null) || existing.salesOrderId !== input.salesOrderId
         || existing.salesOrderItemId !== input.salesOrderItemId || !existing.quantity.equals(input.quantity)) {
         throw new EnterpriseDomainConflictError("INVENTORY_RESERVATION_IDEMPOTENCY_COLLISION");
       }
@@ -168,10 +170,13 @@ export async function createEnterpriseInventoryReservation(organizationId: strin
     const catalogItemId = orderItem.catalogItemId;
     const inventoryItem = await tx.enterpriseInventoryItem.findFirst({
       where: { organizationId, catalogItemId, status: "ACTIVE", archivedAt: null },
-      select: { id: true },
+      select: { id: true, lotTracking: true, expiryTracking: true },
     });
     if (!inventoryItem) throw new EnterpriseDomainError("INVENTORY_ITEM_NOT_FOUND", 404);
 
+    const orderPromises = await tx.enterpriseInventoryReservation.findMany({ where: { organizationId, salesOrderItemId: input.salesOrderItemId, status: "ACTIVE", OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] }, select: { quantity: true, fulfilledQuantity: true } });
+    const alreadyPromised = orderPromises.reduce((sum, row) => sum.plus(row.quantity.minus(row.fulfilledQuantity)), decimal());
+    if (alreadyPromised.plus(input.quantity).gt(remainingOrderQuantity)) throw new EnterpriseDomainError("RESERVATION_EXCEEDS_ORDER_REMAINING", 409);
     const [balances, activeReservations, retailHolds] = await Promise.all([
       tx.enterpriseInventoryBalance.findMany({
         where: {
@@ -184,7 +189,7 @@ export async function createEnterpriseInventoryReservation(organizationId: strin
       }),
       tx.enterpriseInventoryReservation.findMany({
         where: activeReservationWhere(organizationId, inventoryItem.id, input.warehouseId),
-        select: { quantity: true, fulfilledQuantity: true, storageLocationId: true },
+        select: { quantity: true, fulfilledQuantity: true, storageLocationId: true, lotAllocations: true },
       }),
       readActiveRetailInvoiceStockHoldsTx(tx, { organizationId, warehouseId: input.warehouseId, inventoryItemIds: [inventoryItem.id] }),
     ]);
@@ -205,6 +210,21 @@ export async function createEnterpriseInventoryReservation(organizationId: strin
       );
     }
 
+    let lotAllocations: Prisma.InputJsonValue | undefined;
+    if (inventoryItem.lotTracking || inventoryItem.expiryTracking) {
+      if (decimal(input.quantity).decimalPlaces() > 3) throw new EnterpriseDomainError("INVENTORY_RESERVATION_ALLOCATION_INVALID", 400);
+      const [trackedBalances, organization] = await Promise.all([
+        tx.enterpriseInventoryBalance.findMany({
+          where: { organizationId, inventoryItemId: inventoryItem.id, warehouseId: input.warehouseId, stockLotId: { not: null }, quantityOnHand: { gt: 0 }, OR: [{ storageLocationId: null }, { storageLocation: { status: "ACTIVE", archivedAt: null } }] },
+          select: { id: true, stockLotId: true, storageLocationId: true, quantityOnHand: true, quantityReserved: true, stockLot: { select: { status: true, archivedAt: true, expiryDate: true } } },
+        }),
+        tx.organization.findUniqueOrThrow({ where: { id: organizationId }, select: { timezone: true } }),
+      ]);
+      const plan = planReservationLotAllocations({ balances: trackedBalances, reservations: activeReservations, holds: retailHolds, quantity: input.quantity, businessDate: businessDateKey(new Date(), organization.timezone || "UTC"), requireExpiry: inventoryItem.expiryTracking, storageLocationId: input.storageLocationId });
+      if (plan.shortfall.gt(0)) throw new EnterpriseDomainError("INVENTORY_RESERVATION_INSUFFICIENT", 409);
+      lotAllocations = plan.allocations;
+    }
+
     const reservation = await tx.enterpriseInventoryReservation.create({
       data: {
         organizationId,
@@ -214,6 +234,7 @@ export async function createEnterpriseInventoryReservation(organizationId: strin
         warehouseId: input.warehouseId,
         storageLocationId: input.storageLocationId || null,
         quantity: input.quantity,
+        ...(lotAllocations ? { lotAllocations } : {}),
         expiresAt: input.expiresAt || null,
         idempotencyKey: input.idempotencyKey,
         createdByUserId: actorUserId,
@@ -273,26 +294,23 @@ export async function consumeEnterpriseInventoryReservationsTx(
       const reservationRemaining = decimal(reservation.quantity).minus(reservation.fulfilledQuantity);
       if (reservationRemaining.lte(0)) continue;
       const consumeQuantity = Prisma.Decimal.min(reservationRemaining, remainingToFulfill);
-      const movement = await applyStockMovementTx(tx, args.organizationId, args.actorUserId, {
-        inventoryItemId: reservation.inventoryItemId,
-        warehouseId: reservation.warehouseId,
-        storageLocationId: reservation.storageLocationId,
-        stockLotId: null,
-        movementType: "SALE_FULFILLMENT",
-        direction: "OUT",
-        quantity: Number(consumeQuantity.toString()),
-        sourceEntityType: "EnterpriseFulfillment",
-        sourceEntityId: args.fulfillmentId,
-        sourceLineId: item.salesOrderItemId,
-        idempotencyKey: `fulfillment:${args.fulfillmentId}:reservation:${reservation.id}`,
-        reason: "Consommation de réservation lors du fulfillment de commande",
-      });
+      const allocations = readReservationLotAllocations(reservation);
+      const split = allocations ? consumeReservationLotAllocations(allocations, consumeQuantity) : null;
+      if (!split) {
+        // Historical reservations are never assigned an invented lot. They
+        // must be released and re-created if the item now requires lots.
+        const inventory = await tx.enterpriseInventoryItem.findFirst({ where: { organizationId: args.organizationId, id: reservation.inventoryItemId }, select: { lotTracking: true, expiryTracking: true } });
+        if (inventory?.lotTracking || inventory?.expiryTracking) throw new EnterpriseDomainError("INVENTORY_RESERVATION_REALLOCATION_REQUIRED", 409);
+      }
       const nextFulfilled = decimal(reservation.fulfilledQuantity).plus(consumeQuantity);
       const fullyConsumed = nextFulfilled.gte(reservation.quantity);
+      // First release only the quantity consumed by this fulfillment. The
+      // serializable transaction rolls back both promises and stock on failure.
       const updated = await tx.enterpriseInventoryReservation.updateMany({
         where: { id: reservation.id, organizationId: args.organizationId, revision: reservation.revision, status: "ACTIVE" },
         data: {
           fulfilledQuantity: nextFulfilled,
+          ...(split ? { lotAllocations: split.next } : {}),
           status: fullyConsumed ? "FULFILLED" : "ACTIVE",
           fulfilledByUserId: args.actorUserId,
           fulfilledAt: fullyConsumed ? now : null,
@@ -300,7 +318,32 @@ export async function consumeEnterpriseInventoryReservationsTx(
         },
       });
       if (updated.count !== 1) throw new EnterpriseDomainConflictError("INVENTORY_RESERVATION_CONFLICT");
-      consumed.push({ reservationId: reservation.id, salesOrderItemId: item.salesOrderItemId, quantity: consumeQuantity.toFixed(), movementId: movement.movement.id });
+      const issues = split ? split.movements.map((entry) => ({ ...entry, quantity: decimal(entry.consumedQuantity), key: `fulfillment:${args.fulfillmentId}:reservation:${reservation.id}:${entry.balanceId}` })) : [{ balanceId: null, stockLotId: null, storageLocationId: reservation.storageLocationId, quantity: consumeQuantity, key: `fulfillment:${args.fulfillmentId}:reservation:${reservation.id}` }];
+      for (const issue of issues) {
+        if (issue.stockLotId) {
+          const [lot, balance, organization] = await Promise.all([
+            tx.enterpriseStockLot.findFirst({ where: { organizationId: args.organizationId, id: issue.stockLotId, inventoryItemId: reservation.inventoryItemId, warehouseId: reservation.warehouseId, status: "AVAILABLE", archivedAt: null }, select: { expiryDate: true } }),
+            tx.enterpriseInventoryBalance.findFirst({ where: { id: issue.balanceId!, organizationId: args.organizationId, inventoryItemId: reservation.inventoryItemId, warehouseId: reservation.warehouseId, storageLocationId: issue.storageLocationId, stockLotId: issue.stockLotId }, select: { id: true } }),
+            tx.organization.findUniqueOrThrow({ where: { id: args.organizationId }, select: { timezone: true } }),
+          ]);
+          if (!lot || !balance || lotIsExpired(lot.expiryDate, businessDateKey(now, organization.timezone || "UTC"))) throw new EnterpriseDomainError("INVENTORY_RESERVATION_REALLOCATION_REQUIRED", 409);
+        }
+        const movement = await applyStockMovementTx(tx, args.organizationId, args.actorUserId, {
+          inventoryItemId: reservation.inventoryItemId,
+          warehouseId: reservation.warehouseId,
+          storageLocationId: issue.storageLocationId,
+          stockLotId: issue.stockLotId,
+          movementType: "SALE_FULFILLMENT",
+          direction: "OUT",
+          quantity: Number(issue.quantity.toString()),
+          sourceEntityType: "EnterpriseFulfillment",
+          sourceEntityId: args.fulfillmentId,
+          sourceLineId: item.salesOrderItemId,
+          idempotencyKey: issue.key,
+          reason: "Consommation de réservation lors du fulfillment de commande",
+        });
+        consumed.push({ reservationId: reservation.id, salesOrderItemId: item.salesOrderItemId, quantity: issue.quantity.toFixed(), movementId: movement.movement.id });
+      }
       remainingToFulfill = remainingToFulfill.minus(consumeQuantity);
     }
   }

@@ -16,6 +16,7 @@ import type {
   stockTransferDecisionSchema,
 } from "@/lib/enterprise/inventory/schemas";
 import { prisma } from "@/lib/prisma";
+import { reservationExactBalanceRemaining, reservationLegacyRemaining, reservationLotRemaining } from "@/lib/enterprise/inventory/lot-allocation";
 
 type StockMovementInput = z.infer<typeof stockMovementCreateSchema>;
 type StockTransferCreateInput = z.infer<typeof stockTransferCreateSchema>;
@@ -121,7 +122,7 @@ export async function applyStockMovementTx(
     });
     const held = holds.filter((row) => row.stockLotId === (input.stockLotId || null))
       .reduce((sum, row) => sum.plus(row.quantity), new Prisma.Decimal(0));
-    if (held.greaterThan(0)) {
+    if (held.greaterThan(0) || inventoryItem.lotTracking || input.stockLotId) {
       const balances = await tx.enterpriseInventoryBalance.findMany({
         where: {
           organizationId, inventoryItemId: input.inventoryItemId, warehouseId: input.warehouseId,
@@ -130,8 +131,15 @@ export async function applyStockMovementTx(
         select: { quantityOnHand: true, quantityReserved: true },
       });
       const physicallyFree = balances.reduce((sum, row) => sum.plus(row.quantityOnHand.minus(row.quantityReserved)), new Prisma.Decimal(0));
-      if (physicallyFree.minus(input.quantity).lessThan(held)) {
+      if (held.gt(0) && physicallyFree.minus(input.quantity).lessThan(held)) {
         throw new EnterpriseDomainError("RETAIL_INVOICE_STOCK_HELD", 409);
+      }
+      if (inventoryItem.lotTracking || input.stockLotId) {
+        const reservations = await tx.enterpriseInventoryReservation.findMany({ where: { organizationId, inventoryItemId: input.inventoryItemId, warehouseId: input.warehouseId, status: "ACTIVE", OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] }, select: { quantity: true, fulfilledQuantity: true, lotAllocations: true, storageLocationId: true } });
+        const lotPromised = reservations.reduce((sum, row) => sum.plus(reservationLotRemaining(row, input.stockLotId || null)), new Prisma.Decimal(0));
+        const localPromised = reservations.reduce((sum, row) => sum.plus(balance ? reservationExactBalanceRemaining(row, balance.id) : 0).plus(!row.storageLocationId || row.storageLocationId === (input.storageLocationId || null) ? reservationLegacyRemaining(row) : 0), new Prisma.Decimal(0));
+        const localFree = new Prisma.Decimal(balance?.quantityOnHand || 0).minus(balance?.quantityReserved || 0).minus(localPromised);
+        if (localFree.lt(input.quantity) || physicallyFree.minus(input.quantity).lt(held.plus(lotPromised))) throw new EnterpriseDomainError("INVENTORY_RESERVATION_STOCK_HELD", 409);
       }
     }
   }
