@@ -4,6 +4,14 @@ import { NextResponse } from "next/server";
 import { EnterpriseDomainError } from "@/lib/enterprise/common/errors";
 
 const BUSINESS_ERROR_MESSAGES: Record<string, { fr: string; en: string }> = {
+  RECEIPT_BATCH_LINE_INVALID: { fr: "Les lots doivent correspondre à des lignes de cette réception, sans doublon.", en: "Batches must match receipt lines, without duplicates." },
+  RECEIPT_BATCH_SERVICE_INVALID: { fr: "Une prestation de service ne possède pas de lot physique.", en: "A service does not have a physical batch." },
+  RECEIPT_BATCH_REQUIRED: { fr: "Renseignez les lots réellement reçus pour cet article.", en: "Enter the batches actually received for this item." },
+  RECEIPT_BATCH_POLICY_REQUIRED: { fr: "Activez le suivi des lots dans Stock & logistique avant cette réception.", en: "Enable batch tracking in Inventory & logistics before receiving this item." },
+  RECEIPT_BATCH_QUANTITY_INVALID: { fr: "La somme des quantités par lot doit correspondre à la quantité reçue, sans numéro en double.", en: "The total batch quantities must match the received quantity, without duplicate batch numbers." },
+  RECEIPT_BATCH_EXPIRY_REQUIRED: { fr: "La date réelle de péremption est obligatoire pour chaque lot.", en: "The actual expiry date is required for every batch." },
+  RECEIPT_BATCH_DATES_INVALID: { fr: "La date de fabrication doit précéder ou correspondre à la péremption.", en: "The production date must be on or before the expiry date." },
+  RECEIPT_BATCH_METADATA_CONFLICT: { fr: "Ce lot existe avec des dates, un emplacement ou un statut différent. Vérifiez sa fiche dans Stock & logistique.", en: "This batch already exists with different dates, location or status. Review it in Inventory & logistics." },
   STOCK_TRANSFER_NOT_IN_TRANSIT: { fr: "Ce transfert ne peut pas être réceptionné : il n'est pas en cours de transport ou il a déjà été reçu.", en: "This transfer cannot be received: it is not in transit or has already been received." },
   STOCK_TRANSFER_REVISION_CONFLICT: { fr: "Ce transfert a changé depuis votre dernière lecture. Actualisez sa fiche.", en: "This transfer changed since you last viewed it. Refresh its details." },
   STOCK_TRANSFER_SOURCE_LOT_NOT_FOUND: { fr: "Le lot d'origine de ce transfert est introuvable. Contactez le responsable du stock avant réception.", en: "The original transfer batch is missing. Contact the stock manager before receiving." },
