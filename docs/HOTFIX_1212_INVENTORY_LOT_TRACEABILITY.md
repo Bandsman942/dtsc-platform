@@ -13,6 +13,11 @@
 - Création ou réutilisation transactionnelle du lot du dépôt, refus de dates/statuts incompatibles ; mouvements distincts par lot. Le lien historique par ligne conserve le premier mouvement ; le journal canonique contient toutes les sorties/entrées par source de réception. Pas de double quantité ni de migration. Le rapprochement de valorisation reste celui du moteur Finance existant, à tester (aucune valeur comptable inventée).
 - Formulaire Achats : champs multiples par ligne suivie avec aide FR/EN, erreur métier contextualisée. Cette tranche n’atteste ni les tests de production ni la réception pharmaceutique réglementée.
 
+## Tranche FEFO commun (en validation)
+- Planificateur physique Decimal, date civile, tri déterministe, exclusion quarantaine/blocage, péremption BLOCK ou dernier recours WARN/ALLOW; déduction des réserves et retenues factures.
+- Validation Retail de la demande totale par lot et article, y compris livraison finale après crédit partiel ; exclusion des retenues de la facture en cours. Conservation du contrat facture (une ligne par article) : allocation automatique multi-lots de la facture reste à réaliser avec une provenance adaptée. Les réservations sans lot sont déduites conservativement sur chaque lot, comme les contrôles Retail historiques ; leur allocation exacte reste bloquante.
+- QA comportementale sur quantités 20+20, lot retenu, date civile et quarantaine. Exécution requise sur SHA final. FEFO ne change pas les couches de coût moyen pondéré par article/dépôt/devise.
+
 ## Restant (bloquant)
 Assistant de réaffectation historique transactionnel avec approbation et valeur conservée; certification achats et valorisation, réservations/livraisons multi-lots; moteur FEFO commun et POS; pertes, rappels et comptabilité; Design 2.0 et tests multisectoriels. Voir issue #1212. Ne pas merger avant clôture de tous les points.
 

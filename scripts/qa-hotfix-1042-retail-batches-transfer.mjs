@@ -13,11 +13,14 @@ class EnterpriseRetailError extends Error {
 const cjs = typescript.transpileModule(source, {
   compilerOptions: { module: typescript.ModuleKind.CommonJS, target: typescript.ScriptTarget.ES2022 },
 }).outputText;
+const plannerModule = { exports: {} };
+vm.runInNewContext(typescript.transpileModule(fs.readFileSync("lib/enterprise/inventory/lot-allocation.ts", "utf8"), { compilerOptions: { module: typescript.ModuleKind.CommonJS, target: typescript.ScriptTarget.ES2022 } }).outputText, { module: plannerModule, exports: plannerModule.exports, require, Date, Set, Map });
+let holds = [];
 const cjsModule = { exports: {} };
 vm.runInNewContext(cjs, {
   module: cjsModule,
   exports: cjsModule.exports,
-  require: (id) => id === "@/lib/enterprise/retail/errors" ? { EnterpriseRetailError } : require(id),
+  require: (id) => id === "@/lib/enterprise/retail/errors" ? { EnterpriseRetailError } : id === "@/lib/enterprise/inventory/lot-allocation" ? plannerModule.exports : id === "@/lib/enterprise/retail/invoice-stock-holds" ? { readActiveRetailInvoiceStockHoldsTx: async () => holds } : require(id),
   Date, Intl, Set, Map,
 }, { filename: "inventory-policy.ts" });
 
@@ -45,7 +48,7 @@ const lots = [
   { id: "late", inventoryItemId: "item", status: "AVAILABLE", expiryDate: later },
 ];
 const balances = lots.map((lot) => ({ inventoryItemId: "item", stockLotId: lot.id, quantityOnHand: new Prisma.Decimal(5), quantityReserved: new Prisma.Decimal(0) }));
-const tx = { enterpriseStockLot: { findMany: async () => lots }, enterpriseInventoryBalance: { findMany: async () => balances } };
+const tx = { enterpriseStockLot: { findMany: async () => lots }, enterpriseInventoryBalance: { findMany: async () => balances }, enterpriseInventoryReservation: { findMany: async () => [] } };
 const input = (policy, stockLotId) => ({
   organizationId: "org", warehouseId: "wh", timezone: "UTC", settings: { inventoryPolicy: policy },
   lines: [{ inventoryItemId: "item", stockLotId }],
@@ -56,6 +59,12 @@ await assert.rejects(assertRetailLotPolicyTx(tx, input(policy, "expired")), { co
 await assert.rejects(assertRetailLotPolicyTx(tx, input(policy, "late")), { code: "RETAIL_FEFO_LOT_REQUIRED" });
 await assert.doesNotReject(assertRetailLotPolicyTx(tx, input(policy, "early")));
 await assert.doesNotReject(assertRetailLotPolicyTx(tx, input({ ...policy, expiryMode: "WARN", enforceFefo: false }, "expired")));
+// A multi-line physical selection must exhaust the earliest free lot first.
+await assert.doesNotReject(assertRetailLotPolicyTx(tx, { ...input(policy, "early"), lines: [{ inventoryItemId: "item", stockLotId: "late", quantity: 2 }, { inventoryItemId: "item", stockLotId: "early", quantity: 5 }] }));
+await assert.rejects(assertRetailLotPolicyTx(tx, { ...input(policy, "late"), lines: [{ inventoryItemId: "item", stockLotId: "early", quantity: 4 }, { inventoryItemId: "item", stockLotId: "late", quantity: 3 }] }), { code: "RETAIL_FEFO_LOT_REQUIRED" });
+holds = [{ inventoryItemId: "item", stockLotId: "early", quantity: new Prisma.Decimal(5) }];
+await assert.doesNotReject(assertRetailLotPolicyTx(tx, input(policy, "late")));
+holds = [];
 
 const inventory = fs.readFileSync("lib/enterprise/inventory/service.ts", "utf8");
 const transferBlock = inventory.slice(inventory.indexOf("export async function decideEnterpriseStockTransfer"), inventory.indexOf("export async function receiveEnterpriseStockTransfer"));

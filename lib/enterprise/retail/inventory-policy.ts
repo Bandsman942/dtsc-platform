@@ -1,6 +1,8 @@
 import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
+import { lotExpiryDateKey, planFefoLots } from "@/lib/enterprise/inventory/lot-allocation";
+import { readActiveRetailInvoiceStockHoldsTx } from "@/lib/enterprise/retail/invoice-stock-holds";
 
 export const retailInventoryPolicySchema = z.object({
   expiryMode: z.enum(["ALLOW", "WARN", "BLOCK"]),
@@ -47,10 +49,7 @@ export function businessDateKey(value: Date, timezone: string): string {
 // stored date label here; today's *business* date must come independently
 // from businessDateKey(now, organization.timezone), never from UTC now.
 export function retailLotExpiryDateKey(expiryDate: Date): string {
-  const year = String(expiryDate.getUTCFullYear()).padStart(4, "0");
-  const month = String(expiryDate.getUTCMonth() + 1).padStart(2, "0");
-  const day = String(expiryDate.getUTCDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
+  return lotExpiryDateKey(expiryDate);
 }
 
 // A lot remains valid throughout its named expiry day in the store's timezone.
@@ -71,7 +70,8 @@ export async function assertRetailLotPolicyTx(
     warehouseId: string;
     timezone: string;
     settings: unknown;
-    lines: Array<{ inventoryItemId: string | null; stockLotId: string | null }>;
+    lines: Array<{ inventoryItemId: string | null; stockLotId: string | null; quantity?: Prisma.Decimal.Value }>;
+    excludeSalesInvoiceId?: string;
   },
 ) {
   const policy = readRetailInventoryPolicy(args.settings);
@@ -94,6 +94,10 @@ export async function assertRetailLotPolicyTx(
     select: { inventoryItemId: true, stockLotId: true, quantityOnHand: true, quantityReserved: true },
   }) : [];
 
+  const [holds, reservations] = policy.enforceFefo ? await Promise.all([
+    readActiveRetailInvoiceStockHoldsTx(tx, { organizationId: args.organizationId, warehouseId: args.warehouseId, inventoryItemIds: inventoryIds, excludeSalesInvoiceId: args.excludeSalesInvoiceId }),
+    tx.enterpriseInventoryReservation.findMany({ where: { organizationId: args.organizationId, warehouseId: args.warehouseId, inventoryItemId: { in: inventoryIds }, status: "ACTIVE", OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] }, select: { inventoryItemId: true, quantity: true, fulfilledQuantity: true } }),
+  ]) : [[], []];
   for (const line of args.lines) {
     if (!line.inventoryItemId) continue;
     const availableLots = lots.filter((lot) => lot.inventoryItemId === line.inventoryItemId && lot.status === "AVAILABLE");
@@ -119,14 +123,34 @@ export async function assertRetailLotPolicyTx(
         code: "RETAIL_STOCK_LOT_EXPIRED_WARNING", inventoryItemId: line.inventoryItemId, stockLotId: selected.id,
       });
     }
-    if (!policy.enforceFefo) continue;
-    const usable = availableLots.filter((lot) => !lotIsExpired(lot.expiryDate, today));
-    const candidates = usable.filter((lot) => balances.some((balance) =>
-      balance.inventoryItemId === line.inventoryItemId && balance.stockLotId === lot.id
-      && balance.quantityOnHand.greaterThan(balance.quantityReserved),
-    ));
-    candidates.sort((a, b) => (a.expiryDate?.getTime() ?? Number.MAX_SAFE_INTEGER) - (b.expiryDate?.getTime() ?? Number.MAX_SAFE_INTEGER));
-    if (candidates.length && candidates[0].id !== selected.id) throw new EnterpriseRetailError("RETAIL_FEFO_LOT_REQUIRED", 409);
+  }
+  if (policy.enforceFefo) {
+    const zero = () => new Prisma.Decimal(0);
+    for (const inventoryItemId of inventoryIds) {
+      const selected = args.lines.filter((line) => line.inventoryItemId === inventoryItemId && line.stockLotId);
+      if (!selected.length) continue;
+      const demand = new Map<string, Prisma.Decimal>();
+      for (const line of selected) {
+        const amount = new Prisma.Decimal(line.quantity ?? 1);
+        if (!amount.isFinite() || amount.lte(0) || amount.decimalPlaces() > 3) throw new EnterpriseRetailError("RETAIL_STOCK_LOT_INVALID", 409);
+        demand.set(line.stockLotId!, (demand.get(line.stockLotId!) || zero()).plus(amount));
+      }
+      const quantity = [...demand.values()].reduce((sum, value) => sum.plus(value), zero());
+      const plan = planFefoLots({
+        candidates: lots.filter((lot) => lot.inventoryItemId === inventoryItemId).map((lot) => {
+          const rows = balances.filter((row) => row.inventoryItemId === inventoryItemId && row.stockLotId === lot.id);
+          return { ...lot, quantityOnHand: rows.reduce((sum, row) => sum.plus(row.quantityOnHand), zero()),
+            quantityReserved: rows.reduce((sum, row) => sum.plus(row.quantityReserved), zero()),
+            quantityHeld: holds.filter((row) => row.inventoryItemId === inventoryItemId && row.stockLotId === lot.id).reduce((sum, row) => sum.plus(row.quantity), zero()) };
+        }),
+        quantity, businessDate: today, expiryMode: policy.expiryMode,
+        unallocatedReserved: reservations.filter((row) => row.inventoryItemId === inventoryItemId).reduce((sum, row) => sum.plus(row.quantity.minus(row.fulfilledQuantity)), zero()),
+      });
+      if (plan.shortfall.gt(0)) throw new EnterpriseRetailError("NEGATIVE_STOCK_FORBIDDEN", 409);
+      if (plan.allocations.length !== demand.size || plan.allocations.some((allocation) => !demand.get(allocation.stockLotId)?.equals(allocation.quantity))) {
+        throw new EnterpriseRetailError("RETAIL_FEFO_LOT_REQUIRED", 409);
+      }
+    }
   }
   return warnings;
 }

@@ -147,7 +147,7 @@ export async function prepareRetailInvoice(organizationId: string, actorUserId: 
     });
     const stockWarnings = await assertRetailLotPolicyTx(tx, {
       organizationId, warehouseId: input.warehouseId, timezone: organization.timezone || "UTC", settings: configuration?.settingsJson,
-      lines: prepared.map((line) => ({ inventoryItemId: line.inventoryItemId, stockLotId: line.stockLotId || null })),
+      lines: prepared.map((line) => ({ inventoryItemId: line.inventoryItemId, stockLotId: line.stockLotId || null, quantity: line.quantity })),
     });
 
     const customerId = input.businessPartyId || await resolveWalkInCustomerTx(tx, organizationId, actorUserId);
@@ -294,7 +294,8 @@ export async function postPaidRetailInvoiceStockTx(
     warehouseId: checkout.warehouseId,
     timezone: organization?.timezone || "UTC",
     settings: configuration?.settingsJson,
-    lines: fulfilableLines.map(({ line }) => ({ inventoryItemId: line.inventoryItemId, stockLotId: line.stockLotId })),
+    excludeSalesInvoiceId: checkout.salesInvoiceId,
+    lines: fulfilableLines.map(({ line, remaining }) => ({ inventoryItemId: line.inventoryItemId, stockLotId: line.stockLotId, quantity: remaining })),
   });
 
   for (const { line, remaining } of fulfilableLines) {

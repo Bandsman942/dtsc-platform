@@ -97,3 +97,17 @@ assert.equal((await put()).status, 200);
 assert.equal(updated, 1);
 assert.equal(transactionOptions.isolationLevel, Prisma.TransactionIsolationLevel.Serializable);
 console.log("Inventory lot options and activation guards OK");
+
+const { planFefoLots } = load("lib/enterprise/inventory/lot-allocation.ts");
+const d = (v) => new Prisma.Decimal(v);
+const candidate = (id, expiryDate, qty, held = 0, status = "AVAILABLE") => ({ id, expiryDate: expiryDate ? new Date(expiryDate + "T00:00:00Z") : null, quantityOnHand: d(qty), quantityReserved: d(0), quantityHeld: d(held), status });
+const candidates = [candidate("early", "2026-11-17", 30, 10), candidate("late", "2026-12-01", 70), candidate("expired", "2026-11-16", 100), candidate("quarantine", "2026-11-17", 100, 0, "QUARANTINED")];
+const plan = planFefoLots({ candidates, quantity: 40, businessDate: "2026-11-17", expiryMode: "BLOCK" });
+assert.equal(plan.shortfall.toFixed(), "0");
+assert.equal(plan.allocations.map((a) => a.stockLotId + ":" + a.quantity.toFixed()).join(","), "early:20,late:20");
+const short = planFefoLots({ candidates, quantity: 100, businessDate: "2026-11-17", expiryMode: "BLOCK" });
+assert.equal(short.shortfall.toFixed(), "10");
+assert.equal(planFefoLots({ candidates, quantity: 100, businessDate: "2026-11-17", expiryMode: "WARN" }).allocations.at(-1).stockLotId, "expired");
+assert.equal(planFefoLots({ candidates: [candidate("undated", null, 10)], quantity: 1, businessDate: "2026-11-17", expiryMode: "BLOCK", requireExpiry: true }).shortfall.toFixed(), "1");
+assert.throws(() => planFefoLots({ candidates, quantity: 0.0001, businessDate: "2026-11-17", expiryMode: "BLOCK" }), { name: "RangeError" });
+console.log("FEFO multi-lot planning, holds, quarantine and calendar dates OK");
