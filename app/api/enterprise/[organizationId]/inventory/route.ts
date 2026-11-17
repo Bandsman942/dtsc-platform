@@ -4,7 +4,7 @@ import { getSession } from "@/lib/auth";
 import { writeApiLog } from "@/lib/audit";
 import { getEnterpriseCommonDomainAccess } from "@/lib/enterprise/common/access";
 import { retailErrorResponse } from "@/lib/enterprise/retail/http";
-import { retailInventoryVisibleSites } from "@/lib/enterprise/retail/site-access";
+import { requireRetailWarehouseCapability, retailInventoryVisibleSites } from "@/lib/enterprise/retail/site-access";
 import { prisma } from "@/lib/prisma";
 
 type Params = { params: Promise<{ organizationId: string }> };
@@ -20,6 +20,28 @@ export async function GET(req: Request, { params }: Params) {
   try { scope = await retailInventoryVisibleSites(organizationId, session.userId); }
   catch (error) { return retailErrorResponse(error, "RETAIL_SITE_ACCESS_DENIED"); }
   const url = new URL(req.url);
+  if (url.searchParams.get("view") === "lot-options") {
+    // A first batch does not require a pre-existing warehouse balance. Return
+    // only shared catalogue identity and traceability flags, never other-site quantities.
+    if (!access.canWrite) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    const warehouseId = url.searchParams.get("warehouseId")?.trim() || "";
+    if (!warehouseId) return NextResponse.json({ error: "INVENTORY_WAREHOUSE_REQUIRED", message: "Choisissez un dépôt actif." }, { status: 400 });
+    const warehouse = await prisma.enterpriseWarehouse.findFirst({ where: { id: warehouseId, organizationId, status: "ACTIVE", archivedAt: null }, select: { id: true } });
+    if (!warehouse) return NextResponse.json({ error: "INVENTORY_WAREHOUSE_NOT_FOUND" }, { status: 404 });
+    try { await requireRetailWarehouseCapability(organizationId, session.userId, warehouseId, "MANAGE_STOCK"); }
+    catch (error) { return retailErrorResponse(error, "RETAIL_SITE_ACCESS_DENIED"); }
+    const requestedPage = Number(url.searchParams.get("page") || 1);
+    const page = Number.isSafeInteger(requestedPage) ? Math.max(1, Math.min(10000, requestedPage)) : 1;
+    const pageSize = 25;
+    const search = (url.searchParams.get("search") || "").trim().slice(0, 120);
+    const where: Prisma.EnterpriseInventoryItemWhereInput = { organizationId, status: "ACTIVE", archivedAt: null, lotTracking: true, catalogItem: { organizationId, status: "ACTIVE", archivedAt: null, trackInventory: true, ...(search ? { OR: [{ name: { contains: search, mode: "insensitive" } }, { code: { contains: search, mode: "insensitive" } }, { sku: { contains: search, mode: "insensitive" } }] } : {}) } };
+    const [items, total] = await Promise.all([
+      prisma.enterpriseInventoryItem.findMany({ where, orderBy: [{ catalogItem: { name: "asc" } }, { id: "asc" }], skip: (page - 1) * pageSize, take: pageSize, select: { id: true, expiryTracking: true, catalogItem: { select: { name: true, code: true } } } }),
+      prisma.enterpriseInventoryItem.count({ where }),
+    ]);
+    await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "inventory-lot-options", page } });
+    return NextResponse.json({ items, pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) } }, { headers: { "Cache-Control": "private, no-store" } });
+  }
   const page = Math.max(1, Number(url.searchParams.get("page") || 1) || 1);
   const pageSize = Math.min(50, Math.max(5, Number(url.searchParams.get("pageSize") || 20) || 20));
   const search = url.searchParams.get("search")?.trim() || "";

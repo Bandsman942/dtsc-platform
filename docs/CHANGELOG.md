@@ -1,3 +1,7 @@
+## 2026-11-17 — Hotfix stock/lots #1212 — v1.23.4 candidate (DRAFT, tranche initiale uniquement)
+
+- Sélecteur indépendant de lots par dépôt, recherche et prérequis; garde de traçabilité historique. [Périmètre et recette](HOTFIX_1212_INVENTORY_LOT_TRACEABILITY.md). Les six chantiers ne sont pas clos; aucun E2E final.
+
 ## 2026-11-17 — Hotfix POS RETAIL #1210 — v1.23.3 candidate (OWNER_E2E requis)
 
 - Registre des factures : raccourcis vers validation assignée ou émission autorisée, ciblage strict boutique + identifiant + numéro par les files métier serveur.

@@ -9,6 +9,7 @@ import { notifyToast } from "@/lib/client-toast";
 import { customerFacingError } from "@/lib/customer-facing-language";
 
 type Item = { id: string; revision: number; catalogItem: { code: string; name: string }; minimumQuantity: string | number | null; reorderQuantity: string | number | null; lotTracking: boolean; expiryTracking: boolean };
+type BatchOption = { id: string; expiryTracking: boolean; catalogItem: { code: string; name: string } };
 type Warehouse = { id: string; code: string; name: string };
 type Lot = { id: string; revision: number; lotNumber: string; warehouseId: string; status: string; productionDate: string | null; expiryDate: string | null; notes: string | null; quantityOnHand: string; quantityReserved: string; inventoryItem: { catalogItem: { name: string; code: string } } };
 const dateInput = (value: string | null) => value ? value.slice(0, 10) : "";
@@ -30,6 +31,14 @@ export function InventoryStockGovernance({ organizationId, locale, warehouses }:
   const [editPolicy, setEditPolicy] = useState<Item | null>(null);
   const [editLot, setEditLot] = useState<Lot | null>(null);
   const [lotDialog, setLotDialog] = useState(false);
+  const [batchWarehouse, setBatchWarehouse] = useState("");
+  const [batchSearch, setBatchSearch] = useState("");
+  const [batchPage, setBatchPage] = useState(1);
+  const [batchPages, setBatchPages] = useState(1);
+  const [batchOptions, setBatchOptions] = useState<BatchOption[]>([]);
+  const [batchItem, setBatchItem] = useState("");
+  const [batchLoading, setBatchLoading] = useState(false);
+  const [batchError, setBatchError] = useState("");
   const [busy, setBusy] = useState(false);
   const [reload, setReload] = useState(0);
   const [error, setError] = useState("");
@@ -50,6 +59,25 @@ export function InventoryStockGovernance({ organizationId, locale, warehouses }:
     }).catch((caught) => { if (!controller.signal.aborted) setError(customerFacingError(caught, locale)); });
     return () => controller.abort();
   }, [open, organizationId, search, page, itemPage, itemSearch, reload, en, locale]);
+
+  useEffect(() => {
+    if (!lotDialog || editLot || !batchWarehouse) return;
+    const controller = new AbortController();
+    const query = new URLSearchParams({ view: "lot-options", warehouseId: batchWarehouse, search: batchSearch, page: String(batchPage) });
+    const timer = setTimeout(() => {
+      setBatchLoading(true); setBatchError(""); setBatchOptions([]);
+      void fetch(`/api/enterprise/${organizationId}/inventory?${query}`, { signal: controller.signal, cache: "no-store" }).then(async (response) => {
+        const body = await response.json() as { items?: BatchOption[]; pagination?: { pageCount: number }; message?: string };
+        if (!response.ok) throw new Error(body.message || (en ? "Products unavailable for this warehouse." : "Articles indisponibles pour ce dépôt."));
+        if (!controller.signal.aborted) { setBatchOptions(body.items || []); setBatchPages(body.pagination?.pageCount || 1); }
+      }).catch((caught) => { if (!controller.signal.aborted) setBatchError(customerFacingError(caught, locale)); }).finally(() => { if (!controller.signal.aborted) setBatchLoading(false); });
+    }, 250);
+    return () => { clearTimeout(timer); controller.abort(); };
+  }, [lotDialog, editLot, batchWarehouse, batchSearch, batchPage, organizationId, en, locale, reload]);
+
+  function openBatchDialog() {
+    setEditLot(null); setBatchWarehouse(""); setBatchSearch(""); setBatchPage(1); setBatchPages(1); setBatchOptions([]); setBatchItem(""); setBatchError(""); setBatchLoading(false); setLotDialog(true);
+  }
 
   async function savePolicy(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); if (!editPolicy) return;
@@ -79,7 +107,7 @@ export function InventoryStockGovernance({ organizationId, locale, warehouses }:
     <div className="flex flex-wrap items-center justify-between gap-2"><div className="flex items-start gap-2"><ShieldCheck className="mt-1 h-5 w-5 shrink-0 text-emerald-600" /><div><h3 className="text-sm font-black text-dtsc-ink">{en ? "Stock rules, batches and expiry" : "Règles de stock, lots et péremptions"}</h3><p className="text-xs text-dtsc-muted">{en ? "Logistics is the owner of stock configuration and batch history; the product catalog only defines the item." : "La logistique pilote les règles de stock et les lots ; le catalogue définit uniquement l'article."}</p></div></div><Button variant="outline" type="button" onClick={() => setOpen((value) => !value)}><Boxes className="h-4 w-4" />{open ? en ? "Collapse" : "Réduire" : en ? "Manage" : "Gérer"}</Button></div>
     {open ? <div className="mt-4 space-y-4">
       {error ? <p role="alert" className="rounded-lg bg-red-500/10 p-3 text-xs text-red-700 dark:text-red-200">{error}</p> : null}
-      <div className="flex flex-wrap gap-2"><Button type="button" onClick={() => { setEditLot(null); setLotDialog(true); }}><PackagePlus className="h-4 w-4" />{en ? "Register batch" : "Enregistrer un lot"}</Button><p className="self-center text-xs text-dtsc-muted">{en ? "A batch has zero stock until a receipt is approved." : "Un lot n'a aucun stock avant validation d'une entrée physique."}</p></div>
+      <div className="flex flex-wrap gap-2"><Button type="button" onClick={openBatchDialog}><PackagePlus className="h-4 w-4" />{en ? "Register batch" : "Enregistrer un lot"}</Button><p className="self-center text-xs text-dtsc-muted">{en ? "A batch has zero stock until a receipt is approved." : "Un lot n'a aucun stock avant validation d'une entrée physique."}</p></div>
       <div><h4 className="mb-2 text-xs font-black uppercase text-dtsc-muted">{en ? "Per-item controls" : "Contrôles par article"}</h4>
         <input className="mb-2 min-h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 text-sm" value={itemSearch} onChange={(event) => { setItemSearch(event.target.value); setItemPage(1); }} placeholder={en ? "Search item by name or SKU" : "Rechercher un article ou SKU"} aria-label={en ? "Search items" : "Rechercher les articles"} />
         <div className="grid min-w-0 gap-2 sm:grid-cols-2 xl:grid-cols-3">{items.map((item) => <div key={item.id} className="flex min-w-0 items-center justify-between gap-2 rounded-xl border border-dtsc-border bg-dtsc-page p-3"><span className="min-w-0 truncate text-xs font-bold text-dtsc-ink" title={item.catalogItem.name}>{item.catalogItem.name}</span><Button variant="outline" size="sm" onClick={() => setEditPolicy(item)}><Settings2 className="h-4 w-4" />{en ? "Rules" : "Règles"}</Button></div>)}</div>
@@ -101,14 +129,20 @@ export function InventoryStockGovernance({ organizationId, locale, warehouses }:
       <div className="flex justify-end gap-2"><Button variant="outline" type="button" disabled={busy} onClick={() => setEditPolicy(null)}>{en ? "Cancel" : "Annuler"}</Button><Button type="submit" disabled={busy}>{busy ? en ? "Saving…" : "Enregistrement…" : en ? "Save rules" : "Enregistrer les règles"}</Button></div>
     </form></Dialog>
     <Dialog open={lotDialog} onClose={() => { if (!busy) { setLotDialog(false); setEditLot(null); } }} title={editLot ? en ? "Update batch metadata" : "Modifier le lot" : en ? "Register a batch" : "Enregistrer un lot"} description={en ? "Batch identification and expiry are managed here. Quantity is recorded only by an approved stock operation." : "Identification et péremption du lot. La quantité se saisit exclusivement par une opération de stock approuvée."} presentation="editor"><form key={editLot?.id || "new"} onSubmit={saveLot} className="grid gap-3 p-2">
-      <label className="grid gap-1 text-xs font-bold text-dtsc-muted">{en ? "Tracked item" : "Article suivi"} *<select name="inventoryItemId" required disabled={Boolean(editLot)} defaultValue="" className="min-h-11 rounded-xl border border-dtsc-border bg-dtsc-page px-2 text-sm"><option value="">{en ? "Choose" : "Choisir"}</option>{items.map((item) => <option key={item.id} value={item.id}>{item.catalogItem.code} · {item.catalogItem.name}</option>)}</select></label>
-      <label className="grid gap-1 text-xs font-bold text-dtsc-muted">{en ? "Warehouse" : "Dépôt"} *<select name="warehouseId" required disabled={Boolean(editLot)} defaultValue={editLot?.warehouseId || ""} className="min-h-11 rounded-xl border border-dtsc-border bg-dtsc-page px-2 text-sm"><option value="">{en ? "Choose" : "Choisir"}</option>{warehouses.map((item) => <option key={item.id} value={item.id}>{item.code} · {item.name}</option>)}</select></label>
+      {editLot ? <p className="text-sm font-semibold text-dtsc-ink">{editLot.inventoryItem.catalogItem.code} · {editLot.inventoryItem.catalogItem.name}</p> : null}
+      <label className="grid gap-1 text-xs font-bold text-dtsc-muted">{en ? "Warehouse" : "Dépôt"} *<select name="warehouseId" required disabled={Boolean(editLot)} value={editLot?.warehouseId || batchWarehouse} onChange={(event) => { setBatchWarehouse(event.target.value); setBatchSearch(""); setBatchPage(1); setBatchItem(""); setBatchOptions([]); setBatchError(""); setBatchLoading(Boolean(event.target.value)); }} className="min-h-11 rounded-xl border border-dtsc-border bg-dtsc-page px-2 text-sm"><option value="">{en ? "Choose" : "Choisir"}</option>{warehouses.map((item) => <option key={item.id} value={item.id}>{item.code} · {item.name}</option>)}</select></label>
+      {!editLot ? <div className="grid gap-2">
+        <label className="grid gap-1 text-xs font-bold text-dtsc-muted">{en ? "Search tracked items" : "Rechercher un article suivi"}<Input value={batchSearch} disabled={!batchWarehouse} onChange={(event) => { setBatchSearch(event.target.value); setBatchPage(1); setBatchItem(""); setBatchOptions([]); setBatchLoading(true); }} placeholder={en ? "Name, code or SKU" : "Nom, code ou SKU"} /></label>
+        <label className="grid gap-1 text-xs font-bold text-dtsc-muted">{en ? "Tracked item" : "Article suivi"} *<select name="inventoryItemId" required disabled={!batchWarehouse || batchLoading || Boolean(batchError)} value={batchItem} onChange={(event) => setBatchItem(event.target.value)} className="min-h-11 rounded-xl border border-dtsc-border bg-dtsc-page px-2 text-sm"><option value="">{en ? "Choose" : "Choisir"}</option>{batchOptions.map((item) => <option key={item.id} value={item.id}>{item.catalogItem.code} · {item.catalogItem.name}</option>)}</select></label>
+        {batchLoading ? <p role="status" className="text-xs text-dtsc-muted">{en ? "Loading items…" : "Chargement des articles…"}</p> : batchError ? <p role="alert" className="text-xs text-red-600 dark:text-red-300">{batchError}</p> : !batchWarehouse ? <p className="text-xs text-dtsc-muted">{en ? "Choose the warehouse first." : "Choisissez d’abord le dépôt."}</p> : !batchOptions.length ? <p className="text-xs text-dtsc-muted">{en ? "No eligible item. Clear the search or enable batch tracking in stock rules." : "Aucun article éligible. Effacez la recherche ou activez le suivi des lots dans les règles de stock."}</p> : null}
+        {batchPages > 1 ? <div className="flex items-center justify-between gap-2 text-xs text-dtsc-muted"><span>{batchPage}/{batchPages}</span><div className="flex gap-2"><Button variant="outline" type="button" disabled={batchLoading || batchPage <= 1} onClick={() => { setBatchPage((v) => v - 1); setBatchItem(""); setBatchOptions([]); setBatchLoading(true); }}>{en ? "Previous" : "Précédent"}</Button><Button variant="outline" type="button" disabled={batchLoading || batchPage >= batchPages} onClick={() => { setBatchPage((v) => v + 1); setBatchItem(""); setBatchOptions([]); setBatchLoading(true); }}>{en ? "Next" : "Suivant"}</Button></div></div> : null}
+      </div> : null}
       <label className="grid gap-1 text-xs font-bold text-dtsc-muted">{en ? "Batch number" : "Numéro de lot"} *<Input required name="lotNumber" maxLength={120} disabled={Boolean(editLot)} defaultValue={editLot?.lotNumber || ""} /></label>
       <label className="grid gap-1 text-xs font-bold text-dtsc-muted">{en ? "Manufactured on" : "Date de fabrication"}<Input name="productionDate" type="date" defaultValue={dateInput(editLot?.productionDate || null)} /></label>
-      <label className="grid gap-1 text-xs font-bold text-dtsc-muted">{en ? "Expiry date (required for expiry-tracked items)" : "Date de péremption (obligatoire si suivi activé)"}<Input name="expiryDate" type="date" defaultValue={dateInput(editLot?.expiryDate || null)} /></label>
+      <label className="grid gap-1 text-xs font-bold text-dtsc-muted">{en ? "Expiry date (required for expiry-tracked items)" : "Date de péremption (obligatoire si suivi activé)"}<Input name="expiryDate" type="date" required={!editLot && Boolean(batchOptions.find((item) => item.id === batchItem)?.expiryTracking)} defaultValue={dateInput(editLot?.expiryDate || null)} /></label>
       {editLot ? <label className="grid gap-1 text-xs font-bold text-dtsc-muted">{en ? "Batch availability" : "Disponibilité du lot"}<select name="status" defaultValue={editLot.status} className="min-h-11 rounded-xl border border-dtsc-border bg-dtsc-page p-2"><option value="AVAILABLE">{en ? "Available" : "Disponible"}</option><option value="BLOCKED">{en ? "Blocked" : "Bloqué"}</option><option value="QUARANTINED">{en ? "Quarantined" : "En quarantaine"}</option></select></label> : null}
       <label className="grid gap-1 text-xs font-bold text-dtsc-muted">{en ? "Traceability note" : "Observation de traçabilité"}<textarea name="notes" maxLength={1000} defaultValue={editLot?.notes || ""} className="min-h-20 rounded-xl border border-dtsc-border bg-dtsc-page p-3 text-sm" /></label>
-      <div className="flex justify-end gap-2"><Button type="button" variant="outline" disabled={busy} onClick={() => { setLotDialog(false); setEditLot(null); }}>{en ? "Cancel" : "Annuler"}</Button><Button type="submit" disabled={busy}>{busy ? en ? "Saving…" : "Enregistrement…" : en ? "Save batch" : "Enregistrer le lot"}</Button></div>
+      <div className="flex justify-end gap-2"><Button type="button" variant="outline" disabled={busy} onClick={() => { setLotDialog(false); setEditLot(null); }}>{en ? "Cancel" : "Annuler"}</Button><Button type="submit" disabled={busy || (!editLot && (!batchWarehouse || !batchItem || batchLoading || Boolean(batchError)))}>{busy ? en ? "Saving…" : "Enregistrement…" : en ? "Save batch" : "Enregistrer le lot"}</Button></div>
     </form></Dialog>
   </section>;
 }
