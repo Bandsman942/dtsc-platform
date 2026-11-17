@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
 import ts from "typescript";
+import { Prisma } from "@prisma/client";
 
 const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), "utf8");
 const source = read("lib/enterprise/retail/invoice-stock-holds.ts");
@@ -11,15 +12,7 @@ const reservations = read("lib/enterprise/inventory/reservations.ts");
 const lotSelector = read("app/api/enterprise/[organizationId]/retail/stock-lots/route.ts");
 const productSearch = read("app/api/enterprise/[organizationId]/retail/products/search/route.ts");
 
-class Decimal {
-  constructor(value) { this.value = Number(value instanceof Decimal ? value.value : value); }
-  toFixed() { return String(this.value); }
-  plus(value) { return new Decimal(this.value + new Decimal(value).value); }
-  minus(value) { return new Decimal(this.value - new Decimal(value).value); }
-  lessThan(value) { return this.value < new Decimal(value).value; }
-  greaterThan(value) { return this.value > new Decimal(value).value; }
-  isPositive() { return this.value >= 0; } // Decimal.js treats zero as non-negative.
-}
+const { Decimal } = Prisma;
 
 const module = { exports: {} };
 const javascript = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;

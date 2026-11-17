@@ -447,4 +447,90 @@ test.describe.serial("Shop 2.0 Iteration 4 global behavioral acceptance", () => 
     }
   });
 
+  test("HOTFIX #1212 common ERP reserves real FEFO lots and values partial deliveries exactly once", async ({ page }) => {
+    await signIn(page);
+    const key = "LOT1212-" + crypto.randomUUID().slice(0, 12);
+    const baseProduct = await prisma.enterpriseCatalogItem.findUniqueOrThrow({ where: { id: fixture.catalogItemId } });
+    const product = await prisma.enterpriseCatalogItem.create({ data: { organizationId, code: key, sku: key, name: "E2E Batch product " + key, normalizedName: ("E2E Batch product " + key).toLowerCase(), itemType: "PRODUCT", unitOfMeasureId: baseProduct.unitOfMeasureId, indicativeSalePrice: 10, indicativeCost: 4, currency: fixture.currencyCode, trackInventory: true, taxable: false, createdByUserId: fixture.userId } });
+    const inventory = await prisma.enterpriseInventoryItem.create({ data: { organizationId, catalogItemId: product.id, lotTracking: true, expiryTracking: true, allowNegativeStock: false, createdByUserId: fixture.userId } });
+    const date = (offset) => { const value = new Date(Date.now() + offset * 86400000); value.setUTCHours(0, 0, 0, 0); return value; };
+    const lots = {};
+    for (const [name, amount, days, status] of [["EARLY", 30, 60, "AVAILABLE"], ["LATE", 70, 120, "AVAILABLE"], ["EXPIRED", 100, -10, "AVAILABLE"], ["QUARANTINE", 100, 30, "QUARANTINED"]]) {
+      const lot = await prisma.enterpriseStockLot.create({ data: { organizationId, inventoryItemId: inventory.id, warehouseId: fixture.warehouseId, lotNumber: name, expiryDate: date(days), status, createdByUserId: fixture.userId } });
+      const balance = await prisma.enterpriseInventoryBalance.create({ data: { organizationId, inventoryItemId: inventory.id, warehouseId: fixture.warehouseId, stockLotId: lot.id, quantityOnHand: amount } });
+      const movement = await prisma.enterpriseStockMovement.create({ data: { organizationId, inventoryItemId: inventory.id, warehouseId: fixture.warehouseId, stockLotId: lot.id, movementType: "OPENING_BALANCE", direction: "IN", quantity: amount, balanceAfter: amount, idempotencyKey: key + ":" + name, createdByUserId: fixture.userId } });
+      await prisma.enterpriseInventoryCostLayer.create({ data: { organizationId, inventoryItemId: inventory.id, warehouseId: fixture.warehouseId, sourceMovementId: movement.id, valuationMethod: "WEIGHTED_AVERAGE", quantity: amount, remainingQuantity: amount, unitCost: 4, totalCost: amount * 4, currencyCode: fixture.currencyCode, effectiveAt: new Date() } });
+      lots[name] = { lot, balance };
+    }
+    async function createOrder(suffix, quantity) {
+      return prisma.enterpriseSalesOrder.create({ data: { organizationId, reference: key + "-" + suffix, businessPartyId: fixture.customerId, title: "Batch preparation E2E", status: "CONFIRMED", currency: fixture.currencyCode, subtotalAmount: quantity * 10, totalAmount: quantity * 10, createdByUserId: fixture.userId, items: { create: { organizationId, catalogItemId: product.id, description: product.name, quantityOrdered: quantity, unitOfMeasureId: product.unitOfMeasureId, unitPrice: 10, lineSubtotal: quantity * 10, lineTotal: quantity * 10 } } }, include: { items: true } });
+    }
+    const order = await createOrder("A", 50);
+    const second = await createOrder("B", 60);
+    const endpoint = `/api/enterprise/${organizationId}/sales-orders/${order.id}/fulfill`;
+    const available = () => apiGet(page, `/api/enterprise/${organizationId}/retail/inventory/availability?catalogItemId=${product.id}`);
+    const before = await available();
+    expect(before.response.status(), JSON.stringify(before.body)).toBe(200);
+    expect(before.body.totalAvailable).toBe("100");
+    const request = { action: "RESERVE", salesOrderItemId: order.items[0].id, warehouseId: fixture.warehouseId, quantity: 50, idempotencyKey: key + "-reserve" };
+    const reserved = await apiPost(page, endpoint, request);
+    expect(reserved.response.status(), JSON.stringify(reserved.body)).toBe(201);
+    const reservationId = reserved.body.reservation.id;
+    expect(reserved.body.reservation.lotAllocations.map((row) => [row.stockLotId, row.quantity])).toEqual([[lots.EARLY.lot.id, "30"], [lots.LATE.lot.id, "20"]]);
+    const replay = await apiPost(page, endpoint, request);
+    expect(replay.response.status(), JSON.stringify(replay.body)).toBe(200);
+    expect(replay.body.reservation.id).toBe(reservationId);
+    const list = await apiGet(page, endpoint);
+    expect(list.response.status(), JSON.stringify(list.body)).toBe(200);
+    expect(list.body.items[0].allocations.map((row) => row.lotNumber)).toEqual(["EARLY", "LATE"]);
+    const denied = await apiPost(page, `/api/enterprise/${organizationId}/sales-orders/${second.id}/fulfill`, { ...request, salesOrderItemId: second.items[0].id, quantity: 60, idempotencyKey: key + "-overbook" });
+    expect(denied.response.status(), JSON.stringify(denied.body)).toBe(409);
+    expect((await available()).body.totalAvailable).toBe("50");
+    expect(asNumber((await prisma.enterpriseInventoryBalance.findUniqueOrThrow({ where: { id: lots.EARLY.balance.id } })).quantityOnHand)).toBe(30);
+    const firstDeliveryInput = { fulfillmentType: "PRODUCT_DELIVERY", warehouseId: fixture.warehouseId, acceptedByCustomer: true, idempotencyKey: key + "-delivery1", revision: order.revision, items: [{ salesOrderItemId: order.items[0].id, quantityFulfilled: 40 }] };
+    const firstDelivery = await apiPost(page, endpoint, firstDeliveryInput);
+    expect(firstDelivery.response.status(), JSON.stringify(firstDelivery.body)).toBe(201);
+    const movementWhere = { organizationId, inventoryItemId: inventory.id, sourceEntityType: "EnterpriseFulfillment", sourceEntityId: firstDelivery.body.fulfillment.id };
+    const issues = await prisma.enterpriseStockMovement.findMany({ where: movementWhere });
+    expect(issues.map((issue) => [issue.stockLotId, asNumber(issue.quantity)]).sort()).toEqual([[lots.EARLY.lot.id, 30], [lots.LATE.lot.id, 10]].sort());
+    const valuations = await prisma.enterpriseInventoryAccountingEvent.findMany({ where: { organizationId, stockMovementId: { in: issues.map((issue) => issue.id) }, eventType: "ISSUE" } });
+    expect(valuations.length).toBe(2);
+    expect(valuations.reduce((sum, valuation) => sum + asNumber(valuation.totalCost), 0)).toBe(160);
+    expect(valuations.every((valuation) => Boolean(valuation.journalEntryId))).toBe(true);
+    const replayDelivery = await apiPost(page, endpoint, firstDeliveryInput);
+    expect(replayDelivery.response.ok(), JSON.stringify(replayDelivery.body)).toBeTruthy();
+    expect(replayDelivery.body.fulfillment.id).toBe(firstDelivery.body.fulfillment.id);
+    expect(await prisma.enterpriseStockMovement.count({ where: movementWhere })).toBe(2);
+    const partial = await prisma.enterpriseInventoryReservation.findUniqueOrThrow({ where: { id: reservationId } });
+    expect(partial.status).toBe("ACTIVE");
+    expect(asNumber(partial.fulfilledQuantity)).toBe(40);
+    expect(partial.lotAllocations.map((row) => row.fulfilledQuantity)).toEqual(["30", "10"]);
+    expect((await available()).body.totalAvailable).toBe("50");
+    const current = await prisma.enterpriseSalesOrder.findUniqueOrThrow({ where: { id: order.id } });
+    expect(current.status).toBe("PARTIALLY_FULFILLED");
+    await prisma.enterpriseStockLot.update({ where: { id: lots.LATE.lot.id }, data: { status: "QUARANTINED" } });
+    const finalDeliveryInput = { ...firstDeliveryInput, revision: current.revision, idempotencyKey: key + "-delivery2", items: [{ salesOrderItemId: order.items[0].id, quantityFulfilled: 10 }] };
+    const blocked = await apiPost(page, endpoint, finalDeliveryInput);
+    expect(blocked.response.status(), JSON.stringify(blocked.body)).toBe(409);
+    expect(asNumber((await prisma.enterpriseInventoryReservation.findUniqueOrThrow({ where: { id: reservationId } })).fulfilledQuantity)).toBe(40);
+    expect(await prisma.enterpriseFulfillment.count({ where: { organizationId, salesOrderId: order.id } })).toBe(1);
+    await prisma.enterpriseStockLot.update({ where: { id: lots.LATE.lot.id }, data: { status: "AVAILABLE" } });
+    const finalDelivery = await apiPost(page, endpoint, finalDeliveryInput);
+    expect(finalDelivery.response.status(), JSON.stringify(finalDelivery.body)).toBe(201);
+    const completed = await prisma.enterpriseInventoryReservation.findUniqueOrThrow({ where: { id: reservationId } });
+    expect(completed.status).toBe("FULFILLED");
+    expect(asNumber(completed.fulfilledQuantity)).toBe(50);
+    expect((await prisma.enterpriseSalesOrder.findUniqueOrThrow({ where: { id: order.id } })).status).toBe("FULFILLED");
+    expect(asNumber((await prisma.enterpriseInventoryBalance.findUniqueOrThrow({ where: { id: lots.LATE.balance.id } })).quantityOnHand)).toBe(50);
+    expect(asNumber((await prisma.enterpriseInventoryBalance.findUniqueOrThrow({ where: { id: lots.EXPIRED.balance.id } })).quantityOnHand)).toBe(100);
+    expect(asNumber((await prisma.enterpriseInventoryBalance.findUniqueOrThrow({ where: { id: lots.QUARANTINE.balance.id } })).quantityOnHand)).toBe(100);
+    const secondEndpoint = `/api/enterprise/${organizationId}/sales-orders/${second.id}/fulfill`;
+    const newReservation = await apiPost(page, secondEndpoint, { ...request, salesOrderItemId: second.items[0].id, quantity: 20, idempotencyKey: key + "-reserveB" });
+    expect(newReservation.response.status(), JSON.stringify(newReservation.body)).toBe(201);
+    expect((await available()).body.totalAvailable).toBe("30");
+    const released = await apiPost(page, secondEndpoint, { action: "RELEASE", reservationId: newReservation.body.reservation.id, reason: "E2E release remaining order promise" });
+    expect(released.response.status(), JSON.stringify(released.body)).toBe(200);
+    expect((await available()).body.totalAvailable).toBe("50");
+  });
+
 });

@@ -33,6 +33,8 @@
 - Les livraisons ERP communes des articles suivis exigent une réservation dans le dépôt, et consomment les mêmes mouvements. Si la comptabilisation automatique est activée, valorisation transactionnelle par le moteur Finance existant ; sinon journal physique sans prétendre qu'il est automatiquement comptabilisé. Le flux historique des articles non suivis est inchangé.
 - Reste bloquant : allocation multi-lots automatique sur une seule ligne de facture POS, retour et pertes/qualité, certification de bout en bout incluant la préparation physique et la valorisation commune.
 
+- Recette API/DB ajoutée à la suite Playwright Shop 2 globale : commande ERP commune, réservation 30+20, livraison partielle 30+10, 2 écritures de coût, replay sans double mouvement, blocage/rollback si lot mis en quarantaine, reprise et libération du reliquat. Aucune exécution réussie encore déclarée sur ce commit.
+
 ## Restant (bloquant)
 Certification de la réaffectation historique sur PostgreSQL + navigateur et valeur inchangée; certification achats et valorisation, réservations/livraisons multi-lots; moteur FEFO commun et POS; pertes, rappels et comptabilité; Design 2.0 et tests multisectoriels. Voir issue #1212. Ne pas merger avant clôture de tous les points.
 

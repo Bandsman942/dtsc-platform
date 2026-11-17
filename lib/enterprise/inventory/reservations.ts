@@ -143,14 +143,15 @@ export async function getEnterpriseInventoryAvailability(organizationId: string,
   return { catalogItemId, inventoryItemId: inventoryItem.id, totalAvailable: totalAvailable.toFixed(), stores };
 }
 
-export async function createEnterpriseInventoryReservation(organizationId: string, actorUserId: string, input: ReservationCreateInput) {
+export async function createEnterpriseInventoryReservation(organizationId: string, actorUserId: string, input: ReservationCreateInput, options?: { requireTracked?: boolean }) {
   return reservationRetry(() => prisma.$transaction(async (tx) => {
     // Enforce site rights before an idempotency hit can expose another store.
     await requireInventoryStockAuthorityTx(tx, organizationId, actorUserId, input.warehouseId);
     const existing = await tx.enterpriseInventoryReservation.findFirst({ where: { organizationId, idempotencyKey: input.idempotencyKey } });
     if (existing) {
       if (existing.warehouseId !== input.warehouseId || existing.storageLocationId !== (input.storageLocationId || null) || existing.salesOrderId !== input.salesOrderId
-        || existing.salesOrderItemId !== input.salesOrderItemId || !existing.quantity.equals(input.quantity)) {
+        || existing.salesOrderItemId !== input.salesOrderItemId || !existing.quantity.equals(input.quantity)
+        || (existing.expiresAt?.getTime() ?? null) !== (input.expiresAt?.getTime() ?? null) || (options?.requireTracked && !existing.lotAllocations)) {
         throw new EnterpriseDomainConflictError("INVENTORY_RESERVATION_IDEMPOTENCY_COLLISION");
       }
       return { reservation: existing, idempotent: true };
@@ -158,7 +159,7 @@ export async function createEnterpriseInventoryReservation(organizationId: strin
 
     const [orderItem, warehouse, storageLocation] = await Promise.all([
       tx.enterpriseSalesOrderItem.findFirst({
-        where: { id: input.salesOrderItemId, organizationId, salesOrderId: input.salesOrderId },
+        where: { id: input.salesOrderItemId, organizationId, salesOrderId: input.salesOrderId, salesOrder: { archivedAt: null } },
         select: { id: true, catalogItemId: true, quantityOrdered: true, quantityFulfilled: true, salesOrder: { select: { id: true, status: true } } },
       }),
       tx.enterpriseWarehouse.findFirst({ where: { id: input.warehouseId, organizationId, status: "ACTIVE", archivedAt: null }, select: { id: true } }),
@@ -178,11 +179,12 @@ export async function createEnterpriseInventoryReservation(organizationId: strin
 
     const catalogItemId = orderItem.catalogItemId;
     const inventoryItem = await tx.enterpriseInventoryItem.findFirst({
-      where: { organizationId, catalogItemId, status: "ACTIVE", archivedAt: null },
+      where: { organizationId, catalogItemId, status: "ACTIVE", archivedAt: null, catalogItem: { organizationId, trackInventory: true, status: "ACTIVE", archivedAt: null } },
       select: { id: true, lotTracking: true, expiryTracking: true },
     });
     if (!inventoryItem) throw new EnterpriseDomainError("INVENTORY_ITEM_NOT_FOUND", 404);
 
+    if (options?.requireTracked && !inventoryItem.lotTracking && !inventoryItem.expiryTracking) throw new EnterpriseDomainError("INVENTORY_RESERVATION_TRACKED_ITEM_REQUIRED", 409);
     const orderPromises = await tx.enterpriseInventoryReservation.findMany({ where: { organizationId, salesOrderItemId: input.salesOrderItemId, status: "ACTIVE", OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] }, select: { quantity: true, fulfilledQuantity: true } });
     const alreadyPromised = orderPromises.reduce((sum, row) => sum.plus(row.quantity.minus(row.fulfilledQuantity)), decimal());
     if (alreadyPromised.plus(input.quantity).gt(remainingOrderQuantity)) throw new EnterpriseDomainError("RESERVATION_EXCEEDS_ORDER_REMAINING", 409);

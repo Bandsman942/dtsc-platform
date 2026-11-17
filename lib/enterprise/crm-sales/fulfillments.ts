@@ -95,10 +95,11 @@ export async function createEnterpriseFulfillment(organizationId: string, salesO
     // must instead consume the explicit reservations of this order.
     let commonTrackedItemIds = new Set<string>();
     if (!retailOrchestration) {
-      const requestedGoods = order.items.filter((item) => requestedByItem.has(item.id) && item.catalogItem?.trackInventory && item.catalogItemId);
+      const requestedGoods = order.items.filter((item) => requestedByItem.has(item.id) && item.catalogItemId);
       if (requestedGoods.length) {
         const catalogIds = requestedGoods.map((item) => item.catalogItemId!);
-        const tracked = await tx.enterpriseInventoryItem.findMany({ where: { organizationId, catalogItemId: { in: catalogIds }, archivedAt: null, status: "ACTIVE", OR: [{ lotTracking: true }, { expiryTracking: true }] }, select: { catalogItemId: true } });
+        const tracked = await tx.enterpriseInventoryItem.findMany({ where: { organizationId, catalogItemId: { in: catalogIds }, OR: [{ lotTracking: true }, { expiryTracking: true }] }, select: { catalogItemId: true, status: true, archivedAt: true } });
+        if (tracked.some((item) => item.archivedAt || item.status !== "ACTIVE")) throw new EnterpriseDomainError("INVENTORY_RESERVATION_REALLOCATION_REQUIRED", 409);
         const trackedCatalogIds = new Set(tracked.map((item) => item.catalogItemId));
         commonTrackedItemIds = new Set(requestedGoods.filter((item) => trackedCatalogIds.has(item.catalogItemId!)).map((item) => item.id));
         if (commonTrackedItemIds.size) {
