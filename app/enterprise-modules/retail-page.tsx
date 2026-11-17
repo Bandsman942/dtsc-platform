@@ -25,10 +25,10 @@ import { formatEnterpriseBusinessDate } from "@/lib/enterprise/business-context"
 import { resolveEnterpriseModuleAccess } from "@/lib/enterprise/module-access";
 import { requireEnterpriseMembership } from "@/lib/enterprise-sector-templates";
 import { prisma } from "@/lib/prisma";
-import { siteStaffCapabilities } from "@/lib/enterprise/retail/site-access";
+import { siteStaffCapabilities, retailStaffIsolationIsEnabled, hasExplicitRetailSelfApproval } from "@/lib/enterprise/retail/site-access";
 import { hasShopHistoricalImportAccess } from "@/lib/enterprise/retail/shop-history-availability";
 
-export async function renderRetailModulePage(moduleCode: "RETAIL_POS" | "MOBILE_MONEY_AGENCY" | "TELCO_TOPUPS" | "RETAIL_DAILY_CLOSE", options?: { section?: string; siteId?: string; invoiceId?: string; invoiceNumber?: string }) {
+export async function renderRetailModulePage(moduleCode: "RETAIL_POS" | "MOBILE_MONEY_AGENCY" | "TELCO_TOPUPS" | "RETAIL_DAILY_CLOSE", options?: { section?: string; siteId?: string; invoiceId?: string; invoiceNumber?: string; invoiceView?: string }) {
   const user = await requireUser();
   const session = await getSession();
   const organizationId = session?.activeContext === "ORGANIZATION" ? session.activeOrganizationId : null;
@@ -70,6 +70,7 @@ export async function renderRetailModulePage(moduleCode: "RETAIL_POS" | "MOBILE_
   const posConfiguration = moduleCode === "RETAIL_POS"
     ? await prisma.enterpriseRetailConfiguration.findUnique({ where: { organizationId }, select: { settingsJson: true } }) : null;
   const invoiceCheckoutEnabled = Boolean(posConfiguration?.settingsJson && typeof posConfiguration.settingsJson === "object" && !Array.isArray(posConfiguration.settingsJson) && posConfiguration.settingsJson.invoiceCheckoutEnabled === true);
+  if (invoiceCheckoutEnabled && retailStaffIsolationIsEnabled(posConfiguration?.settingsJson) && posAssignments.some((assignment) => hasExplicitRetailSelfApproval({ ...assignment, isActive: true }, "INVOICE"))) posCapabilities.add("INVOICE_WORKFLOW");
   const companySites = moduleCode === "RETAIL_DAILY_CLOSE" && canManagePos
     ? await prisma.enterpriseSite.findMany({
       where: { organizationId, status: "ACTIVE", archivedAt: null },
@@ -113,9 +114,9 @@ export async function renderRetailModulePage(moduleCode: "RETAIL_POS" | "MOBILE_
               ) : posSection.id === "staff" ? (
                 <RetailSiteStaffAccess organizationId={organizationId} locale={locale} />
               ) : posSection.id === "invoices" ? (
-                <RetailInvoiceFlowWorkbench organizationId={organizationId} organizationName={organization.name} locale={locale} preferredSiteId={options?.siteId} mode="invoices" />
+                <RetailInvoiceFlowWorkbench organizationId={organizationId} organizationName={organization.name} locale={locale} preferredSiteId={options?.siteId} mode="invoices" canOpenWorkflow={canManagePos || posCapabilities.has("INVOICE_WORKFLOW")} />
               ) : posSection.id === "approvals" ? (
-                <RetailInvoiceApprovalWorkbench organizationId={organizationId} locale={locale} preferredSiteId={options?.siteId} />
+                <RetailInvoiceApprovalWorkbench key={JSON.stringify([options?.siteId, options?.invoiceId, options?.invoiceNumber, options?.invoiceView])} organizationId={organizationId} locale={locale} preferredSiteId={options?.siteId} targetInvoiceId={options?.invoiceId} targetInvoiceNumber={options?.invoiceNumber} preferredView={options?.invoiceView === "issue" ? "issue" : "approvals"} />
               ) : posSection.id === "collections" ? (
                 <RetailInvoiceCashierWorkbench organizationId={organizationId} locale={locale} preferredSiteId={options?.siteId} targetInvoiceId={options?.invoiceId} targetInvoiceNumber={options?.invoiceNumber} />
               ) : posSection.id === "offline" ? (
