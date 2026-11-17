@@ -4,6 +4,8 @@ import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
 import { EnterpriseDomainConflictError, EnterpriseDomainError } from "@/lib/enterprise/common/errors";
 import { enterpriseReference, publishEnterpriseEvent } from "@/lib/enterprise/crm-sales/helpers";
 import type { fulfillmentCreateSchema } from "@/lib/enterprise/crm-sales/schemas";
+import { requireInventoryStockAuthorityTx } from "@/lib/enterprise/inventory/service";
+import { resolveEnterpriseModuleAccess } from "@/lib/enterprise/module-access";
 import { consumeEnterpriseInventoryReservationsTx } from "@/lib/enterprise/inventory/reservations";
 import { consumeRetailOmnichannelRelationshipBenefitsTx } from "@/lib/enterprise/relationship-benefits/omnichannel-adapter";
 import { tryGrantRetailOmnichannelCashbackTx } from "@/lib/enterprise/relationship-benefits/omnichannel-cashback";
@@ -19,7 +21,10 @@ export async function createEnterpriseFulfillment(organizationId: string, salesO
       where: { organizationId, idempotencyKey: input.idempotencyKey },
       include: { items: true },
     });
-    if (existing) return existing;
+    if (existing) {
+      if (existing.salesOrderId !== salesOrderId) throw new EnterpriseDomainConflictError("FULFILLMENT_IDEMPOTENCY_COLLISION");
+      return existing;
+    }
 
     const [order, retailOrchestration] = await Promise.all([
       tx.enterpriseSalesOrder.findFirst({
@@ -85,6 +90,30 @@ export async function createEnterpriseFulfillment(organizationId: string, salesO
       }
     }
 
+    // Preserve untracked legacy commercial deliveries. For common stock
+    // articles configured for batch/expiry traceability, physical delivery
+    // must instead consume the explicit reservations of this order.
+    let commonTrackedItemIds = new Set<string>();
+    if (!retailOrchestration) {
+      const requestedGoods = order.items.filter((item) => requestedByItem.has(item.id) && item.catalogItem?.trackInventory && item.catalogItemId);
+      if (requestedGoods.length) {
+        const catalogIds = requestedGoods.map((item) => item.catalogItemId!);
+        const tracked = await tx.enterpriseInventoryItem.findMany({ where: { organizationId, catalogItemId: { in: catalogIds }, archivedAt: null, status: "ACTIVE", OR: [{ lotTracking: true }, { expiryTracking: true }] }, select: { catalogItemId: true } });
+        const trackedCatalogIds = new Set(tracked.map((item) => item.catalogItemId));
+        commonTrackedItemIds = new Set(requestedGoods.filter((item) => trackedCatalogIds.has(item.catalogItemId!)).map((item) => item.id));
+        if (commonTrackedItemIds.size) {
+          if (input.fulfillmentType !== "PRODUCT_DELIVERY" || !input.warehouseId) throw new EnterpriseDomainError("INVENTORY_RESERVATION_PRODUCT_DELIVERY_REQUIRED", 409);
+          const inventoryAccess = await resolveEnterpriseModuleAccess({ userId: actorUserId, organizationId, moduleCode: "INVENTORY_LOGISTICS", action: "write" });
+          if (!inventoryAccess.allowed) throw new EnterpriseDomainError("INVENTORY_RESERVATION_PERMISSION_DENIED", 403);
+          await requireInventoryStockAuthorityTx(tx, organizationId, actorUserId, input.warehouseId);
+          const [pharmacy, sector] = await Promise.all([
+            tx.pharmacyProductExtension.count({ where: { organizationId, catalogItemId: { in: [...trackedCatalogIds] } } }),
+            tx.enterpriseSectorInventoryEvent.count({ where: { organizationId, catalogItemId: { in: [...trackedCatalogIds] } } }),
+          ]);
+          if (pharmacy || sector) throw new EnterpriseDomainError("INVENTORY_RESERVATION_SECTOR_AUTHORITY", 409);
+        }
+      }
+    }
     const fulfillment = await tx.enterpriseFulfillment.create({
       data: {
         organizationId,
@@ -112,8 +141,9 @@ export async function createEnterpriseFulfillment(organizationId: string, salesO
       include: { items: true },
     });
 
-    if (retailOrchestration && input.fulfillmentType === "PRODUCT_DELIVERY") {
+    if ((retailOrchestration || commonTrackedItemIds.size) && input.fulfillmentType === "PRODUCT_DELIVERY") {
       const trackedItems = input.items.filter((requestItem) => {
+        if (!retailOrchestration) return commonTrackedItemIds.has(requestItem.salesOrderItemId);
         const orderItem = order.items.find((item) => item.id === requestItem.salesOrderItemId);
         return Boolean(orderItem?.catalogItem?.trackInventory);
       });
@@ -128,11 +158,12 @@ export async function createEnterpriseFulfillment(organizationId: string, salesO
           items: trackedItems.map((item) => ({ salesOrderItemId: item.salesOrderItemId, quantityFulfilled: item.quantityFulfilled })),
         });
         try {
-          await valueRetailOmnichannelFulfillmentIssuesTx(tx, organizationId, actorUserId,
+          const configuration = retailOrchestration ? null : await tx.enterpriseFinanceConfiguration.findUnique({ where: { organizationId }, select: { automaticPostingEnabled: true } });
+          if (retailOrchestration || configuration?.automaticPostingEnabled) await valueRetailOmnichannelFulfillmentIssuesTx(tx, organizationId, actorUserId,
             consumed.map((row) => row.movementId), order.currency);
         } catch (error) {
           if (error instanceof EnterpriseAccountingError) {
-            throw new EnterpriseDomainError("RETAIL_FULFILLMENT_ACCOUNTING_NOT_READY", 409);
+            throw new EnterpriseDomainError(retailOrchestration ? "RETAIL_FULFILLMENT_ACCOUNTING_NOT_READY" : "INVENTORY_RESERVATION_ACCOUNTING_NOT_READY", 409);
           }
           throw error;
         }

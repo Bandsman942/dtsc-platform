@@ -4,6 +4,13 @@ import { NextResponse } from "next/server";
 import { EnterpriseDomainError } from "@/lib/enterprise/common/errors";
 
 const BUSINESS_ERROR_MESSAGES: Record<string, { fr: string; en: string }> = {
+  INVENTORY_RESERVATION_FULFILLMENT_EXCEEDED: { fr: "Les quantités réservées ne suffisent pas pour cette livraison. Réservez les lots nécessaires dans le dépôt sélectionné.", en: "Reserved quantities are insufficient for delivery. Reserve the required batches in the selected warehouse." },
+  INVENTORY_RESERVATION_TRACKED_ITEM_REQUIRED: { fr: "Choisissez un article actif suivi par lots ou par péremption.", en: "Select an active batch- or expiry-tracked item." },
+  INVENTORY_RESERVATION_RETAIL_MANAGED: { fr: "Cette commande est pilotée par RETAIL. Utilisez ses opérations pour modifier les réservations.", en: "This order is managed by RETAIL. Use its workflow to change reservations." },
+  INVENTORY_RESERVATION_ACCOUNTING_NOT_READY: { fr: "La valorisation comptable du stock n’est pas prête. Vérifiez les comptes et les coûts avant de confirmer la livraison.", en: "Stock valuation is not ready. Check accounts and costs before confirming delivery." },
+  INVENTORY_RESERVATION_PERMISSION_DENIED: { fr: "Un droit d’écriture Stock est nécessaire pour la livraison des lots.", en: "Inventory write permission is required to deliver tracked batches." },
+  INVENTORY_RESERVATION_PRODUCT_DELIVERY_REQUIRED: { fr: "Pour livrer un article suivi par lots, choisissez une livraison de produits et le dépôt réservé.", en: "Choose product delivery and the reserved warehouse for batch-tracked items." },
+  INVENTORY_RESERVATION_SECTOR_AUTHORITY: { fr: "Cet article dépend d’un registre sectoriel. Utilisez son circuit de traçabilité spécialisé.", en: "This item belongs to a sector ledger. Use its specialized traceability workflow." },
   RESERVATION_EXCEEDS_ORDER_REMAINING: { fr: "La quantité déjà livrée ou réservée et cette demande dépassent la quantité commandée.", en: "Delivered and reserved quantities plus this request exceed the order quantity." },
   INVENTORY_RESERVATION_EXPIRY_INVALID: { fr: "La date de fin de réservation doit être future.", en: "The reservation expiry must be in the future." },
   INVENTORY_RESERVATION_INSUFFICIENT: { fr: "Quantité vendable insuffisante après déduction des réservations, retenues et lots indisponibles.", en: "Insufficient sellable quantity after reservations, holds and unavailable batches." },

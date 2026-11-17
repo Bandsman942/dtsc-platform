@@ -221,6 +221,11 @@ export async function createEnterpriseInventoryReservation(organizationId: strin
 
     let lotAllocations: Prisma.InputJsonValue | undefined;
     if (inventoryItem.lotTracking || inventoryItem.expiryTracking) {
+      const [pharmacyMapping, sectorEvents] = await Promise.all([
+        tx.pharmacyProductExtension.count({ where: { organizationId, catalogItemId } }),
+        tx.enterpriseSectorInventoryEvent.count({ where: { organizationId, catalogItemId } }),
+      ]);
+      if (pharmacyMapping || sectorEvents) throw new EnterpriseDomainError("INVENTORY_RESERVATION_SECTOR_AUTHORITY", 409);
       if (decimal(input.quantity).decimalPlaces() > 3) throw new EnterpriseDomainError("INVENTORY_RESERVATION_ALLOCATION_INVALID", 400);
       const [trackedBalances, organization] = await Promise.all([
         tx.enterpriseInventoryBalance.findMany({
@@ -304,6 +309,7 @@ export async function consumeEnterpriseInventoryReservationsTx(
       if (reservationRemaining.lte(0)) continue;
       const consumeQuantity = Prisma.Decimal.min(reservationRemaining, remainingToFulfill);
       const allocations = readReservationLotAllocations(reservation);
+      if (allocations && consumeQuantity.decimalPlaces() > 3) throw new EnterpriseDomainError("INVENTORY_RESERVATION_ALLOCATION_INVALID", 400);
       const split = allocations ? consumeReservationLotAllocations(allocations, consumeQuantity) : null;
       if (!split) {
         // Historical reservations are never assigned an invented lot. They
