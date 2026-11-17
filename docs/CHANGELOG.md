@@ -1,3 +1,10 @@
+## 2026-11-17 — Hotfix POS RETAIL #1210 — v1.23.3 candidate (OWNER_E2E requis)
+
+- Registre des factures : raccourcis vers validation assignée ou émission autorisée, ciblage strict boutique + identifiant + numéro par les files métier serveur.
+- Validation : après décision réussie, ouverture de la file d'émission de cette facture uniquement si le serveur confirme le droit d'émettre ; conservation de la séparation des tâches, révision et auto-approbation explicitement accordée.
+- Émission : reçu de confirmation et lien vers les encaissements de la facture seulement après lecture canonique confirmant canCollect, checkout actif, statut émis et solde ouvert. Aucun paiement déclenché au clic.
+- Aucun changement des routes immuables ROUTES-05A, Prisma, secrets ou permissions enregistrées ; QA ciblée, [contrat et recette](HOTFIX_1210_RETAIL_INVOICE_WORKFLOW_LINKS.md) et contrôle propriétaire avant fusion.
+
 ## 2026-11-16 — Hotfix POS factures → Encaissements et Finance/Reports 2.0 #1208 — v1.23.2 candidate (OWNER_E2E requis)
 
 - RETAIL POS : un lien sur chaque facture émise non soldée renvoie à l'encaissement de cette facture seulement si l'utilisateur dispose de `COLLECT_PAYMENT` sur sa boutique ; la liste RETAIL reste figée par ROUTES-05A ; recherche par numéro sur boutiques autorisées puis correspondance stricte ID + numéro en caisse, suivie des contrôles serveur de paiement (entreprise, boutique, statut, solde et affectations).
