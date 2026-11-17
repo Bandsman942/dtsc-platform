@@ -2,6 +2,15 @@ import { enterpriseCoreIntlLocale } from "@/lib/enterprise-core-i18n";
 
 const PURCHASE_FORM_GUIDANCE = {
   fr: {
+    receiptBatchInvalid: "Renseignez les numéros, dates et quantités réelles des lots. Leur somme doit correspondre à la quantité reçue.",
+    receiptBatchHelp: "Lots réellement reçus — à compléter uniquement si cette ligne est réceptionnée.",
+    receiptBatchNumber: "Numéro de lot",
+    receiptBatchQuantity: "Quantité du lot",
+    receiptBatchProduction: "Date de fabrication",
+    receiptBatchExpiryRequired: "Date de péremption *",
+    receiptBatchExpiry: "Date de péremption",
+    receiptBatchRemove: "Retirer ce lot",
+    receiptBatchAdd: "Ajouter un lot",
     subject: "Donnez un objet court qui permettra d’identifier cet achat dans les listes, validations et rapports.",
     sourceRequest: "Reliez l’achat uniquement à une demande d’achat déjà approuvée afin de conserver la traçabilité du besoin et de sa validation.",
     supplier: "Sélectionnez un fournisseur actif de cette entreprise. La référence est contrôlée dans le même espace entreprise.",
@@ -41,6 +50,15 @@ const PURCHASE_FORM_GUIDANCE = {
     actionReasonHelp: "Un motif est obligatoire pour une annulation ou un archivage et restera dans la piste d’audit.",
   },
   en: {
+    receiptBatchInvalid: "Enter the actual batch numbers, dates and quantities. Their sum must match the received quantity.",
+    receiptBatchHelp: "Actual received batches — fill only if receiving this line.",
+    receiptBatchNumber: "Batch number",
+    receiptBatchQuantity: "Batch quantity",
+    receiptBatchProduction: "Manufacture date",
+    receiptBatchExpiryRequired: "Expiry date *",
+    receiptBatchExpiry: "Expiry date",
+    receiptBatchRemove: "Remove batch",
+    receiptBatchAdd: "Add batch",
     subject: "Use a short subject that clearly identifies this purchase in lists, approvals and reports.",
     sourceRequest: "Link only an already approved purchase request so the original need and its approval remain traceable.",
     supplier: "Select an active supplier from this organization. The reference remains controlled inside the same enterprise workspace.",

@@ -24,10 +24,10 @@ type ApprovalCoordination = {
   decisions: Array<{ id: string; decision: string; reason: string | null; actorUserId: string; createdAt: string }>;
   delegates: Array<{ id: string; label: string; email: string }>;
   sourceDeepLink: string;
-  capabilities: { canApprove: boolean; canReject: boolean; canRequestCorrection: boolean; canDelegate: boolean; canResubmit: boolean };
+  capabilities: { canCancel?: boolean; canApprove: boolean; canReject: boolean; canRequestCorrection: boolean; canDelegate: boolean; canResubmit: boolean };
 };
 
-type ApprovalAction = "PREPARE_REVIEW" | "APPROVE" | "REJECT" | "REQUEST_CORRECTION" | "RESUBMIT" | "DELEGATE";
+type ApprovalAction = "PREPARE_REVIEW" | "CANCEL" | "APPROVE" | "REJECT" | "REQUEST_CORRECTION" | "RESUBMIT" | "DELEGATE";
 
 export function ApprovalCoordinationPanel({ organizationId, approvalId, locale, onChanged }: { organizationId: string; approvalId: string; locale?: string | null; onChanged?: () => void }) {
   const [data, setData] = useState<ApprovalCoordination | null>(null);
@@ -123,6 +123,7 @@ export function ApprovalCoordinationPanel({ organizationId, approvalId, locale, 
     {latestVersion ? <section className="grid gap-3 rounded-2xl border border-dtsc-border p-4">
       <div className="flex flex-wrap items-center gap-2"><FileCheck2 className="h-4 w-4 text-dtsc-blue" /><h4 className="font-black text-dtsc-ink">{approvalReviewLabel(locale, "snapshot")}</h4><StatusBadge>v{latestVersion.versionNumber}</StatusBadge></div>
       <div className="grid gap-2 sm:grid-cols-2">{snapshotEntries(latestVersion.snapshotJson).map(([field, value]) => <div key={field} className="min-w-0 rounded-xl border border-dtsc-border bg-dtsc-page p-3"><p className="text-xs font-black text-dtsc-muted">{approvalSnapshotFieldLabel(locale, field)}</p><p className="mt-1 break-words text-sm text-dtsc-ink">{formatSnapshotValue(value, locale)}</p></div>)}</div>
+      {Array.isArray(latestVersion.snapshotJson.batchAllocations) ? <div className="grid gap-2"><h5 className="font-semibold">{approvalSnapshotFieldLabel(locale, "batchAllocations")}</h5>{latestVersion.snapshotJson.batchAllocations.map((entry: unknown, index: number) => { if (!entry || typeof entry !== "object") return null; const record = entry as Record<string, unknown>; return <div key={index} className="grid gap-2 rounded-xl border border-dtsc-border p-3 sm:grid-cols-2">{["lotNumber", "quantity", "productionDate", "expiryDate"].map((field) => <p key={field} className="break-words"><strong className="text-xs text-dtsc-muted">{approvalSnapshotFieldLabel(locale, field)}</strong><br />{formatSnapshotValue(record[field], locale)}</p>)}</div>; })}</div> : null}
       {latestVersion.submissionComment ? <p className="rounded-xl border border-dtsc-border p-3 text-sm text-dtsc-muted">{latestVersion.submissionComment}</p> : null}
     </section> : null}
 
@@ -132,6 +133,7 @@ export function ApprovalCoordinationPanel({ organizationId, approvalId, locale, 
       {reasonError ? <span id="approval-reason-error" className="text-xs text-red-700" role="alert">{reasonError}</span> : null}
     </label> : null}
     <div className="flex min-w-0 flex-wrap gap-2">
+      {data.capabilities.canCancel ? <Button type="button" variant="outline" disabled={submitting} onClick={() => void act("CANCEL")}>{approvalSnapshotFieldLabel(locale, "cancelAllocation")}</Button> : null}
       {data.capabilities.canApprove && canFinalDecision ? <Button type="button" disabled={submitting} onClick={() => void act("APPROVE")} className="bg-emerald-600 text-white"><CheckCircle2 className="h-4 w-4" />{enterpriseCoreT(locale, "approval.decision.APPROVE")}</Button> : null}
       {data.capabilities.canRequestCorrection ? <Button type="button" variant="outline" disabled={submitting} onClick={() => void act("REQUEST_CORRECTION")}><RefreshCcw className="h-4 w-4" />{enterpriseCoreT(locale, "approval.action.REQUEST_CORRECTION")}</Button> : null}
       {data.capabilities.canReject && canFinalDecision ? <Button type="button" variant="outline" disabled={submitting} onClick={() => void act("REJECT")} className="text-red-700"><XCircle className="h-4 w-4" />{enterpriseCoreT(locale, "approvals.coordination.reject")}</Button> : null}
@@ -152,7 +154,7 @@ export function ApprovalCoordinationPanel({ organizationId, approvalId, locale, 
   </div>;
 }
 
-const SNAPSHOT_FIELDS = new Set(["title", "description", "status", "priority", "requestType", "reference", "revision", "startAt", "dueAt", "endAt", "locationMode", "currency", "amount", "totalAmount", "sourceAmount", "sourceCurrencyCode", "targetAmount", "targetCurrencyCode", "updatedAt"]);
+const SNAPSHOT_FIELDS = new Set(["article", "warehouse", "location", "quantity", "reason", "title", "description", "status", "priority", "requestType", "reference", "revision", "startAt", "dueAt", "endAt", "locationMode", "currency", "amount", "totalAmount", "sourceAmount", "sourceCurrencyCode", "targetAmount", "targetCurrencyCode", "updatedAt"]);
 
 function snapshotEntries(snapshot: Record<string, unknown>) {
   return Object.entries(snapshot).filter(([field, value]) => SNAPSHOT_FIELDS.has(field) && value !== null && value !== undefined && value !== "");

@@ -129,7 +129,7 @@ async function approvalTargetSnapshot(tx: Prisma.TransactionClient, organization
       tx.enterpriseWarehouse.findFirst({ where: { organizationId, id: item.warehouseId }, select: { code: true, name: true } }),
       item.storageLocationId ? tx.enterpriseStorageLocation.findFirst({ where: { organizationId, id: item.storageLocationId }, select: { code: true, name: true } }) : Promise.resolve(null),
     ]);
-    return serializeSnapshot({ reference: item.reference, status: item.status, article: inventory?.catalogItem, warehouse, location, quantity: item.quantity, allocations: item.allocations, reason: item.reason, revision: item.revision });
+    return serializeSnapshot({ reference: item.reference, status: item.status, article: inventory?.catalogItem ? inventory.catalogItem.code + " · " + inventory.catalogItem.name : null, warehouse: warehouse ? warehouse.code + " · " + warehouse.name : null, location: location ? location.code + " · " + location.name : null, quantity: item.quantity.toFixed(), batchAllocations: item.allocations, reason: item.reason, revision: item.revision });
   }
   if (entityType === "EnterpriseStockAdjustment") {
     const item = await tx.enterpriseStockAdjustment.findFirst({ where: { id: entityId, organizationId }, select: { id: true, reference: true, status: true, adjustmentType: true, inventoryItemId: true, warehouseId: true, storageLocationId: true, stockLotId: true, quantity: true, reason: true, requestedByUserId: true, approvedByUserId: true, revision: true, updatedAt: true } });

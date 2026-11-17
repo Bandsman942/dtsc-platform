@@ -35,7 +35,8 @@ export async function GET(req: Request, { params }: Params) {
   const isAssignedValidator = approval.approverUserId === session.userId;
   const isRequester = approval.requestedByUserId === session.userId;
   const selfApprovalAllowed = candidateResult.candidates.some((candidate) => candidate.userId === session.userId && candidate.selfApprovalOverride);
-  const canDecide = approval.status === "PENDING" && isAssignedValidator && (!isRequester || selfApprovalAllowed);
+  const isHistoricalLotAllocation = approval.targetEntityType === "EnterpriseStockLotReclassification";
+  const canDecide = approval.status === "PENDING" && isAssignedValidator && (!isRequester || (!isHistoricalLotAllocation && selfApprovalAllowed));
   const correctionSupported = supportsProfessionalApprovalCorrection(approval.targetEntityType);
   const capabilities = {
     canView: true,
@@ -43,7 +44,8 @@ export async function GET(req: Request, { params }: Params) {
     canApprove: canDecide,
     canReject: canDecide,
     canRequestCorrection: correctionSupported && canDecide,
-    canDelegate: approval.status === "PENDING" && Boolean(moduleCode) && delegates.length > 0 && (access.canManage || (isAssignedValidator && !isRequester)),
+    canCancel: isHistoricalLotAllocation && approval.status === "PENDING" && isRequester,
+    canDelegate: !isHistoricalLotAllocation && approval.status === "PENDING" && Boolean(moduleCode) && delegates.length > 0 && (access.canManage || (isAssignedValidator && !isRequester)),
     canResubmit: correctionSupported && approval.status === "CORRECTION_REQUESTED" && (access.canManage || isRequester),
   };
 

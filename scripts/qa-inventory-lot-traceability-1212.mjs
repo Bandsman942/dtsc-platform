@@ -25,6 +25,8 @@ const db = {
 };
 const mocks = {
   "next/server": { NextResponse: { json: (body, opts) => ({ body, status: opts?.status || 200 }) } },
+  "@/lib/notifications": { notifyUser: async () => {} },
+  "@/lib/enterprise/inventory/lot-reclassification": {},
   "@/lib/auth": { getSession: async () => ({ userId: "actor" }) },
   "@/lib/audit": { writeApiLog: async () => {}, writeAuditLog: async () => {} },
   "@/lib/enterprise/common/access": { getEnterpriseCommonDomainAccess: async () => access },
@@ -111,3 +113,18 @@ assert.equal(planFefoLots({ candidates, quantity: 100, businessDate: "2026-11-17
 assert.equal(planFefoLots({ candidates: [candidate("undated", null, 10)], quantity: 1, businessDate: "2026-11-17", expiryMode: "BLOCK", requireExpiry: true }).shortfall.toFixed(), "1");
 assert.throws(() => planFefoLots({ candidates, quantity: 0.0001, businessDate: "2026-11-17", expiryMode: "BLOCK" }), { name: "RangeError" });
 console.log("FEFO multi-lot planning, holds, quarantine and calendar dates OK");
+
+class TestDomainError extends Error { constructor(code, status = 400) { super(code); this.code = code; this.status = status; } }
+mocks["@/lib/enterprise/common/errors"] = { EnterpriseDomainError: TestDomainError, EnterpriseDomainConflictError: TestDomainError };
+mocks["@/lib/enterprise/inventory/approval"] = {};
+mocks["@/lib/enterprise/inventory/service"] = {};
+mocks["@/lib/enterprise/retail/invoice-stock-holds"] = {};
+mocks["@/lib/enterprise/crm-sales/helpers"] = {};
+const reclass = load("lib/enterprise/inventory/lot-reclassification.ts");
+const batches = [{ lotNumber: "L-A", quantity: "30", productionDate: null, expiryDate: "2027-02-01" }, { lotNumber: "L-B", quantity: "70", productionDate: null, expiryDate: "2027-03-01" }];
+assert.equal(reclass.validateLotReclassificationAllocations(batches, d(100), true).toFixed(), "100");
+assert.throws(() => reclass.validateLotReclassificationAllocations(batches, d(101), true), { code: "STOCK_RECLASS_QUANTITY_MISMATCH" });
+assert.throws(() => reclass.validateLotReclassificationAllocations([batches[0], { ...batches[1], lotNumber: "L-A" }], d(100), true), { code: "STOCK_RECLASS_ALLOCATION_INVALID" });
+assert.throws(() => reclass.validateLotReclassificationAllocations([batches[0], { ...batches[1], expiryDate: null }], d(100), true), { code: "STOCK_RECLASS_ALLOCATION_INVALID" });
+await assert.rejects(reclass.submitStockLotReclassification("org", "same-user", { approverUserId: "same-user" }), { code: "SELF_APPROVAL_FORBIDDEN" });
+console.log("Historical batch allocation: quantity conservation, real dates, duplicate guard and independent approver OK");

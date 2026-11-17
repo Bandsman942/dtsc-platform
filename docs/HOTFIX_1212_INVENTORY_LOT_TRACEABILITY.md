@@ -21,10 +21,10 @@
 ## Réaffectation historique — service et approbation (en validation)
 - Demande persistée, migration additive sans backfill, validation commune par un autre collaborateur, revue versionnée, transaction Serializable à révision du solde/fiche avec contrôle des opérations ouvertes et séparation des registres sectoriels.
 - Mouvements compensés `LOT_RECLASSIFICATION_OUT/IN` à quantité exacte, même article/dépôt/emplacement, journal immuable, aucune modification de couches de coût ou d’écriture; valorisation interdite pour ces mouvements. Le suivi des lots s’active séparément après traitement de tous les soldes.
-- Interface de soumission et recette PostgreSQL/UI à compléter. Pas d’exécution sur données clientes.
+- Interface de soumission depuis les contrôles par article, sélection des soldes, calcul indicatif du restant, validation indépendante, lien vers Validations et revue affichant tous les lots. QA des règles 100 = 30+70, doublons, données et séparation des acteurs; recette PostgreSQL/UI complète à exécuter. Pas d’exécution sur données clientes.
 
 ## Restant (bloquant)
-Assistant de réaffectation historique transactionnel avec approbation et valeur conservée; certification achats et valorisation, réservations/livraisons multi-lots; moteur FEFO commun et POS; pertes, rappels et comptabilité; Design 2.0 et tests multisectoriels. Voir issue #1212. Ne pas merger avant clôture de tous les points.
+Certification de la réaffectation historique sur PostgreSQL + navigateur et valeur inchangée; certification achats et valorisation, réservations/livraisons multi-lots; moteur FEFO commun et POS; pertes, rappels et comptabilité; Design 2.0 et tests multisectoriels. Voir issue #1212. Ne pas merger avant clôture de tous les points.
 
 ## Recette propriétaire (NON EXÉCUTÉE)
 1. Article stockable suivi, sans solde dans un dépôt autorisé : présent; service, article inactif ou non suivi : absent.

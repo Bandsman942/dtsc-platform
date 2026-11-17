@@ -5,10 +5,11 @@ import { Boxes, PackagePlus, Settings2, ShieldCheck, TriangleAlert } from "lucid
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { InventoryHistoricalLotDialog, type HistoricalInventoryItem } from "@/components/enterprise/professional/inventory-historical-lot-dialog";
 import { notifyToast } from "@/lib/client-toast";
 import { customerFacingError } from "@/lib/customer-facing-language";
 
-type Item = { id: string; revision: number; catalogItem: { code: string; name: string }; minimumQuantity: string | number | null; reorderQuantity: string | number | null; lotTracking: boolean; expiryTracking: boolean };
+type Item = HistoricalInventoryItem & { minimumQuantity: string | number | null; reorderQuantity: string | number | null; lotTracking: boolean; expiryTracking: boolean };
 type BatchOption = { id: string; expiryTracking: boolean; catalogItem: { code: string; name: string } };
 type Warehouse = { id: string; code: string; name: string };
 type Lot = { id: string; revision: number; lotNumber: string; warehouseId: string; status: string; productionDate: string | null; expiryDate: string | null; notes: string | null; quantityOnHand: string; quantityReserved: string; inventoryItem: { catalogItem: { name: string; code: string } } };
@@ -31,6 +32,8 @@ export function InventoryStockGovernance({ organizationId, locale, warehouses }:
   const [pages, setPages] = useState(1);
   const [search, setSearch] = useState("");
   const [editPolicy, setEditPolicy] = useState<Item | null>(null);
+  const [historicalItem, setHistoricalItem] = useState<Item | null>(null);
+  const [lastApproval, setLastApproval] = useState<{ id: string; reference: string } | null>(null);
   const [editLot, setEditLot] = useState<Lot | null>(null);
   const [lotDialog, setLotDialog] = useState(false);
   const [batchWarehouse, setBatchWarehouse] = useState("");
@@ -112,7 +115,8 @@ export function InventoryStockGovernance({ organizationId, locale, warehouses }:
       <div className="flex flex-wrap gap-2"><Button type="button" disabled={!canRegisterLot} onClick={openBatchDialog}><PackagePlus className="h-4 w-4" />{en ? "Register batch" : "Enregistrer un lot"}</Button><p className="self-center text-xs text-dtsc-muted">{en ? "A batch has zero stock until a receipt is approved." : "Un lot n'a aucun stock avant validation d'une entrée physique."}</p></div>
       <div><h4 className="mb-2 text-xs font-black uppercase text-dtsc-muted">{en ? "Per-item controls" : "Contrôles par article"}</h4>{!canAdminister ? <p className="mb-2 text-xs text-dtsc-muted">{en ? "Company-wide stock rules require inventory administration rights." : "Les règles de stock communes à tous les dépôts exigent le droit d’administration du stock."}</p> : null}
         <input className="mb-2 min-h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 text-sm" value={itemSearch} onChange={(event) => { setItemSearch(event.target.value); setItemPage(1); }} placeholder={en ? "Search item by name or SKU" : "Rechercher un article ou SKU"} aria-label={en ? "Search items" : "Rechercher les articles"} />
-        <div className="grid min-w-0 gap-2 sm:grid-cols-2 xl:grid-cols-3">{items.map((item) => <div key={item.id} className="flex min-w-0 items-center justify-between gap-2 rounded-xl border border-dtsc-border bg-dtsc-page p-3"><span className="min-w-0 truncate text-xs font-bold text-dtsc-ink" title={item.catalogItem.name}>{item.catalogItem.name}</span><Button variant="outline" size="sm" disabled={!canAdminister} onClick={() => setEditPolicy(item)}><Settings2 className="h-4 w-4" />{en ? "Rules" : "Règles"}</Button></div>)}</div>
+        {lastApproval ? <p role="status" className="mb-2 rounded-xl border border-dtsc-border p-3 text-sm"><strong>{lastApproval.reference}</strong> · <a className="font-semibold text-dtsc-blue underline" href={`/enterprise-modules/VALIDATIONS?approval=${encodeURIComponent(lastApproval.id)}`}>{en ? "Open approval" : "Ouvrir la validation"}</a></p> : null}
+        <div className="grid min-w-0 gap-2 sm:grid-cols-2 xl:grid-cols-3">{items.map((item) => <div key={item.id} className="grid min-w-0 gap-2 rounded-xl border border-dtsc-border bg-dtsc-page p-3"><span className="min-w-0 break-words text-xs font-bold text-dtsc-ink">{item.catalogItem.code} · {item.catalogItem.name}</span><div className="flex flex-wrap gap-2"><Button variant="outline" size="sm" disabled={!canAdminister} onClick={() => setEditPolicy(item)}><Settings2 className="h-4 w-4" />{en ? "Rules" : "Règles"}</Button>{canAdminister && item.balances?.some((balance) => !balance.stockLotId && Number(balance.quantityOnHand) > 0) ? <Button variant="outline" size="sm" onClick={() => setHistoricalItem(item)}>{en ? "Allocate historical stock" : "Répartir le stock historique"}</Button> : null}</div></div>)}</div>
         <div className="mt-2 flex items-center justify-between gap-3 text-xs text-dtsc-muted"><span>{en ? "Items page" : "Articles · page"} {itemPage}/{itemPages}</span><div className="flex gap-2"><Button variant="outline" disabled={itemPage <= 1} onClick={() => setItemPage((value) => value - 1)}>{en ? "Previous" : "Précédent"}</Button><Button variant="outline" disabled={itemPage >= itemPages} onClick={() => setItemPage((value) => value + 1)}>{en ? "Next" : "Suivant"}</Button></div></div>
       </div>
       <div><h4 className="mb-2 text-xs font-black uppercase text-dtsc-muted">{en ? "Traceable batches by warehouse" : "Lots traçables par dépôt"}</h4>
@@ -121,6 +125,7 @@ export function InventoryStockGovernance({ organizationId, locale, warehouses }:
         <div className="mt-2 flex items-center justify-between gap-3 text-xs text-dtsc-muted"><span>{en ? "Page" : "Page"} {page}/{pages}</span><div className="flex gap-2"><Button variant="outline" disabled={page <= 1} onClick={() => setPage((value) => value - 1)}>{en ? "Previous" : "Précédent"}</Button><Button variant="outline" disabled={page >= pages} onClick={() => setPage((value) => value + 1)}>{en ? "Next" : "Suivant"}</Button></div></div>
       </div>
     </div> : null}
+    {historicalItem ? <InventoryHistoricalLotDialog key={historicalItem.id} organizationId={organizationId} locale={locale} item={historicalItem} onClose={() => setHistoricalItem(null)} onSubmitted={(result) => { setLastApproval(result); setHistoricalItem(null); refresh(); }} /> : null}
     <Dialog open={Boolean(editPolicy)} onClose={() => { if (!busy) setEditPolicy(null); }} title={en ? "Stock rules" : "Règles de stock"} presentation="editor"><form key={editPolicy?.id || "none"} onSubmit={savePolicy} className="grid gap-3 p-2">
       <p className="text-xs text-dtsc-muted">{editPolicy?.catalogItem.name}</p>
       <label className="grid gap-1 text-xs font-bold text-dtsc-muted">{en ? "Low-stock threshold (available units)" : "Seuil d'alerte du stock disponible"}<Input name="minimumQuantity" type="number" min="0" step="0.001" defaultValue={editPolicy?.minimumQuantity?.toString() || ""} /></label>

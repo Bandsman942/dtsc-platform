@@ -5,6 +5,7 @@ import { retailErrorResponse } from "@/lib/enterprise/retail/http";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getSession } from "@/lib/auth";
+import { notifyUser } from "@/lib/notifications";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { getEnterpriseCommonDomainAccess } from "@/lib/enterprise/common/access";
 import { lotReclassificationSchema, submitStockLotReclassification } from "@/lib/enterprise/inventory/lot-reclassification";
@@ -83,6 +84,7 @@ export async function POST(req: Request, { params }: Params) {
   if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "STOCK_RECLASS_ALLOCATION_INVALID", req);
   try {
     const result = await submitStockLotReclassification(organizationId, session.userId, parsed.data);
+    if (!result.idempotent) await notifyUser({ userId: result.approval.approverUserId, organizationId, type: "ENTERPRISE_APPROVAL", title: "Régularisation des lots à valider", body: result.request.reference, targetUrl: `/enterprise-modules/VALIDATIONS?approval=${encodeURIComponent(result.approval.id)}` }).catch(() => undefined);
     await writeAuditLog({ userId: session.userId, organizationId, action: "STOCK_LOT_RECLASS_SUBMITTED", entity: "EnterpriseStockLotReclassification", entityId: result.request.id, request: req, metadata: { approvalId: result.approval.id, idempotent: result.idempotent } });
     await writeApiLog({ request: req, startedAt, userId: session.userId, statusCode: result.idempotent ? 200 : 201, metadata: { organizationId, domain: "inventory-lot-reclass" } });
     return NextResponse.json({ ok: true, reference: result.request.reference, approvalId: result.approval.id, idempotent: result.idempotent }, { status: result.idempotent ? 200 : 201 });
