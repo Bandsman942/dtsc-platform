@@ -11,6 +11,7 @@ import { Dialog } from "@/components/ui/dialog";
 import { toastError, toastSuccess, notifyToast } from "@/lib/client-toast";
 import { customerFacingError } from "@/lib/customer-facing-language";
 import { browserCivilDate } from "@/lib/enterprise/retail/civil-date";
+import { findRetailNavigationInvoice, retailInvoiceNavigationHref, type RetailInvoiceNavigationView } from "@/lib/enterprise/retail/invoice-navigation";
 
 type Store = { id: string; code: string; name: string; warehouses: { id: string; code: string; name: string }[] };
 type InvoiceItem = { id: string; description: string; quantity: string; totalAmount: string };
@@ -44,6 +45,7 @@ const language = {
     disabled: "Ce circuit est encore en validation. Les tickets POS actuels ne sont pas modifiés ; la préparation de nouvelles factures demeure désactivée.",
     warehouse: "Boutique et dépôt", chooseWarehouse: "Choisir un dépôt", product: "Rechercher un article", search: "Nom, référence ou code article", quantity: "Quantité", add: "Ajouter l'article", lines: "Articles à facturer", prepare: "Préparer la facture impayée", preparing: "Préparation…", clear: "Vider le panier", removed: "Retirer", lot: "Lot de stock", chooseLot: "Choisir un lot", noLines: "Ajoutez un ou plusieurs articles.",
     collectLink: "Ouvrir les encaissements de cette facture",
+    approvalLink: "Ouvrir pour valider", issueLink: "Ouvrir pour émettre",
     list: "Factures Retail", all: "Toutes les boutiques", refresh: "Actualiser", loading: "Chargement du registre…", empty: "Aucune facture Retail préparée pour cette sélection.",
     date: "Préparée", outstanding: "Reste dû", paid: "Payée", draft: "Brouillon", rejected: "Refusée — à corriger ou annuler", pending: "À valider", approved: "Approuvée", issued: "Émise", partial: "Partiellement payée", cancelled: "Annulée", voided: "Invalidée", overdue: "Échue", credited: "Avoir comptabilisé", unknown: "Statut à vérifier", delivered: "Stock délivré", stockPending: "Stock non encore délivré", finance: "Les validations et affectations de paiement sont réalisées dans le module Finance commun, avec les droits de chaque intervenant.",
     pagePrev: "Précédente", pageNext: "Suivante", currencyMismatch: "Une facture ne peut pas mélanger plusieurs devises. Préparez un autre panier pour cet article.", ready: "Circuit en cours d'activation contrôlée", failed: "Impossible de consulter les factures Retail.", saved: "Facture préparée. Elle attend les étapes de validation Finance.", duplicate: "Une facture existe déjà pour cette référence ; son état a été actualisé.",
@@ -58,6 +60,7 @@ const language = {
     disabled: "This workflow is still under validation. Existing POS receipts are unaffected; new invoice preparation remains disabled.",
     warehouse: "Store and warehouse", chooseWarehouse: "Choose a warehouse", product: "Find an item", search: "Item name, reference or code", quantity: "Quantity", add: "Add item", lines: "Invoice items", prepare: "Prepare unpaid invoice", preparing: "Preparing…", clear: "Clear basket", removed: "Remove", lot: "Stock batch", chooseLot: "Choose a batch", noLines: "Add one or more items.",
     collectLink: "Open this invoice’s collections",
+    approvalLink: "Open for approval", issueLink: "Open for issuance",
     list: "Retail invoices", all: "All stores", refresh: "Refresh", loading: "Loading invoices…", empty: "No Retail invoices in this selection.",
     date: "Prepared", outstanding: "Outstanding", paid: "Paid", draft: "Draft", rejected: "Rejected — correct or cancel", pending: "Awaiting approval", approved: "Approved", issued: "Issued", partial: "Partially paid", cancelled: "Cancelled", voided: "Voided", overdue: "Overdue", credited: "Credit note posted", unknown: "Check status", delivered: "Inventory delivered", stockPending: "Inventory not yet delivered", finance: "Approvals and payment allocations are performed in the common Finance module under each actor's permissions.",
     pagePrev: "Previous", pageNext: "Next", currencyMismatch: "An invoice cannot mix currencies. Create another basket for this item.", ready: "Controlled activation in progress", failed: "Retail invoices are unavailable.", saved: "Invoice prepared. It is awaiting Finance approval stages.", duplicate: "An invoice already exists for this reference; its status has been refreshed.",
@@ -81,11 +84,12 @@ function money(value: string, currency: string, locale: "fr" | "en") {
   return `${new Intl.NumberFormat(locale === "fr" ? "fr-FR" : "en-US", { maximumFractionDigits: 2 }).format(Number(value))} ${currency}`;
 }
 
-export function RetailInvoiceFlowWorkbench({ organizationId, organizationName, locale, preferredSiteId, mode = "invoices" }: {
-  organizationId: string; organizationName?: string; locale: "fr" | "en"; preferredSiteId?: string; mode?: "checkout" | "invoices";
+export function RetailInvoiceFlowWorkbench({ organizationId, organizationName, locale, preferredSiteId, mode = "invoices", canOpenWorkflow = false }: {
+  organizationId: string; organizationName?: string; locale: "fr" | "en"; preferredSiteId?: string; mode?: "checkout" | "invoices"; canOpenWorkflow?: boolean;
 }) {
   const copy = language[locale];
   const [data, setData] = useState<InvoiceResponse | null>(null);
+  const [workflowLinks, setWorkflowLinks] = useState<{ source: InvoiceResponse; links: Record<string, RetailInvoiceNavigationView> } | null>(null);
   const [loading, setLoading] = useState(true);
   const [forbidden, setForbidden] = useState(false);
   const [error, setError] = useState("");
@@ -162,6 +166,27 @@ export function RetailInvoiceFlowWorkbench({ organizationId, organizationName, l
     finally { setLoading(false); }
   }, [copy.disabled, copy.failed, invoiceSearch, invoiceDateFrom, invoiceDateTo, locale, organizationId, page, siteFilter]);
   useEffect(() => { const timeout = window.setTimeout(() => { void load(); }, invoiceSearch ? 220 : 0); return () => window.clearTimeout(timeout); }, [load, invoiceSearch]);
+
+  // Only inspect the visible page (10 invoices), only actionable statuses.
+  // Three concurrent targeted reads at most; no background polling or name-based authorization.
+  useEffect(() => {
+    if (mode !== "invoices" || !canOpenWorkflow || !data?.checkoutReady || forbidden || loading) return;
+    const controller = new AbortController();
+    const source = data;
+    const candidates = source.items.filter((entry) => ["PENDING_APPROVAL", "APPROVED"].includes(entry.invoice.status));
+    void (async () => {
+      const links: Record<string, RetailInvoiceNavigationView> = {};
+      for (let offset = 0; offset < candidates.length && !controller.signal.aborted; offset += 3) {
+        await Promise.all(candidates.slice(offset, offset + 3).map(async (entry) => {
+          const view = entry.invoice.status === "PENDING_APPROVAL" ? "approvals" : "issue";
+          const exact = await findRetailNavigationInvoice(organizationId, view, { siteId: entry.siteId, invoiceId: entry.invoice.id, invoiceNumber: entry.invoice.number }, controller.signal);
+          if (exact) links[entry.invoice.id] = view;
+        }));
+      }
+      if (!controller.signal.aborted) setWorkflowLinks({ source, links });
+    })();
+    return () => controller.abort();
+  }, [organizationId, mode, data, canOpenWorkflow, forbidden, loading]);
 
   useEffect(() => {
     if (mode !== "checkout") return;
@@ -387,6 +412,7 @@ export function RetailInvoiceFlowWorkbench({ organizationId, organizationName, l
             <Button type="button" variant="outline" onClick={() => window.open(`/api/enterprise/${organizationId}/retail/invoices/${encodeURIComponent(entry.invoice.id)}/print?paper=a4&lang=${locale}`, "_blank", "noopener,noreferrer")}><Printer className="h-4 w-4" />{copy.printA4}</Button>
             <Button type="button" variant="outline" onClick={() => window.open(`/api/enterprise/${organizationId}/retail/invoices/${encodeURIComponent(entry.invoice.id)}/print?paper=thermal&lang=${locale}`, "_blank", "noopener,noreferrer")}><Printer className="h-4 w-4" />{copy.printThermal}</Button>
             {data.checkoutReady && entry.canCancel ? <Button type="button" variant="outline" onClick={() => { setCancelTarget(entry); setCancelReason(""); }}><XCircle className="h-4 w-4 text-amber-600" />{copy.cancelDraft}</Button> : null}
+            {!loading && workflowLinks?.source === data && workflowLinks.links[entry.invoice.id] ? <Link href={retailInvoiceNavigationHref(workflowLinks.links[entry.invoice.id], { siteId: entry.siteId, invoiceId: entry.invoice.id, invoiceNumber: entry.invoice.number })} className="inline-flex min-h-10 min-w-0 items-center gap-2 rounded-xl border border-dtsc-border bg-dtsc-soft px-3 text-sm font-bold text-dtsc-ink transition hover:bg-dtsc-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"><ArrowRight className="h-4 w-4 shrink-0" aria-hidden="true" />{workflowLinks.links[entry.invoice.id] === "approvals" ? copy.approvalLink : copy.issueLink}</Link> : null}
             {data.checkoutReady && entry.canSubmit ? <Button type="button" onClick={() => setSubmitTarget(entry)}><Send className="h-4 w-4" />{copy.submitDraft}</Button> : null}
             {/* Navigation to collections is a permission-scoped deep link, never a payment action here. */}
              {data.checkoutReady && entry.canCollect && ["ISSUED", "OVERDUE", "PARTIALLY_PAID"].includes(entry.invoice.status) && Number(entry.invoice.outstandingAmount) > 0 ? <Link href={`/enterprise-modules/RETAIL_POS?section=collections&siteId=${encodeURIComponent(entry.siteId)}&invoiceId=${encodeURIComponent(entry.invoice.id)}&invoiceNumber=${encodeURIComponent(entry.invoice.number)}`} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 text-sm font-bold text-emerald-700 transition hover:bg-emerald-500/20 focus-visible:ring-2 focus-visible:ring-emerald-400 dark:text-emerald-300"><ArrowRight className="h-4 w-4" aria-hidden="true" />{copy.collectLink}</Link> : null}
