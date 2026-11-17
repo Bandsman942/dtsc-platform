@@ -11,6 +11,12 @@ import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
 
 const ERROR_MESSAGES: Record<string, string> = {
+  INVENTORY_RESERVATION_ALLOCATION_INVALID: "La réservation par lot doit correspondre aux quantités physiques. Actualisez ou contactez le support si elle est incohérente.",
+  INVENTORY_RESERVATION_REALLOCATION_REQUIRED: "Le lot réservé n'est plus utilisable ou la réservation n'a pas de lot identifié. Libérez le reliquat puis réservez des lots valides.",
+  INVENTORY_RESERVATION_STOCK_HELD: "Ce stock est réservé à une commande client. Réduisez la quantité ou utilisez un autre lot.",
+  INVENTORY_RESERVATION_INSUFFICIENT: "Quantité vendable insuffisante après déduction des réservations, retenues et lots indisponibles.",
+  INVENTORY_RESERVATION_EXPIRY_INVALID: "La date de fin de réservation doit être future.",
+  RESERVATION_EXCEEDS_ORDER_REMAINING: "La quantité déjà livrée ou réservée et cette demande dépassent la quantité commandée.",
   RETAIL_SECTOR_REQUIRED: "Cette entreprise doit utiliser le profil Commerce Retail pour accéder à cette opération.",
   RETAIL_REFERENCE_INVALID: "Une référence sélectionnée n’appartient pas à cette entreprise ou n’est plus active.",
   RETAIL_FINANCE_PROMOTION_LEDGER_REQUIRED: "Les promotions Retail ne peuvent pas encore être appliquées aux factures Finance : leur suivi d'utilisation et de remboursement doit d'abord être relié à la facture canonique. Désactivez l'offre concernée ou contactez un administrateur.",

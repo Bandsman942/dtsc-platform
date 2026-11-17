@@ -40,7 +40,7 @@ export async function GET(req: Request, { params }: Params) {
   }
   const items = lots.map((lot) => ({
     id: lot.id, inventoryItemId: lot.inventoryItemId, lotNumber: lot.lotNumber, expiryDate: lot.expiryDate,
-    quantityAvailable: Prisma.Decimal.max(new Prisma.Decimal(0), lot.balances.reduce((sum, row) => sum.plus(row.quantityOnHand.minus(row.quantityReserved)), new Prisma.Decimal(0)).minus(heldByLot.get(lot.id) || 0).minus(reservations.filter((row) => row.inventoryItemId === lot.inventoryItemId).reduce((sum, row) => sum.plus(reservationLotRemaining(row, lot.id)), new Prisma.Decimal(0)))).toFixed(),
+    quantityAvailable: Prisma.Decimal.max(new Prisma.Decimal(0), lot.balances.reduce((sum, row) => sum.plus(row.quantityOnHand.minus(row.quantityReserved)), new Prisma.Decimal(0)).minus(heldByLot.get(lot.id) || 0).minus(retailHolds.filter((hold) => hold.inventoryItemId === lot.inventoryItemId && !hold.stockLotId).reduce((sum, hold) => sum.plus(hold.quantity), new Prisma.Decimal(0))).minus(reservations.filter((row) => row.inventoryItemId === lot.inventoryItemId).reduce((sum, row) => sum.plus(reservationLotRemaining(row, lot.id)), new Prisma.Decimal(0)))).toFixed(),
   }));
   await writeApiLog({ request: req, startedAt, statusCode: 200, userId: auth.session.userId, metadata: { organizationId, domain: "retail-stock-lot-selector", warehouseId, count: items.length } });
   return NextResponse.json({ items, truncated: lots.length === 1000 }, { headers: { "Cache-Control": "private, no-store" } });

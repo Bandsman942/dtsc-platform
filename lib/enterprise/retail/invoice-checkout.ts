@@ -141,7 +141,7 @@ export async function prepareRetailInvoice(organizationId: string, actorUserId: 
         }
         const available = rows.reduce((sum, row) => sum.plus(row.quantityOnHand.minus(row.quantityReserved)), new Prisma.Decimal(0))
           .minus(reservations.filter((row) => row.inventoryItemId === inventory.id).reduce((sum, row) => sum.plus(reservationLotRemaining(row, line.stockLotId || null)), new Prisma.Decimal(0)))
-          .minus(retailHolds.filter((hold) => hold.inventoryItemId === inventory.id && hold.stockLotId === (line.stockLotId || null)).reduce((sum, hold) => sum.plus(hold.quantity), new Prisma.Decimal(0)));
+          .minus(retailHolds.filter((hold) => hold.inventoryItemId === inventory.id && (hold.stockLotId === (line.stockLotId || null) || (Boolean(line.stockLotId) && !hold.stockLotId))).reduce((sum, hold) => sum.plus(hold.quantity), new Prisma.Decimal(0)));
         if (available.lessThan(line.quantity)) throw new EnterpriseRetailError("NEGATIVE_STOCK_FORBIDDEN", 409);
       }
       return { ...line, inventoryItemId: inventory?.id || null, itemName: item.name, decision };
@@ -325,7 +325,7 @@ export async function postPaidRetailInvoiceStockTx(
     // Another unpaid invoice owns this physical quantity. This checkout's
     // own promise must not block its eventual fulfillment.
     unscopedReserved = unscopedReserved.plus(otherRetailHolds
-      .filter((hold) => hold.stockLotId === line.stockLotId)
+      .filter((hold) => hold.stockLotId === line.stockLotId || (Boolean(line.stockLotId) && !hold.stockLotId))
       .reduce((sum, hold) => sum.plus(hold.quantity), new Prisma.Decimal(0)));
     // Reserve outstanding sales orders first. InventoryBalance.quantityReserved
     // is a separate legacy field, so these two sources must both be counted.

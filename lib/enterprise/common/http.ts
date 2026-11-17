@@ -4,6 +4,12 @@ import { NextResponse } from "next/server";
 import { EnterpriseDomainError } from "@/lib/enterprise/common/errors";
 
 const BUSINESS_ERROR_MESSAGES: Record<string, { fr: string; en: string }> = {
+  RESERVATION_EXCEEDS_ORDER_REMAINING: { fr: "La quantité déjà livrée ou réservée et cette demande dépassent la quantité commandée.", en: "Delivered and reserved quantities plus this request exceed the order quantity." },
+  INVENTORY_RESERVATION_EXPIRY_INVALID: { fr: "La date de fin de réservation doit être future.", en: "The reservation expiry must be in the future." },
+  INVENTORY_RESERVATION_INSUFFICIENT: { fr: "Quantité vendable insuffisante après déduction des réservations, retenues et lots indisponibles.", en: "Insufficient sellable quantity after reservations, holds and unavailable batches." },
+  INVENTORY_RESERVATION_STOCK_HELD: { fr: "Ce stock est réservé à une commande client. Réduisez la quantité ou utilisez un autre lot.", en: "This stock is reserved for a customer order. Reduce the quantity or use another batch." },
+  INVENTORY_RESERVATION_REALLOCATION_REQUIRED: { fr: "Le lot réservé n'est plus utilisable ou la réservation n'a pas de lot identifié. Libérez le reliquat puis réservez des lots valides.", en: "A reserved batch is no longer usable or the reservation has no identified batch. Release the remainder and reserve eligible batches again." },
+  INVENTORY_RESERVATION_ALLOCATION_INVALID: { fr: "La réservation par lot doit correspondre aux quantités physiques. Actualisez ou contactez le support si elle est incohérente.", en: "Batch reservation quantities must match physical stock. Refresh or contact support if inconsistent." },
   STOCK_RECLASS_ALLOCATION_INVALID: { fr: "Vérifiez les numéros réels, dates et quantités de lots, sans doublon.", en: "Check actual batch numbers, dates and quantities, without duplicates." },
   STOCK_RECLASS_QUANTITY_MISMATCH: { fr: "La répartition doit couvrir exactement le stock historique sélectionné.", en: "The allocation must exactly match the selected historical balance." },
   STOCK_RECLASS_SOURCE_INVALID: { fr: "Ce stock historique ou son dépôt n’est plus disponible.", en: "This historical balance or its warehouse is unavailable." },

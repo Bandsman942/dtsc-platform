@@ -141,7 +141,7 @@ export async function assertRetailLotPolicyTx(
           const rows = balances.filter((row) => row.inventoryItemId === inventoryItemId && row.stockLotId === lot.id);
           return { ...lot, quantityOnHand: rows.reduce((sum, row) => sum.plus(row.quantityOnHand), zero()),
             quantityReserved: rows.reduce((sum, row) => sum.plus(row.quantityReserved), zero()).plus(reservations.filter((row) => row.inventoryItemId === inventoryItemId).reduce((sum, row) => sum.plus(reservationLotRemaining(row, lot.id).minus(reservationLegacyRemaining(row))), zero())),
-            quantityHeld: holds.filter((row) => row.inventoryItemId === inventoryItemId && row.stockLotId === lot.id).reduce((sum, row) => sum.plus(row.quantity), zero()) };
+            quantityHeld: holds.filter((row) => row.inventoryItemId === inventoryItemId && (row.stockLotId === lot.id || !row.stockLotId)).reduce((sum, row) => sum.plus(row.quantity), zero()) };
         }),
         quantity, businessDate: today, expiryMode: policy.expiryMode,
         unallocatedReserved: reservations.filter((row) => row.inventoryItemId === inventoryItemId).reduce((sum, row) => sum.plus(reservationLegacyRemaining(row)), zero()),

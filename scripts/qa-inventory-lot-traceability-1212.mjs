@@ -153,3 +153,8 @@ const held = allocationTools.planReservationLotAllocations({ ...parameters, bala
 assert.equal(held.shortfall.toFixed(), "0", "One invoice hold across two shelves must be deducted only once");
 assert.equal(held.allocations.map(row => row.quantity).join(","), "10,20");
 console.log("Reservation batch allocation and partial delivery: exact balance coordinates, FEFO, holds and no duplicate quantities OK");
+
+const oldHold = allocationTools.planReservationLotAllocations({ ...parameters, holds: [{ stockLotId: null, quantity: d(10) }], quantity: 100 });
+assert.equal(oldHold.shortfall.toFixed(), "20", "Unidentified invoice holds remain conservatively protected until reconciled");
+const locationOnly = allocationTools.planReservationLotAllocations({ ...parameters, balances: shelves, holds: [{ stockLotId: "same", quantity: d(10) }], storageLocationId: "loc1", quantity: 15 });
+assert.equal(locationOnly.shortfall.toFixed(), "5", "A single-location request cannot ignore warehouse-level invoice holds");

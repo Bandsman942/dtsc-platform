@@ -120,7 +120,7 @@ export async function applyStockMovementTx(
       organizationId, warehouseId: input.warehouseId, inventoryItemIds: [input.inventoryItemId],
       excludeSalesInvoiceId: internal?.consumingRetailInvoiceId,
     });
-    const held = holds.filter((row) => row.stockLotId === (input.stockLotId || null))
+    const held = holds.filter((row) => row.stockLotId === (input.stockLotId || null) || (Boolean(input.stockLotId) && !row.stockLotId))
       .reduce((sum, row) => sum.plus(row.quantity), new Prisma.Decimal(0));
     if (held.greaterThan(0) || inventoryItem.lotTracking || input.stockLotId) {
       const balances = await tx.enterpriseInventoryBalance.findMany({

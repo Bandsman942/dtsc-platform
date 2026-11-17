@@ -72,11 +72,12 @@ export async function getEnterpriseInventoryAvailability(organizationId: string,
 }> {
   const inventoryItem = await prisma.enterpriseInventoryItem.findFirst({
     where: { organizationId, catalogItemId, status: "ACTIVE", archivedAt: null },
-    select: { id: true },
+    select: { id: true, lotTracking: true, expiryTracking: true },
   });
   if (!inventoryItem) throw new EnterpriseDomainError("INVENTORY_ITEM_NOT_FOUND", 404);
 
-  const [warehouses, balances, reservations, retailHolds] = await Promise.all([
+  const tracked = inventoryItem.lotTracking || inventoryItem.expiryTracking;
+  const [warehouses, balances, reservations, retailHolds, organization] = await Promise.all([
     prisma.enterpriseWarehouse.findMany({
       where: { organizationId, status: "ACTIVE", archivedAt: null },
       orderBy: [{ siteId: "asc" }, { code: "asc" }],
@@ -84,13 +85,14 @@ export async function getEnterpriseInventoryAvailability(organizationId: string,
     }),
     prisma.enterpriseInventoryBalance.findMany({
       where: { organizationId, inventoryItemId: inventoryItem.id },
-      select: { warehouseId: true, quantityOnHand: true, quantityReserved: true },
+      select: { id: true, warehouseId: true, stockLotId: true, storageLocationId: true, quantityOnHand: true, quantityReserved: true, stockLot: { select: { status: true, archivedAt: true, expiryDate: true } }, storageLocation: { select: { status: true, archivedAt: true } } },
     }),
     prisma.enterpriseInventoryReservation.findMany({
       where: activeReservationWhere(organizationId, inventoryItem.id),
-      select: { warehouseId: true, quantity: true, fulfilledQuantity: true },
+      select: { warehouseId: true, quantity: true, fulfilledQuantity: true, lotAllocations: true, storageLocationId: true },
     }),
     readActiveRetailInvoiceStockHoldsTx(prisma, { organizationId, inventoryItemIds: [inventoryItem.id] }),
+    tracked ? prisma.organization.findUniqueOrThrow({ where: { id: organizationId }, select: { timezone: true } }) : Promise.resolve(null),
   ]);
 
   const balanceByWarehouse = new Map<string, { onHand: Prisma.Decimal; legacyReserved: Prisma.Decimal }>();
@@ -116,7 +118,13 @@ export async function getEnterpriseInventoryAvailability(organizationId: string,
     const balance = balanceByWarehouse.get(warehouse.id) || { onHand: decimal(), legacyReserved: decimal() };
     const reserved = reservationByWarehouse.get(warehouse.id) || decimal();
     const retailHeld = retailHoldsByWarehouse.get(warehouse.id) || decimal();
-    const available = Prisma.Decimal.max(decimal(), balance.onHand.minus(balance.legacyReserved).minus(reserved).minus(retailHeld));
+    let available = Prisma.Decimal.max(decimal(), balance.onHand.minus(balance.legacyReserved).minus(reserved).minus(retailHeld));
+    if (tracked) {
+      const rows = balances.filter((row) => row.warehouseId === warehouse.id && row.quantityOnHand.gt(0) && (!row.storageLocationId || (row.storageLocation?.status === "ACTIVE" && !row.storageLocation.archivedAt)));
+      const physical = rows.reduce((sum, row) => sum.plus(row.quantityOnHand), decimal());
+      const plan = physical.gt(0) ? planReservationLotAllocations({ balances: rows, reservations: reservations.filter((row) => row.warehouseId === warehouse.id), holds: retailHolds.filter((row) => row.warehouseId === warehouse.id), quantity: physical, businessDate: businessDateKey(new Date(), organization?.timezone || "UTC"), requireExpiry: inventoryItem.expiryTracking }) : null;
+      available = plan ? plan.allocations.reduce((sum, row) => sum.plus(row.quantity), decimal()) : decimal();
+    }
     totalAvailable = totalAvailable.plus(available);
     return {
       warehouseId: warehouse.id,
@@ -160,7 +168,8 @@ export async function createEnterpriseInventoryReservation(organizationId: strin
     ]);
     if (!orderItem) throw new EnterpriseDomainError("SALES_ORDER_ITEM_NOT_FOUND", 404);
     if (!orderItem.catalogItemId) throw new EnterpriseDomainError("SALES_ORDER_ITEM_CATALOG_REQUIRED", 409);
-    if (!["CONFIRMED", "PROCESSING"].includes(orderItem.salesOrder.status)) throw new EnterpriseDomainError("SALES_ORDER_NOT_RESERVABLE", 409);
+    if (!["CONFIRMED", "PROCESSING", "IN_FULFILLMENT", "PARTIALLY_FULFILLED"].includes(orderItem.salesOrder.status)) throw new EnterpriseDomainError("SALES_ORDER_NOT_RESERVABLE", 409);
+    if (input.expiresAt && input.expiresAt <= new Date()) throw new EnterpriseDomainError("INVENTORY_RESERVATION_EXPIRY_INVALID", 400);
     if (!warehouse) throw new EnterpriseDomainError("WAREHOUSE_NOT_FOUND", 404);
     if (input.storageLocationId && !storageLocation) throw new EnterpriseDomainError("STORAGE_LOCATION_NOT_FOUND", 404);
 
@@ -202,7 +211,7 @@ export async function createEnterpriseInventoryReservation(organizationId: strin
     // of them even when the sales-order request targets one shelf.
     const retailHeld = retailHolds.reduce((sum, row) => sum.plus(row.quantity), decimal());
     const available = onHand.minus(legacyReserved).minus(reserved).minus(retailHeld);
-    if (decimal(input.quantity).gt(available)) {
+    if (!inventoryItem.lotTracking && !inventoryItem.expiryTracking && decimal(input.quantity).gt(available)) {
       throw new EnterpriseDomainError(
         "INVENTORY_RESERVATION_INSUFFICIENT",
         409,

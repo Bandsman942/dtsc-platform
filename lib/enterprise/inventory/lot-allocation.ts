@@ -119,7 +119,7 @@ export function planReservationLotAllocations(input: {
   storageLocationId?: string | null;
 }) {
   const zero = () => new Prisma.Decimal(0);
-  const legacy = input.reservations.reduce((sum, entry) => sum.plus(reservationLegacyRemaining(entry)), zero());
+  const legacy = input.reservations.reduce((sum, entry) => sum.plus(reservationLegacyRemaining(entry)), zero()).plus(input.holds.filter((hold) => !hold.stockLotId).reduce((sum, hold) => sum.plus(hold.quantity), zero()));
   const holdByLot = new Map<string, Prisma.Decimal>();
   for (const hold of input.holds) if (hold.stockLotId) holdByLot.set(hold.stockLotId, (holdByLot.get(hold.stockLotId) || zero()).plus(hold.quantity));
   const byId = new Map(input.balances.map((balance) => [balance.id, balance]));
