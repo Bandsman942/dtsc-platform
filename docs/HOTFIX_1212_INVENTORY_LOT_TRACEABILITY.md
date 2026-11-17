@@ -8,8 +8,13 @@
 
 - Contrôle des références catalogue aussi sur POST lots, limitation des mutations, UX actions selon permissions. QA comportementale de la tranche initiale : `pnpm qa:inventory-lot-traceability-1212` intégrée à qa:regression (non exécutée localement).
 
+## Tranche réception fournisseurs (en validation)
+- Les deux routes de réception acceptent `lotAllocations` par ligne d’achat : numéro réel, dates et quantité. La somme doit correspondre à la réception. Une ligne de service ne possède pas de lot.
+- Création ou réutilisation transactionnelle du lot du dépôt, refus de dates/statuts incompatibles ; mouvements distincts par lot. Le lien historique par ligne conserve le premier mouvement ; le journal canonique contient toutes les sorties/entrées par source de réception. Pas de double quantité ni de migration. Le rapprochement de valorisation reste celui du moteur Finance existant, à tester (aucune valeur comptable inventée).
+- Formulaire Achats : champs multiples par ligne suivie avec aide FR/EN, erreur métier contextualisée. Cette tranche n’atteste ni les tests de production ni la réception pharmaceutique réglementée.
+
 ## Restant (bloquant)
-Assistant de réaffectation historique transactionnel avec approbation et valeur conservée; achats/réservations/livraisons multi-lots; moteur FEFO commun et POS; pertes, rappels et comptabilité; Design 2.0 et tests multisectoriels. Voir issue #1212. Ne pas merger avant clôture de tous les points.
+Assistant de réaffectation historique transactionnel avec approbation et valeur conservée; certification achats et valorisation, réservations/livraisons multi-lots; moteur FEFO commun et POS; pertes, rappels et comptabilité; Design 2.0 et tests multisectoriels. Voir issue #1212. Ne pas merger avant clôture de tous les points.
 
 ## Recette propriétaire (NON EXÉCUTÉE)
 1. Article stockable suivi, sans solde dans un dépôt autorisé : présent; service, article inactif ou non suivi : absent.

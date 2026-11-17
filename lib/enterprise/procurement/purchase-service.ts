@@ -314,6 +314,7 @@ export async function receiveEnterprisePurchase(organizationId: string, purchase
       warehouseId: nullable(input.warehouseId),
       storageLocationId: nullable(input.storageLocationId),
       idempotencyKey: `purchase-receipt:${receipt.id}`,
+      lotAllocations: input.lotAllocations,
     });
     await addEnterpriseOperationalEvent(tx, { organizationId, entityType: "EnterprisePurchase", entityId: purchaseId, eventType: fullyReceived ? "ENTERPRISE_PURCHASE_RECEIVED" : "ENTERPRISE_PURCHASE_PARTIALLY_RECEIVED", summary: fullyReceived ? "Réception complète enregistrée et intégrée aux opérations." : "Réception partielle enregistrée et intégrée aux opérations.", actorUserId, fromStatus: purchase.status, toStatus: nextStatus, metadata: { receiptId: receipt.id, receiptReference: receipt.reference, receiptOperationalLinkId: projection.receiptLink.id } });
     return { receipt, projection, purchase: await tx.enterprisePurchase.findUnique({ where: { id: purchaseId }, include: { items: true, supplier: true, budgetLine: { include: { budget: true } }, receipts: { include: { items: true }, orderBy: { receivedAt: "desc" } } } }) };

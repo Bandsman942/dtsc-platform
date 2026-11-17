@@ -28,8 +28,10 @@ export async function GET(req: Request, { params }: Params) {
     prisma.enterprisePurchaseOperationalLink.findFirst({ where: { organizationId, purchaseId: id }, select: { id: true, siteId: true, destinationWarehouseId: true, expectedReceiptType: true } }),
     itemIds.length ? prisma.enterprisePurchaseItemCatalogLink.findMany({ where: { organizationId, purchaseItemId: { in: itemIds } }, select: { purchaseItemId: true, catalogItemId: true, unitOfMeasureId: true, expectedItemType: true } }) : Promise.resolve([]),
   ]);
+  const catalogIds = [...new Set(itemCatalogLinks.flatMap((link) => link.catalogItemId ? [link.catalogItemId] : []))];
+  const inventoryRules = catalogIds.length ? await prisma.enterpriseInventoryItem.findMany({ where: { organizationId, catalogItemId: { in: catalogIds }, status: "ACTIVE", archivedAt: null }, select: { catalogItemId: true, lotTracking: true, expiryTracking: true } }) : [];
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "purchases", purchaseId: id } });
-  return NextResponse.json({ purchase, request: requestRecord, approvals, links, events, comments, operationalLink, itemCatalogLinks, canManage: access.canManage, currentUserId: session.userId });
+  return NextResponse.json({ purchase, request: requestRecord, approvals, links, events, comments, operationalLink, itemCatalogLinks, inventoryRules, canManage: access.canManage, currentUserId: session.userId });
 }
 
 export async function PATCH(req: Request, { params }: Params) {
