@@ -1168,6 +1168,49 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
     expect(selfReturn.body.error).toBe("SUPPLIER_RETURN_INDEPENDENT_REQUIRED");
     const cashierReturn=await post(context.cashier,submitReturnPath,requestPayload);
     expect([403,404]).toContain(cashierReturn.status);
+    // Withdraw a previously approved but undispatched dossier without rewriting
+    // the original independent decision. The invoice slot is then reusable.
+    {
+      const prior=await post(context.owner,submitReturnPath,{...requestPayload,idempotencyKey:historyKey+"-withdrawal-test"});
+      expect(prior.status,JSON.stringify(prior.body)).toBe(201);
+      const priorId=prior.body.request.id,priorApprovalId=prior.body.approvalId;
+      const priorCoordination=await context.settler.request.get(base+"/approvals/"+priorApprovalId+"/coordination");
+      expect(priorCoordination.status()).toBe(200);
+      const priorReview=await priorCoordination.json();
+      const priorDecision=await post(context.settler,base+"/approvals/"+priorApprovalId+"/actions",{action:"APPROVE",revision:priorReview.approval.revision,reviewedVersionId:priorReview.versions[0].id});
+      expect(priorDecision.status,JSON.stringify(priorDecision.body)).toBe(200);
+      const priorApproved=await prisma.enterpriseSupplierReturnRequest.findFirstOrThrow({where:{organizationId,id:priorId}});
+      const withdrawalPath=base+"/purchases/"+normalPurchase.id+"?action=withdraw-supplier-return";
+      const withdrawalPayload={requestId:priorId,revision:priorApproved.revision,reason:"Supplier withdrew authorization before physical handover",confirmUndispatched:true};
+      expect((await post(context.settler,withdrawalPath,withdrawalPayload)).status).toBe(403);
+      expect((await post(context.owner,withdrawalPath,{...withdrawalPayload,confirmUndispatched:false})).status).toBe(400);
+      expect((await post(context.owner,withdrawalPath,{...withdrawalPayload,reason:"short"})).status).toBe(400);
+      expect((await post(context.owner,withdrawalPath,{...withdrawalPayload,revision:priorApproved.revision+1})).status).toBe(409);
+      const withdrawn=await post(context.owner,withdrawalPath,withdrawalPayload);
+      expect(withdrawn.status,JSON.stringify(withdrawn.body)).toBe(200);
+      expect(withdrawn.body.request.status).toBe("CANCELLED");
+      const replayWithdrawal=await post(context.owner,withdrawalPath,withdrawalPayload);
+      expect(replayWithdrawal.status).toBe(200);expect(replayWithdrawal.body.idempotent).toBe(true);
+      expect((await post(context.owner,withdrawalPath,{...withdrawalPayload,reason:"Another reason cannot overwrite evidence"})).status).toBe(409);
+      const withdrawnRecord=await prisma.enterpriseSupplierReturnRequest.findFirstOrThrow({where:{organizationId,id:priorId}});
+      expect(withdrawnRecord.cancelledAfterApprovalByUserId).toBe(fixture.owner.id);
+      expect(withdrawnRecord.cancellationReason).toBe(withdrawalPayload.reason);
+      expect(withdrawnRecord.decidedAt.getTime()).toBe(priorApproved.decidedAt.getTime());
+      expect(withdrawnRecord.dispatchMovementId).toBeNull();
+      expect(await prisma.enterpriseApprovalDecision.count({where:{organizationId,approvalId:priorApprovalId,decision:"APPROVE"}})).toBe(1);
+      const historicalReview=await context.settler.request.get(base+"/approvals/"+priorApprovalId+"/coordination");
+      expect(historicalReview.status()).toBe(200);
+      const historicalReviewBody=await historicalReview.json();
+      expect(historicalReviewBody.approval.status).toBe("APPROVED");
+      expect(historicalReviewBody.supplierReturn).toMatchObject({status:"CANCELLED",cancellationReason:withdrawalPayload.reason});
+      expect(historicalReviewBody.versions[0].id).toBe(priorReview.versions[0].id);
+      expect((await post(context.owner,base+"/purchases/"+normalPurchase.id+"?action=dispatch-supplier-return",{requestId:priorId,revision:withdrawnRecord.revision,dispatchReference:historyKey+"-CANCELLED"})).status).toBe(409);
+      expect(await prisma.enterpriseStockMovement.count({where:{organizationId,inventoryItemId:historicalInventory.id}})).toBe(snapshotBeforeCheck.movements);
+      expect(await prisma.enterpriseInventoryAccountingEvent.count({where:{organizationId,inventoryItemId:historicalInventory.id}})).toBe(snapshotBeforeCheck.valuation);
+      expect(await prisma.enterpriseJournalEntry.count({where:{organizationId}})).toBe(snapshotBeforeCheck.journals);
+      expect((await prisma.enterpriseInventoryBalance.findFirstOrThrow({where:{organizationId,stockLotId:returnedSource.stockLotId}})).quantityOnHand.equals(4)).toBe(true);
+      expect((await prisma.enterprisePayable.findUniqueOrThrow({where:{supplierInvoiceId:supplierInvoice.id}})).outstandingAmount.equals(70)).toBe(true);
+    }
     const requestReturn=await post(context.owner,submitReturnPath,requestPayload);
     expect(requestReturn.status,JSON.stringify(requestReturn.body)).toBe(201);
     expect(requestReturn.body.request.status).toBe("PENDING_APPROVAL");
@@ -1268,6 +1311,7 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
     const dispatchedRecord=await prisma.enterpriseSupplierReturnRequest.findFirstOrThrow({where:{organizationId,id:returnRequestId}});
     expect(dispatchedRecord.dispatchReference).toBe(dispatchPayload.dispatchReference);
     expect(dispatchedRecord.dispatchedByUserId).toBe(fixture.owner.id);
+    expect((await post(context.owner,base+"/purchases/"+normalPurchase.id+"?action=withdraw-supplier-return",{requestId:returnRequestId,revision:dispatchedRecord.revision,reason:"Cannot withdraw after physical handover",confirmUndispatched:true})).status).toBe(409);
     const dispatchMovement=await prisma.enterpriseStockMovement.findFirstOrThrow({where:{organizationId,id:dispatchedRecord.dispatchMovementId}});
     expect(dispatchMovement.movementType).toBe("SUPPLIER_RETURN_OUT");
     expect(dispatchMovement.direction).toBe("OUT");
