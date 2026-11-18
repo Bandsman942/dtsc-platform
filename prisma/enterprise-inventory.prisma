@@ -302,6 +302,9 @@ model EnterpriseSupplierReturnRequest {
   reconciledAt             DateTime?
   reconciledByUserId       String?
   creditJournalEntryId     String?
+  cancelledAfterApprovalAt DateTime?
+  cancelledAfterApprovalByUserId String?
+  cancellationReason       String?
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
 
