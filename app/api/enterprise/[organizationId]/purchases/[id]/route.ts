@@ -79,11 +79,13 @@ export async function GET(req: Request, { params }: Params) {
     const page = Math.min(10000, Math.max(1, Math.trunc(Number(url.searchParams.get("page")) || 1)));
     const pageSize = Math.min(50, Math.max(1, Math.trunc(Number(url.searchParams.get("pageSize")) || 20)));
     const search = (url.searchParams.get("search") || "").trim().slice(0, 120);
+    const focusMovement = (url.searchParams.get("movementId") || "").trim().slice(0, 191);
     // Each physical movement is canonical, not the historical first-movement
     // receipt-line link. Include the original receipt, even for recalled lots.
     const receiptById = new Map(purchase.receipts.map((receipt) => [receipt.id, receipt]));
     const where: Prisma.EnterpriseStockMovementWhereInput = {
       organizationId, movementType: "PURCHASE_RECEIPT", direction: "IN",
+      ...(focusMovement ? { id: focusMovement } : {}),
       sourceEntityType: "EnterprisePurchaseReceipt",
       sourceEntityId: { in: [...receiptById.keys()] },
       sourceLineId: { in: purchase.receipts.flatMap((receipt) => receipt.items.map((item) => item.id)) },
