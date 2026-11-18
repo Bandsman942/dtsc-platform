@@ -344,3 +344,40 @@ await returnCredit.completeSupplierReturnCreditTx({...evidenceTx,enterpriseSuppl
 assert.equal(reconciled.data.status,"RECONCILED");assert.equal(reconciled.data.creditJournalEntryId,"credit-journal");
 console.log("Linked supplier credit contract: exact source, posting evidence, separate approval and reserved payable (isolated mocks)");
 console.log("Supplier return dispatch contract: exact cost, approved source, separate clearing journal, replay and generic credit guard OK (isolated mocks)");
+
+/* Recovery diagnostic: an original issue cost is only a ceiling, not a
+ * new valuation. Mock delegates deliberately expose no mutation methods. */
+let recoveryAllowed=true,recoveryRecall=0,recoveryPriorRestock=0,recoverySiteAllowed=true,recoverySpecialized=0;
+mocks["@/lib/enterprise/module-access"]={resolveEnterpriseModuleAccess:async()=>({allowed:recoveryAllowed})};
+mocks["@/lib/enterprise/inventory/service"]={requireInventoryStockAuthorityTx:async(_tx,org,actor,warehouse)=>{assert.equal(org,"org-a");assert.equal(warehouse,"wh-a");if(!recoverySiteAllowed)throw new TestDomainError("FORBIDDEN",403);}};
+mocks["@/lib/enterprise/inventory/lot-allocation"]={lotExpiryDateKey:date=>realBusinessContext.formatEnterpriseBusinessDate(date,"UTC")};
+mocks["@/lib/enterprise/accounting/helpers"]={money:value=>d(value).toDecimalPlaces(6)};
+const recoveryService=load("lib/enterprise/inventory/custody-recovery-preflight.ts");
+const recoveryLot={id:"lot-a",lotNumber:"A",inventoryItemId:"item-a",warehouseId:"wh-a",storageLocationId:null,status:"AVAILABLE",expiryDate:new Date("2099-01-01T00:00:00Z"),archivedAt:null,recallReference:null};
+const recoveryIssue={id:"issue-a",inventoryItemId:"item-a",warehouseId:"wh-a",storageLocationId:null,stockLotId:"lot-a",movementType:"SALE_FULFILLMENT",direction:"OUT",sourceEntityType:"EnterpriseSalesInvoice",sourceEntityId:"invoice-a",sourceLineId:"sale-line-a",quantity:d(4),stockLot:recoveryLot,inventoryItem:{catalogItemId:"catalog-a",status:"ACTIVE",archivedAt:null,lotTracking:true,expiryTracking:true,catalogItem:{status:"ACTIVE",trackInventory:true,archivedAt:null}},warehouse:{status:"ACTIVE",archivedAt:null}};
+const recoveryCustody={id:"custody-a",status:"QUARANTINED",disposition:"QUARANTINE",revision:1,quantity:d(2),originalMovement:recoveryIssue,returnLine:{quantity:d(2),stockDisposition:"QUARANTINE",checkoutLineId:"checkout-line-a",request:{number:"RET-A",salesCreditNoteId:"credit-a",inspectedByUserId:"inspector",completedAt:new Date()},checkoutLine:{invoiceItemId:"sale-line-a",inventoryItemId:"item-a",checkout:{salesInvoiceId:"invoice-a",warehouseId:"wh-a"}}}};
+const recoveryValuation={id:"issue-val",journalEntryId:"issue-journal",quantity:d(4),unitCost:d(7),totalCost:d(28),currencyCode:"USD"};
+const recoveryTx={
+  organization:{findFirst:async()=>({timezone:"Africa/Kinshasa"})},
+  enterpriseFinanceConfiguration:{findUnique:async()=>({automaticPostingEnabled:true,inventoryValuationMethod:"WEIGHTED_AVERAGE",functionalCurrencyCode:"USD"})},
+  enterpriseInventoryReturnCustody:{findFirst:async({where})=>{assert.equal(where.organizationId,"org-a");assert.equal(where.id,"custody-a");return recoveryCustody;},aggregate:async()=>({_sum:{quantity:d(2)}})},
+  enterpriseStockLot:{count:async({where})=>{assert.equal(where.organizationId,"org-a");assert.equal(where.lotNumber,"A");return recoveryRecall;}},
+  enterpriseStockMovement:{count:async({where})=>where.direction==="IN"?recoveryPriorRestock:1},
+  pharmacyProductExtension:{count:async()=>recoverySpecialized},enterpriseSectorInventoryEvent:{count:async()=>0},
+  enterpriseSalesCreditNote:{findFirst:async()=>({id:"credit-a"})},enterpriseInventoryAccountingEvent:{findFirst:async()=>recoveryValuation},
+  enterpriseRetailInvoiceReturnLine:{findMany:async()=>[{id:"return-line-a"}]},
+  enterpriseJournalEntry:{findFirst:async()=>({id:"issue-journal",functionalCurrencyCode:"USD",lines:[ledgerLine("COST_OF_SALES",28,0),ledgerLine("INVENTORY",0,28)]})},
+};
+await recoveryService.assertCustodyRecoveryReadAccess("org-a","actor");
+recoveryAllowed=false;await assert.rejects(recoveryService.assertCustodyRecoveryReadAccess("org-a","actor"),{code:"INVENTORY_RETURN_RECOVERY_PERMISSION_REQUIRED"});recoveryAllowed=true;
+const inspectRecovery=()=>recoveryService.inspectCustodyRecoveryTx(recoveryTx,"org-a","actor","custody-a");
+const recoveryPreview=await inspectRecovery();
+assert.equal(recoveryPreview.historicalCostCeiling,"14");
+assert.equal(recoveryPreview.readOnly,true);assert.equal(recoveryPreview.physicalReleaseAuthorized,false);assert.equal(recoveryPreview.accountingRecognitionAuthorized,false);
+recoveryRecall=1;await assert.rejects(inspectRecovery(),{code:"INVENTORY_RETURN_RECOVERY_LOT_UNSAFE"});recoveryRecall=0;
+recoveryLot.expiryDate=new Date("2000-01-01T00:00:00Z");await assert.rejects(inspectRecovery(),{code:"INVENTORY_RETURN_RECOVERY_LOT_UNSAFE"});recoveryLot.expiryDate=new Date("2099-01-01T00:00:00Z");
+recoveryPriorRestock=1;await assert.rejects(inspectRecovery(),{code:"INVENTORY_RETURN_RECOVERY_ORIGIN_INVALID"});recoveryPriorRestock=0;
+recoverySpecialized=1;await assert.rejects(inspectRecovery(),{code:"INVENTORY_RETURN_RECOVERY_SECTOR_REQUIRED"});recoverySpecialized=0;
+recoveryCustody.status="DISPOSED";await assert.rejects(inspectRecovery(),{code:"INVENTORY_RETURN_RECOVERY_CUSTODY_INVALID"});recoveryCustody.status="QUARANTINED";
+recoverySiteAllowed=false;await assert.rejects(inspectRecovery(),{code:"FORBIDDEN"});
+console.log("Custody recovery diagnostic: historical ceiling only, no mutations, recall/expiry, sector and site guards (isolated mocks)");
