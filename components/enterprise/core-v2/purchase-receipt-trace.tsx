@@ -14,7 +14,53 @@ type TraceRow = {
   storageLocation: { name: string; code: string } | null;
   stockLot: { lotNumber: string; productionDate: string | null; expiryDate: string | null; status: string; recallReference: string | null } | null;
 };
-type TraceResponse = { items: TraceRow[]; pagination: { page: number; pageSize: number; total: number; pageCount: number } };
+type TraceResponse = { items: TraceRow[]; canCheckSupplierReturn?: boolean; pagination: { page: number; pageSize: number; total: number; pageCount: number } };
+
+type ReturnPreview = { eligible: true; readOnly: true; quantity: string; remaining: string; unitCost: string; totalCost: string; currencyCode: string; receiptReference: string; invoiceReference: string };
+
+function SupplierReturnCheck({ organizationId, purchaseId, row, locale }: { organizationId: string; purchaseId: string; row: TraceRow; locale: string }) {
+  const t = (key: PurchaseFormGuidanceKey) => purchaseFormGuidance(locale, key);
+  const [open, setOpen] = useState(false);
+  const [quantity, setQuantity] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [preview, setPreview] = useState<ReturnPreview | null>(null);
+  const valid = /^\d{1,12}(?:\.\d{1,3})?$/.test(quantity.trim()) && Number(quantity) > 0;
+  const money = (amount: string, currency: string) => new Intl.NumberFormat(locale, { style: "currency", currency, maximumFractionDigits: 6 }).format(Number(amount));
+  async function check() {
+    if (!valid || busy) return;
+    setBusy(true); setPreview(null); setError("");
+    try {
+      const params = new URLSearchParams({ view: "supplier-return-preflight", movementId: row.id, quantity: quantity.trim() });
+      const response = await fetch(`/api/enterprise/${encodeURIComponent(organizationId)}/purchases/${encodeURIComponent(purchaseId)}?${params}`, { cache: "no-store", headers: { "Accept-Language": locale } });
+      const body = await response.json();
+      if (!response.ok) { setError(typeof body.message === "string" ? body.message : t("returnCheckError")); return; }
+      if (body.eligible !== true || body.readOnly !== true) { setError(t("returnCheckError")); return; }
+      setPreview(body as ReturnPreview);
+    } catch { setError(t("returnCheckError")); }
+    finally { setBusy(false); }
+  }
+  if (!open) return <Button type="button" variant="outline" className="mt-2 w-fit max-w-full whitespace-normal" onClick={() => setOpen(true)} aria-expanded={false}>{t("returnCheckTitle")}</Button>;
+  return <div className="mt-2 grid min-w-0 gap-2 rounded-lg border border-dtsc-border p-2" data-supplier-return-preflight>
+    <div className="flex flex-wrap items-center justify-between gap-2"><strong className="text-sm">{t("returnCheckTitle")}</strong><Button type="button" variant="outline" disabled={busy} onClick={() => { setOpen(false); setPreview(null); setError(""); setQuantity(""); }}>{t("returnCheckClose")}</Button></div>
+    <p className="text-xs text-dtsc-muted">{t("returnCheckHelp")}</p>
+    <div className="flex flex-wrap items-end gap-2" data-responsive-actions>
+      <label className="grid min-w-0 flex-1 gap-1 text-xs font-medium">{t("returnCheckQuantity")}<Input inputMode="decimal" value={quantity} disabled={busy} maxLength={16} onChange={(event) => { setQuantity(event.target.value.replace(",", ".")); setPreview(null); setError(""); }} /></label>
+      <Button type="button" variant="outline" disabled={!valid || busy} onClick={() => void check()}>{busy ? "…" : preview ? t("returnCheckRefresh") : t("returnCheckAction")}</Button>
+    </div>
+    <div aria-live="polite" aria-busy={busy} className="grid min-w-0 gap-1">
+      {error ? <p role="alert" className="break-words text-xs text-red-700 dark:text-red-300">{error}</p> : null}
+      {preview ? <div className="grid min-w-0 gap-1 text-xs">
+        <div><StatusBadge tone="success">{t("returnCheckReady")}</StatusBadge></div>
+        <p>{t("returnCheckRemaining")} : <strong>{preview.remaining} {row.inventoryItem.catalogItem.unitOfMeasure?.symbol || ""}</strong></p>
+        <p>{t("returnCheckUnitCost")} : {money(preview.unitCost, preview.currencyCode)}</p>
+        <p>{t("returnCheckAmount")} : <strong>{money(preview.totalCost, preview.currencyCode)}</strong></p>
+        <p className="break-words">{t("returnCheckInvoice")} : {preview.invoiceReference}</p>
+        <p className="text-dtsc-muted">{t("returnCheckHelp")}</p>
+      </div> : null}
+    </div>
+  </div>;
+}
 
 export function PurchaseReceiptTrace({ organizationId, purchaseId, locale }: { organizationId: string; purchaseId: string; locale: string }) {
   const t = (key: PurchaseFormGuidanceKey) => purchaseFormGuidance(locale, key);
@@ -65,6 +111,7 @@ export function PurchaseReceiptTrace({ organizationId, purchaseId, locale }: { o
             <p className="break-words text-xs text-dtsc-muted">{row.warehouse.name}{row.storageLocation ? " · " + row.storageLocation.name : ""}</p>
             <div className="flex min-w-0 flex-wrap items-center gap-2"><span className="min-w-0 break-words font-medium">{lot?.lotNumber || t("receiptTraceNoLot")}</span>{lot ? <StatusBadge tone={lot.recallReference || lot.status === "BLOCKED" || lot.status === "QUARANTINED" ? "warning" : lot.status === "AVAILABLE" ? "success" : "neutral"}>{t(stateKey)}</StatusBadge> : null}</div>
             {lot ? <p className="break-words text-xs text-dtsc-muted">{t("receiptBatchProduction")} : {date(lot.productionDate)} · {t("receiptBatchExpiry")} : {date(lot.expiryDate)}{lot.recallReference ? " · " + lot.recallReference : ""}</p> : null}
+            {lot && result?.canCheckSupplierReturn ? <SupplierReturnCheck organizationId={organizationId} purchaseId={purchaseId} row={row} locale={locale} /> : null}
           </article>;
         })}
       </div>
