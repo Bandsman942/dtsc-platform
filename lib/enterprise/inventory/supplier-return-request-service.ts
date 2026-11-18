@@ -233,6 +233,7 @@ export const supplierReturnWithdrawalSchema = z.object({
   requestId: z.string().trim().min(1).max(191),
   revision: z.number().int().positive(),
   reason: z.string().trim().min(8).max(2000),
+  confirmUndispatched: z.literal(true),
 }).strict();
 type WithdrawalInput = z.infer<typeof supplierReturnWithdrawalSchema>;
 
