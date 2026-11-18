@@ -2,6 +2,7 @@ import { enterpriseCoreIntlLocale } from "@/lib/enterprise-core-i18n";
 
 const PURCHASE_FORM_GUIDANCE = {
   fr: {
+    recoveryWithdrawn:"Expertise retirée après approbation. La décision initiale est conservée.",
     recoveryReviewOnly:"Approbation de la proposition uniquement : aucune remise en stock ni reconnaissance comptable.",
     recoveryReviewStale:"Le dossier de garde a changé depuis l’expertise. Le serveur refusera l’approbation d’une proposition périmée.",
     returnWithdrawTitle: "Annuler le retour avant expédition",
@@ -128,6 +129,7 @@ const PURCHASE_FORM_GUIDANCE = {
     actionReasonHelp: "Un motif est obligatoire pour une annulation ou un archivage et restera dans la piste d’audit.",
   },
   en: {
+    recoveryWithdrawn:"Appraisal withdrawn after approval. The original decision is preserved.",
     recoveryReviewOnly:"Proposal approval only: no physical release or accounting recognition.",
     recoveryReviewStale:"The custody record changed since the appraisal. The server will refuse stale approval.",
     returnWithdrawTitle: "Withdraw return before dispatch",
