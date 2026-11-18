@@ -10,6 +10,7 @@ import { assertSalesCreditNoteStillPostable } from "@/lib/enterprise/accounting/
 import { money, publishFinanceEvent } from "@/lib/enterprise/accounting/helpers";
 import { postBusinessEvent, postBusinessEventTx } from "@/lib/enterprise/accounting/posting-service";
 import { recordPostedTaxApplicationsTx } from "@/lib/enterprise/accounting/tax-engine";
+import { completeSupplierReturnCreditTx, lockSupplierReturnInvoiceTx, verifySupplierReturnCreditTx } from "@/lib/enterprise/accounting/supplier-return-credit-reconciliation";
 
 type AssignedDocumentSubmitInput = {
   revision: number;
@@ -313,6 +314,7 @@ export async function submitSupplierCreditNoteForAssignedApproval(
     if (!credit) throw new EnterpriseAccountingError("SUPPLIER_CREDIT_NOTE_NOT_FOUND", 404);
     if (!(["DRAFT", "REJECTED"].includes(credit.status)) || credit.revision !== input.revision) throw new EnterpriseAccountingError("SUPPLIER_CREDIT_NOTE_CONFLICT", 409);
     if (credit.createdByUserId !== actorUserId) throw new EnterpriseAccountingError("SUPPLIER_CREDIT_NOTE_SUBMITTER_MISMATCH", 403);
+    if (input.approverUserId === actorUserId && await tx.enterpriseSupplierReturnRequest.count({where:{organizationId,supplierCreditNoteId:credit.id}})) throw new EnterpriseAccountingError("SUPPLIER_CREDIT_NOTE_SELF_APPROVAL_FORBIDDEN",403);
 
     const approval = await createAccountingApprovalAssignment(tx, {
       organizationId,
@@ -358,6 +360,7 @@ export async function decideSupplierCreditNoteAssignedApproval(
     const credit = await tx.enterpriseSupplierCreditNote.findFirst({ where: { id: creditNoteId, organizationId } });
     if (!credit) throw new EnterpriseAccountingError("SUPPLIER_CREDIT_NOTE_NOT_FOUND", 404);
     if (credit.status !== "PENDING_APPROVAL" || credit.revision !== input.revision) throw new EnterpriseAccountingError("SUPPLIER_CREDIT_NOTE_CONFLICT", 409);
+    if (credit.createdByUserId === actorUserId && await tx.enterpriseSupplierReturnRequest.count({where:{organizationId,supplierCreditNoteId:credit.id}})) throw new EnterpriseAccountingError("SUPPLIER_CREDIT_NOTE_SELF_APPROVAL_FORBIDDEN",403);
 
     await decideAccountingApproval(tx, {
       organizationId,
@@ -410,7 +413,11 @@ export async function postApprovedSupplierCreditNote(
     if (!credit?.supplierInvoice.payable) throw new EnterpriseAccountingError("PAYABLE_NOT_FOUND", 409);
     if (credit.status === "POSTED") return credit;
     if (credit.status !== "APPROVED" || credit.revision !== revision) throw new EnterpriseAccountingError("SUPPLIER_CREDIT_NOTE_NOT_APPROVED", 409);
+    await lockSupplierReturnInvoiceTx(tx, organizationId, credit.supplierInvoiceId);
+    const creditLines = await tx.enterpriseSupplierCreditNoteItem.findMany({ where:{organizationId,supplierCreditNoteId:credit.id} });
+    await verifySupplierReturnCreditTx(tx, organizationId, credit, creditLines);
     const payable = credit.supplierInvoice.payable;
+    if (credit.currencyCode !== payable.currencyCode) throw new EnterpriseAccountingError("SUPPLIER_CREDIT_NOTE_CURRENCY_MISMATCH",409);
     if (credit.grandTotal.greaterThan(payable.outstandingAmount)) throw new EnterpriseAccountingError("SUPPLIER_CREDIT_EXCEEDS_OPEN_PAYABLE", 409);
     const posting = await postBusinessEventTx(tx, organizationId, actorUserId, { postingEvent: "SUPPLIER_CREDIT_NOTE_POSTED", sourceEntityType: "EnterpriseSupplierCreditNote", sourceEntityId: credit.id });
     const creditTaxLines = await tx.enterpriseSupplierCreditNoteItem.findMany({ where: { organizationId, supplierCreditNoteId: credit.id }, select: { id: true, taxBreakdownJson: true, taxRecoveryRequested: true } });
@@ -422,6 +429,7 @@ export async function postApprovedSupplierCreditNote(
     await tx.enterprisePayable.update({ where: { id: payable.id }, data: { creditedAmount: { increment: credit.grandTotal }, outstandingAmount: outstanding, status: outstanding.isZero() ? "CLOSED" : "OPEN" } });
     await tx.enterpriseSupplierInvoice.update({ where: { id: credit.supplierInvoiceId }, data: { amountCredited: { increment: credit.grandTotal }, outstandingAmount: outstanding, status: outstanding.isZero() ? "PAID" : credit.supplierInvoice.status, revision: { increment: 1 } } });
     const posted = await tx.enterpriseSupplierCreditNote.update({ where: { id: credit.id }, data: { status: "POSTED", postedAt: new Date(), revision: { increment: 1 } } });
+    await completeSupplierReturnCreditTx(tx, organizationId, credit, posting.entry.id, actorUserId);
     await publishFinanceEvent(tx, {
       organizationId,
       entityType: "EnterpriseSupplierCreditNote",
