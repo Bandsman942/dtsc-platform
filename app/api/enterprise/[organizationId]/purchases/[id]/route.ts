@@ -6,6 +6,9 @@ import { retailErrorResponse } from "@/lib/enterprise/retail/http";
 import { enterpriseDomainErrorResponse, enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
 import { EnterpriseDomainError } from "@/lib/enterprise/common/errors";
 import { assertSupplierReturnAccess, inspectSupplierReturnTx } from "@/lib/enterprise/inventory/supplier-return-preflight";
+import { requireSupplierReturnParticipantAccess, submitSupplierReturnRequest, supplierReturnApprovalCandidates, supplierReturnRequestSchema, SUPPLIER_RETURN_TARGET } from "@/lib/enterprise/inventory/supplier-return-request-service";
+import { notifyUser } from "@/lib/notifications";
+import { workCoordinationDeepLink } from "@/lib/standard-work-coordination/deep-links";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { normalizeEnterpriseCoreV2Error } from "@/lib/enterprise/core-v2/errors";
@@ -25,6 +28,12 @@ export async function GET(req: Request, { params }: Params) {
   const purchase = await prisma.enterprisePurchase.findFirst({ where: { AND: [visible, { id }] }, include: { items: { orderBy: { sortOrder: "asc" } }, supplier: { include: { contacts: { orderBy: [{ isPrimary: "desc" }, { name: "asc" }], take: 5 } } }, budgetLine: { include: { budget: true } }, receipts: { orderBy: { receivedAt: "desc" }, include: { items: true } } } });
   if (!purchase) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const url = new URL(req.url);
+  if (url.searchParams.get("view") === "supplier-return-approvers") {
+    const rate = await rateLimit(getRateLimitKey(req, `supplier-return-approvers:${organizationId}:${session.userId}`), 60, 60 * 60 * 1000);
+    if (!rate.ok) return NextResponse.json({ error: "TOO_MANY_REQUESTS" }, { status: 429 });
+    try { return NextResponse.json(await supplierReturnApprovalCandidates(organizationId, session.userId), { headers: { "Cache-Control": "private, no-store" } }); }
+    catch (error) { return enterpriseDomainErrorResponse(error, "SUPPLIER_RETURN_PREFLIGHT_FAILED", req); }
+  }
   if (url.searchParams.get("view") === "supplier-return-preflight") {
     const rate = await rateLimit(getRateLimitKey(req, `supplier-return-preflight:${organizationId}:${session.userId}`), 90, 60 * 60 * 1000);
     if (!rate.ok) return NextResponse.json({ error: "TOO_MANY_REQUESTS" }, { status: 429 });
@@ -52,7 +61,8 @@ export async function GET(req: Request, { params }: Params) {
           receiptReference: check.receipt.reference, invoiceReference: check.invoice.number };
       }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
       await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "supplier-return-preflight", purchaseId: id } });
-      return NextResponse.json(preview, { headers: { "Cache-Control": "private, no-store" } });
+      const canSubmitRequest = await requireSupplierReturnParticipantAccess(organizationId, session.userId, false).then(() => true, () => false);
+      return NextResponse.json({ ...preview, canSubmitRequest }, { headers: { "Cache-Control": "private, no-store" } });
     } catch (error) {
       const response = enterpriseDomainErrorResponse(error, "SUPPLIER_RETURN_PREFLIGHT_FAILED", req);
       await writeApiLog({ request: req, statusCode: response.status, userId: session.userId, startedAt, metadata: { organizationId, domain: "supplier-return-preflight", purchaseId: id } });
@@ -102,7 +112,17 @@ export async function GET(req: Request, { params }: Params) {
     }));
     await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "purchase-receipt-lots", purchaseId: id, page } });
     const canCheckSupplierReturn = access.canWrite && await assertSupplierReturnAccess(organizationId, session.userId, false).then(() => true, () => false);
-    return NextResponse.json({ items, canCheckSupplierReturn, pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) } });
+    const canSubmitSupplierReturn = canCheckSupplierReturn && await requireSupplierReturnParticipantAccess(organizationId, session.userId, false).then(() => true, () => false);
+    const requests = canSubmitSupplierReturn && rows.length ? await prisma.enterpriseSupplierReturnRequest.findMany({
+      where: { organizationId, purchaseId: id, sourceMovementId: { in: rows.map((row) => row.id) }, requestedByUserId: session.userId, status: { in: ["PENDING_APPROVAL", "APPROVED"] } },
+      select: { id: true, sourceMovementId: true, reference: true, status: true, quantity: true },
+    }) : [];
+    const requestApprovals = requests.length ? await prisma.enterpriseApproval.findMany({
+      where: { organizationId, targetEntityType: SUPPLIER_RETURN_TARGET, targetEntityId: { in: requests.map((request) => request.id) }, requestedByUserId: session.userId, archivedAt: null },
+      select: { id: true, targetEntityId: true },
+    }) : [];
+    const requestByMovement = new Map(requests.map((request) => [request.sourceMovementId, { reference: request.reference, status: request.status, quantity: request.quantity, approvalId: requestApprovals.find((approval) => approval.targetEntityId === request.id)?.id || null }]));
+    return NextResponse.json({ items: items.map((row) => ({ ...row, supplierReturnRequest: requestByMovement.get(row.id) || null })), canCheckSupplierReturn, canSubmitSupplierReturn, pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) } });
   }
   const itemIds = purchase.items.map((item) => item.id);
   const [requestRecord, approvals, links, events, comments, operationalLink, itemCatalogLinks] = await Promise.all([
@@ -134,4 +154,33 @@ export async function PATCH(req: Request, { params }: Params) {
     await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "purchases", purchaseId: id } });
     return NextResponse.json({ ok: true, purchase });
   } catch (error) { const normalized = normalizeEnterpriseCoreV2Error(error); return NextResponse.json({ error: normalized.code, message: normalized.message }, { status: normalized.status }); }
+}
+
+export async function POST(req: Request, { params }: Params) {
+  const startedAt = Date.now();
+  if (!isSameOriginRequest(req)) return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
+  const session = await getSession();
+  if (!session) return NextResponse.json({ error: "UNAUTHENTICATED" }, { status: 401 });
+  const { organizationId, id } = await params;
+  if (new URL(req.url).searchParams.get("action") !== "submit-supplier-return") return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
+  const limited = await rateLimit(getRateLimitKey(req, `supplier-return-submit:${organizationId}:${session.userId}`), 60, 60 * 60 * 1000);
+  if (!limited.ok) return NextResponse.json({ error: "TOO_MANY_REQUESTS" }, { status: 429 });
+  const access = await getEnterpriseProcurementAccess({ session, organizationId, moduleCode: "SUPPLIERS_PURCHASES", action: "write" });
+  if (!access) return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
+  const parsed = supplierReturnRequestSchema.safeParse(await req.json().catch(() => null));
+  if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "SUPPLIER_RETURN_INPUT_INVALID", req);
+  try {
+    const result = await submitSupplierReturnRequest(organizationId, id, session.userId, parsed.data);
+    if (!result.idempotent) {
+      await notifyUser({ userId: result.approval.approverUserId, organizationId, type: "ENTERPRISE_APPROVAL", title: "Validation requise", body: "Une demande de retour fournisseur attend votre décision.", targetUrl: workCoordinationDeepLink("APPROVAL", result.approval.id) }).catch(() => null);
+      await writeAuditLog({ userId: session.userId, action: "SUPPLIER_RETURN_REQUESTED", entity: SUPPLIER_RETURN_TARGET, entityId: result.request.id, request: req, metadata: { organizationId, approvalId: result.approval.id } });
+    }
+    const status = result.idempotent ? 200 : 201;
+    await writeApiLog({ request: req, statusCode: status, userId: session.userId, startedAt, metadata: { organizationId, domain: "supplier-return-submit", purchaseId: id, idempotent: result.idempotent } });
+    return NextResponse.json({ ok: true, idempotent: result.idempotent, request: { id: result.request.id, reference: result.request.reference, status: result.request.status, quantity: result.request.quantity }, approvalId: result.approval.id }, { status, headers: { "Cache-Control": "private, no-store" } });
+  } catch (error) {
+    const response = enterpriseDomainErrorResponse(error, "SUPPLIER_RETURN_SUBMIT_FAILED", req);
+    await writeApiLog({ request: req, statusCode: response.status, userId: session.userId, startedAt, metadata: { organizationId, domain: "supplier-return-submit", purchaseId: id } });
+    return response;
+  }
 }
