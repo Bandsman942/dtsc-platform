@@ -3,6 +3,7 @@
 - Sélecteur indépendant, garde de politique historique, réceptions et réservations FEFO, factures POS et retours multi-lots; régularisation historique sans changement de valeur.
 - Pertes approuvées avec valorisation distincte, contrôle qualité et rappel multisite, traçabilité par mouvements, réception isolée des rappels en transit, registre des retours non revendables et attestation de destruction, filtres et interface enrichie. Huit migrations additives en candidat, dont le registre de garde des retours isolés et le suivi des notifications qualité. Recettes commandes ERP et Finance multi-lots vertes sur c7c4e8a uniquement; nouvelle CI et autres certifications obligatoires.
 - Régularisations historiques : contrôle préalable des droits effectifs des deux participants au module commun Validations, erreur contextualisée FR/EN, aucune demande inaccessible ni activation automatique. Recette négative sans mutation et preuve CI à renouveler.
+- Baseline `4a3d706` : 18/18 workflows CI réussis. Fiche achat : registre de provenance des réceptions physiques (chaque lot réel, quantité reçue, bon, dépôt, dates et qualité), recherche/pagination serveur et double droit Achats/Stocks. Ce registre est en lecture seule, distinct du retour fournisseur et du stock actuellement retournable ; certification du nouveau SHA requise.
 - [Périmètre et recette](HOTFIX_1212_INVENTORY_LOT_TRACEABILITY.md). Les six chantiers ne sont pas clos; aucun E2E final, aucune migration de production.
 
 ## 2026-11-17 — Hotfix POS RETAIL #1210 — v1.23.3 candidate (OWNER_E2E requis)
