@@ -120,8 +120,10 @@ export async function inspectSupplierReturnTx(tx: Prisma.TransactionClient, orga
     if (error instanceof EnterpriseAccountingError) blocked("SUPPLIER_RETURN_VALUATION_REQUIRED");
     throw error;
   }
+  const totalCost = money(qty.times(receiptValue.unitCost));
+  if (!totalCost.gt(0)) blocked("SUPPLIER_RETURN_VALUATION_REQUIRED");
   return { origin, receipt, receiptItem, invoice, invoiceItem: invoiceItems[0], originLayer, receiptValue,
-    remaining, currencyCode: receiptValue.currencyCode, unitCost: receiptValue.unitCost, totalCost: money(qty.times(receiptValue.unitCost)) };
+    remaining, currencyCode: receiptValue.currencyCode, unitCost: receiptValue.unitCost, totalCost };
 }
 
 /** No stock-only or global DTSC role may authorize a financial return. */
