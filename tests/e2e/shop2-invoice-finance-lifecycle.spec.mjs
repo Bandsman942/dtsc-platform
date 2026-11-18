@@ -1237,8 +1237,33 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
     const staleDispatch=await post(context.owner,dispatchPath,{...dispatchPayload,revision:approvedRecord.revision+1});
     expect(staleDispatch.status).toBe(409);
     const sourceLayer=await prisma.enterpriseInventoryCostLayer.findFirstOrThrow({where:{organizationId,id:approvedRecord.originCostLayerId}});
-    const dispatchResult=await post(context.owner,dispatchPath,dispatchPayload);
-    expect(dispatchResult.status,JSON.stringify(dispatchResult.body)).toBe(200);
+    // A closed fiscal period must roll back even a physically valid dispatch.
+    // Change only the ephemeral fixture period, restoring it in finally.
+    const returnBusinessContextResponse=await context.owner.request.get(base+"/business-context");
+    expect(returnBusinessContextResponse.status()).toBe(200);
+    const returnBusinessContext=await returnBusinessContextResponse.json();
+    const ledgerDay=new Date(returnBusinessContext.businessDate+"T00:00:00.000Z");
+    const returnPeriod=await prisma.enterpriseFiscalPeriod.findFirstOrThrow({where:{organizationId,fiscalYear:{status:"OPEN"},startDate:{lte:ledgerDay},endDate:{gte:ledgerDay}},orderBy:{startDate:"desc"}});
+    expect(returnPeriod.status).toBe("OPEN");
+    await prisma.enterpriseFiscalPeriod.update({where:{id:returnPeriod.id},data:{status:"CLOSED"}});
+    try {
+      const closedDispatch=await post(context.owner,dispatchPath,dispatchPayload);
+      expect(closedDispatch.status,JSON.stringify(closedDispatch.body)).toBe(409);
+      expect((await prisma.enterpriseSupplierReturnRequest.findFirstOrThrow({where:{organizationId,id:returnRequestId}})).status).toBe("APPROVED");
+      expect((await prisma.enterpriseInventoryBalance.findFirstOrThrow({where:{organizationId,stockLotId:returnedSource.stockLotId}})).quantityOnHand.equals(4)).toBe(true);
+      expect((await prisma.enterpriseInventoryCostLayer.findFirstOrThrow({where:{organizationId,id:sourceLayer.id}})).remainingQuantity.equals(sourceLayer.remainingQuantity)).toBe(true);
+      expect(await prisma.enterpriseStockMovement.count({where:{organizationId,sourceEntityType:"EnterpriseSupplierReturnRequest",sourceEntityId:returnRequestId}})).toBe(0);
+      expect(await prisma.enterpriseJournalEntry.count({where:{organizationId}})).toBe(snapshotBeforeCheck.journals);
+      expect(await prisma.enterpriseInventoryAccountingEvent.count({where:{organizationId,inventoryItemId:historicalInventory.id}})).toBe(snapshotBeforeCheck.valuation);
+    } finally {
+      await prisma.enterpriseFiscalPeriod.update({where:{id:returnPeriod.id},data:{status:returnPeriod.status}});
+    }
+    // Competing identical dispatch requests must create one physical movement,
+    // regardless of whether the loser gets an idempotent reply or a conflict.
+    const dispatchRace=await Promise.all([post(context.owner,dispatchPath,dispatchPayload),post(context.owner,dispatchPath,dispatchPayload)]);
+    expect(dispatchRace.every(result=>[200,409].includes(result.status)),JSON.stringify(dispatchRace.map(result=>({status:result.status,body:result.body})))).toBe(true);
+    const dispatchResult=dispatchRace.find(result=>result.status===200);
+    expect(dispatchResult).toBeTruthy();
     expect(dispatchResult.body.request.status).toBe("DISPATCHED");
     const dispatchedRecord=await prisma.enterpriseSupplierReturnRequest.findFirstOrThrow({where:{organizationId,id:returnRequestId}});
     expect(dispatchedRecord.dispatchReference).toBe(dispatchPayload.dispatchReference);
