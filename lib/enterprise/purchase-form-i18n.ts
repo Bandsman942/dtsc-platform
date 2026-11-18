@@ -2,6 +2,8 @@ import { enterpriseCoreIntlLocale } from "@/lib/enterprise-core-i18n";
 
 const PURCHASE_FORM_GUIDANCE = {
   fr: {
+    recoveryReviewOnly:"Approbation de la proposition uniquement : aucune remise en stock ni reconnaissance comptable.",
+    recoveryReviewStale:"Le dossier de garde a changé depuis l’expertise. Le serveur refusera l’approbation d’une proposition périmée.",
     returnWithdrawTitle: "Annuler le retour avant expédition",
     returnWithdrawHelp: "L’accord initial reste dans Validations. Le lot reste isolé et aucune écriture n’est modifiée. Confirmez seulement si la marchandise n’a pas été remise.",
     returnWithdrawReason: "Motif de l’annulation",
@@ -126,6 +128,8 @@ const PURCHASE_FORM_GUIDANCE = {
     actionReasonHelp: "Un motif est obligatoire pour une annulation ou un archivage et restera dans la piste d’audit.",
   },
   en: {
+    recoveryReviewOnly:"Proposal approval only: no physical release or accounting recognition.",
+    recoveryReviewStale:"The custody record changed since the appraisal. The server will refuse stale approval.",
     returnWithdrawTitle: "Withdraw return before dispatch",
     returnWithdrawHelp: "The original approval remains in Approvals. The batch stays isolated and no journal is changed. Confirm only if the goods have not been handed over.",
     returnWithdrawReason: "Withdrawal reason",
