@@ -5,6 +5,7 @@ import { enterpriseApprovalVisibilityWhere, getEnterpriseCoreV2Access } from "@/
 import { getEnterpriseOperationalTimeline } from "@/lib/enterprise/core-v2/service";
 import { prisma } from "@/lib/prisma";
 import { assertSupplierReturnReviewAccess, SUPPLIER_RETURN_TARGET } from "@/lib/enterprise/inventory/supplier-return-request-service";
+import { assertRecoveryReviewAccess, RECOVERY_ASSESSMENT_TARGET } from "@/lib/enterprise/inventory/custody-recovery-assessment";
 
 type Params = { params: Promise<{ organizationId: string; id: string }> };
 
@@ -17,6 +18,9 @@ export async function GET(req: Request, { params }: Params) {
   if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const approval = await prisma.enterpriseApproval.findFirst({ where: { ...enterpriseApprovalVisibilityWhere({ organizationId, userId: session.userId, canSeeAll: access.canSeeAll }), id } });
   if (!approval) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (approval.targetEntityType === RECOVERY_ASSESSMENT_TARGET) {
+    try { await assertRecoveryReviewAccess(organizationId,session.userId,approval); } catch { return NextResponse.json({error:"FORBIDDEN"},{status:403}); }
+  }
   if (approval.targetEntityType === SUPPLIER_RETURN_TARGET) {
     try { await assertSupplierReturnReviewAccess(organizationId, session.userId, approval); }
     catch { return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 }); }
