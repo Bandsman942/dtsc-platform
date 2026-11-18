@@ -29,7 +29,7 @@ export async function GET(req: Request, { params }: Params) {
     if (!stockAccess) return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
     let scope: Awaited<ReturnType<typeof retailInventoryVisibleSites>>;
     try { scope = await retailInventoryVisibleSites(organizationId, session.userId); }
-    catch (error) { return retailErrorResponse(error, "RETAIL_SITE_ACCESS_DENIED", req); }
+    catch (error) { return retailErrorResponse(error, "RETAIL_SITE_ACCESS_DENIED"); }
     const page = Math.min(10000, Math.max(1, Math.trunc(Number(url.searchParams.get("page")) || 1)));
     const pageSize = Math.min(50, Math.max(1, Math.trunc(Number(url.searchParams.get("pageSize")) || 20)));
     const search = (url.searchParams.get("search") || "").trim().slice(0, 120);
