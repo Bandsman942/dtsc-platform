@@ -93,7 +93,7 @@ export async function submitSupplierReturnRequest(organizationId: string, purcha
     if (!origin?.stockLotId || !receipt) throw new EnterpriseDomainError("SUPPLIER_RETURN_ORIGIN_INVALID", 404);
     const check = await inspectSupplierReturnTx(tx, organizationId, actorUserId, { ...origin, supplierReturnSourceMovementId: origin.id, quantity: input.quantity });
     if (check.receipt.purchaseId !== purchaseId) throw new EnterpriseDomainError("SUPPLIER_RETURN_ORIGIN_INVALID", 404);
-    const open = await tx.enterpriseSupplierReturnRequest.findFirst({ where: { organizationId, supplierInvoiceId: check.invoice.id, status: { in: ["PENDING_APPROVAL", "APPROVED", "DISPATCHED"] } }, select: { id: true } });
+    const open = await tx.enterpriseSupplierReturnRequest.findFirst({ where: { organizationId, supplierInvoiceId: check.invoice.id, status: { in: ["PENDING_APPROVAL", "APPROVED", "DISPATCHED", "RECONCILED"] } }, select: { id: true } });
     if (open) throw new EnterpriseDomainConflictError("SUPPLIER_RETURN_ALREADY_OPEN");
     const request = await tx.enterpriseSupplierReturnRequest.create({ data: {
       organizationId, reference: "RTV-" + randomUUID().slice(0, 12).toUpperCase(), purchaseId,
@@ -182,7 +182,7 @@ export async function dispatchSupplierReturn(organizationId: string, purchaseId:
     if (!request) throw new EnterpriseDomainError("SUPPLIER_RETURN_DISPATCH_DENIED", 403);
     const approval = await tx.enterpriseApproval.findFirst({ where: { organizationId, targetEntityType: SUPPLIER_RETURN_TARGET, targetEntityId: request.id, status: "APPROVED", archivedAt: null, requestedByUserId: actorUserId } });
     if (!approval || approval.approverUserId === actorUserId) throw new EnterpriseDomainError("SUPPLIER_RETURN_DISPATCH_DENIED", 403);
-    if (request.status === "DISPATCHED" && request.dispatchReference === input.dispatchReference && request.revision === input.revision + 1 && request.dispatchMovementId && request.dispatchAccountingEventId && request.dispatchedByUserId === actorUserId) return { request, idempotent: true };
+    if (["DISPATCHED","RECONCILED"].includes(request.status) && request.dispatchReference === input.dispatchReference && request.revision >= input.revision + 1 && request.dispatchMovementId && request.dispatchAccountingEventId && request.dispatchedByUserId === actorUserId) return { request, idempotent: true };
     if (request.status !== "APPROVED" || request.revision !== input.revision) throw new EnterpriseDomainConflictError("SUPPLIER_RETURN_CONFLICT");
     // A decision record over the immutable reviewed version is mandatory.
     const decision = await tx.enterpriseApprovalDecision.findFirst({ where: { organizationId, approvalId: approval.id, actorUserId: approval.approverUserId, decision: "APPROVE" } });
