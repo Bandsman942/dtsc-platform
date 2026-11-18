@@ -3,6 +3,9 @@ import { EnterpriseDomainError } from "@/lib/enterprise/common/errors";
 import { requireInventoryStockAuthorityTx } from "@/lib/enterprise/inventory/service";
 import { resolveEnterpriseModuleAccess } from "@/lib/enterprise/module-access";
 import { money, sumDecimals } from "@/lib/enterprise/accounting/helpers";
+import { readActiveRetailInvoiceStockHoldsTx } from "@/lib/enterprise/retail/invoice-stock-holds";
+import { resolveSemanticPostingAccount } from "@/lib/enterprise/accounting/semantic-account-resolver";
+import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
 
 export type SupplierReturnCoordinates = {
   inventoryItemId: string; warehouseId: string; storageLocationId?: string | null; stockLotId?: string | null;
@@ -33,6 +36,15 @@ export async function inspectSupplierReturnTx(tx: Prisma.TransactionClient, orga
     origin.stockLot.archivedAt || origin.warehouse.status !== "ACTIVE" || origin.warehouse.archivedAt) blocked("SUPPLIER_RETURN_ORIGIN_INVALID");
   if (!["BLOCKED", "QUARANTINED"].includes(origin.stockLot.status)) blocked("SUPPLIER_RETURN_ISOLATE_FIRST");
   const catalogItemId = origin.inventoryItem.catalogItemId;
+  const coordinates = { organizationId, inventoryItemId: origin.inventoryItemId, warehouseId: origin.warehouseId };
+  const [reservations, holds, pendingAdjustment, transfer, count] = await Promise.all([
+    tx.enterpriseInventoryReservation.count({ where: { ...coordinates, status: "ACTIVE", OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] } }),
+    readActiveRetailInvoiceStockHoldsTx(tx, { organizationId, warehouseId: origin.warehouseId, inventoryItemIds: [origin.inventoryItemId] }),
+    tx.enterpriseStockAdjustment.count({ where: { ...coordinates, status: "PENDING_APPROVAL" } }),
+    tx.enterpriseStockTransfer.count({ where: { organizationId, status: { in: ["DRAFT", "PENDING_APPROVAL", "APPROVED", "IN_TRANSIT"] }, OR: [{ sourceWarehouseId: origin.warehouseId }, { destinationWarehouseId: origin.warehouseId }], lines: { some: { inventoryItemId: origin.inventoryItemId } } } }),
+    tx.enterpriseInventoryCount.count({ where: { organizationId, warehouseId: origin.warehouseId, status: { in: ["DRAFT", "IN_PROGRESS", "SUBMITTED", "APPROVED"] }, lines: { some: { inventoryItemId: origin.inventoryItemId } } } }),
+  ]);
+  if (reservations || holds.length || pendingAdjustment || transfer || count) blocked("SUPPLIER_RETURN_OPEN_OPERATIONS");
   const [pharmacy, sector, receipt, receiptLink, lotMovements, balance, physical, config, layers, receiptValue] = await Promise.all([
     tx.pharmacyProductExtension.count({ where: { organizationId, catalogItemId } }),
     tx.enterpriseSectorInventoryEvent.count({ where: { organizationId, catalogItemId } }),
@@ -48,7 +60,7 @@ export async function inspectSupplierReturnTx(tx: Prisma.TransactionClient, orga
   if (pharmacy || sector) blocked("STOCK_RECLASS_SECTOR_AUTHORITY");
   const receiptItem = receipt?.items[0];
   if (!receipt || !receiptItem || !receiptLink || !receipt.purchase.supplierId || receipt.purchase.archivedAt ||
-    receipt.purchase.status === "CANCELLED" || receipt.purchase.status === "REJECTED" || receiptItem.purchaseItem.taxAmount.gt(0)) blocked("SUPPLIER_RETURN_ORIGIN_INVALID");
+    receipt.purchase.status === "CANCELLED" || receipt.purchase.status === "REJECTED" || !receiptItem.purchaseItem.taxAmount.isZero() || origin.quantity.gt(receiptItem.quantityReceived)) blocked("SUPPLIER_RETURN_ORIGIN_INVALID");
   // The whole local lot must have one incoming receipt. Transferred, mixed and
   // re-entered batches need an explicit provenance allocation workflow.
   const incoming = lotMovements.filter((row) => row.direction === "IN");
@@ -59,7 +71,7 @@ export async function inspectSupplierReturnTx(tx: Prisma.TransactionClient, orga
   const alreadyReturned = sumDecimals(outgoing.map((row) => row._sum.quantity || 0));
   const remaining = origin.quantity.minus(alreadyReturned);
   if (balance.length !== 1 || !balance[0].quantityOnHand.equals(remaining) || qty.gt(remaining) ||
-    qty.gt(balance[0].quantityOnHand.minus(balance[0].quantityReserved))) blocked("SUPPLIER_RETURN_QUANTITY_INVALID");
+    !balance[0].quantityReserved.isZero() || qty.gt(balance[0].quantityOnHand.minus(balance[0].quantityReserved))) blocked("SUPPLIER_RETURN_QUANTITY_INVALID");
   if (!config?.automaticPostingEnabled || config.inventoryValuationMethod !== "WEIGHTED_AVERAGE" || !receiptValue ||
     !receiptValue.quantity.equals(origin.quantity) || receiptValue.currencyCode !== config.functionalCurrencyCode ||
     receiptValue.currencyCode !== receipt.purchase.currency || !receiptValue.unitCost.gt(0) ||
@@ -70,7 +82,7 @@ export async function inspectSupplierReturnTx(tx: Prisma.TransactionClient, orga
     layers.some((layer) => layer.currencyCode !== receiptValue.currencyCode || !layer.unitCost.equals(receiptValue.unitCost) || layer.valuationMethod !== "WEIGHTED_AVERAGE") ||
     !sumDecimals(layers.map((layer) => layer.remainingQuantity)).equals(physical._sum.quantityOnHand || 0)) blocked("SUPPLIER_RETURN_VALUATION_REQUIRED");
   const [journal, invoices, itemLink] = await Promise.all([
-    tx.enterpriseJournalEntry.findFirst({ where: { organizationId, id: receiptValue.journalEntryId!, status: "POSTED", postingEvent: "INVENTORY_RECEIPT_VALUED", sourceEntityType: "EnterpriseInventoryAccountingEvent", sourceEntityId: receiptValue.id } }),
+    tx.enterpriseJournalEntry.findFirst({ where: { organizationId, id: receiptValue.journalEntryId!, status: "POSTED", postingEvent: "INVENTORY_RECEIPT_VALUED", sourceEntityType: "EnterpriseInventoryAccountingEvent", sourceEntityId: receiptValue.id }, include: { lines: true } }),
     tx.enterpriseSupplierInvoice.findMany({ where: { organizationId, purchaseReceiptId: receipt.id, purchaseId: receipt.purchaseId, supplierId: receipt.purchase.supplierId,
       archivedAt: null, status: { notIn: ["CANCELLED", "REJECTED"] } }, include: { items: true, threeWayMatch: true }, take: 2 }),
     tx.enterprisePurchaseItemCatalogLink.findFirst({ where: { organizationId, purchaseItemId: receiptItem.purchaseItemId, catalogItemId, expectedItemType: "GOODS" } }),
@@ -81,14 +93,33 @@ export async function inspectSupplierReturnTx(tx: Prisma.TransactionClient, orga
   const invoiceItems = invoice.items.filter((line) => line.catalogItemId === catalogItemId);
   if (!["POSTED", "PARTIALLY_PAID", "PAID"].includes(invoice.status) || !invoice.postedAt || invoice.currencyCode !== receiptValue.currencyCode ||
     invoice.taxTotal.gt(0) || invoice.threeWayMatch?.status !== "MATCHED" || invoice.amountCredited.gt(0) ||
-    invoiceItems.length !== 1 || !invoiceItems[0].quantity.equals(receiptItem.quantityReceived) ||
+    invoice.items.length !== 1 || invoiceItems.length !== 1 || !invoiceItems[0].quantity.equals(receiptItem.quantityReceived) ||
     !invoiceItems[0].unitPrice.equals(receiptValue.unitCost) || !receiptItem.purchaseItem.unitPrice.equals(receiptValue.unitCost) ||
     !invoiceItems[0].netAmount.equals(money(receiptItem.quantityReceived.times(receiptValue.unitCost))) || invoiceItems[0].taxAmount.gt(0)) blocked("SUPPLIER_RETURN_INVOICE_REQUIRED");
   const [invoiceJournal, credits] = await Promise.all([
-    tx.enterpriseJournalEntry.findFirst({ where: { organizationId, sourceEntityType: "EnterpriseSupplierInvoice", sourceEntityId: invoice.id, postingEvent: "SUPPLIER_INVOICE_POSTED", status: "POSTED" } }),
+    tx.enterpriseJournalEntry.findFirst({ where: { organizationId, sourceEntityType: "EnterpriseSupplierInvoice", sourceEntityId: invoice.id, postingEvent: "SUPPLIER_INVOICE_POSTED", status: "POSTED" }, include: { lines: true } }),
     tx.enterpriseSupplierCreditNote.count({ where: { organizationId, supplierInvoiceId: invoice.id, status: { notIn: ["CANCELLED", "REJECTED"] } } }),
   ]);
-  if (!invoiceJournal || credits) blocked("SUPPLIER_RETURN_INVOICE_REQUIRED");
+  if (!invoiceJournal || credits || !invoice.subtotal.equals(invoiceItems[0].netAmount) || !invoice.grandTotal.equals(invoice.subtotal)) blocked("SUPPLIER_RETURN_INVOICE_REQUIRED");
+  // The return must reverse the very same stock and clearing accounts, not a
+  // newly remapped account or a sales/expense journal. This first tranche
+  // deliberately refuses tax and FX cases that need dedicated treatment.
+  try {
+    const date = new Date();
+    const [stockAccount, clearingAccount, payableAccount] = await Promise.all([
+      resolveSemanticPostingAccount(tx, { organizationId, mappingKey: "INVENTORY", accountingDate: date }),
+      resolveSemanticPostingAccount(tx, { organizationId, mappingKey: "GOODS_RECEIVED_CLEARING", accountingDate: date }),
+      resolveSemanticPostingAccount(tx, { organizationId, mappingKey: "ACCOUNTS_PAYABLE", accountingDate: date }),
+    ]);
+    const balanced = (lines: typeof journal.lines, debitId: string, creditId: string, amount: Prisma.Decimal) =>
+      lines.length === 2 && lines.some((line) => line.ledgerAccountId === debitId && line.debit.equals(amount) && line.credit.isZero()) &&
+      lines.some((line) => line.ledgerAccountId === creditId && line.credit.equals(amount) && line.debit.isZero());
+    if (!balanced(journal.lines, stockAccount.id, clearingAccount.id, receiptValue.totalCost) ||
+      !balanced(invoiceJournal.lines, clearingAccount.id, payableAccount.id, invoice.subtotal)) blocked("SUPPLIER_RETURN_VALUATION_REQUIRED");
+  } catch (error) {
+    if (error instanceof EnterpriseAccountingError) blocked("SUPPLIER_RETURN_VALUATION_REQUIRED");
+    throw error;
+  }
   return { origin, receipt, receiptItem, invoice, invoiceItem: invoiceItems[0], originLayer, receiptValue,
     remaining, currencyCode: receiptValue.currencyCode, unitCost: receiptValue.unitCost, totalCost: money(qty.times(receiptValue.unitCost)) };
 }
@@ -97,6 +128,7 @@ export async function inspectSupplierReturnTx(tx: Prisma.TransactionClient, orga
 export async function assertSupplierReturnAccess(organizationId: string, userId: string, approve: boolean) {
   const checks = await Promise.all([
     resolveEnterpriseModuleAccess({ organizationId, userId, moduleCode: "SUPPLIERS_PURCHASES", action: approve ? "approve" : "write" }),
+    resolveEnterpriseModuleAccess({ organizationId, userId, moduleCode: "INVENTORY_LOGISTICS", action: approve ? "manage" : "write" }),
     resolveEnterpriseModuleAccess({ organizationId, userId, moduleCode: "FINANCE_INVENTORY", action: approve ? "manage" : "read" }),
     resolveEnterpriseModuleAccess({ organizationId, userId, moduleCode: "FINANCE_PAYABLES", action: "read" }),
   ]);
