@@ -90,8 +90,11 @@ requireTokens("lib/enterprise/inventory/supplier-return-request-service.ts", [
 ]);
 requireTokens("lib/enterprise/accounting/domain-posting-builders.ts", [
   'kind === "SUPPLIER_RETURN" ? "GOODS_RECEIVED_CLEARING"',
-  "SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED",
+  "verifySupplierReturnCreditTx",
 ]);
+requireTokens("lib/enterprise/accounting/supplier-return-credit-reconciliation.ts", ["SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED", "SUPPLIER_RETURN_PAYABLE_RESERVED", "completeSupplierReturnCreditTx", "GOODS_RECEIVED_CLEARING"]);
+requireTokens("lib/enterprise/accounting/payments-service.ts", ["assertSupplierPaymentCapacityTx", "lockSupplierReturnInvoiceTx"]);
+requireTokens("lib/enterprise/accounting/accounting-document-approval-orchestration.ts", ["completeSupplierReturnCreditTx", "verifySupplierReturnCreditTx"]);
 requireTokens("lib/enterprise/accounting/journal-template-registry.ts", ["INVENTORY_SUPPLIER_RETURN_VALUED"]);
 requireTokens("lib/enterprise/accounting/semantic-account-registry.ts", ["INVENTORY_SUPPLIER_RETURN_VALUED"]);
 forbidTokens("lib/enterprise/inventory/supplier-return-request-service.ts", ["enterpriseJournalEntry.create", "enterprisePostingBatch.create", "enterprisePayable.update", "enterpriseSupplierInvoice.update"]);
