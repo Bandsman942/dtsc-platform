@@ -39,7 +39,7 @@ export async function GET(req: Request, { params }: Params) {
     if (!rate.ok) return NextResponse.json({ error: "TOO_MANY_REQUESTS" }, { status: 429 });
     const movementId = (url.searchParams.get("movementId") || "").trim();
     const quantity = (url.searchParams.get("quantity") || "").trim();
-    if (!movementId || movementId.length > 191 || !/^\\d{1,12}(?:\\.\\d{1,3})?$/.test(quantity) || !new Prisma.Decimal(quantity).gt(0)) {
+    if (!movementId || movementId.length > 191 || !supplierReturnRequestSchema.shape.quantity.safeParse(quantity).success || !new Prisma.Decimal(quantity).gt(0)) {
       return enterpriseDomainErrorResponse(new EnterpriseDomainError("SUPPLIER_RETURN_QUANTITY_INVALID", 400), "SUPPLIER_RETURN_PREFLIGHT_FAILED", req);
     }
     try {
