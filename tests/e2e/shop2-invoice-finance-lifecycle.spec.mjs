@@ -932,6 +932,12 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
     const listedCustody=await context.owner.request.get(qualityPath+"?view=custody&search="+encodeURIComponent(batchKey));
     expect(listedCustody.status()).toBe(200);
     expect((await listedCustody.json()).items.some(row=>row.id===custody.id&&row.canRequest)).toBe(true);
+    const recoveryProbePath=qualityPath+"?view=custody-recovery&custodyId="+encodeURIComponent(custody.id);
+    const recoveryBefore=await context.owner.request.get(recoveryProbePath);
+    expect(recoveryBefore.status(),await recoveryBefore.text()).toBe(409);
+    expect((await recoveryBefore.json()).error).toBe("INVENTORY_RETURN_RECOVERY_LOT_UNSAFE");
+    expect((await prisma.enterpriseInventoryReturnCustody.findUniqueOrThrow({where:{id:custody.id}})).revision).toBe(custody.revision);
+    expect((await batchStock(1)).equals(1)).toBe(true);
     const requestedDisposal=await patchLot(context.owner,{custodyId:custody.id,revision:custody.revision,action:"REQUEST_DISPOSAL",reason:"Supplier recall requires safe physical disposal"});
     expect(requestedDisposal.status,JSON.stringify(requestedDisposal.body)).toBe(200);
     const disposalPayload={custodyId:custody.id,revision:requestedDisposal.body.revision,action:"CONFIRM_DISPOSAL",reason:"Physical destruction witnessed and recorded in E2E certificate"};
