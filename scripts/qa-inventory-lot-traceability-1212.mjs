@@ -158,3 +158,11 @@ const oldHold = allocationTools.planReservationLotAllocations({ ...parameters, h
 assert.equal(oldHold.shortfall.toFixed(), "20", "Unidentified invoice holds remain conservatively protected until reconciled");
 const locationOnly = allocationTools.planReservationLotAllocations({ ...parameters, balances: shelves, holds: [{ stockLotId: "same", quantity: d(10) }], storageLocationId: "loc1", quantity: 15 });
 assert.equal(locationOnly.shortfall.toFixed(), "5", "A single-location request cannot ignore warehouse-level invoice holds");
+
+const splitInvoice = { stockLotId: null, invoiceItem: { quantity: d(50) }, lotAllocations: [{ stockLotId: "early", quantity: "30" }, { stockLotId: "late", quantity: "20" }] };
+assert.equal(allocationTools.readInvoiceLotAllocations(splitInvoice).map(row => row.stockLotId + ":" + row.quantity.toFixed()).join(","), "early:30,late:20");
+assert.equal(allocationTools.readInvoiceLotAllocations(splitInvoice, d(15)).map(row => row.stockLotId + ":" + row.quantity.toFixed()).join(","), "early:30,late:5");
+assert.equal(allocationTools.readInvoiceLotAllocations(splitInvoice, d(50)).length, 0);
+assert.throws(() => allocationTools.readInvoiceLotAllocations({ ...splitInvoice, invoiceItem: { quantity: d(51) } }), /RETAIL_INVOICE_LOT_ALLOCATION_INVALID/);
+assert.throws(() => allocationTools.readInvoiceLotAllocations({ ...splitInvoice, stockLotId: "early" }), /RETAIL_INVOICE_LOT_ALLOCATION_INVALID/);
+console.log("Invoice batch promises: one invoice line, immutable batch snapshot, exact release of undelivered credits OK");

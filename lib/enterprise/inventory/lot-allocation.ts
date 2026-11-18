@@ -158,3 +158,31 @@ export function consumeReservationLotAllocations(allocations: ReservationLotAllo
   if (remaining.gt(0)) throw new Error("INVENTORY_RESERVATION_ALLOCATION_INVALID");
   return { next, movements };
 }
+
+/** The invoice retains a single financial line. Its physical batch promises
+ * are a quantity-conserving snapshot; old single-lot lines are unchanged.
+ * An undelivered credit releases the tail of the original FEFO allocation,
+ * preserving earlier batches. No new physical allocation is invented. */
+export type InvoiceLotAllocation = { stockLotId: string; quantity: string };
+export function readInvoiceLotAllocations(line: { stockLotId: string | null; lotAllocations?: Prisma.JsonValue | null; invoiceItem: { quantity: Prisma.Decimal } }, cancelled: Prisma.Decimal = new Prisma.Decimal(0)) {
+  const total = new Prisma.Decimal(line.invoiceItem.quantity);
+  if (cancelled.lt(0) || cancelled.gt(total)) throw new Error("RETAIL_INVOICE_LOT_ALLOCATION_INVALID");
+  let remaining = total.minus(cancelled);
+  if (line.lotAllocations == null) return remaining.gt(0) ? [{ stockLotId: line.stockLotId, quantity: remaining }] : [];
+  if (line.stockLotId || !Array.isArray(line.lotAllocations) || !line.lotAllocations.length) throw new Error("RETAIL_INVOICE_LOT_ALLOCATION_INVALID");
+  const entries: Array<{ stockLotId: string; quantity: Prisma.Decimal }> = [];
+  const seen = new Set<string>();
+  for (const value of line.lotAllocations) {
+    if (!value || typeof value !== "object" || Array.isArray(value) || typeof value.stockLotId !== "string" || !value.stockLotId || seen.has(value.stockLotId) || typeof value.quantity !== "string" || !/^\d{1,15}(\.\d{1,3})?$/.test(value.quantity)) throw new Error("RETAIL_INVOICE_LOT_ALLOCATION_INVALID");
+    const quantity = new Prisma.Decimal(value.quantity);
+    if (!quantity.gt(0)) throw new Error("RETAIL_INVOICE_LOT_ALLOCATION_INVALID");
+    seen.add(value.stockLotId);
+    entries.push({ stockLotId: value.stockLotId, quantity });
+  }
+  if (!entries.reduce((sum, entry) => sum.plus(entry.quantity), new Prisma.Decimal(0)).equals(total)) throw new Error("RETAIL_INVOICE_LOT_ALLOCATION_INVALID");
+  return entries.flatMap((entry) => {
+    const take = entry.quantity.lt(remaining) ? entry.quantity : remaining;
+    remaining = remaining.minus(take);
+    return take.gt(0) ? [{ stockLotId: entry.stockLotId, quantity: take }] : [];
+  });
+}

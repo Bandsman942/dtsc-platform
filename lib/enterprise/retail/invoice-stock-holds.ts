@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import { readInvoiceLotAllocations } from "@/lib/enterprise/inventory/lot-allocation";
 
 // @prisma/client Decimal does not expose the static Decimal.min/max helpers.
 const decimalMax = (...values: Prisma.Decimal[]): Prisma.Decimal => values.reduce((a, b) => a.greaterThan(b) ? a : b);
@@ -34,17 +35,18 @@ export async function readActiveRetailInvoiceStockHoldsTx(
     select: {
       inventoryItemId: true,
       stockLotId: true,
+      lotAllocations: true,
       invoiceItem: { select: { quantity: true } },
       returnLines: { where: { request: { status: "COMPLETED" } }, select: { quantity: true } },
       checkout: { select: { warehouseId: true } },
     },
   });
-  return lines.map((line) => ({
-    inventoryItemId: line.inventoryItemId!,
-    stockLotId: line.stockLotId,
-    warehouseId: line.checkout.warehouseId,
-    quantity: decimalMax(new Prisma.Decimal(0), new Prisma.Decimal(line.invoiceItem.quantity).minus(
-      (line.returnLines || []).reduce((total, entry) => total.plus(entry.quantity), new Prisma.Decimal(0)),
-    )),
-  })).filter((line) => line.quantity.greaterThan(0));
+  return lines.flatMap((line) => {
+    const cancelled = (line.returnLines || []).reduce((total, entry) => total.plus(entry.quantity), new Prisma.Decimal(0));
+    // Preserve the prior zero-floor behavior for historical single-lot lines;
+    // a new malformed multi-lot promise must fail closed.
+    const bounded = line.lotAllocations == null ? decimalMax(new Prisma.Decimal(0), new Prisma.Decimal(line.invoiceItem.quantity).minus(cancelled)) : null;
+    const allocations = bounded ? (bounded.gt(0) ? [{ stockLotId: line.stockLotId, quantity: bounded }] : []) : readInvoiceLotAllocations(line, cancelled);
+    return allocations.map((allocation) => ({ inventoryItemId: line.inventoryItemId!, stockLotId: allocation.stockLotId, warehouseId: line.checkout.warehouseId, quantity: allocation.quantity }));
+  });
 }

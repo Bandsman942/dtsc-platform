@@ -11,6 +11,8 @@ import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
 
 const ERROR_MESSAGES: Record<string, string> = {
+  RETAIL_INVOICE_RETURN_BATCH_SELECTION_REQUIRED: "Ce retour concerne une facture ventilée par lots. Identifiez les lots réellement rapportés avant toute régularisation physique.",
+  RETAIL_INVOICE_LOT_ALLOCATION_INVALID: "La ventilation des lots ne correspond plus à la facture. Contactez le support avant de poursuivre.",
   INVENTORY_RESERVATION_ALLOCATION_INVALID: "La réservation par lot doit correspondre aux quantités physiques. Actualisez ou contactez le support si elle est incohérente.",
   INVENTORY_RESERVATION_REALLOCATION_REQUIRED: "Le lot réservé n'est plus utilisable ou la réservation n'a pas de lot identifié. Libérez le reliquat puis réservez des lots valides.",
   INVENTORY_RESERVATION_STOCK_HELD: "Ce stock est réservé à une commande client. Réduisez la quantité ou utilisez un autre lot.",

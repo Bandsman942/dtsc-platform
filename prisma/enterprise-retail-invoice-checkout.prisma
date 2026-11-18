@@ -58,6 +58,7 @@ model EnterpriseRetailInvoiceCheckoutLine {
   invoiceItemId      String
   inventoryItemId    String?
   stockLotId         String?
+  lotAllocations     Json?
 
   checkout    EnterpriseRetailInvoiceCheckout @relation(fields: [organizationId, checkoutId], references: [organizationId, id], onDelete: Restrict)
   invoiceItem EnterpriseSalesInvoiceItem      @relation(fields: [organizationId, invoiceItemId], references: [organizationId, id], onDelete: Restrict)

@@ -42,7 +42,7 @@ export async function assertRetailInvoiceReturnSettlementReadinessTx(
             receivable: { select: { id: true } },
           } },
           lines: { select: {
-            id: true, invoiceItemId: true, inventoryItemId: true, stockLotId: true,
+            id: true, invoiceItemId: true, inventoryItemId: true, stockLotId: true, lotAllocations: true,
             invoiceItem: { select: { quantity: true, totalAmount: true, netAmount: true, taxAmount: true } },
           } },
         },
@@ -225,6 +225,7 @@ export async function assertRetailInvoiceReturnSettlementReadinessTx(
   for (const line of stockLines) {
     if (!checkout.stockPostedAt) continue; // Undelivered goods release stock promises; never add stock.
     const source = invoiceLines.get(line.checkoutLineId)!;
+    if (source.lotAllocations != null) throw conflict("RETAIL_INVOICE_RETURN_BATCH_SELECTION_REQUIRED");
     const related = originalMovements.filter((movement) => movement.sourceLineId === line.invoiceItemId);
     const movements = related.filter((movement) =>
       movement.sourceLineId === line.invoiceItemId && movement.warehouseId === checkout.warehouseId &&

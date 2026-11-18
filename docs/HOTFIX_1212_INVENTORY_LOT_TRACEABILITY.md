@@ -35,6 +35,13 @@
 
 - Recette API/DB ajoutée à la suite Playwright Shop 2 globale : commande ERP commune, réservation 30+20, livraison partielle 30+10, 2 écritures de coût, replay sans double mouvement, blocage/rollback si lot mis en quarantaine, reprise et libération du reliquat. Aucune exécution réussie encore déclarée sur ce commit.
 
+## Facture POS à ventilation multi-lots (en validation)
+- Une ligne Finance et un checkout par article; ajout nullable `lotAllocations` au lien de checkout. Quand aucun lot explicite n’est sélectionné, le serveur répartit les lots disponibles FEFO strict, après déduction des retenues et réservations. Aucune duplication de prix, TVA, créance ou facture. Le choix explicite d’un lot reste compatible.
+- Les retenues et la sortie physique à paiement intégral relisent le même instantané. Un crédit avant livraison libère la fin de la ventilation FEFO; contrôle des sommes et refus sur lot devenu indisponible. Chaque sortie garde le même invoiceItemId et sa propre clé par solde.
+- Les retours physiques des factures auto-ventilées restent volontairement bloqués au niveau de la demande et du préflight Finance tant que la preuve de lot rapporté n’est pas intégrée. Aucun retour arbitraire. Ne pas fusionner avant ce correctif et sa recette.
+- La QA vérifie le total exact et le crédit non livré. Le scénario matériel complet et les retours doivent encore être exécutés.
+- Correction du gate strict-positive (nouvelle garde distincte pour les réservations de commande, retenue facture positive uniquement) et réutilisation des cookies d’une authentification réussie dans le scénario E2E global; aucune modification du rate limit de production ni suppression de scénario.
+
 ## Restant (bloquant)
 Certification de la réaffectation historique sur PostgreSQL + navigateur et valeur inchangée; certification achats et valorisation, réservations/livraisons multi-lots; moteur FEFO commun et POS; pertes, rappels et comptabilité; Design 2.0 et tests multisectoriels. Voir issue #1212. Ne pas merger avant clôture de tous les points.
 

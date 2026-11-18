@@ -322,6 +322,9 @@ export async function createRetailInvoiceReturnRequest(
     }
     const prepared = input.lines.map((entry) => {
       const line = source.get(entry.checkoutLineId)!;
+      // Physical multi-lot returns require an inspected batch identity. Until
+      // that evidence is captured, do not permit an arbitrary restock/credit.
+      if (checkout.stockPostedAt && line.lotAllocations != null) throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_BATCH_SELECTION_REQUIRED", 409);
       const value = new Prisma.Decimal(entry.quantity);
       const priorQty = previousQuantity.get(line.id) || new Prisma.Decimal(0);
       const priorAmount = previousAmount.get(line.id) || new Prisma.Decimal(0);

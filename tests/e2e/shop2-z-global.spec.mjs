@@ -41,7 +41,11 @@ async function apiPost(page, path, data) {
   }));
 }
 
+let authenticatedCookies = null;
 async function signIn(page) {
+  if (authenticatedCookies) {
+    await page.context().addCookies(authenticatedCookies);
+  } else {
   const response = await page.context().request.post(`${baseUrl}/api/auth/sign-in`, {
     data: {
       email: adminEmail,
@@ -53,6 +57,8 @@ async function signIn(page) {
   });
   const body = await response.json().catch(() => null);
   expect(response.ok(), `Direct Shop 2 E2E sign-in failed: ${JSON.stringify(body)}`).toBeTruthy();
+  authenticatedCookies = await page.context().cookies();
+  }
   await page.goto("/enterprise-modules/RETAIL_POS");
   await page.waitForURL((url) => url.pathname.includes("/enterprise-modules/RETAIL_POS"), { timeout: 30_000 });
 }

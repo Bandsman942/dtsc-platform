@@ -15,10 +15,13 @@ const productSearch = read("app/api/enterprise/[organizationId]/retail/products/
 const { Decimal } = Prisma;
 
 const module = { exports: {} };
+const actualLotTools = { exports: {} };
+vm.runInNewContext(ts.transpileModule(read("lib/enterprise/inventory/lot-allocation.ts"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, { exports: actualLotTools.exports, require: (name) => name === "@prisma/client" ? { Prisma: { Decimal } } : require(name) });
 const javascript = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
 vm.runInNewContext(javascript, {
   exports: module.exports,
   require(name) {
+    if (name === "@/lib/enterprise/inventory/lot-allocation") return actualLotTools.exports;
     assert.equal(name, "@prisma/client");
     return { Prisma: { Decimal } };
   },
