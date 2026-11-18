@@ -118,10 +118,10 @@ export function ApprovalCoordinationPanel({ organizationId, approvalId, locale, 
     </div>
 
     {data.supplierReturn?.cancelledAfterApprovalAt?<section className="grid min-w-0 gap-2 rounded-xl border border-dtsc-border p-3" data-supplier-return-withdrawal>
-      <div><StatusBadge tone="warning">{purchaseFormGuidance(locale==="en"?"en":"fr","returnWithdrawn")}</StatusBadge></div>
-      <p className="text-sm text-dtsc-muted">{purchaseFormGuidance(locale==="en"?"en":"fr","returnWithdrawHistory")}</p>
+      <div><StatusBadge tone="warning">{purchaseFormGuidance(locale,"returnWithdrawn")}</StatusBadge></div>
+      <p className="text-sm text-dtsc-muted">{purchaseFormGuidance(locale,"returnWithdrawHistory")}</p>
       <p className="text-xs text-dtsc-muted">{coreFormatEnterpriseDate(data.supplierReturn.cancelledAfterApprovalAt,locale)}</p>
-      <p className="break-words text-sm"><strong>{purchaseFormGuidance(locale==="en"?"en":"fr","returnWithdrawReason")} :</strong> {data.supplierReturn.cancellationReason}</p>
+      <p className="break-words text-sm"><strong>{purchaseFormGuidance(locale,"returnWithdrawReason")} :</strong> {data.supplierReturn.cancellationReason}</p>
     </section>:null}
     {(data.capabilities.canApprove || data.capabilities.canReject || data.capabilities.canRequestCorrection) && !latestVersion ? <section className="grid gap-3 rounded-2xl border border-dtsc-border bg-dtsc-page p-4">
       <div><h4 className="font-black text-dtsc-ink">{approvalReviewLabel(locale, "prepare")}</h4><p className="mt-1 text-sm text-dtsc-muted">{approvalReviewLabel(locale, "prepareHelp")}</p></div>
