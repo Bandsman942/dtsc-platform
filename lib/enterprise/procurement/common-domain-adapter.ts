@@ -226,6 +226,14 @@ export async function postEnterprisePurchaseReceiptToInventoryTx(
         if (batch.productionDate && batch.expiryDate && batch.productionDate > batch.expiryDate) throw new EnterpriseDomainError("RECEIPT_BATCH_DATES_INVALID", 400, "La date de fabrication doit précéder ou correspondre à la péremption.");
         const productionDate = batch.productionDate ? new Date(`${batch.productionDate}T00:00:00.000Z`) : null;
         const expiryDate = batch.expiryDate ? new Date(`${batch.expiryDate}T00:00:00.000Z`) : null;
+        // Supplier acceptance is not a transfer of goods we already own.
+        // Never post a recalled supplier batch as received or create a new
+        // available copy. Keep the purchase open for replacement/return.
+        const recalledLot = await tx.enterpriseStockLot.findFirst({
+          where: { organizationId, inventoryItemId: inventoryItem.id, lotNumber: batch.lotNumber, recallReference: { not: null } },
+          select: { recallReference: true },
+        });
+        if (recalledLot) throw new EnterpriseDomainError("RECEIPT_BATCH_RECALLED", 409, "Lot rappelé : refusez sa réception commerciale, isolez la marchandise physiquement et demandez son remplacement ou retour au fournisseur.");
         const existingLot = await tx.enterpriseStockLot.findFirst({ where: { organizationId, inventoryItemId: inventoryItem.id, warehouseId, lotNumber: batch.lotNumber } });
         if (existingLot) {
           if (existingLot.archivedAt || existingLot.status !== "AVAILABLE" || existingLot.productionDate?.getTime() !== productionDate?.getTime() || existingLot.expiryDate?.getTime() !== expiryDate?.getTime() || (existingLot.storageLocationId && existingLot.storageLocationId !== storageLocationId)) throw new EnterpriseDomainError("RECEIPT_BATCH_METADATA_CONFLICT", 409, "Ce lot existe avec des dates, un emplacement ou un statut différent. Vérifiez sa fiche dans Stock & logistique.");

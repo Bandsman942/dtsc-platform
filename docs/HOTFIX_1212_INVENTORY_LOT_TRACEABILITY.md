@@ -84,6 +84,8 @@
 
 - CI 5295e4e : 16/17 workflows verts (Quality 44293682806, commandes/concurrence Shop 2 réussies); étape Finance 134765234692 échoue sur le compte Stock attendu par la recette de perte. La recette sélectionnait une ligne active arbitraire sans période ni ordre; correction pour sélectionner la correspondance en vigueur à la date du journal, avec assertions comptables conservées et événement LOSS/2 lignes supplémentaires. Résultat à vérifier sur le SHA suivant.
 
+- Traitement fournisseur : contrôle de rappel global par article/numéro avant validation de réception, y compris dans un nouveau dépôt. Refus métier 409 contextualisé, rollback de la réception et du changement d’état achat; pas d’acceptation commerciale ni de dette fictive. Décision conservatrice : contrairement au transfert déjà expédié (stock déjà détenu), refuser le lot fournisseur à l’arrivée, l’isoler physiquement et organiser le retour/remplacement. Un registre des livraisons refusées avant acceptation et la réception volontaire d’un lot fournisseur rappelé sous garde contractuelle ne sont pas implémentés dans cette tranche.
+
 ## Restant (bloquant)
 Certification de la réaffectation historique sur PostgreSQL + navigateur et valeur inchangée; certification achats et valorisation, réservations/livraisons multi-lots; moteur FEFO commun et POS; pertes, rappels et comptabilité; Design 2.0 et tests multisectoriels. Voir issue #1212. Ne pas merger avant clôture de tous les points.
 
