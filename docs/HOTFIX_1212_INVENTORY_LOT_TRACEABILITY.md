@@ -98,6 +98,8 @@
 
 - Recettes supplémentaires : collaborateur magasin B sur deux dépôts, liste/compteurs/trace/stock minimum limités à B, tentative de modification A refusée; retour physique du lot rappelé sur facture réglée, crédit/inspection cinq acteurs, garde unique et sans mouvement vendable, demande de destruction et attestation distinctes, preuve, refus du rejeu. À certifier sur SHA final.
 
+- CI 700ca2d : 16/17 verts, Quality 44312944517 et migrations OK. Finance Shop 2 134831574606 a franchi la recette perte (compte effectif, équilibre) et échoue en création de transfert (500). Correction de la création imbriquée Prisma : le parent fournit organizationId via la relation composite, la ligne ne doit pas le répéter. À confirmer par la recette existante, sans retirer aucune assertion.
+
 ## Restant (bloquant)
 Certification de la réaffectation historique sur PostgreSQL + navigateur et valeur inchangée; certification achats et valorisation, réservations/livraisons multi-lots; moteur FEFO commun et POS; pertes, rappels et comptabilité; Design 2.0 et tests multisectoriels. Voir issue #1212. Ne pas merger avant clôture de tous les points.
 

@@ -208,7 +208,7 @@ export async function createEnterpriseStockTransfer(organizationId: string, acto
         if (!destinationLocation) throw new EnterpriseDomainError("DESTINATION_LOCATION_NOT_FOUND", 404);
       }
     }
-    const transfer = await tx.enterpriseStockTransfer.create({ data: { organizationId, reference: inventoryReference("TRF"), sourceWarehouseId: input.sourceWarehouseId, destinationWarehouseId: input.destinationWarehouseId, status: "PENDING_APPROVAL", requestedByUserId: actorUserId, approvedByUserId: input.approverUserId, notes: input.notes || null, lines: { create: input.lines.map((line) => ({ organizationId, ...line })) } }, include: { lines: true } });
+    const transfer = await tx.enterpriseStockTransfer.create({ data: { organizationId, reference: inventoryReference("TRF"), sourceWarehouseId: input.sourceWarehouseId, destinationWarehouseId: input.destinationWarehouseId, status: "PENDING_APPROVAL", requestedByUserId: actorUserId, approvedByUserId: input.approverUserId, notes: input.notes || null, lines: { create: input.lines.map((line) => ({ ...line })) } }, include: { lines: true } });
     await tx.enterpriseApproval.create({ data: { organizationId, targetEntityType: "EnterpriseStockTransfer", targetEntityId: transfer.id, requestedByUserId: actorUserId, approverUserId: input.approverUserId } });
     await publishEnterpriseEvent(tx, { organizationId, entityType: "EnterpriseStockTransfer", entityId: transfer.id, eventType: "STOCK_TRANSFER_SUBMITTED", summary: `Transfert ${transfer.reference} soumis`, actorUserId, toStatus: "PENDING_APPROVAL" });
     return transfer;
