@@ -54,6 +54,9 @@ export async function assertRecoveryReviewAccess(org:string,user:string,approval
   if(![approval.requestedByUserId,approval.approverUserId].includes(user))throw forbidden();
   await requireRecoveryParticipantAccess(org,user,user===approval.approverUserId);
 }
+export async function lockRecoveryCustodyTx(tx:Prisma.TransactionClient,org:string,id:string){
+  await tx.$queryRaw(Prisma.sql`SELECT id FROM "EnterpriseInventoryReturnCustody" WHERE "organizationId"=${org} AND id=${id} FOR UPDATE`);
+}
 async function custodyParties(tx:Prisma.TransactionClient,org:string,id:string){
   const custody=await tx.enterpriseInventoryReturnCustody.findFirst({where:{organizationId:org,id},select:{inspectedByUserId:true,registeredByUserId:true,originalMovement:{select:{warehouseId:true}}}});
   if(!custody)throw new EnterpriseDomainError("INVENTORY_RETURN_CUSTODY_NOT_FOUND",404);
@@ -81,6 +84,7 @@ export async function submitRecoveryAssessment(org:string,user:string,input:Asse
   await assertInventoryApprovalCandidate({organizationId:org,requesterUserId:user,approverUserId:input.approverUserId});
   return serial(async tx=>{
     await wideScope(tx,org,user);await wideScope(tx,org,input.approverUserId);
+    await lockRecoveryCustodyTx(tx,org,input.custodyId);
     const parties=await custodyParties(tx,org,input.custodyId);
     await requireInventoryStockAuthorityTx(tx,org,user,parties.originalMovement.warehouseId);
     await requireInventoryStockAuthorityTx(tx,org,input.approverUserId,parties.originalMovement.warehouseId);
@@ -127,6 +131,7 @@ export async function decideRecoveryAssessment(args:{organizationId:string;appro
     const assessment=await tx.enterpriseInventoryReturnRecoveryAssessment.findFirst({where:{organizationId:org,id:approval.targetEntityId,status:"PENDING_APPROVAL",assessedByUserId:approval.requestedByUserId}});
     const version=await tx.enterpriseApprovalSubmissionVersion.findFirst({where:{organizationId:org,approvalId,versionNumber:1}});
     if(!assessment||!version||(args.action!=="CANCEL"&&version.id!==args.reviewedVersionId))throw conflict();
+    await lockRecoveryCustodyTx(tx,org,assessment.custodyId);
     const parties=await custodyParties(tx,org,assessment.custodyId);
     await requireInventoryStockAuthorityTx(tx,org,user,parties.originalMovement.warehouseId);
     if([parties.inspectedByUserId,parties.registeredByUserId].includes(user))throw new EnterpriseDomainError("INVENTORY_RETURN_RECOVERY_INDEPENDENT_REQUIRED",403);
@@ -144,5 +149,29 @@ export async function decideRecoveryAssessment(args:{organizationId:string;appro
     if(args.action!=="CANCEL")await tx.enterpriseApprovalDecision.create({data:{organizationId:org,approvalId,submissionVersionId:version.id,actorUserId:user,decision:args.action,reason:args.decisionComment||null,idempotencyKey:"custody-recovery:"+approvalId+":"+version.id}});
     await publishEnterpriseEvent(tx,{organizationId:org,entityType:RECOVERY_ASSESSMENT_TARGET,entityId:assessment.id,eventType:"INVENTORY_RETURN_RECOVERY_"+status,summary:assessment.reference,actorUserId:user,fromStatus:"PENDING_APPROVAL",toStatus:status,metadataJson:{custodyId:assessment.custodyId,approvalId,physicalReleaseAuthorized:false,accountingRecognitionAuthorized:false}});
     return {requestId:assessment.id,status};
+  });
+}
+
+export const recoveryWithdrawalSchema=z.object({custodyId:z.string().trim().min(1).max(191),assessmentId:z.string().trim().min(1).max(191),revision:z.number().int().positive(),reason:z.string().trim().min(8).max(2000),confirmedNotReleased:z.literal(true)}).strict();
+export async function withdrawRecoveryAssessment(org:string,user:string,input:z.infer<typeof recoveryWithdrawalSchema>){
+  await requireRecoveryParticipantAccess(org,user,false);
+  return serial(async tx=>{
+    await wideScope(tx,org,user);
+    await lockRecoveryCustodyTx(tx,org,input.custodyId);
+    const parties=await custodyParties(tx,org,input.custodyId);
+    await requireInventoryStockAuthorityTx(tx,org,user,parties.originalMovement.warehouseId);
+    const assessment=await tx.enterpriseInventoryReturnRecoveryAssessment.findFirst({where:{organizationId:org,id:input.assessmentId,custodyId:input.custodyId,assessedByUserId:user}});
+    if(!assessment)throw forbidden();
+    const approval=await tx.enterpriseApproval.findFirst({where:{organizationId:org,targetEntityType:RECOVERY_ASSESSMENT_TARGET,targetEntityId:assessment.id,requestedByUserId:user,status:"APPROVED",archivedAt:null}});
+    if(!approval||approval.approverUserId===user)throw conflict();
+    if(assessment.status==="CANCELLED"&&assessment.withdrawnByUserId===user&&assessment.withdrawalReason===input.reason&&assessment.revision===input.revision+1)return {assessment,approval,idempotent:true};
+    if(assessment.status!=="APPROVED"||assessment.revision!==input.revision)throw conflict();
+    const decision=await tx.enterpriseApprovalDecision.findFirst({where:{organizationId:org,approvalId:approval.id,actorUserId:approval.approverUserId,decision:"APPROVE"}});
+    if(!decision)throw conflict();
+    if(await tx.enterpriseStockMovement.count({where:{organizationId:org,sourceEntityType:RECOVERY_ASSESSMENT_TARGET,sourceEntityId:assessment.id}}))throw conflict();
+    const changed=await tx.enterpriseInventoryReturnRecoveryAssessment.updateMany({where:{organizationId:org,id:assessment.id,status:"APPROVED",revision:input.revision},data:{status:"CANCELLED",withdrawnAt:new Date(),withdrawnByUserId:user,withdrawalReason:input.reason,revision:{increment:1}}});
+    if(changed.count!==1)throw conflict();
+    await publishEnterpriseEvent(tx,{organizationId:org,entityType:RECOVERY_ASSESSMENT_TARGET,entityId:assessment.id,eventType:"INVENTORY_RETURN_RECOVERY_WITHDRAWN",summary:assessment.reference,actorUserId:user,fromStatus:"APPROVED",toStatus:"CANCELLED",metadataJson:{custodyId:assessment.custodyId,approvalId:approval.id,decisionId:decision.id,reason:input.reason,physicalReleaseAuthorized:false,accountingRecognitionAuthorized:false}});
+    return {assessment:await tx.enterpriseInventoryReturnRecoveryAssessment.findFirstOrThrow({where:{organizationId:org,id:assessment.id}}),approval,idempotent:false};
   });
 }
