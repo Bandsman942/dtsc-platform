@@ -11,12 +11,28 @@ export async function lockSupplierReturnInvoiceTx(tx: Prisma.TransactionClient, 
   await tx.$queryRaw(Prisma.sql`SELECT id FROM "EnterpriseSupplierInvoice" WHERE id = ${invoiceId} AND "organizationId" = ${organizationId} FOR UPDATE`);
 }
 
+type PayableCapacityInput = { outstandingAmount: Prisma.Decimal; currencyCode: string };
+type ReservedReturn = { totalCost: Prisma.Decimal; currencyCode: string };
+
+export function supplierReturnPayableCapacity(payable: PayableCapacityInput, pending: ReservedReturn[]) {
+  if (pending.some(row => row.currencyCode !== payable.currencyCode)) return fail();
+  const reserved = pending.reduce((sum,row) => sum.plus(row.totalCost),new Prisma.Decimal(0));
+  return { reserved, available:Prisma.Decimal.max(0,payable.outstandingAmount.minus(reserved)) };
+}
+
+/** Page-bounded summary, never expose return motives or approval identities
+ * to a Finance-only reader. Call inside the same snapshot as the balances. */
+export async function supplierReturnFinanceProjectionTx(tx: Prisma.TransactionClient, organizationId: string, invoiceIds: string[]) {
+  if (!invoiceIds.length) return new Map<string, { id:string; reference:string; status:string; purchaseId:string; sourceMovementId:string; totalCost:Prisma.Decimal; currencyCode:string; supplierCreditNoteId:string|null }>();
+  const rows = await tx.enterpriseSupplierReturnRequest.findMany({where:{organizationId,supplierInvoiceId:{in:invoiceIds},status:{in:["DISPATCHED","RECONCILED"]}},
+    select:{id:true,supplierInvoiceId:true,reference:true,status:true,purchaseId:true,sourceMovementId:true,totalCost:true,currencyCode:true,supplierCreditNoteId:true}});
+  return new Map(rows.map(row=>[row.supplierInvoiceId,row]));
+}
+
 export async function assertSupplierPaymentCapacityTx(tx: Prisma.TransactionClient, organizationId: string, payable: { supplierInvoiceId: string; outstandingAmount: Prisma.Decimal; currencyCode: string }, amount: Prisma.Decimal) {
   const pending = await tx.enterpriseSupplierReturnRequest.findMany({ where: { organizationId, supplierInvoiceId: payable.supplierInvoiceId, status: "DISPATCHED" }, select: { totalCost: true, currencyCode: true } });
   if (!pending.length) return;
-  if (pending.some(row => row.currencyCode !== payable.currencyCode)) fail();
-  const reserved = pending.reduce((sum, row) => sum.plus(row.totalCost), new Prisma.Decimal(0));
-  const available = Prisma.Decimal.max(0, payable.outstandingAmount.minus(reserved));
+  const { reserved, available } = supplierReturnPayableCapacity(payable, pending);
   if (amount.gt(available)) throw new EnterpriseAccountingError("SUPPLIER_RETURN_PAYABLE_RESERVED", 409, { reservedAmount: reserved.toFixed(), allocatableAmount: available.toFixed(), currencyCode: payable.currencyCode });
 }
 
