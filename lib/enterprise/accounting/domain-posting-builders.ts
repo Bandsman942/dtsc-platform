@@ -1,13 +1,15 @@
 import { Prisma } from "@prisma/client";
 import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
 import type { PostingDocument } from "@/lib/enterprise/accounting/posting-registry";
+import { verifySupplierReturnCreditTx } from "@/lib/enterprise/accounting/supplier-return-credit-reconciliation";
 
 export async function buildSupplierCreditNotePosting(tx: Prisma.TransactionClient, input: { organizationId: string; sourceEntityType: string; sourceEntityId: string }): Promise<PostingDocument> {
   const credit = await tx.enterpriseSupplierCreditNote.findFirst({ where: { id: input.sourceEntityId, organizationId: input.organizationId, status: { in: ["APPROVED", "POSTED"] } }, include: { supplierInvoice: true } });
   if (!credit) throw new EnterpriseAccountingError("SUPPLIER_CREDIT_NOTE_NOT_POSTABLE", 409);
-  if (await tx.enterpriseSupplierReturnRequest.count({ where: { organizationId: input.organizationId, supplierInvoiceId: credit.supplierInvoiceId, status: "DISPATCHED" } })) throw new EnterpriseAccountingError("SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED", 409);
+
   const items = await tx.enterpriseSupplierCreditNoteItem.findMany({ where: { organizationId: input.organizationId, supplierCreditNoteId: credit.id } });
   if (!items.length) throw new EnterpriseAccountingError("SUPPLIER_CREDIT_LINES_REQUIRED", 409);
+  await verifySupplierReturnCreditTx(tx, input.organizationId, credit, items);
   const originalIds = items.map((line) => line.sourceInvoiceItemId).filter((id): id is string => Boolean(id));
   if (originalIds.length !== items.length) throw new EnterpriseAccountingError("SUPPLIER_CREDIT_ORIGIN_REQUIRED", 409);
   const originals = await tx.enterpriseSupplierInvoiceItem.findMany({
@@ -120,7 +122,7 @@ export async function buildInventoryAccountingPosting(tx: Prisma.TransactionClie
   if (kind === "ISSUE" && ["LOT_WRITE_OFF", "SUPPLIER_RETURN_OUT"].includes(sourceMovement?.movementType || "")) throw new EnterpriseAccountingError("INVENTORY_ACCOUNTING_EVENT_NOT_POSTABLE",409);
   if (kind === "SUPPLIER_RETURN") {
     if (!sourceMovement || sourceMovement.movementType !== "SUPPLIER_RETURN_OUT" || sourceMovement.direction !== "OUT" || sourceMovement.sourceEntityType !== "EnterpriseSupplierReturnRequest" || !sourceMovement.sourceEntityId) throw new EnterpriseAccountingError("INVENTORY_ACCOUNTING_EVENT_NOT_POSTABLE",409);
-    const request = await tx.enterpriseSupplierReturnRequest.findFirst({ where: { organizationId: input.organizationId, id: sourceMovement.sourceEntityId, status: { in: ["APPROVED","DISPATCHED"] } } });
+    const request = await tx.enterpriseSupplierReturnRequest.findFirst({ where: { organizationId: input.organizationId, id: sourceMovement.sourceEntityId, status: { in: ["APPROVED","DISPATCHED","RECONCILED"] } } });
     if (!request || (request.dispatchMovementId && request.dispatchMovementId !== event.stockMovementId) || (request.dispatchAccountingEventId && request.dispatchAccountingEventId !== event.id) ||
       request.inventoryItemId !== event.inventoryItemId || request.inventoryItemId !== sourceMovement.inventoryItemId || request.warehouseId !== sourceMovement.warehouseId || request.stockLotId !== sourceMovement.stockLotId ||
       !request.quantity.equals(event.quantity) || !request.quantity.equals(sourceMovement.quantity) || !request.totalCost.equals(event.totalCost) || !request.unitCost.equals(event.unitCost) || request.currencyCode !== event.currencyCode) throw new EnterpriseAccountingError("INVENTORY_ACCOUNTING_EVENT_NOT_POSTABLE",409);
