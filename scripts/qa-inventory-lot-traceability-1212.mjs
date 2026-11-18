@@ -27,6 +27,10 @@ const mocks = {
   "next/server": { NextResponse: { json: (body, opts) => ({ body, status: opts?.status || 200 }) } },
   "@/lib/notifications": { notifyUser: async () => {} },
   "@/lib/enterprise/inventory/lot-reclassification": {},
+  // Selector-only VM; normal stock dashboard is covered by PostgreSQL HTTP E2E.
+  "@/lib/enterprise/inventory/lot-allocation": {},
+  "@/lib/enterprise/retail/invoice-stock-holds": {},
+  "@/lib/enterprise/retail/inventory-policy": {},
   "@/lib/auth": { getSession: async () => ({ userId: "actor" }) },
   "@/lib/audit": { writeApiLog: async () => {}, writeAuditLog: async () => {} },
   "@/lib/enterprise/common/access": { getEnterpriseCommonDomainAccess: async () => access },
