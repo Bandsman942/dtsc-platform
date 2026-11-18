@@ -1045,6 +1045,32 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
     expect(purchaseReceipt.body.purchase.status).toBe("RECEIVED");
     const movementsReceived=await prisma.enterpriseStockMovement.findMany({where:{organizationId,sourceEntityType:"EnterprisePurchaseReceipt",sourceEntityId:purchaseReceipt.body.receipt.id,movementType:"PURCHASE_RECEIPT"},include:{stockLot:true}});
     expect(movementsReceived.map(row=>[row.stockLot.lotNumber,Number(row.quantity)]).sort()).toEqual([["PURCHASE-A",4],["PURCHASE-B",6]]);
+    // Purchase detail must expose every canonical receipt movement, not just
+    // the compatibility link to the first batch. Read access never mutates stock.
+    const receiptTracePath=base+"/purchases/"+normalPurchase.id+"?view=receipt-lots";
+    const firstTrace=await context.owner.request.get(receiptTracePath+"&pageSize=1&page=1");
+    expect(firstTrace.status(),await firstTrace.text()).toBe(200);
+    const firstTraceBody=await firstTrace.json();
+    expect(firstTraceBody.pagination.total).toBe(2);
+    expect(firstTraceBody.pagination.pageCount).toBe(2);
+    expect(firstTraceBody.items).toHaveLength(1);
+    const secondTrace=await context.owner.request.get(receiptTracePath+"&pageSize=1&page=2");
+    expect(secondTrace.status(),await secondTrace.text()).toBe(200);
+    const secondTraceBody=await secondTrace.json();
+    const actualTrace=[...firstTraceBody.items,...secondTraceBody.items];
+    expect(actualTrace.map(row=>[row.stockLot.lotNumber,Number(row.quantity)]).sort()).toEqual([["PURCHASE-A",4],["PURCHASE-B",6]]);
+    expect(actualTrace.every(row=>row.receiptReference===purchaseReceipt.body.receipt.reference&&row.warehouse.name===fixture.warehouse.name)).toBe(true);
+    expect(new Set(actualTrace.map(row=>row.id))).toEqual(new Set(movementsReceived.map(row=>row.id)));
+    const searchedTrace=await context.owner.request.get(receiptTracePath+"&search=PURCHASE-B");
+    expect(searchedTrace.status(),await searchedTrace.text()).toBe(200);
+    expect((await searchedTrace.json()).items.map(row=>row.stockLot.lotNumber)).toEqual(["PURCHASE-B"]);
+    const rejectedTrace=await context.owner.request.get(base+"/purchases/"+recalledPurchase.id+"?view=receipt-lots");
+    expect(rejectedTrace.status(),await rejectedTrace.text()).toBe(200);
+    expect((await rejectedTrace.json()).pagination.total).toBe(0);
+    const deniedTrace=await context.cashier.request.get(receiptTracePath);
+    expect([403,404]).toContain(deniedTrace.status());
+    expect(await prisma.enterpriseStockMovement.count({where:{organizationId,sourceEntityType:"EnterprisePurchaseReceipt",sourceEntityId:purchaseReceipt.body.receipt.id}})).toBe(2);
+
     await ensureStepUp(context.owner,ownerPassword);
     for(const movement of movementsReceived){
       const valued=await post(context.owner,base+"/stock-movements/"+movement.id+"/value-receipt",{unitCost:"7",currencyCode:fixture.currencyCode});
