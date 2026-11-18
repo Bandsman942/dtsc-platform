@@ -6,6 +6,8 @@ import { publishEnterpriseEvent } from "@/lib/enterprise/crm-sales/helpers";
 import { lotExpiryDateKey } from "@/lib/enterprise/inventory/lot-allocation";
 import { requireInventoryStockAuthorityTx } from "@/lib/enterprise/inventory/service";
 import { assertCustodyRecoveryReadAccess, inspectCustodyRecoveryTx } from "@/lib/enterprise/inventory/custody-recovery-preflight";
+import { recoveryApprovalCandidates, recoveryAssessmentSchema, submitRecoveryAssessment, requireRecoveryParticipantAccess, RECOVERY_ASSESSMENT_TARGET } from "@/lib/enterprise/inventory/custody-recovery-assessment";
+import { notifyUser } from "@/lib/notifications";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getSession } from "@/lib/auth";
@@ -43,6 +45,12 @@ export async function GET(req: Request, { params }: Params) {
   const allowedWarehouseIds=scope.isolationEnabled?(await prisma.enterpriseWarehouse.findMany({where:{organizationId,siteId:{in:scope.siteIds}},select:{id:true}})).map(row=>row.id):null;
   const lotScope:Prisma.EnterpriseStockLotWhereInput=allowedWarehouseIds!==null?{warehouseId:{in:allowedWarehouseIds}}:{};
   const traceId=url.searchParams.get("lotId");
+  if(url.searchParams.get("view")==="custody-recovery-approvers") {
+    const custodyId=url.searchParams.get("custodyId")?.trim();
+    if(!custodyId||custodyId.length>191)return NextResponse.json({error:"INVENTORY_LOT_INPUT_INVALID"},{status:400});
+    if(!(await rateLimit(`inventory-custody-recovery-candidates:${organizationId}:${session.userId}`,60,60_000)).ok)return NextResponse.json({error:"RATE_LIMITED"},{status:429});
+    try{return NextResponse.json(await recoveryApprovalCandidates(organizationId,session.userId,custodyId),{headers:{"Cache-Control":"private, no-store"}});}catch(error){return enterpriseDomainErrorResponse(error,"INVENTORY_RETURN_CUSTODY_FAILED",req);}
+  }
   if(url.searchParams.get("view")==="custody-recovery") {
     const custodyId=url.searchParams.get("custodyId")?.trim();
     if(!custodyId||custodyId.length>191)return NextResponse.json({error:"INVENTORY_LOT_INPUT_INVALID"},{status:400});
@@ -55,14 +63,20 @@ export async function GET(req: Request, { params }: Params) {
   }
   if(url.searchParams.get("view")==="custody") {
     const status=url.searchParams.get("status");
+    const custodyId=url.searchParams.get("custodyId")?.trim();
+    if(custodyId&&custodyId.length>191)return NextResponse.json({error:"INVENTORY_LOT_INPUT_INVALID"},{status:400});
     const movementWhere:Prisma.EnterpriseStockMovementWhereInput={organizationId,...scoped,...(warehouseId?{warehouseId}:{}),...(traceId?{stockLotId:traceId}:{})};
-    const where:Prisma.EnterpriseInventoryReturnCustodyWhereInput={organizationId,originalMovement:movementWhere,returnLine:{request:{status:"COMPLETED"}},...(status&&["QUARANTINED","DISPOSAL_PENDING","DISPOSED"].includes(status)?{status}:{}),...(search?{OR:[{originalMovement:{inventoryItem:{catalogItem:{name:{contains:search,mode:"insensitive"}}}}},{originalMovement:{stockLot:{lotNumber:{contains:search,mode:"insensitive"}}}},{returnLine:{request:{number:{contains:search,mode:"insensitive"}}}}]}:{})};
+    const where:Prisma.EnterpriseInventoryReturnCustodyWhereInput={organizationId,...(custodyId?{id:custodyId}:{}),originalMovement:movementWhere,returnLine:{request:{status:"COMPLETED"}},...(status&&["QUARANTINED","DISPOSAL_PENDING","DISPOSED"].includes(status)?{status}:{}),...(search?{OR:[{originalMovement:{inventoryItem:{catalogItem:{name:{contains:search,mode:"insensitive"}}}}},{originalMovement:{stockLot:{lotNumber:{contains:search,mode:"insensitive"}}}},{returnLine:{request:{number:{contains:search,mode:"insensitive"}}}}]}:{})};
     const [items,total]=await Promise.all([
       prisma.enterpriseInventoryReturnCustody.findMany({where,orderBy:[{createdAt:"desc"},{id:"desc"}],skip:(page-1)*pageSize,take:pageSize,include:{originalMovement:{select:{warehouseId:true,warehouse:{select:{name:true,code:true,siteId:true}},inventoryItem:{select:{catalogItem:{select:{name:true,code:true}}}},stockLot:{select:{id:true,lotNumber:true,recallReference:true}}}},returnLine:{select:{request:{select:{id:true,number:true}}}}}}),
       prisma.enterpriseInventoryReturnCustody.count({where}),
     ]);
     const canInspectRecovery=items.length>0&&await assertCustodyRecoveryReadAccess(organizationId,session.userId).then(()=>true,()=>false);
-    return NextResponse.json({items:items.map(item=>{ const siteWrite=!scope.isolationEnabled||scope.manageableSiteIds.includes(item.originalMovement.warehouse.siteId);return {...item,canInspectRecovery:canInspectRecovery&&siteWrite&&access.canWrite&&item.status==="QUARANTINED",canRequest:siteWrite&&access.canWrite&&item.status==="QUARANTINED",canConfirm:siteWrite&&access.canAdminister&&item.status==="DISPOSAL_PENDING"&&![item.inspectedByUserId,item.registeredByUserId,item.disposalRequestedByUserId].includes(session.userId)};}),pagination:{page,pageSize,total,pageCount:Math.max(1,Math.ceil(total/pageSize))}},{headers:{"Cache-Control":"private, no-store"}});
+    const [canAssess,canReview]=canInspectRecovery?await Promise.all([false,true].map(review=>requireRecoveryParticipantAccess(organizationId,session.userId,review).then(()=>true,()=>false))):[false,false];
+    const assessments=items.length&&(canAssess||canReview)?await prisma.enterpriseInventoryReturnRecoveryAssessment.findMany({where:{organizationId,custodyId:{in:items.map(row=>row.id)},status:{in:["PENDING_APPROVAL","APPROVED"]}},select:{id:true,custodyId:true,status:true,reference:true,assessedByUserId:true,proposedRecoveryAmount:true,currencyCode:true,custodyRevision:true}}):[];
+    const reviews=assessments.length?await prisma.enterpriseApproval.findMany({where:{organizationId,targetEntityType:RECOVERY_ASSESSMENT_TARGET,targetEntityId:{in:assessments.map(row=>row.id)},archivedAt:null,OR:[...(canAssess?[{requestedByUserId:session.userId}]:[]),...(canReview?[{approverUserId:session.userId}]:[])]},select:{id:true,targetEntityId:true}}):[];
+    const active= new Map(assessments.map(row=>[row.custodyId,row]));
+    return NextResponse.json({items:items.map(item=>{ const siteWrite=!scope.isolationEnabled||scope.manageableSiteIds.includes(item.originalMovement.warehouse.siteId);const assessment=active.get(item.id),review=assessment&&reviews.find(row=>row.targetEntityId===assessment.id);return {...item,canAssessRecovery:canAssess&&siteWrite&&access.canWrite&&item.status==="QUARANTINED"&&!assessment&&![item.inspectedByUserId,item.registeredByUserId].includes(session.userId),recoveryAssessment:assessment&&review?{reference:assessment.reference,status:assessment.status,proposedRecoveryAmount:assessment.proposedRecoveryAmount,currencyCode:assessment.currencyCode,stale:assessment.custodyRevision!==item.revision,approvalId:review.id}:null,canInspectRecovery:canInspectRecovery&&siteWrite&&access.canWrite&&item.status==="QUARANTINED",canRequest:siteWrite&&access.canWrite&&item.status==="QUARANTINED",canConfirm:siteWrite&&access.canAdminister&&item.status==="DISPOSAL_PENDING"&&![item.inspectedByUserId,item.registeredByUserId,item.disposalRequestedByUserId].includes(session.userId)};}),pagination:{page,pageSize,total,pageCount:Math.max(1,Math.ceil(total/pageSize))}},{headers:{"Cache-Control":"private, no-store"}});
   }
   if (url.searchParams.get("view")==="trace") {
     if(!traceId || traceId.length>191) return NextResponse.json({error:"INVENTORY_LOT_INPUT_INVALID"},{status:400});
@@ -160,6 +174,18 @@ export async function PATCH(req: Request, { params }: Params) {
   if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   if (!(await rateLimit(`inventory-lot-write:${organizationId}:${session.userId}`, 60, 60_000)).ok) return NextResponse.json({ error: "RATE_LIMITED" }, { status: 429 });
   const raw=await req.json().catch(()=>null);
+  if(new URL(req.url).searchParams.get("action")==="submit-recovery-assessment") {
+    const parsed=recoveryAssessmentSchema.safeParse(raw);
+    if(!parsed.success)return enterpriseValidationErrorResponse(parsed.error,"INVENTORY_LOT_INPUT_INVALID",req);
+    try{
+      const result=await submitRecoveryAssessment(organizationId,session.userId,parsed.data);
+      if(!result.idempotent){
+        await notifyUser({userId:result.approval.approverUserId,organizationId,type:"ENTERPRISE_APPROVAL",title:"Expertise de récupération à valider",body:"Une expertise de retour isolé requiert votre décision indépendante.",targetUrl:`/enterprise-modules/VALIDATIONS?approval=${encodeURIComponent(result.approval.id)}`}).catch(()=>null);
+        await writeAuditLog({userId:session.userId,organizationId,action:"INVENTORY_RETURN_RECOVERY_ASSESSED",entity:RECOVERY_ASSESSMENT_TARGET,entityId:result.assessment.id,request:req,metadata:{approvalId:result.approval.id,custodyId:result.assessment.custodyId}});
+      }
+      return NextResponse.json({ok:true,idempotent:result.idempotent,assessment:{id:result.assessment.id,reference:result.assessment.reference,status:result.assessment.status,proposedRecoveryAmount:result.assessment.proposedRecoveryAmount,currencyCode:result.assessment.currencyCode},approvalId:result.approval.id},{status:result.idempotent?200:201,headers:{"Cache-Control":"private, no-store"}});
+    }catch(error){return enterpriseDomainErrorResponse(error,"INVENTORY_RETURN_CUSTODY_FAILED",req);}
+  }
   if(raw&&typeof raw==="object"&&"custodyId" in raw) {
     const parsed=custodyActionSchema.safeParse(raw);
     if(!parsed.success)return enterpriseValidationErrorResponse(parsed.error,"INVENTORY_LOT_INPUT_INVALID",req);
