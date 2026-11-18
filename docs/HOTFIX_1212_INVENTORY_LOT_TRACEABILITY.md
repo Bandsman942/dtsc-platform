@@ -78,6 +78,8 @@
 
 - Registre de garde via route existante : consultation paginée et filtrable (site, dépôt, article/lot/référence de retour, statut), demande de destruction des retours en quarantaine et attestation de destruction effective avec preuve textuelle, révision, audit, responsable indépendant (ni inspecteur, ni liquidateur, ni demandeur). Aucun nouveau mouvement vendable, aucune écriture supplémentaire. Le volet récupération de valeur après expertise reste à définir.
 
+- UI registre de garde : fenêtre éditeur FR/EN, filtre dépôt/statut, recherche, pagination, quantité et lot d’origine, preuve inspection/destruction, actions conditionnées à la permission du site et contrôle indépendant. Le registre ne fournit pas de remise en vente ni de valorisation automatique. À valider en CI et recette UI.
+
 ## Restant (bloquant)
 Certification de la réaffectation historique sur PostgreSQL + navigateur et valeur inchangée; certification achats et valorisation, réservations/livraisons multi-lots; moteur FEFO commun et POS; pertes, rappels et comptabilité; Design 2.0 et tests multisectoriels. Voir issue #1212. Ne pas merger avant clôture de tous les points.
 
