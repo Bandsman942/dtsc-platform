@@ -297,6 +297,11 @@ model EnterpriseSupplierReturnRequest {
   dispatchReference       String?
   dispatchMovementId      String?
   dispatchAccountingEventId String?
+  supplierCreditNoteId     String?
+  supplierCreditReference  String?
+  reconciledAt             DateTime?
+  reconciledByUserId       String?
+  creditJournalEntryId     String?
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
 
@@ -305,6 +310,9 @@ model EnterpriseSupplierReturnRequest {
   @@unique([organizationId, idempotencyKey], map: "supplier_return_idempotency_key")
   @@unique([organizationId, dispatchMovementId], map: "supplier_return_dispatch_movement_key")
   @@unique([organizationId, dispatchAccountingEventId], map: "supplier_return_dispatch_event_key")
+  @@unique([organizationId, supplierCreditNoteId], map: "supplier_return_credit_note_key")
+  @@unique([organizationId, supplierId, supplierCreditReference], map: "supplier_return_supplier_credit_reference_key")
+  @@unique([organizationId, creditJournalEntryId], map: "supplier_return_credit_journal_key")
   @@index([organizationId, purchaseId, createdAt], map: "supplier_return_purchase_idx")
   @@index([organizationId, sourceMovementId, status], map: "supplier_return_movement_idx")
   @@index([organizationId, supplierInvoiceId, status], map: "supplier_return_invoice_idx")
