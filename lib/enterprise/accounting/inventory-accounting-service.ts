@@ -21,7 +21,7 @@ export async function valueInventoryReceipt(
     const movement = await tx.enterpriseStockMovement.findFirst({
       where: { id: stockMovementId, organizationId, direction: "IN", quantity: { gt: 0 } },
     });
-    if (!movement || movement.movementType === "LOT_RECLASSIFICATION_IN") throw new EnterpriseAccountingError("INVENTORY_RECEIPT_MOVEMENT_INVALID", 409);
+    if (!movement || ["LOT_RECLASSIFICATION_IN","CUSTODY_RECOVERY_IN"].includes(movement.movementType)) throw new EnterpriseAccountingError("INVENTORY_RECEIPT_MOVEMENT_INVALID", 409);
 
     const configuration = await tx.enterpriseFinanceConfiguration.findUnique({ where: { organizationId } });
     if (!configuration) throw new EnterpriseAccountingError("FINANCE_CONFIGURATION_REQUIRED", 409);
