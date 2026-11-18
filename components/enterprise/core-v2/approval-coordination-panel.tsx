@@ -118,6 +118,10 @@ export function ApprovalCoordinationPanel({ organizationId, approvalId, locale, 
       <Link href={data.sourceDeepLink} className="inline-flex h-10 items-center gap-2 rounded-xl border border-dtsc-border px-3 text-sm font-black text-dtsc-blue hover:bg-cyan-400/10">{enterpriseCoreT(locale, "approvals.coordination.open.source")}<ExternalLink className="h-4 w-4" /></Link>
     </div>
 
+    {data.recoveryAssessment?<section className="grid min-w-0 gap-2 rounded-xl border border-dtsc-border p-3" data-recovery-review>
+      <p className="text-sm font-semibold">{purchaseFormGuidance(locale,"recoveryReviewOnly")}</p>
+      {data.recoveryAssessment.stale?<p role="alert" className="text-sm text-amber-700 dark:text-amber-200">{purchaseFormGuidance(locale,"recoveryReviewStale")}</p>:null}
+    </section>:null}
     {data.supplierReturn?.cancelledAfterApprovalAt?<section className="grid min-w-0 gap-2 rounded-xl border border-dtsc-border p-3" data-supplier-return-withdrawal>
       <div><StatusBadge tone="warning">{purchaseFormGuidance(locale,"returnWithdrawn")}</StatusBadge></div>
       <p className="text-sm text-dtsc-muted">{purchaseFormGuidance(locale,"returnWithdrawHistory")}</p>
