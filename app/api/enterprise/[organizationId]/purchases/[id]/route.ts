@@ -1,4 +1,8 @@
+import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
+import { getEnterpriseCommonDomainAccess } from "@/lib/enterprise/common/access";
+import { retailInventoryVisibleSites } from "@/lib/enterprise/retail/site-access";
+import { retailErrorResponse } from "@/lib/enterprise/retail/http";
 import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
@@ -18,6 +22,51 @@ export async function GET(req: Request, { params }: Params) {
   const visible = enterprisePurchaseVisibilityWhere({ organizationId, userId: session.userId, canSeeAll: access.canSeeAll });
   const purchase = await prisma.enterprisePurchase.findFirst({ where: { AND: [visible, { id }] }, include: { items: { orderBy: { sortOrder: "asc" } }, supplier: { include: { contacts: { orderBy: [{ isPrimary: "desc" }, { name: "asc" }], take: 5 } } }, budgetLine: { include: { budget: true } }, receipts: { orderBy: { receivedAt: "desc" }, include: { items: true } } } });
   if (!purchase) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  const url = new URL(req.url);
+  if (url.searchParams.get("view") === "receipt-lots") {
+    // Purchase visibility is necessary but not sufficient for inventory detail.
+    const stockAccess = await getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode: "INVENTORY_LOGISTICS", action: "read", includeMutationCapabilities: false });
+    if (!stockAccess) return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
+    let scope: Awaited<ReturnType<typeof retailInventoryVisibleSites>>;
+    try { scope = await retailInventoryVisibleSites(organizationId, session.userId); }
+    catch (error) { return retailErrorResponse(error, "RETAIL_SITE_ACCESS_DENIED", req); }
+    const page = Math.min(10000, Math.max(1, Math.trunc(Number(url.searchParams.get("page")) || 1)));
+    const pageSize = Math.min(50, Math.max(1, Math.trunc(Number(url.searchParams.get("pageSize")) || 20)));
+    const search = (url.searchParams.get("search") || "").trim().slice(0, 120);
+    // Each physical movement is canonical, not the historical first-movement
+    // receipt-line link. Include the original receipt, even for recalled lots.
+    const receiptById = new Map(purchase.receipts.map((receipt) => [receipt.id, receipt]));
+    const where: Prisma.EnterpriseStockMovementWhereInput = {
+      organizationId, movementType: "PURCHASE_RECEIPT", direction: "IN",
+      sourceEntityType: "EnterprisePurchaseReceipt",
+      sourceEntityId: { in: [...receiptById.keys()] },
+      sourceLineId: { in: purchase.receipts.flatMap((receipt) => receipt.items.map((item) => item.id)) },
+      ...(scope.isolationEnabled ? { warehouse: { siteId: { in: scope.siteIds } } } : {}),
+      ...(search ? { OR: [
+        { stockLot: { lotNumber: { contains: search, mode: "insensitive" } } },
+        { inventoryItem: { catalogItem: { name: { contains: search, mode: "insensitive" } } } },
+        { inventoryItem: { catalogItem: { code: { contains: search, mode: "insensitive" } } } },
+        { inventoryItem: { catalogItem: { sku: { contains: search, mode: "insensitive" } } } },
+        { sourceEntityId: { in: purchase.receipts.filter((receipt) => receipt.reference.toLocaleLowerCase().includes(search.toLocaleLowerCase())).map((receipt) => receipt.id) } },
+      ] } : {}),
+    };
+    const [rows, total] = await prisma.$transaction([
+      prisma.enterpriseStockMovement.findMany({ where, orderBy: [{ occurredAt: "desc" }, { id: "desc" }], skip: (page - 1) * pageSize, take: pageSize, select: {
+        id: true, sourceEntityId: true, sourceLineId: true, quantity: true, occurredAt: true,
+        inventoryItem: { select: { catalogItem: { select: { name: true, code: true, sku: true, unitOfMeasure: { select: { symbol: true } } } } } },
+        warehouse: { select: { name: true, code: true } },
+        storageLocation: { select: { name: true, code: true } },
+        stockLot: { select: { lotNumber: true, productionDate: true, expiryDate: true, status: true, recallReference: true } },
+      } }),
+      prisma.enterpriseStockMovement.count({ where }),
+    ], { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
+    const items = rows.map((row) => ({
+      ...row,
+      receiptReference: receiptById.get(row.sourceEntityId || "")?.reference || null,
+    }));
+    await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "purchase-receipt-lots", purchaseId: id, page } });
+    return NextResponse.json({ items, pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) } });
+  }
   const itemIds = purchase.items.map((item) => item.id);
   const [requestRecord, approvals, links, events, comments, operationalLink, itemCatalogLinks] = await Promise.all([
     purchase.requestId ? prisma.enterpriseRequest.findFirst({ where: { id: purchase.requestId, organizationId }, select: { id: true, requestType: true, title: true, status: true, priority: true } }) : Promise.resolve(null),
