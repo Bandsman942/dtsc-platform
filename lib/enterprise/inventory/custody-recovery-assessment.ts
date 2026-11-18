@@ -226,6 +226,7 @@ export async function executeRecoveryAssessment(org:string,user:string,input:z.i
       valuationMethod:"WEIGHTED_AVERAGE",quantity:assessment.quantity,remainingQuantity:assessment.quantity,unitCost,totalCost:assessment.proposedRecoveryAmount,currencyCode:assessment.currencyCode,effectiveAt:movement.movement.occurredAt}});
     const postingEvent="INVENTORY_CUSTODY_RECOVERY_VALUED" as const;
     const event=await tx.enterpriseInventoryAccountingEvent.create({data:{organizationId:org,inventoryItemId:source.inventoryItemId,stockMovementId:movement.movement.id,eventType:"CUSTODY_RECOVERY",quantity:assessment.quantity,unitCost,totalCost:assessment.proposedRecoveryAmount,currencyCode:assessment.currencyCode,status:"APPROVED",idempotencyKey:idempotencyKey({organizationId:org,sourceEntityType:"EnterpriseStockMovement",sourceEntityId:movement.movement.id,postingEvent,postingVersion:1})}});
+    await getPostingPeriod(tx,org,new Date((await resolveEnterpriseBusinessDate(tx,org,event.createdAt))+"T00:00:00.000Z"));
     const posting=await postBusinessEventTx(tx,org,user,{postingEvent,sourceEntityType:"EnterpriseInventoryAccountingEvent",sourceEntityId:event.id});
     await tx.enterpriseInventoryAccountingEvent.update({where:{id:event.id},data:{status:"POSTED",journalEntryId:posting.entry.id}});
     const released=await tx.enterpriseInventoryReturnCustody.updateMany({where:{organizationId:org,id:custody.id,status:"QUARANTINED",revision:custody.revision},data:{status:"RECOVERED",revision:{increment:1}}});
