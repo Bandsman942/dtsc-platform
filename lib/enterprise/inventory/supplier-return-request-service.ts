@@ -10,6 +10,9 @@ import { listEnterpriseApprovalCandidates } from "@/lib/enterprise/approval-assi
 import { assertSupplierReturnAccess, inspectSupplierReturnTx } from "@/lib/enterprise/inventory/supplier-return-preflight";
 import { enterprisePurchaseVisibilityWhere } from "@/lib/enterprise/procurement/access";
 import { publishEnterpriseEvent } from "@/lib/enterprise/crm-sales/helpers";
+import { applyStockMovementTx } from "@/lib/enterprise/inventory/service";
+import { postBusinessEventTx } from "@/lib/enterprise/accounting/posting-service";
+import { idempotencyKey, publishFinanceEvent } from "@/lib/enterprise/accounting/helpers";
 
 export const SUPPLIER_RETURN_TARGET = "EnterpriseSupplierReturnRequest";
 export const supplierReturnRequestSchema = z.object({
@@ -90,7 +93,7 @@ export async function submitSupplierReturnRequest(organizationId: string, purcha
     if (!origin?.stockLotId || !receipt) throw new EnterpriseDomainError("SUPPLIER_RETURN_ORIGIN_INVALID", 404);
     const check = await inspectSupplierReturnTx(tx, organizationId, actorUserId, { ...origin, supplierReturnSourceMovementId: origin.id, quantity: input.quantity });
     if (check.receipt.purchaseId !== purchaseId) throw new EnterpriseDomainError("SUPPLIER_RETURN_ORIGIN_INVALID", 404);
-    const open = await tx.enterpriseSupplierReturnRequest.findFirst({ where: { organizationId, supplierInvoiceId: check.invoice.id, status: { in: ["PENDING_APPROVAL", "APPROVED"] } }, select: { id: true } });
+    const open = await tx.enterpriseSupplierReturnRequest.findFirst({ where: { organizationId, supplierInvoiceId: check.invoice.id, status: { in: ["PENDING_APPROVAL", "APPROVED", "DISPATCHED"] } }, select: { id: true } });
     if (open) throw new EnterpriseDomainConflictError("SUPPLIER_RETURN_ALREADY_OPEN");
     const request = await tx.enterpriseSupplierReturnRequest.create({ data: {
       organizationId, reference: "RTV-" + randomUUID().slice(0, 12).toUpperCase(), purchaseId,
@@ -157,5 +160,71 @@ export async function decideSupplierReturnRequest(args: { organizationId: string
     if (args.action !== "CANCEL") await tx.enterpriseApprovalDecision.create({ data: { organizationId, approvalId, submissionVersionId: version.id, actorUserId, decision: args.action, reason: args.decisionComment || null, idempotencyKey: "supplier-return-review:" + approval.id + ":" + version.id } });
     await publishEnterpriseEvent(tx, { organizationId, entityType: SUPPLIER_RETURN_TARGET, entityId: request.id, eventType: "SUPPLIER_RETURN_" + status, summary: request.reference, actorUserId, fromStatus: "PENDING_APPROVAL", toStatus: status, metadataJson: { approvalId, physicallyDispatched: false } });
     return { requestId: request.id, status };
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 30000 }));
+}
+
+export const supplierReturnDispatchSchema = z.object({
+  requestId: z.string().trim().min(1).max(191),
+  revision: z.number().int().positive(),
+  dispatchReference: z.string().trim().min(5).max(200),
+}).strict();
+type DispatchInput = z.infer<typeof supplierReturnDispatchSchema>;
+
+/** Dispatch remains distinct from independent review. The requester records the
+ * actual shipment reference; no credit, payable or money is changed here. */
+export async function dispatchSupplierReturn(organizationId: string, purchaseId: string, actorUserId: string, input: DispatchInput) {
+  await requireSupplierReturnParticipantAccess(organizationId, actorUserId, false);
+  const financialAccess = await resolveEnterpriseModuleCapabilities({ organizationId, userId: actorUserId, moduleCode: "FINANCE_INVENTORY" });
+  if (!financialAccess.canManage) throw new EnterpriseDomainError("SUPPLIER_RETURN_DISPATCH_DENIED", 403);
+  return serializeConflict(() => prisma.$transaction(async (tx) => {
+    await requireWideScope(tx, organizationId, actorUserId);
+    const request = await tx.enterpriseSupplierReturnRequest.findFirst({ where: { organizationId, id: input.requestId, purchaseId, requestedByUserId: actorUserId } });
+    if (!request) throw new EnterpriseDomainError("SUPPLIER_RETURN_DISPATCH_DENIED", 403);
+    const approval = await tx.enterpriseApproval.findFirst({ where: { organizationId, targetEntityType: SUPPLIER_RETURN_TARGET, targetEntityId: request.id, status: "APPROVED", archivedAt: null, requestedByUserId: actorUserId } });
+    if (!approval || approval.approverUserId === actorUserId) throw new EnterpriseDomainError("SUPPLIER_RETURN_DISPATCH_DENIED", 403);
+    if (request.status === "DISPATCHED" && request.dispatchReference === input.dispatchReference && request.revision === input.revision + 1 && request.dispatchMovementId && request.dispatchAccountingEventId && request.dispatchedByUserId === actorUserId) return { request, idempotent: true };
+    if (request.status !== "APPROVED" || request.revision !== input.revision) throw new EnterpriseDomainConflictError("SUPPLIER_RETURN_CONFLICT");
+    // A decision record over the immutable reviewed version is mandatory.
+    const decision = await tx.enterpriseApprovalDecision.findFirst({ where: { organizationId, approvalId: approval.id, actorUserId: approval.approverUserId, decision: "APPROVE" } });
+    if (!decision) throw new EnterpriseDomainError("SUPPLIER_RETURN_DISPATCH_DENIED", 403);
+    await tx.$queryRaw(Prisma.sql`SELECT id FROM "EnterpriseSupplierInvoice" WHERE id = ${request.supplierInvoiceId} AND "organizationId" = ${organizationId} FOR UPDATE`);
+    const check = await inspectSupplierReturnTx(tx, organizationId, actorUserId, { ...request, supplierReturnSourceMovementId: request.sourceMovementId });
+    if (check.receipt.purchaseId !== request.purchaseId || check.receipt.id !== request.receiptId || check.receiptItem.id !== request.receiptItemId ||
+      check.invoice.id !== request.supplierInvoiceId || check.invoiceItem.id !== request.supplierInvoiceItemId || check.invoice.supplierId !== request.supplierId ||
+      check.receiptValue.id !== request.receiptAccountingEventId || check.originLayer.id !== request.originCostLayerId ||
+      !check.unitCost.equals(request.unitCost) || !check.totalCost.equals(request.totalCost) || check.currencyCode !== request.currencyCode) throw new EnterpriseDomainConflictError("SUPPLIER_RETURN_CONFLICT");
+    // Paid or insufficient payable requires a different reconciliation/refund
+    // path. Do not create a dispatch that the current credit engine cannot close.
+    const payable = await tx.enterprisePayable.findUnique({ where: { supplierInvoiceId: request.supplierInvoiceId } });
+    if (!payable || payable.organizationId !== organizationId || payable.outstandingAmount.lt(request.totalCost)) throw new EnterpriseDomainError("SUPPLIER_RETURN_PAYABLE_INSUFFICIENT",409);
+    const movement = await applyStockMovementTx(tx, organizationId, actorUserId, {
+      inventoryItemId: request.inventoryItemId, warehouseId: request.warehouseId, storageLocationId: request.storageLocationId,
+      stockLotId: request.stockLotId, movementType: "SUPPLIER_RETURN_OUT", direction: "OUT", quantity: Number(request.quantity.toFixed()),
+      sourceEntityType: SUPPLIER_RETURN_TARGET, sourceEntityId: request.id, sourceLineId: request.receiptItemId,
+      idempotencyKey: "supplier-return:" + request.id + ":dispatch", reason: request.reason,
+    }, { approvedSupplierReturnId: request.id });
+    if (movement.idempotent) throw new EnterpriseDomainConflictError("SUPPLIER_RETURN_CONFLICT");
+    // Same-cost CUMP preflight proves exact removal from the original layer
+    // without changing the cost of other batches.
+    const updatedLayer = await tx.enterpriseInventoryCostLayer.updateMany({
+      where: { organizationId, id: request.originCostLayerId, remainingQuantity: { equals: check.originLayer.remainingQuantity, gte: request.quantity } },
+      data: { remainingQuantity: { decrement: request.quantity } },
+    });
+    if (updatedLayer.count !== 1) throw new EnterpriseDomainConflictError("SUPPLIER_RETURN_CONFLICT");
+    const postingEvent = "INVENTORY_SUPPLIER_RETURN_VALUED" as const;
+    const event = await tx.enterpriseInventoryAccountingEvent.create({ data: {
+      organizationId, inventoryItemId: request.inventoryItemId, stockMovementId: movement.movement.id, eventType: "SUPPLIER_RETURN", quantity: request.quantity,
+      unitCost: request.unitCost, totalCost: request.totalCost, currencyCode: request.currencyCode, status: "APPROVED",
+      idempotencyKey: idempotencyKey({ organizationId, sourceEntityType: "EnterpriseStockMovement", sourceEntityId: movement.movement.id, postingEvent, postingVersion: 1 }),
+    } });
+    const posting = await postBusinessEventTx(tx, organizationId, actorUserId, { postingEvent, sourceEntityType: "EnterpriseInventoryAccountingEvent", sourceEntityId: event.id });
+    await tx.enterpriseInventoryAccountingEvent.update({ where: { id: event.id }, data: { status: "POSTED", journalEntryId: posting.entry.id } });
+    const changed = await tx.enterpriseSupplierReturnRequest.updateMany({ where: { organizationId, id: request.id, status: "APPROVED", revision: input.revision }, data: {
+      status: "DISPATCHED", dispatchedAt: new Date(), dispatchedByUserId: actorUserId, dispatchReference: input.dispatchReference,
+      dispatchMovementId: movement.movement.id, dispatchAccountingEventId: event.id, revision: { increment: 1 },
+    } });
+    if (changed.count !== 1) throw new EnterpriseDomainConflictError("SUPPLIER_RETURN_CONFLICT");
+    await publishFinanceEvent(tx, { organizationId, entityType: SUPPLIER_RETURN_TARGET, entityId: request.id, eventType: "SUPPLIER_RETURN_DISPATCHED", summary: request.reference, actorUserId, fromStatus: "APPROVED", toStatus: "DISPATCHED", metadataJson: { stockMovementId: movement.movement.id, journalEntryId: posting.entry.id, total: request.totalCost.toFixed(), currency: request.currencyCode, dispatchReference: input.dispatchReference } });
+    return { request: await tx.enterpriseSupplierReturnRequest.findFirstOrThrow({ where: { organizationId, id: request.id } }), idempotent: false };
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 30000 }));
 }
