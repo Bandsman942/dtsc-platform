@@ -77,18 +77,18 @@ export async function recoveryApprovalCandidates(org:string,user:string,custodyI
   }));
   return {candidates:candidates.filter(c=>c!==null),selfApprovalOverrideAvailable:false};
 }
+/** The custody row is shared by recovery and disposal. SELECT FOR UPDATE
+ * may surface PostgreSQL conflicts as raw-query errors (P2010) instead
+ * of the transaction-level P2034. Do not hide unrelated SQL failures. */
+export function isCustodyTransactionConflict(error:unknown):boolean {
+  if(!(error instanceof Prisma.PrismaClientKnownRequestError))return false;
+  const sqlState=error.meta?.code;
+  return error.code==="P2002"||error.code==="P2034"||
+    (error.code==="P2010"&&(sqlState==="40001"||sqlState==="40P01"));
+}
 async function serial<T>(fn:(tx:Prisma.TransactionClient)=>Promise<T>){
   try{return await prisma.$transaction(fn,{isolationLevel:Prisma.TransactionIsolationLevel.Serializable,timeout:30000});}
-  catch(error){
-    if(error instanceof Prisma.PrismaClientKnownRequestError){
-      // SELECT FOR UPDATE can surface PostgreSQL conflicts as raw-query
-      // errors (P2010) instead of the transaction-level P2034.
-      const sqlState=error.meta?.code;
-      if(error.code==="P2002"||error.code==="P2034"||
-        (error.code==="P2010"&&(sqlState==="40001"||sqlState==="40P01")))throw conflict();
-    }
-    throw error;
-  }
+  catch(error){if(isCustodyTransactionConflict(error))throw conflict();throw error;}
 }
 export async function submitRecoveryAssessment(org:string,user:string,input:AssessmentInput){
   if(user===input.approverUserId)throw new EnterpriseDomainError("INVENTORY_RETURN_RECOVERY_INDEPENDENT_REQUIRED",403);
