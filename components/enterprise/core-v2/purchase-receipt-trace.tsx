@@ -9,7 +9,7 @@ import { StatusBadge } from "@/components/workspace/status-badge";
 import { formatEnterpriseDate } from "@/components/enterprise/core-v2/erp-v2-ui";
 import { purchaseFormGuidance, type PurchaseFormGuidanceKey } from "@/lib/enterprise/purchase-form-i18n";
 
-type ReturnRequestSummary = { id?: string; reference: string; status: string; quantity: string; approvalId: string | null; revision?: number; unitCost?: string; totalCost?: string; currencyCode?: string; canDispatch?: boolean; canCreateCredit?: boolean; dispatchReference?: string | null; dispatchedAt?: string | null; supplierCreditNoteId?: string | null; supplierCreditReference?: string | null; supplierInvoiceId?: string; supplierInvoiceItemId?: string };
+type ReturnRequestSummary = { id?: string; reference: string; status: string; quantity: string; approvalId: string | null; revision?: number; unitCost?: string; totalCost?: string; currencyCode?: string; canDispatch?: boolean; canCreateCredit?: boolean; dispatchReference?: string | null; dispatchedAt?: string | null; dispatchBusinessDate?: string | null; supplierCreditNoteId?: string | null; supplierCreditReference?: string | null; supplierInvoiceId?: string; supplierInvoiceItemId?: string };
 type TraceRow = {
   supplierReturnRequest?: ReturnRequestSummary | null;
   id: string; receiptReference: string | null; quantity: string; occurredAt: string;
@@ -114,7 +114,7 @@ function SupplierReturnCheck({ organizationId, purchaseId, row, locale, onRefres
     {request.canCreateCredit&&request.status==="DISPATCHED"?<form onSubmit={createLinkedCredit} className="grid min-w-0 gap-2 border-t border-dtsc-border pt-2">
       <strong>{t("returnCreditTitle")}</strong><p className="text-dtsc-muted">{t("returnCreditHelp")}</p>
       <label className="grid min-w-0 gap-1">{t("returnCreditReference")}<Input name="supplierCreditReference" required minLength={3} maxLength={160} disabled={busy}/></label>
-      <label className="grid min-w-0 gap-1">{t("returnCreditDate")}<Input name="creditDate" type="date" min={request.dispatchedAt?.slice(0,10)} required disabled={busy}/></label>
+      <label className="grid min-w-0 gap-1">{t("returnCreditDate")}<Input name="creditDate" type="date" min={request.dispatchBusinessDate || undefined} required disabled={busy}/></label>
       <label className="grid min-w-0 gap-1">{t("returnCreditReason")}<textarea name="creditReason" required minLength={8} maxLength={1000} disabled={busy} className="w-full min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface p-2 text-base text-dtsc-ink md:text-sm"/></label>
       <Button type="submit" disabled={busy} className="whitespace-normal">{t("returnCreditAction")}</Button>
     </form>:null}
