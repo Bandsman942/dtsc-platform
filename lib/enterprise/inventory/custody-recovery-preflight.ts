@@ -68,6 +68,8 @@ export async function inspectCustodyRecoveryTx(tx:Prisma.TransactionClient,organ
   if(!credit||!valuation?.journalEntryId||!valuation.quantity.equals(source.quantity)||!valuation.unitCost.gt(0)||
     !valuation.totalCost.equals(money(source.quantity.times(valuation.unitCost)))||!config?.automaticPostingEnabled||
     config.inventoryValuationMethod!=="WEIGHTED_AVERAGE"||valuation.currencyCode!==config.functionalCurrencyCode)blocked("INVENTORY_RETURN_RECOVERY_VALUATION_REQUIRED");
+  const creditJournal=await tx.enterpriseJournalEntry.findFirst({where:{organizationId,sourceEntityType:"EnterpriseSalesCreditNote",sourceEntityId:credit.id,postingEvent:"SALES_CREDIT_NOTE_POSTED",status:"POSTED"}});
+  if(!creditJournal||creditJournal.functionalCurrencyCode!==valuation.currencyCode||!creditJournal.totalDebit.gt(0)||!creditJournal.totalDebit.equals(creditJournal.totalCredit))blocked("INVENTORY_RETURN_RECOVERY_VALUATION_REQUIRED");
   const journal=await tx.enterpriseJournalEntry.findFirst({where:{organizationId,id:valuation.journalEntryId,sourceEntityType:"EnterpriseInventoryAccountingEvent",sourceEntityId:valuation.id,postingEvent:"INVENTORY_ISSUE_VALUED",status:"POSTED"},include:{lines:true}});
   if(!journal||journal.functionalCurrencyCode!==valuation.currencyCode||journal.lines.length!==2)blocked("INVENTORY_RETURN_RECOVERY_VALUATION_REQUIRED");
   try{
