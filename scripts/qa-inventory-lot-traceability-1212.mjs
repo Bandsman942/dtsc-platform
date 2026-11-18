@@ -120,7 +120,15 @@ console.log("FEFO multi-lot planning, holds, quarantine and calendar dates OK");
 
 class TestDomainError extends Error { constructor(code, status = 400) { super(code); this.code = code; this.status = status; } }
 mocks["@/lib/enterprise/common/errors"] = { EnterpriseDomainError: TestDomainError, EnterpriseDomainConflictError: TestDomainError };
-mocks["@/lib/enterprise/inventory/approval"] = {};
+mocks["@/lib/enterprise/inventory/approval"] = { assertInventoryApprovalCandidate: async () => {} };
+let deniedApprovalActor = "approver";
+let deniedApprovalCapability = "canSubmit";
+mocks["@/lib/enterprise/module-access"] = {
+  resolveEnterpriseModuleCapabilities: async ({ organizationId, userId, moduleCode }) => {
+    assert.equal(organizationId, "org"); assert.equal(moduleCode, "VALIDATIONS");
+    return { canRead: true, canSubmit: true, ...(userId === deniedApprovalActor ? { [deniedApprovalCapability]: false } : {}) };
+  },
+};
 mocks["@/lib/enterprise/inventory/service"] = {};
 mocks["@/lib/enterprise/retail/invoice-stock-holds"] = {};
 mocks["@/lib/enterprise/crm-sales/helpers"] = {};
@@ -131,6 +139,10 @@ assert.throws(() => reclass.validateLotReclassificationAllocations(batches, d(10
 assert.throws(() => reclass.validateLotReclassificationAllocations([batches[0], { ...batches[1], lotNumber: "L-A" }], d(100), true), { code: "STOCK_RECLASS_ALLOCATION_INVALID" });
 assert.throws(() => reclass.validateLotReclassificationAllocations([batches[0], { ...batches[1], expiryDate: null }], d(100), true), { code: "STOCK_RECLASS_ALLOCATION_INVALID" });
 await assert.rejects(reclass.submitStockLotReclassification("org", "same-user", { approverUserId: "same-user" }), { code: "SELF_APPROVAL_FORBIDDEN" });
+await assert.rejects(reclass.submitStockLotReclassification("org", "requester", { approverUserId: "approver" }), { code: "STOCK_RECLASS_VALIDATIONS_REQUIRED" });
+deniedApprovalActor = "requester";
+deniedApprovalCapability = "canRead";
+await assert.rejects(reclass.submitStockLotReclassification("org", "requester", { approverUserId: "approver" }), { code: "STOCK_RECLASS_VALIDATIONS_REQUIRED" });
 console.log("Historical batch allocation: quantity conservation, real dates, duplicate guard and independent approver OK");
 
 const allocationTools = load("lib/enterprise/inventory/lot-allocation.ts");
