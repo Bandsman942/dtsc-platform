@@ -82,15 +82,16 @@ function assertFinishedOmnichannelReservation(status: string) {
 }
 
 async function compensateFailedReservations(args: { organizationId: string; actorUserId: string; orderId: string; reservationIds: string[]; cancelFreshOrder: boolean; errorCode: string }) {
+  await withRetailTransactionRetry(() => prisma.$transaction(async tx => {
+  // Release promises and mark the failed order in the same transaction.
   for (const reservationId of [...args.reservationIds].reverse()) {
-    await releaseEnterpriseInventoryReservation(args.organizationId, reservationId, args.actorUserId, "OMNICHANNEL_RESERVATION_COMPENSATION").catch(() => null);
+    await releaseEnterpriseInventoryReservationTx(tx, args.organizationId, reservationId, args.actorUserId, "OMNICHANNEL_RESERVATION_COMPENSATION");
   }
-  await prisma.enterpriseRetailOrderOrchestration.updateMany({
+  await tx.enterpriseRetailOrderOrchestration.updateMany({
     where: { organizationId: args.organizationId, salesOrderId: args.orderId },
     data: { status: "RESERVATION_FAILED", updatedByUserId: args.actorUserId },
   });
   if (args.cancelFreshOrder) {
-    await prisma.$transaction(async (tx) => {
       const cancelled = await tx.enterpriseSalesOrder.updateMany({
         where: { id: args.orderId, organizationId: args.organizationId, status: "CONFIRMED" },
         data: { status: "CANCELLED", cancelledAt: new Date(), cancellationReason: args.errorCode, updatedByUserId: args.actorUserId, revision: { increment: 1 } },
@@ -100,8 +101,8 @@ async function compensateFailedReservations(args: { organizationId: string; acto
           tx, organizationId: args.organizationId, orderId: args.orderId,
         });
       }
-    });
   }
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout:30000 }), {maxAttempts:5});
 }
 
 export async function createRetailOmnichannelOrder(organizationId: string, actorUserId: string, input: OmnichannelInput) {

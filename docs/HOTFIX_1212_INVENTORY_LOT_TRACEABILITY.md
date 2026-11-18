@@ -70,6 +70,8 @@
 
 - Recette PostgreSQL qualité ajoutée : quarantaine sans mouvement, refus auto-libération, libération indépendante, destruction, rappel de deux copies dans deux dépôts, quantité inchangée, refus de libérer et de recréer y compris par le client Prisma (trigger), preuve des mouvements d’origine et retour/destruction. À certifier.
 
+- CI 8f91596 : 15/17 workflows verts. Correction des deux échecs : droit VIEW_STOCK conservé explicitement avant MANAGE_STOCK pour les pertes; concurrence des réservations convertie en conflit 409 après retries, compensation omnicanale dans une transaction Serializable rejouable sans ignorer les erreurs de libération. Aucun test affaibli.
+
 ## Restant (bloquant)
 Certification de la réaffectation historique sur PostgreSQL + navigateur et valeur inchangée; certification achats et valorisation, réservations/livraisons multi-lots; moteur FEFO commun et POS; pertes, rappels et comptabilité; Design 2.0 et tests multisectoriels. Voir issue #1212. Ne pas merger avant clôture de tous les points.
 

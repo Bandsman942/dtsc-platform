@@ -29,7 +29,8 @@ export async function GET(req: Request, { params }: Params) {
   });
   if (!warehouse) return NextResponse.json({ error: "WAREHOUSE_NOT_FOUND" }, { status: 404 });
   try {
-    await requireRetailSiteCapability(organizationId, session.userId, warehouse.siteId, loss ? "MANAGE_STOCK" : "VIEW_STOCK");
+    await requireRetailSiteCapability(organizationId, session.userId, warehouse.siteId, "VIEW_STOCK");
+    if (loss) await requireRetailSiteCapability(organizationId, session.userId, warehouse.siteId, "MANAGE_STOCK");
   } catch (error) {
     return retailErrorResponse(error, "RETAIL_SITE_ACCESS_DENIED");
   }

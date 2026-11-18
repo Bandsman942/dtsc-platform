@@ -57,7 +57,9 @@ async function reservationRetry<T>(work: () => Promise<T>, maxAttempts = 3): Pro
     } catch (error) {
       lastError = error;
       const code = typeof error === "object" && error && "code" in error ? String((error as { code?: unknown }).code || "") : "";
-      if (code !== "P2034" || attempt === maxAttempts) throw error;
+      const concurrent = code === "P2034" || (error instanceof Error && /write conflict|deadlock|could not serialize access/i.test(error.message));
+      if (!concurrent) throw error;
+      if (attempt === maxAttempts) throw new EnterpriseDomainConflictError("INVENTORY_RESERVATION_CONCURRENT");
       await new Promise((resolve) => setTimeout(resolve, attempt * 20));
     }
   }

@@ -311,6 +311,9 @@ export function retailErrorResponse(error: unknown, fallback = "RETAIL_OPERATION
       { status: error.status },
     );
   }
+  if (error && typeof error === "object" && "code" in error && (error as { code?: string }).code === "P2034") {
+    return NextResponse.json(retailFailureOutcome(null, { error: "RETAIL_CONCURRENT_OPERATION", message: "Une opération concurrente a modifié les données. Actualisez le stock et réessayez." }), { status: 409 });
+  }
   if (error && typeof error === "object" && "code" in error && (error as { code?: string }).code === "P2002") {
     return NextResponse.json(
       retailFailureOutcome(null, { error: "RETAIL_DUPLICATE", message: "Cette opération existe déjà ou sa référence est déjà utilisée." }),
