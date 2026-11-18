@@ -1195,6 +1195,12 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
     expect(reviewBody.capabilities.canApprove).toBe(true);
     expect(reviewBody.capabilities.canDelegate).toBe(false);
     expect(reviewBody.versions).toHaveLength(1);
+    expect(reviewBody.sourceDeepLink).toBe("/enterprise-modules/SUPPLIERS_PURCHASES?purchase="+encodeURIComponent(normalPurchase.id)+"&returnMovement="+encodeURIComponent(returnedSource.id));
+    const exactSource=await context.settler.request.get(receiptTracePath+"&movementId="+encodeURIComponent(returnedSource.id));
+    expect(exactSource.status(),await exactSource.text()).toBe(200);
+    const exactSourceBody=await exactSource.json();
+    expect(exactSourceBody.items.map(row=>row.id)).toEqual([returnedSource.id]);
+    expect(exactSourceBody.items[0].supplierReturnRequest).toMatchObject({reference:returnRecord.reference,status:"PENDING_APPROVAL",approvalId:supplierApprovalId});
     expect(reviewBody.versions[0].snapshotJson).toMatchObject({reference:returnRecord.reference,lotNumber:"PURCHASE-A",quantity:"2",totalAmount:"14",supplierInvoiceReference:supplierInvoice.number});
     const actionPath=base+"/approvals/"+supplierApprovalId+"/actions";
     const decisionPayload={action:"APPROVE",revision:reviewBody.approval.revision,reviewedVersionId:reviewBody.versions[0].id};
