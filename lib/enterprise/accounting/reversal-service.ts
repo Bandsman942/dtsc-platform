@@ -44,6 +44,13 @@ export async function reverseJournalEntryTx(
     if (linked) throw new EnterpriseAccountingError("SUPPLIER_RETURN_DOMAIN_REVERSAL_REQUIRED",409);
   }
 
+  if (["INVENTORY_CUSTODY_RECOVERY_VALUED","INVENTORY_ISSUE_VALUED","SALES_CREDIT_NOTE_POSTED"].includes(original.postingEvent || "")) {
+    const linked=await tx.enterpriseInventoryReturnRecoveryAssessment.findFirst({where:{organizationId,status:"EXECUTED",OR:[
+      {recoveryJournalEntryId:original.id},{originalIssueJournalId:original.id},
+      ...(original.sourceEntityType==="EnterpriseSalesCreditNote"&&original.sourceEntityId?[{custody:{returnLine:{request:{salesCreditNoteId:original.sourceEntityId}}}}]:[]),
+    ]},select:{id:true}});
+    if(linked)throw new EnterpriseAccountingError("INVENTORY_RETURN_RECOVERY_DOMAIN_REVERSAL_REQUIRED",409);
+  }
   if ((options?.authorization || "USER") === "USER") {
     assertIndependentActor({
       actorUserId,
