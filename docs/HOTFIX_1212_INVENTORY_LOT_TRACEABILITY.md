@@ -56,6 +56,8 @@
 - Valorisation automatique si activée, par moteur existant et devise unique des couches ouvertes. En cas de configuration insuffisante, rollback de la sortie et de l'approbation. Événement distinct `INVENTORY_LOSS_VALUED` (LOSS), débit charge d'exploitation configurée et crédit Stock, sans COGS ni mouvement de trésorerie. En mode manuel, la valorisation par la route Finance existante reconnaît le même mouvement et le même événement.
 - Sur c7c4e8a, les deux recettes PostgreSQL/HTTP sont CI_PROVEN (Shop 2 behavioral 44249517190, étapes des commandes globales et Finance cinq acteurs). 16 workflows verts; Quality 134616677661 a échoué sur le code d'erreur de lot non revendable (exception masquée). Correction préflight avec code autorisé et conservation de l'erreur métier.
 
+- Formulaire d’ajustement : nature de perte, sélecteur des lots non disponibles pour la destruction sous droit MANAGE_STOCK, motif détaillé et sortie imposée. Les autres sélecteurs de vente/transfert restent limités aux lots disponibles. Tests à exécuter.
+
 ## Restant (bloquant)
 Certification de la réaffectation historique sur PostgreSQL + navigateur et valeur inchangée; certification achats et valorisation, réservations/livraisons multi-lots; moteur FEFO commun et POS; pertes, rappels et comptabilité; Design 2.0 et tests multisectoriels. Voir issue #1212. Ne pas merger avant clôture de tous les points.
 
