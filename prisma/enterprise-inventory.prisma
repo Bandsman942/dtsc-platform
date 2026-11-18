@@ -292,12 +292,19 @@ model EnterpriseSupplierReturnRequest {
   idempotencyKey          String
   revision                Int @default(1)
   decidedAt               DateTime?
+  dispatchedAt            DateTime?
+  dispatchedByUserId      String?
+  dispatchReference       String?
+  dispatchMovementId      String?
+  dispatchAccountingEventId String?
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
 
   @@unique([organizationId, id], map: "supplier_return_org_id_key")
   @@unique([organizationId, reference], map: "supplier_return_reference_key")
   @@unique([organizationId, idempotencyKey], map: "supplier_return_idempotency_key")
+  @@unique([organizationId, dispatchMovementId], map: "supplier_return_dispatch_movement_key")
+  @@unique([organizationId, dispatchAccountingEventId], map: "supplier_return_dispatch_event_key")
   @@index([organizationId, purchaseId, createdAt], map: "supplier_return_purchase_idx")
   @@index([organizationId, sourceMovementId, status], map: "supplier_return_movement_idx")
   @@index([organizationId, supplierInvoiceId, status], map: "supplier_return_invoice_idx")
