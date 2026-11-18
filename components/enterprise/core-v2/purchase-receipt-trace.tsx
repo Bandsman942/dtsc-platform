@@ -9,7 +9,7 @@ import { StatusBadge } from "@/components/workspace/status-badge";
 import { formatEnterpriseDate } from "@/components/enterprise/core-v2/erp-v2-ui";
 import { purchaseFormGuidance, type PurchaseFormGuidanceKey } from "@/lib/enterprise/purchase-form-i18n";
 
-type ReturnRequestSummary = { id?: string; reference: string; status: string; quantity: string; approvalId: string | null; revision?: number; unitCost?: string; totalCost?: string; currencyCode?: string; canDispatch?: boolean; canCreateCredit?: boolean; dispatchReference?: string | null; dispatchedAt?: string | null; dispatchBusinessDate?: string | null; supplierCreditNoteId?: string | null; supplierCreditReference?: string | null; supplierInvoiceId?: string; supplierInvoiceItemId?: string };
+type ReturnRequestSummary = { id?: string; reference: string; status: string; quantity: string; approvalId: string | null; revision?: number; unitCost?: string; totalCost?: string; currencyCode?: string; canDispatch?: boolean; canWithdraw?: boolean; canCreateCredit?: boolean; dispatchReference?: string | null; dispatchedAt?: string | null; dispatchBusinessDate?: string | null; supplierCreditNoteId?: string | null; supplierCreditReference?: string | null; supplierInvoiceId?: string; supplierInvoiceItemId?: string };
 type TraceRow = {
   supplierReturnRequest?: ReturnRequestSummary | null;
   id: string; receiptReference: string | null; quantity: string; occurredAt: string;
@@ -70,6 +70,20 @@ function SupplierReturnCheck({ organizationId, purchaseId, row, locale, onRefres
     } catch { setError(t("returnRequestFailed")); }
     finally { setBusy(false); }
   }
+  async function withdrawReturn(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (busy || !request?.id || !request.revision || !request.canWithdraw) return;
+    const form=new FormData(event.currentTarget);
+    const reason=String(form.get("withdrawReason")||"").trim();
+    if(reason.length<8||form.get("confirmWithdrawal")!=="on")return;
+    setBusy(true);setError("");setMessage("");
+    try {
+      const response=await fetch(`/api/enterprise/${encodeURIComponent(organizationId)}/purchases/${encodeURIComponent(purchaseId)}?action=withdraw-supplier-return`,{method:"POST",headers:{"Content-Type":"application/json","Accept-Language":locale},body:JSON.stringify({requestId:request.id,revision:request.revision,reason})});
+      const body=await response.json();
+      if(!response.ok||!body.ok){setError(body.message||t("returnWithdrawFailed"));return;}
+      setRequest({...request,status:"CANCELLED",canWithdraw:false,canDispatch:false,revision:body.request.revision});setMessage(t("returnWithdrawDone"));
+    }catch{setError(t("returnWithdrawFailed"));}finally{setBusy(false);}
+  }
   async function dispatchReturn(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (busy || !request?.id || !request.revision || !request.canDispatch) return;
@@ -81,7 +95,7 @@ function SupplierReturnCheck({ organizationId, purchaseId, row, locale, onRefres
       const response = await fetch(`/api/enterprise/${encodeURIComponent(organizationId)}/purchases/${encodeURIComponent(purchaseId)}?action=dispatch-supplier-return`,{method:"POST",headers:{"Content-Type":"application/json","Accept-Language":locale},body:JSON.stringify({requestId:request.id,revision:request.revision,dispatchReference})});
       const body=await response.json();
       if (!response.ok || !body.ok) { setError(body.message || t("returnDispatchFailed")); return; }
-      setRequest({...request,status:"DISPATCHED",canDispatch:false,dispatchReference,revision:body.request.revision});setMessage(t("returnDispatchDone"));onRefresh();
+      setRequest({...request,status:"DISPATCHED",canDispatch:false,canWithdraw:false,dispatchReference,revision:body.request.revision});setMessage(t("returnDispatchDone"));onRefresh();
     } catch { setError(t("returnDispatchFailed")); } finally { setBusy(false); }
   }
   async function createLinkedCredit(event: FormEvent<HTMLFormElement>) {
@@ -99,12 +113,22 @@ function SupplierReturnCheck({ organizationId, purchaseId, row, locale, onRefres
     } catch {setError(t("returnCreditFailed"));} finally {setBusy(false);}
   }
   if (request) return <div className="mt-2 grid min-w-0 grid-cols-[minmax(0,1fr)] gap-2 rounded-lg border border-dtsc-border p-2 text-xs">
-    <div className="flex min-w-0 flex-wrap items-center gap-2"><strong className="break-words">{request.reference}</strong><StatusBadge tone={request.status==="RECONCILED"?"success":request.status==="APPROVED"?"info":"warning"}>{t(request.status==="RECONCILED"?"returnReconciled":request.status==="DISPATCHED"?"returnDispatched":request.status==="APPROVED"?"returnRequestApproved":"returnRequestPending")}</StatusBadge></div>
+    <div className="flex min-w-0 flex-wrap items-center gap-2"><strong className="break-words">{request.reference}</strong><StatusBadge tone={request.status==="RECONCILED"?"success":request.status==="APPROVED"?"info":"warning"}>{t(request.status==="CANCELLED"?"returnWithdrawn":request.status==="RECONCILED"?"returnReconciled":request.status==="DISPATCHED"?"returnDispatched":request.status==="APPROVED"?"returnRequestApproved":"returnRequestPending")}</StatusBadge></div>
     <p>{t("returnCheckQuantity")} : <strong>{request.quantity} {row.inventoryItem.catalogItem.unitOfMeasure?.symbol || ""}</strong></p>
     {request.status==="PENDING_APPROVAL"||request.status==="APPROVED"?<p className="text-dtsc-muted">{t("returnRequestHelp")}</p>:null}
     {request.totalCost&&request.currencyCode?<p>{t("returnCreditAmount")} : <strong>{money(request.totalCost,request.currencyCode)}</strong></p>:null}
     {request.dispatchReference?<p className="break-words">{t("returnDispatchReference")} : {request.dispatchReference}</p>:null}
     {request.supplierCreditReference?<p className="break-words">{t("returnCreditReference")} : {request.supplierCreditReference}</p>:null}
+    {request.status==="CANCELLED"?<p className="text-dtsc-muted">{t("returnWithdrawHistory")}</p>:null}
+    {request.canWithdraw&&request.status==="APPROVED"?<details className="grid min-w-0 rounded-lg border border-dtsc-border p-2">
+      <summary className="cursor-pointer font-medium text-dtsc-ink">{t("returnWithdrawTitle")}</summary>
+      <form onSubmit={withdrawReturn} className="mt-2 grid min-w-0 gap-2">
+        <p className="text-dtsc-muted">{t("returnWithdrawHelp")}</p>
+        <label className="grid min-w-0 gap-1">{t("returnWithdrawReason")}<textarea name="withdrawReason" required minLength={8} maxLength={2000} disabled={busy} className="w-full min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface p-2 text-base text-dtsc-ink md:text-sm"/></label>
+        <label className="flex items-start gap-2"><input type="checkbox" name="confirmWithdrawal" required disabled={busy}/><span>{t("returnWithdrawConfirm")}</span></label>
+        <Button type="submit" variant="outline" disabled={busy} className="whitespace-normal">{t("returnWithdrawAction")}</Button>
+      </form>
+    </details>:null}
     {request.canDispatch&&request.status==="APPROVED"?<form onSubmit={dispatchReturn} className="grid min-w-0 gap-2 border-t border-dtsc-border pt-2">
       <strong>{t("returnDispatchTitle")}</strong><p className="text-dtsc-muted">{t("returnDispatchHelp")}</p>
       <label className="grid min-w-0 gap-1">{t("returnDispatchReference")}<Input name="dispatchReference" required minLength={5} maxLength={200} disabled={busy}/></label>
