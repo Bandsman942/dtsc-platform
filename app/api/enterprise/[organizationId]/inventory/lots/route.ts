@@ -57,26 +57,45 @@ export async function GET(req: Request, { params }: Params) {
     return NextResponse.json({lot,items,pagination:{page,pageSize,total,pageCount:Math.max(1,Math.ceil(total/pageSize))}},{headers:{"Cache-Control":"private, no-store"}});
   }
   const status=url.searchParams.get("status");
-  const where: Prisma.EnterpriseStockLotWhereInput = {
-    organizationId, archivedAt: null,
-    ...(status==="RECALLED"?{recallReference:{not:null}}:status && ["AVAILABLE","BLOCKED","QUARANTINED"].includes(status)?{status}:{}),
-    ...(warehouseId ? { warehouseId } : {}),
-    ...(scope.isolationEnabled ? { warehouse: { siteId: { in: scope.siteIds } } } : {}),
-    ...(search ? { OR: [{ lotNumber: { contains: search, mode: "insensitive" } }, { inventoryItem: { catalogItem: { name: { contains: search, mode: "insensitive" } } } }] } : {}),
-  };
-  const [items, total, organization] = await Promise.all([
-    prisma.enterpriseStockLot.findMany({ where, orderBy: [{ expiryDate: "asc" }, { createdAt: "desc" }], skip: (page - 1) * pageSize, take: pageSize, include: { inventoryItem: { select: { catalogItem: { select: { name: true, code: true } } } }, balances: { select: { quantityOnHand: true, quantityReserved: true } } } }),
-    prisma.enterpriseStockLot.count({ where }),
-    prisma.organization.findUniqueOrThrow({where:{id:organizationId},select:{timezone:true}}),
-  ]);
-  const parts=new Intl.DateTimeFormat("en-CA",{timeZone:organization.timezone||"UTC",year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(new Date());
+  const expiryFilter=url.searchParams.get("expiry");
+  const org=await prisma.organization.findUniqueOrThrow({where:{id:organizationId},select:{timezone:true}});
+  const parts=new Intl.DateTimeFormat("en-CA",{timeZone:org.timezone||"UTC",year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(new Date());
   const today=["year","month","day"].map(type=>parts.find(part=>part.type===type)?.value).join("-");
+  const todayDate=new Date(today+"T00:00:00.000Z");
+  const horizon=new Date(todayDate.getTime()+30*86400000);
+  const baseWhere:Prisma.EnterpriseStockLotWhereInput={
+    organizationId,archivedAt:null,...scoped,...(warehouseId?{warehouseId}:{}),
+    ...(search?{OR:[{lotNumber:{contains:search,mode:"insensitive"}},{inventoryItem:{catalogItem:{OR:[{name:{contains:search,mode:"insensitive"}},{code:{contains:search,mode:"insensitive"}},{sku:{contains:search,mode:"insensitive"}}]}}}]}:{}),
+  };
+  // Counts refer to batch records with positive physical stock, not
+  // heterogeneous units or just the visible page.
+  const physical:Prisma.EnterpriseStockLotWhereInput={balances:{some:{organizationId,quantityOnHand:{gt:0}}}};
+  const filters:Record<string,Prisma.EnterpriseStockLotWhereInput>={
+    EXPIRED:{AND:[physical,{expiryDate:{lt:todayDate}}]},
+    EXPIRING:{AND:[physical,{expiryDate:{gte:todayDate,lte:horizon},status:"AVAILABLE",recallReference:null}]},
+    UNDATED:{AND:[physical,{expiryDate:null,inventoryItem:{expiryTracking:true}}]},
+    ISOLATED:{AND:[physical,{status:{in:["BLOCKED","QUARANTINED"]}}]},
+    RECALLED:{AND:[physical,{recallReference:{not:null}}]},
+  };
+  const statusWhere:Prisma.EnterpriseStockLotWhereInput=status==="RECALLED"?{recallReference:{not:null}}:status&&["AVAILABLE","BLOCKED","QUARANTINED"].includes(status)?{status}:{};
+  const where:Prisma.EnterpriseStockLotWhereInput={AND:[baseWhere,statusWhere, ...(expiryFilter && filters[expiryFilter]?[filters[expiryFilter]]:[])]};
+  const [items,total,expired,expiring,undated,isolated,recalled,pendingDisposal]=await Promise.all([
+    prisma.enterpriseStockLot.findMany({where,orderBy:[{expiryDate:"asc"},{createdAt:"desc"},{id:"asc"}],skip:(page-1)*pageSize,take:pageSize,include:{inventoryItem:{select:{catalogItem:{select:{name:true,code:true}}}},balances:{select:{quantityOnHand:true,quantityReserved:true}}}}),
+    prisma.enterpriseStockLot.count({where}),
+    prisma.enterpriseStockLot.count({where:{AND:[baseWhere,filters.EXPIRED]}}),
+    prisma.enterpriseStockLot.count({where:{AND:[baseWhere,filters.EXPIRING]}}),
+    prisma.enterpriseStockLot.count({where:{AND:[baseWhere,filters.UNDATED]}}),
+    prisma.enterpriseStockLot.count({where:{AND:[baseWhere,filters.ISOLATED]}}),
+    prisma.enterpriseStockLot.count({where:{AND:[baseWhere,filters.RECALLED]}}),
+    prisma.enterpriseInventoryReturnCustody.count({where:{organizationId,status:"DISPOSAL_PENDING",originalMovement:{organizationId,...scoped,...(warehouseId?{warehouseId}:{})},returnLine:{request:{status:"COMPLETED"}}}}),
+  ]);
   return NextResponse.json({ items: items.map((item) => ({ ...item,
     expired:Boolean(item.expiryDate && lotExpiryDateKey(item.expiryDate)<today),
+    expiresSoon:Boolean(item.expiryDate && item.expiryDate>=todayDate && item.expiryDate<=horizon),
     quantityOnHand: item.balances.reduce((sum, balance) => sum.plus(balance.quantityOnHand), new Prisma.Decimal(0)).toFixed(3),
     quantityReserved: item.balances.reduce((sum, balance) => sum.plus(balance.quantityReserved), new Prisma.Decimal(0)).toFixed(3),
     balances: undefined,
-  })), pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) }, canManage: access.canManage, canRecall:access.canAdminister && !scope.isolationEnabled, currentUserId:session.userId },{headers:{"Cache-Control":"private, no-store"}});
+  })), pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) }, metrics:{expired,expiring,undated,isolated,recalled,pendingDisposal}, businessDate:today, horizonDays:30, canManage: access.canManage, canRecall:access.canAdminister && !scope.isolationEnabled, currentUserId:session.userId },{headers:{"Cache-Control":"private, no-store"}});
 }
 
 export async function POST(req: Request, { params }: Params) {

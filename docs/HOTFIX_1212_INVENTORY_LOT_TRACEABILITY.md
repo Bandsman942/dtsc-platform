@@ -86,6 +86,8 @@
 
 - Traitement fournisseur : contrôle de rappel global par article/numéro avant validation de réception, y compris dans un nouveau dépôt. Refus métier 409 contextualisé, rollback de la réception et du changement d’état achat; pas d’acceptation commerciale ni de dette fictive. Décision conservatrice : contrairement au transfert déjà expédié (stock déjà détenu), refuser le lot fournisseur à l’arrivée, l’isoler physiquement et organiser le retour/remplacement. Un registre des livraisons refusées avant acceptation et la réception volontaire d’un lot fournisseur rappelé sous garde contractuelle ne sont pas implémentés dans cette tranche.
 
+- Pilotage qualité : indicateurs paginés correctement par dépôt/recherche (lots avec stock physique positif, périmés, échéance 30 jours selon fuseau entreprise, date obligatoire absente, isolés, rappelés), filtres activables et registre de destruction à attester. Requêtes règles/lots indépendantes, chargement et erreurs séparés, recherche par SKU/code/nom/lot. Il s’agit d’alertes de tableau de bord à la consultation, pas encore d’un job de notification proactif.
+
 ## Restant (bloquant)
 Certification de la réaffectation historique sur PostgreSQL + navigateur et valeur inchangée; certification achats et valorisation, réservations/livraisons multi-lots; moteur FEFO commun et POS; pertes, rappels et comptabilité; Design 2.0 et tests multisectoriels. Voir issue #1212. Ne pas merger avant clôture de tous les points.
 

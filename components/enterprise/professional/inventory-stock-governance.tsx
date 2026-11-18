@@ -13,7 +13,7 @@ import { customerFacingError } from "@/lib/customer-facing-language";
 type Item = HistoricalInventoryItem & { minimumQuantity: string | number | null; reorderQuantity: string | number | null; lotTracking: boolean; expiryTracking: boolean };
 type BatchOption = { id: string; expiryTracking: boolean; catalogItem: { code: string; name: string } };
 type Warehouse = { id: string; code: string; name: string };
-type Lot = { expired?: boolean; recallReference?:string|null; qualityReason?:string|null; qualityChangedAt?:string|null; qualityChangedByUserId?:string|null; id: string; revision: number; lotNumber: string; warehouseId: string; status: string; productionDate: string | null; expiryDate: string | null; notes: string | null; quantityOnHand: string; quantityReserved: string; inventoryItem: { catalogItem: { name: string; code: string } } };
+type Lot = { expired?: boolean; expiresSoon?:boolean; recallReference?:string|null; qualityReason?:string|null; qualityChangedAt?:string|null; qualityChangedByUserId?:string|null; id: string; revision: number; lotNumber: string; warehouseId: string; status: string; productionDate: string | null; expiryDate: string | null; notes: string | null; quantityOnHand: string; quantityReserved: string; inventoryItem: { catalogItem: { name: string; code: string } } };
 type TraceMovement={id:string;movementType:string;direction:string;quantity:string;occurredAt:string;sourceEntityType:string|null;sourceEntityId:string|null;sourceLineId:string|null;warehouse:{name:string;code:string};stockLot:{lotNumber:string;status:string;recallReference:string|null}|null};
 const dateInput = (value: string | null) => value ? value.slice(0, 10) : "";
 const formatDate = (value: string | null, en: boolean) => value ? new Intl.DateTimeFormat(en ? "en-GB" : "fr-FR").format(new Date(value)) : "—";
@@ -35,6 +35,10 @@ export function InventoryStockGovernance({ organizationId, locale, warehouses }:
   const [pages, setPages] = useState(1);
   const [search, setSearch] = useState("");
   const [lotStatus,setLotStatus]=useState("");
+  const [expiryFilter,setExpiryFilter]=useState("");
+  const [lotMetrics,setLotMetrics]=useState<{expired:number;expiring:number;undated:number;isolated:number;recalled:number;pendingDisposal:number}|null>(null);
+  const [lotsLoading,setLotsLoading]=useState(false);
+  const [lotsError,setLotsError]=useState("");
   const [lotWarehouse,setLotWarehouse]=useState("");
   const [canRecall,setCanRecall]=useState(false);
   const [currentUserId,setCurrentUserId]=useState("");
@@ -65,21 +69,30 @@ export function InventoryStockGovernance({ organizationId, locale, warehouses }:
   const [error, setError] = useState("");
   const refresh = useCallback(() => setReload((value) => value + 1), []);
 
+  // Rules and lot monitoring have independent queries.
   useEffect(() => {
-    if (!open) return;
-    const controller = new AbortController();
-    const query = new URLSearchParams({ page: String(page), search, status:lotStatus,warehouseId:lotWarehouse });
-    void Promise.all([
-      fetch(`/api/enterprise/${organizationId}/inventory?${new URLSearchParams({ page: String(itemPage), pageSize: "50", search: itemSearch })}`, { signal: controller.signal, cache: "no-store" }),
-      fetch(`/api/enterprise/${organizationId}/inventory/lots?${query}`, { signal: controller.signal, cache: "no-store" }),
-    ]).then(async ([inventoryResponse, lotResponse]) => {
-      const inventory = await inventoryResponse.json().catch(() => null) as { items?: Item[]; pagination?: { pageCount: number }; message?: string; canAdminister?: boolean } | null;
-      const batches = await lotResponse.json().catch(() => null) as { items?: Lot[]; pagination?: { pageCount: number }; message?: string; canManage?: boolean;canRecall?:boolean;currentUserId?:string } | null;
-      if (!inventoryResponse.ok || !lotResponse.ok) throw new Error(inventory?.message || batches?.message || (en ? "Inventory data unavailable." : "Données de stock indisponibles."));
-      if (!controller.signal.aborted) { setItems(inventory?.items || []); setCanAdminister(Boolean(inventory?.canAdminister)); setCanRegisterLot(Boolean(batches?.canManage)); setCanRecall(Boolean(batches?.canRecall));setCurrentUserId(batches?.currentUserId||""); setItemPages(inventory?.pagination?.pageCount || 1); setLots(batches?.items || []); setPages(batches?.pagination?.pageCount || 1); setError(""); }
-    }).catch((caught) => { if (!controller.signal.aborted) setError(customerFacingError(caught, locale)); });
-    return () => controller.abort();
-  }, [open, organizationId, search, page, itemPage, itemSearch, reload, en, locale,lotStatus,lotWarehouse]);
+    if(!open)return;
+    const controller=new AbortController();
+    void fetch(`/api/enterprise/${organizationId}/inventory?${new URLSearchParams({page:String(itemPage),pageSize:"50",search:itemSearch})}`,{signal:controller.signal,cache:"no-store"}).then(async response=>{
+      const inventory=await response.json().catch(()=>null) as {items?:Item[];pagination?:{pageCount:number};message?:string;canAdminister?:boolean}|null;
+      if(!response.ok||!inventory?.items)throw new Error(inventory?.message||(en?"Stock rules unavailable":"Règles de stock indisponibles"));
+      if(!controller.signal.aborted){setItems(inventory.items);setCanAdminister(Boolean(inventory.canAdminister));setItemPages(inventory.pagination?.pageCount||1);setError("");}
+    }).catch(caught=>{if(!controller.signal.aborted)setError(customerFacingError(caught,locale));});
+    return()=>controller.abort();
+  },[open,organizationId,itemPage,itemSearch,reload,en,locale]);
+  useEffect(()=>{
+    if(!open)return;
+    const controller=new AbortController();setLotsLoading(true);setLotsError("");setLotMetrics(null);
+    const query=new URLSearchParams({page:String(page),search,status:lotStatus,warehouseId:lotWarehouse,expiry:expiryFilter});
+    const timer=setTimeout(()=>{
+      void fetch(`/api/enterprise/${organizationId}/inventory/lots?${query}`,{signal:controller.signal,cache:"no-store"}).then(async response=>{
+        const batches=await response.json().catch(()=>null) as {items?:Lot[];pagination?:{pageCount:number};message?:string;canManage?:boolean;canRecall?:boolean;currentUserId?:string;metrics?:{expired:number;expiring:number;undated:number;isolated:number;recalled:number;pendingDisposal:number}}|null;
+        if(!response.ok||!batches?.items)throw new Error(batches?.message||(en?"Batch list unavailable":"Liste des lots indisponible"));
+        if(!controller.signal.aborted){setLots(batches.items);setPages(batches.pagination?.pageCount||1);setCanRegisterLot(Boolean(batches.canManage));setCanRecall(Boolean(batches.canRecall));setCurrentUserId(batches.currentUserId||"");setLotMetrics(batches.metrics||null);}
+      }).catch(caught=>{if(!controller.signal.aborted){setLots([]);setLotsError(customerFacingError(caught,locale));}}).finally(()=>{if(!controller.signal.aborted)setLotsLoading(false);});
+    },200);
+    return()=>{clearTimeout(timer);controller.abort();};
+  },[open,organizationId,page,search,lotStatus,lotWarehouse,expiryFilter,reload,en,locale]);
 
   useEffect(() => {
     if (!lotDialog || editLot || !batchWarehouse) return;
@@ -150,12 +163,19 @@ export function InventoryStockGovernance({ organizationId, locale, warehouses }:
       </div>
       <div><h4 className="mb-2 text-xs font-black uppercase text-dtsc-muted">{en ? "Traceable batches by warehouse" : "Lots traçables par dépôt"}</h4>
         <input className="mb-2 min-h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 text-sm" value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder={en ? "Search item or batch number" : "Rechercher un article ou un numéro de lot"} aria-label={en ? "Search batches" : "Rechercher des lots"} />
+        <p className="mb-2 text-xs text-dtsc-muted">{en?"Warehouse/search scope · all matching stocked batch records, not just this page. Alert categories may overlap.":"Périmètre dépôt/recherche · tous les lots ayant du stock, au-delà de la page affichée. Les catégories peuvent se chevaucher."}</p>
+        <div className="mb-3 grid grid-cols-2 gap-2 lg:grid-cols-3">
+          {([{key:"EXPIRED",label:en?"Expired":"Périmés",value:lotMetrics?.expired,tone:"text-red-700 dark:text-red-200"},{key:"EXPIRING",label:en?"Expires ≤ 30 days":"Échéance ≤ 30 jours",value:lotMetrics?.expiring,tone:"text-amber-700 dark:text-amber-200"},{key:"UNDATED",label:en?"Missing expiry":"Date manquante",value:lotMetrics?.undated,tone:"text-orange-700 dark:text-orange-200"},{key:"ISOLATED",label:en?"Isolated":"Isolés",value:lotMetrics?.isolated,tone:"text-violet-700 dark:text-violet-200"},{key:"RECALLED",label:en?"Recalled":"Rappelés",value:lotMetrics?.recalled,tone:"text-red-700 dark:text-red-200"}]).map(metric=><button type="button" key={metric.key} aria-pressed={expiryFilter===metric.key} className={`min-w-0 rounded-xl border p-3 text-left transition-colors ${expiryFilter===metric.key?"border-dtsc-blue bg-dtsc-blue/5":"border-dtsc-border bg-dtsc-page"}`} onClick={()=>{setExpiryFilter(value=>value===metric.key?"":metric.key);setLotStatus("");setPage(1);}}><span className={"block text-lg font-bold "+metric.tone}>{metric.value??"—"}</span><span className="block break-words text-xs text-dtsc-muted">{metric.label}</span></button>)}
+          <button type="button" className="min-w-0 rounded-xl border border-dtsc-border bg-dtsc-page p-3 text-left" onClick={()=>setCustodyOpen(true)}><span className="block text-lg font-bold text-amber-700 dark:text-amber-200">{lotMetrics?.pendingDisposal??"—"}</span><span className="block break-words text-xs text-dtsc-muted">{en?"Disposal to attest (warehouse)":"Destructions à attester (dépôt)"}</span></button>
+        </div>
+        {expiryFilter?<Button type="button" variant="outline" size="sm" onClick={()=>{setExpiryFilter("");setPage(1);}}>{en?"Clear alert filter":"Effacer le filtre d’alerte"}</Button>:null}
+        {lotsError?<p role="alert" className="mb-2 text-xs text-red-700 dark:text-red-200">{lotsError}</p>:null}
         <div className="mb-3 grid gap-2 sm:grid-cols-2">
           <label className="grid gap-1 text-xs font-semibold">{en?"Warehouse":"Dépôt"}<select value={lotWarehouse} onChange={event=>{setLotWarehouse(event.target.value);setPage(1);}} className="min-h-11 min-w-0 rounded-xl border border-dtsc-border bg-dtsc-page px-2 text-sm"><option value="">{en?"All authorized warehouses":"Tous les dépôts autorisés"}</option>{warehouses.map(warehouse=><option key={warehouse.id} value={warehouse.id}>{warehouse.code} · {warehouse.name}</option>)}</select></label>
           <label className="grid gap-1 text-xs font-semibold">{en?"Quality status":"Statut qualité"}<select value={lotStatus} onChange={event=>{setLotStatus(event.target.value);setPage(1);}} className="min-h-11 min-w-0 rounded-xl border border-dtsc-border bg-dtsc-page px-2 text-sm"><option value="">{en?"All statuses":"Tous les statuts"}</option><option value="AVAILABLE">{en?"Available":"Disponible"}</option><option value="BLOCKED">{en?"Blocked":"Bloqué"}</option><option value="QUARANTINED">{en?"Quarantined":"En quarantaine"}</option><option value="RECALLED">{en?"Recalled":"Rappelé"}</option></select></label>
         </div>
-        <div className="grid gap-2">{lots.length?lots.map(lot=><article key={lot.id} className="grid min-w-0 gap-2 rounded-xl border border-dtsc-border bg-dtsc-page p-3">
-          <div className="flex min-w-0 flex-wrap items-start justify-between gap-2"><div className="min-w-0"><p className="break-words text-sm font-black text-dtsc-ink">{lot.inventoryItem.catalogItem.name} · {lot.lotNumber}</p><p className="text-xs text-dtsc-muted">{warehouses.find(warehouse=>warehouse.id===lot.warehouseId)?.name||"—"} · {en?"Expires":"Péremption"} {formatDate(lot.expiryDate,en)}</p></div><span className={`rounded-full px-2 py-1 text-xs font-semibold ${lot.recallReference||lot.expired?"bg-red-500/15 text-red-700 dark:text-red-200":lot.status==="AVAILABLE"?"bg-emerald-500/15 text-emerald-700 dark:text-emerald-300":"bg-amber-500/15 text-amber-800 dark:text-amber-200"}`}>{lot.recallReference?(en?"Recalled":"Rappelé"):lot.expired?(en?"Expired":"Périmé"):lot.status==="AVAILABLE"?(en?"Available":"Disponible"):lot.status==="QUARANTINED"?(en?"Quarantined":"En quarantaine"):(en?"Blocked":"Bloqué")}</span></div>
+        <div className="grid gap-2" aria-busy={lotsLoading}>{lotsLoading?<p role="status" className="text-xs text-dtsc-muted">{en?"Loading batches…":"Chargement des lots…"}</p>:lots.length?lots.map(lot=><article key={lot.id} className="grid min-w-0 gap-2 rounded-xl border border-dtsc-border bg-dtsc-page p-3">
+          <div className="flex min-w-0 flex-wrap items-start justify-between gap-2"><div className="min-w-0"><p className="break-words text-sm font-black text-dtsc-ink">{lot.inventoryItem.catalogItem.name} · {lot.lotNumber}</p><p className="text-xs text-dtsc-muted">{warehouses.find(warehouse=>warehouse.id===lot.warehouseId)?.name||"—"} · {en?"Expires":"Péremption"} {formatDate(lot.expiryDate,en)}</p></div><span className={`rounded-full px-2 py-1 text-xs font-semibold ${lot.recallReference||lot.expired?"bg-red-500/15 text-red-700 dark:text-red-200":lot.expiresSoon&&lot.status==="AVAILABLE"?"bg-amber-500/15 text-amber-800 dark:text-amber-200":lot.status==="AVAILABLE"?"bg-emerald-500/15 text-emerald-700 dark:text-emerald-300":"bg-amber-500/15 text-amber-800 dark:text-amber-200"}`}>{lot.recallReference?(en?"Recalled":"Rappelé"):lot.expired?(en?"Expired":"Périmé"):lot.expiresSoon&&lot.status==="AVAILABLE"?(en?"Expires soon":"Péremption proche"):lot.status==="AVAILABLE"?(en?"Available":"Disponible"):lot.status==="QUARANTINED"?(en?"Quarantined":"En quarantaine"):(en?"Blocked":"Bloqué")}</span></div>
           <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs"><span>{en?"Physical stock":"Stock physique"} <strong>{lot.quantityOnHand}</strong></span><span>{en?"Balance reservation":"Réservé au solde"} <strong>{lot.quantityReserved}</strong></span></div>
           {lot.recallReference?<p className="break-words font-semibold text-xs text-red-700 dark:text-red-200">{lot.recallReference}</p>:null}
           {lot.qualityReason?<p className="break-words text-xs text-dtsc-muted">{lot.qualityReason}</p>:null}
