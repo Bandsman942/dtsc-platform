@@ -890,6 +890,97 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
     expect(trace.items.some(row=>row.movementType==="RETURN_IN")).toBe(true);
     expect(trace.items.every(row=>row.stockLot.lotNumber===duplicateLot.lotNumber)).toBe(true);
 
+    // #1212 Historical stock: independent approval, no new acquisition,
+    // unchanged inventory accounting value, then controlled lot activation.
+    const historyKey=batchKey+"-HIST";
+    const historicalProduct=await prisma.enterpriseCatalogItem.create({data:{organizationId,code:historyKey,sku:historyKey,name:"E2E legacy stock "+historyKey,normalizedName:historyKey.toLowerCase(),itemType:"PRODUCT",unitOfMeasureId:fixture.product.unitOfMeasureId,indicativeSalePrice:20,indicativeCost:7,currency:fixture.currencyCode,taxable:false,trackInventory:true,createdByUserId:fixture.owner.id}});
+    const historicalInventory=await prisma.enterpriseInventoryItem.create({data:{organizationId,catalogItemId:historicalProduct.id,lotTracking:false,expiryTracking:false,createdByUserId:fixture.owner.id}});
+    const historicalBalance=await prisma.enterpriseInventoryBalance.create({data:{organizationId,inventoryItemId:historicalInventory.id,warehouseId:fixture.warehouse.id,quantityOnHand:100}});
+    const historicalMovement=await prisma.enterpriseStockMovement.create({data:{organizationId,inventoryItemId:historicalInventory.id,warehouseId:fixture.warehouse.id,movementType:"OPENING_BALANCE",direction:"IN",quantity:100,balanceAfter:100,idempotencyKey:historyKey+"-opening",createdByUserId:fixture.owner.id}});
+    const historicalLayer=await prisma.enterpriseInventoryCostLayer.create({data:{organizationId,inventoryItemId:historicalInventory.id,warehouseId:fixture.warehouse.id,sourceMovementId:historicalMovement.id,valuationMethod:"WEIGHTED_AVERAGE",quantity:100,remainingQuantity:100,unitCost:7,totalCost:700,currencyCode:fixture.currencyCode,effectiveAt:new Date()}});
+    const policyPath=base+"/inventory/item-policy";
+    const changePolicy=async ()=>{const response=await context.owner.request.put(policyPath,{data:{inventoryItemId:historicalInventory.id,revision:historicalInventory.revision,minimumQuantity:10,reorderQuantity:25,lotTracking:true,expiryTracking:true},headers:{origin:baseUrl,referer:baseUrl+"/enterprise-modules/INVENTORY_LOGISTICS"}});return {status:response.status(),body:await response.json().catch(()=>null)};};
+    const premature=await changePolicy();expect(premature.status,JSON.stringify(premature.body)).toBe(409);
+    const allocationPayload={sourceBalanceId:historicalBalance.id,sourceBalanceRevision:historicalBalance.revision,itemRevision:historicalInventory.revision,approverUserId:fixture.settler.id,reason:"Physical historical reconciliation by identified lots",idempotencyKey:historyKey+"-allocation",allocations:[{lotNumber:"HIST-A",productionDate:null,expiryDate:batches[0].lot.expiryDate.toISOString().slice(0,10),quantity:"30"},{lotNumber:"HIST-B",productionDate:null,expiryDate:batches[1].lot.expiryDate.toISOString().slice(0,10),quantity:"70"}]};
+    const invalid=await post(context.owner,policyPath,{...allocationPayload,allocations:[{...allocationPayload.allocations[0],quantity:"29"},allocationPayload.allocations[1]]});
+    expect(invalid.status,JSON.stringify(invalid.body)).toBe(409);
+    const allocatedRequest=await post(context.owner,policyPath,allocationPayload);
+    expect(allocatedRequest.status,JSON.stringify(allocatedRequest.body)).toBe(201);
+    const allocatedReplay=await post(context.owner,policyPath,allocationPayload);
+    expect(allocatedReplay.status,JSON.stringify(allocatedReplay.body)).toBe(200);
+    expect(allocatedReplay.body.approvalId).toBe(allocatedRequest.body.approvalId);
+    expect((await prisma.enterpriseInventoryBalance.findUniqueOrThrow({where:{id:historicalBalance.id}})).quantityOnHand.equals(100)).toBe(true);
+    const allocationApproval=await prisma.enterpriseApproval.findUniqueOrThrow({where:{id:allocatedRequest.body.approvalId}});
+    const allocationApprovalPath=base+"/approvals/"+allocationApproval.id+"/actions";
+    const review=await post(context.settler,allocationApprovalPath,{action:"PREPARE_REVIEW",revision:allocationApproval.revision});
+    expect(review.status,JSON.stringify(review.body)).toBe(200);
+    const approveAllocation={action:"APPROVE",revision:allocationApproval.revision,reviewedVersionId:review.body.submissionVersion.id};
+    const selfAllocation=await post(context.owner,allocationApprovalPath,approveAllocation);
+    expect(selfAllocation.status).toBe(403);
+    const allocated=await post(context.settler,allocationApprovalPath,approveAllocation);
+    expect(allocated.status,JSON.stringify(allocated.body)).toBe(200);
+    const historicalRows=await prisma.enterpriseInventoryBalance.findMany({where:{organizationId,inventoryItemId:historicalInventory.id},include:{stockLot:true}});
+    expect(historicalRows.length).toBe(3);
+    expect(historicalRows.reduce((sum,row)=>sum.plus(row.quantityOnHand),new Prisma.Decimal(0)).equals(100)).toBe(true);
+    expect(historicalRows.find(row=>row.stockLotId===null).quantityOnHand.isZero()).toBe(true);
+    expect(historicalRows.filter(row=>row.stockLotId).map(row=>[row.stockLot.lotNumber,Number(row.quantityOnHand)]).sort()).toEqual([["HIST-A",30],["HIST-B",70]]);
+    expect(await prisma.enterpriseInventoryCostLayer.count({where:{organizationId,inventoryItemId:historicalInventory.id}})).toBe(1);
+    const sameCostLayer=await prisma.enterpriseInventoryCostLayer.findUniqueOrThrow({where:{id:historicalLayer.id}});
+    expect(sameCostLayer.remainingQuantity.equals(100)).toBe(true);
+    expect(sameCostLayer.totalCost.equals(700)).toBe(true);
+    expect(await prisma.enterpriseInventoryAccountingEvent.count({where:{organizationId,inventoryItemId:historicalInventory.id}})).toBe(0);
+    const reclassMovements=await prisma.enterpriseStockMovement.findMany({where:{organizationId,inventoryItemId:historicalInventory.id,sourceEntityType:"EnterpriseStockLotReclassification"}});
+    expect(reclassMovements).toHaveLength(3);
+    expect(reclassMovements.reduce((sum,row)=>sum+(row.direction==="IN"?1:-1)*Number(row.quantity),0)).toBe(0);
+    expect((await changePolicy()).status).toBe(200);
+    const activeHistory=await prisma.enterpriseInventoryItem.findUniqueOrThrow({where:{id:historicalInventory.id}});
+    expect(activeHistory.lotTracking&&activeHistory.expiryTracking).toBe(true);
+
+    // Purchase adapter and valuation: rejected recalled batches must roll back
+    // the purchase status, canonical receipt, balances and movements together.
+    async function orderForPurchase(product,amount,suffix){
+      const purchase=await prisma.enterprisePurchase.create({data:{organizationId,reference:batchKey+"-"+suffix,title:"Receipt E2E "+suffix,status:"ORDERED",requestedByUserId:fixture.owner.id,buyerUserId:fixture.owner.id,currency:fixture.currencyCode,subtotalAmount:7*amount,totalAmount:7*amount,orderedAt:new Date(),createdByUserId:fixture.owner.id,items:{create:{description:product.name,quantity:amount,unit:"UNIT",unitPrice:7,lineSubtotal:7*amount,taxAmount:0,lineTotal:7*amount}}},include:{items:true}});
+      await prisma.enterprisePurchaseItemCatalogLink.create({data:{organizationId,purchaseItemId:purchase.items[0].id,catalogItemId:product.id,unitOfMeasureId:product.unitOfMeasureId,expectedItemType:"GOODS"}});
+      return purchase;
+    }
+    const recalledPurchase=await orderForPurchase(batchProduct,1,"RECALLED-PO");
+    const recalledReceipt=await post(context.owner,base+"/purchases/"+recalledPurchase.id+"/receive",{revision:recalledPurchase.revision,receivedAt:new Date().toISOString(),warehouseId:fixture.warehouse.id,items:[{purchaseItemId:recalledPurchase.items[0].id,quantityReceived:1}],lotAllocations:[{purchaseItemId:recalledPurchase.items[0].id,batches:[{lotNumber:duplicateLot.lotNumber,productionDate:null,expiryDate:duplicateLot.expiryDate.toISOString().slice(0,10),quantity:1}]}]});
+    expect(recalledReceipt.status,JSON.stringify(recalledReceipt.body)).toBe(409);
+    expect(recalledReceipt.body.error).toBe("RECEIPT_BATCH_RECALLED");
+    expect((await prisma.enterprisePurchase.findUniqueOrThrow({where:{id:recalledPurchase.id}})).status).toBe("ORDERED");
+    expect(await prisma.enterprisePurchaseReceipt.count({where:{organizationId,purchaseId:recalledPurchase.id}})).toBe(0);
+    const normalPurchase=await orderForPurchase(historicalProduct,10,"NORMAL-PO");
+    const purchaseReceiptPath=base+"/purchases/"+normalPurchase.id+"/receive";
+    const purchasePayload={revision:normalPurchase.revision,receivedAt:new Date().toISOString(),warehouseId:fixture.warehouse.id,items:[{purchaseItemId:normalPurchase.items[0].id,quantityReceived:10}],lotAllocations:[{purchaseItemId:normalPurchase.items[0].id,batches:[{lotNumber:"PURCHASE-A",productionDate:null,expiryDate:allocationPayload.allocations[0].expiryDate,quantity:4},{lotNumber:"PURCHASE-B",productionDate:null,expiryDate:allocationPayload.allocations[1].expiryDate,quantity:6}]}]};
+    const wrongReceipt=await post(context.owner,purchaseReceiptPath,{...purchasePayload,lotAllocations:[{...purchasePayload.lotAllocations[0],batches:[{...purchasePayload.lotAllocations[0].batches[0],quantity:3},purchasePayload.lotAllocations[0].batches[1]]}]});
+    expect(wrongReceipt.status,JSON.stringify(wrongReceipt.body)).toBe(409);
+    expect(await prisma.enterprisePurchaseReceipt.count({where:{organizationId,purchaseId:normalPurchase.id}})).toBe(0);
+    const purchaseReceipt=await post(context.owner,purchaseReceiptPath,purchasePayload);
+    expect(purchaseReceipt.status,JSON.stringify(purchaseReceipt.body)).toBe(201);
+    expect(purchaseReceipt.body.purchase.status).toBe("RECEIVED");
+    const movementsReceived=await prisma.enterpriseStockMovement.findMany({where:{organizationId,sourceEntityType:"EnterprisePurchaseReceipt",sourceEntityId:purchaseReceipt.body.receipt.id,movementType:"PURCHASE_RECEIPT"},include:{stockLot:true}});
+    expect(movementsReceived.map(row=>[row.stockLot.lotNumber,Number(row.quantity)]).sort()).toEqual([["PURCHASE-A",4],["PURCHASE-B",6]]);
+    await ensureStepUp(context.owner,ownerPassword);
+    for(const movement of movementsReceived){
+      const valued=await post(context.owner,base+"/stock-movements/"+movement.id+"/value-receipt",{unitCost:"7",currencyCode:fixture.currencyCode});
+      expect(valued.status,JSON.stringify(valued.body)).toBe(200);
+      expect(valued.body.event.status).toBe("POSTED");
+      const repeated=await post(context.owner,base+"/stock-movements/"+movement.id+"/value-receipt",{unitCost:"7",currencyCode:fixture.currencyCode});
+      expect(repeated.status,JSON.stringify(repeated.body)).toBe(200);expect(repeated.body.event.id).toBe(valued.body.event.id);
+    }
+    const receiptValuations=await prisma.enterpriseInventoryAccountingEvent.findMany({where:{organizationId,stockMovementId:{in:movementsReceived.map(row=>row.id)},eventType:"RECEIPT"}});
+    expect(receiptValuations).toHaveLength(2);
+    expect(receiptValuations.reduce((sum,row)=>sum.plus(row.totalCost),new Prisma.Decimal(0)).equals(70)).toBe(true);
+    expect(receiptValuations.every(row=>row.status==="POSTED"&&row.journalEntryId)).toBe(true);
+    const receiptBalances=await prisma.enterpriseInventoryBalance.findMany({where:{organizationId,inventoryItemId:historicalInventory.id}});
+    expect(receiptBalances.reduce((sum,row)=>sum.plus(row.quantityOnHand),new Prisma.Decimal(0)).equals(110)).toBe(true);
+    const alerts=await context.owner.request.get(qualityPath+"?search="+encodeURIComponent(batchKey)+"&expiry=RECALLED&page=1&warehouseId="+encodeURIComponent(spareWarehouse.id));
+    expect(alerts.status()).toBe(200);
+    const alertBody=await alerts.json();
+    expect(alertBody.metrics.recalled).toBe(1);
+    expect(alertBody.items.some(row=>row.id===receivedLot.id)).toBe(true);
+
+
 
   } finally {
     if (originalSettings !== undefined) await prisma.enterpriseRetailConfiguration.update({

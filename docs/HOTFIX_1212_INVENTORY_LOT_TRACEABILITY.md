@@ -88,6 +88,8 @@
 
 - Pilotage qualité : indicateurs paginés correctement par dépôt/recherche (lots avec stock physique positif, périmés, échéance 30 jours selon fuseau entreprise, date obligatoire absente, isolés, rappelés), filtres activables et registre de destruction à attester. Requêtes règles/lots indépendantes, chargement et erreurs séparés, recherche par SKU/code/nom/lot. Il s’agit d’alertes de tableau de bord à la consultation, pas encore d’un job de notification proactif.
 
+- Recette #1212 étendue : historique 100 → 30+70, contrôle de somme, refus activation avant régularisation, revue et validation indépendante, replay, couches de coût inchangées (700), aucun événement comptable de reclassification; achat refusé si rappel et transaction annulée; achat sain 4+6, somme incorrecte refusée, valorisation facture/réception séparée via route Finance existante pour chaque mouvement (70 total, replay idempotent), stock final 110. Vérification de l’alerte rappel dans le troisième dépôt. Preuves à obtenir en CI.
+
 ## Restant (bloquant)
 Certification de la réaffectation historique sur PostgreSQL + navigateur et valeur inchangée; certification achats et valorisation, réservations/livraisons multi-lots; moteur FEFO commun et POS; pertes, rappels et comptabilité; Design 2.0 et tests multisectoriels. Voir issue #1212. Ne pas merger avant clôture de tous les points.
 
