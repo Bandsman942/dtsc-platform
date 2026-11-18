@@ -3,7 +3,9 @@ import { NextResponse } from "next/server";
 import { getEnterpriseCommonDomainAccess } from "@/lib/enterprise/common/access";
 import { retailInventoryVisibleSites } from "@/lib/enterprise/retail/site-access";
 import { retailErrorResponse } from "@/lib/enterprise/retail/http";
-import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
+import { enterpriseDomainErrorResponse, enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
+import { EnterpriseDomainError } from "@/lib/enterprise/common/errors";
+import { assertSupplierReturnAccess, inspectSupplierReturnTx } from "@/lib/enterprise/inventory/supplier-return-preflight";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { normalizeEnterpriseCoreV2Error } from "@/lib/enterprise/core-v2/errors";
@@ -23,6 +25,40 @@ export async function GET(req: Request, { params }: Params) {
   const purchase = await prisma.enterprisePurchase.findFirst({ where: { AND: [visible, { id }] }, include: { items: { orderBy: { sortOrder: "asc" } }, supplier: { include: { contacts: { orderBy: [{ isPrimary: "desc" }, { name: "asc" }], take: 5 } } }, budgetLine: { include: { budget: true } }, receipts: { orderBy: { receivedAt: "desc" }, include: { items: true } } } });
   if (!purchase) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const url = new URL(req.url);
+  if (url.searchParams.get("view") === "supplier-return-preflight") {
+    const rate = await rateLimit(getRateLimitKey(req, `supplier-return-preflight:${organizationId}:${session.userId}`), 90, 60 * 60 * 1000);
+    if (!rate.ok) return NextResponse.json({ error: "TOO_MANY_REQUESTS" }, { status: 429 });
+    const movementId = (url.searchParams.get("movementId") || "").trim();
+    const quantity = (url.searchParams.get("quantity") || "").trim();
+    if (!movementId || movementId.length > 191 || !/^\\d{1,12}(?:\\.\\d{1,3})?$/.test(quantity) || !new Prisma.Decimal(quantity).gt(0)) {
+      return enterpriseDomainErrorResponse(new EnterpriseDomainError("SUPPLIER_RETURN_QUANTITY_INVALID", 400), "SUPPLIER_RETURN_PREFLIGHT_FAILED", req);
+    }
+    try {
+      await assertSupplierReturnAccess(organizationId, session.userId, false);
+      const scope = await retailInventoryVisibleSites(organizationId, session.userId);
+      const preview = await prisma.$transaction(async (tx) => {
+        const origin = await tx.enterpriseStockMovement.findFirst({
+          where: { organizationId, id: movementId, movementType: "PURCHASE_RECEIPT", direction: "IN",
+            sourceEntityType: "EnterprisePurchaseReceipt", sourceEntityId: { in: purchase.receipts.map((receipt) => receipt.id) },
+            sourceLineId: { in: purchase.receipts.flatMap((receipt) => receipt.items.map((item) => item.id)) },
+            ...(scope.isolationEnabled ? { warehouse: { siteId: { in: scope.siteIds } } } : {}) },
+          select: { id: true, inventoryItemId: true, warehouseId: true, storageLocationId: true, stockLotId: true },
+        });
+        if (!origin) throw new EnterpriseDomainError("SUPPLIER_RETURN_ORIGIN_INVALID", 404);
+        const check = await inspectSupplierReturnTx(tx, organizationId, session.userId, { ...origin, supplierReturnSourceMovementId: origin.id, quantity });
+        if (check.receipt.purchaseId !== id) throw new EnterpriseDomainError("SUPPLIER_RETURN_ORIGIN_INVALID", 404);
+        return { eligible: true, readOnly: true, quantity, remaining: check.remaining.toFixed(),
+          unitCost: check.unitCost.toFixed(), totalCost: check.totalCost.toFixed(), currencyCode: check.currencyCode,
+          receiptReference: check.receipt.reference, invoiceReference: check.invoice.number };
+      }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
+      await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "supplier-return-preflight", purchaseId: id } });
+      return NextResponse.json(preview, { headers: { "Cache-Control": "private, no-store" } });
+    } catch (error) {
+      const response = enterpriseDomainErrorResponse(error, "SUPPLIER_RETURN_PREFLIGHT_FAILED", req);
+      await writeApiLog({ request: req, statusCode: response.status, userId: session.userId, startedAt, metadata: { organizationId, domain: "supplier-return-preflight", purchaseId: id } });
+      return response;
+    }
+  }
   if (url.searchParams.get("view") === "receipt-lots") {
     // Purchase visibility is necessary but not sufficient for inventory detail.
     const stockAccess = await getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode: "INVENTORY_LOGISTICS", action: "read", includeMutationCapabilities: false });
@@ -65,7 +101,8 @@ export async function GET(req: Request, { params }: Params) {
       receiptReference: receiptById.get(row.sourceEntityId || "")?.reference || null,
     }));
     await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "purchase-receipt-lots", purchaseId: id, page } });
-    return NextResponse.json({ items, pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) } });
+    const canCheckSupplierReturn = access.canWrite && await assertSupplierReturnAccess(organizationId, session.userId, false).then(() => true, () => false);
+    return NextResponse.json({ items, canCheckSupplierReturn, pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) } });
   }
   const itemIds = purchase.items.map((item) => item.id);
   const [requestRecord, approvals, links, events, comments, operationalLink, itemCatalogLinks] = await Promise.all([
