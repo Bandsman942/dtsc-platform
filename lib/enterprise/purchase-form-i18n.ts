@@ -2,6 +2,15 @@ import { enterpriseCoreIntlLocale } from "@/lib/enterprise-core-i18n";
 
 const PURCHASE_FORM_GUIDANCE = {
   fr: {
+    returnWithdrawTitle: "Annuler le retour avant expédition",
+    returnWithdrawHelp: "L’accord initial reste dans Validations. Le lot reste isolé et aucune écriture n’est modifiée. Confirmez seulement si la marchandise n’a pas été remise.",
+    returnWithdrawReason: "Motif de l’annulation",
+    returnWithdrawConfirm: "Je confirme que le lot n’a pas été expédié.",
+    returnWithdrawAction: "Annuler le retour approuvé",
+    returnWithdrawDone: "Retour annulé avant expédition.",
+    returnWithdrawFailed: "Impossible d’annuler le retour. Actualisez le dossier.",
+    returnWithdrawn: "Retour annulé après approbation",
+    returnWithdrawHistory: "L’accord initial reste disponible à titre historique.",
     returnFinanceReserved: "Réservé pour avoir à rapprocher",
     returnFinanceAllocatable: "Solde affectable au paiement",
     returnFinanceTitle: "Retour fournisseur lié",
@@ -117,6 +126,15 @@ const PURCHASE_FORM_GUIDANCE = {
     actionReasonHelp: "Un motif est obligatoire pour une annulation ou un archivage et restera dans la piste d’audit.",
   },
   en: {
+    returnWithdrawTitle: "Withdraw return before dispatch",
+    returnWithdrawHelp: "The original approval remains in Approvals. The batch stays isolated and no journal is changed. Confirm only if the goods have not been handed over.",
+    returnWithdrawReason: "Withdrawal reason",
+    returnWithdrawConfirm: "I confirm the batch has not been dispatched.",
+    returnWithdrawAction: "Withdraw approved return",
+    returnWithdrawDone: "Return withdrawn before dispatch.",
+    returnWithdrawFailed: "Unable to withdraw the return. Refresh the record.",
+    returnWithdrawn: "Return withdrawn after approval",
+    returnWithdrawHistory: "The original approval remains available as historical evidence.",
     returnFinanceReserved: "Reserved for pending credit",
     returnFinanceAllocatable: "Payable available for allocation",
     returnFinanceTitle: "Linked supplier return",
