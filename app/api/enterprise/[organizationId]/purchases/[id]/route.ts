@@ -7,6 +7,7 @@ import { enterpriseDomainErrorResponse, enterpriseValidationErrorResponse } from
 import { EnterpriseDomainError } from "@/lib/enterprise/common/errors";
 import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
 import { resolveEnterpriseModuleCapabilities } from "@/lib/enterprise/module-access";
+import { formatEnterpriseBusinessDate, getEnterpriseBusinessContext } from "@/lib/enterprise/business-context";
 import { assertSupplierReturnAccess, inspectSupplierReturnTx } from "@/lib/enterprise/inventory/supplier-return-preflight";
 import { dispatchSupplierReturn, supplierReturnDispatchSchema, requireSupplierReturnParticipantAccess, submitSupplierReturnRequest, supplierReturnApprovalCandidates, supplierReturnRequestSchema, SUPPLIER_RETURN_TARGET } from "@/lib/enterprise/inventory/supplier-return-request-service";
 import { notifyUser } from "@/lib/notifications";
@@ -130,9 +131,10 @@ export async function GET(req: Request, { params }: Params) {
       resolveEnterpriseModuleCapabilities({organizationId,userId:session.userId,moduleCode:"FINANCE_INVENTORY"}),
       resolveEnterpriseModuleCapabilities({organizationId,userId:session.userId,moduleCode:"FINANCE_PAYABLES"}),
     ]) : [null,null];
+    const businessContext = requests.some(request => request.dispatchedAt) ? await getEnterpriseBusinessContext(prisma, organizationId) : null;
     const requestByMovement = new Map(requests.filter((request) => requestApprovals.some((approval) => approval.targetEntityId === request.id)).map((request) => [request.sourceMovementId, {
       id:request.id, reference:request.reference,status:request.status,quantity:request.quantity,revision:request.revision,unitCost:request.unitCost,totalCost:request.totalCost,currencyCode:request.currencyCode,
-      dispatchReference:request.dispatchReference,dispatchedAt:request.dispatchedAt,supplierCreditNoteId:request.supplierCreditNoteId,supplierCreditReference:request.supplierCreditReference,
+      dispatchReference:request.dispatchReference,dispatchedAt:request.dispatchedAt,dispatchBusinessDate:request.dispatchedAt && businessContext ? formatEnterpriseBusinessDate(request.dispatchedAt,businessContext.timezone) : null,supplierCreditNoteId:request.supplierCreditNoteId,supplierCreditReference:request.supplierCreditReference,
       supplierInvoiceId:request.supplierInvoiceId,supplierInvoiceItemId:request.supplierInvoiceItemId,
       canDispatch:canSubmitSupplierReturn && financeInventory?.canManage === true && request.requestedByUserId === session.userId && request.status === "APPROVED",
       canCreateCredit:financePayables?.canCreate === true && request.status === "DISPATCHED" && !request.supplierCreditNoteId,
