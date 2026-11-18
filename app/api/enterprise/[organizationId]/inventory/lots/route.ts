@@ -5,6 +5,7 @@ import { enterpriseDomainErrorResponse } from "@/lib/enterprise/common/http";
 import { publishEnterpriseEvent } from "@/lib/enterprise/crm-sales/helpers";
 import { lotExpiryDateKey } from "@/lib/enterprise/inventory/lot-allocation";
 import { requireInventoryStockAuthorityTx } from "@/lib/enterprise/inventory/service";
+import { assertCustodyRecoveryReadAccess, inspectCustodyRecoveryTx } from "@/lib/enterprise/inventory/custody-recovery-preflight";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getSession } from "@/lib/auth";
@@ -42,6 +43,16 @@ export async function GET(req: Request, { params }: Params) {
   const allowedWarehouseIds=scope.isolationEnabled?(await prisma.enterpriseWarehouse.findMany({where:{organizationId,siteId:{in:scope.siteIds}},select:{id:true}})).map(row=>row.id):null;
   const lotScope:Prisma.EnterpriseStockLotWhereInput=allowedWarehouseIds!==null?{warehouseId:{in:allowedWarehouseIds}}:{};
   const traceId=url.searchParams.get("lotId");
+  if(url.searchParams.get("view")==="custody-recovery") {
+    const custodyId=url.searchParams.get("custodyId")?.trim();
+    if(!custodyId||custodyId.length>191)return NextResponse.json({error:"INVENTORY_LOT_INPUT_INVALID"},{status:400});
+    if(!(await rateLimit(`inventory-custody-recovery:${organizationId}:${session.userId}`,60,60_000)).ok)return NextResponse.json({error:"RATE_LIMITED"},{status:429});
+    try{
+      await assertCustodyRecoveryReadAccess(organizationId,session.userId);
+      const result=await prisma.$transaction(tx=>inspectCustodyRecoveryTx(tx,organizationId,session.userId,custodyId),{isolationLevel:Prisma.TransactionIsolationLevel.RepeatableRead});
+      return NextResponse.json(result,{headers:{"Cache-Control":"private, no-store"}});
+    }catch(error){return enterpriseDomainErrorResponse(error,"INVENTORY_RETURN_CUSTODY_FAILED",req);}
+  }
   if(url.searchParams.get("view")==="custody") {
     const status=url.searchParams.get("status");
     const movementWhere:Prisma.EnterpriseStockMovementWhereInput={organizationId,...scoped,...(warehouseId?{warehouseId}:{}),...(traceId?{stockLotId:traceId}:{})};
@@ -50,7 +61,8 @@ export async function GET(req: Request, { params }: Params) {
       prisma.enterpriseInventoryReturnCustody.findMany({where,orderBy:[{createdAt:"desc"},{id:"desc"}],skip:(page-1)*pageSize,take:pageSize,include:{originalMovement:{select:{warehouseId:true,warehouse:{select:{name:true,code:true,siteId:true}},inventoryItem:{select:{catalogItem:{select:{name:true,code:true}}}},stockLot:{select:{id:true,lotNumber:true,recallReference:true}}}},returnLine:{select:{request:{select:{id:true,number:true}}}}}}),
       prisma.enterpriseInventoryReturnCustody.count({where}),
     ]);
-    return NextResponse.json({items:items.map(item=>{ const siteWrite=!scope.isolationEnabled||scope.manageableSiteIds.includes(item.originalMovement.warehouse.siteId);return {...item,canRequest:siteWrite&&access.canWrite&&item.status==="QUARANTINED",canConfirm:siteWrite&&access.canAdminister&&item.status==="DISPOSAL_PENDING"&&![item.inspectedByUserId,item.registeredByUserId,item.disposalRequestedByUserId].includes(session.userId)};}),pagination:{page,pageSize,total,pageCount:Math.max(1,Math.ceil(total/pageSize))}},{headers:{"Cache-Control":"private, no-store"}});
+    const canInspectRecovery=items.length>0&&await assertCustodyRecoveryReadAccess(organizationId,session.userId).then(()=>true,()=>false);
+    return NextResponse.json({items:items.map(item=>{ const siteWrite=!scope.isolationEnabled||scope.manageableSiteIds.includes(item.originalMovement.warehouse.siteId);return {...item,canInspectRecovery:canInspectRecovery&&siteWrite&&access.canWrite&&item.status==="QUARANTINED",canRequest:siteWrite&&access.canWrite&&item.status==="QUARANTINED",canConfirm:siteWrite&&access.canAdminister&&item.status==="DISPOSAL_PENDING"&&![item.inspectedByUserId,item.registeredByUserId,item.disposalRequestedByUserId].includes(session.userId)};}),pagination:{page,pageSize,total,pageCount:Math.max(1,Math.ceil(total/pageSize))}},{headers:{"Cache-Control":"private, no-store"}});
   }
   if (url.searchParams.get("view")==="trace") {
     if(!traceId || traceId.length>191) return NextResponse.json({error:"INVENTORY_LOT_INPUT_INVALID"},{status:400});
