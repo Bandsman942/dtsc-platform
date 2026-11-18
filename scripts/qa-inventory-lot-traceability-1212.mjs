@@ -301,6 +301,10 @@ assert.equal(replayDispatch.idempotent,true); assert.equal(quantityRemaining.toF
 assert.equal(writes.length,7);
 await assert.rejects(returnSvc.dispatchSupplierReturn("org-a","po-a","requester",{...dispatch,dispatchReference:"SHIP-OTHER"}),{code:"SUPPLIER_RETURN_CONFLICT"});
 mocks["@/lib/enterprise/accounting/semantic-account-resolver"] = { resolveSemanticPostingAccount: async (_tx,input) => ({id:input.mappingKey}) };
+const realBusinessContext = load("lib/enterprise/business-context.ts");
+mocks["@/lib/enterprise/business-context"] = realBusinessContext;
+rtvTx.organization={findFirst:async()=>({timezone:"Africa/Kinshasa"})};
+rtvTx.enterpriseFinanceConfiguration={findUnique:async()=>({functionalCurrencyCode:"USD"})};
 const returnCredit = load("lib/enterprise/accounting/supplier-return-credit-reconciliation.ts");
 mocks["@/lib/enterprise/accounting/supplier-return-credit-reconciliation"] = returnCredit;
 const postingBuilder = load("lib/enterprise/accounting/domain-posting-builders.ts");
@@ -310,7 +314,7 @@ assert.equal(doc.lines[1].accountMappingKey,"INVENTORY");
 assert.ok(doc.lines[0].debit.equals(14)); assert.ok(doc.lines[1].credit.equals(14));
 currentEvent = {...currentEvent,eventType:"ISSUE"};
 await assert.rejects(postingBuilder.buildInventoryAccountingPosting(rtvTx,{organizationId:"org-a",sourceEntityType:"EnterpriseInventoryAccountingEvent",sourceEntityId:"event-a"},"ISSUE"),{code:"INVENTORY_ACCOUNTING_EVENT_NOT_POSTABLE"});
-const fakeCredit = { id:"credit-a", supplierInvoiceId:"invoice-a", currencyCode:"USD", grandTotal:d(14),subtotal:d(14),taxTotal:d(0),creditDate:new Date(),createdByUserId:"creator",approvedByUserId:"reviewer" };
+const fakeCredit = { id:"credit-a", supplierInvoiceId:"invoice-a", currencyCode:"USD", grandTotal:d(14),subtotal:d(14),taxTotal:d(0),creditDate:new Date("2026-10-19T00:00:00.000Z"),createdByUserId:"creator",approvedByUserId:"reviewer" };
 const fakeLine = {sourceInvoiceItemId:"invoice-item-a",catalogItemId:"catalog-a",quantity:d(2),unitPrice:d(7),netAmount:d(14),taxAmount:d(0),totalAmount:d(14)};
 const creditTx = {...rtvTx,enterpriseSupplierReturnRequest:{findFirst:async()=>rtv,findMany:async()=>[rtv]},
   enterpriseSupplierCreditNote:{findFirst:async()=>fakeCredit},enterpriseSupplierCreditNoteItem:{findMany:async()=>[fakeLine]}};
@@ -318,11 +322,14 @@ await assert.rejects(postingBuilder.buildSupplierCreditNotePosting(creditTx,{org
 await returnCredit.assertSupplierPaymentCapacityTx(creditTx,"org-a",{supplierInvoiceId:"invoice-a",currencyCode:"USD",outstandingAmount:d(70)},d(56));
 await assert.rejects(returnCredit.assertSupplierPaymentCapacityTx(creditTx,"org-a",{supplierInvoiceId:"invoice-a",currencyCode:"USD",outstandingAmount:d(70)},d("56.01")),{code:"SUPPLIER_RETURN_PAYABLE_RESERVED"});
 const ledgerLine = (ledgerAccountId,debit,credit)=>({ledgerAccountId,debit:d(debit),credit:d(credit)});
-rtv={...rtv,supplierCreditNoteId:"credit-a",supplierCreditReference:"SCN-ORIG"};
+rtv={...rtv,dispatchedAt:new Date("2026-10-18T23:30:00.000Z"),supplierCreditNoteId:"credit-a",supplierCreditReference:"SCN-ORIG"};
 currentEvent={...currentEvent,eventType:"SUPPLIER_RETURN",status:"POSTED",journalEntryId:"dispatch-journal"};
 const evidenceTx={...creditTx,enterpriseSupplierInvoiceItem:{findFirst:async()=>({id:"invoice-item-a",catalogItemId:"catalog-a"})},
-  enterpriseJournalEntry:{findFirst:async({where})=>where.id?{id:"dispatch-journal",accountingDate:new Date(),functionalCurrencyCode:"USD",lines:[ledgerLine("GOODS_RECEIVED_CLEARING",14,0),ledgerLine("INVENTORY",0,14)]}:{id:"invoice-journal",functionalCurrencyCode:"USD",lines:[ledgerLine("GOODS_RECEIVED_CLEARING",70,0),ledgerLine("ACCOUNTS_PAYABLE",0,70)]}}};
+  enterpriseJournalEntry:{findFirst:async({where})=>where.id?{id:"dispatch-journal",accountingDate:new Date("2026-10-19T00:00:00.000Z"),functionalCurrencyCode:"USD",lines:[ledgerLine("GOODS_RECEIVED_CLEARING",14,0),ledgerLine("INVENTORY",0,14)]}:{id:"invoice-journal",functionalCurrencyCode:"USD",lines:[ledgerLine("GOODS_RECEIVED_CLEARING",70,0),ledgerLine("ACCOUNTS_PAYABLE",0,70)]}}};
 assert.equal((await returnCredit.verifySupplierReturnCreditTx(evidenceTx,"org-a",fakeCredit,[fakeLine])).id,rtv.id);
+await assert.rejects(returnCredit.assertSupplierReturnCreditDateTx(evidenceTx,"org-a",new Date("2026-10-18T00:00:00.000Z"),rtv.dispatchedAt),{code:"SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED"});
+assert.equal(await returnCredit.assertSupplierReturnCreditDateTx(evidenceTx,"org-a",fakeCredit.creditDate,rtv.dispatchedAt),"2026-10-19");
+await assert.rejects(returnCredit.assertSupplierReturnCreditDateTx(evidenceTx,"org-a",new Date("2026-10-19T12:00:00.000Z"),rtv.dispatchedAt),{code:"SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED"});
 await assert.rejects(returnCredit.verifySupplierReturnCreditTx(evidenceTx,"org-a",{...fakeCredit,grandTotal:d(13)},[fakeLine]),{code:"SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED"});
 await assert.rejects(returnCredit.verifySupplierReturnCreditTx(evidenceTx,"org-a",{...fakeCredit,approvedByUserId:"creator"},[fakeLine]),{code:"SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED"});
 await assert.rejects(returnCredit.verifySupplierReturnCreditTx(evidenceTx,"org-a",fakeCredit,[{...fakeLine,quantity:d(1)}]),{code:"SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED"});
