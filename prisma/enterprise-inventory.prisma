@@ -262,6 +262,47 @@ model EnterpriseStockAdjustment {
 }
 
 
+
+ // Supplier return request/approval is not a stock movement or credit note.
+ // Preserve the exact original receipt, valuation and invoice evidence.
+model EnterpriseSupplierReturnRequest {
+  id                      String @id @default(cuid())
+  organizationId          String
+  reference               String
+  purchaseId              String
+  receiptId               String
+  receiptItemId           String
+  sourceMovementId        String
+  inventoryItemId         String
+  warehouseId             String
+  storageLocationId       String?
+  stockLotId              String
+  supplierId              String
+  supplierInvoiceId       String
+  supplierInvoiceItemId   String
+  receiptAccountingEventId String
+  originCostLayerId       String
+  quantity                Decimal @db.Decimal(18, 3)
+  unitCost                Decimal @db.Decimal(20, 6)
+  totalCost               Decimal @db.Decimal(20, 6)
+  currencyCode            String
+  reason                  String
+  requestedByUserId       String
+  status                  String @default("PENDING_APPROVAL")
+  idempotencyKey          String
+  revision                Int @default(1)
+  decidedAt               DateTime?
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  @@unique([organizationId, id], map: "supplier_return_org_id_key")
+  @@unique([organizationId, reference], map: "supplier_return_reference_key")
+  @@unique([organizationId, idempotencyKey], map: "supplier_return_idempotency_key")
+  @@index([organizationId, purchaseId, createdAt], map: "supplier_return_purchase_idx")
+  @@index([organizationId, sourceMovementId, status], map: "supplier_return_movement_idx")
+  @@index([organizationId, supplierInvoiceId, status], map: "supplier_return_invoice_idx")
+}
+
 model EnterpriseStockLotReclassification {
   id                    String   @id @default(cuid())
   organizationId        String
