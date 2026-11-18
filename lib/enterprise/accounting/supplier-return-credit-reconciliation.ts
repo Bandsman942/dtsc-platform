@@ -30,7 +30,12 @@ type CreditLine = { sourceInvoiceItemId: string | null; catalogItemId: string | 
  * It never treats an unrelated commercial discount as a stock reversal. */
 export async function verifySupplierReturnCreditTx(tx: Prisma.TransactionClient, organizationId: string, credit: CreditEvidence, items: CreditLine[]) {
   const dispatched = await tx.enterpriseSupplierReturnRequest.findFirst({ where: { organizationId, supplierInvoiceId: credit.supplierInvoiceId, status: "DISPATCHED" } });
-  if (!dispatched) return null;
+  if (!dispatched) {
+    // Finalized return evidence cannot be posted again at a new posting version.
+    const finalized = await tx.enterpriseSupplierReturnRequest.findFirst({where:{organizationId,supplierInvoiceId:credit.supplierInvoiceId,status:"RECONCILED"}});
+    if (finalized) return fail();
+    return null;
+  }
   if (dispatched.supplierCreditNoteId !== credit.id || !dispatched.supplierCreditReference || !dispatched.dispatchedAt || !dispatched.dispatchMovementId || !dispatched.dispatchAccountingEventId ||
       credit.creditDate.toISOString().slice(0,10) < dispatched.dispatchedAt.toISOString().slice(0,10) ||
       !credit.approvedByUserId || credit.createdByUserId === credit.approvedByUserId ||
