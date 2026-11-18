@@ -11,7 +11,7 @@ import { customerFacingError } from "@/lib/customer-facing-language";
 type CustodyRow={
   id:string;revision:number;quantity:string;status:string;disposition:string;inspectedAt:string;
   inspectionNotes:string|null;disposalReason:string|null;disposalEvidence:string|null;disposedAt:string|null;
-  canRequest:boolean;canConfirm:boolean;canInspectRecovery?:boolean;canAssessRecovery?:boolean;recoveryAssessment?:{id:string;revision:number;canWithdraw:boolean;reference:string;status:string;proposedRecoveryAmount:string;currencyCode:string;stale:boolean;approvalId:string}|null;
+  canRequest:boolean;canConfirm:boolean;canInspectRecovery?:boolean;canAssessRecovery?:boolean;recoveryAssessment?:{id:string;revision:number;canWithdraw:boolean;canExecute?:boolean;recoveryMovementId?:string|null;recoveryJournalEntryId?:string|null;releaseEvidence?:string|null;executedAt?:string|null;reference:string;status:string;proposedRecoveryAmount:string;currencyCode:string;stale:boolean;approvalId:string}|null;
   originalMovement:{warehouse:{name:string;code:string};inventoryItem:{catalogItem:{name:string;code:string}};stockLot:{lotNumber:string;recallReference:string|null}|null};
   returnLine:{request:{id:string;number:string}};
 };
@@ -49,7 +49,7 @@ export function InventoryReturnCustodyDialog({organizationId,locale,warehouses,o
     },200);
     return()=>{clearTimeout(timer);controller.abort();};
   },[endpoint,search,warehouse,status,page,reload,en,locale,focusedCustodyId]);
-  const labels:Record<string,string>={QUARANTINED:en?"In quarantine":"En quarantaine",DISPOSAL_PENDING:en?"Disposal pending":"Destruction à attester",DISPOSED:en?"Disposed":"Détruit"};
+  const labels:Record<string,string>={QUARANTINED:en?"In quarantine":"En quarantaine",DISPOSAL_PENDING:en?"Disposal pending":"Destruction à attester",DISPOSED:en?"Disposed":"Détruit",RECOVERED:en?"Recovered":"Réintégré"};
   const date=(value:string)=>new Intl.DateTimeFormat(en?"en-GB":"fr-FR",{dateStyle:"medium"}).format(new Date(value));
   async function inspectRecovery(row:CustodyRow){
     if(busy||recovery?.loading)return;
@@ -61,6 +61,20 @@ export function InventoryReturnCustodyDialog({organizationId,locale,warehouses,o
       if(!response.ok||!body?.eligibleForAssessment||body.readOnly!==true||body.physicalReleaseAuthorized!==false||body.accountingRecognitionAuthorized!==false)throw new Error(body?.message||(en?"Assessment not available.":"Diagnostic indisponible."));
       setRecovery({id:row.id,preview:body,loading:false});
     }catch(caught){setRecovery({id:row.id,error:customerFacingError(caught,locale),loading:false});}
+  }
+  async function executeAssessment(event:FormEvent<HTMLFormElement>,row:CustodyRow){
+    event.preventDefault();
+    const appraisal=row.recoveryAssessment;
+    if(busy||!appraisal?.canExecute)return;
+    const form=new FormData(event.currentTarget),releaseEvidence=String(form.get("releaseEvidence")||"").trim();
+    if(releaseEvidence.length<8||form.get("confirmedSaleableAndRepaired")!=="on")return;
+    setBusy(true);
+    try{
+      const response=await fetch(endpoint+"?action=execute-recovery-assessment",{method:"PATCH",headers:{"Content-Type":"application/json","Accept-Language":locale},body:JSON.stringify({custodyId:row.id,assessmentId:appraisal.id,revision:appraisal.revision,releaseEvidence,confirmedSaleableAndRepaired:true})});
+      const body=await response.json().catch(()=>null);
+      if(!response.ok||!body?.ok)throw new Error(body?.message||(en?"Recovery refused.":"Réintégration refusée."));
+      setRecovery(null);setReload(value=>value+1);notifyToast(en?"Stock and accounting recovery recorded.":"Réintégration physique et comptable enregistrée.","success");
+    }catch(caught){notifyToast({title:en?"Recovery not recorded":"Réintégration non enregistrée",description:customerFacingError(caught,locale),tone:"error"});}finally{setBusy(false);}
   }
   async function withdrawAssessment(event:FormEvent<HTMLFormElement>,row:CustodyRow){
     event.preventDefault();
@@ -120,13 +134,25 @@ export function InventoryReturnCustodyDialog({organizationId,locale,warehouses,o
         <label className="grid gap-1 text-xs font-semibold">{en?"Warehouse":"Dépôt"}<select className="min-h-11 rounded-xl border border-dtsc-border bg-dtsc-page p-2" value={warehouse} onChange={event=>{setWarehouse(event.target.value);setPage(1);}}><option value="">{en?"All authorized warehouses":"Tous les dépôts autorisés"}</option>{warehouses.map(row=><option key={row.id} value={row.id}>{row.code} · {row.name}</option>)}</select></label>
         <label className="grid gap-1 text-xs font-semibold">{en?"Status":"Statut"}<select className="min-h-11 rounded-xl border border-dtsc-border bg-dtsc-page p-2" value={status} onChange={event=>{setStatus(event.target.value);setPage(1);}}><option value="">{en?"All statuses":"Tous les statuts"}</option>{Object.entries(labels).map(([key,label])=><option key={key} value={key}>{label}</option>)}</select></label>
       </div>
-      {loading?<p role="status" className="text-sm">{en?"Loading…":"Chargement…"}</p>:error?<p role="alert" className="text-sm text-red-700 dark:text-red-200">{error}</p>:items.length?items.map(row=><article key={row.id} className="grid min-w-0 gap-2 rounded-xl border border-dtsc-border p-3"><div className="flex flex-wrap items-start justify-between gap-2"><div className="min-w-0"><p className="break-words text-sm font-bold">{row.originalMovement.inventoryItem.catalogItem.name} · {row.quantity}</p><p className="break-words text-xs text-dtsc-muted">{row.returnLine.request.number} · {row.originalMovement.warehouse.name} · {row.originalMovement.stockLot?.lotNumber||(en?"Untracked batch":"Sans lot")}</p></div><span className={`rounded-full px-2 py-1 text-xs font-semibold ${row.status==="DISPOSED"?"bg-slate-500/15 text-dtsc-muted":row.status==="DISPOSAL_PENDING"?"bg-red-500/10 text-red-700 dark:text-red-200":"bg-amber-500/15 text-amber-800 dark:text-amber-200"}`}>{labels[row.status]||row.status}</span></div>
+      {loading?<p role="status" className="text-sm">{en?"Loading…":"Chargement…"}</p>:error?<p role="alert" className="text-sm text-red-700 dark:text-red-200">{error}</p>:items.length?items.map(row=><article key={row.id} className="grid min-w-0 gap-2 rounded-xl border border-dtsc-border p-3"><div className="flex flex-wrap items-start justify-between gap-2"><div className="min-w-0"><p className="break-words text-sm font-bold">{row.originalMovement.inventoryItem.catalogItem.name} · {row.quantity}</p><p className="break-words text-xs text-dtsc-muted">{row.returnLine.request.number} · {row.originalMovement.warehouse.name} · {row.originalMovement.stockLot?.lotNumber||(en?"Untracked batch":"Sans lot")}</p></div><span className={`rounded-full px-2 py-1 text-xs font-semibold ${row.status==="RECOVERED"?"bg-green-500/10 text-green-700 dark:text-green-200":row.status==="DISPOSED"?"bg-slate-500/15 text-dtsc-muted":row.status==="DISPOSAL_PENDING"?"bg-red-500/10 text-red-700 dark:text-red-200":"bg-amber-500/15 text-amber-800 dark:text-amber-200"}`}>{labels[row.status]||row.status}</span></div>
         <p className="text-xs text-dtsc-muted">{en?"Inspected":"Inspecté"} · {date(row.inspectedAt)} {row.inspectionNotes||""}</p>{row.disposalReason?<p className="break-words text-xs">{en?"Reason":"Motif"} : {row.disposalReason}</p>:null}{row.disposalEvidence?<p className="break-words text-xs">{en?"Evidence":"Preuve"} : {row.disposalEvidence} · {row.disposedAt?date(row.disposedAt):"—"}</p>:null}
         {row.recoveryAssessment?<section className="grid min-w-0 gap-1 rounded-lg border border-dtsc-border p-2 text-xs">
-          <strong className="break-words">{row.recoveryAssessment.reference} · {row.recoveryAssessment.status==="APPROVED"?(en?"Appraisal approved":"Expertise approuvée"):(en?"Under review":"En attente de validation")}</strong>
+          <strong className="break-words">{row.recoveryAssessment.reference} · {row.recoveryAssessment.status==="EXECUTED"?(en?"Recovery executed":"Réintégration effectuée"):row.recoveryAssessment.status==="APPROVED"?(en?"Appraisal approved":"Expertise approuvée"):(en?"Under review":"En attente de validation")}</strong>
           <p>{en?"Proposed recovery":"Valeur proposée"} : {row.recoveryAssessment.proposedRecoveryAmount} {row.recoveryAssessment.currencyCode}</p>
           {row.recoveryAssessment.stale?<p role="alert" className="text-amber-700 dark:text-amber-200">{en?"Custody has changed; a new review is required.":"La garde a changé ; une nouvelle revue est nécessaire."}</p>:null}
-          <p className="text-dtsc-muted">{en?"No stock release or accounting recognition authorized.":"Aucune remise en stock ni reconnaissance comptable autorisée."}</p>
+          {row.recoveryAssessment.status==="EXECUTED"?<div className="grid gap-1 text-dtsc-muted">
+            <p>{en?"Recognized inventory value":"Valeur réintégrée"} : {row.recoveryAssessment.proposedRecoveryAmount} {row.recoveryAssessment.currencyCode}</p>
+            <p className="break-all">{en?"Movement":"Mouvement"} : {row.recoveryAssessment.recoveryMovementId}</p>
+            <p className="break-all">{en?"Journal entry":"Écriture"} : {row.recoveryAssessment.recoveryJournalEntryId}</p>
+            <p className="break-words">{en?"Release evidence":"Preuve de remise"} : {row.recoveryAssessment.releaseEvidence}</p>
+          </div>:<p className="text-dtsc-muted">{en?"Approval alone does not release stock or recognize value.":"L’approbation seule ne remet pas en stock et ne comptabilise aucune valeur."}</p>}
+          {row.recoveryAssessment.canExecute?<form onSubmit={event=>void executeAssessment(event,row)} className="grid min-w-0 gap-2 rounded-lg border border-dtsc-border p-2">
+            <strong>{en?"Record final physical release":"Enregistrer la remise en stock définitive"}</strong>
+            <p className="text-dtsc-muted">{en?"Confirm only after quality checks and all required repairs are completed. The approved value will debit inventory and credit cost of sales.":"Confirmez uniquement après les contrôles qualité et la remise en état complète. La valeur approuvée sera portée au débit du stock et au crédit du coût des ventes."}</p>
+            <label className="grid gap-1">{en?"Final quality/release evidence":"Preuve finale de conformité et de remise"} *<textarea name="releaseEvidence" required minLength={8} maxLength={2000} disabled={busy} className="w-full min-w-0 rounded-xl border border-dtsc-border bg-dtsc-page p-2 text-base"/></label>
+            <label className="flex items-start gap-2"><input type="checkbox" name="confirmedSaleableAndRepaired" required disabled={busy}/><span>{en?"I confirm the goods are physically present, repairs complete, safe and saleable.":"Je confirme la présence physique, la remise en état terminée et la conformité du produit à la vente."}</span></label>
+            <Button type="submit" disabled={busy} className="whitespace-normal">{en?"Confirm stock and valuation recovery":"Confirmer la réintégration et la valorisation"}</Button>
+          </form>:null}
           {row.recoveryAssessment.canWithdraw?<details className="rounded-lg border border-dtsc-border p-2">
             <summary className="cursor-pointer font-medium">{en?"Withdraw approved appraisal":"Retirer l’expertise approuvée"}</summary>
             <form onSubmit={event=>void withdrawAssessment(event,row)} className="mt-2 grid min-w-0 gap-2">
