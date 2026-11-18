@@ -6,6 +6,7 @@ import { enterpriseApprovalModuleForTarget, enterpriseApprovalTargetDeepLink } f
 import { enterpriseApprovalVisibilityWhere, getEnterpriseCoreV2Access } from "@/lib/enterprise/core-v2/access";
 import { prisma } from "@/lib/prisma";
 import { requireLotReclassificationOrganizationWideScope } from "@/lib/enterprise/inventory/lot-reclassification";
+import { assertSupplierReturnReviewAccess, SUPPLIER_RETURN_TARGET } from "@/lib/enterprise/inventory/supplier-return-request-service";
 import { supportsProfessionalApprovalCorrection } from "@/lib/standard-work-coordination/approval-coordination";
 
 type Params = { params: Promise<{ organizationId: string; id: string }> };
@@ -21,6 +22,10 @@ export async function GET(req: Request, { params }: Params) {
     where: { id, ...enterpriseApprovalVisibilityWhere({ organizationId, userId: session.userId, canSeeAll: access.canSeeAll }) },
   });
   if (!approval) return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
+  if (approval.targetEntityType === SUPPLIER_RETURN_TARGET) {
+    try { await assertSupplierReturnReviewAccess(organizationId, session.userId, approval); }
+    catch { return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 }); }
+  }
   if (approval.targetEntityType === "EnterpriseStockLotReclassification") {
     try { await requireLotReclassificationOrganizationWideScope(prisma, organizationId, session.userId); }
     catch { return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 }); }
@@ -33,15 +38,15 @@ export async function GET(req: Request, { params }: Params) {
   ]);
 
   const moduleCode = enterpriseApprovalModuleForTarget(approval.targetEntityType);
-  const candidateResult = moduleCode && approval.status === "PENDING"
+  const candidateResult = moduleCode && approval.status === "PENDING" && approval.targetEntityType !== SUPPLIER_RETURN_TARGET
     ? await listEnterpriseApprovalCandidates({ organizationId, requesterUserId: approval.requestedByUserId, moduleCode })
     : { candidates: [], selfApprovalOverrideAvailable: false };
   const delegates = candidateResult.candidates.filter((candidate) => candidate.userId !== approval.approverUserId && candidate.userId !== approval.requestedByUserId);
   const isAssignedValidator = approval.approverUserId === session.userId;
   const isRequester = approval.requestedByUserId === session.userId;
   const selfApprovalAllowed = candidateResult.candidates.some((candidate) => candidate.userId === session.userId && candidate.selfApprovalOverride);
-  const isHistoricalLotAllocation = approval.targetEntityType === "EnterpriseStockLotReclassification";
-  const canDecide = approval.status === "PENDING" && isAssignedValidator && (!isRequester || (!isHistoricalLotAllocation && selfApprovalAllowed));
+  const requiresIndependentReview = ["EnterpriseStockLotReclassification", SUPPLIER_RETURN_TARGET].includes(approval.targetEntityType);
+  const canDecide = approval.status === "PENDING" && isAssignedValidator && (!isRequester || (!requiresIndependentReview && selfApprovalAllowed));
   const correctionSupported = supportsProfessionalApprovalCorrection(approval.targetEntityType);
   const capabilities = {
     canView: true,
@@ -49,8 +54,8 @@ export async function GET(req: Request, { params }: Params) {
     canApprove: canDecide,
     canReject: canDecide,
     canRequestCorrection: correctionSupported && canDecide,
-    canCancel: isHistoricalLotAllocation && approval.status === "PENDING" && isRequester,
-    canDelegate: !isHistoricalLotAllocation && approval.status === "PENDING" && Boolean(moduleCode) && delegates.length > 0 && (access.canManage || (isAssignedValidator && !isRequester)),
+    canCancel: requiresIndependentReview && approval.status === "PENDING" && isRequester,
+    canDelegate: !requiresIndependentReview && approval.status === "PENDING" && Boolean(moduleCode) && delegates.length > 0 && (access.canManage || (isAssignedValidator && !isRequester)),
     canResubmit: correctionSupported && approval.status === "CORRECTION_REQUESTED" && (access.canManage || isRequester),
   };
 
