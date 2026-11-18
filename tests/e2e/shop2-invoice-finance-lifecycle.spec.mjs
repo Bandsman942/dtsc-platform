@@ -981,6 +981,18 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
     expect((await changePolicy()).status).toBe(200);
     const activeHistory=await prisma.enterpriseInventoryItem.findUniqueOrThrow({where:{id:historicalInventory.id}});
     expect(activeHistory.lotTracking&&activeHistory.expiryTracking).toBe(true);
+    const countPath=base+"/inventory-counts";
+    const countedA=historicalRows.find(row=>row.stockLot?.lotNumber==="HIST-A");
+    const countRequest=await post(context.owner,countPath,{warehouseId:fixture.warehouse.id,countType:"SPOT",approverUserId:fixture.settler.id,lines:[{inventoryItemId:historicalInventory.id,stockLotId:countedA.stockLotId,countedQuantity:30}]});
+    expect(countRequest.status,JSON.stringify(countRequest.body)).toBe(201);
+    expect(countRequest.body.count.lines).toHaveLength(1);
+    expect(countRequest.body.count.lines[0].organizationId).toBe(organizationId);
+    expect(Number(countRequest.body.count.lines[0].expectedQuantity)).toBe(30);
+    const finishedCount=await post(context.settler,countPath+"/"+countRequest.body.count.id+"/decision",{decision:"APPROVE",revision:countRequest.body.count.revision});
+    expect(finishedCount.status,JSON.stringify(finishedCount.body)).toBe(200);
+    expect(finishedCount.body.count.status).toBe("COMPLETED");
+    expect(await prisma.enterpriseStockMovement.count({where:{organizationId,sourceEntityType:"EnterpriseInventoryCount",sourceEntityId:countRequest.body.count.id}})).toBe(0);
+
 
     // Purchase adapter and valuation: rejected recalled batches must roll back
     // the purchase status, canonical receipt, balances and movements together.
