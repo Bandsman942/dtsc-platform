@@ -815,13 +815,22 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
     const lossEntry=await prisma.enterpriseJournalEntry.findUniqueOrThrow({where:{id:lostCost.journalEntryId},include:{lines:true}});
     expect(lossEntry.totalDebit.equals(lossEntry.totalCredit)).toBe(true);
     expect(lossEntry.totalDebit.equals(7)).toBe(true);
-    const mappingRows=await prisma.enterpriseAccountMapping.findMany({where:{organizationId,mappingKey:{in:["OPERATING_EXPENSE","INVENTORY","COST_OF_SALES"]},isActive:true,chart:{status:"ACTIVE"}}});
-    const expenseMapping=mappingRows.find(row=>row.mappingKey==="OPERATING_EXPENSE");
-    const inventoryMapping=mappingRows.find(row=>row.mappingKey==="INVENTORY");
+    // Accounts are versioned. Resolve the mapping EFFECTIVE on the journal
+    // date, not an arbitrary active row from the whole history.
+    const effectiveMapping=async mappingKey=>prisma.enterpriseAccountMapping.findFirstOrThrow({
+      where:{organizationId,mappingKey,isActive:true,chart:{status:"ACTIVE"},
+        OR:[{effectiveFrom:null},{effectiveFrom:{lte:lossEntry.accountingDate}}],
+        AND:[{OR:[{effectiveTo:null},{effectiveTo:{gte:lossEntry.accountingDate}}]}]},
+      orderBy:[{effectiveFrom:"desc"},{createdAt:"desc"}],
+    });
+    const expenseMapping=await effectiveMapping("OPERATING_EXPENSE");
+    const inventoryMapping=await effectiveMapping("INVENTORY");
+    expect(lossEntry.postingEvent).toBe("INVENTORY_LOSS_VALUED");
+    expect(lossEntry.lines).toHaveLength(2);
     expect(expenseMapping).toBeTruthy();
     expect(inventoryMapping).toBeTruthy();
     expect(lossEntry.lines.some(row=>row.ledgerAccountId===expenseMapping.ledgerAccountId && row.debit.equals(7))).toBe(true);
-    expect(lossEntry.lines.some(row=>row.ledgerAccountId===inventoryMapping.ledgerAccountId && row.credit.equals(7))).toBe(true);
+    expect(lossEntry.lines.some(row=>row.ledgerAccountId===inventoryMapping.ledgerAccountId && row.credit.equals(7)),JSON.stringify({expectedAccount:inventoryMapping.ledgerAccountId,lines:lossEntry.lines.map(row=>({account:row.ledgerAccountId,debit:row.debit,credit:row.credit}))})).toBe(true);
     expect(lossEntry.lines.every(row=>row.siteId===fixture.site.id)).toBe(true);
     const secondDecision=await post(context.settler,lossDecision,{decision:"APPROVE",revision:loss.body.adjustment.revision});
     expect(secondDecision.status).toBeGreaterThanOrEqual(400);

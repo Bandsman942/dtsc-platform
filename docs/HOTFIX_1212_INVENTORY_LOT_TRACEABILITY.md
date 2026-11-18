@@ -82,6 +82,8 @@
 
 - Recette transfert réel enrichie : expédition confirmée, rappel avant réception, refus de recréer le lot via POST et DB, réception dans le troisième dépôt sous le même rappel, solde physique isolé, rejeu refusé et unique mouvement entrant, trace inter-dépôts. Résultat à certifier.
 
+- CI 5295e4e : 16/17 workflows verts (Quality 44293682806, commandes/concurrence Shop 2 réussies); étape Finance 134765234692 échoue sur le compte Stock attendu par la recette de perte. La recette sélectionnait une ligne active arbitraire sans période ni ordre; correction pour sélectionner la correspondance en vigueur à la date du journal, avec assertions comptables conservées et événement LOSS/2 lignes supplémentaires. Résultat à vérifier sur le SHA suivant.
+
 ## Restant (bloquant)
 Certification de la réaffectation historique sur PostgreSQL + navigateur et valeur inchangée; certification achats et valorisation, réservations/livraisons multi-lots; moteur FEFO commun et POS; pertes, rappels et comptabilité; Design 2.0 et tests multisectoriels. Voir issue #1212. Ne pas merger avant clôture de tous les points.
 
