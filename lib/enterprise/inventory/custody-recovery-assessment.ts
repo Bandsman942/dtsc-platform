@@ -4,7 +4,11 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { EnterpriseDomainError, EnterpriseDomainConflictError } from "@/lib/enterprise/common/errors";
 import { inspectCustodyRecoveryTx, assertCustodyRecoveryReadAccess } from "@/lib/enterprise/inventory/custody-recovery-preflight";
-import { requireInventoryStockAuthorityTx } from "@/lib/enterprise/inventory/service";
+import { applyStockMovementTx, requireInventoryStockAuthorityTx } from "@/lib/enterprise/inventory/service";
+import { idempotencyKey, money, publishFinanceEvent } from "@/lib/enterprise/accounting/helpers";
+import { getPostingPeriod } from "@/lib/enterprise/accounting/periods";
+import { postBusinessEventTx } from "@/lib/enterprise/accounting/posting-service";
+import { resolveEnterpriseBusinessDate } from "@/lib/enterprise/business-context";
 import { assertInventoryApprovalCandidate, assertInventoryApprovalDecision } from "@/lib/enterprise/inventory/approval";
 import { listEnterpriseApprovalCandidates } from "@/lib/enterprise/approval-assignment";
 import { resolveEnterpriseModuleCapabilities } from "@/lib/enterprise/module-access";
@@ -173,5 +177,61 @@ export async function withdrawRecoveryAssessment(org:string,user:string,input:z.
     if(changed.count!==1)throw conflict();
     await publishEnterpriseEvent(tx,{organizationId:org,entityType:RECOVERY_ASSESSMENT_TARGET,entityId:assessment.id,eventType:"INVENTORY_RETURN_RECOVERY_WITHDRAWN",summary:assessment.reference,actorUserId:user,fromStatus:"APPROVED",toStatus:"CANCELLED",metadataJson:{custodyId:assessment.custodyId,approvalId:approval.id,decisionId:decision.id,reason:input.reason,physicalReleaseAuthorized:false,accountingRecognitionAuthorized:false}});
     return {assessment:await tx.enterpriseInventoryReturnRecoveryAssessment.findFirstOrThrow({where:{organizationId:org,id:assessment.id}}),approval,idempotent:false};
+  });
+}
+
+export const recoveryExecutionSchema=z.object({
+  custodyId:z.string().trim().min(1).max(191),assessmentId:z.string().trim().min(1).max(191),revision:z.number().int().positive(),
+  releaseEvidence:z.string().trim().min(8).max(2000),confirmedSaleableAndRepaired:z.literal(true),
+}).strict();
+
+/** Restricted, full-quantity recovery. No new refund, credit or receivable.
+ * The expert records the final physical quality release after independent
+ * approval, with Finance valuation rights, and only at the exact approved cost. */
+export async function executeRecoveryAssessment(org:string,user:string,input:z.infer<typeof recoveryExecutionSchema>){
+  await requireRecoveryParticipantAccess(org,user,true);
+  return serial(async tx=>{
+    await wideScope(tx,org,user);
+    await lockRecoveryCustodyTx(tx,org,input.custodyId);
+    const assessment=await tx.enterpriseInventoryReturnRecoveryAssessment.findFirst({where:{organizationId:org,id:input.assessmentId,custodyId:input.custodyId,assessedByUserId:user},include:{custody:{include:{originalMovement:true}}}});
+    if(!assessment)throw forbidden();
+    const custody=assessment.custody,source=custody.originalMovement;
+    await requireInventoryStockAuthorityTx(tx,org,user,source.warehouseId);
+    const approval=await tx.enterpriseApproval.findFirst({where:{organizationId:org,targetEntityType:RECOVERY_ASSESSMENT_TARGET,targetEntityId:assessment.id,status:"APPROVED",requestedByUserId:user,archivedAt:null}});
+    if(!approval||approval.approverUserId===user||[custody.inspectedByUserId,custody.registeredByUserId].some(id=>id===user||id===approval.approverUserId))throw forbidden();
+    if(assessment.status==="EXECUTED"&&assessment.executedByUserId===user&&assessment.releaseEvidence===input.releaseEvidence&&assessment.revision===input.revision+1&&custody.status==="RECOVERED"&&assessment.recoveryMovementId&&assessment.recoveryAccountingEventId&&assessment.recoveryJournalEntryId)return {assessment,idempotent:true};
+    if(assessment.status!=="APPROVED"||assessment.revision!==input.revision||custody.status!=="QUARANTINED"||custody.revision!==assessment.custodyRevision)throw conflict();
+    const version=await tx.enterpriseApprovalSubmissionVersion.findFirst({where:{organizationId:org,approvalId:approval.id,versionNumber:1}});
+    const decision=version?await tx.enterpriseApprovalDecision.findFirst({where:{organizationId:org,approvalId:approval.id,submissionVersionId:version.id,actorUserId:approval.approverUserId,decision:"APPROVE"}}):null;
+    if(!decision)throw conflict();
+    const check=await inspectCustodyRecoveryTx(tx,org,user,input.custodyId);
+    const proposal=recoveryProposal(assessment,check.historicalCostCeiling);
+    if(check.revision!==assessment.custodyRevision||check.currencyCode!==assessment.currencyCode||check.originalIssueEventId!==assessment.originalIssueEventId||check.originalIssueJournalId!==assessment.originalIssueJournalId||!assessment.quantity.equals(check.quantity)||!assessment.historicalCostCeiling.equals(check.historicalCostCeiling)||!assessment.proposedRecoveryAmount.equals(proposal.proposedRecoveryAmount)||!assessment.estimatedNetValue.equals(proposal.estimatedNetValue)||!source.stockLotId)throw conflict();
+    // Cost layers store 6 decimals; physical movement input is a JS number.
+    // Fail closed instead of silently changing the reviewed value/quantity.
+    const qty=Number(assessment.quantity.toFixed()),unitCost=money(assessment.proposedRecoveryAmount.dividedBy(assessment.quantity));
+    if(!Number.isFinite(qty)||!assessment.quantity.equals(qty)||!unitCost.gt(0)||!unitCost.times(assessment.quantity).equals(assessment.proposedRecoveryAmount))throw new EnterpriseDomainError("INVENTORY_RETURN_RECOVERY_PRECISION_UNSUPPORTED",409);
+    const [physical,layers]=await Promise.all([
+      tx.enterpriseInventoryBalance.findMany({where:{organizationId:org,inventoryItemId:source.inventoryItemId,warehouseId:source.warehouseId},select:{quantityOnHand:true}}),
+      tx.enterpriseInventoryCostLayer.findMany({where:{organizationId:org,inventoryItemId:source.inventoryItemId,warehouseId:source.warehouseId,remainingQuantity:{gt:0}},select:{remainingQuantity:true,currencyCode:true,valuationMethod:true}}),
+    ]);
+    if(physical.some(row=>row.quantityOnHand.lt(0))||layers.some(row=>row.currencyCode!==assessment.currencyCode||row.valuationMethod!=="WEIGHTED_AVERAGE")||!physical.reduce((sum,row)=>sum.plus(row.quantityOnHand),new Prisma.Decimal(0)).equals(layers.reduce((sum,row)=>sum.plus(row.remainingQuantity),new Prisma.Decimal(0))))throw new EnterpriseDomainError("INVENTORY_RETURN_RECOVERY_VALUATION_REQUIRED",409);
+    const day=await resolveEnterpriseBusinessDate(tx,org);
+    await getPostingPeriod(tx,org,new Date(day+"T00:00:00.000Z"));
+    const movement=await applyStockMovementTx(tx,org,user,{inventoryItemId:source.inventoryItemId,warehouseId:source.warehouseId,storageLocationId:source.storageLocationId,stockLotId:source.stockLotId,
+      direction:"IN",movementType:"CUSTODY_RECOVERY_IN",quantity:qty,sourceEntityType:RECOVERY_ASSESSMENT_TARGET,sourceEntityId:assessment.id,sourceLineId:custody.id,
+      idempotencyKey:"custody-recovery:"+assessment.id+":execute",reason:input.releaseEvidence},{approvedRecoveryAssessmentId:assessment.id});
+    if(movement.idempotent)throw conflict();
+    await tx.enterpriseInventoryCostLayer.create({data:{organizationId:org,inventoryItemId:source.inventoryItemId,warehouseId:source.warehouseId,sourceMovementId:movement.movement.id,
+      valuationMethod:"WEIGHTED_AVERAGE",quantity:assessment.quantity,remainingQuantity:assessment.quantity,unitCost,totalCost:assessment.proposedRecoveryAmount,currencyCode:assessment.currencyCode,effectiveAt:movement.movement.occurredAt}});
+    const postingEvent="INVENTORY_CUSTODY_RECOVERY_VALUED" as const;
+    const event=await tx.enterpriseInventoryAccountingEvent.create({data:{organizationId:org,inventoryItemId:source.inventoryItemId,stockMovementId:movement.movement.id,eventType:"CUSTODY_RECOVERY",quantity:assessment.quantity,unitCost,totalCost:assessment.proposedRecoveryAmount,currencyCode:assessment.currencyCode,status:"APPROVED",idempotencyKey:idempotencyKey({organizationId:org,sourceEntityType:"EnterpriseStockMovement",sourceEntityId:movement.movement.id,postingEvent,postingVersion:1})}});
+    const posting=await postBusinessEventTx(tx,org,user,{postingEvent,sourceEntityType:"EnterpriseInventoryAccountingEvent",sourceEntityId:event.id});
+    await tx.enterpriseInventoryAccountingEvent.update({where:{id:event.id},data:{status:"POSTED",journalEntryId:posting.entry.id}});
+    const released=await tx.enterpriseInventoryReturnCustody.updateMany({where:{organizationId:org,id:custody.id,status:"QUARANTINED",revision:custody.revision},data:{status:"RECOVERED",revision:{increment:1}}});
+    const completed=await tx.enterpriseInventoryReturnRecoveryAssessment.updateMany({where:{organizationId:org,id:assessment.id,status:"APPROVED",revision:input.revision},data:{status:"EXECUTED",executedAt:event.createdAt,executedByUserId:user,releaseEvidence:input.releaseEvidence,recoveryMovementId:movement.movement.id,recoveryAccountingEventId:event.id,recoveryJournalEntryId:posting.entry.id,revision:{increment:1}}});
+    if(released.count!==1||completed.count!==1)throw conflict();
+    await publishFinanceEvent(tx,{organizationId:org,entityType:RECOVERY_ASSESSMENT_TARGET,entityId:assessment.id,eventType:postingEvent,summary:assessment.reference,actorUserId:user,fromStatus:"APPROVED",toStatus:"EXECUTED",metadataJson:{custodyId:custody.id,approvalId:approval.id,stockMovementId:movement.movement.id,journalEntryId:posting.entry.id,total:assessment.proposedRecoveryAmount.toFixed(),currency:assessment.currencyCode,releaseEvidence:input.releaseEvidence}});
+    return {assessment:await tx.enterpriseInventoryReturnRecoveryAssessment.findFirstOrThrow({where:{organizationId:org,id:assessment.id}}),idempotent:false};
   });
 }
