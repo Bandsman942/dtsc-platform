@@ -119,7 +119,7 @@ function SupplierReturnCheck({ organizationId, purchaseId, row, locale, onRefres
       <Button type="submit" disabled={busy} className="whitespace-normal">{t("returnCreditAction")}</Button>
     </form>:null}
     {error?<p role="alert" className="break-words text-red-700 dark:text-red-300">{error}</p>:null}
-    {request.supplierCreditNoteId?<a className="w-fit break-words text-dtsc-blue underline" href={`/enterprise-modules/FINANCE_PAYABLES?creditNote=${encodeURIComponent(request.supplierCreditNoteId)}`}>{t("returnCreditReview")}</a>:null}
+    {request.supplierCreditNoteId?<a className="w-fit break-words text-dtsc-blue underline" href={`/enterprise-modules/FINANCE_PAYABLES?supplierCreditNoteId=${encodeURIComponent(request.supplierCreditNoteId)}`}>{t("returnCreditReview")}</a>:null}
     <Button type="button" variant="outline" disabled={busy} className="w-fit" onClick={onRefresh}>{t("returnRefresh")}</Button>
     {request.approvalId ? <a className="w-fit break-words text-dtsc-blue underline" href={`/enterprise-modules/VALIDATIONS?approval=${encodeURIComponent(request.approvalId)}`}>{t("returnRequestReview")}</a> : null}
   </div>;
