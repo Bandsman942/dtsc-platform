@@ -5,8 +5,10 @@ import { retailInventoryVisibleSites } from "@/lib/enterprise/retail/site-access
 import { retailErrorResponse } from "@/lib/enterprise/retail/http";
 import { enterpriseDomainErrorResponse, enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
 import { EnterpriseDomainError } from "@/lib/enterprise/common/errors";
+import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
+import { resolveEnterpriseModuleCapabilities } from "@/lib/enterprise/module-access";
 import { assertSupplierReturnAccess, inspectSupplierReturnTx } from "@/lib/enterprise/inventory/supplier-return-preflight";
-import { requireSupplierReturnParticipantAccess, submitSupplierReturnRequest, supplierReturnApprovalCandidates, supplierReturnRequestSchema, SUPPLIER_RETURN_TARGET } from "@/lib/enterprise/inventory/supplier-return-request-service";
+import { dispatchSupplierReturn, supplierReturnDispatchSchema, requireSupplierReturnParticipantAccess, submitSupplierReturnRequest, supplierReturnApprovalCandidates, supplierReturnRequestSchema, SUPPLIER_RETURN_TARGET } from "@/lib/enterprise/inventory/supplier-return-request-service";
 import { notifyUser } from "@/lib/notifications";
 import { workCoordinationDeepLink } from "@/lib/standard-work-coordination/deep-links";
 import { getSession } from "@/lib/auth";
@@ -117,14 +119,25 @@ export async function GET(req: Request, { params }: Params) {
     const canSubmitSupplierReturn = canCheckSupplierReturn && await requireSupplierReturnParticipantAccess(organizationId, session.userId, false).then(() => true, () => false);
     const canReviewSupplierReturn = canCheckSupplierReturn && await requireSupplierReturnParticipantAccess(organizationId, session.userId, true).then(() => true, () => false);
     const requests = (canSubmitSupplierReturn || canReviewSupplierReturn) && rows.length ? await prisma.enterpriseSupplierReturnRequest.findMany({
-      where: { organizationId, purchaseId: id, sourceMovementId: { in: rows.map((row) => row.id) }, status: { in: ["PENDING_APPROVAL", "APPROVED"] } },
-      select: { id: true, sourceMovementId: true, reference: true, status: true, quantity: true },
+      where: { organizationId, purchaseId: id, sourceMovementId: { in: rows.map((row) => row.id) }, status: { in: ["PENDING_APPROVAL", "APPROVED", "DISPATCHED", "RECONCILED"] } },
+      select: { id:true, sourceMovementId:true, reference:true, status:true, quantity:true, requestedByUserId:true, revision:true, dispatchReference:true, dispatchedAt:true, supplierCreditNoteId:true, supplierCreditReference:true, supplierInvoiceId:true, supplierInvoiceItemId:true, unitCost:true, totalCost:true, currencyCode:true },
     }) : [];
     const requestApprovals = requests.length ? await prisma.enterpriseApproval.findMany({
       where: { organizationId, targetEntityType: SUPPLIER_RETURN_TARGET, targetEntityId: { in: requests.map((request) => request.id) }, OR: [...(canSubmitSupplierReturn ? [{ requestedByUserId: session.userId }] : []), ...(canReviewSupplierReturn ? [{ approverUserId: session.userId }] : [])], archivedAt: null },
       select: { id: true, targetEntityId: true },
     }) : [];
-    const requestByMovement = new Map(requests.filter((request) => requestApprovals.some((approval) => approval.targetEntityId === request.id)).map((request) => [request.sourceMovementId, { reference: request.reference, status: request.status, quantity: request.quantity, approvalId: requestApprovals.find((approval) => approval.targetEntityId === request.id)?.id || null }]));
+    const [financeInventory,financePayables] = requests.length ? await Promise.all([
+      resolveEnterpriseModuleCapabilities({organizationId,userId:session.userId,moduleCode:"FINANCE_INVENTORY"}),
+      resolveEnterpriseModuleCapabilities({organizationId,userId:session.userId,moduleCode:"FINANCE_PAYABLES"}),
+    ]) : [null,null];
+    const requestByMovement = new Map(requests.filter((request) => requestApprovals.some((approval) => approval.targetEntityId === request.id)).map((request) => [request.sourceMovementId, {
+      id:request.id, reference:request.reference,status:request.status,quantity:request.quantity,revision:request.revision,unitCost:request.unitCost,totalCost:request.totalCost,currencyCode:request.currencyCode,
+      dispatchReference:request.dispatchReference,dispatchedAt:request.dispatchedAt,supplierCreditNoteId:request.supplierCreditNoteId,supplierCreditReference:request.supplierCreditReference,
+      supplierInvoiceId:request.supplierInvoiceId,supplierInvoiceItemId:request.supplierInvoiceItemId,
+      canDispatch:canSubmitSupplierReturn && financeInventory?.canManage === true && request.requestedByUserId === session.userId && request.status === "APPROVED",
+      canCreateCredit:financePayables?.canCreate === true && request.status === "DISPATCHED" && !request.supplierCreditNoteId,
+      approvalId:requestApprovals.find((approval) => approval.targetEntityId === request.id)?.id || null,
+    }]));
     return NextResponse.json({ items: items.map((row) => ({ ...row, supplierReturnRequest: requestByMovement.get(row.id) || null })), canCheckSupplierReturn, canSubmitSupplierReturn, pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) } });
   }
   const itemIds = purchase.items.map((item) => item.id);
@@ -165,11 +178,27 @@ export async function POST(req: Request, { params }: Params) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "UNAUTHENTICATED" }, { status: 401 });
   const { organizationId, id } = await params;
-  if (new URL(req.url).searchParams.get("action") !== "submit-supplier-return") return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
+  const action = new URL(req.url).searchParams.get("action");
+  if (!["submit-supplier-return","dispatch-supplier-return"].includes(action || "")) return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
   const limited = await rateLimit(getRateLimitKey(req, `supplier-return-submit:${organizationId}:${session.userId}`), 60, 60 * 60 * 1000);
   if (!limited.ok) return NextResponse.json({ error: "TOO_MANY_REQUESTS" }, { status: 429 });
   const access = await getEnterpriseProcurementAccess({ session, organizationId, moduleCode: "SUPPLIERS_PURCHASES", action: "write" });
   if (!access) return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
+  if (action === "dispatch-supplier-return") {
+    const parsed = supplierReturnDispatchSchema.safeParse(await req.json().catch(() => null));
+    if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "SUPPLIER_RETURN_INPUT_INVALID", req);
+    try {
+      const result=await dispatchSupplierReturn(organizationId,id,session.userId,parsed.data);
+      if (!result.idempotent) await writeAuditLog({userId:session.userId,action:"SUPPLIER_RETURN_DISPATCHED",entity:SUPPLIER_RETURN_TARGET,entityId:result.request.id,request:req,metadata:{organizationId,dispatchMovementId:result.request.dispatchMovementId}});
+      await writeApiLog({request:req,statusCode:200,userId:session.userId,startedAt,metadata:{organizationId,domain:"supplier-return-dispatch",purchaseId:id,idempotent:result.idempotent}});
+      return NextResponse.json({ok:true,idempotent:result.idempotent,request:{id:result.request.id,status:result.request.status,revision:result.request.revision,reference:result.request.reference}},{headers:{"Cache-Control":"private, no-store"}});
+    } catch (error) {
+      const domainError = error instanceof EnterpriseAccountingError ? new EnterpriseDomainError(error.code,error.status) : error;
+      const response = enterpriseDomainErrorResponse(domainError,"SUPPLIER_RETURN_DISPATCH_FAILED",req);
+      await writeApiLog({request:req,statusCode:response.status,userId:session.userId,startedAt,metadata:{organizationId,domain:"supplier-return-dispatch",purchaseId:id}});
+      return response;
+    }
+  }
   const parsed = supplierReturnRequestSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "SUPPLIER_RETURN_INPUT_INVALID", req);
   try {
