@@ -9,7 +9,7 @@ import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
 import { resolveEnterpriseModuleCapabilities } from "@/lib/enterprise/module-access";
 import { formatEnterpriseBusinessDate, getEnterpriseBusinessContext } from "@/lib/enterprise/business-context";
 import { assertSupplierReturnAccess, inspectSupplierReturnTx } from "@/lib/enterprise/inventory/supplier-return-preflight";
-import { dispatchSupplierReturn, supplierReturnDispatchSchema, requireSupplierReturnParticipantAccess, submitSupplierReturnRequest, supplierReturnApprovalCandidates, supplierReturnRequestSchema, SUPPLIER_RETURN_TARGET } from "@/lib/enterprise/inventory/supplier-return-request-service";
+import { withdrawApprovedSupplierReturn, supplierReturnWithdrawalSchema, dispatchSupplierReturn, supplierReturnDispatchSchema, requireSupplierReturnParticipantAccess, submitSupplierReturnRequest, supplierReturnApprovalCandidates, supplierReturnRequestSchema, SUPPLIER_RETURN_TARGET } from "@/lib/enterprise/inventory/supplier-return-request-service";
 import { notifyUser } from "@/lib/notifications";
 import { workCoordinationDeepLink } from "@/lib/standard-work-coordination/deep-links";
 import { getSession } from "@/lib/auth";
@@ -136,6 +136,7 @@ export async function GET(req: Request, { params }: Params) {
       id:request.id, reference:request.reference,status:request.status,quantity:request.quantity,revision:request.revision,unitCost:request.unitCost,totalCost:request.totalCost,currencyCode:request.currencyCode,
       dispatchReference:request.dispatchReference,dispatchedAt:request.dispatchedAt,dispatchBusinessDate:request.dispatchedAt && businessContext ? formatEnterpriseBusinessDate(request.dispatchedAt,businessContext.timezone) : null,supplierCreditNoteId:request.supplierCreditNoteId,supplierCreditReference:request.supplierCreditReference,
       supplierInvoiceId:request.supplierInvoiceId,supplierInvoiceItemId:request.supplierInvoiceItemId,
+      canWithdraw:canSubmitSupplierReturn && request.requestedByUserId===session.userId && request.status==="APPROVED",
       canDispatch:canSubmitSupplierReturn && financeInventory?.canManage === true && request.requestedByUserId === session.userId && request.status === "APPROVED",
       canCreateCredit:financePayables?.canCreate === true && request.status === "DISPATCHED" && !request.supplierCreditNoteId,
       approvalId:requestApprovals.find((approval) => approval.targetEntityId === request.id)?.id || null,
@@ -181,11 +182,28 @@ export async function POST(req: Request, { params }: Params) {
   if (!session) return NextResponse.json({ error: "UNAUTHENTICATED" }, { status: 401 });
   const { organizationId, id } = await params;
   const action = new URL(req.url).searchParams.get("action");
-  if (!["submit-supplier-return","dispatch-supplier-return"].includes(action || "")) return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
+  if (!["submit-supplier-return","dispatch-supplier-return","withdraw-supplier-return"].includes(action || "")) return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
   const limited = await rateLimit(getRateLimitKey(req, `supplier-return-submit:${organizationId}:${session.userId}`), 60, 60 * 60 * 1000);
   if (!limited.ok) return NextResponse.json({ error: "TOO_MANY_REQUESTS" }, { status: 429 });
   const access = await getEnterpriseProcurementAccess({ session, organizationId, moduleCode: "SUPPLIERS_PURCHASES", action: "write" });
   if (!access) return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
+  if (action === "withdraw-supplier-return") {
+    const parsed=supplierReturnWithdrawalSchema.safeParse(await req.json().catch(()=>null));
+    if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error,"SUPPLIER_RETURN_INPUT_INVALID",req);
+    try {
+      const result=await withdrawApprovedSupplierReturn(organizationId,id,session.userId,parsed.data);
+      if (!result.idempotent) {
+        await notifyUser({userId:result.approval.approverUserId,organizationId,type:"ENTERPRISE_APPROVAL",title:"Retour fournisseur annulé",body:"Le demandeur a annulé un retour approuvé avant expédition.",targetUrl:workCoordinationDeepLink("APPROVAL",result.approval.id)}).catch(()=>null);
+        await writeAuditLog({userId:session.userId,action:"SUPPLIER_RETURN_APPROVED_WITHDRAWN",entity:SUPPLIER_RETURN_TARGET,entityId:result.request.id,request:req,metadata:{organizationId,approvalId:result.approval.id}});
+      }
+      await writeApiLog({request:req,statusCode:200,userId:session.userId,startedAt,metadata:{organizationId,domain:"supplier-return-withdrawal",purchaseId:id,idempotent:result.idempotent}});
+      return NextResponse.json({ok:true,idempotent:result.idempotent,request:{id:result.request.id,reference:result.request.reference,status:result.request.status,revision:result.request.revision}},{headers:{"Cache-Control":"private, no-store"}});
+    } catch(error) {
+      const response=enterpriseDomainErrorResponse(error,"SUPPLIER_RETURN_WITHDRAWAL_FAILED",req);
+      await writeApiLog({request:req,statusCode:response.status,userId:session.userId,startedAt,metadata:{organizationId,domain:"supplier-return-withdrawal",purchaseId:id}});
+      return response;
+    }
+  }
   if (action === "dispatch-supplier-return") {
     const parsed = supplierReturnDispatchSchema.safeParse(await req.json().catch(() => null));
     if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "SUPPLIER_RETURN_INPUT_INVALID", req);
