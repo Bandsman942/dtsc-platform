@@ -667,6 +667,110 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
     expect(fxLedger.lines.length).toBeGreaterThan(0);
     expect(fxLedger.lines.every((line) => line.siteId === fixture.site.id)).toBe(true);
     expect(fxLedger.totalDebit.equals(fxLedger.totalCredit)).toBe(true);
+
+    // #1212: a unique financial line across two physical batches, then
+    // independently inspect and return ONLY the second batch.
+    const batchKey = "SHOP2-LOT1212-" + crypto.randomUUID().slice(0, 12);
+    const batchProduct = await prisma.enterpriseCatalogItem.create({ data: {
+      organizationId, code: batchKey, sku: batchKey, name: "E2E multi-batch product " + batchKey,
+      normalizedName: batchKey.toLowerCase(), itemType: "PRODUCT", unitOfMeasureId: fixture.product.unitOfMeasureId,
+      indicativeSalePrice: 20, indicativeCost: 7, currency: fixture.currencyCode, taxable: false, trackInventory: true, createdByUserId: fixture.owner.id,
+    } });
+    const batchInventory = await prisma.enterpriseInventoryItem.create({ data: { organizationId, catalogItemId: batchProduct.id, lotTracking: true, expiryTracking: true, createdByUserId: fixture.owner.id } });
+    const batches = [];
+    for (const [suffix, units, days] of [["EARLY", 2, 45], ["LATE", 3, 90]]) {
+      const expiryDate = new Date(Date.now() + days * 86400000); expiryDate.setUTCHours(0,0,0,0);
+      const lot = await prisma.enterpriseStockLot.create({ data: { organizationId, inventoryItemId: batchInventory.id, warehouseId: fixture.warehouse.id, lotNumber: suffix, expiryDate, createdByUserId: fixture.owner.id } });
+      const balance = await prisma.enterpriseInventoryBalance.create({ data: { organizationId, inventoryItemId: batchInventory.id, warehouseId: fixture.warehouse.id, stockLotId: lot.id, quantityOnHand: units } });
+      const movement = await prisma.enterpriseStockMovement.create({ data: { organizationId, inventoryItemId: batchInventory.id, warehouseId: fixture.warehouse.id, stockLotId: lot.id, movementType: "OPENING_BALANCE", direction: "IN", quantity: units, balanceAfter: units, idempotencyKey: batchKey + ":" + suffix, createdByUserId: fixture.owner.id } });
+      await prisma.enterpriseInventoryCostLayer.create({ data: { organizationId, inventoryItemId: batchInventory.id, warehouseId: fixture.warehouse.id, sourceMovementId: movement.id, valuationMethod: "WEIGHTED_AVERAGE", quantity: units, remainingQuantity: units, unitCost: 7, totalCost: 7*units, currencyCode: fixture.currencyCode, effectiveAt: new Date() } });
+      batches.push({ lot, balance });
+    }
+    const batchPayload = { idempotencyKey: batchKey + "-invoice", siteId: fixture.site.id, warehouseId: fixture.warehouse.id, currencyCode: fixture.currencyCode, lines: [{ catalogItemId: batchProduct.id, quantity: 4 }] };
+    const batchInvoice = await post(context.cashier, base + "/retail/invoices", batchPayload);
+    expect(batchInvoice.status, JSON.stringify(batchInvoice.body)).toBe(201);
+    const bi = batchInvoice.body.invoice.id;
+    expect(batchInvoice.body.invoice.items).toHaveLength(1);
+    expect(new Prisma.Decimal(batchInvoice.body.invoice.grandTotal).equals(80)).toBe(true);
+    const batchCheckout = await prisma.enterpriseRetailInvoiceCheckout.findFirstOrThrow({ where: { organizationId, salesInvoiceId: bi }, include: { lines: true } });
+    expect(batchCheckout.lines).toHaveLength(1);
+    expect(batchCheckout.lines[0].lotAllocations).toEqual([{stockLotId:batches[0].lot.id,quantity:"2"},{stockLotId:batches[1].lot.id,quantity:"2"}]);
+    const batchReplay = await post(context.cashier, base + "/retail/invoices", batchPayload);
+    expect(batchReplay.status).toBe(200);
+    expect(batchReplay.body.invoice.id).toBe(bi);
+    const oversold = await post(context.cashier, base + "/retail/invoices", { ...batchPayload, idempotencyKey:batchKey+"-oversold", lines:[{catalogItemId:batchProduct.id,quantity:2}] });
+    expect(oversold.status,JSON.stringify(oversold.body)).toBe(409);
+    const batchStock = async index => (await prisma.enterpriseInventoryBalance.findUniqueOrThrow({where:{id:batches[index].balance.id}})).quantityOnHand;
+    expect((await batchStock(0)).equals(2)).toBe(true);
+    expect((await batchStock(1)).equals(3)).toBe(true);
+    const bs = await post(context.cashier, `${base}/retail/invoices/${bi}/transition`, {action:"SUBMIT",revision:batchInvoice.body.invoice.revision,approverUserId:fixture.owner.id});
+    expect(bs.status,JSON.stringify(bs.body)).toBe(200);
+    const ba = await post(context.owner,`${base}/sales-invoices/${bi}/transition`,{action:"APPROVE",revision:bs.body.invoice.revision});
+    expect(ba.status,JSON.stringify(ba.body)).toBe(200);
+    const bp = await post(context.owner,`${base}/sales-invoices/${bi}/transition`,{action:"ISSUE",revision:ba.body.invoice.revision});
+    expect(bp.status,JSON.stringify(bp.body)).toBe(200);
+    const payment = await post(context.cashier,`${base}/retail/invoices/${bi}/payments`,{idempotencyKey:batchKey+"-payment",financialAccountId:fixture.bank.id,methodType:"BANK_TRANSFER",amount:"80.00"});
+    expect(payment.status,JSON.stringify(payment.body)).toBe(201);
+    const paymentId = payment.body.payment.id;
+    const ps = await post(context.cashier,`${base}/retail/invoices/${bi}/payments/${paymentId}/transition`,{action:"SUBMIT",revision:payment.body.payment.revision,approverUserId:fixture.owner.id});
+    expect(ps.status,JSON.stringify(ps.body)).toBe(200);
+    await ensureStepUp(context.owner,ownerPassword);
+    const pa = await post(context.owner,`${base}/payments/${paymentId}/transition`,{action:"APPROVE",revision:ps.body.payment.revision});
+    expect(pa.status,JSON.stringify(pa.body)).toBe(200);
+    await ensureStepUp(context.settler,cashierPassword);
+    const pc = await post(context.settler,`${base}/payments/${paymentId}/transition`,{action:"CONFIRM",revision:pa.body.payment.revision});
+    expect(pc.status,JSON.stringify(pc.body)).toBe(200);
+    const issues = await prisma.enterpriseStockMovement.findMany({where:{organizationId,sourceEntityType:"EnterpriseSalesInvoice",sourceEntityId:bi,movementType:"SALE_FULFILLMENT"}});
+    expect(issues).toHaveLength(2);
+    expect(issues.every(row=>row.sourceLineId===batchCheckout.lines[0].invoiceItemId)).toBe(true);
+    expect(issues.map(row=>[row.stockLotId,Number(row.quantity)]).sort()).toEqual([[batches[0].lot.id,2],[batches[1].lot.id,2]].sort());
+    expect((await batchStock(0)).isZero()).toBe(true);
+    expect((await batchStock(1)).equals(1)).toBe(true);
+    const costs = await prisma.enterpriseInventoryAccountingEvent.findMany({where:{organizationId,stockMovementId:{in:issues.map(row=>row.id)},status:"POSTED"}});
+    expect(costs).toHaveLength(2);
+    expect(costs.reduce((sum,row)=>sum.plus(row.totalCost),new Prisma.Decimal(0)).equals(28)).toBe(true);
+    const rbase = `${base}/retail/invoices/${bi}/returns`;
+    const listed = await context.cashier.request.get(rbase);
+    expect(listed.status()).toBe(200);
+    const choices = (await listed.json()).batchOptions[batchCheckout.lines[0].id];
+    expect(choices.map(row=>[row.lotNumber,row.quantityAvailable]).sort()).toEqual([["EARLY","2"],["LATE","2"]]);
+    const returnPayload = {idempotencyKey:batchKey+"-return",approverUserId:fixture.owner.id,reason:"Return physically identified late batch",lines:[{checkoutLineId:batchCheckout.lines[0].id,quantity:"1",stockDisposition:"RESTOCK"}]};
+    const unidentified = await post(context.cashier,rbase,returnPayload);
+    expect(unidentified.status).toBe(409);
+    const rr = await post(context.cashier,rbase,{...returnPayload,lines:[{...returnPayload.lines[0],lotAllocations:[{stockLotId:batches[1].lot.id,quantity:"1"}]}]});
+    expect(rr.status,JSON.stringify(rr.body)).toBe(201);
+    const rp = rbase+"/"+rr.body.request.id;
+    const inspectionPayload = {revision:rr.body.request.revision,receivedAndInspected:true,notes:"The late batch was physically received and verified"};
+    const unverified = await post(context.inspector,rp+"/inspection",inspectionPayload);
+    expect(unverified.status).toBe(409);
+    const ri = await post(context.inspector,rp+"/inspection",{...inspectionPayload,confirmedBatchSelection:true});
+    expect(ri.status,JSON.stringify(ri.body)).toBe(200);
+    const rd = await post(context.owner,rp+"/decision",{decision:"APPROVE",revision:ri.body.request.revision});
+    expect(rd.status,JSON.stringify(rd.body)).toBe(200);
+    const rf = await post(context.preparer,rp+"/prepare",{revision:rd.body.request.revision});
+    expect(rf.status,JSON.stringify(rf.body)).toBe(201);
+    const refund = await prisma.enterprisePayment.findUniqueOrThrow({where:{id:rf.body.request.refundPaymentId}});
+    const batchCredit = await prisma.enterpriseSalesCreditNote.findUniqueOrThrow({where:{id:rf.body.request.salesCreditNoteId}});
+    await ensureStepUp(context.owner,ownerPassword);
+    const approvedRefund = await post(context.owner,`${base}/payments/${refund.id}/transition`,{action:"APPROVE",revision:refund.revision});
+    expect(approvedRefund.status,JSON.stringify(approvedRefund.body)).toBe(200);
+    const approvedCredit = await post(context.owner,`${base}/sales-credit-notes/${batchCredit.id}/transition`,{action:"APPROVE",revision:batchCredit.revision});
+    expect(approvedCredit.status,JSON.stringify(approvedCredit.body)).toBe(200);
+    await ensureStepUp(context.returnSettler,cashierPassword);
+    const settlePayload = {revision:rf.body.request.revision,reason:"Verified batch return and Finance approval"};
+    const done = await post(context.returnSettler,rp+"/settle",settlePayload);
+    expect(done.status,JSON.stringify(done.body)).toBe(200);
+    expect(done.body.request.status).toBe("COMPLETED");
+    const restored = await prisma.enterpriseStockMovement.findMany({where:{organizationId,sourceEntityType:"EnterpriseRetailInvoiceReturnRequest",sourceEntityId:rr.body.request.id,movementType:"RETURN_IN"}});
+    expect(restored).toHaveLength(1);
+    expect(restored[0].stockLotId).toBe(batches[1].lot.id);
+    expect((await batchStock(0)).isZero()).toBe(true);
+    expect((await batchStock(1)).equals(2)).toBe(true);
+    const restoredCost = await prisma.enterpriseInventoryAccountingEvent.findFirstOrThrow({where:{organizationId,stockMovementId:restored[0].id,status:"POSTED"}});
+    expect(restoredCost.totalCost.equals(7)).toBe(true);
+    expect((await post(context.returnSettler,rp+"/settle",settlePayload)).body.idempotent).toBe(true);
+    expect((await batchStock(1)).equals(2)).toBe(true);
+
   } finally {
     if (originalSettings !== undefined) await prisma.enterpriseRetailConfiguration.update({
       where: { organizationId }, data: { settingsJson: originalSettings === null ? Prisma.DbNull : originalSettings,

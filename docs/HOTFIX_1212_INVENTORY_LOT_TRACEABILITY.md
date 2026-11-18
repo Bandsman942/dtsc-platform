@@ -48,6 +48,8 @@
 - Contrôle de sécurité commun : un article géré avec date de péremption ne peut pas être vendu, réintégré en stock vendable ou consommé en production après sa date limite. Le choix manuel du lot ne contourne pas ce contrôle. La politique Retail historique ALLOW reste applicable aux articles sans suivi obligatoire de péremption.
 - QA préflight étendue : retour volontaire du deuxième lot après crédit avant livraison, contrôle du solde après retour précédent, refus lot étranger, rejet de la réintégration d’un lot indisponible, traçabilité des dispositions non revendables. Aucun test supprimé.
 
+- Recette POS PostgreSQL/HTTP ajoutée au parcours Finance cinq acteurs : 2+3 unités stockées, facture unique de 4 unités (2+2), promesses empêchant la survente, paiement et deux mouvements/coûts, retour du lot tardif seul, confirmation physique indépendante et restitution au coût de 7, rejeu sans mouvement en double. Résultat à vérifier en CI.
+
 ## Restant (bloquant)
 Certification de la réaffectation historique sur PostgreSQL + navigateur et valeur inchangée; certification achats et valorisation, réservations/livraisons multi-lots; moteur FEFO commun et POS; pertes, rappels et comptabilité; Design 2.0 et tests multisectoriels. Voir issue #1212. Ne pas merger avant clôture de tous les points.
 
