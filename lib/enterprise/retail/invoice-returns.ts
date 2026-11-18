@@ -110,7 +110,7 @@ export async function listRetailInvoiceReturnRequests(
   await requireReturnFeatureTx(prisma, organizationId);
   const checkout = await prisma.enterpriseRetailInvoiceCheckout.findFirst({
     where: { organizationId, salesInvoiceId: invoiceId },
-    select: { id: true, siteId: true, stockPostedAt: true, invoice: { select: {
+    select: { id: true, siteId: true, warehouseId: true, stockPostedAt: true, lines: { select: { id: true, invoiceItemId: true, inventoryItemId: true, lotAllocations: true } }, invoice: { select: {
       status: true, grandTotal: true, amountPaid: true, amountCredited: true, outstandingAmount: true,
     } } },
   });
@@ -143,6 +143,26 @@ export async function listRetailInvoiceReturnRequests(
       select: { isActive: true, roleCode: true, permissionsJson: true },
     }),
   ]);
+  const batchOptions: Record<string, Array<{ stockLotId: string; lotNumber: string; quantityIssued: string; quantityAvailable: string }>> = {};
+  const splitLines = checkout.stockPostedAt ? (checkout.lines || []).filter(line => line.lotAllocations != null) : [];
+  if (splitLines.length) {
+    const [issues, committed] = await Promise.all([
+      prisma.enterpriseStockMovement.findMany({ where: { organizationId, sourceEntityType: "EnterpriseSalesInvoice", sourceEntityId: invoiceId, sourceLineId: { in: splitLines.map(line => line.invoiceItemId) }, direction: "OUT", movementType: "SALE_FULFILLMENT" }, select: { sourceLineId: true, stockLotId: true, inventoryItemId: true, warehouseId: true, quantity: true } }),
+      prisma.enterpriseRetailInvoiceReturnLine.findMany({ where: { organizationId, checkoutId: checkout.id, checkoutLineId: { in: splitLines.map(line => line.id) }, request: { status: { in: ["SUBMITTED", "INSPECTED", "APPROVED", "FINANCE_PENDING", "COMPLETED"] } } }, select: { checkoutLineId: true, quantity: true, stockDisposition: true, lotAllocations: true } }),
+    ]);
+    const lots = await prisma.enterpriseStockLot.findMany({ where: { organizationId, warehouseId: checkout.warehouseId, id: { in: [...new Set(issues.map(row => row.stockLotId).filter((id): id is string => Boolean(id)))] } }, select: { id: true, inventoryItemId: true, lotNumber: true } });
+    for (const line of splitLines) {
+      const previous = committed.filter(row => row.checkoutLineId === line.id && row.stockDisposition !== "UNDELIVERED_CREDIT").flatMap(row => readPhysicalReturnLots(row.lotAllocations, row.quantity));
+      const quantities = new Map<string, Prisma.Decimal>();
+      for (const issue of issues.filter(row => row.sourceLineId === line.invoiceItemId && row.inventoryItemId === line.inventoryItemId && row.warehouseId === checkout.warehouseId && row.stockLotId)) quantities.set(issue.stockLotId!, (quantities.get(issue.stockLotId!) || new Prisma.Decimal(0)).plus(issue.quantity));
+      batchOptions[line.id] = [...quantities].flatMap(([stockLotId, issued]) => {
+        const lot = lots.find(row => row.id === stockLotId && row.inventoryItemId === line.inventoryItemId);
+        if (!lot) return [];
+        const used = previous.filter(row => row.stockLotId === stockLotId).reduce((sum,row) => sum.plus(row.quantity), new Prisma.Decimal(0));
+        return [{ stockLotId, lotNumber: lot.lotNumber, quantityIssued: issued.toFixed(), quantityAvailable: issued.gt(used) ? issued.minus(used).toFixed() : "0" }];
+      });
+    }
+  }
   const capabilities = member && (RETAIL_OWNER_ROLES.has(member.role) || siteAssignment?.isActive)
     ? RETAIL_OWNER_ROLES.has(member.role)
       ? { canRequest: true, canInspect: true, canApprove: true }
@@ -202,6 +222,7 @@ export async function listRetailInvoiceReturnRequests(
         ["SUBMITTED", "INSPECTED"].includes(item.status) && item.approverUserId === actorUserId &&
         (item.requestedByUserId !== actorUserId || selfCanDecide) && item.inspectedByUserId !== actorUserId,
     }; }),
+    batchOptions,
     stockPostedAt: Boolean(checkout.stockPostedAt),
     canRequest: capabilities.canRequest && ["PAID", "CREDIT_NOTE", "PARTIALLY_PAID", "ISSUED", "OVERDUE"].includes(checkout.invoice.status) &&
       checkout.invoice.amountPaid.plus(checkout.invoice.amountCredited).plus(checkout.invoice.outstandingAmount).equals(checkout.invoice.grandTotal),

@@ -1,5 +1,5 @@
 import { Prisma } from "@prisma/client";
-import { planPhysicalInvoiceReturnLots } from "@/lib/enterprise/inventory/lot-allocation";
+import { lotExpiryDateKey, planPhysicalInvoiceReturnLots } from "@/lib/enterprise/inventory/lot-allocation";
 
 // @prisma/client Decimal does not expose the static Decimal.min/max helpers.
 const decimalMin = (...values: Prisma.Decimal[]): Prisma.Decimal => values.reduce((a, b) => a.lessThan(b) ? a : b);
@@ -232,6 +232,13 @@ export async function assertRetailInvoiceReturnSettlementReadinessTx(
       if (related.some(row => row.warehouseId !== checkout.warehouseId || row.inventoryItemId !== source.inventoryItemId)) throw conflict("RETAIL_INVOICE_RETURN_SETTLEMENT_STOCK_INVALID");
       try {
         const splits = planPhysicalInvoiceReturnLots({ source, movements: related, previous, quantity: line.quantity, selected: line.lotAllocations });
+        if (line.stockDisposition === "RESTOCK") {
+          const organization = await tx.organization.findUniqueOrThrow({ where: { id: organizationId }, select: { timezone: true } });
+          const parts = new Intl.DateTimeFormat("en-CA", { timeZone: organization.timezone || "UTC", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date());
+          const today = ["year","month","day"].map(type => parts.find(part => part.type === type)?.value).join("-");
+          const lots = await tx.enterpriseStockLot.findMany({ where: { organizationId, warehouseId: checkout.warehouseId, inventoryItemId: source.inventoryItemId!, id: { in: splits.map(({movement}) => movement.stockLotId!).filter(Boolean) }, status: "AVAILABLE", archivedAt: null }, select: { id: true, expiryDate: true } });
+          if (splits.some(({movement}) => !lots.some(lot => lot.id === movement.stockLotId && (!lot.expiryDate || lotExpiryDateKey(lot.expiryDate) >= today)))) throw conflict("RETAIL_INVOICE_RETURN_BATCH_UNSAFE");
+        }
         for (const { movement, quantity } of splits) stockSourcePlan.push({ returnLineId: line.returnLineId, originalMovementId: movement.id, inventoryItemId: movement.inventoryItemId, warehouseId: movement.warehouseId, storageLocationId: movement.storageLocationId, stockLotId: movement.stockLotId, quantity, stockDisposition: line.stockDisposition });
       } catch (error) { throw conflict(error instanceof Error ? error.message : "RETAIL_INVOICE_RETURN_SETTLEMENT_STOCK_INVALID"); }
       continue;

@@ -12,7 +12,7 @@ import { resolveRetailCommercialPricingDecisions } from "@/lib/enterprise/retail
 import { valueRetailInvoiceFulfillmentIssueTx } from "@/lib/enterprise/retail/accounting";
 import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
 import { planReservationLotAllocations, readInvoiceLotAllocations, reservationExactBalanceRemaining, reservationLegacyRemaining, reservationLotRemaining, type InvoiceLotAllocation } from "@/lib/enterprise/inventory/lot-allocation";
-import { assertRetailLotPolicyTx, businessDateKey } from "@/lib/enterprise/retail/inventory-policy";
+import { assertRetailLotPolicyTx, businessDateKey, lotIsExpired } from "@/lib/enterprise/retail/inventory-policy";
 import { readActiveRetailInvoiceStockHoldsTx } from "@/lib/enterprise/retail/invoice-stock-holds";
 import { applyStockMovementTx } from "@/lib/enterprise/inventory/service";
 import { RETAIL_SECTOR_CODE } from "@/lib/enterprise/retail/constants";
@@ -306,7 +306,7 @@ export async function postPaidRetailInvoiceStockTx(
     const today = businessDateKey(new Date(), organization?.timezone || "UTC");
     for (const { line } of autoLines) {
       const lot = lots.find((item) => item.id === line.stockLotId && item.inventoryItemId === line.inventoryItemId);
-      if (!lot || (lot.expiryDate && businessDateKey(lot.expiryDate, "UTC") < today)) throw new EnterpriseRetailError("RETAIL_STOCK_LOT_INVALID", 409);
+      if (!lot || lotIsExpired(lot.expiryDate, today)) throw new EnterpriseRetailError("RETAIL_STOCK_LOT_INVALID", 409);
     }
   }
   // The owner may deactivate future checkouts; previously issued invoices
