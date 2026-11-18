@@ -15,6 +15,9 @@ export async function createSupplierCreditNote(organizationId: string, actorUser
   return prisma.$transaction(async (tx) => {
     const invoice = await tx.enterpriseSupplierInvoice.findFirst({ where: { id: input.invoiceId, organizationId, status: { in: ["POSTED", "PARTIALLY_PAID", "PAID"] } }, include: { payable: true } });
     if (!invoice?.payable) throw new EnterpriseAccountingError("SUPPLIER_INVOICE_NOT_CREDITABLE", 409);
+    // Until the linked credit workflow is available, never allow a generic
+    // credit to settle the clearing account of a dispatched supplier return.
+    if (await tx.enterpriseSupplierReturnRequest.count({ where: { organizationId, supplierInvoiceId: invoice.id, status: "DISPATCHED" } })) throw new EnterpriseAccountingError("SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED", 409);
     const [originalLines, olderNotes] = await Promise.all([
       tx.enterpriseSupplierInvoiceItem.findMany({ where: { organizationId, supplierInvoiceId: invoice.id } }),
       tx.enterpriseSupplierCreditNote.findMany({ where: { organizationId, supplierInvoiceId: invoice.id, status: { notIn: ["REJECTED", "CANCELLED"] } }, select: { id: true } }),
