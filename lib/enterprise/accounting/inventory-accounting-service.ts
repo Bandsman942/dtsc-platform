@@ -117,7 +117,7 @@ export async function valueInventoryIssueTx(
   const movement = await tx.enterpriseStockMovement.findFirst({
     where: { id: stockMovementId, organizationId, direction: "OUT", quantity: { gt: 0 } },
   });
-  if (!movement || movement.movementType === "LOT_RECLASSIFICATION_OUT") throw new EnterpriseAccountingError("INVENTORY_ISSUE_MOVEMENT_INVALID", 409);
+  if (!movement || ["LOT_RECLASSIFICATION_OUT", "SUPPLIER_RETURN_OUT"].includes(movement.movementType)) throw new EnterpriseAccountingError("INVENTORY_ISSUE_MOVEMENT_INVALID", 409);
 
   const configuration = await tx.enterpriseFinanceConfiguration.findUnique({ where: { organizationId } });
   if (!configuration || configuration.inventoryValuationMethod !== "WEIGHTED_AVERAGE") {
