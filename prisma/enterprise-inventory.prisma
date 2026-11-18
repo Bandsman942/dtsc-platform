@@ -418,6 +418,9 @@ model EnterpriseInventoryReturnRecoveryAssessment {
   assessedByUserId String
   assessedAt DateTime @default(now())
   decidedAt DateTime?
+  withdrawnAt DateTime?
+  withdrawnByUserId String?
+  withdrawalReason String?
   revision Int @default(1)
   idempotencyKey String
   createdAt DateTime @default(now())
