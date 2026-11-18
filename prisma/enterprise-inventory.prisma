@@ -376,6 +376,8 @@ model EnterpriseInventoryReturnCustody {
   returnLine EnterpriseRetailInvoiceReturnLine @relation(fields:[organizationId,returnLineId],references:[organizationId,id],onDelete:Restrict,map:"inv_return_custody_line_fk")
   originalMovement EnterpriseStockMovement @relation(fields:[organizationId,originalMovementId],references:[organizationId,id],onDelete:Restrict,map:"inv_return_custody_movement_fk")
 
+  recoveryAssessments EnterpriseInventoryReturnRecoveryAssessment[]
+
   @@unique([organizationId, id],map:"inv_return_custody_org_id_key")
   @@unique([organizationId,returnLineId,originalMovementId],map:"inv_return_custody_source_key")
   @@index([organizationId,status,createdAt],map:"inv_return_custody_status_idx")
@@ -392,4 +394,38 @@ model EnterpriseInventoryQualityScan {
   organization Organization @relation(fields:[organizationId],references:[id],onDelete:Cascade)
 
   @@index([nextScanAt,leaseUntil],map:"inventory_quality_scan_due_idx")
+}
+
+model EnterpriseInventoryReturnRecoveryAssessment {
+  id String @id @default(cuid())
+  organizationId String
+  custodyId String
+  reference String
+  status String @default("PENDING_APPROVAL")
+  custodyRevision Int
+  quantity Decimal @db.Decimal(20,6)
+  historicalCostCeiling Decimal @db.Decimal(20,6)
+  estimatedSellingAmount Decimal @db.Decimal(20,6)
+  completionCost Decimal @db.Decimal(20,6)
+  sellingCost Decimal @db.Decimal(20,6)
+  estimatedNetValue Decimal @db.Decimal(20,6)
+  proposedRecoveryAmount Decimal @db.Decimal(20,6)
+  currencyCode String
+  originalIssueEventId String
+  originalIssueJournalId String
+  evidenceReference String
+  findings String
+  assessedByUserId String
+  assessedAt DateTime @default(now())
+  decidedAt DateTime?
+  revision Int @default(1)
+  idempotencyKey String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  custody EnterpriseInventoryReturnCustody @relation(fields:[organizationId,custodyId],references:[organizationId,id],onDelete:Restrict,map:"inv_recovery_custody_fk")
+
+  @@unique([organizationId,id],map:"inv_recovery_org_id_key")
+  @@unique([organizationId,reference],map:"inv_recovery_reference_key")
+  @@unique([organizationId,idempotencyKey],map:"inv_recovery_idempotency_key")
+  @@index([organizationId,custodyId,status],map:"inv_recovery_custody_status_idx")
 }
