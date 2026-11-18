@@ -319,6 +319,12 @@ const fakeLine = {sourceInvoiceItemId:"invoice-item-a",catalogItemId:"catalog-a"
 const creditTx = {...rtvTx,enterpriseSupplierReturnRequest:{findFirst:async()=>rtv,findMany:async()=>[rtv]},
   enterpriseSupplierCreditNote:{findFirst:async()=>fakeCredit},enterpriseSupplierCreditNoteItem:{findMany:async()=>[fakeLine]}};
 await assert.rejects(postingBuilder.buildSupplierCreditNotePosting(creditTx,{organizationId:"org-a",sourceEntityType:"EnterpriseSupplierCreditNote",sourceEntityId:"credit-a"}),{code:"SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED"});
+const capacity=returnCredit.supplierReturnPayableCapacity({currencyCode:"USD",outstandingAmount:d(70)},[rtv]);
+assert.equal(capacity.reserved.toFixed(),"14");assert.equal(capacity.available.toFixed(),"56");
+assert.equal(returnCredit.supplierReturnPayableCapacity({currencyCode:"USD",outstandingAmount:d(56)},[]).available.toFixed(),"56");
+assert.throws(()=>returnCredit.supplierReturnPayableCapacity({currencyCode:"CDF",outstandingAmount:d(70)},[rtv]),{code:"SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED"});
+const projection=await returnCredit.supplierReturnFinanceProjectionTx({enterpriseSupplierReturnRequest:{findMany:async({where,select})=>{assert.equal(where.organizationId,"org-a");assert.deepEqual([...where.supplierInvoiceId.in],["invoice-a"]);assert.equal(select.reason,undefined);return [rtv];}}},"org-a",["invoice-a"]);
+assert.equal(projection.get("invoice-a").id,"rtv-a");
 await returnCredit.assertSupplierPaymentCapacityTx(creditTx,"org-a",{supplierInvoiceId:"invoice-a",currencyCode:"USD",outstandingAmount:d(70)},d(56));
 await assert.rejects(returnCredit.assertSupplierPaymentCapacityTx(creditTx,"org-a",{supplierInvoiceId:"invoice-a",currencyCode:"USD",outstandingAmount:d(70)},d("56.01")),{code:"SUPPLIER_RETURN_PAYABLE_RESERVED"});
 const ledgerLine = (ledgerAccountId,debit,credit)=>({ledgerAccountId,debit:d(debit),credit:d(credit)});
