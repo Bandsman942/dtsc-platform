@@ -46,7 +46,7 @@ export async function GET(req: Request, { params }: Params) {
   ]);
 
   const moduleCode = enterpriseApprovalModuleForTarget(approval.targetEntityType);
-  const recoveryAssessment=approval.targetEntityType===RECOVERY_ASSESSMENT_TARGET?await prisma.enterpriseInventoryReturnRecoveryAssessment.findFirst({where:{organizationId,id:approval.targetEntityId},select:{custodyId:true,status:true,custody:{select:{status:true,revision:true}},custodyRevision:true}}):null;
+  const recoveryAssessment=approval.targetEntityType===RECOVERY_ASSESSMENT_TARGET?await prisma.enterpriseInventoryReturnRecoveryAssessment.findFirst({where:{organizationId,id:approval.targetEntityId},select:{custodyId:true,status:true,custody:{select:{status:true,revision:true}},custodyRevision:true,withdrawnAt:true,withdrawalReason:true}}):null;
   if(approval.targetEntityType===RECOVERY_ASSESSMENT_TARGET&&!recoveryAssessment)return NextResponse.json({error:"NOT_FOUND"},{status:404});
   const candidateResult = moduleCode && approval.status === "PENDING" && approval.targetEntityType !== SUPPLIER_RETURN_TARGET && approval.targetEntityType !== RECOVERY_ASSESSMENT_TARGET
     ? await listEnterpriseApprovalCandidates({ organizationId, requesterUserId: approval.requestedByUserId, moduleCode })
@@ -78,7 +78,7 @@ export async function GET(req: Request, { params }: Params) {
     delegates: delegates.map((candidate) => ({ id: candidate.userId, label: candidate.positionTitle ? `${candidate.name} · ${candidate.positionTitle}` : candidate.name, email: candidate.email })),
     sourceDeepLink: recoveryAssessment ? `/enterprise-modules/INVENTORY_LOGISTICS?custodyId=${encodeURIComponent(recoveryAssessment.custodyId)}` : supplierReturn ? `/enterprise-modules/SUPPLIERS_PURCHASES?purchase=${encodeURIComponent(supplierReturn.purchaseId)}&returnMovement=${encodeURIComponent(supplierReturn.sourceMovementId)}` : enterpriseApprovalTargetDeepLink(approval.targetEntityType, approval.targetEntityId, approval.id),
     capabilities,
-    recoveryAssessment:recoveryAssessment?{status:recoveryAssessment.status,custodyStatus:recoveryAssessment.custody.status,stale:recoveryAssessment.custodyRevision!==recoveryAssessment.custody.revision,physicalReleaseAuthorized:false,accountingRecognitionAuthorized:false}:null,
+    recoveryAssessment:recoveryAssessment?{status:recoveryAssessment.status,withdrawnAt:recoveryAssessment.withdrawnAt,withdrawalReason:recoveryAssessment.withdrawalReason,custodyStatus:recoveryAssessment.custody.status,stale:recoveryAssessment.custodyRevision!==recoveryAssessment.custody.revision,physicalReleaseAuthorized:false,accountingRecognitionAuthorized:false}:null,
     supplierReturn: supplierReturn ? { status:supplierReturn.status,cancelledAfterApprovalAt:supplierReturn.cancelledAfterApprovalAt,cancellationReason:supplierReturn.cancellationReason } : null,
   });
 }
