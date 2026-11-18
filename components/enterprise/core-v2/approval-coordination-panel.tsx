@@ -2,6 +2,7 @@
 
 import { formatEnterpriseDate as coreFormatEnterpriseDate, statusLabel as coreStatusLabel } from "@/components/enterprise/core-v2/erp-v2-ui";
 import { enterpriseCoreT } from "@/lib/enterprise-core-i18n";
+import { purchaseFormGuidance } from "@/lib/enterprise/purchase-form-i18n";
 import { approvalReviewLabel, approvalSnapshotFieldLabel } from "@/lib/standard-work-coordination/approval-review-i18n";
 import Link from "next/link";
 import { CheckCircle2, ExternalLink, FileCheck2, RefreshCcw, Send, UserRoundCog, XCircle } from "lucide-react";
@@ -24,6 +25,7 @@ type ApprovalCoordination = {
   decisions: Array<{ id: string; decision: string; reason: string | null; actorUserId: string; createdAt: string }>;
   delegates: Array<{ id: string; label: string; email: string }>;
   sourceDeepLink: string;
+  supplierReturn?: {status:string;cancelledAfterApprovalAt:string|null;cancellationReason:string|null}|null;
   capabilities: { canCancel?: boolean; canApprove: boolean; canReject: boolean; canRequestCorrection: boolean; canDelegate: boolean; canResubmit: boolean };
 };
 
@@ -115,6 +117,12 @@ export function ApprovalCoordinationPanel({ organizationId, approvalId, locale, 
       <Link href={data.sourceDeepLink} className="inline-flex h-10 items-center gap-2 rounded-xl border border-dtsc-border px-3 text-sm font-black text-dtsc-blue hover:bg-cyan-400/10">{enterpriseCoreT(locale, "approvals.coordination.open.source")}<ExternalLink className="h-4 w-4" /></Link>
     </div>
 
+    {data.supplierReturn?.cancelledAfterApprovalAt?<section className="grid min-w-0 gap-2 rounded-xl border border-dtsc-border p-3" data-supplier-return-withdrawal>
+      <div><StatusBadge tone="warning">{purchaseFormGuidance(locale==="en"?"en":"fr","returnWithdrawn")}</StatusBadge></div>
+      <p className="text-sm text-dtsc-muted">{purchaseFormGuidance(locale==="en"?"en":"fr","returnWithdrawHistory")}</p>
+      <p className="text-xs text-dtsc-muted">{coreFormatEnterpriseDate(data.supplierReturn.cancelledAfterApprovalAt,locale)}</p>
+      <p className="break-words text-sm"><strong>{purchaseFormGuidance(locale==="en"?"en":"fr","returnWithdrawReason")} :</strong> {data.supplierReturn.cancellationReason}</p>
+    </section>:null}
     {(data.capabilities.canApprove || data.capabilities.canReject || data.capabilities.canRequestCorrection) && !latestVersion ? <section className="grid gap-3 rounded-2xl border border-dtsc-border bg-dtsc-page p-4">
       <div><h4 className="font-black text-dtsc-ink">{approvalReviewLabel(locale, "prepare")}</h4><p className="mt-1 text-sm text-dtsc-muted">{approvalReviewLabel(locale, "prepareHelp")}</p></div>
       <Button type="button" disabled={submitting} onClick={() => void act("PREPARE_REVIEW")} className="w-full bg-dtsc-blue text-white sm:w-fit"><FileCheck2 className="h-4 w-4" />{approvalReviewLabel(locale, "prepare")}</Button>
