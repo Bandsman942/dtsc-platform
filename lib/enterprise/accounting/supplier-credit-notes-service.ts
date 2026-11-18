@@ -7,7 +7,7 @@ import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
 import { financeReference, money, publishFinanceEvent, sumDecimals } from "@/lib/enterprise/accounting/helpers";
 import { postBusinessEventTx } from "@/lib/enterprise/accounting/posting-service";
 import type { supplierCreditNoteCreateSchema } from "@/lib/enterprise/accounting/schemas";
-import { completeSupplierReturnCreditTx, lockSupplierReturnInvoiceTx, verifySupplierReturnCreditTx } from "@/lib/enterprise/accounting/supplier-return-credit-reconciliation";
+import { assertSupplierReturnCreditDateTx, completeSupplierReturnCreditTx, lockSupplierReturnInvoiceTx, verifySupplierReturnCreditTx } from "@/lib/enterprise/accounting/supplier-return-credit-reconciliation";
 import type { z } from "zod";
 
 type CreditInput = z.infer<typeof supplierCreditNoteCreateSchema>;
@@ -22,11 +22,11 @@ export async function createSupplierCreditNote(organizationId: string, actorUser
     if (returnRequest || input.supplierReturnId || supplierReference) {
       const line = input.items[0];
       if (!returnRequest || !supplierReference || input.supplierReturnId !== returnRequest.id || !returnRequest.dispatchedAt ||
-        input.creditDate.toISOString().slice(0,10) < returnRequest.dispatchedAt.toISOString().slice(0,10) ||
         input.items.length !== 1 || line.sourceInvoiceItemId !== returnRequest.supplierInvoiceItemId ||
         !returnRequest.quantity.equals(line.quantity) || !returnRequest.unitCost.equals(line.unitPrice) || invoice.currencyCode !== returnRequest.currencyCode) {
         throw new EnterpriseAccountingError("SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED", 409);
       }
+      await assertSupplierReturnCreditDateTx(tx, organizationId, input.creditDate, returnRequest.dispatchedAt);
       if (returnRequest.supplierCreditNoteId) {
         const existing = await tx.enterpriseSupplierCreditNote.findFirst({ where: { organizationId, id: returnRequest.supplierCreditNoteId, supplierInvoiceId:invoice.id } });
         if (existing && returnRequest.supplierCreditReference === supplierReference && existing.createdByUserId === actorUserId && existing.reason === input.reason && existing.creditDate.getTime() === input.creditDate.getTime()) return existing;
