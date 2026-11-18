@@ -36,7 +36,7 @@ export async function GET(req: Request, { params }: Params) {
   const pageSize = 25;
   const search = (url.searchParams.get("search") || "").trim().slice(0, 120);
   const warehouseId = url.searchParams.get("warehouseId") || "";
-  const scoped = scope.isolationEnabled ? {warehouse:{siteId:{in:scope.siteIds}}} : {};
+  const scoped = scope.isolationEnabled ? { warehouse: { siteId: { in: scope.siteIds } } } : {};
   const traceId=url.searchParams.get("lotId");
   if(url.searchParams.get("view")==="custody") {
     const status=url.searchParams.get("status");
