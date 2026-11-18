@@ -220,7 +220,7 @@ export async function dispatchSupplierReturn(organizationId: string, purchaseId:
     const posting = await postBusinessEventTx(tx, organizationId, actorUserId, { postingEvent, sourceEntityType: "EnterpriseInventoryAccountingEvent", sourceEntityId: event.id });
     await tx.enterpriseInventoryAccountingEvent.update({ where: { id: event.id }, data: { status: "POSTED", journalEntryId: posting.entry.id } });
     const changed = await tx.enterpriseSupplierReturnRequest.updateMany({ where: { organizationId, id: request.id, status: "APPROVED", revision: input.revision }, data: {
-      status: "DISPATCHED", dispatchedAt: new Date(), dispatchedByUserId: actorUserId, dispatchReference: input.dispatchReference,
+      status: "DISPATCHED", dispatchedAt: event.createdAt, dispatchedByUserId: actorUserId, dispatchReference: input.dispatchReference,
       dispatchMovementId: movement.movement.id, dispatchAccountingEventId: event.id, revision: { increment: 1 },
     } });
     if (changed.count !== 1) throw new EnterpriseDomainConflictError("SUPPLIER_RETURN_CONFLICT");
