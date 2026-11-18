@@ -76,6 +76,8 @@
 
 - Retours physiques non revendables : registre de garde EnterpriseInventoryReturnCustody, clé unique ligne de retour/mouvement source, quantité exacte, identité du lot par mouvement d’origine, inspection et provenance. Création atomique dans la liquidation Finance; QUARANTINE isolé / DISPOSE en attente de preuve de destruction, jamais déclaré détruit par simple avoir. Pas de solde vendable ni de nouvelle valeur comptable automatique. La valeur récupérable éventuelle exige une procédure qualité/Finance dédiée. Les retours historiques ne sont pas inventés ni rétroactivement générés. QA du règlement avec garde pour les deux dispositions, rejeu et absence de restitution fictive.
 
+- Registre de garde via route existante : consultation paginée et filtrable (site, dépôt, article/lot/référence de retour, statut), demande de destruction des retours en quarantaine et attestation de destruction effective avec preuve textuelle, révision, audit, responsable indépendant (ni inspecteur, ni liquidateur, ni demandeur). Aucun nouveau mouvement vendable, aucune écriture supplémentaire. Le volet récupération de valeur après expertise reste à définir.
+
 ## Restant (bloquant)
 Certification de la réaffectation historique sur PostgreSQL + navigateur et valeur inchangée; certification achats et valorisation, réservations/livraisons multi-lots; moteur FEFO commun et POS; pertes, rappels et comptabilité; Design 2.0 et tests multisectoriels. Voir issue #1212. Ne pas merger avant clôture de tous les points.
 

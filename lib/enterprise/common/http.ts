@@ -4,6 +4,9 @@ import { NextResponse } from "next/server";
 import { EnterpriseDomainError } from "@/lib/enterprise/common/errors";
 
 const BUSINESS_ERROR_MESSAGES: Record<string, { fr: string; en: string }> = {
+  INVENTORY_RETURN_CUSTODY_NOT_FOUND:{fr:"Retour isolé introuvable.",en:"Isolated return not found."},
+  INVENTORY_RETURN_CUSTODY_STATUS_INVALID:{fr:"Cette opération ne correspond plus au statut du retour isolé.",en:"This action no longer matches the isolated return status."},
+  INVENTORY_RETURN_CUSTODY_APPROVER_REQUIRED:{fr:"La preuve de destruction exige un administrateur distinct de l’inspecteur, du demandeur et du liquidateur.",en:"Disposal evidence requires an administrator independent of the inspector, requester and settler."},
   STOCK_TRANSFER_ISOLATED_RECEIPT_INVALID:{fr:"La réception isolée doit correspondre exactement à un transfert expédié et à son lot de départ.",en:"An isolated receipt must match a dispatched transfer and its original batch."},
   INVENTORY_RESERVATION_CONCURRENT:{fr:"Une réservation concurrente a modifié le stock. Actualisez les disponibilités.",en:"A concurrent reservation modified stock. Refresh availability."},
   INVENTORY_LOT_RECALLED:{fr:"Ce lot est rappelé. Sa remise en circulation ou sa recréation est interdite.",en:"This batch is recalled. It cannot be released or recreated."},

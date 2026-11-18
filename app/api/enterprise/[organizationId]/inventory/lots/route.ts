@@ -21,6 +21,7 @@ type Params = { params: Promise<{ organizationId: string }> };
 const fields = z.object({ inventoryItemId: z.string().min(1), warehouseId: z.string().min(1), lotNumber: z.string().trim().min(1).max(120), productionDate: z.iso.date().nullable(), expiryDate: z.iso.date().nullable(), notes: z.string().trim().max(1000).nullable() });
 const createSchema = fields.strict();
 const patchSchema = fields.partial().extend({ id: z.string().min(1), revision: z.number().int().positive(), status: z.enum(["AVAILABLE", "BLOCKED", "QUARANTINED"]).optional(), qualityReason:z.string().trim().min(8).max(1000).optional(), recall:z.literal(true).optional() }).strict();
+const custodyActionSchema=z.object({custodyId:z.string().trim().min(1).max(191),revision:z.number().int().positive(),action:z.enum(["REQUEST_DISPOSAL","CONFIRM_DISPOSAL"]),reason:z.string().trim().min(8).max(2000)}).strict();
 const isoDate = (value: string | null | undefined) => value ? new Date(`${value}T00:00:00.000Z`) : null;
 
 export async function GET(req: Request, { params }: Params) {
@@ -37,6 +38,16 @@ export async function GET(req: Request, { params }: Params) {
   const warehouseId = url.searchParams.get("warehouseId") || "";
   const scoped = scope.isolationEnabled ? {warehouse:{siteId:{in:scope.siteIds}}} : {};
   const traceId=url.searchParams.get("lotId");
+  if(url.searchParams.get("view")==="custody") {
+    const status=url.searchParams.get("status");
+    const movementWhere:Prisma.EnterpriseStockMovementWhereInput={organizationId,...scoped,...(warehouseId?{warehouseId}:{}),...(traceId?{stockLotId:traceId}:{})};
+    const where:Prisma.EnterpriseInventoryReturnCustodyWhereInput={organizationId,originalMovement:movementWhere,returnLine:{request:{status:"COMPLETED"}},...(status&&["QUARANTINED","DISPOSAL_PENDING","DISPOSED"].includes(status)?{status}:{}),...(search?{OR:[{originalMovement:{inventoryItem:{catalogItem:{name:{contains:search,mode:"insensitive"}}}}},{originalMovement:{stockLot:{lotNumber:{contains:search,mode:"insensitive"}}}},{returnLine:{request:{number:{contains:search,mode:"insensitive"}}}}]}:{})};
+    const [items,total]=await Promise.all([
+      prisma.enterpriseInventoryReturnCustody.findMany({where,orderBy:[{createdAt:"desc"},{id:"desc"}],skip:(page-1)*pageSize,take:pageSize,include:{originalMovement:{select:{warehouseId:true,warehouse:{select:{name:true,code:true}},inventoryItem:{select:{catalogItem:{select:{name:true,code:true}}}},stockLot:{select:{id:true,lotNumber:true,recallReference:true}}}},returnLine:{select:{request:{select:{id:true,number:true}}}}}}),
+      prisma.enterpriseInventoryReturnCustody.count({where}),
+    ]);
+    return NextResponse.json({items:items.map(item=>({...item,canRequest:access.canWrite&&item.status==="QUARANTINED",canConfirm:access.canAdminister&&item.status==="DISPOSAL_PENDING"&&![item.inspectedByUserId,item.registeredByUserId,item.disposalRequestedByUserId].includes(session.userId)})),pagination:{page,pageSize,total,pageCount:Math.max(1,Math.ceil(total/pageSize))}},{headers:{"Cache-Control":"private, no-store"}});
+  }
   if (url.searchParams.get("view")==="trace") {
     if(!traceId || traceId.length>191) return NextResponse.json({error:"INVENTORY_LOT_INPUT_INVALID"},{status:400});
     const lot=await prisma.enterpriseStockLot.findFirst({where:{organizationId,id:traceId,...scoped},select:{id:true,inventoryItemId:true,lotNumber:true,recallReference:true,qualityReason:true,qualityChangedAt:true}});
@@ -113,7 +124,35 @@ export async function PATCH(req: Request, { params }: Params) {
   const access = await getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode: "INVENTORY_LOGISTICS", action: "write" });
   if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   if (!(await rateLimit(`inventory-lot-write:${organizationId}:${session.userId}`, 60, 60_000)).ok) return NextResponse.json({ error: "RATE_LIMITED" }, { status: 429 });
-  const parsed = patchSchema.safeParse(await req.json().catch(() => null));
+  const raw=await req.json().catch(()=>null);
+  if(raw&&typeof raw==="object"&&"custodyId" in raw) {
+    const parsed=custodyActionSchema.safeParse(raw);
+    if(!parsed.success)return enterpriseValidationErrorResponse(parsed.error,"INVENTORY_LOT_INPUT_INVALID",req);
+    const input=parsed.data;
+    try {
+      const result=await prisma.$transaction(async tx=>{
+        const item=await tx.enterpriseInventoryReturnCustody.findFirst({where:{organizationId,id:input.custodyId,returnLine:{request:{status:"COMPLETED"}}},include:{originalMovement:{select:{warehouseId:true}}}});
+        if(!item)throw new EnterpriseDomainError("INVENTORY_RETURN_CUSTODY_NOT_FOUND",404);
+        await requireInventoryStockAuthorityTx(tx,organizationId,session.userId,item.originalMovement.warehouseId);
+        if(item.revision!==input.revision)throw new EnterpriseDomainConflictError("INVENTORY_LOT_CONFLICT");
+        const confirm=input.action==="CONFIRM_DISPOSAL";
+        if(confirm&&(!access.canAdminister||[item.inspectedByUserId,item.registeredByUserId,item.disposalRequestedByUserId].includes(session.userId)))throw new EnterpriseDomainError("INVENTORY_RETURN_CUSTODY_APPROVER_REQUIRED",403);
+        if(item.status!==(confirm?"DISPOSAL_PENDING":"QUARANTINED"))throw new EnterpriseDomainConflictError("INVENTORY_RETURN_CUSTODY_STATUS_INVALID");
+        const status=confirm?"DISPOSED":"DISPOSAL_PENDING";
+        const now=new Date();
+        const changed=await tx.enterpriseInventoryReturnCustody.updateMany({where:{organizationId,id:item.id,status:item.status,revision:input.revision},data:{status,revision:{increment:1},...(confirm?{disposedByUserId:session.userId,disposedAt:now,disposalEvidence:input.reason}:{disposalRequestedByUserId:session.userId,disposalRequestedAt:now,disposalReason:input.reason})}});
+        if(changed.count!==1)throw new EnterpriseDomainConflictError("INVENTORY_LOT_CONFLICT");
+        await publishEnterpriseEvent(tx,{organizationId,entityType:"EnterpriseInventoryReturnCustody",entityId:item.id,eventType:confirm?"STOCK_RETURN_CUSTODY_DISPOSED":"STOCK_RETURN_CUSTODY_DISPOSAL_REQUESTED",summary:confirm?"Physical disposal attested":"Disposal requested",actorUserId:session.userId,fromStatus:item.status,toStatus:status,metadataJson:{originalMovementId:item.originalMovementId,returnLineId:item.returnLineId,quantity:item.quantity.toFixed(),reason:input.reason}});
+        return {id:item.id,status,revision:item.revision+1};
+      },{isolationLevel:Prisma.TransactionIsolationLevel.Serializable});
+      await writeAuditLog({userId:session.userId,organizationId,action:input.action==="CONFIRM_DISPOSAL"?"ENTERPRISE_RETURN_CUSTODY_DISPOSED":"ENTERPRISE_RETURN_CUSTODY_DISPOSAL_REQUESTED",entity:"EnterpriseInventoryReturnCustody",entityId:input.custodyId,request:req,metadata:{...result,reason:input.reason}});
+      return NextResponse.json({ok:true,...result});
+    } catch(error) {
+      if(error instanceof Prisma.PrismaClientKnownRequestError && error.code==="P2034")return enterpriseDomainErrorResponse(new EnterpriseDomainConflictError("INVENTORY_LOT_CONFLICT"),"INVENTORY_RETURN_CUSTODY_FAILED",req);
+      return enterpriseDomainErrorResponse(error,"INVENTORY_RETURN_CUSTODY_FAILED",req);
+    }
+  }
+  const parsed = patchSchema.safeParse(raw);
   if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "INVENTORY_LOT_INPUT_INVALID", req);
   const input = parsed.data;
   try {
