@@ -25,6 +25,7 @@ type ApprovalCoordination = {
   decisions: Array<{ id: string; decision: string; reason: string | null; actorUserId: string; createdAt: string }>;
   delegates: Array<{ id: string; label: string; email: string }>;
   sourceDeepLink: string;
+  recoveryAssessment?:{status:string;custodyStatus:string;stale:boolean;physicalReleaseAuthorized:false;accountingRecognitionAuthorized:false}|null;
   supplierReturn?: {status:string;cancelledAfterApprovalAt:string|null;cancellationReason:string|null}|null;
   capabilities: { canCancel?: boolean; canApprove: boolean; canReject: boolean; canRequestCorrection: boolean; canDelegate: boolean; canResubmit: boolean };
 };
@@ -162,7 +163,7 @@ export function ApprovalCoordinationPanel({ organizationId, approvalId, locale, 
   </div>;
 }
 
-const SNAPSHOT_FIELDS = new Set(["article", "lotNumber", "warehouse", "location", "purchaseReference", "receiptReference", "supplierInvoiceReference", "unitCost", "quantity", "reason", "title", "description", "status", "priority", "requestType", "reference", "revision", "startAt", "dueAt", "endAt", "locationMode", "currency", "amount", "totalAmount", "sourceAmount", "sourceCurrencyCode", "targetAmount", "targetCurrencyCode", "updatedAt"]);
+const SNAPSHOT_FIELDS = new Set(["returnReference","historicalCostCeiling","estimatedSellingAmount","completionCost","sellingCost","estimatedNetValue","evidenceReference","article", "lotNumber", "warehouse", "location", "purchaseReference", "receiptReference", "supplierInvoiceReference", "unitCost", "quantity", "reason", "title", "description", "status", "priority", "requestType", "reference", "revision", "startAt", "dueAt", "endAt", "locationMode", "currency", "amount", "totalAmount", "sourceAmount", "sourceCurrencyCode", "targetAmount", "targetCurrencyCode", "updatedAt"]);
 
 function snapshotEntries(snapshot: Record<string, unknown>) {
   return Object.entries(snapshot).filter(([field, value]) => SNAPSHOT_FIELDS.has(field) && value !== null && value !== undefined && value !== "");
