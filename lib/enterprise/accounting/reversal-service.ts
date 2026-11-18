@@ -31,6 +31,18 @@ export async function reverseJournalEntryTx(
   }
   if (original.status === "REVERSED") throw new EnterpriseAccountingError("JOURNAL_REVERSAL_INCONSISTENT", 409);
   if (original.status !== "POSTED") throw new EnterpriseAccountingError("ONLY_POSTED_ENTRY_CAN_BE_REVERSED", 409);
+  // A manual reversal of a matched supplier source would leave stock, payable
+  // and the return evidence inconsistent. Only a future domain inverse can
+  // reverse those objects together.
+  if (["INVENTORY_SUPPLIER_RETURN_VALUED","INVENTORY_RECEIPT_VALUED","SUPPLIER_INVOICE_POSTED","SUPPLIER_CREDIT_NOTE_POSTED"].includes(original.postingEvent || "")) {
+    const linked = await tx.enterpriseSupplierReturnRequest.findFirst({where:{organizationId,status:{in:["DISPATCHED","RECONCILED"]},OR:[
+      {creditJournalEntryId:original.id},
+      ...(original.sourceEntityType==="EnterpriseInventoryAccountingEvent" && original.sourceEntityId ? [{dispatchAccountingEventId:original.sourceEntityId},{receiptAccountingEventId:original.sourceEntityId}] : []),
+      ...(original.sourceEntityType==="EnterpriseSupplierInvoice" && original.sourceEntityId ? [{supplierInvoiceId:original.sourceEntityId}] : []),
+      ...(original.sourceEntityType==="EnterpriseSupplierCreditNote" && original.sourceEntityId ? [{supplierCreditNoteId:original.sourceEntityId}] : []),
+    ]},select:{id:true}});
+    if (linked) throw new EnterpriseAccountingError("SUPPLIER_RETURN_DOMAIN_REVERSAL_REQUIRED",409);
+  }
 
   if ((options?.authorization || "USER") === "USER") {
     assertIndependentActor({
