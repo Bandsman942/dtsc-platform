@@ -1491,7 +1491,14 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
       }finally{
         await prisma.enterpriseFiscalPeriod.update({where:{id:period.id},data:{status:period.status}});
       }
-      const competing=await Promise.all([recoveryAction(context.owner,"execute-recovery-assessment",executeInput),recoveryAction(context.owner,"execute-recovery-assessment",executeInput)]);
+      const [firstRecovery,secondRecovery,competingDisposal]=await Promise.all([
+        recoveryAction(context.owner,"execute-recovery-assessment",executeInput),
+        recoveryAction(context.owner,"execute-recovery-assessment",executeInput),
+        patchLot(context.owner,{custodyId:recoverableCustody.id,revision:recoverableCustody.revision,action:"REQUEST_DISPOSAL",reason:"Concurrent destruction must not race an approved recovery"}),
+      ]);
+      const competing=[firstRecovery,secondRecovery];
+      expect(competingDisposal.status,JSON.stringify(competingDisposal.body)).toBe(409);
+      expect(["INVENTORY_RETURN_RECOVERY_ACTIVE","INVENTORY_LOT_CONFLICT"]).toContain(competingDisposal.body.error);
       expect(competing.every(result=>[200,409].includes(result.status)),JSON.stringify(competing)).toBe(true);
       const executed=competing.find(result=>result.status===200);
       expect(executed).toBeTruthy();
