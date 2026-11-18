@@ -170,6 +170,8 @@ const FINANCE_ERROR_MESSAGES: Record<string, string> = {
   SUPPLIER_INVOICE_ASSET_PURCHASE_MISMATCH: "L’actif sélectionné est rattaché à un autre achat.",
   SUPPLIER_INVOICE_ASSET_CURRENCY_MISMATCH: "La devise de la facture ne correspond pas à celle de l’actif sélectionné.",
   SALES_CREDIT_NOTE_EXCEEDS_OPEN_RECEIVABLE: "Le montant de l’avoir dépasse le solde client encore ouvert. Rechargez la créance avant de comptabiliser l’avoir.",
+  SUPPLIER_RETURN_PAYABLE_RESERVED: "Une partie de cette dette est réservée à un avoir fournisseur en attente de rapprochement. Réduisez le montant affecté ou comptabilisez d’abord l’avoir lié.",
+  SUPPLIER_RETURN_CREDIT_REFERENCE_REQUIRED: "Renseignez ensemble le retour expédié et la référence de l’avoir reçu du fournisseur.",
   SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED: "Cette facture est liée à un retour fournisseur expédié. Rapprochez l’avoir de ce retour avant toute comptabilisation.",
   SUPPLIER_CREDIT_NOTE_EXCEEDS_OPEN_PAYABLE: "Le montant de l’avoir fournisseur dépasse le solde de dette encore ouvert. Rechargez la dette avant de comptabiliser l’avoir.",
   SALES_CREDIT_NOTE_CURRENCY_MISMATCH: "La devise de l’avoir ne correspond plus à celle de la créance.",
