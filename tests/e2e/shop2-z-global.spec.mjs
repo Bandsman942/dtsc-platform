@@ -469,7 +469,7 @@ test.describe.serial("Shop 2.0 Iteration 4 global behavioral acceptance", () => 
       lots[name] = { lot, balance };
     }
     async function createOrder(suffix, quantity) {
-      return prisma.enterpriseSalesOrder.create({ data: { organizationId, reference: key + "-" + suffix, businessPartyId: fixture.customerId, title: "Batch preparation E2E", status: "CONFIRMED", currency: fixture.currencyCode, subtotalAmount: quantity * 10, totalAmount: quantity * 10, createdByUserId: fixture.userId, items: { create: { organizationId, catalogItemId: product.id, description: product.name, quantityOrdered: quantity, unitOfMeasureId: product.unitOfMeasureId, unitPrice: 10, lineSubtotal: quantity * 10, lineTotal: quantity * 10 } } }, include: { items: true } });
+      return prisma.enterpriseSalesOrder.create({ data: { organizationId, reference: key + "-" + suffix, businessPartyId: fixture.customerId, title: "Batch preparation E2E", status: "CONFIRMED", currency: fixture.currencyCode, subtotalAmount: quantity * 10, totalAmount: quantity * 10, createdByUserId: fixture.userId, items: { create: { catalogItemId: product.id, description: product.name, quantityOrdered: quantity, unitOfMeasureId: product.unitOfMeasureId, unitPrice: 10, lineSubtotal: quantity * 10, lineTotal: quantity * 10 } } }, include: { items: true } });
     }
     const order = await createOrder("A", 50);
     const second = await createOrder("B", 60);

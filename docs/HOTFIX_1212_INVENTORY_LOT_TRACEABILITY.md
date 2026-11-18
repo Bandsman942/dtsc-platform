@@ -38,9 +38,12 @@
 ## Facture POS à ventilation multi-lots (en validation)
 - Une ligne Finance et un checkout par article; ajout nullable `lotAllocations` au lien de checkout. Quand aucun lot explicite n’est sélectionné, le serveur répartit les lots disponibles FEFO strict, après déduction des retenues et réservations. Aucune duplication de prix, TVA, créance ou facture. Le choix explicite d’un lot reste compatible.
 - Les retenues et la sortie physique à paiement intégral relisent le même instantané. Un crédit avant livraison libère la fin de la ventilation FEFO; contrôle des sommes et refus sur lot devenu indisponible. Chaque sortie garde le même invoiceItemId et sa propre clé par solde.
-- Les retours physiques des factures auto-ventilées restent volontairement bloqués au niveau de la demande et du préflight Finance tant que la preuve de lot rapporté n’est pas intégrée. Aucun retour arbitraire. Ne pas fusionner avant ce correctif et sa recette.
+- Retour physique multi-lots : preuve structurée par lot sur la ligne unique d’avoir, somme exacte, contrôle du débit source et des retours déjà engagés. Inspection indépendante avec confirmation explicite ; préflight Finance répète les vérifications, y compris crédit antérieur à livraison et rapprochement des mouvements originaux. La réintégration utilise le coût d’origine. L’interface et la recette complète restent à finaliser.
 - La QA vérifie le total exact et le crédit non livré. Le scénario matériel complet et les retours doivent encore être exécutés.
 - Correction du gate strict-positive (nouvelle garde distincte pour les réservations de commande, retenue facture positive uniquement) et réutilisation des cookies d’une authentification réussie dans le scénario E2E global; aucune modification du rate limit de production ni suppression de scénario.
+
+- Correction fixture E2E : le parent fournit organizationId à la relation composite lors de la création imbriquée. Les 16 workflows réussis du SHA d4bb49c n’incluent pas la recette globale qui a échoué sur ce champ.
+- La liquidation de facture respecte les lots déjà promis, sans imposer une nouvelle allocation FEFO après une réception ultérieure; les contrôles de sécurité et disponibilité demeurent actifs.
 
 ## Restant (bloquant)
 Certification de la réaffectation historique sur PostgreSQL + navigateur et valeur inchangée; certification achats et valorisation, réservations/livraisons multi-lots; moteur FEFO commun et POS; pertes, rappels et comptabilité; Design 2.0 et tests multisectoriels. Voir issue #1212. Ne pas merger avant clôture de tous les points.

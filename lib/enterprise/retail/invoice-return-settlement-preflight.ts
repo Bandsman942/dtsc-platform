@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import { planPhysicalInvoiceReturnLots } from "@/lib/enterprise/inventory/lot-allocation";
 
 // @prisma/client Decimal does not expose the static Decimal.min/max helpers.
 const decimalMin = (...values: Prisma.Decimal[]): Prisma.Decimal => values.reduce((a, b) => a.lessThan(b) ? a : b);
@@ -32,7 +33,7 @@ export async function assertRetailInvoiceReturnSettlementReadinessTx(
       requestedByUserId: true, approverUserId: true, decidedByUserId: true,
       inspectedByUserId: true, inspectedAt: true, inspectionNotes: true,
       lines: { select: { id: true, checkoutLineId: true, quantity: true, refundAmount: true,
-        refundNetAmount: true, refundTaxAmount: true, stockDisposition: true } },
+        refundNetAmount: true, refundTaxAmount: true, stockDisposition: true, lotAllocations: true } },
       checkout: {
         select: {
           id: true, siteId: true, warehouseId: true, stockPostedAt: true,
@@ -88,7 +89,7 @@ export async function assertRetailInvoiceReturnSettlementReadinessTx(
   const invoiceLines = new Map(checkout.lines.map((line) => [line.id, line]));
   const stockLines = [] as Array<{
     returnLineId: string; checkoutLineId: string; invoiceItemId: string;
-    quantity: Prisma.Decimal; stockDisposition: string;
+    quantity: Prisma.Decimal; stockDisposition: string; lotAllocations?: Prisma.JsonValue | null;
   }>;
   const ids = new Set<string>();
   for (const line of request.lines) {
@@ -121,7 +122,7 @@ export async function assertRetailInvoiceReturnSettlementReadinessTx(
     ids.add(source.id);
     if (source.inventoryItemId && checkout.stockPostedAt) stockLines.push({
       returnLineId: line.id, checkoutLineId: source.id, invoiceItemId: source.invoiceItemId,
-      quantity: line.quantity, stockDisposition: line.stockDisposition,
+      quantity: line.quantity, stockDisposition: line.stockDisposition, lotAllocations: line.lotAllocations,
     });
   }
   const [confirmedAllocations, originalMovements, previouslyCompleted] = await Promise.all([
@@ -146,7 +147,7 @@ export async function assertRetailInvoiceReturnSettlementReadinessTx(
     tx.enterpriseRetailInvoiceReturnLine.findMany({
       where: { organizationId, checkoutId: checkout.id, checkoutLineId: { in: [...ids] }, request: { status: "COMPLETED" } },
       select: { checkoutLineId: true, quantity: true, refundAmount: true,
-        refundNetAmount: true, refundTaxAmount: true },
+        refundNetAmount: true, refundTaxAmount: true, stockDisposition: true, lotAllocations: true },
     }),
   ]);
   const accounts = await tx.enterpriseFinancialAccount.findMany({
@@ -225,8 +226,17 @@ export async function assertRetailInvoiceReturnSettlementReadinessTx(
   for (const line of stockLines) {
     if (!checkout.stockPostedAt) continue; // Undelivered goods release stock promises; never add stock.
     const source = invoiceLines.get(line.checkoutLineId)!;
-    if (source.lotAllocations != null) throw conflict("RETAIL_INVOICE_RETURN_BATCH_SELECTION_REQUIRED");
     const related = originalMovements.filter((movement) => movement.sourceLineId === line.invoiceItemId);
+    const previous = previouslyCompleted.filter(row => row.checkoutLineId === line.checkoutLineId);
+    if (source.lotAllocations != null) {
+      if (related.some(row => row.warehouseId !== checkout.warehouseId || row.inventoryItemId !== source.inventoryItemId)) throw conflict("RETAIL_INVOICE_RETURN_SETTLEMENT_STOCK_INVALID");
+      try {
+        const splits = planPhysicalInvoiceReturnLots({ source, movements: related, previous, quantity: line.quantity, selected: line.lotAllocations });
+        for (const { movement, quantity } of splits) stockSourcePlan.push({ returnLineId: line.returnLineId, originalMovementId: movement.id, inventoryItemId: movement.inventoryItemId, warehouseId: movement.warehouseId, storageLocationId: movement.storageLocationId, stockLotId: movement.stockLotId, quantity, stockDisposition: line.stockDisposition });
+      } catch (error) { throw conflict(error instanceof Error ? error.message : "RETAIL_INVOICE_RETURN_SETTLEMENT_STOCK_INVALID"); }
+      continue;
+    }
+    if (line.lotAllocations != null) throw conflict("RETAIL_INVOICE_RETURN_SETTLEMENT_STOCK_INVALID");
     const movements = related.filter((movement) =>
       movement.sourceLineId === line.invoiceItemId && movement.warehouseId === checkout.warehouseId &&
       movement.inventoryItemId === source.inventoryItemId && movement.stockLotId === source.stockLotId,
@@ -238,10 +248,9 @@ export async function assertRetailInvoiceReturnSettlementReadinessTx(
       throw conflict("RETAIL_INVOICE_RETURN_SETTLEMENT_STOCK_INVALID");
     }
     const original = sum(movements.map((movement) => movement.quantity));
-    const completed = sum(previouslyCompleted.filter((previous) =>
-      previous.checkoutLineId === line.checkoutLineId,
-    ).map((previous) => previous.quantity));
-    if (!original.equals(source.invoiceItem.quantity) ||
+    const completed = sum(previous.filter(row => row.stockDisposition !== "UNDELIVERED_CREDIT").map(row => row.quantity));
+    const undelivered = sum(previous.filter(row => row.stockDisposition === "UNDELIVERED_CREDIT").map(row => row.quantity));
+    if (!original.equals(source.invoiceItem.quantity.minus(undelivered)) ||
         completed.plus(line.quantity).greaterThan(original)) {
       throw conflict("RETAIL_INVOICE_RETURN_SETTLEMENT_STOCK_INVALID");
     }

@@ -5,6 +5,9 @@ import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 const ts = require("typescript");
 const { Prisma } = require("@prisma/client");
+const lotTools = { exports: {} };
+vm.runInNewContext(ts.transpileModule(fs.readFileSync("lib/enterprise/inventory/lot-allocation.ts", "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, { exports: lotTools.exports, require: (id) => id === "@prisma/client" ? { Prisma } : require(id) });
+
 const D = (x) => new Prisma.Decimal(x);
 class EnterpriseRetailError extends Error {
   constructor(code, status = 409) { super(code); this.code = code; this.status = status; }
@@ -105,6 +108,7 @@ vm.runInNewContext(ts.transpileModule(source, {
 }).outputText, {
   module: unit, exports: unit.exports, Promise, Date, Set, Map,
   require: (id) => {
+    if (id === "@/lib/enterprise/inventory/lot-allocation") return lotTools.exports;
     if (id === "@prisma/client") return { Prisma };
     if (id === "zod") return { z: require("zod").z };
     if (id === "@/lib/prisma") return { prisma };

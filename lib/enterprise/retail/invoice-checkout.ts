@@ -317,6 +317,7 @@ export async function postPaidRetailInvoiceStockTx(
     timezone: organization?.timezone || "UTC",
     settings: configuration?.settingsJson,
     excludeSalesInvoiceId: checkout.salesInvoiceId,
+    preserveCommittedSelection: true,
     lines: fulfilableLines.map(({ line, remaining }) => ({ inventoryItemId: line.inventoryItemId, stockLotId: line.stockLotId, quantity: remaining })),
   });
 

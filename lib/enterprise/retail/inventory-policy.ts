@@ -72,9 +72,11 @@ export async function assertRetailLotPolicyTx(
     settings: unknown;
     lines: Array<{ inventoryItemId: string | null; stockLotId: string | null; quantity?: Prisma.Decimal.Value }>;
     excludeSalesInvoiceId?: string;
+    preserveCommittedSelection?: boolean;
   },
 ) {
-  const policy = readRetailInventoryPolicy(args.settings);
+  const configuredPolicy = readRetailInventoryPolicy(args.settings);
+  const policy = args.preserveCommittedSelection ? { ...configuredPolicy, enforceFefo: false } : configuredPolicy;
   const warnings: RetailLotPolicyWarning[] = [];
   if (policy.expiryMode === "ALLOW" && !policy.enforceFefo) return warnings;
   const inventoryIds = [...new Set(args.lines.map((line) => line.inventoryItemId).filter((value): value is string => Boolean(value)))];

@@ -186,3 +186,62 @@ export function readInvoiceLotAllocations(line: { stockLotId: string | null; lot
     return take.gt(0) ? [{ stockLotId: entry.stockLotId, quantity: take }] : [];
   });
 }
+
+/** Physical return choices refer to real lots, never the order in which
+ * goods happened to leave a warehouse. Preserve a single financial credit
+ * line and reject over-return per lot, including pending commitments. */
+export function readPhysicalReturnLots(value: Prisma.JsonValue | undefined | null, quantity: Prisma.Decimal): InvoiceLotAllocation[] {
+  if (!Array.isArray(value) || !value.length || value.length > 100) throw new Error("RETAIL_INVOICE_RETURN_BATCH_SELECTION_REQUIRED");
+  const seen = new Set<string>();
+  let total = new Prisma.Decimal(0);
+  const result: InvoiceLotAllocation[] = [];
+  for (const entry of value) {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry) || typeof entry.stockLotId !== "string" || !entry.stockLotId || seen.has(entry.stockLotId) || typeof entry.quantity !== "string" || !/^\d{1,15}(\.\d{1,3})?$/.test(entry.quantity)) throw new Error("RETAIL_INVOICE_RETURN_BATCH_SELECTION_REQUIRED");
+    const q = new Prisma.Decimal(entry.quantity);
+    if (!q.gt(0)) throw new Error("RETAIL_INVOICE_RETURN_BATCH_SELECTION_REQUIRED");
+    total = total.plus(q); seen.add(entry.stockLotId);
+    result.push({ stockLotId: entry.stockLotId, quantity: q.toFixed() });
+  }
+  if (!total.equals(quantity)) throw new Error("RETAIL_INVOICE_RETURN_BATCH_SELECTION_REQUIRED");
+  return result.sort((a,b) => a.stockLotId.localeCompare(b.stockLotId));
+}
+
+export function planPhysicalInvoiceReturnLots<T extends { id: string; stockLotId: string | null; quantity: Prisma.Decimal }>(input: {
+  source: { stockLotId: string | null; lotAllocations?: Prisma.JsonValue | null; invoiceItem: { quantity: Prisma.Decimal } };
+  movements: T[];
+  previous: Array<{ quantity: Prisma.Decimal; stockDisposition?: string; lotAllocations?: Prisma.JsonValue | null }>;
+  quantity: Prisma.Decimal;
+  selected: Prisma.JsonValue | null | undefined;
+}) {
+  const sum = (values: Prisma.Decimal[]) => values.reduce((total, value) => total.plus(value), new Prisma.Decimal(0));
+  const cancelled = sum(input.previous.filter(row => row.stockDisposition === "UNDELIVERED_CREDIT").map(row => row.quantity));
+  const issued = readInvoiceLotAllocations(input.source, cancelled);
+  const physical = input.previous.filter(row => row.stockDisposition !== "UNDELIVERED_CREDIT");
+  const chosen = readPhysicalReturnLots(input.selected, input.quantity);
+  const prior = physical.flatMap(row => readPhysicalReturnLots(row.lotAllocations, row.quantity));
+  if (new Set(input.movements.map(row => row.id)).size !== input.movements.length ||
+      input.movements.some(row => !row.quantity.gt(0) || !issued.some(entry => entry.stockLotId === row.stockLotId)) ||
+      issued.some(entry => !sum(input.movements.filter(row => row.stockLotId === entry.stockLotId).map(row => row.quantity)).equals(entry.quantity)) ||
+      prior.some(entry => !issued.some(row => row.stockLotId === entry.stockLotId))) throw new Error("RETAIL_INVOICE_RETURN_SETTLEMENT_STOCK_INVALID");
+  for (const entry of issued) {
+    const used = sum(prior.filter(row => row.stockLotId === entry.stockLotId).map(row => new Prisma.Decimal(row.quantity)));
+    if (used.gt(entry.quantity)) throw new Error("RETAIL_INVOICE_RETURN_SETTLEMENT_STOCK_INVALID");
+  }
+  const plan: Array<{ movement: T; quantity: Prisma.Decimal }> = [];
+  for (const entry of chosen) {
+    const capacity = issued.find(row => row.stockLotId === entry.stockLotId);
+    let remaining = new Prisma.Decimal(entry.quantity);
+    let skip = sum(prior.filter(row => row.stockLotId === entry.stockLotId).map(row => new Prisma.Decimal(row.quantity)));
+    if (!capacity || skip.plus(remaining).gt(capacity.quantity)) throw new Error("RETAIL_INVOICE_RETURN_BATCH_QUANTITY_EXCEEDED");
+    for (const movement of input.movements.filter(row => row.stockLotId === entry.stockLotId)) {
+      if (remaining.isZero()) break;
+      if (skip.gte(movement.quantity)) { skip = skip.minus(movement.quantity); continue; }
+      const available = movement.quantity.minus(skip); skip = new Prisma.Decimal(0);
+      const portion = remaining.lt(available) ? remaining : available;
+      if (portion.gt(0)) plan.push({ movement, quantity: portion });
+      remaining = remaining.minus(portion);
+    }
+    if (!remaining.isZero()) throw new Error("RETAIL_INVOICE_RETURN_BATCH_QUANTITY_EXCEEDED");
+  }
+  return plan;
+}

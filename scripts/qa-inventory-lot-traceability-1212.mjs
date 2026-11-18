@@ -166,3 +166,12 @@ assert.equal(allocationTools.readInvoiceLotAllocations(splitInvoice, d(50)).leng
 assert.throws(() => allocationTools.readInvoiceLotAllocations({ ...splitInvoice, invoiceItem: { quantity: d(51) } }), /RETAIL_INVOICE_LOT_ALLOCATION_INVALID/);
 assert.throws(() => allocationTools.readInvoiceLotAllocations({ ...splitInvoice, stockLotId: "early" }), /RETAIL_INVOICE_LOT_ALLOCATION_INVALID/);
 console.log("Invoice batch promises: one invoice line, immutable batch snapshot, exact release of undelivered credits OK");
+
+const returnSource = { source: splitInvoice, movements: [{ id: "out-early", stockLotId: "early", quantity: d(30) }, { id: "out-late", stockLotId: "late", quantity: d(20) }], previous: [], quantity: d(5), selected: [{ stockLotId: "late", quantity: "5" }] };
+assert.equal(allocationTools.planPhysicalInvoiceReturnLots(returnSource)[0].movement.id, "out-late", "Actual returned lot, not earliest sold lot");
+assert.throws(() => allocationTools.planPhysicalInvoiceReturnLots({ ...returnSource, selected: [{ stockLotId: "foreign", quantity: "5" }] }), /BATCH_QUANTITY_EXCEEDED/);
+assert.throws(() => allocationTools.planPhysicalInvoiceReturnLots({ ...returnSource, previous: [{ quantity: d(18), stockDisposition: "QUARANTINE", lotAllocations: [{ stockLotId: "late", quantity: "18" }] }] }), /BATCH_QUANTITY_EXCEEDED/);
+const creditedBeforeDelivery = { ...returnSource, movements: [{ id: "out-early", stockLotId: "early", quantity: d(30) }, { id: "out-late", stockLotId: "late", quantity: d(5) }], previous: [{ quantity: d(15), stockDisposition: "UNDELIVERED_CREDIT" }] };
+assert.equal(allocationTools.planPhysicalInvoiceReturnLots(creditedBeforeDelivery)[0].quantity.toFixed(), "5");
+assert.throws(() => allocationTools.planPhysicalInvoiceReturnLots({ ...returnSource, selected: [{ stockLotId: "late", quantity: "2" }] }), /BATCH_SELECTION_REQUIRED/);
+console.log("Physical returns: explicit lot, prior commitments, undelivered credits and original movements OK");
