@@ -1039,7 +1039,7 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
     const supplierName="E2E supplier "+historyKey;
     const supplier=await prisma.enterpriseSupplier.create({data:{organizationId,legalName:supplierName,displayName:supplierName,normalizedName:supplierName.toLowerCase(),status:"ACTIVE",createdByUserId:fixture.owner.id}});
     const supplierParty=await prisma.enterpriseBusinessParty.create({data:{organizationId,partyType:"ORGANIZATION",legalName:supplierName,displayName:supplierName,normalizedName:supplierName.toLowerCase(),code:historyKey+"-SUPPLIER",status:"ACTIVE",createdByUserId:fixture.owner.id}});
-    await prisma.enterpriseBusinessPartyRole.create({data:{organizationId,businessPartyId:supplierParty.id,roleCode:"SUPPLIER",status:"ACTIVE"}});
+    await prisma.enterpriseBusinessPartyRole.create({data:{organizationId,businessPartyId:supplierParty.id,roleCode:"SUPPLIER",status:"ACTIVE",createdByUserId:fixture.owner.id}});
     await prisma.enterpriseSupplierPartyLink.create({data:{organizationId,supplierId:supplier.id,businessPartyId:supplierParty.id,createdByUserId:fixture.owner.id}});
     await prisma.enterpriseModule.upsert({where:{organizationId_moduleCode:{organizationId,moduleCode:"FINANCE_PAYABLES"}},update:{isEnabled:true,requiresPlanLevel:"BUSINESS"},create:{organizationId,moduleCode:"FINANCE_PAYABLES",labelFr:"Achats & dettes",labelEn:"Purchases & payables",moduleCategory:"FINANCE",isEnabled:true,isCore:false,requiresPlanLevel:"BUSINESS",sortOrder:30}});
     const normalPurchase=await orderForPurchase(historicalProduct,10,"NORMAL-PO",supplier.id);
