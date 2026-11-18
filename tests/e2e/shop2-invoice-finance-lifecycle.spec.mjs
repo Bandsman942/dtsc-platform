@@ -771,6 +771,49 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
     expect((await post(context.returnSettler,rp+"/settle",settlePayload)).body.idempotent).toBe(true);
     expect((await batchStock(1)).equals(2)).toBe(true);
 
+    // #1212 approved write-off, with separate expense posting.
+    await prisma.enterpriseStockLot.update({where:{id:batches[1].lot.id},data:{status:"QUARANTINED"}});
+    const lossPayload={inventoryItemId:batchInventory.id,warehouseId:fixture.warehouse.id,stockLotId:batches[1].lot.id,adjustmentType:"OUT",lossReason:"DAMAGE",quantity:1,reason:"E2E independent destruction of damaged batch",approverUserId:fixture.settler.id,idempotencyKey:batchKey+"-loss"};
+    const lossesPath=base+"/stock-adjustments";
+    const self=await post(context.owner,lossesPath,{...lossPayload,approverUserId:fixture.owner.id,idempotencyKey:batchKey+"-self-loss"});
+    expect(self.status,JSON.stringify(self.body)).toBe(403);
+    const notIsolated=await post(context.owner,lossesPath,{...lossPayload,stockLotId:batches[0].lot.id,idempotencyKey:batchKey+"-available-loss"});
+    expect(notIsolated.status,JSON.stringify(notIsolated.body)).toBe(409);
+    const loss=await post(context.owner,lossesPath,lossPayload);
+    expect(loss.status,JSON.stringify(loss.body)).toBe(201);
+    expect(loss.body.adjustment.status).toBe("PENDING_APPROVAL");
+    const lossReplay=await post(context.owner,lossesPath,lossPayload);
+    expect(lossReplay.status,JSON.stringify(lossReplay.body)).toBe(201);
+    expect(lossReplay.body.adjustment.id).toBe(loss.body.adjustment.id);
+    expect((await batchStock(1)).equals(2)).toBe(true);
+    const lossDecision=lossesPath+"/"+loss.body.adjustment.id+"/decision";
+    const incorrectApprover=await post(context.owner,lossDecision,{decision:"APPROVE",revision:loss.body.adjustment.revision});
+    expect(incorrectApprover.status).toBe(403);
+    const approvedLoss=await post(context.settler,lossDecision,{decision:"APPROVE",revision:loss.body.adjustment.revision});
+    expect(approvedLoss.status,JSON.stringify(approvedLoss.body)).toBe(200);
+    expect(approvedLoss.body.adjustment.status).toBe("COMPLETED");
+    expect((await batchStock(1)).equals(1)).toBe(true);
+    const lostMovements=await prisma.enterpriseStockMovement.findMany({where:{organizationId,sourceEntityType:"EnterpriseStockAdjustment",sourceEntityId:loss.body.adjustment.id,movementType:"LOT_WRITE_OFF"}});
+    expect(lostMovements).toHaveLength(1);
+    const lostCost=await prisma.enterpriseInventoryAccountingEvent.findFirstOrThrow({where:{organizationId,stockMovementId:lostMovements[0].id,eventType:"LOSS"}});
+    expect(lostCost.totalCost.equals(7)).toBe(true);
+    expect(lostCost.status).toBe("POSTED");
+    const lossEntry=await prisma.enterpriseJournalEntry.findUniqueOrThrow({where:{id:lostCost.journalEntryId},include:{lines:true}});
+    expect(lossEntry.totalDebit.equals(lossEntry.totalCredit)).toBe(true);
+    expect(lossEntry.totalDebit.equals(7)).toBe(true);
+    const mappingRows=await prisma.enterpriseAccountMapping.findMany({where:{organizationId,mappingKey:{in:["OPERATING_EXPENSE","INVENTORY","COST_OF_SALES"]},isActive:true,chart:{status:"ACTIVE"}}});
+    const expenseMapping=mappingRows.find(row=>row.mappingKey==="OPERATING_EXPENSE");
+    const inventoryMapping=mappingRows.find(row=>row.mappingKey==="INVENTORY");
+    expect(expenseMapping).toBeTruthy();
+    expect(inventoryMapping).toBeTruthy();
+    expect(lossEntry.lines.some(row=>row.ledgerAccountId===expenseMapping.ledgerAccountId && row.debit.equals(7))).toBe(true);
+    expect(lossEntry.lines.some(row=>row.ledgerAccountId===inventoryMapping.ledgerAccountId && row.credit.equals(7))).toBe(true);
+    expect(lossEntry.lines.every(row=>row.siteId===fixture.site.id)).toBe(true);
+    const secondDecision=await post(context.settler,lossDecision,{decision:"APPROVE",revision:loss.body.adjustment.revision});
+    expect(secondDecision.status).toBeGreaterThanOrEqual(400);
+    expect((await batchStock(1)).equals(1)).toBe(true);
+    expect(await prisma.enterpriseStockMovement.count({where:{organizationId,sourceEntityType:"EnterpriseStockAdjustment",sourceEntityId:loss.body.adjustment.id}})).toBe(1);
+
   } finally {
     if (originalSettings !== undefined) await prisma.enterpriseRetailConfiguration.update({
       where: { organizationId }, data: { settingsJson: originalSettings === null ? Prisma.DbNull : originalSettings,

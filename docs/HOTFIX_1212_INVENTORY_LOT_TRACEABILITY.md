@@ -58,6 +58,9 @@
 
 - Formulaire d’ajustement : nature de perte, sélecteur des lots non disponibles pour la destruction sous droit MANAGE_STOCK, motif détaillé et sortie imposée. Les autres sélecteurs de vente/transfert restent limités aux lots disponibles. Tests à exécuter.
 
+- Recette PostgreSQL ajoutée au circuit Finance authentifié : lot en quarantaine, destruction d’une unité, refus auto-validation et lot disponible, rejeu demande, approbation distincte, mouvement unique, valorisation LOSS de 7, journal équilibré sur comptes Charge d’exploitation/Stock et site d’origine. À exécuter.
+- Le contrat historique de posting de l’événement INVENTORY_ISSUE_VALUED reste explicite, sans modifier les tests historiques.
+
 ## Restant (bloquant)
 Certification de la réaffectation historique sur PostgreSQL + navigateur et valeur inchangée; certification achats et valorisation, réservations/livraisons multi-lots; moteur FEFO commun et POS; pertes, rappels et comptabilité; Design 2.0 et tests multisectoriels. Voir issue #1212. Ne pas merger avant clôture de tous les points.
 

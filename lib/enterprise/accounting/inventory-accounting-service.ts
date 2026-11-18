@@ -125,12 +125,12 @@ export async function valueInventoryIssueTx(
   }
 
   const loss = movement.movementType === "LOT_WRITE_OFF";
-  const postingEvent = loss ? "INVENTORY_LOSS_VALUED" : "INVENTORY_ISSUE_VALUED";
+  const postingDescriptor = loss ? { postingEvent: "INVENTORY_LOSS_VALUED" as const } : { postingEvent: "INVENTORY_ISSUE_VALUED" as const };
   const stableKey = idempotencyKey({
     organizationId,
     sourceEntityType: "EnterpriseStockMovement",
     sourceEntityId: movement.id,
-    postingEvent,
+    ...postingDescriptor,
     postingVersion: 1,
   });
   let event = await tx.enterpriseInventoryAccountingEvent.findUnique({
@@ -186,7 +186,7 @@ export async function valueInventoryIssueTx(
       organizationId,
       entityType: "EnterpriseInventoryAccountingEvent",
       entityId: event.id,
-      eventType: postingEvent,
+      eventType: postingDescriptor.postingEvent,
       summary: `Inventory issue ${movementLabel(movement)} valued`,
       actorUserId,
       toStatus: "APPROVED",
@@ -201,7 +201,7 @@ export async function valueInventoryIssueTx(
   }
 
   const posting = await postBusinessEventTx(tx, organizationId, actorUserId, {
-    postingEvent,
+    ...postingDescriptor,
     sourceEntityType: "EnterpriseInventoryAccountingEvent",
     sourceEntityId: event.id,
   });
