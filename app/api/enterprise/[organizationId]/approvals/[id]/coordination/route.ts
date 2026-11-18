@@ -31,6 +31,10 @@ export async function GET(req: Request, { params }: Params) {
     catch { return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 }); }
   }
 
+  const supplierReturn = approval.targetEntityType === SUPPLIER_RETURN_TARGET
+    ? await prisma.enterpriseSupplierReturnRequest.findFirst({ where: { organizationId, id: approval.targetEntityId }, select: { purchaseId: true, sourceMovementId: true } })
+    : null;
+  if (approval.targetEntityType === SUPPLIER_RETURN_TARGET && !supplierReturn) return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
   const [versions, decisions, comments] = await Promise.all([
     prisma.enterpriseApprovalSubmissionVersion.findMany({ where: { organizationId, approvalId: id }, orderBy: { versionNumber: "desc" }, take: 100 }),
     prisma.enterpriseApprovalDecision.findMany({ where: { organizationId, approvalId: id }, orderBy: { createdAt: "desc" }, take: 100 }),
@@ -66,7 +70,7 @@ export async function GET(req: Request, { params }: Params) {
     decisions,
     comments,
     delegates: delegates.map((candidate) => ({ id: candidate.userId, label: candidate.positionTitle ? `${candidate.name} · ${candidate.positionTitle}` : candidate.name, email: candidate.email })),
-    sourceDeepLink: enterpriseApprovalTargetDeepLink(approval.targetEntityType, approval.targetEntityId, approval.id),
+    sourceDeepLink: supplierReturn ? `/enterprise-modules/SUPPLIERS_PURCHASES?purchase=${encodeURIComponent(supplierReturn.purchaseId)}&returnMovement=${encodeURIComponent(supplierReturn.sourceMovementId)}` : enterpriseApprovalTargetDeepLink(approval.targetEntityType, approval.targetEntityId, approval.id),
     capabilities,
   });
 }
