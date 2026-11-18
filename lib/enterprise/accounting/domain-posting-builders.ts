@@ -112,7 +112,7 @@ export async function buildPayrollPosting(tx: Prisma.TransactionClient, input: {
   return { organizationId: input.organizationId, journalType: "PAYROLL", accountingDate: run.payrollPeriod.payDate || run.payrollPeriod.periodEnd, documentDate: run.payrollPeriod.periodEnd, reference: run.reference, description: `Payroll ${run.reference}`, sourceModule: "HR_PAYROLL", sourceEntityType: "EnterprisePayrollRun", sourceEntityId: run.id, currencyCode: run.currency, lines };
 }
 
-export async function buildInventoryAccountingPosting(tx: Prisma.TransactionClient, input: { organizationId: string; sourceEntityType: string; sourceEntityId: string }, kind: "RECEIPT" | "ISSUE" | "LOSS" | "SUPPLIER_RETURN"): Promise<PostingDocument> {
+export async function buildInventoryAccountingPosting(tx: Prisma.TransactionClient, input: { organizationId: string; sourceEntityType: string; sourceEntityId: string }, kind: "RECEIPT" | "ISSUE" | "LOSS" | "SUPPLIER_RETURN" | "CUSTODY_RECOVERY"): Promise<PostingDocument> {
   const event = await tx.enterpriseInventoryAccountingEvent.findFirst({ where: { id: input.sourceEntityId, organizationId: input.organizationId, status: { in: ["PENDING", "APPROVED", "POSTED"] }, eventType: kind } });
   if (!event) throw new EnterpriseAccountingError("INVENTORY_ACCOUNTING_EVENT_NOT_POSTABLE", 409);
   const sourceMovement = await tx.enterpriseStockMovement.findFirst({
@@ -128,8 +128,18 @@ export async function buildInventoryAccountingPosting(tx: Prisma.TransactionClie
       request.inventoryItemId !== event.inventoryItemId || request.inventoryItemId !== sourceMovement.inventoryItemId || request.warehouseId !== sourceMovement.warehouseId || request.stockLotId !== sourceMovement.stockLotId ||
       !request.quantity.equals(event.quantity) || !request.quantity.equals(sourceMovement.quantity) || !request.totalCost.equals(event.totalCost) || !request.unitCost.equals(event.unitCost) || request.currencyCode !== event.currencyCode) throw new EnterpriseAccountingError("INVENTORY_ACCOUNTING_EVENT_NOT_POSTABLE",409);
   }
+  if (kind !== "CUSTODY_RECOVERY" && sourceMovement?.movementType === "CUSTODY_RECOVERY_IN") throw new EnterpriseAccountingError("INVENTORY_ACCOUNTING_EVENT_NOT_POSTABLE",409);
+  if (kind === "CUSTODY_RECOVERY") {
+    if(event.status!=="APPROVED"||event.journalEntryId||!sourceMovement||sourceMovement.movementType!=="CUSTODY_RECOVERY_IN"||sourceMovement.direction!=="IN"||sourceMovement.sourceEntityType!=="EnterpriseInventoryReturnRecoveryAssessment"||!sourceMovement.sourceEntityId)throw new EnterpriseAccountingError("INVENTORY_ACCOUNTING_EVENT_NOT_POSTABLE",409);
+    const appraisal=await tx.enterpriseInventoryReturnRecoveryAssessment.findFirst({where:{organizationId:input.organizationId,id:sourceMovement.sourceEntityId,status:"APPROVED",custody:{status:"QUARANTINED"}},include:{custody:{include:{originalMovement:true}}}});
+    const original=appraisal?.custody.originalMovement;
+    if(!appraisal||!original||appraisal.custodyRevision!==appraisal.custody.revision||original.inventoryItemId!==event.inventoryItemId||original.inventoryItemId!==sourceMovement.inventoryItemId||original.warehouseId!==sourceMovement.warehouseId||original.stockLotId!==sourceMovement.stockLotId||!appraisal.quantity.equals(event.quantity)||!event.quantity.equals(sourceMovement.quantity)||!appraisal.proposedRecoveryAmount.equals(event.totalCost)||!event.quantity.times(event.unitCost).equals(event.totalCost)||appraisal.currencyCode!==event.currencyCode)throw new EnterpriseAccountingError("INVENTORY_ACCOUNTING_EVENT_NOT_POSTABLE",409);
+    const origin=await tx.enterpriseJournalEntry.findFirst({where:{organizationId:input.organizationId,id:appraisal.originalIssueJournalId,status:"POSTED",sourceEntityType:"EnterpriseInventoryAccountingEvent",sourceEntityId:appraisal.originalIssueEventId,postingEvent:"INVENTORY_ISSUE_VALUED"}});
+    if(!origin)throw new EnterpriseAccountingError("INVENTORY_ACCOUNTING_EVENT_NOT_POSTABLE",409);
+  }
+  const recovery = kind === "CUSTODY_RECOVERY";
   const receipt = kind === "RECEIPT";
-  const accountingDate = kind === "SUPPLIER_RETURN" ? new Date((await resolveEnterpriseBusinessDate(tx, input.organizationId, event.createdAt)) + "T00:00:00.000Z") : event.createdAt;
+  const accountingDate = kind === "SUPPLIER_RETURN" || recovery ? new Date((await resolveEnterpriseBusinessDate(tx, input.organizationId, event.createdAt)) + "T00:00:00.000Z") : event.createdAt;
   return {
     organizationId: input.organizationId,
     journalType: "INVENTORY",
@@ -142,8 +152,8 @@ export async function buildInventoryAccountingPosting(tx: Prisma.TransactionClie
     sourceEntityId: event.id,
     currencyCode: event.currencyCode,
     lines: [
-      { accountMappingKey: receipt ? "INVENTORY" : kind === "SUPPLIER_RETURN" ? "GOODS_RECEIVED_CLEARING" : kind === "LOSS" ? "OPERATING_EXPENSE" : "COST_OF_SALES", description: `${kind} ${event.inventoryItemId}`, debit: event.totalCost, transactionCurrencyCode: event.currencyCode, transactionAmount: event.totalCost, inventoryItemId: event.inventoryItemId, siteId: sourceMovement?.warehouse.siteId },
-      { accountMappingKey: receipt ? "GOODS_RECEIVED_CLEARING" : "INVENTORY", description: `${kind} ${event.inventoryItemId}`, credit: event.totalCost, transactionCurrencyCode: event.currencyCode, transactionAmount: event.totalCost, inventoryItemId: event.inventoryItemId, siteId: sourceMovement?.warehouse.siteId },
+      { accountMappingKey: receipt || recovery ? "INVENTORY" : kind === "SUPPLIER_RETURN" ? "GOODS_RECEIVED_CLEARING" : kind === "LOSS" ? "OPERATING_EXPENSE" : "COST_OF_SALES", description: `${kind} ${event.inventoryItemId}`, debit: event.totalCost, transactionCurrencyCode: event.currencyCode, transactionAmount: event.totalCost, inventoryItemId: event.inventoryItemId, siteId: sourceMovement?.warehouse.siteId },
+      { accountMappingKey: recovery ? "COST_OF_SALES" : receipt ? "GOODS_RECEIVED_CLEARING" : "INVENTORY", description: `${kind} ${event.inventoryItemId}`, credit: event.totalCost, transactionCurrencyCode: event.currencyCode, transactionAmount: event.totalCost, inventoryItemId: event.inventoryItemId, siteId: sourceMovement?.warehouse.siteId },
     ],
   };
 }
