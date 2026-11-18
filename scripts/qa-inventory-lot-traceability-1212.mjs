@@ -414,6 +414,9 @@ const appraisalTx={...recoveryTx,$queryRaw:async()=>[],
 };
 mocks["@/lib/prisma"]={prisma:{...appraisalTx,$transaction:async(fn,options)=>{assert.equal(options.isolationLevel,Prisma.TransactionIsolationLevel.Serializable);return fn(appraisalTx);}}};
 mocks["@/lib/enterprise/accounting/periods"]={getPostingPeriod:async()=>({id:"period-a",status:"OPEN"})};
+// Exercise the production error class for recovery conflicts, including its
+// actual HTTP 409 status; the older generic VM stub defaults to 400.
+mocks["@/lib/enterprise/common/errors"]=load("lib/enterprise/common/errors.ts");
 const appraisal=load("lib/enterprise/inventory/custody-recovery-assessment.ts");
 const application={custodyId:"custody-a",custodyRevision:1,estimatedSellingAmount:"18",completionCost:"5",sellingCost:"2",evidenceReference:"REPORT-QA",findings:"Physical appraisal confirms repairable condition.",confirmedPhysicalInspection:true,approverUserId:"reviewer",idempotencyKey:"APPRAISAL-QA-01"};
 assert.equal(appraisal.recoveryAssessmentSchema.safeParse(application).success,true);
