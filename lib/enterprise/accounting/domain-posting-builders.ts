@@ -5,6 +5,7 @@ import type { PostingDocument } from "@/lib/enterprise/accounting/posting-regist
 export async function buildSupplierCreditNotePosting(tx: Prisma.TransactionClient, input: { organizationId: string; sourceEntityType: string; sourceEntityId: string }): Promise<PostingDocument> {
   const credit = await tx.enterpriseSupplierCreditNote.findFirst({ where: { id: input.sourceEntityId, organizationId: input.organizationId, status: { in: ["APPROVED", "POSTED"] } }, include: { supplierInvoice: true } });
   if (!credit) throw new EnterpriseAccountingError("SUPPLIER_CREDIT_NOTE_NOT_POSTABLE", 409);
+  if (await tx.enterpriseSupplierReturnRequest.count({ where: { organizationId: input.organizationId, supplierInvoiceId: credit.supplierInvoiceId, status: "DISPATCHED" } })) throw new EnterpriseAccountingError("SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED", 409);
   const items = await tx.enterpriseSupplierCreditNoteItem.findMany({ where: { organizationId: input.organizationId, supplierCreditNoteId: credit.id } });
   if (!items.length) throw new EnterpriseAccountingError("SUPPLIER_CREDIT_LINES_REQUIRED", 409);
   const originalIds = items.map((line) => line.sourceInvoiceItemId).filter((id): id is string => Boolean(id));
