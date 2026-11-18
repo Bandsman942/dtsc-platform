@@ -2,6 +2,14 @@ import { enterpriseCoreIntlLocale } from "@/lib/enterprise-core-i18n";
 
 const PURCHASE_FORM_GUIDANCE = {
   fr: {
+    returnFinanceReserved: "Réservé pour avoir à rapprocher",
+    returnFinanceAllocatable: "Solde affectable au paiement",
+    returnFinanceTitle: "Retour fournisseur lié",
+    returnFinanceExplain: "Le solde comptable reste inchangé jusqu’à la comptabilisation de l’avoir. La réserve empêche une affectation excessive de paiement.",
+    returnFinanceSource: "Ouvrir la réception liée",
+    returnFinanceMatched: "L’avoir lié a été comptabilisé. La réserve est libérée.",
+    returnFinanceExportReserved: "Montant réservé au retour",
+    returnFinanceExportAllocatable: "Montant affectable",
     returnDispatchTitle: "Enregistrer l’expédition",
     returnDispatchHelp: "Confirmez uniquement après remise physique au transporteur ou fournisseur. La sortie de stock et sa valorisation seront enregistrées ensemble ; la dette reste inchangée.",
     returnDispatchReference: "Référence du bon d’expédition ou de remise",
@@ -109,6 +117,14 @@ const PURCHASE_FORM_GUIDANCE = {
     actionReasonHelp: "Un motif est obligatoire pour une annulation ou un archivage et restera dans la piste d’audit.",
   },
   en: {
+    returnFinanceReserved: "Reserved for pending credit",
+    returnFinanceAllocatable: "Payable available for allocation",
+    returnFinanceTitle: "Linked supplier return",
+    returnFinanceExplain: "The accounting balance stays unchanged until the credit is posted. The reserve prevents excessive payment allocation.",
+    returnFinanceSource: "Open linked receipt",
+    returnFinanceMatched: "The linked credit has been posted. The reserve has been released.",
+    returnFinanceExportReserved: "Return reserve amount",
+    returnFinanceExportAllocatable: "Allocatable amount",
     returnDispatchTitle: "Record dispatch",
     returnDispatchHelp: "Confirm only after physically handing over the batch to the carrier or supplier. Stock issue and valuation are recorded together; the payable remains unchanged.",
     returnDispatchReference: "Dispatch or handover document reference",
