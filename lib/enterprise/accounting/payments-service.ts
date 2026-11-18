@@ -12,6 +12,7 @@ import { tryGrantRetailOmnichannelCashbackTx } from "@/lib/enterprise/relationsh
 import { withRetailTransactionRetry } from "@/lib/enterprise/retail/transaction-retry";
 import { assertRetailInvoicePaymentScopeTx, postPaidRetailInvoiceStockTx } from "@/lib/enterprise/retail/invoice-checkout";
 import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
+import { assertSupplierPaymentCapacityTx, lockSupplierReturnInvoiceTx } from "@/lib/enterprise/accounting/supplier-return-credit-reconciliation";
 import type { paymentCreateSchema } from "@/lib/enterprise/accounting/schemas";
 import type { z } from "zod";
 
@@ -756,7 +757,9 @@ export async function allocateEnterprisePayment(
     } else if (input.payableId) {
       payable = await tx.enterprisePayable.findFirst({ where: { id: input.payableId, organizationId, status: "OPEN" } });
       if (!payable || payment.direction !== "OUTBOUND" || payment.paymentType !== "SUPPLIER_PAYMENT") throw new EnterpriseAccountingError("PAYABLE_ALLOCATION_INVALID", 409);
+      await lockSupplierReturnInvoiceTx(tx, organizationId, payable.supplierInvoiceId);
       if ((payment.businessPartyId && payment.businessPartyId !== payable.businessPartyId) || payment.currencyCode !== payable.currencyCode || amount.greaterThan(payable.outstandingAmount)) throw new EnterpriseAccountingError("PAYABLE_ALLOCATION_SCOPE_OR_AMOUNT_INVALID", 409);
+      await assertSupplierPaymentCapacityTx(tx, organizationId, payable, amount);
     } else {
       throw new EnterpriseAccountingError("PAYMENT_ALLOCATION_TARGET_REQUIRED", 400);
     }
