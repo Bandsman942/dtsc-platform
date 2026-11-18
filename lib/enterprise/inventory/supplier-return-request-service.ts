@@ -182,7 +182,7 @@ export async function dispatchSupplierReturn(organizationId: string, purchaseId:
     if (!request) throw new EnterpriseDomainError("SUPPLIER_RETURN_DISPATCH_DENIED", 403);
     const approval = await tx.enterpriseApproval.findFirst({ where: { organizationId, targetEntityType: SUPPLIER_RETURN_TARGET, targetEntityId: request.id, status: "APPROVED", archivedAt: null, requestedByUserId: actorUserId } });
     if (!approval || approval.approverUserId === actorUserId) throw new EnterpriseDomainError("SUPPLIER_RETURN_DISPATCH_DENIED", 403);
-    if (["DISPATCHED","RECONCILED"].includes(request.status) && request.dispatchReference === input.dispatchReference && request.revision >= input.revision + 1 && request.dispatchMovementId && request.dispatchAccountingEventId && request.dispatchedByUserId === actorUserId) return { request, idempotent: true };
+    if (request.status === "DISPATCHED" && request.dispatchReference === input.dispatchReference && request.revision === input.revision + 1 && request.dispatchMovementId && request.dispatchAccountingEventId && request.dispatchedByUserId === actorUserId) return { request, idempotent: true };
     if (request.status !== "APPROVED" || request.revision !== input.revision) throw new EnterpriseDomainConflictError("SUPPLIER_RETURN_CONFLICT");
     // A decision record over the immutable reviewed version is mandatory.
     const decision = await tx.enterpriseApprovalDecision.findFirst({ where: { organizationId, approvalId: approval.id, actorUserId: approval.approverUserId, decision: "APPROVE" } });
