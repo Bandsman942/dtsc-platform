@@ -79,7 +79,16 @@ export async function recoveryApprovalCandidates(org:string,user:string,custodyI
 }
 async function serial<T>(fn:(tx:Prisma.TransactionClient)=>Promise<T>){
   try{return await prisma.$transaction(fn,{isolationLevel:Prisma.TransactionIsolationLevel.Serializable,timeout:30000});}
-  catch(error){if(error instanceof Prisma.PrismaClientKnownRequestError&&["P2002","P2034"].includes(error.code))throw conflict();throw error;}
+  catch(error){
+    if(error instanceof Prisma.PrismaClientKnownRequestError){
+      // SELECT FOR UPDATE can surface PostgreSQL conflicts as raw-query
+      // errors (P2010) instead of the transaction-level P2034.
+      const sqlState=error.meta?.code;
+      if(error.code==="P2002"||error.code==="P2034"||
+        (error.code==="P2010"&&(sqlState==="40001"||sqlState==="40P01")))throw conflict();
+    }
+    throw error;
+  }
 }
 export async function submitRecoveryAssessment(org:string,user:string,input:AssessmentInput){
   if(user===input.approverUserId)throw new EnterpriseDomainError("INVENTORY_RETURN_RECOVERY_INDEPENDENT_REQUIRED",403);
