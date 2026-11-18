@@ -25,7 +25,7 @@ type ApprovalCoordination = {
   decisions: Array<{ id: string; decision: string; reason: string | null; actorUserId: string; createdAt: string }>;
   delegates: Array<{ id: string; label: string; email: string }>;
   sourceDeepLink: string;
-  recoveryAssessment?:{withdrawnAt?:string|null;withdrawalReason?:string|null;status:string;custodyStatus:string;stale:boolean;physicalReleaseAuthorized:false;accountingRecognitionAuthorized:false}|null;
+  recoveryAssessment?:{executedAt?:string|null;recoveryJournalEntryId?:string|null;withdrawnAt?:string|null;withdrawalReason?:string|null;status:string;custodyStatus:string;stale:boolean;physicalReleaseAuthorized:false;accountingRecognitionAuthorized:false}|null;
   supplierReturn?: {status:string;cancelledAfterApprovalAt:string|null;cancellationReason:string|null}|null;
   capabilities: { canCancel?: boolean; canApprove: boolean; canReject: boolean; canRequestCorrection: boolean; canDelegate: boolean; canResubmit: boolean };
 };
@@ -119,7 +119,7 @@ export function ApprovalCoordinationPanel({ organizationId, approvalId, locale, 
     </div>
 
     {data.recoveryAssessment?<section className="grid min-w-0 gap-2 rounded-xl border border-dtsc-border p-3" data-recovery-review>
-      <p className="text-sm font-semibold">{purchaseFormGuidance(locale,"recoveryReviewOnly")}</p>
+      <p className="text-sm font-semibold">{purchaseFormGuidance(locale,data.recoveryAssessment.status==="EXECUTED"?"recoveryExecuted":"recoveryReviewOnly")}</p>
       {data.recoveryAssessment.withdrawnAt?<div className="grid gap-1"><StatusBadge tone="warning">{purchaseFormGuidance(locale,"recoveryWithdrawn")}</StatusBadge><p className="text-sm break-words">{data.recoveryAssessment.withdrawalReason}</p><p className="text-xs text-dtsc-muted">{coreFormatEnterpriseDate(data.recoveryAssessment.withdrawnAt,locale)}</p></div>:null}
       {data.recoveryAssessment.stale?<p role="alert" className="text-sm text-amber-700 dark:text-amber-200">{purchaseFormGuidance(locale,"recoveryReviewStale")}</p>:null}
     </section>:null}
