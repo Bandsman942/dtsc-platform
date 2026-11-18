@@ -66,6 +66,8 @@
 - Rappel global réservé à l’administration non isolée : tous les lots du même article et numéro (y compris historiques) sont mis en quarantaine, référence unique de rappel, aucune suppression de mouvements, aucun changement de quantité ni écriture financière. Une contrainte et un trigger PostgreSQL empêchent la remise à AVAILABLE et la recréation silencieuse dans un autre dépôt; le rappel est irréversible dans ce premier circuit. Une future révision approuvée de rappel nécessite un flux spécifique.
 - GET trace sur la route existante : historique paginé des mouvements liés au numéro de lot, sources, quantités, dates, dépôt, respect strict du périmètre autorisé. Pas d’envoi de notifications clients ou rappel réglementaire automatique dans cette tranche. Les réceptions/transferts en transit d'un lot rappelé doivent faire l’objet d’une procédure de traitement non revendable spécifique, encore bloquante.
 
+- UI qualité : filtre dépôt/statut, distinction stock physique/réservation de solde, badges de péremption/rappel, raison qualité et libération conditionnelle, confirmation du rappel global et historique paginé des mouvements avec source et dépôt. Les lectures restent possibles indépendamment du droit de modification. Recette CI/UI à exécuter.
+
 ## Restant (bloquant)
 Certification de la réaffectation historique sur PostgreSQL + navigateur et valeur inchangée; certification achats et valorisation, réservations/livraisons multi-lots; moteur FEFO commun et POS; pertes, rappels et comptabilité; Design 2.0 et tests multisectoriels. Voir issue #1212. Ne pas merger avant clôture de tous les points.
 
