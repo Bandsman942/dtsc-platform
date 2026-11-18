@@ -191,3 +191,121 @@ const creditedBeforeDelivery = { ...returnSource, movements: [{ id: "out-early",
 assert.equal(allocationTools.planPhysicalInvoiceReturnLots(creditedBeforeDelivery)[0].quantity.toFixed(), "5");
 assert.throws(() => allocationTools.planPhysicalInvoiceReturnLots({ ...returnSource, selected: [{ stockLotId: "late", quantity: "2" }] }), /BATCH_SELECTION_REQUIRED/);
 console.log("Physical returns: explicit lot, prior commitments, undelivered credits and original movements OK");
+
+/* Supplier dispatch is not yet exposed by an HTTP/UI action: exercise the
+ * actual service and posting builder in isolation without a fake end-to-end
+ * claim. PostgreSQL integration is mandatory before exposing the action. */
+const approvedRtv = {
+  id: "rtv-a", organizationId: "org-a", reference: "RTV-A", purchaseId: "po-a",
+  receiptId: "receipt-a", receiptItemId: "receipt-item-a", sourceMovementId: "receipt-movement-a",
+  inventoryItemId: "item-a", warehouseId: "wh-a", storageLocationId: null, stockLotId: "lot-a",
+  supplierId: "supplier-a", supplierInvoiceId: "invoice-a", supplierInvoiceItemId: "invoice-item-a",
+  receiptAccountingEventId: "receipt-event-a", originCostLayerId: "origin-layer-a",
+  quantity: d(2), unitCost: d(7), totalCost: d(14), currencyCode: "USD",
+  reason: "Defective goods", requestedByUserId: "requester", status: "APPROVED", revision: 2,
+};
+const approvalRtv = { id: "review-a", requestedByUserId: "requester", approverUserId: "approver", status: "APPROVED" };
+const dispatch = { requestId: "rtv-a", revision: 2, dispatchReference: "SHIP-123" };
+let rtv = { ...approvedRtv }, canManageValue = true, payableBalance = d(70), approvalEvidence = true;
+let quantityRemaining = d(4), writes = [], failPost = false, txOptions;
+const sourceOut = { id: "out-a", movementType: "SUPPLIER_RETURN_OUT", direction: "OUT", sourceEntityType: "EnterpriseSupplierReturnRequest",
+  sourceEntityId: "rtv-a", quantity: d(2), inventoryItemId: "item-a", warehouseId: "wh-a", stockLotId: "lot-a", warehouse: { siteId: "site-a" } };
+let currentEvent = { id: "event-a", stockMovementId: "out-a", organizationId: "org-a", inventoryItemId: "item-a", quantity: d(2), unitCost:d(7), totalCost:d(14), currencyCode:"USD", createdAt:new Date(), eventType:"SUPPLIER_RETURN", status:"APPROVED" };
+const rtvTx = {
+  $queryRaw: async () => [],
+  enterpriseSupplierReturnRequest: {
+    findFirst: async ({ where }) => {
+      assert.equal(where.organizationId, "org-a");
+      if (where.requestedByUserId && where.requestedByUserId !== rtv.requestedByUserId) return null;
+      return rtv;
+    },
+    findFirstOrThrow: async () => rtv,
+    updateMany: async ({ where, data }) => {
+      assert.equal(where.status, "APPROVED"); assert.equal(where.revision, 2);
+      writes.push("state"); rtv = { ...rtv, ...data, revision: rtv.revision + data.revision.increment }; return { count: 1 };
+    },
+  },
+  enterpriseApproval: { findFirst: async () => approvalRtv },
+  enterpriseApprovalDecision: { findFirst: async () => approvalEvidence ? { id: "decision-a" } : null },
+  enterprisePayable: { findUnique: async () => ({ organizationId: "org-a", outstandingAmount: payableBalance }) },
+  enterpriseInventoryCostLayer: { updateMany: async ({ where, data }) => {
+    assert.equal(where.id, "origin-layer-a"); assert.ok(where.remainingQuantity.equals.equals(quantityRemaining));
+    assert.ok(data.remainingQuantity.decrement.equals(2)); quantityRemaining = quantityRemaining.minus(data.remainingQuantity.decrement);
+    writes.push("layer"); return { count: 1 };
+  } },
+  enterpriseInventoryAccountingEvent: {
+    findFirst: async () => currentEvent,
+    create: async ({ data }) => { assert.equal(data.eventType, "SUPPLIER_RETURN"); assert.ok(data.totalCost.equals(14)); writes.push("event"); return currentEvent; },
+    update: async ({ data }) => { assert.equal(data.status, "POSTED"); assert.equal(data.journalEntryId, "journal-a"); writes.push("event-posted"); return currentEvent; },
+  },
+  enterpriseStockMovement: { findFirst: async () => sourceOut },
+  enterpriseSupplierCreditNote: { findFirst: async () => ({ id:"credit-a", supplierInvoiceId:"invoice-a" }) },
+};
+mocks["@/lib/prisma"] = { prisma: { ...rtvTx, $transaction: async (fn, options) => {
+  txOptions = options;
+  const prior = { rtv, quantityRemaining, writes: [...writes] };
+  try { return await fn(rtvTx); } catch (error) { rtv = prior.rtv; quantityRemaining = prior.quantityRemaining; writes = prior.writes; throw error; }
+} } };
+mocks["@/lib/enterprise/module-access"] = { resolveEnterpriseModuleCapabilities: async () => ({ canRead:true, canSubmit:true, canManage:canManageValue }) };
+mocks["@/lib/enterprise/approval-assignment"] = {};
+mocks["@/lib/enterprise/procurement/access"] = {};
+mocks["@/lib/enterprise/inventory/supplier-return-preflight"] = {
+  assertSupplierReturnAccess: async () => {},
+  inspectSupplierReturnTx: async (_tx, org, actor, input) => {
+    assert.equal(org,"org-a"); assert.equal(actor,"requester"); assert.equal(input.supplierReturnSourceMovementId,"receipt-movement-a");
+    return { receipt:{id:"receipt-a",purchaseId:"po-a"}, receiptItem:{id:"receipt-item-a"}, invoice:{id:"invoice-a",supplierId:"supplier-a"}, invoiceItem:{id:"invoice-item-a"},
+      receiptValue:{id:"receipt-event-a"}, originLayer:{id:"origin-layer-a",remainingQuantity:quantityRemaining},
+      unitCost:d(7),totalCost:d(14),currencyCode:"USD" };
+  },
+};
+mocks["@/lib/enterprise/accounting/helpers"] = { idempotencyKey: () => "value-a", publishFinanceEvent: async () => { writes.push("audit"); } };
+mocks["@/lib/enterprise/inventory/service"] = {
+  applyStockMovementTx: async (_tx, org, actor, input, internal) => {
+    assert.equal(org,"org-a"); assert.equal(actor,"requester"); assert.equal(input.quantity,2);
+    assert.equal(input.movementType,"SUPPLIER_RETURN_OUT"); assert.equal(input.stockLotId,"lot-a");
+    assert.equal(internal.approvedSupplierReturnId,"rtv-a"); writes.push("movement"); return {movement:sourceOut,idempotent:false};
+  },
+};
+mocks["@/lib/enterprise/accounting/posting-service"] = {
+  postBusinessEventTx: async (_tx, org, actor, input) => {
+    assert.equal(org,"org-a"); assert.equal(actor,"requester"); assert.equal(input.postingEvent,"INVENTORY_SUPPLIER_RETURN_VALUED");
+    if (failPost) throw Error("closed period"); writes.push("journal"); return {entry:{id:"journal-a"}};
+  },
+};
+mocks["@/lib/enterprise/accounting/errors"] = { EnterpriseAccountingError: TestDomainError };
+const returnSvc = load("lib/enterprise/inventory/supplier-return-request-service.ts");
+const qtySchema = returnSvc.supplierReturnRequestSchema.shape.quantity;
+for (const quantity of ["2","1.125","0.001","999999999999.999"]) assert.equal(qtySchema.safeParse(quantity).success,true);
+for (const quantity of ["1.0001","-1","2e2","2,5","1000000000000"]) assert.equal(qtySchema.safeParse(quantity).success,false);
+assert.equal(returnSvc.supplierReturnDispatchSchema.safeParse({...dispatch,dispatchReference:""}).success,false);
+const doDispatch = () => returnSvc.dispatchSupplierReturn("org-a","po-a","requester",dispatch);
+canManageValue=false;
+await assert.rejects(doDispatch(),{code:"SUPPLIER_RETURN_DISPATCH_DENIED"});
+canManageValue=true; payableBalance=d(10);
+await assert.rejects(doDispatch(),{code:"SUPPLIER_RETURN_PAYABLE_INSUFFICIENT"});
+payableBalance=d(70); approvalEvidence=false;
+await assert.rejects(doDispatch(),{code:"SUPPLIER_RETURN_DISPATCH_DENIED"});
+approvalEvidence=true; rtv={...approvedRtv,status:"PENDING_APPROVAL"};
+await assert.rejects(doDispatch(),{code:"SUPPLIER_RETURN_CONFLICT"});
+rtv={...approvedRtv}; failPost=true;
+await assert.rejects(doDispatch(),/closed period/);
+assert.equal(rtv.status,"APPROVED"); assert.equal(quantityRemaining.toFixed(),"4"); assert.equal(writes.length,0);
+failPost=false;
+const dispatched = await doDispatch();
+assert.equal(dispatched.request.status,"DISPATCHED"); assert.equal(dispatched.request.dispatchMovementId,"out-a");
+assert.equal(dispatched.request.dispatchAccountingEventId,"event-a"); assert.equal(quantityRemaining.toFixed(),"2");
+assert.equal(txOptions.isolationLevel,Prisma.TransactionIsolationLevel.Serializable);
+assert.equal(writes.join(","),"movement,layer,event,journal,event-posted,state,audit");
+const replayDispatch = await doDispatch();
+assert.equal(replayDispatch.idempotent,true); assert.equal(quantityRemaining.toFixed(),"2");
+assert.equal(writes.length,7);
+await assert.rejects(returnSvc.dispatchSupplierReturn("org-a","po-a","requester",{...dispatch,dispatchReference:"SHIP-OTHER"}),{code:"SUPPLIER_RETURN_CONFLICT"});
+const postingBuilder = load("lib/enterprise/accounting/domain-posting-builders.ts");
+const doc = await postingBuilder.buildInventoryAccountingPosting(rtvTx,{organizationId:"org-a",sourceEntityType:"EnterpriseInventoryAccountingEvent",sourceEntityId:"event-a"},"SUPPLIER_RETURN");
+assert.equal(doc.lines[0].accountMappingKey,"GOODS_RECEIVED_CLEARING");
+assert.equal(doc.lines[1].accountMappingKey,"INVENTORY");
+assert.ok(doc.lines[0].debit.equals(14)); assert.ok(doc.lines[1].credit.equals(14));
+currentEvent = {...currentEvent,eventType:"ISSUE"};
+await assert.rejects(postingBuilder.buildInventoryAccountingPosting(rtvTx,{organizationId:"org-a",sourceEntityType:"EnterpriseInventoryAccountingEvent",sourceEntityId:"event-a"},"ISSUE"),{code:"INVENTORY_ACCOUNTING_EVENT_NOT_POSTABLE"});
+await assert.rejects(postingBuilder.buildSupplierCreditNotePosting({...rtvTx,enterpriseSupplierReturnRequest:{count:async()=>1}},{organizationId:"org-a",sourceEntityType:"EnterpriseSupplierCreditNote",sourceEntityId:"credit-a"}),{code:"SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED"});
+console.log("Supplier return dispatch contract: exact cost, approved source, separate clearing journal, replay and generic credit guard OK (isolated mocks)");
