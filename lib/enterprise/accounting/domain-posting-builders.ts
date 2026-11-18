@@ -108,15 +108,22 @@ export async function buildPayrollPosting(tx: Prisma.TransactionClient, input: {
   return { organizationId: input.organizationId, journalType: "PAYROLL", accountingDate: run.payrollPeriod.payDate || run.payrollPeriod.periodEnd, documentDate: run.payrollPeriod.periodEnd, reference: run.reference, description: `Payroll ${run.reference}`, sourceModule: "HR_PAYROLL", sourceEntityType: "EnterprisePayrollRun", sourceEntityId: run.id, currencyCode: run.currency, lines };
 }
 
-export async function buildInventoryAccountingPosting(tx: Prisma.TransactionClient, input: { organizationId: string; sourceEntityType: string; sourceEntityId: string }, kind: "RECEIPT" | "ISSUE" | "LOSS"): Promise<PostingDocument> {
+export async function buildInventoryAccountingPosting(tx: Prisma.TransactionClient, input: { organizationId: string; sourceEntityType: string; sourceEntityId: string }, kind: "RECEIPT" | "ISSUE" | "LOSS" | "SUPPLIER_RETURN"): Promise<PostingDocument> {
   const event = await tx.enterpriseInventoryAccountingEvent.findFirst({ where: { id: input.sourceEntityId, organizationId: input.organizationId, status: { in: ["PENDING", "APPROVED", "POSTED"] }, eventType: kind } });
   if (!event) throw new EnterpriseAccountingError("INVENTORY_ACCOUNTING_EVENT_NOT_POSTABLE", 409);
   const sourceMovement = await tx.enterpriseStockMovement.findFirst({
     where: { organizationId: input.organizationId, id: event.stockMovementId },
-    select: { movementType:true, warehouse: { select: { siteId: true } } },
+    select: { movementType:true, direction:true, sourceEntityType:true, sourceEntityId:true, quantity:true, inventoryItemId:true, warehouseId:true, stockLotId:true, warehouse: { select: { siteId: true } } },
   });
   if (kind === "LOSS" && sourceMovement?.movementType !== "LOT_WRITE_OFF") throw new EnterpriseAccountingError("INVENTORY_ACCOUNTING_EVENT_NOT_POSTABLE",409);
-  if (kind === "ISSUE" && sourceMovement?.movementType === "LOT_WRITE_OFF") throw new EnterpriseAccountingError("INVENTORY_ACCOUNTING_EVENT_NOT_POSTABLE",409);
+  if (kind === "ISSUE" && ["LOT_WRITE_OFF", "SUPPLIER_RETURN_OUT"].includes(sourceMovement?.movementType || "")) throw new EnterpriseAccountingError("INVENTORY_ACCOUNTING_EVENT_NOT_POSTABLE",409);
+  if (kind === "SUPPLIER_RETURN") {
+    if (!sourceMovement || sourceMovement.movementType !== "SUPPLIER_RETURN_OUT" || sourceMovement.direction !== "OUT" || sourceMovement.sourceEntityType !== "EnterpriseSupplierReturnRequest" || !sourceMovement.sourceEntityId) throw new EnterpriseAccountingError("INVENTORY_ACCOUNTING_EVENT_NOT_POSTABLE",409);
+    const request = await tx.enterpriseSupplierReturnRequest.findFirst({ where: { organizationId: input.organizationId, id: sourceMovement.sourceEntityId, status: { in: ["APPROVED","DISPATCHED"] } } });
+    if (!request || (request.dispatchMovementId && request.dispatchMovementId !== event.stockMovementId) || (request.dispatchAccountingEventId && request.dispatchAccountingEventId !== event.id) ||
+      request.inventoryItemId !== event.inventoryItemId || request.inventoryItemId !== sourceMovement.inventoryItemId || request.warehouseId !== sourceMovement.warehouseId || request.stockLotId !== sourceMovement.stockLotId ||
+      !request.quantity.equals(event.quantity) || !request.quantity.equals(sourceMovement.quantity) || !request.totalCost.equals(event.totalCost) || !request.unitCost.equals(event.unitCost) || request.currencyCode !== event.currencyCode) throw new EnterpriseAccountingError("INVENTORY_ACCOUNTING_EVENT_NOT_POSTABLE",409);
+  }
   const receipt = kind === "RECEIPT";
   return {
     organizationId: input.organizationId,
@@ -130,7 +137,7 @@ export async function buildInventoryAccountingPosting(tx: Prisma.TransactionClie
     sourceEntityId: event.id,
     currencyCode: event.currencyCode,
     lines: [
-      { accountMappingKey: receipt ? "INVENTORY" : kind === "LOSS" ? "OPERATING_EXPENSE" : "COST_OF_SALES", description: `${kind} ${event.inventoryItemId}`, debit: event.totalCost, transactionCurrencyCode: event.currencyCode, transactionAmount: event.totalCost, inventoryItemId: event.inventoryItemId, siteId: sourceMovement?.warehouse.siteId },
+      { accountMappingKey: receipt ? "INVENTORY" : kind === "SUPPLIER_RETURN" ? "GOODS_RECEIVED_CLEARING" : kind === "LOSS" ? "OPERATING_EXPENSE" : "COST_OF_SALES", description: `${kind} ${event.inventoryItemId}`, debit: event.totalCost, transactionCurrencyCode: event.currencyCode, transactionAmount: event.totalCost, inventoryItemId: event.inventoryItemId, siteId: sourceMovement?.warehouse.siteId },
       { accountMappingKey: receipt ? "GOODS_RECEIVED_CLEARING" : "INVENTORY", description: `${kind} ${event.inventoryItemId}`, credit: event.totalCost, transactionCurrencyCode: event.currencyCode, transactionAmount: event.totalCost, inventoryItemId: event.inventoryItemId, siteId: sourceMovement?.warehouse.siteId },
     ],
   };
