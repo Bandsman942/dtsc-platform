@@ -74,6 +74,8 @@
 
 - Transfert déjà expédié : réception physique autorisée en stock isolé si le lot source ou destination est indisponible, conservation des dates, numéro et référence de rappel, preuve de la sortie de transfert et quantité exacte, capacité du dépôt destinataire, événement STOCK_TRANSFER_RECEIVED_QUARANTINED. Le mouvement public ne peut pas ouvrir cette exception. Transfert immédiat normal refuse les lots indisponibles. Recette spécifique à ajouter.
 
+- Retours physiques non revendables : registre de garde EnterpriseInventoryReturnCustody, clé unique ligne de retour/mouvement source, quantité exacte, identité du lot par mouvement d’origine, inspection et provenance. Création atomique dans la liquidation Finance; QUARANTINE isolé / DISPOSE en attente de preuve de destruction, jamais déclaré détruit par simple avoir. Pas de solde vendable ni de nouvelle valeur comptable automatique. La valeur récupérable éventuelle exige une procédure qualité/Finance dédiée. Les retours historiques ne sont pas inventés ni rétroactivement générés. QA du règlement avec garde pour les deux dispositions, rejeu et absence de restitution fictive.
+
 ## Restant (bloquant)
 Certification de la réaffectation historique sur PostgreSQL + navigateur et valeur inchangée; certification achats et valorisation, réservations/livraisons multi-lots; moteur FEFO commun et POS; pertes, rappels et comptabilité; Design 2.0 et tests multisectoriels. Voir issue #1212. Ne pas merger avant clôture de tous les points.
 

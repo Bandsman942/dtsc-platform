@@ -16,6 +16,7 @@ const state = {
   accountSite: "shop-A", sourceAccounts: ["cash-A"], operations: [], requestStatus: "APPROVED",
   requestRevision: 1, refundPaymentId: null, salesCreditNoteId: null, preparedByUserId: null,
   settledByUserId: null, refundPayoutAmount: null, zeroPayout: false,
+  custody: [], disposition:"RESTOCK",
   creditStatus: "PENDING_APPROVAL", paymentStatus: "PENDING_APPROVAL",
   approvedByUserId: null, receivableOutstanding: d(0), throwStock: false, refundLegs: [],
 };
@@ -24,7 +25,7 @@ const currentRequest = () => ({
   status: state.requestStatus, revision: state.requestRevision,
   refundAmount: d("33.33"), refundPayoutAmount: state.refundPayoutAmount,
   reason: "Défectueux", requestedByUserId: "requester",
-  inspectedByUserId: "inspector", approverUserId: "approver",
+  inspectedByUserId: "inspector", inspectedAt:new Date("2026-01-01T12:00:00Z"),inspectionNotes:"Received and inspected", approverUserId: "approver",
   preparedByUserId: state.preparedByUserId, settledByUserId: state.settledByUserId,
   refundPaymentId: state.refundPaymentId, salesCreditNoteId: state.salesCreditNoteId,
   checkout: { siteId: "shop-A", invoice: { currencyCode: "CDF", businessPartyId: "buyer-A" } },
@@ -42,7 +43,7 @@ const preview = () => ({
   })),
   stockSourcePlan: state.zeroPayout ? [] : [{ returnLineId: "line-A", originalMovementId: "movement-A",
     inventoryItemId: "item-A", warehouseId: "warehouse-A", stockLotId: "lot-A",
-    storageLocationId: "shelf-A", stockDisposition: "RESTOCK", quantity: d(1) }],
+    storageLocationId: "shelf-A", stockDisposition: state.disposition, quantity: d(1) }],
 });
 const tx = {
   $executeRaw: async () => 1,
@@ -79,6 +80,7 @@ const tx = {
       amount: d(state.sourceAccounts.length > 1 ? (where.id === "refund-cash-B" ? "16.66" : "16.67") : "33.33"), revision: 2 }),
     update: async () => { state.operations.push("payment:submit"); return {}; },
   },
+  enterpriseInventoryReturnCustody:{create:async ({data})=>{assert.equal(data.organizationId,"tenant");assert.equal(data.returnLineId,"line-A");assert.equal(data.originalMovementId,"movement-A");assert.equal(data.quantity.toFixed(),"1");assert.equal(data.inspectedByUserId,"inspector");state.custody.push(data);state.operations.push("custody:registered");return data;}},
   enterpriseRetailInvoiceReturnRefundLeg: {
     createMany: async ({ data }) => { state.refundLegs = data; state.operations.push("refund-legs:create"); },
     findMany: async () => state.refundLegs.map((leg) => ({ ...leg, refundPayment: {
@@ -300,6 +302,20 @@ assert.equal(state.operations.filter((entry) => entry === "payment:confirmed").l
 assert.equal(state.operations.filter((entry) => entry === "stock:return-in").length, 0);
 assert.equal(state.operations.filter((entry) => entry === "credit:posted-journal").length, 1);
 assert.equal((await settle("settler", 2)).idempotent, true);
+// Physically inspected non-sellable returns are not silently discarded,
+// restocked, or recognized as another asset. Keep custody exactly once.
+for (const disposition of ["QUARANTINE","DISPOSE"]) {
+  Object.assign(state,{sourceAccounts:["cash-A"],zeroPayout:false,operations:[],custody:[],disposition,requestStatus:"APPROVED",requestRevision:1,refundPaymentId:null,refundPayoutAmount:null,salesCreditNoteId:null,preparedByUserId:null,settledByUserId:null,refundLegs:[],paymentStatus:"PENDING_APPROVAL",creditStatus:"PENDING_APPROVAL",approvedByUserId:null,receivableOutstanding:d(0)});
+  await prep();
+  state.paymentStatus="APPROVED";state.creditStatus="APPROVED";state.approvedByUserId="approver";state.operations=[];
+  await settle();
+  assert.equal(state.custody.length,1);
+  assert.equal(state.custody[0].status,disposition==="DISPOSE"?"DISPOSAL_PENDING":"QUARANTINED");
+  assert.equal(state.operations.filter(x=>x==="stock:return-in"||x==="stock:valued").length,0);
+  assert.ok(state.operations.indexOf("custody:registered")<state.operations.indexOf("return:COMPLETED"));
+  assert.equal((await settle("settler",2)).idempotent,true);
+  assert.equal(state.custody.length,1);
+}
 const financePrepareRoute = fs.readFileSync("app/api/enterprise/[organizationId]/retail/invoices/[invoiceId]/returns/[requestId]/prepare/handler.ts", "utf8");
 const financeSettleRoute = fs.readFileSync("app/api/enterprise/[organizationId]/retail/invoices/[invoiceId]/returns/[requestId]/settle/handler.ts", "utf8");
 assert.match(financePrepareRoute, /authorizeFinanceRequest\(req, organizationId, "FINANCE_PAYMENTS", "submit", \{ mutation: true/);

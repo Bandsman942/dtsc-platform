@@ -112,6 +112,7 @@ model EnterpriseStockMovement {
   warehouse            EnterpriseWarehouse        @relation(fields: [organizationId, warehouseId], references: [organizationId, id], onDelete: Restrict)
   storageLocation      EnterpriseStorageLocation? @relation(fields: [organizationId, storageLocationId], references: [organizationId, id], onDelete: Restrict)
   stockLot             EnterpriseStockLot?        @relation(fields: [organizationId, stockLotId], references: [organizationId, id], onDelete: Restrict)
+  returnCustodyEntries EnterpriseInventoryReturnCustody[]
 
   @@unique([organizationId, id])
   @@unique([organizationId, idempotencyKey])
@@ -287,4 +288,37 @@ model EnterpriseStockLotReclassification {
   @@unique([organizationId, idempotencyKey], map: "EnterpriseLotReclass_idempotency_key")
   @@index([organizationId, sourceBalanceId, status], map: "EnterpriseLotReclass_source_status_idx")
   @@index([organizationId, warehouseId, status], map: "EnterpriseLotReclass_warehouse_status_idx")
+}
+
+ // An inspected non-sellable return is physical custody, NOT a sellable
+ // inventory balance or an automatically recognized asset. Keep provenance
+ // and the final disposal evidence independently of the commercial refund.
+model EnterpriseInventoryReturnCustody {
+  id String @id @default(cuid())
+  organizationId String
+  returnLineId String
+  originalMovementId String
+  quantity Decimal @db.Decimal(20, 6)
+  disposition String
+  status String
+  inspectedByUserId String
+  inspectedAt DateTime
+  inspectionNotes String?
+  registeredByUserId String
+  disposalRequestedByUserId String?
+  disposalRequestedAt DateTime?
+  disposalReason String?
+  disposedByUserId String?
+  disposedAt DateTime?
+  disposalEvidence String?
+  revision Int @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  returnLine EnterpriseRetailInvoiceReturnLine @relation(fields:[organizationId,returnLineId],references:[organizationId,id],onDelete:Restrict,map:"inv_return_custody_line_fk")
+  originalMovement EnterpriseStockMovement @relation(fields:[organizationId,originalMovementId],references:[organizationId,id],onDelete:Restrict,map:"inv_return_custody_movement_fk")
+
+  @@unique([organizationId, id],map:"inv_return_custody_org_id_key")
+  @@unique([organizationId,returnLineId,originalMovementId],map:"inv_return_custody_source_key")
+  @@index([organizationId,status,createdAt],map:"inv_return_custody_status_idx")
+  @@index([organizationId,originalMovementId],map:"inv_return_custody_movement_idx")
 }
