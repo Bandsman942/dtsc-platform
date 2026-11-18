@@ -1023,8 +1023,8 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
 
     // Purchase adapter and valuation: rejected recalled batches must roll back
     // the purchase status, canonical receipt, balances and movements together.
-    async function orderForPurchase(product,amount,suffix){
-      const purchase=await prisma.enterprisePurchase.create({data:{organizationId,reference:batchKey+"-"+suffix,title:"Receipt E2E "+suffix,status:"ORDERED",requestedByUserId:fixture.owner.id,buyerUserId:fixture.owner.id,currency:fixture.currencyCode,subtotalAmount:7*amount,totalAmount:7*amount,orderedAt:new Date(),createdByUserId:fixture.owner.id,items:{create:{description:product.name,quantity:amount,unit:"UNIT",unitPrice:7,lineSubtotal:7*amount,taxAmount:0,lineTotal:7*amount}}},include:{items:true}});
+    async function orderForPurchase(product,amount,suffix,supplierId){
+      const purchase=await prisma.enterprisePurchase.create({data:{organizationId,reference:batchKey+"-"+suffix,title:"Receipt E2E "+suffix,status:"ORDERED",supplierId,requestedByUserId:fixture.owner.id,buyerUserId:fixture.owner.id,currency:fixture.currencyCode,subtotalAmount:7*amount,totalAmount:7*amount,orderedAt:new Date(),createdByUserId:fixture.owner.id,items:{create:{description:product.name,quantity:amount,unit:"UNIT",unitPrice:7,lineSubtotal:7*amount,taxAmount:0,lineTotal:7*amount}}},include:{items:true}});
       await prisma.enterprisePurchaseItemCatalogLink.create({data:{organizationId,purchaseItemId:purchase.items[0].id,catalogItemId:product.id,unitOfMeasureId:product.unitOfMeasureId,expectedItemType:"GOODS"}});
       return purchase;
     }
@@ -1034,7 +1034,15 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
     expect(recalledReceipt.body.error).toBe("RECEIPT_BATCH_RECALLED");
     expect((await prisma.enterprisePurchase.findUniqueOrThrow({where:{id:recalledPurchase.id}})).status).toBe("ORDERED");
     expect(await prisma.enterprisePurchaseReceipt.count({where:{organizationId,purchaseId:recalledPurchase.id}})).toBe(0);
-    const normalPurchase=await orderForPurchase(historicalProduct,10,"NORMAL-PO");
+    // Supplier, buyer and invoice use the canonical Procurement/Finance
+    // references, not a synthetic supplier name or a fabricated ledger entry.
+    const supplierName="E2E supplier "+historyKey;
+    const supplier=await prisma.enterpriseSupplier.create({data:{organizationId,legalName:supplierName,displayName:supplierName,normalizedName:supplierName.toLowerCase(),status:"ACTIVE",createdByUserId:fixture.owner.id}});
+    const supplierParty=await prisma.enterpriseBusinessParty.create({data:{organizationId,partyType:"ORGANIZATION",legalName:supplierName,displayName:supplierName,normalizedName:supplierName.toLowerCase(),code:historyKey+"-SUPPLIER",status:"ACTIVE",createdByUserId:fixture.owner.id}});
+    await prisma.enterpriseBusinessPartyRole.create({data:{organizationId,businessPartyId:supplierParty.id,roleCode:"SUPPLIER",status:"ACTIVE"}});
+    await prisma.enterpriseSupplierPartyLink.create({data:{organizationId,supplierId:supplier.id,businessPartyId:supplierParty.id,createdByUserId:fixture.owner.id}});
+    await prisma.enterpriseModule.upsert({where:{organizationId_moduleCode:{organizationId,moduleCode:"FINANCE_PAYABLES"}},update:{isEnabled:true,requiresPlanLevel:"BUSINESS"},create:{organizationId,moduleCode:"FINANCE_PAYABLES",labelFr:"Achats & dettes",labelEn:"Purchases & payables",moduleCategory:"FINANCE",isEnabled:true,isCore:false,requiresPlanLevel:"BUSINESS",sortOrder:30}});
+    const normalPurchase=await orderForPurchase(historicalProduct,10,"NORMAL-PO",supplier.id);
     const purchaseReceiptPath=base+"/purchases/"+normalPurchase.id+"/receive";
     const purchasePayload={revision:normalPurchase.revision,receivedAt:new Date().toISOString(),warehouseId:fixture.warehouse.id,items:[{purchaseItemId:normalPurchase.items[0].id,quantityReceived:10}],lotAllocations:[{purchaseItemId:normalPurchase.items[0].id,batches:[{lotNumber:"PURCHASE-A",productionDate:null,expiryDate:allocationPayload.allocations[0].expiryDate,quantity:4},{lotNumber:"PURCHASE-B",productionDate:null,expiryDate:allocationPayload.allocations[1].expiryDate,quantity:6}]}]};
     const wrongReceipt=await post(context.owner,purchaseReceiptPath,{...purchasePayload,lotAllocations:[{...purchasePayload.lotAllocations[0],batches:[{...purchasePayload.lotAllocations[0].batches[0],quantity:3},purchasePayload.lotAllocations[0].batches[1]]}]});
@@ -1085,6 +1093,67 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
     expect(receiptValuations.every(row=>row.status==="POSTED"&&row.journalEntryId)).toBe(true);
     const receiptBalances=await prisma.enterpriseInventoryBalance.findMany({where:{organizationId,inventoryItemId:historicalInventory.id}});
     expect(receiptBalances.reduce((sum,row)=>sum.plus(row.quantityOnHand),new Prisma.Decimal(0)).equals(110)).toBe(true);
+
+    // Return feasibility is deliberately read-only until the independent
+    // dispatch/credit reconciliation workflow is implemented. Check the real
+    // original receipt, lot, valuation, posted supplier invoice and ledger.
+    const returnedSource=movementsReceived.find(row=>row.stockLot.lotNumber==="PURCHASE-A");
+    const returnCheck=base+"/purchases/"+normalPurchase.id+"?view=supplier-return-preflight&movementId="+encodeURIComponent(returnedSource.id);
+    const availableCheck=await context.owner.request.get(returnCheck+"&quantity=2",{headers:{"Accept-Language":"fr"}});
+    expect(availableCheck.status(),await availableCheck.text()).toBe(409);
+    expect((await availableCheck.json()).error).toBe("SUPPLIER_RETURN_ISOLATE_FIRST");
+    const isolatedSupplierLot=await patchLot(context.owner,{id:returnedSource.stockLotId,revision:returnedSource.stockLot.revision,status:"QUARANTINED",qualityReason:"E2E supplier return awaiting evidence"});
+    expect(isolatedSupplierLot.status,JSON.stringify(isolatedSupplierLot.body)).toBe(200);
+    const tooMuch=await context.owner.request.get(returnCheck+"&quantity=5");
+    expect(tooMuch.status(),await tooMuch.text()).toBe(409);
+    expect((await tooMuch.json()).error).toBe("SUPPLIER_RETURN_QUANTITY_INVALID");
+    const invalidPrecision=await context.owner.request.get(returnCheck+"&quantity=1.0001");
+    expect(invalidPrecision.status()).toBe(400);
+    const missingInvoice=await context.owner.request.get(returnCheck+"&quantity=2");
+    expect(missingInvoice.status(),await missingInvoice.text()).toBe(409);
+    expect((await missingInvoice.json()).error).toBe("SUPPLIER_RETURN_INVOICE_REQUIRED");
+    const wrongPurchase=await context.owner.request.get(base+"/purchases/"+recalledPurchase.id+"?view=supplier-return-preflight&movementId="+encodeURIComponent(returnedSource.id)+"&quantity=2");
+    expect(wrongPurchase.status()).toBe(404);
+    const unauthorizedPreview=await context.cashier.request.get(returnCheck+"&quantity=2");
+    expect([403,404]).toContain(unauthorizedPreview.status());
+
+    // Seed an already approved invoice; posting itself uses the real Finance
+    // endpoint, which creates its journal, payable and canonical posting batch.
+    const supplierInvoice=await prisma.enterpriseSupplierInvoice.create({data:{
+      organizationId,number:historyKey+"-BILL",supplierId:supplier.id,businessPartyId:supplierParty.id,
+      purchaseId:normalPurchase.id,purchaseReceiptId:purchaseReceipt.body.receipt.id,status:"APPROVED",
+      invoiceDate:new Date(),currencyCode:fixture.currencyCode,subtotal:"70",taxTotal:"0",grandTotal:"70",outstandingAmount:"70",
+      approvedAt:new Date(),approvedByUserId:fixture.settler.id,createdByUserId:fixture.owner.id,
+      items:{create:{catalogItemId:historicalProduct.id,description:historicalProduct.name,quantity:"10",unitPrice:"7",netAmount:"70",taxAmount:"0",totalAmount:"70"}},
+      threeWayMatch:{create:{purchaseId:normalPurchase.id,purchaseReceiptId:purchaseReceipt.body.receipt.id,quantityVariance:0,priceVariance:0,taxVariance:0,currencyMatches:true,supplierMatches:true,withinTolerance:true,status:"MATCHED",checkedAt:new Date()}}
+    }});
+    await ensureStepUp(context.owner,ownerPassword);
+    const postedSupplierInvoice=await post(context.owner,base+"/supplier-invoices/"+supplierInvoice.id+"/transition",{action:"POST",revision:supplierInvoice.revision});
+    expect(postedSupplierInvoice.status,JSON.stringify(postedSupplierInvoice.body)).toBe(200);
+    const supplierPayable=await prisma.enterprisePayable.findUniqueOrThrow({where:{supplierInvoiceId:supplierInvoice.id}});
+    expect(supplierPayable.outstandingAmount.equals(70)).toBe(true);
+    const snapshotBeforeCheck={
+      movements:await prisma.enterpriseStockMovement.count({where:{organizationId,inventoryItemId:historicalInventory.id}}),
+      valuation:await prisma.enterpriseInventoryAccountingEvent.count({where:{organizationId,inventoryItemId:historicalInventory.id}}),
+      journals:await prisma.enterpriseJournalEntry.count({where:{organizationId}}),
+      adjustments:await prisma.enterpriseStockAdjustment.count({where:{organizationId,inventoryItemId:historicalInventory.id}}),
+      credits:await prisma.enterpriseSupplierCreditNote.count({where:{organizationId,supplierInvoiceId:supplierInvoice.id}})
+    };
+    const validPreview=await context.owner.request.get(returnCheck+"&quantity=2",{headers:{"Accept-Language":"en"}});
+    expect(validPreview.status(),await validPreview.text()).toBe(200);
+    const validPreviewBody=await validPreview.json();
+    expect(validPreviewBody).toMatchObject({eligible:true,readOnly:true,quantity:"2",remaining:"4",unitCost:"7",totalCost:"14",currencyCode:fixture.currencyCode,receiptReference:purchaseReceipt.body.receipt.reference,invoiceReference:supplierInvoice.number});
+    const repeatedPreview=await context.owner.request.get(returnCheck+"&quantity=2");
+    expect(repeatedPreview.status()).toBe(200);
+    expect(await repeatedPreview.json()).toEqual(validPreviewBody);
+    expect(await prisma.enterpriseStockMovement.count({where:{organizationId,inventoryItemId:historicalInventory.id}})).toBe(snapshotBeforeCheck.movements);
+    expect(await prisma.enterpriseInventoryAccountingEvent.count({where:{organizationId,inventoryItemId:historicalInventory.id}})).toBe(snapshotBeforeCheck.valuation);
+    expect(await prisma.enterpriseJournalEntry.count({where:{organizationId}})).toBe(snapshotBeforeCheck.journals);
+    expect(await prisma.enterpriseStockAdjustment.count({where:{organizationId,inventoryItemId:historicalInventory.id}})).toBe(snapshotBeforeCheck.adjustments);
+    expect(await prisma.enterpriseSupplierCreditNote.count({where:{organizationId,supplierInvoiceId:supplierInvoice.id}})).toBe(snapshotBeforeCheck.credits);
+    expect((await prisma.enterprisePayable.findUniqueOrThrow({where:{supplierInvoiceId:supplierInvoice.id}})).outstandingAmount.equals(70)).toBe(true);
+    expect((await prisma.enterpriseInventoryBalance.findFirstOrThrow({where:{organizationId,stockLotId:returnedSource.stockLotId}})).quantityOnHand.equals(4)).toBe(true);
+
     const alerts=await context.owner.request.get(qualityPath+"?search="+encodeURIComponent(batchKey)+"&expiry=RECALLED&page=1&warehouseId="+encodeURIComponent(spareWarehouse.id));
     expect(alerts.status()).toBe(200);
     const alertBody=await alerts.json();
