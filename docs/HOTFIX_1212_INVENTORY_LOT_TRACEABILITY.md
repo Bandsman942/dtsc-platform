@@ -102,6 +102,8 @@
 
 - Même correction de relation composite appliquée à la création des lignes de comptage d’inventaire. Recette de comptage ponctuel du lot HIST-A (30 théoriques / 30 comptés), approbateur distinct, aucune correction fictive ni mouvement si écart nul. À certifier.
 
+- Notifications proactives : worker dédié borné (8 organisations par 15 minutes, curseur durable, lease 5 minutes, retry et déduplication journalière selon calendrier entreprise). Réservé aux administrateurs actifs disposant de l’accès au module, message neutre et lien interne, aucun détail sensible dans le Push. Migration additive `20261118145000_inventory_quality_scan`, route préservant la marge du budget (862 fichiers de routes au dernier build, +1). Activation production volontaire `INVENTORY_QUALITY_ALERTS_CRON_ENABLED=true` ; aucune activation effectuée. Tests et certification requis.
+
 ## Restant (bloquant)
 Certification de la réaffectation historique sur PostgreSQL + navigateur et valeur inchangée; certification achats et valorisation, réservations/livraisons multi-lots; moteur FEFO commun et POS; pertes, rappels et comptabilité; Design 2.0 et tests multisectoriels. Voir issue #1212. Ne pas merger avant clôture de tous les points.
 

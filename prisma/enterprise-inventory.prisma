@@ -322,3 +322,15 @@ model EnterpriseInventoryReturnCustody {
   @@index([organizationId,status,createdAt],map:"inv_return_custody_status_idx")
   @@index([organizationId,originalMovementId],map:"inv_return_custody_movement_idx")
 }
+
+// Durable work cursor only; the stock ledger remains the source of truth.
+model EnterpriseInventoryQualityScan {
+  organizationId String @id
+  nextScanAt DateTime @default(now())
+  leaseUntil DateTime?
+  leaseToken String?
+  updatedAt DateTime @updatedAt
+  organization Organization @relation(fields:[organizationId],references:[id],onDelete:Cascade)
+
+  @@index([nextScanAt,leaseUntil],map:"inventory_quality_scan_due_idx")
+}

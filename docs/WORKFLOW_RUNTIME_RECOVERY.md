@@ -149,3 +149,7 @@ Le hotfix #861 ajoute `isSharedCronDispatchPaused` **après l'authentification e
 | Expiration des invitations de liaison de compte | `IDENTITY_LINKS_CRON_ENABLED=true` |
 
 La route workflows conserve **`WORKFLOW_WORKER_ENABLED=true`** et un `WORKFLOW_EVENT_CUTOVER_AT` UTC borné à 72h comme conditions d'activation. **Ne pas définir les sept autres opt-in à true** lors de l'installation initiale de `CRON_SECRET`. Avant chaque activation ultérieure, auditer la queue concernée, la catégorie et la tranche d'âge, disposer de l'autorisation de l'exploitant et de critères d'arrêt. Le statut 503 des Crons désactivés est attendu, il ne valide pas une exécution métier. Les 343 Web Push restent volontairement intacts jusqu'au plan de reprise ciblé.
+
+### Inventory quality digest (#1212)
+
+Enable scheduled dispatch explicitly with `INVENTORY_QUALITY_ALERTS_CRON_ENABLED=true` after production acceptance. The existing cron secret authenticates the new bounded worker; no new secret is required. The worker claims at most eight due active client organizations every 15 minutes, leases for five minutes, scans each successful tenant once per 24 hours, and retries errors after 15 minutes. A neutral daily notification is deduplicated by organization, authorized administrator, and local business date. Stock data never appear in the push payload; opening the module requires normal authorization. Site-scoped recipients are intentionally excluded from this initial digest. Turn the flag off to disable dispatch without removing any history or stock movements.
