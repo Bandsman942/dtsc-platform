@@ -100,9 +100,19 @@ export async function applyStockMovementTx(
   tx: Prisma.TransactionClient,
   organizationId: string,
   actorUserId: string,
-  input: Omit<StockMovementInput, "movementType"> & {movementType: StockMovementInput["movementType"] | "LOT_WRITE_OFF" | "SUPPLIER_RETURN_OUT"},
-  internal?: { consumingRetailInvoiceId?: string; approvedLotWriteOffId?: string; quarantinedTransferReceiptId?: string; approvedSupplierReturnId?: string },
+  input: Omit<StockMovementInput, "movementType"> & {movementType: StockMovementInput["movementType"] | "LOT_WRITE_OFF" | "SUPPLIER_RETURN_OUT" | "CUSTODY_RECOVERY_IN"},
+  internal?: { consumingRetailInvoiceId?: string; approvedLotWriteOffId?: string; quarantinedTransferReceiptId?: string; approvedSupplierReturnId?: string; approvedRecoveryAssessmentId?: string },
 ) {
+  const recovery=input.movementType==="CUSTODY_RECOVERY_IN";
+  if(recovery){
+    const id=internal?.approvedRecoveryAssessmentId;
+    if(!id||input.sourceEntityType!=="EnterpriseInventoryReturnRecoveryAssessment"||input.sourceEntityId!==id||input.direction!=="IN"||!input.stockLotId)throw new EnterpriseDomainError("INVENTORY_RETURN_RECOVERY_PERMISSION_REQUIRED",403);
+    const appraisal=await tx.enterpriseInventoryReturnRecoveryAssessment.findFirst({where:{organizationId,id,status:"APPROVED",assessedByUserId:actorUserId,custody:{status:"QUARANTINED"}},include:{custody:{include:{originalMovement:{include:{stockLot:true}}}}}});
+    const original=appraisal?.custody.originalMovement,lot=original?.stockLot;
+    if(!appraisal||!original||!lot||lot.status!=="AVAILABLE"||lot.recallReference||appraisal.custody.revision!==appraisal.custodyRevision||!appraisal.quantity.equals(input.quantity)||input.sourceLineId!==appraisal.custodyId||original.inventoryItemId!==input.inventoryItemId||original.warehouseId!==input.warehouseId||original.stockLotId!==input.stockLotId||original.storageLocationId!==(input.storageLocationId||null))throw new EnterpriseDomainConflictError("INVENTORY_RETURN_RECOVERY_CONFLICT");
+    if(await tx.enterpriseStockLot.count({where:{organizationId,inventoryItemId:original.inventoryItemId,lotNumber:lot.lotNumber,recallReference:{not:null}}}))throw new EnterpriseDomainConflictError("INVENTORY_RETURN_RECOVERY_LOT_UNSAFE");
+    await requireInventoryStockAuthorityTx(tx,organizationId,actorUserId,input.warehouseId);
+  }
   const supplierReturn = input.movementType === "SUPPLIER_RETURN_OUT";
   if (supplierReturn) {
     const requestId = internal?.approvedSupplierReturnId;
@@ -135,7 +145,7 @@ export async function applyStockMovementTx(
     if(!source || !dest || !dispatch || source.lotNumber!==dest.lotNumber || source.expiryDate?.getTime()!==dest.expiryDate?.getTime() || source.productionDate?.getTime()!==dest.productionDate?.getTime() || (source.recallReference && source.recallReference!==dest.recallReference)) throw new EnterpriseDomainError("STOCK_TRANSFER_ISOLATED_RECEIPT_INVALID",409);
   }
   const { inventoryItem, stockLot } = await assertInventoryCoordinates(tx, organizationId, input, writeOff || isolatedReceipt || supplierReturn);
-  if (inventoryItem.expiryTracking && stockLot?.expiryDate && ["SALE_FULFILLMENT", "RETURN_IN", "PRODUCTION_CONSUMPTION"].includes(input.movementType)) {
+  if (inventoryItem.expiryTracking && stockLot?.expiryDate && ["SALE_FULFILLMENT", "RETURN_IN", "PRODUCTION_CONSUMPTION", "CUSTODY_RECOVERY_IN"].includes(input.movementType)) {
     const organization = await tx.organization.findUniqueOrThrow({ where: { id: organizationId }, select: { timezone: true } });
     const components = new Intl.DateTimeFormat("en-CA", { timeZone: organization.timezone || "UTC", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date());
     const today = ["year", "month", "day"].map(type => components.find(part => part.type === type)?.value).join("-");
@@ -146,7 +156,7 @@ export async function applyStockMovementTx(
   const delta = input.direction === "IN" ? input.quantity : -input.quantity;
   const nextQuantity = currentQuantity + delta;
   // The restricted supplier return uses the exact stored decimal, not a floating-point subtraction.
-  const nextBalance = supplierReturn ? new Prisma.Decimal(balance?.quantityOnHand || 0).minus(input.quantity) : nextQuantity;
+  const nextBalance = supplierReturn ? new Prisma.Decimal(balance?.quantityOnHand || 0).minus(input.quantity) : recovery ? new Prisma.Decimal(balance?.quantityOnHand || 0).plus(input.quantity) : nextQuantity;
   if (supplierReturn && (!balance || new Prisma.Decimal(nextBalance).lt(0))) throw new EnterpriseDomainError("NEGATIVE_STOCK_FORBIDDEN",409);
   if (nextQuantity < -0.000001 && !inventoryItem.allowNegativeStock) throw new EnterpriseDomainError("NEGATIVE_STOCK_FORBIDDEN", 409);
   if (input.direction === "OUT") {
