@@ -160,7 +160,7 @@ async function financeFixture() {
 test("#1042 real Finance settlement and five-actor credit, refund and inventory return", async ({ browser }) => {
   // #1187 adds two independent cancellation flows and the FX invoice journal
   // to the same serializable PostgreSQL scenario. Keep the timeout local.
-  test.setTimeout(240_000);
+  test.setTimeout(360_000);
   if (process.env.CI !== "true" || !/\/dtsc_shop2_behavioral(?:\?|$)/.test(process.env.DATABASE_URL || "")) {
     throw new Error("RETAIL_1042_FINANCE_LIFECYCLE_REQUIRES_EPHEMERAL_CI_DATABASE");
   }
@@ -1418,6 +1418,93 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
     const finalTrace=await context.owner.request.get(receiptTracePath+"&search=PURCHASE-A");
     expect(finalTrace.status()).toBe(200);
     expect((await finalTrace.json()).items[0].supplierReturnRequest).toMatchObject({status:"RECONCILED",supplierCreditNoteId:supplierReturnCreditId,canDispatch:false,canCreateCredit:false});
+
+    // Recover the other, unrecalled batch of the same paid invoice through
+    // a genuine inspected customer return; no direct stock/custody fixtures.
+    {
+      const recoveryReturn=await post(context.cashier,rbase,{...returnPayload,idempotencyKey:batchKey+"-recoverable",reason:"Returned early batch isolated pending repair appraisal",lines:[{checkoutLineId:batchCheckout.lines[0].id,quantity:"2",stockDisposition:"QUARANTINE",lotAllocations:[{stockLotId:batches[0].lot.id,quantity:"2"}]}]});
+      expect(recoveryReturn.status,JSON.stringify(recoveryReturn.body)).toBe(201);
+      const recoveredReturnPath=rbase+"/"+recoveryReturn.body.request.id;
+      const inspected=await post(context.inspector,recoveredReturnPath+"/inspection",{revision:recoveryReturn.body.request.revision,receivedAndInspected:true,confirmedBatchSelection:true,notes:"Early batch inspected and placed in physical quarantine for repair"});
+      expect(inspected.status,JSON.stringify(inspected.body)).toBe(200);
+      const approved=await post(context.owner,recoveredReturnPath+"/decision",{decision:"APPROVE",revision:inspected.body.request.revision});
+      expect(approved.status,JSON.stringify(approved.body)).toBe(200);
+      const prepared=await post(context.preparer,recoveredReturnPath+"/prepare",{revision:approved.body.request.revision});
+      expect(prepared.status,JSON.stringify(prepared.body)).toBe(201);
+      const refundDoc=await prisma.enterprisePayment.findUniqueOrThrow({where:{id:prepared.body.request.refundPaymentId}});
+      const creditDoc=await prisma.enterpriseSalesCreditNote.findUniqueOrThrow({where:{id:prepared.body.request.salesCreditNoteId}});
+      await ensureStepUp(context.owner,ownerPassword);
+      expect((await post(context.owner,base+"/payments/"+refundDoc.id+"/transition",{action:"APPROVE",revision:refundDoc.revision})).status).toBe(200);
+      expect((await post(context.owner,base+"/sales-credit-notes/"+creditDoc.id+"/transition",{action:"APPROVE",revision:creditDoc.revision})).status).toBe(200);
+      await ensureStepUp(context.returnSettler,cashierPassword);
+      const settled=await post(context.returnSettler,recoveredReturnPath+"/settle",{revision:prepared.body.request.revision,reason:"Independent liquidation while safe batch remains isolated"});
+      expect(settled.status,JSON.stringify(settled.body)).toBe(200);
+      const recoverableCustody=await prisma.enterpriseInventoryReturnCustody.findFirstOrThrow({where:{organizationId,returnLine:{returnRequestId:recoveryReturn.body.request.id}}});
+      expect(recoverableCustody.quantity.equals(2)).toBe(true);
+      expect(recoverableCustody.status).toBe("QUARANTINED");
+      expect((await batchStock(0)).isZero()).toBe(true);
+      const previewPath=qualityPath+"?view=custody-recovery&custodyId="+encodeURIComponent(recoverableCustody.id);
+      const eligibleResponse=await context.owner.request.get(previewPath);
+      expect(eligibleResponse.status(),await eligibleResponse.text()).toBe(200);
+      expect(await eligibleResponse.json()).toMatchObject({historicalCostCeiling:"14",quantity:"2",readOnly:true,physicalReleaseAuthorized:false,accountingRecognitionAuthorized:false});
+      const candidateResponse=await context.owner.request.get(qualityPath+"?view=custody-recovery-approvers&custodyId="+encodeURIComponent(recoverableCustody.id));
+      expect(candidateResponse.status(),await candidateResponse.text()).toBe(200);
+      expect((await candidateResponse.json()).candidates.some(row=>row.userId===fixture.settler.id)).toBe(true);
+      async function recoveryAction(actor,action,data){
+        const response=await actor.request.patch(qualityPath+"?action="+action,{data,headers:{origin:baseUrl,referer:baseUrl+"/enterprise-modules/INVENTORY_LOGISTICS"}});
+        return {status:response.status(),body:await response.json().catch(()=>null)};
+      }
+      const input={custodyId:recoverableCustody.id,custodyRevision:recoverableCustody.revision,estimatedSellingAmount:"18",completionCost:"5",sellingCost:"2",evidenceReference:batchKey+"-REPORT",findings:"Independent physical examination confirms the early batch can be repaired.",confirmedPhysicalInspection:true,approverUserId:fixture.settler.id,idempotencyKey:batchKey+"-ASSESS"};
+      expect((await recoveryAction(context.owner,"submit-recovery-assessment",{...input,approverUserId:fixture.owner.id})).status).toBe(403);
+      const beforeRecovery={journals:await prisma.enterpriseJournalEntry.count({where:{organizationId}}),credits:await prisma.enterpriseSalesCreditNote.count({where:{organizationId,salesInvoiceId:bi}}),payments:await prisma.enterprisePayment.count({where:{organizationId}})};
+      const created=await recoveryAction(context.owner,"submit-recovery-assessment",input);
+      expect(created.status,JSON.stringify(created.body)).toBe(201);
+      expect(created.body.assessment.proposedRecoveryAmount).toBe("11");
+      expect((await recoveryAction(context.owner,"submit-recovery-assessment",input)).body.idempotent).toBe(true);
+      const deniedDisposal=await patchLot(context.owner,{custodyId:recoverableCustody.id,revision:recoverableCustody.revision,action:"REQUEST_DISPOSAL",reason:"Conflicting disposal while appraisal is active"});
+      expect(deniedDisposal.status).toBe(409);
+      expect(deniedDisposal.body.error).toBe("INVENTORY_RETURN_RECOVERY_ACTIVE");
+      const reviewPath=base+"/approvals/"+created.body.approvalId;
+      const reviewResponse=await context.settler.request.get(reviewPath+"/coordination");
+      expect(reviewResponse.status(),await reviewResponse.text()).toBe(200);
+      const review=await reviewResponse.json();
+      expect(review.versions[0].snapshotJson).toMatchObject({historicalCostCeiling:"14",totalAmount:"11"});
+      const reviewed=await post(context.settler,reviewPath+"/actions",{action:"APPROVE",revision:review.approval.revision,reviewedVersionId:review.versions[0].id});
+      expect(reviewed.status,JSON.stringify(reviewed.body)).toBe(200);
+      const appraised=await prisma.enterpriseInventoryReturnRecoveryAssessment.findFirstOrThrow({where:{organizationId,id:created.body.assessment.id}});
+      expect(appraised.status).toBe("APPROVED");
+      expect((await batchStock(0)).isZero()).toBe(true);
+      expect(await prisma.enterpriseJournalEntry.count({where:{organizationId}})).toBe(beforeRecovery.journals);
+      const executeInput={custodyId:recoverableCustody.id,assessmentId:appraised.id,revision:appraised.revision,releaseEvidence:"Final inspection passed; repairs completed and physical release recorded",confirmedSaleableAndRepaired:true};
+      expect((await recoveryAction(context.settler,"execute-recovery-assessment",executeInput)).status).toBe(403);
+      expect((await recoveryAction(context.owner,"execute-recovery-assessment",{...executeInput,confirmedSaleableAndRepaired:false})).status).toBe(400);
+      const executed=await recoveryAction(context.owner,"execute-recovery-assessment",executeInput);
+      expect(executed.status,JSON.stringify(executed.body)).toBe(200);
+      expect(executed.body.assessment.status).toBe("EXECUTED");
+      expect((await batchStock(0)).equals(2)).toBe(true);
+      const completion=await prisma.enterpriseInventoryReturnRecoveryAssessment.findFirstOrThrow({where:{organizationId,id:appraised.id}});
+      expect((await prisma.enterpriseInventoryReturnCustody.findFirstOrThrow({where:{organizationId,id:recoverableCustody.id}})).status).toBe("RECOVERED");
+      const move=await prisma.enterpriseStockMovement.findFirstOrThrow({where:{organizationId,id:completion.recoveryMovementId}});
+      expect(move.movementType).toBe("CUSTODY_RECOVERY_IN");expect(move.quantity.equals(2)).toBe(true);expect(move.stockLotId).toBe(batches[0].lot.id);
+      const layer=await prisma.enterpriseInventoryCostLayer.findFirstOrThrow({where:{organizationId,sourceMovementId:move.id}});
+      expect(layer.unitCost.equals("5.5")).toBe(true);expect(layer.totalCost.equals(11)).toBe(true);
+      const valuation=await prisma.enterpriseInventoryAccountingEvent.findFirstOrThrow({where:{organizationId,id:completion.recoveryAccountingEventId}});
+      expect(valuation.status).toBe("POSTED");expect(valuation.totalCost.equals(11)).toBe(true);
+      const journal=await prisma.enterpriseJournalEntry.findFirstOrThrow({where:{organizationId,id:completion.recoveryJournalEntryId},include:{lines:true}});
+      const originalJournal=await prisma.enterpriseJournalEntry.findFirstOrThrow({where:{organizationId,id:completion.originalIssueJournalId},include:{lines:true}});
+      expect(journal.postingEvent).toBe("INVENTORY_CUSTODY_RECOVERY_VALUED");
+      expect(journal.totalDebit.equals(11)).toBe(true);expect(journal.totalCredit.equals(11)).toBe(true);
+      expect(journal.lines.find(row=>row.debit.equals(11)).ledgerAccountId).toBe(originalJournal.lines.find(row=>row.credit.gt(0)).ledgerAccountId);
+      expect(journal.lines.find(row=>row.credit.equals(11)).ledgerAccountId).toBe(originalJournal.lines.find(row=>row.debit.gt(0)).ledgerAccountId);
+      const replay=await recoveryAction(context.owner,"execute-recovery-assessment",executeInput);
+      expect(replay.status,JSON.stringify(replay.body)).toBe(200);expect(replay.body.idempotent).toBe(true);
+      expect((await recoveryAction(context.owner,"withdraw-recovery-assessment",{custodyId:recoverableCustody.id,assessmentId:completion.id,revision:completion.revision,reason:"Cannot withdraw executed recovery",confirmedNotReleased:true})).status).toBe(409);
+      expect(await prisma.enterpriseStockMovement.count({where:{organizationId,sourceEntityType:"EnterpriseInventoryReturnRecoveryAssessment",sourceEntityId:completion.id}})).toBe(1);
+      expect(await prisma.enterpriseJournalEntry.count({where:{organizationId}})).toBe(beforeRecovery.journals+1);
+      expect(await prisma.enterpriseSalesCreditNote.count({where:{organizationId,salesInvoiceId:bi}})).toBe(beforeRecovery.credits);
+      expect(await prisma.enterprisePayment.count({where:{organizationId}})).toBe(beforeRecovery.payments);
+      expect((await batchStock(0)).equals(2)).toBe(true);
+    }
 
     const alerts=await context.owner.request.get(qualityPath+"?search="+encodeURIComponent(batchKey)+"&expiry=RECALLED&page=1&warehouseId="+encodeURIComponent(spareWarehouse.id));
     expect(alerts.status()).toBe(200);
