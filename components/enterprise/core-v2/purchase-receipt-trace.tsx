@@ -1,13 +1,17 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
+import { EnterpriseApproverSelect } from "@/components/enterprise/enterprise-approver-select";
+import { useToastMessage } from "@/components/ui/use-toast-message";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { StatusBadge } from "@/components/workspace/status-badge";
 import { formatEnterpriseDate } from "@/components/enterprise/core-v2/erp-v2-ui";
 import { purchaseFormGuidance, type PurchaseFormGuidanceKey } from "@/lib/enterprise/purchase-form-i18n";
 
+type ReturnRequestSummary = { reference: string; status: string; quantity: string; approvalId: string | null };
 type TraceRow = {
+  supplierReturnRequest?: ReturnRequestSummary | null;
   id: string; receiptReference: string | null; quantity: string; occurredAt: string;
   inventoryItem: { catalogItem: { name: string; code: string; sku: string | null; unitOfMeasure: { symbol: string } | null } };
   warehouse: { name: string; code: string };
@@ -16,7 +20,7 @@ type TraceRow = {
 };
 type TraceResponse = { items: TraceRow[]; canCheckSupplierReturn?: boolean; pagination: { page: number; pageSize: number; total: number; pageCount: number } };
 
-type ReturnPreview = { eligible: true; readOnly: true; quantity: string; remaining: string; unitCost: string; totalCost: string; currencyCode: string; receiptReference: string; invoiceReference: string };
+type ReturnPreview = { eligible: true; readOnly: true; quantity: string; remaining: string; unitCost: string; totalCost: string; currencyCode: string; receiptReference: string; invoiceReference: string; canSubmitRequest?: boolean };
 
 function SupplierReturnCheck({ organizationId, purchaseId, row, locale }: { organizationId: string; purchaseId: string; row: TraceRow; locale: string }) {
   const t = (key: PurchaseFormGuidanceKey) => purchaseFormGuidance(locale, key);
@@ -25,6 +29,10 @@ function SupplierReturnCheck({ organizationId, purchaseId, row, locale }: { orga
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [preview, setPreview] = useState<ReturnPreview | null>(null);
+  const [request, setRequest] = useState<ReturnRequestSummary | null>(row.supplierReturnRequest || null);
+  const [message, setMessage] = useState("");
+  const retryIdentity = useRef<{ fingerprint: string; key: string } | null>(null);
+  useToastMessage(message);
   const valid = /^\d{1,12}(?:\.\d{1,3})?$/.test(quantity.trim()) && Number(quantity) > 0;
   const money = (amount: string, currency: string) => new Intl.NumberFormat(locale, { style: "currency", currency, maximumFractionDigits: 6 }).format(Number(amount));
   async function check() {
@@ -40,6 +48,34 @@ function SupplierReturnCheck({ organizationId, purchaseId, row, locale }: { orga
     } catch { setError(t("returnCheckError")); }
     finally { setBusy(false); }
   }
+  async function submitReturn(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (busy || !preview?.canSubmitRequest || request || !valid) return;
+    const form = new FormData(event.currentTarget);
+    const reason = String(form.get("reason") || "").trim();
+    const approverUserId = String(form.get("approverUserId") || "");
+    if (reason.length < 8 || !approverUserId) { setError(t("returnRequestMissing")); return; }
+    const draft = { movementId: row.id, quantity: quantity.trim(), reason, approverUserId };
+    const fingerprint = JSON.stringify(draft);
+    if (retryIdentity.current?.fingerprint !== fingerprint) retryIdentity.current = { fingerprint, key: "rtv:" + crypto.randomUUID() };
+    setBusy(true); setError(""); setMessage("");
+    try {
+      const response = await fetch(`/api/enterprise/${encodeURIComponent(organizationId)}/purchases/${encodeURIComponent(purchaseId)}?action=submit-supplier-return`, {
+        method: "POST", headers: { "Content-Type": "application/json", "Accept-Language": locale }, body: JSON.stringify({ ...draft, idempotencyKey: retryIdentity.current.key }),
+      });
+      const body = await response.json();
+      if (!response.ok || body.ok !== true || !body.request) { setError(typeof body.message === "string" ? body.message : t("returnRequestFailed")); return; }
+      setRequest({ reference: body.request.reference, status: body.request.status, quantity: body.request.quantity, approvalId: body.approvalId });
+      setPreview(null); setOpen(false); setMessage(t("returnRequestSubmitted"));
+    } catch { setError(t("returnRequestFailed")); }
+    finally { setBusy(false); }
+  }
+  if (request) return <div className="mt-2 grid min-w-0 grid-cols-[minmax(0,1fr)] gap-1 rounded-lg border border-dtsc-border p-2 text-xs">
+    <div className="flex min-w-0 flex-wrap items-center gap-2"><strong className="break-words">{request.reference}</strong><StatusBadge tone={request.status === "APPROVED" ? "info" : "warning"}>{t(request.status === "APPROVED" ? "returnRequestApproved" : "returnRequestPending")}</StatusBadge></div>
+    <p>{t("returnCheckQuantity")} : <strong>{request.quantity} {row.inventoryItem.catalogItem.unitOfMeasure?.symbol || ""}</strong></p>
+    <p className="text-dtsc-muted">{t("returnRequestHelp")}</p>
+    {request.approvalId ? <a className="w-fit break-words text-dtsc-blue underline" href={`/enterprise-modules/VALIDATIONS?approval=${encodeURIComponent(request.approvalId)}`}>{t("returnRequestReview")}</a> : null}
+  </div>;
   if (!open) return <Button type="button" variant="outline" className="mt-2 w-fit max-w-full whitespace-normal" onClick={() => setOpen(true)} aria-expanded={false}>{t("returnCheckTitle")}</Button>;
   return <div className="mt-2 grid min-w-0 gap-2 rounded-lg border border-dtsc-border p-2" data-supplier-return-preflight>
     <div className="flex flex-wrap items-center justify-between gap-2"><strong className="text-sm">{t("returnCheckTitle")}</strong><Button type="button" variant="outline" disabled={busy} onClick={() => { setOpen(false); setPreview(null); setError(""); setQuantity(""); }}>{t("returnCheckClose")}</Button></div>
@@ -57,6 +93,12 @@ function SupplierReturnCheck({ organizationId, purchaseId, row, locale }: { orga
         <p>{t("returnCheckAmount")} : <strong>{money(preview.totalCost, preview.currencyCode)}</strong></p>
         <p className="break-words">{t("returnCheckInvoice")} : {preview.invoiceReference}</p>
         <p className="text-dtsc-muted">{t("returnCheckHelp")}</p>
+        {preview.canSubmitRequest ? <form onSubmit={submitReturn} className="mt-2 grid min-w-0 grid-cols-[minmax(0,1fr)] gap-2 border-t border-dtsc-border pt-2">
+          <strong>{t("returnRequestTitle")}</strong><p className="text-dtsc-muted">{t("returnRequestHelp")}</p>
+          <label className="grid min-w-0 gap-1 font-medium">{t("returnRequestReason")}<textarea name="reason" minLength={8} maxLength={2000} required disabled={busy} className="min-h-20 w-full min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface p-2 text-base text-dtsc-ink md:text-sm" /></label>
+          <EnterpriseApproverSelect organizationId={organizationId} moduleCode="INVENTORY_LOGISTICS" locale={locale} label={t("returnRequestApprover")} disabled={busy} candidatesEndpoint={`/api/enterprise/${encodeURIComponent(organizationId)}/purchases/${encodeURIComponent(purchaseId)}?view=supplier-return-approvers`} />
+          <Button type="submit" disabled={busy} className="max-w-full whitespace-normal">{t("returnRequestSubmit")}</Button>
+        </form> : <p className="text-dtsc-muted">{t("returnRequestNoAccess")}</p>}
       </div> : null}
     </div>
   </div>;
