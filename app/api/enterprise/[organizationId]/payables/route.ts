@@ -90,7 +90,7 @@ export async function GET(req: Request, { params }: Params) {
   });
   return {items,total,openByCurrency,overdueByCurrency};
   },{isolationLevel:Prisma.TransactionIsolationLevel.RepeatableRead});
-  
+
   await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "payables", page, overdue, ageBucket } });
   return NextResponse.json({
     items,
