@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
 import type { PostingDocument } from "@/lib/enterprise/accounting/posting-registry";
 import { verifySupplierReturnCreditTx } from "@/lib/enterprise/accounting/supplier-return-credit-reconciliation";
+import { resolveEnterpriseBusinessDate } from "@/lib/enterprise/business-context";
 
 export async function buildSupplierCreditNotePosting(tx: Prisma.TransactionClient, input: { organizationId: string; sourceEntityType: string; sourceEntityId: string }): Promise<PostingDocument> {
   const credit = await tx.enterpriseSupplierCreditNote.findFirst({ where: { id: input.sourceEntityId, organizationId: input.organizationId, status: { in: ["APPROVED", "POSTED"] } }, include: { supplierInvoice: true } });
@@ -128,11 +129,12 @@ export async function buildInventoryAccountingPosting(tx: Prisma.TransactionClie
       !request.quantity.equals(event.quantity) || !request.quantity.equals(sourceMovement.quantity) || !request.totalCost.equals(event.totalCost) || !request.unitCost.equals(event.unitCost) || request.currencyCode !== event.currencyCode) throw new EnterpriseAccountingError("INVENTORY_ACCOUNTING_EVENT_NOT_POSTABLE",409);
   }
   const receipt = kind === "RECEIPT";
+  const accountingDate = kind === "SUPPLIER_RETURN" ? new Date((await resolveEnterpriseBusinessDate(tx, input.organizationId, event.createdAt)) + "T00:00:00.000Z") : event.createdAt;
   return {
     organizationId: input.organizationId,
     journalType: "INVENTORY",
-    accountingDate: event.createdAt,
-    documentDate: event.createdAt,
+    accountingDate,
+    documentDate: accountingDate,
     reference: event.stockMovementId,
     description: `${kind} valuation ${event.stockMovementId}`,
     sourceModule: "FINANCE_INVENTORY",
