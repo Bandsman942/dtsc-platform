@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
 import { resolveSemanticPostingAccount } from "@/lib/enterprise/accounting/semantic-account-resolver";
+import { formatEnterpriseBusinessDate, getEnterpriseBusinessContext } from "@/lib/enterprise/business-context";
 
 const fail = () => { throw new EnterpriseAccountingError("SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED", 409); };
 
@@ -17,6 +18,17 @@ export async function assertSupplierPaymentCapacityTx(tx: Prisma.TransactionClie
   const reserved = pending.reduce((sum, row) => sum.plus(row.totalCost), new Prisma.Decimal(0));
   const available = Prisma.Decimal.max(0, payable.outstandingAmount.minus(reserved));
   if (amount.gt(available)) throw new EnterpriseAccountingError("SUPPLIER_RETURN_PAYABLE_RESERVED", 409, { reservedAmount: reserved.toFixed(), allocatableAmount: available.toFixed(), currencyCode: payable.currencyCode });
+}
+
+/** Financial document dates are civil dates stored at UTC midnight, while
+ * physical handover is an instant. Never slice the UTC instant as a business day. */
+export async function assertSupplierReturnCreditDateTx(tx: Prisma.TransactionClient, organizationId: string, creditDate: Date, dispatchedAt: Date) {
+  const { timezone } = await getEnterpriseBusinessContext(tx, organizationId);
+  const date = formatEnterpriseBusinessDate(creditDate, "UTC");
+  if (creditDate.getTime() !== new Date(date + "T00:00:00.000Z").getTime() ||
+      date < formatEnterpriseBusinessDate(dispatchedAt, timezone) ||
+      date > formatEnterpriseBusinessDate(new Date(), timezone)) return fail();
+  return date;
 }
 
 type CreditEvidence = {
@@ -37,10 +49,10 @@ export async function verifySupplierReturnCreditTx(tx: Prisma.TransactionClient,
     return null;
   }
   if (dispatched.supplierCreditNoteId !== credit.id || !dispatched.supplierCreditReference || !dispatched.dispatchedAt || !dispatched.dispatchMovementId || !dispatched.dispatchAccountingEventId ||
-      credit.creditDate.toISOString().slice(0,10) < dispatched.dispatchedAt.toISOString().slice(0,10) ||
       !credit.approvedByUserId || credit.createdByUserId === credit.approvedByUserId ||
       credit.currencyCode !== dispatched.currencyCode || !credit.grandTotal.equals(dispatched.totalCost) || !credit.subtotal.equals(dispatched.totalCost) || !credit.taxTotal.isZero() ||
       items.length !== 1) return fail();
+  const creditBusinessDate = await assertSupplierReturnCreditDateTx(tx, organizationId, credit.creditDate, dispatched.dispatchedAt);
   const item = items[0];
   const [original, movement, event, invoiceJournal] = await Promise.all([
     tx.enterpriseSupplierInvoiceItem.findFirst({ where: { organizationId, supplierInvoiceId: credit.supplierInvoiceId, id: dispatched.supplierInvoiceItemId } }),
@@ -59,7 +71,7 @@ export async function verifySupplierReturnCreditTx(tx: Prisma.TransactionClient,
     resolveSemanticPostingAccount(tx,{organizationId,mappingKey:"INVENTORY",accountingDate:credit.creditDate}),
     resolveSemanticPostingAccount(tx,{organizationId,mappingKey:"ACCOUNTS_PAYABLE",accountingDate:credit.creditDate}),
   ]);
-  if (!journal || credit.creditDate.toISOString().slice(0,10) < journal.accountingDate.toISOString().slice(0,10) ||
+  if (!journal || creditBusinessDate < formatEnterpriseBusinessDate(journal.accountingDate, "UTC") ||
       journal.functionalCurrencyCode !== credit.currencyCode || invoiceJournal.functionalCurrencyCode !== credit.currencyCode ||
       journal.lines.length !== 2 || !journal.lines.some(l=>l.ledgerAccountId===clearing.id&&l.debit.equals(credit.grandTotal)&&l.credit.isZero()) ||
       !journal.lines.some(l=>l.ledgerAccountId===stock.id&&l.credit.equals(credit.grandTotal)&&l.debit.isZero()) ||
