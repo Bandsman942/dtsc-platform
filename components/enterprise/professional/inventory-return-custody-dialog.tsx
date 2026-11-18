@@ -11,7 +11,7 @@ import { customerFacingError } from "@/lib/customer-facing-language";
 type CustodyRow={
   id:string;revision:number;quantity:string;status:string;disposition:string;inspectedAt:string;
   inspectionNotes:string|null;disposalReason:string|null;disposalEvidence:string|null;disposedAt:string|null;
-  canRequest:boolean;canConfirm:boolean;canInspectRecovery?:boolean;canAssessRecovery?:boolean;recoveryAssessment?:{reference:string;status:string;proposedRecoveryAmount:string;currencyCode:string;stale:boolean;approvalId:string}|null;
+  canRequest:boolean;canConfirm:boolean;canInspectRecovery?:boolean;canAssessRecovery?:boolean;recoveryAssessment?:{id:string;revision:number;canWithdraw:boolean;reference:string;status:string;proposedRecoveryAmount:string;currencyCode:string;stale:boolean;approvalId:string}|null;
   originalMovement:{warehouse:{name:string;code:string};inventoryItem:{catalogItem:{name:string;code:string}};stockLot:{lotNumber:string;recallReference:string|null}|null};
   returnLine:{request:{id:string;number:string}};
 };
@@ -61,6 +61,20 @@ export function InventoryReturnCustodyDialog({organizationId,locale,warehouses,o
       if(!response.ok||!body?.eligibleForAssessment||body.readOnly!==true||body.physicalReleaseAuthorized!==false||body.accountingRecognitionAuthorized!==false)throw new Error(body?.message||(en?"Assessment not available.":"Diagnostic indisponible."));
       setRecovery({id:row.id,preview:body,loading:false});
     }catch(caught){setRecovery({id:row.id,error:customerFacingError(caught,locale),loading:false});}
+  }
+  async function withdrawAssessment(event:FormEvent<HTMLFormElement>,row:CustodyRow){
+    event.preventDefault();
+    const appraisal=row.recoveryAssessment;
+    if(busy||!appraisal?.canWithdraw)return;
+    const form=new FormData(event.currentTarget),reason=String(form.get("withdrawReason")||"").trim();
+    if(reason.length<8||form.get("confirmNotReleased")!=="on")return;
+    setBusy(true);
+    try{
+      const response=await fetch(endpoint+"?action=withdraw-recovery-assessment",{method:"PATCH",headers:{"Content-Type":"application/json","Accept-Language":locale},body:JSON.stringify({custodyId:row.id,assessmentId:appraisal.id,revision:appraisal.revision,reason,confirmedNotReleased:true})});
+      const body=await response.json().catch(()=>null);
+      if(!response.ok||!body?.ok)throw new Error(body?.message||(en?"Withdrawal refused.":"Retrait refusé."));
+      setRecovery(null);setReload(value=>value+1);notifyToast(en?"Appraisal withdrawn without stock or accounting effects.":"Expertise retirée sans effet physique ni comptable.","success");
+    }catch(caught){notifyToast({title:en?"Appraisal not withdrawn":"Expertise non retirée",description:customerFacingError(caught,locale),tone:"error"});}finally{setBusy(false);}
   }
   async function submitAssessment(event:FormEvent<HTMLFormElement>,row:CustodyRow,preview:RecoveryPreview){
     event.preventDefault();
@@ -113,6 +127,15 @@ export function InventoryReturnCustodyDialog({organizationId,locale,warehouses,o
           <p>{en?"Proposed recovery":"Valeur proposée"} : {row.recoveryAssessment.proposedRecoveryAmount} {row.recoveryAssessment.currencyCode}</p>
           {row.recoveryAssessment.stale?<p role="alert" className="text-amber-700 dark:text-amber-200">{en?"Custody has changed; a new review is required.":"La garde a changé ; une nouvelle revue est nécessaire."}</p>:null}
           <p className="text-dtsc-muted">{en?"No stock release or accounting recognition authorized.":"Aucune remise en stock ni reconnaissance comptable autorisée."}</p>
+          {row.recoveryAssessment.canWithdraw?<details className="rounded-lg border border-dtsc-border p-2">
+            <summary className="cursor-pointer font-medium">{en?"Withdraw approved appraisal":"Retirer l’expertise approuvée"}</summary>
+            <form onSubmit={event=>void withdrawAssessment(event,row)} className="mt-2 grid min-w-0 gap-2">
+              <p className="text-dtsc-muted">{en?"The original decision stays in history. The goods must still be isolated.":"La décision initiale reste dans l’historique. Les marchandises doivent toujours être isolées."}</p>
+              <label className="grid min-w-0 gap-1">{en?"Withdrawal reason":"Motif du retrait"} *<textarea name="withdrawReason" required minLength={8} maxLength={2000} disabled={busy} className="w-full min-w-0 rounded-xl border border-dtsc-border bg-dtsc-page p-2 text-base"/></label>
+              <label className="flex items-start gap-2"><input name="confirmNotReleased" type="checkbox" required disabled={busy}/><span>{en?"I confirm no goods have been released.":"Je confirme qu’aucune marchandise n’a été remise en stock."}</span></label>
+              <Button type="submit" variant="outline" disabled={busy}>{en?"Confirm withdrawal":"Confirmer le retrait"}</Button>
+            </form>
+          </details>:null}
           <a className="break-words text-dtsc-blue underline" href={`/enterprise-modules/VALIDATIONS?approval=${encodeURIComponent(row.recoveryAssessment.approvalId)}`}>{en?"Open independent review":"Ouvrir la validation indépendante"}</a>
         </section>:null}
         {row.canInspectRecovery?<Button variant="outline" size="sm" type="button" disabled={busy||Boolean(recovery?.loading)} onClick={()=>void inspectRecovery(row)}>{en?"Check recovery eligibility":"Vérifier la récupération possible"}</Button>:null}
