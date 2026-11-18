@@ -526,7 +526,7 @@ export async function inspectRetailInvoiceReturnRequest(
       where: { id: requestId, organizationId, checkout: { salesInvoiceId: invoiceId } },
       include: { checkout: { select: { siteId: true, stockPostedAt: true,
         invoice: { select: { status: true } } } },
-        lines: { select: { quantity: true, lotAllocations: true, checkoutLine: { select: { inventoryItemId: true, lotAllocations: true } } } } } },
+        lines: { select: { quantity: true, lotAllocations: true, checkoutLine: { select: { inventoryItemId: true, lotAllocations: true } } } } },
     });
     if (!request) throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_NOT_FOUND", 404);
     const physicallyDeliveredGoods = Boolean(request.checkout.stockPostedAt) &&
