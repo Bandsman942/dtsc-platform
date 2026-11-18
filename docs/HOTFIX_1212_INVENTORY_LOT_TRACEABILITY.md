@@ -187,6 +187,11 @@
 - L'exécution de récupération complète utilise une quantité approuvée, la valeur prudente plafonnée, la libération attestée, un mouvement et une couche de coût unique, et un journal distinct, dans la même transaction. Les migrations de retrait et d'exécution sont additives. Ne pas assimiler le succès d'une requête à la certification du scénario concurrent entier.
 - Aucune validation locale de build/QA revendiquée (absence de checkout), aucun merge, aucun déploiement, aucun OWNER_E2E. Les cas complexes, Design 2.0, tests multisectoriels et revue finale restent bloquants.
 
+## Reprise — concurrence récupération/destruction (19 novembre 2026)
+- 77e7bd8 : Shop 2 behavioral 44421237205 réussi, y compris le rollback période fermée, les deux exécutions concurrentes, la récupération physique de 2 unités à 11 USD (5,5/unité), un seul mouvement et journal équilibré, rejeu et absence de nouveau paiement/avoir. Quality 44421237123/job 135214585224 échoué sur la QA isolée : son ancien mock de conflit utilisait 400 au lieu du vrai 409. Trois autres logs échantillonnés confirment la même assertion.
+- 0419327 : la QA d'expertise charge désormais la classe métier réelle; l'assertion HTTP 409 et les scénarios négatifs sont conservés. 73800c4/3e1115e : le classificateur strict des conflits Prisma est partagé par récupération et destruction, sans élargir permissions ni transitions. 779afc6 : la recette HTTP ajoute une troisième requête concurrente de destruction, qui doit être refusée en 409; toutes les assertions précédentes de stock, coût, journal et rejeu demeurent. Nouvelle CI requise pour ces modifications, aucune migration nouvelle.
+- Le scénario de concurrence de destruction nouvellement ajouté n'est pas encore certifié. Aucune validation locale sans checkout, aucune fusion, aucun déploiement ni OWNER_E2E.
+
 ## Restant (bloquant)
 Certification de la réaffectation historique sur PostgreSQL + navigateur et valeur inchangée; certification achats et valorisation, réservations/livraisons multi-lots; moteur FEFO commun et POS; pertes, rappels et comptabilité; Design 2.0 et tests multisectoriels. Voir issue #1212. Ne pas merger avant clôture de tous les points.
 
