@@ -6,7 +6,7 @@ import { publishEnterpriseEvent } from "@/lib/enterprise/crm-sales/helpers";
 import { lotExpiryDateKey } from "@/lib/enterprise/inventory/lot-allocation";
 import { requireInventoryStockAuthorityTx } from "@/lib/enterprise/inventory/service";
 import { assertCustodyRecoveryReadAccess, inspectCustodyRecoveryTx } from "@/lib/enterprise/inventory/custody-recovery-preflight";
-import { recoveryApprovalCandidates, recoveryAssessmentSchema, submitRecoveryAssessment, requireRecoveryParticipantAccess, RECOVERY_ASSESSMENT_TARGET } from "@/lib/enterprise/inventory/custody-recovery-assessment";
+import { recoveryApprovalCandidates, recoveryAssessmentSchema, submitRecoveryAssessment, requireRecoveryParticipantAccess, RECOVERY_ASSESSMENT_TARGET, recoveryWithdrawalSchema, withdrawRecoveryAssessment, lockRecoveryCustodyTx } from "@/lib/enterprise/inventory/custody-recovery-assessment";
 import { notifyUser } from "@/lib/notifications";
 import { NextResponse } from "next/server";
 import { z } from "zod";
@@ -73,10 +73,10 @@ export async function GET(req: Request, { params }: Params) {
     ]);
     const canInspectRecovery=items.length>0&&await assertCustodyRecoveryReadAccess(organizationId,session.userId).then(()=>true,()=>false);
     const [canAssess,canReview]=canInspectRecovery?await Promise.all([false,true].map(review=>requireRecoveryParticipantAccess(organizationId,session.userId,review).then(()=>true,()=>false))):[false,false];
-    const assessments=items.length&&(canAssess||canReview)?await prisma.enterpriseInventoryReturnRecoveryAssessment.findMany({where:{organizationId,custodyId:{in:items.map(row=>row.id)},status:{in:["PENDING_APPROVAL","APPROVED"]}},select:{id:true,custodyId:true,status:true,reference:true,assessedByUserId:true,proposedRecoveryAmount:true,currencyCode:true,custodyRevision:true}}):[];
+    const assessments=items.length&&(canAssess||canReview)?await prisma.enterpriseInventoryReturnRecoveryAssessment.findMany({where:{organizationId,custodyId:{in:items.map(row=>row.id)},status:{in:["PENDING_APPROVAL","APPROVED"]}},select:{id:true,custodyId:true,status:true,reference:true,assessedByUserId:true,proposedRecoveryAmount:true,currencyCode:true,custodyRevision:true,revision:true}}):[];
     const reviews=assessments.length?await prisma.enterpriseApproval.findMany({where:{organizationId,targetEntityType:RECOVERY_ASSESSMENT_TARGET,targetEntityId:{in:assessments.map(row=>row.id)},archivedAt:null,OR:[...(canAssess?[{requestedByUserId:session.userId}]:[]),...(canReview?[{approverUserId:session.userId}]:[])]},select:{id:true,targetEntityId:true}}):[];
     const active= new Map(assessments.map(row=>[row.custodyId,row]));
-    return NextResponse.json({items:items.map(item=>{ const siteWrite=!scope.isolationEnabled||scope.manageableSiteIds.includes(item.originalMovement.warehouse.siteId);const assessment=active.get(item.id),review=assessment&&reviews.find(row=>row.targetEntityId===assessment.id);return {...item,canAssessRecovery:canAssess&&siteWrite&&access.canWrite&&item.status==="QUARANTINED"&&!assessment&&![item.inspectedByUserId,item.registeredByUserId].includes(session.userId),recoveryAssessment:assessment&&review?{reference:assessment.reference,status:assessment.status,proposedRecoveryAmount:assessment.proposedRecoveryAmount,currencyCode:assessment.currencyCode,stale:assessment.custodyRevision!==item.revision,approvalId:review.id}:null,canInspectRecovery:canInspectRecovery&&siteWrite&&access.canWrite&&item.status==="QUARANTINED",canRequest:siteWrite&&access.canWrite&&item.status==="QUARANTINED",canConfirm:siteWrite&&access.canAdminister&&item.status==="DISPOSAL_PENDING"&&![item.inspectedByUserId,item.registeredByUserId,item.disposalRequestedByUserId].includes(session.userId)};}),pagination:{page,pageSize,total,pageCount:Math.max(1,Math.ceil(total/pageSize))}},{headers:{"Cache-Control":"private, no-store"}});
+    return NextResponse.json({items:items.map(item=>{ const siteWrite=!scope.isolationEnabled||scope.manageableSiteIds.includes(item.originalMovement.warehouse.siteId);const assessment=active.get(item.id),review=assessment&&reviews.find(row=>row.targetEntityId===assessment.id);return {...item,canAssessRecovery:canAssess&&siteWrite&&access.canWrite&&item.status==="QUARANTINED"&&!assessment&&![item.inspectedByUserId,item.registeredByUserId].includes(session.userId),recoveryAssessment:assessment&&review?{id:assessment.id,revision:assessment.revision,canWithdraw:canAssess&&assessment.assessedByUserId===session.userId&&assessment.status==="APPROVED",reference:assessment.reference,status:assessment.status,proposedRecoveryAmount:assessment.proposedRecoveryAmount,currencyCode:assessment.currencyCode,stale:assessment.custodyRevision!==item.revision,approvalId:review.id}:null,canInspectRecovery:canInspectRecovery&&siteWrite&&access.canWrite&&item.status==="QUARANTINED",canRequest:siteWrite&&access.canWrite&&item.status==="QUARANTINED",canConfirm:siteWrite&&access.canAdminister&&item.status==="DISPOSAL_PENDING"&&![item.inspectedByUserId,item.registeredByUserId,item.disposalRequestedByUserId].includes(session.userId)};}),pagination:{page,pageSize,total,pageCount:Math.max(1,Math.ceil(total/pageSize))}},{headers:{"Cache-Control":"private, no-store"}});
   }
   if (url.searchParams.get("view")==="trace") {
     if(!traceId || traceId.length>191) return NextResponse.json({error:"INVENTORY_LOT_INPUT_INVALID"},{status:400});
@@ -174,6 +174,18 @@ export async function PATCH(req: Request, { params }: Params) {
   if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   if (!(await rateLimit(`inventory-lot-write:${organizationId}:${session.userId}`, 60, 60_000)).ok) return NextResponse.json({ error: "RATE_LIMITED" }, { status: 429 });
   const raw=await req.json().catch(()=>null);
+  if(new URL(req.url).searchParams.get("action")==="withdraw-recovery-assessment") {
+    const parsed=recoveryWithdrawalSchema.safeParse(raw);
+    if(!parsed.success)return enterpriseValidationErrorResponse(parsed.error,"INVENTORY_LOT_INPUT_INVALID",req);
+    try{
+      const result=await withdrawRecoveryAssessment(organizationId,session.userId,parsed.data);
+      if(!result.idempotent){
+        await notifyUser({userId:result.approval.approverUserId,organizationId,type:"ENTERPRISE_APPROVAL",title:"Expertise de récupération retirée",body:"L’expert a retiré la proposition approuvée avant toute réintégration.",targetUrl:`/enterprise-modules/VALIDATIONS?approval=${encodeURIComponent(result.approval.id)}`}).catch(()=>null);
+        await writeAuditLog({userId:session.userId,organizationId,action:"INVENTORY_RETURN_RECOVERY_WITHDRAWN",entity:RECOVERY_ASSESSMENT_TARGET,entityId:result.assessment.id,request:req,metadata:{approvalId:result.approval.id,custodyId:result.assessment.custodyId}});
+      }
+      return NextResponse.json({ok:true,idempotent:result.idempotent,assessment:{id:result.assessment.id,status:result.assessment.status,revision:result.assessment.revision}},{headers:{"Cache-Control":"private, no-store"}});
+    }catch(error){return enterpriseDomainErrorResponse(error,"INVENTORY_RETURN_CUSTODY_FAILED",req);}
+  }
   if(new URL(req.url).searchParams.get("action")==="submit-recovery-assessment") {
     const parsed=recoveryAssessmentSchema.safeParse(raw);
     if(!parsed.success)return enterpriseValidationErrorResponse(parsed.error,"INVENTORY_LOT_INPUT_INVALID",req);
@@ -192,6 +204,7 @@ export async function PATCH(req: Request, { params }: Params) {
     const input=parsed.data;
     try {
       const result=await prisma.$transaction(async tx=>{
+        await lockRecoveryCustodyTx(tx,organizationId,input.custodyId);
         const item=await tx.enterpriseInventoryReturnCustody.findFirst({where:{organizationId,id:input.custodyId,returnLine:{request:{status:"COMPLETED"}}},include:{originalMovement:{select:{warehouseId:true}}}});
         if(!item)throw new EnterpriseDomainError("INVENTORY_RETURN_CUSTODY_NOT_FOUND",404);
         await requireInventoryStockAuthorityTx(tx,organizationId,session.userId,item.originalMovement.warehouseId);
@@ -199,6 +212,7 @@ export async function PATCH(req: Request, { params }: Params) {
         const confirm=input.action==="CONFIRM_DISPOSAL";
         if(confirm&&(!access.canAdminister||[item.inspectedByUserId,item.registeredByUserId,item.disposalRequestedByUserId].includes(session.userId)))throw new EnterpriseDomainError("INVENTORY_RETURN_CUSTODY_APPROVER_REQUIRED",403);
         if(item.status!==(confirm?"DISPOSAL_PENDING":"QUARANTINED"))throw new EnterpriseDomainConflictError("INVENTORY_RETURN_CUSTODY_STATUS_INVALID");
+        if(await tx.enterpriseInventoryReturnRecoveryAssessment.count({where:{organizationId,custodyId:item.id,status:{in:["PENDING_APPROVAL","APPROVED"]}}}))throw new EnterpriseDomainConflictError("INVENTORY_RETURN_RECOVERY_ACTIVE");
         const status=confirm?"DISPOSED":"DISPOSAL_PENDING";
         const now=new Date();
         const changed=await tx.enterpriseInventoryReturnCustody.updateMany({where:{organizationId,id:item.id,status:item.status,revision:input.revision},data:{status,revision:{increment:1},...(confirm?{disposedByUserId:session.userId,disposedAt:now,disposalEvidence:input.reason}:{disposalRequestedByUserId:session.userId,disposalRequestedAt:now,disposalReason:input.reason})}});
