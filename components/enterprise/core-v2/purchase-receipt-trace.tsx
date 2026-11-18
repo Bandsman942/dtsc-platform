@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { EnterpriseApproverSelect } from "@/components/enterprise/enterprise-approver-select";
 import { useToastMessage } from "@/components/ui/use-toast-message";
 import { Button } from "@/components/ui/button";
@@ -104,7 +104,7 @@ function SupplierReturnCheck({ organizationId, purchaseId, row, locale }: { orga
   </div>;
 }
 
-export function PurchaseReceiptTrace({ organizationId, purchaseId, locale }: { organizationId: string; purchaseId: string; locale: string }) {
+export function PurchaseReceiptTrace({ organizationId, purchaseId, locale, focusMovementId }: { organizationId: string; purchaseId: string; locale: string; focusMovementId?: string | null }) {
   const t = (key: PurchaseFormGuidanceKey) => purchaseFormGuidance(locale, key);
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -113,6 +113,19 @@ export function PurchaseReceiptTrace({ organizationId, purchaseId, locale }: { o
   const [appliedSearch, setAppliedSearch] = useState("");
   const [result, setResult] = useState<TraceResponse | null>(null);
   const date = (value: string | null) => value ? new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeZone: "UTC" }).format(new Date(value)) : "—";
+
+  useEffect(() => {
+    if (!focusMovementId) return;
+    let active = true;
+    setOpen(true); setBusy(true); setFailed(false); setResult(null); setSearch(""); setAppliedSearch("");
+    const params = new URLSearchParams({ view: "receipt-lots", page: "1", pageSize: "20", movementId: focusMovementId });
+    void fetch(`/api/enterprise/${encodeURIComponent(organizationId)}/purchases/${encodeURIComponent(purchaseId)}?${params}`, { cache: "no-store" })
+      .then(async (response) => { if (!response.ok) throw new Error("RECEIPT_TRACE_UNAVAILABLE"); return await response.json() as TraceResponse; })
+      .then((body) => { if (active) setResult(body); })
+      .catch(() => { if (active) setFailed(true); })
+      .finally(() => { if (active) setBusy(false); });
+    return () => { active = false; };
+  }, [organizationId, purchaseId, focusMovementId]);
 
   async function load(page: number, query: string) {
     if (busy) return;
