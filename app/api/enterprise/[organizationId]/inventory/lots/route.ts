@@ -7,7 +7,7 @@ import { publishEnterpriseEvent } from "@/lib/enterprise/crm-sales/helpers";
 import { lotExpiryDateKey } from "@/lib/enterprise/inventory/lot-allocation";
 import { requireInventoryStockAuthorityTx } from "@/lib/enterprise/inventory/service";
 import { assertCustodyRecoveryReadAccess, inspectCustodyRecoveryTx } from "@/lib/enterprise/inventory/custody-recovery-preflight";
-import { recoveryApprovalCandidates, recoveryAssessmentSchema, submitRecoveryAssessment, requireRecoveryParticipantAccess, RECOVERY_ASSESSMENT_TARGET, recoveryWithdrawalSchema, withdrawRecoveryAssessment, lockRecoveryCustodyTx, recoveryExecutionSchema, executeRecoveryAssessment } from "@/lib/enterprise/inventory/custody-recovery-assessment";
+import { recoveryApprovalCandidates, recoveryAssessmentSchema, submitRecoveryAssessment, requireRecoveryParticipantAccess, RECOVERY_ASSESSMENT_TARGET, recoveryWithdrawalSchema, withdrawRecoveryAssessment, lockRecoveryCustodyTx, recoveryExecutionSchema, executeRecoveryAssessment, isCustodyTransactionConflict } from "@/lib/enterprise/inventory/custody-recovery-assessment";
 import { notifyUser } from "@/lib/notifications";
 import { NextResponse } from "next/server";
 import { z } from "zod";
@@ -233,7 +233,7 @@ export async function PATCH(req: Request, { params }: Params) {
       await writeAuditLog({userId:session.userId,organizationId,action:input.action==="CONFIRM_DISPOSAL"?"ENTERPRISE_RETURN_CUSTODY_DISPOSED":"ENTERPRISE_RETURN_CUSTODY_DISPOSAL_REQUESTED",entity:"EnterpriseInventoryReturnCustody",entityId:input.custodyId,request:req,metadata:{...result,reason:input.reason}});
       return NextResponse.json({ok:true,...result});
     } catch(error) {
-      if(error instanceof Prisma.PrismaClientKnownRequestError && error.code==="P2034")return enterpriseDomainErrorResponse(new EnterpriseDomainConflictError("INVENTORY_LOT_CONFLICT"),"INVENTORY_RETURN_CUSTODY_FAILED",req);
+      if(isCustodyTransactionConflict(error))return enterpriseDomainErrorResponse(new EnterpriseDomainConflictError("INVENTORY_LOT_CONFLICT"),"INVENTORY_RETURN_CUSTODY_FAILED",req);
       return enterpriseDomainErrorResponse(error,"INVENTORY_RETURN_CUSTODY_FAILED",req);
     }
   }
