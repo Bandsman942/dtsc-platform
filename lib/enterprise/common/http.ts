@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { EnterpriseDomainError } from "@/lib/enterprise/common/errors";
 
 const BUSINESS_ERROR_MESSAGES: Record<string, { fr: string; en: string }> = {
+  STOCK_LOT_EXPIRED: { fr: "Ce lot suivi est périmé. Il ne peut pas être vendu, réintégré en stock vendable ou consommé en production.", en: "This expiry-tracked batch has expired and cannot be sold, restocked for sale or consumed in production." },
   INVENTORY_RESERVATION_FULFILLMENT_EXCEEDED: { fr: "Les quantités réservées ne suffisent pas pour cette livraison. Réservez les lots nécessaires dans le dépôt sélectionné.", en: "Reserved quantities are insufficient for delivery. Reserve the required batches in the selected warehouse." },
   INVENTORY_RESERVATION_TRACKED_ITEM_REQUIRED: { fr: "Choisissez un article actif suivi par lots ou par péremption.", en: "Select an active batch- or expiry-tracked item." },
   INVENTORY_RESERVATION_RETAIL_MANAGED: { fr: "Cette commande est pilotée par RETAIL. Utilisez ses opérations pour modifier les réservations.", en: "This order is managed by RETAIL. Use its workflow to change reservations." },

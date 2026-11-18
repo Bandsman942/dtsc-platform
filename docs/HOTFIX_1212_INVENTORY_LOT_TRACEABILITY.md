@@ -45,6 +45,9 @@
 - Correction fixture E2E : le parent fournit organizationId à la relation composite lors de la création imbriquée. Les 16 workflows réussis du SHA d4bb49c n’incluent pas la recette globale qui a échoué sur ce champ.
 - La liquidation de facture respecte les lots déjà promis, sans imposer une nouvelle allocation FEFO après une réception ultérieure; les contrôles de sécurité et disponibilité demeurent actifs.
 
+- Contrôle de sécurité commun : un article géré avec date de péremption ne peut pas être vendu, réintégré en stock vendable ou consommé en production après sa date limite. Le choix manuel du lot ne contourne pas ce contrôle. La politique Retail historique ALLOW reste applicable aux articles sans suivi obligatoire de péremption.
+- QA préflight étendue : retour volontaire du deuxième lot après crédit avant livraison, contrôle du solde après retour précédent, refus lot étranger, rejet de la réintégration d’un lot indisponible, traçabilité des dispositions non revendables. Aucun test supprimé.
+
 ## Restant (bloquant)
 Certification de la réaffectation historique sur PostgreSQL + navigateur et valeur inchangée; certification achats et valorisation, réservations/livraisons multi-lots; moteur FEFO commun et POS; pertes, rappels et comptabilité; Design 2.0 et tests multisectoriels. Voir issue #1212. Ne pas merger avant clôture de tous les points.
 

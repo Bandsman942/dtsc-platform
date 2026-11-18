@@ -56,6 +56,8 @@ const tx = {
     assert.equal(where.organizationId, "tenant");
     return where.id.in.includes("account-A") ? [{ id: "account-A", siteId: state.accountSiteId || "site-A", currencyCode: "CDF" }] : [];
   } },
+  organization: { findUniqueOrThrow: async ({where}) => { assert.equal(where.id,"tenant"); return { timezone: "Africa/Kinshasa" }; } },
+  enterpriseStockLot: { findMany: async ({where}) => { assert.equal(where.organizationId,"tenant"); assert.equal(where.warehouseId,"warehouse-A"); return state.unsafe ? [] : where.id.in.map(id => ({id,expiryDate:new Date("2099-01-01T00:00:00Z")})); } },
   enterpriseStockMovement: { findMany: async ({ where }) => {
     assert.equal(where.organizationId, "tenant");
     assert.equal(where.sourceEntityType, "EnterpriseSalesInvoice");
@@ -209,6 +211,33 @@ await assert.rejects(preview(), { code: "RETAIL_INVOICE_RETURN_SETTLEMENT_LINE_I
 state.request.checkout.lines[0].inventoryItemId = "item-A";
 state.request.lines[0].quantity = D(0);
 await assert.rejects(preview(), { code: "RETAIL_INVOICE_RETURN_SETTLEMENT_LINE_INVALID" });
+
+// Multi-batch physical return: select the actual LATE lot, never guess FIFO
+// across batches. Earlier undelivered credit released the tail of the pick.
+state.request.lines[0].quantity = D(1);
+state.request.checkout.lines[0].stockLotId = null;
+state.request.checkout.lines[0].lotAllocations = [{stockLotId:"lot-A",quantity:"1"},{stockLotId:"lot-B",quantity:"2"}];
+state.request.lines[0].lotAllocations = [{stockLotId:"lot-B",quantity:"1"}];
+state.movements = [{...state.movements[0],stockLotId:"lot-A",quantity:D(1)}, {...state.movements[0],id:"movement-B",stockLotId:"lot-B",quantity:D(1)}];
+state.completed = [{checkoutLineId:"checkoutline-A",quantity:D(1),refundAmount:D("33.33"),refundNetAmount:D(30),refundTaxAmount:D("3.33"),stockDisposition:"UNDELIVERED_CREDIT"}];
+const batchReturn = await preview();
+assert.equal(batchReturn.stockSourcePlan.length,1);
+assert.equal(batchReturn.stockSourcePlan[0].originalMovementId,"movement-B");
+assert.equal(batchReturn.stockSourcePlan[0].stockLotId,"lot-B");
+state.unsafe = true;
+await assert.rejects(preview(),{code:"RETAIL_INVOICE_RETURN_BATCH_UNSAFE"});
+state.request.lines[0].stockDisposition = "QUARANTINE";
+assert.equal((await preview()).stockSourcePlan[0].stockDisposition,"QUARANTINE");
+state.unsafe = false;
+state.request.lines[0].stockDisposition = "RESTOCK";
+state.request.lines[0].lotAllocations = [{stockLotId:"foreign",quantity:"1"}];
+await assert.rejects(preview(),{code:"RETAIL_INVOICE_RETURN_BATCH_QUANTITY_EXCEEDED"});
+state.request.lines[0].lotAllocations = [{stockLotId:"lot-B",quantity:"1"}];
+state.completed.push({checkoutLineId:"checkoutline-A",quantity:D(1),refundAmount:D("33.33"),refundNetAmount:D(30),refundTaxAmount:D("3.33"),stockDisposition:"DISPOSE",lotAllocations:[{stockLotId:"lot-B",quantity:"1"}]});
+state.request.lines[0].refundAmount = D("33.34");
+state.request.lines[0].refundTaxAmount = D("3.34");
+state.request.refundAmount = D("33.34");
+await assert.rejects(preview(),{code:"RETAIL_INVOICE_RETURN_BATCH_QUANTITY_EXCEEDED"});
 
 assert.doesNotMatch(source, /tx\.[a-zA-Z]+\.(?:create|update|delete|upsert|createMany|updateMany)\(/,
   "Preflight must remain read-only: it is NOT an accounting, payment or stock settlement");

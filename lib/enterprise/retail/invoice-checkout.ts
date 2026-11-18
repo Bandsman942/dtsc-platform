@@ -153,6 +153,7 @@ export async function prepareRetailInvoice(organizationId: string, actorUserId: 
             .minus(retailHolds.filter((hold) => hold.inventoryItemId === inventory.id && (hold.stockLotId === (line.stockLotId || null) || (Boolean(line.stockLotId) && !hold.stockLotId))).reduce((sum, hold) => sum.plus(hold.quantity), new Prisma.Decimal(0)));
           if (available.lessThan(line.quantity)) throw new EnterpriseRetailError("NEGATIVE_STOCK_FORBIDDEN", 409);
           if (inventory.expiryTracking && !rows.some((row) => row.stockLot?.expiryDate)) throw new EnterpriseRetailError("RETAIL_STOCK_LOT_INVALID", 409);
+          if (inventory.expiryTracking && rows.some(row => row.stockLot?.expiryDate && lotIsExpired(row.stockLot.expiryDate, businessDateKey(new Date(), organization.timezone || "UTC")))) throw new EnterpriseRetailError("RETAIL_STOCK_LOT_EXPIRED", 409);
         }
       }
       return { ...line, lotAllocations, inventoryItemId: inventory?.id || null, itemName: item.name, decision };

@@ -16,7 +16,7 @@ import type {
   stockTransferDecisionSchema,
 } from "@/lib/enterprise/inventory/schemas";
 import { prisma } from "@/lib/prisma";
-import { reservationExactBalanceRemaining, reservationLegacyRemaining, reservationLotRemaining } from "@/lib/enterprise/inventory/lot-allocation";
+import { lotExpiryDateKey, reservationExactBalanceRemaining, reservationLegacyRemaining, reservationLotRemaining } from "@/lib/enterprise/inventory/lot-allocation";
 
 type StockMovementInput = z.infer<typeof stockMovementCreateSchema>;
 type StockTransferCreateInput = z.infer<typeof stockTransferCreateSchema>;
@@ -93,7 +93,7 @@ async function assertInventoryCoordinates(tx: Prisma.TransactionClient, organiza
   if (inventoryItem.lotTracking && !stockLot) throw new EnterpriseDomainError("STOCK_LOT_REQUIRED_FOR_TRACKED_ITEM", 409);
   if (inventoryItem.expiryTracking && !stockLot?.expiryDate) throw new EnterpriseDomainError("STOCK_EXPIRY_DATE_REQUIRED", 409);
   if (stockLot?.storageLocationId && input.storageLocationId && stockLot.storageLocationId !== input.storageLocationId) throw new EnterpriseDomainError("STOCK_LOT_LOCATION_MISMATCH", 409);
-  return inventoryItem;
+  return { inventoryItem, stockLot };
 }
 
 export async function applyStockMovementTx(
@@ -105,7 +105,13 @@ export async function applyStockMovementTx(
 ) {
   const existing = await tx.enterpriseStockMovement.findFirst({ where: { organizationId, idempotencyKey: input.idempotencyKey } });
   if (existing) return { movement: existing, idempotent: true };
-  const inventoryItem = await assertInventoryCoordinates(tx, organizationId, input);
+  const { inventoryItem, stockLot } = await assertInventoryCoordinates(tx, organizationId, input);
+  if (inventoryItem.expiryTracking && stockLot?.expiryDate && ["SALE_FULFILLMENT", "RETURN_IN", "PRODUCTION_CONSUMPTION"].includes(input.movementType)) {
+    const organization = await tx.organization.findUniqueOrThrow({ where: { id: organizationId }, select: { timezone: true } });
+    const components = new Intl.DateTimeFormat("en-CA", { timeZone: organization.timezone || "UTC", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date());
+    const today = ["year", "month", "day"].map(type => components.find(part => part.type === type)?.value).join("-");
+    if (lotExpiryDateKey(stockLot.expiryDate) < today) throw new EnterpriseDomainError("STOCK_LOT_EXPIRED", 409);
+  }
   const balance = await tx.enterpriseInventoryBalance.findFirst({ where: { organizationId, inventoryItemId: input.inventoryItemId, warehouseId: input.warehouseId, storageLocationId: input.storageLocationId || null, stockLotId: input.stockLotId || null } });
   const currentQuantity = Number(balance?.quantityOnHand || 0);
   const delta = input.direction === "IN" ? input.quantity : -input.quantity;
