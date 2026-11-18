@@ -40,6 +40,10 @@ model EnterpriseStockLot {
   warehouseId       String
   storageLocationId String?
   status            String                       @default("AVAILABLE")
+  qualityReason     String?
+  qualityChangedByUserId String?
+  qualityChangedAt  DateTime?
+  recallReference   String?
   notes             String?
   createdByUserId   String
   revision          Int                          @default(1)
@@ -58,6 +62,7 @@ model EnterpriseStockLot {
   @@index([organizationId, warehouseId, status])
   @@index([organizationId, storageLocationId, status])
   @@index([organizationId, expiryDate, status])
+  @@index([organizationId, inventoryItemId, lotNumber, recallReference], map: "stock_lot_recall_lookup_idx")
   @@index([organizationId, supplierId])
   @@index([archivedAt])
 }

@@ -4,6 +4,13 @@ import { NextResponse } from "next/server";
 import { EnterpriseDomainError } from "@/lib/enterprise/common/errors";
 
 const BUSINESS_ERROR_MESSAGES: Record<string, { fr: string; en: string }> = {
+  INVENTORY_LOT_RECALLED:{fr:"Ce lot est rappelé. Sa remise en circulation ou sa recréation est interdite.",en:"This batch is recalled. It cannot be released or recreated."},
+  INVENTORY_LOT_RECALL_FORBIDDEN:{fr:"Le rappel multisite exige le droit d’administration globale du stock.",en:"A multi-site recall requires company-wide stock administration."},
+  INVENTORY_LOT_QUALITY_REASON_REQUIRED:{fr:"Renseignez le constat qualité ou le motif du changement de statut.",en:"Provide the quality findings or reason for the status change."},
+  INVENTORY_LOT_RELEASE_FORBIDDEN:{fr:"La levée de quarantaine exige un autre administrateur du stock et des dates inchangées.",en:"Release requires another inventory administrator and unchanged dates."},
+  INVENTORY_LOT_RELEASE_LOSS_PENDING:{fr:"Une demande de perte est en cours pour ce lot. Traitez-la avant toute remise en vente.",en:"A loss request is pending for this batch. Resolve it before release."},
+  INVENTORY_LOT_DATES_LOCKED:{fr:"Les dates d’un lot déjà mouvementé sont verrouillées. Une correction documentée est nécessaire.",en:"Dates on a batch with movement history are locked. A documented correction is required."},
+  INVENTORY_LOT_CONFLICT:{fr:"Le lot a changé ou une opération concurrente a été détectée. Actualisez avant de réessayer.",en:"The batch has changed or a concurrent operation occurred. Refresh and retry."},
   STOCK_LOSS_BATCH_REQUIRED: {fr:"Sélectionnez un article suivi et un lot identifié.",en:"Select a tracked item and identified batch."},
   STOCK_LOSS_NOT_EXPIRED: {fr:"Ce lot n’est pas encore périmé. Vérifiez le motif de perte.",en:"This batch has not expired. Check the loss reason."},
   STOCK_LOSS_ISOLATE_FIRST: {fr:"Bloquez ou mettez le lot en quarantaine avant de soumettre sa destruction.",en:"Block or quarantine the batch before submitting disposal."},
