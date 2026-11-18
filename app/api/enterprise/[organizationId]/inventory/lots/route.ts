@@ -37,6 +37,10 @@ export async function GET(req: Request, { params }: Params) {
   const search = (url.searchParams.get("search") || "").trim().slice(0, 120);
   const warehouseId = url.searchParams.get("warehouseId") || "";
   const scoped = scope.isolationEnabled ? { warehouse: { siteId: { in: scope.siteIds } } } : {};
+  // StockLot stores warehouseId, not a Prisma warehouse relation. Resolve
+  // the authorized IDs first and intersect the explicit warehouse filter.
+  const allowedWarehouseIds=scope.isolationEnabled?(await prisma.enterpriseWarehouse.findMany({where:{organizationId,siteId:{in:scope.siteIds}},select:{id:true}})).map(row=>row.id):null;
+  const lotScope:Prisma.EnterpriseStockLotWhereInput=allowedWarehouseIds!==null?{warehouseId:{in:allowedWarehouseIds}}:{};
   const traceId=url.searchParams.get("lotId");
   if(url.searchParams.get("view")==="custody") {
     const status=url.searchParams.get("status");
@@ -50,7 +54,7 @@ export async function GET(req: Request, { params }: Params) {
   }
   if (url.searchParams.get("view")==="trace") {
     if(!traceId || traceId.length>191) return NextResponse.json({error:"INVENTORY_LOT_INPUT_INVALID"},{status:400});
-    const lot=await prisma.enterpriseStockLot.findFirst({where:{organizationId,id:traceId,...scoped},select:{id:true,inventoryItemId:true,lotNumber:true,recallReference:true,qualityReason:true,qualityChangedAt:true}});
+    const lot=await prisma.enterpriseStockLot.findFirst({where:{organizationId,id:traceId,...lotScope},select:{id:true,inventoryItemId:true,lotNumber:true,recallReference:true,qualityReason:true,qualityChangedAt:true}});
     if(!lot) return NextResponse.json({error:"INVENTORY_LOT_NOT_FOUND"},{status:404});
     const movementWhere:Prisma.EnterpriseStockMovementWhereInput={organizationId,...scoped,stockLot:{organizationId,inventoryItemId:lot.inventoryItemId,lotNumber:lot.lotNumber}};
     const [items,total]=await Promise.all([prisma.enterpriseStockMovement.findMany({where:movementWhere,orderBy:[{occurredAt:"desc"},{id:"desc"}],skip:(page-1)*pageSize,take:pageSize,select:{id:true,movementType:true,direction:true,quantity:true,occurredAt:true,sourceEntityType:true,sourceEntityId:true,sourceLineId:true,warehouse:{select:{name:true,code:true}},stockLot:{select:{lotNumber:true,status:true,recallReference:true}}}}),prisma.enterpriseStockMovement.count({where:movementWhere})]);
@@ -64,7 +68,7 @@ export async function GET(req: Request, { params }: Params) {
   const todayDate=new Date(today+"T00:00:00.000Z");
   const horizon=new Date(todayDate.getTime()+30*86400000);
   const baseWhere:Prisma.EnterpriseStockLotWhereInput={
-    organizationId,archivedAt:null,...scoped,...(warehouseId?{warehouseId}:{}),
+    organizationId,archivedAt:null,AND:[lotScope,...(warehouseId?[{warehouseId}]:[])],
     ...(search?{OR:[{lotNumber:{contains:search,mode:"insensitive"}},{inventoryItem:{catalogItem:{OR:[{name:{contains:search,mode:"insensitive"}},{code:{contains:search,mode:"insensitive"}},{sku:{contains:search,mode:"insensitive"}}]}}}]}:{}),
   };
   // Counts refer to batch records with positive physical stock, not

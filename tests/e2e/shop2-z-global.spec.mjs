@@ -478,6 +478,13 @@ test.describe.serial("Shop 2.0 Iteration 4 global behavioral acceptance", () => 
     const before = await available();
     expect(before.response.status(), JSON.stringify(before.body)).toBe(200);
     expect(before.body.totalAvailable).toBe("100");
+    const stockList = () => apiGet(page, `/api/enterprise/${organizationId}/inventory?search=${encodeURIComponent(key)}&warehouseId=${fixture.warehouseId}`);
+    const initialStock = await stockList();
+    expect(initialStock.response.status(),JSON.stringify(initialStock.body)).toBe(200);
+    expect(initialStock.body.items).toHaveLength(1);
+    expect(initialStock.body.items[0].quantityOnHand).toBe(300);
+    expect(initialStock.body.items[0].quantityAvailable).toBe(100);
+    expect(initialStock.body.items[0].quantityReserved).toBe(0);
     const request = { action: "RESERVE", salesOrderItemId: order.items[0].id, warehouseId: fixture.warehouseId, quantity: 50, idempotencyKey: key + "-reserve" };
     const reserved = await apiPost(page, endpoint, request);
     expect(reserved.response.status(), JSON.stringify(reserved.body)).toBe(201);
@@ -492,6 +499,10 @@ test.describe.serial("Shop 2.0 Iteration 4 global behavioral acceptance", () => 
     const denied = await apiPost(page, `/api/enterprise/${organizationId}/sales-orders/${second.id}/fulfill`, { ...request, salesOrderItemId: second.items[0].id, quantity: 60, idempotencyKey: key + "-overbook" });
     expect(denied.response.status(), JSON.stringify(denied.body)).toBe(409);
     expect((await available()).body.totalAvailable).toBe("50");
+    const promisedStock=await stockList();
+    expect(promisedStock.response.status(),JSON.stringify(promisedStock.body)).toBe(200);
+    expect(promisedStock.body.items[0].quantityAvailable).toBe(50);
+    expect(promisedStock.body.items[0].orderReservedQuantity).toBe(50);
     expect(asNumber((await prisma.enterpriseInventoryBalance.findUniqueOrThrow({ where: { id: lots.EARLY.balance.id } })).quantityOnHand)).toBe(30);
     const firstDeliveryInput = { fulfillmentType: "PRODUCT_DELIVERY", warehouseId: fixture.warehouseId, acceptedByCustomer: true, idempotencyKey: key + "-delivery1", revision: order.revision, items: [{ salesOrderItemId: order.items[0].id, quantityFulfilled: 40 }] };
     const firstDelivery = await apiPost(page, endpoint, firstDeliveryInput);
@@ -537,6 +548,20 @@ test.describe.serial("Shop 2.0 Iteration 4 global behavioral acceptance", () => 
     const released = await apiPost(page, secondEndpoint, { action: "RELEASE", reservationId: newReservation.body.reservation.id, reason: "E2E release remaining order promise" });
     expect(released.response.status(), JSON.stringify(released.body)).toBe(200);
     expect((await available()).body.totalAvailable).toBe("50");
+    const finalStock=await stockList();
+    expect(finalStock.response.status(),JSON.stringify(finalStock.body)).toBe(200);
+    expect(finalStock.body.items[0].quantityAvailable).toBe(50);
+    expect(finalStock.body.items[0].quantityOnHand).toBe(250);
+    await prisma.enterpriseInventoryItem.update({where:{id:inventory.id},data:{minimumQuantity:250}});
+    const low=await apiGet(page,`/api/enterprise/${organizationId}/inventory?search=${encodeURIComponent(key)}&warehouseId=${fixture.warehouseId}&lowStock=true&pageSize=5`);
+    expect(low.response.status(),JSON.stringify(low.body)).toBe(200);
+    expect(low.body.pagination.total).toBe(1);
+    expect(low.body.metrics.lowStockCount).toBe(1);
+    expect(low.body.items[0].isLowStock).toBe(true);
+    const beyond=await apiGet(page,`/api/enterprise/${organizationId}/inventory?search=${encodeURIComponent(key)}&warehouseId=${fixture.warehouseId}&lowStock=true&pageSize=5&page=2`);
+    expect(beyond.response.status(),JSON.stringify(beyond.body)).toBe(200);
+    expect(beyond.body.items).toHaveLength(0);
+    expect(beyond.body.pagination.total).toBe(1);
   });
 
 });

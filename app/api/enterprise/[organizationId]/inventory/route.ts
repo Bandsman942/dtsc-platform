@@ -98,8 +98,9 @@ export async function GET(req: Request, { params }: Params) {
   // One bounded read per promise source for the page; use the same FEFO
   // planner as reservation creation and retail availability, not onHand alone.
   const itemIds=items.map(item=>item.id);
+  const pageWarehouseIds=[...new Set(items.flatMap(item=>item.balances.map(row=>row.warehouseId)))];
   const [reservations,holds]=await Promise.all([
-    prisma.enterpriseInventoryReservation.findMany({where:{organizationId,inventoryItemId:{in:itemIds},status:"ACTIVE",OR:[{expiresAt:null},{expiresAt:{gt:new Date()}}],...(warehouseId?{warehouseId}:{}),...(scope.isolationEnabled?{warehouse:{siteId:{in:scope.siteIds}}}:{})},select:{inventoryItemId:true,warehouseId:true,quantity:true,fulfilledQuantity:true,lotAllocations:true,storageLocationId:true}}),
+    prisma.enterpriseInventoryReservation.findMany({where:{organizationId,inventoryItemId:{in:itemIds},status:"ACTIVE",OR:[{expiresAt:null},{expiresAt:{gt:new Date()}}],warehouseId:{in:pageWarehouseIds}},select:{inventoryItemId:true,warehouseId:true,quantity:true,fulfilledQuantity:true,lotAllocations:true,storageLocationId:true}}),
     readActiveRetailInvoiceStockHoldsTx(prisma,{organizationId,inventoryItemIds:itemIds,...(warehouseId?{warehouseId}:{})}),
   ]);
   const zero=()=>new Prisma.Decimal(0);
