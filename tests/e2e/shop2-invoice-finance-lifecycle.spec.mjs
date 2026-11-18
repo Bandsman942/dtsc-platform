@@ -958,6 +958,23 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
     const changePolicy=async ()=>{const response=await context.owner.request.put(policyPath,{data:{inventoryItemId:historicalInventory.id,revision:historicalInventory.revision,minimumQuantity:10,reorderQuantity:25,lotTracking:true,expiryTracking:true},headers:{origin:baseUrl,referer:baseUrl+"/enterprise-modules/INVENTORY_LOGISTICS"}});return {status:response.status(),body:await response.json().catch(()=>null)};};
     const premature=await changePolicy();expect(premature.status,JSON.stringify(premature.body)).toBe(409);
     const allocationPayload={sourceBalanceId:historicalBalance.id,sourceBalanceRevision:historicalBalance.revision,itemRevision:historicalInventory.revision,approverUserId:fixture.settler.id,reason:"Physical historical reconciliation by identified lots",idempotencyKey:historyKey+"-allocation",allocations:[{lotNumber:"HIST-A",productionDate:null,expiryDate:batches[0].lot.expiryDate.toISOString().slice(0,10),quantity:"30"},{lotNumber:"HIST-B",productionDate:null,expiryDate:batches[1].lot.expiryDate.toISOString().slice(0,10),quantity:"70"}]};
+    // The common approval workspace is a real prerequisite, not an implicit
+    // privilege of a stock approver. Verify fail-closed before enabling it.
+    await prisma.enterpriseModule.upsert({
+      where: { organizationId_moduleCode: { organizationId, moduleCode: "VALIDATIONS" } },
+      update: { isEnabled: false, requiresPlanLevel: "BUSINESS" },
+      create: { organizationId, moduleCode: "VALIDATIONS", labelFr: "Validations", labelEn: "Approvals",
+        moduleCategory: "OPERATIONS", isEnabled: false, isCore: false, requiresPlanLevel: "BUSINESS", sortOrder: 30 },
+    });
+    const unavailableApproval = await post(context.owner, policyPath, allocationPayload);
+    expect(unavailableApproval.status, JSON.stringify(unavailableApproval.body)).toBe(403);
+    expect(unavailableApproval.body.error).toBe("STOCK_RECLASS_VALIDATIONS_REQUIRED");
+    expect(await prisma.enterpriseStockLotReclassification.count({ where: { organizationId, sourceBalanceId: historicalBalance.id } })).toBe(0);
+    expect((await prisma.enterpriseInventoryBalance.findUniqueOrThrow({ where: { id: historicalBalance.id } })).quantityOnHand.equals(100)).toBe(true);
+    await prisma.enterpriseModule.update({
+      where: { organizationId_moduleCode: { organizationId, moduleCode: "VALIDATIONS" } },
+      data: { isEnabled: true },
+    });
     const invalid=await post(context.owner,policyPath,{...allocationPayload,allocations:[{...allocationPayload.allocations[0],quantity:"29"},allocationPayload.allocations[1]]});
     expect(invalid.status,JSON.stringify(invalid.body)).toBe(409);
     const allocatedRequest=await post(context.owner,policyPath,allocationPayload);
