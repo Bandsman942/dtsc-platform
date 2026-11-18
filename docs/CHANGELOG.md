@@ -1,7 +1,7 @@
 ## 2026-11-17 / 18 — Hotfix stock/lots #1212 — v1.23.4 candidate (DRAFT)
 
 - Sélecteur indépendant, garde de politique historique, réceptions et réservations FEFO, factures POS et retours multi-lots; régularisation historique sans changement de valeur.
-- Pertes approuvées avec valorisation distincte, contrôle qualité et rappel multisite, traçabilité par mouvements, filtres et interface enrichie. Six migrations additives en candidat. Recettes commandes ERP et Finance multi-lots vertes sur c7c4e8a uniquement; nouvelle CI et autres certifications obligatoires.
+- Pertes approuvées avec valorisation distincte, contrôle qualité et rappel multisite, traçabilité par mouvements, réception isolée des rappels en transit, registre des retours non revendables et attestation de destruction, filtres et interface enrichie. Sept migrations additives en candidat, dont le registre de garde des retours isolés. Recettes commandes ERP et Finance multi-lots vertes sur c7c4e8a uniquement; nouvelle CI et autres certifications obligatoires.
 - [Périmètre et recette](HOTFIX_1212_INVENTORY_LOT_TRACEABILITY.md). Les six chantiers ne sont pas clos; aucun E2E final, aucune migration de production.
 
 ## 2026-11-17 — Hotfix POS RETAIL #1210 — v1.23.3 candidate (OWNER_E2E requis)
