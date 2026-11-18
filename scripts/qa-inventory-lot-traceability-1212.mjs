@@ -366,7 +366,7 @@ const recoveryTx={
   pharmacyProductExtension:{count:async()=>recoverySpecialized},enterpriseSectorInventoryEvent:{count:async()=>0},
   enterpriseSalesCreditNote:{findFirst:async()=>({id:"credit-a"})},enterpriseInventoryAccountingEvent:{findFirst:async()=>recoveryValuation},
   enterpriseRetailInvoiceReturnLine:{findMany:async()=>[{id:"return-line-a"}]},
-  enterpriseJournalEntry:{findFirst:async()=>({id:"issue-journal",functionalCurrencyCode:"USD",lines:[ledgerLine("COST_OF_SALES",28,0),ledgerLine("INVENTORY",0,28)]})},
+  enterpriseJournalEntry:{findFirst:async({where})=>where.sourceEntityType==="EnterpriseSalesCreditNote"?{id:"credit-journal",functionalCurrencyCode:"USD",totalDebit:d(40),totalCredit:d(40)}:{id:"issue-journal",functionalCurrencyCode:"USD",lines:[ledgerLine("COST_OF_SALES",28,0),ledgerLine("INVENTORY",0,28)]}},
 };
 await recoveryService.assertCustodyRecoveryReadAccess("org-a","actor");
 recoveryAllowed=false;await assert.rejects(recoveryService.assertCustodyRecoveryReadAccess("org-a","actor"),{code:"INVENTORY_RETURN_RECOVERY_PERMISSION_REQUIRED"});recoveryAllowed=true;
