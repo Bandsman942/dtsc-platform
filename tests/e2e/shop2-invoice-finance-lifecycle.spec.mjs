@@ -1038,6 +1038,30 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
     expect(alertBody.metrics.recalled).toBe(1);
     expect(alertBody.items.some(row=>row.id===receivedLot.id)).toBe(true);
 
+    // Daily quality alerts: worker authentication, bounded claim and same-day
+    // retries, restricted to authorized admins and neutral push contents.
+    const worker="/api/internal/inventory-quality/process?batch=8";
+    expect((await context.owner.request.get(worker)).status()).toBe(401);
+    const workerHeaders={authorization:`Bearer ${process.env.E2E_CRON_SECRET}`};
+    expect(process.env.E2E_CRON_SECRET).toBeTruthy();
+    await prisma.enterpriseInventoryQualityScan.upsert({where:{organizationId},update:{nextScanAt:new Date("2000-01-01T00:00:00.000Z"),leaseToken:null,leaseUntil:null},create:{organizationId,nextScanAt:new Date("2000-01-01T00:00:00.000Z")}});
+    const firstScan=await context.owner.request.get(worker,{headers:workerHeaders});
+    expect(firstScan.status(),await firstScan.text()).toBe(200);
+    const targetNotifications={organizationId,type:"ENTERPRISE_INVENTORY_ALERT",userId:fixture.owner.id};
+    const notification=await prisma.notification.findFirstOrThrow({where:targetNotifications,orderBy:{createdAt:"desc"}});
+    expect(notification.targetUrl).toBe("/enterprise-modules/INVENTORY_LOGISTICS");
+    expect(notification.body).not.toContain(batchKey);
+    expect(await prisma.notification.count({where:{organizationId,type:"ENTERPRISE_INVENTORY_ALERT",userId:fixture.cashier.id}})).toBe(0);
+    const beforeRetry=await prisma.notification.count({where:targetNotifications});
+    await prisma.enterpriseInventoryQualityScan.update({where:{organizationId},data:{nextScanAt:new Date("2000-01-01T00:00:00.000Z")}});
+    const repeatScan=await context.owner.request.get(worker,{headers:workerHeaders});
+    expect(repeatScan.status(),await repeatScan.text()).toBe(200);
+    expect(await prisma.notification.count({where:targetNotifications})).toBe(beforeRetry);
+    const nextScan=await prisma.enterpriseInventoryQualityScan.findUniqueOrThrow({where:{organizationId}});
+    expect(nextScan.leaseToken).toBeNull();
+    expect(nextScan.nextScanAt.getTime()).toBeGreaterThan(Date.now());
+
+
 
 
   } finally {
