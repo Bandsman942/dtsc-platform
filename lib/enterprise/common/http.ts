@@ -4,6 +4,8 @@ import { NextResponse } from "next/server";
 import { EnterpriseDomainError } from "@/lib/enterprise/common/errors";
 
 const BUSINESS_ERROR_MESSAGES: Record<string, { fr: string; en: string }> = {
+  STOCK_TRANSFER_ISOLATED_RECEIPT_INVALID:{fr:"La réception isolée doit correspondre exactement à un transfert expédié et à son lot de départ.",en:"An isolated receipt must match a dispatched transfer and its original batch."},
+  INVENTORY_RESERVATION_CONCURRENT:{fr:"Une réservation concurrente a modifié le stock. Actualisez les disponibilités.",en:"A concurrent reservation modified stock. Refresh availability."},
   INVENTORY_LOT_RECALLED:{fr:"Ce lot est rappelé. Sa remise en circulation ou sa recréation est interdite.",en:"This batch is recalled. It cannot be released or recreated."},
   INVENTORY_LOT_RECALL_FORBIDDEN:{fr:"Le rappel multisite exige le droit d’administration globale du stock.",en:"A multi-site recall requires company-wide stock administration."},
   INVENTORY_LOT_QUALITY_REASON_REQUIRED:{fr:"Renseignez le constat qualité ou le motif du changement de statut.",en:"Provide the quality findings or reason for the status change."},

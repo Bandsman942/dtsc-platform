@@ -101,7 +101,7 @@ export async function applyStockMovementTx(
   organizationId: string,
   actorUserId: string,
   input: Omit<StockMovementInput, "movementType"> & {movementType: StockMovementInput["movementType"] | "LOT_WRITE_OFF"},
-  internal?: { consumingRetailInvoiceId?: string; approvedLotWriteOffId?: string },
+  internal?: { consumingRetailInvoiceId?: string; approvedLotWriteOffId?: string; quarantinedTransferReceiptId?: string },
 ) {
   const writeOff = input.movementType === "LOT_WRITE_OFF";
   if (writeOff) {
@@ -112,7 +112,22 @@ export async function applyStockMovementTx(
   }
   const existing = await tx.enterpriseStockMovement.findFirst({ where: { organizationId, idempotencyKey: input.idempotencyKey } });
   if (existing) return { movement: existing, idempotent: true };
-  const { inventoryItem, stockLot } = await assertInventoryCoordinates(tx, organizationId, input, writeOff);
+  const isolatedReceipt=Boolean(internal?.quarantinedTransferReceiptId);
+  if (isolatedReceipt) {
+    const transferId=internal!.quarantinedTransferReceiptId!;
+    if(input.sourceEntityType!=="EnterpriseStockTransfer" || input.sourceEntityId!==transferId || input.movementType!=="TRANSFER_IN" || input.direction!=="IN" || !input.stockLotId || !input.sourceLineId) throw new EnterpriseDomainError("STOCK_TRANSFER_ISOLATED_RECEIPT_INVALID",409);
+    const transfer=await tx.enterpriseStockTransfer.findFirst({where:{organizationId,id:transferId,status:"IN_TRANSIT",archivedAt:null,destinationWarehouseId:input.warehouseId},include:{lines:{where:{id:input.sourceLineId}},destinationWarehouse:{select:{siteId:true}}}});
+    const line=transfer?.lines[0];
+    if(!transfer || !line || !line.stockLotId || line.inventoryItemId!==input.inventoryItemId || line.destinationLocationId!==(input.storageLocationId||null) || !line.quantity.equals(input.quantity)) throw new EnterpriseDomainError("STOCK_TRANSFER_ISOLATED_RECEIPT_INVALID",409);
+    await requireTransferSiteAuthority(tx,organizationId,actorUserId,transfer.destinationWarehouse.siteId);
+    const [source,dest,dispatch]=await Promise.all([
+      tx.enterpriseStockLot.findFirst({where:{organizationId,id:line.stockLotId,warehouseId:transfer.sourceWarehouseId,inventoryItemId:line.inventoryItemId}}),
+      tx.enterpriseStockLot.findFirst({where:{organizationId,id:input.stockLotId,warehouseId:input.warehouseId,inventoryItemId:line.inventoryItemId,status:{in:["BLOCKED","QUARANTINED"]},archivedAt:null}}),
+      tx.enterpriseStockMovement.findFirst({where:{organizationId,sourceEntityType:"EnterpriseStockTransfer",sourceEntityId:transferId,sourceLineId:line.id,movementType:"TRANSFER_OUT",direction:"OUT",warehouseId:transfer.sourceWarehouseId,stockLotId:line.stockLotId,inventoryItemId:line.inventoryItemId,quantity:line.quantity}}),
+    ]);
+    if(!source || !dest || !dispatch || source.lotNumber!==dest.lotNumber || source.expiryDate?.getTime()!==dest.expiryDate?.getTime() || source.productionDate?.getTime()!==dest.productionDate?.getTime() || (source.recallReference && source.recallReference!==dest.recallReference)) throw new EnterpriseDomainError("STOCK_TRANSFER_ISOLATED_RECEIPT_INVALID",409);
+  }
+  const { inventoryItem, stockLot } = await assertInventoryCoordinates(tx, organizationId, input, writeOff || isolatedReceipt);
   if (inventoryItem.expiryTracking && stockLot?.expiryDate && ["SALE_FULFILLMENT", "RETURN_IN", "PRODUCTION_CONSUMPTION"].includes(input.movementType)) {
     const organization = await tx.organization.findUniqueOrThrow({ where: { id: organizationId }, select: { timezone: true } });
     const components = new Intl.DateTimeFormat("en-CA", { timeZone: organization.timezone || "UTC", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date());
@@ -202,11 +217,11 @@ export async function createEnterpriseStockTransfer(organizationId: string, acto
 
 async function resolveTransferredLotTx(
   tx: Prisma.TransactionClient,
-  transfer: { organizationId: string; destinationWarehouseId: string; id: string },
+  transfer: { organizationId: string; destinationWarehouseId: string; id: string; status?: string },
   line: { id: string; inventoryItemId: string; stockLotId: string | null },
   actorUserId: string,
 ) {
-  if (!line.stockLotId) return null;
+  if (!line.stockLotId) return {id:null,isolated:false};
   const sourceLot = await tx.enterpriseStockLot.findFirst({
     where: { id: line.stockLotId, organizationId: transfer.organizationId, inventoryItemId: line.inventoryItemId },
   });
@@ -214,12 +229,22 @@ async function resolveTransferredLotTx(
   const existing = await tx.enterpriseStockLot.findFirst({
     where: { organizationId: transfer.organizationId, inventoryItemId: line.inventoryItemId, warehouseId: transfer.destinationWarehouseId, lotNumber: sourceLot.lotNumber, archivedAt: null },
   });
+  const inTransit=transfer.status==="IN_TRANSIT";
+  const sourceIsolated=sourceLot.status!=="AVAILABLE" || Boolean(sourceLot.recallReference);
+  const destinationIsolated=Boolean(existing && existing.status!=="AVAILABLE");
+  const isolated=sourceIsolated || destinationIsolated;
+  if(isolated && !inTransit) throw new EnterpriseDomainError("STOCK_TRANSFER_DESTINATION_LOT_CONFLICT",409);
   if (existing) {
-    if (existing.status !== "AVAILABLE" || existing.expiryDate?.toISOString() !== sourceLot.expiryDate?.toISOString()
-      || existing.productionDate?.toISOString() !== sourceLot.productionDate?.toISOString()) {
+    if (existing.expiryDate?.toISOString() !== sourceLot.expiryDate?.toISOString()
+      || existing.productionDate?.toISOString() !== sourceLot.productionDate?.toISOString()
+      || (sourceLot.recallReference && existing.recallReference && sourceLot.recallReference!==existing.recallReference)) {
       throw new EnterpriseDomainError("STOCK_TRANSFER_DESTINATION_LOT_CONFLICT", 409);
     }
-    return existing.id;
+    if(sourceIsolated && (!destinationIsolated || (sourceLot.recallReference&&!existing.recallReference))) {
+      const changed=await tx.enterpriseStockLot.updateMany({where:{organizationId:transfer.organizationId,id:existing.id,revision:existing.revision},data:{status:"QUARANTINED",qualityReason:sourceLot.qualityReason||"Isolated batch received from transfer "+transfer.id,qualityChangedByUserId:sourceLot.qualityChangedByUserId||actorUserId,qualityChangedAt:sourceLot.qualityChangedAt||new Date(),...(sourceLot.recallReference?{recallReference:sourceLot.recallReference}:{}),revision:{increment:1}}});
+      if(changed.count!==1)throw new EnterpriseDomainConflictError();
+    }
+    return {id:existing.id,isolated};
   }
   const destinationLot = await tx.enterpriseStockLot.create({
     data: {
@@ -231,22 +256,24 @@ async function resolveTransferredLotTx(
       expiryDate: sourceLot.expiryDate,
       supplierId: sourceLot.supplierId,
       storageLocationId: null,
-      status: "AVAILABLE",
+      status: isolated ? "QUARANTINED" : "AVAILABLE",
+      ...(isolated?{qualityReason:sourceLot.qualityReason||"Isolated batch received from transfer "+transfer.id,qualityChangedByUserId:sourceLot.qualityChangedByUserId||actorUserId,qualityChangedAt:sourceLot.qualityChangedAt||new Date(),recallReference:sourceLot.recallReference}:{}),
       notes: `Lot issu du transfert ${transfer.id}, ligne ${line.id}`,
       createdByUserId: actorUserId,
     },
   });
-  return destinationLot.id;
+  return {id:destinationLot.id,isolated};
 }
 
 async function receiveTransferLinesTx(
   tx: Prisma.TransactionClient,
-  transfer: { organizationId: string; id: string; destinationWarehouseId: string; lines: Array<{ id: string; inventoryItemId: string; stockLotId: string | null; destinationLocationId: string | null; quantity: Prisma.Decimal }> },
+  transfer: { organizationId: string; id: string; destinationWarehouseId: string; status?:string; lines: Array<{ id: string; inventoryItemId: string; stockLotId: string | null; destinationLocationId: string | null; quantity: Prisma.Decimal }> },
   actorUserId: string,
   comment?: string | null,
 ) {
   for (const line of transfer.lines) {
-    const destinationLotId = await resolveTransferredLotTx(tx, transfer, line, actorUserId);
+    const destinationLot = await resolveTransferredLotTx(tx, transfer, line, actorUserId);
+    const destinationLotId=destinationLot.id;
     await applyStockMovementTx(tx, transfer.organizationId, actorUserId, {
       inventoryItemId: line.inventoryItemId,
       warehouseId: transfer.destinationWarehouseId,
@@ -260,7 +287,8 @@ async function receiveTransferLinesTx(
       sourceLineId: line.id,
       idempotencyKey: `transfer:${transfer.id}:${line.id}:in`,
       reason: comment || null,
-    });
+    }, destinationLot.isolated?{quarantinedTransferReceiptId:transfer.id}:undefined);
+    if(destinationLot.isolated) await publishEnterpriseEvent(tx,{organizationId:transfer.organizationId,entityType:"EnterpriseStockTransfer",entityId:transfer.id,eventType:"STOCK_TRANSFER_RECEIVED_QUARANTINED",summary:"Batch received into quarantine",actorUserId,metadataJson:{lineId:line.id,stockLotId:destinationLotId,warehouseId:transfer.destinationWarehouseId,quantity:line.quantity.toFixed()}});
   }
 }
 

@@ -3,7 +3,6 @@ import { createEnterpriseDirectSalesOrder } from "@/lib/enterprise/crm-sales/ord
 import { publishEnterpriseEvent } from "@/lib/enterprise/crm-sales/helpers";
 import {
   createEnterpriseInventoryReservation,
-  releaseEnterpriseInventoryReservation,
   releaseEnterpriseInventoryReservationTx,
 } from "@/lib/enterprise/inventory/reservations";
 import {
