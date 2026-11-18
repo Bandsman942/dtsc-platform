@@ -9,7 +9,7 @@ import { StatusBadge } from "@/components/workspace/status-badge";
 import { formatEnterpriseDate } from "@/components/enterprise/core-v2/erp-v2-ui";
 import { purchaseFormGuidance, type PurchaseFormGuidanceKey } from "@/lib/enterprise/purchase-form-i18n";
 
-type ReturnRequestSummary = { reference: string; status: string; quantity: string; approvalId: string | null };
+type ReturnRequestSummary = { id?: string; reference: string; status: string; quantity: string; approvalId: string | null; revision?: number; unitCost?: string; totalCost?: string; currencyCode?: string; canDispatch?: boolean; canCreateCredit?: boolean; dispatchReference?: string | null; dispatchedAt?: string | null; supplierCreditNoteId?: string | null; supplierCreditReference?: string | null; supplierInvoiceId?: string; supplierInvoiceItemId?: string };
 type TraceRow = {
   supplierReturnRequest?: ReturnRequestSummary | null;
   id: string; receiptReference: string | null; quantity: string; occurredAt: string;
@@ -22,7 +22,7 @@ type TraceResponse = { items: TraceRow[]; canCheckSupplierReturn?: boolean; pagi
 
 type ReturnPreview = { eligible: true; readOnly: true; quantity: string; remaining: string; unitCost: string; totalCost: string; currencyCode: string; receiptReference: string; invoiceReference: string; canSubmitRequest?: boolean };
 
-function SupplierReturnCheck({ organizationId, purchaseId, row, locale }: { organizationId: string; purchaseId: string; row: TraceRow; locale: string }) {
+function SupplierReturnCheck({ organizationId, purchaseId, row, locale, onRefresh }: { organizationId: string; purchaseId: string; row: TraceRow; locale: string; onRefresh: () => void }) {
   const t = (key: PurchaseFormGuidanceKey) => purchaseFormGuidance(locale, key);
   const [open, setOpen] = useState(false);
   const [quantity, setQuantity] = useState("");
@@ -70,10 +70,57 @@ function SupplierReturnCheck({ organizationId, purchaseId, row, locale }: { orga
     } catch { setError(t("returnRequestFailed")); }
     finally { setBusy(false); }
   }
-  if (request) return <div className="mt-2 grid min-w-0 grid-cols-[minmax(0,1fr)] gap-1 rounded-lg border border-dtsc-border p-2 text-xs">
-    <div className="flex min-w-0 flex-wrap items-center gap-2"><strong className="break-words">{request.reference}</strong><StatusBadge tone={request.status === "APPROVED" ? "info" : "warning"}>{t(request.status === "APPROVED" ? "returnRequestApproved" : "returnRequestPending")}</StatusBadge></div>
+  async function dispatchReturn(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (busy || !request?.id || !request.revision || !request.canDispatch) return;
+    const form = new FormData(event.currentTarget);
+    const dispatchReference = String(form.get("dispatchReference") || "").trim();
+    if (dispatchReference.length < 5 || form.get("confirmDispatch") !== "on") return;
+    setBusy(true); setError(""); setMessage("");
+    try {
+      const response = await fetch(`/api/enterprise/${encodeURIComponent(organizationId)}/purchases/${encodeURIComponent(purchaseId)}?action=dispatch-supplier-return`,{method:"POST",headers:{"Content-Type":"application/json","Accept-Language":locale},body:JSON.stringify({requestId:request.id,revision:request.revision,dispatchReference})});
+      const body=await response.json();
+      if (!response.ok || !body.ok) { setError(body.message || t("returnDispatchFailed")); return; }
+      setRequest({...request,status:"DISPATCHED",canDispatch:false,dispatchReference,revision:body.request.revision});setMessage(t("returnDispatchDone"));onRefresh();
+    } catch { setError(t("returnDispatchFailed")); } finally { setBusy(false); }
+  }
+  async function createLinkedCredit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (busy || !request?.id || !request.canCreateCredit || !request.supplierInvoiceId || !request.supplierInvoiceItemId || !request.unitCost) return;
+    const form = new FormData(event.currentTarget);
+    const supplierCreditReference=String(form.get("supplierCreditReference")||"").trim(),creditDate=String(form.get("creditDate")||""),reason=String(form.get("creditReason")||"").trim();
+    if(supplierCreditReference.length<3||!creditDate||reason.length<8)return;
+    setBusy(true);setError("");setMessage("");
+    try {
+      const response=await fetch(`/api/enterprise/${encodeURIComponent(organizationId)}/supplier-credit-notes`,{method:"POST",headers:{"Content-Type":"application/json","Accept-Language":locale},body:JSON.stringify({invoiceId:request.supplierInvoiceId,supplierReturnId:request.id,supplierCreditReference,creditDate,reason,items:[{sourceInvoiceItemId:request.supplierInvoiceItemId,description:row.inventoryItem.catalogItem.name,quantity:request.quantity,unitPrice:request.unitCost}]})});
+      const body=await response.json();
+      if(!response.ok||!body.ok||!body.creditNote){setError(body.message||t("returnCreditFailed"));return;}
+      setRequest({...request,canCreateCredit:false,supplierCreditNoteId:body.creditNote.id,supplierCreditReference});setMessage(t("returnCreditCreated"));onRefresh();
+    } catch {setError(t("returnCreditFailed"));} finally {setBusy(false);}
+  }
+  if (request) return <div className="mt-2 grid min-w-0 grid-cols-[minmax(0,1fr)] gap-2 rounded-lg border border-dtsc-border p-2 text-xs">
+    <div className="flex min-w-0 flex-wrap items-center gap-2"><strong className="break-words">{request.reference}</strong><StatusBadge tone={request.status==="RECONCILED"?"success":request.status==="APPROVED"?"info":"warning"}>{t(request.status==="RECONCILED"?"returnReconciled":request.status==="DISPATCHED"?"returnDispatched":request.status==="APPROVED"?"returnRequestApproved":"returnRequestPending")}</StatusBadge></div>
     <p>{t("returnCheckQuantity")} : <strong>{request.quantity} {row.inventoryItem.catalogItem.unitOfMeasure?.symbol || ""}</strong></p>
-    <p className="text-dtsc-muted">{t("returnRequestHelp")}</p>
+    {request.status==="PENDING_APPROVAL"||request.status==="APPROVED"?<p className="text-dtsc-muted">{t("returnRequestHelp")}</p>:null}
+    {request.totalCost&&request.currencyCode?<p>{t("returnCreditAmount")} : <strong>{money(request.totalCost,request.currencyCode)}</strong></p>:null}
+    {request.dispatchReference?<p className="break-words">{t("returnDispatchReference")} : {request.dispatchReference}</p>:null}
+    {request.supplierCreditReference?<p className="break-words">{t("returnCreditReference")} : {request.supplierCreditReference}</p>:null}
+    {request.canDispatch&&request.status==="APPROVED"?<form onSubmit={dispatchReturn} className="grid min-w-0 gap-2 border-t border-dtsc-border pt-2">
+      <strong>{t("returnDispatchTitle")}</strong><p className="text-dtsc-muted">{t("returnDispatchHelp")}</p>
+      <label className="grid min-w-0 gap-1">{t("returnDispatchReference")}<Input name="dispatchReference" required minLength={5} maxLength={200} disabled={busy}/></label>
+      <label className="flex items-start gap-2"><input name="confirmDispatch" type="checkbox" required disabled={busy} className="mt-1"/><span>{t("returnDispatchConfirm")}</span></label>
+      <Button type="submit" disabled={busy} className="whitespace-normal">{t("returnDispatchAction")}</Button>
+    </form>:null}
+    {request.canCreateCredit&&request.status==="DISPATCHED"?<form onSubmit={createLinkedCredit} className="grid min-w-0 gap-2 border-t border-dtsc-border pt-2">
+      <strong>{t("returnCreditTitle")}</strong><p className="text-dtsc-muted">{t("returnCreditHelp")}</p>
+      <label className="grid min-w-0 gap-1">{t("returnCreditReference")}<Input name="supplierCreditReference" required minLength={3} maxLength={160} disabled={busy}/></label>
+      <label className="grid min-w-0 gap-1">{t("returnCreditDate")}<Input name="creditDate" type="date" min={request.dispatchedAt?.slice(0,10)} required disabled={busy}/></label>
+      <label className="grid min-w-0 gap-1">{t("returnCreditReason")}<textarea name="creditReason" required minLength={8} maxLength={1000} disabled={busy} className="w-full min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface p-2 text-base text-dtsc-ink md:text-sm"/></label>
+      <Button type="submit" disabled={busy} className="whitespace-normal">{t("returnCreditAction")}</Button>
+    </form>:null}
+    {error?<p role="alert" className="break-words text-red-700 dark:text-red-300">{error}</p>:null}
+    {request.supplierCreditNoteId?<a className="w-fit break-words text-dtsc-blue underline" href={`/enterprise-modules/FINANCE_PAYABLES?creditNote=${encodeURIComponent(request.supplierCreditNoteId)}`}>{t("returnCreditReview")}</a>:null}
+    <Button type="button" variant="outline" disabled={busy} className="w-fit" onClick={onRefresh}>{t("returnRefresh")}</Button>
     {request.approvalId ? <a className="w-fit break-words text-dtsc-blue underline" href={`/enterprise-modules/VALIDATIONS?approval=${encodeURIComponent(request.approvalId)}`}>{t("returnRequestReview")}</a> : null}
   </div>;
   if (!open) return <Button type="button" variant="outline" className="mt-2 w-fit max-w-full whitespace-normal" onClick={() => setOpen(true)} aria-expanded={false}>{t("returnCheckTitle")}</Button>;
@@ -166,7 +213,7 @@ export function PurchaseReceiptTrace({ organizationId, purchaseId, locale, focus
             <p className="break-words text-xs text-dtsc-muted">{row.warehouse.name}{row.storageLocation ? " · " + row.storageLocation.name : ""}</p>
             <div className="flex min-w-0 flex-wrap items-center gap-2"><span className="min-w-0 break-words font-medium">{lot?.lotNumber || t("receiptTraceNoLot")}</span>{lot ? <StatusBadge tone={lot.recallReference || lot.status === "BLOCKED" || lot.status === "QUARANTINED" ? "warning" : lot.status === "AVAILABLE" ? "success" : "neutral"}>{t(stateKey)}</StatusBadge> : null}</div>
             {lot ? <p className="break-words text-xs text-dtsc-muted">{t("receiptBatchProduction")} : {date(lot.productionDate)} · {t("receiptBatchExpiry")} : {date(lot.expiryDate)}{lot.recallReference ? " · " + lot.recallReference : ""}</p> : null}
-            {lot && result?.canCheckSupplierReturn ? <SupplierReturnCheck organizationId={organizationId} purchaseId={purchaseId} row={row} locale={locale} /> : null}
+            {lot && result?.canCheckSupplierReturn ? <SupplierReturnCheck organizationId={organizationId} purchaseId={purchaseId} row={row} locale={locale} onRefresh={() => void load(result.pagination.page,appliedSearch)} /> : null}
           </article>;
         })}
       </div>
