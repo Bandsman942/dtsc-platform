@@ -115,15 +115,16 @@ export async function GET(req: Request, { params }: Params) {
     await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "purchase-receipt-lots", purchaseId: id, page } });
     const canCheckSupplierReturn = access.canWrite && await assertSupplierReturnAccess(organizationId, session.userId, false).then(() => true, () => false);
     const canSubmitSupplierReturn = canCheckSupplierReturn && await requireSupplierReturnParticipantAccess(organizationId, session.userId, false).then(() => true, () => false);
-    const requests = canSubmitSupplierReturn && rows.length ? await prisma.enterpriseSupplierReturnRequest.findMany({
-      where: { organizationId, purchaseId: id, sourceMovementId: { in: rows.map((row) => row.id) }, requestedByUserId: session.userId, status: { in: ["PENDING_APPROVAL", "APPROVED"] } },
+    const canReviewSupplierReturn = canCheckSupplierReturn && await requireSupplierReturnParticipantAccess(organizationId, session.userId, true).then(() => true, () => false);
+    const requests = (canSubmitSupplierReturn || canReviewSupplierReturn) && rows.length ? await prisma.enterpriseSupplierReturnRequest.findMany({
+      where: { organizationId, purchaseId: id, sourceMovementId: { in: rows.map((row) => row.id) }, status: { in: ["PENDING_APPROVAL", "APPROVED"] } },
       select: { id: true, sourceMovementId: true, reference: true, status: true, quantity: true },
     }) : [];
     const requestApprovals = requests.length ? await prisma.enterpriseApproval.findMany({
-      where: { organizationId, targetEntityType: SUPPLIER_RETURN_TARGET, targetEntityId: { in: requests.map((request) => request.id) }, requestedByUserId: session.userId, archivedAt: null },
+      where: { organizationId, targetEntityType: SUPPLIER_RETURN_TARGET, targetEntityId: { in: requests.map((request) => request.id) }, OR: [...(canSubmitSupplierReturn ? [{ requestedByUserId: session.userId }] : []), ...(canReviewSupplierReturn ? [{ approverUserId: session.userId }] : [])], archivedAt: null },
       select: { id: true, targetEntityId: true },
     }) : [];
-    const requestByMovement = new Map(requests.map((request) => [request.sourceMovementId, { reference: request.reference, status: request.status, quantity: request.quantity, approvalId: requestApprovals.find((approval) => approval.targetEntityId === request.id)?.id || null }]));
+    const requestByMovement = new Map(requests.filter((request) => requestApprovals.some((approval) => approval.targetEntityId === request.id)).map((request) => [request.sourceMovementId, { reference: request.reference, status: request.status, quantity: request.quantity, approvalId: requestApprovals.find((approval) => approval.targetEntityId === request.id)?.id || null }]));
     return NextResponse.json({ items: items.map((row) => ({ ...row, supplierReturnRequest: requestByMovement.get(row.id) || null })), canCheckSupplierReturn, canSubmitSupplierReturn, pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) } });
   }
   const itemIds = purchase.items.map((item) => item.id);
