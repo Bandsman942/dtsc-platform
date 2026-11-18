@@ -13,6 +13,7 @@ import { createEnterprisePurchaseApproval } from "@/lib/enterprise/procurement/p
 import { notifyUser } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
 import { requireSupplierReturnParticipantAccess, SUPPLIER_RETURN_TARGET } from "@/lib/enterprise/inventory/supplier-return-request-service";
+import { requireRecoveryParticipantAccess, RECOVERY_ASSESSMENT_TARGET } from "@/lib/enterprise/inventory/custody-recovery-assessment";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
 
@@ -22,7 +23,7 @@ type ApprovalTargetSummary = { type: string; id: string; title: string; priority
 async function targetSummaries(organizationId: string, search = "") {
   const contains = search ? { contains: search, mode: "insensitive" as const } : undefined;
   const take = search ? 80 : 0;
-  const [tasks, requests, meetings, purchases, stockTransfers, inventoryCounts, stockAdjustments, lotReclassifications, supplierReturns, budgets, expenses, incidents, projectMilestones] = await Promise.all([
+  const [tasks, requests, meetings, purchases, stockTransfers, inventoryCounts, stockAdjustments, lotReclassifications, supplierReturns, recoveryAssessments, budgets, expenses, incidents, projectMilestones] = await Promise.all([
     prisma.enterpriseTask.findMany({ where: { organizationId, archivedAt: null, ...(contains ? { title: contains } : {}) }, select: { id: true, title: true, priority: true, status: true }, take }),
     prisma.enterpriseRequest.findMany({ where: { organizationId, archivedAt: null, ...(contains ? { title: contains } : {}) }, select: { id: true, title: true, priority: true, status: true }, take }),
     prisma.enterpriseMeeting.findMany({ where: { organizationId, archivedAt: null, ...(contains ? { title: contains } : {}) }, select: { id: true, title: true, status: true }, take }),
@@ -32,6 +33,7 @@ async function targetSummaries(organizationId: string, search = "") {
     prisma.enterpriseStockAdjustment.findMany({ where: { organizationId, ...(contains ? { reference: contains } : {}) }, select: { id: true, reference: true, status: true }, take }),
     prisma.enterpriseStockLotReclassification.findMany({ where: { organizationId, ...(contains ? { reference: contains } : {}) }, select: { id: true, reference: true, status: true }, take }),
     prisma.enterpriseSupplierReturnRequest.findMany({ where: { organizationId, ...(contains ? { reference: contains } : {}) }, select: { id: true, reference: true, status: true }, take }),
+    prisma.enterpriseInventoryReturnRecoveryAssessment.findMany({where:{organizationId,...(contains?{reference:contains}:{})},select:{id:true,reference:true,status:true},take}),
     prisma.enterpriseBudget.findMany({ where: { organizationId, archivedAt: null, ...(contains ? { title: contains } : {}) }, select: { id: true, title: true, status: true }, take }),
     prisma.enterpriseExpense.findMany({ where: { organizationId, archivedAt: null, ...(contains ? { title: contains } : {}) }, select: { id: true, title: true, status: true }, take }),
     prisma.pharmacyQualityIncident.findMany({ where: { organizationId, ...(contains ? { title: contains } : {}) }, select: { id: true, title: true, priority: true, status: true }, take }),
@@ -54,6 +56,7 @@ async function targetSummaries(organizationId: string, search = "") {
   for (const item of stockAdjustments) map.set(`EnterpriseStockAdjustment:${item.id}`, { type: "EnterpriseStockAdjustment", id: item.id, title: item.reference, status: item.status });
   for (const item of lotReclassifications) map.set(`EnterpriseStockLotReclassification:${item.id}`, { type: "EnterpriseStockLotReclassification", id: item.id, title: item.reference, status: item.status });
   for (const item of supplierReturns) map.set(`EnterpriseSupplierReturnRequest:${item.id}`, { type: "EnterpriseSupplierReturnRequest", id: item.id, title: item.reference, status: item.status });
+  for(const item of recoveryAssessments)map.set(`${RECOVERY_ASSESSMENT_TARGET}:${item.id}`,{type:RECOVERY_ASSESSMENT_TARGET,id:item.id,title:item.reference,status:item.status});
   for (const item of budgets) map.set(`EnterpriseBudget:${item.id}`, { type: "EnterpriseBudget", ...item });
   for (const item of expenses) map.set(`EnterpriseExpense:${item.id}`, { type: "EnterpriseExpense", ...item });
   for (const item of incidents) map.set(`PharmacyQualityIncident:${item.id}`, { type: "PharmacyQualityIncident", ...item });
@@ -90,6 +93,8 @@ export async function GET(req: Request, { params }: Params) {
   // Approvals alone cannot expose return-related financial data, even to a former participant.
   const [requesterAccess, reviewerAccess] = await Promise.all([false, true].map((approve) => requireSupplierReturnParticipantAccess(organizationId, session.userId, approve).then(() => true, () => false)));
   filters.push({ OR: [{ targetEntityType: { not: SUPPLIER_RETURN_TARGET } }, ...(requesterAccess ? [{ targetEntityType: SUPPLIER_RETURN_TARGET, requestedByUserId: session.userId }] : []), ...(reviewerAccess ? [{ targetEntityType: SUPPLIER_RETURN_TARGET, approverUserId: session.userId }] : [])] });
+  const [recoveryRequesterAccess,recoveryReviewerAccess]=await Promise.all([false,true].map(approve=>requireRecoveryParticipantAccess(organizationId,session.userId,approve).then(()=>true,()=>false)));
+  filters.push({OR:[{targetEntityType:{not:RECOVERY_ASSESSMENT_TARGET}},...(recoveryRequesterAccess?[{targetEntityType:RECOVERY_ASSESSMENT_TARGET,requestedByUserId:session.userId}]:[]),...(recoveryReviewerAccess?[{targetEntityType:RECOVERY_ASSESSMENT_TARGET,approverUserId:session.userId}]:[])]});
   const where: Prisma.EnterpriseApprovalWhereInput = { AND: [enterpriseApprovalVisibilityWhere({ organizationId, userId: session.userId, canSeeAll: access.canSeeAll }), ...filters] };
   const [items, total] = await Promise.all([prisma.enterpriseApproval.findMany({ where, orderBy: { requestedAt: "desc" }, skip: (page - 1) * pageSize, take: pageSize }), prisma.enterpriseApproval.count({ where })]);
   const allTargetMap = search ? matchingTargets : await resolveTargets(organizationId, items); const enriched = items.map((item) => ({ ...item, target: allTargetMap.get(`${item.targetEntityType}:${item.targetEntityId}`) || null }));
@@ -99,7 +104,7 @@ export async function GET(req: Request, { params }: Params) {
 
 async function resolveTargets(organizationId: string, approvals: Array<{ targetEntityType: string; targetEntityId: string }>) {
   const byType = new Map<string, string[]>(); for (const approval of approvals) byType.set(approval.targetEntityType, [...(byType.get(approval.targetEntityType) || []), approval.targetEntityId]);
-  const [tasks, requests, meetings, purchases, stockTransfers, inventoryCounts, stockAdjustments, lotReclassifications, supplierReturns, budgets, expenses, incidents, projectMilestones] = await Promise.all([
+  const [tasks, requests, meetings, purchases, stockTransfers, inventoryCounts, stockAdjustments, lotReclassifications, supplierReturns, recoveryAssessments, budgets, expenses, incidents, projectMilestones] = await Promise.all([
     prisma.enterpriseTask.findMany({ where: { organizationId, id: { in: byType.get("EnterpriseTask") || [] } }, select: { id: true, title: true, priority: true, status: true } }),
     prisma.enterpriseRequest.findMany({ where: { organizationId, id: { in: byType.get("EnterpriseRequest") || [] } }, select: { id: true, title: true, priority: true, status: true } }),
     prisma.enterpriseMeeting.findMany({ where: { organizationId, id: { in: byType.get("EnterpriseMeeting") || [] } }, select: { id: true, title: true, status: true } }),
@@ -109,6 +114,7 @@ async function resolveTargets(organizationId: string, approvals: Array<{ targetE
     prisma.enterpriseStockAdjustment.findMany({ where: { organizationId, id: { in: byType.get("EnterpriseStockAdjustment") || [] } }, select: { id: true, reference: true, status: true } }),
     prisma.enterpriseStockLotReclassification.findMany({ where: { organizationId, id: { in: byType.get("EnterpriseStockLotReclassification") || [] } }, select: { id: true, reference: true, status: true } }),
     prisma.enterpriseSupplierReturnRequest.findMany({ where: { organizationId, id: { in: byType.get("EnterpriseSupplierReturnRequest") || [] } }, select: { id: true, reference: true, status: true } }),
+    prisma.enterpriseInventoryReturnRecoveryAssessment.findMany({where:{organizationId,id:{in:byType.get(RECOVERY_ASSESSMENT_TARGET)||[]}},select:{id:true,reference:true,status:true}}),
     prisma.enterpriseBudget.findMany({ where: { organizationId, id: { in: byType.get("EnterpriseBudget") || [] } }, select: { id: true, title: true, status: true } }),
     prisma.enterpriseExpense.findMany({ where: { organizationId, id: { in: byType.get("EnterpriseExpense") || [] } }, select: { id: true, title: true, status: true } }),
     prisma.pharmacyQualityIncident.findMany({ where: { organizationId, id: { in: byType.get("PharmacyQualityIncident") || [] } }, select: { id: true, title: true, priority: true, status: true } }),
@@ -127,6 +133,7 @@ async function resolveTargets(organizationId: string, approvals: Array<{ targetE
   for (const item of stockAdjustments) map.set(`EnterpriseStockAdjustment:${item.id}`, { type: "EnterpriseStockAdjustment", id: item.id, title: item.reference, status: item.status });
   for (const item of lotReclassifications) map.set(`EnterpriseStockLotReclassification:${item.id}`, { type: "EnterpriseStockLotReclassification", id: item.id, title: item.reference, status: item.status });
   for (const item of supplierReturns) map.set(`EnterpriseSupplierReturnRequest:${item.id}`, { type: "EnterpriseSupplierReturnRequest", id: item.id, title: item.reference, status: item.status });
+  for(const item of recoveryAssessments)map.set(`${RECOVERY_ASSESSMENT_TARGET}:${item.id}`,{type:RECOVERY_ASSESSMENT_TARGET,id:item.id,title:item.reference,status:item.status});
   for (const item of budgets) map.set(`EnterpriseBudget:${item.id}`, { type: "EnterpriseBudget", ...item });
   for (const item of expenses) map.set(`EnterpriseExpense:${item.id}`, { type: "EnterpriseExpense", ...item });
   for (const item of incidents) map.set(`PharmacyQualityIncident:${item.id}`, { type: "PharmacyQualityIncident", ...item });
