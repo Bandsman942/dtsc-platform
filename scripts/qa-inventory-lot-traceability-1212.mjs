@@ -381,3 +381,62 @@ recoverySpecialized=1;await assert.rejects(inspectRecovery(),{code:"INVENTORY_RE
 recoveryCustody.status="DISPOSED";await assert.rejects(inspectRecovery(),{code:"INVENTORY_RETURN_RECOVERY_CUSTODY_INVALID"});recoveryCustody.status="QUARANTINED";
 recoverySiteAllowed=false;await assert.rejects(inspectRecovery(),{code:"FORBIDDEN"});
 console.log("Custody recovery diagnostic: historical ceiling only, no mutations, recall/expiry, sector and site guards (isolated mocks)");
+
+/* Appraisal submission and review: only the dossier and approval delegates
+ * are writable. The source custody, balances, cost layers and journals are not. */
+recoverySiteAllowed=true;
+recoveryCustody.inspectedByUserId="original-inspector";
+recoveryCustody.registeredByUserId="original-settler";
+let savedAssessment=null,savedReview=null,savedVersion=null,reviewDecisions=[],appraisalEvents=[];
+mocks["@/lib/enterprise/module-access"]={resolveEnterpriseModuleAccess:async()=>({allowed:true}),resolveEnterpriseModuleCapabilities:async()=>({canRead:true,canCreate:true,canManage:true,canSubmit:true})};
+mocks["@/lib/enterprise/inventory/custody-recovery-preflight"]=recoveryService;
+mocks["@/lib/enterprise/inventory/approval"]={assertInventoryApprovalCandidate:async()=>{},assertInventoryApprovalDecision:async()=>{}};
+mocks["@/lib/enterprise/approval-assignment"]={listEnterpriseApprovalCandidates:async()=>({candidates:["appraiser","reviewer","original-inspector","original-settler"].map(userId=>({userId}))})};
+mocks["@/lib/enterprise/retail/site-access"]={retailInventoryVisibleSites:async()=>({isolationEnabled:false})};
+mocks["@/lib/enterprise/crm-sales/helpers"]={publishEnterpriseEvent:async(_tx,event)=>{appraisalEvents.push(event);}};
+const appraisalTx={...recoveryTx,
+  enterpriseInventoryReturnRecoveryAssessment:{
+    findFirst:async({where})=>savedAssessment&&(!where.id||where.id===savedAssessment.id)&&(!where.idempotencyKey||where.idempotencyKey===savedAssessment.idempotencyKey)&&(!where.status||where.status===savedAssessment.status)?savedAssessment:null,
+    count:async()=>savedAssessment&&["PENDING_APPROVAL","APPROVED"].includes(savedAssessment.status)?1:0,
+    create:async({data})=>{savedAssessment={...data,id:"assessment-a",status:"PENDING_APPROVAL",revision:1};for(const field of ["quantity","historicalCostCeiling","estimatedSellingAmount","completionCost","sellingCost","estimatedNetValue","proposedRecoveryAmount"])savedAssessment[field]=d(data[field]);return savedAssessment;},
+    updateMany:async({where,data})=>{assert.equal(where.organizationId,"org-a");assert.equal(where.status,savedAssessment.status);savedAssessment={...savedAssessment,...data,revision:savedAssessment.revision+1};return {count:1};}
+  },
+  enterpriseApproval:{
+    findFirst:async({where})=>savedReview&&(!where.id||where.id===savedReview.id)&&(!where.status||where.status===savedReview.status)&&(!where.revision||where.revision===savedReview.revision)?savedReview:null,
+    create:async({data})=>{savedReview={...data,id:"approval-recovery-a",revision:1};return savedReview;},
+    updateMany:async({where,data})=>{assert.equal(where.organizationId,"org-a");assert.equal(where.revision,savedReview.revision);savedReview={...savedReview,...data,revision:savedReview.revision+1};return {count:1};}
+  },
+  enterpriseApprovalSubmissionVersion:{create:async({data})=>{savedVersion={...data,id:"version-recovery-a"};return savedVersion;},findFirst:async()=>savedVersion},
+  enterpriseApprovalDecision:{create:async({data})=>{reviewDecisions.push(data);return data;}},
+  enterpriseEntityLink:{create:async()=>({})},
+};
+mocks["@/lib/prisma"]={prisma:{...appraisalTx,$transaction:async(fn,options)=>{assert.equal(options.isolationLevel,Prisma.TransactionIsolationLevel.Serializable);return fn(appraisalTx);}}};
+const appraisal=load("lib/enterprise/inventory/custody-recovery-assessment.ts");
+const application={custodyId:"custody-a",custodyRevision:1,estimatedSellingAmount:"18",completionCost:"5",sellingCost:"2",evidenceReference:"REPORT-QA",findings:"Physical appraisal confirms repairable condition.",confirmedPhysicalInspection:true,approverUserId:"reviewer",idempotencyKey:"APPRAISAL-QA-01"};
+assert.equal(appraisal.recoveryAssessmentSchema.safeParse(application).success,true);
+assert.equal(appraisal.recoveryAssessmentSchema.safeParse({...application,confirmedPhysicalInspection:false}).success,false);
+assert.equal(appraisal.recoveryAssessmentSchema.safeParse({...application,completionCost:"1.0000001"}).success,false);
+assert.equal(appraisal.recoveryProposal(application,"14").proposedRecoveryAmount.toFixed(),"11");
+assert.equal(appraisal.recoveryProposal({...application,estimatedSellingAmount:"40"},"14").proposedRecoveryAmount.toFixed(),"14");
+assert.throws(()=>appraisal.recoveryProposal({...application,estimatedSellingAmount:"7"},"14"),{code:"INVENTORY_RETURN_RECOVERY_AMOUNT_INVALID"});
+assert.equal((await appraisal.recoveryApprovalCandidates("org-a","appraiser","custody-a")).candidates.length,1);
+await assert.rejects(appraisal.submitRecoveryAssessment("org-a","appraiser",{...application,approverUserId:"appraiser"}),{code:"INVENTORY_RETURN_RECOVERY_INDEPENDENT_REQUIRED"});
+await assert.rejects(appraisal.submitRecoveryAssessment("org-a","original-inspector",application),{code:"INVENTORY_RETURN_RECOVERY_INDEPENDENT_REQUIRED"});
+const appraisalCreated=await appraisal.submitRecoveryAssessment("org-a","appraiser",application);
+assert.equal(appraisalCreated.assessment.proposedRecoveryAmount.toFixed(),"11");
+assert.equal(savedVersion.snapshotJson.totalAmount,"11");
+assert.equal(savedVersion.snapshotJson.historicalCostCeiling,"14");
+assert.equal((await appraisal.submitRecoveryAssessment("org-a","appraiser",application)).idempotent,true);
+await assert.rejects(appraisal.submitRecoveryAssessment("org-a","appraiser",{...application,completionCost:"6"}),{code:"INVENTORY_RETURN_RECOVERY_CONFLICT"});
+await assert.rejects(appraisal.submitRecoveryAssessment("org-a","appraiser",{...application,idempotencyKey:"APPRAISAL-QA-02"}),{code:"INVENTORY_RETURN_RECOVERY_CONFLICT"});
+const reviewInput={organizationId:"org-a",approvalId:"approval-recovery-a",actorUserId:"reviewer",action:"APPROVE",revision:1,reviewedVersionId:"version-recovery-a"};
+await assert.rejects(appraisal.decideRecoveryAssessment({...reviewInput,actorUserId:"appraiser"}),{code:"INVENTORY_RETURN_RECOVERY_INDEPENDENT_REQUIRED"});
+await assert.rejects(appraisal.decideRecoveryAssessment({...reviewInput,reviewedVersionId:"old"}),{code:"INVENTORY_RETURN_RECOVERY_CONFLICT"});
+recoveryCustody.revision=2;await assert.rejects(appraisal.decideRecoveryAssessment(reviewInput),{code:"INVENTORY_RETURN_RECOVERY_CONFLICT"});recoveryCustody.revision=1;
+recoveryRecall=1;await assert.rejects(appraisal.decideRecoveryAssessment(reviewInput),{code:"INVENTORY_RETURN_RECOVERY_LOT_UNSAFE"});recoveryRecall=0;
+assert.equal((await appraisal.decideRecoveryAssessment(reviewInput)).status,"APPROVED");
+assert.equal(savedAssessment.status,"APPROVED");assert.equal(reviewDecisions.length,1);
+assert.equal(reviewDecisions[0].submissionVersionId,savedVersion.id);
+assert.equal(recoveryCustody.status,"QUARANTINED");assert.equal(recoveryCustody.revision,1);
+assert.equal(appraisalEvents.length,2);assert.ok(appraisalEvents.every(event=>event.metadataJson.physicalReleaseAuthorized===false&&event.metadataJson.accountingRecognitionAuthorized===false));
+console.log("Recovery appraisal contract: prudent value, independence, immutable review, idempotency and stale-source rejection (isolated mocks)");
