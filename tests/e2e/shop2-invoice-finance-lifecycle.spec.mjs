@@ -1226,6 +1226,105 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
     expect((await prisma.enterprisePayable.findUniqueOrThrow({where:{supplierInvoiceId:supplierInvoice.id}})).outstandingAmount.equals(70)).toBe(true);
     expect((await prisma.enterpriseInventoryBalance.findFirstOrThrow({where:{organizationId,stockLotId:returnedSource.stockLotId}})).quantityOnHand.equals(4)).toBe(true);
 
+    // Actual HTTP dispatch and Finance credit posting against PostgreSQL.
+    // It must not be possible to spend or credit the reserved part of the
+    // payable before the linked supplier document has been posted.
+    const approvedRecord=await prisma.enterpriseSupplierReturnRequest.findFirstOrThrow({where:{organizationId,id:returnRequestId}});
+    const dispatchPath=base+"/purchases/"+normalPurchase.id+"?action=dispatch-supplier-return";
+    const dispatchPayload={requestId:returnRequestId,revision:approvedRecord.revision,dispatchReference:historyKey+"-DISPATCH"};
+    const noDispatch=await post(context.settler,dispatchPath,dispatchPayload);
+    expect(noDispatch.status,JSON.stringify(noDispatch.body)).toBe(403);
+    const staleDispatch=await post(context.owner,dispatchPath,{...dispatchPayload,revision:approvedRecord.revision+1});
+    expect(staleDispatch.status).toBe(409);
+    const sourceLayer=await prisma.enterpriseInventoryCostLayer.findFirstOrThrow({where:{organizationId,id:approvedRecord.originCostLayerId}});
+    const dispatchResult=await post(context.owner,dispatchPath,dispatchPayload);
+    expect(dispatchResult.status,JSON.stringify(dispatchResult.body)).toBe(200);
+    expect(dispatchResult.body.request.status).toBe("DISPATCHED");
+    const dispatchedRecord=await prisma.enterpriseSupplierReturnRequest.findFirstOrThrow({where:{organizationId,id:returnRequestId}});
+    expect(dispatchedRecord.dispatchReference).toBe(dispatchPayload.dispatchReference);
+    expect(dispatchedRecord.dispatchedByUserId).toBe(fixture.owner.id);
+    const dispatchMovement=await prisma.enterpriseStockMovement.findFirstOrThrow({where:{organizationId,id:dispatchedRecord.dispatchMovementId}});
+    expect(dispatchMovement.movementType).toBe("SUPPLIER_RETURN_OUT");
+    expect(dispatchMovement.direction).toBe("OUT");
+    expect(dispatchMovement.quantity.equals(2)).toBe(true);
+    expect(dispatchMovement.stockLotId).toBe(returnedSource.stockLotId);
+    expect((await prisma.enterpriseInventoryBalance.findFirstOrThrow({where:{organizationId,stockLotId:returnedSource.stockLotId}})).quantityOnHand.equals(2)).toBe(true);
+    expect((await prisma.enterpriseInventoryCostLayer.findFirstOrThrow({where:{organizationId,id:sourceLayer.id}})).remainingQuantity.equals(sourceLayer.remainingQuantity.minus(2))).toBe(true);
+    const dispatchValue=await prisma.enterpriseInventoryAccountingEvent.findFirstOrThrow({where:{organizationId,id:dispatchedRecord.dispatchAccountingEventId}});
+    expect(dispatchValue.eventType).toBe("SUPPLIER_RETURN");
+    expect(dispatchValue.status).toBe("POSTED");
+    expect(dispatchValue.totalCost.equals(14)).toBe(true);
+    const dispatchJournal=await prisma.enterpriseJournalEntry.findFirstOrThrow({where:{organizationId,id:dispatchValue.journalEntryId},include:{lines:true}});
+    expect(dispatchJournal.postingEvent).toBe("INVENTORY_SUPPLIER_RETURN_VALUED");
+    expect(dispatchJournal.totalDebit.equals(14)).toBe(true);
+    expect(dispatchJournal.totalCredit.equals(14)).toBe(true);
+    expect(dispatchJournal.lines).toHaveLength(2);
+    const replayDispatch=await post(context.owner,dispatchPath,dispatchPayload);
+    expect(replayDispatch.status,JSON.stringify(replayDispatch.body)).toBe(200);
+    expect(replayDispatch.body.idempotent).toBe(true);
+    expect(await prisma.enterpriseStockMovement.count({where:{organizationId,sourceEntityType:"EnterpriseSupplierReturnRequest",sourceEntityId:returnRequestId}})).toBe(1);
+    expect((await prisma.enterprisePayable.findUniqueOrThrow({where:{supplierInvoiceId:supplierInvoice.id}})).outstandingAmount.equals(70)).toBe(true);
+
+    // Negative allocation uses a confirmed-payment fixture solely to reach
+    // the actual allocation guard; no cash or accounting movement is faked.
+    const paymentProbe=await prisma.enterprisePayment.create({data:{
+      organizationId,number:historyKey+"-PAYMENT-PROBE",direction:"OUTBOUND",paymentType:"SUPPLIER_PAYMENT",methodType:"BANK_TRANSFER",
+      financialAccountId:fixture.bank.id,businessPartyId:supplierParty.id,currencyCode:fixture.currencyCode,amount:70,unallocatedAmount:70,
+      paymentDate:new Date(),status:"CONFIRMED",initiatedByUserId:fixture.owner.id,approvedByUserId:fixture.settler.id,confirmedByUserId:fixture.owner.id,confirmedAt:new Date()
+    }});
+    const overReserved=await post(context.owner,base+"/payments/"+paymentProbe.id+"/allocations",{payableId:supplierPayable.id,amount:"57"});
+    expect(overReserved.status,JSON.stringify(overReserved.body)).toBe(409);
+    expect(overReserved.body.error).toBe("SUPPLIER_RETURN_PAYABLE_RESERVED");
+    expect(await prisma.enterprisePaymentAllocation.count({where:{organizationId,paymentId:paymentProbe.id}})).toBe(0);
+    expect((await prisma.enterprisePayment.findUniqueOrThrow({where:{id:paymentProbe.id}})).unallocatedAmount.equals(70)).toBe(true);
+    const linkedCreditPayload={invoiceId:supplierInvoice.id,supplierReturnId:returnRequestId,supplierCreditReference:historyKey+"-SCN",creditDate:dispatchedRecord.dispatchedAt.toISOString().slice(0,10),reason:"Supplier confirmed credit for physically returned defective units",items:[{sourceInvoiceItemId:approvedRecord.supplierInvoiceItemId,description:historicalProduct.name,quantity:"2",unitPrice:"7"}]};
+    const genericPayload={...linkedCreditPayload};delete genericPayload.supplierReturnId;delete genericPayload.supplierCreditReference;
+    const genericDenied=await post(context.owner,base+"/supplier-credit-notes",genericPayload);
+    expect(genericDenied.status,JSON.stringify(genericDenied.body)).toBe(409);
+    const wrongAmount=await post(context.owner,base+"/supplier-credit-notes",{...linkedCreditPayload,items:[{...linkedCreditPayload.items[0],quantity:"1"}]});
+    expect(wrongAmount.status).toBe(409);
+    const createdCredit=await post(context.owner,base+"/supplier-credit-notes",linkedCreditPayload);
+    expect(createdCredit.status,JSON.stringify(createdCredit.body)).toBe(201);
+    const creditId=createdCredit.body.creditNote.id;
+    expect(createdCredit.body.creditNote.status).toBe("DRAFT");
+    expect(Number(createdCredit.body.creditNote.grandTotal)).toBe(14);
+    const replayCredit=await post(context.owner,base+"/supplier-credit-notes",linkedCreditPayload);
+    expect(replayCredit.status,JSON.stringify(replayCredit.body)).toBe(201);
+    expect(replayCredit.body.creditNote.id).toBe(creditId);
+    expect(await prisma.enterpriseSupplierCreditNote.count({where:{organizationId,supplierInvoiceId:supplierInvoice.id}})).toBe(1);
+    const creditPath=base+"/supplier-credit-notes/"+creditId;
+    const selfCredit=await post(context.owner,creditPath+"/transition",{action:"SUBMIT",revision:createdCredit.body.creditNote.revision,approverUserId:fixture.owner.id});
+    expect(selfCredit.status).toBe(403);
+    const submittedCredit=await post(context.owner,creditPath+"/transition",{action:"SUBMIT",revision:createdCredit.body.creditNote.revision,approverUserId:fixture.settler.id});
+    expect(submittedCredit.status,JSON.stringify(submittedCredit.body)).toBe(200);
+    const earlyPosting=await post(context.owner,creditPath+"/post",{revision:submittedCredit.body.creditNote.revision});
+    expect(earlyPosting.status).toBe(409);
+    const approvedCredit=await post(context.settler,creditPath+"/transition",{action:"APPROVE",revision:submittedCredit.body.creditNote.revision});
+    expect(approvedCredit.status,JSON.stringify(approvedCredit.body)).toBe(200);
+    expect((await prisma.enterprisePayable.findUniqueOrThrow({where:{supplierInvoiceId:supplierInvoice.id}})).outstandingAmount.equals(70)).toBe(true);
+    const postedCredit=await post(context.owner,creditPath+"/post",{revision:approvedCredit.body.creditNote.revision});
+    expect(postedCredit.status,JSON.stringify(postedCredit.body)).toBe(200);
+    expect(postedCredit.body.creditNote.status).toBe("POSTED");
+    const reconciliation=await prisma.enterpriseSupplierReturnRequest.findFirstOrThrow({where:{organizationId,id:returnRequestId}});
+    expect(reconciliation.status).toBe("RECONCILED");
+    expect(reconciliation.supplierCreditNoteId).toBe(creditId);
+    const creditJournal=await prisma.enterpriseJournalEntry.findFirstOrThrow({where:{organizationId,id:reconciliation.creditJournalEntryId},include:{lines:true}});
+    expect(creditJournal.postingEvent).toBe("SUPPLIER_CREDIT_NOTE_POSTED");
+    expect(creditJournal.totalDebit.equals(14)).toBe(true);
+    expect(creditJournal.totalCredit.equals(14)).toBe(true);
+    const clearingId=dispatchJournal.lines.find(line=>line.debit.equals(14)).ledgerAccountId;
+    expect(creditJournal.lines.some(line=>line.ledgerAccountId===clearingId&&line.credit.equals(14)&&line.debit.isZero())).toBe(true);
+    const finalPayable=await prisma.enterprisePayable.findUniqueOrThrow({where:{supplierInvoiceId:supplierInvoice.id}});
+    expect(finalPayable.outstandingAmount.equals(56)).toBe(true);
+    expect(finalPayable.creditedAmount.equals(14)).toBe(true);
+    expect(await prisma.enterprisePayableAllocation.count({where:{organizationId,payableId:finalPayable.id,sourceType:"SUPPLIER_CREDIT_NOTE",sourceId:creditId}})).toBe(1);
+    expect((await post(context.owner,creditPath+"/post",{revision:approvedCredit.body.creditNote.revision})).status).toBe(200);
+    expect(await prisma.enterprisePayableAllocation.count({where:{organizationId,payableId:finalPayable.id,sourceType:"SUPPLIER_CREDIT_NOTE",sourceId:creditId}})).toBe(1);
+    expect((await prisma.enterpriseInventoryBalance.findFirstOrThrow({where:{organizationId,stockLotId:returnedSource.stockLotId}})).quantityOnHand.equals(2)).toBe(true);
+    const finalTrace=await context.owner.request.get(receiptTracePath+"&search=PURCHASE-A");
+    expect(finalTrace.status()).toBe(200);
+    expect((await finalTrace.json()).items[0].supplierReturnRequest).toMatchObject({status:"RECONCILED",supplierCreditNoteId:creditId,canDispatch:false,canCreateCredit:false});
+
     const alerts=await context.owner.request.get(qualityPath+"?search="+encodeURIComponent(batchKey)+"&expiry=RECALLED&page=1&warehouseId="+encodeURIComponent(spareWarehouse.id));
     expect(alerts.status()).toBe(200);
     const alertBody=await alerts.json();
