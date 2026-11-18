@@ -24,6 +24,8 @@ export function InventoryStockGovernance({ organizationId, locale, warehouses }:
   const en = locale === "en";
   const [open, setOpen] = useState(false);
   const [custodyOpen,setCustodyOpen]=useState(false);
+  const [initialCustodyId,setInitialCustodyId]=useState("");
+  useEffect(()=>{const id=new URLSearchParams(window.location.search).get("custodyId");if(id&&id.length<=191){setInitialCustodyId(id);setCustodyOpen(true);}},[]);
   const [items, setItems] = useState<Item[]>([]);
   const [canAdminister, setCanAdminister] = useState(false);
   const [canRegisterLot, setCanRegisterLot] = useState(false);
@@ -184,7 +186,7 @@ export function InventoryStockGovernance({ organizationId, locale, warehouses }:
         <div className="mt-2 flex items-center justify-between gap-3 text-xs text-dtsc-muted"><span>{en ? "Page" : "Page"} {page}/{pages}</span><div className="flex gap-2"><Button variant="outline" disabled={page <= 1} onClick={() => setPage((value) => value - 1)}>{en ? "Previous" : "Précédent"}</Button><Button variant="outline" disabled={page >= pages} onClick={() => setPage((value) => value + 1)}>{en ? "Next" : "Suivant"}</Button></div></div>
       </div>
     </div> : null}
-    {custodyOpen?<InventoryReturnCustodyDialog organizationId={organizationId} locale={locale} warehouses={warehouses} onClose={()=>setCustodyOpen(false)} />:null}
+    {custodyOpen?<InventoryReturnCustodyDialog organizationId={organizationId} locale={locale} warehouses={warehouses} initialCustodyId={initialCustodyId} onClose={()=>{setCustodyOpen(false);setInitialCustodyId("");}} />:null}
     {historicalItem ? <InventoryHistoricalLotDialog key={historicalItem.id} organizationId={organizationId} locale={locale} item={historicalItem} onClose={() => setHistoricalItem(null)} onSubmitted={(result) => { setLastApproval(result); setHistoricalItem(null); refresh(); }} /> : null}
     <Dialog open={Boolean(editPolicy)} onClose={() => { if (!busy) setEditPolicy(null); }} title={en ? "Stock rules" : "Règles de stock"} presentation="editor"><form key={editPolicy?.id || "none"} onSubmit={savePolicy} className="grid gap-3 p-2">
       <p className="text-xs text-dtsc-muted">{editPolicy?.catalogItem.name}</p>
