@@ -78,7 +78,7 @@ function SupplierReturnCheck({ organizationId, purchaseId, row, locale, onRefres
     if(reason.length<8||form.get("confirmWithdrawal")!=="on")return;
     setBusy(true);setError("");setMessage("");
     try {
-      const response=await fetch(`/api/enterprise/${encodeURIComponent(organizationId)}/purchases/${encodeURIComponent(purchaseId)}?action=withdraw-supplier-return`,{method:"POST",headers:{"Content-Type":"application/json","Accept-Language":locale},body:JSON.stringify({requestId:request.id,revision:request.revision,reason})});
+      const response=await fetch(`/api/enterprise/${encodeURIComponent(organizationId)}/purchases/${encodeURIComponent(purchaseId)}?action=withdraw-supplier-return`,{method:"POST",headers:{"Content-Type":"application/json","Accept-Language":locale},body:JSON.stringify({requestId:request.id,revision:request.revision,reason,confirmUndispatched:true})});
       const body=await response.json();
       if(!response.ok||!body.ok){setError(body.message||t("returnWithdrawFailed"));return;}
       setRequest({...request,status:"CANCELLED",canWithdraw:false,canDispatch:false,revision:body.request.revision});setMessage(t("returnWithdrawDone"));
