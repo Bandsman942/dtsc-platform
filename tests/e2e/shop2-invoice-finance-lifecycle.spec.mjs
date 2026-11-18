@@ -772,7 +772,21 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
     expect((await batchStock(1)).equals(2)).toBe(true);
 
     // #1212 approved write-off, with separate expense posting.
-    await prisma.enterpriseStockLot.update({where:{id:batches[1].lot.id},data:{status:"QUARANTINED"}});
+    const qualityPath=base+"/inventory/lots";
+    const patchLot=async (context,data)=>{
+      const res=await context.request.patch(qualityPath,{data,headers:{origin:baseUrl,referer:`${baseUrl}/enterprise-modules/INVENTORY_LOGISTICS`}});
+      return {status:res.status(),body:await res.json().catch(()=>null)};
+    };
+    const qualityBefore=await prisma.enterpriseStockLot.findUniqueOrThrow({where:{id:batches[1].lot.id}});
+    const quarantine=await patchLot(context.owner,{id:qualityBefore.id,revision:qualityBefore.revision,status:"QUARANTINED",qualityReason:"E2E found damaged packaging in late lot"});
+    expect(quarantine.status,JSON.stringify(quarantine.body)).toBe(200);
+    expect((await batchStock(1)).equals(2)).toBe(true);
+    const selfRelease=await patchLot(context.owner,{id:qualityBefore.id,revision:quarantine.body.revision,status:"AVAILABLE",qualityReason:"E2E prohibited self-release"});
+    expect(selfRelease.status,JSON.stringify(selfRelease.body)).toBe(403);
+    const releasedQuality=await patchLot(context.settler,{id:qualityBefore.id,revision:quarantine.body.revision,status:"AVAILABLE",qualityReason:"Independent quality review before subsequent damage"});
+    expect(releasedQuality.status,JSON.stringify(releasedQuality.body)).toBe(200);
+    const finalQuarantine=await patchLot(context.owner,{id:qualityBefore.id,revision:releasedQuality.body.revision,status:"QUARANTINED",qualityReason:"Damaged packaging identified before destruction"});
+    expect(finalQuarantine.status,JSON.stringify(finalQuarantine.body)).toBe(200);
     const lossPayload={inventoryItemId:batchInventory.id,warehouseId:fixture.warehouse.id,stockLotId:batches[1].lot.id,adjustmentType:"OUT",lossReason:"DAMAGE",quantity:1,reason:"E2E independent destruction of damaged batch",approverUserId:fixture.settler.id,idempotencyKey:batchKey+"-loss"};
     const lossesPath=base+"/stock-adjustments";
     const self=await post(context.owner,lossesPath,{...lossPayload,approverUserId:fixture.owner.id,idempotencyKey:batchKey+"-self-loss"});
@@ -813,6 +827,37 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
     expect(secondDecision.status).toBeGreaterThanOrEqual(400);
     expect((await batchStock(1)).equals(1)).toBe(true);
     expect(await prisma.enterpriseStockMovement.count({where:{organizationId,sourceEntityType:"EnterpriseStockAdjustment",sourceEntityId:loss.body.adjustment.id}})).toBe(1);
+
+    // Recall the same batch identity across warehouses without removing stock.
+    const duplicateWarehouse=await prisma.enterpriseWarehouse.create({data:{organizationId,siteId:fixture.site.id,code:batchKey+"-W2",name:"Recall E2E warehouse 2",warehouseType:"STORE",createdByUserId:fixture.owner.id}});
+    const spareWarehouse=await prisma.enterpriseWarehouse.create({data:{organizationId,siteId:fixture.site.id,code:batchKey+"-W3",name:"Recall E2E warehouse 3",warehouseType:"STORE",createdByUserId:fixture.owner.id}});
+    const duplicateLot=await prisma.enterpriseStockLot.create({data:{organizationId,inventoryItemId:batchInventory.id,warehouseId:duplicateWarehouse.id,lotNumber:batches[1].lot.lotNumber,expiryDate:batches[1].lot.expiryDate,createdByUserId:fixture.owner.id}});
+    const duplicateBalance=await prisma.enterpriseInventoryBalance.create({data:{organizationId,inventoryItemId:batchInventory.id,warehouseId:duplicateWarehouse.id,stockLotId:duplicateLot.id,quantityOnHand:1}});
+    const duplicateMovement=await prisma.enterpriseStockMovement.create({data:{organizationId,inventoryItemId:batchInventory.id,warehouseId:duplicateWarehouse.id,stockLotId:duplicateLot.id,movementType:"OPENING_BALANCE",direction:"IN",quantity:1,balanceAfter:1,idempotencyKey:batchKey+"-recall-copy-opening",createdByUserId:fixture.owner.id}});
+    const recallBefore=await prisma.enterpriseStockLot.findUniqueOrThrow({where:{id:qualityBefore.id}});
+    const recall=await patchLot(context.owner,{id:recallBefore.id,revision:recallBefore.revision,recall:true,qualityReason:"Supplier recall of identical batch across warehouses"});
+    expect(recall.status,JSON.stringify(recall.body)).toBe(200);
+    expect(recall.body.affectedLots).toBe(2);
+    expect(recall.body.recallReference).toMatch(/^RECALL-/);
+    const recalled=await prisma.enterpriseStockLot.findMany({where:{organizationId,id:{in:[recallBefore.id,duplicateLot.id]}}});
+    expect(recalled.every(row=>row.status==="QUARANTINED"&&row.recallReference===recall.body.recallReference)).toBe(true);
+    expect((await batchStock(1)).equals(1)).toBe(true);
+    expect((await prisma.enterpriseInventoryBalance.findUniqueOrThrow({where:{id:duplicateBalance.id}})).quantityOnHand.equals(1)).toBe(true);
+    const forbiddenRelease=await patchLot(context.settler,{id:recallBefore.id,revision:recall.body.revision,status:"AVAILABLE",qualityReason:"A recalled batch cannot be released"});
+    expect(forbiddenRelease.status,JSON.stringify(forbiddenRelease.body)).toBe(409);
+    const recreate=await post(context.owner,qualityPath,{inventoryItemId:batchInventory.id,warehouseId:spareWarehouse.id,lotNumber:duplicateLot.lotNumber,productionDate:null,expiryDate:duplicateLot.expiryDate.toISOString().slice(0,10),notes:null});
+    expect(recreate.status,JSON.stringify(recreate.body)).toBe(409);
+    await expect(prisma.enterpriseStockLot.create({data:{organizationId,inventoryItemId:batchInventory.id,warehouseId:spareWarehouse.id,lotNumber:duplicateLot.lotNumber,expiryDate:duplicateLot.expiryDate,createdByUserId:fixture.owner.id}})).rejects.toThrow();
+    const traceRes=await context.owner.request.get(qualityPath+"?view=trace&lotId="+encodeURIComponent(recallBefore.id));
+    expect(traceRes.status()).toBe(200);
+    const trace=await traceRes.json();
+    expect(trace.lot.recallReference).toBe(recall.body.recallReference);
+    expect(trace.items.some(row=>row.id===duplicateMovement.id)).toBe(true);
+    expect(trace.items.some(row=>row.movementType==="LOT_WRITE_OFF")).toBe(true);
+    expect(trace.items.some(row=>row.movementType==="SALE_FULFILLMENT")).toBe(true);
+    expect(trace.items.some(row=>row.movementType==="RETURN_IN")).toBe(true);
+    expect(trace.items.every(row=>row.stockLot.lotNumber===duplicateLot.lotNumber)).toBe(true);
+
 
   } finally {
     if (originalSettings !== undefined) await prisma.enterpriseRetailConfiguration.update({

@@ -68,6 +68,8 @@
 
 - UI qualité : filtre dépôt/statut, distinction stock physique/réservation de solde, badges de péremption/rappel, raison qualité et libération conditionnelle, confirmation du rappel global et historique paginé des mouvements avec source et dépôt. Les lectures restent possibles indépendamment du droit de modification. Recette CI/UI à exécuter.
 
+- Recette PostgreSQL qualité ajoutée : quarantaine sans mouvement, refus auto-libération, libération indépendante, destruction, rappel de deux copies dans deux dépôts, quantité inchangée, refus de libérer et de recréer y compris par le client Prisma (trigger), preuve des mouvements d’origine et retour/destruction. À certifier.
+
 ## Restant (bloquant)
 Certification de la réaffectation historique sur PostgreSQL + navigateur et valeur inchangée; certification achats et valorisation, réservations/livraisons multi-lots; moteur FEFO commun et POS; pertes, rappels et comptabilité; Design 2.0 et tests multisectoriels. Voir issue #1212. Ne pas merger avant clôture de tous les points.
 
