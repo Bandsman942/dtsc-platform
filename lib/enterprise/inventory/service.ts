@@ -72,7 +72,7 @@ function inventoryReference(prefix: string) {
   return `${prefix}-${Date.now().toString(36).toUpperCase()}-${randomUUID().slice(0, 6).toUpperCase()}`;
 }
 
-async function assertInventoryCoordinates(tx: Prisma.TransactionClient, organizationId: string, input: Pick<StockMovementInput, "inventoryItemId" | "warehouseId" | "storageLocationId" | "stockLotId">) {
+async function assertInventoryCoordinates(tx: Prisma.TransactionClient, organizationId: string, input: Pick<StockMovementInput, "inventoryItemId" | "warehouseId" | "storageLocationId" | "stockLotId">, allowUnavailableLot = false) {
   const [inventoryItem, warehouse, storageLocation, stockLot] = await Promise.all([
     tx.enterpriseInventoryItem.findFirst({
       where: { id: input.inventoryItemId, organizationId, status: "ACTIVE", archivedAt: null },
@@ -83,7 +83,7 @@ async function assertInventoryCoordinates(tx: Prisma.TransactionClient, organiza
       ? tx.enterpriseStorageLocation.findFirst({ where: { id: input.storageLocationId, organizationId, warehouseId: input.warehouseId, status: "ACTIVE", archivedAt: null }, select: { id: true } })
       : Promise.resolve(null),
     input.stockLotId
-      ? tx.enterpriseStockLot.findFirst({ where: { id: input.stockLotId, organizationId, inventoryItemId: input.inventoryItemId, warehouseId: input.warehouseId, status: "AVAILABLE", archivedAt: null }, select: { id: true, storageLocationId: true, expiryDate: true } })
+      ? tx.enterpriseStockLot.findFirst({ where: { id: input.stockLotId, organizationId, inventoryItemId: input.inventoryItemId, warehouseId: input.warehouseId, status: allowUnavailableLot ? {in:["AVAILABLE","BLOCKED","QUARANTINED"]} : "AVAILABLE", archivedAt: null }, select: { id: true, storageLocationId: true, expiryDate: true } })
       : Promise.resolve(null),
   ]);
   if (!inventoryItem || !inventoryItem.catalogItem.trackInventory) throw new EnterpriseDomainError("INVENTORY_ITEM_NOT_FOUND", 404);
@@ -100,12 +100,19 @@ export async function applyStockMovementTx(
   tx: Prisma.TransactionClient,
   organizationId: string,
   actorUserId: string,
-  input: StockMovementInput,
-  internal?: { consumingRetailInvoiceId?: string },
+  input: Omit<StockMovementInput, "movementType"> & {movementType: StockMovementInput["movementType"] | "LOT_WRITE_OFF"},
+  internal?: { consumingRetailInvoiceId?: string; approvedLotWriteOffId?: string },
 ) {
+  const writeOff = input.movementType === "LOT_WRITE_OFF";
+  if (writeOff) {
+    const approvalId=internal?.approvedLotWriteOffId;
+    if (!approvalId || input.sourceEntityId!==approvalId || input.sourceEntityType!=="EnterpriseStockAdjustment" || input.direction!=="OUT" || !input.stockLotId) throw new EnterpriseDomainError("STOCK_LOSS_APPROVAL_REQUIRED",403);
+    const adjustment=await tx.enterpriseStockAdjustment.findFirst({where:{organizationId,id:approvalId,status:"PENDING_APPROVAL",approvedByUserId:actorUserId,lossReason:{not:null},adjustmentType:"OUT"}});
+    if (!adjustment || adjustment.requestedByUserId===actorUserId || adjustment.stockLotId!==input.stockLotId || adjustment.inventoryItemId!==input.inventoryItemId || adjustment.warehouseId!==input.warehouseId || adjustment.storageLocationId!==(input.storageLocationId||null) || !adjustment.quantity.equals(input.quantity)) throw new EnterpriseDomainError("STOCK_LOSS_APPROVAL_REQUIRED",403);
+  }
   const existing = await tx.enterpriseStockMovement.findFirst({ where: { organizationId, idempotencyKey: input.idempotencyKey } });
   if (existing) return { movement: existing, idempotent: true };
-  const { inventoryItem, stockLot } = await assertInventoryCoordinates(tx, organizationId, input);
+  const { inventoryItem, stockLot } = await assertInventoryCoordinates(tx, organizationId, input, writeOff);
   if (inventoryItem.expiryTracking && stockLot?.expiryDate && ["SALE_FULFILLMENT", "RETURN_IN", "PRODUCTION_CONSUMPTION"].includes(input.movementType)) {
     const organization = await tx.organization.findUniqueOrThrow({ where: { id: organizationId }, select: { timezone: true } });
     const components = new Intl.DateTimeFormat("en-CA", { timeZone: organization.timezone || "UTC", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date());

@@ -64,6 +64,7 @@ export const ENTERPRISE_POSTING_REGISTRY: Record<PostingEvent, PostingBuilder> =
   PAYROLL_PAYMENT_CONFIRMED: buildPayrollPaymentPosting,
   INVENTORY_RECEIPT_VALUED: (tx, input) => buildInventoryAccountingPosting(tx, input, "RECEIPT"),
   INVENTORY_ISSUE_VALUED: (tx, input) => buildInventoryAccountingPosting(tx, input, "ISSUE"),
+  INVENTORY_LOSS_VALUED: (tx, input) => buildInventoryAccountingPosting(tx, input, "LOSS"),
   ASSET_CAPITALIZED: buildAssetCapitalizationPosting,
   ASSET_DEPRECIATION_POSTED: buildDepreciationPosting,
   ASSET_DISPOSAL_POSTED: buildAssetDisposalPosting,

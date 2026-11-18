@@ -240,7 +240,11 @@ export async function assertRetailInvoiceReturnSettlementReadinessTx(
           if (splits.some(({movement}) => !lots.some(lot => lot.id === movement.stockLotId && (!lot.expiryDate || lotExpiryDateKey(lot.expiryDate) >= today)))) throw conflict("RETAIL_INVOICE_RETURN_BATCH_UNSAFE");
         }
         for (const { movement, quantity } of splits) stockSourcePlan.push({ returnLineId: line.returnLineId, originalMovementId: movement.id, inventoryItemId: movement.inventoryItemId, warehouseId: movement.warehouseId, storageLocationId: movement.storageLocationId, stockLotId: movement.stockLotId, quantity, stockDisposition: line.stockDisposition });
-      } catch (error) { throw conflict(error instanceof Error ? error.message : "RETAIL_INVOICE_RETURN_SETTLEMENT_STOCK_INVALID"); }
+      } catch (error) {
+        if (error instanceof EnterpriseRetailError) throw error;
+        const code = error && typeof error === "object" && "message" in error ? String(error.message) : "";
+        throw conflict(["RETAIL_INVOICE_RETURN_BATCH_SELECTION_REQUIRED", "RETAIL_INVOICE_RETURN_BATCH_QUANTITY_EXCEEDED", "RETAIL_INVOICE_RETURN_SETTLEMENT_STOCK_INVALID"].includes(code) ? code : "RETAIL_INVOICE_RETURN_SETTLEMENT_STOCK_INVALID");
+      }
       continue;
     }
     if (line.lotAllocations != null) throw conflict("RETAIL_INVOICE_RETURN_SETTLEMENT_STOCK_INVALID");

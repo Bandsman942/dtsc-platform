@@ -124,11 +124,13 @@ export async function valueInventoryIssueTx(
     throw new EnterpriseAccountingError("INVENTORY_WEIGHTED_AVERAGE_REQUIRED", 409);
   }
 
+  const loss = movement.movementType === "LOT_WRITE_OFF";
+  const postingEvent = loss ? "INVENTORY_LOSS_VALUED" : "INVENTORY_ISSUE_VALUED";
   const stableKey = idempotencyKey({
     organizationId,
     sourceEntityType: "EnterpriseStockMovement",
     sourceEntityId: movement.id,
-    postingEvent: "INVENTORY_ISSUE_VALUED",
+    postingEvent,
     postingVersion: 1,
   });
   let event = await tx.enterpriseInventoryAccountingEvent.findUnique({
@@ -171,7 +173,7 @@ export async function valueInventoryIssueTx(
         organizationId,
         inventoryItemId: movement.inventoryItemId,
         stockMovementId: movement.id,
-        eventType: "ISSUE",
+        eventType: loss ? "LOSS" : "ISSUE",
         quantity: issueQuantity,
         unitCost: weightedUnitCost,
         totalCost,
@@ -184,7 +186,7 @@ export async function valueInventoryIssueTx(
       organizationId,
       entityType: "EnterpriseInventoryAccountingEvent",
       entityId: event.id,
-      eventType: "INVENTORY_ISSUE_VALUED",
+      eventType: postingEvent,
       summary: `Inventory issue ${movementLabel(movement)} valued`,
       actorUserId,
       toStatus: "APPROVED",
@@ -199,7 +201,7 @@ export async function valueInventoryIssueTx(
   }
 
   const posting = await postBusinessEventTx(tx, organizationId, actorUserId, {
-    postingEvent: "INVENTORY_ISSUE_VALUED",
+    postingEvent,
     sourceEntityType: "EnterpriseInventoryAccountingEvent",
     sourceEntityId: event.id,
   });

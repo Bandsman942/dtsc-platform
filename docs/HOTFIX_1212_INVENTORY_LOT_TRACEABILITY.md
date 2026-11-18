@@ -50,6 +50,12 @@
 
 - Recette POS PostgreSQL/HTTP ajoutée au parcours Finance cinq acteurs : 2+3 unités stockées, facture unique de 4 unités (2+2), promesses empêchant la survente, paiement et deux mouvements/coûts, retour du lot tardif seul, confirmation physique indépendante et restitution au coût de 7, rejeu sans mouvement en double. Résultat à vérifier en CI.
 
+## Pertes et destruction contrôlées (en validation)
+- `lossReason` optionnel sur l'ajustement canonique (migration additive), motifs EXPIRY/DAMAGE/RECALL/DESTRUCTION; quantité positive exacte, lot identifié, demande et validateur distincts, contrôle du solde, révision et idempotence.
+- Sortie interne uniquement `LOT_WRITE_OFF`, sur demande approuvée; jamais exposée au schéma public de mouvement. Les retenues et réservations restent opposables, donc libérer/régulariser les promesses avant destruction. Les secteurs à registre spécialisé sont exclus.
+- Valorisation automatique si activée, par moteur existant et devise unique des couches ouvertes. En cas de configuration insuffisante, rollback de la sortie et de l'approbation. Événement distinct `INVENTORY_LOSS_VALUED` (LOSS), débit charge d'exploitation configurée et crédit Stock, sans COGS ni mouvement de trésorerie. En mode manuel, la valorisation par la route Finance existante reconnaît le même mouvement et le même événement.
+- Sur c7c4e8a, les deux recettes PostgreSQL/HTTP sont CI_PROVEN (Shop 2 behavioral 44249517190, étapes des commandes globales et Finance cinq acteurs). 16 workflows verts; Quality 134616677661 a échoué sur le code d'erreur de lot non revendable (exception masquée). Correction préflight avec code autorisé et conservation de l'erreur métier.
+
 ## Restant (bloquant)
 Certification de la réaffectation historique sur PostgreSQL + navigateur et valeur inchangée; certification achats et valorisation, réservations/livraisons multi-lots; moteur FEFO commun et POS; pertes, rappels et comptabilité; Design 2.0 et tests multisectoriels. Voir issue #1212. Ne pas merger avant clôture de tous les points.
 

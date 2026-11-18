@@ -4,6 +4,13 @@ import { NextResponse } from "next/server";
 import { EnterpriseDomainError } from "@/lib/enterprise/common/errors";
 
 const BUSINESS_ERROR_MESSAGES: Record<string, { fr: string; en: string }> = {
+  STOCK_LOSS_BATCH_REQUIRED: {fr:"Sélectionnez un article suivi et un lot identifié.",en:"Select a tracked item and identified batch."},
+  STOCK_LOSS_NOT_EXPIRED: {fr:"Ce lot n’est pas encore périmé. Vérifiez le motif de perte.",en:"This batch has not expired. Check the loss reason."},
+  STOCK_LOSS_ISOLATE_FIRST: {fr:"Bloquez ou mettez le lot en quarantaine avant de soumettre sa destruction.",en:"Block or quarantine the batch before submitting disposal."},
+  STOCK_LOSS_INDEPENDENT_APPROVAL: {fr:"La destruction exige un validateur indépendant du demandeur.",en:"Disposal requires an independent approver."},
+  STOCK_LOSS_IDEMPOTENCY_CONFLICT: {fr:"Cette référence de demande correspond à une autre opération.",en:"This request key belongs to another operation."},
+  STOCK_LOSS_APPROVAL_REQUIRED: {fr:"Une demande de perte approuvée est obligatoire.",en:"An approved loss request is required."},
+  STOCK_LOSS_VALUATION_REQUIRED: {fr:"Vérifiez les couches de coût, la devise, les comptes Stock et Charges ainsi que la période comptable. Aucune sortie n’a été enregistrée.",en:"Check cost layers, currency, Inventory and Expense mappings and accounting period. No stock was removed."},
   STOCK_LOT_EXPIRED: { fr: "Ce lot suivi est périmé. Il ne peut pas être vendu, réintégré en stock vendable ou consommé en production.", en: "This expiry-tracked batch has expired and cannot be sold, restocked for sale or consumed in production." },
   INVENTORY_RESERVATION_FULFILLMENT_EXCEEDED: { fr: "Les quantités réservées ne suffisent pas pour cette livraison. Réservez les lots nécessaires dans le dépôt sélectionné.", en: "Reserved quantities are insufficient for delivery. Reserve the required batches in the selected warehouse." },
   INVENTORY_RESERVATION_TRACKED_ITEM_REQUIRED: { fr: "Choisissez un article actif suivi par lots ou par péremption.", en: "Select an active batch- or expiry-tracked item." },

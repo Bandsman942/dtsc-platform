@@ -231,6 +231,7 @@ model EnterpriseStockAdjustment {
   storageLocationId String?
   stockLotId        String?
   adjustmentType    String
+  lossReason        String?
   quantity          Decimal                 @db.Decimal(18, 3)
   reason             String
   status             String                  @default("DRAFT")
