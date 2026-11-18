@@ -96,6 +96,8 @@
 
 - Correction d’isolation : modèles Lot et Reservation sans relation Prisma warehouse; résolution des IDs de dépôts autorisés et intersection avec le filtre explicite, réservations bornées aux dépôts des soldes déjà autorisés. Les requêtes de mouvements conservent la relation warehouse. Recette de disponibilité ERP : 300 physiques / 100 vendables, 50 promis, puis 250 physiques / 50 vendables; seuil physique 250, total filtré identique au-delà de la page. À certifier.
 
+- Recettes supplémentaires : collaborateur magasin B sur deux dépôts, liste/compteurs/trace/stock minimum limités à B, tentative de modification A refusée; retour physique du lot rappelé sur facture réglée, crédit/inspection cinq acteurs, garde unique et sans mouvement vendable, demande de destruction et attestation distinctes, preuve, refus du rejeu. À certifier sur SHA final.
+
 ## Restant (bloquant)
 Certification de la réaffectation historique sur PostgreSQL + navigateur et valeur inchangée; certification achats et valorisation, réservations/livraisons multi-lots; moteur FEFO commun et POS; pertes, rappels et comptabilité; Design 2.0 et tests multisectoriels. Voir issue #1212. Ne pas merger avant clôture de tous les points.
 

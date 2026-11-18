@@ -890,6 +890,52 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
     expect(trace.items.some(row=>row.movementType==="RETURN_IN")).toBe(true);
     expect(trace.items.every(row=>row.stockLot.lotNumber===duplicateLot.lotNumber)).toBe(true);
 
+    // Non-sellable return: credit/refund, no fictitious stock replenishment,
+    // physical custody from the original issue, then independent disposal.
+    const isolatedPayload={...returnPayload,idempotencyKey:batchKey+"-custody",reason:"Physically returned recalled batch in quarantine",lines:[{checkoutLineId:batchCheckout.lines[0].id,quantity:"1",stockDisposition:"QUARANTINE",lotAllocations:[{stockLotId:batches[1].lot.id,quantity:"1"}]}]};
+    const ir=await post(context.cashier,rbase,isolatedPayload);
+    expect(ir.status,JSON.stringify(ir.body)).toBe(201);
+    const isolatedPath=rbase+"/"+ir.body.request.id;
+    const ii=await post(context.inspector,isolatedPath+"/inspection",{revision:ir.body.request.revision,receivedAndInspected:true,confirmedBatchSelection:true,notes:"Recalled batch physically received and isolated"});
+    expect(ii.status,JSON.stringify(ii.body)).toBe(200);
+    const idc=await post(context.owner,isolatedPath+"/decision",{decision:"APPROVE",revision:ii.body.request.revision});
+    expect(idc.status,JSON.stringify(idc.body)).toBe(200);
+    const ip=await post(context.preparer,isolatedPath+"/prepare",{revision:idc.body.request.revision});
+    expect(ip.status,JSON.stringify(ip.body)).toBe(201);
+    const isolatedRefund=await prisma.enterprisePayment.findUniqueOrThrow({where:{id:ip.body.request.refundPaymentId}});
+    const isolatedCredit=await prisma.enterpriseSalesCreditNote.findUniqueOrThrow({where:{id:ip.body.request.salesCreditNoteId}});
+    await ensureStepUp(context.owner,ownerPassword);
+    expect((await post(context.owner,base+"/payments/"+isolatedRefund.id+"/transition",{action:"APPROVE",revision:isolatedRefund.revision})).status).toBe(200);
+    expect((await post(context.owner,base+"/sales-credit-notes/"+isolatedCredit.id+"/transition",{action:"APPROVE",revision:isolatedCredit.revision})).status).toBe(200);
+    await ensureStepUp(context.returnSettler,cashierPassword);
+    const isolatedSettlePayload={revision:ip.body.request.revision,reason:"Verified physical custody and independent financial approvals"};
+    const isettled=await post(context.returnSettler,isolatedPath+"/settle",isolatedSettlePayload);
+    expect(isettled.status,JSON.stringify(isettled.body)).toBe(200);
+    const custody=await prisma.enterpriseInventoryReturnCustody.findFirstOrThrow({where:{organizationId,returnLine:{returnRequestId:ir.body.request.id}}});
+    expect(custody.status).toBe("QUARANTINED");
+    expect(custody.quantity.equals(1)).toBe(true);
+    expect(custody.originalMovementId).toBe(issues.find(row=>row.stockLotId===batches[1].lot.id).id);
+    expect((await batchStock(1)).equals(1)).toBe(true);
+    expect(await prisma.enterpriseStockMovement.count({where:{organizationId,sourceEntityType:"EnterpriseRetailInvoiceReturnRequest",sourceEntityId:ir.body.request.id}})).toBe(0);
+    expect((await post(context.returnSettler,isolatedPath+"/settle",isolatedSettlePayload)).body.idempotent).toBe(true);
+    expect(await prisma.enterpriseInventoryReturnCustody.count({where:{organizationId,returnLine:{returnRequestId:ir.body.request.id}}})).toBe(1);
+    const listedCustody=await context.owner.request.get(qualityPath+"?view=custody&search="+encodeURIComponent(batchKey));
+    expect(listedCustody.status()).toBe(200);
+    expect((await listedCustody.json()).items.some(row=>row.id===custody.id&&row.canRequest)).toBe(true);
+    const requestedDisposal=await patchLot(context.owner,{custodyId:custody.id,revision:custody.revision,action:"REQUEST_DISPOSAL",reason:"Supplier recall requires safe physical disposal"});
+    expect(requestedDisposal.status,JSON.stringify(requestedDisposal.body)).toBe(200);
+    const disposalPayload={custodyId:custody.id,revision:requestedDisposal.body.revision,action:"CONFIRM_DISPOSAL",reason:"Physical destruction witnessed and recorded in E2E certificate"};
+    const selfDisposal=await patchLot(context.owner,disposalPayload);
+    expect(selfDisposal.status).toBe(403);
+    const attested=await patchLot(context.settler,disposalPayload);
+    expect(attested.status,JSON.stringify(attested.body)).toBe(200);
+    const disposed=await prisma.enterpriseInventoryReturnCustody.findUniqueOrThrow({where:{id:custody.id}});
+    expect(disposed.status).toBe("DISPOSED");
+    expect(disposed.disposedByUserId).toBe(fixture.settler.id);
+    expect(disposed.disposalEvidence).toBe(disposalPayload.reason);
+    expect((await patchLot(context.settler,disposalPayload)).status).toBe(409);
+    expect((await batchStock(1)).equals(1)).toBe(true);
+
     // #1212 Historical stock: independent approval, no new acquisition,
     // unchanged inventory accounting value, then controlled lot activation.
     const historyKey=batchKey+"-HIST";
