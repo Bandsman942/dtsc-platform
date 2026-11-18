@@ -1478,8 +1478,23 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
       const executeInput={custodyId:recoverableCustody.id,assessmentId:appraised.id,revision:appraised.revision,releaseEvidence:"Final inspection passed; repairs completed and physical release recorded",confirmedSaleableAndRepaired:true};
       expect((await recoveryAction(context.settler,"execute-recovery-assessment",executeInput)).status).toBe(403);
       expect((await recoveryAction(context.owner,"execute-recovery-assessment",{...executeInput,confirmedSaleableAndRepaired:false})).status).toBe(400);
-      const executed=await recoveryAction(context.owner,"execute-recovery-assessment",executeInput);
-      expect(executed.status,JSON.stringify(executed.body)).toBe(200);
+      const period=await prisma.enterpriseFiscalPeriod.findFirstOrThrow({where:{organizationId,id:returnPeriod.id}});
+      expect(period.status).toBe("OPEN");
+      await prisma.enterpriseFiscalPeriod.update({where:{id:period.id},data:{status:"CLOSED"}});
+      try{
+        const closed=await recoveryAction(context.owner,"execute-recovery-assessment",executeInput);
+        expect(closed.status,JSON.stringify(closed.body)).toBe(409);
+        expect((await batchStock(0)).isZero()).toBe(true);
+        expect((await prisma.enterpriseInventoryReturnRecoveryAssessment.findFirstOrThrow({where:{organizationId,id:appraised.id}})).status).toBe("APPROVED");
+        expect(await prisma.enterpriseJournalEntry.count({where:{organizationId}})).toBe(beforeRecovery.journals);
+        expect(await prisma.enterpriseStockMovement.count({where:{organizationId,sourceEntityType:"EnterpriseInventoryReturnRecoveryAssessment",sourceEntityId:appraised.id}})).toBe(0);
+      }finally{
+        await prisma.enterpriseFiscalPeriod.update({where:{id:period.id},data:{status:period.status}});
+      }
+      const competing=await Promise.all([recoveryAction(context.owner,"execute-recovery-assessment",executeInput),recoveryAction(context.owner,"execute-recovery-assessment",executeInput)]);
+      expect(competing.every(result=>[200,409].includes(result.status)),JSON.stringify(competing)).toBe(true);
+      const executed=competing.find(result=>result.status===200);
+      expect(executed).toBeTruthy();
       expect(executed.body.assessment.status).toBe("EXECUTED");
       expect((await batchStock(0)).equals(2)).toBe(true);
       const completion=await prisma.enterpriseInventoryReturnRecoveryAssessment.findFirstOrThrow({where:{organizationId,id:appraised.id}});
