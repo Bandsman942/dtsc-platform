@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { authorizeFinanceRequest, financeBusinessDateRange, financeErrorResponse, financeListParams } from "@/lib/enterprise/accounting/http";
-import { creditNoteCreateSchema } from "@/lib/enterprise/accounting/schemas";
+import { supplierCreditNoteCreateSchema } from "@/lib/enterprise/accounting/schemas";
 import { createSupplierCreditNote } from "@/lib/enterprise/accounting/supplier-credit-notes-service";
 import { prisma } from "@/lib/prisma";
 
@@ -73,7 +73,7 @@ export async function POST(req: Request, { params }: Params) {
   const { organizationId } = await params;
   const auth = await authorizeFinanceRequest(req, organizationId, "FINANCE_PAYABLES", "create", { mutation: true });
   if (!auth.ok) return auth.response;
-  const parsed = creditNoteCreateSchema.safeParse(await req.json().catch(() => null));
+  const parsed = supplierCreditNoteCreateSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "SUPPLIER_CREDIT_NOTES_INPUT_INVALID", req);
   try {
     const creditNote = await createSupplierCreditNote(organizationId, auth.session.userId, parsed.data);
