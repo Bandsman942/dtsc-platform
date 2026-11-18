@@ -421,6 +421,12 @@ model EnterpriseInventoryReturnRecoveryAssessment {
   withdrawnAt DateTime?
   withdrawnByUserId String?
   withdrawalReason String?
+  executedAt DateTime?
+  executedByUserId String?
+  releaseEvidence String?
+  recoveryMovementId String?
+  recoveryAccountingEventId String?
+  recoveryJournalEntryId String?
   revision Int @default(1)
   idempotencyKey String
   createdAt DateTime @default(now())
@@ -430,5 +436,8 @@ model EnterpriseInventoryReturnRecoveryAssessment {
   @@unique([organizationId,id],map:"inv_recovery_org_id_key")
   @@unique([organizationId,reference],map:"inv_recovery_reference_key")
   @@unique([organizationId,idempotencyKey],map:"inv_recovery_idempotency_key")
+  @@unique([organizationId,recoveryMovementId],map:"inv_recovery_movement_key")
+  @@unique([organizationId,recoveryAccountingEventId],map:"inv_recovery_event_key")
+  @@unique([organizationId,recoveryJournalEntryId],map:"inv_recovery_journal_key")
   @@index([organizationId,custodyId,status],map:"inv_recovery_custody_status_idx")
 }
