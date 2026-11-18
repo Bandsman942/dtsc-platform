@@ -228,3 +228,33 @@ export async function dispatchSupplierReturn(organizationId: string, purchaseId:
     return { request: await tx.enterpriseSupplierReturnRequest.findFirstOrThrow({ where: { organizationId, id: request.id } }), idempotent: false };
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 30000 }));
 }
+
+export const supplierReturnWithdrawalSchema = z.object({
+  requestId: z.string().trim().min(1).max(191),
+  revision: z.number().int().positive(),
+  reason: z.string().trim().min(8).max(2000),
+}).strict();
+type WithdrawalInput = z.infer<typeof supplierReturnWithdrawalSchema>;
+
+/** Withdraw a previously approved, unexecuted authorization. Do not rewrite
+ * the approval or reviewed snapshot and never change stock or the ledger. */
+export async function withdrawApprovedSupplierReturn(organizationId: string, purchaseId: string, actorUserId: string, input: WithdrawalInput) {
+  await requireSupplierReturnParticipantAccess(organizationId,actorUserId,false);
+  return serializeConflict(() => prisma.$transaction(async tx => {
+    await requireWideScope(tx,organizationId,actorUserId);
+    const request = await tx.enterpriseSupplierReturnRequest.findFirst({where:{organizationId,id:input.requestId,purchaseId,requestedByUserId:actorUserId}});
+    if (!request) throw new EnterpriseDomainError("SUPPLIER_RETURN_PERMISSION_DENIED",403);
+    const approval = await tx.enterpriseApproval.findFirst({where:{organizationId,targetEntityType:SUPPLIER_RETURN_TARGET,targetEntityId:request.id,status:"APPROVED",archivedAt:null,requestedByUserId:actorUserId}});
+    if (!approval || approval.approverUserId===actorUserId) throw new EnterpriseDomainConflictError("SUPPLIER_RETURN_CONFLICT");
+    if (request.status==="CANCELLED" && request.cancelledAfterApprovalByUserId===actorUserId && request.cancellationReason===input.reason && request.revision===input.revision+1) return {request,approval,idempotent:true};
+    if (request.status!=="APPROVED" || request.revision!==input.revision || request.dispatchedAt || request.dispatchMovementId || request.dispatchAccountingEventId || request.supplierCreditNoteId) throw new EnterpriseDomainConflictError("SUPPLIER_RETURN_WITHDRAWAL_NOT_ALLOWED");
+    const decision=await tx.enterpriseApprovalDecision.findFirst({where:{organizationId,approvalId:approval.id,actorUserId:approval.approverUserId,decision:"APPROVE"}});
+    if (!decision) throw new EnterpriseDomainConflictError("SUPPLIER_RETURN_CONFLICT");
+    if (await tx.enterpriseStockMovement.count({where:{organizationId,sourceEntityType:SUPPLIER_RETURN_TARGET,sourceEntityId:request.id}})) throw new EnterpriseDomainConflictError("SUPPLIER_RETURN_WITHDRAWAL_NOT_ALLOWED");
+    const changed=await tx.enterpriseSupplierReturnRequest.updateMany({where:{organizationId,id:request.id,status:"APPROVED",revision:input.revision,dispatchMovementId:null,dispatchAccountingEventId:null,supplierCreditNoteId:null},
+      data:{status:"CANCELLED",cancelledAfterApprovalAt:new Date(),cancelledAfterApprovalByUserId:actorUserId,cancellationReason:input.reason,revision:{increment:1}}});
+    if(changed.count!==1) throw new EnterpriseDomainConflictError("SUPPLIER_RETURN_CONFLICT");
+    await publishEnterpriseEvent(tx,{organizationId,entityType:SUPPLIER_RETURN_TARGET,entityId:request.id,eventType:"SUPPLIER_RETURN_APPROVED_WITHDRAWN",summary:request.reference,actorUserId,fromStatus:"APPROVED",toStatus:"CANCELLED",metadataJson:{approvalId:approval.id,decisionId:decision.id,reason:input.reason,physicallyDispatched:false}});
+    return {request:await tx.enterpriseSupplierReturnRequest.findFirstOrThrow({where:{organizationId,id:request.id}}),approval,idempotent:false};
+  },{isolationLevel:Prisma.TransactionIsolationLevel.Serializable,timeout:30000}));
+}
