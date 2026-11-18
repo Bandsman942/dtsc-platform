@@ -4,6 +4,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { EnterpriseDomainError, EnterpriseDomainConflictError } from "@/lib/enterprise/common/errors";
 import { assertInventoryApprovalCandidate, assertInventoryApprovalDecision } from "@/lib/enterprise/inventory/approval";
+import { resolveEnterpriseModuleCapabilities } from "@/lib/enterprise/module-access";
 import { requireInventoryStockAuthorityTx } from "@/lib/enterprise/inventory/service";
 import { retailInventoryVisibleSites } from "@/lib/enterprise/retail/site-access";
 import { readActiveRetailInvoiceStockHoldsTx } from "@/lib/enterprise/retail/invoice-stock-holds";
@@ -90,6 +91,14 @@ async function retryConflict<T>(work: () => Promise<T>): Promise<T> {
 export async function submitStockLotReclassification(organizationId: string, actorUserId: string, input: RequestInput) {
   if (actorUserId === input.approverUserId) throw new EnterpriseDomainError("SELF_APPROVAL_FORBIDDEN", 403);
   await assertInventoryApprovalCandidate({ organizationId, requesterUserId: actorUserId, approverUserId: input.approverUserId });
+  // This workflow is decided exclusively from the common Approvals workspace.
+  // Reject unavailable routes before persisting a request that nobody can process.
+  const approvalAccess = await Promise.all([actorUserId, input.approverUserId].map((userId) =>
+    resolveEnterpriseModuleCapabilities({ organizationId, userId, moduleCode: "VALIDATIONS" }),
+  ));
+  if (approvalAccess.some((access) => !access.canRead || !access.canSubmit)) {
+    throw new EnterpriseDomainError("STOCK_RECLASS_VALIDATIONS_REQUIRED", 403);
+  }
   return retryConflict(() => prisma.$transaction(async (tx) => {
     await requireLotReclassificationOrganizationWideScope(tx, organizationId, actorUserId);
     await requireLotReclassificationOrganizationWideScope(tx, organizationId, input.approverUserId);
