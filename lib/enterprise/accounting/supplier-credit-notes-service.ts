@@ -17,7 +17,7 @@ export async function createSupplierCreditNote(organizationId: string, actorUser
     await lockSupplierReturnInvoiceTx(tx, organizationId, input.invoiceId);
     const invoice = await tx.enterpriseSupplierInvoice.findFirst({ where: { id: input.invoiceId, organizationId, status: { in: ["POSTED", "PARTIALLY_PAID", "PAID"] } }, include: { payable: true } });
     if (!invoice?.payable) throw new EnterpriseAccountingError("SUPPLIER_INVOICE_NOT_CREDITABLE", 409);
-    const returnRequest = await tx.enterpriseSupplierReturnRequest.findFirst({ where: { organizationId, supplierInvoiceId: invoice.id, status: "DISPATCHED" } });
+    const returnRequest = await tx.enterpriseSupplierReturnRequest.findFirst({ where: { organizationId, supplierInvoiceId: invoice.id, status: { in: ["DISPATCHED","RECONCILED"] } } });
     const supplierReference = input.supplierCreditReference?.trim().toUpperCase();
     if (returnRequest || input.supplierReturnId || supplierReference) {
       const line = input.items[0];
