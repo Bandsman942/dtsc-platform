@@ -89,7 +89,7 @@ export function enterpriseApprovalVisibilityWhere({
   return {
     organizationId,
     archivedAt: null,
-    ...(canSeeAll ? {} : { OR: [{ requestedByUserId: userId }, { approverUserId: userId }] }),
+    ...{ OR: [...(canSeeAll ? [{ targetEntityType: { not: "EnterpriseSupplierReturnRequest" } }] : []), { requestedByUserId: userId }, { approverUserId: userId }] },
   };
 }
 
