@@ -455,3 +455,28 @@ assert.equal((await appraisal.withdrawRecoveryAssessment("org-a","appraiser",wit
 await assert.rejects(appraisal.withdrawRecoveryAssessment("org-a","appraiser",{...withdrawal,reason:"Attempt to change original reason"}),{code:"INVENTORY_RETURN_RECOVERY_CONFLICT"});
 assert.equal(recoveryCustody.status,"QUARANTINED");assert.equal(recoveryCustody.revision,1);
 console.log("Recovery withdrawal preserves original decision and physical custody");
+
+// The real PostgreSQL SELECT FOR UPDATE may reject the losing Serializable
+// transaction as P2010/40001 (or 40P01), not just P2034. Never disguise an
+// unrelated raw-query failure as a business conflict.
+const executeRecoveryInput={custodyId:"custody-a",assessmentId:"assessment-a",revision:2,releaseEvidence:"Physical quality release confirmed",confirmedSaleableAndRepaired:true};
+const originalRecoveryLock=appraisalTx.$queryRaw;
+const recoveryErrors=[
+  new Prisma.PrismaClientKnownRequestError("serialization conflict",{code:"P2034",clientVersion:"test"}),
+  new Prisma.PrismaClientKnownRequestError("unique conflict",{code:"P2002",clientVersion:"test"}),
+  ...["40001","40P01"].map(code=>new Prisma.PrismaClientKnownRequestError("raw lock conflict",{code:"P2010",clientVersion:"test",meta:{code}})),
+];
+const previousAppraisalEventCount=appraisalEvents.length;
+try{
+  for(const error of recoveryErrors){
+    appraisalTx.$queryRaw=async()=>{throw error;};
+    await assert.rejects(appraisal.executeRecoveryAssessment("org-a","appraiser",executeRecoveryInput),{code:"INVENTORY_RETURN_RECOVERY_CONFLICT",status:409});
+  }
+  const unexpected=new Prisma.PrismaClientKnownRequestError("unexpected raw failure",{code:"P2010",clientVersion:"test",meta:{code:"42P01"}});
+  appraisalTx.$queryRaw=async()=>{throw unexpected;};
+  await assert.rejects(appraisal.executeRecoveryAssessment("org-a","appraiser",executeRecoveryInput),error=>error===unexpected);
+}finally{appraisalTx.$queryRaw=originalRecoveryLock;}
+assert.equal(appraisalEvents.length,previousAppraisalEventCount);
+assert.equal(savedAssessment.status,"CANCELLED");
+assert.equal(recoveryCustody.status,"QUARANTINED");
+console.log("Recovery concurrency normalizes only known transaction conflicts; unexpected errors propagate");
