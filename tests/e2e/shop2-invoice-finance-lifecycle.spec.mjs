@@ -844,7 +844,17 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
     const duplicateBalance=await prisma.enterpriseInventoryBalance.create({data:{organizationId,inventoryItemId:batchInventory.id,warehouseId:duplicateWarehouse.id,stockLotId:duplicateLot.id,quantityOnHand:1}});
     const duplicateMovement=await prisma.enterpriseStockMovement.create({data:{organizationId,inventoryItemId:batchInventory.id,warehouseId:duplicateWarehouse.id,stockLotId:duplicateLot.id,movementType:"OPENING_BALANCE",direction:"IN",quantity:1,balanceAfter:1,idempotencyKey:batchKey+"-recall-copy-opening",createdByUserId:fixture.owner.id}});
     const activeRetailConfig=await prisma.enterpriseRetailConfiguration.findUniqueOrThrow({where:{organizationId}});
-    await prisma.enterpriseRetailConfiguration.update({where:{organizationId},data:{settingsJson:{...activeRetailConfig.settingsJson,inventoryPolicy:{...activeRetailConfig.settingsJson?.inventoryPolicy,transferReception:"CONFIRMED"}}}});
+    // A missing inventoryPolicy resolves to the canonical defaults on reads.
+    // When persisting an explicit policy, provide every required field.
+    const activeSettings = activeRetailConfig.settingsJson ?? {};
+    const transferPolicy = {
+      expiryMode: "ALLOW", enforceFefo: false, warningDays: 30,
+      ...activeSettings.inventoryPolicy, transferReception: "CONFIRMED",
+    };
+    await prisma.enterpriseRetailConfiguration.update({
+      where: { organizationId },
+      data: { settingsJson: { ...activeSettings, inventoryPolicy: transferPolicy } },
+    });
     const transferPath=base+"/stock-transfers";
     const transit=await post(context.owner,transferPath,{sourceWarehouseId:duplicateWarehouse.id,destinationWarehouseId:spareWarehouse.id,approverUserId:fixture.settler.id,lines:[{inventoryItemId:batchInventory.id,stockLotId:duplicateLot.id,quantity:1}]});
     expect(transit.status,JSON.stringify(transit.body)).toBe(201);
