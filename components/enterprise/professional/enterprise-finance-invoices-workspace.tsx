@@ -220,8 +220,8 @@ export function EnterpriseFinanceInvoicesWorkspace(props: Props) {
     { key: "currency", labelFr: "Devise", labelEn: "Currency", get: (row) => String(row.currencyCode || row.currency || "") },
     { key: "total", labelFr: "Total", labelEn: "Total", get: (row) => String(row.totalAmount || row.amount || row.balanceDue || "") },
     ...(!isReceivables && endpointName !== "supplier-credit-notes" ? [
-      { key: "returnReserved", labelFr: purchaseFormGuidance("fr","returnFinanceExportReserved"),labelEn:purchaseFormGuidance("en","returnFinanceExportReserved"),get:(row:FinanceRecord)=>String(row.supplierReturnReservedAmount ?? "") },
-      { key: "returnAllocatable", labelFr: purchaseFormGuidance("fr","returnFinanceExportAllocatable"),labelEn:purchaseFormGuidance("en","returnFinanceExportAllocatable"),get:(row:FinanceRecord)=>String(row.supplierReturnAllocatableAmount ?? "") },
+      { key: "returnReserved", labelFr: purchaseFormGuidance("fr","returnFinanceExportReserved"),labelEn:purchaseFormGuidance("en","returnFinanceExportReserved"),get:(row:Record<string,unknown>)=>String(row.supplierReturnReservedAmount ?? "") },
+      { key: "returnAllocatable", labelFr: purchaseFormGuidance("fr","returnFinanceExportAllocatable"),labelEn:purchaseFormGuidance("en","returnFinanceExportAllocatable"),get:(row:Record<string,unknown>)=>String(row.supplierReturnAllocatableAmount ?? "") },
     ] : []),
   ];
   const { summary, error: summaryError } = useOperationalFinanceSummary(organizationId, moduleCode, refreshKey);
