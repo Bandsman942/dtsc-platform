@@ -1265,6 +1265,15 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
     expect(await prisma.enterpriseStockMovement.count({where:{organizationId,sourceEntityType:"EnterpriseSupplierReturnRequest",sourceEntityId:returnRequestId}})).toBe(1);
     expect((await prisma.enterprisePayable.findUniqueOrThrow({where:{supplierInvoiceId:supplierInvoice.id}})).outstandingAmount.equals(70)).toBe(true);
 
+    const payableDetailUrl=base+"/payables?recordId="+encodeURIComponent(supplierPayable.id);
+    const invoiceDetailUrl=base+"/supplier-invoices?recordId="+encodeURIComponent(supplierInvoice.id);
+    const heldPayableView=await context.owner.request.get(payableDetailUrl);
+    expect(heldPayableView.status(),await heldPayableView.text()).toBe(200);
+    expect((await heldPayableView.json()).items[0]).toMatchObject({outstandingAmount:"70",supplierReturnReservedAmount:"14",supplierReturnAllocatableAmount:"56",supplierReturn:{id:returnRequestId,status:"DISPATCHED"}});
+    const heldInvoiceView=await context.owner.request.get(invoiceDetailUrl);
+    expect(heldInvoiceView.status(),await heldInvoiceView.text()).toBe(200);
+    expect((await heldInvoiceView.json()).items[0]).toMatchObject({outstandingAmount:"70",supplierReturnReservedAmount:"14",supplierReturnAllocatableAmount:"56",capabilities:{canCreateCredit:false}});
+
     // Negative allocation uses a confirmed-payment fixture solely to reach
     // the actual allocation guard; no cash or accounting movement is faked.
     const paymentProbe=await prisma.enterprisePayment.create({data:{
@@ -1303,10 +1312,10 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
     expect(submittedCredit.status,JSON.stringify(submittedCredit.body)).toBe(200);
     const earlyPosting=await post(context.owner,creditPath+"/post",{revision:submittedCredit.body.creditNote.revision});
     expect(earlyPosting.status).toBe(409);
-    const approvedCredit=await post(context.settler,creditPath+"/transition",{action:"APPROVE",revision:submittedCredit.body.creditNote.revision});
-    expect(approvedCredit.status,JSON.stringify(approvedCredit.body)).toBe(200);
+    const approvedSupplierReturnCredit=await post(context.settler,creditPath+"/transition",{action:"APPROVE",revision:submittedCredit.body.creditNote.revision});
+    expect(approvedSupplierReturnCredit.status,JSON.stringify(approvedSupplierReturnCredit.body)).toBe(200);
     expect((await prisma.enterprisePayable.findUniqueOrThrow({where:{supplierInvoiceId:supplierInvoice.id}})).outstandingAmount.equals(70)).toBe(true);
-    const postedCredit=await post(context.owner,creditPath+"/post",{revision:approvedCredit.body.creditNote.revision});
+    const postedCredit=await post(context.owner,creditPath+"/post",{revision:approvedSupplierReturnCredit.body.creditNote.revision});
     expect(postedCredit.status,JSON.stringify(postedCredit.body)).toBe(200);
     expect(postedCredit.body.creditNote.status).toBe("POSTED");
     const reconciliation=await prisma.enterpriseSupplierReturnRequest.findFirstOrThrow({where:{organizationId,id:returnRequestId}});
@@ -1321,8 +1330,14 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
     const finalPayable=await prisma.enterprisePayable.findUniqueOrThrow({where:{supplierInvoiceId:supplierInvoice.id}});
     expect(finalPayable.outstandingAmount.equals(56)).toBe(true);
     expect(finalPayable.creditedAmount.equals(14)).toBe(true);
+    const matchedPayableView=await context.owner.request.get(payableDetailUrl);
+    expect(matchedPayableView.status(),await matchedPayableView.text()).toBe(200);
+    expect((await matchedPayableView.json()).items[0]).toMatchObject({outstandingAmount:"56",supplierReturnReservedAmount:"0",supplierReturnAllocatableAmount:"56",supplierReturn:{status:"RECONCILED",supplierCreditNoteId:supplierReturnCreditId}});
+    const matchedInvoiceView=await context.owner.request.get(invoiceDetailUrl);
+    expect(matchedInvoiceView.status(),await matchedInvoiceView.text()).toBe(200);
+    expect((await matchedInvoiceView.json()).items[0]).toMatchObject({outstandingAmount:"56",supplierReturnReservedAmount:"0",supplierReturnAllocatableAmount:"56",capabilities:{canCreateCredit:false}});
     expect(await prisma.enterprisePayableAllocation.count({where:{organizationId,payableId:finalPayable.id,sourceType:"SUPPLIER_CREDIT_NOTE",sourceId:supplierReturnCreditId}})).toBe(1);
-    expect((await post(context.owner,creditPath+"/post",{revision:approvedCredit.body.creditNote.revision})).status).toBe(200);
+    expect((await post(context.owner,creditPath+"/post",{revision:approvedSupplierReturnCredit.body.creditNote.revision})).status).toBe(200);
     expect(await prisma.enterprisePayableAllocation.count({where:{organizationId,payableId:finalPayable.id,sourceType:"SUPPLIER_CREDIT_NOTE",sourceId:supplierReturnCreditId}})).toBe(1);
     expect((await prisma.enterpriseInventoryBalance.findFirstOrThrow({where:{organizationId,stockLotId:returnedSource.stockLotId}})).quantityOnHand.equals(2)).toBe(true);
     const finalTrace=await context.owner.request.get(receiptTracePath+"&search=PURCHASE-A");
