@@ -106,6 +106,8 @@
 
 - Recette notification ajoutée au scénario PostgreSQL/HTTP : accès sans secret refusé, exécution autorisée, notification administrateur sans données de lot, aucun envoi au caissier, reprise forcée le même jour sans doublon, échéance suivante et lease libérée. Gate statique #861 étendue au nouveau cron sans neutraliser les contrôles existants.
 
+- CI 718239d : 17/18 workflows verts, Quality 44316785435 ; Shop 2 behavioral 44316785376, job 134845010769, franchit la création du transfert mais reçoit HTTP 409 `RETAIL_INVENTORY_POLICY_INVALID` à l’approbation (ligne 852). La fixture persistait seulement `transferReception` en l’absence de politique enregistrée ; le parseur strict exige aussi `expiryMode`, `enforceFefo` et `warningDays`. Le commit 733b977 complète la fixture avec les valeurs par défaut canoniques, conserve les valeurs explicites existantes et toutes les assertions. Aucun assouplissement du contrôle métier, aucune migration supplémentaire. Nouvelle certification CI requise ; OWNER_E2E non exécuté.
+
 ## Restant (bloquant)
 Certification de la réaffectation historique sur PostgreSQL + navigateur et valeur inchangée; certification achats et valorisation, réservations/livraisons multi-lots; moteur FEFO commun et POS; pertes, rappels et comptabilité; Design 2.0 et tests multisectoriels. Voir issue #1212. Ne pas merger avant clôture de tous les points.
 
