@@ -92,7 +92,14 @@ export async function GET(req: Request, { params }: Params) {
     prisma.enterpriseInventoryItem.findMany({where:itemWhere,orderBy:[{catalogItem:{name:"asc"}},{id:"asc"}],skip:lowStock?0:(page-1)*pageSize,take:pageSize,include:{catalogItem:{include:{unitOfMeasure:true,category:true}},balances:{where:warehouseId||scope.isolationEnabled?balancesScope:undefined,include:{warehouse:{select:{id:true,code:true,name:true,status:true,archivedAt:true}},storageLocation:{select:{id:true,code:true,name:true,status:true,archivedAt:true}},stockLot:{select:{id:true,lotNumber:true,expiryDate:true,status:true,archivedAt:true}}},orderBy:{updatedAt:"desc"}}}}),
     lowStock?Promise.resolve(lowStockCount):prisma.enterpriseInventoryItem.count({where}),
     prisma.enterpriseStockMovement.count({where:{organizationId,...(scope.isolationEnabled?{warehouse:{siteId:{in:scope.siteIds}}}:{})}}),
-    prisma.enterpriseWarehouse.count({where:{organizationId,status:"ACTIVE",archivedAt:null,...(scope.isolationEnabled?{siteId:{in:scope.siteIds}}}:{})}}),
+    prisma.enterpriseWarehouse.count({
+      where: {
+        organizationId,
+        status: "ACTIVE",
+        archivedAt: null,
+        ...(scope.isolationEnabled ? { siteId: { in: scope.siteIds } } : {}),
+      },
+    }),
     prisma.organization.findUniqueOrThrow({where:{id:organizationId},select:{timezone:true}}),
   ]);
   // One bounded read per promise source for the page; use the same FEFO
