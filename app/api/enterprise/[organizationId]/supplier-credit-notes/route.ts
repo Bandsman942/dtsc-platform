@@ -53,11 +53,14 @@ export async function GET(req: Request, { params }: Params) {
     select: { targetEntityId: true },
   }) : [];
   const assignedIds = new Set(approvals.map((approval) => approval.targetEntityId));
+  const replacements = items.length?await prisma.enterpriseSupplierReturnCreditReplacement.findMany({where:{organizationId,previousCreditNoteId:{in:items.map(item=>item.id)}},select:{previousCreditNoteId:true,replacementCreditNoteId:true}}):[];
+  const replacedById=new Map(replacements.map(proof=>[proof.previousCreditNoteId,proof.replacementCreditNoteId]));
   const capabilities = auth.access.capabilities;
   const resultItems = items.map((item) => ({
     ...item,
+    replacementCreditNoteId:replacedById.get(item.id)||null,
     capabilities: {
-      canSubmit: capabilities.canSubmit && ["DRAFT", "REJECTED"].includes(item.status) && item.createdByUserId === auth.session.userId,
+      canSubmit: capabilities.canSubmit && ["DRAFT", "REJECTED"].includes(item.status) && item.createdByUserId === auth.session.userId && !replacedById.has(item.id),
       canApprove: capabilities.canApprove && item.status === "PENDING_APPROVAL" && assignedIds.has(item.id),
       canReject: capabilities.canApprove && item.status === "PENDING_APPROVAL" && assignedIds.has(item.id),
       canPost: capabilities.canManage && item.status === "APPROVED",
