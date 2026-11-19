@@ -37,7 +37,14 @@ type ProfessionalErpSupplementKey =
   | "inventory.batchRecalled"
   | "inventory.batchExpired"
   | "inventory.batchExpiring"
-  | "inventory.batchMetricScope";
+  | "inventory.batchMetricScope"
+  | "inventory.batchExpiryDateFilter"
+  | "inventory.batchExpiryFrom"
+  | "inventory.batchExpiryTo"
+  | "inventory.batchExpiryHelp"
+  | "inventory.batchExpiryApply"
+  | "inventory.batchExpiryClear"
+  | "inventory.batchExpiryActive";
 type ProfessionalErpAliasKey =
   | "assets.plannedAt"
   | "assets.dueAt"
@@ -98,7 +105,14 @@ const professionalSupplements: Record<ProfessionalErpLocale, Record<Professional
     "inventory.batchRecalled": "Rappelé",
     "inventory.batchExpired": "Périmé",
     "inventory.batchExpiring": "Péremption proche",
-    "inventory.batchMetricScope": "Les alertes de lots couvrent les dépôts et la recherche sélectionnés. Les destructions à attester couvrent uniquement le périmètre dépôt.",
+    "inventory.batchMetricScope": "Les alertes de lots couvrent les dépôts, la recherche et les dates de péremption appliquées. Les catégories peuvent se chevaucher. Les destructions à attester couvrent uniquement le périmètre dépôt.",
+    "inventory.batchExpiryDateFilter": "Dates de péremption",
+    "inventory.batchExpiryFrom": "À partir du",
+    "inventory.batchExpiryTo": "Jusqu’au",
+    "inventory.batchExpiryHelp": "Pour une date précise, sélectionnez le même jour dans les deux champs. Une borne seule est possible. Les lots sans date sont exclus lorsque ce filtre est actif.",
+    "inventory.batchExpiryApply": "Appliquer",
+    "inventory.batchExpiryClear": "Toutes les dates",
+    "inventory.batchExpiryActive": "Péremptions filtrées",
   },
   en: {
     "common.loadFailed": "Unable to load data.",
@@ -133,7 +147,14 @@ const professionalSupplements: Record<ProfessionalErpLocale, Record<Professional
     "inventory.batchRecalled": "Recalled",
     "inventory.batchExpired": "Expired",
     "inventory.batchExpiring": "Expires soon",
-    "inventory.batchMetricScope": "Batch alerts cover the selected warehouses and search. Pending disposals cover the warehouse scope only.",
+    "inventory.batchMetricScope": "Batch alerts cover the selected warehouses, search and applied expiry dates. Categories may overlap. Pending disposals cover the warehouse scope only.",
+    "inventory.batchExpiryDateFilter": "Expiry dates",
+    "inventory.batchExpiryFrom": "From",
+    "inventory.batchExpiryTo": "Through",
+    "inventory.batchExpiryHelp": "For an exact date, select the same day in both fields. Either bound can be used alone. Undated batches are excluded while this filter is active.",
+    "inventory.batchExpiryApply": "Apply",
+    "inventory.batchExpiryClear": "All dates",
+    "inventory.batchExpiryActive": "Expiry dates filtered",
   },
 };
 
