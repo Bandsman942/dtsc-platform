@@ -1546,6 +1546,30 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
     expect(alertBody.metrics.recalled).toBe(1);
     expect(alertBody.items.some(row=>row.id===receivedLot.id)).toBe(true);
     expect(alertBody.items.find(row=>row.id===receivedLot.id).warehouse).toMatchObject({id:spareWarehouse.id,code:spareWarehouse.code,name:spareWarehouse.name});
+    // Expiry is an inclusive civil date, composable with warehouse, search,
+    // quality scope and pagination (the same contract used by exports).
+    const recalledLotDate=alertBody.items.find(row=>row.id===receivedLot.id).expiryDate.slice(0,10);
+    const dateScope=qualityPath+"?search="+encodeURIComponent(batchKey)+"&expiry=RECALLED&warehouseId="+encodeURIComponent(spareWarehouse.id);
+    const exactExpiry=await context.owner.request.get(dateScope+"&expiryFrom="+recalledLotDate+"&expiryTo="+recalledLotDate);
+    expect(exactExpiry.status(),await exactExpiry.text()).toBe(200);
+    const exactExpiryBody=await exactExpiry.json();
+    expect(exactExpiryBody.items.map(row=>row.id)).toEqual([receivedLot.id]);
+    expect(exactExpiryBody.pagination.total).toBe(1);
+    expect(exactExpiryBody.metrics.recalled).toBe(1);
+    const dayBeforeExpiry=new Date(new Date(recalledLotDate+"T00:00:00.000Z").getTime()-86400000).toISOString().slice(0,10);
+    const dayAfterExpiry=new Date(new Date(recalledLotDate+"T00:00:00.000Z").getTime()+86400000).toISOString().slice(0,10);
+    const earlierExpiry=await context.owner.request.get(dateScope+"&expiryTo="+dayBeforeExpiry);
+    expect(earlierExpiry.status()).toBe(200);
+    expect((await earlierExpiry.json()).items).toEqual([]);
+    const laterExpiry=await context.owner.request.get(dateScope+"&expiryFrom="+dayAfterExpiry);
+    expect(laterExpiry.status()).toBe(200);
+    expect((await laterExpiry.json()).metrics.recalled).toBe(0);
+    for(const invalidDates of ["expiryFrom=2026-02-30","expiryTo=not-a-date","expiryFrom="+dayAfterExpiry+"&expiryTo="+recalledLotDate]){
+      const rejectedDates=await context.owner.request.get(dateScope+"&"+invalidDates);
+      expect(rejectedDates.status(),await rejectedDates.text()).toBe(400);
+      expect((await rejectedDates.json()).error).toBe("INVENTORY_LOT_DATES_INVALID");
+    }
+
 
     // Daily quality alerts: worker authentication, bounded claim and same-day
     // retries, restricted to authorized admins and neutral push contents.
