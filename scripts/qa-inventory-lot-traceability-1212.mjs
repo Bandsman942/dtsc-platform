@@ -340,7 +340,8 @@ mocks["@/lib/enterprise/accounting/helpers"]={...mocks["@/lib/enterprise/account
 mocks["@/lib/enterprise/accounting/historical-credit-tax"]=load("lib/enterprise/accounting/historical-credit-tax.ts");
 const returnCredit = load("lib/enterprise/accounting/supplier-return-credit-reconciliation.ts");
 mocks["@/lib/enterprise/accounting/supplier-return-credit-reconciliation"] = returnCredit;
-const {planWeightedAverageResidualQuantities}=load("lib/enterprise/accounting/inventory-accounting-service.ts");
+const inventoryAccounting=load("lib/enterprise/accounting/inventory-accounting-service.ts");
+const {planWeightedAverageResidualQuantities}=inventoryAccounting;
 const planResidual=(layers,issue)=>planWeightedAverageResidualQuantities(layers.map(([id,quantity])=>({id,remainingQuantity:d(quantity)})),d(issue));
 const residualById=rows=>Object.fromEntries(rows.map(row=>[row.id,row.remainingQuantity.toFixed()]));
 const three=[["a","1"],["b","1"],["c","1"]];
@@ -367,6 +368,55 @@ assert.throws(()=>planResidual(three,"0.0000001"),{code:"INVENTORY_COST_LAYER_PR
 assert.throws(()=>planResidual([["a","1"],["a","1"]],"1"),{code:"INVENTORY_COST_LAYER_PRECISION_INVALID"});
 assert.throws(()=>planResidual([["a","-1"]],"1"),{code:"INVENTORY_COST_LAYER_PRECISION_INVALID"});
 console.log("Weighted-average cost-layer quantity allocation: exact residual, deterministic rounding, bounds and precision");
+
+// Exact transfer cost, with independent destination proof. No database or
+// journal mutations in this planning primitive.
+mocks["@/lib/enterprise/accounting/inventory-accounting-service"]=inventoryAccounting;
+const {planInventoryTransferCost,proveInventoryTransferDestination}=load("lib/enterprise/accounting/inventory-transfer-cost-plan.ts");
+const transferPool=(physical,layers,currencyCode="USD")=>({
+  physicalQuantity:d(physical),currencyCode,layers:layers.map(([id,quantity,unitCost,currency])=>({id,remainingQuantity:d(quantity),unitCost:d(unitCost),currencyCode:currency||currencyCode})),
+});
+const exactSource=transferPool("20",[["a","10","5"],["b","10","9"]]);
+const transferCost=planInventoryTransferCost(exactSource,d("4"));
+assert.equal(transferCost.quantity.toFixed(),"4");
+assert.equal(transferCost.unitCost.toFixed(),"7");
+assert.equal(transferCost.totalCost.toFixed(),"28");
+assert.equal(transferCost.sourceValueBefore.toFixed(),"140");
+assert.equal(transferCost.sourceValueAfter.toFixed(),"112");
+assert.equal(transferCost.sourceQuantityAfter.toFixed(),"16");
+assert.deepEqual(Object.fromEntries(transferCost.allocations.map(x=>[x.layerId,x.remainingQuantity.toFixed()])),{a:"8",b:"8"});
+assert.deepEqual(exactSource.layers.map(x=>x.remainingQuantity.toFixed()),["10","10"]);
+const destinationCost=proveInventoryTransferDestination(transferPool("3",[["existing","3","10"]]),transferCost);
+assert.equal(destinationCost.destinationQuantityAfter.toFixed(),"7");
+assert.equal(destinationCost.destinationValueBefore.toFixed(),"30");
+assert.equal(destinationCost.destinationValueAfter.toFixed(),"58");
+assert.ok(transferCost.sourceValueAfter.plus(destinationCost.destinationValueAfter).equals(170));
+const sameCost=planInventoryTransferCost(transferPool("3",[["c","1","7"],["b","1","7"],["a","1","7"]]),d("1"));
+assert.equal(sameCost.totalCost.toFixed(),"7");
+assert.equal(sameCost.sourceValueAfter.toFixed(),"14");
+assert.equal(sameCost.allocations.reduce((sum,x)=>sum.plus(x.transferredQuantity),d(0)).toFixed(),"1");
+assert.equal(proveInventoryTransferDestination(transferPool("0",[]),sameCost).destinationValueAfter.toFixed(),"7");
+const allCost=planInventoryTransferCost(exactSource,d("20"));
+assert.equal(allCost.totalCost.toFixed(),"140");
+assert.equal(allCost.sourceQuantityAfter.toFixed(),"0");
+assert.equal(allCost.sourceValueAfter.toFixed(),"0");
+for(const invalid of [
+  transferPool("21",exactSource.layers.map(x=>[x.id,x.remainingQuantity,x.unitCost])),
+  transferPool("20",[["a","10","5"],["b","10","9","CDF"]]),
+  transferPool("20",[["a","10","5"],["a","10","9"]]),
+  transferPool("1",[["zero","1","0"]]),
+  transferPool("1",[]),
+])assert.throws(()=>planInventoryTransferCost(invalid,d("1")),{code:"INVENTORY_TRANSFER_COST_POOL_UNPROVEN"});
+for(const quantity of ["0","21","0.0001"])assert.throws(()=>planInventoryTransferCost(exactSource,d(quantity)),{code:"INVENTORY_TRANSFER_COST_POOL_UNPROVEN"});
+assert.throws(()=>planInventoryTransferCost(transferPool("3",[["a","1","5"],["b","1","7"],["c","1","9"]]),d("1")),{code:"INVENTORY_TRANSFER_COST_NOT_EXACT"});
+assert.throws(()=>proveInventoryTransferDestination(transferPool("1",[]),transferCost),{code:"INVENTORY_TRANSFER_COST_POOL_UNPROVEN"});
+assert.throws(()=>proveInventoryTransferDestination(transferPool("0",[],"CDF"),transferCost),{code:"INVENTORY_TRANSFER_COST_POOL_UNPROVEN"});
+assert.throws(()=>proveInventoryTransferDestination(transferPool("0",[]),{...transferCost,totalCost:d("27")}),{code:"INVENTORY_TRANSFER_COST_NOT_EXACT"});
+const roundingTransfer=planInventoryTransferCost(transferPool("0.001",[["small","0.001","0.0005"]]),d("0.001"));
+assert.equal(roundingTransfer.totalCost.toFixed(),"0.000001");
+assert.throws(()=>proveInventoryTransferDestination(transferPool("0.001",[["already-small","0.001","0.0005"]]),roundingTransfer),{code:"INVENTORY_TRANSFER_COST_NOT_EXACT"});
+console.log("Transfer cost proof: CUMP/source and destination quantity and value conservation, strict currency and rounding guards");
+
 const postingBuilder = load("lib/enterprise/accounting/domain-posting-builders.ts");
 for(const [kind,movement] of [
   ["RECEIPT",{movementType:"TRANSFER_IN",direction:"IN",sourceEntityType:"EnterpriseStockTransfer"}],
