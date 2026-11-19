@@ -187,6 +187,67 @@ test.describe.serial("#1212 common inventory contract in independent sector tena
         expect(list.body.items[0]).toMatchObject({ id: inventoryItemId, quantityOnHand: 100, quantityAvailable: 30, quantityReserved: 0 });
         expect(seeded.layers.reduce((sum, layer) => sum.plus(layer.totalCost), d(0)).equals(400)).toBe(true);
         expect(await snapshot()).toEqual(seeded);
+
+        // A common article in a sector tenant is allowed until an actual
+        // sector-authority link exists. After that, the same common identity
+        // remains readable but is no longer an independent lot editor.
+        if (sectorCode === "PHARMACY" || sectorCode === "HEALTH_CARE") {
+          const stockItem = await prisma.enterpriseInventoryItem.findUniqueOrThrow({where:{id:inventoryItemId}});
+          let pharmacyBatch = null;
+          let sectorEvent = null;
+          if (sectorCode === "PHARMACY") {
+            const product = await prisma.pharmacyProduct.create({data:{
+              organizationId,name:runKey,internalCode:runKey,category:"E2E",pharmaceuticalForm:"TABLET",
+              saleUnit:"EA",stockUnit:"EA",createdById:actor,
+            }});
+            pharmacyBatch = await prisma.pharmacyBatch.create({data:{
+              organizationId,productId:product.id,batchNumber:input.lotNumber,expiryDate:iso(input.expiryDate),
+              receivedQuantity:0,availableQuantity:0,unit:"EA",createdById:actor,
+            }});
+            await prisma.pharmacyProductExtension.create({data:{organizationId,pharmacyProductId:product.id,catalogItemId:stockItem.catalogItemId,createdByUserId:actor}});
+          } else {
+            // Explicit synthetic sector provenance marker, not an assertion
+            // that clinical stock consumption was executed.
+            sectorEvent = await prisma.enterpriseSectorInventoryEvent.create({data:{
+              organizationId,sector:sectorCode,sourceMovementId:seeded.movements[0].id,sourceProductId:stockItem.catalogItemId,
+              catalogItemId:stockItem.catalogItemId,inventoryItemId,eventType:"E2E_AUTHORITY_MARKER",direction:"IN",
+              quantity:0,idempotencyKey:runKey+"-sector-authority",createdByUserId:actor,
+            }});
+          }
+          const beforeProtected = await snapshot();
+          const beforeLot = await prisma.enterpriseStockLot.findUniqueOrThrow({where:{id:lot.id}});
+          const beforeCount = await prisma.enterpriseStockLot.count({where:scope});
+          const excluded = await get(path+"?view=lot-options&warehouseId="+warehouseId+"&search="+runKey);
+          expect(excluded.status).toBe(200);
+          expect(excluded.body.items).toEqual([]);
+          expect(excluded.body.pagination.total).toBe(0);
+          const projected = await get(path+"?search="+runKey);
+          expect(projected.status).toBe(200);
+          expect(projected.body.items.find(item=>item.id===inventoryItemId)?.sectorManaged).toBe(true);
+          const lotRegister = await get(path+"/lots?search="+runKey+"&warehouseId="+warehouseId);
+          expect(lotRegister.status).toBe(200);
+          expect(lotRegister.body.items.find(item=>item.id===lot.id)?.sectorManaged).toBe(true);
+          const forbiddenCreate = await post({...input,lotNumber:runKey+"-SECTOR-DUPLICATE"});
+          expect(forbiddenCreate.status).toBe(409);
+          expect(forbiddenCreate.body.error).toBe("STOCK_RECLASS_SECTOR_AUTHORITY");
+          const headers = {origin:baseUrl,referer:baseUrl+"/enterprise-modules/INVENTORY_LOGISTICS"};
+          for (const mutation of [{expiryDate:day(90)},{status:"QUARANTINED",qualityReason:"Attempt wrong stock authority"}]) {
+            const result=await read(await context.request.patch(baseUrl+path+"/lots",{headers,data:{id:lot.id,revision:beforeLot.revision,...mutation}}));
+            expect(result.status).toBe(409);
+            expect(result.body.error).toBe("STOCK_RECLASS_SECTOR_AUTHORITY");
+          }
+          const forbiddenPolicy=await read(await context.request.put(baseUrl+path+"/item-policy",{headers,data:{
+            inventoryItemId,revision:stockItem.revision,minimumQuantity:10,reorderQuantity:20,lotTracking:true,expiryTracking:true,
+          }}));
+          expect(forbiddenPolicy.status).toBe(409);
+          expect(forbiddenPolicy.body.error).toBe("STOCK_RECLASS_SECTOR_AUTHORITY");
+          expect(await prisma.enterpriseStockLot.count({where:scope})).toBe(beforeCount);
+          expect(await prisma.enterpriseStockLot.findUniqueOrThrow({where:{id:lot.id}})).toEqual(beforeLot);
+          expect(await prisma.enterpriseInventoryItem.findUniqueOrThrow({where:{id:inventoryItemId}})).toEqual(stockItem);
+          expect(await snapshot()).toEqual(beforeProtected);
+          if(pharmacyBatch) expect(await prisma.pharmacyBatch.findUniqueOrThrow({where:{id:pharmacyBatch.id}})).toEqual(pharmacyBatch);
+          if(sectorEvent) expect(await prisma.enterpriseSectorInventoryEvent.findUniqueOrThrow({where:{id:sectorEvent.id}})).toEqual(sectorEvent);
+        }
       } finally {
         await context.close();
       }
