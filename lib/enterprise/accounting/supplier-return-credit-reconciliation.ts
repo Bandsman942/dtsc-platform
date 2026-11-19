@@ -57,6 +57,7 @@ export async function deriveSupplierReturnTaxTx(tx: Prisma.TransactionClient, or
   const snapshot = original.taxBreakdownJson[0];
   if (!snapshot || typeof snapshot !== "object" || Array.isArray(snapshot) || typeof snapshot.taxCodeId !== "string" ||
       typeof snapshot.rate !== "string" || typeof snapshot.amount !== "string" || typeof snapshot.base !== "string" ||
+      ![snapshot.rate,snapshot.amount,snapshot.base].every(value=>/^\d+(?:\.\d+)?$/.test(value)) ||
       snapshot.treatment !== "STANDARD" || snapshot.basisMode !== "NET" || typeof snapshot.effectiveAt !== "string") return fail();
   const applications = await tx.enterpriseTaxLine.findMany({where:{organizationId,sourceEntityType:"EnterpriseSupplierInvoiceItem",sourceEntityId:original.id},include:{taxCode:{select:{category:true}}}});
   const posted=applications[0];
