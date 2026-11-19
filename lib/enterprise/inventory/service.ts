@@ -68,6 +68,21 @@ export async function requireInventoryStockAuthorityTx(
   }
 }
 
+/** Mapped sector stock is a read-only common projection. The regulated
+ * sector remains its physical authority; the common stock service must not
+ * create a second movement, adjustment or reservation against that identity.
+ * Ordinary common inventory in a sector tenant remains writable.
+ */
+export async function assertCommonInventoryCatalogAuthorityTx(
+  tx: Prisma.TransactionClient, organizationId: string, catalogItemId: string,
+) {
+  const [pharmacy, sector] = await Promise.all([
+    tx.pharmacyProductExtension.count({where:{organizationId,catalogItemId}}),
+    tx.enterpriseSectorInventoryEvent.count({where:{organizationId,catalogItemId}}),
+  ]);
+  if (pharmacy || sector) throw new EnterpriseDomainError("STOCK_RECLASS_SECTOR_AUTHORITY",409);
+}
+
 function inventoryReference(prefix: string) {
   return `${prefix}-${Date.now().toString(36).toUpperCase()}-${randomUUID().slice(0, 6).toUpperCase()}`;
 }
@@ -87,6 +102,7 @@ async function assertInventoryCoordinates(tx: Prisma.TransactionClient, organiza
       : Promise.resolve(null),
   ]);
   if (!inventoryItem || !inventoryItem.catalogItem.trackInventory) throw new EnterpriseDomainError("INVENTORY_ITEM_NOT_FOUND", 404);
+  await assertCommonInventoryCatalogAuthorityTx(tx,organizationId,inventoryItem.catalogItemId);
   if (!warehouse) throw new EnterpriseDomainError("WAREHOUSE_NOT_FOUND", 404);
   if (input.storageLocationId && !storageLocation) throw new EnterpriseDomainError("STORAGE_LOCATION_NOT_FOUND", 404);
   if (input.stockLotId && !stockLot) throw new EnterpriseDomainError("STOCK_LOT_NOT_FOUND", 404);
@@ -232,7 +248,7 @@ export async function createEnterpriseStockTransfer(organizationId: string, acto
     await tx.enterpriseApproval.create({ data: { organizationId, targetEntityType: "EnterpriseStockTransfer", targetEntityId: transfer.id, requestedByUserId: actorUserId, approverUserId: input.approverUserId } });
     await publishEnterpriseEvent(tx, { organizationId, entityType: "EnterpriseStockTransfer", entityId: transfer.id, eventType: "STOCK_TRANSFER_SUBMITTED", summary: `Transfert ${transfer.reference} soumis`, actorUserId, toStatus: "PENDING_APPROVAL" });
     return transfer;
-  });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 }
 
 async function resolveTransferredLotTx(
@@ -395,7 +411,7 @@ export async function createEnterpriseInventoryCount(organizationId: string, act
     await tx.enterpriseApproval.create({ data: { organizationId, targetEntityType: "EnterpriseInventoryCount", targetEntityId: count.id, requestedByUserId: actorUserId, approverUserId: input.approverUserId } });
     await publishEnterpriseEvent(tx, { organizationId, entityType: "EnterpriseInventoryCount", entityId: count.id, eventType: "INVENTORY_COUNT_SUBMITTED", summary: `Inventaire ${count.reference} soumis`, actorUserId, toStatus: "SUBMITTED" });
     return count;
-  });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 }
 
 export async function decideEnterpriseInventoryCount(organizationId: string, countId: string, actorUserId: string, input: InventoryCountDecisionInput) {
@@ -419,6 +435,11 @@ export async function decideEnterpriseInventoryCount(organizationId: string, cou
       return tx.enterpriseInventoryCount.findUniqueOrThrow({ where: { id: count.id }, include: { lines: true } });
     }
     for (const line of count.lines) {
+      // A sector mapping may have appeared since submission. Even a no-variance
+      // count must not be completed as an independent common stock authority.
+      const item=await tx.enterpriseInventoryItem.findFirst({where:{organizationId,id:line.inventoryItemId},select:{catalogItemId:true}});
+      if(!item)throw new EnterpriseDomainError("INVENTORY_ITEM_NOT_FOUND",404);
+      await assertCommonInventoryCatalogAuthorityTx(tx,organizationId,item.catalogItemId);
       const variance = Number(line.varianceQuantity || 0);
       if (Math.abs(variance) < 0.000001) continue;
       await applyStockMovementTx(tx, organizationId, actorUserId, { inventoryItemId: line.inventoryItemId, warehouseId: count.warehouseId, storageLocationId: count.storageLocationId, stockLotId: line.stockLotId, movementType: "COUNT_CORRECTION", direction: variance > 0 ? "IN" : "OUT", quantity: Math.abs(variance), sourceEntityType: "EnterpriseInventoryCount", sourceEntityId: count.id, sourceLineId: line.id, idempotencyKey: `inventory-count:${count.id}:${line.id}`, reason: input.comment || `Correction inventaire ${count.reference}` });
