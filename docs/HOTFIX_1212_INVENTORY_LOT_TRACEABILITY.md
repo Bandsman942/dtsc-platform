@@ -192,6 +192,11 @@
 - 0419327 : la QA d'expertise charge désormais la classe métier réelle; l'assertion HTTP 409 et les scénarios négatifs sont conservés. 73800c4/3e1115e : le classificateur strict des conflits Prisma est partagé par récupération et destruction, sans élargir permissions ni transitions. 779afc6 : la recette HTTP ajoute une troisième requête concurrente de destruction, qui doit être refusée en 409; toutes les assertions précédentes de stock, coût, journal et rejeu demeurent. Nouvelle CI requise pour ces modifications, aucune migration nouvelle.
 - Le scénario de concurrence de destruction nouvellement ajouté n'est pas encore certifié. Aucune validation locale sans checkout, aucune fusion, aucun déploiement ni OWNER_E2E.
 
+## Reprise — registre qualité Design 2.0 (19 novembre 2026)
+- CI 8a03f00 interrompue par les nouveaux commits : 4/18 workflows réussis, 14 annulés, dont Quality et Shop 2 behavioral. Ne pas les assimiler à des succès.
+- 2c16d21/82d2054/c2b4bda/320c68d/f272d23 : registre des lots avec rail de statuts et exports Excel/CSV/PDF via le composant ERP commun (limite 1 000 lignes, filtres de recherche/dépôt/statut/alerte réappliqués à chaque page). Identité de l'entreprise et du dépôt issue des données existantes; projection débiteur non concernée, aucun nouvel accès ni mutation. Dates civiles de production/péremption conservées au format YYYY-MM-DD pour les exports et affichage de péremption indépendant du fuseau navigateur. Le KPI destructions ouvre le registre sur DISPOSAL_PENDING et dépôt sélectionné; fermeture rafraîchit les compteurs. Les alertes de lots suivent dépôt/recherche, la garde suit uniquement le dépôt.
+- f1f0c25 : assertions HTTP de portée dépôt et état de destruction, projection du vrai dépôt sur lot rappelé. Export rendu, mobile FR/EN, filtre civil personnalisé et certification multisectorielle restent à prouver. Aucun checkout local, nouvelle migration, fusion, déploiement ou OWNER_E2E.
+
 ## Restant (bloquant)
 Certification de la réaffectation historique sur PostgreSQL + navigateur et valeur inchangée; certification achats et valorisation, réservations/livraisons multi-lots; moteur FEFO commun et POS; pertes, rappels et comptabilité; Design 2.0 et tests multisectoriels. Voir issue #1212. Ne pas merger avant clôture de tous les points.
 
