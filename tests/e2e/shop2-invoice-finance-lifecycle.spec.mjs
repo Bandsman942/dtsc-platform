@@ -889,6 +889,26 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
     const replayReceipt=await post(context.owner,receiptPath,{revision:dispatch.body.transfer.revision,comment:"Replay"});
     expect(replayReceipt.status).toBe(409);
     expect(await prisma.enterpriseStockMovement.count({where:{organizationId,sourceEntityId:transit.body.transfer.id,movementType:"TRANSFER_IN"}})).toBe(1);
+    // Transfer is an asset relocation, not an independent acquisition or sale.
+    // Both generic finance actions must reject it before any cost or journal write.
+    const transferMovements=await prisma.enterpriseStockMovement.findMany({where:{organizationId,sourceEntityType:"EnterpriseStockTransfer",sourceEntityId:transit.body.transfer.id},orderBy:{id:"asc"}});
+    expect(transferMovements).toHaveLength(2);
+    const transferLayerScope={organizationId,inventoryItemId:batchInventory.id};
+    const transferFinanceSnapshot=async()=>({
+      layers:await prisma.enterpriseInventoryCostLayer.findMany({where:transferLayerScope,orderBy:{id:"asc"}}),
+      events:await prisma.enterpriseInventoryAccountingEvent.findMany({where:transferLayerScope,orderBy:{id:"asc"}}),
+      journals:await prisma.enterpriseJournalEntry.count({where:{organizationId}}),
+      balances:await prisma.enterpriseInventoryBalance.findMany({where:transferLayerScope,orderBy:{id:"asc"}}),
+    });
+    const beforeTransferFinance=await transferFinanceSnapshot();
+    for(const movement of transferMovements){
+      const receipt=movement.direction==="IN";
+      const response=await post(context.owner,base+"/stock-movements/"+movement.id+(receipt?"/value-receipt":"/value-issue"),receipt?{currencyCode:fixture.currencyCode,unitCost:"7"}:{currencyCode:fixture.currencyCode});
+      expect(response.status,JSON.stringify(response.body)).toBe(409);
+      expect(response.body.error).toBe("INVENTORY_TRANSFER_VALUATION_WORKFLOW_REQUIRED");
+    }
+    expect(await transferFinanceSnapshot()).toEqual(beforeTransferFinance);
+
     const traceRes=await context.owner.request.get(qualityPath+"?view=trace&lotId="+encodeURIComponent(recallBefore.id));
     expect(traceRes.status()).toBe(200);
     const trace=await traceRes.json();
