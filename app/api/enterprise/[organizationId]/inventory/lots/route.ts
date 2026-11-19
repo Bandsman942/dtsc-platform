@@ -138,7 +138,7 @@ export async function GET(req: Request, { params }: Params) {
   const pageCatalogIds=[...new Set(items.map(item=>item.inventoryItem.catalogItem.id))];
   const [pharmacyItems,sectorItems]=await Promise.all([
     prisma.pharmacyProductExtension.findMany({where:{organizationId,catalogItemId:{in:pageCatalogIds}},select:{catalogItemId:true}}),
-    prisma.enterpriseSectorInventoryEvent.findMany({where:{organizationId,catalogItemId:{in:pageCatalogIds}},distinct:["catalogItemId"],select:{catalogItemId:true}}),
+    prisma.enterpriseSectorInventoryEvent.groupBy({by:["catalogItemId"],where:{organizationId,catalogItemId:{in:pageCatalogIds}}}),
   ]);
   const sectorManaged=new Set([...pharmacyItems,...sectorItems].map(row=>row.catalogItemId));
   return NextResponse.json({ items: items.map((item) => ({ ...item,
