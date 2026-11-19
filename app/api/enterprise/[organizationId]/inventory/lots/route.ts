@@ -120,7 +120,10 @@ export async function GET(req: Request, { params }: Params) {
     prisma.enterpriseStockLot.count({where:{AND:[baseWhere,filters.RECALLED]}}),
     prisma.enterpriseInventoryReturnCustody.count({where:{organizationId,status:"DISPOSAL_PENDING",originalMovement:{organizationId,...scoped,...(warehouseId?{warehouseId}:{})},returnLine:{request:{status:"COMPLETED"}}}}),
   ]);
+  const pageWarehouses=await prisma.enterpriseWarehouse.findMany({where:{organizationId,id:{in:[...new Set(items.map(item=>item.warehouseId))]}},select:{id:true,code:true,name:true}});
+  const warehouseById=new Map(pageWarehouses.map(warehouse=>[warehouse.id,warehouse]));
   return NextResponse.json({ items: items.map((item) => ({ ...item,
+    warehouse:warehouseById.get(item.warehouseId)??null,
     expired:Boolean(item.expiryDate && lotExpiryDateKey(item.expiryDate)<today),
     expiresSoon:Boolean(item.expiryDate && item.expiryDate>=todayDate && item.expiryDate<=horizon),
     quantityOnHand: item.balances.reduce((sum, balance) => sum.plus(balance.quantityOnHand), new Prisma.Decimal(0)).toFixed(3),
