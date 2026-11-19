@@ -803,15 +803,19 @@ export async function allocateEnterprisePayment(
     }
     await addPaymentEvent(tx, organizationId, payment.id, actorUserId, "ALLOCATED", "Payment allocation confirmed", { allocationId: created.id, amount: amount.toFixed(), receivableId: receivable?.id || null, payableId: payable?.id || null });
     await publishFinanceEvent(tx, { organizationId, entityType: "EnterprisePayment", entityId: payment.id, eventType: "PAYMENT_ALLOCATED", summary: `Payment ${payment.number} allocated`, actorUserId, metadataJson: { allocationId: created.id, amount: amount.toFixed(), receivableId: receivable?.id || null, payableId: payable?.id || null } });
+    // The supplier debt, payment allocation and its posting must commit
+    // together. A closed period or posting failure cannot leave a reduced
+    // payable without its matching ledger entry.
+    if (payable) await postBusinessEventTx(tx, organizationId, actorUserId, { postingEvent: "PAYMENT_ALLOCATION_CONFIRMED", sourceEntityType: "EnterprisePaymentAllocation", sourceEntityId: created.id });
     return created;
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })).catch((error: unknown) => {
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, ...(input.payableId ? { maxWait: 10000, timeout: 30000 } : {}) })).catch((error: unknown) => {
     if (error instanceof Prisma.PrismaClientKnownRequestError &&
         (error.code === "P2034" || (error.code === "P2010" && ["40001", "40P01"].includes(String(error.meta?.code))))) {
       throw new EnterpriseAccountingError("PAYMENT_ALLOCATION_CONFLICT", 409);
     }
     throw error;
   });
-  await postBusinessEvent(organizationId, actorUserId, { postingEvent: "PAYMENT_ALLOCATION_CONFIRMED", sourceEntityType: "EnterprisePaymentAllocation", sourceEntityId: allocation.id });
+  if (!allocation.payableId) await postBusinessEvent(organizationId, actorUserId, { postingEvent: "PAYMENT_ALLOCATION_CONFIRMED", sourceEntityType: "EnterprisePaymentAllocation", sourceEntityId: allocation.id });
   return allocation;
 }
 
