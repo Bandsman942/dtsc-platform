@@ -60,7 +60,7 @@ export async function GET(req: Request, { params }: Params) {
         const check = await inspectSupplierReturnTx(tx, organizationId, session.userId, { ...origin, supplierReturnSourceMovementId: origin.id, quantity });
         if (check.receipt.purchaseId !== id) throw new EnterpriseDomainError("SUPPLIER_RETURN_ORIGIN_INVALID", 404);
         return { eligible: true, readOnly: true, quantity, remaining: check.remaining.toFixed(),
-          unitCost: check.unitCost.toFixed(), totalCost: check.totalCost.toFixed(), currencyCode: check.currencyCode,
+          unitCost: check.unitCost.toFixed(), totalCost: check.totalCost.toFixed(), recoverableTaxAmount: check.recoverableTaxAmount.toFixed(), creditTotal: check.creditTotal.toFixed(), currencyCode: check.currencyCode,
           receiptReference: check.receipt.reference, invoiceReference: check.invoice.number };
       }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
       await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "supplier-return-preflight", purchaseId: id } });
@@ -121,7 +121,7 @@ export async function GET(req: Request, { params }: Params) {
     const canReviewSupplierReturn = canCheckSupplierReturn && await requireSupplierReturnParticipantAccess(organizationId, session.userId, true).then(() => true, () => false);
     const requests = (canSubmitSupplierReturn || canReviewSupplierReturn) && rows.length ? await prisma.enterpriseSupplierReturnRequest.findMany({
       where: { organizationId, purchaseId: id, sourceMovementId: { in: rows.map((row) => row.id) }, status: { in: ["PENDING_APPROVAL", "APPROVED", "DISPATCHED", "RECONCILED"] } },
-      select: { id:true, sourceMovementId:true, reference:true, status:true, quantity:true, requestedByUserId:true, revision:true, dispatchReference:true, dispatchedAt:true, supplierCreditNoteId:true, supplierCreditReference:true, supplierInvoiceId:true, supplierInvoiceItemId:true, unitCost:true, totalCost:true, currencyCode:true },
+      select: { id:true, sourceMovementId:true, reference:true, status:true, quantity:true, requestedByUserId:true, revision:true, dispatchReference:true, dispatchedAt:true, supplierCreditNoteId:true, supplierCreditReference:true, supplierInvoiceId:true, supplierInvoiceItemId:true, unitCost:true, totalCost:true, recoverableTaxAmount:true, currencyCode:true },
     }) : [];
     const requestApprovals = requests.length ? await prisma.enterpriseApproval.findMany({
       where: { organizationId, targetEntityType: SUPPLIER_RETURN_TARGET, targetEntityId: { in: requests.map((request) => request.id) }, OR: [...(canSubmitSupplierReturn ? [{ requestedByUserId: session.userId }] : []), ...(canReviewSupplierReturn ? [{ approverUserId: session.userId }] : [])], archivedAt: null },
@@ -144,7 +144,7 @@ export async function GET(req: Request, { params }: Params) {
       const credit=request.supplierCreditNoteId?creditById.get(request.supplierCreditNoteId):null;
       const replaced=request.supplierCreditNoteId?replacementById.get(request.supplierCreditNoteId):null;
       return [request.sourceMovementId, {
-      id:request.id, reference:request.reference,status:request.status,quantity:request.quantity,revision:request.revision,unitCost:request.unitCost,totalCost:request.totalCost,currencyCode:request.currencyCode,
+      id:request.id, reference:request.reference,status:request.status,quantity:request.quantity,revision:request.revision,unitCost:request.unitCost,totalCost:request.totalCost,recoverableTaxAmount:request.recoverableTaxAmount,creditTotal:request.totalCost.plus(request.recoverableTaxAmount),currencyCode:request.currencyCode,
       dispatchReference:request.dispatchReference,dispatchedAt:request.dispatchedAt,dispatchBusinessDate:request.dispatchedAt && businessContext ? formatEnterpriseBusinessDate(request.dispatchedAt,businessContext.timezone) : null,supplierCreditNoteId:request.supplierCreditNoteId,supplierCreditReference:request.supplierCreditReference,
       supplierInvoiceId:request.supplierInvoiceId,supplierInvoiceItemId:request.supplierInvoiceItemId,
       canWithdraw:canSubmitSupplierReturn && request.requestedByUserId===session.userId && request.status==="APPROVED",
