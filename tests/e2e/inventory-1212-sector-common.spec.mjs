@@ -51,6 +51,9 @@ test.describe.serial("#1212 common inventory contract in independent sector tena
         name: key, slug: key.toLowerCase(), sectorCode, sector: sectorCode,
         status: "ACTIVE", organizationType: "CLIENT", country: "CD",
         timezone: "Africa/Kinshasa", createdByDtscUserId: user.id,
+        // Disposable one-owner fixtures only: allow a stock approval candidate
+        // so authority failures are tested after genuine RBAC/policy checks.
+        settingsJson:{approvalPolicy:{selfApprovalModuleCodes:["INVENTORY_LOGISTICS"]}},
       } });
       const organizationId = org.id;
       await prisma.organizationMember.create({ data: {
@@ -61,7 +64,7 @@ test.describe.serial("#1212 common inventory contract in independent sector tena
         startedAt: new Date(Date.now() - 86400000), expiresAt: new Date(Date.now() + 30 * 86400000),
         createdByDtscUserId: user.id, updatedByDtscUserId: user.id,
       } });
-      for (const [index, moduleCode] of ["CATALOG", "SITES_WAREHOUSES", "INVENTORY_LOGISTICS"].entries()) {
+      for (const [index, moduleCode] of ["CATALOG", "SITES_WAREHOUSES", "INVENTORY_LOGISTICS", ...(sectorCode==="PHARMACY"?["SALES_DISPENSATION"]:[])].entries()) {
         await prisma.enterpriseModule.create({ data: {
           organizationId, moduleCode, labelFr: moduleCode, labelEn: moduleCode,
           moduleCategory: "E2E", isEnabled: true, isCore: false, requiresPlanLevel: "BUSINESS", sortOrder: index,
@@ -92,7 +95,8 @@ test.describe.serial("#1212 common inventory contract in independent sector tena
         organizationId, catalogItemId: product.id, lotTracking: true, expiryTracking: true,
         allowNegativeStock: false, createdByUserId: user.id,
       } });
-      fixtureBySector.set(sectorCode, { organizationId, warehouseId: warehouse.id, inventoryItemId: inventory.id, actor: user.id });
+      const secondWarehouse=await prisma.enterpriseWarehouse.create({data:{organizationId,siteId:site.id,code:"E2E-WH-2",name:"E2E second warehouse",warehouseType:"STORE",status:"ACTIVE",createdByUserId:user.id}});
+      fixtureBySector.set(sectorCode, { organizationId, warehouseId: warehouse.id, secondWarehouseId:secondWarehouse.id, inventoryItemId: inventory.id, actor: user.id });
     }
   });
 
@@ -241,6 +245,27 @@ test.describe.serial("#1212 common inventory contract in independent sector tena
           }}));
           expect(forbiddenPolicy.status).toBe(409);
           expect(forbiddenPolicy.body.error).toBe("STOCK_RECLASS_SECTOR_AUTHORITY");
+          const apiBase=baseUrl+"/api/enterprise/"+organizationId;
+          const durableCounts=async()=>Promise.all([
+            prisma.enterpriseStockAdjustment.count({where:scope}),
+            prisma.enterpriseStockTransfer.count({where:{organizationId}}),
+            prisma.enterpriseInventoryCount.count({where:{organizationId}}),
+            prisma.enterpriseApproval.count({where:{organizationId}}),
+            prisma.enterpriseInventoryAccountingEvent.count({where:scope}),
+            prisma.enterpriseJournalEntry.count({where:{organizationId}}),
+          ]);
+          const beforeOperations=await durableCounts();
+          for(const [endpoint,data] of [
+            ["stock-movements",{inventoryItemId,warehouseId,stockLotId:lot.id,movementType:"OPENING_BALANCE",direction:"IN",quantity:1,idempotencyKey:runKey+"-blocked-opening"}],
+            ["stock-adjustments",{inventoryItemId,warehouseId,stockLotId:lot.id,adjustmentType:"IN",quantity:1,reason:"Attempt independent common adjustment",approverUserId:actor,idempotencyKey:runKey+"-blocked-adjustment"}],
+            ["inventory-counts",{warehouseId,countType:"SPOT",approverUserId:actor,lines:[{inventoryItemId,stockLotId:lot.id,countedQuantity:1}]}],
+            ["stock-transfers",{sourceWarehouseId:warehouseId,destinationWarehouseId:fixture.secondWarehouseId,approverUserId:actor,lines:[{inventoryItemId,stockLotId:lot.id,quantity:1}]}],
+          ]){
+            const response=await read(await context.request.post(apiBase+"/"+endpoint,{headers,data}));
+            expect(response.status,JSON.stringify(response.body)).toBe(409);
+            expect(response.body.error).toBe("STOCK_RECLASS_SECTOR_AUTHORITY");
+          }
+          expect(await durableCounts()).toEqual(beforeOperations);
           expect(await prisma.enterpriseStockLot.count({where:scope})).toBe(beforeCount);
           expect(await prisma.enterpriseStockLot.findUniqueOrThrow({where:{id:lot.id}})).toEqual(beforeLot);
           expect(await prisma.enterpriseInventoryItem.findUniqueOrThrow({where:{id:inventoryItemId}})).toEqual(stockItem);
