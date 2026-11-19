@@ -1406,7 +1406,13 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
       const refused=await post(context.owner,base+"/supplier-credit-notes",invalidReplacement);
       expect(refused.status,JSON.stringify(refused.body)).toBe(409);
     }
-    const createdCredit=await post(context.owner,base+"/supplier-credit-notes",replacementPayload);
+    const replacementRace=await Promise.all([
+      post(context.owner,base+"/supplier-credit-notes",replacementPayload),
+      post(context.owner,base+"/supplier-credit-notes",replacementPayload),
+    ]);
+    expect(replacementRace.every(result=>[201,409].includes(result.status)),JSON.stringify(replacementRace)).toBe(true);
+    const createdCredit=replacementRace.find(result=>result.status===201);
+    expect(createdCredit).toBeTruthy();
     expect(createdCredit.status,JSON.stringify(createdCredit.body)).toBe(201);
     const supplierReturnCreditId=createdCredit.body.creditNote.id;
     expect(createdCredit.body.creditNote.status).toBe("DRAFT");
