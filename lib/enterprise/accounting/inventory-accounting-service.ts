@@ -22,6 +22,8 @@ export async function valueInventoryReceipt(
       where: { id: stockMovementId, organizationId, direction: "IN", quantity: { gt: 0 } },
     });
     if (!movement || ["LOT_RECLASSIFICATION_IN","CUSTODY_RECOVERY_IN"].includes(movement.movementType)) throw new EnterpriseAccountingError("INVENTORY_RECEIPT_MOVEMENT_INVALID", 409);
+    // A transfer is a relocation of existing stock, never an acquisition.
+    if (movement.movementType === "TRANSFER_IN" || movement.movementType === "TRANSFER_OUT" || movement.sourceEntityType === "EnterpriseStockTransfer") throw new EnterpriseAccountingError("INVENTORY_TRANSFER_VALUATION_WORKFLOW_REQUIRED",409);
 
     const configuration = await tx.enterpriseFinanceConfiguration.findUnique({ where: { organizationId } });
     if (!configuration) throw new EnterpriseAccountingError("FINANCE_CONFIGURATION_REQUIRED", 409);
@@ -118,6 +120,8 @@ export async function valueInventoryIssueTx(
     where: { id: stockMovementId, organizationId, direction: "OUT", quantity: { gt: 0 } },
   });
   if (!movement || ["LOT_RECLASSIFICATION_OUT", "SUPPLIER_RETURN_OUT"].includes(movement.movementType)) throw new EnterpriseAccountingError("INVENTORY_ISSUE_MOVEMENT_INVALID", 409);
+  // Never turn inter-warehouse dispatch into a cost-of-sales journal.
+  if (movement.movementType === "TRANSFER_IN" || movement.movementType === "TRANSFER_OUT" || movement.sourceEntityType === "EnterpriseStockTransfer") throw new EnterpriseAccountingError("INVENTORY_TRANSFER_VALUATION_WORKFLOW_REQUIRED",409);
 
   const configuration = await tx.enterpriseFinanceConfiguration.findUnique({ where: { organizationId } });
   if (!configuration || configuration.inventoryValuationMethod !== "WEIGHTED_AVERAGE") {
