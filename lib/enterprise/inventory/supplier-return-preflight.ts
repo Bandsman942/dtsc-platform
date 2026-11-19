@@ -102,7 +102,8 @@ export async function inspectSupplierReturnTx(tx: Prisma.TransactionClient, orga
     tx.enterpriseJournalEntry.findFirst({ where: { organizationId, sourceEntityType: "EnterpriseSupplierInvoice", sourceEntityId: invoice.id, postingEvent: "SUPPLIER_INVOICE_POSTED", status: "POSTED" }, include: { lines: true } }),
     tx.enterpriseSupplierCreditNote.count({ where: { organizationId, supplierInvoiceId: invoice.id, status: { notIn: ["CANCELLED", "REJECTED"] } } }),
   ]);
-  if (!invoiceJournal || credits || !invoice.subtotal.equals(invoiceItems[0].netAmount) || !invoice.taxTotal.equals(invoiceItems[0].taxAmount) || !invoice.taxTotal.equals(receiptItem.purchaseItem.taxAmount) || !invoice.grandTotal.equals(invoice.subtotal.plus(invoice.taxTotal)) || (invoice.taxTotal.gt(0) && (!invoice.taxRecoveryVerifiedAt || !invoice.taxRecoveryVerifiedByUserId))) blocked("SUPPLIER_RETURN_INVOICE_REQUIRED");
+  if (!invoiceJournal || credits || !invoice.subtotal.equals(invoiceItems[0].netAmount) || !invoice.taxTotal.equals(invoiceItems[0].taxAmount) || !invoice.taxTotal.equals(receiptItem.purchaseItem.taxAmount) || !invoice.grandTotal.equals(invoice.subtotal.plus(invoice.taxTotal))) blocked("SUPPLIER_RETURN_INVOICE_REQUIRED");
+  if (invoice.taxTotal.lt(0) || (invoice.taxTotal.gt(0) && (!invoice.taxRecoveryVerifiedAt || !invoice.taxRecoveryVerifiedByUserId))) blocked("SUPPLIER_RETURN_TAX_PROOF_REQUIRED");
   // The return must reverse the very same stock and clearing accounts, not a
   // newly remapped account or a sales/expense journal. VAT must be recorded
   // in the historical INPUT register and recoverable tax account.
@@ -138,7 +139,7 @@ export async function inspectSupplierReturnTx(tx: Prisma.TransactionClient, orga
     throw error;
   }
   const totalCost = money(qty.times(receiptValue.unitCost));
-  if (!totalCost.gt(0)) blocked("SUPPLIER_RETURN_VALUATION_REQUIRED");
+  if (!totalCost.gt(0) || totalCost.plus(recoverableTaxAmount).gt("99999999999999.999999")) blocked("SUPPLIER_RETURN_VALUATION_REQUIRED");
   return { origin, receipt, receiptItem, invoice, invoiceItem: invoiceItems[0], originLayer, receiptValue,
     remaining, currencyCode: receiptValue.currencyCode, unitCost: receiptValue.unitCost, totalCost, recoverableTaxAmount, creditTotal: money(totalCost.plus(recoverableTaxAmount)) };
 }
