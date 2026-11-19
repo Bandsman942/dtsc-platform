@@ -9,7 +9,7 @@ import { StatusBadge } from "@/components/workspace/status-badge";
 import { formatEnterpriseDate } from "@/components/enterprise/core-v2/erp-v2-ui";
 import { purchaseFormGuidance, type PurchaseFormGuidanceKey } from "@/lib/enterprise/purchase-form-i18n";
 
-type ReturnRequestSummary = { id?: string; reference: string; status: string; quantity: string; approvalId: string | null; revision?: number; unitCost?: string; totalCost?: string; currencyCode?: string; canDispatch?: boolean; canWithdraw?: boolean; canCreateCredit?: boolean; canReplaceCredit?: boolean; supplierCreditStatus?: string|null; supplierCreditRevision?: number|null; previousCreditNoteId?: string|null; previousSupplierCreditReference?: string|null; dispatchReference?: string | null; dispatchedAt?: string | null; dispatchBusinessDate?: string | null; supplierCreditNoteId?: string | null; supplierCreditReference?: string | null; supplierInvoiceId?: string; supplierInvoiceItemId?: string };
+type ReturnRequestSummary = { id?: string; reference: string; status: string; quantity: string; approvalId: string | null; revision?: number; unitCost?: string; totalCost?: string; recoverableTaxAmount?: string; creditTotal?: string; currencyCode?: string; canDispatch?: boolean; canWithdraw?: boolean; canCreateCredit?: boolean; canReplaceCredit?: boolean; supplierCreditStatus?: string|null; supplierCreditRevision?: number|null; previousCreditNoteId?: string|null; previousSupplierCreditReference?: string|null; dispatchReference?: string | null; dispatchedAt?: string | null; dispatchBusinessDate?: string | null; supplierCreditNoteId?: string | null; supplierCreditReference?: string | null; supplierInvoiceId?: string; supplierInvoiceItemId?: string };
 type TraceRow = {
   supplierReturnRequest?: ReturnRequestSummary | null;
   id: string; receiptReference: string | null; quantity: string; occurredAt: string;
@@ -20,7 +20,7 @@ type TraceRow = {
 };
 type TraceResponse = { items: TraceRow[]; canCheckSupplierReturn?: boolean; pagination: { page: number; pageSize: number; total: number; pageCount: number } };
 
-type ReturnPreview = { eligible: true; readOnly: true; quantity: string; remaining: string; unitCost: string; totalCost: string; currencyCode: string; receiptReference: string; invoiceReference: string; canSubmitRequest?: boolean };
+type ReturnPreview = { eligible: true; readOnly: true; quantity: string; remaining: string; unitCost: string; totalCost: string; recoverableTaxAmount: string; creditTotal: string; currencyCode: string; receiptReference: string; invoiceReference: string; canSubmitRequest?: boolean };
 
 function SupplierReturnCheck({ organizationId, purchaseId, row, locale, onRefresh }: { organizationId: string; purchaseId: string; row: TraceRow; locale: string; onRefresh: () => void }) {
   const t = (key: PurchaseFormGuidanceKey) => purchaseFormGuidance(locale, key);
@@ -119,7 +119,11 @@ function SupplierReturnCheck({ organizationId, purchaseId, row, locale, onRefres
     <div className="flex min-w-0 flex-wrap items-center gap-2"><strong className="break-words">{request.reference}</strong><StatusBadge tone={request.status==="RECONCILED"?"success":request.status==="APPROVED"?"info":"warning"}>{t(request.status==="CANCELLED"?"returnWithdrawn":request.status==="RECONCILED"?"returnReconciled":request.status==="DISPATCHED"?"returnDispatched":request.status==="APPROVED"?"returnRequestApproved":"returnRequestPending")}</StatusBadge></div>
     <p>{t("returnCheckQuantity")} : <strong>{request.quantity} {row.inventoryItem.catalogItem.unitOfMeasure?.symbol || ""}</strong></p>
     {request.status==="PENDING_APPROVAL"||request.status==="APPROVED"?<p className="text-dtsc-muted">{t("returnRequestHelp")}</p>:null}
-    {request.totalCost&&request.currencyCode?<p>{t("returnCreditAmount")} : <strong>{money(request.totalCost,request.currencyCode)}</strong></p>:null}
+    {request.totalCost&&request.currencyCode?<div className="grid gap-1">
+      <p>{t("returnCreditStockValue")} : <strong>{money(request.totalCost,request.currencyCode)}</strong></p>
+      {request.recoverableTaxAmount&&Number(request.recoverableTaxAmount)>0?<p>{t("returnCreditRecoverableTax")} : <strong>{money(request.recoverableTaxAmount,request.currencyCode)}</strong></p>:null}
+      <p>{t("returnCreditAmount")} : <strong>{money(request.creditTotal||request.totalCost,request.currencyCode)}</strong></p>
+    </div>:null}
     {request.dispatchReference?<p className="break-words">{t("returnDispatchReference")} : {request.dispatchReference}</p>:null}
     {request.supplierCreditReference?<p className="break-words">{t("returnCreditReference")} : {request.supplierCreditReference}</p>:null}
     {request.status==="CANCELLED"?<p className="text-dtsc-muted">{t("returnWithdrawHistory")}</p>:null}
@@ -167,6 +171,8 @@ function SupplierReturnCheck({ organizationId, purchaseId, row, locale, onRefres
         <p>{t("returnCheckRemaining")} : <strong>{preview.remaining} {row.inventoryItem.catalogItem.unitOfMeasure?.symbol || ""}</strong></p>
         <p>{t("returnCheckUnitCost")} : {money(preview.unitCost, preview.currencyCode)}</p>
         <p>{t("returnCheckAmount")} : <strong>{money(preview.totalCost, preview.currencyCode)}</strong></p>
+        {Number(preview.recoverableTaxAmount)>0?<p>{t("returnCreditRecoverableTax")} : <strong>{money(preview.recoverableTaxAmount,preview.currencyCode)}</strong></p>:null}
+        <p>{t("returnCreditAmount")} : <strong>{money(preview.creditTotal,preview.currencyCode)}</strong></p>
         <p className="break-words">{t("returnCheckInvoice")} : {preview.invoiceReference}</p>
         <p className="text-dtsc-muted">{t("returnCheckHelp")}</p>
         {preview.canSubmitRequest ? <form onSubmit={submitReturn} className="mt-2 grid min-w-0 grid-cols-[minmax(0,1fr)] gap-2 border-t border-dtsc-border pt-2">
