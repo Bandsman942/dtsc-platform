@@ -3,7 +3,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
 import { serializeFinanceValue } from "@/lib/enterprise/accounting/helpers";
-import { assertAcquisitionValuationCutoffTx } from "@/lib/enterprise/accounting/inventory-acquisition-cost-guards";
+import { inventoryValuationAtSqlTx } from "@/lib/enterprise/accounting/inventory-historical-valuation";
 
 export type FinancialStatementType = "TRIAL_BALANCE" | "GENERAL_LEDGER" | "JOURNALS" | "INCOME_STATEMENT" | "BALANCE_SHEET" | "CASH_FLOW" | "AR_AGING" | "AP_AGING" | "TREASURY" | "BUDGET_VS_ACTUAL" | "TAX" | "ASSET_REGISTER" | "INVENTORY_VALUATION";
 
@@ -160,11 +160,10 @@ async function assetRegister(organizationId: string, periodEnd: Date) {
 
 async function inventoryValuation(organizationId: string, periodEnd: Date) {
   return prisma.$transaction(async tx => {
-    await assertAcquisitionValuationCutoffTx(tx, organizationId, periodEnd);
+    const valuation = await inventoryValuationAtSqlTx(tx, organizationId, periodEnd);
     return tx.$queryRaw<Array<{ inventoryItemId: string; warehouseId: string | null; currencyCode: string; quantity: Prisma.Decimal; value: Prisma.Decimal }>>(Prisma.sql`
-    SELECT "inventoryItemId", "warehouseId", "currencyCode", COALESCE(SUM("remainingQuantity"), 0) AS quantity, COALESCE(SUM("remainingQuantity" * "unitCost"), 0) AS value
-    FROM "EnterpriseInventoryCostLayer"
-    WHERE "organizationId" = ${organizationId} AND "effectiveAt" <= ${periodEnd}
+    SELECT "inventoryItemId", "warehouseId", "currencyCode", COALESCE(SUM(quantity), 0) AS quantity, COALESCE(SUM(value), 0) AS value
+    FROM (${valuation}) inventory_rows
     GROUP BY "inventoryItemId", "warehouseId", "currencyCode"
     ORDER BY "inventoryItemId", "warehouseId", "currencyCode"
     `);
