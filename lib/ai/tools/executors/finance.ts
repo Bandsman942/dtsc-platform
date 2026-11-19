@@ -374,7 +374,8 @@ async function inventory(organizationId: string, toolName: FinanceAiToolCode, ar
     tx.$queryRaw<Array<{ currencyCode: string; quantity: Prisma.Decimal; value: Prisma.Decimal }>>(Prisma.sql`
       SELECT "currencyCode",
         COALESCE(SUM(quantity), 0) AS quantity,
-        COALESCE(SUM(value), 0) AS value
+        COALESCE(SUM(value), 0) AS value,
+        CASE WHEN BOOL_AND("valuationBasis"='VERIFIED_HISTORY') THEN 'VERIFIED_HISTORY' ELSE 'CURRENT_LAYER_PROJECTION' END AS "valuationBasis"
       FROM (${valuation}) inventory_rows
       WHERE quantity > 0
       GROUP BY "currencyCode"
@@ -383,7 +384,8 @@ async function inventory(organizationId: string, toolName: FinanceAiToolCode, ar
     tx.$queryRaw<Array<{ inventoryItemId: string; warehouseId: string | null; currencyCode: string; quantity: Prisma.Decimal; value: Prisma.Decimal }>>(Prisma.sql`
       SELECT "inventoryItemId", "warehouseId", "currencyCode",
         COALESCE(SUM(quantity), 0) AS quantity,
-        COALESCE(SUM(value), 0) AS value
+        COALESCE(SUM(value), 0) AS value,
+        CASE WHEN BOOL_AND("valuationBasis"='VERIFIED_HISTORY') THEN 'VERIFIED_HISTORY' ELSE 'CURRENT_LAYER_PROJECTION' END AS "valuationBasis"
       FROM (${valuation}) inventory_rows
       WHERE quantity > 0
       GROUP BY "inventoryItemId", "warehouseId", "currencyCode"
@@ -392,7 +394,7 @@ async function inventory(organizationId: string, toolName: FinanceAiToolCode, ar
     `),
     ]);
   }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
-  return output(toolName, totals.length, totals.length ? "Valorisation du stock issue des couches de coût et de l’historique d’acquisition prouvé, séparée par devise avec positions bornées." : "Aucune couche de coût de stock valorisable.", { asOf: end, totals, positions });
+  return output(toolName, totals.length, totals.length ? "Valorisation par devise et position. VERIFIED_HISTORY : mouvements comptabilisés concordants à la date demandée. CURRENT_LAYER_PROJECTION : reliquat actuel de couches de coût, non certifié historiquement ; ne pas présenter ces montants comme la valeur exacte à cette date." : "Aucune couche de coût de stock valorisable.", { asOf: end, totals, positions });
 }
 
 export async function runFinanceReadToolData(input: {
