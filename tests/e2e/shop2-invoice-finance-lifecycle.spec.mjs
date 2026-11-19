@@ -2120,6 +2120,38 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
     }
     expect(await prisma.enterpriseInventoryCostLayer.findMany({where:{organizationId,inventoryItemId:mixedItem.id},orderBy:{id:"asc"}})).toEqual(beforeReports);
 
+    // Three equal-cost lots of one unit: independent 3-decimal rounding
+    // used to leave 2.001 in the cost pool after a real loss of one unit.
+    const fractionalSku=historyKey+"-CUMP-RESIDUAL";
+    const fractionalProduct=await prisma.enterpriseCatalogItem.create({data:{organizationId,code:fractionalSku,sku:fractionalSku,name:"E2E CUMP residual "+historyKey,normalizedName:fractionalSku.toLowerCase(),itemType:"PRODUCT",unitOfMeasureId:fixture.product.unitOfMeasureId,indicativeSalePrice:20,indicativeCost:7,currency:fixture.currencyCode,taxable:false,trackInventory:true,createdByUserId:fixture.owner.id}});
+    const fractionalItem=await prisma.enterpriseInventoryItem.create({data:{organizationId,catalogItemId:fractionalProduct.id,lotTracking:true,expiryTracking:true,createdByUserId:fixture.owner.id}});
+    const fractionalPurchase=await orderForPurchase(fractionalProduct,3,"RESIDUAL",supplier.id);
+    const fractionalReceipt=await post(context.owner,base+"/purchases/"+fractionalPurchase.id+"/receive",{revision:fractionalPurchase.revision,receivedAt:new Date().toISOString(),warehouseId:fixture.warehouse.id,items:[{purchaseItemId:fractionalPurchase.items[0].id,quantityReceived:3}],lotAllocations:[{purchaseItemId:fractionalPurchase.items[0].id,batches:["A","B","C"].map(suffix=>({lotNumber:fractionalSku+"-"+suffix,productionDate:null,expiryDate:allocationPayload.allocations[0].expiryDate,quantity:1}))}]});
+    expect(fractionalReceipt.status,JSON.stringify(fractionalReceipt.body)).toBe(201);
+    const fractionalMovements=await prisma.enterpriseStockMovement.findMany({where:{organizationId,sourceEntityType:"EnterprisePurchaseReceipt",sourceEntityId:fractionalReceipt.body.receipt.id},include:{stockLot:true}});
+    expect(fractionalMovements).toHaveLength(3);
+    for(const movement of fractionalMovements){
+      const valued=await post(context.owner,base+"/stock-movements/"+movement.id+"/value-receipt",{unitCost:"7",currencyCode:fixture.currencyCode});
+      expect(valued.status,JSON.stringify(valued.body)).toBe(200);
+    }
+    const fractionalLot=fractionalMovements[0].stockLot;
+    const fractionalIsolation=await patchLot(context.owner,{id:fractionalLot.id,revision:fractionalLot.revision,status:"QUARANTINED",qualityReason:"Isolate one defective unit before CUMP precision test"});
+    expect(fractionalIsolation.status,JSON.stringify(fractionalIsolation.body)).toBe(200);
+    const fractionalLoss=await post(context.owner,base+"/stock-adjustments",{inventoryItemId:fractionalItem.id,warehouseId:fixture.warehouse.id,stockLotId:fractionalLot.id,adjustmentType:"OUT",lossReason:"DAMAGE",quantity:1,reason:"Approved destruction of one unit in three-layer pool",approverUserId:fixture.settler.id,idempotencyKey:fractionalSku+"-loss"});
+    expect(fractionalLoss.status,JSON.stringify(fractionalLoss.body)).toBe(201);
+    const fractionalApprove=await post(context.settler,base+"/stock-adjustments/"+fractionalLoss.body.adjustment.id+"/decision",{decision:"APPROVE",revision:fractionalLoss.body.adjustment.revision});
+    expect(fractionalApprove.status,JSON.stringify(fractionalApprove.body)).toBe(200);
+    const fractionalLayers=await prisma.enterpriseInventoryCostLayer.findMany({where:{organizationId,inventoryItemId:fractionalItem.id},orderBy:{id:"asc"}});
+    expect(fractionalLayers.map(row=>row.remainingQuantity.toFixed())).toEqual(["0.666667","0.666667","0.666666"]);
+    const fractionalBalances=await prisma.enterpriseInventoryBalance.findMany({where:{organizationId,inventoryItemId:fractionalItem.id}});
+    expect(fractionalBalances.reduce((sum,row)=>sum.plus(row.quantityOnHand),new Prisma.Decimal(0)).equals(2)).toBe(true);
+    expect(fractionalLayers.reduce((sum,row)=>sum.plus(row.remainingQuantity),new Prisma.Decimal(0)).equals(2)).toBe(true);
+    expect(fractionalLayers.reduce((sum,row)=>sum.plus(row.remainingQuantity.times(row.unitCost)),new Prisma.Decimal(0)).equals(14)).toBe(true);
+    const fractionalOut=await prisma.enterpriseStockMovement.findFirstOrThrow({where:{organizationId,sourceEntityType:"EnterpriseStockAdjustment",sourceEntityId:fractionalLoss.body.adjustment.id,movementType:"LOT_WRITE_OFF"}});
+    const fractionalEvent=await prisma.enterpriseInventoryAccountingEvent.findFirstOrThrow({where:{organizationId,stockMovementId:fractionalOut.id,eventType:"LOSS",status:"POSTED"}});
+    expect(fractionalEvent.totalCost.equals(7)).toBe(true);
+
+
   } finally {
     if (originalSettings !== undefined) await prisma.enterpriseRetailConfiguration.update({
       where: { organizationId }, data: { settingsJson: originalSettings === null ? Prisma.DbNull : originalSettings,
