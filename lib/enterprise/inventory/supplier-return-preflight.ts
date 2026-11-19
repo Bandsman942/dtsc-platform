@@ -6,6 +6,7 @@ import { money, sumDecimals } from "@/lib/enterprise/accounting/helpers";
 import { readActiveRetailInvoiceStockHoldsTx } from "@/lib/enterprise/retail/invoice-stock-holds";
 import { resolveSemanticPostingAccount } from "@/lib/enterprise/accounting/semantic-account-resolver";
 import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
+import { deriveSupplierReturnTaxTx } from "@/lib/enterprise/accounting/supplier-return-credit-reconciliation";
 
 export type SupplierReturnCoordinates = {
   inventoryItemId: string; warehouseId: string; storageLocationId?: string | null; stockLotId?: string | null;
@@ -17,7 +18,8 @@ function blocked(code: string): never { throw new EnterpriseDomainError(code, 40
 /** The first supported return is deliberately narrow: an identified, isolated
  * lot from a unique original receipt in its original warehouse, with a
  * posted matching supplier invoice and equal current/original unit costs.
- * Never guess allocation across suppliers, currencies, tax or transferred stock.
+ * Never guess allocation across suppliers, currencies or transferred stock.
+ * Only proven historical recoverable standard VAT is supported.
  * Run this again in the same serializable transaction as any future dispatch. */
 export async function inspectSupplierReturnTx(tx: Prisma.TransactionClient, organizationId: string, actorUserId: string, input: SupplierReturnCoordinates) {
   await requireInventoryStockAuthorityTx(tx, organizationId, actorUserId, input.warehouseId);
@@ -60,7 +62,7 @@ export async function inspectSupplierReturnTx(tx: Prisma.TransactionClient, orga
   if (pharmacy || sector) blocked("STOCK_RECLASS_SECTOR_AUTHORITY");
   const receiptItem = receipt?.items[0];
   if (!receipt || !receiptItem || !receiptLink || !receipt.purchase.supplierId || receipt.purchase.archivedAt ||
-    receipt.purchase.status === "CANCELLED" || receipt.purchase.status === "REJECTED" || !receiptItem.purchaseItem.taxAmount.isZero() || origin.quantity.gt(receiptItem.quantityReceived)) blocked("SUPPLIER_RETURN_ORIGIN_INVALID");
+    receipt.purchase.status === "CANCELLED" || receipt.purchase.status === "REJECTED" || origin.quantity.gt(receiptItem.quantityReceived)) blocked("SUPPLIER_RETURN_ORIGIN_INVALID");
   // The whole local lot must have one incoming receipt. Transferred, mixed and
   // re-entered batches need an explicit provenance allocation workflow.
   const incoming = lotMovements.filter((row) => row.direction === "IN");
@@ -92,20 +94,25 @@ export async function inspectSupplierReturnTx(tx: Prisma.TransactionClient, orga
   const invoice = invoices[0];
   const invoiceItems = invoice.items.filter((line) => line.catalogItemId === catalogItemId);
   if (!["POSTED", "PARTIALLY_PAID", "PAID"].includes(invoice.status) || !invoice.postedAt || invoice.currencyCode !== receiptValue.currencyCode ||
-    invoice.taxTotal.gt(0) || invoice.threeWayMatch?.status !== "MATCHED" || invoice.amountCredited.gt(0) ||
+    invoice.threeWayMatch?.status !== "MATCHED" || invoice.amountCredited.gt(0) ||
     invoice.items.length !== 1 || invoiceItems.length !== 1 || !invoiceItems[0].quantity.equals(receiptItem.quantityReceived) ||
     !invoiceItems[0].unitPrice.equals(receiptValue.unitCost) || !receiptItem.purchaseItem.unitPrice.equals(receiptValue.unitCost) ||
-    !invoiceItems[0].netAmount.equals(money(receiptItem.quantityReceived.times(receiptValue.unitCost))) || invoiceItems[0].taxAmount.gt(0)) blocked("SUPPLIER_RETURN_INVOICE_REQUIRED");
+    !invoiceItems[0].netAmount.equals(money(receiptItem.quantityReceived.times(receiptValue.unitCost)))) blocked("SUPPLIER_RETURN_INVOICE_REQUIRED");
   const [invoiceJournal, credits] = await Promise.all([
     tx.enterpriseJournalEntry.findFirst({ where: { organizationId, sourceEntityType: "EnterpriseSupplierInvoice", sourceEntityId: invoice.id, postingEvent: "SUPPLIER_INVOICE_POSTED", status: "POSTED" }, include: { lines: true } }),
     tx.enterpriseSupplierCreditNote.count({ where: { organizationId, supplierInvoiceId: invoice.id, status: { notIn: ["CANCELLED", "REJECTED"] } } }),
   ]);
-  if (!invoiceJournal || credits || !invoice.subtotal.equals(invoiceItems[0].netAmount) || !invoice.grandTotal.equals(invoice.subtotal)) blocked("SUPPLIER_RETURN_INVOICE_REQUIRED");
+  if (!invoiceJournal || credits || !invoice.subtotal.equals(invoiceItems[0].netAmount) || !invoice.taxTotal.equals(invoiceItems[0].taxAmount) || !invoice.taxTotal.equals(receiptItem.purchaseItem.taxAmount) || !invoice.grandTotal.equals(invoice.subtotal.plus(invoice.taxTotal)) || (invoice.taxTotal.gt(0) && (!invoice.taxRecoveryVerifiedAt || !invoice.taxRecoveryVerifiedByUserId))) blocked("SUPPLIER_RETURN_INVOICE_REQUIRED");
   // The return must reverse the very same stock and clearing accounts, not a
-  // newly remapped account or a sales/expense journal. This first tranche
-  // deliberately refuses tax and FX cases that need dedicated treatment.
+  // newly remapped account or a sales/expense journal. VAT must be recorded
+  // in the historical INPUT register and recoverable tax account.
+  let recoverableTaxAmount = new Prisma.Decimal(0);
   try {
     const date = new Date();
+    if (invoice.taxTotal.gt(0)) {
+      try { recoverableTaxAmount = (await deriveSupplierReturnTaxTx(tx, organizationId, invoiceItems[0], invoice.currencyCode, qty, date)).amount; }
+      catch (error) { if (error instanceof EnterpriseAccountingError) blocked("SUPPLIER_RETURN_TAX_PROOF_REQUIRED"); throw error; }
+    }
     const [stockAccount, clearingAccount, payableAccount] = await Promise.all([
       resolveSemanticPostingAccount(tx, { organizationId, mappingKey: "INVENTORY", accountingDate: date }),
       resolveSemanticPostingAccount(tx, { organizationId, mappingKey: "GOODS_RECEIVED_CLEARING", accountingDate: date }),
@@ -115,7 +122,17 @@ export async function inspectSupplierReturnTx(tx: Prisma.TransactionClient, orga
       lines.length === 2 && lines.some((line) => line.ledgerAccountId === debitId && line.debit.equals(amount) && line.credit.isZero()) &&
       lines.some((line) => line.ledgerAccountId === creditId && line.credit.equals(amount) && line.debit.isZero());
     if (!balanced(journal.lines, stockAccount.id, clearingAccount.id, receiptValue.totalCost) ||
-      !balanced(invoiceJournal.lines, clearingAccount.id, payableAccount.id, invoice.subtotal)) blocked("SUPPLIER_RETURN_VALUATION_REQUIRED");
+        journal.functionalCurrencyCode !== invoice.currencyCode || invoiceJournal.functionalCurrencyCode !== invoice.currencyCode) blocked("SUPPLIER_RETURN_VALUATION_REQUIRED");
+    if (invoice.taxTotal.isZero()) {
+      if (!balanced(invoiceJournal.lines, clearingAccount.id, payableAccount.id, invoice.subtotal)) blocked("SUPPLIER_RETURN_VALUATION_REQUIRED");
+    } else {
+      const taxAccount=await resolveSemanticPostingAccount(tx,{organizationId,mappingKey:"TAX_RECEIVABLE",accountingDate:date});
+      if(new Set([stockAccount.id,clearingAccount.id,payableAccount.id,taxAccount.id]).size!==4 ||
+        invoiceJournal.lines.length!==3 ||
+        !invoiceJournal.lines.some(l=>l.ledgerAccountId===clearingAccount.id&&l.debit.equals(invoice.subtotal)&&l.credit.isZero()) ||
+        !invoiceJournal.lines.some(l=>l.ledgerAccountId===taxAccount.id&&l.debit.equals(invoice.taxTotal)&&l.credit.isZero()) ||
+        !invoiceJournal.lines.some(l=>l.ledgerAccountId===payableAccount.id&&l.credit.equals(invoice.grandTotal)&&l.debit.isZero())) blocked("SUPPLIER_RETURN_TAX_PROOF_REQUIRED");
+    }
   } catch (error) {
     if (error instanceof EnterpriseAccountingError) blocked("SUPPLIER_RETURN_VALUATION_REQUIRED");
     throw error;
@@ -123,7 +140,7 @@ export async function inspectSupplierReturnTx(tx: Prisma.TransactionClient, orga
   const totalCost = money(qty.times(receiptValue.unitCost));
   if (!totalCost.gt(0)) blocked("SUPPLIER_RETURN_VALUATION_REQUIRED");
   return { origin, receipt, receiptItem, invoice, invoiceItem: invoiceItems[0], originLayer, receiptValue,
-    remaining, currencyCode: receiptValue.currencyCode, unitCost: receiptValue.unitCost, totalCost };
+    remaining, currencyCode: receiptValue.currencyCode, unitCost: receiptValue.unitCost, totalCost, recoverableTaxAmount, creditTotal: money(totalCost.plus(recoverableTaxAmount)) };
 }
 
 /** No stock-only or global DTSC role may authorize a financial return. */
