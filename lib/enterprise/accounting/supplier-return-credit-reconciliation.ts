@@ -86,7 +86,7 @@ export async function readPriorReconciledSupplierReturnCreditsTx(
       tx.enterpriseStockMovement.findMany({where:{organizationId,id:{in:sourceIds},sourceEntityType:"EnterprisePurchaseReceipt",sourceEntityId:scope.receiptId,sourceLineId:scope.receiptItemId,inventoryItemId:scope.inventoryItemId,warehouseId:scope.warehouseId,movementType:"PURCHASE_RECEIPT",direction:"IN"}}),
       tx.enterpriseInventoryCostLayer.findMany({where:{organizationId,sourceMovementId:{in:sourceIds},inventoryItemId:scope.inventoryItemId,warehouseId:scope.warehouseId}}),
       tx.enterpriseInventoryAccountingEvent.findMany({where:{organizationId,stockMovementId:{in:sourceIds},inventoryItemId:scope.inventoryItemId,eventType:"RECEIPT",status:"POSTED",journalEntryId:{not:null}}}),
-      tx.enterprisePurchaseReceiptItem.findFirst({where:{organizationId,id:scope.receiptItemId,purchaseReceiptId:scope.receiptId}}),
+      tx.enterprisePurchaseReceiptItem.findFirst({where:{organizationId,id:scope.receiptItemId,receiptId:scope.receiptId}}),
     ]);
     if(!receiptLine || !receiptLine.quantityReceived.equals(input.original.quantity) ||
       [origins,originLayers,originEvents].some(rows=>rows.length!==sourceIds.length))return fail();
