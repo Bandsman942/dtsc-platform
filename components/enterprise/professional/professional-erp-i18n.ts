@@ -28,7 +28,16 @@ type ProfessionalErpSupplementKey =
   | "inventory.countKind"
   | "inventory.adjustmentKind"
   | "inventory.rejectionReason"
-  | "inventory.decisionComment";
+  | "inventory.decisionComment"
+  | "inventory.batchRegister"
+  | "inventory.batchAllStatuses"
+  | "inventory.batchAvailable"
+  | "inventory.batchBlocked"
+  | "inventory.batchQuarantined"
+  | "inventory.batchRecalled"
+  | "inventory.batchExpired"
+  | "inventory.batchExpiring"
+  | "inventory.batchMetricScope";
 type ProfessionalErpAliasKey =
   | "assets.plannedAt"
   | "assets.dueAt"
@@ -81,6 +90,15 @@ const professionalSupplements: Record<ProfessionalErpLocale, Record<Professional
     "inventory.adjustmentKind": "Ajustement de stock",
     "inventory.rejectionReason": "Motif du rejet",
     "inventory.decisionComment": "Commentaire de décision",
+    "inventory.batchRegister": "Registre des lots",
+    "inventory.batchAllStatuses": "Tous les statuts",
+    "inventory.batchAvailable": "Disponible",
+    "inventory.batchBlocked": "Bloqué",
+    "inventory.batchQuarantined": "En quarantaine",
+    "inventory.batchRecalled": "Rappelé",
+    "inventory.batchExpired": "Périmé",
+    "inventory.batchExpiring": "Péremption proche",
+    "inventory.batchMetricScope": "Les alertes de lots couvrent les dépôts et la recherche sélectionnés. Les destructions à attester couvrent uniquement le périmètre dépôt.",
   },
   en: {
     "common.loadFailed": "Unable to load data.",
@@ -107,6 +125,15 @@ const professionalSupplements: Record<ProfessionalErpLocale, Record<Professional
     "inventory.adjustmentKind": "Stock adjustment",
     "inventory.rejectionReason": "Rejection reason",
     "inventory.decisionComment": "Decision comment",
+    "inventory.batchRegister": "Batch register",
+    "inventory.batchAllStatuses": "All statuses",
+    "inventory.batchAvailable": "Available",
+    "inventory.batchBlocked": "Blocked",
+    "inventory.batchQuarantined": "Quarantined",
+    "inventory.batchRecalled": "Recalled",
+    "inventory.batchExpired": "Expired",
+    "inventory.batchExpiring": "Expires soon",
+    "inventory.batchMetricScope": "Batch alerts cover the selected warehouses and search. Pending disposals cover the warehouse scope only.",
   },
 };
 
