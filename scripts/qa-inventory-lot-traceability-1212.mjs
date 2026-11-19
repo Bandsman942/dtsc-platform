@@ -731,6 +731,63 @@ for(const marker of [
 ]) assert.ok(ordinaryProof.sql.includes(marker),marker);
 assert.ok(ordinaryProof.values.includes("org-a"));
 assert.ok(ordinaryProof.values.some(value=>value instanceof Date&&value.getTime()===acqDay.getTime()));
+mocks["@/lib/enterprise/accounting/inventory-transfer-cost-plan"]={planInventoryTransferCost,proveInventoryTransferDestination};
+const transferPreflight=load("lib/enterprise/accounting/inventory-transfer-cost-preflight.ts");
+let sourceVerified=true, destinationVerified=true, destinationHistory=false, foreignDestination=false, negativeSource=false, wrongCurrency=false;
+let destinationQuantity=d(3), destinationLayers=transferPool("3",[["existing","3","10"]]).layers;
+const proofQueries=[];
+const verifyTransferScope=where=>{
+  assert.equal(where.organizationId,"org-a");
+  assert.equal(where.inventoryItemId,"item-a");
+  assert.ok(["source-a","destination-b"].includes(where.warehouseId));
+  return where.warehouseId==="source-a";
+};
+const transferReadTx={
+  enterpriseFinanceConfiguration:{findUnique:async({where})=>{
+    assert.equal(where.organizationId,"org-a");
+    return {functionalCurrencyCode:"USD",inventoryValuationMethod:"WEIGHTED_AVERAGE"};
+  }},
+  enterpriseInventoryItem:{findFirst:async({where})=>{
+    assert.equal(where.organizationId,"org-a");assert.equal(where.id,"item-a");return {id:"item-a"};
+  }},
+  enterpriseWarehouse:{findMany:async({where})=>{
+    assert.equal(where.organizationId,"org-a");return foreignDestination?[{id:"source-a"}]:[{id:"source-a"},{id:"destination-b"}];
+  }},
+  enterpriseInventoryCostLayer:{findMany:async({where})=>{
+    const source=verifyTransferScope(where);
+    return source?(wrongCurrency?exactSource.layers.map(x=>({...x,currencyCode:"CDF"})):exactSource.layers):destinationLayers;
+  }},
+  enterpriseInventoryBalance:{
+    aggregate:async({where})=>({_sum:{quantityOnHand:verifyTransferScope(where)?d(20):destinationQuantity}}),
+    count:async({where})=>verifyTransferScope(where)&&negativeSource?1:0,
+  },
+  enterpriseStockMovement:{count:async({where})=>{assert.equal(verifyTransferScope(where),false);return destinationHistory?1:0;}},
+  $queryRaw:async query=>{
+    proofQueries.push(query);
+    assert.ok(query.sql.includes('AND l."inventoryItemId"=? AND l."warehouseId"=?'));
+    assert.ok(query.values.includes("org-a")&&query.values.includes("item-a"));
+    return query.values.includes("source-a")?(sourceVerified?[{quantity:d(20),value:d(140),currencyCode:"USD"}]:[]):
+      (destinationVerified?[{quantity:destinationQuantity,value:d(30),currencyCode:"USD"}]:[]);
+  },
+};
+const transferInput={organizationId:"org-a",inventoryItemId:"item-a",sourceWarehouseId:"source-a",destinationWarehouseId:"destination-b",quantity:d(4)};
+const preparedTransfer=await transferPreflight.prepareInventoryTransferCostTx(transferReadTx,transferInput);
+assert.equal(preparedTransfer.plan.totalCost.toFixed(),"28");
+assert.equal(preparedTransfer.reception.destinationValueAfter.toFixed(),"58");
+assert.equal(proofQueries.length,2);
+assert.ok(proofQueries[0].values.includes("source-a")&&!proofQueries[0].values.includes("destination-b"));
+assert.ok(proofQueries[1].values.includes("destination-b")&&!proofQueries[1].values.includes("source-a"));
+const prepareTransfer=()=>transferPreflight.prepareInventoryTransferCostTx(transferReadTx,transferInput);
+sourceVerified=false;await assert.rejects(prepareTransfer(),{code:"INVENTORY_TRANSFER_COST_POOL_UNPROVEN"});sourceVerified=true;
+destinationVerified=false;await assert.rejects(prepareTransfer(),{code:"INVENTORY_TRANSFER_COST_POOL_UNPROVEN"});destinationVerified=true;
+foreignDestination=true;await assert.rejects(prepareTransfer(),{code:"INVENTORY_TRANSFER_COST_POOL_UNPROVEN"});foreignDestination=false;
+negativeSource=true;await assert.rejects(prepareTransfer(),{code:"INVENTORY_TRANSFER_COST_POOL_UNPROVEN"});negativeSource=false;
+wrongCurrency=true;await assert.rejects(prepareTransfer(),{code:"INVENTORY_TRANSFER_COST_POOL_UNPROVEN"});wrongCurrency=false;
+destinationQuantity=d(0);destinationLayers=[];
+assert.equal((await prepareTransfer()).reception.destinationValueAfter.toFixed(),"28");
+destinationHistory=true;await assert.rejects(prepareTransfer(),{code:"INVENTORY_TRANSFER_COST_POOL_UNPROVEN"});
+console.log("Transfer preflight: tenant-scoped ledger proof, functional currency, exact live quantity and pristine destination");
+
 const historicalValuation=load("lib/enterprise/accounting/inventory-historical-valuation.ts");
 const historyProof=historicalValuation.isolatedAcquisitionHistorySql("org-a",acqDay);
 for(const marker of [
