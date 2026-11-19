@@ -1,12 +1,73 @@
 import { Prisma } from "@prisma/client";
 
+/** Transfer recognition dates come from immutable movements and posted journals.
+ * The IN_TRANSIT record is a location dimension, not a fictitious warehouse.
+ * A completed receipt must independently prove its destination layer. */
+export function verifiedInventoryTransfersSql(organizationId:string): Prisma.Sql {
+  return Prisma.sql`
+    SELECT v.id, v."organizationId", v."currencyCode", v.quantity, v."totalCost",
+      line."inventoryItemId", t."sourceWarehouseId",t."destinationWarehouseId",
+      v."dispatchMovementId",v."receiptMovementId",v."destinationCostLayerId",
+      GREATEST(v."createdAt",v."dispatchedAt",dm."createdAt",dm."occurredAt",dj."accountingDate",dj."postedAt") AS "dispatchRecognized",
+      CASE WHEN v.status='RECEIVED' THEN GREATEST(v."receivedAt",rm."createdAt",rm."occurredAt",rl."createdAt",rl."effectiveAt",rj."accountingDate",rj."postedAt") END AS "receiptRecognized"
+    FROM "EnterpriseInventoryTransferValuation" v
+    JOIN "EnterpriseStockTransferLine" line ON line."organizationId"=v."organizationId" AND line.id=v."transferLineId"
+    JOIN "EnterpriseStockTransfer" t ON t."organizationId"=line."organizationId" AND t.id=line."stockTransferId"
+    JOIN "EnterpriseStockMovement" dm ON dm."organizationId"=v."organizationId" AND dm.id=v."dispatchMovementId"
+    JOIN "EnterpriseJournalEntry" dj ON dj."organizationId"=v."organizationId" AND dj.id=v."dispatchJournalEntryId"
+    LEFT JOIN "EnterpriseStockMovement" rm ON rm."organizationId"=v."organizationId" AND rm.id=v."receiptMovementId"
+    LEFT JOIN "EnterpriseInventoryCostLayer" rl ON rl."organizationId"=v."organizationId" AND rl.id=v."destinationCostLayerId"
+    LEFT JOIN "EnterpriseJournalEntry" rj ON rj."organizationId"=v."organizationId" AND rj.id=v."receiptJournalEntryId"
+    CROSS JOIN LATERAL (
+      SELECT COUNT(*) AS count,COALESCE(SUM(a."transferredQuantity"),0) AS quantity,
+        COALESCE(SUM(a."transferredQuantity"*a."unitCost"),0) AS value,
+        BOOL_AND(l.id IS NOT NULL AND l."inventoryItemId"=line."inventoryItemId" AND l."warehouseId"=t."sourceWarehouseId"
+          AND l."currencyCode"=v."currencyCode" AND l."unitCost"=a."unitCost") AS scoped
+      FROM "EnterpriseInventoryTransferCostAllocation" a
+      LEFT JOIN "EnterpriseInventoryCostLayer" l ON l."organizationId"=a."organizationId" AND l.id=a."sourceCostLayerId"
+      WHERE a."organizationId"=v."organizationId" AND a."valuationId"=v.id
+    ) allocation
+    WHERE v."organizationId"=${organizationId} AND v.status IN ('IN_TRANSIT','RECEIVED')
+      AND t."sourceWarehouseId"<>t."destinationWarehouseId" AND line.quantity=v.quantity
+      AND v."dispatchedAt" IS NOT NULL
+      AND dm."movementType"='TRANSFER_OUT' AND dm.direction='OUT' AND dm."sourceEntityType"='EnterpriseStockTransfer'
+      AND dm."sourceEntityId"=t.id AND dm."sourceLineId"=line.id AND dm.quantity=v.quantity
+      AND dm."inventoryItemId"=line."inventoryItemId" AND dm."warehouseId"=t."sourceWarehouseId"
+      AND dm."stockLotId" IS NOT DISTINCT FROM line."stockLotId" AND dm."storageLocationId" IS NOT DISTINCT FROM line."sourceLocationId"
+      AND allocation.count>0 AND allocation.scoped AND allocation.quantity=v.quantity AND allocation.value=v.quantity*v."unitCost"
+      AND v."totalCost"=ROUND(allocation.value,6)
+      AND dj.status='POSTED' AND dj."postedAt" IS NOT NULL AND dj."reversedAt" IS NULL AND dj."reversalOfEntryId" IS NULL
+      AND dj."sourceEntityType"='EnterpriseInventoryTransferValuation' AND dj."sourceEntityId"=v.id
+      AND dj."postingEvent"='INVENTORY_TRANSFER_DISPATCHED' AND dj."postingVersion"=1
+      AND dj."functionalCurrencyCode"=v."currencyCode" AND dj."totalDebit"=v."totalCost" AND dj."totalCredit"=v."totalCost"
+      AND NOT EXISTS(SELECT 1 FROM "EnterpriseJournalReversal" rev WHERE rev."organizationId"=v."organizationId" AND rev."originalEntryId"=dj.id)
+      AND NOT EXISTS(SELECT 1 FROM "EnterpriseInventoryAccountingEvent" legacy WHERE legacy."organizationId"=v."organizationId" AND legacy."stockMovementId"=dm.id)
+      AND (v.status='IN_TRANSIT' OR (
+        v.status='RECEIVED' AND rm.id IS NOT NULL AND rl.id IS NOT NULL AND rj.id IS NOT NULL
+        AND rm."movementType"='TRANSFER_IN' AND rm.direction='IN' AND rm."sourceEntityType"='EnterpriseStockTransfer'
+        AND rm."sourceEntityId"=t.id AND rm."sourceLineId"=line.id AND rm.quantity=v.quantity
+        AND rm."inventoryItemId"=line."inventoryItemId" AND rm."warehouseId"=t."destinationWarehouseId"
+        AND rm."storageLocationId" IS NOT DISTINCT FROM line."destinationLocationId"
+        AND rm."occurredAt">=dm."occurredAt" AND v."receivedAt">=v."dispatchedAt"
+        AND rl."sourceMovementId"=rm.id AND rl."inventoryItemId"=line."inventoryItemId" AND rl."warehouseId"=rm."warehouseId"
+        AND rl.quantity=v.quantity AND rl."unitCost"=v."unitCost" AND rl."totalCost"=v."totalCost" AND rl."currencyCode"=v."currencyCode"
+        AND rj.status='POSTED' AND rj."postedAt" IS NOT NULL AND rj."reversedAt" IS NULL AND rj."reversalOfEntryId" IS NULL
+        AND rj."sourceEntityType"='EnterpriseInventoryTransferValuation' AND rj."sourceEntityId"=v.id
+        AND rj."postingEvent"='INVENTORY_TRANSFER_RECEIVED' AND rj."postingVersion"=1
+        AND rj."functionalCurrencyCode"=v."currencyCode" AND rj."totalDebit"=v."totalCost" AND rj."totalCredit"=v."totalCost"
+        AND NOT EXISTS(SELECT 1 FROM "EnterpriseJournalReversal" rev WHERE rev."organizationId"=v."organizationId" AND rev."originalEntryId"=rj.id)
+        AND NOT EXISTS(SELECT 1 FROM "EnterpriseInventoryAccountingEvent" legacy WHERE legacy."organizationId"=v."organizationId" AND legacy."stockMovementId"=rm.id)
+      ))
+  `;
+}
+
 /**
  * Article/warehouse history from posted movements, not mutable layer balances.
  * The pool can contain differently priced receipts; FEFO lot selection does
  * not determine accounting cost. Reconcile the full ledger chronology and
  * current physical/cost quantities before admitting a historical amount.
  * Only ordinary single-currency CUMP pools, without acquisition supplements,
- * unvalued movements, transfers or reversals, qualify for this proof.
+ * unvalued movements, unsupported transfers or reversals, qualify for this proof.
  */
 export function ordinaryInventoryHistorySql(organizationId: string, cutoff: Date, pool?: {inventoryItemId:string;warehouseId:string}): Prisma.Sql {
   return Prisma.sql`
@@ -22,7 +83,7 @@ export function ordinaryInventoryHistorySql(organizationId: string, cutoff: Date
         AND BOOL_AND("valuationMethod"='WEIGHTED_AVERAGE' AND layers.quantity>0
           AND "remainingQuantity">=0 AND "remainingQuantity"<=layers.quantity AND "unitCost">=0
           AND "totalCost"=ROUND(layers.quantity*"unitCost",6))
-    ), movements AS (
+    ), verified_transfers AS (${verifiedInventoryTransfersSql(organizationId)}), movements AS (
       SELECT p."inventoryItemId",p."warehouseId",p."currencyCode",m.id,
         GREATEST(m."occurredAt",m."createdAt",e."createdAt",j."accountingDate",j."postedAt",
           COALESCE(l."effectiveAt",m."occurredAt"),COALESCE(l."createdAt",m."createdAt")) AS recognized,
@@ -71,6 +132,17 @@ export function ordinaryInventoryHistorySql(organizationId: string, cutoff: Date
         )
         AND (SELECT COUNT(*) FROM "EnterpriseInventoryAccountingEvent" other
           WHERE other."organizationId"=m."organizationId" AND other."stockMovementId"=m.id)=1
+      UNION ALL
+      SELECT p."inventoryItemId",p."warehouseId",p."currencyCode",v."dispatchMovementId",
+        v."dispatchRecognized",-v.quantity,-v."totalCost"
+      FROM pools p JOIN verified_transfers v ON v."inventoryItemId"=p."inventoryItemId"
+        AND v."sourceWarehouseId"=p."warehouseId" AND v."currencyCode"=p."currencyCode"
+      UNION ALL
+      SELECT p."inventoryItemId",p."warehouseId",p."currencyCode",v."receiptMovementId",
+        v."receiptRecognized",v.quantity,v."totalCost"
+      FROM pools p JOIN verified_transfers v ON v."inventoryItemId"=p."inventoryItemId"
+        AND v."destinationWarehouseId"=p."warehouseId" AND v."currencyCode"=p."currencyCode"
+      WHERE v."receiptRecognized" IS NOT NULL
     ), timeline AS (
       SELECT "inventoryItemId","warehouseId","currencyCode",recognized,
         SUM(quantity) AS quantity,SUM(value) AS value

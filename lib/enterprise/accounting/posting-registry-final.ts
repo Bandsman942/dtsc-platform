@@ -28,6 +28,7 @@ import {
   buildClosingFxRevaluationPosting,
   buildYearEndClosingPosting,
 } from "@/lib/enterprise/accounting/closing-posting-builders";
+import { buildInventoryTransferPosting } from "@/lib/enterprise/accounting/inventory-transfer-posting";
 import { buildCustomerRefundPosting } from "@/lib/enterprise/accounting/refund-posting-builder";
 import { buildHealthWriteOffPosting } from "@/lib/enterprise/accounting/sector-adapters/health";
 import { buildPharmacySectorInventoryPosting } from "@/lib/enterprise/accounting/sector-adapters/pharmacy";
@@ -67,6 +68,8 @@ export const ENTERPRISE_POSTING_REGISTRY: Record<PostingEvent, PostingBuilder> =
   INVENTORY_LOSS_VALUED: (tx, input) => buildInventoryAccountingPosting(tx, input, "LOSS"),
   INVENTORY_SUPPLIER_RETURN_VALUED: (tx, input) => buildInventoryAccountingPosting(tx, input, "SUPPLIER_RETURN"),
   INVENTORY_CUSTODY_RECOVERY_VALUED: (tx, input) => buildInventoryAccountingPosting(tx, input, "CUSTODY_RECOVERY"),
+  INVENTORY_TRANSFER_DISPATCHED: (tx,input) => buildInventoryTransferPosting(tx,input,"DISPATCH"),
+  INVENTORY_TRANSFER_RECEIVED: (tx,input) => buildInventoryTransferPosting(tx,input,"RECEIPT"),
   ASSET_CAPITALIZED: buildAssetCapitalizationPosting,
   ASSET_DEPRECIATION_POSTED: buildDepreciationPosting,
   ASSET_DISPOSAL_POSTED: buildAssetDisposalPosting,

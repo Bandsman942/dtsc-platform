@@ -697,6 +697,7 @@ console.log("Acquisition cost writer: strict 3-way provenance, original and invo
 const acquisitionGuards=load("lib/enterprise/accounting/inventory-acquisition-cost-guards.ts");
 let guardProof=null;
 const guardTx={
+  enterpriseInventoryTransferValuation:{findFirst:async()=>null},
   enterpriseInventoryAcquisitionCostSupplement:{findFirst:async({where})=>{assert.equal(where.organizationId,"org-a");return guardProof;}},
   enterpriseInventoryAccountingEvent:{findFirst:async({where})=>{assert.equal(where.organizationId,"org-a");return {stockMovementId:poolOrigin.id};}},
   enterpriseStockMovement:{findFirst:async({where})=>{assert.equal(where.organizationId,"org-a");return {inventoryItemId:"acq-item",warehouseId:"acq-wh"};}},
@@ -708,6 +709,7 @@ await acquisitionGuards.assertAcquisitionJournalCorrectionAllowedTx(guardTx,"org
 guardProof={id:"protected-supplement"};
 for(const source of [guardInvoiceSource,guardEventSource]) await assert.rejects(acquisitionGuards.assertAcquisitionJournalCorrectionAllowedTx(guardTx,"org-a",source),{code:"INVENTORY_ACQUISITION_COST_DOMAIN_CORRECTION_REQUIRED"});
 await acquisitionGuards.assertAcquisitionJournalCorrectionAllowedTx(guardTx,"org-a",{sourceEntityType:"EnterprisePayment",sourceEntityId:"other"});
+await assert.rejects(acquisitionGuards.assertAcquisitionJournalCorrectionAllowedTx(guardTx,"org-a",{sourceEntityType:"EnterpriseInventoryTransferValuation",sourceEntityId:"transfer-val"}),{code:"INVENTORY_TRANSFER_DOMAIN_REVERSAL_REQUIRED"});
 await assert.rejects(returnCredit.assertNoCapitalizedSupplierCreditTx(guardTx,"org-a",acqInvoice.id),{code:"INVENTORY_ACQUISITION_COST_DOMAIN_CORRECTION_REQUIRED"});
 await assert.rejects(returnCredit.verifySupplierReturnCreditTx({...evidenceTx,enterpriseSupplierReturnRequest:{findFirst:async()=>null},enterpriseInventoryAcquisitionCostSupplement:guardTx.enterpriseInventoryAcquisitionCostSupplement},"org-a",fakeCredit,[fakeLine]),{code:"INVENTORY_ACQUISITION_COST_DOMAIN_CORRECTION_REQUIRED"});
 guardProof=null;
@@ -802,9 +804,10 @@ for(const marker of [
 ]) assert.ok(historyProof.sql.includes(marker),marker);
 assert.ok(historyProof.values.includes("org-a"));
 assert.ok(historyProof.values.some(value=>value instanceof Date&&value.getTime()===acqDay.getTime()));
-let guardCalls=0;
+let guardCalls=0, transferGuardBlocked=false;
 const historyTx={$queryRaw:async query=>{
   guardCalls++;
+  if(query.sql.includes('WHERE valid.id=v.id'))return transferGuardBlocked?[{blocked:1}]:[];
   assert.ok(query.sql.includes('AND NOT EXISTS (SELECT 1 FROM (SELECT')||query.sql.includes('AND NOT EXISTS (SELECT 1 FROM (\n'));
   assert.ok(query.sql.includes('h."layerId"=l.id'));
   assert.ok(query.sql.includes('s."createdAt"'));
@@ -812,13 +815,18 @@ const historyTx={$queryRaw:async query=>{
 }};
 cutoffBlocked=false;
 const historyQuery=await historicalValuation.inventoryValuationAtSqlTx(historyTx,"org-a",acqDay);
-assert.equal(guardCalls,1);
+assert.equal(guardCalls,2);
 assert.ok(historyQuery.sql.includes("WITH verified_history AS"));
 assert.ok(historyQuery.sql.includes('NOT EXISTS (SELECT 1 FROM verified_history h WHERE h."layerId"=l.id)'));
 assert.ok(historyQuery.sql.includes("UNION ALL"));
 assert.ok(historyQuery.sql.includes("ordinary_history AS"));
 assert.ok(historyQuery.sql.includes("CURRENT_LAYER_PROJECTION"));
 assert.ok(historyQuery.sql.includes("VERIFIED_HISTORY"));
+assert.ok(historyQuery.sql.includes("VERIFIED_TRANSIT"));
+assert.ok(historyQuery.sql.includes('v."dispatchRecognized"<='));
+transferGuardBlocked=true;
+await assert.rejects(historicalValuation.inventoryValuationAtSqlTx(historyTx,"org-a",acqDay),{code:"INVENTORY_TRANSFER_COST_POOL_UNPROVEN"});
+transferGuardBlocked=false;
 cutoffBlocked=true;
 await assert.rejects(historicalValuation.inventoryValuationAtSqlTx(historyTx,"org-a",acqDay),{code:"INVENTORY_ACQUISITION_COST_HISTORY_REQUIRED"});
 console.log("Historical isolated acquisition: canonical signed receipt, supplement and dispatch proof; unsupported pool guard retained");

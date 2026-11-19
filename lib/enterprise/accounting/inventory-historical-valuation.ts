@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
-import { ordinaryInventoryHistorySql } from "@/lib/enterprise/accounting/inventory-ordinary-history";
+import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
+import { ordinaryInventoryHistorySql, verifiedInventoryTransfersSql } from "@/lib/enterprise/accounting/inventory-ordinary-history";
 import { assertAcquisitionValuationCutoffTx } from "@/lib/enterprise/accounting/inventory-acquisition-cost-guards";
 
 /**
@@ -105,6 +106,16 @@ export function isolatedAcquisitionHistorySql(organizationId: string, cutoff: Da
   `;
 }
 
+export async function assertVerifiedTransfersTx(tx:Pick<Prisma.TransactionClient,"$queryRaw">,organizationId:string,proof:Prisma.Sql) {
+  const blocked=await tx.$queryRaw<Array<{blocked:number}>>(Prisma.sql`
+    SELECT 1 AS blocked FROM "EnterpriseInventoryTransferValuation" v
+    WHERE v."organizationId"=${organizationId}
+      AND NOT EXISTS(SELECT 1 FROM (${proof}) valid WHERE valid.id=v.id)
+    LIMIT 1
+  `);
+  if(blocked.length)throw new EnterpriseAccountingError("INVENTORY_TRANSFER_COST_POOL_UNPROVEN",409);
+}
+
 /** Shared valuation. Unsupported legacy pools retain explicitly identified
  * current-layer projections, never a claim of verified historical value. */
 export async function inventoryValuationAtSqlTx(
@@ -112,8 +123,12 @@ export async function inventoryValuationAtSqlTx(
 ): Promise<Prisma.Sql> {
   const verifiedHistory = isolatedAcquisitionHistorySql(organizationId, cutoff);
   await assertAcquisitionValuationCutoffTx(tx, organizationId, cutoff, verifiedHistory);
+  // If a durable transfer was corrupted or reversed outside its domain,
+  // never silently omit goods in transit or certify a partial asset total.
+  const transferEvidence=verifiedInventoryTransfersSql(organizationId);
+  await assertVerifiedTransfersTx(tx,organizationId,transferEvidence);
   return Prisma.sql`
-    WITH verified_history AS (${verifiedHistory}), ordinary_history AS (${ordinaryInventoryHistorySql(organizationId, cutoff)})
+    WITH verified_history AS (${verifiedHistory}), ordinary_history AS (${ordinaryInventoryHistorySql(organizationId, cutoff)}), transfer_evidence AS (${transferEvidence})
     SELECT l."inventoryItemId", l."warehouseId", l."currencyCode", l."remainingQuantity" AS quantity,
       l."remainingQuantity"*l."unitCost" AS value, 'CURRENT_LAYER_PROJECTION'::text AS "valuationBasis"
     FROM "EnterpriseInventoryCostLayer" l
@@ -126,5 +141,8 @@ export async function inventoryValuationAtSqlTx(
     UNION ALL
     SELECT h."inventoryItemId",h."warehouseId",h."currencyCode",h.quantity,h.value, 'VERIFIED_HISTORY'::text AS "valuationBasis"
     FROM ordinary_history h WHERE h."recognizedAt"<=${cutoff}
+    UNION ALL
+    SELECT v."inventoryItemId",NULL::text AS "warehouseId",v."currencyCode",v.quantity,v."totalCost",'VERIFIED_TRANSIT'::text AS "valuationBasis"
+    FROM transfer_evidence v WHERE v."dispatchRecognized"<=${cutoff} AND (v."receiptRecognized" IS NULL OR v."receiptRecognized">${cutoff})
   `;
 }

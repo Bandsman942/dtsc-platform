@@ -38,36 +38,37 @@ export async function prepareInventoryTransferCostTx(
   const currencyCode=configuration.functionalCurrencyCode;
   const cutoff=new Date();
 
-  async function readProof(warehouseId:string,allowPristine:boolean) {
-    const where={organizationId,inventoryItemId,warehouseId};
-    const [layers,balance,negative]=await Promise.all([
-      tx.enterpriseInventoryCostLayer.findMany({where,select:{id:true,remainingQuantity:true,unitCost:true,currencyCode:true},orderBy:{id:"asc"}}),
-      tx.enterpriseInventoryBalance.aggregate({where,_sum:{quantityOnHand:true}}),
-      tx.enterpriseInventoryBalance.count({where:{...where,quantityOnHand:{lt:0}}}),
-    ]);
-    const physicalQuantity=balance._sum.quantityOnHand||new Prisma.Decimal(0);
-    if(negative || layers.some(layer=>layer.currencyCode!==currencyCode)) return unproven();
-    const pool={currencyCode,physicalQuantity,layers};
-    if(!layers.length) {
-      // Missing costs on existing or historical stock are not a pristine
-      // destination and cannot be silently blended into a valued pool.
-      if(!allowPristine || !physicalQuantity.isZero() || await tx.enterpriseStockMovement.count({where})) return unproven();
-      return {pool,verifiedValue:new Prisma.Decimal(0)};
-    }
-    const proof=ordinaryInventoryHistorySql(organizationId,cutoff,{inventoryItemId,warehouseId});
-    const rows=await tx.$queryRaw<Array<{quantity:Prisma.Decimal;value:Prisma.Decimal;currencyCode:string}>>(Prisma.sql`
-      SELECT quantity,value,"currencyCode" FROM (${proof}) verified
-      WHERE verified."inventoryItemId"=${inventoryItemId} AND verified."warehouseId"=${warehouseId}
-    `);
-    if(rows.length!==1 || rows[0].currencyCode!==currencyCode || !rows[0].quantity.equals(physicalQuantity)) return unproven();
-    return {pool,verifiedValue:rows[0].value};
-  }
 
-  const source=await readProof(sourceWarehouseId,false);
+  const source=await readVerifiedTransferPoolTx(tx,organizationId,inventoryItemId,sourceWarehouseId,currencyCode,cutoff,false);
   const plan=planInventoryTransferCost(source.pool,input.quantity);
   if(!plan.sourceValueBefore.equals(source.verifiedValue)) return unproven();
-  const destination=await readProof(destinationWarehouseId,true);
+  const destination=await readVerifiedTransferPoolTx(tx,organizationId,inventoryItemId,destinationWarehouseId,currencyCode,cutoff,true);
   const reception=proveInventoryTransferDestination(destination.pool,plan);
   if(!reception.destinationValueBefore.equals(destination.verifiedValue)) return unproven();
   return {organizationId,inventoryItemId,sourceWarehouseId,destinationWarehouseId,plan,reception,recognizedAt:cutoff};
+}
+
+export async function readVerifiedTransferPoolTx(tx:Prisma.TransactionClient, organizationId:string, inventoryItemId:string, warehouseId:string, currencyCode:string, cutoff:Date,allowPristine:boolean) {
+  const where={organizationId,inventoryItemId,warehouseId};
+  const [layers,balance,negative]=await Promise.all([
+    tx.enterpriseInventoryCostLayer.findMany({where,select:{id:true,remainingQuantity:true,unitCost:true,currencyCode:true},orderBy:{id:"asc"}}),
+    tx.enterpriseInventoryBalance.aggregate({where,_sum:{quantityOnHand:true}}),
+    tx.enterpriseInventoryBalance.count({where:{...where,quantityOnHand:{lt:0}}}),
+  ]);
+  const physicalQuantity=balance._sum.quantityOnHand||new Prisma.Decimal(0);
+  if(negative || layers.some(layer=>layer.currencyCode!==currencyCode)) return unproven();
+  const pool={currencyCode,physicalQuantity,layers};
+  if(!layers.length) {
+    // Missing costs on existing or historical stock are not a pristine
+    // destination and cannot be silently blended into a valued pool.
+    if(!allowPristine || !physicalQuantity.isZero() || await tx.enterpriseStockMovement.count({where})) return unproven();
+    return {pool,verifiedValue:new Prisma.Decimal(0)};
+  }
+  const proof=ordinaryInventoryHistorySql(organizationId,cutoff,{inventoryItemId,warehouseId});
+  const rows=await tx.$queryRaw<Array<{quantity:Prisma.Decimal;value:Prisma.Decimal;currencyCode:string}>>(Prisma.sql`
+    SELECT quantity,value,"currencyCode" FROM (${proof}) verified
+    WHERE verified."inventoryItemId"=${inventoryItemId} AND verified."warehouseId"=${warehouseId}
+  `);
+  if(rows.length!==1 || rows[0].currencyCode!==currencyCode || !rows[0].quantity.equals(physicalQuantity)) return unproven();
+  return {pool,verifiedValue:rows[0].value};
 }

@@ -11,6 +11,7 @@ export async function assertAcquisitionJournalCorrectionAllowedTx(
   tx: Prisma.TransactionClient, organizationId: string,
   source: { journalId?: string; sourceEntityType: string | null; sourceEntityId: string | null },
 ) {
+  if(source.sourceEntityType==="EnterpriseInventoryTransferValuation") throw new EnterpriseAccountingError("INVENTORY_TRANSFER_DOMAIN_REVERSAL_REQUIRED",409);
   if (source.sourceEntityType === "EnterpriseSupplierInvoice" && source.sourceEntityId) {
     const evidence = await tx.enterpriseInventoryAcquisitionCostSupplement.findFirst({
       where: { organizationId, OR: [
@@ -34,6 +35,10 @@ export async function assertAcquisitionJournalCorrectionAllowedTx(
       ] }, select: { id: true },
     });
     if (evidence) return correctionRequired();
+    if(movement && await tx.enterpriseInventoryTransferValuation.findFirst({where:{organizationId,status:{in:["IN_TRANSIT","RECEIVED"]},OR:[
+      {dispatchMovement:{inventoryItemId:movement.inventoryItemId,warehouseId:movement.warehouseId}},
+      {receiptMovement:{inventoryItemId:movement.inventoryItemId,warehouseId:movement.warehouseId}},
+    ]},select:{id:true}})) throw new EnterpriseAccountingError("INVENTORY_TRANSFER_DOMAIN_REVERSAL_REQUIRED",409);
   }
 }
 

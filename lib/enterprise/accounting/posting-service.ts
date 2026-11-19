@@ -160,9 +160,10 @@ export async function postBusinessEventTx(
   organizationId: string,
   actorUserId: string,
   input: PostingInput,
-  options?: { supplierInvoiceTransition?: true; supplierCreditTransition?: true },
+  options?: { supplierInvoiceTransition?: true; supplierCreditTransition?: true; inventoryTransferTransition?: true },
 ) {
   const version = input.postingVersion || 1;
+  if (["INVENTORY_TRANSFER_DISPATCHED","INVENTORY_TRANSFER_RECEIVED"].includes(input.postingEvent) && (!options?.inventoryTransferTransition || version!==1 || input.sourceEntityType!=="EnterpriseInventoryTransferValuation")) throw new EnterpriseAccountingError("INVENTORY_TRANSFER_VALUATION_WORKFLOW_REQUIRED",409);
   const stableKey = postingStableKey(organizationId, input);
   await tx.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${stableKey}))`);
   const existingBatch = await tx.enterprisePostingBatch.findUnique({

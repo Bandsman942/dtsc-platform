@@ -84,6 +84,7 @@ vm.runInNewContext(serviceJavaScript, {
       },
     };
     if (name === "@/lib/enterprise/inventory/lot-allocation") return allocationModule.exports;
+    if (name === "@/lib/enterprise/accounting/inventory-transfer-service") return {};
     if (name === "@/lib/enterprise/inventory/approval") return {};
     if (name === "@/lib/enterprise/retail/inventory-policy") return {};
     // Inventory now imports the Retail site guard for stock transfer writes.

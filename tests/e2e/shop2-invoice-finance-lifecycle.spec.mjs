@@ -2194,6 +2194,66 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
     const fractionalEvent=await prisma.enterpriseInventoryAccountingEvent.findFirstOrThrow({where:{organizationId,stockMovementId:fractionalOut.id,eventType:"LOSS",status:"POSTED"}});
     expect(fractionalEvent.totalCost.equals(7)).toBe(true);
 
+    // End-to-end valued transfer: a proven mixed CUMP pool (16 units / 112)
+    // dispatches four units at 7 into a pristine destination. No purchase,
+    // sale or new price is used. Historical snapshots must include transit
+    // even AFTER the receipt has completed.
+    const valuedTransferLot=mixedReceipts[1].movement.stockLotId;
+    const valuedTransfer=await post(context.owner,transferPath,{sourceWarehouseId:fixture.warehouse.id,destinationWarehouseId:spareWarehouse.id,approverUserId:fixture.settler.id,lines:[{inventoryItemId:mixedItem.id,stockLotId:valuedTransferLot,quantity:4}]});
+    expect(valuedTransfer.status,JSON.stringify(valuedTransfer.body)).toBe(201);
+    const vtid=valuedTransfer.body.transfer.id,vtline=valuedTransfer.body.transfer.lines[0].id;
+    const vtdispatch=await post(context.settler,transferPath+"/"+vtid+"/decision",{decision:"APPROVE",revision:valuedTransfer.body.transfer.revision});
+    expect(vtdispatch.status,JSON.stringify(vtdispatch.body)).toBe(200);
+    expect(vtdispatch.body.transfer.status).toBe("IN_TRANSIT");
+    const transitProof=await prisma.enterpriseInventoryTransferValuation.findFirstOrThrow({where:{organizationId,transferLineId:vtline},include:{allocations:true,dispatchMovement:true,dispatchJournalEntry:{include:{lines:true}}}});
+    expect(transitProof.status).toBe("IN_TRANSIT");
+    expect(transitProof.quantity.equals(4)&&transitProof.unitCost.equals(7)&&transitProof.totalCost.equals(28)).toBe(true);
+    expect(transitProof.sourceQuantityAfter.equals(12)&&transitProof.sourceValueAfter.equals(84)).toBe(true);
+    expect(transitProof.allocations.map(x=>x.transferredQuantity.toFixed())).toEqual(["2","2"]);
+    const transitEntry=transitProof.dispatchJournalEntry;
+    expect(transitEntry.postingEvent).toBe("INVENTORY_TRANSFER_DISPATCHED");
+    expect(transitEntry.lines).toHaveLength(2);
+    expect(transitEntry.lines.find(x=>x.debit.equals(28))?.siteId).toBeNull();
+    expect(transitEntry.lines.find(x=>x.credit.equals(28))?.siteId).toBe(fixture.site.id);
+    expect(new Set(transitEntry.lines.map(x=>x.ledgerAccountId)).size).toBe(1);
+    expect(await prisma.enterpriseInventoryCostLayer.count({where:{organizationId,inventoryItemId:mixedItem.id,warehouseId:spareWarehouse.id}})).toBe(0);
+    const transitCutoff=recognized(transitProof.createdAt,transitProof.dispatchedAt,transitProof.dispatchMovement.createdAt,transitProof.dispatchMovement.occurredAt,transitEntry.accountingDate,transitEntry.postedAt);
+    const checkTransferReport=async(cutoff,received)=>{
+      const report=await post(context.owner,base+"/financial-statements",{statementType:"INVENTORY_VALUATION",periodStart:new Date(firstCutoff.getTime()-86400000).toISOString(),periodEnd:cutoff.toISOString(),currencyCode:fixture.currencyCode,publish:false});
+      expect(report.status,JSON.stringify(report.body)).toBe(201);
+      const rows=report.body.snapshot.filter(row=>row.inventoryItemId===mixedItem.id);
+      const sourceRow=rows.find(row=>row.warehouseId===fixture.warehouse.id);
+      const transferRow=rows.find(row=>received?row.warehouseId===spareWarehouse.id:row.warehouseId===null);
+      expect(sourceRow?.valuationBasis).toBe("VERIFIED_HISTORY");
+      expect(transferRow?.valuationBasis).toBe("VERIFIED_HISTORY");
+      expect(new Prisma.Decimal(sourceRow.quantity).equals(12)&&new Prisma.Decimal(sourceRow.value).equals(84)).toBe(true);
+      expect(new Prisma.Decimal(transferRow.quantity).equals(4)&&new Prisma.Decimal(transferRow.value).equals(28)).toBe(true);
+      expect(rows.reduce((sum,row)=>sum.plus(row.value),new Prisma.Decimal(0)).equals(112)).toBe(true);
+      if(received)expect(rows.some(row=>row.warehouseId===null)).toBe(false);
+      else expect(transferRow.warehouseName).toContain("Stock en transit");
+    };
+    await checkTransferReport(transitCutoff,false);
+    const vtreceive=await post(context.owner,transferPath+"/"+vtid+"/receive",{revision:vtdispatch.body.transfer.revision,comment:"Receive original valued CUMP stock"});
+    expect(vtreceive.status,JSON.stringify(vtreceive.body)).toBe(200);
+    expect(vtreceive.body.transfer.status).toBe("COMPLETED");
+    const receivedProof=await prisma.enterpriseInventoryTransferValuation.findUniqueOrThrow({where:{id:transitProof.id},include:{receiptMovement:true,destinationCostLayer:true,receiptJournalEntry:{include:{lines:true}}}});
+    expect(receivedProof.status).toBe("RECEIVED");
+    expect(receivedProof.destinationQuantityAfter.equals(4)&&receivedProof.destinationValueAfter.equals(28)).toBe(true);
+    const destLayer=receivedProof.destinationCostLayer,receiveEntry=receivedProof.receiptJournalEntry;
+    expect(destLayer.quantity.equals(4)&&destLayer.remainingQuantity.equals(4)&&destLayer.unitCost.equals(7)&&destLayer.totalCost.equals(28)).toBe(true);
+    expect(receiveEntry.postingEvent).toBe("INVENTORY_TRANSFER_RECEIVED");
+    expect(receiveEntry.lines.find(x=>x.credit.equals(28))?.siteId).toBeNull();
+    expect(receiveEntry.lines.find(x=>x.debit.equals(28))?.siteId).toBe(fixture.site.id);
+    const receivingCutoff=recognized(receivedProof.receivedAt,receivedProof.receiptMovement.createdAt,receivedProof.receiptMovement.occurredAt,destLayer.createdAt,destLayer.effectiveAt,receiveEntry.accountingDate,receiveEntry.postedAt);
+    await checkTransferReport(transitCutoff,false);
+    await checkTransferReport(receivingCutoff,true);
+    const replayValued=await post(context.owner,transferPath+"/"+vtid+"/receive",{revision:vtdispatch.body.transfer.revision,comment:"Replay must not apply"});
+    expect(replayValued.status).toBe(409);
+    expect(await prisma.enterpriseInventoryTransferValuation.count({where:{organizationId,transferLineId:vtline}})).toBe(1);
+    expect(await prisma.enterpriseInventoryCostLayer.count({where:{organizationId,inventoryItemId:mixedItem.id,warehouseId:spareWarehouse.id}})).toBe(1);
+    expect(await prisma.enterpriseJournalEntry.count({where:{organizationId,sourceEntityType:"EnterpriseInventoryTransferValuation",sourceEntityId:transitProof.id}})).toBe(2);
+
+
 
   } finally {
     if (originalSettings !== undefined) await prisma.enterpriseRetailConfiguration.update({

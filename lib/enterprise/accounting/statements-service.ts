@@ -162,14 +162,14 @@ async function inventoryValuation(organizationId: string, periodEnd: Date) {
   return prisma.$transaction(async tx => {
     const valuation = await inventoryValuationAtSqlTx(tx, organizationId, periodEnd);
     return tx.$queryRaw<Array<{ inventoryItemId: string; warehouseId: string | null; currencyCode: string; inventoryItemName: string | null; warehouseName: string | null; quantity: Prisma.Decimal; value: Prisma.Decimal; valuationBasis: string }>>(Prisma.sql`
-    SELECT v."inventoryItemId", v."warehouseId", v."currencyCode", c.name AS "inventoryItemName", w.name AS "warehouseName",
+    SELECT v."inventoryItemId", v."warehouseId", v."currencyCode", c.name AS "inventoryItemName", CASE WHEN (v."valuationBasis"='VERIFIED_TRANSIT') THEN 'Stock en transit / In-transit stock' ELSE w.name END AS "warehouseName",
       COALESCE(SUM(v.quantity), 0) AS quantity, COALESCE(SUM(v.value), 0) AS value,
-      CASE WHEN BOOL_AND(v."valuationBasis"='VERIFIED_HISTORY') THEN 'VERIFIED_HISTORY' ELSE 'CURRENT_LAYER_PROJECTION' END AS "valuationBasis"
+      CASE WHEN BOOL_AND(v."valuationBasis" IN ('VERIFIED_HISTORY','VERIFIED_TRANSIT')) THEN 'VERIFIED_HISTORY' ELSE 'CURRENT_LAYER_PROJECTION' END AS "valuationBasis"
     FROM (${valuation}) v
     LEFT JOIN "EnterpriseInventoryItem" i ON i."organizationId"=${organizationId} AND i.id=v."inventoryItemId"
     LEFT JOIN "EnterpriseCatalogItem" c ON c."organizationId"=i."organizationId" AND c.id=i."catalogItemId"
     LEFT JOIN "EnterpriseWarehouse" w ON w."organizationId"=${organizationId} AND w.id=v."warehouseId"
-    GROUP BY v."inventoryItemId", v."warehouseId", v."currencyCode", c.name, w.name
+    GROUP BY v."inventoryItemId", v."warehouseId", v."currencyCode", c.name, w.name, (v."valuationBasis"='VERIFIED_TRANSIT')
     ORDER BY v."inventoryItemId", v."warehouseId", v."currencyCode"
     `);
   }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });

@@ -1,5 +1,8 @@
 -- Additive evidence only; never fabricate historical cost, move inventory,
 -- create an accounting entry or change an already posted journal.
+-- Historical inventory migration omitted the composite Prisma key.
+CREATE UNIQUE INDEX IF NOT EXISTS "EnterpriseStockTransferLine_organizationId_id_key"
+  ON "EnterpriseStockTransferLine" ("organizationId","id");
 CREATE TABLE "EnterpriseInventoryTransferValuation" (
   "id" TEXT NOT NULL,
   "organizationId" TEXT NOT NULL,

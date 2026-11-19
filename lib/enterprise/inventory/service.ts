@@ -16,6 +16,7 @@ import type {
   stockTransferDecisionSchema,
 } from "@/lib/enterprise/inventory/schemas";
 import { prisma } from "@/lib/prisma";
+import { prepareValuedTransferDispatchTx, completeValuedTransferDispatchTx, prepareValuedTransferReceiptTx, completeValuedTransferReceiptTx } from "@/lib/enterprise/accounting/inventory-transfer-service";
 import { lotExpiryDateKey, reservationExactBalanceRemaining, reservationLegacyRemaining, reservationLotRemaining } from "@/lib/enterprise/inventory/lot-allocation";
 
 type StockMovementInput = z.infer<typeof stockMovementCreateSchema>;
@@ -308,9 +309,10 @@ async function receiveTransferLinesTx(
   comment?: string | null,
 ) {
   for (const line of transfer.lines) {
+    const financialReceipt = await prepareValuedTransferReceiptTx(tx,transfer.organizationId,transfer.id,line.id);
     const destinationLot = await resolveTransferredLotTx(tx, transfer, line, actorUserId);
     const destinationLotId=destinationLot.id;
-    await applyStockMovementTx(tx, transfer.organizationId, actorUserId, {
+    const receivedMovement = await applyStockMovementTx(tx, transfer.organizationId, actorUserId, {
       inventoryItemId: line.inventoryItemId,
       warehouseId: transfer.destinationWarehouseId,
       storageLocationId: line.destinationLocationId,
@@ -324,6 +326,7 @@ async function receiveTransferLinesTx(
       idempotencyKey: `transfer:${transfer.id}:${line.id}:in`,
       reason: comment || null,
     }, destinationLot.isolated?{quarantinedTransferReceiptId:transfer.id}:undefined);
+    if(financialReceipt) await completeValuedTransferReceiptTx(tx,transfer.organizationId,actorUserId,financialReceipt,receivedMovement.movement.id);
     if(destinationLot.isolated) await publishEnterpriseEvent(tx,{organizationId:transfer.organizationId,entityType:"EnterpriseStockTransfer",entityId:transfer.id,eventType:"STOCK_TRANSFER_RECEIVED_QUARANTINED",summary:"Batch received into quarantine",actorUserId,metadataJson:{lineId:line.id,stockLotId:destinationLotId,warehouseId:transfer.destinationWarehouseId,quantity:line.quantity.toFixed()}});
   }
 }
@@ -354,7 +357,9 @@ export async function decideEnterpriseStockTransfer(organizationId: string, tran
     const retailConfig = await tx.enterpriseRetailConfiguration.findUnique({ where: { organizationId }, select: { settingsJson: true } });
     const confirmedReceipt = Boolean(retailConfig && readRetailInventoryPolicy(retailConfig.settingsJson).transferReception === "CONFIRMED");
     for (const line of transfer.lines) {
-      await applyStockMovementTx(tx, organizationId, actorUserId, { inventoryItemId: line.inventoryItemId, warehouseId: transfer.sourceWarehouseId, storageLocationId: line.sourceLocationId, stockLotId: line.stockLotId, movementType: "TRANSFER_OUT", direction: "OUT", quantity: Number(line.quantity), sourceEntityType: "EnterpriseStockTransfer", sourceEntityId: transfer.id, sourceLineId: line.id, idempotencyKey: `transfer:${transfer.id}:${line.id}:out`, reason: input.comment || null });
+      const financialDispatch=await prepareValuedTransferDispatchTx(tx,organizationId,transfer.id,line.id);
+      const dispatchedMovement=await applyStockMovementTx(tx, organizationId, actorUserId, { inventoryItemId: line.inventoryItemId, warehouseId: transfer.sourceWarehouseId, storageLocationId: line.sourceLocationId, stockLotId: line.stockLotId, movementType: "TRANSFER_OUT", direction: "OUT", quantity: Number(line.quantity), sourceEntityType: "EnterpriseStockTransfer", sourceEntityId: transfer.id, sourceLineId: line.id, idempotencyKey: `transfer:${transfer.id}:${line.id}:out`, reason: input.comment || null });
+      if(financialDispatch) await completeValuedTransferDispatchTx(tx,organizationId,actorUserId,financialDispatch,dispatchedMovement.movement.id);
     }
     if (!confirmedReceipt) await receiveTransferLinesTx(tx, transfer, actorUserId, input.comment);
     const now = new Date();
@@ -363,7 +368,7 @@ export async function decideEnterpriseStockTransfer(organizationId: string, tran
     await tx.enterpriseApproval.update({ where: { id: approval.id }, data: { status: "APPROVED", decidedAt: new Date(), decisionComment, revision: { increment: 1 } } });
     await publishEnterpriseEvent(tx, { organizationId, entityType: "EnterpriseStockTransfer", entityId: transfer.id, eventType: confirmedReceipt ? "STOCK_TRANSFER_DISPATCHED" : "STOCK_TRANSFER_COMPLETED", summary: confirmedReceipt ? `Transfert ${transfer.reference} expédié, réception attendue` : `Transfert ${transfer.reference} exécuté`, actorUserId, fromStatus: "PENDING_APPROVAL", toStatus: confirmedReceipt ? "IN_TRANSIT" : "COMPLETED", metadataJson: { selfApprovalOverride: decision.selfApprovalOverride } });
     return tx.enterpriseStockTransfer.findUniqueOrThrow({ where: { id: transfer.id }, include: { lines: true } });
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait:10000, timeout:30000 });
 }
 
 export async function receiveEnterpriseStockTransfer(organizationId: string, transferId: string, actorUserId: string, revision: number, comment?: string) {
@@ -383,7 +388,7 @@ export async function receiveEnterpriseStockTransfer(organizationId: string, tra
     if (updated.count !== 1) throw new EnterpriseDomainConflictError("STOCK_TRANSFER_REVISION_CONFLICT");
     await publishEnterpriseEvent(tx, { organizationId, entityType: "EnterpriseStockTransfer", entityId: transfer.id, eventType: "STOCK_TRANSFER_RECEIVED", summary: `Transfert ${transfer.reference} reçu`, actorUserId, fromStatus: "IN_TRANSIT", toStatus: "COMPLETED" });
     return tx.enterpriseStockTransfer.findUniqueOrThrow({ where: { id: transferId }, include: { lines: true } });
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait:10000, timeout:30000 });
 }
 
 export async function createEnterpriseInventoryCount(organizationId: string, actorUserId: string, input: InventoryCountCreateInput) {
