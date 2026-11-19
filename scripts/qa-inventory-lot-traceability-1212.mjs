@@ -600,6 +600,39 @@ const cutoffTx={$queryRaw:async query=>{assert.ok(query.values.includes("org-a")
 await acquisitionGuards.assertAcquisitionValuationCutoffTx(cutoffTx,"org-a",acqDay);
 cutoffBlocked=true;await assert.rejects(acquisitionGuards.assertAcquisitionValuationCutoffTx(cutoffTx,"org-a",acqDay),{code:"INVENTORY_ACQUISITION_COST_HISTORY_REQUIRED"});
 console.log("Acquisition guards: generic credits/reversals, tenant scope and misleading historical projections blocked");
+mocks["@/lib/enterprise/accounting/inventory-acquisition-cost-guards"]=acquisitionGuards;
+const historicalValuation=load("lib/enterprise/accounting/inventory-historical-valuation.ts");
+const historyProof=historicalValuation.isolatedAcquisitionHistorySql("org-a",acqDay);
+for(const marker of [
+  'e."totalCost"=s."originalTotalCost"', 's."originalTotalCost"+s."capitalizedTaxAmount"=s."totalCost"',
+  'dates.received<=dates.capitalized', 'returns."firstRecognized">=dates.capitalized',
+  'r."dispatchAccountingEventId"', 'r."originCostLayerId"=l.id',
+  're."stockMovementId"=rm.id', 'rj."sourceEntityId"=re.id',
+  'm."organizationId"=l."organizationId"', 'r."organizationId"=s."organizationId"',
+  'l."remainingQuantity"=s.quantity-returns.quantity', '1+returns.count',
+  'ROUND(l."remainingQuantity"*l."unitCost",6)=s."totalCost"-returns.value',
+  '"EnterpriseJournalReversal"', 'b."quantityOnHand"', 'j."postedAt"', 'ij."postedAt"',
+]) assert.ok(historyProof.sql.includes(marker),marker);
+assert.ok(historyProof.values.includes("org-a"));
+assert.ok(historyProof.values.some(value=>value instanceof Date&&value.getTime()===acqDay.getTime()));
+let guardCalls=0;
+const historyTx={$queryRaw:async query=>{
+  guardCalls++;
+  assert.ok(query.sql.includes('AND NOT EXISTS (SELECT 1 FROM (SELECT')||query.sql.includes('AND NOT EXISTS (SELECT 1 FROM (\n'));
+  assert.ok(query.sql.includes('h."layerId"=l.id'));
+  assert.ok(query.sql.includes('s."createdAt"'));
+  return cutoffBlocked?[{blocked:1}]:[];
+}};
+cutoffBlocked=false;
+const historyQuery=await historicalValuation.inventoryValuationAtSqlTx(historyTx,"org-a",acqDay);
+assert.equal(guardCalls,1);
+assert.ok(historyQuery.sql.includes("WITH verified_history AS"));
+assert.ok(historyQuery.sql.includes('NOT EXISTS (SELECT 1 FROM verified_history h WHERE h."layerId"=l.id)'));
+assert.ok(historyQuery.sql.includes("UNION ALL"));
+cutoffBlocked=true;
+await assert.rejects(historicalValuation.inventoryValuationAtSqlTx(historyTx,"org-a",acqDay),{code:"INVENTORY_ACQUISITION_COST_HISTORY_REQUIRED"});
+console.log("Historical isolated acquisition: canonical signed receipt, supplement and dispatch proof; unsupported pool guard retained");
+
 const capCoordinates={originCostLayerId:recordedAcq.costLayerId,receiptAccountingEventId:recordedAcq.receiptAccountingEventId,invoiceJournalEntryId:recordedAcq.invoiceJournalEntryId,currencyCode:"USD",quantity:d(2)};
 const capTaxTx={...acqTx,enterpriseTaxLine:{findMany:async()=>[{...nonRecoverableRow,effectiveAt:acqDay}],findFirst:async({where})=>where.id===recordedAcq.taxLineId?{id:recordedAcq.taxLineId,effectiveAt:acqDay}:null}};
 const capReturn=await returnCredit.deriveCapitalizedSupplierReturnTx(capTaxTx,"org-a",acqInvoiceItem,recordedAcq,capCoordinates,acqDay);
