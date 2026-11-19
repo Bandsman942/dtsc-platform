@@ -6,7 +6,8 @@ import { money, sumDecimals } from "@/lib/enterprise/accounting/helpers";
 import { readActiveRetailInvoiceStockHoldsTx } from "@/lib/enterprise/retail/invoice-stock-holds";
 import { resolveSemanticPostingAccount } from "@/lib/enterprise/accounting/semantic-account-resolver";
 import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
-import { deriveCapitalizedSupplierReturnTx, deriveSupplierReturnTaxTx } from "@/lib/enterprise/accounting/supplier-return-credit-reconciliation";
+import { allocateHistoricalCreditLines } from "@/lib/enterprise/accounting/historical-credit-tax";
+import { deriveCapitalizedSupplierReturnTx, deriveSupplierReturnTaxTx, readPriorReconciledSupplierReturnCreditsTx } from "@/lib/enterprise/accounting/supplier-return-credit-reconciliation";
 
 export type SupplierReturnCoordinates = {
   inventoryItemId: string; warehouseId: string; storageLocationId?: string | null; stockLotId?: string | null;
@@ -84,14 +85,16 @@ export async function inspectSupplierReturnTx(tx: Prisma.TransactionClient, orga
   }) : null;
   const unitCost = supplement?.unitCost || receiptValue.unitCost;
   if (supplement) {
-    // First capitalized return: original untouched pool only, no mixing,
-    // depleted layer, issue, transfer or previously returned quantity.
+    // Sequential capitalized returns may consume only the original receipt
+    // and previously coordinated returns. Mixed pools, issues and transfers
+    // still require a separate provenance and cost reconciliation.
     const [poolMovements,poolLayers] = await Promise.all([
       tx.enterpriseStockMovement.count({ where: coordinates }),
       tx.enterpriseInventoryCostLayer.count({ where: coordinates }),
     ]);
-    if (poolMovements !== 1 || poolLayers !== 1 || !alreadyReturned.isZero() ||
-        !originLayer?.remainingQuantity.equals(origin.quantity) ||
+    const priorMovementCount=outgoing.reduce((sum,row)=>sum+row._count._all,0);
+    if (poolMovements !== 1+priorMovementCount || poolLayers !== 1 ||
+        !originLayer?.remainingQuantity.equals(remaining) ||
         !supplement.originalUnitCost.equals(receiptValue.unitCost) ||
         !supplement.originalTotalCost.equals(receiptValue.totalCost)) blocked("SUPPLIER_RETURN_NONRECOVERABLE_COST_RECONCILIATION_REQUIRED");
   }
@@ -110,7 +113,7 @@ export async function inspectSupplierReturnTx(tx: Prisma.TransactionClient, orga
   const invoice = invoices[0];
   const invoiceItems = invoice.items.filter((line) => line.catalogItemId === catalogItemId);
   if (!["POSTED", "PARTIALLY_PAID", "PAID"].includes(invoice.status) || !invoice.postedAt || invoice.currencyCode !== receiptValue.currencyCode ||
-    invoice.threeWayMatch?.status !== "MATCHED" || invoice.amountCredited.gt(0) ||
+    invoice.threeWayMatch?.status !== "MATCHED" ||
     invoice.items.length !== 1 || invoiceItems.length !== 1 || !invoiceItems[0].quantity.equals(receiptItem.quantityReceived) ||
     !invoiceItems[0].unitPrice.equals(receiptValue.unitCost) || !receiptItem.purchaseItem.unitPrice.equals(receiptValue.unitCost) ||
     !invoiceItems[0].netAmount.equals(money(receiptItem.quantityReceived.times(receiptValue.unitCost)))) blocked("SUPPLIER_RETURN_INVOICE_REQUIRED");
@@ -118,7 +121,18 @@ export async function inspectSupplierReturnTx(tx: Prisma.TransactionClient, orga
     tx.enterpriseJournalEntry.findFirst({ where: { organizationId, sourceEntityType: "EnterpriseSupplierInvoice", sourceEntityId: invoice.id, postingEvent: "SUPPLIER_INVOICE_POSTED", status: "POSTED" }, include: { lines: true } }),
     tx.enterpriseSupplierCreditNote.count({ where: { organizationId, supplierInvoiceId: invoice.id, status: { notIn: ["CANCELLED", "REJECTED"] } } }),
   ]);
-  if (!invoiceJournal || credits || !invoice.subtotal.equals(invoiceItems[0].netAmount) || !invoice.taxTotal.equals(invoiceItems[0].taxAmount) || !invoice.taxTotal.equals(receiptItem.purchaseItem.taxAmount) || !invoice.grandTotal.equals(invoice.subtotal.plus(invoice.taxTotal))) blocked("SUPPLIER_RETURN_INVOICE_REQUIRED");
+  if (!invoiceJournal || !invoice.subtotal.equals(invoiceItems[0].netAmount) || !invoice.taxTotal.equals(invoiceItems[0].taxAmount) || !invoice.taxTotal.equals(receiptItem.purchaseItem.taxAmount) || !invoice.grandTotal.equals(invoice.subtotal.plus(invoice.taxTotal))) blocked("SUPPLIER_RETURN_INVOICE_REQUIRED");
+  let prior: Awaited<ReturnType<typeof readPriorReconciledSupplierReturnCreditsTx>> = [];
+  try {
+    if(credits || invoice.amountCredited.gt(0) || !alreadyReturned.isZero()){
+      prior=await readPriorReconciledSupplierReturnCreditsTx(tx,organizationId,{
+        supplierInvoiceId:invoice.id,sourceMovementId:origin.id,originCostLayerId:originLayer.id,
+        receiptAccountingEventId:receiptValue.id,original:invoiceItems[0],currencyCode:invoice.currencyCode,
+      });
+      if(prior.length!==credits || !sumDecimals(prior.map(line=>line.quantity)).equals(alreadyReturned) ||
+          !sumDecimals(prior.map(line=>line.totalAmount)).equals(invoice.amountCredited)) blocked("SUPPLIER_RETURN_INVOICE_REQUIRED");
+    }
+  } catch(error) { if(error instanceof EnterpriseAccountingError) blocked("SUPPLIER_RETURN_INVOICE_REQUIRED"); throw error; }
   // Nonrecoverable VAT is part of stock acquisition cost. The invoice
   // journal can already debit INVENTORY without a matching cost supplement
   // on the receipt layer. Never infer that the tax is in CUMP from a journal.
@@ -137,9 +151,9 @@ export async function inspectSupplierReturnTx(tx: Prisma.TransactionClient, orga
       nonrecoverableTaxAmount = (await deriveCapitalizedSupplierReturnTx(tx, organizationId, invoiceItems[0], supplement, {
         originCostLayerId: originLayer.id, receiptAccountingEventId: receiptValue.id, invoiceJournalEntryId: invoiceJournal.id,
         currencyCode: invoice.currencyCode, quantity: qty,
-      }, date)).tax.amount;
+      }, date, prior)).tax.amount;
     } else if (invoice.taxTotal.gt(0)) {
-      try { recoverableTaxAmount = (await deriveSupplierReturnTaxTx(tx, organizationId, invoiceItems[0], invoice.currencyCode, qty, date)).amount; }
+      try { recoverableTaxAmount = (await deriveSupplierReturnTaxTx(tx, organizationId, invoiceItems[0], invoice.currencyCode, qty, date, prior)).amount; }
       catch (error) { if (error instanceof EnterpriseAccountingError) blocked("SUPPLIER_RETURN_TAX_PROOF_REQUIRED"); throw error; }
     }
     const [stockAccount, clearingAccount, payableAccount] = await Promise.all([
@@ -167,6 +181,13 @@ export async function inspectSupplierReturnTx(tx: Prisma.TransactionClient, orga
     throw error;
   }
   const totalCost = money(qty.times(unitCost));
+  // The prospective credit and physical valuation must still agree after
+  // cumulative residual tax/net rounding. Never dispatch a residual that
+  // cannot be settled by the current exact-cost posting contract.
+  try {
+    const [next]=allocateHistoricalCreditLines([invoiceItems[0]],prior,[{sourceInvoiceItemId:invoiceItems[0].id,description:invoiceItems[0].description,quantity:qty.toFixed(),unitPrice:receiptValue.unitCost.toFixed()}],new Date());
+    if(!next.netAmount.equals(money(qty.times(receiptValue.unitCost))) || !next.taxAmount.equals(supplement?nonrecoverableTaxAmount:recoverableTaxAmount) || !next.totalAmount.equals(totalCost.plus(recoverableTaxAmount))) blocked("SUPPLIER_RETURN_VALUATION_REQUIRED");
+  } catch(error) { if(error instanceof EnterpriseAccountingError) blocked("SUPPLIER_RETURN_VALUATION_REQUIRED"); throw error; }
   if (!totalCost.gt(0) || totalCost.plus(recoverableTaxAmount).gt("99999999999999.999999")) blocked("SUPPLIER_RETURN_VALUATION_REQUIRED");
   return { origin, receipt, receiptItem, invoice, invoiceItem: invoiceItems[0], originLayer, receiptValue,
     remaining, currencyCode: receiptValue.currencyCode, unitCost, creditUnitPrice: receiptValue.unitCost, totalCost, recoverableTaxAmount, nonrecoverableTaxAmount, creditTotal: money(totalCost.plus(recoverableTaxAmount)) };
