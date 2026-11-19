@@ -19,7 +19,7 @@ function blocked(code: string): never { throw new EnterpriseDomainError(code, 40
  * lot from a unique original receipt in its original warehouse, with a
  * posted matching supplier invoice and equal current/original unit costs.
  * Never guess allocation across suppliers, currencies or transferred stock.
- * Only proven historical recoverable standard VAT is supported.
+ * Only proven historical independent recoverable standard VAT is supported.
  * Run this again in the same serializable transaction as any future dispatch. */
 export async function inspectSupplierReturnTx(tx: Prisma.TransactionClient, organizationId: string, actorUserId: string, input: SupplierReturnCoordinates) {
   await requireInventoryStockAuthorityTx(tx, organizationId, actorUserId, input.warehouseId);
@@ -103,6 +103,11 @@ export async function inspectSupplierReturnTx(tx: Prisma.TransactionClient, orga
     tx.enterpriseSupplierCreditNote.count({ where: { organizationId, supplierInvoiceId: invoice.id, status: { notIn: ["CANCELLED", "REJECTED"] } } }),
   ]);
   if (!invoiceJournal || credits || !invoice.subtotal.equals(invoiceItems[0].netAmount) || !invoice.taxTotal.equals(invoiceItems[0].taxAmount) || !invoice.taxTotal.equals(receiptItem.purchaseItem.taxAmount) || !invoice.grandTotal.equals(invoice.subtotal.plus(invoice.taxTotal))) blocked("SUPPLIER_RETURN_INVOICE_REQUIRED");
+  // Nonrecoverable VAT is part of stock acquisition cost. The invoice
+  // journal can already debit INVENTORY without a matching cost supplement
+  // on the receipt layer. Never infer that the tax is in CUMP from a journal.
+  // A historical reconciliation and capitalized-cost proof are required first.
+  if (invoice.taxTotal.gt(0) && !invoiceItems[0].taxRecoveryRequested) blocked("SUPPLIER_RETURN_NONRECOVERABLE_COST_RECONCILIATION_REQUIRED");
   if (invoice.taxTotal.lt(0) || (invoice.taxTotal.gt(0) && (!invoice.taxRecoveryVerifiedAt || !invoice.taxRecoveryVerifiedByUserId))) blocked("SUPPLIER_RETURN_TAX_PROOF_REQUIRED");
   // The return must reverse the very same stock and clearing accounts, not a
   // newly remapped account or a sales/expense journal. VAT must be recorded
