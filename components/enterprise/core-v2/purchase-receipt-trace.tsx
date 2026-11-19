@@ -9,7 +9,7 @@ import { StatusBadge } from "@/components/workspace/status-badge";
 import { formatEnterpriseDate } from "@/components/enterprise/core-v2/erp-v2-ui";
 import { purchaseFormGuidance, type PurchaseFormGuidanceKey } from "@/lib/enterprise/purchase-form-i18n";
 
-type ReturnRequestSummary = { id?: string; reference: string; status: string; quantity: string; approvalId: string | null; revision?: number; unitCost?: string; totalCost?: string; currencyCode?: string; canDispatch?: boolean; canWithdraw?: boolean; canCreateCredit?: boolean; dispatchReference?: string | null; dispatchedAt?: string | null; dispatchBusinessDate?: string | null; supplierCreditNoteId?: string | null; supplierCreditReference?: string | null; supplierInvoiceId?: string; supplierInvoiceItemId?: string };
+type ReturnRequestSummary = { id?: string; reference: string; status: string; quantity: string; approvalId: string | null; revision?: number; unitCost?: string; totalCost?: string; currencyCode?: string; canDispatch?: boolean; canWithdraw?: boolean; canCreateCredit?: boolean; canReplaceCredit?: boolean; supplierCreditStatus?: string|null; supplierCreditRevision?: number|null; previousCreditNoteId?: string|null; previousSupplierCreditReference?: string|null; dispatchReference?: string | null; dispatchedAt?: string | null; dispatchBusinessDate?: string | null; supplierCreditNoteId?: string | null; supplierCreditReference?: string | null; supplierInvoiceId?: string; supplierInvoiceItemId?: string };
 type TraceRow = {
   supplierReturnRequest?: ReturnRequestSummary | null;
   id: string; receiptReference: string | null; quantity: string; occurredAt: string;
@@ -100,16 +100,19 @@ function SupplierReturnCheck({ organizationId, purchaseId, row, locale, onRefres
   }
   async function createLinkedCredit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (busy || !request?.id || !request.canCreateCredit || !request.supplierInvoiceId || !request.supplierInvoiceItemId || !request.unitCost) return;
+    if (busy || !request?.id || !(request.canCreateCredit||request.canReplaceCredit) || !request.supplierInvoiceId || !request.supplierInvoiceItemId || !request.unitCost) return;
+    const replacing=request.canReplaceCredit===true;
+    if(replacing&&(!request.supplierCreditNoteId||!request.supplierCreditRevision))return;
     const form = new FormData(event.currentTarget);
     const supplierCreditReference=String(form.get("supplierCreditReference")||"").trim(),creditDate=String(form.get("creditDate")||""),reason=String(form.get("creditReason")||"").trim();
     if(supplierCreditReference.length<3||!creditDate||reason.length<8)return;
+    if(replacing&&supplierCreditReference.toUpperCase()===request.supplierCreditReference?.toUpperCase()){setError(t("returnCreditReplacementInvalid"));return;}
     setBusy(true);setError("");setMessage("");
     try {
-      const response=await fetch(`/api/enterprise/${encodeURIComponent(organizationId)}/supplier-credit-notes`,{method:"POST",headers:{"Content-Type":"application/json","Accept-Language":locale},body:JSON.stringify({invoiceId:request.supplierInvoiceId,supplierReturnId:request.id,supplierCreditReference,creditDate,reason,items:[{sourceInvoiceItemId:request.supplierInvoiceItemId,description:row.inventoryItem.catalogItem.name,quantity:request.quantity,unitPrice:request.unitCost}]})});
+      const response=await fetch(`/api/enterprise/${encodeURIComponent(organizationId)}/supplier-credit-notes`,{method:"POST",headers:{"Content-Type":"application/json","Accept-Language":locale},body:JSON.stringify({invoiceId:request.supplierInvoiceId,supplierReturnId:request.id,supplierCreditReference,creditDate,reason,...(replacing?{replacesCreditNoteId:request.supplierCreditNoteId,replacesCreditRevision:request.supplierCreditRevision}:{}),items:[{sourceInvoiceItemId:request.supplierInvoiceItemId,description:row.inventoryItem.catalogItem.name,quantity:request.quantity,unitPrice:request.unitCost}]})});
       const body=await response.json();
-      if(!response.ok||!body.ok||!body.creditNote){setError(body.message||t("returnCreditFailed"));return;}
-      setRequest({...request,canCreateCredit:false,supplierCreditNoteId:body.creditNote.id,supplierCreditReference});setMessage(t("returnCreditCreated"));onRefresh();
+      if(!response.ok||!body.ok||!body.creditNote){setError(body.error==="SUPPLIER_RETURN_CREDIT_REPLACEMENT_INVALID"?t("returnCreditReplacementInvalid"):body.message||t("returnCreditFailed"));return;}
+      setRequest({...request,canCreateCredit:false,canReplaceCredit:false,supplierCreditStatus:body.creditNote.status,supplierCreditRevision:body.creditNote.revision,supplierCreditNoteId:body.creditNote.id,supplierCreditReference,...(replacing?{previousCreditNoteId:request.supplierCreditNoteId,previousSupplierCreditReference:request.supplierCreditReference}:{})});setMessage(t("returnCreditCreated"));onRefresh();
     } catch {setError(t("returnCreditFailed"));} finally {setBusy(false);}
   }
   if (request) return <div className="mt-2 grid min-w-0 grid-cols-[minmax(0,1fr)] gap-2 rounded-lg border border-dtsc-border p-2 text-xs">
@@ -135,12 +138,14 @@ function SupplierReturnCheck({ organizationId, purchaseId, row, locale, onRefres
       <label className="flex items-start gap-2"><input name="confirmDispatch" type="checkbox" required disabled={busy} className="mt-1"/><span>{t("returnDispatchConfirm")}</span></label>
       <Button type="submit" disabled={busy} className="whitespace-normal">{t("returnDispatchAction")}</Button>
     </form>:null}
-    {request.canCreateCredit&&request.status==="DISPATCHED"?<form onSubmit={createLinkedCredit} className="grid min-w-0 gap-2 border-t border-dtsc-border pt-2">
-      <strong>{t("returnCreditTitle")}</strong><p className="text-dtsc-muted">{t("returnCreditHelp")}</p>
+    {request.supplierCreditStatus==="REJECTED"?<StatusBadge tone="danger">{t("returnCreditRejected")}</StatusBadge>:null}
+    {request.previousCreditNoteId?<a className="w-fit break-words text-dtsc-blue underline" href={`/enterprise-modules/FINANCE_PAYABLES?supplierCreditNoteId=${encodeURIComponent(request.previousCreditNoteId)}`}>{t("returnCreditPrevious")} · {request.previousSupplierCreditReference}</a>:null}
+    {(request.canCreateCredit||request.canReplaceCredit)&&request.status==="DISPATCHED"?<form key={request.supplierCreditNoteId||"initial"} onSubmit={createLinkedCredit} className="grid min-w-0 gap-2 border-t border-dtsc-border pt-2">
+      <strong>{t(request.canReplaceCredit?"returnCreditReplaceTitle":"returnCreditTitle")}</strong><p className="text-dtsc-muted">{t(request.canReplaceCredit?"returnCreditReplaceHelp":"returnCreditHelp")}</p>
       <label className="grid min-w-0 gap-1">{t("returnCreditReference")}<Input name="supplierCreditReference" required minLength={3} maxLength={160} disabled={busy}/></label>
       <label className="grid min-w-0 gap-1">{t("returnCreditDate")}<Input name="creditDate" type="date" min={request.dispatchBusinessDate || undefined} required disabled={busy}/></label>
       <label className="grid min-w-0 gap-1">{t("returnCreditReason")}<textarea name="creditReason" required minLength={8} maxLength={1000} disabled={busy} className="w-full min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface p-2 text-base text-dtsc-ink md:text-sm"/></label>
-      <Button type="submit" disabled={busy} className="whitespace-normal">{t("returnCreditAction")}</Button>
+      <Button type="submit" disabled={busy} className="whitespace-normal">{t(request.canReplaceCredit?"returnCreditReplaceAction":"returnCreditAction")}</Button>
     </form>:null}
     {error?<p role="alert" className="break-words text-red-700 dark:text-red-300">{error}</p>:null}
     {request.supplierCreditNoteId?<a className="w-fit break-words text-dtsc-blue underline" href={`/enterprise-modules/FINANCE_PAYABLES?supplierCreditNoteId=${encodeURIComponent(request.supplierCreditNoteId)}`}>{t("returnCreditReview")}</a>:null}
