@@ -1647,11 +1647,13 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
     // Independent purchases and real three-actor bank payments: race the
     // allocation of a confirmed supplier advance against physical dispatch.
     // No direct payable, payment, allocation, movement or journal fixture.
-    for (const paymentAmount of [57,56,64.96,67.2,0,-1]) {
-      const multiTax=paymentAmount===67.2, nonrecoverable=paymentAmount<=0, freshAcquisition=paymentAmount===-1;
+    for (const scenario of [57,56,64.96,67.2,0,-1]) {
+      const paymentAmount=scenario===-1?64.96:scenario;
+      const multiTax=scenario===67.2, nonrecoverable=scenario<=0, freshAcquisition=scenario===-1;
       const taxed=paymentAmount===64.96||multiTax||nonrecoverable;
       const invoiceGross=multiTax?"84":taxed?"81.2":"70", invoiceVat=multiTax?"14":taxed?"11.2":"0", returnVat=multiTax?"2.8":taxed?"2.24":"0", creditGross=multiTax?"16.8":taxed?"16.24":"14", exactAllocation=multiTax?"67.2":taxed?"64.96":"56";
-      const suffix="PAYMENT-RACE-"+paymentAmount;
+      const suffix="PAYMENT-RACE-"+scenario;
+      const stockReturnValue=freshAcquisition?"16.24":"14", reservedRecoverable=freshAcquisition?"0":returnVat;
       // The positive nonrecoverable case needs an entirely untouched pool.
       const raceProduct=freshAcquisition?await prisma.enterpriseCatalogItem.create({data:{organizationId,code:historyKey+"-ACQ",sku:historyKey+"-ACQ",name:"E2E isolated acquisition "+historyKey,normalizedName:(historyKey+"-ACQ").toLowerCase(),itemType:"PRODUCT",unitOfMeasureId:fixture.product.unitOfMeasureId,indicativeSalePrice:20,indicativeCost:7,currency:fixture.currencyCode,taxable:false,trackInventory:true,createdByUserId:fixture.owner.id}}):historicalProduct;
       if(freshAcquisition)await prisma.enterpriseInventoryItem.create({data:{organizationId,catalogItemId:raceProduct.id,lotTracking:true,expiryTracking:true,createdByUserId:fixture.owner.id}});
@@ -1745,19 +1747,10 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
             expect((await prisma.enterpriseJournalEntry.findUniqueOrThrow({where:{id:journalId}})).status).toBe("POSTED");
             expect(await prisma.enterpriseJournalReversal.count({where:{organizationId,originalEntryId:journalId}})).toBe(0);
           }
-          expect(vatPreview.status()).toBe(409);
-          expect((await vatPreview.json()).error).toBe("SUPPLIER_RETURN_NONRECOVERABLE_COST_RECONCILIATION_REQUIRED");
-          const blockedReturn=await post(context.owner,racePurchasePath+"?action=submit-supplier-return",{movementId:raceSource.id,quantity:"2",reason:"Nonrecoverable tax cost must be reconciled",approverUserId:fixture.settler.id,idempotencyKey:historyKey+"-"+suffix});
-          expect(blockedReturn.status).toBe(409);expect(blockedReturn.body.error).toBe("SUPPLIER_RETURN_NONRECOVERABLE_COST_RECONCILIATION_REQUIRED");
-          expect(await prisma.enterpriseSupplierReturnRequest.count({where:{organizationId,supplierInvoiceId:raceInvoice.id}})).toBe(0);
           expect(await prisma.enterpriseSupplierCreditNote.count({where:{organizationId,supplierInvoiceId:raceInvoice.id}})).toBe(0);
-          const afterLayer=await prisma.enterpriseInventoryCostLayer.findUniqueOrThrow({where:{id:beforeLayer.id}});
-          expect(afterLayer.unitCost.equals(beforeLayer.unitCost)&&afterLayer.remainingQuantity.equals(beforeLayer.remainingQuantity)).toBe(true);
-          expect((await prisma.enterprisePayable.findUniqueOrThrow({where:{id:racePayable.id}})).outstandingAmount.equals(invoiceGross)).toBe(true);
-          continue;
         }
         expect(vatPreview.status(),await vatPreview.text()).toBe(200);
-        expect(await vatPreview.json()).toMatchObject({totalCost:"14",recoverableTaxAmount:returnVat,creditTotal:creditGross});
+        expect(await vatPreview.json()).toMatchObject({totalCost:stockReturnValue,recoverableTaxAmount:reservedRecoverable,creditTotal:creditGross,...(freshAcquisition?{unitCost:"8.12",creditUnitPrice:"7",nonrecoverableTaxAmount:"2.24"}:{})});
       }
       const submittedRace=await post(context.owner,racePurchasePath+"?action=submit-supplier-return",{movementId:raceSource.id,quantity:"2",reason:"Physical supplier return competing with payable allocation",approverUserId:fixture.settler.id,idempotencyKey:historyKey+"-"+suffix});
       expect(submittedRace.status,JSON.stringify(submittedRace.body)).toBe(201);
@@ -1770,9 +1763,9 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
       expect(raceApproval.status,JSON.stringify(raceApproval.body)).toBe(200);
       const approvedRace=await prisma.enterpriseSupplierReturnRequest.findFirstOrThrow({where:{organizationId,id:raceId}});
       expect(approvedRace.status).toBe("APPROVED");
-      expect(approvedRace.totalCost.equals(14)).toBe(true);
-      expect(approvedRace.recoverableTaxAmount.equals(returnVat)).toBe(true);
-      expect(raceReview.versions[0].snapshotJson).toMatchObject({stockValue:"14",recoverableTaxAmount:returnVat,totalAmount:creditGross});
+      expect(approvedRace.totalCost.equals(stockReturnValue)).toBe(true);
+      expect(approvedRace.recoverableTaxAmount.equals(reservedRecoverable)).toBe(true);
+      expect(raceReview.versions[0].snapshotJson).toMatchObject({stockValue:stockReturnValue,recoverableTaxAmount:reservedRecoverable,totalAmount:creditGross});
 
       const racePayment=await post(context.owner,base+"/payments",{direction:"OUTBOUND",paymentType:"SUPPLIER_PAYMENT",methodType:"BANK_TRANSFER",financialAccountId:fixture.bank.id,businessPartyId:supplierParty.id,currencyCode:fixture.currencyCode,amount:String(paymentAmount),paymentDate:returnBusinessContext.businessDate,reference:historyKey+"-"+suffix,idempotencyKey:historyKey+"-"+suffix+"-payment"});
       expect(racePayment.status,JSON.stringify(racePayment.body)).toBe(201);
@@ -1847,9 +1840,13 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
       expect(shipped.status).toBe("DISPATCHED");
       expect(await prisma.enterpriseStockMovement.count({where:{organizationId,sourceEntityType:"EnterpriseSupplierReturnRequest",sourceEntityId:raceId}})).toBe(1);
       const shippedValue=await prisma.enterpriseInventoryAccountingEvent.findFirstOrThrow({where:{organizationId,id:shipped.dispatchAccountingEventId,stockMovementId:shipped.dispatchMovementId}});
-      expect(shippedValue.totalCost.equals(14)&&shippedValue.status==="POSTED").toBe(true);
+      expect(shippedValue.totalCost.equals(stockReturnValue)&&shippedValue.status==="POSTED").toBe(true);
+      if(freshAcquisition){
+        const remainingAcq=await prisma.enterpriseInventoryCostLayer.findFirstOrThrow({where:{organizationId,sourceMovementId:raceSource.id}});
+        expect(remainingAcq.remainingQuantity.equals(8)&&remainingAcq.remainingQuantity.times(remainingAcq.unitCost).equals("64.96")).toBe(true);
+      }
       const shippedJournal=await prisma.enterpriseJournalEntry.findFirstOrThrow({where:{organizationId,id:shippedValue.journalEntryId},include:{lines:true}});
-      expect(shippedJournal.totalDebit.equals(14)&&shippedJournal.totalCredit.equals(14)).toBe(true);
+      expect(shippedJournal.totalDebit.equals(stockReturnValue)&&shippedJournal.totalCredit.equals(stockReturnValue)).toBe(true);
       expect((await prisma.enterpriseInventoryBalance.findFirstOrThrow({where:{organizationId,stockLotId:raceSource.stockLotId}})).quantityOnHand.equals(8)).toBe(true);
       expect((await prisma.enterprisePayment.findUniqueOrThrow({where:{id:racePaymentId}})).unallocatedAmount.equals(new Prisma.Decimal(String(paymentAmount)).minus(exactAllocation))).toBe(true);
       expect(await prisma.enterprisePaymentAllocation.count({where:{organizationId,paymentId:racePaymentId}})).toBe(1);
@@ -1863,7 +1860,7 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
       const raceTrace=await context.owner.request.get(racePurchasePath+"?view=receipt-lots&movementId="+encodeURIComponent(raceSource.id));
       expect(raceTrace.status()).toBe(200);
       const raceCreditDay=(await raceTrace.json()).items[0].supplierReturnRequest.dispatchBusinessDate;
-      const raceCredit=await post(context.owner,base+"/supplier-credit-notes",{invoiceId:raceInvoice.id,supplierReturnId:raceId,supplierCreditReference:historyKey+"-"+suffix+"-CREDIT",creditDate:raceCreditDay,reason:"Confirmed returned goods credit after payment allocation",items:[{sourceInvoiceItemId:approvedRace.supplierInvoiceItemId,description:historicalProduct.name,quantity:"2",unitPrice:"7"}]});
+      const raceCredit=await post(context.owner,base+"/supplier-credit-notes",{invoiceId:raceInvoice.id,supplierReturnId:raceId,supplierCreditReference:historyKey+"-"+suffix+"-CREDIT",creditDate:raceCreditDay,reason:"Confirmed returned goods credit after payment allocation",items:[{sourceInvoiceItemId:approvedRace.supplierInvoiceItemId,description:raceProduct.name,quantity:"2",unitPrice:"7"}]});
       expect(raceCredit.status,JSON.stringify(raceCredit.body)).toBe(201);
       expect(raceCredit.body.creditNote).toMatchObject({subtotal:"14",taxTotal:returnVat,grandTotal:creditGross});
       const raceCreditPath=base+"/supplier-credit-notes/"+raceCredit.body.creditNote.id;
@@ -1880,7 +1877,7 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
       expect(closedRace.status).toBe("RECONCILED");
       if(taxed){
         const vatCreditItem=await prisma.enterpriseSupplierCreditNoteItem.findFirstOrThrow({where:{organizationId,supplierCreditNoteId:raceCredit.body.creditNote.id}});
-        const reversals=await prisma.enterpriseTaxLine.findMany({where:{organizationId,sourceEntityType:"EnterpriseSupplierCreditNoteItem",sourceEntityId:vatCreditItem.id,direction:"INPUT_REVERSAL"},orderBy:{applicationOrder:"asc"}});
+        const reversals=await prisma.enterpriseTaxLine.findMany({where:{organizationId,sourceEntityType:"EnterpriseSupplierCreditNoteItem",sourceEntityId:vatCreditItem.id,direction:freshAcquisition?"INPUT_NONRECOVERABLE_REVERSAL":"INPUT_REVERSAL"},orderBy:{applicationOrder:"asc"}});
         expect(reversals).toHaveLength(vatSnapshots.length);
         for(const [index,reversal] of reversals.entries()){
           expect(reversal.taxCodeId).toBe(vatSnapshots[index].taxCodeId);
@@ -1894,9 +1891,10 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
         const originalTaxLine=originalJournal.lines.find(line=>line.debit.equals(invoiceVat));
         expect(originalTaxLine).toBeTruthy();
         expect(vatJournal.totalDebit.equals(creditGross)&&vatJournal.totalCredit.equals(creditGross)).toBe(true);
-        expect(vatJournal.lines).toHaveLength(3);
-        expect(vatJournal.lines.some(line=>line.ledgerAccountId===originalTaxLine.ledgerAccountId&&line.credit.equals(returnVat)&&line.debit.isZero())).toBe(true);
-        expect(vatJournal.lines.some(line=>line.ledgerAccountId===shippedJournal.lines?.find(l=>l.debit.equals(14))?.ledgerAccountId&&line.credit.equals(14))).toBe(true);
+        expect(vatJournal.lines).toHaveLength(freshAcquisition?2:3);
+        expect(vatJournal.lines.some(line=>line.ledgerAccountId===originalTaxLine.ledgerAccountId&&line.credit.equals(returnVat)&&line.debit.isZero())).toBe(!freshAcquisition);
+        expect(vatJournal.lines.some(line=>line.ledgerAccountId===shippedJournal.lines?.find(l=>l.debit.equals(stockReturnValue))?.ledgerAccountId&&line.credit.equals(stockReturnValue))).toBe(true);
+        if(freshAcquisition)expect(vatJournal.lines.some(line=>line.ledgerAccountId===originalTaxLine.ledgerAccountId)).toBe(false);
       }
       expect(await prisma.enterprisePayableAllocation.count({where:{organizationId,payableId:racePayable.id,sourceType:"SUPPLIER_CREDIT_NOTE",sourceId:raceCredit.body.creditNote.id}})).toBe(1);
     }

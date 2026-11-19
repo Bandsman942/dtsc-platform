@@ -1,5 +1,6 @@
 ## 2026-11-17 / 18 — Hotfix stock/lots #1212 — v1.23.4 candidate (DRAFT)
 
+- Retour fournisseur TTC sur couche capitalisée isolée et avoir lié : allocation historique HT/TVA/TTC, GRNI TTC sans double crédit INVENTORY, preuve et UI FR/EN, recette de rapprochement PostgreSQL. CI à certifier.
 - Capitalisation initiale non récupérable activée dans le posting canonique, sur pool strictement intact; journaux/taxe/coût/dette atomiques. Refus des avoirs/contrepassations génériques et des lectures historiques non prouvées; recette PostgreSQL ajoutée, CI à certifier. Retours TTC et autres cas complexes restent bloquants.
 - Primitive interne de capitalisation acquisition : provenance et journaux exacts, période ouverte, compare-and-set de couche et preuve dans la transaction appelante; recette isolée, non raccordée au posting opérationnel tant que les gardes inverses et historiques ne sont pas certifiées.
 - 18e migration candidate : preuve de supplément d'acquisition tenant-aware, contraintes HT/TTC exactes et préflight CUMP isolé en lecture seule. Aucun backfill, aucune activation de posting ou de retour non récupérable. CI à certifier.

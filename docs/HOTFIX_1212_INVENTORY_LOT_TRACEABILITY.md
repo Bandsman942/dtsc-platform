@@ -259,6 +259,14 @@
 - QA mocks étendus et E2E HTTP PostgreSQL : cas mélangé auparavant posté sans capitalisation désormais refusé, 0 journal/taxe/dette/preuve et couche HT intacte; nouveau produit isolé, 10 à 7 + TVA 11,20 = couche 81,20, PU 8,12, quantité inchangée, événement de réception HT immuable, un journal et une ligne fiscale, replay exact, avoir générique et contrepassations refusés, retour encore refusé. Test rate 16% illustratif. Pièces approuvées fixtures, posting et valorisation réels; timeout 600s. Aucune exécution locale (DNS GitHub indisponible), nouvelle certification CI et OWNER_E2E indispensables.
 - Restent bloquants : circuit de retour fournisseur TTC et son avoir (pas de double crédit stock), inverse métier, reconstitution historique exacte, concurrence réelle supplémentaire et cas complexes FX/transferts/dettes soldées/secteurs spécialisés, certification UI/export multisecteur et OWNER_E2E. 18 migrations inchangées; aucun merge ni production.
 
+### Reprise — retour fournisseur TTC et avoir lié (19 novembre 2026)
+
+- Baseline **c02e700 : 19/19 workflows CI réussis**; nouvelle recette sur stock TTC et rollback certifiée.
+- Retour sur une couche capitalisée prouvée et pool toujours intact : mêmes contrôles physiques/approbations, 1 mouvement et 1 couche au total, aucune consommation ni autre réception, preuve exacte de la fiscalité historique, journal et couche. Coût TTC 16,24 pour deux unités, prix fournisseur HT 7, TVA 2,24 incluse dans la valorisation; réserve de dette TTC 16,24 sans TVA récupérable ajoutée.
+- Avoir lié conserve ligne HT 14 et taxe historique non récupérable 2,24; validation d'origine, montant TTC et journal de sortie. Le posting crédite GRNI TTC 16,24 seul, jamais INVENTORY une seconde fois; registre INPUT_NONRECOVERABLE_REVERSAL maintenu. Création générique non liée et contrepassations toujours bloquées. Posting autonome de crédit lié refusé hors transition canonique v1. Projection lecture et UI FR/EN distinguent prix fournisseur et valeur stock.
+- QA mock de ventilation exacte et refus de preuve divergent; recette HTTP PostgreSQL prolonge le cas capitalisé jusqu'à sortie, allocation concurrente 64,96, approbation et rapprochement crédit 16,24, 8 unités restant à 8,12 = 64,96 et journal de crédit sans deuxième crédit stock. Les autres scénarios TVA récupérable restent inchangés.
+- Pas de nouvelle migration. CI de ce commit à certifier; pas de checkout local. Cas non isolés, inverse métier, historique complet et certification UX/multisecteur restent bloquants. Aucune fusion, production ou OWNER_E2E.
+
 ## Restant (bloquant)
 Certification de la réaffectation historique sur PostgreSQL + navigateur et valeur inchangée; certification achats et valorisation, réservations/livraisons multi-lots; moteur FEFO commun et POS; pertes, rappels et comptabilité; Design 2.0 et tests multisectoriels. Voir issue #1212. Ne pas merger avant clôture de tous les points.
 

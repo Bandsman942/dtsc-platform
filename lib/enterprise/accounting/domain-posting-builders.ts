@@ -10,7 +10,7 @@ export async function buildSupplierCreditNotePosting(tx: Prisma.TransactionClien
 
   const items = await tx.enterpriseSupplierCreditNoteItem.findMany({ where: { organizationId: input.organizationId, supplierCreditNoteId: credit.id } });
   if (!items.length) throw new EnterpriseAccountingError("SUPPLIER_CREDIT_LINES_REQUIRED", 409);
-  await verifySupplierReturnCreditTx(tx, input.organizationId, credit, items);
+  const linkedReturn = await verifySupplierReturnCreditTx(tx, input.organizationId, credit, items);
   const originalIds = items.map((line) => line.sourceInvoiceItemId).filter((id): id is string => Boolean(id));
   if (originalIds.length !== items.length) throw new EnterpriseAccountingError("SUPPLIER_CREDIT_ORIGIN_REQUIRED", 409);
   const originals = await tx.enterpriseSupplierInvoiceItem.findMany({
@@ -29,10 +29,10 @@ export async function buildSupplierCreditNotePosting(tx: Prisma.TransactionClien
       : credit.supplierInvoice.assetId ? "FIXED_ASSET"
       : original.expenseAccountId ? `ACCOUNT_ID:${original.expenseAccountId}` : "OPERATING_EXPENSE";
     lines.push({ accountMappingKey: baseKey, description: `Supplier credit ${credit.number}: ${item.description}`,
-      credit: item.netAmount, transactionCurrencyCode: credit.currencyCode, transactionAmount: item.netAmount,
+      credit: linkedReturn && !item.taxRecoveryRequested && item.taxAmount.gt(0) ? item.totalAmount : item.netAmount, transactionCurrencyCode: credit.currencyCode, transactionAmount: linkedReturn && !item.taxRecoveryRequested && item.taxAmount.gt(0) ? item.totalAmount : item.netAmount,
       businessPartyId: credit.supplierInvoice.businessPartyId, projectId: credit.supplierInvoice.projectId,
       assetId: credit.supplierInvoice.assetId });
-    if (item.taxAmount.gt(0)) lines.push({ accountMappingKey: item.taxRecoveryRequested ? "TAX_RECEIVABLE" : credit.supplierInvoice.purchaseReceiptId ? "INVENTORY"
+    if (item.taxAmount.gt(0) && !(linkedReturn && !item.taxRecoveryRequested)) lines.push({ accountMappingKey: item.taxRecoveryRequested ? "TAX_RECEIVABLE" : linkedReturn ? "GOODS_RECEIVED_CLEARING" : credit.supplierInvoice.purchaseReceiptId ? "INVENTORY"
         : credit.supplierInvoice.assetId ? "FIXED_ASSET" : baseKey,
       description: `Supplier tax reversal ${credit.number}: ${item.description}`,
       credit: item.taxAmount, transactionCurrencyCode: credit.currencyCode, transactionAmount: item.taxAmount,

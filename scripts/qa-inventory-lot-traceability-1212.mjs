@@ -582,7 +582,7 @@ guardProof={id:"protected-supplement"};
 for(const source of [guardInvoiceSource,guardEventSource]) await assert.rejects(acquisitionGuards.assertAcquisitionJournalCorrectionAllowedTx(guardTx,"org-a",source),{code:"INVENTORY_ACQUISITION_COST_DOMAIN_CORRECTION_REQUIRED"});
 await acquisitionGuards.assertAcquisitionJournalCorrectionAllowedTx(guardTx,"org-a",{sourceEntityType:"EnterprisePayment",sourceEntityId:"other"});
 await assert.rejects(returnCredit.assertNoCapitalizedSupplierCreditTx(guardTx,"org-a",acqInvoice.id),{code:"INVENTORY_ACQUISITION_COST_DOMAIN_CORRECTION_REQUIRED"});
-await assert.rejects(returnCredit.verifySupplierReturnCreditTx({...evidenceTx,enterpriseInventoryAcquisitionCostSupplement:guardTx.enterpriseInventoryAcquisitionCostSupplement},"org-a",fakeCredit,[fakeLine]),{code:"INVENTORY_ACQUISITION_COST_DOMAIN_CORRECTION_REQUIRED"});
+await assert.rejects(returnCredit.verifySupplierReturnCreditTx({...evidenceTx,enterpriseSupplierReturnRequest:{findFirst:async()=>null},enterpriseInventoryAcquisitionCostSupplement:guardTx.enterpriseInventoryAcquisitionCostSupplement},"org-a",fakeCredit,[fakeLine]),{code:"INVENTORY_ACQUISITION_COST_DOMAIN_CORRECTION_REQUIRED"});
 guardProof=null;
 await returnCredit.assertNoCapitalizedSupplierCreditTx(guardTx,"org-a",acqInvoice.id);
 let cutoffBlocked=false;
@@ -590,6 +590,12 @@ const cutoffTx={$queryRaw:async query=>{assert.ok(query.values.includes("org-a")
 await acquisitionGuards.assertAcquisitionValuationCutoffTx(cutoffTx,"org-a",acqDay);
 cutoffBlocked=true;await assert.rejects(acquisitionGuards.assertAcquisitionValuationCutoffTx(cutoffTx,"org-a",acqDay),{code:"INVENTORY_ACQUISITION_COST_HISTORY_REQUIRED"});
 console.log("Acquisition guards: generic credits/reversals, tenant scope and misleading historical projections blocked");
+const capCoordinates={originCostLayerId:recordedAcq.costLayerId,receiptAccountingEventId:recordedAcq.receiptAccountingEventId,invoiceJournalEntryId:recordedAcq.invoiceJournalEntryId,currencyCode:"USD",quantity:d(2)};
+const capTaxTx={...acqTx,enterpriseTaxLine:{findMany:async()=>[{...nonRecoverableRow,effectiveAt:acqDay}],findFirst:async({where})=>where.id===recordedAcq.taxLineId?{id:recordedAcq.taxLineId,effectiveAt:acqDay}:null}};
+const capReturn=await returnCredit.deriveCapitalizedSupplierReturnTx(capTaxTx,"org-a",acqInvoiceItem,recordedAcq,capCoordinates,acqDay);
+assert.equal(capReturn.unitPrice.toFixed(),"7");assert.equal(capReturn.net.toFixed(),"14");assert.equal(capReturn.tax.amount.toFixed(),"2.24");assert.equal(capReturn.gross.toFixed(),"16.24");
+for(const coords of [{...capCoordinates,currencyCode:"CDF"},{...capCoordinates,originCostLayerId:"other"},{...capCoordinates,receiptAccountingEventId:"other"},{...capCoordinates,invoiceJournalEntryId:"other"},{...capCoordinates,quantity:d(11)}])await assert.rejects(returnCredit.deriveCapitalizedSupplierReturnTx(capTaxTx,"org-a",acqInvoiceItem,recordedAcq,coords,acqDay),{code:"SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED"});
+console.log("Capitalized supplier return: exact historical HT/VAT/TTC allocation and linked source proof");
 
 
 

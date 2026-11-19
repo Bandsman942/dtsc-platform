@@ -17,15 +17,20 @@ export async function createSupplierCreditNote(organizationId: string, actorUser
     await lockSupplierReturnInvoiceTx(tx, organizationId, input.invoiceId);
     const invoice = await tx.enterpriseSupplierInvoice.findFirst({ where: { id: input.invoiceId, organizationId, status: { in: ["POSTED", "PARTIALLY_PAID", "PAID"] } }, include: { payable: true } });
     if (!invoice?.payable) throw new EnterpriseAccountingError("SUPPLIER_INVOICE_NOT_CREDITABLE", 409);
-    await assertNoCapitalizedSupplierCreditTx(tx, organizationId, invoice.id);
     const returnRequest = await tx.enterpriseSupplierReturnRequest.findFirst({ where: { organizationId, supplierInvoiceId: invoice.id, status: { in: ["DISPATCHED","RECONCILED"] } } });
+    const supplement = await tx.enterpriseInventoryAcquisitionCostSupplement.findFirst({where:{organizationId,supplierInvoiceItem:{organizationId,supplierInvoiceId:invoice.id}}});
+    if (!returnRequest) await assertNoCapitalizedSupplierCreditTx(tx, organizationId, invoice.id);
+    if (supplement && (!returnRequest || supplement.supplierInvoiceItemId !== returnRequest.supplierInvoiceItemId ||
+      supplement.costLayerId !== returnRequest.originCostLayerId || supplement.receiptAccountingEventId !== returnRequest.receiptAccountingEventId ||
+      supplement.currencyCode !== returnRequest.currencyCode || !supplement.unitCost.equals(returnRequest.unitCost) ||
+      !returnRequest.recoverableTaxAmount.isZero())) throw new EnterpriseAccountingError("INVENTORY_ACQUISITION_COST_DOMAIN_CORRECTION_REQUIRED",409);
     const supplierReference = input.supplierCreditReference?.trim().toUpperCase();
     let replacement: { id: string; revision: number; reference: string; approvalId: string } | null = null;
     if (returnRequest || input.supplierReturnId || supplierReference || input.replacesCreditNoteId) {
       const line = input.items[0];
       if (!returnRequest || !supplierReference || input.supplierReturnId !== returnRequest.id || !returnRequest.dispatchedAt ||
         input.items.length !== 1 || line.sourceInvoiceItemId !== returnRequest.supplierInvoiceItemId ||
-        !returnRequest.quantity.equals(line.quantity) || !returnRequest.unitCost.equals(line.unitPrice) || invoice.currencyCode !== returnRequest.currencyCode) {
+        !returnRequest.quantity.equals(line.quantity) || !(supplement?.originalUnitCost || returnRequest.unitCost).equals(line.unitPrice) || invoice.currencyCode !== returnRequest.currencyCode) {
         throw new EnterpriseAccountingError("SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED", 409);
       }
       await assertSupplierReturnCreditDateTx(tx, organizationId, input.creditDate, returnRequest.dispatchedAt);
@@ -75,7 +80,7 @@ export async function createSupplierCreditNote(organizationId: string, actorUser
     const taxTotal = money(sumDecimals(calculated.map((row) => row.taxAmount)));
     const grandTotal = money(subtotal.plus(taxTotal));
     if (!grandTotal.greaterThan(0) || grandTotal.greaterThan(invoice.payable.outstandingAmount)) throw new EnterpriseAccountingError("SUPPLIER_CREDIT_EXCEEDS_OPEN_PAYABLE", 409);
-    if (returnRequest && (!subtotal.equals(returnRequest.totalCost) || !taxTotal.equals(returnRequest.recoverableTaxAmount) || !grandTotal.equals(returnRequest.totalCost.plus(returnRequest.recoverableTaxAmount)))) throw new EnterpriseAccountingError("SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED",409);
+    if (returnRequest && ((supplement ? !subtotal.plus(taxTotal).equals(returnRequest.totalCost) || !taxTotal.gt(0) || calculated[0].taxRecoveryRequested : !subtotal.equals(returnRequest.totalCost) || !taxTotal.equals(returnRequest.recoverableTaxAmount)) || !grandTotal.equals(returnRequest.totalCost.plus(returnRequest.recoverableTaxAmount)))) throw new EnterpriseAccountingError("SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED",409);
     const credit = await tx.enterpriseSupplierCreditNote.create({ data: { organizationId, number: financeReference("SCN"), supplierInvoiceId: invoice.id, reason: input.reason, creditDate: input.creditDate, currencyCode: invoice.currencyCode, subtotal, taxTotal, grandTotal, createdByUserId: actorUserId } });
     await tx.enterpriseSupplierCreditNoteItem.createMany({ data: calculated.map((row) => ({ organizationId, supplierCreditNoteId: credit.id,
       sourceInvoiceItemId: row.sourceInvoiceItemId, taxRecoveryRequested: row.taxRecoveryRequested,
@@ -129,7 +134,7 @@ export async function approveAndPostSupplierCreditNote(organizationId: string, c
     const creditLines = await tx.enterpriseSupplierCreditNoteItem.findMany({ where:{organizationId,supplierCreditNoteId:credit.id} });
     await verifySupplierReturnCreditTx(tx, organizationId, credit, creditLines);
     if (credit.grandTotal.gt(credit.supplierInvoice.payable.outstandingAmount)) throw new EnterpriseAccountingError("SUPPLIER_CREDIT_EXCEEDS_OPEN_PAYABLE",409);
-    const posting = await postBusinessEventTx(tx, organizationId, actorUserId, { postingEvent: "SUPPLIER_CREDIT_NOTE_POSTED", sourceEntityType: "EnterpriseSupplierCreditNote", sourceEntityId: credit.id });
+    const posting = await postBusinessEventTx(tx, organizationId, actorUserId, { postingEvent: "SUPPLIER_CREDIT_NOTE_POSTED", sourceEntityType: "EnterpriseSupplierCreditNote", sourceEntityId: credit.id }, { supplierCreditTransition: true });
     const creditItems = await tx.enterpriseSupplierCreditNoteItem.findMany({ where: { organizationId, supplierCreditNoteId: credit.id }, select: { id: true, taxBreakdownJson: true, taxRecoveryRequested: true } });
     await recordPostedTaxApplicationsTx(tx, { organizationId, sourceEntityType: "EnterpriseSupplierCreditNoteItem", currencyCode: credit.currencyCode, items: creditItems });
     const payable = credit.supplierInvoice.payable;

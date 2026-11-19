@@ -6,7 +6,7 @@ import { money, sumDecimals } from "@/lib/enterprise/accounting/helpers";
 import { readActiveRetailInvoiceStockHoldsTx } from "@/lib/enterprise/retail/invoice-stock-holds";
 import { resolveSemanticPostingAccount } from "@/lib/enterprise/accounting/semantic-account-resolver";
 import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
-import { deriveSupplierReturnTaxTx } from "@/lib/enterprise/accounting/supplier-return-credit-reconciliation";
+import { deriveCapitalizedSupplierReturnTx, deriveSupplierReturnTaxTx } from "@/lib/enterprise/accounting/supplier-return-credit-reconciliation";
 
 export type SupplierReturnCoordinates = {
   inventoryItemId: string; warehouseId: string; storageLocationId?: string | null; stockLotId?: string | null;
@@ -79,12 +79,25 @@ export async function inspectSupplierReturnTx(tx: Prisma.TransactionClient, orga
     receiptValue.currencyCode !== receipt.purchase.currency || !receiptValue.unitCost.gt(0) ||
     !receiptValue.totalCost.equals(money(origin.quantity.times(receiptValue.unitCost)))) blocked("SUPPLIER_RETURN_VALUATION_REQUIRED");
   const originLayer = layers.find((layer) => layer.sourceMovementId === origin.id);
-  if (originLayer && await tx.enterpriseInventoryAcquisitionCostSupplement.findFirst({
-    where: { organizationId, costLayerId: originLayer.id }, select: { id: true },
-  })) blocked("SUPPLIER_RETURN_NONRECOVERABLE_COST_RECONCILIATION_REQUIRED");
+  const supplement = originLayer ? await tx.enterpriseInventoryAcquisitionCostSupplement.findFirst({
+    where: { organizationId, costLayerId: originLayer.id },
+  }) : null;
+  const unitCost = supplement?.unitCost || receiptValue.unitCost;
+  if (supplement) {
+    // First capitalized return: original untouched pool only, no mixing,
+    // depleted layer, issue, transfer or previously returned quantity.
+    const [poolMovements,poolLayers] = await Promise.all([
+      tx.enterpriseStockMovement.count({ where: coordinates }),
+      tx.enterpriseInventoryCostLayer.count({ where: coordinates }),
+    ]);
+    if (poolMovements !== 1 || poolLayers !== 1 || !alreadyReturned.isZero() ||
+        !originLayer?.remainingQuantity.equals(origin.quantity) ||
+        !supplement.originalUnitCost.equals(receiptValue.unitCost) ||
+        !supplement.originalTotalCost.equals(receiptValue.totalCost)) blocked("SUPPLIER_RETURN_NONRECOVERABLE_COST_RECONCILIATION_REQUIRED");
+  }
   if (!originLayer || !originLayer.quantity.equals(origin.quantity) || originLayer.remainingQuantity.lt(qty) ||
-    !originLayer.totalCost.equals(receiptValue.totalCost) || !layers.length ||
-    layers.some((layer) => layer.currencyCode !== receiptValue.currencyCode || !layer.unitCost.equals(receiptValue.unitCost) || layer.valuationMethod !== "WEIGHTED_AVERAGE") ||
+    !originLayer.totalCost.equals(supplement?.totalCost || receiptValue.totalCost) || !layers.length ||
+    layers.some((layer) => layer.currencyCode !== receiptValue.currencyCode || !layer.unitCost.equals(unitCost) || layer.valuationMethod !== "WEIGHTED_AVERAGE") ||
     !sumDecimals(layers.map((layer) => layer.remainingQuantity)).equals(physical._sum.quantityOnHand || 0)) blocked("SUPPLIER_RETURN_VALUATION_REQUIRED");
   const [journal, invoices, itemLink] = await Promise.all([
     tx.enterpriseJournalEntry.findFirst({ where: { organizationId, id: receiptValue.journalEntryId!, status: "POSTED", postingEvent: "INVENTORY_RECEIPT_VALUED", sourceEntityType: "EnterpriseInventoryAccountingEvent", sourceEntityId: receiptValue.id }, include: { lines: true } }),
@@ -110,15 +123,22 @@ export async function inspectSupplierReturnTx(tx: Prisma.TransactionClient, orga
   // journal can already debit INVENTORY without a matching cost supplement
   // on the receipt layer. Never infer that the tax is in CUMP from a journal.
   // A historical reconciliation and capitalized-cost proof are required first.
-  if (invoice.taxTotal.gt(0) && !invoiceItems[0].taxRecoveryRequested) blocked("SUPPLIER_RETURN_NONRECOVERABLE_COST_RECONCILIATION_REQUIRED");
-  if (invoice.taxTotal.lt(0) || (invoice.taxTotal.gt(0) && (!invoice.taxRecoveryVerifiedAt || !invoice.taxRecoveryVerifiedByUserId))) blocked("SUPPLIER_RETURN_TAX_PROOF_REQUIRED");
+  const nonrecoverable = invoice.taxTotal.gt(0) && !invoiceItems[0].taxRecoveryRequested;
+  if (nonrecoverable !== Boolean(supplement)) blocked("SUPPLIER_RETURN_NONRECOVERABLE_COST_RECONCILIATION_REQUIRED");
+  if (invoice.taxTotal.lt(0) || (invoice.taxTotal.gt(0) && !nonrecoverable && (!invoice.taxRecoveryVerifiedAt || !invoice.taxRecoveryVerifiedByUserId))) blocked("SUPPLIER_RETURN_TAX_PROOF_REQUIRED");
   // The return must reverse the very same stock and clearing accounts, not a
   // newly remapped account or a sales/expense journal. VAT must be recorded
   // in the historical INPUT register and recoverable tax account.
   let recoverableTaxAmount = new Prisma.Decimal(0);
+  let nonrecoverableTaxAmount = new Prisma.Decimal(0);
   try {
     const date = new Date();
-    if (invoice.taxTotal.gt(0)) {
+    if (supplement) {
+      nonrecoverableTaxAmount = (await deriveCapitalizedSupplierReturnTx(tx, organizationId, invoiceItems[0], supplement, {
+        originCostLayerId: originLayer.id, receiptAccountingEventId: receiptValue.id, invoiceJournalEntryId: invoiceJournal.id,
+        currencyCode: invoice.currencyCode, quantity: qty,
+      }, date)).tax.amount;
+    } else if (invoice.taxTotal.gt(0)) {
       try { recoverableTaxAmount = (await deriveSupplierReturnTaxTx(tx, organizationId, invoiceItems[0], invoice.currencyCode, qty, date)).amount; }
       catch (error) { if (error instanceof EnterpriseAccountingError) blocked("SUPPLIER_RETURN_TAX_PROOF_REQUIRED"); throw error; }
     }
@@ -135,8 +155,8 @@ export async function inspectSupplierReturnTx(tx: Prisma.TransactionClient, orga
     if (invoice.taxTotal.isZero()) {
       if (!balanced(invoiceJournal.lines, clearingAccount.id, payableAccount.id, invoice.subtotal)) blocked("SUPPLIER_RETURN_VALUATION_REQUIRED");
     } else {
-      const taxAccount=await resolveSemanticPostingAccount(tx,{organizationId,mappingKey:"TAX_RECEIVABLE",accountingDate:date});
-      if(new Set([stockAccount.id,clearingAccount.id,payableAccount.id,taxAccount.id]).size!==4 ||
+      const taxAccount=supplement ? stockAccount : await resolveSemanticPostingAccount(tx,{organizationId,mappingKey:"TAX_RECEIVABLE",accountingDate:date});
+      if(new Set([stockAccount.id,clearingAccount.id,payableAccount.id,taxAccount.id]).size!==(supplement ? 3 : 4) ||
         invoiceJournal.lines.length!==3 ||
         !invoiceJournal.lines.some(l=>l.ledgerAccountId===clearingAccount.id&&l.debit.equals(invoice.subtotal)&&l.credit.isZero()) ||
         !invoiceJournal.lines.some(l=>l.ledgerAccountId===taxAccount.id&&l.debit.equals(invoice.taxTotal)&&l.credit.isZero()) ||
@@ -146,10 +166,10 @@ export async function inspectSupplierReturnTx(tx: Prisma.TransactionClient, orga
     if (error instanceof EnterpriseAccountingError) blocked("SUPPLIER_RETURN_VALUATION_REQUIRED");
     throw error;
   }
-  const totalCost = money(qty.times(receiptValue.unitCost));
+  const totalCost = money(qty.times(unitCost));
   if (!totalCost.gt(0) || totalCost.plus(recoverableTaxAmount).gt("99999999999999.999999")) blocked("SUPPLIER_RETURN_VALUATION_REQUIRED");
   return { origin, receipt, receiptItem, invoice, invoiceItem: invoiceItems[0], originLayer, receiptValue,
-    remaining, currencyCode: receiptValue.currencyCode, unitCost: receiptValue.unitCost, totalCost, recoverableTaxAmount, creditTotal: money(totalCost.plus(recoverableTaxAmount)) };
+    remaining, currencyCode: receiptValue.currencyCode, unitCost, creditUnitPrice: receiptValue.unitCost, totalCost, recoverableTaxAmount, nonrecoverableTaxAmount, creditTotal: money(totalCost.plus(recoverableTaxAmount)) };
 }
 
 /** No stock-only or global DTSC role may authorize a financial return. */

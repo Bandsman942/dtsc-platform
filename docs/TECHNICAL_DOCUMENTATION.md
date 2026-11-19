@@ -1,3 +1,5 @@
+> **Retour TTC #1212** : coût de stock capitalisé sorti TTC, facture d’avoir conserve prix HT et TVA non récupérable. Seul GRNI est crédité au posting d’avoir lié, taxe historisée sans deuxième crédit INVENTORY. Admission limitée au pool isolé intact; nouvelle CI et OWNER_E2E exigés.
+
 > **Activation initiale acquisition #1212** : le posting de facture fournisseur lié à réception avec taxe non récupérable exige maintenant la preuve atomique sur pool intact, avec rollback en cas de refus. Gardes pour les crédits, contrepassations et lectures historiques affectées. Aucun retour TTC activé; recette automatisée et OWNER_E2E requis.
 
 > **Tranche écriture acquisition #1212** : primitive transactionnelle de capitalisation avec concordance documentaire, fiscale et comptable, sans deuxième journal ni changement de quantité. Appel runtime encore désactivé; certification de la transaction réelle et des protections inverses/historiques exigée.

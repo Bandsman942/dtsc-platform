@@ -117,9 +117,37 @@ export async function deriveNonRecoverableInventoryCostTx(
     capitalizedTaxAmount: tax.amount, unitCost, totalCost };
 }
 
-/** A finance-only credit would credit INVENTORY for the same capitalized tax
- * without reducing the corresponding cost layer. Block draft and posting
- * until the linked physical-return / domain correction is implemented. */
+/** A partial return of an original capitalized layer must exactly allocate
+ * both the historical net and tax. No current rate, rounding residual or
+ * second inventory credit is permitted. Bind every proof to the original
+ * invoice line, receipt accounting event, cost layer and invoice journal. */
+export async function deriveCapitalizedSupplierReturnTx(
+  tx: Prisma.TransactionClient, organizationId: string, original: EnterpriseSupplierInvoiceItem,
+  proof: import("@prisma/client").EnterpriseInventoryAcquisitionCostSupplement,
+  coordinates: { originCostLayerId: string; receiptAccountingEventId: string; invoiceJournalEntryId: string; currencyCode: string; quantity: Prisma.Decimal },
+  date: Date,
+) {
+  if (proof.organizationId !== organizationId || proof.supplierInvoiceItemId !== original.id ||
+      proof.costLayerId !== coordinates.originCostLayerId || proof.receiptAccountingEventId !== coordinates.receiptAccountingEventId ||
+      proof.invoiceJournalEntryId !== coordinates.invoiceJournalEntryId || proof.currencyCode !== coordinates.currencyCode ||
+      !proof.quantity.equals(original.quantity) || !proof.originalUnitCost.equals(original.unitPrice) ||
+      !proof.originalTotalCost.equals(original.netAmount) || !proof.capitalizedTaxAmount.equals(original.taxAmount) ||
+      !proof.originalTotalCost.plus(proof.capitalizedTaxAmount).equals(proof.totalCost) ||
+      !proof.quantity.times(proof.unitCost).equals(proof.totalCost) || original.taxRecoveryRequested ||
+      !coordinates.quantity.gt(0) || coordinates.quantity.gt(proof.quantity)) return fail();
+  const fiscal = await tx.enterpriseTaxLine.findFirst({ where: { organizationId, id: proof.taxLineId, sourceEntityType: "EnterpriseSupplierInvoiceItem",
+    sourceEntityId: original.id, currencyCode: proof.currencyCode, direction: "INPUT_NONRECOVERABLE" }, select: { id: true, effectiveAt: true } });
+  if (!fiscal?.effectiveAt || fiscal.effectiveAt.getTime() !== proof.effectiveAt.getTime()) return fail();
+  const tax = await deriveHistoricalSupplierVatTx(tx, organizationId, original, proof.currencyCode, coordinates.quantity, date, "INPUT_NONRECOVERABLE");
+  const net = coordinates.quantity.times(proof.originalUnitCost);
+  const gross = coordinates.quantity.times(proof.unitCost);
+  if (!tax.amount.gt(0) || net.decimalPlaces() > 6 || gross.decimalPlaces() > 6 ||
+      !net.plus(tax.amount).equals(gross)) return fail();
+  return { unitPrice: proof.originalUnitCost, net, tax, gross };
+}
+
+/** A generic finance-only credit may not change a capitalized invoice.
+ * Linked credits are permitted only by the dispatch verifier below. */
 export async function assertNoCapitalizedSupplierCreditTx(tx: Prisma.TransactionClient, organizationId: string, supplierInvoiceId: string) {
   const evidence = await tx.enterpriseInventoryAcquisitionCostSupplement.findFirst({
     where: { organizationId, supplierInvoiceItem: { organizationId, supplierInvoiceId } }, select: { id: true },
@@ -137,35 +165,43 @@ type CreditLine = { sourceInvoiceItemId: string | null; catalogItemId: string | 
  * dispatch value, line, quantity, original accounts and posted source journal.
  * It never treats an unrelated commercial discount as a stock reversal. */
 export async function verifySupplierReturnCreditTx(tx: Prisma.TransactionClient, organizationId: string, credit: CreditEvidence, items: CreditLine[]) {
-  await assertNoCapitalizedSupplierCreditTx(tx, organizationId, credit.supplierInvoiceId);
   const dispatched = await tx.enterpriseSupplierReturnRequest.findFirst({ where: { organizationId, supplierInvoiceId: credit.supplierInvoiceId, status: "DISPATCHED" } });
   if (!dispatched) {
     // Finalized return evidence cannot be posted again at a new posting version.
     const finalized = await tx.enterpriseSupplierReturnRequest.findFirst({where:{organizationId,supplierInvoiceId:credit.supplierInvoiceId,status:"RECONCILED"}});
     if (finalized) return fail();
+    await assertNoCapitalizedSupplierCreditTx(tx, organizationId, credit.supplierInvoiceId);
     return null;
   }
   if (dispatched.supplierCreditNoteId !== credit.id || !dispatched.supplierCreditReference || !dispatched.dispatchedAt || !dispatched.dispatchMovementId || !dispatched.dispatchAccountingEventId ||
       !credit.approvedByUserId || credit.createdByUserId === credit.approvedByUserId ||
-      credit.currencyCode !== dispatched.currencyCode || !credit.grandTotal.equals(dispatched.totalCost.plus(dispatched.recoverableTaxAmount)) || !credit.subtotal.equals(dispatched.totalCost) || !credit.taxTotal.equals(dispatched.recoverableTaxAmount) ||
+      credit.currencyCode !== dispatched.currencyCode || !credit.grandTotal.equals(dispatched.totalCost.plus(dispatched.recoverableTaxAmount)) ||
       items.length !== 1) return fail();
   const creditBusinessDate = await assertSupplierReturnCreditDateTx(tx, organizationId, credit.creditDate, dispatched.dispatchedAt);
   const item = items[0];
-  const [original, movement, event, invoiceJournal] = await Promise.all([
+  const [original, movement, event, invoiceJournal, supplement] = await Promise.all([
     tx.enterpriseSupplierInvoiceItem.findFirst({ where: { organizationId, supplierInvoiceId: credit.supplierInvoiceId, id: dispatched.supplierInvoiceItemId } }),
     tx.enterpriseStockMovement.findFirst({ where: { organizationId, id: dispatched.dispatchMovementId, sourceEntityType: "EnterpriseSupplierReturnRequest", sourceEntityId: dispatched.id, direction: "OUT", movementType: "SUPPLIER_RETURN_OUT" } }),
     tx.enterpriseInventoryAccountingEvent.findFirst({ where: { organizationId, id: dispatched.dispatchAccountingEventId, stockMovementId: dispatched.dispatchMovementId, eventType: "SUPPLIER_RETURN", status: "POSTED", journalEntryId: { not:null } } }),
     tx.enterpriseJournalEntry.findFirst({ where: { organizationId, sourceEntityType:"EnterpriseSupplierInvoice", sourceEntityId:credit.supplierInvoiceId, postingEvent:"SUPPLIER_INVOICE_POSTED",status:"POSTED" }, include: { lines:true } }),
+    tx.enterpriseInventoryAcquisitionCostSupplement.findFirst({ where: { organizationId, supplierInvoiceItem: { organizationId, supplierInvoiceId:credit.supplierInvoiceId } } }),
   ]);
   if (!original || !movement || !event || !event.journalEntryId || !invoiceJournal ||
-      item.sourceInvoiceItemId !== original.id || item.catalogItemId !== original.catalogItemId || !item.quantity.equals(dispatched.quantity) || !item.unitPrice.equals(dispatched.unitCost) ||
-      !item.netAmount.equals(dispatched.totalCost) || !item.totalAmount.equals(credit.grandTotal) || !item.taxAmount.equals(dispatched.recoverableTaxAmount) ||
+      item.sourceInvoiceItemId !== original.id || item.catalogItemId !== original.catalogItemId || !item.quantity.equals(dispatched.quantity) || !item.totalAmount.equals(credit.grandTotal) ||
       movement.stockLotId !== dispatched.stockLotId || movement.inventoryItemId !== dispatched.inventoryItemId || movement.warehouseId !== dispatched.warehouseId || !movement.quantity.equals(dispatched.quantity) ||
       event.inventoryItemId !== dispatched.inventoryItemId || !event.quantity.equals(dispatched.quantity) || !event.unitCost.equals(dispatched.unitCost) || !event.totalCost.equals(dispatched.totalCost) || event.currencyCode !== dispatched.currencyCode) return fail();
-  const tax = await deriveSupplierReturnTaxTx(tx, organizationId, original, credit.currencyCode, dispatched.quantity, credit.creditDate);
-  if (!tax.amount.equals(dispatched.recoverableTaxAmount)) return fail();
+  const capitalized = supplement ? await deriveCapitalizedSupplierReturnTx(tx, organizationId, original, supplement, {
+    originCostLayerId: dispatched.originCostLayerId, receiptAccountingEventId: dispatched.receiptAccountingEventId,
+    invoiceJournalEntryId: invoiceJournal.id, currencyCode: credit.currencyCode, quantity: dispatched.quantity,
+  }, credit.creditDate) : null;
+  const tax = capitalized?.tax || await deriveSupplierReturnTaxTx(tx, organizationId, original, credit.currencyCode, dispatched.quantity, credit.creditDate);
+  const net = capitalized?.net || dispatched.totalCost;
+  if (!credit.subtotal.equals(net) || !item.netAmount.equals(net) || !credit.taxTotal.equals(tax.amount) ||
+      !item.taxAmount.equals(tax.amount) || !item.unitPrice.equals(capitalized?.unitPrice || dispatched.unitCost) ||
+      (capitalized ? !dispatched.recoverableTaxAmount.isZero() || !capitalized.gross.equals(dispatched.totalCost) ||
+        !supplement!.unitCost.equals(dispatched.unitCost) : !tax.amount.equals(dispatched.recoverableTaxAmount))) return fail();
   if (tax.amount.gt(0) || original.taxAmount.gt(0)) {
-    if (!item.taxRecoveryRequested || !Array.isArray(item.taxBreakdownJson) || item.taxBreakdownJson.length!==tax.breakdown.length) return fail();
+    if (item.taxRecoveryRequested !== !capitalized || !Array.isArray(item.taxBreakdownJson) || item.taxBreakdownJson.length!==tax.breakdown.length) return fail();
     for(const [index,expected] of tax.breakdown.entries()){
       const actual=item.taxBreakdownJson[index];
       if (!actual || typeof actual!=="object" || Array.isArray(actual) || Object.entries(expected).some(([key,value])=>actual[key]!==value)) return fail();
@@ -182,10 +218,10 @@ export async function verifySupplierReturnCreditTx(tx: Prisma.TransactionClient,
       journal.lines.length !== 2 || !journal.lines.some(l=>l.ledgerAccountId===clearing.id&&l.debit.equals(dispatched.totalCost)&&l.credit.isZero()) ||
       !journal.lines.some(l=>l.ledgerAccountId===stock.id&&l.credit.equals(dispatched.totalCost)&&l.debit.isZero()) ||
       !invoiceJournal.lines.some(l=>l.ledgerAccountId===payable.id&&l.credit.gte(credit.grandTotal)&&l.debit.isZero()) ||
-      !invoiceJournal.lines.some(l=>l.ledgerAccountId===clearing.id&&l.debit.gte(dispatched.totalCost)&&l.credit.isZero())) return fail();
+      !invoiceJournal.lines.some(l=>l.ledgerAccountId===clearing.id&&l.debit.gte(net)&&l.credit.isZero())) return fail();
   if (original.taxAmount.gt(0)) {
-    const taxAccount=await resolveSemanticPostingAccount(tx,{organizationId,mappingKey:"TAX_RECEIVABLE",accountingDate:credit.creditDate});
-    if (new Set([taxAccount.id,stock.id,clearing.id,payable.id]).size!==4 ||
+    const taxAccount=capitalized ? stock : await resolveSemanticPostingAccount(tx,{organizationId,mappingKey:"TAX_RECEIVABLE",accountingDate:credit.creditDate});
+    if (new Set([taxAccount.id,stock.id,clearing.id,payable.id]).size!==(capitalized ? 3 : 4) ||
         invoiceJournal.lines.length!==3 ||
         !invoiceJournal.lines.some(l=>l.ledgerAccountId===taxAccount.id&&l.debit.equals(original.taxAmount)&&l.credit.isZero()) ||
         !invoiceJournal.lines.some(l=>l.ledgerAccountId===clearing.id&&l.debit.equals(original.netAmount)&&l.credit.isZero()) ||

@@ -160,7 +160,7 @@ export async function postBusinessEventTx(
   organizationId: string,
   actorUserId: string,
   input: PostingInput,
-  options?: { supplierInvoiceTransition?: true },
+  options?: { supplierInvoiceTransition?: true; supplierCreditTransition?: true },
 ) {
   const version = input.postingVersion || 1;
   const stableKey = postingStableKey(organizationId, input);
@@ -208,6 +208,10 @@ export async function postBusinessEventTx(
   // Nonrecoverable stock VAT must never be posted as a stand-alone journal:
   // only the canonical invoice transition also creates the payable and marks
   // the approved document POSTED in this same Serializable transaction.
+  if (input.postingEvent === "SUPPLIER_CREDIT_NOTE_POSTED" && (!options?.supplierCreditTransition || version !== 1)) {
+    const linked = await tx.enterpriseSupplierReturnRequest.findFirst({where:{organizationId,supplierCreditNoteId:input.sourceEntityId},select:{id:true}});
+    if (linked) throw new EnterpriseAccountingError("SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED",409);
+  }
   const capitalizeAcquisition = input.postingEvent === "SUPPLIER_INVOICE_POSTED" &&
     document.lines.some(line => line.accountMappingKey === "INVENTORY");
   if (capitalizeAcquisition && (version !== 1 || input.sourceEntityType !== "EnterpriseSupplierInvoice" || !options?.supplierInvoiceTransition)) {

@@ -9,7 +9,7 @@ import { StatusBadge } from "@/components/workspace/status-badge";
 import { formatEnterpriseDate } from "@/components/enterprise/core-v2/erp-v2-ui";
 import { purchaseFormGuidance, type PurchaseFormGuidanceKey } from "@/lib/enterprise/purchase-form-i18n";
 
-type ReturnRequestSummary = { id?: string; reference: string; status: string; quantity: string; approvalId: string | null; revision?: number; unitCost?: string; totalCost?: string; recoverableTaxAmount?: string; creditTotal?: string; currencyCode?: string; canDispatch?: boolean; canWithdraw?: boolean; canCreateCredit?: boolean; canReplaceCredit?: boolean; supplierCreditStatus?: string|null; supplierCreditRevision?: number|null; previousCreditNoteId?: string|null; previousSupplierCreditReference?: string|null; dispatchReference?: string | null; dispatchedAt?: string | null; dispatchBusinessDate?: string | null; supplierCreditNoteId?: string | null; supplierCreditReference?: string | null; supplierInvoiceId?: string; supplierInvoiceItemId?: string };
+type ReturnRequestSummary = { id?: string; reference: string; status: string; quantity: string; approvalId: string | null; revision?: number; unitCost?: string; creditUnitPrice?: string; nonrecoverableTaxAmount?: string; totalCost?: string; recoverableTaxAmount?: string; creditTotal?: string; currencyCode?: string; canDispatch?: boolean; canWithdraw?: boolean; canCreateCredit?: boolean; canReplaceCredit?: boolean; supplierCreditStatus?: string|null; supplierCreditRevision?: number|null; previousCreditNoteId?: string|null; previousSupplierCreditReference?: string|null; dispatchReference?: string | null; dispatchedAt?: string | null; dispatchBusinessDate?: string | null; supplierCreditNoteId?: string | null; supplierCreditReference?: string | null; supplierInvoiceId?: string; supplierInvoiceItemId?: string };
 type TraceRow = {
   supplierReturnRequest?: ReturnRequestSummary | null;
   id: string; receiptReference: string | null; quantity: string; occurredAt: string;
@@ -20,7 +20,7 @@ type TraceRow = {
 };
 type TraceResponse = { items: TraceRow[]; canCheckSupplierReturn?: boolean; pagination: { page: number; pageSize: number; total: number; pageCount: number } };
 
-type ReturnPreview = { eligible: true; readOnly: true; quantity: string; remaining: string; unitCost: string; totalCost: string; recoverableTaxAmount: string; creditTotal: string; currencyCode: string; receiptReference: string; invoiceReference: string; canSubmitRequest?: boolean };
+type ReturnPreview = { eligible: true; readOnly: true; quantity: string; remaining: string; unitCost: string; creditUnitPrice: string; nonrecoverableTaxAmount: string; totalCost: string; recoverableTaxAmount: string; creditTotal: string; currencyCode: string; receiptReference: string; invoiceReference: string; canSubmitRequest?: boolean };
 
 function SupplierReturnCheck({ organizationId, purchaseId, row, locale, onRefresh }: { organizationId: string; purchaseId: string; row: TraceRow; locale: string; onRefresh: () => void }) {
   const t = (key: PurchaseFormGuidanceKey) => purchaseFormGuidance(locale, key);
@@ -65,7 +65,7 @@ function SupplierReturnCheck({ organizationId, purchaseId, row, locale, onRefres
       });
       const body = await response.json();
       if (!response.ok || body.ok !== true || !body.request) { setError(typeof body.message === "string" ? body.message : t("returnRequestFailed")); return; }
-      setRequest({ id:body.request.id, reference: body.request.reference, status: body.request.status, quantity: body.request.quantity, approvalId: body.approvalId, revision:body.request.revision, unitCost:preview.unitCost, totalCost:preview.totalCost, recoverableTaxAmount:preview.recoverableTaxAmount, creditTotal:preview.creditTotal, currencyCode:preview.currencyCode });
+      setRequest({ id:body.request.id, reference: body.request.reference, status: body.request.status, quantity: body.request.quantity, approvalId: body.approvalId, revision:body.request.revision, unitCost:preview.unitCost, creditUnitPrice:preview.creditUnitPrice, nonrecoverableTaxAmount:preview.nonrecoverableTaxAmount, totalCost:preview.totalCost, recoverableTaxAmount:preview.recoverableTaxAmount, creditTotal:preview.creditTotal, currencyCode:preview.currencyCode });
       setPreview(null); setOpen(false); setMessage(t("returnRequestSubmitted"));
     } catch { setError(t("returnRequestFailed")); }
     finally { setBusy(false); }
@@ -109,7 +109,7 @@ function SupplierReturnCheck({ organizationId, purchaseId, row, locale, onRefres
     if(replacing&&supplierCreditReference.toUpperCase()===request.supplierCreditReference?.toUpperCase()){setError(t("returnCreditReplacementInvalid"));return;}
     setBusy(true);setError("");setMessage("");
     try {
-      const response=await fetch(`/api/enterprise/${encodeURIComponent(organizationId)}/supplier-credit-notes`,{method:"POST",headers:{"Content-Type":"application/json","Accept-Language":locale},body:JSON.stringify({invoiceId:request.supplierInvoiceId,supplierReturnId:request.id,supplierCreditReference,creditDate,reason,...(replacing?{replacesCreditNoteId:request.supplierCreditNoteId,replacesCreditRevision:request.supplierCreditRevision}:{}),items:[{sourceInvoiceItemId:request.supplierInvoiceItemId,description:row.inventoryItem.catalogItem.name,quantity:request.quantity,unitPrice:request.unitCost}]})});
+      const response=await fetch(`/api/enterprise/${encodeURIComponent(organizationId)}/supplier-credit-notes`,{method:"POST",headers:{"Content-Type":"application/json","Accept-Language":locale},body:JSON.stringify({invoiceId:request.supplierInvoiceId,supplierReturnId:request.id,supplierCreditReference,creditDate,reason,...(replacing?{replacesCreditNoteId:request.supplierCreditNoteId,replacesCreditRevision:request.supplierCreditRevision}:{}),items:[{sourceInvoiceItemId:request.supplierInvoiceItemId,description:row.inventoryItem.catalogItem.name,quantity:request.quantity,unitPrice:request.creditUnitPrice||request.unitCost}]})});
       const body=await response.json();
       if(!response.ok||!body.ok||!body.creditNote){setError(body.error==="SUPPLIER_RETURN_CREDIT_REPLACEMENT_INVALID"?t("returnCreditReplacementInvalid"):body.message||t("returnCreditFailed"));return;}
       setRequest({...request,canCreateCredit:false,canReplaceCredit:false,supplierCreditStatus:body.creditNote.status,supplierCreditRevision:body.creditNote.revision,supplierCreditNoteId:body.creditNote.id,supplierCreditReference,...(replacing?{previousCreditNoteId:request.supplierCreditNoteId,previousSupplierCreditReference:request.supplierCreditReference}:{})});setMessage(t("returnCreditCreated"));onRefresh();
@@ -122,6 +122,7 @@ function SupplierReturnCheck({ organizationId, purchaseId, row, locale, onRefres
     {request.totalCost&&request.currencyCode?<div className="grid gap-1">
       <p>{t("returnCreditStockValue")} : <strong>{money(request.totalCost,request.currencyCode)}</strong></p>
       {request.recoverableTaxAmount&&Number(request.recoverableTaxAmount)>0?<p>{t("returnCreditRecoverableTax")} : <strong>{money(request.recoverableTaxAmount,request.currencyCode)}</strong></p>:null}
+      {Number(request.nonrecoverableTaxAmount)>0?<p>{t("returnCreditCapitalizedTax")} : <strong>{money(request.nonrecoverableTaxAmount,request.currencyCode)}</strong></p>:null}
       <p>{t("returnCreditAmount")} : <strong>{money(request.creditTotal||request.totalCost,request.currencyCode)}</strong></p>
     </div>:null}
     {request.dispatchReference?<p className="break-words">{t("returnDispatchReference")} : {request.dispatchReference}</p>:null}
@@ -172,6 +173,7 @@ function SupplierReturnCheck({ organizationId, purchaseId, row, locale, onRefres
         <p>{t("returnCheckUnitCost")} : {money(preview.unitCost, preview.currencyCode)}</p>
         <p>{t("returnCheckAmount")} : <strong>{money(preview.totalCost, preview.currencyCode)}</strong></p>
         {Number(preview.recoverableTaxAmount)>0?<p>{t("returnCreditRecoverableTax")} : <strong>{money(preview.recoverableTaxAmount,preview.currencyCode)}</strong></p>:null}
+        {Number(preview.nonrecoverableTaxAmount)>0?<p>{t("returnCreditCapitalizedTax")} : <strong>{money(preview.nonrecoverableTaxAmount,preview.currencyCode)}</strong></p>:null}
         <p>{t("returnCreditAmount")} : <strong>{money(preview.creditTotal,preview.currencyCode)}</strong></p>
         <p className="break-words">{t("returnCheckInvoice")} : {preview.invoiceReference}</p>
         <p className="text-dtsc-muted">{t("returnCheckHelp")}</p>

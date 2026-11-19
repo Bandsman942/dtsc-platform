@@ -60,7 +60,7 @@ export async function GET(req: Request, { params }: Params) {
         const check = await inspectSupplierReturnTx(tx, organizationId, session.userId, { ...origin, supplierReturnSourceMovementId: origin.id, quantity });
         if (check.receipt.purchaseId !== id) throw new EnterpriseDomainError("SUPPLIER_RETURN_ORIGIN_INVALID", 404);
         return { eligible: true, readOnly: true, quantity, remaining: check.remaining.toFixed(),
-          unitCost: check.unitCost.toFixed(), totalCost: check.totalCost.toFixed(), recoverableTaxAmount: check.recoverableTaxAmount.toFixed(), creditTotal: check.creditTotal.toFixed(), currencyCode: check.currencyCode,
+          unitCost: check.unitCost.toFixed(), creditUnitPrice: check.creditUnitPrice.toFixed(), nonrecoverableTaxAmount: check.nonrecoverableTaxAmount.toFixed(), totalCost: check.totalCost.toFixed(), recoverableTaxAmount: check.recoverableTaxAmount.toFixed(), creditTotal: check.creditTotal.toFixed(), currencyCode: check.currencyCode,
           receiptReference: check.receipt.reference, invoiceReference: check.invoice.number };
       }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
       await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "supplier-return-preflight", purchaseId: id } });
@@ -137,14 +137,17 @@ export async function GET(req: Request, { params }: Params) {
       prisma.enterpriseSupplierCreditNote.findMany({where:{organizationId,id:{in:creditIds}},select:{id:true,status:true,revision:true,createdByUserId:true,postedAt:true}}),
       prisma.enterpriseSupplierReturnCreditReplacement.findMany({where:{organizationId,replacementCreditNoteId:{in:creditIds}},select:{replacementCreditNoteId:true,previousCreditNoteId:true,previousSupplierReference:true}}),
     ]):[[],[]];
+    const supplements=authorizedRequests.length?await prisma.enterpriseInventoryAcquisitionCostSupplement.findMany({where:{organizationId,supplierInvoiceItemId:{in:authorizedRequests.map(request=>request.supplierInvoiceItemId)}},select:{supplierInvoiceItemId:true,originalUnitCost:true,unitCost:true}}):[];
+    const supplementByLine=new Map(supplements.map(s=>[s.supplierInvoiceItemId,s]));
     const creditById=new Map(currentCredits.map(credit=>[credit.id,credit]));
     const replacementById=new Map(creditReplacements.map(proof=>[proof.replacementCreditNoteId,proof]));
     const businessContext = requests.some(request => request.dispatchedAt) ? await getEnterpriseBusinessContext(prisma, organizationId) : null;
     const requestByMovement = new Map(authorizedRequests.map((request) => {
+      const supplement=supplementByLine.get(request.supplierInvoiceItemId);
       const credit=request.supplierCreditNoteId?creditById.get(request.supplierCreditNoteId):null;
       const replaced=request.supplierCreditNoteId?replacementById.get(request.supplierCreditNoteId):null;
       return [request.sourceMovementId, {
-      id:request.id, reference:request.reference,status:request.status,quantity:request.quantity,revision:request.revision,unitCost:request.unitCost,totalCost:request.totalCost,recoverableTaxAmount:request.recoverableTaxAmount,creditTotal:request.totalCost.plus(request.recoverableTaxAmount),currencyCode:request.currencyCode,
+      id:request.id, reference:request.reference,status:request.status,quantity:request.quantity,revision:request.revision,unitCost:request.unitCost,creditUnitPrice:supplement?.originalUnitCost||request.unitCost,nonrecoverableTaxAmount:supplement?request.totalCost.minus(request.quantity.times(supplement.originalUnitCost)):new Prisma.Decimal(0),totalCost:request.totalCost,recoverableTaxAmount:request.recoverableTaxAmount,creditTotal:request.totalCost.plus(request.recoverableTaxAmount),currencyCode:request.currencyCode,
       dispatchReference:request.dispatchReference,dispatchedAt:request.dispatchedAt,dispatchBusinessDate:request.dispatchedAt && businessContext ? formatEnterpriseBusinessDate(request.dispatchedAt,businessContext.timezone) : null,supplierCreditNoteId:request.supplierCreditNoteId,supplierCreditReference:request.supplierCreditReference,
       supplierInvoiceId:request.supplierInvoiceId,supplierInvoiceItemId:request.supplierInvoiceItemId,
       canWithdraw:canSubmitSupplierReturn && request.requestedByUserId===session.userId && request.status==="APPROVED",
