@@ -89,13 +89,26 @@ export async function GET(req: Request, { params }: Params) {
   }
   const status=url.searchParams.get("status");
   const expiryFilter=url.searchParams.get("expiry");
+  // Inclusive civil dates: an exclusive next-day bound also includes legacy
+  // expiry timestamps that were stored with a time component.
+  const expiryFrom=url.searchParams.get("expiryFrom")||"";
+  const expiryTo=url.searchParams.get("expiryTo")||"";
+  if((expiryFrom&&!z.iso.date().safeParse(expiryFrom).success)||
+    (expiryTo&&!z.iso.date().safeParse(expiryTo).success)||
+    (expiryFrom&&expiryTo&&expiryFrom>expiryTo)){
+    return enterpriseDomainErrorResponse(new EnterpriseDomainError("INVENTORY_LOT_DATES_INVALID",400),"INVENTORY_LOT_DATES_INVALID",req);
+  }
+  const expiryRange:Prisma.EnterpriseStockLotWhereInput=expiryFrom||expiryTo?{
+    expiryDate:{...(expiryFrom?{gte:new Date(expiryFrom+"T00:00:00.000Z")}:{}),
+      ...(expiryTo?{lt:new Date(new Date(expiryTo+"T00:00:00.000Z").getTime()+86400000)}:{})},
+  }:{};
   const org=await prisma.organization.findUniqueOrThrow({where:{id:organizationId},select:{timezone:true}});
   const parts=new Intl.DateTimeFormat("en-CA",{timeZone:org.timezone||"UTC",year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(new Date());
   const today=["year","month","day"].map(type=>parts.find(part=>part.type===type)?.value).join("-");
   const todayDate=new Date(today+"T00:00:00.000Z");
   const horizon=new Date(todayDate.getTime()+30*86400000);
   const baseWhere:Prisma.EnterpriseStockLotWhereInput={
-    organizationId,archivedAt:null,AND:[lotScope,...(warehouseId?[{warehouseId}]:[])],
+    organizationId,archivedAt:null,AND:[lotScope,expiryRange,...(warehouseId?[{warehouseId}]:[])],
     ...(search?{OR:[{lotNumber:{contains:search,mode:"insensitive"}},{inventoryItem:{catalogItem:{OR:[{name:{contains:search,mode:"insensitive"}},{code:{contains:search,mode:"insensitive"}},{sku:{contains:search,mode:"insensitive"}}]}}}]}:{}),
   };
   // Counts refer to batch records with positive physical stock, not
