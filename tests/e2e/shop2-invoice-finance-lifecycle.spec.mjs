@@ -1712,6 +1712,19 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
       const allocatePath=racePaymentPath+"/allocations";
       const allocateInput={payableId:racePayable.id,amount:String(paymentAmount)};
       const allocOk=result=>[200,201].includes(result.status);
+      if(paymentAmount===57){
+        await prisma.enterpriseFiscalPeriod.update({where:{id:returnPeriod.id},data:{status:"CLOSED"}});
+        try{
+          const blockedAllocation=await post(context.owner,allocatePath,allocateInput);
+          expect(blockedAllocation.status,JSON.stringify(blockedAllocation.body)).toBe(409);
+          expect(await prisma.enterprisePaymentAllocation.count({where:{organizationId,paymentId:racePaymentId}})).toBe(0);
+          expect(await prisma.enterprisePayableAllocation.count({where:{organizationId,payableId:racePayable.id}})).toBe(0);
+          expect((await prisma.enterprisePayment.findUniqueOrThrow({where:{id:racePaymentId}})).unallocatedAmount.equals(paymentAmount)).toBe(true);
+          expect((await prisma.enterprisePayable.findUniqueOrThrow({where:{id:racePayable.id}})).outstandingAmount.equals(70)).toBe(true);
+        }finally{
+          await prisma.enterpriseFiscalPeriod.update({where:{id:returnPeriod.id},data:{status:returnPeriod.status}});
+        }
+      }
       let [ship,allocated]=await Promise.all([post(context.owner,shipPath,shipInput),post(context.owner,allocatePath,allocateInput)]);
       expect([200,409]).toContain(ship.status);
       expect([200,201,409]).toContain(allocated.status);
