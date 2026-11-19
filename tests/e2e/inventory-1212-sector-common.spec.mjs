@@ -270,7 +270,46 @@ test.describe.serial("#1212 common inventory contract in independent sector tena
           expect(await prisma.enterpriseStockLot.findUniqueOrThrow({where:{id:lot.id}})).toEqual(beforeLot);
           expect(await prisma.enterpriseInventoryItem.findUniqueOrThrow({where:{id:inventoryItemId}})).toEqual(stockItem);
           expect(await snapshot()).toEqual(beforeProtected);
-          if(pharmacyBatch) expect(await prisma.pharmacyBatch.findUniqueOrThrow({where:{id:pharmacyBatch.id}})).toEqual(pharmacyBatch);
+          if(pharmacyBatch) {
+            expect(await prisma.pharmacyBatch.findUniqueOrThrow({where:{id:pharmacyBatch.id}})).toEqual(pharmacyBatch);
+            // Genuine Pharmacy references endpoint (not the common projection).
+            // All positive quantities here are isolated regulated fixture data,
+            // not a claim that a sale or a clinical action was executed.
+            const regulatoryLots=[];
+            for(const [suffix,offset,amount,status,flags] of [
+              ["EARLY",20,5,"ACTIVE",{}],["LATE",60,8,"ACTIVE",{}],
+              ["EXPIRED",-10,9,"ACTIVE",{}],["QUARANTINE",10,6,"QUARANTINED",{quarantine:true}],
+              ["RECALLED",15,7,"RECALLED",{recall:true}],["BLOCKED",5,4,"BLOCKED",{}]
+            ]){
+              regulatoryLots.push(await prisma.pharmacyBatch.create({data:{
+                organizationId,productId:pharmacyBatch.productId,batchNumber:runKey+"-PH-"+suffix,
+                expiryDate:iso(day(offset)),receivedQuantity:amount,availableQuantity:amount,
+                status,...flags,unit:"EA",createdById:actor,
+              }}));
+            }
+            const refs="/api/enterprise/"+organizationId+"/pharmacy/sales/references?kind=batches&productId="+pharmacyBatch.productId;
+            const first=await get(refs+"&pageSize=1");
+            expect(first.status,JSON.stringify(first.body)).toBe(200);
+            expect(first.body.total).toBe(2);
+            expect(first.body.pageCount).toBe(2);
+            expect(first.body.items.map(row=>row.id)).toEqual([regulatoryLots[0].id]);
+            const second=await get(refs+"&pageSize=1&page=2&selectedId="+regulatoryLots[0].id);
+            expect(second.status).toBe(200);
+            expect(second.body.items.map(row=>row.id)).toEqual([regulatoryLots[1].id]);
+            expect(second.body.selected.id).toBe(regulatoryLots[0].id);
+            for(const denied of regulatoryLots.slice(2)){
+              const result=await get(refs+"&selectedId="+denied.id);
+              expect(result.status).toBe(200);
+              expect(result.body.selected).toBeNull();
+            }
+            await prisma.pharmacyProduct.update({where:{id:pharmacyBatch.productId},data:{status:"ARCHIVED"}});
+            const archived=await get(refs+"&selectedId="+regulatoryLots[0].id);
+            expect(archived.status).toBe(200);
+            expect(archived.body.total).toBe(0);
+            expect(archived.body.selected).toBeNull();
+            for(const batch of regulatoryLots)expect(await prisma.pharmacyBatch.findUniqueOrThrow({where:{id:batch.id}})).toEqual(batch);
+            expect(await snapshot()).toEqual(beforeProtected);
+          }
           if(sectorEvent) expect(await prisma.enterpriseSectorInventoryEvent.findUniqueOrThrow({where:{id:sectorEvent.id}})).toEqual(sectorEvent);
         }
       } finally {
