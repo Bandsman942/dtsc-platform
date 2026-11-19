@@ -44,13 +44,16 @@ type PriorCreditCoordinates = {
   supplierInvoiceId: string; sourceMovementId: string; originCostLayerId: string;
   receiptAccountingEventId: string; original: EnterpriseSupplierInvoiceItem; currencyCode: string;
   currentCreditId?: string;
+  // Optional only for ordinary, same-cost sibling lots of the SAME receipt line.
+  receiptScope?: { receiptId: string; receiptItemId: string; purchaseId: string; inventoryItemId: string; warehouseId: string; supplierId: string };
 };
 
 /** Only sequential returns against the SAME proven receipt and invoice line
- * can reopen this workflow. Every previous dispatch must have its exact
- * posted credit, journal, historical tax rows and payable allocation.
- * A generic credit, reversed evidence, different lot or uncredited dispatch
- * is not permission to infer prior consumption. All consumers use the same
+ * can reopen this workflow. An ordinary sibling lot additionally requires its
+ * own immutable origin movement, cost layer, receipt valuation and journal.
+ * Capitalized and unrelated receipt lines remain excluded from that extension.
+ * A generic credit, reversed evidence or uncredited dispatch is not proof.
+ * All consumers use the same
  * Serializable/RepeatableRead transaction and the invoice lock on writes. */
 export async function readPriorReconciledSupplierReturnCreditsTx(
   tx: Prisma.TransactionClient, organizationId: string, input: PriorCreditCoordinates,
@@ -63,10 +66,57 @@ export async function readPriorReconciledSupplierReturnCreditsTx(
   if (!prior.length) return [];
   if (prior.some(r=>r.organizationId!==organizationId || r.status!=="RECONCILED" ||
       r.supplierInvoiceId!==input.supplierInvoiceId || r.supplierInvoiceItemId!==input.original.id ||
-      r.sourceMovementId!==input.sourceMovementId || r.originCostLayerId!==input.originCostLayerId ||
-      r.receiptAccountingEventId!==input.receiptAccountingEventId || r.currencyCode!==input.currencyCode ||
+      (!input.receiptScope && (r.sourceMovementId!==input.sourceMovementId || r.originCostLayerId!==input.originCostLayerId ||
+        r.receiptAccountingEventId!==input.receiptAccountingEventId)) ||
+      (input.receiptScope && (r.receiptId!==input.receiptScope.receiptId || r.receiptItemId!==input.receiptScope.receiptItemId ||
+        r.purchaseId!==input.receiptScope.purchaseId || r.inventoryItemId!==input.receiptScope.inventoryItemId ||
+        r.warehouseId!==input.receiptScope.warehouseId || r.supplierId!==input.receiptScope.supplierId)) || r.currencyCode!==input.currencyCode ||
       !r.dispatchedAt || !r.dispatchMovementId || !r.dispatchAccountingEventId || !r.supplierCreditNoteId ||
       !r.supplierCreditReference || !r.creditJournalEntryId || !r.reconciledAt || !r.quantity.gt(0))) return fail();
+  const siblings=prior.filter(r=>r.sourceMovementId!==input.sourceMovementId);
+  if(prior.some(r=>r.sourceMovementId===input.sourceMovementId &&
+    (r.originCostLayerId!==input.originCostLayerId || r.receiptAccountingEventId!==input.receiptAccountingEventId))) return fail();
+  if(siblings.length){
+    if(!input.receiptScope || (input.original.taxAmount.gt(0) && !input.original.taxRecoveryRequested))return fail();
+    const scope=input.receiptScope;
+    // Read all prior sibling origins once, and preserve per-movement quantity
+    // caps independently from the cumulative invoice-line tax/credit cap.
+    const sourceIds=[...new Set(siblings.map(r=>r.sourceMovementId))];
+    const [origins,originLayers,originEvents,receiptLine]=await Promise.all([
+      tx.enterpriseStockMovement.findMany({where:{organizationId,id:{in:sourceIds},sourceEntityType:"EnterprisePurchaseReceipt",sourceEntityId:scope.receiptId,sourceLineId:scope.receiptItemId,inventoryItemId:scope.inventoryItemId,warehouseId:scope.warehouseId,movementType:"PURCHASE_RECEIPT",direction:"IN"}}),
+      tx.enterpriseInventoryCostLayer.findMany({where:{organizationId,sourceMovementId:{in:sourceIds},inventoryItemId:scope.inventoryItemId,warehouseId:scope.warehouseId}}),
+      tx.enterpriseInventoryAccountingEvent.findMany({where:{organizationId,stockMovementId:{in:sourceIds},inventoryItemId:scope.inventoryItemId,eventType:"RECEIPT",status:"POSTED",journalEntryId:{not:null}}}),
+      tx.enterprisePurchaseReceiptItem.findFirst({where:{organizationId,id:scope.receiptItemId,purchaseReceiptId:scope.receiptId}}),
+    ]);
+    if(!receiptLine || !receiptLine.quantityReceived.equals(input.original.quantity) ||
+      [origins,originLayers,originEvents].some(rows=>rows.length!==sourceIds.length))return fail();
+    const originJournals=await tx.enterpriseJournalEntry.findMany({where:{organizationId,id:{in:originEvents.flatMap(e=>e.journalEntryId?[e.journalEntryId]:[])}}});
+    const [supplements,reversed]=await Promise.all([
+      tx.enterpriseInventoryAcquisitionCostSupplement.count({where:{organizationId,costLayerId:{in:originLayers.map(l=>l.id)}}}),
+      tx.enterpriseJournalReversal.count({where:{organizationId,originalEntryId:{in:originJournals.map(j=>j.id)}}}),
+    ]);
+    if(supplements||reversed||originJournals.length!==sourceIds.length)return fail();
+    for(const origin of origins){
+      const rows=siblings.filter(r=>r.sourceMovementId===origin.id);
+      const layer=originLayers.find(l=>l.sourceMovementId===origin.id);
+      const event=originEvents.find(e=>e.stockMovementId===origin.id);
+      const journal=originJournals.find(j=>j.id===event?.journalEntryId);
+      const returned=rows.reduce((sum,r)=>sum.plus(r.quantity),new Prisma.Decimal(0));
+      if(!layer||!event||!journal||!origin.stockLotId||!origin.quantity.gt(0)||returned.gt(origin.quantity)||
+        rows.some(r=>r.originCostLayerId!==layer.id||r.receiptAccountingEventId!==event.id||
+          r.stockLotId!==origin.stockLotId||r.storageLocationId!==origin.storageLocationId||
+          !r.unitCost.equals(input.original.unitPrice))||
+        layer.valuationMethod!=="WEIGHTED_AVERAGE"||layer.currencyCode!==input.currencyCode||
+        !layer.quantity.equals(origin.quantity)||!layer.unitCost.equals(input.original.unitPrice)||
+        !layer.totalCost.equals(origin.quantity.times(layer.unitCost).toDecimalPlaces(6,Prisma.Decimal.ROUND_HALF_UP))||
+        event.currencyCode!==input.currencyCode||!event.quantity.equals(origin.quantity)||
+        !event.unitCost.equals(layer.unitCost)||!event.totalCost.equals(layer.totalCost)||
+        journal.status!=="POSTED"||!journal.postedAt||journal.reversedAt||journal.reversalOfEntryId||
+        journal.sourceEntityType!=="EnterpriseInventoryAccountingEvent"||journal.sourceEntityId!==event.id||
+        journal.postingEvent!=="INVENTORY_RECEIPT_VALUED"||journal.postingVersion!==1||
+        journal.functionalCurrencyCode!==input.currencyCode||!journal.totalDebit.equals(event.totalCost)||!journal.totalCredit.equals(event.totalCost))return fail();
+    }
+  }
   const creditIds=prior.map(r=>r.supplierCreditNoteId!);
   const [invoice,payable,notes,lines,movements,events,creditJournals,allocations] = await Promise.all([
     tx.enterpriseSupplierInvoice.findFirst({where:{organizationId,id:input.supplierInvoiceId}}),
@@ -292,7 +342,8 @@ export async function verifySupplierReturnCreditTx(tx: Prisma.TransactionClient,
       movement.stockLotId !== dispatched.stockLotId || movement.inventoryItemId !== dispatched.inventoryItemId || movement.warehouseId !== dispatched.warehouseId || !movement.quantity.equals(dispatched.quantity) ||
       event.inventoryItemId !== dispatched.inventoryItemId || !event.quantity.equals(dispatched.quantity) || !event.unitCost.equals(dispatched.unitCost) || !event.totalCost.equals(dispatched.totalCost) || event.currencyCode !== dispatched.currencyCode) return fail();
   const priorReturns=await tx.enterpriseSupplierReturnRequest.findMany({where:{organizationId,supplierInvoiceId:credit.supplierInvoiceId,status:"RECONCILED"},orderBy:[{dispatchedAt:"asc"},{id:"asc"}]});
-  const prior=await readPriorReconciledSupplierReturnCreditsTx(tx,organizationId,{supplierInvoiceId:credit.supplierInvoiceId,sourceMovementId:dispatched.sourceMovementId,originCostLayerId:dispatched.originCostLayerId,receiptAccountingEventId:dispatched.receiptAccountingEventId,original,currencyCode:credit.currencyCode,currentCreditId:credit.id},priorReturns);
+  const prior=await readPriorReconciledSupplierReturnCreditsTx(tx,organizationId,{supplierInvoiceId:credit.supplierInvoiceId,sourceMovementId:dispatched.sourceMovementId,originCostLayerId:dispatched.originCostLayerId,receiptAccountingEventId:dispatched.receiptAccountingEventId,original,currencyCode:credit.currencyCode,currentCreditId:credit.id,
+    ...(supplement?{}:{receiptScope:{receiptId:dispatched.receiptId,receiptItemId:dispatched.receiptItemId,purchaseId:dispatched.purchaseId,inventoryItemId:dispatched.inventoryItemId,warehouseId:dispatched.warehouseId,supplierId:dispatched.supplierId}})},priorReturns);
   const capitalized = supplement ? await deriveCapitalizedSupplierReturnTx(tx, organizationId, original, supplement, {
     originCostLayerId: dispatched.originCostLayerId, receiptAccountingEventId: dispatched.receiptAccountingEventId,
     invoiceJournalEntryId: invoiceJournal.id, currencyCode: credit.currencyCode, quantity: dispatched.quantity,
