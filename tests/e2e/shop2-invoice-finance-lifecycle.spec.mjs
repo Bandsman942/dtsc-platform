@@ -1897,6 +1897,40 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
         if(freshAcquisition)expect(vatJournal.lines.some(line=>line.ledgerAccountId===originalTaxLine.ledgerAccountId)).toBe(false);
       }
       expect(await prisma.enterprisePayableAllocation.count({where:{organizationId,payableId:racePayable.id,sourceType:"SUPPLIER_CREDIT_NOTE",sourceId:raceCredit.body.creditNote.id}})).toBe(1);
+      if(freshAcquisition){
+        // Rebuild all three historical states AFTER dispatch and credit posting.
+        // Use actual recognition timestamps from committed evidence, not guessed
+        // wall-clock dates or the currently depleted cost layer.
+        const layer=await prisma.enterpriseInventoryCostLayer.findFirstOrThrow({where:{organizationId,sourceMovementId:raceSource.id}});
+        const proof=await prisma.enterpriseInventoryAcquisitionCostSupplement.findFirstOrThrow({where:{organizationId,costLayerId:layer.id}});
+        const [receiptEvent,invoiceJournal,dispatchMovement]=await Promise.all([
+          prisma.enterpriseInventoryAccountingEvent.findUniqueOrThrow({where:{id:proof.receiptAccountingEventId}}),
+          prisma.enterpriseJournalEntry.findUniqueOrThrow({where:{id:proof.invoiceJournalEntryId}}),
+          prisma.enterpriseStockMovement.findUniqueOrThrow({where:{id:shipped.dispatchMovementId}}),
+        ]);
+        const receiptJournal=await prisma.enterpriseJournalEntry.findUniqueOrThrow({where:{id:receiptEvent.journalEntryId}});
+        const latest=(...dates)=>new Date(Math.max(...dates.map(date=>date.getTime())));
+        const receiptCutoff=latest(layer.effectiveAt,layer.createdAt,raceSource.occurredAt,raceSource.createdAt,receiptEvent.createdAt,receiptJournal.accountingDate,receiptJournal.postedAt);
+        const capitalizedCutoff=latest(proof.effectiveAt,proof.createdAt,invoiceJournal.accountingDate,invoiceJournal.postedAt);
+        const dispatchCutoff=latest(shipped.dispatchedAt,dispatchMovement.occurredAt,dispatchMovement.createdAt,shippedValue.createdAt,shippedJournal.accountingDate,shippedJournal.postedAt);
+        expect(receiptCutoff.getTime()).toBeLessThan(capitalizedCutoff.getTime());
+        expect(capitalizedCutoff.getTime()).toBeLessThan(dispatchCutoff.getTime());
+        for(const [cutoff,quantity,value] of [[receiptCutoff,"10","70"],[capitalizedCutoff,"10","81.2"],[dispatchCutoff,"8","64.96"]]){
+          const report=await post(context.owner,base+"/financial-statements",{
+            statementType:"INVENTORY_VALUATION",periodStart:new Date(receiptCutoff.getTime()-86400000).toISOString(),
+            periodEnd:cutoff.toISOString(),currencyCode:fixture.currencyCode,publish:false,
+          });
+          expect(report.status,JSON.stringify(report.body)).toBe(201);
+          const row=report.body.snapshot.find(entry=>entry.inventoryItemId===layer.inventoryItemId&&entry.warehouseId===layer.warehouseId&&entry.currencyCode===fixture.currencyCode);
+          expect(row,JSON.stringify(report.body)).toBeTruthy();
+          expect(new Prisma.Decimal(row.quantity).equals(quantity)).toBe(true);
+          expect(new Prisma.Decimal(row.value).equals(value)).toBe(true);
+          const persisted=await prisma.enterpriseFinancialStatementSnapshot.findUniqueOrThrow({where:{id:report.body.statement.id}});
+          expect(persisted.snapshotJson).toEqual(report.body.snapshot);
+        }
+        expect(await prisma.enterpriseInventoryCostLayer.findUniqueOrThrow({where:{id:layer.id}})).toEqual(layer);
+        expect(await prisma.enterpriseInventoryAcquisitionCostSupplement.findUniqueOrThrow({where:{id:proof.id}})).toEqual(proof);
+      }
     }
 
 
