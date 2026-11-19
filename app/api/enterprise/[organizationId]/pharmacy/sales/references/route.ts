@@ -56,7 +56,7 @@ export async function GET(req: Request, { params }: Params) {
   } else if (kind === "batches") {
     if (!productId) return NextResponse.json({ items: [], selected: null, page: 1, pageCount: 1, total: 0 });
     const where: Prisma.PharmacyBatchWhereInput = {
-      organizationId, productId, availableQuantity: { gt: 0 }, expiryDate: { gt: new Date() },
+      organizationId, productId, product: { organizationId, status: "ACTIVE" }, availableQuantity: { gt: 0 }, expiryDate: { gt: new Date() },
       recall: false, quarantine: false, status: { in: ["ACTIVE", "NEAR_EXPIRY"] },
       ...(q ? { OR: [
         { batchNumber: { contains: q, mode: "insensitive" } },
