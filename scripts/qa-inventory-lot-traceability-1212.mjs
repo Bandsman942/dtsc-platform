@@ -365,6 +365,15 @@ const repeatedProjection=await returnCredit.supplierReturnFinanceProjectionTx({e
   return [rtv,latestClosed,oldReturn];
 }}},"org-a",["invoice-a"]);
 assert.equal(repeatedProjection.get("invoice-a").id,"rtv-a");
+const siblingScope={receiptId:"receipt-1",receiptItemId:"receipt-line-1",purchaseId:"purchase-1",inventoryItemId:"item-1",warehouseId:"wh-1",supplierId:"supplier-1"};
+const siblingCoordinates={supplierInvoiceId:"invoice-a",sourceMovementId:"origin-b",originCostLayerId:"layer-b",receiptAccountingEventId:"event-b",original:{id:"invoice-item-a",taxAmount:d(0),taxRecoveryRequested:false},currencyCode:"USD",receiptScope:siblingScope};
+const siblingPrior={...oldReturn,...siblingScope,organizationId:"org-a",supplierInvoiceId:"invoice-a",supplierInvoiceItemId:"invoice-item-a",currencyCode:"USD",sourceMovementId:"origin-a",originCostLayerId:"layer-a",receiptAccountingEventId:"event-a",quantity:d(2),dispatchedAt:new Date(),dispatchMovementId:"dispatch-a",dispatchAccountingEventId:"dispatch-event-a",supplierCreditNoteId:"credit-a",supplierCreditReference:"CR-A",creditJournalEntryId:"credit-journal-a",reconciledAt:new Date()};
+for(const mismatch of [{receiptId:"receipt-other"},{receiptItemId:"line-other"},{purchaseId:"purchase-other"},{supplierId:"supplier-other"},{warehouseId:"wh-other"},{inventoryItemId:"item-other"}]){
+  await assert.rejects(returnCredit.readPriorReconciledSupplierReturnCreditsTx({},"org-a",siblingCoordinates,[{...siblingPrior,...mismatch}]),{code:"SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED"});
+}
+await assert.rejects(returnCredit.readPriorReconciledSupplierReturnCreditsTx({},"org-a",{...siblingCoordinates,receiptScope:undefined},[siblingPrior]),{code:"SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED"});
+await assert.rejects(returnCredit.readPriorReconciledSupplierReturnCreditsTx({},"org-a",{...siblingCoordinates,original:{...siblingCoordinates.original,taxAmount:d(10)}},[siblingPrior]),{code:"SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED"});
+
 await assert.rejects(returnCredit.readPriorReconciledSupplierReturnCreditsTx({},"org-a",{supplierInvoiceId:"invoice-a",sourceMovementId:"receipt-a",originCostLayerId:"layer-a",receiptAccountingEventId:"event-a",original:{id:"invoice-item-a"},currencyCode:"USD"},[{...oldReturn,organizationId:"org-other"}]),{code:"SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED"});
 
 await returnCredit.assertSupplierPaymentCapacityTx(creditTx,"org-a",{supplierInvoiceId:"invoice-a",currencyCode:"USD",outstandingAmount:d(70)},d(56));
