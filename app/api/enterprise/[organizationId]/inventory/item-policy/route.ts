@@ -38,9 +38,11 @@ export async function PUT(req: Request, { params }: Params) {
   const input = parsed.data;
   if (input.expiryTracking && !input.lotTracking) return NextResponse.json({ error: "INVENTORY_POLICY_BATCH_REQUIRED", message: "Activez le suivi des lots avant les péremptions." }, { status: 400 });
   const result = await prisma.$transaction(async (tx) => {
-    const item = await tx.enterpriseInventoryItem.findFirst({ where: { organizationId, id: input.inventoryItemId, status: "ACTIVE", archivedAt: null, catalogItem: { organizationId, status: "ACTIVE", archivedAt: null, trackInventory: true } }, select: { id: true, revision: true, lotTracking: true, expiryTracking: true } });
+    const item = await tx.enterpriseInventoryItem.findFirst({ where: { organizationId, id: input.inventoryItemId, status: "ACTIVE", archivedAt: null, catalogItem: { organizationId, status: "ACTIVE", archivedAt: null, trackInventory: true } }, select: { id: true, catalogItemId: true, revision: true, lotTracking: true, expiryTracking: true } });
     if (!item) return "NOT_FOUND" as const;
     if (item.revision !== input.revision) return "CONFLICT" as const;
+    const [pharmacy,sector] = await Promise.all([tx.pharmacyProductExtension.count({where:{organizationId,catalogItemId:item.catalogItemId}}),tx.enterpriseSectorInventoryEvent.count({where:{organizationId,catalogItemId:item.catalogItemId}})]);
+    if (pharmacy || sector) return "SECTOR_AUTHORITY" as const;
     if (input.lotTracking && !item.lotTracking) {
       const unmapped = await tx.enterpriseInventoryBalance.findFirst({ where: { organizationId, inventoryItemId: item.id, stockLotId: null, OR: [{ quantityOnHand: { not: 0 } }, { quantityReserved: { not: 0 } }] }, select: { id: true } });
       if (unmapped) return "UNMAPPED_STOCK" as const;
@@ -63,7 +65,7 @@ export async function PUT(req: Request, { params }: Params) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2034") return "CONFLICT" as const;
     throw error;
   });
-  if (result !== "OK") return NextResponse.json({ error: `INVENTORY_POLICY_${result}`, message: result === "UNMAPPED_STOCK" ? "Des quantités historiques existent sans lot. Ne créez pas une nouvelle entrée : régularisez le stock existant avant d’activer les lots." : result === "UNDATED_LOTS" ? "Renseignez les dates réelles de péremption des lots existants avant d’activer le suivi des péremptions." : result === "HAS_LOTS" ? "Des lots existants empêchent de désactiver leur traçabilité." : result === "NOT_FOUND" ? "Article de stock introuvable." : "La politique a été modifiée entre-temps. Actualisez la fiche." }, { status: result === "NOT_FOUND" ? 404 : 409 });
+  if (result !== "OK") return NextResponse.json({ error: result === "SECTOR_AUTHORITY" ? "STOCK_RECLASS_SECTOR_AUTHORITY" : `INVENTORY_POLICY_${result}`, message: result === "SECTOR_AUTHORITY" ? "Cet article relève du registre sectoriel. Gérez ses règles de stock dans le module dédié." : result === "UNMAPPED_STOCK" ? "Des quantités historiques existent sans lot. Ne créez pas une nouvelle entrée : régularisez le stock existant avant d’activer les lots." : result === "UNDATED_LOTS" ? "Renseignez les dates réelles de péremption des lots existants avant d’activer le suivi des péremptions." : result === "HAS_LOTS" ? "Des lots existants empêchent de désactiver leur traçabilité." : result === "NOT_FOUND" ? "Article de stock introuvable." : "La politique a été modifiée entre-temps. Actualisez la fiche." }, { status: result === "NOT_FOUND" ? 404 : 409 });
   await writeAuditLog({ userId: session.userId, organizationId, action: "ENTERPRISE_INVENTORY_ITEM_POLICY_UPDATED", entity: "EnterpriseInventoryItem", entityId: input.inventoryItemId, request: req, metadata: { revision: input.revision + 1, lotTracking: input.lotTracking, expiryTracking: input.expiryTracking } });
   await writeApiLog({ request: req, startedAt, statusCode: 200, userId: session.userId, metadata: { organizationId, domain: "inventory-item-policy" } });
   return NextResponse.json({ ok: true, revision: input.revision + 1 });
