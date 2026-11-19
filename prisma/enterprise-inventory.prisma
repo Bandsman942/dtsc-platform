@@ -340,9 +340,9 @@ model EnterpriseSupplierReturnCreditReplacement {
   reason                    String
   replacedByUserId          String
   createdAt                 DateTime @default(now())
-  returnRequest             EnterpriseSupplierReturnRequest @relation(fields: [organizationId, returnRequestId], references: [organizationId, id], onDelete: Restrict)
-  previousCredit            EnterpriseSupplierCreditNote @relation("SupplierReturnPreviousCredit", fields: [organizationId, previousCreditNoteId], references: [organizationId, id], onDelete: Restrict)
-  replacementCredit         EnterpriseSupplierCreditNote @relation("SupplierReturnReplacementCredit", fields: [organizationId, replacementCreditNoteId], references: [organizationId, id], onDelete: Restrict)
+  returnRequest             EnterpriseSupplierReturnRequest @relation(fields: [organizationId, returnRequestId], references: [organizationId, id], onDelete: Restrict, map: "supplier_credit_history_return_fk")
+  previousCredit            EnterpriseSupplierCreditNote @relation("SupplierReturnPreviousCredit", fields: [organizationId, previousCreditNoteId], references: [organizationId, id], onDelete: Restrict, map: "supplier_credit_history_previous_fk")
+  replacementCredit         EnterpriseSupplierCreditNote @relation("SupplierReturnReplacementCredit", fields: [organizationId, replacementCreditNoteId], references: [organizationId, id], onDelete: Restrict, map: "supplier_credit_history_replacement_fk")
 
   @@unique([organizationId, previousCreditNoteId], map: "supplier_return_replaced_credit_key")
   @@unique([organizationId, replacementCreditNoteId], map: "supplier_return_replacement_credit_key")
