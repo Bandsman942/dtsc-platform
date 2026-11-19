@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import { ordinaryInventoryHistorySql } from "@/lib/enterprise/accounting/inventory-ordinary-history";
 import { assertAcquisitionValuationCutoffTx } from "@/lib/enterprise/accounting/inventory-acquisition-cost-guards";
 
 /**
@@ -104,22 +105,26 @@ export function isolatedAcquisitionHistorySql(organizationId: string, cutoff: Da
   `;
 }
 
-/** Common SQL source for financial statements and Finance AI. No write, no
- * change to the legacy reporting contract for uncapitalized pools. */
+/** Shared valuation. Unsupported legacy pools retain explicitly identified
+ * current-layer projections, never a claim of verified historical value. */
 export async function inventoryValuationAtSqlTx(
   tx: Pick<Prisma.TransactionClient, "$queryRaw">, organizationId: string, cutoff: Date,
 ): Promise<Prisma.Sql> {
   const verifiedHistory = isolatedAcquisitionHistorySql(organizationId, cutoff);
   await assertAcquisitionValuationCutoffTx(tx, organizationId, cutoff, verifiedHistory);
   return Prisma.sql`
-    WITH verified_history AS (${verifiedHistory})
+    WITH verified_history AS (${verifiedHistory}), ordinary_history AS (${ordinaryInventoryHistorySql(organizationId, cutoff)})
     SELECT l."inventoryItemId", l."warehouseId", l."currencyCode", l."remainingQuantity" AS quantity,
-      l."remainingQuantity"*l."unitCost" AS value
+      l."remainingQuantity"*l."unitCost" AS value, 'CURRENT_LAYER_PROJECTION'::text AS "valuationBasis"
     FROM "EnterpriseInventoryCostLayer" l
     WHERE l."organizationId"=${organizationId} AND l."effectiveAt"<=${cutoff}
       AND NOT EXISTS (SELECT 1 FROM verified_history h WHERE h."layerId"=l.id)
+      AND NOT EXISTS (SELECT 1 FROM ordinary_history h WHERE h."inventoryItemId"=l."inventoryItemId" AND h."warehouseId"=l."warehouseId" AND h."currencyCode"=l."currencyCode")
     UNION ALL
-    SELECT h."inventoryItemId",h."warehouseId",h."currencyCode",h.quantity,h.value
+    SELECT h."inventoryItemId",h."warehouseId",h."currencyCode",h.quantity,h.value, 'VERIFIED_HISTORY'::text AS "valuationBasis"
     FROM verified_history h WHERE h."recognizedAt"<=${cutoff}
+    UNION ALL
+    SELECT h."inventoryItemId",h."warehouseId",h."currencyCode",h.quantity,h.value, 'VERIFIED_HISTORY'::text AS "valuationBasis"
+    FROM ordinary_history h WHERE h."recognizedAt"<=${cutoff}
   `;
 }
