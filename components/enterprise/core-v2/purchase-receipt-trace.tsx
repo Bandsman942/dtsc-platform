@@ -12,6 +12,7 @@ import { purchaseFormGuidance, type PurchaseFormGuidanceKey } from "@/lib/enterp
 type ReturnRequestSummary = { id?: string; reference: string; status: string; quantity: string; approvalId: string | null; revision?: number; unitCost?: string; creditUnitPrice?: string; nonrecoverableTaxAmount?: string; totalCost?: string; recoverableTaxAmount?: string; creditTotal?: string; currencyCode?: string; canDispatch?: boolean; canWithdraw?: boolean; canCreateCredit?: boolean; canReplaceCredit?: boolean; supplierCreditStatus?: string|null; supplierCreditRevision?: number|null; previousCreditNoteId?: string|null; previousSupplierCreditReference?: string|null; dispatchReference?: string | null; dispatchedAt?: string | null; dispatchBusinessDate?: string | null; supplierCreditNoteId?: string | null; supplierCreditReference?: string | null; supplierInvoiceId?: string; supplierInvoiceItemId?: string };
 type TraceRow = {
   supplierReturnRequest?: ReturnRequestSummary | null;
+  supplierReturnHistory?: ReturnRequestSummary[];
   id: string; receiptReference: string | null; quantity: string; occurredAt: string;
   inventoryItem: { catalogItem: { name: string; code: string; sku: string | null; unitOfMeasure: { symbol: string } | null } };
   warehouse: { name: string; code: string };
@@ -29,7 +30,7 @@ function SupplierReturnCheck({ organizationId, purchaseId, row, locale, onRefres
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [preview, setPreview] = useState<ReturnPreview | null>(null);
-  const [request, setRequest] = useState<ReturnRequestSummary | null>(row.supplierReturnRequest || null);
+  const [request, setRequest] = useState<ReturnRequestSummary | null>(row.supplierReturnRequest?.status === "RECONCILED" ? null : row.supplierReturnRequest || null);
   const [message, setMessage] = useState("");
   const retryIdentity = useRef<{ fingerprint: string; key: string } | null>(null);
   useToastMessage(message);
@@ -250,6 +251,17 @@ export function PurchaseReceiptTrace({ organizationId, purchaseId, locale, focus
             <p className="break-words text-xs text-dtsc-muted">{row.warehouse.name}{row.storageLocation ? " · " + row.storageLocation.name : ""}</p>
             <div className="flex min-w-0 flex-wrap items-center gap-2"><span className="min-w-0 break-words font-medium">{lot?.lotNumber || t("receiptTraceNoLot")}</span>{lot ? <StatusBadge tone={lot.recallReference || lot.status === "BLOCKED" || lot.status === "QUARANTINED" ? "warning" : lot.status === "AVAILABLE" ? "success" : "neutral"}>{t(stateKey)}</StatusBadge> : null}</div>
             {lot ? <p className="break-words text-xs text-dtsc-muted">{t("receiptBatchProduction")} : {date(lot.productionDate)} · {t("receiptBatchExpiry")} : {date(lot.expiryDate)}{lot.recallReference ? " · " + lot.recallReference : ""}</p> : null}
+            {Boolean(row.supplierReturnHistory?.length)?<details className="mt-2 min-w-0 rounded-lg border border-dtsc-border p-2 text-xs">
+              <summary className="cursor-pointer font-semibold text-dtsc-ink">{t("returnReconciledHistory")} · {row.supplierReturnHistory!.length}</summary>
+              <div className="mt-2 grid min-w-0 gap-2">{row.supplierReturnHistory!.map(previous=><div key={previous.id} className="grid min-w-0 gap-1 rounded-lg border border-dtsc-border p-2">
+                <div className="flex min-w-0 flex-wrap items-center justify-between gap-1"><strong className="break-words">{previous.reference}</strong><StatusBadge tone="success">{t("returnReconciled")}</StatusBadge></div>
+                <span>{t("returnCheckQuantity")} : {previous.quantity} {product.unitOfMeasure?.symbol||""}</span>
+                {previous.creditTotal&&previous.currencyCode?<span>{t("returnCreditAmount")} : {new Intl.NumberFormat(locale,{style:"currency",currency:previous.currencyCode,maximumFractionDigits:6}).format(Number(previous.creditTotal))}</span>:null}
+                {previous.dispatchReference?<span className="break-words">{t("returnDispatchReference")} : {previous.dispatchReference}</span>:null}
+                {previous.supplierCreditNoteId?<a className="w-fit break-words text-dtsc-blue underline" href={`/enterprise-modules/FINANCE_PAYABLES?supplierCreditNoteId=${encodeURIComponent(previous.supplierCreditNoteId)}`}>{t("returnCreditReview")} · {previous.supplierCreditReference}</a>:null}
+                {previous.approvalId?<a className="w-fit break-words text-dtsc-blue underline" href={`/enterprise-modules/VALIDATIONS?approval=${encodeURIComponent(previous.approvalId)}`}>{t("returnRequestReview")}</a>:null}
+              </div>)}</div>
+            </details>:null}
             {lot && result?.canCheckSupplierReturn ? <SupplierReturnCheck organizationId={organizationId} purchaseId={purchaseId} row={row} locale={locale} onRefresh={() => void load(result.pagination.page,appliedSearch)} /> : null}
           </article>;
         })}
