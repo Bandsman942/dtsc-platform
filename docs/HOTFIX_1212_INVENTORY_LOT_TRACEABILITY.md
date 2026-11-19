@@ -272,6 +272,13 @@
 - 8c3e6ce : 3/19 workflows réussis (migration, politique de livraison, Shop 2 UI), 16 en échec. Quality 44499473255, Shop 2 44499473282, Accounting 44499473592 arrêtés au typecheck (TS2345, purchase-receipt-trace.tsx:125 : taxe non récupérable optionnelle). Les suites aval ne sont donc pas certifiées sur ce SHA.
 - Rétrécissement explicite de la valeur optionnelle avant formatage dans la vue du retour. Anciennes données sans ce champ restent valides et n'affichent pas de taxe inventée. Aucun changement des règles métier ni des tests. Relance de toutes les CI sur le nouveau SHA, PR brouillon, aucun merge, production ou OWNER_E2E.
 
+### Reprise — recette navigateur du sélecteur de lots et mobile (19 novembre 2026)
+
+- Le correctif 59a91b7 a éliminé le TS2345 ; le typecheck Shop 2 et Accounting est confirmé réussi, les suites aval n'étaient pas encore terminées.
+- Ajustements ciblés du formulaire Logistique : champs natifs bornés en largeur (y compris noms de catalogue longs et dates), grilles capables de rétrécir, pagination/action repliables. Pas de changement du moteur de stock.
+- Nouvelle recette Playwright sur page réelle INVENTORY_LOGISTICS (pas de mock réseau) : article suivi neuf sans solde, recherche des règles volontairement sans résultat, sélecteur indépendant par dépôt et recherche serveur, champ de péremption obligatoire, enregistrement effectif de deux identités de lot FR/EN, sans mouvement, coût ou stock physique créé. Largeurs 320/360/375/390/414/768/1024/1440, sombre FR / clair EN, vérification du débordement de page et éditeur à 320 ; restauration de la langue du compte fixture. Cette recette est écrite, non encore certifiée sur le SHA final. Les migrations restent inchangées.
+- Aucun merge, production ou OWNER_E2E tant que toutes les gates et les critères de #1212 ne sont pas certifiés.
+
 ## Restant (bloquant)
 Certification de la réaffectation historique sur PostgreSQL + navigateur et valeur inchangée; certification achats et valorisation, réservations/livraisons multi-lots; moteur FEFO commun et POS; pertes, rappels et comptabilité; Design 2.0 et tests multisectoriels. Voir issue #1212. Ne pas merger avant clôture de tous les points.
 

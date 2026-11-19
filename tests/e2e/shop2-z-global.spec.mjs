@@ -564,4 +564,91 @@ test.describe.serial("Shop 2.0 Iteration 4 global behavioral acceptance", () => 
     expect(beyond.body.pagination.total).toBe(1);
   });
 
+  test("HOTFIX #1212 first tracked batch is selectable without a stock balance on real FR/EN mobile and desktop", async ({ page }) => {
+    test.setTimeout(180_000);
+    await signIn(page);
+    const key = "UI1212-" + crypto.randomUUID().slice(0, 12);
+    const baseProduct = await prisma.enterpriseCatalogItem.findUniqueOrThrow({ where: { id: fixture.catalogItemId } });
+    const name = "E2E first tracked batch with an intentionally long catalogue description " + key;
+    const product = await prisma.enterpriseCatalogItem.create({
+      data: { organizationId, code: key, sku: key, name, normalizedName: name.toLowerCase(),
+        itemType: "PRODUCT", unitOfMeasureId: baseProduct.unitOfMeasureId, indicativeSalePrice: 10, indicativeCost: 4,
+        currency: fixture.currencyCode, trackInventory: true, taxable: false, createdByUserId: fixture.userId },
+    });
+    const inventory = await prisma.enterpriseInventoryItem.create({
+      data: { organizationId, catalogItemId: product.id, lotTracking: true, expiryTracking: true, allowNegativeStock: false, createdByUserId: fixture.userId },
+    });
+    const stockScope = { organizationId, inventoryItemId: inventory.id };
+    const user = await prisma.user.findUniqueOrThrow({ where: { id: fixture.userId }, select: { locale: true } });
+    const expiry = new Date(Date.now() + 365 * 86400000).toISOString().slice(0, 10);
+    try {
+      expect(await prisma.enterpriseInventoryBalance.count({ where: stockScope })).toBe(0);
+      for (const { locale, theme, widths } of [
+        { locale: "fr", theme: "dark", widths: [320, 360, 375, 390, 414] },
+        { locale: "en", theme: "light", widths: [1440, 1024, 768, 320] },
+      ]) {
+        await prisma.user.update({ where: { id: fixture.userId }, data: { locale } });
+        await page.setViewportSize({ width: widths[0], height: 844 });
+        await page.evaluate(value => localStorage.setItem("theme", value), theme);
+        await page.goto("/enterprise-modules/INVENTORY_LOGISTICS");
+        await page.waitForURL(/\/enterprise-modules\/INVENTORY_LOGISTICS/);
+        await expect(page.locator("html")).toHaveClass(new RegExp("\\b" + theme + "\\b"));
+        const governance = page.getByTestId("inventory-stock-governance");
+        await expect(governance.getByRole("heading", { name: locale === "fr" ? "Règles de stock, lots et péremptions" : "Stock rules, batches and expiry", exact: true })).toBeVisible();
+        await governance.getByRole("button", { name: locale === "fr" ? "Gérer" : "Manage", exact: true }).click();
+        const rulesQuery = page.waitForResponse(response => {
+          const url = new URL(response.url());
+          return url.pathname === "/api/enterprise/" + organizationId + "/inventory" && url.searchParams.get("search") === key + "-no-match";
+        });
+        await governance.getByRole("textbox", { name: locale === "fr" ? "Rechercher les articles" : "Search items", exact: true }).fill(key + "-no-match");
+        const rules = await rulesQuery;
+        expect(rules.ok()).toBeTruthy();
+        expect((await rules.json()).items).toEqual([]);
+        for (const width of widths) {
+          await page.setViewportSize({ width, height: 844 });
+          await expect(governance).toBeVisible();
+          await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth - innerWidth), { message: "Inventory page overflow at " + width + "px (" + locale + ", " + theme + ")" }).toBeLessThanOrEqual(2);
+        }
+        await page.setViewportSize({ width: 320, height: 844 });
+        await governance.getByRole("button", { name: locale === "fr" ? "Enregistrer un lot" : "Register batch", exact: true }).click();
+        const dialog = page.getByRole("dialog", { name: locale === "fr" ? "Enregistrer un lot" : "Register a batch" });
+        await expect(dialog).toBeVisible();
+        const itemSelect = dialog.locator('select[name="inventoryItemId"]');
+        await expect(itemSelect).toBeDisabled();
+        await dialog.locator('select[name="warehouseId"]').selectOption(fixture.warehouseId);
+        const optionResponse = page.waitForResponse(response => {
+          const url = new URL(response.url());
+          return url.pathname === "/api/enterprise/" + organizationId + "/inventory" && url.searchParams.get("view") === "lot-options" &&
+            url.searchParams.get("warehouseId") === fixture.warehouseId && url.searchParams.get("search") === key;
+        });
+        await dialog.getByPlaceholder(locale === "fr" ? "Nom, code ou SKU" : "Name, code or SKU", { exact: true }).fill(key);
+        const response = await optionResponse;
+        expect(response.ok()).toBeTruthy();
+        const options = await response.json();
+        expect(options.items.map(item => item.id)).toEqual([inventory.id]);
+        expect(options.items[0]).not.toHaveProperty("balances");
+        await expect(itemSelect).toBeEnabled();
+        await itemSelect.selectOption(inventory.id);
+        const expiryInput = dialog.locator('input[name="expiryDate"]');
+        await expect(expiryInput).toHaveAttribute("required", "");
+        await expect.poll(() => dialog.locator("[data-dtsc-dialog-scroll]").evaluate(el => el.scrollWidth - el.clientWidth), { message: "Batch editor must fit mobile viewport" }).toBeLessThanOrEqual(2);
+        const lotNumber = key + "-" + locale;
+        await dialog.locator('input[name="lotNumber"]').fill(lotNumber);
+        await expiryInput.fill(expiry);
+        const createResponse = page.waitForResponse(response => response.request().method() === "POST" && new URL(response.url()).pathname === "/api/enterprise/" + organizationId + "/inventory/lots");
+        await dialog.getByRole("button", { name: locale === "fr" ? "Enregistrer le lot" : "Save batch", exact: true }).click();
+        expect((await createResponse).status()).toBe(201);
+        await expect(dialog).not.toBeVisible();
+        const lot = await prisma.enterpriseStockLot.findFirstOrThrow({ where: { ...stockScope, warehouseId: fixture.warehouseId, lotNumber } });
+        expect(lot.expiryDate.toISOString().slice(0, 10)).toBe(expiry);
+        expect(await prisma.enterpriseStockMovement.count({ where: stockScope })).toBe(0);
+        expect(await prisma.enterpriseInventoryCostLayer.count({ where: stockScope })).toBe(0);
+        const physical = await prisma.enterpriseInventoryBalance.aggregate({ where: stockScope, _sum: { quantityOnHand: true } });
+        expect(asNumber(physical._sum.quantityOnHand)).toBe(0);
+      }
+    } finally {
+      await prisma.user.update({ where: { id: fixture.userId }, data: { locale: user.locale } });
+    }
+  });
+
 });
