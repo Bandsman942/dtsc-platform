@@ -24,7 +24,8 @@ export async function buildInventoryTransferPosting(tx:Prisma.TransactionClient,
   const sum=v.allocations.reduce((n,a)=>n.plus(a.transferredQuantity),v.quantity.minus(v.quantity));
   const value=v.allocations.reduce((n,a)=>n.plus(a.transferredQuantity.times(a.unitCost)),v.quantity.minus(v.quantity));
   if(!sum.equals(v.quantity)||!value.equals(v.quantity.times(v.unitCost)))return invalid();
-  let date=m.occurredAt,siteId:string|null=m.warehouse.siteId,reference=t.reference,creditAccount="INVENTORY";
+  const reference=t.reference;
+  let date=m.occurredAt,siteId:string|null=m.warehouse.siteId,creditAccount="INVENTORY";
   if(phase==="RECEIPT"){
     const j=v.dispatchJournalEntry;
     if(!j||j.status!=="POSTED"||j.reversedAt||j.reversalOfEntryId||j.sourceEntityType!==input.sourceEntityType||j.sourceEntityId!==v.id||
