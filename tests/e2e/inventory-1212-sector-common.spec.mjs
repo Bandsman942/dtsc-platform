@@ -41,9 +41,12 @@ async function signIn(context, organizationId, email, password) {
 test.describe.serial("#1212 common inventory contract in independent sector tenants", () => {
   test.beforeAll(async () => {
     assertIsolatedFixtureEnvironment();
-    const [user, subscription] = await Promise.all([
+    const [user, subscription, enterprisePlan] = await Promise.all([
       prisma.user.findUniqueOrThrow({ where: { email: adminEmail } }),
       prisma.organizationSubscription.findFirstOrThrow({ where: { organizationId: seedOrganizationId, status: "ACTIVE" } }),
+      // Sector tests must use the actual canonical Enterprise entitlement,
+      // not the possibly modified subscription of another scenario.
+      prisma.billingPlan.findFirstOrThrow({where:{id:"e2e-enterprise-plan",slug:"enterprise",isActive:true,audience:{in:["ORGANIZATION","BOTH"]}}}),
     ]);
     for (const sectorCode of sectors) {
       const key = runKey + "-" + sectorCode;
@@ -60,7 +63,7 @@ test.describe.serial("#1212 common inventory contract in independent sector tena
         organizationId, userId: user.id, role: "OWNER", status: "ACTIVE", joinedAt: new Date(),
       } });
       await prisma.organizationSubscription.create({ data: {
-        organizationId, planId: subscription.planId, status: "ACTIVE",
+        organizationId, planId: sectorCode==="PHARMACY"||sectorCode==="HEALTH_CARE"?enterprisePlan.id:subscription.planId, status: "ACTIVE",
         startedAt: new Date(Date.now() - 86400000), expiresAt: new Date(Date.now() + 30 * 86400000),
         createdByDtscUserId: user.id, updatedByDtscUserId: user.id,
       } });
