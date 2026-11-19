@@ -215,6 +215,16 @@ export const creditNoteCreateSchema = z.object({
   items: z.array(invoiceItemSchema).min(1).max(500),
 });
 
+// Supplier-only extension; sales credits never accept supplier return references.
+export const supplierCreditNoteCreateSchema = creditNoteCreateSchema.extend({
+  supplierReturnId: z.string().trim().min(1).max(191).optional(),
+  supplierCreditReference: z.string().trim().min(3).max(160).optional(),
+  replacesCreditNoteId: z.string().trim().min(1).max(191).optional(),
+  replacesCreditRevision: revisionSchema.optional(),
+}).refine((value) => Boolean(value.supplierReturnId) === Boolean(value.supplierCreditReference), { message: "SUPPLIER_RETURN_CREDIT_REFERENCE_REQUIRED", path: ["supplierCreditReference"] })
+  .refine((value) => Boolean(value.replacesCreditNoteId) === (value.replacesCreditRevision !== undefined) &&
+    (!value.replacesCreditNoteId || Boolean(value.supplierReturnId)), { message: "SUPPLIER_RETURN_CREDIT_REPLACEMENT_INVALID", path: ["replacesCreditNoteId"] });
+
 export const paymentCreateSchema = z.object({
   direction: z.enum(PAYMENT_DIRECTIONS),
   paymentType: z.enum(PAYMENT_TYPES),

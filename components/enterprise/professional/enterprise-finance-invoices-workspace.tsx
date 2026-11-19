@@ -37,6 +37,7 @@ import { ModuleContent, ModuleHeader, ModuleSection, ModuleToolbar, ModuleWorksp
 import { StatusBadge } from "@/components/workspace/status-badge";
 import type { EnterpriseModuleDefinition } from "@/lib/enterprise/module-registry";
 import { translateEnterpriseFinance, type EnterpriseFinanceKey } from "@/lib/i18n";
+import { purchaseFormGuidance } from "@/lib/enterprise/purchase-form-i18n";
 
 type Props = {
   organizationId: string;
@@ -65,8 +66,12 @@ type InvoiceRecord = FinanceRecord & {
   dueDate?: string | null;
   grandTotal?: string | number;
   outstandingAmount?: string | number;
+  supplierReturnReservedAmount?: string;
+  supplierReturnAllocatableAmount?: string;
+  supplierReturn?: { id:string; reference:string; status:string; purchaseId:string; sourceMovementId:string; currencyCode:string; totalCost:string; recoverableTaxAmount?:string; supplierCreditNoteId:string|null } | null;
   salesInvoiceId?: string;
   supplierInvoiceId?: string;
+  replacementCreditNoteId?: string|null;
   items?: Array<{ id: string; description: string; quantity: string | number; unitPrice: string | number; discountAmount?: string | number }>;
   pendingApproverName?: string | null;
   capabilities?: RecordCapabilities;
@@ -215,6 +220,10 @@ export function EnterpriseFinanceInvoicesWorkspace(props: Props) {
     { key: "date", labelFr: "Date de la pièce / échéance", labelEn: "Document date / due date", get: (row) => financeDate(row.invoiceDate || row.creditDate || row.dueDate, locale) },
     { key: "currency", labelFr: "Devise", labelEn: "Currency", get: (row) => String(row.currencyCode || row.currency || "") },
     { key: "total", labelFr: "Total", labelEn: "Total", get: (row) => String(row.totalAmount || row.amount || row.balanceDue || "") },
+    ...(!isReceivables && endpointName !== "supplier-credit-notes" ? [
+      { key: "returnReserved", labelFr: purchaseFormGuidance("fr","returnFinanceExportReserved"),labelEn:purchaseFormGuidance("en","returnFinanceExportReserved"),get:(row:Record<string,unknown>)=>String(row.supplierReturnReservedAmount ?? "") },
+      { key: "returnAllocatable", labelFr: purchaseFormGuidance("fr","returnFinanceExportAllocatable"),labelEn:purchaseFormGuidance("en","returnFinanceExportAllocatable"),get:(row:Record<string,unknown>)=>String(row.supplierReturnAllocatableAmount ?? "") },
+    ] : []),
   ];
   const { summary, error: summaryError } = useOperationalFinanceSummary(organizationId, moduleCode, refreshKey);
 
@@ -222,7 +231,7 @@ export function EnterpriseFinanceInvoicesWorkspace(props: Props) {
     const invoiceKey = isReceivables ? "invoiceId" : "supplierInvoiceId";
     const creditKey = isReceivables ? "creditNoteId" : "supplierCreditNoteId";
     const invoiceId = searchParams.get(invoiceKey);
-    const creditId = searchParams.get(creditKey);
+    const creditId = searchParams.get(creditKey) || (!isReceivables ? searchParams.get("creditNote") : null);
     const deepId = creditId || invoiceId;
     if (!deepId) return;
     const directName = creditId
@@ -396,6 +405,12 @@ export function EnterpriseFinanceInvoicesWorkspace(props: Props) {
                 <Button size="sm" variant="outline" onClick={() => setDetail(record as InvoiceRecord)}><Eye className="h-4 w-4" />{t("detailsLabel")}</Button>
                 <Button size="sm" variant="outline" onClick={() => printCustomerInvoice(invoiceId)}><Printer className="h-4 w-4" />{t("printInvoicePreview")}</Button>
               </div> : null;
+            } : !isReceivables ? (record) => {
+              const row=record as InvoiceRecord;
+              return <div className="flex min-w-0 flex-wrap items-center gap-2" data-responsive-actions>
+                {row.supplierReturn?.status==="DISPATCHED"?<StatusBadge tone="warning">{purchaseFormGuidance(locale,"returnFinanceReserved")} : {financeMoney(row.supplierReturnReservedAmount,String(row.currencyCode),locale)}</StatusBadge>:null}
+                <Button size="sm" variant="outline" onClick={()=>setDetail(row)}><Eye className="h-4 w-4"/>{t("detailsLabel")}</Button>
+              </div>;
             } : undefined}
           />
         </div>}
@@ -470,6 +485,21 @@ export function EnterpriseFinanceInvoicesWorkspace(props: Props) {
           {detail.outstandingAmount !== undefined ? <FinanceDetailValue label={t("outstanding")}>{financeMoney(detail.outstandingAmount, String(detail.currencyCode || "USD"), locale)}</FinanceDetailValue> : null}
           {detail.dueDate ? <FinanceDetailValue label={t("dueDate")}>{financeDate(detail.dueDate, locale)}</FinanceDetailValue> : null}
         </FinanceDetailGrid>
+        {!isReceivables && detail.replacementCreditNoteId ? <div className="min-w-0 rounded-xl border border-dtsc-border p-3"><a className="break-words text-sm font-semibold text-dtsc-blue underline" href={`/enterprise-modules/FINANCE_PAYABLES?supplierCreditNoteId=${encodeURIComponent(detail.replacementCreditNoteId)}`}>{purchaseFormGuidance(locale,"returnCreditReplacementLink")}</a></div>:null}
+        {!isReceivables && detail.supplierReturn ? <section className="grid min-w-0 gap-2 rounded-xl border border-dtsc-border p-3" data-supplier-return-finance>
+          <div className="flex min-w-0 flex-wrap justify-between gap-2"><h3 className="font-semibold break-words">{purchaseFormGuidance(locale,"returnFinanceTitle")} · {detail.supplierReturn.reference}</h3><StatusBadge tone={detail.supplierReturn.status==="RECONCILED"?"success":"warning"}>{purchaseFormGuidance(locale,detail.supplierReturn.status==="RECONCILED"?"returnReconciled":"returnDispatched")}</StatusBadge></div>
+          <FinanceDetailGrid>
+            <FinanceDetailValue label={purchaseFormGuidance(locale,"returnCreditStockValue")}>{financeMoney(detail.supplierReturn.totalCost,String(detail.currencyCode),locale)}</FinanceDetailValue>
+            {Number(detail.supplierReturn.recoverableTaxAmount)>0?<FinanceDetailValue label={purchaseFormGuidance(locale,"returnCreditRecoverableTax")}>{financeMoney(detail.supplierReturn.recoverableTaxAmount,String(detail.currencyCode),locale)}</FinanceDetailValue>:null}
+            <FinanceDetailValue label={purchaseFormGuidance(locale,"returnFinanceReserved")}>{financeMoney(detail.supplierReturnReservedAmount,String(detail.currencyCode),locale)}</FinanceDetailValue>
+            <FinanceDetailValue label={purchaseFormGuidance(locale,"returnFinanceAllocatable")}>{financeMoney(detail.supplierReturnAllocatableAmount,String(detail.currencyCode),locale)}</FinanceDetailValue>
+          </FinanceDetailGrid>
+          <p className="text-xs text-dtsc-muted">{purchaseFormGuidance(locale,detail.supplierReturn.status==="RECONCILED"?"returnFinanceMatched":"returnFinanceExplain")}</p>
+          <div data-responsive-actions className="flex min-w-0 flex-wrap gap-2">
+            <a className="break-words text-sm text-dtsc-blue underline" href={`/enterprise-modules/SUPPLIERS_PURCHASES?purchase=${encodeURIComponent(detail.supplierReturn.purchaseId)}&returnMovement=${encodeURIComponent(detail.supplierReturn.sourceMovementId)}`}>{purchaseFormGuidance(locale,"returnFinanceSource")}</a>
+            {detail.supplierReturn.supplierCreditNoteId?<a className="break-words text-sm text-dtsc-blue underline" href={`/enterprise-modules/FINANCE_PAYABLES?supplierCreditNoteId=${encodeURIComponent(detail.supplierReturn.supplierCreditNoteId)}`}>{purchaseFormGuidance(locale,"returnCreditReview")}</a>:null}
+          </div>
+        </section>:null}
         {!isReceivables && detailKind === "invoice" && detail.threeWayMatch ? <section className="rounded-xl border border-dtsc-border p-4"><h3 className="font-black text-dtsc-ink">{t("poReceiptInvoiceControl")}</h3><div className="mt-3 grid gap-3 sm:grid-cols-3"><FinanceDetailValue label={t("quantity")}>{String(detail.threeWayMatch.quantityVariance ?? 0)}</FinanceDetailValue><FinanceDetailValue label={t("price")}>{String(detail.threeWayMatch.priceVariance ?? 0)}</FinanceDetailValue><FinanceDetailValue label={t("totalVariance")}>{String(detail.threeWayMatch.totalVariance ?? 0)}</FinanceDetailValue></div></section> : null}
         {invoiceIdFor(detail) ? <div data-responsive-actions><Button variant="outline" onClick={() => printCustomerInvoice(invoiceIdFor(detail)!)}><Printer className="h-4 w-4" />{t("printInvoicePreview")}</Button></div> : null}
         {detailHasWorkflow ? <div data-responsive-actions>{(detailKind === "credit" ? creditTransitionActions(detail.status, locale) : invoiceTransitionActions(detail.status, locale, isReceivables)).filter((action) => capabilityAllowsAction(detail, action.action)).map((action) => { const Icon = action.icon; return <Button key={action.action} disabled={busy} variant={action.destructive ? "destructive" : "outline"} onClick={() => setActionTarget({ record: detail, action: action.action, kind: detailKind })}><Icon className="h-4 w-4" />{action.label}</Button>; })}{detailKind === "invoice" && detail.capabilities?.canCreateCredit ? <Button variant="outline" disabled={busy} onClick={() => setCreditTarget(detail)}><FileMinus2 className="h-4 w-4" />{t("createCreditNote")}</Button> : null}</div> : null}

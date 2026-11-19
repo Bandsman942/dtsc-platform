@@ -41,6 +41,7 @@ const FIELD_LABELS: Record<string, { fr: string; en: string }> = {
   assetTotal: { fr: "Total actif", en: "Total assets" }, liabilityTotal: { fr: "Total passif", en: "Total liabilities" }, equityTotal: { fr: "Capitaux propres", en: "Equity" }, difference: { fr: "Écart d’équilibre", en: "Balance difference" },
   budgetName: { fr: "Budget", en: "Budget" }, lineName: { fr: "Ligne budgétaire", en: "Budget line" }, plannedAmount: { fr: "Prévu", en: "Planned" }, committedAmount: { fr: "Engagé", en: "Committed" }, realizedAmount: { fr: "Réalisé", en: "Actual" }, approvedExpenseAmount: { fr: "Dépenses approuvées", en: "Approved expenses" },
   taxableAmount: { fr: "Base taxable", en: "Taxable amount" }, outputTax: { fr: "Taxe collectée", en: "Output tax" }, inputTax: { fr: "Taxe déductible", en: "Input tax" }, netTax: { fr: "Taxe nette", en: "Net tax" },
+  inventoryItemName: { fr: "Article", en: "Item" }, warehouseName: { fr: "Dépôt", en: "Warehouse" }, valuationBasis: { fr: "Base de valorisation", en: "Valuation basis" },
   quantity: { fr: "Quantité", en: "Quantity" }, currencyCode: { fr: "Devise", en: "Currency" }, dueDate: { fr: "Échéance", en: "Due date" }, daysPastDue: { fr: "Jours de retard", en: "Days past due" }, outstandingAmount: { fr: "Encours", en: "Outstanding" }, bucket: { fr: "Ancienneté", en: "Aging bucket" },
   operationalBalance: { fr: "Solde opérationnel", en: "Operational balance" }, reconciledBalance: { fr: "Solde rapproché", en: "Reconciled balance" }, availableBalance: { fr: "Disponible", en: "Available balance" }, accountTypeLabel: { fr: "Type de compte", en: "Account type" },
 };
@@ -49,6 +50,7 @@ const ENUM_LABELS: Record<string, { fr: string; en: string }> = {
   ASSET: { fr: "Actif", en: "Asset" }, LIABILITY: { fr: "Passif", en: "Liability" }, EQUITY: { fr: "Capitaux propres", en: "Equity" }, REVENUE: { fr: "Produits", en: "Revenue" }, EXPENSE: { fr: "Charges", en: "Expense" }, OTHER_INCOME: { fr: "Autres produits", en: "Other income" }, OTHER_EXPENSE: { fr: "Autres charges", en: "Other expense" },
   OPERATING: { fr: "Exploitation", en: "Operating" }, INVESTING: { fr: "Investissement", en: "Investing" }, FINANCING: { fr: "Financement", en: "Financing" }, INBOUND: { fr: "Entrant", en: "Inbound" }, OUTBOUND: { fr: "Sortant", en: "Outbound" },
   CURRENT: { fr: "À échoir", en: "Current" }, days1to30: { fr: "1–30 jours", en: "1–30 days" }, days31to60: { fr: "31–60 jours", en: "31–60 days" }, days61to90: { fr: "61–90 jours", en: "61–90 days" }, over90: { fr: "> 90 jours", en: "> 90 days" },
+  VERIFIED_HISTORY: { fr: "Historique vérifié", en: "Verified history" }, CURRENT_LAYER_PROJECTION: { fr: "Projection actuelle, historique non certifié", en: "Current projection, unverified history" },
   GENERATED: { fr: "Généré", en: "Generated" }, PUBLISHED: { fr: "Publié", en: "Published" }, POSTED: { fr: "Comptabilisé", en: "Posted" }, CONFIRMED: { fr: "Confirmé", en: "Confirmed" }, OPEN: { fr: "Ouvert", en: "Open" }, CLOSED: { fr: "Clôturé", en: "Closed" },
 };
 
@@ -132,13 +134,13 @@ export function buildFinancialStatementProfessionalReport(input: { statement: Fi
   const statement = input.statement;
   const currency = statement.currencyCode || "USD";
   const statementType = String(statement.statementType || "FINANCIAL_STATEMENT");
-  const rowEntries = rowArrays(statement.snapshotJson);
+  const rowEntries = rowArrays(statement.snapshotJson).map(entry => statementType === "INVENTORY_VALUATION" ? {...entry,row:{...entry.row, valuationBasis: entry.row.valuationBasis === "VERIFIED_HISTORY" ? "VERIFIED_HISTORY" : "CURRENT_LAYER_PROJECTION"}} : entry);
   const rawRows = rowEntries.map((entry) => entry.row);
   const keys = safeKeys(rawRows);
   const scalar = scalarMetrics(statement.snapshotJson);
   const rows = rowEntries.map((entry) => Object.fromEntries([
     ...(entry.section && rowEntries.some((candidate) => candidate.section !== entry.section) ? [["section", fieldLabel(entry.section, locale)]] : []),
-    ...keys.map((key) => [key, displayValue(entry.row[key], key, currency, locale)]),
+    ...keys.map((key) => [key, displayValue(entry.row[key], key, statementType === "INVENTORY_VALUATION" && typeof entry.row.currencyCode === "string" ? entry.row.currencyCode : currency, locale)]),
   ]));
   const columns = [
     ...(rowEntries.some((entry) => entry.section) && new Set(rowEntries.map((entry) => entry.section)).size > 1 ? [{ key: "section", label: locale === "en" ? "Section" : "Section" }] : []),
@@ -161,6 +163,10 @@ export function buildFinancialStatementProfessionalReport(input: { statement: Fi
 
   const insights: ProfessionalReportInsight[] = [];
   const snapshot = asRecord(statement.snapshotJson);
+  if (statementType === "INVENTORY_VALUATION") {
+    const unverified=rawRows.filter(row=>row.valuationBasis!=="VERIFIED_HISTORY").length;
+    insights.push({title:locale==="en"?"Historical evidence":"Preuve historique", body:unverified ? (locale==="en"?`${unverified} line(s) use current cost-layer balances; their historical values are not certified.`:`${unverified} ligne(s) reposent sur les reliquats actuels des couches de coût ; leurs valeurs historiques ne sont pas certifiées.`) : (locale==="en"?"All displayed lines have verified posted movement history.":"Toutes les lignes affichées disposent d’un historique de mouvements comptabilisés vérifié."),tone:unverified?"warning":"info"});
+  }
   if (statementType === "BUDGET_VS_ACTUAL") {
     const planned = rawRows.reduce((sum, row) => sum + (numberValue(row.plannedAmount) || 0), 0);
     const actual = rawRows.reduce((sum, row) => sum + (numberValue(row.realizedAmount) ?? numberValue(row.approvedExpenseAmount) ?? 0), 0);
@@ -203,7 +209,8 @@ export function buildFinancialStatementProfessionalReport(input: { statement: Fi
     filenameBase: `etat-financier-${statementType.toLowerCase()}`,
     kpis: kpis.slice(0, 8),
     chartTitle: preferredNumeric ? fieldLabel(preferredNumeric, locale) : (locale === "en" ? "Comparable metrics" : "Métriques comparables"),
-    chart,
+    // Never aggregate visually or label cross-currency stock amounts as the selected document currency.
+    chart: statementType === "INVENTORY_VALUATION" && (new Set(rawRows.map(row=>row.currencyCode)).size>1 || rawRows.some(row=>row.valuationBasis!=="VERIFIED_HISTORY"||row.currencyCode!==currency)) ? [] : chart,
     columns,
     rows,
     insights,

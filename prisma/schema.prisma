@@ -922,6 +922,7 @@ model Organization {
   enterpriseAiToolCalls        EnterpriseAiToolCall[]
   enterpriseAiUsageLogs        EnterpriseAiUsage[]
   enterpriseAiSettings         EnterpriseAiSetting[]
+  inventoryQualityScan         EnterpriseInventoryQualityScan?
   notifications                Notification[]
   supportTickets               SupportTicket[]
   announcements                Announcement[]                   @relation("AnnouncementOrganization")

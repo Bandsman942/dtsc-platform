@@ -717,6 +717,38 @@ test.describe.serial("Shop 2.0 Retail behavioral acceptance", () => {
       expect(warehouseList.body.items.every((item) => item.siteId === secondarySite.id)).toBe(true);
       expect(warehouseList.body.items.some((item) => item.id === fixture.warehouseId)).toBe(false);
       const sourceWarehouse = await prisma.enterpriseWarehouse.findUniqueOrThrow({ where: { id: fixture.warehouseId } });
+      // Lots and reservations store warehouse IDs, not foreign relation
+      // fields. A valid store-B request must not fail with Prisma 500 or
+      // reveal the lot/quantity/alert totals of store A.
+      const scopeKey="LOT-SCOPE-"+crypto.randomUUID().slice(0,10);
+      const scopeProduct=await prisma.enterpriseCatalogItem.create({data:{organizationId,code:scopeKey,sku:scopeKey,name:scopeKey,normalizedName:scopeKey.toLowerCase(),itemType:"PRODUCT",unitOfMeasureId:product.unitOfMeasureId,indicativeSalePrice:10,currency:fixture.currencyCode,trackInventory:true,createdByUserId:fixture.userId}});
+      const scopeInventory=await prisma.enterpriseInventoryItem.create({data:{organizationId,catalogItemId:scopeProduct.id,lotTracking:true,expiryTracking:true,minimumQuantity:5,createdByUserId:fixture.userId}});
+      const past=new Date(Date.now()-86400000*10);
+      const lotA=await prisma.enterpriseStockLot.create({data:{organizationId,inventoryItemId:scopeInventory.id,warehouseId:fixture.warehouseId,lotNumber:scopeKey,expiryDate:past,createdByUserId:fixture.userId}});
+      const lotB=await prisma.enterpriseStockLot.create({data:{organizationId,inventoryItemId:scopeInventory.id,warehouseId:secondaryWarehouse.id,lotNumber:scopeKey,expiryDate:past,createdByUserId:fixture.userId}});
+      for(const [lot,qty] of [[lotA,90],[lotB,3]])await prisma.enterpriseInventoryBalance.create({data:{organizationId,inventoryItemId:scopeInventory.id,warehouseId:lot.warehouseId,stockLotId:lot.id,quantityOnHand:qty}});
+      const scopedLotsPath=`/api/enterprise/${organizationId}/inventory/lots`;
+      const scopedLots=await apiGet(page,scopedLotsPath+"?search="+scopeKey+"&expiry=EXPIRED");
+      expect(scopedLots.response.status(),JSON.stringify(scopedLots.body)).toBe(200);
+      expect(scopedLots.body.items.map(row=>row.id)).toEqual([lotB.id]);
+      expect(scopedLots.body.metrics.expired).toBe(1);
+      const hiddenLots=await apiGet(page,scopedLotsPath+"?search="+scopeKey+"&warehouseId="+fixture.warehouseId);
+      expect(hiddenLots.response.status()).toBe(200);
+      expect(hiddenLots.body.pagination.total).toBe(0);
+      expect(hiddenLots.body.metrics.expired).toBe(0);
+      const hiddenTrace=await apiGet(page,scopedLotsPath+"?view=trace&lotId="+lotA.id);
+      expect(hiddenTrace.response.status()).toBe(404);
+      const ownTrace=await apiGet(page,scopedLotsPath+"?view=trace&lotId="+lotB.id);
+      expect(ownTrace.response.status()).toBe(200);
+      const scopedAvailable=await apiGet(page,`/api/enterprise/${organizationId}/inventory?search=${scopeKey}&lowStock=true`);
+      expect(scopedAvailable.response.status(),JSON.stringify(scopedAvailable.body)).toBe(200);
+      expect(scopedAvailable.body.pagination.total).toBe(1);
+      expect(scopedAvailable.body.metrics.lowStockCount).toBe(1);
+      expect(scopedAvailable.body.items[0].quantityOnHand).toBe(3);
+      expect(scopedAvailable.body.items[0].quantityAvailable).toBe(0);
+      expect(scopedAvailable.body.items[0].balances.every(row=>row.warehouseId===secondaryWarehouse.id)).toBe(true);
+      const forbiddenLotUpdate=await apiJson(await page.context().request.patch(scopedLotsPath,{data:{id:lotA.id,revision:lotA.revision,status:"QUARANTINED",qualityReason:"Forbidden cross-site quality mutation"},headers:{origin:baseUrl,referer:baseUrl+"/enterprise-modules/INVENTORY_LOGISTICS"}}));
+      expect(forbiddenLotUpdate.response.status()).toBe(403);
 
       const forbiddenWarehouseCreate = await apiPost(page, `/api/enterprise/${organizationId}/warehouses`, {
         siteId: primarySite.siteId, name: "Forbidden cross-store depot",

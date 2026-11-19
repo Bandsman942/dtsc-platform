@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { z } from "zod";
+import { receiptLotAllocationsSchema } from "@/lib/enterprise/procurement/receipt-lot-schema";
 import { EnterpriseDomainError } from "@/lib/enterprise/common/errors";
 import { applyStockMovementTx } from "@/lib/enterprise/inventory/service";
 import { requireRetailSiteCapability } from "@/lib/enterprise/retail/site-access";
@@ -18,6 +19,7 @@ export const receiptInventoryPostSchema = z.object({
   warehouseId: z.string().trim().min(1).optional().nullable(),
   storageLocationId: z.string().trim().min(1).optional().nullable(),
   idempotencyKey: z.string().trim().min(8).max(240),
+  lotAllocations: receiptLotAllocationsSchema.optional(),
 });
 
 type SupplierPartyLinkInput = z.infer<typeof supplierPartyLinkSchema>;
@@ -163,7 +165,9 @@ export async function postEnterprisePurchaseReceiptToInventoryTx(
     if (error instanceof EnterpriseRetailError) throw new EnterpriseDomainError(error.code, error.status);
     throw error;
   }
-  const results: Array<{ receiptItemId: string; stockMovementId: string | null; serviceAccepted: boolean }> = [];
+  const allocationsByItem = new Map((input.lotAllocations || []).map((allocation) => [allocation.purchaseItemId, allocation.batches]));
+  if (allocationsByItem.size !== (input.lotAllocations || []).length || [...allocationsByItem.keys()].some((id) => !receipt.items.some((item) => item.purchaseItemId === id))) throw new EnterpriseDomainError("RECEIPT_BATCH_LINE_INVALID", 400, "Les lots doivent correspondre à des lignes de cette réception, sans doublon.");
+  const results: Array<{ receiptItemId: string; stockMovementId: string | null; stockMovementIds?: string[]; serviceAccepted: boolean }> = [];
   for (const receiptItem of receipt.items) {
     const existingItemLink = await tx.enterprisePurchaseReceiptItemStockLink.findFirst({
       where: { organizationId, purchaseReceiptItemId: receiptItem.id },
@@ -179,7 +183,9 @@ export async function postEnterprisePurchaseReceiptToInventoryTx(
     if (!itemLink) throw new EnterpriseDomainError("PURCHASE_ITEM_CATALOG_LINK_REQUIRED", 409);
 
     const requiresStockMovement = itemLink.expectedItemType === "GOODS";
+    const batches = allocationsByItem.get(receiptItem.purchaseItemId) || [];
     if (!requiresStockMovement) {
+      if (batches.length) throw new EnterpriseDomainError("RECEIPT_BATCH_SERVICE_INVALID", 400, "Une prestation de service ne possède pas de lot physique.");
       const operationalLink = await tx.enterprisePurchaseReceiptItemStockLink.create({
         data: { organizationId, purchaseReceiptItemId: receiptItem.id, serviceAccepted: true },
       });
@@ -203,24 +209,64 @@ export async function postEnterprisePurchaseReceiptToInventoryTx(
       });
     }
 
-    const movementResult = await applyStockMovementTx(tx, organizationId, actorUserId, {
-      inventoryItemId: inventoryItem.id,
-      warehouseId,
-      storageLocationId,
-      stockLotId: null,
-      movementType: "PURCHASE_RECEIPT",
-      direction: "IN",
-      quantity: Number(receiptItem.quantityReceived),
-      sourceEntityType: "EnterprisePurchaseReceipt",
-      sourceEntityId: receipt.id,
-      sourceLineId: receiptItem.id,
-      idempotencyKey: `purchase-receipt:${receipt.id}:${receiptItem.id}`,
-      reason: `Réception ${receipt.reference}`,
-    });
+    if (inventoryItem.status !== "ACTIVE") throw new EnterpriseDomainError("INVENTORY_ITEM_NOT_FOUND", 404, "Cet article de stock n’est plus actif.");
+    if ((inventoryItem.lotTracking || inventoryItem.expiryTracking) && !batches.length) throw new EnterpriseDomainError("RECEIPT_BATCH_REQUIRED", 409, "Renseignez les lots réellement reçus pour cet article.");
+    if (!inventoryItem.lotTracking && batches.length) throw new EnterpriseDomainError("RECEIPT_BATCH_POLICY_REQUIRED", 409, "Activez le suivi des lots dans Stock & logistique avant cette réception.");
+    if (batches.length) {
+      const seen = new Set(batches.map((batch) => batch.lotNumber));
+      const total = batches.reduce((sum, batch) => sum.plus(batch.quantity), new Prisma.Decimal(0));
+      if (seen.size !== batches.length || !total.equals(receiptItem.quantityReceived)) throw new EnterpriseDomainError("RECEIPT_BATCH_QUANTITY_INVALID", 409, "La somme des quantités par lot doit correspondre à la quantité reçue, sans numéro en double.");
+    }
+    const stockMovementIds: string[] = [];
+    const entries = batches.length ? batches : [{ lotNumber: "", productionDate: null, expiryDate: null, quantity: Number(receiptItem.quantityReceived) }];
+    for (const batch of entries) {
+      let stockLotId: string | null = null;
+      if (batch.lotNumber) {
+        if (inventoryItem.expiryTracking && !batch.expiryDate) throw new EnterpriseDomainError("RECEIPT_BATCH_EXPIRY_REQUIRED", 409, "La date réelle de péremption est obligatoire pour chaque lot.");
+        if (batch.productionDate && batch.expiryDate && batch.productionDate > batch.expiryDate) throw new EnterpriseDomainError("RECEIPT_BATCH_DATES_INVALID", 400, "La date de fabrication doit précéder ou correspondre à la péremption.");
+        const productionDate = batch.productionDate ? new Date(`${batch.productionDate}T00:00:00.000Z`) : null;
+        const expiryDate = batch.expiryDate ? new Date(`${batch.expiryDate}T00:00:00.000Z`) : null;
+        // Supplier acceptance is not a transfer of goods we already own.
+        // Never post a recalled supplier batch as received or create a new
+        // available copy. Keep the purchase open for replacement/return.
+        const recalledLot = await tx.enterpriseStockLot.findFirst({
+          where: { organizationId, inventoryItemId: inventoryItem.id, lotNumber: batch.lotNumber, recallReference: { not: null } },
+          select: { recallReference: true },
+        });
+        if (recalledLot) throw new EnterpriseDomainError("RECEIPT_BATCH_RECALLED", 409, "Lot rappelé : refusez sa réception commerciale, isolez la marchandise physiquement et demandez son remplacement ou retour au fournisseur.");
+        const existingLot = await tx.enterpriseStockLot.findFirst({ where: { organizationId, inventoryItemId: inventoryItem.id, warehouseId, lotNumber: batch.lotNumber } });
+        if (existingLot) {
+          if (existingLot.archivedAt || existingLot.status !== "AVAILABLE" || existingLot.productionDate?.getTime() !== productionDate?.getTime() || existingLot.expiryDate?.getTime() !== expiryDate?.getTime() || (existingLot.storageLocationId && existingLot.storageLocationId !== storageLocationId)) throw new EnterpriseDomainError("RECEIPT_BATCH_METADATA_CONFLICT", 409, "Ce lot existe avec des dates, un emplacement ou un statut différent. Vérifiez sa fiche dans Stock & logistique.");
+          stockLotId = existingLot.id;
+        } else {
+          const newLot = await tx.enterpriseStockLot.create({ data: { organizationId, inventoryItemId: inventoryItem.id, warehouseId, lotNumber: batch.lotNumber, productionDate, expiryDate, createdByUserId: actorUserId } });
+          stockLotId = newLot.id;
+        }
+      }
+      const movementResult = await applyStockMovementTx(tx, organizationId, actorUserId, {
+        inventoryItemId: inventoryItem.id,
+        warehouseId,
+        storageLocationId,
+        stockLotId,
+        movementType: "PURCHASE_RECEIPT",
+        direction: "IN",
+        quantity: batch.quantity,
+        sourceEntityType: "EnterprisePurchaseReceipt",
+        sourceEntityId: receipt.id,
+        sourceLineId: receiptItem.id,
+        idempotencyKey: stockLotId ? `purchase-receipt:${receipt.id}:${receiptItem.id}:lot:${stockLotId}` : `purchase-receipt:${receipt.id}:${receiptItem.id}`,
+        reason: `Réception ${receipt.reference}`,
+      });
+      stockMovementIds.push(movementResult.movement.id);
+    }
+    // The historical one-per-receipt-line marker remains the compatibility
+    // anchor. The authoritative complete movement set is the immutable ledger,
+    // keyed by receipt id + receipt item id, including each physical lot.
+    const stockMovementId = stockMovementIds[0]!;
     await tx.enterprisePurchaseReceiptItemStockLink.create({
-      data: { organizationId, purchaseReceiptItemId: receiptItem.id, stockMovementId: movementResult.movement.id },
+      data: { organizationId, purchaseReceiptItemId: receiptItem.id, stockMovementId },
     });
-    results.push({ receiptItemId: receiptItem.id, stockMovementId: movementResult.movement.id, serviceAccepted: false });
+    results.push({ receiptItemId: receiptItem.id, stockMovementId, stockMovementIds, serviceAccepted: false });
   }
 
   const serviceAccepted = results.length > 0 && results.every((item) => item.serviceAccepted);

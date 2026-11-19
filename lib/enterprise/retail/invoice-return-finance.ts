@@ -414,8 +414,21 @@ export async function settleRetailInvoiceReturnFinance(
         { revision: payout.payment.revision, reason: input.reason });
     }
     let restockedCount = 0;
+    let isolatedCustodyCount = 0;
     for (const source of plan.stockSourcePlan) {
-      if (source.stockDisposition !== "RESTOCK") continue;
+      if (source.stockDisposition !== "RESTOCK") {
+        if (!["QUARANTINE","DISPOSE"].includes(source.stockDisposition) || !request.inspectedByUserId || !request.inspectedAt) throw fail("RETAIL_INVOICE_RETURN_SETTLEMENT_STOCK_INVALID");
+        const disposal=source.stockDisposition==="DISPOSE";
+        await tx.enterpriseInventoryReturnCustody.create({data:{
+          organizationId,returnLineId:source.returnLineId,originalMovementId:source.originalMovementId,quantity:source.quantity,
+          disposition:source.stockDisposition,status:disposal?"DISPOSAL_PENDING":"QUARANTINED",
+          inspectedByUserId:request.inspectedByUserId,inspectedAt:request.inspectedAt,inspectionNotes:request.inspectionNotes,
+          registeredByUserId:actorUserId,
+          ...(disposal?{disposalRequestedByUserId:request.inspectedByUserId,disposalRequestedAt:request.inspectedAt,disposalReason:request.reason}:{}),
+        }});
+        isolatedCustodyCount++;
+        continue;
+      }
       const stock = await applyStockMovementTx(tx, organizationId, actorUserId, {
         inventoryItemId: source.inventoryItemId, warehouseId: source.warehouseId,
         storageLocationId: source.storageLocationId, stockLotId: source.stockLotId,
@@ -446,7 +459,7 @@ export async function settleRetailInvoiceReturnFinance(
       metadataJson: { invoiceId, siteId: plan.siteId, refundPaymentId: payment?.id || null,
         payoutPaymentIds: payouts.map((leg) => leg.payment.id),
         creditNoteId: credit.id, creditAmount: plan.refundAmount.toFixed(2), payoutAmount: payoutAmount.toFixed(2),
-        restockedMovementCount: restockedCount,
+        restockedMovementCount: restockedCount, isolatedCustodyCount,
         nonRestockedLineCount: plan.stockSourcePlan.filter((source) => source.stockDisposition !== "RESTOCK").length },
     });
     return { request: completed, idempotent: false };

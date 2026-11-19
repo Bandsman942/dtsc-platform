@@ -12,7 +12,9 @@ import { customerFacingError } from "@/lib/customer-facing-language";
 type StockDisposition = "RESTOCK" | "QUARANTINE" | "DISPOSE" | "SERVICE_CREDIT" | "UNDELIVERED_CREDIT";
 type CheckoutLine = { id: string; invoiceItemId: string; inventoryItemId: string | null };
 type InvoiceItem = { id: string; description: string; quantity: string; totalAmount: string };
-type RequestLine = { id: string; checkoutLineId: string; quantity: string; refundAmount: string; stockDisposition: StockDisposition };
+type BatchChoice = { stockLotId: string; quantity: string };
+type BatchOption = { stockLotId: string; lotNumber: string; quantityIssued: string; quantityAvailable: string };
+type RequestLine = { id: string; checkoutLineId: string; quantity: string; refundAmount: string; stockDisposition: StockDisposition; lotAllocations?: BatchChoice[] | null };
 type ReturnRequest = {
   id: string;
   number: string;
@@ -39,15 +41,17 @@ type ReturnRequest = {
 type ReturnResponse = {
   items: ReturnRequest[];
   stockPostedAt: boolean;
+  batchOptions?: Record<string, BatchOption[]>;
   canRequest: boolean;
   pagination: { page: number; pageCount: number; total: number };
   message?: string;
 };
-type Row = { checked: boolean; quantity: string; stockDisposition: StockDisposition };
+type Row = { checked: boolean; quantity: string; stockDisposition: StockDisposition; batches?: Record<string, string> };
 type Action = { request: ReturnRequest; type: "INSPECT" | "APPROVE" | "REJECT" | "PREPARE_FINANCE" | "SETTLE_FINANCE" };
 
 const translations = {
   fr: {
+    batchTitle: "Lots réellement rapportés", batchHelp: "Indiquez les quantités par lot ; leur somme doit correspondre à la quantité créditée.", batchAvailable: "Encore retournable", batchMismatch: "Vérifiez les quantités réellement rapportées par lot. Leur somme doit correspondre au retour et ne pas dépasser le solde retournable.", batchConfirm: "Je confirme avoir physiquement contrôlé les numéros de lots et les quantités ci-dessus.", batchMissing: "Aucun lot retournable identifié. Actualisez ou contactez le support.",
     trigger: "Annulation et avoirs", title: "Annulation, retour et avoir", explain: "Une facture comptabilisée n'est jamais effacée. L'avoir réduit la créance et le remboursement se limite au trop-perçu déjà encaissé. Les articles livrés exigent une inspection indépendante ; les services et articles non livrés une vérification indépendante. Le gérant autorisé ne liquide jamais lui-même l'opération.",
     refresh: "Actualiser", loading: "Chargement des demandes…", empty: "Aucune demande de retour enregistrée.", error: "Impossible de charger les retours de cette facture.",
     undeliveredCredit: "Article non encore livré : libérer la réservation sans mouvement de stock",
@@ -59,6 +63,7 @@ const translations = {
     previous: "Précédente", next: "Suivante", close: "Fermer", select: "Sélectionner", rowMissing: "Aucune ligne facturée n’est disponible pour créer un retour.", itemRequired: "Sélectionnez au moins un article avec une quantité valide.", invalidQuantity: "La quantité doit être positive, ne pas dépasser la facture et avoir au plus 3 décimales pour un article en stock. Les quantités déjà engagées sont revérifiées par le serveur.",
   },
   en: {
+    batchTitle: "Batches actually returned", batchHelp: "Enter quantities by batch; their sum must match the credited quantity.", batchAvailable: "Still returnable", batchMismatch: "Check the physical quantities by batch. Their sum must match the return and stay within the returnable balance.", batchConfirm: "I confirm that I physically checked the batch numbers and quantities above.", batchMissing: "No identified returnable batch. Refresh or contact support.",
     trigger: "Cancellation and credits", title: "Cancellation, returns and credit notes", explain: "Posted invoices are never erased. The credit note reduces receivables and refunds cover only excess amounts already collected. Delivered goods require independent physical inspection; services and unfulfilled goods require independent verification. An authorized manager cannot settle their own request.",
     refresh: "Refresh", loading: "Loading return requests…", empty: "No return requests yet.", error: "Unable to load this invoice's returns.",
     undeliveredCredit: "Goods not yet delivered: release stock hold, no inventory movement",
@@ -92,6 +97,7 @@ export function RetailInvoiceReturnDialog({ organizationId, invoiceId, invoiceNu
   const [reason, setReason] = useState("");
   const [action, setAction] = useState<Action | null>(null);
   const [actionNotes, setActionNotes] = useState("");
+  const [batchConfirmed, setBatchConfirmed] = useState(false);
   const key = useRef("");
   const sourceItems = checkoutLines.flatMap((line) => {
     const item = invoiceItems.find((entry) => entry.id === line.invoiceItemId);
@@ -135,6 +141,8 @@ export function RetailInvoiceReturnDialog({ organizationId, invoiceId, invoiceNu
       stockDisposition: rows[line.id].stockDisposition,
       invoicedQuantity: line.item.quantity,
       hasStock: Boolean(line.inventoryItemId),
+      options: data?.batchOptions?.[line.id],
+      lotAllocations: Object.entries(rows[line.id].batches || {}).filter(([,quantity]) => Number(quantity) > 0).map(([stockLotId,quantity]) => ({ stockLotId, quantity })),
     }));
     if (!selected.length) { setError(copy.itemRequired); return; }
     if (selected.some((line) => !/^\d+(?:\.\d{1,6})?$/.test(line.quantity) ||
@@ -142,13 +150,16 @@ export function RetailInvoiceReturnDialog({ organizationId, invoiceId, invoiceNu
       (line.hasStock && !/^\d+(?:\.\d{1,3})?$/.test(line.quantity)))) {
       setError(copy.invalidQuantity); return;
     }
+    if (selected.some(line => line.options !== undefined && (!line.lotAllocations.length ||
+      line.lotAllocations.some(batch => !/^\d+(\.\d{1,3})?$/.test(batch.quantity) || !line.options!.some(option => option.stockLotId === batch.stockLotId && Number(batch.quantity) <= Number(option.quantityAvailable))) ||
+      line.lotAllocations.reduce((sum,batch) => sum + Math.round(Number(batch.quantity)*1000),0) !== Math.round(Number(line.quantity)*1000)))) { setError(copy.batchMismatch); return; }
     setBusy(true); setError("");
     try {
       if (!key.current) key.current = crypto.randomUUID();
       const response = await fetch(`/api/enterprise/${organizationId}/retail/invoices/${encodeURIComponent(invoiceId)}/returns`, {
         method: "POST", headers: { "content-type": "application/json" },
         body: JSON.stringify({ idempotencyKey: key.current, approverUserId, reason: reason.trim(),
-          lines: selected.map(({ checkoutLineId, quantity, stockDisposition }) => ({ checkoutLineId, quantity, stockDisposition })) }),
+          lines: selected.map(({ checkoutLineId, quantity, stockDisposition, options, lotAllocations }) => ({ checkoutLineId, quantity, stockDisposition, ...(options !== undefined ? { lotAllocations } : {}) })) }),
       });
       const payload = await response.json().catch(() => null) as { message?: string } | null;
       if (!response.ok) throw new Error(payload?.message || copy.error);
@@ -159,7 +170,7 @@ export function RetailInvoiceReturnDialog({ organizationId, invoiceId, invoiceNu
   }
 
   async function completeAction(form?: FormData) {
-    if (!action || busy || (action.type === "INSPECT" && actionNotes.trim().length < 5) ||
+    if (!action || busy || (action.type === "INSPECT" && (actionNotes.trim().length < 5 || (action.request.lines.some(line => line.lotAllocations?.length) && !batchConfirmed))) ||
       (["REJECT", "SETTLE_FINANCE"].includes(action.type) && actionNotes.trim().length < 4)) return;
     setBusy(true); setError("");
     try {
@@ -176,7 +187,7 @@ export function RetailInvoiceReturnDialog({ organizationId, invoiceId, invoiceNu
         method: "POST", headers: { "content-type": "application/json" },
         body: JSON.stringify(financePrepare ? { revision: action.request.revision, financeApproverUserId: String(form?.get("financeApproverUserId") || "") } : financeSettlement
           ? { revision: action.request.revision, reason: actionNotes.trim() } : inspection
-          ? { revision: action.request.revision, receivedAndInspected: true, notes: actionNotes.trim() }
+          ? { revision: action.request.revision, receivedAndInspected: true, notes: actionNotes.trim(), ...(action.request.lines.some(line => line.lotAllocations?.length) ? { confirmedBatchSelection: true } : {}) }
           : { revision: action.request.revision, decision: action.type === "APPROVE" ? "APPROVE" : "REJECT",
             ...(actionNotes.trim() ? { reason: actionNotes.trim() } : {}) }),
       });
@@ -189,6 +200,7 @@ export function RetailInvoiceReturnDialog({ organizationId, invoiceId, invoiceNu
     finally { setBusy(false); }
   }
 
+  const batchLabel = (line: RequestLine, batch: BatchChoice) => data?.batchOptions?.[line.checkoutLineId]?.find(option => option.stockLotId === batch.stockLotId)?.lotNumber || batch.stockLotId;
   const money = (amount: string) => `${new Intl.NumberFormat(locale === "fr" ? "fr-FR" : "en-US", { maximumFractionDigits: 2 }).format(Number(amount))} ${currencyCode}`;
   return <>
     <Button type="button" variant="outline" onClick={() => setOpen(true)}><RotateCcw className="h-4 w-4" />{copy.trigger}</Button>
@@ -203,11 +215,13 @@ export function RetailInvoiceReturnDialog({ organizationId, invoiceId, invoiceNu
           <h3 className="text-sm font-black text-dtsc-ink">{copy.new}</h3>
           <p className="text-xs leading-5 text-dtsc-muted">{copy.newHint}</p>
           {!sourceItems.length ? <p className="text-sm text-amber-700 dark:text-amber-300">{copy.rowMissing}</p> : sourceItems.map((line) => {
-            const value = rows[line.id] || { checked: false, quantity: "1", stockDisposition: !line.inventoryItemId ? "SERVICE_CREDIT" : data.stockPostedAt ? "RESTOCK" : "UNDELIVERED_CREDIT" };
+            const batchOptions = data.batchOptions?.[line.id];
+            const value: Row = rows[line.id] || { checked: false, quantity: "1", stockDisposition: !line.inventoryItemId ? "SERVICE_CREDIT" : data.stockPostedAt ? "RESTOCK" : "UNDELIVERED_CREDIT" };
             return <div key={line.id} className="grid min-w-0 gap-2 rounded-lg border border-dtsc-border bg-dtsc-surface p-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,7rem)_minmax(0,12rem)] sm:items-end">
               <label className="flex min-w-0 items-start gap-2 text-sm font-semibold text-dtsc-ink"><input type="checkbox" className="mt-1 size-4 shrink-0 accent-dtsc-blue" checked={value.checked} disabled={busy} onChange={(event) => rowUpdate(line.id, { checked: event.target.checked }, Boolean(line.inventoryItemId))} /><span className="min-w-0 break-words">{line.item.description}<span className="mt-1 block text-xs font-normal text-dtsc-muted">{copy.quantity} ≤ {line.item.quantity}</span></span></label>
               <label className="grid min-w-0 gap-1 text-xs font-semibold text-dtsc-ink">{copy.quantity}<input type="number" inputMode="decimal" className="min-h-11 w-full min-w-0 rounded-lg border border-dtsc-border bg-dtsc-page px-2 text-base" step={line.inventoryItemId ? "0.001" : "0.000001"} min={line.inventoryItemId ? "0.001" : "0.000001"} max={line.item.quantity} value={value.quantity} disabled={!value.checked || busy} onChange={(event) => rowUpdate(line.id, { quantity: event.target.value }, Boolean(line.inventoryItemId))} /></label>
               <label className="grid min-w-0 gap-1 text-xs font-semibold text-dtsc-ink">{copy.disposition}<select className="min-h-11 w-full min-w-0 rounded-lg border border-dtsc-border bg-dtsc-page px-2 text-sm" value={value.stockDisposition} disabled={!value.checked || busy} onChange={(event) => rowUpdate(line.id, { stockDisposition: event.target.value as StockDisposition }, Boolean(line.inventoryItemId))}>{!line.inventoryItemId ? <option value="SERVICE_CREDIT">{copy.serviceCredit}</option> : !data.stockPostedAt ? <option value="UNDELIVERED_CREDIT">{copy.undeliveredCredit}</option> : <><option value="RESTOCK">{copy.restock}</option><option value="QUARANTINE">{copy.quarantine}</option><option value="DISPOSE">{copy.dispose}</option></>}</select></label>
+              {batchOptions !== undefined && value.checked ? <div className="grid min-w-0 gap-2 rounded-lg border border-dtsc-border bg-dtsc-page p-3 sm:col-span-3"><p className="text-sm font-bold">{copy.batchTitle}</p><p className="text-xs text-dtsc-muted">{copy.batchHelp}</p>{batchOptions.length ? batchOptions.map(option => <label key={option.stockLotId} className="grid min-w-0 grid-cols-[minmax(0,1fr)_7rem] items-center gap-2 text-xs"><span className="break-words"><strong>{option.lotNumber}</strong><span className="block text-dtsc-muted">{copy.batchAvailable}: {option.quantityAvailable}</span></span><input aria-label={option.lotNumber} type="number" min="0" max={option.quantityAvailable} step="0.001" value={value.batches?.[option.stockLotId] || ""} disabled={busy || Number(option.quantityAvailable) <= 0} onChange={event => rowUpdate(line.id, { batches: { ...value.batches, [option.stockLotId]: event.target.value } }, Boolean(line.inventoryItemId))} className="min-h-10 min-w-0 rounded-lg border border-dtsc-border bg-dtsc-surface px-2 text-sm" /></label>) : <p className="text-xs text-amber-700 dark:text-amber-200">{copy.batchMissing}</p>}</div> : null}
             </div>;
           })}
           <p className="text-xs text-dtsc-muted">{copy.noAmount}</p>
@@ -218,6 +232,7 @@ export function RetailInvoiceReturnDialog({ organizationId, invoiceId, invoiceNu
         {action ? <form className="grid min-w-0 gap-3 rounded-xl border border-blue-500/30 bg-blue-500/5 p-3 sm:p-4" onSubmit={(event) => { event.preventDefault(); void completeAction(new FormData(event.currentTarget)); }}>
           <h3 className="text-sm font-black text-dtsc-ink">{action.type === "INSPECT" ? copy.inspection : action.type === "APPROVE" ? copy.approve : action.type === "REJECT" ? copy.reject : action.type === "PREPARE_FINANCE" ? copy.prepareFinance : copy.settleFinance} · {action.request.number}</h3>
           <p className="text-sm leading-6 text-dtsc-muted">{action.type === "INSPECT" && !action.request.requiresPhysicalInspection ? copy.independentCheck : action.type === "INSPECT" ? copy.inspectionHint : action.type === "PREPARE_FINANCE" ? copy.prepareFinanceHint : action.type === "SETTLE_FINANCE" ? copy.settleFinanceHint : copy.decisionHint}</p>
+          {action.type === "INSPECT" && action.request.lines.some(line => line.lotAllocations?.length) ? <div className="grid gap-2 rounded-lg border border-dtsc-border bg-dtsc-surface p-3"><p className="text-sm font-bold">{copy.batchTitle}</p>{action.request.lines.flatMap(line => (line.lotAllocations || []).map(batch => <p key={line.id + batch.stockLotId} className="break-words text-xs">{sourceItems.find(item => item.id === line.checkoutLineId)?.item.description} · {batchLabel(line,batch)} · {batch.quantity}</p>))}<label className="flex gap-2 text-sm"><input type="checkbox" required checked={batchConfirmed} disabled={busy} onChange={event => setBatchConfirmed(event.target.checked)} />{copy.batchConfirm}</label></div> : null}
           {action.type === "PREPARE_FINANCE" ? <EnterpriseApproverSelect organizationId={organizationId} moduleCode="FINANCE_RECEIVABLES" locale={locale} name="financeApproverUserId" label={copy.financeApprover} disabled={busy} required /> : null}
           {action.type !== "PREPARE_FINANCE" ? <label className="grid min-w-0 gap-1 text-sm font-semibold text-dtsc-ink">{action.type === "INSPECT" ? copy.inspectionNotes : action.type === "REJECT" ? copy.rejectionReason : action.type === "SETTLE_FINANCE" ? copy.settlementReason : copy.decisionReason}<textarea className="min-h-28 w-full min-w-0 rounded-lg border border-dtsc-border bg-dtsc-surface p-3 text-base" minLength={action.type === "INSPECT" ? 5 : ["REJECT", "SETTLE_FINANCE"].includes(action.type) ? 4 : undefined} maxLength={1000} required={["INSPECT", "REJECT", "SETTLE_FINANCE"].includes(action.type)} value={actionNotes} disabled={busy} onChange={(event) => setActionNotes(event.target.value)} /></label> : null}
           {action.type === "SETTLE_FINANCE" ? <FinanceCriticalStepUpFields action="CONFIRM" locale={locale} /> : null}
@@ -231,7 +246,7 @@ export function RetailInvoiceReturnDialog({ organizationId, invoiceId, invoiceNu
             <div className="flex min-w-0 flex-wrap items-start justify-between gap-2"><span className="min-w-0 break-words text-sm font-black text-dtsc-ink">{request.number}</span><span className={`rounded-full px-2 py-1 text-xs font-bold ${request.status === "REJECTED" ? "bg-red-500/10 text-red-700 dark:text-red-300" : request.status === "APPROVED" ? "bg-amber-500/10 text-amber-800 dark:text-amber-200" : "bg-blue-500/10 text-blue-700 dark:text-blue-300"}`}>{statusLabel(request.status, copy)}</span></div>
             <p className="text-sm text-dtsc-ink">{request.reason}</p>
             <p className="text-xs text-dtsc-muted">{copy.amount} : <strong className="text-dtsc-ink">{money(request.refundAmount)}</strong> · {copy.payout} : <strong className="text-dtsc-ink">{request.refundPayoutAmount !== null ? money(request.refundPayoutAmount) : copy.payoutPending}</strong> · {new Intl.DateTimeFormat(locale === "fr" ? "fr-FR" : "en-US", { dateStyle: "medium" }).format(new Date(request.createdAt))}</p>
-            <ul className="grid min-w-0 gap-1 text-xs text-dtsc-muted">{request.lines.map((line) => <li key={line.id} className="break-words">{sourceItems.find((item) => item.id === line.checkoutLineId)?.item.description || copy.item} · {line.quantity} · {line.stockDisposition === "RESTOCK" ? copy.restock : line.stockDisposition === "SERVICE_CREDIT" ? copy.serviceCredit : line.stockDisposition === "UNDELIVERED_CREDIT" ? copy.undeliveredCredit : line.stockDisposition === "QUARANTINE" ? copy.quarantine : copy.dispose}</li>)}</ul>
+            <ul className="grid min-w-0 gap-1 text-xs text-dtsc-muted">{request.lines.map((line) => <li key={line.id} className="break-words">{sourceItems.find((item) => item.id === line.checkoutLineId)?.item.description || copy.item} · {line.quantity} · {line.stockDisposition === "RESTOCK" ? copy.restock : line.stockDisposition === "SERVICE_CREDIT" ? copy.serviceCredit : line.stockDisposition === "UNDELIVERED_CREDIT" ? copy.undeliveredCredit : line.stockDisposition === "QUARANTINE" ? copy.quarantine : copy.dispose}{line.lotAllocations?.map(batch => <span className="block" key={batch.stockLotId}>{batchLabel(line,batch)} · {batch.quantity}</span>)}</li>)}</ul>
             {request.inspectionNotes ? <p className="text-xs text-dtsc-muted"><PackageSearch className="mr-1 inline h-3.5 w-3.5" />{request.inspectionNotes}</p> : null}
             {request.decisionReason ? <p className="text-xs text-dtsc-muted">{request.decisionReason}</p> : null}
             {request.status === "FINANCE_PENDING" ? <div className="grid gap-1 rounded-lg border border-amber-500/25 bg-amber-500/5 p-2 text-xs text-dtsc-ink">
@@ -239,7 +254,7 @@ export function RetailInvoiceReturnDialog({ organizationId, invoiceId, invoiceNu
               {!request.canSettleFinance ? <p className="text-dtsc-muted">{copy.financeGuide}</p> : null}
             </div> : null}
             <div data-responsive-actions className="flex min-w-0 flex-wrap justify-end gap-2">
-              {request.canInspect ? <Button type="button" variant="outline" disabled={busy} onClick={() => { setCreating(false); setAction({ request, type: "INSPECT" }); setActionNotes(""); }}><PackageSearch className="h-4 w-4" />{request.requiresPhysicalInspection ? copy.inspection : copy.independentCheck}</Button> : null}
+              {request.canInspect ? <Button type="button" variant="outline" disabled={busy} onClick={() => { setCreating(false); setAction({ request, type: "INSPECT" }); setActionNotes(""); setBatchConfirmed(false); }}><PackageSearch className="h-4 w-4" />{request.requiresPhysicalInspection ? copy.inspection : copy.independentCheck}</Button> : null}
               {request.canDecide && request.status === "INSPECTED" ? <Button type="button" disabled={busy} onClick={() => { setCreating(false); setAction({ request, type: "APPROVE" }); setActionNotes(""); }}><ShieldCheck className="h-4 w-4" />{copy.approve}</Button> : null}
               {request.canDecide ? <Button type="button" variant="outline" disabled={busy} onClick={() => { setCreating(false); setAction({ request, type: "REJECT" }); setActionNotes(""); }}><ShieldX className="h-4 w-4" />{copy.reject}</Button> : null}
               {request.canPrepareFinance ? <Button type="button" variant="outline" disabled={busy} onClick={() => { setCreating(false); setAction({ request, type: "PREPARE_FINANCE" }); setActionNotes(""); }}><CreditCard className="h-4 w-4" />{copy.prepareFinance}</Button> : null}

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { receiptLotAllocationsSchema } from "@/lib/enterprise/procurement/receipt-lot-schema";
 import {
   ENTERPRISE_DOCUMENT_STATUSES,
   ENTERPRISE_DOCUMENT_TYPES,
@@ -159,6 +160,7 @@ export const enterprisePurchaseActionSchema = z.object({ revision, action: z.enu
 export const enterprisePurchaseReceiptSchema = z.object({
   revision,
   receivedAt: z.coerce.date(),
+  lotAllocations: receiptLotAllocationsSchema.optional(),
   warehouseId: optionalId,
   storageLocationId: optionalId,
   notes: optionalText(5000),

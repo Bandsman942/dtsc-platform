@@ -5,21 +5,37 @@ import { Boxes, PackagePlus, Settings2, ShieldCheck, TriangleAlert } from "lucid
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { InventoryReturnCustodyDialog } from "@/components/enterprise/professional/inventory-return-custody-dialog";
+import { InventoryHistoricalLotDialog, type HistoricalInventoryItem } from "@/components/enterprise/professional/inventory-historical-lot-dialog";
 import { notifyToast } from "@/lib/client-toast";
 import { customerFacingError } from "@/lib/customer-facing-language";
+import { ErpDesign2RegisterTools } from "@/components/enterprise/professional/erp-design2-register";
+import { professionalErpT } from "@/components/enterprise/professional/professional-erp-i18n";
 
-type Item = { id: string; revision: number; catalogItem: { code: string; name: string }; minimumQuantity: string | number | null; reorderQuantity: string | number | null; lotTracking: boolean; expiryTracking: boolean };
+type Item = HistoricalInventoryItem & { sectorManaged?: boolean; minimumQuantity: string | number | null; reorderQuantity: string | number | null; lotTracking: boolean; expiryTracking: boolean };
+type BatchOption = { id: string; expiryTracking: boolean; catalogItem: { code: string; name: string } };
 type Warehouse = { id: string; code: string; name: string };
-type Lot = { id: string; revision: number; lotNumber: string; warehouseId: string; status: string; productionDate: string | null; expiryDate: string | null; notes: string | null; quantityOnHand: string; quantityReserved: string; inventoryItem: { catalogItem: { name: string; code: string } } };
+type Lot = { sectorManaged?: boolean; warehouse?: Warehouse|null; expired?: boolean; expiresSoon?:boolean; recallReference?:string|null; qualityReason?:string|null; qualityChangedAt?:string|null; qualityChangedByUserId?:string|null; id: string; revision: number; lotNumber: string; warehouseId: string; status: string; productionDate: string | null; expiryDate: string | null; notes: string | null; quantityOnHand: string; quantityReserved: string; inventoryItem: { catalogItem: { name: string; code: string } } };
+type TraceMovement={id:string;movementType:string;direction:string;quantity:string;occurredAt:string;sourceEntityType:string|null;sourceEntityId:string|null;sourceLineId:string|null;warehouse:{name:string;code:string};stockLot:{lotNumber:string;status:string;recallReference:string|null}|null};
 const dateInput = (value: string | null) => value ? value.slice(0, 10) : "";
 const formatDate = (value: string | null, en: boolean) => value ? new Intl.DateTimeFormat(en ? "en-GB" : "fr-FR").format(new Date(value)) : "—";
+// A batch expiry is a civil date, not an event instant.
+const formatCivilDate = (value: string | null, en: boolean) => value ? new Intl.DateTimeFormat(en ? "en-GB" : "fr-FR",{timeZone:"UTC"}).format(new Date(value)) : "—";
 
 /** Product master data declares stockability; this workspace owns stock
  * policy and local batch identities. No lot creation changes stock quantity. */
-export function InventoryStockGovernance({ organizationId, locale, warehouses }: { organizationId: string; locale: "fr" | "en"; warehouses: Warehouse[] }) {
+export function InventoryStockGovernance({ organizationId, organizationName, locale, warehouses }: { organizationId: string; organizationName:string; locale: "fr" | "en"; warehouses: Warehouse[] }) {
   const en = locale === "en";
+  const t=(key:Parameters<typeof professionalErpT>[1])=>professionalErpT(locale,key);
+  const statusOptions=[{id:"",label:t("inventory.batchAllStatuses")},{id:"AVAILABLE",label:t("inventory.batchAvailable")},{id:"BLOCKED",label:t("inventory.batchBlocked")},{id:"QUARANTINED",label:t("inventory.batchQuarantined")},{id:"RECALLED",label:t("inventory.batchRecalled")}];
   const [open, setOpen] = useState(false);
+  const [custodyOpen,setCustodyOpen]=useState(false);
+  const [initialCustodyId,setInitialCustodyId]=useState("");
+  const [disposalDrilldown,setDisposalDrilldown]=useState(false);
+  useEffect(()=>{const id=new URLSearchParams(window.location.search).get("custodyId");if(id&&id.length<=191){setInitialCustodyId(id);setCustodyOpen(true);}},[]);
   const [items, setItems] = useState<Item[]>([]);
+  const [canAdminister, setCanAdminister] = useState(false);
+  const [canRegisterLot, setCanRegisterLot] = useState(false);
   const [itemPage, setItemPage] = useState(1);
   const [itemPages, setItemPages] = useState(1);
   const [itemSearch, setItemSearch] = useState("");
@@ -27,29 +43,99 @@ export function InventoryStockGovernance({ organizationId, locale, warehouses }:
   const [page, setPage] = useState(1);
   const [pages, setPages] = useState(1);
   const [search, setSearch] = useState("");
+  const [lotStatus,setLotStatus]=useState("");
+  const [expiryFilter,setExpiryFilter]=useState("");
+  const [expiryDraft,setExpiryDraft]=useState({from:"",to:""});
+  const [expiryDates,setExpiryDates]=useState({from:"",to:""});
+  const [lotMetrics,setLotMetrics]=useState<{expired:number;expiring:number;undated:number;isolated:number;recalled:number;pendingDisposal:number}|null>(null);
+  const [lotsLoading,setLotsLoading]=useState(false);
+  const [lotsError,setLotsError]=useState("");
+  const [lotWarehouse,setLotWarehouse]=useState("");
+  const [canRecall,setCanRecall]=useState(false);
+  const [currentUserId,setCurrentUserId]=useState("");
+  const [nextStatus,setNextStatus]=useState("");
+  const [recall,setRecall]=useState(false);
+  const [traceLot,setTraceLot]=useState<Lot|null>(null);
+  const [traceItems,setTraceItems]=useState<TraceMovement[]>([]);
+  const [tracePage,setTracePage]=useState(1);
+  const [tracePages,setTracePages]=useState(1);
+  const [traceTotal,setTraceTotal]=useState(0);
+  const [traceLoading,setTraceLoading]=useState(false);
+  const [traceError,setTraceError]=useState("");
   const [editPolicy, setEditPolicy] = useState<Item | null>(null);
+  const [historicalItem, setHistoricalItem] = useState<Item | null>(null);
+  const [lastApproval, setLastApproval] = useState<{ id: string; reference: string } | null>(null);
   const [editLot, setEditLot] = useState<Lot | null>(null);
   const [lotDialog, setLotDialog] = useState(false);
+  const [batchWarehouse, setBatchWarehouse] = useState("");
+  const [batchSearch, setBatchSearch] = useState("");
+  const [batchPage, setBatchPage] = useState(1);
+  const [batchPages, setBatchPages] = useState(1);
+  const [batchOptions, setBatchOptions] = useState<BatchOption[]>([]);
+  const [batchItem, setBatchItem] = useState("");
+  const [batchLoading, setBatchLoading] = useState(false);
+  const [batchError, setBatchError] = useState("");
   const [busy, setBusy] = useState(false);
   const [reload, setReload] = useState(0);
   const [error, setError] = useState("");
   const refresh = useCallback(() => setReload((value) => value + 1), []);
 
+  // Rules and lot monitoring have independent queries.
   useEffect(() => {
-    if (!open) return;
+    if(!open)return;
+    const controller=new AbortController();
+    void fetch(`/api/enterprise/${organizationId}/inventory?${new URLSearchParams({page:String(itemPage),pageSize:"50",search:itemSearch})}`,{signal:controller.signal,cache:"no-store"}).then(async response=>{
+      const inventory=await response.json().catch(()=>null) as {items?:Item[];pagination?:{pageCount:number};message?:string;canAdminister?:boolean}|null;
+      if(!response.ok||!inventory?.items)throw new Error(inventory?.message||(en?"Stock rules unavailable":"Règles de stock indisponibles"));
+      if(!controller.signal.aborted){setItems(inventory.items);setCanAdminister(Boolean(inventory.canAdminister));setItemPages(inventory.pagination?.pageCount||1);setError("");}
+    }).catch(caught=>{if(!controller.signal.aborted)setError(customerFacingError(caught,locale));});
+    return()=>controller.abort();
+  },[open,organizationId,itemPage,itemSearch,reload,en,locale]);
+  useEffect(()=>{
+    if(!open)return;
+    const controller=new AbortController();setLotsLoading(true);setLotsError("");setLotMetrics(null);
+    const query=new URLSearchParams({page:String(page),search,status:lotStatus,warehouseId:lotWarehouse,expiry:expiryFilter,expiryFrom:expiryDates.from,expiryTo:expiryDates.to});
+    const timer=setTimeout(()=>{
+      void fetch(`/api/enterprise/${organizationId}/inventory/lots?${query}`,{signal:controller.signal,cache:"no-store"}).then(async response=>{
+        const batches=await response.json().catch(()=>null) as {items?:Lot[];pagination?:{pageCount:number};message?:string;canManage?:boolean;canRecall?:boolean;currentUserId?:string;metrics?:{expired:number;expiring:number;undated:number;isolated:number;recalled:number;pendingDisposal:number}}|null;
+        if(!response.ok||!batches?.items)throw new Error(batches?.message||(en?"Batch list unavailable":"Liste des lots indisponible"));
+        if(!controller.signal.aborted){setLots(batches.items);setPages(batches.pagination?.pageCount||1);setCanRegisterLot(Boolean(batches.canManage));setCanRecall(Boolean(batches.canRecall));setCurrentUserId(batches.currentUserId||"");setLotMetrics(batches.metrics||null);}
+      }).catch(caught=>{if(!controller.signal.aborted){setLots([]);setLotsError(customerFacingError(caught,locale));}}).finally(()=>{if(!controller.signal.aborted)setLotsLoading(false);});
+    },200);
+    return()=>{clearTimeout(timer);controller.abort();};
+  },[open,organizationId,page,search,lotStatus,lotWarehouse,expiryFilter,expiryDates,reload,en,locale]);
+
+  useEffect(() => {
+    if (!lotDialog || editLot || !batchWarehouse) return;
     const controller = new AbortController();
-    const query = new URLSearchParams({ page: String(page), search });
-    void Promise.all([
-      fetch(`/api/enterprise/${organizationId}/inventory?${new URLSearchParams({ page: String(itemPage), pageSize: "50", search: itemSearch })}`, { signal: controller.signal, cache: "no-store" }),
-      fetch(`/api/enterprise/${organizationId}/inventory/lots?${query}`, { signal: controller.signal, cache: "no-store" }),
-    ]).then(async ([inventoryResponse, lotResponse]) => {
-      const inventory = await inventoryResponse.json().catch(() => null) as { items?: Item[]; pagination?: { pageCount: number }; message?: string } | null;
-      const batches = await lotResponse.json().catch(() => null) as { items?: Lot[]; pagination?: { pageCount: number }; message?: string } | null;
-      if (!inventoryResponse.ok || !lotResponse.ok) throw new Error(inventory?.message || batches?.message || (en ? "Inventory data unavailable." : "Données de stock indisponibles."));
-      if (!controller.signal.aborted) { setItems(inventory?.items || []); setItemPages(inventory?.pagination?.pageCount || 1); setLots(batches?.items || []); setPages(batches?.pagination?.pageCount || 1); setError(""); }
-    }).catch((caught) => { if (!controller.signal.aborted) setError(customerFacingError(caught, locale)); });
-    return () => controller.abort();
-  }, [open, organizationId, search, page, itemPage, itemSearch, reload, en, locale]);
+    const query = new URLSearchParams({ view: "lot-options", warehouseId: batchWarehouse, search: batchSearch, page: String(batchPage) });
+    const timer = setTimeout(() => {
+      setBatchLoading(true); setBatchError(""); setBatchOptions([]);
+      void fetch(`/api/enterprise/${organizationId}/inventory?${query}`, { signal: controller.signal, cache: "no-store" }).then(async (response) => {
+        const body = await response.json() as { items?: BatchOption[]; pagination?: { pageCount: number }; message?: string };
+        if (!response.ok) throw new Error(body.message || (en ? "Products unavailable for this warehouse." : "Articles indisponibles pour ce dépôt."));
+        if (!controller.signal.aborted) { setBatchOptions(body.items || []); setBatchPages(body.pagination?.pageCount || 1); }
+      }).catch((caught) => { if (!controller.signal.aborted) setBatchError(customerFacingError(caught, locale)); }).finally(() => { if (!controller.signal.aborted) setBatchLoading(false); });
+    }, 250);
+    return () => { clearTimeout(timer); controller.abort(); };
+  }, [lotDialog, editLot, batchWarehouse, batchSearch, batchPage, organizationId, en, locale, reload]);
+
+  useEffect(()=>{
+    if(!traceLot)return;
+    const controller=new AbortController();setTraceLoading(true);setTraceError("");setTraceItems([]);
+    const query=new URLSearchParams({view:"trace",lotId:traceLot.id,page:String(tracePage)});
+    void fetch(`/api/enterprise/${organizationId}/inventory/lots?${query}`,{signal:controller.signal,cache:"no-store"}).then(async res=>{
+      const body=await res.json().catch(()=>null) as {items?:TraceMovement[];pagination?:{pageCount:number;total:number};message?:string}|null;
+      if(!res.ok || !body?.items)throw new Error(body?.message||(en?"Trace unavailable":"Traçabilité indisponible"));
+      if(!controller.signal.aborted){setTraceItems(body.items);setTracePages(body.pagination?.pageCount||1);setTraceTotal(body.pagination?.total||0);}
+    }).catch(error=>{if(!controller.signal.aborted)setTraceError(customerFacingError(error,locale));}).finally(()=>{if(!controller.signal.aborted)setTraceLoading(false);});
+    return()=>controller.abort();
+  },[traceLot,tracePage,organizationId,en,locale]);
+  function openEditLot(lot:Lot){setEditLot(lot);setNextStatus(lot.status);setRecall(false);setLotDialog(true);}
+  function openBatchDialog() {
+    setRecall(false);setNextStatus("");
+    setEditLot(null); setBatchWarehouse(""); setBatchSearch(""); setBatchPage(1); setBatchPages(1); setBatchOptions([]); setBatchItem(""); setBatchError(""); setBatchLoading(false); setLotDialog(true);
+  }
 
   async function savePolicy(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); if (!editPolicy) return;
@@ -67,48 +153,121 @@ export function InventoryStockGovernance({ organizationId, locale, warehouses }:
     event.preventDefault(); const form = new FormData(event.currentTarget); setBusy(true);
     try {
       const payload = { inventoryItemId: String(form.get("inventoryItemId") || ""), warehouseId: String(form.get("warehouseId") || ""), lotNumber: String(form.get("lotNumber") || "").trim(), productionDate: String(form.get("productionDate") || "") || null, expiryDate: String(form.get("expiryDate") || "") || null, notes: String(form.get("notes") || "") || null };
-      const response = await fetch(`/api/enterprise/${organizationId}/inventory/lots`, { method: editLot ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(editLot ? { id: editLot.id, revision: editLot.revision, status: String(form.get("status") || editLot.status), productionDate: payload.productionDate, expiryDate: payload.expiryDate, notes: payload.notes } : payload) });
-      const body = await response.json().catch(() => null) as { message?: string } | null;
+      const response = await fetch(`/api/enterprise/${organizationId}/inventory/lots`, { method: editLot ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(editLot ? { id: editLot.id, revision: editLot.revision, status: nextStatus||editLot.status, productionDate: payload.productionDate, expiryDate: payload.expiryDate, notes: payload.notes, ...((recall||nextStatus!==editLot.status)?{qualityReason:String(form.get("qualityReason")||"").trim()}:{}), ...(recall?{recall:true}:{}) } : payload) });
+      const body = await response.json().catch(() => null) as { message?: string;recallReference?:string;affectedLots?:number } | null;
       if (!response.ok) throw new Error(body?.message || (en ? "Batch save failed." : "Enregistrement du lot impossible."));
-      setLotDialog(false); setEditLot(null); refresh(); notifyToast({ title: en ? "Batch metadata recorded; quantity unchanged" : "Lot enregistré ; quantité inchangée", description: en ? "Record the physical receipt through an approved stock adjustment or goods receipt." : "Enregistrez la réception physique par une entrée de stock approuvée.", tone: "success" });
+      setLotDialog(false); setEditLot(null); refresh(); if(body?.recallReference){notifyToast({title:en?"Recall registered":"Rappel enregistré",description:`${body.recallReference} · ${body.affectedLots||0} ${en?"batch records quarantined":"fiches de lot mises en quarantaine"}`,tone:"success"});return;} notifyToast({ title: en ? "Batch metadata recorded; quantity unchanged" : "Lot enregistré ; quantité inchangée", description: en ? "Record the physical receipt through an approved stock adjustment or goods receipt." : "Enregistrez la réception physique par une entrée de stock approuvée.", tone: "success" });
     } catch (caught) { notifyToast({ title: en ? "Batch not saved" : "Lot non enregistré", description: customerFacingError(caught, locale), tone: "error" }); }
     finally { setBusy(false); }
   }
 
   return <section data-testid="inventory-stock-governance" className="min-w-0 rounded-2xl border border-dtsc-border bg-dtsc-surface p-3 sm:p-4">
-    <div className="flex flex-wrap items-center justify-between gap-2"><div className="flex items-start gap-2"><ShieldCheck className="mt-1 h-5 w-5 shrink-0 text-emerald-600" /><div><h3 className="text-sm font-black text-dtsc-ink">{en ? "Stock rules, batches and expiry" : "Règles de stock, lots et péremptions"}</h3><p className="text-xs text-dtsc-muted">{en ? "Logistics is the owner of stock configuration and batch history; the product catalog only defines the item." : "La logistique pilote les règles de stock et les lots ; le catalogue définit uniquement l'article."}</p></div></div><Button variant="outline" type="button" onClick={() => setOpen((value) => !value)}><Boxes className="h-4 w-4" />{open ? en ? "Collapse" : "Réduire" : en ? "Manage" : "Gérer"}</Button></div>
+    <div className="flex flex-wrap items-center justify-between gap-2"><div className="flex min-w-0 items-start gap-2"><ShieldCheck className="mt-1 h-5 w-5 shrink-0 text-emerald-600" /><div className="min-w-0"><h3 className="break-words text-sm font-black text-dtsc-ink">{en ? "Stock rules, batches and expiry" : "Règles de stock, lots et péremptions"}</h3><p className="text-xs text-dtsc-muted">{en ? "Logistics is the owner of stock configuration and batch history; the product catalog only defines the item." : "La logistique pilote les règles de stock et les lots ; le catalogue définit uniquement l'article."}</p></div></div><Button variant="outline" type="button" onClick={() => setOpen((value) => !value)}><Boxes className="h-4 w-4" />{open ? en ? "Collapse" : "Réduire" : en ? "Manage" : "Gérer"}</Button></div>
     {open ? <div className="mt-4 space-y-4">
       {error ? <p role="alert" className="rounded-lg bg-red-500/10 p-3 text-xs text-red-700 dark:text-red-200">{error}</p> : null}
-      <div className="flex flex-wrap gap-2"><Button type="button" onClick={() => { setEditLot(null); setLotDialog(true); }}><PackagePlus className="h-4 w-4" />{en ? "Register batch" : "Enregistrer un lot"}</Button><p className="self-center text-xs text-dtsc-muted">{en ? "A batch has zero stock until a receipt is approved." : "Un lot n'a aucun stock avant validation d'une entrée physique."}</p></div>
-      <div><h4 className="mb-2 text-xs font-black uppercase text-dtsc-muted">{en ? "Per-item controls" : "Contrôles par article"}</h4>
+      <div className="flex flex-wrap gap-2"><Button type="button" disabled={!canRegisterLot} onClick={openBatchDialog}><PackagePlus className="h-4 w-4" />{en ? "Register batch" : "Enregistrer un lot"}</Button><Button type="button" variant="outline" onClick={()=>{setDisposalDrilldown(false);setCustodyOpen(true);}}>{en?"Isolated returns":"Retours isolés"}</Button><p className="self-center text-xs text-dtsc-muted">{en ? "A batch has zero stock until a receipt is approved." : "Un lot n'a aucun stock avant validation d'une entrée physique."}</p></div>
+      <div><h4 className="mb-2 text-xs font-black uppercase text-dtsc-muted">{en ? "Per-item controls" : "Contrôles par article"}</h4>{!canAdminister ? <p className="mb-2 text-xs text-dtsc-muted">{en ? "Company-wide stock rules require inventory administration rights." : "Les règles de stock communes à tous les dépôts exigent le droit d’administration du stock."}</p> : null}
         <input className="mb-2 min-h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 text-sm" value={itemSearch} onChange={(event) => { setItemSearch(event.target.value); setItemPage(1); }} placeholder={en ? "Search item by name or SKU" : "Rechercher un article ou SKU"} aria-label={en ? "Search items" : "Rechercher les articles"} />
-        <div className="grid min-w-0 gap-2 sm:grid-cols-2 xl:grid-cols-3">{items.map((item) => <div key={item.id} className="flex min-w-0 items-center justify-between gap-2 rounded-xl border border-dtsc-border bg-dtsc-page p-3"><span className="min-w-0 truncate text-xs font-bold text-dtsc-ink" title={item.catalogItem.name}>{item.catalogItem.name}</span><Button variant="outline" size="sm" onClick={() => setEditPolicy(item)}><Settings2 className="h-4 w-4" />{en ? "Rules" : "Règles"}</Button></div>)}</div>
-        <div className="mt-2 flex items-center justify-between gap-3 text-xs text-dtsc-muted"><span>{en ? "Items page" : "Articles · page"} {itemPage}/{itemPages}</span><div className="flex gap-2"><Button variant="outline" disabled={itemPage <= 1} onClick={() => setItemPage((value) => value - 1)}>{en ? "Previous" : "Précédent"}</Button><Button variant="outline" disabled={itemPage >= itemPages} onClick={() => setItemPage((value) => value + 1)}>{en ? "Next" : "Suivant"}</Button></div></div>
+        {lastApproval ? <p role="status" className="mb-2 rounded-xl border border-dtsc-border p-3 text-sm"><strong>{lastApproval.reference}</strong> · <a className="font-semibold text-dtsc-blue underline" href={`/enterprise-modules/VALIDATIONS?approval=${encodeURIComponent(lastApproval.id)}`}>{en ? "Open approval" : "Ouvrir la validation"}</a></p> : null}
+        <div className="grid min-w-0 gap-2 sm:grid-cols-2 xl:grid-cols-3">{items.map((item) => <div key={item.id} className="grid min-w-0 gap-2 rounded-xl border border-dtsc-border bg-dtsc-page p-3"><span className="min-w-0 break-words text-xs font-bold text-dtsc-ink">{item.catalogItem.code} · {item.catalogItem.name}</span>{item.sectorManaged?<p className="text-xs text-dtsc-muted">{en?"Managed in the dedicated sector module.":"Géré dans le module sectoriel dédié."}</p>:null}<div className="flex flex-wrap gap-2"><Button variant="outline" size="sm" disabled={!canAdminister || item.sectorManaged} onClick={() => setEditPolicy(item)}><Settings2 className="h-4 w-4" />{en ? "Rules" : "Règles"}</Button>{canAdminister && !item.sectorManaged && item.balances?.some((balance) => !balance.stockLotId && Number(balance.quantityOnHand) > 0) ? <Button variant="outline" size="sm" onClick={() => setHistoricalItem(item)}>{en ? "Allocate historical stock" : "Répartir le stock historique"}</Button> : null}</div></div>)}</div>
+        <div className="mt-2 flex min-w-0 flex-wrap items-center justify-between gap-2 text-xs text-dtsc-muted"><span>{en ? "Items page" : "Articles · page"} {itemPage}/{itemPages}</span><div className="flex gap-2"><Button variant="outline" disabled={itemPage <= 1} onClick={() => setItemPage((value) => value - 1)}>{en ? "Previous" : "Précédent"}</Button><Button variant="outline" disabled={itemPage >= itemPages} onClick={() => setItemPage((value) => value + 1)}>{en ? "Next" : "Suivant"}</Button></div></div>
       </div>
       <div><h4 className="mb-2 text-xs font-black uppercase text-dtsc-muted">{en ? "Traceable batches by warehouse" : "Lots traçables par dépôt"}</h4>
         <input className="mb-2 min-h-11 w-full rounded-xl border border-dtsc-border bg-dtsc-page px-3 text-sm" value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder={en ? "Search item or batch number" : "Rechercher un article ou un numéro de lot"} aria-label={en ? "Search batches" : "Rechercher des lots"} />
-        <div className="grid gap-2">{lots.length ? lots.map((lot) => <button type="button" key={lot.id} onClick={() => { setEditLot(lot); setLotDialog(true); }} className="flex min-w-0 flex-wrap items-center justify-between gap-2 rounded-xl border border-dtsc-border bg-dtsc-page p-3 text-left hover:border-cyan-500 focus-visible:outline-2 focus-visible:outline-cyan-500"><div className="min-w-0"><p className="break-words text-xs font-black text-dtsc-ink">{lot.inventoryItem.catalogItem.name} · {lot.lotNumber}</p><p className="text-xs text-dtsc-muted">{en ? "Expires" : "Péremption"} {formatDate(lot.expiryDate, en)} · {en ? "On hand" : "En stock"} {lot.quantityOnHand} · {en ? "Reserved" : "Réservé"} {lot.quantityReserved}</p></div><span className={`rounded-full px-2 py-1 text-xs font-bold ${lot.status === "AVAILABLE" ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300" : "bg-amber-500/15 text-amber-800 dark:text-amber-200"}`}>{lot.status === "AVAILABLE" ? en ? "Available" : "Disponible" : lot.status === "QUARANTINED" ? en ? "Quarantined" : "En quarantaine" : en ? "Blocked" : "Bloqué"}</span></button>) : <p className="text-xs text-dtsc-muted">{en ? "No batch for these filters." : "Aucun lot pour ces filtres."}</p>}</div>
-        <div className="mt-2 flex items-center justify-between gap-3 text-xs text-dtsc-muted"><span>{en ? "Page" : "Page"} {page}/{pages}</span><div className="flex gap-2"><Button variant="outline" disabled={page <= 1} onClick={() => setPage((value) => value - 1)}>{en ? "Previous" : "Précédent"}</Button><Button variant="outline" disabled={page >= pages} onClick={() => setPage((value) => value + 1)}>{en ? "Next" : "Suivant"}</Button></div></div>
+        <p className="mb-2 text-xs text-dtsc-muted">{t("inventory.batchMetricScope")}</p>
+        <div className="mb-3 grid grid-cols-2 gap-2 lg:grid-cols-3">
+          {([{key:"EXPIRED",label:en?"Expired":"Périmés",value:lotMetrics?.expired,tone:"text-red-700 dark:text-red-200"},{key:"EXPIRING",label:en?"Expires ≤ 30 days":"Échéance ≤ 30 jours",value:lotMetrics?.expiring,tone:"text-amber-700 dark:text-amber-200"},{key:"UNDATED",label:en?"Missing expiry":"Date manquante",value:lotMetrics?.undated,tone:"text-orange-700 dark:text-orange-200"},{key:"ISOLATED",label:en?"Isolated":"Isolés",value:lotMetrics?.isolated,tone:"text-violet-700 dark:text-violet-200"},{key:"RECALLED",label:en?"Recalled":"Rappelés",value:lotMetrics?.recalled,tone:"text-red-700 dark:text-red-200"}]).map(metric=><button type="button" key={metric.key} aria-pressed={expiryFilter===metric.key} className={`min-w-0 rounded-xl border p-3 text-left transition-colors ${expiryFilter===metric.key?"border-dtsc-blue bg-dtsc-blue/5":"border-dtsc-border bg-dtsc-page"}`} onClick={()=>{setExpiryFilter(value=>value===metric.key?"":metric.key);setLotStatus("");setPage(1);}}><span className={"block text-lg font-bold "+metric.tone}>{metric.value??"—"}</span><span className="block break-words text-xs text-dtsc-muted">{metric.label}</span></button>)}
+          <button type="button" className="min-w-0 rounded-xl border border-dtsc-border bg-dtsc-page p-3 text-left" onClick={()=>{setDisposalDrilldown(true);setCustodyOpen(true);}}><span className="block text-lg font-bold text-amber-700 dark:text-amber-200">{lotMetrics?.pendingDisposal??"—"}</span><span className="block break-words text-xs text-dtsc-muted">{en?"Disposal to attest (warehouse)":"Destructions à attester (dépôt)"}</span></button>
+        </div>
+        {expiryFilter?<Button type="button" variant="outline" size="sm" onClick={()=>{setExpiryFilter("");setPage(1);}}>{en?"Clear alert filter":"Effacer le filtre d’alerte"}</Button>:null}
+        {lotsError?<p role="alert" className="mb-2 text-xs text-red-700 dark:text-red-200">{lotsError}</p>:null}
+        <div className="mb-3 grid min-w-0 max-w-full gap-2 grid-cols-[minmax(0,1fr)]">
+          <label className="grid gap-1 text-xs font-semibold">{en?"Warehouse":"Dépôt"}<select value={lotWarehouse} onChange={event=>{setLotWarehouse(event.target.value);setPage(1);}} className="min-h-11 min-w-0 rounded-xl border border-dtsc-border bg-dtsc-page px-2 text-sm"><option value="">{en?"All authorized warehouses":"Tous les dépôts autorisés"}</option>{warehouses.map(warehouse=><option key={warehouse.id} value={warehouse.id}>{warehouse.code} · {warehouse.name}</option>)}</select></label>
+          <form className="min-w-0 rounded-xl border border-dtsc-border p-3 space-y-2" aria-label={t("inventory.batchExpiryDateFilter")} onSubmit={event=>{
+            event.preventDefault();
+            if(expiryDraft.from&&expiryDraft.to&&expiryDraft.from>expiryDraft.to)return;
+            setExpiryDates({...expiryDraft});setPage(1);
+          }}>
+            <p className="text-xs font-semibold text-dtsc-ink">{t("inventory.batchExpiryDateFilter")}</p>
+            <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-2 sm:grid-cols-2">
+              <label className="grid min-w-0 gap-1 text-xs font-semibold">{t("inventory.batchExpiryFrom")}<Input type="date" className="min-w-0 w-full" value={expiryDraft.from} max={expiryDraft.to||undefined} onChange={event=>setExpiryDraft(value=>({...value,from:event.target.value}))}/></label>
+              <label className="grid min-w-0 gap-1 text-xs font-semibold">{t("inventory.batchExpiryTo")}<Input type="date" className="min-w-0 w-full" value={expiryDraft.to} min={expiryDraft.from||undefined} onChange={event=>setExpiryDraft(value=>({...value,to:event.target.value}))}/></label>
+            </div>
+            <p className="text-xs text-dtsc-muted">{t("inventory.batchExpiryHelp")}</p>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button size="sm" type="submit" disabled={Boolean(expiryDraft.from&&expiryDraft.to&&expiryDraft.from>expiryDraft.to)}>{t("inventory.batchExpiryApply")}</Button>
+              <Button size="sm" type="button" variant="outline" onClick={()=>{setExpiryDraft({from:"",to:""});setExpiryDates({from:"",to:""});setPage(1);}}>{t("inventory.batchExpiryClear")}</Button>
+            </div>
+            {expiryDates.from||expiryDates.to?<p role="status" className="break-words text-xs font-semibold text-dtsc-blue">{t("inventory.batchExpiryActive")} · {expiryDates.from||"…"} → {expiryDates.to||"…"}</p>:null}
+          </form>
+          <ErpDesign2RegisterTools locale={locale} title={t("inventory.batchRegister")} organizationName={organizationName}
+            endpoint={`/api/enterprise/${organizationId}/inventory/lots`}
+            filters={{search,warehouseId:lotWarehouse,status:lotStatus,expiry:expiryFilter,expiryFrom:expiryDates.from,expiryTo:expiryDates.to}}
+            status={lotStatus} statuses={statusOptions} onStatusChange={value=>{setLotStatus(value);setPage(1);}}
+            columns={[
+              {key:"lot",labelFr:"Lot",labelEn:"Batch",get:row=>String(row.lotNumber||"")},
+              {key:"code",labelFr:"Code article",labelEn:"Item code",get:row=>String((row.inventoryItem as Lot["inventoryItem"]|undefined)?.catalogItem.code||"")},
+              {key:"item",labelFr:"Article",labelEn:"Item",get:row=>String((row.inventoryItem as Lot["inventoryItem"]|undefined)?.catalogItem.name||"")},
+              {key:"warehouse",labelFr:"Dépôt",labelEn:"Warehouse",get:row=>String((row.warehouse as Warehouse|null)?.code||"")+" · "+String((row.warehouse as Warehouse|null)?.name||"")},
+              {key:"production",labelFr:"Date de production",labelEn:"Production date",get:row=>dateInput(typeof row.productionDate==="string"?row.productionDate:null)},
+              {key:"expiry",labelFr:"Péremption",labelEn:"Expiry date",get:row=>dateInput(typeof row.expiryDate==="string"?row.expiryDate:null)},
+              {key:"quality",labelFr:"Statut qualité",labelEn:"Quality status",get:row=>statusOptions.find(option=>option.id===(row.recallReference?"RECALLED":row.status))?.label||"—"},
+              {key:"alert",labelFr:"Alerte péremption",labelEn:"Expiry alert",get:row=>row.expired?t("inventory.batchExpired"):row.expiresSoon?t("inventory.batchExpiring"):""},
+              {key:"onHand",labelFr:"Stock physique",labelEn:"Physical stock",get:row=>String(row.quantityOnHand??"")},
+              {key:"reserved",labelFr:"Réservé au solde",labelEn:"Balance reservation",get:row=>String(row.quantityReserved??"")},
+              {key:"recall",labelFr:"Référence rappel",labelEn:"Recall reference",get:row=>String(row.recallReference||"")},
+              {key:"reason",labelFr:"Motif qualité",labelEn:"Quality reason",get:row=>String(row.qualityReason||"")},
+            ]} />
+        </div>
+        <div className="grid gap-2" aria-busy={lotsLoading}>{lotsLoading?<p role="status" className="text-xs text-dtsc-muted">{en?"Loading batches…":"Chargement des lots…"}</p>:lots.length?lots.map(lot=><article key={lot.id} className="grid min-w-0 gap-2 rounded-xl border border-dtsc-border bg-dtsc-page p-3">
+          <div className="flex min-w-0 flex-wrap items-start justify-between gap-2"><div className="min-w-0"><p className="break-words text-sm font-black text-dtsc-ink">{lot.inventoryItem.catalogItem.name} · {lot.lotNumber}</p><p className="text-xs text-dtsc-muted">{lot.warehouse?.name||warehouses.find(warehouse=>warehouse.id===lot.warehouseId)?.name||"—"} · {en?"Expires":"Péremption"} {formatCivilDate(lot.expiryDate,en)}</p></div><span className={`rounded-full px-2 py-1 text-xs font-semibold ${lot.recallReference||lot.expired?"bg-red-500/15 text-red-700 dark:text-red-200":lot.expiresSoon&&lot.status==="AVAILABLE"?"bg-amber-500/15 text-amber-800 dark:text-amber-200":lot.status==="AVAILABLE"?"bg-emerald-500/15 text-emerald-700 dark:text-emerald-300":"bg-amber-500/15 text-amber-800 dark:text-amber-200"}`}>{lot.recallReference?(en?"Recalled":"Rappelé"):lot.expired?(en?"Expired":"Périmé"):lot.expiresSoon&&lot.status==="AVAILABLE"?(en?"Expires soon":"Péremption proche"):lot.status==="AVAILABLE"?(en?"Available":"Disponible"):lot.status==="QUARANTINED"?(en?"Quarantined":"En quarantaine"):(en?"Blocked":"Bloqué")}</span></div>
+          <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs"><span>{en?"Physical stock":"Stock physique"} <strong>{lot.quantityOnHand}</strong></span><span>{en?"Balance reservation":"Réservé au solde"} <strong>{lot.quantityReserved}</strong></span></div>
+          {lot.recallReference?<p className="break-words font-semibold text-xs text-red-700 dark:text-red-200">{lot.recallReference}</p>:null}
+          {lot.qualityReason?<p className="break-words text-xs text-dtsc-muted">{lot.qualityReason}</p>:null}
+          {lot.sectorManaged?<p className="text-xs text-dtsc-muted">{en?"Read-only projection. Use the dedicated sector register.":"Projection en lecture seule. Utilisez le registre sectoriel dédié."}</p>:null}
+          <div data-responsive-actions className="flex flex-wrap gap-2"><Button type="button" variant="outline" size="sm" disabled={!canRegisterLot||Boolean(lot.recallReference)||Boolean(lot.sectorManaged)} onClick={()=>openEditLot(lot)}>{en?"Quality / edit":"Qualité / modifier"}</Button><Button type="button" variant="outline" size="sm" onClick={()=>{setTraceLot(lot);setTracePage(1);setTraceItems([]);}}>{en?"Trace movements":"Tracer les mouvements"}</Button></div>
+        </article>):<p className="text-xs text-dtsc-muted">{en?"No batch for these filters.":"Aucun lot pour ces filtres."}</p>}</div>
+        <div className="mt-2 flex min-w-0 flex-wrap items-center justify-between gap-2 text-xs text-dtsc-muted"><span>{en ? "Page" : "Page"} {page}/{pages}</span><div className="flex gap-2"><Button variant="outline" disabled={page <= 1} onClick={() => setPage((value) => value - 1)}>{en ? "Previous" : "Précédent"}</Button><Button variant="outline" disabled={page >= pages} onClick={() => setPage((value) => value + 1)}>{en ? "Next" : "Suivant"}</Button></div></div>
       </div>
     </div> : null}
-    <Dialog open={Boolean(editPolicy)} onClose={() => { if (!busy) setEditPolicy(null); }} title={en ? "Stock rules" : "Règles de stock"} presentation="editor"><form key={editPolicy?.id || "none"} onSubmit={savePolicy} className="grid gap-3 p-2">
+    {custodyOpen?<InventoryReturnCustodyDialog organizationId={organizationId} locale={locale} warehouses={warehouses} initialCustodyId={initialCustodyId} initialWarehouse={disposalDrilldown?lotWarehouse:""} initialStatus={disposalDrilldown?"DISPOSAL_PENDING":""} onClose={()=>{setCustodyOpen(false);setInitialCustodyId("");setDisposalDrilldown(false);refresh();}} />:null}
+    {historicalItem ? <InventoryHistoricalLotDialog key={historicalItem.id} organizationId={organizationId} locale={locale} item={historicalItem} onClose={() => setHistoricalItem(null)} onSubmitted={(result) => { setLastApproval(result); setHistoricalItem(null); refresh(); }} /> : null}
+    <Dialog open={Boolean(editPolicy)} onClose={() => { if (!busy) setEditPolicy(null); }} title={en ? "Stock rules" : "Règles de stock"} presentation="editor"><form key={editPolicy?.id || "none"} onSubmit={savePolicy} className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3 p-2">
       <p className="text-xs text-dtsc-muted">{editPolicy?.catalogItem.name}</p>
-      <label className="grid gap-1 text-xs font-bold text-dtsc-muted">{en ? "Low-stock threshold (available units)" : "Seuil d'alerte du stock disponible"}<Input name="minimumQuantity" type="number" min="0" step="0.001" defaultValue={editPolicy?.minimumQuantity?.toString() || ""} /></label>
-      <label className="grid gap-1 text-xs font-bold text-dtsc-muted">{en ? "Reorder quantity" : "Quantité de réapprovisionnement"}<Input name="reorderQuantity" type="number" min="0" step="0.001" defaultValue={editPolicy?.reorderQuantity?.toString() || ""} /></label>
+      <label className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-1 text-xs font-bold text-dtsc-muted">{en ? "Low-stock threshold (physical units)" : "Seuil d’alerte du stock physique"}<Input name="minimumQuantity" type="number" min="0" step="0.001" defaultValue={editPolicy?.minimumQuantity?.toString() || ""} /></label>
+      <label className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-1 text-xs font-bold text-dtsc-muted">{en ? "Reorder quantity" : "Quantité de réapprovisionnement"}<Input name="reorderQuantity" type="number" min="0" step="0.001" defaultValue={editPolicy?.reorderQuantity?.toString() || ""} /></label>
       <label className="flex min-h-11 items-center gap-2 text-sm text-dtsc-ink"><input name="lotTracking" type="checkbox" defaultChecked={editPolicy?.lotTracking} />{en ? "Require batch tracking for stock movements" : "Suivre les lots sur les mouvements"}</label>
       <label className="flex min-h-11 items-center gap-2 text-sm text-dtsc-ink"><input name="expiryTracking" type="checkbox" defaultChecked={editPolicy?.expiryTracking} />{en ? "Require expiry dates for batches" : "Exiger la date de péremption par lot"}</label>
       <p className="flex gap-2 text-xs text-amber-800 dark:text-amber-200"><TriangleAlert className="h-4 w-4 shrink-0" />{en ? "Traceability cannot be turned off while active batches exist." : "La traçabilité ne peut être désactivée si des lots actifs existent."}</p>
-      <div className="flex justify-end gap-2"><Button variant="outline" type="button" disabled={busy} onClick={() => setEditPolicy(null)}>{en ? "Cancel" : "Annuler"}</Button><Button type="submit" disabled={busy}>{busy ? en ? "Saving…" : "Enregistrement…" : en ? "Save rules" : "Enregistrer les règles"}</Button></div>
+      <div className="flex min-w-0 flex-wrap justify-end gap-2"><Button variant="outline" type="button" disabled={busy} onClick={() => setEditPolicy(null)}>{en ? "Cancel" : "Annuler"}</Button><Button type="submit" disabled={busy}>{busy ? en ? "Saving…" : "Enregistrement…" : en ? "Save rules" : "Enregistrer les règles"}</Button></div>
     </form></Dialog>
-    <Dialog open={lotDialog} onClose={() => { if (!busy) { setLotDialog(false); setEditLot(null); } }} title={editLot ? en ? "Update batch metadata" : "Modifier le lot" : en ? "Register a batch" : "Enregistrer un lot"} description={en ? "Batch identification and expiry are managed here. Quantity is recorded only by an approved stock operation." : "Identification et péremption du lot. La quantité se saisit exclusivement par une opération de stock approuvée."} presentation="editor"><form key={editLot?.id || "new"} onSubmit={saveLot} className="grid gap-3 p-2">
-      <label className="grid gap-1 text-xs font-bold text-dtsc-muted">{en ? "Tracked item" : "Article suivi"} *<select name="inventoryItemId" required disabled={Boolean(editLot)} defaultValue="" className="min-h-11 rounded-xl border border-dtsc-border bg-dtsc-page px-2 text-sm"><option value="">{en ? "Choose" : "Choisir"}</option>{items.map((item) => <option key={item.id} value={item.id}>{item.catalogItem.code} · {item.catalogItem.name}</option>)}</select></label>
-      <label className="grid gap-1 text-xs font-bold text-dtsc-muted">{en ? "Warehouse" : "Dépôt"} *<select name="warehouseId" required disabled={Boolean(editLot)} defaultValue={editLot?.warehouseId || ""} className="min-h-11 rounded-xl border border-dtsc-border bg-dtsc-page px-2 text-sm"><option value="">{en ? "Choose" : "Choisir"}</option>{warehouses.map((item) => <option key={item.id} value={item.id}>{item.code} · {item.name}</option>)}</select></label>
-      <label className="grid gap-1 text-xs font-bold text-dtsc-muted">{en ? "Batch number" : "Numéro de lot"} *<Input required name="lotNumber" maxLength={120} disabled={Boolean(editLot)} defaultValue={editLot?.lotNumber || ""} /></label>
-      <label className="grid gap-1 text-xs font-bold text-dtsc-muted">{en ? "Manufactured on" : "Date de fabrication"}<Input name="productionDate" type="date" defaultValue={dateInput(editLot?.productionDate || null)} /></label>
-      <label className="grid gap-1 text-xs font-bold text-dtsc-muted">{en ? "Expiry date (required for expiry-tracked items)" : "Date de péremption (obligatoire si suivi activé)"}<Input name="expiryDate" type="date" defaultValue={dateInput(editLot?.expiryDate || null)} /></label>
-      {editLot ? <label className="grid gap-1 text-xs font-bold text-dtsc-muted">{en ? "Batch availability" : "Disponibilité du lot"}<select name="status" defaultValue={editLot.status} className="min-h-11 rounded-xl border border-dtsc-border bg-dtsc-page p-2"><option value="AVAILABLE">{en ? "Available" : "Disponible"}</option><option value="BLOCKED">{en ? "Blocked" : "Bloqué"}</option><option value="QUARANTINED">{en ? "Quarantined" : "En quarantaine"}</option></select></label> : null}
-      <label className="grid gap-1 text-xs font-bold text-dtsc-muted">{en ? "Traceability note" : "Observation de traçabilité"}<textarea name="notes" maxLength={1000} defaultValue={editLot?.notes || ""} className="min-h-20 rounded-xl border border-dtsc-border bg-dtsc-page p-3 text-sm" /></label>
-      <div className="flex justify-end gap-2"><Button type="button" variant="outline" disabled={busy} onClick={() => { setLotDialog(false); setEditLot(null); }}>{en ? "Cancel" : "Annuler"}</Button><Button type="submit" disabled={busy}>{busy ? en ? "Saving…" : "Enregistrement…" : en ? "Save batch" : "Enregistrer le lot"}</Button></div>
+    <Dialog open={lotDialog} onClose={() => { if (!busy) { setLotDialog(false); setEditLot(null); } }} title={editLot ? en ? "Update batch metadata" : "Modifier le lot" : en ? "Register a batch" : "Enregistrer un lot"} description={en ? "Batch identification and expiry are managed here. Quantity is recorded only by an approved stock operation." : "Identification et péremption du lot. La quantité se saisit exclusivement par une opération de stock approuvée."} presentation="editor"><form key={editLot?.id || "new"} onSubmit={saveLot} className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3 p-2">
+      {editLot ? <p className="text-sm font-semibold text-dtsc-ink">{editLot.inventoryItem.catalogItem.code} · {editLot.inventoryItem.catalogItem.name}</p> : null}
+      <label className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-1 text-xs font-bold text-dtsc-muted">{en ? "Warehouse" : "Dépôt"} *<select name="warehouseId" required disabled={Boolean(editLot)} value={editLot?.warehouseId || batchWarehouse} onChange={(event) => { setBatchWarehouse(event.target.value); setBatchSearch(""); setBatchPage(1); setBatchItem(""); setBatchOptions([]); setBatchError(""); setBatchLoading(Boolean(event.target.value)); }} className="min-h-11 min-w-0 w-full max-w-full rounded-xl border border-dtsc-border bg-dtsc-page px-2 text-sm"><option value="">{en ? "Choose" : "Choisir"}</option>{warehouses.map((item) => <option key={item.id} value={item.id}>{item.code} · {item.name}</option>)}</select></label>
+      {!editLot ? <div className="grid gap-2">
+        <label className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-1 text-xs font-bold text-dtsc-muted">{en ? "Search tracked items" : "Rechercher un article suivi"}<Input value={batchSearch} disabled={!batchWarehouse} onChange={(event) => { setBatchSearch(event.target.value); setBatchPage(1); setBatchItem(""); setBatchOptions([]); setBatchLoading(true); }} placeholder={en ? "Name, code or SKU" : "Nom, code ou SKU"} /></label>
+        <label className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-1 text-xs font-bold text-dtsc-muted">{en ? "Tracked item" : "Article suivi"} *<select name="inventoryItemId" required disabled={!batchWarehouse || batchLoading || Boolean(batchError)} value={batchItem} onChange={(event) => setBatchItem(event.target.value)} className="min-h-11 min-w-0 w-full max-w-full rounded-xl border border-dtsc-border bg-dtsc-page px-2 text-sm"><option value="">{en ? "Choose" : "Choisir"}</option>{batchOptions.map((item) => <option key={item.id} value={item.id}>{item.catalogItem.code} · {item.catalogItem.name}</option>)}</select></label>
+        {batchLoading ? <p role="status" className="text-xs text-dtsc-muted">{en ? "Loading items…" : "Chargement des articles…"}</p> : batchError ? <p role="alert" className="text-xs text-red-600 dark:text-red-300">{batchError}</p> : !batchWarehouse ? <p className="text-xs text-dtsc-muted">{en ? "Choose the warehouse first." : "Choisissez d’abord le dépôt."}</p> : !batchOptions.length ? <p className="text-xs text-dtsc-muted">{en ? "No eligible item. Clear the search or enable batch tracking in stock rules. Sector-managed batches use their dedicated register." : "Aucun article éligible. Effacez la recherche ou activez le suivi des lots dans les règles de stock. Les lots sectoriels relèvent de leur registre dédié."}</p> : null}
+        {batchPages > 1 ? <div className="flex min-w-0 flex-wrap items-center justify-between gap-2 text-xs text-dtsc-muted"><span>{batchPage}/{batchPages}</span><div className="flex gap-2"><Button variant="outline" type="button" disabled={batchLoading || batchPage <= 1} onClick={() => { setBatchPage((v) => v - 1); setBatchItem(""); setBatchOptions([]); setBatchLoading(true); }}>{en ? "Previous" : "Précédent"}</Button><Button variant="outline" type="button" disabled={batchLoading || batchPage >= batchPages} onClick={() => { setBatchPage((v) => v + 1); setBatchItem(""); setBatchOptions([]); setBatchLoading(true); }}>{en ? "Next" : "Suivant"}</Button></div></div> : null}
+      </div> : null}
+      <label className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-1 text-xs font-bold text-dtsc-muted">{en ? "Batch number" : "Numéro de lot"} *<Input required name="lotNumber" maxLength={120} disabled={Boolean(editLot)} defaultValue={editLot?.lotNumber || ""} /></label>
+      <label className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-1 text-xs font-bold text-dtsc-muted">{en ? "Manufactured on" : "Date de fabrication"}<Input className="min-w-0 w-full max-w-full" name="productionDate" type="date" defaultValue={dateInput(editLot?.productionDate || null)} /></label>
+      <label className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-1 text-xs font-bold text-dtsc-muted">{en ? "Expiry date (required for expiry-tracked items)" : "Date de péremption (obligatoire si suivi activé)"}<Input className="min-w-0 w-full max-w-full" name="expiryDate" type="date" required={!editLot && Boolean(batchOptions.find((item) => item.id === batchItem)?.expiryTracking)} defaultValue={dateInput(editLot?.expiryDate || null)} /></label>
+      {editLot ? <div className="grid gap-2 rounded-xl border border-dtsc-border p-3">
+        <label className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-1 text-xs font-bold text-dtsc-muted">{en?"Batch quality status":"Statut qualité du lot"}<select name="status" value={nextStatus} disabled={recall} onChange={event=>setNextStatus(event.target.value)} className="min-h-11 rounded-xl border border-dtsc-border bg-dtsc-page p-2"><option value="AVAILABLE" disabled={editLot.status!=="AVAILABLE"&&(!canAdminister||editLot.expired||editLot.qualityChangedByUserId===currentUserId)}>{en?"Available / release":"Disponible / libérer"}</option><option value="BLOCKED">{en?"Blocked":"Bloqué"}</option><option value="QUARANTINED">{en?"Quarantined":"En quarantaine"}</option></select></label>
+        {canRecall?<label className="flex items-start gap-2 text-sm font-semibold text-red-700 dark:text-red-200"><input className="mt-1" type="checkbox" checked={recall} onChange={event=>{setRecall(event.target.checked);setNextStatus(event.target.checked?"QUARANTINED":editLot.status);}} />{en?"Recall this batch in every warehouse (irreversible here)":"Rappeler ce lot dans tous les dépôts (irréversible ici)"}</label>:null}
+        {recall?<p role="alert" className="text-xs text-red-700 dark:text-red-200">{en?"The same item and batch number will be quarantined in all warehouses. No physical removal or credit note is generated.":"Le même article et numéro de lot seront mis en quarantaine dans tous les dépôts. Aucune sortie physique ni aucun avoir n’est généré."}</p>:null}
+        {recall||nextStatus!==editLot.status?<label className="grid gap-1 text-xs font-semibold">{en?"Quality findings / mandatory reason":"Constat qualité / motif obligatoire"}<textarea required name="qualityReason" minLength={8} maxLength={1000} className="min-h-20 rounded-xl border border-dtsc-border bg-dtsc-page p-2 text-sm" /></label>:null}
+        <p className="text-xs text-dtsc-muted">{en?"Release requires another inventory administrator; existing physical history locks batch dates.":"La libération requiert un autre administrateur du stock ; l’historique physique verrouille les dates."}</p>
+      </div>:null}
+      <label className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-1 text-xs font-bold text-dtsc-muted">{en ? "Traceability note" : "Observation de traçabilité"}<textarea name="notes" maxLength={1000} defaultValue={editLot?.notes || ""} className="min-h-20 rounded-xl border border-dtsc-border bg-dtsc-page p-3 text-sm" /></label>
+      <div className="flex min-w-0 flex-wrap justify-end gap-2"><Button type="button" variant="outline" disabled={busy} onClick={() => { setLotDialog(false); setEditLot(null); }}>{en ? "Cancel" : "Annuler"}</Button><Button type="submit" disabled={busy || (!editLot && (!batchWarehouse || !batchItem || batchLoading || Boolean(batchError)))}>{busy ? en ? "Saving…" : "Enregistrement…" : en ? "Save batch" : "Enregistrer le lot"}</Button></div>
     </form></Dialog>
+    <Dialog open={Boolean(traceLot)} onClose={()=>setTraceLot(null)} title={en?"Batch traceability":"Traçabilité du lot"} description={traceLot?`${traceLot.inventoryItem.catalogItem.name} · ${traceLot.lotNumber}`:""} presentation="editor" className="max-w-3xl"><div className="grid min-w-0 gap-3 p-2">
+      {traceLot?.recallReference?<p className="rounded-xl bg-red-500/10 p-3 text-xs text-red-700 dark:text-red-200">{traceLot.recallReference} · {traceLot.qualityReason}</p>:null}
+      <p className="text-xs text-dtsc-muted">{en?"Physical movements of this item and batch number in authorized warehouses. Source references identify the original documents.":"Mouvements physiques de cet article et numéro de lot dans les dépôts autorisés. Les références sources identifient les pièces d’origine."}</p>
+      {traceLoading?<p role="status" className="text-sm">{en?"Loading…":"Chargement…"}</p>:traceError?<p role="alert" className="text-sm text-red-700 dark:text-red-200">{traceError}</p>:traceItems.length?traceItems.map(row=><article key={row.id} className="grid min-w-0 gap-1 rounded-xl border border-dtsc-border p-3"><div className="flex flex-wrap justify-between gap-2"><strong className="break-words text-sm">{row.warehouse.code} · {row.warehouse.name}</strong><span className={row.direction==="IN"?"font-semibold text-emerald-600":"font-semibold text-amber-600"}>{row.direction==="IN"?"+":"−"}{row.quantity}</span></div><p className="break-words text-xs">{row.movementType} · {formatDate(row.occurredAt,en)}</p>{row.sourceEntityId?<p className="break-all text-xs text-dtsc-muted">{row.sourceEntityType} · {row.sourceEntityId}</p>:null}</article>):<p className="text-sm text-dtsc-muted">{en?"No physical movements recorded.":"Aucun mouvement physique enregistré."}</p>}
+      <div className="flex flex-wrap items-center justify-between gap-2 text-xs"><span>{traceTotal} {en?"movements":"mouvements"} · {tracePage}/{tracePages}</span><div className="flex gap-2"><Button variant="outline" type="button" disabled={traceLoading||tracePage<=1} onClick={()=>setTracePage(page=>page-1)}>{en?"Previous":"Précédent"}</Button><Button variant="outline" type="button" disabled={traceLoading||tracePage>=tracePages} onClick={()=>setTracePage(page=>page+1)}>{en?"Next":"Suivant"}</Button></div></div>
+    </div></Dialog>
   </section>;
 }

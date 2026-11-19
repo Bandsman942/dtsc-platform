@@ -1,12 +1,16 @@
 import { Prisma } from "@prisma/client";
 import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
 import type { PostingDocument } from "@/lib/enterprise/accounting/posting-registry";
+import { verifySupplierReturnCreditTx } from "@/lib/enterprise/accounting/supplier-return-credit-reconciliation";
+import { resolveEnterpriseBusinessDate } from "@/lib/enterprise/business-context";
 
 export async function buildSupplierCreditNotePosting(tx: Prisma.TransactionClient, input: { organizationId: string; sourceEntityType: string; sourceEntityId: string }): Promise<PostingDocument> {
   const credit = await tx.enterpriseSupplierCreditNote.findFirst({ where: { id: input.sourceEntityId, organizationId: input.organizationId, status: { in: ["APPROVED", "POSTED"] } }, include: { supplierInvoice: true } });
   if (!credit) throw new EnterpriseAccountingError("SUPPLIER_CREDIT_NOTE_NOT_POSTABLE", 409);
+
   const items = await tx.enterpriseSupplierCreditNoteItem.findMany({ where: { organizationId: input.organizationId, supplierCreditNoteId: credit.id } });
   if (!items.length) throw new EnterpriseAccountingError("SUPPLIER_CREDIT_LINES_REQUIRED", 409);
+  const linkedReturn = await verifySupplierReturnCreditTx(tx, input.organizationId, credit, items);
   const originalIds = items.map((line) => line.sourceInvoiceItemId).filter((id): id is string => Boolean(id));
   if (originalIds.length !== items.length) throw new EnterpriseAccountingError("SUPPLIER_CREDIT_ORIGIN_REQUIRED", 409);
   const originals = await tx.enterpriseSupplierInvoiceItem.findMany({
@@ -25,10 +29,10 @@ export async function buildSupplierCreditNotePosting(tx: Prisma.TransactionClien
       : credit.supplierInvoice.assetId ? "FIXED_ASSET"
       : original.expenseAccountId ? `ACCOUNT_ID:${original.expenseAccountId}` : "OPERATING_EXPENSE";
     lines.push({ accountMappingKey: baseKey, description: `Supplier credit ${credit.number}: ${item.description}`,
-      credit: item.netAmount, transactionCurrencyCode: credit.currencyCode, transactionAmount: item.netAmount,
+      credit: linkedReturn && !item.taxRecoveryRequested && item.taxAmount.gt(0) ? item.totalAmount : item.netAmount, transactionCurrencyCode: credit.currencyCode, transactionAmount: linkedReturn && !item.taxRecoveryRequested && item.taxAmount.gt(0) ? item.totalAmount : item.netAmount,
       businessPartyId: credit.supplierInvoice.businessPartyId, projectId: credit.supplierInvoice.projectId,
       assetId: credit.supplierInvoice.assetId });
-    if (item.taxAmount.gt(0)) lines.push({ accountMappingKey: item.taxRecoveryRequested ? "TAX_RECEIVABLE" : credit.supplierInvoice.purchaseReceiptId ? "INVENTORY"
+    if (item.taxAmount.gt(0) && !(linkedReturn && !item.taxRecoveryRequested)) lines.push({ accountMappingKey: item.taxRecoveryRequested ? "TAX_RECEIVABLE" : linkedReturn ? "GOODS_RECEIVED_CLEARING" : credit.supplierInvoice.purchaseReceiptId ? "INVENTORY"
         : credit.supplierInvoice.assetId ? "FIXED_ASSET" : baseKey,
       description: `Supplier tax reversal ${credit.number}: ${item.description}`,
       credit: item.taxAmount, transactionCurrencyCode: credit.currencyCode, transactionAmount: item.taxAmount,
@@ -108,19 +112,41 @@ export async function buildPayrollPosting(tx: Prisma.TransactionClient, input: {
   return { organizationId: input.organizationId, journalType: "PAYROLL", accountingDate: run.payrollPeriod.payDate || run.payrollPeriod.periodEnd, documentDate: run.payrollPeriod.periodEnd, reference: run.reference, description: `Payroll ${run.reference}`, sourceModule: "HR_PAYROLL", sourceEntityType: "EnterprisePayrollRun", sourceEntityId: run.id, currencyCode: run.currency, lines };
 }
 
-export async function buildInventoryAccountingPosting(tx: Prisma.TransactionClient, input: { organizationId: string; sourceEntityType: string; sourceEntityId: string }, kind: "RECEIPT" | "ISSUE"): Promise<PostingDocument> {
+export async function buildInventoryAccountingPosting(tx: Prisma.TransactionClient, input: { organizationId: string; sourceEntityType: string; sourceEntityId: string }, kind: "RECEIPT" | "ISSUE" | "LOSS" | "SUPPLIER_RETURN" | "CUSTODY_RECOVERY"): Promise<PostingDocument> {
   const event = await tx.enterpriseInventoryAccountingEvent.findFirst({ where: { id: input.sourceEntityId, organizationId: input.organizationId, status: { in: ["PENDING", "APPROVED", "POSTED"] }, eventType: kind } });
   if (!event) throw new EnterpriseAccountingError("INVENTORY_ACCOUNTING_EVENT_NOT_POSTABLE", 409);
   const sourceMovement = await tx.enterpriseStockMovement.findFirst({
     where: { organizationId: input.organizationId, id: event.stockMovementId },
-    select: { warehouse: { select: { siteId: true } } },
+    select: { movementType:true, direction:true, sourceEntityType:true, sourceEntityId:true, quantity:true, inventoryItemId:true, warehouseId:true, stockLotId:true, warehouse: { select: { siteId: true } } },
   });
+  // A direct posting request must enforce the same transfer boundary as the valuation APIs.
+  if (sourceMovement && (sourceMovement.movementType === "TRANSFER_IN" || sourceMovement.movementType === "TRANSFER_OUT" || sourceMovement.sourceEntityType === "EnterpriseStockTransfer")) throw new EnterpriseAccountingError("INVENTORY_TRANSFER_VALUATION_WORKFLOW_REQUIRED",409);
+  if (kind === "LOSS" && sourceMovement?.movementType !== "LOT_WRITE_OFF") throw new EnterpriseAccountingError("INVENTORY_ACCOUNTING_EVENT_NOT_POSTABLE",409);
+  if (kind === "ISSUE" && ["LOT_WRITE_OFF", "SUPPLIER_RETURN_OUT"].includes(sourceMovement?.movementType || "")) throw new EnterpriseAccountingError("INVENTORY_ACCOUNTING_EVENT_NOT_POSTABLE",409);
+  if (kind === "SUPPLIER_RETURN") {
+    if (!sourceMovement || sourceMovement.movementType !== "SUPPLIER_RETURN_OUT" || sourceMovement.direction !== "OUT" || sourceMovement.sourceEntityType !== "EnterpriseSupplierReturnRequest" || !sourceMovement.sourceEntityId) throw new EnterpriseAccountingError("INVENTORY_ACCOUNTING_EVENT_NOT_POSTABLE",409);
+    const request = await tx.enterpriseSupplierReturnRequest.findFirst({ where: { organizationId: input.organizationId, id: sourceMovement.sourceEntityId, status: { in: ["APPROVED","DISPATCHED","RECONCILED"] } } });
+    if (!request || (request.dispatchMovementId && request.dispatchMovementId !== event.stockMovementId) || (request.dispatchAccountingEventId && request.dispatchAccountingEventId !== event.id) ||
+      request.inventoryItemId !== event.inventoryItemId || request.inventoryItemId !== sourceMovement.inventoryItemId || request.warehouseId !== sourceMovement.warehouseId || request.stockLotId !== sourceMovement.stockLotId ||
+      !request.quantity.equals(event.quantity) || !request.quantity.equals(sourceMovement.quantity) || !request.totalCost.equals(event.totalCost) || !request.unitCost.equals(event.unitCost) || request.currencyCode !== event.currencyCode) throw new EnterpriseAccountingError("INVENTORY_ACCOUNTING_EVENT_NOT_POSTABLE",409);
+  }
+  if (kind !== "CUSTODY_RECOVERY" && sourceMovement?.movementType === "CUSTODY_RECOVERY_IN") throw new EnterpriseAccountingError("INVENTORY_ACCOUNTING_EVENT_NOT_POSTABLE",409);
+  if (kind === "CUSTODY_RECOVERY") {
+    if(event.status!=="APPROVED"||event.journalEntryId||!sourceMovement||sourceMovement.movementType!=="CUSTODY_RECOVERY_IN"||sourceMovement.direction!=="IN"||sourceMovement.sourceEntityType!=="EnterpriseInventoryReturnRecoveryAssessment"||!sourceMovement.sourceEntityId)throw new EnterpriseAccountingError("INVENTORY_ACCOUNTING_EVENT_NOT_POSTABLE",409);
+    const appraisal=await tx.enterpriseInventoryReturnRecoveryAssessment.findFirst({where:{organizationId:input.organizationId,id:sourceMovement.sourceEntityId,status:"APPROVED",custody:{status:"QUARANTINED"}},include:{custody:{include:{originalMovement:true}}}});
+    const original=appraisal?.custody.originalMovement;
+    if(!appraisal||!original||appraisal.custodyRevision!==appraisal.custody.revision||original.inventoryItemId!==event.inventoryItemId||original.inventoryItemId!==sourceMovement.inventoryItemId||original.warehouseId!==sourceMovement.warehouseId||original.stockLotId!==sourceMovement.stockLotId||!appraisal.quantity.equals(event.quantity)||!event.quantity.equals(sourceMovement.quantity)||!appraisal.proposedRecoveryAmount.equals(event.totalCost)||!event.quantity.times(event.unitCost).equals(event.totalCost)||appraisal.currencyCode!==event.currencyCode)throw new EnterpriseAccountingError("INVENTORY_ACCOUNTING_EVENT_NOT_POSTABLE",409);
+    const origin=await tx.enterpriseJournalEntry.findFirst({where:{organizationId:input.organizationId,id:appraisal.originalIssueJournalId,status:"POSTED",sourceEntityType:"EnterpriseInventoryAccountingEvent",sourceEntityId:appraisal.originalIssueEventId,postingEvent:"INVENTORY_ISSUE_VALUED"}});
+    if(!origin)throw new EnterpriseAccountingError("INVENTORY_ACCOUNTING_EVENT_NOT_POSTABLE",409);
+  }
+  const recovery = kind === "CUSTODY_RECOVERY";
   const receipt = kind === "RECEIPT";
+  const accountingDate = kind === "SUPPLIER_RETURN" || recovery ? new Date((await resolveEnterpriseBusinessDate(tx, input.organizationId, event.createdAt)) + "T00:00:00.000Z") : event.createdAt;
   return {
     organizationId: input.organizationId,
     journalType: "INVENTORY",
-    accountingDate: event.createdAt,
-    documentDate: event.createdAt,
+    accountingDate,
+    documentDate: accountingDate,
     reference: event.stockMovementId,
     description: `${kind} valuation ${event.stockMovementId}`,
     sourceModule: "FINANCE_INVENTORY",
@@ -128,8 +154,8 @@ export async function buildInventoryAccountingPosting(tx: Prisma.TransactionClie
     sourceEntityId: event.id,
     currencyCode: event.currencyCode,
     lines: [
-      { accountMappingKey: receipt ? "INVENTORY" : "COST_OF_SALES", description: `${kind} ${event.inventoryItemId}`, debit: event.totalCost, transactionCurrencyCode: event.currencyCode, transactionAmount: event.totalCost, inventoryItemId: event.inventoryItemId, siteId: sourceMovement?.warehouse.siteId },
-      { accountMappingKey: receipt ? "GOODS_RECEIVED_CLEARING" : "INVENTORY", description: `${kind} ${event.inventoryItemId}`, credit: event.totalCost, transactionCurrencyCode: event.currencyCode, transactionAmount: event.totalCost, inventoryItemId: event.inventoryItemId, siteId: sourceMovement?.warehouse.siteId },
+      { accountMappingKey: receipt || recovery ? "INVENTORY" : kind === "SUPPLIER_RETURN" ? "GOODS_RECEIVED_CLEARING" : kind === "LOSS" ? "OPERATING_EXPENSE" : "COST_OF_SALES", description: `${kind} ${event.inventoryItemId}`, debit: event.totalCost, transactionCurrencyCode: event.currencyCode, transactionAmount: event.totalCost, inventoryItemId: event.inventoryItemId, siteId: sourceMovement?.warehouse.siteId },
+      { accountMappingKey: recovery ? "COST_OF_SALES" : receipt ? "GOODS_RECEIVED_CLEARING" : "INVENTORY", description: `${kind} ${event.inventoryItemId}`, credit: event.totalCost, transactionCurrencyCode: event.currencyCode, transactionAmount: event.totalCost, inventoryItemId: event.inventoryItemId, siteId: sourceMovement?.warehouse.siteId },
     ],
   };
 }

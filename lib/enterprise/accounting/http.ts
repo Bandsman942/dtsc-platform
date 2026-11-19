@@ -9,6 +9,9 @@ import { isSameOriginRequest } from "@/lib/request-security";
 import { isValidEnterpriseActivityCivilDate } from "@/lib/enterprise/enterprise-activity-civil-date";
 
 const FINANCE_ERROR_MESSAGES: Record<string, string> = {
+  SUPPLIER_RETURN_NONRECOVERABLE_COST_RECONCILIATION_REQUIRED: "La TVA non récupérable exige une réception et une valorisation d'origine entièrement rapprochées, sans consommation ni opération ouverte. Vérifiez les pièces et la période avant de poursuivre.",
+  INVENTORY_ACQUISITION_COST_DOMAIN_CORRECTION_REQUIRED: "Ce coût de stock intègre une taxe non récupérable. Un avoir ou une contrepassation isolée déséquilibrerait le stock et la comptabilité. Utilisez une correction coordonnée lorsqu’elle sera disponible.",
+  INVENTORY_ACQUISITION_COST_HISTORY_REQUIRED: "Cette date exige une reconstitution historique du stock valorisé. Consultez un état déjà enregistré ou la valorisation actuelle ; aucun nouvel état historique approximatif n’a été créé.",
   FINANCE_PERIOD_CLOSED: "Cette période financière est fermée. Choisissez une période ouverte ou demandez une réouverture autorisée.",
   FINANCE_INPUT_INVALID: "Certaines informations sont invalides ou incomplètes. Corrigez les champs signalés puis réessayez.",
   RETAIL_INVOICE_NOT_FULLY_PAID: "La facture Retail doit être intégralement réglée avant de déclencher sa sortie de stock.",
@@ -80,6 +83,9 @@ const FINANCE_ERROR_MESSAGES: Record<string, string> = {
   PERIODIC_ACCOUNTING_ALLOCATION_UNBALANCED: "La répartition périodique ne produit pas un débit et un crédit égaux. Vérifiez les pourcentages d’allocation.",
   PERIODIC_ACCOUNTING_AUTO_REVERSAL_PERIOD_REQUIRED: "Aucune période comptable future ouverte n’est disponible pour la contrepassation automatique. Ouvrez la période suivante avant d’exécuter ce modèle.",
   INVENTORY_ACCOUNTING_NEGATIVE_STOCK_FORBIDDEN: "La sortie dépasse les quantités comptables valorisées disponibles.",
+  INVENTORY_COST_LAYER_PRECISION_INVALID: "Les quantités des couches de coût ne peuvent pas être réparties avec la précision comptable autorisée. Faites vérifier les données de valorisation avant de poursuivre.",
+  INVENTORY_TRANSFER_DOMAIN_REVERSAL_REQUIRED: "Cette écriture participe à un transfert valorisé. Une contrepassation isolée dissocierait le stock et la comptabilité. Utilisez une correction métier coordonnée.",
+  INVENTORY_TRANSFER_VALUATION_WORKFLOW_REQUIRED: "Un transfert interne ne constitue ni un achat ni une vente. La valorisation doit conserver le coût d’origine dans un circuit de transfert dédié. Ne valorisez pas séparément les deux mouvements.",
   ASSET_DEPRECIATION_NOT_ELIGIBLE: "Cette échéance d’amortissement n’est pas éligible à la comptabilisation.",
   FINANCIAL_CLOSE_BLOCKED: "La période contient encore des blocages. Corrigez-les avant la clôture.",
   FINANCIAL_CLOSE_SELF_APPROVAL_FORBIDDEN: "La clôture doit être approuvée par une autre personne autorisée.",
@@ -170,6 +176,12 @@ const FINANCE_ERROR_MESSAGES: Record<string, string> = {
   SUPPLIER_INVOICE_ASSET_PURCHASE_MISMATCH: "L’actif sélectionné est rattaché à un autre achat.",
   SUPPLIER_INVOICE_ASSET_CURRENCY_MISMATCH: "La devise de la facture ne correspond pas à celle de l’actif sélectionné.",
   SALES_CREDIT_NOTE_EXCEEDS_OPEN_RECEIVABLE: "Le montant de l’avoir dépasse le solde client encore ouvert. Rechargez la créance avant de comptabiliser l’avoir.",
+  INVENTORY_RETURN_RECOVERY_DOMAIN_REVERSAL_REQUIRED:"Cette écriture est liée à une récupération de stock exécutée. Une correction coordonnée du stock et de sa valorisation est nécessaire.",
+  SUPPLIER_RETURN_DOMAIN_REVERSAL_REQUIRED: "Cette écriture appartient à un retour fournisseur expédié ou rapproché. Une correction coordonnée du stock et de la dette est nécessaire.",
+  SUPPLIER_RETURN_PAYABLE_RESERVED: "Une partie de cette dette est réservée à un avoir fournisseur en attente de rapprochement. Réduisez le montant affecté ou comptabilisez d’abord l’avoir lié.",
+  SUPPLIER_RETURN_CREDIT_REFERENCE_REQUIRED: "Renseignez ensemble le retour expédié et la référence de l’avoir reçu du fournisseur.",
+  SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED: "Cette facture est liée à un retour fournisseur expédié. Rapprochez l’avoir de ce retour avant toute comptabilisation.",
+  SUPPLIER_RETURN_CREDIT_REPLACEMENT_INVALID: "Le remplacement exige le document rejeté actuel, sa révision et une nouvelle référence fournisseur. Un document remplacé ne peut plus être soumis. Actualisez les données.",
   SUPPLIER_CREDIT_NOTE_EXCEEDS_OPEN_PAYABLE: "Le montant de l’avoir fournisseur dépasse le solde de dette encore ouvert. Rechargez la dette avant de comptabiliser l’avoir.",
   SALES_CREDIT_NOTE_CURRENCY_MISMATCH: "La devise de l’avoir ne correspond plus à celle de la créance.",
   SUPPLIER_CREDIT_NOTE_CURRENCY_MISMATCH: "La devise de l’avoir ne correspond plus à celle de la dette.",

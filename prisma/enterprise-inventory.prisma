@@ -40,6 +40,10 @@ model EnterpriseStockLot {
   warehouseId       String
   storageLocationId String?
   status            String                       @default("AVAILABLE")
+  qualityReason     String?
+  qualityChangedByUserId String?
+  qualityChangedAt  DateTime?
+  recallReference   String?
   notes             String?
   createdByUserId   String
   revision          Int                          @default(1)
@@ -58,6 +62,7 @@ model EnterpriseStockLot {
   @@index([organizationId, warehouseId, status])
   @@index([organizationId, storageLocationId, status])
   @@index([organizationId, expiryDate, status])
+  @@index([organizationId, inventoryItemId, lotNumber, recallReference], map: "stock_lot_recall_lookup_idx")
   @@index([organizationId, supplierId])
   @@index([archivedAt])
 }
@@ -107,6 +112,9 @@ model EnterpriseStockMovement {
   warehouse            EnterpriseWarehouse        @relation(fields: [organizationId, warehouseId], references: [organizationId, id], onDelete: Restrict)
   storageLocation      EnterpriseStorageLocation? @relation(fields: [organizationId, storageLocationId], references: [organizationId, id], onDelete: Restrict)
   stockLot             EnterpriseStockLot?        @relation(fields: [organizationId, stockLotId], references: [organizationId, id], onDelete: Restrict)
+  returnCustodyEntries EnterpriseInventoryReturnCustody[]
+  inventoryTransferDispatch EnterpriseInventoryTransferValuation? @relation("InventoryTransferDispatchMovement")
+  inventoryTransferReceipt EnterpriseInventoryTransferValuation? @relation("InventoryTransferReceiptMovement")
 
   @@unique([organizationId, id])
   @@unique([organizationId, idempotencyKey])
@@ -215,6 +223,7 @@ model EnterpriseStockTransferLine {
   createdAt            DateTime                  @default(now())
   stockTransfer        EnterpriseStockTransfer   @relation(fields: [organizationId, stockTransferId], references: [organizationId, id], onDelete: Cascade)
   inventoryItem        EnterpriseInventoryItem   @relation(fields: [organizationId, inventoryItemId], references: [organizationId, id], onDelete: Restrict)
+  inventoryValuation EnterpriseInventoryTransferValuation?
 
   @@unique([organizationId, id])
   @@index([organizationId, stockTransferId])
@@ -231,6 +240,7 @@ model EnterpriseStockAdjustment {
   storageLocationId String?
   stockLotId        String?
   adjustmentType    String
+  lossReason        String?
   quantity          Decimal                 @db.Decimal(18, 3)
   reason             String
   status             String                  @default("DRAFT")
@@ -252,4 +262,215 @@ model EnterpriseStockAdjustment {
   @@index([organizationId, inventoryItemId, status])
   @@index([organizationId, warehouseId, status])
   @@index([organizationId, requestedByUserId, status])
+}
+
+
+
+ // Supplier return request/approval is not a stock movement or credit note.
+ // Preserve the exact original receipt, valuation and invoice evidence.
+model EnterpriseSupplierReturnRequest {
+  id                      String @id @default(cuid())
+  organizationId          String
+  reference               String
+  purchaseId              String
+  receiptId               String
+  receiptItemId           String
+  sourceMovementId        String
+  inventoryItemId         String
+  warehouseId             String
+  storageLocationId       String?
+  stockLotId              String
+  supplierId              String
+  supplierInvoiceId       String
+  supplierInvoiceItemId   String
+  receiptAccountingEventId String
+  originCostLayerId       String
+  quantity                Decimal @db.Decimal(18, 3)
+  unitCost                Decimal @db.Decimal(20, 6)
+  totalCost               Decimal @db.Decimal(20, 6)
+  recoverableTaxAmount    Decimal @default(0) @db.Decimal(20, 6)
+  currencyCode            String
+  reason                  String
+  requestedByUserId       String
+  status                  String @default("PENDING_APPROVAL")
+  idempotencyKey          String
+  revision                Int @default(1)
+  decidedAt               DateTime?
+  dispatchedAt            DateTime?
+  dispatchedByUserId      String?
+  dispatchReference       String?
+  dispatchMovementId      String?
+  dispatchAccountingEventId String?
+  supplierCreditNoteId     String?
+  supplierCreditReference  String?
+  reconciledAt             DateTime?
+  reconciledByUserId       String?
+  creditJournalEntryId     String?
+  cancelledAfterApprovalAt DateTime?
+  cancelledAfterApprovalByUserId String?
+  cancellationReason       String?
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  creditReplacements      EnterpriseSupplierReturnCreditReplacement[]
+
+  @@unique([organizationId, id], map: "supplier_return_org_id_key")
+  @@unique([organizationId, reference], map: "supplier_return_reference_key")
+  @@unique([organizationId, idempotencyKey], map: "supplier_return_idempotency_key")
+  @@unique([organizationId, dispatchMovementId], map: "supplier_return_dispatch_movement_key")
+  @@unique([organizationId, dispatchAccountingEventId], map: "supplier_return_dispatch_event_key")
+  @@unique([organizationId, supplierCreditNoteId], map: "supplier_return_credit_note_key")
+  @@unique([organizationId, supplierId, supplierCreditReference], map: "supplier_return_supplier_credit_reference_key")
+  @@unique([organizationId, creditJournalEntryId], map: "supplier_return_credit_journal_key")
+  @@index([organizationId, purchaseId, createdAt], map: "supplier_return_purchase_idx")
+  @@index([organizationId, sourceMovementId, status], map: "supplier_return_movement_idx")
+  @@index([organizationId, supplierInvoiceId, status], map: "supplier_return_invoice_idx")
+}
+
+
+/// Immutable evidence of replacing a rejected, unposted supplier credit.
+/// The return's current credit pointer is the only active financial link.
+model EnterpriseSupplierReturnCreditReplacement {
+  id                        String   @id @default(cuid())
+  organizationId            String
+  returnRequestId           String
+  supplierId                String
+  previousCreditNoteId      String
+  previousCreditRevision    Int
+  previousSupplierReference String
+  replacementCreditNoteId   String
+  replacementSupplierReference String
+  rejectionApprovalId       String
+  reason                    String
+  replacedByUserId          String
+  createdAt                 DateTime @default(now())
+  returnRequest             EnterpriseSupplierReturnRequest @relation(fields: [organizationId, returnRequestId], references: [organizationId, id], onDelete: Restrict, map: "supplier_credit_history_return_fk")
+  previousCredit            EnterpriseSupplierCreditNote @relation("SupplierReturnPreviousCredit", fields: [organizationId, previousCreditNoteId], references: [organizationId, id], onDelete: Restrict, map: "supplier_credit_history_previous_fk")
+  replacementCredit         EnterpriseSupplierCreditNote @relation("SupplierReturnReplacementCredit", fields: [organizationId, replacementCreditNoteId], references: [organizationId, id], onDelete: Restrict, map: "supplier_credit_history_replacement_fk")
+
+  @@unique([organizationId, previousCreditNoteId], map: "supplier_return_replaced_credit_key")
+  @@unique([organizationId, replacementCreditNoteId], map: "supplier_return_replacement_credit_key")
+  @@unique([organizationId, supplierId, previousSupplierReference], map: "supplier_return_replaced_reference_key")
+  @@index([organizationId, returnRequestId, createdAt], map: "supplier_return_credit_history_idx")
+}
+
+model EnterpriseStockLotReclassification {
+  id                    String   @id @default(cuid())
+  organizationId        String
+  reference             String
+  sourceBalanceId       String
+  sourceBalanceRevision Int
+  inventoryItemId       String
+  itemRevision          Int
+  warehouseId           String
+  storageLocationId     String?
+  quantity              Decimal  @db.Decimal(18, 3)
+  allocations           Json
+  reason                String
+  requestedByUserId     String
+  status                String   @default("PENDING_APPROVAL")
+  revision              Int      @default(1)
+  idempotencyKey        String
+  decidedAt             DateTime?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, reference])
+  @@unique([organizationId, idempotencyKey], map: "EnterpriseLotReclass_idempotency_key")
+  @@index([organizationId, sourceBalanceId, status], map: "EnterpriseLotReclass_source_status_idx")
+  @@index([organizationId, warehouseId, status], map: "EnterpriseLotReclass_warehouse_status_idx")
+}
+
+ // An inspected non-sellable return is physical custody, NOT a sellable
+ // inventory balance or an automatically recognized asset. Keep provenance
+ // and the final disposal evidence independently of the commercial refund.
+model EnterpriseInventoryReturnCustody {
+  id String @id @default(cuid())
+  organizationId String
+  returnLineId String
+  originalMovementId String
+  quantity Decimal @db.Decimal(20, 6)
+  disposition String
+  status String
+  inspectedByUserId String
+  inspectedAt DateTime
+  inspectionNotes String?
+  registeredByUserId String
+  disposalRequestedByUserId String?
+  disposalRequestedAt DateTime?
+  disposalReason String?
+  disposedByUserId String?
+  disposedAt DateTime?
+  disposalEvidence String?
+  revision Int @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  returnLine EnterpriseRetailInvoiceReturnLine @relation(fields:[organizationId,returnLineId],references:[organizationId,id],onDelete:Restrict,map:"inv_return_custody_line_fk")
+  originalMovement EnterpriseStockMovement @relation(fields:[organizationId,originalMovementId],references:[organizationId,id],onDelete:Restrict,map:"inv_return_custody_movement_fk")
+
+  recoveryAssessments EnterpriseInventoryReturnRecoveryAssessment[]
+
+  @@unique([organizationId, id],map:"inv_return_custody_org_id_key")
+  @@unique([organizationId,returnLineId,originalMovementId],map:"inv_return_custody_source_key")
+  @@index([organizationId,status,createdAt],map:"inv_return_custody_status_idx")
+  @@index([organizationId,originalMovementId],map:"inv_return_custody_movement_idx")
+}
+
+// Durable work cursor only; the stock ledger remains the source of truth.
+model EnterpriseInventoryQualityScan {
+  organizationId String @id
+  nextScanAt DateTime @default(now())
+  leaseUntil DateTime?
+  leaseToken String?
+  updatedAt DateTime @updatedAt
+  organization Organization @relation(fields:[organizationId],references:[id],onDelete:Cascade)
+
+  @@index([nextScanAt,leaseUntil],map:"inventory_quality_scan_due_idx")
+}
+
+model EnterpriseInventoryReturnRecoveryAssessment {
+  id String @id @default(cuid())
+  organizationId String
+  custodyId String
+  reference String
+  status String @default("PENDING_APPROVAL")
+  custodyRevision Int
+  quantity Decimal @db.Decimal(20,6)
+  historicalCostCeiling Decimal @db.Decimal(20,6)
+  estimatedSellingAmount Decimal @db.Decimal(20,6)
+  completionCost Decimal @db.Decimal(20,6)
+  sellingCost Decimal @db.Decimal(20,6)
+  estimatedNetValue Decimal @db.Decimal(20,6)
+  proposedRecoveryAmount Decimal @db.Decimal(20,6)
+  currencyCode String
+  originalIssueEventId String
+  originalIssueJournalId String
+  evidenceReference String
+  findings String
+  assessedByUserId String
+  assessedAt DateTime @default(now())
+  decidedAt DateTime?
+  withdrawnAt DateTime?
+  withdrawnByUserId String?
+  withdrawalReason String?
+  executedAt DateTime?
+  executedByUserId String?
+  releaseEvidence String?
+  recoveryMovementId String?
+  recoveryAccountingEventId String?
+  recoveryJournalEntryId String?
+  revision Int @default(1)
+  idempotencyKey String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  custody EnterpriseInventoryReturnCustody @relation(fields:[organizationId,custodyId],references:[organizationId,id],onDelete:Restrict,map:"inv_recovery_custody_fk")
+
+  @@unique([organizationId,id],map:"inv_recovery_org_id_key")
+  @@unique([organizationId,reference],map:"inv_recovery_reference_key")
+  @@unique([organizationId,idempotencyKey],map:"inv_recovery_idempotency_key")
+  @@unique([organizationId,recoveryMovementId],map:"inv_recovery_movement_key")
+  @@unique([organizationId,recoveryAccountingEventId],map:"inv_recovery_event_key")
+  @@unique([organizationId,recoveryJournalEntryId],map:"inv_recovery_journal_key")
+  @@index([organizationId,custodyId,status],map:"inv_recovery_custody_status_idx")
 }

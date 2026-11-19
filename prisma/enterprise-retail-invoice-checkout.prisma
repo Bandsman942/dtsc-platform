@@ -58,6 +58,7 @@ model EnterpriseRetailInvoiceCheckoutLine {
   invoiceItemId      String
   inventoryItemId    String?
   stockLotId         String?
+  lotAllocations     Json?
 
   checkout    EnterpriseRetailInvoiceCheckout @relation(fields: [organizationId, checkoutId], references: [organizationId, id], onDelete: Restrict)
   invoiceItem EnterpriseSalesInvoiceItem      @relation(fields: [organizationId, invoiceItemId], references: [organizationId, id], onDelete: Restrict)
@@ -150,9 +151,12 @@ model EnterpriseRetailInvoiceReturnLine {
   refundNetAmount  Decimal? @db.Decimal(20, 6)
   refundTaxAmount  Decimal? @db.Decimal(20, 6)
   stockDisposition String
+  lotAllocations   Json?
 
   request EnterpriseRetailInvoiceReturnRequest @relation(fields: [organizationId, returnRequestId, checkoutId], references: [organizationId, id, checkoutId], onDelete: Restrict, map: "retail_invoice_return_line_request_fkey")
   checkoutLine EnterpriseRetailInvoiceCheckoutLine @relation(fields: [organizationId, checkoutId, checkoutLineId], references: [organizationId, checkoutId, id], onDelete: Restrict, map: "retail_invoice_return_line_checkout_line_fkey")
+
+  custodyEntries EnterpriseInventoryReturnCustody[]
 
   @@unique([organizationId, id], map: "retail_invoice_return_line_org_id_key")
   @@unique([organizationId, returnRequestId, checkoutLineId], map: "retail_invoice_return_line_request_line_key")

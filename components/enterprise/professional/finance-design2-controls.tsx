@@ -65,12 +65,13 @@ export function FinanceDateFilter({ locale, from, to, onChange, disabledReason }
 export type FinanceExportColumn = { key: string; labelFr: string; labelEn: string; get: (row: Record<string, unknown>) => string | number };
 
 /** Downloads the FULL authorized, filtered result up to the safe export cap; never silently exports only the visible page. */
-export function FinanceExportControls({ endpoint, organizationName, title, locale, filters, columns, disabled, subtitleFr, subtitleEn }: {
+export function FinanceExportControls({ endpoint, organizationName, title, locale, filters, reportFilters, columns, disabled, subtitleFr, subtitleEn }: {
   endpoint: string;
   organizationName: string;
   title: string;
   locale: Locale;
   filters?: Record<string, string>;
+  reportFilters?: { label: string; value: string }[];
   columns: FinanceExportColumn[];
   disabled?: boolean;
   subtitleFr?: string;
@@ -112,7 +113,7 @@ export function FinanceExportControls({ endpoint, organizationName, title, local
         generatedLabel: `${tr("Édité le", "Generated on")} ${now}`,
         kpis: [{ label: tr("Enregistrements", "Records"), value: String(all.length), numericValue: all.length }],
         chart: [], insights: [],
-        filters: Object.entries(filters || {}).filter(([, value]) => value).map(([key, value]) => ({ label: key, value })),
+        filters: reportFilters ?? Object.entries(filters || {}).filter(([, value]) => value).map(([key, value]) => ({ label: key, value })),
         columns: columns.map((column) => ({ key: column.key, label: en ? column.labelEn : column.labelFr })),
         rows: all.map((row) => Object.fromEntries(columns.map((column) => [column.key, column.get(row)]))),
         accentHex: "#087EA4",

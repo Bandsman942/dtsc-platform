@@ -11,6 +11,16 @@ import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
 
 const ERROR_MESSAGES: Record<string, string> = {
+  RETAIL_INVOICE_RETURN_BATCH_UNSAFE: "Un lot du retour est expiré, bloqué ou indisponible. Ne le remettez pas en vente : faites traiter sa quarantaine ou son retrait.",
+  RETAIL_INVOICE_RETURN_BATCH_QUANTITY_EXCEEDED: "La quantité rapportée pour ce lot dépasse son solde retournable ou ne correspond pas à la facture.",
+  RETAIL_INVOICE_RETURN_BATCH_SELECTION_REQUIRED: "Ce retour concerne une facture ventilée par lots. Identifiez les lots réellement rapportés avant toute régularisation physique.",
+  RETAIL_INVOICE_LOT_ALLOCATION_INVALID: "La ventilation des lots ne correspond plus à la facture. Contactez le support avant de poursuivre.",
+  INVENTORY_RESERVATION_ALLOCATION_INVALID: "La réservation par lot doit correspondre aux quantités physiques. Actualisez ou contactez le support si elle est incohérente.",
+  INVENTORY_RESERVATION_REALLOCATION_REQUIRED: "Le lot réservé n'est plus utilisable ou la réservation n'a pas de lot identifié. Libérez le reliquat puis réservez des lots valides.",
+  INVENTORY_RESERVATION_STOCK_HELD: "Ce stock est réservé à une commande client. Réduisez la quantité ou utilisez un autre lot.",
+  INVENTORY_RESERVATION_INSUFFICIENT: "Quantité vendable insuffisante après déduction des réservations, retenues et lots indisponibles.",
+  INVENTORY_RESERVATION_EXPIRY_INVALID: "La date de fin de réservation doit être future.",
+  RESERVATION_EXCEEDS_ORDER_REMAINING: "La quantité déjà livrée ou réservée et cette demande dépassent la quantité commandée.",
   RETAIL_SECTOR_REQUIRED: "Cette entreprise doit utiliser le profil Commerce Retail pour accéder à cette opération.",
   RETAIL_REFERENCE_INVALID: "Une référence sélectionnée n’appartient pas à cette entreprise ou n’est plus active.",
   RETAIL_FINANCE_PROMOTION_LEDGER_REQUIRED: "Les promotions Retail ne peuvent pas encore être appliquées aux factures Finance : leur suivi d'utilisation et de remboursement doit d'abord être relié à la facture canonique. Désactivez l'offre concernée ou contactez un administrateur.",
@@ -300,6 +310,9 @@ export function retailErrorResponse(error: unknown, fallback = "RETAIL_OPERATION
       retailFailureOutcome(null, { error: error.code, message: ERROR_MESSAGES[error.code] || error.message || "L’opération métier n’a pas pu être terminée." }),
       { status: error.status },
     );
+  }
+  if (error && typeof error === "object" && "code" in error && (error as { code?: string }).code === "P2034") {
+    return NextResponse.json(retailFailureOutcome(null, { error: "RETAIL_CONCURRENT_OPERATION", message: "Une opération concurrente a modifié les données. Actualisez le stock et réessayez." }), { status: 409 });
   }
   if (error && typeof error === "object" && "code" in error && (error as { code?: string }).code === "P2002") {
     return NextResponse.json(

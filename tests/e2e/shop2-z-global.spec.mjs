@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { Prisma, PrismaClient } from "@prisma/client";
+import { readFile } from "node:fs/promises";
 
 const prisma = new PrismaClient();
 const baseUrl = process.env.E2E_BASE_URL || "http://127.0.0.1:3000";
@@ -41,7 +42,11 @@ async function apiPost(page, path, data) {
   }));
 }
 
+let authenticatedCookies = null;
 async function signIn(page) {
+  if (authenticatedCookies) {
+    await page.context().addCookies(authenticatedCookies);
+  } else {
   const response = await page.context().request.post(`${baseUrl}/api/auth/sign-in`, {
     data: {
       email: adminEmail,
@@ -53,6 +58,8 @@ async function signIn(page) {
   });
   const body = await response.json().catch(() => null);
   expect(response.ok(), `Direct Shop 2 E2E sign-in failed: ${JSON.stringify(body)}`).toBeTruthy();
+  authenticatedCookies = await page.context().cookies();
+  }
   await page.goto("/enterprise-modules/RETAIL_POS");
   await page.waitForURL((url) => url.pathname.includes("/enterprise-modules/RETAIL_POS"), { timeout: 30_000 });
 }
@@ -444,6 +451,249 @@ test.describe.serial("Shop 2.0 Iteration 4 global behavioral acceptance", () => 
         where: { organizationId, id: { in: createdRuleIds } },
       });
       await context.close();
+    }
+  });
+
+  test("HOTFIX #1212 common ERP reserves real FEFO lots and values partial deliveries exactly once", async ({ page }) => {
+    await signIn(page);
+    const key = "LOT1212-" + crypto.randomUUID().slice(0, 12);
+    const baseProduct = await prisma.enterpriseCatalogItem.findUniqueOrThrow({ where: { id: fixture.catalogItemId } });
+    const product = await prisma.enterpriseCatalogItem.create({ data: { organizationId, code: key, sku: key, name: "E2E Batch product " + key, normalizedName: ("E2E Batch product " + key).toLowerCase(), itemType: "PRODUCT", unitOfMeasureId: baseProduct.unitOfMeasureId, indicativeSalePrice: 10, indicativeCost: 4, currency: fixture.currencyCode, trackInventory: true, taxable: false, createdByUserId: fixture.userId } });
+    const inventory = await prisma.enterpriseInventoryItem.create({ data: { organizationId, catalogItemId: product.id, lotTracking: true, expiryTracking: true, allowNegativeStock: false, createdByUserId: fixture.userId } });
+    const date = (offset) => { const value = new Date(Date.now() + offset * 86400000); value.setUTCHours(0, 0, 0, 0); return value; };
+    const lots = {};
+    for (const [name, amount, days, status] of [["EARLY", 30, 60, "AVAILABLE"], ["LATE", 70, 120, "AVAILABLE"], ["EXPIRED", 100, -10, "AVAILABLE"], ["QUARANTINE", 100, 30, "QUARANTINED"]]) {
+      const lot = await prisma.enterpriseStockLot.create({ data: { organizationId, inventoryItemId: inventory.id, warehouseId: fixture.warehouseId, lotNumber: name, expiryDate: date(days), status, createdByUserId: fixture.userId } });
+      const balance = await prisma.enterpriseInventoryBalance.create({ data: { organizationId, inventoryItemId: inventory.id, warehouseId: fixture.warehouseId, stockLotId: lot.id, quantityOnHand: amount } });
+      const movement = await prisma.enterpriseStockMovement.create({ data: { organizationId, inventoryItemId: inventory.id, warehouseId: fixture.warehouseId, stockLotId: lot.id, movementType: "OPENING_BALANCE", direction: "IN", quantity: amount, balanceAfter: amount, idempotencyKey: key + ":" + name, createdByUserId: fixture.userId } });
+      await prisma.enterpriseInventoryCostLayer.create({ data: { organizationId, inventoryItemId: inventory.id, warehouseId: fixture.warehouseId, sourceMovementId: movement.id, valuationMethod: "WEIGHTED_AVERAGE", quantity: amount, remainingQuantity: amount, unitCost: 4, totalCost: amount * 4, currencyCode: fixture.currencyCode, effectiveAt: new Date() } });
+      lots[name] = { lot, balance };
+    }
+    async function createOrder(suffix, quantity) {
+      return prisma.enterpriseSalesOrder.create({ data: { organizationId, reference: key + "-" + suffix, businessPartyId: fixture.customerId, title: "Batch preparation E2E", status: "CONFIRMED", currency: fixture.currencyCode, subtotalAmount: quantity * 10, totalAmount: quantity * 10, createdByUserId: fixture.userId, items: { create: { catalogItemId: product.id, description: product.name, quantityOrdered: quantity, unitOfMeasureId: product.unitOfMeasureId, unitPrice: 10, lineSubtotal: quantity * 10, lineTotal: quantity * 10 } } }, include: { items: true } });
+    }
+    const order = await createOrder("A", 50);
+    const second = await createOrder("B", 60);
+    const endpoint = `/api/enterprise/${organizationId}/sales-orders/${order.id}/fulfill`;
+    const available = () => apiGet(page, `/api/enterprise/${organizationId}/retail/inventory/availability?catalogItemId=${product.id}`);
+    const before = await available();
+    expect(before.response.status(), JSON.stringify(before.body)).toBe(200);
+    expect(before.body.totalAvailable).toBe("100");
+    const stockList = () => apiGet(page, `/api/enterprise/${organizationId}/inventory?search=${encodeURIComponent(key)}&warehouseId=${fixture.warehouseId}`);
+    const initialStock = await stockList();
+    expect(initialStock.response.status(),JSON.stringify(initialStock.body)).toBe(200);
+    expect(initialStock.body.items).toHaveLength(1);
+    expect(initialStock.body.items[0].quantityOnHand).toBe(300);
+    expect(initialStock.body.items[0].quantityAvailable).toBe(100);
+    expect(initialStock.body.items[0].quantityReserved).toBe(0);
+    const request = { action: "RESERVE", salesOrderItemId: order.items[0].id, warehouseId: fixture.warehouseId, quantity: 50, idempotencyKey: key + "-reserve" };
+    const reserved = await apiPost(page, endpoint, request);
+    expect(reserved.response.status(), JSON.stringify(reserved.body)).toBe(201);
+    const reservationId = reserved.body.reservation.id;
+    expect(reserved.body.reservation.lotAllocations.map((row) => [row.stockLotId, row.quantity])).toEqual([[lots.EARLY.lot.id, "30"], [lots.LATE.lot.id, "20"]]);
+    const replay = await apiPost(page, endpoint, request);
+    expect(replay.response.status(), JSON.stringify(replay.body)).toBe(200);
+    expect(replay.body.reservation.id).toBe(reservationId);
+    const list = await apiGet(page, endpoint);
+    expect(list.response.status(), JSON.stringify(list.body)).toBe(200);
+    expect(list.body.items[0].allocations.map((row) => row.lotNumber)).toEqual(["EARLY", "LATE"]);
+    const denied = await apiPost(page, `/api/enterprise/${organizationId}/sales-orders/${second.id}/fulfill`, { ...request, salesOrderItemId: second.items[0].id, quantity: 60, idempotencyKey: key + "-overbook" });
+    expect(denied.response.status(), JSON.stringify(denied.body)).toBe(409);
+    expect((await available()).body.totalAvailable).toBe("50");
+    const promisedStock=await stockList();
+    expect(promisedStock.response.status(),JSON.stringify(promisedStock.body)).toBe(200);
+    expect(promisedStock.body.items[0].quantityAvailable).toBe(50);
+    expect(promisedStock.body.items[0].orderReservedQuantity).toBe(50);
+    expect(asNumber((await prisma.enterpriseInventoryBalance.findUniqueOrThrow({ where: { id: lots.EARLY.balance.id } })).quantityOnHand)).toBe(30);
+    const firstDeliveryInput = { fulfillmentType: "PRODUCT_DELIVERY", warehouseId: fixture.warehouseId, acceptedByCustomer: true, idempotencyKey: key + "-delivery1", revision: order.revision, items: [{ salesOrderItemId: order.items[0].id, quantityFulfilled: 40 }] };
+    const firstDelivery = await apiPost(page, endpoint, firstDeliveryInput);
+    expect(firstDelivery.response.status(), JSON.stringify(firstDelivery.body)).toBe(201);
+    const movementWhere = { organizationId, inventoryItemId: inventory.id, sourceEntityType: "EnterpriseFulfillment", sourceEntityId: firstDelivery.body.fulfillment.id };
+    const issues = await prisma.enterpriseStockMovement.findMany({ where: movementWhere });
+    expect(issues.map((issue) => [issue.stockLotId, asNumber(issue.quantity)]).sort()).toEqual([[lots.EARLY.lot.id, 30], [lots.LATE.lot.id, 10]].sort());
+    const valuations = await prisma.enterpriseInventoryAccountingEvent.findMany({ where: { organizationId, stockMovementId: { in: issues.map((issue) => issue.id) }, eventType: "ISSUE" } });
+    expect(valuations.length).toBe(2);
+    expect(valuations.reduce((sum, valuation) => sum + asNumber(valuation.totalCost), 0)).toBe(160);
+    expect(valuations.every((valuation) => Boolean(valuation.journalEntryId))).toBe(true);
+    const replayDelivery = await apiPost(page, endpoint, firstDeliveryInput);
+    expect(replayDelivery.response.ok(), JSON.stringify(replayDelivery.body)).toBeTruthy();
+    expect(replayDelivery.body.fulfillment.id).toBe(firstDelivery.body.fulfillment.id);
+    expect(await prisma.enterpriseStockMovement.count({ where: movementWhere })).toBe(2);
+    const partial = await prisma.enterpriseInventoryReservation.findUniqueOrThrow({ where: { id: reservationId } });
+    expect(partial.status).toBe("ACTIVE");
+    expect(asNumber(partial.fulfilledQuantity)).toBe(40);
+    expect(partial.lotAllocations.map((row) => row.fulfilledQuantity)).toEqual(["30", "10"]);
+    expect((await available()).body.totalAvailable).toBe("50");
+    const current = await prisma.enterpriseSalesOrder.findUniqueOrThrow({ where: { id: order.id } });
+    expect(current.status).toBe("PARTIALLY_FULFILLED");
+    await prisma.enterpriseStockLot.update({ where: { id: lots.LATE.lot.id }, data: { status: "QUARANTINED" } });
+    const finalDeliveryInput = { ...firstDeliveryInput, revision: current.revision, idempotencyKey: key + "-delivery2", items: [{ salesOrderItemId: order.items[0].id, quantityFulfilled: 10 }] };
+    const blocked = await apiPost(page, endpoint, finalDeliveryInput);
+    expect(blocked.response.status(), JSON.stringify(blocked.body)).toBe(409);
+    expect(asNumber((await prisma.enterpriseInventoryReservation.findUniqueOrThrow({ where: { id: reservationId } })).fulfilledQuantity)).toBe(40);
+    expect(await prisma.enterpriseFulfillment.count({ where: { organizationId, salesOrderId: order.id } })).toBe(1);
+    await prisma.enterpriseStockLot.update({ where: { id: lots.LATE.lot.id }, data: { status: "AVAILABLE" } });
+    const finalDelivery = await apiPost(page, endpoint, finalDeliveryInput);
+    expect(finalDelivery.response.status(), JSON.stringify(finalDelivery.body)).toBe(201);
+    const completed = await prisma.enterpriseInventoryReservation.findUniqueOrThrow({ where: { id: reservationId } });
+    expect(completed.status).toBe("FULFILLED");
+    expect(asNumber(completed.fulfilledQuantity)).toBe(50);
+    expect((await prisma.enterpriseSalesOrder.findUniqueOrThrow({ where: { id: order.id } })).status).toBe("FULFILLED");
+    expect(asNumber((await prisma.enterpriseInventoryBalance.findUniqueOrThrow({ where: { id: lots.LATE.balance.id } })).quantityOnHand)).toBe(50);
+    expect(asNumber((await prisma.enterpriseInventoryBalance.findUniqueOrThrow({ where: { id: lots.EXPIRED.balance.id } })).quantityOnHand)).toBe(100);
+    expect(asNumber((await prisma.enterpriseInventoryBalance.findUniqueOrThrow({ where: { id: lots.QUARANTINE.balance.id } })).quantityOnHand)).toBe(100);
+    const secondEndpoint = `/api/enterprise/${organizationId}/sales-orders/${second.id}/fulfill`;
+    const newReservation = await apiPost(page, secondEndpoint, { ...request, salesOrderItemId: second.items[0].id, quantity: 20, idempotencyKey: key + "-reserveB" });
+    expect(newReservation.response.status(), JSON.stringify(newReservation.body)).toBe(201);
+    expect((await available()).body.totalAvailable).toBe("30");
+    const released = await apiPost(page, secondEndpoint, { action: "RELEASE", reservationId: newReservation.body.reservation.id, reason: "E2E release remaining order promise" });
+    expect(released.response.status(), JSON.stringify(released.body)).toBe(200);
+    expect((await available()).body.totalAvailable).toBe("50");
+    const finalStock=await stockList();
+    expect(finalStock.response.status(),JSON.stringify(finalStock.body)).toBe(200);
+    expect(finalStock.body.items[0].quantityAvailable).toBe(50);
+    expect(finalStock.body.items[0].quantityOnHand).toBe(250);
+    await prisma.enterpriseInventoryItem.update({where:{id:inventory.id},data:{minimumQuantity:250}});
+    const low=await apiGet(page,`/api/enterprise/${organizationId}/inventory?search=${encodeURIComponent(key)}&warehouseId=${fixture.warehouseId}&lowStock=true&pageSize=5`);
+    expect(low.response.status(),JSON.stringify(low.body)).toBe(200);
+    expect(low.body.pagination.total).toBe(1);
+    expect(low.body.metrics.lowStockCount).toBe(1);
+    expect(low.body.items[0].isLowStock).toBe(true);
+    const beyond=await apiGet(page,`/api/enterprise/${organizationId}/inventory?search=${encodeURIComponent(key)}&warehouseId=${fixture.warehouseId}&lowStock=true&pageSize=5&page=2`);
+    expect(beyond.response.status(),JSON.stringify(beyond.body)).toBe(200);
+    expect(beyond.body.items).toHaveLength(0);
+    expect(beyond.body.pagination.total).toBe(1);
+  });
+
+  test("HOTFIX #1212 first tracked batch is selectable without a stock balance on real FR/EN mobile and desktop", async ({ page }) => {
+    test.setTimeout(180_000);
+    await signIn(page);
+    const key = "UI1212-" + crypto.randomUUID().slice(0, 12);
+    const baseProduct = await prisma.enterpriseCatalogItem.findUniqueOrThrow({ where: { id: fixture.catalogItemId } });
+    const name = "E2E first tracked batch with an intentionally long catalogue description " + key;
+    const product = await prisma.enterpriseCatalogItem.create({
+      data: { organizationId, code: key, sku: key, name, normalizedName: name.toLowerCase(),
+        itemType: "PRODUCT", unitOfMeasureId: baseProduct.unitOfMeasureId, indicativeSalePrice: 10, indicativeCost: 4,
+        currency: fixture.currencyCode, trackInventory: true, taxable: false, createdByUserId: fixture.userId },
+    });
+    const inventory = await prisma.enterpriseInventoryItem.create({
+      data: { organizationId, catalogItemId: product.id, lotTracking: true, expiryTracking: true, allowNegativeStock: false, createdByUserId: fixture.userId },
+    });
+    const stockScope = { organizationId, inventoryItemId: inventory.id };
+    const user = await prisma.user.findUniqueOrThrow({ where: { id: fixture.userId }, select: { locale: true } });
+    const expiry = new Date(Date.now() + 365 * 86400000).toISOString().slice(0, 10);
+    try {
+      expect(await prisma.enterpriseInventoryBalance.count({ where: stockScope })).toBe(0);
+      for (const { locale, theme, widths } of [
+        { locale: "fr", theme: "dark", widths: [320, 360, 375, 390, 414] },
+        { locale: "en", theme: "light", widths: [1440, 1024, 768, 320] },
+      ]) {
+        await prisma.user.update({ where: { id: fixture.userId }, data: { locale } });
+        await page.setViewportSize({ width: widths[0], height: 844 });
+        await page.evaluate(value => localStorage.setItem("theme", value), theme);
+        await page.goto("/enterprise-modules/INVENTORY_LOGISTICS");
+        await page.waitForURL(/\/enterprise-modules\/INVENTORY_LOGISTICS/);
+        await expect(page.locator("html")).toHaveClass(new RegExp("\\b" + theme + "\\b"));
+        const stockRegister = page.locator("#inventory-operation-register");
+        const registerQuery = page.waitForResponse(response => {
+          const url = new URL(response.url());
+          return url.pathname === "/api/enterprise/" + organizationId + "/inventory" && url.searchParams.get("search") === key && !url.searchParams.get("view");
+        });
+        await page.locator("[data-workspace-toolbar]").getByRole("textbox").fill(key);
+        expect((await registerQuery).ok()).toBeTruthy();
+        await expect(stockRegister.getByText(locale === "fr" ? "Aucun stock vendable" : "No sellable stock", { exact: true })).toBeVisible();
+        async function downloadRegister(format) {
+          const downloaded = page.waitForEvent("download");
+          await stockRegister.getByRole("button", { name: format, exact: true }).click();
+          const file = await downloaded;
+          expect(await file.failure()).toBeNull();
+          return { name: file.suggestedFilename(), bytes: await readFile(await file.path()) };
+        }
+        const csv = await downloadRegister("CSV");
+        expect(csv.name).toMatch(/\.csv$/i);
+        const rows = csv.bytes.toString("utf8").trim().split(/\r?\n/);
+        expect(rows).toHaveLength(2);
+        expect(rows[0]).toContain(locale === "fr" ? '"Stock vendable"' : '"Sellable stock"');
+        expect(rows[1]).toContain(key);
+        expect(rows[1]).toContain(locale === "fr" ? '"Aucun stock vendable"' : '"No sellable stock"');
+        expect(rows[1]).toMatch(/,"0","0","0"$/);
+        if (locale === "en") {
+          const xlsx = await downloadRegister("Excel");
+          expect(xlsx.name).toMatch(/\.xlsx$/i);
+          expect(xlsx.bytes.subarray(0, 4)).toEqual(Buffer.from([0x50, 0x4b, 0x03, 0x04]));
+          expect(xlsx.bytes.includes(Buffer.from(key))).toBeTruthy();
+          const pdf = await downloadRegister("PDF");
+          expect(pdf.name).toMatch(/\.pdf$/i);
+          expect(pdf.bytes.subarray(0, 5).toString()).toBe("%PDF-");
+        }
+        const warehouseFilter = stockRegister.getByTestId("inventory-register-warehouse");
+        const scopedQuery = page.waitForResponse(response => {
+          const url = new URL(response.url());
+          return url.pathname === "/api/enterprise/" + organizationId + "/inventory" &&
+            url.searchParams.get("warehouseId") === fixture.warehouseId && url.searchParams.get("search") === key;
+        });
+        await warehouseFilter.selectOption(fixture.warehouseId);
+        const scopedStock = await scopedQuery;
+        expect(scopedStock.ok()).toBeTruthy();
+        expect((await scopedStock.json()).items).toEqual([]);
+        const scopedCsv = await downloadRegister("CSV");
+        expect(scopedCsv.bytes.toString("utf8").trim().split(/\r?\n/)).toHaveLength(1);
+        await warehouseFilter.selectOption("");
+        const governance = page.getByTestId("inventory-stock-governance");
+        await expect(governance.getByRole("heading", { name: locale === "fr" ? "Règles de stock, lots et péremptions" : "Stock rules, batches and expiry", exact: true })).toBeVisible();
+        await governance.getByRole("button", { name: locale === "fr" ? "Gérer" : "Manage", exact: true }).click();
+        const rulesQuery = page.waitForResponse(response => {
+          const url = new URL(response.url());
+          return url.pathname === "/api/enterprise/" + organizationId + "/inventory" && url.searchParams.get("search") === key + "-no-match";
+        });
+        await governance.getByRole("textbox", { name: locale === "fr" ? "Rechercher les articles" : "Search items", exact: true }).fill(key + "-no-match");
+        const rules = await rulesQuery;
+        expect(rules.ok()).toBeTruthy();
+        expect((await rules.json()).items).toEqual([]);
+        for (const width of widths) {
+          await page.setViewportSize({ width, height: 844 });
+          await expect(governance).toBeVisible();
+          await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth - innerWidth), { message: "Inventory page overflow at " + width + "px (" + locale + ", " + theme + ")" }).toBeLessThanOrEqual(2);
+        }
+        await page.setViewportSize({ width: 320, height: 844 });
+        await governance.getByRole("button", { name: locale === "fr" ? "Enregistrer un lot" : "Register batch", exact: true }).click();
+        const dialog = page.getByRole("dialog", { name: locale === "fr" ? "Enregistrer un lot" : "Register a batch" });
+        await expect(dialog).toBeVisible();
+        const itemSelect = dialog.locator('select[name="inventoryItemId"]');
+        await expect(itemSelect).toBeDisabled();
+        await dialog.locator('select[name="warehouseId"]').selectOption(fixture.warehouseId);
+        const optionResponse = page.waitForResponse(response => {
+          const url = new URL(response.url());
+          return url.pathname === "/api/enterprise/" + organizationId + "/inventory" && url.searchParams.get("view") === "lot-options" &&
+            url.searchParams.get("warehouseId") === fixture.warehouseId && url.searchParams.get("search") === key;
+        });
+        await dialog.getByPlaceholder(locale === "fr" ? "Nom, code ou SKU" : "Name, code or SKU", { exact: true }).fill(key);
+        const response = await optionResponse;
+        expect(response.ok()).toBeTruthy();
+        const options = await response.json();
+        expect(options.items.map(item => item.id)).toEqual([inventory.id]);
+        expect(options.items[0]).not.toHaveProperty("balances");
+        await expect(itemSelect).toBeEnabled();
+        await itemSelect.selectOption(inventory.id);
+        const expiryInput = dialog.locator('input[name="expiryDate"]');
+        await expect(expiryInput).toHaveAttribute("required", "");
+        await expect.poll(() => dialog.locator("[data-dtsc-dialog-scroll]").evaluate(el => el.scrollWidth - el.clientWidth), { message: "Batch editor must fit mobile viewport" }).toBeLessThanOrEqual(2);
+        const lotNumber = key + "-" + locale;
+        await dialog.locator('input[name="lotNumber"]').fill(lotNumber);
+        await expiryInput.fill(expiry);
+        const createResponse = page.waitForResponse(response => response.request().method() === "POST" && new URL(response.url()).pathname === "/api/enterprise/" + organizationId + "/inventory/lots");
+        await dialog.getByRole("button", { name: locale === "fr" ? "Enregistrer le lot" : "Save batch", exact: true }).click();
+        expect((await createResponse).status()).toBe(201);
+        await expect(dialog).not.toBeVisible();
+        const lot = await prisma.enterpriseStockLot.findFirstOrThrow({ where: { ...stockScope, warehouseId: fixture.warehouseId, lotNumber } });
+        expect(lot.expiryDate.toISOString().slice(0, 10)).toBe(expiry);
+        expect(await prisma.enterpriseStockMovement.count({ where: stockScope })).toBe(0);
+        expect(await prisma.enterpriseInventoryCostLayer.count({ where: stockScope })).toBe(0);
+        const physical = await prisma.enterpriseInventoryBalance.aggregate({ where: stockScope, _sum: { quantityOnHand: true } });
+        expect(asNumber(physical._sum.quantityOnHand)).toBe(0);
+      }
+    } finally {
+      await prisma.user.update({ where: { id: fixture.userId }, data: { locale: user.locale } });
     }
   });
 

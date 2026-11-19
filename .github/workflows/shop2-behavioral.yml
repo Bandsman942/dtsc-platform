@@ -43,6 +43,7 @@ on:
       - "tests/e2e/shop2-daily-close-ui.spec.mjs"
       - "tests/e2e/shop2-final-coherence-ui.spec.mjs"
       - "tests/e2e/shop2-z-global.spec.mjs"
+      - "tests/e2e/inventory-1212-sector-common.spec.mjs"
       - "tests/e2e/retail-offline-finance-1116.spec.mjs"
       - "tests/e2e/retail-financial-kpi-1117.spec.mjs"
       - "playwright.config.mjs"
@@ -289,6 +290,17 @@ jobs:
             http://127.0.0.1:8079/ >/dev/null
       - name: Retail financial KPI source evidence acceptance
         run: pnpm exec playwright test tests/e2e/retail-financial-kpi-1117.spec.mjs
+      - name: Reset isolated Redis before #1212 sector inventory acceptance
+        run: |
+          curl --fail --silent --show-error \
+            -H "Authorization: Bearer ${CI_REDIS_REST_TOKEN}" \
+            -H "Content-Type: application/json" \
+            --data '["FLUSHDB"]' \
+            http://127.0.0.1:8079/ >/dev/null
+      - name: Inventory #1212 common stock contract across sector tenants
+        env:
+          E2E_INVENTORY_SECTOR_ISOLATED: "true"
+        run: pnpm exec playwright test tests/e2e/inventory-1212-sector-common.spec.mjs
       - name: Stop application and Redis REST proxy
         if: always()
         run: |

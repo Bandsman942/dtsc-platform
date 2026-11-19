@@ -43,7 +43,7 @@ const language = {
   fr: {
     title: "Facturation au comptoir", lead: "Sélectionnez le client et les articles. Prévisualisez la facture avant de la préparer, sans encaisser dans ce panier.",
     disabled: "Ce circuit est encore en validation. Les tickets POS actuels ne sont pas modifiés ; la préparation de nouvelles factures demeure désactivée.",
-    warehouse: "Boutique et dépôt", chooseWarehouse: "Choisir un dépôt", product: "Rechercher un article", search: "Nom, référence ou code article", quantity: "Quantité", add: "Ajouter l'article", lines: "Articles à facturer", prepare: "Préparer la facture impayée", preparing: "Préparation…", clear: "Vider le panier", removed: "Retirer", lot: "Lot de stock", chooseLot: "Choisir un lot", noLines: "Ajoutez un ou plusieurs articles.",
+    warehouse: "Boutique et dépôt", chooseWarehouse: "Choisir un dépôt", product: "Rechercher un article", search: "Nom, référence ou code article", quantity: "Quantité", add: "Ajouter l'article", lines: "Articles à facturer", prepare: "Préparer la facture impayée", preparing: "Préparation…", clear: "Vider le panier", removed: "Retirer", lot: "Lot de stock", chooseLot: "Automatique · FEFO (plusieurs lots si nécessaire)", noLines: "Ajoutez un ou plusieurs articles.",
     collectLink: "Ouvrir les encaissements de cette facture",
     approvalLink: "Ouvrir pour valider", issueLink: "Ouvrir pour émettre",
     list: "Factures Retail", all: "Toutes les boutiques", refresh: "Actualiser", loading: "Chargement du registre…", empty: "Aucune facture Retail préparée pour cette sélection.",
@@ -58,7 +58,7 @@ const language = {
   en: {
     title: "Counter invoicing", lead: "Choose a customer and items. Preview the invoice before preparing it, without taking payment in the basket.",
     disabled: "This workflow is still under validation. Existing POS receipts are unaffected; new invoice preparation remains disabled.",
-    warehouse: "Store and warehouse", chooseWarehouse: "Choose a warehouse", product: "Find an item", search: "Item name, reference or code", quantity: "Quantity", add: "Add item", lines: "Invoice items", prepare: "Prepare unpaid invoice", preparing: "Preparing…", clear: "Clear basket", removed: "Remove", lot: "Stock batch", chooseLot: "Choose a batch", noLines: "Add one or more items.",
+    warehouse: "Store and warehouse", chooseWarehouse: "Choose a warehouse", product: "Find an item", search: "Item name, reference or code", quantity: "Quantity", add: "Add item", lines: "Invoice items", prepare: "Prepare unpaid invoice", preparing: "Preparing…", clear: "Clear basket", removed: "Remove", lot: "Stock batch", chooseLot: "Automatic · FEFO (multiple batches if needed)", noLines: "Add one or more items.",
     collectLink: "Open this invoice’s collections",
     approvalLink: "Open for approval", issueLink: "Open for issuance",
     list: "Retail invoices", all: "All stores", refresh: "Refresh", loading: "Loading invoices…", empty: "No Retail invoices in this selection.",

@@ -5,6 +5,9 @@ import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 const ts = require("typescript");
 const { Prisma } = require("@prisma/client");
+const lotTools = { exports: {} };
+vm.runInNewContext(ts.transpileModule(fs.readFileSync("lib/enterprise/inventory/lot-allocation.ts", "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, { exports: lotTools.exports, require: (id) => id === "@prisma/client" ? { Prisma } : require(id) });
+
 const d = (value) => new Prisma.Decimal(value);
 class EnterpriseRetailError extends Error {
   constructor(code, status = 409) { super(code); this.code = code; this.status = status; }
@@ -31,7 +34,7 @@ vm.runInNewContext(ts.transpileModule(fs.readFileSync("lib/enterprise/retail/inv
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
 }).outputText, {
   module: unit, exports: unit.exports, Promise, Set, Map, Date,
-  require: (id) => id === "@prisma/client" ? { Prisma } : id === "@/lib/enterprise/retail/errors"
+  require: (id) => id === "@/lib/enterprise/inventory/lot-allocation" ? lotTools.exports : id === "@prisma/client" ? { Prisma } : id === "@/lib/enterprise/retail/errors"
     ? { EnterpriseRetailError } : require(id),
 });
 const preflight = unit.exports.assertRetailInvoiceReturnSettlementReadinessTx;

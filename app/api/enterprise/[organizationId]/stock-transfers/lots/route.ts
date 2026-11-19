@@ -18,6 +18,8 @@ export async function GET(req: Request, { params }: Params) {
   const url = new URL(req.url);
   const warehouseId = url.searchParams.get("warehouseId")?.trim() || "";
   const inventoryItemId = url.searchParams.get("inventoryItemId")?.trim() || "";
+  const loss = url.searchParams.get("purpose") === "write-off";
+  if (loss && !access.canWrite) return NextResponse.json({error:"Forbidden"},{status:403});
   if (!warehouseId || !inventoryItemId || warehouseId.length > 240 || inventoryItemId.length > 240) {
     return NextResponse.json({ error: "STOCK_TRANSFER_LOT_FILTER_INVALID" }, { status: 400 });
   }
@@ -28,18 +30,19 @@ export async function GET(req: Request, { params }: Params) {
   if (!warehouse) return NextResponse.json({ error: "WAREHOUSE_NOT_FOUND" }, { status: 404 });
   try {
     await requireRetailSiteCapability(organizationId, session.userId, warehouse.siteId, "VIEW_STOCK");
+    if (loss) await requireRetailSiteCapability(organizationId, session.userId, warehouse.siteId, "MANAGE_STOCK");
   } catch (error) {
     return retailErrorResponse(error, "RETAIL_SITE_ACCESS_DENIED");
   }
   const lots = await prisma.enterpriseStockLot.findMany({
-    where: { organizationId, warehouseId, inventoryItemId, status: "AVAILABLE", archivedAt: null },
-    select: { id: true, lotNumber: true, expiryDate: true, balances: { where: { organizationId, warehouseId }, select: { quantityOnHand: true, quantityReserved: true, storageLocationId: true } } },
+    where: { organizationId, warehouseId, inventoryItemId, status: loss ? {in:["AVAILABLE","BLOCKED","QUARANTINED"]} : "AVAILABLE", archivedAt: null },
+    select: { id: true, lotNumber: true, expiryDate: true, status:true, balances: { where: { organizationId, warehouseId }, select: { quantityOnHand: true, quantityReserved: true, storageLocationId: true } } },
     orderBy: [{ expiryDate: "asc" }, { lotNumber: "asc" }],
     take: 250,
   });
   await writeApiLog({ request: req, startedAt, statusCode: 200, userId: session.userId, metadata: { organizationId, domain: "stock-transfer-lot-selector", warehouseId, count: lots.length } });
   return NextResponse.json({ items: lots.map((lot) => ({
-    id: lot.id, lotNumber: lot.lotNumber, expiryDate: lot.expiryDate,
+    id: lot.id, lotNumber: lot.lotNumber, expiryDate: lot.expiryDate, status:lot.status,
     quantityAvailable: lot.balances.reduce((sum, balance) => sum.plus(balance.quantityOnHand.minus(balance.quantityReserved)), new Prisma.Decimal(0)).toFixed(),
     locations: lot.balances.map((balance) => ({ storageLocationId: balance.storageLocationId, available: balance.quantityOnHand.minus(balance.quantityReserved).toFixed() })),
   })) }, { headers: { "Cache-Control": "private, no-store" } });

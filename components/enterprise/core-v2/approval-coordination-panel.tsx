@@ -2,6 +2,7 @@
 
 import { formatEnterpriseDate as coreFormatEnterpriseDate, statusLabel as coreStatusLabel } from "@/components/enterprise/core-v2/erp-v2-ui";
 import { enterpriseCoreT } from "@/lib/enterprise-core-i18n";
+import { purchaseFormGuidance } from "@/lib/enterprise/purchase-form-i18n";
 import { approvalReviewLabel, approvalSnapshotFieldLabel } from "@/lib/standard-work-coordination/approval-review-i18n";
 import Link from "next/link";
 import { CheckCircle2, ExternalLink, FileCheck2, RefreshCcw, Send, UserRoundCog, XCircle } from "lucide-react";
@@ -24,10 +25,12 @@ type ApprovalCoordination = {
   decisions: Array<{ id: string; decision: string; reason: string | null; actorUserId: string; createdAt: string }>;
   delegates: Array<{ id: string; label: string; email: string }>;
   sourceDeepLink: string;
-  capabilities: { canApprove: boolean; canReject: boolean; canRequestCorrection: boolean; canDelegate: boolean; canResubmit: boolean };
+  recoveryAssessment?:{executedAt?:string|null;recoveryJournalEntryId?:string|null;withdrawnAt?:string|null;withdrawalReason?:string|null;status:string;custodyStatus:string;stale:boolean;physicalReleaseAuthorized:false;accountingRecognitionAuthorized:false}|null;
+  supplierReturn?: {status:string;cancelledAfterApprovalAt:string|null;cancellationReason:string|null}|null;
+  capabilities: { canCancel?: boolean; canApprove: boolean; canReject: boolean; canRequestCorrection: boolean; canDelegate: boolean; canResubmit: boolean };
 };
 
-type ApprovalAction = "PREPARE_REVIEW" | "APPROVE" | "REJECT" | "REQUEST_CORRECTION" | "RESUBMIT" | "DELEGATE";
+type ApprovalAction = "PREPARE_REVIEW" | "CANCEL" | "APPROVE" | "REJECT" | "REQUEST_CORRECTION" | "RESUBMIT" | "DELEGATE";
 
 export function ApprovalCoordinationPanel({ organizationId, approvalId, locale, onChanged }: { organizationId: string; approvalId: string; locale?: string | null; onChanged?: () => void }) {
   const [data, setData] = useState<ApprovalCoordination | null>(null);
@@ -115,6 +118,17 @@ export function ApprovalCoordinationPanel({ organizationId, approvalId, locale, 
       <Link href={data.sourceDeepLink} className="inline-flex h-10 items-center gap-2 rounded-xl border border-dtsc-border px-3 text-sm font-black text-dtsc-blue hover:bg-cyan-400/10">{enterpriseCoreT(locale, "approvals.coordination.open.source")}<ExternalLink className="h-4 w-4" /></Link>
     </div>
 
+    {data.recoveryAssessment?<section className="grid min-w-0 gap-2 rounded-xl border border-dtsc-border p-3" data-recovery-review>
+      <p className="text-sm font-semibold">{purchaseFormGuidance(locale,data.recoveryAssessment.status==="EXECUTED"?"recoveryExecuted":"recoveryReviewOnly")}</p>
+      {data.recoveryAssessment.withdrawnAt?<div className="grid gap-1"><StatusBadge tone="warning">{purchaseFormGuidance(locale,"recoveryWithdrawn")}</StatusBadge><p className="text-sm break-words">{data.recoveryAssessment.withdrawalReason}</p><p className="text-xs text-dtsc-muted">{coreFormatEnterpriseDate(data.recoveryAssessment.withdrawnAt,locale)}</p></div>:null}
+      {data.recoveryAssessment.stale?<p role="alert" className="text-sm text-amber-700 dark:text-amber-200">{purchaseFormGuidance(locale,"recoveryReviewStale")}</p>:null}
+    </section>:null}
+    {data.supplierReturn?.cancelledAfterApprovalAt?<section className="grid min-w-0 gap-2 rounded-xl border border-dtsc-border p-3" data-supplier-return-withdrawal>
+      <div><StatusBadge tone="warning">{purchaseFormGuidance(locale,"returnWithdrawn")}</StatusBadge></div>
+      <p className="text-sm text-dtsc-muted">{purchaseFormGuidance(locale,"returnWithdrawHistory")}</p>
+      <p className="text-xs text-dtsc-muted">{coreFormatEnterpriseDate(data.supplierReturn.cancelledAfterApprovalAt,locale)}</p>
+      <p className="break-words text-sm"><strong>{purchaseFormGuidance(locale,"returnWithdrawReason")} :</strong> {data.supplierReturn.cancellationReason}</p>
+    </section>:null}
     {(data.capabilities.canApprove || data.capabilities.canReject || data.capabilities.canRequestCorrection) && !latestVersion ? <section className="grid gap-3 rounded-2xl border border-dtsc-border bg-dtsc-page p-4">
       <div><h4 className="font-black text-dtsc-ink">{approvalReviewLabel(locale, "prepare")}</h4><p className="mt-1 text-sm text-dtsc-muted">{approvalReviewLabel(locale, "prepareHelp")}</p></div>
       <Button type="button" disabled={submitting} onClick={() => void act("PREPARE_REVIEW")} className="w-full bg-dtsc-blue text-white sm:w-fit"><FileCheck2 className="h-4 w-4" />{approvalReviewLabel(locale, "prepare")}</Button>
@@ -123,6 +137,7 @@ export function ApprovalCoordinationPanel({ organizationId, approvalId, locale, 
     {latestVersion ? <section className="grid gap-3 rounded-2xl border border-dtsc-border p-4">
       <div className="flex flex-wrap items-center gap-2"><FileCheck2 className="h-4 w-4 text-dtsc-blue" /><h4 className="font-black text-dtsc-ink">{approvalReviewLabel(locale, "snapshot")}</h4><StatusBadge>v{latestVersion.versionNumber}</StatusBadge></div>
       <div className="grid gap-2 sm:grid-cols-2">{snapshotEntries(latestVersion.snapshotJson).map(([field, value]) => <div key={field} className="min-w-0 rounded-xl border border-dtsc-border bg-dtsc-page p-3"><p className="text-xs font-black text-dtsc-muted">{approvalSnapshotFieldLabel(locale, field)}</p><p className="mt-1 break-words text-sm text-dtsc-ink">{formatSnapshotValue(value, locale)}</p></div>)}</div>
+      {Array.isArray(latestVersion.snapshotJson.batchAllocations) ? <div className="grid gap-2"><h5 className="font-semibold">{approvalSnapshotFieldLabel(locale, "batchAllocations")}</h5>{latestVersion.snapshotJson.batchAllocations.map((entry: unknown, index: number) => { if (!entry || typeof entry !== "object") return null; const record = entry as Record<string, unknown>; return <div key={index} className="grid gap-2 rounded-xl border border-dtsc-border p-3 sm:grid-cols-2">{["lotNumber", "quantity", "productionDate", "expiryDate"].map((field) => <p key={field} className="break-words"><strong className="text-xs text-dtsc-muted">{approvalSnapshotFieldLabel(locale, field)}</strong><br />{formatSnapshotValue(record[field], locale)}</p>)}</div>; })}</div> : null}
       {latestVersion.submissionComment ? <p className="rounded-xl border border-dtsc-border p-3 text-sm text-dtsc-muted">{latestVersion.submissionComment}</p> : null}
     </section> : null}
 
@@ -132,6 +147,7 @@ export function ApprovalCoordinationPanel({ organizationId, approvalId, locale, 
       {reasonError ? <span id="approval-reason-error" className="text-xs text-red-700" role="alert">{reasonError}</span> : null}
     </label> : null}
     <div className="flex min-w-0 flex-wrap gap-2">
+      {data.capabilities.canCancel ? <Button type="button" variant="outline" disabled={submitting} onClick={() => void act("CANCEL")}>{approvalSnapshotFieldLabel(locale, "cancelAllocation")}</Button> : null}
       {data.capabilities.canApprove && canFinalDecision ? <Button type="button" disabled={submitting} onClick={() => void act("APPROVE")} className="bg-emerald-600 text-white"><CheckCircle2 className="h-4 w-4" />{enterpriseCoreT(locale, "approval.decision.APPROVE")}</Button> : null}
       {data.capabilities.canRequestCorrection ? <Button type="button" variant="outline" disabled={submitting} onClick={() => void act("REQUEST_CORRECTION")}><RefreshCcw className="h-4 w-4" />{enterpriseCoreT(locale, "approval.action.REQUEST_CORRECTION")}</Button> : null}
       {data.capabilities.canReject && canFinalDecision ? <Button type="button" variant="outline" disabled={submitting} onClick={() => void act("REJECT")} className="text-red-700"><XCircle className="h-4 w-4" />{enterpriseCoreT(locale, "approvals.coordination.reject")}</Button> : null}
@@ -152,7 +168,7 @@ export function ApprovalCoordinationPanel({ organizationId, approvalId, locale, 
   </div>;
 }
 
-const SNAPSHOT_FIELDS = new Set(["title", "description", "status", "priority", "requestType", "reference", "revision", "startAt", "dueAt", "endAt", "locationMode", "currency", "amount", "totalAmount", "sourceAmount", "sourceCurrencyCode", "targetAmount", "targetCurrencyCode", "updatedAt"]);
+const SNAPSHOT_FIELDS = new Set(["returnReference","historicalCostCeiling","estimatedSellingAmount","completionCost","sellingCost","estimatedNetValue","evidenceReference","article", "lotNumber", "warehouse", "location", "purchaseReference", "receiptReference", "supplierInvoiceReference", "unitCost", "stockValue", "recoverableTaxAmount", "quantity", "reason", "title", "description", "status", "priority", "requestType", "reference", "revision", "startAt", "dueAt", "endAt", "locationMode", "currency", "amount", "totalAmount", "sourceAmount", "sourceCurrencyCode", "targetAmount", "targetCurrencyCode", "updatedAt"]);
 
 function snapshotEntries(snapshot: Record<string, unknown>) {
   return Object.entries(snapshot).filter(([field, value]) => SNAPSHOT_FIELDS.has(field) && value !== null && value !== undefined && value !== "");

@@ -74,6 +74,9 @@ const ENUM_LABELS: Record<FinanceLocale, Record<string, string>> = {
 
 export const FINANCE_ERROR_MESSAGES: Record<FinanceLocale, Record<string, string>> = {
   fr: {
+    SUPPLIER_RETURN_NONRECOVERABLE_COST_RECONCILIATION_REQUIRED: "La TVA non récupérable exige une réception et une valorisation d'origine entièrement rapprochées, sans consommation ni opération ouverte. Vérifiez les pièces et la période avant de poursuivre.",
+    INVENTORY_ACQUISITION_COST_DOMAIN_CORRECTION_REQUIRED: "Ce coût de stock intègre une taxe non récupérable. Un avoir ou une contrepassation isolée déséquilibrerait le stock et la comptabilité. Utilisez une correction coordonnée lorsqu’elle sera disponible.",
+    INVENTORY_ACQUISITION_COST_HISTORY_REQUIRED: "Cette date exige une reconstitution historique du stock valorisé. Consultez un état déjà enregistré ou la valorisation actuelle ; aucun nouvel état historique approximatif n’a été créé.",
     PAYMENT_ALLOCATION_EXCEEDS_UNALLOCATED: "Le montant affecté dépasse la partie encore disponible de ce paiement.",
     FINANCE_INPUT_INVALID: "Certaines informations sont invalides ou incomplètes. Corrigez les champs signalés puis réessayez.",
     TAX_TEMPLATE_JURISDICTION_MISMATCH: "Ce modèle fiscal ne correspond pas au pays déclaré de l’entreprise. Corrigez la juridiction dans les paramètres.",
@@ -222,6 +225,9 @@ export const FINANCE_ERROR_MESSAGES: Record<FinanceLocale, Record<string, string
     FINANCE_NETWORK_UNAVAILABLE: "La connexion a été interrompue. Votre opération n'est pas confirmée ; vérifiez son statut avant de réessayer."
   },
   en: {
+    SUPPLIER_RETURN_NONRECOVERABLE_COST_RECONCILIATION_REQUIRED: "Non-recoverable VAT requires a fully reconciled original receipt and valuation, with no consumption or open stock operation. Review the documents and period before continuing.",
+    INVENTORY_ACQUISITION_COST_DOMAIN_CORRECTION_REQUIRED: "This stock cost includes non-recoverable tax. A standalone credit or reversal would leave inventory and accounting inconsistent. Use a coordinated correction when available.",
+    INVENTORY_ACQUISITION_COST_HISTORY_REQUIRED: "This date requires historical inventory valuation replay. Consult an existing statement or current valuation; no inaccurate historical statement was created.",
     TAX_TEMPLATE_JURISDICTION_MISMATCH: "This tax template does not match the company fiscal country.",
     TAX_TEMPLATE_ALREADY_ADOPTED: "This tax template is already configured in your company.",
     TAX_AUTOMATIC_SCOPE_INVALID: "Automatic taxes need a recognized jurisdiction, standard sales-tax category and eligible rules.",

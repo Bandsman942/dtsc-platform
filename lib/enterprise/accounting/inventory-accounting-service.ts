@@ -10,6 +10,57 @@ function movementLabel(movement: { id: string; sourceEntityType: string | null; 
     : movement.id;
 }
 
+/**
+ * Preserve the exact residual quantity of a weighted-average pool at the
+ * persisted cost-layer scale (six fractional digits). Proportional flooring
+ * followed by largest remainders distributes only the remaining microunits.
+ * Integer arithmetic avoids Decimal division rounding and tie instability.
+ * Physical lot selection remains independent of this accounting allocation.
+ */
+export function planWeightedAverageResidualQuantities(
+  layers: ReadonlyArray<{id: string; remainingQuantity: Prisma.Decimal}>,
+  issueQuantity: Prisma.Decimal,
+): Array<{id: string; remainingQuantity: Prisma.Decimal}> {
+  const scale = new Prisma.Decimal("1000000");
+  const toUnits = (quantity: Prisma.Decimal) => {
+    if (!quantity.isFinite() || quantity.isNegative() || quantity.decimalPlaces() > 6) {
+      throw new EnterpriseAccountingError("INVENTORY_COST_LAYER_PRECISION_INVALID",409);
+    }
+    return BigInt(quantity.times(scale).toFixed(0));
+  };
+  const zero = BigInt(0);
+  const one = BigInt(1);
+  if (new Set(layers.map(layer=>layer.id)).size !== layers.length) {
+    throw new EnterpriseAccountingError("INVENTORY_COST_LAYER_PRECISION_INVALID",409);
+  }
+  const rows = layers.map(layer=>({id:layer.id,units:toUnits(layer.remainingQuantity)}));
+  const available = rows.reduce((sum,row)=>sum+row.units,zero);
+  const issued = toUnits(issueQuantity);
+  if (issued <= zero || issued > available) {
+    throw new EnterpriseAccountingError("INVENTORY_ACCOUNTING_NEGATIVE_STOCK_FORBIDDEN",409);
+  }
+  const target = available-issued;
+  const allocations = rows.map(row=>{
+    const product = row.units*target;
+    return {...row,residual:product/available,remainder:product%available};
+  });
+  const ranked = [...allocations].sort((a,b)=>a.remainder===b.remainder
+    ? (a.id<b.id?-1:a.id>b.id?1:0)
+    : a.remainder>b.remainder?-1:1);
+  let extras = target-allocations.reduce((sum,row)=>sum+row.residual,zero);
+  for(const row of ranked) {
+    if (extras === zero) break;
+    if (row.residual < row.units && row.remainder > zero) {
+      row.residual += one;
+      extras -= one;
+    }
+  }
+  if (extras !== zero || allocations.some(row=>row.residual>row.units)) {
+    throw new EnterpriseAccountingError("INVENTORY_COST_LAYER_PRECISION_INVALID",409);
+  }
+  return allocations.map(row=>({id:row.id,remainingQuantity:new Prisma.Decimal(row.residual.toString()).dividedBy(scale)}));
+}
+
 export async function valueInventoryReceipt(
   organizationId: string,
   stockMovementId: string,
@@ -21,7 +72,9 @@ export async function valueInventoryReceipt(
     const movement = await tx.enterpriseStockMovement.findFirst({
       where: { id: stockMovementId, organizationId, direction: "IN", quantity: { gt: 0 } },
     });
-    if (!movement) throw new EnterpriseAccountingError("INVENTORY_RECEIPT_MOVEMENT_INVALID", 409);
+    if (!movement || ["LOT_RECLASSIFICATION_IN","CUSTODY_RECOVERY_IN"].includes(movement.movementType)) throw new EnterpriseAccountingError("INVENTORY_RECEIPT_MOVEMENT_INVALID", 409);
+    // A transfer is a relocation of existing stock, never an acquisition.
+    if (movement.movementType === "TRANSFER_IN" || movement.movementType === "TRANSFER_OUT" || movement.sourceEntityType === "EnterpriseStockTransfer") throw new EnterpriseAccountingError("INVENTORY_TRANSFER_VALUATION_WORKFLOW_REQUIRED",409);
 
     const configuration = await tx.enterpriseFinanceConfiguration.findUnique({ where: { organizationId } });
     if (!configuration) throw new EnterpriseAccountingError("FINANCE_CONFIGURATION_REQUIRED", 409);
@@ -117,18 +170,22 @@ export async function valueInventoryIssueTx(
   const movement = await tx.enterpriseStockMovement.findFirst({
     where: { id: stockMovementId, organizationId, direction: "OUT", quantity: { gt: 0 } },
   });
-  if (!movement) throw new EnterpriseAccountingError("INVENTORY_ISSUE_MOVEMENT_INVALID", 409);
+  if (!movement || ["LOT_RECLASSIFICATION_OUT", "SUPPLIER_RETURN_OUT"].includes(movement.movementType)) throw new EnterpriseAccountingError("INVENTORY_ISSUE_MOVEMENT_INVALID", 409);
+  // Never turn inter-warehouse dispatch into a cost-of-sales journal.
+  if (movement.movementType === "TRANSFER_IN" || movement.movementType === "TRANSFER_OUT" || movement.sourceEntityType === "EnterpriseStockTransfer") throw new EnterpriseAccountingError("INVENTORY_TRANSFER_VALUATION_WORKFLOW_REQUIRED",409);
 
   const configuration = await tx.enterpriseFinanceConfiguration.findUnique({ where: { organizationId } });
   if (!configuration || configuration.inventoryValuationMethod !== "WEIGHTED_AVERAGE") {
     throw new EnterpriseAccountingError("INVENTORY_WEIGHTED_AVERAGE_REQUIRED", 409);
   }
 
+  const loss = movement.movementType === "LOT_WRITE_OFF";
+  const postingDescriptor = loss ? { postingEvent: "INVENTORY_LOSS_VALUED" as const } : { postingEvent: "INVENTORY_ISSUE_VALUED" as const };
   const stableKey = idempotencyKey({
     organizationId,
     sourceEntityType: "EnterpriseStockMovement",
     sourceEntityId: movement.id,
-    postingEvent: "INVENTORY_ISSUE_VALUED",
+    ...postingDescriptor,
     postingVersion: 1,
   });
   let event = await tx.enterpriseInventoryAccountingEvent.findUnique({
@@ -159,11 +216,13 @@ export async function valueInventoryIssueTx(
     const availableValue = sumDecimals(layers.map((layer) => layer.remainingQuantity.times(layer.unitCost)));
     const weightedUnitCost = money(availableValue.dividedBy(availableQuantity));
     const totalCost = money(issueQuantity.times(weightedUnitCost));
-    const remainingRatio = availableQuantity.minus(issueQuantity).dividedBy(availableQuantity);
+    const residualLayers = planWeightedAverageResidualQuantities(layers, issueQuantity);
 
-    for (const layer of layers) {
-      const nextQuantity = layer.remainingQuantity.times(remainingRatio).toDecimalPlaces(3, Prisma.Decimal.ROUND_HALF_UP);
-      await tx.enterpriseInventoryCostLayer.update({ where: { id: layer.id }, data: { remainingQuantity: nextQuantity } });
+    // Preserve the pool's exact remaining quantity; the existing rounded CUMP
+    // monetary posting contract is unchanged. Historical proof still requires
+    // its independent quantity AND value reconciliation.
+    for (const layer of residualLayers) {
+      await tx.enterpriseInventoryCostLayer.update({ where: { id: layer.id }, data: { remainingQuantity: layer.remainingQuantity } });
     }
 
     event = await tx.enterpriseInventoryAccountingEvent.create({
@@ -171,7 +230,7 @@ export async function valueInventoryIssueTx(
         organizationId,
         inventoryItemId: movement.inventoryItemId,
         stockMovementId: movement.id,
-        eventType: "ISSUE",
+        eventType: loss ? "LOSS" : "ISSUE",
         quantity: issueQuantity,
         unitCost: weightedUnitCost,
         totalCost,
@@ -184,7 +243,7 @@ export async function valueInventoryIssueTx(
       organizationId,
       entityType: "EnterpriseInventoryAccountingEvent",
       entityId: event.id,
-      eventType: "INVENTORY_ISSUE_VALUED",
+      eventType: postingDescriptor.postingEvent,
       summary: `Inventory issue ${movementLabel(movement)} valued`,
       actorUserId,
       toStatus: "APPROVED",
@@ -199,7 +258,7 @@ export async function valueInventoryIssueTx(
   }
 
   const posting = await postBusinessEventTx(tx, organizationId, actorUserId, {
-    postingEvent: "INVENTORY_ISSUE_VALUED",
+    ...postingDescriptor,
     sourceEntityType: "EnterpriseInventoryAccountingEvent",
     sourceEntityId: event.id,
   });

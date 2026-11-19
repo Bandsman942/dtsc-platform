@@ -74,7 +74,7 @@ export type ErpDesign2StatusOption = { id: string; label: string };
 
 /** All export calls use the original authenticated ERP endpoints and reapply the server filters on every page. */
 export function ErpDesign2RegisterTools({
-  locale, title, organizationName, endpoint, columns, filters,
+  locale, title, organizationName, endpoint, columns, filters, reportFilters,
   status, statuses, onStatusChange,
   dateFrom, dateTo, onDateChange, dateDisabledReason,
 }: {
@@ -84,6 +84,7 @@ export function ErpDesign2RegisterTools({
   endpoint: string;
   columns: FinanceExportColumn[];
   filters?: Record<string, string>;
+  reportFilters?: { label: string; value: string }[];
   status?: string;
   statuses?: ErpDesign2StatusOption[];
   onStatusChange?: (value: string) => void;
@@ -106,7 +107,7 @@ export function ErpDesign2RegisterTools({
       {onDateChange ? <FinanceDateFilter locale={locale} from={dateFrom || ""} to={dateTo || ""}
         onChange={onDateChange} disabledReason={dateDisabledReason} /> : null}
       <FinanceExportControls endpoint={endpoint} organizationName={organizationName} title={title}
-        locale={locale} filters={filters} columns={columns}
+        locale={locale} filters={filters} reportFilters={reportFilters} columns={columns}
         subtitleFr="DTSC Platform · Registre ERP professionnel" subtitleEn="DTSC Platform · Professional ERP register" />
     </div>
     <p className="text-[0.7rem] leading-5 text-dtsc-muted">

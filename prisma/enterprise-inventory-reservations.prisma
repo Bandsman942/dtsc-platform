@@ -8,6 +8,7 @@ model EnterpriseInventoryReservation {
   storageLocationId    String?
   quantity             Decimal  @db.Decimal(20, 6)
   fulfilledQuantity    Decimal  @default(0) @db.Decimal(20, 6)
+  lotAllocations       Json?
   status               String   @default("ACTIVE")
   idempotencyKey       String
   expiresAt            DateTime?

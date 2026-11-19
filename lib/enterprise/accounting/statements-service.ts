@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
 import { serializeFinanceValue } from "@/lib/enterprise/accounting/helpers";
+import { inventoryValuationAtSqlTx } from "@/lib/enterprise/accounting/inventory-historical-valuation";
 
 export type FinancialStatementType = "TRIAL_BALANCE" | "GENERAL_LEDGER" | "JOURNALS" | "INCOME_STATEMENT" | "BALANCE_SHEET" | "CASH_FLOW" | "AR_AGING" | "AP_AGING" | "TREASURY" | "BUDGET_VS_ACTUAL" | "TAX" | "ASSET_REGISTER" | "INVENTORY_VALUATION";
 
@@ -158,13 +159,20 @@ async function assetRegister(organizationId: string, periodEnd: Date) {
 }
 
 async function inventoryValuation(organizationId: string, periodEnd: Date) {
-  return prisma.$queryRaw<Array<{ inventoryItemId: string; warehouseId: string | null; currencyCode: string; quantity: Prisma.Decimal; value: Prisma.Decimal }>>(Prisma.sql`
-    SELECT "inventoryItemId", "warehouseId", "currencyCode", COALESCE(SUM("remainingQuantity"), 0) AS quantity, COALESCE(SUM("remainingQuantity" * "unitCost"), 0) AS value
-    FROM "EnterpriseInventoryCostLayer"
-    WHERE "organizationId" = ${organizationId} AND "effectiveAt" <= ${periodEnd}
-    GROUP BY "inventoryItemId", "warehouseId", "currencyCode"
-    ORDER BY "inventoryItemId", "warehouseId", "currencyCode"
-  `);
+  return prisma.$transaction(async tx => {
+    const valuation = await inventoryValuationAtSqlTx(tx, organizationId, periodEnd);
+    return tx.$queryRaw<Array<{ inventoryItemId: string; warehouseId: string | null; currencyCode: string; inventoryItemName: string | null; warehouseName: string | null; quantity: Prisma.Decimal; value: Prisma.Decimal; valuationBasis: string }>>(Prisma.sql`
+    SELECT v."inventoryItemId", v."warehouseId", v."currencyCode", c.name AS "inventoryItemName", CASE WHEN (v."valuationBasis"='VERIFIED_TRANSIT') THEN 'Stock en transit / In-transit stock' ELSE w.name END AS "warehouseName",
+      COALESCE(SUM(v.quantity), 0) AS quantity, COALESCE(SUM(v.value), 0) AS value,
+      CASE WHEN BOOL_AND(v."valuationBasis" IN ('VERIFIED_HISTORY','VERIFIED_TRANSIT')) THEN 'VERIFIED_HISTORY' ELSE 'CURRENT_LAYER_PROJECTION' END AS "valuationBasis"
+    FROM (${valuation}) v
+    LEFT JOIN "EnterpriseInventoryItem" i ON i."organizationId"=${organizationId} AND i.id=v."inventoryItemId"
+    LEFT JOIN "EnterpriseCatalogItem" c ON c."organizationId"=i."organizationId" AND c.id=i."catalogItemId"
+    LEFT JOIN "EnterpriseWarehouse" w ON w."organizationId"=${organizationId} AND w.id=v."warehouseId"
+    GROUP BY v."inventoryItemId", v."warehouseId", v."currencyCode", c.name, w.name, (v."valuationBasis"='VERIFIED_TRANSIT')
+    ORDER BY v."inventoryItemId", v."warehouseId", v."currencyCode"
+    `);
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
 }
 
 export async function generateFinancialStatement(

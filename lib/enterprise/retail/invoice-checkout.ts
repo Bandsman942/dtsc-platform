@@ -11,7 +11,8 @@ import { resolveExchangeRateDetails, snapshotExchangeRate } from "@/lib/enterpri
 import { resolveRetailCommercialPricingDecisions } from "@/lib/enterprise/retail/commercial-engine";
 import { valueRetailInvoiceFulfillmentIssueTx } from "@/lib/enterprise/retail/accounting";
 import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
-import { assertRetailLotPolicyTx } from "@/lib/enterprise/retail/inventory-policy";
+import { planReservationLotAllocations, readInvoiceLotAllocations, reservationExactBalanceRemaining, reservationLegacyRemaining, reservationLotRemaining, type InvoiceLotAllocation } from "@/lib/enterprise/inventory/lot-allocation";
+import { assertRetailLotPolicyTx, businessDateKey, lotIsExpired } from "@/lib/enterprise/retail/inventory-policy";
 import { readActiveRetailInvoiceStockHoldsTx } from "@/lib/enterprise/retail/invoice-stock-holds";
 import { applyStockMovementTx } from "@/lib/enterprise/inventory/service";
 import { RETAIL_SECTOR_CODE } from "@/lib/enterprise/retail/constants";
@@ -106,7 +107,7 @@ export async function prepareRetailInvoice(organizationId: string, actorUserId: 
       tx.enterpriseRetailConfiguration.findUnique({ where: { organizationId }, select: { settingsJson: true } }),
       tx.enterpriseWarehouse.findFirst({ where: { id: input.warehouseId, organizationId, siteId: input.siteId, site: { status: "ACTIVE", archivedAt: null }, status: "ACTIVE", archivedAt: null }, select: { id: true } }),
       tx.enterpriseCatalogItem.findMany({ where: { organizationId, id: { in: [...uniqueItems] }, status: "ACTIVE", archivedAt: null }, select: { id: true, name: true, currency: true, trackInventory: true } }),
-      tx.enterpriseInventoryItem.findMany({ where: { organizationId, catalogItemId: { in: [...uniqueItems] }, status: "ACTIVE", archivedAt: null }, select: { id: true, catalogItemId: true } }),
+      tx.enterpriseInventoryItem.findMany({ where: { organizationId, catalogItemId: { in: [...uniqueItems] }, status: "ACTIVE", archivedAt: null }, select: { id: true, catalogItemId: true, lotTracking: true, expiryTracking: true } }),
     ]);
     if (!organization || !warehouse) throw new EnterpriseRetailError("RETAIL_REFERENCE_INVALID", 409);
     if (!invoiceCheckoutEnabled(configuration?.settingsJson)) throw new EnterpriseRetailError("RETAIL_INVOICE_CHECKOUT_NOT_ACTIVE", 409);
@@ -118,8 +119,8 @@ export async function prepareRetailInvoice(organizationId: string, actorUserId: 
     const selectedLots = [...new Set(input.lines.map((line) => line.stockLotId).filter((id): id is string => Boolean(id)))];
     const [lots, balances, reservations, retailHolds] = await Promise.all([
       selectedLots.length ? tx.enterpriseStockLot.findMany({ where: { organizationId, warehouseId: input.warehouseId, id: { in: selectedLots }, status: "AVAILABLE", archivedAt: null }, select: { id: true, inventoryItemId: true } }) : Promise.resolve([]),
-      tx.enterpriseInventoryBalance.findMany({ where: { organizationId, warehouseId: input.warehouseId, inventoryItemId: { in: inventoryItems.map((item) => item.id) } }, select: { inventoryItemId: true, stockLotId: true, quantityOnHand: true, quantityReserved: true } }),
-      tx.enterpriseInventoryReservation.findMany({ where: { organizationId, warehouseId: input.warehouseId, inventoryItemId: { in: inventoryItems.map((item) => item.id) }, status: "ACTIVE", OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] }, select: { inventoryItemId: true, quantity: true, fulfilledQuantity: true } }),
+      tx.enterpriseInventoryBalance.findMany({ where: { organizationId, warehouseId: input.warehouseId, inventoryItemId: { in: inventoryItems.map((item) => item.id) } }, select: { id: true, inventoryItemId: true, stockLotId: true, storageLocationId: true, quantityOnHand: true, quantityReserved: true, stockLot: { select: { status: true, archivedAt: true, expiryDate: true } }, storageLocation: { select: { status: true, archivedAt: true } } } }),
+      tx.enterpriseInventoryReservation.findMany({ where: { organizationId, warehouseId: input.warehouseId, inventoryItemId: { in: inventoryItems.map((item) => item.id) }, status: "ACTIVE", OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] }, select: { inventoryItemId: true, quantity: true, fulfilledQuantity: true, lotAllocations: true } }),
       readActiveRetailInvoiceStockHoldsTx(tx, { organizationId, warehouseId: input.warehouseId, inventoryItemIds: inventoryItems.map((item) => item.id) }),
     ]);
     const lotById = new Map(lots.map((lot) => [lot.id, lot]));
@@ -131,23 +132,35 @@ export async function prepareRetailInvoice(organizationId: string, actorUserId: 
       const inventory = item.trackInventory ? inventoryByCatalog.get(item.id) : null;
       if (item.trackInventory && !inventory) throw new EnterpriseRetailError("RETAIL_INVENTORY_ITEM_REQUIRED", 409);
       if (line.stockLotId && (!inventory || lotById.get(line.stockLotId)?.inventoryItemId !== inventory.id)) throw new EnterpriseRetailError("RETAIL_STOCK_LOT_INVALID", 409);
+      let lotAllocations: InvoiceLotAllocation[] | null = null;
       if (inventory) {
         const rows = balances.filter((row) => row.inventoryItemId === inventory.id && (!line.stockLotId || row.stockLotId === line.stockLotId));
-        if (!line.stockLotId && rows.some((row) => row.stockLotId)) {
-          // The future stock posting must never silently consume an arbitrary
-          // batch at the moment a customer finishes paying.
-          throw new EnterpriseRetailError("RETAIL_STOCK_LOT_REQUIRED", 409);
+        const auto = !line.stockLotId && (inventory.lotTracking || inventory.expiryTracking || rows.some((row) => row.stockLotId));
+        if (auto) {
+          const plan = planReservationLotAllocations({
+            balances: rows.filter((row) => !row.storageLocationId || (row.storageLocation?.status === "ACTIVE" && !row.storageLocation.archivedAt)),
+            reservations: reservations.filter((row) => row.inventoryItemId === inventory.id),
+            holds: retailHolds.filter((row) => row.inventoryItemId === inventory.id),
+            quantity: line.quantity, businessDate: businessDateKey(new Date(), organization.timezone || "UTC"), requireExpiry: inventory.expiryTracking,
+          });
+          if (plan.shortfall.gt(0)) throw new EnterpriseRetailError("RETAIL_INVOICE_STOCK_INSUFFICIENT", 409);
+          const aggregate = new Map<string, Prisma.Decimal>();
+          for (const allocation of plan.allocations) aggregate.set(allocation.stockLotId, (aggregate.get(allocation.stockLotId) || new Prisma.Decimal(0)).plus(allocation.quantity));
+          lotAllocations = [...aggregate].map(([stockLotId, quantity]) => ({ stockLotId, quantity: quantity.toFixed() }));
+        } else {
+          const available = rows.reduce((sum, row) => sum.plus(row.quantityOnHand.minus(row.quantityReserved)), new Prisma.Decimal(0))
+            .minus(reservations.filter((row) => row.inventoryItemId === inventory.id).reduce((sum, row) => sum.plus(reservationLotRemaining(row, line.stockLotId || null)), new Prisma.Decimal(0)))
+            .minus(retailHolds.filter((hold) => hold.inventoryItemId === inventory.id && (hold.stockLotId === (line.stockLotId || null) || (Boolean(line.stockLotId) && !hold.stockLotId))).reduce((sum, hold) => sum.plus(hold.quantity), new Prisma.Decimal(0)));
+          if (available.lessThan(line.quantity)) throw new EnterpriseRetailError("NEGATIVE_STOCK_FORBIDDEN", 409);
+          if (inventory.expiryTracking && !rows.some((row) => row.stockLot?.expiryDate)) throw new EnterpriseRetailError("RETAIL_STOCK_LOT_INVALID", 409);
+          if (inventory.expiryTracking && rows.some(row => row.stockLot?.expiryDate && lotIsExpired(row.stockLot.expiryDate, businessDateKey(new Date(), organization.timezone || "UTC")))) throw new EnterpriseRetailError("RETAIL_STOCK_LOT_EXPIRED", 409);
         }
-        const available = rows.reduce((sum, row) => sum.plus(row.quantityOnHand.minus(row.quantityReserved)), new Prisma.Decimal(0))
-          .minus(reservations.filter((row) => row.inventoryItemId === inventory.id).reduce((sum, row) => sum.plus(row.quantity.minus(row.fulfilledQuantity)), new Prisma.Decimal(0)))
-          .minus(retailHolds.filter((hold) => hold.inventoryItemId === inventory.id && hold.stockLotId === (line.stockLotId || null)).reduce((sum, hold) => sum.plus(hold.quantity), new Prisma.Decimal(0)));
-        if (available.lessThan(line.quantity)) throw new EnterpriseRetailError("NEGATIVE_STOCK_FORBIDDEN", 409);
       }
-      return { ...line, inventoryItemId: inventory?.id || null, itemName: item.name, decision };
+      return { ...line, lotAllocations, inventoryItemId: inventory?.id || null, itemName: item.name, decision };
     });
     const stockWarnings = await assertRetailLotPolicyTx(tx, {
       organizationId, warehouseId: input.warehouseId, timezone: organization.timezone || "UTC", settings: configuration?.settingsJson,
-      lines: prepared.map((line) => ({ inventoryItemId: line.inventoryItemId, stockLotId: line.stockLotId || null })),
+      lines: prepared.flatMap((line) => line.lotAllocations ? line.lotAllocations.map((allocation) => ({ inventoryItemId: line.inventoryItemId, stockLotId: allocation.stockLotId, quantity: allocation.quantity })) : [{ inventoryItemId: line.inventoryItemId, stockLotId: line.stockLotId || null, quantity: String(line.quantity) }]),
     });
 
     const customerId = input.businessPartyId || await resolveWalkInCustomerTx(tx, organizationId, actorUserId);
@@ -195,7 +208,7 @@ export async function prepareRetailInvoice(organizationId: string, actorUserId: 
       const item = invoiceItems.get(line.catalogItemId);
       if (!item) throw new EnterpriseRetailError("RETAIL_INVOICE_LINE_MISSING", 409);
       return { organizationId, invoiceItemId: item.id, inventoryItemId: line.inventoryItemId,
-        stockLotId: line.stockLotId || null };
+        stockLotId: line.stockLotId || null, ...(line.lotAllocations ? { lotAllocations: line.lotAllocations } : {}) };
     });
     // Keep both writes inside the same serializable transaction. Prisma's
     // nested unchecked create cannot safely mix the composite Finance line
@@ -281,12 +294,22 @@ export async function postPaidRetailInvoiceStockTx(
   ]);
   // If a partial invoice was credited before physical fulfillment, remove
   // completed cancellation quantities before committing cost-of-goods sold.
-  const fulfilableLines = checkout.lines.map((line) => ({
-    line,
-    remaining: decimalMax(new Prisma.Decimal(0), line.invoiceItem.quantity.minus(
-      (line.returnLines || []).reduce((total, entry) => total.plus(entry.quantity), new Prisma.Decimal(0)),
-    )),
-  })).filter(({ line, remaining }) => Boolean(line.inventoryItemId) && remaining.greaterThan(0));
+  const fulfilableLines = checkout.lines.flatMap((line) => {
+    if (!line.inventoryItemId) return [];
+    const cancelled = (line.returnLines || []).reduce((total, entry) => total.plus(entry.quantity), new Prisma.Decimal(0));
+    return readInvoiceLotAllocations(line, cancelled).map((allocation) => ({ line: { ...line, stockLotId: allocation.stockLotId }, remaining: allocation.quantity }));
+  });
+  // Auto-allocated batches are frozen at preparation. A lot becoming unusable
+  // is a business conflict, never an implicit substitution at settlement.
+  const autoLines = fulfilableLines.filter(({ line }) => line.lotAllocations != null);
+  if (autoLines.length) {
+    const lots = await tx.enterpriseStockLot.findMany({ where: { organizationId, warehouseId: checkout.warehouseId, id: { in: autoLines.map(({ line }) => line.stockLotId!) }, archivedAt: null, status: "AVAILABLE" }, select: { id: true, inventoryItemId: true, expiryDate: true } });
+    const today = businessDateKey(new Date(), organization?.timezone || "UTC");
+    for (const { line } of autoLines) {
+      const lot = lots.find((item) => item.id === line.stockLotId && item.inventoryItemId === line.inventoryItemId);
+      if (!lot || lotIsExpired(lot.expiryDate, today)) throw new EnterpriseRetailError("RETAIL_STOCK_LOT_INVALID", 409);
+    }
+  }
   // The owner may deactivate future checkouts; previously issued invoices
   // still have to be fulfilled, subject to current lot safety rules.
   await assertRetailLotPolicyTx(tx, {
@@ -294,7 +317,9 @@ export async function postPaidRetailInvoiceStockTx(
     warehouseId: checkout.warehouseId,
     timezone: organization?.timezone || "UTC",
     settings: configuration?.settingsJson,
-    lines: fulfilableLines.map(({ line }) => ({ inventoryItemId: line.inventoryItemId, stockLotId: line.stockLotId })),
+    excludeSalesInvoiceId: checkout.salesInvoiceId,
+    preserveCommittedSelection: true,
+    lines: fulfilableLines.map(({ line, remaining }) => ({ inventoryItemId: line.inventoryItemId, stockLotId: line.stockLotId, quantity: remaining })),
   });
 
   for (const { line, remaining } of fulfilableLines) {
@@ -311,7 +336,7 @@ export async function postPaidRetailInvoiceStockTx(
         organizationId, warehouseId: checkout.warehouseId, inventoryItemId: line.inventoryItemId,
         status: "ACTIVE", OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
       },
-      select: { quantity: true, fulfilledQuantity: true, storageLocationId: true },
+      select: { quantity: true, fulfilledQuantity: true, storageLocationId: true, lotAllocations: true },
     }), readActiveRetailInvoiceStockHoldsTx(tx, {
       organizationId, warehouseId: checkout.warehouseId, inventoryItemIds: [line.inventoryItemId],
       excludeSalesInvoiceId: checkout.salesInvoiceId,
@@ -319,19 +344,17 @@ export async function postPaidRetailInvoiceStockTx(
     let stillNeeded = remaining;
     let unscopedReserved = activeReservations
       .filter((reservation) => !reservation.storageLocationId)
-      .reduce((sum, reservation) => sum.plus(reservation.quantity.minus(reservation.fulfilledQuantity)), new Prisma.Decimal(0));
+      .reduce((sum, reservation) => sum.plus(reservationLegacyRemaining(reservation)), new Prisma.Decimal(0));
     // Another unpaid invoice owns this physical quantity. This checkout's
     // own promise must not block its eventual fulfillment.
     unscopedReserved = unscopedReserved.plus(otherRetailHolds
-      .filter((hold) => hold.stockLotId === line.stockLotId)
+      .filter((hold) => hold.stockLotId === line.stockLotId || (Boolean(line.stockLotId) && !hold.stockLotId))
       .reduce((sum, hold) => sum.plus(hold.quantity), new Prisma.Decimal(0)));
     // Reserve outstanding sales orders first. InventoryBalance.quantityReserved
     // is a separate legacy field, so these two sources must both be counted.
     for (const balance of balances) {
       if (stillNeeded.isZero()) break;
-      const specificReserved = activeReservations
-        .filter((reservation) => reservation.storageLocationId && reservation.storageLocationId === balance.storageLocationId)
-        .reduce((sum, reservation) => sum.plus(reservation.quantity.minus(reservation.fulfilledQuantity)), new Prisma.Decimal(0));
+      const specificReserved = activeReservations.reduce((sum, reservation) => sum.plus(reservationExactBalanceRemaining(reservation, balance.id)).plus(reservation.storageLocationId && reservation.storageLocationId === balance.storageLocationId ? reservationLegacyRemaining(reservation) : 0), new Prisma.Decimal(0));
       const physicallyFree = decimalMax(new Prisma.Decimal(0), balance.quantityOnHand.minus(balance.quantityReserved).minus(specificReserved));
       const unscopedTakenHere = decimalMin(unscopedReserved, physicallyFree);
       unscopedReserved = unscopedReserved.minus(unscopedTakenHere);

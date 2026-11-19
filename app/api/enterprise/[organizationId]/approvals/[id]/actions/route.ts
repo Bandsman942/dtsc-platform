@@ -19,6 +19,10 @@ import { decideEnterpriseLeaveRequest } from "@/lib/enterprise/hr-payroll/leave"
 import { decideEnterprisePayrollRun } from "@/lib/enterprise/hr-payroll/payroll";
 import { decideEnterpriseTimesheet } from "@/lib/enterprise/hr-payroll/timesheets";
 import { decideEnterpriseInventoryCount, decideEnterpriseStockTransfer } from "@/lib/enterprise/inventory/service";
+import { decideStockLotReclassification, requireLotReclassificationOrganizationWideScope } from "@/lib/enterprise/inventory/lot-reclassification";
+import { assertSupplierReturnReviewAccess, decideSupplierReturnRequest, SUPPLIER_RETURN_TARGET } from "@/lib/enterprise/inventory/supplier-return-request-service";
+import { assertRecoveryReviewAccess, decideRecoveryAssessment, RECOVERY_ASSESSMENT_TARGET } from "@/lib/enterprise/inventory/custody-recovery-assessment";
+import { enterpriseDomainErrorResponse } from "@/lib/enterprise/common/http";
 import { decideEnterpriseStockAdjustment } from "@/lib/enterprise/inventory/adjustment-service";
 import { cancelEnterpriseProjectMilestoneApproval } from "@/lib/enterprise/projects-assets/milestone-approval-cancel";
 import { ensureProjectMilestoneApprovalSubmissionVersion, recordProjectMilestoneApprovalDecision } from "@/lib/enterprise/projects-assets/milestone-approval-coordination";
@@ -54,12 +58,17 @@ async function targetRevision(organizationId: string, approval: CurrentApproval)
 }
 
 async function reviewVersion(organizationId: string, current: CurrentApproval) {
+  if(current.targetEntityType===RECOVERY_ASSESSMENT_TARGET){
+    const version=await prisma.enterpriseApprovalSubmissionVersion.findFirst({where:{organizationId,approvalId:current.id,versionNumber:1}});
+    if(!version)throw new EnterpriseDomainError("INVENTORY_RETURN_RECOVERY_CONFLICT",409);
+    return version;
+  }
   return current.targetEntityType === "EnterpriseProjectMilestone"
     ? ensureProjectMilestoneApprovalSubmissionVersion({ organizationId, approvalId: current.id, actorUserId: current.requestedByUserId })
     : ensureApprovalSubmissionVersion({ organizationId, approvalId: current.id, actorUserId: current.requestedByUserId });
 }
 
-async function decideDomainApproval(organizationId: string, current: CurrentApproval, actorUserId: string, data: { action: "APPROVE" | "REJECT" | "CANCEL"; revision: number; decisionComment?: string }, canManage: boolean) {
+async function decideDomainApproval(organizationId: string, current: CurrentApproval, actorUserId: string, data: { action: "APPROVE" | "REJECT" | "CANCEL"; revision: number; decisionComment?: string; reviewedVersionId?: string }, canManage: boolean) {
   if (current.targetEntityType === "EnterpriseSalesInvoice") {
     if (data.action === "CANCEL") throw new ApprovalCoordinationError("INVALID_STATE", 409, "Utilisez le registre des factures pour annuler cette facture.");
     const revision = await targetRevision(organizationId, current);
@@ -67,6 +76,9 @@ async function decideDomainApproval(organizationId: string, current: CurrentAppr
     return decideSalesInvoiceAssignedApproval(organizationId, current.targetEntityId, actorUserId, { action: data.action, revision, reason: data.decisionComment });
   }
   const args = { organizationId, approvalId: current.id, actorUserId, action: data.action, revision: data.revision, decisionComment: data.decisionComment || undefined, canManage };
+  if (current.targetEntityType === "EnterpriseStockLotReclassification") return decideStockLotReclassification(args);
+  if (current.targetEntityType === SUPPLIER_RETURN_TARGET) return decideSupplierReturnRequest({ ...args, reviewedVersionId: data.reviewedVersionId });
+  if (current.targetEntityType === RECOVERY_ASSESSMENT_TARGET) return decideRecoveryAssessment({...args,reviewedVersionId:data.reviewedVersionId});
   if (current.targetEntityType === "EnterprisePurchase") return decideEnterprisePurchaseApproval(args);
   if (current.targetEntityType === "EnterpriseBudget") return decideEnterpriseBudgetApproval(args);
   if (current.targetEntityType === "EnterpriseExpense") return decideEnterpriseExpenseApproval(args);
@@ -105,6 +117,11 @@ export async function POST(req: Request, { params }: Params) {
   const current = await prisma.enterpriseApproval.findFirst({ where: { id, organizationId, archivedAt: null } }); if (!current) return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
 
   try {
+    if (current.targetEntityType === SUPPLIER_RETURN_TARGET) await assertSupplierReturnReviewAccess(organizationId, session.userId, current);
+    if (current.targetEntityType === RECOVERY_ASSESSMENT_TARGET) await assertRecoveryReviewAccess(organizationId,session.userId,current);
+    if (current.targetEntityType === "EnterpriseStockLotReclassification") {
+      await requireLotReclassificationOrganizationWideScope(prisma, organizationId, session.userId);
+    }
     if (prepareReview) {
       const data = prepareReviewSchema.parse(payload);
       if (current.status !== "PENDING") throw new ApprovalCoordinationError("INVALID_STATE", 409, "Cette validation n’est plus en attente de revue.");
@@ -117,6 +134,9 @@ export async function POST(req: Request, { params }: Params) {
     }
     if (professional) {
       const data = professionalApprovalActionSchema.parse(payload);
+      if (current.targetEntityType === SUPPLIER_RETURN_TARGET) throw new EnterpriseDomainError("SUPPLIER_RETURN_CONFLICT", 409);
+      if (current.targetEntityType === RECOVERY_ASSESSMENT_TARGET) throw new EnterpriseDomainError("INVENTORY_RETURN_RECOVERY_CONFLICT",409);
+      if (current.targetEntityType === "EnterpriseStockLotReclassification") throw new ApprovalCoordinationError("TARGET_ACTION_NOT_SUPPORTED", 409, "Annulez ou rejetez cette répartition avant d’en soumettre une nouvelle.");
       if (current.targetEntityType === "EnterpriseSalesInvoice") {
         if (data.action !== "REQUEST_CORRECTION" || current.approverUserId !== session.userId) throw new ApprovalCoordinationError("FORBIDDEN", 403, "La correction de cette facture doit être demandée par son validateur désigné.");
         const revision = await targetRevision(organizationId, current);
@@ -146,7 +166,7 @@ export async function POST(req: Request, { params }: Params) {
     await decideDomainApproval(organizationId, current, session.userId, data, access.canManage);
     // The invoice orchestrator has already committed the approval decision
     // alongside the Finance invoice. A second generic decision would conflict.
-    if ((data.action === "APPROVE" || data.action === "REJECT") && current.targetEntityType !== "EnterpriseSalesInvoice") {
+    if ((data.action === "APPROVE" || data.action === "REJECT") && current.targetEntityType !== "EnterpriseSalesInvoice" && current.targetEntityType !== SUPPLIER_RETURN_TARGET && current.targetEntityType !== RECOVERY_ASSESSMENT_TARGET) {
       const decisionArgs = { organizationId, approvalId: id, actorUserId: session.userId, decision: data.action, reason: data.decisionComment, idempotencyKey: typeof payload?.idempotencyKey === "string" ? payload.idempotencyKey : null };
       if (current.targetEntityType === "EnterpriseProjectMilestone") await recordProjectMilestoneApprovalDecision(decisionArgs);
       else await recordApprovalDecision(decisionArgs);
@@ -157,6 +177,8 @@ export async function POST(req: Request, { params }: Params) {
     await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "approvals", approvalId: id, action: data.action } });
     return NextResponse.json({ ok: true, approval });
   } catch (error) {
+    if (current.targetEntityType === RECOVERY_ASSESSMENT_TARGET && error instanceof EnterpriseDomainError) { await writeApiLog({ request:req,statusCode:error.status,userId:session.userId,startedAt,metadata:{organizationId,domain:"approvals",approvalId:id,action,error:error.code} }); return enterpriseDomainErrorResponse(error,"INVENTORY_RETURN_CUSTODY_FAILED",req); }
+    if (current.targetEntityType === SUPPLIER_RETURN_TARGET && error instanceof EnterpriseDomainError) { await writeApiLog({ request: req, statusCode: error.status, userId: session.userId, startedAt, metadata: { organizationId, domain: "approvals", approvalId: id, action, error: error.code } }); return enterpriseDomainErrorResponse(error, "SUPPLIER_RETURN_SUBMIT_FAILED", req); }
     if (error instanceof ApprovalCoordinationError) { await writeApiLog({ request: req, statusCode: error.status, userId: session.userId, startedAt, metadata: { organizationId, domain: "approvals", approvalId: id, action, error: error.code } }); return NextResponse.json({ error: error.code, message: /^[A-Z][A-Z0-9_]+$/.test(error.message) ? error.message : "L’opération n’a pas pu être terminée." }, { status: error.status }); }
     if (error instanceof EnterpriseDomainError || error instanceof EnterpriseAccountingError) { await writeApiLog({ request: req, statusCode: error.status, userId: session.userId, startedAt, metadata: { organizationId, domain: "approvals", approvalId: id, action, error: error.code } }); return NextResponse.json({ error: error.code, message: /^[A-Z][A-Z0-9_]+$/.test(error.message) ? error.message : "L’opération n’a pas pu être terminée." }, { status: error.status }); }
     const normalized = normalizeEnterpriseCoreV2Error(error); await writeApiLog({ request: req, statusCode: normalized.status, userId: session.userId, startedAt, metadata: { organizationId, domain: "approvals", approvalId: id, action, error: normalized.code } }); return NextResponse.json({ error: normalized.code, message: normalized.message }, { status: normalized.status });

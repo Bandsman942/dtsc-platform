@@ -91,7 +91,7 @@ assert.equal(validOpeningLine(0, 0), false);
 assert.equal(validOpeningLine(100, 100), false);
 assert.equal(validOpeningLine(-1, 1), false);
 const stockSource = fs.readFileSync("lib/enterprise/inventory/service.ts", "utf8");
-assert.match(stockSource, /if \(held\.greaterThan\(0\)\)/,
+assert.match(stockSource, /if \(held\.gt\(0\) && physicallyFree\.minus\(input\.quantity\)\.lessThan\(held\)\)/,
   "A zero invoice hold must not consume or invalidate physical stock");
 const invoiceCheckout = fs.readFileSync("lib/enterprise/retail/invoice-checkout.ts", "utf8");
 assert.match(invoiceCheckout, /if \(!take\.greaterThan\(0\)\) continue/,

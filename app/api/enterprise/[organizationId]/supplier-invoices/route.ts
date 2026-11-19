@@ -7,6 +7,7 @@ import { assertSupplierInvoiceSources } from "@/lib/enterprise/accounting/invoic
 import { createSupplierInvoice } from "@/lib/enterprise/accounting/payables-service";
 import { supplierInvoiceCreateSchema } from "@/lib/enterprise/accounting/schemas";
 import { prisma } from "@/lib/prisma";
+import { supplierReturnFinanceProjectionTx, supplierReturnPayableCapacity } from "@/lib/enterprise/accounting/supplier-return-credit-reconciliation";
 
 type Params = { params: Promise<{ organizationId: string }> };
 
@@ -30,16 +31,20 @@ export async function GET(req: Request, { params }: Params) {
     ...(search ? { number: { contains: search, mode: "insensitive" } } : {}),
   };
 
-  const [items, total] = await Promise.all([
-    prisma.enterpriseSupplierInvoice.findMany({
+  const {items,total,returns}=await prisma.$transaction(async tx=>{
+  const [items,total]=await Promise.all([
+    tx.enterpriseSupplierInvoice.findMany({
       where,
       orderBy: [{ invoiceDate: "desc" }, { createdAt: "desc" }],
       skip: (page - 1) * pageSize,
       take: pageSize,
       include: { items: true, payable: true, threeWayMatch: true },
     }),
-    prisma.enterpriseSupplierInvoice.count({ where }),
+    tx.enterpriseSupplierInvoice.count({ where }),
   ]);
+  const returns=await supplierReturnFinanceProjectionTx(tx,organizationId,items.map(row=>row.id));
+  return {items,total,returns};
+  },{isolationLevel:Prisma.TransactionIsolationLevel.RepeatableRead});
   const assignedApprovals = items.length ? await prisma.enterpriseApproval.findMany({
     where: {
       organizationId,
@@ -54,17 +59,20 @@ export async function GET(req: Request, { params }: Params) {
   const reviewIds = new Set(assignedApprovals.filter((approval) => approval.targetEntityType === "EnterpriseSupplierInvoiceReview").map((approval) => approval.targetEntityId));
   const approvalIds = new Set(assignedApprovals.filter((approval) => approval.targetEntityType === "EnterpriseSupplierInvoiceApproval").map((approval) => approval.targetEntityId));
   const capabilities = auth.access.capabilities;
-  const resultItems = items.map((item) => ({
-    ...item,
+  const resultItems=items.map(item=>{
+    const supplierReturn=returns.get(item.id)||null;
+    const capacity=supplierReturnPayableCapacity(item,supplierReturn?.status==="DISPATCHED"?[supplierReturn]:[]);
+    return {
+    ...item,supplierReturn,supplierReturnReservedAmount:capacity.reserved.toFixed(),supplierReturnAllocatableAmount:capacity.available.toFixed(),
     capabilities: {
       canSubmit: capabilities.canSubmit && item.status === "DRAFT" && item.createdByUserId === auth.session.userId,
       canReview: capabilities.canApprove && item.status === "PENDING_REVIEW" && reviewIds.has(item.id),
       canApprove: capabilities.canApprove && item.status === "PENDING_APPROVAL" && approvalIds.has(item.id),
       canReject: capabilities.canApprove && ((item.status === "PENDING_REVIEW" && reviewIds.has(item.id)) || (item.status === "PENDING_APPROVAL" && approvalIds.has(item.id))),
       canPost: capabilities.canManage && item.status === "APPROVED",
-      canCreateCredit: capabilities.canCreate && ["POSTED", "PARTIALLY_PAID", "PAID"].includes(item.status),
+      canCreateCredit: !supplierReturn && capabilities.canCreate && ["POSTED", "PARTIALLY_PAID", "PAID"].includes(item.status),
     },
-  }));
+  }; });
 
   await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "supplier-invoices", page, recordId: Boolean(recordId), workflowPending } });
   return NextResponse.json({ items: resultItems, pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) } });

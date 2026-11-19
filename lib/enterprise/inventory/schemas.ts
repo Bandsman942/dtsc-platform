@@ -66,10 +66,14 @@ export const stockAdjustmentCreateSchema = z.object({
   storageLocationId: z.string().trim().min(1).optional().nullable(),
   stockLotId: z.string().trim().min(1).optional().nullable(),
   adjustmentType: z.enum(["IN", "OUT"]),
+  lossReason: z.enum(["EXPIRY", "DAMAGE", "RECALL", "DESTRUCTION"]).optional().nullable(),
   quantity: z.coerce.number().positive().max(1_000_000_000),
   reason: z.string().trim().min(3).max(2000),
   approverUserId: z.string().trim().min(1),
   idempotencyKey: z.string().trim().min(8).max(180).optional().nullable(),
+}).superRefine((data, ctx) => {
+  if (data.lossReason && (data.adjustmentType !== "OUT" || !data.stockLotId || data.reason.length < 8 || !data.idempotencyKey)) ctx.addIssue({code:"custom",path:["lossReason"],message:"Specify a batch, outbound direction, detailed reason and unique request key."});
+  if (data.lossReason && Math.abs(data.quantity * 1000 - Math.round(data.quantity * 1000)) > 0.000001) ctx.addIssue({code:"custom",path:["quantity"],message:"Maximum 3 decimal places."});
 });
 
 export const stockAdjustmentDecisionSchema = stockDecisionSchema;

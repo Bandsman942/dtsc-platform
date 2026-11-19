@@ -3,6 +3,7 @@ import type { AiToolExecutor, AiToolRuntimeContext } from "@/lib/ai/tools/types"
 import { FINANCE_AI_TOOL_CODES, type FinanceAiToolCode } from "@/lib/ai/tools/finance-contract";
 import { resolveEnterpriseFinanceReadiness } from "@/lib/enterprise/accounting/finance-readiness-service";
 import { serializeFinanceValue } from "@/lib/enterprise/accounting/helpers";
+import { inventoryValuationAtSqlTx } from "@/lib/enterprise/accounting/inventory-historical-valuation";
 import {
   enterpriseBudgetVisibilityWhere,
   enterpriseExpenseVisibilityWhere,
@@ -367,28 +368,33 @@ async function assets(organizationId: string, toolName: FinanceAiToolCode, args:
 
 async function inventory(organizationId: string, toolName: FinanceAiToolCode, args: FinanceReadArgs) {
   const { limit, end } = windowFor(args);
-  const [totals, positions] = await Promise.all([
-    prisma.$queryRaw<Array<{ currencyCode: string; quantity: Prisma.Decimal; value: Prisma.Decimal }>>(Prisma.sql`
+  const [totals, positions] = await prisma.$transaction(async tx => {
+    const valuation = await inventoryValuationAtSqlTx(tx, organizationId, end);
+    return Promise.all([
+    tx.$queryRaw<Array<{ currencyCode: string; quantity: Prisma.Decimal; value: Prisma.Decimal }>>(Prisma.sql`
       SELECT "currencyCode",
-        COALESCE(SUM("remainingQuantity"), 0) AS quantity,
-        COALESCE(SUM("remainingQuantity" * "unitCost"), 0) AS value
-      FROM "EnterpriseInventoryCostLayer"
-      WHERE "organizationId" = ${organizationId} AND "effectiveAt" <= ${end} AND "remainingQuantity" > 0
+        COALESCE(SUM(quantity), 0) AS quantity,
+        COALESCE(SUM(value), 0) AS value,
+        CASE WHEN BOOL_AND("valuationBasis"='VERIFIED_HISTORY') THEN 'VERIFIED_HISTORY' ELSE 'CURRENT_LAYER_PROJECTION' END AS "valuationBasis"
+      FROM (${valuation}) inventory_rows
+      WHERE quantity > 0
       GROUP BY "currencyCode"
       ORDER BY "currencyCode"
     `),
-    prisma.$queryRaw<Array<{ inventoryItemId: string; warehouseId: string | null; currencyCode: string; quantity: Prisma.Decimal; value: Prisma.Decimal }>>(Prisma.sql`
+    tx.$queryRaw<Array<{ inventoryItemId: string; warehouseId: string | null; currencyCode: string; quantity: Prisma.Decimal; value: Prisma.Decimal }>>(Prisma.sql`
       SELECT "inventoryItemId", "warehouseId", "currencyCode",
-        COALESCE(SUM("remainingQuantity"), 0) AS quantity,
-        COALESCE(SUM("remainingQuantity" * "unitCost"), 0) AS value
-      FROM "EnterpriseInventoryCostLayer"
-      WHERE "organizationId" = ${organizationId} AND "effectiveAt" <= ${end} AND "remainingQuantity" > 0
+        COALESCE(SUM(quantity), 0) AS quantity,
+        COALESCE(SUM(value), 0) AS value,
+        CASE WHEN BOOL_AND("valuationBasis"='VERIFIED_HISTORY') THEN 'VERIFIED_HISTORY' ELSE 'CURRENT_LAYER_PROJECTION' END AS "valuationBasis"
+      FROM (${valuation}) inventory_rows
+      WHERE quantity > 0
       GROUP BY "inventoryItemId", "warehouseId", "currencyCode"
       ORDER BY value DESC, "inventoryItemId", "warehouseId", "currencyCode"
       LIMIT ${limit}
     `),
-  ]);
-  return output(toolName, totals.length, totals.length ? "Valorisation du stock calculée depuis les couches de coût canoniques, séparée par devise avec positions bornées." : "Aucune couche de coût de stock valorisable.", { asOf: end, totals, positions });
+    ]);
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
+  return output(toolName, totals.length, totals.length ? "Valorisation par devise et position. VERIFIED_HISTORY : mouvements comptabilisés concordants à la date demandée. CURRENT_LAYER_PROJECTION : reliquat actuel de couches de coût, non certifié historiquement ; ne pas présenter ces montants comme la valeur exacte à cette date." : "Aucune couche de coût de stock valorisable.", { asOf: end, totals, positions });
 }
 
 export async function runFinanceReadToolData(input: {

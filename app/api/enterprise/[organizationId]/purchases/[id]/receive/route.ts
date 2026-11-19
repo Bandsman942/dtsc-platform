@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
-import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
+import { enterpriseDomainErrorResponse, enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
+import { EnterpriseDomainError } from "@/lib/enterprise/common/errors";
 import { normalizeEnterpriseCoreV2Error } from "@/lib/enterprise/core-v2/errors";
 import { getEnterpriseProcurementAccess } from "@/lib/enterprise/procurement/access";
 import { receiveEnterprisePurchase } from "@/lib/enterprise/procurement/purchase-service";
@@ -28,5 +29,5 @@ export async function POST(req: Request, { params }: Params) {
     await writeAuditLog({ userId: session.userId, action: result.purchase?.status === "RECEIVED" ? "ENTERPRISE_PURCHASE_RECEIVED" : "ENTERPRISE_PURCHASE_PARTIALLY_RECEIVED", entity: "EnterprisePurchase", entityId: id, request: req, metadata: { organizationId, receiptId: result.receipt.id, receiptReference: result.receipt.reference } });
     await writeApiLog({ request: req, statusCode: 201, userId: session.userId, startedAt, metadata: { organizationId, domain: "purchases", purchaseId: id, receiptId: result.receipt.id } });
     return NextResponse.json({ ok: true, ...result }, { status: 201 });
-  } catch (error) { const normalized = normalizeEnterpriseCoreV2Error(error); await writeApiLog({ request: req, statusCode: normalized.status, userId: session.userId, startedAt, metadata: { organizationId, domain: "purchases", purchaseId: id, error: normalized.code } }); return NextResponse.json({ error: normalized.code, message: normalized.message }, { status: normalized.status }); }
+  } catch (error) { if (error instanceof EnterpriseDomainError) { const response = enterpriseDomainErrorResponse(error, "PURCHASE_RECEIPT_FAILED", req); await writeApiLog({ request: req, statusCode: response.status, userId: session.userId, startedAt, metadata: { organizationId, domain: "purchases", purchaseId: id, error: error.code } }); return response; } const normalized = normalizeEnterpriseCoreV2Error(error); await writeApiLog({ request: req, statusCode: normalized.status, userId: session.userId, startedAt, metadata: { organizationId, domain: "purchases", purchaseId: id, error: normalized.code } }); return NextResponse.json({ error: normalized.code, message: normalized.message }, { status: normalized.status }); }
 }

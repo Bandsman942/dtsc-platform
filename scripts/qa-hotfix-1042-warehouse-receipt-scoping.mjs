@@ -72,7 +72,9 @@ await attempt(() => master.createEnterpriseStorageLocation("tenantA", "employeeA
 await attempt(() => master.updateEnterpriseStorageLocation("tenantA", "locationB", "employeeA", { revision: 1 }), "shopB", false);
 await attempt(() => master.updateEnterpriseStorageLocation("tenantA", "locationA", "employeeA", { revision: 1 }), "shopA", true);
 
+const receiptBatchSchema = loadModule("lib/enterprise/procurement/receipt-lot-schema.ts", { "zod": { z } });
 const adapter = loadModule("lib/enterprise/procurement/common-domain-adapter.ts", {
+  "@/lib/enterprise/procurement/receipt-lot-schema": receiptBatchSchema,
   "zod": { z },
   "@/lib/enterprise/common/errors": { EnterpriseDomainError: DomainError },
   "@/lib/enterprise/retail/site-access": { requireRetailSiteCapability },

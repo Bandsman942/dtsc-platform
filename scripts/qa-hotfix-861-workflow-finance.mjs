@@ -69,6 +69,7 @@ const otherCrons = [
   ["app/api/internal/enterprise-bulk/process/route.ts","ENTERPRISE_BULK_CRON_ENABLED"],
   ["app/api/internal/report-schedules/process/route.ts","REPORT_SCHEDULES_CRON_ENABLED"],
   ["app/api/internal/identity-links/expire/route.ts","IDENTITY_LINKS_CRON_ENABLED"],
+  ["app/api/internal/inventory-quality/process/route.ts","INVENTORY_QUALITY_ALERTS_CRON_ENABLED"],
 ];
 for (const [route, flag] of otherCrons) {
   const contents = readFileSync(route,"utf8");

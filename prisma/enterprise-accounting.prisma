@@ -286,6 +286,10 @@ model EnterpriseJournalEntry {
   reversalRecordsAsResult  EnterpriseJournalReversal[] @relation("EnterpriseJournalReversalResult")
   lines                    EnterpriseJournalLine[]
 
+  inventoryAcquisitionCostSupplements EnterpriseInventoryAcquisitionCostSupplement[]
+  inventoryTransferDispatch EnterpriseInventoryTransferValuation? @relation("InventoryTransferDispatchJournal")
+  inventoryTransferReceipt EnterpriseInventoryTransferValuation? @relation("InventoryTransferReceiptJournal")
+
   @@unique([organizationId, id])
   @@unique([organizationId, number])
   @@unique([organizationId, idempotencyKey])
@@ -629,6 +633,8 @@ model EnterpriseSupplierInvoiceItem {
   createdAt               DateTime                  @default(now())
   supplierInvoice         EnterpriseSupplierInvoice @relation(fields: [organizationId, supplierInvoiceId], references: [organizationId, id], onDelete: Cascade)
 
+  acquisitionCostSupplement EnterpriseInventoryAcquisitionCostSupplement?
+
   @@unique([organizationId, id])
   @@index([organizationId, supplierInvoiceId])
   @@index([organizationId, catalogItemId])
@@ -655,6 +661,9 @@ model EnterpriseSupplierCreditNote {
   createdAt           DateTime                  @default(now())
   updatedAt           DateTime                  @updatedAt
   supplierInvoice     EnterpriseSupplierInvoice @relation(fields: [organizationId, supplierInvoiceId], references: [organizationId, id], onDelete: Restrict)
+
+  supersededInReturn      EnterpriseSupplierReturnCreditReplacement? @relation("SupplierReturnPreviousCredit")
+  replacementInReturn     EnterpriseSupplierReturnCreditReplacement? @relation("SupplierReturnReplacementCredit")
 
   @@unique([organizationId, id])
   @@unique([organizationId, number])
@@ -1261,6 +1270,8 @@ model EnterpriseTaxLine {
   createdAt          DateTime @default(now())
   taxCode            EnterpriseTaxCode @relation(fields: [organizationId, taxCodeId], references: [organizationId, id], onDelete: Restrict)
 
+  acquisitionCostSupplement EnterpriseInventoryAcquisitionCostSupplement?
+
   @@unique([organizationId, id])
   @@unique([organizationId, sourceEntityType, sourceEntityId, taxCodeId])
   @@index([organizationId, taxCodeId, createdAt])
@@ -1320,6 +1331,10 @@ model EnterpriseInventoryCostLayer {
   effectiveAt           DateTime
   createdAt             DateTime @default(now())
 
+  acquisitionCostSupplement EnterpriseInventoryAcquisitionCostSupplement?
+  transferValuationReceived EnterpriseInventoryTransferValuation? @relation("InventoryTransferDestinationLayer")
+  transferCostAllocations EnterpriseInventoryTransferCostAllocation[]
+
   @@unique([organizationId, id])
   @@unique([organizationId, sourceMovementId])
   @@index([organizationId, inventoryItemId, effectiveAt])
@@ -1341,10 +1356,48 @@ model EnterpriseInventoryAccountingEvent {
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
+  acquisitionCostSupplement EnterpriseInventoryAcquisitionCostSupplement?
+
   @@unique([organizationId, id])
   @@unique([organizationId, idempotencyKey])
   @@unique([organizationId, stockMovementId, eventType])
   @@index([organizationId, inventoryItemId, status])
+}
+
+/// Append-only evidence for a future, atomic nonrecoverable acquisition-cost posting.
+/// It is not a second inventory ledger or a new stock movement.
+model EnterpriseInventoryAcquisitionCostSupplement {
+  id                    String   @id @default(cuid())
+  organizationId        String
+  supplierInvoiceItemId String
+  costLayerId           String
+  receiptAccountingEventId String
+  taxLineId             String
+  invoiceJournalEntryId String
+  quantity              Decimal  @db.Decimal(20, 6)
+  originalUnitCost      Decimal  @db.Decimal(20, 6)
+  originalTotalCost     Decimal  @db.Decimal(20, 6)
+  capitalizedTaxAmount  Decimal  @db.Decimal(20, 6)
+  unitCost              Decimal  @db.Decimal(20, 6)
+  totalCost             Decimal  @db.Decimal(20, 6)
+  currencyCode          String
+  effectiveAt           DateTime
+  recordedByUserId      String
+  createdAt             DateTime @default(now())
+
+  supplierInvoiceItem   EnterpriseSupplierInvoiceItem @relation(fields: [organizationId, supplierInvoiceItemId], references: [organizationId, id], onDelete: Restrict, map: "inv_acq_cost_invoice_item_fk")
+  costLayer             EnterpriseInventoryCostLayer @relation(fields: [organizationId, costLayerId], references: [organizationId, id], onDelete: Restrict, map: "inv_acq_cost_layer_fk")
+  receiptAccountingEvent EnterpriseInventoryAccountingEvent @relation(fields: [organizationId, receiptAccountingEventId], references: [organizationId, id], onDelete: Restrict, map: "inv_acq_cost_receipt_event_fk")
+  taxLine               EnterpriseTaxLine @relation(fields: [organizationId, taxLineId], references: [organizationId, id], onDelete: Restrict, map: "inv_acq_cost_tax_line_fk")
+  invoiceJournalEntry   EnterpriseJournalEntry @relation(fields: [organizationId, invoiceJournalEntryId], references: [organizationId, id], onDelete: Restrict, map: "inv_acq_cost_journal_fk")
+
+  @@unique([organizationId, id], map: "inv_acq_cost_org_id_key")
+  @@unique([organizationId, supplierInvoiceItemId], map: "inv_acq_cost_invoice_item_key")
+  @@unique([organizationId, costLayerId], map: "inv_acq_cost_layer_key")
+  @@unique([organizationId, receiptAccountingEventId], map: "inv_acq_cost_receipt_event_key")
+  @@unique([organizationId, taxLineId], map: "inv_acq_cost_tax_line_key")
+  @@index([organizationId, invoiceJournalEntryId], map: "inv_acq_cost_journal_idx")
+  @@index([organizationId, effectiveAt], map: "inv_acq_cost_effective_idx")
 }
 
 model EnterpriseAssetAccountingProfile {
@@ -1537,4 +1590,75 @@ model EnterpriseOpeningBalanceLine {
   @@unique([organizationId, id])
   @@index([organizationId, openingBalanceImportId])
   @@index([organizationId, ledgerAccountId])
+}
+
+/// Durable cost evidence for a physical transfer line. PREPARED is an
+/// intermediate transactional state; only a coordinate-checked service may
+/// advance it. This is not a second physical stock ledger.
+model EnterpriseInventoryTransferValuation {
+  id                     String   @id @default(cuid())
+  organizationId         String
+  transferLineId         String
+  dispatchMovementId     String
+  receiptMovementId      String?
+  destinationCostLayerId String?
+  dispatchJournalEntryId String?
+  receiptJournalEntryId  String?
+  currencyCode           String
+  quantity               Decimal  @db.Decimal(20, 6)
+  unitCost               Decimal  @db.Decimal(20, 6)
+  totalCost              Decimal  @db.Decimal(20, 6)
+  sourceQuantityBefore   Decimal  @db.Decimal(20, 6)
+  sourceQuantityAfter    Decimal  @db.Decimal(20, 6)
+  sourceValueBefore      Decimal  @db.Decimal(20, 6)
+  sourceValueAfter       Decimal  @db.Decimal(20, 6)
+  destinationQuantityBefore Decimal? @db.Decimal(20, 6)
+  destinationQuantityAfter  Decimal? @db.Decimal(20, 6)
+  destinationValueBefore Decimal? @db.Decimal(20, 6)
+  destinationValueAfter  Decimal? @db.Decimal(20, 6)
+  status                 String   @default("PREPARED")
+  revision               Int      @default(1)
+  preparedByUserId       String
+  receivedByUserId       String?
+  dispatchedAt           DateTime?
+  receivedAt             DateTime?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  transferLine EnterpriseStockTransferLine @relation(fields: [organizationId, transferLineId], references: [organizationId, id], onDelete: Restrict, map: "inv_transfer_value_line_fk")
+  dispatchMovement EnterpriseStockMovement @relation("InventoryTransferDispatchMovement", fields: [organizationId, dispatchMovementId], references: [organizationId, id], onDelete: Restrict, map: "inv_transfer_value_dispatch_fk")
+  receiptMovement EnterpriseStockMovement? @relation("InventoryTransferReceiptMovement", fields: [organizationId, receiptMovementId], references: [organizationId, id], onDelete: Restrict, map: "inv_transfer_value_receipt_fk")
+  destinationCostLayer EnterpriseInventoryCostLayer? @relation("InventoryTransferDestinationLayer", fields: [organizationId, destinationCostLayerId], references: [organizationId, id], onDelete: Restrict, map: "inv_transfer_value_dest_layer_fk")
+  dispatchJournalEntry EnterpriseJournalEntry? @relation("InventoryTransferDispatchJournal", fields: [organizationId, dispatchJournalEntryId], references: [organizationId, id], onDelete: Restrict, map: "inv_transfer_value_dispatch_journal_fk")
+  receiptJournalEntry EnterpriseJournalEntry? @relation("InventoryTransferReceiptJournal", fields: [organizationId, receiptJournalEntryId], references: [organizationId, id], onDelete: Restrict, map: "inv_transfer_value_receipt_journal_fk")
+  allocations EnterpriseInventoryTransferCostAllocation[]
+
+  @@unique([organizationId, id], map: "inv_transfer_value_org_id_key")
+  @@unique([organizationId, transferLineId], map: "inv_transfer_value_line_key")
+  @@unique([organizationId, dispatchMovementId], map: "inv_transfer_value_dispatch_key")
+  @@unique([organizationId, receiptMovementId], map: "inv_transfer_value_receipt_key")
+  @@unique([organizationId, destinationCostLayerId], map: "inv_transfer_value_dest_layer_key")
+  @@unique([organizationId, dispatchJournalEntryId], map: "inv_transfer_value_dispatch_journal_key")
+  @@unique([organizationId, receiptJournalEntryId], map: "inv_transfer_value_receipt_journal_key")
+  @@index([organizationId, status, dispatchedAt], map: "inv_transfer_value_transit_idx")
+}
+
+/// Original CUMP layer quantities consumed by one transfer valuation.
+/// The source layer and the quantity/cost before and after are retained.
+model EnterpriseInventoryTransferCostAllocation {
+  id                   String   @id @default(cuid())
+  organizationId       String
+  valuationId          String
+  sourceCostLayerId    String
+  quantityBefore       Decimal  @db.Decimal(20, 6)
+  remainingQuantity    Decimal  @db.Decimal(20, 6)
+  transferredQuantity  Decimal  @db.Decimal(20, 6)
+  unitCost             Decimal  @db.Decimal(20, 6)
+  createdAt            DateTime @default(now())
+
+  valuation EnterpriseInventoryTransferValuation @relation(fields: [organizationId, valuationId], references: [organizationId, id], onDelete: Restrict, map: "inv_transfer_alloc_value_fk")
+  sourceCostLayer EnterpriseInventoryCostLayer @relation(fields: [organizationId, sourceCostLayerId], references: [organizationId, id], onDelete: Restrict, map: "inv_transfer_alloc_layer_fk")
+
+  @@unique([organizationId, valuationId, sourceCostLayerId], map: "inv_transfer_alloc_value_layer_key")
+  @@index([organizationId, sourceCostLayerId], map: "inv_transfer_alloc_layer_idx")
 }

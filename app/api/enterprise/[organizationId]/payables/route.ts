@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { writeApiLog } from "@/lib/audit";
 import { authorizeFinanceRequest, financeBusinessDateRange, financeListParams } from "@/lib/enterprise/accounting/http";
 import { prisma } from "@/lib/prisma";
+import { supplierReturnFinanceProjectionTx, supplierReturnPayableCapacity } from "@/lib/enterprise/accounting/supplier-return-credit-reconciliation";
 
 type Params = { params: Promise<{ organizationId: string }> };
 
@@ -58,28 +59,37 @@ export async function GET(req: Request, { params }: Params) {
     ...(search ? { supplierInvoice: { number: { contains: search, mode: "insensitive" } } } : {}),
   };
   const today = startOfUtcDay();
-  const [items, total, openByCurrency, overdueByCurrency] = await Promise.all([
-    prisma.enterprisePayable.findMany({
+  const {items,total,openByCurrency,overdueByCurrency} = await prisma.$transaction(async tx => {
+  const [pageItems, total, openByCurrency, overdueByCurrency] = await Promise.all([
+    tx.enterprisePayable.findMany({
       where,
       orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }],
       skip: (page - 1) * pageSize,
       take: pageSize,
       include: { supplierInvoice: { include: { threeWayMatch: true } }, _count: { select: { paymentAllocations: true, allocations: true } } },
     }),
-    prisma.enterprisePayable.count({ where }),
-    prisma.enterprisePayable.groupBy({
+    tx.enterprisePayable.count({ where }),
+    tx.enterprisePayable.groupBy({
       by: ["currencyCode"],
       where: { organizationId, status: "OPEN" },
       _sum: { outstandingAmount: true },
       _count: { _all: true },
     }),
-    prisma.enterprisePayable.groupBy({
+    tx.enterprisePayable.groupBy({
       by: ["currencyCode"],
       where: { organizationId, status: "OPEN", dueDate: { lt: today } },
       _sum: { outstandingAmount: true },
       _count: { _all: true },
     }),
   ]);
+  const returns=await supplierReturnFinanceProjectionTx(tx,organizationId,pageItems.map(row=>row.supplierInvoiceId));
+  const items=pageItems.map(row=>{
+    const supplierReturn=returns.get(row.supplierInvoiceId)||null;
+    const {reserved,available}=supplierReturnPayableCapacity(row,supplierReturn?.status==="DISPATCHED"?[supplierReturn]:[]);
+    return {...row,supplierReturn,supplierReturnReservedAmount:reserved.toFixed(),supplierReturnAllocatableAmount:available.toFixed()};
+  });
+  return {items,total,openByCurrency,overdueByCurrency};
+  },{isolationLevel:Prisma.TransactionIsolationLevel.RepeatableRead});
 
   await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "payables", page, overdue, ageBucket } });
   return NextResponse.json({

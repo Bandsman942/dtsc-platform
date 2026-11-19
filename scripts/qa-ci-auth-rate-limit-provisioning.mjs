@@ -86,6 +86,8 @@ const shop2Stages = [
   "Retail offline Finance draft replay acceptance",
   "Reset isolated Redis before Retail financial trace acceptance",
   "Retail financial KPI source evidence acceptance",
+  "Reset isolated Redis before #1212 sector inventory acceptance",
+  "Inventory #1212 common stock contract across sector tenants",
 ];
 let previousStageIndex = -1;
 for (const stage of shop2Stages) {
@@ -93,15 +95,31 @@ for (const stage of shop2Stages) {
   if (index <= previousStageIndex) throw new Error(`Shop 2 CI authentication isolation stage missing or out of order: ${stage}`);
   previousStageIndex = index;
 }
-if ((shop2Workflow.match(/--data '\["FLUSHDB"\]'/g) || []).length !== 6) {
-  throw new Error("Shop 2 CI must reset only disposable Redis after Retail HTTP acceptance and between its six historical browser acceptance groups");
+// Each independent acceptance group must have exactly one reset of the
+// disposable loopback Redis service, never an extra or remote FLUSHDB.
+const resetStages = shop2Stages.filter((stage) => stage.startsWith("Reset isolated Redis"));
+const resetCommand = '--data \'["FLUSHDB"]\'';
+if ((shop2Workflow.match(/--data '\["FLUSHDB"\]'/g) || []).length !== resetStages.length) {
+  throw new Error("Shop 2 CI must reset only disposable Redis after Retail HTTP acceptance and before each independent browser acceptance group");
 }
+for (const stage of resetStages) {
+  const start = shop2Workflow.indexOf(`- name: ${stage}\n`);
+  const end = shop2Workflow.indexOf("\n      - name:", start + 1);
+  const step = shop2Workflow.slice(start, end === -1 ? undefined : end);
+  if (start === -1 || step.split(resetCommand).length !== 2) {
+    throw new Error(`Shop 2 CI must run one Redis reset in the intended step: ${stage}`);
+  }
+  requireToken(step, 'Authorization: Bearer ${CI_REDIS_REST_TOKEN}', `${stage} CI-only token`);
+  requireToken(step, "http://127.0.0.1:8079/ >/dev/null", `${stage} isolated loopback endpoint`);
+}
+requireToken(shop2Workflow, 'E2E_INVENTORY_SECTOR_ISOLATED: "true"', "isolated-only sector inventory activation");
 const shop2Specs = [
   "accounting-atomic-retail-posting", "issue-786-relationship-benefits-enforcement",
   "issue-910-relationship-credit", "scale5b-retail-dashboard-cache",
   "shop2-commercial", "shop2-customer-payments", "shop2-customer-value-ui",
   "shop2-daily-close-ui", "shop2-final-coherence-ui", "shop2-retail", "shop2-z-global",
   "shop2-invoice-finance-lifecycle", "retail-offline-finance-1116", "retail-financial-kpi-1117",
+  "inventory-1212-sector-common",
 ];
 const acceptanceRuns = shop2Workflow.split("\n").filter((line) =>
   line.includes("run: pnpm exec playwright test tests/e2e/"),

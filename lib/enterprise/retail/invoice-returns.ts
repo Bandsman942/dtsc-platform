@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
+import { readPhysicalReturnLots, planPhysicalInvoiceReturnLots } from "@/lib/enterprise/inventory/lot-allocation";
 
 // @prisma/client Decimal does not expose the static Decimal.min/max helpers.
 const decimalMin = (...values: Prisma.Decimal[]): Prisma.Decimal => values.reduce((a, b) => a.lessThan(b) ? a : b);
@@ -23,6 +24,7 @@ export const retailInvoiceReturnRequestSchema = z.object({
   lines: z.array(z.object({
     checkoutLineId: z.string().trim().min(1).max(191),
     quantity,
+    lotAllocations: z.array(z.object({ stockLotId: z.string().trim().min(1).max(191), quantity: z.string().trim().regex(/^\d{1,15}(\.\d{1,3})?$/) }).strict()).min(1).max(100).optional(),
     stockDisposition: z.enum(["RESTOCK", "QUARANTINE", "DISPOSE", "SERVICE_CREDIT", "UNDELIVERED_CREDIT"]),
   }).strict()).min(1).max(100),
 }).strict();
@@ -34,6 +36,7 @@ export const retailInvoiceReturnDecisionSchema = z.object({
 export const retailInvoiceReturnInspectionSchema = z.object({
   revision: z.number().int().positive(),
   receivedAndInspected: z.literal(true),
+  confirmedBatchSelection: z.literal(true).optional(),
   notes: z.string().trim().min(5).max(1000),
 }).strict();
 
@@ -55,6 +58,7 @@ function fingerprint(input: RequestInput) {
     checkoutLineId: line.checkoutLineId,
     quantity: new Prisma.Decimal(line.quantity).toFixed(),
     stockDisposition: line.stockDisposition,
+    ...(line.lotAllocations ? { lotAllocations: line.lotAllocations.map(row => ({ stockLotId: row.stockLotId, quantity: new Prisma.Decimal(row.quantity).toFixed() })).sort((a,b) => a.stockLotId.localeCompare(b.stockLotId)) } : {}),
   })).sort((a, b) => a.checkoutLineId.localeCompare(b.checkoutLineId));
   return createHash("sha256")
     .update(JSON.stringify({ approverUserId: input.approverUserId, reason: input.reason, lines: normalized }))
@@ -106,7 +110,7 @@ export async function listRetailInvoiceReturnRequests(
   await requireReturnFeatureTx(prisma, organizationId);
   const checkout = await prisma.enterpriseRetailInvoiceCheckout.findFirst({
     where: { organizationId, salesInvoiceId: invoiceId },
-    select: { id: true, siteId: true, stockPostedAt: true, invoice: { select: {
+    select: { id: true, siteId: true, warehouseId: true, stockPostedAt: true, lines: { select: { id: true, invoiceItemId: true, inventoryItemId: true, lotAllocations: true } }, invoice: { select: {
       status: true, grandTotal: true, amountPaid: true, amountCredited: true, outstandingAmount: true,
     } } },
   });
@@ -126,7 +130,7 @@ export async function listRetailInvoiceReturnRequests(
         salesCreditNote: { select: { status: true } },
         inspectedAt: true, inspectionNotes: true, decidedAt: true, decisionReason: true,
         revision: true, createdAt: true,
-        lines: { select: { id: true, checkoutLineId: true, quantity: true, refundAmount: true, stockDisposition: true,
+        lines: { select: { id: true, checkoutLineId: true, quantity: true, refundAmount: true, stockDisposition: true, lotAllocations: true,
           checkoutLine: { select: { inventoryItemId: true } } } },
       },
     }),
@@ -139,6 +143,26 @@ export async function listRetailInvoiceReturnRequests(
       select: { isActive: true, roleCode: true, permissionsJson: true },
     }),
   ]);
+  const batchOptions: Record<string, Array<{ stockLotId: string; lotNumber: string; quantityIssued: string; quantityAvailable: string }>> = {};
+  const splitLines = checkout.stockPostedAt ? (checkout.lines || []).filter(line => line.lotAllocations != null) : [];
+  if (splitLines.length) {
+    const [issues, committed] = await Promise.all([
+      prisma.enterpriseStockMovement.findMany({ where: { organizationId, sourceEntityType: "EnterpriseSalesInvoice", sourceEntityId: invoiceId, sourceLineId: { in: splitLines.map(line => line.invoiceItemId) }, direction: "OUT", movementType: "SALE_FULFILLMENT" }, select: { sourceLineId: true, stockLotId: true, inventoryItemId: true, warehouseId: true, quantity: true } }),
+      prisma.enterpriseRetailInvoiceReturnLine.findMany({ where: { organizationId, checkoutId: checkout.id, checkoutLineId: { in: splitLines.map(line => line.id) }, request: { status: { in: ["SUBMITTED", "INSPECTED", "APPROVED", "FINANCE_PENDING", "COMPLETED"] } } }, select: { checkoutLineId: true, quantity: true, stockDisposition: true, lotAllocations: true } }),
+    ]);
+    const lots = await prisma.enterpriseStockLot.findMany({ where: { organizationId, warehouseId: checkout.warehouseId, id: { in: [...new Set(issues.map(row => row.stockLotId).filter((id): id is string => Boolean(id)))] } }, select: { id: true, inventoryItemId: true, lotNumber: true } });
+    for (const line of splitLines) {
+      const previous = committed.filter(row => row.checkoutLineId === line.id && row.stockDisposition !== "UNDELIVERED_CREDIT").flatMap(row => readPhysicalReturnLots(row.lotAllocations, row.quantity));
+      const quantities = new Map<string, Prisma.Decimal>();
+      for (const issue of issues.filter(row => row.sourceLineId === line.invoiceItemId && row.inventoryItemId === line.inventoryItemId && row.warehouseId === checkout.warehouseId && row.stockLotId)) quantities.set(issue.stockLotId!, (quantities.get(issue.stockLotId!) || new Prisma.Decimal(0)).plus(issue.quantity));
+      batchOptions[line.id] = [...quantities].flatMap(([stockLotId, issued]) => {
+        const lot = lots.find(row => row.id === stockLotId && row.inventoryItemId === line.inventoryItemId);
+        if (!lot) return [];
+        const used = previous.filter(row => row.stockLotId === stockLotId).reduce((sum,row) => sum.plus(row.quantity), new Prisma.Decimal(0));
+        return [{ stockLotId, lotNumber: lot.lotNumber, quantityIssued: issued.toFixed(), quantityAvailable: issued.gt(used) ? issued.minus(used).toFixed() : "0" }];
+      });
+    }
+  }
   const capabilities = member && (RETAIL_OWNER_ROLES.has(member.role) || siteAssignment?.isActive)
     ? RETAIL_OWNER_ROLES.has(member.role)
       ? { canRequest: true, canInspect: true, canApprove: true }
@@ -198,6 +222,7 @@ export async function listRetailInvoiceReturnRequests(
         ["SUBMITTED", "INSPECTED"].includes(item.status) && item.approverUserId === actorUserId &&
         (item.requestedByUserId !== actorUserId || selfCanDecide) && item.inspectedByUserId !== actorUserId,
     }; }),
+    batchOptions,
     stockPostedAt: Boolean(checkout.stockPostedAt),
     canRequest: capabilities.canRequest && ["PAID", "CREDIT_NOTE", "PARTIALLY_PAID", "ISSUED", "OVERDUE"].includes(checkout.invoice.status) &&
       checkout.invoice.amountPaid.plus(checkout.invoice.amountCredited).plus(checkout.invoice.outstandingAmount).equals(checkout.invoice.grandTotal),
@@ -300,7 +325,7 @@ export async function createRetailInvoiceReturnRequest(
         organizationId, checkoutId: checkout.id, checkoutLineId: { in: lineIds },
         request: { status: { in: ["SUBMITTED", "INSPECTED", "APPROVED", "FINANCE_PENDING", "COMPLETED"] } },
       },
-      select: { checkoutLineId: true, quantity: true, refundAmount: true, refundNetAmount: true, refundTaxAmount: true },
+      select: { checkoutLineId: true, quantity: true, refundAmount: true, refundNetAmount: true, refundTaxAmount: true, stockDisposition: true, lotAllocations: true, request: { select: { status: true } } },
     });
     const previousQuantity = new Map<string, Prisma.Decimal>();
     const previousAmount = new Map<string, Prisma.Decimal>();
@@ -320,9 +345,20 @@ export async function createRetailInvoiceReturnRequest(
       previousTax.set(row.checkoutLineId,
         (previousTax.get(row.checkoutLineId) || new Prisma.Decimal(0)).plus(row.refundTaxAmount));
     }
-    const prepared = input.lines.map((entry) => {
+    const prepared = await Promise.all(input.lines.map(async (entry) => {
       const line = source.get(entry.checkoutLineId)!;
       const value = new Prisma.Decimal(entry.quantity);
+      let batchSelection: ReturnType<typeof readPhysicalReturnLots> | null = null;
+      if (checkout.stockPostedAt && line.lotAllocations != null) {
+        const related = await tx.enterpriseStockMovement.findMany({ where: { organizationId, sourceEntityType: "EnterpriseSalesInvoice", sourceEntityId: invoiceId, sourceLineId: line.invoiceItemId, direction: "OUT", movementType: "SALE_FULFILLMENT" }, orderBy: [{ createdAt: "asc" }, { id: "asc" }] });
+        if (related.some(row => row.warehouseId !== checkout.warehouseId || row.inventoryItemId !== line.inventoryItemId)) throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_SETTLEMENT_STOCK_INVALID", 409);
+        const previous = committed.filter(row => row.checkoutLineId === line.id);
+        if (previous.some(row => row.stockDisposition === "UNDELIVERED_CREDIT" && row.request.status !== "COMPLETED")) throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_SETTLEMENT_STOCK_INVALID", 409);
+        try {
+          batchSelection = readPhysicalReturnLots(entry.lotAllocations, value);
+          planPhysicalInvoiceReturnLots({ source: line, movements: related, previous, quantity: value, selected: batchSelection });
+        } catch (error) { throw new EnterpriseRetailError(error instanceof Error ? error.message : "RETAIL_INVOICE_RETURN_BATCH_SELECTION_REQUIRED", 409); }
+      } else if (entry.lotAllocations) throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_BATCH_SELECTION_REQUIRED", 409);
       const priorQty = previousQuantity.get(line.id) || new Prisma.Decimal(0);
       const priorAmount = previousAmount.get(line.id) || new Prisma.Decimal(0);
       const priorNet = previousNet.get(line.id) || new Prisma.Decimal(0);
@@ -380,8 +416,9 @@ export async function createRetailInvoiceReturnRequest(
         organizationId, checkoutId: checkout.id, checkoutLineId: line.id,
         quantity: value, refundAmount: amount, refundNetAmount, refundTaxAmount,
         stockDisposition: entry.stockDisposition,
+        ...(batchSelection ? { lotAllocations: batchSelection } : {}),
       };
-    });
+    }));
     const refundAmount = financeMoney(prepared.reduce(
       (sum, line) => sum.plus(line.refundAmount), new Prisma.Decimal(0),
     ));
@@ -489,7 +526,7 @@ export async function inspectRetailInvoiceReturnRequest(
       where: { id: requestId, organizationId, checkout: { salesInvoiceId: invoiceId } },
       include: { checkout: { select: { siteId: true, stockPostedAt: true,
         invoice: { select: { status: true } } } },
-        lines: { select: { checkoutLine: { select: { inventoryItemId: true } } } } },
+        lines: { select: { quantity: true, lotAllocations: true, checkoutLine: { select: { inventoryItemId: true, lotAllocations: true } } } } },
     });
     if (!request) throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_NOT_FOUND", 404);
     const physicallyDeliveredGoods = Boolean(request.checkout.stockPostedAt) &&
@@ -522,6 +559,12 @@ export async function inspectRetailInvoiceReturnRequest(
     if (request.status !== "SUBMITTED" || request.revision !== input.revision ||
       !["PAID", "CREDIT_NOTE", "PARTIALLY_PAID", "ISSUED", "OVERDUE"].includes(request.checkout.invoice.status)) {
       throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_REVISION_CONFLICT", 409);
+    }
+    for (const line of request.lines) {
+      if (request.checkout.stockPostedAt && line.checkoutLine.lotAllocations != null) {
+        if (!input.confirmedBatchSelection) throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_BATCH_SELECTION_REQUIRED", 409);
+        try { readPhysicalReturnLots(line.lotAllocations, line.quantity); } catch { throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_BATCH_SELECTION_REQUIRED", 409); }
+      }
     }
     const inspected = await tx.enterpriseRetailInvoiceReturnRequest.update({
       where: { id: request.id }, data: {

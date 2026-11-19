@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { authorizeFinanceRequest, financeBusinessDateRange, financeErrorResponse, financeListParams } from "@/lib/enterprise/accounting/http";
-import { creditNoteCreateSchema } from "@/lib/enterprise/accounting/schemas";
+import { supplierCreditNoteCreateSchema } from "@/lib/enterprise/accounting/schemas";
 import { createSupplierCreditNote } from "@/lib/enterprise/accounting/supplier-credit-notes-service";
 import { prisma } from "@/lib/prisma";
 
@@ -53,11 +53,14 @@ export async function GET(req: Request, { params }: Params) {
     select: { targetEntityId: true },
   }) : [];
   const assignedIds = new Set(approvals.map((approval) => approval.targetEntityId));
+  const replacements = items.length?await prisma.enterpriseSupplierReturnCreditReplacement.findMany({where:{organizationId,previousCreditNoteId:{in:items.map(item=>item.id)}},select:{previousCreditNoteId:true,replacementCreditNoteId:true}}):[];
+  const replacedById=new Map(replacements.map(proof=>[proof.previousCreditNoteId,proof.replacementCreditNoteId]));
   const capabilities = auth.access.capabilities;
   const resultItems = items.map((item) => ({
     ...item,
+    replacementCreditNoteId:replacedById.get(item.id)||null,
     capabilities: {
-      canSubmit: capabilities.canSubmit && ["DRAFT", "REJECTED"].includes(item.status) && item.createdByUserId === auth.session.userId,
+      canSubmit: capabilities.canSubmit && ["DRAFT", "REJECTED"].includes(item.status) && item.createdByUserId === auth.session.userId && !replacedById.has(item.id),
       canApprove: capabilities.canApprove && item.status === "PENDING_APPROVAL" && assignedIds.has(item.id),
       canReject: capabilities.canApprove && item.status === "PENDING_APPROVAL" && assignedIds.has(item.id),
       canPost: capabilities.canManage && item.status === "APPROVED",
@@ -73,7 +76,7 @@ export async function POST(req: Request, { params }: Params) {
   const { organizationId } = await params;
   const auth = await authorizeFinanceRequest(req, organizationId, "FINANCE_PAYABLES", "create", { mutation: true });
   if (!auth.ok) return auth.response;
-  const parsed = creditNoteCreateSchema.safeParse(await req.json().catch(() => null));
+  const parsed = supplierCreditNoteCreateSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "SUPPLIER_CREDIT_NOTES_INPUT_INVALID", req);
   try {
     const creditNote = await createSupplierCreditNote(organizationId, auth.session.userId, parsed.data);

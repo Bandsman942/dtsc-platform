@@ -37,6 +37,8 @@ requireTokens(registry, [
   "PAYROLL_APPROVED",
   "INVENTORY_RECEIPT_VALUED",
   "INVENTORY_ISSUE_VALUED",
+  "INVENTORY_SUPPLIER_RETURN_VALUED",
+  "INVENTORY_CUSTODY_RECOVERY_VALUED",
   "ASSET_CAPITALIZED",
   "RETAIL_POS_SALE_POSTED",
   "HEALTH_WRITE_OFF_APPROVED",
@@ -78,6 +80,29 @@ requireTokens(inventory, [
   "postingEvent: \"INVENTORY_ISSUE_VALUED\"",
   "organizationId_idempotencyKey",
 ]);
+requireTokens("lib/enterprise/inventory/supplier-return-request-service.ts", [
+  "dispatchSupplierReturn",
+  "applyStockMovementTx",
+  'movementType: "SUPPLIER_RETURN_OUT"',
+  "postBusinessEventTx",
+  "INVENTORY_SUPPLIER_RETURN_VALUED",
+  "remainingQuantity: { decrement: request.quantity }",
+  "TransactionIsolationLevel.Serializable",
+]);
+requireTokens("lib/enterprise/accounting/domain-posting-builders.ts", [
+  'kind === "SUPPLIER_RETURN" ? "GOODS_RECEIVED_CLEARING"',
+  "verifySupplierReturnCreditTx",
+]);
+requireTokens("lib/enterprise/accounting/supplier-return-credit-reconciliation.ts", ["SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED", "SUPPLIER_RETURN_PAYABLE_RESERVED", "completeSupplierReturnCreditTx", "GOODS_RECEIVED_CLEARING"]);
+requireTokens("lib/enterprise/accounting/payments-service.ts", ["assertSupplierPaymentCapacityTx", "lockSupplierReturnInvoiceTx"]);
+requireTokens("lib/enterprise/accounting/accounting-document-approval-orchestration.ts", ["completeSupplierReturnCreditTx", "verifySupplierReturnCreditTx"]);
+requireTokens("lib/enterprise/accounting/journal-template-registry.ts", ["INVENTORY_SUPPLIER_RETURN_VALUED"]);
+requireTokens("lib/enterprise/accounting/semantic-account-registry.ts", ["INVENTORY_SUPPLIER_RETURN_VALUED"]);
+forbidTokens("lib/enterprise/inventory/supplier-return-request-service.ts", ["enterpriseJournalEntry.create", "enterprisePostingBatch.create", "enterprisePayable.update", "enterpriseSupplierInvoice.update"]);
+requireTokens("lib/enterprise/inventory/custody-recovery-assessment.ts",["executeRecoveryAssessment","applyStockMovementTx","CUSTODY_RECOVERY_IN","postBusinessEventTx","INVENTORY_CUSTODY_RECOVERY_VALUED","TransactionIsolationLevel.Serializable","getPostingPeriod"]);
+requireTokens("lib/enterprise/accounting/journal-template-registry.ts",["INVENTORY_CUSTODY_RECOVERY_VALUED"]);
+requireTokens("lib/enterprise/accounting/semantic-account-registry.ts",["INVENTORY_CUSTODY_RECOVERY_VALUED"]);
+forbidTokens("lib/enterprise/inventory/custody-recovery-assessment.ts",["enterpriseJournalEntry.create","enterprisePostingBatch.create","enterprisePayable.update","enterpriseSalesCreditNote.update"]);
 requireTokens(assets, [
   "ASSET_CAPITALIZED",
   "postBusinessEvent",

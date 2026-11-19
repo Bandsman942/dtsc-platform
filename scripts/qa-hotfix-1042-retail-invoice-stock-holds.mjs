@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
 import ts from "typescript";
+import { Prisma } from "@prisma/client";
 
 const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), "utf8");
 const source = read("lib/enterprise/retail/invoice-stock-holds.ts");
@@ -11,21 +12,16 @@ const reservations = read("lib/enterprise/inventory/reservations.ts");
 const lotSelector = read("app/api/enterprise/[organizationId]/retail/stock-lots/route.ts");
 const productSearch = read("app/api/enterprise/[organizationId]/retail/products/search/route.ts");
 
-class Decimal {
-  constructor(value) { this.value = Number(value instanceof Decimal ? value.value : value); }
-  toFixed() { return String(this.value); }
-  plus(value) { return new Decimal(this.value + new Decimal(value).value); }
-  minus(value) { return new Decimal(this.value - new Decimal(value).value); }
-  lessThan(value) { return this.value < new Decimal(value).value; }
-  greaterThan(value) { return this.value > new Decimal(value).value; }
-  isPositive() { return this.value >= 0; } // Decimal.js treats zero as non-negative.
-}
+const { Decimal } = Prisma;
 
 const module = { exports: {} };
+const actualLotTools = { exports: {} };
+vm.runInNewContext(ts.transpileModule(read("lib/enterprise/inventory/lot-allocation.ts"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, { exports: actualLotTools.exports, require: (name) => name === "@prisma/client" ? { Prisma: { Decimal } } : require(name) });
 const javascript = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
 vm.runInNewContext(javascript, {
   exports: module.exports,
   require(name) {
+    if (name === "@/lib/enterprise/inventory/lot-allocation") return actualLotTools.exports;
     assert.equal(name, "@prisma/client");
     return { Prisma: { Decimal } };
   },
@@ -68,7 +64,10 @@ class DomainError extends Error {
 }
 let outstandingHold = new Decimal(3);
 let moved = 0;
+let pharmacyMapping=0, sectorMapping=0;
 const inventoryModule = { exports: {} };
+const allocationModule = { exports: {} };
+vm.runInNewContext(ts.transpileModule(read("lib/enterprise/inventory/lot-allocation.ts"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, { exports: allocationModule.exports, require: (name) => name === "@prisma/client" ? { Prisma: { Decimal } } : require(name) });
 const serviceJavaScript = ts.transpileModule(movement, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
 vm.runInNewContext(serviceJavaScript, {
   exports: inventoryModule.exports,
@@ -84,6 +83,8 @@ vm.runInNewContext(serviceJavaScript, {
         return args.excludeSalesInvoiceId === "invoice-paying" ? [] : [{ inventoryItemId: "item-1", stockLotId: "lot-1", warehouseId: "store-a", quantity: outstandingHold }];
       },
     };
+    if (name === "@/lib/enterprise/inventory/lot-allocation") return allocationModule.exports;
+    if (name === "@/lib/enterprise/accounting/inventory-transfer-service") return {};
     if (name === "@/lib/enterprise/inventory/approval") return {};
     if (name === "@/lib/enterprise/retail/inventory-policy") return {};
     // Inventory now imports the Retail site guard for stock transfer writes.
@@ -96,12 +97,16 @@ vm.runInNewContext(serviceJavaScript, {
   },
 });
 const balance = { id: "balance-1", revision: 1, quantityOnHand: new Decimal(5), quantityReserved: new Decimal(0) };
+let promises = [];
 const movementTx = {
+  enterpriseInventoryReservation: { findMany: async () => promises },
   enterpriseStockMovement: {
     findFirst: async () => null,
     create: async () => { moved++; return { id: "movement-1" }; },
   },
-  enterpriseInventoryItem: { findFirst: async () => ({ allowNegativeStock: false, catalogItem: { trackInventory: true } }) },
+  enterpriseInventoryItem: { findFirst: async () => ({ catalogItemId: "catalog-1", allowNegativeStock: false, catalogItem: { id:"catalog-1", trackInventory: true } }) },
+  pharmacyProductExtension: {count:async ({where})=>{assert.equal(where.organizationId,"tenant-a");assert.equal(where.catalogItemId,"catalog-1");return pharmacyMapping;}},
+  enterpriseSectorInventoryEvent: {count:async ({where})=>{assert.equal(where.organizationId,"tenant-a");assert.equal(where.catalogItemId,"catalog-1");return sectorMapping;}},
   enterpriseWarehouse: { findFirst: async () => ({ id: "store-a" }) },
   enterpriseStockLot: { findFirst: async () => ({ id: "lot-1", storageLocationId: null }) },
   enterpriseInventoryBalance: {
@@ -111,6 +116,12 @@ const movementTx = {
   },
 };
 const outbound = { inventoryItemId: "item-1", warehouseId: "store-a", stockLotId: "lot-1", quantity: 3, direction: "OUT", movementType: "SALE_FULFILLMENT", idempotencyKey: "test-1" };
+pharmacyMapping=1;
+await assert.rejects(inventoryModule.exports.applyStockMovementTx(movementTx,"tenant-a","actor",outbound),{code:"STOCK_RECLASS_SECTOR_AUTHORITY"});
+pharmacyMapping=0;sectorMapping=1;
+await assert.rejects(inventoryModule.exports.applyStockMovementTx(movementTx,"tenant-a","actor",outbound),{code:"STOCK_RECLASS_SECTOR_AUTHORITY"});
+sectorMapping=0;
+assert.equal(moved,0,"Sector mappings must prevent all common stock mutations");
 await assert.rejects(inventoryModule.exports.applyStockMovementTx(movementTx, "tenant-a", "actor", outbound), { code: "RETAIL_INVOICE_STOCK_HELD" });
 assert.equal(moved, 0, "Unpaid customer's quantity must never be consumed by a second sale");
 await assert.doesNotReject(inventoryModule.exports.applyStockMovementTx(movementTx, "tenant-a", "actor", { ...outbound, quantity: 2 }));
@@ -120,6 +131,9 @@ assert.equal(moved, 2, "The Finance settlement path may consume only its own pro
 outstandingHold = new Decimal(0);
 await assert.doesNotReject(inventoryModule.exports.applyStockMovementTx(movementTx, "tenant-a", "actor", outbound));
 assert.equal(moved, 3, "Cancelled invoice must no longer reduce stock availability");
+promises = [{ quantity: new Decimal(3), fulfilledQuantity: new Decimal(0), lotAllocations: [{ balanceId: "balance-1", stockLotId: "lot-1", storageLocationId: null, quantity: "3", fulfilledQuantity: "0" }] }];
+await assert.rejects(inventoryModule.exports.applyStockMovementTx(movementTx, "tenant-a", "actor", outbound), { code: "INVENTORY_RESERVATION_STOCK_HELD" });
+await assert.doesNotReject(inventoryModule.exports.applyStockMovementTx(movementTx, "tenant-a", "actor", { ...outbound, quantity: 2 }));
 
 // All reservation sources must share the same canonical invoice lines.
 assert.match(checkout, /readActiveRetailInvoiceStockHoldsTx\(tx, \{ organizationId, warehouseId: input\.warehouseId/);

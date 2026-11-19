@@ -12,6 +12,7 @@ import { tryGrantRetailOmnichannelCashbackTx } from "@/lib/enterprise/relationsh
 import { withRetailTransactionRetry } from "@/lib/enterprise/retail/transaction-retry";
 import { assertRetailInvoicePaymentScopeTx, postPaidRetailInvoiceStockTx } from "@/lib/enterprise/retail/invoice-checkout";
 import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
+import { assertSupplierPaymentCapacityTx, lockSupplierReturnInvoiceTx } from "@/lib/enterprise/accounting/supplier-return-credit-reconciliation";
 import type { paymentCreateSchema } from "@/lib/enterprise/accounting/schemas";
 import type { z } from "zod";
 
@@ -756,7 +757,9 @@ export async function allocateEnterprisePayment(
     } else if (input.payableId) {
       payable = await tx.enterprisePayable.findFirst({ where: { id: input.payableId, organizationId, status: "OPEN" } });
       if (!payable || payment.direction !== "OUTBOUND" || payment.paymentType !== "SUPPLIER_PAYMENT") throw new EnterpriseAccountingError("PAYABLE_ALLOCATION_INVALID", 409);
+      await lockSupplierReturnInvoiceTx(tx, organizationId, payable.supplierInvoiceId);
       if ((payment.businessPartyId && payment.businessPartyId !== payable.businessPartyId) || payment.currencyCode !== payable.currencyCode || amount.greaterThan(payable.outstandingAmount)) throw new EnterpriseAccountingError("PAYABLE_ALLOCATION_SCOPE_OR_AMOUNT_INVALID", 409);
+      await assertSupplierPaymentCapacityTx(tx, organizationId, payable, amount);
     } else {
       throw new EnterpriseAccountingError("PAYMENT_ALLOCATION_TARGET_REQUIRED", 400);
     }
@@ -800,9 +803,19 @@ export async function allocateEnterprisePayment(
     }
     await addPaymentEvent(tx, organizationId, payment.id, actorUserId, "ALLOCATED", "Payment allocation confirmed", { allocationId: created.id, amount: amount.toFixed(), receivableId: receivable?.id || null, payableId: payable?.id || null });
     await publishFinanceEvent(tx, { organizationId, entityType: "EnterprisePayment", entityId: payment.id, eventType: "PAYMENT_ALLOCATED", summary: `Payment ${payment.number} allocated`, actorUserId, metadataJson: { allocationId: created.id, amount: amount.toFixed(), receivableId: receivable?.id || null, payableId: payable?.id || null } });
+    // The supplier debt, payment allocation and its posting must commit
+    // together. A closed period or posting failure cannot leave a reduced
+    // payable without its matching ledger entry.
+    if (payable) await postBusinessEventTx(tx, organizationId, actorUserId, { postingEvent: "PAYMENT_ALLOCATION_CONFIRMED", sourceEntityType: "EnterprisePaymentAllocation", sourceEntityId: created.id });
     return created;
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }));
-  await postBusinessEvent(organizationId, actorUserId, { postingEvent: "PAYMENT_ALLOCATION_CONFIRMED", sourceEntityType: "EnterprisePaymentAllocation", sourceEntityId: allocation.id });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, ...(input.payableId ? { maxWait: 10000, timeout: 30000 } : {}) })).catch((error: unknown) => {
+    if (error instanceof Prisma.PrismaClientKnownRequestError &&
+        (error.code === "P2034" || (error.code === "P2010" && ["40001", "40P01"].includes(String(error.meta?.code))))) {
+      throw new EnterpriseAccountingError("PAYMENT_ALLOCATION_CONFLICT", 409);
+    }
+    throw error;
+  });
+  if (!allocation.payableId) await postBusinessEvent(organizationId, actorUserId, { postingEvent: "PAYMENT_ALLOCATION_CONFIRMED", sourceEntityType: "EnterprisePaymentAllocation", sourceEntityId: allocation.id });
   return allocation;
 }
 
