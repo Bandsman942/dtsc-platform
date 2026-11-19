@@ -341,6 +341,28 @@ mocks["@/lib/enterprise/accounting/historical-credit-tax"]=load("lib/enterprise/
 const returnCredit = load("lib/enterprise/accounting/supplier-return-credit-reconciliation.ts");
 mocks["@/lib/enterprise/accounting/supplier-return-credit-reconciliation"] = returnCredit;
 const postingBuilder = load("lib/enterprise/accounting/domain-posting-builders.ts");
+for(const [kind,movement] of [
+  ["RECEIPT",{movementType:"TRANSFER_IN",direction:"IN",sourceEntityType:"EnterpriseStockTransfer"}],
+  ["ISSUE",{movementType:"TRANSFER_OUT",direction:"OUT",sourceEntityType:"EnterpriseStockTransfer"}],
+  ["RECEIPT",{movementType:"PURCHASE_RECEIPT",direction:"IN",sourceEntityType:"EnterpriseStockTransfer"}],
+  ["ISSUE",{movementType:"SALE_FULFILLMENT",direction:"OUT",sourceEntityType:"EnterpriseStockTransfer"}],
+]){
+  // Deliberately omit cost/payment/posting delegates: any attempt to proceed
+  // beyond the proof boundary fails this assertion with a different error.
+  const transferTx={
+    enterpriseInventoryAccountingEvent:{findFirst:async({where})=>{
+      assert.equal(where.organizationId,"org-a");assert.equal(where.eventType,kind);
+      return {id:"transfer-event",stockMovementId:"transfer-movement",inventoryItemId:"item-a",quantity:d(1),totalCost:d(7),currencyCode:"USD"};
+    }},
+    enterpriseStockMovement:{findFirst:async({where})=>{
+      assert.equal(where.organizationId,"org-a");assert.equal(where.id,"transfer-movement");
+      return {...movement,warehouse:{siteId:"site-a"}};
+    }},
+  };
+  await assert.rejects(postingBuilder.buildInventoryAccountingPosting(transferTx,{organizationId:"org-a",sourceEntityType:"EnterpriseInventoryAccountingEvent",sourceEntityId:"transfer-event"},kind),{code:"INVENTORY_TRANSFER_VALUATION_WORKFLOW_REQUIRED"});
+}
+console.log("Inventory transfer: generic purchase/COGS posting blocked even through direct builder");
+
 const doc = await postingBuilder.buildInventoryAccountingPosting(rtvTx,{organizationId:"org-a",sourceEntityType:"EnterpriseInventoryAccountingEvent",sourceEntityId:"event-a"},"SUPPLIER_RETURN");
 assert.equal(doc.lines[0].accountMappingKey,"GOODS_RECEIVED_CLEARING");
 assert.equal(doc.lines[1].accountMappingKey,"INVENTORY");
