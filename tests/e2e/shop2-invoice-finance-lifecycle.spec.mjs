@@ -1999,6 +1999,57 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
 
 
 
+
+    // New ordinary pool: differently priced receipts, then an approved
+    // physical loss. Prove the past AFTER depletion, not with seeded layers.
+    const mixedSku=historyKey+"-CUMP-HISTORY";
+    const mixedProduct=await prisma.enterpriseCatalogItem.create({data:{organizationId,code:mixedSku,sku:mixedSku,name:"E2E mixed-cost history "+historyKey,normalizedName:mixedSku.toLowerCase(),itemType:"PRODUCT",unitOfMeasureId:fixture.product.unitOfMeasureId,indicativeSalePrice:20,indicativeCost:7,currency:fixture.currencyCode,taxable:false,trackInventory:true,createdByUserId:fixture.owner.id}});
+    const mixedItem=await prisma.enterpriseInventoryItem.create({data:{organizationId,catalogItemId:mixedProduct.id,lotTracking:true,expiryTracking:true,createdByUserId:fixture.owner.id}});
+    const recognized=(...dates)=>new Date(Math.max(...dates.map(date=>date.getTime())));
+    const mixedReceipts=[];
+    for(const [suffix,cost] of [["MIX-A",5],["MIX-B",9]]){
+      const purchase=await orderForPurchase(mixedProduct,10,suffix,supplier.id);
+      await prisma.enterprisePurchaseItem.update({where:{id:purchase.items[0].id},data:{unitPrice:cost,lineSubtotal:10*cost,lineTotal:10*cost}});
+      await prisma.enterprisePurchase.update({where:{id:purchase.id},data:{subtotalAmount:10*cost,totalAmount:10*cost}});
+      const received=await post(context.owner,base+"/purchases/"+purchase.id+"/receive",{revision:purchase.revision,receivedAt:new Date().toISOString(),warehouseId:fixture.warehouse.id,items:[{purchaseItemId:purchase.items[0].id,quantityReceived:10}],lotAllocations:[{purchaseItemId:purchase.items[0].id,batches:[{lotNumber:suffix,productionDate:null,expiryDate:allocationPayload.allocations[0].expiryDate,quantity:10}]}]});
+      expect(received.status,JSON.stringify(received.body)).toBe(201);
+      const movement=await prisma.enterpriseStockMovement.findFirstOrThrow({where:{organizationId,sourceEntityType:"EnterprisePurchaseReceipt",sourceEntityId:received.body.receipt.id},include:{stockLot:true}});
+      const valued=await post(context.owner,base+"/stock-movements/"+movement.id+"/value-receipt",{unitCost:String(cost),currencyCode:fixture.currencyCode});
+      expect(valued.status,JSON.stringify(valued.body)).toBe(200);
+      const event=await prisma.enterpriseInventoryAccountingEvent.findFirstOrThrow({where:{organizationId,stockMovementId:movement.id,eventType:"RECEIPT",status:"POSTED"}});
+      const journal=await prisma.enterpriseJournalEntry.findUniqueOrThrow({where:{id:event.journalEntryId}});
+      const layer=await prisma.enterpriseInventoryCostLayer.findFirstOrThrow({where:{organizationId,sourceMovementId:movement.id}});
+      mixedReceipts.push({movement,cutoff:recognized(movement.occurredAt,movement.createdAt,event.createdAt,journal.accountingDate,journal.postedAt,layer.effectiveAt,layer.createdAt)});
+    }
+    const firstMixed=mixedReceipts[0].movement;
+    const isolateMixed=await patchLot(context.owner,{id:firstMixed.stockLotId,revision:firstMixed.stockLot.revision,status:"QUARANTINED",qualityReason:"Mixed pool defect found before approved write-off"});
+    expect(isolateMixed.status,JSON.stringify(isolateMixed.body)).toBe(200);
+    const mixedLoss=await post(context.owner,base+"/stock-adjustments",{inventoryItemId:mixedItem.id,warehouseId:fixture.warehouse.id,stockLotId:firstMixed.stockLotId,adjustmentType:"OUT",lossReason:"DAMAGE",quantity:4,reason:"Independent destruction in a mixed weighted average cost pool",approverUserId:fixture.settler.id,idempotencyKey:mixedSku+"-loss"});
+    expect(mixedLoss.status,JSON.stringify(mixedLoss.body)).toBe(201);
+    const approvedMixedLoss=await post(context.settler,base+"/stock-adjustments/"+mixedLoss.body.adjustment.id+"/decision",{decision:"APPROVE",revision:mixedLoss.body.adjustment.revision});
+    expect(approvedMixedLoss.status,JSON.stringify(approvedMixedLoss.body)).toBe(200);
+    const mixedOut=await prisma.enterpriseStockMovement.findFirstOrThrow({where:{organizationId,sourceEntityType:"EnterpriseStockAdjustment",sourceEntityId:mixedLoss.body.adjustment.id,movementType:"LOT_WRITE_OFF"}});
+    const mixedEvent=await prisma.enterpriseInventoryAccountingEvent.findFirstOrThrow({where:{organizationId,stockMovementId:mixedOut.id,eventType:"LOSS",status:"POSTED"}});
+    expect(mixedEvent.unitCost.equals(7)&&mixedEvent.totalCost.equals(28)).toBe(true);
+    const mixedJournal=await prisma.enterpriseJournalEntry.findUniqueOrThrow({where:{id:mixedEvent.journalEntryId}});
+    const mixedCutoff=recognized(mixedOut.occurredAt,mixedOut.createdAt,mixedEvent.createdAt,mixedJournal.accountingDate,mixedJournal.postedAt);
+    const beforeReports=await prisma.enterpriseInventoryCostLayer.findMany({where:{organizationId,inventoryItemId:mixedItem.id},orderBy:{id:"asc"}});
+    expect(beforeReports.map(layer=>layer.remainingQuantity.toFixed())).toEqual(["8","8"]);
+    const firstCutoff=mixedReceipts[0].cutoff,secondCutoff=mixedReceipts[1].cutoff;
+    expect(firstCutoff.getTime()).toBeLessThan(secondCutoff.getTime());
+    expect(secondCutoff.getTime()).toBeLessThan(mixedCutoff.getTime());
+    for(const [cutoff,quantity,value] of [[firstCutoff,"10","50"],[secondCutoff,"20","140"],[mixedCutoff,"16","112"]]){
+      const report=await post(context.owner,base+"/financial-statements",{statementType:"INVENTORY_VALUATION",periodStart:new Date(firstCutoff.getTime()-86400000).toISOString(),periodEnd:cutoff.toISOString(),currencyCode:fixture.currencyCode,publish:false});
+      expect(report.status,JSON.stringify(report.body)).toBe(201);
+      const row=report.body.snapshot.find(r=>r.inventoryItemId===mixedItem.id&&r.warehouseId===fixture.warehouse.id);
+      expect(row).toMatchObject({valuationBasis:"VERIFIED_HISTORY",inventoryItemName:mixedProduct.name,currencyCode:fixture.currencyCode});
+      expect(new Prisma.Decimal(row.quantity).equals(quantity)).toBe(true);
+      expect(new Prisma.Decimal(row.value).equals(value)).toBe(true);
+      const legacy=report.body.snapshot.find(r=>r.inventoryItemId===historicalInventory.id&&r.warehouseId===fixture.warehouse.id);
+      expect(legacy?.valuationBasis).toBe("CURRENT_LAYER_PROJECTION");
+    }
+    expect(await prisma.enterpriseInventoryCostLayer.findMany({where:{organizationId,inventoryItemId:mixedItem.id},orderBy:{id:"asc"}})).toEqual(beforeReports);
+
   } finally {
     if (originalSettings !== undefined) await prisma.enterpriseRetailConfiguration.update({
       where: { organizationId }, data: { settingsJson: originalSettings === null ? Prisma.DbNull : originalSettings,
