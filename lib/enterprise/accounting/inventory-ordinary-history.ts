@@ -8,11 +8,12 @@ import { Prisma } from "@prisma/client";
  * Only ordinary single-currency CUMP pools, without acquisition supplements,
  * unvalued movements, transfers or reversals, qualify for this proof.
  */
-export function ordinaryInventoryHistorySql(organizationId: string, cutoff: Date): Prisma.Sql {
+export function ordinaryInventoryHistorySql(organizationId: string, cutoff: Date, pool?: {inventoryItemId:string;warehouseId:string}): Prisma.Sql {
   return Prisma.sql`
     WITH layers AS (
       SELECT l.* FROM "EnterpriseInventoryCostLayer" l
       WHERE l."organizationId"=${organizationId} AND l."warehouseId" IS NOT NULL
+        ${pool?Prisma.sql`AND l."inventoryItemId"=${pool.inventoryItemId} AND l."warehouseId"=${pool.warehouseId}`:Prisma.empty}
     ), pools AS (
       SELECT "inventoryItemId","warehouseId",MIN("currencyCode") AS "currencyCode",
         SUM("remainingQuantity") AS quantity, ROUND(SUM("remainingQuantity"*"unitCost"),6) AS value
