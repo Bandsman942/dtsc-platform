@@ -125,11 +125,15 @@ export async function inspectSupplierReturnTx(tx: Prisma.TransactionClient, orga
   let prior: Awaited<ReturnType<typeof readPriorReconciledSupplierReturnCreditsTx>> = [];
   try {
     if(credits || invoice.amountCredited.gt(0) || !alreadyReturned.isZero()){
+      const reconciledReturns=await tx.enterpriseSupplierReturnRequest.findMany({where:{organizationId,supplierInvoiceId:invoice.id,status:"RECONCILED"},orderBy:[{dispatchedAt:"asc"},{id:"asc"}]});
       prior=await readPriorReconciledSupplierReturnCreditsTx(tx,organizationId,{
         supplierInvoiceId:invoice.id,sourceMovementId:origin.id,originCostLayerId:originLayer.id,
         receiptAccountingEventId:receiptValue.id,original:invoiceItems[0],currencyCode:invoice.currencyCode,
-      });
-      if(prior.length!==credits || !sumDecimals(prior.map(line=>line.quantity)).equals(alreadyReturned) ||
+        ...(supplement?{}:{receiptScope:{receiptId:receipt.id,receiptItemId:receiptItem.id,purchaseId:receipt.purchaseId,
+          inventoryItemId:origin.inventoryItemId,warehouseId:origin.warehouseId,supplierId:invoice.supplierId}}),
+      },reconciledReturns);
+      const sameOriginCredits=new Set(reconciledReturns.filter(row=>row.sourceMovementId===origin.id).map(row=>row.supplierCreditNoteId));
+      if(prior.length!==credits || !sumDecimals(prior.filter(line=>sameOriginCredits.has(line.supplierCreditNoteId)).map(line=>line.quantity)).equals(alreadyReturned) ||
           !sumDecimals(prior.map(line=>line.totalAmount)).equals(invoice.amountCredited)) blocked("SUPPLIER_RETURN_INVOICE_REQUIRED");
     }
   } catch(error) { if(error instanceof EnterpriseAccountingError) blocked("SUPPLIER_RETURN_INVOICE_REQUIRED"); throw error; }
