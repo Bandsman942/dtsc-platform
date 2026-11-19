@@ -9,6 +9,11 @@ function prismaErrorCode(error: unknown) {
 export function isRetriableRetailTransactionError(error: unknown) {
   const code = prismaErrorCode(error);
   if (code && RETRIABLE_TRANSACTION_CODES.has(code)) return true;
+  // PostgreSQL row locks can surface serialization/deadlock via raw SQL.
+  if (code === "P2010") {
+    const sqlState = (error as { meta?: { code?: unknown } }).meta?.code;
+    return sqlState === "40001" || sqlState === "40P01";
+  }
   if (!(error instanceof Error)) return false;
   return /write conflict|deadlock|could not serialize access/i.test(error.message);
 }
