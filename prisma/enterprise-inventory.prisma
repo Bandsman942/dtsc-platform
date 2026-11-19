@@ -113,6 +113,8 @@ model EnterpriseStockMovement {
   storageLocation      EnterpriseStorageLocation? @relation(fields: [organizationId, storageLocationId], references: [organizationId, id], onDelete: Restrict)
   stockLot             EnterpriseStockLot?        @relation(fields: [organizationId, stockLotId], references: [organizationId, id], onDelete: Restrict)
   returnCustodyEntries EnterpriseInventoryReturnCustody[]
+  inventoryTransferDispatch EnterpriseInventoryTransferValuation? @relation("InventoryTransferDispatchMovement")
+  inventoryTransferReceipt EnterpriseInventoryTransferValuation? @relation("InventoryTransferReceiptMovement")
 
   @@unique([organizationId, id])
   @@unique([organizationId, idempotencyKey])
@@ -221,6 +223,7 @@ model EnterpriseStockTransferLine {
   createdAt            DateTime                  @default(now())
   stockTransfer        EnterpriseStockTransfer   @relation(fields: [organizationId, stockTransferId], references: [organizationId, id], onDelete: Cascade)
   inventoryItem        EnterpriseInventoryItem   @relation(fields: [organizationId, inventoryItemId], references: [organizationId, id], onDelete: Restrict)
+  inventoryValuation EnterpriseInventoryTransferValuation?
 
   @@unique([organizationId, id])
   @@index([organizationId, stockTransferId])
