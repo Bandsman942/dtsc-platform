@@ -339,6 +339,11 @@
 - f57c872 : fixture Retail avec delegates tenant/article explicites, tests négatifs pour chacun des deux liens sectoriels et maintien de toutes les assertions historiques de réservations. 71812c1 : fixture Pharmacie avec les vrais prérequis activés et minimum ENTERPRISE conforme au registre ; le plan Enterprise est déjà provisionné par seed-erp-professional-e2e.mjs. Aucun changement des contrôles de production, permissions, migration ou règles métier. Nouvelle certification intégrale requise ; pas de test local, aucune fusion ou production.
 - La dernière base intégralement certifiée reste 615de90 (19/19). Pas de déclaration d'OWNER_E2E tant que les nouvelles recettes et chantiers bloquants ne sont pas certifiés.
 
+### Reprise — dépendance Finance de la recette Pharmacie
+- 1032b7e : test Retail #1042 précédemment en échec désormais réussi dans Quality (job 135707498316), migration et gouvernance réussies. Shop 2 behavioral 44565851951, job 135707370505 : échec 403 persistant du sélecteur Pharmacie ; les trois scénarios suivants ne sont pas exécutés. L'ajout de MEDICINES_PRODUCTS/BATCH_EXPIRY était insuffisant.
+- Analyse du registre **effectif**, y compris module-registry-sector-convergence.json, final-cleanup et commercial-overrides : SALES_DISPENSATION exige MEDICINES_PRODUCTS, BATCH_EXPIRY, CATALOG, INVENTORY_LOGISTICS et FINANCE_RECEIVABLES. Cette dernière dépend de CRM_CUSTOMERS. Les deux prérequis Finance/CRM étaient absents de la fixture. fefb989 : provisionnement des dépendances manquantes ; 73c492f : fixtures Pharmacie/Santé épinglées au plan Enterprise canonique de CI, et non à un abonnement potentiellement modifié par d'autres parcours. Aucune modification des droits ou du runtime. La correction doit être prouvée par une nouvelle exécution complète.
+- Pas de nouvel élargissement du chantier avant la stabilisation ; toujours aucune fusion ni production. La précédente certification complète demeure 615de90.
+
 ## Restant (bloquant)
 Certification de la réaffectation historique sur PostgreSQL + navigateur et valeur inchangée; certification achats et valorisation, réservations/livraisons multi-lots; moteur FEFO commun et POS; pertes, rappels et comptabilité; Design 2.0 et tests multisectoriels. Voir issue #1212. Ne pas merger avant clôture de tous les points.
 
