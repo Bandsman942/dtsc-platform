@@ -1481,6 +1481,56 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
     expect(finalTrace.status()).toBe(200);
     expect((await finalTrace.json()).items[0].supplierReturnRequest).toMatchObject({status:"RECONCILED",supplierCreditNoteId:supplierReturnCreditId,canDispatch:false,canCreateCredit:false});
 
+    // The two receipt lots are separate physical origins of one invoice line.
+    // Reconcile a second return from B only AFTER A has been credited.
+    const siblingSource=movementsReceived.find(row=>row.stockLot.lotNumber==="PURCHASE-B");
+    const siblingLot=await prisma.enterpriseStockLot.findUniqueOrThrow({where:{id:siblingSource.stockLotId}});
+    const siblingIsolation=await patchLot(context.owner,{id:siblingLot.id,revision:siblingLot.revision,status:"QUARANTINED",qualityReason:"Defective units from second lot of same supplier receipt"});
+    expect(siblingIsolation.status,JSON.stringify(siblingIsolation.body)).toBe(200);
+    const siblingPreflight=await context.owner.request.get(base+"/purchases/"+normalPurchase.id+"?view=supplier-return-preflight&movementId="+encodeURIComponent(siblingSource.id)+"&quantity=3");
+    expect(siblingPreflight.status(),await siblingPreflight.text()).toBe(200);
+    expect(await siblingPreflight.json()).toMatchObject({remaining:"6",totalCost:"21",creditTotal:"21"});
+    const siblingSubmit=await post(context.owner,submitReturnPath,{movementId:siblingSource.id,quantity:"3",reason:"Second lot return after first credit reconciliation",approverUserId:fixture.settler.id,idempotencyKey:historyKey+"-SIBLING"});
+    expect(siblingSubmit.status,JSON.stringify(siblingSubmit.body)).toBe(201);
+    const siblingId=siblingSubmit.body.request.id,siblingApprovalId=siblingSubmit.body.approvalId;
+    const siblingReview=await context.settler.request.get(base+"/approvals/"+siblingApprovalId+"/coordination");
+    expect(siblingReview.status()).toBe(200);
+    const siblingReviewBody=await siblingReview.json();
+    const siblingApproved=await post(context.settler,base+"/approvals/"+siblingApprovalId+"/actions",{action:"APPROVE",revision:siblingReviewBody.approval.revision,reviewedVersionId:siblingReviewBody.versions[0].id});
+    expect(siblingApproved.status,JSON.stringify(siblingApproved.body)).toBe(200);
+    const siblingApprovedRecord=await prisma.enterpriseSupplierReturnRequest.findUniqueOrThrow({where:{id:siblingId}});
+    expect(siblingApprovedRecord.supplierInvoiceItemId).toBe(reconciliation.supplierInvoiceItemId);
+    expect(siblingApprovedRecord.originCostLayerId).not.toBe(reconciliation.originCostLayerId);
+    const siblingDispatch=await post(context.owner,dispatchPath,{requestId:siblingId,revision:siblingApprovedRecord.revision,dispatchReference:historyKey+"-SIBLING-SHIP"});
+    expect(siblingDispatch.status,JSON.stringify(siblingDispatch.body)).toBe(200);
+    const siblingTrace=await context.owner.request.get(receiptTracePath+"&search=PURCHASE-B");
+    expect(siblingTrace.status()).toBe(200);
+    const siblingCreditDate=(await siblingTrace.json()).items[0].supplierReturnRequest.dispatchBusinessDate;
+    const siblingCredit=await post(context.owner,base+"/supplier-credit-notes",{invoiceId:supplierInvoice.id,supplierReturnId:siblingId,supplierCreditReference:historyKey+"-SIBLING-CREDIT",creditDate:siblingCreditDate,reason:"Supplier credit for second receipt lot",items:[{sourceInvoiceItemId:siblingApprovedRecord.supplierInvoiceItemId,description:historicalProduct.name,quantity:"3",unitPrice:"7"}]});
+    expect(siblingCredit.status,JSON.stringify(siblingCredit.body)).toBe(201);
+    expect(siblingCredit.body.creditNote.grandTotal).toBe("21");
+    const siblingCreditPath=base+"/supplier-credit-notes/"+siblingCredit.body.creditNote.id;
+    const siblingCreditSubmitted=await post(context.owner,siblingCreditPath+"/transition",{action:"SUBMIT",revision:siblingCredit.body.creditNote.revision,approverUserId:fixture.settler.id});
+    expect(siblingCreditSubmitted.status,JSON.stringify(siblingCreditSubmitted.body)).toBe(200);
+    const siblingCreditApproved=await post(context.settler,siblingCreditPath+"/transition",{action:"APPROVE",revision:siblingCreditSubmitted.body.creditNote.revision});
+    expect(siblingCreditApproved.status,JSON.stringify(siblingCreditApproved.body)).toBe(200);
+    const siblingCreditPosted=await post(context.owner,siblingCreditPath+"/post",{revision:siblingCreditApproved.body.creditNote.revision});
+    expect(siblingCreditPosted.status,JSON.stringify(siblingCreditPosted.body)).toBe(200);
+    const siblingClosed=await prisma.enterpriseSupplierReturnRequest.findUniqueOrThrow({where:{id:siblingId}});
+    expect(siblingClosed.status).toBe("RECONCILED");
+    expect(siblingClosed.dispatchMovementId).not.toBe(reconciliation.dispatchMovementId);
+    expect(siblingClosed.creditJournalEntryId).not.toBe(reconciliation.creditJournalEntryId);
+    expect(await prisma.enterpriseSupplierReturnRequest.findUniqueOrThrow({where:{id:returnRequestId}})).toEqual(reconciliation);
+    const siblingPayable=await prisma.enterprisePayable.findUniqueOrThrow({where:{id:finalPayable.id}});
+    expect(siblingPayable.creditedAmount.equals(35)&&siblingPayable.outstandingAmount.equals(35)).toBe(true);
+    expect((await prisma.enterpriseInventoryBalance.findFirstOrThrow({where:{organizationId,stockLotId:siblingSource.stockLotId}})).quantityOnHand.equals(3)).toBe(true);
+    expect((await prisma.enterpriseInventoryBalance.findFirstOrThrow({where:{organizationId,stockLotId:returnedSource.stockLotId}})).quantityOnHand.equals(2)).toBe(true);
+    const bothTrace=await context.owner.request.get(receiptTracePath);
+    expect(bothTrace.status()).toBe(200);
+    const bothTraceItems=(await bothTrace.json()).items;
+    expect(bothTraceItems.find(row=>row.id===returnedSource.id).supplierReturnHistory.map(row=>row.id)).toEqual([returnRequestId]);
+    expect(bothTraceItems.find(row=>row.id===siblingSource.id).supplierReturnHistory.map(row=>row.id)).toEqual([siblingId]);
+
     // Recover the other, unrecalled batch of the same paid invoice through
     // a genuine inspected customer return; no direct stock/custody fixtures.
     {
