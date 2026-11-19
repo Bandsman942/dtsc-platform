@@ -16,12 +16,12 @@ type CustodyRow={
   returnLine:{request:{id:string;number:string}};
 };
 type RecoveryPreview={custodyId:string;revision:number;quantity:string;historicalUnitCost:string;historicalCostCeiling:string;currencyCode:string;lotNumber:string;returnReference:string;eligibleForAssessment:true;readOnly:true;physicalReleaseAuthorized:false;accountingRecognitionAuthorized:false};
-export function InventoryReturnCustodyDialog({organizationId,locale,warehouses,onClose,initialCustodyId=""}:{organizationId:string;locale:"fr"|"en";warehouses:Array<{id:string;code:string;name:string}>;onClose:()=>void;initialCustodyId?:string}){
+export function InventoryReturnCustodyDialog({organizationId,locale,warehouses,onClose,initialCustodyId="",initialWarehouse="",initialStatus=""}:{organizationId:string;locale:"fr"|"en";warehouses:Array<{id:string;code:string;name:string}>;onClose:()=>void;initialCustodyId?:string;initialWarehouse?:string;initialStatus?:""|"DISPOSAL_PENDING"}){
   const en=locale==="en";
   const [search,setSearch]=useState("");
   const [focusedCustodyId,setFocusedCustodyId]=useState(initialCustodyId);
-  const [warehouse,setWarehouse]=useState("");
-  const [status,setStatus]=useState("");
+  const [warehouse,setWarehouse]=useState(initialWarehouse);
+  const [status,setStatus]=useState<string>(initialStatus);
   const [page,setPage]=useState(1);
   const [pages,setPages]=useState(1);
   const [total,setTotal]=useState(0);
