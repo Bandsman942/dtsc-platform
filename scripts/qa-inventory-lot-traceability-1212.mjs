@@ -391,6 +391,38 @@ try{
   await assert.rejects(returnCredit.verifySupplierReturnCreditTx(vatProof,"org-a",vatCredit,[{...vatCreditLine,taxBreakdownJson:[{...historicalVat.breakdown[0],rate:"0.20"}]}]),{code:"SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED"});
 }finally{rtv=previousRtv;}
 console.log("Supplier return VAT: historical input proof, tax-exclusive stock, gross payable reserve and exact credit evidence OK (isolated mocks)");
+// Two independently posted standard VAT applications must be matched
+// by code; neither database ordering nor current rates can change the credit.
+const secondVat={...vatSnapshot,taxCodeId:"vat-b",rate:"0.04000000",amount:"2.800000",applicationOrder:1};
+const secondApplication={...vatApplication,taxCodeId:"vat-b",taxRate:d("0.04"),taxAmount:d("2.8"),applicationOrder:1};
+const multiOriginal={...vatOriginal,taxAmount:d(14),taxBreakdownJson:[vatSnapshot,secondVat]};
+const multiProof={...vatProof,enterpriseTaxLine:{findMany:async()=>[secondApplication,vatApplication]},enterpriseSupplierInvoiceItem:{findFirst:async()=>multiOriginal},
+  enterpriseJournalEntry:{findFirst:async({where})=>where.id?{id:"dispatch-journal",accountingDate:new Date("2026-10-19T00:00:00.000Z"),functionalCurrencyCode:"USD",lines:[ledgerLine("GOODS_RECEIVED_CLEARING",14,0),ledgerLine("INVENTORY",0,14)]}:{id:"invoice-journal",functionalCurrencyCode:"USD",lines:[ledgerLine("GOODS_RECEIVED_CLEARING",70,0),ledgerLine("TAX_RECEIVABLE",14,0),ledgerLine("ACCOUNTS_PAYABLE",0,84)]}}};
+const multiTax=await returnCredit.deriveSupplierReturnTaxTx(multiProof,"org-a",multiOriginal,"USD",d(2),fakeCredit.creditDate);
+assert.equal(multiTax.amount.toFixed(),"2.8");
+assert.equal(multiTax.breakdown.map(row=>row.taxCodeId+":"+row.amount).join(","),"vat-a:2.240000,vat-b:0.560000");
+for(const invalid of [
+  {...multiOriginal,taxAmount:d("13.99")},
+  {...multiOriginal,taxBreakdownJson:[vatSnapshot,{...secondVat,taxCodeId:"vat-a"}]},
+  {...multiOriginal,taxBreakdownJson:[vatSnapshot,{...secondVat,applicationOrder:0}]},
+  {...multiOriginal,taxBreakdownJson:[vatSnapshot,{...secondVat,basisMode:"SEQUENTIAL"}]},
+  {...multiOriginal,taxRecoveryRequested:false}
+]) await assert.rejects(returnCredit.deriveSupplierReturnTaxTx(multiProof,"org-a",invalid,"USD",d(2),fakeCredit.creditDate),{code:"SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED"});
+for(const applications of [[vatApplication],[vatApplication,vatApplication],[vatApplication,{...secondApplication,direction:"INPUT_NONRECOVERABLE"}],[vatApplication,{...secondApplication,taxCode:{category:"WITHHOLDING"}}],[vatApplication,{...secondApplication,taxableAmount:d(81.2)}]]){
+  await assert.rejects(returnCredit.deriveSupplierReturnTaxTx({...multiProof,enterpriseTaxLine:{findMany:async()=>applications}},"org-a",multiOriginal,"USD",d(2),fakeCredit.creditDate),{code:"SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED"});
+}
+const multiCredit={...fakeCredit,taxTotal:d("2.8"),grandTotal:d("16.8")};
+const multiLine={...fakeLine,taxAmount:d("2.8"),totalAmount:d("16.8"),taxRecoveryRequested:true,taxBreakdownJson:multiTax.breakdown};
+rtv={...previousRtv,recoverableTaxAmount:d("2.8")};
+try{
+  const reserved=returnCredit.supplierReturnPayableCapacity({currencyCode:"USD",outstandingAmount:d(84)},[rtv]);
+  assert.equal(reserved.reserved.toFixed(),"16.8");assert.equal(reserved.available.toFixed(),"67.2");
+  assert.equal((await returnCredit.verifySupplierReturnCreditTx(multiProof,"org-a",multiCredit,[multiLine])).id,rtv.id);
+  await assert.rejects(returnCredit.verifySupplierReturnCreditTx(multiProof,"org-a",multiCredit,[{...multiLine,taxBreakdownJson:[multiTax.breakdown[0],{...multiTax.breakdown[1],rate:"0.05"}]}]),{code:"SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED"});
+  await assert.rejects(returnCredit.verifySupplierReturnCreditTx(multiProof,"org-a",multiCredit,[{...multiLine,taxBreakdownJson:[...multiTax.breakdown].reverse()}]),{code:"SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED"});
+}finally{rtv=previousRtv;}
+console.log("Independent historical VAT applications: exact per-code proof, no duplicate or compound tax, credit and reserve match");
+
 console.log("Linked supplier credit contract: exact source, posting evidence, separate approval and reserved payable (isolated mocks)");
 console.log("Supplier return dispatch contract: exact cost, approved source, separate clearing journal, replay and generic credit guard OK (isolated mocks)");
 
