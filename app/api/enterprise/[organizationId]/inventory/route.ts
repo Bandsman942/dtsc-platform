@@ -37,11 +37,23 @@ export async function GET(req: Request, { params }: Params) {
     const page = Number.isSafeInteger(requestedPage) ? Math.max(1, Math.min(10000, requestedPage)) : 1;
     const pageSize = 25;
     const search = (url.searchParams.get("search") || "").trim().slice(0, 120);
-    const where: Prisma.EnterpriseInventoryItemWhereInput = { organizationId, status: "ACTIVE", archivedAt: null, lotTracking: true, catalogItem: { organizationId, status: "ACTIVE", archivedAt: null, trackInventory: true, ...(search ? { OR: [{ name: { contains: search, mode: "insensitive" } }, { code: { contains: search, mode: "insensitive" } }, { sku: { contains: search, mode: "insensitive" } }] } : {}) } };
-    const [items, total] = await Promise.all([
-      prisma.enterpriseInventoryItem.findMany({ where, orderBy: [{ catalogItem: { name: "asc" } }, { id: "asc" }], skip: (page - 1) * pageSize, take: pageSize, select: { id: true, expiryTracking: true, catalogItem: { select: { name: true, code: true } } } }),
-      prisma.enterpriseInventoryItem.count({ where }),
-    ]);
+    // Sector projections are not a second batch register. Apply exclusion
+    // before pagination/count (indexed, tenant-scoped anti-joins).
+    const matching = search ? Prisma.sql`AND (strpos(lower(c.name),lower(${search}))>0 OR strpos(lower(c.code),lower(${search}))>0 OR strpos(lower(c.sku),lower(${search}))>0)` : Prisma.empty;
+    const eligible = Prisma.sql`
+      FROM "EnterpriseInventoryItem" i
+      JOIN "EnterpriseCatalogItem" c ON c.id=i."catalogItemId" AND c."organizationId"=i."organizationId"
+      WHERE i."organizationId"=${organizationId} AND i.status='ACTIVE' AND i."archivedAt" IS NULL
+        AND i."lotTracking"=true AND c.status='ACTIVE' AND c."archivedAt" IS NULL AND c."trackInventory"=true
+        AND NOT EXISTS (SELECT 1 FROM "PharmacyProductExtension" p WHERE p."organizationId"=i."organizationId" AND p."catalogItemId"=c.id)
+        AND NOT EXISTS (SELECT 1 FROM "EnterpriseSectorInventoryEvent" e WHERE e."organizationId"=i."organizationId" AND e."catalogItemId"=c.id)
+        ${matching}`;
+    const [rows, counts] = await prisma.$transaction(async tx => Promise.all([
+      tx.$queryRaw<Array<{ id:string; expiryTracking:boolean; name:string; code:string }>>(Prisma.sql`SELECT i.id,i."expiryTracking",c.name,c.code ${eligible} ORDER BY c.name ASC,i.id ASC LIMIT ${pageSize} OFFSET ${(page-1)*pageSize}`),
+      tx.$queryRaw<Array<{ total:bigint }>>(Prisma.sql`SELECT COUNT(*) AS total ${eligible}`),
+    ]), { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
+    const items = rows.map(row=>({id:row.id,expiryTracking:row.expiryTracking,catalogItem:{name:row.name,code:row.code}}));
+    const total = Number(counts[0]?.total || 0);
     await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "inventory-lot-options", page } });
     return NextResponse.json({ items, pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) } }, { headers: { "Cache-Control": "private, no-store" } });
   }
