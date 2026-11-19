@@ -656,6 +656,9 @@ model EnterpriseSupplierCreditNote {
   updatedAt           DateTime                  @updatedAt
   supplierInvoice     EnterpriseSupplierInvoice @relation(fields: [organizationId, supplierInvoiceId], references: [organizationId, id], onDelete: Restrict)
 
+  supersededInReturn      EnterpriseSupplierReturnCreditReplacement? @relation("SupplierReturnPreviousCredit")
+  replacementInReturn     EnterpriseSupplierReturnCreditReplacement? @relation("SupplierReturnReplacementCredit")
+
   @@unique([organizationId, id])
   @@unique([organizationId, number])
   @@index([organizationId, supplierInvoiceId, status])
