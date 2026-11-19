@@ -201,7 +201,7 @@ const approvedRtv = {
   inventoryItemId: "item-a", warehouseId: "wh-a", storageLocationId: null, stockLotId: "lot-a",
   supplierId: "supplier-a", supplierInvoiceId: "invoice-a", supplierInvoiceItemId: "invoice-item-a",
   receiptAccountingEventId: "receipt-event-a", originCostLayerId: "origin-layer-a",
-  quantity: d(2), unitCost: d(7), totalCost: d(14), currencyCode: "USD",
+  quantity: d(2), unitCost: d(7), totalCost: d(14), recoverableTaxAmount:d(0), currencyCode: "USD",
   reason: "Defective goods", requestedByUserId: "requester", status: "APPROVED", revision: 2,
 };
 const approvalRtv = { id: "review-a", requestedByUserId: "requester", approverUserId: "approver", status: "APPROVED" };
@@ -255,7 +255,7 @@ mocks["@/lib/enterprise/inventory/supplier-return-preflight"] = {
     assert.equal(org,"org-a"); assert.equal(actor,"requester"); assert.equal(input.supplierReturnSourceMovementId,"receipt-movement-a");
     return { receipt:{id:"receipt-a",purchaseId:"po-a"}, receiptItem:{id:"receipt-item-a"}, invoice:{id:"invoice-a",supplierId:"supplier-a"}, invoiceItem:{id:"invoice-item-a"},
       receiptValue:{id:"receipt-event-a"}, originLayer:{id:"origin-layer-a",remainingQuantity:quantityRemaining},
-      unitCost:d(7),totalCost:d(14),currencyCode:"USD" };
+      unitCost:d(7),totalCost:d(14),recoverableTaxAmount:d(0),currencyCode:"USD" };
   },
 };
 mocks["@/lib/enterprise/accounting/helpers"] = { idempotencyKey: () => "value-a", publishFinanceEvent: async () => { writes.push("audit"); } };
@@ -326,6 +326,8 @@ const realBusinessContext = load("lib/enterprise/business-context.ts");
 mocks["@/lib/enterprise/business-context"] = realBusinessContext;
 rtvTx.organization={findFirst:async()=>({timezone:"Africa/Kinshasa"})};
 rtvTx.enterpriseFinanceConfiguration={findUnique:async()=>({functionalCurrencyCode:"USD"})};
+mocks["@/lib/enterprise/accounting/helpers"]={...mocks["@/lib/enterprise/accounting/helpers"],money:value=>d(value).toDecimalPlaces(6,Prisma.Decimal.ROUND_HALF_UP),sumDecimals:values=>values.reduce((sum,value)=>sum.plus(value),d(0))};
+mocks["@/lib/enterprise/accounting/historical-credit-tax"]=load("lib/enterprise/accounting/historical-credit-tax.ts");
 const returnCredit = load("lib/enterprise/accounting/supplier-return-credit-reconciliation.ts");
 mocks["@/lib/enterprise/accounting/supplier-return-credit-reconciliation"] = returnCredit;
 const postingBuilder = load("lib/enterprise/accounting/domain-posting-builders.ts");
@@ -351,7 +353,7 @@ await assert.rejects(returnCredit.assertSupplierPaymentCapacityTx(creditTx,"org-
 const ledgerLine = (ledgerAccountId,debit,credit)=>({ledgerAccountId,debit:d(debit),credit:d(credit)});
 rtv={...rtv,dispatchedAt:new Date("2026-10-18T23:30:00.000Z"),supplierCreditNoteId:"credit-a",supplierCreditReference:"SCN-ORIG"};
 currentEvent={...currentEvent,eventType:"SUPPLIER_RETURN",status:"POSTED",journalEntryId:"dispatch-journal"};
-const evidenceTx={...creditTx,enterpriseSupplierInvoiceItem:{findFirst:async()=>({id:"invoice-item-a",catalogItemId:"catalog-a"})},
+const evidenceTx={...creditTx,enterpriseSupplierInvoiceItem:{findFirst:async()=>({id:"invoice-item-a",catalogItemId:"catalog-a",taxAmount:d(0)})},
   enterpriseJournalEntry:{findFirst:async({where})=>where.id?{id:"dispatch-journal",accountingDate:new Date("2026-10-19T00:00:00.000Z"),functionalCurrencyCode:"USD",lines:[ledgerLine("GOODS_RECEIVED_CLEARING",14,0),ledgerLine("INVENTORY",0,14)]}:{id:"invoice-journal",functionalCurrencyCode:"USD",lines:[ledgerLine("GOODS_RECEIVED_CLEARING",70,0),ledgerLine("ACCOUNTS_PAYABLE",0,70)]}}};
 assert.equal((await returnCredit.verifySupplierReturnCreditTx(evidenceTx,"org-a",fakeCredit,[fakeLine])).id,rtv.id);
 await assert.rejects(returnCredit.assertSupplierReturnCreditDateTx(evidenceTx,"org-a",new Date("2026-10-18T00:00:00.000Z"),rtv.dispatchedAt),{code:"SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED"});
@@ -363,6 +365,32 @@ await assert.rejects(returnCredit.verifySupplierReturnCreditTx(evidenceTx,"org-a
 let reconciled;
 await returnCredit.completeSupplierReturnCreditTx({...evidenceTx,enterpriseSupplierReturnRequest:{findFirst:async()=>rtv,updateMany:async(args)=>{reconciled=args;return {count:1};}}},"org-a",fakeCredit,"credit-journal","poster");
 assert.equal(reconciled.data.status,"RECONCILED");assert.equal(reconciled.data.creditJournalEntryId,"credit-journal");
+// Historic recoverable VAT only; amount comes from the original invoice
+// tax snapshot and posted INPUT line, not from a current tax rate.
+const vatSnapshot={taxCodeId:"vat-a",rate:"0.16000000",base:"70.000000",amount:"11.200000",jurisdiction:"CD",treatment:"STANDARD",templateVersion:null,evidenceReference:"E2E-ORIGINAL",basisMode:"NET",applicationOrder:0,effectiveAt:"2026-10-18T00:00:00.000Z"};
+const vatOriginal={id:"invoice-item-a",catalogItemId:"catalog-a",description:"Historic goods",quantity:d(10),unitPrice:d(7),netAmount:d(70),taxAmount:d("11.2"),taxRecoveryRequested:true,taxCalculationMode:"NET",taxBreakdownJson:[vatSnapshot]};
+const vatApplication={taxCodeId:"vat-a",taxCode:{category:"VAT"},direction:"INPUT",currencyCode:"USD",taxTreatment:"STANDARD",basisMode:"NET",jurisdiction:"CD",templateVersion:null,evidenceReference:"E2E-ORIGINAL",applicationOrder:0,effectiveAt:new Date(vatSnapshot.effectiveAt),taxableAmount:d(70),taxRate:d("0.16"),taxAmount:d("11.2")};
+const vatProof={...evidenceTx,enterpriseTaxLine:{findMany:async({where})=>{assert.equal(where.organizationId,"org-a");assert.equal(where.sourceEntityId,vatOriginal.id);return [vatApplication];}},enterpriseSupplierInvoiceItem:{findFirst:async()=>vatOriginal},
+  enterpriseJournalEntry:{findFirst:async({where})=>where.id?{id:"dispatch-journal",accountingDate:new Date("2026-10-19T00:00:00.000Z"),functionalCurrencyCode:"USD",lines:[ledgerLine("GOODS_RECEIVED_CLEARING",14,0),ledgerLine("INVENTORY",0,14)]}:{id:"invoice-journal",functionalCurrencyCode:"USD",lines:[ledgerLine("GOODS_RECEIVED_CLEARING",70,0),ledgerLine("TAX_RECEIVABLE","11.2",0),ledgerLine("ACCOUNTS_PAYABLE",0,"81.2")]}}};
+const historicalVat=await returnCredit.deriveSupplierReturnTaxTx(vatProof,"org-a",vatOriginal,"USD",d(2),fakeCredit.creditDate);
+assert.equal(historicalVat.amount.toFixed(),"2.24");
+assert.equal(historicalVat.breakdown[0].rate,vatSnapshot.rate);
+assert.equal(historicalVat.breakdown[0].effectiveAt,fakeCredit.creditDate.toISOString());
+for(const invalid of [{...vatOriginal,taxRecoveryRequested:false},{...vatOriginal,taxCalculationMode:"SEQUENTIAL"},{...vatOriginal,taxBreakdownJson:null}]) await assert.rejects(returnCredit.deriveSupplierReturnTaxTx(vatProof,"org-a",invalid,"USD",d(2),fakeCredit.creditDate),{code:"SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED"});
+await assert.rejects(returnCredit.deriveSupplierReturnTaxTx({...vatProof,enterpriseTaxLine:{findMany:async()=>[]}},"org-a",vatOriginal,"USD",d(2),fakeCredit.creditDate),{code:"SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED"});
+await assert.rejects(returnCredit.deriveSupplierReturnTaxTx({...vatProof,enterpriseTaxLine:{findMany:async()=>[{...vatApplication,taxAmount:d(10)}]}},"org-a",vatOriginal,"USD",d(2),fakeCredit.creditDate),{code:"SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED"});
+const vatReturn={...rtv,recoverableTaxAmount:d("2.24")};
+const vatCapacity=returnCredit.supplierReturnPayableCapacity({currencyCode:"USD",outstandingAmount:d("81.2")},[vatReturn]);
+assert.equal(vatCapacity.reserved.toFixed(),"16.24");assert.equal(vatCapacity.available.toFixed(),"64.96");
+const vatCredit={...fakeCredit,taxTotal:d("2.24"),grandTotal:d("16.24")};
+const vatCreditLine={...fakeLine,taxAmount:d("2.24"),totalAmount:d("16.24"),taxRecoveryRequested:true,taxBreakdownJson:historicalVat.breakdown};
+const previousRtv=rtv;rtv=vatReturn;
+try{
+  assert.equal((await returnCredit.verifySupplierReturnCreditTx(vatProof,"org-a",vatCredit,[vatCreditLine])).id,rtv.id);
+  await assert.rejects(returnCredit.verifySupplierReturnCreditTx(vatProof,"org-a",vatCredit,[{...vatCreditLine,taxRecoveryRequested:false}]),{code:"SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED"});
+  await assert.rejects(returnCredit.verifySupplierReturnCreditTx(vatProof,"org-a",vatCredit,[{...vatCreditLine,taxBreakdownJson:[{...historicalVat.breakdown[0],rate:"0.20"}]}]),{code:"SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED"});
+}finally{rtv=previousRtv;}
+console.log("Supplier return VAT: historical input proof, tax-exclusive stock, gross payable reserve and exact credit evidence OK (isolated mocks)");
 console.log("Linked supplier credit contract: exact source, posting evidence, separate approval and reserved payable (isolated mocks)");
 console.log("Supplier return dispatch contract: exact cost, approved source, separate clearing journal, replay and generic credit guard OK (isolated mocks)");
 
