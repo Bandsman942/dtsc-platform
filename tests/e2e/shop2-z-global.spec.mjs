@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { Prisma, PrismaClient } from "@prisma/client";
+import { readFile } from "node:fs/promises";
 
 const prisma = new PrismaClient();
 const baseUrl = process.env.E2E_BASE_URL || "http://127.0.0.1:3000";
@@ -593,6 +594,51 @@ test.describe.serial("Shop 2.0 Iteration 4 global behavioral acceptance", () => 
         await page.goto("/enterprise-modules/INVENTORY_LOGISTICS");
         await page.waitForURL(/\/enterprise-modules\/INVENTORY_LOGISTICS/);
         await expect(page.locator("html")).toHaveClass(new RegExp("\\b" + theme + "\\b"));
+        const stockRegister = page.locator("#inventory-operation-register");
+        const registerQuery = page.waitForResponse(response => {
+          const url = new URL(response.url());
+          return url.pathname === "/api/enterprise/" + organizationId + "/inventory" && url.searchParams.get("search") === key && !url.searchParams.get("view");
+        });
+        await page.locator("[data-workspace-toolbar]").getByRole("textbox").fill(key);
+        expect((await registerQuery).ok()).toBeTruthy();
+        await expect(stockRegister.getByText(locale === "fr" ? "Aucun stock vendable" : "No sellable stock", { exact: true })).toBeVisible();
+        async function downloadRegister(format) {
+          const downloaded = page.waitForEvent("download");
+          await stockRegister.getByRole("button", { name: format, exact: true }).click();
+          const file = await downloaded;
+          expect(await file.failure()).toBeNull();
+          return { name: file.suggestedFilename(), bytes: await readFile(await file.path()) };
+        }
+        const csv = await downloadRegister("CSV");
+        expect(csv.name).toMatch(/\.csv$/i);
+        const rows = csv.bytes.toString("utf8").trim().split(/\r?\n/);
+        expect(rows).toHaveLength(2);
+        expect(rows[0]).toContain(locale === "fr" ? '"Stock vendable"' : '"Sellable stock"');
+        expect(rows[1]).toContain(key);
+        expect(rows[1]).toContain(locale === "fr" ? '"Aucun stock vendable"' : '"No sellable stock"');
+        expect(rows[1]).toMatch(/,"0","0","0"$/);
+        if (locale === "en") {
+          const xlsx = await downloadRegister("Excel");
+          expect(xlsx.name).toMatch(/\.xlsx$/i);
+          expect(xlsx.bytes.subarray(0, 4)).toEqual(Buffer.from([0x50, 0x4b, 0x03, 0x04]));
+          expect(xlsx.bytes.includes(Buffer.from(key))).toBeTruthy();
+          const pdf = await downloadRegister("PDF");
+          expect(pdf.name).toMatch(/\.pdf$/i);
+          expect(pdf.bytes.subarray(0, 5).toString()).toBe("%PDF-");
+        }
+        const warehouseFilter = stockRegister.getByTestId("inventory-register-warehouse");
+        const scopedQuery = page.waitForResponse(response => {
+          const url = new URL(response.url());
+          return url.pathname === "/api/enterprise/" + organizationId + "/inventory" &&
+            url.searchParams.get("warehouseId") === fixture.warehouseId && url.searchParams.get("search") === key;
+        });
+        await warehouseFilter.selectOption(fixture.warehouseId);
+        const scopedStock = await scopedQuery;
+        expect(scopedStock.ok()).toBeTruthy();
+        expect((await scopedStock.json()).items).toEqual([]);
+        const scopedCsv = await downloadRegister("CSV");
+        expect(scopedCsv.bytes.toString("utf8").trim().split(/\r?\n/)).toHaveLength(1);
+        await warehouseFilter.selectOption("");
         const governance = page.getByTestId("inventory-stock-governance");
         await expect(governance.getByRole("heading", { name: locale === "fr" ? "Règles de stock, lots et péremptions" : "Stock rules, batches and expiry", exact: true })).toBeVisible();
         await governance.getByRole("button", { name: locale === "fr" ? "Gérer" : "Manage", exact: true }).click();
