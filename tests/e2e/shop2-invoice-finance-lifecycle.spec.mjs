@@ -940,6 +940,15 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
     expect((await batchStock(1)).equals(1)).toBe(true);
     const requestedDisposal=await patchLot(context.owner,{custodyId:custody.id,revision:custody.revision,action:"REQUEST_DISPOSAL",reason:"Supplier recall requires safe physical disposal"});
     expect(requestedDisposal.status,JSON.stringify(requestedDisposal.body)).toBe(200);
+    const custodyWarehouse=issues.find(row=>row.id===custody.originalMovementId).warehouseId;
+    const pendingRegister=qualityPath+"?view=custody&status=DISPOSAL_PENDING&warehouseId="+encodeURIComponent(custodyWarehouse)+"&custodyId="+encodeURIComponent(custody.id);
+    const pendingDisposalList=await context.owner.request.get(pendingRegister);
+    expect(pendingDisposalList.status()).toBe(200);
+    expect((await pendingDisposalList.json()).items.map(row=>row.id)).toEqual([custody.id]);
+    const otherCustodyWarehouse=custodyWarehouse===spareWarehouse.id?fixture.warehouse.id:spareWarehouse.id;
+    const otherDisposalList=await context.owner.request.get(qualityPath+"?view=custody&status=DISPOSAL_PENDING&warehouseId="+encodeURIComponent(otherCustodyWarehouse)+"&custodyId="+encodeURIComponent(custody.id));
+    expect(otherDisposalList.status()).toBe(200);
+    expect((await otherDisposalList.json()).items).toEqual([]);
     const disposalPayload={custodyId:custody.id,revision:requestedDisposal.body.revision,action:"CONFIRM_DISPOSAL",reason:"Physical destruction witnessed and recorded in E2E certificate"};
     const selfDisposal=await patchLot(context.owner,disposalPayload);
     expect(selfDisposal.status).toBe(403);
@@ -947,6 +956,9 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
     expect(attested.status,JSON.stringify(attested.body)).toBe(200);
     const disposed=await prisma.enterpriseInventoryReturnCustody.findUniqueOrThrow({where:{id:custody.id}});
     expect(disposed.status).toBe("DISPOSED");
+    const completedDisposalList=await context.owner.request.get(pendingRegister);
+    expect(completedDisposalList.status()).toBe(200);
+    expect((await completedDisposalList.json()).items).toEqual([]);
     expect(disposed.disposedByUserId).toBe(fixture.settler.id);
     expect(disposed.disposalEvidence).toBe(disposalPayload.reason);
     expect((await patchLot(context.settler,disposalPayload)).status).toBe(409);
@@ -1533,6 +1545,7 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
     const alertBody=await alerts.json();
     expect(alertBody.metrics.recalled).toBe(1);
     expect(alertBody.items.some(row=>row.id===receivedLot.id)).toBe(true);
+    expect(alertBody.items.find(row=>row.id===receivedLot.id).warehouse).toMatchObject({id:spareWarehouse.id,code:spareWarehouse.code,name:spareWarehouse.name});
 
     // Daily quality alerts: worker authentication, bounded claim and same-day
     // retries, restricted to authorized admins and neutral push contents.
