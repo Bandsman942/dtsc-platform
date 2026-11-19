@@ -17,7 +17,10 @@ export async function createSupplierCreditNote(organizationId: string, actorUser
     await lockSupplierReturnInvoiceTx(tx, organizationId, input.invoiceId);
     const invoice = await tx.enterpriseSupplierInvoice.findFirst({ where: { id: input.invoiceId, organizationId, status: { in: ["POSTED", "PARTIALLY_PAID", "PAID"] } }, include: { payable: true } });
     if (!invoice?.payable) throw new EnterpriseAccountingError("SUPPLIER_INVOICE_NOT_CREDITABLE", 409);
-    const returnRequest = await tx.enterpriseSupplierReturnRequest.findFirst({ where: { organizationId, supplierInvoiceId: invoice.id, status: { in: ["DISPATCHED","RECONCILED"] } } });
+    // Explicit linked identity takes priority, so an exact replay of an old
+    // reconciled document cannot attach to the newest live return. Generic
+    // notes remain forbidden once the invoice has any coordinated return.
+    const returnRequest = await tx.enterpriseSupplierReturnRequest.findFirst({ where: { organizationId, supplierInvoiceId: invoice.id, status: { in: ["DISPATCHED","RECONCILED"] }, ...(input.supplierReturnId?{id:input.supplierReturnId}:{}) }, orderBy:[{status:"asc"},{dispatchedAt:"desc"},{id:"desc"}] });
     const supplement = await tx.enterpriseInventoryAcquisitionCostSupplement.findFirst({where:{organizationId,supplierInvoiceItem:{organizationId,supplierInvoiceId:invoice.id}}});
     if (!returnRequest) await assertNoCapitalizedSupplierCreditTx(tx, organizationId, invoice.id);
     if (supplement && (!returnRequest || supplement.supplierInvoiceItemId !== returnRequest.supplierInvoiceItemId ||
