@@ -7,15 +7,20 @@ const require = createRequire(import.meta.url);
 const ts = require("typescript");
 const { Prisma } = require("@prisma/client");
 const params = { params: Promise.resolve({ organizationId: "org-a" }) };
-const item = { id: "tracked-1", revision: 1, lotTracking: false, expiryTracking: false };
+const item = { id: "tracked-1", catalogItemId: "catalog-a", revision: 1, lotTracking: false, expiryTracking: false };
 let access = { canWrite: true, canAdminister: true, canManage: true };
 let isolated = false, warehouseAllowed = true, foundWarehouse = true, unmapped = false, undated = false, limited = false;
-let selectedQuery, updated = 0, transactionOptions;
+let selectedQuery, countQuery, sectorManaged = false, updated = 0, transactionOptions;
 const db = {
   enterpriseWarehouse: { findFirst: async ({ where }) => { assert.equal(where.organizationId, "org-a"); return foundWarehouse ? { id: "wh-a" } : null; } },
+  $queryRaw: async (query) => {
+    if (query.sql.includes("COUNT(*)")) { countQuery = query; return [{ total: 26n }]; }
+    selectedQuery = query;
+    return [{ id: "tracked-1", expiryTracking: true, name: "Milk", code: "M001" }];
+  },
+  pharmacyProductExtension: { count: async ({where}) => { assert.equal(where.organizationId,"org-a"); assert.equal(where.catalogItemId,"catalog-a"); return sectorManaged ? 1 : 0; } },
+  enterpriseSectorInventoryEvent: { count: async ({where}) => { assert.equal(where.organizationId,"org-a"); assert.equal(where.catalogItemId,"catalog-a"); return 0; } },
   enterpriseInventoryItem: {
-    findMany: async (args) => { selectedQuery = args; return [{ id: "tracked-1", expiryTracking: true, catalogItem: { name: "Milk", code: "M001" } }]; },
-    count: async () => 26,
     findFirst: async () => item,
     updateMany: async () => { updated++; return { count: 1 }; },
   },
@@ -61,14 +66,15 @@ isolated = true;
 const eligible = await get();
 assert.equal(eligible.status, 200);
 assert.equal(eligible.body.pagination.pageCount, 2);
-assert.equal(selectedQuery.skip, 25);
-assert.equal(selectedQuery.where.organizationId, "org-a");
-assert.equal(selectedQuery.where.lotTracking, true);
-assert.equal(selectedQuery.where.catalogItem.trackInventory, true);
-assert.equal(selectedQuery.where.catalogItem.organizationId, "org-a");
-assert.equal(selectedQuery.where.balances, undefined, "The first batch must not require an existing balance");
-assert.equal(selectedQuery.select.balances, undefined, "Never disclose another site balance");
-assert.equal(selectedQuery.where.catalogItem.OR[2].sku.contains, "milk");
+assert.deepEqual(eligible.body.items.map(row=>row.id).join(","),"tracked-1");
+assert.deepEqual(Array.from(selectedQuery.values), ["org-a","milk","milk","milk",25,25]);
+assert.deepEqual(Array.from(countQuery.values), ["org-a","milk","milk","milk"]);
+for (const query of [selectedQuery,countQuery]) {
+  for (const required of ['i."organizationId"=?','i."lotTracking"=true','c."trackInventory"=true','c."organizationId"=i."organizationId"','i.status=\'ACTIVE\'','c.status=\'ACTIVE\'','i."archivedAt" IS NULL','c."archivedAt" IS NULL','lower(c.sku)','NOT EXISTS (SELECT 1 FROM "PharmacyProductExtension"','NOT EXISTS (SELECT 1 FROM "EnterpriseSectorInventoryEvent"','p."organizationId"=i."organizationId"','e."organizationId"=i."organizationId"']) assert.ok(query.sql.includes(required), required);
+  assert.ok(!query.sql.includes("EnterpriseInventoryBalance"),"The first batch must not require an existing balance");
+}
+assert.ok(selectedQuery.sql.includes('ORDER BY c.name ASC,i.id ASC LIMIT ? OFFSET ?'));
+assert.equal(Object.hasOwn(eligible.body.items[0],"balances"),false,"Never disclose another site balance");
 warehouseAllowed = false;
 assert.equal((await get()).status, 403);
 warehouseAllowed = true;
@@ -87,6 +93,10 @@ access = { ...access, canAdminister: true };
 limited = true;
 assert.equal((await put()).status, 429);
 limited = false;
+sectorManaged = true;
+assert.equal((await put()).body.error, "STOCK_RECLASS_SECTOR_AUTHORITY");
+assert.equal(updated, 0);
+sectorManaged = false;
 unmapped = true;
 const blocked = await put();
 assert.equal(blocked.status, 409);
