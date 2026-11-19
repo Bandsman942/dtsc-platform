@@ -346,7 +346,7 @@ export function EnterpriseInventoryOperationsWorkspace({ organizationId, organiz
       summary={t("inventory.mobileSummary")}
     />
     <ModuleContent density="compact">
-      <InventoryStockGovernance organizationId={organizationId} locale={locale} warehouses={lookups.warehouses} />
+      <InventoryStockGovernance organizationId={organizationId} organizationName={organizationName} locale={locale} warehouses={lookups.warehouses} />
       <ErpDesign2RegisterSection title={tab === "STOCK" ? t("inventory.stockSection") : tab === "TRANSFERS" ? t("inventory.transferSection") : tab === "COUNTS" ? t("inventory.countSection") : t("inventory.adjustmentSection")} description={tab === "STOCK" ? t("inventory.stockDescription") : tab === "TRANSFERS" ? t("inventory.transferDescription") : tab === "COUNTS" ? t("inventory.countDescription") : t("inventory.adjustmentDescription")}>
         <ErpDesign2RegisterTools locale={locale} organizationName={organizationName}
           title={tab === "STOCK" ? t("inventory.stockSection") : tab === "TRANSFERS" ? t("inventory.transferSection") : tab === "COUNTS" ? t("inventory.countSection") : t("inventory.adjustmentSection")}
