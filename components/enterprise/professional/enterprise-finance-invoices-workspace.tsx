@@ -71,6 +71,7 @@ type InvoiceRecord = FinanceRecord & {
   supplierReturn?: { id:string; reference:string; status:string; purchaseId:string; sourceMovementId:string; currencyCode:string; totalCost:string; supplierCreditNoteId:string|null } | null;
   salesInvoiceId?: string;
   supplierInvoiceId?: string;
+  replacementCreditNoteId?: string|null;
   items?: Array<{ id: string; description: string; quantity: string | number; unitPrice: string | number; discountAmount?: string | number }>;
   pendingApproverName?: string | null;
   capabilities?: RecordCapabilities;
@@ -484,6 +485,7 @@ export function EnterpriseFinanceInvoicesWorkspace(props: Props) {
           {detail.outstandingAmount !== undefined ? <FinanceDetailValue label={t("outstanding")}>{financeMoney(detail.outstandingAmount, String(detail.currencyCode || "USD"), locale)}</FinanceDetailValue> : null}
           {detail.dueDate ? <FinanceDetailValue label={t("dueDate")}>{financeDate(detail.dueDate, locale)}</FinanceDetailValue> : null}
         </FinanceDetailGrid>
+        {!isReceivables && detail.replacementCreditNoteId ? <div className="min-w-0 rounded-xl border border-dtsc-border p-3"><a className="break-words text-sm font-semibold text-dtsc-blue underline" href={`/enterprise-modules/FINANCE_PAYABLES?supplierCreditNoteId=${encodeURIComponent(detail.replacementCreditNoteId)}`}>{purchaseFormGuidance(locale,"returnCreditReplacementLink")}</a></div>:null}
         {!isReceivables && detail.supplierReturn ? <section className="grid min-w-0 gap-2 rounded-xl border border-dtsc-border p-3" data-supplier-return-finance>
           <div className="flex min-w-0 flex-wrap justify-between gap-2"><h3 className="font-semibold break-words">{purchaseFormGuidance(locale,"returnFinanceTitle")} · {detail.supplierReturn.reference}</h3><StatusBadge tone={detail.supplierReturn.status==="RECONCILED"?"success":"warning"}>{purchaseFormGuidance(locale,detail.supplierReturn.status==="RECONCILED"?"returnReconciled":"returnDispatched")}</StatusBadge></div>
           <FinanceDetailGrid>
