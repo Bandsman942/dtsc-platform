@@ -308,6 +308,8 @@ model EnterpriseSupplierReturnRequest {
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
 
+  creditReplacements      EnterpriseSupplierReturnCreditReplacement[]
+
   @@unique([organizationId, id], map: "supplier_return_org_id_key")
   @@unique([organizationId, reference], map: "supplier_return_reference_key")
   @@unique([organizationId, idempotencyKey], map: "supplier_return_idempotency_key")
@@ -319,6 +321,33 @@ model EnterpriseSupplierReturnRequest {
   @@index([organizationId, purchaseId, createdAt], map: "supplier_return_purchase_idx")
   @@index([organizationId, sourceMovementId, status], map: "supplier_return_movement_idx")
   @@index([organizationId, supplierInvoiceId, status], map: "supplier_return_invoice_idx")
+}
+
+
+/// Immutable evidence of replacing a rejected, unposted supplier credit.
+/// The return's current credit pointer is the only active financial link.
+model EnterpriseSupplierReturnCreditReplacement {
+  id                        String   @id @default(cuid())
+  organizationId            String
+  returnRequestId           String
+  supplierId                String
+  previousCreditNoteId      String
+  previousCreditRevision    Int
+  previousSupplierReference String
+  replacementCreditNoteId   String
+  replacementSupplierReference String
+  rejectionApprovalId       String
+  reason                    String
+  replacedByUserId          String
+  createdAt                 DateTime @default(now())
+  returnRequest             EnterpriseSupplierReturnRequest @relation(fields: [organizationId, returnRequestId], references: [organizationId, id], onDelete: Restrict)
+  previousCredit            EnterpriseSupplierCreditNote @relation("SupplierReturnPreviousCredit", fields: [organizationId, previousCreditNoteId], references: [organizationId, id], onDelete: Restrict)
+  replacementCredit         EnterpriseSupplierCreditNote @relation("SupplierReturnReplacementCredit", fields: [organizationId, replacementCreditNoteId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, previousCreditNoteId], map: "supplier_return_replaced_credit_key")
+  @@unique([organizationId, replacementCreditNoteId], map: "supplier_return_replacement_credit_key")
+  @@unique([organizationId, supplierId, previousSupplierReference], map: "supplier_return_replaced_reference_key")
+  @@index([organizationId, returnRequestId, createdAt], map: "supplier_return_credit_history_idx")
 }
 
 model EnterpriseStockLotReclassification {
