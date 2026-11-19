@@ -65,7 +65,7 @@ function SupplierReturnCheck({ organizationId, purchaseId, row, locale, onRefres
       });
       const body = await response.json();
       if (!response.ok || body.ok !== true || !body.request) { setError(typeof body.message === "string" ? body.message : t("returnRequestFailed")); return; }
-      setRequest({ reference: body.request.reference, status: body.request.status, quantity: body.request.quantity, approvalId: body.approvalId });
+      setRequest({ id:body.request.id, reference: body.request.reference, status: body.request.status, quantity: body.request.quantity, approvalId: body.approvalId, revision:body.request.revision, unitCost:preview.unitCost, totalCost:preview.totalCost, recoverableTaxAmount:preview.recoverableTaxAmount, creditTotal:preview.creditTotal, currencyCode:preview.currencyCode });
       setPreview(null); setOpen(false); setMessage(t("returnRequestSubmitted"));
     } catch { setError(t("returnRequestFailed")); }
     finally { setBusy(false); }
