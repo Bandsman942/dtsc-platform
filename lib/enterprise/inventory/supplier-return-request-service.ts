@@ -62,7 +62,11 @@ export async function supplierReturnApprovalCandidates(organizationId: string, r
 async function serializeConflict<T>(operation: () => Promise<T>) {
   try { return await operation(); }
   catch (error) {
-    if (error instanceof Prisma.PrismaClientKnownRequestError && ["P2002", "P2034"].includes(error.code)) throw new EnterpriseDomainConflictError("SUPPLIER_RETURN_CONFLICT");
+    if (error instanceof Prisma.PrismaClientKnownRequestError &&
+      (["P2002", "P2034"].includes(error.code) ||
+      (error.code === "P2010" && ["40001", "40P01"].includes(String(error.meta?.code))))) {
+      throw new EnterpriseDomainConflictError("SUPPLIER_RETURN_CONFLICT");
+    }
     throw error;
   }
 }
