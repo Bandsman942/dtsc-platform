@@ -122,7 +122,7 @@ function SupplierReturnCheck({ organizationId, purchaseId, row, locale, onRefres
     {request.totalCost&&request.currencyCode?<div className="grid gap-1">
       <p>{t("returnCreditStockValue")} : <strong>{money(request.totalCost,request.currencyCode)}</strong></p>
       {request.recoverableTaxAmount&&Number(request.recoverableTaxAmount)>0?<p>{t("returnCreditRecoverableTax")} : <strong>{money(request.recoverableTaxAmount,request.currencyCode)}</strong></p>:null}
-      {Number(request.nonrecoverableTaxAmount)>0?<p>{t("returnCreditCapitalizedTax")} : <strong>{money(request.nonrecoverableTaxAmount,request.currencyCode)}</strong></p>:null}
+      {request.nonrecoverableTaxAmount&&Number(request.nonrecoverableTaxAmount)>0?<p>{t("returnCreditCapitalizedTax")} : <strong>{money(request.nonrecoverableTaxAmount,request.currencyCode)}</strong></p>:null}
       <p>{t("returnCreditAmount")} : <strong>{money(request.creditTotal||request.totalCost,request.currencyCode)}</strong></p>
     </div>:null}
     {request.dispatchReference?<p className="break-words">{t("returnDispatchReference")} : {request.dispatchReference}</p>:null}

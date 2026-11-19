@@ -267,6 +267,11 @@
 - QA mock de ventilation exacte et refus de preuve divergent; recette HTTP PostgreSQL prolonge le cas capitalisé jusqu'à sortie, allocation concurrente 64,96, approbation et rapprochement crédit 16,24, 8 unités restant à 8,12 = 64,96 et journal de crédit sans deuxième crédit stock. Les autres scénarios TVA récupérable restent inchangés.
 - Pas de nouvelle migration. CI de ce commit à certifier; pas de checkout local. Cas non isolés, inverse métier, historique complet et certification UX/multisecteur restent bloquants. Aucune fusion, production ou OWNER_E2E.
 
+### Reprise — correctif de compilation avant la recette (19 novembre 2026)
+
+- 8c3e6ce : 3/19 workflows réussis (migration, politique de livraison, Shop 2 UI), 16 en échec. Quality 44499473255, Shop 2 44499473282, Accounting 44499473592 arrêtés au typecheck (TS2345, purchase-receipt-trace.tsx:125 : taxe non récupérable optionnelle). Les suites aval ne sont donc pas certifiées sur ce SHA.
+- Rétrécissement explicite de la valeur optionnelle avant formatage dans la vue du retour. Anciennes données sans ce champ restent valides et n'affichent pas de taxe inventée. Aucun changement des règles métier ni des tests. Relance de toutes les CI sur le nouveau SHA, PR brouillon, aucun merge, production ou OWNER_E2E.
+
 ## Restant (bloquant)
 Certification de la réaffectation historique sur PostgreSQL + navigateur et valeur inchangée; certification achats et valorisation, réservations/livraisons multi-lots; moteur FEFO commun et POS; pertes, rappels et comptabilité; Design 2.0 et tests multisectoriels. Voir issue #1212. Ne pas merger avant clôture de tous les points.
 
