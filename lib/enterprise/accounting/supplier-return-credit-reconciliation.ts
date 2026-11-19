@@ -128,7 +128,9 @@ export async function verifySupplierReturnCreditTx(tx: Prisma.TransactionClient,
     const taxAccount=await resolveSemanticPostingAccount(tx,{organizationId,mappingKey:"TAX_RECEIVABLE",accountingDate:credit.creditDate});
     if (new Set([taxAccount.id,stock.id,clearing.id,payable.id]).size!==4 ||
         invoiceJournal.lines.length!==3 ||
-        !invoiceJournal.lines.some(l=>l.ledgerAccountId===taxAccount.id&&l.debit.equals(original.taxAmount)&&l.credit.isZero())) return fail();
+        !invoiceJournal.lines.some(l=>l.ledgerAccountId===taxAccount.id&&l.debit.equals(original.taxAmount)&&l.credit.isZero()) ||
+        !invoiceJournal.lines.some(l=>l.ledgerAccountId===clearing.id&&l.debit.equals(original.netAmount)&&l.credit.isZero()) ||
+        !invoiceJournal.lines.some(l=>l.ledgerAccountId===payable.id&&l.credit.equals(original.netAmount.plus(original.taxAmount))&&l.debit.isZero())) return fail();
   }
   return dispatched;
 }
