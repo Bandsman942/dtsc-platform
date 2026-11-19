@@ -291,6 +291,12 @@
 - d259859 : extension de l'ordre obligatoire aux étapes de reset et d'acceptance #1212, contrôle exact de chaque reset dans sa propre étape, endpoint loopback et jeton CI dédiés, opt-in secteur et exécution unique de la nouvelle spec. Les six groupes historiques restent obligatoires; aucun assouplissement du rate limit de production, aucune suppression de test. Inspection statique des sept étapes effectuée; CI complète à obtenir sur le HEAD final.
 - Aucun changement runtime, aucune migration supplémentaire, aucun merge ni production. Les cas non isolés, inverse métier, historique, certification des exports et extensions sectorielles ainsi que OWNER_E2E restent bloquants.
 
+### Reprise — registre de stock filtré et exports (19 novembre 2026)
+
+- 1f6e205 : la gate statique Shop 2 Redis a réussi avant annulation des workflows longs par les nouveaux commits; cinq workflows intégralement verts, aucune certification complète de cette baseline.
+- 14cf825/ff56c56/0ca5756 : filtre dépôt autorisé et seuil physique du registre Stock, requête et export partagent les paramètres serveur. Colonnes spécifiques au stock : code, SKU, article, unité, statut, physique, réservations/retenues, vendable. Le statut sans stock vendable est identique dans liste et export. Les métadonnées des rapports Excel/PDF utilisent des libellés de filtres lisibles au lieu des identifiants du dépôt; réutilisation des composants Design 2.0 communs. Aucun changement de calcul stock, de droits ou de migration.
+- 937c618 : extension de la recette Playwright FR/EN existante : CSV authentifié avec article sans stock (0/0/0 et statut exact), filtre dépôt réellement envoyé et CSV vide si aucun solde dans ce dépôt, téléchargement Excel (signature ZIP et identifiant article) et PDF (signature). Ni inspection visuelle du PDF/Excel ni certification de tout le périmètre d'exports revendiquées. Aucun test historique supprimé. Nouvelle CI obligatoire. Pas de checkout local, pas de merge ni production, OWNER_E2E non soumis.
+
 ## Restant (bloquant)
 Certification de la réaffectation historique sur PostgreSQL + navigateur et valeur inchangée; certification achats et valorisation, réservations/livraisons multi-lots; moteur FEFO commun et POS; pertes, rappels et comptabilité; Design 2.0 et tests multisectoriels. Voir issue #1212. Ne pas merger avant clôture de tous les points.
 
