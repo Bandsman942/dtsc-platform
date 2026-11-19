@@ -286,6 +286,8 @@ model EnterpriseJournalEntry {
   reversalRecordsAsResult  EnterpriseJournalReversal[] @relation("EnterpriseJournalReversalResult")
   lines                    EnterpriseJournalLine[]
 
+  inventoryAcquisitionCostSupplements EnterpriseInventoryAcquisitionCostSupplement[]
+
   @@unique([organizationId, id])
   @@unique([organizationId, number])
   @@unique([organizationId, idempotencyKey])
@@ -628,6 +630,8 @@ model EnterpriseSupplierInvoiceItem {
   projectId               String?
   createdAt               DateTime                  @default(now())
   supplierInvoice         EnterpriseSupplierInvoice @relation(fields: [organizationId, supplierInvoiceId], references: [organizationId, id], onDelete: Cascade)
+
+  acquisitionCostSupplement EnterpriseInventoryAcquisitionCostSupplement?
 
   @@unique([organizationId, id])
   @@index([organizationId, supplierInvoiceId])
@@ -1264,6 +1268,8 @@ model EnterpriseTaxLine {
   createdAt          DateTime @default(now())
   taxCode            EnterpriseTaxCode @relation(fields: [organizationId, taxCodeId], references: [organizationId, id], onDelete: Restrict)
 
+  acquisitionCostSupplement EnterpriseInventoryAcquisitionCostSupplement?
+
   @@unique([organizationId, id])
   @@unique([organizationId, sourceEntityType, sourceEntityId, taxCodeId])
   @@index([organizationId, taxCodeId, createdAt])
@@ -1323,6 +1329,8 @@ model EnterpriseInventoryCostLayer {
   effectiveAt           DateTime
   createdAt             DateTime @default(now())
 
+  acquisitionCostSupplement EnterpriseInventoryAcquisitionCostSupplement?
+
   @@unique([organizationId, id])
   @@unique([organizationId, sourceMovementId])
   @@index([organizationId, inventoryItemId, effectiveAt])
@@ -1344,10 +1352,48 @@ model EnterpriseInventoryAccountingEvent {
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
+  acquisitionCostSupplement EnterpriseInventoryAcquisitionCostSupplement?
+
   @@unique([organizationId, id])
   @@unique([organizationId, idempotencyKey])
   @@unique([organizationId, stockMovementId, eventType])
   @@index([organizationId, inventoryItemId, status])
+}
+
+/// Append-only evidence for a future, atomic nonrecoverable acquisition-cost posting.
+/// It is not a second inventory ledger or a new stock movement.
+model EnterpriseInventoryAcquisitionCostSupplement {
+  id                    String   @id @default(cuid())
+  organizationId        String
+  supplierInvoiceItemId String
+  costLayerId           String
+  receiptAccountingEventId String
+  taxLineId             String
+  invoiceJournalEntryId String
+  quantity              Decimal  @db.Decimal(20, 6)
+  originalUnitCost      Decimal  @db.Decimal(20, 6)
+  originalTotalCost     Decimal  @db.Decimal(20, 6)
+  capitalizedTaxAmount  Decimal  @db.Decimal(20, 6)
+  unitCost              Decimal  @db.Decimal(20, 6)
+  totalCost             Decimal  @db.Decimal(20, 6)
+  currencyCode          String
+  effectiveAt           DateTime
+  recordedByUserId      String
+  createdAt             DateTime @default(now())
+
+  supplierInvoiceItem   EnterpriseSupplierInvoiceItem @relation(fields: [organizationId, supplierInvoiceItemId], references: [organizationId, id], onDelete: Restrict, map: "inv_acq_cost_invoice_item_fk")
+  costLayer             EnterpriseInventoryCostLayer @relation(fields: [organizationId, costLayerId], references: [organizationId, id], onDelete: Restrict, map: "inv_acq_cost_layer_fk")
+  receiptAccountingEvent EnterpriseInventoryAccountingEvent @relation(fields: [organizationId, receiptAccountingEventId], references: [organizationId, id], onDelete: Restrict, map: "inv_acq_cost_receipt_event_fk")
+  taxLine               EnterpriseTaxLine @relation(fields: [organizationId, taxLineId], references: [organizationId, id], onDelete: Restrict, map: "inv_acq_cost_tax_line_fk")
+  invoiceJournalEntry   EnterpriseJournalEntry @relation(fields: [organizationId, invoiceJournalEntryId], references: [organizationId, id], onDelete: Restrict, map: "inv_acq_cost_journal_fk")
+
+  @@unique([organizationId, id], map: "inv_acq_cost_org_id_key")
+  @@unique([organizationId, supplierInvoiceItemId], map: "inv_acq_cost_invoice_item_key")
+  @@unique([organizationId, costLayerId], map: "inv_acq_cost_layer_key")
+  @@unique([organizationId, receiptAccountingEventId], map: "inv_acq_cost_receipt_event_key")
+  @@unique([organizationId, taxLineId], map: "inv_acq_cost_tax_line_key")
+  @@index([organizationId, invoiceJournalEntryId], map: "inv_acq_cost_journal_idx")
+  @@index([organizationId, effectiveAt], map: "inv_acq_cost_effective_idx")
 }
 
 model EnterpriseAssetAccountingProfile {

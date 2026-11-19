@@ -458,6 +458,51 @@ await assert.rejects(deriveCost(fractionProof,fractionOriginal,{quantity:d(3),un
 await assert.rejects(returnCredit.deriveSupplierReturnTaxTx(nonRecoverableProof,"org-a",nonRecoverableOriginal,"USD",d(2),fakeCredit.creditDate),{code:"SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED"});
 console.log("Nonrecoverable inventory cost evidence: exact TTC acquisition cost, historical INPUT_NONRECOVERABLE proof and refusal of rounding or ambiguous receipt (read-only mocks)");
 
+// Acquisition-cost preflight must prove the entire CUMP pool, not just the
+// selected physical lot. All delegates below are read-only.
+const poolOrigin={id:"acq-move",organizationId:"org-a",inventoryItemId:"acq-item",warehouseId:"acq-wh",storageLocationId:null,stockLotId:"acq-lot",sourceEntityId:"acq-receipt",sourceLineId:"acq-line",quantity:d(10),occurredAt:new Date("2026-10-19T10:00:00Z")};
+const poolLayer={id:"acq-layer",sourceMovementId:poolOrigin.id,currencyCode:"USD",valuationMethod:"WEIGHTED_AVERAGE",effectiveAt:poolOrigin.occurredAt,quantity:d(10),remainingQuantity:d(10),unitCost:d(7),totalCost:d(70)};
+const poolBalance={stockLotId:"acq-lot",storageLocationId:null,quantityOnHand:d(10),quantityReserved:d(0)};
+const poolEvent={id:"acq-event",journalEntryId:"acq-journal",currencyCode:"USD",quantity:d(10),unitCost:d(7),totalCost:d(70)};
+const poolConfig={automaticPostingEnabled:true,inventoryValuationMethod:"WEIGHTED_AVERAGE",functionalCurrencyCode:"USD"};
+let poolMovements=[{id:poolOrigin.id}], poolLayers=[poolLayer],poolBalances=[poolBalance],poolReceipt=poolEvent,poolSupplement=null,poolHolds=[],poolReservations=0,poolAdjustments=0,poolTransfers=0,poolCounts=0;
+const poolQuery=({where,take})=>{assert.equal(where.organizationId,"org-a");assert.equal(where.inventoryItemId,"acq-item");assert.equal(where.warehouseId,"acq-wh");assert.equal(take,2);};
+const poolTx={
+  enterpriseStockMovement:{findFirst:async({where})=>{assert.equal(where.organizationId,"org-a");assert.equal(where.movementType,"PURCHASE_RECEIPT");return where.id===poolOrigin.id?poolOrigin:null;},findMany:async(args)=>{poolQuery(args);return poolMovements;}},
+  enterpriseInventoryCostLayer:{findMany:async(args)=>{poolQuery(args);assert.equal(args.where.currencyCode,undefined);assert.equal(args.where.remainingQuantity,undefined);return poolLayers;}},
+  enterpriseInventoryBalance:{findMany:async(args)=>{poolQuery(args);return poolBalances;}},
+  enterpriseInventoryAccountingEvent:{findFirst:async({where})=>{assert.equal(where.organizationId,"org-a");assert.equal(where.stockMovementId,poolOrigin.id);assert.equal(where.status,"POSTED");return poolReceipt;}},
+  enterpriseFinanceConfiguration:{findUnique:async({where})=>{assert.equal(where.organizationId,"org-a");return poolConfig;}},
+  enterpriseInventoryReservation:{count:async()=>poolReservations},
+  enterpriseStockAdjustment:{count:async()=>poolAdjustments},
+  enterpriseStockTransfer:{count:async()=>poolTransfers},
+  enterpriseInventoryCount:{count:async()=>poolCounts},
+  enterpriseInventoryAcquisitionCostSupplement:{findFirst:async({where})=>{assert.equal(where.organizationId,"org-a");assert.equal(where.OR[0].costLayerId,poolLayer.id);return poolSupplement;}},
+};
+const priorHoldMock=mocks["@/lib/enterprise/retail/invoice-stock-holds"];
+mocks["@/lib/enterprise/retail/invoice-stock-holds"]={readActiveRetailInvoiceStockHoldsTx:async(_tx,args)=>{assert.equal(args.organizationId,"org-a");assert.equal(args.warehouseId,"acq-wh");return poolHolds;}};
+const acquisitionPool=load("lib/enterprise/accounting/inventory-acquisition-cost-preflight.ts");
+mocks["@/lib/enterprise/retail/invoice-stock-holds"]=priorHoldMock;
+const inspectPool=(movementId=poolOrigin.id,currency="USD")=>acquisitionPool.inspectUnconsumedAcquisitionPoolTx(poolTx,"org-a",movementId,currency);
+const rejectedPool=()=>assert.rejects(inspectPool(),{code:"SUPPLIER_RETURN_NONRECOVERABLE_COST_RECONCILIATION_REQUIRED"});
+assert.equal((await inspectPool()).layer.id,poolLayer.id);
+await assert.rejects(inspectPool("another-tenant-movement"),{code:"SUPPLIER_RETURN_NONRECOVERABLE_COST_RECONCILIATION_REQUIRED"});
+await assert.rejects(inspectPool(poolOrigin.id,"CDF"),{code:"SUPPLIER_RETURN_NONRECOVERABLE_COST_RECONCILIATION_REQUIRED"});
+poolMovements=[...poolMovements,{id:"other-lot-issue"}];await rejectedPool();poolMovements=[{id:poolOrigin.id}];
+for(const layers of [[{...poolLayer,remainingQuantity:d(9)}],[poolLayer,{...poolLayer,id:"depleted-layer",remainingQuantity:d(0)}],[poolLayer,{...poolLayer,id:"other-currency",currencyCode:"CDF"}],[{...poolLayer,totalCost:d(71)}]]){poolLayers=layers;await rejectedPool();}poolLayers=[poolLayer];
+for(const balances of [[{...poolBalance,quantityReserved:d(1)}],[{...poolBalance,stockLotId:"different-lot"}],[{...poolBalance,quantityOnHand:d(9)}]]){poolBalances=balances;await rejectedPool();}poolBalances=[poolBalance];
+poolReceipt=null;await rejectedPool();poolReceipt={...poolEvent,totalCost:d(71)};await rejectedPool();poolReceipt=poolEvent;
+poolConfig.automaticPostingEnabled=false;await rejectedPool();poolConfig.automaticPostingEnabled=true;
+poolSupplement={id:"already-capitalized"};await rejectedPool();poolSupplement=null;
+poolHolds=[{}];await rejectedPool();poolHolds=[];
+poolReservations=1;await rejectedPool();poolReservations=0;
+poolAdjustments=1;await rejectedPool();poolAdjustments=0;
+poolTransfers=1;await rejectedPool();poolTransfers=0;
+poolCounts=1;await rejectedPool();poolCounts=0;
+assert.equal((await inspectPool()).receiptEvent.id,poolEvent.id);
+console.log("Acquisition pool preflight: entire history, tenant, functional currency, physical and cost equality, no open operations or duplicate supplement (read-only mocks)");
+
+
 console.log("Linked supplier credit contract: exact source, posting evidence, separate approval and reserved payable (isolated mocks)");
 console.log("Supplier return dispatch contract: exact cost, approved source, separate clearing journal, replay and generic credit guard OK (isolated mocks)");
 
