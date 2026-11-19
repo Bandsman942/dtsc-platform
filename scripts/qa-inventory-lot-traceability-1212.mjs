@@ -423,6 +423,41 @@ try{
 }finally{rtv=previousRtv;}
 console.log("Independent historical VAT applications: exact per-code proof, no duplicate or compound tax, credit and reserve match");
 
+// Read-only first tranche of nonrecoverable acquisition-cost evidence.
+const nonRecoverableOriginal={...vatOriginal,taxRecoveryRequested:false};
+const nonRecoverableRow={...vatApplication,direction:"INPUT_NONRECOVERABLE"};
+const nonRecoverableProof={...vatProof,enterpriseTaxLine:{findMany:async({where})=>{
+  assert.equal(where.organizationId,"org-a");
+  assert.equal(where.sourceEntityId,nonRecoverableOriginal.id);
+  return [nonRecoverableRow];
+}}};
+const receiptCost={quantity:d(10),unitCost:d(7),totalCost:d(70)};
+const supplement=await returnCredit.deriveNonRecoverableInventoryCostTx(nonRecoverableProof,"org-a",nonRecoverableOriginal,"USD",receiptCost,fakeCredit.creditDate);
+assert.equal(supplement.originalUnitCost.toFixed(),"7");
+assert.equal(supplement.originalTotalCost.toFixed(),"70");
+assert.equal(supplement.capitalizedTaxAmount.toFixed(),"11.2");
+assert.equal(supplement.unitCost.toFixed(),"8.12");
+assert.equal(supplement.totalCost.toFixed(),"81.2");
+assert.equal(supplement.unitCost.times(2).toFixed(),"16.24");
+assert.equal(supplement.unitCost.times(8).toFixed(),"64.96");
+const deriveCost=(tx,original,receipt=receiptCost)=>returnCredit.deriveNonRecoverableInventoryCostTx(tx,"org-a",original,"USD",receipt,fakeCredit.creditDate);
+for (const invalid of [vatOriginal,{...nonRecoverableOriginal,taxBreakdownJson:null},{...nonRecoverableOriginal,taxCalculationMode:"SEQUENTIAL"},{...multiOriginal,taxRecoveryRequested:false}]) {
+  await assert.rejects(deriveCost(nonRecoverableProof,invalid),{code:"SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED"});
+}
+for (const rows of [[],[vatApplication],[{...nonRecoverableRow,currencyCode:"CDF"}],[{...nonRecoverableRow,taxAmount:d(10)}]]) {
+  await assert.rejects(deriveCost({...nonRecoverableProof,enterpriseTaxLine:{findMany:async()=>rows}},nonRecoverableOriginal),{code:"SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED"});
+}
+for (const receipt of [{...receiptCost,quantity:d(9)},{...receiptCost,totalCost:d(69)},{...receiptCost,unitCost:d(8)}]) {
+  await assert.rejects(deriveCost(nonRecoverableProof,nonRecoverableOriginal,receipt),{code:"SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED"});
+}
+const fractionSnapshot={...vatSnapshot,base:"21.000000",amount:"1.000000",rate:"0.04761905"};
+const fractionOriginal={...nonRecoverableOriginal,quantity:d(3),netAmount:d(21),taxAmount:d(1),taxBreakdownJson:[fractionSnapshot]};
+const fractionProof={...nonRecoverableProof,enterpriseTaxLine:{findMany:async()=>[{...nonRecoverableRow,taxableAmount:d(21),taxAmount:d(1),taxRate:d("0.04761905")}]}};
+await assert.rejects(deriveCost(fractionProof,fractionOriginal,{quantity:d(3),unitCost:d(7),totalCost:d(21)}),{code:"SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED"});
+// The existing public recoverable-return contract must remain restrictive.
+await assert.rejects(returnCredit.deriveSupplierReturnTaxTx(nonRecoverableProof,"org-a",nonRecoverableOriginal,"USD",d(2),fakeCredit.creditDate),{code:"SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED"});
+console.log("Nonrecoverable inventory cost evidence: exact TTC acquisition cost, historical INPUT_NONRECOVERABLE proof and refusal of rounding or ambiguous receipt (read-only mocks)");
+
 console.log("Linked supplier credit contract: exact source, posting evidence, separate approval and reserved payable (isolated mocks)");
 console.log("Supplier return dispatch contract: exact cost, approved source, separate clearing journal, replay and generic credit guard OK (isolated mocks)");
 

@@ -1,5 +1,6 @@
 ## 2026-11-17 / 18 — Hotfix stock/lots #1212 — v1.23.4 candidate (DRAFT)
 
+- Preuve préparatoire de coût non récupérable : calcul TTC exact à partir d'une preuve fiscale historique INPUT_NONRECOVERABLE unique, sans mutation de stock ni activation du retour; QA isolée ajoutée, CI à certifier. #1212 reste bloquant.
 - Sélecteur indépendant, garde de politique historique, réceptions et réservations FEFO, factures POS et retours multi-lots; régularisation historique sans changement de valeur.
 - Pertes approuvées avec valorisation distincte, contrôle qualité et rappel multisite, traçabilité par mouvements, réception isolée des rappels en transit, registre des retours non revendables et attestation de destruction, filtres et interface enrichie. Onze migrations additives en candidat, dont le registre de garde des retours isolés, le suivi des notifications qualité, la demande de retour fournisseur, ses preuves d'expédition et son rapprochement d'avoir. Recettes commandes ERP et Finance multi-lots vertes sur c7c4e8a uniquement; nouvelle CI et autres certifications obligatoires.
 - Régularisations historiques : contrôle préalable des droits effectifs des deux participants au module commun Validations, erreur contextualisée FR/EN, aucune demande inaccessible ni activation automatique. Recette négative sans mutation et preuve CI à renouveler.

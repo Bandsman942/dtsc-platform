@@ -53,9 +53,13 @@ export async function assertSupplierReturnCreditDateTx(tx: Prisma.TransactionCli
  * duplicates, compound calculations and mixed/nonrecoverable tax treatment.
  * The historical allocation engine, not today's catalog, determines the credit. */
 export async function deriveSupplierReturnTaxTx(tx: Prisma.TransactionClient, organizationId: string, original: EnterpriseSupplierInvoiceItem, currencyCode: string, quantity: Prisma.Decimal, date: Date) {
-  if (original.taxAmount.isZero()) return { amount: new Prisma.Decimal(0), breakdown: [] };
-  if (!original.taxAmount.gt(0) || !original.taxRecoveryRequested || !Array.isArray(original.taxBreakdownJson) ||
-      !original.taxBreakdownJson.length || original.taxBreakdownJson.length>20 || original.taxCalculationMode !== "NET") return fail();
+  return deriveHistoricalSupplierVatTx(tx, organizationId, original, currencyCode, quantity, date, "INPUT");
+}
+
+async function deriveHistoricalSupplierVatTx(tx: Prisma.TransactionClient, organizationId: string, original: EnterpriseSupplierInvoiceItem, currencyCode: string, quantity: Prisma.Decimal, date: Date, direction: "INPUT" | "INPUT_NONRECOVERABLE") {
+  if (original.taxAmount.isZero() && direction === "INPUT") return { amount: new Prisma.Decimal(0), breakdown: [] };
+  if (!original.taxAmount.gt(0) || original.taxRecoveryRequested !== (direction === "INPUT") || !Array.isArray(original.taxBreakdownJson) ||
+      !original.taxBreakdownJson.length || original.taxBreakdownJson.length>(direction === "INPUT" ? 20 : 1) || original.taxCalculationMode !== "NET") return fail();
   const applications = await tx.enterpriseTaxLine.findMany({where:{organizationId,sourceEntityType:"EnterpriseSupplierInvoiceItem",sourceEntityId:original.id},include:{taxCode:{select:{category:true}}}});
   if (applications.length!==original.taxBreakdownJson.length) return fail();
   const byCode=new Map(applications.map(row=>[row.taxCodeId,row]));
@@ -71,7 +75,7 @@ export async function deriveSupplierReturnTaxTx(tx: Prisma.TransactionClient, or
         snapshot.applicationOrder!==index) return fail();
     seen.add(snapshot.taxCodeId);
     const posted=byCode.get(snapshot.taxCodeId);
-    if (!posted || posted.direction!=="INPUT" || posted.taxCode.category!=="VAT" ||
+    if (!posted || posted.direction!==direction || posted.taxCode.category!=="VAT" ||
         posted.currencyCode!==currencyCode || posted.taxTreatment!=="STANDARD" || posted.basisMode!=="NET" ||
         posted.jurisdiction!==snapshot.jurisdiction || posted.templateVersion!==snapshot.templateVersion ||
         posted.evidenceReference!==snapshot.evidenceReference || posted.applicationOrder!==snapshot.applicationOrder ||
@@ -83,6 +87,34 @@ export async function deriveSupplierReturnTaxTx(tx: Prisma.TransactionClient, or
   if(!sourceTax.equals(original.taxAmount))return fail();
   const [credit]=allocateHistoricalCreditLines([original],[],[{sourceInvoiceItemId:original.id,description:original.description,quantity:quantity.toFixed(),unitPrice:original.unitPrice.toFixed()}],date);
   return {amount:credit.taxAmount,breakdown:credit.taxBreakdown};
+}
+
+/**
+ * Read-only proof for a prospective cost supplement. The posted tax evidence
+ * must already exist in the same transaction as the supplier invoice posting.
+ * This is not permission to change a cost layer or dispatch a supplier return:
+ * the caller must separately prove receipt provenance, physical quantities,
+ * period, journals, absence of consumption and exclusive access to the pool.
+ * Do not use a current tax rate or round away an unrepresentable acquisition cost.
+ */
+export async function deriveNonRecoverableInventoryCostTx(
+  tx: Prisma.TransactionClient, organizationId: string, original: EnterpriseSupplierInvoiceItem,
+  currencyCode: string, receipt: { quantity: Prisma.Decimal; unitCost: Prisma.Decimal; totalCost: Prisma.Decimal }, date: Date,
+) {
+  const max = new Prisma.Decimal("99999999999999.999999");
+  const validPositive = (value: Prisma.Decimal) => value.isFinite() && value.gt(0) && value.lte(max) && value.decimalPlaces() <= 6;
+  if (!validPositive(receipt.quantity) || !validPositive(receipt.unitCost) || !validPositive(receipt.totalCost) ||
+      !validPositive(original.netAmount) || !validPositive(original.taxAmount) ||
+      !original.quantity.equals(receipt.quantity) || !original.unitPrice.equals(receipt.unitCost) ||
+      !receipt.quantity.times(receipt.unitCost).equals(receipt.totalCost) ||
+      !receipt.totalCost.equals(original.netAmount)) return fail();
+  const tax = await deriveHistoricalSupplierVatTx(tx, organizationId, original, currencyCode, receipt.quantity, date, "INPUT_NONRECOVERABLE");
+  if (!tax.amount.equals(original.taxAmount)) return fail();
+  const totalCost = receipt.totalCost.plus(tax.amount);
+  const unitCost = totalCost.div(receipt.quantity).toDecimalPlaces(6, Prisma.Decimal.ROUND_HALF_UP);
+  if (!validPositive(totalCost) || !validPositive(unitCost) || !receipt.quantity.times(unitCost).equals(totalCost)) return fail();
+  return { quantity: receipt.quantity, originalUnitCost: receipt.unitCost, originalTotalCost: receipt.totalCost,
+    capitalizedTaxAmount: tax.amount, unitCost, totalCost };
 }
 
 type CreditEvidence = {
