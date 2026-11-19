@@ -1383,15 +1383,59 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
     expect(genericDenied.status,JSON.stringify(genericDenied.body)).toBe(409);
     const wrongAmount=await post(context.owner,base+"/supplier-credit-notes",{...linkedCreditPayload,items:[{...linkedCreditPayload.items[0],quantity:"1"}]});
     expect(wrongAmount.status).toBe(409);
-    const createdCredit=await post(context.owner,base+"/supplier-credit-notes",linkedCreditPayload);
+    // Rejected documentary credit must be correctable without a second
+    // dispatch or a release of the payable reserve. The rejection remains
+    // visible and the replacement follows the original independent approval.
+    const rejectedCreditPayload={...linkedCreditPayload,supplierCreditReference:historyKey+"-SCN-REJECTED",reason:"Initial supplier document requires corrected reference"};
+    const rejectedCreditCreated=await post(context.owner,base+"/supplier-credit-notes",rejectedCreditPayload);
+    expect(rejectedCreditCreated.status,JSON.stringify(rejectedCreditCreated.body)).toBe(201);
+    const rejectedCreditId=rejectedCreditCreated.body.creditNote.id;
+    const rejectedCreditPath=base+"/supplier-credit-notes/"+rejectedCreditId;
+    const rejectedCreditSubmitted=await post(context.owner,rejectedCreditPath+"/transition",{action:"SUBMIT",revision:rejectedCreditCreated.body.creditNote.revision,approverUserId:fixture.settler.id});
+    expect(rejectedCreditSubmitted.status,JSON.stringify(rejectedCreditSubmitted.body)).toBe(200);
+    const rejectedCreditResult=await post(context.settler,rejectedCreditPath+"/transition",{action:"REJECT",revision:rejectedCreditSubmitted.body.creditNote.revision,reason:"Supplier document reference must be corrected"});
+    expect(rejectedCreditResult.status,JSON.stringify(rejectedCreditResult.body)).toBe(200);
+    expect(rejectedCreditResult.body.creditNote.status).toBe("REJECTED");
+    const rejectedCreditRevision=rejectedCreditResult.body.creditNote.revision;
+    const replacementPayload={...linkedCreditPayload,replacesCreditNoteId:rejectedCreditId,replacesCreditRevision:rejectedCreditRevision};
+    const replacementTrace=await context.owner.request.get(receiptTracePath+"&movementId="+encodeURIComponent(returnedSource.id));
+    expect(replacementTrace.status()).toBe(200);
+    expect((await replacementTrace.json()).items[0].supplierReturnRequest).toMatchObject({status:"DISPATCHED",supplierCreditNoteId:rejectedCreditId,supplierCreditStatus:"REJECTED",supplierCreditRevision:rejectedCreditRevision,canReplaceCredit:true,canCreateCredit:false});
+    const journalCountBeforeReplacement=await prisma.enterpriseJournalEntry.count({where:{organizationId}});
+    for(const invalidReplacement of [{...replacementPayload,replacesCreditRevision:rejectedCreditRevision+1},{...replacementPayload,supplierCreditReference:rejectedCreditPayload.supplierCreditReference},linkedCreditPayload]){
+      const refused=await post(context.owner,base+"/supplier-credit-notes",invalidReplacement);
+      expect(refused.status,JSON.stringify(refused.body)).toBe(409);
+    }
+    const createdCredit=await post(context.owner,base+"/supplier-credit-notes",replacementPayload);
     expect(createdCredit.status,JSON.stringify(createdCredit.body)).toBe(201);
     const supplierReturnCreditId=createdCredit.body.creditNote.id;
     expect(createdCredit.body.creditNote.status).toBe("DRAFT");
     expect(Number(createdCredit.body.creditNote.grandTotal)).toBe(14);
-    const replayCredit=await post(context.owner,base+"/supplier-credit-notes",linkedCreditPayload);
+    const replayCredit=await post(context.owner,base+"/supplier-credit-notes",replacementPayload);
     expect(replayCredit.status,JSON.stringify(replayCredit.body)).toBe(201);
     expect(replayCredit.body.creditNote.id).toBe(supplierReturnCreditId);
-    expect(await prisma.enterpriseSupplierCreditNote.count({where:{organizationId,supplierInvoiceId:supplierInvoice.id}})).toBe(1);
+    expect(await prisma.enterpriseSupplierCreditNote.count({where:{organizationId,supplierInvoiceId:supplierInvoice.id}})).toBe(2);
+    const rejectedOriginal=await prisma.enterpriseSupplierCreditNote.findFirstOrThrow({where:{organizationId,id:rejectedCreditId}});
+    expect(rejectedOriginal.status).toBe("REJECTED");expect(rejectedOriginal.postedAt).toBeNull();
+    expect(rejectedOriginal.reason).toBe(rejectedCreditPayload.reason);
+    const replacementProof=await prisma.enterpriseSupplierReturnCreditReplacement.findFirstOrThrow({where:{organizationId,previousCreditNoteId:rejectedCreditId}});
+    expect(replacementProof).toMatchObject({returnRequestId,previousCreditRevision:rejectedCreditRevision,previousSupplierReference:rejectedCreditPayload.supplierCreditReference.toUpperCase(),replacementCreditNoteId:supplierReturnCreditId,replacementSupplierReference:linkedCreditPayload.supplierCreditReference.toUpperCase(),replacedByUserId:fixture.owner.id});
+    const rejectionApproval=await prisma.enterpriseApproval.findFirstOrThrow({where:{organizationId,id:replacementProof.rejectionApprovalId}});
+    expect(rejectionApproval.status).toBe("REJECTED");expect(rejectionApproval.approverUserId).toBe(fixture.settler.id);
+    expect(rejectionApproval.decisionComment).toBeTruthy();
+    const refusedResubmit=await post(context.owner,rejectedCreditPath+"/transition",{action:"SUBMIT",revision:rejectedOriginal.revision,approverUserId:fixture.settler.id});
+    expect(refusedResubmit.status,JSON.stringify(refusedResubmit.body)).toBe(409);
+    const rejectedCreditView=await context.owner.request.get(base+"/supplier-credit-notes?recordId="+encodeURIComponent(rejectedCreditId));
+    expect(rejectedCreditView.status()).toBe(200);
+    expect((await rejectedCreditView.json()).items[0]).toMatchObject({status:"REJECTED",replacementCreditNoteId:supplierReturnCreditId,capabilities:{canSubmit:false}});
+    const correctedTrace=await context.owner.request.get(receiptTracePath+"&movementId="+encodeURIComponent(returnedSource.id));
+    expect(correctedTrace.status()).toBe(200);
+    expect((await correctedTrace.json()).items[0].supplierReturnRequest).toMatchObject({previousCreditNoteId:rejectedCreditId,supplierCreditNoteId:supplierReturnCreditId,canReplaceCredit:false});
+    expect(await prisma.enterpriseJournalEntry.count({where:{organizationId}})).toBe(journalCountBeforeReplacement);
+    expect(await prisma.enterpriseStockMovement.count({where:{organizationId,sourceEntityType:"EnterpriseSupplierReturnRequest",sourceEntityId:returnRequestId}})).toBe(1);
+    expect((await prisma.enterprisePayable.findUniqueOrThrow({where:{supplierInvoiceId:supplierInvoice.id}})).outstandingAmount.equals(70)).toBe(true);
+    const stillHeld=await context.owner.request.get(payableDetailUrl);
+    expect((await stillHeld.json()).items[0]).toMatchObject({supplierReturnReservedAmount:"14",supplierReturnAllocatableAmount:"56"});
     const creditPath=base+"/supplier-credit-notes/"+supplierReturnCreditId;
     const selfCredit=await post(context.owner,creditPath+"/transition",{action:"SUBMIT",revision:createdCredit.body.creditNote.revision,approverUserId:fixture.owner.id});
     expect(selfCredit.status).toBe(403);
