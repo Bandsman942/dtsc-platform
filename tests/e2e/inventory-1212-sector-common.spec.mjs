@@ -64,10 +64,10 @@ test.describe.serial("#1212 common inventory contract in independent sector tena
         startedAt: new Date(Date.now() - 86400000), expiresAt: new Date(Date.now() + 30 * 86400000),
         createdByDtscUserId: user.id, updatedByDtscUserId: user.id,
       } });
-      for (const [index, moduleCode] of ["CATALOG", "SITES_WAREHOUSES", "INVENTORY_LOGISTICS", ...(sectorCode==="PHARMACY"?["SALES_DISPENSATION"]:[])].entries()) {
+      for (const [index, moduleCode] of ["CATALOG", "SITES_WAREHOUSES", "INVENTORY_LOGISTICS", ...(sectorCode==="PHARMACY"?["MEDICINES_PRODUCTS","BATCH_EXPIRY","SALES_DISPENSATION"]:[])].entries()) {
         await prisma.enterpriseModule.create({ data: {
           organizationId, moduleCode, labelFr: moduleCode, labelEn: moduleCode,
-          moduleCategory: "E2E", isEnabled: true, isCore: false, requiresPlanLevel: "BUSINESS", sortOrder: index,
+          moduleCategory: "E2E", isEnabled: true, isCore: false, requiresPlanLevel: ["MEDICINES_PRODUCTS","BATCH_EXPIRY","SALES_DISPENSATION"].includes(moduleCode)?"ENTERPRISE":"BUSINESS", sortOrder: index,
         } });
       }
       await prisma.enterpriseCurrency.create({ data: { organizationId, code: "USD", name: "US Dollar", symbol: "USD", precision: 2, isActive: true } });
