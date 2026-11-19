@@ -74,7 +74,7 @@ export async function createSupplierCreditNote(organizationId: string, actorUser
     const taxTotal = money(sumDecimals(calculated.map((row) => row.taxAmount)));
     const grandTotal = money(subtotal.plus(taxTotal));
     if (!grandTotal.greaterThan(0) || grandTotal.greaterThan(invoice.payable.outstandingAmount)) throw new EnterpriseAccountingError("SUPPLIER_CREDIT_EXCEEDS_OPEN_PAYABLE", 409);
-    if (returnRequest && (!subtotal.equals(returnRequest.totalCost) || !taxTotal.isZero() || !grandTotal.equals(returnRequest.totalCost))) throw new EnterpriseAccountingError("SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED",409);
+    if (returnRequest && (!subtotal.equals(returnRequest.totalCost) || !taxTotal.equals(returnRequest.recoverableTaxAmount) || !grandTotal.equals(returnRequest.totalCost.plus(returnRequest.recoverableTaxAmount)))) throw new EnterpriseAccountingError("SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED",409);
     const credit = await tx.enterpriseSupplierCreditNote.create({ data: { organizationId, number: financeReference("SCN"), supplierInvoiceId: invoice.id, reason: input.reason, creditDate: input.creditDate, currencyCode: invoice.currencyCode, subtotal, taxTotal, grandTotal, createdByUserId: actorUserId } });
     await tx.enterpriseSupplierCreditNoteItem.createMany({ data: calculated.map((row) => ({ organizationId, supplierCreditNoteId: credit.id,
       sourceInvoiceItemId: row.sourceInvoiceItemId, taxRecoveryRequested: row.taxRecoveryRequested,
