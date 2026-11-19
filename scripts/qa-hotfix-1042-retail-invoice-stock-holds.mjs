@@ -64,6 +64,7 @@ class DomainError extends Error {
 }
 let outstandingHold = new Decimal(3);
 let moved = 0;
+let pharmacyMapping=0, sectorMapping=0;
 const inventoryModule = { exports: {} };
 const allocationModule = { exports: {} };
 vm.runInNewContext(ts.transpileModule(read("lib/enterprise/inventory/lot-allocation.ts"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, { exports: allocationModule.exports, require: (name) => name === "@prisma/client" ? { Prisma: { Decimal } } : require(name) });
@@ -102,7 +103,9 @@ const movementTx = {
     findFirst: async () => null,
     create: async () => { moved++; return { id: "movement-1" }; },
   },
-  enterpriseInventoryItem: { findFirst: async () => ({ allowNegativeStock: false, catalogItem: { trackInventory: true } }) },
+  enterpriseInventoryItem: { findFirst: async () => ({ catalogItemId: "catalog-1", allowNegativeStock: false, catalogItem: { id:"catalog-1", trackInventory: true } }) },
+  pharmacyProductExtension: {count:async ({where})=>{assert.equal(where.organizationId,"tenant-a");assert.equal(where.catalogItemId,"catalog-1");return pharmacyMapping;}},
+  enterpriseSectorInventoryEvent: {count:async ({where})=>{assert.equal(where.organizationId,"tenant-a");assert.equal(where.catalogItemId,"catalog-1");return sectorMapping;}},
   enterpriseWarehouse: { findFirst: async () => ({ id: "store-a" }) },
   enterpriseStockLot: { findFirst: async () => ({ id: "lot-1", storageLocationId: null }) },
   enterpriseInventoryBalance: {
@@ -112,6 +115,12 @@ const movementTx = {
   },
 };
 const outbound = { inventoryItemId: "item-1", warehouseId: "store-a", stockLotId: "lot-1", quantity: 3, direction: "OUT", movementType: "SALE_FULFILLMENT", idempotencyKey: "test-1" };
+pharmacyMapping=1;
+await assert.rejects(inventoryModule.exports.applyStockMovementTx(movementTx,"tenant-a","actor",outbound),{code:"STOCK_RECLASS_SECTOR_AUTHORITY"});
+pharmacyMapping=0;sectorMapping=1;
+await assert.rejects(inventoryModule.exports.applyStockMovementTx(movementTx,"tenant-a","actor",outbound),{code:"STOCK_RECLASS_SECTOR_AUTHORITY"});
+sectorMapping=0;
+assert.equal(moved,0,"Sector mappings must prevent all common stock mutations");
 await assert.rejects(inventoryModule.exports.applyStockMovementTx(movementTx, "tenant-a", "actor", outbound), { code: "RETAIL_INVOICE_STOCK_HELD" });
 assert.equal(moved, 0, "Unpaid customer's quantity must never be consumed by a second sale");
 await assert.doesNotReject(inventoryModule.exports.applyStockMovementTx(movementTx, "tenant-a", "actor", { ...outbound, quantity: 2 }));
