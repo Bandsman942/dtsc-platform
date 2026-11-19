@@ -339,7 +339,7 @@ currentEvent = {...currentEvent,eventType:"ISSUE"};
 await assert.rejects(postingBuilder.buildInventoryAccountingPosting(rtvTx,{organizationId:"org-a",sourceEntityType:"EnterpriseInventoryAccountingEvent",sourceEntityId:"event-a"},"ISSUE"),{code:"INVENTORY_ACCOUNTING_EVENT_NOT_POSTABLE"});
 const fakeCredit = { id:"credit-a", supplierInvoiceId:"invoice-a", currencyCode:"USD", grandTotal:d(14),subtotal:d(14),taxTotal:d(0),creditDate:new Date("2026-10-19T00:00:00.000Z"),createdByUserId:"creator",approvedByUserId:"reviewer" };
 const fakeLine = {sourceInvoiceItemId:"invoice-item-a",catalogItemId:"catalog-a",quantity:d(2),unitPrice:d(7),netAmount:d(14),taxAmount:d(0),totalAmount:d(14)};
-const creditTx = {...rtvTx,enterpriseSupplierReturnRequest:{findFirst:async()=>rtv,findMany:async()=>[rtv]},
+const creditTx = {...rtvTx,enterpriseInventoryAcquisitionCostSupplement:{findFirst:async()=>null},enterpriseSupplierReturnRequest:{findFirst:async()=>rtv,findMany:async()=>[rtv]},
   enterpriseSupplierCreditNote:{findFirst:async()=>fakeCredit},enterpriseSupplierCreditNoteItem:{findMany:async()=>[fakeLine]}};
 await assert.rejects(postingBuilder.buildSupplierCreditNotePosting(creditTx,{organizationId:"org-a",sourceEntityType:"EnterpriseSupplierCreditNote",sourceEntityId:"credit-a"}),{code:"SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED"});
 const capacity=returnCredit.supplierReturnPayableCapacity({currencyCode:"USD",outstandingAmount:d(70)},[rtv]);
@@ -566,6 +566,31 @@ assert.equal(acqWrites.at(-1).data.totalCost.toFixed(),"81.2");assert.equal(acqW
 assert.equal(acqProofWrites.length,1);assert.equal(acqProofWrites[0].invoiceJournalEntryId,acqInvoiceJournal.id);assert.equal(acqProofWrites[0].receiptAccountingEventId,poolEvent.id);
 assert.equal(acqProofWrites[0].taxLineId,"acq-tax");assert.equal(acqProofWrites[0].recordedByUserId,"poster");
 console.log("Acquisition cost writer: strict 3-way provenance, original and invoice journals, posted tax proof, open period and compare-and-set layer without quantity or journal mutation (isolated mocks)");
+
+const acquisitionGuards=load("lib/enterprise/accounting/inventory-acquisition-cost-guards.ts");
+let guardProof=null;
+const guardTx={
+  enterpriseInventoryAcquisitionCostSupplement:{findFirst:async({where})=>{assert.equal(where.organizationId,"org-a");return guardProof;}},
+  enterpriseInventoryAccountingEvent:{findFirst:async({where})=>{assert.equal(where.organizationId,"org-a");return {stockMovementId:poolOrigin.id};}},
+  enterpriseStockMovement:{findFirst:async({where})=>{assert.equal(where.organizationId,"org-a");return {inventoryItemId:"acq-item",warehouseId:"acq-wh"};}},
+};
+const guardInvoiceSource={sourceEntityType:"EnterpriseSupplierInvoice",sourceEntityId:acqInvoice.id,journalId:acqInvoiceJournal.id};
+const guardEventSource={sourceEntityType:"EnterpriseInventoryAccountingEvent",sourceEntityId:poolEvent.id};
+await acquisitionGuards.assertAcquisitionJournalCorrectionAllowedTx(guardTx,"org-a",guardInvoiceSource);
+await acquisitionGuards.assertAcquisitionJournalCorrectionAllowedTx(guardTx,"org-a",guardEventSource);
+guardProof={id:"protected-supplement"};
+for(const source of [guardInvoiceSource,guardEventSource]) await assert.rejects(acquisitionGuards.assertAcquisitionJournalCorrectionAllowedTx(guardTx,"org-a",source),{code:"INVENTORY_ACQUISITION_COST_DOMAIN_CORRECTION_REQUIRED"});
+await acquisitionGuards.assertAcquisitionJournalCorrectionAllowedTx(guardTx,"org-a",{sourceEntityType:"EnterprisePayment",sourceEntityId:"other"});
+await assert.rejects(returnCredit.assertNoCapitalizedSupplierCreditTx(guardTx,"org-a",acqInvoice.id),{code:"INVENTORY_ACQUISITION_COST_DOMAIN_CORRECTION_REQUIRED"});
+await assert.rejects(returnCredit.verifySupplierReturnCreditTx({...evidenceTx,enterpriseInventoryAcquisitionCostSupplement:guardTx.enterpriseInventoryAcquisitionCostSupplement},"org-a",fakeCredit,[fakeLine]),{code:"INVENTORY_ACQUISITION_COST_DOMAIN_CORRECTION_REQUIRED"});
+guardProof=null;
+await returnCredit.assertNoCapitalizedSupplierCreditTx(guardTx,"org-a",acqInvoice.id);
+let cutoffBlocked=false;
+const cutoffTx={$queryRaw:async query=>{assert.ok(query.values.includes("org-a"));assert.ok(query.values.some(value=>value instanceof Date&&value.getTime()===acqDay.getTime()));assert.ok(query.sql.includes('s."createdAt"'));assert.ok(query.sql.includes('e."createdAt"'));return cutoffBlocked?[{blocked:1}]:[];}};
+await acquisitionGuards.assertAcquisitionValuationCutoffTx(cutoffTx,"org-a",acqDay);
+cutoffBlocked=true;await assert.rejects(acquisitionGuards.assertAcquisitionValuationCutoffTx(cutoffTx,"org-a",acqDay),{code:"INVENTORY_ACQUISITION_COST_HISTORY_REQUIRED"});
+console.log("Acquisition guards: generic credits/reversals, tenant scope and misleading historical projections blocked");
+
 
 
 

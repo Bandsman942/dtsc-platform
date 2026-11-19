@@ -7,7 +7,7 @@ import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
 import { financeReference, money, publishFinanceEvent, sumDecimals } from "@/lib/enterprise/accounting/helpers";
 import { postBusinessEventTx } from "@/lib/enterprise/accounting/posting-service";
 import type { supplierCreditNoteCreateSchema } from "@/lib/enterprise/accounting/schemas";
-import { assertSupplierReturnCreditDateTx, completeSupplierReturnCreditTx, lockSupplierReturnInvoiceTx, verifySupplierReturnCreditTx } from "@/lib/enterprise/accounting/supplier-return-credit-reconciliation";
+import { assertNoCapitalizedSupplierCreditTx, assertSupplierReturnCreditDateTx, completeSupplierReturnCreditTx, lockSupplierReturnInvoiceTx, verifySupplierReturnCreditTx } from "@/lib/enterprise/accounting/supplier-return-credit-reconciliation";
 import type { z } from "zod";
 
 type CreditInput = z.infer<typeof supplierCreditNoteCreateSchema>;
@@ -17,6 +17,7 @@ export async function createSupplierCreditNote(organizationId: string, actorUser
     await lockSupplierReturnInvoiceTx(tx, organizationId, input.invoiceId);
     const invoice = await tx.enterpriseSupplierInvoice.findFirst({ where: { id: input.invoiceId, organizationId, status: { in: ["POSTED", "PARTIALLY_PAID", "PAID"] } }, include: { payable: true } });
     if (!invoice?.payable) throw new EnterpriseAccountingError("SUPPLIER_INVOICE_NOT_CREDITABLE", 409);
+    await assertNoCapitalizedSupplierCreditTx(tx, organizationId, invoice.id);
     const returnRequest = await tx.enterpriseSupplierReturnRequest.findFirst({ where: { organizationId, supplierInvoiceId: invoice.id, status: { in: ["DISPATCHED","RECONCILED"] } } });
     const supplierReference = input.supplierCreditReference?.trim().toUpperCase();
     let replacement: { id: string; revision: number; reference: string; approvalId: string } | null = null;

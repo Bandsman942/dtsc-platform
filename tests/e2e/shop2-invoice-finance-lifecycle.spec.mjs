@@ -160,7 +160,7 @@ async function financeFixture() {
 test("#1042 real Finance settlement and five-actor credit, refund and inventory return", async ({ browser }) => {
   // #1187 adds two independent cancellation flows and the FX invoice journal
   // to the same serializable PostgreSQL scenario. Keep the timeout local.
-  test.setTimeout(540_000);
+  test.setTimeout(600_000);
   if (process.env.CI !== "true" || !/\/dtsc_shop2_behavioral(?:\?|$)/.test(process.env.DATABASE_URL || "")) {
     throw new Error("RETAIL_1042_FINANCE_LIFECYCLE_REQUIRES_EPHEMERAL_CI_DATABASE");
   }
@@ -1647,12 +1647,15 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
     // Independent purchases and real three-actor bank payments: race the
     // allocation of a confirmed supplier advance against physical dispatch.
     // No direct payable, payment, allocation, movement or journal fixture.
-    for (const paymentAmount of [57,56,64.96,67.2,0]) {
-      const multiTax=paymentAmount===67.2, nonrecoverable=paymentAmount===0;
+    for (const paymentAmount of [57,56,64.96,67.2,0,-1]) {
+      const multiTax=paymentAmount===67.2, nonrecoverable=paymentAmount<=0, freshAcquisition=paymentAmount===-1;
       const taxed=paymentAmount===64.96||multiTax||nonrecoverable;
       const invoiceGross=multiTax?"84":taxed?"81.2":"70", invoiceVat=multiTax?"14":taxed?"11.2":"0", returnVat=multiTax?"2.8":taxed?"2.24":"0", creditGross=multiTax?"16.8":taxed?"16.24":"14", exactAllocation=multiTax?"67.2":taxed?"64.96":"56";
       const suffix="PAYMENT-RACE-"+paymentAmount;
-      const racePurchase=await orderForPurchase(historicalProduct,10,suffix,supplier.id);
+      // The positive nonrecoverable case needs an entirely untouched pool.
+      const raceProduct=freshAcquisition?await prisma.enterpriseCatalogItem.create({data:{organizationId,code:historyKey+"-ACQ",sku:historyKey+"-ACQ",name:"E2E isolated acquisition "+historyKey,normalizedName:(historyKey+"-ACQ").toLowerCase(),itemType:"PRODUCT",unitOfMeasureId:fixture.product.unitOfMeasureId,indicativeSalePrice:20,indicativeCost:7,currency:fixture.currencyCode,taxable:false,trackInventory:true,createdByUserId:fixture.owner.id}}):historicalProduct;
+      if(freshAcquisition)await prisma.enterpriseInventoryItem.create({data:{organizationId,catalogItemId:raceProduct.id,lotTracking:true,expiryTracking:true,createdByUserId:fixture.owner.id}});
+      const racePurchase=await orderForPurchase(raceProduct,10,suffix,supplier.id);
       // Approved document fixture only: the real posting below generates the
       // ledger and historical INPUT tax line. The test rate is illustrative.
       const invoiceDay=new Date(returnBusinessContext.businessDate+"T00:00:00.000Z");
@@ -1687,11 +1690,24 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
         invoiceDate:invoiceDay,currencyCode:fixture.currencyCode,subtotal:"70",taxTotal:invoiceVat,grandTotal:invoiceGross,outstandingAmount:invoiceGross,
         approvedAt:new Date(),approvedByUserId:fixture.settler.id,createdByUserId:fixture.owner.id,
         ...(taxed&&!nonrecoverable?{taxRecoveryVerifiedAt:new Date(),taxRecoveryVerifiedByUserId:fixture.settler.id,reviewedByUserId:fixture.settler.id}:{}),
-        items:{create:{catalogItemId:historicalProduct.id,description:historicalProduct.name,quantity:"10",unitPrice:"7",netAmount:"70",taxAmount:invoiceVat,totalAmount:invoiceGross,...(taxed?{taxCodeId:taxCode.id,taxRateApplied:"0.16",taxJurisdiction:"CD",taxEvidenceReference:"E2E-RTV-VAT",taxRecoveryRequested:!nonrecoverable,taxCalculationMode:"NET",taxBreakdownJson:vatSnapshots}:{})}},
+        items:{create:{catalogItemId:raceProduct.id,description:raceProduct.name,quantity:"10",unitPrice:"7",netAmount:"70",taxAmount:invoiceVat,totalAmount:invoiceGross,...(taxed?{taxCodeId:taxCode.id,taxRateApplied:"0.16",taxJurisdiction:"CD",taxEvidenceReference:"E2E-RTV-VAT",taxRecoveryRequested:!nonrecoverable,taxCalculationMode:"NET",taxBreakdownJson:vatSnapshots}:{})}},
         threeWayMatch:{create:{purchaseId:racePurchase.id,purchaseReceiptId:raceReceipt.body.receipt.id,quantityVariance:0,priceVariance:0,taxVariance:0,currencyMatches:true,supplierMatches:true,withinTolerance:true,status:"MATCHED",checkedAt:new Date()}},
       }});
       await ensureStepUp(context.owner,ownerPassword);
       const raceInvoicePosted=await post(context.owner,base+"/supplier-invoices/"+raceInvoice.id+"/transition",{action:"POST",revision:raceInvoice.revision});
+      if(nonrecoverable&&!freshAcquisition){
+        expect(raceInvoicePosted.status,JSON.stringify(raceInvoicePosted.body)).toBe(409);
+        expect(raceInvoicePosted.body.error).toBe("SUPPLIER_RETURN_NONRECOVERABLE_COST_RECONCILIATION_REQUIRED");
+        const rejectedSource=await prisma.enterpriseSupplierInvoiceItem.findFirstOrThrow({where:{organizationId,supplierInvoiceId:raceInvoice.id}});
+        expect(await prisma.enterpriseJournalEntry.count({where:{organizationId,sourceEntityType:"EnterpriseSupplierInvoice",sourceEntityId:raceInvoice.id}})).toBe(0);
+        expect(await prisma.enterpriseTaxLine.count({where:{organizationId,sourceEntityType:"EnterpriseSupplierInvoiceItem",sourceEntityId:rejectedSource.id}})).toBe(0);
+        expect(await prisma.enterpriseInventoryAcquisitionCostSupplement.count({where:{organizationId,supplierInvoiceItemId:rejectedSource.id}})).toBe(0);
+        expect(await prisma.enterprisePayable.count({where:{organizationId,supplierInvoiceId:raceInvoice.id}})).toBe(0);
+        expect((await prisma.enterpriseSupplierInvoice.findUniqueOrThrow({where:{id:raceInvoice.id}})).status).toBe("APPROVED");
+        const originalLayer=await prisma.enterpriseInventoryCostLayer.findFirstOrThrow({where:{organizationId,sourceMovementId:raceSource.id}});
+        expect(originalLayer.unitCost.equals(7)&&originalLayer.totalCost.equals(70)&&originalLayer.remainingQuantity.equals(10)).toBe(true);
+        continue;
+      }
       expect(raceInvoicePosted.status,JSON.stringify(raceInvoicePosted.body)).toBe(200);
       const racePayable=await prisma.enterprisePayable.findUniqueOrThrow({where:{supplierInvoiceId:raceInvoice.id}});
       expect(racePayable.outstandingAmount.equals(invoiceGross)).toBe(true);
@@ -1704,6 +1720,31 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
         const vatPreview=await context.owner.request.get(racePurchasePath+"?view=supplier-return-preflight&movementId="+encodeURIComponent(raceSource.id)+"&quantity=2");
         if(nonrecoverable){
           const beforeLayer=await prisma.enterpriseInventoryCostLayer.findFirstOrThrow({where:{organizationId,sourceMovementId:raceSource.id}});
+          expect(beforeLayer.quantity.equals(10)&&beforeLayer.remainingQuantity.equals(10)&&beforeLayer.unitCost.equals("8.12")&&beforeLayer.totalCost.equals("81.2")).toBe(true);
+          const proof=await prisma.enterpriseInventoryAcquisitionCostSupplement.findFirstOrThrow({where:{organizationId,supplierInvoiceItemId:sourceItem.id}});
+          expect(proof.costLayerId).toBe(beforeLayer.id);
+          expect(proof.taxLineId).toBe(inputTaxes[0].id);
+          expect(proof.originalUnitCost.equals(7)&&proof.originalTotalCost.equals(70)&&proof.capitalizedTaxAmount.equals("11.2")&&proof.totalCost.equals("81.2")).toBe(true);
+          const originalEvent=await prisma.enterpriseInventoryAccountingEvent.findUniqueOrThrow({where:{id:proof.receiptAccountingEventId}});
+          expect(originalEvent.unitCost.equals(7)&&originalEvent.totalCost.equals(70)&&originalEvent.quantity.equals(10)).toBe(true);
+          const newInvoiceJournal=await prisma.enterpriseJournalEntry.findUniqueOrThrow({where:{id:proof.invoiceJournalEntryId},include:{lines:true}});
+          expect(newInvoiceJournal.totalDebit.equals("81.2")&&newInvoiceJournal.totalCredit.equals("81.2")).toBe(true);
+          expect(newInvoiceJournal.lines).toHaveLength(3);
+          const replayAcquisition=await post(context.owner,base+"/supplier-invoices/"+raceInvoice.id+"/transition",{action:"POST",revision:raceInvoice.revision});
+          expect(replayAcquisition.status,JSON.stringify(replayAcquisition.body)).toBe(200);
+          expect(await prisma.enterpriseInventoryAcquisitionCostSupplement.count({where:{organizationId,supplierInvoiceItemId:sourceItem.id}})).toBe(1);
+          expect(await prisma.enterpriseJournalEntry.count({where:{organizationId,sourceEntityType:"EnterpriseSupplierInvoice",sourceEntityId:raceInvoice.id}})).toBe(1);
+          expect(await prisma.enterpriseTaxLine.count({where:{organizationId,sourceEntityType:"EnterpriseSupplierInvoiceItem",sourceEntityId:sourceItem.id}})).toBe(1);
+          const genericCredit=await post(context.owner,base+"/supplier-credit-notes",{invoiceId:raceInvoice.id,creditDate:returnBusinessContext.businessDate,reason:"Attempt unsupported independent acquisition correction",items:[{sourceInvoiceItemId:sourceItem.id,description:raceProduct.name,quantity:"2",unitPrice:"7"}]});
+          expect(genericCredit.status,JSON.stringify(genericCredit.body)).toBe(409);
+          expect(genericCredit.body.error).toBe("INVENTORY_ACQUISITION_COST_DOMAIN_CORRECTION_REQUIRED");
+          for(const journalId of [newInvoiceJournal.id,originalEvent.journalEntryId]){
+            const reverseAcquisition=await post(context.owner,base+"/journal-entries/"+journalId+"/reverse",{reason:"Attempt unsupported independent acquisition reversal",accountingDate:returnBusinessContext.businessDate});
+            expect(reverseAcquisition.status,JSON.stringify(reverseAcquisition.body)).toBe(409);
+            expect(reverseAcquisition.body.error).toBe("INVENTORY_ACQUISITION_COST_DOMAIN_CORRECTION_REQUIRED");
+            expect((await prisma.enterpriseJournalEntry.findUniqueOrThrow({where:{id:journalId}})).status).toBe("POSTED");
+            expect(await prisma.enterpriseJournalReversal.count({where:{organizationId,originalEntryId:journalId}})).toBe(0);
+          }
           expect(vatPreview.status()).toBe(409);
           expect((await vatPreview.json()).error).toBe("SUPPLIER_RETURN_NONRECOVERABLE_COST_RECONCILIATION_REQUIRED");
           const blockedReturn=await post(context.owner,racePurchasePath+"?action=submit-supplier-return",{movementId:raceSource.id,quantity:"2",reason:"Nonrecoverable tax cost must be reconciled",approverUserId:fixture.settler.id,idempotencyKey:historyKey+"-"+suffix});

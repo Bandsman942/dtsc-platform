@@ -4,6 +4,7 @@ import { assertIndependentActor } from "@/lib/enterprise/accounting/access";
 import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
 import { financeReference, publishFinanceEvent } from "@/lib/enterprise/accounting/helpers";
 import { getPostingPeriod } from "@/lib/enterprise/accounting/periods";
+import { assertAcquisitionJournalCorrectionAllowedTx } from "@/lib/enterprise/accounting/inventory-acquisition-cost-guards";
 
 export type JournalReversalAuthorization = "USER" | "APPROVED_PERIODIC_TEMPLATE" | "SYSTEM_CLOSING" | "DOMAIN_INVERSE";
 
@@ -31,6 +32,9 @@ export async function reverseJournalEntryTx(
   }
   if (original.status === "REVERSED") throw new EnterpriseAccountingError("JOURNAL_REVERSAL_INCONSISTENT", 409);
   if (original.status !== "POSTED") throw new EnterpriseAccountingError("ONLY_POSTED_ENTRY_CAN_BE_REVERSED", 409);
+  await assertAcquisitionJournalCorrectionAllowedTx(tx, organizationId, {
+    journalId: original.id, sourceEntityType: original.sourceEntityType, sourceEntityId: original.sourceEntityId,
+  });
   // A manual reversal of a matched supplier source would leave stock, payable
   // and the return evidence inconsistent. Only a future domain inverse can
   // reverse those objects together.

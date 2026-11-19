@@ -79,6 +79,9 @@ export async function inspectSupplierReturnTx(tx: Prisma.TransactionClient, orga
     receiptValue.currencyCode !== receipt.purchase.currency || !receiptValue.unitCost.gt(0) ||
     !receiptValue.totalCost.equals(money(origin.quantity.times(receiptValue.unitCost)))) blocked("SUPPLIER_RETURN_VALUATION_REQUIRED");
   const originLayer = layers.find((layer) => layer.sourceMovementId === origin.id);
+  if (originLayer && await tx.enterpriseInventoryAcquisitionCostSupplement.findFirst({
+    where: { organizationId, costLayerId: originLayer.id }, select: { id: true },
+  })) blocked("SUPPLIER_RETURN_NONRECOVERABLE_COST_RECONCILIATION_REQUIRED");
   if (!originLayer || !originLayer.quantity.equals(origin.quantity) || originLayer.remainingQuantity.lt(qty) ||
     !originLayer.totalCost.equals(receiptValue.totalCost) || !layers.length ||
     layers.some((layer) => layer.currencyCode !== receiptValue.currencyCode || !layer.unitCost.equals(receiptValue.unitCost) || layer.valuationMethod !== "WEIGHTED_AVERAGE") ||

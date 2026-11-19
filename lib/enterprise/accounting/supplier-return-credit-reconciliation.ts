@@ -117,6 +117,16 @@ export async function deriveNonRecoverableInventoryCostTx(
     capitalizedTaxAmount: tax.amount, unitCost, totalCost };
 }
 
+/** A finance-only credit would credit INVENTORY for the same capitalized tax
+ * without reducing the corresponding cost layer. Block draft and posting
+ * until the linked physical-return / domain correction is implemented. */
+export async function assertNoCapitalizedSupplierCreditTx(tx: Prisma.TransactionClient, organizationId: string, supplierInvoiceId: string) {
+  const evidence = await tx.enterpriseInventoryAcquisitionCostSupplement.findFirst({
+    where: { organizationId, supplierInvoiceItem: { organizationId, supplierInvoiceId } }, select: { id: true },
+  });
+  if (evidence) throw new EnterpriseAccountingError("INVENTORY_ACQUISITION_COST_DOMAIN_CORRECTION_REQUIRED", 409);
+}
+
 type CreditEvidence = {
   id: string; supplierInvoiceId: string; currencyCode: string; grandTotal: Prisma.Decimal; subtotal: Prisma.Decimal; taxTotal: Prisma.Decimal;
   creditDate: Date; createdByUserId: string; approvedByUserId: string | null;
@@ -127,6 +137,7 @@ type CreditLine = { sourceInvoiceItemId: string | null; catalogItemId: string | 
  * dispatch value, line, quantity, original accounts and posted source journal.
  * It never treats an unrelated commercial discount as a stock reversal. */
 export async function verifySupplierReturnCreditTx(tx: Prisma.TransactionClient, organizationId: string, credit: CreditEvidence, items: CreditLine[]) {
+  await assertNoCapitalizedSupplierCreditTx(tx, organizationId, credit.supplierInvoiceId);
   const dispatched = await tx.enterpriseSupplierReturnRequest.findFirst({ where: { organizationId, supplierInvoiceId: credit.supplierInvoiceId, status: "DISPATCHED" } });
   if (!dispatched) {
     // Finalized return evidence cannot be posted again at a new posting version.

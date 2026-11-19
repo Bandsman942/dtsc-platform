@@ -17,8 +17,8 @@ const fail = () => { throw new EnterpriseAccountingError("SUPPLIER_RETURN_NONREC
  * transaction, including journal, tax lines, cost and payable changes.
  *
  * Do not call from a repair job, a generic posting retry or an existing
- * POSTED invoice. Activation requires the posting authority to enforce that
- * contract and protect linked journals, credit notes and historical reports.
+ * POSTED invoice. The canonical posting authority enforces that contract;
+ * generic credits/reversals and affected historical projections are guarded.
  */
 export async function capitalizeNonRecoverableAcquisitionCostTx(
   tx: Prisma.TransactionClient, organizationId: string, actorUserId: string,

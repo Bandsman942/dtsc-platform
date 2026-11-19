@@ -10,6 +10,9 @@ import { getPostingBuilderV2 } from "@/lib/enterprise/accounting/posting-registr
 import type { PostingDocument, PostingLineDraft } from "@/lib/enterprise/accounting/posting-types";
 import { resolveSemanticPostingAccount } from "@/lib/enterprise/accounting/semantic-account-resolver";
 import { ensureSystemFiscalCalendarForDateTx } from "@/lib/enterprise/accounting/system-accounting-continuity";
+import { capitalizeNonRecoverableAcquisitionCostTx } from "@/lib/enterprise/accounting/inventory-acquisition-cost-service";
+import { assertAcquisitionJournalCorrectionAllowedTx } from "@/lib/enterprise/accounting/inventory-acquisition-cost-guards";
+import { recordPostedTaxApplicationsTx } from "@/lib/enterprise/accounting/tax-engine";
 
 type PostingInput = {
   postingEvent: PostingEvent;
@@ -157,6 +160,7 @@ export async function postBusinessEventTx(
   organizationId: string,
   actorUserId: string,
   input: PostingInput,
+  options?: { supplierInvoiceTransition?: true },
 ) {
   const version = input.postingVersion || 1;
   const stableKey = postingStableKey(organizationId, input);
@@ -199,6 +203,19 @@ export async function postBusinessEventTx(
   });
   if (document.organizationId !== organizationId || document.sourceEntityId !== input.sourceEntityId) {
     throw new EnterpriseAccountingError("POSTING_SOURCE_SCOPE_MISMATCH", 409);
+  }
+
+  // Nonrecoverable stock VAT must never be posted as a stand-alone journal:
+  // only the canonical invoice transition also creates the payable and marks
+  // the approved document POSTED in this same Serializable transaction.
+  const capitalizeAcquisition = input.postingEvent === "SUPPLIER_INVOICE_POSTED" &&
+    document.lines.some(line => line.accountMappingKey === "INVENTORY");
+  if (capitalizeAcquisition && (version !== 1 || input.sourceEntityType !== "EnterpriseSupplierInvoice" || !options?.supplierInvoiceTransition)) {
+    throw new EnterpriseAccountingError("SUPPLIER_RETURN_NONRECOVERABLE_COST_RECONCILIATION_REQUIRED", 409);
+  }
+  if (document.sourceEntityType === "EnterpriseInventoryAccountingEvent" &&
+      (version !== 1 || input.sourceEntityType !== document.sourceEntityType)) {
+    await assertAcquisitionJournalCorrectionAllowedTx(tx, organizationId, document);
   }
 
   // The system-managed hidden ledger receives a deterministic calendar-year
@@ -256,6 +273,18 @@ export async function postBusinessEventTx(
     },
     include: { lines: true, journal: true, fiscalPeriod: true },
   });
+  if (capitalizeAcquisition) {
+    // Tax evidence and the journal are visible to the writer but none of
+    // them can commit unless the exact stock supplement and payable succeed.
+    const items = await tx.enterpriseSupplierInvoiceItem.findMany({
+      where: { organizationId, supplierInvoiceId: input.sourceEntityId },
+      select: { id: true, taxBreakdownJson: true, taxRecoveryRequested: true },
+    });
+    await recordPostedTaxApplicationsTx(tx, { organizationId, sourceEntityType: "EnterpriseSupplierInvoiceItem", currencyCode: document.currencyCode, items });
+    await capitalizeNonRecoverableAcquisitionCostTx(tx, organizationId, actorUserId, {
+      invoiceId: input.sourceEntityId, invoiceJournalId: entry.id, postingBatchId: batch.id,
+    });
+  }
   const completedBatch = await tx.enterprisePostingBatch.update({
     where: { id: batch.id },
     data: { status: "COMPLETED", completedAt: new Date() },

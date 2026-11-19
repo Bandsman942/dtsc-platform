@@ -3,6 +3,7 @@ import type { AiToolExecutor, AiToolRuntimeContext } from "@/lib/ai/tools/types"
 import { FINANCE_AI_TOOL_CODES, type FinanceAiToolCode } from "@/lib/ai/tools/finance-contract";
 import { resolveEnterpriseFinanceReadiness } from "@/lib/enterprise/accounting/finance-readiness-service";
 import { serializeFinanceValue } from "@/lib/enterprise/accounting/helpers";
+import { assertAcquisitionValuationCutoffTx } from "@/lib/enterprise/accounting/inventory-acquisition-cost-guards";
 import {
   enterpriseBudgetVisibilityWhere,
   enterpriseExpenseVisibilityWhere,
@@ -367,8 +368,10 @@ async function assets(organizationId: string, toolName: FinanceAiToolCode, args:
 
 async function inventory(organizationId: string, toolName: FinanceAiToolCode, args: FinanceReadArgs) {
   const { limit, end } = windowFor(args);
-  const [totals, positions] = await Promise.all([
-    prisma.$queryRaw<Array<{ currencyCode: string; quantity: Prisma.Decimal; value: Prisma.Decimal }>>(Prisma.sql`
+  const [totals, positions] = await prisma.$transaction(async tx => {
+    await assertAcquisitionValuationCutoffTx(tx, organizationId, end);
+    return Promise.all([
+    tx.$queryRaw<Array<{ currencyCode: string; quantity: Prisma.Decimal; value: Prisma.Decimal }>>(Prisma.sql`
       SELECT "currencyCode",
         COALESCE(SUM("remainingQuantity"), 0) AS quantity,
         COALESCE(SUM("remainingQuantity" * "unitCost"), 0) AS value
@@ -377,7 +380,7 @@ async function inventory(organizationId: string, toolName: FinanceAiToolCode, ar
       GROUP BY "currencyCode"
       ORDER BY "currencyCode"
     `),
-    prisma.$queryRaw<Array<{ inventoryItemId: string; warehouseId: string | null; currencyCode: string; quantity: Prisma.Decimal; value: Prisma.Decimal }>>(Prisma.sql`
+    tx.$queryRaw<Array<{ inventoryItemId: string; warehouseId: string | null; currencyCode: string; quantity: Prisma.Decimal; value: Prisma.Decimal }>>(Prisma.sql`
       SELECT "inventoryItemId", "warehouseId", "currencyCode",
         COALESCE(SUM("remainingQuantity"), 0) AS quantity,
         COALESCE(SUM("remainingQuantity" * "unitCost"), 0) AS value
@@ -387,7 +390,8 @@ async function inventory(organizationId: string, toolName: FinanceAiToolCode, ar
       ORDER BY value DESC, "inventoryItemId", "warehouseId", "currencyCode"
       LIMIT ${limit}
     `),
-  ]);
+    ]);
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
   return output(toolName, totals.length, totals.length ? "Valorisation du stock calculée depuis les couches de coût canoniques, séparée par devise avec positions bornées." : "Aucune couche de coût de stock valorisable.", { asOf: end, totals, positions });
 }
 

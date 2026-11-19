@@ -9,6 +9,9 @@ import { isSameOriginRequest } from "@/lib/request-security";
 import { isValidEnterpriseActivityCivilDate } from "@/lib/enterprise/enterprise-activity-civil-date";
 
 const FINANCE_ERROR_MESSAGES: Record<string, string> = {
+  SUPPLIER_RETURN_NONRECOVERABLE_COST_RECONCILIATION_REQUIRED: "La TVA non récupérable exige une réception et une valorisation d'origine entièrement rapprochées, sans consommation ni opération ouverte. Vérifiez les pièces et la période avant de poursuivre.",
+  INVENTORY_ACQUISITION_COST_DOMAIN_CORRECTION_REQUIRED: "Ce coût de stock intègre une taxe non récupérable. Un avoir ou une contrepassation isolée déséquilibrerait le stock et la comptabilité. Utilisez une correction coordonnée lorsqu’elle sera disponible.",
+  INVENTORY_ACQUISITION_COST_HISTORY_REQUIRED: "Cette date exige une reconstitution historique du stock valorisé. Consultez un état déjà enregistré ou la valorisation actuelle ; aucun nouvel état historique approximatif n’a été créé.",
   FINANCE_PERIOD_CLOSED: "Cette période financière est fermée. Choisissez une période ouverte ou demandez une réouverture autorisée.",
   FINANCE_INPUT_INVALID: "Certaines informations sont invalides ou incomplètes. Corrigez les champs signalés puis réessayez.",
   RETAIL_INVOICE_NOT_FULLY_PAID: "La facture Retail doit être intégralement réglée avant de déclencher sa sortie de stock.",

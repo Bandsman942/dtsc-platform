@@ -202,10 +202,23 @@ export async function transitionSupplierInvoice(
       const invoice = await tx.enterpriseSupplierInvoice.findFirst({ where: { id: invoiceId, organizationId } });
       if (!invoice) throw new EnterpriseAccountingError("SUPPLIER_INVOICE_NOT_FOUND", 404);
       if (invoice.status !== "APPROVED" || invoice.revision !== input.revision) throw new EnterpriseAccountingError("SUPPLIER_INVOICE_NOT_APPROVED", 409);
-      const supplierLines = await tx.enterpriseSupplierInvoiceItem.findMany({ where: { organizationId, supplierInvoiceId: invoice.id }, select: { id: true, taxBreakdownJson: true, taxRecoveryRequested: true } });
+      const supplierLines = await tx.enterpriseSupplierInvoiceItem.findMany({ where: { organizationId, supplierInvoiceId: invoice.id }, select: { id: true, taxBreakdownJson: true, taxRecoveryRequested: true, taxAmount: true } });
       if (supplierLines.some((line) => line.taxRecoveryRequested) && !invoice.taxRecoveryVerifiedAt) throw new EnterpriseAccountingError("SUPPLIER_INPUT_TAX_REVIEW_REQUIRED", 409);
-      const posting = await postBusinessEventTx(tx, organizationId, actorUserId, { postingEvent: "SUPPLIER_INVOICE_POSTED", sourceEntityType: "EnterpriseSupplierInvoice", sourceEntityId: invoice.id });
-      await recordPostedTaxApplicationsTx(tx, { organizationId, sourceEntityType: "EnterpriseSupplierInvoiceItem", currencyCode: invoice.currencyCode, items: supplierLines });
+      const requiresSupplement = Boolean(invoice.purchaseReceiptId && supplierLines.some(line => !line.taxRecoveryRequested && line.taxAmount.gt(0)));
+      const posting = await postBusinessEventTx(tx, organizationId, actorUserId, { postingEvent: "SUPPLIER_INVOICE_POSTED", sourceEntityType: "EnterpriseSupplierInvoice", sourceEntityId: invoice.id }, { supplierInvoiceTransition: true });
+      if (requiresSupplement) {
+        // Old orphan journals from before this rollout cannot silently become
+        // approved invoices. An exact persisted proof must be created by the
+        // live posting in this transaction; a completed-batch replay here
+        // would imply an inconsistent APPROVED source.
+        const proof = await tx.enterpriseInventoryAcquisitionCostSupplement.findFirst({
+          where: { organizationId, invoiceJournalEntryId: posting.entry.id, supplierInvoiceItem: { organizationId, supplierInvoiceId: invoice.id } },
+          select: { id: true },
+        });
+        if (posting.idempotent || !proof) throw new EnterpriseAccountingError("SUPPLIER_RETURN_NONRECOVERABLE_COST_RECONCILIATION_REQUIRED", 409);
+      } else {
+        await recordPostedTaxApplicationsTx(tx, { organizationId, sourceEntityType: "EnterpriseSupplierInvoiceItem", currencyCode: invoice.currencyCode, items: supplierLines });
+      }
       const payable = await tx.enterprisePayable.upsert({
         where: { supplierInvoiceId: invoice.id },
         update: {},
@@ -223,7 +236,13 @@ export async function transitionSupplierInvoice(
       }
       await publishFinanceEvent(tx, { organizationId, entityType: "EnterpriseSupplierInvoice", entityId: invoice.id, eventType: "SUPPLIER_INVOICE_POSTED", summary: `Supplier invoice ${invoice.number} posted`, actorUserId, fromStatus: invoice.status, toStatus: "POSTED", metadataJson: { payableId: payable.id, journalEntryId: posting.entry.id } });
       return updated;
-    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 30000 }).catch(error => {
+      if (error instanceof Prisma.PrismaClientKnownRequestError &&
+          (error.code === "P2034" || (error.code === "P2010" && ["40001", "40P01"].includes(String(error.meta?.code))))) {
+        throw new EnterpriseAccountingError("SUPPLIER_INVOICE_REVISION_CONFLICT", 409);
+      }
+      throw error;
+    });
   }
   return prisma.$transaction(async (tx) => {
     await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterpriseSupplierInvoice" WHERE id = ${invoiceId} AND "organizationId" = ${organizationId} FOR UPDATE`);
