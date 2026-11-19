@@ -56,9 +56,13 @@ export async function createSupplierCreditNote(organizationId: string, actorUser
       }
       // Retired supplier references stay reserved even after the active pointer
       // moves. Never recycle a rejected external document identifier.
-      if (await tx.enterpriseSupplierReturnCreditReplacement.count({where:{organizationId,supplierId:returnRequest.supplierId,previousSupplierReference:supplierReference}})) {
-        throw new EnterpriseAccountingError("SUPPLIER_RETURN_CREDIT_REPLACEMENT_INVALID",409);
-      }
+      // Both current and retired references are checked in the same snapshot:
+      // a reference moved to history concurrently cannot be recycled.
+      const [currentReference,retiredReference]=await Promise.all([
+        tx.enterpriseSupplierReturnRequest.count({where:{organizationId,supplierId:returnRequest.supplierId,supplierCreditReference:supplierReference,id:{not:returnRequest.id}}}),
+        tx.enterpriseSupplierReturnCreditReplacement.count({where:{organizationId,supplierId:returnRequest.supplierId,previousSupplierReference:supplierReference}}),
+      ]);
+      if (currentReference || retiredReference) throw new EnterpriseAccountingError("SUPPLIER_RETURN_CREDIT_REPLACEMENT_INVALID",409);
     }
     const [originalLines, olderNotes] = await Promise.all([
       tx.enterpriseSupplierInvoiceItem.findMany({ where: { organizationId, supplierInvoiceId: invoice.id } }),
