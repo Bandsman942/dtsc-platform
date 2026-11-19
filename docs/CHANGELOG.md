@@ -1,5 +1,6 @@
 ## 2026-11-17 / 18 — Hotfix stock/lots #1212 — v1.23.4 candidate (DRAFT)
 
+- Primitive interne de capitalisation acquisition : provenance et journaux exacts, période ouverte, compare-and-set de couche et preuve dans la transaction appelante; recette isolée, non raccordée au posting opérationnel tant que les gardes inverses et historiques ne sont pas certifiées.
 - 18e migration candidate : preuve de supplément d'acquisition tenant-aware, contraintes HT/TTC exactes et préflight CUMP isolé en lecture seule. Aucun backfill, aucune activation de posting ou de retour non récupérable. CI à certifier.
 - Preuve préparatoire de coût non récupérable : calcul TTC exact à partir d'une preuve fiscale historique INPUT_NONRECOVERABLE unique, sans mutation de stock ni activation du retour; QA isolée ajoutée, CI à certifier. #1212 reste bloquant.
 - Sélecteur indépendant, garde de politique historique, réceptions et réservations FEFO, factures POS et retours multi-lots; régularisation historique sans changement de valeur.

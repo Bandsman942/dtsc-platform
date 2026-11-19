@@ -1,3 +1,5 @@
+> **Tranche écriture acquisition #1212** : primitive transactionnelle de capitalisation avec concordance documentaire, fiscale et comptable, sans deuxième journal ni changement de quantité. Appel runtime encore désactivé; certification de la transaction réelle et des protections inverses/historiques exigée.
+
 > **Tranche pool CUMP et preuve d'acquisition #1212** : dix-huitième migration additive, registre de preuve à cinq références tenant-aware, unicité et contraintes monétaires exactes; préflight lecture seule sur réception/couche/solde uniques, sans opération ouverte. Aucun supplément créé par le runtime à ce stade.
 
 > **Tranche coût non récupérable #1212** : preuve historique en lecture seule, calcul TTC exact et garde de retour conservée. Aucun supplément de coût persisté ni changement de posting; l’intégration atomique et la certification restent bloquantes.

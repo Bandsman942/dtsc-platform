@@ -502,6 +502,72 @@ poolCounts=1;await rejectedPool();poolCounts=0;
 assert.equal((await inspectPool()).receiptEvent.id,poolEvent.id);
 console.log("Acquisition pool preflight: entire history, tenant, functional currency, physical and cost equality, no open operations or duplicate supplement (read-only mocks)");
 
+// Test the write primitive with the existing real isolated-pool and tax
+// verification helpers. No production route calls it yet.
+mocks["@/lib/enterprise/accounting/inventory-acquisition-cost-preflight"]=acquisitionPool;
+const acqDay=new Date(realBusinessContext.formatEnterpriseBusinessDate(new Date(),"Africa/Kinshasa")+"T00:00:00Z");
+const acqNow=new Date();
+const acqOrigin={...poolOrigin,occurredAt:new Date(acqNow.getTime()-1000)};
+const acqLayer={...poolLayer,effectiveAt:acqOrigin.occurredAt};
+const acqPurchaseItem={id:"purchase-item-acq",quantity:d(10),unitPrice:d(7),lineSubtotal:d(70),taxAmount:d("11.2"),lineTotal:d("81.2")};
+const acqReceipt={id:acqOrigin.sourceEntityId,receivedAt:acqOrigin.occurredAt,items:[{id:acqOrigin.sourceLineId,purchaseItemId:acqPurchaseItem.id,quantityReceived:d(10)}]};
+const acqInvoiceItem={...nonRecoverableOriginal,catalogItemId:"acq-catalog",totalAmount:d("81.2"),taxBreakdownJson:[{...vatSnapshot,effectiveAt:acqDay.toISOString()}]};
+const acqMatch={organizationId:"org-a",purchaseId:"purchase-acq",purchaseReceiptId:acqReceipt.id,status:"MATCHED",currencyMatches:true,supplierMatches:true,withinTolerance:true,overrideReason:null,quantityVariance:d(0),priceVariance:d(0),taxVariance:d(0)};
+const acqInvoice={id:"invoice-acq",purchaseId:"purchase-acq",purchaseReceiptId:acqReceipt.id,supplierId:"supplier-acq",assetId:null,expenseId:null,approvedAt:acqNow,approvedByUserId:"approver",createdByUserId:"creator",items:[acqInvoiceItem],amountPaid:d(0),amountCredited:d(0),outstandingAmount:d("81.2"),subtotal:d(70),taxTotal:d("11.2"),grandTotal:d("81.2"),currencyCode:"USD",invoiceDate:acqDay,threeWayMatch:acqMatch};
+const acqPurchase={currency:"USD",items:[acqPurchaseItem],receipts:[acqReceipt],subtotalAmount:d(70),taxAmount:d("11.2"),totalAmount:d("81.2")};
+const acqLedger=(account,debit,credit)=>({...ledgerLine(account,debit,credit),transactionCurrencyCode:"USD",exchangeRate:d(1)});
+const acqInvoiceJournal={id:"invoice-journal-acq",postedAt:acqNow,postedByUserId:"poster",idempotencyKey:"acq-key",fiscalPeriodId:"period-acq",accountingDate:acqDay,functionalCurrencyCode:"USD",totalDebit:d("81.2"),totalCredit:d("81.2"),lines:[acqLedger("GOODS_RECEIVED_CLEARING",70,0),acqLedger("INVENTORY","11.2",0),acqLedger("ACCOUNTS_PAYABLE",0,"81.2")]};
+const acqReceiptJournal={id:poolEvent.journalEntryId,postedAt:acqOrigin.occurredAt,accountingDate:acqOrigin.occurredAt,functionalCurrencyCode:"USD",totalDebit:d(70),totalCredit:d(70),lines:[acqLedger("INVENTORY",70,0),acqLedger("GOODS_RECEIVED_CLEARING",0,70)]};
+let acqInvoiceRead=acqInvoice,acqPurchaseRead=acqPurchase,acqJournalRead=acqInvoiceJournal,acqReceiptJournalRead=acqReceiptJournal,acqLink=true,acqBatch=true,acqTax=true,acqAffected=1,acqWrites=[],acqProofWrites=[],acqPriorPayable=null,acqDuplicateInvoice=false;
+const acqPeriodMock=mocks["@/lib/enterprise/accounting/periods"];
+let acqPeriodOpen=true;
+mocks["@/lib/enterprise/accounting/periods"]={getPostingPeriod:async(_tx,org,date,options)=>{assert.equal(org,"org-a");assert.equal(date.getTime(),acqDay.getTime());assert.equal(options,undefined);if(!acqPeriodOpen)throw new TestDomainError("FINANCE_PERIOD_CLOSED",409);return {id:"period-acq"};}};
+const acqWriter=load("lib/enterprise/accounting/inventory-acquisition-cost-service.ts");
+mocks["@/lib/enterprise/accounting/periods"]=acqPeriodMock;
+const acqTx={...poolTx,
+  $queryRaw:async()=>[],
+  organization:{findFirst:async()=>({timezone:"Africa/Kinshasa"})},
+  enterpriseSupplierInvoice:{findFirst:async({where})=>{assert.equal(where.organizationId,"org-a");assert.equal(where.status,"APPROVED");assert.equal(where.postedAt,null);return acqInvoiceRead;},findMany:async()=>acqDuplicateInvoice?[{id:acqInvoice.id},{id:"other"}]:[{id:acqInvoice.id}]},
+  enterprisePurchase:{findFirst:async({where})=>{assert.equal(where.supplierId,acqInvoice.supplierId);return acqPurchaseRead;}},
+  enterpriseStockMovement:{findFirst:async()=>acqOrigin,findMany:async({where})=>where.sourceEntityId?[{...acqOrigin,direction:"IN",movementType:"PURCHASE_RECEIPT"}]:[{id:acqOrigin.id}]},
+  enterpriseInventoryCostLayer:{findMany:async()=>[acqLayer],updateMany:async args=>{acqWrites.push(args);return {count:acqAffected};}},
+  enterprisePostingBatch:{findFirst:async({where})=>{assert.equal(where.status,"PROCESSING");return acqBatch?{idempotencyKey:"acq-key"}:null;}},
+  enterpriseJournalEntry:{findFirst:async({where})=>where.id===acqInvoiceJournal.id?acqJournalRead:acqReceiptJournalRead},
+  enterprisePayable:{findFirst:async()=>acqPriorPayable},
+  enterpriseSupplierCreditNote:{count:async()=>0},
+  pharmacyProductExtension:{count:async()=>0},
+  enterpriseSectorInventoryEvent:{count:async()=>0},
+  enterprisePurchaseItemCatalogLink:{findFirst:async()=>acqLink?{id:"link"}:null},
+  enterprisePurchaseReceiptOperationalLink:{findFirst:async()=>({id:"receipt-link"})},
+  enterpriseInventoryItem:{findFirst:async()=>({id:acqOrigin.inventoryItemId})},
+  enterpriseTaxLine:{findMany:async()=>[{...nonRecoverableRow,effectiveAt:acqDay}],findFirst:async()=>acqTax?{id:"acq-tax",effectiveAt:acqDay}:null},
+  enterpriseInventoryAcquisitionCostSupplement:{findFirst:async()=>poolSupplement,create:async({data})=>{acqProofWrites.push(data);return {id:"acq-proof",...data};}},
+};
+const applyAcq=()=>acqWriter.capitalizeNonRecoverableAcquisitionCostTx(acqTx,"org-a","poster",{invoiceId:acqInvoice.id,invoiceJournalId:acqInvoiceJournal.id,postingBatchId:"batch-acq"});
+const blockedAcq=()=>assert.rejects(applyAcq(),{code:"SUPPLIER_RETURN_NONRECOVERABLE_COST_RECONCILIATION_REQUIRED"});
+acqInvoiceRead={...acqInvoice,threeWayMatch:{...acqMatch,taxVariance:d("0.01")}};await blockedAcq();acqInvoiceRead=acqInvoice;
+acqDuplicateInvoice=true;await blockedAcq();acqDuplicateInvoice=false;
+acqPurchaseRead={...acqPurchase,taxAmount:d(10)};await blockedAcq();acqPurchaseRead=acqPurchase;
+acqLink=false;await blockedAcq();acqLink=true;
+acqPriorPayable={id:"existing"};await blockedAcq();acqPriorPayable=null;
+acqBatch=false;await blockedAcq();acqBatch=true;
+acqTax=false;await blockedAcq();acqTax=true;
+acqJournalRead={...acqInvoiceJournal,lines:[...acqInvoiceJournal.lines.slice(0,2),acqLedger("ACCOUNTS_PAYABLE",0,81)]};await blockedAcq();acqJournalRead=acqInvoiceJournal;
+acqReceiptJournalRead={...acqReceiptJournal,totalDebit:d(71)};await blockedAcq();acqReceiptJournalRead=acqReceiptJournal;
+acqPeriodOpen=false;await assert.rejects(applyAcq(),{code:"FINANCE_PERIOD_CLOSED"});acqPeriodOpen=true;
+poolSupplement={id:"already-capitalized"};await blockedAcq();poolSupplement=null;
+assert.equal(acqWrites.length,0);assert.equal(acqProofWrites.length,0);
+acqAffected=0;await blockedAcq();assert.equal(acqProofWrites.length,0);
+acqAffected=1;const recordedAcq=await applyAcq();
+assert.equal(recordedAcq.totalCost.toFixed(),"81.2");assert.equal(recordedAcq.unitCost.toFixed(),"8.12");
+assert.equal(acqWrites.at(-1).where.organizationId,"org-a");assert.equal(acqWrites.at(-1).where.remainingQuantity.toFixed(),"10");
+assert.equal(acqWrites.at(-1).where.unitCost.toFixed(),"7");assert.equal(acqWrites.at(-1).data.unitCost.toFixed(),"8.12");
+assert.equal(acqWrites.at(-1).data.totalCost.toFixed(),"81.2");assert.equal(acqWrites.at(-1).data.remainingQuantity,undefined);
+assert.equal(acqProofWrites.length,1);assert.equal(acqProofWrites[0].invoiceJournalEntryId,acqInvoiceJournal.id);assert.equal(acqProofWrites[0].receiptAccountingEventId,poolEvent.id);
+assert.equal(acqProofWrites[0].taxLineId,"acq-tax");assert.equal(acqProofWrites[0].recordedByUserId,"poster");
+console.log("Acquisition cost writer: strict 3-way provenance, original and invoice journals, posted tax proof, open period and compare-and-set layer without quantity or journal mutation (isolated mocks)");
+
+
 
 console.log("Linked supplier credit contract: exact source, posting evidence, separate approval and reserved payable (isolated mocks)");
 console.log("Supplier return dispatch contract: exact cost, approved source, separate clearing journal, replay and generic credit guard OK (isolated mocks)");
