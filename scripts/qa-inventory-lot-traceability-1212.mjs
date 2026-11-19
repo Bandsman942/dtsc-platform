@@ -291,6 +291,27 @@ rtv={...approvedRtv}; failPost=true;
 await assert.rejects(doDispatch(),/closed period/);
 assert.equal(rtv.status,"APPROVED"); assert.equal(quantityRemaining.toFixed(),"4"); assert.equal(writes.length,0);
 failPost=false;
+const originalSupplierLock=rtvTx.$queryRaw;
+const retryHelpers=load("lib/enterprise/retail/transaction-retry.ts");
+try {
+  for(const code of ["40001","40P01"]){
+    const conflict=new Prisma.PrismaClientKnownRequestError("supplier invoice lock",{code:"P2010",clientVersion:"test",meta:{code}});
+    rtvTx.$queryRaw=async()=>{throw conflict;};
+    await assert.rejects(doDispatch(),{code:"SUPPLIER_RETURN_CONFLICT"});
+    assert.equal(retryHelpers.isRetriableRetailTransactionError(conflict),true);
+    let attempts=0;
+    const retried=await retryHelpers.withRetailTransactionRetry(async()=>{if(++attempts===1)throw conflict;return "ok";},{maxAttempts:2,baseDelayMs:0});
+    assert.equal(retried,"ok");assert.equal(attempts,2);
+  }
+  const unexpected=new Prisma.PrismaClientKnownRequestError("unexpected SQL failure",{code:"P2010",clientVersion:"test",meta:{code:"42P01"}});
+  rtvTx.$queryRaw=async()=>{throw unexpected;};
+  await assert.rejects(doDispatch(),error=>error===unexpected);
+  assert.equal(retryHelpers.isRetriableRetailTransactionError(unexpected),false);
+  let attempts=0;
+  await assert.rejects(retryHelpers.withRetailTransactionRetry(async()=>{attempts++;throw unexpected;},{maxAttempts:2,baseDelayMs:0}),error=>error===unexpected);
+  assert.equal(attempts,1);
+}finally{rtvTx.$queryRaw=originalSupplierLock;}
+assert.equal(rtv.status,"APPROVED");assert.equal(quantityRemaining.toFixed(),"4");assert.equal(writes.length,0);
 const dispatched = await doDispatch();
 assert.equal(dispatched.request.status,"DISPATCHED"); assert.equal(dispatched.request.dispatchMovementId,"out-a");
 assert.equal(dispatched.request.dispatchAccountingEventId,"event-a"); assert.equal(quantityRemaining.toFixed(),"2");
