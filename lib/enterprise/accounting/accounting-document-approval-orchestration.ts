@@ -314,6 +314,7 @@ export async function submitSupplierCreditNoteForAssignedApproval(
     if (!credit) throw new EnterpriseAccountingError("SUPPLIER_CREDIT_NOTE_NOT_FOUND", 404);
     if (!(["DRAFT", "REJECTED"].includes(credit.status)) || credit.revision !== input.revision) throw new EnterpriseAccountingError("SUPPLIER_CREDIT_NOTE_CONFLICT", 409);
     if (credit.createdByUserId !== actorUserId) throw new EnterpriseAccountingError("SUPPLIER_CREDIT_NOTE_SUBMITTER_MISMATCH", 403);
+    if (credit.status === "REJECTED" && await tx.enterpriseSupplierReturnCreditReplacement.count({where:{organizationId,previousCreditNoteId:credit.id}})) throw new EnterpriseAccountingError("SUPPLIER_RETURN_CREDIT_REPLACEMENT_INVALID",409);
     if (input.approverUserId === actorUserId && await tx.enterpriseSupplierReturnRequest.count({where:{organizationId,supplierCreditNoteId:credit.id}})) throw new EnterpriseAccountingError("SUPPLIER_CREDIT_NOTE_SELF_APPROVAL_FORBIDDEN",403);
 
     const approval = await createAccountingApprovalAssignment(tx, {
