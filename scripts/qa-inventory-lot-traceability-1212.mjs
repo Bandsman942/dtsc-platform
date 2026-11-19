@@ -340,6 +340,33 @@ mocks["@/lib/enterprise/accounting/helpers"]={...mocks["@/lib/enterprise/account
 mocks["@/lib/enterprise/accounting/historical-credit-tax"]=load("lib/enterprise/accounting/historical-credit-tax.ts");
 const returnCredit = load("lib/enterprise/accounting/supplier-return-credit-reconciliation.ts");
 mocks["@/lib/enterprise/accounting/supplier-return-credit-reconciliation"] = returnCredit;
+const {planWeightedAverageResidualQuantities}=load("lib/enterprise/accounting/inventory-accounting-service.ts");
+const planResidual=(layers,issue)=>planWeightedAverageResidualQuantities(layers.map(([id,quantity])=>({id,remainingQuantity:d(quantity)})),d(issue));
+const residualById=rows=>Object.fromEntries(rows.map(row=>[row.id,row.remainingQuantity.toFixed()]));
+const three=[["a","1"],["b","1"],["c","1"]];
+assert.deepEqual(residualById(planResidual(three,"1")),{a:"0.666667",b:"0.666667",c:"0.666666"});
+assert.deepEqual(residualById(planResidual([...three].reverse(),"1")),{a:"0.666667",b:"0.666667",c:"0.666666"});
+assert.deepEqual(residualById(planResidual(three,"3")),{a:"0",b:"0",c:"0"});
+assert.deepEqual(residualById(planResidual([["a","0.001"],["b","0.001"],["c","0.001"]],"0.001")),{a:"0.000667",b:"0.000667",c:"0.000666"});
+for(const [layers,quantity] of [
+  [[["a","99999999999999.999999"],["b","99999999999999.999999"]],"0.000001"],
+  [[["a","0.123456"],["b","0.654321"],["c","0.000001"]],"0.001"],
+  [Array.from({length:200},(_,i)=>["layer-"+i,"0.001"]),"0.001"],
+]){
+  const rows=planResidual(layers,quantity);
+  // Accumulate at integer storage scale as Decimal's standard context has
+  // only 20 significant digits, less than the sum of two maximum DB values.
+  const exactUnits=value=>BigInt(d(value).times(1000000).toFixed(0));
+  const initial=layers.reduce((sum,[,value])=>sum+exactUnits(value),0n);
+  const remaining=rows.reduce((sum,row)=>sum+exactUnits(row.remainingQuantity),0n);
+  assert.equal(remaining,initial-exactUnits(quantity));
+  for(const row of rows){assert.ok(row.remainingQuantity.gte(0));assert.ok(row.remainingQuantity.lte(d(layers.find(([id])=>id===row.id)[1])));}
+}
+assert.throws(()=>planResidual(three,"4"),{code:"INVENTORY_ACCOUNTING_NEGATIVE_STOCK_FORBIDDEN"});
+assert.throws(()=>planResidual(three,"0.0000001"),{code:"INVENTORY_COST_LAYER_PRECISION_INVALID"});
+assert.throws(()=>planResidual([["a","1"],["a","1"]],"1"),{code:"INVENTORY_COST_LAYER_PRECISION_INVALID"});
+assert.throws(()=>planResidual([["a","-1"]],"1"),{code:"INVENTORY_COST_LAYER_PRECISION_INVALID"});
+console.log("Weighted-average cost-layer quantity allocation: exact residual, deterministic rounding, bounds and precision");
 const postingBuilder = load("lib/enterprise/accounting/domain-posting-builders.ts");
 for(const [kind,movement] of [
   ["RECEIPT",{movementType:"TRANSFER_IN",direction:"IN",sourceEntityType:"EnterpriseStockTransfer"}],
