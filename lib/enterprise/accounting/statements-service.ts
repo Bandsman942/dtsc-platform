@@ -161,11 +161,16 @@ async function assetRegister(organizationId: string, periodEnd: Date) {
 async function inventoryValuation(organizationId: string, periodEnd: Date) {
   return prisma.$transaction(async tx => {
     const valuation = await inventoryValuationAtSqlTx(tx, organizationId, periodEnd);
-    return tx.$queryRaw<Array<{ inventoryItemId: string; warehouseId: string | null; currencyCode: string; quantity: Prisma.Decimal; value: Prisma.Decimal }>>(Prisma.sql`
-    SELECT "inventoryItemId", "warehouseId", "currencyCode", COALESCE(SUM(quantity), 0) AS quantity, COALESCE(SUM(value), 0) AS value
-    FROM (${valuation}) inventory_rows
-    GROUP BY "inventoryItemId", "warehouseId", "currencyCode"
-    ORDER BY "inventoryItemId", "warehouseId", "currencyCode"
+    return tx.$queryRaw<Array<{ inventoryItemId: string; warehouseId: string | null; currencyCode: string; inventoryItemName: string | null; warehouseName: string | null; quantity: Prisma.Decimal; value: Prisma.Decimal; valuationBasis: string }>>(Prisma.sql`
+    SELECT v."inventoryItemId", v."warehouseId", v."currencyCode", c.name AS "inventoryItemName", w.name AS "warehouseName",
+      COALESCE(SUM(v.quantity), 0) AS quantity, COALESCE(SUM(v.value), 0) AS value,
+      CASE WHEN BOOL_AND(v."valuationBasis"='VERIFIED_HISTORY') THEN 'VERIFIED_HISTORY' ELSE 'CURRENT_LAYER_PROJECTION' END AS "valuationBasis"
+    FROM (${valuation}) v
+    LEFT JOIN "EnterpriseInventoryItem" i ON i."organizationId"=${organizationId} AND i.id=v."inventoryItemId"
+    LEFT JOIN "EnterpriseCatalogItem" c ON c."organizationId"=i."organizationId" AND c.id=i."catalogItemId"
+    LEFT JOIN "EnterpriseWarehouse" w ON w."organizationId"=${organizationId} AND w.id=v."warehouseId"
+    GROUP BY v."inventoryItemId", v."warehouseId", v."currencyCode", c.name, w.name
+    ORDER BY v."inventoryItemId", v."warehouseId", v."currencyCode"
     `);
   }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
 }
