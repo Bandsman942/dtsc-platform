@@ -1647,15 +1647,16 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
     // Independent purchases and real three-actor bank payments: race the
     // allocation of a confirmed supplier advance against physical dispatch.
     // No direct payable, payment, allocation, movement or journal fixture.
-    for (const scenario of [57,56,64.96,67.2,0,-1]) {
-      const paymentAmount=scenario===-1?64.96:scenario;
-      const multiTax=scenario===67.2, nonrecoverable=scenario<=0, freshAcquisition=scenario===-1;
+    for (const scenario of [57,56,64.96,67.2,0,-1,-2]) {
+      const repeatedReturn=scenario===-2;
+      const paymentAmount=repeatedReturn?48.72:scenario===-1?64.96:scenario;
+      const multiTax=scenario===67.2, nonrecoverable=scenario<=0, freshAcquisition=scenario===-1||repeatedReturn;
       const taxed=paymentAmount===64.96||multiTax||nonrecoverable;
-      const invoiceGross=multiTax?"84":taxed?"81.2":"70", invoiceVat=multiTax?"14":taxed?"11.2":"0", returnVat=multiTax?"2.8":taxed?"2.24":"0", creditGross=multiTax?"16.8":taxed?"16.24":"14", exactAllocation=multiTax?"67.2":taxed?"64.96":"56";
+      const invoiceGross=multiTax?"84":taxed?"81.2":"70", invoiceVat=multiTax?"14":taxed?"11.2":"0", returnVat=multiTax?"2.8":taxed?"2.24":"0", creditGross=multiTax?"16.8":taxed?"16.24":"14", exactAllocation=repeatedReturn?"48.72":multiTax?"67.2":taxed?"64.96":"56";
       const suffix="PAYMENT-RACE-"+scenario;
       const stockReturnValue=freshAcquisition?"16.24":"14", reservedRecoverable=freshAcquisition?"0":returnVat;
       // The positive nonrecoverable case needs an entirely untouched pool.
-      const raceProduct=freshAcquisition?await prisma.enterpriseCatalogItem.create({data:{organizationId,code:historyKey+"-ACQ",sku:historyKey+"-ACQ",name:"E2E isolated acquisition "+historyKey,normalizedName:(historyKey+"-ACQ").toLowerCase(),itemType:"PRODUCT",unitOfMeasureId:fixture.product.unitOfMeasureId,indicativeSalePrice:20,indicativeCost:7,currency:fixture.currencyCode,taxable:false,trackInventory:true,createdByUserId:fixture.owner.id}}):historicalProduct;
+      const raceProduct=freshAcquisition?await prisma.enterpriseCatalogItem.create({data:{organizationId,code:historyKey+"-ACQ-"+suffix,sku:historyKey+"-ACQ-"+suffix,name:"E2E isolated acquisition "+historyKey+" "+suffix,normalizedName:(historyKey+"-ACQ-"+suffix).toLowerCase(),itemType:"PRODUCT",unitOfMeasureId:fixture.product.unitOfMeasureId,indicativeSalePrice:20,indicativeCost:7,currency:fixture.currencyCode,taxable:false,trackInventory:true,createdByUserId:fixture.owner.id}}):historicalProduct;
       if(freshAcquisition)await prisma.enterpriseInventoryItem.create({data:{organizationId,catalogItemId:raceProduct.id,lotTracking:true,expiryTracking:true,createdByUserId:fixture.owner.id}});
       const racePurchase=await orderForPurchase(raceProduct,10,suffix,supplier.id);
       // Approved document fixture only: the real posting below generates the
@@ -1752,9 +1753,63 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
         expect(vatPreview.status(),await vatPreview.text()).toBe(200);
         expect(await vatPreview.json()).toMatchObject({totalCost:stockReturnValue,recoverableTaxAmount:reservedRecoverable,creditTotal:creditGross,...(freshAcquisition?{unitCost:"8.12",creditUnitPrice:"7",nonrecoverableTaxAmount:"2.24"}:{})});
       }
+      let firstReturn=null, firstCreditInput=null, firstCreditId=null, firstDispatchCutoff=null;
+      if(repeatedReturn){
+        const firstSubmitted=await post(context.owner,racePurchasePath+"?action=submit-supplier-return",{movementId:raceSource.id,quantity:"2",reason:"First separately approved supplier return",approverUserId:fixture.settler.id,idempotencyKey:historyKey+"-"+suffix+"-first"});
+        expect(firstSubmitted.status,JSON.stringify(firstSubmitted.body)).toBe(201);
+        const firstId=firstSubmitted.body.request.id, firstApprovalId=firstSubmitted.body.approvalId;
+        const review=await context.settler.request.get(base+"/approvals/"+firstApprovalId+"/coordination");
+        expect(review.status()).toBe(200);
+        const reviewBody=await review.json();
+        const firstApproved=await post(context.settler,base+"/approvals/"+firstApprovalId+"/actions",{action:"APPROVE",revision:reviewBody.approval.revision,reviewedVersionId:reviewBody.versions[0].id});
+        expect(firstApproved.status,JSON.stringify(firstApproved.body)).toBe(200);
+        const beforeFirst=await prisma.enterpriseSupplierReturnRequest.findUniqueOrThrow({where:{id:firstId}});
+        const firstShip=await post(context.owner,racePurchasePath+"?action=dispatch-supplier-return",{requestId:firstId,revision:beforeFirst.revision,dispatchReference:historyKey+"-"+suffix+"-FIRST-SHIP"});
+        expect(firstShip.status,JSON.stringify(firstShip.body)).toBe(200);
+        const dispatchedFirst=await prisma.enterpriseSupplierReturnRequest.findUniqueOrThrow({where:{id:firstId}});
+        const firstTrace=await context.owner.request.get(racePurchasePath+"?view=receipt-lots&movementId="+encodeURIComponent(raceSource.id));
+        expect(firstTrace.status()).toBe(200);
+        const firstCreditDay=(await firstTrace.json()).items[0].supplierReturnRequest.dispatchBusinessDate;
+        firstCreditInput={invoiceId:raceInvoice.id,supplierReturnId:firstId,supplierCreditReference:historyKey+"-"+suffix+"-FIRST-CREDIT",creditDate:firstCreditDay,reason:"First supplier credit of separately returned units",items:[{sourceInvoiceItemId:beforeFirst.supplierInvoiceItemId,description:raceProduct.name,quantity:"2",unitPrice:"7"}]};
+        const note=await post(context.owner,base+"/supplier-credit-notes",firstCreditInput);
+        expect(note.status,JSON.stringify(note.body)).toBe(201);
+        expect(note.body.creditNote).toMatchObject({subtotal:"14",taxTotal:"2.24",grandTotal:"16.24"});
+        firstCreditId=note.body.creditNote.id;
+        const notePath=base+"/supplier-credit-notes/"+firstCreditId;
+        const noteSubmitted=await post(context.owner,notePath+"/transition",{action:"SUBMIT",revision:note.body.creditNote.revision,approverUserId:fixture.settler.id});
+        expect(noteSubmitted.status,JSON.stringify(noteSubmitted.body)).toBe(200);
+        const noteApproved=await post(context.settler,notePath+"/transition",{action:"APPROVE",revision:noteSubmitted.body.creditNote.revision});
+        expect(noteApproved.status,JSON.stringify(noteApproved.body)).toBe(200);
+        const notePosted=await post(context.owner,notePath+"/post",{revision:noteApproved.body.creditNote.revision});
+        expect(notePosted.status,JSON.stringify(notePosted.body)).toBe(200);
+        firstReturn=await prisma.enterpriseSupplierReturnRequest.findUniqueOrThrow({where:{id:firstId}});
+        expect(firstReturn.status).toBe("RECONCILED");
+        expect((await prisma.enterprisePayable.findUniqueOrThrow({where:{id:racePayable.id}})).outstandingAmount.equals("64.96")).toBe(true);
+        const firstMovement=await prisma.enterpriseStockMovement.findUniqueOrThrow({where:{id:dispatchedFirst.dispatchMovementId}});
+        const firstEvent=await prisma.enterpriseInventoryAccountingEvent.findUniqueOrThrow({where:{id:dispatchedFirst.dispatchAccountingEventId}});
+        const firstJournal=await prisma.enterpriseJournalEntry.findUniqueOrThrow({where:{id:firstEvent.journalEntryId}});
+        firstDispatchCutoff=new Date(Math.max(...[dispatchedFirst.dispatchedAt,firstMovement.occurredAt,firstMovement.createdAt,firstEvent.createdAt,firstJournal.accountingDate,firstJournal.postedAt].map(d=>d.getTime())));
+        const nextPreview=await context.owner.request.get(racePurchasePath+"?view=supplier-return-preflight&movementId="+encodeURIComponent(raceSource.id)+"&quantity=2");
+        expect(nextPreview.status(),await nextPreview.text()).toBe(200);
+        expect(await nextPreview.json()).toMatchObject({remaining:"8",totalCost:"16.24",creditTotal:"16.24"});
+        const tooMuch=await context.owner.request.get(racePurchasePath+"?view=supplier-return-preflight&movementId="+encodeURIComponent(raceSource.id)+"&quantity=9");
+        expect(tooMuch.status()).toBe(409);
+      }
       const submittedRace=await post(context.owner,racePurchasePath+"?action=submit-supplier-return",{movementId:raceSource.id,quantity:"2",reason:"Physical supplier return competing with payable allocation",approverUserId:fixture.settler.id,idempotencyKey:historyKey+"-"+suffix});
       expect(submittedRace.status,JSON.stringify(submittedRace.body)).toBe(201);
       const raceId=submittedRace.body.request.id;
+      if(repeatedReturn){
+        const active=await context.owner.request.get(racePurchasePath+"?view=receipt-lots&movementId="+encodeURIComponent(raceSource.id));
+        expect(active.status()).toBe(200);
+        const trace=(await active.json()).items[0];
+        expect(trace.supplierReturnRequest.id).toBe(raceId);
+        expect(trace.supplierReturnHistory.map(r=>r.id)).toEqual([firstReturn.id]);
+        const replayOld=await post(context.owner,base+"/supplier-credit-notes",firstCreditInput);
+        expect(replayOld.status,JSON.stringify(replayOld.body)).toBe(201);
+        expect(replayOld.body.creditNote.id).toBe(firstCreditId);
+        const simultaneous=await post(context.owner,racePurchasePath+"?action=submit-supplier-return",{movementId:raceSource.id,quantity:"1",reason:"Third return while second request is active",approverUserId:fixture.settler.id,idempotencyKey:historyKey+"-"+suffix+"-third"});
+        expect(simultaneous.status).toBe(409);
+      }
       const raceApprovalId=submittedRace.body.approvalId;
       const raceCoordination=await context.settler.request.get(base+"/approvals/"+raceApprovalId+"/coordination");
       expect(raceCoordination.status()).toBe(200);
@@ -1843,11 +1898,11 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
       expect(shippedValue.totalCost.equals(stockReturnValue)&&shippedValue.status==="POSTED").toBe(true);
       if(freshAcquisition){
         const remainingAcq=await prisma.enterpriseInventoryCostLayer.findFirstOrThrow({where:{organizationId,sourceMovementId:raceSource.id}});
-        expect(remainingAcq.remainingQuantity.equals(8)&&remainingAcq.remainingQuantity.times(remainingAcq.unitCost).equals("64.96")).toBe(true);
+        expect(remainingAcq.remainingQuantity.equals(repeatedReturn?6:8)&&remainingAcq.remainingQuantity.times(remainingAcq.unitCost).equals(repeatedReturn?"48.72":"64.96")).toBe(true);
       }
       const shippedJournal=await prisma.enterpriseJournalEntry.findFirstOrThrow({where:{organizationId,id:shippedValue.journalEntryId},include:{lines:true}});
       expect(shippedJournal.totalDebit.equals(stockReturnValue)&&shippedJournal.totalCredit.equals(stockReturnValue)).toBe(true);
-      expect((await prisma.enterpriseInventoryBalance.findFirstOrThrow({where:{organizationId,stockLotId:raceSource.stockLotId}})).quantityOnHand.equals(8)).toBe(true);
+      expect((await prisma.enterpriseInventoryBalance.findFirstOrThrow({where:{organizationId,stockLotId:raceSource.stockLotId}})).quantityOnHand.equals(repeatedReturn?6:8)).toBe(true);
       expect((await prisma.enterprisePayment.findUniqueOrThrow({where:{id:racePaymentId}})).unallocatedAmount.equals(new Prisma.Decimal(String(paymentAmount)).minus(exactAllocation))).toBe(true);
       expect(await prisma.enterprisePaymentAllocation.count({where:{organizationId,paymentId:racePaymentId}})).toBe(1);
       const allocationRace=await prisma.enterprisePaymentAllocation.findFirstOrThrow({where:{organizationId,paymentId:racePaymentId,payableId:racePayable.id}});
@@ -1872,9 +1927,16 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
       expect(postedRaceCredit.status,JSON.stringify(postedRaceCredit.body)).toBe(200);
       const closedRacePayable=await prisma.enterprisePayable.findUniqueOrThrow({where:{id:racePayable.id}});
       expect(closedRacePayable.status).toBe("CLOSED");expect(closedRacePayable.outstandingAmount.isZero()).toBe(true);
-      expect(closedRacePayable.allocatedAmount.equals(exactAllocation)&&closedRacePayable.creditedAmount.equals(creditGross)).toBe(true);
+      expect(closedRacePayable.allocatedAmount.equals(exactAllocation)&&closedRacePayable.creditedAmount.equals(repeatedReturn?"32.48":creditGross)).toBe(true);
       const closedRace=await prisma.enterpriseSupplierReturnRequest.findFirstOrThrow({where:{organizationId,id:raceId}});
       expect(closedRace.status).toBe("RECONCILED");
+      if(repeatedReturn){
+        expect(await prisma.enterpriseSupplierReturnRequest.count({where:{organizationId,supplierInvoiceId:raceInvoice.id,status:"RECONCILED"}})).toBe(2);
+        expect(await prisma.enterpriseSupplierReturnRequest.findUniqueOrThrow({where:{id:firstReturn.id}})).toEqual(firstReturn);
+        const historyResponse=await context.owner.request.get(racePurchasePath+"?view=receipt-lots&movementId="+encodeURIComponent(raceSource.id));
+        expect(historyResponse.status()).toBe(200);
+        expect((await historyResponse.json()).items[0].supplierReturnHistory.map(r=>r.id)).toEqual([raceId,firstReturn.id]);
+      }
       if(taxed){
         const vatCreditItem=await prisma.enterpriseSupplierCreditNoteItem.findFirstOrThrow({where:{organizationId,supplierCreditNoteId:raceCredit.body.creditNote.id}});
         const reversals=await prisma.enterpriseTaxLine.findMany({where:{organizationId,sourceEntityType:"EnterpriseSupplierCreditNoteItem",sourceEntityId:vatCreditItem.id,direction:freshAcquisition?"INPUT_NONRECOVERABLE_REVERSAL":"INPUT_REVERSAL"},orderBy:{applicationOrder:"asc"}});
@@ -1915,7 +1977,7 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
         const dispatchCutoff=latest(shipped.dispatchedAt,dispatchMovement.occurredAt,dispatchMovement.createdAt,shippedValue.createdAt,shippedJournal.accountingDate,shippedJournal.postedAt);
         expect(receiptCutoff.getTime()).toBeLessThan(capitalizedCutoff.getTime());
         expect(capitalizedCutoff.getTime()).toBeLessThan(dispatchCutoff.getTime());
-        for(const [cutoff,quantity,value] of [[receiptCutoff,"10","70"],[capitalizedCutoff,"10","81.2"],[dispatchCutoff,"8","64.96"]]){
+        for(const [cutoff,quantity,value] of [[receiptCutoff,"10","70"],[capitalizedCutoff,"10","81.2"],...(firstDispatchCutoff?[[firstDispatchCutoff,"8","64.96"]]:[]),[dispatchCutoff,repeatedReturn?"6":"8",repeatedReturn?"48.72":"64.96"]]){
           const report=await post(context.owner,base+"/financial-statements",{
             statementType:"INVENTORY_VALUATION",periodStart:new Date(receiptCutoff.getTime()-86400000).toISOString(),
             periodEnd:cutoff.toISOString(),currencyCode:fixture.currencyCode,publish:false,
