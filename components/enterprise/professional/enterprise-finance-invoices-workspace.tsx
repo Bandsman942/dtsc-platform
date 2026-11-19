@@ -68,7 +68,7 @@ type InvoiceRecord = FinanceRecord & {
   outstandingAmount?: string | number;
   supplierReturnReservedAmount?: string;
   supplierReturnAllocatableAmount?: string;
-  supplierReturn?: { id:string; reference:string; status:string; purchaseId:string; sourceMovementId:string; currencyCode:string; totalCost:string; supplierCreditNoteId:string|null } | null;
+  supplierReturn?: { id:string; reference:string; status:string; purchaseId:string; sourceMovementId:string; currencyCode:string; totalCost:string; recoverableTaxAmount?:string; supplierCreditNoteId:string|null } | null;
   salesInvoiceId?: string;
   supplierInvoiceId?: string;
   replacementCreditNoteId?: string|null;
@@ -489,6 +489,8 @@ export function EnterpriseFinanceInvoicesWorkspace(props: Props) {
         {!isReceivables && detail.supplierReturn ? <section className="grid min-w-0 gap-2 rounded-xl border border-dtsc-border p-3" data-supplier-return-finance>
           <div className="flex min-w-0 flex-wrap justify-between gap-2"><h3 className="font-semibold break-words">{purchaseFormGuidance(locale,"returnFinanceTitle")} · {detail.supplierReturn.reference}</h3><StatusBadge tone={detail.supplierReturn.status==="RECONCILED"?"success":"warning"}>{purchaseFormGuidance(locale,detail.supplierReturn.status==="RECONCILED"?"returnReconciled":"returnDispatched")}</StatusBadge></div>
           <FinanceDetailGrid>
+            <FinanceDetailValue label={purchaseFormGuidance(locale,"returnCreditStockValue")}>{financeMoney(detail.supplierReturn.totalCost,String(detail.currencyCode),locale)}</FinanceDetailValue>
+            {Number(detail.supplierReturn.recoverableTaxAmount)>0?<FinanceDetailValue label={purchaseFormGuidance(locale,"returnCreditRecoverableTax")}>{financeMoney(detail.supplierReturn.recoverableTaxAmount,String(detail.currencyCode),locale)}</FinanceDetailValue>:null}
             <FinanceDetailValue label={purchaseFormGuidance(locale,"returnFinanceReserved")}>{financeMoney(detail.supplierReturnReservedAmount,String(detail.currencyCode),locale)}</FinanceDetailValue>
             <FinanceDetailValue label={purchaseFormGuidance(locale,"returnFinanceAllocatable")}>{financeMoney(detail.supplierReturnAllocatableAmount,String(detail.currencyCode),locale)}</FinanceDetailValue>
           </FinanceDetailGrid>
