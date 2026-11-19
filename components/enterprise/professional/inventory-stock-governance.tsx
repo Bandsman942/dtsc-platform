@@ -45,6 +45,8 @@ export function InventoryStockGovernance({ organizationId, organizationName, loc
   const [search, setSearch] = useState("");
   const [lotStatus,setLotStatus]=useState("");
   const [expiryFilter,setExpiryFilter]=useState("");
+  const [expiryDraft,setExpiryDraft]=useState({from:"",to:""});
+  const [expiryDates,setExpiryDates]=useState({from:"",to:""});
   const [lotMetrics,setLotMetrics]=useState<{expired:number;expiring:number;undated:number;isolated:number;recalled:number;pendingDisposal:number}|null>(null);
   const [lotsLoading,setLotsLoading]=useState(false);
   const [lotsError,setLotsError]=useState("");
@@ -92,7 +94,7 @@ export function InventoryStockGovernance({ organizationId, organizationName, loc
   useEffect(()=>{
     if(!open)return;
     const controller=new AbortController();setLotsLoading(true);setLotsError("");setLotMetrics(null);
-    const query=new URLSearchParams({page:String(page),search,status:lotStatus,warehouseId:lotWarehouse,expiry:expiryFilter});
+    const query=new URLSearchParams({page:String(page),search,status:lotStatus,warehouseId:lotWarehouse,expiry:expiryFilter,expiryFrom:expiryDates.from,expiryTo:expiryDates.to});
     const timer=setTimeout(()=>{
       void fetch(`/api/enterprise/${organizationId}/inventory/lots?${query}`,{signal:controller.signal,cache:"no-store"}).then(async response=>{
         const batches=await response.json().catch(()=>null) as {items?:Lot[];pagination?:{pageCount:number};message?:string;canManage?:boolean;canRecall?:boolean;currentUserId?:string;metrics?:{expired:number;expiring:number;undated:number;isolated:number;recalled:number;pendingDisposal:number}}|null;
@@ -101,7 +103,7 @@ export function InventoryStockGovernance({ organizationId, organizationName, loc
       }).catch(caught=>{if(!controller.signal.aborted){setLots([]);setLotsError(customerFacingError(caught,locale));}}).finally(()=>{if(!controller.signal.aborted)setLotsLoading(false);});
     },200);
     return()=>{clearTimeout(timer);controller.abort();};
-  },[open,organizationId,page,search,lotStatus,lotWarehouse,expiryFilter,reload,en,locale]);
+  },[open,organizationId,page,search,lotStatus,lotWarehouse,expiryFilter,expiryDates,reload,en,locale]);
 
   useEffect(() => {
     if (!lotDialog || editLot || !batchWarehouse) return;
@@ -181,9 +183,26 @@ export function InventoryStockGovernance({ organizationId, organizationName, loc
         {lotsError?<p role="alert" className="mb-2 text-xs text-red-700 dark:text-red-200">{lotsError}</p>:null}
         <div className="mb-3 grid min-w-0 max-w-full gap-2 grid-cols-[minmax(0,1fr)]">
           <label className="grid gap-1 text-xs font-semibold">{en?"Warehouse":"Dépôt"}<select value={lotWarehouse} onChange={event=>{setLotWarehouse(event.target.value);setPage(1);}} className="min-h-11 min-w-0 rounded-xl border border-dtsc-border bg-dtsc-page px-2 text-sm"><option value="">{en?"All authorized warehouses":"Tous les dépôts autorisés"}</option>{warehouses.map(warehouse=><option key={warehouse.id} value={warehouse.id}>{warehouse.code} · {warehouse.name}</option>)}</select></label>
+          <form className="min-w-0 rounded-xl border border-dtsc-border p-3 space-y-2" aria-label={t("inventory.batchExpiryDateFilter")} onSubmit={event=>{
+            event.preventDefault();
+            if(expiryDraft.from&&expiryDraft.to&&expiryDraft.from>expiryDraft.to)return;
+            setExpiryDates({...expiryDraft});setPage(1);
+          }}>
+            <p className="text-xs font-semibold text-dtsc-ink">{t("inventory.batchExpiryDateFilter")}</p>
+            <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-2 sm:grid-cols-2">
+              <label className="grid min-w-0 gap-1 text-xs font-semibold">{t("inventory.batchExpiryFrom")}<Input type="date" className="min-w-0 w-full" value={expiryDraft.from} max={expiryDraft.to||undefined} onChange={event=>setExpiryDraft(value=>({...value,from:event.target.value}))}/></label>
+              <label className="grid min-w-0 gap-1 text-xs font-semibold">{t("inventory.batchExpiryTo")}<Input type="date" className="min-w-0 w-full" value={expiryDraft.to} min={expiryDraft.from||undefined} onChange={event=>setExpiryDraft(value=>({...value,to:event.target.value}))}/></label>
+            </div>
+            <p className="text-xs text-dtsc-muted">{t("inventory.batchExpiryHelp")}</p>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button size="sm" type="submit" disabled={Boolean(expiryDraft.from&&expiryDraft.to&&expiryDraft.from>expiryDraft.to)}>{t("inventory.batchExpiryApply")}</Button>
+              <Button size="sm" type="button" variant="outline" onClick={()=>{setExpiryDraft({from:"",to:""});setExpiryDates({from:"",to:""});setPage(1);}}>{t("inventory.batchExpiryClear")}</Button>
+            </div>
+            {expiryDates.from||expiryDates.to?<p role="status" className="break-words text-xs font-semibold text-dtsc-blue">{t("inventory.batchExpiryActive")} · {expiryDates.from||"…"} → {expiryDates.to||"…"}</p>:null}
+          </form>
           <ErpDesign2RegisterTools locale={locale} title={t("inventory.batchRegister")} organizationName={organizationName}
             endpoint={`/api/enterprise/${organizationId}/inventory/lots`}
-            filters={{search,warehouseId:lotWarehouse,status:lotStatus,expiry:expiryFilter}}
+            filters={{search,warehouseId:lotWarehouse,status:lotStatus,expiry:expiryFilter,expiryFrom:expiryDates.from,expiryTo:expiryDates.to}}
             status={lotStatus} statuses={statusOptions} onStatusChange={value=>{setLotStatus(value);setPage(1);}}
             columns={[
               {key:"lot",labelFr:"Lot",labelEn:"Batch",get:row=>String(row.lotNumber||"")},
