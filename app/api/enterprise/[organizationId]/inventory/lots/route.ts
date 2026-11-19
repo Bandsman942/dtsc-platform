@@ -124,7 +124,7 @@ export async function GET(req: Request, { params }: Params) {
   const statusWhere:Prisma.EnterpriseStockLotWhereInput=status==="RECALLED"?{recallReference:{not:null}}:status&&["AVAILABLE","BLOCKED","QUARANTINED"].includes(status)?{status}:{};
   const where:Prisma.EnterpriseStockLotWhereInput={AND:[baseWhere,statusWhere, ...(expiryFilter && filters[expiryFilter]?[filters[expiryFilter]]:[])]};
   const [items,total,expired,expiring,undated,isolated,recalled,pendingDisposal]=await Promise.all([
-    prisma.enterpriseStockLot.findMany({where,orderBy:[{expiryDate:"asc"},{createdAt:"desc"},{id:"asc"}],skip:(page-1)*pageSize,take:pageSize,include:{inventoryItem:{select:{catalogItem:{select:{name:true,code:true}}}},balances:{select:{quantityOnHand:true,quantityReserved:true}}}}),
+    prisma.enterpriseStockLot.findMany({where,orderBy:[{expiryDate:"asc"},{createdAt:"desc"},{id:"asc"}],skip:(page-1)*pageSize,take:pageSize,include:{inventoryItem:{select:{catalogItem:{select:{id:true,name:true,code:true}}}},balances:{select:{quantityOnHand:true,quantityReserved:true}}}}),
     prisma.enterpriseStockLot.count({where}),
     prisma.enterpriseStockLot.count({where:{AND:[baseWhere,filters.EXPIRED]}}),
     prisma.enterpriseStockLot.count({where:{AND:[baseWhere,filters.EXPIRING]}}),
@@ -135,8 +135,15 @@ export async function GET(req: Request, { params }: Params) {
   ]);
   const pageWarehouses=await prisma.enterpriseWarehouse.findMany({where:{organizationId,id:{in:[...new Set(items.map(item=>item.warehouseId))]}},select:{id:true,code:true,name:true}});
   const warehouseById=new Map(pageWarehouses.map(warehouse=>[warehouse.id,warehouse]));
+  const pageCatalogIds=[...new Set(items.map(item=>item.inventoryItem.catalogItem.id))];
+  const [pharmacyItems,sectorItems]=await Promise.all([
+    prisma.pharmacyProductExtension.findMany({where:{organizationId,catalogItemId:{in:pageCatalogIds}},select:{catalogItemId:true}}),
+    prisma.enterpriseSectorInventoryEvent.findMany({where:{organizationId,catalogItemId:{in:pageCatalogIds}},distinct:["catalogItemId"],select:{catalogItemId:true}}),
+  ]);
+  const sectorManaged=new Set([...pharmacyItems,...sectorItems].map(row=>row.catalogItemId));
   return NextResponse.json({ items: items.map((item) => ({ ...item,
     warehouse:warehouseById.get(item.warehouseId)??null,
+    sectorManaged:sectorManaged.has(item.inventoryItem.catalogItem.id),
     expired:Boolean(item.expiryDate && lotExpiryDateKey(item.expiryDate)<today),
     expiresSoon:Boolean(item.expiryDate && item.expiryDate>=todayDate && item.expiryDate<=horizon),
     quantityOnHand: item.balances.reduce((sum, balance) => sum.plus(balance.quantityOnHand), new Prisma.Decimal(0)).toFixed(3),
@@ -174,6 +181,8 @@ export async function POST(req: Request, { params }: Params) {
     await requireInventoryStockAuthorityTx(tx,organizationId,session.userId,warehouse.id);
     const active=await tx.enterpriseInventoryItem.findFirst({where:{organizationId,id:item.id,status:"ACTIVE",archivedAt:null,lotTracking:true,catalogItem:{status:"ACTIVE",archivedAt:null,trackInventory:true}}});
     if(!active || (active.expiryTracking && !input.expiryDate)) throw new EnterpriseDomainError("INVENTORY_LOT_REFERENCES_INVALID",409);
+    const [pharmacy,sector]=await Promise.all([tx.pharmacyProductExtension.count({where:{organizationId,catalogItemId:active.catalogItemId}}),tx.enterpriseSectorInventoryEvent.count({where:{organizationId,catalogItemId:active.catalogItemId}})]);
+    if(pharmacy||sector) throw new EnterpriseDomainError("STOCK_RECLASS_SECTOR_AUTHORITY",409);
     if(await tx.enterpriseStockLot.findFirst({where:{organizationId,inventoryItemId:item.id,lotNumber:input.lotNumber,recallReference:{not:null}},select:{id:true}})) throw new EnterpriseDomainError("INVENTORY_LOT_RECALLED",409);
     return tx.enterpriseStockLot.create({ data: { organizationId, inventoryItemId: item.id, warehouseId: warehouse.id, lotNumber: input.lotNumber, productionDate: isoDate(input.productionDate), expiryDate: isoDate(input.expiryDate), notes: input.notes, createdByUserId: session.userId } });
   },{isolationLevel:Prisma.TransactionIsolationLevel.Serializable}); }
@@ -270,11 +279,10 @@ export async function PATCH(req: Request, { params }: Params) {
       const changeStatus=Boolean(input.status && input.status!==lot.status);
       if(lot.recallReference && (changeStatus || dateChanged || input.recall)) throw new EnterpriseDomainError("INVENTORY_LOT_RECALLED",409);
       if(dateChanged && await tx.enterpriseStockMovement.count({where:{organizationId,stockLotId:lot.id}})) throw new EnterpriseDomainError("INVENTORY_LOT_DATES_LOCKED",409);
-      if(changeStatus || input.recall) {
-        if(!input.qualityReason) throw new EnterpriseDomainError("INVENTORY_LOT_QUALITY_REASON_REQUIRED",400);
-        const [pharmacy,sector]=await Promise.all([tx.pharmacyProductExtension.count({where:{organizationId,catalogItemId:lot.inventoryItem.catalogItemId}}),tx.enterpriseSectorInventoryEvent.count({where:{organizationId,catalogItemId:lot.inventoryItem.catalogItemId}})]);
-        if(pharmacy||sector) throw new EnterpriseDomainError("STOCK_RECLASS_SECTOR_AUTHORITY",409);
-      }
+      // Even an unvalued common lot must not become a second regulatory register.
+      const [pharmacy,sector]=await Promise.all([tx.pharmacyProductExtension.count({where:{organizationId,catalogItemId:lot.inventoryItem.catalogItemId}}),tx.enterpriseSectorInventoryEvent.count({where:{organizationId,catalogItemId:lot.inventoryItem.catalogItemId}})]);
+      if(pharmacy||sector) throw new EnterpriseDomainError("STOCK_RECLASS_SECTOR_AUTHORITY",409);
+      if((changeStatus || input.recall) && !input.qualityReason) throw new EnterpriseDomainError("INVENTORY_LOT_QUALITY_REASON_REQUIRED",400);
       if(input.recall) {
         if(!access.canAdminister || (await retailInventoryVisibleSites(organizationId,session.userId,tx)).isolationEnabled) throw new EnterpriseDomainError("INVENTORY_LOT_RECALL_FORBIDDEN",403);
         const other=await tx.enterpriseStockLot.findFirst({where:{organizationId,inventoryItemId:lot.inventoryItemId,lotNumber:lot.lotNumber,recallReference:{not:null}},select:{recallReference:true}});
