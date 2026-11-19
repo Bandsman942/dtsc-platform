@@ -6,7 +6,7 @@ import type { z } from "zod";
 import { EnterpriseDomainConflictError, EnterpriseDomainError } from "@/lib/enterprise/common/errors";
 import { publishEnterpriseEvent } from "@/lib/enterprise/crm-sales/helpers";
 import { assertInventoryApprovalCandidate, assertInventoryApprovalDecision } from "@/lib/enterprise/inventory/approval";
-import { applyStockMovementTx, requireInventoryStockAuthorityTx } from "@/lib/enterprise/inventory/service";
+import { applyStockMovementTx, requireInventoryStockAuthorityTx, assertCommonInventoryCatalogAuthorityTx } from "@/lib/enterprise/inventory/service";
 import type { stockAdjustmentCreateSchema, stockAdjustmentDecisionSchema } from "@/lib/enterprise/inventory/schemas";
 import { prisma } from "@/lib/prisma";
 
@@ -25,6 +25,7 @@ async function assertAdjustmentCoordinates(tx: Prisma.TransactionClient, organiz
     input.stockLotId ? tx.enterpriseStockLot.findFirst({ where: { id: input.stockLotId, organizationId, inventoryItemId: input.inventoryItemId, warehouseId: input.warehouseId, status: input.lossReason ? { in: ["AVAILABLE","BLOCKED","QUARANTINED"] } : "AVAILABLE", archivedAt: null }, select: { id: true, storageLocationId: true, expiryDate: true, status: true } }) : Promise.resolve(null),
   ]);
   if (!inventoryItem || !inventoryItem.catalogItem.trackInventory) throw new EnterpriseDomainError("INVENTORY_ITEM_NOT_FOUND", 404);
+  await assertCommonInventoryCatalogAuthorityTx(tx,organizationId,inventoryItem.catalogItem.id);
   if (!warehouse) throw new EnterpriseDomainError("WAREHOUSE_NOT_FOUND", 404);
   if (input.storageLocationId && !location) throw new EnterpriseDomainError("STORAGE_LOCATION_NOT_FOUND", 404);
   if (input.stockLotId && !stockLot) throw new EnterpriseDomainError("STOCK_LOT_NOT_FOUND", 404);
