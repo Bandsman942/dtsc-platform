@@ -105,7 +105,7 @@ export async function submitSupplierReturnRequest(organizationId: string, purcha
       inventoryItemId: origin.inventoryItemId, warehouseId: origin.warehouseId, storageLocationId: origin.storageLocationId,
       stockLotId: origin.stockLotId, supplierId: check.invoice.supplierId, supplierInvoiceId: check.invoice.id, supplierInvoiceItemId: check.invoiceItem.id,
       receiptAccountingEventId: check.receiptValue.id, originCostLayerId: check.originLayer.id,
-      quantity: input.quantity, unitCost: check.unitCost, totalCost: check.totalCost, currencyCode: check.currencyCode,
+      quantity: input.quantity, unitCost: check.unitCost, totalCost: check.totalCost, recoverableTaxAmount: check.recoverableTaxAmount, currencyCode: check.currencyCode,
       reason: input.reason, requestedByUserId: actorUserId, idempotencyKey: input.idempotencyKey,
     } });
     const approval = await tx.enterpriseApproval.create({ data: { organizationId, targetEntityType: SUPPLIER_RETURN_TARGET, targetEntityId: request.id, requestedByUserId: actorUserId, approverUserId: input.approverUserId, status: "PENDING" } });
@@ -121,7 +121,7 @@ export async function submitSupplierReturnRequest(organizationId: string, purcha
       organizationId, approvalId: approval.id, versionNumber: 1, submittedByUserId: actorUserId,
       snapshotJson: { reference: request.reference, article: item.catalogItem.code + " · " + item.catalogItem.name, lotNumber: lot.lotNumber, warehouse: warehouse.code + " · " + warehouse.name,
         location: location ? location.code + " · " + location.name : null, purchaseReference: purchase.reference, receiptReference: check.receipt.reference,
-        supplierInvoiceReference: check.invoice.number, quantity: request.quantity.toFixed(), unitCost: request.unitCost.toFixed(), totalAmount: request.totalCost.toFixed(),
+        supplierInvoiceReference: check.invoice.number, quantity: request.quantity.toFixed(), unitCost: request.unitCost.toFixed(), stockValue: request.totalCost.toFixed(), recoverableTaxAmount: request.recoverableTaxAmount.toFixed(), totalAmount: request.totalCost.plus(request.recoverableTaxAmount).toFixed(),
         currency: request.currencyCode, reason: request.reason, revision: request.revision },
     } });
     await tx.enterpriseEntityLink.create({ data: { organizationId, sourceModule: "SUPPLIERS_PURCHASES", sourceEntityType: SUPPLIER_RETURN_TARGET, sourceEntityId: request.id,
@@ -152,7 +152,7 @@ export async function decideSupplierReturnRequest(args: { organizationId: string
       if (check.receipt.purchaseId !== request.purchaseId || check.receipt.id !== request.receiptId || check.receiptItem.id !== request.receiptItemId ||
         check.invoice.id !== request.supplierInvoiceId || check.invoiceItem.id !== request.supplierInvoiceItemId || check.invoice.supplierId !== request.supplierId ||
         check.receiptValue.id !== request.receiptAccountingEventId || check.originLayer.id !== request.originCostLayerId ||
-        !check.unitCost.equals(request.unitCost) || !check.totalCost.equals(request.totalCost) || check.currencyCode !== request.currencyCode) throw new EnterpriseDomainConflictError("SUPPLIER_RETURN_CONFLICT");
+        !check.unitCost.equals(request.unitCost) || !check.totalCost.equals(request.totalCost) || !check.recoverableTaxAmount.equals(request.recoverableTaxAmount) || check.currencyCode !== request.currencyCode) throw new EnterpriseDomainConflictError("SUPPLIER_RETURN_CONFLICT");
     }
     const status = args.action === "APPROVE" ? "APPROVED" : args.action === "REJECT" ? "REJECTED" : "CANCELLED";
     const now = new Date();
@@ -196,11 +196,11 @@ export async function dispatchSupplierReturn(organizationId: string, purchaseId:
     if (check.receipt.purchaseId !== request.purchaseId || check.receipt.id !== request.receiptId || check.receiptItem.id !== request.receiptItemId ||
       check.invoice.id !== request.supplierInvoiceId || check.invoiceItem.id !== request.supplierInvoiceItemId || check.invoice.supplierId !== request.supplierId ||
       check.receiptValue.id !== request.receiptAccountingEventId || check.originLayer.id !== request.originCostLayerId ||
-      !check.unitCost.equals(request.unitCost) || !check.totalCost.equals(request.totalCost) || check.currencyCode !== request.currencyCode) throw new EnterpriseDomainConflictError("SUPPLIER_RETURN_CONFLICT");
+      !check.unitCost.equals(request.unitCost) || !check.totalCost.equals(request.totalCost) || !check.recoverableTaxAmount.equals(request.recoverableTaxAmount) || check.currencyCode !== request.currencyCode) throw new EnterpriseDomainConflictError("SUPPLIER_RETURN_CONFLICT");
     // Paid or insufficient payable requires a different reconciliation/refund
     // path. Do not create a dispatch that the current credit engine cannot close.
     const payable = await tx.enterprisePayable.findUnique({ where: { supplierInvoiceId: request.supplierInvoiceId } });
-    if (!payable || payable.organizationId !== organizationId || payable.outstandingAmount.lt(request.totalCost)) throw new EnterpriseDomainError("SUPPLIER_RETURN_PAYABLE_INSUFFICIENT",409);
+    if (!payable || payable.organizationId !== organizationId || payable.outstandingAmount.lt(request.totalCost.plus(request.recoverableTaxAmount))) throw new EnterpriseDomainError("SUPPLIER_RETURN_PAYABLE_INSUFFICIENT",409);
     const movement = await applyStockMovementTx(tx, organizationId, actorUserId, {
       inventoryItemId: request.inventoryItemId, warehouseId: request.warehouseId, storageLocationId: request.storageLocationId,
       stockLotId: request.stockLotId, movementType: "SUPPLIER_RETURN_OUT", direction: "OUT", quantity: Number(request.quantity.toFixed()),
@@ -228,7 +228,7 @@ export async function dispatchSupplierReturn(organizationId: string, purchaseId:
       dispatchMovementId: movement.movement.id, dispatchAccountingEventId: event.id, revision: { increment: 1 },
     } });
     if (changed.count !== 1) throw new EnterpriseDomainConflictError("SUPPLIER_RETURN_CONFLICT");
-    await publishFinanceEvent(tx, { organizationId, entityType: SUPPLIER_RETURN_TARGET, entityId: request.id, eventType: "SUPPLIER_RETURN_DISPATCHED", summary: request.reference, actorUserId, fromStatus: "APPROVED", toStatus: "DISPATCHED", metadataJson: { stockMovementId: movement.movement.id, journalEntryId: posting.entry.id, total: request.totalCost.toFixed(), currency: request.currencyCode, dispatchReference: input.dispatchReference } });
+    await publishFinanceEvent(tx, { organizationId, entityType: SUPPLIER_RETURN_TARGET, entityId: request.id, eventType: "SUPPLIER_RETURN_DISPATCHED", summary: request.reference, actorUserId, fromStatus: "APPROVED", toStatus: "DISPATCHED", metadataJson: { stockMovementId: movement.movement.id, journalEntryId: posting.entry.id, total: request.totalCost.toFixed(), recoverableTaxAmount: request.recoverableTaxAmount.toFixed(), expectedCreditTotal: request.totalCost.plus(request.recoverableTaxAmount).toFixed(), currency: request.currencyCode, dispatchReference: input.dispatchReference } });
     return { request: await tx.enterpriseSupplierReturnRequest.findFirstOrThrow({ where: { organizationId, id: request.id } }), idempotent: false };
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 30000 }));
 }
