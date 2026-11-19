@@ -131,16 +131,30 @@ export async function GET(req: Request, { params }: Params) {
       resolveEnterpriseModuleCapabilities({organizationId,userId:session.userId,moduleCode:"FINANCE_INVENTORY"}),
       resolveEnterpriseModuleCapabilities({organizationId,userId:session.userId,moduleCode:"FINANCE_PAYABLES"}),
     ]) : [null,null];
+    const authorizedRequests = requests.filter(request=>requestApprovals.some(approval=>approval.targetEntityId===request.id));
+    const creditIds=authorizedRequests.flatMap(request=>request.supplierCreditNoteId?[request.supplierCreditNoteId]:[]);
+    const [currentCredits,creditReplacements]=creditIds.length?await Promise.all([
+      prisma.enterpriseSupplierCreditNote.findMany({where:{organizationId,id:{in:creditIds}},select:{id:true,status:true,revision:true,createdByUserId:true,postedAt:true}}),
+      prisma.enterpriseSupplierReturnCreditReplacement.findMany({where:{organizationId,replacementCreditNoteId:{in:creditIds}},select:{replacementCreditNoteId:true,previousCreditNoteId:true,previousSupplierReference:true}}),
+    ]):[[],[]];
+    const creditById=new Map(currentCredits.map(credit=>[credit.id,credit]));
+    const replacementById=new Map(creditReplacements.map(proof=>[proof.replacementCreditNoteId,proof]));
     const businessContext = requests.some(request => request.dispatchedAt) ? await getEnterpriseBusinessContext(prisma, organizationId) : null;
-    const requestByMovement = new Map(requests.filter((request) => requestApprovals.some((approval) => approval.targetEntityId === request.id)).map((request) => [request.sourceMovementId, {
+    const requestByMovement = new Map(authorizedRequests.map((request) => {
+      const credit=request.supplierCreditNoteId?creditById.get(request.supplierCreditNoteId):null;
+      const replaced=request.supplierCreditNoteId?replacementById.get(request.supplierCreditNoteId):null;
+      return [request.sourceMovementId, {
       id:request.id, reference:request.reference,status:request.status,quantity:request.quantity,revision:request.revision,unitCost:request.unitCost,totalCost:request.totalCost,currencyCode:request.currencyCode,
       dispatchReference:request.dispatchReference,dispatchedAt:request.dispatchedAt,dispatchBusinessDate:request.dispatchedAt && businessContext ? formatEnterpriseBusinessDate(request.dispatchedAt,businessContext.timezone) : null,supplierCreditNoteId:request.supplierCreditNoteId,supplierCreditReference:request.supplierCreditReference,
       supplierInvoiceId:request.supplierInvoiceId,supplierInvoiceItemId:request.supplierInvoiceItemId,
       canWithdraw:canSubmitSupplierReturn && request.requestedByUserId===session.userId && request.status==="APPROVED",
       canDispatch:canSubmitSupplierReturn && financeInventory?.canManage === true && request.requestedByUserId === session.userId && request.status === "APPROVED",
       canCreateCredit:financePayables?.canCreate === true && request.status === "DISPATCHED" && !request.supplierCreditNoteId,
+      canReplaceCredit:financePayables?.canCreate===true && request.status==="DISPATCHED" && credit?.status==="REJECTED" && !credit.postedAt && credit.createdByUserId===session.userId,
+      supplierCreditStatus:credit?.status||null,supplierCreditRevision:credit?.revision||null,
+      previousCreditNoteId:replaced?.previousCreditNoteId||null,previousSupplierCreditReference:replaced?.previousSupplierReference||null,
       approvalId:requestApprovals.find((approval) => approval.targetEntityId === request.id)?.id || null,
-    }]));
+    }] as const;}));
     return NextResponse.json({ items: items.map((row) => ({ ...row, supplierReturnRequest: requestByMovement.get(row.id) || null })), canCheckSupplierReturn, canSubmitSupplierReturn, pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) } });
   }
   const itemIds = purchase.items.map((item) => item.id);
