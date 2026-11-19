@@ -909,6 +909,49 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
     }
     expect(await transferFinanceSnapshot()).toEqual(beforeTransferFinance);
 
+    // Structural PostgreSQL contract for the new evidence tables. The
+    // synthetic PREPARED records deliberately never commit; this is not an
+    // assertion that the existing physical transfer was valued by the service.
+    const schemaDispatchMovement=transferMovements.find(row=>row.direction==="OUT");
+    expect(schemaDispatchMovement?.sourceLineId).toBeTruthy();
+    const evidenceId=transit.body.transfer.id+"-schema-proof";
+    const rollbackEvidence=new Error("ROLLBACK_TRANSFER_SCHEMA_TEST");
+    const insertEvidence=(tx,overrides={})=>tx.$executeRaw(Prisma.sql`
+      INSERT INTO "EnterpriseInventoryTransferValuation"
+        ("id","organizationId","transferLineId","dispatchMovementId","currencyCode",
+          "quantity","unitCost","totalCost","sourceQuantityBefore","sourceQuantityAfter",
+          "sourceValueBefore","sourceValueAfter","status","preparedByUserId","updatedAt")
+      VALUES (${overrides.id||evidenceId},${overrides.organizationId||organizationId},
+        ${schemaDispatchMovement.sourceLineId},${schemaDispatchMovement.id},${fixture.currencyCode},
+        1,7,${overrides.totalCost??7},1,0,7,0,${overrides.status||"PREPARED"},
+        ${fixture.owner.id},CURRENT_TIMESTAMP)
+    `);
+    await expect(prisma.$transaction(async tx=>{
+      await insertEvidence(tx);
+      const evidence=await tx.enterpriseInventoryTransferValuation.findUniqueOrThrow({where:{id:evidenceId}});
+      expect(evidence.status).toBe("PREPARED");
+      expect(evidence.totalCost.equals(7)).toBe(true);
+      expect(evidence.receiptMovementId).toBeNull();
+      throw rollbackEvidence;
+    })).rejects.toThrow("ROLLBACK_TRANSFER_SCHEMA_TEST");
+    const expectSqlState=async (action,sqlState)=>{
+      let error=null;
+      try{await action();}catch(caught){error=caught;}
+      expect(error?.code).toBe("P2010");
+      expect(error?.meta?.code).toBe(sqlState);
+    };
+    await expectSqlState(()=>prisma.$transaction(tx=>insertEvidence(tx,{totalCost:8})),"23514");
+    await expectSqlState(()=>prisma.$transaction(tx=>insertEvidence(tx,{status:"IN_TRANSIT"})),"23514");
+    await expectSqlState(()=>prisma.$transaction(tx=>insertEvidence(tx,{status:"RECEIVED"})),"23514");
+    await expectSqlState(()=>prisma.$transaction(tx=>insertEvidence(tx,{organizationId:organizationId+"-foreign"})),"23503");
+    await expectSqlState(()=>prisma.$transaction(async tx=>{
+      await insertEvidence(tx);
+      await insertEvidence(tx,{id:evidenceId+"-duplicate"});
+    }),"23505");
+    expect(await prisma.enterpriseInventoryTransferValuation.count({where:{organizationId,transferLineId:schemaDispatchMovement.sourceLineId}})).toBe(0);
+    expect(await transferFinanceSnapshot()).toEqual(beforeTransferFinance);
+
+
     const traceRes=await context.owner.request.get(qualityPath+"?view=trace&lotId="+encodeURIComponent(recallBefore.id));
     expect(traceRes.status()).toBe(200);
     const trace=await traceRes.json();

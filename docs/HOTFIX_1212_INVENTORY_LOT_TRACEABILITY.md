@@ -366,6 +366,7 @@
 ### Reprise — registre durable de valorisation des transferts
 - 4727155 : Quality bloquée avant le code par un espace final dans cette documentation ; 924682f corrige uniquement cet espace. Type-check, QA de régression et migration Quality réussis dans la campagne suivante, certification complète à vérifier.
 - Migration additive 20261119190000 : deux tables, preuve unique par ligne et allocations aux couches d'origine ; clés étrangères composites tenant-scoped, unicité des mouvements, journaux et couche de réception, contraintes de conservation des montants/quantités et cohérence PREPARED/IN_TRANSIT/RECEIVED. Aucun backfill, aucun déplacement de stock, aucun journal historique modifié.
+- Recette PostgreSQL ajoutée : insertion PREPARED isolée et annulée, refus montant incohérent, état sans preuves, références inter-tenant et doublon via SQLSTATE. Vise les contraintes de structure uniquement ; aucune preuve fictive conservée.
 - Le registre n'est pas encore alimenté : les transitions métier devront vérifier les coordonnées source/destination et la somme des allocations, produire les écritures dans la même transaction sérialisable, interdire les mutations hors workflow et empêcher des contrepassations non coordonnées. Les contraintes SQL sont structurelles, pas un substitut à ces règles. Pas de déclaration de valorisation opérationnelle ni d'OWNER_E2E ; nouvelle CI requise.
 
 ## Restant (bloquant)
