@@ -610,6 +610,19 @@ await acquisitionGuards.assertAcquisitionValuationCutoffTx(cutoffTx,"org-a",acqD
 cutoffBlocked=true;await assert.rejects(acquisitionGuards.assertAcquisitionValuationCutoffTx(cutoffTx,"org-a",acqDay),{code:"INVENTORY_ACQUISITION_COST_HISTORY_REQUIRED"});
 console.log("Acquisition guards: generic credits/reversals, tenant scope and misleading historical projections blocked");
 mocks["@/lib/enterprise/accounting/inventory-acquisition-cost-guards"]=acquisitionGuards;
+const ordinaryHistory=load("lib/enterprise/accounting/inventory-ordinary-history.ts");
+mocks["@/lib/enterprise/accounting/inventory-ordinary-history"]=ordinaryHistory;
+const ordinaryProof=ordinaryHistory.ordinaryInventoryHistorySql("org-a",acqDay);
+for(const marker of [
+  'COUNT(DISTINCT "currencyCode")=1', 'j."sourceEntityId"=e.id', 'j."postedAt"', 'j."reversedAt" IS NULL',
+  'm."organizationId"=', 'e."organizationId"=m."organizationId"', 'l."organizationId"=s."organizationId"',
+  't.quantity=p.quantity AND t.value=p.value', 't."minQuantity">=0', 't."zeroBalanced"',
+  'NOT EXISTS (SELECT 1 FROM movements v WHERE v.id=m.id)', '"EnterpriseInventoryAcquisitionCostSupplement"',
+  'b."quantityOnHand"<0', '"EnterpriseJournalReversal"', 'INVENTORY_LOSS_VALUED', 'INVENTORY_ISSUE_VALUED',
+  'm."movementType" NOT LIKE \'%TRANSFER%\'', 'r."dispatchAccountingEventId"=e.id'
+]) assert.ok(ordinaryProof.sql.includes(marker),marker);
+assert.ok(ordinaryProof.values.includes("org-a"));
+assert.ok(ordinaryProof.values.some(value=>value instanceof Date&&value.getTime()===acqDay.getTime()));
 const historicalValuation=load("lib/enterprise/accounting/inventory-historical-valuation.ts");
 const historyProof=historicalValuation.isolatedAcquisitionHistorySql("org-a",acqDay);
 for(const marker of [
@@ -638,6 +651,9 @@ assert.equal(guardCalls,1);
 assert.ok(historyQuery.sql.includes("WITH verified_history AS"));
 assert.ok(historyQuery.sql.includes('NOT EXISTS (SELECT 1 FROM verified_history h WHERE h."layerId"=l.id)'));
 assert.ok(historyQuery.sql.includes("UNION ALL"));
+assert.ok(historyQuery.sql.includes("ordinary_history AS"));
+assert.ok(historyQuery.sql.includes("CURRENT_LAYER_PROJECTION"));
+assert.ok(historyQuery.sql.includes("VERIFIED_HISTORY"));
 cutoffBlocked=true;
 await assert.rejects(historicalValuation.inventoryValuationAtSqlTx(historyTx,"org-a",acqDay),{code:"INVENTORY_ACQUISITION_COST_HISTORY_REQUIRED"});
 console.log("Historical isolated acquisition: canonical signed receipt, supplement and dispatch proof; unsupported pool guard retained");
