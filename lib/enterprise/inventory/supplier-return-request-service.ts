@@ -97,7 +97,7 @@ export async function submitSupplierReturnRequest(organizationId: string, purcha
     if (!origin?.stockLotId || !receipt) throw new EnterpriseDomainError("SUPPLIER_RETURN_ORIGIN_INVALID", 404);
     const check = await inspectSupplierReturnTx(tx, organizationId, actorUserId, { ...origin, supplierReturnSourceMovementId: origin.id, quantity: input.quantity });
     if (check.receipt.purchaseId !== purchaseId) throw new EnterpriseDomainError("SUPPLIER_RETURN_ORIGIN_INVALID", 404);
-    const open = await tx.enterpriseSupplierReturnRequest.findFirst({ where: { organizationId, supplierInvoiceId: check.invoice.id, status: { in: ["PENDING_APPROVAL", "APPROVED", "DISPATCHED", "RECONCILED"] } }, select: { id: true } });
+    const open = await tx.enterpriseSupplierReturnRequest.findFirst({ where: { organizationId, supplierInvoiceId: check.invoice.id, status: { in: ["PENDING_APPROVAL", "APPROVED", "DISPATCHED"] } }, select: { id: true } });
     if (open) throw new EnterpriseDomainConflictError("SUPPLIER_RETURN_ALREADY_OPEN");
     const request = await tx.enterpriseSupplierReturnRequest.create({ data: {
       organizationId, reference: "RTV-" + randomUUID().slice(0, 12).toUpperCase(), purchaseId,
