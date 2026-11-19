@@ -121,6 +121,7 @@ export async function GET(req: Request, { params }: Params) {
     const canReviewSupplierReturn = canCheckSupplierReturn && await requireSupplierReturnParticipantAccess(organizationId, session.userId, true).then(() => true, () => false);
     const requests = (canSubmitSupplierReturn || canReviewSupplierReturn) && rows.length ? await prisma.enterpriseSupplierReturnRequest.findMany({
       where: { organizationId, purchaseId: id, sourceMovementId: { in: rows.map((row) => row.id) }, status: { in: ["PENDING_APPROVAL", "APPROVED", "DISPATCHED", "RECONCILED"] } },
+      orderBy:[{createdAt:"desc"},{id:"desc"}],
       select: { id:true, sourceMovementId:true, reference:true, status:true, quantity:true, requestedByUserId:true, revision:true, dispatchReference:true, dispatchedAt:true, supplierCreditNoteId:true, supplierCreditReference:true, supplierInvoiceId:true, supplierInvoiceItemId:true, unitCost:true, totalCost:true, recoverableTaxAmount:true, currencyCode:true },
     }) : [];
     const requestApprovals = requests.length ? await prisma.enterpriseApproval.findMany({
@@ -142,7 +143,7 @@ export async function GET(req: Request, { params }: Params) {
     const creditById=new Map(currentCredits.map(credit=>[credit.id,credit]));
     const replacementById=new Map(creditReplacements.map(proof=>[proof.replacementCreditNoteId,proof]));
     const businessContext = requests.some(request => request.dispatchedAt) ? await getEnterpriseBusinessContext(prisma, organizationId) : null;
-    const requestByMovement = new Map(authorizedRequests.map((request) => {
+    const projectedRequests = authorizedRequests.map((request) => {
       const supplement=supplementByLine.get(request.supplierInvoiceItemId);
       const credit=request.supplierCreditNoteId?creditById.get(request.supplierCreditNoteId):null;
       const replaced=request.supplierCreditNoteId?replacementById.get(request.supplierCreditNoteId):null;
@@ -157,8 +158,18 @@ export async function GET(req: Request, { params }: Params) {
       supplierCreditStatus:credit?.status||null,supplierCreditRevision:credit?.revision||null,
       previousCreditNoteId:replaced?.previousCreditNoteId||null,previousSupplierCreditReference:replaced?.previousSupplierReference||null,
       approvalId:requestApprovals.find((approval) => approval.targetEntityId === request.id)?.id || null,
-    }] as const;}));
-    return NextResponse.json({ items: items.map((row) => ({ ...row, supplierReturnRequest: requestByMovement.get(row.id) || null })), canCheckSupplierReturn, canSubmitSupplierReturn, pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) } });
+    }] as const;});
+    type ProjectedRequest=(typeof projectedRequests)[number][1];
+    const requestByMovement=new Map<string,ProjectedRequest>();
+    const historyByMovement=new Map<string,ProjectedRequest[]>();
+    for(const [movementId,request] of projectedRequests){
+      const selected=requestByMovement.get(movementId);
+      if(!selected||(selected.status==="RECONCILED"&&request.status!=="RECONCILED"))requestByMovement.set(movementId,request);
+      if(request.status==="RECONCILED"){
+        const history=historyByMovement.get(movementId)||[];history.push(request);historyByMovement.set(movementId,history);
+      }
+    }
+    return NextResponse.json({ items: items.map((row) => ({ ...row, supplierReturnRequest: requestByMovement.get(row.id) || null, supplierReturnHistory:historyByMovement.get(row.id)||[] })), canCheckSupplierReturn, canSubmitSupplierReturn, pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) } });
   }
   const itemIds = purchase.items.map((item) => item.id);
   const [requestRecord, approvals, links, events, comments, operationalLink, itemCatalogLinks] = await Promise.all([
