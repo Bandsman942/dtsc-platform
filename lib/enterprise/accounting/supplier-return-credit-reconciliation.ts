@@ -1,4 +1,4 @@
-import { Prisma, type EnterpriseSupplierInvoiceItem } from "@prisma/client";
+import { Prisma, type EnterpriseSupplierInvoiceItem, type EnterpriseSupplierCreditNoteItem, type EnterpriseSupplierReturnRequest } from "@prisma/client";
 import { allocateHistoricalCreditLines } from "@/lib/enterprise/accounting/historical-credit-tax";
 import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
 import { resolveSemanticPostingAccount } from "@/lib/enterprise/accounting/semantic-account-resolver";
@@ -26,8 +26,10 @@ export function supplierReturnPayableCapacity(payable: PayableCapacityInput, pen
 export async function supplierReturnFinanceProjectionTx(tx: Prisma.TransactionClient, organizationId: string, invoiceIds: string[]) {
   if (!invoiceIds.length) return new Map<string, { id:string; reference:string; status:string; purchaseId:string; sourceMovementId:string; totalCost:Prisma.Decimal; recoverableTaxAmount:Prisma.Decimal; currencyCode:string; supplierCreditNoteId:string|null }>();
   const rows = await tx.enterpriseSupplierReturnRequest.findMany({where:{organizationId,supplierInvoiceId:{in:invoiceIds},status:{in:["DISPATCHED","RECONCILED"]}},
+    orderBy:[{status:"asc"},{dispatchedAt:"desc"},{id:"desc"}],
     select:{id:true,supplierInvoiceId:true,reference:true,status:true,purchaseId:true,sourceMovementId:true,totalCost:true,recoverableTaxAmount:true,currencyCode:true,supplierCreditNoteId:true}});
-  return new Map(rows.map(row=>[row.supplierInvoiceId,row]));
+  // DISPATCHED sorts before RECONCILED; retain the active reservation or latest closed return.
+  return new Map(rows.slice().reverse().map(row=>[row.supplierInvoiceId,row]));
 }
 
 export async function assertSupplierPaymentCapacityTx(tx: Prisma.TransactionClient, organizationId: string, payable: { supplierInvoiceId: string; outstandingAmount: Prisma.Decimal; currencyCode: string }, amount: Prisma.Decimal) {
@@ -35,6 +37,104 @@ export async function assertSupplierPaymentCapacityTx(tx: Prisma.TransactionClie
   if (!pending.length) return;
   const { reserved, available } = supplierReturnPayableCapacity(payable, pending);
   if (amount.gt(available)) throw new EnterpriseAccountingError("SUPPLIER_RETURN_PAYABLE_RESERVED", 409, { reservedAmount: reserved.toFixed(), allocatableAmount: available.toFixed(), currencyCode: payable.currencyCode });
+}
+
+
+type PriorCreditCoordinates = {
+  supplierInvoiceId: string; sourceMovementId: string; originCostLayerId: string;
+  receiptAccountingEventId: string; original: EnterpriseSupplierInvoiceItem; currencyCode: string;
+  currentCreditId?: string;
+};
+
+/** Only sequential returns against the SAME proven receipt and invoice line
+ * can reopen this workflow. Every previous dispatch must have its exact
+ * posted credit, journal, historical tax rows and payable allocation.
+ * A generic credit, reversed evidence, different lot or uncredited dispatch
+ * is not permission to infer prior consumption. All consumers use the same
+ * Serializable/RepeatableRead transaction and the invoice lock on writes. */
+export async function readPriorReconciledSupplierReturnCreditsTx(
+  tx: Prisma.TransactionClient, organizationId: string, input: PriorCreditCoordinates,
+  existing?: EnterpriseSupplierReturnRequest[],
+): Promise<EnterpriseSupplierCreditNoteItem[]> {
+  const prior = existing || await tx.enterpriseSupplierReturnRequest.findMany({
+    where:{organizationId,supplierInvoiceId:input.supplierInvoiceId,status:"RECONCILED"},
+    orderBy:[{dispatchedAt:"asc"},{id:"asc"}],
+  });
+  if (!prior.length) return [];
+  if (prior.some(r=>r.organizationId!==organizationId || r.status!=="RECONCILED" ||
+      r.supplierInvoiceId!==input.supplierInvoiceId || r.supplierInvoiceItemId!==input.original.id ||
+      r.sourceMovementId!==input.sourceMovementId || r.originCostLayerId!==input.originCostLayerId ||
+      r.receiptAccountingEventId!==input.receiptAccountingEventId || r.currencyCode!==input.currencyCode ||
+      !r.dispatchedAt || !r.dispatchMovementId || !r.dispatchAccountingEventId || !r.supplierCreditNoteId ||
+      !r.supplierCreditReference || !r.creditJournalEntryId || !r.reconciledAt || !r.quantity.gt(0))) return fail();
+  const creditIds=prior.map(r=>r.supplierCreditNoteId!);
+  const [invoice,payable,notes,lines,movements,events,creditJournals,allocations] = await Promise.all([
+    tx.enterpriseSupplierInvoice.findFirst({where:{organizationId,id:input.supplierInvoiceId}}),
+    tx.enterprisePayable.findFirst({where:{organizationId,supplierInvoiceId:input.supplierInvoiceId}}),
+    tx.enterpriseSupplierCreditNote.findMany({where:{organizationId,supplierInvoiceId:input.supplierInvoiceId,
+      status:{notIn:["REJECTED","CANCELLED"]},...(input.currentCreditId?{id:{not:input.currentCreditId}}:{})}}),
+    tx.enterpriseSupplierCreditNoteItem.findMany({where:{organizationId,supplierCreditNoteId:{in:creditIds}}}),
+    tx.enterpriseStockMovement.findMany({where:{organizationId,id:{in:prior.map(r=>r.dispatchMovementId!)}}}),
+    tx.enterpriseInventoryAccountingEvent.findMany({where:{organizationId,id:{in:prior.map(r=>r.dispatchAccountingEventId!)}}}),
+    tx.enterpriseJournalEntry.findMany({where:{organizationId,id:{in:prior.map(r=>r.creditJournalEntryId!)}}}),
+    tx.enterprisePayableAllocation.findMany({where:{organizationId,sourceType:"SUPPLIER_CREDIT_NOTE",sourceId:{in:creditIds}}}),
+  ]);
+  if (!invoice || !payable || invoice.currencyCode!==input.currencyCode || payable.currencyCode!==input.currencyCode ||
+      !invoice.outstandingAmount.equals(payable.outstandingAmount) ||
+      [notes,lines,movements,events,creditJournals,allocations].some(list=>list.length!==prior.length)) return fail();
+  const dispatchJournals=await tx.enterpriseJournalEntry.findMany({where:{organizationId,id:{in:events.flatMap(e=>e.journalEntryId?[e.journalEntryId]:[])}}});
+  const reversals=await tx.enterpriseJournalReversal.count({where:{organizationId,originalEntryId:{in:[...creditJournals,...dispatchJournals].map(j=>j.id)}}});
+  if(dispatchJournals.length!==prior.length || reversals) return fail();
+  const taxRows=await tx.enterpriseTaxLine.findMany({where:{organizationId,sourceEntityType:"EnterpriseSupplierCreditNoteItem",sourceEntityId:{in:lines.map(l=>l.id)}}});
+  const accumulated:EnterpriseSupplierCreditNoteItem[]=[];
+  let credited=new Prisma.Decimal(0);
+  const validJournal=(j:typeof creditJournals[number]|undefined,type:string,id:string,postingEvent:string,amount:Prisma.Decimal)=>
+    j && j.status==="POSTED" && j.postedAt && !j.reversedAt && !j.reversalOfEntryId &&
+    j.sourceEntityType===type && j.sourceEntityId===id && j.postingEvent===postingEvent && j.postingVersion===1 &&
+    j.functionalCurrencyCode===input.currencyCode && j.totalDebit.equals(amount) && j.totalCredit.equals(amount);
+  for(const r of prior){
+    const note=notes.find(n=>n.id===r.supplierCreditNoteId), line=lines.find(l=>l.supplierCreditNoteId===note?.id);
+    const movement=movements.find(m=>m.id===r.dispatchMovementId), event=events.find(e=>e.id===r.dispatchAccountingEventId);
+    const gross=r.totalCost.plus(r.recoverableTaxAmount);
+    const allocation=allocations.find(a=>a.sourceId===note?.id);
+    if(!note || note.status!=="POSTED" || !note.postedAt || !note.approvedByUserId || note.approvedByUserId===note.createdByUserId ||
+      note.currencyCode!==input.currencyCode || !line || line.sourceInvoiceItemId!==input.original.id ||
+      line.catalogItemId!==input.original.catalogItemId || !line.quantity.equals(r.quantity) || !line.unitPrice.equals(input.original.unitPrice) ||
+      !note.grandTotal.equals(gross) || !line.totalAmount.equals(gross) ||
+      !note.subtotal.equals(line.netAmount) || !note.taxTotal.equals(line.taxAmount) ||
+      !movement || movement.sourceEntityType!=="EnterpriseSupplierReturnRequest" || movement.sourceEntityId!==r.id ||
+      movement.movementType!=="SUPPLIER_RETURN_OUT" || movement.direction!=="OUT" ||
+      movement.inventoryItemId!==r.inventoryItemId || movement.warehouseId!==r.warehouseId ||
+      movement.stockLotId!==r.stockLotId || movement.storageLocationId!==r.storageLocationId || !movement.quantity.equals(r.quantity) ||
+      !event || event.status!=="POSTED" || event.eventType!=="SUPPLIER_RETURN" || event.stockMovementId!==movement.id ||
+      event.inventoryItemId!==r.inventoryItemId || event.currencyCode!==input.currencyCode || !event.quantity.equals(r.quantity) ||
+      !event.unitCost.equals(r.unitCost) || !event.totalCost.equals(r.totalCost) ||
+      !validJournal(dispatchJournals.find(j=>j.id===event.journalEntryId),"EnterpriseInventoryAccountingEvent",event.id,"INVENTORY_SUPPLIER_RETURN_VALUED",r.totalCost) ||
+      !validJournal(creditJournals.find(j=>j.id===r.creditJournalEntryId),"EnterpriseSupplierCreditNote",note.id,"SUPPLIER_CREDIT_NOTE_POSTED",gross) ||
+      !allocation || allocation.payableId!==payable.id || allocation.status!=="CONFIRMED" || allocation.reversedAt || !allocation.amount.equals(gross)) return fail();
+    const [expected]=allocateHistoricalCreditLines([input.original],accumulated,[{sourceInvoiceItemId:input.original.id,description:input.original.description,quantity:r.quantity.toFixed(),unitPrice:input.original.unitPrice.toFixed()}],note.creditDate);
+    if (!line.netAmount.equals(expected.netAmount)||!line.taxAmount.equals(expected.taxAmount)||!line.totalAmount.equals(expected.totalAmount)||
+        line.taxRecoveryRequested!==expected.taxRecoveryRequested ||
+        (line.taxRecoveryRequested ? !r.totalCost.equals(line.netAmount)||!r.recoverableTaxAmount.equals(line.taxAmount) :
+          !r.totalCost.equals(line.totalAmount)||!r.recoverableTaxAmount.isZero())) return fail();
+    const postedTax=taxRows.filter(t=>t.sourceEntityId===line.id);
+    if(postedTax.length!==expected.taxBreakdown.length) return fail();
+    if(expected.taxBreakdown.length){
+      if(!Array.isArray(line.taxBreakdownJson)||line.taxBreakdownJson.length!==expected.taxBreakdown.length) return fail();
+      for(const [index,expectedTax] of expected.taxBreakdown.entries()){
+        const actual=line.taxBreakdownJson[index];
+        const tax=postedTax.find(t=>t.taxCodeId===expectedTax.taxCodeId&&t.applicationOrder===expectedTax.applicationOrder);
+        if(!actual||typeof actual!=="object"||Array.isArray(actual)||Object.entries(expectedTax).some(([key,value])=>actual[key]!==value)||
+          !tax||tax.direction!==(line.taxRecoveryRequested?"INPUT_REVERSAL":"INPUT_NONRECOVERABLE_REVERSAL")||
+          tax.currencyCode!==input.currencyCode||!tax.taxAmount.equals(expectedTax.amount)||!tax.taxableAmount.equals(expectedTax.base)||
+          !tax.taxRate.equals(expectedTax.rate)||tax.effectiveAt?.toISOString()!==expectedTax.effectiveAt) return fail();
+      }
+    }
+    accumulated.push(line);
+    credited=credited.plus(gross);
+  }
+  if(!invoice.amountCredited.equals(credited)||!payable.creditedAmount.equals(credited)) return fail();
+  return accumulated;
 }
 
 /** Financial document dates are civil dates stored at UTC midnight, while
@@ -52,11 +152,11 @@ export async function assertSupplierReturnCreditDateTx(tx: Prisma.TransactionCli
  * Match each original snapshot to one posted INPUT row. Reject ambiguous
  * duplicates, compound calculations and mixed/nonrecoverable tax treatment.
  * The historical allocation engine, not today's catalog, determines the credit. */
-export async function deriveSupplierReturnTaxTx(tx: Prisma.TransactionClient, organizationId: string, original: EnterpriseSupplierInvoiceItem, currencyCode: string, quantity: Prisma.Decimal, date: Date) {
-  return deriveHistoricalSupplierVatTx(tx, organizationId, original, currencyCode, quantity, date, "INPUT");
+export async function deriveSupplierReturnTaxTx(tx: Prisma.TransactionClient, organizationId: string, original: EnterpriseSupplierInvoiceItem, currencyCode: string, quantity: Prisma.Decimal, date: Date, previous: Parameters<typeof allocateHistoricalCreditLines>[1] = []) {
+  return deriveHistoricalSupplierVatTx(tx, organizationId, original, currencyCode, quantity, date, "INPUT", previous);
 }
 
-async function deriveHistoricalSupplierVatTx(tx: Prisma.TransactionClient, organizationId: string, original: EnterpriseSupplierInvoiceItem, currencyCode: string, quantity: Prisma.Decimal, date: Date, direction: "INPUT" | "INPUT_NONRECOVERABLE") {
+async function deriveHistoricalSupplierVatTx(tx: Prisma.TransactionClient, organizationId: string, original: EnterpriseSupplierInvoiceItem, currencyCode: string, quantity: Prisma.Decimal, date: Date, direction: "INPUT" | "INPUT_NONRECOVERABLE", previous: Parameters<typeof allocateHistoricalCreditLines>[1] = []) {
   if (original.taxAmount.isZero() && direction === "INPUT") return { amount: new Prisma.Decimal(0), breakdown: [] };
   if (!original.taxAmount.gt(0) || original.taxRecoveryRequested !== (direction === "INPUT") || !Array.isArray(original.taxBreakdownJson) ||
       !original.taxBreakdownJson.length || original.taxBreakdownJson.length>(direction === "INPUT" ? 20 : 1) || original.taxCalculationMode !== "NET") return fail();
@@ -85,7 +185,7 @@ async function deriveHistoricalSupplierVatTx(tx: Prisma.TransactionClient, organ
     sourceTax=sourceTax.plus(posted.taxAmount);
   }
   if(!sourceTax.equals(original.taxAmount))return fail();
-  const [credit]=allocateHistoricalCreditLines([original],[],[{sourceInvoiceItemId:original.id,description:original.description,quantity:quantity.toFixed(),unitPrice:original.unitPrice.toFixed()}],date);
+  const [credit]=allocateHistoricalCreditLines([original],previous,[{sourceInvoiceItemId:original.id,description:original.description,quantity:quantity.toFixed(),unitPrice:original.unitPrice.toFixed()}],date);
   return {amount:credit.taxAmount,breakdown:credit.taxBreakdown};
 }
 
@@ -126,6 +226,7 @@ export async function deriveCapitalizedSupplierReturnTx(
   proof: import("@prisma/client").EnterpriseInventoryAcquisitionCostSupplement,
   coordinates: { originCostLayerId: string; receiptAccountingEventId: string; invoiceJournalEntryId: string; currencyCode: string; quantity: Prisma.Decimal },
   date: Date,
+  previous: Parameters<typeof allocateHistoricalCreditLines>[1] = [],
 ) {
   if (proof.organizationId !== organizationId || proof.supplierInvoiceItemId !== original.id ||
       proof.costLayerId !== coordinates.originCostLayerId || proof.receiptAccountingEventId !== coordinates.receiptAccountingEventId ||
@@ -138,7 +239,7 @@ export async function deriveCapitalizedSupplierReturnTx(
   const fiscal = await tx.enterpriseTaxLine.findFirst({ where: { organizationId, id: proof.taxLineId, sourceEntityType: "EnterpriseSupplierInvoiceItem",
     sourceEntityId: original.id, currencyCode: proof.currencyCode, direction: "INPUT_NONRECOVERABLE" }, select: { id: true, effectiveAt: true } });
   if (!fiscal?.effectiveAt || fiscal.effectiveAt.getTime() !== proof.effectiveAt.getTime()) return fail();
-  const tax = await deriveHistoricalSupplierVatTx(tx, organizationId, original, proof.currencyCode, coordinates.quantity, date, "INPUT_NONRECOVERABLE");
+  const tax = await deriveHistoricalSupplierVatTx(tx, organizationId, original, proof.currencyCode, coordinates.quantity, date, "INPUT_NONRECOVERABLE", previous);
   const net = coordinates.quantity.times(proof.originalUnitCost);
   const gross = coordinates.quantity.times(proof.unitCost);
   if (!tax.amount.gt(0) || net.decimalPlaces() > 6 || gross.decimalPlaces() > 6 ||
@@ -190,11 +291,13 @@ export async function verifySupplierReturnCreditTx(tx: Prisma.TransactionClient,
       item.sourceInvoiceItemId !== original.id || item.catalogItemId !== original.catalogItemId || !item.quantity.equals(dispatched.quantity) || !item.totalAmount.equals(credit.grandTotal) ||
       movement.stockLotId !== dispatched.stockLotId || movement.inventoryItemId !== dispatched.inventoryItemId || movement.warehouseId !== dispatched.warehouseId || !movement.quantity.equals(dispatched.quantity) ||
       event.inventoryItemId !== dispatched.inventoryItemId || !event.quantity.equals(dispatched.quantity) || !event.unitCost.equals(dispatched.unitCost) || !event.totalCost.equals(dispatched.totalCost) || event.currencyCode !== dispatched.currencyCode) return fail();
+  const priorReturns=await tx.enterpriseSupplierReturnRequest.findMany({where:{organizationId,supplierInvoiceId:credit.supplierInvoiceId,status:"RECONCILED"},orderBy:[{dispatchedAt:"asc"},{id:"asc"}]});
+  const prior=await readPriorReconciledSupplierReturnCreditsTx(tx,organizationId,{supplierInvoiceId:credit.supplierInvoiceId,sourceMovementId:dispatched.sourceMovementId,originCostLayerId:dispatched.originCostLayerId,receiptAccountingEventId:dispatched.receiptAccountingEventId,original,currencyCode:credit.currencyCode,currentCreditId:credit.id},priorReturns);
   const capitalized = supplement ? await deriveCapitalizedSupplierReturnTx(tx, organizationId, original, supplement, {
     originCostLayerId: dispatched.originCostLayerId, receiptAccountingEventId: dispatched.receiptAccountingEventId,
     invoiceJournalEntryId: invoiceJournal.id, currencyCode: credit.currencyCode, quantity: dispatched.quantity,
-  }, credit.creditDate) : null;
-  const tax = capitalized?.tax || await deriveSupplierReturnTaxTx(tx, organizationId, original, credit.currencyCode, dispatched.quantity, credit.creditDate);
+  }, credit.creditDate, prior) : null;
+  const tax = capitalized?.tax || await deriveSupplierReturnTaxTx(tx, organizationId, original, credit.currencyCode, dispatched.quantity, credit.creditDate, prior);
   const net = capitalized?.net || dispatched.totalCost;
   if (!credit.subtotal.equals(net) || !item.netAmount.equals(net) || !credit.taxTotal.equals(tax.amount) ||
       !item.taxAmount.equals(tax.amount) || !item.unitPrice.equals(capitalized?.unitPrice || dispatched.unitCost) ||
