@@ -657,6 +657,25 @@ assert.ok(historyQuery.sql.includes("VERIFIED_HISTORY"));
 cutoffBlocked=true;
 await assert.rejects(historicalValuation.inventoryValuationAtSqlTx(historyTx,"org-a",acqDay),{code:"INVENTORY_ACQUISITION_COST_HISTORY_REQUIRED"});
 console.log("Historical isolated acquisition: canonical signed receipt, supplement and dispatch proof; unsupported pool guard retained");
+const reportBuilder=load("lib/reporting/finance-professional-report.ts");
+for(const locale of ["fr","en"]){
+  const report=reportBuilder.buildFinancialStatementProfessionalReport({locale,statement:{
+    statementType:"INVENTORY_VALUATION",currencyCode:"USD",status:"GENERATED",snapshotJson:[
+      {inventoryItemId:"item-a",inventoryItemName:"Milk",warehouseName:"Warehouse A",currencyCode:"USD",quantity:"16",value:"112",valuationBasis:"VERIFIED_HISTORY"},
+      {inventoryItemId:"item-b",inventoryItemName:"Oil",warehouseName:"Warehouse B",currencyCode:"EUR",quantity:"2",value:"30",valuationBasis:"CURRENT_LAYER_PROJECTION"},
+      {inventoryItemId:"item-c",inventoryItemName:"Legacy",warehouseName:"Warehouse C",currencyCode:"USD",quantity:"1",value:"5"}
+    ]
+  }});
+  assert.ok(report.columns.some(col=>col.key==="valuationBasis"));
+  assert.equal(report.rows[0].valuationBasis,locale==="en"?"Verified history":"Historique vérifié");
+  assert.equal(report.rows[1].valuationBasis,locale==="en"?"Current projection, unverified history":"Projection actuelle, historique non certifié");
+  assert.equal(report.rows[2].valuationBasis,report.rows[1].valuationBasis);
+  assert.ok(report.rows[1].value.includes("€"));
+  assert.equal(report.chart.length,0);
+  assert.ok(report.insights.some(insight=>insight.tone==="warning"));
+}
+console.log("Inventory professional report: localized proof status, legacy warning and original currencies");
+
 
 const capCoordinates={originCostLayerId:recordedAcq.costLayerId,receiptAccountingEventId:recordedAcq.receiptAccountingEventId,invoiceJournalEntryId:recordedAcq.invoiceJournalEntryId,currencyCode:"USD",quantity:d(2)};
 const capTaxTx={...acqTx,enterpriseTaxLine:{findMany:async()=>[{...nonRecoverableRow,effectiveAt:acqDay}],findFirst:async({where})=>where.id===recordedAcq.taxLineId?{id:recordedAcq.taxLineId,effectiveAt:acqDay}:null}};
