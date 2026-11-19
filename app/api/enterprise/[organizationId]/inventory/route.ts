@@ -122,6 +122,12 @@ export async function GET(req: Request, { params }: Params) {
     prisma.enterpriseInventoryReservation.findMany({where:{organizationId,inventoryItemId:{in:itemIds},status:"ACTIVE",OR:[{expiresAt:null},{expiresAt:{gt:new Date()}}],warehouseId:{in:pageWarehouseIds}},select:{inventoryItemId:true,warehouseId:true,quantity:true,fulfilledQuantity:true,lotAllocations:true,storageLocationId:true}}),
     readActiveRetailInvoiceStockHoldsTx(prisma,{organizationId,inventoryItemIds:itemIds,...(warehouseId?{warehouseId}:{})}),
   ]);
+  const pageCatalogIds=[...new Set(items.map(item=>item.catalogItemId))];
+  const [pharmacyItems,sectorItems]=await Promise.all([
+    prisma.pharmacyProductExtension.findMany({where:{organizationId,catalogItemId:{in:pageCatalogIds}},select:{catalogItemId:true}}),
+    prisma.enterpriseSectorInventoryEvent.groupBy({by:["catalogItemId"],where:{organizationId,catalogItemId:{in:pageCatalogIds}}}),
+  ]);
+  const sectorManaged=new Set([...pharmacyItems,...sectorItems].map(row=>row.catalogItemId));
   const zero=()=>new Prisma.Decimal(0);
   const today=businessDateKey(new Date(),organization.timezone||"UTC");
   const normalizedItems=items.map(item=>{
@@ -152,7 +158,7 @@ export async function GET(req: Request, { params }: Params) {
         if(local.gt(0))available=available.plus(local);
       }
     }
-    return {...item,quantityOnHand:Number(physical),quantityReserved:Number(legacy.plus(orderReserved).plus(invoiceHeld)),legacyQuantityReserved:Number(legacy),orderReservedQuantity:Number(orderReserved),invoiceHeldQuantity:Number(invoiceHeld),quantityAvailable:Number(available),isLowStock:item.minimumQuantity!==null&&physical.lte(item.minimumQuantity)};
+    return {...item,sectorManaged:sectorManaged.has(item.catalogItemId),quantityOnHand:Number(physical),quantityReserved:Number(legacy.plus(orderReserved).plus(invoiceHeld)),legacyQuantityReserved:Number(legacy),orderReservedQuantity:Number(orderReserved),invoiceHeldQuantity:Number(invoiceHeld),quantityAvailable:Number(available),isLowStock:item.minimumQuantity!==null&&physical.lte(item.minimumQuantity)};
   });
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "inventory", page } });
   return NextResponse.json({ items: normalizedItems, pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) }, metrics: { lowStockCount, movementCount, warehouseCount }, canManage: access.canManage && !scope.isolationEnabled, canAdminister: access.canAdminister && !scope.isolationEnabled });
