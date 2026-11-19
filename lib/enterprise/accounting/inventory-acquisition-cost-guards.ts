@@ -41,16 +41,19 @@ export async function assertAcquisitionJournalCorrectionAllowedTx(
  * Before a new historical snapshot or AI read, reject a cutoff that would
  * retroject a cost supplement, or post-cutoff movement/valuation in an affected
  * pool. No published snapshot is modified. Execute this and the aggregate in
- * the same RepeatableRead/Serializable snapshot. Other pools retain their
+ * the same RepeatableRead/Serializable snapshot. A caller may supply the exact isolated history proof inside the same snapshot.
+ * Other pools retain their
  * existing valuation contract; this does not certify their historical data. */
 export async function assertAcquisitionValuationCutoffTx(
   tx: Pick<Prisma.TransactionClient, "$queryRaw">, organizationId: string, cutoff: Date,
+  verifiedHistory?: Prisma.Sql,
 ) {
   const rows = await tx.$queryRaw<Array<{ blocked: number }>>(Prisma.sql`
     SELECT 1 AS blocked
     FROM "EnterpriseInventoryAcquisitionCostSupplement" s
     JOIN "EnterpriseInventoryCostLayer" l ON l."organizationId" = s."organizationId" AND l.id = s."costLayerId"
     WHERE s."organizationId" = ${organizationId} AND l."effectiveAt" <= ${cutoff}
+      ${verifiedHistory ? Prisma.sql`AND NOT EXISTS (SELECT 1 FROM (${verifiedHistory}) h WHERE h."layerId"=l.id)` : Prisma.empty}
       AND (
         s."effectiveAt" > ${cutoff} OR s."createdAt" > ${cutoff}
         OR EXISTS (
