@@ -175,6 +175,7 @@ const FINANCE_ERROR_MESSAGES: Record<string, string> = {
   SUPPLIER_RETURN_PAYABLE_RESERVED: "Une partie de cette dette est réservée à un avoir fournisseur en attente de rapprochement. Réduisez le montant affecté ou comptabilisez d’abord l’avoir lié.",
   SUPPLIER_RETURN_CREDIT_REFERENCE_REQUIRED: "Renseignez ensemble le retour expédié et la référence de l’avoir reçu du fournisseur.",
   SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED: "Cette facture est liée à un retour fournisseur expédié. Rapprochez l’avoir de ce retour avant toute comptabilisation.",
+  SUPPLIER_RETURN_CREDIT_REPLACEMENT_INVALID: "Le remplacement exige le document rejeté actuel, sa révision et une nouvelle référence fournisseur. Un document remplacé ne peut plus être soumis. Actualisez les données.",
   SUPPLIER_CREDIT_NOTE_EXCEEDS_OPEN_PAYABLE: "Le montant de l’avoir fournisseur dépasse le solde de dette encore ouvert. Rechargez la dette avant de comptabiliser l’avoir.",
   SALES_CREDIT_NOTE_CURRENCY_MISMATCH: "La devise de l’avoir ne correspond plus à celle de la créance.",
   SUPPLIER_CREDIT_NOTE_CURRENCY_MISMATCH: "La devise de l’avoir ne correspond plus à celle de la dette.",
