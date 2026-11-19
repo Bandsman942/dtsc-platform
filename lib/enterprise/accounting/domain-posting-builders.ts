@@ -119,6 +119,8 @@ export async function buildInventoryAccountingPosting(tx: Prisma.TransactionClie
     where: { organizationId: input.organizationId, id: event.stockMovementId },
     select: { movementType:true, direction:true, sourceEntityType:true, sourceEntityId:true, quantity:true, inventoryItemId:true, warehouseId:true, stockLotId:true, warehouse: { select: { siteId: true } } },
   });
+  // A direct posting request must enforce the same transfer boundary as the valuation APIs.
+  if (sourceMovement && (sourceMovement.movementType === "TRANSFER_IN" || sourceMovement.movementType === "TRANSFER_OUT" || sourceMovement.sourceEntityType === "EnterpriseStockTransfer")) throw new EnterpriseAccountingError("INVENTORY_TRANSFER_VALUATION_WORKFLOW_REQUIRED",409);
   if (kind === "LOSS" && sourceMovement?.movementType !== "LOT_WRITE_OFF") throw new EnterpriseAccountingError("INVENTORY_ACCOUNTING_EVENT_NOT_POSTABLE",409);
   if (kind === "ISSUE" && ["LOT_WRITE_OFF", "SUPPLIER_RETURN_OUT"].includes(sourceMovement?.movementType || "")) throw new EnterpriseAccountingError("INVENTORY_ACCOUNTING_EVENT_NOT_POSTABLE",409);
   if (kind === "SUPPLIER_RETURN") {
