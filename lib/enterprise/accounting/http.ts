@@ -83,6 +83,7 @@ const FINANCE_ERROR_MESSAGES: Record<string, string> = {
   PERIODIC_ACCOUNTING_ALLOCATION_UNBALANCED: "La répartition périodique ne produit pas un débit et un crédit égaux. Vérifiez les pourcentages d’allocation.",
   PERIODIC_ACCOUNTING_AUTO_REVERSAL_PERIOD_REQUIRED: "Aucune période comptable future ouverte n’est disponible pour la contrepassation automatique. Ouvrez la période suivante avant d’exécuter ce modèle.",
   INVENTORY_ACCOUNTING_NEGATIVE_STOCK_FORBIDDEN: "La sortie dépasse les quantités comptables valorisées disponibles.",
+  INVENTORY_TRANSFER_VALUATION_WORKFLOW_REQUIRED: "Un transfert interne ne constitue ni un achat ni une vente. La valorisation doit conserver le coût d’origine dans un circuit de transfert dédié. Ne valorisez pas séparément les deux mouvements.",
   ASSET_DEPRECIATION_NOT_ELIGIBLE: "Cette échéance d’amortissement n’est pas éligible à la comptabilisation.",
   FINANCIAL_CLOSE_BLOCKED: "La période contient encore des blocages. Corrigez-les avant la clôture.",
   FINANCIAL_CLOSE_SELF_APPROVAL_FORBIDDEN: "La clôture doit être approuvée par une autre personne autorisée.",
