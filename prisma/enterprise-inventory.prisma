@@ -285,6 +285,7 @@ model EnterpriseSupplierReturnRequest {
   quantity                Decimal @db.Decimal(18, 3)
   unitCost                Decimal @db.Decimal(20, 6)
   totalCost               Decimal @db.Decimal(20, 6)
+  recoverableTaxAmount    Decimal @default(0) @db.Decimal(20, 6)
   currencyCode            String
   reason                  String
   requestedByUserId       String
