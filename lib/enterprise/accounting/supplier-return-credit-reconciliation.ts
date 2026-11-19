@@ -48,26 +48,39 @@ export async function assertSupplierReturnCreditDateTx(tx: Prisma.TransactionCli
   return date;
 }
 
-/** First tax-enabled return tranche: exactly one historical, recoverable,
- * standard VAT application with posted INPUT evidence. Never consult today's
- * rate. Nonrecoverable tax changes inventory cost and is deliberately blocked. */
+/** Independent standard recoverable VAT applications on the net base.
+ * Match each original snapshot to one posted INPUT row. Reject ambiguous
+ * duplicates, compound calculations and mixed/nonrecoverable tax treatment.
+ * The historical allocation engine, not today's catalog, determines the credit. */
 export async function deriveSupplierReturnTaxTx(tx: Prisma.TransactionClient, organizationId: string, original: EnterpriseSupplierInvoiceItem, currencyCode: string, quantity: Prisma.Decimal, date: Date) {
   if (original.taxAmount.isZero()) return { amount: new Prisma.Decimal(0), breakdown: [] };
-  if (!original.taxAmount.gt(0) || !original.taxRecoveryRequested || !Array.isArray(original.taxBreakdownJson) || original.taxBreakdownJson.length !== 1 || original.taxCalculationMode !== "NET") return fail();
-  const snapshot = original.taxBreakdownJson[0];
-  if (!snapshot || typeof snapshot !== "object" || Array.isArray(snapshot) || typeof snapshot.taxCodeId !== "string" ||
-      typeof snapshot.rate !== "string" || typeof snapshot.amount !== "string" || typeof snapshot.base !== "string" ||
-      ![snapshot.rate,snapshot.amount,snapshot.base].every(value=>/^\d+(?:\.\d+)?$/.test(value)) ||
-      snapshot.treatment !== "STANDARD" || snapshot.basisMode !== "NET" || typeof snapshot.effectiveAt !== "string") return fail();
+  if (!original.taxAmount.gt(0) || !original.taxRecoveryRequested || !Array.isArray(original.taxBreakdownJson) ||
+      !original.taxBreakdownJson.length || original.taxBreakdownJson.length>20 || original.taxCalculationMode !== "NET") return fail();
   const applications = await tx.enterpriseTaxLine.findMany({where:{organizationId,sourceEntityType:"EnterpriseSupplierInvoiceItem",sourceEntityId:original.id},include:{taxCode:{select:{category:true}}}});
-  const posted=applications[0];
-  if (applications.length!==1 || posted.direction!=="INPUT" || posted.taxCode.category!=="VAT" ||
-      posted.taxCodeId!==snapshot.taxCodeId || posted.currencyCode!==currencyCode || posted.taxTreatment!=="STANDARD" || posted.basisMode!=="NET" ||
-      posted.jurisdiction!==snapshot.jurisdiction || posted.templateVersion!==snapshot.templateVersion ||
-      posted.evidenceReference!==snapshot.evidenceReference || posted.applicationOrder!==snapshot.applicationOrder ||
-      !posted.effectiveAt || posted.effectiveAt.toISOString()!==snapshot.effectiveAt ||
-      !posted.taxAmount.equals(original.taxAmount) || !posted.taxAmount.equals(snapshot.amount) ||
-      !posted.taxableAmount.equals(original.netAmount) || !posted.taxableAmount.equals(snapshot.base) || !posted.taxRate.equals(snapshot.rate)) return fail();
+  if (applications.length!==original.taxBreakdownJson.length) return fail();
+  const byCode=new Map(applications.map(row=>[row.taxCodeId,row]));
+  const seen=new Set<string>();
+  if(byCode.size!==applications.length)return fail();
+  let sourceTax=new Prisma.Decimal(0);
+  for(const [index,snapshot] of original.taxBreakdownJson.entries()){
+    if (!snapshot || typeof snapshot !== "object" || Array.isArray(snapshot) || typeof snapshot.taxCodeId !== "string" ||
+        !snapshot.taxCodeId || seen.has(snapshot.taxCodeId) ||
+        typeof snapshot.rate !== "string" || typeof snapshot.amount !== "string" || typeof snapshot.base !== "string" ||
+        ![snapshot.rate,snapshot.amount,snapshot.base].every(value=>/^\d+(?:\.\d+)?$/.test(value)) ||
+        snapshot.treatment !== "STANDARD" || snapshot.basisMode !== "NET" || typeof snapshot.effectiveAt !== "string" ||
+        snapshot.applicationOrder!==index) return fail();
+    seen.add(snapshot.taxCodeId);
+    const posted=byCode.get(snapshot.taxCodeId);
+    if (!posted || posted.direction!=="INPUT" || posted.taxCode.category!=="VAT" ||
+        posted.currencyCode!==currencyCode || posted.taxTreatment!=="STANDARD" || posted.basisMode!=="NET" ||
+        posted.jurisdiction!==snapshot.jurisdiction || posted.templateVersion!==snapshot.templateVersion ||
+        posted.evidenceReference!==snapshot.evidenceReference || posted.applicationOrder!==snapshot.applicationOrder ||
+        !posted.effectiveAt || posted.effectiveAt.toISOString()!==snapshot.effectiveAt ||
+        !posted.taxAmount.gt(0) || !posted.taxAmount.equals(snapshot.amount) ||
+        !posted.taxableAmount.equals(original.netAmount) || !posted.taxableAmount.equals(snapshot.base) || !posted.taxRate.equals(snapshot.rate)) return fail();
+    sourceTax=sourceTax.plus(posted.taxAmount);
+  }
+  if(!sourceTax.equals(original.taxAmount))return fail();
   const [credit]=allocateHistoricalCreditLines([original],[],[{sourceInvoiceItemId:original.id,description:original.description,quantity:quantity.toFixed(),unitPrice:original.unitPrice.toFixed()}],date);
   return {amount:credit.taxAmount,breakdown:credit.taxBreakdown};
 }
@@ -110,8 +123,10 @@ export async function verifySupplierReturnCreditTx(tx: Prisma.TransactionClient,
   if (!tax.amount.equals(dispatched.recoverableTaxAmount)) return fail();
   if (tax.amount.gt(0) || original.taxAmount.gt(0)) {
     if (!item.taxRecoveryRequested || !Array.isArray(item.taxBreakdownJson) || item.taxBreakdownJson.length!==tax.breakdown.length) return fail();
-    const expected=tax.breakdown[0], actual=item.taxBreakdownJson[0];
-    if (!expected || !actual || typeof actual!=="object" || Array.isArray(actual) || Object.entries(expected).some(([key,value])=>actual[key]!==value)) return fail();
+    for(const [index,expected] of tax.breakdown.entries()){
+      const actual=item.taxBreakdownJson[index];
+      if (!actual || typeof actual!=="object" || Array.isArray(actual) || Object.entries(expected).some(([key,value])=>actual[key]!==value)) return fail();
+    }
   }
   const [journal, clearing, stock, payable] = await Promise.all([
     tx.enterpriseJournalEntry.findFirst({ where: { organizationId, id:event.journalEntryId, sourceEntityType:"EnterpriseInventoryAccountingEvent",sourceEntityId:event.id,postingEvent:"INVENTORY_SUPPLIER_RETURN_VALUED", status:"POSTED" }, include:{lines:true} }),
