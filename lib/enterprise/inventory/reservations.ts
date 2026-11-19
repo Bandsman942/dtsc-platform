@@ -3,7 +3,7 @@ import type { z } from "zod";
 import { EnterpriseDomainConflictError, EnterpriseDomainError } from "@/lib/enterprise/common/errors";
 import { publishEnterpriseEvent } from "@/lib/enterprise/crm-sales/helpers";
 import type { inventoryReservationCreateSchema } from "@/lib/enterprise/inventory/reservation-schemas";
-import { applyStockMovementTx, requireInventoryStockAuthorityTx } from "@/lib/enterprise/inventory/service";
+import { applyStockMovementTx, requireInventoryStockAuthorityTx, assertCommonInventoryCatalogAuthorityTx } from "@/lib/enterprise/inventory/service";
 import { readActiveRetailInvoiceStockHoldsTx } from "@/lib/enterprise/retail/invoice-stock-holds";
 import { prisma } from "@/lib/prisma";
 import { consumeReservationLotAllocations, planReservationLotAllocations, readReservationLotAllocations } from "@/lib/enterprise/inventory/lot-allocation";
@@ -185,6 +185,7 @@ export async function createEnterpriseInventoryReservation(organizationId: strin
       select: { id: true, lotTracking: true, expiryTracking: true },
     });
     if (!inventoryItem) throw new EnterpriseDomainError("INVENTORY_ITEM_NOT_FOUND", 404);
+    await assertCommonInventoryCatalogAuthorityTx(tx,organizationId,catalogItemId);
 
     if (options?.requireTracked && !inventoryItem.lotTracking && !inventoryItem.expiryTracking) throw new EnterpriseDomainError("INVENTORY_RESERVATION_TRACKED_ITEM_REQUIRED", 409);
     const orderPromises = await tx.enterpriseInventoryReservation.findMany({ where: { organizationId, salesOrderItemId: input.salesOrderItemId, status: "ACTIVE", OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] }, select: { quantity: true, fulfilledQuantity: true } });
