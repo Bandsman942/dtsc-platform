@@ -2151,6 +2151,37 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
         const openClaim=await context.owner.request.get(claimPath);
         expect(openClaim.status(),await openClaim.text()).toBe(200);
         expect((await openClaim.json()).claim).toMatchObject({id:raceId,original:String(paymentAmount-56),refunded:"0",reserved:"0",available:String(paymentAmount-56),canCreate:true});
+
+        // A second invoice is a genuine POSTED supplier debt. As with the
+        // source invoice above, only the approved document is seeded; the
+        // actual Finance transition creates both its ledger and payable.
+        const targetInvoice=await prisma.enterpriseSupplierInvoice.create({data:{
+          organizationId,number:historyKey+"-COMP-TARGET-"+scenario,supplierId:supplier.id,businessPartyId:supplierParty.id,
+          status:"APPROVED",invoiceDate:new Date(returnBusinessContext.businessDate+"T00:00:00.000Z"),
+          currencyCode:fixture.currencyCode,subtotal:"12",taxTotal:"0",grandTotal:"12",outstandingAmount:"12",
+          approvedAt:new Date(),approvedByUserId:fixture.settler.id,createdByUserId:fixture.owner.id,
+          items:{create:{description:"Supplier compensation target service",quantity:"1",unitPrice:"12",netAmount:"12",taxAmount:"0",totalAmount:"12"}},
+        }});
+        await ensureStepUp(context.owner,ownerPassword);
+        const postedTarget=await post(context.owner,base+"/supplier-invoices/"+targetInvoice.id+"/transition",{action:"POST",revision:targetInvoice.revision});
+        expect(postedTarget.status,JSON.stringify(postedTarget.body)).toBe(200);
+        const targetPayable=await prisma.enterprisePayable.findFirstOrThrow({where:{organizationId,supplierInvoiceId:targetInvoice.id}});
+        const targetSnapshot=await prisma.enterpriseSupplierInvoice.findUniqueOrThrow({where:{id:targetInvoice.id}});
+        const targetJournal=await prisma.enterpriseJournalEntry.findFirstOrThrow({where:{organizationId,sourceEntityType:"EnterpriseSupplierInvoice",sourceEntityId:targetInvoice.id,postingEvent:"SUPPLIER_INVOICE_POSTED"},include:{lines:true}});
+        const compensationPath=claimPath+"&compensationPayableId="+encodeURIComponent(targetPayable.id);
+        const expectCompensation=async(available)=>{
+          const response=await context.owner.request.get(compensationPath);
+          expect(response.status(),await response.text()).toBe(200);
+          expect((await response.json()).claim.compensation).toMatchObject({
+            payableId:targetPayable.id,invoiceReference:targetInvoice.number,currencyCode:fixture.currencyCode,
+            openPayable:"12",unreservedClaim:String(available),maximum:String(Math.min(available,12)),executionAvailable:false,
+          });
+        };
+        await expectCompensation(paymentAmount-56);
+        // Refuse the source invoice itself and any unfound target.
+        expect((await context.owner.request.get(claimPath+"&compensationPayableId="+encodeURIComponent(racePayable.id))).status()).toBe(409);
+        expect((await context.owner.request.get(claimPath+"&compensationPayableId=absent-target-"+scenario)).status()).toBe(409);
+        expect((await context.owner.request.get(base+"/payments?compensationPayableId="+encodeURIComponent(targetPayable.id))).status()).toBe(409);
         const initialBank=await prisma.enterpriseFinancialAccount.findUniqueOrThrow({where:{id:fixture.bank.id}});
         const refundBase={paymentType:"SUPPLIER_RETURN_REFUND",direction:"INBOUND",methodType:"BANK_TRANSFER",supplierReturnClaimId:raceId,businessPartyId:supplierParty.id,financialAccountId:fixture.bank.id,currencyCode:fixture.currencyCode,paymentDate:returnBusinessContext.businessDate};
         const impossible=await post(context.owner,base+"/payments",{...refundBase,amount:String(paymentAmount-55),reference:historyKey+"-OVER-REFUND-"+scenario,idempotencyKey:historyKey+"-over-refund-"+scenario});
@@ -2168,6 +2199,7 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
           const openReserved=await context.owner.request.get(claimPath);
           expect(openReserved.status(),await openReserved.text()).toBe(200);
           expect((await openReserved.json()).claim).toMatchObject({refunded:String(refundedAmount),reserved:String(refundAmount),remaining:String(paymentAmount-56-refundedAmount),available:String(paymentAmount-56-refundedAmount-refundAmount)});
+          await expectCompensation(paymentAmount-56-refundedAmount-refundAmount);
           const excessive=await post(context.owner,base+"/payments",{...refundBase,amount:String(paymentAmount-55-refundedAmount-refundAmount),reference:input.reference+"-EXCESS",idempotencyKey:input.idempotencyKey+"-excess"});
           expect(excessive.status,JSON.stringify(excessive.body)).toBe(409);
           const submit=await post(context.owner,refundPath+"/transition",{action:"SUBMIT",revision:draft.body.payment.revision,approverUserId:fixture.settler.id});
@@ -2197,11 +2229,17 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
           const summary=await context.owner.request.get(claimPath);
           expect(summary.status(),await summary.text()).toBe(200);
           expect((await summary.json()).claim).toMatchObject({refunded:String(refundedAmount),reserved:"0",remaining:String(paymentAmount-56-refundedAmount),available:String(paymentAmount-56-refundedAmount),canCreate:refundedAmount<paymentAmount-56});
+          await expectCompensation(paymentAmount-56-refundedAmount);
         }
         expect((await prisma.enterpriseFinancialAccount.findUniqueOrThrow({where:{id:fixture.bank.id}})).operationalBalance.equals(initialBank.operationalBalance.plus(paymentAmount-56))).toBe(true);
         expect(await prisma.enterpriseSupplierInvoice.findUniqueOrThrow({where:{id:closedInvoice.id}})).toEqual(closedInvoice);
         expect(await prisma.enterprisePayable.findUniqueOrThrow({where:{id:closedRacePayable.id}})).toEqual(closedRacePayable);
         expect(await prisma.enterpriseSupplierReturnRequest.findUniqueOrThrow({where:{id:raceId}})).toEqual(closedRace);
+        expect(await prisma.enterpriseSupplierInvoice.findUniqueOrThrow({where:{id:targetInvoice.id}})).toEqual(targetSnapshot);
+        expect(await prisma.enterprisePayable.findUniqueOrThrow({where:{id:targetPayable.id}})).toEqual(targetPayable);
+        expect(await prisma.enterpriseJournalEntry.findUniqueOrThrow({where:{id:targetJournal.id},include:{lines:true}})).toEqual(targetJournal);
+        expect(await prisma.enterprisePayableAllocation.count({where:{organizationId,payableId:targetPayable.id}})).toBe(0);
+        expect(await prisma.enterprisePaymentAllocation.count({where:{organizationId,payableId:targetPayable.id}})).toBe(0);
       }
       if(freshAcquisition){
         // Rebuild all three historical states AFTER dispatch and credit posting.
