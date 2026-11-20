@@ -2197,6 +2197,31 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
         }
         expect((await context.owner.request.get(compensationPath+"&compensationAmount=1")).status()).toBe(409);
 
+        const compensationDraftInput={action:"PREPARE_COMPENSATION",claimId:raceId,payableId:targetPayable.id,
+          amount:String(plannedAmount),accountingDate:returnBusinessContext.businessDate,supplierReference:historyKey+"-OFFSET-"+scenario,
+          reason:"Supplier compensation proposal without reservation",idempotencyKey:historyKey+"-comp-draft-"+scenario};
+        const compensationDraft=await post(context.owner,base+"/payables",compensationDraftInput);
+        expect(compensationDraft.status,JSON.stringify(compensationDraft.body)).toBe(201);
+        const compensationId=compensationDraft.body.compensation.id;
+        expect(compensationDraft.body.compensation).toMatchObject({claimId:raceId,payableId:targetPayable.id,
+          amount:String(plannedAmount),status:"DRAFT",revision:1,reservationActive:false,executionAvailable:false});
+        expect(compensationDraft.body.compensation.claimAccountId).toBeUndefined();
+        const draftReplay=await post(context.owner,base+"/payables",compensationDraftInput);
+        expect(draftReplay.status,JSON.stringify(draftReplay.body)).toBe(201);
+        expect(draftReplay.body.compensation.id).toBe(compensationId);
+        const wrongReplay=await post(context.owner,base+"/payables",{...compensationDraftInput,reason:"Different request with same idempotency key"});
+        expect(wrongReplay.status,JSON.stringify(wrongReplay.body)).toBe(409);
+        const draftRead=await context.owner.request.get(base+"/payables?compensationId="+encodeURIComponent(compensationId));
+        expect(draftRead.status(),await draftRead.text()).toBe(200);
+        expect((await draftRead.json()).compensation.id).toBe(compensationId);
+        const frozenDraft=await prisma.enterpriseSupplierClaimCompensation.findUniqueOrThrow({where:{id:compensationId}});
+        expect(frozenDraft.targetInvoiceJournalId).toBe(targetJournal.id);
+        expect(frozenDraft.claimAccountId).not.toBe(frozenDraft.payableAccountId);
+        await expect(prisma.enterpriseSupplierClaimCompensation.update({where:{id:compensationId},data:{amount:"1"}})).rejects.toThrow();
+        expect(await prisma.enterpriseJournalEntry.count({where:{organizationId,sourceEntityType:"EnterpriseSupplierClaimCompensation",sourceEntityId:compensationId}})).toBe(0);
+        expect(await prisma.enterprisePayableAllocation.count({where:{organizationId,payableId:targetPayable.id}})).toBe(0);
+        await expectCompensation(paymentAmount-56); // draft is explicitly not a reservation.
+
         // Refuse the source invoice itself and any unfound target.
         expect((await context.owner.request.get(claimPath+"&compensationPayableId="+encodeURIComponent(racePayable.id))).status()).toBe(409);
         expect((await context.owner.request.get(claimPath+"&compensationPayableId=absent-target-"+scenario)).status()).toBe(409);
@@ -2221,6 +2246,18 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
           await expectCompensation(paymentAmount-56-refundedAmount-refundAmount);
           const stalePlan=await context.owner.request.get(planPath);
           expect(stalePlan.status(),await stalePlan.text()).toBe(409);
+          if(idx===0){
+            const staleNew=await post(context.owner,base+"/payables",{...compensationDraftInput,idempotencyKey:compensationDraftInput.idempotencyKey+"-stale"});
+            expect(staleNew.status,JSON.stringify(staleNew.body)).toBe(409);
+            const cancelInput={action:"CANCEL_COMPENSATION_DRAFT",compensationId,revision:1,reason:"Supplier proposal no longer available"};
+            const cancel=await post(context.owner,base+"/payables",cancelInput);
+            expect(cancel.status,JSON.stringify(cancel.body)).toBe(200);
+            expect(cancel.body.compensation).toMatchObject({status:"CANCELLED",revision:2,reservationActive:false,executionAvailable:false});
+            const cancelReplay=await post(context.owner,base+"/payables",cancelInput);
+            expect(cancelReplay.status,JSON.stringify(cancelReplay.body)).toBe(200);
+            expect(cancelReplay.body.compensation.revision).toBe(2);
+            expect(await prisma.enterprisePayableAllocation.count({where:{organizationId,payableId:targetPayable.id}})).toBe(0);
+          }
           const excessive=await post(context.owner,base+"/payments",{...refundBase,amount:String(paymentAmount-55-refundedAmount-refundAmount),reference:input.reference+"-EXCESS",idempotencyKey:input.idempotencyKey+"-excess"});
           expect(excessive.status,JSON.stringify(excessive.body)).toBe(409);
           const submit=await post(context.owner,refundPath+"/transition",{action:"SUBMIT",revision:draft.body.payment.revision,approverUserId:fixture.settler.id});

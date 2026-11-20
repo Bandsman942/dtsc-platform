@@ -689,11 +689,45 @@ model EnterprisePayable {
   supplierInvoice     EnterpriseSupplierInvoice     @relation(fields: [organizationId, supplierInvoiceId], references: [organizationId, id], onDelete: Restrict)
   allocations         EnterprisePayableAllocation[]
   paymentAllocations  EnterprisePaymentAllocation[]
+  claimCompensations EnterpriseSupplierClaimCompensation[]
 
   @@unique([organizationId, id])
   @@unique([organizationId, supplierInvoiceId])
   @@index([organizationId, supplierId, status])
   @@index([organizationId, dueDate, status])
+}
+
+/// Non-cash settlement intent, not a payment or payable allocation.
+model EnterpriseSupplierClaimCompensation {
+  id                         String   @id @default(cuid())
+  organizationId             String
+  claimId                    String
+  payableId                  String
+  currencyCode               String
+  amount                     Decimal  @db.Decimal(20, 6)
+  accountingDate             DateTime
+  supplierReference          String
+  reason                     String
+  sourceCreditJournalId      String
+  targetInvoiceJournalId     String
+  claimAccountId             String
+  payableAccountId           String
+  requestedByUserId          String
+  idempotencyKey             String
+  status                     String   @default("DRAFT")
+  revision                   Int      @default(1)
+  cancelledAt                DateTime?
+  cancelledByUserId          String?
+  cancellationReason         String?
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
+  claim                      EnterpriseSupplierReturnRequest @relation(fields: [organizationId, claimId], references: [organizationId, id], onDelete: Restrict, map: "supplier_comp_claim_fk")
+  payable                    EnterprisePayable @relation(fields: [organizationId, payableId], references: [organizationId, id], onDelete: Restrict, map: "supplier_comp_payable_fk")
+
+  @@unique([organizationId, id], map: "supplier_comp_org_id_key")
+  @@unique([organizationId, idempotencyKey], map: "supplier_comp_idempotency_key")
+  @@index([organizationId, claimId, status], map: "supplier_comp_claim_status_idx")
+  @@index([organizationId, payableId, status], map: "supplier_comp_payable_status_idx")
 }
 
 model EnterprisePayableAllocation {

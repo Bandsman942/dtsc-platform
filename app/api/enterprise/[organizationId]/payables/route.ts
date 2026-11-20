@@ -1,7 +1,12 @@
 import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
-import { writeApiLog } from "@/lib/audit";
-import { authorizeFinanceRequest, financeBusinessDateRange, financeListParams } from "@/lib/enterprise/accounting/http";
+import { writeApiLog, writeAuditLog } from "@/lib/audit";
+import { z } from "zod";
+import { getEnterpriseAccountingAccess } from "@/lib/enterprise/accounting/access";
+import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
+import { isValidEnterpriseActivityCivilDate } from "@/lib/enterprise/enterprise-activity-civil-date";
+import { prepareSupplierClaimCompensation, cancelSupplierClaimCompensation, readSupplierClaimCompensation, supplierCompensationDraftProjection } from "@/lib/enterprise/accounting/supplier-claim-compensation-service";
+import { authorizeFinanceRequest, financeBusinessDateRange, financeErrorResponse, financeListParams, financeValidationErrorResponse } from "@/lib/enterprise/accounting/http";
 import { prisma } from "@/lib/prisma";
 import { supplierReturnFinanceProjectionTx, supplierReturnPayableCapacity } from "@/lib/enterprise/accounting/supplier-return-credit-reconciliation";
 
@@ -33,6 +38,16 @@ export async function GET(req: Request, { params }: Params) {
   const { organizationId } = await params;
   const auth = await authorizeFinanceRequest(req, organizationId, "FINANCE_PAYABLES", "view");
   if (!auth.ok) return auth.response;
+  const compensationId = new URL(req.url).searchParams.get("compensationId");
+  if (compensationId !== null) {
+    try {
+      if (!await getEnterpriseAccountingAccess({ session: auth.session, organizationId, moduleCode: "FINANCE_PAYMENTS", action: "view" }))
+        throw new EnterpriseAccountingError("SUPPLIER_RETURN_REFUND_ACCESS_FORBIDDEN", 403);
+      const draft = await readSupplierClaimCompensation(organizationId, auth.session.userId, compensationId, auth.access.canSeeAll);
+      await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "supplier-claim-compensation-draft", compensationId } });
+      return NextResponse.json({ compensation: supplierCompensationDraftProjection(draft) }, { headers: { "Cache-Control": "private, no-store" } });
+    } catch (error) { return financeErrorResponse(error, "SUPPLIER_RETURN_COMPENSATION_DRAFT_CONFLICT"); }
+  }
   const dates = financeBusinessDateRange(req);
   if (!dates.ok) return dates.response;
 
@@ -97,4 +112,40 @@ export async function GET(req: Request, { params }: Params) {
     pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) },
     metrics: { openByCurrency, overdueByCurrency },
   });
+}
+
+const compensationDraftMutation = z.discriminatedUnion("action", [
+  z.object({ action: z.literal("PREPARE_COMPENSATION"), claimId: z.string().trim().min(1).max(200),
+    payableId: z.string().trim().min(1).max(200), amount: z.string().regex(/^\d{1,14}(\.\d{1,6})?$/),
+    accountingDate: z.string().refine(isValidEnterpriseActivityCivilDate),
+    supplierReference: z.string().trim().min(1).max(200), reason: z.string().trim().min(8).max(1000),
+    idempotencyKey: z.string().trim().min(8).max(200) }).strict(),
+  z.object({ action: z.literal("CANCEL_COMPENSATION_DRAFT"), compensationId: z.string().trim().min(1).max(200),
+    revision: z.number().int().positive(), reason: z.string().trim().min(8).max(1000) }).strict(),
+]);
+
+// Non-cash drafts belong to payables, never to the payment creation route.
+export async function POST(req: Request, { params }: Params) {
+  const startedAt = Date.now();
+  const { organizationId } = await params;
+  const auth = await authorizeFinanceRequest(req, organizationId, "FINANCE_PAYABLES", "update", { mutation: true, limit: 60 });
+  if (!auth.ok) return auth.response;
+  const parsed = compensationDraftMutation.safeParse(await req.json().catch(() => null));
+  if (!parsed.success) return financeValidationErrorResponse(parsed.error);
+  try {
+    if (!await getEnterpriseAccountingAccess({ session: auth.session, organizationId, moduleCode: "FINANCE_PAYMENTS", action: "view" }))
+      throw new EnterpriseAccountingError("SUPPLIER_RETURN_REFUND_ACCESS_FORBIDDEN", 403);
+    const data = parsed.data;
+    const draft = data.action === "PREPARE_COMPENSATION"
+      ? await prepareSupplierClaimCompensation(organizationId, auth.session.userId, data)
+      : await cancelSupplierClaimCompensation(organizationId, auth.session.userId, data);
+    const statusCode = data.action === "PREPARE_COMPENSATION" ? 201 : 200;
+    await writeAuditLog({ userId: auth.session.userId, action: data.action === "PREPARE_COMPENSATION"
+      ? "SUPPLIER_CLAIM_COMPENSATION_DRAFT_PREPARED" : "SUPPLIER_CLAIM_COMPENSATION_DRAFT_CANCELLED",
+      entity: "EnterpriseSupplierClaimCompensation", entityId: draft.id, request: req,
+      metadata: { organizationId, claimId: draft.claimId, payableId: draft.payableId, status: draft.status } });
+    await writeApiLog({ request: req, statusCode, userId: auth.session.userId, startedAt,
+      metadata: { organizationId, domain: "supplier-claim-compensation-draft", compensationId: draft.id } });
+    return NextResponse.json({ ok: true, compensation: supplierCompensationDraftProjection(draft) }, { status: statusCode, headers: { "Cache-Control": "private, no-store" } });
+  } catch (error) { return financeErrorResponse(error, "SUPPLIER_RETURN_COMPENSATION_DRAFT_CONFLICT"); }
 }

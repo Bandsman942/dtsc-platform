@@ -1,5 +1,7 @@
 ## 2026-11-20 — Suite #1212 — v1.23.5 candidate (DRAFT)
 
+- Lot 1G.3 : brouillon de compensation fournisseur immuable, migration additive, préparation/lecture/annulation idempotente et audit sur Payables ; explicitement aucun effet comptable ni réservation. Recette PostgreSQL ajoutée, CI à certifier.
+
 - Lot 1G.2 : plan comptable indicatif de compensation, montant exact, date civile, période ouverte, journal général et comptes historiques vérifiés, impact trésorerie nul. Aucun effet financier ; QA isolée et HTTP à certifier.
 
 - Lot 1G.1 : diagnostic en lecture seule de la dette cible d'une éventuelle compensation fournisseur, preuve du journal et plafond net des remboursements/réservations. Aucun flux de compensation activé ; QA ciblée et recette HTTP/PostgreSQL (plafond avant, pendant et après remboursement ; dette cible inchangée) à certifier.

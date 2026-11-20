@@ -185,6 +185,16 @@ export async function readSupplierClaimCompensationTargetTx(
   payableId: string,
   intent?: { amount: string; accountingDate: string },
 ) {
+  return (await readSupplierClaimCompensationEvidenceTx(tx, organizationId, proof, payableId, intent)).preview;
+}
+
+// Internal evidence for a frozen draft. Public read-only projection never
+// reveals ledger identifiers or historical journal identifiers.
+export async function readSupplierClaimCompensationEvidenceTx(
+  tx: Prisma.TransactionClient, organizationId: string,
+  proof: Awaited<ReturnType<typeof readSupplierClaimRefundEvidenceTx>>,
+  payableId: string, intent?: { amount: string; accountingDate: string },
+) {
   const reject = (): never => { throw new EnterpriseAccountingError("SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED", 409); };
   if (proof.claim.organizationId !== organizationId || !proof.invoice.businessPartyId ||
       !proof.available.isFinite() || proof.available.lt(0) || !proof.claim.settlementClaimAccountId) return reject();
@@ -238,10 +248,13 @@ export async function readSupplierClaimCompensationTargetTx(
     historicalDebtAccountId: debt.id, claimAccountId: proof.claim.settlementClaimAccountId,
   }) : undefined;
   return {
-    payableId: payable.id, invoiceReference: target.number, currencyCode: target.currencyCode,
-    openPayable: payable.outstandingAmount, unreservedClaim: proof.available, maximum,
-    executionAvailable: false as const,
-    ...(plan ? { plan } : {}),
+    evidence: { targetInvoiceId: target.id, targetInvoiceJournalId: entry.id, payableAccountId: debt.id },
+    preview: {
+      payableId: payable.id, invoiceReference: target.number, currencyCode: target.currencyCode,
+      openPayable: payable.outstandingAmount, unreservedClaim: proof.available, maximum,
+      executionAvailable: false as const,
+      ...(plan ? { plan } : {}),
+    },
   };
 }
 

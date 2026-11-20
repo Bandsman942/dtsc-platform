@@ -61,6 +61,12 @@ Le même GET accepte les deux paramètres supplémentaires `compensationAmount` 
 
 Le contrôle Quality du SHA 0d6d6cd5 a détecté une conversion de jour civil via ISO/UTC interdite par QA #670. Remplacée par le validateur civil canonique (y compris années bissextiles et année zéro), sans modifier les gates. Nouvelle CI obligatoire.
 
+## Lot 1G.3 — brouillon non réservé et immuable (DRAFT)
+
+Migration additive `20261120140000_supplier_claim_compensation_drafts` : `EnterpriseSupplierClaimCompensation` porte une intention non monétaire, distincte de Payment, avec FK organisation/créance et organisation/dette, montant exact, date civile, référence fournisseur, motif, acteur, idempotence et preuves figées (journaux historiques et comptes). Seule transition actuellement permise DRAFT → CANCELLED, par l'auteur avec révision et motif ; contrainte SQL et trigger interdisent la réécriture du contrat. Aucune suppression, aucun journal, aucune allocation, aucun mouvement financier ni réserve à cette étape. Les brouillons ne constituent pas une promesse de capacité : une soumission ultérieure devra revalider les preuves sous verrou et réserver simultanément les deux côtés.
+
+API sur `/api/enterprise/:organizationId/payables` (POST `PREPARE_COMPENSATION`, `CANCEL_COMPENSATION_DRAFT`, GET `?compensationId=…`). Permission Payables update + Payments view, contrôle same-origin, rate limit, isolation site refusée, lecture auteur ou approbateur/manager autorisé, transactions, journal événementiel et audit. Ordre préparation : verrou claim puis facture cible. Retour `reservationActive:false`, `executionAvailable:false`, preuves internes non exposées. HTTP/PostgreSQL : préparation, rejeu idempotent, conflit d'intention, lecture, immuabilité SQL, capacité inchangée, nouveau brouillon refusé après réservation bancaire, annulation idempotente sans allocation. Ne pas confondre le brouillon avec un crédit réservé. Soumission/réservation concurrente, circuit indépendant, comptabilisation et inverse restent à implémenter, ainsi que les surfaces FR/EN Design 2.0 avant fusion.
+
 ## Programme restant (aucune certification implicite)
 
 1. Créance fournisseur canonique : preuve et registre, posting partie double, règlement par remboursement ou compensation approuvée, capacité et concurrence, avoir partiel/intégral sur facture payée.

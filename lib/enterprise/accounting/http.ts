@@ -48,6 +48,8 @@ const FINANCE_ERROR_MESSAGES: Record<string, string> = {
   CHART_OF_ACCOUNTS_DELETE_BLOCKED: "Ce plan ne peut pas être supprimé. Seul un plan personnalisé brouillon et totalement vide peut l’être.",
   TEMPLATE_LEDGER_ACCOUNT_IMMUTABLE: "Ce compte provient du template comptable officiel. Créez un sous-compte personnalisé au lieu de modifier le compte réglementaire.",
   LEDGER_ACCOUNT_STRUCTURE_IN_USE: "Ce compte est déjà utilisé. Ses éléments structurels ne peuvent plus être modifiés ; conservez l’historique ou désactivez le compte si nécessaire.",
+  SUPPLIER_RETURN_COMPENSATION_DRAFT_CONFLICT: "Le brouillon de compensation ne correspond plus à la demande ou à sa révision. Actualisez le dossier avant de recommencer.",
+  SUPPLIER_RETURN_COMPENSATION_NOT_FOUND: "Ce brouillon de compensation n’est pas disponible.",
   SUPPLIER_RETURN_COMPENSATION_PLAN_INVALID: "La compensation proposée ne correspond plus au montant disponible, à une date comptable autorisée ou aux comptes historiques. Vérifiez la dette, la créance et la configuration comptable.",
   SUPPLIER_RETURN_REFUND_EVIDENCE_REQUIRED: "La créance fournisseur ou la preuve du remboursement bancaire est incomplète. Vérifiez le dossier et sa comptabilisation.",
   SUPPLIER_RETURN_REFUND_AMOUNT_INVALID: "Le remboursement dépasse la créance disponible ou ne correspond pas au tiers, à la devise ou à la date du dossier.",

@@ -319,6 +319,7 @@ model EnterpriseSupplierReturnRequest {
   settlementClaimAccount EnterpriseLedgerAccount? @relation("SupplierReturnClaimAccount", fields: [organizationId, settlementClaimAccountId], references: [organizationId, id], onDelete: Restrict, map: "supplier_return_claim_account_fk")
 
   claimRefunds            EnterprisePayment[] @relation("SupplierReturnClaimRefunds")
+  claimCompensations      EnterpriseSupplierClaimCompensation[]
   creditReplacements      EnterpriseSupplierReturnCreditReplacement[]
 
   @@unique([organizationId, id], map: "supplier_return_org_id_key")
