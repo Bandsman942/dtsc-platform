@@ -1941,11 +1941,26 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
           expect(await blocked.json()).toMatchObject({canSubmitRequest:false,settlement:{paymentProof:"PROVEN",claimReady:false}});
           const refused=await post(context.owner,racePurchasePath+"?action=submit-supplier-return",{movementId:raceSource.id,quantity:"2",reason:"No dedicated account before claim approval",approverUserId:fixture.settler.id,idempotencyKey:historyKey+"-unconfigured-claim"});
           expect(refused.status,JSON.stringify(refused.body)).toBe(409);
-          // Fixture configuration ONLY. This account already belongs to the
-          // immutable OHADA chart; no production provisioning is implied.
           const account=await prisma.enterpriseLedgerAccount.findFirstOrThrow({where:{organizationId,code:"409",isActive:true,archivedAt:null}});
-          await prisma.enterpriseAccountMapping.create({data:{organizationId,chartId:account.chartId,mappingKey:"SUPPLIER_RETURN_CLAIMS",ledgerAccountId:account.id,createdByUserId:fixture.owner.id}});
-          claimAccountId=account.id;
+          const rejectParent=await post(context.owner,base+"/account-mappings",{mappingKey:"SUPPLIER_RETURN_CLAIMS",ledgerAccountId:account.id});
+          expect(rejectParent.status,JSON.stringify(rejectParent.body)).toBe(409);
+          const advance=await prisma.enterpriseLedgerAccount.findFirstOrThrow({where:{organizationId,code:"4091",isActive:true,archivedAt:null}});
+          const rejectAdvance=await post(context.owner,base+"/account-mappings",{mappingKey:"SUPPLIER_RETURN_CLAIMS",ledgerAccountId:advance.id});
+          expect(rejectAdvance.status,JSON.stringify(rejectAdvance.body)).toBe(409);
+          const child=await post(context.owner,base+"/ledger-accounts",{chartId:account.chartId,parentId:account.id,code:"4099001212",nameFr:"Créances retours test",nameEn:"Return claims test",currencyCode:fixture.currencyCode});
+          expect(child.status,JSON.stringify(child.body)).toBe(201);
+          claimAccountId=child.body.account.id;
+          const unrelated=await post(context.owner,base+"/account-mappings",{mappingKey:"SUPPLIER_ADVANCES",ledgerAccountId:claimAccountId});
+          expect(unrelated.status,JSON.stringify(unrelated.body)).toBe(409);
+          const mapping=await post(context.owner,base+"/account-mappings",{mappingKey:"SUPPLIER_RETURN_CLAIMS",ledgerAccountId:claimAccountId});
+          expect(mapping.status,JSON.stringify(mapping.body)).toBe(201);
+          const restricted=await prisma.enterpriseLedgerAccount.findUniqueOrThrow({where:{id:claimAccountId}});
+          expect(restricted.isControlAccount).toBe(true);expect(restricted.allowDirectPosting).toBe(false);
+          const projected=await context.owner.request.get(base+"/account-mappings?recordId="+encodeURIComponent(mapping.body.mapping.id));
+          expect(projected.status()).toBe(200);
+          expect((await projected.json()).items[0]).toMatchObject({claimExtension:true,capabilities:{canEdit:false,canDeactivate:false}});
+          const unchanged=await prisma.enterpriseLedgerAccount.findUniqueOrThrow({where:{id:account.id}});
+          expect(unchanged).toEqual(account);
         }else claimAccountId=existingMapping.ledgerAccountId;
         const ready=await context.owner.request.get(checkPath);
         expect(ready.status(),await ready.text()).toBe(200);

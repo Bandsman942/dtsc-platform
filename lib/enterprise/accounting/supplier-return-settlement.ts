@@ -73,7 +73,7 @@ type FrozenClaimPlan = {
 export async function resolveSupplierReturnClaimAccountTx(tx: Prisma.TransactionClient, organizationId: string, currencyCode: string, accountingDate: Date) {
   const { resolveSemanticPostingAccount } = await import("@/lib/enterprise/accounting/semantic-account-resolver");
   const account = await resolveSemanticPostingAccount(tx, { organizationId, mappingKey: SUPPLIER_RETURN_CLAIM_MAPPING, accountingDate });
-  if (!account.allowDirectPosting || (account.currencyCode && account.currencyCode !== currencyCode) ||
+  if (!account.isControlAccount || account.allowDirectPosting || (account.currencyCode && account.currencyCode !== currencyCode) ||
       await tx.enterpriseAccountMapping.count({where:{organizationId,ledgerAccountId:account.id,isActive:true,mappingKey:{not:SUPPLIER_RETURN_CLAIM_MAPPING}}}) ||
       await tx.enterpriseFinancialAccount.count({where:{organizationId,ledgerAccountId:account.id}})) return fail();
   return account.id;

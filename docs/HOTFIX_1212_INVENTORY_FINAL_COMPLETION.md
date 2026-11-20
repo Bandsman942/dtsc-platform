@@ -37,6 +37,10 @@ Restrictions : même devise fonctionnelle, preuves ordinaires déjà acceptées,
 
 Recette HTTP/PostgreSQL ajoutée sur les factures de 70 payées 70 ou 65, retours de 14 (créance 14 ou 9, dette imputée 0 ou 5), refus avant mapping, écriture dédiée, absence de trésorerie supplémentaire, rejeu et protection des contrepassations. Configuration directe du mapping dans la fixture isolée uniquement; aucune certification encore exécutée. Finance affiche la créance distincte et réserve uniquement la part de dette; exports enrichis.
 
+## Lot 1E — extension comptable entreprise (DRAFT)
+
+Sur le template immuable OHADA_SYSCOHADA@0.1.0, une configuration explicite est proposée dans Comptabilité → Configurer → Règles → Nouvelle règle → « Configurer les créances sur fournisseurs — retours ». Créer d'abord un sous-compte personnalisé inutilisé du 409 dans le plan actif. La route de création des règles conserve la permission manage, Zod, audit et rate limit. Seule la clé SUPPLIER_RETURN_CLAIMS bénéficie de cette extension; aucun compte du modèle n'est modifié. Le compte enfant doit être un actif feuille, non système, sans écritures, fiscalité, trésorerie, ouverture, financement ni mapping historique. Après liaison il devient un compte de contrôle sans saisie manuelle; la règle est immuable dans ce premier circuit. Tout autre mapping d'un template reste interdit. Aucun provisioning automatique ni backfill. La recette réelle passe par les API de création de sous-compte et règle et vérifie les refus parent, avance et mapping ordinaire; elle n'injecte plus une configuration directement en base. Les règlements effectifs restent à implémenter.
+
 ## Programme restant (aucune certification implicite)
 
 1. Créance fournisseur canonique : preuve et registre, posting partie double, règlement par remboursement ou compensation approuvée, capacité et concurrence, avoir partiel/intégral sur facture payée.

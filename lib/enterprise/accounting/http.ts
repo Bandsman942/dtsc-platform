@@ -48,6 +48,7 @@ const FINANCE_ERROR_MESSAGES: Record<string, string> = {
   CHART_OF_ACCOUNTS_DELETE_BLOCKED: "Ce plan ne peut pas être supprimé. Seul un plan personnalisé brouillon et totalement vide peut l’être.",
   TEMPLATE_LEDGER_ACCOUNT_IMMUTABLE: "Ce compte provient du template comptable officiel. Créez un sous-compte personnalisé au lieu de modifier le compte réglementaire.",
   LEDGER_ACCOUNT_STRUCTURE_IN_USE: "Ce compte est déjà utilisé. Ses éléments structurels ne peuvent plus être modifiés ; conservez l’historique ou désactivez le compte si nécessaire.",
+  SUPPLIER_RETURN_CLAIM_MAPPING_INVALID: "Choisissez un sous-compte personnalisé inutilisé du 409 dans le plan SYSCOHADA actif, sans date d’effet manuelle.",
   ACCOUNT_MAPPING_KEY_INVALID: "Cette règle comptable n’existe pas dans le registre sémantique autorisé.",
   ACCOUNT_MAPPING_ACCOUNT_INVALID: "Le compte cible n’est plus actif ou n’appartient pas à cette entreprise.",
   ACCOUNT_MAPPING_CHART_MISMATCH: "Le compte cible doit rester dans le même plan comptable que cette règle.",

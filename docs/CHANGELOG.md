@@ -1,5 +1,7 @@
 ## 2026-11-20 — Suite #1212 — v1.23.5 candidate (DRAFT)
 
+- Lot 1E : configuration explicite du compte de contrôle pour créances fournisseurs via un sous-compte personnalisé du 409, sans toucher le référentiel publié. UI FR/EN et recette API, preuve CI à renouveler.
+
 - Lots 1C–1D : plan financier persistant et immuable lié au retour, reconnaissance d'une créance distincte via posting canonique, conservation du solde non négatif, vérification à toutes les transitions et protections des journaux supports; FR/EN. Une migration additive, aucune donnée historique touchée. Mapping optionnel, provisionnement client, règlement de créance et CI restent bloquants.
 
 - Lot 1C.1 : preuve en lecture seule des paiements d'origine par allocations, trésorerie et journaux non contrepassés, avec état FR/EN; cas ordinaires en devise fonctionnelle et partie identifiée. Aucune créance reconnue, aucun flux débloqué, aucune migration. QA ciblée à certifier.
