@@ -19,9 +19,12 @@ export async function buildSupplierCreditNotePosting(tx: Prisma.TransactionClien
   });
   if (originals.length !== new Set(originalIds).size) throw new EnterpriseAccountingError("SUPPLIER_CREDIT_ORIGIN_INVALID", 409);
   const originById = new Map(originals.map((item) => [item.id, item]));
-  const lines: PostingDocument["lines"] = [
-    { accountMappingKey: "ACCOUNTS_PAYABLE", description: `Payable credit ${credit.number}`, debit: credit.grandTotal, transactionCurrencyCode: credit.currencyCode, transactionAmount: credit.grandTotal, businessPartyId: credit.supplierInvoice.businessPartyId, projectId: credit.supplierInvoice.projectId },
-  ];
+  const lines: PostingDocument["lines"] = [];
+  const payableReduction=linkedReturn?.settlementPayableAmount ?? credit.grandTotal;
+  const claimAmount=linkedReturn?.settlementClaimAmount ?? new Prisma.Decimal(0);
+  if(payableReduction.lt(0)||claimAmount.lt(0)||!payableReduction.plus(claimAmount).equals(credit.grandTotal)) throw new EnterpriseAccountingError("SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED",409);
+  if(payableReduction.gt(0)) lines.push({ accountMappingKey: "ACCOUNTS_PAYABLE", description: `Payable credit ${credit.number}`, debit: payableReduction, transactionCurrencyCode: credit.currencyCode, transactionAmount: payableReduction, businessPartyId: credit.supplierInvoice.businessPartyId, projectId: credit.supplierInvoice.projectId });
+  if(claimAmount.gt(0)) lines.push({accountMappingKey:"SUPPLIER_RETURN_CLAIMS",description:`Supplier return claim ${credit.number}`,debit:claimAmount,transactionCurrencyCode:credit.currencyCode,transactionAmount:claimAmount,businessPartyId:credit.supplierInvoice.businessPartyId,projectId:credit.supplierInvoice.projectId});
   for (const item of items) {
     const original = originById.get(item.sourceInvoiceItemId!);
     if (!original) throw new EnterpriseAccountingError("SUPPLIER_CREDIT_ORIGIN_INVALID", 409);

@@ -312,6 +312,12 @@ model EnterpriseSupplierReturnRequest {
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
 
+  // A positive claim plan is frozen before approval; only RECONCILED is recognition.
+  settlementPayableAmount Decimal? @db.Decimal(20, 6)
+  settlementClaimAmount   Decimal? @db.Decimal(20, 6)
+  settlementClaimAccountId String?
+  settlementClaimAccount EnterpriseLedgerAccount? @relation("SupplierReturnClaimAccount", fields: [organizationId, settlementClaimAccountId], references: [organizationId, id], onDelete: Restrict, map: "supplier_return_claim_account_fk")
+
   creditReplacements      EnterpriseSupplierReturnCreditReplacement[]
 
   @@unique([organizationId, id], map: "supplier_return_org_id_key")

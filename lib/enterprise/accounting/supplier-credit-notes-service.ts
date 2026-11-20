@@ -7,7 +7,7 @@ import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
 import { financeReference, money, publishFinanceEvent, sumDecimals } from "@/lib/enterprise/accounting/helpers";
 import { postBusinessEventTx } from "@/lib/enterprise/accounting/posting-service";
 import type { supplierCreditNoteCreateSchema } from "@/lib/enterprise/accounting/schemas";
-import { assertNoCapitalizedSupplierCreditTx, assertSupplierReturnCreditDateTx, completeSupplierReturnCreditTx, lockSupplierReturnInvoiceTx, verifySupplierReturnCreditTx } from "@/lib/enterprise/accounting/supplier-return-credit-reconciliation";
+import { assertNoCapitalizedSupplierCreditTx, assertSupplierReturnCreditDateTx, completeSupplierReturnCreditTx, lockSupplierReturnInvoiceTx, verifySupplierReturnCreditTx, assertSupplierReturnClaimCreditReadyTx } from "@/lib/enterprise/accounting/supplier-return-credit-reconciliation";
 import type { z } from "zod";
 
 type CreditInput = z.infer<typeof supplierCreditNoteCreateSchema>;
@@ -82,7 +82,8 @@ export async function createSupplierCreditNote(organizationId: string, actorUser
     const subtotal = money(sumDecimals(calculated.map((row) => row.netAmount)));
     const taxTotal = money(sumDecimals(calculated.map((row) => row.taxAmount)));
     const grandTotal = money(subtotal.plus(taxTotal));
-    if (!grandTotal.greaterThan(0) || grandTotal.greaterThan(invoice.payable.outstandingAmount)) throw new EnterpriseAccountingError("SUPPLIER_CREDIT_EXCEEDS_OPEN_PAYABLE", 409);
+    if (!grandTotal.greaterThan(0) || (grandTotal.greaterThan(invoice.payable.outstandingAmount) && !returnRequest?.settlementClaimAmount?.gt(0))) throw new EnterpriseAccountingError("SUPPLIER_CREDIT_EXCEEDS_OPEN_PAYABLE", 409);
+    if (returnRequest?.settlementClaimAmount?.gt(0)) await assertSupplierReturnClaimCreditReadyTx(tx,organizationId,invoice,grandTotal,invoice.currencyCode,input.creditDate,returnRequest);
     if (returnRequest && ((supplement ? !subtotal.plus(taxTotal).equals(returnRequest.totalCost) || !taxTotal.gt(0) || calculated[0].taxRecoveryRequested : !subtotal.equals(returnRequest.totalCost) || !taxTotal.equals(returnRequest.recoverableTaxAmount)) || !grandTotal.equals(returnRequest.totalCost.plus(returnRequest.recoverableTaxAmount)))) throw new EnterpriseAccountingError("SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED",409);
     const credit = await tx.enterpriseSupplierCreditNote.create({ data: { organizationId, number: financeReference("SCN"), supplierInvoiceId: invoice.id, reason: input.reason, creditDate: input.creditDate, currencyCode: invoice.currencyCode, subtotal, taxTotal, grandTotal, createdByUserId: actorUserId } });
     await tx.enterpriseSupplierCreditNoteItem.createMany({ data: calculated.map((row) => ({ organizationId, supplierCreditNoteId: credit.id,
@@ -125,6 +126,7 @@ export async function approveAndPostSupplierCreditNote(organizationId: string, c
     if (credit.status === "POSTED") return credit;
     if (credit.status !== "DRAFT" || credit.revision !== revision) throw new EnterpriseAccountingError("SUPPLIER_CREDIT_NOTE_CONFLICT", 409);
     assertIndependentActor({ actorUserId, relatedUserIds: [credit.createdByUserId], errorCode: "SUPPLIER_CREDIT_NOTE_SELF_APPROVAL_FORBIDDEN" });
+    if(await tx.enterpriseSupplierReturnRequest.findFirst({where:{organizationId,supplierCreditNoteId:credit.id,settlementClaimAmount:{gt:0}},select:{id:true}})) throw new EnterpriseAccountingError("SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED",409);
     return tx.enterpriseSupplierCreditNote.update({ where: { id: credit.id }, data: { status: "APPROVED", approvedByUserId: actorUserId, approvedAt: new Date(), revision: { increment: 1 } } });
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
   if (approved.status === "POSTED") return approved;

@@ -60,3 +60,57 @@ export async function assertSupplierReturnSettlementCoveredTx(
   if (result.requiresSupplierClaim) throw new EnterpriseDomainError("SUPPLIER_RETURN_PAYABLE_INSUFFICIENT", 409);
   return result;
 }
+
+export const SUPPLIER_RETURN_CLAIM_MAPPING = "SUPPLIER_RETURN_CLAIMS";
+
+type FrozenClaimPlan = {
+  settlementPayableAmount: Prisma.Decimal | null;
+  settlementClaimAmount: Prisma.Decimal | null;
+  settlementClaimAccountId: string | null;
+};
+
+/** Explicit dedicated asset; no reuse of an advance or treasury account. */
+export async function resolveSupplierReturnClaimAccountTx(tx: Prisma.TransactionClient, organizationId: string, currencyCode: string, accountingDate: Date) {
+  const { resolveSemanticPostingAccount } = await import("@/lib/enterprise/accounting/semantic-account-resolver");
+  const account = await resolveSemanticPostingAccount(tx, { organizationId, mappingKey: SUPPLIER_RETURN_CLAIM_MAPPING, accountingDate });
+  if (!account.allowDirectPosting || (account.currencyCode && account.currencyCode !== currencyCode) ||
+      await tx.enterpriseAccountMapping.count({where:{organizationId,ledgerAccountId:account.id,isActive:true,mappingKey:{not:SUPPLIER_RETURN_CLAIM_MAPPING}}}) ||
+      await tx.enterpriseFinancialAccount.count({where:{organizationId,ledgerAccountId:account.id}})) return fail();
+  return account.id;
+}
+
+async function proveClaimEligibilityTx(tx: Prisma.TransactionClient, organizationId: string, invoice: InvoiceSettlement, claimAmount: Prisma.Decimal, currencyCode: string, date: Date) {
+  // A second claim needs cumulative provenance including future settlements.
+  if (await tx.enterpriseSupplierReturnRequest.count({where:{organizationId,supplierInvoiceId:invoice.id,status:"RECONCILED",settlementClaimAmount:{gt:0}}})) {
+    throw new EnterpriseDomainError("SUPPLIER_RETURN_PAYABLE_INSUFFICIENT",409);
+  }
+  const { proveSupplierReturnPaidAmountTx } = await import("@/lib/enterprise/accounting/supplier-return-payment-proof");
+  const { EnterpriseAccountingError } = await import("@/lib/enterprise/accounting/errors");
+  try {
+    await proveSupplierReturnPaidAmountTx(tx,{organizationId,invoiceId:invoice.id,supplierId:invoice.supplierId,businessPartyId:invoice.businessPartyId,
+      currencyCode,amountPaid:invoice.amountPaid,claimAmount});
+    return await resolveSupplierReturnClaimAccountTx(tx,organizationId,currencyCode,date);
+  } catch (error) {
+    if (error instanceof EnterpriseAccountingError && error.status === 409) throw new EnterpriseDomainError("SUPPLIER_RETURN_PAYABLE_INSUFFICIENT",409);
+    throw error;
+  }
+}
+
+export async function prepareSupplierReturnClaimPlanTx(tx: Prisma.TransactionClient, organizationId: string, invoice: InvoiceSettlement, creditTotal: Prisma.Decimal, currencyCode: string, date: Date): Promise<FrozenClaimPlan> {
+  const split = await readSupplierReturnSettlementTx(tx,organizationId,invoice,creditTotal,currencyCode);
+  if (!split.requiresSupplierClaim) return {settlementPayableAmount:null,settlementClaimAmount:null,settlementClaimAccountId:null};
+  const accountId=await proveClaimEligibilityTx(tx,organizationId,invoice,split.supplierClaim,currencyCode,date);
+  return {settlementPayableAmount:split.payableReduction,settlementClaimAmount:split.supplierClaim,settlementClaimAccountId:accountId};
+}
+
+export async function assertFrozenSupplierReturnClaimPlanTx(tx: Prisma.TransactionClient, organizationId: string, invoice: InvoiceSettlement, creditTotal: Prisma.Decimal, currencyCode: string, date: Date, reviewed: Partial<FrozenClaimPlan>) {
+  if (!reviewed.settlementClaimAmount?.gt(0)) {
+    await assertSupplierReturnSettlementCoveredTx(tx,organizationId,invoice,creditTotal,currencyCode);
+    return;
+  }
+  const split=await readSupplierReturnSettlementTx(tx,organizationId,invoice,creditTotal,currencyCode);
+  if (!reviewed.settlementPayableAmount?.equals(split.payableReduction) || !reviewed.settlementClaimAmount.equals(split.supplierClaim) ||
+      !split.requiresSupplierClaim || !reviewed.settlementClaimAccountId) return fail();
+  const accountId=await proveClaimEligibilityTx(tx,organizationId,invoice,split.supplierClaim,currencyCode,date);
+  if (accountId!==reviewed.settlementClaimAccountId) return fail();
+}

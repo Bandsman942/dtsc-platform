@@ -64,6 +64,8 @@ export async function readPriorReconciledSupplierReturnCreditsTx(
     orderBy:[{dispatchedAt:"asc"},{id:"asc"}],
   });
   if (!prior.length) return [];
+  // Claim history needs cumulative settlement provenance; fail closed for now.
+  if (prior.some(row=>row.settlementClaimAmount?.gt(0))) return fail();
   if (prior.some(r=>r.organizationId!==organizationId || r.status!=="RECONCILED" ||
       r.supplierInvoiceId!==input.supplierInvoiceId || r.supplierInvoiceItemId!==input.original.id ||
       (!input.receiptScope && (r.sourceMovementId!==input.sourceMovementId || r.originCostLayerId!==input.originCostLayerId ||
@@ -329,6 +331,11 @@ export async function verifySupplierReturnCreditTx(tx: Prisma.TransactionClient,
       credit.currencyCode !== dispatched.currencyCode || !credit.grandTotal.equals(dispatched.totalCost.plus(dispatched.recoverableTaxAmount)) ||
       items.length !== 1) return fail();
   const creditBusinessDate = await assertSupplierReturnCreditDateTx(tx, organizationId, credit.creditDate, dispatched.dispatchedAt);
+  if (dispatched.settlementClaimAmount?.gt(0)) {
+    const invoice=await tx.enterpriseSupplierInvoice.findFirst({where:{organizationId,id:credit.supplierInvoiceId}});
+    if (!invoice) return fail();
+    await assertSupplierReturnClaimCreditReadyTx(tx,organizationId,invoice,credit.grandTotal,credit.currencyCode,credit.creditDate,dispatched);
+  }
   const item = items[0];
   const [original, movement, event, invoiceJournal, supplement] = await Promise.all([
     tx.enterpriseSupplierInvoiceItem.findFirst({ where: { organizationId, supplierInvoiceId: credit.supplierInvoiceId, id: dispatched.supplierInvoiceItemId } }),
@@ -390,7 +397,23 @@ export async function completeSupplierReturnCreditTx(tx: Prisma.TransactionClien
   const linked = await tx.enterpriseSupplierReturnRequest.findFirst({ where: { organizationId, supplierCreditNoteId: credit.id, supplierInvoiceId:credit.supplierInvoiceId } });
   if (!linked) return;
   if (linked.status !== "DISPATCHED") return fail();
+  if(linked.settlementClaimAmount?.gt(0)){
+    const journal=await tx.enterpriseJournalEntry.findFirst({where:{organizationId,id:journalEntryId,status:"POSTED",sourceEntityType:"EnterpriseSupplierCreditNote",sourceEntityId:credit.id,postingEvent:"SUPPLIER_CREDIT_NOTE_POSTED",postingVersion:1},include:{lines:true}});
+    if(!journal||!journal.postedAt||journal.reversedAt||journal.reversalOfEntryId||journal.functionalCurrencyCode!==credit.currencyCode||
+      !journal.totalDebit.equals(credit.grandTotal)||!journal.totalCredit.equals(credit.grandTotal)||
+      !journal.lines.some(line=>line.ledgerAccountId===linked.settlementClaimAccountId&&line.debit.equals(linked.settlementClaimAmount!)&&line.credit.isZero()))return fail();
+  }
   const updated = await tx.enterpriseSupplierReturnRequest.updateMany({ where:{organizationId,id:linked.id,status:"DISPATCHED",revision:linked.revision,supplierCreditNoteId:credit.id},
     data:{status:"RECONCILED",reconciledAt:new Date(),reconciledByUserId:actorUserId,creditJournalEntryId:journalEntryId,revision:{increment:1}} });
   if (updated.count !== 1) return fail();
+}
+
+/** Finance boundary: recheck the frozen financial plan in the credit date. */
+export async function assertSupplierReturnClaimCreditReadyTx(tx: Prisma.TransactionClient, organizationId: string,
+  invoice: import("@prisma/client").EnterpriseSupplierInvoice, amount: Prisma.Decimal, currencyCode: string, date: Date,
+  linked: EnterpriseSupplierReturnRequest) {
+  const { assertFrozenSupplierReturnClaimPlanTx }=await import("@/lib/enterprise/accounting/supplier-return-settlement");
+  const { EnterpriseDomainError }=await import("@/lib/enterprise/common/errors");
+  try { await assertFrozenSupplierReturnClaimPlanTx(tx,organizationId,invoice,amount,currencyCode,date,linked); }
+  catch(error) { if(error instanceof EnterpriseDomainError && error.status===409) return fail(); throw error; }
 }

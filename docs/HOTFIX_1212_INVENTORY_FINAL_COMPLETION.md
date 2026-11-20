@@ -27,6 +27,14 @@ Avant toute reconnaissance de créance, le diagnostic rapproche les allocations 
 
 Le registre de créances et son posting ne sont pas encore raccordés : ils devront consommer cette preuve en transaction, y compris la protection contre les doubles imputations et le règlement futur. Aucune table inutilisée ajoutée dans cette tranche. Tests isolés de preuve positive, absence de trésorerie/journal, contrepassation, mauvais compte, FX, doublon, tiers différent et montant excessif ajoutés. CI/E2E à renouveler.
 
+## Lot 1C–1D — registre et reconnaissance de créance (DRAFT, non fusionnable)
+
+Une migration additive ajoute la ventilation financière immuable au dossier de retour existant (montant imputable, montant de créance et FK tenant-aware vers le compte d'actif). Pas de table concurrente, aucun backfill ; une créance n'est reconnue qu'au statut RECONCILED avec avoir et journal POSTED. Le compte sémantique optionnel SUPPLIER_RETURN_CLAIMS doit être explicitement provisionné, distinct de toute autre règle active ou compte financier. La baseline publiée OHADA 0.1.0 n'est pas modifiée; le provisioning versionné du mapping dans les organisations clientes reste bloquant avant livraison.
+
+Le paiement d'origine prouvé, la ventilation figée et le compte sont contrôlés dès la demande, à l'approbation, sous verrou facture à l'expédition, à la création et au posting de l'avoir. Une demande dette seule ne devient pas une créance silencieusement après paiement. Le posting canonique débite la dette pour la part applicable et l'actif dédié pour la part excédentaire, crédite GRNI et la TVA historique le cas échéant. La dette reste non négative, le montant payé demeure historique, les champs d'allocation de dette ne contiennent que la part imputée. Le document d'avoir conserve le TTC total. Aucun encaissement ni frais de vente. La contrepassation isolée des journaux de paiement et d'allocation supports est refusée après expédition. L'ancien flux combiné d'approbation/posting ne peut pas approuver une créance. Le préflight et la fiche Achat/Validations affichent la ventilation FR/EN.
+
+Restrictions : même devise fonctionnelle, preuves ordinaires déjà acceptées, un seul retour avec créance par facture (les précédents retours dette-only restent éligibles), aucun remboursement ni compensation active. Les anciens cas restent conservés. La résolution du compte, le remboursement/compensation, les rapports et les parcours multi-origines exigent encore leur certification et ne sont pas annoncés prêts. La PR reste en brouillon.
+
 ## Programme restant (aucune certification implicite)
 
 1. Créance fournisseur canonique : preuve et registre, posting partie double, règlement par remboursement ou compensation approuvée, capacité et concurrence, avoir partiel/intégral sur facture payée.

@@ -173,6 +173,7 @@ model EnterpriseLedgerAccount {
   taxCodesPayable        EnterpriseTaxCode[] @relation("EnterpriseTaxCodePayableAccount")
   taxCodesRecoverable    EnterpriseTaxCode[] @relation("EnterpriseTaxCodeRecoverableAccount")
   fundingCounterparts    EnterpriseFundingOperation[]
+  supplierReturnClaims   EnterpriseSupplierReturnRequest[] @relation("SupplierReturnClaimAccount")
 
   @@unique([organizationId, id])
   @@unique([organizationId, code])

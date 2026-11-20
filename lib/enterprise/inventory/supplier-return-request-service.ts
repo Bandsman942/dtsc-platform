@@ -12,7 +12,7 @@ import { enterprisePurchaseVisibilityWhere } from "@/lib/enterprise/procurement/
 import { publishEnterpriseEvent } from "@/lib/enterprise/crm-sales/helpers";
 import { applyStockMovementTx } from "@/lib/enterprise/inventory/service";
 import { postBusinessEventTx } from "@/lib/enterprise/accounting/posting-service";
-import { assertSupplierReturnSettlementCoveredTx } from "@/lib/enterprise/accounting/supplier-return-settlement";
+import { prepareSupplierReturnClaimPlanTx, assertFrozenSupplierReturnClaimPlanTx } from "@/lib/enterprise/accounting/supplier-return-settlement";
 import { idempotencyKey, publishFinanceEvent } from "@/lib/enterprise/accounting/helpers";
 
 export const SUPPLIER_RETURN_TARGET = "EnterpriseSupplierReturnRequest";
@@ -100,7 +100,7 @@ export async function submitSupplierReturnRequest(organizationId: string, purcha
     if (check.receipt.purchaseId !== purchaseId) throw new EnterpriseDomainError("SUPPLIER_RETURN_ORIGIN_INVALID", 404);
     const open = await tx.enterpriseSupplierReturnRequest.findFirst({ where: { organizationId, supplierInvoiceId: check.invoice.id, status: { in: ["PENDING_APPROVAL", "APPROVED", "DISPATCHED"] } }, select: { id: true } });
     if (open) throw new EnterpriseDomainConflictError("SUPPLIER_RETURN_ALREADY_OPEN");
-    await assertSupplierReturnSettlementCoveredTx(tx, organizationId, check.invoice, check.creditTotal, check.currencyCode);
+    const claimPlan=await prepareSupplierReturnClaimPlanTx(tx, organizationId, check.invoice, check.creditTotal, check.currencyCode, new Date());
     const request = await tx.enterpriseSupplierReturnRequest.create({ data: {
       organizationId, reference: "RTV-" + randomUUID().slice(0, 12).toUpperCase(), purchaseId,
       receiptId: check.receipt.id, receiptItemId: check.receiptItem.id, sourceMovementId: origin.id,
@@ -108,7 +108,7 @@ export async function submitSupplierReturnRequest(organizationId: string, purcha
       stockLotId: origin.stockLotId, supplierId: check.invoice.supplierId, supplierInvoiceId: check.invoice.id, supplierInvoiceItemId: check.invoiceItem.id,
       receiptAccountingEventId: check.receiptValue.id, originCostLayerId: check.originLayer.id,
       quantity: input.quantity, unitCost: check.unitCost, totalCost: check.totalCost, recoverableTaxAmount: check.recoverableTaxAmount, currencyCode: check.currencyCode,
-      reason: input.reason, requestedByUserId: actorUserId, idempotencyKey: input.idempotencyKey,
+      reason: input.reason, requestedByUserId: actorUserId, idempotencyKey: input.idempotencyKey, ...claimPlan,
     } });
     const approval = await tx.enterpriseApproval.create({ data: { organizationId, targetEntityType: SUPPLIER_RETURN_TARGET, targetEntityId: request.id, requestedByUserId: actorUserId, approverUserId: input.approverUserId, status: "PENDING" } });
     // Store the immutable review at submission; never reconstruct from later
@@ -124,6 +124,7 @@ export async function submitSupplierReturnRequest(organizationId: string, purcha
       snapshotJson: { reference: request.reference, article: item.catalogItem.code + " · " + item.catalogItem.name, lotNumber: lot.lotNumber, warehouse: warehouse.code + " · " + warehouse.name,
         location: location ? location.code + " · " + location.name : null, purchaseReference: purchase.reference, receiptReference: check.receipt.reference,
         supplierInvoiceReference: check.invoice.number, quantity: request.quantity.toFixed(), unitCost: request.unitCost.toFixed(), stockValue: request.totalCost.toFixed(), recoverableTaxAmount: request.recoverableTaxAmount.toFixed(), totalAmount: request.totalCost.plus(request.recoverableTaxAmount).toFixed(),
+        ...(claimPlan.settlementClaimAmount ? {settlementPayableAmount:claimPlan.settlementPayableAmount!.toFixed(),settlementClaimAmount:claimPlan.settlementClaimAmount.toFixed()} : {}),
         currency: request.currencyCode, reason: request.reason, revision: request.revision },
     } });
     await tx.enterpriseEntityLink.create({ data: { organizationId, sourceModule: "SUPPLIERS_PURCHASES", sourceEntityType: SUPPLIER_RETURN_TARGET, sourceEntityId: request.id,
@@ -155,7 +156,7 @@ export async function decideSupplierReturnRequest(args: { organizationId: string
         check.invoice.id !== request.supplierInvoiceId || check.invoiceItem.id !== request.supplierInvoiceItemId || check.invoice.supplierId !== request.supplierId ||
         check.receiptValue.id !== request.receiptAccountingEventId || check.originLayer.id !== request.originCostLayerId ||
         !check.unitCost.equals(request.unitCost) || !check.totalCost.equals(request.totalCost) || !check.recoverableTaxAmount.equals(request.recoverableTaxAmount) || check.currencyCode !== request.currencyCode) throw new EnterpriseDomainConflictError("SUPPLIER_RETURN_CONFLICT");
-      await assertSupplierReturnSettlementCoveredTx(tx, organizationId, check.invoice, check.creditTotal, check.currencyCode);
+      await assertFrozenSupplierReturnClaimPlanTx(tx, organizationId, check.invoice, check.creditTotal, check.currencyCode, new Date(), request);
     }
     const status = args.action === "APPROVE" ? "APPROVED" : args.action === "REJECT" ? "REJECTED" : "CANCELLED";
     const now = new Date();
@@ -200,9 +201,8 @@ export async function dispatchSupplierReturn(organizationId: string, purchaseId:
       check.invoice.id !== request.supplierInvoiceId || check.invoiceItem.id !== request.supplierInvoiceItemId || check.invoice.supplierId !== request.supplierId ||
       check.receiptValue.id !== request.receiptAccountingEventId || check.originLayer.id !== request.originCostLayerId ||
       !check.unitCost.equals(request.unitCost) || !check.totalCost.equals(request.totalCost) || !check.recoverableTaxAmount.equals(request.recoverableTaxAmount) || check.currencyCode !== request.currencyCode) throw new EnterpriseDomainConflictError("SUPPLIER_RETURN_CONFLICT");
-    // Paid or insufficient payable requires a different reconciliation/refund
-    // path. Do not create a dispatch that the current credit engine cannot close.
-    await assertSupplierReturnSettlementCoveredTx(tx, organizationId, check.invoice, request.totalCost.plus(request.recoverableTaxAmount), request.currencyCode);
+    // The reviewed split must still be valid under the invoice lock.
+    await assertFrozenSupplierReturnClaimPlanTx(tx, organizationId, check.invoice, request.totalCost.plus(request.recoverableTaxAmount), request.currencyCode, new Date(), request);
     const movement = await applyStockMovementTx(tx, organizationId, actorUserId, {
       inventoryItemId: request.inventoryItemId, warehouseId: request.warehouseId, storageLocationId: request.storageLocationId,
       stockLotId: request.stockLotId, movementType: "SUPPLIER_RETURN_OUT", direction: "OUT", quantity: Number(request.quantity.toFixed()),

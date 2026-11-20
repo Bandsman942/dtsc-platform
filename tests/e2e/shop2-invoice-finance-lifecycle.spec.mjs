@@ -1760,12 +1760,13 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
     // Independent purchases and real three-actor bank payments: race the
     // allocation of a confirmed supplier advance against physical dispatch.
     // No direct payable, payment, allocation, movement or journal fixture.
-    for (const scenario of [57,56,64.96,67.2,0,-1,-2]) {
+    for (const scenario of [57,56,64.96,67.2,0,-1,-2,70,65]) {
       const repeatedReturn=scenario===-2;
+      const claimScenario=scenario===70||scenario===65;
       const paymentAmount=repeatedReturn?48.72:scenario===-1?64.96:scenario;
       const multiTax=scenario===67.2, nonrecoverable=scenario<=0, freshAcquisition=scenario===-1||repeatedReturn;
       const taxed=paymentAmount===64.96||multiTax||nonrecoverable;
-      const invoiceGross=multiTax?"84":taxed?"81.2":"70", invoiceVat=multiTax?"14":taxed?"11.2":"0", returnVat=multiTax?"2.8":taxed?"2.24":"0", creditGross=multiTax?"16.8":taxed?"16.24":"14", exactAllocation=repeatedReturn?"48.72":multiTax?"67.2":taxed?"64.96":"56";
+      const invoiceGross=multiTax?"84":taxed?"81.2":"70", invoiceVat=multiTax?"14":taxed?"11.2":"0", returnVat=multiTax?"2.8":taxed?"2.24":"0", creditGross=multiTax?"16.8":taxed?"16.24":"14", exactAllocation=claimScenario?String(paymentAmount):repeatedReturn?"48.72":multiTax?"67.2":taxed?"64.96":"56";
       const suffix="PAYMENT-RACE-"+scenario;
       const stockReturnValue=freshAcquisition?"16.24":"14", reservedRecoverable=freshAcquisition?"0":returnVat;
       // The positive nonrecoverable case needs an entirely untouched pool.
@@ -1908,6 +1909,51 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
         const tooMuch=await context.owner.request.get(racePurchasePath+"?view=supplier-return-preflight&movementId="+encodeURIComponent(raceSource.id)+"&quantity=9");
         expect(tooMuch.status()).toBe(409);
       }
+      const prepareRacePayment=async()=>{
+        const racePayment=await post(context.owner,base+"/payments",{direction:"OUTBOUND",paymentType:"SUPPLIER_PAYMENT",methodType:"BANK_TRANSFER",financialAccountId:fixture.bank.id,businessPartyId:supplierParty.id,currencyCode:fixture.currencyCode,amount:String(paymentAmount),paymentDate:returnBusinessContext.businessDate,reference:historyKey+"-"+suffix,idempotencyKey:historyKey+"-"+suffix+"-payment"});
+        expect(racePayment.status,JSON.stringify(racePayment.body)).toBe(201);
+        const racePaymentId=racePayment.body.payment.id;
+        const racePaymentPath=base+"/payments/"+racePaymentId;
+        const paymentSubmittedRace=await post(context.owner,racePaymentPath+"/transition",{action:"SUBMIT",revision:racePayment.body.payment.revision,approverUserId:fixture.settler.id});
+        expect(paymentSubmittedRace.status,JSON.stringify(paymentSubmittedRace.body)).toBe(200);
+        const paymentApprovedRace=await post(context.settler,racePaymentPath+"/transition",{action:"APPROVE",revision:paymentSubmittedRace.body.payment.revision});
+        expect(paymentApprovedRace.status,JSON.stringify(paymentApprovedRace.body)).toBe(200);
+        await ensureStepUp(context.preparer,cashierPassword);
+        const paymentConfirmedRace=await post(context.preparer,racePaymentPath+"/transition",{action:"CONFIRM",revision:paymentApprovedRace.body.payment.revision});
+        expect(paymentConfirmedRace.status,JSON.stringify(paymentConfirmedRace.body)).toBe(200);
+        expect(paymentConfirmedRace.body.payment.status).toBe("CONFIRMED");
+        expect(await prisma.enterpriseTreasuryTransaction.count({where:{organizationId,paymentId:racePaymentId,status:"CONFIRMED"}})).toBe(1);
+        const paymentJournalRace=await prisma.enterpriseJournalEntry.findFirstOrThrow({where:{organizationId,sourceEntityType:"EnterprisePayment",sourceEntityId:racePaymentId,postingEvent:"SUPPLIER_PAYMENT_CONFIRMED",status:"POSTED"}});
+        expect(paymentJournalRace.totalDebit.equals(paymentAmount)&&paymentJournalRace.totalCredit.equals(paymentAmount)).toBe(true);
+  
+        return {racePaymentId,racePaymentPath,paymentJournalRace};
+      };
+      const earlyPayment=claimScenario?await prepareRacePayment():null;
+      let earlyAllocation=null, claimAccountId=null;
+      if(claimScenario){
+        earlyAllocation=await post(context.owner,earlyPayment.racePaymentPath+"/allocations",{payableId:racePayable.id,amount:String(paymentAmount)});
+        expect([200,201],JSON.stringify(earlyAllocation.body)).toContain(earlyAllocation.status);
+        const checkPath=racePurchasePath+"?view=supplier-return-preflight&movementId="+encodeURIComponent(raceSource.id)+"&quantity=2";
+        const existingMapping=await prisma.enterpriseAccountMapping.findFirst({where:{organizationId,mappingKey:"SUPPLIER_RETURN_CLAIMS",isActive:true}});
+        if(!existingMapping){
+          const blocked=await context.owner.request.get(checkPath);
+          expect(blocked.status(),await blocked.text()).toBe(200);
+          expect(await blocked.json()).toMatchObject({canSubmitRequest:false,settlement:{paymentProof:"PROVEN",claimReady:false}});
+          const refused=await post(context.owner,racePurchasePath+"?action=submit-supplier-return",{movementId:raceSource.id,quantity:"2",reason:"No dedicated account before claim approval",approverUserId:fixture.settler.id,idempotencyKey:historyKey+"-unconfigured-claim"});
+          expect(refused.status,JSON.stringify(refused.body)).toBe(409);
+          // Fixture configuration ONLY. This account already belongs to the
+          // immutable OHADA chart; no production provisioning is implied.
+          const account=await prisma.enterpriseLedgerAccount.findFirstOrThrow({where:{organizationId,code:"409",isActive:true,archivedAt:null}});
+          await prisma.enterpriseAccountMapping.create({data:{organizationId,chartId:account.chartId,mappingKey:"SUPPLIER_RETURN_CLAIMS",ledgerAccountId:account.id,createdByUserId:fixture.owner.id}});
+          claimAccountId=account.id;
+        }else claimAccountId=existingMapping.ledgerAccountId;
+        const ready=await context.owner.request.get(checkPath);
+        expect(ready.status(),await ready.text()).toBe(200);
+        expect(await ready.json()).toMatchObject({canSubmitRequest:true,settlement:{paymentProof:"PROVEN",claimReady:true,payableReduction:String(70-paymentAmount),supplierClaim:String(paymentAmount-56),remainingPayable:"0"}});
+        const beforeClaim=await prisma.enterpriseJournalEntry.count({where:{organizationId,sourceEntityType:"EnterpriseSupplierCreditNote"}});
+        expect(await prisma.enterpriseSupplierReturnRequest.count({where:{organizationId,supplierInvoiceId:raceInvoice.id}})).toBe(0);
+        expect(await prisma.enterpriseJournalEntry.count({where:{organizationId,sourceEntityType:"EnterpriseSupplierCreditNote"}})).toBe(beforeClaim);
+      }
       const submittedRace=await post(context.owner,racePurchasePath+"?action=submit-supplier-return",{movementId:raceSource.id,quantity:"2",reason:"Physical supplier return competing with payable allocation",approverUserId:fixture.settler.id,idempotencyKey:historyKey+"-"+suffix});
       expect(submittedRace.status,JSON.stringify(submittedRace.body)).toBe(201);
       const raceId=submittedRace.body.request.id;
@@ -1934,22 +1980,9 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
       expect(approvedRace.totalCost.equals(stockReturnValue)).toBe(true);
       expect(approvedRace.recoverableTaxAmount.equals(reservedRecoverable)).toBe(true);
       expect(raceReview.versions[0].snapshotJson).toMatchObject({stockValue:stockReturnValue,recoverableTaxAmount:reservedRecoverable,totalAmount:creditGross});
+      if(claimScenario){expect(raceReview.versions[0].snapshotJson).toMatchObject({settlementPayableAmount:String(70-paymentAmount),settlementClaimAmount:String(paymentAmount-56)});expect(approvedRace.settlementClaimAccountId).toBe(claimAccountId);}
 
-      const racePayment=await post(context.owner,base+"/payments",{direction:"OUTBOUND",paymentType:"SUPPLIER_PAYMENT",methodType:"BANK_TRANSFER",financialAccountId:fixture.bank.id,businessPartyId:supplierParty.id,currencyCode:fixture.currencyCode,amount:String(paymentAmount),paymentDate:returnBusinessContext.businessDate,reference:historyKey+"-"+suffix,idempotencyKey:historyKey+"-"+suffix+"-payment"});
-      expect(racePayment.status,JSON.stringify(racePayment.body)).toBe(201);
-      const racePaymentId=racePayment.body.payment.id;
-      const racePaymentPath=base+"/payments/"+racePaymentId;
-      const paymentSubmittedRace=await post(context.owner,racePaymentPath+"/transition",{action:"SUBMIT",revision:racePayment.body.payment.revision,approverUserId:fixture.settler.id});
-      expect(paymentSubmittedRace.status,JSON.stringify(paymentSubmittedRace.body)).toBe(200);
-      const paymentApprovedRace=await post(context.settler,racePaymentPath+"/transition",{action:"APPROVE",revision:paymentSubmittedRace.body.payment.revision});
-      expect(paymentApprovedRace.status,JSON.stringify(paymentApprovedRace.body)).toBe(200);
-      await ensureStepUp(context.preparer,cashierPassword);
-      const paymentConfirmedRace=await post(context.preparer,racePaymentPath+"/transition",{action:"CONFIRM",revision:paymentApprovedRace.body.payment.revision});
-      expect(paymentConfirmedRace.status,JSON.stringify(paymentConfirmedRace.body)).toBe(200);
-      expect(paymentConfirmedRace.body.payment.status).toBe("CONFIRMED");
-      expect(await prisma.enterpriseTreasuryTransaction.count({where:{organizationId,paymentId:racePaymentId,status:"CONFIRMED"}})).toBe(1);
-      const paymentJournalRace=await prisma.enterpriseJournalEntry.findFirstOrThrow({where:{organizationId,sourceEntityType:"EnterprisePayment",sourceEntityId:racePaymentId,postingEvent:"SUPPLIER_PAYMENT_CONFIRMED",status:"POSTED"}});
-      expect(paymentJournalRace.totalDebit.equals(paymentAmount)&&paymentJournalRace.totalCredit.equals(paymentAmount)).toBe(true);
+      const {racePaymentId,racePaymentPath,paymentJournalRace}=earlyPayment||await prepareRacePayment();
 
       const shipPath=racePurchasePath+"?action=dispatch-supplier-return";
       const shipInput={requestId:raceId,revision:approvedRace.revision,dispatchReference:historyKey+"-"+suffix+"-SHIP"};
@@ -1969,7 +2002,7 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
           await prisma.enterpriseFiscalPeriod.update({where:{id:returnPeriod.id},data:{status:returnPeriod.status}});
         }
       }
-      let [ship,allocated]=await Promise.all([post(context.owner,shipPath,shipInput),post(context.owner,allocatePath,allocateInput)]);
+      let [ship,allocated]=claimScenario?[await post(context.owner,shipPath,shipInput),earlyAllocation]:await Promise.all([post(context.owner,shipPath,shipInput),post(context.owner,allocatePath,allocateInput)]);
       expect([200,409]).toContain(ship.status);
       expect([200,201,409]).toContain(allocated.status);
       expect(ship.status===200||allocOk(allocated),JSON.stringify({ship,allocated})).toBe(true);
@@ -2024,7 +2057,7 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
       expect(allocationJournalRace.totalDebit.equals(exactAllocation)&&allocationJournalRace.totalCredit.equals(exactAllocation)).toBe(true);
       const racePayableView=await context.owner.request.get(base+"/payables?recordId="+encodeURIComponent(racePayable.id));
       expect(racePayableView.status()).toBe(200);
-      expect((await racePayableView.json()).items[0]).toMatchObject({outstandingAmount:creditGross,supplierReturnReservedAmount:creditGross,supplierReturnAllocatableAmount:"0"});
+      expect((await racePayableView.json()).items[0]).toMatchObject({outstandingAmount:claimScenario?String(70-paymentAmount):creditGross,supplierReturnReservedAmount:claimScenario?String(70-paymentAmount):creditGross,supplierReturnAllocatableAmount:"0"});
       const raceTrace=await context.owner.request.get(racePurchasePath+"?view=receipt-lots&movementId="+encodeURIComponent(raceSource.id));
       expect(raceTrace.status()).toBe(200);
       const raceCreditDay=(await raceTrace.json()).items[0].supplierReturnRequest.dispatchBusinessDate;
@@ -2040,7 +2073,7 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
       expect(postedRaceCredit.status,JSON.stringify(postedRaceCredit.body)).toBe(200);
       const closedRacePayable=await prisma.enterprisePayable.findUniqueOrThrow({where:{id:racePayable.id}});
       expect(closedRacePayable.status).toBe("CLOSED");expect(closedRacePayable.outstandingAmount.isZero()).toBe(true);
-      expect(closedRacePayable.allocatedAmount.equals(exactAllocation)&&closedRacePayable.creditedAmount.equals(repeatedReturn?"32.48":creditGross)).toBe(true);
+      expect(closedRacePayable.allocatedAmount.equals(exactAllocation)&&closedRacePayable.creditedAmount.equals(claimScenario?String(70-paymentAmount):repeatedReturn?"32.48":creditGross)).toBe(true);
       const closedRace=await prisma.enterpriseSupplierReturnRequest.findFirstOrThrow({where:{organizationId,id:raceId}});
       expect(closedRace.status).toBe("RECONCILED");
       if(repeatedReturn){
@@ -2071,7 +2104,33 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
         expect(vatJournal.lines.some(line=>line.ledgerAccountId===shippedJournal.lines?.find(l=>l.debit.equals(stockReturnValue))?.ledgerAccountId&&line.credit.equals(stockReturnValue))).toBe(true);
         if(freshAcquisition)expect(vatJournal.lines.some(line=>line.ledgerAccountId===originalTaxLine.ledgerAccountId)).toBe(false);
       }
-      expect(await prisma.enterprisePayableAllocation.count({where:{organizationId,payableId:racePayable.id,sourceType:"SUPPLIER_CREDIT_NOTE",sourceId:raceCredit.body.creditNote.id}})).toBe(1);
+      expect(await prisma.enterprisePayableAllocation.count({where:{organizationId,payableId:racePayable.id,sourceType:"SUPPLIER_CREDIT_NOTE",sourceId:raceCredit.body.creditNote.id}})).toBe(scenario===70?0:1);
+      if(claimScenario){
+        expect(closedRace.settlementClaimAmount.equals(paymentAmount-56)).toBe(true);
+        expect(closedRace.settlementPayableAmount.equals(70-paymentAmount)).toBe(true);
+        expect(closedRace.settlementClaimAccountId).toBe(claimAccountId);
+        const closedInvoice=await prisma.enterpriseSupplierInvoice.findFirstOrThrow({where:{organizationId,id:raceInvoice.id}});
+        expect(closedInvoice.amountPaid.equals(paymentAmount)&&closedInvoice.amountCredited.equals(70-paymentAmount)&&closedInvoice.outstandingAmount.isZero()).toBe(true);
+        const claimJournal=await prisma.enterpriseJournalEntry.findFirstOrThrow({where:{organizationId,id:closedRace.creditJournalEntryId},include:{lines:true}});
+        expect(claimJournal.totalDebit.equals(14)&&claimJournal.totalCredit.equals(14)).toBe(true);
+        expect(claimJournal.lines).toHaveLength(scenario===70?2:3);
+        expect(claimJournal.lines.some(line=>line.ledgerAccountId===claimAccountId&&line.debit.equals(paymentAmount-56)&&line.credit.isZero())).toBe(true);
+        expect(claimJournal.lines.some(line=>line.ledgerAccountId===shippedJournal.lines.find(l=>l.debit.gt(0)).ledgerAccountId&&line.credit.equals(14))).toBe(true);
+        expect(await prisma.enterpriseTreasuryTransaction.count({where:{organizationId,paymentId:racePaymentId}})).toBe(1);
+        const repeated=await post(context.owner,raceCreditPath+"/post",{revision:approvedRaceCredit.body.creditNote.revision});
+        expect(repeated.status,JSON.stringify(repeated.body)).toBe(200);
+        expect(await prisma.enterpriseJournalEntry.count({where:{organizationId,sourceEntityType:"EnterpriseSupplierCreditNote",sourceEntityId:raceCredit.body.creditNote.id}})).toBe(1);
+        const next=await context.owner.request.get(racePurchasePath+"?view=supplier-return-preflight&movementId="+encodeURIComponent(raceSource.id)+"&quantity=1");
+        expect(next.status()).toBe(409);
+        for(const journalId of [paymentJournalRace.id,allocationJournalRace.id,claimJournal.id]){
+          const reversed=await post(context.owner,base+"/journal-entries/"+journalId+"/reverse",{reason:"Attempt isolated reversal of claim evidence",accountingDate:returnBusinessContext.businessDate});
+          expect(reversed.status,JSON.stringify(reversed.body)).toBe(409);
+          expect(reversed.body.error).toBe("SUPPLIER_RETURN_DOMAIN_REVERSAL_REQUIRED");
+        }
+        const view=await context.owner.request.get(racePurchasePath+"?view=receipt-lots&movementId="+encodeURIComponent(raceSource.id));
+        expect(view.status()).toBe(200);
+        expect((await view.json()).items[0].supplierReturnHistory[0]).toMatchObject({id:raceId,status:"RECONCILED",settlementClaimAmount:String(paymentAmount-56),settlementPayableAmount:String(70-paymentAmount)});
+      }
       if(freshAcquisition){
         // Rebuild all three historical states AFTER dispatch and credit posting.
         // Use actual recognition timestamps from committed evidence, not guessed
