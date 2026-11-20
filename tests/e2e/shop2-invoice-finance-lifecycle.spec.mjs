@@ -1925,7 +1925,7 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
         expect(await prisma.enterpriseTreasuryTransaction.count({where:{organizationId,paymentId:racePaymentId,status:"CONFIRMED"}})).toBe(1);
         const paymentJournalRace=await prisma.enterpriseJournalEntry.findFirstOrThrow({where:{organizationId,sourceEntityType:"EnterprisePayment",sourceEntityId:racePaymentId,postingEvent:"SUPPLIER_PAYMENT_CONFIRMED",status:"POSTED"}});
         expect(paymentJournalRace.totalDebit.equals(paymentAmount)&&paymentJournalRace.totalCredit.equals(paymentAmount)).toBe(true);
-  
+
         return {racePaymentId,racePaymentPath,paymentJournalRace};
       };
       const earlyPayment=claimScenario?await prepareRacePayment():null;
