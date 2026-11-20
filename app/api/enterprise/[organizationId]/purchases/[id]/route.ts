@@ -6,6 +6,7 @@ import { retailErrorResponse } from "@/lib/enterprise/retail/http";
 import { enterpriseDomainErrorResponse, enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
 import { EnterpriseDomainError } from "@/lib/enterprise/common/errors";
 import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
+import { splitSupplierReturnSettlement } from "@/lib/enterprise/accounting/supplier-return-credit-reconciliation";
 import { resolveEnterpriseModuleCapabilities } from "@/lib/enterprise/module-access";
 import { formatEnterpriseBusinessDate, getEnterpriseBusinessContext } from "@/lib/enterprise/business-context";
 import { assertSupplierReturnAccess, inspectSupplierReturnTx } from "@/lib/enterprise/inventory/supplier-return-preflight";
@@ -59,13 +60,22 @@ export async function GET(req: Request, { params }: Params) {
         if (!origin) throw new EnterpriseDomainError("SUPPLIER_RETURN_ORIGIN_INVALID", 404);
         const check = await inspectSupplierReturnTx(tx, organizationId, session.userId, { ...origin, supplierReturnSourceMovementId: origin.id, quantity });
         if (check.receipt.purchaseId !== id) throw new EnterpriseDomainError("SUPPLIER_RETURN_ORIGIN_INVALID", 404);
+        const payable = await tx.enterprisePayable.findFirst({ where: { organizationId, supplierInvoiceId: check.invoice.id },
+          select: { outstandingAmount: true, currencyCode: true } });
+        if (!payable || payable.currencyCode !== check.currencyCode || check.invoice.currencyCode !== check.currencyCode ||
+            !payable.outstandingAmount.equals(check.invoice.outstandingAmount)) {
+          throw new EnterpriseDomainError("SUPPLIER_RETURN_INVOICE_REQUIRED", 409);
+        }
+        const split = splitSupplierReturnSettlement({ creditTotal: check.creditTotal, outstandingAmount: payable.outstandingAmount });
         return { eligible: true, readOnly: true, quantity, remaining: check.remaining.toFixed(),
+          settlement: { payableReduction: split.payableReduction.toFixed(), supplierClaim: split.supplierClaim.toFixed(),
+            remainingPayable: split.remainingPayable.toFixed(), requiresSupplierClaim: split.requiresSupplierClaim },
           unitCost: check.unitCost.toFixed(), creditUnitPrice: check.creditUnitPrice.toFixed(), nonrecoverableTaxAmount: check.nonrecoverableTaxAmount.toFixed(), totalCost: check.totalCost.toFixed(), recoverableTaxAmount: check.recoverableTaxAmount.toFixed(), creditTotal: check.creditTotal.toFixed(), currencyCode: check.currencyCode,
           receiptReference: check.receipt.reference, invoiceReference: check.invoice.number };
       }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
       await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "supplier-return-preflight", purchaseId: id } });
       const canSubmitRequest = await requireSupplierReturnParticipantAccess(organizationId, session.userId, false).then(() => true, () => false);
-      return NextResponse.json({ ...preview, canSubmitRequest }, { headers: { "Cache-Control": "private, no-store" } });
+      return NextResponse.json({ ...preview, canSubmitRequest: canSubmitRequest && !preview.settlement.requiresSupplierClaim }, { headers: { "Cache-Control": "private, no-store" } });
     } catch (error) {
       const response = enterpriseDomainErrorResponse(error, "SUPPLIER_RETURN_PREFLIGHT_FAILED", req);
       await writeApiLog({ request: req, statusCode: response.status, userId: session.userId, startedAt, metadata: { organizationId, domain: "supplier-return-preflight", purchaseId: id } });

@@ -339,6 +339,23 @@ rtvTx.enterpriseFinanceConfiguration={findUnique:async()=>({functionalCurrencyCo
 mocks["@/lib/enterprise/accounting/helpers"]={...mocks["@/lib/enterprise/accounting/helpers"],money:value=>d(value).toDecimalPlaces(6,Prisma.Decimal.ROUND_HALF_UP),sumDecimals:values=>values.reduce((sum,value)=>sum.plus(value),d(0))};
 mocks["@/lib/enterprise/accounting/historical-credit-tax"]=load("lib/enterprise/accounting/historical-credit-tax.ts");
 const returnCredit = load("lib/enterprise/accounting/supplier-return-credit-reconciliation.ts");
+for (const [credit, outstanding, reduction, claim, remaining] of [
+  ["200", "0", "0", "200", "0"],
+  ["200", "50", "50", "150", "0"],
+  ["200", "200", "200", "0", "0"],
+  ["200", "1000", "200", "0", "800"],
+  ["16.240001", "0.000001", "0.000001", "16.24", "0"],
+]) {
+  const split = returnCredit.splitSupplierReturnSettlement({creditTotal:new Prisma.Decimal(credit),outstandingAmount:new Prisma.Decimal(outstanding)});
+  assert.equal(split.payableReduction.toFixed(), reduction);
+  assert.equal(split.supplierClaim.toFixed(), claim);
+  assert.equal(split.remainingPayable.toFixed(), remaining);
+  assert.equal(split.requiresSupplierClaim, new Prisma.Decimal(claim).gt(0));
+  assert.ok(split.payableReduction.plus(split.supplierClaim).equals(credit));
+}
+for (const [credit, outstanding] of [["0","0"],["-1","1"],["1","-1"],["1.0000001","1"],["1","0.0000001"],["NaN","1"]]) {
+  assert.throws(() => returnCredit.splitSupplierReturnSettlement({creditTotal:new Prisma.Decimal(credit),outstandingAmount:new Prisma.Decimal(outstanding)}), {code:"SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED"});
+}
 mocks["@/lib/enterprise/accounting/supplier-return-credit-reconciliation"] = returnCredit;
 const inventoryAccounting=load("lib/enterprise/accounting/inventory-accounting-service.ts");
 const {planWeightedAverageResidualQuantities}=inventoryAccounting;

@@ -21,7 +21,7 @@ type TraceRow = {
 };
 type TraceResponse = { items: TraceRow[]; canCheckSupplierReturn?: boolean; pagination: { page: number; pageSize: number; total: number; pageCount: number } };
 
-type ReturnPreview = { eligible: true; readOnly: true; quantity: string; remaining: string; unitCost: string; creditUnitPrice: string; nonrecoverableTaxAmount: string; totalCost: string; recoverableTaxAmount: string; creditTotal: string; currencyCode: string; receiptReference: string; invoiceReference: string; canSubmitRequest?: boolean };
+type ReturnPreview = { eligible: true; readOnly: true; settlement: { payableReduction: string; supplierClaim: string; remainingPayable: string; requiresSupplierClaim: boolean }; quantity: string; remaining: string; unitCost: string; creditUnitPrice: string; nonrecoverableTaxAmount: string; totalCost: string; recoverableTaxAmount: string; creditTotal: string; currencyCode: string; receiptReference: string; invoiceReference: string; canSubmitRequest?: boolean };
 
 function SupplierReturnCheck({ organizationId, purchaseId, row, locale, onRefresh }: { organizationId: string; purchaseId: string; row: TraceRow; locale: string; onRefresh: () => void }) {
   const t = (key: PurchaseFormGuidanceKey) => purchaseFormGuidance(locale, key);
@@ -44,7 +44,7 @@ function SupplierReturnCheck({ organizationId, purchaseId, row, locale, onRefres
       const response = await fetch(`/api/enterprise/${encodeURIComponent(organizationId)}/purchases/${encodeURIComponent(purchaseId)}?${params}`, { cache: "no-store", headers: { "Accept-Language": locale } });
       const body = await response.json();
       if (!response.ok) { setError(typeof body.message === "string" ? body.message : t("returnCheckError")); return; }
-      if (body.eligible !== true || body.readOnly !== true) { setError(t("returnCheckError")); return; }
+      if (body.eligible !== true || body.readOnly !== true || !body.settlement) { setError(t("returnCheckError")); return; }
       setPreview(body as ReturnPreview);
     } catch { setError(t("returnCheckError")); }
     finally { setBusy(false); }
@@ -169,7 +169,7 @@ function SupplierReturnCheck({ organizationId, purchaseId, row, locale, onRefres
     <div aria-live="polite" aria-busy={busy} className="grid min-w-0 gap-1">
       {error ? <p role="alert" className="break-words text-xs text-red-700 dark:text-red-300">{error}</p> : null}
       {preview ? <div className="grid min-w-0 gap-1 text-xs">
-        <div><StatusBadge tone="success">{t("returnCheckReady")}</StatusBadge></div>
+        <div><StatusBadge tone={preview.settlement.requiresSupplierClaim ? "warning" : "success"}>{t(preview.settlement.requiresSupplierClaim ? "returnSettlementBlocked" : "returnCheckReady")}</StatusBadge></div>
         <p>{t("returnCheckRemaining")} : <strong>{preview.remaining} {row.inventoryItem.catalogItem.unitOfMeasure?.symbol || ""}</strong></p>
         <p>{t("returnCheckUnitCost")} : {money(preview.unitCost, preview.currencyCode)}</p>
         <p>{t("returnCheckAmount")} : <strong>{money(preview.totalCost, preview.currencyCode)}</strong></p>
@@ -177,13 +177,17 @@ function SupplierReturnCheck({ organizationId, purchaseId, row, locale, onRefres
         {Number(preview.nonrecoverableTaxAmount)>0?<p>{t("returnCreditCapitalizedTax")} : <strong>{money(preview.nonrecoverableTaxAmount,preview.currencyCode)}</strong></p>:null}
         <p>{t("returnCreditAmount")} : <strong>{money(preview.creditTotal,preview.currencyCode)}</strong></p>
         <p className="break-words">{t("returnCheckInvoice")} : {preview.invoiceReference}</p>
+        <p>{t("returnSettlementPayableReduction")} : <strong>{money(preview.settlement.payableReduction, preview.currencyCode)}</strong></p>
+        <p>{t("returnSettlementRemainingPayable")} : <strong>{money(preview.settlement.remainingPayable, preview.currencyCode)}</strong></p>
+        <p>{t("returnSettlementClaim")} : <strong>{money(preview.settlement.supplierClaim, preview.currencyCode)}</strong></p>
+        {preview.settlement.requiresSupplierClaim ? <p role="alert" className="break-words text-amber-700 dark:text-amber-300">{t("returnSettlementClaimHelp")}</p> : null}
         <p className="text-dtsc-muted">{t("returnCheckHelp")}</p>
         {preview.canSubmitRequest ? <form onSubmit={submitReturn} className="mt-2 grid min-w-0 grid-cols-[minmax(0,1fr)] gap-2 border-t border-dtsc-border pt-2">
           <strong>{t("returnRequestTitle")}</strong><p className="text-dtsc-muted">{t("returnRequestHelp")}</p>
           <label className="grid min-w-0 gap-1 font-medium">{t("returnRequestReason")}<textarea name="reason" minLength={8} maxLength={2000} required disabled={busy} className="min-h-20 w-full min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface p-2 text-base text-dtsc-ink md:text-sm" /></label>
           <EnterpriseApproverSelect organizationId={organizationId} moduleCode="INVENTORY_LOGISTICS" locale={locale} label={t("returnRequestApprover")} disabled={busy} candidatesEndpoint={`/api/enterprise/${encodeURIComponent(organizationId)}/purchases/${encodeURIComponent(purchaseId)}?view=supplier-return-approvers`} />
           <Button type="submit" disabled={busy} className="max-w-full whitespace-normal">{t("returnRequestSubmit")}</Button>
-        </form> : <p className="text-dtsc-muted">{t("returnRequestNoAccess")}</p>}
+        </form> : !preview.settlement.requiresSupplierClaim ? <p className="text-dtsc-muted">{t("returnRequestNoAccess")}</p> : null}
       </div> : null}
     </div>
   </div>;
