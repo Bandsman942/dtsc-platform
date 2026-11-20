@@ -1096,3 +1096,52 @@ assert.equal(appraisalEvents.length,previousAppraisalEventCount);
 assert.equal(savedAssessment.status,"CANCELLED");
 assert.equal(recoveryCustody.status,"QUARANTINED");
 console.log("Recovery concurrency normalizes only known transaction conflicts; unexpected errors propagate");
+
+/* Lot 1G.1: proof of target debt only; mock deliberately exposes no writes.
+ * Exercise the actual helper via VM and verify no affirmative execution flag. */
+mocks["@/lib/enterprise/accounting/supplier-return-payment-proof"] = supplierPaymentProof;
+const compensationService = load("lib/enterprise/accounting/supplier-return-claim-refunds.ts");
+const cmpDate = new Date("2026-11-20T00:00:00Z");
+const cmpCreditDate = new Date("2026-11-19T00:00:00Z");
+const cmpInvoice = {id:"target-invoice",organizationId:"org-a",number:"INV-TARGET",supplierId:"supplier-a",
+  businessPartyId:"party-a",currencyCode:"USD",status:"POSTED",archivedAt:null,postedAt:cmpDate,invoiceDate:cmpDate,
+  grandTotal:d(20),amountPaid:d(0),amountCredited:d(0),outstandingAmount:d(20)};
+const cmpPayable = {id:"target-payable",supplierId:"supplier-a",businessPartyId:"party-a",currencyCode:"USD",status:"OPEN",
+  allocatedAmount:d(0),creditedAmount:d(0),originalAmount:d(20),outstandingAmount:d(20),supplierInvoice:cmpInvoice};
+const cmpJournal = {id:"target-journal",status:"POSTED",postedAt:cmpDate,reversedAt:null,reversalOfEntryId:null,
+  postingVersion:1,postingEvent:"SUPPLIER_INVOICE_POSTED",functionalCurrencyCode:"USD",accountingDate:cmpDate,
+  totalDebit:d(20),totalCredit:d(20),lines:[{ledgerAccountId:"ACCOUNTS_PAYABLE",businessPartyId:"party-a",debit:d(0),credit:d(20),
+    transactionCurrencyCode:"USD",exchangeRate:d(1),transactionAmount:d(20),functionalAmount:d(20)}]};
+const cmpProof = {claim:{organizationId:"org-a",supplierId:"supplier-a",currencyCode:"USD",settlementClaimAccountId:"claim-account"},
+  invoice:{id:"original-invoice",businessPartyId:"party-a"},credit:{creditDate:cmpCreditDate},available:d(9)};
+let cmpScope = true, cmpAllocations=0, cmpPaymentAllocations=0, cmpReturns=0, cmpCredits=0, cmpReversals=0;
+const cmpTx = {
+  enterprisePayable:{findFirst:async({where})=>{assert.equal(where.organizationId,"org-a");assert.equal(where.id,"target-payable");return cmpScope?cmpPayable:null;}},
+  enterprisePayableAllocation:{count:async({where})=>{assert.equal(where.organizationId,"org-a");return cmpAllocations;}},
+  enterprisePaymentAllocation:{count:async()=>cmpPaymentAllocations},
+  enterpriseSupplierReturnRequest:{count:async()=>cmpReturns},
+  enterpriseSupplierCreditNote:{count:async()=>cmpCredits},
+  enterpriseJournalEntry:{findMany:async()=>[cmpJournal]},
+  enterpriseJournalReversal:{count:async()=>cmpReversals},
+};
+mocks["@/lib/enterprise/accounting/semantic-account-resolver"]={resolveSemanticPostingAccount:async(_tx,input)=>({id:input.mappingKey})};
+const cmpPreview = (proof=cmpProof)=>compensationService.readSupplierClaimCompensationTargetTx(cmpTx,"org-a",proof,"target-payable");
+const cmpRefusal={code:"SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED"};
+assert.equal((await cmpPreview()).maximum.toFixed(),"9");
+assert.equal((await cmpPreview({...cmpProof,available:d(30)})).maximum.toFixed(),"20");
+assert.equal((await cmpPreview({...cmpProof,available:d(0)})).maximum.toFixed(),"0");
+assert.equal((await cmpPreview()).executionAvailable,false);
+await assert.rejects(cmpPreview({...cmpProof,claim:{...cmpProof.claim,organizationId:"org-b"}}),cmpRefusal);
+await assert.rejects(cmpPreview({...cmpProof,invoice:{...cmpProof.invoice,id:"target-invoice"}}),cmpRefusal);
+for (const [field,value] of [["businessPartyId","party-b"],["supplierId","supplier-b"],["currencyCode","CDF"],["status","DRAFT"],["amountPaid",d(1)],["invoiceDate",new Date("2026-11-18T00:00:00Z")]]) {
+  const original=cmpInvoice[field];cmpInvoice[field]=value;
+  try{await assert.rejects(cmpPreview(),cmpRefusal);}finally{cmpInvoice[field]=original;}
+}
+cmpScope=false;await assert.rejects(cmpPreview(),cmpRefusal);cmpScope=true;
+cmpAllocations=1;await assert.rejects(cmpPreview(),cmpRefusal);cmpAllocations=0;
+cmpPaymentAllocations=1;await assert.rejects(cmpPreview(),cmpRefusal);cmpPaymentAllocations=0;
+cmpReturns=1;await assert.rejects(cmpPreview(),cmpRefusal);cmpReturns=0;
+cmpCredits=1;await assert.rejects(cmpPreview(),cmpRefusal);cmpCredits=0;
+cmpReversals=1;await assert.rejects(cmpPreview(),cmpRefusal);cmpReversals=0;
+cmpJournal.lines[0].credit=d(19);await assert.rejects(cmpPreview(),cmpRefusal);cmpJournal.lines[0].credit=d(20);
+console.log("Supplier claim compensation target: exact new debt, refund-adjusted capacity, wrong tenant/party/currency, prior allocations, returns and reversed journals refused; no mutation");

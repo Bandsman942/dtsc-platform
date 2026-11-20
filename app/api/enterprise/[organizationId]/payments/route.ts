@@ -16,22 +16,31 @@ export async function GET(req: Request, { params }: Params) {
   const { organizationId } = await params;
   const auth = await authorizeFinanceRequest(req, organizationId, "FINANCE_PAYMENTS", "view");
   if (!auth.ok) return auth.response;
-  const claimId = new URL(req.url).searchParams.get("supplierReturnClaimId")?.trim();
+  const claimQuery = new URL(req.url).searchParams;
+  const claimId = claimQuery.get("supplierReturnClaimId")?.trim();
+  const compensationPayableId = claimQuery.get("compensationPayableId")?.trim();
+  if (compensationPayableId && !claimId) return financeErrorResponse(new EnterpriseAccountingError("SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED", 409));
   if (claimId) {
     try {
       if (!await getEnterpriseAccountingAccess({session:auth.session,organizationId,moduleCode:"FINANCE_PAYABLES",action:"view"})) throw new EnterpriseAccountingError("SUPPLIER_RETURN_REFUND_ACCESS_FORBIDDEN",403);
-      const { readSupplierClaimRefundEvidenceTx } = await import("@/lib/enterprise/accounting/supplier-return-claim-refunds");
+      const { readSupplierClaimRefundEvidenceTx, readSupplierClaimCompensationTargetTx } = await import("@/lib/enterprise/accounting/supplier-return-claim-refunds");
       const summary=await prisma.$transaction(async tx=>{
         const scope=await retailFinanceReadSiteScope(organizationId,auth.session.userId,"COLLECT_PAYMENT",tx);
+        // A supplier invoice has no canonical site dimension yet. Do not infer
+        // a target site from the claim or expose its debt to a scoped operator.
+        if (compensationPayableId && scope !== null) throw new EnterpriseAccountingError("SUPPLIER_RETURN_REFUND_ACCESS_FORBIDDEN", 403);
         if(scope!==null){
           const linked=await tx.enterpriseSupplierReturnRequest.findFirst({where:{organizationId,id:claimId},select:{sourceMovementId:true,warehouseId:true}});
           const source=linked?await tx.enterpriseStockMovement.findFirst({where:{organizationId,id:linked.sourceMovementId,warehouseId:linked.warehouseId},select:{warehouse:{select:{siteId:true}}}}):null;
           if(!source?.warehouse.siteId||!scope.includes(source.warehouse.siteId))throw new EnterpriseAccountingError("SUPPLIER_RETURN_REFUND_CLAIM_NOT_FOUND",404);
         }
         const proof=await readSupplierClaimRefundEvidenceTx(tx,organizationId,claimId);
-        return {id:proof.claim.id,reference:proof.claim.reference,invoiceReference:proof.invoice.number,businessPartyId:proof.invoice.businessPartyId,currencyCode:proof.claim.currencyCode,creditDate:proof.credit.creditDate,original:proof.claim.settlementClaimAmount,refunded:proof.refunded,reserved:proof.reserved,remaining:proof.remaining,available:proof.available,canCreate:auth.access.capabilities.canCreate&&proof.available.gt(0)};
+        const compensation = compensationPayableId
+          ? await readSupplierClaimCompensationTargetTx(tx, organizationId, proof, compensationPayableId)
+          : undefined;
+        return {id:proof.claim.id,reference:proof.claim.reference,invoiceReference:proof.invoice.number,businessPartyId:proof.invoice.businessPartyId,currencyCode:proof.claim.currencyCode,creditDate:proof.credit.creditDate,original:proof.claim.settlementClaimAmount,refunded:proof.refunded,reserved:proof.reserved,remaining:proof.remaining,available:proof.available,canCreate:auth.access.capabilities.canCreate&&proof.available.gt(0), ...(compensation ? { compensation } : {})};
       },{isolationLevel:Prisma.TransactionIsolationLevel.RepeatableRead});
-      await writeApiLog({request:req,statusCode:200,userId:auth.session.userId,startedAt,metadata:{organizationId,domain:"supplier-claim-refund-preflight",claimId}});
+      await writeApiLog({request:req,statusCode:200,userId:auth.session.userId,startedAt,metadata:{organizationId,domain:compensationPayableId?"supplier-claim-compensation-preflight":"supplier-claim-refund-preflight",claimId}});
       return NextResponse.json({claim:summary},{headers:{"Cache-Control":"private, no-store"}});
     }catch(error){return financeErrorResponse(error,"SUPPLIER_RETURN_REFUND_EVIDENCE_REQUIRED");}
   }

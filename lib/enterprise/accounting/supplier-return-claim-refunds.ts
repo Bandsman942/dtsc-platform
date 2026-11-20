@@ -173,3 +173,67 @@ export const buildSupplierClaimRefundPosting: PostingBuilder = async (tx, input)
     ],
   };
 };
+
+/** Lot 1G.1: read-only capacity for the first non-cash compensation.
+ * No reservation, approval or posting is authorized by this result.
+ * Initial scope: a newly posted, entirely unpaid and uncredited supplier
+ * invoice, with exact original debt evidence in the same functional currency.
+ * Future writes must re-run all checks under both claim and target locks. */
+export async function readSupplierClaimCompensationTargetTx(
+  tx: Prisma.TransactionClient, organizationId: string,
+  proof: Awaited<ReturnType<typeof readSupplierClaimRefundEvidenceTx>>,
+  payableId: string,
+) {
+  const reject = (): never => { throw new EnterpriseAccountingError("SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED", 409); };
+  if (proof.claim.organizationId !== organizationId || !proof.invoice.businessPartyId ||
+      !proof.available.isFinite() || proof.available.lt(0) || !proof.claim.settlementClaimAccountId) return reject();
+  const payable = await tx.enterprisePayable.findFirst({
+    where: { organizationId, id: payableId },
+    include: { supplierInvoice: true },
+  });
+  if (!payable) return reject();
+  const target = payable.supplierInvoice;
+  if (target.id === proof.invoice.id || target.organizationId !== organizationId ||
+      target.supplierId !== proof.claim.supplierId || payable.supplierId !== target.supplierId ||
+      target.businessPartyId !== proof.invoice.businessPartyId || payable.businessPartyId !== target.businessPartyId ||
+      target.currencyCode !== proof.claim.currencyCode || payable.currencyCode !== target.currencyCode ||
+      target.status !== "POSTED" || target.archivedAt || !target.postedAt ||
+      target.invoiceDate < proof.credit.creditDate || payable.status !== "OPEN" ||
+      !target.grandTotal.isFinite() || !target.grandTotal.gt(0) || target.grandTotal.decimalPlaces() > 6 ||
+      !target.amountPaid.isZero() || !target.amountCredited.isZero() ||
+      !payable.allocatedAmount.isZero() || !payable.creditedAmount.isZero() ||
+      !target.grandTotal.equals(payable.originalAmount) || !target.grandTotal.equals(target.outstandingAmount) ||
+      !target.outstandingAmount.equals(payable.outstandingAmount)) return reject();
+  const [allocations, paymentAllocations, returns, credits, journals] = await Promise.all([
+    tx.enterprisePayableAllocation.count({ where: { organizationId, payableId } }),
+    tx.enterprisePaymentAllocation.count({ where: { organizationId, payableId } }),
+    tx.enterpriseSupplierReturnRequest.count({ where: { organizationId, supplierInvoiceId: target.id } }),
+    tx.enterpriseSupplierCreditNote.count({ where: { organizationId, supplierInvoiceId: target.id } }),
+    tx.enterpriseJournalEntry.findMany({
+      where: { organizationId, sourceEntityType: "EnterpriseSupplierInvoice", sourceEntityId: target.id },
+      include: { lines: true }, take: 2,
+    }),
+  ]);
+  const entry = journals[0];
+  if (allocations || paymentAllocations || returns || credits || journals.length !== 1 ||
+      entry.status !== "POSTED" || !entry.postedAt || entry.reversedAt || entry.reversalOfEntryId ||
+      entry.postingVersion !== 1 || entry.postingEvent !== "SUPPLIER_INVOICE_POSTED" ||
+      entry.functionalCurrencyCode !== target.currencyCode ||
+      !entry.totalDebit.equals(target.grandTotal) || !entry.totalCredit.equals(target.grandTotal) ||
+      await tx.enterpriseJournalReversal.count({ where: { organizationId, OR: [{ originalEntryId: entry.id }, { reversalEntryId: entry.id }] } })) return reject();
+  const { resolveSemanticPostingAccount } = await import("@/lib/enterprise/accounting/semantic-account-resolver");
+  const debt = await resolveSemanticPostingAccount(tx, { organizationId, mappingKey: "ACCOUNTS_PAYABLE", accountingDate: entry.accountingDate });
+  if (debt.id === proof.claim.settlementClaimAccountId) return reject();
+  const lines = entry.lines.filter(line => line.ledgerAccountId === debt.id);
+  if (lines.length !== 1 || lines[0].businessPartyId !== target.businessPartyId ||
+      !lines[0].debit.isZero() || !lines[0].credit.equals(target.grandTotal) ||
+      lines[0].transactionCurrencyCode !== target.currencyCode || !lines[0].exchangeRate?.equals(1) ||
+      !lines[0].transactionAmount?.equals(target.grandTotal) || !lines[0].functionalAmount.equals(target.grandTotal) ||
+      entry.lines.some(line => line.ledgerAccountId === proof.claim.settlementClaimAccountId)) return reject();
+  const maximum = Prisma.Decimal.min(proof.available, payable.outstandingAmount);
+  return {
+    payableId: payable.id, invoiceReference: target.number, currencyCode: target.currencyCode,
+    openPayable: payable.outstandingAmount, unreservedClaim: proof.available, maximum,
+    executionAvailable: false as const,
+  };
+}

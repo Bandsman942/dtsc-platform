@@ -51,6 +51,10 @@ UX : depuis la fiche Finance de l'avoir reconnu, ouvrir « Consulter ou enregist
 
 Le contrôle QA #986 a identifié un appel au feedback typé sans espacement conventionnel autour de locale; correction sans modification du test. Migration et Shop 2 behavioral du SHA 46e3fc61 réussis; nouvelle certification requise.
 
+## Lot 1G.1 — preuve préalable de la dette cible de compensation (DRAFT)
+
+Le diagnostic GET existant `/payments?supplierReturnClaimId=…&compensationPayableId=…` peut désormais examiner une dette précise dans le même snapshot RepeatableRead, sous les droits de lecture Payments + Payables. Refus de tout opérateur à visibilité limitée par site : aucune dimension boutique fiable n'est portée par la facture fournisseur cible. Vérifications : autre facture POSTED, postérieure ou égale à l'avoir, même fournisseur/tiers/devise fonctionnelle, intégralement impayée et non créditée, concordance facture/dette, aucun historique d'allocation, retour ou avoir, journal canonique v1 non contrepassé et ligne dette créditée exactement au TTC. Le maximum indicatif est min(créance disponible après remboursements et réservations, dette ouverte). Réponse `claim.compensation` incluant `maximum`, `openPayable`, `unreservedClaim` et `executionAvailable: false`. Référence cible absente/incohérente : 409; opérateur isolé : 403. Aucun journal, paiement, allocation, réservation, mouvement ni nouveau droit créé. Aucune UI ou mutation activée. Le prochain lot doit introduire la demande immuable, les verrous créance/dette et réservation croisée avec remboursements/paiements, puis validation/posting/inverse. QA ciblée sur le vrai helper (mocks isolés en lecture seule); recette HTTP/PostgreSQL et certification CI exactes restent nécessaires.
+
 ## Programme restant (aucune certification implicite)
 
 1. Créance fournisseur canonique : preuve et registre, posting partie double, règlement par remboursement ou compensation approuvée, capacité et concurrence, avoir partiel/intégral sur facture payée.
