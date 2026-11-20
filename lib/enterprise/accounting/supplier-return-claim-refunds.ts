@@ -254,7 +254,7 @@ async function readSupplierClaimCompensationPostingPlanTx(
     openPayable: Prisma.Decimal; unreservedClaim: Prisma.Decimal; targetInvoiceDate: Date;
     creditDate: Date; historicalDebtAccountId: string; claimAccountId: string },
 ) {
-  const reject = (): never => { throw new EnterpriseAccountingError("SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED", 409); };
+  const reject = (): never => { throw new EnterpriseAccountingError("SUPPLIER_RETURN_COMPENSATION_PLAN_INVALID", 409); };
   // Decimal(20,6): 14 integer digits, six fractional digits, no rounding.
   if (!/^\d{1,14}(\.\d{1,6})?$/.test(input.amount) ||
       !/^\d{4}-\d{2}-\d{2}$/.test(input.accountingDate)) return reject();
@@ -265,7 +265,11 @@ async function readSupplierClaimCompensationPostingPlanTx(
       accountingDate.toISOString().slice(0, 10) !== input.accountingDate ||
       accountingDate < input.creditDate || accountingDate < input.targetInvoiceDate) return reject();
   const { getEnterpriseBusinessContext, formatEnterpriseBusinessDate } = await import("@/lib/enterprise/business-context");
-  const context = await getEnterpriseBusinessContext(tx, organizationId);
+  const { EnterpriseDomainError } = await import("@/lib/enterprise/common/errors");
+  const context = await getEnterpriseBusinessContext(tx, organizationId).catch((error: unknown) => {
+    if (error instanceof EnterpriseDomainError) return reject();
+    throw error;
+  });
   if (context.functionalCurrencyCode !== input.currencyCode ||
       input.accountingDate > formatEnterpriseBusinessDate(new Date(), context.timezone)) return reject();
   const { getPostingPeriod } = await import("@/lib/enterprise/accounting/periods");
@@ -281,7 +285,10 @@ async function readSupplierClaimCompensationPostingPlanTx(
     tx.enterpriseJournal.findFirst({ where: { organizationId, journalType: "GENERAL", isActive: true },
       orderBy: { createdAt: "asc" }, select: { id: true } }),
     resolveSemanticPostingAccount(tx, { organizationId, mappingKey: "ACCOUNTS_PAYABLE", accountingDate }),
-    resolveSupplierReturnClaimAccountTx(tx, organizationId, input.currencyCode, accountingDate),
+    resolveSupplierReturnClaimAccountTx(tx, organizationId, input.currencyCode, accountingDate).catch((error: unknown) => {
+      if (error instanceof EnterpriseDomainError) return reject();
+      throw error;
+    }),
   ]);
   if (period.status !== "OPEN" || !journal ||
       debt.id !== input.historicalDebtAccountId || claimAccountId !== input.claimAccountId ||

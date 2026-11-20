@@ -21,10 +21,10 @@ export async function GET(req: Request, { params }: Params) {
   const compensationPayableId = claimQuery.get("compensationPayableId")?.trim();
   const compensationAmount = claimQuery.get("compensationAmount");
   const compensationDate = claimQuery.get("compensationDate");
-  if ((compensationPayableId && !claimId) ||
-      ((compensationAmount !== null || compensationDate !== null) &&
-        (!claimId || !compensationPayableId || !compensationAmount || !compensationDate))) {
-    return financeErrorResponse(new EnterpriseAccountingError("SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED", 409));
+  if (compensationPayableId && !claimId) return financeErrorResponse(new EnterpriseAccountingError("SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED", 409));
+  if ((compensationAmount !== null || compensationDate !== null) &&
+      (!claimId || !compensationPayableId || !compensationAmount || !compensationDate)) {
+    return financeErrorResponse(new EnterpriseAccountingError("SUPPLIER_RETURN_COMPENSATION_PLAN_INVALID", 409));
   }
   const compensationIntent = compensationAmount && compensationDate
     ? { amount: compensationAmount, accountingDate: compensationDate } : undefined;

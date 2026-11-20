@@ -1148,6 +1148,7 @@ console.log("Supplier claim compensation target: exact new debt, refund-adjusted
 
 /* Lot 1G.2: a proposed accounting entry is not a financial operation. */
 const cmpPlanIntent={amount:"9",accountingDate:"2026-11-20"};
+const cmpPlanRefusal={code:"SUPPLIER_RETURN_COMPENSATION_PLAN_INVALID"};
 let cmpPeriodStatus="OPEN",cmpJournalActive=true,cmpPostingEnabled=true,cmpDebtAccount="ACCOUNTS_PAYABLE",cmpClaimAccount="claim-account";
 let cmpReadyCurrency="USD";
 mocks["@/lib/enterprise/accounting/configuration-service"]={assertFinanceReady:async(_tx,org,requirements)=>{
@@ -1180,12 +1181,18 @@ assert.equal(cmpPlanned.amount.toFixed(),"9");
 assert.equal(cmpPlanned.debitPayable.toFixed(),"9");assert.equal(cmpPlanned.creditSupplierClaim.toFixed(),"9");
 assert.equal(cmpPlanned.payableAfter.toFixed(),"11");assert.equal(cmpPlanned.unreservedClaimAfter.toFixed(),"0");
 assert.equal(cmpPlanned.treasuryImpact.toFixed(),"0");assert.equal(cmpPlanned.executionAvailable,false);
-for(const amount of ["0","-1","10","0.0000001","1e0","NaN","999999999999999"]) await assert.rejects(cmpPlan({...cmpPlanIntent,amount}),cmpRefusal);
-for(const accountingDate of ["2026-11-19","2026-02-30","2026-11-20T00:00:00Z","2099-01-01"]) await assert.rejects(cmpPlan({...cmpPlanIntent,accountingDate}),cmpRefusal);
+for(const amount of ["0","-1","10","0.0000001","1e0","NaN","999999999999999"]) await assert.rejects(cmpPlan({...cmpPlanIntent,amount}),cmpPlanRefusal);
+for(const accountingDate of ["2026-11-19","2026-02-30","2026-11-20T00:00:00Z","2099-01-01"]) await assert.rejects(cmpPlan({...cmpPlanIntent,accountingDate}),cmpPlanRefusal);
 cmpPeriodStatus="LOCKED";await assert.rejects(cmpPlan(),{code:"FINANCE_PERIOD_CLOSED"});cmpPeriodStatus="OPEN";
-cmpJournalActive=false;await assert.rejects(cmpPlan(),cmpRefusal);cmpJournalActive=true;
-cmpPostingEnabled=false;await assert.rejects(cmpPlan(),cmpRefusal);cmpPostingEnabled=true;
-cmpReadyCurrency="CDF";await assert.rejects(cmpPlan(),cmpRefusal);cmpReadyCurrency="USD";
-cmpClaimAccount="other-claim";await assert.rejects(cmpPlan(),cmpRefusal);cmpClaimAccount="claim-account";
-cmpDebtAccount="other-debt";await assert.rejects(cmpPlan(),cmpRefusal);cmpDebtAccount="ACCOUNTS_PAYABLE";
+cmpJournalActive=false;await assert.rejects(cmpPlan(),cmpPlanRefusal);cmpJournalActive=true;
+cmpPostingEnabled=false;await assert.rejects(cmpPlan(),cmpPlanRefusal);cmpPostingEnabled=true;
+cmpReadyCurrency="CDF";await assert.rejects(cmpPlan(),cmpPlanRefusal);cmpReadyCurrency="USD";
+cmpClaimAccount="other-claim";await assert.rejects(cmpPlan(),cmpPlanRefusal);cmpClaimAccount="claim-account";
+// Historical account is checked first; only change the mapping for the later posting day.
+cmpJournal.accountingDate=cmpCreditDate;
+mocks["@/lib/enterprise/accounting/semantic-account-resolver"]={resolveSemanticPostingAccount:async(_tx,input)=>{
+  if(input.mappingKey==="SUPPLIER_RETURN_CLAIMS")return {id:cmpClaimAccount,isControlAccount:true,allowDirectPosting:false,currencyCode:"USD"};
+  return {id:input.accountingDate.getTime()===cmpCreditDate.getTime()?"ACCOUNTS_PAYABLE":"other-debt"};
+}};
+await assert.rejects(cmpPlan(),cmpPlanRefusal);
 console.log("Supplier compensation posting preflight: exact debit/credit, strict civil date, open period, ready configuration, unchanged accounts, zero treasury; no write");
