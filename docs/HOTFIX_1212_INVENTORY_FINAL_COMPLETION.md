@@ -49,6 +49,8 @@ La route existante GET /payments?supplierReturnClaimId=... fournit, sous contrô
 
 UX : depuis la fiche Finance de l'avoir reconnu, ouvrir « Consulter ou enregistrer le remboursement fournisseur », consulter montant reconnu/remboursé/réservé/restant/disponible, saisir un compte bancaire de même devise, date, montant, référence, enregistrer un brouillon, suivre le lien vers Paiements pour soumission/validation/confirmation. FR/EN. Test HTTP sur les créances 14 (5 puis 9) et 9 (9), refus de dépassement, preuve avant et après validation, rejeu, écriture/trésorerie uniques, dette, quantité et avoir immuables. CI obligatoire sur le SHA exact; aucun E2E propriétaire intermédiaire.
 
+Le contrôle QA #986 a identifié un appel au feedback typé sans espacement conventionnel autour de locale; correction sans modification du test. Migration et Shop 2 behavioral du SHA 46e3fc61 réussis; nouvelle certification requise.
+
 ## Programme restant (aucune certification implicite)
 
 1. Créance fournisseur canonique : preuve et registre, posting partie double, règlement par remboursement ou compensation approuvée, capacité et concurrence, avoir partiel/intégral sur facture payée.

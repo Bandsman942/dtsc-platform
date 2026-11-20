@@ -363,7 +363,7 @@ export function EnterpriseFinanceInvoicesWorkspace(props: Props) {
       if(!payment?.id)throw new Error("PAYMENT_ID_MISSING");
       setRefundPaymentId(payment.id);setRefreshKey(value=>value+1);
       setMessage(locale==="en"?"Supplier refund draft created. Submit it for independent approval.":"Brouillon de remboursement créé. Soumettez-le pour validation indépendante.");
-    }catch(error){setErrorMessage(safeFinanceError(error,locale==="en"?"Unable to prepare refund":"Impossible de préparer le remboursement",locale));}
+    }catch(error){setErrorMessage(safeFinanceError(error, locale === "en" ? "Unable to prepare refund" : "Impossible de préparer le remboursement", locale));}
     finally{setBusy(false);}
   }
 
