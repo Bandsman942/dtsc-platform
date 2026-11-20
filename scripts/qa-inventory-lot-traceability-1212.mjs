@@ -543,6 +543,11 @@ const creditTx = {...rtvTx,enterpriseInventoryAcquisitionCostSupplement:{findFir
 await assert.rejects(postingBuilder.buildSupplierCreditNotePosting(creditTx,{organizationId:"org-a",sourceEntityType:"EnterpriseSupplierCreditNote",sourceEntityId:"credit-a"}),{code:"SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED"});
 const capacity=returnCredit.supplierReturnPayableCapacity({currencyCode:"USD",outstandingAmount:d(70)},[rtv]);
 assert.equal(capacity.reserved.toFixed(),"14");assert.equal(capacity.available.toFixed(),"56");
+const partialClaimCapacity=returnCredit.supplierReturnPayableCapacity({currencyCode:"USD",outstandingAmount:d(5)},[{...rtv,settlementPayableAmount:d(5),settlementClaimAmount:d(9)}]);
+assert.equal(partialClaimCapacity.reserved.toFixed(),"5");assert.equal(partialClaimCapacity.available.toFixed(),"0");
+const fullClaimCapacity=returnCredit.supplierReturnPayableCapacity({currencyCode:"USD",outstandingAmount:d(0)},[{...rtv,settlementPayableAmount:d(0),settlementClaimAmount:d(14)}]);
+assert.equal(fullClaimCapacity.reserved.toFixed(),"0");assert.equal(fullClaimCapacity.available.toFixed(),"0");
+assert.throws(()=>returnCredit.supplierReturnPayableCapacity({currencyCode:"USD",outstandingAmount:d(5)},[{...rtv,settlementPayableAmount:d(5),settlementClaimAmount:d(10)}]),{code:"SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED"});
 assert.equal(returnCredit.supplierReturnPayableCapacity({currencyCode:"USD",outstandingAmount:d(56)},[]).available.toFixed(),"56");
 assert.throws(()=>returnCredit.supplierReturnPayableCapacity({currencyCode:"CDF",outstandingAmount:d(70)},[rtv]),{code:"SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED"});
 const projection=await returnCredit.supplierReturnFinanceProjectionTx({enterpriseSupplierReturnRequest:{findMany:async({where,select})=>{assert.equal(where.organizationId,"org-a");assert.deepEqual([...where.supplierInvoiceId.in],["invoice-a"]);assert.equal(select.reason,undefined);return [rtv];}}},"org-a",["invoice-a"]);

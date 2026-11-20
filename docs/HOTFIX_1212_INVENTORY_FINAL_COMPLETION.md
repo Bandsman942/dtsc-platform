@@ -35,6 +35,8 @@ Le paiement d'origine prouvé, la ventilation figée et le compte sont contrôl�
 
 Restrictions : même devise fonctionnelle, preuves ordinaires déjà acceptées, un seul retour avec créance par facture (les précédents retours dette-only restent éligibles), aucun remboursement ni compensation active. Les anciens cas restent conservés. La résolution du compte, le remboursement/compensation, les rapports et les parcours multi-origines exigent encore leur certification et ne sont pas annoncés prêts. La PR reste en brouillon.
 
+Recette HTTP/PostgreSQL ajoutée sur les factures de 70 payées 70 ou 65, retours de 14 (créance 14 ou 9, dette imputée 0 ou 5), refus avant mapping, écriture dédiée, absence de trésorerie supplémentaire, rejeu et protection des contrepassations. Configuration directe du mapping dans la fixture isolée uniquement; aucune certification encore exécutée. Finance affiche la créance distincte et réserve uniquement la part de dette; exports enrichis.
+
 ## Programme restant (aucune certification implicite)
 
 1. Créance fournisseur canonique : preuve et registre, posting partie double, règlement par remboursement ou compensation approuvée, capacité et concurrence, avoir partiel/intégral sur facture payée.

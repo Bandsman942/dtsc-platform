@@ -68,7 +68,7 @@ type InvoiceRecord = FinanceRecord & {
   outstandingAmount?: string | number;
   supplierReturnReservedAmount?: string;
   supplierReturnAllocatableAmount?: string;
-  supplierReturn?: { id:string; reference:string; status:string; purchaseId:string; sourceMovementId:string; currencyCode:string; totalCost:string; recoverableTaxAmount?:string; supplierCreditNoteId:string|null } | null;
+  supplierReturn?: { id:string; reference:string; status:string; purchaseId:string; sourceMovementId:string; currencyCode:string; totalCost:string; recoverableTaxAmount?:string; supplierCreditNoteId:string|null; settlementPayableAmount?:string|null; settlementClaimAmount?:string|null } | null;
   salesInvoiceId?: string;
   supplierInvoiceId?: string;
   replacementCreditNoteId?: string|null;
@@ -223,6 +223,7 @@ export function EnterpriseFinanceInvoicesWorkspace(props: Props) {
     ...(!isReceivables && endpointName !== "supplier-credit-notes" ? [
       { key: "returnReserved", labelFr: purchaseFormGuidance("fr","returnFinanceExportReserved"),labelEn:purchaseFormGuidance("en","returnFinanceExportReserved"),get:(row:Record<string,unknown>)=>String(row.supplierReturnReservedAmount ?? "") },
       { key: "returnAllocatable", labelFr: purchaseFormGuidance("fr","returnFinanceExportAllocatable"),labelEn:purchaseFormGuidance("en","returnFinanceExportAllocatable"),get:(row:Record<string,unknown>)=>String(row.supplierReturnAllocatableAmount ?? "") },
+      { key: "returnClaim", labelFr: purchaseFormGuidance("fr","returnSettlementRecognized"),labelEn:purchaseFormGuidance("en","returnSettlementRecognized"),get:(row:Record<string,unknown>)=>{const linked=row.supplierReturn as InvoiceRecord["supplierReturn"];return linked?.status==="RECONCILED"?String(linked.settlementClaimAmount ?? ""):"";} },
     ] : []),
   ];
   const { summary, error: summaryError } = useOperationalFinanceSummary(organizationId, moduleCode, refreshKey);
@@ -491,10 +492,11 @@ export function EnterpriseFinanceInvoicesWorkspace(props: Props) {
           <FinanceDetailGrid>
             <FinanceDetailValue label={purchaseFormGuidance(locale,"returnCreditStockValue")}>{financeMoney(detail.supplierReturn.totalCost,String(detail.currencyCode),locale)}</FinanceDetailValue>
             {Number(detail.supplierReturn.recoverableTaxAmount)>0?<FinanceDetailValue label={purchaseFormGuidance(locale,"returnCreditRecoverableTax")}>{financeMoney(detail.supplierReturn.recoverableTaxAmount,String(detail.currencyCode),locale)}</FinanceDetailValue>:null}
+            {detail.supplierReturn.settlementClaimAmount?<><FinanceDetailValue label={purchaseFormGuidance(locale,"returnSettlementPayableReduction")}>{financeMoney(detail.supplierReturn.settlementPayableAmount,String(detail.currencyCode),locale)}</FinanceDetailValue><FinanceDetailValue label={purchaseFormGuidance(locale,detail.supplierReturn.status==="RECONCILED"?"returnSettlementRecognized":"returnSettlementClaim")}>{financeMoney(detail.supplierReturn.settlementClaimAmount,String(detail.currencyCode),locale)}</FinanceDetailValue></>:null}
             <FinanceDetailValue label={purchaseFormGuidance(locale,"returnFinanceReserved")}>{financeMoney(detail.supplierReturnReservedAmount,String(detail.currencyCode),locale)}</FinanceDetailValue>
             <FinanceDetailValue label={purchaseFormGuidance(locale,"returnFinanceAllocatable")}>{financeMoney(detail.supplierReturnAllocatableAmount,String(detail.currencyCode),locale)}</FinanceDetailValue>
           </FinanceDetailGrid>
-          <p className="text-xs text-dtsc-muted">{purchaseFormGuidance(locale,detail.supplierReturn.status==="RECONCILED"?"returnFinanceMatched":"returnFinanceExplain")}</p>
+          <p className="text-xs text-dtsc-muted">{purchaseFormGuidance(locale,detail.supplierReturn.settlementClaimAmount?(detail.supplierReturn.status==="RECONCILED"?"returnFinanceClaimMatched":"returnSettlementClaimReadyHelp"):detail.supplierReturn.status==="RECONCILED"?"returnFinanceMatched":"returnFinanceExplain")}</p>
           <div data-responsive-actions className="flex min-w-0 flex-wrap gap-2">
             <a className="break-words text-sm text-dtsc-blue underline" href={`/enterprise-modules/SUPPLIERS_PURCHASES?purchase=${encodeURIComponent(detail.supplierReturn.purchaseId)}&returnMovement=${encodeURIComponent(detail.supplierReturn.sourceMovementId)}`}>{purchaseFormGuidance(locale,"returnFinanceSource")}</a>
             {detail.supplierReturn.supplierCreditNoteId?<a className="break-words text-sm text-dtsc-blue underline" href={`/enterprise-modules/FINANCE_PAYABLES?supplierCreditNoteId=${encodeURIComponent(detail.supplierReturn.supplierCreditNoteId)}`}>{purchaseFormGuidance(locale,"returnCreditReview")}</a>:null}

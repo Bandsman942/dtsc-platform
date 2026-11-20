@@ -13,27 +13,34 @@ export async function lockSupplierReturnInvoiceTx(tx: Prisma.TransactionClient, 
 }
 
 type PayableCapacityInput = { outstandingAmount: Prisma.Decimal; currencyCode: string };
-type ReservedReturn = { totalCost: Prisma.Decimal; recoverableTaxAmount: Prisma.Decimal; currencyCode: string };
+type ReservedReturn = { totalCost: Prisma.Decimal; recoverableTaxAmount: Prisma.Decimal; currencyCode: string; settlementPayableAmount?: Prisma.Decimal|null; settlementClaimAmount?: Prisma.Decimal|null };
 
 export function supplierReturnPayableCapacity(payable: PayableCapacityInput, pending: ReservedReturn[]) {
   if (pending.some(row => row.currencyCode !== payable.currencyCode)) return fail();
-  const reserved = pending.reduce((sum,row) => sum.plus(row.totalCost).plus(row.recoverableTaxAmount),new Prisma.Decimal(0));
+  const reserved = pending.reduce((sum,row) => {
+    const gross=row.totalCost.plus(row.recoverableTaxAmount);
+    if(row.settlementClaimAmount?.gt(0)){
+      if(!row.settlementPayableAmount || row.settlementPayableAmount.lt(0) || !row.settlementPayableAmount.plus(row.settlementClaimAmount).equals(gross)) return fail();
+      return sum.plus(row.settlementPayableAmount);
+    }
+    return sum.plus(gross);
+  },new Prisma.Decimal(0));
   return { reserved, available:Prisma.Decimal.max(0,payable.outstandingAmount.minus(reserved)) };
 }
 
 /** Page-bounded summary, never expose return motives or approval identities
  * to a Finance-only reader. Call inside the same snapshot as the balances. */
 export async function supplierReturnFinanceProjectionTx(tx: Prisma.TransactionClient, organizationId: string, invoiceIds: string[]) {
-  if (!invoiceIds.length) return new Map<string, { id:string; reference:string; status:string; purchaseId:string; sourceMovementId:string; totalCost:Prisma.Decimal; recoverableTaxAmount:Prisma.Decimal; currencyCode:string; supplierCreditNoteId:string|null }>();
+  if (!invoiceIds.length) return new Map<string, { id:string; reference:string; status:string; purchaseId:string; sourceMovementId:string; totalCost:Prisma.Decimal; recoverableTaxAmount:Prisma.Decimal; currencyCode:string; supplierCreditNoteId:string|null; settlementPayableAmount:Prisma.Decimal|null; settlementClaimAmount:Prisma.Decimal|null }>();
   const rows = await tx.enterpriseSupplierReturnRequest.findMany({where:{organizationId,supplierInvoiceId:{in:invoiceIds},status:{in:["DISPATCHED","RECONCILED"]}},
     orderBy:[{status:"asc"},{dispatchedAt:"desc"},{id:"desc"}],
-    select:{id:true,supplierInvoiceId:true,reference:true,status:true,purchaseId:true,sourceMovementId:true,totalCost:true,recoverableTaxAmount:true,currencyCode:true,supplierCreditNoteId:true}});
+    select:{id:true,supplierInvoiceId:true,reference:true,status:true,purchaseId:true,sourceMovementId:true,totalCost:true,recoverableTaxAmount:true,currencyCode:true,supplierCreditNoteId:true,settlementPayableAmount:true,settlementClaimAmount:true}});
   // DISPATCHED sorts before RECONCILED; retain the active reservation or latest closed return.
   return new Map(rows.slice().reverse().map(row=>[row.supplierInvoiceId,row]));
 }
 
 export async function assertSupplierPaymentCapacityTx(tx: Prisma.TransactionClient, organizationId: string, payable: { supplierInvoiceId: string; outstandingAmount: Prisma.Decimal; currencyCode: string }, amount: Prisma.Decimal) {
-  const pending = await tx.enterpriseSupplierReturnRequest.findMany({ where: { organizationId, supplierInvoiceId: payable.supplierInvoiceId, status: "DISPATCHED" }, select: { totalCost: true, recoverableTaxAmount: true, currencyCode: true } });
+  const pending = await tx.enterpriseSupplierReturnRequest.findMany({ where: { organizationId, supplierInvoiceId: payable.supplierInvoiceId, status: "DISPATCHED" }, select: { totalCost: true, recoverableTaxAmount: true, currencyCode: true, settlementPayableAmount:true, settlementClaimAmount:true } });
   if (!pending.length) return;
   const { reserved, available } = supplierReturnPayableCapacity(payable, pending);
   if (amount.gt(available)) throw new EnterpriseAccountingError("SUPPLIER_RETURN_PAYABLE_RESERVED", 409, { reservedAmount: reserved.toFixed(), allocatableAmount: available.toFixed(), currencyCode: payable.currencyCode });
