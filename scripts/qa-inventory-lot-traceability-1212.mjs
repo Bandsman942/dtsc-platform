@@ -237,7 +237,18 @@ const rtvTx = {
   },
   enterpriseApproval: { findFirst: async () => approvalRtv },
   enterpriseApprovalDecision: { findFirst: async () => approvalEvidence ? { id: "decision-a" } : null },
-  enterprisePayable: { findUnique: async () => ({ organizationId: "org-a", outstandingAmount: payableBalance }) },
+  enterprisePayable: {
+    findUnique: async () => ({ organizationId: "org-a", outstandingAmount: payableBalance }),
+    findFirst: async ({where}) => {
+      assert.equal(where.organizationId,"org-a"); assert.equal(where.supplierInvoiceId,"invoice-a");
+      return { id:"payable-a", supplierId:"supplier-a", businessPartyId:null, currencyCode:"USD", originalAmount:d(70),
+        allocatedAmount:d(70).minus(payableBalance), creditedAmount:d(0), outstandingAmount:payableBalance, status:payableBalance.isZero()?"CLOSED":"OPEN" };
+    },
+  },
+  enterprisePayableAllocation: {
+    groupBy: async ({where}) => { assert.equal(where.organizationId,"org-a"); assert.equal(where.payableId,"payable-a"); return [{sourceType:"PAYMENT",_sum:{amount:d(70).minus(payableBalance)}}]; },
+    count: async () => 0,
+  },
   enterpriseInventoryCostLayer: { updateMany: async ({ where, data }) => {
     assert.equal(where.id, "origin-layer-a"); assert.ok(where.remainingQuantity.equals.equals(quantityRemaining));
     assert.ok(data.remainingQuantity.decrement.equals(2)); quantityRemaining = quantityRemaining.minus(data.remainingQuantity.decrement);
@@ -263,9 +274,9 @@ mocks["@/lib/enterprise/inventory/supplier-return-preflight"] = {
   assertSupplierReturnAccess: async () => {},
   inspectSupplierReturnTx: async (_tx, org, actor, input) => {
     assert.equal(org,"org-a"); assert.equal(actor,"requester"); assert.equal(input.supplierReturnSourceMovementId,"receipt-movement-a");
-    return { receipt:{id:"receipt-a",purchaseId:"po-a"}, receiptItem:{id:"receipt-item-a"}, invoice:{id:"invoice-a",supplierId:"supplier-a"}, invoiceItem:{id:"invoice-item-a"},
+    return { receipt:{id:"receipt-a",purchaseId:"po-a"}, receiptItem:{id:"receipt-item-a"}, invoice:{id:"invoice-a",organizationId:"org-a",supplierId:"supplier-a",businessPartyId:null,currencyCode:"USD",grandTotal:d(70),amountPaid:d(70).minus(payableBalance),amountCredited:d(0),outstandingAmount:payableBalance}, invoiceItem:{id:"invoice-item-a"},
       receiptValue:{id:"receipt-event-a"}, originLayer:{id:"origin-layer-a",remainingQuantity:quantityRemaining},
-      unitCost:d(7),totalCost:d(14),recoverableTaxAmount:d(0),currencyCode:"USD" };
+      unitCost:d(7),totalCost:d(14),recoverableTaxAmount:d(0),creditTotal:d(14),currencyCode:"USD" };
   },
 };
 mocks["@/lib/enterprise/accounting/helpers"] = { idempotencyKey: () => "value-a", publishFinanceEvent: async () => { writes.push("audit"); } };
@@ -283,6 +294,8 @@ mocks["@/lib/enterprise/accounting/posting-service"] = {
   },
 };
 mocks["@/lib/enterprise/accounting/errors"] = { EnterpriseAccountingError: TestDomainError };
+const settlement = load("lib/enterprise/accounting/supplier-return-settlement.ts");
+mocks["@/lib/enterprise/accounting/supplier-return-settlement"] = settlement;
 const returnSvc = load("lib/enterprise/inventory/supplier-return-request-service.ts");
 const qtySchema = returnSvc.supplierReturnRequestSchema.shape.quantity;
 for (const quantity of ["2","1.125","0.001","999999999999.999"]) assert.equal(qtySchema.safeParse(quantity).success,true);
@@ -293,6 +306,27 @@ canManageValue=false;
 await assert.rejects(doDispatch(),{code:"SUPPLIER_RETURN_DISPATCH_DENIED"});
 canManageValue=true; payableBalance=d(10);
 await assert.rejects(doDispatch(),{code:"SUPPLIER_RETURN_PAYABLE_INSUFFICIENT"});
+// The same reader is used by previews and mutations: no negative debt,
+ // no source from another tenant and no projection without allocations.
+const settlementInvoice = () => ({id:"invoice-a",organizationId:"org-a",supplierId:"supplier-a",businessPartyId:null,currencyCode:"USD",grandTotal:d(70),amountPaid:d(70).minus(payableBalance),amountCredited:d(0),outstandingAmount:payableBalance});
+payableBalance=d(0);
+const fullClaim=await settlement.readSupplierReturnSettlementTx(rtvTx,"org-a",settlementInvoice(),d(14),"USD");
+assert.equal(fullClaim.supplierClaim.toFixed(),"14");
+assert.equal(fullClaim.remainingPayable.toFixed(),"0");
+await assert.rejects(doDispatch(),{code:"SUPPLIER_RETURN_PAYABLE_INSUFFICIENT"});
+assert.equal(writes.length,0);
+payableBalance=d(10);
+const partClaim=await settlement.readSupplierReturnSettlementTx(rtvTx,"org-a",settlementInvoice(),d(14),"USD");
+assert.equal(partClaim.payableReduction.toFixed(),"10");
+assert.equal(partClaim.supplierClaim.toFixed(),"4");
+await assert.rejects(settlement.readSupplierReturnSettlementTx(rtvTx,"org-a",{...settlementInvoice(),amountPaid:d(59)},d(14),"USD"),{code:"SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED"});
+await assert.rejects(settlement.readSupplierReturnSettlementTx(rtvTx,"org-a",{...settlementInvoice(),organizationId:"org-b"},d(14),"USD"),{code:"SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED"});
+const canonicalGroup=rtvTx.enterprisePayableAllocation.groupBy;
+try {
+  rtvTx.enterprisePayableAllocation.groupBy=async()=>[];
+  await assert.rejects(doDispatch(),{code:"SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED"});
+  assert.equal(writes.length,0);
+} finally {rtvTx.enterprisePayableAllocation.groupBy=canonicalGroup;}
 payableBalance=d(70); approvalEvidence=false;
 await assert.rejects(doDispatch(),{code:"SUPPLIER_RETURN_DISPATCH_DENIED"});
 approvalEvidence=true; rtv={...approvedRtv,status:"PENDING_APPROVAL"};
@@ -346,7 +380,7 @@ for (const [credit, outstanding, reduction, claim, remaining] of [
   ["200", "1000", "200", "0", "800"],
   ["16.240001", "0.000001", "0.000001", "16.24", "0"],
 ]) {
-  const split = returnCredit.splitSupplierReturnSettlement({creditTotal:new Prisma.Decimal(credit),outstandingAmount:new Prisma.Decimal(outstanding)});
+  const split = settlement.splitSupplierReturnSettlement({creditTotal:new Prisma.Decimal(credit),outstandingAmount:new Prisma.Decimal(outstanding)});
   assert.equal(split.payableReduction.toFixed(), reduction);
   assert.equal(split.supplierClaim.toFixed(), claim);
   assert.equal(split.remainingPayable.toFixed(), remaining);
@@ -354,7 +388,7 @@ for (const [credit, outstanding, reduction, claim, remaining] of [
   assert.ok(split.payableReduction.plus(split.supplierClaim).equals(credit));
 }
 for (const [credit, outstanding] of [["0","0"],["-1","1"],["1","-1"],["1.0000001","1"],["1","0.0000001"],["NaN","1"]]) {
-  assert.throws(() => returnCredit.splitSupplierReturnSettlement({creditTotal:new Prisma.Decimal(credit),outstandingAmount:new Prisma.Decimal(outstanding)}), {code:"SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED"});
+  assert.throws(() => settlement.splitSupplierReturnSettlement({creditTotal:new Prisma.Decimal(credit),outstandingAmount:new Prisma.Decimal(outstanding)}), {code:"SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED"});
 }
 mocks["@/lib/enterprise/accounting/supplier-return-credit-reconciliation"] = returnCredit;
 const inventoryAccounting=load("lib/enterprise/accounting/inventory-accounting-service.ts");

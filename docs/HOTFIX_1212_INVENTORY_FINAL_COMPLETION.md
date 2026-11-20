@@ -15,6 +15,12 @@ Sur la seule origine déjà admissible, calcul exact : dette imputable = min(avo
 - [ ] Lecture sans mutation, accès inter-tenant/site refusé, FR/EN, clair/sombre, mobile 320px.
 - [ ] Période verrouillée, rejeu/concurrence, garde d’expédition inchangée.
 
+## Lot 1B — concordance des allocations et garde serveur (DRAFT)
+
+Le diagnostic et les transitions de demande, approbation et expédition partagent maintenant le lecteur canonique de ventilation. Il contrôle les identités du fournisseur/tiers, devise, montant initial, montants payés/crédités, solde, statut et agrégats d'allocations CONFIRMED non inversées. Une allocation inconnue, non positive ou marquée inversée tout en restant confirmée bloque. Le diagnostic reste en RepeatableRead et les mutations Serializable, avec verrou facture existant à l'expédition. Les nouvelles demandes non couvertes sont refusées 409, tout comme leur approbation si la dette a diminué; rejet/retrait et rejeu exact conservent leur logique. Aucun nouveau posting, droit, registre ou migration. Le lecteur ne prouve pas encore les journaux, paiements ou flux de trésorerie de chaque allocation.
+
+QA isolée étendue : dette nulle/partielle, projection divergente, tenant étranger, allocation manquante et absence d'écriture après refus. Nouvelle certification CI et E2E restent obligatoires.
+
 ## Programme restant (aucune certification implicite)
 
 1. Créance fournisseur canonique : preuve et registre, posting partie double, règlement par remboursement ou compensation approuvée, capacité et concurrence, avoir partiel/intégral sur facture payée.

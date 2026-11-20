@@ -21,22 +21,6 @@ export function supplierReturnPayableCapacity(payable: PayableCapacityInput, pen
   return { reserved, available:Prisma.Decimal.max(0,payable.outstandingAmount.minus(reserved)) };
 }
 
-/** Indicative settlement split for the exact historical credit (including
- * applicable tax). Not an allocation, a receivable or a posting permission.
- * Recompute within the invoice lock before any future settlement mutation. */
-export function splitSupplierReturnSettlement(input: {
-  creditTotal: Prisma.Decimal; outstandingAmount: Prisma.Decimal;
-}) {
-  const { creditTotal, outstandingAmount } = input;
-  if (!creditTotal.isFinite() || !outstandingAmount.isFinite() ||
-      !creditTotal.gt(0) || outstandingAmount.lt(0) ||
-      creditTotal.decimalPlaces() > 6 || outstandingAmount.decimalPlaces() > 6) return fail();
-  const payableReduction = Prisma.Decimal.min(creditTotal, outstandingAmount);
-  const supplierClaim = creditTotal.minus(payableReduction);
-  return { payableReduction, supplierClaim, remainingPayable: outstandingAmount.minus(payableReduction),
-    requiresSupplierClaim: supplierClaim.gt(0) };
-}
-
 /** Page-bounded summary, never expose return motives or approval identities
  * to a Finance-only reader. Call inside the same snapshot as the balances. */
 export async function supplierReturnFinanceProjectionTx(tx: Prisma.TransactionClient, organizationId: string, invoiceIds: string[]) {

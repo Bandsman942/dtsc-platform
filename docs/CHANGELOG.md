@@ -1,5 +1,7 @@
 ## 2026-11-20 — Suite #1212 — v1.23.5 candidate (DRAFT)
 
+- Lot 1B : lecteur commun de concordance facture/dette/allocations confirmées, refus serveur précoce des demandes et approbations non couvertes; recontrôle avant expédition sous verrou facture. Tests de dette nulle, insuffisance, projections divergentes et allocations manquantes. Aucun posting, migration ou créance nouvelle; CI à renouveler.
+
 - Lot 1A : diagnostic en lecture seule de la ventilation d’un avoir fournisseur entre dette ouverte et créance potentielle, en Decimal à six décimales, rapprochement facture/dette dans le même snapshot, FR/EN et désactivation du formulaire de demande dans ce cas. Aucun nouveau droit d’expédier, aucun avoir/solde/journal/encaissement créé. Tests de ventilation ajoutés à la QA #1212; CI et recette manuelle à exécuter. Les huit lots restent ouverts.
 
 ## 2026-11-17 / 18 — Hotfix stock/lots #1212 — v1.23.4 candidate (DRAFT)
