@@ -7,6 +7,7 @@ import { enterpriseDomainErrorResponse, enterpriseValidationErrorResponse } from
 import { EnterpriseDomainError } from "@/lib/enterprise/common/errors";
 import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
 import { readSupplierReturnSettlementTx } from "@/lib/enterprise/accounting/supplier-return-settlement";
+import { proveSupplierReturnPaidAmountTx } from "@/lib/enterprise/accounting/supplier-return-payment-proof";
 import { resolveEnterpriseModuleCapabilities } from "@/lib/enterprise/module-access";
 import { formatEnterpriseBusinessDate, getEnterpriseBusinessContext } from "@/lib/enterprise/business-context";
 import { assertSupplierReturnAccess, inspectSupplierReturnTx } from "@/lib/enterprise/inventory/supplier-return-preflight";
@@ -61,9 +62,21 @@ export async function GET(req: Request, { params }: Params) {
         const check = await inspectSupplierReturnTx(tx, organizationId, session.userId, { ...origin, supplierReturnSourceMovementId: origin.id, quantity });
         if (check.receipt.purchaseId !== id) throw new EnterpriseDomainError("SUPPLIER_RETURN_ORIGIN_INVALID", 404);
         const split = await readSupplierReturnSettlementTx(tx, organizationId, check.invoice, check.creditTotal, check.currencyCode);
+        let paymentProof: "NOT_REQUIRED" | "PROVEN" | "UNPROVEN" = "NOT_REQUIRED";
+        if (split.requiresSupplierClaim) {
+          try {
+            await proveSupplierReturnPaidAmountTx(tx, { organizationId, invoiceId: check.invoice.id,
+              supplierId: check.invoice.supplierId, businessPartyId: check.invoice.businessPartyId, currencyCode: check.currencyCode,
+              amountPaid: check.invoice.amountPaid, claimAmount: split.supplierClaim });
+            paymentProof = "PROVEN";
+          } catch (error) {
+            if (!(error instanceof EnterpriseAccountingError) || error.status !== 409) throw error;
+            paymentProof = "UNPROVEN";
+          }
+        }
         return { eligible: true, readOnly: true, quantity, remaining: check.remaining.toFixed(),
           settlement: { payableReduction: split.payableReduction.toFixed(), supplierClaim: split.supplierClaim.toFixed(),
-            remainingPayable: split.remainingPayable.toFixed(), requiresSupplierClaim: split.requiresSupplierClaim },
+            remainingPayable: split.remainingPayable.toFixed(), requiresSupplierClaim: split.requiresSupplierClaim, paymentProof },
           unitCost: check.unitCost.toFixed(), creditUnitPrice: check.creditUnitPrice.toFixed(), nonrecoverableTaxAmount: check.nonrecoverableTaxAmount.toFixed(), totalCost: check.totalCost.toFixed(), recoverableTaxAmount: check.recoverableTaxAmount.toFixed(), creditTotal: check.creditTotal.toFixed(), currencyCode: check.currencyCode,
           receiptReference: check.receipt.reference, invoiceReference: check.invoice.number };
       }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });

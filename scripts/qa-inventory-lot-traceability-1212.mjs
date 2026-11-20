@@ -373,6 +373,45 @@ rtvTx.enterpriseFinanceConfiguration={findUnique:async()=>({functionalCurrencyCo
 mocks["@/lib/enterprise/accounting/helpers"]={...mocks["@/lib/enterprise/accounting/helpers"],money:value=>d(value).toDecimalPlaces(6,Prisma.Decimal.ROUND_HALF_UP),sumDecimals:values=>values.reduce((sum,value)=>sum.plus(value),d(0))};
 mocks["@/lib/enterprise/accounting/historical-credit-tax"]=load("lib/enterprise/accounting/historical-credit-tax.ts");
 const returnCredit = load("lib/enterprise/accounting/supplier-return-credit-reconciliation.ts");
+const supplierPaymentProof = load("lib/enterprise/accounting/supplier-return-payment-proof.ts");
+{
+  const date=new Date("2026-11-19T00:00:00Z"), confirmed=new Date("2026-11-19T10:00:00Z"), allocatedAt=new Date("2026-11-19T11:00:00Z");
+  const payment={id:"pay-proof",organizationId:"org-a",businessPartyId:"party-a",currencyCode:"USD",paymentType:"SUPPLIER_PAYMENT",direction:"OUTBOUND",status:"CONFIRMED",confirmedAt:confirmed,confirmedByUserId:"actor",reversedAt:null,amount:d(70),unallocatedAmount:d(0),financialAccountId:"bank-a",paymentDate:date};
+  const allocation={id:"alloc-proof",organizationId:"org-a",paymentId:payment.id,payableId:"debt-a",receivableId:null,status:"CONFIRMED",reversedAt:null,amount:d(70),allocatedAt,payment};
+  const link={id:"link-proof",sourceId:allocation.id,amount:d(70)};
+  const line=(ledgerAccountId, debit, credit)=>({organizationId:"org-a",ledgerAccountId,businessPartyId:"party-a",transactionCurrencyCode:"USD",transactionAmount:d(70),exchangeRate:d(1),functionalAmount:d(70),debit:d(debit),credit:d(credit)});
+  const journal=(id,sourceEntityType,sourceEntityId,postingEvent,lines)=>({id,organizationId:"org-a",sourceEntityType,sourceEntityId,postingEvent,postingVersion:1,status:"POSTED",postedAt:date,reversedAt:null,reversalOfEntryId:null,functionalCurrencyCode:"USD",totalDebit:d(70),totalCredit:d(70),accountingDate:date,lines});
+  const paidJournal=journal("paid-j","EnterprisePayment",payment.id,"SUPPLIER_PAYMENT_CONFIRMED",[line("SUPPLIER_ADVANCES",70,0),line("bank-ledger",0,70)]);
+  const allocatedJournal=journal("allocated-j","EnterprisePaymentAllocation",allocation.id,"PAYMENT_ALLOCATION_CONFIRMED",[line("ACCOUNTS_PAYABLE",70,0),line("SUPPLIER_ADVANCES",0,70)]);
+  const treasury={paymentId:payment.id,financialAccountId:"bank-a",direction:"OUTBOUND",transactionType:"SUPPLIER_PAYMENT",status:"CONFIRMED",reversedAt:null,currencyCode:"USD",amount:d(70),transactionDate:date};
+  let journals=[paidJournal,allocatedJournal], movements=[treasury], reversalCount=0, linkRows=[link], allocationRows=[allocation];
+  const dbProof={
+    enterprisePayable:{findFirst:async({where})=>{assert.equal(where.organizationId,"org-a");assert.equal(where.supplierInvoiceId,"invoice-a");return {id:"debt-a",supplierId:"supplier-a",businessPartyId:"party-a",currencyCode:"USD",allocatedAmount:d(70)};}},
+    enterpriseFinanceConfiguration:{findUnique:async()=>({functionalCurrencyCode:"USD"})},
+    enterprisePayableAllocation:{findMany:async()=>linkRows},
+    enterprisePaymentAllocation:{findMany:async()=>allocationRows},
+    enterpriseTreasuryTransaction:{findMany:async()=>movements},
+    enterpriseJournalEntry:{findMany:async()=>journals},
+    enterpriseFinancialAccount:{findMany:async()=>[{id:"bank-a",ledgerAccountId:"bank-ledger",currencyCode:"USD"}]},
+    enterpriseJournalReversal:{count:async()=>reversalCount},
+  };
+  const input={organizationId:"org-a",invoiceId:"invoice-a",supplierId:"supplier-a",businessPartyId:"party-a",currencyCode:"USD",amountPaid:d(70),claimAmount:d(14)};
+  const proof=()=>supplierPaymentProof.proveSupplierReturnPaidAmountTx(dbProof,input);
+  const verified=await proof();
+  assert.equal(verified.provenPaidAmount.toFixed(),"70"); assert.equal(verified.paymentCount,1);
+  const rejects=()=>assert.rejects(proof(),{code:"SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED"});
+  reversalCount=1;await rejects();reversalCount=0;
+  movements=[];await rejects();movements=[treasury];
+  journals=[paidJournal];await rejects();journals=[paidJournal,allocatedJournal];
+  journals=[paidJournal,{...allocatedJournal,lines:[line("WRONG",70,0),line("SUPPLIER_ADVANCES",0,70)]}];await rejects();journals=[paidJournal,allocatedJournal];
+  journals=[{...paidJournal,functionalCurrencyCode:"CDF"},allocatedJournal];await rejects();journals=[paidJournal,allocatedJournal];
+  linkRows=[link,link];await rejects();linkRows=[link];
+  allocationRows=[{...allocation,payment:{...payment,businessPartyId:"party-b"}}];await rejects();allocationRows=[allocation];
+  await assert.rejects(supplierPaymentProof.proveSupplierReturnPaidAmountTx(dbProof,{...input,claimAmount:d(71)}),{code:"SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED"});
+  await assert.rejects(supplierPaymentProof.proveSupplierReturnPaidAmountTx(dbProof,{...input,businessPartyId:null}),{code:"SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED"});
+  assert.equal((await proof()).paymentCount,1);
+}
+
 for (const [credit, outstanding, reduction, claim, remaining] of [
   ["200", "0", "0", "200", "0"],
   ["200", "50", "50", "150", "0"],

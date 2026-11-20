@@ -21,6 +21,12 @@ Le diagnostic et les transitions de demande, approbation et expédition partagen
 
 QA isolée étendue : dette nulle/partielle, projection divergente, tenant étranger, allocation manquante et absence d'écriture après refus. Nouvelle certification CI et E2E restent obligatoires.
 
+## Lot 1C.1 — preuve du paiement d’origine (DRAFT)
+
+Avant toute reconnaissance de créance, le diagnostic rapproche les allocations de dette avec leurs allocations de paiement et les paiements fournisseur OUTBOUND confirmés, les mouvements de trésorerie exacts et les journaux de paiement et d'allocation POSTED v1 non contrepassés. Périmètre initial : devise fonctionnelle, tiers explicite, paiement initial en avance à deux lignes puis imputation sur dette à deux lignes, taux 1, compte de trésorerie et mappings sémantiques concordants. Maximum 100 allocations, refus des sources ambiguës et écarts. Le diagnostic expose uniquement un état de preuve FR/EN; aucune référence bancaire, aucune nouvelle mutation ni écriture. Un résultat PROVEN ne constitue pas encore une créance reconnue et ne débloque pas l'expédition. Une preuve absente ou hors périmètre est signalée UNPROVEN, jamais convertie en zéro.
+
+Le registre de créances et son posting ne sont pas encore raccordés : ils devront consommer cette preuve en transaction, y compris la protection contre les doubles imputations et le règlement futur. Aucune table inutilisée ajoutée dans cette tranche. Tests isolés de preuve positive, absence de trésorerie/journal, contrepassation, mauvais compte, FX, doublon, tiers différent et montant excessif ajoutés. CI/E2E à renouveler.
+
 ## Programme restant (aucune certification implicite)
 
 1. Créance fournisseur canonique : preuve et registre, posting partie double, règlement par remboursement ou compensation approuvée, capacité et concurrence, avoir partiel/intégral sur facture payée.

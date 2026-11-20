@@ -21,7 +21,7 @@ type TraceRow = {
 };
 type TraceResponse = { items: TraceRow[]; canCheckSupplierReturn?: boolean; pagination: { page: number; pageSize: number; total: number; pageCount: number } };
 
-type ReturnPreview = { eligible: true; readOnly: true; settlement: { payableReduction: string; supplierClaim: string; remainingPayable: string; requiresSupplierClaim: boolean }; quantity: string; remaining: string; unitCost: string; creditUnitPrice: string; nonrecoverableTaxAmount: string; totalCost: string; recoverableTaxAmount: string; creditTotal: string; currencyCode: string; receiptReference: string; invoiceReference: string; canSubmitRequest?: boolean };
+type ReturnPreview = { eligible: true; readOnly: true; settlement: { payableReduction: string; supplierClaim: string; remainingPayable: string; requiresSupplierClaim: boolean; paymentProof: "NOT_REQUIRED" | "PROVEN" | "UNPROVEN" }; quantity: string; remaining: string; unitCost: string; creditUnitPrice: string; nonrecoverableTaxAmount: string; totalCost: string; recoverableTaxAmount: string; creditTotal: string; currencyCode: string; receiptReference: string; invoiceReference: string; canSubmitRequest?: boolean };
 
 function SupplierReturnCheck({ organizationId, purchaseId, row, locale, onRefresh }: { organizationId: string; purchaseId: string; row: TraceRow; locale: string; onRefresh: () => void }) {
   const t = (key: PurchaseFormGuidanceKey) => purchaseFormGuidance(locale, key);
@@ -180,7 +180,10 @@ function SupplierReturnCheck({ organizationId, purchaseId, row, locale, onRefres
         <p>{t("returnSettlementPayableReduction")} : <strong>{money(preview.settlement.payableReduction, preview.currencyCode)}</strong></p>
         <p>{t("returnSettlementRemainingPayable")} : <strong>{money(preview.settlement.remainingPayable, preview.currencyCode)}</strong></p>
         <p>{t("returnSettlementClaim")} : <strong>{money(preview.settlement.supplierClaim, preview.currencyCode)}</strong></p>
-        {preview.settlement.requiresSupplierClaim ? <p role="alert" className="break-words text-amber-700 dark:text-amber-300">{t("returnSettlementClaimHelp")}</p> : null}
+        {preview.settlement.requiresSupplierClaim ? <>
+          <p className="break-words">{t(preview.settlement.paymentProof === "PROVEN" ? "returnSettlementPaymentProven" : "returnSettlementPaymentUnproven")}</p>
+          <p role="alert" className="break-words text-amber-700 dark:text-amber-300">{t("returnSettlementClaimHelp")}</p>
+        </> : null}
         <p className="text-dtsc-muted">{t("returnCheckHelp")}</p>
         {preview.canSubmitRequest ? <form onSubmit={submitReturn} className="mt-2 grid min-w-0 grid-cols-[minmax(0,1fr)] gap-2 border-t border-dtsc-border pt-2">
           <strong>{t("returnRequestTitle")}</strong><p className="text-dtsc-muted">{t("returnRequestHelp")}</p>
