@@ -183,6 +183,7 @@ export async function readSupplierClaimCompensationTargetTx(
   tx: Prisma.TransactionClient, organizationId: string,
   proof: Awaited<ReturnType<typeof readSupplierClaimRefundEvidenceTx>>,
   payableId: string,
+  intent?: { amount: string; accountingDate: string },
 ) {
   const reject = (): never => { throw new EnterpriseAccountingError("SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED", 409); };
   if (proof.claim.organizationId !== organizationId || !proof.invoice.businessPartyId ||
@@ -231,9 +232,65 @@ export async function readSupplierClaimCompensationTargetTx(
       !lines[0].transactionAmount?.equals(target.grandTotal) || !lines[0].functionalAmount.equals(target.grandTotal) ||
       entry.lines.some(line => line.ledgerAccountId === proof.claim.settlementClaimAccountId)) return reject();
   const maximum = Prisma.Decimal.min(proof.available, payable.outstandingAmount);
+  const plan = intent ? await readSupplierClaimCompensationPostingPlanTx(tx, organizationId, {
+    ...intent, currencyCode: target.currencyCode, maximum, openPayable: payable.outstandingAmount,
+    unreservedClaim: proof.available, targetInvoiceDate: target.invoiceDate, creditDate: proof.credit.creditDate,
+    historicalDebtAccountId: debt.id, claimAccountId: proof.claim.settlementClaimAccountId,
+  }) : undefined;
   return {
     payableId: payable.id, invoiceReference: target.number, currencyCode: target.currencyCode,
     openPayable: payable.outstandingAmount, unreservedClaim: proof.available, maximum,
     executionAvailable: false as const,
+    ...(plan ? { plan } : {}),
+  };
+}
+
+/** An exact proposed non-cash posting, still read-only. Revalidate under
+ * the claim and target invoice locks before reservation, review or posting.
+ * No customer-managed fiscal calendar is provisioned on this GET path. */
+async function readSupplierClaimCompensationPostingPlanTx(
+  tx: Prisma.TransactionClient, organizationId: string,
+  input: { amount: string; accountingDate: string; currencyCode: string; maximum: Prisma.Decimal;
+    openPayable: Prisma.Decimal; unreservedClaim: Prisma.Decimal; targetInvoiceDate: Date;
+    creditDate: Date; historicalDebtAccountId: string; claimAccountId: string },
+) {
+  const reject = (): never => { throw new EnterpriseAccountingError("SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED", 409); };
+  // Decimal(20,6): 14 integer digits, six fractional digits, no rounding.
+  if (!/^\d{1,14}(\.\d{1,6})?$/.test(input.amount) ||
+      !/^\d{4}-\d{2}-\d{2}$/.test(input.accountingDate)) return reject();
+  const amount = new Prisma.Decimal(input.amount);
+  const accountingDate = new Date(input.accountingDate + "T00:00:00.000Z");
+  if (!amount.isFinite() || !amount.gt(0) || amount.gt(input.maximum) ||
+      !Number.isFinite(accountingDate.getTime()) ||
+      accountingDate.toISOString().slice(0, 10) !== input.accountingDate ||
+      accountingDate < input.creditDate || accountingDate < input.targetInvoiceDate) return reject();
+  const { getEnterpriseBusinessContext, formatEnterpriseBusinessDate } = await import("@/lib/enterprise/business-context");
+  const context = await getEnterpriseBusinessContext(tx, organizationId);
+  if (context.functionalCurrencyCode !== input.currencyCode ||
+      input.accountingDate > formatEnterpriseBusinessDate(new Date(), context.timezone)) return reject();
+  const { getPostingPeriod } = await import("@/lib/enterprise/accounting/periods");
+  const { assertFinanceReady } = await import("@/lib/enterprise/accounting/configuration-service");
+  const { resolveSemanticPostingAccount } = await import("@/lib/enterprise/accounting/semantic-account-resolver");
+  const configuration = await assertFinanceReady(tx, organizationId, {
+    asOf: accountingDate, requiredMappingKeys: ["ACCOUNTS_PAYABLE", "SUPPLIER_RETURN_CLAIMS"],
+    requiredJournalTypes: ["GENERAL"],
+  });
+  if (configuration.functionalCurrencyCode !== input.currencyCode || !configuration.automaticPostingEnabled) return reject();
+  const [period, journal, debt, claimAccountId] = await Promise.all([
+    getPostingPeriod(tx, organizationId, accountingDate),
+    tx.enterpriseJournal.findFirst({ where: { organizationId, journalType: "GENERAL", isActive: true },
+      orderBy: { createdAt: "asc" }, select: { id: true } }),
+    resolveSemanticPostingAccount(tx, { organizationId, mappingKey: "ACCOUNTS_PAYABLE", accountingDate }),
+    resolveSupplierReturnClaimAccountTx(tx, organizationId, input.currencyCode, accountingDate),
+  ]);
+  if (period.status !== "OPEN" || !journal ||
+      debt.id !== input.historicalDebtAccountId || claimAccountId !== input.claimAccountId ||
+      debt.id === claimAccountId) return reject();
+  return {
+    accountingDate: input.accountingDate, amount,
+    debitPayable: amount, creditSupplierClaim: amount,
+    payableAfter: input.openPayable.minus(amount),
+    unreservedClaimAfter: input.unreservedClaim.minus(amount),
+    treasuryImpact: zero(), executionAvailable: false as const,
   };
 }

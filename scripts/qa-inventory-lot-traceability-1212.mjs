@@ -1145,3 +1145,47 @@ cmpCredits=1;await assert.rejects(cmpPreview(),cmpRefusal);cmpCredits=0;
 cmpReversals=1;await assert.rejects(cmpPreview(),cmpRefusal);cmpReversals=0;
 cmpJournal.lines[0].credit=d(19);await assert.rejects(cmpPreview(),cmpRefusal);cmpJournal.lines[0].credit=d(20);
 console.log("Supplier claim compensation target: exact new debt, refund-adjusted capacity, wrong tenant/party/currency, prior allocations, returns and reversed journals refused; no mutation");
+
+/* Lot 1G.2: a proposed accounting entry is not a financial operation. */
+const cmpPlanIntent={amount:"9",accountingDate:"2026-11-20"};
+let cmpPeriodStatus="OPEN",cmpJournalActive=true,cmpPostingEnabled=true,cmpDebtAccount="ACCOUNTS_PAYABLE",cmpClaimAccount="claim-account";
+let cmpReadyCurrency="USD";
+mocks["@/lib/enterprise/accounting/configuration-service"]={assertFinanceReady:async(_tx,org,requirements)=>{
+  assert.equal(org,"org-a");
+  assert.equal(requirements.asOf.toISOString(),"2026-11-20T00:00:00.000Z");
+  assert.equal(requirements.requiredMappingKeys.join(","),"ACCOUNTS_PAYABLE,SUPPLIER_RETURN_CLAIMS");
+  assert.equal(requirements.requiredJournalTypes.join(","),"GENERAL");
+  return {automaticPostingEnabled:cmpPostingEnabled,functionalCurrencyCode:cmpReadyCurrency};
+}};
+mocks["@/lib/enterprise/accounting/periods"]={getPostingPeriod:async(_tx,org,date,options)=>{
+  assert.equal(org,"org-a");assert.equal(options,undefined);
+  if(cmpPeriodStatus!=="OPEN")throw new TestDomainError("FINANCE_PERIOD_CLOSED",409);
+  return {id:"period-cmp",status:"OPEN"};
+}};
+mocks["@/lib/enterprise/accounting/semantic-account-resolver"]={resolveSemanticPostingAccount:async(_tx,input)=>{
+  if(input.mappingKey==="SUPPLIER_RETURN_CLAIMS")return {id:cmpClaimAccount,isControlAccount:true,allowDirectPosting:false,currencyCode:"USD"};
+  return {id:cmpDebtAccount};
+}};
+// Resolve the claim mapping through the real helper, not an independent test implementation.
+const cmpPlanTx={...cmpTx,
+  organization:{findFirst:async()=>({timezone:"Africa/Kinshasa"})},
+  enterpriseFinanceConfiguration:{findUnique:async()=>({functionalCurrencyCode:"USD"})},
+  enterpriseJournal:{findFirst:async({where})=>{assert.equal(where.organizationId,"org-a");assert.equal(where.journalType,"GENERAL");return cmpJournalActive?{id:"od-cmp"}:null;}},
+  enterpriseAccountMapping:{count:async()=>0},
+  enterpriseFinancialAccount:{count:async()=>0},
+};
+const cmpPlan=(intent=cmpPlanIntent,proof=cmpProof)=>compensationService.readSupplierClaimCompensationTargetTx(cmpPlanTx,"org-a",proof,"target-payable",intent);
+const cmpPlanned=(await cmpPlan()).plan;
+assert.equal(cmpPlanned.amount.toFixed(),"9");
+assert.equal(cmpPlanned.debitPayable.toFixed(),"9");assert.equal(cmpPlanned.creditSupplierClaim.toFixed(),"9");
+assert.equal(cmpPlanned.payableAfter.toFixed(),"11");assert.equal(cmpPlanned.unreservedClaimAfter.toFixed(),"0");
+assert.equal(cmpPlanned.treasuryImpact.toFixed(),"0");assert.equal(cmpPlanned.executionAvailable,false);
+for(const amount of ["0","-1","10","0.0000001","1e0","NaN","999999999999999"]) await assert.rejects(cmpPlan({...cmpPlanIntent,amount}),cmpRefusal);
+for(const accountingDate of ["2026-11-19","2026-02-30","2026-11-20T00:00:00Z","2099-01-01"]) await assert.rejects(cmpPlan({...cmpPlanIntent,accountingDate}),cmpRefusal);
+cmpPeriodStatus="LOCKED";await assert.rejects(cmpPlan(),{code:"FINANCE_PERIOD_CLOSED"});cmpPeriodStatus="OPEN";
+cmpJournalActive=false;await assert.rejects(cmpPlan(),cmpRefusal);cmpJournalActive=true;
+cmpPostingEnabled=false;await assert.rejects(cmpPlan(),cmpRefusal);cmpPostingEnabled=true;
+cmpReadyCurrency="CDF";await assert.rejects(cmpPlan(),cmpRefusal);cmpReadyCurrency="USD";
+cmpClaimAccount="other-claim";await assert.rejects(cmpPlan(),cmpRefusal);cmpClaimAccount="claim-account";
+cmpDebtAccount="other-debt";await assert.rejects(cmpPlan(),cmpRefusal);cmpDebtAccount="ACCOUNTS_PAYABLE";
+console.log("Supplier compensation posting preflight: exact debit/credit, strict civil date, open period, ready configuration, unchanged accounts, zero treasury; no write");

@@ -2178,6 +2178,25 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
           });
         };
         await expectCompensation(paymentAmount-56);
+        const plannedAmount=Math.min(paymentAmount-56,12);
+        const planPath=compensationPath+"&compensationAmount="+plannedAmount+"&compensationDate="+returnBusinessContext.businessDate;
+        const planned=await context.owner.request.get(planPath);
+        expect(planned.status(),await planned.text()).toBe(200);
+        expect((await planned.json()).claim.compensation.plan).toMatchObject({
+          accountingDate:returnBusinessContext.businessDate,amount:String(plannedAmount),
+          debitPayable:String(plannedAmount),creditSupplierClaim:String(plannedAmount),
+          payableAfter:String(12-plannedAmount),unreservedClaimAfter:String(paymentAmount-56-plannedAmount),
+          treasuryImpact:"0",executionAvailable:false,
+        });
+        for(const suffix of ["&compensationAmount=0","&compensationAmount=0.0000001","&compensationAmount=99","&compensationDate=2099-01-01","&compensationDate=2026-02-30"]){
+          const invalid=new URL("https://example.test"+planPath);
+          const [key,value]=suffix.slice(1).split("=");
+          invalid.searchParams.set(key,value);
+          const refused=await context.owner.request.get(invalid.pathname+invalid.search);
+          expect(refused.status(),await refused.text()).toBe(409);
+        }
+        expect((await context.owner.request.get(compensationPath+"&compensationAmount=1")).status()).toBe(409);
+
         // Refuse the source invoice itself and any unfound target.
         expect((await context.owner.request.get(claimPath+"&compensationPayableId="+encodeURIComponent(racePayable.id))).status()).toBe(409);
         expect((await context.owner.request.get(claimPath+"&compensationPayableId=absent-target-"+scenario)).status()).toBe(409);
@@ -2200,6 +2219,8 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
           expect(openReserved.status(),await openReserved.text()).toBe(200);
           expect((await openReserved.json()).claim).toMatchObject({refunded:String(refundedAmount),reserved:String(refundAmount),remaining:String(paymentAmount-56-refundedAmount),available:String(paymentAmount-56-refundedAmount-refundAmount)});
           await expectCompensation(paymentAmount-56-refundedAmount-refundAmount);
+          const stalePlan=await context.owner.request.get(planPath);
+          expect(stalePlan.status(),await stalePlan.text()).toBe(409);
           const excessive=await post(context.owner,base+"/payments",{...refundBase,amount:String(paymentAmount-55-refundedAmount-refundAmount),reference:input.reference+"-EXCESS",idempotencyKey:input.idempotencyKey+"-excess"});
           expect(excessive.status,JSON.stringify(excessive.body)).toBe(409);
           const submit=await post(context.owner,refundPath+"/transition",{action:"SUBMIT",revision:draft.body.payment.revision,approverUserId:fixture.settler.id});

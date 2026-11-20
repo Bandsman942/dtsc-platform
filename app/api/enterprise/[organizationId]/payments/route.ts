@@ -19,7 +19,15 @@ export async function GET(req: Request, { params }: Params) {
   const claimQuery = new URL(req.url).searchParams;
   const claimId = claimQuery.get("supplierReturnClaimId")?.trim();
   const compensationPayableId = claimQuery.get("compensationPayableId")?.trim();
-  if (compensationPayableId && !claimId) return financeErrorResponse(new EnterpriseAccountingError("SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED", 409));
+  const compensationAmount = claimQuery.get("compensationAmount");
+  const compensationDate = claimQuery.get("compensationDate");
+  if ((compensationPayableId && !claimId) ||
+      ((compensationAmount !== null || compensationDate !== null) &&
+        (!claimId || !compensationPayableId || !compensationAmount || !compensationDate))) {
+    return financeErrorResponse(new EnterpriseAccountingError("SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED", 409));
+  }
+  const compensationIntent = compensationAmount && compensationDate
+    ? { amount: compensationAmount, accountingDate: compensationDate } : undefined;
   if (claimId) {
     try {
       if (!await getEnterpriseAccountingAccess({session:auth.session,organizationId,moduleCode:"FINANCE_PAYABLES",action:"view"})) throw new EnterpriseAccountingError("SUPPLIER_RETURN_REFUND_ACCESS_FORBIDDEN",403);
@@ -36,7 +44,7 @@ export async function GET(req: Request, { params }: Params) {
         }
         const proof=await readSupplierClaimRefundEvidenceTx(tx,organizationId,claimId);
         const compensation = compensationPayableId
-          ? await readSupplierClaimCompensationTargetTx(tx, organizationId, proof, compensationPayableId)
+          ? await readSupplierClaimCompensationTargetTx(tx, organizationId, proof, compensationPayableId, compensationIntent)
           : undefined;
         return {id:proof.claim.id,reference:proof.claim.reference,invoiceReference:proof.invoice.number,businessPartyId:proof.invoice.businessPartyId,currencyCode:proof.claim.currencyCode,creditDate:proof.credit.creditDate,original:proof.claim.settlementClaimAmount,refunded:proof.refunded,reserved:proof.reserved,remaining:proof.remaining,available:proof.available,canCreate:auth.access.capabilities.canCreate&&proof.available.gt(0), ...(compensation ? { compensation } : {})};
       },{isolationLevel:Prisma.TransactionIsolationLevel.RepeatableRead});
