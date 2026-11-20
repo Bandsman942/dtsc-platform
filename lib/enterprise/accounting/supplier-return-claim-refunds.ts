@@ -255,14 +255,15 @@ async function readSupplierClaimCompensationPostingPlanTx(
     creditDate: Date; historicalDebtAccountId: string; claimAccountId: string },
 ) {
   const reject = (): never => { throw new EnterpriseAccountingError("SUPPLIER_RETURN_COMPENSATION_PLAN_INVALID", 409); };
-  // Decimal(20,6): 14 integer digits, six fractional digits, no rounding.
+  const { isValidEnterpriseActivityCivilDate } = await import("@/lib/enterprise/enterprise-activity-civil-date");
+  // Validate the civil day before encoding it as the canonical UTC-midnight
+  // database date. Today's limit still uses the organization's timezone.
   if (!/^\d{1,14}(\.\d{1,6})?$/.test(input.amount) ||
-      !/^\d{4}-\d{2}-\d{2}$/.test(input.accountingDate)) return reject();
+      !isValidEnterpriseActivityCivilDate(input.accountingDate)) return reject();
   const amount = new Prisma.Decimal(input.amount);
   const accountingDate = new Date(input.accountingDate + "T00:00:00.000Z");
   if (!amount.isFinite() || !amount.gt(0) || amount.gt(input.maximum) ||
       !Number.isFinite(accountingDate.getTime()) ||
-      accountingDate.toISOString().slice(0, 10) !== input.accountingDate ||
       accountingDate < input.creditDate || accountingDate < input.targetInvoiceDate) return reject();
   const { getEnterpriseBusinessContext, formatEnterpriseBusinessDate } = await import("@/lib/enterprise/business-context");
   const { EnterpriseDomainError } = await import("@/lib/enterprise/common/errors");

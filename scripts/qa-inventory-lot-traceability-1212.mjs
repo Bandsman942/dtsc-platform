@@ -1147,6 +1147,7 @@ cmpJournal.lines[0].credit=d(19);await assert.rejects(cmpPreview(),cmpRefusal);c
 console.log("Supplier claim compensation target: exact new debt, refund-adjusted capacity, wrong tenant/party/currency, prior allocations, returns and reversed journals refused; no mutation");
 
 /* Lot 1G.2: a proposed accounting entry is not a financial operation. */
+mocks["@/lib/enterprise/enterprise-activity-civil-date"]=load("lib/enterprise/enterprise-activity-civil-date.ts");
 const cmpPlanIntent={amount:"9",accountingDate:"2026-11-20"};
 const cmpPlanRefusal={code:"SUPPLIER_RETURN_COMPENSATION_PLAN_INVALID"};
 let cmpPeriodStatus="OPEN",cmpJournalActive=true,cmpPostingEnabled=true,cmpDebtAccount="ACCOUNTS_PAYABLE",cmpClaimAccount="claim-account";
@@ -1182,7 +1183,7 @@ assert.equal(cmpPlanned.debitPayable.toFixed(),"9");assert.equal(cmpPlanned.cred
 assert.equal(cmpPlanned.payableAfter.toFixed(),"11");assert.equal(cmpPlanned.unreservedClaimAfter.toFixed(),"0");
 assert.equal(cmpPlanned.treasuryImpact.toFixed(),"0");assert.equal(cmpPlanned.executionAvailable,false);
 for(const amount of ["0","-1","10","0.0000001","1e0","NaN","999999999999999"]) await assert.rejects(cmpPlan({...cmpPlanIntent,amount}),cmpPlanRefusal);
-for(const accountingDate of ["2026-11-19","2026-02-30","2026-11-20T00:00:00Z","2099-01-01"]) await assert.rejects(cmpPlan({...cmpPlanIntent,accountingDate}),cmpPlanRefusal);
+for(const accountingDate of ["2026-11-19","2026-02-30","2026-02-29","0000-11-20","2026-13-01","2026-11-20T00:00:00Z","2099-01-01"]) await assert.rejects(cmpPlan({...cmpPlanIntent,accountingDate}),cmpPlanRefusal);
 cmpPeriodStatus="LOCKED";await assert.rejects(cmpPlan(),{code:"FINANCE_PERIOD_CLOSED"});cmpPeriodStatus="OPEN";
 cmpJournalActive=false;await assert.rejects(cmpPlan(),cmpPlanRefusal);cmpJournalActive=true;
 cmpPostingEnabled=false;await assert.rejects(cmpPlan(),cmpPlanRefusal);cmpPostingEnabled=true;
