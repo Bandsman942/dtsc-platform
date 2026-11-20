@@ -77,6 +77,7 @@ type InvoiceRecord = FinanceRecord & {
   capabilities?: RecordCapabilities;
   threeWayMatch?: { status?: string; quantityVariance?: string | number; priceVariance?: string | number; totalVariance?: string | number; overrideReason?: string | null } | null;
 };
+type RefundClaim = {id:string;reference:string;invoiceReference:string;businessPartyId:string;currencyCode:string;creditDate:string;original:string;refunded:string;reserved:string;remaining:string;available:string;canCreate:boolean};
 type InvoiceLine = {
   key: string;
   catalogItemId: string;
@@ -166,6 +167,10 @@ export function EnterpriseFinanceInvoicesWorkspace(props: Props) {
   const [page, setPage] = useState(1);
   const [refreshKey, setRefreshKey] = useState(0);
   const [detail, setDetail] = useState<InvoiceRecord | null>(null);
+  const [refundClaim,setRefundClaim]=useState<RefundClaim|null>(null);
+  const [refundPaymentId,setRefundPaymentId]=useState<string|null>(null);
+  const [refundBankValid,setRefundBankValid]=useState(false);
+  const [refundKey,setRefundKey]=useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [actionTarget, setActionTarget] = useState<ActionTarget | null>(null);
   const [creditTarget, setCreditTarget] = useState<InvoiceRecord | null>(null);
@@ -328,6 +333,38 @@ export function EnterpriseFinanceInvoicesWorkspace(props: Props) {
     } catch (error) {
       setErrorMessage(safeFinanceError(error, t("transitionFailed"), locale));
     } finally { setBusy(false); }
+  }
+
+  async function openClaimRefund(claimId:string) {
+    setBusy(true);setErrorMessage("");setRefundPaymentId(null);setRefundBankValid(false);
+    try {
+      const response=await fetch(`/api/enterprise/${organizationId}/payments?supplierReturnClaimId=${encodeURIComponent(claimId)}`,{cache:"no-store"});
+      const body=await response.json();
+      if(!response.ok||!body.claim)throw new Error("CLAIM_UNAVAILABLE");
+      setRefundClaim(body.claim as RefundClaim);setRefundKey(crypto.randomUUID());setDetail(null);
+    }catch{setErrorMessage(locale==="en"?"Unable to open the supplier claim. Check Finance access and accounting evidence.":"Impossible d’ouvrir la créance fournisseur. Vérifiez les droits Finance et les pièces comptables.");}
+    finally{setBusy(false);}
+  }
+
+  async function createClaimRefund(event:FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if(!refundClaim?.canCreate||!refundBankValid||!refundKey)return;
+    const form=new FormData(event.currentTarget);
+    setBusy(true);setErrorMessage("");
+    try{
+      const result=await financeMutation(`/api/enterprise/${organizationId}/payments`,{
+        paymentType:"SUPPLIER_RETURN_REFUND",direction:"INBOUND",methodType:"BANK_TRANSFER",
+        supplierReturnClaimId:refundClaim.id,businessPartyId:refundClaim.businessPartyId,
+        financialAccountId:String(form.get("financialAccountId")||""),currencyCode:refundClaim.currencyCode,
+        amount:String(form.get("amount")||""),paymentDate:String(form.get("paymentDate")||""),
+        reference:String(form.get("reference")||""),idempotencyKey:refundKey,
+      });
+      const payment=result.payment as {id?:string}|undefined;
+      if(!payment?.id)throw new Error("PAYMENT_ID_MISSING");
+      setRefundPaymentId(payment.id);setRefreshKey(value=>value+1);
+      setMessage(locale==="en"?"Supplier refund draft created. Submit it for independent approval.":"Brouillon de remboursement créé. Soumettez-le pour validation indépendante.");
+    }catch(error){setErrorMessage(safeFinanceError(error,locale==="en"?"Unable to prepare refund":"Impossible de préparer le remboursement",locale));}
+    finally{setBusy(false);}
   }
 
   async function createCredit(event: FormEvent<HTMLFormElement>) {
@@ -499,6 +536,7 @@ export function EnterpriseFinanceInvoicesWorkspace(props: Props) {
           <p className="text-xs text-dtsc-muted">{purchaseFormGuidance(locale,detail.supplierReturn.settlementClaimAmount?(detail.supplierReturn.status==="RECONCILED"?"returnFinanceClaimMatched":"returnSettlementClaimReadyHelp"):detail.supplierReturn.status==="RECONCILED"?"returnFinanceMatched":"returnFinanceExplain")}</p>
           <div data-responsive-actions className="flex min-w-0 flex-wrap gap-2">
             <a className="break-words text-sm text-dtsc-blue underline" href={`/enterprise-modules/SUPPLIERS_PURCHASES?purchase=${encodeURIComponent(detail.supplierReturn.purchaseId)}&returnMovement=${encodeURIComponent(detail.supplierReturn.sourceMovementId)}`}>{purchaseFormGuidance(locale,"returnFinanceSource")}</a>
+            {detail.supplierReturn.status==="RECONCILED"&&Number(detail.supplierReturn.settlementClaimAmount)>0?<Button type="button" variant="outline" size="sm" disabled={busy} onClick={()=>void openClaimRefund(detail.supplierReturn!.id)}>{locale==="en"?"View or record supplier refund":"Consulter ou enregistrer le remboursement fournisseur"}</Button>:null}
             {detail.supplierReturn.supplierCreditNoteId?<a className="break-words text-sm text-dtsc-blue underline" href={`/enterprise-modules/FINANCE_PAYABLES?supplierCreditNoteId=${encodeURIComponent(detail.supplierReturn.supplierCreditNoteId)}`}>{purchaseFormGuidance(locale,"returnCreditReview")}</a>:null}
           </div>
         </section>:null}
@@ -507,6 +545,27 @@ export function EnterpriseFinanceInvoicesWorkspace(props: Props) {
         {detailHasWorkflow ? <div data-responsive-actions>{(detailKind === "credit" ? creditTransitionActions(detail.status, locale) : invoiceTransitionActions(detail.status, locale, isReceivables)).filter((action) => capabilityAllowsAction(detail, action.action)).map((action) => { const Icon = action.icon; return <Button key={action.action} disabled={busy} variant={action.destructive ? "destructive" : "outline"} onClick={() => setActionTarget({ record: detail, action: action.action, kind: detailKind })}><Icon className="h-4 w-4" />{action.label}</Button>; })}{detailKind === "invoice" && detail.capabilities?.canCreateCredit ? <Button variant="outline" disabled={busy} onClick={() => setCreditTarget(detail)}><FileMinus2 className="h-4 w-4" />{t("createCreditNote")}</Button> : null}</div> : null}
         <FinanceCollaboration organizationId={organizationId} moduleCode={moduleCode} record={detail} locale={locale} />
       </div> : null}
+    </Dialog>
+
+    <Dialog open={Boolean(refundClaim)} onClose={()=>{if(!busy){setRefundClaim(null);setRefundPaymentId(null);}}} title={locale==="en"?"Supplier return claim":"Créance sur fournisseur — retour"} presentation="editor" className="max-w-3xl">
+      {refundClaim?<div className="grid min-w-0 gap-4">
+        <p className="break-words font-semibold">{refundClaim.reference} · {refundClaim.invoiceReference}</p>
+        <FinanceDetailGrid>
+          <FinanceDetailValue label={locale==="en"?"Recognized claim":"Créance reconnue"}>{financeMoney(refundClaim.original,refundClaim.currencyCode,locale)}</FinanceDetailValue>
+          <FinanceDetailValue label={locale==="en"?"Refunded":"Remboursé"}>{financeMoney(refundClaim.refunded,refundClaim.currencyCode,locale)}</FinanceDetailValue>
+          <FinanceDetailValue label={locale==="en"?"Pending payments reserved":"Réservé pour paiements en attente"}>{financeMoney(refundClaim.reserved,refundClaim.currencyCode,locale)}</FinanceDetailValue>
+          <FinanceDetailValue label={locale==="en"?"Remaining claim":"Créance restante"}>{financeMoney(refundClaim.remaining,refundClaim.currencyCode,locale)}</FinanceDetailValue>
+          <FinanceDetailValue label={locale==="en"?"Available for new refund":"Disponible pour un nouveau remboursement"}>{financeMoney(refundClaim.available,refundClaim.currencyCode,locale)}</FinanceDetailValue>
+        </FinanceDetailGrid>
+        {refundPaymentId?<section className="grid gap-2 rounded-xl border border-dtsc-border p-3"><p>{locale==="en"?"Draft saved; the claim has not yet been reduced.":"Brouillon enregistré ; la créance n’a pas encore été réduite."}</p><a className="font-semibold text-dtsc-blue underline" href={`/enterprise-modules/FINANCE_PAYMENTS?paymentId=${encodeURIComponent(refundPaymentId)}`}>{locale==="en"?"Open payment for approval":"Ouvrir le paiement pour validation"}</a></section>:refundClaim.canCreate?<form onSubmit={createClaimRefund} className="grid min-w-0 gap-3">
+          <p className="text-sm text-dtsc-muted">{locale==="en"?"Record only an actual bank receipt in the original claim currency. A different approver and confirmer are required.":"Enregistrez un remboursement bancaire réellement reçu dans la devise de la créance. Un validateur et un confirmateur distincts sont requis."}</p>
+          <Field label={locale==="en"?"Receiving bank account":"Compte bancaire de réception"}><FinanceReferenceSelect organizationId={organizationId} moduleCode="FINANCE_PAYMENTS" kind="financial-account" name="financialAccountId" label={locale==="en"?"Bank account":"Compte bancaire"} locale={rawLocale} required disabled={busy} onOptionChange={option=>setRefundBankValid(Boolean(option?.accountType==="BANK"&&option.currency===refundClaim.currencyCode))}/></Field>
+          <Field label={locale==="en"?"Amount received":"Montant reçu"}><Input name="amount" type="number" min="0.000001" step="0.000001" max={refundClaim.available} required disabled={busy}/></Field>
+          <Field label={locale==="en"?"Bank receipt date":"Date de réception bancaire"}><Input name="paymentDate" type="date" defaultValue={businessContext?.businessDate||""} min={refundClaim.creditDate.slice(0,10)} required disabled={busy}/></Field>
+          <Field label={locale==="en"?"Bank transaction reference":"Référence de transaction bancaire"}><Input name="reference" required maxLength={160} disabled={busy}/></Field>
+          <Button type="submit" disabled={busy||!refundBankValid}>{locale==="en"?"Prepare refund draft":"Préparer le brouillon de remboursement"}</Button>
+        </form>:<p className="text-sm text-dtsc-muted">{locale==="en"?"No refundable amount is available or payment creation is not authorized.":"Aucun montant disponible ou création de paiement non autorisée."}</p>}
+      </div>:null}
     </Dialog>
 
     <Dialog open={Boolean(actionTarget)} onClose={() => { if (!busy) setActionTarget(null); }} title={actionTarget ? `${actionLabel(actionTarget.action, locale)} · ${String(actionTarget.record.number || actionTarget.record.reference || "")}` : ""} description={t("sodAndPeriodChecked")} presentation="editor" className="max-w-xl">

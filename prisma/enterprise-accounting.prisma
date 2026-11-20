@@ -799,6 +799,8 @@ model EnterprisePayment {
   treasuryTransactions     EnterpriseTreasuryTransaction[]
   cashSession              EnterpriseCashSession?         @relation(fields: [organizationId, cashSessionId], references: [organizationId, id], onDelete: Restrict)
   expense                  EnterpriseExpense? @relation("ExpenseSettlements", fields: [organizationId, expenseId], references: [organizationId, id], onDelete: Restrict, map: "EnterprisePayment_expense_fkey")
+  supplierReturnClaimId String?
+  supplierReturnClaim EnterpriseSupplierReturnRequest? @relation("SupplierReturnClaimRefunds", fields: [organizationId, supplierReturnClaimId], references: [organizationId, id], onDelete: Restrict, map: "supplier_claim_refund_fk")
 
   @@unique([organizationId, id])
   @@unique([organizationId, number])
@@ -808,6 +810,7 @@ model EnterprisePayment {
   @@index([organizationId, financialAccountId])
   @@index([organizationId, cashSessionId])
   @@index([organizationId, expenseId, status])
+  @@index([organizationId, supplierReturnClaimId, status], map: "supplier_claim_refund_status_idx")
 }
 
 model EnterprisePaymentAllocation {

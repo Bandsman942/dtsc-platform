@@ -48,6 +48,8 @@ export async function reverseJournalEntryTx(
     if (linked) throw new EnterpriseAccountingError("SUPPLIER_RETURN_DOMAIN_REVERSAL_REQUIRED",409);
   }
 
+  if (original.postingEvent === "SUPPLIER_RETURN_REFUND_CONFIRMED") throw new EnterpriseAccountingError("SUPPLIER_RETURN_REFUND_DOMAIN_WORKFLOW_REQUIRED",409);
+
   // Claims rely on the original supplier payment and allocation journals.
   if (original.sourceEntityId && ["SUPPLIER_PAYMENT_CONFIRMED","PAYMENT_ALLOCATION_CONFIRMED"].includes(original.postingEvent || "")) {
     const allocations=await tx.enterprisePaymentAllocation.findMany({where:{organizationId,payableId:{not:null},

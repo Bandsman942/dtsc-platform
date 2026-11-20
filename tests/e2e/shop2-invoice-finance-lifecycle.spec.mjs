@@ -2145,6 +2145,63 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
         const view=await context.owner.request.get(racePurchasePath+"?view=receipt-lots&movementId="+encodeURIComponent(raceSource.id));
         expect(view.status()).toBe(200);
         expect((await view.json()).items[0].supplierReturnHistory[0]).toMatchObject({id:raceId,status:"RECONCILED",settlementClaimAmount:String(paymentAmount-56),settlementPayableAmount:String(70-paymentAmount)});
+        // Real inbound BANK receipt via canonical Finance payment approval.
+        // No mocked settlement balance, payment, treasury row or journal.
+        const claimPath=base+"/payments?supplierReturnClaimId="+encodeURIComponent(raceId);
+        const openClaim=await context.owner.request.get(claimPath);
+        expect(openClaim.status(),await openClaim.text()).toBe(200);
+        expect((await openClaim.json()).claim).toMatchObject({id:raceId,original:String(paymentAmount-56),refunded:"0",reserved:"0",available:String(paymentAmount-56),canCreate:true});
+        const initialBank=await prisma.enterpriseFinancialAccount.findUniqueOrThrow({where:{id:fixture.bank.id}});
+        const refundBase={paymentType:"SUPPLIER_RETURN_REFUND",direction:"INBOUND",methodType:"BANK_TRANSFER",supplierReturnClaimId:raceId,businessPartyId:supplierParty.id,financialAccountId:fixture.bank.id,currencyCode:fixture.currencyCode,paymentDate:returnBusinessContext.businessDate};
+        const impossible=await post(context.owner,base+"/payments",{...refundBase,amount:String(paymentAmount-55),reference:historyKey+"-OVER-REFUND-"+scenario,idempotencyKey:historyKey+"-over-refund-"+scenario});
+        expect(impossible.status,JSON.stringify(impossible.body)).toBe(409);
+        let refundedAmount=0;
+        for(const [idx,refundAmount] of (scenario===70?[5,9]:[9]).entries()){
+          const input={...refundBase,amount:String(refundAmount),reference:historyKey+"-REFUND-"+scenario+"-"+idx,idempotencyKey:historyKey+"-refund-"+scenario+"-"+idx};
+          const draft=await post(context.owner,base+"/payments",input);
+          expect(draft.status,JSON.stringify(draft.body)).toBe(201);
+          const refundId=draft.body.payment.id, refundPath=base+"/payments/"+refundId;
+          expect(draft.body.payment).toMatchObject({paymentType:"SUPPLIER_RETURN_REFUND",supplierReturnClaimId:raceId,status:"DRAFT",unallocatedAmount:"0"});
+          const retry=await post(context.owner,base+"/payments",input);
+          expect(retry.status,JSON.stringify(retry.body)).toBe(201);expect(retry.body.payment.id).toBe(refundId);
+          expect(await prisma.enterpriseTreasuryTransaction.count({where:{organizationId,paymentId:refundId}})).toBe(0);
+          const openReserved=await context.owner.request.get(claimPath);
+          expect(openReserved.status(),await openReserved.text()).toBe(200);
+          expect((await openReserved.json()).claim).toMatchObject({refunded:String(refundedAmount),reserved:String(refundAmount),remaining:String(paymentAmount-56-refundedAmount),available:String(paymentAmount-56-refundedAmount-refundAmount)});
+          const excessive=await post(context.owner,base+"/payments",{...refundBase,amount:String(paymentAmount-55-refundedAmount-refundAmount),reference:input.reference+"-EXCESS",idempotencyKey:input.idempotencyKey+"-excess"});
+          expect(excessive.status,JSON.stringify(excessive.body)).toBe(409);
+          const submit=await post(context.owner,refundPath+"/transition",{action:"SUBMIT",revision:draft.body.payment.revision,approverUserId:fixture.settler.id});
+          expect(submit.status,JSON.stringify(submit.body)).toBe(200);
+          const approve=await post(context.settler,refundPath+"/transition",{action:"APPROVE",revision:submit.body.payment.revision});
+          expect(approve.status,JSON.stringify(approve.body)).toBe(200);
+          await ensureStepUp(context.preparer,cashierPassword);
+          const confirm=await post(context.preparer,refundPath+"/transition",{action:"CONFIRM",revision:approve.body.payment.revision});
+          expect(confirm.status,JSON.stringify(confirm.body)).toBe(200);
+          expect(confirm.body.payment.status).toBe("CONFIRMED");
+          const retryConfirm=await post(context.preparer,refundPath+"/transition",{action:"CONFIRM",revision:approve.body.payment.revision});
+          expect(retryConfirm.status,JSON.stringify(retryConfirm.body)).toBe(200);
+          const receipt=await prisma.enterpriseTreasuryTransaction.findFirstOrThrow({where:{organizationId,paymentId:refundId,transactionType:"SUPPLIER_RETURN_REFUND"}});
+          expect(receipt.direction).toBe("INBOUND");expect(receipt.amount.equals(refundAmount)).toBe(true);
+          expect(await prisma.enterpriseTreasuryTransaction.count({where:{organizationId,paymentId:refundId}})).toBe(1);
+          const entry=await prisma.enterpriseJournalEntry.findFirstOrThrow({where:{organizationId,sourceEntityType:"EnterprisePayment",sourceEntityId:refundId,postingEvent:"SUPPLIER_RETURN_REFUND_CONFIRMED",status:"POSTED"},include:{lines:true}});
+          expect(entry.lines).toHaveLength(2);
+          expect(entry.totalDebit.equals(refundAmount)&&entry.totalCredit.equals(refundAmount)).toBe(true);
+          expect(entry.lines.some(line=>line.ledgerAccountId===fixture.bank.ledgerAccountId&&line.debit.equals(refundAmount)&&line.credit.isZero())).toBe(true);
+          expect(entry.lines.some(line=>line.ledgerAccountId===claimAccountId&&line.credit.equals(refundAmount)&&line.debit.isZero())).toBe(true);
+          expect(await prisma.enterpriseJournalEntry.count({where:{organizationId,sourceEntityType:"EnterprisePayment",sourceEntityId:refundId}})).toBe(1);
+          expect(await prisma.enterprisePaymentAllocation.count({where:{organizationId,paymentId:refundId}})).toBe(0);
+          const reverse=await post(context.owner,base+"/journal-entries/"+entry.id+"/reverse",{reason:"Attempt isolated claim refund reversal",accountingDate:returnBusinessContext.businessDate});
+          expect(reverse.status,JSON.stringify(reverse.body)).toBe(409);
+          expect(reverse.body.error).toBe("SUPPLIER_RETURN_REFUND_DOMAIN_WORKFLOW_REQUIRED");
+          refundedAmount+=refundAmount;
+          const summary=await context.owner.request.get(claimPath);
+          expect(summary.status(),await summary.text()).toBe(200);
+          expect((await summary.json()).claim).toMatchObject({refunded:String(refundedAmount),reserved:"0",remaining:String(paymentAmount-56-refundedAmount),available:String(paymentAmount-56-refundedAmount),canCreate:refundedAmount<paymentAmount-56});
+        }
+        expect((await prisma.enterpriseFinancialAccount.findUniqueOrThrow({where:{id:fixture.bank.id}})).operationalBalance.equals(initialBank.operationalBalance.plus(paymentAmount-56))).toBe(true);
+        expect(await prisma.enterpriseSupplierInvoice.findUniqueOrThrow({where:{id:closedInvoice.id}})).toEqual(closedInvoice);
+        expect(await prisma.enterprisePayable.findUniqueOrThrow({where:{id:closedRacePayable.id}})).toEqual(closedRacePayable);
+        expect(await prisma.enterpriseSupplierReturnRequest.findUniqueOrThrow({where:{id:raceId}})).toEqual(closedRace);
       }
       if(freshAcquisition){
         // Rebuild all three historical states AFTER dispatch and credit posting.

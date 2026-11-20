@@ -228,6 +228,7 @@ export const supplierCreditNoteCreateSchema = creditNoteCreateSchema.extend({
 export const paymentCreateSchema = z.object({
   direction: z.enum(PAYMENT_DIRECTIONS),
   paymentType: z.enum(PAYMENT_TYPES),
+  supplierReturnClaimId: z.string().min(1).max(160).optional(),
   methodType: z.enum(PAYMENT_METHOD_TYPES),
   paymentMethodId: z.string().min(1).optional(),
   financialAccountId: z.string().min(1).optional(),
