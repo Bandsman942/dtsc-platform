@@ -2222,6 +2222,131 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
         expect(await prisma.enterprisePayableAllocation.count({where:{organizationId,payableId:targetPayable.id}})).toBe(0);
         await expectCompensation(paymentAmount-56); // draft is explicitly not a reservation.
 
+
+        // Compensation has its own two-sided reservation and assigned decision:
+        // scenario 70 uses a third Finance actor to post a real non-cash offset
+        // against a separate new debt. Scenario 65 rejects a reserved offset;
+        // both retain the preceding refund lifecycle as an independent proof.
+        const compensatedAmount=scenario===70?1:0;
+        if(scenario===70){
+          const offsetInvoice=await prisma.enterpriseSupplierInvoice.create({data:{
+            organizationId,number:historyKey+"-COMP-POST-"+scenario,supplierId:supplier.id,businessPartyId:supplierParty.id,
+            status:"APPROVED",invoiceDate:new Date(returnBusinessContext.businessDate+"T00:00:00.000Z"),
+            currencyCode:fixture.currencyCode,subtotal:"1",taxTotal:"0",grandTotal:"1",outstandingAmount:"1",
+            approvedAt:new Date(),approvedByUserId:fixture.settler.id,createdByUserId:fixture.owner.id,
+            items:{create:{description:"Non-cash compensation test debt",quantity:"1",unitPrice:"1",
+              netAmount:"1",taxAmount:"0",totalAmount:"1"}},
+          }});
+          const offsetInvoicePost=await post(context.owner,base+"/supplier-invoices/"+offsetInvoice.id+"/transition",
+            {action:"POST",revision:offsetInvoice.revision});
+          expect(offsetInvoicePost.status,JSON.stringify(offsetInvoicePost.body)).toBe(200);
+          const offsetPayable=await prisma.enterprisePayable.findFirstOrThrow({where:{organizationId,supplierInvoiceId:offsetInvoice.id}});
+          const offsetDraft=await post(context.owner,base+"/payables",{
+            ...compensationDraftInput,payableId:offsetPayable.id,amount:"1",
+            idempotencyKey:compensationDraftInput.idempotencyKey+"-posted",
+            supplierReference:compensationDraftInput.supplierReference+"-POST",
+          });
+          expect(offsetDraft.status,JSON.stringify(offsetDraft.body)).toBe(201);
+          const offsetId=offsetDraft.body.compensation.id;
+          const offsetSubmit=await post(context.owner,base+"/payables",{
+            action:"SUBMIT_COMPENSATION",compensationId:offsetId,revision:1,approverUserId:fixture.settler.id,
+          });
+          expect(offsetSubmit.status,JSON.stringify(offsetSubmit.body)).toBe(200);
+          expect(offsetSubmit.body.compensation).toMatchObject({status:"PENDING_APPROVAL",revision:2,reservationActive:true});
+          const reservedClaim=await context.owner.request.get(claimPath);
+          expect(reservedClaim.status(),await reservedClaim.text()).toBe(200);
+          expect((await reservedClaim.json()).claim).toMatchObject({
+            compensated:"0",compensationReserved:"1",reserved:"1",
+            remaining:String(paymentAmount-56),available:String(paymentAmount-57),
+          });
+          // A bank refund cannot consume the same USD while the non-cash
+          // settlement reserves it; the exact target is reserved too.
+          const reservedTarget=await context.owner.request.get(claimPath+"&compensationPayableId="+encodeURIComponent(offsetPayable.id));
+          expect(reservedTarget.status(),await reservedTarget.text()).toBe(200);
+          expect((await reservedTarget.json()).claim.compensation).toMatchObject({
+            targetReserved:"1",targetAvailable:"0",maximum:"0",executionAvailable:false,
+          });
+          const duplicateBank=await post(context.owner,base+"/payments",{
+            paymentType:"SUPPLIER_RETURN_REFUND",direction:"INBOUND",methodType:"BANK_TRANSFER",
+            supplierReturnClaimId:raceId,businessPartyId:supplierParty.id,financialAccountId:fixture.bank.id,
+            currencyCode:fixture.currencyCode,amount:String(paymentAmount-56),
+            paymentDate:returnBusinessContext.businessDate,reference:historyKey+"-RESERVED-REFUND",
+            idempotencyKey:historyKey+"-reserved-refund",
+          });
+          expect(duplicateBank.status,JSON.stringify(duplicateBank.body)).toBe(409);
+          const offsetApprove=await post(context.settler,base+"/payables",{
+            action:"APPROVE_COMPENSATION",compensationId:offsetId,revision:2,
+          });
+          expect(offsetApprove.status,JSON.stringify(offsetApprove.body)).toBe(200);
+          expect(offsetApprove.body.compensation).toMatchObject({status:"APPROVED",revision:3,reservationActive:true});
+          const selfPost=await post(context.owner,base+"/payables",{
+            action:"POST_COMPENSATION",compensationId:offsetId,revision:3,
+          });
+          expect(selfPost.status,JSON.stringify(selfPost.body)).toBe(409);
+          await ensureStepUp(context.preparer,cashierPassword);
+          const offsetPost=await post(context.preparer,base+"/payables",{
+            action:"POST_COMPENSATION",compensationId:offsetId,revision:3,
+          });
+          expect(offsetPost.status,JSON.stringify(offsetPost.body)).toBe(200);
+          expect(offsetPost.body.compensation).toMatchObject({status:"POSTED",revision:4,reservationActive:false});
+          const offsetReplay=await post(context.preparer,base+"/payables",{
+            action:"POST_COMPENSATION",compensationId:offsetId,revision:3,
+          });
+          expect(offsetReplay.status,JSON.stringify(offsetReplay.body)).toBe(200);
+          expect(offsetReplay.body.compensation.postingJournalEntryId).toBe(offsetPost.body.compensation.postingJournalEntryId);
+          const postedComp=await prisma.enterpriseJournalEntry.findFirstOrThrow({
+            where:{organizationId,sourceEntityType:"EnterpriseSupplierClaimCompensation",sourceEntityId:offsetId,
+              postingEvent:"SUPPLIER_CLAIM_COMPENSATION_POSTED",status:"POSTED"},include:{lines:true},
+          });
+          expect(postedComp.lines).toHaveLength(2);
+          expect(postedComp.totalDebit.equals(1)&&postedComp.totalCredit.equals(1)).toBe(true);
+          expect(postedComp.lines.some(line=>line.ledgerAccountId===claimAccountId&&line.credit.equals(1)&&line.debit.isZero())).toBe(true);
+          expect(postedComp.lines.some(line=>line.ledgerAccountId!==claimAccountId&&line.debit.equals(1)&&line.credit.isZero())).toBe(true);
+          const linkedAlloc=await prisma.enterprisePayableAllocation.findMany({where:{
+            organizationId,payableId:offsetPayable.id,sourceType:"SUPPLIER_CLAIM_COMPENSATION",sourceId:offsetId}});
+          expect(linkedAlloc).toHaveLength(1);expect(linkedAlloc[0].amount.equals(1)).toBe(true);
+          expect((await prisma.enterprisePayable.findUniqueOrThrow({where:{id:offsetPayable.id}})).outstandingAmount.isZero()).toBe(true);
+          expect((await prisma.enterpriseSupplierInvoice.findUniqueOrThrow({where:{id:offsetInvoice.id}})).outstandingAmount.isZero()).toBe(true);
+          expect(await prisma.enterpriseTreasuryTransaction.count({where:{organizationId,transactionType:"SUPPLIER_CLAIM_COMPENSATION"}})).toBe(0);
+          const reverseComp=await post(context.owner,base+"/journal-entries/"+postedComp.id+"/reverse",
+            {reason:"Generic reversal cannot separate supplier offset",accountingDate:returnBusinessContext.businessDate});
+          expect(reverseComp.status,JSON.stringify(reverseComp.body)).toBe(409);
+          const reverseTarget=await post(context.owner,base+"/journal-entries/"+(await prisma.enterpriseJournalEntry.findFirstOrThrow({
+            where:{organizationId,sourceEntityType:"EnterpriseSupplierInvoice",sourceEntityId:offsetInvoice.id,postingEvent:"SUPPLIER_INVOICE_POSTED"}
+          })).id+"/reverse",{reason:"Invoice is linked to posted offset",accountingDate:returnBusinessContext.businessDate});
+          expect(reverseTarget.status,JSON.stringify(reverseTarget.body)).toBe(409);
+          const afterOffset=await context.owner.request.get(claimPath);
+          expect(afterOffset.status(),await afterOffset.text()).toBe(200);
+          expect((await afterOffset.json()).claim).toMatchObject({refunded:"0",compensated:"1",compensationReserved:"0",
+            reserved:"0",remaining:String(paymentAmount-57),available:String(paymentAmount-57)});
+        } else {
+          const rejectionDraft=await post(context.owner,base+"/payables",{
+            ...compensationDraftInput,amount:"1",idempotencyKey:compensationDraftInput.idempotencyKey+"-rejected",
+            supplierReference:compensationDraftInput.supplierReference+"-REJECT",
+          });
+          expect(rejectionDraft.status,JSON.stringify(rejectionDraft.body)).toBe(201);
+          const rejectionId=rejectionDraft.body.compensation.id;
+          const rejectionSubmit=await post(context.owner,base+"/payables",{
+            action:"SUBMIT_COMPENSATION",compensationId:rejectionId,revision:1,approverUserId:fixture.settler.id,
+          });
+          expect(rejectionSubmit.status,JSON.stringify(rejectionSubmit.body)).toBe(200);
+          const rejectionProof=await context.owner.request.get(claimPath);
+          expect(rejectionProof.status(),await rejectionProof.text()).toBe(200);
+          expect((await rejectionProof.json()).claim).toMatchObject({compensationReserved:"1",available:String(paymentAmount-57)});
+          const reject=await post(context.settler,base+"/payables",{
+            action:"REJECT_COMPENSATION",compensationId:rejectionId,revision:2,
+            reason:"Supplier offset rejected by assigned financial approver",
+          });
+          expect(reject.status,JSON.stringify(reject.body)).toBe(200);
+          expect(reject.body.compensation).toMatchObject({status:"REJECTED",revision:3,reservationActive:false});
+          const afterReject=await context.owner.request.get(claimPath);
+          expect(afterReject.status(),await afterReject.text()).toBe(200);
+          expect((await afterReject.json()).claim).toMatchObject({compensationReserved:"0",available:String(paymentAmount-56)});
+          expect(await prisma.enterpriseJournalEntry.count({where:{organizationId,
+            sourceEntityType:"EnterpriseSupplierClaimCompensation",sourceEntityId:rejectionId}})).toBe(0);
+          expect(await prisma.enterprisePayableAllocation.count({where:{organizationId,payableId:targetPayable.id}})).toBe(0);
+        }
+
         // Refuse the source invoice itself and any unfound target.
         expect((await context.owner.request.get(claimPath+"&compensationPayableId="+encodeURIComponent(racePayable.id))).status()).toBe(409);
         expect((await context.owner.request.get(claimPath+"&compensationPayableId=absent-target-"+scenario)).status()).toBe(409);
@@ -2231,7 +2356,7 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
         const impossible=await post(context.owner,base+"/payments",{...refundBase,amount:String(paymentAmount-55),reference:historyKey+"-OVER-REFUND-"+scenario,idempotencyKey:historyKey+"-over-refund-"+scenario});
         expect(impossible.status,JSON.stringify(impossible.body)).toBe(409);
         let refundedAmount=0;
-        for(const [idx,refundAmount] of (scenario===70?[5,9]:[9]).entries()){
+        for(const [idx,refundAmount] of (scenario===70?[5,8]:[9]).entries()){
           const input={...refundBase,amount:String(refundAmount),reference:historyKey+"-REFUND-"+scenario+"-"+idx,idempotencyKey:historyKey+"-refund-"+scenario+"-"+idx};
           const draft=await post(context.owner,base+"/payments",input);
           expect(draft.status,JSON.stringify(draft.body)).toBe(201);
@@ -2242,8 +2367,8 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
           expect(await prisma.enterpriseTreasuryTransaction.count({where:{organizationId,paymentId:refundId}})).toBe(0);
           const openReserved=await context.owner.request.get(claimPath);
           expect(openReserved.status(),await openReserved.text()).toBe(200);
-          expect((await openReserved.json()).claim).toMatchObject({refunded:String(refundedAmount),reserved:String(refundAmount),remaining:String(paymentAmount-56-refundedAmount),available:String(paymentAmount-56-refundedAmount-refundAmount)});
-          await expectCompensation(paymentAmount-56-refundedAmount-refundAmount);
+          expect((await openReserved.json()).claim).toMatchObject({refunded:String(refundedAmount),reserved:String(refundAmount),remaining:String(paymentAmount-56-compensatedAmount-refundedAmount),available:String(paymentAmount-56-compensatedAmount-refundedAmount-refundAmount)});
+          await expectCompensation(paymentAmount-56-compensatedAmount-refundedAmount-refundAmount);
           const stalePlan=await context.owner.request.get(planPath);
           expect(stalePlan.status(),await stalePlan.text()).toBe(409);
           if(idx===0){
@@ -2286,10 +2411,10 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
           refundedAmount+=refundAmount;
           const summary=await context.owner.request.get(claimPath);
           expect(summary.status(),await summary.text()).toBe(200);
-          expect((await summary.json()).claim).toMatchObject({refunded:String(refundedAmount),reserved:"0",remaining:String(paymentAmount-56-refundedAmount),available:String(paymentAmount-56-refundedAmount),canCreate:refundedAmount<paymentAmount-56});
-          await expectCompensation(paymentAmount-56-refundedAmount);
+          expect((await summary.json()).claim).toMatchObject({refunded:String(refundedAmount),reserved:"0",remaining:String(paymentAmount-56-compensatedAmount-refundedAmount),available:String(paymentAmount-56-compensatedAmount-refundedAmount),canCreate:refundedAmount<paymentAmount-56-compensatedAmount});
+          await expectCompensation(paymentAmount-56-compensatedAmount-refundedAmount);
         }
-        expect((await prisma.enterpriseFinancialAccount.findUniqueOrThrow({where:{id:fixture.bank.id}})).operationalBalance.equals(initialBank.operationalBalance.plus(paymentAmount-56))).toBe(true);
+        expect((await prisma.enterpriseFinancialAccount.findUniqueOrThrow({where:{id:fixture.bank.id}})).operationalBalance.equals(initialBank.operationalBalance.plus(paymentAmount-56-compensatedAmount))).toBe(true);
         expect(await prisma.enterpriseSupplierInvoice.findUniqueOrThrow({where:{id:closedInvoice.id}})).toEqual(closedInvoice);
         expect(await prisma.enterprisePayable.findUniqueOrThrow({where:{id:closedRacePayable.id}})).toEqual(closedRacePayable);
         expect(await prisma.enterpriseSupplierReturnRequest.findUniqueOrThrow({where:{id:raceId}})).toEqual(closedRace);
