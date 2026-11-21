@@ -22,6 +22,7 @@ type Compensation = {
   amount: string; currencyCode: string; supplierReference: string; reason: string;
   status: string; revision: number; submittedAt?: string | null; approverUserId?: string | null;
   postingJournalEntryId?: string | null; reservationActive: boolean;
+  requestedByName?: string | null; approverName?: string | null; postedByName?: string | null;
 };
 type Preview = {
   maximum: string; targetReserved: string; targetAvailable: string;
@@ -269,6 +270,8 @@ export function SupplierClaimCompensationPanel({
               REJECTED:t("Rejetée","Rejected"),CANCELLED:t("Annulée","Cancelled")} as Record<string,string>)[row.status] || row.status}
           </StatusBadge>
         </div>
+        {row.approverName ? <p className="text-xs text-dtsc-muted">{t("Validateur désigné","Assigned reviewer")} : <span className="font-semibold text-dtsc-ink">{row.approverName}</span></p> : null}
+        {row.status==="POSTED" && row.postedByName ? <p className="text-xs text-dtsc-muted">{t("Comptabilisé par","Posted by")} : {row.postedByName}</p> : null}
         {row.reservationActive ? <p className="text-xs text-amber-700 dark:text-amber-300">{t(
           "Le montant est réservé sur la créance et la dette.", "Amount reserved against claim and payable.")}</p> : null}
         {row.status === "DRAFT" && canSubmit ? <form onSubmit={event => void transition(event,row,"SUBMIT_COMPENSATION")} className="grid min-w-0 gap-2 sm:grid-cols-[1fr_auto]">

@@ -1382,10 +1382,16 @@ draftDb.enterpriseSupplierClaimCompensation.findMany=async({where,skip,take,incl
   if(where.requestedByUserId&&where.requestedByUserId!=="creator")return [];
   return [{...draftRow,payable:{supplierInvoice:{number:"INV-READABLE"}}}];
 };
+draftDb.user={findMany:async({where,select})=>{
+  assert.ok(where.id.in.includes("creator"));assert.equal(select.name,true);
+  return [{id:"creator",name:"Original Requester"},{id:"reviewer",name:"Independent Reviewer"}];
+}};
 draftDb.enterpriseSupplierClaimCompensation.count=async({where})=>
   where.requestedByUserId&&where.requestedByUserId!=="creator"?0:1;
 const claimHistory=await draftService.listSupplierClaimCompensations("org-a","reviewer","claim-a",true,1);
 assert.equal(claimHistory.pagination.total,1);assert.equal(claimHistory.items[0].targetInvoiceNumber,"INV-READABLE");
+assert.equal(claimHistory.items[0].requestedByName,"Original Requester");
+assert.equal(claimHistory.items[0].approverName,"Independent Reviewer");
 assert.equal(claimHistory.items[0].reservationActive,true);
 for(const field of ["claimAccountId","payableAccountId","sourceCreditJournalId","targetInvoiceJournalId","idempotencyKey"])
   assert.equal(Object.hasOwn(claimHistory.items[0],field),false);

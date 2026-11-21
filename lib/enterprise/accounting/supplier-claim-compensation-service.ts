@@ -324,10 +324,20 @@ export async function listSupplierClaimCompensations(
       }),
       tx.enterpriseSupplierClaimCompensation.count({ where }),
     ]);
+    const actorIds = [...new Set(items.flatMap(item =>
+      [item.requestedByUserId, item.approverUserId, item.approvedByUserId, item.postedByUserId]
+        .filter((id): id is string => Boolean(id))))];
+    const actors = actorIds.length
+      ? await tx.user.findMany({ where: { id: { in: actorIds } }, select: { id: true, name: true } })
+      : [];
+    const names = new Map(actors.map(actor => [actor.id, actor.name]));
     return {
       items: items.map(item => ({
         ...supplierCompensationDraftProjection(item),
         targetInvoiceNumber: item.payable.supplierInvoice.number,
+        requestedByName: names.get(item.requestedByUserId) || null,
+        approverName: item.approverUserId ? names.get(item.approverUserId) || null : null,
+        postedByName: item.postedByUserId ? names.get(item.postedByUserId) || null : null,
       })),
       pagination: { page, pageSize: 25, total, pageCount: Math.max(1, Math.ceil(total / 25)) },
     };
