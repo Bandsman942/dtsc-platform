@@ -111,3 +111,16 @@ Champs métier additifs `EnterprisePayable.compensatedAmount` et `EnterpriseSupp
 8. Certification réelle : type-check/lint/build, tests PostgreSQL, concurrence et rollback, QA régression, migration/Delivery, Playwright et revue, OWNER_E2E sur SHA final. Production depuis main uniquement, contrôle de déploiement et smoke tests avant clôture #1212.
 
 Aucun backfill, aucune modification de données historiques, aucune migration dans le lot 1A. Ne pas fusionner cette tranche.
+
+
+## Sécurisation supplémentaire — changement d'entreprise ou de créance (21/11/2026)
+
+Le panneau de compensation est remonté avec une clé `organizationId:claimId` pour chaque dossier. Ses soldes, listes de dettes et d'historique, montants, date, aperçu de compensation et clé d'idempotence sont réinitialisés lorsque l'entreprise ou la créance change. La lecture des dettes et de l'historique conserve son annulation `AbortController` en cas de changement de contexte.
+
+Dans la vue financière parent, les dialogues, justificatifs de remboursement et clés de requêtes de l'entreprise précédente sont vidés au changement d'`organizationId`. Une réponse asynchrone de lecture ou de création de remboursement pour un ancien contexte ne peut plus remplacer l'état du contexte actif. Le serveur conserve seul l'autorité pour la vérification des droits et le cloisonnement tenant.
+
+**Preuves disponibles :** contrôles statiques ajoutés à `pnpm qa:inventory-lot-traceability-1212` ; type-check, build, workflows et recette navigateur sur le nouveau SHA doivent être lus indépendamment de toute CI antérieure.
+
+**E2E propriétaire à réaliser :** ouvrir une créance fournisseur de l'entreprise A et une compensation en préparation ; basculer vers l'entreprise B puis vers une autre créance ; vérifier l'absence de dettes, informations, aperçus et références de A ; revenir à A, recharger les données autorisées, puis créer une nouvelle intention avec nouvelle clé d'idempotence. Répéter pendant une lecture API retardée. Vérifier FR/EN, mobile 320 px et mode clair/sombre. Aucun effet comptable ne doit être généré par un changement de contexte.
+
+Ce correctif ne résout pas à lui seul les inverses métier, la couverture FX/valorisation, les retours multi-provenances ni les flux sectoriels complets. **PR DRAFT ; OWNER_E2E non obtenu ; aucun déploiement.**
