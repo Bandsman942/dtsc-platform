@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { Field, NativeSelect } from "@/components/enterprise/core-v2/erp-v2-ui";
 import { EnterpriseApproverSelect } from "@/components/enterprise/enterprise-approver-select";
 import { financeMutation } from "@/components/enterprise/professional/finance-professional-workspace-shared";
@@ -38,7 +38,7 @@ const labels = (locale: FinanceLocale, fr: string, en: string) => locale === "en
 export function SupplierClaimCompensationPanel({
   organizationId, claim, locale, businessDate, canWrite, canSubmit, canApprove, onMutated,
 }: Props) {
-  const t = (fr: string, en: string) => labels(locale, fr, en);
+  const t = useCallback((fr: string, en: string) => labels(locale, fr, en), [locale]);
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
   const [payables, setPayables] = useState<Payable[]>([]);
@@ -52,13 +52,33 @@ export function SupplierClaimCompensationPanel({
   const [selectedPayableId, setSelectedPayableId] = useState("");
   const [amount, setAmount] = useState("");
   const [accountingDate, setAccountingDate] = useState(businessDate || "");
-  useEffect(() => { if (businessDate) setAccountingDate(current => current || businessDate); }, [businessDate]);
   const [preview, setPreview] = useState<Preview | null>(null);
   const [previewKey, setPreviewKey] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
+
+  // A panel instance may outlive a claim/tenant switch. Never retain another
+  // claim's debts, accounting preview or idempotency key after that switch.
+  useEffect(() => {
+    setQuery("");
+    setPage(1);
+    setPayables([]);
+    setPageCount(1);
+    setHistory([]);
+    setHistoryPage(1);
+    setHistoryPageCount(1);
+    setHistoryStatus("ALL");
+    setSelectedPayableId("");
+    setAmount("");
+    setAccountingDate(businessDate || "");
+    setPreview(null);
+    setPreviewKey("");
+    setError("");
+    setMessage("");
+    setIdempotencyKey(crypto.randomUUID());
+  }, [organizationId, claim.id, businessDate]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -83,7 +103,7 @@ export function SupplierClaimCompensationPanel({
       "Payables are unavailable. Check access and try again.")); })
       .finally(() => { if (!controller.signal.aborted) setPayablesLoading(false); });
     return () => controller.abort();
-  }, [organizationId, claim.businessPartyId, claim.currencyCode, query, page, refresh, locale]);
+  }, [organizationId, claim.businessPartyId, claim.currencyCode, query, page, refresh, locale, t]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -103,7 +123,7 @@ export function SupplierClaimCompensationPanel({
       "Historique des compensations indisponible. Actualisez le dossier.",
       "Compensation history unavailable. Refresh the claim.")); });
     return () => controller.abort();
-  }, [organizationId, claim.id, historyPage, historyStatus, refresh, locale]);
+  }, [organizationId, claim.id, historyPage, historyStatus, refresh, locale, t]);
 
   function resetPreview() { setPreview(null); setPreviewKey(""); }
   const currentKey = [selectedPayableId, amount, accountingDate].join("|");
