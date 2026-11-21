@@ -26,7 +26,7 @@ type Compensation = {
 };
 type Preview = {
   maximum: string; targetReserved: string; targetAvailable: string;
-  plan?: { amount: string; payableAfter: string; unreservedClaimAfter: string; treasuryImpact: string; accountingDate: string };
+  plan?: { amount: string; payableAfter: string; targetUnreservedAfter: string; unreservedClaimAfter: string; treasuryImpact: string; accountingDate: string };
 };
 type Props = {
   organizationId: string; claim: Claim; locale: FinanceLocale; businessDate?: string;
@@ -237,6 +237,7 @@ export function SupplierClaimCompensationPanel({
       {preview?.plan && previewKey === currentKey ? <div className="grid gap-2 rounded-lg border border-dtsc-border p-3 text-sm sm:grid-cols-2">
         <p>{t("Dette après compensation","Payable after offset")} : <strong>{money(preview.plan.payableAfter)}</strong></p>
         <p>{t("Créance non réservée après compensation","Available claim after offset")} : <strong>{money(preview.plan.unreservedClaimAfter)}</strong></p>
+        <p>{t("Dette disponible après réservation","Payable still allocatable after reservation")} : <strong>{money(preview.plan.targetUnreservedAfter)}</strong></p>
         <p>{t("Impact en trésorerie","Cash impact")} : <strong>{money(preview.plan.treasuryImpact)}</strong></p>
         <p className="text-dtsc-muted">{t("Aucune écriture avant validation et comptabilisation","No posting before approval and final execution")}</p>
       </div> : null}

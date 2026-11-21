@@ -331,8 +331,9 @@ export async function readSupplierClaimCompensationEvidenceTx(
   const targetAvailable = payable.outstandingAmount.minus(targetReserved);
   const maximum = Prisma.Decimal.min(proof.available, targetAvailable);
   const plan = intent ? await readSupplierClaimCompensationPostingPlanTx(tx, organizationId, {
-    ...intent, currencyCode: target.currencyCode, maximum, openPayable: targetAvailable,
-    unreservedClaim: proof.available, targetInvoiceDate: target.invoiceDate, creditDate: proof.credit.creditDate,
+    ...intent, currencyCode: target.currencyCode, maximum, openPayable: payable.outstandingAmount,
+    targetAvailable, unreservedClaim: proof.available,
+    targetInvoiceDate: target.invoiceDate, creditDate: proof.credit.creditDate,
     historicalDebtAccountId: debt.id, claimAccountId: proof.claim.settlementClaimAccountId,
   }) : undefined;
   return {
@@ -352,7 +353,7 @@ export async function readSupplierClaimCompensationEvidenceTx(
 async function readSupplierClaimCompensationPostingPlanTx(
   tx: Prisma.TransactionClient, organizationId: string,
   input: { amount: string; accountingDate: string; currencyCode: string; maximum: Prisma.Decimal;
-    openPayable: Prisma.Decimal; unreservedClaim: Prisma.Decimal; targetInvoiceDate: Date;
+    openPayable: Prisma.Decimal; targetAvailable: Prisma.Decimal; unreservedClaim: Prisma.Decimal; targetInvoiceDate: Date;
     creditDate: Date; historicalDebtAccountId: string; claimAccountId: string },
 ) {
   const reject = (): never => { throw new EnterpriseAccountingError("SUPPLIER_RETURN_COMPENSATION_PLAN_INVALID", 409); };
@@ -399,6 +400,7 @@ async function readSupplierClaimCompensationPostingPlanTx(
     accountingDate: input.accountingDate, amount,
     debitPayable: amount, creditSupplierClaim: amount,
     payableAfter: input.openPayable.minus(amount),
+    targetUnreservedAfter: input.targetAvailable.minus(amount),
     unreservedClaimAfter: input.unreservedClaim.minus(amount),
     treasuryImpact: zero(), executionAvailable: false as const,
   };

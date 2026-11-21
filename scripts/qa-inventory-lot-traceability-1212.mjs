@@ -1192,7 +1192,9 @@ const cmpPlan=(intent=cmpPlanIntent,proof=cmpProof)=>compensationService.readSup
 const cmpPlanned=(await cmpPlan()).plan;
 assert.equal(cmpPlanned.amount.toFixed(),"9");
 assert.equal(cmpPlanned.debitPayable.toFixed(),"9");assert.equal(cmpPlanned.creditSupplierClaim.toFixed(),"9");
-assert.equal(cmpPlanned.payableAfter.toFixed(),"11");assert.equal(cmpPlanned.unreservedClaimAfter.toFixed(),"0");
+assert.equal(cmpPlanned.payableAfter.toFixed(),"11");
+assert.equal(cmpPlanned.targetUnreservedAfter.toFixed(),"11");
+assert.equal(cmpPlanned.unreservedClaimAfter.toFixed(),"0");
 assert.equal(cmpPlanned.treasuryImpact.toFixed(),"0");assert.equal(cmpPlanned.executionAvailable,false);
 for(const amount of ["0","-1","10","0.0000001","1e0","NaN","999999999999999"]) await assert.rejects(cmpPlan({...cmpPlanIntent,amount}),cmpPlanRefusal);
 for(const accountingDate of ["2026-11-19","2026-02-30","2026-02-29","0000-11-20","2026-13-01","2026-11-20T00:00:00Z","2099-01-01"]) await assert.rejects(cmpPlan({...cmpPlanIntent,accountingDate}),cmpPlanRefusal);
@@ -1201,6 +1203,12 @@ cmpJournalActive=false;await assert.rejects(cmpPlan(),cmpPlanRefusal);cmpJournal
 cmpPostingEnabled=false;await assert.rejects(cmpPlan(),cmpPlanRefusal);cmpPostingEnabled=true;
 cmpReadyCurrency="CDF";await assert.rejects(cmpPlan(),cmpPlanRefusal);cmpReadyCurrency="USD";
 cmpClaimAccount="other-claim";await assert.rejects(cmpPlan(),cmpPlanRefusal);cmpClaimAccount="claim-account";
+cmpReserved=[{id:"pending-other",amount:d(5),currencyCode:"USD",
+  targetInvoiceJournalId:"target-journal",payableAccountId:"ACCOUNTS_PAYABLE"}];
+const reservedPlan=(await cmpPlan()).plan;
+assert.equal(reservedPlan.payableAfter.toFixed(),"11","Posted balance must start from actual 20");
+assert.equal(reservedPlan.targetUnreservedAfter.toFixed(),"6","Reservation availability starts from 15");
+cmpReserved=[];
 // Historical account is checked first; only change the mapping for the later posting day.
 cmpJournal.accountingDate=cmpCreditDate;
 mocks["@/lib/enterprise/accounting/semantic-account-resolver"]={resolveSemanticPostingAccount:async(_tx,input)=>{
