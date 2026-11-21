@@ -1417,3 +1417,37 @@ assert.ok(scopedPayablesSource.includes("retailFinanceReadSiteScope(organization
 assert.ok(scopedPayablesSource.includes("SUPPLIER_PAYABLES_SITE_SCOPE_REQUIRED"),
   "Site isolation failure must be an explicit and actionable Finance error");
 console.log("Supplier compensation history and UI: page-bounded, no ledger identifiers, owner/manager access, FR/EN responsive panel");
+
+/* Lot 1G.10: non-cash compensation is NEVER a supplier credit note. */
+const distinctInvoice={id:"comp-vs-credit",organizationId:"org-a",supplierId:"supplier-a",businessPartyId:"party-a",
+  currencyCode:"USD",grandTotal:d(20),amountPaid:d(0),amountCredited:d(5),
+  amountCompensated:d(9),outstandingAmount:d(6)};
+let distinctPayable={id:"comp-debt",supplierInvoiceId:"comp-vs-credit",supplierId:"supplier-a",businessPartyId:"party-a",
+  currencyCode:"USD",originalAmount:d(20),allocatedAmount:d(0),creditedAmount:d(5),
+  compensatedAmount:d(9),outstandingAmount:d(6),status:"OPEN"};
+const distinctTx={
+  enterprisePayable:{findFirst:async({where})=>{
+    assert.equal(where.organizationId,"org-a");assert.equal(where.supplierInvoiceId,"comp-vs-credit");
+    return distinctPayable;
+  }},
+  enterprisePayableAllocation:{
+    groupBy:async({where})=>{
+      assert.equal(where.payableId,"comp-debt");assert.equal(where.status,"CONFIRMED");
+      assert.ok(where.sourceType.in.includes("SUPPLIER_CLAIM_COMPENSATION"));
+      return [
+        {sourceType:"SUPPLIER_CREDIT_NOTE",_sum:{amount:d(5)}},
+        {sourceType:"SUPPLIER_CLAIM_COMPENSATION",_sum:{amount:d(9)}},
+      ];
+    },
+    count:async()=>0,
+  },
+};
+assert.equal((await settlement.readSupplierReturnSettlementTx(distinctTx,"org-a",distinctInvoice,d(5),"USD")).payableReduction.toFixed(),"5");
+await assert.rejects(settlement.readSupplierReturnSettlementTx(distinctTx,"org-a",
+  {...distinctInvoice,amountCredited:d(14),amountCompensated:d(0)},d(5),"USD"),
+  {code:"SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED"});
+distinctPayable={...distinctPayable,creditedAmount:d(14),compensatedAmount:d(0)};
+await assert.rejects(settlement.readSupplierReturnSettlementTx(distinctTx,"org-a",
+  {...distinctInvoice,amountCredited:d(14),amountCompensated:d(0)},d(5),"USD"),
+  {code:"SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED"});
+console.log("Supplier non-cash settlement: separate real credit notes 5, compensation 9, open payable 6, no arbitrary payment");
