@@ -2226,6 +2226,10 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
           "targetInvoiceJournalId","idempotencyKey"])expect(firstHistory[privateField]).toBeUndefined();
         expect((await context.owner.request.get(historyPath+"&compensationId="+compensationId)).status()).toBe(400);
         expect((await context.owner.request.get(base+"/payables?claimCompensationsFor="+raceId+"&page=0")).status()).toBe(400);
+        const onlyDrafts=await context.owner.request.get(historyPath+"&compensationStatus=DRAFT");
+        expect(onlyDrafts.status(),await onlyDrafts.text()).toBe(200);
+        expect((await onlyDrafts.json()).items.some(row=>row.id===compensationId)).toBe(true);
+        expect((await context.owner.request.get(historyPath+"&compensationStatus=UNSAFE")).status()).toBe(400);
         const frozenDraft=await prisma.enterpriseSupplierClaimCompensation.findUniqueOrThrow({where:{id:compensationId}});
         expect(frozenDraft.targetInvoiceJournalId).toBe(targetJournal.id);
         expect(frozenDraft.claimAccountId).not.toBe(frozenDraft.payableAccountId);

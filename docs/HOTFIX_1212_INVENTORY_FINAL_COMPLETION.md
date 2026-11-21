@@ -77,7 +77,7 @@ Le POST distingue les droits Payables view comme prérequis de session, update p
 
 ## Lot 1G.7 — historique paginé des compensations (DRAFT)
 
-GET Payables avec claimCompensationsFor et page : historique de 25 éléments par organisation/créance, droits Finance Payables view et Payments view, isolation site stricte, consultation de l'auteur ou des responsables autorisés, références de factures cibles lisibles sans divulguer les comptes comptables privés. Les compensations rejetées ne réservent plus les montants.
+GET Payables avec claimCompensationsFor et page : historique de 25 éléments par organisation/créance, droits Finance Payables view et Payments view, isolation site stricte, consultation de l'auteur ou des responsables autorisés, références de factures cibles lisibles sans divulguer les comptes comptables privés. Les compensations rejetées ne réservent plus les montants. Rail de filtres des statuts en FR/EN via compensationStatus (allow-list serveur et pagination réelle), aucune filtration locale trompeuse après pagination.
 
 ## Lot 1G.7 — interface Finance Design 2.0 FR/EN (DRAFT)
 

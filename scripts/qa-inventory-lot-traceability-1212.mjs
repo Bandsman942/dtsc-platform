@@ -1376,6 +1376,7 @@ console.log("Supplier compensation posting builder: canonical balanced liability
 /* Lot 1G.7: page-bounded history and privacy, no direct ledger IDs. */
 draftDb.enterpriseSupplierClaimCompensation.findMany=async({where,skip,take,include})=>{
   assert.equal(where.organizationId,"org-a");assert.equal(where.claimId,"claim-a");
+  if(where.status)assert.equal(where.status,"PENDING_APPROVAL");
   assert.equal(skip,0);assert.equal(take,25);
   assert.equal(include.payable.select.supplierInvoice.select.number,true);
   if(where.requestedByUserId&&where.requestedByUserId!=="creator")return [];
@@ -1390,6 +1391,8 @@ for(const field of ["claimAccountId","payableAccountId","sourceCreditJournalId",
   assert.equal(Object.hasOwn(claimHistory.items[0],field),false);
 const privateHistory=await draftService.listSupplierClaimCompensations("org-a","other-user","claim-a",false,1);
 assert.equal(privateHistory.items.length,0);assert.equal(privateHistory.pagination.total,0);
+const filteredHistory=await draftService.listSupplierClaimCompensations("org-a","reviewer","claim-a",true,1,"PENDING_APPROVAL");
+assert.equal(filteredHistory.items[0].status,"PENDING_APPROVAL");
 const compensationUi=fs.readFileSync("components/enterprise/professional/supplier-claim-compensation-panel.tsx","utf8");
 const invoicesUi=fs.readFileSync("components/enterprise/professional/enterprise-finance-invoices-workspace.tsx","utf8");
 for(const token of ["data-supplier-claim-compensation","PREPARE_COMPENSATION","SUBMIT_COMPENSATION",
