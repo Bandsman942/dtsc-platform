@@ -306,6 +306,33 @@ export async function readSupplierClaimCompensation(organizationId: string, acto
   }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
 }
 
+/** Page-bounded claim workflow history. No private ledger identifiers
+ * are exposed and site-scoped operators cannot see another store's debts. */
+export async function listSupplierClaimCompensations(
+  organizationId: string, actorUserId: string, claimId: string, canSeeAll: boolean,
+  page: number,
+) {
+  return prisma.$transaction(async tx => {
+    await assertSupplierCompensationScopeTx(tx, organizationId, actorUserId);
+    const where = { organizationId, claimId, ...(canSeeAll ? {} : { requestedByUserId: actorUserId }) };
+    const [items, total] = await Promise.all([
+      tx.enterpriseSupplierClaimCompensation.findMany({
+        where, orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        skip: (page - 1) * 25, take: 25,
+        include: { payable: { select: { supplierInvoice: { select: { number: true } } } } },
+      }),
+      tx.enterpriseSupplierClaimCompensation.count({ where }),
+    ]);
+    return {
+      items: items.map(item => ({
+        ...supplierCompensationDraftProjection(item),
+        targetInvoiceNumber: item.payable.supplierInvoice.number,
+      })),
+      pagination: { page, pageSize: 25, total, pageCount: Math.max(1, Math.ceil(total / 25)) },
+    };
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
+}
+
 // The frozen accounting proof stays server-side. Never represent this as an
 // allocation, payment, posted journal or even a reservation.
 export function supplierCompensationDraftProjection(row: Awaited<ReturnType<typeof prepareSupplierClaimCompensation>>) {

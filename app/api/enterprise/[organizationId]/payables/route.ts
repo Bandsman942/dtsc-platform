@@ -5,7 +5,7 @@ import { z } from "zod";
 import { getEnterpriseAccountingAccess } from "@/lib/enterprise/accounting/access";
 import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
 import { isValidEnterpriseActivityCivilDate } from "@/lib/enterprise/enterprise-activity-civil-date";
-import { prepareSupplierClaimCompensation, cancelSupplierClaimCompensation, submitSupplierClaimCompensation, decideSupplierClaimCompensation, postSupplierClaimCompensation, readSupplierClaimCompensation, supplierCompensationDraftProjection } from "@/lib/enterprise/accounting/supplier-claim-compensation-service";
+import { prepareSupplierClaimCompensation, cancelSupplierClaimCompensation, submitSupplierClaimCompensation, decideSupplierClaimCompensation, postSupplierClaimCompensation, readSupplierClaimCompensation, listSupplierClaimCompensations, supplierCompensationDraftProjection } from "@/lib/enterprise/accounting/supplier-claim-compensation-service";
 import { authorizeFinanceRequest, financeBusinessDateRange, financeErrorResponse, financeListParams, financeValidationErrorResponse } from "@/lib/enterprise/accounting/http";
 import { prisma } from "@/lib/prisma";
 import { supplierReturnFinanceProjectionTx, supplierReturnPayableCapacity } from "@/lib/enterprise/accounting/supplier-return-credit-reconciliation";
@@ -38,7 +38,26 @@ export async function GET(req: Request, { params }: Params) {
   const { organizationId } = await params;
   const auth = await authorizeFinanceRequest(req, organizationId, "FINANCE_PAYABLES", "view");
   if (!auth.ok) return auth.response;
-  const compensationId = new URL(req.url).searchParams.get("compensationId");
+  const query = new URL(req.url).searchParams;
+  const compensationId = query.get("compensationId");
+  const claimCompensationsFor = query.get("claimCompensationsFor");
+  if (compensationId !== null && claimCompensationsFor !== null)
+    return financeErrorResponse(new EnterpriseAccountingError("FINANCE_INPUT_INVALID", 400));
+  if (claimCompensationsFor !== null) {
+    try {
+      if (!claimCompensationsFor || claimCompensationsFor.length > 200 ||
+          !await getEnterpriseAccountingAccess({ session: auth.session, organizationId,
+            moduleCode: "FINANCE_PAYMENTS", action: "view" }))
+        throw new EnterpriseAccountingError("SUPPLIER_RETURN_REFUND_ACCESS_FORBIDDEN", 403);
+      const rawPage = query.get("page") || "1";
+      if (!/^[1-9]\d{0,3}$/.test(rawPage)) throw new EnterpriseAccountingError("FINANCE_INPUT_INVALID",400);
+      const history = await listSupplierClaimCompensations(
+        organizationId, auth.session.userId, claimCompensationsFor, auth.access.canSeeAll, Number(rawPage));
+      await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt,
+        metadata: { organizationId, domain: "supplier-claim-compensation-history", claimId: claimCompensationsFor, page: Number(rawPage) } });
+      return NextResponse.json(history, { headers: { "Cache-Control": "private, no-store" } });
+    } catch (error) { return financeErrorResponse(error,"SUPPLIER_RETURN_COMPENSATION_DRAFT_CONFLICT"); }
+  }
   if (compensationId !== null) {
     try {
       if (!await getEnterpriseAccountingAccess({ session: auth.session, organizationId, moduleCode: "FINANCE_PAYMENTS", action: "view" }))
