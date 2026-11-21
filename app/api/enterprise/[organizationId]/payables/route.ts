@@ -135,7 +135,7 @@ const compensationDraftMutation = z.discriminatedUnion("action", [
 export async function POST(req: Request, { params }: Params) {
   const startedAt = Date.now();
   const { organizationId } = await params;
-  const auth = await authorizeFinanceRequest(req, organizationId, "FINANCE_PAYABLES", "update", { mutation: true, limit: 60 });
+  const auth = await authorizeFinanceRequest(req, organizationId, "FINANCE_PAYABLES", "view", { mutation: true, limit: 60 });
   if (!auth.ok) return auth.response;
   const parsed = compensationDraftMutation.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return financeValidationErrorResponse(parsed.error);
@@ -143,15 +143,16 @@ export async function POST(req: Request, { params }: Params) {
     if (!await getEnterpriseAccountingAccess({ session: auth.session, organizationId, moduleCode: "FINANCE_PAYMENTS", action: "view" }))
       throw new EnterpriseAccountingError("SUPPLIER_RETURN_REFUND_ACCESS_FORBIDDEN", 403);
     const data = parsed.data;
-    if (data.action === "SUBMIT_COMPENSATION" &&
-        !await getEnterpriseAccountingAccess({ session: auth.session, organizationId, moduleCode: "FINANCE_PAYABLES", action: "submit" }))
-      throw new EnterpriseAccountingError("SUPPLIER_RETURN_REFUND_ACCESS_FORBIDDEN", 403);
-    if (["APPROVE_COMPENSATION", "REJECT_COMPENSATION"].includes(data.action) &&
-        !await getEnterpriseAccountingAccess({ session: auth.session, organizationId, moduleCode: "FINANCE_PAYABLES", action: "approve" }))
+    // Approvers may have canApprove without canWrite. Apply the actual
+    // mutation permission rather than requiring Payables update for everyone.
+    const requiredAction = data.action === "SUBMIT_COMPENSATION" ? "submit"
+      : data.action === "APPROVE_COMPENSATION" || data.action === "REJECT_COMPENSATION" ? "approve"
+      : data.action === "POST_COMPENSATION" ? "pay" : "update";
+    if (!await getEnterpriseAccountingAccess({ session: auth.session, organizationId,
+      moduleCode: "FINANCE_PAYABLES", action: requiredAction }))
       throw new EnterpriseAccountingError("SUPPLIER_RETURN_REFUND_ACCESS_FORBIDDEN", 403);
     if (data.action === "POST_COMPENSATION" &&
-        (!await getEnterpriseAccountingAccess({ session: auth.session, organizationId, moduleCode: "FINANCE_PAYABLES", action: "pay" }) ||
-         !await getEnterpriseAccountingAccess({ session: auth.session, organizationId, moduleCode: "FINANCE_ACCOUNTING", action: "create" })))
+        !await getEnterpriseAccountingAccess({ session: auth.session, organizationId, moduleCode: "FINANCE_ACCOUNTING", action: "create" }))
       throw new EnterpriseAccountingError("SUPPLIER_RETURN_REFUND_ACCESS_FORBIDDEN", 403);
     const draft = data.action === "PREPARE_COMPENSATION"
       ? await prepareSupplierClaimCompensation(organizationId, auth.session.userId, data)

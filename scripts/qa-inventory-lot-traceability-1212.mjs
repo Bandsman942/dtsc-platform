@@ -1363,7 +1363,7 @@ const buildComp=()=>draftService.buildSupplierClaimCompensationPosting(postingCo
 const offsetDocument=await buildComp();
 assert.equal(offsetDocument.journalType,"GENERAL");assert.equal(offsetDocument.sourceEntityType,"EnterpriseSupplierClaimCompensation");
 assert.equal(offsetDocument.lines.length,2);
-assert.deepEqual(offsetDocument.lines.map(x=>x.accountMappingKey),["ACCOUNTS_PAYABLE","SUPPLIER_RETURN_CLAIMS"]);
+assert.equal(offsetDocument.lines.map(x=>x.accountMappingKey).join(","),"ACCOUNTS_PAYABLE,SUPPLIER_RETURN_CLAIMS");
 assert.equal(offsetDocument.lines[0].debit.toFixed(),"9");assert.equal(offsetDocument.lines[1].credit.toFixed(),"9");
 assert.equal(offsetDocument.lines[0].businessPartyId,"party-a");assert.equal(offsetDocument.lines[1].businessPartyId,"party-a");
 assert.equal(offsetDocument.lines[0].transactionAmount.toFixed(),"9");assert.equal(offsetDocument.lines[1].transactionAmount.toFixed(),"9");
