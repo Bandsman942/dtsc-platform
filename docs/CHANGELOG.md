@@ -1,3 +1,9 @@
+## 2026-11-21 — Durcissement du contexte Finance #1212 (DRAFT)
+
+- Compensation fournisseur : réinitialisation de l'état du panneau à chaque changement d'entreprise, de créance ou de date métier ; nouvelle clé d'idempotence et disparition des aperçus et listes précédents.
+- Remboursement fournisseur : protection des réponses API asynchrones provenant de l'ancienne entreprise, fermeture des éditeurs sensibles et nettoyage des données de dossier.
+- Tests ciblés de non-régression complétés ; aucun changement de schéma ni d'écriture comptable. La validation E2E globale du chantier #1212 reste requise avant fusion.
+
 ## 2026-11-20 — Suite #1212 — v1.23.5 candidate (DRAFT)
 
 - Lot 1G.10 : règlement fournisseur par compensation distinct du paiement et de l'avoir, indicateurs canoniques et formule de réconciliation dédiés. Migration additive, test PostgreSQL.
