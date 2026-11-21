@@ -2375,6 +2375,52 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
           expect(await prisma.enterpriseJournalEntry.count({where:{organizationId,
             sourceEntityType:"EnterpriseSupplierClaimCompensation",sourceEntityId:rejectionId}})).toBe(0);
           expect(await prisma.enterprisePayableAllocation.count({where:{organizationId,payableId:targetPayable.id}})).toBe(0);
+
+          // True concurrent submissions against the SAME 9 USD claim, but two
+          // distinct posted 12 USD debts. One and only one can reserve it.
+          const concurrentInvoice=await prisma.enterpriseSupplierInvoice.create({data:{
+            organizationId,number:historyKey+"-CONCURRENT-COMP-"+scenario,
+            supplierId:supplier.id,businessPartyId:supplierParty.id,status:"APPROVED",
+            invoiceDate:new Date(returnBusinessContext.businessDate+"T00:00:00.000Z"),
+            currencyCode:fixture.currencyCode,subtotal:"12",taxTotal:"0",grandTotal:"12",outstandingAmount:"12",
+            approvedAt:new Date(),approvedByUserId:fixture.settler.id,createdByUserId:fixture.owner.id,
+            items:{create:{description:"Second independent target debt",quantity:"1",unitPrice:"12",
+              netAmount:"12",taxAmount:"0",totalAmount:"12"}},
+          }});
+          const concurrentPosted=await post(context.owner,base+"/supplier-invoices/"+concurrentInvoice.id+
+            "/transition",{action:"POST",revision:concurrentInvoice.revision});
+          expect(concurrentPosted.status,JSON.stringify(concurrentPosted.body)).toBe(200);
+          const concurrentPayable=await prisma.enterprisePayable.findFirstOrThrow({
+            where:{organizationId,supplierInvoiceId:concurrentInvoice.id}});
+          const raceInputs=[targetPayable.id,concurrentPayable.id].map((payableId,i)=>({
+            ...compensationDraftInput,payableId,amount:"9",
+            supplierReference:historyKey+"-CONCURRENT-COMP-"+scenario+"-"+i,
+            idempotencyKey:historyKey+"-concurrent-comp-"+scenario+"-"+i,
+          }));
+          const raceDrafts=await Promise.all(raceInputs.map(input=>post(context.owner,base+"/payables",input)));
+          for(const draft of raceDrafts)expect(draft.status,JSON.stringify(draft.body)).toBe(201);
+          const raceResults=await Promise.all(raceDrafts.map(draft=>post(context.owner,base+"/payables",{
+            action:"SUBMIT_COMPENSATION",compensationId:draft.body.compensation.id,
+            revision:1,approverUserId:fixture.settler.id,
+          })));
+          expect(raceResults.map(result=>result.status).sort((a,b)=>a-b)).toEqual([200,409]);
+          const winner=raceResults.find(result=>result.status===200).body.compensation;
+          const rejectedRacer=raceResults.find(result=>result.status===409);
+          expect(rejectedRacer.body.error).toBeTruthy();
+          const raceProof=await context.owner.request.get(claimPath);
+          expect(raceProof.status(),await raceProof.text()).toBe(200);
+          expect((await raceProof.json()).claim).toMatchObject({compensationReserved:"9",available:"0"});
+          const raceReject=await post(context.settler,base+"/payables",{
+            action:"REJECT_COMPENSATION",compensationId:winner.id,revision:2,
+            reason:"Concurrent offset test, release all held supplier funds",
+          });
+          expect(raceReject.status,JSON.stringify(raceReject.body)).toBe(200);
+          const released=await context.owner.request.get(claimPath);
+          expect(released.status(),await released.text()).toBe(200);
+          expect((await released.json()).claim).toMatchObject({compensationReserved:"0",available:"9"});
+          expect(await prisma.enterprisePayableAllocation.count({where:{
+            organizationId,payableId:{in:[targetPayable.id,concurrentPayable.id]},
+            sourceType:"SUPPLIER_CLAIM_COMPENSATION"}})).toBe(0);
         }
 
         // Refuse the source invoice itself and any unfound target.

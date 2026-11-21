@@ -91,6 +91,10 @@ Le lecteur canonique de créances vérifie pour chaque compensation POSTED : app
 
 La gate #670 a détecté deux nouveaux affichages avec repli arbitraire sur USD ; corrigés en exigeant la devise réelle de la dette et en signalant explicitement son absence, sans masque de devise. Nouvelle CI requise.
 
+## Lot 1G.9 — concurrence réelle HTTP/PostgreSQL (DRAFT)
+
+Recette avec deux dettes fournisseurs comptabilisées, deux brouillons indépendants du même montant et soumissions concurrentes à la même créance : une seule transaction doit réserver le montant (200/409), l'autre conserve le brouillon non réservé. Rejet du gagnant libère la totalité avant le remboursement bancaire ; aucun journal, allocation ou trésorerie fantôme n'est créé. Le verrou sur la créance et l'isolation Serializable sont vérifiés par les effets réels, non par un mock.
+
 ## Programme restant (aucune certification implicite)
 
 1. Créance fournisseur canonique : preuve et registre, posting partie double, règlement par remboursement ou compensation approuvée, capacité et concurrence, avoir partiel/intégral sur facture payée.
