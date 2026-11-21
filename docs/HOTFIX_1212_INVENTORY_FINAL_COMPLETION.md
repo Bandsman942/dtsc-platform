@@ -124,3 +124,16 @@ Le routeur de modules Finance recrée les workspaces Créances/Dettes par clé `
 **E2E propriétaire à réaliser :** ouvrir une créance fournisseur de l'entreprise A et une compensation en préparation ; basculer vers l'entreprise B puis vers une autre créance ; vérifier l'absence de dettes, informations, aperçus et références de A ; revenir à A, recharger les données autorisées, puis créer une nouvelle intention avec nouvelle clé d'idempotence. Répéter pendant une lecture API retardée. Vérifier FR/EN, mobile 320 px et mode clair/sombre. Aucun effet comptable ne doit être généré par un changement de contexte.
 
 Ce correctif ne résout pas à lui seul les inverses métier, la couverture FX/valorisation, les retours multi-provenances ni les flux sectoriels complets. **PR DRAFT ; OWNER_E2E non obtenu ; aucun déploiement.**
+
+
+## Lot 6 — alertes de rappel aux responsables de dépôts (DRAFT)
+
+Un rappel de lot global met déjà en quarantaine les enregistrements correspondants dans les dépôts de l'entreprise. La transition recherche désormais, **dans la transaction du rappel**, les dépôts actifs réellement touchés, leurs responsables désignés et leur adhésion active à la même organisation. L'auteur du rappel, les membres retirés et les responsables absents ne sont pas destinataires. Une même personne n'est notifiée qu'une fois.
+
+**Après commit uniquement**, une notification `INFO` neutre est créée via le service commun `notifyUser`, par lots de dix destinataires et clé d'idempotence stable `INVENTORY_RECALL:organisation:référence:utilisateur`. Aucun numéro de lot, article, dépôt, fournisseur, identité des destinataires ou motif qualité n'est mis dans la notification. Le lien mène au module Stocks, dont l'accès reste soumis aux permissions serveur. Les erreurs d'envoi sont isolées : une alerte manquante n'annule ni le rappel ni la quarantaine. La réponse et l'audit contiennent seulement les nombres de destinataires, notifications enregistrées et échecs ; le formulaire FR/EN signale les échecs sans annoncer un retour en disponibilité.
+
+**Contrôles automatisés :** `scripts/qa-inventory-recall-alerts-1212.mjs`, inclus dans `pnpm qa:inventory-lot-traceability-1212`. La QA vérifie l'isolement par entreprise, les gestionnaires actifs, les doublons, la neutralité du contenu, l'idempotence de la clé et l'isolation des erreurs.
+
+**Recette E2E propriétaire encore requise :** deux dépôts actifs touchés + un dépôt non concerné ; gestionnaires actifs, désactivés et retirés ; un gestionnaire commun à plusieurs dépôts ; affichage Web/mobiles, FR/EN, clair/sombre, et lien permissionné ; contrôle d'une notification échouée, de l'absence de changement de stock et du refus du rappel dupliqué. Aucune garantie de livraison push sur le terminal (seule la mise en file est vérifiée). Les entreprises sans responsable désigné doivent être signalées dans le pilotage qualité : le présent lot ne crée aucune affectation automatique.
+
+Les autres réserves du programme (inverse financier, FX/multi-origines, adapters sectoriels et OWNER_E2E global) restent ouvertes. Aucun déploiement ni fusion.
