@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { CheckCircle2, Eye, FileMinus2, Plus, Printer, Send, ShieldCheck, XCircle } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { useEnterpriseBusinessContext } from "@/components/enterprise/use-enterprise-business-context";
@@ -171,6 +171,7 @@ export function EnterpriseFinanceInvoicesWorkspace(props: Props) {
   const [refreshKey, setRefreshKey] = useState(0);
   const [detail, setDetail] = useState<InvoiceRecord | null>(null);
   const [refundClaim,setRefundClaim]=useState<RefundClaim|null>(null);
+  const activeOrganizationIdRef=useRef(organizationId);
   const [refundPaymentId,setRefundPaymentId]=useState<string|null>(null);
   const [refundBankValid,setRefundBankValid]=useState(false);
   const [refundKey,setRefundKey]=useState("");
@@ -190,6 +191,21 @@ export function EnterpriseFinanceInvoicesWorkspace(props: Props) {
   const [errorMessage, setErrorMessage] = useState("");
   useToastMessage(message, "success");
   useToastMessage(errorMessage, "error");
+
+  // This workspace can survive a change of enterprise. Close any old tenant's
+  // financial editors before displaying another company's data.
+  useEffect(() => {
+    activeOrganizationIdRef.current = organizationId;
+    setRefundClaim(null);
+    setRefundPaymentId(null);
+    setRefundKey("");
+    setRefundBankValid(false);
+    setDetail(null);
+    setActionTarget(null);
+    setCreditTarget(null);
+    setCreateOpen(false);
+    setBusy(false);
+  }, [organizationId]);
 
   useEffect(() => {
     if (!createOpen) return;
@@ -342,20 +358,23 @@ export function EnterpriseFinanceInvoicesWorkspace(props: Props) {
   }
 
   async function openClaimRefund(claimId:string) {
+    const requestOrganizationId=organizationId;
     setBusy(true);setErrorMessage("");setRefundPaymentId(null);setRefundBankValid(false);
     try {
       const response=await fetch(`/api/enterprise/${organizationId}/payments?supplierReturnClaimId=${encodeURIComponent(claimId)}`,{cache:"no-store"});
       const body=await response.json();
       if(!response.ok||!body.claim)throw new Error("CLAIM_UNAVAILABLE");
+      if(activeOrganizationIdRef.current!==requestOrganizationId)return;
       setRefundClaim(body.claim as RefundClaim);setRefundKey(crypto.randomUUID());setDetail(null);
-    }catch{setErrorMessage(locale==="en"?"Unable to open the supplier claim. Check Finance access and accounting evidence.":"Impossible d’ouvrir la créance fournisseur. Vérifiez les droits Finance et les pièces comptables.");}
-    finally{setBusy(false);}
+    }catch{if(activeOrganizationIdRef.current===requestOrganizationId)setErrorMessage(locale==="en"?"Unable to open the supplier claim. Check Finance access and accounting evidence.":"Impossible d’ouvrir la créance fournisseur. Vérifiez les droits Finance et les pièces comptables.");}
+    finally{if(activeOrganizationIdRef.current===requestOrganizationId)setBusy(false);}
   }
 
   async function createClaimRefund(event:FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if(!refundClaim?.canCreate||!refundBankValid||!refundKey)return;
     const form=new FormData(event.currentTarget);
+    const requestOrganizationId=organizationId;
     setBusy(true);setErrorMessage("");
     try{
       const result=await financeMutation(`/api/enterprise/${organizationId}/payments`,{
@@ -367,10 +386,11 @@ export function EnterpriseFinanceInvoicesWorkspace(props: Props) {
       });
       const payment=result.payment as {id?:string}|undefined;
       if(!payment?.id)throw new Error("PAYMENT_ID_MISSING");
+      if(activeOrganizationIdRef.current!==requestOrganizationId)return;
       setRefundPaymentId(payment.id);setRefreshKey(value=>value+1);
       setMessage(locale==="en"?"Supplier refund draft created. Submit it for independent approval.":"Brouillon de remboursement créé. Soumettez-le pour validation indépendante.");
-    }catch(error){setErrorMessage(safeFinanceError(error, locale === "en" ? "Unable to prepare refund" : "Impossible de préparer le remboursement", locale));}
-    finally{setBusy(false);}
+    }catch(error){if(activeOrganizationIdRef.current===requestOrganizationId)setErrorMessage(safeFinanceError(error, locale === "en" ? "Unable to prepare refund" : "Impossible de préparer le remboursement", locale));}
+    finally{if(activeOrganizationIdRef.current===requestOrganizationId)setBusy(false);}
   }
 
   async function createCredit(event: FormEvent<HTMLFormElement>) {
