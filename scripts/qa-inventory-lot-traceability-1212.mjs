@@ -1476,3 +1476,6 @@ await assert.rejects(settlement.readSupplierReturnSettlementTx(distinctTx,"org-a
   {...distinctInvoice,amountCredited:d(14),amountCompensated:d(0)},d(5),"USD"),
   {code:"SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED"});
 console.log("Supplier non-cash settlement: separate real credit notes 5, compensation 9, open payable 6, no arbitrary payment");
+
+// The all-sector inventory quality gate must include recall notification safety.
+await import("./qa-inventory-recall-alerts-1212.mjs");
