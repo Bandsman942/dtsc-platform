@@ -2406,7 +2406,11 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
             supplierReference:historyKey+"-CONCURRENT-COMP-"+scenario+"-"+i,
             idempotencyKey:historyKey+"-concurrent-comp-"+scenario+"-"+i,
           }));
-          const raceDrafts=await Promise.all(raceInputs.map(input=>post(context.owner,base+"/payables",input)));
+          // Draft creation locks immutable claim evidence and may serialize.
+          // The business race begins at SUBMIT, where each intent competes to
+          // reserve the same nine dollars on different supplier invoices.
+          const raceDrafts=[];
+          for(const input of raceInputs) raceDrafts.push(await post(context.owner,base+"/payables",input));
           for(const draft of raceDrafts)expect(draft.status,JSON.stringify(draft.body)).toBe(201);
           const raceResults=await Promise.all(raceDrafts.map(draft=>post(context.owner,base+"/payables",{
             action:"SUBMIT_COMPENSATION",compensationId:draft.body.compensation.id,
