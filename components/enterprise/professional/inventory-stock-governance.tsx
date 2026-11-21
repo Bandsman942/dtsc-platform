@@ -154,9 +154,24 @@ export function InventoryStockGovernance({ organizationId, organizationName, loc
     try {
       const payload = { inventoryItemId: String(form.get("inventoryItemId") || ""), warehouseId: String(form.get("warehouseId") || ""), lotNumber: String(form.get("lotNumber") || "").trim(), productionDate: String(form.get("productionDate") || "") || null, expiryDate: String(form.get("expiryDate") || "") || null, notes: String(form.get("notes") || "") || null };
       const response = await fetch(`/api/enterprise/${organizationId}/inventory/lots`, { method: editLot ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(editLot ? { id: editLot.id, revision: editLot.revision, status: nextStatus||editLot.status, productionDate: payload.productionDate, expiryDate: payload.expiryDate, notes: payload.notes, ...((recall||nextStatus!==editLot.status)?{qualityReason:String(form.get("qualityReason")||"").trim()}:{}), ...(recall?{recall:true}:{}) } : payload) });
-      const body = await response.json().catch(() => null) as { message?: string;recallReference?:string;affectedLots?:number } | null;
+      const body = await response.json().catch(() => null) as { message?: string;recallReference?:string;affectedLots?:number;notifications?:{recipients:number;queued:number;failed:number} } | null;
       if (!response.ok) throw new Error(body?.message || (en ? "Batch save failed." : "Enregistrement du lot impossible."));
-      setLotDialog(false); setEditLot(null); refresh(); if(body?.recallReference){notifyToast({title:en?"Recall registered":"Rappel enregistré",description:`${body.recallReference} · ${body.affectedLots||0} ${en?"batch records quarantined":"fiches de lot mises en quarantaine"}`,tone:"success"});return;} notifyToast({ title: en ? "Batch metadata recorded; quantity unchanged" : "Lot enregistré ; quantité inchangée", description: en ? "Record the physical receipt through an approved stock adjustment or goods receipt." : "Enregistrez la réception physique par une entrée de stock approuvée.", tone: "success" });
+      setLotDialog(false); setEditLot(null); refresh(); if(body?.recallReference){
+         const alerts=body.notifications;
+         const notificationSummary=alerts
+           ? (en ? ` · ${alerts.queued}/${alerts.recipients} manager alerts queued`
+             : ` · ${alerts.queued}/${alerts.recipients} alertes responsables enregistrées`)
+           : "";
+         notifyToast({title:en?"Recall registered":"Rappel enregistré",description:`${body.recallReference} · ${body.affectedLots||0} ${en?"batch records quarantined":"fiches de lot mises en quarantaine"}${notificationSummary}`,tone:"success"});
+         if(alerts?.failed){
+           notifyToast({title:en?"Recall notification issue":"Alerte de rappel incomplète",
+             description:en
+               ? `${alerts.failed} manager notifications could not be queued. The affected batches remain quarantined.`
+               : `${alerts.failed} notifications n'ont pas pu être enregistrées. Les lots restent en quarantaine.`,
+             tone:"error"});
+         }
+         return;
+       } notifyToast({ title: en ? "Batch metadata recorded; quantity unchanged" : "Lot enregistré ; quantité inchangée", description: en ? "Record the physical receipt through an approved stock adjustment or goods receipt." : "Enregistrez la réception physique par une entrée de stock approuvée.", tone: "success" });
     } catch (caught) { notifyToast({ title: en ? "Batch not saved" : "Lot non enregistré", description: customerFacingError(caught, locale), tone: "error" }); }
     finally { setBusy(false); }
   }
