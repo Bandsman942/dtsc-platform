@@ -1428,6 +1428,11 @@ for (const resetProof of [
 }
 assert.ok(invoicesUi.includes('key={`${organizationId}:${refundClaim.id}`}'),
   "Compensation panel must remount between claims and tenants to isolate pending requests");
+assert.ok(invoicesUi.includes('activeOrganizationIdRef.current!==requestOrganizationId'),
+  "Out-of-order refund responses must not overwrite the newly active enterprise context");
+for (const oldTenantState of ['setRefundClaim(null)', 'setRefundPaymentId(null)', 'setRefundKey("")']) {
+  assert.ok(invoicesUi.includes(oldTenantState), `Enterprise switch must clear ${oldTenantState}`);
+}
 const scopedPayablesSource=fs.readFileSync("app/api/enterprise/[organizationId]/payables/route.ts","utf8");
 assert.ok(scopedPayablesSource.includes("retailFinanceReadSiteScope(organizationId, auth.session.userId, \"COLLECT_PAYMENT\")"),
   "Payables without canonical site coordinate must reject isolated retail operators");
