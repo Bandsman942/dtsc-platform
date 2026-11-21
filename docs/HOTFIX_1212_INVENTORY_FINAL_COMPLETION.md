@@ -85,6 +85,10 @@ Nouveau panneau responsive dans le détail de la créance fournisseur : recherch
 
 La CI du candidat 06bc6957 a passé Migration, mais le type-check a refusé le branchement TS de l'action CANCEL. Branches discriminées explicitement ; aucune règle Finance affaiblie. Les nouveaux contrôles de l'UI sont encore à certifier.
 
+## Lot 1G.8 — preuve de rapprochement renforcée des compensations comptabilisées (DRAFT)
+
+Le lecteur canonique de créances vérifie pour chaque compensation POSTED : approbation assignée toujours valide, trois acteurs distincts, date du journal et allocation exacte, double écriture en devise fonctionnelle (transaction et valeur), aucune contrepassation, journal initial de la facture cible non inversé, identité fournisseur/tiers, cohérence des projections facture/dette et somme originale — paiements — crédits = solde. Une incohérence refuse tout nouveau remboursement ou compensation ; aucune correction silencieuse d'historique, aucun double solde. QA et recette de non-régression à certifier avant fusion.
+
 ## Programme restant (aucune certification implicite)
 
 1. Créance fournisseur canonique : preuve et registre, posting partie double, règlement par remboursement ou compensation approuvée, capacité et concurrence, avoir partiel/intégral sur facture payée.

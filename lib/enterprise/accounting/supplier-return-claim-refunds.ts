@@ -109,26 +109,57 @@ export async function readSupplierClaimRefundEvidenceTx(
       continue;
     }
     // No balancing entry, allocation, or account proof means no claim reduction.
-    const [entries, allocation, payable] = await Promise.all([
+    const [entries, allocation, payable, approval] = await Promise.all([
       tx.enterpriseJournalEntry.findMany({ where: { organizationId, sourceEntityType: "EnterpriseSupplierClaimCompensation", sourceEntityId: offset.id }, include: { lines: true }, take: 2 }),
       tx.enterprisePayableAllocation.findMany({ where: { organizationId, sourceType: "SUPPLIER_CLAIM_COMPENSATION", sourceId: offset.id }, take: 2 }),
       tx.enterprisePayable.findFirst({ where: { organizationId, id: offset.payableId } }),
+      tx.enterpriseApproval.findFirst({ where: { organizationId,
+        targetEntityType: "EnterpriseSupplierClaimCompensation", targetEntityId: offset.id,
+        status: "APPROVED", archivedAt: null, requestedByUserId: offset.requestedByUserId,
+        approverUserId: offset.approvedByUserId || "" }, select: { id: true } }),
     ]);
     const entry = entries[0], alloc = allocation[0];
     if (offset.status !== "POSTED" || !offset.approvedAt || !offset.approvedByUserId || !offset.postedAt ||
-        !offset.postedByUserId || !offset.postingJournalEntryId ||
+        !offset.postedByUserId || !offset.postingJournalEntryId || !approval ||
+        offset.approvedByUserId !== offset.approverUserId ||
+        offset.postedByUserId === offset.approvedByUserId || offset.postedByUserId === offset.requestedByUserId ||
         !payable || payable.businessPartyId !== invoice.businessPartyId || payable.currencyCode !== claim.currencyCode ||
+        !payable.creditedAmount.isFinite() || payable.creditedAmount.lt(offset.amount) ||
         entries.length !== 1 || allocation.length !== 1 || !alloc || alloc.payableId !== offset.payableId ||
         alloc.status !== "CONFIRMED" || alloc.reversedAt || !alloc.amount.equals(offset.amount) ||
+        alloc.createdByUserId !== offset.postedByUserId ||
+        alloc.allocationDate.getTime() !== offset.accountingDate.getTime() ||
         !entry || entry.id !== offset.postingJournalEntryId || entry.status !== "POSTED" || !entry.postedAt ||
+        entry.accountingDate.getTime() !== offset.accountingDate.getTime() ||
         entry.reversedAt || entry.reversalOfEntryId || entry.postingEvent !== "SUPPLIER_CLAIM_COMPENSATION_POSTED" ||
         entry.postingVersion !== 1 || entry.functionalCurrencyCode !== claim.currencyCode ||
         !entry.totalDebit.equals(offset.amount) || !entry.totalCredit.equals(offset.amount) || entry.lines.length !== 2 ||
         !entry.lines.some(line => line.ledgerAccountId === offset.payableAccountId && line.debit.equals(offset.amount) && line.credit.isZero()) ||
         !entry.lines.some(line => line.ledgerAccountId === offset.claimAccountId && line.credit.equals(offset.amount) && line.debit.isZero()) ||
-        entry.lines.some(line => line.businessPartyId !== invoice.businessPartyId || line.transactionCurrencyCode !== claim.currencyCode ||
-          !line.exchangeRate?.equals(1) || !line.transactionAmount?.equals(offset.amount)) ||
+        entry.lines.some(line => line.organizationId !== organizationId ||
+          line.businessPartyId !== invoice.businessPartyId || line.transactionCurrencyCode !== claim.currencyCode ||
+          !line.exchangeRate?.equals(1) || !line.transactionAmount?.equals(offset.amount) ||
+          !line.functionalAmount.equals(offset.amount)) ||
         await tx.enterpriseJournalReversal.count({ where: { organizationId, OR: [{ originalEntryId: entry.id }, { reversalEntryId: entry.id }] } })) return bad();
+    const [target, targetJournal] = await Promise.all([
+      tx.enterpriseSupplierInvoice.findFirst({ where: { organizationId, id: payable.supplierInvoiceId } }),
+      tx.enterpriseJournalEntry.findFirst({ where: { organizationId,
+        id: offset.targetInvoiceJournalId, sourceEntityType: "EnterpriseSupplierInvoice",
+        sourceEntityId: payable.supplierInvoiceId, postingEvent: "SUPPLIER_INVOICE_POSTED",
+        postingVersion: 1, status: "POSTED" } }),
+    ]);
+    if (!target || !targetJournal || targetJournal.reversedAt || targetJournal.reversalOfEntryId ||
+        !targetJournal.postedAt || targetJournal.functionalCurrencyCode !== claim.currencyCode ||
+        !targetJournal.totalCredit.equals(payable.originalAmount) || !targetJournal.totalDebit.equals(payable.originalAmount) ||
+        payable.supplierId !== claim.supplierId || target.supplierId !== claim.supplierId ||
+        target.businessPartyId !== invoice.businessPartyId || payable.businessPartyId !== target.businessPartyId ||
+        target.currencyCode !== claim.currencyCode || !target.grandTotal.equals(payable.originalAmount) ||
+        !target.amountPaid.equals(payable.allocatedAmount) || !target.amountCredited.equals(payable.creditedAmount) ||
+        !target.outstandingAmount.equals(payable.outstandingAmount) ||
+        !payable.originalAmount.minus(payable.allocatedAmount).minus(payable.creditedAmount).equals(payable.outstandingAmount) ||
+        payable.status !== (payable.outstandingAmount.isZero() ? "CLOSED" : "OPEN") ||
+        await tx.enterpriseJournalReversal.count({ where: { organizationId,
+          OR: [{ originalEntryId: targetJournal.id }, { reversalEntryId: targetJournal.id }] } })) return bad();
     compensated = compensated.plus(offset.amount);
   }
   const remaining = claim.settlementClaimAmount.minus(refunded).minus(compensated);
