@@ -89,6 +89,8 @@ La CI du candidat 06bc6957 a passé Migration, mais le type-check a refusé le b
 
 Le lecteur canonique de créances vérifie pour chaque compensation POSTED : approbation assignée toujours valide, trois acteurs distincts, date du journal et allocation exacte, double écriture en devise fonctionnelle (transaction et valeur), aucune contrepassation, journal initial de la facture cible non inversé, identité fournisseur/tiers, cohérence des projections facture/dette et somme originale — paiements — crédits = solde. Une incohérence refuse tout nouveau remboursement ou compensation ; aucune correction silencieuse d'historique, aucun double solde. QA et recette de non-régression à certifier avant fusion.
 
+La gate #670 a détecté deux nouveaux affichages avec repli arbitraire sur USD ; corrigés en exigeant la devise réelle de la dette et en signalant explicitement son absence, sans masque de devise. Nouvelle CI requise.
+
 ## Programme restant (aucune certification implicite)
 
 1. Créance fournisseur canonique : preuve et registre, posting partie double, règlement par remboursement ou compensation approuvée, capacité et concurrence, avoir partiel/intégral sur facture payée.
