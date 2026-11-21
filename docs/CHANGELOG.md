@@ -2,6 +2,7 @@
 
 - Après rappel confirmé, notification neutre et idempotente aux gestionnaires actifs des dépôts concernés, vérifiés dans la même organisation, sans divulguer de détails sur les lots.
 - Aucune notification envoyée avant commit ; erreurs de mise en file isolées du changement de quarantaine ; retour quantitatif et toasts FR/EN, sans identité des collaborateurs.
+- Relance explicite des alertes depuis un lot rappelé, contrôlée par les droits Stock, la portée multisite et la révision, sans réécriture du stock ni double notification.
 - QA indépendante raccordée à la gate Stocks & Lots. Certificat CI du SHA final et recette propriétaire multisite/permissions encore nécessaires. Aucun déploiement sur la branche.
 
 ## 2026-11-21 — Durcissement du contexte Finance #1212 (DRAFT)
