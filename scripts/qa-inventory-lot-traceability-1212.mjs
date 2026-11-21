@@ -1400,4 +1400,9 @@ for(const token of ["data-supplier-claim-compensation","PREPARE_COMPENSATION","S
   "EnterpriseApproverSelect","claimCompensationsFor","onMutated"])
   assert.ok(compensationUi.includes(token),token);
 assert.ok(invoicesUi.includes("<SupplierClaimCompensationPanel"),"Payables user must actually reach non-cash compensation");
+const scopedPayablesSource=fs.readFileSync("app/api/enterprise/[organizationId]/payables/route.ts","utf8");
+assert.ok(scopedPayablesSource.includes("retailFinanceReadSiteScope(organizationId, auth.session.userId, \"COLLECT_PAYMENT\")"),
+  "Payables without canonical site coordinate must reject isolated retail operators");
+assert.ok(scopedPayablesSource.includes("SUPPLIER_PAYABLES_SITE_SCOPE_REQUIRED"),
+  "Site isolation failure must be an explicit and actionable Finance error");
 console.log("Supplier compensation history and UI: page-bounded, no ledger identifiers, owner/manager access, FR/EN responsive panel");
