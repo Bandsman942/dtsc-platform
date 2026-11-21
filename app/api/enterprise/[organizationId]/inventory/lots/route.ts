@@ -198,6 +198,7 @@ export async function POST(req: Request, { params }: Params) {
 }
 
 export async function PATCH(req: Request, { params }: Params) {
+  const startedAt=Date.now();
   if (!isSameOriginRequest(req)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const session = await getSession(); if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { organizationId } = await params;
@@ -231,6 +232,8 @@ export async function PATCH(req: Request, { params }: Params) {
       await writeAuditLog({userId:session.userId,organizationId,
         action:"ENTERPRISE_STOCK_LOT_RECALL_ALERTS_RETRIED",entity:"EnterpriseStockLot",
         entityId:parsed.data.id,request:req,metadata:{recipients:notifications.recipients,queued:notifications.queued,failed:notifications.failed}});
+      await writeApiLog({request:req,startedAt,statusCode:200,userId:session.userId,
+        metadata:{organizationId,domain:"inventory-recall-alerts-retry",queued:notifications.queued,failed:notifications.failed}});
       return NextResponse.json({ok:true,notifications},{headers:{"Cache-Control":"private, no-store"}});
     }catch(error){return enterpriseDomainErrorResponse(error,"INVENTORY_LOT_UPDATE_FAILED",req);}
   }
@@ -351,6 +354,7 @@ export async function PATCH(req: Request, { params }: Params) {
         })
       : null;
     await writeAuditLog({userId:session.userId,organizationId,action:input.recall?"ENTERPRISE_STOCK_LOT_RECALLED":"ENTERPRISE_STOCK_LOT_UPDATED",entity:"EnterpriseStockLot",entityId:input.id,request:req,metadata:{...publicResult,reason:input.qualityReason||null,...(alerts?{notificationRecipients:alerts.recipients,notificationsQueued:alerts.queued,notificationsFailed:alerts.failed}:{})}});
+    await writeApiLog({request:req,startedAt,statusCode:200,userId:session.userId,metadata:{organizationId,domain:input.recall?"inventory-lot-recall":"inventory-lot-quality",...(alerts?{notificationsQueued:alerts.queued,notificationsFailed:alerts.failed}:{})}});
     return NextResponse.json({ok:true,...publicResult,...(alerts?{notifications:alerts}:{})});
   } catch(error) {
     if(error instanceof Prisma.PrismaClientKnownRequestError && ["P2034","P2002","P2004"].includes(error.code)) return enterpriseDomainErrorResponse(new EnterpriseDomainConflictError("INVENTORY_LOT_CONFLICT"),"INVENTORY_LOT_UPDATE_FAILED",req);
