@@ -327,9 +327,9 @@ export async function PATCH(req: Request, { params }: Params) {
         const reference="RECALL-"+randomUUID().slice(0,12).toUpperCase();
         const changed=await tx.enterpriseStockLot.updateMany({where:{organizationId,inventoryItemId:lot.inventoryItemId,lotNumber:lot.lotNumber},data:{status:"QUARANTINED",recallReference:reference,qualityReason:input.qualityReason,qualityChangedAt:new Date(),qualityChangedByUserId:session.userId,revision:{increment:1}}});
         await publishEnterpriseEvent(tx,{organizationId,entityType:"EnterpriseStockLot",entityId:lot.id,eventType:"STOCK_LOT_RECALLED",summary:reference,actorUserId:session.userId,fromStatus:lot.status,toStatus:"QUARANTINED",metadataJson:{reference,lotNumber:lot.lotNumber,affectedLots:changed.count,reason:input.qualityReason||""}});
-        const recallRecipients=await recallWarehouseManagerRecipientsTx(
-          tx,organizationId,lot.inventoryItemId,lot.lotNumber,reference,session.userId);
-        return {revision:lot.revision+1,recallReference:reference,affectedLots:changed.count,status:"QUARANTINED",recallRecipients};
+        // The public-safety quarantine must not depend on notification
+        // discovery or delivery. Both happen only after this transaction commits.
+        return {revision:lot.revision+1,recallReference:reference,affectedLots:changed.count,status:"QUARANTINED"};
       }
       if(changeStatus && input.status==="AVAILABLE") {
         if(!access.canAdminister || lot.qualityChangedByUserId===session.userId || dateChanged) throw new EnterpriseDomainError("INVENTORY_LOT_RELEASE_FORBIDDEN",403);
@@ -344,18 +344,34 @@ export async function PATCH(req: Request, { params }: Params) {
       if(changeStatus) await publishEnterpriseEvent(tx,{organizationId,entityType:"EnterpriseStockLot",entityId:lot.id,eventType:"STOCK_LOT_QUALITY_CHANGED",summary:lot.lotNumber,actorUserId:session.userId,fromStatus:lot.status,toStatus:input.status,metadataJson:{reason:input.qualityReason||""}});
       return {revision:lot.revision+1,status:input.status||lot.status};
     },{isolationLevel:Prisma.TransactionIsolationLevel.Serializable});
-    // Deliver only after the quarantine transaction commits; the response
-    // never contains warehouse managers' identities or other private data.
-    const {recallRecipients:internalRecipients,...publicResult}=
-      "recallRecipients" in result ? result : {...result,recallRecipients:[] as string[]};
-    const alerts="recallReference" in result && typeof result.recallReference==="string"
-      ? await notifyRecallWarehouseManagers({
-          organizationId,recallReference:result.recallReference,recipientUserIds:internalRecipients ?? [],
-        })
-      : null;
-    await writeAuditLog({userId:session.userId,organizationId,action:input.recall?"ENTERPRISE_STOCK_LOT_RECALLED":"ENTERPRISE_STOCK_LOT_UPDATED",entity:"EnterpriseStockLot",entityId:input.id,request:req,metadata:{...publicResult,reason:input.qualityReason||null,...(alerts?{notificationRecipients:alerts.recipients,notificationsQueued:alerts.queued,notificationsFailed:alerts.failed}:{})}});
-    await writeApiLog({request:req,startedAt,statusCode:200,userId:session.userId,metadata:{organizationId,domain:input.recall?"inventory-lot-recall":"inventory-lot-quality",...(alerts?{notificationsQueued:alerts.queued,notificationsFailed:alerts.failed}:{})}});
-    return NextResponse.json({ok:true,...publicResult,...(alerts?{notifications:alerts}:{})});
+    // A safety-critical recall is already committed. Missing notification
+    // evidence or an unavailable notification service must never roll it back.
+    // Recipient identities remain internal to this read-only follow-up.
+    let alerts:{recipients:number;queued:number;failed:number;discoveryFailed:boolean}|null=null;
+    if("recallReference" in result && typeof result.recallReference==="string") {
+      const recipientIds=await prisma.$transaction(async tx=>{
+        const confirmed=await tx.enterpriseStockLot.findFirst({
+          where:{organizationId,id:input.id,recallReference:result.recallReference,
+            status:"QUARANTINED",archivedAt:null},
+          select:{inventoryItemId:true,lotNumber:true,qualityChangedByUserId:true},
+        });
+        if(!confirmed)throw new Error("INVENTORY_RECALL_NOTIFICATION_PROOF_MISSING");
+        return recallWarehouseManagerRecipientsTx(
+          tx,organizationId,confirmed.inventoryItemId,confirmed.lotNumber,result.recallReference,
+          confirmed.qualityChangedByUserId||session.userId);
+      },{isolationLevel:Prisma.TransactionIsolationLevel.RepeatableRead}).catch(()=>null);
+      if(recipientIds===null) {
+        alerts={recipients:0,queued:0,failed:0,discoveryFailed:true};
+      }else{
+        const delivery=await notifyRecallWarehouseManagers({
+          organizationId,recallReference:result.recallReference,recipientUserIds:recipientIds,
+        }).catch(()=>({recipients:recipientIds.length,queued:0,failed:recipientIds.length}));
+        alerts={...delivery,discoveryFailed:false};
+      }
+    }
+    await writeAuditLog({userId:session.userId,organizationId,action:input.recall?"ENTERPRISE_STOCK_LOT_RECALLED":"ENTERPRISE_STOCK_LOT_UPDATED",entity:"EnterpriseStockLot",entityId:input.id,request:req,metadata:{...publicResult,reason:input.qualityReason||null,...(alerts?{notificationRecipients:alerts.recipients,notificationsQueued:alerts.queued,notificationsFailed:alerts.failed,notificationDiscoveryFailed:alerts.discoveryFailed}:{})}});
+    await writeApiLog({request:req,startedAt,statusCode:200,userId:session.userId,metadata:{organizationId,domain:input.recall?"inventory-lot-recall":"inventory-lot-quality",...(alerts?{notificationsQueued:alerts.queued,notificationsFailed:alerts.failed,notificationDiscoveryFailed:alerts.discoveryFailed}:{})}});
+    return NextResponse.json({ok:true,...result,...(alerts?{notifications:alerts}:{})});
   } catch(error) {
     if(error instanceof Prisma.PrismaClientKnownRequestError && ["P2034","P2002","P2004"].includes(error.code)) return enterpriseDomainErrorResponse(new EnterpriseDomainConflictError("INVENTORY_LOT_CONFLICT"),"INVENTORY_LOT_UPDATE_FAILED",req);
     return enterpriseDomainErrorResponse(error,"INVENTORY_LOT_UPDATE_FAILED",req);
