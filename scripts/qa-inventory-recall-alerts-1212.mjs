@@ -110,6 +110,22 @@ assert.equal(noManagers.length, 0);
 const route = fs.readFileSync("app/api/enterprise/[organizationId]/inventory/lots/route.ts", "utf8");
 assert.ok(route.includes("recallWarehouseManagerRecipientsTx("));
 assert.ok(route.includes("notifyRecallWarehouseManagers("));
+for (const retryGuard of [
+  'action:z.literal("RETRY_RECALL_ALERTS")',
+  'if(!access.canAdminister)',
+  'if(visibility.isolationEnabled)',
+  'lot.status!=="QUARANTINED"',
+  'lot.revision!==parsed.data.revision',
+  'Prisma.TransactionIsolationLevel.RepeatableRead',
+  'ENTERPRISE_STOCK_LOT_RECALL_ALERTS_RETRIED',
+]) {
+  assert.ok(route.includes(retryGuard), `Alert retry must retain server guard ${retryGuard}`);
+}
+const governanceUi=fs.readFileSync("components/enterprise/professional/inventory-stock-governance.tsx","utf8");
+for (const uiGuard of ['retryRecallAlerts(lot)', 'lot.recallReference&&canRecall',
+  'action:"RETRY_RECALL_ALERTS"', 'alerts.failed']) {
+  assert.ok(governanceUi.includes(uiGuard), `Recall alert retry UI must contain ${uiGuard}`);
+}
 const deliveryIndex = route.indexOf("const alerts=");
 assert.ok(deliveryIndex > route.indexOf('return {revision:lot.revision+1,recallReference:reference'),
   "Notifications must never be sent inside the recall mutation branch");
