@@ -2326,8 +2326,16 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
           const linkedAlloc=await prisma.enterprisePayableAllocation.findMany({where:{
             organizationId,payableId:offsetPayable.id,sourceType:"SUPPLIER_CLAIM_COMPENSATION",sourceId:offsetId}});
           expect(linkedAlloc).toHaveLength(1);expect(linkedAlloc[0].amount.equals(1)).toBe(true);
-          expect((await prisma.enterprisePayable.findUniqueOrThrow({where:{id:offsetPayable.id}})).outstandingAmount.isZero()).toBe(true);
-          expect((await prisma.enterpriseSupplierInvoice.findUniqueOrThrow({where:{id:offsetInvoice.id}})).outstandingAmount.isZero()).toBe(true);
+          const settledPayable=await prisma.enterprisePayable.findUniqueOrThrow({where:{id:offsetPayable.id}});
+          const settledInvoice=await prisma.enterpriseSupplierInvoice.findUniqueOrThrow({where:{id:offsetInvoice.id}});
+          expect(settledPayable.outstandingAmount.isZero()).toBe(true);
+          expect(settledInvoice.outstandingAmount.isZero()).toBe(true);
+          expect(settledPayable.compensatedAmount.equals(1)).toBe(true);
+          expect(settledInvoice.amountCompensated.equals(1)).toBe(true);
+          expect(settledPayable.creditedAmount.isZero()).toBe(true);
+          expect(settledInvoice.amountCredited.isZero()).toBe(true);
+          expect(settledPayable.allocatedAmount.isZero()).toBe(true);
+          expect(settledInvoice.amountPaid.isZero()).toBe(true);
           expect(await prisma.enterpriseTreasuryTransaction.count({where:{organizationId,transactionType:"SUPPLIER_CLAIM_COMPENSATION"}})).toBe(0);
           const reverseComp=await post(context.owner,base+"/journal-entries/"+postedComp.id+"/reverse",
             {reason:"Generic reversal cannot separate supplier offset",accountingDate:returnBusinessContext.businessDate});

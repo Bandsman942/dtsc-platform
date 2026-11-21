@@ -581,6 +581,7 @@ model EnterpriseSupplierInvoice {
   grandTotal            Decimal                        @db.Decimal(20, 6)
   amountPaid            Decimal                        @default(0) @db.Decimal(20, 6)
   amountCredited        Decimal                        @default(0) @db.Decimal(20, 6)
+  amountCompensated     Decimal                        @default(0) @db.Decimal(20, 6)
   outstandingAmount     Decimal                        @db.Decimal(20, 6)
   varianceReason        String?
   approvedAt            DateTime?
@@ -681,6 +682,7 @@ model EnterprisePayable {
   originalAmount      Decimal                       @db.Decimal(20, 6)
   allocatedAmount     Decimal                       @default(0) @db.Decimal(20, 6)
   creditedAmount      Decimal                       @default(0) @db.Decimal(20, 6)
+  compensatedAmount   Decimal                       @default(0) @db.Decimal(20, 6)
   outstandingAmount   Decimal                       @db.Decimal(20, 6)
   status              String                        @default("OPEN")
   dueDate             DateTime?

@@ -273,11 +273,11 @@ export async function postSupplierClaimCompensation(
       amount: draft.amount, allocationDate: draft.accountingDate, createdByUserId: actorUserId,
     } });
     await tx.enterprisePayable.update({ where: { id: current.id }, data: {
-      creditedAmount: { increment: draft.amount }, outstandingAmount: outstanding,
+      compensatedAmount: { increment: draft.amount }, outstandingAmount: outstanding,
       status: outstanding.isZero() ? "CLOSED" : "OPEN",
     } });
     await tx.enterpriseSupplierInvoice.update({ where: { id: current.supplierInvoiceId }, data: {
-      amountCredited: { increment: draft.amount }, outstandingAmount: outstanding,
+      amountCompensated: { increment: draft.amount }, outstandingAmount: outstanding,
       status: outstanding.isZero() ? "PAID" : "POSTED", revision: { increment: 1 },
     } });
     const updated = await tx.enterpriseSupplierClaimCompensation.update({

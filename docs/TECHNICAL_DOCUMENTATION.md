@@ -1,3 +1,5 @@
+> **Suite #1212 — lot 1G.10, DRAFT** : indicateurs dédiés compensations dans dette et facture fournisseur, additionnés séparément des paiements et avoirs dans la réconciliation ; aucune inflation des avoirs fournisseur par un règlement sans trésorerie. Migration additive et preuves E2E en cours.
+
 > **Suite #1212 — lot 1G.5, DRAFT** : approbation/rejet par destinataire, comptabilisation canonique créance/dette en une transaction à trois acteurs, allocation Payable COMPENSATION et preuve de journal; rejet libère la réserve. Contrats HTTP en cours de certification.
 
 > **Suite #1212 — lot 1G.4, DRAFT** : réservation à la soumission (statut PENDING_APPROVAL et approbateur indépendant) et garde croisée contre remboursement bancaire / paiement fournisseur. Les brouillons ne bloquent pas; la comptabilisation n'est pas encore activée.

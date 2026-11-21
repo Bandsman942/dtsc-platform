@@ -95,6 +95,10 @@ La gate #670 a détecté deux nouveaux affichages avec repli arbitraire sur USD 
 
 Recette avec deux dettes fournisseurs comptabilisées, deux brouillons indépendants du même montant et soumissions concurrentes à la même créance : une seule transaction doit réserver le montant (200/409), l'autre conserve le brouillon non réservé. Rejet du gagnant libère la totalité avant le remboursement bancaire ; aucun journal, allocation ou trésorerie fantôme n'est créé. Le verrou sur la créance et l'isolation Serializable sont vérifiés par les effets réels, non par un mock.
 
+## Lot 1G.10 — séparation comptable du règlement par compensation (DRAFT)
+
+Champs métier additifs `EnterprisePayable.compensatedAmount` et `EnterpriseSupplierInvoice.amountCompensated` (Decimal 20,6, zéro par défaut). La compensation non monétaire n'est pas un avoir fournisseur ni un paiement : elle augmente exclusivement ces nouveaux indicateurs et réduit le solde ouvert. Identité canonique : dette d'origine = allouée aux paiements + créditée par vrais avoirs + compensée avec créance + solde ouvert. Les allocations `PAYMENT`, `SUPPLIER_CREDIT_NOTE` et `SUPPLIER_CLAIM_COMPENSATION` sont prouvées séparément par type et non additionnées au champ crédit. La recette HTTP vérifie que l'écriture de compensation ne gonfle ni amountPaid ni amountCredited. Migration 20261121150000 additive, zéro backfill de l'ancien modèle (aucune compensation n'était en Production avant cette branche). QA/CI requises.
+
 ## Programme restant (aucune certification implicite)
 
 1. Créance fournisseur canonique : preuve et registre, posting partie double, règlement par remboursement ou compensation approuvée, capacité et concurrence, avoir partiel/intégral sur facture payée.

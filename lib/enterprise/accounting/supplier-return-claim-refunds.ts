@@ -124,7 +124,7 @@ export async function readSupplierClaimRefundEvidenceTx(
         offset.approvedByUserId !== offset.approverUserId ||
         offset.postedByUserId === offset.approvedByUserId || offset.postedByUserId === offset.requestedByUserId ||
         !payable || payable.businessPartyId !== invoice.businessPartyId || payable.currencyCode !== claim.currencyCode ||
-        !payable.creditedAmount.isFinite() || payable.creditedAmount.lt(offset.amount) ||
+        !payable.compensatedAmount.isFinite() || payable.compensatedAmount.lt(offset.amount) ||
         entries.length !== 1 || allocation.length !== 1 || !alloc || alloc.payableId !== offset.payableId ||
         alloc.status !== "CONFIRMED" || alloc.reversedAt || !alloc.amount.equals(offset.amount) ||
         alloc.createdByUserId !== offset.postedByUserId ||
@@ -155,8 +155,10 @@ export async function readSupplierClaimRefundEvidenceTx(
         target.businessPartyId !== invoice.businessPartyId || payable.businessPartyId !== target.businessPartyId ||
         target.currencyCode !== claim.currencyCode || !target.grandTotal.equals(payable.originalAmount) ||
         !target.amountPaid.equals(payable.allocatedAmount) || !target.amountCredited.equals(payable.creditedAmount) ||
+        !target.amountCompensated.equals(payable.compensatedAmount) ||
         !target.outstandingAmount.equals(payable.outstandingAmount) ||
-        !payable.originalAmount.minus(payable.allocatedAmount).minus(payable.creditedAmount).equals(payable.outstandingAmount) ||
+        !payable.originalAmount.minus(payable.allocatedAmount).minus(payable.creditedAmount)
+          .minus(payable.compensatedAmount).equals(payable.outstandingAmount) ||
         payable.status !== (payable.outstandingAmount.isZero() ? "CLOSED" : "OPEN") ||
         await tx.enterpriseJournalReversal.count({ where: { organizationId,
           OR: [{ originalEntryId: targetJournal.id }, { reversalEntryId: targetJournal.id }] } })) return bad();
@@ -285,8 +287,8 @@ export async function readSupplierClaimCompensationEvidenceTx(
       target.status !== "POSTED" || target.archivedAt || !target.postedAt ||
       target.invoiceDate < proof.credit.creditDate || payable.status !== "OPEN" ||
       !target.grandTotal.isFinite() || !target.grandTotal.gt(0) || target.grandTotal.decimalPlaces() > 6 ||
-      !target.amountPaid.isZero() || !target.amountCredited.isZero() ||
-      !payable.allocatedAmount.isZero() || !payable.creditedAmount.isZero() ||
+      !target.amountPaid.isZero() || !target.amountCredited.isZero() || !target.amountCompensated.isZero() ||
+      !payable.allocatedAmount.isZero() || !payable.creditedAmount.isZero() || !payable.compensatedAmount.isZero() ||
       !target.grandTotal.equals(payable.originalAmount) || !target.grandTotal.equals(target.outstandingAmount) ||
       !target.outstandingAmount.equals(payable.outstandingAmount)) return reject();
   const [allocations, paymentAllocations, returns, credits, journals] = await Promise.all([

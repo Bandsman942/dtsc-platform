@@ -20,7 +20,7 @@ export function splitSupplierReturnSettlement(input: {
 }
 
 type InvoiceSettlement = Pick<EnterpriseSupplierInvoice, "id" | "organizationId" | "supplierId" | "businessPartyId" |
-  "currencyCode" | "grandTotal" | "amountPaid" | "amountCredited" | "outstandingAmount">;
+  "currencyCode" | "grandTotal" | "amountPaid" | "amountCredited" | "amountCompensated" | "outstandingAmount">;
 
 /** One source of truth for the preview and mutation preflight. Payment and
  * credit allocations are canonical; invoice/payable balances are projections.
@@ -35,9 +35,10 @@ export async function readSupplierReturnSettlementTx(
   if (!payable || payable.supplierId !== invoice.supplierId || payable.businessPartyId !== invoice.businessPartyId ||
       payable.currencyCode !== currencyCode || !payable.originalAmount.equals(invoice.grandTotal) ||
       !payable.allocatedAmount.equals(invoice.amountPaid) || !payable.creditedAmount.equals(invoice.amountCredited) ||
+      !payable.compensatedAmount.equals(invoice.amountCompensated) ||
       !payable.outstandingAmount.equals(invoice.outstandingAmount) ||
-      [payable.originalAmount, payable.allocatedAmount, payable.creditedAmount, payable.outstandingAmount].some(amount => !amount.isFinite() || amount.lt(0)) ||
-      !payable.originalAmount.minus(payable.allocatedAmount).minus(payable.creditedAmount).equals(payable.outstandingAmount) ||
+      [payable.originalAmount, payable.allocatedAmount, payable.creditedAmount, payable.compensatedAmount, payable.outstandingAmount].some(amount => !amount.isFinite() || amount.lt(0)) ||
+      !payable.originalAmount.minus(payable.allocatedAmount).minus(payable.creditedAmount).minus(payable.compensatedAmount).equals(payable.outstandingAmount) ||
       payable.status !== (payable.outstandingAmount.isZero() ? "CLOSED" : "OPEN")) return fail();
   const [groups, invalid] = await Promise.all([
     tx.enterprisePayableAllocation.groupBy({ by: ["sourceType"], where: { organizationId, payableId: payable.id, status: "CONFIRMED", reversedAt: null, sourceType: { in: ["PAYMENT", "SUPPLIER_CREDIT_NOTE", "SUPPLIER_CLAIM_COMPENSATION"] } }, _sum: { amount: true } }),
@@ -46,7 +47,7 @@ export async function readSupplierReturnSettlementTx(
     ] } }),
   ]);
   const total = (type: string) => groups.find(row => row.sourceType === type)?._sum.amount || new Prisma.Decimal(0);
-  if (invalid || !total("PAYMENT").equals(payable.allocatedAmount) || !total("SUPPLIER_CREDIT_NOTE").plus(total("SUPPLIER_CLAIM_COMPENSATION")).equals(payable.creditedAmount)) return fail();
+  if (invalid || !total("PAYMENT").equals(payable.allocatedAmount) || !total("SUPPLIER_CREDIT_NOTE").equals(payable.creditedAmount) || !total("SUPPLIER_CLAIM_COMPENSATION").equals(payable.compensatedAmount)) return fail();
   return splitSupplierReturnSettlement({ creditTotal, outstandingAmount: payable.outstandingAmount });
 }
 

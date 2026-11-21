@@ -242,7 +242,7 @@ const rtvTx = {
     findFirst: async ({where}) => {
       assert.equal(where.organizationId,"org-a"); assert.equal(where.supplierInvoiceId,"invoice-a");
       return { id:"payable-a", supplierId:"supplier-a", businessPartyId:null, currencyCode:"USD", originalAmount:d(70),
-        allocatedAmount:d(70).minus(payableBalance), creditedAmount:d(0), outstandingAmount:payableBalance, status:payableBalance.isZero()?"CLOSED":"OPEN" };
+        allocatedAmount:d(70).minus(payableBalance), creditedAmount:d(0), compensatedAmount:d(0), outstandingAmount:payableBalance, status:payableBalance.isZero()?"CLOSED":"OPEN" };
     },
   },
   enterprisePayableAllocation: {
@@ -274,7 +274,7 @@ mocks["@/lib/enterprise/inventory/supplier-return-preflight"] = {
   assertSupplierReturnAccess: async () => {},
   inspectSupplierReturnTx: async (_tx, org, actor, input) => {
     assert.equal(org,"org-a"); assert.equal(actor,"requester"); assert.equal(input.supplierReturnSourceMovementId,"receipt-movement-a");
-    return { receipt:{id:"receipt-a",purchaseId:"po-a"}, receiptItem:{id:"receipt-item-a"}, invoice:{id:"invoice-a",organizationId:"org-a",supplierId:"supplier-a",businessPartyId:null,currencyCode:"USD",grandTotal:d(70),amountPaid:d(70).minus(payableBalance),amountCredited:d(0),outstandingAmount:payableBalance}, invoiceItem:{id:"invoice-item-a"},
+    return { receipt:{id:"receipt-a",purchaseId:"po-a"}, receiptItem:{id:"receipt-item-a"}, invoice:{id:"invoice-a",organizationId:"org-a",supplierId:"supplier-a",businessPartyId:null,currencyCode:"USD",grandTotal:d(70),amountPaid:d(70).minus(payableBalance),amountCredited:d(0),amountCompensated:d(0),outstandingAmount:payableBalance}, invoiceItem:{id:"invoice-item-a"},
       receiptValue:{id:"receipt-event-a"}, originLayer:{id:"origin-layer-a",remainingQuantity:quantityRemaining},
       unitCost:d(7),totalCost:d(14),recoverableTaxAmount:d(0),creditTotal:d(14),currencyCode:"USD" };
   },
@@ -308,7 +308,7 @@ canManageValue=true; payableBalance=d(10);
 await assert.rejects(doDispatch(),{code:"SUPPLIER_RETURN_PAYABLE_INSUFFICIENT"});
 // The same reader is used by previews and mutations: no negative debt,
  // no source from another tenant and no projection without allocations.
-const settlementInvoice = () => ({id:"invoice-a",organizationId:"org-a",supplierId:"supplier-a",businessPartyId:null,currencyCode:"USD",grandTotal:d(70),amountPaid:d(70).minus(payableBalance),amountCredited:d(0),outstandingAmount:payableBalance});
+const settlementInvoice = () => ({id:"invoice-a",organizationId:"org-a",supplierId:"supplier-a",businessPartyId:null,currencyCode:"USD",grandTotal:d(70),amountPaid:d(70).minus(payableBalance),amountCredited:d(0),amountCompensated:d(0),outstandingAmount:payableBalance});
 payableBalance=d(0);
 const fullClaim=await settlement.readSupplierReturnSettlementTx(rtvTx,"org-a",settlementInvoice(),d(14),"USD");
 assert.equal(fullClaim.supplierClaim.toFixed(),"14");
@@ -1112,9 +1112,9 @@ const cmpDate = new Date("2026-11-20T00:00:00Z");
 const cmpCreditDate = new Date("2026-11-19T00:00:00Z");
 const cmpInvoice = {id:"target-invoice",organizationId:"org-a",number:"INV-TARGET",supplierId:"supplier-a",
   businessPartyId:"party-a",currencyCode:"USD",status:"POSTED",archivedAt:null,postedAt:cmpDate,invoiceDate:cmpDate,
-  grandTotal:d(20),amountPaid:d(0),amountCredited:d(0),outstandingAmount:d(20)};
+  grandTotal:d(20),amountPaid:d(0),amountCredited:d(0),amountCompensated:d(0),outstandingAmount:d(20)};
 const cmpPayable = {id:"target-payable",supplierId:"supplier-a",businessPartyId:"party-a",currencyCode:"USD",status:"OPEN",
-  allocatedAmount:d(0),creditedAmount:d(0),originalAmount:d(20),outstandingAmount:d(20),supplierInvoice:cmpInvoice};
+  allocatedAmount:d(0),creditedAmount:d(0),compensatedAmount:d(0),originalAmount:d(20),outstandingAmount:d(20),supplierInvoice:cmpInvoice};
 const cmpJournal = {id:"target-journal",status:"POSTED",postedAt:cmpDate,reversedAt:null,reversalOfEntryId:null,
   postingVersion:1,postingEvent:"SUPPLIER_INVOICE_POSTED",functionalCurrencyCode:"USD",accountingDate:cmpDate,
   totalDebit:d(20),totalCredit:d(20),lines:[{ledgerAccountId:"ACCOUNTS_PAYABLE",businessPartyId:"party-a",debit:d(0),credit:d(20),
