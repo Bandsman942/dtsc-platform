@@ -2261,6 +2261,11 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
           });
           // A bank refund cannot consume the same USD while the non-cash
           // settlement reserves it; the exact target is reserved too.
+          const payablesReserved=await context.owner.request.get(base+"/payables?recordId="+encodeURIComponent(offsetPayable.id));
+          expect(payablesReserved.status(),await payablesReserved.text()).toBe(200);
+          const reservedRow=(await payablesReserved.json()).items[0];
+          expect(reservedRow).toMatchObject({id:offsetPayable.id,compensationReservedAmount:"1",
+            payableAllocatableAmount:"0",supplierReturnAllocatableAmount:"0"});
           const reservedTarget=await context.owner.request.get(claimPath+"&compensationPayableId="+encodeURIComponent(offsetPayable.id));
           expect(reservedTarget.status(),await reservedTarget.text()).toBe(200);
           expect((await reservedTarget.json()).claim.compensation).toMatchObject({

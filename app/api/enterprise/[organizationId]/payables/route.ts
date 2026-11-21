@@ -98,10 +98,26 @@ export async function GET(req: Request, { params }: Params) {
     }),
   ]);
   const returns=await supplierReturnFinanceProjectionTx(tx,organizationId,pageItems.map(row=>row.supplierInvoiceId));
+  // The common Payables summary must display reservations made by the
+  // non-cash settlement workflow; it is NOT another balance authority.
+  const reservations=pageItems.length?await tx.enterpriseSupplierClaimCompensation.groupBy({
+    by:["payableId","currencyCode"],
+    where:{organizationId,payableId:{in:pageItems.map(row=>row.id)},status:{in:["PENDING_APPROVAL","APPROVED"]}},
+    _sum:{amount:true},_count:{_all:true},
+  }):[];
   const items=pageItems.map(row=>{
     const supplierReturn=returns.get(row.supplierInvoiceId)||null;
     const {reserved,available}=supplierReturnPayableCapacity(row,supplierReturn?.status==="DISPATCHED"?[supplierReturn]:[]);
-    return {...row,supplierReturn,supplierReturnReservedAmount:reserved.toFixed(),supplierReturnAllocatableAmount:available.toFixed()};
+    const offsetRows=reservations.filter(offset=>offset.payableId===row.id);
+    if(offsetRows.some(offset=>offset.currencyCode!==row.currencyCode||offset._count._all>100))
+      throw new EnterpriseAccountingError("SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED",409);
+    const compensationReserved=offsetRows.reduce((sum,offset)=>sum.plus(offset._sum.amount||new Prisma.Decimal(0)),new Prisma.Decimal(0));
+    if(!compensationReserved.isFinite()||compensationReserved.lt(0)||compensationReserved.gt(available))
+      throw new EnterpriseAccountingError("SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED",409);
+    const allocatable=available.minus(compensationReserved);
+    return {...row,supplierReturn,supplierReturnReservedAmount:reserved.toFixed(),
+      compensationReservedAmount:compensationReserved.toFixed(),
+      supplierReturnAllocatableAmount:allocatable.toFixed(),payableAllocatableAmount:allocatable.toFixed()};
   });
   return {items,total,openByCurrency,overdueByCurrency};
   },{isolationLevel:Prisma.TransactionIsolationLevel.RepeatableRead});
