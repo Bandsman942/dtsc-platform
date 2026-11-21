@@ -16,6 +16,9 @@ export async function resolveSemanticPostingAccount(
       where: { id: accountId, organizationId: input.organizationId, isActive: true, archivedAt: null },
     });
     if (!direct) throw new EnterpriseAccountingError("POSTING_DIRECT_ACCOUNT_INVALID", 409, { accountId });
+    if (direct.isControlAccount && !direct.allowDirectPosting && await tx.enterpriseAccountMapping.count({where:{organizationId:input.organizationId,ledgerAccountId:direct.id,mappingKey:"SUPPLIER_RETURN_CLAIMS"}})) {
+      throw new EnterpriseAccountingError("SUPPLIER_RETURN_CLAIM_MAPPING_INVALID",409);
+    }
     return direct;
   }
 

@@ -10,7 +10,7 @@ import { assertSalesCreditNoteStillPostable } from "@/lib/enterprise/accounting/
 import { money, publishFinanceEvent } from "@/lib/enterprise/accounting/helpers";
 import { postBusinessEvent, postBusinessEventTx } from "@/lib/enterprise/accounting/posting-service";
 import { recordPostedTaxApplicationsTx } from "@/lib/enterprise/accounting/tax-engine";
-import { completeSupplierReturnCreditTx, lockSupplierReturnInvoiceTx, verifySupplierReturnCreditTx } from "@/lib/enterprise/accounting/supplier-return-credit-reconciliation";
+import { completeSupplierReturnCreditTx, lockSupplierReturnInvoiceTx, verifySupplierReturnCreditTx, assertSupplierPaymentCapacityTx } from "@/lib/enterprise/accounting/supplier-return-credit-reconciliation";
 
 type AssignedDocumentSubmitInput = {
   revision: number;
@@ -416,19 +416,24 @@ export async function postApprovedSupplierCreditNote(
     if (credit.status !== "APPROVED" || credit.revision !== revision) throw new EnterpriseAccountingError("SUPPLIER_CREDIT_NOTE_NOT_APPROVED", 409);
     await lockSupplierReturnInvoiceTx(tx, organizationId, credit.supplierInvoiceId);
     const creditLines = await tx.enterpriseSupplierCreditNoteItem.findMany({ where:{organizationId,supplierCreditNoteId:credit.id} });
-    await verifySupplierReturnCreditTx(tx, organizationId, credit, creditLines);
+    const linkedReturn=await verifySupplierReturnCreditTx(tx, organizationId, credit, creditLines);
     const payable = credit.supplierInvoice.payable;
+    const payableReduction=linkedReturn?.settlementPayableAmount ?? credit.grandTotal;
+    // Reuse Finance's locked debt-capacity guard before any generic credit
+    // consumes a payable reserved for a supplier-claim compensation.
+    if (!linkedReturn) await assertSupplierPaymentCapacityTx(tx, organizationId, payable, payableReduction);
     if (credit.currencyCode !== payable.currencyCode) throw new EnterpriseAccountingError("SUPPLIER_CREDIT_NOTE_CURRENCY_MISMATCH",409);
-    if (credit.grandTotal.greaterThan(payable.outstandingAmount)) throw new EnterpriseAccountingError("SUPPLIER_CREDIT_EXCEEDS_OPEN_PAYABLE", 409);
+    if (payableReduction.lt(0) || payableReduction.greaterThan(payable.outstandingAmount)) throw new EnterpriseAccountingError("SUPPLIER_CREDIT_EXCEEDS_OPEN_PAYABLE", 409);
     const posting = await postBusinessEventTx(tx, organizationId, actorUserId, { postingEvent: "SUPPLIER_CREDIT_NOTE_POSTED", sourceEntityType: "EnterpriseSupplierCreditNote", sourceEntityId: credit.id }, { supplierCreditTransition: true });
     const creditTaxLines = await tx.enterpriseSupplierCreditNoteItem.findMany({ where: { organizationId, supplierCreditNoteId: credit.id }, select: { id: true, taxBreakdownJson: true, taxRecoveryRequested: true } });
     await recordPostedTaxApplicationsTx(tx, { organizationId, sourceEntityType: "EnterpriseSupplierCreditNoteItem", currencyCode: credit.currencyCode, items: creditTaxLines });
-    const outstanding = money(payable.outstandingAmount.minus(credit.grandTotal));
-    await tx.enterprisePayableAllocation.create({
-      data: { organizationId, payableId: payable.id, sourceType: "SUPPLIER_CREDIT_NOTE", sourceId: credit.id, amount: credit.grandTotal, allocationDate: credit.creditDate, createdByUserId: actorUserId },
+    const outstanding = money(payable.outstandingAmount.minus(payableReduction));
+    // The payable and invoice credited fields remain debt reductions.
+    if(payableReduction.gt(0)) await tx.enterprisePayableAllocation.create({
+      data: { organizationId, payableId: payable.id, sourceType: "SUPPLIER_CREDIT_NOTE", sourceId: credit.id, amount: payableReduction, allocationDate: credit.creditDate, createdByUserId: actorUserId },
     });
-    await tx.enterprisePayable.update({ where: { id: payable.id }, data: { creditedAmount: { increment: credit.grandTotal }, outstandingAmount: outstanding, status: outstanding.isZero() ? "CLOSED" : "OPEN" } });
-    await tx.enterpriseSupplierInvoice.update({ where: { id: credit.supplierInvoiceId }, data: { amountCredited: { increment: credit.grandTotal }, outstandingAmount: outstanding, status: outstanding.isZero() ? "PAID" : credit.supplierInvoice.status, revision: { increment: 1 } } });
+    await tx.enterprisePayable.update({ where: { id: payable.id }, data: { creditedAmount: { increment: payableReduction }, outstandingAmount: outstanding, status: outstanding.isZero() ? "CLOSED" : "OPEN" } });
+    await tx.enterpriseSupplierInvoice.update({ where: { id: credit.supplierInvoiceId }, data: { amountCredited: { increment: payableReduction }, outstandingAmount: outstanding, status: outstanding.isZero() ? "PAID" : credit.supplierInvoice.status, revision: { increment: 1 } } });
     const posted = await tx.enterpriseSupplierCreditNote.update({ where: { id: credit.id }, data: { status: "POSTED", postedAt: new Date(), revision: { increment: 1 } } });
     await completeSupplierReturnCreditTx(tx, organizationId, credit, posting.entry.id, actorUserId);
     await publishFinanceEvent(tx, {
@@ -440,7 +445,7 @@ export async function postApprovedSupplierCreditNote(
       actorUserId,
       fromStatus: "APPROVED",
       toStatus: "POSTED",
-      metadataJson: { payableId: payable.id, journalEntryId: posting.entry.id },
+      metadataJson: { payableId: payable.id, journalEntryId: posting.entry.id, payableReduction:payableReduction.toFixed(), supplierClaimAmount:linkedReturn?.settlementClaimAmount?.toFixed()||"0" },
     });
     return posted;
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });

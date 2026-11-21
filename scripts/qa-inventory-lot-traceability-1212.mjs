@@ -237,7 +237,18 @@ const rtvTx = {
   },
   enterpriseApproval: { findFirst: async () => approvalRtv },
   enterpriseApprovalDecision: { findFirst: async () => approvalEvidence ? { id: "decision-a" } : null },
-  enterprisePayable: { findUnique: async () => ({ organizationId: "org-a", outstandingAmount: payableBalance }) },
+  enterprisePayable: {
+    findUnique: async () => ({ organizationId: "org-a", outstandingAmount: payableBalance }),
+    findFirst: async ({where}) => {
+      assert.equal(where.organizationId,"org-a"); assert.equal(where.supplierInvoiceId,"invoice-a");
+      return { id:"payable-a", supplierId:"supplier-a", businessPartyId:null, currencyCode:"USD", originalAmount:d(70),
+        allocatedAmount:d(70).minus(payableBalance), creditedAmount:d(0), compensatedAmount:d(0), outstandingAmount:payableBalance, status:payableBalance.isZero()?"CLOSED":"OPEN" };
+    },
+  },
+  enterprisePayableAllocation: {
+    groupBy: async ({where}) => { assert.equal(where.organizationId,"org-a"); assert.equal(where.payableId,"payable-a"); return [{sourceType:"PAYMENT",_sum:{amount:d(70).minus(payableBalance)}}]; },
+    count: async () => 0,
+  },
   enterpriseInventoryCostLayer: { updateMany: async ({ where, data }) => {
     assert.equal(where.id, "origin-layer-a"); assert.ok(where.remainingQuantity.equals.equals(quantityRemaining));
     assert.ok(data.remainingQuantity.decrement.equals(2)); quantityRemaining = quantityRemaining.minus(data.remainingQuantity.decrement);
@@ -263,9 +274,9 @@ mocks["@/lib/enterprise/inventory/supplier-return-preflight"] = {
   assertSupplierReturnAccess: async () => {},
   inspectSupplierReturnTx: async (_tx, org, actor, input) => {
     assert.equal(org,"org-a"); assert.equal(actor,"requester"); assert.equal(input.supplierReturnSourceMovementId,"receipt-movement-a");
-    return { receipt:{id:"receipt-a",purchaseId:"po-a"}, receiptItem:{id:"receipt-item-a"}, invoice:{id:"invoice-a",supplierId:"supplier-a"}, invoiceItem:{id:"invoice-item-a"},
+    return { receipt:{id:"receipt-a",purchaseId:"po-a"}, receiptItem:{id:"receipt-item-a"}, invoice:{id:"invoice-a",organizationId:"org-a",supplierId:"supplier-a",businessPartyId:null,currencyCode:"USD",grandTotal:d(70),amountPaid:d(70).minus(payableBalance),amountCredited:d(0),amountCompensated:d(0),outstandingAmount:payableBalance}, invoiceItem:{id:"invoice-item-a"},
       receiptValue:{id:"receipt-event-a"}, originLayer:{id:"origin-layer-a",remainingQuantity:quantityRemaining},
-      unitCost:d(7),totalCost:d(14),recoverableTaxAmount:d(0),currencyCode:"USD" };
+      unitCost:d(7),totalCost:d(14),recoverableTaxAmount:d(0),creditTotal:d(14),currencyCode:"USD" };
   },
 };
 mocks["@/lib/enterprise/accounting/helpers"] = { idempotencyKey: () => "value-a", publishFinanceEvent: async () => { writes.push("audit"); } };
@@ -283,6 +294,8 @@ mocks["@/lib/enterprise/accounting/posting-service"] = {
   },
 };
 mocks["@/lib/enterprise/accounting/errors"] = { EnterpriseAccountingError: TestDomainError };
+const settlement = load("lib/enterprise/accounting/supplier-return-settlement.ts");
+mocks["@/lib/enterprise/accounting/supplier-return-settlement"] = settlement;
 const returnSvc = load("lib/enterprise/inventory/supplier-return-request-service.ts");
 const qtySchema = returnSvc.supplierReturnRequestSchema.shape.quantity;
 for (const quantity of ["2","1.125","0.001","999999999999.999"]) assert.equal(qtySchema.safeParse(quantity).success,true);
@@ -293,6 +306,27 @@ canManageValue=false;
 await assert.rejects(doDispatch(),{code:"SUPPLIER_RETURN_DISPATCH_DENIED"});
 canManageValue=true; payableBalance=d(10);
 await assert.rejects(doDispatch(),{code:"SUPPLIER_RETURN_PAYABLE_INSUFFICIENT"});
+// The same reader is used by previews and mutations: no negative debt,
+ // no source from another tenant and no projection without allocations.
+const settlementInvoice = () => ({id:"invoice-a",organizationId:"org-a",supplierId:"supplier-a",businessPartyId:null,currencyCode:"USD",grandTotal:d(70),amountPaid:d(70).minus(payableBalance),amountCredited:d(0),amountCompensated:d(0),outstandingAmount:payableBalance});
+payableBalance=d(0);
+const fullClaim=await settlement.readSupplierReturnSettlementTx(rtvTx,"org-a",settlementInvoice(),d(14),"USD");
+assert.equal(fullClaim.supplierClaim.toFixed(),"14");
+assert.equal(fullClaim.remainingPayable.toFixed(),"0");
+await assert.rejects(doDispatch(),{code:"SUPPLIER_RETURN_PAYABLE_INSUFFICIENT"});
+assert.equal(writes.length,0);
+payableBalance=d(10);
+const partClaim=await settlement.readSupplierReturnSettlementTx(rtvTx,"org-a",settlementInvoice(),d(14),"USD");
+assert.equal(partClaim.payableReduction.toFixed(),"10");
+assert.equal(partClaim.supplierClaim.toFixed(),"4");
+await assert.rejects(settlement.readSupplierReturnSettlementTx(rtvTx,"org-a",{...settlementInvoice(),amountPaid:d(59)},d(14),"USD"),{code:"SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED"});
+await assert.rejects(settlement.readSupplierReturnSettlementTx(rtvTx,"org-a",{...settlementInvoice(),organizationId:"org-b"},d(14),"USD"),{code:"SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED"});
+const canonicalGroup=rtvTx.enterprisePayableAllocation.groupBy;
+try {
+  rtvTx.enterprisePayableAllocation.groupBy=async()=>[];
+  await assert.rejects(doDispatch(),{code:"SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED"});
+  assert.equal(writes.length,0);
+} finally {rtvTx.enterprisePayableAllocation.groupBy=canonicalGroup;}
 payableBalance=d(70); approvalEvidence=false;
 await assert.rejects(doDispatch(),{code:"SUPPLIER_RETURN_DISPATCH_DENIED"});
 approvalEvidence=true; rtv={...approvedRtv,status:"PENDING_APPROVAL"};
@@ -339,6 +373,62 @@ rtvTx.enterpriseFinanceConfiguration={findUnique:async()=>({functionalCurrencyCo
 mocks["@/lib/enterprise/accounting/helpers"]={...mocks["@/lib/enterprise/accounting/helpers"],money:value=>d(value).toDecimalPlaces(6,Prisma.Decimal.ROUND_HALF_UP),sumDecimals:values=>values.reduce((sum,value)=>sum.plus(value),d(0))};
 mocks["@/lib/enterprise/accounting/historical-credit-tax"]=load("lib/enterprise/accounting/historical-credit-tax.ts");
 const returnCredit = load("lib/enterprise/accounting/supplier-return-credit-reconciliation.ts");
+const supplierPaymentProof = load("lib/enterprise/accounting/supplier-return-payment-proof.ts");
+{
+  const date=new Date("2026-11-19T00:00:00Z"), confirmed=new Date("2026-11-19T10:00:00Z"), allocatedAt=new Date("2026-11-19T11:00:00Z");
+  const payment={id:"pay-proof",organizationId:"org-a",businessPartyId:"party-a",currencyCode:"USD",paymentType:"SUPPLIER_PAYMENT",direction:"OUTBOUND",status:"CONFIRMED",confirmedAt:confirmed,confirmedByUserId:"actor",reversedAt:null,amount:d(70),unallocatedAmount:d(0),financialAccountId:"bank-a",paymentDate:date};
+  const allocation={id:"alloc-proof",organizationId:"org-a",paymentId:payment.id,payableId:"debt-a",receivableId:null,status:"CONFIRMED",reversedAt:null,amount:d(70),allocatedAt,payment};
+  const link={id:"link-proof",sourceId:allocation.id,amount:d(70)};
+  const line=(ledgerAccountId, debit, credit)=>({organizationId:"org-a",ledgerAccountId,businessPartyId:"party-a",transactionCurrencyCode:"USD",transactionAmount:d(70),exchangeRate:d(1),functionalAmount:d(70),debit:d(debit),credit:d(credit)});
+  const journal=(id,sourceEntityType,sourceEntityId,postingEvent,lines)=>({id,organizationId:"org-a",sourceEntityType,sourceEntityId,postingEvent,postingVersion:1,status:"POSTED",postedAt:date,reversedAt:null,reversalOfEntryId:null,functionalCurrencyCode:"USD",totalDebit:d(70),totalCredit:d(70),accountingDate:date,lines});
+  const paidJournal=journal("paid-j","EnterprisePayment",payment.id,"SUPPLIER_PAYMENT_CONFIRMED",[line("SUPPLIER_ADVANCES",70,0),line("bank-ledger",0,70)]);
+  const allocatedJournal=journal("allocated-j","EnterprisePaymentAllocation",allocation.id,"PAYMENT_ALLOCATION_CONFIRMED",[line("ACCOUNTS_PAYABLE",70,0),line("SUPPLIER_ADVANCES",0,70)]);
+  const treasury={paymentId:payment.id,financialAccountId:"bank-a",direction:"OUTBOUND",transactionType:"SUPPLIER_PAYMENT",status:"CONFIRMED",reversedAt:null,currencyCode:"USD",amount:d(70),transactionDate:date};
+  let journals=[paidJournal,allocatedJournal], movements=[treasury], reversalCount=0, linkRows=[link], allocationRows=[allocation];
+  const dbProof={
+    enterprisePayable:{findFirst:async({where})=>{assert.equal(where.organizationId,"org-a");assert.equal(where.supplierInvoiceId,"invoice-a");return {id:"debt-a",supplierId:"supplier-a",businessPartyId:"party-a",currencyCode:"USD",allocatedAmount:d(70)};}},
+    enterpriseFinanceConfiguration:{findUnique:async()=>({functionalCurrencyCode:"USD"})},
+    enterprisePayableAllocation:{findMany:async()=>linkRows},
+    enterprisePaymentAllocation:{findMany:async()=>allocationRows},
+    enterpriseTreasuryTransaction:{findMany:async()=>movements},
+    enterpriseJournalEntry:{findMany:async()=>journals},
+    enterpriseFinancialAccount:{findMany:async()=>[{id:"bank-a",ledgerAccountId:"bank-ledger",currencyCode:"USD"}]},
+    enterpriseJournalReversal:{count:async()=>reversalCount},
+  };
+  const input={organizationId:"org-a",invoiceId:"invoice-a",supplierId:"supplier-a",businessPartyId:"party-a",currencyCode:"USD",amountPaid:d(70),claimAmount:d(14)};
+  const proof=()=>supplierPaymentProof.proveSupplierReturnPaidAmountTx(dbProof,input);
+  const verified=await proof();
+  assert.equal(verified.provenPaidAmount.toFixed(),"70"); assert.equal(verified.paymentCount,1);
+  const rejects=()=>assert.rejects(proof(),{code:"SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED"});
+  reversalCount=1;await rejects();reversalCount=0;
+  movements=[];await rejects();movements=[treasury];
+  journals=[paidJournal];await rejects();journals=[paidJournal,allocatedJournal];
+  journals=[paidJournal,{...allocatedJournal,lines:[line("WRONG",70,0),line("SUPPLIER_ADVANCES",0,70)]}];await rejects();journals=[paidJournal,allocatedJournal];
+  journals=[{...paidJournal,functionalCurrencyCode:"CDF"},allocatedJournal];await rejects();journals=[paidJournal,allocatedJournal];
+  linkRows=[link,link];await rejects();linkRows=[link];
+  allocationRows=[{...allocation,payment:{...payment,businessPartyId:"party-b"}}];await rejects();allocationRows=[allocation];
+  await assert.rejects(supplierPaymentProof.proveSupplierReturnPaidAmountTx(dbProof,{...input,claimAmount:d(71)}),{code:"SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED"});
+  await assert.rejects(supplierPaymentProof.proveSupplierReturnPaidAmountTx(dbProof,{...input,businessPartyId:null}),{code:"SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED"});
+  assert.equal((await proof()).paymentCount,1);
+}
+
+for (const [credit, outstanding, reduction, claim, remaining] of [
+  ["200", "0", "0", "200", "0"],
+  ["200", "50", "50", "150", "0"],
+  ["200", "200", "200", "0", "0"],
+  ["200", "1000", "200", "0", "800"],
+  ["16.240001", "0.000001", "0.000001", "16.24", "0"],
+]) {
+  const split = settlement.splitSupplierReturnSettlement({creditTotal:new Prisma.Decimal(credit),outstandingAmount:new Prisma.Decimal(outstanding)});
+  assert.equal(split.payableReduction.toFixed(), reduction);
+  assert.equal(split.supplierClaim.toFixed(), claim);
+  assert.equal(split.remainingPayable.toFixed(), remaining);
+  assert.equal(split.requiresSupplierClaim, new Prisma.Decimal(claim).gt(0));
+  assert.ok(split.payableReduction.plus(split.supplierClaim).equals(credit));
+}
+for (const [credit, outstanding] of [["0","0"],["-1","1"],["1","-1"],["1.0000001","1"],["1","0.0000001"],["NaN","1"]]) {
+  assert.throws(() => settlement.splitSupplierReturnSettlement({creditTotal:new Prisma.Decimal(credit),outstandingAmount:new Prisma.Decimal(outstanding)}), {code:"SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED"});
+}
 mocks["@/lib/enterprise/accounting/supplier-return-credit-reconciliation"] = returnCredit;
 const inventoryAccounting=load("lib/enterprise/accounting/inventory-accounting-service.ts");
 const {planWeightedAverageResidualQuantities}=inventoryAccounting;
@@ -448,11 +538,17 @@ currentEvent = {...currentEvent,eventType:"ISSUE"};
 await assert.rejects(postingBuilder.buildInventoryAccountingPosting(rtvTx,{organizationId:"org-a",sourceEntityType:"EnterpriseInventoryAccountingEvent",sourceEntityId:"event-a"},"ISSUE"),{code:"INVENTORY_ACCOUNTING_EVENT_NOT_POSTABLE"});
 const fakeCredit = { id:"credit-a", supplierInvoiceId:"invoice-a", currencyCode:"USD", grandTotal:d(14),subtotal:d(14),taxTotal:d(0),creditDate:new Date("2026-10-19T00:00:00.000Z"),createdByUserId:"creator",approvedByUserId:"reviewer" };
 const fakeLine = {sourceInvoiceItemId:"invoice-item-a",catalogItemId:"catalog-a",quantity:d(2),unitPrice:d(7),netAmount:d(14),taxAmount:d(0),totalAmount:d(14)};
-const creditTx = {...rtvTx,enterpriseInventoryAcquisitionCostSupplement:{findFirst:async()=>null},enterpriseSupplierReturnRequest:{findFirst:async()=>rtv,findMany:async({where})=>where.status==="RECONCILED"?[]:[rtv]},
+let activeCompensationForPayment=[];
+const creditTx = {...rtvTx,enterpriseSupplierClaimCompensation:{findMany:async()=>activeCompensationForPayment},enterpriseInventoryAcquisitionCostSupplement:{findFirst:async()=>null},enterpriseSupplierReturnRequest:{findFirst:async()=>rtv,findMany:async({where})=>where.status==="RECONCILED"?[]:[rtv]},
   enterpriseSupplierCreditNote:{findFirst:async()=>fakeCredit},enterpriseSupplierCreditNoteItem:{findMany:async()=>[fakeLine]}};
 await assert.rejects(postingBuilder.buildSupplierCreditNotePosting(creditTx,{organizationId:"org-a",sourceEntityType:"EnterpriseSupplierCreditNote",sourceEntityId:"credit-a"}),{code:"SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED"});
 const capacity=returnCredit.supplierReturnPayableCapacity({currencyCode:"USD",outstandingAmount:d(70)},[rtv]);
 assert.equal(capacity.reserved.toFixed(),"14");assert.equal(capacity.available.toFixed(),"56");
+const partialClaimCapacity=returnCredit.supplierReturnPayableCapacity({currencyCode:"USD",outstandingAmount:d(5)},[{...rtv,settlementPayableAmount:d(5),settlementClaimAmount:d(9)}]);
+assert.equal(partialClaimCapacity.reserved.toFixed(),"5");assert.equal(partialClaimCapacity.available.toFixed(),"0");
+const fullClaimCapacity=returnCredit.supplierReturnPayableCapacity({currencyCode:"USD",outstandingAmount:d(0)},[{...rtv,settlementPayableAmount:d(0),settlementClaimAmount:d(14)}]);
+assert.equal(fullClaimCapacity.reserved.toFixed(),"0");assert.equal(fullClaimCapacity.available.toFixed(),"0");
+assert.throws(()=>returnCredit.supplierReturnPayableCapacity({currencyCode:"USD",outstandingAmount:d(5)},[{...rtv,settlementPayableAmount:d(5),settlementClaimAmount:d(10)}]),{code:"SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED"});
 assert.equal(returnCredit.supplierReturnPayableCapacity({currencyCode:"USD",outstandingAmount:d(56)},[]).available.toFixed(),"56");
 assert.throws(()=>returnCredit.supplierReturnPayableCapacity({currencyCode:"CDF",outstandingAmount:d(70)},[rtv]),{code:"SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED"});
 const projection=await returnCredit.supplierReturnFinanceProjectionTx({enterpriseSupplierReturnRequest:{findMany:async({where,select})=>{assert.equal(where.organizationId,"org-a");assert.deepEqual([...where.supplierInvoiceId.in],["invoice-a"]);assert.equal(select.reason,undefined);return [rtv];}}},"org-a",["invoice-a"]);
@@ -477,6 +573,12 @@ await assert.rejects(returnCredit.readPriorReconciledSupplierReturnCreditsTx({},
 
 await returnCredit.assertSupplierPaymentCapacityTx(creditTx,"org-a",{supplierInvoiceId:"invoice-a",currencyCode:"USD",outstandingAmount:d(70)},d(56));
 await assert.rejects(returnCredit.assertSupplierPaymentCapacityTx(creditTx,"org-a",{supplierInvoiceId:"invoice-a",currencyCode:"USD",outstandingAmount:d(70)},d("56.01")),{code:"SUPPLIER_RETURN_PAYABLE_RESERVED"});
+activeCompensationForPayment=[{amount:d(5),currencyCode:"USD"}];
+await returnCredit.assertSupplierPaymentCapacityTx(creditTx,"org-a",{supplierInvoiceId:"invoice-a",currencyCode:"USD",outstandingAmount:d(70)},d(51));
+await assert.rejects(returnCredit.assertSupplierPaymentCapacityTx(creditTx,"org-a",{supplierInvoiceId:"invoice-a",currencyCode:"USD",outstandingAmount:d(70)},d(52)),{code:"SUPPLIER_RETURN_PAYABLE_RESERVED"});
+activeCompensationForPayment=[{amount:d(5),currencyCode:"CDF"}];
+await assert.rejects(returnCredit.assertSupplierPaymentCapacityTx(creditTx,"org-a",{supplierInvoiceId:"invoice-a",currencyCode:"USD",outstandingAmount:d(70)},d(1)),{code:"SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED"});
+activeCompensationForPayment=[];
 const ledgerLine = (ledgerAccountId,debit,credit)=>({ledgerAccountId,debit:d(debit),credit:d(credit)});
 rtv={...rtv,dispatchedAt:new Date("2026-10-18T23:30:00.000Z"),supplierCreditNoteId:"credit-a",supplierCreditReference:"SCN-ORIG"};
 currentEvent={...currentEvent,eventType:"SUPPLIER_RETURN",status:"POSTED",journalEntryId:"dispatch-journal"};
@@ -1001,3 +1103,359 @@ assert.equal(appraisalEvents.length,previousAppraisalEventCount);
 assert.equal(savedAssessment.status,"CANCELLED");
 assert.equal(recoveryCustody.status,"QUARANTINED");
 console.log("Recovery concurrency normalizes only known transaction conflicts; unexpected errors propagate");
+
+/* Lot 1G.1: proof of target debt only; mock deliberately exposes no writes.
+ * Exercise the actual helper via VM and verify no affirmative execution flag. */
+mocks["@/lib/enterprise/accounting/supplier-return-payment-proof"] = supplierPaymentProof;
+const compensationService = load("lib/enterprise/accounting/supplier-return-claim-refunds.ts");
+const cmpDate = new Date("2026-11-20T00:00:00Z");
+const cmpCreditDate = new Date("2026-11-19T00:00:00Z");
+const cmpInvoice = {id:"target-invoice",organizationId:"org-a",number:"INV-TARGET",supplierId:"supplier-a",
+  businessPartyId:"party-a",currencyCode:"USD",status:"POSTED",archivedAt:null,postedAt:cmpDate,invoiceDate:cmpDate,
+  grandTotal:d(20),amountPaid:d(0),amountCredited:d(0),amountCompensated:d(0),outstandingAmount:d(20)};
+const cmpPayable = {id:"target-payable",supplierId:"supplier-a",businessPartyId:"party-a",currencyCode:"USD",status:"OPEN",
+  allocatedAmount:d(0),creditedAmount:d(0),compensatedAmount:d(0),originalAmount:d(20),outstandingAmount:d(20),supplierInvoice:cmpInvoice};
+const cmpJournal = {id:"target-journal",status:"POSTED",postedAt:cmpDate,reversedAt:null,reversalOfEntryId:null,
+  postingVersion:1,postingEvent:"SUPPLIER_INVOICE_POSTED",functionalCurrencyCode:"USD",accountingDate:cmpDate,
+  totalDebit:d(20),totalCredit:d(20),lines:[{ledgerAccountId:"ACCOUNTS_PAYABLE",businessPartyId:"party-a",debit:d(0),credit:d(20),
+    transactionCurrencyCode:"USD",exchangeRate:d(1),transactionAmount:d(20),functionalAmount:d(20)}]};
+const cmpProof = {claim:{organizationId:"org-a",supplierId:"supplier-a",currencyCode:"USD",settlementClaimAccountId:"claim-account"},
+  invoice:{id:"original-invoice",businessPartyId:"party-a"},credit:{creditDate:cmpCreditDate},available:d(9)};
+let cmpScope = true, cmpAllocations=0, cmpPaymentAllocations=0, cmpReturns=0, cmpCredits=0, cmpReversals=0;
+let cmpReserved = [];
+const cmpTx = {
+  enterpriseSupplierClaimCompensation:{findMany:async({where})=>{assert.equal(where.organizationId,"org-a");assert.equal(where.payableId,"target-payable");return cmpReserved;}},
+  enterprisePayable:{findFirst:async({where})=>{assert.equal(where.organizationId,"org-a");assert.equal(where.id,"target-payable");return cmpScope?cmpPayable:null;}},
+  enterprisePayableAllocation:{count:async({where})=>{assert.equal(where.organizationId,"org-a");return cmpAllocations;}},
+  enterprisePaymentAllocation:{count:async()=>cmpPaymentAllocations},
+  enterpriseSupplierReturnRequest:{count:async()=>cmpReturns},
+  enterpriseSupplierCreditNote:{count:async()=>cmpCredits},
+  enterpriseJournalEntry:{findMany:async()=>[cmpJournal]},
+  enterpriseJournalReversal:{count:async()=>cmpReversals},
+};
+mocks["@/lib/enterprise/accounting/semantic-account-resolver"]={resolveSemanticPostingAccount:async(_tx,input)=>({id:input.mappingKey})};
+const cmpPreview = (proof=cmpProof)=>compensationService.readSupplierClaimCompensationTargetTx(cmpTx,"org-a",proof,"target-payable");
+const cmpRefusal={code:"SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED"};
+assert.equal((await cmpPreview()).maximum.toFixed(),"9");
+cmpReserved=[{id:"other-comp",amount:d(15),currencyCode:"USD",targetInvoiceJournalId:"target-journal",payableAccountId:"ACCOUNTS_PAYABLE"}];
+assert.equal((await cmpPreview()).maximum.toFixed(),"5");
+cmpReserved=[];
+assert.equal((await cmpPreview({...cmpProof,available:d(30)})).maximum.toFixed(),"20");
+assert.equal((await cmpPreview({...cmpProof,available:d(0)})).maximum.toFixed(),"0");
+assert.equal((await cmpPreview()).executionAvailable,false);
+await assert.rejects(cmpPreview({...cmpProof,claim:{...cmpProof.claim,organizationId:"org-b"}}),cmpRefusal);
+await assert.rejects(cmpPreview({...cmpProof,invoice:{...cmpProof.invoice,id:"target-invoice"}}),cmpRefusal);
+for (const [field,value] of [["businessPartyId","party-b"],["supplierId","supplier-b"],["currencyCode","CDF"],["status","DRAFT"],["amountPaid",d(1)],["invoiceDate",new Date("2026-11-18T00:00:00Z")]]) {
+  const original=cmpInvoice[field];cmpInvoice[field]=value;
+  try{await assert.rejects(cmpPreview(),cmpRefusal);}finally{cmpInvoice[field]=original;}
+}
+cmpScope=false;await assert.rejects(cmpPreview(),cmpRefusal);cmpScope=true;
+cmpAllocations=1;await assert.rejects(cmpPreview(),cmpRefusal);cmpAllocations=0;
+cmpPaymentAllocations=1;await assert.rejects(cmpPreview(),cmpRefusal);cmpPaymentAllocations=0;
+cmpReturns=1;await assert.rejects(cmpPreview(),cmpRefusal);cmpReturns=0;
+cmpCredits=1;await assert.rejects(cmpPreview(),cmpRefusal);cmpCredits=0;
+cmpReversals=1;await assert.rejects(cmpPreview(),cmpRefusal);cmpReversals=0;
+cmpJournal.lines[0].credit=d(19);await assert.rejects(cmpPreview(),cmpRefusal);cmpJournal.lines[0].credit=d(20);
+console.log("Supplier claim compensation target: exact new debt, refund-adjusted capacity, wrong tenant/party/currency, prior allocations, returns and reversed journals refused; no mutation");
+
+/* Lot 1G.2: a proposed accounting entry is not a financial operation. */
+mocks["@/lib/enterprise/enterprise-activity-civil-date"]=load("lib/enterprise/enterprise-activity-civil-date.ts");
+const cmpPlanIntent={amount:"9",accountingDate:"2026-11-20"};
+const cmpPlanRefusal={code:"SUPPLIER_RETURN_COMPENSATION_PLAN_INVALID"};
+let cmpPeriodStatus="OPEN",cmpJournalActive=true,cmpPostingEnabled=true,cmpDebtAccount="ACCOUNTS_PAYABLE",cmpClaimAccount="claim-account";
+let cmpReadyCurrency="USD";
+mocks["@/lib/enterprise/accounting/configuration-service"]={assertFinanceReady:async(_tx,org,requirements)=>{
+  assert.equal(org,"org-a");
+  assert.equal(requirements.asOf.toISOString(),"2026-11-20T00:00:00.000Z");
+  assert.equal(requirements.requiredMappingKeys.join(","),"ACCOUNTS_PAYABLE,SUPPLIER_RETURN_CLAIMS");
+  assert.equal(requirements.requiredJournalTypes.join(","),"GENERAL");
+  return {automaticPostingEnabled:cmpPostingEnabled,functionalCurrencyCode:cmpReadyCurrency};
+}};
+mocks["@/lib/enterprise/accounting/periods"]={getPostingPeriod:async(_tx,org,date,options)=>{
+  assert.equal(org,"org-a");assert.equal(options,undefined);
+  if(cmpPeriodStatus!=="OPEN")throw new TestDomainError("FINANCE_PERIOD_CLOSED",409);
+  return {id:"period-cmp",status:"OPEN"};
+}};
+mocks["@/lib/enterprise/accounting/semantic-account-resolver"]={resolveSemanticPostingAccount:async(_tx,input)=>{
+  if(input.mappingKey==="SUPPLIER_RETURN_CLAIMS")return {id:cmpClaimAccount,isControlAccount:true,allowDirectPosting:false,currencyCode:"USD"};
+  return {id:cmpDebtAccount};
+}};
+// Resolve the claim mapping through the real helper, not an independent test implementation.
+const cmpPlanTx={...cmpTx,
+  organization:{findFirst:async()=>({timezone:"Africa/Kinshasa"})},
+  enterpriseFinanceConfiguration:{findUnique:async()=>({functionalCurrencyCode:"USD"})},
+  enterpriseJournal:{findFirst:async({where})=>{assert.equal(where.organizationId,"org-a");assert.equal(where.journalType,"GENERAL");return cmpJournalActive?{id:"od-cmp"}:null;}},
+  enterpriseAccountMapping:{count:async()=>0},
+  enterpriseFinancialAccount:{count:async()=>0},
+};
+const cmpPlan=(intent=cmpPlanIntent,proof=cmpProof)=>compensationService.readSupplierClaimCompensationTargetTx(cmpPlanTx,"org-a",proof,"target-payable",intent);
+const cmpPlanned=(await cmpPlan()).plan;
+assert.equal(cmpPlanned.amount.toFixed(),"9");
+assert.equal(cmpPlanned.debitPayable.toFixed(),"9");assert.equal(cmpPlanned.creditSupplierClaim.toFixed(),"9");
+assert.equal(cmpPlanned.payableAfter.toFixed(),"11");
+assert.equal(cmpPlanned.targetUnreservedAfter.toFixed(),"11");
+assert.equal(cmpPlanned.unreservedClaimAfter.toFixed(),"0");
+assert.equal(cmpPlanned.treasuryImpact.toFixed(),"0");assert.equal(cmpPlanned.executionAvailable,false);
+for(const amount of ["0","-1","10","0.0000001","1e0","NaN","999999999999999"]) await assert.rejects(cmpPlan({...cmpPlanIntent,amount}),cmpPlanRefusal);
+for(const accountingDate of ["2026-11-19","2026-02-30","2026-02-29","0000-11-20","2026-13-01","2026-11-20T00:00:00Z","2099-01-01"]) await assert.rejects(cmpPlan({...cmpPlanIntent,accountingDate}),cmpPlanRefusal);
+cmpPeriodStatus="LOCKED";await assert.rejects(cmpPlan(),{code:"FINANCE_PERIOD_CLOSED"});cmpPeriodStatus="OPEN";
+cmpJournalActive=false;await assert.rejects(cmpPlan(),cmpPlanRefusal);cmpJournalActive=true;
+cmpPostingEnabled=false;await assert.rejects(cmpPlan(),cmpPlanRefusal);cmpPostingEnabled=true;
+cmpReadyCurrency="CDF";await assert.rejects(cmpPlan(),cmpPlanRefusal);cmpReadyCurrency="USD";
+cmpClaimAccount="other-claim";await assert.rejects(cmpPlan(),cmpPlanRefusal);cmpClaimAccount="claim-account";
+cmpReserved=[{id:"pending-other",amount:d(5),currencyCode:"USD",
+  targetInvoiceJournalId:"target-journal",payableAccountId:"ACCOUNTS_PAYABLE"}];
+const reservedPlan=(await cmpPlan()).plan;
+assert.equal(reservedPlan.payableAfter.toFixed(),"11","Posted balance must start from actual 20");
+assert.equal(reservedPlan.targetUnreservedAfter.toFixed(),"6","Reservation availability starts from 15");
+cmpReserved=[];
+// Historical account is checked first; only change the mapping for the later posting day.
+cmpJournal.accountingDate=cmpCreditDate;
+mocks["@/lib/enterprise/accounting/semantic-account-resolver"]={resolveSemanticPostingAccount:async(_tx,input)=>{
+  if(input.mappingKey==="SUPPLIER_RETURN_CLAIMS")return {id:cmpClaimAccount,isControlAccount:true,allowDirectPosting:false,currencyCode:"USD"};
+  return {id:input.accountingDate.getTime()===cmpCreditDate.getTime()?"ACCOUNTS_PAYABLE":"other-debt"};
+}};
+await assert.rejects(cmpPlan(),cmpPlanRefusal);
+console.log("Supplier compensation posting preflight: exact debit/credit, strict civil date, open period, ready configuration, unchanged accounts, zero treasury; no write");
+
+/* Lot 1G.3: draft transaction orchestration and absence of financial writes.
+ * Historical evidence itself is covered by the preceding proof QA and real
+ * PostgreSQL API E2E, not manufactured inside this orchestration test. */
+let draftScope=null,draftRow=null,draftValid=true,draftTarget=true;
+const draftCalls=[];
+const draftProof={claim:{creditJournalEntryId:"source-journal",settlementClaimAccountId:"claim-account"}};
+const draftInput={claimId:"claim-a",payableId:"target-payable",amount:"9",accountingDate:"2026-11-20",
+  supplierReference:"OFFSET-1",reason:"Propose supplier compensation",idempotencyKey:"draft-key-1"};
+const draftDb={
+  $queryRaw:async(query)=>{
+    assert.ok(query.sql.includes("FOR UPDATE"));assert.ok(query.values.includes("org-a"));
+    draftCalls.push("lock-draft");return [];
+  },
+  enterpriseSupplierClaimCompensation:{
+    findUnique:async({where})=>{
+      assert.equal(where.organizationId_idempotencyKey.organizationId,"org-a");
+      return draftRow?.idempotencyKey===where.organizationId_idempotencyKey.idempotencyKey?draftRow:null;
+    },
+    findFirst:async({where})=>{
+      assert.equal(where.organizationId,"org-a");
+      return draftRow?.id===where.id&&(!where.requestedByUserId||draftRow.requestedByUserId===where.requestedByUserId)?draftRow:null;
+    },
+    create:async({data})=>{
+      assert.equal(data.organizationId,"org-a");assert.equal(data.claimId,"claim-a");
+      assert.equal(data.amount.toFixed(),"9");assert.equal(data.sourceCreditJournalId,"source-journal");
+      assert.equal(data.targetInvoiceJournalId,"target-journal");assert.equal(data.claimAccountId,"claim-account");
+      assert.equal(data.payableAccountId,"ACCOUNTS_PAYABLE");
+      draftCalls.push("persist-draft");draftRow={...data,id:"draft-a",status:"DRAFT",revision:1,createdAt:new Date(),cancelledAt:null,cancellationReason:null};return draftRow;
+    },
+    update:async({where,data})=>{
+      assert.equal(where.organizationId_id.organizationId,"org-a");
+      assert.equal(where.organizationId_id.id,"draft-a");
+      assert.ok(["CANCELLED","PENDING_APPROVAL"].includes(data.status));assert.equal(data.revision.increment,1);
+      draftCalls.push(data.status==="CANCELLED"?"cancel-draft":"submit-draft");
+      draftRow={...draftRow,...data,revision:2};return draftRow;
+    },
+  },
+  enterprisePayable:{findFirst:async({where})=>{
+    assert.equal(where.organizationId,"org-a");assert.equal(where.id,"target-payable");
+    return draftTarget?{supplierInvoiceId:"target-invoice"}:null;
+  }},
+  // There are deliberately NO payment, treasury, allocation, journal-write
+  // or invoice-update delegates: any accidental mutation fails this test.
+};
+mocks["@/lib/prisma"]={prisma:{$transaction:async(fn,options)=>{
+  assert.ok(["Serializable","RepeatableRead"].includes(options.isolationLevel));return fn(draftDb);
+}}};
+mocks["@/lib/enterprise/retail/site-access"]={retailFinanceReadSiteScope:async(org,actor,capability,tx)=>{
+  assert.equal(org,"org-a");assert.equal(capability,"COLLECT_PAYMENT");assert.equal(tx,draftDb);
+  return draftScope;
+}};
+mocks["@/lib/enterprise/accounting/supplier-return-claim-refunds"]={
+  lockSupplierClaimRefundTx:async(tx,org,claimId)=>{assert.equal(tx,draftDb);assert.equal(org,"org-a");assert.equal(claimId,"claim-a");draftCalls.push("lock-claim");},
+  readSupplierClaimRefundEvidenceTx:async(tx,org,claimId)=>{assert.equal(org,"org-a");assert.equal(claimId,"claim-a");draftCalls.push("read-claim");return draftProof;},
+  readSupplierClaimCompensationEvidenceTx:async(tx,org,proof,payableId,intent)=>{
+    assert.equal(proof,draftProof);assert.equal(payableId,"target-payable");draftCalls.push("read-target");
+    if(!draftValid)throw new TestDomainError("SUPPLIER_RETURN_COMPENSATION_PLAN_INVALID",409);
+    return {evidence:{targetInvoiceId:"target-invoice",targetInvoiceJournalId:"target-journal",payableAccountId:"ACCOUNTS_PAYABLE"},
+      preview:{currencyCode:"USD",plan:{amount:d(intent.amount)}}};
+  },
+};
+mocks["@/lib/enterprise/accounting/supplier-return-credit-reconciliation"]={
+  lockSupplierReturnInvoiceTx:async(tx,org,invoiceId)=>{assert.equal(tx,draftDb);assert.equal(org,"org-a");assert.equal(invoiceId,"target-invoice");draftCalls.push("lock-invoice");},
+};
+mocks["@/lib/enterprise/accounting/helpers"]={publishFinanceEvent:async(tx,event)=>{
+  assert.equal(tx,draftDb);assert.equal(event.organizationId,"org-a");
+  assert.equal(event.entityType,"EnterpriseSupplierClaimCompensation");assert.equal(event.entityId,"draft-a");
+  draftCalls.push(event.toStatus==="DRAFT"?"audit-draft":event.toStatus==="PENDING_APPROVAL"?"audit-submit":"audit-cancel");
+}};
+mocks["@/lib/enterprise/accounting/accounting-approval-service"]={
+  createAccountingApprovalAssignment:async(tx,input)=>{
+    assert.equal(tx,draftDb);assert.equal(input.organizationId,"org-a");
+    assert.equal(input.targetEntityType,"EnterpriseSupplierClaimCompensation");
+    assert.equal(input.requesterUserId,"creator");assert.equal(input.approverUserId,"reviewer");
+    draftCalls.push("assign-reviewer");return {id:"approval-a"};
+  },
+};
+const draftService=load("lib/enterprise/accounting/supplier-claim-compensation-service.ts");
+const prepareDraft=(input=draftInput,actor="creator")=>draftService.prepareSupplierClaimCompensation("org-a",actor,input);
+draftScope=["site-a"];await assert.rejects(prepareDraft(),{code:"SUPPLIER_RETURN_REFUND_ACCESS_FORBIDDEN"});draftScope=null;
+assert.equal(draftCalls.length,0);
+draftTarget=false;await assert.rejects(prepareDraft(),{code:"SUPPLIER_RETURN_COMPENSATION_DRAFT_CONFLICT"});draftTarget=true;draftCalls.length=0;
+draftValid=false;await assert.rejects(prepareDraft(),{code:"SUPPLIER_RETURN_COMPENSATION_PLAN_INVALID"});draftValid=true;
+assert.equal(draftRow,null);draftCalls.length=0;
+const preparedDraft=await prepareDraft();
+assert.equal(draftCalls.join(","),"lock-claim,lock-invoice,read-claim,read-target,persist-draft,audit-draft");
+const projectedDraft=draftService.supplierCompensationDraftProjection(preparedDraft);
+assert.equal(projectedDraft.reservationActive,false);assert.equal(projectedDraft.executionAvailable,false);
+for(const privateKey of ["sourceCreditJournalId","targetInvoiceJournalId","claimAccountId","payableAccountId","idempotencyKey"])
+  assert.equal(Object.hasOwn(projectedDraft,privateKey),false);
+draftCalls.length=0;
+assert.equal((await prepareDraft()).id,preparedDraft.id);assert.equal(draftCalls.join(","),"lock-claim");
+await assert.rejects(prepareDraft({...draftInput,reason:"Different compensation reason"}),{code:"SUPPLIER_RETURN_COMPENSATION_DRAFT_CONFLICT"});
+await assert.rejects(prepareDraft(draftInput,"other-user"),{code:"SUPPLIER_RETURN_COMPENSATION_DRAFT_CONFLICT"});
+await assert.rejects(draftService.readSupplierClaimCompensation("org-a","other-user","draft-a",false),{code:"SUPPLIER_RETURN_COMPENSATION_NOT_FOUND"});
+assert.equal((await draftService.readSupplierClaimCompensation("org-a","reviewer","draft-a",true)).id,"draft-a");
+const cancelInput={compensationId:"draft-a",revision:1,reason:"Proposal no longer available"};
+await assert.rejects(draftService.cancelSupplierClaimCompensation("org-a","other-user",cancelInput),{code:"SUPPLIER_RETURN_REFUND_ACCESS_FORBIDDEN"});
+await assert.rejects(draftService.cancelSupplierClaimCompensation("org-a","creator",{...cancelInput,revision:2}),{code:"SUPPLIER_RETURN_COMPENSATION_DRAFT_CONFLICT"});
+draftCalls.length=0;
+const cancelledDraft=await draftService.cancelSupplierClaimCompensation("org-a","creator",cancelInput);
+assert.equal(cancelledDraft.revision,2);assert.equal(cancelledDraft.status,"CANCELLED");
+assert.equal(draftCalls.join(","),"lock-draft,cancel-draft,audit-cancel");
+draftCalls.length=0;
+assert.equal((await draftService.cancelSupplierClaimCompensation("org-a","creator",cancelInput)).revision,2);
+assert.equal(draftCalls.join(","),"lock-draft");
+console.log("Supplier compensation draft: canonical lock order, scoped ownership, audit, immutable idempotent intent, cancellation, no financial writes");
+
+/* Lot 1G.4: submitted compensation is reserved, not merely previewed. */
+draftRow=null;draftCalls.length=0;
+const newlyPrepared=await prepareDraft({...draftInput,idempotencyKey:"draft-submit-key"});
+assert.equal(newlyPrepared.status,"DRAFT");draftCalls.length=0;
+await assert.rejects(draftService.submitSupplierClaimCompensation("org-a","creator",
+  {compensationId:"draft-a",revision:1,approverUserId:"creator"}),{code:"ACCOUNTING_SELF_APPROVAL_FORBIDDEN"});
+const submitted=await draftService.submitSupplierClaimCompensation("org-a","creator",
+  {compensationId:"draft-a",revision:1,approverUserId:"reviewer"});
+assert.equal(submitted.status,"PENDING_APPROVAL");assert.equal(submitted.revision,2);
+assert.equal(draftCalls.join(","),"lock-claim,lock-draft,lock-invoice,read-claim,read-target,assign-reviewer,submit-draft,audit-submit");
+assert.equal(draftService.supplierCompensationDraftProjection(submitted).reservationActive,true);
+draftCalls.length=0;
+const idemSubmitted=await draftService.submitSupplierClaimCompensation("org-a","creator",
+  {compensationId:"draft-a",revision:1,approverUserId:"reviewer"});
+assert.equal(idemSubmitted.id,submitted.id);
+assert.equal(draftCalls.join(","),"lock-claim,lock-draft");
+await assert.rejects(draftService.cancelSupplierClaimCompensation("org-a","creator",cancelInput),{code:"SUPPLIER_RETURN_COMPENSATION_DRAFT_CONFLICT"});
+assert.equal(draftRow.status,"PENDING_APPROVAL");
+console.log("Supplier claim compensation reservation: independent assigned approval, source→target locks, frozen provenance, no postings");
+
+/* Lot 1G.5: canonical two-line posting document, no treasury mutation. */
+const approvedComp={id:"approved-comp",organizationId:"org-a",amount:d(9),
+  sourceCreditJournalId:"source-j",claimAccountId:"claim-account",payableAccountId:"AP-account",
+  approvedAt:new Date("2026-11-20T00:00:00.000Z"),approvedByUserId:"reviewer",
+  approverUserId:"reviewer",requestedByUserId:"creator",submittedAt:new Date("2026-11-20T00:00:00.000Z"),
+  supplierReference:"SUPPLIER-OFFSET",accountingDate:new Date("2026-11-20T00:00:00.000Z"),currencyCode:"USD",
+  claim:{supplierId:"supplier-a",settlementClaimAmount:d(14),settlementClaimAccountId:"claim-account",creditJournalEntryId:"source-j"},
+  payable:{supplierId:"supplier-a",currencyCode:"USD",businessPartyId:"party-a",supplierInvoice:{supplierId:"supplier-a",businessPartyId:"party-a"}},
+};
+let approvedExists=true,approvedRow=approvedComp;
+const postingCompTx={
+  enterpriseSupplierClaimCompensation:{findFirst:async({where})=>{
+    assert.equal(where.organizationId,"org-a");assert.equal(where.id,"approved-comp");assert.equal(where.status,"APPROVED");
+    return approvedRow;
+  }},
+  enterpriseApproval:{findFirst:async({where})=>{
+    assert.equal(where.organizationId,"org-a");assert.equal(where.targetEntityType,"EnterpriseSupplierClaimCompensation");
+    assert.equal(where.status,"APPROVED");return approvedExists?{id:"approved-assignment"}:null;
+  }},
+};
+const buildComp=()=>draftService.buildSupplierClaimCompensationPosting(postingCompTx,{
+  organizationId:"org-a",sourceEntityType:"EnterpriseSupplierClaimCompensation",sourceEntityId:"approved-comp"});
+const offsetDocument=await buildComp();
+const accountingServiceSource=fs.readFileSync("lib/enterprise/accounting/supplier-claim-compensation-service.ts","utf8");
+assert.ok(accountingServiceSource.includes("compensatedAmount: { increment: draft.amount }"));
+assert.ok(accountingServiceSource.includes("amountCompensated: { increment: draft.amount }"));
+assert.ok(!accountingServiceSource.includes("creditedAmount: { increment: draft.amount }"));
+assert.ok(!accountingServiceSource.includes("amountCredited: { increment: draft.amount }"));
+assert.equal(offsetDocument.journalType,"GENERAL");assert.equal(offsetDocument.sourceEntityType,"EnterpriseSupplierClaimCompensation");
+assert.equal(offsetDocument.lines.length,2);
+assert.equal(offsetDocument.lines.map(x=>x.accountMappingKey).join(","),"ACCOUNTS_PAYABLE,SUPPLIER_RETURN_CLAIMS");
+assert.equal(offsetDocument.lines[0].debit.toFixed(),"9");assert.equal(offsetDocument.lines[1].credit.toFixed(),"9");
+assert.equal(offsetDocument.lines[0].businessPartyId,"party-a");assert.equal(offsetDocument.lines[1].businessPartyId,"party-a");
+assert.equal(offsetDocument.lines[0].transactionAmount.toFixed(),"9");assert.equal(offsetDocument.lines[1].transactionAmount.toFixed(),"9");
+approvedExists=false;await assert.rejects(buildComp(),{code:"SUPPLIER_RETURN_COMPENSATION_DRAFT_CONFLICT"});approvedExists=true;
+approvedRow={...approvedComp,approvedByUserId:"creator"};await assert.rejects(buildComp(),{code:"SUPPLIER_RETURN_COMPENSATION_DRAFT_CONFLICT"});
+approvedRow={...approvedComp,payable:{...approvedComp.payable,businessPartyId:"another-party"}};
+await assert.rejects(buildComp(),{code:"SUPPLIER_RETURN_COMPENSATION_DRAFT_CONFLICT"});approvedRow=approvedComp;
+console.log("Supplier compensation posting builder: canonical balanced liability/claim, assigned independent approval, exact supplier party; zero payments");
+
+/* Lot 1G.7: page-bounded history and privacy, no direct ledger IDs. */
+draftDb.enterpriseSupplierClaimCompensation.findMany=async({where,skip,take,include})=>{
+  assert.equal(where.organizationId,"org-a");assert.equal(where.claimId,"claim-a");
+  if(where.status)assert.equal(where.status,"PENDING_APPROVAL");
+  assert.equal(skip,0);assert.equal(take,25);
+  assert.equal(include.payable.select.supplierInvoice.select.number,true);
+  if(where.requestedByUserId&&where.requestedByUserId!=="creator")return [];
+  return [{...draftRow,payable:{supplierInvoice:{number:"INV-READABLE"}}}];
+};
+draftDb.user={findMany:async({where,select})=>{
+  assert.ok(where.id.in.includes("creator"));assert.equal(select.name,true);
+  return [{id:"creator",name:"Original Requester"},{id:"reviewer",name:"Independent Reviewer"}];
+}};
+draftDb.enterpriseSupplierClaimCompensation.count=async({where})=>
+  where.requestedByUserId&&where.requestedByUserId!=="creator"?0:1;
+const claimHistory=await draftService.listSupplierClaimCompensations("org-a","reviewer","claim-a",true,1);
+assert.equal(claimHistory.pagination.total,1);assert.equal(claimHistory.items[0].targetInvoiceNumber,"INV-READABLE");
+assert.equal(claimHistory.items[0].requestedByName,"Original Requester");
+assert.equal(claimHistory.items[0].approverName,"Independent Reviewer");
+assert.equal(claimHistory.items[0].reservationActive,true);
+for(const field of ["claimAccountId","payableAccountId","sourceCreditJournalId","targetInvoiceJournalId","idempotencyKey"])
+  assert.equal(Object.hasOwn(claimHistory.items[0],field),false);
+const privateHistory=await draftService.listSupplierClaimCompensations("org-a","other-user","claim-a",false,1);
+assert.equal(privateHistory.items.length,0);assert.equal(privateHistory.pagination.total,0);
+const filteredHistory=await draftService.listSupplierClaimCompensations("org-a","reviewer","claim-a",true,1,"PENDING_APPROVAL");
+assert.equal(filteredHistory.items[0].status,"PENDING_APPROVAL");
+const compensationUi=fs.readFileSync("components/enterprise/professional/supplier-claim-compensation-panel.tsx","utf8");
+const invoicesUi=fs.readFileSync("components/enterprise/professional/enterprise-finance-invoices-workspace.tsx","utf8");
+for(const token of ["data-supplier-claim-compensation","PREPARE_COMPENSATION","SUBMIT_COMPENSATION",
+  "APPROVE_COMPENSATION","REJECT_COMPENSATION","POST_COMPENSATION","CANCEL_COMPENSATION_DRAFT",
+  "EnterpriseApproverSelect","claimCompensationsFor","onMutated"])
+  assert.ok(compensationUi.includes(token),token);
+assert.ok(invoicesUi.includes("<SupplierClaimCompensationPanel"),"Payables user must actually reach non-cash compensation");
+const scopedPayablesSource=fs.readFileSync("app/api/enterprise/[organizationId]/payables/route.ts","utf8");
+assert.ok(scopedPayablesSource.includes("retailFinanceReadSiteScope(organizationId, auth.session.userId, \"COLLECT_PAYMENT\")"),
+  "Payables without canonical site coordinate must reject isolated retail operators");
+assert.ok(scopedPayablesSource.includes("SUPPLIER_PAYABLES_SITE_SCOPE_REQUIRED"),
+  "Site isolation failure must be an explicit and actionable Finance error");
+console.log("Supplier compensation history and UI: page-bounded, no ledger identifiers, owner/manager access, FR/EN responsive panel");
+
+/* Lot 1G.10: non-cash compensation is NEVER a supplier credit note. */
+const distinctInvoice={id:"comp-vs-credit",organizationId:"org-a",supplierId:"supplier-a",businessPartyId:"party-a",
+  currencyCode:"USD",grandTotal:d(20),amountPaid:d(0),amountCredited:d(5),
+  amountCompensated:d(9),outstandingAmount:d(6)};
+let distinctPayable={id:"comp-debt",supplierInvoiceId:"comp-vs-credit",supplierId:"supplier-a",businessPartyId:"party-a",
+  currencyCode:"USD",originalAmount:d(20),allocatedAmount:d(0),creditedAmount:d(5),
+  compensatedAmount:d(9),outstandingAmount:d(6),status:"OPEN"};
+const distinctTx={
+  enterprisePayable:{findFirst:async({where})=>{
+    assert.equal(where.organizationId,"org-a");assert.equal(where.supplierInvoiceId,"comp-vs-credit");
+    return distinctPayable;
+  }},
+  enterprisePayableAllocation:{
+    groupBy:async({where})=>{
+      assert.equal(where.payableId,"comp-debt");assert.equal(where.status,"CONFIRMED");
+      assert.ok(where.sourceType.in.includes("SUPPLIER_CLAIM_COMPENSATION"));
+      return [
+        {sourceType:"SUPPLIER_CREDIT_NOTE",_sum:{amount:d(5)}},
+        {sourceType:"SUPPLIER_CLAIM_COMPENSATION",_sum:{amount:d(9)}},
+      ];
+    },
+    count:async()=>0,
+  },
+};
+assert.equal((await settlement.readSupplierReturnSettlementTx(distinctTx,"org-a",distinctInvoice,d(5),"USD")).payableReduction.toFixed(),"5");
+await assert.rejects(settlement.readSupplierReturnSettlementTx(distinctTx,"org-a",
+  {...distinctInvoice,amountCredited:d(14),amountCompensated:d(0)},d(5),"USD"),
+  {code:"SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED"});
+distinctPayable={...distinctPayable,creditedAmount:d(14),compensatedAmount:d(0)};
+await assert.rejects(settlement.readSupplierReturnSettlementTx(distinctTx,"org-a",
+  {...distinctInvoice,amountCredited:d(14),amountCompensated:d(0)},d(5),"USD"),
+  {code:"SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED"});
+console.log("Supplier non-cash settlement: separate real credit notes 5, compensation 9, open payable 6, no arbitrary payment");

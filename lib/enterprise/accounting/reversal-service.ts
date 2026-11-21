@@ -48,6 +48,23 @@ export async function reverseJournalEntryTx(
     if (linked) throw new EnterpriseAccountingError("SUPPLIER_RETURN_DOMAIN_REVERSAL_REQUIRED",409);
   }
 
+  if (original.postingEvent === "SUPPLIER_CLAIM_COMPENSATION_POSTED")
+    throw new EnterpriseAccountingError("SUPPLIER_RETURN_DOMAIN_REVERSAL_REQUIRED",409);
+  if (original.postingEvent === "SUPPLIER_INVOICE_POSTED" && original.sourceEntityId &&
+      await tx.enterpriseSupplierClaimCompensation.count({ where: {
+        organizationId, status: "POSTED", payable: { supplierInvoiceId: original.sourceEntityId },
+      } })) throw new EnterpriseAccountingError("SUPPLIER_RETURN_DOMAIN_REVERSAL_REQUIRED",409);
+  if (original.postingEvent === "SUPPLIER_RETURN_REFUND_CONFIRMED") throw new EnterpriseAccountingError("SUPPLIER_RETURN_REFUND_DOMAIN_WORKFLOW_REQUIRED",409);
+
+  // Claims rely on the original supplier payment and allocation journals.
+  if (original.sourceEntityId && ["SUPPLIER_PAYMENT_CONFIRMED","PAYMENT_ALLOCATION_CONFIRMED"].includes(original.postingEvent || "")) {
+    const allocations=await tx.enterprisePaymentAllocation.findMany({where:{organizationId,payableId:{not:null},
+      ...(original.postingEvent==="SUPPLIER_PAYMENT_CONFIRMED"?{paymentId:original.sourceEntityId}:{id:original.sourceEntityId})},select:{payable:{select:{supplierInvoiceId:true}}}});
+    const invoiceIds=allocations.flatMap(row=>row.payable?[row.payable.supplierInvoiceId]:[]);
+    if(invoiceIds.length&&await tx.enterpriseSupplierReturnRequest.count({where:{organizationId,supplierInvoiceId:{in:invoiceIds},status:{in:["DISPATCHED","RECONCILED"]},settlementClaimAmount:{gt:0}}}))
+      throw new EnterpriseAccountingError("SUPPLIER_RETURN_DOMAIN_REVERSAL_REQUIRED",409);
+  }
+
   if (["INVENTORY_CUSTODY_RECOVERY_VALUED","INVENTORY_ISSUE_VALUED","SALES_CREDIT_NOTE_POSTED"].includes(original.postingEvent || "")) {
     const linked=await tx.enterpriseInventoryReturnRecoveryAssessment.findFirst({where:{organizationId,status:"EXECUTED",OR:[
       {recoveryJournalEntryId:original.id},{originalIssueJournalId:original.id},

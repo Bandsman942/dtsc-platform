@@ -32,6 +32,11 @@ async function assertAccountsPostable(
     where: { organizationId, id: { in: [...new Set(accountIds)] }, isActive: true, archivedAt: null },
   });
   if (accounts.length !== new Set(accountIds).size) throw new EnterpriseAccountingError("JOURNAL_ACCOUNT_INVALID", 409);
+  const controlIds = accounts.filter(account => account.isControlAccount && !account.allowDirectPosting).map(account => account.id);
+  // A caller cannot bypass this dedicated ledger by supplying a fake sourceEntityId.
+  if (controlIds.length && await tx.enterpriseAccountMapping.count({ where: { organizationId, ledgerAccountId: { in: controlIds }, mappingKey: "SUPPLIER_RETURN_CLAIMS" } })) {
+    throw new EnterpriseAccountingError("JOURNAL_DIRECT_POSTING_FORBIDDEN", 409);
+  }
   if (options?.manualEntry && accounts.some((account) => !account.allowDirectPosting)) {
     throw new EnterpriseAccountingError("JOURNAL_DIRECT_POSTING_FORBIDDEN", 409);
   }

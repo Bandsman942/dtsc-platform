@@ -128,6 +128,12 @@ export async function submitPaymentForAssignedApproval(
     if (payment.revision !== input.revision) throw new EnterpriseAccountingError("PAYMENT_REVISION_CONFLICT", 409, { currentRevision: payment.revision });
     if (payment.status !== "DRAFT") throw new EnterpriseAccountingError("PAYMENT_TRANSITION_INVALID", 409);
     if (payment.initiatedByUserId !== actorUserId) throw new EnterpriseAccountingError("PAYMENT_SUBMITTER_MISMATCH", 403);
+    if (payment.paymentType === "SUPPLIER_RETURN_REFUND") {
+      if (!payment.supplierReturnClaimId) throw new EnterpriseAccountingError("SUPPLIER_RETURN_REFUND_EVIDENCE_REQUIRED",409);
+      const { lockSupplierClaimRefundTx, assertSupplierClaimRefundIntentTx } = await import("@/lib/enterprise/accounting/supplier-return-claim-refunds");
+      await lockSupplierClaimRefundTx(tx,organizationId,payment.supplierReturnClaimId);
+      await assertSupplierClaimRefundIntentTx(tx,organizationId,actorUserId,payment,payment.id);
+    }
     if (options.retailPaymentSiteId) {
       const proposal = await tx.enterpriseRetailInvoicePaymentProposal.findFirst({
         where: { organizationId, paymentId: payment.id, checkout: { siteId: options.retailPaymentSiteId } },
@@ -191,6 +197,15 @@ export async function approvePaymentAssignedApproval(
     if (!payment) throw new EnterpriseAccountingError("PAYMENT_NOT_FOUND", 404);
     if (payment.revision !== input.revision) throw new EnterpriseAccountingError("PAYMENT_REVISION_CONFLICT", 409, { currentRevision: payment.revision });
     if (payment.status !== "PENDING_APPROVAL") throw new EnterpriseAccountingError("PAYMENT_TRANSITION_INVALID", 409);
+    if (payment.paymentType === "SUPPLIER_RETURN_REFUND") {
+      if (!payment.supplierReturnClaimId) throw new EnterpriseAccountingError("SUPPLIER_RETURN_REFUND_EVIDENCE_REQUIRED",409);
+      const { lockSupplierClaimRefundTx, assertSupplierClaimRefundIntentTx } = await import("@/lib/enterprise/accounting/supplier-return-claim-refunds");
+      await lockSupplierClaimRefundTx(tx,organizationId,payment.supplierReturnClaimId);
+      await assertSupplierClaimRefundIntentTx(tx,organizationId,actorUserId,payment,payment.id);
+    }
+    if (payment.paymentType === "SUPPLIER_RETURN_REFUND" && (decision.selfApprovalOverride || payment.initiatedByUserId === actorUserId)) {
+      throw new EnterpriseAccountingError("ACCOUNTING_SELF_APPROVAL_FORBIDDEN",403);
+    }
     if (decision.selfApprovalOverride && approval.requestedByUserId === actorUserId) {
       const proposal = await tx.enterpriseRetailInvoicePaymentProposal.findFirst({ where: { organizationId, paymentId }, select: { checkout: { select: { siteId: true } } } });
       if (proposal && !await hasRetailSelfApprovalGrant(organizationId, actorUserId, proposal.checkout.siteId, "PAYMENT", tx)) {

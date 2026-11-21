@@ -6,6 +6,8 @@ import { createEnterprisePayment, inspectEnterprisePaymentConfirmation, paymentC
 import { paymentCreateSchema } from "@/lib/enterprise/accounting/schemas";
 import { prisma } from "@/lib/prisma";
 import { retailFinanceReadSiteScope } from "@/lib/enterprise/retail/site-access";
+import { getEnterpriseAccountingAccess } from "@/lib/enterprise/accounting/access";
+import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
 
 type Params = { params: Promise<{ organizationId: string }> };
 
@@ -14,6 +16,42 @@ export async function GET(req: Request, { params }: Params) {
   const { organizationId } = await params;
   const auth = await authorizeFinanceRequest(req, organizationId, "FINANCE_PAYMENTS", "view");
   if (!auth.ok) return auth.response;
+  const claimQuery = new URL(req.url).searchParams;
+  const claimId = claimQuery.get("supplierReturnClaimId")?.trim();
+  const compensationPayableId = claimQuery.get("compensationPayableId")?.trim();
+  const compensationAmount = claimQuery.get("compensationAmount");
+  const compensationDate = claimQuery.get("compensationDate");
+  if (compensationPayableId && !claimId) return financeErrorResponse(new EnterpriseAccountingError("SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED", 409));
+  if ((compensationAmount !== null || compensationDate !== null) &&
+      (!claimId || !compensationPayableId || !compensationAmount || !compensationDate)) {
+    return financeErrorResponse(new EnterpriseAccountingError("SUPPLIER_RETURN_COMPENSATION_PLAN_INVALID", 409));
+  }
+  const compensationIntent = compensationAmount && compensationDate
+    ? { amount: compensationAmount, accountingDate: compensationDate } : undefined;
+  if (claimId) {
+    try {
+      if (!await getEnterpriseAccountingAccess({session:auth.session,organizationId,moduleCode:"FINANCE_PAYABLES",action:"view"})) throw new EnterpriseAccountingError("SUPPLIER_RETURN_REFUND_ACCESS_FORBIDDEN",403);
+      const { readSupplierClaimRefundEvidenceTx, readSupplierClaimCompensationTargetTx } = await import("@/lib/enterprise/accounting/supplier-return-claim-refunds");
+      const summary=await prisma.$transaction(async tx=>{
+        const scope=await retailFinanceReadSiteScope(organizationId,auth.session.userId,"COLLECT_PAYMENT",tx);
+        // A supplier invoice has no canonical site dimension yet. Do not infer
+        // a target site from the claim or expose its debt to a scoped operator.
+        if (compensationPayableId && scope !== null) throw new EnterpriseAccountingError("SUPPLIER_RETURN_REFUND_ACCESS_FORBIDDEN", 403);
+        if(scope!==null){
+          const linked=await tx.enterpriseSupplierReturnRequest.findFirst({where:{organizationId,id:claimId},select:{sourceMovementId:true,warehouseId:true}});
+          const source=linked?await tx.enterpriseStockMovement.findFirst({where:{organizationId,id:linked.sourceMovementId,warehouseId:linked.warehouseId},select:{warehouse:{select:{siteId:true}}}}):null;
+          if(!source?.warehouse.siteId||!scope.includes(source.warehouse.siteId))throw new EnterpriseAccountingError("SUPPLIER_RETURN_REFUND_CLAIM_NOT_FOUND",404);
+        }
+        const proof=await readSupplierClaimRefundEvidenceTx(tx,organizationId,claimId);
+        const compensation = compensationPayableId
+          ? await readSupplierClaimCompensationTargetTx(tx, organizationId, proof, compensationPayableId, compensationIntent)
+          : undefined;
+        return {id:proof.claim.id,reference:proof.claim.reference,invoiceReference:proof.invoice.number,businessPartyId:proof.invoice.businessPartyId,currencyCode:proof.claim.currencyCode,creditDate:proof.credit.creditDate,original:proof.claim.settlementClaimAmount,refunded:proof.refunded,compensated:proof.compensated,compensationReserved:proof.compensationReserved,reserved:proof.reserved,remaining:proof.remaining,available:proof.available,canCreate:auth.access.capabilities.canCreate&&proof.available.gt(0), ...(compensation ? { compensation } : {})};
+      },{isolationLevel:Prisma.TransactionIsolationLevel.RepeatableRead});
+      await writeApiLog({request:req,statusCode:200,userId:auth.session.userId,startedAt,metadata:{organizationId,domain:compensationPayableId?"supplier-claim-compensation-preflight":"supplier-claim-refund-preflight",claimId}});
+      return NextResponse.json({claim:summary},{headers:{"Cache-Control":"private, no-store"}});
+    }catch(error){return financeErrorResponse(error,"SUPPLIER_RETURN_REFUND_EVIDENCE_REQUIRED");}
+  }
   const dates = financeBusinessDateRange(req);
   if (!dates.ok) return dates.response;
 
@@ -158,7 +196,7 @@ export async function GET(req: Request, { params }: Params) {
         canCancel: capabilities.canSubmit && ["DRAFT", "PENDING_APPROVAL"].includes(item.status) && item.initiatedByUserId === auth.session.userId,
         canConfirm,
         canReconcile: capabilities.canManage && item.status === "CONFIRMED",
-        canReverse: capabilities.canManage && ["CONFIRMED", "RECONCILED"].includes(item.status),
+        canReverse: capabilities.canManage && item.paymentType !== "SUPPLIER_RETURN_REFUND" && ["CONFIRMED", "RECONCILED"].includes(item.status),
         canAllocate: capabilities.canWrite && ["CONFIRMED", "RECONCILED"].includes(item.status) && item.unallocatedAmount.gt(0),
       },
       confirmation: {
@@ -206,6 +244,7 @@ export async function POST(req: Request, { params }: Params) {
   }
 
   try {
+    if(parsed.data.paymentType==="SUPPLIER_RETURN_REFUND"&&!await getEnterpriseAccountingAccess({session:auth.session,organizationId,moduleCode:"FINANCE_PAYABLES",action:"view"})) throw new EnterpriseAccountingError("SUPPLIER_RETURN_REFUND_ACCESS_FORBIDDEN",403);
     const payment = await createEnterprisePayment(organizationId, auth.session.userId, parsed.data);
     await writeAuditLog({ userId: auth.session.userId, action: "ENTERPRISE_PAYMENT_CREATED", entity: "EnterprisePayment", entityId: payment.id, request: req, metadata: { organizationId, number: payment.number, amount: payment.amount.toFixed(), currency: payment.currencyCode, direction: payment.direction, paymentType: payment.paymentType } });
     await writeApiLog({ request: req, statusCode: 201, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "payments" } });

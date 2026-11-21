@@ -173,6 +173,7 @@ model EnterpriseLedgerAccount {
   taxCodesPayable        EnterpriseTaxCode[] @relation("EnterpriseTaxCodePayableAccount")
   taxCodesRecoverable    EnterpriseTaxCode[] @relation("EnterpriseTaxCodeRecoverableAccount")
   fundingCounterparts    EnterpriseFundingOperation[]
+  supplierReturnClaims   EnterpriseSupplierReturnRequest[] @relation("SupplierReturnClaimAccount")
 
   @@unique([organizationId, id])
   @@unique([organizationId, code])
@@ -580,6 +581,7 @@ model EnterpriseSupplierInvoice {
   grandTotal            Decimal                        @db.Decimal(20, 6)
   amountPaid            Decimal                        @default(0) @db.Decimal(20, 6)
   amountCredited        Decimal                        @default(0) @db.Decimal(20, 6)
+  amountCompensated     Decimal                        @default(0) @db.Decimal(20, 6)
   outstandingAmount     Decimal                        @db.Decimal(20, 6)
   varianceReason        String?
   approvedAt            DateTime?
@@ -680,6 +682,7 @@ model EnterprisePayable {
   originalAmount      Decimal                       @db.Decimal(20, 6)
   allocatedAmount     Decimal                       @default(0) @db.Decimal(20, 6)
   creditedAmount      Decimal                       @default(0) @db.Decimal(20, 6)
+  compensatedAmount   Decimal                       @default(0) @db.Decimal(20, 6)
   outstandingAmount   Decimal                       @db.Decimal(20, 6)
   status              String                        @default("OPEN")
   dueDate             DateTime?
@@ -688,11 +691,55 @@ model EnterprisePayable {
   supplierInvoice     EnterpriseSupplierInvoice     @relation(fields: [organizationId, supplierInvoiceId], references: [organizationId, id], onDelete: Restrict)
   allocations         EnterprisePayableAllocation[]
   paymentAllocations  EnterprisePaymentAllocation[]
+  claimCompensations EnterpriseSupplierClaimCompensation[]
 
   @@unique([organizationId, id])
   @@unique([organizationId, supplierInvoiceId])
   @@index([organizationId, supplierId, status])
   @@index([organizationId, dueDate, status])
+}
+
+/// Non-cash settlement intent, not a payment or payable allocation.
+model EnterpriseSupplierClaimCompensation {
+  id                         String   @id @default(cuid())
+  organizationId             String
+  claimId                    String
+  payableId                  String
+  currencyCode               String
+  amount                     Decimal  @db.Decimal(20, 6)
+  accountingDate             DateTime
+  supplierReference          String
+  reason                     String
+  sourceCreditJournalId      String
+  targetInvoiceJournalId     String
+  claimAccountId             String
+  payableAccountId           String
+  requestedByUserId          String
+  idempotencyKey             String
+  status                     String   @default("DRAFT")
+  revision                   Int      @default(1)
+  submittedAt                DateTime?
+  approverUserId             String?
+  approvedAt                 DateTime?
+  approvedByUserId           String?
+  rejectedAt                 DateTime?
+  rejectedByUserId           String?
+  rejectionReason            String?
+  postedAt                   DateTime?
+  postedByUserId             String?
+  postingJournalEntryId      String?
+  cancelledAt                DateTime?
+  cancelledByUserId          String?
+  cancellationReason         String?
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
+  claim                      EnterpriseSupplierReturnRequest @relation(fields: [organizationId, claimId], references: [organizationId, id], onDelete: Restrict, map: "supplier_comp_claim_fk")
+  payable                    EnterprisePayable @relation(fields: [organizationId, payableId], references: [organizationId, id], onDelete: Restrict, map: "supplier_comp_payable_fk")
+
+  @@unique([organizationId, id], map: "supplier_comp_org_id_key")
+  @@unique([organizationId, idempotencyKey], map: "supplier_comp_idempotency_key")
+  @@index([organizationId, claimId, status], map: "supplier_comp_claim_status_idx")
+  @@index([organizationId, payableId, status], map: "supplier_comp_payable_status_idx")
 }
 
 model EnterprisePayableAllocation {
@@ -798,6 +845,8 @@ model EnterprisePayment {
   treasuryTransactions     EnterpriseTreasuryTransaction[]
   cashSession              EnterpriseCashSession?         @relation(fields: [organizationId, cashSessionId], references: [organizationId, id], onDelete: Restrict)
   expense                  EnterpriseExpense? @relation("ExpenseSettlements", fields: [organizationId, expenseId], references: [organizationId, id], onDelete: Restrict, map: "EnterprisePayment_expense_fkey")
+  supplierReturnClaimId String?
+  supplierReturnClaim EnterpriseSupplierReturnRequest? @relation("SupplierReturnClaimRefunds", fields: [organizationId, supplierReturnClaimId], references: [organizationId, id], onDelete: Restrict, map: "supplier_claim_refund_fk")
 
   @@unique([organizationId, id])
   @@unique([organizationId, number])
@@ -807,6 +856,7 @@ model EnterprisePayment {
   @@index([organizationId, financialAccountId])
   @@index([organizationId, cashSessionId])
   @@index([organizationId, expenseId, status])
+  @@index([organizationId, supplierReturnClaimId, status], map: "supplier_claim_refund_status_idx")
 }
 
 model EnterprisePaymentAllocation {

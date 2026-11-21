@@ -168,7 +168,7 @@ export function ApprovalCoordinationPanel({ organizationId, approvalId, locale, 
   </div>;
 }
 
-const SNAPSHOT_FIELDS = new Set(["returnReference","historicalCostCeiling","estimatedSellingAmount","completionCost","sellingCost","estimatedNetValue","evidenceReference","article", "lotNumber", "warehouse", "location", "purchaseReference", "receiptReference", "supplierInvoiceReference", "unitCost", "stockValue", "recoverableTaxAmount", "quantity", "reason", "title", "description", "status", "priority", "requestType", "reference", "revision", "startAt", "dueAt", "endAt", "locationMode", "currency", "amount", "totalAmount", "sourceAmount", "sourceCurrencyCode", "targetAmount", "targetCurrencyCode", "updatedAt"]);
+const SNAPSHOT_FIELDS = new Set(["returnReference","historicalCostCeiling","estimatedSellingAmount","completionCost","sellingCost","estimatedNetValue","evidenceReference","article", "lotNumber", "warehouse", "location", "purchaseReference", "receiptReference", "supplierInvoiceReference", "unitCost", "stockValue", "recoverableTaxAmount", "settlementPayableAmount", "settlementClaimAmount", "quantity", "reason", "title", "description", "status", "priority", "requestType", "reference", "revision", "startAt", "dueAt", "endAt", "locationMode", "currency", "amount", "totalAmount", "sourceAmount", "sourceCurrencyCode", "targetAmount", "targetCurrencyCode", "updatedAt"]);
 
 function snapshotEntries(snapshot: Record<string, unknown>) {
   return Object.entries(snapshot).filter(([field, value]) => SNAPSHOT_FIELDS.has(field) && value !== null && value !== undefined && value !== "");

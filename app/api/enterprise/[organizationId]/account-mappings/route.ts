@@ -42,6 +42,7 @@ export async function GET(req: Request, { params }: Params) {
   ]);
   const projected = items.map((item) => {
     const definition = getSemanticAccountDefinition(item.mappingKey);
+    const claimExtension = item.mappingKey === "SUPPLIER_RETURN_CLAIMS";
     const templateManaged = Boolean(item.ledgerAccount.chart.templateCode);
     return {
       ...item,
@@ -51,9 +52,10 @@ export async function GET(req: Request, { params }: Params) {
       category: definition?.category || null,
       status: item.isActive ? "ACTIVE" : "INACTIVE",
       templateManaged,
+      claimExtension,
       capabilities: {
-        canEdit: Boolean(auth.access.capabilities.canManage && !templateManaged),
-        canDeactivate: Boolean(auth.access.capabilities.canManage && !templateManaged && item.isActive),
+        canEdit: Boolean(auth.access.capabilities.canManage && !templateManaged && !claimExtension),
+        canDeactivate: Boolean(auth.access.capabilities.canManage && !templateManaged && !claimExtension && item.isActive),
       },
     };
   });

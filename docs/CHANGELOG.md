@@ -1,3 +1,29 @@
+## 2026-11-20 — Suite #1212 — v1.23.5 candidate (DRAFT)
+
+- Lot 1G.10 : règlement fournisseur par compensation distinct du paiement et de l'avoir, indicateurs canoniques et formule de réconciliation dédiés. Migration additive, test PostgreSQL.
+
+- Lot 1G.5 : décision assignée et exécution comptable atomique de la compensation, rapprochement source/dette, garde de contrepassation ; QA et recette à certifier.
+
+- Lot 1G.4 : soumission de compensation sous réservation cohérente créance/dette, assignation d'approbation Finance et verrouillage concurrent, aucun posting. Migration additive et QA à certifier.
+
+- Lot 1G.3 : brouillon de compensation fournisseur immuable, migration additive, préparation/lecture/annulation idempotente et audit sur Payables ; explicitement aucun effet comptable ni réservation. Recette PostgreSQL ajoutée, CI à certifier.
+
+- Lot 1G.2 : plan comptable indicatif de compensation, montant exact, date civile, période ouverte, journal général et comptes historiques vérifiés, impact trésorerie nul. Aucun effet financier ; QA isolée et HTTP à certifier.
+
+- Lot 1G.1 : diagnostic en lecture seule de la dette cible d'une éventuelle compensation fournisseur, preuve du journal et plafond net des remboursements/réservations. Aucun flux de compensation activé ; QA ciblée et recette HTTP/PostgreSQL (plafond avant, pendant et après remboursement ; dette cible inchangée) à certifier.
+
+- Lot 1F : remboursement bancaire de créances fournisseurs via le paiement canonique, preuves et capacité transactionnelle, approbation indépendante et écriture Banque/Créance. Nouvelle migration additive, UI FR/EN, tests réels ajoutés non encore certifiés.
+
+- Lot 1E : configuration explicite du compte de contrôle pour créances fournisseurs via un sous-compte personnalisé du 409, sans toucher le référentiel publié. UI FR/EN et recette API, preuve CI à renouveler.
+
+- Lots 1C–1D : plan financier persistant et immuable lié au retour, reconnaissance d'une créance distincte via posting canonique, conservation du solde non négatif, vérification à toutes les transitions et protections des journaux supports; FR/EN. Une migration additive, aucune donnée historique touchée. Mapping optionnel, provisionnement client, règlement de créance et CI restent bloquants.
+
+- Lot 1C.1 : preuve en lecture seule des paiements d'origine par allocations, trésorerie et journaux non contrepassés, avec état FR/EN; cas ordinaires en devise fonctionnelle et partie identifiée. Aucune créance reconnue, aucun flux débloqué, aucune migration. QA ciblée à certifier.
+
+- Lot 1B : lecteur commun de concordance facture/dette/allocations confirmées, refus serveur précoce des demandes et approbations non couvertes; recontrôle avant expédition sous verrou facture. Tests de dette nulle, insuffisance, projections divergentes et allocations manquantes. Aucun posting, migration ou créance nouvelle; CI à renouveler.
+
+- Lot 1A : diagnostic en lecture seule de la ventilation d’un avoir fournisseur entre dette ouverte et créance potentielle, en Decimal à six décimales, rapprochement facture/dette dans le même snapshot, FR/EN et désactivation du formulaire de demande dans ce cas. Aucun nouveau droit d’expédier, aucun avoir/solde/journal/encaissement créé. Tests de ventilation ajoutés à la QA #1212; CI et recette manuelle à exécuter. Les huit lots restent ouverts.
+
 ## 2026-11-17 / 18 — Hotfix stock/lots #1212 — v1.23.4 candidate (DRAFT)
 
 - Recette sectorielle #1212 : quatre tenants isolés, sélecteur et lot sans quantité, disponibilité hors périmés/quarantaine, refus références étrangères et absence d'écriture des autorités sectorielles; certification CI à exécuter.

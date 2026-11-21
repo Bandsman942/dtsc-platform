@@ -55,6 +55,13 @@ export async function assertSupplierCreditNoteStillPostable(
     if (!payable) throw new EnterpriseAccountingError("PAYABLE_NOT_FOUND", 409);
     if (payable.currencyCode !== credit.currencyCode) throw new EnterpriseAccountingError("SUPPLIER_CREDIT_NOTE_CURRENCY_MISMATCH", 409);
     if (credit.grandTotal.gt(payable.outstandingAmount)) {
+      const linked=await tx.enterpriseSupplierReturnRequest.findFirst({where:{organizationId,supplierCreditNoteId:credit.id,supplierInvoiceId:credit.supplierInvoiceId,status:"DISPATCHED",settlementClaimAmount:{gt:0}}});
+      if (linked) {
+        const { assertSupplierReturnClaimCreditReadyTx, lockSupplierReturnInvoiceTx } = await import("@/lib/enterprise/accounting/supplier-return-credit-reconciliation");
+        await lockSupplierReturnInvoiceTx(tx,organizationId,credit.supplierInvoiceId);
+        await assertSupplierReturnClaimCreditReadyTx(tx,organizationId,credit.supplierInvoice,credit.grandTotal,credit.currencyCode,credit.creditDate,linked);
+        return;
+      }
       throw new EnterpriseAccountingError("SUPPLIER_CREDIT_NOTE_EXCEEDS_OPEN_PAYABLE", 409, {
         outstandingAmount: payable.outstandingAmount.toFixed(),
         creditAmount: credit.grandTotal.toFixed(),
