@@ -176,6 +176,33 @@ export function InventoryStockGovernance({ organizationId, organizationName, loc
     finally { setBusy(false); }
   }
 
+  async function retryRecallAlerts(lot:Lot) {
+    if(!canRecall||!lot.recallReference||busy)return;
+    setBusy(true);
+    try {
+      const response=await fetch(`/api/enterprise/${organizationId}/inventory/lots`,{
+        method:"PATCH",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({action:"RETRY_RECALL_ALERTS",id:lot.id,revision:lot.revision}),
+      });
+      const body=await response.json().catch(()=>null) as {
+        message?:string;notifications?:{recipients:number;queued:number;failed:number};
+      }|null;
+      if(!response.ok||!body?.notifications)
+        throw new Error(body?.message||(en?"Unable to retry recall alerts.":"Relance des alertes impossible."));
+      const alert=body.notifications;
+      notifyToast({title:en?"Recall alerts checked":"Alertes de rappel vérifiées",
+        description:en?`${alert.queued}/${alert.recipients} notifications available. No stock changes were made.`
+          :`${alert.queued}/${alert.recipients} notifications disponibles. Aucun changement de stock.`,
+        tone:"success"});
+      if(alert.failed)notifyToast({title:en?"Notifications still unavailable":"Notifications toujours indisponibles",
+        description:en?`${alert.failed} alerts could not be queued. The lots remain quarantined.`
+          :`${alert.failed} alertes n'ont pas pu être enregistrées. Les lots restent en quarantaine.`,
+        tone:"error"});
+    }catch(error){
+      notifyToast({title:en?"Retry rejected":"Relance refusée",description:customerFacingError(error,locale),tone:"error"});
+    }finally{setBusy(false);}
+  }
+
   return <section data-testid="inventory-stock-governance" className="min-w-0 rounded-2xl border border-dtsc-border bg-dtsc-surface p-3 sm:p-4">
     <div className="flex flex-wrap items-center justify-between gap-2"><div className="flex min-w-0 items-start gap-2"><ShieldCheck className="mt-1 h-5 w-5 shrink-0 text-emerald-600" /><div className="min-w-0"><h3 className="break-words text-sm font-black text-dtsc-ink">{en ? "Stock rules, batches and expiry" : "Règles de stock, lots et péremptions"}</h3><p className="text-xs text-dtsc-muted">{en ? "Logistics is the owner of stock configuration and batch history; the product catalog only defines the item." : "La logistique pilote les règles de stock et les lots ; le catalogue définit uniquement l'article."}</p></div></div><Button variant="outline" type="button" onClick={() => setOpen((value) => !value)}><Boxes className="h-4 w-4" />{open ? en ? "Collapse" : "Réduire" : en ? "Manage" : "Gérer"}</Button></div>
     {open ? <div className="mt-4 space-y-4">
@@ -240,7 +267,7 @@ export function InventoryStockGovernance({ organizationId, organizationName, loc
           {lot.recallReference?<p className="break-words font-semibold text-xs text-red-700 dark:text-red-200">{lot.recallReference}</p>:null}
           {lot.qualityReason?<p className="break-words text-xs text-dtsc-muted">{lot.qualityReason}</p>:null}
           {lot.sectorManaged?<p className="text-xs text-dtsc-muted">{en?"Read-only projection. Use the dedicated sector register.":"Projection en lecture seule. Utilisez le registre sectoriel dédié."}</p>:null}
-          <div data-responsive-actions className="flex flex-wrap gap-2"><Button type="button" variant="outline" size="sm" disabled={!canRegisterLot||Boolean(lot.recallReference)||Boolean(lot.sectorManaged)} onClick={()=>openEditLot(lot)}>{en?"Quality / edit":"Qualité / modifier"}</Button><Button type="button" variant="outline" size="sm" onClick={()=>{setTraceLot(lot);setTracePage(1);setTraceItems([]);}}>{en?"Trace movements":"Tracer les mouvements"}</Button></div>
+          <div data-responsive-actions className="flex flex-wrap gap-2"><Button type="button" variant="outline" size="sm" disabled={!canRegisterLot||Boolean(lot.recallReference)||Boolean(lot.sectorManaged)} onClick={()=>openEditLot(lot)}>{en?"Quality / edit":"Qualité / modifier"}</Button><Button type="button" variant="outline" size="sm" onClick={()=>{setTraceLot(lot);setTracePage(1);setTraceItems([]);}}>{en?"Trace movements":"Tracer les mouvements"}</Button>{lot.recallReference&&canRecall&&!lot.sectorManaged?<Button type="button" variant="outline" size="sm" disabled={busy} onClick={()=>void retryRecallAlerts(lot)}>{en?"Retry recall alerts":"Relancer les alertes"}</Button>:null}</div>
         </article>):<p className="text-xs text-dtsc-muted">{en?"No batch for these filters.":"Aucun lot pour ces filtres."}</p>}</div>
         <div className="mt-2 flex min-w-0 flex-wrap items-center justify-between gap-2 text-xs text-dtsc-muted"><span>{en ? "Page" : "Page"} {page}/{pages}</span><div className="flex gap-2"><Button variant="outline" disabled={page <= 1} onClick={() => setPage((value) => value - 1)}>{en ? "Previous" : "Précédent"}</Button><Button variant="outline" disabled={page >= pages} onClick={() => setPage((value) => value + 1)}>{en ? "Next" : "Suivant"}</Button></div></div>
       </div>
