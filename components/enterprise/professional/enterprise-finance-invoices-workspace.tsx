@@ -577,7 +577,7 @@ export function EnterpriseFinanceInvoicesWorkspace(props: Props) {
           <Field label={locale==="en"?"Bank transaction reference":"Référence de transaction bancaire"}><Input name="reference" required maxLength={160} disabled={busy}/></Field>
           <Button type="submit" disabled={busy||!refundBankValid}>{locale==="en"?"Prepare refund draft":"Préparer le brouillon de remboursement"}</Button>
         </form>:<p className="text-sm text-dtsc-muted">{locale==="en"?"No refundable amount is available or payment creation is not authorized.":"Aucun montant disponible ou création de paiement non autorisée."}</p>}
-        <SupplierClaimCompensationPanel organizationId={organizationId} claim={refundClaim} locale={locale}
+        <SupplierClaimCompensationPanel key={`${organizationId}:${refundClaim.id}`} organizationId={organizationId} claim={refundClaim} locale={locale}
           businessDate={businessContext?.businessDate} canWrite={canWrite} canSubmit={canSubmit} canApprove={canApprove}
           onMutated={()=>{setRefreshKey(value=>value+1);void openClaimRefund(refundClaim.id);}} />
       </div>:null}
