@@ -5,7 +5,7 @@ import { z } from "zod";
 import { getEnterpriseAccountingAccess } from "@/lib/enterprise/accounting/access";
 import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
 import { isValidEnterpriseActivityCivilDate } from "@/lib/enterprise/enterprise-activity-civil-date";
-import { prepareSupplierClaimCompensation, cancelSupplierClaimCompensation, readSupplierClaimCompensation, supplierCompensationDraftProjection } from "@/lib/enterprise/accounting/supplier-claim-compensation-service";
+import { prepareSupplierClaimCompensation, cancelSupplierClaimCompensation, submitSupplierClaimCompensation, readSupplierClaimCompensation, supplierCompensationDraftProjection } from "@/lib/enterprise/accounting/supplier-claim-compensation-service";
 import { authorizeFinanceRequest, financeBusinessDateRange, financeErrorResponse, financeListParams, financeValidationErrorResponse } from "@/lib/enterprise/accounting/http";
 import { prisma } from "@/lib/prisma";
 import { supplierReturnFinanceProjectionTx, supplierReturnPayableCapacity } from "@/lib/enterprise/accounting/supplier-return-credit-reconciliation";
@@ -120,6 +120,8 @@ const compensationDraftMutation = z.discriminatedUnion("action", [
     accountingDate: z.string().refine(isValidEnterpriseActivityCivilDate),
     supplierReference: z.string().trim().min(1).max(200), reason: z.string().trim().min(8).max(1000),
     idempotencyKey: z.string().trim().min(8).max(200) }).strict(),
+  z.object({ action: z.literal("SUBMIT_COMPENSATION"), compensationId: z.string().trim().min(1).max(200),
+    revision: z.number().int().positive(), approverUserId: z.string().trim().min(1).max(200) }).strict(),
   z.object({ action: z.literal("CANCEL_COMPENSATION_DRAFT"), compensationId: z.string().trim().min(1).max(200),
     revision: z.number().int().positive(), reason: z.string().trim().min(8).max(1000) }).strict(),
 ]);
@@ -136,12 +138,18 @@ export async function POST(req: Request, { params }: Params) {
     if (!await getEnterpriseAccountingAccess({ session: auth.session, organizationId, moduleCode: "FINANCE_PAYMENTS", action: "view" }))
       throw new EnterpriseAccountingError("SUPPLIER_RETURN_REFUND_ACCESS_FORBIDDEN", 403);
     const data = parsed.data;
+    if (data.action === "SUBMIT_COMPENSATION" &&
+        !await getEnterpriseAccountingAccess({ session: auth.session, organizationId, moduleCode: "FINANCE_PAYABLES", action: "submit" }))
+      throw new EnterpriseAccountingError("SUPPLIER_RETURN_REFUND_ACCESS_FORBIDDEN", 403);
     const draft = data.action === "PREPARE_COMPENSATION"
       ? await prepareSupplierClaimCompensation(organizationId, auth.session.userId, data)
-      : await cancelSupplierClaimCompensation(organizationId, auth.session.userId, data);
+      : data.action === "SUBMIT_COMPENSATION"
+        ? await submitSupplierClaimCompensation(organizationId, auth.session.userId, data)
+        : await cancelSupplierClaimCompensation(organizationId, auth.session.userId, data);
     const statusCode = data.action === "PREPARE_COMPENSATION" ? 201 : 200;
-    await writeAuditLog({ userId: auth.session.userId, action: data.action === "PREPARE_COMPENSATION"
-      ? "SUPPLIER_CLAIM_COMPENSATION_DRAFT_PREPARED" : "SUPPLIER_CLAIM_COMPENSATION_DRAFT_CANCELLED",
+    await writeAuditLog({ userId: auth.session.userId, action: data.action === "PREPARE_COMPENSATION" ? "SUPPLIER_CLAIM_COMPENSATION_DRAFT_PREPARED"
+        : data.action === "SUBMIT_COMPENSATION" ? "SUPPLIER_CLAIM_COMPENSATION_SUBMITTED"
+        : "SUPPLIER_CLAIM_COMPENSATION_DRAFT_CANCELLED",
       entity: "EnterpriseSupplierClaimCompensation", entityId: draft.id, request: req,
       metadata: { organizationId, claimId: draft.claimId, payableId: draft.payableId, status: draft.status } });
     await writeApiLog({ request: req, statusCode, userId: auth.session.userId, startedAt,

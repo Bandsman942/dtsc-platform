@@ -1,5 +1,7 @@
 ## 2026-11-20 — Suite #1212 — v1.23.5 candidate (DRAFT)
 
+- Lot 1G.4 : soumission de compensation sous réservation cohérente créance/dette, assignation d'approbation Finance et verrouillage concurrent, aucun posting. Migration additive et QA à certifier.
+
 - Lot 1G.3 : brouillon de compensation fournisseur immuable, migration additive, préparation/lecture/annulation idempotente et audit sur Payables ; explicitement aucun effet comptable ni réservation. Recette PostgreSQL ajoutée, CI à certifier.
 
 - Lot 1G.2 : plan comptable indicatif de compensation, montant exact, date civile, période ouverte, journal général et comptes historiques vérifiés, impact trésorerie nul. Aucun effet financier ; QA isolée et HTTP à certifier.

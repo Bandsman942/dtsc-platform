@@ -716,6 +716,16 @@ model EnterpriseSupplierClaimCompensation {
   idempotencyKey             String
   status                     String   @default("DRAFT")
   revision                   Int      @default(1)
+  submittedAt                DateTime?
+  approverUserId             String?
+  approvedAt                 DateTime?
+  approvedByUserId           String?
+  rejectedAt                 DateTime?
+  rejectedByUserId           String?
+  rejectionReason            String?
+  postedAt                   DateTime?
+  postedByUserId             String?
+  postingJournalEntryId      String?
   cancelledAt                DateTime?
   cancelledByUserId          String?
   cancellationReason         String?

@@ -46,7 +46,7 @@ export async function GET(req: Request, { params }: Params) {
         const compensation = compensationPayableId
           ? await readSupplierClaimCompensationTargetTx(tx, organizationId, proof, compensationPayableId, compensationIntent)
           : undefined;
-        return {id:proof.claim.id,reference:proof.claim.reference,invoiceReference:proof.invoice.number,businessPartyId:proof.invoice.businessPartyId,currencyCode:proof.claim.currencyCode,creditDate:proof.credit.creditDate,original:proof.claim.settlementClaimAmount,refunded:proof.refunded,reserved:proof.reserved,remaining:proof.remaining,available:proof.available,canCreate:auth.access.capabilities.canCreate&&proof.available.gt(0), ...(compensation ? { compensation } : {})};
+        return {id:proof.claim.id,reference:proof.claim.reference,invoiceReference:proof.invoice.number,businessPartyId:proof.invoice.businessPartyId,currencyCode:proof.claim.currencyCode,creditDate:proof.credit.creditDate,original:proof.claim.settlementClaimAmount,refunded:proof.refunded,compensated:proof.compensated,compensationReserved:proof.compensationReserved,reserved:proof.reserved,remaining:proof.remaining,available:proof.available,canCreate:auth.access.capabilities.canCreate&&proof.available.gt(0), ...(compensation ? { compensation } : {})};
       },{isolationLevel:Prisma.TransactionIsolationLevel.RepeatableRead});
       await writeApiLog({request:req,statusCode:200,userId:auth.session.userId,startedAt,metadata:{organizationId,domain:compensationPayableId?"supplier-claim-compensation-preflight":"supplier-claim-refund-preflight",claimId}});
       return NextResponse.json({claim:summary},{headers:{"Cache-Control":"private, no-store"}});

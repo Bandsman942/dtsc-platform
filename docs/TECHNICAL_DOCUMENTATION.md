@@ -1,3 +1,5 @@
+> **Suite #1212 — lot 1G.4, DRAFT** : réservation à la soumission (statut PENDING_APPROVAL et approbateur indépendant) et garde croisée contre remboursement bancaire / paiement fournisseur. Les brouillons ne bloquent pas; la comptabilisation n'est pas encore activée.
+
 > **Suite #1212 — lot 1G.3, DRAFT** : registre `EnterpriseSupplierClaimCompensation`, migration additive avec FK composites et contrat SQL immuable, API Payables préparer/lire/annuler, aucune réservation ni exécution. Provenance figée et contrôles tenant/site/acteur/révision. Soumission sous réservation et workflow indépendant restent bloquants avant fusion.
 
 > **Suite #1212 — lot 1G.2, DRAFT** : le diagnostic de compensation accepte montant et jour civil ensemble, vérifie capacité, date locale, période OPEN, préparation comptable et concordance des comptes historiques. Plan indicatif débit dette/crédit créance, trésorerie zéro, sans mutation ni réservation. QA isolée et HTTP ajoutées; CI exacte et workflow d'exécution restent requis.

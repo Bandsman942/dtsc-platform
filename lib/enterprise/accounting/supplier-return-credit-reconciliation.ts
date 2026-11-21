@@ -41,9 +41,17 @@ export async function supplierReturnFinanceProjectionTx(tx: Prisma.TransactionCl
 
 export async function assertSupplierPaymentCapacityTx(tx: Prisma.TransactionClient, organizationId: string, payable: { supplierInvoiceId: string; outstandingAmount: Prisma.Decimal; currencyCode: string }, amount: Prisma.Decimal) {
   const pending = await tx.enterpriseSupplierReturnRequest.findMany({ where: { organizationId, supplierInvoiceId: payable.supplierInvoiceId, status: "DISPATCHED" }, select: { totalCost: true, recoverableTaxAmount: true, currencyCode: true, settlementPayableAmount:true, settlementClaimAmount:true } });
-  if (!pending.length) return;
-  const { reserved, available } = supplierReturnPayableCapacity(payable, pending);
-  if (amount.gt(available)) throw new EnterpriseAccountingError("SUPPLIER_RETURN_PAYABLE_RESERVED", 409, { reservedAmount: reserved.toFixed(), allocatableAmount: available.toFixed(), currencyCode: payable.currencyCode });
+  const compensations = await tx.enterpriseSupplierClaimCompensation.findMany({
+    where: { organizationId, payable: { supplierInvoiceId: payable.supplierInvoiceId }, status: { in: ["PENDING_APPROVAL", "APPROVED"] } },
+    select: { amount: true, currencyCode: true }, take: 101,
+  });
+  if (compensations.length > 100 || compensations.some(row => row.currencyCode !== payable.currencyCode ||
+    !row.amount.isFinite() || !row.amount.gt(0))) return fail();
+  const reservedCompensation = compensations.reduce((sum,row)=>sum.plus(row.amount),new Prisma.Decimal(0));
+  const { reserved: reservedReturns } = supplierReturnPayableCapacity(payable, pending);
+  const reserved = reservedReturns.plus(reservedCompensation);
+  const available = Prisma.Decimal.max(0,payable.outstandingAmount.minus(reserved));
+  if (reserved.gt(payable.outstandingAmount) || amount.gt(available)) throw new EnterpriseAccountingError("SUPPLIER_RETURN_PAYABLE_RESERVED", 409, { reservedAmount: reserved.toFixed(), allocatableAmount: available.toFixed(), currencyCode: payable.currencyCode });
 }
 
 

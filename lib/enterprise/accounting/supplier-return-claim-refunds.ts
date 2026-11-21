@@ -19,6 +19,7 @@ export async function lockSupplierClaimRefundTx(tx: Prisma.TransactionClient, or
 
 export async function readSupplierClaimRefundEvidenceTx(
   tx: Prisma.TransactionClient, organizationId: string, claimId: string, excludePaymentId?: string,
+  excludeCompensationId?: string,
 ) {
   const claim = await tx.enterpriseSupplierReturnRequest.findFirst({
     where: { organizationId, id: claimId, status: "RECONCILED" },
@@ -90,10 +91,51 @@ export async function readSupplierClaimRefundEvidenceTx(
         await tx.enterpriseJournalReversal.count({ where: { organizationId, OR: [{ originalEntryId: entry.id }, { reversalEntryId: entry.id }] } })) return bad();
     refunded = refunded.plus(payment.amount);
   }
-  const remaining = claim.settlementClaimAmount.minus(refunded);
+  const compensations = await tx.enterpriseSupplierClaimCompensation.findMany({
+    where: { organizationId, claimId: claim.id, status: { in: ["PENDING_APPROVAL", "APPROVED", "POSTED"] },
+      ...(excludeCompensationId ? { id: { not: excludeCompensationId } } : {}) },
+    orderBy: { id: "asc" }, take: LIMIT + 1,
+  });
+  if (compensations.length > LIMIT) return bad();
+  let compensated = zero(), compensationReserved = zero();
+  for (const offset of compensations) {
+    if (!offset.amount.isFinite() || !offset.amount.gt(0) || offset.amount.decimalPlaces() > 6 ||
+        offset.currencyCode !== claim.currencyCode || offset.sourceCreditJournalId !== journal.id ||
+        offset.claimAccountId !== claim.settlementClaimAccountId || !offset.submittedAt ||
+        !offset.approverUserId || offset.approverUserId === offset.requestedByUserId) return bad();
+    if (["PENDING_APPROVAL", "APPROVED"].includes(offset.status)) {
+      if (offset.postedAt || offset.postingJournalEntryId) return bad();
+      compensationReserved = compensationReserved.plus(offset.amount);
+      continue;
+    }
+    // No balancing entry, allocation, or account proof means no claim reduction.
+    const [entries, allocation, payable] = await Promise.all([
+      tx.enterpriseJournalEntry.findMany({ where: { organizationId, sourceEntityType: "EnterpriseSupplierClaimCompensation", sourceEntityId: offset.id }, include: { lines: true }, take: 2 }),
+      tx.enterprisePayableAllocation.findMany({ where: { organizationId, sourceType: "SUPPLIER_CLAIM_COMPENSATION", sourceId: offset.id }, take: 2 }),
+      tx.enterprisePayable.findFirst({ where: { organizationId, id: offset.payableId } }),
+    ]);
+    const entry = entries[0], alloc = allocation[0];
+    if (offset.status !== "POSTED" || !offset.approvedAt || !offset.approvedByUserId || !offset.postedAt ||
+        !offset.postedByUserId || !offset.postingJournalEntryId ||
+        !payable || payable.businessPartyId !== invoice.businessPartyId || payable.currencyCode !== claim.currencyCode ||
+        entries.length !== 1 || allocation.length !== 1 || !alloc || alloc.payableId !== offset.payableId ||
+        alloc.status !== "CONFIRMED" || alloc.reversedAt || !alloc.amount.equals(offset.amount) ||
+        !entry || entry.id !== offset.postingJournalEntryId || entry.status !== "POSTED" || !entry.postedAt ||
+        entry.reversedAt || entry.reversalOfEntryId || entry.postingEvent !== "SUPPLIER_CLAIM_COMPENSATION_POSTED" ||
+        entry.postingVersion !== 1 || entry.functionalCurrencyCode !== claim.currencyCode ||
+        !entry.totalDebit.equals(offset.amount) || !entry.totalCredit.equals(offset.amount) || entry.lines.length !== 2 ||
+        !entry.lines.some(line => line.ledgerAccountId === offset.payableAccountId && line.debit.equals(offset.amount) && line.credit.isZero()) ||
+        !entry.lines.some(line => line.ledgerAccountId === offset.claimAccountId && line.credit.equals(offset.amount) && line.debit.isZero()) ||
+        entry.lines.some(line => line.businessPartyId !== invoice.businessPartyId || line.transactionCurrencyCode !== claim.currencyCode ||
+          !line.exchangeRate?.equals(1) || !line.transactionAmount?.equals(offset.amount)) ||
+        await tx.enterpriseJournalReversal.count({ where: { organizationId, OR: [{ originalEntryId: entry.id }, { reversalEntryId: entry.id }] } })) return bad();
+    compensated = compensated.plus(offset.amount);
+  }
+  const remaining = claim.settlementClaimAmount.minus(refunded).minus(compensated);
+  reserved = reserved.plus(compensationReserved);
   const available = remaining.minus(reserved);
   if (remaining.lt(0) || available.lt(0)) return bad();
-  return { claim, invoice, credit, siteId: origin.warehouse.siteId, refunded, reserved, remaining, available };
+  return { claim, invoice, credit, siteId: origin.warehouse.siteId, refunded, compensated, compensationReserved, reserved, remaining, available };
 }
 
 type RefundIntent = {
@@ -194,6 +236,7 @@ export async function readSupplierClaimCompensationEvidenceTx(
   tx: Prisma.TransactionClient, organizationId: string,
   proof: Awaited<ReturnType<typeof readSupplierClaimRefundEvidenceTx>>,
   payableId: string, intent?: { amount: string; accountingDate: string },
+  excludeCompensationId?: string,
 ) {
   const reject = (): never => { throw new EnterpriseAccountingError("SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED", 409); };
   if (proof.claim.organizationId !== organizationId || !proof.invoice.businessPartyId ||
@@ -241,9 +284,21 @@ export async function readSupplierClaimCompensationEvidenceTx(
       lines[0].transactionCurrencyCode !== target.currencyCode || !lines[0].exchangeRate?.equals(1) ||
       !lines[0].transactionAmount?.equals(target.grandTotal) || !lines[0].functionalAmount.equals(target.grandTotal) ||
       entry.lines.some(line => line.ledgerAccountId === proof.claim.settlementClaimAccountId)) return reject();
-  const maximum = Prisma.Decimal.min(proof.available, payable.outstandingAmount);
+  const otherReservations = await tx.enterpriseSupplierClaimCompensation.findMany({
+    where: { organizationId, payableId, status: { in: ["PENDING_APPROVAL", "APPROVED"] },
+      ...(excludeCompensationId ? { id: { not: excludeCompensationId } } : {}) },
+    select: { id: true, amount: true, currencyCode: true, targetInvoiceJournalId: true, payableAccountId: true },
+    take: LIMIT + 1,
+  });
+  if (otherReservations.length > LIMIT || otherReservations.some(row =>
+      row.currencyCode !== payable.currencyCode || !row.amount.isFinite() || !row.amount.gt(0) ||
+      row.targetInvoiceJournalId !== entry.id || row.payableAccountId !== debt.id)) return reject();
+  const targetReserved = otherReservations.reduce((sum,row)=>sum.plus(row.amount),zero());
+  if (targetReserved.gt(payable.outstandingAmount)) return reject();
+  const targetAvailable = payable.outstandingAmount.minus(targetReserved);
+  const maximum = Prisma.Decimal.min(proof.available, targetAvailable);
   const plan = intent ? await readSupplierClaimCompensationPostingPlanTx(tx, organizationId, {
-    ...intent, currencyCode: target.currencyCode, maximum, openPayable: payable.outstandingAmount,
+    ...intent, currencyCode: target.currencyCode, maximum, openPayable: targetAvailable,
     unreservedClaim: proof.available, targetInvoiceDate: target.invoiceDate, creditDate: proof.credit.creditDate,
     historicalDebtAccountId: debt.id, claimAccountId: proof.claim.settlementClaimAccountId,
   }) : undefined;
@@ -251,7 +306,7 @@ export async function readSupplierClaimCompensationEvidenceTx(
     evidence: { targetInvoiceId: target.id, targetInvoiceJournalId: entry.id, payableAccountId: debt.id },
     preview: {
       payableId: payable.id, invoiceReference: target.number, currencyCode: target.currencyCode,
-      openPayable: payable.outstandingAmount, unreservedClaim: proof.available, maximum,
+      openPayable: payable.outstandingAmount, targetReserved, targetAvailable, unreservedClaim: proof.available, maximum,
       executionAvailable: false as const,
       ...(plan ? { plan } : {}),
     },
