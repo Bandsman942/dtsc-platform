@@ -215,14 +215,14 @@ export async function PATCH(req: Request, { params }: Params) {
       const evidence=await prisma.$transaction(async tx=>{
         const lot=await tx.enterpriseStockLot.findFirst({
           where:{organizationId,id:parsed.data.id,archivedAt:null},
-          select:{revision:true,status:true,inventoryItemId:true,lotNumber:true,recallReference:true},
+          select:{revision:true,status:true,inventoryItemId:true,lotNumber:true,recallReference:true,qualityChangedByUserId:true},
         });
         if(!lot||!lot.recallReference||lot.status!=="QUARANTINED")
           throw new EnterpriseDomainError("INVENTORY_LOT_RECALLED_REQUIRED",409);
         if(lot.revision!==parsed.data.revision)
           throw new EnterpriseDomainConflictError("INVENTORY_LOT_CONFLICT");
         const recipients=await recallWarehouseManagerRecipientsTx(
-          tx,organizationId,lot.inventoryItemId,lot.lotNumber,lot.recallReference,session.userId);
+          tx,organizationId,lot.inventoryItemId,lot.lotNumber,lot.recallReference,lot.qualityChangedByUserId||session.userId);
         return {reference:lot.recallReference,recipients};
       },{isolationLevel:Prisma.TransactionIsolationLevel.RepeatableRead});
       const notifications=await notifyRecallWarehouseManagers({
