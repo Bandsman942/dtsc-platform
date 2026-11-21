@@ -538,7 +538,8 @@ currentEvent = {...currentEvent,eventType:"ISSUE"};
 await assert.rejects(postingBuilder.buildInventoryAccountingPosting(rtvTx,{organizationId:"org-a",sourceEntityType:"EnterpriseInventoryAccountingEvent",sourceEntityId:"event-a"},"ISSUE"),{code:"INVENTORY_ACCOUNTING_EVENT_NOT_POSTABLE"});
 const fakeCredit = { id:"credit-a", supplierInvoiceId:"invoice-a", currencyCode:"USD", grandTotal:d(14),subtotal:d(14),taxTotal:d(0),creditDate:new Date("2026-10-19T00:00:00.000Z"),createdByUserId:"creator",approvedByUserId:"reviewer" };
 const fakeLine = {sourceInvoiceItemId:"invoice-item-a",catalogItemId:"catalog-a",quantity:d(2),unitPrice:d(7),netAmount:d(14),taxAmount:d(0),totalAmount:d(14)};
-const creditTx = {...rtvTx,enterpriseSupplierClaimCompensation:{findMany:async()=>[]},enterpriseInventoryAcquisitionCostSupplement:{findFirst:async()=>null},enterpriseSupplierReturnRequest:{findFirst:async()=>rtv,findMany:async({where})=>where.status==="RECONCILED"?[]:[rtv]},
+let activeCompensationForPayment=[];
+const creditTx = {...rtvTx,enterpriseSupplierClaimCompensation:{findMany:async()=>activeCompensationForPayment},enterpriseInventoryAcquisitionCostSupplement:{findFirst:async()=>null},enterpriseSupplierReturnRequest:{findFirst:async()=>rtv,findMany:async({where})=>where.status==="RECONCILED"?[]:[rtv]},
   enterpriseSupplierCreditNote:{findFirst:async()=>fakeCredit},enterpriseSupplierCreditNoteItem:{findMany:async()=>[fakeLine]}};
 await assert.rejects(postingBuilder.buildSupplierCreditNotePosting(creditTx,{organizationId:"org-a",sourceEntityType:"EnterpriseSupplierCreditNote",sourceEntityId:"credit-a"}),{code:"SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED"});
 const capacity=returnCredit.supplierReturnPayableCapacity({currencyCode:"USD",outstandingAmount:d(70)},[rtv]);
@@ -572,6 +573,12 @@ await assert.rejects(returnCredit.readPriorReconciledSupplierReturnCreditsTx({},
 
 await returnCredit.assertSupplierPaymentCapacityTx(creditTx,"org-a",{supplierInvoiceId:"invoice-a",currencyCode:"USD",outstandingAmount:d(70)},d(56));
 await assert.rejects(returnCredit.assertSupplierPaymentCapacityTx(creditTx,"org-a",{supplierInvoiceId:"invoice-a",currencyCode:"USD",outstandingAmount:d(70)},d("56.01")),{code:"SUPPLIER_RETURN_PAYABLE_RESERVED"});
+activeCompensationForPayment=[{amount:d(5),currencyCode:"USD"}];
+await returnCredit.assertSupplierPaymentCapacityTx(creditTx,"org-a",{supplierInvoiceId:"invoice-a",currencyCode:"USD",outstandingAmount:d(70)},d(51));
+await assert.rejects(returnCredit.assertSupplierPaymentCapacityTx(creditTx,"org-a",{supplierInvoiceId:"invoice-a",currencyCode:"USD",outstandingAmount:d(70)},d(52)),{code:"SUPPLIER_RETURN_PAYABLE_RESERVED"});
+activeCompensationForPayment=[{amount:d(5),currencyCode:"CDF"}];
+await assert.rejects(returnCredit.assertSupplierPaymentCapacityTx(creditTx,"org-a",{supplierInvoiceId:"invoice-a",currencyCode:"USD",outstandingAmount:d(70)},d(1)),{code:"SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED"});
+activeCompensationForPayment=[];
 const ledgerLine = (ledgerAccountId,debit,credit)=>({ledgerAccountId,debit:d(debit),credit:d(credit)});
 rtv={...rtv,dispatchedAt:new Date("2026-10-18T23:30:00.000Z"),supplierCreditNoteId:"credit-a",supplierCreditReference:"SCN-ORIG"};
 currentEvent={...currentEvent,eventType:"SUPPLIER_RETURN",status:"POSTED",journalEntryId:"dispatch-journal"};
@@ -1330,3 +1337,38 @@ assert.equal(draftCalls.join(","),"lock-claim,lock-draft");
 await assert.rejects(draftService.cancelSupplierClaimCompensation("org-a","creator",cancelInput),{code:"SUPPLIER_RETURN_COMPENSATION_DRAFT_CONFLICT"});
 assert.equal(draftRow.status,"PENDING_APPROVAL");
 console.log("Supplier claim compensation reservation: independent assigned approval, source→target locks, frozen provenance, no postings");
+
+/* Lot 1G.5: canonical two-line posting document, no treasury mutation. */
+const approvedComp={id:"approved-comp",organizationId:"org-a",amount:d(9),
+  sourceCreditJournalId:"source-j",claimAccountId:"claim-account",payableAccountId:"AP-account",
+  approvedAt:new Date("2026-11-20T00:00:00.000Z"),approvedByUserId:"reviewer",
+  approverUserId:"reviewer",requestedByUserId:"creator",submittedAt:new Date("2026-11-20T00:00:00.000Z"),
+  supplierReference:"SUPPLIER-OFFSET",accountingDate:new Date("2026-11-20T00:00:00.000Z"),currencyCode:"USD",
+  claim:{supplierId:"supplier-a",settlementClaimAmount:d(14),settlementClaimAccountId:"claim-account",creditJournalEntryId:"source-j"},
+  payable:{supplierId:"supplier-a",currencyCode:"USD",businessPartyId:"party-a",supplierInvoice:{supplierId:"supplier-a",businessPartyId:"party-a"}},
+};
+let approvedExists=true,approvedRow=approvedComp;
+const postingCompTx={
+  enterpriseSupplierClaimCompensation:{findFirst:async({where})=>{
+    assert.equal(where.organizationId,"org-a");assert.equal(where.id,"approved-comp");assert.equal(where.status,"APPROVED");
+    return approvedRow;
+  }},
+  enterpriseApproval:{findFirst:async({where})=>{
+    assert.equal(where.organizationId,"org-a");assert.equal(where.targetEntityType,"EnterpriseSupplierClaimCompensation");
+    assert.equal(where.status,"APPROVED");return approvedExists?{id:"approved-assignment"}:null;
+  }},
+};
+const buildComp=()=>draftService.buildSupplierClaimCompensationPosting(postingCompTx,{
+  organizationId:"org-a",sourceEntityType:"EnterpriseSupplierClaimCompensation",sourceEntityId:"approved-comp"});
+const offsetDocument=await buildComp();
+assert.equal(offsetDocument.journalType,"GENERAL");assert.equal(offsetDocument.sourceEntityType,"EnterpriseSupplierClaimCompensation");
+assert.equal(offsetDocument.lines.length,2);
+assert.deepEqual(offsetDocument.lines.map(x=>x.accountMappingKey),["ACCOUNTS_PAYABLE","SUPPLIER_RETURN_CLAIMS"]);
+assert.equal(offsetDocument.lines[0].debit.toFixed(),"9");assert.equal(offsetDocument.lines[1].credit.toFixed(),"9");
+assert.equal(offsetDocument.lines[0].businessPartyId,"party-a");assert.equal(offsetDocument.lines[1].businessPartyId,"party-a");
+assert.equal(offsetDocument.lines[0].transactionAmount.toFixed(),"9");assert.equal(offsetDocument.lines[1].transactionAmount.toFixed(),"9");
+approvedExists=false;await assert.rejects(buildComp(),{code:"SUPPLIER_RETURN_COMPENSATION_DRAFT_CONFLICT"});approvedExists=true;
+approvedRow={...approvedComp,approvedByUserId:"creator"};await assert.rejects(buildComp(),{code:"SUPPLIER_RETURN_COMPENSATION_DRAFT_CONFLICT"});
+approvedRow={...approvedComp,payable:{...approvedComp.payable,businessPartyId:"another-party"}};
+await assert.rejects(buildComp(),{code:"SUPPLIER_RETURN_COMPENSATION_DRAFT_CONFLICT"});approvedRow=approvedComp;
+console.log("Supplier compensation posting builder: canonical balanced liability/claim, assigned independent approval, exact supplier party; zero payments");
