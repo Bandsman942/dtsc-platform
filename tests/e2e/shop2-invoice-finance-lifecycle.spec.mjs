@@ -2185,7 +2185,8 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
         expect((await planned.json()).claim.compensation.plan).toMatchObject({
           accountingDate:returnBusinessContext.businessDate,amount:String(plannedAmount),
           debitPayable:String(plannedAmount),creditSupplierClaim:String(plannedAmount),
-          payableAfter:String(12-plannedAmount),unreservedClaimAfter:String(paymentAmount-56-plannedAmount),
+          payableAfter:String(12-plannedAmount),targetUnreservedAfter:String(12-plannedAmount),
+          unreservedClaimAfter:String(paymentAmount-56-plannedAmount),
           treasuryImpact:"0",executionAvailable:false,
         });
         for(const suffix of ["&compensationAmount=0","&compensationAmount=0.0000001","&compensationAmount=99","&compensationDate=2099-01-01","&compensationDate=2026-02-30"]){
