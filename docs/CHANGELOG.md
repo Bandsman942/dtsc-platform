@@ -1,5 +1,7 @@
 ## 2026-11-20 — Suite #1212 — v1.23.5 candidate (DRAFT)
 
+- Lot 1G.5 : décision assignée et exécution comptable atomique de la compensation, rapprochement source/dette, garde de contrepassation ; QA et recette à certifier.
+
 - Lot 1G.4 : soumission de compensation sous réservation cohérente créance/dette, assignation d'approbation Finance et verrouillage concurrent, aucun posting. Migration additive et QA à certifier.
 
 - Lot 1G.3 : brouillon de compensation fournisseur immuable, migration additive, préparation/lecture/annulation idempotente et audit sur Payables ; explicitement aucun effet comptable ni réservation. Recette PostgreSQL ajoutée, CI à certifier.

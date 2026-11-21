@@ -40,13 +40,13 @@ export async function readSupplierReturnSettlementTx(
       !payable.originalAmount.minus(payable.allocatedAmount).minus(payable.creditedAmount).equals(payable.outstandingAmount) ||
       payable.status !== (payable.outstandingAmount.isZero() ? "CLOSED" : "OPEN")) return fail();
   const [groups, invalid] = await Promise.all([
-    tx.enterprisePayableAllocation.groupBy({ by: ["sourceType"], where: { organizationId, payableId: payable.id, status: "CONFIRMED", reversedAt: null, sourceType: { in: ["PAYMENT", "SUPPLIER_CREDIT_NOTE"] } }, _sum: { amount: true } }),
+    tx.enterprisePayableAllocation.groupBy({ by: ["sourceType"], where: { organizationId, payableId: payable.id, status: "CONFIRMED", reversedAt: null, sourceType: { in: ["PAYMENT", "SUPPLIER_CREDIT_NOTE", "SUPPLIER_CLAIM_COMPENSATION"] } }, _sum: { amount: true } }),
     tx.enterprisePayableAllocation.count({ where: { organizationId, payableId: payable.id, status: "CONFIRMED", OR: [
-      { reversedAt: { not: null } }, { amount: { lte: 0 } }, { sourceType: { notIn: ["PAYMENT", "SUPPLIER_CREDIT_NOTE"] } },
+      { reversedAt: { not: null } }, { amount: { lte: 0 } }, { sourceType: { notIn: ["PAYMENT", "SUPPLIER_CREDIT_NOTE", "SUPPLIER_CLAIM_COMPENSATION"] } },
     ] } }),
   ]);
   const total = (type: string) => groups.find(row => row.sourceType === type)?._sum.amount || new Prisma.Decimal(0);
-  if (invalid || !total("PAYMENT").equals(payable.allocatedAmount) || !total("SUPPLIER_CREDIT_NOTE").equals(payable.creditedAmount)) return fail();
+  if (invalid || !total("PAYMENT").equals(payable.allocatedAmount) || !total("SUPPLIER_CREDIT_NOTE").plus(total("SUPPLIER_CLAIM_COMPENSATION")).equals(payable.creditedAmount)) return fail();
   return splitSupplierReturnSettlement({ creditTotal, outstandingAmount: payable.outstandingAmount });
 }
 

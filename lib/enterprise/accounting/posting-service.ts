@@ -160,9 +160,12 @@ export async function postBusinessEventTx(
   organizationId: string,
   actorUserId: string,
   input: PostingInput,
-  options?: { supplierInvoiceTransition?: true; supplierCreditTransition?: true; inventoryTransferTransition?: true; supplierClaimRefundTransition?: true },
+  options?: { supplierInvoiceTransition?: true; supplierCreditTransition?: true; inventoryTransferTransition?: true; supplierClaimRefundTransition?: true; supplierClaimCompensationTransition?: true },
 ) {
   const version = input.postingVersion || 1;
+  if (input.postingEvent === "SUPPLIER_CLAIM_COMPENSATION_POSTED" &&
+      (!options?.supplierClaimCompensationTransition || version !== 1 || input.sourceEntityType !== "EnterpriseSupplierClaimCompensation"))
+    throw new EnterpriseAccountingError("SUPPLIER_RETURN_COMPENSATION_DRAFT_CONFLICT",409);
   if (input.postingEvent === "SUPPLIER_RETURN_REFUND_CONFIRMED" && (!options?.supplierClaimRefundTransition || version !== 1 || input.sourceEntityType !== "EnterprisePayment")) throw new EnterpriseAccountingError("SUPPLIER_RETURN_REFUND_DOMAIN_WORKFLOW_REQUIRED",409);
   if (["INVENTORY_TRANSFER_DISPATCHED","INVENTORY_TRANSFER_RECEIVED"].includes(input.postingEvent) && (!options?.inventoryTransferTransition || version!==1 || input.sourceEntityType!=="EnterpriseInventoryTransferValuation")) throw new EnterpriseAccountingError("INVENTORY_TRANSFER_VALUATION_WORKFLOW_REQUIRED",409);
   const stableKey = postingStableKey(organizationId, input);

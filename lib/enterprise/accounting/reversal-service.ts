@@ -48,6 +48,12 @@ export async function reverseJournalEntryTx(
     if (linked) throw new EnterpriseAccountingError("SUPPLIER_RETURN_DOMAIN_REVERSAL_REQUIRED",409);
   }
 
+  if (original.postingEvent === "SUPPLIER_CLAIM_COMPENSATION_POSTED")
+    throw new EnterpriseAccountingError("SUPPLIER_RETURN_DOMAIN_REVERSAL_REQUIRED",409);
+  if (original.postingEvent === "SUPPLIER_INVOICE_POSTED" && original.sourceEntityId &&
+      await tx.enterpriseSupplierClaimCompensation.count({ where: {
+        organizationId, status: "POSTED", payable: { supplierInvoiceId: original.sourceEntityId },
+      } })) throw new EnterpriseAccountingError("SUPPLIER_RETURN_DOMAIN_REVERSAL_REQUIRED",409);
   if (original.postingEvent === "SUPPLIER_RETURN_REFUND_CONFIRMED") throw new EnterpriseAccountingError("SUPPLIER_RETURN_REFUND_DOMAIN_WORKFLOW_REQUIRED",409);
 
   // Claims rely on the original supplier payment and allocation journals.

@@ -161,6 +161,140 @@ export async function cancelSupplierClaimCompensation(organizationId: string, ac
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }).catch(handleConflict);
 }
 
+async function revalidateCompensationReservationTx(tx: Prisma.TransactionClient, organizationId: string, draft: {
+  id: string; claimId: string; payableId: string; amount: Prisma.Decimal; accountingDate: Date;
+  sourceCreditJournalId: string; targetInvoiceJournalId: string; claimAccountId: string; payableAccountId: string;
+  currencyCode: string;
+}) {
+  const payable = await tx.enterprisePayable.findFirst({
+    where: { organizationId, id: draft.payableId }, select: { supplierInvoiceId: true },
+  });
+  if (!payable) return conflict();
+  await lockSupplierReturnInvoiceTx(tx, organizationId, payable.supplierInvoiceId);
+  const proof = await readSupplierClaimRefundEvidenceTx(tx, organizationId, draft.claimId, undefined, draft.id);
+  const { evidence, preview } = await readSupplierClaimCompensationEvidenceTx(tx, organizationId, proof, draft.payableId,
+    { amount: draft.amount.toFixed(), accountingDate: formatSupplierCompensationCivilDate(draft.accountingDate) }, draft.id);
+  if (!preview.plan || !draft.amount.equals(preview.plan.amount) || draft.currencyCode !== preview.currencyCode ||
+      payable.supplierInvoiceId !== evidence.targetInvoiceId || draft.sourceCreditJournalId !== proof.claim.creditJournalEntryId ||
+      draft.claimAccountId !== proof.claim.settlementClaimAccountId ||
+      draft.targetInvoiceJournalId !== evidence.targetInvoiceJournalId ||
+      draft.payableAccountId !== evidence.payableAccountId) return conflict();
+  return { proof, payable, preview };
+}
+
+/** Assigned decision revalidates current accounting evidence before approval.
+ * Rejection simply releases the two reservations, without a fake cash flow. */
+export async function decideSupplierClaimCompensation(
+  organizationId: string, actorUserId: string,
+  input: { compensationId: string; revision: number; action: "APPROVE" | "REJECT"; reason?: string },
+) {
+  if (input.action === "REJECT" && (!input.reason || input.reason.trim().length < 8)) return conflict();
+  const { requireAccountingApprovalDecision, decideAccountingApproval } = await import("@/lib/enterprise/accounting/accounting-approval-service");
+  const { approval, decision } = await requireAccountingApprovalDecision({
+    organizationId, targetEntityType: "EnterpriseSupplierClaimCompensation",
+    targetEntityId: input.compensationId, actorUserId,
+  });
+  if (decision.selfApprovalOverride || approval.requestedByUserId === actorUserId)
+    throw new EnterpriseAccountingError("ACCOUNTING_SELF_APPROVAL_FORBIDDEN", 403);
+  return prisma.$transaction(async tx => {
+    await assertSupplierCompensationScopeTx(tx, organizationId, actorUserId);
+    const initial = await tx.enterpriseSupplierClaimCompensation.findFirst({
+      where: { organizationId, id: input.compensationId }, select: { claimId: true },
+    });
+    if (!initial) throw new EnterpriseAccountingError("SUPPLIER_RETURN_COMPENSATION_NOT_FOUND", 404);
+    await lockSupplierClaimRefundTx(tx, organizationId, initial.claimId);
+    await tx.$queryRaw(Prisma.sql`SELECT id FROM "EnterpriseSupplierClaimCompensation" WHERE id = ${input.compensationId} AND "organizationId" = ${organizationId} FOR UPDATE`);
+    const draft = await tx.enterpriseSupplierClaimCompensation.findFirst({
+      where: { organizationId, id: input.compensationId },
+    });
+    if (!draft || draft.claimId !== initial.claimId || draft.status !== "PENDING_APPROVAL" ||
+        draft.revision !== input.revision || draft.approverUserId !== actorUserId ||
+        draft.requestedByUserId === actorUserId || !draft.submittedAt) return conflict();
+    if (input.action === "APPROVE") await revalidateCompensationReservationTx(tx, organizationId, draft);
+    await decideAccountingApproval(tx, {
+      organizationId, approvalId: approval.id, approvalRevision: approval.revision,
+      actorUserId, status: input.action === "APPROVE" ? "APPROVED" : "REJECTED",
+      decisionComment: input.reason, selfApprovalOverride: false,
+    });
+    const toStatus = input.action === "APPROVE" ? "APPROVED" : "REJECTED";
+    const updated = await tx.enterpriseSupplierClaimCompensation.update({
+      where: { organizationId_id: { organizationId, id: draft.id } },
+      data: { status: toStatus, revision: { increment: 1 },
+        ...(input.action === "APPROVE"
+          ? { approvedAt: new Date(), approvedByUserId: actorUserId }
+          : { rejectedAt: new Date(), rejectedByUserId: actorUserId, rejectionReason: input.reason!.trim() }) },
+    });
+    await publishFinanceEvent(tx, {
+      organizationId, entityType: "EnterpriseSupplierClaimCompensation", entityId: draft.id,
+      eventType: "SUPPLIER_CLAIM_COMPENSATION_" + toStatus,
+      summary: "Supplier claim compensation " + toStatus.toLowerCase(),
+      actorUserId, fromStatus: "PENDING_APPROVAL", toStatus,
+      metadataJson: { approvalId: approval.id, amount: draft.amount.toFixed(), currency: draft.currencyCode },
+    });
+    return updated;
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }).catch(handleConflict);
+}
+
+/** The canonical posting and both financial projections commit atomically.
+ * No EnterprisePayment or TreasuryTransaction is created by offsetting debt. */
+export async function postSupplierClaimCompensation(
+  organizationId: string, actorUserId: string,
+  input: { compensationId: string; revision: number },
+) {
+  return prisma.$transaction(async tx => {
+    await assertSupplierCompensationScopeTx(tx, organizationId, actorUserId);
+    const initial = await tx.enterpriseSupplierClaimCompensation.findFirst({
+      where: { organizationId, id: input.compensationId }, select: { claimId: true },
+    });
+    if (!initial) throw new EnterpriseAccountingError("SUPPLIER_RETURN_COMPENSATION_NOT_FOUND", 404);
+    await lockSupplierClaimRefundTx(tx, organizationId, initial.claimId);
+    await tx.$queryRaw(Prisma.sql`SELECT id FROM "EnterpriseSupplierClaimCompensation" WHERE id = ${input.compensationId} AND "organizationId" = ${organizationId} FOR UPDATE`);
+    const draft = await tx.enterpriseSupplierClaimCompensation.findFirst({ where: { organizationId, id: input.compensationId } });
+    if (!draft || draft.claimId !== initial.claimId) return conflict();
+    if (draft.status === "POSTED" && draft.revision === input.revision + 1) return draft;
+    if (draft.status !== "APPROVED" || draft.revision !== input.revision ||
+        !draft.approvedAt || !draft.approvedByUserId || draft.approvedByUserId !== draft.approverUserId ||
+        !draft.submittedAt || actorUserId === draft.requestedByUserId || actorUserId === draft.approvedByUserId)
+      return conflict();
+    const { proof, payable } = await revalidateCompensationReservationTx(tx, organizationId, draft);
+    if (proof.claim.supplierId !== proof.invoice.supplierId) return conflict();
+    const { postBusinessEventTx } = await import("@/lib/enterprise/accounting/posting-service");
+    const posting = await postBusinessEventTx(tx, organizationId, actorUserId, {
+      postingEvent: "SUPPLIER_CLAIM_COMPENSATION_POSTED",
+      sourceEntityType: "EnterpriseSupplierClaimCompensation", sourceEntityId: draft.id,
+    }, { supplierClaimCompensationTransition: true });
+    const current = await tx.enterprisePayable.findFirst({ where: { organizationId, id: draft.payableId } });
+    if (!current || !current.outstandingAmount.isFinite() || current.outstandingAmount.lt(draft.amount) ||
+        current.supplierInvoiceId !== payable.supplierInvoiceId ||
+        current.currencyCode !== draft.currencyCode) return conflict();
+    const outstanding = current.outstandingAmount.minus(draft.amount);
+    await tx.enterprisePayableAllocation.create({ data: {
+      organizationId, payableId: current.id, sourceType: "SUPPLIER_CLAIM_COMPENSATION", sourceId: draft.id,
+      amount: draft.amount, allocationDate: draft.accountingDate, createdByUserId: actorUserId,
+    } });
+    await tx.enterprisePayable.update({ where: { id: current.id }, data: {
+      creditedAmount: { increment: draft.amount }, outstandingAmount: outstanding,
+      status: outstanding.isZero() ? "CLOSED" : "OPEN",
+    } });
+    await tx.enterpriseSupplierInvoice.update({ where: { id: current.supplierInvoiceId }, data: {
+      amountCredited: { increment: draft.amount }, outstandingAmount: outstanding,
+      status: outstanding.isZero() ? "PAID" : "POSTED", revision: { increment: 1 },
+    } });
+    const updated = await tx.enterpriseSupplierClaimCompensation.update({
+      where: { organizationId_id: { organizationId, id: draft.id } },
+      data: { status: "POSTED", postedAt: new Date(), postedByUserId: actorUserId,
+        postingJournalEntryId: posting.entry.id, revision: { increment: 1 } },
+    });
+    await publishFinanceEvent(tx, {
+      organizationId, entityType: "EnterpriseSupplierClaimCompensation", entityId: draft.id,
+      eventType: "SUPPLIER_CLAIM_COMPENSATION_POSTED", summary: "Supplier claim settled against an open payable",
+      actorUserId, fromStatus: "APPROVED", toStatus: "POSTED",
+      metadataJson: { payableId: draft.payableId, journalEntryId: posting.entry.id, amount: draft.amount.toFixed(), currency: draft.currencyCode, treasuryImpact: "0" },
+    });
+    return updated;
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 30000 }).catch(handleConflict);
+}
+
 export async function readSupplierClaimCompensation(organizationId: string, actorUserId: string, compensationId: string, canSeeAll: boolean) {
   return prisma.$transaction(async tx => {
     await assertSupplierCompensationScopeTx(tx, organizationId, actorUserId);
@@ -180,5 +314,48 @@ export function supplierCompensationDraftProjection(row: Awaited<ReturnType<type
     reason: row.reason, status: row.status, revision: row.revision, requestedByUserId: row.requestedByUserId,
     cancelledAt: row.cancelledAt, cancellationReason: row.cancellationReason, createdAt: row.createdAt,
     submittedAt: row.submittedAt, approverUserId: row.approverUserId,
+    approvedAt: row.approvedAt, approvedByUserId: row.approvedByUserId,
+    postedAt: row.postedAt, postingJournalEntryId: row.postingJournalEntryId,
     reservationActive: ["PENDING_APPROVAL", "APPROVED"].includes(row.status), executionAvailable: false as const };
 }
+
+// Posting can only be invoked by the approved compensation transition.
+// The registry deliberately exposes no standalone accounting-adjustment route.
+export const buildSupplierClaimCompensationPosting: import("@/lib/enterprise/accounting/posting-types").PostingBuilder = async (tx, input) => {
+  if (input.sourceEntityType !== "EnterpriseSupplierClaimCompensation") return conflict();
+  const row = await tx.enterpriseSupplierClaimCompensation.findFirst({
+    where: { organizationId: input.organizationId, id: input.sourceEntityId, status: "APPROVED" },
+    include: { claim: true, payable: { include: { supplierInvoice: true } } },
+  });
+  if (!row || !row.approvedAt || !row.approvedByUserId || row.approvedByUserId !== row.approverUserId ||
+      row.approvedByUserId === row.requestedByUserId || !row.submittedAt ||
+      !row.amount.isFinite() || !row.amount.gt(0) || !row.claim.settlementClaimAmount?.gt(0) ||
+      row.claim.creditJournalEntryId !== row.sourceCreditJournalId ||
+      row.claim.settlementClaimAccountId !== row.claimAccountId ||
+      row.claim.supplierId !== row.payable.supplierId ||
+      row.payable.supplierInvoice.supplierId !== row.claim.supplierId ||
+      row.payable.businessPartyId !== row.payable.supplierInvoice.businessPartyId ||
+      row.payable.currencyCode !== row.currencyCode ||
+      row.payableAccountId === row.claimAccountId || !row.payable.businessPartyId) return conflict();
+  const approval = await tx.enterpriseApproval.findFirst({
+    where: { organizationId: input.organizationId, targetEntityType: "EnterpriseSupplierClaimCompensation",
+      targetEntityId: row.id, status: "APPROVED", archivedAt: null,
+      requestedByUserId: row.requestedByUserId, approverUserId: row.approvedByUserId },
+    select: { id: true },
+  });
+  if (!approval) return conflict();
+  const partyId = row.payable.businessPartyId;
+  const common = { transactionCurrencyCode: row.currencyCode, transactionAmount: row.amount,
+    businessPartyId: partyId, description: row.supplierReference };
+  return {
+    organizationId: input.organizationId, journalType: "GENERAL",
+    accountingDate: row.accountingDate, documentDate: row.accountingDate,
+    reference: row.supplierReference, description: "Supplier claim offset " + row.supplierReference,
+    sourceModule: "FINANCE_PAYABLES", sourceEntityType: "EnterpriseSupplierClaimCompensation",
+    sourceEntityId: row.id, currencyCode: row.currencyCode,
+    lines: [
+      { ...common, accountMappingKey: "ACCOUNTS_PAYABLE", debit: row.amount },
+      { ...common, accountMappingKey: "SUPPLIER_RETURN_CLAIMS", credit: row.amount },
+    ],
+  };
+};
