@@ -83,6 +83,8 @@ GET Payables avec claimCompensationsFor et page : historique de 25 éléments pa
 
 Nouveau panneau responsive dans le détail de la créance fournisseur : recherche/pagination des dettes ouvertes de même tiers/devise, aperçu exact de compensation sans cash, contrôles de date/mapping, saisie avec référence et motif, brouillon idempotent, soumission à un validateur indépendant, approbation/rejet, exécution par troisième acteur, historique paginé 25 lignes et toasts/messages d'erreur accessibles. Champs réservés visibles dans la liste des dettes et dans les exports Finance, statut et capacités rafraîchis après mutation. L'API demeure l'autorité pour RBAC/tenant/site; l'UI ne contourne jamais l'approbation. Reste certification CI/Playwright sur SHA final et vérification responsive, clavier et clair/sombre.
 
+La CI du candidat 06bc6957 a passé Migration, mais le type-check a refusé le branchement TS de l'action CANCEL. Branches discriminées explicitement ; aucune règle Finance affaiblie. Les nouveaux contrôles de l'UI sont encore à certifier.
+
 ## Programme restant (aucune certification implicite)
 
 1. Créance fournisseur canonique : preuve et registre, posting partie double, règlement par remboursement ou compensation approuvée, capacité et concurrence, avoir partiel/intégral sur facture payée.

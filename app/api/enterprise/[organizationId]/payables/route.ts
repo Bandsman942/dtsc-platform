@@ -199,7 +199,9 @@ export async function POST(req: Request, { params }: Params) {
             action: data.action === "APPROVE_COMPENSATION" ? "APPROVE" : "REJECT", reason: data.reason })
           : data.action === "POST_COMPENSATION"
             ? await postSupplierClaimCompensation(organizationId, auth.session.userId, data)
-            : await cancelSupplierClaimCompensation(organizationId, auth.session.userId, data);
+            : data.action === "CANCEL_COMPENSATION_DRAFT"
+              ? await cancelSupplierClaimCompensation(organizationId, auth.session.userId, data)
+              : (() => { throw new EnterpriseAccountingError("FINANCE_INPUT_INVALID", 400); })();
     const statusCode = data.action === "PREPARE_COMPENSATION" ? 201 : 200;
     await writeAuditLog({ userId: auth.session.userId, action: data.action === "PREPARE_COMPENSATION" ? "SUPPLIER_CLAIM_COMPENSATION_DRAFT_PREPARED"
         : data.action === "SUBMIT_COMPENSATION" ? "SUPPLIER_CLAIM_COMPENSATION_SUBMITTED"
