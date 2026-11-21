@@ -7,7 +7,7 @@ import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
 import { financeReference, money, publishFinanceEvent, sumDecimals } from "@/lib/enterprise/accounting/helpers";
 import { postBusinessEventTx } from "@/lib/enterprise/accounting/posting-service";
 import type { supplierCreditNoteCreateSchema } from "@/lib/enterprise/accounting/schemas";
-import { assertNoCapitalizedSupplierCreditTx, assertSupplierReturnCreditDateTx, completeSupplierReturnCreditTx, lockSupplierReturnInvoiceTx, verifySupplierReturnCreditTx, assertSupplierReturnClaimCreditReadyTx } from "@/lib/enterprise/accounting/supplier-return-credit-reconciliation";
+import { assertNoCapitalizedSupplierCreditTx, assertSupplierReturnCreditDateTx, completeSupplierReturnCreditTx, lockSupplierReturnInvoiceTx, verifySupplierReturnCreditTx, assertSupplierReturnClaimCreditReadyTx, assertSupplierPaymentCapacityTx } from "@/lib/enterprise/accounting/supplier-return-credit-reconciliation";
 import type { z } from "zod";
 
 type CreditInput = z.infer<typeof supplierCreditNoteCreateSchema>;
@@ -137,7 +137,10 @@ export async function approveAndPostSupplierCreditNote(organizationId: string, c
     if (credit.status === "POSTED") return credit;
     await lockSupplierReturnInvoiceTx(tx, organizationId, credit.supplierInvoiceId);
     const creditLines = await tx.enterpriseSupplierCreditNoteItem.findMany({ where:{organizationId,supplierCreditNoteId:credit.id} });
-    await verifySupplierReturnCreditTx(tx, organizationId, credit, creditLines);
+    const linkedReturn = await verifySupplierReturnCreditTx(tx, organizationId, credit, creditLines);
+    // A generic credit must not consume debt reserved by a pending non-cash
+    // compensation. The linked return already owns its own dispatch reserve.
+    if (!linkedReturn) await assertSupplierPaymentCapacityTx(tx, organizationId, credit.supplierInvoice.payable, credit.grandTotal);
     if (credit.grandTotal.gt(credit.supplierInvoice.payable.outstandingAmount)) throw new EnterpriseAccountingError("SUPPLIER_CREDIT_EXCEEDS_OPEN_PAYABLE",409);
     const posting = await postBusinessEventTx(tx, organizationId, actorUserId, { postingEvent: "SUPPLIER_CREDIT_NOTE_POSTED", sourceEntityType: "EnterpriseSupplierCreditNote", sourceEntityId: credit.id }, { supplierCreditTransition: true });
     const creditItems = await tx.enterpriseSupplierCreditNoteItem.findMany({ where: { organizationId, supplierCreditNoteId: credit.id }, select: { id: true, taxBreakdownJson: true, taxRecoveryRequested: true } });

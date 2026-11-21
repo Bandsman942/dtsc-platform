@@ -10,7 +10,7 @@ import { assertSalesCreditNoteStillPostable } from "@/lib/enterprise/accounting/
 import { money, publishFinanceEvent } from "@/lib/enterprise/accounting/helpers";
 import { postBusinessEvent, postBusinessEventTx } from "@/lib/enterprise/accounting/posting-service";
 import { recordPostedTaxApplicationsTx } from "@/lib/enterprise/accounting/tax-engine";
-import { completeSupplierReturnCreditTx, lockSupplierReturnInvoiceTx, verifySupplierReturnCreditTx } from "@/lib/enterprise/accounting/supplier-return-credit-reconciliation";
+import { completeSupplierReturnCreditTx, lockSupplierReturnInvoiceTx, verifySupplierReturnCreditTx, assertSupplierPaymentCapacityTx } from "@/lib/enterprise/accounting/supplier-return-credit-reconciliation";
 
 type AssignedDocumentSubmitInput = {
   revision: number;
@@ -419,6 +419,9 @@ export async function postApprovedSupplierCreditNote(
     const linkedReturn=await verifySupplierReturnCreditTx(tx, organizationId, credit, creditLines);
     const payable = credit.supplierInvoice.payable;
     const payableReduction=linkedReturn?.settlementPayableAmount ?? credit.grandTotal;
+    // Reuse Finance's locked debt-capacity guard before any generic credit
+    // consumes a payable reserved for a supplier-claim compensation.
+    if (!linkedReturn) await assertSupplierPaymentCapacityTx(tx, organizationId, payable, payableReduction);
     if (credit.currencyCode !== payable.currencyCode) throw new EnterpriseAccountingError("SUPPLIER_CREDIT_NOTE_CURRENCY_MISMATCH",409);
     if (payableReduction.lt(0) || payableReduction.greaterThan(payable.outstandingAmount)) throw new EnterpriseAccountingError("SUPPLIER_CREDIT_EXCEEDS_OPEN_PAYABLE", 409);
     const posting = await postBusinessEventTx(tx, organizationId, actorUserId, { postingEvent: "SUPPLIER_CREDIT_NOTE_POSTED", sourceEntityType: "EnterpriseSupplierCreditNote", sourceEntityId: credit.id }, { supplierCreditTransition: true });
