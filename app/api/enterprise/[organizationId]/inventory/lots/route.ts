@@ -314,7 +314,7 @@ export async function PATCH(req: Request, { params }: Params) {
       "recallRecipients" in result ? result : {...result,recallRecipients:[] as string[]};
     const alerts="recallReference" in result && typeof result.recallReference==="string"
       ? await notifyRecallWarehouseManagers({
-          organizationId,recallReference:result.recallReference,recipientUserIds:internalRecipients,
+          organizationId,recallReference:result.recallReference,recipientUserIds:internalRecipients ?? [],
         })
       : null;
     await writeAuditLog({userId:session.userId,organizationId,action:input.recall?"ENTERPRISE_STOCK_LOT_RECALLED":"ENTERPRISE_STOCK_LOT_UPDATED",entity:"EnterpriseStockLot",entityId:input.id,request:req,metadata:{...publicResult,reason:input.qualityReason||null,...(alerts?{notificationRecipients:alerts.recipients,notificationsQueued:alerts.queued,notificationsFailed:alerts.failed}:{})}});
