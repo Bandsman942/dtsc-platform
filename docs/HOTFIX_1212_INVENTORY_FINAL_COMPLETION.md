@@ -117,7 +117,7 @@ Aucun backfill, aucune modification de données historiques, aucune migration da
 
 Le panneau de compensation est remonté avec une clé `organizationId:claimId` pour chaque dossier. Ses soldes, listes de dettes et d'historique, montants, date, aperçu de compensation et clé d'idempotence sont réinitialisés lorsque l'entreprise ou la créance change. La lecture des dettes et de l'historique conserve son annulation `AbortController` en cas de changement de contexte.
 
-Dans la vue financière parent, les dialogues, justificatifs de remboursement et clés de requêtes de l'entreprise précédente sont vidés au changement d'`organizationId`. Une réponse asynchrone de lecture ou de création de remboursement pour un ancien contexte ne peut plus remplacer l'état du contexte actif. Le serveur conserve seul l'autorité pour la vérification des droits et le cloisonnement tenant.
+Le routeur de modules Finance recrée les workspaces Créances/Dettes par clé `organizationId:moduleCode`, même si la navigation conserve son composant parent. Dans la vue financière parent, les dialogues, justificatifs de remboursement et clés de requêtes de l'entreprise précédente sont vidés au changement d'`organizationId`. Une réponse asynchrone de lecture ou de création de remboursement pour un ancien contexte ne peut plus remplacer l'état du contexte actif. Le serveur conserve seul l'autorité pour la vérification des droits et le cloisonnement tenant.
 
 **Preuves disponibles :** contrôles statiques ajoutés à `pnpm qa:inventory-lot-traceability-1212` ; type-check, build, workflows et recette navigateur sur le nouveau SHA doivent être lus indépendamment de toute CI antérieure.
 
