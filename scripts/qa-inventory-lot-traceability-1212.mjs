@@ -1428,6 +1428,9 @@ for (const resetProof of [
 }
 assert.ok(invoicesUi.includes('key={`${organizationId}:${refundClaim.id}`}'),
   "Compensation panel must remount between claims and tenants to isolate pending requests");
+const financeRouterUi=fs.readFileSync("components/enterprise/professional/enterprise-operational-finance-workspace.tsx","utf8");
+assert.ok(financeRouterUi.includes('key={`${props.organizationId}:${props.definition.code}`}'),
+  "Switching enterprise or Finance module must remount the financial editor and release prior tenant state");
 assert.ok(invoicesUi.includes('activeOrganizationIdRef.current!==requestOrganizationId'),
   "Out-of-order refund responses must not overwrite the newly active enterprise context");
 for (const oldTenantState of ['setRefundClaim(null)', 'setRefundPaymentId(null)', 'setRefundKey("")']) {
