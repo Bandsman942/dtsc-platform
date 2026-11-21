@@ -110,6 +110,8 @@ assert.equal(noManagers.length, 0);
 const route = fs.readFileSync("app/api/enterprise/[organizationId]/inventory/lots/route.ts", "utf8");
 assert.ok(route.includes("recallWarehouseManagerRecipientsTx("));
 assert.ok(route.includes("notifyRecallWarehouseManagers("));
+assert.ok(route.includes('domain:"inventory-recall-alerts-retry"'),"Recall retry must emit an ApiLog");
+assert.ok(route.includes('domain:input.recall?"inventory-lot-recall":"inventory-lot-quality"'),"Recall action must emit an ApiLog");
 for (const retryGuard of [
   'action:z.literal("RETRY_RECALL_ALERTS")',
   'if(!access.canAdminister)',
