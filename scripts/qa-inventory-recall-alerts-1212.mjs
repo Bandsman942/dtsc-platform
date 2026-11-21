@@ -110,7 +110,6 @@ assert.equal(noManagers.length, 0);
 const route = fs.readFileSync("app/api/enterprise/[organizationId]/inventory/lots/route.ts", "utf8");
 assert.ok(route.includes("recallWarehouseManagerRecipientsTx("));
 assert.ok(route.includes("notifyRecallWarehouseManagers("));
-const commitBoundary = route.indexOf("}, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });");
 const deliveryIndex = route.indexOf("const alerts=");
 assert.ok(deliveryIndex > route.indexOf('return {revision:lot.revision+1,recallReference:reference'),
   "Notifications must never be sent inside the recall mutation branch");
