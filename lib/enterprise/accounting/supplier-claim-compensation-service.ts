@@ -310,11 +310,12 @@ export async function readSupplierClaimCompensation(organizationId: string, acto
  * are exposed and site-scoped operators cannot see another store's debts. */
 export async function listSupplierClaimCompensations(
   organizationId: string, actorUserId: string, claimId: string, canSeeAll: boolean,
-  page: number,
+  page: number, status?: string,
 ) {
   return prisma.$transaction(async tx => {
     await assertSupplierCompensationScopeTx(tx, organizationId, actorUserId);
-    const where = { organizationId, claimId, ...(canSeeAll ? {} : { requestedByUserId: actorUserId }) };
+    const where = { organizationId, claimId, ...(canSeeAll ? {} : { requestedByUserId: actorUserId }),
+      ...(status ? { status } : {}) };
     const [items, total] = await Promise.all([
       tx.enterpriseSupplierClaimCompensation.findMany({
         where, orderBy: [{ createdAt: "desc" }, { id: "desc" }],

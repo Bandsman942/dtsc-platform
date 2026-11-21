@@ -46,6 +46,7 @@ export function SupplierClaimCompensationPanel({
   const [history, setHistory] = useState<Compensation[]>([]);
   const [historyPage, setHistoryPage] = useState(1);
   const [historyPageCount, setHistoryPageCount] = useState(1);
+  const [historyStatus, setHistoryStatus] = useState("ALL");
   const [refresh, setRefresh] = useState(0);
   const [selectedPayableId, setSelectedPayableId] = useState("");
   const [amount, setAmount] = useState("");
@@ -85,7 +86,8 @@ export function SupplierClaimCompensationPanel({
 
   useEffect(() => {
     const controller = new AbortController();
-    const params = new URLSearchParams({ claimCompensationsFor: claim.id, page: String(historyPage) });
+    const params = new URLSearchParams({ claimCompensationsFor: claim.id, page: String(historyPage),
+      ...(historyStatus !== "ALL" ? { compensationStatus: historyStatus } : {}) });
     void fetch("/api/enterprise/" + encodeURIComponent(organizationId) + "/payables?" + params, {
       cache: "no-store", signal: controller.signal,
     }).then(async response => {
@@ -100,7 +102,7 @@ export function SupplierClaimCompensationPanel({
       "Historique des compensations indisponible. Actualisez le dossier.",
       "Compensation history unavailable. Refresh the claim.")); });
     return () => controller.abort();
-  }, [organizationId, claim.id, historyPage, refresh, locale]);
+  }, [organizationId, claim.id, historyPage, historyStatus, refresh, locale]);
 
   function resetPreview() { setPreview(null); setPreviewKey(""); }
   const currentKey = [selectedPayableId, amount, accountingDate].join("|");
@@ -241,6 +243,18 @@ export function SupplierClaimCompensationPanel({
 
     <div className="grid min-w-0 gap-2">
       <h4 className="font-semibold">{t("Demandes de compensation", "Compensation requests")}</h4>
+      <div className="flex max-w-full flex-wrap gap-1.5" aria-label={t("Filtrer les compensations par statut","Filter offsets by status")}>
+        {([
+          ["ALL",t("Toutes","All")],["DRAFT",t("Brouillons","Drafts")],
+          ["PENDING_APPROVAL",t("En attente","Pending")],["APPROVED",t("Approuvées","Approved")],
+          ["POSTED",t("Comptabilisées","Posted")],["REJECTED",t("Rejetées","Rejected")],
+          ["CANCELLED",t("Annulées","Cancelled")],
+        ] as const).map(([id,label]) => <button key={id} type="button" aria-pressed={historyStatus===id}
+          onClick={()=>{setHistoryStatus(id);setHistoryPage(1);}}
+          className={historyStatus===id?"rounded-full border border-dtsc-blue bg-dtsc-soft px-2.5 py-1.5 text-xs font-semibold text-dtsc-blue":"rounded-full border border-dtsc-border px-2.5 py-1.5 text-xs text-dtsc-muted hover:bg-dtsc-soft"}>
+          {label}
+        </button>)}
+      </div>
       {history.length === 0 ? <p className="text-sm text-dtsc-muted">{t("Aucune demande enregistrée ou accessible.", "No recorded or accessible request.")}</p> : null}
       {history.map(row => <article key={row.id} className="grid min-w-0 gap-2 rounded-lg border border-dtsc-border p-3">
         <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">

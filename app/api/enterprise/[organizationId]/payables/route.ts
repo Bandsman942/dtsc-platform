@@ -51,8 +51,11 @@ export async function GET(req: Request, { params }: Params) {
         throw new EnterpriseAccountingError("SUPPLIER_RETURN_REFUND_ACCESS_FORBIDDEN", 403);
       const rawPage = query.get("page") || "1";
       if (!/^[1-9]\d{0,3}$/.test(rawPage)) throw new EnterpriseAccountingError("FINANCE_INPUT_INVALID",400);
+      const status = query.get("compensationStatus") || undefined;
+      if (status && !["DRAFT","PENDING_APPROVAL","APPROVED","POSTED","REJECTED","CANCELLED"].includes(status))
+        throw new EnterpriseAccountingError("FINANCE_INPUT_INVALID",400);
       const history = await listSupplierClaimCompensations(
-        organizationId, auth.session.userId, claimCompensationsFor, auth.access.canSeeAll, Number(rawPage));
+        organizationId, auth.session.userId, claimCompensationsFor, auth.access.canSeeAll, Number(rawPage), status);
       await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt,
         metadata: { organizationId, domain: "supplier-claim-compensation-history", claimId: claimCompensationsFor, page: Number(rawPage) } });
       return NextResponse.json(history, { headers: { "Cache-Control": "private, no-store" } });
