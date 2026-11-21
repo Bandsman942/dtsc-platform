@@ -49,6 +49,7 @@ const FINANCE_ERROR_MESSAGES: Record<string, string> = {
   TEMPLATE_LEDGER_ACCOUNT_IMMUTABLE: "Ce compte provient du template comptable officiel. Créez un sous-compte personnalisé au lieu de modifier le compte réglementaire.",
   LEDGER_ACCOUNT_STRUCTURE_IN_USE: "Ce compte est déjà utilisé. Ses éléments structurels ne peuvent plus être modifiés ; conservez l’historique ou désactivez le compte si nécessaire.",
   SUPPLIER_RETURN_COMPENSATION_CAPACITY_RESERVED: "Une compensation déjà soumise réserve cette créance ou cette dette. Actualisez les disponibilités avant de saisir une autre opération.",
+  SUPPLIER_PAYABLES_SITE_SCOPE_REQUIRED: "La dette fournisseur n’est pas rattachée à une boutique identifiable. Consultez-la avec une permission Finance sur l’ensemble de l’entreprise.",
   SUPPLIER_RETURN_COMPENSATION_DRAFT_CONFLICT: "Le brouillon de compensation ne correspond plus à la demande ou à sa révision. Actualisez le dossier avant de recommencer.",
   SUPPLIER_RETURN_COMPENSATION_NOT_FOUND: "Ce brouillon de compensation n’est pas disponible.",
   SUPPLIER_RETURN_COMPENSATION_PLAN_INVALID: "La compensation proposée ne correspond plus au montant disponible, à une date comptable autorisée ou aux comptes historiques. Vérifiez la dette, la créance et la configuration comptable.",

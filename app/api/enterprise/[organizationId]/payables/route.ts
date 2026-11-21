@@ -8,6 +8,7 @@ import { isValidEnterpriseActivityCivilDate } from "@/lib/enterprise/enterprise-
 import { prepareSupplierClaimCompensation, cancelSupplierClaimCompensation, submitSupplierClaimCompensation, decideSupplierClaimCompensation, postSupplierClaimCompensation, readSupplierClaimCompensation, listSupplierClaimCompensations, supplierCompensationDraftProjection } from "@/lib/enterprise/accounting/supplier-claim-compensation-service";
 import { authorizeFinanceRequest, financeBusinessDateRange, financeErrorResponse, financeListParams, financeValidationErrorResponse } from "@/lib/enterprise/accounting/http";
 import { prisma } from "@/lib/prisma";
+import { retailFinanceReadSiteScope } from "@/lib/enterprise/retail/site-access";
 import { supplierReturnFinanceProjectionTx, supplierReturnPayableCapacity } from "@/lib/enterprise/accounting/supplier-return-credit-reconciliation";
 
 type Params = { params: Promise<{ organizationId: string }> };
@@ -38,6 +39,10 @@ export async function GET(req: Request, { params }: Params) {
   const { organizationId } = await params;
   const auth = await authorizeFinanceRequest(req, organizationId, "FINANCE_PAYABLES", "view");
   if (!auth.ok) return auth.response;
+  // EnterprisePayable has no canonical site coordinate. Do not accidentally
+  // expose all branches' supplier liabilities to an isolated shop operator.
+  const siteScope = await retailFinanceReadSiteScope(organizationId, auth.session.userId, "COLLECT_PAYMENT");
+  if (siteScope !== null) return financeErrorResponse(new EnterpriseAccountingError("SUPPLIER_PAYABLES_SITE_SCOPE_REQUIRED", 403));
   const query = new URL(req.url).searchParams;
   const compensationId = query.get("compensationId");
   const claimCompensationsFor = query.get("claimCompensationsFor");
