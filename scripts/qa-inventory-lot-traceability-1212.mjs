@@ -1419,6 +1419,15 @@ for(const token of ["data-supplier-claim-compensation","PREPARE_COMPENSATION","S
   "EnterpriseApproverSelect","claimCompensationsFor","onMutated"])
   assert.ok(compensationUi.includes(token),token);
 assert.ok(invoicesUi.includes("<SupplierClaimCompensationPanel"),"Payables user must actually reach non-cash compensation");
+for (const resetProof of [
+  'setPayables([])', 'setHistory([])', 'setSelectedPayableId("")',
+  'setPreview(null)', 'setPreviewKey("")', 'setIdempotencyKey(crypto.randomUUID())',
+  '[organizationId, claim.id, businessDate]',
+]) {
+  assert.ok(compensationUi.includes(resetProof), `Compensation context switch must reset ${resetProof}`);
+}
+assert.ok(invoicesUi.includes('key={`${organizationId}:${refundClaim.id}`}'),
+  "Compensation panel must remount between claims and tenants to isolate pending requests");
 const scopedPayablesSource=fs.readFileSync("app/api/enterprise/[organizationId]/payables/route.ts","utf8");
 assert.ok(scopedPayablesSource.includes("retailFinanceReadSiteScope(organizationId, auth.session.userId, \"COLLECT_PAYMENT\")"),
   "Payables without canonical site coordinate must reject isolated retail operators");
