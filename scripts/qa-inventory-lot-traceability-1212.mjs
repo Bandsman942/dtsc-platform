@@ -1361,6 +1361,11 @@ const postingCompTx={
 const buildComp=()=>draftService.buildSupplierClaimCompensationPosting(postingCompTx,{
   organizationId:"org-a",sourceEntityType:"EnterpriseSupplierClaimCompensation",sourceEntityId:"approved-comp"});
 const offsetDocument=await buildComp();
+const accountingServiceSource=fs.readFileSync("lib/enterprise/accounting/supplier-claim-compensation-service.ts","utf8");
+assert.ok(accountingServiceSource.includes("compensatedAmount: { increment: draft.amount }"));
+assert.ok(accountingServiceSource.includes("amountCompensated: { increment: draft.amount }"));
+assert.ok(!accountingServiceSource.includes("creditedAmount: { increment: draft.amount }"));
+assert.ok(!accountingServiceSource.includes("amountCredited: { increment: draft.amount }"));
 assert.equal(offsetDocument.journalType,"GENERAL");assert.equal(offsetDocument.sourceEntityType,"EnterpriseSupplierClaimCompensation");
 assert.equal(offsetDocument.lines.length,2);
 assert.equal(offsetDocument.lines.map(x=>x.accountMappingKey).join(","),"ACCOUNTS_PAYABLE,SUPPLIER_RETURN_CLAIMS");
