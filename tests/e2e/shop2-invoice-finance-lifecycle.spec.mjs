@@ -2214,6 +2214,18 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
         const draftRead=await context.owner.request.get(base+"/payables?compensationId="+encodeURIComponent(compensationId));
         expect(draftRead.status(),await draftRead.text()).toBe(200);
         expect((await draftRead.json()).compensation.id).toBe(compensationId);
+        const historyPath=base+"/payables?claimCompensationsFor="+encodeURIComponent(raceId)+"&page=1";
+        const historyResponse=await context.owner.request.get(historyPath);
+        expect(historyResponse.status(),await historyResponse.text()).toBe(200);
+        const historyBody=await historyResponse.json();
+        expect(historyBody.pagination.pageSize).toBe(25);
+        const firstHistory=historyBody.items.find(row=>row.id===compensationId);
+        expect(firstHistory).toMatchObject({claimId:raceId,payableId:targetPayable.id,
+          targetInvoiceNumber:targetInvoice.number,status:"DRAFT",reservationActive:false});
+        for(const privateField of ["claimAccountId","payableAccountId","sourceCreditJournalId",
+          "targetInvoiceJournalId","idempotencyKey"])expect(firstHistory[privateField]).toBeUndefined();
+        expect((await context.owner.request.get(historyPath+"&compensationId="+compensationId)).status()).toBe(400);
+        expect((await context.owner.request.get(base+"/payables?claimCompensationsFor="+raceId+"&page=0")).status()).toBe(400);
         const frozenDraft=await prisma.enterpriseSupplierClaimCompensation.findUniqueOrThrow({where:{id:compensationId}});
         expect(frozenDraft.targetInvoiceJournalId).toBe(targetJournal.id);
         expect(frozenDraft.claimAccountId).not.toBe(frozenDraft.payableAccountId);
@@ -2320,6 +2332,11 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
             where:{organizationId,sourceEntityType:"EnterpriseSupplierInvoice",sourceEntityId:offsetInvoice.id,postingEvent:"SUPPLIER_INVOICE_POSTED"}
           })).id+"/reverse",{reason:"Invoice is linked to posted offset",accountingDate:returnBusinessContext.businessDate});
           expect(reverseTarget.status,JSON.stringify(reverseTarget.body)).toBe(409);
+          const offsetHistory=await context.owner.request.get(historyPath);
+          expect(offsetHistory.status(),await offsetHistory.text()).toBe(200);
+          const offsetRow=(await offsetHistory.json()).items.find(row=>row.id===offsetId);
+          expect(offsetRow).toMatchObject({status:"POSTED",targetInvoiceNumber:offsetInvoice.number,
+            reservationActive:false,postingJournalEntryId:postedComp.id});
           const afterOffset=await context.owner.request.get(claimPath);
           expect(afterOffset.status(),await afterOffset.text()).toBe(200);
           expect((await afterOffset.json()).claim).toMatchObject({refunded:"0",compensated:"1",compensationReserved:"0",
@@ -2344,6 +2361,10 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
           });
           expect(reject.status,JSON.stringify(reject.body)).toBe(200);
           expect(reject.body.compensation).toMatchObject({status:"REJECTED",revision:3,reservationActive:false});
+          const rejectedHistory=await context.owner.request.get(historyPath);
+          expect(rejectedHistory.status(),await rejectedHistory.text()).toBe(200);
+          expect((await rejectedHistory.json()).items.find(row=>row.id===rejectionId))
+            .toMatchObject({status:"REJECTED",reservationActive:false});
           const afterReject=await context.owner.request.get(claimPath);
           expect(afterReject.status(),await afterReject.text()).toBe(200);
           expect((await afterReject.json()).claim).toMatchObject({compensationReserved:"0",available:String(paymentAmount-56)});

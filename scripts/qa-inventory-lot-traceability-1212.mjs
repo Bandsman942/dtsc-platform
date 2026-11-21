@@ -1372,3 +1372,29 @@ approvedRow={...approvedComp,approvedByUserId:"creator"};await assert.rejects(bu
 approvedRow={...approvedComp,payable:{...approvedComp.payable,businessPartyId:"another-party"}};
 await assert.rejects(buildComp(),{code:"SUPPLIER_RETURN_COMPENSATION_DRAFT_CONFLICT"});approvedRow=approvedComp;
 console.log("Supplier compensation posting builder: canonical balanced liability/claim, assigned independent approval, exact supplier party; zero payments");
+
+/* Lot 1G.7: page-bounded history and privacy, no direct ledger IDs. */
+draftDb.enterpriseSupplierClaimCompensation.findMany=async({where,skip,take,include})=>{
+  assert.equal(where.organizationId,"org-a");assert.equal(where.claimId,"claim-a");
+  assert.equal(skip,0);assert.equal(take,25);
+  assert.equal(include.payable.select.supplierInvoice.select.number,true);
+  if(where.requestedByUserId&&where.requestedByUserId!=="creator")return [];
+  return [{...draftRow,payable:{supplierInvoice:{number:"INV-READABLE"}}}];
+};
+draftDb.enterpriseSupplierClaimCompensation.count=async({where})=>
+  where.requestedByUserId&&where.requestedByUserId!=="creator"?0:1;
+const claimHistory=await draftService.listSupplierClaimCompensations("org-a","reviewer","claim-a",true,1);
+assert.equal(claimHistory.pagination.total,1);assert.equal(claimHistory.items[0].targetInvoiceNumber,"INV-READABLE");
+assert.equal(claimHistory.items[0].reservationActive,true);
+for(const field of ["claimAccountId","payableAccountId","sourceCreditJournalId","targetInvoiceJournalId","idempotencyKey"])
+  assert.equal(Object.hasOwn(claimHistory.items[0],field),false);
+const privateHistory=await draftService.listSupplierClaimCompensations("org-a","other-user","claim-a",false,1);
+assert.equal(privateHistory.items.length,0);assert.equal(privateHistory.pagination.total,0);
+const compensationUi=fs.readFileSync("components/enterprise/professional/supplier-claim-compensation-panel.tsx","utf8");
+const invoicesUi=fs.readFileSync("components/enterprise/professional/enterprise-finance-invoices-workspace.tsx","utf8");
+for(const token of ["data-supplier-claim-compensation","PREPARE_COMPENSATION","SUBMIT_COMPENSATION",
+  "APPROVE_COMPENSATION","REJECT_COMPENSATION","POST_COMPENSATION","CANCEL_COMPENSATION_DRAFT",
+  "EnterpriseApproverSelect","claimCompensationsFor","onMutated"])
+  assert.ok(compensationUi.includes(token),token);
+assert.ok(invoicesUi.includes("<SupplierClaimCompensationPanel"),"Payables user must actually reach non-cash compensation");
+console.log("Supplier compensation history and UI: page-bounded, no ledger identifiers, owner/manager access, FR/EN responsive panel");
