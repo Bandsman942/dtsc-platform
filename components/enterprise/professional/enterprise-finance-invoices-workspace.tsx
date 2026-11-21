@@ -38,6 +38,7 @@ import { StatusBadge } from "@/components/workspace/status-badge";
 import type { EnterpriseModuleDefinition } from "@/lib/enterprise/module-registry";
 import { translateEnterpriseFinance, type EnterpriseFinanceKey } from "@/lib/i18n";
 import { purchaseFormGuidance } from "@/lib/enterprise/purchase-form-i18n";
+import { SupplierClaimCompensationPanel } from "@/components/enterprise/professional/supplier-claim-compensation-panel";
 
 type Props = {
   organizationId: string;
@@ -67,6 +68,8 @@ type InvoiceRecord = FinanceRecord & {
   grandTotal?: string | number;
   outstandingAmount?: string | number;
   supplierReturnReservedAmount?: string;
+  compensationReservedAmount?: string;
+  payableAllocatableAmount?: string;
   supplierReturnAllocatableAmount?: string;
   supplierReturn?: { id:string; reference:string; status:string; purchaseId:string; sourceMovementId:string; currencyCode:string; totalCost:string; recoverableTaxAmount?:string; supplierCreditNoteId:string|null; settlementPayableAmount?:string|null; settlementClaimAmount?:string|null } | null;
   salesInvoiceId?: string;
@@ -77,7 +80,7 @@ type InvoiceRecord = FinanceRecord & {
   capabilities?: RecordCapabilities;
   threeWayMatch?: { status?: string; quantityVariance?: string | number; priceVariance?: string | number; totalVariance?: string | number; overrideReason?: string | null } | null;
 };
-type RefundClaim = {id:string;reference:string;invoiceReference:string;businessPartyId:string;currencyCode:string;creditDate:string;original:string;refunded:string;reserved:string;remaining:string;available:string;canCreate:boolean};
+type RefundClaim = {id:string;reference:string;invoiceReference:string;businessPartyId:string;currencyCode:string;creditDate:string;original:string;refunded:string;compensated:string;compensationReserved:string;reserved:string;remaining:string;available:string;canCreate:boolean};
 type InvoiceLine = {
   key: string;
   catalogItemId: string;
@@ -151,7 +154,7 @@ function capabilityAllowsAction(record: InvoiceRecord, action: string) {
 }
 
 export function EnterpriseFinanceInvoicesWorkspace(props: Props) {
-  const { organizationId, organizationName, definition, locale: rawLocale, canCreate, canSubmit, canApprove, canManage } = props;
+  const { organizationId, organizationName, definition, locale: rawLocale, canCreate, canSubmit, canWrite, canApprove, canManage } = props;
   const locale: FinanceLocale = rawLocale === "en" ? "en" : "fr";
   const t = (key: EnterpriseFinanceKey) => copy(locale, key);
   const { context: businessContext } = useEnterpriseBusinessContext(organizationId);
@@ -228,6 +231,8 @@ export function EnterpriseFinanceInvoicesWorkspace(props: Props) {
     ...(!isReceivables && endpointName !== "supplier-credit-notes" ? [
       { key: "returnReserved", labelFr: purchaseFormGuidance("fr","returnFinanceExportReserved"),labelEn:purchaseFormGuidance("en","returnFinanceExportReserved"),get:(row:Record<string,unknown>)=>String(row.supplierReturnReservedAmount ?? "") },
       { key: "returnAllocatable", labelFr: purchaseFormGuidance("fr","returnFinanceExportAllocatable"),labelEn:purchaseFormGuidance("en","returnFinanceExportAllocatable"),get:(row:Record<string,unknown>)=>String(row.supplierReturnAllocatableAmount ?? "") },
+      { key: "claimOffsetReserved", labelFr: "Compensations réservées", labelEn: "Reserved claim offsets",get:(row:Record<string,unknown>)=>String(row.compensationReservedAmount ?? "") },
+      { key: "payableAvailable", labelFr: "Dette mobilisable", labelEn: "Available payable",get:(row:Record<string,unknown>)=>String(row.payableAllocatableAmount ?? "") },
       { key: "returnClaim", labelFr: purchaseFormGuidance("fr","returnSettlementRecognized"),labelEn:purchaseFormGuidance("en","returnSettlementRecognized"),get:(row:Record<string,unknown>)=>{const linked=row.supplierReturn as InvoiceRecord["supplierReturn"];return linked?.status==="RECONCILED"?String(linked.settlementClaimAmount ?? ""):"";} },
     ] : []),
   ];
@@ -547,13 +552,15 @@ export function EnterpriseFinanceInvoicesWorkspace(props: Props) {
       </div> : null}
     </Dialog>
 
-    <Dialog open={Boolean(refundClaim)} onClose={()=>{if(!busy){setRefundClaim(null);setRefundPaymentId(null);}}} title={locale==="en"?"Supplier return claim":"Créance sur fournisseur — retour"} presentation="editor" className="max-w-3xl">
+    <Dialog open={Boolean(refundClaim)} onClose={()=>{if(!busy){setRefundClaim(null);setRefundPaymentId(null);}}} title={locale==="en"?"Supplier return claim":"Créance sur fournisseur — retour"} presentation="editor" className="max-w-5xl">
       {refundClaim?<div className="grid min-w-0 gap-4">
         <p className="break-words font-semibold">{refundClaim.reference} · {refundClaim.invoiceReference}</p>
         <FinanceDetailGrid>
           <FinanceDetailValue label={locale==="en"?"Recognized claim":"Créance reconnue"}>{financeMoney(refundClaim.original,refundClaim.currencyCode,locale)}</FinanceDetailValue>
           <FinanceDetailValue label={locale==="en"?"Refunded":"Remboursé"}>{financeMoney(refundClaim.refunded,refundClaim.currencyCode,locale)}</FinanceDetailValue>
-          <FinanceDetailValue label={locale==="en"?"Pending payments reserved":"Réservé pour paiements en attente"}>{financeMoney(refundClaim.reserved,refundClaim.currencyCode,locale)}</FinanceDetailValue>
+          <FinanceDetailValue label={locale==="en"?"Offset against supplier debt":"Compensé avec une dette fournisseur"}>{financeMoney(refundClaim.compensated||"0",refundClaim.currencyCode,locale)}</FinanceDetailValue>
+          <FinanceDetailValue label={locale==="en"?"Reserved for non-cash offset":"Réservé aux compensations"}>{financeMoney(refundClaim.compensationReserved||"0",refundClaim.currencyCode,locale)}</FinanceDetailValue>
+          <FinanceDetailValue label={locale==="en"?"Pending settlements reserved":"Règlements en attente réservés"}>{financeMoney(refundClaim.reserved,refundClaim.currencyCode,locale)}</FinanceDetailValue>
           <FinanceDetailValue label={locale==="en"?"Remaining claim":"Créance restante"}>{financeMoney(refundClaim.remaining,refundClaim.currencyCode,locale)}</FinanceDetailValue>
           <FinanceDetailValue label={locale==="en"?"Available for new refund":"Disponible pour un nouveau remboursement"}>{financeMoney(refundClaim.available,refundClaim.currencyCode,locale)}</FinanceDetailValue>
         </FinanceDetailGrid>
@@ -565,6 +572,9 @@ export function EnterpriseFinanceInvoicesWorkspace(props: Props) {
           <Field label={locale==="en"?"Bank transaction reference":"Référence de transaction bancaire"}><Input name="reference" required maxLength={160} disabled={busy}/></Field>
           <Button type="submit" disabled={busy||!refundBankValid}>{locale==="en"?"Prepare refund draft":"Préparer le brouillon de remboursement"}</Button>
         </form>:<p className="text-sm text-dtsc-muted">{locale==="en"?"No refundable amount is available or payment creation is not authorized.":"Aucun montant disponible ou création de paiement non autorisée."}</p>}
+        <SupplierClaimCompensationPanel organizationId={organizationId} claim={refundClaim} locale={locale}
+          businessDate={businessContext?.businessDate} canWrite={canWrite} canSubmit={canSubmit} canApprove={canApprove}
+          onMutated={()=>{setRefreshKey(value=>value+1);void openClaimRefund(refundClaim.id);}} />
       </div>:null}
     </Dialog>
 

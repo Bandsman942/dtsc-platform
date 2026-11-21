@@ -50,6 +50,7 @@ export function SupplierClaimCompensationPanel({
   const [selectedPayableId, setSelectedPayableId] = useState("");
   const [amount, setAmount] = useState("");
   const [accountingDate, setAccountingDate] = useState(businessDate || "");
+  useEffect(() => { if (businessDate) setAccountingDate(current => current || businessDate); }, [businessDate]);
   const [preview, setPreview] = useState<Preview | null>(null);
   const [previewKey, setPreviewKey] = useState("");
   const [busy, setBusy] = useState(false);
