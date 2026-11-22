@@ -37,6 +37,9 @@ on:
       - "prisma/enterprise-hr-payroll.prisma"
       - "prisma/enterprise-inventory.prisma"
       - "prisma/migrations/**"
+      - "scripts/qa-supplier-compensation-migration-postgres-1212.mjs"
+      - "scripts/qa-supplier-claim-compensation-inverse-1212.mjs"
+      - "scripts/qa-supplier-compensation-reversed-allocation-1212.mjs"
       - "scripts/seed-erp-professional-e2e.mjs"
       - "scripts/qa-accounting-program-150-155.mjs"
       - "scripts/qa-accounting-acceptance-contract.mjs"
@@ -146,6 +149,8 @@ jobs:
         run: pnpm prisma:generate
       - name: Apply migrations from scratch
         run: pnpm prisma:deploy
+      - name: Verify immutable supplier compensation inverse on isolated PostgreSQL
+        run: node scripts/qa-supplier-compensation-migration-postgres-1212.mjs
       - name: Seed canonical ERP acceptance tenant
         run: node scripts/seed-erp-professional-e2e.mjs
       - name: Validate accounting and cross-module acceptance contracts

@@ -84,6 +84,12 @@ vm.runInNewContext(serviceJavaScript, {
       },
     };
     if (name === "@/lib/enterprise/inventory/lot-allocation") return allocationModule.exports;
+    // This legacy VM isolates Retail stock-hold accounting from the recall
+    // safety boundary. The real recall helper is exercised independently
+    // by qa-inventory-recall-stock-guard-1212.mjs in the same Quality gate.
+    if (name === "@/lib/enterprise/inventory/stock-recall-gate") return {
+      assertNoRecalledLotConsumptionTx: async () => {},
+    };
     if (name === "@/lib/enterprise/accounting/inventory-transfer-service") return {};
     if (name === "@/lib/enterprise/inventory/approval") return {};
     if (name === "@/lib/enterprise/retail/inventory-policy") return {};

@@ -58,6 +58,8 @@ export const ENTERPRISE_POSTING_REGISTRY: Record<PostingEvent, PostingBuilder> =
   SUPPLIER_INVOICE_POSTED: buildSupplierInvoicePosting,
   SUPPLIER_CREDIT_NOTE_POSTED: buildSupplierCreditNotePosting,
   SUPPLIER_PAYMENT_CONFIRMED: buildSupplierPaymentPosting,
+  SUPPLIER_RETURN_REFUND_CONFIRMED: async (tx,input) => (await import("@/lib/enterprise/accounting/supplier-return-claim-refunds")).buildSupplierClaimRefundPosting(tx,input),
+  SUPPLIER_CLAIM_COMPENSATION_POSTED: async (tx,input) => (await import("@/lib/enterprise/accounting/supplier-claim-compensation-service")).buildSupplierClaimCompensationPosting(tx,input),
   PAYMENT_ALLOCATION_CONFIRMED: buildPaymentAllocationPosting,
   EXPENSE_APPROVED: buildExpensePosting,
   EXPENSE_SETTLEMENT_CONFIRMED: buildExpenseSettlementPosting,

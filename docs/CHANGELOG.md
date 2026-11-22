@@ -1,3 +1,88 @@
+## 2026-11-22 — #1215 : autorité stock commune, rappel sur sorties commerciales (DRAFT)
+
+- Garde transactionnelle partagée avant toute sortie de vente, consommation de production ou transfert : rappel détecté sur le couple article/numéro de lot dans les autres dépôts de la même organisation.
+- Ne bloque pas les circuits validés de destruction, retour fournisseur et récupération de stock isolé ; statut local et permissions toujours contrôlés.
+- QA exécutable avec intégration obligatoire Quality Gates ; tests HTTP multisectoriels et OWNER_E2E toujours requis.
+- Aucun schéma modifié, aucune migration, aucun merge ni déploiement depuis la branche.
+
+## 2026-11-22 — #1215 : rappel global des lots sur toutes les boutiques (DRAFT)
+
+- Nouvelle garde serveur dans le checkout RETAIL : le rappel historique d'un même couple article/numéro de lot dans un autre dépôt bloque un exemplaire local marqué AVAILABLE, même sous politique ALLOW sans FEFO.
+- Comparaison exacte article/numéro de lot, sans collision entre SKU ; lecture transversale au sein du même tenant, aucune mutation des historiques.
+- QA #1042 et E2E CASH PostgreSQL d'un lot local disponible avec lot sœur rappelé dans un autre entrepôt ; certification CI et OWNER_E2E à obtenir.
+
+## 2026-11-22 — #1215 : exclusion des utilisateurs suspendus des alertes de rappel (DRAFT)
+
+- Les notifications de rappel ne ciblent que les responsables de dépôts ayant à la fois une adhésion entreprise active et un compte utilisateur global ACTIVE ; les comptes SUSPENDED ou PENDING sont exclus.
+- Tests de contrat et Playwright PostgreSQL avec suspension, relance idempotente, restauration de la fixture et absence de notification supplémentaire ; validations CI et OWNER_E2E à certifier.
+- Sécurité stock/Finance intacte, aucun changement de schéma ni déploiement.
+
+## 2026-11-22 — #1215 : garde inconditionnelle des lots rappelés dans le CASH direct (DRAFT)
+
+- Un lot explicitement choisi est vérifié même si la politique commerciale laisse les péremptions en mode ALLOW sans FEFO : QUARANTINED, rappel, lot inconnu ou appartenant à un autre article refusés côté serveur.
+- Test Finance/Stock de non-mutation ajouté au parcours Playwright CASH #1217 sur PostgreSQL isolé : 409 après rappel, même sous rejeu, aucune facture, aucun paiement, aucun mouvement ni journal fantôme.
+- Validation CI exacte et E2E final propriétaire à obtenir ; aucune fusion ni modification de Production.
+
+## 2026-11-22 — #1215 : rappel multisite réel et relance idempotente (DRAFT)
+
+- Recette Playwright + PostgreSQL sur deux dépôts partageant un lot rappelé, contrôle de quarantaine globale, destinataire actif dédupliqué, notification neutre, relance sans doublon, révision périmée et refus de remise en vente.
+- Preuve comptable de non-mutation : mouvements, soldes, journal et événements de valorisation inchangés après rappel et retry.
+- Aucun changement métier ni migration; certification du SHA courant requise avant d’étendre aux secteurs régulés.
+
+## 2026-11-22 — Reprise #1215 après fusion RETAIL #1217 (DRAFT)
+
+- Branche `fix/1212-inventory-final-completion` synchronisée avec `main` au commit `45e611689e0702b219ba389178103ad289cb8231` ; 60 changements métier/QA de #1215 conservés, deux conflits documentaire/version résolus sans toucher aux transactions Finance.
+- Version candidate `1.24.1`, héritage des fonctionnalités Commerce sans caissier v1.24.0 intact (API, UI, stock, journaux, tests).
+- Prochaines étapes : inverse métier multi-lignes, FX/taxes/provenances, parcours secteur Pharma/Health/Manufacturing, UI 2.0 et certification E2E propriétaire. Aucun merge ni déploiement de #1215.
+
+## 2026-11-22 — #1215 : contrepassation contrôlée des compensations fournisseurs (DRAFT)
+
+- Transition comptable `POSTED → REVERSED` avec écriture inverse, motif, date de période ouverte, identité indépendante et registre conservé ; aucune création de paiement ou transaction de trésorerie.
+- Restauration atomique de la capacité de la créance fournisseur et des soldes de dettes/factures ; allocation initiale marquée `REVERSED`, nouveaux champs de preuve et contraintes SQL additives.
+- Réutilisation d’une dette cible restaurée uniquement après démonstration des deux journaux opposés, de l’allocation historiquement contrepassée, du fournisseur, des comptes et de l’identité du correcteur ; toute allocation active ou non prouvée est refusée.
+- Route Finance/Comptabilité réservée aux gestionnaires autorisés ; historique, filtres et formulaire bilingue. QA métier isolée raccordée à la gate Stocks & Lots.
+- Test de schéma sur PostgreSQL 16 jetable dans l'acceptation comptable, après migrations depuis zéro ; lecture seule, aucune connexion autorisée à la production.
+- Pas de fusion ni déploiement ; migration PostgreSQL et E2E métier final à certifier sur un environnement de test.
+
+## 2026-11-22 — Stock & Lots #1212 : alertes de rappel multisite (DRAFT)
+
+- Après rappel confirmé, notification neutre et idempotente aux gestionnaires actifs des dépôts concernés, vérifiés dans la même organisation, sans divulguer de détails sur les lots.
+- Aucune recherche de destinataires ni notification avant commit ; erreurs de découverte ou de mise en file isolées de la quarantaine ; retour quantitatif et toasts FR/EN, sans identité des collaborateurs.
+- Relance explicite des alertes depuis un lot rappelé, contrôlée par les droits Stock, la portée multisite et la révision, sans réécriture du stock ni double notification.
+- QA indépendante raccordée à la gate Stocks & Lots. Certificat CI du SHA final et recette propriétaire multisite/permissions encore nécessaires. Aucun déploiement sur la branche.
+
+## 2026-11-21 — Durcissement du contexte Finance #1212 (DRAFT)
+
+- Compensation fournisseur : réinitialisation de l'état du panneau à chaque changement d'entreprise, de créance ou de date métier ; nouvelle clé d'idempotence et disparition des aperçus et listes précédents.
+- Remboursement fournisseur : protection des réponses API asynchrones provenant de l'ancienne entreprise, fermeture des éditeurs sensibles et nettoyage des données de dossier.
+- Tests ciblés de non-régression complétés ; aucun changement de schéma ni d'écriture comptable. La validation E2E globale du chantier #1212 reste requise avant fusion.
+
+## 2026-11-20 — Suite #1212 — v1.23.5 candidate (DRAFT)
+
+- Lot 1G.10 : règlement fournisseur par compensation distinct du paiement et de l'avoir, indicateurs canoniques et formule de réconciliation dédiés. Migration additive, test PostgreSQL.
+
+- Lot 1G.5 : décision assignée et exécution comptable atomique de la compensation, rapprochement source/dette, garde de contrepassation ; QA et recette à certifier.
+
+- Lot 1G.4 : soumission de compensation sous réservation cohérente créance/dette, assignation d'approbation Finance et verrouillage concurrent, aucun posting. Migration additive et QA à certifier.
+
+- Lot 1G.3 : brouillon de compensation fournisseur immuable, migration additive, préparation/lecture/annulation idempotente et audit sur Payables ; explicitement aucun effet comptable ni réservation. Recette PostgreSQL ajoutée, CI à certifier.
+
+- Lot 1G.2 : plan comptable indicatif de compensation, montant exact, date civile, période ouverte, journal général et comptes historiques vérifiés, impact trésorerie nul. Aucun effet financier ; QA isolée et HTTP à certifier.
+
+- Lot 1G.1 : diagnostic en lecture seule de la dette cible d'une éventuelle compensation fournisseur, preuve du journal et plafond net des remboursements/réservations. Aucun flux de compensation activé ; QA ciblée et recette HTTP/PostgreSQL (plafond avant, pendant et après remboursement ; dette cible inchangée) à certifier.
+
+- Lot 1F : remboursement bancaire de créances fournisseurs via le paiement canonique, preuves et capacité transactionnelle, approbation indépendante et écriture Banque/Créance. Nouvelle migration additive, UI FR/EN, tests réels ajoutés non encore certifiés.
+
+- Lot 1E : configuration explicite du compte de contrôle pour créances fournisseurs via un sous-compte personnalisé du 409, sans toucher le référentiel publié. UI FR/EN et recette API, preuve CI à renouveler.
+
+- Lots 1C–1D : plan financier persistant et immuable lié au retour, reconnaissance d'une créance distincte via posting canonique, conservation du solde non négatif, vérification à toutes les transitions et protections des journaux supports; FR/EN. Une migration additive, aucune donnée historique touchée. Mapping optionnel, provisionnement client, règlement de créance et CI restent bloquants.
+
+- Lot 1C.1 : preuve en lecture seule des paiements d'origine par allocations, trésorerie et journaux non contrepassés, avec état FR/EN; cas ordinaires en devise fonctionnelle et partie identifiée. Aucune créance reconnue, aucun flux débloqué, aucune migration. QA ciblée à certifier.
+
+- Lot 1B : lecteur commun de concordance facture/dette/allocations confirmées, refus serveur précoce des demandes et approbations non couvertes; recontrôle avant expédition sous verrou facture. Tests de dette nulle, insuffisance, projections divergentes et allocations manquantes. Aucun posting, migration ou créance nouvelle; CI à renouveler.
+
+- Lot 1A : diagnostic en lecture seule de la ventilation d’un avoir fournisseur entre dette ouverte et créance potentielle, en Decimal à six décimales, rapprochement facture/dette dans le même snapshot, FR/EN et désactivation du formulaire de demande dans ce cas. Aucun nouveau droit d’expédier, aucun avoir/solde/journal/encaissement créé. Tests de ventilation ajoutés à la QA #1212; CI et recette manuelle à exécuter. Les huit lots restent ouverts.
+
 ## 2026-11-17 / 18 — Hotfix stock/lots #1212 — v1.23.4 candidate (DRAFT)
 
 - Recette sectorielle #1212 : quatre tenants isolés, sélecteur et lot sans quantité, disponibilité hors périmés/quarantaine, refus références étrangères et absence d'écriture des autorités sectorielles; certification CI à exécuter.

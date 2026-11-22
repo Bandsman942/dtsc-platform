@@ -23,7 +23,7 @@ export function EnterpriseOperationalFinanceWorkspace(props: {
   locale?: string | null;
 } & EnterpriseOperationalFinanceCapabilities) {
   if (props.definition.code === "FINANCE_OVERVIEW") return <EnterpriseFinanceOverviewWorkspace {...props} />;
-  if (["FINANCE_RECEIVABLES", "FINANCE_PAYABLES"].includes(props.definition.code)) return <EnterpriseFinanceInvoicesWorkspace {...props} />;
+  if (["FINANCE_RECEIVABLES", "FINANCE_PAYABLES"].includes(props.definition.code)) return <EnterpriseFinanceInvoicesWorkspace key={`${props.organizationId}:${props.definition.code}`} {...props} />;
   if (props.definition.code === "FINANCE_PAYMENTS") return <EnterpriseFinancePaymentsWorkspace {...props} />;
   if (props.definition.code === "FINANCE_TREASURY") return <EnterpriseFinanceTreasuryWorkspace {...props} />;
   if (props.definition.code === "FINANCE_CASH") return <EnterpriseFinanceCashWorkspace {...props} />;

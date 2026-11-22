@@ -14,6 +14,7 @@ import { hasRetailSelfApprovalGrant } from "@/lib/enterprise/retail/site-access"
 export const ACCOUNTING_APPROVAL_MODULE_BY_TARGET: Readonly<Record<string, EnterpriseFinanceModuleCode>> = {
   EnterpriseJournalEntry: "FINANCE_ACCOUNTING",
   EnterprisePayment: "FINANCE_PAYMENTS",
+  EnterpriseSupplierClaimCompensation: "FINANCE_PAYABLES",
   EnterpriseSalesInvoice: "FINANCE_RECEIVABLES",
   EnterpriseSupplierInvoiceReview: "FINANCE_PAYABLES",
   EnterpriseSupplierInvoiceApproval: "FINANCE_PAYABLES",

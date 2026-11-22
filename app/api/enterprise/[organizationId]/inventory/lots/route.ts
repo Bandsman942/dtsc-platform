@@ -9,6 +9,7 @@ import { requireInventoryStockAuthorityTx } from "@/lib/enterprise/inventory/ser
 import { assertCustodyRecoveryReadAccess, inspectCustodyRecoveryTx } from "@/lib/enterprise/inventory/custody-recovery-preflight";
 import { recoveryApprovalCandidates, recoveryAssessmentSchema, submitRecoveryAssessment, requireRecoveryParticipantAccess, RECOVERY_ASSESSMENT_TARGET, recoveryWithdrawalSchema, withdrawRecoveryAssessment, lockRecoveryCustodyTx, recoveryExecutionSchema, executeRecoveryAssessment, isCustodyTransactionConflict } from "@/lib/enterprise/inventory/custody-recovery-assessment";
 import { notifyUser } from "@/lib/notifications";
+import { recallWarehouseManagerRecipientsTx, notifyRecallWarehouseManagers } from "@/lib/enterprise/inventory/recall-notifications";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getSession } from "@/lib/auth";
@@ -25,6 +26,10 @@ type Params = { params: Promise<{ organizationId: string }> };
 const fields = z.object({ inventoryItemId: z.string().min(1), warehouseId: z.string().min(1), lotNumber: z.string().trim().min(1).max(120), productionDate: z.iso.date().nullable(), expiryDate: z.iso.date().nullable(), notes: z.string().trim().max(1000).nullable() });
 const createSchema = fields.strict();
 const patchSchema = fields.partial().extend({ id: z.string().min(1), revision: z.number().int().positive(), status: z.enum(["AVAILABLE", "BLOCKED", "QUARANTINED"]).optional(), qualityReason:z.string().trim().min(8).max(1000).optional(), recall:z.literal(true).optional() }).strict();
+const recallAlertRetrySchema=z.object({
+  action:z.literal("RETRY_RECALL_ALERTS"),id:z.string().trim().min(1).max(191),
+  revision:z.number().int().positive(),
+}).strict();
 const custodyActionSchema=z.object({custodyId:z.string().trim().min(1).max(191),revision:z.number().int().positive(),action:z.enum(["REQUEST_DISPOSAL","CONFIRM_DISPOSAL"]),reason:z.string().trim().min(8).max(2000)}).strict();
 const isoDate = (value: string | null | undefined) => value ? new Date(`${value}T00:00:00.000Z`) : null;
 
@@ -193,6 +198,7 @@ export async function POST(req: Request, { params }: Params) {
 }
 
 export async function PATCH(req: Request, { params }: Params) {
+  const startedAt=Date.now();
   if (!isSameOriginRequest(req)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const session = await getSession(); if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { organizationId } = await params;
@@ -200,6 +206,37 @@ export async function PATCH(req: Request, { params }: Params) {
   if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   if (!(await rateLimit(`inventory-lot-write:${organizationId}:${session.userId}`, 60, 60_000)).ok) return NextResponse.json({ error: "RATE_LIMITED" }, { status: 429 });
   const raw=await req.json().catch(()=>null);
+  if(raw && typeof raw==="object" && "action" in raw && raw.action==="RETRY_RECALL_ALERTS") {
+    const parsed=recallAlertRetrySchema.safeParse(raw);
+    if(!parsed.success)return enterpriseValidationErrorResponse(parsed.error,"INVENTORY_LOT_INPUT_INVALID",req);
+    if(!access.canAdminister)return enterpriseDomainErrorResponse(new EnterpriseDomainError("INVENTORY_LOT_RECALL_FORBIDDEN",403),"INVENTORY_LOT_UPDATE_FAILED",req);
+    try {
+      const visibility=await retailInventoryVisibleSites(organizationId,session.userId);
+      if(visibility.isolationEnabled)throw new EnterpriseDomainError("INVENTORY_LOT_RECALL_FORBIDDEN",403);
+      const evidence=await prisma.$transaction(async tx=>{
+        const lot=await tx.enterpriseStockLot.findFirst({
+          where:{organizationId,id:parsed.data.id,archivedAt:null},
+          select:{revision:true,status:true,inventoryItemId:true,lotNumber:true,recallReference:true,qualityChangedByUserId:true},
+        });
+        if(!lot||!lot.recallReference||lot.status!=="QUARANTINED")
+          throw new EnterpriseDomainError("INVENTORY_LOT_RECALLED_REQUIRED",409);
+        if(lot.revision!==parsed.data.revision)
+          throw new EnterpriseDomainConflictError("INVENTORY_LOT_CONFLICT");
+        const recipients=await recallWarehouseManagerRecipientsTx(
+          tx,organizationId,lot.inventoryItemId,lot.lotNumber,lot.recallReference,lot.qualityChangedByUserId||session.userId);
+        return {reference:lot.recallReference,recipients};
+      },{isolationLevel:Prisma.TransactionIsolationLevel.RepeatableRead});
+      const notifications=await notifyRecallWarehouseManagers({
+        organizationId,recallReference:evidence.reference,recipientUserIds:evidence.recipients,
+      });
+      await writeAuditLog({userId:session.userId,organizationId,
+        action:"ENTERPRISE_STOCK_LOT_RECALL_ALERTS_RETRIED",entity:"EnterpriseStockLot",
+        entityId:parsed.data.id,request:req,metadata:{recipients:notifications.recipients,queued:notifications.queued,failed:notifications.failed}});
+      await writeApiLog({request:req,startedAt,statusCode:200,userId:session.userId,
+        metadata:{organizationId,domain:"inventory-recall-alerts-retry",queued:notifications.queued,failed:notifications.failed}});
+      return NextResponse.json({ok:true,notifications},{headers:{"Cache-Control":"private, no-store"}});
+    }catch(error){return enterpriseDomainErrorResponse(error,"INVENTORY_LOT_UPDATE_FAILED",req);}
+  }
   if(new URL(req.url).searchParams.get("action")==="execute-recovery-assessment") {
     const parsed=recoveryExecutionSchema.safeParse(raw);
     if(!parsed.success)return enterpriseValidationErrorResponse(parsed.error,"INVENTORY_LOT_INPUT_INVALID",req);
@@ -290,6 +327,8 @@ export async function PATCH(req: Request, { params }: Params) {
         const reference="RECALL-"+randomUUID().slice(0,12).toUpperCase();
         const changed=await tx.enterpriseStockLot.updateMany({where:{organizationId,inventoryItemId:lot.inventoryItemId,lotNumber:lot.lotNumber},data:{status:"QUARANTINED",recallReference:reference,qualityReason:input.qualityReason,qualityChangedAt:new Date(),qualityChangedByUserId:session.userId,revision:{increment:1}}});
         await publishEnterpriseEvent(tx,{organizationId,entityType:"EnterpriseStockLot",entityId:lot.id,eventType:"STOCK_LOT_RECALLED",summary:reference,actorUserId:session.userId,fromStatus:lot.status,toStatus:"QUARANTINED",metadataJson:{reference,lotNumber:lot.lotNumber,affectedLots:changed.count,reason:input.qualityReason||""}});
+        // The public-safety quarantine must not depend on notification
+        // discovery or delivery. Both happen only after this transaction commits.
         return {revision:lot.revision+1,recallReference:reference,affectedLots:changed.count,status:"QUARANTINED"};
       }
       if(changeStatus && input.status==="AVAILABLE") {
@@ -305,8 +344,34 @@ export async function PATCH(req: Request, { params }: Params) {
       if(changeStatus) await publishEnterpriseEvent(tx,{organizationId,entityType:"EnterpriseStockLot",entityId:lot.id,eventType:"STOCK_LOT_QUALITY_CHANGED",summary:lot.lotNumber,actorUserId:session.userId,fromStatus:lot.status,toStatus:input.status,metadataJson:{reason:input.qualityReason||""}});
       return {revision:lot.revision+1,status:input.status||lot.status};
     },{isolationLevel:Prisma.TransactionIsolationLevel.Serializable});
-    await writeAuditLog({userId:session.userId,organizationId,action:input.recall?"ENTERPRISE_STOCK_LOT_RECALLED":"ENTERPRISE_STOCK_LOT_UPDATED",entity:"EnterpriseStockLot",entityId:input.id,request:req,metadata:{...result,reason:input.qualityReason||null}});
-    return NextResponse.json({ok:true,...result});
+    // A safety-critical recall is already committed. Missing notification
+    // evidence or an unavailable notification service must never roll it back.
+    // Recipient identities remain internal to this read-only follow-up.
+    let alerts:{recipients:number;queued:number;failed:number;discoveryFailed:boolean}|null=null;
+    if("recallReference" in result && typeof result.recallReference==="string") {
+      const recipientIds=await prisma.$transaction(async tx=>{
+        const confirmed=await tx.enterpriseStockLot.findFirst({
+          where:{organizationId,id:input.id,recallReference:result.recallReference,
+            status:"QUARANTINED",archivedAt:null},
+          select:{inventoryItemId:true,lotNumber:true,qualityChangedByUserId:true},
+        });
+        if(!confirmed)throw new Error("INVENTORY_RECALL_NOTIFICATION_PROOF_MISSING");
+        return recallWarehouseManagerRecipientsTx(
+          tx,organizationId,confirmed.inventoryItemId,confirmed.lotNumber,result.recallReference,
+          confirmed.qualityChangedByUserId||session.userId);
+      },{isolationLevel:Prisma.TransactionIsolationLevel.RepeatableRead}).catch(()=>null);
+      if(recipientIds===null) {
+        alerts={recipients:0,queued:0,failed:0,discoveryFailed:true};
+      }else{
+        const delivery=await notifyRecallWarehouseManagers({
+          organizationId,recallReference:result.recallReference,recipientUserIds:recipientIds,
+        }).catch(()=>({recipients:recipientIds.length,queued:0,failed:recipientIds.length}));
+        alerts={...delivery,discoveryFailed:false};
+      }
+    }
+    await writeAuditLog({userId:session.userId,organizationId,action:input.recall?"ENTERPRISE_STOCK_LOT_RECALLED":"ENTERPRISE_STOCK_LOT_UPDATED",entity:"EnterpriseStockLot",entityId:input.id,request:req,metadata:{...result,reason:input.qualityReason||null,...(alerts?{notificationRecipients:alerts.recipients,notificationsQueued:alerts.queued,notificationsFailed:alerts.failed,notificationDiscoveryFailed:alerts.discoveryFailed}:{})}});
+    await writeApiLog({request:req,startedAt,statusCode:200,userId:session.userId,metadata:{organizationId,domain:input.recall?"inventory-lot-recall":"inventory-lot-quality",...(alerts?{notificationsQueued:alerts.queued,notificationsFailed:alerts.failed,notificationDiscoveryFailed:alerts.discoveryFailed}:{})}});
+    return NextResponse.json({ok:true,...result,...(alerts?{notifications:alerts}:{})});
   } catch(error) {
     if(error instanceof Prisma.PrismaClientKnownRequestError && ["P2034","P2002","P2004"].includes(error.code)) return enterpriseDomainErrorResponse(new EnterpriseDomainConflictError("INVENTORY_LOT_CONFLICT"),"INVENTORY_LOT_UPDATE_FAILED",req);
     return enterpriseDomainErrorResponse(error,"INVENTORY_LOT_UPDATE_FAILED",req);

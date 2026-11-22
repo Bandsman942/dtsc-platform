@@ -21,6 +21,7 @@ type PaymentInput = z.infer<typeof paymentCreateSchema> & { cashSessionId?: stri
 function paymentPostingEvent(paymentType: string) {
   if (paymentType === "CUSTOMER_PAYMENT") return "CUSTOMER_PAYMENT_CONFIRMED" as const;
   if (paymentType === "SUPPLIER_PAYMENT") return "SUPPLIER_PAYMENT_CONFIRMED" as const;
+  if (paymentType === "SUPPLIER_RETURN_REFUND") return "SUPPLIER_RETURN_REFUND_CONFIRMED" as const;
   if (paymentType === "PAYROLL_PAYMENT") return "PAYROLL_PAYMENT_CONFIRMED" as const;
   if (paymentType === "EXPENSE_SETTLEMENT") return "EXPENSE_SETTLEMENT_CONFIRMED" as const;
   return null;
@@ -246,6 +247,30 @@ export async function createEnterprisePaymentTx(tx: Prisma.TransactionClient, or
     await assertActiveClientOrganization(tx, organizationId);
     const amount = new Prisma.Decimal(input.amount);
     if (!amount.greaterThan(0)) throw new EnterpriseAccountingError("PAYMENT_AMOUNT_INVALID", 400);
+    if (input.paymentType === "SUPPLIER_RETURN_REFUND") {
+      if (!input.supplierReturnClaimId) throw new EnterpriseAccountingError("SUPPLIER_RETURN_REFUND_EVIDENCE_REQUIRED",409);
+      const { lockSupplierClaimRefundTx, assertSupplierClaimRefundIntentTx } = await import("@/lib/enterprise/accounting/supplier-return-claim-refunds");
+      await lockSupplierClaimRefundTx(tx, organizationId, input.supplierReturnClaimId);
+      if (input.idempotencyKey) {
+        const existing = await tx.enterprisePayment.findFirst({ where: { organizationId, idempotencyKey: input.idempotencyKey } });
+        if (existing) {
+          if (existing.paymentType !== input.paymentType || existing.supplierReturnClaimId !== input.supplierReturnClaimId ||
+              existing.initiatedByUserId !== actorUserId || !existing.amount.equals(amount) ||
+              existing.businessPartyId !== input.businessPartyId || existing.financialAccountId !== input.financialAccountId ||
+              existing.direction !== input.direction || existing.methodType !== input.methodType ||
+              existing.currencyCode !== input.currencyCode || existing.paymentDate.getTime() !== input.paymentDate.getTime() ||
+              existing.reference !== input.reference) throw new EnterpriseAccountingError("SUPPLIER_RETURN_REFUND_INTENT_CONFLICT",409);
+          return existing;
+        }
+      }
+      await assertSupplierClaimRefundIntentTx(tx, organizationId, actorUserId, input);
+      if (await tx.enterprisePayment.count({ where: { organizationId, financialAccountId: input.financialAccountId,
+        reference: input.reference, paymentType: "SUPPLIER_RETURN_REFUND", status: { not: "CANCELLED" } } })) {
+        throw new EnterpriseAccountingError("SUPPLIER_RETURN_REFUND_REFERENCE_CONFLICT",409);
+      }
+    } else if (input.supplierReturnClaimId) {
+      throw new EnterpriseAccountingError("SUPPLIER_RETURN_REFUND_EVIDENCE_REQUIRED",409);
+    }
     if (["CASH", "BANK_TRANSFER", "MOBILE_MONEY", "CARD", "CHEQUE"].includes(input.methodType) && !input.financialAccountId) throw new EnterpriseAccountingError("PAYMENT_FINANCIAL_ACCOUNT_REQUIRED", 409);
     let cashSessionId: string | null = null;
     if (input.financialAccountId) {
@@ -328,8 +353,8 @@ export async function createEnterprisePaymentTx(tx: Prisma.TransactionClient, or
     }
 
     const payrollUnallocatedAmount = input.paymentType === "PAYROLL_PAYMENT" ? new Prisma.Decimal(0) : amount;
-    const unallocatedAmount = input.paymentType === "EXPENSE_SETTLEMENT" ? new Prisma.Decimal(0) : payrollUnallocatedAmount;
-    const payment = await tx.enterprisePayment.create({ data: { organizationId, number: financeReference("PAY"), direction: input.direction, paymentType: input.paymentType, methodType: input.methodType, paymentMethodId: input.paymentMethodId || null, financialAccountId: input.financialAccountId || null, cashSessionId, businessPartyId: input.businessPartyId || null, employeeId: input.employeeId || null, payrollRunId: input.payrollRunId || null, expenseId: input.expenseId || null, currencyCode: input.currencyCode, amount, unallocatedAmount, paymentDate: input.paymentDate, reference: input.reference || null, maskedExternalReference: input.maskedExternalReference || null, initiatedByUserId: actorUserId, idempotencyKey: input.idempotencyKey || null } });
+    const unallocatedAmount = ["EXPENSE_SETTLEMENT","SUPPLIER_RETURN_REFUND"].includes(input.paymentType) ? new Prisma.Decimal(0) : payrollUnallocatedAmount;
+    const payment = await tx.enterprisePayment.create({ data: { organizationId, number: financeReference("PAY"), direction: input.direction, paymentType: input.paymentType, methodType: input.methodType, paymentMethodId: input.paymentMethodId || null, financialAccountId: input.financialAccountId || null, cashSessionId, businessPartyId: input.businessPartyId || null, employeeId: input.employeeId || null, payrollRunId: input.payrollRunId || null, expenseId: input.expenseId || null, supplierReturnClaimId: input.supplierReturnClaimId || null, currencyCode: input.currencyCode, amount, unallocatedAmount, paymentDate: input.paymentDate, reference: input.reference || null, maskedExternalReference: input.maskedExternalReference || null, initiatedByUserId: actorUserId, idempotencyKey: input.idempotencyKey || null } });
     await addPaymentEvent(tx, organizationId, payment.id, actorUserId, "CREATED", "Payment created");
     await publishFinanceEvent(tx, { organizationId, entityType: "EnterprisePayment", entityId: payment.id, eventType: "PAYMENT_CREATED", summary: `Payment ${payment.number} created`, actorUserId, toStatus: "DRAFT", metadataJson: { amount: amount.toFixed(), currency: payment.currencyCode, direction: payment.direction, payrollRunId: payment.payrollRunId, cashSessionId: payment.cashSessionId } });
     return payment;
@@ -355,6 +380,13 @@ export async function transitionEnterprisePayment(
     if (!payment) throw new EnterpriseAccountingError("PAYMENT_NOT_FOUND", 404);
     if (payment.revision !== input.revision) throw new EnterpriseAccountingError("PAYMENT_REVISION_CONFLICT", 409, { currentRevision: payment.revision });
     const action = input.action as Exclude<typeof input.action, "CONFIRM">;
+    if (payment.paymentType === "SUPPLIER_RETURN_REFUND") {
+      if (["SUBMIT","APPROVE","REVERSE"].includes(action)) throw new EnterpriseAccountingError("SUPPLIER_RETURN_REFUND_DOMAIN_WORKFLOW_REQUIRED",409);
+      if (!payment.supplierReturnClaimId) throw new EnterpriseAccountingError("SUPPLIER_RETURN_REFUND_EVIDENCE_REQUIRED",409);
+      const { lockSupplierClaimRefundTx, assertSupplierClaimRefundIntentTx } = await import("@/lib/enterprise/accounting/supplier-return-claim-refunds");
+      await lockSupplierClaimRefundTx(tx,organizationId,payment.supplierReturnClaimId);
+      await assertSupplierClaimRefundIntentTx(tx,organizationId,actorUserId,payment,payment.id);
+    }
     const transition = {
       SUBMIT: { from: ["DRAFT"], to: "PENDING_APPROVAL" },
       APPROVE: { from: ["PENDING_APPROVAL"], to: "APPROVED" },
@@ -476,6 +508,13 @@ async function confirmEnterprisePayment(organizationId: string, paymentId: strin
     if (["CONFIRMED", "RECONCILED"].includes(payment.status)) return payment;
     if (payment.paymentType === "REFUND") throw new EnterpriseAccountingError("REFUND_SPECIALIZED_CONFIRMATION_REQUIRED", 409);
     if (payment.status !== "APPROVED" || payment.revision !== revision) throw new EnterpriseAccountingError("PAYMENT_NOT_APPROVED", 409);
+    if (payment.paymentType === "SUPPLIER_RETURN_REFUND") {
+      if (!payment.supplierReturnClaimId) throw new EnterpriseAccountingError("SUPPLIER_RETURN_REFUND_EVIDENCE_REQUIRED",409);
+      const { lockSupplierClaimRefundTx, assertSupplierClaimRefundIntentTx, assertSupplierClaimRefundAssignedApprovalTx } = await import("@/lib/enterprise/accounting/supplier-return-claim-refunds");
+      await lockSupplierClaimRefundTx(tx,organizationId,payment.supplierReturnClaimId);
+      await assertSupplierClaimRefundAssignedApprovalTx(tx,organizationId,payment);
+      await assertSupplierClaimRefundIntentTx(tx,organizationId,actorUserId,payment,payment.id);
+    }
     // Only the original cashier, who also approved under the owner-granted
     // exception, may self-confirm this SAME store's customer collection.
     const isSelfActor = [payment.initiatedByUserId, payment.approvedByUserId].includes(actorUserId);
@@ -539,7 +578,7 @@ async function confirmEnterprisePayment(organizationId: string, paymentId: strin
         postingEvent,
         sourceEntityType: "EnterprisePayment",
         sourceEntityId: updated.id,
-      });
+      }, updated.paymentType === "SUPPLIER_RETURN_REFUND" ? { supplierClaimRefundTransition: true } : undefined);
     }
     if (retailIntent) {
       const checkout = await tx.enterpriseRetailInvoicePaymentProposal.findFirst({
@@ -570,6 +609,18 @@ export async function inspectEnterprisePaymentConfirmation(
   });
   if (!payment) return blocked("PAYMENT_NOT_FOUND");
   if (payment.status !== "APPROVED") return blocked("PAYMENT_NOT_APPROVED");
+  if (payment.paymentType === "SUPPLIER_RETURN_REFUND") {
+    try {
+      const { assertSupplierClaimRefundIntentTx, assertSupplierClaimRefundAssignedApprovalTx } = await import("@/lib/enterprise/accounting/supplier-return-claim-refunds");
+      await prisma.$transaction(async tx => {
+        await assertSupplierClaimRefundAssignedApprovalTx(tx,organizationId,payment);
+        await assertSupplierClaimRefundIntentTx(tx,organizationId,actorUserId,payment,payment.id);
+      }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
+    } catch(error) {
+      if(error instanceof EnterpriseAccountingError) return blocked(error.code);
+      throw error;
+    }
+  }
   if (actorUserId === payment.initiatedByUserId || actorUserId === payment.approvedByUserId) {
     return blocked(payment.paymentType === "REFUND" ? "REFUND_PAYMENT_SELF_CONFIRMATION_FORBIDDEN" : "PAYMENT_SELF_CONFIRMATION_FORBIDDEN");
   }
@@ -665,6 +716,7 @@ export async function inspectEnterprisePaymentConfirmation(
   // read-only and deliberately scoped to the semantic keys of this payment.
   const mappingKeys = payment.paymentType === "CUSTOMER_PAYMENT"
     ? ["CUSTOMER_ADVANCES"]
+    : payment.paymentType === "SUPPLIER_RETURN_REFUND" ? ["SUPPLIER_RETURN_CLAIMS"]
     : payment.paymentType === "SUPPLIER_PAYMENT" ? ["SUPPLIER_ADVANCES"]
       : payment.paymentType === "PAYROLL_PAYMENT" ? ["PAYROLL_PAYABLE"] : [];
   const journalType = account.accountType === "CASH" ? "CASH" : account.accountType === "MOBILE_MONEY" ? "MOBILE_MONEY" : "BANK";
@@ -700,7 +752,7 @@ export async function allocateEnterprisePayment(
   const allocation = await withRetailTransactionRetry(() => prisma.$transaction(async (tx) => {
     await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterprisePayment" WHERE id = ${paymentId} AND "organizationId" = ${organizationId} FOR UPDATE`);
     const payment = await tx.enterprisePayment.findFirst({ where: { id: paymentId, organizationId } });
-    if (!payment || !["CONFIRMED", "RECONCILED"].includes(payment.status)) throw new EnterpriseAccountingError("PAYMENT_NOT_ALLOCATABLE", 409);
+    if (!payment || !["CONFIRMED", "RECONCILED"].includes(payment.status) || payment.paymentType === "SUPPLIER_RETURN_REFUND") throw new EnterpriseAccountingError("PAYMENT_NOT_ALLOCATABLE", 409);
     const amount = new Prisma.Decimal(input.amount);
     const refundEvents = payment.direction === "INBOUND" && payment.paymentType === "CUSTOMER_PAYMENT"
       ? await tx.enterprisePaymentEvent.findMany({

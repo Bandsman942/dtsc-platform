@@ -43,12 +43,27 @@ const yesterday = new Date(Date.now() - 86_400_000 * 2);
 const upcoming = new Date(Date.now() + 86_400_000 * 5);
 const later = new Date(Date.now() + 86_400_000 * 20);
 const lots = [
-  { id: "expired", inventoryItemId: "item", status: "AVAILABLE", expiryDate: yesterday },
-  { id: "early", inventoryItemId: "item", status: "AVAILABLE", expiryDate: upcoming },
-  { id: "late", inventoryItemId: "item", status: "AVAILABLE", expiryDate: later },
+  { id: "expired", inventoryItemId: "item", lotNumber: "BATCH-EXPIRED", status: "AVAILABLE", expiryDate: yesterday },
+  { id: "early", inventoryItemId: "item", lotNumber: "BATCH-EARLY", status: "AVAILABLE", expiryDate: upcoming },
+  { id: "late", inventoryItemId: "item", lotNumber: "BATCH-LATE", status: "AVAILABLE", expiryDate: later },
 ];
 const balances = lots.map((lot) => ({ inventoryItemId: "item", stockLotId: lot.id, quantityOnHand: new Prisma.Decimal(5), quantityReserved: new Prisma.Decimal(0) }));
-const tx = { enterpriseStockLot: { findMany: async () => lots }, enterpriseInventoryBalance: { findMany: async () => balances }, enterpriseInventoryReservation: { findMany: async () => [] } };
+let sisterRecall = null;
+const tx = {
+  enterpriseStockLot: {
+    findMany: async () => lots,
+    findFirst: async ({ where, select }) => {
+      assert.equal(where.organizationId, "org");
+      assert.equal(where.recallReference.not, null);
+      assert.equal(select.id, true);
+      assert.ok(where.OR.every(pair => pair.inventoryItemId === "item" && pair.lotNumber.startsWith("BATCH-")));
+      return sisterRecall && where.OR.some(pair => pair.inventoryItemId === sisterRecall.inventoryItemId &&
+        pair.lotNumber === sisterRecall.lotNumber) ? { id: "sister-recall" } : null;
+    },
+  },
+  enterpriseInventoryBalance: { findMany: async () => balances },
+  enterpriseInventoryReservation: { findMany: async () => [] },
+};
 const input = (policy, stockLotId) => ({
   organizationId: "org", warehouseId: "wh", timezone: "UTC", settings: { inventoryPolicy: policy },
   lines: [{ inventoryItemId: "item", stockLotId }],
@@ -59,6 +74,29 @@ await assert.rejects(assertRetailLotPolicyTx(tx, input(policy, "expired")), { co
 await assert.rejects(assertRetailLotPolicyTx(tx, input(policy, "late")), { code: "RETAIL_FEFO_LOT_REQUIRED" });
 await assert.doesNotReject(assertRetailLotPolicyTx(tx, input(policy, "early")));
 await assert.doesNotReject(assertRetailLotPolicyTx(tx, input({ ...policy, expiryMode: "WARN", enforceFefo: false }, "expired")));
+// Safety is independent from optional expiry policy / FEFO. In particular,
+// a recalled batch MUST remain unsellable to #1217's direct CASH checkout.
+const permissive = { ...policy, expiryMode: "ALLOW", enforceFefo: false };
+await assert.doesNotReject(assertRetailLotPolicyTx(tx, input(permissive, "early")));
+const earlyLot = lots.find(lot => lot.id === "early");
+earlyLot.status = "QUARANTINED";
+await assert.rejects(assertRetailLotPolicyTx(tx, input(permissive, "early")), { code: "RETAIL_STOCK_LOT_INVALID" });
+earlyLot.status = "AVAILABLE";
+earlyLot.recallReference = "RECALL-COMMON-STOCK-1215";
+await assert.rejects(assertRetailLotPolicyTx(tx, input(permissive, "early")), { code: "RETAIL_STOCK_LOT_INVALID" });
+earlyLot.recallReference = null;
+await assert.rejects(assertRetailLotPolicyTx(tx, { ...input(permissive, "early"),
+  lines: [{ inventoryItemId: "alien-item", stockLotId: "early" }] }), { code: "RETAIL_STOCK_LOT_INVALID" });
+await assert.rejects(assertRetailLotPolicyTx(tx, input(permissive, "missing-lot")), { code: "RETAIL_STOCK_LOT_INVALID" });
+await assert.doesNotReject(assertRetailLotPolicyTx(tx, input(permissive, null)));
+await assert.doesNotReject(assertRetailLotPolicyTx(tx, input(permissive, "early")));
+// An AVAILABLE copy in this depot cannot override a recalled sister batch
+// of the same SKU/lot-number in another depot. Other SKUs do not collide.
+sisterRecall = { inventoryItemId: "item", lotNumber: "BATCH-EARLY" };
+await assert.rejects(assertRetailLotPolicyTx(tx, input(permissive, "early")), { code: "RETAIL_STOCK_LOT_INVALID" });
+sisterRecall = { inventoryItemId: "different-item", lotNumber: "BATCH-EARLY" };
+await assert.doesNotReject(assertRetailLotPolicyTx(tx, input(permissive, "early")));
+sisterRecall = null;
 // A multi-line physical selection must exhaust the earliest free lot first.
 await assert.doesNotReject(assertRetailLotPolicyTx(tx, { ...input(policy, "early"), lines: [{ inventoryItemId: "item", stockLotId: "late", quantity: 2 }, { inventoryItemId: "item", stockLotId: "early", quantity: 5 }] }));
 await assert.rejects(assertRetailLotPolicyTx(tx, { ...input(policy, "late"), lines: [{ inventoryItemId: "item", stockLotId: "early", quantity: 4 }, { inventoryItemId: "item", stockLotId: "late", quantity: 3 }] }), { code: "RETAIL_FEFO_LOT_REQUIRED" });

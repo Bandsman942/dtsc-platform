@@ -154,11 +154,58 @@ export function InventoryStockGovernance({ organizationId, organizationName, loc
     try {
       const payload = { inventoryItemId: String(form.get("inventoryItemId") || ""), warehouseId: String(form.get("warehouseId") || ""), lotNumber: String(form.get("lotNumber") || "").trim(), productionDate: String(form.get("productionDate") || "") || null, expiryDate: String(form.get("expiryDate") || "") || null, notes: String(form.get("notes") || "") || null };
       const response = await fetch(`/api/enterprise/${organizationId}/inventory/lots`, { method: editLot ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(editLot ? { id: editLot.id, revision: editLot.revision, status: nextStatus||editLot.status, productionDate: payload.productionDate, expiryDate: payload.expiryDate, notes: payload.notes, ...((recall||nextStatus!==editLot.status)?{qualityReason:String(form.get("qualityReason")||"").trim()}:{}), ...(recall?{recall:true}:{}) } : payload) });
-      const body = await response.json().catch(() => null) as { message?: string;recallReference?:string;affectedLots?:number } | null;
+      const body = await response.json().catch(() => null) as { message?: string;recallReference?:string;affectedLots?:number;notifications?:{recipients:number;queued:number;failed:number;discoveryFailed?:boolean} } | null;
       if (!response.ok) throw new Error(body?.message || (en ? "Batch save failed." : "Enregistrement du lot impossible."));
-      setLotDialog(false); setEditLot(null); refresh(); if(body?.recallReference){notifyToast({title:en?"Recall registered":"Rappel enregistré",description:`${body.recallReference} · ${body.affectedLots||0} ${en?"batch records quarantined":"fiches de lot mises en quarantaine"}`,tone:"success"});return;} notifyToast({ title: en ? "Batch metadata recorded; quantity unchanged" : "Lot enregistré ; quantité inchangée", description: en ? "Record the physical receipt through an approved stock adjustment or goods receipt." : "Enregistrez la réception physique par une entrée de stock approuvée.", tone: "success" });
+      setLotDialog(false); setEditLot(null); refresh(); if(body?.recallReference){
+         const alerts=body.notifications;
+         const notificationSummary=alerts
+           ? (en ? ` · ${alerts.queued}/${alerts.recipients} manager alerts queued`
+             : ` · ${alerts.queued}/${alerts.recipients} alertes responsables enregistrées`)
+           : "";
+         notifyToast({title:en?"Recall registered":"Rappel enregistré",description:`${body.recallReference} · ${body.affectedLots||0} ${en?"batch records quarantined":"fiches de lot mises en quarantaine"}${notificationSummary}`,tone:"success"});
+         if(alerts?.discoveryFailed){
+           notifyToast({title:en?"Recall notifications need retry":"Alertes de rappel à relancer",
+             description:en?"The warehouse manager list could not be verified. The batches remain quarantined; retry notifications from a recalled batch."
+               :"Les responsables des dépôts n'ont pas pu être vérifiés. Les lots restent en quarantaine ; relancez les alertes depuis un lot rappelé.",
+             tone:"error"});
+         }else if(alerts?.failed){
+           notifyToast({title:en?"Recall notification issue":"Alerte de rappel incomplète",
+             description:en
+               ? `${alerts.failed} manager notifications could not be queued. The affected batches remain quarantined.`
+               : `${alerts.failed} notifications n'ont pas pu être enregistrées. Les lots restent en quarantaine.`,
+             tone:"error"});
+         }
+         return;
+       } notifyToast({ title: en ? "Batch metadata recorded; quantity unchanged" : "Lot enregistré ; quantité inchangée", description: en ? "Record the physical receipt through an approved stock adjustment or goods receipt." : "Enregistrez la réception physique par une entrée de stock approuvée.", tone: "success" });
     } catch (caught) { notifyToast({ title: en ? "Batch not saved" : "Lot non enregistré", description: customerFacingError(caught, locale), tone: "error" }); }
     finally { setBusy(false); }
+  }
+
+  async function retryRecallAlerts(lot:Lot) {
+    if(!canRecall||!lot.recallReference||busy)return;
+    setBusy(true);
+    try {
+      const response=await fetch(`/api/enterprise/${organizationId}/inventory/lots`,{
+        method:"PATCH",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({action:"RETRY_RECALL_ALERTS",id:lot.id,revision:lot.revision}),
+      });
+      const body=await response.json().catch(()=>null) as {
+        message?:string;notifications?:{recipients:number;queued:number;failed:number};
+      }|null;
+      if(!response.ok||!body?.notifications)
+        throw new Error(body?.message||(en?"Unable to retry recall alerts.":"Relance des alertes impossible."));
+      const alert=body.notifications;
+      notifyToast({title:en?"Recall alerts checked":"Alertes de rappel vérifiées",
+        description:en?`${alert.queued}/${alert.recipients} notifications available. No stock changes were made.`
+          :`${alert.queued}/${alert.recipients} notifications disponibles. Aucun changement de stock.`,
+        tone:"success"});
+      if(alert.failed)notifyToast({title:en?"Notifications still unavailable":"Notifications toujours indisponibles",
+        description:en?`${alert.failed} alerts could not be queued. The lots remain quarantined.`
+          :`${alert.failed} alertes n'ont pas pu être enregistrées. Les lots restent en quarantaine.`,
+        tone:"error"});
+    }catch(error){
+      notifyToast({title:en?"Retry rejected":"Relance refusée",description:customerFacingError(error,locale),tone:"error"});
+    }finally{setBusy(false);}
   }
 
   return <section data-testid="inventory-stock-governance" className="min-w-0 rounded-2xl border border-dtsc-border bg-dtsc-surface p-3 sm:p-4">
@@ -225,7 +272,7 @@ export function InventoryStockGovernance({ organizationId, organizationName, loc
           {lot.recallReference?<p className="break-words font-semibold text-xs text-red-700 dark:text-red-200">{lot.recallReference}</p>:null}
           {lot.qualityReason?<p className="break-words text-xs text-dtsc-muted">{lot.qualityReason}</p>:null}
           {lot.sectorManaged?<p className="text-xs text-dtsc-muted">{en?"Read-only projection. Use the dedicated sector register.":"Projection en lecture seule. Utilisez le registre sectoriel dédié."}</p>:null}
-          <div data-responsive-actions className="flex flex-wrap gap-2"><Button type="button" variant="outline" size="sm" disabled={!canRegisterLot||Boolean(lot.recallReference)||Boolean(lot.sectorManaged)} onClick={()=>openEditLot(lot)}>{en?"Quality / edit":"Qualité / modifier"}</Button><Button type="button" variant="outline" size="sm" onClick={()=>{setTraceLot(lot);setTracePage(1);setTraceItems([]);}}>{en?"Trace movements":"Tracer les mouvements"}</Button></div>
+          <div data-responsive-actions className="flex flex-wrap gap-2"><Button type="button" variant="outline" size="sm" disabled={!canRegisterLot||Boolean(lot.recallReference)||Boolean(lot.sectorManaged)} onClick={()=>openEditLot(lot)}>{en?"Quality / edit":"Qualité / modifier"}</Button><Button type="button" variant="outline" size="sm" onClick={()=>{setTraceLot(lot);setTracePage(1);setTraceItems([]);}}>{en?"Trace movements":"Tracer les mouvements"}</Button>{lot.recallReference&&canRecall&&!lot.sectorManaged?<Button type="button" variant="outline" size="sm" disabled={busy} onClick={()=>void retryRecallAlerts(lot)}>{en?"Retry recall alerts":"Relancer les alertes"}</Button>:null}</div>
         </article>):<p className="text-xs text-dtsc-muted">{en?"No batch for these filters.":"Aucun lot pour ces filtres."}</p>}</div>
         <div className="mt-2 flex min-w-0 flex-wrap items-center justify-between gap-2 text-xs text-dtsc-muted"><span>{en ? "Page" : "Page"} {page}/{pages}</span><div className="flex gap-2"><Button variant="outline" disabled={page <= 1} onClick={() => setPage((value) => value - 1)}>{en ? "Previous" : "Précédent"}</Button><Button variant="outline" disabled={page >= pages} onClick={() => setPage((value) => value + 1)}>{en ? "Next" : "Suivant"}</Button></div></div>
       </div>

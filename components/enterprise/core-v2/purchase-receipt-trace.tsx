@@ -9,7 +9,7 @@ import { StatusBadge } from "@/components/workspace/status-badge";
 import { formatEnterpriseDate } from "@/components/enterprise/core-v2/erp-v2-ui";
 import { purchaseFormGuidance, type PurchaseFormGuidanceKey } from "@/lib/enterprise/purchase-form-i18n";
 
-type ReturnRequestSummary = { id?: string; reference: string; status: string; quantity: string; approvalId: string | null; revision?: number; unitCost?: string; creditUnitPrice?: string; nonrecoverableTaxAmount?: string; totalCost?: string; recoverableTaxAmount?: string; creditTotal?: string; currencyCode?: string; canDispatch?: boolean; canWithdraw?: boolean; canCreateCredit?: boolean; canReplaceCredit?: boolean; supplierCreditStatus?: string|null; supplierCreditRevision?: number|null; previousCreditNoteId?: string|null; previousSupplierCreditReference?: string|null; dispatchReference?: string | null; dispatchedAt?: string | null; dispatchBusinessDate?: string | null; supplierCreditNoteId?: string | null; supplierCreditReference?: string | null; supplierInvoiceId?: string; supplierInvoiceItemId?: string };
+type ReturnRequestSummary = { id?: string; reference: string; status: string; quantity: string; approvalId: string | null; revision?: number; unitCost?: string; creditUnitPrice?: string; nonrecoverableTaxAmount?: string; totalCost?: string; recoverableTaxAmount?: string; creditTotal?: string; settlementPayableAmount?: string|null; settlementClaimAmount?: string|null; currencyCode?: string; canDispatch?: boolean; canWithdraw?: boolean; canCreateCredit?: boolean; canReplaceCredit?: boolean; supplierCreditStatus?: string|null; supplierCreditRevision?: number|null; previousCreditNoteId?: string|null; previousSupplierCreditReference?: string|null; dispatchReference?: string | null; dispatchedAt?: string | null; dispatchBusinessDate?: string | null; supplierCreditNoteId?: string | null; supplierCreditReference?: string | null; supplierInvoiceId?: string; supplierInvoiceItemId?: string };
 type TraceRow = {
   supplierReturnRequest?: ReturnRequestSummary | null;
   supplierReturnHistory?: ReturnRequestSummary[];
@@ -21,7 +21,7 @@ type TraceRow = {
 };
 type TraceResponse = { items: TraceRow[]; canCheckSupplierReturn?: boolean; pagination: { page: number; pageSize: number; total: number; pageCount: number } };
 
-type ReturnPreview = { eligible: true; readOnly: true; quantity: string; remaining: string; unitCost: string; creditUnitPrice: string; nonrecoverableTaxAmount: string; totalCost: string; recoverableTaxAmount: string; creditTotal: string; currencyCode: string; receiptReference: string; invoiceReference: string; canSubmitRequest?: boolean };
+type ReturnPreview = { eligible: true; readOnly: true; settlement: { payableReduction: string; supplierClaim: string; remainingPayable: string; requiresSupplierClaim: boolean; paymentProof: "NOT_REQUIRED" | "PROVEN" | "UNPROVEN"; claimReady: boolean }; quantity: string; remaining: string; unitCost: string; creditUnitPrice: string; nonrecoverableTaxAmount: string; totalCost: string; recoverableTaxAmount: string; creditTotal: string; currencyCode: string; receiptReference: string; invoiceReference: string; canSubmitRequest?: boolean };
 
 function SupplierReturnCheck({ organizationId, purchaseId, row, locale, onRefresh }: { organizationId: string; purchaseId: string; row: TraceRow; locale: string; onRefresh: () => void }) {
   const t = (key: PurchaseFormGuidanceKey) => purchaseFormGuidance(locale, key);
@@ -44,7 +44,7 @@ function SupplierReturnCheck({ organizationId, purchaseId, row, locale, onRefres
       const response = await fetch(`/api/enterprise/${encodeURIComponent(organizationId)}/purchases/${encodeURIComponent(purchaseId)}?${params}`, { cache: "no-store", headers: { "Accept-Language": locale } });
       const body = await response.json();
       if (!response.ok) { setError(typeof body.message === "string" ? body.message : t("returnCheckError")); return; }
-      if (body.eligible !== true || body.readOnly !== true) { setError(t("returnCheckError")); return; }
+      if (body.eligible !== true || body.readOnly !== true || !body.settlement) { setError(t("returnCheckError")); return; }
       setPreview(body as ReturnPreview);
     } catch { setError(t("returnCheckError")); }
     finally { setBusy(false); }
@@ -66,7 +66,7 @@ function SupplierReturnCheck({ organizationId, purchaseId, row, locale, onRefres
       });
       const body = await response.json();
       if (!response.ok || body.ok !== true || !body.request) { setError(typeof body.message === "string" ? body.message : t("returnRequestFailed")); return; }
-      setRequest({ id:body.request.id, reference: body.request.reference, status: body.request.status, quantity: body.request.quantity, approvalId: body.approvalId, revision:body.request.revision, unitCost:preview.unitCost, creditUnitPrice:preview.creditUnitPrice, nonrecoverableTaxAmount:preview.nonrecoverableTaxAmount, totalCost:preview.totalCost, recoverableTaxAmount:preview.recoverableTaxAmount, creditTotal:preview.creditTotal, currencyCode:preview.currencyCode });
+      setRequest({ id:body.request.id, reference: body.request.reference, status: body.request.status, quantity: body.request.quantity, approvalId: body.approvalId, revision:body.request.revision, unitCost:preview.unitCost, creditUnitPrice:preview.creditUnitPrice, nonrecoverableTaxAmount:preview.nonrecoverableTaxAmount, totalCost:preview.totalCost, recoverableTaxAmount:preview.recoverableTaxAmount, creditTotal:preview.creditTotal, settlementPayableAmount:body.request.settlementPayableAmount,settlementClaimAmount:body.request.settlementClaimAmount,currencyCode:preview.currencyCode });
       setPreview(null); setOpen(false); setMessage(t("returnRequestSubmitted"));
     } catch { setError(t("returnRequestFailed")); }
     finally { setBusy(false); }
@@ -125,6 +125,7 @@ function SupplierReturnCheck({ organizationId, purchaseId, row, locale, onRefres
       {request.recoverableTaxAmount&&Number(request.recoverableTaxAmount)>0?<p>{t("returnCreditRecoverableTax")} : <strong>{money(request.recoverableTaxAmount,request.currencyCode)}</strong></p>:null}
       {request.nonrecoverableTaxAmount&&Number(request.nonrecoverableTaxAmount)>0?<p>{t("returnCreditCapitalizedTax")} : <strong>{money(request.nonrecoverableTaxAmount,request.currencyCode)}</strong></p>:null}
       <p>{t("returnCreditAmount")} : <strong>{money(request.creditTotal||request.totalCost,request.currencyCode)}</strong></p>
+      {request.settlementClaimAmount&&Number(request.settlementClaimAmount)>0?<><p>{t("returnSettlementPayableReduction")} : <strong>{money(request.settlementPayableAmount||"0",request.currencyCode)}</strong></p><p>{t("returnSettlementClaim")} : <strong>{money(request.settlementClaimAmount,request.currencyCode)}</strong></p></>:null}
     </div>:null}
     {request.dispatchReference?<p className="break-words">{t("returnDispatchReference")} : {request.dispatchReference}</p>:null}
     {request.supplierCreditReference?<p className="break-words">{t("returnCreditReference")} : {request.supplierCreditReference}</p>:null}
@@ -169,7 +170,7 @@ function SupplierReturnCheck({ organizationId, purchaseId, row, locale, onRefres
     <div aria-live="polite" aria-busy={busy} className="grid min-w-0 gap-1">
       {error ? <p role="alert" className="break-words text-xs text-red-700 dark:text-red-300">{error}</p> : null}
       {preview ? <div className="grid min-w-0 gap-1 text-xs">
-        <div><StatusBadge tone="success">{t("returnCheckReady")}</StatusBadge></div>
+        <div><StatusBadge tone={preview.settlement.requiresSupplierClaim && !preview.settlement.claimReady ? "warning" : "success"}>{t(preview.settlement.requiresSupplierClaim && !preview.settlement.claimReady ? "returnSettlementBlocked" : "returnCheckReady")}</StatusBadge></div>
         <p>{t("returnCheckRemaining")} : <strong>{preview.remaining} {row.inventoryItem.catalogItem.unitOfMeasure?.symbol || ""}</strong></p>
         <p>{t("returnCheckUnitCost")} : {money(preview.unitCost, preview.currencyCode)}</p>
         <p>{t("returnCheckAmount")} : <strong>{money(preview.totalCost, preview.currencyCode)}</strong></p>
@@ -177,13 +178,20 @@ function SupplierReturnCheck({ organizationId, purchaseId, row, locale, onRefres
         {Number(preview.nonrecoverableTaxAmount)>0?<p>{t("returnCreditCapitalizedTax")} : <strong>{money(preview.nonrecoverableTaxAmount,preview.currencyCode)}</strong></p>:null}
         <p>{t("returnCreditAmount")} : <strong>{money(preview.creditTotal,preview.currencyCode)}</strong></p>
         <p className="break-words">{t("returnCheckInvoice")} : {preview.invoiceReference}</p>
+        <p>{t("returnSettlementPayableReduction")} : <strong>{money(preview.settlement.payableReduction, preview.currencyCode)}</strong></p>
+        <p>{t("returnSettlementRemainingPayable")} : <strong>{money(preview.settlement.remainingPayable, preview.currencyCode)}</strong></p>
+        <p>{t("returnSettlementClaim")} : <strong>{money(preview.settlement.supplierClaim, preview.currencyCode)}</strong></p>
+        {preview.settlement.requiresSupplierClaim ? <>
+          <p className="break-words">{t(preview.settlement.paymentProof === "PROVEN" ? "returnSettlementPaymentProven" : "returnSettlementPaymentUnproven")}</p>
+          <p role={preview.settlement.claimReady?"status":"alert"} className={preview.settlement.claimReady?"break-words text-dtsc-muted":"break-words text-amber-700 dark:text-amber-300"}>{t(preview.settlement.claimReady?"returnSettlementClaimReadyHelp":"returnSettlementClaimHelp")}</p>
+        </> : null}
         <p className="text-dtsc-muted">{t("returnCheckHelp")}</p>
         {preview.canSubmitRequest ? <form onSubmit={submitReturn} className="mt-2 grid min-w-0 grid-cols-[minmax(0,1fr)] gap-2 border-t border-dtsc-border pt-2">
           <strong>{t("returnRequestTitle")}</strong><p className="text-dtsc-muted">{t("returnRequestHelp")}</p>
           <label className="grid min-w-0 gap-1 font-medium">{t("returnRequestReason")}<textarea name="reason" minLength={8} maxLength={2000} required disabled={busy} className="min-h-20 w-full min-w-0 rounded-xl border border-dtsc-border bg-dtsc-surface p-2 text-base text-dtsc-ink md:text-sm" /></label>
           <EnterpriseApproverSelect organizationId={organizationId} moduleCode="INVENTORY_LOGISTICS" locale={locale} label={t("returnRequestApprover")} disabled={busy} candidatesEndpoint={`/api/enterprise/${encodeURIComponent(organizationId)}/purchases/${encodeURIComponent(purchaseId)}?view=supplier-return-approvers`} />
           <Button type="submit" disabled={busy} className="max-w-full whitespace-normal">{t("returnRequestSubmit")}</Button>
-        </form> : <p className="text-dtsc-muted">{t("returnRequestNoAccess")}</p>}
+        </form> : (!preview.settlement.requiresSupplierClaim || preview.settlement.claimReady) ? <p className="text-dtsc-muted">{t("returnRequestNoAccess")}</p> : null}
       </div> : null}
     </div>
   </div>;
@@ -257,6 +265,7 @@ export function PurchaseReceiptTrace({ organizationId, purchaseId, locale, focus
                 <div className="flex min-w-0 flex-wrap items-center justify-between gap-1"><strong className="break-words">{previous.reference}</strong><StatusBadge tone="success">{t("returnReconciled")}</StatusBadge></div>
                 <span>{t("returnCheckQuantity")} : {previous.quantity} {product.unitOfMeasure?.symbol||""}</span>
                 {previous.creditTotal&&previous.currencyCode?<span>{t("returnCreditAmount")} : {new Intl.NumberFormat(locale,{style:"currency",currency:previous.currencyCode,maximumFractionDigits:6}).format(Number(previous.creditTotal))}</span>:null}
+                {previous.settlementClaimAmount&&previous.currencyCode?<span>{t("returnSettlementRecognized")} : {new Intl.NumberFormat(locale,{style:"currency",currency:previous.currencyCode,maximumFractionDigits:6}).format(Number(previous.settlementClaimAmount))}</span>:null}
                 {previous.dispatchReference?<span className="break-words">{t("returnDispatchReference")} : {previous.dispatchReference}</span>:null}
                 {previous.supplierCreditNoteId?<a className="w-fit break-words text-dtsc-blue underline" href={`/enterprise-modules/FINANCE_PAYABLES?supplierCreditNoteId=${encodeURIComponent(previous.supplierCreditNoteId)}`}>{t("returnCreditReview")} · {previous.supplierCreditReference}</a>:null}
                 {previous.approvalId?<a className="w-fit break-words text-dtsc-blue underline" href={`/enterprise-modules/VALIDATIONS?approval=${encodeURIComponent(previous.approvalId)}`}>{t("returnRequestReview")}</a>:null}

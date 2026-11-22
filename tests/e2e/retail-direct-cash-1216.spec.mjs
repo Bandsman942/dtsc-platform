@@ -197,6 +197,110 @@ test("RETAIL #1216 direct CASH full lifecycle, once-only posting, print and isol
     });
     expect(collision.status).toBe(409);
 
+    // Cross-PR #1215/#1217: recall is an unconditional sale barrier,
+    // including stores configured for permissive expiry policy. Rejected
+    // direct CASH attempts must not emit invoices, allocate cash or move stock.
+    const blockedLot = await prisma.enterpriseStockLot.create({ data: {
+      organizationId, inventoryItemId: f.inventory.id, warehouseId: f.warehouse.id,
+      lotNumber: uniq("RECALLED-1215"), status: "QUARANTINED",
+      recallReference: uniq("RECALL-1215"),
+      qualityReason: "Synthetic quality recall in disposable CI database",
+      qualityChangedByUserId: f.owner.id, qualityChangedAt: new Date(),
+      createdByUserId: f.owner.id,
+    } });
+    const blockedKey = uniq("direct-recalled-1215");
+    const financeBeforeBlocked = await Promise.all([
+      prisma.enterpriseSalesInvoice.count({ where: { organizationId } }),
+      prisma.enterprisePayment.count({ where: { organizationId } }),
+      prisma.enterpriseCashMovement.count({ where: { organizationId } }),
+      prisma.enterpriseTreasuryTransaction.count({ where: { organizationId } }),
+      prisma.enterpriseStockMovement.count({ where: { organizationId } }),
+      prisma.enterpriseJournalEntry.count({ where: { organizationId } }),
+    ]);
+    const blockedCommand = {
+      ...command, idempotencyKey: blockedKey,
+      lines: [{ catalogItemId: f.product.id, stockLotId: blockedLot.id, quantity: 1 }],
+    };
+    const blocked = await post(context, root + "/direct-checkout", blockedCommand);
+    expect(blocked.status, JSON.stringify(blocked.body)).toBe(409);
+    const blockedReplay = await post(context, root + "/direct-checkout", blockedCommand);
+    expect(blockedReplay.status, JSON.stringify(blockedReplay.body)).toBe(409);
+    const failedAttempt = await prisma.enterpriseRetailDirectCheckoutAttempt.findUniqueOrThrow({
+      where: { organizationId_idempotencyKey: { organizationId, idempotencyKey: blockedKey } },
+    });
+    expect(failedAttempt.status).toBe("FAILED");
+    expect(failedAttempt.salesInvoiceId).toBeNull();
+    expect(failedAttempt.paymentId).toBeNull();
+    expect(await Promise.all([
+      prisma.enterpriseSalesInvoice.count({ where: { organizationId } }),
+      prisma.enterprisePayment.count({ where: { organizationId } }),
+      prisma.enterpriseCashMovement.count({ where: { organizationId } }),
+      prisma.enterpriseTreasuryTransaction.count({ where: { organizationId } }),
+      prisma.enterpriseStockMovement.count({ where: { organizationId } }),
+      prisma.enterpriseJournalEntry.count({ where: { organizationId } }),
+    ])).toEqual(financeBeforeBlocked);
+    expect((await prisma.enterpriseStockLot.findUniqueOrThrow({ where: { id: blockedLot.id } })).status).toBe("QUARANTINED");
+
+    // Cross-warehouse anti-bypass: even a stale AVAILABLE local sister batch
+    // must be unsellable when the SAME SKU/lot-number has been recalled
+    // elsewhere in the tenant. No new Finance/stock record may be created.
+    const shadowWarehouse = await prisma.enterpriseWarehouse.create({ data: {
+      organizationId, siteId: f.site.id, code: uniq("SHADOW-WH-1215"),
+      name: "Recall shadow warehouse", warehouseType: "STORE",
+      status: "ACTIVE", createdByUserId: f.owner.id,
+    } });
+    const sharedBatchNumber = uniq("SISTER-BATCH-1215");
+    const staleLocalLot = await prisma.enterpriseStockLot.create({ data: {
+      organizationId, inventoryItemId: f.inventory.id, warehouseId: f.warehouse.id,
+      lotNumber: sharedBatchNumber, status: "AVAILABLE", createdByUserId: f.owner.id,
+    } });
+    await prisma.enterpriseInventoryBalance.create({ data: {
+      organizationId, inventoryItemId: f.inventory.id, warehouseId: f.warehouse.id,
+      stockLotId: staleLocalLot.id, quantityOnHand: 5, quantityReserved: 0,
+    } });
+    const recalledSister = await prisma.enterpriseStockLot.create({ data: {
+      organizationId, inventoryItemId: f.inventory.id, warehouseId: shadowWarehouse.id,
+      lotNumber: sharedBatchNumber, status: "QUARANTINED",
+      recallReference: uniq("RECALL-SISTER-1215"),
+      qualityReason: "Synthetic globally recalled batch in a separate warehouse",
+      qualityChangedByUserId: f.owner.id, qualityChangedAt: new Date(),
+      createdByUserId: f.owner.id,
+    } });
+    const beforeCrossWarehouseCheckout = await Promise.all([
+      prisma.enterpriseSalesInvoice.count({ where: { organizationId } }),
+      prisma.enterprisePayment.count({ where: { organizationId } }),
+      prisma.enterpriseCashMovement.count({ where: { organizationId } }),
+      prisma.enterpriseTreasuryTransaction.count({ where: { organizationId } }),
+      prisma.enterpriseStockMovement.count({ where: { organizationId } }),
+      prisma.enterpriseJournalEntry.count({ where: { organizationId } }),
+    ]);
+    const crossWarehouseKey = uniq("direct-recalled-sister-1215");
+    const crossWarehouseCommand = {
+      ...command, idempotencyKey: crossWarehouseKey,
+      lines: [{ catalogItemId: f.product.id, stockLotId: staleLocalLot.id, quantity: 1 }],
+    };
+    const crossWarehouseRejected = await post(context, root + "/direct-checkout", crossWarehouseCommand);
+    expect(crossWarehouseRejected.status, JSON.stringify(crossWarehouseRejected.body)).toBe(409);
+    const crossWarehouseReplay = await post(context, root + "/direct-checkout", crossWarehouseCommand);
+    expect(crossWarehouseReplay.status, JSON.stringify(crossWarehouseReplay.body)).toBe(409);
+    expect((await prisma.enterpriseRetailDirectCheckoutAttempt.findUniqueOrThrow({
+      where: { organizationId_idempotencyKey: { organizationId, idempotencyKey: crossWarehouseKey } },
+    })).status).toBe("FAILED");
+    expect(await Promise.all([
+      prisma.enterpriseSalesInvoice.count({ where: { organizationId } }),
+      prisma.enterprisePayment.count({ where: { organizationId } }),
+      prisma.enterpriseCashMovement.count({ where: { organizationId } }),
+      prisma.enterpriseTreasuryTransaction.count({ where: { organizationId } }),
+      prisma.enterpriseStockMovement.count({ where: { organizationId } }),
+      prisma.enterpriseJournalEntry.count({ where: { organizationId } }),
+    ])).toEqual(beforeCrossWarehouseCheckout);
+    expect((await prisma.enterpriseStockLot.findUniqueOrThrow({
+      where: { id: staleLocalLot.id },
+    })).status).toBe("AVAILABLE", "Read-only guard must not mutate historic local lot");
+    expect((await prisma.enterpriseStockLot.findUniqueOrThrow({
+      where: { id: recalledSister.id },
+    })).status).toBe("QUARANTINED");
+
     const invoice = await prisma.enterpriseSalesInvoice.findFirstOrThrow({
       where: { id: result.body.invoiceId, organizationId },
     });

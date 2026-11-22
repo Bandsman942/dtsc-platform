@@ -18,6 +18,7 @@ import type {
 import { prisma } from "@/lib/prisma";
 import { prepareValuedTransferDispatchTx, completeValuedTransferDispatchTx, prepareValuedTransferReceiptTx, completeValuedTransferReceiptTx } from "@/lib/enterprise/accounting/inventory-transfer-service";
 import { lotExpiryDateKey, reservationExactBalanceRemaining, reservationLegacyRemaining, reservationLotRemaining } from "@/lib/enterprise/inventory/lot-allocation";
+import { assertNoRecalledLotConsumptionTx } from "@/lib/enterprise/inventory/stock-recall-gate";
 
 type StockMovementInput = z.infer<typeof stockMovementCreateSchema>;
 type StockTransferCreateInput = z.infer<typeof stockTransferCreateSchema>;
@@ -99,7 +100,7 @@ async function assertInventoryCoordinates(tx: Prisma.TransactionClient, organiza
       ? tx.enterpriseStorageLocation.findFirst({ where: { id: input.storageLocationId, organizationId, warehouseId: input.warehouseId, status: "ACTIVE", archivedAt: null }, select: { id: true } })
       : Promise.resolve(null),
     input.stockLotId
-      ? tx.enterpriseStockLot.findFirst({ where: { id: input.stockLotId, organizationId, inventoryItemId: input.inventoryItemId, warehouseId: input.warehouseId, status: allowUnavailableLot ? {in:["AVAILABLE","BLOCKED","QUARANTINED"]} : "AVAILABLE", archivedAt: null }, select: { id: true, storageLocationId: true, expiryDate: true } })
+      ? tx.enterpriseStockLot.findFirst({ where: { id: input.stockLotId, organizationId, inventoryItemId: input.inventoryItemId, warehouseId: input.warehouseId, status: allowUnavailableLot ? {in:["AVAILABLE","BLOCKED","QUARANTINED"]} : "AVAILABLE", archivedAt: null }, select: { id: true, storageLocationId: true, expiryDate: true, lotNumber: true, recallReference: true } })
       : Promise.resolve(null),
   ]);
   if (!inventoryItem || !inventoryItem.catalogItem.trackInventory) throw new EnterpriseDomainError("INVENTORY_ITEM_NOT_FOUND", 404);
@@ -162,6 +163,11 @@ export async function applyStockMovementTx(
     if(!source || !dest || !dispatch || source.lotNumber!==dest.lotNumber || source.expiryDate?.getTime()!==dest.expiryDate?.getTime() || source.productionDate?.getTime()!==dest.productionDate?.getTime() || (source.recallReference && source.recallReference!==dest.recallReference)) throw new EnterpriseDomainError("STOCK_TRANSFER_ISOLATED_RECEIPT_INVALID",409);
   }
   const { inventoryItem, stockLot } = await assertInventoryCoordinates(tx, organizationId, input, writeOff || isolatedReceipt || supplierReturn);
+  await assertNoRecalledLotConsumptionTx(tx, {
+    organizationId, inventoryItemId: input.inventoryItemId,
+    stockLot: stockLot ? { lotNumber: stockLot.lotNumber, recallReference: stockLot.recallReference } : null,
+    movementType: input.movementType,
+  });
   if (inventoryItem.expiryTracking && stockLot?.expiryDate && ["SALE_FULFILLMENT", "RETURN_IN", "PRODUCTION_CONSUMPTION", "CUSTODY_RECOVERY_IN"].includes(input.movementType)) {
     const organization = await tx.organization.findUniqueOrThrow({ where: { id: organizationId }, select: { timezone: true } });
     const components = new Intl.DateTimeFormat("en-CA", { timeZone: organization.timezone || "UTC", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date());
