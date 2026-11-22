@@ -1482,3 +1482,4 @@ await import("./qa-inventory-recall-alerts-1212.mjs");
 await import("./qa-inventory-recall-retry-route-1212.mjs");
 await import("./qa-inventory-recall-failsafe-1212.mjs");
 await import("./qa-supplier-claim-compensation-inverse-1212.mjs");
+await import("./qa-supplier-compensation-reversed-allocation-1212.mjs");
