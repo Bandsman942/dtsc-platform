@@ -354,9 +354,9 @@ export function supplierCompensationDraftProjection(row: Awaited<ReturnType<type
     cancelledAt: row.cancelledAt, cancellationReason: row.cancellationReason, createdAt: row.createdAt,
     submittedAt: row.submittedAt, approverUserId: row.approverUserId,
     approvedAt: row.approvedAt, approvedByUserId: row.approvedByUserId,
-    postedAt: row.postedAt, postingJournalEntryId: row.postingJournalEntryId,
+    postedAt: row.postedAt,
     reversedAt: row.reversedAt, reversedByUserId: row.reversedByUserId,
-    reversalReason: row.reversalReason, reversalJournalEntryId: row.reversalJournalEntryId,
+    reversalReason: row.reversalReason,
     reservationActive: ["PENDING_APPROVAL", "APPROVED"].includes(row.status), executionAvailable: false as const };
 }
 
