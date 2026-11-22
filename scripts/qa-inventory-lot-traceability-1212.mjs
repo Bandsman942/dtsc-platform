@@ -1415,7 +1415,7 @@ assert.equal(claimHistory.pagination.total,1);assert.equal(claimHistory.items[0]
 assert.equal(claimHistory.items[0].requestedByName,"Original Requester");
 assert.equal(claimHistory.items[0].approverName,"Independent Reviewer");
 assert.equal(claimHistory.items[0].reservationActive,true);
-for(const field of ["claimAccountId","payableAccountId","sourceCreditJournalId","targetInvoiceJournalId","idempotencyKey"])
+for(const field of ["claimAccountId","payableAccountId","sourceCreditJournalId","targetInvoiceJournalId","idempotencyKey","postingJournalEntryId","reversalJournalEntryId"])
   assert.equal(Object.hasOwn(claimHistory.items[0],field),false);
 const privateHistory=await draftService.listSupplierClaimCompensations("org-a","other-user","claim-a",false,1);
 assert.equal(privateHistory.items.length,0);assert.equal(privateHistory.pagination.total,0);
