@@ -1,3 +1,10 @@
+## 2026-11-22 — #1215 : contrepassation contrôlée des compensations fournisseurs (DRAFT)
+
+- Transition comptable `POSTED → REVERSED` avec écriture inverse, motif, date de période ouverte, identité indépendante et registre conservé ; aucune création de paiement ou transaction de trésorerie.
+- Restauration atomique de la capacité de la créance fournisseur et des soldes de dettes/factures ; allocation initiale marquée `REVERSED`, nouveaux champs de preuve et contraintes SQL additives.
+- Route Finance/Comptabilité réservée aux gestionnaires autorisés ; historique, filtres et formulaire bilingue. QA métier isolée raccordée à la gate Stocks & Lots.
+- Pas de fusion ni déploiement ; migration PostgreSQL et E2E métier final à certifier sur un environnement de test.
+
 ## 2026-11-22 — Stock & Lots #1212 : alertes de rappel multisite (DRAFT)
 
 - Après rappel confirmé, notification neutre et idempotente aux gestionnaires actifs des dépôts concernés, vérifiés dans la même organisation, sans divulguer de détails sur les lots.
