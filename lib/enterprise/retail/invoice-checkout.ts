@@ -106,7 +106,7 @@ export async function prepareRetailInvoice(organizationId: string, actorUserId: 
       return { checkout: existing, invoice: existing.invoice, stockWarnings: [], idempotent: true };
     }
     const [organization, configuration, warehouse, catalogs, inventoryItems] = await Promise.all([
-      tx.organization.findFirst({ where: { id: organizationId, organizationType: "CLIENT", status: "ACTIVE", deletedAt: null, sectorCode: RETAIL_SECTOR_CODE }, select: { id: true, name: true, phone: true, email: true, address: true, timezone: true } }),
+      tx.organization.findFirst({ where: { id: organizationId, organizationType: "CLIENT", status: "ACTIVE", deletedAt: null, sectorCode: RETAIL_SECTOR_CODE }, select: { id: true, name: true, phone: true, email: true, address: true, timezone: true, settingsJson: true } }),
       tx.enterpriseRetailConfiguration.findUnique({ where: { organizationId }, select: { settingsJson: true } }),
       tx.enterpriseWarehouse.findFirst({ where: { id: input.warehouseId, organizationId, siteId: input.siteId, site: { status: "ACTIVE", archivedAt: null }, status: "ACTIVE", archivedAt: null }, select: { id: true, site: { select: { name: true, addressLine1: true, addressLine2: true, city: true, countryCode: true } } } }),
       tx.enterpriseCatalogItem.findMany({ where: { organizationId, id: { in: [...uniqueItems] }, status: "ACTIVE", archivedAt: null }, select: { id: true, name: true, currency: true, trackInventory: true } }),
