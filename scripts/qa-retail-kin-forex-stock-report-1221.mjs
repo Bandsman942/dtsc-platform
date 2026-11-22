@@ -35,7 +35,7 @@ let captured = [];
 let logs = 0;
 const products = [
   { id: "product-a", catalogItem: { code: "A-001", name: "Article A" } },
-  { id: "product-b", catalogItem: { code: "B-001", name: "Article B" } },
+  { id: "product-b", catalogItem: { code: "B-001", name: "=SUM(1,1)" } },
 ];
 const movementsBefore = [
   { inventoryItemId: "product-a", direction: "IN", _sum: { quantity: 20 } },
@@ -77,7 +77,11 @@ const api = loadModule(read("app/api/enterprise/[organizationId]/retail/daily-cl
     retailErrorResponse: (error) => NextResponse.json({ error: error.code || "FAILED" }, { status: error.status || 500 }),
   },
   "@/lib/enterprise/retail/errors": { EnterpriseRetailError: RetailError },
-  "@/lib/enterprise/retail/operating-settings": { readRetailOperatingSettings: () => ({
+  "@/lib/enterprise/organization-logo-storage": { resolveOrganizationLogoStoragePath: () => null },
+  "@/lib/enterprise/retail/operating-settings": {
+    readRetailLegalIdentity: () => ({ legalName: "KIN FOREX SARL", tradeName: "KIN FOREX",
+      rccm: "RCCM-TEST", idNat: "IDNAT-TEST", nif: "NIF-TEST", address: "", phone: "", email: "", website: "" }),
+    readRetailOperatingSettings: () => ({
     stockReportEnabled: enabled, stockReportIncludeZeroMovement: true,
     stockReportIncludeReserved: false, stockReportIncludeLots: false, stockReportIncludeExpiry: false,
   }) },
@@ -100,15 +104,19 @@ assert.equal(a.reserved, null, "No fabricated reservations for historical dates"
 assert.ok(captured.some((w) => w.occurredAt?.gte?.toISOString() === "2026-11-22T23:00:00.000Z"));
 assert.ok(captured.some((w) => w.occurredAt?.lt?.toISOString() === "2026-11-23T23:00:00.000Z"));
 assert.equal(logs, 1);
+assert.ok(captured.some((w) => w.createdAt?.lt instanceof Date), "Archived items still require an as-of creation bound");
 response = await invoke("siteId=store-a&date=2026-11-23&format=csv");
 assert.equal(response.status, 200);
 assert.match(response.body, /Stock initial/);
 assert.match(response.body, /21.000/);
 assert.match(response.body, /12.000/);
+assert.match(response.body, /'=SUM\(1,1\)/, "CSV formula injection must be neutralized");
 response = await invoke("siteId=store-a&date=2026-11-23&format=print");
 assert.equal(response.status, 200);
 assert.match(response.body, /window.print/);
 assert.match(response.body, /<table>/);
+assert.match(response.body, /RCCM-TEST/);
+assert.match(response.body, /IDNAT-TEST/);
 response = await invoke("siteId=store-a&date=2026-02-31");
 assert.equal(response.status, 400);
 authorized = ["store-b"];
