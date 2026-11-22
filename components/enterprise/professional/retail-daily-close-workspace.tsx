@@ -91,6 +91,13 @@ type CloseListResponse = {
 };
 type CloseSummary = { date: string; rows: Array<{ siteId: string | null; status: string; closeCount: number; varianceCount: number }> };
 type AdminStore = { id: string; name: string; code: string };
+type StockReport = {
+  date: string; site: { id: string; name: string; code: string }; timezone: string;
+  generatedAt: string; currentReservations: boolean; page: number; pageCount: number; total: number;
+  rows: Array<{ code: string; name: string; opening: string; entries: string; sold: string;
+    otherOut: string; closing: string; reserved: string | null; available: string | null;
+    lots: Array<{ number: string; expiry: string | null }> }>;
+};
 
 function statusTone(status: string) {
   if (["APPROVED", "CLOSED", "COMPLETED"].includes(status)) return "success" as const;
@@ -148,6 +155,11 @@ export function RetailDailyCloseWorkspace({
   const [siteFilter, setSiteFilter] = useState(preferredSiteId || "ALL");
   const [summaryDate, setSummaryDate] = useState(defaultBusinessDate);
   const [summary, setSummary] = useState<CloseSummary | null>(null);
+  const [stockReportDate, setStockReportDate] = useState(defaultBusinessDate);
+  const [stockReportPage, setStockReportPage] = useState(1);
+  const [stockReport, setStockReport] = useState<StockReport | null>(null);
+  const [stockReportLoading, setStockReportLoading] = useState(false);
+  const [stockReportError, setStockReportError] = useState("");
   const [summaryError, setSummaryError] = useState("");
   const mutationKeys = useRef<Record<string, string>>({});
   const guide = useMemo(() => getRetailUserGuide("RETAIL_DAILY_CLOSE", locale), [locale]);
@@ -191,6 +203,28 @@ export function RetailDailyCloseWorkspace({
   useEffect(() => {
     void load();
   }, [load, refreshKey]);
+
+  useEffect(() => {
+    if (siteFilter === "ALL") { setStockReport(null); setStockReportError(""); return; }
+    const controller = new AbortController();
+    setStockReportLoading(true); setStockReport(null); setStockReportError("");
+    const params = new URLSearchParams({ siteId: siteFilter, date: stockReportDate, page: String(stockReportPage), pageSize: "50" });
+    void fetch(`/api/enterprise/${encodeURIComponent(organizationId)}/retail/daily-close/stock-report?${params}`,
+      { signal: controller.signal, cache: "no-store" })
+      .then(async (response) => {
+        const data = await response.json().catch(() => null) as (StockReport & { message?: string }) | null;
+        if (!response.ok || !data?.rows) throw new Error(data?.message || (locale === "fr" ? "Rapport indisponible." : "Report unavailable."));
+        if (!controller.signal.aborted) setStockReport(data);
+      })
+      .catch((cause) => { if (!controller.signal.aborted) setStockReportError(customerFacingError(cause, locale)); })
+      .finally(() => { if (!controller.signal.aborted) setStockReportLoading(false); });
+    return () => controller.abort();
+  }, [organizationId, siteFilter, stockReportDate, stockReportPage, refreshKey, locale]);
+
+  function stockReportUrl(format: "csv" | "xlsx" | "print") {
+    const params = new URLSearchParams({ siteId: siteFilter, date: stockReportDate, format });
+    return `/api/enterprise/${encodeURIComponent(organizationId)}/retail/daily-close/stock-report?${params}`;
+  }
 
   function stableKey(action: string) {
     if (!mutationKeys.current[action]) mutationKeys.current[action] = crypto.randomUUID();
@@ -452,7 +486,7 @@ export function RetailDailyCloseWorkspace({
               })()}</div> : null}
             </ModuleSection> : null}
             <ModuleSection density="compact" id="retail-close-store" title={locale === "fr" ? "Boutique de travail" : "Working store"} description={locale === "fr" ? "Choisissez une boutique avant de soumettre une clôture : aucun mélange entre les magasins." : "Choose one store before submitting a close; never combine multiple stores."}>
-              <select aria-label={locale === "fr" ? "Filtrer les clôtures par boutique" : "Filter closes by store"} value={siteFilter} onChange={(event) => { setSiteFilter(event.target.value); setHistoryPage(1); setSelectedAccountIds([]); }} className="min-h-11 w-full max-w-lg rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink">
+              <select aria-label={locale === "fr" ? "Filtrer les clôtures par boutique" : "Filter closes by store"} value={siteFilter} onChange={(event) => { setSiteFilter(event.target.value); setHistoryPage(1); setStockReportPage(1); setSelectedAccountIds([]); }} className="min-h-11 w-full max-w-lg rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-sm font-semibold text-dtsc-ink">
                 <option value="ALL">{locale === "fr" ? "Toutes les boutiques — consultation uniquement" : "All stores — read only"}</option>
                 {selectableSites.map((site) => <option key={site.id} value={site.id}>{site.label}</option>)}
               </select>
@@ -589,6 +623,52 @@ export function RetailDailyCloseWorkspace({
                   <ClipboardCheck className="h-4 w-4" />{busyAction === "daily-close-submit" ? (translateRetailWorkspace(locale, "dailyCloseSubmitting")) : (translateRetailWorkspace(locale, "dailyCloseSubmitForReview"))}
                 </Button>
               </form>
+            </ModuleSection>
+
+            <ModuleSection density="compact" id="retail-close-stock-report"
+              title={locale === "fr" ? "Rapport journalier des stocks" : "Daily inventory movement report"}
+              description={locale === "fr" ? "Stock initial, entrées, quantités vendues, autres sorties et stock final calculés depuis Inventaire & Logistique. Aucune saisie manuelle des stocks." : "Opening stock, receipts, physical sales, other issues and closing stock from the canonical inventory ledger."}
+            >
+              <div className="flex min-w-0 flex-wrap items-end gap-2">
+                <Field label={locale === "fr" ? "Date du rapport" : "Report date"}>
+                  <Input type="date" value={stockReportDate} onChange={(event) => { setStockReportPage(1); setStockReportDate(event.target.value); }} />
+                </Field>
+                <Button variant="outline" onClick={() => setRefreshKey((value) => value + 1)}><RefreshCw className="h-4 w-4" />{locale === "fr" ? "Actualiser" : "Refresh"}</Button>
+                {stockReport ? <>
+                  <a href={stockReportUrl("print")} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-dtsc-border px-3 text-sm font-bold text-dtsc-ink">{locale === "fr" ? "Aperçu / PDF" : "Preview / PDF"}</a>
+                  <a href={stockReportUrl("xlsx")} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-dtsc-border px-3 text-sm font-bold text-dtsc-ink"><Download className="h-4 w-4" />Excel</a>
+                  <a href={stockReportUrl("csv")} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-dtsc-border px-3 text-sm font-bold text-dtsc-ink"><Download className="h-4 w-4" />CSV</a>
+                </> : null}
+              </div>
+              {siteFilter === "ALL" ? <p className="mt-2 rounded-lg bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-300">{locale === "fr" ? "Sélectionnez une boutique dans « Boutique de travail » pour calculer un rapport selon son fuseau horaire." : "Select a specific store above for a timezone-accurate report."}</p> : null}
+              {stockReportLoading ? <p role="status" className="mt-3 text-sm text-dtsc-muted">{locale === "fr" ? "Calcul du rapport journalier…" : "Calculating daily report…"}</p> : null}
+              {stockReportError ? <p role="alert" className="mt-3 rounded-lg bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-300">{stockReportError}</p> : null}
+              {stockReport ? <>
+                <p className="mt-2 text-xs text-dtsc-muted">{stockReport.site.name} · {stockReport.date} · {stockReport.timezone} · {stockReport.total} {locale === "fr" ? "articles" : "items"}</p>
+                {!stockReport.currentReservations ? <p className="text-xs text-amber-700 dark:text-amber-300">{locale === "fr" ? "Réservations historiques non reconstituées : le stock final physique reste calculé depuis les mouvements." : "Historical reservations are not reconstructed; physical closing stock uses movements."}</p> : null}
+                <div className="mt-3 max-w-full overflow-x-auto rounded-lg border border-dtsc-border">
+                  <table className="min-w-[850px] w-full text-left text-xs">
+                    <thead className="bg-dtsc-soft text-dtsc-ink"><tr>
+                      {["Article", locale === "fr" ? "Initial" : "Opening", locale === "fr" ? "Entrées" : "In",
+                        locale === "fr" ? "Ventes" : "Sales", locale === "fr" ? "Autres sorties" : "Other out",
+                        locale === "fr" ? "Final" : "Closing", locale === "fr" ? "Réservé" : "Reserved",
+                        locale === "fr" ? "Disponible" : "Available"].map((label) => <th key={label} className="p-2">{label}</th>)}
+                    </tr></thead>
+                    <tbody>{stockReport.rows.map((row) => <tr key={row.code} className="border-t border-dtsc-border text-dtsc-ink">
+                      <td className="p-2 font-bold">{row.name}<span className="block text-dtsc-muted">{row.code}</span>
+                        {row.lots.length ? <span className="block text-dtsc-muted">{row.lots.map((lot) => lot.number + (lot.expiry ? " · " + lot.expiry : "")).join(", ")}</span> : null}</td>
+                      {[row.opening, row.entries, row.sold, row.otherOut, row.closing, row.reserved ?? "—", row.available ?? "—"].map((number, index) =>
+                        <td key={index} className="p-2 tabular-nums">{number}</td>)}
+                    </tr>)}</tbody>
+                  </table>
+                </div>
+                {!stockReport.rows.length ? <EmptyState compact title={locale === "fr" ? "Aucun article à présenter" : "No inventory items"} /> : null}
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+                  <span className="text-xs text-dtsc-muted">{locale === "fr" ? "Page" : "Page"} {stockReport.page} / {stockReport.pageCount}</span>
+                  <div className="flex gap-2"><Button variant="outline" size="sm" disabled={stockReportPage <= 1} onClick={() => setStockReportPage((v) => Math.max(1, v - 1))}><ChevronLeft className="h-4 w-4" /></Button>
+                    <Button variant="outline" size="sm" disabled={stockReportPage >= stockReport.pageCount} onClick={() => setStockReportPage((v) => v + 1)}><ChevronRight className="h-4 w-4" /></Button></div>
+                </div>
+              </> : null}
             </ModuleSection>
 
             <ModuleSection density="compact" id="retail-close-history"
