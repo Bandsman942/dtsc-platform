@@ -321,7 +321,7 @@ export async function readSupplierClaimCompensationEvidenceTx(
   // no longer a debt settlement, but only a matching journal pair and reversal
   // record can prove this; arbitrary historical rows must still fail closed.
   await assertReversedSupplierCompensationAllocationsTx(tx, {
-    organizationId, payableId, invoiceId: target.id, targetInvoiceJournalId: entry.id,
+    organizationId, payableId, targetInvoiceJournalId: entry.id,
     businessPartyId: target.businessPartyId, supplierId: target.supplierId,
     currencyCode: target.currencyCode, payableAccountId: debt.id,
   });
