@@ -108,7 +108,7 @@ export function RetailOperatingSettingsPanel({ organizationId, locale }: { organ
         <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3 sm:grid-cols-3">
           {([["directCheckoutEnabled", t.direct], ["quickPrintEnabled", t.print], ["simplifiedNavigationEnabled", t.simple]] as const).map(([key, label]) =>
             <label key={key} className="flex min-w-0 items-center gap-3 rounded-xl border border-dtsc-border bg-dtsc-page p-3 text-sm font-bold text-dtsc-ink">
-              <input className="h-5 w-5 shrink-0 accent-cyan-600" type="checkbox" checked={settings[key]} onChange={(event) => change(key, event.target.checked)} />
+              <input className="h-5 w-5 shrink-0 accent-cyan-600" type="checkbox" checked={settings[key]} onChange={(event) => { if (key === "directCheckoutEnabled" && event.target.checked) setSettings((current) => current ? { ...current, directCheckoutEnabled: true, footerLinesFr: current.footerLinesFr.length ? current.footerLinesFr : suggested } : current); else change(key, event.target.checked); }} />
               <span className="min-w-0 break-words">{label}</span>
             </label>)}
         </div>
