@@ -1,3 +1,10 @@
+## 2026-11-22 — #1215 : autorité stock commune, rappel sur sorties commerciales (DRAFT)
+
+- Garde transactionnelle partagée avant toute sortie de vente, consommation de production ou transfert : rappel détecté sur le couple article/numéro de lot dans les autres dépôts de la même organisation.
+- Ne bloque pas les circuits validés de destruction, retour fournisseur et récupération de stock isolé ; statut local et permissions toujours contrôlés.
+- QA exécutable avec intégration obligatoire Quality Gates ; tests HTTP multisectoriels et OWNER_E2E toujours requis.
+- Aucun schéma modifié, aucune migration, aucun merge ni déploiement depuis la branche.
+
 ## 2026-11-22 — #1215 : rappel global des lots sur toutes les boutiques (DRAFT)
 
 - Nouvelle garde serveur dans le checkout RETAIL : le rappel historique d'un même couple article/numéro de lot dans un autre dépôt bloque un exemplaire local marqué AVAILABLE, même sous politique ALLOW sans FEFO.

@@ -147,6 +147,8 @@ jobs:
         run: pnpm qa:retail-cogs-1109
       - name: Retail direct CASH cashierless mode contract QA (#1216)
         run: pnpm qa:retail-direct-cash-1216
+      - name: "INVENTORY #1215 canonical recalled batch outbound safety"
+        run: node scripts/qa-inventory-recall-stock-guard-1212.mjs
       - name: Retail five-lot canonical Finance offline draft safeguards (#1116)
         run: pnpm qa:retail-five-lots-1116
       - name: RETAIL financial KPI source traceability v2 QA (#1117)
