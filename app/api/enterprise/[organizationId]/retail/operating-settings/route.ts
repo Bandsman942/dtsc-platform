@@ -54,7 +54,7 @@ export async function GET(req: Request, { params }: Params) {
     const siteId = new URL(req.url).searchParams.get("siteId") || null;
     if (siteId && siteId.length > 191) throw new EnterpriseRetailError("RETAIL_SITE_ACCESS_DENIED", 400);
     await activeSite(organizationId, siteId);
-    const [configuration, sites] = await Promise.all([
+    const [configuration, sites, organization] = await Promise.all([
       prisma.enterpriseRetailConfiguration.findUnique({
         where: { organizationId }, select: { revision: true, settingsJson: true },
       }),
@@ -62,14 +62,18 @@ export async function GET(req: Request, { params }: Params) {
         where: { organizationId, status: "ACTIVE", archivedAt: null },
         select: { id: true, name: true, code: true }, take: 200, orderBy: { name: "asc" },
       }),
+      prisma.organization.findFirst({
+        where: { id: organizationId, status: "ACTIVE", deletedAt: null }, select: { settingsJson: true },
+      }),
     ]);
+    if (!organization) throw new EnterpriseRetailError("RETAIL_REFERENCE_INVALID", 404);
     if (!configuration) throw new EnterpriseRetailError("RETAIL_CONFIGURATION_REQUIRED", 409);
     const settings = readRetailOperatingSettings(configuration.settingsJson, siteId);
     const inherited = readRetailOperatingSettings(configuration.settingsJson);
     await writeApiLog({ request: req, startedAt, statusCode: 200, userId: auth.session.userId,
       metadata: { organizationId, domain: "retail-operating-settings", action: "read" } });
     return NextResponse.json({ revision: configuration.revision, settings, inherited,
-      legalIdentity: readRetailLegalIdentity(configuration.settingsJson),
+      legalIdentity: readRetailLegalIdentity(organization.settingsJson),
       isOverridden: Boolean(siteId && configuration.settingsJson &&
         typeof configuration.settingsJson === "object" && !Array.isArray(configuration.settingsJson) &&
         (configuration.settingsJson.retailSiteOperatingOverrides as Record<string, unknown> | undefined)?.[siteId]),
@@ -100,6 +104,22 @@ export async function PUT(req: Request, { params }: Params) {
       if (!existing) throw new EnterpriseRetailError("RETAIL_CONFIGURATION_REQUIRED", 409);
       if (existing.revision !== parsed.data.revision) throw new EnterpriseRetailError("RETAIL_OPERATING_SETTINGS_CONFLICT", 409);
       const current = readRetailOperatingSettings(existing.settingsJson, parsed.data.siteId);
+      let legalBefore = undefined as ReturnType<typeof readRetailLegalIdentity> | undefined;
+      if (parsed.data.legalIdentity) {
+        // A single company-scoped canonical fiscal identity is shared with Finance.
+        // Lock the Organization row to preserve concurrent changes in its settings.
+        await tx.$executeRaw(Prisma.sql`SELECT id FROM "Organization" WHERE id = ${organizationId} FOR UPDATE`);
+        const organization = await tx.organization.findFirst({
+          where: { id: organizationId, status: "ACTIVE", deletedAt: null },
+          select: { settingsJson: true },
+        });
+        if (!organization) throw new EnterpriseRetailError("RETAIL_REFERENCE_INVALID", 404);
+        legalBefore = readRetailLegalIdentity(organization.settingsJson);
+        await tx.organization.update({
+          where: { id: organizationId },
+          data: { settingsJson: mergeRetailLegalIdentity(organization.settingsJson, parsed.data.legalIdentity) },
+        });
+      }
       if (parsed.data.settings.directCheckoutEnabled) {
         const flags = existing.settingsJson;
         if (!flags || typeof flags !== "object" || Array.isArray(flags) ||
@@ -108,8 +128,7 @@ export async function PUT(req: Request, { params }: Params) {
         }
       }
       const nextSettings = mergeRetailOperatingSettings(existing.settingsJson, parsed.data.settings, parsed.data.siteId);
-      const nextJson = parsed.data.legalIdentity
-        ? mergeRetailLegalIdentity(nextSettings, parsed.data.legalIdentity) : nextSettings;
+      const nextJson = nextSettings;
       const updated = await tx.enterpriseRetailConfiguration.updateMany({
         where: { organizationId, revision: parsed.data.revision },
         data: { settingsJson: nextJson,
@@ -119,7 +138,7 @@ export async function PUT(req: Request, { params }: Params) {
       await tx.auditLog.create({ data: {
         organizationId, userId: auth.session.userId, action: "ENTERPRISE_RETAIL_OPERATING_MODE_UPDATED",
         entity: "EnterpriseRetailConfiguration", entityId: existing.id, riskLevel: "HIGH",
-        beforeJson: { settings: current, legalIdentity: parsed.data.siteId ? undefined : readRetailLegalIdentity(existing.settingsJson) },
+        beforeJson: { settings: current, legalIdentity: legalBefore },
         afterJson: { settings: parsed.data.settings, legalIdentity: parsed.data.legalIdentity },
         metadata: { organizationId, siteId: parsed.data.siteId, revision: existing.revision + 1 },
       } });
