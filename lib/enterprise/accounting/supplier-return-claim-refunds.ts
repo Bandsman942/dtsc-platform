@@ -1,4 +1,5 @@
 import { Prisma, type EnterprisePayment } from "@prisma/client";
+import { assertReversedSupplierCompensationAllocationsTx } from "@/lib/enterprise/accounting/supplier-compensation-reversed-allocation-proof";
 import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
 import { retailFinanceReadSiteScope } from "@/lib/enterprise/retail/site-access";
 import { resolveSupplierReturnClaimAccountTx } from "@/lib/enterprise/accounting/supplier-return-settlement";
@@ -291,8 +292,7 @@ export async function readSupplierClaimCompensationEvidenceTx(
       !payable.allocatedAmount.isZero() || !payable.creditedAmount.isZero() || !payable.compensatedAmount.isZero() ||
       !target.grandTotal.equals(payable.originalAmount) || !target.grandTotal.equals(target.outstandingAmount) ||
       !target.outstandingAmount.equals(payable.outstandingAmount)) return reject();
-  const [allocations, paymentAllocations, returns, credits, journals] = await Promise.all([
-    tx.enterprisePayableAllocation.count({ where: { organizationId, payableId } }),
+  const [paymentAllocations, returns, credits, journals] = await Promise.all([
     tx.enterprisePaymentAllocation.count({ where: { organizationId, payableId } }),
     tx.enterpriseSupplierReturnRequest.count({ where: { organizationId, supplierInvoiceId: target.id } }),
     tx.enterpriseSupplierCreditNote.count({ where: { organizationId, supplierInvoiceId: target.id } }),
@@ -302,7 +302,7 @@ export async function readSupplierClaimCompensationEvidenceTx(
     }),
   ]);
   const entry = journals[0];
-  if (allocations || paymentAllocations || returns || credits || journals.length !== 1 ||
+  if (paymentAllocations || returns || credits || journals.length !== 1 ||
       entry.status !== "POSTED" || !entry.postedAt || entry.reversedAt || entry.reversalOfEntryId ||
       entry.postingVersion !== 1 || entry.postingEvent !== "SUPPLIER_INVOICE_POSTED" ||
       entry.functionalCurrencyCode !== target.currencyCode ||
@@ -317,6 +317,14 @@ export async function readSupplierClaimCompensationEvidenceTx(
       lines[0].transactionCurrencyCode !== target.currencyCode || !lines[0].exchangeRate?.equals(1) ||
       !lines[0].transactionAmount?.equals(target.grandTotal) || !lines[0].functionalAmount.equals(target.grandTotal) ||
       entry.lines.some(line => line.ledgerAccountId === proof.claim.settlementClaimAccountId)) return reject();
+  // A prior domain inverse preserves an immutable REVERSED allocation. It is
+  // no longer a debt settlement, but only a matching journal pair and reversal
+  // record can prove this; arbitrary historical rows must still fail closed.
+  await assertReversedSupplierCompensationAllocationsTx(tx, {
+    organizationId, payableId, invoiceId: target.id, targetInvoiceJournalId: entry.id,
+    businessPartyId: target.businessPartyId, supplierId: target.supplierId,
+    currencyCode: target.currencyCode, payableAccountId: debt.id,
+  });
   const otherReservations = await tx.enterpriseSupplierClaimCompensation.findMany({
     where: { organizationId, payableId, status: { in: ["PENDING_APPROVAL", "APPROVED"] },
       ...(excludeCompensationId ? { id: { not: excludeCompensationId } } : {}) },
