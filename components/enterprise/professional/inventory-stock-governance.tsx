@@ -154,7 +154,7 @@ export function InventoryStockGovernance({ organizationId, organizationName, loc
     try {
       const payload = { inventoryItemId: String(form.get("inventoryItemId") || ""), warehouseId: String(form.get("warehouseId") || ""), lotNumber: String(form.get("lotNumber") || "").trim(), productionDate: String(form.get("productionDate") || "") || null, expiryDate: String(form.get("expiryDate") || "") || null, notes: String(form.get("notes") || "") || null };
       const response = await fetch(`/api/enterprise/${organizationId}/inventory/lots`, { method: editLot ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(editLot ? { id: editLot.id, revision: editLot.revision, status: nextStatus||editLot.status, productionDate: payload.productionDate, expiryDate: payload.expiryDate, notes: payload.notes, ...((recall||nextStatus!==editLot.status)?{qualityReason:String(form.get("qualityReason")||"").trim()}:{}), ...(recall?{recall:true}:{}) } : payload) });
-      const body = await response.json().catch(() => null) as { message?: string;recallReference?:string;affectedLots?:number;notifications?:{recipients:number;queued:number;failed:number} } | null;
+      const body = await response.json().catch(() => null) as { message?: string;recallReference?:string;affectedLots?:number;notifications?:{recipients:number;queued:number;failed:number;discoveryFailed?:boolean} } | null;
       if (!response.ok) throw new Error(body?.message || (en ? "Batch save failed." : "Enregistrement du lot impossible."));
       setLotDialog(false); setEditLot(null); refresh(); if(body?.recallReference){
          const alerts=body.notifications;
@@ -163,7 +163,12 @@ export function InventoryStockGovernance({ organizationId, organizationName, loc
              : ` · ${alerts.queued}/${alerts.recipients} alertes responsables enregistrées`)
            : "";
          notifyToast({title:en?"Recall registered":"Rappel enregistré",description:`${body.recallReference} · ${body.affectedLots||0} ${en?"batch records quarantined":"fiches de lot mises en quarantaine"}${notificationSummary}`,tone:"success"});
-         if(alerts?.failed){
+         if(alerts?.discoveryFailed){
+           notifyToast({title:en?"Recall notifications need retry":"Alertes de rappel à relancer",
+             description:en?"The warehouse manager list could not be verified. The batches remain quarantined; retry notifications from a recalled batch."
+               :"Les responsables des dépôts n'ont pas pu être vérifiés. Les lots restent en quarantaine ; relancez les alertes depuis un lot rappelé.",
+             tone:"error"});
+         }else if(alerts?.failed){
            notifyToast({title:en?"Recall notification issue":"Alerte de rappel incomplète",
              description:en
                ? `${alerts.failed} manager notifications could not be queued. The affected batches remain quarantined.`
