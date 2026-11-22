@@ -233,7 +233,7 @@ for(const fragment of ["ADD COLUMN \"reversedAt\"","'POSTED' AND NEW.\"status\" 
   "supplier_comp_no_ghost_decision","supplier_comp_reversal_journal_key",
   "AND \"reversalJournalEntryId\" IS NOT NULL"])assert.ok(sql.includes(fragment));
 const api=fs.readFileSync("app/api/enterprise/[organizationId]/payables/route.ts","utf8");
-for(const fragment of ['REVERSE_COMPENSATION','action: "reverse"','reversePostedSupplierClaimCompensation',
+for(const fragment of ['REVERSE_COMPENSATION','data.action === "REVERSE_COMPENSATION" ? "reverse"','reversePostedSupplierClaimCompensation',
   'SUPPLIER_CLAIM_COMPENSATION_REVERSED'])assert.ok(api.includes(fragment),fragment);
 const generic=fs.readFileSync("lib/enterprise/accounting/reversal-service.ts","utf8");
 assert.ok(generic.includes('options?.authorization !== "DOMAIN_INVERSE"'));
