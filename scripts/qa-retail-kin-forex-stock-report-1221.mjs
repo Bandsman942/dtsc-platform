@@ -60,7 +60,8 @@ const prisma = {
   },
   enterpriseStockMovement: { groupBy: async ({ where }) => {
     captured.push(where);
-    return "lt" in where.occurredAt ? movementsBefore : today;
+    // Daily movement ranges include both lower and upper bounds; opening is upper-bound only.
+    return "gte" in where.occurredAt ? today : movementsBefore;
   } },
   enterpriseInventoryBalance: { findMany: async () => [{ inventoryItemId: "product-a", quantityReserved: 3 }] },
   enterpriseStockLot: { findMany: async () => [] },
