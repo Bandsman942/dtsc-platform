@@ -68,7 +68,7 @@ const tx={
     assert.equal(where.organizationId,"org-a");assert.equal(where.status,"REVERSED");
     assert.equal(where.payableId,"payable-a");
     state.queries.push("offsets");
-    return state.offsets;
+    return state.offsets.filter(row => row.status === where.status && row.payableId === where.payableId && where.id.in.includes(row.id));
   }},
   enterpriseJournalEntry:{findMany:async ({where})=>{
     assert.equal(where.organizationId,"org-a");
