@@ -157,6 +157,8 @@ export function RetailDailyCloseWorkspace({
   const [summary, setSummary] = useState<CloseSummary | null>(null);
   const [stockReportDate, setStockReportDate] = useState(defaultBusinessDate);
   const [stockReportPage, setStockReportPage] = useState(1);
+  const [stockSearchDraft, setStockSearchDraft] = useState("");
+  const [stockSearch, setStockSearch] = useState("");
   const [stockReport, setStockReport] = useState<StockReport | null>(null);
   const [stockReportLoading, setStockReportLoading] = useState(false);
   const [stockReportError, setStockReportError] = useState("");
@@ -208,7 +210,7 @@ export function RetailDailyCloseWorkspace({
     if (siteFilter === "ALL") { setStockReport(null); setStockReportError(""); return; }
     const controller = new AbortController();
     setStockReportLoading(true); setStockReport(null); setStockReportError("");
-    const params = new URLSearchParams({ siteId: siteFilter, date: stockReportDate, page: String(stockReportPage), pageSize: "50" });
+    const params = new URLSearchParams({ siteId: siteFilter, date: stockReportDate, page: String(stockReportPage), pageSize: "50", ...(stockSearch ? { search: stockSearch } : {}) });
     void fetch(`/api/enterprise/${encodeURIComponent(organizationId)}/retail/daily-close/stock-report?${params}`,
       { signal: controller.signal, cache: "no-store" })
       .then(async (response) => {
@@ -219,10 +221,10 @@ export function RetailDailyCloseWorkspace({
       .catch((cause) => { if (!controller.signal.aborted) setStockReportError(customerFacingError(cause, locale)); })
       .finally(() => { if (!controller.signal.aborted) setStockReportLoading(false); });
     return () => controller.abort();
-  }, [organizationId, siteFilter, stockReportDate, stockReportPage, refreshKey, locale]);
+  }, [organizationId, siteFilter, stockReportDate, stockReportPage, refreshKey, locale, stockSearch]);
 
   function stockReportUrl(format: "csv" | "xlsx" | "print") {
-    const params = new URLSearchParams({ siteId: siteFilter, date: stockReportDate, format });
+    const params = new URLSearchParams({ siteId: siteFilter, date: stockReportDate, format, ...(stockSearch ? { search: stockSearch } : {}) });
     return `/api/enterprise/${encodeURIComponent(organizationId)}/retail/daily-close/stock-report?${params}`;
   }
 
@@ -630,6 +632,11 @@ export function RetailDailyCloseWorkspace({
               description={locale === "fr" ? "Stock initial, entrées, quantités vendues, autres sorties et stock final calculés depuis Inventaire & Logistique. Aucune saisie manuelle des stocks." : "Opening stock, receipts, physical sales, other issues and closing stock from the canonical inventory ledger."}
             >
               <div className="flex min-w-0 flex-wrap items-end gap-2">
+                <form className="flex min-w-0 gap-2" onSubmit={(event) => { event.preventDefault(); setStockReportPage(1); setStockSearch(stockSearchDraft.trim()); }}>
+                  <Input type="search" aria-label={locale === "fr" ? "Rechercher un article de stock" : "Find inventory item"} value={stockSearchDraft} maxLength={100} onChange={(event) => setStockSearchDraft(event.target.value)} placeholder={locale === "fr" ? "Article ou code…" : "Item or code…"} />
+                  <Button variant="outline" size="sm" type="submit"><Search className="h-4 w-4" />{locale === "fr" ? "Chercher" : "Search"}</Button>
+                </form>
+                {stockSearch ? <Button variant="outline" size="sm" onClick={() => { setStockSearchDraft(""); setStockSearch(""); setStockReportPage(1); }}>{locale === "fr" ? "Effacer" : "Clear"}</Button> : null}
                 <Field label={locale === "fr" ? "Date du rapport" : "Report date"}>
                   <Input type="date" value={stockReportDate} onChange={(event) => { setStockReportPage(1); setStockReportDate(event.target.value); }} />
                 </Field>
