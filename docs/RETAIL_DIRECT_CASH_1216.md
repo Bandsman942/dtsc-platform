@@ -17,7 +17,7 @@ Le serveur n'accepte que `CASH` sur la route directe de ce lot. Les moyens Mobil
 - `GET /api/enterprise/:org/retail/operating-settings?siteId=` : administrateur, réglages, héritage, boutique et révision.
 - `PUT /api/enterprise/:org/retail/operating-settings` : administrateur + step-up MFA/mot de passe, validation Zod, révision, audit atomique. Body `{revision,siteId:null|string,settings}`.
 - `GET /api/enterprise/:org/retail/direct-checkout/options?siteId=` : facturier habilité, permissions effectives, comptes CASH et sessions personnelles ouvertes du site.
-- `POST /api/enterprise/:org/retail/direct-checkout` : session, same-origin, entitlement, Zod, rate-limit, calcul prix serveur, validations, transaction de facture, validations attribuées, émission, paiement et rapprochement durable. Body `{idempotencyKey,siteId,warehouseId,businessPartyId,currencyCode,lines,payment:{methodType:"CASH",financialAccountId,cashSessionId,cashTendered}}`. `cashTendered` est le billetage présenté, **pas** la valeur comptabilisée.
+- `POST /api/enterprise/:org/retail/direct-checkout` : session, same-origin, entitlement, Zod, rate-limit, calcul prix serveur, validations, transaction de facture, validations attribuées, émission, paiement et rapprochement durable. Body `{idempotencyKey,siteId,warehouseId,businessPartyId,currencyCode,expectedGrandTotal,lines,payment:{methodType:"CASH",financialAccountId,cashSessionId,cashTendered}}`. `cashTendered` est le billetage présenté, **pas** la valeur comptabilisée.
 - En sortie `{status:"COMPLETED",invoiceId,invoiceNumber,paymentId,total,cashTendered,changeDue,currencyCode}`; sinon refus explicite et opération de récupération de la même clé.
 
 ## Source de vérité / transaction

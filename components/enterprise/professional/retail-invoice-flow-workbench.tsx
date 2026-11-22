@@ -332,6 +332,7 @@ export function RetailInvoiceFlowWorkbench({ organizationId, organizationName, l
     const siteId = chosenWarehouse.siteId;
     const intent = {
       siteId, warehouseId, businessPartyId: customerId, currencyCode,
+      expectedGrandTotal: pricing.grandTotal,
       lines: lines.map((line) => ({ catalogItemId: line.catalogItemId, stockLotId: line.stockLotId, quantity: line.quantity })),
       payment: { methodType: "CASH", financialAccountId: directAccountId,
         cashSessionId: directSessionId, cashTendered },

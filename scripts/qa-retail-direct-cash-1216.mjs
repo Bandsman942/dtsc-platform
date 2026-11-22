@@ -58,7 +58,7 @@ const migration = read("prisma/migrations/20261122130000_retail_direct_checkout_
 const prisma = read("prisma/enterprise-retail-direct-checkout.prisma");
 const page = read("components/enterprise/enterprise-administration-module.tsx");
 const run = (name, code, rules) => { for (const rule of rules) assert.match(code, rule, name); console.log("PASS", name); };
-run("Server route is mutation-protected", route, [/authorizeRetailRequest/, /retailDirectCashCheckoutSchema\.safeParse/, /writeAuditLog/, /writeApiLog/]);
+run("Server route is mutation-protected", route, [/authorizeRetailRequest/, /retailDirectCashCheckoutSchema\.safeParse/, /writeApiLog/]);
 run("Direct checkout requires scoped self approvals and live CASH session", service, [
   /"PREPARE_INVOICE", "ISSUE_INVOICE", "COLLECT_PAYMENT", "OPEN_CASH"/,
   /hasRetailSelfApprovalGrant/, /cashierUserId: actorUserId/, /status: "OPEN"/,
@@ -66,7 +66,7 @@ run("Direct checkout requires scoped self approvals and live CASH session", serv
 ]);
 run("Durable retry and lock do not invent financial balances", service, [
   /requestFingerprint/, /randomUUID/, /lockUntil/, /findUniqueOrThrow/, /upsert/, /"COMPLETED"/,
-  /prepareRetailInvoice/, /proposeRetailInvoicePayment/, /transitionEnterprisePayment/,
+  /prepareRetailInvoice/, /proposeRetailInvoicePayment/, /transitionEnterprisePayment/, /tx\.auditLog\.create/,
   /submitSalesInvoiceForAssignedApproval/, /decideSalesInvoiceAssignedApproval/,
   /submitPaymentForAssignedApproval/, /approvePaymentAssignedApproval/,
   /transitionSalesInvoice/,
@@ -78,7 +78,7 @@ run("Finance remains the single accounting boundary", finance, [
   /postPaidRetailInvoiceStockTx/, /TransactionIsolationLevel\.Serializable/,
 ]);
 run("Invoice caps CASH before creating a draft and freezes footer", prep, [
-  /cashTendered\.lessThan\(calculatedTotal\)/, /invoiceFooterSnapshot: retailInvoiceFooterSnapshot/,
+  /checkoutExpectations\.cashTendered\.lessThan\(calculatedTotal\)/, /checkoutExpectations\.expectedGrandTotal/, /invoiceFooterSnapshot: retailInvoiceFooterSnapshot/,
 ]);
 run("Store options and strict configurable mode", options, [/requireRetailSiteCapability/, /hasRetailSelfApprovalGrant/, /cashierUserId: auth\.session\.userId/, /directAllowed/]);
 run("Only owner can configure and each change is audited inside transaction", admin, [

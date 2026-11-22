@@ -36,7 +36,10 @@ export async function GET(req: Request, { params }: Params) {
         financialAccountId: { in: accounts.map((account) => account.id) } },
       select: { id: true, number: true, financialAccountId: true }, take: 30,
     });
-    let directAllowed = settings.directCheckoutEnabled && invoiceGrant && paymentGrant;
+    const flags = configuration.settingsJson;
+    let directAllowed = settings.directCheckoutEnabled && invoiceGrant && paymentGrant &&
+      Boolean(flags && typeof flags === "object" && !Array.isArray(flags) &&
+        flags.invoiceCheckoutEnabled === true && flags.siteStaffIsolationEnabled === true);
     if (directAllowed) {
       for (const capability of ["ISSUE_INVOICE", "COLLECT_PAYMENT", "OPEN_CASH"] as const) {
         try { await requireRetailSiteCapability(organizationId, auth.session.userId, siteId, capability, prisma, { requireAssignment: true }); }

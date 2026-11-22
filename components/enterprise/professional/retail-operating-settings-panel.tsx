@@ -125,7 +125,7 @@ export function RetailOperatingSettingsPanel({ organizationId, locale }: { organ
             <textarea maxLength={300} rows={2} className="w-full min-w-0 rounded-xl border border-dtsc-border bg-dtsc-page p-3 text-sm text-dtsc-ink" placeholder={locale === "fr" ? suggested[index] : "Optional customer notice"} value={(locale === "fr" ? settings.footerLinesFr : settings.footerLinesEn)[index] || ""} onChange={(event) => {
               const key = locale === "fr" ? "footerLinesFr" : "footerLinesEn";
               const copy = [...settings[key]]; copy[index] = event.target.value;
-              change(key, copy.filter(Boolean));
+              change(key, copy.slice(0, 2).filter((line, i) => line.trim().length > 0 || (i === 0 && copy[1]?.trim().length > 0)));
             }} />
           </label>)}
         </div>

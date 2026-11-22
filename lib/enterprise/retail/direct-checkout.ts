@@ -19,6 +19,7 @@ export const retailDirectCashCheckoutSchema = z.object({
   warehouseId: id,
   businessPartyId: id.nullable().optional(),
   currencyCode: z.string().trim().length(3).transform((v) => v.toUpperCase()),
+  expectedGrandTotal: z.string().regex(/^\d{1,14}(?:\.\d{1,6})?$/),
   lines: retailInvoicePrepareSchema.shape.lines,
   payment: z.object({
     methodType: z.literal("CASH"),
@@ -134,9 +135,22 @@ async function resultFor(organizationId: string, actorUserId: string, input: Dir
 export async function finalizeRetailDirectCashCheckout(
   organizationId: string, actorUserId: string, input: DirectCashInput,
 ) {
+  // A completed CASH operation remains re-readable even if its drawer
+  // has since closed; a retry never starts another transaction.
+  const existing = await prisma.enterpriseRetailDirectCheckoutAttempt.findUnique({
+    where: { organizationId_idempotencyKey: { organizationId, idempotencyKey: input.idempotencyKey } },
+  });
+  if (existing?.status === "COMPLETED") {
+    if (existing.actorUserId !== actorUserId || existing.siteId !== input.siteId ||
+        existing.requestFingerprint !== fingerprint(input)) {
+      throw new EnterpriseRetailError("RETAIL_DIRECT_CHECKOUT_IDEMPOTENCY_CONFLICT", 409);
+    }
+    await requireRetailSiteCapability(organizationId, actorUserId, input.siteId, "PREPARE_INVOICE", prisma, { requireAssignment: true });
+    return { ...await resultFor(organizationId, actorUserId, input), idempotent: true };
+  }
   await requireDirectCashRights(organizationId, actorUserId, input);
   const { attempt, token } = await lockAttempt(organizationId, actorUserId, input);
-  if (!token) return resultFor(organizationId, actorUserId, input);
+  if (!token) return { ...await resultFor(organizationId, actorUserId, input), idempotent: true };
   try {
     const invoiceKey = scopedKey("direct-invoice:", input.idempotencyKey);
     const paymentKey = scopedKey("direct-payment:", input.idempotencyKey);
@@ -145,7 +159,8 @@ export async function finalizeRetailDirectCashCheckout(
       siteId: input.siteId, warehouseId: input.warehouseId,
       businessPartyId: input.businessPartyId ?? null,
       currencyCode: input.currencyCode, lines: input.lines,
-    }, new Prisma.Decimal(input.payment.cashTendered));
+    }, { cashTendered: new Prisma.Decimal(input.payment.cashTendered),
+      expectedGrandTotal: new Prisma.Decimal(input.expectedGrandTotal) });
     await prisma.enterpriseRetailDirectCheckoutAttempt.updateMany({
       where: { id: attempt.id, organizationId, lockToken: token },
       data: { salesInvoiceId: prepared.invoice.id },
@@ -226,11 +241,20 @@ export async function finalizeRetailDirectCashCheckout(
         { action: "CONFIRM", revision: settlement.revision }, { retailSelfCheckoutSiteId: input.siteId });
     }
     const verified = await resultFor(organizationId, actorUserId, input);
-    await prisma.enterpriseRetailDirectCheckoutAttempt.updateMany({
-      where: { id: attempt.id, organizationId, lockToken: token },
-      data: { status: "COMPLETED", completedAt: new Date(), lockToken: null, lockUntil: null },
-    });
-    return verified;
+    await prisma.$transaction(async (tx) => {
+      const changed = await tx.enterpriseRetailDirectCheckoutAttempt.updateMany({
+        where: { id: attempt.id, organizationId, lockToken: token, status: "PROCESSING" },
+        data: { status: "COMPLETED", completedAt: new Date(), lockToken: null, lockUntil: null },
+      });
+      if (changed.count !== 1) throw new EnterpriseRetailError("RETAIL_DIRECT_CHECKOUT_IN_PROGRESS", 409);
+      await tx.auditLog.create({ data: {
+        organizationId, userId: actorUserId, action: "ENTERPRISE_RETAIL_DIRECT_CHECKOUT_COMPLETED",
+        entity: "EnterpriseSalesInvoice", entityId: verified.invoiceId, riskLevel: "HIGH",
+        metadata: { organizationId, siteId: input.siteId, invoiceId: verified.invoiceId,
+          paymentId: verified.paymentId, methodType: "CASH", idempotencyKey: input.idempotencyKey },
+      } });
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+    return { ...verified, idempotent: false };
   } catch (error) {
     await prisma.enterpriseRetailDirectCheckoutAttempt.updateMany({
       where: { id: attempt.id, organizationId, lockToken: token },
