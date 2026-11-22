@@ -199,4 +199,3 @@ Le contrôle du rappel est maintenant également exécuté dans `applyStockMovem
 Les sorties d'élimination contrôlée `LOT_WRITE_OFF` et de retour fournisseur `SUPPLIER_RETURN_OUT`, ainsi que les flux entrants et de récupération, restent accessibles à leurs contrôles métier existants : le rappel ne doit pas interdire de retirer un stock dangereux. Les contrôles de provenance, autorisations et qualité préexistants restent actifs.
 
 La QA exécutable `scripts/qa-inventory-recall-stock-guard-1212.mjs` vérifie les trois refus, la portée organisation/article, le refus sans requête si le lot local est rappelé, les flux de correction non bloqués et l'emplacement avant l'écriture physique. Une étape obligatoire est ajoutée à Quality Gates. **Ne pas assimiler cette QA isolée à un E2E HTTP multisectoriel** : ces parcours restent nécessaires avant clôture #1215, tout comme l'E2E final propriétaire.
-
