@@ -73,6 +73,7 @@ const tx = {
       assert.equal(where.organizationId, "org-a");
       assert.equal(where.status, "ACTIVE");
       assert.equal(where.removedAt, null);
+      assert.equal(where.user.status, "ACTIVE", "Suspended/pending global accounts must be excluded even if their enterprise membership is active");
       assert.equal(where.userId.in.includes("requester"), false);
       assert.equal(select.userId, true);
       // The removed manager MUST NOT receive the recall alert.

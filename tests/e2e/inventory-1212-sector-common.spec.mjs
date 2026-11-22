@@ -387,6 +387,24 @@ test.describe.serial("#1212 common inventory contract in independent sector tena
       expect(retry.status, JSON.stringify(retry.body)).toBe(200);
       expect(retry.body.notifications).toMatchObject({ recipients: 1, queued: 1, failed: 0 });
       expect(await prisma.notification.count({ where: { organizationId, userId: reader.id, title: "Alerte qualité des stocks" } })).toBe(1);
+      // An inactive global account must not receive a fresh notification
+      // even when its organization membership remains ACTIVE. Test only
+      // on the disposable CI database and restore status for later tests.
+      await prisma.user.update({ where: { id: reader.id }, data: { status: "SUSPENDED" } });
+      try {
+        const suspendedRetry = await read(await context.request.patch(api, { headers, data: {
+          action: "RETRY_RECALL_ALERTS", id: lots[0].id, revision: 2,
+        } }));
+        expect(suspendedRetry.status, JSON.stringify(suspendedRetry.body)).toBe(200);
+        expect(suspendedRetry.body.notifications).toMatchObject({
+          recipients: 0, queued: 0, failed: 0, discoveryFailed: false,
+        });
+        expect(await prisma.notification.count({ where: {
+          organizationId, userId: reader.id, title: "Alerte qualité des stocks",
+        } })).toBe(1);
+      } finally {
+        await prisma.user.update({ where: { id: reader.id }, data: { status: "ACTIVE" } });
+      }
       const stale = await read(await context.request.patch(api, { headers, data: {
         action: "RETRY_RECALL_ALERTS", id: lots[0].id, revision: 1,
       } }));

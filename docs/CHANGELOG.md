@@ -1,3 +1,9 @@
+## 2026-11-22 — #1215 : exclusion des utilisateurs suspendus des alertes de rappel (DRAFT)
+
+- Les notifications de rappel ne ciblent que les responsables de dépôts ayant à la fois une adhésion entreprise active et un compte utilisateur global ACTIVE ; les comptes SUSPENDED ou PENDING sont exclus.
+- Tests de contrat et Playwright PostgreSQL avec suspension, relance idempotente, restauration de la fixture et absence de notification supplémentaire ; validations CI et OWNER_E2E à certifier.
+- Sécurité stock/Finance intacte, aucun changement de schéma ni déploiement.
+
 ## 2026-11-22 — #1215 : garde inconditionnelle des lots rappelés dans le CASH direct (DRAFT)
 
 - Un lot explicitement choisi est vérifié même si la politique commerciale laisse les péremptions en mode ALLOW sans FEFO : QUARANTINED, rappel, lot inconnu ou appartenant à un autre article refusés côté serveur.

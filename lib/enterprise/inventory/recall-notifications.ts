@@ -34,8 +34,15 @@ export async function recallWarehouseManagerRecipientsTx(
   const candidates = [...new Set(warehouses.map(row => row.managerUserId)
     .filter((id): id is string => Boolean(id) && id !== initiatedByUserId))];
   if (!candidates.length) return [];
+  // An ACTIVE membership is not enough: a suspended/pending global user
+  // must not receive a newly queued enterprise quality notification.
+  // The organization and user status checks share the same bounded query.
   const active = await tx.organizationMember.findMany({
-    where: { organizationId, status: "ACTIVE", removedAt: null, userId: { in: candidates } },
+    where: {
+      organizationId, status: "ACTIVE", removedAt: null,
+      userId: { in: candidates },
+      user: { status: "ACTIVE" },
+    },
     select: { userId: true },
   });
   return [...new Set(active.map(member => member.userId))].sort();

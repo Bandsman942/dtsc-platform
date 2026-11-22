@@ -177,3 +177,11 @@ L'intégration du nouveau mode Commerce sans caissier v1.24.0 avec le Stock & Lo
 QA unitaire ajoutée au contrat historique `qa-hotfix-1042-retail-batches-transfer.mjs` : isolement des lots étrangers, refus d'un statut QUARANTINED et d'un lot rappelé même avec `expiryMode=ALLOW` et `enforceFefo=false`. Recette PostgreSQL + Playwright ajoutée au parcours `retail-direct-cash-1216.spec.mjs` sur une fixture de lot rappelé : tentative de caisse refusée 409, rejeu refusé, clé marquée FAILED, aucune facture ni aucun paiement ni mouvement CASH/trésorerie/stock ni journal supplémentaire. Le rappel multisite par route Stock est couvert séparément dans `inventory-1212-sector-common.spec.mjs`.
 
 Ces deux tests doivent réussir sur le **SHA final de #1215** ; aucune affirmation de validation propriétaire ni fusion avant CI et OWNER_E2E.
+
+## Lot 6D — sécurité des destinataires de rappels (candidat #1215)
+
+La recherche des gestionnaires de dépôts après rappel applique désormais **deux conditions indépendantes** dans le même SELECT Prisma du tenant : adhésion `OrganizationMember` active, non supprimée, **et compte `User.status=ACTIVE`**. Un responsable suspendu ou en attente ne doit pas recevoir de nouvelle notification, même si sa fiche de collaborateur est encore active. Cette vérification ne modifie jamais le rappel, la quarantaine ou la valeur du stock.
+
+La QA `qa-inventory-recall-alerts-1212.mjs` exige la condition de compte utilisateur. Une nouvelle recette `inventory-1212-sector-common.spec.mjs` suspend temporairement un responsable sur PostgreSQL jetable, relance l'alerte et vérifie HTTP 200, zéro destinataire, zéro notification supplémentaire et conservation de la notification initiale. Le test réactive le compte dans un bloc `finally` pour ne pas perturber les scénarios voisins.
+
+Il reste à vérifier les Quality Gates et Playwright sur le dernier SHA de la PR. La certification globale et la validation propriétaire restent ouvertes ; aucune fusion ni mise en Production depuis cette branche.
