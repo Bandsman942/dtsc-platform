@@ -843,6 +843,7 @@ Un échec de publication Vercel `too_many_routes` apparaît après une compilati
 
 ## Hotfix #1221 — RETAIL documents, encaissement et rapport journalier
 
+- Identité officielle RETAIL/Finance unifiée : `Organization.settingsJson.fiscalRegistration` est le référentiel légal (RCCM/NIF/ID.NAT, etc.) ; les coordonnées boutique sont des overrides commerciaux. Écriture atomique sous verrou organisation et config Retail, snapshot préparé depuis ce référentiel; DGI Readiness réutilise son nom légal.
 - Paramètres de mode de fonctionnement RETAIL : la configuration et l'identité légale commerciale sont versionnées sur `EnterpriseRetailConfiguration.settingsJson`. Identité légale entreprise unique; seules les coordonnées commerciales peuvent varier par boutique. PUT restreint au propriétaire/admin et protégé par step-up et contrôle de révision. GET retourne les paramètres hérités.
 - Snapshot documentaire `EnterpriseRetailInvoiceCheckout.invoiceHeaderSnapshot` figé à la préparation; facture Finance commune reste unique. Impression A4/80 mm conserve les anciens footers et affiche RCCM/ID.NAT, téléphone, NIF lorsque disponibles.
 - POS : montant dû provenant du serveur de tarification et du panier complet, billets reçus distincts et configurables (total / vide), remise à zéro explicite; idempotence Finance inchangée.
