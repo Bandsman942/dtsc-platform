@@ -177,4 +177,3 @@ L'intégration du nouveau mode Commerce sans caissier v1.24.0 avec le Stock & Lo
 QA unitaire ajoutée au contrat historique `qa-hotfix-1042-retail-batches-transfer.mjs` : isolement des lots étrangers, refus d'un statut QUARANTINED et d'un lot rappelé même avec `expiryMode=ALLOW` et `enforceFefo=false`. Recette PostgreSQL + Playwright ajoutée au parcours `retail-direct-cash-1216.spec.mjs` sur une fixture de lot rappelé : tentative de caisse refusée 409, rejeu refusé, clé marquée FAILED, aucune facture ni aucun paiement ni mouvement CASH/trésorerie/stock ni journal supplémentaire. Le rappel multisite par route Stock est couvert séparément dans `inventory-1212-sector-common.spec.mjs`.
 
 Ces deux tests doivent réussir sur le **SHA final de #1215** ; aucune affirmation de validation propriétaire ni fusion avant CI et OWNER_E2E.
-
