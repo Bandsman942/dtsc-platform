@@ -38,7 +38,7 @@ type Product = { id: string; name: string; code: string; sku?: string | null; cu
 type Line = { catalogItemId: string; name: string; code: string; quantity: number; currencyCode: string; unitPrice: string; inventoryItemId: string | null; stockLotId: string | null };
 type Lot = { id: string; inventoryItemId: string; lotNumber: string; expiryDate: string | null; quantityAvailable: string };
 type DirectOptions = {
-  settings: { directCheckoutEnabled: boolean; quickPrintEnabled: boolean; simplifiedNavigationEnabled: boolean; defaultPaper: "A4" | "THERMAL_80MM" };
+  settings: { directCheckoutEnabled: boolean; quickPrintEnabled: boolean; simplifiedNavigationEnabled: boolean; defaultPaper: "A4" | "THERMAL_80MM"; cashTenderedDefault: "TOTAL" | "EMPTY" };
   directAllowed: boolean;
   accounts: { id: string; name: string; code: string; currencyCode: string }[];
   cashSessions: { id: string; number: string; financialAccountId: string }[];
@@ -129,6 +129,7 @@ export function RetailInvoiceFlowWorkbench({ organizationId, organizationName, l
   const [directAccountId, setDirectAccountId] = useState("");
   const [directSessionId, setDirectSessionId] = useState("");
   const [cashTendered, setCashTendered] = useState("");
+  const cashTenderedEdited = useRef(false);
   const [directReceipt, setDirectReceipt] = useState<DirectReceipt | null>(null);
   const [directBusy, setDirectBusy] = useState(false);
   const [invoiceCurrency, setInvoiceCurrency] = useState("");
@@ -180,8 +181,10 @@ export function RetailInvoiceFlowWorkbench({ organizationId, organizationName, l
   }, [organizationId, mode, chosenWarehouse]);
 
   useEffect(() => {
-    if (pricing?.grandTotal) setCashTendered((previous) => previous || pricing.grandTotal);
-  }, [pricing?.grandTotal]);
+    if (!cashTenderedEdited.current) {
+      setCashTendered(directOptions?.settings.cashTenderedDefault === "EMPTY" ? "" : (pricing?.grandTotal || ""));
+    }
+  }, [pricing?.grandTotal, directOptions?.settings.cashTenderedDefault]);
   useEffect(() => {
     const matching = directOptions?.cashSessions.filter((session) => session.financialAccountId === directAccountId) || [];
     setDirectSessionId(matching.length === 1 ? matching[0].id : "");
@@ -258,8 +261,9 @@ export function RetailInvoiceFlowWorkbench({ organizationId, organizationName, l
 
   useEffect(() => {
     if (mode !== "checkout" || !data?.checkoutReady || !chosenWarehouse || !lines.length || !invoiceCurrency) {
-      setPricing(null); setPricingError(""); return;
+      setPricing(null); setPricingError(""); setPricingLoading(false); return;
     }
+    setPricing(null); setPricingLoading(true); // Invalidate the previous cart's total before recalculation.
     const controller = new AbortController();
     const timer = window.setTimeout(async () => {
       setPricingLoading(true);
@@ -360,7 +364,7 @@ export function RetailInvoiceFlowWorkbench({ organizationId, organizationName, l
       const value = await response.json().catch(() => null) as (DirectReceipt & { message?: string }) | null;
       if (!response.ok || value?.status !== "COMPLETED") throw new Error(value?.message || copy.failed);
       setDirectReceipt(value);
-      setLines([]); setLots([]); setCashTendered(""); setQuery("");
+      cashTenderedEdited.current = false; setLines([]); setLots([]); setCashTendered(""); setQuery("");
       idempotencyKey.current = "";
       try { sessionStorage.removeItem(storageKey); } catch { /* no-op */ }
       await fetch(`/api/enterprise/${organizationId}/retail/active-customer`, { method: "DELETE" }).catch(() => null);
@@ -456,7 +460,7 @@ export function RetailInvoiceFlowWorkbench({ organizationId, organizationName, l
       <RetailActiveCustomerBar organizationId={organizationId} compact />
       <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
         <div className="min-w-0 space-y-3 rounded-xl border border-dtsc-border bg-dtsc-page p-3">
-          <label className="block min-w-0 text-xs font-bold text-dtsc-ink">{copy.warehouse}<select className="mt-1 block min-h-11 w-full min-w-0 rounded-lg border border-dtsc-border bg-dtsc-surface px-3 text-sm" value={warehouseId} onChange={(event) => { setWarehouseId(event.target.value); setLines([]); setPreviewOpen(false); idempotencyKey.current = ""; }}><option value="">{copy.chooseWarehouse}</option>{warehouses.map((warehouse) => <option key={warehouse.id} value={warehouse.id}>{warehouse.siteName} · {warehouse.name}</option>)}</select></label>
+          <label className="block min-w-0 text-xs font-bold text-dtsc-ink">{copy.warehouse}<select className="mt-1 block min-h-11 w-full min-w-0 rounded-lg border border-dtsc-border bg-dtsc-surface px-3 text-sm" value={warehouseId} onChange={(event) => { cashTenderedEdited.current = false; setCashTendered(""); setWarehouseId(event.target.value); setLines([]); setPreviewOpen(false); idempotencyKey.current = ""; }}><option value="">{copy.chooseWarehouse}</option>{warehouses.map((warehouse) => <option key={warehouse.id} value={warehouse.id}>{warehouse.siteName} · {warehouse.name}</option>)}</select></label>
           <label className="block min-w-0 text-xs font-bold text-dtsc-ink">{copy.product}<span className="mt-1 flex min-h-11 min-w-0 items-center gap-2 rounded-lg border border-dtsc-border bg-dtsc-surface px-3"><Search className="h-4 w-4 shrink-0 text-dtsc-muted" /><input className="w-full min-w-0 bg-transparent text-sm outline-none" value={query} onChange={(event) => setQuery(event.target.value)} placeholder={copy.search} disabled={!warehouseId} /></span></label>
           {searching ? <p role="status" className="text-xs text-dtsc-muted">{copy.loading}</p> : null}
           <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-1.5">{products.map((product) => <button type="button" key={product.id} disabled={Boolean(product.trackInventory && Number(product.availableQuantity || "0") <= 0)} onClick={() => addProduct(product)} className="flex min-h-11 min-w-0 items-center justify-between gap-2 rounded-lg border border-dtsc-border bg-dtsc-surface px-3 py-2 text-left text-sm hover:border-cyan-500 focus-visible:ring-2 focus-visible:ring-cyan-400 disabled:opacity-50"><span className="min-w-0 flex-1"><span className="block break-words font-bold text-dtsc-ink">{product.name}</span><span className="block text-xs text-dtsc-muted">{product.sku || product.code} · {product.trackInventory ? `${product.availableQuantity || "0"} ${locale === "fr" ? "disponibles" : "available"}` : "Service"}</span></span><span className="shrink-0 text-right text-xs font-black text-dtsc-blue">{money(product.indicativeSalePrice || "0", product.currency || "CDF", locale)}<span className="mt-1 block">+ {copy.add}</span></span></button>)}</div>
@@ -495,15 +499,17 @@ export function RetailInvoiceFlowWorkbench({ organizationId, organizationName, l
             </label>
             {!directAccounts.length || !directSessions.length ? <p role="note" className="text-xs font-semibold text-amber-700 dark:text-amber-300">{copy.directCashMissing}</p> : null}
             <label className="grid min-w-0 gap-1 text-xs font-bold text-dtsc-ink">{copy.directTendered} ({currencyCode})
-              <input inputMode="decimal" type="number" min="0.01" step="0.01" className="min-h-11 w-full min-w-0 rounded-lg border border-dtsc-border bg-dtsc-page px-3 text-base" value={cashTendered} onChange={(event) => setCashTendered(event.target.value)} />
+              <input inputMode="decimal" type="number" min="0.01" step="0.01" className="min-h-11 w-full min-w-0 rounded-lg border border-dtsc-border bg-dtsc-page px-3 text-base" value={cashTendered} onChange={(event) => { cashTenderedEdited.current = true; setCashTendered(event.target.value); }} />
             </label>
+            <div className="flex flex-wrap items-center justify-between gap-2 text-sm"><span className="text-dtsc-muted">{locale === "fr" ? "Montant à encaisser (panier complet)" : "Amount due (entire cart)"}</span><strong className="tabular-nums text-dtsc-ink">{money(pricing?.grandTotal || "0", currencyCode, locale)}</strong></div>
+            <Button type="button" size="sm" variant="outline" disabled={!pricing?.grandTotal} onClick={() => { cashTenderedEdited.current = false; setCashTendered(pricing?.grandTotal || ""); }}>{locale === "fr" ? "Reprendre le montant exact" : "Use exact amount"}</Button>
             <div className="flex flex-wrap items-center justify-between gap-2 text-sm"><span className="text-dtsc-muted">{copy.directChange}</span><strong className="tabular-nums text-dtsc-ink">{money(String(Math.max(0, cashChange)), currencyCode, locale)}</strong></div>
           </div> : <p className="text-xs leading-5 text-dtsc-muted">{copy.invoiceOnly}</p>}
           {directReceipt ? <div role="status" className="min-w-0 space-y-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3">
             <p className="break-words text-sm font-bold text-dtsc-ink">{copy.directReady} · {directReceipt.invoiceNumber}</p>
             <a className="inline-flex min-h-11 items-center rounded-lg border border-emerald-600/30 px-3 text-sm font-bold text-emerald-700 dark:text-emerald-300" href={`/api/enterprise/${encodeURIComponent(organizationId)}/retail/invoices/${encodeURIComponent(directReceipt.invoiceId)}/print?paper=${directOptions?.settings.defaultPaper === "A4" ? "a4" : "thermal"}&lang=${locale}`} target="_blank" rel="noopener noreferrer"><Printer className="mr-2 h-4 w-4" />{copy.directPrint}</a>
           </div> : null}
-          <div data-responsive-actions className="flex flex-wrap justify-end gap-2"><Button type="button" variant="outline" disabled={!lines.length || submitting || directBusy} onClick={() => { setLines([]); idempotencyKey.current = ""; }}>{copy.clear}</Button>{directCash ? <Button type="button" disabled={!directCanPay || !lines.length || lines.some((line) => !Number.isFinite(line.quantity) || line.quantity <= 0)} onClick={() => void finalizeDirectCash()}><ArrowRight className="h-4 w-4" />{directBusy ? copy.directBusy : copy.directFinal}</Button> : <Button type="button" disabled={!chosenWarehouse || !lines.length || !pricing || pricingLoading || submitting || lines.some((line) => !Number.isFinite(line.quantity) || line.quantity <= 0)} onClick={() => setPreviewOpen(true)}><ArrowRight className="h-4 w-4" />{copy.preview}</Button>}</div>
+          <div data-responsive-actions className="flex flex-wrap justify-end gap-2"><Button type="button" variant="outline" disabled={!lines.length || submitting || directBusy} onClick={() => { cashTenderedEdited.current = false; setCashTendered(""); setLines([]); idempotencyKey.current = ""; }}>{copy.clear}</Button>{directCash ? <Button type="button" disabled={!directCanPay || !lines.length || lines.some((line) => !Number.isFinite(line.quantity) || line.quantity <= 0)} onClick={() => void finalizeDirectCash()}><ArrowRight className="h-4 w-4" />{directBusy ? copy.directBusy : copy.directFinal}</Button> : <Button type="button" disabled={!chosenWarehouse || !lines.length || !pricing || pricingLoading || submitting || lines.some((line) => !Number.isFinite(line.quantity) || line.quantity <= 0)} onClick={() => setPreviewOpen(true)}><ArrowRight className="h-4 w-4" />{copy.preview}</Button>}</div>
         </div>
       </div>
     </div> : null}
