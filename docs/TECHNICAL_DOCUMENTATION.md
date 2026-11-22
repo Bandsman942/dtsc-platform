@@ -841,10 +841,10 @@ L'interface `/enterprise-insurance/ocr` couvre UploadDocuments en UAT et Product
 Un échec de publication Vercel `too_many_routes` apparaît après une compilation Next réussie lorsque le budget de 2048 entrées est dépassé. Le matcher middleware DTSC est consolidé, toutes protections de session/CSRF sont conservées. Les endpoints HIRMS historiques servent maintenant des filtres tenant-scope et exports CSV de 500 lignes au plus ; aucun nouveau chemin API n'est créé. L'interface HIRMS comprend un rail commun pour configuration, adhérents, factures et OCR, badges, KPI et téléchargement du modèle officiel HSL. Voir `docs/HOTFIX_1132_VERCEL_ROUTES_HIRMS_DESIGN2.md`.
 
 
-## Hotfix #1218 — RETAIL documents, encaissement et rapport journalier
+## Hotfix #1221 — RETAIL documents, encaissement et rapport journalier
 
 - Paramètres de mode de fonctionnement RETAIL : la configuration et l'identité légale commerciale sont versionnées sur `EnterpriseRetailConfiguration.settingsJson`. Identité légale entreprise unique; seules les coordonnées commerciales peuvent varier par boutique. PUT restreint au propriétaire/admin et protégé par step-up et contrôle de révision. GET retourne les paramètres hérités.
 - Snapshot documentaire `EnterpriseRetailInvoiceCheckout.invoiceHeaderSnapshot` figé à la préparation; facture Finance commune reste unique. Impression A4/80 mm conserve les anciens footers et affiche RCCM/ID.NAT, téléphone, NIF lorsque disponibles.
 - POS : montant dû provenant du serveur de tarification et du panier complet, billets reçus distincts et configurables (total / vide), remise à zéro explicite; idempotence Finance inchangée.
 - API `GET /api/enterprise/:organizationId/retail/daily-close/stock-report?siteId=&date=YYYY-MM-DD&page=&pageSize=&format=json|print|xlsx|csv` : autorisation RETAIL_DAILY_CLOSE + visibilité inventaire, configuration boutique, fuseau IANA, agrégats des mouvements immuables, exclusion des ventes sans sortie de stock. JSON paginé, Excel et CSV complets bornés, impression HTML A4/PDF navigateur. Erreurs 400 filtres invalides, 403 accès désactivé/interdit, 422 trop de lignes.
-- Limites et essais : `docs/HOTFIX_1218_KIN_FOREX_RETAIL_TICKET2.md`, `docs/OWNER_E2E_1218_KIN_FOREX_TICKET2.md`.
+- Limites et essais : `docs/HOTFIX_1221_KIN_FOREX_RETAIL_TICKET2.md`, `docs/OWNER_E2E_1221_KIN_FOREX_TICKET2.md`.

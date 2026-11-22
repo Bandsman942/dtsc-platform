@@ -1,7 +1,7 @@
-# Hotfix #1218 — KIN FOREX ticket 2 (RETAIL transverse)
+# Hotfix #1221 — KIN FOREX ticket 2 (RETAIL transverse)
 
 ## État
-Branche de correctif `fix/1218-kin-forex-retail-documents-pos-stocks`. Ne pas fusionner avant CI et retour E2E propriétaire « BON ». Aucune preview Vercel ni déploiement manuel.
+Branche de correctif `fix/1219-kin-forex-retail-ticket2`. Ne pas fusionner avant CI et retour E2E propriétaire « BON ». Aucune preview Vercel ni déploiement manuel.
 
 ## Lot 1 — Encaissement POS
 Le montant dû dépend uniquement du calcul serveur de l'ensemble du panier : quantité × prix, remises, taxes et conversion Finance. Le champ « Espèces reçues » suit le total seulement tant qu'aucune saisie manuelle n'a été faite. Toute modification du panier invalide l'ancien aperçu avant de permettre la confirmation. Un bouton réinitialise l'argent reçu au total exact; une configuration entreprise/boutique permet de proposer le total ou une saisie vide. Le montant comptabilisé reste exclusivement le total vérifié serveur et non le billetage reçu. Reprise idempotente et flux Finance existants inchangés.

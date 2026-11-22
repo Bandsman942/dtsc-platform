@@ -32,6 +32,6 @@ Statut : **À EXÉCUTER / NON VALIDÉ**. L'existence de la checklist ne vaut pas
 - Captures écran desktop/mobile, factures A4/80mm, XLSX/CSV et PDF obtenu par l'impression navigateur.
 - Requêtes API autorisées/interdites et preuves d'isolation organisation/site.
 - Preuve chiffrée Finance + Stock (aucun double mouvement).
-- Commentaire propriétaire explicite : « E2E final #1218 BON » ou « KO » avec scénario.
+- Commentaire propriétaire explicite : « E2E final #1221 BON » ou « KO » avec scénario.
 
 **Pas de fusion tant que l'E2E final n'est pas validé par le propriétaire.**

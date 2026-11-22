@@ -2742,9 +2742,9 @@ Hotfix #861 (complément) : un secret CRON_SECRET Production commun réveille po
 - Référence : `docs/HOTFIX_1132_VERCEL_ROUTES_HIRMS_DESIGN2.md` ; aucune fusion avant E2E propriétaire.
 
 
-## 2026-11-22 — Hotfix #1218 (branche, validation en attente)
+## 2026-11-22 — Hotfix #1221 (branche, validation en attente)
 - KIN FOREX RETAIL : identité légale et coordonnées commerciales configurables sur factures Retail; snapshot A4/80mm.
 - POS : correction de la préinitialisation d'espèces reçues lorsque le panier change.
 - Clôture magasin Design 2.0 : rapport quotidien des mouvements de stock par boutique, exports CSV/XLSX, aperçu imprimable PDF navigateur.
-- Documentation et QA : voir `docs/HOTFIX_1218_KIN_FOREX_RETAIL_TICKET2.md` et `docs/OWNER_E2E_1218_KIN_FOREX_TICKET2.md`.
+- Documentation et QA : voir `docs/HOTFIX_1221_KIN_FOREX_RETAIL_TICKET2.md` et `docs/OWNER_E2E_1221_KIN_FOREX_TICKET2.md`.
 - **Non fusionné : attendre CI et E2E final propriétaire.**
