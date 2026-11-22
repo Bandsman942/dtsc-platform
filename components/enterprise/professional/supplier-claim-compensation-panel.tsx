@@ -21,8 +21,9 @@ type Compensation = {
   id: string; claimId: string; payableId: string; targetInvoiceNumber: string;
   amount: string; currencyCode: string; supplierReference: string; reason: string;
   status: string; revision: number; submittedAt?: string | null; approverUserId?: string | null;
-  postingJournalEntryId?: string | null; reservationActive: boolean;
-  requestedByName?: string | null; approverName?: string | null; postedByName?: string | null;
+  postingJournalEntryId?: string | null; reversalJournalEntryId?: string | null;
+  reversedAt?: string | null; reversalReason?: string | null; reservationActive: boolean;
+  requestedByName?: string | null; approverName?: string | null; postedByName?: string | null; reversedByName?: string | null;
 };
 type Preview = {
   maximum: string; targetReserved: string; targetAvailable: string;
@@ -30,13 +31,13 @@ type Preview = {
 };
 type Props = {
   organizationId: string; claim: Claim; locale: FinanceLocale; businessDate?: string;
-  canWrite: boolean; canSubmit: boolean; canApprove: boolean;
+  canWrite: boolean; canSubmit: boolean; canApprove: boolean; canManage: boolean;
   onMutated?: () => void;
 };
 const labels = (locale: FinanceLocale, fr: string, en: string) => locale === "en" ? en : fr;
 
 export function SupplierClaimCompensationPanel({
-  organizationId, claim, locale, businessDate, canWrite, canSubmit, canApprove, onMutated,
+  organizationId, claim, locale, businessDate, canWrite, canSubmit, canApprove, canManage, onMutated,
 }: Props) {
   const t = useCallback((fr: string, en: string) => labels(locale, fr, en), [locale]);
   const [query, setQuery] = useState("");
@@ -180,8 +181,10 @@ export function SupplierClaimCompensationPanel({
     await mutate({
       action, compensationId: compensation.id, revision: compensation.revision,
       ...(action === "SUBMIT_COMPENSATION" ? { approverUserId: String(form.get("approverUserId") || "") } : {}),
-      ...(["REJECT_COMPENSATION", "CANCEL_COMPENSATION_DRAFT"].includes(action)
+      ...(["REJECT_COMPENSATION", "CANCEL_COMPENSATION_DRAFT", "REVERSE_COMPENSATION"].includes(action)
         ? { reason: String(form.get("reason") || "") } : {}),
+      ...(action === "REVERSE_COMPENSATION"
+        ? { accountingDate: String(form.get("accountingDate") || "") } : {}),
     }, "Action enregistrée. La capacité a été recalculée.",
        "Action recorded. Available capacity has been recalculated.");
   }
@@ -269,7 +272,7 @@ export function SupplierClaimCompensationPanel({
         {([
           ["ALL",t("Toutes","All")],["DRAFT",t("Brouillons","Drafts")],
           ["PENDING_APPROVAL",t("En attente","Pending")],["APPROVED",t("Approuvées","Approved")],
-          ["POSTED",t("Comptabilisées","Posted")],["REJECTED",t("Rejetées","Rejected")],
+          ["POSTED",t("Comptabilisées","Posted")],["REVERSED",t("Contrepassées","Reversed")],["REJECTED",t("Rejetées","Rejected")],
           ["CANCELLED",t("Annulées","Cancelled")],
         ] as const).map(([id,label]) => <button key={id} type="button" aria-pressed={historyStatus===id}
           onClick={()=>{setHistoryStatus(id);setHistoryPage(1);}}
@@ -285,9 +288,9 @@ export function SupplierClaimCompensationPanel({
             <p className="text-xs text-dtsc-muted">{row.supplierReference} · {money(row.amount)}</p>
           </div>
           <StatusBadge tone={row.status === "POSTED" ? "success" :
-            row.status === "REJECTED" || row.status === "CANCELLED" ? "danger" : "warning"}>
+            row.status === "REJECTED" || row.status === "CANCELLED" || row.status === "REVERSED" ? "danger" : "warning"}>
             {({DRAFT:t("Brouillon","Draft"),PENDING_APPROVAL:t("En validation","Pending approval"),
-              APPROVED:t("Approuvée","Approved"),POSTED:t("Comptabilisée","Posted"),
+              APPROVED:t("Approuvée","Approved"),POSTED:t("Comptabilisée","Posted"),REVERSED:t("Contrepassée","Reversed"),
               REJECTED:t("Rejetée","Rejected"),CANCELLED:t("Annulée","Cancelled")} as Record<string,string>)[row.status] || row.status}
           </StatusBadge>
         </div>
@@ -328,6 +331,31 @@ export function SupplierClaimCompensationPanel({
         {row.status === "POSTED" ? <p className="text-xs text-dtsc-muted">{t(
           "Dette réduite et créance rapprochée par une écriture canonique. Aucune trésorerie consommée.",
           "Payable reduced and claim settled through a canonical posting. No cash consumed.")}</p> : null}
+        {row.status === "POSTED" && canManage ? <form
+          onSubmit={event => void transition(event,row,"REVERSE_COMPENSATION")}
+          className="grid min-w-0 gap-2 rounded-lg border border-amber-400/40 bg-amber-500/5 p-3">
+          <p className="text-xs font-semibold text-amber-800 dark:text-amber-200">{t(
+            "Contrepassation comptable exceptionnelle : réservée à une personne indépendante de la préparation, de la validation et de la comptabilisation. La date doit appartenir à une période ouverte.",
+            "Exceptional accounting inverse: only an actor independent of request, approval and posting may execute it. Use an open posting period.")}</p>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <Field label={t("Date de contrepassation","Reversal date")}>
+              <Input name="accountingDate" type="date" defaultValue={businessDate || ""}
+                min={row.postedAt?.slice(0,10)} required disabled={busy}/>
+            </Field>
+            <Field label={t("Motif détaillé (obligatoire)","Detailed reason (required)")}>
+              <Input name="reason" minLength={8} maxLength={1000} required disabled={busy}/>
+            </Field>
+          </div>
+          <Button type="submit" variant="outline" disabled={busy}>{t(
+            "Contrepasser et restaurer les soldes","Reverse and restore balances")}</Button>
+        </form> : null}
+        {row.status === "REVERSED" ? <div className="grid gap-1 text-xs text-amber-800 dark:text-amber-200">
+          <p className="font-semibold">{t(
+            "Écriture inverse comptabilisée ; la dette et la créance ont été restaurées sans banque.",
+            "Reversal posted; payable and claim restored without a bank flow.")}</p>
+          {row.reversedByName ? <p>{t("Contrepassée par","Reversed by")} : {row.reversedByName}</p> : null}
+          {row.reversalReason ? <p className="break-words">{t("Motif","Reason")} : {row.reversalReason}</p> : null}
+        </div> : null}
       </article>)}
       {historyPageCount > 1 ? <div className="flex items-center justify-between gap-2">
         <Button variant="outline" type="button" size="sm" disabled={historyPage <= 1}
