@@ -32,6 +32,10 @@ Les documents de vente hors circuit Retail (factures communes et pro-forma POS) 
 
 RCCM, NIF, ID.NAT et autres mentions légales sont stockés dans `Organization.settingsJson.fiscalRegistration`, référentiel déjà utilisé par les précontrôles DGI de Finance. Aucun second enregistrement légal Retail n'est maintenu. La sauvegarde synchronise les paramètres commerciaux sur `EnterpriseRetailConfiguration` et les identifiants légaux sur `Organization` dans une transaction unique avec verrouillage; les champs fiscaux existants inconnus ne sont pas effacés. La facture Retail fige un instantané de la source centrale lors de sa préparation.
 
+## Revue ROUTES-05A (dispatch immutable)
+
+Le handler historique `retail/invoices/[invoiceId]/print/handler.ts` est déplacé derrière le dispatcher canoniquement verrouillé par `docs/routing/routes-05a-retail-manifest.json`. Son adaptation d'en-tête est une évolution métier intentionnelle (Issue #1219) : nouveau blob exact `8bf9fa26923f515918f4854b6fc82fea3c977d3a` explicitement approuvé dans le manifeste, sans changer les méthodes, les paramètres de routage, la portée d'accès ni le dispatcher. `scripts/qa-routes-retail-parity.mjs` continue d'interdire tout handler non approuvé et n'accepte que cinq exceptions #1184 et la seule impression #1219. Les tests comportementaux A4/80 mm et le contrôle du tenant/boutique demeurent actifs.
+
 ## Sécurité et audit
 Paramètres versionnés sur `EnterpriseRetailConfiguration.revision`, verrou pessimiste et Zod strict. Mutations step-up et audit HIGH. Impression et rapport sous contrôle organisation et site. Aucun duplicata comptable et aucune écriture stock depuis le reporting.
 
