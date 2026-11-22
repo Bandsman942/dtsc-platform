@@ -2361,6 +2361,95 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
           expect(afterOffset.status(),await afterOffset.text()).toBe(200);
           expect((await afterOffset.json()).claim).toMatchObject({refunded:"0",compensated:"1",compensationReserved:"0",
             reserved:"0",remaining:String(paymentAmount-57),available:String(paymentAmount-57)});
+
+          // Real HTTP/PostgreSQL domain inverse, not a simulated journal
+          // update: requester, approver and poster cannot undo their offset.
+          const inverseInput={action:"REVERSE_COMPENSATION",compensationId:offsetId,revision:4,
+            reason:"Independent correction with full accounting reversal evidence",
+            accountingDate:returnBusinessContext.businessDate};
+          for(const restrictedActor of [context.owner,context.settler,context.preparer]){
+            const denied=await post(restrictedActor,base+"/payables",inverseInput);
+            expect(denied.status,JSON.stringify(denied.body)).toBe(409);
+            expect(denied.body.error).toBe("SUPPLIER_RETURN_COMPENSATION_SELF_INVERSE_FORBIDDEN");
+          }
+          await ensureStepUp(context.returnSettler,cashierPassword);
+          const inverted=await post(context.returnSettler,base+"/payables",inverseInput);
+          expect(inverted.status,JSON.stringify(inverted.body)).toBe(200);
+          expect(inverted.body.compensation).toMatchObject({status:"REVERSED",revision:5,reservationActive:false});
+          expect(Object.hasOwn(inverted.body.compensation,"reversalJournalEntryId")).toBe(false);
+          const inverseReplay=await post(context.returnSettler,base+"/payables",inverseInput);
+          expect(inverseReplay.status,JSON.stringify(inverseReplay.body)).toBe(200);
+          expect(inverseReplay.body.compensation).toMatchObject({id:offsetId,status:"REVERSED",revision:5});
+          const reversedOffset=await prisma.enterpriseSupplierClaimCompensation.findUniqueOrThrow({
+            where:{organizationId_id:{organizationId,id:offsetId}},
+          });
+          expect(reversedOffset.reversalJournalEntryId).toBeTruthy();
+          const oppositeJournal=await prisma.enterpriseJournalEntry.findUniqueOrThrow({
+            where:{id:reversedOffset.reversalJournalEntryId},include:{lines:true},
+          });
+          expect(oppositeJournal.status).toBe("POSTED");
+          expect(oppositeJournal.reversalOfEntryId).toBe(postedComp.id);
+          expect(oppositeJournal.lines).toHaveLength(2);
+          expect(oppositeJournal.totalDebit.equals(1)&&oppositeJournal.totalCredit.equals(1)).toBe(true);
+          const immutableOriginal=await prisma.enterpriseJournalEntry.findUniqueOrThrow({where:{id:postedComp.id}});
+          expect(immutableOriginal.status).toBe("REVERSED");
+          expect(await prisma.enterpriseJournalReversal.count({
+            where:{organizationId,originalEntryId:postedComp.id,reversalEntryId:oppositeJournal.id},
+          })).toBe(1);
+          const reversedAllocation=await prisma.enterprisePayableAllocation.findFirstOrThrow({
+            where:{organizationId,payableId:offsetPayable.id,sourceType:"SUPPLIER_CLAIM_COMPENSATION",sourceId:offsetId},
+          });
+          expect(reversedAllocation.status).toBe("REVERSED");
+          expect(reversedAllocation.reversedAt).toBeTruthy();
+          const restoredPayable=await prisma.enterprisePayable.findUniqueOrThrow({where:{id:offsetPayable.id}});
+          const restoredInvoice=await prisma.enterpriseSupplierInvoice.findUniqueOrThrow({where:{id:offsetInvoice.id}});
+          expect(restoredPayable.compensatedAmount.isZero()&&restoredInvoice.amountCompensated.isZero()).toBe(true);
+          expect(restoredPayable.outstandingAmount.equals(1)&&restoredInvoice.outstandingAmount.equals(1)).toBe(true);
+          expect(restoredPayable.status).toBe("OPEN");
+          expect(restoredInvoice.status).toBe("POSTED");
+          const reversedClaim=await context.owner.request.get(claimPath);
+          expect(reversedClaim.status(),await reversedClaim.text()).toBe(200);
+          expect((await reversedClaim.json()).claim).toMatchObject({compensated:"0",
+            compensationReserved:"0",remaining:String(paymentAmount-56),available:String(paymentAmount-56)});
+          const reversedHistory=await context.owner.request.get(historyPath+"&compensationStatus=REVERSED");
+          expect(reversedHistory.status(),await reversedHistory.text()).toBe(200);
+          const reversedRow=(await reversedHistory.json()).items.find(row=>row.id===offsetId);
+          expect(reversedRow).toMatchObject({status:"REVERSED",revision:5,reservationActive:false});
+          expect(Object.hasOwn(reversedRow,"reversalJournalEntryId")).toBe(false);
+          expect(await prisma.enterpriseTreasuryTransaction.count({
+            where:{organizationId,transactionType:"SUPPLIER_CLAIM_COMPENSATION"},
+          })).toBe(0);
+
+          // A second allocation against the restored SAME debt is permitted
+          // only after verifying the immutable original, opposite journal and
+          // reversal record. It restores the expected end-of-scenario balance.
+          const secondDraft=await post(context.owner,base+"/payables",{
+            ...compensationDraftInput,payableId:offsetPayable.id,amount:"1",
+            idempotencyKey:compensationDraftInput.idempotencyKey+"-reused-after-inverse",
+            supplierReference:compensationDraftInput.supplierReference+"-REUSED",
+          });
+          expect(secondDraft.status,JSON.stringify(secondDraft.body)).toBe(201);
+          const secondId=secondDraft.body.compensation.id;
+          const secondSubmit=await post(context.owner,base+"/payables",{
+            action:"SUBMIT_COMPENSATION",compensationId:secondId,revision:1,approverUserId:fixture.settler.id,
+          });
+          expect(secondSubmit.status,JSON.stringify(secondSubmit.body)).toBe(200);
+          const secondApproved=await post(context.settler,base+"/payables",{
+            action:"APPROVE_COMPENSATION",compensationId:secondId,revision:2,
+          });
+          expect(secondApproved.status,JSON.stringify(secondApproved.body)).toBe(200);
+          const secondPosting=await post(context.preparer,base+"/payables",{
+            action:"POST_COMPENSATION",compensationId:secondId,revision:3,
+          });
+          expect(secondPosting.status,JSON.stringify(secondPosting.body)).toBe(200);
+          expect(secondPosting.body.compensation).toMatchObject({status:"POSTED",revision:4});
+          const reallocated=await prisma.enterprisePayable.findUniqueOrThrow({where:{id:offsetPayable.id}});
+          expect(reallocated.compensatedAmount.equals(1)&&reallocated.outstandingAmount.isZero()).toBe(true);
+          const restoredClaimAfterReallocation=await context.owner.request.get(claimPath);
+          expect(restoredClaimAfterReallocation.status(),await restoredClaimAfterReallocation.text()).toBe(200);
+          expect((await restoredClaimAfterReallocation.json()).claim).toMatchObject({
+            compensated:"1",compensationReserved:"0",available:String(paymentAmount-57),
+          });
         } else {
           const rejectionDraft=await post(context.owner,base+"/payables",{
             ...compensationDraftInput,amount:"1",idempotencyKey:compensationDraftInput.idempotencyKey+"-rejected",
