@@ -40,8 +40,17 @@ export function mergeRetailOperatingSettings(
   const settings = asRecord(existing);
   const parsed = retailOperatingSettingsSchema.parse(value);
   if (!siteId) return { ...settings, retailOperatingSettings: parsed } as Prisma.InputJsonValue;
-  const overrides = asRecord(settings.retailSiteOperatingOverrides);
-  return { ...settings, retailSiteOperatingOverrides: { ...overrides, [siteId]: parsed } } as Prisma.InputJsonValue;
+  // Persist only fields that differ from the company defaults. This keeps
+  // untouched store settings inherited across later company-level edits.
+  const inherited = readRetailOperatingSettings(settings);
+  const overrides = { ...asRecord(settings.retailSiteOperatingOverrides) };
+  const difference = Object.fromEntries(
+    Object.entries(parsed).filter(([key, val]) =>
+      JSON.stringify(val) !== JSON.stringify(inherited[key as keyof RetailOperatingSettings])),
+  );
+  if (Object.keys(difference).length) overrides[siteId] = difference;
+  else delete overrides[siteId];
+  return { ...settings, retailSiteOperatingOverrides: overrides } as Prisma.InputJsonValue;
 }
 
 export function retailInvoiceFooterSnapshot(value: unknown, siteId: string): Prisma.InputJsonValue {

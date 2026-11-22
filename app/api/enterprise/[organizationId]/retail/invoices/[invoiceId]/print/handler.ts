@@ -66,6 +66,7 @@ export async function GET(req: Request, { params }: Params) {
     const url = new URL(req.url);
     const locale: "fr" | "en" = url.searchParams.get("lang") === "en" ? "en" : "fr";
     const paper = url.searchParams.get("paper") === "thermal" ? "thermal" : "a4";
+    const autoPrint = url.searchParams.get("auto") === "1";
     const labels = locale === "fr" ? {
       title: "Facture de vente", draft: "BROUILLON — NE VAUT PAS FACTURE ÉMISE", cancelled: "ANNULÉE — DOCUMENT SANS VALEUR DE PAIEMENT", voided: "INVALIDÉE — DOCUMENT SANS VALEUR DE PAIEMENT",
       item: "Article", qty: "Qté", unit: "Prix unitaire", amount: "Montant", subtotal: "Sous-total", discount: "Réductions", tax: "Taxes", total: "Total", paid: "Déjà réglé", due: "Reste dû",
@@ -108,7 +109,7 @@ export async function GET(req: Request, { params }: Params) {
       ${statusBanner ? `<div class="banner">${escapeHtml(statusBanner)}</div>` : ""}
       <h1>${escapeHtml(labels.title)}</h1><div class="meta"><div><strong>${escapeHtml(labels.invoiceNumber)}:</strong> ${escapeHtml(invoice.number)}</div><div><strong>${escapeHtml(labels.date)}:</strong> ${escapeHtml(localDate(invoice.invoiceDate, locale, timezone))}</div><div><strong>${escapeHtml(labels.site)}:</strong> ${escapeHtml(checkout.site.name)}</div><div><strong>${escapeHtml(labels.status)}:</strong> ${escapeHtml(localizedStatus)}</div><div><strong>${escapeHtml(labels.customer)}:</strong> ${escapeHtml(customer?.displayName || customer?.legalName || "—")}</div><div><strong>${escapeHtml(labels.preparer)}:</strong> ${escapeHtml(preparer?.name || "—")}</div></div>
       <table><thead><tr><th>${escapeHtml(labels.item)}</th><th class="numeric">${escapeHtml(labels.qty)}</th><th class="numeric">${escapeHtml(labels.unit)}</th><th class="numeric">${escapeHtml(labels.amount)}</th></tr></thead><tbody>${tableRows}</tbody></table>
-      <div class="totals">${summaryRows}</div><div class="footer">${footerLines.map((line) => `<p>${escapeHtml(line)}</p>`).join("")}<p>${escapeHtml(labels.note)}</p></div></body></html>`;
+      <div class="totals">${summaryRows}</div><div class="footer">${footerLines.map((line) => `<p>${escapeHtml(line)}</p>`).join("")}<p>${escapeHtml(labels.note)}</p></div>${autoPrint && !statusBanner ? `<script>window.addEventListener("load",function(){window.print()})</script>` : ""}</body></html>`;
     await writeApiLog({ request: req, startedAt, statusCode: 200, userId: auth.session.userId, metadata: { organizationId, domain: "retail-invoice-print", invoiceId, siteId: checkout.siteId, paper, locale } });
     return new NextResponse(html, { status: 200, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "private, no-store", "x-content-type-options": "nosniff", "content-disposition": `inline; filename="invoice-${invoice.id}.html"` } });
   } catch (error) {

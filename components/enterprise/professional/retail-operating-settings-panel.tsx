@@ -125,7 +125,7 @@ export function RetailOperatingSettingsPanel({ organizationId, locale }: { organ
             <textarea maxLength={300} rows={2} className="w-full min-w-0 rounded-xl border border-dtsc-border bg-dtsc-page p-3 text-sm text-dtsc-ink" placeholder={locale === "fr" ? suggested[index] : "Optional customer notice"} value={(locale === "fr" ? settings.footerLinesFr : settings.footerLinesEn)[index] || ""} onChange={(event) => {
               const key = locale === "fr" ? "footerLinesFr" : "footerLinesEn";
               const copy = [...settings[key]]; copy[index] = event.target.value;
-              change(key, copy.slice(0, 2).filter((line, i) => line.trim().length > 0 || (i === 0 && copy[1]?.trim().length > 0)));
+              change(key, copy.slice(0, 2).map((line) => line.trim()).filter(Boolean));
             }} />
           </label>)}
         </div>
@@ -134,7 +134,10 @@ export function RetailOperatingSettingsPanel({ organizationId, locale }: { organ
           <label className="grid gap-1 text-xs font-bold text-dtsc-ink">{t.password}<input type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} className="min-h-11 min-w-0 rounded-xl border border-dtsc-border bg-dtsc-page px-3 text-base" /></label>
           <label className="grid gap-1 text-xs font-bold text-dtsc-ink">{t.totp}<input inputMode="numeric" autoComplete="one-time-code" value={totp} onChange={(event) => setTotp(event.target.value)} className="min-h-11 min-w-0 rounded-xl border border-dtsc-border bg-dtsc-page px-3 text-base" /></label>
         </div>
-        <div data-responsive-actions className="flex flex-wrap justify-end"><Button type="button" disabled={!password || saving} onClick={() => void submit()}>{saving ? t.busy : t.save}</Button></div>
+        <div data-responsive-actions className="flex flex-wrap justify-end gap-2">
+          {siteId && data?.isOverridden ? <Button type="button" variant="outline" disabled={saving} onClick={() => setSettings(data.inherited)}>{locale === "fr" ? "Rétablir les réglages entreprise" : "Restore company defaults"}</Button> : null}
+          <Button type="button" disabled={!password || saving} onClick={() => void submit()}>{saving ? t.busy : t.save}</Button>
+        </div>
       </> : null}
     </section>
   );

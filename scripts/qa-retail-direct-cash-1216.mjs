@@ -40,6 +40,11 @@ const separate = { ...enabled, directCheckoutEnabled: false, defaultPaper: "A4" 
 const withStore = mergeRetailOperatingSettings(root, separate, "site-B");
 assert.equal(readRetailOperatingSettings(withStore, "site-A").directCheckoutEnabled, true);
 assert.equal(readRetailOperatingSettings(withStore, "site-B").directCheckoutEnabled, false);
+const newerCompany = mergeRetailOperatingSettings(withStore, { ...enabled, quickPrintEnabled: false });
+assert.equal(readRetailOperatingSettings(newerCompany, "site-B").quickPrintEnabled, false, "Unmodified store settings retain inheritance");
+const reverted = mergeRetailOperatingSettings(withStore, enabled, "site-B");
+assert.equal(readRetailOperatingSettings(reverted, "site-B").directCheckoutEnabled, true);
+assert.equal(Boolean(reverted.retailSiteOperatingOverrides["site-B"]), false, "Company values clear redundant store overrides");
 const historical = retailInvoiceFooterSnapshot(root, "site-A");
 assert.deepEqual(Array.from(readRetailInvoiceFooterSnapshot(historical, "fr")), enabled.footerLinesFr);
 assert.deepEqual(Array.from(readRetailInvoiceFooterSnapshot(historical, "en")), []);
@@ -87,7 +92,7 @@ run("Only owner can configure and each change is audited inside transaction", ad
 run("Client only pays net, prints after completion", flow, [
   /data-retail-direct-cash/, /cashTendered/, /cashChange/, /copy\.directFinal/, /value\?\.status !== "COMPLETED"/, /popup\.location\.replace/,
 ]);
-run("Printed footers come from the historical invoice", print, [/readRetailInvoiceFooterSnapshot\(checkout\.invoiceFooterSnapshot, locale\)/, /escapeHtml\(line\)/]);
+run("Printed footers come from the historical invoice", print, [/readRetailInvoiceFooterSnapshot\(checkout\.invoiceFooterSnapshot, locale\)/, /escapeHtml\(line\)/, /autoPrint/]);
 run("Available inside Enterprise Administration", page, [/COMMERCE_RETAIL/, /RetailOperatingSettingsPanel/]);
 run("Migration and Prisma indexes are additive", migration, [/ADD COLUMN "invoiceFooterSnapshot" JSONB/, /CREATE TABLE "EnterpriseRetailDirectCheckoutAttempt"/, /idempotencyKey_key/]);
 run("Model is scoped and idempotent", prisma, [/organizationId/, /actorUserId/, /@@unique\(\[organizationId, idempotencyKey\]\)/]);

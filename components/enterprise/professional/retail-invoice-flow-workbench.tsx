@@ -366,7 +366,7 @@ export function RetailInvoiceFlowWorkbench({ organizationId, organizationName, l
       await fetch(`/api/enterprise/${organizationId}/retail/active-customer`, { method: "DELETE" }).catch(() => null);
       window.dispatchEvent(new CustomEvent("dtsc-retail-customer-changed", { detail: { organizationId } }));
       toastSuccess(copy.directReady);
-      const printHref = `/api/enterprise/${encodeURIComponent(organizationId)}/retail/invoices/${encodeURIComponent(value.invoiceId)}/print?paper=${paper}&lang=${locale}`;
+      const printHref = `/api/enterprise/${encodeURIComponent(organizationId)}/retail/invoices/${encodeURIComponent(value.invoiceId)}/print?paper=${paper}&lang=${locale}&auto=1`;
       if (popup && !popup.closed) popup.location.replace(printHref);
       await load(1, siteFilter);
     } catch (cause) {

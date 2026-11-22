@@ -70,7 +70,11 @@ export async function renderRetailModulePage(moduleCode: "RETAIL_POS" | "MOBILE_
   }
   const posConfiguration = moduleCode === "RETAIL_POS"
     ? await prisma.enterpriseRetailConfiguration.findUnique({ where: { organizationId }, select: { settingsJson: true } }) : null;
-  const simplifiedPos = moduleCode === "RETAIL_POS" && !canManagePos && readRetailOperatingSettings(posConfiguration?.settingsJson, options?.siteId).simplifiedNavigationEnabled;
+  // A single-store worker should receive the store-specific navigation even
+  // when opening the POS directory without an explicit siteId query.
+  const navigationSiteId = options?.siteId || (posAssignments.length === 1 ? posAssignments[0].siteId : undefined);
+  const simplifiedPos = moduleCode === "RETAIL_POS" && !canManagePos &&
+    readRetailOperatingSettings(posConfiguration?.settingsJson, navigationSiteId).simplifiedNavigationEnabled;
   const invoiceCheckoutEnabled = Boolean(posConfiguration?.settingsJson && typeof posConfiguration.settingsJson === "object" && !Array.isArray(posConfiguration.settingsJson) && posConfiguration.settingsJson.invoiceCheckoutEnabled === true);
   if (invoiceCheckoutEnabled && retailStaffIsolationIsEnabled(posConfiguration?.settingsJson) && posAssignments.some((assignment) => hasExplicitRetailSelfApproval({ ...assignment, isActive: true }, "INVOICE"))) posCapabilities.add("INVOICE_WORKFLOW");
   const companySites = moduleCode === "RETAIL_DAILY_CLOSE" && canManagePos
