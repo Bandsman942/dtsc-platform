@@ -482,7 +482,8 @@
     "qa:provider-settlement-preflight:postgres": "node scripts/qa-provider-settlement-preflight-postgres.mjs",
     "qa:public-app-install-1178": "node scripts/qa-public-app-install-1178.mjs",
     "qa:hotfix-support-collaboration": "node scripts/qa-hotfix-support-collaboration-20261115.mjs",
-    "qa:erp-seven-design2-1200": "node scripts/qa-erp-seven-design2-1200.mjs"
+    "qa:erp-seven-design2-1200": "node scripts/qa-erp-seven-design2-1200.mjs",
+    "qa:retail-kin-forex-ticket2-1218": "node scripts/qa-retail-kin-forex-ticket2-1218.mjs"
   },
   "dependencies": {
     "@ai-sdk/gateway": "2.0.27",
