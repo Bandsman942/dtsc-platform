@@ -48,7 +48,12 @@ export async function reverseJournalEntryTx(
     if (linked) throw new EnterpriseAccountingError("SUPPLIER_RETURN_DOMAIN_REVERSAL_REQUIRED",409);
   }
 
-  if (original.postingEvent === "SUPPLIER_CLAIM_COMPENSATION_POSTED")
+  // Generic journal reversal can never detach a supplier-claim offset from
+  // its payable and allocation. Only the explicit atomic domain inverse may
+  // reverse this posting, after verifying its own business evidence.
+  if (original.postingEvent === "SUPPLIER_CLAIM_COMPENSATION_POSTED" &&
+      (options?.authorization !== "DOMAIN_INVERSE" ||
+        original.sourceEntityType !== "EnterpriseSupplierClaimCompensation"))
     throw new EnterpriseAccountingError("SUPPLIER_RETURN_DOMAIN_REVERSAL_REQUIRED",409);
   if (original.postingEvent === "SUPPLIER_INVOICE_POSTED" && original.sourceEntityId &&
       await tx.enterpriseSupplierClaimCompensation.count({ where: {
