@@ -36,7 +36,12 @@ const mocks = {
   "@/lib/enterprise/inventory/lot-allocation": {},
   // Independent QA executes this proof with full strict journal fixtures below.
   "@/lib/enterprise/accounting/supplier-compensation-reversed-allocation-proof": {
-    assertReversedSupplierCompensationAllocationsTx: async () => {},
+    assertReversedSupplierCompensationAllocationsTx: async () => {
+      // Legacy target-preflight VM: any non-reversed allocation stays blocked.
+      // A separate executable QA validates complete journal-inverse provenance.
+      if(cmpAllocations)throw Object.assign(new Error("unproven allocation"),{
+        code:"SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED",status:409});
+    },
   },
   "@/lib/enterprise/retail/invoice-stock-holds": {},
   "@/lib/enterprise/retail/inventory-policy": {},
