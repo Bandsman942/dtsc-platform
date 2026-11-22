@@ -308,10 +308,10 @@
       "reason": "Own-invoice approval queue is scoped to assigned store"
     },
     {
-      "issue": 1216,
+      "issue": 1219,
       "handlerPath": "app/api/enterprise/[organizationId]/retail/invoices/[invoiceId]/print/handler.ts",
-      "blobSha": "e806d5a3d0db8620263a3fb4378b2cae0b428a7d",
-      "reason": "Cashierless mode: store-scoped historical invoice footer snapshot and optional post-payment quick-print"
+      "blobSha": "8bf9fa26923f515918f4854b6fc82fea3c977d3a",
+      "reason": "Reviewed #1219 legal-header invoice snapshot (RCCM/ID.NAT/NIF/telephone) in A4 and 80mm; existing store scopes, footer snapshot, draft watermark and dispatch methods preserved; QA qa-hotfix-1042-retail-invoice-print and qa-retail-kin-forex-ticket2-1218."
     }
   ]
 }

@@ -8,6 +8,7 @@ import { authorizeRetailRequest, retailErrorResponse } from "@/lib/enterprise/re
 import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
 import {
   DEFAULT_RETAIL_OPERATING_SETTINGS, mergeRetailOperatingSettings,
+  mergeRetailLegalIdentity, readRetailLegalIdentity, retailLegalIdentitySchema,
   readRetailOperatingSettings, retailOperatingSettingsSchema,
 } from "@/lib/enterprise/retail/operating-settings";
 import { RETAIL_OWNER_ROLES } from "@/lib/enterprise/retail/site-access";
@@ -18,6 +19,7 @@ const updateSchema = z.object({
   revision: z.number().int().positive(),
   siteId: z.string().trim().min(1).max(191).nullable(),
   settings: retailOperatingSettingsSchema,
+  legalIdentity: retailLegalIdentitySchema.optional(),
 }).strict();
 
 async function owner(req: Request, organizationId: string, mutation: boolean) {
@@ -52,7 +54,7 @@ export async function GET(req: Request, { params }: Params) {
     const siteId = new URL(req.url).searchParams.get("siteId") || null;
     if (siteId && siteId.length > 191) throw new EnterpriseRetailError("RETAIL_SITE_ACCESS_DENIED", 400);
     await activeSite(organizationId, siteId);
-    const [configuration, sites] = await Promise.all([
+    const [configuration, sites, organization] = await Promise.all([
       prisma.enterpriseRetailConfiguration.findUnique({
         where: { organizationId }, select: { revision: true, settingsJson: true },
       }),
@@ -60,13 +62,18 @@ export async function GET(req: Request, { params }: Params) {
         where: { organizationId, status: "ACTIVE", archivedAt: null },
         select: { id: true, name: true, code: true }, take: 200, orderBy: { name: "asc" },
       }),
+      prisma.organization.findFirst({
+        where: { id: organizationId, status: "ACTIVE", deletedAt: null }, select: { settingsJson: true },
+      }),
     ]);
+    if (!organization) throw new EnterpriseRetailError("RETAIL_REFERENCE_INVALID", 404);
     if (!configuration) throw new EnterpriseRetailError("RETAIL_CONFIGURATION_REQUIRED", 409);
     const settings = readRetailOperatingSettings(configuration.settingsJson, siteId);
     const inherited = readRetailOperatingSettings(configuration.settingsJson);
     await writeApiLog({ request: req, startedAt, statusCode: 200, userId: auth.session.userId,
       metadata: { organizationId, domain: "retail-operating-settings", action: "read" } });
     return NextResponse.json({ revision: configuration.revision, settings, inherited,
+      legalIdentity: readRetailLegalIdentity(organization.settingsJson),
       isOverridden: Boolean(siteId && configuration.settingsJson &&
         typeof configuration.settingsJson === "object" && !Array.isArray(configuration.settingsJson) &&
         (configuration.settingsJson.retailSiteOperatingOverrides as Record<string, unknown> | undefined)?.[siteId]),
@@ -88,12 +95,31 @@ export async function PUT(req: Request, { params }: Params) {
   if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "RETAIL_OPERATING_SETTINGS_INPUT_INVALID", req);
   try {
     await activeSite(organizationId, parsed.data.siteId);
+    if (parsed.data.siteId && parsed.data.legalIdentity) {
+      throw new EnterpriseRetailError("RETAIL_OPERATING_SETTINGS_INVALID", 400);
+    }
     const result = await prisma.$transaction(async (tx) => {
       await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterpriseRetailConfiguration" WHERE "organizationId" = ${organizationId} FOR UPDATE`);
       const existing = await tx.enterpriseRetailConfiguration.findUnique({ where: { organizationId } });
       if (!existing) throw new EnterpriseRetailError("RETAIL_CONFIGURATION_REQUIRED", 409);
       if (existing.revision !== parsed.data.revision) throw new EnterpriseRetailError("RETAIL_OPERATING_SETTINGS_CONFLICT", 409);
       const current = readRetailOperatingSettings(existing.settingsJson, parsed.data.siteId);
+      let legalBefore = undefined as ReturnType<typeof readRetailLegalIdentity> | undefined;
+      if (parsed.data.legalIdentity) {
+        // A single company-scoped canonical fiscal identity is shared with Finance.
+        // Lock the Organization row to preserve concurrent changes in its settings.
+        await tx.$executeRaw(Prisma.sql`SELECT id FROM "Organization" WHERE id = ${organizationId} FOR UPDATE`);
+        const organization = await tx.organization.findFirst({
+          where: { id: organizationId, status: "ACTIVE", deletedAt: null },
+          select: { settingsJson: true },
+        });
+        if (!organization) throw new EnterpriseRetailError("RETAIL_REFERENCE_INVALID", 404);
+        legalBefore = readRetailLegalIdentity(organization.settingsJson);
+        await tx.organization.update({
+          where: { id: organizationId },
+          data: { settingsJson: mergeRetailLegalIdentity(organization.settingsJson, parsed.data.legalIdentity) },
+        });
+      }
       if (parsed.data.settings.directCheckoutEnabled) {
         const flags = existing.settingsJson;
         if (!flags || typeof flags !== "object" || Array.isArray(flags) ||
@@ -101,16 +127,19 @@ export async function PUT(req: Request, { params }: Params) {
           throw new EnterpriseRetailError("RETAIL_INVOICE_CHECKOUT_NOT_ACTIVE", 409);
         }
       }
+      const nextSettings = mergeRetailOperatingSettings(existing.settingsJson, parsed.data.settings, parsed.data.siteId);
+      const nextJson = nextSettings;
       const updated = await tx.enterpriseRetailConfiguration.updateMany({
         where: { organizationId, revision: parsed.data.revision },
-        data: { settingsJson: mergeRetailOperatingSettings(existing.settingsJson, parsed.data.settings, parsed.data.siteId),
+        data: { settingsJson: nextJson,
           updatedByUserId: auth.session.userId, revision: { increment: 1 } },
       });
       if (updated.count !== 1) throw new EnterpriseRetailError("RETAIL_OPERATING_SETTINGS_CONFLICT", 409);
       await tx.auditLog.create({ data: {
         organizationId, userId: auth.session.userId, action: "ENTERPRISE_RETAIL_OPERATING_MODE_UPDATED",
         entity: "EnterpriseRetailConfiguration", entityId: existing.id, riskLevel: "HIGH",
-        beforeJson: current, afterJson: parsed.data.settings,
+        beforeJson: { settings: current, legalIdentity: legalBefore },
+        afterJson: { settings: parsed.data.settings, legalIdentity: parsed.data.legalIdentity },
         metadata: { organizationId, siteId: parsed.data.siteId, revision: existing.revision + 1 },
       } });
       return { revision: existing.revision + 1, settings: parsed.data.settings };

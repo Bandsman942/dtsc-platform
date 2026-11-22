@@ -19,7 +19,7 @@ import { RETAIL_SECTOR_CODE } from "@/lib/enterprise/retail/constants";
 import { requireRetailSiteCapability } from "@/lib/enterprise/retail/site-access";
 import { withRetailTransactionRetry } from "@/lib/enterprise/retail/transaction-retry";
 import { prisma } from "@/lib/prisma";
-import { retailInvoiceFooterSnapshot } from "@/lib/enterprise/retail/operating-settings";
+import { retailInvoiceFooterSnapshot, retailInvoiceHeaderSnapshot } from "@/lib/enterprise/retail/operating-settings";
 
 export const retailInvoicePrepareSchema = z.object({
   idempotencyKey: z.string().trim().min(8).max(160),
@@ -106,9 +106,9 @@ export async function prepareRetailInvoice(organizationId: string, actorUserId: 
       return { checkout: existing, invoice: existing.invoice, stockWarnings: [], idempotent: true };
     }
     const [organization, configuration, warehouse, catalogs, inventoryItems] = await Promise.all([
-      tx.organization.findFirst({ where: { id: organizationId, organizationType: "CLIENT", status: "ACTIVE", deletedAt: null, sectorCode: RETAIL_SECTOR_CODE }, select: { id: true, timezone: true } }),
+      tx.organization.findFirst({ where: { id: organizationId, organizationType: "CLIENT", status: "ACTIVE", deletedAt: null, sectorCode: RETAIL_SECTOR_CODE }, select: { id: true, name: true, phone: true, email: true, address: true, timezone: true, settingsJson: true } }),
       tx.enterpriseRetailConfiguration.findUnique({ where: { organizationId }, select: { settingsJson: true } }),
-      tx.enterpriseWarehouse.findFirst({ where: { id: input.warehouseId, organizationId, siteId: input.siteId, site: { status: "ACTIVE", archivedAt: null }, status: "ACTIVE", archivedAt: null }, select: { id: true } }),
+      tx.enterpriseWarehouse.findFirst({ where: { id: input.warehouseId, organizationId, siteId: input.siteId, site: { status: "ACTIVE", archivedAt: null }, status: "ACTIVE", archivedAt: null }, select: { id: true, site: { select: { name: true, addressLine1: true, addressLine2: true, city: true, countryCode: true } } } }),
       tx.enterpriseCatalogItem.findMany({ where: { organizationId, id: { in: [...uniqueItems] }, status: "ACTIVE", archivedAt: null }, select: { id: true, name: true, currency: true, trackInventory: true } }),
       tx.enterpriseInventoryItem.findMany({ where: { organizationId, catalogItemId: { in: [...uniqueItems] }, status: "ACTIVE", archivedAt: null }, select: { id: true, catalogItemId: true, lotTracking: true, expiryTracking: true } }),
     ]);
@@ -221,6 +221,7 @@ export async function prepareRetailInvoice(organizationId: string, actorUserId: 
         organizationId, salesInvoiceId: invoice.id, siteId: input.siteId, warehouseId: input.warehouseId,
         idempotencyKey: input.idempotencyKey, requestFingerprint, preparedByUserId: actorUserId,
         invoiceFooterSnapshot: retailInvoiceFooterSnapshot(configuration?.settingsJson, input.siteId),
+        invoiceHeaderSnapshot: retailInvoiceHeaderSnapshot(configuration?.settingsJson, input.siteId, organization, warehouse.site),
       },
     });
     await tx.enterpriseRetailInvoiceCheckoutLine.createMany({

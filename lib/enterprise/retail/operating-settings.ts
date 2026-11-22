@@ -9,6 +9,17 @@ export const retailOperatingSettingsSchema = z.object({
   defaultPaper: z.enum(["THERMAL_80MM", "A4"]),
   footerLinesFr: z.array(z.string().trim().min(1).max(300)).max(4),
   footerLinesEn: z.array(z.string().trim().min(1).max(300)).max(4),
+  cashTenderedDefault: z.enum(["TOTAL", "EMPTY"]).default("TOTAL"),
+  stockReportEnabled: z.boolean().default(true),
+  stockReportIncludeZeroMovement: z.boolean().default(true),
+  stockReportIncludeReserved: z.boolean().default(true),
+  stockReportIncludeLots: z.boolean().default(false),
+  stockReportIncludeExpiry: z.boolean().default(false),
+  stockReportDefaultFormat: z.enum(["PDF", "XLSX", "CSV"]).default("PDF"),
+  siteTradeName: z.string().trim().max(160).default(""),
+  sitePhone: z.string().trim().max(60).default(""),
+  siteEmail: z.string().trim().max(150).default(""),
+  siteAddress: z.string().trim().max(320).default(""),
 }).strict();
 
 export type RetailOperatingSettings = z.infer<typeof retailOperatingSettingsSchema>;
@@ -19,6 +30,14 @@ export const DEFAULT_RETAIL_OPERATING_SETTINGS: RetailOperatingSettings = {
   defaultPaper: "THERMAL_80MM",
   footerLinesFr: [],
   footerLinesEn: [],
+  cashTenderedDefault: "TOTAL",
+  stockReportEnabled: true,
+  stockReportIncludeZeroMovement: true,
+  stockReportIncludeReserved: true,
+  stockReportIncludeLots: false,
+  stockReportIncludeExpiry: false,
+  stockReportDefaultFormat: "PDF",
+  siteTradeName: "", sitePhone: "", siteEmail: "", siteAddress: "",
 };
 const partialSchema = retailOperatingSettingsSchema.partial();
 const asRecord = (value: unknown): Record<string, unknown> =>
@@ -62,4 +81,70 @@ export function readRetailInvoiceFooterSnapshot(value: unknown, locale: "fr" | "
   const snapshot = asRecord(value)[locale];
   return Array.isArray(snapshot) ? snapshot.filter((line): line is string =>
     typeof line === "string" && line.trim().length > 0 && line.length <= 300).slice(0, 4) : [];
+}
+
+/** The registered legal entity is company-scoped. Site overrides can change
+ * contact/branding only; they never create a new legal issuer. */
+export const retailLegalIdentitySchema = z.object({
+  legalName: z.string().trim().max(180).default(""),
+  tradeName: z.string().trim().max(180).default(""),
+  rccm: z.string().trim().max(100).default(""),
+  idNat: z.string().trim().max(100).default(""),
+  nif: z.string().trim().max(100).default(""),
+  address: z.string().trim().max(320).default(""),
+  phone: z.string().trim().max(60).default(""),
+  email: z.string().trim().max(150).default(""),
+  website: z.string().trim().max(180).default(""),
+}).strict();
+export type RetailLegalIdentity = z.infer<typeof retailLegalIdentitySchema>;
+
+export function readRetailLegalIdentity(value: unknown): RetailLegalIdentity {
+  const root = asRecord(value);
+  // Canonical company registration, also consumed by Finance DGI readiness.
+  const registration = asRecord(root.fiscalRegistration);
+  const known = new Set(Object.keys(retailLegalIdentitySchema.shape));
+  // Finance may store additional fiscal registration metadata. Ignore those
+  // unknown read fields while preserving them on writes.
+  const parsed = retailLegalIdentitySchema.safeParse(
+    Object.fromEntries(Object.entries(registration).filter(([key]) => known.has(key))),
+  );
+  if (!parsed.success) throw new EnterpriseRetailError("RETAIL_OPERATING_SETTINGS_INVALID", 409);
+  return parsed.data;
+}
+
+export function mergeRetailLegalIdentity(value: unknown, identity: RetailLegalIdentity): Prisma.InputJsonValue {
+  const root = asRecord(value);
+  return { ...root, fiscalRegistration: { ...asRecord(root.fiscalRegistration), ...retailLegalIdentitySchema.parse(identity) } } as Prisma.InputJsonValue;
+}
+
+export const retailInvoiceHeaderSchema = z.object({
+  legalName: z.string().max(180), tradeName: z.string().max(180),
+  phone: z.string().max(60), email: z.string().max(150),
+  address: z.string().max(320), website: z.string().max(180),
+  rccm: z.string().max(100), idNat: z.string().max(100), nif: z.string().max(100),
+}).strict();
+export type RetailInvoiceHeader = z.infer<typeof retailInvoiceHeaderSchema>;
+
+/** Freeze the legal identity and local contact data at invoice preparation. */
+export function retailInvoiceHeaderSnapshot(
+  value: unknown, siteId: string,
+  organization: { name: string; phone?: string | null; email?: string | null; address?: string | null; settingsJson?: Prisma.JsonValue | null },
+  site: { name: string; addressLine1?: string | null; addressLine2?: string | null; city?: string | null; countryCode?: string | null },
+): Prisma.InputJsonValue {
+  const legal = readRetailLegalIdentity(organization.settingsJson);
+  const store = readRetailOperatingSettings(value, siteId);
+  const localAddress = [site.addressLine1, site.addressLine2, site.city, site.countryCode].filter(Boolean).join(", ");
+  return retailInvoiceHeaderSchema.parse({
+    legalName: legal.legalName || organization.name,
+    tradeName: store.siteTradeName || legal.tradeName || site.name,
+    phone: store.sitePhone || legal.phone || organization.phone || "",
+    email: store.siteEmail || legal.email || organization.email || "",
+    address: store.siteAddress || localAddress || legal.address || organization.address || "",
+    website: legal.website, rccm: legal.rccm, idNat: legal.idNat, nif: legal.nif,
+  }) as Prisma.InputJsonValue;
+}
+
+export function readRetailInvoiceHeaderSnapshot(value: unknown): RetailInvoiceHeader | null {
+  const parsed = retailInvoiceHeaderSchema.safeParse(value);
+  return parsed.success ? parsed.data : null;
 }

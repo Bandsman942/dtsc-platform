@@ -1,0 +1,45 @@
+import { readFileSync, existsSync } from "node:fs";
+import assert from "node:assert/strict";
+
+const read = (path) => readFileSync(path, "utf8");
+const operating = read("lib/enterprise/retail/operating-settings.ts");
+const configApi = read("app/api/enterprise/[organizationId]/retail/operating-settings/route.ts");
+const pos = read("components/enterprise/professional/retail-invoice-flow-workbench.tsx");
+const print = read("app/api/enterprise/[organizationId]/retail/invoices/[invoiceId]/print/handler.ts");
+const invoice = read("lib/enterprise/retail/invoice-checkout.ts");
+const stock = read("app/api/enterprise/[organizationId]/retail/daily-close/stock-report/route.ts");
+const close = read("components/enterprise/professional/retail-daily-close-workspace.tsx");
+const schema = read("prisma/enterprise-retail-invoice-checkout.prisma");
+for (const property of ["cashTenderedDefault", "stockReportEnabled", "sitePhone", "siteAddress", "retailLegalIdentitySchema", "rccm", "idNat"]) {
+  assert.ok(operating.includes(property), "missing settings contract " + property);
+}
+assert.match(configApi, /hasRecentStepUp/);
+assert.match(configApi, /mergeRetailLegalIdentity/);
+assert.match(configApi, /tx\.organization\.update/);
+assert.match(configApi, /readRetailLegalIdentity\(organization\.settingsJson\)/);
+assert.doesNotMatch(configApi, /mergeRetailLegalIdentity\(nextSettings/);
+assert.match(operating, /fiscalRegistration/);
+assert.match(invoice, /settingsJson: true/);
+assert.match(configApi, /revision: \{ increment: 1 \}/);
+assert.match(pos, /cashTenderedEdited\.current/);
+assert.match(pos, /pricing\?\.grandTotal/);
+assert.match(pos, /setPricing\(null\); setPricingLoading\(true\)/);
+assert.match(pos, /expectedGrandTotal: pricing\.grandTotal/);
+assert.match(pos, /cashTenderedEdited\.current = true/);
+assert.match(invoice, /invoiceHeaderSnapshot: retailInvoiceHeaderSnapshot/);
+assert.match(print, /readRetailInvoiceHeaderSnapshot/);
+assert.match(print, /identity\.rccm/);
+assert.match(print, /identity\.idNat/);
+assert.match(schema, /invoiceHeaderSnapshot\s+Json\?/);
+assert.ok(existsSync("prisma/migrations/20261122200000_retail_invoice_header_snapshot_1218/migration.sql"));
+assert.match(stock, /civilMidnightUtc\(date, timezone\)/);
+assert.match(stock, /civilMidnightUtc\(followingCivilDate\(date\), timezone\)/);
+assert.match(stock, /retailInventoryVisibleSites/);
+assert.match(stock, /SALE_FULFILLMENT/);
+assert.match(stock, /enterpriseStockMovement\.groupBy/);
+assert.match(stock, /spreadsheet viewers against formula injection/);
+assert.match(stock, /new ExcelJS\.Workbook/);
+assert.match(stock, /window\.print/);
+assert.match(close, /id="retail-close-stock-report"/);
+assert.match(close, /stockReportUrl\("xlsx"\)/);
+console.log("QA RETAIL ticket KIN FOREX #1218: static contract checks PASS. Authenticated E2E still requires owner validation.");

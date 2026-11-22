@@ -16,6 +16,7 @@ function declaredIdentity(json: Prisma.JsonValue | null | undefined) {
   return {
     nif: typeof declared.nif === "string" ? declared.nif : null,
     rccm: typeof declared.rccm === "string" ? declared.rccm : null,
+    legalName: typeof declared.legalName === "string" && declared.legalName.trim() ? declared.legalName.trim() : null,
   };
 }
 export async function GET(req: Request, { params }: Params) {
@@ -41,7 +42,7 @@ export async function GET(req: Request, { params }: Params) {
     const fiscal = declaredIdentity(organization.settingsJson);
     const report = evaluateDgiReadiness({
       companyCountry: normalizeTaxCountryCode(organization.country),
-      seller: { legalName: organization.name, nif: fiscal.nif, rccm: fiscal.rccm, address: organization.address },
+      seller: { legalName: fiscal.legalName || organization.name, nif: fiscal.nif, rccm: fiscal.rccm, address: organization.address },
       buyer: { legalName: customer.legalName, nif: customer.taxIdentifier },
       invoice: {
         number: invoice.number, issueDate: invoice.issuedAt,

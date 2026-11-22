@@ -10,16 +10,16 @@ assert.equal(manifest.routes.length, 24);
 // changes to a moved business handler must be explicit, per-issue and
 // pinned to the new Git blob, rather than disabling routing parity wholesale.
 const approvedChanges = new Map((manifest.approvedHandlerChanges || []).map(change => {
-  assert.ok([1184, 1216].includes(change.issue), "Only reviewed Retail hotfix #1184 and cashierless print #1216 may amend ROUTES-05A handlers");
+  assert.ok([1184, 1219].includes(change.issue), "Only reviewed Retail hotfix #1184 and KIN FOREX print #1219 may amend ROUTES-05A handlers");
   assert.match(change.blobSha, /^[0-9a-f]{40}$/, "Approved handler must specify its exact Git blob");
   assert.ok(manifest.routes.some(route => route.handlerPath === change.handlerPath), "Approved handler must exist in ROUTES-05A");
   return [change.handlerPath, change];
 }));
 assert.equal(approvedChanges.size, (manifest.approvedHandlerChanges || []).length, "Duplicate approved handler path");
-assert.equal(approvedChanges.size, 6, "Only five #1184 handlers and the single #1216 print handler may depart from baseline");
+assert.equal(approvedChanges.size, 6, "Only five #1184 handlers and the single #1219 print handler may depart from baseline");
 assert.equal((manifest.approvedHandlerChanges || []).filter(change => change.issue === 1184).length, 5);
-const printChange = (manifest.approvedHandlerChanges || []).filter(change => change.issue === 1216);
-assert.equal(printChange.length, 1, "Only one #1216 print-handler exception is permitted");
+const printChange = (manifest.approvedHandlerChanges || []).filter(change => change.issue === 1219);
+assert.equal(printChange.length, 1, "Only one #1219 print-handler exception is permitted");
 assert.equal(printChange[0].handlerPath, "app/api/enterprise/[organizationId]/retail/invoices/[invoiceId]/print/handler.ts", "Cashierless exception must remain print-only");
 for (const route of manifest.routes) {
   assert.equal(execFileSync("git", ["rev-parse", manifest.baselineCommit + ":" + route.originalPath], { encoding: "utf8" }).trim(), route.originalBlobSha, "Manifest SHA must match the delivered baseline");
@@ -45,4 +45,4 @@ assert.equal(vercelBuildCapacity(2000, 2048).remainingRules, 48);
 assert.equal(vercelBuildCapacity(2049, 2048).remainingRules, -1);
 assert.throws(() => vercelBuildCapacity(-1, 2048));
 assert.throws(() => sourceRouteCapacity({ baseline: 915, current: NaN, maxSourceFiles: 900, minimumFreed: 40 }));
-console.log(`ROUTES-05A parity OK: ${manifest.routes.length - approvedChanges.size} original handlers + five #1184 and one #1216 reviewed amendments; original invoice root and dispatcher, 21 reclaimed source entries. No unreviewed handler change permitted.`);
+console.log(`ROUTES-05A parity OK: ${manifest.routes.length - approvedChanges.size} original handlers + five #1184 and one #1219 reviewed amendments; original invoice root and dispatcher, 21 reclaimed source entries. No unreviewed handler change permitted.`);

@@ -14,6 +14,9 @@ class NextResponse {
 const amount = (value) => ({ toFixed: () => String(value), toString: () => String(value), valueOf: () => value });
 const checkout = {
   id: "checkout-a", siteId: "site-a", preparedByUserId: "invoicer-a",
+  invoiceHeaderSnapshot: { legalName: "Boutiques & Fils", tradeName: "Boutique <Nord>",
+    address: "Avenue des Écoles, Kinshasa", phone: "081-TEST-100",
+    email: "info@example.test", website: "", rccm: "RCCM-TEST-26", idNat: "IDNAT-TEST-26", nif: "" },
   site: { id: "site-a", name: "Boutique <Nord>", addressLine1: "Avenue des Écoles", city: "Kinshasa", countryCode: "CD", timezone: "Africa/Kinshasa" },
   invoice: {
     id: "invoice-a", status: "DRAFT", number: "FAC-001", businessPartyId: "customer-a", invoiceDate: new Date("2026-11-07T10:15:00Z"), currencyCode: "CDF",
@@ -46,7 +49,8 @@ vm.runInNewContext(ts.transpileModule(route, { compilerOptions: { module: ts.Mod
       retailInvoiceVisibleSites: async () => ({ isOwner: false, siteIds: visible ? ["site-a"] : ["site-b"], collectibleSiteIds: [] }),
     };
     if (name === "@/lib/enterprise/organization-logo-storage") return { resolveOrganizationLogoStoragePath: () => "company-logos/tenant/logo.png" };
-    if (name === "@/lib/enterprise/retail/operating-settings") return { readRetailInvoiceFooterSnapshot: () => [] };
+    if (name === "@/lib/enterprise/retail/operating-settings") return { readRetailInvoiceFooterSnapshot: () => [],
+      readRetailInvoiceHeaderSnapshot: (snapshot) => snapshot || null };
     if (name === "@/lib/prisma") return { prisma };
     throw Error(`Unexpected import: ${name}`);
   },
@@ -65,6 +69,16 @@ assert.match(a4.body, /@page\{size:A4/);
 assert.match(a4.body, /Boutiques &amp; Fils/);
 assert.match(a4.body, /<img class="company-logo" src="\/api\/enterprise\/tenant\/logo"/);
 assert.match(a4.body, /Boutique &lt;Nord&gt;/);
+assert.match(a4.body, /RCCM-TEST-26/);
+assert.match(a4.body, /IDNAT-TEST-26/);
+assert.match(a4.body, /081-TEST-100/);
+checkout.invoiceHeaderSnapshot = null;
+const legacy = await invoke("a4", "fr");
+assert.equal(legacy.status, 200, "Legacy invoices without header snapshots remain printable");
+assert.match(legacy.body, /Boutiques &amp; Fils/);
+checkout.invoiceHeaderSnapshot = { legalName: "Boutiques & Fils", tradeName: "Boutique <Nord>",
+  address: "Avenue des Écoles, Kinshasa", phone: "081-TEST-100",
+  email: "info@example.test", website: "", rccm: "RCCM-TEST-26", idNat: "IDNAT-TEST-26", nif: "" };
 assert.match(a4.body, /Client &lt;VIP&gt;/);
 assert.match(a4.body, /Lait &lt;script&gt;/);
 assert.doesNotMatch(a4.body, /<script>/);
@@ -80,7 +94,7 @@ visible = false;
 const rejected = await invoke("a4", "fr");
 assert.equal(rejected.status, 404);
 assert.equal(rejected.body.error, "RETAIL_INVOICE_NOT_FOUND");
-assert.equal(auditCount, 2, "Cross-store invoice attempt cannot be audited as an authorized print");
+assert.equal(auditCount, 3, "Cross-store invoice attempt cannot be audited as an authorized print");
 
 visible = true;
 checkout.invoice.status = "ISSUED";
