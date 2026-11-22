@@ -101,7 +101,13 @@ export type RetailLegalIdentity = z.infer<typeof retailLegalIdentitySchema>;
 export function readRetailLegalIdentity(value: unknown): RetailLegalIdentity {
   const root = asRecord(value);
   // Canonical company registration, also consumed by Finance DGI readiness.
-  const parsed = retailLegalIdentitySchema.safeParse(root.fiscalRegistration ?? {});
+  const registration = asRecord(root.fiscalRegistration);
+  const known = new Set(Object.keys(retailLegalIdentitySchema.shape));
+  // Finance may store additional fiscal registration metadata. Ignore those
+  // unknown read fields while preserving them on writes.
+  const parsed = retailLegalIdentitySchema.safeParse(
+    Object.fromEntries(Object.entries(registration).filter(([key]) => known.has(key))),
+  );
   if (!parsed.success) throw new EnterpriseRetailError("RETAIL_OPERATING_SETTINGS_INVALID", 409);
   return parsed.data;
 }
