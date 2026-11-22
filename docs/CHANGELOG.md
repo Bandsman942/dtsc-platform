@@ -2,6 +2,7 @@
 
 - Transition comptable `POSTED → REVERSED` avec écriture inverse, motif, date de période ouverte, identité indépendante et registre conservé ; aucune création de paiement ou transaction de trésorerie.
 - Restauration atomique de la capacité de la créance fournisseur et des soldes de dettes/factures ; allocation initiale marquée `REVERSED`, nouveaux champs de preuve et contraintes SQL additives.
+- Réutilisation d’une dette cible restaurée uniquement après démonstration des deux journaux opposés, de l’allocation historiquement contrepassée, du fournisseur, des comptes et de l’identité du correcteur ; toute allocation active ou non prouvée est refusée.
 - Route Finance/Comptabilité réservée aux gestionnaires autorisés ; historique, filtres et formulaire bilingue. QA métier isolée raccordée à la gate Stocks & Lots.
 - Pas de fusion ni déploiement ; migration PostgreSQL et E2E métier final à certifier sur un environnement de test.
 
