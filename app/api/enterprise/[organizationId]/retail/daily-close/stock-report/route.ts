@@ -35,6 +35,7 @@ export async function GET(req: Request, { params }: Params) {
     const siteId = (url.searchParams.get("siteId") || "").trim();
     const date = (url.searchParams.get("date") || "").trim();
     const format = url.searchParams.get("format") || "json";
+    const search = (url.searchParams.get("search") || "").trim().slice(0, 100);
     const page = Math.max(1, Math.min(10000, Number(url.searchParams.get("page") || 1) || 1));
     const pageSize = Math.max(10, Math.min(100, Number(url.searchParams.get("pageSize") || 50) || 50));
     if (!siteId || siteId.length > 191 || !isCivilDate(date) || !["json", "csv", "xlsx", "print"].includes(format)) {
@@ -64,7 +65,13 @@ export async function GET(req: Request, { params }: Params) {
         { balances: { some: { warehouseId: { in: warehouseIds } } } },
         { stockMovements: { some: { warehouseId: { in: warehouseIds }, occurredAt: { lt: to } } } },
       ],
-      ...(!settings.stockReportIncludeZeroMovement ? { AND: [{ stockMovements: { some: { warehouseId: { in: warehouseIds }, occurredAt: { gte: from, lt: to } } } }] } : {}),
+      AND: [
+        ...(!settings.stockReportIncludeZeroMovement ? [{ stockMovements: { some: { warehouseId: { in: warehouseIds }, occurredAt: { gte: from, lt: to } } } }] : []),
+        ...(search ? [{ OR: [
+          { catalogItem: { name: { contains: search, mode: "insensitive" as const } } },
+          { catalogItem: { code: { contains: search, mode: "insensitive" as const } } },
+        ] }] : []),
+      ],
     };
     // Exports must cover the full selected site, not just the visible page.
     const exportMode = format !== "json";
