@@ -92,7 +92,7 @@ vm.runInNewContext(js,{module:mod,exports:mod.exports,
   filename:"supplier-compensation-reversed-allocation-proof.ts",
 });
 const proof=mod.exports.assertReversedSupplierCompensationAllocationsTx;
-const input={organizationId:"org-a",payableId:"payable-a",invoiceId:"invoice-a",
+const input={organizationId:"org-a",payableId:"payable-a",
   targetInvoiceJournalId:"invoice-journal",businessPartyId:"party-a",
   supplierId:"supplier-a",currencyCode:"CDF",payableAccountId:"payable-ledger"};
 const denied = error=>error?.code==="SUPPLIER_RETURN_CREDIT_RECONCILIATION_REQUIRED";
