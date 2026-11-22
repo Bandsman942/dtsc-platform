@@ -2391,6 +2391,13 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
           expect(oppositeJournal.reversalOfEntryId).toBe(postedComp.id);
           expect(oppositeJournal.lines).toHaveLength(2);
           expect(oppositeJournal.totalDebit.equals(1)&&oppositeJournal.totalCredit.equals(1)).toBe(true);
+          const attemptInverseOfInverse=await post(context.returnSettler,
+            base+"/journal-entries/"+oppositeJournal.id+"/reverse",{
+              reason:"Generic reversal must not undo domain inverse evidence",
+              accountingDate:returnBusinessContext.businessDate,
+            });
+          expect(attemptInverseOfInverse.status,JSON.stringify(attemptInverseOfInverse.body)).toBe(409);
+          expect(attemptInverseOfInverse.body.error).toBe("SUPPLIER_RETURN_DOMAIN_REVERSAL_REQUIRED");
           const immutableOriginal=await prisma.enterpriseJournalEntry.findUniqueOrThrow({where:{id:postedComp.id}});
           expect(immutableOriginal.status).toBe("REVERSED");
           expect(await prisma.enterpriseJournalReversal.count({
