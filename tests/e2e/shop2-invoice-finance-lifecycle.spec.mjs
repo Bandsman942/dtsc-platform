@@ -2400,6 +2400,13 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
           expect(attemptInverseOfInverse.body.error).toBe("SUPPLIER_RETURN_DOMAIN_REVERSAL_REQUIRED");
           const immutableOriginal=await prisma.enterpriseJournalEntry.findUniqueOrThrow({where:{id:postedComp.id}});
           expect(immutableOriginal.status).toBe("REVERSED");
+          const oldJournalGenericReplay=await post(context.owner,
+            base+"/journal-entries/"+postedComp.id+"/reverse",{
+              reason:"Old supplier offset reversal must remain a domain-only action",
+              accountingDate:returnBusinessContext.businessDate,
+            });
+          expect(oldJournalGenericReplay.status,JSON.stringify(oldJournalGenericReplay.body)).toBe(409);
+          expect(oldJournalGenericReplay.body.error).toBe("SUPPLIER_RETURN_DOMAIN_REVERSAL_REQUIRED");
           expect(await prisma.enterpriseJournalReversal.count({
             where:{organizationId,originalEntryId:postedComp.id,reversalEntryId:oppositeJournal.id},
           })).toBe(1);
