@@ -46,6 +46,7 @@ vm.runInNewContext(ts.transpileModule(route, { compilerOptions: { module: ts.Mod
       retailInvoiceVisibleSites: async () => ({ isOwner: false, siteIds: visible ? ["site-a"] : ["site-b"], collectibleSiteIds: [] }),
     };
     if (name === "@/lib/enterprise/organization-logo-storage") return { resolveOrganizationLogoStoragePath: () => "company-logos/tenant/logo.png" };
+    if (name === "@/lib/enterprise/retail/operating-settings") return { readRetailInvoiceFooterSnapshot: () => [] };
     if (name === "@/lib/prisma") return { prisma };
     throw Error(`Unexpected import: ${name}`);
   },

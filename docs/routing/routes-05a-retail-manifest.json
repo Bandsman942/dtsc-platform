@@ -306,6 +306,12 @@
       "handlerPath": "app/api/enterprise/[organizationId]/retail/invoices/workflow/handler.ts",
       "blobSha": "b74ed3723e84ca81db5b318de5f1ce92b329fe04",
       "reason": "Own-invoice approval queue is scoped to assigned store"
+    },
+    {
+      "issue": 1216,
+      "handlerPath": "app/api/enterprise/[organizationId]/retail/invoices/[invoiceId]/print/handler.ts",
+      "blobSha": "e806d5a3d0db8620263a3fb4378b2cae0b428a7d",
+      "reason": "Cashierless mode: store-scoped historical invoice footer snapshot and optional post-payment quick-print"
     }
   ]
 }

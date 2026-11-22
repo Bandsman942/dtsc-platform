@@ -19,6 +19,7 @@ import { RETAIL_SECTOR_CODE } from "@/lib/enterprise/retail/constants";
 import { requireRetailSiteCapability } from "@/lib/enterprise/retail/site-access";
 import { withRetailTransactionRetry } from "@/lib/enterprise/retail/transaction-retry";
 import { prisma } from "@/lib/prisma";
+import { retailInvoiceFooterSnapshot } from "@/lib/enterprise/retail/operating-settings";
 
 export const retailInvoicePrepareSchema = z.object({
   idempotencyKey: z.string().trim().min(8).max(160),
@@ -63,7 +64,7 @@ async function resolveWalkInCustomerTx(tx: Prisma.TransactionClient, organizatio
  * in one serializable transaction. Its checkout lines reserve the available
  * physical quantity without a stock movement until full payment; cancellation
  * releases this derived reservation automatically. */
-export async function prepareRetailInvoice(organizationId: string, actorUserId: string, input: RetailInvoicePrepareInput) {
+export async function prepareRetailInvoice(organizationId: string, actorUserId: string, input: RetailInvoicePrepareInput, checkoutExpectations?: { cashTendered?: Prisma.Decimal; expectedGrandTotal?: Prisma.Decimal }) {
   const requestFingerprint = fingerprint(input);
   const uniqueItems = new Set(input.lines.map((line) => line.catalogItemId));
   if (uniqueItems.size !== input.lines.length) throw new EnterpriseRetailError("RETAIL_DUPLICATE", 409);
@@ -92,6 +93,8 @@ export async function prepareRetailInvoice(organizationId: string, actorUserId: 
   }
   const decisionByCatalog = new Map(decisions.map((decision) => [decision.catalogItemId, decision]));
   const calculatedTotal = decisions.reduce((sum, decision) => sum.plus(decision.lineTotal), new Prisma.Decimal(0));
+  if (checkoutExpectations?.expectedGrandTotal && !calculatedTotal.equals(checkoutExpectations.expectedGrandTotal)) throw new EnterpriseRetailError("RETAIL_DIRECT_CHECKOUT_PRICE_CHANGED", 409);
+  if (checkoutExpectations?.cashTendered && checkoutExpectations.cashTendered.lessThan(calculatedTotal)) throw new EnterpriseRetailError("RETAIL_DIRECT_CHECKOUT_CASH_INSUFFICIENT", 409);
 
   return withRetailTransactionRetry(() => prisma.$transaction(async (tx) => {
     const existing = await tx.enterpriseRetailInvoiceCheckout.findFirst({
@@ -217,6 +220,7 @@ export async function prepareRetailInvoice(organizationId: string, actorUserId: 
       data: {
         organizationId, salesInvoiceId: invoice.id, siteId: input.siteId, warehouseId: input.warehouseId,
         idempotencyKey: input.idempotencyKey, requestFingerprint, preparedByUserId: actorUserId,
+        invoiceFooterSnapshot: retailInvoiceFooterSnapshot(configuration?.settingsJson, input.siteId),
       },
     });
     await tx.enterpriseRetailInvoiceCheckoutLine.createMany({

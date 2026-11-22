@@ -11,6 +11,15 @@ import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
 
 const ERROR_MESSAGES: Record<string, string> = {
+  RETAIL_DIRECT_CHECKOUT_NOT_ACTIVE: "Le mode Commerce sans caissier n’est pas actif pour cette boutique. Demandez son activation à l’administrateur.",
+  RETAIL_DIRECT_CHECKOUT_APPROVAL_REQUIRED: "Les autorisations de validation personnelle de facture et de paiement manquent pour cette boutique. Demandez une délégation explicite à l’administrateur.",
+  RETAIL_DIRECT_CHECKOUT_CASH_INSUFFICIENT: "Les espèces reçues ne couvrent pas le total calculé. Vérifiez le montant remis.",
+  RETAIL_DIRECT_CHECKOUT_PRICE_CHANGED: "Le prix ou la taxe a changé depuis l’aperçu. Actualisez le panier et confirmez le nouveau montant.",
+  RETAIL_DIRECT_CHECKOUT_IN_PROGRESS: "Cette vente est déjà en cours de finalisation. Vérifiez son résultat avant de recommencer.",
+  RETAIL_DIRECT_CHECKOUT_IDEMPOTENCY_CONFLICT: "Cette référence de vente a déjà été utilisée pour un autre panier. Ne mélangez pas deux encaissements.",
+  RETAIL_DIRECT_CHECKOUT_INCOMPLETE: "La vente n’est pas encore totalement confirmée. Reprenez cette vente avec la même référence, sans créer de nouveau paiement.",
+  RETAIL_OPERATING_SETTINGS_INVALID: "Les paramètres commerciaux sont invalides. Vérifiez leur configuration.",
+  RETAIL_OPERATING_SETTINGS_CONFLICT: "La configuration a changé depuis son ouverture. Actualisez les paramètres avant de les enregistrer.",
   RETAIL_INVOICE_RETURN_BATCH_UNSAFE: "Un lot du retour est expiré, bloqué ou indisponible. Ne le remettez pas en vente : faites traiter sa quarantaine ou son retrait.",
   RETAIL_INVOICE_RETURN_BATCH_QUANTITY_EXCEEDED: "La quantité rapportée pour ce lot dépasse son solde retournable ou ne correspond pas à la facture.",
   RETAIL_INVOICE_RETURN_BATCH_SELECTION_REQUIRED: "Ce retour concerne une facture ventilée par lots. Identifiez les lots réellement rapportés avant toute régularisation physique.",

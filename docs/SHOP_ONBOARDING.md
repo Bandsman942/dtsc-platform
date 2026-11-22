@@ -510,3 +510,8 @@ La validation de cette checklist signifie qu’un **tenant** est prêt à exploi
 ## Note #1064 — Entreprise RETAIL générale
 
 Ce guide historique SHOP reste applicable aux entreprises spécialisées. Pour créer une entreprise RETAIL non-SHOP, choisissez le secteur `COMMERCE_RETAIL` et laissez le sous-secteur vide. Le template `RETAIL_CORE` couvre le POS et la clôture sans opérateurs ; `MOBILE_MONEY_AGENCY` et `TELCO_TOPUPS` sont désactivés par défaut et peuvent être activés individuellement dans Administration DTSC selon le plan et les autorisations. Les options futures sont `PLANNED` et non opérationnelles. Voir `docs/HOTFIX_1064_RETAIL_CORE_SECTOR_PACKS.md`.
+
+
+## Mode optionnel Commerce sans caissier — issue #1216 (candidat)
+
+Dans Administration entreprise → Paramètres entreprise, ouvrir « Mode de fonctionnement RETAIL ». Pour le commerce au comptoir : activer « Commerce sans caissier », « Impression rapide » et « Interface simplifiée ». Configurer les dérogations de boutiques A/B, les comptes CASH et sessions personnelles OPEN. Accorder `PREPARE_INVOICE`, `ISSUE_INVOICE`, `COLLECT_PAYMENT`, `OPEN_CASH` et les deux auto-approbations explicites uniquement aux opérateurs de confiance. Ces autorisations ne sont jamais héritées de la case « sans caissier ». Pour une vente de 85 000 CDF avec 100 000 CDF en billets, 15 000 CDF sont rendus et 85 000 CDF seuls sont comptabilisés. Voir `docs/RETAIL_DIRECT_CASH_1216.md` pour les scénarios de refus et l'E2E. Cette fonctionnalité n'est pas encore certifiée ni déployée.
