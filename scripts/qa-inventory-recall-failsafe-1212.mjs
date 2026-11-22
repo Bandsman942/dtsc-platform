@@ -27,7 +27,7 @@ const tx = {
   enterpriseStockLot: {
     findFirst: async ({ where }) => {
       assert.equal(where.organizationId, "org-a");
-      if (where.recallReference?.not) return null; // no prior recall
+      if (where.recallReference && "not" in where.recallReference) return null; // no prior recall
       return lot;
     },
     updateMany: async ({ where, data }) => {
