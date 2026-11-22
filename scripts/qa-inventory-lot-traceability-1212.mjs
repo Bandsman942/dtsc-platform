@@ -34,6 +34,10 @@ const mocks = {
   "@/lib/enterprise/inventory/lot-reclassification": {},
   // Selector-only VM; normal stock dashboard is covered by PostgreSQL HTTP E2E.
   "@/lib/enterprise/inventory/lot-allocation": {},
+  // Independent QA executes this proof with full strict journal fixtures below.
+  "@/lib/enterprise/accounting/supplier-compensation-reversed-allocation-proof": {
+    assertReversedSupplierCompensationAllocationsTx: async () => {},
+  },
   "@/lib/enterprise/retail/invoice-stock-holds": {},
   "@/lib/enterprise/retail/inventory-policy": {},
   "@/lib/auth": { getSession: async () => ({ userId: "actor" }) },
