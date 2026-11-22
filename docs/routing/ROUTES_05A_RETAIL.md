@@ -54,3 +54,7 @@ Les preuves CI sont publiées en artefacts `routes-01-build-budget` et `routes-0
 Aucune source métier parallèle ni nouvelle dépendance applicative. Les autres familles Retail/Pharmacy/Health restent dans #1140 et l’extraction multi-build dans #1141. L’absence de métriques Vercel exactes et de cold start/P95 Production demeure explicitement mesurée comme indisponible, jamais remplacée par une estimation source.
 
 Avant fusion : branche et PR uniquement. Après approbation et fusion autorisée : déploiement natif depuis main, vérification distincte READY/Release. Rollback par revert de la PR avec Quality Gates, sans réécriture de migrations ni modification des données. Aucun déploiement manuel de branche.
+
+## Exception d’intégrité routage #1216
+
+La route déplacée d’impression facture `invoices/[invoiceId]/print/handler.ts` reçoit une exception de modification **strictement liée** à l’Issue #1216 : mentions historiques sur document A4/80mm et option d’impression au succès. L’empreinte du blob Git, la route et l’Issue sont figées dans `routes-05a-retail-manifest.json`; `qa-routes-retail-parity.mjs` conserve les cinq exceptions #1184 et n’autorise qu’une exception supplémentaire de ce périmètre. Tous les autres handlers d’origine, le dispatcher et la route racine restent contrôlés par la parité existante.
