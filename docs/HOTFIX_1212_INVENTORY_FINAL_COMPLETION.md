@@ -168,3 +168,13 @@ Les autres inverses des mouvements d'inventaire, le FX, la fiscalité multi-orig
 Le scénario `tests/e2e/inventory-1212-sector-common.spec.mjs` couvre maintenant un même numéro de lot dans deux dépôts du tenant RETAIL isolé, avec un responsable commun et un auteur distinct. Il déclenche la vraie route HTTP de rappel, vérifie la quarantaine sur les deux enregistrements, la notification neutre et dédupliquée, la relance idempotente, le refus de révision périmée et de libération post-rappel, puis la stabilité des mouvements de stock, soldes, événements comptables et journaux. Les managers sans membership actif sont exclus par le service métier existant.
 
 Ce test est intégré à la suite Shop 2 déjà exécutée en PostgreSQL éphémère. **La réussite du nouvel SHA est à certifier en GitHub Actions** ; ne pas transposer les réussites antérieures. Aucun code de Production n’a été modifié par cette tranche de tests. Les adapters Pharmacy/Health/Manufacturing restent à valider séparément.
+
+
+## Lot 6C — garde de vente CASH sur lot rappelé (#1215 et #1217 ; DRAFT)
+
+L'intégration du nouveau mode Commerce sans caissier v1.24.0 avec le Stock & Lot Traceability 2.0 conserve une politique de **sécurité inconditionnelle**. Le lecteur transactionnel `assertRetailLotPolicyTx` vérifie désormais les lots explicitement sélectionnés en une requête filtrée par organisation/dépôt : le lot doit appartenir à l'article, être actif, de statut AVAILABLE et dépourvu de référence de rappel. Cette vérification ne dépend **ni** du mode FEFO **ni** de l'option d'avertissement/blocage des dates de péremption. La route de mouvement physique reste la dernière barrière lors de la confirmation financière.
+
+QA unitaire ajoutée au contrat historique `qa-hotfix-1042-retail-batches-transfer.mjs` : isolement des lots étrangers, refus d'un statut QUARANTINED et d'un lot rappelé même avec `expiryMode=ALLOW` et `enforceFefo=false`. Recette PostgreSQL + Playwright ajoutée au parcours `retail-direct-cash-1216.spec.mjs` sur une fixture de lot rappelé : tentative de caisse refusée 409, rejeu refusé, clé marquée FAILED, aucune facture ni aucun paiement ni mouvement CASH/trésorerie/stock ni journal supplémentaire. Le rappel multisite par route Stock est couvert séparément dans `inventory-1212-sector-common.spec.mjs`.
+
+Ces deux tests doivent réussir sur le **SHA final de #1215** ; aucune affirmation de validation propriétaire ni fusion avant CI et OWNER_E2E.
+

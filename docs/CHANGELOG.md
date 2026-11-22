@@ -1,3 +1,9 @@
+## 2026-11-22 — #1215 : garde inconditionnelle des lots rappelés dans le CASH direct (DRAFT)
+
+- Un lot explicitement choisi est vérifié même si la politique commerciale laisse les péremptions en mode ALLOW sans FEFO : QUARANTINED, rappel, lot inconnu ou appartenant à un autre article refusés côté serveur.
+- Test Finance/Stock de non-mutation ajouté au parcours Playwright CASH #1217 sur PostgreSQL isolé : 409 après rappel, même sous rejeu, aucune facture, aucun paiement, aucun mouvement ni journal fantôme.
+- Validation CI exacte et E2E final propriétaire à obtenir ; aucune fusion ni modification de Production.
+
 ## 2026-11-22 — #1215 : rappel multisite réel et relance idempotente (DRAFT)
 
 - Recette Playwright + PostgreSQL sur deux dépôts partageant un lot rappelé, contrôle de quarantaine globale, destinataire actif dédupliqué, notification neutre, relance sans doublon, révision périmée et refus de remise en vente.

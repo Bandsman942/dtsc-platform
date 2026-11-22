@@ -59,6 +59,22 @@ await assert.rejects(assertRetailLotPolicyTx(tx, input(policy, "expired")), { co
 await assert.rejects(assertRetailLotPolicyTx(tx, input(policy, "late")), { code: "RETAIL_FEFO_LOT_REQUIRED" });
 await assert.doesNotReject(assertRetailLotPolicyTx(tx, input(policy, "early")));
 await assert.doesNotReject(assertRetailLotPolicyTx(tx, input({ ...policy, expiryMode: "WARN", enforceFefo: false }, "expired")));
+// Safety is independent from optional expiry policy / FEFO. In particular,
+// a recalled batch MUST remain unsellable to #1217's direct CASH checkout.
+const permissive = { ...policy, expiryMode: "ALLOW", enforceFefo: false };
+await assert.doesNotReject(assertRetailLotPolicyTx(tx, input(permissive, "early")));
+const earlyLot = lots.find(lot => lot.id === "early");
+earlyLot.status = "QUARANTINED";
+await assert.rejects(assertRetailLotPolicyTx(tx, input(permissive, "early")), { code: "RETAIL_STOCK_LOT_INVALID" });
+earlyLot.status = "AVAILABLE";
+earlyLot.recallReference = "RECALL-COMMON-STOCK-1215";
+await assert.rejects(assertRetailLotPolicyTx(tx, input(permissive, "early")), { code: "RETAIL_STOCK_LOT_INVALID" });
+earlyLot.recallReference = null;
+await assert.rejects(assertRetailLotPolicyTx(tx, { ...input(permissive, "early"),
+  lines: [{ inventoryItemId: "alien-item", stockLotId: "early" }] }), { code: "RETAIL_STOCK_LOT_INVALID" });
+await assert.rejects(assertRetailLotPolicyTx(tx, input(permissive, "missing-lot")), { code: "RETAIL_STOCK_LOT_INVALID" });
+await assert.doesNotReject(assertRetailLotPolicyTx(tx, input(permissive, null)));
+await assert.doesNotReject(assertRetailLotPolicyTx(tx, input(permissive, "early")));
 // A multi-line physical selection must exhaust the earliest free lot first.
 await assert.doesNotReject(assertRetailLotPolicyTx(tx, { ...input(policy, "early"), lines: [{ inventoryItemId: "item", stockLotId: "late", quantity: 2 }, { inventoryItemId: "item", stockLotId: "early", quantity: 5 }] }));
 await assert.rejects(assertRetailLotPolicyTx(tx, { ...input(policy, "late"), lines: [{ inventoryItemId: "item", stockLotId: "early", quantity: 4 }, { inventoryItemId: "item", stockLotId: "late", quantity: 3 }] }), { code: "RETAIL_FEFO_LOT_REQUIRED" });

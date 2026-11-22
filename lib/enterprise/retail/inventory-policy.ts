@@ -78,6 +78,30 @@ export async function assertRetailLotPolicyTx(
   const configuredPolicy = readRetailInventoryPolicy(args.settings);
   const policy = args.preserveCommittedSelection ? { ...configuredPolicy, enforceFefo: false } : configuredPolicy;
   const warnings: RetailLotPolicyWarning[] = [];
+  // A recalled/quarantined lot is never sellable, even when the enterprise
+  // intentionally allows expiry warnings or disables FEFO. Keep this safety
+  // check independent of the optional expiry policy so the old POS, the
+  // invoice workflow, and #1217's direct CASH checkout share the same rule.
+  // This is a batched tenant-and-warehouse-scoped read; no stock is mutated.
+  const selectedLotIds = [...new Set(args.lines.map(line => line.stockLotId).filter((id): id is string => Boolean(id)))];
+  if (selectedLotIds.length) {
+    const selectedLots = await tx.enterpriseStockLot.findMany({
+      where: {
+        organizationId: args.organizationId, warehouseId: args.warehouseId,
+        id: { in: selectedLotIds }, archivedAt: null,
+      },
+      select: { id: true, inventoryItemId: true, status: true, recallReference: true },
+    });
+    const byId = new Map(selectedLots.map(lot => [lot.id, lot]));
+    for (const line of args.lines) {
+      if (!line.stockLotId) continue;
+      const lot = byId.get(line.stockLotId);
+      if (!lot || !line.inventoryItemId || lot.inventoryItemId !== line.inventoryItemId ||
+          lot.status !== "AVAILABLE" || Boolean(lot.recallReference)) {
+        throw new EnterpriseRetailError("RETAIL_STOCK_LOT_INVALID", 409);
+      }
+    }
+  }
   if (policy.expiryMode === "ALLOW" && !policy.enforceFefo) return warnings;
   const inventoryIds = [...new Set(args.lines.map((line) => line.inventoryItemId).filter((value): value is string => Boolean(value)))];
   if (!inventoryIds.length) return warnings;
