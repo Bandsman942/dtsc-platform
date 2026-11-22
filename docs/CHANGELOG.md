@@ -1,3 +1,9 @@
+## 2026-11-22 — #1215 : rappel global des lots sur toutes les boutiques (DRAFT)
+
+- Nouvelle garde serveur dans le checkout RETAIL : le rappel historique d'un même couple article/numéro de lot dans un autre dépôt bloque un exemplaire local marqué AVAILABLE, même sous politique ALLOW sans FEFO.
+- Comparaison exacte article/numéro de lot, sans collision entre SKU ; lecture transversale au sein du même tenant, aucune mutation des historiques.
+- QA #1042 et E2E CASH PostgreSQL d'un lot local disponible avec lot sœur rappelé dans un autre entrepôt ; certification CI et OWNER_E2E à obtenir.
+
 ## 2026-11-22 — #1215 : exclusion des utilisateurs suspendus des alertes de rappel (DRAFT)
 
 - Les notifications de rappel ne ciblent que les responsables de dépôts ayant à la fois une adhésion entreprise active et un compte utilisateur global ACTIVE ; les comptes SUSPENDED ou PENDING sont exclus.

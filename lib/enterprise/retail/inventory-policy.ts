@@ -90,7 +90,7 @@ export async function assertRetailLotPolicyTx(
         organizationId: args.organizationId, warehouseId: args.warehouseId,
         id: { in: selectedLotIds }, archivedAt: null,
       },
-      select: { id: true, inventoryItemId: true, status: true, recallReference: true },
+      select: { id: true, inventoryItemId: true, lotNumber: true, status: true, recallReference: true },
     });
     const byId = new Map(selectedLots.map(lot => [lot.id, lot]));
     for (const line of args.lines) {
@@ -101,6 +101,18 @@ export async function assertRetailLotPolicyTx(
         throw new EnterpriseRetailError("RETAIL_STOCK_LOT_INVALID", 409);
       }
     }
+    // A recall is company-wide for the SAME item and physical lot number,
+    // not merely for the local stockLotId. Fail closed when a legacy/imported
+    // sister record in another warehouse proves the batch was recalled,
+    // even if the selected local record is stale and marked AVAILABLE.
+    const recalledSister = await tx.enterpriseStockLot.findFirst({
+      where: {
+        organizationId: args.organizationId, recallReference: { not: null },
+        OR: selectedLots.map(lot => ({ inventoryItemId: lot.inventoryItemId, lotNumber: lot.lotNumber })),
+      },
+      select: { id: true },
+    });
+    if (recalledSister) throw new EnterpriseRetailError("RETAIL_STOCK_LOT_INVALID", 409);
   }
   if (policy.expiryMode === "ALLOW" && !policy.enforceFefo) return warnings;
   const inventoryIds = [...new Set(args.lines.map((line) => line.inventoryItemId).filter((value): value is string => Boolean(value)))];
