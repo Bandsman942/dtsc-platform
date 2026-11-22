@@ -1,3 +1,9 @@
+## 2026-11-22 — #1215 : rappel multisite réel et relance idempotente (DRAFT)
+
+- Recette Playwright + PostgreSQL sur deux dépôts partageant un lot rappelé, contrôle de quarantaine globale, destinataire actif dédupliqué, notification neutre, relance sans doublon, révision périmée et refus de remise en vente.
+- Preuve comptable de non-mutation : mouvements, soldes, journal et événements de valorisation inchangés après rappel et retry.
+- Aucun changement métier ni migration; certification du SHA courant requise avant d’étendre aux secteurs régulés.
+
 ## 2026-11-22 — Reprise #1215 après fusion RETAIL #1217 (DRAFT)
 
 - Branche `fix/1212-inventory-final-completion` synchronisée avec `main` au commit `45e611689e0702b219ba389178103ad289cb8231` ; 60 changements métier/QA de #1215 conservés, deux conflits documentaire/version résolus sans toucher aux transactions Finance.

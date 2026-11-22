@@ -321,6 +321,89 @@ test.describe.serial("#1212 common inventory contract in independent sector tena
     });
   }
 
+  test("Lot 6 #1215: real two-warehouse recall, deduplicated active managers, retry and no stock or ledger mutation", async ({ browser }) => {
+    const target = fixtureBySector.get("COMMERCE_RETAIL");
+    expect(target).toBeTruthy();
+    const { organizationId, warehouseId, secondWarehouseId, inventoryItemId, actor } = target;
+    const reader = await prisma.user.findUniqueOrThrow({ where: { email: readerEmail } });
+    // Only disposable synthetic organizations are written. Two physical
+    // warehouses share the same batch and the same active manager.
+    await prisma.organizationMember.create({ data: {
+      organizationId, userId: reader.id, role: "MEMBER", status: "ACTIVE", joinedAt: new Date(),
+    } });
+    await prisma.enterpriseWarehouse.updateMany({
+      where: { organizationId, id: { in: [warehouseId, secondWarehouseId] } },
+      data: { managerUserId: reader.id },
+    });
+    const lotNumber = runKey + "-CROSS-WAREHOUSE-RECALL";
+    const lots = await Promise.all([warehouseId, secondWarehouseId].map(id =>
+      prisma.enterpriseStockLot.create({ data: {
+        organizationId, inventoryItemId, warehouseId: id, lotNumber,
+        expiryDate: iso(day(60)), status: "AVAILABLE", createdByUserId: actor,
+      } }),
+    ));
+    const initial = await Promise.all([
+      prisma.enterpriseStockMovement.count({ where: { organizationId, inventoryItemId } }),
+      prisma.enterpriseInventoryBalance.count({ where: { organizationId, inventoryItemId } }),
+      prisma.enterpriseJournalEntry.count({ where: { organizationId } }),
+      prisma.enterpriseInventoryAccountingEvent.count({ where: { organizationId, inventoryItemId } }),
+    ]);
+    const context = await browser.newContext();
+    const api = baseUrl + "/api/enterprise/" + organizationId + "/inventory/lots";
+    const headers = { origin: baseUrl, referer: baseUrl + "/enterprise-modules/INVENTORY_LOGISTICS" };
+    try {
+      await signIn(context, organizationId, adminEmail, adminPassword);
+      const recall = await read(await context.request.patch(api, { headers, data: {
+        id: lots[0].id, revision: lots[0].revision, recall: true,
+        qualityReason: "Prevent delivery of the affected test batch",
+      } }));
+      expect(recall.status, JSON.stringify(recall.body)).toBe(200);
+      expect(recall.body).toMatchObject({ ok: true, status: "QUARANTINED", affectedLots: 2 });
+      expect(recall.body.recallReference).toMatch(/^RECALL-/);
+      expect(recall.body.notifications).toMatchObject({
+        recipients: 1, queued: 1, failed: 0, discoveryFailed: false,
+      });
+      expect(JSON.stringify(recall.body)).not.toContain(reader.id);
+      expect(JSON.stringify(recall.body)).not.toContain(lotNumber);
+      const after = await prisma.enterpriseStockLot.findMany({
+        where: { organizationId, inventoryItemId, lotNumber },
+        orderBy: { warehouseId: "asc" },
+      });
+      expect(after).toHaveLength(2);
+      for (const lot of after) {
+        expect(lot.status).toBe("QUARANTINED");
+        expect(lot.recallReference).toBe(recall.body.recallReference);
+        expect(lot.revision).toBe(2);
+      }
+      const notices = await prisma.notification.findMany({
+        where: { organizationId, userId: reader.id, title: "Alerte qualité des stocks" },
+      });
+      expect(notices).toHaveLength(1);
+      expect(notices[0].body).not.toContain(lotNumber);
+      expect(notices[0].body).not.toContain(warehouseId);
+      const retry = await read(await context.request.patch(api, { headers, data: {
+        action: "RETRY_RECALL_ALERTS", id: lots[0].id, revision: 2,
+      } }));
+      expect(retry.status, JSON.stringify(retry.body)).toBe(200);
+      expect(retry.body.notifications).toMatchObject({ recipients: 1, queued: 1, failed: 0 });
+      expect(await prisma.notification.count({ where: { organizationId, userId: reader.id, title: "Alerte qualité des stocks" } })).toBe(1);
+      const stale = await read(await context.request.patch(api, { headers, data: {
+        action: "RETRY_RECALL_ALERTS", id: lots[0].id, revision: 1,
+      } }));
+      expect(stale.status).toBe(409);
+      const unquarantine = await read(await context.request.patch(api, { headers, data: {
+        id: lots[0].id, revision: 2, status: "AVAILABLE",
+        qualityReason: "Invalid attempted release after recall",
+      } }));
+      expect(unquarantine.status).toBe(409);
+      expect(await Promise.all([
+        prisma.enterpriseStockMovement.count({ where: { organizationId, inventoryItemId } }),
+        prisma.enterpriseInventoryBalance.count({ where: { organizationId, inventoryItemId } }),
+        prisma.enterpriseJournalEntry.count({ where: { organizationId } }),
+        prisma.enterpriseInventoryAccountingEvent.count({ where: { organizationId, inventoryItemId } }),
+      ])).toEqual(initial);
+    } finally { await context.close(); }
+  });
   test("A user belonging to the seeded organization cannot read or write isolated sector tenants", async ({ browser }) => {
     const target = fixtureBySector.get("PHARMACY");
     const context = await browser.newContext();
