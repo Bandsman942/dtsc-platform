@@ -19,7 +19,6 @@ export async function assertReversedSupplierCompensationAllocationsTx(
   input: {
     organizationId: string;
     payableId: string;
-    invoiceId: string;
     targetInvoiceJournalId: string;
     businessPartyId: string;
     supplierId: string;
@@ -80,7 +79,10 @@ export async function assertReversedSupplierCompensationAllocationsTx(
         !offset.amount.equals(allocation.amount) ||
         offset.accountingDate.getTime() !== allocation.allocationDate.getTime() ||
         offset.postedByUserId !== allocation.createdByUserId ||
-        !offset.reversedAt || allocation.reversedAt!.getTime() > offset.reversedAt.getTime() + 60_000 ||
+        Math.abs(allocation.reversedAt!.getTime() - offset.reversedAt.getTime()) > 60_000 ||
+        offset.reversedByUserId === offset.requestedByUserId ||
+        offset.reversedByUserId === offset.approverUserId ||
+        offset.reversedByUserId === offset.postedByUserId ||
         offset.currencyCode !== input.currencyCode ||
         offset.claim.supplierId !== input.supplierId ||
         offset.claim.currencyCode !== input.currencyCode ||
@@ -93,6 +95,7 @@ export async function assertReversedSupplierCompensationAllocationsTx(
     if (!original || !inverse || !record ||
         record.reversalEntryId !== inverse.id || record.reason !== offset.reversalReason ||
         record.requestedByUserId !== offset.reversedByUserId ||
+        record.approvedByUserId !== offset.reversedByUserId ||
         original.status !== "REVERSED" || !original.reversedAt ||
         original.reversalOfEntryId || original.sourceEntityType !== "EnterpriseSupplierClaimCompensation" ||
         original.sourceEntityId !== offset.id ||
