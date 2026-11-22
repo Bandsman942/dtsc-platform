@@ -15,6 +15,11 @@ for (const property of ["cashTenderedDefault", "stockReportEnabled", "sitePhone"
 }
 assert.match(configApi, /hasRecentStepUp/);
 assert.match(configApi, /mergeRetailLegalIdentity/);
+assert.match(configApi, /tx\.organization\.update/);
+assert.match(configApi, /readRetailLegalIdentity\(organization\.settingsJson\)/);
+assert.doesNotMatch(configApi, /mergeRetailLegalIdentity\(nextSettings/);
+assert.match(operating, /fiscalRegistration/);
+assert.match(invoice, /settingsJson: true/);
 assert.match(configApi, /revision: \{ increment: 1 \}/);
 assert.match(pos, /cashTenderedEdited\.current/);
 assert.match(pos, /pricing\?\.grandTotal/);
