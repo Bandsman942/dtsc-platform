@@ -46,12 +46,12 @@ export async function GET(req: Request, { params }: Params) {
     if (scope.isolationEnabled && !scope.siteIds.includes(siteId)) throw new EnterpriseRetailError("RETAIL_SITE_ACCESS_DENIED", 403);
     const [site, organization, config] = await Promise.all([
       prisma.enterpriseSite.findFirst({ where: { organizationId, id: siteId, status: "ACTIVE", archivedAt: null }, select: { id: true, name: true, code: true, timezone: true } }),
-      prisma.organization.findFirst({ where: { id: organizationId, status: "ACTIVE", deletedAt: null }, select: { name: true, timezone: true, logoUrl: true, phone: true, email: true, address: true } }),
+      prisma.organization.findFirst({ where: { id: organizationId, status: "ACTIVE", deletedAt: null }, select: { name: true, timezone: true, logoUrl: true, phone: true, email: true, address: true, settingsJson: true } }),
       prisma.enterpriseRetailConfiguration.findUnique({ where: { organizationId }, select: { settingsJson: true } }),
     ]);
     if (!site || !organization || !config) throw new EnterpriseRetailError("RETAIL_SITE_ACCESS_DENIED", 404);
     const settings = readRetailOperatingSettings(config.settingsJson, siteId);
-    const legal = readRetailLegalIdentity(config.settingsJson);
+    const legal = readRetailLegalIdentity(organization.settingsJson);
     const issuer = legal.legalName || organization.name;
     const tradeName = settings.siteTradeName || legal.tradeName || site.name;
     const contactPhone = settings.sitePhone || legal.phone || organization.phone || "";
