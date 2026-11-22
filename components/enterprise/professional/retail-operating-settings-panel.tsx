@@ -11,9 +11,18 @@ type Settings = {
   defaultPaper: "A4" | "THERMAL_80MM";
   footerLinesFr: string[];
   footerLinesEn: string[];
+  cashTenderedDefault: "TOTAL" | "EMPTY";
+  stockReportEnabled: boolean;
+  stockReportIncludeZeroMovement: boolean;
+  stockReportIncludeReserved: boolean;
+  stockReportIncludeLots: boolean;
+  stockReportIncludeExpiry: boolean;
+  stockReportDefaultFormat: "PDF" | "XLSX" | "CSV";
+  siteTradeName: string; sitePhone: string; siteEmail: string; siteAddress: string;
 };
+type LegalIdentity = { legalName: string; tradeName: string; rccm: string; idNat: string; nif: string; address: string; phone: string; email: string; website: string };
 type Data = {
-  revision: number; settings: Settings; inherited: Settings;
+  revision: number; settings: Settings; inherited: Settings; legalIdentity: LegalIdentity;
   isOverridden: boolean; sites: { id: string; name: string; code: string }[];
 };
 const labels = {
@@ -54,6 +63,7 @@ export function RetailOperatingSettingsPanel({ organizationId, locale }: { organ
   const [siteId, setSiteId] = useState("");
   const [data, setData] = useState<Data | null>(null);
   const [settings, setSettings] = useState<Settings | null>(null);
+  const [legalIdentity, setLegalIdentity] = useState<LegalIdentity | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [password, setPassword] = useState("");
@@ -65,7 +75,7 @@ export function RetailOperatingSettingsPanel({ organizationId, locale }: { organ
       const response = await fetch(`/api/enterprise/${encodeURIComponent(organizationId)}/retail/operating-settings${siteId ? `?siteId=${encodeURIComponent(siteId)}` : ""}`, { cache: "no-store" });
       const value = await response.json() as Data;
       if (!response.ok || !value.settings) throw new Error(t.failed);
-      setData(value); setSettings(value.settings); setError("");
+      setData(value); setSettings(value.settings); setLegalIdentity(value.legalIdentity); setError("");
     } catch (cause) { setError(cause instanceof Error ? cause.message : t.failed); }
     finally { setLoading(false); }
   }, [organizationId, siteId, t.failed]);
@@ -83,7 +93,8 @@ export function RetailOperatingSettingsPanel({ organizationId, locale }: { organ
       if (!auth.ok) throw new Error(t.failed);
       const response = await fetch(`/api/enterprise/${encodeURIComponent(organizationId)}/retail/operating-settings`, {
         method: "PUT", headers: { "content-type": "application/json" },
-        body: JSON.stringify({ revision: data.revision, siteId: siteId || null, settings }),
+        body: JSON.stringify({ revision: data.revision, siteId: siteId || null, settings,
+          ...(!siteId && legalIdentity ? { legalIdentity } : {}) }),
       });
       const body = await response.json().catch(() => null) as { message?: string } | null;
       if (!response.ok) throw new Error(body?.message || t.failed);
@@ -128,6 +139,59 @@ export function RetailOperatingSettingsPanel({ organizationId, locale }: { organ
               change(key, copy.slice(0, 2).map((line) => line.trim()).filter(Boolean));
             }} />
           </label>)}
+        </div>
+        <div className="min-w-0 space-y-3 rounded-xl border border-dtsc-border bg-dtsc-page p-3">
+          <h4 className="font-black text-dtsc-ink">{locale === "fr" ? "Factures et coordonnées commerciales" : "Invoice identity and contacts"}</h4>
+          <p className="text-xs text-dtsc-muted">{locale === "fr" ? "L'identité légale est commune à l'entreprise. Les coordonnées et le nom commercial peuvent être spécifiques à chaque boutique." : "Legal identity is company-wide; stores may override their commercial contacts."}</p>
+          {!siteId && legalIdentity ? <div className="grid min-w-0 gap-3 sm:grid-cols-2">
+            {([
+              ["legalName", "Dénomination légale"], ["tradeName", locale === "fr" ? "Nom commercial" : "Trade name"],
+              ["rccm", "RCCM"], ["idNat", "ID.NAT"], ["nif", "NIF"],
+              ["address", locale === "fr" ? "Adresse légale" : "Legal address"],
+              ["phone", locale === "fr" ? "Téléphone entreprise" : "Company phone"],
+              ["email", "E-mail"], ["website", locale === "fr" ? "Site web" : "Website"],
+            ] as const).map(([key, label]) => <label key={key} className="grid min-w-0 gap-1 text-xs font-bold text-dtsc-ink">{label}
+              <input value={legalIdentity[key]} onChange={(event) => setLegalIdentity((current) => current ? { ...current, [key]: event.target.value } : current)}
+                maxLength={key === "address" ? 320 : key === "rccm" || key === "idNat" || key === "nif" ? 100 : 180}
+                className="min-h-11 min-w-0 rounded-lg border border-dtsc-border bg-dtsc-surface px-3 text-base" />
+            </label>)}
+          </div> : null}
+          <div className="grid min-w-0 gap-3 sm:grid-cols-2">
+            {([
+              ["siteTradeName", locale === "fr" ? "Nom commercial affiché" : "Displayed store name"],
+              ["sitePhone", locale === "fr" ? "Téléphone affiché" : "Displayed phone"],
+              ["siteEmail", "E-mail"],
+              ["siteAddress", locale === "fr" ? "Adresse affichée" : "Displayed address"],
+            ] as const).map(([key, label]) => <label key={key} className="grid min-w-0 gap-1 text-xs font-bold text-dtsc-ink">{label}
+              <input value={settings[key]} maxLength={key === "siteAddress" ? 320 : 160}
+                onChange={(event) => change(key, event.target.value)}
+                placeholder={locale === "fr" ? "Vide : utiliser le référentiel entreprise/boutique" : "Blank: use company/store reference"}
+                className="min-h-11 min-w-0 rounded-lg border border-dtsc-border bg-dtsc-surface px-3 text-base" />
+            </label>)}
+          </div>
+        </div>
+        <div className="min-w-0 space-y-3 rounded-xl border border-dtsc-border bg-dtsc-page p-3">
+          <h4 className="font-black text-dtsc-ink">{locale === "fr" ? "Encaissement et rapport journalier des stocks" : "Checkout and daily inventory report"}</h4>
+          <label className="grid max-w-sm gap-1 text-xs font-bold text-dtsc-ink">{locale === "fr" ? "Espèces reçues proposées" : "Suggested cash tendered"}
+            <select className="min-h-11 rounded-lg border border-dtsc-border bg-dtsc-surface p-2" value={settings.cashTenderedDefault} onChange={(event) => change("cashTenderedDefault", event.target.value as Settings["cashTenderedDefault"])}>
+              <option value="TOTAL">{locale === "fr" ? "Total exact du panier" : "Exact cart total"}</option>
+              <option value="EMPTY">{locale === "fr" ? "Champ vide" : "Empty field"}</option>
+            </select>
+          </label>
+          <div className="grid min-w-0 gap-2 sm:grid-cols-2">
+            {([
+              ["stockReportEnabled", "Activer le rapport journalier", "Enable daily inventory report"],
+              ["stockReportIncludeZeroMovement", "Inclure les articles sans mouvement", "Include items without movement"],
+              ["stockReportIncludeReserved", "Afficher les réservations", "Show reserved inventory"],
+              ["stockReportIncludeLots", "Afficher les lots", "Include lots"],
+              ["stockReportIncludeExpiry", "Afficher les péremptions", "Include expiry dates"],
+            ] as const).map(([key, labelFr, labelEn]) => <label key={key} className="flex min-w-0 items-center gap-2 text-sm text-dtsc-ink"><input type="checkbox" className="h-5 w-5" checked={settings[key]} onChange={(event) => change(key, event.target.checked)} />{locale === "fr" ? labelFr : labelEn}</label>)}
+          </div>
+          <label className="grid max-w-sm gap-1 text-xs font-bold text-dtsc-ink">{locale === "fr" ? "Format d'export favori" : "Preferred export"}
+            <select className="min-h-11 rounded-lg border border-dtsc-border bg-dtsc-surface p-2" value={settings.stockReportDefaultFormat} onChange={(event) => change("stockReportDefaultFormat", event.target.value as Settings["stockReportDefaultFormat"])}>
+              <option value="PDF">PDF</option><option value="XLSX">Excel (.xlsx)</option><option value="CSV">CSV</option>
+            </select>
+          </label>
         </div>
         <p className="text-xs leading-5 text-dtsc-muted">{t.security}</p>
         <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-2 sm:grid-cols-2">

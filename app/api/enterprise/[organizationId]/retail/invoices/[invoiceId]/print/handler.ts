@@ -5,7 +5,7 @@ import { authorizeRetailRequest, retailErrorResponse } from "@/lib/enterprise/re
 import { retailInvoiceVisibleSites } from "@/lib/enterprise/retail/site-access";
 import { resolveOrganizationLogoStoragePath } from "@/lib/enterprise/organization-logo-storage";
 import { prisma } from "@/lib/prisma";
-import { readRetailInvoiceFooterSnapshot } from "@/lib/enterprise/retail/operating-settings";
+import { readRetailInvoiceFooterSnapshot, readRetailInvoiceHeaderSnapshot } from "@/lib/enterprise/retail/operating-settings";
 
 type Params = { params: Promise<{ organizationId: string; invoiceId: string }> };
 
@@ -57,7 +57,7 @@ export async function GET(req: Request, { params }: Params) {
       }
     }
     const [organization, customer, preparer] = await Promise.all([
-      prisma.organization.findFirst({ where: { id: organizationId, status: "ACTIVE", deletedAt: null }, select: { name: true, timezone: true, logoUrl: true } }),
+      prisma.organization.findFirst({ where: { id: organizationId, status: "ACTIVE", deletedAt: null }, select: { name: true, timezone: true, logoUrl: true, phone: true, email: true, address: true } }),
       prisma.enterpriseBusinessParty.findFirst({ where: { organizationId, id: checkout.invoice.businessPartyId, archivedAt: null }, select: { displayName: true, legalName: true } }),
       prisma.user.findUnique({ where: { id: checkout.preparedByUserId }, select: { name: true } }),
     ]);
@@ -84,6 +84,22 @@ export async function GET(req: Request, { params }: Params) {
       : { DRAFT: "Draft", PENDING_APPROVAL: "Pending approval", APPROVED: "Approved", ISSUED: "Issued", PARTIALLY_PAID: "Partially paid", PAID: "Paid", OVERDUE: "Overdue", CANCELLED: "Cancelled", VOIDED: "Voided" };
     const localizedStatus = statusNames[invoice.status as keyof typeof statusNames] || invoice.status;
     const address = [checkout.site.addressLine1, checkout.site.addressLine2, checkout.site.city, checkout.site.countryCode].filter(Boolean).join(", ");
+    // New documents use the immutable preparation snapshot. Legacy invoices
+    // with no snapshot fall back to the current registered issuer and site.
+    const identity = readRetailInvoiceHeaderSnapshot(checkout.invoiceHeaderSnapshot) || {
+      legalName: organization.name, tradeName: checkout.site.name, address: address || organization.address || "",
+      phone: organization.phone || "", email: organization.email || "", website: "",
+      rccm: "", idNat: "", nif: "",
+    };
+    const legalRows = [
+      identity.phone ? `${locale === "fr" ? "Tél." : "Phone"}: ${identity.phone}` : "",
+      identity.email ? `E-mail: ${identity.email}` : "",
+      identity.rccm ? `RCCM: ${identity.rccm}` : "",
+      identity.idNat ? `ID.NAT: ${identity.idNat}` : "",
+      identity.nif ? `NIF: ${identity.nif}` : "",
+      identity.website ? identity.website : "",
+    ].filter(Boolean);
+    const printedLegalRows = legalRows.map((row) => `<div class="muted">${escapeHtml(row)}</div>`).join("");
     const statusBanner = invoice.status === "DRAFT" || invoice.status === "PENDING_APPROVAL" || invoice.status === "APPROVED" ? labels.draft
       : invoice.status === "CANCELLED" ? labels.cancelled : invoice.status === "VOIDED" ? labels.voided : null;
     const tableRows = invoice.items.map((line) => `<tr><td>${escapeHtml(line.description)}</td><td class="numeric">${escapeHtml(line.quantity.toFixed())}</td><td class="numeric">${money(line.unitPrice, locale)}</td><td class="numeric">${money(line.totalAmount, locale)}</td></tr>`).join("");
@@ -105,7 +121,7 @@ export async function GET(req: Request, { params }: Params) {
       @page{size:${paper === "thermal" ? "80mm auto" : "A4"};margin:${paper === "thermal" ? "2mm" : "12mm"}}
       @media print{body{width:100%;max-width:none;padding:0}.print-action{display:none}}
       ${paper === "thermal" ? "body{max-width:76mm;padding:6px;font-size:10px}.head{display:block;padding-bottom:6px}.identity{gap:5px}.company-logo{width:34px;height:34px}.brand{font-size:13px}.store{font-size:12px}.meta{grid-template-columns:1fr;gap:3px;margin:8px 0}table{font-size:9px;margin-top:8px}th,td{padding:3px 1px}.totals{max-width:100%}.total-row{font-size:10px}.emphasized{font-size:12px}.footer{margin-top:12px}.banner{font-size:10px;padding:4px}" : ""}
-      </style></head><body><div class="head"><div class="identity">${logo}<div><div class="brand">${escapeHtml(organization.name)}</div><div class="store">${escapeHtml(checkout.site.name)}</div><div class="muted">${escapeHtml(address)}</div></div></div><button type="button" class="print-action" onclick="window.print()">${escapeHtml(labels.print)}</button></div>
+      </style></head><body><div class="head"><div class="identity">${logo}<div><div class="brand">${escapeHtml(identity.legalName)}</div><div class="store">${escapeHtml(identity.tradeName)}</div><div class="muted">${escapeHtml(identity.address)}</div>${printedLegalRows}</div></div><button type="button" class="print-action" onclick="window.print()">${escapeHtml(labels.print)}</button></div>
       ${statusBanner ? `<div class="banner">${escapeHtml(statusBanner)}</div>` : ""}
       <h1>${escapeHtml(labels.title)}</h1><div class="meta"><div><strong>${escapeHtml(labels.invoiceNumber)}:</strong> ${escapeHtml(invoice.number)}</div><div><strong>${escapeHtml(labels.date)}:</strong> ${escapeHtml(localDate(invoice.invoiceDate, locale, timezone))}</div><div><strong>${escapeHtml(labels.site)}:</strong> ${escapeHtml(checkout.site.name)}</div><div><strong>${escapeHtml(labels.status)}:</strong> ${escapeHtml(localizedStatus)}</div><div><strong>${escapeHtml(labels.customer)}:</strong> ${escapeHtml(customer?.displayName || customer?.legalName || "—")}</div><div><strong>${escapeHtml(labels.preparer)}:</strong> ${escapeHtml(preparer?.name || "—")}</div></div>
       <table><thead><tr><th>${escapeHtml(labels.item)}</th><th class="numeric">${escapeHtml(labels.qty)}</th><th class="numeric">${escapeHtml(labels.unit)}</th><th class="numeric">${escapeHtml(labels.amount)}</th></tr></thead><tbody>${tableRows}</tbody></table>

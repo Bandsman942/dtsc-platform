@@ -11,6 +11,7 @@ model EnterpriseRetailInvoiceCheckout {
   requestFingerprint String
   preparedByUserId  String
   invoiceFooterSnapshot Json?
+  invoiceHeaderSnapshot Json?
   stockPostedAt     DateTime?
   stockPostedByUserId String?
   revision          Int      @default(1)
