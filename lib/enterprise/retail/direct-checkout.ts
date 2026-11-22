@@ -118,7 +118,7 @@ async function resultFor(organizationId: string, actorUserId: string, input: Dir
   ]);
   if (!invoice || !payment || !checkout || invoice.status !== "PAID" ||
       !invoice.outstandingAmount.isZero() || !checkout.stockPostedAt ||
-      payment.status !== "CONFIRMED" || !payment.amount.equals(invoice.grandTotal)) {
+      !["CONFIRMED", "RECONCILED"].includes(payment.status) || !payment.amount.equals(invoice.grandTotal)) {
     throw new EnterpriseRetailError("RETAIL_DIRECT_CHECKOUT_INCOMPLETE", 409);
   }
   const tendered = new Prisma.Decimal(input.payment.cashTendered);

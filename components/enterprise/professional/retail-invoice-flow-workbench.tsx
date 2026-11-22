@@ -337,20 +337,22 @@ export function RetailInvoiceFlowWorkbench({ organizationId, organizationName, l
       payment: { methodType: "CASH", financialAccountId: directAccountId,
         cashSessionId: directSessionId, cashTendered },
     };
-    // Persist only an opaque retry key and request fingerprint, not private
-    // customer/financial data. The backend always rechecks the authenticated actor.
-    const storageKey = `dtsc-direct-cash:${organizationId}:${siteId}`;
-    const fingerprint = JSON.stringify(intent);
-    let key = crypto.randomUUID();
-    try {
-      const saved = JSON.parse(sessionStorage.getItem(storageKey) || "null") as { fingerprint?: string; key?: string } | null;
-      if (saved?.fingerprint === fingerprint && saved.key) key = saved.key;
-      sessionStorage.setItem(storageKey, JSON.stringify({ fingerprint, key }));
-    } catch { /* Session storage is optional; the live tab still uses the same request. */ }
+    // Open the print surface synchronously from the click before any await.
+    // Persist only the SHA-256 intent digest and an opaque retry key: never
+    // expose the customer, cash account or session ID in browser storage.
     const paper = directOptions?.settings.defaultPaper === "A4" ? "a4" : "thermal";
     const popup = directOptions?.settings.quickPrintEnabled ? window.open("about:blank", "_blank") : null;
     if (popup) { popup.document.title = copy.directBusy; popup.document.body.textContent = copy.directBusy; }
+    const storageKey = `dtsc-direct-cash:${organizationId}:${siteId}`;
     setDirectBusy(true); setError("");
+    let key = crypto.randomUUID();
+    try {
+      const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify(intent)));
+      const fingerprint = Array.from(new Uint8Array(hash), (byte) => byte.toString(16).padStart(2, "0")).join("");
+      const saved = JSON.parse(sessionStorage.getItem(storageKey) || "null") as { fingerprint?: string; key?: string } | null;
+      if (saved?.fingerprint === fingerprint && saved.key) key = saved.key;
+      sessionStorage.setItem(storageKey, JSON.stringify({ fingerprint, key }));
+    } catch { /* Storage and digest are optional; live requests still use server idempotency. */ }
     try {
       const response = await fetch(`/api/enterprise/${encodeURIComponent(organizationId)}/retail/direct-checkout`, {
         method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...intent, idempotencyKey: key }),
