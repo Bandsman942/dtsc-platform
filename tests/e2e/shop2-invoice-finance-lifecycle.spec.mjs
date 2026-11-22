@@ -2315,7 +2315,9 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
             action:"POST_COMPENSATION",compensationId:offsetId,revision:3,
           });
           expect(offsetReplay.status,JSON.stringify(offsetReplay.body)).toBe(200);
-          expect(offsetReplay.body.compensation.postingJournalEntryId).toBe(offsetPost.body.compensation.postingJournalEntryId);
+          expect(offsetReplay.body.compensation).toMatchObject({id:offsetId,status:"POSTED",revision:4});
+          expect(Object.hasOwn(offsetReplay.body.compensation,"postingJournalEntryId")).toBe(false,
+            "The public Finance response must not disclose internal accounting journal identifiers");
           const postedComp=await prisma.enterpriseJournalEntry.findFirstOrThrow({
             where:{organizationId,sourceEntityType:"EnterpriseSupplierClaimCompensation",sourceEntityId:offsetId,
               postingEvent:"SUPPLIER_CLAIM_COMPENSATION_POSTED",status:"POSTED"},include:{lines:true},
@@ -2349,7 +2351,12 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
           expect(offsetHistory.status(),await offsetHistory.text()).toBe(200);
           const offsetRow=(await offsetHistory.json()).items.find(row=>row.id===offsetId);
           expect(offsetRow).toMatchObject({status:"POSTED",targetInvoiceNumber:offsetInvoice.number,
-            reservationActive:false,postingJournalEntryId:postedComp.id});
+            reservationActive:false});
+          expect(Object.hasOwn(offsetRow,"postingJournalEntryId")).toBe(false,
+            "The Finance history must not disclose internal posting references");
+          expect(Object.hasOwn(offsetRow,"reversalJournalEntryId")).toBe(false,
+            "The Finance history must not disclose internal reversal references");
+          expect(postedComp.id).toBeTruthy(); // Journal provenance is verified directly in the server-side fixture above.
           const afterOffset=await context.owner.request.get(claimPath);
           expect(afterOffset.status(),await afterOffset.text()).toBe(200);
           expect((await afterOffset.json()).claim).toMatchObject({refunded:"0",compensated:"1",compensationReserved:"0",
