@@ -29,7 +29,7 @@ const offsetBase={
   id:"comp-a",organizationId:"org-a",claimId:"claim-a",payableId:"payable-a",
   status:"REVERSED",amount:D(9),currencyCode:"CDF",
   accountingDate:new Date("2026-11-04T00:00:00.000Z"),
-  postedAt:created,postedByUserId:"poster",
+  postedAt:created,postedByUserId:"poster",requestedByUserId:"requester",approverUserId:"approver",
   reversedAt:reversed,reversedByUserId:"reverser",reversalReason:"Correct compensation in period",
   postingJournalEntryId:"journal-0",reversalJournalEntryId:"journal-1",
   targetInvoiceJournalId:"invoice-journal",payableAccountId:"payable-ledger",
@@ -122,6 +122,12 @@ await assert.rejects(proof(tx,input),denied);
 reset();state.records[0].reversalEntryId="missing-inverse";
 await assert.rejects(proof(tx,input),denied);
 reset();state.records[0].reason="tampered";
+await assert.rejects(proof(tx,input),denied);
+reset();state.records[0].approvedByUserId="other-reviewer";
+await assert.rejects(proof(tx,input),denied);
+reset();state.offsets[0].reversedByUserId="requester";
+await assert.rejects(proof(tx,input),denied);
+reset();state.allocations[0].reversedAt=new Date("2026-11-02T00:00:00.000Z");
 await assert.rejects(proof(tx,input),denied);
 reset();state.offsets[0].targetInvoiceJournalId="foreign-invoice";
 await assert.rejects(proof(tx,input),denied);
