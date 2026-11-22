@@ -128,10 +128,19 @@ for (const uiGuard of ['retryRecallAlerts(lot)', 'lot.recallReference&&canRecall
   'action:"RETRY_RECALL_ALERTS"', 'alerts.failed']) {
   assert.ok(governanceUi.includes(uiGuard), `Recall alert retry UI must contain ${uiGuard}`);
 }
-const deliveryIndex = route.indexOf("const alerts=");
-assert.ok(deliveryIndex > route.indexOf('return {revision:lot.revision+1,recallReference:reference'),
-  "Notifications must never be sent inside the recall mutation branch");
-assert.ok(route.includes("...publicResult") && route.includes("recallRecipients:internalRecipients"),
-  "Recipient identifiers must not be present in public recall responses");
+const recallEventIndex=route.indexOf('eventType:"STOCK_LOT_RECALLED"');
+const quarantineCommitIndex=route.indexOf(
+  '},{isolationLevel:Prisma.TransactionIsolationLevel.Serializable});', recallEventIndex);
+const postCommitDiscoveryIndex=route.indexOf("const recipientIds=await prisma.$transaction(", quarantineCommitIndex);
+assert.ok(recallEventIndex>=0 && quarantineCommitIndex>recallEventIndex &&
+  postCommitDiscoveryIndex>quarantineCommitIndex,
+  "Recipient discovery must only run AFTER the stock quarantine has committed");
+assert.ok(route.includes("discoveryFailed:true") && route.includes("recipientIds===null"),
+  "A failed notification lookup cannot undo or misreport the committed recall");
+assert.ok(!route.includes("recallRecipients:internalRecipients") &&
+  route.includes("return NextResponse.json({ok:true,...result"),
+  "Recipient identities must never be included in public recall responses");
+assert.ok(governanceUi.includes("alerts?.discoveryFailed"),
+  "The UX must explicitly signal a recoverable recipient lookup failure");
 assert.ok(acceptedKeys.size > 0);
 console.log("Supplier/retail stock recall alerts: active organization-scoped managers, neutral payloads, idempotent delivery, no identity leaks, partial failure isolation");
