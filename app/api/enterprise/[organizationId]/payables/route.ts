@@ -5,6 +5,7 @@ import { z } from "zod";
 import { getEnterpriseAccountingAccess } from "@/lib/enterprise/accounting/access";
 import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
 import { isValidEnterpriseActivityCivilDate } from "@/lib/enterprise/enterprise-activity-civil-date";
+import { reversePostedSupplierClaimCompensation } from "@/lib/enterprise/accounting/supplier-claim-compensation-inverse";
 import { prepareSupplierClaimCompensation, cancelSupplierClaimCompensation, submitSupplierClaimCompensation, decideSupplierClaimCompensation, postSupplierClaimCompensation, readSupplierClaimCompensation, listSupplierClaimCompensations, supplierCompensationDraftProjection } from "@/lib/enterprise/accounting/supplier-claim-compensation-service";
 import { authorizeFinanceRequest, financeBusinessDateRange, financeErrorResponse, financeListParams, financeValidationErrorResponse } from "@/lib/enterprise/accounting/http";
 import { prisma } from "@/lib/prisma";
@@ -57,7 +58,7 @@ export async function GET(req: Request, { params }: Params) {
       const rawPage = query.get("page") || "1";
       if (!/^[1-9]\d{0,3}$/.test(rawPage)) throw new EnterpriseAccountingError("FINANCE_INPUT_INVALID",400);
       const status = query.get("compensationStatus") || undefined;
-      if (status && !["DRAFT","PENDING_APPROVAL","APPROVED","POSTED","REJECTED","CANCELLED"].includes(status))
+      if (status && !["DRAFT","PENDING_APPROVAL","APPROVED","POSTED","REVERSED","REJECTED","CANCELLED"].includes(status))
         throw new EnterpriseAccountingError("FINANCE_INPUT_INVALID",400);
       const history = await listSupplierClaimCompensations(
         organizationId, auth.session.userId, claimCompensationsFor, auth.access.canSeeAll, Number(rawPage), status);
@@ -170,6 +171,9 @@ const compensationDraftMutation = z.discriminatedUnion("action", [
     reason: z.string().trim().min(8).max(1000).optional() }).strict(),
   z.object({ action: z.literal("POST_COMPENSATION"), compensationId: z.string().trim().min(1).max(200),
     revision: z.number().int().positive() }).strict(),
+  z.object({ action: z.literal("REVERSE_COMPENSATION"), compensationId: z.string().trim().min(1).max(200),
+    revision: z.number().int().positive(), reason: z.string().trim().min(8).max(1000),
+    accountingDate: z.string().refine(isValidEnterpriseActivityCivilDate) }).strict(),
   z.object({ action: z.literal("CANCEL_COMPENSATION_DRAFT"), compensationId: z.string().trim().min(1).max(200),
     revision: z.number().int().positive(), reason: z.string().trim().min(8).max(1000) }).strict(),
 ]);
@@ -190,12 +194,14 @@ export async function POST(req: Request, { params }: Params) {
     // mutation permission rather than requiring Payables update for everyone.
     const requiredAction = data.action === "SUBMIT_COMPENSATION" ? "submit"
       : data.action === "APPROVE_COMPENSATION" || data.action === "REJECT_COMPENSATION" ? "approve"
-      : data.action === "POST_COMPENSATION" ? "pay" : "update";
+      : data.action === "POST_COMPENSATION" ? "pay"
+      : data.action === "REVERSE_COMPENSATION" ? "reverse" : "update";
     if (!await getEnterpriseAccountingAccess({ session: auth.session, organizationId,
       moduleCode: "FINANCE_PAYABLES", action: requiredAction }))
       throw new EnterpriseAccountingError("SUPPLIER_RETURN_REFUND_ACCESS_FORBIDDEN", 403);
-    if (data.action === "POST_COMPENSATION" &&
-        !await getEnterpriseAccountingAccess({ session: auth.session, organizationId, moduleCode: "FINANCE_ACCOUNTING", action: "create" }))
+    if ((data.action === "POST_COMPENSATION" || data.action === "REVERSE_COMPENSATION") &&
+        !await getEnterpriseAccountingAccess({ session: auth.session, organizationId,
+          moduleCode: "FINANCE_ACCOUNTING", action: data.action === "POST_COMPENSATION" ? "create" : "reverse" }))
       throw new EnterpriseAccountingError("SUPPLIER_RETURN_REFUND_ACCESS_FORBIDDEN", 403);
     const draft = data.action === "PREPARE_COMPENSATION"
       ? await prepareSupplierClaimCompensation(organizationId, auth.session.userId, data)
@@ -207,6 +213,8 @@ export async function POST(req: Request, { params }: Params) {
             action: data.action === "APPROVE_COMPENSATION" ? "APPROVE" : "REJECT", reason: data.reason })
           : data.action === "POST_COMPENSATION"
             ? await postSupplierClaimCompensation(organizationId, auth.session.userId, data)
+            : data.action === "REVERSE_COMPENSATION"
+              ? await reversePostedSupplierClaimCompensation(organizationId, auth.session.userId, data)
             : data.action === "CANCEL_COMPENSATION_DRAFT"
               ? await cancelSupplierClaimCompensation(organizationId, auth.session.userId, data)
               : (() => { throw new EnterpriseAccountingError("FINANCE_INPUT_INVALID", 400); })();
@@ -216,6 +224,7 @@ export async function POST(req: Request, { params }: Params) {
         : data.action === "APPROVE_COMPENSATION" ? "SUPPLIER_CLAIM_COMPENSATION_APPROVED"
         : data.action === "REJECT_COMPENSATION" ? "SUPPLIER_CLAIM_COMPENSATION_REJECTED"
         : data.action === "POST_COMPENSATION" ? "SUPPLIER_CLAIM_COMPENSATION_POSTED"
+        : data.action === "REVERSE_COMPENSATION" ? "SUPPLIER_CLAIM_COMPENSATION_REVERSED"
         : "SUPPLIER_CLAIM_COMPENSATION_DRAFT_CANCELLED",
       entity: "EnterpriseSupplierClaimCompensation", entityId: draft.id, request: req,
       metadata: { organizationId, claimId: draft.claimId, payableId: draft.payableId, status: draft.status } });
