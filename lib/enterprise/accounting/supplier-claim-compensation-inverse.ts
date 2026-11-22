@@ -173,9 +173,7 @@ export async function reversePostedSupplierClaimCompensation(
     if (error instanceof Prisma.PrismaClientKnownRequestError &&
         (["P2034", "P2002"].includes(error.code) ||
           (error.code === "P2010" && ["40001", "40P01"].includes(String(error.meta?.code))))) {
-      return error instanceof Error
-        ? Promise.reject(new EnterpriseAccountingError("SUPPLIER_RETURN_COMPENSATION_INVERSE_CONFLICT", 409))
-        : Promise.reject(error);
+      throw new EnterpriseAccountingError("SUPPLIER_RETURN_COMPENSATION_INVERSE_CONFLICT", 409);
     }
     throw error;
   });
