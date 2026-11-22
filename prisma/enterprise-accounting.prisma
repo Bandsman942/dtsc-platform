@@ -728,6 +728,10 @@ model EnterpriseSupplierClaimCompensation {
   postedAt                   DateTime?
   postedByUserId             String?
   postingJournalEntryId      String?
+  reversedAt                 DateTime?
+  reversedByUserId           String?
+  reversalReason             String?
+  reversalJournalEntryId     String?
   cancelledAt                DateTime?
   cancelledByUserId          String?
   cancellationReason         String?
