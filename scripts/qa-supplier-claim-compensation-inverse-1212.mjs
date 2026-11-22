@@ -179,19 +179,7 @@ const {reversePostedSupplierClaimCompensation:reverse}=module.exports;
 const input={compensationId:"comp-1",revision:4,reason:"Accounting correction required",accountingDate:"2026-11-06"};
 
 reset();
-let reset();
-state.payable.allocatedAmount=decimal("3");
-state.payable.creditedAmount=decimal("2");
-state.invoice.amountPaid=decimal("3");
-state.invoice.amountCredited=decimal("2");
-state.invoice.status="PARTIALLY_PAID";
-const partiallyPaid=await reverse("org-a","independent",input);
-assert.equal(partiallyPaid.status,"REVERSED");
-assert.equal(state.invoice.status,"PARTIALLY_PAID",
-  "A post-compensation payment must retain its partially-paid supplier invoice status");
-assert.equal(state.payable.outstandingAmount.toFixed(),"15");
-
-value=await reverse("org-a","independent",input);
+let value=await reverse("org-a","independent",input);
 assert.equal(value.status,"REVERSED");
 assert.equal(value.revision,5);
 assert.equal(value.reversalJournalEntryId,"journal-reversed");
@@ -212,6 +200,18 @@ value=await reverse("org-a","independent",input);
 assert.equal(value.status,"REVERSED");
 assert.equal(state.journalReversals,1,"Idempotent retry must not reverse journal twice");
 assert.equal(state.events.length,1);
+
+reset();
+state.payable.allocatedAmount=decimal("3");
+state.payable.creditedAmount=decimal("2");
+state.invoice.amountPaid=decimal("3");
+state.invoice.amountCredited=decimal("2");
+state.invoice.status="PARTIALLY_PAID";
+const partiallyPaid=await reverse("org-a","independent",input);
+assert.equal(partiallyPaid.status,"REVERSED");
+assert.equal(state.invoice.status,"PARTIALLY_PAID",
+  "A post-compensation payment must retain its partially-paid supplier invoice status");
+assert.equal(state.payable.outstandingAmount.toFixed(),"15");
 
 for(const actor of ["requester","approver","poster"]){
   reset();
