@@ -103,7 +103,9 @@ export async function reversePostedSupplierClaimCompensation(
         invoice.businessPartyId !== proof.invoice.businessPartyId ||
         payable.currencyCode !== posted.currencyCode || invoice.currencyCode !== posted.currencyCode ||
         payable.status !== (payable.outstandingAmount.isZero() ? "CLOSED" : "OPEN") ||
-        invoice.status !== (invoice.outstandingAmount.isZero() ? "PAID" : "POSTED") ||
+        (invoice.outstandingAmount.isZero()
+          ? invoice.status !== "PAID"
+          : !["POSTED", "PARTIALLY_PAID"].includes(invoice.status)) ||
         allocations.length !== 1 || !allocation || allocation.payableId !== payable.id ||
         allocation.status !== "CONFIRMED" || allocation.reversedAt ||
         !allocation.amount.equals(posted.amount) ||
@@ -147,7 +149,8 @@ export async function reversePostedSupplierClaimCompensation(
     await tx.enterpriseSupplierInvoice.update({
       where: { id: invoice.id },
       data: { amountCompensated: nextCompensated, outstandingAmount: nextOutstanding,
-        status: "POSTED", revision: { increment: 1 } },
+        status: payable.allocatedAmount.gt(0) ? "PARTIALLY_PAID" : "POSTED",
+        revision: { increment: 1 } },
     });
     const updated = await tx.enterpriseSupplierClaimCompensation.update({
       where: { organizationId_id: { organizationId, id: posted.id } },
