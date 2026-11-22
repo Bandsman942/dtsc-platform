@@ -192,7 +192,7 @@ export function RetailInvoiceFlowWorkbench({ organizationId, organizationName, l
   const directSessions = directOptions?.cashSessions.filter((session) => session.financialAccountId === directAccountId) || [];
   const cashChange = cashTendered && pricing ? Number(cashTendered) - Number(pricing.grandTotal) : 0;
   const directCanPay = directCash && Boolean(pricing && chosenWarehouse && directAccountId && directSessionId && currencyCode &&
-    Number.isFinite(cashChange) && cashChange >= 0 && Number(pricing.grandTotal) > 0 && !pricingLoading && !submitting && !directBusy);
+    cashTendered.trim().length > 0 && Number.isFinite(Number(cashTendered)) && Number.isFinite(cashChange) && cashChange >= 0 && Number(pricing.grandTotal) > 0 && !pricingLoading && !submitting && !directBusy);
 
 
   const load = useCallback(async (nextPage = page, site = siteFilter) => {

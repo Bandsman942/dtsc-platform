@@ -10,6 +10,7 @@ import { prepareRetailInvoice, retailInvoicePrepareSchema } from "@/lib/enterpri
 import { proposeRetailInvoicePayment } from "@/lib/enterprise/retail/invoice-payments";
 import { readRetailOperatingSettings } from "@/lib/enterprise/retail/operating-settings";
 import { requireRetailSiteCapability, hasRetailSelfApprovalGrant } from "@/lib/enterprise/retail/site-access";
+import { withRetailTransactionRetry } from "@/lib/enterprise/retail/transaction-retry";
 import { prisma } from "@/lib/prisma";
 
 const id = z.string().trim().min(1).max(191);
@@ -74,7 +75,7 @@ async function lockAttempt(organizationId: string, actorUserId: string, input: D
   const token = randomUUID();
   const now = new Date();
   const until = new Date(now.getTime() + 120_000);
-  return prisma.$transaction(async (tx) => {
+  return withRetailTransactionRetry(() => prisma.$transaction(async (tx) => {
     await tx.enterpriseRetailDirectCheckoutAttempt.upsert({
       where: { organizationId_idempotencyKey: { organizationId, idempotencyKey: input.idempotencyKey } },
       create: { organizationId, actorUserId, siteId: input.siteId, idempotencyKey: input.idempotencyKey,
@@ -94,7 +95,7 @@ async function lockAttempt(organizationId: string, actorUserId: string, input: D
     });
     if (acquired.count !== 1) throw new EnterpriseRetailError("RETAIL_DIRECT_CHECKOUT_IN_PROGRESS", 409);
     return { attempt, token };
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }));
 }
 
 async function resultFor(organizationId: string, actorUserId: string, input: DirectCashInput) {
