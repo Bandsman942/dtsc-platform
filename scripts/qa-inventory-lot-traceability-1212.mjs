@@ -1481,3 +1481,4 @@ console.log("Supplier non-cash settlement: separate real credit notes 5, compens
 await import("./qa-inventory-recall-alerts-1212.mjs");
 await import("./qa-inventory-recall-retry-route-1212.mjs");
 await import("./qa-inventory-recall-failsafe-1212.mjs");
+await import("./qa-supplier-claim-compensation-inverse-1212.mjs");
