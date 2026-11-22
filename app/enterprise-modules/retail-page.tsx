@@ -27,6 +27,7 @@ import { requireEnterpriseMembership } from "@/lib/enterprise-sector-templates";
 import { prisma } from "@/lib/prisma";
 import { siteStaffCapabilities, retailStaffIsolationIsEnabled, hasExplicitRetailSelfApproval } from "@/lib/enterprise/retail/site-access";
 import { hasShopHistoricalImportAccess } from "@/lib/enterprise/retail/shop-history-availability";
+import { readRetailOperatingSettings } from "@/lib/enterprise/retail/operating-settings";
 
 export async function renderRetailModulePage(moduleCode: "RETAIL_POS" | "MOBILE_MONEY_AGENCY" | "TELCO_TOPUPS" | "RETAIL_DAILY_CLOSE", options?: { section?: string; siteId?: string; invoiceId?: string; invoiceNumber?: string; invoiceView?: string }) {
   const user = await requireUser();
@@ -69,6 +70,11 @@ export async function renderRetailModulePage(moduleCode: "RETAIL_POS" | "MOBILE_
   }
   const posConfiguration = moduleCode === "RETAIL_POS"
     ? await prisma.enterpriseRetailConfiguration.findUnique({ where: { organizationId }, select: { settingsJson: true } }) : null;
+  // A single-store worker should receive the store-specific navigation even
+  // when opening the POS directory without an explicit siteId query.
+  const navigationSiteId = options?.siteId || (posAssignments.length === 1 ? posAssignments[0].siteId : undefined);
+  const simplifiedPos = moduleCode === "RETAIL_POS" && !canManagePos &&
+    readRetailOperatingSettings(posConfiguration?.settingsJson, navigationSiteId).simplifiedNavigationEnabled;
   const invoiceCheckoutEnabled = Boolean(posConfiguration?.settingsJson && typeof posConfiguration.settingsJson === "object" && !Array.isArray(posConfiguration.settingsJson) && posConfiguration.settingsJson.invoiceCheckoutEnabled === true);
   if (invoiceCheckoutEnabled && retailStaffIsolationIsEnabled(posConfiguration?.settingsJson) && posAssignments.some((assignment) => hasExplicitRetailSelfApproval({ ...assignment, isActive: true }, "INVOICE"))) posCapabilities.add("INVOICE_WORKFLOW");
   const companySites = moduleCode === "RETAIL_DAILY_CLOSE" && canManagePos
@@ -137,7 +143,7 @@ export async function renderRetailModulePage(moduleCode: "RETAIL_POS" | "MOBILE_
                 <RetailExpiryAlertsPanel organizationId={organizationId} locale={locale} />
               ) : null}
             </RetailPosSectionDetail>
-          ) : <RetailPosSectionDirectory locale={locale} canManage={canManagePos} capabilities={posCapabilities} />
+          ) : <RetailPosSectionDirectory locale={locale} canManage={canManagePos} capabilities={posCapabilities} simplified={simplifiedPos} />
         ) : moduleCode === "MOBILE_MONEY_AGENCY" ? (
           <MobileMoneyAgencyWorkspace
             organizationId={organizationId}

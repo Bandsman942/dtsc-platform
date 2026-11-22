@@ -1,3 +1,9 @@
+## 2026-11-22 — Reprise #1215 après fusion RETAIL #1217 (DRAFT)
+
+- Branche `fix/1212-inventory-final-completion` synchronisée avec `main` au commit `45e611689e0702b219ba389178103ad289cb8231` ; 60 changements métier/QA de #1215 conservés, deux conflits documentaire/version résolus sans toucher aux transactions Finance.
+- Version candidate `1.24.1`, héritage des fonctionnalités Commerce sans caissier v1.24.0 intact (API, UI, stock, journaux, tests).
+- Prochaines étapes : inverse métier multi-lignes, FX/taxes/provenances, parcours secteur Pharma/Health/Manufacturing, UI 2.0 et certification E2E propriétaire. Aucun merge ni déploiement de #1215.
+
 ## 2026-11-22 — #1215 : contrepassation contrôlée des compensations fournisseurs (DRAFT)
 
 - Transition comptable `POSTED → REVERSED` avec écriture inverse, motif, date de période ouverte, identité indépendante et registre conservé ; aucune création de paiement ou transaction de trésorerie.

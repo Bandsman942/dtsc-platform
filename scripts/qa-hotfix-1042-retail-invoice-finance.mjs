@@ -58,6 +58,7 @@ vm.runInNewContext(compiled, {
     if (id === "@/lib/prisma") return { prisma };
     if (id === "@/lib/enterprise/retail/errors") return { EnterpriseRetailError };
     if (id === "@/lib/enterprise/retail/constants") return { RETAIL_SECTOR_CODE: "COMMERCE_RETAIL" };
+    if (id === "@/lib/enterprise/retail/operating-settings") return { retailInvoiceFooterSnapshot: () => ({ fr: [], en: [] }) };
     if (id === "@/lib/enterprise/accounting/currency") return { resolveExchangeRateDetails: async () => ({ rate: decimal(1), rateId: null, rateDate: new Date(), direction: "IDENTITY" }), snapshotExchangeRate: async () => ({}) };
     if (id === "@/lib/enterprise/retail/commercial-engine") return { resolveRetailCommercialPricingDecisions: async () => [{ catalogItemId: "product", lineTotal: decimal(10) }] };
     if (id === "@/lib/enterprise/inventory/lot-allocation") return { reservationExactBalanceRemaining: () => decimal(0), reservationLegacyRemaining: (row) => row.quantity.minus(row.fulfilledQuantity), reservationLotRemaining: (row) => row.quantity.minus(row.fulfilledQuantity), readInvoiceLotAllocations: (line, cancelled) => { const remaining = line.invoiceItem.quantity.minus(cancelled); return remaining.gt(0) ? [{ stockLotId: line.stockLotId, quantity: remaining }] : []; } };

@@ -1,6 +1,6 @@
 # Suite #1212 — Inventory & Lot Traceability 2.0
 
-DRAFT — base f44b40102b1a366be491f06ed8154bc283326a47 (#1214 fusionnée), cible 1.23.5. Refs #1212, ne pas fermer avant recette complète.
+DRAFT — base mise à jour main 45e611689e0702b219ba389178103ad289cb8231 (#1217 fusionnée), candidate 1.24.1. Refs #1212/#1215, ne pas fermer avant recette complète.
 
 ## Lot 1A — diagnostic de règlement
 
