@@ -21,7 +21,6 @@ type Compensation = {
   id: string; claimId: string; payableId: string; targetInvoiceNumber: string;
   amount: string; currencyCode: string; supplierReference: string; reason: string;
   status: string; revision: number; submittedAt?: string | null; postedAt?: string | null; approverUserId?: string | null;
-  postingJournalEntryId?: string | null; reversalJournalEntryId?: string | null;
   reversedAt?: string | null; reversalReason?: string | null; reservationActive: boolean;
   requestedByName?: string | null; approverName?: string | null; postedByName?: string | null; reversedByName?: string | null;
 };
