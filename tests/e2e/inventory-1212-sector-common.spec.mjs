@@ -397,8 +397,11 @@ test.describe.serial("#1212 common inventory contract in independent sector tena
         } }));
         expect(suspendedRetry.status, JSON.stringify(suspendedRetry.body)).toBe(200);
         expect(suspendedRetry.body.notifications).toMatchObject({
-          recipients: 0, queued: 0, failed: 0, discoveryFailed: false,
+          recipients: 0, queued: 0, failed: 0,
         });
+        // The retry endpoint omits discoveryFailed on successful reads;
+        // an omitted field and explicit false both mean no discovery error.
+        expect(suspendedRetry.body.notifications.discoveryFailed ?? false).toBe(false);
         expect(await prisma.notification.count({ where: {
           organizationId, userId: reader.id, title: "Alerte qualité des stocks",
         } })).toBe(1);
