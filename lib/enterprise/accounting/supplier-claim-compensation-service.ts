@@ -325,7 +325,7 @@ export async function listSupplierClaimCompensations(
       tx.enterpriseSupplierClaimCompensation.count({ where }),
     ]);
     const actorIds = [...new Set(items.flatMap(item =>
-      [item.requestedByUserId, item.approverUserId, item.approvedByUserId, item.postedByUserId]
+      [item.requestedByUserId, item.approverUserId, item.approvedByUserId, item.postedByUserId, item.reversedByUserId]
         .filter((id): id is string => Boolean(id))))];
     const actors = actorIds.length
       ? await tx.user.findMany({ where: { id: { in: actorIds } }, select: { id: true, name: true } })
@@ -338,6 +338,7 @@ export async function listSupplierClaimCompensations(
         requestedByName: names.get(item.requestedByUserId) || null,
         approverName: item.approverUserId ? names.get(item.approverUserId) || null : null,
         postedByName: item.postedByUserId ? names.get(item.postedByUserId) || null : null,
+        reversedByName: item.reversedByUserId ? names.get(item.reversedByUserId) || null : null,
       })),
       pagination: { page, pageSize: 25, total, pageCount: Math.max(1, Math.ceil(total / 25)) },
     };
@@ -354,6 +355,8 @@ export function supplierCompensationDraftProjection(row: Awaited<ReturnType<type
     submittedAt: row.submittedAt, approverUserId: row.approverUserId,
     approvedAt: row.approvedAt, approvedByUserId: row.approvedByUserId,
     postedAt: row.postedAt, postingJournalEntryId: row.postingJournalEntryId,
+    reversedAt: row.reversedAt, reversedByUserId: row.reversedByUserId,
+    reversalReason: row.reversalReason, reversalJournalEntryId: row.reversalJournalEntryId,
     reservationActive: ["PENDING_APPROVAL", "APPROVED"].includes(row.status), executionAvailable: false as const };
 }
 
