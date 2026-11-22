@@ -141,3 +141,22 @@ Un contrôle de **relance explicite** est disponible sur les fiches de lots rapp
 La sûreté de la transaction est vérifiée par `scripts/qa-inventory-recall-failsafe-1212.mjs` : le vrai handler `PATCH` est exécuté avec un faux moteur SQL qui confirme la transaction de quarantaine, puis simule une panne de recherche des destinataires dans la transaction de lecture suivante. La réponse reste HTTP 200, `status=QUARANTINED`, `discoveryFailed=true`, les logs audités sont produits et aucune notification n'est envoyée faute de destinataires vérifiés. Ce test fait partie de la gate Stocks & Lots ; il ne remplace pas un E2E PostgreSQL réel.
 
 Les autres réserves du programme (inverse financier, FX/multi-origines, adapters sectoriels et OWNER_E2E global) restent ouvertes. Aucun déploiement ni fusion.
+
+
+## Lot 3A — contrepassation métier d'une compensation fournisseur comptabilisée (DRAFT)
+
+Le moteur Finance dispose désormais de la transition explicite `POSTED → REVERSED` pour `EnterpriseSupplierClaimCompensation`. L'opération requiert les capacités **Manage/Reverse** sur Dettes fournisseurs et sur Comptabilité, ainsi qu'un acteur différent du demandeur, du validateur et du comptabilisateur. Le motif (8 caractères minimum), la date civile et une période de correction **OPEN** sont obligatoires. Une période SOFT_CLOSED, CLOSED ou LOCKED ne peut recevoir l'inverse ; le journal historique reste à sa date initiale.
+
+Après verrouillage de la créance, de la compensation, de la facture cible et de la dette, le service revalide la preuve complète de la créance et de la compensation POSTED, la facture du même fournisseur/tiers/devise, l'allocation d'origine unique et la réconciliation `originalAmount = allocatedAmount + creditedAmount + compensatedAmount + outstandingAmount`. Dans **une transaction Serializable**, il :
+- produit une écriture de contrepassation `DOMAIN_INVERSE` sur la période ouverte (aucune écriture directe arbitraire n'est permise par le contrôleur de journaux) ;
+- passe l'allocation de compensation en `REVERSED` avec `reversedAt`, sans la supprimer ;
+- soustrait le montant de `EnterprisePayable.compensatedAmount` et de `EnterpriseSupplierInvoice.amountCompensated`, et le réajoute aux deux soldes ouverts ;
+- passe la compensation en `REVERSED` (révision 5), en conservant journal d'origine, journal inverse, acteur, motif et date, et publie l'événement Finance et les AuditLog/ApiLog de la route.
+
+Aucun paiement, mouvement bancaire, caisse, trésorerie ni avoir fournisseur n'est créé. Le rejeu exact par le même auteur, même date, même motif et révision d'origine est idempotent. Les preuves manquantes, les réservations concurrentes incohérentes, la révision périmée, l'auto-contrepassation et les périodes closes produisent un refus sans écriture partielle. L'interface FR/EN donne un formulaire exclusivement aux gestionnaires Dettes ; l'autorisation Comptabilité est **systématiquement revérifiée côté serveur**.
+
+**Migration additive** : `20261122100000_supplier_claim_compensation_domain_inverse`, avec les quatre attributs de preuve de contrepassation et une extension des contraintes SQL d'état et d'immutabilité. Les migrations historiques ne sont pas modifiées. Le schéma Prisma passe `prisma generate`, `prisma validate` (avec URL PostgreSQL factice uniquement pour la validation statique) et la QA TypeScript. Aucun SQL n'a été exécuté sur la base de production.
+
+**QA exécutée en mocks isolés** : `scripts/qa-supplier-claim-compensation-inverse-1212.mjs`, inclus dans la gate Stocks & Lots, vérifie la restauration des soldes, l'ordre des verrous, la non-création d'un paiement, la période ouverte, la séparation des rôles, l'idempotence et les corruptions refusées. Avant certification E2E, exécuter la migration sur une base PostgreSQL de test isolée et les scénarios de concurrence réelle, budget exact multi-devise et retour après compensation partiellement suivie d'un paiement. La réutilisation de la même dette cible après une contrepassation exige encore l'extension de la preuve des allocations `REVERSED` et ne doit pas être annoncée comme disponible.
+
+**OWNER_E2E global : NON EXÉCUTÉ.** Les autres inverses des mouvements d'inventaire, le FX, la fiscalité multi-origines et les parcours sectoriels restent ouverts. Aucune fusion et aucun déploiement sur `main`.
