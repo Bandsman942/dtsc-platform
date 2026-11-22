@@ -65,14 +65,14 @@ const POS_DIRECTORY_SECTIONS: readonly RetailPosSection[] = [
   },
 ];
 
-export function RetailPosSectionDirectory({ locale, canManage, capabilities }: { locale: "fr" | "en"; canManage: boolean; capabilities: ReadonlySet<string> }) {
+export function RetailPosSectionDirectory({ locale, canManage, capabilities, simplified = false }: { locale: "fr" | "en"; canManage: boolean; capabilities: ReadonlySet<string>; simplified?: boolean }) {
   const t = (key: RetailWorkspaceKey) => translateRetailWorkspace(locale, key);
   return (
     <ModuleWorkspace density="compact" className="pb-[calc(5rem+env(safe-area-inset-bottom))]">
       <div data-retail-pos-directory>
         <ModuleHeader eyebrow={t("shopOperations")} title={t("posNavTitle")} description={t("posNavDescription")} />
         <nav aria-label={t("posNavTitle")} className="mt-4 grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {POS_DIRECTORY_SECTIONS.filter((item) => !item.hiddenInDirectory && canOpenRetailPosSection(item, canManage, capabilities)).map((item) => {
+          {POS_DIRECTORY_SECTIONS.filter((item) => !item.hiddenInDirectory && canOpenRetailPosSection(item, canManage, capabilities) && (!simplified || ["checkout", "my-stores", "invoices", "alerts"].includes(item.id))).map((item) => {
             const Icon = item.icon;
             return (
               <Link

@@ -37,6 +37,14 @@ type InvoiceResponse = {
 type Product = { id: string; name: string; code: string; sku?: string | null; currency: string | null; indicativeSalePrice: string | null; inventoryItemId: string | null; trackInventory: boolean; availableQuantity: string | null };
 type Line = { catalogItemId: string; name: string; code: string; quantity: number; currencyCode: string; unitPrice: string; inventoryItemId: string | null; stockLotId: string | null };
 type Lot = { id: string; inventoryItemId: string; lotNumber: string; expiryDate: string | null; quantityAvailable: string };
+type DirectOptions = {
+  settings: { directCheckoutEnabled: boolean; quickPrintEnabled: boolean; simplifiedNavigationEnabled: boolean; defaultPaper: "A4" | "THERMAL_80MM" };
+  directAllowed: boolean;
+  accounts: { id: string; name: string; code: string; currencyCode: string }[];
+  cashSessions: { id: string; number: string; financialAccountId: string }[];
+};
+type DirectReceipt = { status: "COMPLETED"; invoiceId: string; invoiceNumber: string; total: string; cashTendered: string; changeDue: string; currencyCode: string };
+
 type PricePreview = { subtotal: string; discountTotal: string; taxTotal: string; grandTotal: string; currencyCode: string; lines: { catalogItemId: string; resolvedUnitPrice: string; discountAmount: string; lineTotal: string; invoiceFx?: { sourceCurrencyCode: string; targetCurrencyCode: string; originalUnitPrice: string; rate: string; rateDate: string; rateId: string | null } }[] };
 
 const language = {
@@ -53,6 +61,9 @@ const language = {
     submitDraft: "Soumettre à validation", submitTitle: "Soumettre au validateur Finance", submitHint: "Un responsable indépendant, autorisé dans Finance, doit approuver la facture avant son émission. Aucun encaissement ni stock ne sera enregistré à cette étape.", submitConfirm: "Soumettre la facture", submitSuccess: "Facture soumise au validateur Finance. Son approbation est désormais attendue.", submitFailed: "La facture n’a pas pu être transmise à Finance.", submitNote: "Commentaire de soumission (facultatif)", submitApprover: "Responsable chargé de la validation", submitAbort: "Conserver en brouillon",
     printA4: "Facture A4", printThermal: "Ticket 80 mm", printProforma: "Imprimer la pro-forma A4",
     preview: "Prévisualiser la facture", previewTitle: "Aperçu avant confirmation", previewHint: "PRO FORMA — document non émis. Les prix et taxes sont recalculés par le serveur lors de la confirmation.",
+    directCash: "Paiement espèces · sans caissier", directIntro: "Vous recevez le paiement ici, sans passer par un caissier séparé. Les contrôles Finance restent actifs.",
+    directAccount: "Compte caisse de la boutique", directSession: "Ma session de caisse ouverte", directTendered: "Espèces reçues", directChange: "Monnaie à rendre", directFinal: "Finaliser et encaisser", directBusy: "Finalisation sécurisée…", directDenied: "Cette boutique est en mode sans caissier, mais vos droits de facturation et d'auto-approbation ne permettent pas encore l'encaissement direct. Le circuit habituel reste disponible.",
+    directReady: "Vente payée et enregistrée", directPrint: "Imprimer la facture", directCashMissing: "Une caisse active et votre session personnelle ouverte sont indispensables.",
     previewError: "Le calcul des prix et taxes est indisponible. Actualisez la sélection avant de confirmer.", client: "Client au comptoir", subtotal: "Sous-total", discounts: "Remises", tax: "Taxes", total: "Total", confirm: "Confirmer et préparer la facture", invoiceOnly: "Le paiement sera effectué dans Encaissements, par un caissier autorisé.",
   },
   en: {
@@ -68,6 +79,9 @@ const language = {
     submitDraft: "Submit for approval", submitTitle: "Submit to Finance approver", submitHint: "An independent approver with Finance permissions must approve the invoice before it can be issued. No payment or inventory movement occurs now.", submitConfirm: "Submit invoice", submitSuccess: "Invoice submitted for Finance approval.", submitFailed: "The invoice could not be submitted to Finance.", submitNote: "Submission comment (optional)", submitApprover: "Finance approver", submitAbort: "Keep as draft",
     printA4: "A4 invoice", printThermal: "80 mm receipt", printProforma: "Print A4 pro forma",
     preview: "Preview invoice", previewTitle: "Preview before confirmation", previewHint: "PRO FORMA — not an issued invoice. The server recalculates prices and taxes when you confirm.",
+    directCash: "Cash checkout · no separate cashier", directIntro: "Collect cash here. Finance permissions and audit still apply.",
+    directAccount: "Store cash account", directSession: "My open cash session", directTendered: "Cash received", directChange: "Change due", directFinal: "Finalize and collect", directBusy: "Finalizing securely…", directDenied: "This store uses cashierless mode, but your invoicing and self-approval grants do not yet allow direct collection. The standard approval flow remains available.",
+    directReady: "Sale paid and recorded", directPrint: "Print invoice", directCashMissing: "An active store cash account and your own open cash session are required.",
     previewError: "Pricing and tax calculations are unavailable. Refresh before confirming.", client: "Customer at checkout", subtotal: "Subtotal", discounts: "Discounts", tax: "Tax", total: "Total", confirm: "Confirm and prepare invoice", invoiceOnly: "Payment will be collected in Collections by an authorized cashier.",
   },
 } as const;
@@ -111,6 +125,12 @@ export function RetailInvoiceFlowWorkbench({ organizationId, organizationName, l
   const [customerId, setCustomerId] = useState<string | null>(null);
   const [customerName, setCustomerName] = useState("");
   const [pricing, setPricing] = useState<PricePreview | null>(null);
+  const [directOptions, setDirectOptions] = useState<DirectOptions | null>(null);
+  const [directAccountId, setDirectAccountId] = useState("");
+  const [directSessionId, setDirectSessionId] = useState("");
+  const [cashTendered, setCashTendered] = useState("");
+  const [directReceipt, setDirectReceipt] = useState<DirectReceipt | null>(null);
+  const [directBusy, setDirectBusy] = useState(false);
   const [invoiceCurrency, setInvoiceCurrency] = useState("");
   const [invoiceCurrencyError, setInvoiceCurrencyError] = useState("");
   useEffect(() => {
@@ -143,6 +163,37 @@ export function RetailInvoiceFlowWorkbench({ organizationId, organizationName, l
   }, [preferredSiteId, warehouses]);
   const chosenWarehouse = useMemo(() => warehouses.find((warehouse) => warehouse.id === warehouseId), [warehouseId, warehouses]);
   const currencyCode = invoiceCurrency;
+
+  useEffect(() => {
+    if (mode !== "checkout" || !chosenWarehouse) { setDirectOptions(null); return; }
+    const controller = new AbortController();
+    setDirectOptions(null); setDirectAccountId(""); setDirectSessionId("");
+    void fetch(`/api/enterprise/${encodeURIComponent(organizationId)}/retail/direct-checkout/options?siteId=${encodeURIComponent(chosenWarehouse.siteId)}`,
+      { cache: "no-store", signal: controller.signal })
+      .then(async (response) => { if (!response.ok) throw new Error("options"); return response.json() as Promise<DirectOptions>; })
+      .then((options) => { if (!controller.signal.aborted) {
+        setDirectOptions(options);
+        if (options.accounts.length === 1) setDirectAccountId(options.accounts[0].id);
+      } })
+      .catch(() => { if (!controller.signal.aborted) setDirectOptions(null); });
+    return () => controller.abort();
+  }, [organizationId, mode, chosenWarehouse]);
+
+  useEffect(() => {
+    if (pricing?.grandTotal) setCashTendered((previous) => previous || pricing.grandTotal);
+  }, [pricing?.grandTotal]);
+  useEffect(() => {
+    const matching = directOptions?.cashSessions.filter((session) => session.financialAccountId === directAccountId) || [];
+    setDirectSessionId(matching.length === 1 ? matching[0].id : "");
+  }, [directAccountId, directOptions]);
+
+  const directCash = Boolean(directOptions?.settings.directCheckoutEnabled && directOptions.directAllowed);
+  const directAccounts = directOptions?.accounts.filter((account) => account.currencyCode === currencyCode) || [];
+  const directSessions = directOptions?.cashSessions.filter((session) => session.financialAccountId === directAccountId) || [];
+  const cashChange = cashTendered && pricing ? Number(cashTendered) - Number(pricing.grandTotal) : 0;
+  const directCanPay = directCash && Boolean(pricing && chosenWarehouse && directAccountId && directSessionId && currencyCode &&
+    Number.isFinite(cashChange) && cashChange >= 0 && Number(pricing.grandTotal) > 0 && !pricingLoading && !submitting && !directBusy);
+
 
   const load = useCallback(async (nextPage = page, site = siteFilter) => {
     setLoading(true); setWorkflowLinks(null);
@@ -276,6 +327,51 @@ export function RetailInvoiceFlowWorkbench({ organizationId, organizationName, l
     window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
   }
 
+  async function finalizeDirectCash() {
+    if (!directCanPay || !chosenWarehouse || !pricing || directBusy) return;
+    const siteId = chosenWarehouse.siteId;
+    const intent = {
+      siteId, warehouseId, businessPartyId: customerId, currencyCode,
+      lines: lines.map((line) => ({ catalogItemId: line.catalogItemId, stockLotId: line.stockLotId, quantity: line.quantity })),
+      payment: { methodType: "CASH", financialAccountId: directAccountId,
+        cashSessionId: directSessionId, cashTendered },
+    };
+    // Persist only an opaque retry key and request fingerprint, not private
+    // customer/financial data. The backend always rechecks the authenticated actor.
+    const storageKey = `dtsc-direct-cash:${organizationId}:${siteId}`;
+    const fingerprint = JSON.stringify(intent);
+    let key = crypto.randomUUID();
+    try {
+      const saved = JSON.parse(sessionStorage.getItem(storageKey) || "null") as { fingerprint?: string; key?: string } | null;
+      if (saved?.fingerprint === fingerprint && saved.key) key = saved.key;
+      sessionStorage.setItem(storageKey, JSON.stringify({ fingerprint, key }));
+    } catch { /* Session storage is optional; the live tab still uses the same request. */ }
+    const paper = directOptions?.settings.defaultPaper === "A4" ? "a4" : "thermal";
+    const popup = directOptions?.settings.quickPrintEnabled ? window.open("about:blank", "_blank") : null;
+    if (popup) { popup.document.title = copy.directBusy; popup.document.body.textContent = copy.directBusy; }
+    setDirectBusy(true); setError("");
+    try {
+      const response = await fetch(`/api/enterprise/${encodeURIComponent(organizationId)}/retail/direct-checkout`, {
+        method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...intent, idempotencyKey: key }),
+      });
+      const value = await response.json().catch(() => null) as (DirectReceipt & { message?: string }) | null;
+      if (!response.ok || value?.status !== "COMPLETED") throw new Error(value?.message || copy.failed);
+      setDirectReceipt(value);
+      setLines([]); setLots([]); setCashTendered(""); setQuery("");
+      idempotencyKey.current = "";
+      try { sessionStorage.removeItem(storageKey); } catch { /* no-op */ }
+      await fetch(`/api/enterprise/${organizationId}/retail/active-customer`, { method: "DELETE" }).catch(() => null);
+      window.dispatchEvent(new CustomEvent("dtsc-retail-customer-changed", { detail: { organizationId } }));
+      toastSuccess(copy.directReady);
+      const printHref = `/api/enterprise/${encodeURIComponent(organizationId)}/retail/invoices/${encodeURIComponent(value.invoiceId)}/print?paper=${paper}&lang=${locale}`;
+      if (popup && !popup.closed) popup.location.replace(printHref);
+      await load(1, siteFilter);
+    } catch (cause) {
+      if (popup && !popup.closed) popup.close();
+      const message = customerFacingError(cause, locale); setError(message); toastError(message);
+    } finally { setDirectBusy(false); }
+  }
+
   async function prepare() {
     if (!data?.checkoutReady || !chosenWarehouse || !lines.length || !pricing || !invoiceCurrency || pricingLoading || submitting) return;
     setSubmitting(true);
@@ -380,8 +476,31 @@ export function RetailInvoiceFlowWorkbench({ organizationId, organizationName, l
           {pricingLoading ? <p role="status" className="text-xs text-dtsc-muted">{locale === "fr" ? "Calcul des prix et taxes…" : "Calculating prices and taxes…"}</p> : null}
           {pricingError ? <p role="alert" className="text-xs font-semibold text-red-700 dark:text-red-300">{pricingError}</p> : null}
           <div className="flex items-center justify-between gap-2 border-t border-dtsc-border pt-3"><span className="text-sm font-black text-dtsc-ink">{copy.total}</span><strong className="text-lg text-dtsc-blue">{money(pricing?.grandTotal || "0", currencyCode, locale)}</strong></div>
-          <p className="text-xs leading-5 text-dtsc-muted">{copy.invoiceOnly}</p>
-          <div data-responsive-actions className="flex flex-wrap justify-end gap-2"><Button type="button" variant="outline" disabled={!lines.length || submitting} onClick={() => { setLines([]); idempotencyKey.current = ""; }}>{copy.clear}</Button><Button type="button" disabled={!chosenWarehouse || !lines.length || !pricing || pricingLoading || submitting || lines.some((line) => !Number.isFinite(line.quantity) || line.quantity <= 0)} onClick={() => setPreviewOpen(true)}><ArrowRight className="h-4 w-4" />{copy.preview}</Button></div>
+          {directOptions?.settings.directCheckoutEnabled && !directOptions.directAllowed ? <p role="note" className="rounded-lg bg-amber-500/10 p-3 text-xs leading-5 text-amber-700 dark:text-amber-200">{copy.directDenied}</p> : null}
+          {directCash ? <div className="min-w-0 space-y-3 rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-3" data-retail-direct-cash>
+            <h4 className="text-sm font-black text-emerald-700 dark:text-emerald-300">{copy.directCash}</h4>
+            <p className="text-xs leading-5 text-dtsc-muted">{copy.directIntro}</p>
+            <label className="grid min-w-0 gap-1 text-xs font-bold text-dtsc-ink">{copy.directAccount}
+              <select className="min-h-11 min-w-0 rounded-lg border border-dtsc-border bg-dtsc-page p-2 text-sm" value={directAccountId} onChange={(event) => setDirectAccountId(event.target.value)}>
+                <option value="">{copy.chooseWarehouse}</option>{directAccounts.map((account) => <option key={account.id} value={account.id}>{account.name} · {account.code}</option>)}
+              </select>
+            </label>
+            <label className="grid min-w-0 gap-1 text-xs font-bold text-dtsc-ink">{copy.directSession}
+              <select className="min-h-11 min-w-0 rounded-lg border border-dtsc-border bg-dtsc-page p-2 text-sm" value={directSessionId} onChange={(event) => setDirectSessionId(event.target.value)}>
+                <option value="">{copy.chooseWarehouse}</option>{directSessions.map((session) => <option key={session.id} value={session.id}>{session.number}</option>)}
+              </select>
+            </label>
+            {!directAccounts.length || !directSessions.length ? <p role="note" className="text-xs font-semibold text-amber-700 dark:text-amber-300">{copy.directCashMissing}</p> : null}
+            <label className="grid min-w-0 gap-1 text-xs font-bold text-dtsc-ink">{copy.directTendered} ({currencyCode})
+              <input inputMode="decimal" type="number" min="0.01" step="0.01" className="min-h-11 w-full min-w-0 rounded-lg border border-dtsc-border bg-dtsc-page px-3 text-base" value={cashTendered} onChange={(event) => setCashTendered(event.target.value)} />
+            </label>
+            <div className="flex flex-wrap items-center justify-between gap-2 text-sm"><span className="text-dtsc-muted">{copy.directChange}</span><strong className="tabular-nums text-dtsc-ink">{money(String(Math.max(0, cashChange)), currencyCode, locale)}</strong></div>
+          </div> : <p className="text-xs leading-5 text-dtsc-muted">{copy.invoiceOnly}</p>}
+          {directReceipt ? <div role="status" className="min-w-0 space-y-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3">
+            <p className="break-words text-sm font-bold text-dtsc-ink">{copy.directReady} · {directReceipt.invoiceNumber}</p>
+            <a className="inline-flex min-h-11 items-center rounded-lg border border-emerald-600/30 px-3 text-sm font-bold text-emerald-700 dark:text-emerald-300" href={`/api/enterprise/${encodeURIComponent(organizationId)}/retail/invoices/${encodeURIComponent(directReceipt.invoiceId)}/print?paper=${directOptions?.settings.defaultPaper === "A4" ? "a4" : "thermal"}&lang=${locale}`} target="_blank" rel="noopener noreferrer"><Printer className="mr-2 h-4 w-4" />{copy.directPrint}</a>
+          </div> : null}
+          <div data-responsive-actions className="flex flex-wrap justify-end gap-2"><Button type="button" variant="outline" disabled={!lines.length || submitting || directBusy} onClick={() => { setLines([]); idempotencyKey.current = ""; }}>{copy.clear}</Button>{directCash ? <Button type="button" disabled={!directCanPay || !lines.length || lines.some((line) => !Number.isFinite(line.quantity) || line.quantity <= 0)} onClick={() => void finalizeDirectCash()}><ArrowRight className="h-4 w-4" />{directBusy ? copy.directBusy : copy.directFinal}</Button> : <Button type="button" disabled={!chosenWarehouse || !lines.length || !pricing || pricingLoading || submitting || lines.some((line) => !Number.isFinite(line.quantity) || line.quantity <= 0)} onClick={() => setPreviewOpen(true)}><ArrowRight className="h-4 w-4" />{copy.preview}</Button>}</div>
         </div>
       </div>
     </div> : null}
