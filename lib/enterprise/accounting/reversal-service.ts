@@ -59,6 +59,13 @@ export async function reverseJournalEntryTx(
       await tx.enterpriseSupplierClaimCompensation.count({ where: {
         organizationId, status: "POSTED", payable: { supplierInvoiceId: original.sourceEntityId },
       } })) throw new EnterpriseAccountingError("SUPPLIER_RETURN_DOMAIN_REVERSAL_REQUIRED",409);
+  // A domain inverse is final accounting evidence. Do not allow a generic
+  // "reversal of the reversal": this would reopen the claim in the GL without
+  // restoring its allocation or payable projection and would defeat the
+  // immutable status machine.
+  if (original.postingEvent === "REVERSAL" && await tx.enterpriseSupplierClaimCompensation.count({
+    where: { organizationId, status: "REVERSED", reversalJournalEntryId: original.id },
+  })) throw new EnterpriseAccountingError("SUPPLIER_RETURN_DOMAIN_REVERSAL_REQUIRED", 409);
   if (original.postingEvent === "SUPPLIER_RETURN_REFUND_CONFIRMED") throw new EnterpriseAccountingError("SUPPLIER_RETURN_REFUND_DOMAIN_WORKFLOW_REQUIRED",409);
 
   // Claims rely on the original supplier payment and allocation journals.
