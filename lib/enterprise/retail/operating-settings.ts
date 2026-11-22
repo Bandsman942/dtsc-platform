@@ -100,13 +100,15 @@ export type RetailLegalIdentity = z.infer<typeof retailLegalIdentitySchema>;
 
 export function readRetailLegalIdentity(value: unknown): RetailLegalIdentity {
   const root = asRecord(value);
-  const parsed = retailLegalIdentitySchema.safeParse(root.retailLegalIdentity ?? {});
+  // Canonical company registration, also consumed by Finance DGI readiness.
+  const parsed = retailLegalIdentitySchema.safeParse(root.fiscalRegistration ?? {});
   if (!parsed.success) throw new EnterpriseRetailError("RETAIL_OPERATING_SETTINGS_INVALID", 409);
   return parsed.data;
 }
 
 export function mergeRetailLegalIdentity(value: unknown, identity: RetailLegalIdentity): Prisma.InputJsonValue {
-  return { ...asRecord(value), retailLegalIdentity: retailLegalIdentitySchema.parse(identity) } as Prisma.InputJsonValue;
+  const root = asRecord(value);
+  return { ...root, fiscalRegistration: { ...asRecord(root.fiscalRegistration), ...retailLegalIdentitySchema.parse(identity) } } as Prisma.InputJsonValue;
 }
 
 export const retailInvoiceHeaderSchema = z.object({
@@ -120,10 +122,10 @@ export type RetailInvoiceHeader = z.infer<typeof retailInvoiceHeaderSchema>;
 /** Freeze the legal identity and local contact data at invoice preparation. */
 export function retailInvoiceHeaderSnapshot(
   value: unknown, siteId: string,
-  organization: { name: string; phone?: string | null; email?: string | null; address?: string | null },
+  organization: { name: string; phone?: string | null; email?: string | null; address?: string | null; settingsJson?: Prisma.JsonValue | null },
   site: { name: string; addressLine1?: string | null; addressLine2?: string | null; city?: string | null; countryCode?: string | null },
 ): Prisma.InputJsonValue {
-  const legal = readRetailLegalIdentity(value);
+  const legal = readRetailLegalIdentity(organization.settingsJson);
   const store = readRetailOperatingSettings(value, siteId);
   const localAddress = [site.addressLine1, site.addressLine2, site.city, site.countryCode].filter(Boolean).join(", ");
   return retailInvoiceHeaderSchema.parse({
