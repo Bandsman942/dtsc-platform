@@ -1,0 +1,24 @@
+// Durable orchestration evidence only. Canonical invoices, payments, balances and stock
+// remain the sole sources of truth in Finance and Inventory.
+model EnterpriseRetailDirectCheckoutAttempt {
+  id                 String    @id @default(cuid())
+  organizationId     String
+  siteId             String
+  actorUserId        String
+  idempotencyKey     String
+  requestFingerprint String
+  status             String    @default("PENDING")
+  salesInvoiceId     String?
+  paymentId          String?
+  cashTendered       Decimal   @db.Decimal(20, 6)
+  lockToken          String?
+  lockUntil          DateTime?
+  completedAt        DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, idempotencyKey])
+  @@index([organizationId, actorUserId, createdAt])
+  @@index([organizationId, status, updatedAt])
+}

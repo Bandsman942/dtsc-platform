@@ -10,6 +10,7 @@ model EnterpriseRetailInvoiceCheckout {
   idempotencyKey    String
   requestFingerprint String
   preparedByUserId  String
+  invoiceFooterSnapshot Json?
   stockPostedAt     DateTime?
   stockPostedByUserId String?
   revision          Int      @default(1)
