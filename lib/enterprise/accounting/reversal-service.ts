@@ -23,6 +23,17 @@ export async function reverseJournalEntryTx(
   });
   if (!original) throw new EnterpriseAccountingError("JOURNAL_ENTRY_NOT_FOUND", 404);
 
+  // Enforce the domain boundary BEFORE the generic idempotent reversal lookup.
+  // Otherwise a second generic request could retrieve a domain journal inverse
+  // and incorrectly report an authorized journal reversal after completion.
+  if (original.postingEvent === "SUPPLIER_CLAIM_COMPENSATION_POSTED" &&
+      (options?.authorization !== "DOMAIN_INVERSE" ||
+        original.sourceEntityType !== "EnterpriseSupplierClaimCompensation"))
+    throw new EnterpriseAccountingError("SUPPLIER_RETURN_DOMAIN_REVERSAL_REQUIRED",409);
+  if (original.postingEvent === "REVERSAL" && await tx.enterpriseSupplierClaimCompensation.count({
+    where: { organizationId, status: "REVERSED", reversalJournalEntryId: original.id },
+  })) throw new EnterpriseAccountingError("SUPPLIER_RETURN_DOMAIN_REVERSAL_REQUIRED", 409);
+
   const existing = await tx.enterpriseJournalReversal.findFirst({ where: { organizationId, originalEntryId } });
   if (existing) {
     return tx.enterpriseJournalEntry.findFirstOrThrow({
@@ -48,24 +59,10 @@ export async function reverseJournalEntryTx(
     if (linked) throw new EnterpriseAccountingError("SUPPLIER_RETURN_DOMAIN_REVERSAL_REQUIRED",409);
   }
 
-  // Generic journal reversal can never detach a supplier-claim offset from
-  // its payable and allocation. Only the explicit atomic domain inverse may
-  // reverse this posting, after verifying its own business evidence.
-  if (original.postingEvent === "SUPPLIER_CLAIM_COMPENSATION_POSTED" &&
-      (options?.authorization !== "DOMAIN_INVERSE" ||
-        original.sourceEntityType !== "EnterpriseSupplierClaimCompensation"))
-    throw new EnterpriseAccountingError("SUPPLIER_RETURN_DOMAIN_REVERSAL_REQUIRED",409);
   if (original.postingEvent === "SUPPLIER_INVOICE_POSTED" && original.sourceEntityId &&
       await tx.enterpriseSupplierClaimCompensation.count({ where: {
         organizationId, status: "POSTED", payable: { supplierInvoiceId: original.sourceEntityId },
       } })) throw new EnterpriseAccountingError("SUPPLIER_RETURN_DOMAIN_REVERSAL_REQUIRED",409);
-  // A domain inverse is final accounting evidence. Do not allow a generic
-  // "reversal of the reversal": this would reopen the claim in the GL without
-  // restoring its allocation or payable projection and would defeat the
-  // immutable status machine.
-  if (original.postingEvent === "REVERSAL" && await tx.enterpriseSupplierClaimCompensation.count({
-    where: { organizationId, status: "REVERSED", reversalJournalEntryId: original.id },
-  })) throw new EnterpriseAccountingError("SUPPLIER_RETURN_DOMAIN_REVERSAL_REQUIRED", 409);
   if (original.postingEvent === "SUPPLIER_RETURN_REFUND_CONFIRMED") throw new EnterpriseAccountingError("SUPPLIER_RETURN_REFUND_DOMAIN_WORKFLOW_REQUIRED",409);
 
   // Claims rely on the original supplier payment and allocation journals.
