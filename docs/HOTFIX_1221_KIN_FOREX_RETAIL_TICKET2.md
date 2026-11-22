@@ -28,6 +28,10 @@ La génération d'une **archive officielle immuable du rapport au moment de l'ap
 Le rapport est par boutique sélectionnée afin de respecter les fuseaux; un rapport multi-boutiques exige une consolidation explicite des jours locaux.
 Les documents de vente hors circuit Retail (factures communes et pro-forma POS) devront être connectés au même référentiel d'identité avant d'annoncer une harmonisation trans-sectorielle totale.
 
+## Source unique de vérité juridique
+
+RCCM, NIF, ID.NAT et autres mentions légales sont stockés dans `Organization.settingsJson.fiscalRegistration`, référentiel déjà utilisé par les précontrôles DGI de Finance. Aucun second enregistrement légal Retail n'est maintenu. La sauvegarde synchronise les paramètres commerciaux sur `EnterpriseRetailConfiguration` et les identifiants légaux sur `Organization` dans une transaction unique avec verrouillage; les champs fiscaux existants inconnus ne sont pas effacés. La facture Retail fige un instantané de la source centrale lors de sa préparation.
+
 ## Sécurité et audit
 Paramètres versionnés sur `EnterpriseRetailConfiguration.revision`, verrou pessimiste et Zod strict. Mutations step-up et audit HIGH. Impression et rapport sous contrôle organisation et site. Aucun duplicata comptable et aucune écriture stock depuis le reporting.
 
