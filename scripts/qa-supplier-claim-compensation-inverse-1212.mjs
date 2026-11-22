@@ -249,4 +249,6 @@ for(const fragment of ['REVERSE_COMPENSATION','data.action === "REVERSE_COMPENSA
   'SUPPLIER_CLAIM_COMPENSATION_REVERSED'])assert.ok(api.includes(fragment),fragment);
 const generic=fs.readFileSync("lib/enterprise/accounting/reversal-service.ts","utf8");
 assert.ok(generic.includes('options?.authorization !== "DOMAIN_INVERSE"'));
+assert.ok(generic.includes('original.postingEvent === "REVERSAL" && await tx.enterpriseSupplierClaimCompensation.count'),
+  "An inverse journal cannot be reversed generically without reversing the domain a second time");
 console.log("Supplier compensation domain inverse: restored payable/invoice, immutable allocation, zero cash, separate actor, open period, idempotence and failure rollback guards OK (isolated mocks)");
