@@ -60,6 +60,12 @@ export async function assertRetailExpressReturnAuthorizationTx(
   }
   const plan = await assertRetailInvoiceReturnSettlementReadinessTx(tx, organizationId, invoiceId, requestId);
   const payout = plan.payoutAmount ?? decimal(0);
+  // Self-inspection records evidence but cannot silently grant stock-write
+  // permissions. Real physical return movements require stock management.
+  if (plan.stockSourcePlan.length > 0) {
+    await requireRetailSiteCapability(organizationId, actorUserId, request.checkout.siteId,
+      "MANAGE_STOCK", tx, { requireAssignment: true });
+  }
   if (payout.lessThan(0) || (payout.isZero() && !allowZeroPayoutCreditOnly)) {
     throw conflict("RETAIL_RETURN_EXPRESS_ZERO_PAYOUT_USE_CREDIT_ONLY");
   }
