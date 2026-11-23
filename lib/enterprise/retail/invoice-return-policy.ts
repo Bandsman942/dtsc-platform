@@ -36,6 +36,13 @@ export function readRetailInvoiceReturnPolicy(settings: Prisma.JsonValue | null 
   return parsed.success ? parsed.data : { ...DEFAULT_RETAIL_INVOICE_RETURN_POLICY };
 }
 
+/** Stored per-request snapshot; absent on historical records and never
+ * interpreted as enabling simplified decisions. */
+export function readRetailInvoiceReturnPolicySnapshot(snapshot: Prisma.JsonValue | null | undefined): RetailInvoiceReturnPolicy {
+  const parsed = retailInvoiceReturnPolicySchema.safeParse(snapshot);
+  return parsed.success ? parsed.data : { ...DEFAULT_RETAIL_INVOICE_RETURN_POLICY };
+}
+
 export function mergeRetailInvoiceReturnPolicy(
   settings: Prisma.JsonValue | null | undefined,
   policy: RetailInvoiceReturnPolicy,
