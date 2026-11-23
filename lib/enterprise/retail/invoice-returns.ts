@@ -143,7 +143,7 @@ export async function listRetailInvoiceReturnRequests(
         preparedByUserId: true, refundPayment: { select: { status: true } },
         refundLegs: { select: { refundPayment: { select: { status: true } } } },
         salesCreditNote: { select: { status: true } },
-        inspectedAt: true, inspectionNotes: true, decidedAt: true, decisionReason: true,
+        inspectedAt: true, inspectionNotes: true, inspectionMode: true, returnPolicySnapshot: true, decidedAt: true, decisionReason: true,
         revision: true, createdAt: true,
         lines: { select: { id: true, checkoutLineId: true, quantity: true, refundAmount: true, stockDisposition: true, lotAllocations: true,
           checkoutLine: { select: { inventoryItemId: true } } } },
@@ -208,10 +208,22 @@ export async function listRetailInvoiceReturnRequests(
         ? item.refundLegs.map((leg) => leg.refundPayment.status)
         : item.refundPayment ? [item.refundPayment.status] : [];
       const approvedPayouts = payoutStatuses.filter((status) => status === "APPROVED").length;
+      const policy = readRetailInvoiceReturnPolicySnapshot(item.returnPolicySnapshot);
+      const eligibleSelfInspector = Boolean(member && (RETAIL_OWNER_ROLES.has(member.role) ||
+        (siteAssignment?.isActive && siteAssignment.roleCode === "MANAGER")));
+      const physicalStock = Boolean(checkout.stockPostedAt) &&
+        item.lines.some((line) => Boolean(line.checkoutLine.inventoryItemId));
+      const selfInspected = canSelfInspectRetailReturn(policy, item.requestedByUserId, actorUserId,
+        eligibleSelfInspector, capabilities.canInspect || !physicalStock);
+      const delegatedSelfDecision = selfCanDecide ||
+        Boolean(member && RETAIL_OWNER_ROLES.has(member.role) &&
+          policy.mode === "SIMPLIFIED" && policy.allowDelegatedSelfApproval);
+      const sameActorDecision = item.inspectedByUserId === actorUserId &&
+        item.requestedByUserId === actorUserId && selfInspected && delegatedSelfDecision;
       return {
       id: item.id, number: item.number, status: item.status, reason: item.reason,
       refundAmount: item.refundAmount, refundPayoutAmount: item.refundPayoutAmount, inspectedAt: item.inspectedAt,
-      inspectionNotes: item.inspectionNotes, decidedAt: item.decidedAt,
+      inspectionNotes: item.inspectionNotes, inspectionMode: item.inspectionMode, decidedAt: item.decidedAt,
       decisionReason: item.decisionReason, revision: item.revision,
       createdAt: item.createdAt, lines: item.lines,
       paymentApprovalStatus: payoutStatuses.length && approvedPayouts === payoutStatuses.length
@@ -227,15 +239,16 @@ export async function listRetailInvoiceReturnRequests(
         item.salesCreditNote?.status === "APPROVED" &&
         ![item.requestedByUserId, item.approverUserId, item.inspectedByUserId,
           item.preparedByUserId].includes(actorUserId),
-      requiresPhysicalInspection: Boolean(checkout.stockPostedAt) && item.lines.some((line) => Boolean(line.checkoutLine.inventoryItemId)),
+      requiresPhysicalInspection: physicalStock,
       canInspect: (capabilities.canInspect ||
           ((!checkout.stockPostedAt || item.lines.every((line) => !line.checkoutLine.inventoryItemId)) && independentFinanceVerifier.allowed)) &&
         item.status === "SUBMITTED" &&
-        item.requestedByUserId !== actorUserId && item.approverUserId !== actorUserId,
+        ((item.requestedByUserId !== actorUserId && item.approverUserId !== actorUserId) || selfInspected),
       canDecide: capabilities.canApprove &&
-        (finance?.every((entry) => entry.allowed) === true || (item.requestedByUserId === actorUserId && selfCanDecide)) &&
+        (finance?.every((entry) => entry.allowed) === true || (item.requestedByUserId === actorUserId && delegatedSelfDecision)) &&
         ["SUBMITTED", "INSPECTED"].includes(item.status) && item.approverUserId === actorUserId &&
-        (item.requestedByUserId !== actorUserId || selfCanDecide) && item.inspectedByUserId !== actorUserId,
+        (item.requestedByUserId !== actorUserId || delegatedSelfDecision) &&
+        (item.inspectedByUserId !== actorUserId || sameActorDecision),
     }; }),
     batchOptions,
     stockPostedAt: Boolean(checkout.stockPostedAt),
