@@ -50,6 +50,28 @@ Le registre de réservation `readActiveRetailInvoiceStockHoldsTx` ne déduit les
 - `INV-MWT6CFSV-ADE0B1` — 482 000 CDF, cinq lignes non livrées, `APPROVED`. La réservation ne peut pas être libérée avant `COMPLETED`.
 - `CN-MWTBUA09-303820` — 96 000 CDF, avoir `APPROVED`, retour `RIR-MWTAUSPN-6CDC3A` en `FINANCE_PENDING`. Interdire le bouton générique « Comptabiliser » et revenir au dossier RETAIL pour achever les validations et liquider.
 
+## Extension demandée — plafond express libre dans la devise de l'entreprise
+
+- **Nouvelle politique V2** : seuil positif saisi par le propriétaire dans `Administration entreprise → Annulations, avoirs et remboursements`, dans la devise fonctionnelle établie dans Finance. Aucun plafond métier universel de 100 USD pour les nouvelles demandes.
+- API PUT : version V2 obligatoire, montant décimal sous forme de chaîne pour préserver la précision, et devise **égale** à `enterpriseFinanceConfiguration.functionalCurrencyCode` vérifiée sous transaction verrouillée et auditée.
+- Un remboursement express (NOW/LATER) compare le cumul de tous les retours non rejetés de la facture à la politique actuelle V2, **et** au snapshot figé lors de la création de chaque retour. Les conversions éventuelles entre devises utilisent le taux Finance daté ; taux manquant/périmé = refus sécurisé.
+- **Compatibilité historique** : snapshots V1 USD avec leur plafond initial inchangés ; ils ne sont ni migrés ni interprétés comme un montant CDF. Le propriétaire doit enregistrer explicitement une nouvelle valeur V2 pour les nouvelles demandes. Le mode STANDARD reste le repli.
+- Le règlement sans trop-perçu (0 remboursement réel) conserve sa logique d'avoir, sans inventer de sortie de caisse ni exiger une conversion FX.
+- Messages FR/EN contextuels : dépassement du plafond configuré, devise incohérente, FX périmé, ancien snapshot et retour sur le circuit Finance standard.
+
+### Scénarios additionnels C23–C30
+
+| Test | Résultat attendu |
+| --- | --- |
+| C23 Ancienne politique V1 USD | Lire historique sans migration ni modification des plafonds passés |
+| C24 Propriétaire en CDF règle 500000.00 CDF | PUT V2 accepté, montant conservé comme chaîne et nouvelle demande figée en V2 |
+| C25 Propriétaire en USD règle 350.00 USD | Aucun refus lié à l'ancienne constante 100 USD |
+| C26 Montant nul/négatif/mal formé/précision excessive | API 400, aucune mutation |
+| C27 Devise non égale à devise Finance fonctionnelle | API 409, aucune mutation |
+| C28 Facture en devise différente du plafond | Taux Finance valable exigé, cumul converti et comparé |
+| C29 Retours fractionnés d'une même facture | Addition de toutes les demandes non rejetées, impossibilité de contourner le plafond |
+| C30 Hausse du plafond depuis V1 | Nouveaux retours V2 possibles ; anciens retours V1 restent liés à leur plafond d'origine |
+
 ## Réserves de livraison
 
 - Ce hotfix apporte **une file de reprise guidée**, et non une opération administrative magique qui comptabilise tous les dossiers historiques. Les validations des anciennes demandes demeurent opposables et doivent être effectuées par des intervenants réels distincts.
