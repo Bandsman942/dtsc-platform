@@ -116,6 +116,9 @@ vm.runInNewContext(ts.transpileModule(source, {
     if (id === "@/lib/enterprise/accounting/helpers") return {
       publishFinanceEvent: async (_tx, event) => { state.events.push(event.eventType); },
     };
+    if (id === "@/lib/enterprise/accounting/currency") return {
+      resolveExchangeRateDetails: async () => { throw new Error("UNEXPECTED_EXPRESS_FX_IN_STANDARD_RETURN_FIXTURE"); },
+    };
     if (id === "@/lib/enterprise/module-access") return {
       resolveEnterpriseModuleAccess: async ({ moduleCode, action }) => {
         assert.ok(["FINANCE_RECEIVABLES", "FINANCE_PAYMENTS"].includes(moduleCode)); assert.equal(action, "approve");
