@@ -255,8 +255,10 @@ export async function listRetailInvoiceReturnRequests(
         liveReturnPolicy.mode === "SIMPLIFIED" && liveReturnPolicy.allowDelegatedSelfApproval &&
         Boolean(member && (RETAIL_OWNER_ROLES.has(member.role) || siteAssignment?.isActive && siteAssignment.roleCode === "MANAGER")) &&
         capabilities.canApprove && delegatedSelfDecision &&
-        payoutStatuses.length > 0 && payoutStatuses.every(status => status === "APPROVED") &&
-        payoutMethods.every(method => method === "CASH") && item.salesCreditNote?.status === "POSTED",
+        payoutStatuses.length > 0 && payoutStatuses.every((status, index) =>
+          payoutMethods[index] === "CASH" ? status === "APPROVED" :
+          ["CONFIRMED", "RECONCILED"].includes(status)) &&
+        item.salesCreditNote?.status === "POSTED",
       decisionReason: item.decisionReason, revision: item.revision,
       createdAt: item.createdAt, lines: item.lines,
       paymentApprovalStatus: payoutStatuses.length && approvedPayouts === payoutStatuses.length
