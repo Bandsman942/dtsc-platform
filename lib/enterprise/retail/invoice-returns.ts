@@ -240,6 +240,7 @@ export async function listRetailInvoiceReturnRequests(
         ![item.requestedByUserId, item.approverUserId, item.inspectedByUserId,
           item.preparedByUserId].includes(actorUserId),
       requiresPhysicalInspection: physicalStock,
+      canSelfInspect: selfInspected,
       canInspect: (capabilities.canInspect ||
           ((!checkout.stockPostedAt || item.lines.every((line) => !line.checkoutLine.inventoryItemId)) && independentFinanceVerifier.allowed)) &&
         item.status === "SUBMITTED" &&
