@@ -582,6 +582,121 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
     }
     await exerciseUnfulfilledCredit({ partlyPaid: false });
     await exerciseUnfulfilledCredit({ partlyPaid: true });
+    // #1222 E31/E32/E33: a SELF_ATTESTED return for a posted but UNPAID
+    // invoice creates/POSTs exactly one canonical credit note while the
+    // source receivable and inventory reservation reconcile atomically.
+    const configBeforeExpress = await prisma.enterpriseRetailConfiguration.findUniqueOrThrow({
+      where: { organizationId },
+    });
+    const originalReturnSettings = configBeforeExpress.settingsJson;
+    const originalSettingsRecord = originalReturnSettings && typeof originalReturnSettings === "object" &&
+      !Array.isArray(originalReturnSettings) ? originalReturnSettings : {};
+    const expressPolicy = {
+      version: 1, mode: "SIMPLIFIED", allowRequesterInspection: true,
+      allowDelegatedSelfApproval: true, autoPostCreditNote: true,
+      promptImmediateRefund: true, scope: "ALL_SITES",
+      expressRefundLimitAmount: 100, expressRefundLimitCurrency: "USD",
+    };
+    await prisma.enterpriseRetailConfiguration.update({
+      where: { organizationId }, data: {
+        settingsJson: { ...originalSettingsRecord, retailInvoiceReturnPolicy: expressPolicy },
+      },
+    });
+    try {
+      async function exerciseExpressUnpaidCredit({ quantity }) {
+        const invoiceCreated = await post(context.cashier, base + "/retail/invoices", {
+          idempotencyKey: `retail-1222-unpaid-${quantity}-${Date.now()}`,
+          siteId: fixture.site.id, warehouseId: fixture.warehouse.id,
+          currencyCode: fixture.currencyCode,
+          lines: [{ catalogItemId: fixture.product.id, quantity: 1 }],
+        });
+        expect(invoiceCreated.status, JSON.stringify(invoiceCreated.body)).toBe(201);
+        const invoiceId = invoiceCreated.body.invoice.id;
+        const submitted = await post(context.cashier, `${base}/retail/invoices/${invoiceId}/transition`, {
+          action: "SUBMIT", revision: invoiceCreated.body.invoice.revision,
+          approverUserId: fixture.owner.id,
+        });
+        expect(submitted.status, JSON.stringify(submitted.body)).toBe(200);
+        const approved = await post(context.owner, `${base}/sales-invoices/${invoiceId}/transition`, {
+          action: "APPROVE", revision: submitted.body.invoice.revision,
+        });
+        expect(approved.status, JSON.stringify(approved.body)).toBe(200);
+        const issued = await post(context.owner, `${base}/sales-invoices/${invoiceId}/transition`, {
+          action: "ISSUE", revision: approved.body.invoice.revision,
+        });
+        expect(issued.status, JSON.stringify(issued.body)).toBe(200);
+        const before = await prisma.enterpriseSalesInvoice.findUniqueOrThrow({ where: { id: invoiceId } });
+        expect(before.status).toBe("ISSUED");
+        expect(before.amountPaid.isZero()).toBe(true);
+        const checkout = await prisma.enterpriseRetailInvoiceCheckout.findFirstOrThrow({
+          where: { organizationId, salesInvoiceId: invoiceId }, include: { lines: true },
+        });
+        expect(checkout.stockPostedAt).toBeNull();
+        const returnsBase = `${base}/retail/invoices/${invoiceId}/returns`;
+        const requested = await post(context.owner, returnsBase, {
+          idempotencyKey: `retail-1222-return-${quantity}-${Date.now()}`,
+          approverUserId: fixture.owner.id,
+          reason: "Unpaid customer invoice cancellation with no prior payment",
+          lines: [{
+            checkoutLineId: checkout.lines[0].id,
+            quantity, stockDisposition: "UNDELIVERED_CREDIT",
+          }],
+        });
+        expect(requested.status, JSON.stringify(requested.body)).toBe(201);
+        const returnId = requested.body.request.id;
+        const path = `${returnsBase}/${returnId}`;
+        const inspection = await post(context.owner, path + "/inspection", {
+          revision: requested.body.request.revision, receivedAndInspected: true,
+          notes: "Owner personally verified the undelivered merchandise on site",
+        });
+        expect(inspection.status, JSON.stringify(inspection.body)).toBe(200);
+        expect(inspection.body.request.inspectionMode).toBe("SELF_ATTESTED");
+        const decision = await post(context.owner, path + "/decision", {
+          revision: inspection.body.request.revision, decision: "APPROVE",
+        });
+        expect(decision.status, JSON.stringify(decision.body)).toBe(200);
+        expect(decision.body.request.status).toBe("COMPLETED");
+        expect(new Prisma.Decimal(decision.body.request.refundPayoutAmount).isZero()).toBe(true);
+        expect(decision.body.request.refundPaymentId).toBeNull();
+        const creditId = decision.body.request.salesCreditNoteId;
+        const [credit, after, receivable, payments, stock, creditHistory] = await Promise.all([
+          prisma.enterpriseSalesCreditNote.findUniqueOrThrow({ where: { id: creditId } }),
+          prisma.enterpriseSalesInvoice.findUniqueOrThrow({ where: { id: invoiceId } }),
+          prisma.enterpriseReceivable.findFirstOrThrow({ where: { organizationId, salesInvoiceId: invoiceId } }),
+          prisma.enterprisePayment.count({ where: { organizationId, reference: decision.body.request.number, paymentType: "REFUND" } }),
+          prisma.enterpriseStockMovement.count({ where: { organizationId, sourceEntityType: "EnterpriseRetailInvoiceReturnRequest", sourceEntityId: returnId } }),
+          prisma.enterpriseSalesCreditNote.count({ where: { organizationId, salesInvoiceId: invoiceId, status: "POSTED" } }),
+        ]);
+        const expectedCredit = before.grandTotal.mul(new Prisma.Decimal(quantity));
+        expect(credit.status).toBe("POSTED");
+        expect(credit.grandTotal.equals(expectedCredit)).toBe(true);
+        expect(payments).toBe(0);
+        expect(stock).toBe(0);
+        expect(creditHistory).toBe(1);
+        expect(receivable.outstandingAmount.equals(before.outstandingAmount.minus(credit.grandTotal))).toBe(true);
+        expect(after.outstandingAmount.equals(receivable.outstandingAmount)).toBe(true);
+        expect(after.status).toBe(quantity === "1" ? "CREDIT_NOTE" : "ISSUED");
+        const replay = await post(context.owner, path + "/decision", {
+          revision: inspection.body.request.revision, decision: "APPROVE",
+        });
+        expect(replay.status).toBe(409);
+        expect(await prisma.enterpriseSalesCreditNote.count({
+          where: { organizationId, salesInvoiceId: invoiceId, status: "POSTED" },
+        })).toBe(1);
+        const financeList = await context.owner.request.get(`${base}/sales-credit-notes?recordId=${creditId}`);
+        expect(financeList.status()).toBe(200);
+        const financePayload = await financeList.json();
+        expect(financePayload.items[0].retailOrigin.returnRequestId).toBe(returnId);
+        expect(financePayload.items[0].capabilities.canPost).toBe(false);
+      }
+      await exerciseExpressUnpaidCredit({ quantity: "1" });
+      await exerciseExpressUnpaidCredit({ quantity: "0.5" });
+    } finally {
+      await prisma.enterpriseRetailConfiguration.update({
+        where: { organizationId }, data: { settingsJson: originalReturnSettings },
+      });
+    }
+
     // #1190 + #1191 joint acceptance: Finance rate, mixed catalog currencies,
     // one invoice currency, and durable per-line FX evidence in PostgreSQL.
     const functional = fixture.currencyCode;
