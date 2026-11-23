@@ -142,7 +142,7 @@ export function RetailInvoiceReturnPolicyPanel({ organizationId, locale }: {
       </div>
       <label className="grid max-w-xs gap-1 text-sm font-bold text-dtsc-ink">{t.limit}
         <input className="min-h-11 rounded-xl border border-dtsc-border bg-dtsc-page p-2"
-          type="number" min={0} max={10000} step="0.01"
+          type="number" min={0} max={100} step="0.01"
           value={policy.expressRefundLimitAmount} disabled={disabled || policy.mode === "STANDARD"}
           onChange={(event) => change("expressRefundLimitAmount", Number(event.target.value))} />
       </label>
