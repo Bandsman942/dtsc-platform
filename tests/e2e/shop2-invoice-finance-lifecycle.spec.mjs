@@ -805,6 +805,35 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
       expect((await prisma.enterprisePayment.findUniqueOrThrow({
         where: { id: deferredPayment.id },
       })).status).toBe("APPROVED");
+      // E22: independent Finance confirmation is a prerequisite. RETAIL
+      // can subsequently close the deferred return but must NOT pay again.
+      await ensureStepUp(context.settler, cashierPassword);
+      const bankConfirmed = await post(context.settler,
+        `${base}/payments/${deferredPayment.id}/transition`, {
+          action: "CONFIRM", revision: deferredPayment.revision,
+        });
+      expect(bankConfirmed.status, JSON.stringify(bankConfirmed.body)).toBe(200);
+      const bankPayment = await prisma.enterprisePayment.findUniqueOrThrow({
+        where: { id: deferredPayment.id },
+      });
+      expect(bankPayment.status).toBe("CONFIRMED");
+      expect(bankPayment.confirmedByUserId).toBe(fixture.settler.id);
+      const deferredClosed = await post(context.owner, `${deferredPath}/settle`, {
+        revision: deferredDecision.body.request.revision,
+        reason: "Confirmed independent bank refund; close verified Retail obligation",
+        completeDeferred: true,
+      });
+      expect(deferredClosed.status, JSON.stringify(deferredClosed.body)).toBe(200);
+      expect(deferredClosed.body.request.status).toBe("COMPLETED");
+      expect(await prisma.enterpriseSalesCreditNote.count({
+        where: { organizationId, salesInvoiceId: deferredInvoiceId, status: "POSTED" },
+      })).toBe(1);
+      expect(await prisma.enterpriseTreasuryTransaction.count({
+        where: { organizationId, paymentId: deferredPayment.id, direction: "OUTBOUND" },
+      })).toBe(1);
+      expect(await prisma.enterpriseCashMovement.count({
+        where: { organizationId, paymentId: deferredPayment.id },
+      })).toBe(0);
       // E07/E17/E19: fully paid CASH checkout with delegated owner approval,
       // attested self-inspection, and one transaction posting credit, cash
       // outflow, stock and receivable. Replaying must create nothing new.
