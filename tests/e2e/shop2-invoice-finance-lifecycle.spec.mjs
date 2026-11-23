@@ -691,6 +691,16 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
       }
       await exerciseExpressUnpaidCredit({ quantity: "1" });
       await exerciseExpressUnpaidCredit({ quantity: "0.5" });
+      // Use a recent explicit USD quote for the policy cap even when the
+      // test tenant's functional currency is CDF. Remove it afterward so
+      // unrelated FX scenarios keep their own immutable quote evidence.
+      const capRate = fixture.currencyCode === "USD" ? null :
+        await prisma.enterpriseExchangeRate.create({ data: {
+          organizationId, sourceCurrencyCode: fixture.currencyCode,
+          targetCurrencyCode: "USD", rate: new Prisma.Decimal("0.001"),
+          rateDate: new Date(), source: "RETAIL_1222_EXPRESS_LIMIT_E2E",
+          status: "ACTIVE", createdByUserId: fixture.owner.id,
+        } });
       // E08/E09/E16/E22: partial payment -> approved credit immediately,
       // but an external bank payout is retained as REFUND_PENDING (not paid).
       // The original bank collection is first confirmed by independent actors.
@@ -795,6 +805,7 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
       expect((await prisma.enterprisePayment.findUniqueOrThrow({
         where: { id: deferredPayment.id },
       })).status).toBe("APPROVED");
+      if (capRate) await prisma.enterpriseExchangeRate.delete({ where: { id: capRate.id } });
     } finally {
       await prisma.enterpriseRetailConfiguration.update({
         where: { organizationId }, data: { settingsJson: originalReturnSettings },
