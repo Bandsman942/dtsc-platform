@@ -103,8 +103,8 @@ async function requireReturnApproverTx(
   await requireRetailSiteCapability(
     organizationId, approverUserId, siteId, "APPROVE_INVOICE_RETURN", tx, { requireAssignment: true },
   );
-  // The OWNER's per-store grant replaces only the request-decision entitlement.
-  // Physical inspection, refund Finance approval and settlement remain independent.
+  // A delegated self-decision is strictly scoped. Inspection follows the
+  // immutable policy snapshot; Finance approval and settlement remain guarded.
   if (selfAllowed) return;
   const [receivables, payments] = await Promise.all([
     resolveEnterpriseModuleAccess({
@@ -497,13 +497,13 @@ export async function decideRetailInvoiceReturnRequest(
     await requireRetailSiteCapability(
       organizationId, actorUserId, request.checkout.siteId, "APPROVE_INVOICE_RETURN", tx, { requireAssignment: true },
     );
+    const policy = readRetailInvoiceReturnPolicySnapshot(request.returnPolicySnapshot);
+    const selfReturnDecision = request.requestedByUserId === actorUserId &&
+      await canSelfDecideReturnTx(tx, organizationId, actorUserId, request.checkout.siteId, policy);
     if (request.approverUserId !== actorUserId ||
-        (request.requestedByUserId === actorUserId &&
-          !await hasRetailSelfApprovalGrant(organizationId, actorUserId, request.checkout.siteId, "RETURN", tx))) {
+        (request.requestedByUserId === actorUserId && !selfReturnDecision)) {
       throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_APPROVER_INELIGIBLE", 403);
     }
-    const selfReturnDecision = request.requestedByUserId === actorUserId &&
-      await hasRetailSelfApprovalGrant(organizationId, actorUserId, request.checkout.siteId, "RETURN", tx);
     const finance = await Promise.all([
       resolveEnterpriseModuleAccess({ organizationId, userId: actorUserId, moduleCode: "FINANCE_RECEIVABLES", action: "approve" }),
       resolveEnterpriseModuleAccess({ organizationId, userId: actorUserId, moduleCode: "FINANCE_PAYMENTS", action: "approve" }),
@@ -516,10 +516,15 @@ export async function decideRetailInvoiceReturnRequest(
         !["SUBMITTED", "INSPECTED"].includes(request.status))) {
       throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_REVISION_CONFLICT", 409);
     }
+    const selfInspectionAllowed = policy.mode === "SIMPLIFIED" && policy.allowRequesterInspection &&
+      request.inspectedByUserId === request.requestedByUserId && request.inspectionMode === "SELF_ATTESTED";
+    const sameActorInspectionApproved = selfInspectionAllowed &&
+      request.inspectedByUserId === actorUserId && selfReturnDecision;
     if (input.decision === "APPROVE" &&
       (!request.inspectedAt || !request.inspectedByUserId || !request.inspectionNotes ||
-        request.inspectionNotes.trim().length < 5 || request.inspectedByUserId === request.requestedByUserId ||
-        request.inspectedByUserId === actorUserId)) {
+        request.inspectionNotes.trim().length < 5 ||
+        (request.inspectedByUserId === request.requestedByUserId && !selfInspectionAllowed) ||
+        (request.inspectedByUserId === actorUserId && !sameActorInspectionApproved))) {
       throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_INSPECTION_REQUIRED", 409);
     }
     if (input.decision === "REJECT" && (!input.reason || input.reason.length < 4)) {
@@ -580,12 +585,17 @@ export async function inspectRetailInvoiceReturnRequest(
     ]);
     const canInspectGoods = Boolean(membership && (RETAIL_OWNER_ROLES.has(membership.role) ||
       (verifier?.isActive && siteStaffCapabilities(verifier.roleCode, verifier.permissionsJson).includes("MANAGE_STOCK"))));
+    const policy = readRetailInvoiceReturnPolicySnapshot(request.returnPolicySnapshot);
+    const eligibleSelfInspector = Boolean(membership && (RETAIL_OWNER_ROLES.has(membership.role) ||
+      (verifier?.isActive && verifier.roleCode === "MANAGER")));
+    const selfInspector = canSelfInspectRetailReturn(policy, request.requestedByUserId, actorUserId,
+      eligibleSelfInspector, canInspectGoods || !physicallyDeliveredGoods);
     if (physicallyDeliveredGoods && !canInspectGoods) throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_INSPECTOR_INELIGIBLE", 403);
-    if (!physicallyDeliveredGoods && !canInspectGoods) {
+    if (!physicallyDeliveredGoods && !canInspectGoods && !selfInspector) {
       const finance = await resolveEnterpriseModuleAccess({ organizationId, userId: actorUserId, moduleCode: "FINANCE_RECEIVABLES", action: "approve" });
       if (!finance.allowed) throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_INSPECTOR_INELIGIBLE", 403);
     }
-    if (actorUserId === request.requestedByUserId || actorUserId === request.approverUserId) {
+    if ((actorUserId === request.requestedByUserId || actorUserId === request.approverUserId) && !selfInspector) {
       throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_INSPECTOR_INELIGIBLE", 403);
     }
     if (request.status !== "SUBMITTED" || request.revision !== input.revision ||
@@ -601,15 +611,18 @@ export async function inspectRetailInvoiceReturnRequest(
     const inspected = await tx.enterpriseRetailInvoiceReturnRequest.update({
       where: { id: request.id }, data: {
         status: "INSPECTED", inspectedByUserId: actorUserId, inspectedAt: new Date(),
-        inspectionNotes: input.notes, revision: { increment: 1 },
+        inspectionNotes: input.notes, inspectionMode: selfInspector ? "SELF_ATTESTED" : "INDEPENDENT",
+        revision: { increment: 1 },
       },
     });
     await publishFinanceEvent(tx, {
       organizationId, entityType: "EnterpriseRetailInvoiceReturnRequest", entityId: request.id,
       eventType: "RETAIL_INVOICE_RETURN_INSPECTED",
-      summary: physicallyDeliveredGoods ? "Retail physical return independently inspected" : "Retail service/undelivered credit independently verified",
+      summary: selfInspector ? "Retail return received and inspected by authorized requester" :
+        physicallyDeliveredGoods ? "Retail physical return independently inspected" : "Retail service/undelivered credit independently verified",
       actorUserId, fromStatus: "SUBMITTED", toStatus: "INSPECTED",
-      metadataJson: { invoiceId, siteId: request.checkout.siteId },
+      metadataJson: { invoiceId, siteId: request.checkout.siteId,
+        inspectionMode: selfInspector ? "SELF_ATTESTED" : "INDEPENDENT", policyVersion: policy.version },
     });
     return inspected;
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 30000 }));
