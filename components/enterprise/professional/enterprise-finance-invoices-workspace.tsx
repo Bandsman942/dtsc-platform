@@ -70,6 +70,7 @@ type InvoiceRecord = FinanceRecord & {
   supplierReturnAllocatableAmount?: string;
   supplierReturn?: { id:string; reference:string; status:string; purchaseId:string; sourceMovementId:string; currencyCode:string; totalCost:string; recoverableTaxAmount?:string; supplierCreditNoteId:string|null } | null;
   salesInvoiceId?: string;
+  retailOrigin?: { invoiceId: string; siteId: string; returnRequestId: string | null; returnNumber: string | null; returnStatus: string } | null;
   supplierInvoiceId?: string;
   replacementCreditNoteId?: string|null;
   items?: Array<{ id: string; description: string; quantity: string | number; unitPrice: string | number; discountAmount?: string | number }>;
@@ -136,6 +137,16 @@ function creditTransitionActions(status: string | undefined, locale: FinanceLoca
   ];
   if (status === "APPROVED") return [{ action: "POST", label: actionLabel("POST", locale), icon: ShieldCheck }];
   return [];
+}
+
+function retailReturnStatusKey(status: string): EnterpriseFinanceKey {
+  if (status === "SUBMITTED") return "retailReturnSubmitted";
+  if (status === "INSPECTED") return "retailReturnInspected";
+  if (status === "APPROVED") return "retailReturnApproved";
+  if (status === "FINANCE_PENDING") return "retailReturnFinancePending";
+  if (status === "COMPLETED") return "retailReturnCompleted";
+  if (status === "REJECTED") return "retailReturnRejected";
+  return "retailCreditUnlinked";
 }
 
 function capabilityAllowsAction(record: InvoiceRecord, action: string) {
@@ -501,8 +512,20 @@ export function EnterpriseFinanceInvoicesWorkspace(props: Props) {
           </div>
         </section>:null}
         {!isReceivables && detailKind === "invoice" && detail.threeWayMatch ? <section className="rounded-xl border border-dtsc-border p-4"><h3 className="font-black text-dtsc-ink">{t("poReceiptInvoiceControl")}</h3><div className="mt-3 grid gap-3 sm:grid-cols-3"><FinanceDetailValue label={t("quantity")}>{String(detail.threeWayMatch.quantityVariance ?? 0)}</FinanceDetailValue><FinanceDetailValue label={t("price")}>{String(detail.threeWayMatch.priceVariance ?? 0)}</FinanceDetailValue><FinanceDetailValue label={t("totalVariance")}>{String(detail.threeWayMatch.totalVariance ?? 0)}</FinanceDetailValue></div></section> : null}
+        {isReceivables && detailKind === "credit" && detail.retailOrigin ? <section
+          data-retail-credit-provenance className="min-w-0 space-y-2 rounded-xl border border-cyan-500/30 bg-cyan-500/5 p-3">
+          <h3 className="font-black text-dtsc-ink">{t("retailCreditOriginTitle")}{detail.retailOrigin.returnNumber ? ` · ${detail.retailOrigin.returnNumber}` : ""}</h3>
+          <p className="text-xs leading-5 text-dtsc-muted">{t("retailCreditOriginHelp")}</p>
+          {detail.retailOrigin.returnRequestId ? <p className="text-sm text-dtsc-ink">
+            {t("retailCreditReturnStatus")}: <strong>{t(retailReturnStatusKey(detail.retailOrigin.returnStatus))}</strong>
+          </p> : <p role="alert" className="text-sm font-semibold text-amber-700 dark:text-amber-300">{t("retailCreditUnlinked")}</p>}
+          <a className="inline-flex min-h-11 items-center rounded-lg border border-cyan-500/40 px-3 text-sm font-bold text-dtsc-blue underline focus-visible:ring-2 focus-visible:ring-cyan-500"
+            href={`/enterprise-modules/RETAIL_POS?section=invoices&siteId=${encodeURIComponent(detail.retailOrigin.siteId)}&invoiceId=${encodeURIComponent(detail.retailOrigin.invoiceId)}`}>
+            {t("retailCreditOriginAction")}
+          </a>
+        </section> : null}
         {invoiceIdFor(detail) ? <div data-responsive-actions><Button variant="outline" onClick={() => printCustomerInvoice(invoiceIdFor(detail)!)}><Printer className="h-4 w-4" />{t("printInvoicePreview")}</Button></div> : null}
-        {detailHasWorkflow ? <div data-responsive-actions>{(detailKind === "credit" ? creditTransitionActions(detail.status, locale) : invoiceTransitionActions(detail.status, locale, isReceivables)).filter((action) => capabilityAllowsAction(detail, action.action)).map((action) => { const Icon = action.icon; return <Button key={action.action} disabled={busy} variant={action.destructive ? "destructive" : "outline"} onClick={() => setActionTarget({ record: detail, action: action.action, kind: detailKind })}><Icon className="h-4 w-4" />{action.label}</Button>; })}{detailKind === "invoice" && detail.capabilities?.canCreateCredit ? <Button variant="outline" disabled={busy} onClick={() => setCreditTarget(detail)}><FileMinus2 className="h-4 w-4" />{t("createCreditNote")}</Button> : null}</div> : null}
+        {detailHasWorkflow ? <div data-responsive-actions>{(detailKind === "credit" ? creditTransitionActions(detail.status, locale) : invoiceTransitionActions(detail.status, locale, isReceivables)).filter((action) => !(isReceivables && detailKind === "credit" && detail.retailOrigin && action.action === "POST") && capabilityAllowsAction(detail, action.action)).map((action) => { const Icon = action.icon; return <Button key={action.action} disabled={busy} variant={action.destructive ? "destructive" : "outline"} onClick={() => setActionTarget({ record: detail, action: action.action, kind: detailKind })}><Icon className="h-4 w-4" />{action.label}</Button>; })}{detailKind === "invoice" && detail.capabilities?.canCreateCredit ? <Button variant="outline" disabled={busy} onClick={() => setCreditTarget(detail)}><FileMinus2 className="h-4 w-4" />{t("createCreditNote")}</Button> : null}</div> : null}
         <FinanceCollaboration organizationId={organizationId} moduleCode={moduleCode} record={detail} locale={locale} />
       </div> : null}
     </Dialog>
