@@ -603,25 +603,41 @@ export async function decideRetailInvoiceReturnRequest(
         tx, organizationId, invoiceId, requestId, actorUserId,
       );
       if (zeroPayout) return zeroPayout;
-      // A customer refund must be chosen BEFORE committing the decision.
-      // No gap between approval, Finance posting, inventory and refund.
-      if (input.refundChoice) {
-        if (input.refundChoice === "NOW" && input.cashHandedOver !== true) {
+      // Any real customer payout must be chosen BEFORE committing the
+      // decision. Zero-payout physical returns do not prompt for cash and
+      // can post their credit plus inventory valuation in the same transaction.
+      let expressChoice = input.refundChoice || null;
+      const eligibleZeroCredit = !expressChoice && policy.mode === "SIMPLIFIED" &&
+        livePolicy.mode === "SIMPLIFIED" && policy.autoPostCreditNote &&
+        livePolicy.autoPostCreditNote && policy.allowDelegatedSelfApproval &&
+        livePolicy.allowDelegatedSelfApproval;
+      if (eligibleZeroCredit) {
+        const invoice = await tx.enterpriseSalesInvoice.findFirst({
+          where: { organizationId, id: invoiceId },
+          select: { outstandingAmount: true },
+        });
+        if (invoice && request.refundAmount.lessThanOrEqualTo(invoice.outstandingAmount)) {
+          expressChoice = "LATER";
+        }
+      }
+      if (expressChoice) {
+        if (expressChoice === "NOW" && input.cashHandedOver !== true) {
           throw new EnterpriseRetailError("RETAIL_RETURN_EXPRESS_CASH_HANDOVER_REQUIRED", 400);
         }
         await assertRetailExpressReturnAuthorizationTx(
-          tx, organizationId, invoiceId, requestId, actorUserId, input.refundChoice,
+          tx, organizationId, invoiceId, requestId, actorUserId, expressChoice,
+          eligibleZeroCredit && !input.refundChoice,
         );
         const prepared = await prepareRetailInvoiceReturnFinanceTx(
           tx, organizationId, invoiceId, requestId, actorUserId,
           { revision: updated.revision, financeApproverUserId: actorUserId },
-          input.refundChoice,
+          expressChoice,
         );
         const settled = await settleRetailInvoiceReturnFinanceTx(
           tx, organizationId, invoiceId, requestId, actorUserId,
           { revision: prepared.request.revision,
             reason: input.reason?.trim() || "Retour client express approuvé et contrôlé" },
-          input.refundChoice,
+          expressChoice,
         );
         return settled.request;
       }
