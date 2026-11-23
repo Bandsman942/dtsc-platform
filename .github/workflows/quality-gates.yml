@@ -157,6 +157,8 @@ jobs:
         run: pnpm qa:hotfix-1187
       - name: HOTFIX #1187 canonical partial-credit and zero-refund Decimal preflight QA
         run: pnpm qa:hotfix-1187-returns
+      - name: HOTFIX #1222 RETAIL return policy and credit provenance guards
+        run: pnpm qa:hotfix-1222
       - name: ERP sales #1195 Design 2.0 and premium A4 print contracts
         run: pnpm qa:sales-design2-1195
       - name: "ERP commercial #1198 Prisma quote creation and five Design 2.0 modules"
