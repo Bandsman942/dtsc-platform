@@ -495,6 +495,7 @@ export async function settleRetailInvoiceReturnFinanceTx(
     const completed = await tx.enterpriseRetailInvoiceReturnRequest.update({
       where: { organizationId, id: request.id }, data: {
         status: deferredPayout ? "REFUND_PENDING" : "COMPLETED",
+        refundChoice: payoutAmount.isZero() ? null : request.refundChoice,
         settledByUserId: actorUserId,
         completedAt: deferredPayout ? null : new Date(), revision: { increment: 1 },
       },
