@@ -26,7 +26,7 @@ contract("prisma/migrations/20261116072500_retail_credit_disposition_constraints
 contract("lib/enterprise/retail/invoice-returns.ts", ["UNDELIVERED_CREDIT", "SERVICE_CREDIT", "requiresPhysicalInspection", "independentFinanceVerifier"]);
 contract("lib/enterprise/retail/invoice-return-finance.ts", ["refundPayoutAmount: payoutAmount", "financeApproverUserId", "postPaidRetailInvoiceStockTx", "TransactionIsolationLevel.Serializable"]);
 contract("lib/enterprise/retail/invoice-checkout.ts", ["returnLines", "fulfilableLines", "remaining"]);
-contract("lib/enterprise/retail/invoice-stock-holds.ts", ['status: "COMPLETED"', "decimalMax"]);
+contract("lib/enterprise/retail/invoice-stock-holds.ts", ['"COMPLETED", "REFUND_PENDING"', "decimalMax"]);
 contract("components/enterprise/professional/retail-invoice-return-dialog.tsx", ["UNDELIVERED_CREDIT", "SERVICE_CREDIT", "financeApproverUserId", "requiresPhysicalInspection"]);
 contract("components/enterprise/professional/retail-invoice-flow-workbench.tsx", ['"PARTIALLY_PAID", "PAID", "CREDIT_NOTE"', "RetailInvoiceReturnDialog"]);
 const unit = { exports: {} };
