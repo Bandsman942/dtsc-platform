@@ -14,12 +14,18 @@ export async function POST(req: Request, { params }: Params) {
   const { organizationId, invoiceId, requestId } = await params;
   // Finance settlement is not a POS cashier mutation. No implicit Retail POS
   // privilege is granted; the service enforces both Finance modules and site.
-  const parsed = retailInvoiceReturnFinanceSettlementSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "RETAIL_INVOICE_RETURN_FINANCE_SETTLE_INVALID", req);
-  const auth = parsed.data.completeDeferred
+  const raw = await req.json().catch(() => null);
+  // Choose the permission boundary from the requested action before
+  // returning validation details. Authorization and same-origin must be
+  // enforced even for an empty or malformed anonymous request.
+  const wantsDeferredConfirmation = raw !== null && typeof raw === "object" &&
+    !Array.isArray(raw) && raw.completeDeferred === true;
+  const auth = wantsDeferredConfirmation
     ? await authorizeRetailRequest(req, organizationId, "RETAIL_POS", "submit", { mutation: true, limit: 20 })
     : await authorizeFinanceRequest(req, organizationId, "FINANCE_PAYMENTS", "update", { mutation: true, limit: 20 });
   if (!auth.ok) return auth.response;
+  const parsed = retailInvoiceReturnFinanceSettlementSchema.safeParse(raw);
+  if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "RETAIL_INVOICE_RETURN_FINANCE_SETTLE_INVALID", req);
   // Settlement confirms an outbound customer refund and posts the credit and
   // inventory movements atomically. It must not bypass the real-password/TOTP
   // step-up required by the canonical Finance CONFIRM endpoint.
