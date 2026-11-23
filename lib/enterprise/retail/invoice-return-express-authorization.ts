@@ -15,6 +15,7 @@ const decimal = (value: Prisma.Decimal.Value) => new Prisma.Decimal(value);
 export async function assertRetailExpressReturnAuthorizationTx(
   tx: Prisma.TransactionClient, organizationId: string, invoiceId: string,
   requestId: string, actorUserId: string, choice: RetailExpressRefundChoice,
+  allowZeroPayoutCreditOnly = false,
 ) {
   const request = await tx.enterpriseRetailInvoiceReturnRequest.findFirst({
     where: { organizationId, id: requestId, checkout: { salesInvoiceId: invoiceId } },
@@ -59,7 +60,9 @@ export async function assertRetailExpressReturnAuthorizationTx(
   }
   const plan = await assertRetailInvoiceReturnSettlementReadinessTx(tx, organizationId, invoiceId, requestId);
   const payout = plan.payoutAmount ?? decimal(0);
-  if (payout.lessThanOrEqualTo(0)) throw conflict("RETAIL_RETURN_EXPRESS_ZERO_PAYOUT_USE_CREDIT_ONLY");
+  if (payout.lessThan(0) || (payout.isZero() && !allowZeroPayoutCreditOnly)) {
+    throw conflict("RETAIL_RETURN_EXPRESS_ZERO_PAYOUT_USE_CREDIT_ONLY");
+  }
   // Limit is per invoice, across all non-rejected returns. Never split 100 USD
   // into multiple small requests, or compare CDF to USD as bare numbers.
   const prior = await tx.enterpriseRetailInvoiceReturnRequest.findMany({
