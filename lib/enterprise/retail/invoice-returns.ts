@@ -123,6 +123,10 @@ export async function listRetailInvoiceReturnRequests(
   organizationId: string, invoiceId: string, actorUserId: string, page: number,
 ) {
   await requireReturnFeatureTx(prisma, organizationId);
+  const liveConfig = await prisma.enterpriseRetailConfiguration.findUnique({
+    where: { organizationId }, select: { settingsJson: true },
+  });
+  const liveReturnPolicy = readRetailInvoiceReturnPolicy(liveConfig?.settingsJson);
   const checkout = await prisma.enterpriseRetailInvoiceCheckout.findFirst({
     where: { organizationId, salesInvoiceId: invoiceId },
     select: { id: true, siteId: true, warehouseId: true, stockPostedAt: true, lines: { select: { id: true, invoiceItemId: true, inventoryItemId: true, lotAllocations: true } }, invoice: { select: {
@@ -213,11 +217,14 @@ export async function listRetailInvoiceReturnRequests(
         (siteAssignment?.isActive && siteAssignment.roleCode === "MANAGER")));
       const physicalStock = Boolean(checkout.stockPostedAt) &&
         item.lines.some((line) => Boolean(line.checkoutLine.inventoryItemId));
-      const selfInspected = canSelfInspectRetailReturn(policy, item.requestedByUserId, actorUserId,
-        eligibleSelfInspector, true);
+      const selfInspected = liveReturnPolicy.mode === "SIMPLIFIED" &&
+        liveReturnPolicy.allowRequesterInspection &&
+        canSelfInspectRetailReturn(policy, item.requestedByUserId, actorUserId,
+          eligibleSelfInspector, true);
       const delegatedSelfDecision = selfCanDecide ||
         Boolean(member && RETAIL_OWNER_ROLES.has(member.role) &&
-          policy.mode === "SIMPLIFIED" && policy.allowDelegatedSelfApproval);
+          policy.mode === "SIMPLIFIED" && policy.allowDelegatedSelfApproval &&
+          liveReturnPolicy.mode === "SIMPLIFIED" && liveReturnPolicy.allowDelegatedSelfApproval);
       const sameActorDecision = item.inspectedByUserId === actorUserId &&
         item.requestedByUserId === actorUserId && selfInspected && delegatedSelfDecision;
       return {
@@ -506,8 +513,15 @@ export async function decideRetailInvoiceReturnRequest(
       organizationId, actorUserId, request.checkout.siteId, "APPROVE_INVOICE_RETURN", tx, { requireAssignment: true },
     );
     const policy = readRetailInvoiceReturnPolicySnapshot(request.returnPolicySnapshot);
+    const config = await tx.enterpriseRetailConfiguration.findUnique({
+      where: { organizationId }, select: { settingsJson: true },
+    });
+    const livePolicy = readRetailInvoiceReturnPolicy(config?.settingsJson);
+    const effectivePolicy = policy.mode === "SIMPLIFIED" && policy.allowDelegatedSelfApproval &&
+      livePolicy.mode === "SIMPLIFIED" && livePolicy.allowDelegatedSelfApproval
+      ? policy : { ...policy, mode: "STANDARD" as const };
     const selfReturnDecision = request.requestedByUserId === actorUserId &&
-      await canSelfDecideReturnTx(tx, organizationId, actorUserId, request.checkout.siteId, policy);
+      await canSelfDecideReturnTx(tx, organizationId, actorUserId, request.checkout.siteId, effectivePolicy);
     if (request.approverUserId !== actorUserId ||
         (request.requestedByUserId === actorUserId && !selfReturnDecision)) {
       throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_APPROVER_INELIGIBLE", 403);
@@ -525,6 +539,7 @@ export async function decideRetailInvoiceReturnRequest(
       throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_REVISION_CONFLICT", 409);
     }
     const selfInspectionAllowed = policy.mode === "SIMPLIFIED" && policy.allowRequesterInspection &&
+      livePolicy.mode === "SIMPLIFIED" && livePolicy.allowRequesterInspection &&
       request.inspectedByUserId === request.requestedByUserId && request.inspectionMode === "SELF_ATTESTED";
     const sameActorInspectionApproved = selfInspectionAllowed &&
       request.inspectedByUserId === actorUserId && selfReturnDecision;
@@ -591,10 +606,15 @@ export async function inspectRetailInvoiceReturnRequest(
     const canInspectGoods = Boolean(membership && (RETAIL_OWNER_ROLES.has(membership.role) ||
       (verifier?.isActive && siteStaffCapabilities(verifier.roleCode, verifier.permissionsJson).includes("MANAGE_STOCK"))));
     const policy = readRetailInvoiceReturnPolicySnapshot(request.returnPolicySnapshot);
+    const liveConfig = await tx.enterpriseRetailConfiguration.findUnique({
+      where: { organizationId }, select: { settingsJson: true },
+    });
+    const livePolicy = readRetailInvoiceReturnPolicy(liveConfig?.settingsJson);
     const eligibleSelfInspector = Boolean(membership && (RETAIL_OWNER_ROLES.has(membership.role) ||
       (verifier?.isActive && verifier.roleCode === "MANAGER")));
-    const selfInspector = canSelfInspectRetailReturn(policy, request.requestedByUserId, actorUserId,
-      eligibleSelfInspector, true);
+    const selfInspector = livePolicy.mode === "SIMPLIFIED" && livePolicy.allowRequesterInspection &&
+      canSelfInspectRetailReturn(policy, request.requestedByUserId, actorUserId,
+        eligibleSelfInspector, true);
     if (physicallyDeliveredGoods && !selfInspector) {
       await requireRetailSiteCapability(
         organizationId, actorUserId, request.checkout.siteId, "MANAGE_STOCK", tx, { requireAssignment: true },
