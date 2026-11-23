@@ -229,7 +229,7 @@ export async function prepareRetailInvoiceReturnFinanceTx(
       for (const payment of refundPayments) {
         await tx.enterprisePayment.update({ where: { id: payment.id },
           data: { status: "APPROVED", approvedByUserId: actorUserId,
-            approvedAt: approvalTime, revision: { increment: 1 } } });
+            revision: { increment: 1 } } });
         await tx.enterprisePaymentEvent.create({ data: {
           organizationId, paymentId: payment.id, actorUserId, eventType: "EXPRESS_APPROVE",
           summary: "Refund approved by delegated Retail decision maker",
