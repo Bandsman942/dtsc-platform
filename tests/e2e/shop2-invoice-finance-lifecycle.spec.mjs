@@ -694,6 +694,39 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
       const policyAfter = await policyAfterResponse.json();
       expect(policyAfter.revision).toBe(policyBefore.revision);
       expect(policyAfter.policy.expressRefundLimitAmount).toBe(100);
+      // #1224: an owner may now set a REAL cap above 100, denominated
+      // in the company's Finance functional currency. Never reinterpret
+      // the old 100 USD threshold as 100 CDF.
+      const updatedLimitPolicy = {
+        ...policyAfter.policy, version: 2,
+        expressRefundLimitAmount: "250000.00",
+        expressRefundLimitCurrency: policyAfter.functionalCurrencyCode,
+      };
+      const wrongCurrency = policyAfter.functionalCurrencyCode === "CDF" ? "USD" : "CDF";
+      const invalidCurrencyResponse = await context.owner.request.put(policyUrl, {
+        data: { revision: policyAfter.revision,
+          policy: { ...updatedLimitPolicy, expressRefundLimitCurrency: wrongCurrency } },
+        headers: { origin: baseUrl, referer: `${baseUrl}/enterprise-modules/RETAIL_POS` },
+      });
+      expect(invalidCurrencyResponse.status(), await invalidCurrencyResponse.text()).toBe(409);
+      const zeroLimitResponse = await context.owner.request.put(policyUrl, {
+        data: { revision: policyAfter.revision,
+          policy: { ...updatedLimitPolicy, expressRefundLimitAmount: "0" } },
+        headers: { origin: baseUrl, referer: `${baseUrl}/enterprise-modules/RETAIL_POS` },
+      });
+      expect(zeroLimitResponse.status(), await zeroLimitResponse.text()).toBe(400);
+      const savedOwnerCap = await context.owner.request.put(policyUrl, {
+        data: { revision: policyAfter.revision, policy: updatedLimitPolicy },
+        headers: { origin: baseUrl, referer: `${baseUrl}/enterprise-modules/RETAIL_POS` },
+      });
+      expect(savedOwnerCap.status(), await savedOwnerCap.text()).toBe(200);
+      const readOwnerCap = await context.owner.request.get(policyUrl);
+      expect(readOwnerCap.status()).toBe(200);
+      const liveOwnerCap = await readOwnerCap.json();
+      expect(liveOwnerCap.policy).toMatchObject({
+        version: 2, expressRefundLimitAmount: "250000.00",
+        expressRefundLimitCurrency: policyAfter.functionalCurrencyCode,
+      });
       async function exerciseExpressUnpaidCredit({ quantity }) {
         const invoiceCreated = await post(context.cashier, base + "/retail/invoices", {
           idempotencyKey: `retail-1222-unpaid-${quantity}-${Date.now()}`,
@@ -735,6 +768,13 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
         });
         expect(requested.status, JSON.stringify(requested.body)).toBe(201);
         const returnId = requested.body.request.id;
+        const frozenNewPolicy = await prisma.enterpriseRetailInvoiceReturnRequest.findFirstOrThrow({
+          where: { organizationId, id: returnId }, select: { returnPolicySnapshot: true },
+        });
+        expect(frozenNewPolicy.returnPolicySnapshot).toMatchObject({
+          version: 2, expressRefundLimitAmount: "250000.00",
+          expressRefundLimitCurrency: policyAfter.functionalCurrencyCode,
+        });
         const path = `${returnsBase}/${returnId}`;
         const inspection = await post(context.owner, path + "/inspection", {
           revision: requested.body.request.revision, receivedAndInspected: true,
