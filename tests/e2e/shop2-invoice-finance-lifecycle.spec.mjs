@@ -774,6 +774,23 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
         where: { id: deferredDecision.body.request.salesCreditNoteId },
       });
       expect(deferredCredit.status).toBe("POSTED");
+      const creditJournal = await prisma.enterpriseJournalEntry.findFirstOrThrow({
+        where: { organizationId, sourceEntityType: "EnterpriseSalesCreditNote",
+          sourceEntityId: deferredCredit.id, postingEvent: "SALES_CREDIT_NOTE_POSTED", status: "POSTED" },
+        include: { lines: true },
+      });
+      expect(creditJournal.lines.length).toBeGreaterThanOrEqual(2);
+      // The reversal releases the original allocation into the existing
+      // CUSTOMER_ADVANCES liability until the approved refund is confirmed.
+      const sourceAllocation = await prisma.enterprisePaymentAllocation.findMany({
+        where: { organizationId, paymentId: dp.body.payment.id },
+      });
+      expect(sourceAllocation.length).toBeGreaterThan(0);
+      expect(sourceAllocation.every((allocation) => allocation.status === "REVERSED")).toBe(true);
+      const originalCollection = await prisma.enterprisePayment.findUniqueOrThrow({
+        where: { id: dp.body.payment.id },
+      });
+      expect(originalCollection.unallocatedAmount.equals(halfPaid)).toBe(true);
       const deferredPayment = await prisma.enterprisePayment.findUniqueOrThrow({
         where: { id: deferredDecision.body.request.refundPaymentId },
       });
