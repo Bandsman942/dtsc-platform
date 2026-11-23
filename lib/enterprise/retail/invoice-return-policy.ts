@@ -12,7 +12,7 @@ export const retailInvoiceReturnPolicySchema = z.object({
   autoPostCreditNote: z.boolean(),
   promptImmediateRefund: z.boolean(),
   scope: z.literal("ALL_SITES"),
-  expressRefundLimitAmount: z.number().finite().min(0).max(10000),
+  expressRefundLimitAmount: z.number().finite().min(0).max(100),
   expressRefundLimitCurrency: z.literal("USD"),
 }).strict();
 
