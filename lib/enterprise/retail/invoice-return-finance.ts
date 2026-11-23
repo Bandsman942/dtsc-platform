@@ -526,3 +526,81 @@ export async function settleRetailInvoiceReturnFinance(
     settleRetailInvoiceReturnFinanceTx(tx, organizationId, invoiceId, requestId, actorUserId, input),
   { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 60000 }));
 }
+
+/** The credit, payment allocations, and stock were already settled in the
+ * original atomic LATER decision. This command confirms ONLY previously
+ * approved CASH refunds and closes the open customer reimbursement. */
+export async function confirmDeferredRetailInvoiceReturnRefund(
+  organizationId: string, invoiceId: string, requestId: string, actorUserId: string,
+  input: z.infer<typeof retailInvoiceReturnFinanceSettlementSchema>,
+) {
+  return withRetailTransactionRetry(() => prisma.$transaction(async (tx) => {
+    await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterpriseSalesInvoice" WHERE id = ${invoiceId} AND "organizationId" = ${organizationId} FOR UPDATE`);
+    await tx.$executeRaw(Prisma.sql`SELECT r.id FROM "EnterpriseRetailInvoiceReturnRequest" r JOIN "EnterpriseRetailInvoiceCheckout" c ON c.id = r."checkoutId" AND c."organizationId" = r."organizationId" WHERE r.id = ${requestId} AND r."organizationId" = ${organizationId} AND c."salesInvoiceId" = ${invoiceId} FOR UPDATE OF r`);
+    const request = await tx.enterpriseRetailInvoiceReturnRequest.findFirst({
+      where: { organizationId, id: requestId, checkout: { salesInvoiceId: invoiceId } },
+      include: { checkout: { select: { siteId: true } }, refundLegs: { include: { refundPayment: true } } },
+    });
+    if (!request) throw fail("RETAIL_INVOICE_RETURN_NOT_FOUND", 404);
+    // The original actor may no longer have privileges. Re-check rather than
+    // accepting a stale historical approval or idempotent cross-store read.
+    const { requireRetailSiteCapability } = await import("@/lib/enterprise/retail/site-access");
+    const { readRetailInvoiceReturnPolicy, readRetailInvoiceReturnPolicySnapshot } =
+      await import("@/lib/enterprise/retail/invoice-return-policy");
+    await requireRetailSiteCapability(organizationId, actorUserId, request.checkout.siteId,
+      "COLLECT_PAYMENT", tx, { requireAssignment: true });
+    await requireRetailSiteCapability(organizationId, actorUserId, request.checkout.siteId,
+      "APPROVE_INVOICE_RETURN", tx, { requireAssignment: true });
+    if (request.status === "COMPLETED" && request.completedAt &&
+        request.refundChoice === "LATER" && request.settledByUserId === actorUserId &&
+        request.revision === input.revision + 1) {
+      return { request, idempotent: true };
+    }
+    if (request.status !== "REFUND_PENDING" || request.refundChoice !== "LATER" ||
+        request.revision !== input.revision || request.settledByUserId !== actorUserId ||
+        request.approverUserId !== actorUserId || request.financeApproverUserId !== actorUserId ||
+        request.preparedByUserId !== actorUserId || !request.salesCreditNoteId ||
+        !request.refundPayoutAmount?.greaterThan(0)) {
+      throw fail("RETAIL_INVOICE_RETURN_FINANCE_CONFLICT", 409);
+    }
+    const config = await tx.enterpriseRetailConfiguration.findUnique({
+      where: { organizationId }, select: { settingsJson: true },
+    });
+    const current = readRetailInvoiceReturnPolicy(config?.settingsJson);
+    const original = readRetailInvoiceReturnPolicySnapshot(request.returnPolicySnapshot);
+    if (original.mode !== "SIMPLIFIED" || current.mode !== "SIMPLIFIED" ||
+        !original.allowDelegatedSelfApproval || !current.allowDelegatedSelfApproval) {
+      throw fail("RETAIL_RETURN_EXPRESS_POLICY_DISABLED", 403);
+    }
+    const payments = request.refundLegs.length
+      ? request.refundLegs.map((leg) => leg.refundPayment)
+      : request.refundPaymentId ? [await tx.enterprisePayment.findFirst({
+          where: { organizationId, id: request.refundPaymentId },
+        })] : [];
+    if (payments.length === 0 || payments.some((payment) => !payment ||
+        payment.status !== "APPROVED" || payment.methodType !== "CASH" ||
+        payment.paymentType !== "REFUND" || payment.direction !== "OUTBOUND" ||
+        payment.initiatedByUserId !== actorUserId || payment.approvedByUserId !== actorUserId) ||
+        !payments.reduce((sum, payment) => sum.plus(payment!.amount), new Prisma.Decimal(0))
+          .equals(request.refundPayoutAmount)) {
+      throw fail("RETAIL_INVOICE_RETURN_REFUND_PAYMENT_INVALID", 409);
+    }
+    for (const payment of payments) {
+      await confirmCustomerRefundPaymentTx(tx, organizationId, payment!.id, actorUserId,
+        { revision: payment!.revision, reason: input.reason });
+    }
+    const completed = await tx.enterpriseRetailInvoiceReturnRequest.update({
+      where: { id: request.id, organizationId },
+      data: { status: "COMPLETED", completedAt: new Date(), revision: { increment: 1 } },
+    });
+    await publishFinanceEvent(tx, {
+      organizationId, entityType: "EnterpriseRetailInvoiceReturnRequest", entityId: request.id,
+      eventType: "RETAIL_INVOICE_RETURN_COMPLETED",
+      summary: "Deferred cash customer reimbursement confirmed; credit and stock were already posted",
+      actorUserId, fromStatus: "REFUND_PENDING", toStatus: "COMPLETED",
+      metadataJson: { invoiceId, payoutAmount: request.refundPayoutAmount.toFixed(2),
+        paymentIds: payments.map((payment) => payment!.id), creditNoteId: request.salesCreditNoteId },
+    });
+    return { request: completed, idempotent: false };
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 60000 }));
+}
