@@ -23,6 +23,9 @@ type ReturnRequest = {
   reason: string;
   refundAmount: string;
   refundPayoutAmount: string | null;
+  payoutPreviewAmount?: string;
+  refundChoice?: "NOW" | "LATER" | null;
+  canExpress?: boolean;
   inspectedAt: string | null;
   inspectionNotes: string | null;
   inspectionMode?: "SELF_ATTESTED" | "INDEPENDENT" | null;
@@ -61,6 +64,14 @@ const translations = {
     new: "Demander l'annulation / un avoir", newHint: "Facture émise, partiellement payée ou soldée : sélectionnez les lignes à créditer. Le calcul final protège la créance, le taux de taxe et le montant effectivement encaissé.",
     item: "Article ou prestation", quantity: "Quantité créditée", disposition: "Traitement de ligne", restock: "Réintégrer en stock", quarantine: "Placer en quarantaine", dispose: "Écarter / détruire", serviceCredit: "Prestation / article non stocké : avoir sans mouvement de stock", payout: "Remboursement réel", payoutPending: "À déterminer en Finance", financeApprover: "Validateur Finance indépendant", reason: "Motif du retour", approver: "Validateur Finance (vous-même si exception accordée)", send: "Soumettre la demande", cancel: "Annuler", sending: "Enregistrement…", createSuccess: "Demande enregistrée. Un contrôle de réception autorisé est maintenant attendu.",
     selfInspection: "Attester mon contrôle", selfAttested: "Contrôle effectué par le demandeur habilité", independentAttested: "Contrôle indépendant enregistré",
+    refundChoiceLabel: "Traitement après validation", refundChoiceStandard: "Circuit Finance standard",
+    refundChoiceNow: "Rembourser immédiatement (espèces réellement remises)",
+    refundChoiceLater: "Comptabiliser l’avoir et rembourser plus tard",
+    refundChoiceHelp: "Le montant encaissé remboursable est calculé par le serveur. Mode express sous plafond de 100 USD. Aucun paiement fictif n’est créé pour une facture impayée.",
+    cashHandedOver: "Je confirme avoir réellement remis les espèces au client",
+    expressCompleted: "Avoir comptabilisé, stock régularisé et remboursement confirmé.",
+    expressDeferred: "Avoir comptabilisé, remboursement enregistré en attente de paiement.",
+    deferred: "Remboursement différé en attente",
     requests: "Historique des retours", amount: "Montant de l'avoir", submitted: "En attente d’inspection", inspected: "Inspectée — validation attendue", approved: "Approuvée — aucun remboursement effectué", financePending: "Pièces Finance en attente", rejected: "Refusée", completed: "Avoir et liquidation terminés", unknown: "À vérifier", inspection: "Inspecter / vérifier", approve: "Approuver la demande", reject: "Refuser", inspectionNotes: "Constat de contrôle", inspectionHint: "Confirmez uniquement les articles réellement reçus et contrôlés. L’inspection ne réintègre pas encore le stock.", confirmInspection: "Confirmer l’inspection", decisionHint: "La validation de cette demande ne crée pas encore d’avoir ni de remboursement. Le traitement financier et du stock suivra un circuit distinct.", rejectionReason: "Motif du refus (obligatoire)", decisionReason: "Commentaire de validation (facultatif)", confirmApprove: "Confirmer l’approbation", confirmReject: "Confirmer le refus", inspectionSuccess: "Contrôle enregistré. Le validateur désigné peut maintenant statuer.", approvalSuccess: "Retour approuvé. L’avoir et le remboursement restent en attente du circuit de liquidation.", rejectionSuccess: "Retour refusé avec motif conservé.", noAmount: "Les montants proposés sont calculés par le serveur, après validation des quantités.",
     prepareFinance: "Préparer avoir et remboursement", prepareFinanceHint: "Le serveur sépare la valeur de l'avoir et les éventuels remboursements des paiements déjà reçus. Un avoir sans trop-perçu ne génère aucun paiement. Désignez un validateur Finance indépendant pour les pièces.", confirmPrepareFinance: "Envoyer en validation Finance", prepareFinanceSuccess: "Avoir et paiements de remboursement créés ensemble et soumis à validation Finance.", settleFinance: "Liquider le retour", settleFinanceHint: "Cette étape confirme tous les paiements de remboursement, comptabilise l'avoir unique et réintègre uniquement les articles acceptés en stock dans une transaction indivisible.", settlementReason: "Motif de liquidation", confirmSettleFinance: "Confirmer la liquidation", settleFinanceSuccess: "Remboursements, avoir et stock traités dans une même transaction.", paymentApproval: "Remboursements", creditApproval: "Avoir", financeApproved: "Approuvé", financeAwaiting: "Validation attendue", financeGuide: "Validez tous les paiements et l'avoir dans Finance puis actualisez les retours.",
     previous: "Précédente", next: "Suivante", close: "Fermer", select: "Sélectionner", rowMissing: "Aucune ligne facturée n’est disponible pour créer un retour.", itemRequired: "Sélectionnez au moins un article avec une quantité valide.", invalidQuantity: "La quantité doit être positive, ne pas dépasser la facture et avoir au plus 3 décimales pour un article en stock. Les quantités déjà engagées sont revérifiées par le serveur.",
@@ -74,6 +85,14 @@ const translations = {
     new: "Request cancellation / credit", newHint: "Issued, partly paid or settled invoice: select the lines to credit. The server protects outstanding receivables, taxes and amounts previously collected.",
     item: "Item or service", quantity: "Quantity credited", disposition: "Line treatment", restock: "Return to stock", quarantine: "Quarantine", dispose: "Discard / destroy", serviceCredit: "Service / non-stock item: credit with no inventory movement", payout: "Cash refund", payoutPending: "To be determined by Finance", financeApprover: "Independent Finance approver", reason: "Return reason", approver: "Finance approver (yourself if owner-authorized)", send: "Submit request", cancel: "Cancel", sending: "Saving…", createSuccess: "Request registered. An authorized return inspection is now required.",
     selfInspection: "Record my inspection", selfAttested: "Inspected by authorized requester", independentAttested: "Independent inspection recorded",
+    refundChoiceLabel: "Action after approval", refundChoiceStandard: "Standard Finance workflow",
+    refundChoiceNow: "Refund now (cash physically handed to customer)",
+    refundChoiceLater: "Post credit note and refund later",
+    refundChoiceHelp: "The refundable part of money already collected is computed by the server. Express mode is capped at USD 100. An unpaid invoice never creates a phantom refund.",
+    cashHandedOver: "I confirm I have physically handed the cash to the customer",
+    expressCompleted: "Credit posted, stock reconciled and cash refund confirmed.",
+    expressDeferred: "Credit posted; customer refund recorded as pending.",
+    deferred: "Deferred customer refund outstanding",
     requests: "Return history", amount: "Credit note amount", submitted: "Awaiting inspection", inspected: "Inspected — awaiting approval", approved: "Approved — not refunded", financePending: "Finance documents pending", rejected: "Rejected", completed: "Credit and settlement completed", unknown: "Check status", inspection: "Inspect / verify", approve: "Approve request", reject: "Reject", inspectionNotes: "Inspection findings", inspectionHint: "Only confirm goods that were actually received and inspected. This does not restock inventory yet.", confirmInspection: "Confirm inspection", decisionHint: "Approving this request does not yet create a credit note or a refund. Financial and inventory settlement will follow a separate process.", rejectionReason: "Rejection reason (required)", decisionReason: "Approval note (optional)", confirmApprove: "Confirm approval", confirmReject: "Confirm rejection", inspectionSuccess: "Inspection recorded. The designated approver can now decide.", approvalSuccess: "Return approved. The credit and refund still await settlement.", rejectionSuccess: "Return rejected with the reason preserved.", noAmount: "Proposed amounts are calculated by the server after quantity validation.",
     prepareFinance: "Prepare credit and refund", prepareFinanceHint: "The server separates credit-note value from any actual cash refund due. Credits without excess payment create no outgoing payment. Choose an independent Finance reviewer for credit and refund documents.", confirmPrepareFinance: "Submit for Finance approval", prepareFinanceSuccess: "Credit note and refund payouts created together and submitted for Finance approval.", settleFinance: "Settle return", settleFinanceHint: "This step confirms every refund payout, posts the single credit note and restocks accepted items in one indivisible transaction.", settlementReason: "Settlement reason", confirmSettleFinance: "Confirm settlement", settleFinanceSuccess: "Refund payouts, credit note and inventory completed in the same transaction.", paymentApproval: "Refund payouts", creditApproval: "Credit note", financeApproved: "Approved", financeAwaiting: "Awaiting approval", financeGuide: "Approve all refund payouts and the credit note in Finance, then refresh returns.",
     previous: "Previous", next: "Next", close: "Close", select: "Select", rowMissing: "No invoice lines are available for this return.", itemRequired: "Select at least one item with a valid quantity.", invalidQuantity: "Quantity must be positive, not exceed the invoice and use no more than 3 decimal places for stocked items. Existing commitments are checked again by the server.",
@@ -82,7 +101,7 @@ const translations = {
 
 function statusLabel(status: string, copy: typeof translations.fr | typeof translations.en) {
   return ({ SUBMITTED: copy.submitted, INSPECTED: copy.inspected, APPROVED: copy.approved,
-    FINANCE_PENDING: copy.financePending, REJECTED: copy.rejected, COMPLETED: copy.completed } as Record<string, string>)[status] || copy.unknown;
+    FINANCE_PENDING: copy.financePending, REFUND_PENDING: copy.deferred, REJECTED: copy.rejected, COMPLETED: copy.completed } as Record<string, string>)[status] || copy.unknown;
 }
 
 export function RetailInvoiceReturnDialog({ organizationId, invoiceId, invoiceNumber, siteId, currencyCode, checkoutLines, invoiceItems, locale, onChanged, autoOpen = false }: {
@@ -102,6 +121,7 @@ export function RetailInvoiceReturnDialog({ organizationId, invoiceId, invoiceNu
   const [action, setAction] = useState<Action | null>(null);
   const [actionNotes, setActionNotes] = useState("");
   const [batchConfirmed, setBatchConfirmed] = useState(false);
+  const [refundChoice, setRefundChoice] = useState<"STANDARD" | "NOW" | "LATER">("LATER");
   const key = useRef("");
   const sourceItems = checkoutLines.flatMap((line) => {
     const item = invoiceItems.find((entry) => entry.id === line.invoiceItemId);
@@ -182,8 +202,14 @@ export function RetailInvoiceReturnDialog({ organizationId, invoiceId, invoiceNu
       const inspection = action.type === "INSPECT";
       const financePrepare = action.type === "PREPARE_FINANCE";
       const financeSettlement = action.type === "SETTLE_FINANCE";
-      if (financeSettlement) {
+      const expressChoice = action.type === "APPROVE" && action.request.canExpress &&
+        Number(action.request.payoutPreviewAmount || 0) > 0 && refundChoice !== "STANDARD"
+        ? refundChoice : null;
+      if (financeSettlement || expressChoice) {
         if (!form) throw new Error(locale === "fr" ? "Vérification de sécurité requise." : "Security verification required.");
+        if (expressChoice === "NOW" && form.get("cashHandedOver") !== "on") {
+          throw new Error(locale === "fr" ? "Confirmez la remise effective des espèces au client." : "Confirm that cash was physically handed to the customer.");
+        }
         await performFinanceCriticalStepUp(form, "CONFIRM");
       }
       const path = financePrepare ? "prepare" : financeSettlement ? "settle" : inspection ? "inspection" : "decision";
@@ -193,12 +219,16 @@ export function RetailInvoiceReturnDialog({ organizationId, invoiceId, invoiceNu
           ? { revision: action.request.revision, reason: actionNotes.trim() } : inspection
           ? { revision: action.request.revision, receivedAndInspected: true, notes: actionNotes.trim(), ...(action.request.lines.some(line => line.lotAllocations?.length) ? { confirmedBatchSelection: true } : {}) }
           : { revision: action.request.revision, decision: action.type === "APPROVE" ? "APPROVE" : "REJECT",
-            ...(actionNotes.trim() ? { reason: actionNotes.trim() } : {}) }),
+            ...(actionNotes.trim() ? { reason: actionNotes.trim() } : {}),
+            ...(expressChoice ? { refundChoice: expressChoice,
+              ...(expressChoice === "NOW" ? { cashHandedOver: true } : {}) } : {}) }),
       });
-      const payload = await response.json().catch(() => null) as { message?: string; error?: string } | null;
+      const payload = await response.json().catch(() => null) as { message?: string; error?: string; request?: { status: string } } | null;
       if (!response.ok) throw new Error(payload?.message || payload?.error || copy.error);
       toastSuccess(financePrepare ? copy.prepareFinanceSuccess : financeSettlement ? copy.settleFinanceSuccess :
-        inspection ? copy.inspectionSuccess : action.type === "APPROVE" ? copy.approvalSuccess : copy.rejectionSuccess);
+        inspection ? copy.inspectionSuccess : action.type === "APPROVE" && payload?.request?.status === "REFUND_PENDING" ? copy.expressDeferred :
+        action.type === "APPROVE" && payload?.request?.status === "COMPLETED" ? copy.expressCompleted :
+        action.type === "APPROVE" ? copy.approvalSuccess : copy.rejectionSuccess);
       setAction(null); setActionNotes(""); await load(page); onChanged();
     } catch (caught) { const message = customerFacingError(caught, locale); setError(message); toastError(message); }
     finally { setBusy(false); }
@@ -239,7 +269,20 @@ export function RetailInvoiceReturnDialog({ organizationId, invoiceId, invoiceNu
           {action.type === "INSPECT" && action.request.lines.some(line => line.lotAllocations?.length) ? <div className="grid gap-2 rounded-lg border border-dtsc-border bg-dtsc-surface p-3"><p className="text-sm font-bold">{copy.batchTitle}</p>{action.request.lines.flatMap(line => (line.lotAllocations || []).map(batch => <p key={line.id + batch.stockLotId} className="break-words text-xs">{sourceItems.find(item => item.id === line.checkoutLineId)?.item.description} · {batchLabel(line,batch)} · {batch.quantity}</p>))}<label className="flex gap-2 text-sm"><input type="checkbox" required checked={batchConfirmed} disabled={busy} onChange={event => setBatchConfirmed(event.target.checked)} />{copy.batchConfirm}</label></div> : null}
           {action.type === "PREPARE_FINANCE" ? <EnterpriseApproverSelect organizationId={organizationId} moduleCode="FINANCE_RECEIVABLES" locale={locale} name="financeApproverUserId" label={copy.financeApprover} disabled={busy} required /> : null}
           {action.type !== "PREPARE_FINANCE" ? <label className="grid min-w-0 gap-1 text-sm font-semibold text-dtsc-ink">{action.type === "INSPECT" ? copy.inspectionNotes : action.type === "REJECT" ? copy.rejectionReason : action.type === "SETTLE_FINANCE" ? copy.settlementReason : copy.decisionReason}<textarea className="min-h-28 w-full min-w-0 rounded-lg border border-dtsc-border bg-dtsc-surface p-3 text-base" minLength={action.type === "INSPECT" ? 5 : ["REJECT", "SETTLE_FINANCE"].includes(action.type) ? 4 : undefined} maxLength={1000} required={["INSPECT", "REJECT", "SETTLE_FINANCE"].includes(action.type)} value={actionNotes} disabled={busy} onChange={(event) => setActionNotes(event.target.value)} /></label> : null}
-          {action.type === "SETTLE_FINANCE" ? <FinanceCriticalStepUpFields action="CONFIRM" locale={locale} /> : null}
+          {action.type === "APPROVE" && action.request.canExpress && Number(action.request.payoutPreviewAmount || 0) > 0 ? <div className="grid gap-3 rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-3">
+            <h4 className="text-sm font-black text-dtsc-ink">{copy.refundChoiceLabel} · {money(action.request.payoutPreviewAmount || "0")}</h4>
+            <p className="text-xs leading-5 text-dtsc-muted">{copy.refundChoiceHelp}</p>
+            <div className="grid gap-2">
+              {([["LATER", copy.refundChoiceLater], ["NOW", copy.refundChoiceNow], ["STANDARD", copy.refundChoiceStandard]] as const).map(([value, label]) =>
+                <label key={value} className="flex min-h-11 items-center gap-3 rounded-lg border border-dtsc-border bg-dtsc-surface p-3 text-sm font-medium text-dtsc-ink">
+                  <input type="radio" name="refundChoice" value={value} checked={refundChoice === value} disabled={busy} onChange={() => setRefundChoice(value)} />{label}
+                </label>)}
+            </div>
+            {refundChoice === "NOW" ? <label className="flex gap-3 text-sm font-semibold text-dtsc-ink"><input type="checkbox" name="cashHandedOver" required disabled={busy} />{copy.cashHandedOver}</label> : null}
+          </div> : null}
+          {(action.type === "SETTLE_FINANCE" ||
+            (action.type === "APPROVE" && action.request.canExpress && Number(action.request.payoutPreviewAmount || 0) > 0 && refundChoice !== "STANDARD")) ?
+            <FinanceCriticalStepUpFields action="CONFIRM" locale={locale} /> : null}
           <div data-responsive-actions className="flex min-w-0 flex-wrap justify-end gap-2"><Button type="button" variant="outline" disabled={busy} onClick={() => { setAction(null); setActionNotes(""); }}>{copy.cancel}</Button><Button type="submit" disabled={busy || (action.type === "INSPECT" && actionNotes.trim().length < 5) || (["REJECT", "SETTLE_FINANCE"].includes(action.type) && actionNotes.trim().length < 4)}>{action.type === "INSPECT" ? copy.confirmInspection : action.type === "APPROVE" ? copy.confirmApprove : action.type === "REJECT" ? copy.confirmReject : action.type === "PREPARE_FINANCE" ? copy.confirmPrepareFinance : copy.confirmSettleFinance}</Button></div>
         </form> : null}
         <div className="grid min-w-0 gap-3 border-t border-dtsc-border pt-3">
