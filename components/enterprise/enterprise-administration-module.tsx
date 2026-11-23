@@ -11,6 +11,7 @@ import { EnterpriseRelationshipCodePanel } from "@/components/enterprise/identit
 import { EnterprisePositionsGuidedPanel } from "@/components/enterprise/enterprise-positions-guided-panel";
 import { EnterpriseFiscalSettingsPanel } from "@/components/enterprise/professional/enterprise-fiscal-settings-panel";
 import { RetailOperatingSettingsPanel } from "@/components/enterprise/professional/retail-operating-settings-panel";
+import { RetailInvoiceReturnPolicyPanel } from "@/components/enterprise/professional/retail-invoice-return-policy-panel";
 import {
   EnterpriseAdministrationAuditPanel,
   EnterpriseAdministrationBrandingPanel,
@@ -280,6 +281,7 @@ export function EnterpriseAdministrationModule(
             <EnterpriseAdministrationBrandingPanel organization={organization} locale={locale} />
             <EnterpriseFiscalSettingsPanel organizationId={organization.id} country={organization.country} locale={locale} />
             {organization.sectorCode === "COMMERCE_RETAIL" ? <RetailOperatingSettingsPanel organizationId={organization.id} locale={locale === "en" ? "en" : "fr"} /> : null}
+            {organization.sectorCode === "COMMERCE_RETAIL" ? <RetailInvoiceReturnPolicyPanel organizationId={organization.id} locale={locale === "en" ? "en" : "fr"} /> : null}
             {(organization.sectorCode === "HEALTH_CARE" || organization.sectorCode === "PHARMACY") ? (
               <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-cyan-500/30 bg-cyan-500/5 p-4">
                 <div className="min-w-0">
