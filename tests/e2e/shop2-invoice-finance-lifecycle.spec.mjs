@@ -603,6 +603,25 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
       },
     });
     try {
+      // E10: a real authenticated HTTP policy update must reject a USD 100.01
+      // configuration, without mutating the currently active USD 100 policy.
+      await ensureStepUp(context.owner, ownerPassword);
+      const policyUrl = `${base}/retail/return-policy`;
+      const policyBeforeResponse = await context.owner.request.get(policyUrl);
+      expect(policyBeforeResponse.status()).toBe(200);
+      const policyBefore = await policyBeforeResponse.json();
+      expect(policyBefore.policy.expressRefundLimitAmount).toBe(100);
+      const invalidLimitResponse = await context.owner.request.put(policyUrl, {
+        data: { revision: policyBefore.revision,
+          policy: { ...policyBefore.policy, expressRefundLimitAmount: 100.01 } },
+        headers: { origin: baseUrl, referer: `${baseUrl}/enterprise-modules/RETAIL_POS` },
+      });
+      expect(invalidLimitResponse.status(), await invalidLimitResponse.text()).toBe(400);
+      const policyAfterResponse = await context.owner.request.get(policyUrl);
+      expect(policyAfterResponse.status()).toBe(200);
+      const policyAfter = await policyAfterResponse.json();
+      expect(policyAfter.revision).toBe(policyBefore.revision);
+      expect(policyAfter.policy.expressRefundLimitAmount).toBe(100);
       async function exerciseExpressUnpaidCredit({ quantity }) {
         const invoiceCreated = await post(context.cashier, base + "/retail/invoices", {
           idempotencyKey: `retail-1222-unpaid-${quantity}-${Date.now()}`,
