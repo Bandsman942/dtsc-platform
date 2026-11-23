@@ -287,7 +287,14 @@ export async function listRetailInvoiceReturnApprovers(
     const assignment = siteAccess.get(member.userId);
     return Boolean(assignment && siteStaffCapabilities(assignment.roleCode, assignment.permissionsJson).includes("APPROVE_INVOICE_RETURN"));
   });
-  const selfReturnGrant = await hasRetailSelfApprovalGrant(organizationId, actorUserId, siteId, "RETURN");
+  const config = await prisma.enterpriseRetailConfiguration.findUnique({
+    where: { organizationId }, select: { settingsJson: true },
+  });
+  const policy = readRetailInvoiceReturnPolicy(config?.settingsJson);
+  const requester = members.find((member) => member.userId === actorUserId);
+  const selfReturnGrant = requester && RETAIL_OWNER_ROLES.has(requester.role) &&
+    policy.mode === "SIMPLIFIED" && policy.allowDelegatedSelfApproval
+    ? true : await hasRetailSelfApprovalGrant(organizationId, actorUserId, siteId, "RETURN");
   const candidates = await Promise.all(eligible.map(async (member) => {
     if (member.userId === actorUserId) {
       return selfReturnGrant ? {
