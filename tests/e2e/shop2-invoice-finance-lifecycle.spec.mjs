@@ -24,10 +24,47 @@ async function signIn(context, email, password) {
   expect(response.status(), `Sign-in ${email}: ${await response.text()}`).toBe(200);
 }
 
+// This single long-lived Finance E2E combines historical #1042 and many
+// subsequent Retail acceptance scenarios. Real Retail mutation throttles
+// (30 requests / 5 min per operator) are production protections, not test
+// failures. The CI job provides a disposable localhost-only Redis proxy and
+// independently verifies auth / throttling elsewhere.
+let disposableRateLimitResets = 0;
+async function clearDisposableShop2RateLimits() {
+  const token = process.env.CI_REDIS_REST_TOKEN || "";
+  if (process.env.CI !== "true" ||
+      !/\\/dtsc_shop2_behavioral(?:\\?|$)/.test(process.env.DATABASE_URL || "") ||
+      process.env.UPSTASH_REDIS_REST_URL !== "http://127.0.0.1:8079" ||
+      !/^dtsc-ci-\\d+-\\d+$/.test(token) ||
+      ++disposableRateLimitResets > 12) {
+    throw new Error("E2E_RATE_LIMIT_RESET_REQUIRES_DISPOSABLE_CI_REDIS");
+  }
+  // A 429 has already been observed: only the ephemeral CI proxy is cleared.
+  // Never bypass the live API guard, use a production Redis credential,
+  // or retry a request that succeeded. The original request is still
+  // rejected and its idempotency key is preserved for the retry.
+  const reset = await fetch("http://127.0.0.1:8079/", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify(["FLUSHDB"]),
+  });
+  if (!reset.ok) throw new Error("E2E_DISPOSABLE_REDIS_RESET_FAILED_" + reset.status);
+  console.log("E2E: disposable Shop 2 Redis reset after verified Retail HTTP 429");
+}
+
 async function post(context, path, data = {}) {
-  const response = await context.request.post(path, {
+  const request = () => context.request.post(path, {
     data, headers: { origin: baseUrl, referer: `${baseUrl}/enterprise-modules/RETAIL_POS` },
   });
+  let response = await request();
+  if (response.status() === 429 && path.startsWith(`/api/enterprise/${organizationId}/retail/`)) {
+    const rateLimitBody = await response.json().catch(() => null);
+    if (rateLimitBody?.error !== "Too many requests") {
+      return { status: 429, body: rateLimitBody };
+    }
+    await clearDisposableShop2RateLimits();
+    response = await request();
+  }
   return { status: response.status(), body: await response.json().catch(() => null) };
 }
 
