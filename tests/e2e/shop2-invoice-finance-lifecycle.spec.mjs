@@ -404,28 +404,29 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
       decision: "APPROVE", revision: inspection.body.request.revision,
     });
     expect(decided.status, JSON.stringify(decided.body)).toBe(200);
-    // #1224: an APPROVED historical return is not a posted credit and must
-    // not change the source invoice's issued status or release its stock.
+    // #1224: this invoice has been PAID by two independent confirmed bank
+    // collections above. An APPROVED return must NOT revert it to ISSUED or
+    // prematurely mark the credit as POSTED. Status filtering stays exact.
+    const paidRegister = await context.owner.request.get(`${baseUrl}${base}/retail/invoices?${new URLSearchParams({
+      siteId: fixture.site.id, status: "PAID", q: issued.body.invoice.number,
+    })}`);
+    expect(paidRegister.status(), await paidRegister.text()).toBe(200);
+    const paidRow = (await paidRegister.json()).items.find(entry => entry.invoice.id === invoiceId);
+    expect(paidRow?.invoice.status).toBe("PAID");
+    expect(paidRow?.returnRequests.some(entry =>
+      entry.number === request.body.request.number && entry.status === "APPROVED")).toBe(true);
     const issuedRegister = await context.owner.request.get(`${baseUrl}${base}/retail/invoices?${new URLSearchParams({
       siteId: fixture.site.id, status: "ISSUED", q: issued.body.invoice.number,
     })}`);
     expect(issuedRegister.status(), await issuedRegister.text()).toBe(200);
-    const issuedRegisterBody = await issuedRegister.json();
-    const issuedRow = issuedRegisterBody.items.find(entry => entry.invoice.id === invoiceId);
-    expect(issuedRow?.invoice.status).toBe("ISSUED");
-    expect(issuedRow?.returnRequests.some(entry => entry.number === request.body.request.number && entry.status === "APPROVED")).toBe(true);
-    const paidRegister = await context.owner.request.get(`${baseUrl}${base}/retail/invoices?${new URLSearchParams({
-      siteId: fixture.site.id, status: "PAID", q: issued.body.invoice.number,
-    })}`);
-    expect(paidRegister.status()).toBe(200);
-    expect((await paidRegister.json()).items.some(entry => entry.invoice.id === invoiceId)).toBe(false);
+    expect((await issuedRegister.json()).items.some(entry => entry.invoice.id === invoiceId)).toBe(false);
     const recoveryApproved = await context.owner.request.get(`${baseUrl}${base}/retail/returns/historical?${new URLSearchParams({
       siteId: fixture.site.id, status: "APPROVED", q: issued.body.invoice.number,
     })}`);
     expect(recoveryApproved.status(), await recoveryApproved.text()).toBe(200);
     const approvedRow = (await recoveryApproved.json()).items.find(entry => entry.id === returnId);
     expect(approvedRow).toMatchObject({
-      stage: "FINANCE_PREPARATION_REQUIRED", invoiceStatus: "ISSUED", stockTreatment: "PHYSICAL_RETURN_ON_COMPLETION",
+      stage: "FINANCE_PREPARATION_REQUIRED", invoiceStatus: "PAID", stockTreatment: "PHYSICAL_RETURN_ON_COMPLETION",
       legacyStandard: true,
     });
     const invalidRecoveryStatus = await context.owner.request.get(`${baseUrl}${base}/retail/returns/historical?status=DELETED`);
