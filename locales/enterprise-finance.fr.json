@@ -611,5 +611,6 @@
   "retailReturnApproved": "Retour validé, traitement financier attendu",
   "retailReturnFinancePending": "Avoir et remboursements en validation Finance",
   "retailReturnCompleted": "Avoir et retour finalisés",
-  "retailReturnRejected": "Retour refusé"
+  "retailReturnRejected": "Retour refusé",
+  "retailReturnRefundPending": "Avoir comptabilisé — remboursement client à effectuer"
 }
