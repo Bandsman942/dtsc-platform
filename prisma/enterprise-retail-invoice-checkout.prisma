@@ -93,6 +93,8 @@ model EnterpriseRetailInvoiceReturnRequest {
   inspectedByUserId String?
   inspectedAt       DateTime?
   inspectionNotes   String?
+  inspectionMode    String?  // SELF_ATTESTED or INDEPENDENT, with immutable evidence.
+  returnPolicySnapshot Json?    // Policy version applicable when the request was submitted.
   decidedByUserId   String?
   decidedAt         DateTime?
   decisionReason    String?
