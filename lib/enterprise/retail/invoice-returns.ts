@@ -11,6 +11,7 @@ import { resolveEnterpriseModuleAccess, resolveEnterpriseModuleCapabilities } fr
 import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
 import { requireRetailSiteCapability, RETAIL_OWNER_ROLES, siteStaffCapabilities, hasRetailSelfApprovalGrant } from "@/lib/enterprise/retail/site-access";
 import { withRetailTransactionRetry } from "@/lib/enterprise/retail/transaction-retry";
+import { readRetailInvoiceReturnPolicy, readRetailInvoiceReturnPolicySnapshot, canSelfInspectRetailReturn, type RetailInvoiceReturnPolicy } from "@/lib/enterprise/retail/invoice-return-policy";
 import { prisma } from "@/lib/prisma";
 
 // A request and its approval are NOT a refund. No Finance balance, credit
@@ -76,12 +77,26 @@ async function requireReturnFeatureTx(tx: Prisma.TransactionClient, organization
     throw new EnterpriseRetailError("RETAIL_INVOICE_CHECKOUT_NOT_ACTIVE", 403);
   }
 }
+async function canSelfDecideReturnTx(
+  tx: Prisma.TransactionClient, organizationId: string, actorUserId: string,
+  siteId: string, policy: RetailInvoiceReturnPolicy,
+): Promise<boolean> {
+  const member = await tx.organizationMember.findFirst({
+    where: { organizationId, userId: actorUserId, status: "ACTIVE", removedAt: null },
+    select: { role: true },
+  });
+  if (!member) return false;
+  if (policy.mode === "SIMPLIFIED" && policy.allowDelegatedSelfApproval &&
+      RETAIL_OWNER_ROLES.has(member.role)) return true;
+  return hasRetailSelfApprovalGrant(organizationId, actorUserId, siteId, "RETURN", tx);
+}
 async function requireReturnApproverTx(
   tx: Prisma.TransactionClient, organizationId: string,
   actorUserId: string, approverUserId: string, siteId: string,
+  policy: RetailInvoiceReturnPolicy,
 ) {
   const selfAllowed = actorUserId === approverUserId &&
-    await hasRetailSelfApprovalGrant(organizationId, actorUserId, siteId, "RETURN", tx);
+    await canSelfDecideReturnTx(tx, organizationId, actorUserId, siteId, policy);
   if (actorUserId === approverUserId && !selfAllowed) {
     throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_SELF_APPROVAL_FORBIDDEN", 403);
   }
@@ -284,6 +299,10 @@ export async function createRetailInvoiceReturnRequest(
   const requestHash = fingerprint(input);
   return withRetailTransactionRetry(() => prisma.$transaction(async (tx) => {
     await requireReturnFeatureTx(tx, organizationId);
+    const returnConfiguration = await tx.enterpriseRetailConfiguration.findUnique({
+      where: { organizationId }, select: { settingsJson: true },
+    });
+    const returnPolicy = readRetailInvoiceReturnPolicy(returnConfiguration?.settingsJson);
     const checkout = await tx.enterpriseRetailInvoiceCheckout.findFirst({
       where: { organizationId, salesInvoiceId: invoiceId },
       include: { invoice: { select: { status: true, grandTotal: true, currencyCode: true,
@@ -313,7 +332,7 @@ export async function createRetailInvoiceReturnRequest(
     if (!checkout.invoice.grandTotal.equals(financeMoney(checkout.invoice.grandTotal))) {
       throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_HISTORICAL_PRECISION_UNSUPPORTED", 409);
     }
-    await requireReturnApproverTx(tx, organizationId, actorUserId, input.approverUserId, checkout.siteId);
+    await requireReturnApproverTx(tx, organizationId, actorUserId, input.approverUserId, checkout.siteId, returnPolicy);
     const lineIds = input.lines.map((row) => row.checkoutLineId);
     if (new Set(lineIds).size !== lineIds.length) throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_DUPLICATE_LINE", 409);
     const source = new Map(checkout.lines.map((line) => [line.id, line]));
@@ -430,7 +449,7 @@ export async function createRetailInvoiceReturnRequest(
         organizationId, checkoutId: checkout.id, number: reference(), status: "SUBMITTED",
         reason: input.reason, refundAmount, idempotencyKey: input.idempotencyKey,
         requestFingerprint: requestHash, requestedByUserId: actorUserId,
-        approverUserId: input.approverUserId,
+        approverUserId: input.approverUserId, returnPolicySnapshot: returnPolicy,
       },
     });
     await tx.enterpriseRetailInvoiceReturnLine.createMany({
