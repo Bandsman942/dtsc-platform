@@ -148,6 +148,22 @@ vm.runInNewContext(ts.transpileModule(source, {
     if (id === "@/lib/enterprise/retail/transaction-retry") return {
       withRetailTransactionRetry: async (fn) => fn(),
     };
+    // Legacy fixture never activates the new opt-in policy. Keep the old
+    // independent-validator contract: no self-inspection, no auto-posting.
+    if (id === "@/lib/enterprise/retail/invoice-return-policy") return {
+      readRetailInvoiceReturnPolicy: () => ({ version: 1, mode: "STANDARD",
+        allowRequesterInspection: false, allowDelegatedSelfApproval: false,
+        autoPostCreditNote: false, promptImmediateRefund: false, scope: "ALL_SITES",
+        expressRefundLimitAmount: 100, expressRefundLimitCurrency: "USD" }),
+      readRetailInvoiceReturnPolicySnapshot: () => ({ version: 1, mode: "STANDARD",
+        allowRequesterInspection: false, allowDelegatedSelfApproval: false,
+        autoPostCreditNote: false, promptImmediateRefund: false, scope: "ALL_SITES",
+        expressRefundLimitAmount: 100, expressRefundLimitCurrency: "USD" }),
+      canSelfInspectRetailReturn: () => false,
+    };
+    if (id === "@/lib/enterprise/retail/invoice-return-unpaid-express") return {
+      settleUnpaidRetailInvoiceCreditTx: async () => null,
+    };
     return require(id);
   },
 });
