@@ -149,8 +149,9 @@ export async function listRetailInvoiceReturnRequests(
       select: {
         id: true, number: true, status: true, reason: true, refundAmount: true, refundPayoutAmount: true,
         requestedByUserId: true, approverUserId: true, inspectedByUserId: true,
-        preparedByUserId: true, refundPayment: { select: { status: true } },
-        refundLegs: { select: { refundPayment: { select: { status: true } } } },
+        financeApproverUserId: true, settledByUserId: true, refundChoice: true,
+        preparedByUserId: true, refundPayment: { select: { status: true, methodType: true } },
+        refundLegs: { select: { refundPayment: { select: { status: true, methodType: true } } } },
         salesCreditNote: { select: { status: true } },
         inspectedAt: true, inspectionNotes: true, inspectionMode: true, returnPolicySnapshot: true, decidedAt: true, decisionReason: true,
         revision: true, createdAt: true,
@@ -216,6 +217,9 @@ export async function listRetailInvoiceReturnRequests(
       const payoutStatuses = item.refundLegs.length
         ? item.refundLegs.map((leg) => leg.refundPayment.status)
         : item.refundPayment ? [item.refundPayment.status] : [];
+      const payoutMethods = item.refundLegs.length
+        ? item.refundLegs.map((leg) => leg.refundPayment.methodType)
+        : item.refundPayment ? [item.refundPayment.methodType] : [];
       const approvedPayouts = payoutStatuses.filter((status) => status === "APPROVED").length;
       const policy = readRetailInvoiceReturnPolicySnapshot(item.returnPolicySnapshot);
       const eligibleSelfInspector = Boolean(member && (RETAIL_OWNER_ROLES.has(member.role) ||
@@ -246,6 +250,13 @@ export async function listRetailInvoiceReturnRequests(
       refundAmount: item.refundAmount, refundPayoutAmount: item.refundPayoutAmount, inspectedAt: item.inspectedAt,
       inspectionNotes: item.inspectionNotes, inspectionMode: item.inspectionMode, decidedAt: item.decidedAt,
       payoutPreviewAmount: previewPayout.toFixed(2), canExpress: expressEligible, refundChoice: item.refundChoice,
+      canFinalizeDeferred: item.status === "REFUND_PENDING" && item.refundChoice === "LATER" &&
+        item.settledByUserId === actorUserId && item.financeApproverUserId === actorUserId &&
+        liveReturnPolicy.mode === "SIMPLIFIED" && liveReturnPolicy.allowDelegatedSelfApproval &&
+        Boolean(member && (RETAIL_OWNER_ROLES.has(member.role) || siteAssignment?.isActive && siteAssignment.roleCode === "MANAGER")) &&
+        capabilities.canApprove && delegatedSelfDecision &&
+        payoutStatuses.length > 0 && payoutStatuses.every(status => status === "APPROVED") &&
+        payoutMethods.every(method => method === "CASH") && item.salesCreditNote?.status === "POSTED",
       decisionReason: item.decisionReason, revision: item.revision,
       createdAt: item.createdAt, lines: item.lines,
       paymentApprovalStatus: payoutStatuses.length && approvedPayouts === payoutStatuses.length
