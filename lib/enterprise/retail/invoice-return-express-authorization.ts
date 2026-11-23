@@ -27,10 +27,15 @@ export async function assertRetailExpressReturnAuthorizationTx(
     throw conflict("RETAIL_INVOICE_RETURN_FINANCE_CONFLICT");
   }
   const snapshot = readRetailInvoiceReturnPolicySnapshot(request.returnPolicySnapshot);
-  const currentConfig = await tx.enterpriseRetailConfiguration.findUnique({
-    where: { organizationId }, select: { settingsJson: true },
-  });
+  const [currentConfig, financeConfiguration] = await Promise.all([
+    tx.enterpriseRetailConfiguration.findUnique({ where: { organizationId }, select: { settingsJson: true } }),
+    tx.enterpriseFinanceConfiguration.findUnique({ where: { organizationId }, select: { functionalCurrencyCode: true } }),
+  ]);
   const live = readRetailInvoiceReturnPolicy(currentConfig?.settingsJson);
+  if (live.version === 2 &&
+      (!financeConfiguration?.functionalCurrencyCode || live.expressRefundLimitCurrency !== financeConfiguration.functionalCurrencyCode)) {
+    throw conflict("RETAIL_RETURN_POLICY_CURRENCY_MISMATCH", 409);
+  }
   if (snapshot.mode !== "SIMPLIFIED" || live.mode !== "SIMPLIFIED" ||
       !snapshot.autoPostCreditNote || !live.autoPostCreditNote ||
       !snapshot.promptImmediateRefund || !live.promptImmediateRefund ||
@@ -73,36 +78,55 @@ export async function assertRetailExpressReturnAuthorizationTx(
   // reimbursement to cap. It still needs canonical valuation, journal posting
   // and the currently authorized decision maker, but no cash/FX transaction.
   if (payout.isZero()) {
-    return { request, plan, payout, cumulativeUSD: decimal(0), policy: live, choice };
+    return { request, plan, payout, cumulativeLimitValue: decimal(0), policy: live, choice };
   }
-  // Limit is per invoice, across all non-rejected returns. Never split 100 USD
-  // into multiple small requests, or compare CDF to USD as bare numbers.
+  // The owner sets the live V2 limit in Finance functional currency. We
+  // ALSO enforce the frozen per-request policy (V1 USD if historical) so
+  // changing the company's settings never elevates an existing return.
+  // No hard-coded USD 100 ceiling applies to newly created V2 returns.
   const prior = await tx.enterpriseRetailInvoiceReturnRequest.findMany({
     where: { organizationId, checkoutId: request.checkoutId, id: { not: request.id },
       status: { in: ["APPROVED", "FINANCE_PENDING", "REFUND_PENDING", "COMPLETED"] } },
     select: { refundPayoutAmount: true, refundAmount: true },
   });
   const reservedPayout = prior.reduce((total, row) => total.plus(row.refundPayoutAmount ?? row.refundAmount), decimal(0));
+  const cumulativePayout = reservedPayout.plus(payout);
   const now = new Date();
-  const rate = await resolveExchangeRateDetails(tx, {
-    organizationId, sourceCurrencyCode: request.checkout.invoice.currencyCode,
-    targetCurrencyCode: "USD", rateDate: now,
-  });
-  if (rate.direction !== "IDENTITY" && now.getTime() - rate.rateDate.getTime() > 7 * 86400000) {
-    throw conflict("RETAIL_RETURN_EXPRESS_FX_RATE_STALE");
+  const limits = [snapshot, live];
+  const byCurrency = new Map<string, { amount: Prisma.Decimal; rate: Awaited<ReturnType<typeof resolveExchangeRateDetails>> }>();
+  for (const policy of limits) {
+    if (byCurrency.has(policy.expressRefundLimitCurrency)) continue;
+    const rate = await resolveExchangeRateDetails(tx, {
+      organizationId, sourceCurrencyCode: request.checkout.invoice.currencyCode,
+      targetCurrencyCode: policy.expressRefundLimitCurrency, rateDate: now,
+    });
+    if (rate.direction !== "IDENTITY" && now.getTime() - rate.rateDate.getTime() > 7 * 86400000) {
+      throw conflict("RETAIL_RETURN_EXPRESS_FX_RATE_STALE");
+    }
+    byCurrency.set(policy.expressRefundLimitCurrency, {
+      amount: cumulativePayout.mul(rate.rate).toDecimalPlaces(2, Prisma.Decimal.ROUND_UP),
+      rate,
+    });
   }
-  const effectiveLimit = decimal(snapshot.expressRefundLimitAmount).lt(live.expressRefundLimitAmount)
-    ? decimal(snapshot.expressRefundLimitAmount) : decimal(live.expressRefundLimitAmount);
-  const cumulativeUSD = reservedPayout.plus(payout).mul(rate.rate).toDecimalPlaces(2, Prisma.Decimal.ROUND_UP);
-  if (cumulativeUSD.greaterThan(effectiveLimit) || cumulativeUSD.greaterThan(100)) {
-    throw conflict("RETAIL_RETURN_EXPRESS_LIMIT_EXCEEDED");
+  for (const policy of limits) {
+    const converted = byCurrency.get(policy.expressRefundLimitCurrency);
+    if (!converted) throw conflict("RETAIL_RETURN_EXPRESS_FX_RATE_STALE");
+    if (converted.amount.greaterThan(decimal(policy.expressRefundLimitAmount))) {
+      throw new EnterpriseRetailError("RETAIL_RETURN_EXPRESS_LIMIT_EXCEEDED", 409, {
+        limitAmount: String(policy.expressRefundLimitAmount), limitCurrency: policy.expressRefundLimitCurrency,
+        policyVersion: policy.version,
+      });
+    }
   }
-  await snapshotExchangeRate(tx, {
-    organizationId, sourceEntityType: "EnterpriseRetailInvoiceReturnRequest",
-    sourceEntityId: request.id, sourceCurrencyCode: rate.sourceCurrencyCode,
-    targetCurrencyCode: "USD", rateDate: rate.rateDate, rate: rate.rate,
-    source: rate.direction === "IDENTITY" ? "IDENTITY" : `ENTERPRISE_RATE:${rate.direction}:${rate.rateId || "NONE"}:${rate.source}`,
-  });
+  for (const [currency, converted] of byCurrency) {
+    await snapshotExchangeRate(tx, {
+      organizationId, sourceEntityType: "EnterpriseRetailInvoiceReturnRequest",
+      sourceEntityId: request.id, sourceCurrencyCode: converted.rate.sourceCurrencyCode,
+      targetCurrencyCode: currency, rateDate: converted.rate.rateDate, rate: converted.rate.rate,
+      source: converted.rate.direction === "IDENTITY" ? "IDENTITY" :
+        `ENTERPRISE_RATE:${converted.rate.direction}:${converted.rate.rateId || "NONE"}:${converted.rate.source}`,
+    });
+  }
   // Do not represent external PSP authorisation or delivery of cash as
   // completed merely because a database transaction succeeded.
   const payments = await tx.enterprisePayment.findMany({
@@ -116,5 +140,5 @@ export async function assertRetailExpressReturnAuthorizationTx(
   if (choice === "NOW" && payments.some(p => p.methodType !== "CASH")) {
     throw conflict("RETAIL_RETURN_EXPRESS_EXTERNAL_PAYMENT_PENDING");
   }
-  return { request, plan, payout, cumulativeUSD, policy: live, choice };
+  return { request, plan, payout, cumulativeLimitValue: byCurrency.get(live.expressRefundLimitCurrency)!.amount, policy: live, choice };
 }
