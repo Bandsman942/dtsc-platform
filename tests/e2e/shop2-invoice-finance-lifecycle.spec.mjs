@@ -871,8 +871,9 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
         where: { organizationId, paymentId: deferredPayment.id },
       })).toBe(0);
       // E07/E17/E19: fully paid CASH checkout with delegated owner approval,
-      // attested self-inspection, and one transaction posting credit, cash
-      // outflow, stock and receivable. Replaying must create nothing new.
+      // attested self-inspection of physically returned stock, and one transaction
+      // posting credit, cash outflow, inventory valuation and receivable.
+      // Replaying must create nothing new.
       const cashTemplate = await prisma.enterpriseFinancialAccount.findFirstOrThrow({
         where: { organizationId, code: "SHOP2-E2E-CASH", accountType: "CASH", status: "ACTIVE" },
       });
@@ -938,21 +939,23 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
       const cashCheckout = await prisma.enterpriseRetailInvoiceCheckout.findFirstOrThrow({
         where: { organizationId, salesInvoiceId: cashInvoiceId }, include: { lines: true },
       });
-      expect(cashCheckout.stockPostedAt).toBeNull();
+      expect(cashCheckout.stockPostedAt).not.toBeNull();
+      // Confirmed cash collection has already fulfilled the invoice; this
+      // must be a real physical return, never UNDELIVERED_CREDIT.
       const cashRequestPath = `${base}/retail/invoices/${cashInvoiceId}/returns`;
       const cashReturn = await post(context.owner, cashRequestPath, {
         idempotencyKey: `retail-1222-now-return-${Date.now()}`,
         approverUserId: fixture.owner.id,
-        reason: "Cash sale cancelled before customer collected items",
+        reason: "Cash sale returned after physical handover and inspection",
         lines: [{ checkoutLineId: cashCheckout.lines[0].id,
-          quantity: "1", stockDisposition: "UNDELIVERED_CREDIT" }],
+          quantity: "1", stockDisposition: "RESTOCK" }],
       });
       expect(cashReturn.status, JSON.stringify(cashReturn.body)).toBe(201);
       const cashPath = `${cashRequestPath}/${cashReturn.body.request.id}`;
       const cashInspected = await post(context.owner, `${cashPath}/inspection`, {
         revision: cashReturn.body.request.revision,
         receivedAndInspected: true,
-        notes: "Requester confirms original cash customer order was never delivered",
+        notes: "Requester physically received and inspected the returned cash-sale item",
       });
       expect(cashInspected.status, JSON.stringify(cashInspected.body)).toBe(200);
       await ensureStepUp(context.owner, ownerPassword);
@@ -978,6 +981,15 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
       expect(await prisma.enterpriseCashMovement.count({
         where: { organizationId, paymentId: cashRefundId, direction: "OUTBOUND" },
       })).toBe(1);
+      const cashReturnMovements = await prisma.enterpriseStockMovement.findMany({
+        where: { organizationId, sourceEntityType: "EnterpriseRetailInvoiceReturnRequest",
+          sourceEntityId: cashSettled.body.request.id, movementType: "RETURN_IN" },
+      });
+      expect(cashReturnMovements).toHaveLength(1);
+      const cashReturnValuation = await prisma.enterpriseInventoryAccountingEvent.findFirstOrThrow({
+        where: { organizationId, stockMovementId: cashReturnMovements[0].id, status: "POSTED" },
+      });
+      expect(cashReturnValuation.journalEntryId).toBeTruthy();
       expect((await prisma.enterpriseSalesInvoice.findUniqueOrThrow({
         where: { id: cashInvoiceId },
       })).outstandingAmount.isZero()).toBe(true);
