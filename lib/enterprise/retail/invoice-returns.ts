@@ -232,10 +232,20 @@ export async function listRetailInvoiceReturnRequests(
           liveReturnPolicy.mode === "SIMPLIFIED" && liveReturnPolicy.allowDelegatedSelfApproval);
       const sameActorDecision = item.inspectedByUserId === actorUserId &&
         item.requestedByUserId === actorUserId && selfInspected && delegatedSelfDecision;
+      const previewPayout = item.refundAmount.greaterThan(checkout.invoice.outstandingAmount)
+        ? item.refundAmount.minus(checkout.invoice.outstandingAmount)
+        : new Prisma.Decimal(0);
+      const expressEligible = policy.mode === "SIMPLIFIED" && liveReturnPolicy.mode === "SIMPLIFIED" &&
+        policy.autoPostCreditNote && liveReturnPolicy.autoPostCreditNote &&
+        policy.allowDelegatedSelfApproval && liveReturnPolicy.allowDelegatedSelfApproval &&
+        policy.promptImmediateRefund && liveReturnPolicy.promptImmediateRefund &&
+        capabilities.canApprove && delegatedSelfDecision && item.approverUserId === actorUserId &&
+        item.status === "INSPECTED";
       return {
       id: item.id, number: item.number, status: item.status, reason: item.reason,
       refundAmount: item.refundAmount, refundPayoutAmount: item.refundPayoutAmount, inspectedAt: item.inspectedAt,
       inspectionNotes: item.inspectionNotes, inspectionMode: item.inspectionMode, decidedAt: item.decidedAt,
+      payoutPreviewAmount: previewPayout.toFixed(2), canExpress: expressEligible, refundChoice: item.refundChoice,
       decisionReason: item.decisionReason, revision: item.revision,
       createdAt: item.createdAt, lines: item.lines,
       paymentApprovalStatus: payoutStatuses.length && approvedPayouts === payoutStatuses.length
