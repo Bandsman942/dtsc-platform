@@ -887,12 +887,14 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
           openingBalance: 1000, operationalBalance: 1000, reconciledBalance: 1000,
           availableBalance: 1000, responsibleUserId: fixture.owner.id },
       });
+      const cashSessions = new Map();
       for (const userId of [fixture.cashier.id, fixture.owner.id]) {
-        await prisma.enterpriseCashSession.create({ data: {
+        const openedSession = await prisma.enterpriseCashSession.create({ data: {
           organizationId, number: `RET1222-CASH-${userId.slice(-5)}-${Date.now()}`,
           financialAccountId: cash.id, cashierUserId: userId,
           siteId: fixture.site.id, status: "OPEN", openingAmount: 1000,
         } });
+        cashSessions.set(userId, openedSession.id);
       }
       const cashInvoiceCreated = await post(context.cashier, base + "/retail/invoices", {
         idempotencyKey: `retail-1222-now-invoice-${Date.now()}`,
@@ -917,6 +919,7 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
       const cashPayment = await post(context.cashier, `${base}/retail/invoices/${cashInvoiceId}/payments`, {
         idempotencyKey: `retail-1222-now-source-${Date.now()}`,
         financialAccountId: cash.id, methodType: "CASH",
+        cashSessionId: cashSessions.get(fixture.cashier.id),
         amount: cashIssued.body.invoice.grandTotal,
       });
       expect(cashPayment.status, JSON.stringify(cashPayment.body)).toBe(201);
