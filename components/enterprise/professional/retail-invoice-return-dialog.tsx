@@ -26,6 +26,7 @@ type ReturnRequest = {
   payoutPreviewAmount?: string;
   refundChoice?: "NOW" | "LATER" | null;
   canExpress?: boolean;
+  canFinalizeDeferred?: boolean;
   inspectedAt: string | null;
   inspectionNotes: string | null;
   inspectionMode?: "SELF_ATTESTED" | "INDEPENDENT" | null;
@@ -52,7 +53,7 @@ type ReturnResponse = {
   message?: string;
 };
 type Row = { checked: boolean; quantity: string; stockDisposition: StockDisposition; batches?: Record<string, string> };
-type Action = { request: ReturnRequest; type: "INSPECT" | "APPROVE" | "REJECT" | "PREPARE_FINANCE" | "SETTLE_FINANCE" };
+type Action = { request: ReturnRequest; type: "INSPECT" | "APPROVE" | "REJECT" | "PREPARE_FINANCE" | "SETTLE_FINANCE" | "COMPLETE_DEFERRED" };
 
 const translations = {
   fr: {
@@ -71,7 +72,7 @@ const translations = {
     cashHandedOver: "Je confirme avoir réellement remis les espèces au client",
     expressCompleted: "Avoir comptabilisé, stock régularisé et remboursement confirmé.",
     expressDeferred: "Avoir comptabilisé, remboursement enregistré en attente de paiement.",
-    deferred: "Remboursement différé en attente",
+    deferred: "Remboursement différé en attente", deferredAction: "Effectuer le remboursement en espèces", deferredHint: "L’avoir et les mouvements de stock sont déjà comptabilisés. Confirmez uniquement la remise effective des espèces au client. Aucun nouvel avoir ni mouvement de stock ne sera généré.", deferredSuccess: "Remboursement différé confirmé et dossier clôturé.",
     requests: "Historique des retours", amount: "Montant de l'avoir", submitted: "En attente d’inspection", inspected: "Inspectée — validation attendue", approved: "Approuvée — aucun remboursement effectué", financePending: "Pièces Finance en attente", rejected: "Refusée", completed: "Avoir et liquidation terminés", unknown: "À vérifier", inspection: "Inspecter / vérifier", approve: "Approuver la demande", reject: "Refuser", inspectionNotes: "Constat de contrôle", inspectionHint: "Confirmez uniquement les articles réellement reçus et contrôlés. L’inspection ne réintègre pas encore le stock.", confirmInspection: "Confirmer l’inspection", decisionHint: "La validation de cette demande ne crée pas encore d’avoir ni de remboursement. Le traitement financier et du stock suivra un circuit distinct.", rejectionReason: "Motif du refus (obligatoire)", decisionReason: "Commentaire de validation (facultatif)", confirmApprove: "Confirmer l’approbation", confirmReject: "Confirmer le refus", inspectionSuccess: "Contrôle enregistré. Le validateur désigné peut maintenant statuer.", approvalSuccess: "Retour approuvé. L’avoir et le remboursement restent en attente du circuit de liquidation.", rejectionSuccess: "Retour refusé avec motif conservé.", noAmount: "Les montants proposés sont calculés par le serveur, après validation des quantités.",
     prepareFinance: "Préparer avoir et remboursement", prepareFinanceHint: "Le serveur sépare la valeur de l'avoir et les éventuels remboursements des paiements déjà reçus. Un avoir sans trop-perçu ne génère aucun paiement. Désignez un validateur Finance indépendant pour les pièces.", confirmPrepareFinance: "Envoyer en validation Finance", prepareFinanceSuccess: "Avoir et paiements de remboursement créés ensemble et soumis à validation Finance.", settleFinance: "Liquider le retour", settleFinanceHint: "Cette étape confirme tous les paiements de remboursement, comptabilise l'avoir unique et réintègre uniquement les articles acceptés en stock dans une transaction indivisible.", settlementReason: "Motif de liquidation", confirmSettleFinance: "Confirmer la liquidation", settleFinanceSuccess: "Remboursements, avoir et stock traités dans une même transaction.", paymentApproval: "Remboursements", creditApproval: "Avoir", financeApproved: "Approuvé", financeAwaiting: "Validation attendue", financeGuide: "Validez tous les paiements et l'avoir dans Finance puis actualisez les retours.",
     previous: "Précédente", next: "Suivante", close: "Fermer", select: "Sélectionner", rowMissing: "Aucune ligne facturée n’est disponible pour créer un retour.", itemRequired: "Sélectionnez au moins un article avec une quantité valide.", invalidQuantity: "La quantité doit être positive, ne pas dépasser la facture et avoir au plus 3 décimales pour un article en stock. Les quantités déjà engagées sont revérifiées par le serveur.",
@@ -92,7 +93,7 @@ const translations = {
     cashHandedOver: "I confirm I have physically handed the cash to the customer",
     expressCompleted: "Credit posted, stock reconciled and cash refund confirmed.",
     expressDeferred: "Credit posted; customer refund recorded as pending.",
-    deferred: "Deferred customer refund outstanding",
+    deferred: "Deferred customer refund outstanding", deferredAction: "Complete cash reimbursement", deferredHint: "The credit note and stock are already posted. Confirm that cash was actually handed over; no new credit or inventory movement will be created.", deferredSuccess: "Deferred refund confirmed; return completed.",
     requests: "Return history", amount: "Credit note amount", submitted: "Awaiting inspection", inspected: "Inspected — awaiting approval", approved: "Approved — not refunded", financePending: "Finance documents pending", rejected: "Rejected", completed: "Credit and settlement completed", unknown: "Check status", inspection: "Inspect / verify", approve: "Approve request", reject: "Reject", inspectionNotes: "Inspection findings", inspectionHint: "Only confirm goods that were actually received and inspected. This does not restock inventory yet.", confirmInspection: "Confirm inspection", decisionHint: "Approving this request does not yet create a credit note or a refund. Financial and inventory settlement will follow a separate process.", rejectionReason: "Rejection reason (required)", decisionReason: "Approval note (optional)", confirmApprove: "Confirm approval", confirmReject: "Confirm rejection", inspectionSuccess: "Inspection recorded. The designated approver can now decide.", approvalSuccess: "Return approved. The credit and refund still await settlement.", rejectionSuccess: "Return rejected with the reason preserved.", noAmount: "Proposed amounts are calculated by the server after quantity validation.",
     prepareFinance: "Prepare credit and refund", prepareFinanceHint: "The server separates credit-note value from any actual cash refund due. Credits without excess payment create no outgoing payment. Choose an independent Finance reviewer for credit and refund documents.", confirmPrepareFinance: "Submit for Finance approval", prepareFinanceSuccess: "Credit note and refund payouts created together and submitted for Finance approval.", settleFinance: "Settle return", settleFinanceHint: "This step confirms every refund payout, posts the single credit note and restocks accepted items in one indivisible transaction.", settlementReason: "Settlement reason", confirmSettleFinance: "Confirm settlement", settleFinanceSuccess: "Refund payouts, credit note and inventory completed in the same transaction.", paymentApproval: "Refund payouts", creditApproval: "Credit note", financeApproved: "Approved", financeAwaiting: "Awaiting approval", financeGuide: "Approve all refund payouts and the credit note in Finance, then refresh returns.",
     previous: "Previous", next: "Next", close: "Close", select: "Select", rowMissing: "No invoice lines are available for this return.", itemRequired: "Select at least one item with a valid quantity.", invalidQuantity: "Quantity must be positive, not exceed the invoice and use no more than 3 decimal places for stocked items. Existing commitments are checked again by the server.",
@@ -195,13 +196,14 @@ export function RetailInvoiceReturnDialog({ organizationId, invoiceId, invoiceNu
 
   async function completeAction(form?: FormData) {
     if (!action || busy || (action.type === "INSPECT" && (actionNotes.trim().length < 5 || (action.request.lines.some(line => line.lotAllocations?.length) && !batchConfirmed))) ||
-      (["REJECT", "SETTLE_FINANCE"].includes(action.type) && actionNotes.trim().length < 4)) return;
+      (["REJECT", "SETTLE_FINANCE", "COMPLETE_DEFERRED"].includes(action.type) && actionNotes.trim().length < 4)) return;
     setBusy(true); setError("");
     try {
       const target = `/api/enterprise/${organizationId}/retail/invoices/${encodeURIComponent(invoiceId)}/returns/${encodeURIComponent(action.request.id)}`;
       const inspection = action.type === "INSPECT";
       const financePrepare = action.type === "PREPARE_FINANCE";
-      const financeSettlement = action.type === "SETTLE_FINANCE";
+      const deferredSettlement = action.type === "COMPLETE_DEFERRED";
+      const financeSettlement = action.type === "SETTLE_FINANCE" || deferredSettlement;
       const expressChoice = action.type === "APPROVE" && action.request.canExpress &&
         Number(action.request.payoutPreviewAmount || 0) > 0 && refundChoice !== "STANDARD"
         ? refundChoice : null;
@@ -216,7 +218,7 @@ export function RetailInvoiceReturnDialog({ organizationId, invoiceId, invoiceNu
       const response = await fetch(`${target}/${path}`, {
         method: "POST", headers: { "content-type": "application/json" },
         body: JSON.stringify(financePrepare ? { revision: action.request.revision, financeApproverUserId: String(form?.get("financeApproverUserId") || "") } : financeSettlement
-          ? { revision: action.request.revision, reason: actionNotes.trim() } : inspection
+          ? { revision: action.request.revision, reason: actionNotes.trim(), ...(deferredSettlement ? { completeDeferred: true } : {}) } : inspection
           ? { revision: action.request.revision, receivedAndInspected: true, notes: actionNotes.trim(), ...(action.request.lines.some(line => line.lotAllocations?.length) ? { confirmedBatchSelection: true } : {}) }
           : { revision: action.request.revision, decision: action.type === "APPROVE" ? "APPROVE" : "REJECT",
             ...(actionNotes.trim() ? { reason: actionNotes.trim() } : {}),
@@ -225,7 +227,7 @@ export function RetailInvoiceReturnDialog({ organizationId, invoiceId, invoiceNu
       });
       const payload = await response.json().catch(() => null) as { message?: string; error?: string; request?: { status: string } } | null;
       if (!response.ok) throw new Error(payload?.message || payload?.error || copy.error);
-      toastSuccess(financePrepare ? copy.prepareFinanceSuccess : financeSettlement ? copy.settleFinanceSuccess :
+      toastSuccess(financePrepare ? copy.prepareFinanceSuccess : deferredSettlement ? copy.deferredSuccess : financeSettlement ? copy.settleFinanceSuccess :
         inspection ? copy.inspectionSuccess : action.type === "APPROVE" && payload?.request?.status === "REFUND_PENDING" ? copy.expressDeferred :
         action.type === "APPROVE" && payload?.request?.status === "COMPLETED" ? copy.expressCompleted :
         action.type === "APPROVE" ? copy.approvalSuccess : copy.rejectionSuccess);
@@ -264,11 +266,11 @@ export function RetailInvoiceReturnDialog({ organizationId, invoiceId, invoiceNu
           <div data-responsive-actions className="flex min-w-0 flex-wrap justify-end gap-2"><Button type="button" variant="outline" disabled={busy} onClick={stopCreate}>{copy.cancel}</Button><Button type="submit" disabled={busy || !sourceItems.some((line) => rows[line.id]?.checked) || reason.trim().length < 4}><ClipboardCheck className="h-4 w-4" />{busy ? copy.sending : copy.send}</Button></div>
         </form> : null}
         {action ? <form className="grid min-w-0 gap-3 rounded-xl border border-blue-500/30 bg-blue-500/5 p-3 sm:p-4" onSubmit={(event) => { event.preventDefault(); void completeAction(new FormData(event.currentTarget)); }}>
-          <h3 className="text-sm font-black text-dtsc-ink">{action.type === "INSPECT" ? copy.inspection : action.type === "APPROVE" ? copy.approve : action.type === "REJECT" ? copy.reject : action.type === "PREPARE_FINANCE" ? copy.prepareFinance : copy.settleFinance} · {action.request.number}</h3>
-          <p className="text-sm leading-6 text-dtsc-muted">{action.type === "INSPECT" && !action.request.requiresPhysicalInspection ? copy.independentCheck : action.type === "INSPECT" ? copy.inspectionHint : action.type === "PREPARE_FINANCE" ? copy.prepareFinanceHint : action.type === "SETTLE_FINANCE" ? copy.settleFinanceHint : copy.decisionHint}</p>
+          <h3 className="text-sm font-black text-dtsc-ink">{action.type === "INSPECT" ? copy.inspection : action.type === "APPROVE" ? copy.approve : action.type === "REJECT" ? copy.reject : action.type === "PREPARE_FINANCE" ? copy.prepareFinance : action.type === "COMPLETE_DEFERRED" ? copy.deferredAction : copy.settleFinance} · {action.request.number}</h3>
+          <p className="text-sm leading-6 text-dtsc-muted">{action.type === "INSPECT" && !action.request.requiresPhysicalInspection ? copy.independentCheck : action.type === "INSPECT" ? copy.inspectionHint : action.type === "PREPARE_FINANCE" ? copy.prepareFinanceHint : action.type === "COMPLETE_DEFERRED" ? copy.deferredHint : action.type === "SETTLE_FINANCE" ? copy.settleFinanceHint : copy.decisionHint}</p>
           {action.type === "INSPECT" && action.request.lines.some(line => line.lotAllocations?.length) ? <div className="grid gap-2 rounded-lg border border-dtsc-border bg-dtsc-surface p-3"><p className="text-sm font-bold">{copy.batchTitle}</p>{action.request.lines.flatMap(line => (line.lotAllocations || []).map(batch => <p key={line.id + batch.stockLotId} className="break-words text-xs">{sourceItems.find(item => item.id === line.checkoutLineId)?.item.description} · {batchLabel(line,batch)} · {batch.quantity}</p>))}<label className="flex gap-2 text-sm"><input type="checkbox" required checked={batchConfirmed} disabled={busy} onChange={event => setBatchConfirmed(event.target.checked)} />{copy.batchConfirm}</label></div> : null}
           {action.type === "PREPARE_FINANCE" ? <EnterpriseApproverSelect organizationId={organizationId} moduleCode="FINANCE_RECEIVABLES" locale={locale} name="financeApproverUserId" label={copy.financeApprover} disabled={busy} required /> : null}
-          {action.type !== "PREPARE_FINANCE" ? <label className="grid min-w-0 gap-1 text-sm font-semibold text-dtsc-ink">{action.type === "INSPECT" ? copy.inspectionNotes : action.type === "REJECT" ? copy.rejectionReason : action.type === "SETTLE_FINANCE" ? copy.settlementReason : copy.decisionReason}<textarea className="min-h-28 w-full min-w-0 rounded-lg border border-dtsc-border bg-dtsc-surface p-3 text-base" minLength={action.type === "INSPECT" ? 5 : ["REJECT", "SETTLE_FINANCE"].includes(action.type) ? 4 : undefined} maxLength={1000} required={["INSPECT", "REJECT", "SETTLE_FINANCE"].includes(action.type)} value={actionNotes} disabled={busy} onChange={(event) => setActionNotes(event.target.value)} /></label> : null}
+          {action.type !== "PREPARE_FINANCE" ? <label className="grid min-w-0 gap-1 text-sm font-semibold text-dtsc-ink">{action.type === "INSPECT" ? copy.inspectionNotes : action.type === "REJECT" ? copy.rejectionReason : ["SETTLE_FINANCE", "COMPLETE_DEFERRED"].includes(action.type) ? copy.settlementReason : copy.decisionReason}<textarea className="min-h-28 w-full min-w-0 rounded-lg border border-dtsc-border bg-dtsc-surface p-3 text-base" minLength={action.type === "INSPECT" ? 5 : ["REJECT", "SETTLE_FINANCE", "COMPLETE_DEFERRED"].includes(action.type) ? 4 : undefined} maxLength={1000} required={["INSPECT", "REJECT", "SETTLE_FINANCE", "COMPLETE_DEFERRED"].includes(action.type)} value={actionNotes} disabled={busy} onChange={(event) => setActionNotes(event.target.value)} /></label> : null}
           {action.type === "APPROVE" && action.request.canExpress && Number(action.request.payoutPreviewAmount || 0) > 0 ? <div className="grid gap-3 rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-3">
             <h4 className="text-sm font-black text-dtsc-ink">{copy.refundChoiceLabel} · {money(action.request.payoutPreviewAmount || "0")}</h4>
             <p className="text-xs leading-5 text-dtsc-muted">{copy.refundChoiceHelp}</p>
@@ -280,10 +282,10 @@ export function RetailInvoiceReturnDialog({ organizationId, invoiceId, invoiceNu
             </div>
             {refundChoice === "NOW" ? <label className="flex gap-3 text-sm font-semibold text-dtsc-ink"><input type="checkbox" name="cashHandedOver" required disabled={busy} />{copy.cashHandedOver}</label> : null}
           </div> : null}
-          {(action.type === "SETTLE_FINANCE" ||
+          {(["SETTLE_FINANCE", "COMPLETE_DEFERRED"].includes(action.type) ||
             (action.type === "APPROVE" && action.request.canExpress && Number(action.request.payoutPreviewAmount || 0) > 0 && refundChoice !== "STANDARD")) ?
             <FinanceCriticalStepUpFields action="CONFIRM" locale={locale} /> : null}
-          <div data-responsive-actions className="flex min-w-0 flex-wrap justify-end gap-2"><Button type="button" variant="outline" disabled={busy} onClick={() => { setAction(null); setActionNotes(""); }}>{copy.cancel}</Button><Button type="submit" disabled={busy || (action.type === "INSPECT" && actionNotes.trim().length < 5) || (["REJECT", "SETTLE_FINANCE"].includes(action.type) && actionNotes.trim().length < 4)}>{action.type === "INSPECT" ? copy.confirmInspection : action.type === "APPROVE" ? copy.confirmApprove : action.type === "REJECT" ? copy.confirmReject : action.type === "PREPARE_FINANCE" ? copy.confirmPrepareFinance : copy.confirmSettleFinance}</Button></div>
+          <div data-responsive-actions className="flex min-w-0 flex-wrap justify-end gap-2"><Button type="button" variant="outline" disabled={busy} onClick={() => { setAction(null); setActionNotes(""); }}>{copy.cancel}</Button><Button type="submit" disabled={busy || (action.type === "INSPECT" && actionNotes.trim().length < 5) || (["REJECT", "SETTLE_FINANCE", "COMPLETE_DEFERRED"].includes(action.type) && actionNotes.trim().length < 4)}>{action.type === "INSPECT" ? copy.confirmInspection : action.type === "APPROVE" ? copy.confirmApprove : action.type === "REJECT" ? copy.confirmReject : action.type === "PREPARE_FINANCE" ? copy.confirmPrepareFinance : action.type === "COMPLETE_DEFERRED" ? copy.deferredAction : copy.confirmSettleFinance}</Button></div>
         </form> : null}
         <div className="grid min-w-0 gap-3 border-t border-dtsc-border pt-3">
           <h3 className="text-sm font-black text-dtsc-ink">{copy.requests}</h3>
@@ -308,6 +310,7 @@ export function RetailInvoiceReturnDialog({ organizationId, invoiceId, invoiceNu
               {request.canDecide ? <Button type="button" variant="outline" disabled={busy} onClick={() => { setCreating(false); setAction({ request, type: "REJECT" }); setActionNotes(""); }}><ShieldX className="h-4 w-4" />{copy.reject}</Button> : null}
               {request.canPrepareFinance ? <Button type="button" variant="outline" disabled={busy} onClick={() => { setCreating(false); setAction({ request, type: "PREPARE_FINANCE" }); setActionNotes(""); }}><CreditCard className="h-4 w-4" />{copy.prepareFinance}</Button> : null}
               {request.canSettleFinance ? <Button type="button" disabled={busy} onClick={() => { setCreating(false); setAction({ request, type: "SETTLE_FINANCE" }); setActionNotes(""); }}><CreditCard className="h-4 w-4" />{copy.settleFinance}</Button> : null}
+              {request.canFinalizeDeferred ? <Button type="button" disabled={busy} onClick={() => { setCreating(false); setAction({ request, type: "COMPLETE_DEFERRED" }); setActionNotes(""); }}><CreditCard className="h-4 w-4" />{copy.deferredAction}</Button> : null}
             </div>
           </article>)}
           {data && data.pagination.pageCount > 1 ? <div className="flex min-w-0 flex-wrap items-center justify-between gap-2 text-xs text-dtsc-muted"><span>{page} / {data.pagination.pageCount} · {data.pagination.total}</span><div className="flex gap-2"><Button type="button" variant="outline" disabled={busy || loading || page <= 1} onClick={() => void load(page - 1)}>{copy.previous}</Button><Button type="button" variant="outline" disabled={busy || loading || page >= data.pagination.pageCount} onClick={() => void load(page + 1)}>{copy.next}</Button></div></div> : null}
