@@ -26,6 +26,7 @@ export const retailInvoiceReturnFinancePrepareSchema = z.object({
 export const retailInvoiceReturnFinanceSettlementSchema = z.object({
   revision: z.number().int().positive(),
   reason: z.string().trim().min(4).max(1000),
+  completeDeferred: z.literal(true).optional(),
 }).strict();
 
 const fail = (code: string, status = 409) => new EnterpriseRetailError(code, status);
