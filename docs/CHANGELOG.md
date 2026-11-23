@@ -1,3 +1,11 @@
+## 2026-11-23 — RETAIL #1222 — Politique simplifiée et provenance des avoirs (v1.24.2 candidate, DRAFT)
+
+- Nouveau contrat de politique tenant-scoped et interface Administration entreprise FR/EN, modification à rôle propriétaire/admin + step-up et AuditLog ; mode STANDARD conservé par défaut.
+- Snapshot par demande et inspection SELF_ATTESTED limitée au demandeur owner/admin/gérant habilité ; validateur désigné et contrôles serveur requis ; migration additive, sans backfill.
+- Finance : origine RETAIL liée à la facture et à la demande de retour, suppression de l'action directe Comptabiliser sur ces avoirs et lien vers le dossier RETAIL ; absence de lien signalée sans fabrication de correspondance.
+- **Non livré dans cette tranche** : orchestration express atomique, règlement différé, plafond cumulé, paiements externes et E2E final E01–E33. PR non fusionnable avant implémentation et certification de ces blocs ; aucun déploiement.
+- QA de politique et zéro-encaissement ajoutée, résultat CI requis.
+
 ## 2026-11-17 / 18 — Hotfix stock/lots #1212 — v1.23.4 candidate (DRAFT)
 
 - Recette sectorielle #1212 : quatre tenants isolés, sélecteur et lot sans quantité, disponibilité hors périmés/quarantaine, refus références étrangères et absence d'écriture des autorités sectorielles; certification CI à exécuter.
