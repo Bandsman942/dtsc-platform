@@ -164,6 +164,22 @@ vm.runInNewContext(ts.transpileModule(source, {
     if (id === "@/lib/enterprise/retail/invoice-return-unpaid-express") return {
       settleUnpaidRetailInvoiceCreditTx: async () => null,
     };
+    // This historical fixture runs strictly in STANDARD mode. Preserve a
+    // failing guard if a new express refund path is ever reached, rather
+    // than silently granting Finance or stock privileges inside the VM.
+    if (id === "@/lib/enterprise/retail/invoice-return-express-authorization") return {
+      assertRetailExpressReturnAuthorizationTx: async () => {
+        throw new Error("UNEXPECTED_EXPRESS_RETURN_IN_STANDARD_FIXTURE");
+      },
+    };
+    if (id === "@/lib/enterprise/retail/invoice-return-finance") return {
+      prepareRetailInvoiceReturnFinanceTx: async () => {
+        throw new Error("UNEXPECTED_EXPRESS_FINANCE_PREPARE_IN_STANDARD_FIXTURE");
+      },
+      settleRetailInvoiceReturnFinanceTx: async () => {
+        throw new Error("UNEXPECTED_EXPRESS_FINANCE_SETTLEMENT_IN_STANDARD_FIXTURE");
+      },
+    };
     return require(id);
   },
 });
