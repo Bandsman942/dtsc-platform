@@ -314,12 +314,15 @@ export async function prepareRetailInvoiceReturnFinance(
  * outbound treasury and cash, inventory/valuation and completed return.
  * A failure anywhere rolls the entire refund back, including the stock.
  * No route is allowed to settle an unbound, unapproved Finance document. */
-export async function settleRetailInvoiceReturnFinance(
-  organizationId: string, invoiceId: string, requestId: string, actorUserId: string,
+/** Executes canonical settlement inside an existing serializable transaction.
+ * Express calls require authorization in the same transaction and keep the
+ * original posting, allocation reversal and inventory valuation primitives. */
+export async function settleRetailInvoiceReturnFinanceTx(
+  tx: Prisma.TransactionClient, organizationId: string, invoiceId: string,
+  requestId: string, actorUserId: string,
   input: z.infer<typeof retailInvoiceReturnFinanceSettlementSchema>,
+  expressChoice: "NOW" | "LATER" | null = null,
 ) {
-  await requireFinanceSettler(organizationId, actorUserId);
-  return withRetailTransactionRetry(() => prisma.$transaction(async (tx) => {
     const config = await tx.enterpriseRetailConfiguration.findUnique({
       where: { organizationId }, select: { settingsJson: true },
     });
@@ -344,8 +347,8 @@ export async function settleRetailInvoiceReturnFinance(
     }
     if (request.status !== "FINANCE_PENDING" || request.revision !== input.revision ||
         !request.salesCreditNoteId || !request.preparedByUserId ||
-        [request.requestedByUserId, request.inspectedByUserId, request.approverUserId,
-          request.preparedByUserId].includes(actorUserId)) {
+        (expressChoice === null && [request.requestedByUserId, request.inspectedByUserId, request.approverUserId,
+          request.preparedByUserId].includes(actorUserId))) {
       throw fail("RETAIL_INVOICE_RETURN_FINANCE_CONFLICT");
     }
     const plan = await assertRetailInvoiceReturnSettlementReadinessTx(
@@ -355,7 +358,7 @@ export async function settleRetailInvoiceReturnFinance(
     const financeApproverUserId = request.financeApproverUserId || request.approverUserId;
     if ((payoutAmount.greaterThan(0) && !request.refundPaymentId) ||
         (payoutAmount.isZero() && request.refundPaymentId) ||
-        [request.requestedByUserId, request.inspectedByUserId, request.preparedByUserId].includes(financeApproverUserId)) {
+        (expressChoice === null && [request.requestedByUserId, request.inspectedByUserId, request.preparedByUserId].includes(financeApproverUserId))) {
       throw fail("RETAIL_INVOICE_RETURN_FINANCE_CONFLICT");
     }
     const [payment, credit, invoice, receivable] = await Promise.all([
@@ -453,8 +456,10 @@ export async function settleRetailInvoiceReturnFinance(
       await markCustomerRefundFinancialInverseReadyTx(
         tx, organizationId, payout.payment.id, credit.id, actorUserId, request.id,
       );
-      await confirmCustomerRefundPaymentTx(tx, organizationId, payout.payment.id, actorUserId,
-        { revision: payout.payment.revision, reason: input.reason });
+      if (expressChoice !== "LATER") {
+        await confirmCustomerRefundPaymentTx(tx, organizationId, payout.payment.id, actorUserId,
+          { revision: payout.payment.revision, reason: input.reason });
+      }
     }
     let restockedCount = 0;
     let isolatedCustodyCount = 0;
@@ -487,7 +492,9 @@ export async function settleRetailInvoiceReturnFinance(
     }
     const completed = await tx.enterpriseRetailInvoiceReturnRequest.update({
       where: { organizationId, id: request.id }, data: {
-        status: "COMPLETED", settledByUserId: actorUserId, completedAt: new Date(), revision: { increment: 1 },
+        status: expressChoice === "LATER" ? "REFUND_PENDING" : "COMPLETED",
+        settledByUserId: actorUserId,
+        completedAt: expressChoice === "LATER" ? null : new Date(), revision: { increment: 1 },
       },
     });
     // If the credit closes the remaining receivable, fulfill only the
@@ -496,9 +503,10 @@ export async function settleRetailInvoiceReturnFinance(
     if (nextOutstanding.isZero()) await postPaidRetailInvoiceStockTx(tx, organizationId, invoiceId, actorUserId);
     await publishFinanceEvent(tx, {
       organizationId, entityType: "EnterpriseRetailInvoiceReturnRequest", entityId: request.id,
-      eventType: "RETAIL_INVOICE_RETURN_COMPLETED",
-      summary: "Retail invoice return settled atomically in Finance and Inventory",
-      actorUserId, fromStatus: "FINANCE_PENDING", toStatus: "COMPLETED",
+      eventType: expressChoice === "LATER" ? "RETAIL_INVOICE_RETURN_REFUND_PENDING" : "RETAIL_INVOICE_RETURN_COMPLETED",
+      summary: expressChoice === "LATER" ? "Retail credit and stock settled, customer refund still payable" :
+        "Retail invoice return settled atomically in Finance and Inventory",
+      actorUserId, fromStatus: "FINANCE_PENDING", toStatus: expressChoice === "LATER" ? "REFUND_PENDING" : "COMPLETED",
       metadataJson: { invoiceId, siteId: plan.siteId, refundPaymentId: payment?.id || null,
         payoutPaymentIds: payouts.map((leg) => leg.payment.id),
         creditNoteId: credit.id, creditAmount: plan.refundAmount.toFixed(2), payoutAmount: payoutAmount.toFixed(2),
@@ -506,5 +514,15 @@ export async function settleRetailInvoiceReturnFinance(
         nonRestockedLineCount: plan.stockSourcePlan.filter((source) => source.stockDisposition !== "RESTOCK").length },
     });
     return { request: completed, idempotent: false };
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 60000 }));
+}
+
+/** Existing independent Finance settlement remains strictly unchanged. */
+export async function settleRetailInvoiceReturnFinance(
+  organizationId: string, invoiceId: string, requestId: string, actorUserId: string,
+  input: z.infer<typeof retailInvoiceReturnFinanceSettlementSchema>,
+) {
+  await requireFinanceSettler(organizationId, actorUserId);
+  return withRetailTransactionRetry(() => prisma.$transaction(async (tx) =>
+    settleRetailInvoiceReturnFinanceTx(tx, organizationId, invoiceId, requestId, actorUserId, input),
+  { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 60000 }));
 }
