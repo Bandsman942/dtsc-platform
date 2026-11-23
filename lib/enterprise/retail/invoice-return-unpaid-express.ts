@@ -7,15 +7,15 @@ import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
 import { RETAIL_OWNER_ROLES, siteStaffCapabilities } from "@/lib/enterprise/retail/site-access";
 
 /**
- * The only safe "auto post" subset of #1222: a posted but FULLY UNPAID
- * invoice whose stock has NOT left the warehouse. The approved return
- * eliminates a receivable, creates one credit note and releases reservations.
- * There is no customer-money liability and NO refund/payment/cash movement.
+ * Safe auto-post subset of #1222: the approved return has ZERO refundable
+ * cash payout and stock has NOT left the warehouse. This includes fully
+ * unpaid and partly collected invoices when the credit extinguishes ONLY
+ * the still-open receivable. There is no new cash liability or payment.
  *
  * The caller owns the same SERIALIZABLE transaction that decides the return.
  * This function must never start another transaction or perform an external
- * payment. For partly collected, physically fulfilled or any payable return,
- * return null and preserve the existing independently approved Finance flow.
+ * payment. For physically fulfilled or payable returns, return null and
+ * preserve the existing independently approved Finance flow.
  */
 export async function settleUnpaidRetailInvoiceCreditTx(
   tx: Prisma.TransactionClient, organizationId: string, invoiceId: string,
@@ -46,7 +46,7 @@ export async function settleUnpaidRetailInvoiceCreditTx(
   if (snapshot.mode !== "SIMPLIFIED" || !snapshot.autoPostCreditNote ||
       policy.mode !== "SIMPLIFIED" || !policy.autoPostCreditNote) return null;
   const invoice = request.checkout.invoice;
-  if (!invoice.amountPaid.isZero() || request.checkout.stockPostedAt) return null;
+  if (request.checkout.stockPostedAt) return null;
   if (request.checkout.siteId === "") return null;
 
   const member = await tx.organizationMember.findFirst({
@@ -68,7 +68,7 @@ export async function settleUnpaidRetailInvoiceCreditTx(
 
   const plan = await assertRetailInvoiceReturnSettlementReadinessTx(tx, organizationId, invoiceId, returnRequestId);
   if (!plan.payoutAmount.isZero() || plan.stockSourcePlan.length) return null;
-  if (!invoice.amountPaid.isZero() || invoice.outstandingAmount.lessThan(plan.refundAmount)) {
+  if (invoice.outstandingAmount.lessThan(plan.refundAmount)) {
     throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_SETTLEMENT_PAYOUT_CONFLICT", 409);
   }
 
@@ -113,7 +113,7 @@ export async function settleUnpaidRetailInvoiceCreditTx(
   await publishFinanceEvent(tx, {
     organizationId, entityType: "EnterpriseSalesCreditNote", entityId: credit.id,
     eventType: "SALES_CREDIT_NOTE_CREATED",
-    summary: "Retail unpaid invoice credit created by explicitly authorized return decision",
+    summary: "Retail zero-payout invoice credit created by explicitly authorized return decision",
     actorUserId, toStatus: "APPROVED",
     metadataJson: { invoiceId, returnRequestId: request.id, creditAmount: credit.grandTotal.toFixed(2),
       payoutAmount: "0.00", expressPolicy: true, policyVersion: snapshot.version },
@@ -153,7 +153,7 @@ export async function settleUnpaidRetailInvoiceCreditTx(
   await publishFinanceEvent(tx, {
     organizationId, entityType: "EnterpriseSalesCreditNote", entityId: credit.id,
     eventType: "SALES_CREDIT_NOTE_POSTED",
-    summary: "Unpaid Retail credit posted without any customer refund",
+    summary: "Retail credit posted against open receivable with zero customer refund",
     actorUserId, fromStatus: "APPROVED", toStatus: "POSTED",
     metadataJson: { invoiceId, returnRequestId: request.id, receivableId: receivable.id,
       journalEntryId: posting.entry.id, payoutAmount: "0.00", expressPolicy: true },
@@ -170,7 +170,7 @@ export async function settleUnpaidRetailInvoiceCreditTx(
   await publishFinanceEvent(tx, {
     organizationId, entityType: "EnterpriseRetailInvoiceReturnRequest", entityId: request.id,
     eventType: "RETAIL_INVOICE_RETURN_COMPLETED",
-    summary: "Retail unpaid invoice closed with a canonical credit, no cash settlement",
+    summary: "Retail zero-payout return completed with canonical credit, no cash settlement",
     actorUserId, fromStatus: "APPROVED", toStatus: "COMPLETED",
     metadataJson: { invoiceId, creditNoteId: credit.id, creditAmount: credit.grandTotal.toFixed(2),
       payoutAmount: "0.00", nonStocked: true, expressPolicy: true },
