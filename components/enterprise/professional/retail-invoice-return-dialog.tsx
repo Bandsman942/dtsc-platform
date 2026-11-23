@@ -106,8 +106,8 @@ function statusLabel(status: string, copy: typeof translations.fr | typeof trans
     FINANCE_PENDING: copy.financePending, REFUND_PENDING: copy.deferred, REJECTED: copy.rejected, COMPLETED: copy.completed } as Record<string, string>)[status] || copy.unknown;
 }
 
-export function RetailInvoiceReturnDialog({ organizationId, invoiceId, invoiceNumber, siteId, currencyCode, checkoutLines, invoiceItems, locale, onChanged, autoOpen = false }: {
-  organizationId: string; invoiceId: string; invoiceNumber: string; siteId: string; currencyCode: string;
+export function RetailInvoiceReturnDialog({ organizationId, invoiceId, invoiceNumber, invoiceStatus, siteId, currencyCode, checkoutLines, invoiceItems, locale, onChanged, autoOpen = false }: {
+  organizationId: string; invoiceId: string; invoiceNumber: string; invoiceStatus?: string; siteId: string; currencyCode: string;
   checkoutLines: CheckoutLine[]; invoiceItems: InvoiceItem[]; locale: "fr" | "en"; onChanged: () => void; autoOpen?: boolean;
 }) {
   const copy = translations[locale];
@@ -244,6 +244,11 @@ export function RetailInvoiceReturnDialog({ organizationId, invoiceId, invoiceNu
     <Button type="button" variant="outline" onClick={() => setOpen(true)}><RotateCcw className="h-4 w-4" />{copy.trigger}</Button>
     <Dialog open={open} onClose={() => { if (!busy) { setOpen(false); setCreating(false); setAction(null); } }} title={`${copy.title} · ${invoiceNumber}`} description={copy.explain} className="max-w-3xl" presentation="editor">
       <div className="grid min-w-0 gap-4">
+        {invoiceStatus === "PAID" ? <p data-testid="retail-fully-paid-return-guidance" role="note" className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs leading-5 text-dtsc-ink">
+          {locale === "fr"
+            ? "Facture intégralement payée : elle ne peut plus être effacée ni annulée directement. Le retour crée un avoir comptable et le remboursement doit correspondre aux fonds réellement encaissés. Si le plafond express de 100 USD par facture est dépassé (y compris en CDF), choisissez le circuit Finance standard. Les articles déjà sortis exigent l'inspection réelle et, le cas échéant, les lots d'origine."
+            : "Fully paid invoice: it cannot be erased or directly voided. A return creates a credit note, with refunds limited to actually collected funds. Above the USD 100 per-invoice express cap (including FX), use Standard Finance workflow. Posted goods require real inspection and original batches when applicable."}
+        </p> : null}
         {error ? <p role="alert" className="rounded-lg bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-200">{error}</p> : null}
         <div className="flex min-w-0 flex-wrap justify-between gap-2">
           <Button type="button" variant="outline" disabled={loading || busy} onClick={() => void load(page)}>{copy.refresh}</Button>
