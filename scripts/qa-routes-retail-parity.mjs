@@ -43,7 +43,27 @@ for (const route of manifest.routes) {
   assert.deepEqual(methods, route.methods, "Original HTTP exports changed");
 }
 const root = "app/api/enterprise/[organizationId]/retail/invoices/route.ts";
-assert.equal(hash(root), execFileSync("git", ["rev-parse", manifest.baselineCommit + ":" + root], { encoding: "utf8" }).trim(), "Invoice collection root must remain unchanged");
+// #1224 adds a read-only, site-scoped invoice-status filter and a concise
+// active-return projection to the original collection GET. Only this exact
+// reviewed Git blob may differ; the ROUTES-05A immutable handlers and
+// their baseline remain strictly protected.
+const approvedRootChanges = manifest.approvedRootChanges || [];
+assert.equal(approvedRootChanges.length, 1, "Only one #1224 invoice-root exception may be registered");
+const rootChange = approvedRootChanges[0];
+assert.deepEqual(
+  { issue: rootChange.issue, path: rootChange.path },
+  { issue: 1224, path: root },
+  "The reviewed root exception must be limited to #1224 and the collection GET",
+);
+assert.match(rootChange.blobSha, /^[0-9a-f]{40}$/, "Reviewed root must pin an exact Git blob");
+const baselineRootSha = execFileSync("git", ["rev-parse", manifest.baselineCommit + ":" + root], { encoding: "utf8" }).trim();
+assert.notEqual(rootChange.blobSha, baselineRootSha, "A reviewed amendment must explicitly differ from the ROUTES baseline");
+assert.equal(hash(root), rootChange.blobSha, "Invoice collection root deviated from reviewed #1224 blob");
+const rootSource = fs.readFileSync(root, "utf8");
+assert.match(rootSource, /export async function GET\(/, "Invoice root must retain GET");
+assert.match(rootSource, /export async function POST\(/, "Invoice root must retain POST");
+assert.match(rootSource, /supportedStatuses\.includes\(status\)/, "Invoice status server filter must remain guarded");
+assert.match(rootSource, /retailInvoiceVisibleSites\(/, "Site-scoped invoice projection must remain guarded");
 const before = sourceRouteCapacity({ baseline: 915, current: 871, maxSourceFiles: 900, minimumFreed: 40 });
 const after = sourceRouteCapacity({ baseline: 915, current: 850, maxSourceFiles: 900, minimumFreed: 40 });
 assert.equal(before.effectiveCeiling, 875);
@@ -56,4 +76,4 @@ assert.equal(vercelBuildCapacity(2000, 2048).remainingRules, 48);
 assert.equal(vercelBuildCapacity(2049, 2048).remainingRules, -1);
 assert.throws(() => vercelBuildCapacity(-1, 2048));
 assert.throws(() => sourceRouteCapacity({ baseline: 915, current: NaN, maxSourceFiles: 900, minimumFreed: 40 }));
-console.log(`ROUTES-05A parity OK: ${manifest.routes.length - approvedChanges.size} original handlers + four #1184, one #1219 and two #1222 reviewed amendments; original invoice root and dispatcher, 21 reclaimed source entries. No unreviewed handler change permitted.`);
+console.log(`ROUTES-05A parity OK: ${manifest.routes.length - approvedChanges.size} original handlers + four #1184, one #1219 and two #1222 reviewed amendments; reviewed #1224 invoice collection GET and immutable dispatchers, 21 reclaimed source entries. No unreviewed handler change permitted.`);
