@@ -600,5 +600,16 @@
   "advancedGuideAssets": "Sélectionnez l'immobilisation, sa valeur amortissable et les comptes associés. La capitalisation ne doit pas créer une seconde immobilisation opérationnelle.",
   "inventoryLiveDescription": "Valorisation en direct au coût moyen pondéré. Les mouvements et quantités restent gérés dans Stocks ; les versions périodiques publiées relèvent des États financiers.",
   "inventoryLiveSourceNote": "Quantités physiques : module Stocks. Coûts comptables : couches de coût moyen pondéré validées. Aucun historique de valorisation inventé.",
-  "relatedFinanceWorkflows": "Parcours liés"
+  "relatedFinanceWorkflows": "Parcours liés",
+  "retailCreditOriginTitle": "Avoir issu d’une vente RETAIL",
+  "retailCreditOriginHelp": "La comptabilisation et le remboursement se finalisent dans le dossier de retour RETAIL afin de réconcilier les créances, les encaissements et le stock.",
+  "retailCreditOriginAction": "Voir le dossier RETAIL / Finaliser le retour",
+  "retailCreditUnlinked": "Rapprochement requis : aucune demande de retour liée à cet avoir. N’émettez pas un second avoir.",
+  "retailCreditReturnStatus": "État du retour",
+  "retailReturnSubmitted": "Contrôle attendu",
+  "retailReturnInspected": "Contrôle effectué, validation attendue",
+  "retailReturnApproved": "Retour validé, traitement financier attendu",
+  "retailReturnFinancePending": "Avoir et remboursements en validation Finance",
+  "retailReturnCompleted": "Avoir et retour finalisés",
+  "retailReturnRejected": "Retour refusé"
 }
