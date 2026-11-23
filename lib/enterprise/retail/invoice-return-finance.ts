@@ -60,8 +60,9 @@ export async function prepareRetailInvoiceReturnFinanceTx(
   tx: Prisma.TransactionClient,
   organizationId: string, invoiceId: string, requestId: string,
   actorUserId: string, input: z.infer<typeof retailInvoiceReturnFinancePrepareSchema>,
-  express = false,
+  expressChoice: "NOW" | "LATER" | null = null,
 ) {
+    const express = expressChoice !== null;
     const config = await tx.enterpriseRetailConfiguration.findUnique({
       where: { organizationId }, select: { settingsJson: true },
     });
@@ -283,6 +284,7 @@ export async function prepareRetailInvoiceReturnFinanceTx(
       where: { id: request.id, organizationId }, data: {
         status: "FINANCE_PENDING", refundPaymentId: refundPayments[0]?.id || null, salesCreditNoteId: credit.id,
         refundPayoutAmount: payoutAmount, financeApproverUserId,
+        refundChoice: expressChoice,
         preparedByUserId: actorUserId, preparedAt: new Date(), revision: { increment: 1 },
       },
     });
