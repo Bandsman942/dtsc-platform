@@ -70,7 +70,7 @@ type InvoiceRecord = FinanceRecord & {
   supplierReturnAllocatableAmount?: string;
   supplierReturn?: { id:string; reference:string; status:string; purchaseId:string; sourceMovementId:string; currencyCode:string; totalCost:string; recoverableTaxAmount?:string; supplierCreditNoteId:string|null } | null;
   salesInvoiceId?: string;
-  retailOrigin?: { invoiceId: string; siteId: string; returnRequestId: string | null; returnNumber: string | null; returnStatus: string } | null;
+  retailOrigin?: { invoiceId: string; invoiceNumber: string; siteId: string; returnRequestId: string | null; returnNumber: string | null; returnStatus: string } | null;
   supplierInvoiceId?: string;
   replacementCreditNoteId?: string|null;
   items?: Array<{ id: string; description: string; quantity: string | number; unitPrice: string | number; discountAmount?: string | number }>;
@@ -520,7 +520,7 @@ export function EnterpriseFinanceInvoicesWorkspace(props: Props) {
             {t("retailCreditReturnStatus")}: <strong>{t(retailReturnStatusKey(detail.retailOrigin.returnStatus))}</strong>
           </p> : <p role="alert" className="text-sm font-semibold text-amber-700 dark:text-amber-300">{t("retailCreditUnlinked")}</p>}
           <a className="inline-flex min-h-11 items-center rounded-lg border border-cyan-500/40 px-3 text-sm font-bold text-dtsc-blue underline focus-visible:ring-2 focus-visible:ring-cyan-500"
-            href={`/enterprise-modules/RETAIL_POS?section=invoices&siteId=${encodeURIComponent(detail.retailOrigin.siteId)}&invoiceId=${encodeURIComponent(detail.retailOrigin.invoiceId)}`}>
+            href={`/enterprise-modules/RETAIL_POS?section=invoices&siteId=${encodeURIComponent(detail.retailOrigin.siteId)}&q=${encodeURIComponent(detail.retailOrigin.invoiceNumber)}&returnInvoiceId=${encodeURIComponent(detail.retailOrigin.invoiceId)}`}>
             {t("retailCreditOriginAction")}
           </a>
         </section> : null}
