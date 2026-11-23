@@ -5,17 +5,18 @@ import { Button } from "@/components/ui/button";
 import { toastError, toastSuccess } from "@/lib/client-toast";
 
 type Policy = {
-  version: 1;
+  version: 2;
   mode: "STANDARD" | "SIMPLIFIED";
   allowRequesterInspection: boolean;
   allowDelegatedSelfApproval: boolean;
   autoPostCreditNote: boolean;
   promptImmediateRefund: boolean;
   scope: "ALL_SITES";
-  expressRefundLimitAmount: number;
-  expressRefundLimitCurrency: "USD";
+  expressRefundLimitAmount: string;
+  expressRefundLimitCurrency: string;
 };
-type ResponseData = { revision: number; policy: Policy; canManage: boolean };
+type LegacyPolicy = Omit<Policy, "version" | "expressRefundLimitAmount" | "expressRefundLimitCurrency"> & { version: 1; expressRefundLimitAmount: number; expressRefundLimitCurrency: "USD" };
+type ResponseData = { revision: number; policy: Policy | LegacyPolicy; canManage: boolean; functionalCurrencyCode: string };
 const copy = {
   fr: {
     heading: "Annulations, avoirs et remboursements",
@@ -27,8 +28,11 @@ const copy = {
     approve: "Autoriser l'auto-approbation par le validateur désigné et délégué",
     credit: "Comptabiliser l'avoir à la finalisation du retour",
     prompt: "Proposer le remboursement immédiat, lorsque le montant remboursable est positif",
-    limit: "Plafond par remboursement express (USD)",
-    help: "100 USD : plafond initial. Une demande fractionnée ne doit jamais contourner le plafond. Si aucun encaissement n'existe, le remboursement est nul et seul l'avoir régularise la créance.",
+    limit: "Plafond express cumulé par facture",
+    help: "Choisissez librement le montant maximal dans la devise fonctionnelle de l'entreprise, sans plafond fixe en USD. Les retours fractionnés d'une même facture sont cumulés et les paiements en devise étrangère sont convertis au taux Finance valide.",
+    legacy: "L’ancienne politique conserve son plafond historique pour les retours déjà créés. Indiquez un nouveau montant dans la devise de l’entreprise.",
+    currencyChanged: "La devise fonctionnelle de l’entreprise a changé. Pour éviter de réinterpréter un ancien montant, renseignez explicitement un nouveau plafond.",
+    invalidAmount: "Saisissez un montant positif comportant au maximum deux décimales, dans la devise de l'entreprise.",
     password: "Mot de passe (confirmation d'identité)",
     totp: "Code MFA si nécessaire",
     save: "Enregistrer les autorisations", saving: "Enregistrement…",
@@ -48,8 +52,11 @@ const copy = {
     approve: "Allow the designated and delegated approver to approve their own request",
     credit: "Post the credit note when the return is finalized",
     prompt: "Offer immediate refund when there is a positive refundable amount",
-    limit: "Express refund limit (USD)",
-    help: "Initial limit: USD 100. Splitting a request must never bypass the cap. An unpaid invoice has no refund payout; the credit settles the receivable.",
+    limit: "Cumulative express limit per invoice",
+    help: "Set any positive amount in your company's functional currency: no fixed USD cap. Splitting one invoice into multiple returns cannot bypass this limit. Foreign-currency refunds use a valid Finance exchange rate.",
+    legacy: "The previous policy remains binding for already submitted returns. Enter a new amount in the company currency.",
+    currencyChanged: "The company functional currency has changed. Enter a new refund threshold explicitly: an old amount cannot be silently reinterpreted in another currency.",
+    invalidAmount: "Enter a positive amount with at most two decimal places in your company's currency.",
     password: "Password (identity confirmation)",
     totp: "MFA code if required",
     save: "Save return policy", saving: "Saving…",
@@ -67,6 +74,8 @@ export function RetailInvoiceReturnPolicyPanel({ organizationId, locale }: {
   const t = copy[locale];
   const [data, setData] = useState<ResponseData | null>(null);
   const [policy, setPolicy] = useState<Policy | null>(null);
+  const [legacyPolicy, setLegacyPolicy] = useState(false);
+  const [currencyChanged, setCurrencyChanged] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [password, setPassword] = useState("");
@@ -79,7 +88,17 @@ export function RetailInvoiceReturnPolicyPanel({ organizationId, locale }: {
       const response = await fetch(`/api/enterprise/${encodeURIComponent(organizationId)}/retail/return-policy`, { cache: "no-store" });
       const payload = await response.json() as ResponseData & { message?: string };
       if (!response.ok || !payload.policy) throw new Error(payload.message || t.error);
-      setData(payload); setPolicy(payload.policy); setError("");
+      if (!/^[A-Z]{3}$/.test(payload.functionalCurrencyCode)) throw new Error(t.error);
+      const isLegacy = payload.policy.version === 1;
+      const currencyMismatch = payload.policy.expressRefundLimitCurrency !== payload.functionalCurrencyCode;
+      const prepared: Policy = {
+        ...payload.policy, version: 2,
+        expressRefundLimitAmount: isLegacy || currencyMismatch ? "" : String(payload.policy.expressRefundLimitAmount),
+        expressRefundLimitCurrency: payload.functionalCurrencyCode,
+      };
+      setLegacyPolicy(isLegacy);
+      setCurrencyChanged(currencyMismatch && !isLegacy);
+      setData(payload); setPolicy(prepared); setError("");
     } catch (cause) { setError(cause instanceof Error ? cause.message : t.error); }
     finally { setLoading(false); }
   }, [organizationId, t.error]);
@@ -90,6 +109,10 @@ export function RetailInvoiceReturnPolicyPanel({ organizationId, locale }: {
 
   async function save() {
     if (!data?.canManage || !policy || !password || saving) return;
+    if (!/^(?:0|[1-9][0-9]{0,14})(?:\.[0-9]{1,2})?$/.test(policy.expressRefundLimitAmount) ||
+        !Number.isFinite(Number(policy.expressRefundLimitAmount)) || Number(policy.expressRefundLimitAmount) <= 0) {
+      setError(t.invalidAmount); return;
+    }
     setSaving(true); setError("");
     try {
       const confirm = await fetch("/api/auth/step-up", {
@@ -140,12 +163,13 @@ export function RetailInvoiceReturnPolicyPanel({ organizationId, locale }: {
           <span className="min-w-0 break-words">{label}</span>
         </label>)}
       </div>
-      <label className="grid max-w-xs gap-1 text-sm font-bold text-dtsc-ink">{t.limit}
-        <input className="min-h-11 rounded-xl border border-dtsc-border bg-dtsc-page p-2"
-          type="number" min={0} max={100} step="0.01"
-          value={policy.expressRefundLimitAmount} disabled={disabled || policy.mode === "STANDARD"}
-          onChange={(event) => change("expressRefundLimitAmount", Number(event.target.value))} />
+      <label className="grid max-w-xs gap-1 text-sm font-bold text-dtsc-ink">{t.limit} <strong className="text-cyan-700 dark:text-cyan-300">({data?.functionalCurrencyCode})</strong>
+        <input data-testid="retail-return-express-limit" className="min-h-11 rounded-xl border border-dtsc-border bg-dtsc-page p-2"
+          type="text" inputMode="decimal" autoComplete="off" placeholder="250000"
+          value={policy.expressRefundLimitAmount} disabled={disabled}
+          onChange={(event) => change("expressRefundLimitAmount", event.target.value.replace(",", "."))} />
       </label>
+      {legacyPolicy || currencyChanged ? <p role="note" className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-xs leading-5 text-dtsc-ink">{currencyChanged ? t.currencyChanged : t.legacy}</p> : null}
       <p className="text-xs leading-5 text-dtsc-muted">{t.help}</p>
       <p className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-xs leading-5 text-dtsc-ink">{t.security}</p>
       {!data?.canManage ? <p className="text-sm text-dtsc-muted">{t.readOnly}</p> : <div className="grid gap-3 sm:grid-cols-2">
@@ -156,7 +180,7 @@ export function RetailInvoiceReturnPolicyPanel({ organizationId, locale }: {
           <input type="text" inputMode="numeric" autoComplete="one-time-code" maxLength={12} className="min-h-11 rounded-lg border border-dtsc-border bg-dtsc-page p-2" value={totp} onChange={(event) => setTotp(event.target.value)} disabled={saving} />
         </label>
         <div className="sm:col-span-2 flex justify-end">
-          <Button type="button" disabled={saving || !password} onClick={() => void save()}>{saving ? t.saving : t.save}</Button>
+          <Button type="button" disabled={saving || !password || !policy.expressRefundLimitAmount || Number(policy.expressRefundLimitAmount) <= 0} onClick={() => void save()}>{saving ? t.saving : t.save}</Button>
         </div>
       </div>}
     </> : null}

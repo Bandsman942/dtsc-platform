@@ -34,15 +34,24 @@ export async function GET(req: Request, { params }: Params) {
   const auth = await authorizeRetailRequest(req, organizationId, "RETAIL_POS", "read");
   if (!auth.ok) return auth.response;
   try {
-    const config = await prisma.enterpriseRetailConfiguration.findUnique({
-      where: { organizationId }, select: { revision: true, settingsJson: true },
-    });
+    const [config, finance] = await Promise.all([
+      prisma.enterpriseRetailConfiguration.findUnique({
+        where: { organizationId }, select: { revision: true, settingsJson: true },
+      }),
+      prisma.enterpriseFinanceConfiguration.findUnique({
+        where: { organizationId }, select: { functionalCurrencyCode: true },
+      }),
+    ]);
     if (!config) throw new EnterpriseRetailError("RETAIL_CONFIGURATION_REQUIRED", 409);
+    if (!finance || !/^[A-Z]{3}$/.test(finance.functionalCurrencyCode)) {
+      throw new EnterpriseRetailError("RETAIL_RETURN_POLICY_FUNCTIONAL_CURRENCY_REQUIRED", 409);
+    }
     await writeApiLog({ request: req, startedAt, statusCode: 200, userId: auth.session.userId,
       metadata: { organizationId, domain: "retail-invoice-return-policy", action: "read" } });
     return NextResponse.json({
       revision: config.revision,
       policy: readRetailInvoiceReturnPolicy(config.settingsJson),
+      functionalCurrencyCode: finance.functionalCurrencyCode,
       canManage: auth.access.canManage && await canManage(organizationId, auth.session.userId),
     }, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) { return retailErrorResponse(error, "RETAIL_RETURN_POLICY_READ_FAILED"); }
@@ -68,6 +77,15 @@ export async function PUT(req: Request, { params }: Params) {
       const config = await tx.enterpriseRetailConfiguration.findUnique({ where: { organizationId } });
       if (!config) throw new EnterpriseRetailError("RETAIL_CONFIGURATION_REQUIRED", 409);
       if (config.revision !== parsed.data.revision) throw new EnterpriseRetailError("RETAIL_RETURN_POLICY_CONFLICT", 409);
+      const finance = await tx.enterpriseFinanceConfiguration.findUnique({
+        where: { organizationId }, select: { functionalCurrencyCode: true },
+      });
+      if (!finance || !/^[A-Z]{3}$/.test(finance.functionalCurrencyCode)) {
+        throw new EnterpriseRetailError("RETAIL_RETURN_POLICY_FUNCTIONAL_CURRENCY_REQUIRED", 409);
+      }
+      if (parsed.data.policy.expressRefundLimitCurrency !== finance.functionalCurrencyCode) {
+        throw new EnterpriseRetailError("RETAIL_RETURN_POLICY_CURRENCY_MISMATCH", 409);
+      }
       const oldPolicy = readRetailInvoiceReturnPolicy(config.settingsJson);
       const changed = await tx.enterpriseRetailConfiguration.updateMany({
         where: { organizationId, revision: parsed.data.revision },

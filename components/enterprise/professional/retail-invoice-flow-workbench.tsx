@@ -6,6 +6,7 @@ import { ArrowRight, FileClock, Printer, RefreshCw, Search, Send, ShieldAlert, S
 import { EnterpriseApproverSelect } from "@/components/enterprise/enterprise-approver-select";
 import { RetailActiveCustomerBar } from "@/components/enterprise/professional/retail-active-customer-bar";
 import { RetailInvoiceReturnDialog } from "@/components/enterprise/professional/retail-invoice-return-dialog";
+import { RetailHistoricalReturnRecovery } from "@/components/enterprise/professional/retail-historical-return-recovery";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { toastError, toastSuccess, notifyToast } from "@/lib/client-toast";
@@ -21,6 +22,7 @@ type Checkout = {
   warehouseId: string;
   lines: { id: string; invoiceItemId: string; inventoryItemId: string | null }[];
   stockPostedAt: string | null;
+  returnRequests?: { number: string; status: string; salesCreditNote: { number: string; status: string } | null }[];
   canCancel: boolean;
   canSubmit: boolean;
   canCollect: boolean;
@@ -86,6 +88,8 @@ const language = {
   },
 } as const;
 
+const invoiceStatusValues = ["DRAFT", "PENDING_APPROVAL", "APPROVED", "ISSUED", "OVERDUE", "PARTIALLY_PAID", "PAID", "CREDIT_NOTE", "REJECTED", "CANCELLED", "VOIDED"] as const;
+
 function invoiceStatus(status: string, lang: typeof language.fr | typeof language.en) {
   const values: Record<string, string> = {
     DRAFT: lang.draft, PENDING_APPROVAL: lang.pending, APPROVED: lang.approved, ISSUED: lang.issued,
@@ -109,6 +113,7 @@ export function RetailInvoiceFlowWorkbench({ organizationId, organizationName, l
   const [error, setError] = useState("");
   const [page, setPage] = useState(1);
   const [siteFilter, setSiteFilter] = useState(preferredSiteId || "");
+  const [invoiceStatusFilter, setInvoiceStatusFilter] = useState("");
   const [invoiceSearch, setInvoiceSearch] = useState("");
   const [targetReturnInvoiceId, setTargetReturnInvoiceId] = useState("");
   useEffect(() => {
@@ -117,6 +122,8 @@ export function RetailInvoiceFlowWorkbench({ organizationId, organizationName, l
     const targetNumber = params.get("q")?.trim();
     const targetSiteId = params.get("siteId")?.trim();
     const targetInvoiceId = params.get("returnInvoiceId")?.trim();
+    const requestedStatus = params.get("status")?.trim().toUpperCase();
+    if (requestedStatus && invoiceStatusValues.some((value) => value === requestedStatus)) setInvoiceStatusFilter(requestedStatus);
     if (targetSiteId) setSiteFilter(targetSiteId.slice(0, 191));
     if (targetNumber) setInvoiceSearch(targetNumber.slice(0, 100));
     if (targetInvoiceId) setTargetReturnInvoiceId(targetInvoiceId.slice(0, 191));
@@ -207,7 +214,7 @@ export function RetailInvoiceFlowWorkbench({ organizationId, organizationName, l
   const load = useCallback(async (nextPage = page, site = siteFilter) => {
     setLoading(true); setWorkflowLinks(null);
     try {
-      const queryString = new URLSearchParams({ page: String(nextPage), pageSize: "10", ...(site ? { siteId: site } : {}), ...(invoiceSearch.trim() ? { q: invoiceSearch.trim() } : {}), ...(invoiceDateFrom ? { dateFrom: invoiceDateFrom } : {}), ...(invoiceDateTo ? { dateTo: invoiceDateTo } : {}) });
+      const queryString = new URLSearchParams({ page: String(nextPage), pageSize: "10", ...(site ? { siteId: site } : {}), ...(invoiceStatusFilter ? { status: invoiceStatusFilter } : {}), ...(invoiceSearch.trim() ? { q: invoiceSearch.trim() } : {}), ...(invoiceDateFrom ? { dateFrom: invoiceDateFrom } : {}), ...(invoiceDateTo ? { dateTo: invoiceDateTo } : {}) });
       const response = await fetch(`/api/enterprise/${organizationId}/retail/invoices?${queryString}`, { cache: "no-store" });
       if (response.status === 403) {
         const denied = await response.json().catch(() => null) as { error?: string } | null;
@@ -224,7 +231,7 @@ export function RetailInvoiceFlowWorkbench({ organizationId, organizationName, l
       setError("");
     } catch (caught) { setError(customerFacingError(caught, locale)); }
     finally { setLoading(false); }
-  }, [copy.disabled, copy.failed, invoiceSearch, invoiceDateFrom, invoiceDateTo, locale, organizationId, page, siteFilter]);
+  }, [copy.disabled, copy.failed, invoiceSearch, invoiceDateFrom, invoiceDateTo, invoiceStatusFilter, locale, organizationId, page, siteFilter]);
   useEffect(() => { const timeout = window.setTimeout(() => { void load(); }, invoiceSearch ? 220 : 0); return () => window.clearTimeout(timeout); }, [load, invoiceSearch]);
 
   // Only inspect the visible page (10 invoices), only actionable statuses.
@@ -522,11 +529,13 @@ export function RetailInvoiceFlowWorkbench({ organizationId, organizationName, l
     {mode === "checkout" ? <div className="mt-5 border-t border-dtsc-border pt-4"><p className="text-sm text-dtsc-muted">{locale === "fr" ? "Les factures préparées sont suivies dans le registre, sans encombrer le comptoir." : "Prepared invoices are tracked in the register, keeping the counter focused."}</p><Link className="mt-2 inline-flex min-h-11 items-center rounded-xl border border-dtsc-border px-4 text-sm font-bold text-dtsc-blue" href={`/enterprise-modules/RETAIL_POS?section=invoices${preferredSiteId ? `&siteId=${encodeURIComponent(preferredSiteId)}` : ""}`}>{locale === "fr" ? "Ouvrir le registre des factures" : "Open invoice register"}<ArrowRight className="ml-2 h-4 w-4" /></Link></div> : <div className="mt-5 border-t border-dtsc-border pt-4">
       <div className="flex min-w-0 flex-wrap items-center justify-between gap-3"><h3 className="text-sm font-black text-dtsc-ink">{copy.list}</h3>{data?.sites.length ? <select aria-label={copy.warehouse} className="min-h-11 max-w-full rounded-lg border border-dtsc-border bg-dtsc-page px-2 text-sm" value={siteFilter} onChange={(event) => { setSiteFilter(event.target.value); setPage(1); }}><option value="">{copy.all}</option>{data.sites.map((site) => <option key={site.id} value={site.id}>{site.name}</option>)}</select> : null}</div>
       <div className="mt-3 grid min-w-0 gap-2 sm:grid-cols-2 lg:grid-cols-4">
+        <label data-testid="retail-invoice-status-filter" className="text-xs font-bold text-dtsc-ink">{locale === "fr" ? "Statut de la facture" : "Invoice status"}<select aria-label={locale === "fr" ? "Filtrer les factures par statut" : "Filter invoices by status"} value={invoiceStatusFilter} onChange={(event) => { setInvoiceStatusFilter(event.target.value); setPage(1); }} className="mt-1 min-h-11 w-full rounded-lg border border-dtsc-border bg-dtsc-page px-2 text-sm"><option value="">{locale === "fr" ? "Tous les statuts" : "All statuses"}</option>{invoiceStatusValues.map((status) => <option key={status} value={status}>{invoiceStatus(status, copy)}</option>)}</select></label>
         <label className="text-xs font-bold text-dtsc-ink">{locale === "fr" ? "Recherche intelligente" : "Smart search"}<span className="mt-1 flex min-h-11 items-center gap-2 rounded-lg border border-dtsc-border bg-dtsc-page px-2"><Search className="h-4 w-4 text-dtsc-muted"/><input className="min-w-0 flex-1 bg-transparent text-sm outline-none" placeholder={locale === "fr" ? "N°, article, désignation" : "Number or item"} value={invoiceSearch} onChange={(event) => { setInvoiceSearch(event.target.value); setPage(1); }} /></span></label>
         <label className="text-xs font-bold text-dtsc-ink">{locale === "fr" ? "Du" : "From"}<input type="date" max={invoiceDateTo || undefined} value={invoiceDateFrom} onChange={(event) => { setInvoiceDateFrom(event.target.value); setPage(1); }} className="mt-1 min-h-11 w-full rounded-lg border border-dtsc-border bg-dtsc-page px-2 text-sm" /></label>
         <label className="text-xs font-bold text-dtsc-ink">{locale === "fr" ? "Au" : "To"}<input type="date" min={invoiceDateFrom || undefined} value={invoiceDateTo} onChange={(event) => { setInvoiceDateTo(event.target.value); setPage(1); }} className="mt-1 min-h-11 w-full rounded-lg border border-dtsc-border bg-dtsc-page px-2 text-sm" /></label>
         <div className="flex flex-wrap items-end gap-1"><Button type="button" variant="outline" onClick={() => { const date = invoiceDateFrom || invoiceDateTo || browserCivilDate(); setInvoiceDateFrom(date); setInvoiceDateTo(date); setPage(1); }}>{locale === "fr" ? "Date précise" : "Exact date"}</Button><Button type="button" variant="ghost" onClick={() => { setInvoiceDateFrom(""); setInvoiceDateTo(""); setPage(1); }} disabled={!invoiceDateFrom && !invoiceDateTo}>{locale === "fr" ? "Effacer" : "Clear"}</Button></div>
       </div>
+      <RetailHistoricalReturnRecovery organizationId={organizationId} locale={locale} siteId={siteFilter} />
       {loading ? <p role="status" className="mt-3 text-sm text-dtsc-muted">{copy.loading}</p> : null}
       {!loading && data && !data.items.length ? <p className="mt-3 rounded-xl bg-dtsc-page p-3 text-sm text-dtsc-muted">{copy.empty}</p> : null}
       <div className="mt-3 grid min-w-0 gap-2">{data?.items.map((entry) => (
@@ -538,6 +547,7 @@ export function RetailInvoiceFlowWorkbench({ organizationId, organizationName, l
             </div>
             <span className="max-w-full rounded-full bg-blue-500/10 px-2 py-1 text-xs font-bold text-blue-700 dark:text-blue-300">{invoiceStatus(entry.invoice.status, copy)}{entry.invoice.status === "PENDING_APPROVAL" ? ` (${entry.invoice.pendingApproverName || (locale === "fr" ? "validateur à confirmer" : "approver to confirm")})` : ""}</span>
           </div>
+          {entry.returnRequests?.length ? <div data-testid="retail-invoice-return-status" className="mt-2 flex flex-wrap items-center gap-2 rounded-lg border border-amber-500/25 bg-amber-500/5 px-2.5 py-2 text-xs text-dtsc-ink"><ShieldAlert className="h-3.5 w-3.5 shrink-0 text-amber-500" /><strong>{locale === "fr" ? "Retour en cours" : "Return pending"}:</strong>{entry.returnRequests.map((request) => <span key={request.number}>{request.number} · {({SUBMITTED: locale === "fr" ? "inspection attendue" : "awaiting inspection", INSPECTED: locale === "fr" ? "validation attendue" : "awaiting approval", APPROVED: locale === "fr" ? "approuvé, liquidation requise" : "approved, settlement required", FINANCE_PENDING: locale === "fr" ? "validation Finance" : "Finance approval", REFUND_PENDING: locale === "fr" ? "remboursement à confirmer" : "refund pending"} as Record<string, string>)[request.status] || request.status}{request.salesCreditNote ? ` · ${request.salesCreditNote.number} (${request.salesCreditNote.status})` : ""}</span>)}</div> : null}
           <div className="mt-2 flex min-w-0 flex-wrap items-center justify-between gap-3 text-xs text-dtsc-muted">
             <span>{copy.outstanding} : <strong className="text-dtsc-ink">{money(entry.invoice.outstandingAmount, entry.invoice.currencyCode, locale)}</strong></span>
             <span>{entry.stockPostedAt ? copy.delivered : copy.stockPending}</span>
@@ -550,7 +560,7 @@ export function RetailInvoiceFlowWorkbench({ organizationId, organizationName, l
             {data.checkoutReady && entry.canSubmit ? <Button type="button" onClick={() => setSubmitTarget(entry)}><Send className="h-4 w-4" />{copy.submitDraft}</Button> : null}
             {/* Navigation to collections is a permission-scoped deep link, never a payment action here. */}
              {data.checkoutReady && entry.canCollect && ["ISSUED", "OVERDUE", "PARTIALLY_PAID"].includes(entry.invoice.status) && Number(entry.invoice.outstandingAmount) > 0 ? <Link href={`/enterprise-modules/RETAIL_POS?section=collections&siteId=${encodeURIComponent(entry.siteId)}&invoiceId=${encodeURIComponent(entry.invoice.id)}&invoiceNumber=${encodeURIComponent(entry.invoice.number)}`} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 text-sm font-bold text-emerald-700 transition hover:bg-emerald-500/20 focus-visible:ring-2 focus-visible:ring-emerald-400 dark:text-emerald-300"><ArrowRight className="h-4 w-4" aria-hidden="true" />{copy.collectLink}</Link> : null}
-            {data.checkoutReady && ["ISSUED", "OVERDUE", "PARTIALLY_PAID", "PAID", "CREDIT_NOTE"].includes(entry.invoice.status) ? <RetailInvoiceReturnDialog organizationId={organizationId} invoiceId={entry.invoice.id} invoiceNumber={entry.invoice.number} siteId={entry.siteId} currencyCode={entry.invoice.currencyCode} checkoutLines={entry.lines} invoiceItems={entry.invoice.items} locale={locale} onChanged={() => { void load(page, siteFilter); }} autoOpen={targetReturnInvoiceId === entry.invoice.id} /> : null}
+            {data.checkoutReady && ["ISSUED", "OVERDUE", "PARTIALLY_PAID", "PAID", "CREDIT_NOTE"].includes(entry.invoice.status) ? <RetailInvoiceReturnDialog organizationId={organizationId} invoiceId={entry.invoice.id} invoiceNumber={entry.invoice.number} invoiceStatus={entry.invoice.status} siteId={entry.siteId} currencyCode={entry.invoice.currencyCode} checkoutLines={entry.lines} invoiceItems={entry.invoice.items} locale={locale} onChanged={() => { void load(page, siteFilter); }} autoOpen={targetReturnInvoiceId === entry.invoice.id} /> : null}
           </div>
         </article>
       ))}</div>

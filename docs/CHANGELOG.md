@@ -1,3 +1,12 @@
+## 2026-11-23 — RETAIL #1224 — Reprise guidée des retours historiques et filtrage des factures (candidat DRAFT)
+
+- Registre POS : filtre des 11 statuts Finance, requête validée au serveur avant pagination, compatible boutique/recherche/dates, FR/EN.
+- Indication simultanée du statut de facture et du statut de retour : une facture ISSUED avec retour APPROVED n'est pas considérée comme annulée/comptabilisée.
+- Vue « Reprise des retours historiques » : recherche RIR/INV/CN, étapes SUBMITTED→INSPECTED→APPROVED→FINANCE_PENDING→REFUND_PENDING, indication de la prochaine action, boutique et droits cloisonnés, et lien direct vers le circuit existant. Aucun double avoir/paiement ou mouvement de stock.
+- File d'analyse en lecture seule : les politiques STANDARD des dossiers existants restent immuables et leurs validations Finance indépendantes ne sont jamais contournées. Stock non livré libéré uniquement au statut COMPLETED ou REFUND_PENDING.
+- Tests dédiés QA ajoutés aux Quality Gates. Documentation et matrice C01–C22 : `docs/HOTFIX_1224_RETAIL_HISTORICAL_RETURNS.md`.
+- **Non certifié :** E2E et validation propriétaire en attente. Aucune fusion ni production sur cette branche.
+
 ## 2026-11-23 — RETAIL #1222 — Politique simplifiée et provenance des avoirs (v1.24.2 candidate, DRAFT)
 
 - Nouveau contrat de politique tenant-scoped et interface Administration entreprise FR/EN, modification à rôle propriétaire/admin + step-up et AuditLog ; mode STANDARD conservé par défaut.

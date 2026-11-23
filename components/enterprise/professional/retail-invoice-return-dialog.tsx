@@ -26,6 +26,10 @@ type ReturnRequest = {
   payoutPreviewAmount?: string;
   refundChoice?: "NOW" | "LATER" | null;
   canExpress?: boolean;
+  expressCapAmount?: string;
+  expressCapCurrency?: string;
+  historicalCapEnforced?: boolean;
+  expressLimitFallback?: "FX_RATE_REQUIRED_OR_STALE" | "LIMIT_EXCEEDED" | "STANDARD_APPROVAL_REQUIRED" | null;
   canFinalizeDeferred?: boolean;
   deferredCashDisbursementRequired?: boolean;
   inspectedAt: string | null;
@@ -69,7 +73,7 @@ const translations = {
     refundChoiceLabel: "Traitement après validation", refundChoiceStandard: "Circuit Finance standard",
     refundChoiceNow: "Rembourser immédiatement (espèces réellement remises)",
     refundChoiceLater: "Comptabiliser l’avoir et rembourser plus tard",
-    refundChoiceHelp: "Le montant encaissé remboursable est calculé par le serveur. Mode express sous plafond de 100 USD. Aucun paiement fictif n’est créé pour une facture impayée.",
+    refundChoiceHelp: "Le montant encaissé remboursable est calculé par le serveur. Mode express selon le plafond configuré par le propriétaire. Aucun paiement fictif n’est créé pour une facture impayée.",
     cashHandedOver: "Je confirme avoir réellement remis les espèces au client",
     expressCompleted: "Avoir comptabilisé, stock régularisé et remboursement confirmé.",
     expressDeferred: "Avoir comptabilisé, remboursement enregistré en attente de paiement.",
@@ -90,7 +94,7 @@ const translations = {
     refundChoiceLabel: "Action after approval", refundChoiceStandard: "Standard Finance workflow",
     refundChoiceNow: "Refund now (cash physically handed to customer)",
     refundChoiceLater: "Post credit note and refund later",
-    refundChoiceHelp: "The refundable part of money already collected is computed by the server. Express mode is capped at USD 100. An unpaid invoice never creates a phantom refund.",
+    refundChoiceHelp: "The refundable part of money already collected is computed by the server. The express limit is configured by the company owner. An unpaid invoice never creates a phantom refund.",
     cashHandedOver: "I confirm I have physically handed the cash to the customer",
     expressCompleted: "Credit posted, stock reconciled and cash refund confirmed.",
     expressDeferred: "Credit posted; customer refund recorded as pending.",
@@ -106,8 +110,8 @@ function statusLabel(status: string, copy: typeof translations.fr | typeof trans
     FINANCE_PENDING: copy.financePending, REFUND_PENDING: copy.deferred, REJECTED: copy.rejected, COMPLETED: copy.completed } as Record<string, string>)[status] || copy.unknown;
 }
 
-export function RetailInvoiceReturnDialog({ organizationId, invoiceId, invoiceNumber, siteId, currencyCode, checkoutLines, invoiceItems, locale, onChanged, autoOpen = false }: {
-  organizationId: string; invoiceId: string; invoiceNumber: string; siteId: string; currencyCode: string;
+export function RetailInvoiceReturnDialog({ organizationId, invoiceId, invoiceNumber, invoiceStatus, siteId, currencyCode, checkoutLines, invoiceItems, locale, onChanged, autoOpen = false }: {
+  organizationId: string; invoiceId: string; invoiceNumber: string; invoiceStatus?: string; siteId: string; currencyCode: string;
   checkoutLines: CheckoutLine[]; invoiceItems: InvoiceItem[]; locale: "fr" | "en"; onChanged: () => void; autoOpen?: boolean;
 }) {
   const copy = translations[locale];
@@ -244,6 +248,11 @@ export function RetailInvoiceReturnDialog({ organizationId, invoiceId, invoiceNu
     <Button type="button" variant="outline" onClick={() => setOpen(true)}><RotateCcw className="h-4 w-4" />{copy.trigger}</Button>
     <Dialog open={open} onClose={() => { if (!busy) { setOpen(false); setCreating(false); setAction(null); } }} title={`${copy.title} · ${invoiceNumber}`} description={copy.explain} className="max-w-3xl" presentation="editor">
       <div className="grid min-w-0 gap-4">
+        {invoiceStatus === "PAID" ? <p data-testid="retail-fully-paid-return-guidance" role="note" className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs leading-5 text-dtsc-ink">
+          {locale === "fr"
+            ? "Facture intégralement payée : elle ne peut plus être effacée ni annulée directement. Le retour crée un avoir comptable et le remboursement doit correspondre aux fonds réellement encaissés. Si le plafond express configuré par le propriétaire est dépassé, choisissez le circuit Finance standard. Les articles déjà sortis exigent l'inspection réelle et, le cas échéant, les lots d'origine."
+            : "Fully paid invoice: it cannot be erased or directly voided. A return creates a credit note, with refunds limited to actually collected funds. Above the owner-configured per-invoice express limit, use Standard Finance workflow. Posted goods require real inspection and original batches when applicable."}
+        </p> : null}
         {error ? <p role="alert" className="rounded-lg bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-200">{error}</p> : null}
         <div className="flex min-w-0 flex-wrap justify-between gap-2">
           <Button type="button" variant="outline" disabled={loading || busy} onClick={() => void load(page)}>{copy.refresh}</Button>
@@ -276,6 +285,13 @@ export function RetailInvoiceReturnDialog({ organizationId, invoiceId, invoiceNu
           </label> : null}
           {action.type === "PREPARE_FINANCE" ? <EnterpriseApproverSelect organizationId={organizationId} moduleCode="FINANCE_RECEIVABLES" locale={locale} name="financeApproverUserId" label={copy.financeApprover} disabled={busy} required /> : null}
           {action.type !== "PREPARE_FINANCE" ? <label className="grid min-w-0 gap-1 text-sm font-semibold text-dtsc-ink">{action.type === "INSPECT" ? copy.inspectionNotes : action.type === "REJECT" ? copy.rejectionReason : ["SETTLE_FINANCE", "COMPLETE_DEFERRED"].includes(action.type) ? copy.settlementReason : copy.decisionReason}<textarea className="min-h-28 w-full min-w-0 rounded-lg border border-dtsc-border bg-dtsc-surface p-3 text-base" minLength={action.type === "INSPECT" ? 5 : ["REJECT", "SETTLE_FINANCE", "COMPLETE_DEFERRED"].includes(action.type) ? 4 : undefined} maxLength={1000} required={["INSPECT", "REJECT", "SETTLE_FINANCE", "COMPLETE_DEFERRED"].includes(action.type)} value={actionNotes} disabled={busy} onChange={(event) => setActionNotes(event.target.value)} /></label> : null}
+          {action.type === "APPROVE" && action.request.expressLimitFallback ? <p role="note" data-testid="retail-return-standard-finance-fallback" className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm leading-5 text-dtsc-ink">
+            {action.request.expressLimitFallback === "LIMIT_EXCEEDED"
+              ? locale === "fr" ? `Le remboursement dépasse le plafond express configuré (${action.request.expressCapAmount || "—"} ${action.request.expressCapCurrency || ""}). ${action.request.historicalCapEnforced ? "Le plafond historique de la demande s’applique également. " : ""}Utilisez le circuit Finance standard avec les intervenants indépendants.` : `The refund exceeds the configured express limit (${action.request.expressCapAmount || "—"} ${action.request.expressCapCurrency || ""}). ${action.request.historicalCapEnforced ? "The return also retains its historical limit. " : ""}Use the Standard Finance workflow with independent actors.`
+              : action.request.expressLimitFallback === "FX_RATE_REQUIRED_OR_STALE"
+                ? locale === "fr" ? "Aucun taux Finance récent ne permet de vérifier le plafond express. Utilisez le circuit Finance standard, ou mettez les taux à jour avant d'actualiser." : "No fresh Finance exchange rate is available for the express cap. Use Standard Finance workflow or update the exchange rate."
+                : locale === "fr" ? "Le remboursement express n'est pas autorisé pour ce dossier ; terminez la procédure Finance standard." : "Express refund is not authorized for this return. Complete the standard Finance workflow."}
+          </p> : null}
           {action.type === "APPROVE" && action.request.canExpress && Number(action.request.payoutPreviewAmount || 0) > 0 ? <div className="grid gap-3 rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-3">
             <h4 className="text-sm font-black text-dtsc-ink">{copy.refundChoiceLabel} · {money(action.request.payoutPreviewAmount || "0")}</h4>
             <p className="text-xs leading-5 text-dtsc-muted">{copy.refundChoiceHelp}</p>

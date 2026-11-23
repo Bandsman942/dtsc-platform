@@ -1,6 +1,6 @@
 {
   "name": "dtsc-platform",
-  "version": "1.24.2",
+  "version": "1.24.3",
   "private": true,
   "engines": {
     "node": "22.x"
@@ -485,7 +485,8 @@
     "qa:erp-seven-design2-1200": "node scripts/qa-erp-seven-design2-1200.mjs",
     "qa:retail-kin-forex-ticket2-1218": "node scripts/qa-retail-kin-forex-ticket2-1218.mjs",
     "qa:retail-kin-forex-stock-report-1221": "node scripts/qa-retail-kin-forex-stock-report-1221.mjs",
-    "qa:hotfix-1222": "node scripts/qa-hotfix-1222-retail-returns.mjs"
+    "qa:hotfix-1222": "node scripts/qa-hotfix-1222-retail-returns.mjs",
+    "qa:hotfix-1224": "node scripts/qa-hotfix-1224-retail-recovery.mjs"
   },
   "dependencies": {
     "@ai-sdk/gateway": "2.0.27",
