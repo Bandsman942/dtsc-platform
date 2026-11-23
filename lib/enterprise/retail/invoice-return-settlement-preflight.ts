@@ -59,14 +59,14 @@ export async function assertRetailInvoiceReturnSettlementReadinessTx(
   // to have inspected the goods. Legacy returns and malformed snapshots retain
   // the existing four-eyes invariant. The decision service already checked
   // the designated approver and each per-site delegation at decision time.
-  const snapshot = request.returnPolicySnapshot;
-  const simplified = snapshot && typeof snapshot === "object" && !Array.isArray(snapshot) &&
-    snapshot.version === 1 && snapshot.mode === "SIMPLIFIED";
-  const requesterInspection = simplified && snapshot.allowRequesterInspection === true &&
+  const rawSnapshot = request.returnPolicySnapshot;
+  const policy = rawSnapshot && typeof rawSnapshot === "object" && !Array.isArray(rawSnapshot) ? rawSnapshot : null;
+  const simplified = policy?.version === 1 && policy.mode === "SIMPLIFIED";
+  const requesterInspection = simplified && policy?.allowRequesterInspection === true &&
     request.inspectionMode === "SELF_ATTESTED" && request.inspectedByUserId === request.requestedByUserId;
   const delegatedSameActor = request.requestedByUserId === request.approverUserId;
   const verifiedDecisionChain = independentlyVerified ||
-    Boolean(requesterInspection && (!delegatedSameActor || snapshot.allowDelegatedSelfApproval === true));
+    Boolean(requesterInspection && (!delegatedSameActor || policy?.allowDelegatedSelfApproval === true));
   if (request.status !== expectedStatus || !request.inspectedAt ||
       !request.inspectedByUserId || !request.inspectionNotes || request.inspectionNotes.trim().length < 5 ||
       !request.decidedByUserId || request.decidedByUserId !== request.approverUserId ||
