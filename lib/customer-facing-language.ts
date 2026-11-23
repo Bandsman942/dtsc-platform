@@ -17,6 +17,40 @@ const GENERIC_ERROR: Bilingual = {
 };
 
 const ERROR_MESSAGES: Record<string, Bilingual> = {
+  // RETAIL #1224: a fully paid invoice is reversible only through a real
+  // credit/refund workflow, never by voiding its posted Finance invoice.
+  RETAIL_INVOICE_RETURN_PAID_REQUIRED: {
+    fr: "Cette facture ne peut pas être annulée directement. Vérifiez son état et le rapprochement des encaissements dans Finance, puis créez une demande de retour/avoir depuis le POS.",
+    en: "This invoice cannot be voided directly. Verify its payment allocations and status in Finance, then request a return/credit note from POS.",
+  },
+  RETAIL_RETURN_EXPRESS_LIMIT_EXCEEDED: {
+    fr: "Ce remboursement dépasse le plafond express cumulé de 100 USD par facture (conversion Finance incluse). Choisissez « Circuit Finance standard » : un préparateur, un validateur et un liquidateur indépendants traiteront l'avoir et le remboursement.",
+    en: "This refund exceeds the cumulative USD 100 express cap per invoice (including Finance currency conversion). Choose Standard Finance workflow with independent preparer, approver and settlement officer.",
+  },
+  RETAIL_RETURN_EXPRESS_FX_RATE_STALE: {
+    fr: "Le taux de change Finance nécessaire au contrôle du plafond express est périmé. Actualisez le taux dans Finance ou choisissez le circuit standard, sans forcer le remboursement.",
+    en: "The Finance exchange rate required for the express cap is outdated. Update the rate in Finance or use the standard workflow.",
+  },
+  RETAIL_RETURN_EXPRESS_EXTERNAL_PAYMENT_PENDING: {
+    fr: "Cette vente a été encaissée par un moyen externe. Choisissez un remboursement différé ou le circuit Finance standard ; ne confirmez pas une remise d'espèces qui n'a pas eu lieu.",
+    en: "This sale was collected using an external payment method. Choose deferred refund or Standard Finance workflow; never attest to cash not actually handed out.",
+  },
+  RETAIL_RETURN_EXPRESS_POLICY_DISABLED: {
+    fr: "Le mode express n'est pas autorisé pour ce retour ou son ancienne politique. Poursuivez par le circuit Finance standard avec les intervenants indépendants.",
+    en: "Express mode is not authorized for this return or its original policy. Continue through Standard Finance workflow with independent actors.",
+  },
+  RETAIL_INVOICE_RETURN_BATCH_SELECTION_REQUIRED: {
+    fr: "Cette vente payée a déjà sorti le stock. Pour enregistrer un retour physique, sélectionnez les lots réellement reçus, puis faites confirmer leur inspection avant réintégration.",
+    en: "Stock was already posted for this paid sale. Select the actual returned batches and confirm their physical inspection before restocking.",
+  },
+  RETAIL_INVOICE_RETURN_SETTLEMENT_FUNDS_INSUFFICIENT: {
+    fr: "Le remboursement ne correspond pas encore à des encaissements confirmés et alloués à la facture. Vérifiez les paiements d'origine et leur rapprochement dans Finance.",
+    en: "The refund is not covered by confirmed payments allocated to the invoice. Check the original payment allocations and reconciliation in Finance.",
+  },
+  RETAIL_INVOICE_RETURN_FINANCE_SOURCE_MISMATCH: {
+    fr: "La source ou le compte du remboursement ne correspond pas aux encaissements confirmés de cette facture. Vérifiez les modes de paiement et les comptes de la boutique dans Finance.",
+    en: "The refund source/account does not match confirmed collections for this invoice. Verify payment methods and store accounts in Finance.",
+  },
   RETAIL_INVOICE_RETURN_FINANCE_APPROVER_INDEPENDENT_REQUIRED: { fr: "Désignez un autre validateur Finance autorisé pour les créances et remboursements de cette boutique.", en: "Select a separate Finance approver authorized for this store's receivables and refunds." },
   RETAIL_INVOICE_RETURN_SETTLEMENT_PAYOUT_CONFLICT: { fr: "Le trop-perçu a évolué depuis la préparation Finance. Réconciliez les paiements et actualisez la demande.", en: "The refundable excess has changed since Finance preparation. Reconcile payments and refresh the request." },
   RETAIL_LEGACY_SALE_DISABLED_USE_INVOICE: {
