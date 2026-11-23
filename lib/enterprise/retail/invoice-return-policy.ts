@@ -23,7 +23,7 @@ export const legacyRetailInvoiceReturnPolicySchema = z.object({
 // currency. The number of decimal places and storage size are technical
 // constraints, NOT a commercial limit. The API checks the currency against
 // Finance before saving it; the engine checks it again at settlement.
-const limitAmount = z.string().regex(/^(?:0|[1-9][0-9]{0,14})(?:\\.[0-9]{1,2})?$/)
+const limitAmount = z.string().regex(/^(?:0|[1-9][0-9]{0,14})(?:\.[0-9]{1,2})?$/)
   .refine(value => new Prisma.Decimal(value).greaterThan(0));
 export const retailInvoiceReturnPolicySchema = z.object({
   version: z.literal(2),
