@@ -61,7 +61,7 @@ export async function assertRetailInvoiceReturnSettlementReadinessTx(
   // the designated approver and each per-site delegation at decision time.
   const rawSnapshot = request.returnPolicySnapshot;
   const policy = rawSnapshot && typeof rawSnapshot === "object" && !Array.isArray(rawSnapshot) ? rawSnapshot : null;
-  const simplified = policy?.version === 1 && policy.mode === "SIMPLIFIED";
+  const simplified = (policy?.version === 1 || policy?.version === 2) && policy.mode === "SIMPLIFIED";
   const currentPolicyConfig = request.inspectionMode === "SELF_ATTESTED"
     ? await tx.enterpriseRetailConfiguration.findUnique({
       where: { organizationId }, select: { settingsJson: true },
