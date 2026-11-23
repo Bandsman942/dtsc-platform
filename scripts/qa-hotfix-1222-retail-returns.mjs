@@ -58,11 +58,11 @@ assert.equal(readRetailInvoiceReturnPolicy({ retailInvoiceReturnPolicy: {
   ...simple, expressRefundLimitAmount: "250000000.123",
 } }).mode, "STANDARD", "Amounts must respect Finance two-decimal precision");
 const engine = read("lib/enterprise/retail/invoice-return-express-authorization.ts");
-assert.doesNotMatch(engine, /cumulativeUSD\\.greaterThan\\(100\\)/,
+assert.doesNotMatch(engine, /cumulativeUSD\.greaterThan\(100\)/,
   "No hardcoded USD 100 ceiling may remain on V2 returns");
-assert.match(engine, /const limits = \\[snapshot, live\\]/,
+assert.match(engine, /const limits = \[snapshot, live\]/,
   "Both historical immutable and current owner limits are enforced");
-assert.match(engine, /policy\\.expressRefundLimitCurrency/,
+assert.match(engine, /policy\.expressRefundLimitCurrency/,
   "Limits must be compared in each policy currency");
 const stored = mergeRetailInvoiceReturnPolicy({ invoiceCheckoutEnabled: true }, simple);
 assert.equal(stored.invoiceCheckoutEnabled, true, "Existing Retail settings preserved");
