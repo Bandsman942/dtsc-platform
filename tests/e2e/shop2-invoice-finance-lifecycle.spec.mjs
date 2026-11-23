@@ -33,9 +33,9 @@ let disposableRateLimitResets = 0;
 async function clearDisposableShop2RateLimits() {
   const token = process.env.CI_REDIS_REST_TOKEN || "";
   if (process.env.CI !== "true" ||
-      !/\\/dtsc_shop2_behavioral(?:\\?|$)/.test(process.env.DATABASE_URL || "") ||
+      !/\/dtsc_shop2_behavioral(?:\?|$)/.test(process.env.DATABASE_URL || "") ||
       process.env.UPSTASH_REDIS_REST_URL !== "http://127.0.0.1:8079" ||
-      !/^dtsc-ci-\\d+-\\d+$/.test(token) ||
+      !/^dtsc-ci-\d+-\d+$/.test(token) ||
       ++disposableRateLimitResets > 12) {
     throw new Error("E2E_RATE_LIMIT_RESET_REQUIRES_DISPOSABLE_CI_REDIS");
   }
