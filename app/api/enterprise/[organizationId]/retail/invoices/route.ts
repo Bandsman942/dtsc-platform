@@ -30,6 +30,10 @@ export async function GET(req: Request, { params }: Params) {
   const auth = await authorizeCheckoutAccess(req, organizationId, false);
   if (!auth.ok) return auth.response;
   const { page, pageSize, status } = retailListParams(req);
+  const supportedStatuses = ["DRAFT", "PENDING_APPROVAL", "APPROVED", "ISSUED", "OVERDUE", "PARTIALLY_PAID", "PAID", "CREDIT_NOTE", "REJECTED", "CANCELLED", "VOIDED"];
+  if (status && !supportedStatuses.includes(status)) {
+    return retailErrorResponse(new EnterpriseRetailError("RETAIL_INVOICE_STATUS_FILTER_INVALID", 400));
+  }
   const url = new URL(req.url);
   const siteId = url.searchParams.get("siteId") || undefined;
   const collectionsOnly = url.searchParams.get("view") === "collections";
@@ -71,7 +75,10 @@ export async function GET(req: Request, { params }: Params) {
   const [items, total, sites, configuration] = await Promise.all([
     prisma.enterpriseRetailInvoiceCheckout.findMany({
       where, orderBy: { createdAt: "desc" }, skip: (page - 1) * pageSize, take: pageSize,
-      include: { lines: true, invoice: { include: { items: true } }, site: { select: { id: true, name: true, code: true } } },
+      include: { lines: true, invoice: { include: { items: true } }, site: { select: { id: true, name: true, code: true } },
+        returnRequests: { where: { status: { in: ["SUBMITTED", "INSPECTED", "APPROVED", "FINANCE_PENDING", "REFUND_PENDING"] } },
+          orderBy: { createdAt: "desc" }, take: 3,
+          select: { number: true, status: true, salesCreditNote: { select: { number: true, status: true } } } } },
     }),
     prisma.enterpriseRetailInvoiceCheckout.count({ where }),
     prisma.enterpriseSite.findMany({
