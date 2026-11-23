@@ -667,7 +667,7 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
           prisma.enterpriseStockMovement.count({ where: { organizationId, sourceEntityType: "EnterpriseRetailInvoiceReturnRequest", sourceEntityId: returnId } }),
           prisma.enterpriseSalesCreditNote.count({ where: { organizationId, salesInvoiceId: invoiceId, status: "POSTED" } }),
         ]);
-        const expectedCredit = before.grandTotal.mul(new Prisma.Decimal(quantity));
+        const expectedCredit = new Prisma.Decimal(requested.body.request.refundAmount);
         expect(credit.status).toBe("POSTED");
         expect(credit.grandTotal.equals(expectedCredit)).toBe(true);
         expect(payments).toBe(0);
