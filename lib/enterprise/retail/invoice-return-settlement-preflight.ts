@@ -62,7 +62,17 @@ export async function assertRetailInvoiceReturnSettlementReadinessTx(
   const rawSnapshot = request.returnPolicySnapshot;
   const policy = rawSnapshot && typeof rawSnapshot === "object" && !Array.isArray(rawSnapshot) ? rawSnapshot : null;
   const simplified = policy?.version === 1 && policy.mode === "SIMPLIFIED";
+  const currentPolicyConfig = request.inspectionMode === "SELF_ATTESTED"
+    ? await tx.enterpriseRetailConfiguration.findUnique({
+      where: { organizationId }, select: { settingsJson: true },
+    }) : null;
+  const liveSettings = currentPolicyConfig?.settingsJson;
+  const liveStoredPolicy = liveSettings && typeof liveSettings === "object" && !Array.isArray(liveSettings)
+    ? liveSettings.retailInvoiceReturnPolicy : null;
+  const livePolicy = liveStoredPolicy && typeof liveStoredPolicy === "object" && !Array.isArray(liveStoredPolicy)
+    ? liveStoredPolicy : null;
   const requesterInspection = simplified && policy?.allowRequesterInspection === true &&
+    livePolicy?.mode === "SIMPLIFIED" && livePolicy.allowRequesterInspection === true &&
     request.inspectionMode === "SELF_ATTESTED" && request.inspectedByUserId === request.requestedByUserId;
   const delegatedSameActor = request.requestedByUserId === request.approverUserId;
   const verifiedDecisionChain = independentlyVerified ||
