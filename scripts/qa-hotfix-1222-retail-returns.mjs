@@ -32,21 +32,42 @@ assert.equal(standard.mode, "STANDARD", "No legacy tenant can enter simplified s
 assert.equal(standard.allowRequesterInspection, false);
 assert.equal(readRetailInvoiceReturnPolicy({ retailInvoiceReturnPolicy: { mode: "SIMPLIFIED" } }).mode, "STANDARD",
   "Malformed policy must fail closed");
-const simple = {
+const legacy = {
   version: 1, mode: "SIMPLIFIED", allowRequesterInspection: true,
   allowDelegatedSelfApproval: true, autoPostCreditNote: true,
   promptImmediateRefund: true, scope: "ALL_SITES",
   expressRefundLimitAmount: 100, expressRefundLimitCurrency: "USD",
 };
+assert.equal(readRetailInvoiceReturnPolicySnapshot(legacy).mode, "SIMPLIFIED",
+  "Existing V1 USD snapshots must remain readable");
 assert.equal(readRetailInvoiceReturnPolicy({ retailInvoiceReturnPolicy: {
-  ...simple, expressRefundLimitAmount: 100.01,
-} }).mode, "STANDARD", "Express policy over USD 100 must fail closed");
-assert.match(read("lib/enterprise/retail/invoice-return-express-authorization.ts"),
-  /cumulativeUSD\.greaterThan\(100\)/, "Legacy snapshots cannot bypass the fixed USD 100 hard cap");
+  ...legacy, expressRefundLimitAmount: 100.01,
+} }).mode, "STANDARD", "Only historical V1 remains restricted to its original 100 USD contract");
+const simple = {
+  ...legacy, version: 2, expressRefundLimitAmount: "250000.00",
+  expressRefundLimitCurrency: "CDF",
+};
+assert.equal(readRetailInvoiceReturnPolicy({ retailInvoiceReturnPolicy: simple }).version, 2);
+assert.equal(readRetailInvoiceReturnPolicy({ retailInvoiceReturnPolicy: {
+  ...simple, expressRefundLimitAmount: "250000000.00",
+} }).mode, "SIMPLIFIED", "V2 must support a freely owner-configured threshold above 100 without a fixed USD cap");
+assert.equal(readRetailInvoiceReturnPolicy({ retailInvoiceReturnPolicy: {
+  ...simple, expressRefundLimitAmount: "0",
+} }).mode, "STANDARD", "Zero amount must not activate a V2 express refund");
+assert.equal(readRetailInvoiceReturnPolicy({ retailInvoiceReturnPolicy: {
+  ...simple, expressRefundLimitAmount: "250000000.123",
+} }).mode, "STANDARD", "Amounts must respect Finance two-decimal precision");
+const engine = read("lib/enterprise/retail/invoice-return-express-authorization.ts");
+assert.doesNotMatch(engine, /cumulativeUSD\\.greaterThan\\(100\\)/,
+  "No hardcoded USD 100 ceiling may remain on V2 returns");
+assert.match(engine, /const limits = \\[snapshot, live\\]/,
+  "Both historical immutable and current owner limits are enforced");
+assert.match(engine, /policy\\.expressRefundLimitCurrency/,
+  "Limits must be compared in each policy currency");
 const stored = mergeRetailInvoiceReturnPolicy({ invoiceCheckoutEnabled: true }, simple);
 assert.equal(stored.invoiceCheckoutEnabled, true, "Existing Retail settings preserved");
 assert.equal(readRetailInvoiceReturnPolicy(stored).mode, "SIMPLIFIED");
-assert.equal(readRetailInvoiceReturnPolicySnapshot(simple).mode, "SIMPLIFIED");
+assert.equal(readRetailInvoiceReturnPolicySnapshot(simple).version, 2);
 assert.equal(readRetailInvoiceReturnPolicySnapshot(null).mode, "STANDARD");
 assert.equal(canSelfInspectRetailReturn(simple, "requester", "requester", true, true), true);
 assert.equal(canSelfInspectRetailReturn(simple, "requester", "requester", false, true), false);
