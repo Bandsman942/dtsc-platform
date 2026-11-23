@@ -409,7 +409,7 @@ export async function settleRetailInvoiceReturnFinanceTx(
         select: { siteId: true, currencyCode: true, operationalBalance: true },
       });
       if (!account || account.siteId !== plan.siteId || account.currencyCode !== plan.currencyCode ||
-          account.operationalBalance.lessThan(payout.amount)) {
+          (expressChoice !== "LATER" && account.operationalBalance.lessThan(payout.amount))) {
         throw fail("RETAIL_INVOICE_RETURN_REFUND_ACCOUNT_INSUFFICIENT");
       }
     }
