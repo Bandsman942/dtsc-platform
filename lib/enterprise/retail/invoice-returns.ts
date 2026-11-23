@@ -214,7 +214,7 @@ export async function listRetailInvoiceReturnRequests(
       const physicalStock = Boolean(checkout.stockPostedAt) &&
         item.lines.some((line) => Boolean(line.checkoutLine.inventoryItemId));
       const selfInspected = canSelfInspectRetailReturn(policy, item.requestedByUserId, actorUserId,
-        eligibleSelfInspector, capabilities.canInspect || !physicalStock);
+        eligibleSelfInspector, true);
       const delegatedSelfDecision = selfCanDecide ||
         Boolean(member && RETAIL_OWNER_ROLES.has(member.role) &&
           policy.mode === "SIMPLIFIED" && policy.allowDelegatedSelfApproval);
@@ -241,7 +241,7 @@ export async function listRetailInvoiceReturnRequests(
           item.preparedByUserId].includes(actorUserId),
       requiresPhysicalInspection: physicalStock,
       canSelfInspect: selfInspected,
-      canInspect: (capabilities.canInspect ||
+      canInspect: (capabilities.canInspect || selfInspected ||
           ((!checkout.stockPostedAt || item.lines.every((line) => !line.checkoutLine.inventoryItemId)) && independentFinanceVerifier.allowed)) &&
         item.status === "SUBMITTED" &&
         ((item.requestedByUserId !== actorUserId && item.approverUserId !== actorUserId) || selfInspected),
@@ -582,11 +582,8 @@ export async function inspectRetailInvoiceReturnRequest(
     await requireRetailSiteCapability(
       organizationId, actorUserId, request.checkout.siteId, "VIEW_SALES", tx, { requireAssignment: true },
     );
-    if (physicallyDeliveredGoods) {
-      await requireRetailSiteCapability(
-        organizationId, actorUserId, request.checkout.siteId, "MANAGE_STOCK", tx, { requireAssignment: true },
-      );
-    }
+    // An authorized manager's SELF_ATTESTED receipt is evidence only.
+    // It must not grant MANAGE_STOCK or allow physical stock mutations.
     const [verifier, membership] = await Promise.all([
       tx.enterpriseRetailSiteAssignment.findUnique({ where: { organizationId_siteId_userId: { organizationId, siteId: request.checkout.siteId, userId: actorUserId } }, select: { isActive: true, roleCode: true, permissionsJson: true } }),
       tx.organizationMember.findFirst({ where: { organizationId, userId: actorUserId, status: "ACTIVE", removedAt: null }, select: { role: true } }),
@@ -597,8 +594,15 @@ export async function inspectRetailInvoiceReturnRequest(
     const eligibleSelfInspector = Boolean(membership && (RETAIL_OWNER_ROLES.has(membership.role) ||
       (verifier?.isActive && verifier.roleCode === "MANAGER")));
     const selfInspector = canSelfInspectRetailReturn(policy, request.requestedByUserId, actorUserId,
-      eligibleSelfInspector, canInspectGoods || !physicallyDeliveredGoods);
-    if (physicallyDeliveredGoods && !canInspectGoods) throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_INSPECTOR_INELIGIBLE", 403);
+      eligibleSelfInspector, true);
+    if (physicallyDeliveredGoods && !selfInspector) {
+      await requireRetailSiteCapability(
+        organizationId, actorUserId, request.checkout.siteId, "MANAGE_STOCK", tx, { requireAssignment: true },
+      );
+    }
+    if (physicallyDeliveredGoods && !canInspectGoods && !selfInspector) {
+      throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_INSPECTOR_INELIGIBLE", 403);
+    }
     if (!physicallyDeliveredGoods && !canInspectGoods && !selfInspector) {
       const finance = await resolveEnterpriseModuleAccess({ organizationId, userId: actorUserId, moduleCode: "FINANCE_RECEIVABLES", action: "approve" });
       if (!finance.allowed) throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_INSPECTOR_INELIGIBLE", 403);
