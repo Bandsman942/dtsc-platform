@@ -38,6 +38,11 @@ const simple = {
   promptImmediateRefund: true, scope: "ALL_SITES",
   expressRefundLimitAmount: 100, expressRefundLimitCurrency: "USD",
 };
+assert.equal(readRetailInvoiceReturnPolicy({ retailInvoiceReturnPolicy: {
+  ...simple, expressRefundLimitAmount: 100.01,
+} }).mode, "STANDARD", "Express policy over USD 100 must fail closed");
+assert.match(read("lib/enterprise/retail/invoice-return-express-authorization.ts"),
+  /cumulativeUSD\.greaterThan\(100\)/, "Legacy snapshots cannot bypass the fixed USD 100 hard cap");
 const stored = mergeRetailInvoiceReturnPolicy({ invoiceCheckoutEnabled: true }, simple);
 assert.equal(stored.invoiceCheckoutEnabled, true, "Existing Retail settings preserved");
 assert.equal(readRetailInvoiceReturnPolicy(stored).mode, "SIMPLIFIED");
