@@ -37,7 +37,7 @@ export async function readActiveRetailInvoiceStockHoldsTx(
       stockLotId: true,
       lotAllocations: true,
       invoiceItem: { select: { quantity: true } },
-      returnLines: { where: { request: { status: "COMPLETED" } }, select: { quantity: true } },
+      returnLines: { where: { request: { status: { in: ["COMPLETED", "REFUND_PENDING"] } } }, select: { quantity: true } },
       checkout: { select: { warehouseId: true } },
     },
   });
