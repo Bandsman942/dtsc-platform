@@ -67,6 +67,18 @@ assert.match(service, /requireRetailSiteCapability/, "Site boundary must remain 
 const settlement = read("lib/enterprise/retail/invoice-return-settlement-preflight.ts");
 assert.match(settlement, /requesterInspection/, "Self inspection must be recognized by settlement preflight");
 assert.match(settlement, /verifiedDecisionChain/, "Invalid historical request must remain blocked");
+const unpaidExpress = read("lib/enterprise/retail/invoice-return-unpaid-express.ts");
+assert.match(unpaidExpress, /invoice\.amountPaid\.isZero\(\)/, "Express must be restricted to unpaid invoices");
+assert.match(unpaidExpress, /checkout\.stockPostedAt/, "Express must not return already shipped stock without canonical settlement");
+assert.match(unpaidExpress, /plan\.payoutAmount\.isZero\(\)/, "Zero refund payout is mandatory");
+assert.match(service, /settleUnpaidRetailInvoiceCreditTx\(/, "Decision service must invoke atomic zero-payout settlement inside its own transaction");
+assert.match(unpaidExpress, /postBusinessEventTx/, "Use the canonical journal posting");
+assert.match(unpaidExpress, /"COMPLETED"/, "Return should be completed in the same transaction");
+assert.match(unpaidExpress, /refundPayoutAmount: new Prisma\.Decimal\(0\)/, "Never create a phantom refund");
+const e2eSource = read("tests/e2e/shop2-invoice-finance-lifecycle.spec.mjs");
+assert.match(e2eSource, /exerciseExpressUnpaidCredit/, "HTTP and PostgreSQL acceptance must cover unpaid invoices");
+assert.match(e2eSource, /quantity: "0\.5"/, "HTTP and PostgreSQL acceptance must cover partial credits");
+assert.match(e2eSource, /financePayload\.items\[0\]\.retailOrigin/, "HTTP and PostgreSQL acceptance must check Finance provenance");
 const creditRoute = read("app/api/enterprise/[organizationId]/sales-credit-notes/route.ts");
 assert.match(creditRoute, /retailOrigin:/, "Finance must surface canonical Retail source");
 assert.match(creditRoute, /!retailByInvoice\.has\(item\.salesInvoiceId\)/, "Finance direct posting must be hidden");
