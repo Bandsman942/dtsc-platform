@@ -68,7 +68,7 @@ const settlement = read("lib/enterprise/retail/invoice-return-settlement-preflig
 assert.match(settlement, /requesterInspection/, "Self inspection must be recognized by settlement preflight");
 assert.match(settlement, /verifiedDecisionChain/, "Invalid historical request must remain blocked");
 const unpaidExpress = read("lib/enterprise/retail/invoice-return-unpaid-express.ts");
-assert.match(unpaidExpress, /invoice\.amountPaid\.isZero\(\)/, "Express must be restricted to unpaid invoices");
+assert.match(unpaidExpress, /plan\.payoutAmount\.isZero\(\)/, "Express must remain strictly zero-payout even for partially paid invoices");
 assert.match(unpaidExpress, /checkout\.stockPostedAt/, "Express must not return already shipped stock without canonical settlement");
 assert.match(unpaidExpress, /plan\.payoutAmount\.isZero\(\)/, "Zero refund payout is mandatory");
 assert.match(service, /settleUnpaidRetailInvoiceCreditTx\(/, "Decision service must invoke atomic zero-payout settlement inside its own transaction");
