@@ -11,6 +11,7 @@ import { resolveEnterpriseModuleAccess, resolveEnterpriseModuleCapabilities } fr
 import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
 import { requireRetailSiteCapability, RETAIL_OWNER_ROLES, siteStaffCapabilities, hasRetailSelfApprovalGrant } from "@/lib/enterprise/retail/site-access";
 import { withRetailTransactionRetry } from "@/lib/enterprise/retail/transaction-retry";
+import { settleUnpaidRetailInvoiceCreditTx } from "@/lib/enterprise/retail/invoice-return-unpaid-express";
 import { readRetailInvoiceReturnPolicy, readRetailInvoiceReturnPolicySnapshot, canSelfInspectRetailReturn, type RetailInvoiceReturnPolicy } from "@/lib/enterprise/retail/invoice-return-policy";
 import { prisma } from "@/lib/prisma";
 
@@ -569,6 +570,15 @@ export async function decideRetailInvoiceReturnRequest(
         ownerGrantedSelfApproval: request.requestedByUserId === actorUserId,
         ...(input.reason ? { reason: input.reason } : {}) },
     });
+    // An approved request with ZERO prior payment and no physical stock exit
+    // can post its credit note in this same transaction. For any paid or
+    // fulfilled invoice, retain the existing Finance settlement workflow.
+    if (input.decision === "APPROVE") {
+      const express = await settleUnpaidRetailInvoiceCreditTx(
+        tx, organizationId, invoiceId, requestId, actorUserId,
+      );
+      if (express) return express;
+    }
     return updated;
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 30000 }));
 }
