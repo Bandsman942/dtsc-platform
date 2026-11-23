@@ -53,14 +53,38 @@ export async function GET(req: Request, { params }: Params) {
     select: { targetEntityId: true },
   }) : [];
   const assignedIds = new Set(approvals.map((approval) => approval.targetEntityId));
+  // A Retail credit belongs to the return/settlement domain, even when the
+  // historical credit has no valid return binding yet. Never offer direct
+  // Finance posting on a checkout invoice.
+  const invoiceIds = [...new Set(items.map((item) => item.salesInvoiceId))];
+  const [retailCheckouts, linkedReturns] = await Promise.all([
+    invoiceIds.length ? prisma.enterpriseRetailInvoiceCheckout.findMany({
+      where: { organizationId, salesInvoiceId: { in: invoiceIds } },
+      select: { salesInvoiceId: true, siteId: true },
+    }) : Promise.resolve([]),
+    items.length ? prisma.enterpriseRetailInvoiceReturnRequest.findMany({
+      where: { organizationId, salesCreditNoteId: { in: items.map((item) => item.id) } },
+      select: { id: true, number: true, status: true, salesCreditNoteId: true },
+    }) : Promise.resolve([]),
+  ]);
+  const retailByInvoice = new Map(retailCheckouts.map((checkout) => [checkout.salesInvoiceId, checkout]));
+  const returnByCredit = new Map(linkedReturns.map((request) => [request.salesCreditNoteId, request]));
   const capabilities = auth.access.capabilities;
   const resultItems = items.map((item) => ({
     ...item,
+    retailOrigin: retailByInvoice.has(item.salesInvoiceId) ? {
+      invoiceId: item.salesInvoiceId,
+      invoiceNumber: item.salesInvoice.number,
+      siteId: retailByInvoice.get(item.salesInvoiceId)!.siteId,
+      returnRequestId: returnByCredit.get(item.id)?.id || null,
+      returnNumber: returnByCredit.get(item.id)?.number || null,
+      returnStatus: returnByCredit.get(item.id)?.status || "UNLINKED",
+    } : null,
     capabilities: {
       canSubmit: capabilities.canSubmit && ["DRAFT", "REJECTED"].includes(item.status) && item.createdByUserId === auth.session.userId,
       canApprove: capabilities.canApprove && item.status === "PENDING_APPROVAL" && assignedIds.has(item.id),
       canReject: capabilities.canApprove && item.status === "PENDING_APPROVAL" && assignedIds.has(item.id),
-      canPost: capabilities.canManage && item.status === "APPROVED",
+      canPost: capabilities.canManage && item.status === "APPROVED" && !retailByInvoice.has(item.salesInvoiceId),
     },
   }));
 

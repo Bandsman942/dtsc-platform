@@ -35,7 +35,7 @@ const tx = {
   } },
   enterpriseRetailInvoiceReturnLine: {
     findMany: async ({ where }) => {
-      assert.equal(where.request.status.in.join(","), "SUBMITTED,INSPECTED,APPROVED,FINANCE_PENDING,COMPLETED");
+      assert.equal(where.request.status.in.join(","), "SUBMITTED,INSPECTED,APPROVED,FINANCE_PENDING,REFUND_PENDING,COMPLETED");
       return state.reserved;
     },
     createMany: async ({ data }) => {
@@ -147,6 +147,38 @@ vm.runInNewContext(ts.transpileModule(source, {
     };
     if (id === "@/lib/enterprise/retail/transaction-retry") return {
       withRetailTransactionRetry: async (fn) => fn(),
+    };
+    // Legacy fixture never activates the new opt-in policy. Keep the old
+    // independent-validator contract: no self-inspection, no auto-posting.
+    if (id === "@/lib/enterprise/retail/invoice-return-policy") return {
+      readRetailInvoiceReturnPolicy: () => ({ version: 1, mode: "STANDARD",
+        allowRequesterInspection: false, allowDelegatedSelfApproval: false,
+        autoPostCreditNote: false, promptImmediateRefund: false, scope: "ALL_SITES",
+        expressRefundLimitAmount: 100, expressRefundLimitCurrency: "USD" }),
+      readRetailInvoiceReturnPolicySnapshot: () => ({ version: 1, mode: "STANDARD",
+        allowRequesterInspection: false, allowDelegatedSelfApproval: false,
+        autoPostCreditNote: false, promptImmediateRefund: false, scope: "ALL_SITES",
+        expressRefundLimitAmount: 100, expressRefundLimitCurrency: "USD" }),
+      canSelfInspectRetailReturn: () => false,
+    };
+    if (id === "@/lib/enterprise/retail/invoice-return-unpaid-express") return {
+      settleUnpaidRetailInvoiceCreditTx: async () => null,
+    };
+    // This historical fixture runs strictly in STANDARD mode. Preserve a
+    // failing guard if a new express refund path is ever reached, rather
+    // than silently granting Finance or stock privileges inside the VM.
+    if (id === "@/lib/enterprise/retail/invoice-return-express-authorization") return {
+      assertRetailExpressReturnAuthorizationTx: async () => {
+        throw new Error("UNEXPECTED_EXPRESS_RETURN_IN_STANDARD_FIXTURE");
+      },
+    };
+    if (id === "@/lib/enterprise/retail/invoice-return-finance") return {
+      prepareRetailInvoiceReturnFinanceTx: async () => {
+        throw new Error("UNEXPECTED_EXPRESS_FINANCE_PREPARE_IN_STANDARD_FIXTURE");
+      },
+      settleRetailInvoiceReturnFinanceTx: async () => {
+        throw new Error("UNEXPECTED_EXPRESS_FINANCE_SETTLEMENT_IN_STANDARD_FIXTURE");
+      },
     };
     return require(id);
   },

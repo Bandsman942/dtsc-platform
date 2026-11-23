@@ -70,7 +70,9 @@ const tx = {
   enterpriseRetailInvoiceReturnLine: { findMany: async ({ where }) => {
     assert.equal(where.organizationId, "tenant");
     assert.equal(where.checkoutId, "checkout-A");
-    assert.equal(where.request.status, "COMPLETED");
+    // Completed credits and unsettled deferred payouts both reserve returned quantities.
+    // Dropping REFUND_PENDING would permit a second return of the same goods.
+    assert.equal(where.request.status.in.join(","), "COMPLETED,REFUND_PENDING");
     return state.completed;
   } },
 };

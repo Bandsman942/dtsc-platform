@@ -600,5 +600,17 @@
   "advancedGuideAssets": "Select the asset, depreciation basis and mapped accounts. Capitalization must not duplicate the operational asset.",
   "inventoryLiveDescription": "Live weighted-average valuation. Stock movement quantities remain managed in Inventory; published period snapshots belong to Financial statements.",
   "inventoryLiveSourceNote": "Source of physical quantities: Inventory. Source of accounting cost: posted weighted-average cost layers. No invented historical valuation.",
-  "relatedFinanceWorkflows": "Related workflows"
+  "relatedFinanceWorkflows": "Related workflows",
+  "retailCreditOriginTitle": "Credit note from a RETAIL sale",
+  "retailCreditOriginHelp": "Credit posting and refund settlement must be completed in the linked RETAIL return to reconcile receivables, payments and stock.",
+  "retailCreditOriginAction": "Open RETAIL return / Complete settlement",
+  "retailCreditUnlinked": "Reconciliation required: no linked return request was found. Do not create another credit note.",
+  "retailCreditReturnStatus": "Return status",
+  "retailReturnSubmitted": "Awaiting inspection",
+  "retailReturnInspected": "Inspected, awaiting approval",
+  "retailReturnApproved": "Return approved, awaiting Finance",
+  "retailReturnFinancePending": "Credit and refunds awaiting Finance approval",
+  "retailReturnCompleted": "Credit and return completed",
+  "retailReturnRejected": "Return rejected",
+  "retailReturnRefundPending": "Credit note posted — customer refund outstanding"
 }

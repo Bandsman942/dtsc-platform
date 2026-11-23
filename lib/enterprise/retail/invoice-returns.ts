@@ -11,6 +11,10 @@ import { resolveEnterpriseModuleAccess, resolveEnterpriseModuleCapabilities } fr
 import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
 import { requireRetailSiteCapability, RETAIL_OWNER_ROLES, siteStaffCapabilities, hasRetailSelfApprovalGrant } from "@/lib/enterprise/retail/site-access";
 import { withRetailTransactionRetry } from "@/lib/enterprise/retail/transaction-retry";
+import { settleUnpaidRetailInvoiceCreditTx } from "@/lib/enterprise/retail/invoice-return-unpaid-express";
+import { assertRetailExpressReturnAuthorizationTx } from "@/lib/enterprise/retail/invoice-return-express-authorization";
+import { prepareRetailInvoiceReturnFinanceTx, settleRetailInvoiceReturnFinanceTx } from "@/lib/enterprise/retail/invoice-return-finance";
+import { readRetailInvoiceReturnPolicy, readRetailInvoiceReturnPolicySnapshot, canSelfInspectRetailReturn, type RetailInvoiceReturnPolicy } from "@/lib/enterprise/retail/invoice-return-policy";
 import { prisma } from "@/lib/prisma";
 
 // A request and its approval are NOT a refund. No Finance balance, credit
@@ -32,6 +36,8 @@ export const retailInvoiceReturnDecisionSchema = z.object({
   revision: z.number().int().positive(),
   decision: z.enum(["APPROVE", "REJECT"]),
   reason: z.string().trim().max(1000).optional(),
+  refundChoice: z.enum(["NOW", "LATER"]).optional(),
+  cashHandedOver: z.literal(true).optional(),
 }).strict();
 export const retailInvoiceReturnInspectionSchema = z.object({
   revision: z.number().int().positive(),
@@ -76,20 +82,34 @@ async function requireReturnFeatureTx(tx: Prisma.TransactionClient, organization
     throw new EnterpriseRetailError("RETAIL_INVOICE_CHECKOUT_NOT_ACTIVE", 403);
   }
 }
+async function canSelfDecideReturnTx(
+  tx: Prisma.TransactionClient, organizationId: string, actorUserId: string,
+  siteId: string, policy: RetailInvoiceReturnPolicy,
+): Promise<boolean> {
+  const member = await tx.organizationMember.findFirst({
+    where: { organizationId, userId: actorUserId, status: "ACTIVE", removedAt: null },
+    select: { role: true },
+  });
+  if (!member) return false;
+  if (policy.mode === "SIMPLIFIED" && policy.allowDelegatedSelfApproval &&
+      RETAIL_OWNER_ROLES.has(member.role)) return true;
+  return hasRetailSelfApprovalGrant(organizationId, actorUserId, siteId, "RETURN", tx);
+}
 async function requireReturnApproverTx(
   tx: Prisma.TransactionClient, organizationId: string,
   actorUserId: string, approverUserId: string, siteId: string,
+  policy: RetailInvoiceReturnPolicy,
 ) {
   const selfAllowed = actorUserId === approverUserId &&
-    await hasRetailSelfApprovalGrant(organizationId, actorUserId, siteId, "RETURN", tx);
+    await canSelfDecideReturnTx(tx, organizationId, actorUserId, siteId, policy);
   if (actorUserId === approverUserId && !selfAllowed) {
     throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_SELF_APPROVAL_FORBIDDEN", 403);
   }
   await requireRetailSiteCapability(
     organizationId, approverUserId, siteId, "APPROVE_INVOICE_RETURN", tx, { requireAssignment: true },
   );
-  // The OWNER's per-store grant replaces only the request-decision entitlement.
-  // Physical inspection, refund Finance approval and settlement remain independent.
+  // A delegated self-decision is strictly scoped. Inspection follows the
+  // immutable policy snapshot; Finance approval and settlement remain guarded.
   if (selfAllowed) return;
   const [receivables, payments] = await Promise.all([
     resolveEnterpriseModuleAccess({
@@ -108,6 +128,10 @@ export async function listRetailInvoiceReturnRequests(
   organizationId: string, invoiceId: string, actorUserId: string, page: number,
 ) {
   await requireReturnFeatureTx(prisma, organizationId);
+  const liveConfig = await prisma.enterpriseRetailConfiguration.findUnique({
+    where: { organizationId }, select: { settingsJson: true },
+  });
+  const liveReturnPolicy = readRetailInvoiceReturnPolicy(liveConfig?.settingsJson);
   const checkout = await prisma.enterpriseRetailInvoiceCheckout.findFirst({
     where: { organizationId, salesInvoiceId: invoiceId },
     select: { id: true, siteId: true, warehouseId: true, stockPostedAt: true, lines: { select: { id: true, invoiceItemId: true, inventoryItemId: true, lotAllocations: true } }, invoice: { select: {
@@ -125,10 +149,11 @@ export async function listRetailInvoiceReturnRequests(
       select: {
         id: true, number: true, status: true, reason: true, refundAmount: true, refundPayoutAmount: true,
         requestedByUserId: true, approverUserId: true, inspectedByUserId: true,
-        preparedByUserId: true, refundPayment: { select: { status: true } },
-        refundLegs: { select: { refundPayment: { select: { status: true } } } },
+        financeApproverUserId: true, settledByUserId: true, refundChoice: true,
+        preparedByUserId: true, refundPayment: { select: { status: true, methodType: true } },
+        refundLegs: { select: { refundPayment: { select: { status: true, methodType: true } } } },
         salesCreditNote: { select: { status: true } },
-        inspectedAt: true, inspectionNotes: true, decidedAt: true, decisionReason: true,
+        inspectedAt: true, inspectionNotes: true, inspectionMode: true, returnPolicySnapshot: true, decidedAt: true, decisionReason: true,
         revision: true, createdAt: true,
         lines: { select: { id: true, checkoutLineId: true, quantity: true, refundAmount: true, stockDisposition: true, lotAllocations: true,
           checkoutLine: { select: { inventoryItemId: true } } } },
@@ -148,7 +173,7 @@ export async function listRetailInvoiceReturnRequests(
   if (splitLines.length) {
     const [issues, committed] = await Promise.all([
       prisma.enterpriseStockMovement.findMany({ where: { organizationId, sourceEntityType: "EnterpriseSalesInvoice", sourceEntityId: invoiceId, sourceLineId: { in: splitLines.map(line => line.invoiceItemId) }, direction: "OUT", movementType: "SALE_FULFILLMENT" }, select: { sourceLineId: true, stockLotId: true, inventoryItemId: true, warehouseId: true, quantity: true } }),
-      prisma.enterpriseRetailInvoiceReturnLine.findMany({ where: { organizationId, checkoutId: checkout.id, checkoutLineId: { in: splitLines.map(line => line.id) }, request: { status: { in: ["SUBMITTED", "INSPECTED", "APPROVED", "FINANCE_PENDING", "COMPLETED"] } } }, select: { checkoutLineId: true, quantity: true, stockDisposition: true, lotAllocations: true } }),
+      prisma.enterpriseRetailInvoiceReturnLine.findMany({ where: { organizationId, checkoutId: checkout.id, checkoutLineId: { in: splitLines.map(line => line.id) }, request: { status: { in: ["SUBMITTED", "INSPECTED", "APPROVED", "FINANCE_PENDING", "REFUND_PENDING", "COMPLETED"] } } }, select: { checkoutLineId: true, quantity: true, stockDisposition: true, lotAllocations: true } }),
     ]);
     const lots = await prisma.enterpriseStockLot.findMany({ where: { organizationId, warehouseId: checkout.warehouseId, id: { in: [...new Set(issues.map(row => row.stockLotId).filter((id): id is string => Boolean(id)))] } }, select: { id: true, inventoryItemId: true, lotNumber: true } });
     for (const line of splitLines) {
@@ -192,11 +217,49 @@ export async function listRetailInvoiceReturnRequests(
       const payoutStatuses = item.refundLegs.length
         ? item.refundLegs.map((leg) => leg.refundPayment.status)
         : item.refundPayment ? [item.refundPayment.status] : [];
+      const payoutMethods = item.refundLegs.length
+        ? item.refundLegs.map((leg) => leg.refundPayment.methodType)
+        : item.refundPayment ? [item.refundPayment.methodType] : [];
       const approvedPayouts = payoutStatuses.filter((status) => status === "APPROVED").length;
+      const policy = readRetailInvoiceReturnPolicySnapshot(item.returnPolicySnapshot);
+      const eligibleSelfInspector = Boolean(member && (RETAIL_OWNER_ROLES.has(member.role) ||
+        (siteAssignment?.isActive && siteAssignment.roleCode === "MANAGER")));
+      const physicalStock = Boolean(checkout.stockPostedAt) &&
+        item.lines.some((line) => Boolean(line.checkoutLine.inventoryItemId));
+      const selfInspected = liveReturnPolicy.mode === "SIMPLIFIED" &&
+        liveReturnPolicy.allowRequesterInspection &&
+        canSelfInspectRetailReturn(policy, item.requestedByUserId, actorUserId,
+          eligibleSelfInspector, true);
+      const delegatedSelfDecision = selfCanDecide ||
+        Boolean(member && RETAIL_OWNER_ROLES.has(member.role) &&
+          policy.mode === "SIMPLIFIED" && policy.allowDelegatedSelfApproval &&
+          liveReturnPolicy.mode === "SIMPLIFIED" && liveReturnPolicy.allowDelegatedSelfApproval);
+      const sameActorDecision = item.inspectedByUserId === actorUserId &&
+        item.requestedByUserId === actorUserId && selfInspected && delegatedSelfDecision;
+      const previewPayout = item.refundAmount.greaterThan(checkout.invoice.outstandingAmount)
+        ? item.refundAmount.minus(checkout.invoice.outstandingAmount)
+        : new Prisma.Decimal(0);
+      const expressEligible = policy.mode === "SIMPLIFIED" && liveReturnPolicy.mode === "SIMPLIFIED" &&
+        policy.autoPostCreditNote && liveReturnPolicy.autoPostCreditNote &&
+        policy.allowDelegatedSelfApproval && liveReturnPolicy.allowDelegatedSelfApproval &&
+        policy.promptImmediateRefund && liveReturnPolicy.promptImmediateRefund &&
+        capabilities.canApprove && delegatedSelfDecision && item.approverUserId === actorUserId &&
+        item.status === "INSPECTED";
       return {
       id: item.id, number: item.number, status: item.status, reason: item.reason,
       refundAmount: item.refundAmount, refundPayoutAmount: item.refundPayoutAmount, inspectedAt: item.inspectedAt,
-      inspectionNotes: item.inspectionNotes, decidedAt: item.decidedAt,
+      inspectionNotes: item.inspectionNotes, inspectionMode: item.inspectionMode, decidedAt: item.decidedAt,
+      payoutPreviewAmount: previewPayout.toFixed(2), canExpress: expressEligible, refundChoice: item.refundChoice,
+      deferredCashDisbursementRequired: item.status === "REFUND_PENDING" && payoutMethods.includes("CASH"),
+      canFinalizeDeferred: item.status === "REFUND_PENDING" && item.refundChoice === "LATER" &&
+        item.settledByUserId === actorUserId && item.financeApproverUserId === actorUserId &&
+        liveReturnPolicy.mode === "SIMPLIFIED" && liveReturnPolicy.allowDelegatedSelfApproval &&
+        Boolean(member && (RETAIL_OWNER_ROLES.has(member.role) || siteAssignment?.isActive && siteAssignment.roleCode === "MANAGER")) &&
+        capabilities.canApprove && delegatedSelfDecision &&
+        payoutStatuses.length > 0 && payoutStatuses.every((status, index) =>
+          payoutMethods[index] === "CASH" ? status === "APPROVED" :
+          ["CONFIRMED", "RECONCILED"].includes(status)) &&
+        item.salesCreditNote?.status === "POSTED",
       decisionReason: item.decisionReason, revision: item.revision,
       createdAt: item.createdAt, lines: item.lines,
       paymentApprovalStatus: payoutStatuses.length && approvedPayouts === payoutStatuses.length
@@ -212,15 +275,17 @@ export async function listRetailInvoiceReturnRequests(
         item.salesCreditNote?.status === "APPROVED" &&
         ![item.requestedByUserId, item.approverUserId, item.inspectedByUserId,
           item.preparedByUserId].includes(actorUserId),
-      requiresPhysicalInspection: Boolean(checkout.stockPostedAt) && item.lines.some((line) => Boolean(line.checkoutLine.inventoryItemId)),
-      canInspect: (capabilities.canInspect ||
+      requiresPhysicalInspection: physicalStock,
+      canSelfInspect: selfInspected,
+      canInspect: (capabilities.canInspect || selfInspected ||
           ((!checkout.stockPostedAt || item.lines.every((line) => !line.checkoutLine.inventoryItemId)) && independentFinanceVerifier.allowed)) &&
         item.status === "SUBMITTED" &&
-        item.requestedByUserId !== actorUserId && item.approverUserId !== actorUserId,
+        ((item.requestedByUserId !== actorUserId && item.approverUserId !== actorUserId) || selfInspected),
       canDecide: capabilities.canApprove &&
-        (finance?.every((entry) => entry.allowed) === true || (item.requestedByUserId === actorUserId && selfCanDecide)) &&
+        (finance?.every((entry) => entry.allowed) === true || (item.requestedByUserId === actorUserId && delegatedSelfDecision)) &&
         ["SUBMITTED", "INSPECTED"].includes(item.status) && item.approverUserId === actorUserId &&
-        (item.requestedByUserId !== actorUserId || selfCanDecide) && item.inspectedByUserId !== actorUserId,
+        (item.requestedByUserId !== actorUserId || delegatedSelfDecision) &&
+        (item.inspectedByUserId !== actorUserId || sameActorDecision),
     }; }),
     batchOptions,
     stockPostedAt: Boolean(checkout.stockPostedAt),
@@ -258,7 +323,14 @@ export async function listRetailInvoiceReturnApprovers(
     const assignment = siteAccess.get(member.userId);
     return Boolean(assignment && siteStaffCapabilities(assignment.roleCode, assignment.permissionsJson).includes("APPROVE_INVOICE_RETURN"));
   });
-  const selfReturnGrant = await hasRetailSelfApprovalGrant(organizationId, actorUserId, siteId, "RETURN");
+  const config = await prisma.enterpriseRetailConfiguration.findUnique({
+    where: { organizationId }, select: { settingsJson: true },
+  });
+  const policy = readRetailInvoiceReturnPolicy(config?.settingsJson);
+  const requester = members.find((member) => member.userId === actorUserId);
+  const selfReturnGrant = requester && RETAIL_OWNER_ROLES.has(requester.role) &&
+    policy.mode === "SIMPLIFIED" && policy.allowDelegatedSelfApproval
+    ? true : await hasRetailSelfApprovalGrant(organizationId, actorUserId, siteId, "RETURN");
   const candidates = await Promise.all(eligible.map(async (member) => {
     if (member.userId === actorUserId) {
       return selfReturnGrant ? {
@@ -284,6 +356,10 @@ export async function createRetailInvoiceReturnRequest(
   const requestHash = fingerprint(input);
   return withRetailTransactionRetry(() => prisma.$transaction(async (tx) => {
     await requireReturnFeatureTx(tx, organizationId);
+    const returnConfiguration = await tx.enterpriseRetailConfiguration.findUnique({
+      where: { organizationId }, select: { settingsJson: true },
+    });
+    const returnPolicy = readRetailInvoiceReturnPolicy(returnConfiguration?.settingsJson);
     const checkout = await tx.enterpriseRetailInvoiceCheckout.findFirst({
       where: { organizationId, salesInvoiceId: invoiceId },
       include: { invoice: { select: { status: true, grandTotal: true, currencyCode: true,
@@ -313,7 +389,7 @@ export async function createRetailInvoiceReturnRequest(
     if (!checkout.invoice.grandTotal.equals(financeMoney(checkout.invoice.grandTotal))) {
       throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_HISTORICAL_PRECISION_UNSUPPORTED", 409);
     }
-    await requireReturnApproverTx(tx, organizationId, actorUserId, input.approverUserId, checkout.siteId);
+    await requireReturnApproverTx(tx, organizationId, actorUserId, input.approverUserId, checkout.siteId, returnPolicy);
     const lineIds = input.lines.map((row) => row.checkoutLineId);
     if (new Set(lineIds).size !== lineIds.length) throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_DUPLICATE_LINE", 409);
     const source = new Map(checkout.lines.map((line) => [line.id, line]));
@@ -323,7 +399,7 @@ export async function createRetailInvoiceReturnRequest(
     const committed = await tx.enterpriseRetailInvoiceReturnLine.findMany({
       where: {
         organizationId, checkoutId: checkout.id, checkoutLineId: { in: lineIds },
-        request: { status: { in: ["SUBMITTED", "INSPECTED", "APPROVED", "FINANCE_PENDING", "COMPLETED"] } },
+        request: { status: { in: ["SUBMITTED", "INSPECTED", "APPROVED", "FINANCE_PENDING", "REFUND_PENDING", "COMPLETED"] } },
       },
       select: { checkoutLineId: true, quantity: true, refundAmount: true, refundNetAmount: true, refundTaxAmount: true, stockDisposition: true, lotAllocations: true, request: { select: { status: true } } },
     });
@@ -430,7 +506,7 @@ export async function createRetailInvoiceReturnRequest(
         organizationId, checkoutId: checkout.id, number: reference(), status: "SUBMITTED",
         reason: input.reason, refundAmount, idempotencyKey: input.idempotencyKey,
         requestFingerprint: requestHash, requestedByUserId: actorUserId,
-        approverUserId: input.approverUserId,
+        approverUserId: input.approverUserId, returnPolicySnapshot: returnPolicy,
       },
     });
     await tx.enterpriseRetailInvoiceReturnLine.createMany({
@@ -465,13 +541,20 @@ export async function decideRetailInvoiceReturnRequest(
     await requireRetailSiteCapability(
       organizationId, actorUserId, request.checkout.siteId, "APPROVE_INVOICE_RETURN", tx, { requireAssignment: true },
     );
+    const policy = readRetailInvoiceReturnPolicySnapshot(request.returnPolicySnapshot);
+    const config = await tx.enterpriseRetailConfiguration.findUnique({
+      where: { organizationId }, select: { settingsJson: true },
+    });
+    const livePolicy = readRetailInvoiceReturnPolicy(config?.settingsJson);
+    const effectivePolicy = policy.mode === "SIMPLIFIED" && policy.allowDelegatedSelfApproval &&
+      livePolicy.mode === "SIMPLIFIED" && livePolicy.allowDelegatedSelfApproval
+      ? policy : { ...policy, mode: "STANDARD" as const };
+    const selfReturnDecision = request.requestedByUserId === actorUserId &&
+      await canSelfDecideReturnTx(tx, organizationId, actorUserId, request.checkout.siteId, effectivePolicy);
     if (request.approverUserId !== actorUserId ||
-        (request.requestedByUserId === actorUserId &&
-          !await hasRetailSelfApprovalGrant(organizationId, actorUserId, request.checkout.siteId, "RETURN", tx))) {
+        (request.requestedByUserId === actorUserId && !selfReturnDecision)) {
       throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_APPROVER_INELIGIBLE", 403);
     }
-    const selfReturnDecision = request.requestedByUserId === actorUserId &&
-      await hasRetailSelfApprovalGrant(organizationId, actorUserId, request.checkout.siteId, "RETURN", tx);
     const finance = await Promise.all([
       resolveEnterpriseModuleAccess({ organizationId, userId: actorUserId, moduleCode: "FINANCE_RECEIVABLES", action: "approve" }),
       resolveEnterpriseModuleAccess({ organizationId, userId: actorUserId, moduleCode: "FINANCE_PAYMENTS", action: "approve" }),
@@ -484,10 +567,16 @@ export async function decideRetailInvoiceReturnRequest(
         !["SUBMITTED", "INSPECTED"].includes(request.status))) {
       throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_REVISION_CONFLICT", 409);
     }
+    const selfInspectionAllowed = policy.mode === "SIMPLIFIED" && policy.allowRequesterInspection &&
+      livePolicy.mode === "SIMPLIFIED" && livePolicy.allowRequesterInspection &&
+      request.inspectedByUserId === request.requestedByUserId && request.inspectionMode === "SELF_ATTESTED";
+    const sameActorInspectionApproved = selfInspectionAllowed &&
+      request.inspectedByUserId === actorUserId && selfReturnDecision;
     if (input.decision === "APPROVE" &&
       (!request.inspectedAt || !request.inspectedByUserId || !request.inspectionNotes ||
-        request.inspectionNotes.trim().length < 5 || request.inspectedByUserId === request.requestedByUserId ||
-        request.inspectedByUserId === actorUserId)) {
+        request.inspectionNotes.trim().length < 5 ||
+        (request.inspectedByUserId === request.requestedByUserId && !selfInspectionAllowed) ||
+        (request.inspectedByUserId === actorUserId && !sameActorInspectionApproved))) {
       throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_INSPECTION_REQUIRED", 409);
     }
     if (input.decision === "REJECT" && (!input.reason || input.reason.length < 4)) {
@@ -509,8 +598,55 @@ export async function decideRetailInvoiceReturnRequest(
         ownerGrantedSelfApproval: request.requestedByUserId === actorUserId,
         ...(input.reason ? { reason: input.reason } : {}) },
     });
+    // Zero-payout credits are posted automatically if the invoice is not
+    // physically fulfilled, regardless of whether it was totally unpaid or
+    // partly collected. No refund payment is ever fabricated.
+    if (input.decision === "APPROVE") {
+      const zeroPayout = await settleUnpaidRetailInvoiceCreditTx(
+        tx, organizationId, invoiceId, requestId, actorUserId,
+      );
+      if (zeroPayout) return zeroPayout;
+      // Any real customer payout must be chosen BEFORE committing the
+      // decision. Zero-payout physical returns do not prompt for cash and
+      // can post their credit plus inventory valuation in the same transaction.
+      let expressChoice = input.refundChoice || null;
+      const eligibleZeroCredit = !expressChoice && policy.mode === "SIMPLIFIED" &&
+        livePolicy.mode === "SIMPLIFIED" && policy.autoPostCreditNote &&
+        livePolicy.autoPostCreditNote && policy.allowDelegatedSelfApproval &&
+        livePolicy.allowDelegatedSelfApproval;
+      if (eligibleZeroCredit) {
+        const invoice = await tx.enterpriseSalesInvoice.findFirst({
+          where: { organizationId, id: invoiceId },
+          select: { outstandingAmount: true },
+        });
+        if (invoice && request.refundAmount.lessThanOrEqualTo(invoice.outstandingAmount)) {
+          expressChoice = "LATER";
+        }
+      }
+      if (expressChoice) {
+        if (expressChoice === "NOW" && input.cashHandedOver !== true) {
+          throw new EnterpriseRetailError("RETAIL_RETURN_EXPRESS_CASH_HANDOVER_REQUIRED", 400);
+        }
+        await assertRetailExpressReturnAuthorizationTx(
+          tx, organizationId, invoiceId, requestId, actorUserId, expressChoice,
+          eligibleZeroCredit && !input.refundChoice,
+        );
+        const prepared = await prepareRetailInvoiceReturnFinanceTx(
+          tx, organizationId, invoiceId, requestId, actorUserId,
+          { revision: updated.revision, financeApproverUserId: actorUserId },
+          expressChoice,
+        );
+        const settled = await settleRetailInvoiceReturnFinanceTx(
+          tx, organizationId, invoiceId, requestId, actorUserId,
+          { revision: prepared.request.revision,
+            reason: input.reason?.trim() || "Retour client express approuvé et contrôlé" },
+          expressChoice,
+        );
+        return settled.request;
+      }
+    }
     return updated;
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 30000 }));
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 60000 }));
 }
 
 /** Independent stock operator records physical receipt/inspection. This is
@@ -537,23 +673,37 @@ export async function inspectRetailInvoiceReturnRequest(
     await requireRetailSiteCapability(
       organizationId, actorUserId, request.checkout.siteId, "VIEW_SALES", tx, { requireAssignment: true },
     );
-    if (physicallyDeliveredGoods) {
-      await requireRetailSiteCapability(
-        organizationId, actorUserId, request.checkout.siteId, "MANAGE_STOCK", tx, { requireAssignment: true },
-      );
-    }
+    // An authorized manager's SELF_ATTESTED receipt is evidence only.
+    // It must not grant MANAGE_STOCK or allow physical stock mutations.
     const [verifier, membership] = await Promise.all([
       tx.enterpriseRetailSiteAssignment.findUnique({ where: { organizationId_siteId_userId: { organizationId, siteId: request.checkout.siteId, userId: actorUserId } }, select: { isActive: true, roleCode: true, permissionsJson: true } }),
       tx.organizationMember.findFirst({ where: { organizationId, userId: actorUserId, status: "ACTIVE", removedAt: null }, select: { role: true } }),
     ]);
     const canInspectGoods = Boolean(membership && (RETAIL_OWNER_ROLES.has(membership.role) ||
       (verifier?.isActive && siteStaffCapabilities(verifier.roleCode, verifier.permissionsJson).includes("MANAGE_STOCK"))));
-    if (physicallyDeliveredGoods && !canInspectGoods) throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_INSPECTOR_INELIGIBLE", 403);
-    if (!physicallyDeliveredGoods && !canInspectGoods) {
+    const policy = readRetailInvoiceReturnPolicySnapshot(request.returnPolicySnapshot);
+    const liveConfig = await tx.enterpriseRetailConfiguration.findUnique({
+      where: { organizationId }, select: { settingsJson: true },
+    });
+    const livePolicy = readRetailInvoiceReturnPolicy(liveConfig?.settingsJson);
+    const eligibleSelfInspector = Boolean(membership && (RETAIL_OWNER_ROLES.has(membership.role) ||
+      (verifier?.isActive && verifier.roleCode === "MANAGER")));
+    const selfInspector = livePolicy.mode === "SIMPLIFIED" && livePolicy.allowRequesterInspection &&
+      canSelfInspectRetailReturn(policy, request.requestedByUserId, actorUserId,
+        eligibleSelfInspector, true);
+    if (physicallyDeliveredGoods && !selfInspector) {
+      await requireRetailSiteCapability(
+        organizationId, actorUserId, request.checkout.siteId, "MANAGE_STOCK", tx, { requireAssignment: true },
+      );
+    }
+    if (physicallyDeliveredGoods && !canInspectGoods && !selfInspector) {
+      throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_INSPECTOR_INELIGIBLE", 403);
+    }
+    if (!physicallyDeliveredGoods && !canInspectGoods && !selfInspector) {
       const finance = await resolveEnterpriseModuleAccess({ organizationId, userId: actorUserId, moduleCode: "FINANCE_RECEIVABLES", action: "approve" });
       if (!finance.allowed) throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_INSPECTOR_INELIGIBLE", 403);
     }
-    if (actorUserId === request.requestedByUserId || actorUserId === request.approverUserId) {
+    if ((actorUserId === request.requestedByUserId || actorUserId === request.approverUserId) && !selfInspector) {
       throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_INSPECTOR_INELIGIBLE", 403);
     }
     if (request.status !== "SUBMITTED" || request.revision !== input.revision ||
@@ -569,15 +719,18 @@ export async function inspectRetailInvoiceReturnRequest(
     const inspected = await tx.enterpriseRetailInvoiceReturnRequest.update({
       where: { id: request.id }, data: {
         status: "INSPECTED", inspectedByUserId: actorUserId, inspectedAt: new Date(),
-        inspectionNotes: input.notes, revision: { increment: 1 },
+        inspectionNotes: input.notes, inspectionMode: selfInspector ? "SELF_ATTESTED" : "INDEPENDENT",
+        revision: { increment: 1 },
       },
     });
     await publishFinanceEvent(tx, {
       organizationId, entityType: "EnterpriseRetailInvoiceReturnRequest", entityId: request.id,
       eventType: "RETAIL_INVOICE_RETURN_INSPECTED",
-      summary: physicallyDeliveredGoods ? "Retail physical return independently inspected" : "Retail service/undelivered credit independently verified",
+      summary: selfInspector ? "Retail return received and inspected by authorized requester" :
+        physicallyDeliveredGoods ? "Retail physical return independently inspected" : "Retail service/undelivered credit independently verified",
       actorUserId, fromStatus: "SUBMITTED", toStatus: "INSPECTED",
-      metadataJson: { invoiceId, siteId: request.checkout.siteId },
+      metadataJson: { invoiceId, siteId: request.checkout.siteId,
+        inspectionMode: selfInspector ? "SELF_ATTESTED" : "INDEPENDENT", policyVersion: policy.version },
     });
     return inspected;
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 30000 }));

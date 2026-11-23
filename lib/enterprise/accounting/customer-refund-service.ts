@@ -10,7 +10,8 @@ import { financeReference, publishFinanceEvent } from "@/lib/enterprise/accounti
 import { postBusinessEventTx } from "@/lib/enterprise/accounting/posting-service";
 import { reverseJournalEntryTx } from "@/lib/enterprise/accounting/reversal-service";
 import { resolveCashSessionForConfirmation } from "@/lib/enterprise/accounting/payments-service";
-import { retailFinanceReadSiteScope } from "@/lib/enterprise/retail/site-access";
+import { retailFinanceReadSiteScope, RETAIL_OWNER_ROLES, requireRetailSiteCapability } from "@/lib/enterprise/retail/site-access";
+import { readRetailInvoiceReturnPolicy, readRetailInvoiceReturnPolicySnapshot } from "@/lib/enterprise/retail/invoice-return-policy";
 import { prisma } from "@/lib/prisma";
 
 function money(value: Prisma.Decimal.Value) {
@@ -984,6 +985,63 @@ export async function confirmCustomerRefundPayment(
 /** Confirms a canonical refund, books its cash/treasury ledger, consumes the
  * refund availability, and posts Finance journals in the CALLER transaction.
  * Never invoke before the independent Finance approval and inverse evidence. */
+/** A narrow exception for cash already handed to the customer under a
+ * delegated RETAIL return. It cannot be invoked through a caller-provided
+ * Boolean: prove the origin, signed policy and site permission from the DB
+ * inside the same refund confirmation transaction. */
+async function isDelegatedRetailExpressCashRefundTx(
+  tx: Prisma.TransactionClient, organizationId: string,
+  paymentId: string, actorUserId: string,
+) {
+  const bound = await tx.enterpriseRetailInvoiceReturnRequest.findFirst({
+    where: { organizationId,
+      OR: [{ refundPaymentId: paymentId }, { refundLegs: { some: { refundPaymentId: paymentId } } }],
+      status: { in: ["FINANCE_PENDING", "REFUND_PENDING"] }, refundChoice: { in: ["NOW", "LATER"] },
+      decidedByUserId: actorUserId, financeApproverUserId: actorUserId,
+      preparedByUserId: actorUserId, approverUserId: actorUserId },
+    include: { checkout: { select: { siteId: true } } },
+  });
+  if (!bound) return false;
+  const policy = readRetailInvoiceReturnPolicySnapshot(bound.returnPolicySnapshot);
+  const config = await tx.enterpriseRetailConfiguration.findUnique({
+    where: { organizationId }, select: { settingsJson: true },
+  });
+  const live = readRetailInvoiceReturnPolicy(config?.settingsJson);
+  if (policy.mode !== "SIMPLIFIED" || live.mode !== "SIMPLIFIED" ||
+      !policy.allowDelegatedSelfApproval || !live.allowDelegatedSelfApproval ||
+      !policy.autoPostCreditNote || !live.autoPostCreditNote) return false;
+  const payment = await tx.enterprisePayment.findFirst({
+    where: { organizationId, id: paymentId },
+    select: { paymentType: true, direction: true, methodType: true,
+      approvedByUserId: true, initiatedByUserId: true, amount: true },
+  });
+  if (!payment || payment.paymentType !== "REFUND" || payment.direction !== "OUTBOUND" ||
+      payment.methodType !== "CASH" || payment.approvedByUserId !== actorUserId ||
+      payment.initiatedByUserId !== actorUserId ||
+      !bound.refundPayoutAmount?.greaterThanOrEqualTo(payment.amount)) return false;
+  const member = await tx.organizationMember.findFirst({
+    where: { organizationId, userId: actorUserId, status: "ACTIVE", removedAt: null },
+    select: { role: true },
+  });
+  if (!member) return false;
+  try {
+    await requireRetailSiteCapability(organizationId, actorUserId, bound.checkout.siteId,
+      "COLLECT_PAYMENT", tx, { requireAssignment: true });
+    await requireRetailSiteCapability(organizationId, actorUserId, bound.checkout.siteId,
+      "APPROVE_INVOICE_RETURN", tx, { requireAssignment: true });
+  } catch { return false; }
+  if (!RETAIL_OWNER_ROLES.has(member.role)) {
+    const assignment = await tx.enterpriseRetailSiteAssignment.findUnique({
+      where: { organizationId_siteId_userId: { organizationId, siteId: bound.checkout.siteId, userId: actorUserId } },
+      select: { roleCode: true, isActive: true },
+    });
+    if (!assignment?.isActive || assignment.roleCode !== "MANAGER") return false;
+  }
+  // The payout ceiling and exchange-rate proof were serialized at the
+  // original decision; this confirmation cannot increase a payment's amount.
+  return true;
+}
+
 export async function confirmCustomerRefundPaymentTx(
   tx: Prisma.TransactionClient,
   organizationId: string,
@@ -1032,11 +1090,13 @@ export async function confirmCustomerRefundPaymentTx(
       throw new EnterpriseAccountingError("REFUND_FINANCIAL_INVERSE_CONFLICT", 409);
     }
     await assertRetailInvoiceRefundAccountTx(tx, organizationId, salesInvoiceId, actorUserId, current);
-    assertIndependentActor({
-      actorUserId,
-      relatedUserIds: [current.initiatedByUserId, current.approvedByUserId],
-      errorCode: "REFUND_PAYMENT_SELF_CONFIRMATION_FORBIDDEN",
-    });
+    if (!await isDelegatedRetailExpressCashRefundTx(tx, organizationId, current.id, actorUserId)) {
+      assertIndependentActor({
+        actorUserId,
+        relatedUserIds: [current.initiatedByUserId, current.approvedByUserId],
+        errorCode: "REFUND_PAYMENT_SELF_CONFIRMATION_FORBIDDEN",
+      });
+    }
 
     const account = await tx.enterpriseFinancialAccount.findFirst({
       where: { id: current.financialAccountId, organizationId, status: "ACTIVE", archivedAt: null },

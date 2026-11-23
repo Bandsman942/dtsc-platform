@@ -85,6 +85,7 @@ model EnterpriseRetailInvoiceReturnRequest {
   reason            String
   refundAmount      Decimal  @db.Decimal(20, 6) // Historical property: total CREDIT NOTE face amount.
   refundPayoutAmount Decimal? @db.Decimal(20, 6) // Actual cash refund, zero if credit only. Null on legacy records.
+  refundChoice      String? // NOW / LATER, set only on a delegated express return.
   financeApproverUserId String? // Independent Finance approver for credit and refund; distinct from business cancellation reviewer.
   idempotencyKey    String
   requestFingerprint String
@@ -93,6 +94,8 @@ model EnterpriseRetailInvoiceReturnRequest {
   inspectedByUserId String?
   inspectedAt       DateTime?
   inspectionNotes   String?
+  inspectionMode    String?  // SELF_ATTESTED or INDEPENDENT, with immutable evidence.
+  returnPolicySnapshot Json?    // Policy version applicable when the request was submitted.
   decidedByUserId   String?
   decidedAt         DateTime?
   decisionReason    String?

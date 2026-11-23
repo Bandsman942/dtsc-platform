@@ -32,6 +32,7 @@ export async function assertRetailInvoiceReturnSettlementReadinessTx(
       id: true, checkoutId: true, status: true, refundAmount: true, refundPayoutAmount: true,
       requestedByUserId: true, approverUserId: true, decidedByUserId: true,
       inspectedByUserId: true, inspectedAt: true, inspectionNotes: true,
+      inspectionMode: true, returnPolicySnapshot: true,
       lines: { select: { id: true, checkoutLineId: true, quantity: true, refundAmount: true,
         refundNetAmount: true, refundTaxAmount: true, stockDisposition: true, lotAllocations: true } },
       checkout: {
@@ -54,10 +55,32 @@ export async function assertRetailInvoiceReturnSettlementReadinessTx(
   const { checkout } = request;
   const independentlyVerified = new Set([request.requestedByUserId, request.approverUserId, request.inspectedByUserId]).size === 3 ||
     (request.requestedByUserId === request.approverUserId && request.inspectedByUserId !== request.approverUserId);
+  // Only an immutable, v1, explicit SIMPLIFIED snapshot can permit a requester
+  // to have inspected the goods. Legacy returns and malformed snapshots retain
+  // the existing four-eyes invariant. The decision service already checked
+  // the designated approver and each per-site delegation at decision time.
+  const rawSnapshot = request.returnPolicySnapshot;
+  const policy = rawSnapshot && typeof rawSnapshot === "object" && !Array.isArray(rawSnapshot) ? rawSnapshot : null;
+  const simplified = policy?.version === 1 && policy.mode === "SIMPLIFIED";
+  const currentPolicyConfig = request.inspectionMode === "SELF_ATTESTED"
+    ? await tx.enterpriseRetailConfiguration.findUnique({
+      where: { organizationId }, select: { settingsJson: true },
+    }) : null;
+  const liveSettings = currentPolicyConfig?.settingsJson;
+  const liveStoredPolicy = liveSettings && typeof liveSettings === "object" && !Array.isArray(liveSettings)
+    ? liveSettings.retailInvoiceReturnPolicy : null;
+  const livePolicy = liveStoredPolicy && typeof liveStoredPolicy === "object" && !Array.isArray(liveStoredPolicy)
+    ? liveStoredPolicy : null;
+  const requesterInspection = simplified && policy?.allowRequesterInspection === true &&
+    livePolicy?.mode === "SIMPLIFIED" && livePolicy.allowRequesterInspection === true &&
+    request.inspectionMode === "SELF_ATTESTED" && request.inspectedByUserId === request.requestedByUserId;
+  const delegatedSameActor = request.requestedByUserId === request.approverUserId;
+  const verifiedDecisionChain = independentlyVerified ||
+    Boolean(requesterInspection && (!delegatedSameActor || policy?.allowDelegatedSelfApproval === true));
   if (request.status !== expectedStatus || !request.inspectedAt ||
       !request.inspectedByUserId || !request.inspectionNotes || request.inspectionNotes.trim().length < 5 ||
       !request.decidedByUserId || request.decidedByUserId !== request.approverUserId ||
-      !independentlyVerified) {
+      !verifiedDecisionChain) {
     throw conflict("RETAIL_INVOICE_RETURN_SETTLEMENT_APPROVAL_REQUIRED");
   }
   const invoice = checkout.invoice;
@@ -145,7 +168,7 @@ export async function assertRetailInvoiceReturnSettlementReadinessTx(
         inventoryItemId: true, stockLotId: true, quantity: true },
     }),
     tx.enterpriseRetailInvoiceReturnLine.findMany({
-      where: { organizationId, checkoutId: checkout.id, checkoutLineId: { in: [...ids] }, request: { status: "COMPLETED" } },
+      where: { organizationId, checkoutId: checkout.id, checkoutLineId: { in: [...ids] }, request: { status: { in: ["COMPLETED", "REFUND_PENDING"] } } },
       select: { checkoutLineId: true, quantity: true, refundAmount: true,
         refundNetAmount: true, refundTaxAmount: true, stockDisposition: true, lotAllocations: true },
     }),

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
+import { hasRecentStepUp } from "@/lib/auth/step-up";
 import { authorizeRetailRequest, retailErrorResponse } from "@/lib/enterprise/retail/http";
 import { decideRetailInvoiceReturnRequest, retailInvoiceReturnDecisionSchema } from "@/lib/enterprise/retail/invoice-returns";
 
@@ -13,12 +14,20 @@ export async function POST(req: Request, { params }: Params) {
   if (!auth.ok) return auth.response;
   const parsed = retailInvoiceReturnDecisionSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "RETAIL_INVOICE_RETURN_DECISION_INVALID", req);
+  if (parsed.data.decision === "APPROVE" && parsed.data.refundChoice &&
+      !await hasRecentStepUp(auth.session)) {
+    return NextResponse.json({
+      error: "STEP_UP_REQUIRED",
+      message: "Confirmez votre identité avant toute décision entraînant une sortie de caisse ou une dette à rembourser.",
+    }, { status: 428, headers: { "Cache-Control": "private, no-store" } });
+  }
+
   try {
     const request = await decideRetailInvoiceReturnRequest(organizationId, invoiceId, requestId, auth.session.userId, parsed.data);
     await writeAuditLog({ userId: auth.session.userId, action: "ENTERPRISE_RETAIL_INVOICE_RETURN_" + parsed.data.decision,
       entity: "EnterpriseRetailInvoiceReturnRequest", entityId: request.id, request: req, organizationId,
       riskLevel: "HIGH", metadata: { organizationId, invoiceId, requestId, status: request.status,
-        reason: parsed.data.reason, decisionByUserId: auth.session.userId } });
+        reason: parsed.data.reason, decisionByUserId: auth.session.userId, refundChoice: parsed.data.refundChoice || null } });
     await writeApiLog({ request: req, startedAt, statusCode: 200, userId: auth.session.userId,
       metadata: { organizationId, domain: "retail-invoice-return-requests", action: parsed.data.decision } });
     return NextResponse.json({ request }, { headers: { "Cache-Control": "private, no-store" } });

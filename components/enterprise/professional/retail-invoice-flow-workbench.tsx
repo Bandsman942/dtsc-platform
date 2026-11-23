@@ -110,10 +110,16 @@ export function RetailInvoiceFlowWorkbench({ organizationId, organizationName, l
   const [page, setPage] = useState(1);
   const [siteFilter, setSiteFilter] = useState(preferredSiteId || "");
   const [invoiceSearch, setInvoiceSearch] = useState("");
+  const [targetReturnInvoiceId, setTargetReturnInvoiceId] = useState("");
   useEffect(() => {
     if (mode !== "invoices") return;
-    const targetNumber = new URLSearchParams(window.location.search).get("q")?.trim();
+    const params = new URLSearchParams(window.location.search);
+    const targetNumber = params.get("q")?.trim();
+    const targetSiteId = params.get("siteId")?.trim();
+    const targetInvoiceId = params.get("returnInvoiceId")?.trim();
+    if (targetSiteId) setSiteFilter(targetSiteId.slice(0, 191));
     if (targetNumber) setInvoiceSearch(targetNumber.slice(0, 100));
+    if (targetInvoiceId) setTargetReturnInvoiceId(targetInvoiceId.slice(0, 191));
   }, [mode]);
   const [invoiceDateFrom, setInvoiceDateFrom] = useState("");
   const [invoiceDateTo, setInvoiceDateTo] = useState("");
@@ -544,7 +550,7 @@ export function RetailInvoiceFlowWorkbench({ organizationId, organizationName, l
             {data.checkoutReady && entry.canSubmit ? <Button type="button" onClick={() => setSubmitTarget(entry)}><Send className="h-4 w-4" />{copy.submitDraft}</Button> : null}
             {/* Navigation to collections is a permission-scoped deep link, never a payment action here. */}
              {data.checkoutReady && entry.canCollect && ["ISSUED", "OVERDUE", "PARTIALLY_PAID"].includes(entry.invoice.status) && Number(entry.invoice.outstandingAmount) > 0 ? <Link href={`/enterprise-modules/RETAIL_POS?section=collections&siteId=${encodeURIComponent(entry.siteId)}&invoiceId=${encodeURIComponent(entry.invoice.id)}&invoiceNumber=${encodeURIComponent(entry.invoice.number)}`} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 text-sm font-bold text-emerald-700 transition hover:bg-emerald-500/20 focus-visible:ring-2 focus-visible:ring-emerald-400 dark:text-emerald-300"><ArrowRight className="h-4 w-4" aria-hidden="true" />{copy.collectLink}</Link> : null}
-            {data.checkoutReady && ["ISSUED", "OVERDUE", "PARTIALLY_PAID", "PAID", "CREDIT_NOTE"].includes(entry.invoice.status) ? <RetailInvoiceReturnDialog organizationId={organizationId} invoiceId={entry.invoice.id} invoiceNumber={entry.invoice.number} siteId={entry.siteId} currencyCode={entry.invoice.currencyCode} checkoutLines={entry.lines} invoiceItems={entry.invoice.items} locale={locale} onChanged={() => { void load(page, siteFilter); }} /> : null}
+            {data.checkoutReady && ["ISSUED", "OVERDUE", "PARTIALLY_PAID", "PAID", "CREDIT_NOTE"].includes(entry.invoice.status) ? <RetailInvoiceReturnDialog organizationId={organizationId} invoiceId={entry.invoice.id} invoiceNumber={entry.invoice.number} siteId={entry.siteId} currencyCode={entry.invoice.currencyCode} checkoutLines={entry.lines} invoiceItems={entry.invoice.items} locale={locale} onChanged={() => { void load(page, siteFilter); }} autoOpen={targetReturnInvoiceId === entry.invoice.id} /> : null}
           </div>
         </article>
       ))}</div>

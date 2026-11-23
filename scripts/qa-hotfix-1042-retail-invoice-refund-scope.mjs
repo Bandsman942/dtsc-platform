@@ -54,6 +54,22 @@ const source = fs.readFileSync("lib/enterprise/accounting/customer-refund-servic
 const compiled = ts.transpileModule(source, { compilerOptions: {
   module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022,
 } }).outputText;
+// Exercise the actual fail-closed Retail return policy in this Finance VM test.
+// Do not replace the policy with a permissive stub: the legacy refund path
+// must continue to reject unbound Retail payments.
+const policySource = fs.readFileSync("lib/enterprise/retail/invoice-return-policy.ts", "utf8");
+const policyCompiled = ts.transpileModule(policySource, { compilerOptions: {
+  module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022,
+} }).outputText;
+const policyUnit = { exports: {} };
+vm.runInNewContext(policyCompiled, {
+  module: policyUnit, exports: policyUnit.exports,
+  require: (name) => {
+    if (name === "@prisma/client") return { Prisma };
+    if (name === "zod") return require("zod");
+    throw new Error("Unexpected Retail policy dependency: " + name);
+  },
+}, { filename: "invoice-return-policy.ts" });
 const unit = { exports: {} };
 vm.runInNewContext(compiled, {
   module: unit, exports: unit.exports, Promise, Map, Set, Date,
@@ -66,7 +82,8 @@ vm.runInNewContext(compiled, {
     if (name === "@/lib/enterprise/accounting/posting-service") return { postBusinessEventTx: async () => {} };
     if (name === "@/lib/enterprise/accounting/reversal-service") return { reverseJournalEntryTx: async () => {} };
     if (name === "@/lib/enterprise/accounting/payments-service") return { resolveCashSessionForConfirmation: async () => ({ id: "cash-session" }) };
-    if (name === "@/lib/enterprise/retail/site-access") return { retailFinanceReadSiteScope: async () => state.allowedSites };
+    if (name === "@/lib/enterprise/retail/site-access") return { retailFinanceReadSiteScope: async () => state.allowedSites, RETAIL_OWNER_ROLES: new Set(["OWNER", "ADMIN"]), requireRetailSiteCapability: async () => { throw new Error("Unexpected Retail self-approval in legacy Finance refund"); } };
+    if (name === "@/lib/enterprise/retail/invoice-return-policy") return policyUnit.exports;
     return require(name);
   },
 });

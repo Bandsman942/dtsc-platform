@@ -320,8 +320,14 @@ const financePrepareRoute = fs.readFileSync("app/api/enterprise/[organizationId]
 const financeSettleRoute = fs.readFileSync("app/api/enterprise/[organizationId]/retail/invoices/[invoiceId]/returns/[requestId]/settle/handler.ts", "utf8");
 assert.match(financePrepareRoute, /authorizeFinanceRequest\(req, organizationId, "FINANCE_PAYMENTS", "submit", \{ mutation: true/);
 assert.match(financeSettleRoute, /authorizeFinanceRequest\(req, organizationId, "FINANCE_PAYMENTS", "update", \{ mutation: true/);
-assert.doesNotMatch(financePrepareRoute + financeSettleRoute, /authorizeRetailRequest|"RETAIL_POS"/,
-  "Independent Finance actors are not granted and do not require POS cashier permissions");
+assert.doesNotMatch(financePrepareRoute, /authorizeRetailRequest|"RETAIL_POS"/,
+  "Normal Finance document preparation must not be a POS cashier mutation");
+assert.match(financeSettleRoute, /parsed\.data\.completeDeferred/,
+  "Deferred return close must be a separate operation");
+assert.match(financeSettleRoute, /authorizeRetailRequest/,
+  "Only a delegated RETAIL operator can close an already settled deferred refund");
+assert.match(financeSettleRoute, /authorizeFinanceRequest/,
+  "Standard Finance settlement must retain independent Finance RBAC");
 assert.match(source, /resolveEnterpriseModuleCapabilities\(\{ organizationId, userId: actorUserId, moduleCode: "FINANCE_RECEIVABLES" \}\)/);
 assert.match(source, /retailFinanceReadSiteScope\(organizationId, actorUserId, "COLLECT_PAYMENT", tx\)/);
 console.log("✓ #1042 Retail invoice return Finance prepare/settle: authorization, independent approvals, idempotence, exact source scope, atomic ordering, stock rollback and completion");

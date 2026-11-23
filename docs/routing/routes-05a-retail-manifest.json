@@ -290,10 +290,15 @@
       "reason": "Only assigned store self-approval actions become visible"
     },
     {
-      "issue": 1184,
+      "issue": 1222,
       "handlerPath": "app/api/enterprise/[organizationId]/retail/invoices/[invoiceId]/returns/[requestId]/decision/handler.ts",
-      "blobSha": "7fa66959699d470e1dcbb233c79a51ddfee20273",
-      "reason": "High-risk manager return-decision audit"
+      "blobSha": "f6b5985e6ac23f38c065ea2aa1ef0496646f5b71",
+      "reason": "Reviewed #1222 return APPROVE decision with required authenticated step-up for real refunds; retains prior #1184 high-risk audit and POST dispatch behavior.",
+      "previousApproval": {
+        "issue": 1184,
+        "blobSha": "7fa66959699d470e1dcbb233c79a51ddfee20273",
+        "reason": "High-risk manager return-decision audit"
+      }
     },
     {
       "issue": 1184,
@@ -312,6 +317,12 @@
       "handlerPath": "app/api/enterprise/[organizationId]/retail/invoices/[invoiceId]/print/handler.ts",
       "blobSha": "8bf9fa26923f515918f4854b6fc82fea3c977d3a",
       "reason": "Reviewed #1219 legal-header invoice snapshot (RCCM/ID.NAT/NIF/telephone) in A4 and 80mm; existing store scopes, footer snapshot, draft watermark and dispatch methods preserved; QA qa-hotfix-1042-retail-invoice-print and qa-retail-kin-forex-ticket2-1218."
+    },
+    {
+      "issue": 1222,
+      "handlerPath": "app/api/enterprise/[organizationId]/retail/invoices/[invoiceId]/returns/[requestId]/settle/handler.ts",
+      "blobSha": "c62fdd97c64168692560708c36d2a02b5b39380d",
+      "reason": "Reviewed #1222 settlement handler: session/same-origin before payload validation, Finance or RETAIL delegated authorization, MFA step-up, atomic canonical settlement, audit; POST contract unchanged."
     }
   ]
 }
