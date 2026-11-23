@@ -74,6 +74,7 @@ export async function GET(req: Request, { params }: Params) {
     ...item,
     retailOrigin: retailByInvoice.has(item.salesInvoiceId) ? {
       invoiceId: item.salesInvoiceId,
+      invoiceNumber: item.salesInvoice.number,
       siteId: retailByInvoice.get(item.salesInvoiceId)!.siteId,
       returnRequestId: returnByCredit.get(item.id)?.id || null,
       returnNumber: returnByCredit.get(item.id)?.number || null,
