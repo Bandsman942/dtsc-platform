@@ -35,7 +35,7 @@ const tx = {
   } },
   enterpriseRetailInvoiceReturnLine: {
     findMany: async ({ where }) => {
-      assert.equal(where.request.status.in.join(","), "SUBMITTED,INSPECTED,APPROVED,FINANCE_PENDING,COMPLETED");
+      assert.equal(where.request.status.in.join(","), "SUBMITTED,INSPECTED,APPROVED,FINANCE_PENDING,REFUND_PENDING,COMPLETED");
       return state.reserved;
     },
     createMany: async ({ data }) => {
