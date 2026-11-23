@@ -53,12 +53,15 @@ async function requireFinanceSettler(organizationId: string, actorUserId: string
   }
 }
 
-export async function prepareRetailInvoiceReturnFinance(
+/** Transaction-scoped Finance document preparation. The express flag is
+ * internal: authorization must be checked by assertRetailExpressReturnAuthorizationTx
+ * inside the same locked transaction before calling this helper. */
+export async function prepareRetailInvoiceReturnFinanceTx(
+  tx: Prisma.TransactionClient,
   organizationId: string, invoiceId: string, requestId: string,
   actorUserId: string, input: z.infer<typeof retailInvoiceReturnFinancePrepareSchema>,
+  express = false,
 ) {
-  await requireFinancePreparer(organizationId, actorUserId);
-  return withRetailTransactionRetry(() => prisma.$transaction(async (tx) => {
     const config = await tx.enterpriseRetailConfiguration.findUnique({
       where: { organizationId }, select: { settingsJson: true },
     });
@@ -88,12 +91,12 @@ export async function prepareRetailInvoiceReturnFinance(
       return { request, idempotent: true };
     }
     if (request.status !== "APPROVED" || request.revision !== input.revision ||
-        actorUserId === request.approverUserId || actorUserId === request.requestedByUserId) {
+        (!express && (actorUserId === request.approverUserId || actorUserId === request.requestedByUserId))) {
       throw fail("RETAIL_INVOICE_RETURN_FINANCE_CONFLICT");
     }
-    const financeApproverUserId = input.financeApproverUserId || request.approverUserId;
-    if ((request.approverUserId === request.requestedByUserId && !input.financeApproverUserId) ||
-        [request.requestedByUserId, request.inspectedByUserId, actorUserId].includes(financeApproverUserId)) {
+    const financeApproverUserId = express ? actorUserId : input.financeApproverUserId || request.approverUserId;
+    if (!express && ((request.approverUserId === request.requestedByUserId && !input.financeApproverUserId) ||
+        [request.requestedByUserId, request.inspectedByUserId, actorUserId].includes(financeApproverUserId))) {
       throw fail("RETAIL_INVOICE_RETURN_FINANCE_APPROVER_INDEPENDENT_REQUIRED", 403);
     }
     const [receivableApprove, paymentApprove, receivableScope, paymentScope] = await Promise.all([
@@ -102,9 +105,9 @@ export async function prepareRetailInvoiceReturnFinance(
       retailFinanceReadSiteScope(organizationId, financeApproverUserId, "VIEW_SALES", tx),
       retailFinanceReadSiteScope(organizationId, financeApproverUserId, "COLLECT_PAYMENT", tx),
     ]);
-    if (!receivableApprove.allowed || !paymentApprove.allowed ||
+    if (!express && (!receivableApprove.allowed || !paymentApprove.allowed ||
         (receivableScope !== null && !receivableScope.includes(request.checkout.siteId)) ||
-        (paymentScope !== null && !paymentScope.includes(request.checkout.siteId))) {
+        (paymentScope !== null && !paymentScope.includes(request.checkout.siteId)))) {
       throw fail("RETAIL_INVOICE_RETURN_FINANCE_APPROVER_INDEPENDENT_REQUIRED", 403);
     }
     const preview = await assertRetailInvoiceReturnSettlementReadinessTx(tx, organizationId, invoiceId, requestId);
@@ -216,6 +219,33 @@ export async function prepareRetailInvoiceReturnFinance(
         amount: credit.grandTotal.toFixed(), currency: credit.currencyCode, source: "RETAIL_INVOICE_RETURN" },
     });
 
+    if (express) {
+      // The designated Retail decision maker is the single delegated Finance
+      // approver. Preserve immutable evidence rather than forging an
+      // independent approval assignment with a second operator.
+      const approvalTime = new Date();
+      for (const payment of refundPayments) {
+        await tx.enterprisePayment.update({ where: { id: payment.id },
+          data: { status: "APPROVED", approvedByUserId: actorUserId,
+            approvedAt: approvalTime, revision: { increment: 1 } } });
+        await tx.enterprisePaymentEvent.create({ data: {
+          organizationId, paymentId: payment.id, actorUserId, eventType: "EXPRESS_APPROVE",
+          summary: "Refund approved by delegated Retail decision maker",
+          metadataJson: { returnRequestId: request.id, policyMode: "SIMPLIFIED", source: "RETAIL_RETURN" },
+        } });
+      }
+      await tx.enterpriseSalesCreditNote.update({ where: { id: credit.id },
+        data: { status: "APPROVED", approvedByUserId: actorUserId,
+          approvedAt: approvalTime, revision: { increment: 1 } } });
+      await publishFinanceEvent(tx, {
+        organizationId, entityType: "EnterpriseSalesCreditNote", entityId: credit.id,
+        eventType: "SALES_CREDIT_NOTE_APPROVED",
+        summary: "Retail credit approved by explicitly delegated owner or manager",
+        actorUserId, fromStatus: "DRAFT", toStatus: "APPROVED",
+        metadataJson: { returnRequestId: request.id, policyMode: "SIMPLIFIED",
+          financeApproverUserId, noSecondIndependentApproval: true },
+      });
+    } else {
     // Two real, independently approved Finance assignments, committed in the
     // same transaction as the draft documents and the Retail binding.
     for (const payment of refundPayments) {
@@ -248,6 +278,7 @@ export async function prepareRetailInvoiceReturnFinance(
       metadataJson: { approvalId: creditApproval.id, approverUserId: financeApproverUserId, returnRequestId: request.id },
     });
 
+    }
     const updated = await tx.enterpriseRetailInvoiceReturnRequest.update({
       where: { id: request.id, organizationId }, data: {
         status: "FINANCE_PENDING", refundPaymentId: refundPayments[0]?.id || null, salesCreditNoteId: credit.id,
@@ -257,14 +288,24 @@ export async function prepareRetailInvoiceReturnFinance(
     });
     await publishFinanceEvent(tx, {
       organizationId, entityType: "EnterpriseRetailInvoiceReturnRequest", entityId: request.id,
-      eventType: "RETAIL_INVOICE_RETURN_FINANCE_PREPARED", summary: "Retail invoice return bound to two Finance approvals",
+      eventType: "RETAIL_INVOICE_RETURN_FINANCE_PREPARED", summary: express ? "Retail return Finance documents approved under express delegation" : "Retail invoice return bound to two Finance approvals",
       actorUserId, fromStatus: "APPROVED", toStatus: "FINANCE_PENDING",
       metadataJson: { invoiceId, siteId: preview.siteId, paymentId: refundPayments[0]?.id || null,
         payoutPaymentIds: refundPayments.map((payment) => payment.id),
         creditNoteId: credit.id, creditAmount: preview.refundAmount.toFixed(2), payoutAmount: payoutAmount.toFixed(2), financeApproverUserId },
     });
     return { request: updated, idempotent: false };
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 45000 }));
+}
+
+/** STANDARD workflow: retains independent Finance preparation and approval. */
+export async function prepareRetailInvoiceReturnFinance(
+  organizationId: string, invoiceId: string, requestId: string,
+  actorUserId: string, input: z.infer<typeof retailInvoiceReturnFinancePrepareSchema>,
+) {
+  await requireFinancePreparer(organizationId, actorUserId);
+  return withRetailTransactionRetry(() => prisma.$transaction(async (tx) =>
+    prepareRetailInvoiceReturnFinanceTx(tx, organizationId, invoiceId, requestId, actorUserId, input),
+  { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 45000 }));
 }
 
 /** ONE serializable commit: allocation/journal inverse, credit note posting,
