@@ -94,7 +94,9 @@ export async function assertRetailExpressReturnAuthorizationTx(
   const effectiveLimit = decimal(snapshot.expressRefundLimitAmount).lt(live.expressRefundLimitAmount)
     ? decimal(snapshot.expressRefundLimitAmount) : decimal(live.expressRefundLimitAmount);
   const cumulativeUSD = reservedPayout.plus(payout).mul(rate.rate).toDecimalPlaces(2, Prisma.Decimal.ROUND_UP);
-  if (cumulativeUSD.greaterThan(effectiveLimit)) throw conflict("RETAIL_RETURN_EXPRESS_LIMIT_EXCEEDED");
+  if (cumulativeUSD.greaterThan(effectiveLimit) || cumulativeUSD.greaterThan(100)) {
+    throw conflict("RETAIL_RETURN_EXPRESS_LIMIT_EXCEEDED");
+  }
   await snapshotExchangeRate(tx, {
     organizationId, sourceEntityType: "EnterpriseRetailInvoiceReturnRequest",
     sourceEntityId: request.id, sourceCurrencyCode: rate.sourceCurrencyCode,
