@@ -250,6 +250,7 @@ export async function listRetailInvoiceReturnRequests(
       refundAmount: item.refundAmount, refundPayoutAmount: item.refundPayoutAmount, inspectedAt: item.inspectedAt,
       inspectionNotes: item.inspectionNotes, inspectionMode: item.inspectionMode, decidedAt: item.decidedAt,
       payoutPreviewAmount: previewPayout.toFixed(2), canExpress: expressEligible, refundChoice: item.refundChoice,
+      deferredCashDisbursementRequired: item.status === "REFUND_PENDING" && payoutMethods.includes("CASH"),
       canFinalizeDeferred: item.status === "REFUND_PENDING" && item.refundChoice === "LATER" &&
         item.settledByUserId === actorUserId && item.financeApproverUserId === actorUserId &&
         liveReturnPolicy.mode === "SIMPLIFIED" && liveReturnPolicy.allowDelegatedSelfApproval &&
