@@ -404,11 +404,46 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
       decision: "APPROVE", revision: inspection.body.request.revision,
     });
     expect(decided.status, JSON.stringify(decided.body)).toBe(200);
+    // #1224: an APPROVED historical return is not a posted credit and must
+    // not change the source invoice's issued status or release its stock.
+    const issuedRegister = await context.owner.request.get(`${baseUrl}${base}/retail/invoices?${new URLSearchParams({
+      siteId: fixture.site.id, status: "ISSUED", q: issued.body.invoice.number,
+    })}`);
+    expect(issuedRegister.status(), await issuedRegister.text()).toBe(200);
+    const issuedRegisterBody = await issuedRegister.json();
+    const issuedRow = issuedRegisterBody.items.find(entry => entry.invoice.id === invoiceId);
+    expect(issuedRow?.invoice.status).toBe("ISSUED");
+    expect(issuedRow?.returnRequests.some(entry => entry.number === request.body.request.number && entry.status === "APPROVED")).toBe(true);
+    const paidRegister = await context.owner.request.get(`${baseUrl}${base}/retail/invoices?${new URLSearchParams({
+      siteId: fixture.site.id, status: "PAID", q: issued.body.invoice.number,
+    })}`);
+    expect(paidRegister.status()).toBe(200);
+    expect((await paidRegister.json()).items.some(entry => entry.invoice.id === invoiceId)).toBe(false);
+    const recoveryApproved = await context.owner.request.get(`${baseUrl}${base}/retail/returns/historical?${new URLSearchParams({
+      siteId: fixture.site.id, status: "APPROVED", q: issued.body.invoice.number,
+    })}`);
+    expect(recoveryApproved.status(), await recoveryApproved.text()).toBe(200);
+    const approvedRow = (await recoveryApproved.json()).items.find(entry => entry.id === returnId);
+    expect(approvedRow).toMatchObject({
+      stage: "FINANCE_PREPARATION_REQUIRED", invoiceStatus: "ISSUED", stockTreatment: "PHYSICAL_RETURN_ON_COMPLETION",
+      legacyStandard: true,
+    });
+    const invalidRecoveryStatus = await context.owner.request.get(`${baseUrl}${base}/retail/returns/historical?status=DELETED`);
+    expect(invalidRecoveryStatus.status()).toBe(400);
     const preparedRefund = await post(context.preparer, `${returnPath}/prepare`, {
       revision: decided.body.request.revision,
     });
     expect(preparedRefund.status, JSON.stringify(preparedRefund.body)).toBe(201);
     expect(preparedRefund.body.request.status).toBe("FINANCE_PENDING");
+    // #1224: reopening an already-bound Finance case must point to the
+    // existing credit/payment documents rather than creating a second note.
+    const recoveryFinance = await context.owner.request.get(`${baseUrl}${base}/retail/returns/historical?${new URLSearchParams({
+      siteId: fixture.site.id, status: "FINANCE_PENDING", q: request.body.request.number,
+    })}`);
+    expect(recoveryFinance.status(), await recoveryFinance.text()).toBe(200);
+    const financeRow = (await recoveryFinance.json()).items.find(entry => entry.id === returnId);
+    expect(financeRow).toMatchObject({ stage: "FINANCE_APPROVAL_REQUIRED", status: "FINANCE_PENDING" });
+    expect(financeRow.creditNoteNumber).toBeTruthy();
     const refundId = preparedRefund.body.request.refundPaymentId;
     const creditId = preparedRefund.body.request.salesCreditNoteId;
     const payoutLegs = await prisma.enterpriseRetailInvoiceReturnRefundLeg.findMany({
