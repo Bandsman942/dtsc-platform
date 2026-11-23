@@ -23,13 +23,25 @@ const ERROR_MESSAGES: Record<string, Bilingual> = {
     fr: "Cette facture ne peut pas être annulée directement. Vérifiez son état et le rapprochement des encaissements dans Finance, puis créez une demande de retour/avoir depuis le POS.",
     en: "This invoice cannot be voided directly. Verify its payment allocations and status in Finance, then request a return/credit note from POS.",
   },
+  RETAIL_RETURN_POLICY_FUNCTIONAL_CURRENCY_REQUIRED: {
+    fr: "Configurez d'abord la devise fonctionnelle de l'entreprise dans Finance avant de définir le plafond des remboursements express.",
+    en: "Configure the company's functional currency in Finance before setting its express refund limit.",
+  },
+  RETAIL_RETURN_POLICY_CURRENCY_MISMATCH: {
+    fr: "La devise du plafond doit correspondre exactement à la devise fonctionnelle actuelle de l'entreprise. Actualisez les paramètres et réenregistrez.",
+    en: "The refund limit currency must match the company's current Finance functional currency. Refresh the settings and save again.",
+  },
+  RETAIL_RETURN_POLICY_INPUT_INVALID: {
+    fr: "Renseignez un plafond positif dans la devise fonctionnelle de l'entreprise, avec au plus deux décimales.",
+    en: "Set a positive limit in the company's functional currency, with up to two decimal places.",
+  },
   RETAIL_RETURN_EXPRESS_LIMIT_EXCEEDED: {
-    fr: "Ce remboursement dépasse le plafond express cumulé de 100 USD par facture (conversion Finance incluse). Choisissez « Circuit Finance standard » : un préparateur, un validateur et un liquidateur indépendants traiteront l'avoir et le remboursement.",
-    en: "This refund exceeds the cumulative USD 100 express cap per invoice (including Finance currency conversion). Choose Standard Finance workflow with independent preparer, approver and settlement officer.",
+    fr: "Ce remboursement dépasse le plafond express cumulé fixé dans les paramètres de l’entreprise (conversion Finance incluse). Choisissez « Circuit Finance standard » : un préparateur, un validateur et un liquidateur indépendants traiteront l'avoir et le remboursement.",
+    en: "This refund exceeds the owner-configured cumulative express limit for this invoice (including Finance currency conversion). Choose Standard Finance workflow with independent preparer, approver and settlement officer.",
   },
   RETAIL_RETURN_EXPRESS_FX_RATE_STALE: {
-    fr: "Le taux de change Finance nécessaire au contrôle du plafond express est périmé. Actualisez le taux dans Finance ou choisissez le circuit standard, sans forcer le remboursement.",
-    en: "The Finance exchange rate required for the express cap is outdated. Update the rate in Finance or use the standard workflow.",
+    fr: "Le taux de change Finance nécessaire pour vérifier le plafond express configuré est périmé. Actualisez le taux dans Finance ou choisissez le circuit standard, sans forcer le remboursement.",
+    en: "The Finance exchange rate required for the configured express limit is outdated. Update the rate in Finance or use the standard workflow.",
   },
   RETAIL_RETURN_EXPRESS_EXTERNAL_PAYMENT_PENDING: {
     fr: "Cette vente a été encaissée par un moyen externe. Choisissez un remboursement différé ou le circuit Finance standard ; ne confirmez pas une remise d'espèces qui n'a pas eu lieu.",
