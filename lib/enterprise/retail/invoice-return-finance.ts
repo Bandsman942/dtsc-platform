@@ -356,6 +356,7 @@ export async function settleRetailInvoiceReturnFinanceTx(
       tx, organizationId, invoiceId, requestId, "FINANCE_PENDING",
     );
     const payoutAmount = plan.payoutAmount ?? plan.refundAmount;
+    const deferredPayout = expressChoice === "LATER" && payoutAmount.greaterThan(0);
     const financeApproverUserId = request.financeApproverUserId || request.approverUserId;
     if ((payoutAmount.greaterThan(0) && !request.refundPaymentId) ||
         (payoutAmount.isZero() && request.refundPaymentId) ||
@@ -493,9 +494,9 @@ export async function settleRetailInvoiceReturnFinanceTx(
     }
     const completed = await tx.enterpriseRetailInvoiceReturnRequest.update({
       where: { organizationId, id: request.id }, data: {
-        status: expressChoice === "LATER" ? "REFUND_PENDING" : "COMPLETED",
+        status: deferredPayout ? "REFUND_PENDING" : "COMPLETED",
         settledByUserId: actorUserId,
-        completedAt: expressChoice === "LATER" ? null : new Date(), revision: { increment: 1 },
+        completedAt: deferredPayout ? null : new Date(), revision: { increment: 1 },
       },
     });
     // If the credit closes the remaining receivable, fulfill only the
@@ -504,10 +505,10 @@ export async function settleRetailInvoiceReturnFinanceTx(
     if (nextOutstanding.isZero()) await postPaidRetailInvoiceStockTx(tx, organizationId, invoiceId, actorUserId);
     await publishFinanceEvent(tx, {
       organizationId, entityType: "EnterpriseRetailInvoiceReturnRequest", entityId: request.id,
-      eventType: expressChoice === "LATER" ? "RETAIL_INVOICE_RETURN_REFUND_PENDING" : "RETAIL_INVOICE_RETURN_COMPLETED",
-      summary: expressChoice === "LATER" ? "Retail credit and stock settled, customer refund still payable" :
+      eventType: deferredPayout ? "RETAIL_INVOICE_RETURN_REFUND_PENDING" : "RETAIL_INVOICE_RETURN_COMPLETED",
+      summary: deferredPayout ? "Retail credit and stock settled, customer refund still payable" :
         "Retail invoice return settled atomically in Finance and Inventory",
-      actorUserId, fromStatus: "FINANCE_PENDING", toStatus: expressChoice === "LATER" ? "REFUND_PENDING" : "COMPLETED",
+      actorUserId, fromStatus: "FINANCE_PENDING", toStatus: deferredPayout ? "REFUND_PENDING" : "COMPLETED",
       metadataJson: { invoiceId, siteId: plan.siteId, refundPaymentId: payment?.id || null,
         payoutPaymentIds: payouts.map((leg) => leg.payment.id),
         creditNoteId: credit.id, creditAmount: plan.refundAmount.toFixed(2), payoutAmount: payoutAmount.toFixed(2),
