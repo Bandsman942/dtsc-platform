@@ -63,6 +63,12 @@ export async function assertRetailExpressReturnAuthorizationTx(
   if (payout.lessThan(0) || (payout.isZero() && !allowZeroPayoutCreditOnly)) {
     throw conflict("RETAIL_RETURN_EXPRESS_ZERO_PAYOUT_USE_CREDIT_ONLY");
   }
+  // A zero-payout, physically returned item has no foreign-currency
+  // reimbursement to cap. It still needs canonical valuation, journal posting
+  // and the currently authorized decision maker, but no cash/FX transaction.
+  if (payout.isZero()) {
+    return { request, plan, payout, cumulativeUSD: decimal(0), policy: live, choice };
+  }
   // Limit is per invoice, across all non-rejected returns. Never split 100 USD
   // into multiple small requests, or compare CDF to USD as bare numbers.
   const prior = await tx.enterpriseRetailInvoiceReturnRequest.findMany({
