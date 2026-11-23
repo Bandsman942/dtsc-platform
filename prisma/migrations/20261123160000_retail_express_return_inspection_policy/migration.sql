@@ -16,4 +16,4 @@ BEGIN
       ADD CONSTRAINT "retail_invoice_return_refund_choice_chk"
       CHECK ("refundChoice" IS NULL OR "refundChoice" IN ('NOW', 'LATER'));
   END IF;
-END $;
+END $$;
