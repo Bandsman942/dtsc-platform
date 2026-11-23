@@ -168,7 +168,7 @@ export async function assertRetailInvoiceReturnSettlementReadinessTx(
         inventoryItemId: true, stockLotId: true, quantity: true },
     }),
     tx.enterpriseRetailInvoiceReturnLine.findMany({
-      where: { organizationId, checkoutId: checkout.id, checkoutLineId: { in: [...ids] }, request: { status: "COMPLETED" } },
+      where: { organizationId, checkoutId: checkout.id, checkoutLineId: { in: [...ids] }, request: { status: { in: ["COMPLETED", "REFUND_PENDING"] } } },
       select: { checkoutLineId: true, quantity: true, refundAmount: true,
         refundNetAmount: true, refundTaxAmount: true, stockDisposition: true, lotAllocations: true },
     }),
