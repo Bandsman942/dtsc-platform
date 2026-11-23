@@ -173,7 +173,7 @@ export async function listRetailInvoiceReturnRequests(
   if (splitLines.length) {
     const [issues, committed] = await Promise.all([
       prisma.enterpriseStockMovement.findMany({ where: { organizationId, sourceEntityType: "EnterpriseSalesInvoice", sourceEntityId: invoiceId, sourceLineId: { in: splitLines.map(line => line.invoiceItemId) }, direction: "OUT", movementType: "SALE_FULFILLMENT" }, select: { sourceLineId: true, stockLotId: true, inventoryItemId: true, warehouseId: true, quantity: true } }),
-      prisma.enterpriseRetailInvoiceReturnLine.findMany({ where: { organizationId, checkoutId: checkout.id, checkoutLineId: { in: splitLines.map(line => line.id) }, request: { status: { in: ["SUBMITTED", "INSPECTED", "APPROVED", "FINANCE_PENDING", "COMPLETED"] } } }, select: { checkoutLineId: true, quantity: true, stockDisposition: true, lotAllocations: true } }),
+      prisma.enterpriseRetailInvoiceReturnLine.findMany({ where: { organizationId, checkoutId: checkout.id, checkoutLineId: { in: splitLines.map(line => line.id) }, request: { status: { in: ["SUBMITTED", "INSPECTED", "APPROVED", "FINANCE_PENDING", "REFUND_PENDING", "COMPLETED"] } } }, select: { checkoutLineId: true, quantity: true, stockDisposition: true, lotAllocations: true } }),
     ]);
     const lots = await prisma.enterpriseStockLot.findMany({ where: { organizationId, warehouseId: checkout.warehouseId, id: { in: [...new Set(issues.map(row => row.stockLotId).filter((id): id is string => Boolean(id)))] } }, select: { id: true, inventoryItemId: true, lotNumber: true } });
     for (const line of splitLines) {
@@ -396,7 +396,7 @@ export async function createRetailInvoiceReturnRequest(
     const committed = await tx.enterpriseRetailInvoiceReturnLine.findMany({
       where: {
         organizationId, checkoutId: checkout.id, checkoutLineId: { in: lineIds },
-        request: { status: { in: ["SUBMITTED", "INSPECTED", "APPROVED", "FINANCE_PENDING", "COMPLETED"] } },
+        request: { status: { in: ["SUBMITTED", "INSPECTED", "APPROVED", "FINANCE_PENDING", "REFUND_PENDING", "COMPLETED"] } },
       },
       select: { checkoutLineId: true, quantity: true, refundAmount: true, refundNetAmount: true, refundTaxAmount: true, stockDisposition: true, lotAllocations: true, request: { select: { status: true } } },
     });
