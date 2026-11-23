@@ -49,6 +49,20 @@ const tx = {
 };
 const prisma = { $transaction: async (fn) => fn(tx) };
 const source = fs.readFileSync("lib/enterprise/accounting/customer-refund-service.ts", "utf8");
+// Keep this legacy Finance bypass regression aligned with the actual
+// fail-closed Retail policy instead of letting the TS path alias escape the VM.
+const policySource = fs.readFileSync("lib/enterprise/retail/invoice-return-policy.ts", "utf8");
+const policyUnit = { exports: {} };
+vm.runInNewContext(ts.transpileModule(policySource, {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+}).outputText, {
+  module: policyUnit, exports: policyUnit.exports,
+  require: (id) => {
+    if (id === "@prisma/client") return { Prisma };
+    if (id === "zod") return require("zod");
+    throw new Error("Unexpected Retail policy dependency: " + id);
+  },
+}, { filename: "invoice-return-policy.ts" });
 const unit = { exports: {} };
 vm.runInNewContext(ts.transpileModule(source, {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
@@ -65,7 +79,8 @@ vm.runInNewContext(ts.transpileModule(source, {
     if (id === "@/lib/enterprise/accounting/posting-service") return { postBusinessEventTx: async () => {} };
     if (id === "@/lib/enterprise/accounting/reversal-service") return { reverseJournalEntryTx: async () => {} };
     if (id === "@/lib/enterprise/accounting/payments-service") return { resolveCashSessionForConfirmation: async () => ({ id: "cash" }) };
-    if (id === "@/lib/enterprise/retail/site-access") return { retailFinanceReadSiteScope: async () => ["shop-A"] };
+    if (id === "@/lib/enterprise/retail/site-access") return { retailFinanceReadSiteScope: async () => ["shop-A"], RETAIL_OWNER_ROLES: new Set(["OWNER", "ADMIN"]), requireRetailSiteCapability: async () => { throw new Error("Legacy Finance bypass must not self-authorize Retail return"); } };
+    if (id === "@/lib/enterprise/retail/invoice-return-policy") return policyUnit.exports;
     return require(id);
   },
 });
