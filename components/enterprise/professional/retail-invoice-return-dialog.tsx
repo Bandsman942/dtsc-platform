@@ -85,12 +85,12 @@ function statusLabel(status: string, copy: typeof translations.fr | typeof trans
     FINANCE_PENDING: copy.financePending, REJECTED: copy.rejected, COMPLETED: copy.completed } as Record<string, string>)[status] || copy.unknown;
 }
 
-export function RetailInvoiceReturnDialog({ organizationId, invoiceId, invoiceNumber, siteId, currencyCode, checkoutLines, invoiceItems, locale, onChanged }: {
+export function RetailInvoiceReturnDialog({ organizationId, invoiceId, invoiceNumber, siteId, currencyCode, checkoutLines, invoiceItems, locale, onChanged, autoOpen = false }: {
   organizationId: string; invoiceId: string; invoiceNumber: string; siteId: string; currencyCode: string;
-  checkoutLines: CheckoutLine[]; invoiceItems: InvoiceItem[]; locale: "fr" | "en"; onChanged: () => void;
+  checkoutLines: CheckoutLine[]; invoiceItems: InvoiceItem[]; locale: "fr" | "en"; onChanged: () => void; autoOpen?: boolean;
 }) {
   const copy = translations[locale];
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(autoOpen);
   const [data, setData] = useState<ReturnResponse | null>(null);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
