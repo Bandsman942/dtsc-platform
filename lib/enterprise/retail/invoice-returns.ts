@@ -7,6 +7,7 @@ const decimalMin = (...values: Prisma.Decimal[]): Prisma.Decimal => values.reduc
 
 import { z } from "zod";
 import { publishFinanceEvent } from "@/lib/enterprise/accounting/helpers";
+import { resolveExchangeRateDetails } from "@/lib/enterprise/accounting/currency";
 import { resolveEnterpriseModuleAccess, resolveEnterpriseModuleCapabilities } from "@/lib/enterprise/module-access";
 import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
 import { requireRetailSiteCapability, RETAIL_OWNER_ROLES, siteStaffCapabilities, hasRetailSelfApprovalGrant } from "@/lib/enterprise/retail/site-access";
@@ -135,7 +136,7 @@ export async function listRetailInvoiceReturnRequests(
   const checkout = await prisma.enterpriseRetailInvoiceCheckout.findFirst({
     where: { organizationId, salesInvoiceId: invoiceId },
     select: { id: true, siteId: true, warehouseId: true, stockPostedAt: true, lines: { select: { id: true, invoiceItemId: true, inventoryItemId: true, lotAllocations: true } }, invoice: { select: {
-      status: true, grandTotal: true, amountPaid: true, amountCredited: true, outstandingAmount: true,
+      status: true, grandTotal: true, amountPaid: true, amountCredited: true, outstandingAmount: true, currencyCode: true,
     } } },
   });
   if (!checkout) throw new EnterpriseRetailError("RETAIL_INVOICE_NOT_FOUND", 404);
@@ -212,6 +213,29 @@ export async function listRetailInvoiceReturnRequests(
   const canPrepareFinance = paymentCapabilities.canCreate && paymentCapabilities.canSubmit &&
     receivableCapabilities.canCreate && receivableCapabilities.canSubmit;
   const canSettleFinance = paymentCapabilities.canWrite && receivableCapabilities.canManage;
+  // The approval UI must not offer a paid-invoice express refund which is
+  // guaranteed to fail the server's USD 100 cumulative cap. Amounts in CDF
+  // need a real, dated Finance rate; missing/stale FX fails closed.
+  const expressCandidates = items.filter(item => item.status === "INSPECTED" &&
+    item.refundAmount.greaterThan(checkout.invoice.outstandingAmount));
+  let expressRate: Prisma.Decimal | null = null;
+  let priorExpressRequests: Array<{ id: string; refundPayoutAmount: Prisma.Decimal | null; refundAmount: Prisma.Decimal }> = [];
+  if (expressCandidates.length && liveReturnPolicy.mode === "SIMPLIFIED") {
+    try {
+      const current = new Date();
+      const resolved = await resolveExchangeRateDetails(prisma, {
+        organizationId, sourceCurrencyCode: checkout.invoice.currencyCode,
+        targetCurrencyCode: "USD", rateDate: current,
+      });
+      if (resolved.direction === "IDENTITY" || current.getTime() - resolved.rateDate.getTime() <= 7 * 86400000) {
+        expressRate = resolved.rate;
+      }
+    } catch { /* No current rate: use standard independent Finance workflow. */ }
+    priorExpressRequests = await prisma.enterpriseRetailInvoiceReturnRequest.findMany({
+      where: { organizationId, checkoutId: checkout.id, status: { in: ["APPROVED", "FINANCE_PENDING", "REFUND_PENDING", "COMPLETED"] } },
+      select: { id: true, refundPayoutAmount: true, refundAmount: true },
+    });
+  }
   return {
     items: items.map((item) => {
       const payoutStatuses = item.refundLegs.length
@@ -239,7 +263,12 @@ export async function listRetailInvoiceReturnRequests(
       const previewPayout = item.refundAmount.greaterThan(checkout.invoice.outstandingAmount)
         ? item.refundAmount.minus(checkout.invoice.outstandingAmount)
         : new Prisma.Decimal(0);
-      const expressEligible = policy.mode === "SIMPLIFIED" && liveReturnPolicy.mode === "SIMPLIFIED" &&
+      const priorPayout = priorExpressRequests.filter(row => row.id !== item.id).reduce((amount, row) =>
+        amount.plus(row.refundPayoutAmount ?? row.refundAmount), new Prisma.Decimal(0));
+      const effectiveLimit = new Prisma.Decimal(Math.min(policy.expressRefundLimitAmount, liveReturnPolicy.expressRefundLimitAmount, 100));
+      const withinExpressCap = Boolean(expressRate &&
+        priorPayout.plus(previewPayout).times(expressRate).toDecimalPlaces(2, Prisma.Decimal.ROUND_UP).lessThanOrEqualTo(effectiveLimit));
+      const expressEligible = withinExpressCap && policy.mode === "SIMPLIFIED" && liveReturnPolicy.mode === "SIMPLIFIED" &&
         policy.autoPostCreditNote && liveReturnPolicy.autoPostCreditNote &&
         policy.allowDelegatedSelfApproval && liveReturnPolicy.allowDelegatedSelfApproval &&
         policy.promptImmediateRefund && liveReturnPolicy.promptImmediateRefund &&
@@ -250,6 +279,8 @@ export async function listRetailInvoiceReturnRequests(
       refundAmount: item.refundAmount, refundPayoutAmount: item.refundPayoutAmount, inspectedAt: item.inspectedAt,
       inspectionNotes: item.inspectionNotes, inspectionMode: item.inspectionMode, decidedAt: item.decidedAt,
       payoutPreviewAmount: previewPayout.toFixed(2), canExpress: expressEligible, refundChoice: item.refundChoice,
+      expressLimitFallback: !expressEligible && policy.mode === "SIMPLIFIED" && liveReturnPolicy.mode === "SIMPLIFIED" && item.status === "INSPECTED" && previewPayout.greaterThan(0)
+        ? (!expressRate ? "FX_RATE_REQUIRED_OR_STALE" : !withinExpressCap ? "LIMIT_EXCEEDED" : "STANDARD_APPROVAL_REQUIRED") : null,
       deferredCashDisbursementRequired: item.status === "REFUND_PENDING" && payoutMethods.includes("CASH"),
       canFinalizeDeferred: item.status === "REFUND_PENDING" && item.refundChoice === "LATER" &&
         item.settledByUserId === actorUserId && item.financeApproverUserId === actorUserId &&
