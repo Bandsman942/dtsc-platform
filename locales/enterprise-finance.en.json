@@ -611,5 +611,6 @@
   "retailReturnApproved": "Return approved, awaiting Finance",
   "retailReturnFinancePending": "Credit and refunds awaiting Finance approval",
   "retailReturnCompleted": "Credit and return completed",
-  "retailReturnRejected": "Return rejected"
+  "retailReturnRejected": "Return rejected",
+  "retailReturnRefundPending": "Credit note posted — customer refund outstanding"
 }
