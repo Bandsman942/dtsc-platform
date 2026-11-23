@@ -87,9 +87,11 @@ export function RetailInvoiceReturnPolicyPanel({ organizationId, locale }: {
       if (!response.ok || !payload.policy) throw new Error(payload.message || t.error);
       if (!/^[A-Z]{3}$/.test(payload.functionalCurrencyCode)) throw new Error(t.error);
       const isLegacy = payload.policy.version === 1;
-      const prepared: Policy = isLegacy
-        ? { ...payload.policy, version: 2, expressRefundLimitAmount: "", expressRefundLimitCurrency: payload.functionalCurrencyCode }
-        : { ...payload.policy, expressRefundLimitCurrency: payload.functionalCurrencyCode };
+      const prepared: Policy = {
+        ...payload.policy, version: 2,
+        expressRefundLimitAmount: isLegacy ? "" : String(payload.policy.expressRefundLimitAmount),
+        expressRefundLimitCurrency: payload.functionalCurrencyCode,
+      };
       setLegacyPolicy(isLegacy);
       setData(payload); setPolicy(prepared); setError("");
     } catch (cause) { setError(cause instanceof Error ? cause.message : t.error); }
