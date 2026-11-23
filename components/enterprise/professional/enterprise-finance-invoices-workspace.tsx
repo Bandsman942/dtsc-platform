@@ -144,6 +144,7 @@ function retailReturnStatusKey(status: string): EnterpriseFinanceKey {
   if (status === "INSPECTED") return "retailReturnInspected";
   if (status === "APPROVED") return "retailReturnApproved";
   if (status === "FINANCE_PENDING") return "retailReturnFinancePending";
+  if (status === "REFUND_PENDING") return "retailReturnRefundPending";
   if (status === "COMPLETED") return "retailReturnCompleted";
   if (status === "REJECTED") return "retailReturnRejected";
   return "retailCreditUnlinked";
