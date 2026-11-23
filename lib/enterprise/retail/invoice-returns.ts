@@ -12,6 +12,8 @@ import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
 import { requireRetailSiteCapability, RETAIL_OWNER_ROLES, siteStaffCapabilities, hasRetailSelfApprovalGrant } from "@/lib/enterprise/retail/site-access";
 import { withRetailTransactionRetry } from "@/lib/enterprise/retail/transaction-retry";
 import { settleUnpaidRetailInvoiceCreditTx } from "@/lib/enterprise/retail/invoice-return-unpaid-express";
+import { assertRetailExpressReturnAuthorizationTx } from "@/lib/enterprise/retail/invoice-return-express-authorization";
+import { prepareRetailInvoiceReturnFinanceTx, settleRetailInvoiceReturnFinanceTx } from "@/lib/enterprise/retail/invoice-return-finance";
 import { readRetailInvoiceReturnPolicy, readRetailInvoiceReturnPolicySnapshot, canSelfInspectRetailReturn, type RetailInvoiceReturnPolicy } from "@/lib/enterprise/retail/invoice-return-policy";
 import { prisma } from "@/lib/prisma";
 
@@ -34,6 +36,8 @@ export const retailInvoiceReturnDecisionSchema = z.object({
   revision: z.number().int().positive(),
   decision: z.enum(["APPROVE", "REJECT"]),
   reason: z.string().trim().max(1000).optional(),
+  refundChoice: z.enum(["NOW", "LATER"]).optional(),
+  cashHandedOver: z.literal(true).optional(),
 }).strict();
 export const retailInvoiceReturnInspectionSchema = z.object({
   revision: z.number().int().positive(),
@@ -570,17 +574,39 @@ export async function decideRetailInvoiceReturnRequest(
         ownerGrantedSelfApproval: request.requestedByUserId === actorUserId,
         ...(input.reason ? { reason: input.reason } : {}) },
     });
-    // An approved request with ZERO prior payment and no physical stock exit
-    // can post its credit note in this same transaction. For any paid or
-    // fulfilled invoice, retain the existing Finance settlement workflow.
+    // Zero-payout credits are posted automatically if the invoice is not
+    // physically fulfilled, regardless of whether it was totally unpaid or
+    // partly collected. No refund payment is ever fabricated.
     if (input.decision === "APPROVE") {
-      const express = await settleUnpaidRetailInvoiceCreditTx(
+      const zeroPayout = await settleUnpaidRetailInvoiceCreditTx(
         tx, organizationId, invoiceId, requestId, actorUserId,
       );
-      if (express) return express;
+      if (zeroPayout) return zeroPayout;
+      // A customer refund must be chosen BEFORE committing the decision.
+      // No gap between approval, Finance posting, inventory and refund.
+      if (input.refundChoice) {
+        if (input.refundChoice === "NOW" && input.cashHandedOver !== true) {
+          throw new EnterpriseRetailError("RETAIL_RETURN_EXPRESS_CASH_HANDOVER_REQUIRED", 400);
+        }
+        await assertRetailExpressReturnAuthorizationTx(
+          tx, organizationId, invoiceId, requestId, actorUserId, input.refundChoice,
+        );
+        const prepared = await prepareRetailInvoiceReturnFinanceTx(
+          tx, organizationId, invoiceId, requestId, actorUserId,
+          { revision: updated.revision, financeApproverUserId: actorUserId },
+          input.refundChoice,
+        );
+        const settled = await settleRetailInvoiceReturnFinanceTx(
+          tx, organizationId, invoiceId, requestId, actorUserId,
+          { revision: prepared.request.revision,
+            reason: input.reason?.trim() || "Retour client express approuvé et contrôlé" },
+          input.refundChoice,
+        );
+        return settled.request;
+      }
     }
     return updated;
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 30000 }));
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 60000 }));
 }
 
 /** Independent stock operator records physical receipt/inspection. This is
