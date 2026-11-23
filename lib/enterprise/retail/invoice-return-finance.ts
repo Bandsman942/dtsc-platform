@@ -547,13 +547,21 @@ export async function confirmDeferredRetailInvoiceReturnRefund(
     if (!request) throw fail("RETAIL_INVOICE_RETURN_NOT_FOUND", 404);
     // The original actor may no longer have privileges. Re-check rather than
     // accepting a stale historical approval or idempotent cross-store read.
-    const { requireRetailSiteCapability } = await import("@/lib/enterprise/retail/site-access");
+    const { requireRetailSiteCapability, RETAIL_OWNER_ROLES, hasRetailSelfApprovalGrant } = await import("@/lib/enterprise/retail/site-access");
     const { readRetailInvoiceReturnPolicy, readRetailInvoiceReturnPolicySnapshot } =
       await import("@/lib/enterprise/retail/invoice-return-policy");
     await requireRetailSiteCapability(organizationId, actorUserId, request.checkout.siteId,
       "COLLECT_PAYMENT", tx, { requireAssignment: true });
     await requireRetailSiteCapability(organizationId, actorUserId, request.checkout.siteId,
       "APPROVE_INVOICE_RETURN", tx, { requireAssignment: true });
+    const membership = await tx.organizationMember.findFirst({
+      where: { organizationId, userId: actorUserId, status: "ACTIVE", removedAt: null },
+      select: { role: true },
+    });
+    if (!membership || (!RETAIL_OWNER_ROLES.has(membership.role) &&
+      !await hasRetailSelfApprovalGrant(organizationId, actorUserId, request.checkout.siteId, "RETURN", tx))) {
+      throw fail("RETAIL_INVOICE_RETURN_APPROVER_INELIGIBLE", 403);
+    }
     if (request.status === "COMPLETED" && request.completedAt &&
         request.refundChoice === "LATER" && request.settledByUserId === actorUserId &&
         request.revision === input.revision + 1) {
@@ -581,16 +589,23 @@ export async function confirmDeferredRetailInvoiceReturnRefund(
           where: { organizationId, id: request.refundPaymentId },
         })] : [];
     if (payments.length === 0 || payments.some((payment) => !payment ||
-        payment.status !== "APPROVED" || payment.methodType !== "CASH" ||
         payment.paymentType !== "REFUND" || payment.direction !== "OUTBOUND" ||
-        payment.initiatedByUserId !== actorUserId || payment.approvedByUserId !== actorUserId) ||
+        payment.initiatedByUserId !== actorUserId || payment.approvedByUserId !== actorUserId ||
+        (payment.methodType === "CASH"
+          ? payment.status !== "APPROVED"
+          : !["CONFIRMED", "RECONCILED"].includes(payment.status) ||
+            !payment.confirmedByUserId || payment.confirmedByUserId === actorUserId)) ||
         !payments.reduce((sum, payment) => sum.plus(payment!.amount), new Prisma.Decimal(0))
           .equals(request.refundPayoutAmount)) {
       throw fail("RETAIL_INVOICE_RETURN_REFUND_PAYMENT_INVALID", 409);
     }
     for (const payment of payments) {
-      await confirmCustomerRefundPaymentTx(tx, organizationId, payment!.id, actorUserId,
-        { revision: payment!.revision, reason: input.reason });
+      // External transfers were confirmed separately by an independent
+      // Finance operator. Only cash is disbursed here, after actual handover.
+      if (payment!.methodType === "CASH") {
+        await confirmCustomerRefundPaymentTx(tx, organizationId, payment!.id, actorUserId,
+          { revision: payment!.revision, reason: input.reason });
+      }
     }
     const completed = await tx.enterpriseRetailInvoiceReturnRequest.update({
       where: { id: request.id, organizationId },
@@ -599,7 +614,7 @@ export async function confirmDeferredRetailInvoiceReturnRefund(
     await publishFinanceEvent(tx, {
       organizationId, entityType: "EnterpriseRetailInvoiceReturnRequest", entityId: request.id,
       eventType: "RETAIL_INVOICE_RETURN_COMPLETED",
-      summary: "Deferred cash customer reimbursement confirmed; credit and stock were already posted",
+      summary: "Deferred customer reimbursement completed after confirmed Finance payments; credit and stock not reposted",
       actorUserId, fromStatus: "REFUND_PENDING", toStatus: "COMPLETED",
       metadataJson: { invoiceId, payoutAmount: request.refundPayoutAmount.toFixed(2),
         paymentIds: payments.map((payment) => payment!.id), creditNoteId: request.salesCreditNoteId },
