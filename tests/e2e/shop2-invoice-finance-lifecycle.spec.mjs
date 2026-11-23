@@ -805,6 +805,122 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
       expect((await prisma.enterprisePayment.findUniqueOrThrow({
         where: { id: deferredPayment.id },
       })).status).toBe("APPROVED");
+      // E07/E17/E19: fully paid CASH checkout with delegated owner approval,
+      // attested self-inspection, and one transaction posting credit, cash
+      // outflow, stock and receivable. Replaying must create nothing new.
+      const cashTemplate = await prisma.enterpriseFinancialAccount.findFirstOrThrow({
+        where: { organizationId, code: "SHOP2-E2E-CASH", accountType: "CASH", status: "ACTIVE" },
+      });
+      const cash = await prisma.enterpriseFinancialAccount.upsert({
+        where: { organizationId_code: { organizationId, code: "SHOP2-E2E-RETURNS-1222-CASH" } },
+        update: { accountType: "CASH", siteId: fixture.site.id, currencyCode: fixture.currencyCode,
+          ledgerAccountId: cashTemplate.ledgerAccountId, status: "ACTIVE", archivedAt: null,
+          openingBalance: 1000, operationalBalance: 1000, reconciledBalance: 1000, availableBalance: 1000 },
+        create: { organizationId, code: "SHOP2-E2E-RETURNS-1222-CASH", name: "Retail refunds E2E cash",
+          accountType: "CASH", siteId: fixture.site.id, currencyCode: fixture.currencyCode,
+          ledgerAccountId: cashTemplate.ledgerAccountId, status: "ACTIVE",
+          openingBalance: 1000, operationalBalance: 1000, reconciledBalance: 1000,
+          availableBalance: 1000, responsibleUserId: fixture.owner.id },
+      });
+      for (const userId of [fixture.cashier.id, fixture.owner.id]) {
+        await prisma.enterpriseCashSession.create({ data: {
+          organizationId, number: `RET1222-CASH-${userId.slice(-5)}-${Date.now()}`,
+          financialAccountId: cash.id, cashierUserId: userId,
+          siteId: fixture.site.id, status: "OPEN", openingAmount: 1000,
+        } });
+      }
+      const cashInvoiceCreated = await post(context.cashier, base + "/retail/invoices", {
+        idempotencyKey: `retail-1222-now-invoice-${Date.now()}`,
+        siteId: fixture.site.id, warehouseId: fixture.warehouse.id,
+        currencyCode: fixture.currencyCode,
+        lines: [{ catalogItemId: fixture.product.id, quantity: 1 }],
+      });
+      expect(cashInvoiceCreated.status, JSON.stringify(cashInvoiceCreated.body)).toBe(201);
+      const cashInvoiceId = cashInvoiceCreated.body.invoice.id;
+      const cashSubmitted = await post(context.cashier, `${base}/retail/invoices/${cashInvoiceId}/transition`, {
+        action: "SUBMIT", revision: cashInvoiceCreated.body.invoice.revision, approverUserId: fixture.owner.id,
+      });
+      expect(cashSubmitted.status, JSON.stringify(cashSubmitted.body)).toBe(200);
+      const cashApproved = await post(context.owner, `${base}/sales-invoices/${cashInvoiceId}/transition`, {
+        action: "APPROVE", revision: cashSubmitted.body.invoice.revision,
+      });
+      expect(cashApproved.status, JSON.stringify(cashApproved.body)).toBe(200);
+      const cashIssued = await post(context.owner, `${base}/sales-invoices/${cashInvoiceId}/transition`, {
+        action: "ISSUE", revision: cashApproved.body.invoice.revision,
+      });
+      expect(cashIssued.status, JSON.stringify(cashIssued.body)).toBe(200);
+      const cashPayment = await post(context.cashier, `${base}/retail/invoices/${cashInvoiceId}/payments`, {
+        idempotencyKey: `retail-1222-now-source-${Date.now()}`,
+        financialAccountId: cash.id, methodType: "CASH",
+        amount: cashIssued.body.invoice.grandTotal,
+      });
+      expect(cashPayment.status, JSON.stringify(cashPayment.body)).toBe(201);
+      const cashPaymentSubmitted = await post(context.cashier, `${base}/retail/invoices/${cashInvoiceId}/payments/${cashPayment.body.payment.id}/transition`, {
+        action: "SUBMIT", revision: cashPayment.body.payment.revision, approverUserId: fixture.owner.id,
+      });
+      expect(cashPaymentSubmitted.status, JSON.stringify(cashPaymentSubmitted.body)).toBe(200);
+      const cashPaymentApproved = await post(context.owner, `${base}/payments/${cashPayment.body.payment.id}/transition`, {
+        action: "APPROVE", revision: cashPaymentSubmitted.body.payment.revision,
+      });
+      expect(cashPaymentApproved.status, JSON.stringify(cashPaymentApproved.body)).toBe(200);
+      const cashPaymentConfirmed = await post(context.settler, `${base}/payments/${cashPayment.body.payment.id}/transition`, {
+        action: "CONFIRM", revision: cashPaymentApproved.body.payment.revision,
+      });
+      expect(cashPaymentConfirmed.status, JSON.stringify(cashPaymentConfirmed.body)).toBe(200);
+      const cashCheckout = await prisma.enterpriseRetailInvoiceCheckout.findFirstOrThrow({
+        where: { organizationId, salesInvoiceId: cashInvoiceId }, include: { lines: true },
+      });
+      expect(cashCheckout.stockPostedAt).toBeNull();
+      const cashRequestPath = `${base}/retail/invoices/${cashInvoiceId}/returns`;
+      const cashReturn = await post(context.owner, cashRequestPath, {
+        idempotencyKey: `retail-1222-now-return-${Date.now()}`,
+        approverUserId: fixture.owner.id,
+        reason: "Cash sale cancelled before customer collected items",
+        lines: [{ checkoutLineId: cashCheckout.lines[0].id,
+          quantity: "1", stockDisposition: "UNDELIVERED_CREDIT" }],
+      });
+      expect(cashReturn.status, JSON.stringify(cashReturn.body)).toBe(201);
+      const cashPath = `${cashRequestPath}/${cashReturn.body.request.id}`;
+      const cashInspected = await post(context.owner, `${cashPath}/inspection`, {
+        revision: cashReturn.body.request.revision,
+        receivedAndInspected: true,
+        notes: "Requester confirms original cash customer order was never delivered",
+      });
+      expect(cashInspected.status, JSON.stringify(cashInspected.body)).toBe(200);
+      await ensureStepUp(context.owner, ownerPassword);
+      const cashDecisionData = {
+        revision: cashInspected.body.request.revision, decision: "APPROVE",
+        refundChoice: "NOW", cashHandedOver: true,
+      };
+      const cashSettled = await post(context.owner, `${cashPath}/decision`, cashDecisionData);
+      expect(cashSettled.status, JSON.stringify(cashSettled.body)).toBe(200);
+      expect(cashSettled.body.request.status).toBe("COMPLETED");
+      expect(cashSettled.body.request.refundChoice).toBe("NOW");
+      const cashRefundId = cashSettled.body.request.refundPaymentId;
+      const cashCreditId = cashSettled.body.request.salesCreditNoteId;
+      expect((await prisma.enterpriseSalesCreditNote.findUniqueOrThrow({
+        where: { id: cashCreditId },
+      })).status).toBe("POSTED");
+      expect((await prisma.enterprisePayment.findUniqueOrThrow({
+        where: { id: cashRefundId },
+      })).status).toBe("CONFIRMED");
+      expect(await prisma.enterpriseTreasuryTransaction.count({
+        where: { organizationId, paymentId: cashRefundId, direction: "OUTBOUND" },
+      })).toBe(1);
+      expect(await prisma.enterpriseCashMovement.count({
+        where: { organizationId, paymentId: cashRefundId, direction: "OUTBOUND" },
+      })).toBe(1);
+      expect((await prisma.enterpriseSalesInvoice.findUniqueOrThrow({
+        where: { id: cashInvoiceId },
+      })).outstandingAmount.isZero()).toBe(true);
+      const cashReplay = await post(context.owner, `${cashPath}/decision`, cashDecisionData);
+      expect(cashReplay.status).toBe(409);
+      expect(await prisma.enterpriseSalesCreditNote.count({
+        where: { organizationId, salesInvoiceId: cashInvoiceId },
+      })).toBe(1);
+      expect(await prisma.enterpriseTreasuryTransaction.count({
+        where: { organizationId, paymentId: cashRefundId, direction: "OUTBOUND" },
+      })).toBe(1);
       if (capRate) await prisma.enterpriseExchangeRate.delete({ where: { id: capRate.id } });
     } finally {
       await prisma.enterpriseRetailConfiguration.update({
