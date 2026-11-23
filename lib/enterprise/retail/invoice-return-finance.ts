@@ -27,6 +27,7 @@ export const retailInvoiceReturnFinanceSettlementSchema = z.object({
   revision: z.number().int().positive(),
   reason: z.string().trim().min(4).max(1000),
   completeDeferred: z.literal(true).optional(),
+  cashHandedOver: z.literal(true).optional(),
 }).strict();
 
 const fail = (code: string, status = 409) => new EnterpriseRetailError(code, status);
@@ -598,6 +599,10 @@ export async function confirmDeferredRetailInvoiceReturnRefund(
         !payments.reduce((sum, payment) => sum.plus(payment!.amount), new Prisma.Decimal(0))
           .equals(request.refundPayoutAmount)) {
       throw fail("RETAIL_INVOICE_RETURN_REFUND_PAYMENT_INVALID", 409);
+    }
+    if (payments.some((payment) => payment!.methodType === "CASH") &&
+        input.cashHandedOver !== true) {
+      throw fail("RETAIL_RETURN_EXPRESS_CASH_HANDOVER_REQUIRED", 400);
     }
     for (const payment of payments) {
       // External transfers were confirmed separately by an independent
