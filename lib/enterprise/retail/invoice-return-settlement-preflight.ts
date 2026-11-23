@@ -32,6 +32,7 @@ export async function assertRetailInvoiceReturnSettlementReadinessTx(
       id: true, checkoutId: true, status: true, refundAmount: true, refundPayoutAmount: true,
       requestedByUserId: true, approverUserId: true, decidedByUserId: true,
       inspectedByUserId: true, inspectedAt: true, inspectionNotes: true,
+      inspectionMode: true, returnPolicySnapshot: true,
       lines: { select: { id: true, checkoutLineId: true, quantity: true, refundAmount: true,
         refundNetAmount: true, refundTaxAmount: true, stockDisposition: true, lotAllocations: true } },
       checkout: {
@@ -54,10 +55,22 @@ export async function assertRetailInvoiceReturnSettlementReadinessTx(
   const { checkout } = request;
   const independentlyVerified = new Set([request.requestedByUserId, request.approverUserId, request.inspectedByUserId]).size === 3 ||
     (request.requestedByUserId === request.approverUserId && request.inspectedByUserId !== request.approverUserId);
+  // Only an immutable, v1, explicit SIMPLIFIED snapshot can permit a requester
+  // to have inspected the goods. Legacy returns and malformed snapshots retain
+  // the existing four-eyes invariant. The decision service already checked
+  // the designated approver and each per-site delegation at decision time.
+  const snapshot = request.returnPolicySnapshot;
+  const simplified = snapshot && typeof snapshot === "object" && !Array.isArray(snapshot) &&
+    snapshot.version === 1 && snapshot.mode === "SIMPLIFIED";
+  const requesterInspection = simplified && snapshot.allowRequesterInspection === true &&
+    request.inspectionMode === "SELF_ATTESTED" && request.inspectedByUserId === request.requestedByUserId;
+  const delegatedSameActor = request.requestedByUserId === request.approverUserId;
+  const verifiedDecisionChain = independentlyVerified ||
+    Boolean(requesterInspection && (!delegatedSameActor || snapshot.allowDelegatedSelfApproval === true));
   if (request.status !== expectedStatus || !request.inspectedAt ||
       !request.inspectedByUserId || !request.inspectionNotes || request.inspectionNotes.trim().length < 5 ||
       !request.decidedByUserId || request.decidedByUserId !== request.approverUserId ||
-      !independentlyVerified) {
+      !verifiedDecisionChain) {
     throw conflict("RETAIL_INVOICE_RETURN_SETTLEMENT_APPROVAL_REQUIRED");
   }
   const invoice = checkout.invoice;
