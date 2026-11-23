@@ -26,6 +26,7 @@ type ReturnRequest = {
   payoutPreviewAmount?: string;
   refundChoice?: "NOW" | "LATER" | null;
   canExpress?: boolean;
+  expressLimitFallback?: "FX_RATE_REQUIRED_OR_STALE" | "LIMIT_EXCEEDED" | "STANDARD_APPROVAL_REQUIRED" | null;
   canFinalizeDeferred?: boolean;
   deferredCashDisbursementRequired?: boolean;
   inspectedAt: string | null;
@@ -281,6 +282,13 @@ export function RetailInvoiceReturnDialog({ organizationId, invoiceId, invoiceNu
           </label> : null}
           {action.type === "PREPARE_FINANCE" ? <EnterpriseApproverSelect organizationId={organizationId} moduleCode="FINANCE_RECEIVABLES" locale={locale} name="financeApproverUserId" label={copy.financeApprover} disabled={busy} required /> : null}
           {action.type !== "PREPARE_FINANCE" ? <label className="grid min-w-0 gap-1 text-sm font-semibold text-dtsc-ink">{action.type === "INSPECT" ? copy.inspectionNotes : action.type === "REJECT" ? copy.rejectionReason : ["SETTLE_FINANCE", "COMPLETE_DEFERRED"].includes(action.type) ? copy.settlementReason : copy.decisionReason}<textarea className="min-h-28 w-full min-w-0 rounded-lg border border-dtsc-border bg-dtsc-surface p-3 text-base" minLength={action.type === "INSPECT" ? 5 : ["REJECT", "SETTLE_FINANCE", "COMPLETE_DEFERRED"].includes(action.type) ? 4 : undefined} maxLength={1000} required={["INSPECT", "REJECT", "SETTLE_FINANCE", "COMPLETE_DEFERRED"].includes(action.type)} value={actionNotes} disabled={busy} onChange={(event) => setActionNotes(event.target.value)} /></label> : null}
+          {action.type === "APPROVE" && action.request.expressLimitFallback ? <p role="note" data-testid="retail-return-standard-finance-fallback" className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm leading-5 text-dtsc-ink">
+            {action.request.expressLimitFallback === "LIMIT_EXCEEDED"
+              ? locale === "fr" ? "Le remboursement réel dépasse le plafond express cumulé de 100 USD. Ce retour doit être approuvé puis traité dans le circuit Finance standard, avec des intervenants indépendants." : "The real refund exceeds the USD 100 cumulative express cap. Approve this return and complete it through Standard Finance workflow with independent actors."
+              : action.request.expressLimitFallback === "FX_RATE_REQUIRED_OR_STALE"
+                ? locale === "fr" ? "Aucun taux Finance USD récent ne permet de vérifier le plafond express. Utilisez le circuit Finance standard, ou mettez les taux à jour avant d'actualiser." : "No fresh Finance USD exchange rate is available for the express cap. Use Standard Finance workflow or update the exchange rate."
+                : locale === "fr" ? "Le remboursement express n'est pas autorisé pour ce dossier ; terminez la procédure Finance standard." : "Express refund is not authorized for this return. Complete the standard Finance workflow."}
+          </p> : null}
           {action.type === "APPROVE" && action.request.canExpress && Number(action.request.payoutPreviewAmount || 0) > 0 ? <div className="grid gap-3 rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-3">
             <h4 className="text-sm font-black text-dtsc-ink">{copy.refundChoiceLabel} · {money(action.request.payoutPreviewAmount || "0")}</h4>
             <p className="text-xs leading-5 text-dtsc-muted">{copy.refundChoiceHelp}</p>
