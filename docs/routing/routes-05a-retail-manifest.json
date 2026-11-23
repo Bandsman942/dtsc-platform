@@ -324,5 +324,13 @@
       "blobSha": "c62fdd97c64168692560708c36d2a02b5b39380d",
       "reason": "Reviewed #1222 settlement handler: session/same-origin before payload validation, Finance or RETAIL delegated authorization, MFA step-up, atomic canonical settlement, audit; POST contract unchanged."
     }
+  ],
+  "approvedRootChanges": [
+    {
+      "issue": 1224,
+      "path": "app/api/enterprise/[organizationId]/retail/invoices/route.ts",
+      "blobSha": "eed4a1691cbbe230f4edaff2261a046cc5cf10d2",
+      "reason": "Reviewed #1224 scoped invoice status filters and active return state; POST unchanged; preserves ROUTES-05A immutable moved handlers."
+    }
   ]
 }
