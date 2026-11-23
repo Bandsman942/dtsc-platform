@@ -691,6 +691,110 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
       }
       await exerciseExpressUnpaidCredit({ quantity: "1" });
       await exerciseExpressUnpaidCredit({ quantity: "0.5" });
+      // E08/E09/E16/E22: partial payment -> approved credit immediately,
+      // but an external bank payout is retained as REFUND_PENDING (not paid).
+      // The original bank collection is first confirmed by independent actors.
+      const issuedPartlyPaid = await post(context.cashier, base + "/retail/invoices", {
+        idempotencyKey: `retail-1222-deferred-invoice-${Date.now()}`,
+        siteId: fixture.site.id, warehouseId: fixture.warehouse.id,
+        currencyCode: fixture.currencyCode,
+        lines: [{ catalogItemId: fixture.product.id, quantity: 1 }],
+      });
+      expect(issuedPartlyPaid.status, JSON.stringify(issuedPartlyPaid.body)).toBe(201);
+      const deferredInvoiceId = issuedPartlyPaid.body.invoice.id;
+      const ds = await post(context.cashier, `${base}/retail/invoices/${deferredInvoiceId}/transition`, {
+        action: "SUBMIT", revision: issuedPartlyPaid.body.invoice.revision, approverUserId: fixture.owner.id,
+      });
+      expect(ds.status, JSON.stringify(ds.body)).toBe(200);
+      const da = await post(context.owner, `${base}/sales-invoices/${deferredInvoiceId}/transition`, {
+        action: "APPROVE", revision: ds.body.invoice.revision,
+      });
+      expect(da.status, JSON.stringify(da.body)).toBe(200);
+      const di = await post(context.owner, `${base}/sales-invoices/${deferredInvoiceId}/transition`, {
+        action: "ISSUE", revision: da.body.invoice.revision,
+      });
+      expect(di.status, JSON.stringify(di.body)).toBe(200);
+      const halfPaid = new Prisma.Decimal(di.body.invoice.grandTotal).div(2).toDecimalPlaces(2, Prisma.Decimal.ROUND_DOWN);
+      const dp = await post(context.cashier, `${base}/retail/invoices/${deferredInvoiceId}/payments`, {
+        idempotencyKey: `retail-1222-deferred-payment-${Date.now()}`,
+        financialAccountId: fixture.bank.id, methodType: "BANK_TRANSFER", amount: halfPaid.toFixed(2),
+      });
+      expect(dp.status, JSON.stringify(dp.body)).toBe(201);
+      const dps = await post(context.cashier, `${base}/retail/invoices/${deferredInvoiceId}/payments/${dp.body.payment.id}/transition`, {
+        action: "SUBMIT", revision: dp.body.payment.revision, approverUserId: fixture.owner.id,
+      });
+      expect(dps.status, JSON.stringify(dps.body)).toBe(200);
+      const dpa = await post(context.owner, `${base}/payments/${dp.body.payment.id}/transition`, {
+        action: "APPROVE", revision: dps.body.payment.revision,
+      });
+      expect(dpa.status, JSON.stringify(dpa.body)).toBe(200);
+      const dpc = await post(context.settler, `${base}/payments/${dp.body.payment.id}/transition`, {
+        action: "CONFIRM", revision: dpa.body.payment.revision,
+      });
+      expect(dpc.status, JSON.stringify(dpc.body)).toBe(200);
+      const checkoutDeferred = await prisma.enterpriseRetailInvoiceCheckout.findFirstOrThrow({
+        where: { organizationId, salesInvoiceId: deferredInvoiceId }, include: { lines: true },
+      });
+      expect(checkoutDeferred.stockPostedAt).toBeNull();
+      const deferredBase = `${base}/retail/invoices/${deferredInvoiceId}/returns`;
+      const deferredRequest = await post(context.owner, deferredBase, {
+        idempotencyKey: `retail-1222-deferred-return-${Date.now()}`,
+        approverUserId: fixture.owner.id,
+        reason: "Partly collected customer order cancelled before delivery",
+        lines: [{ checkoutLineId: checkoutDeferred.lines[0].id, quantity: "1",
+          stockDisposition: "UNDELIVERED_CREDIT" }],
+      });
+      expect(deferredRequest.status, JSON.stringify(deferredRequest.body)).toBe(201);
+      const deferredPath = `${deferredBase}/${deferredRequest.body.request.id}`;
+      const deferredInspection = await post(context.owner, `${deferredPath}/inspection`, {
+        revision: deferredRequest.body.request.revision, receivedAndInspected: true,
+        notes: "Owner personally attests that the merchandise was never handed over",
+      });
+      expect(deferredInspection.status, JSON.stringify(deferredInspection.body)).toBe(200);
+      await ensureStepUp(context.owner, ownerPassword);
+      const deferredDecision = await post(context.owner, `${deferredPath}/decision`, {
+        revision: deferredInspection.body.request.revision,
+        decision: "APPROVE", refundChoice: "LATER",
+      });
+      expect(deferredDecision.status, JSON.stringify(deferredDecision.body)).toBe(200);
+      expect(deferredDecision.body.request.status).toBe("REFUND_PENDING");
+      expect(deferredDecision.body.request.refundChoice).toBe("LATER");
+      expect(new Prisma.Decimal(deferredDecision.body.request.refundPayoutAmount).equals(halfPaid)).toBe(true);
+      const deferredCredit = await prisma.enterpriseSalesCreditNote.findUniqueOrThrow({
+        where: { id: deferredDecision.body.request.salesCreditNoteId },
+      });
+      expect(deferredCredit.status).toBe("POSTED");
+      const deferredPayment = await prisma.enterprisePayment.findUniqueOrThrow({
+        where: { id: deferredDecision.body.request.refundPaymentId },
+      });
+      expect(deferredPayment.status).toBe("APPROVED");
+      expect(deferredPayment.methodType).toBe("BANK_TRANSFER");
+      expect(await prisma.enterpriseTreasuryTransaction.count({
+        where: { organizationId, paymentId: deferredPayment.id },
+      })).toBe(0);
+      const deferredInvoice = await prisma.enterpriseSalesInvoice.findUniqueOrThrow({
+        where: { id: deferredInvoiceId },
+      });
+      expect(deferredInvoice.outstandingAmount.isZero()).toBe(true);
+      expect(deferredInvoice.status).toBe("CREDIT_NOTE");
+      const deferredFinance = await context.owner.request.get(
+        `${base}/sales-credit-notes?recordId=${deferredCredit.id}`,
+      );
+      expect(deferredFinance.status()).toBe(200);
+      const deferredFinanceItems = await deferredFinance.json();
+      expect(deferredFinanceItems.items[0].retailOrigin.returnStatus).toBe("REFUND_PENDING");
+      expect(deferredFinanceItems.items[0].capabilities.canPost).toBe(false);
+      // Never permit a "cash handed over" confirmation on an external bank
+      // refund. The upstream provider must confirm an actual payout.
+      const forgedCashConfirmation = await post(context.owner, `${deferredPath}/settle`, {
+        revision: deferredDecision.body.request.revision,
+        reason: "Try to close a bank refund as if cash was paid",
+        completeDeferred: true,
+      });
+      expect(forgedCashConfirmation.status).toBe(409);
+      expect((await prisma.enterprisePayment.findUniqueOrThrow({
+        where: { id: deferredPayment.id },
+      })).status).toBe("APPROVED");
     } finally {
       await prisma.enterpriseRetailConfiguration.update({
         where: { organizationId }, data: { settingsJson: originalReturnSettings },
