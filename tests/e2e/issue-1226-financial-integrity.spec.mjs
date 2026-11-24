@@ -169,6 +169,8 @@ test.describe.serial("Hotfix #1226 financial integrity (isolated browser and Pos
       const cash=await account("CASH",100,100);
       const opened=(await ok(a,"POST",root+"/cash-sessions",{financialAccountId:cash.id,openingAmount:"100"})).session;
       const close=(await ok(a,"POST",root+"/cash-sessions/"+opened.id+"/close",{revision:opened.revision,countedClosingAmount:"105",counts:[{denomination:"5",quantity:21}],closingReason:"Synthetic legacy count error",approverUserId:recipient.id})).session;
+      expect((await call(b,"POST",root+"/cash-sessions/"+opened.id+"/validate",{revision:close.revision,approve:true})).response.status()).toBe(428);
+      await stepUp(b,process.env.E2E_USER_PASSWORD);
       const approved=(await ok(b,"POST",root+"/cash-sessions/"+opened.id+"/validate",{revision:close.revision,approve:true})).session;
       const discrepancy=await prisma.enterpriseCashDiscrepancy.findFirstOrThrow({where:{organizationId,cashSessionId:opened.id}});
       const now=new Date(),from=new Date(now);from.setUTCDate(from.getUTCDate()-2);
@@ -231,6 +233,8 @@ test.describe.serial("Hotfix #1226 financial integrity (isolated browser and Pos
       const fresh=(await ok(c,"POST",root+"/reconciliations",physical)).session;
       const freshEndpoint=root+"/reconciliations/"+fresh.id+"/complete";
       const submitted=(await ok(c,"POST",freshEndpoint,{action:"SUBMIT",revision:fresh.revision,approverUserId:recipient.id})).session;
+      // Remove only the short-lived step-up cookie, not the authenticated session.
+      await b.clearCookies({name:"dtsc_stepup"});
       expect((await call(b,"POST",freshEndpoint,{action:"APPROVE",revision:submitted.revision})).response.status()).toBe(428);
       await stepUp(b,process.env.E2E_USER_PASSWORD);
       const reconciled=(await ok(b,"POST",freshEndpoint,{action:"APPROVE",revision:submitted.revision})).session;

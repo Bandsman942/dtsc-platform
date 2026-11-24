@@ -88,3 +88,6 @@ Un troisième acteur indépendant et des écritures fictives sans site sont cré
 
 ## Extension de recette physique
 Le scénario historique se poursuit par un rapprochement physique : refus d’un montant divergent, annulation motivée, invalidation du comptage par une nouvelle session, nouveau comptage et approbation avec step-up ; le solde rapproché doit passer à 100 USD sans changer le solde opérationnel ni créer de mouvement de trésorerie. La recette responsive ajoute 360, 375 et 414 px. Résultats non anticipés.
+
+## Résultats du SHA 272ba00d
+17/18 workflows réussis, dont Quality Gates #45446349296, migration #45446349388, les deux premières recettes #1226 et les trois scénarios #662. La troisième recette échoue avant création du journal historique car le test n'effectuait pas le step-up du validateur de caisse (HTTP 428). Correctif du scénario uniquement : vérifie le refus initial, réalise le step-up, puis efface le cookie step-up avant le contrôle du rapprochement physique, sans modifier la protection applicative. Nouvelle exécution obligatoire ; OWNER_E2E non exécuté.
