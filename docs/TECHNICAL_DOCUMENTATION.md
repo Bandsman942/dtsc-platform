@@ -1,3 +1,5 @@
+> **#1226 tranche B2 candidate** : protection contre rapprochement incomplet, référence masquée et état jamais rapproché. Rapprochement intelligent complet non certifié et bloquant.
+
 > **#1226 tranche B1 candidate** : écarts de caisse à qualifier sans posting automatique à la clôture. Le parcours de qualification et régularisation reste bloquant. Aucune validation locale ni E2E final.
 
 > **Hotfix #1226 — Intégrité financière (DRAFT, tranche A)** : détail d’écriture avec capacités serveur et révision, deep link exact, exclusion des sessions non ouvertes du comptage Retail, comparaison au solde individuel et refus de soumission périmée, propagation du site lors du posting des écarts. Le traitement qualifié des écarts, régularisation historique, rapprochement automatique, imports XLSX et refonte financière complète restent bloquants avant fusion. Voir [recette et périmètre #1226](HOTFIX_1226_FINANCIAL_INTEGRITY.md). Aucun test CI/E2E ni déploiement présumé.

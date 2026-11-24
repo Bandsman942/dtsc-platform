@@ -25,3 +25,15 @@ const retailClose=read("lib/enterprise/retail/service.ts").split("export async f
 const cashClose=read("lib/enterprise/accounting/accounting-operations-approval-orchestration.ts").split("export async function validateCashSessionAssignedApproval(")[1].split("async function reconciliationSnapshot")[0];
 for(const code of [retailClose,cashClose]) { assert.match(code,/PENDING_QUALIFICATION/); assert.doesNotMatch(code,/postBusinessEvent\(/); }
 console.log("#1226 tranche B1 guards: PASS");
+
+const treasury=read("lib/enterprise/accounting/treasury-service.ts");
+assert.match(treasury,/bankStatementId: session.bankStatementId/);
+assert.match(treasury,/RECONCILIATION_PARTIAL_NOT_SUPPORTED/);
+assert.match(treasury,/assertReconciliationEvidenceTx\(tx, organizationId, session\)/);
+const evidence=read("lib/enterprise/accounting/reconciliation-evidence.ts");
+assert.match(evidence,/distinctLines.length !== total/);
+assert.match(evidence,/unmatchedTransactions !== 0/);
+const { maskFinancialReference }=await import("../lib/enterprise/accounting/masked-financial-reference.ts");
+assert.equal(maskFinancialReference("+123456789"),"•••• 6789");
+assert.equal(maskFinancialReference("•••• 6789"),"•••• 6789");
+console.log("#1226 tranche B2 guards: PASS");

@@ -23,3 +23,8 @@ Rollback avant fusion : abandon de la branche; après fusion suivre la procédur
 ## Tranche B1 — séparation du comptage et du posting (candidate)
 - Approbation des clôtures Finance et Retail : les écarts passent à PENDING_QUALIFICATION sans posting automatique. Le détail de caisse indique la qualification en attente; le formulaire Retail précise le comportement. La commande de qualification et régularisation reste à implémenter. Aucun changement historique et aucune mutation production.
 - QA ciblée étendue. La qualification, le rapprochement complet et E2E propriétaire restent bloquants.
+
+## Tranche B2 — garde conservatoire du rapprochement (candidate)
+- Verrou de session et cibles, relevé exact, période/devise/sens contrôlés; refus des montants partiels avant statut rapproché. Validation exige couverture du relevé et absence de transactions non rapprochées. Le rapprochement physique, partiel/groupé et historique reste bloquant : cette tranche ne constitue pas le moteur final.
+- Trésorerie : distinguer jamais rapproché d'un vrai zéro; dernier rapprochement issu des sessions terminées, référence masquée sur la liste et nouvelles écritures de référentiel. Auditer les autres lecteurs historiques avant livraison.
+- Aucun test exécuté localement. E2E propriétaire requis.

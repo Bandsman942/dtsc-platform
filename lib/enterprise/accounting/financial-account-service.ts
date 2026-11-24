@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import { maskFinancialReference } from "@/lib/enterprise/accounting/masked-financial-reference";
 import type { z } from "zod";
 import { assertEnterpriseCurrencyActiveTx } from "@/lib/enterprise/accounting/currency-service";
 import { prisma } from "@/lib/prisma";
@@ -75,7 +76,7 @@ export async function createManagedFinancialAccount(
         name: input.name,
         accountType: input.accountType,
         currencyCode: input.currencyCode,
-        maskedReference: input.maskedReference || null,
+        maskedReference: maskFinancialReference(input.maskedReference),
         openingBalance,
         operationalBalance: openingBalance,
         reconciledBalance: openingBalance,
@@ -118,7 +119,7 @@ export async function updateManagedFinancialAccount(
       where: { id: existing.id },
       data: {
         name: input.name ?? existing.name,
-        maskedReference: input.maskedReference === undefined ? existing.maskedReference : input.maskedReference,
+        maskedReference: maskFinancialReference(input.maskedReference === undefined ? existing.maskedReference : input.maskedReference),
         responsibleUserId: input.responsibleUserId === undefined ? existing.responsibleUserId : input.responsibleUserId,
         siteId: input.siteId === undefined ? existing.siteId : input.siteId,
         status: input.status ?? existing.status,

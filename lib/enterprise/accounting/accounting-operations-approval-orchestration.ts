@@ -6,6 +6,7 @@ import {
   requireAccountingApprovalDecision,
 } from "@/lib/enterprise/accounting/accounting-approval-service";
 import { calculateFinancialCloseChecklist } from "@/lib/enterprise/accounting/close-service";
+import { assertReconciliationEvidenceTx } from "@/lib/enterprise/accounting/reconciliation-evidence";
 import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
 import { money, publishFinanceEvent, serializeFinanceValue, sumDecimals } from "@/lib/enterprise/accounting/helpers";
 
@@ -367,6 +368,7 @@ export async function submitReconciliationForAssignedValidation(
     if (!session) throw new EnterpriseAccountingError("RECONCILIATION_SESSION_NOT_FOUND", 404);
     if (!["DRAFT", "IN_PROGRESS"].includes(session.status) || session.revision !== input.revision) throw new EnterpriseAccountingError("RECONCILIATION_SESSION_CONFLICT", 409);
     if (session.preparedByUserId !== actorUserId) throw new EnterpriseAccountingError("RECONCILIATION_SUBMITTER_MISMATCH", 403);
+    await assertReconciliationEvidenceTx(tx, organizationId, session);
 
     const approval = await createAccountingApprovalAssignment(tx, {
       organizationId,
@@ -449,6 +451,7 @@ export async function decideReconciliationAssignedValidation(
       return updated;
     }
 
+    await assertReconciliationEvidenceTx(tx, organizationId, session);
     const updated = await tx.enterpriseReconciliationSession.update({
       where: { id: session.id },
       data: {
@@ -463,6 +466,7 @@ export async function decideReconciliationAssignedValidation(
       where: { id: session.financialAccountId },
       data: { reconciledBalance: session.statementBalance, revision: { increment: 1 } },
     });
+    if (session.bankStatementId) await tx.enterpriseBankStatement.update({ where: { id: session.bankStatementId }, data: { status: "RECONCILED" } });
     await publishFinanceEvent(tx, {
       organizationId,
       entityType: "EnterpriseReconciliationSession",

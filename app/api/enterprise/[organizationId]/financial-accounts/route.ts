@@ -5,6 +5,7 @@ import { authorizeFinanceRequest, financeBusinessDateRange, financeErrorResponse
 import { createManagedFinancialAccount } from "@/lib/enterprise/accounting/financial-account-service";
 import { financialAccountCreateSchema } from "@/lib/enterprise/accounting/treasury-schemas";
 import { prisma } from "@/lib/prisma";
+import { maskFinancialReference } from "@/lib/enterprise/accounting/masked-financial-reference";
 
 type Params = { params: Promise<{ organizationId: string }> };
 
@@ -79,6 +80,8 @@ export async function GET(req: Request, { params }: Params) {
       cashSessionStateByAccountId.set(session.financialAccountId, session.status);
     }
   }
+  const reconciliations = await prisma.enterpriseReconciliationSession.groupBy({ by: ["financialAccountId"], where: { organizationId, financialAccountId: { in: rawItems.map((item) => item.id) }, status: "COMPLETED" }, _max: { completedAt: true } });
+  const lastReconciled = new Map(reconciliations.map((item) => [item.financialAccountId, item._max.completedAt]));
   const capabilities = auth.access.capabilities;
   const items = rawItems.map((item) => {
     const cashSessionState = item.accountType === "CASH"
@@ -86,6 +89,8 @@ export async function GET(req: Request, { params }: Params) {
       : null;
     return {
     ...item,
+    maskedReference: maskFinancialReference(item.maskedReference),
+    lastReconciledAt: lastReconciled.get(item.id) ?? null,
     cashSessionStateForCurrentUser: cashSessionState,
     hasOpenCashSessionForCurrentUser: item.accountType === "CASH" ? cashSessionState === "OPEN" : null,
     capabilities: {

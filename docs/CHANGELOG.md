@@ -1,3 +1,7 @@
+## 2026-11-24 — HOTFIX #1226 — tranche B2 candidate
+
+- Garde conservatoire du rapprochement, état jamais rapproché, masquage des références. Rapprochements partiels/groupés, physique et historique à terminer. Pas de livraison.
+
 ## 2026-11-24 — HOTFIX #1226 — tranche B1 candidate
 
 - Séparation de la validation du comptage et de la comptabilisation des écarts ; statut à qualifier sans posting automatique. Non livré, workflow de régularisation encore à terminer.
