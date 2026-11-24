@@ -85,7 +85,7 @@ test.describe.serial("Hotfix #1226 financial integrity (isolated browser and Pos
       const page=await a.newPage();
       await page.goto(base+path+"?recordId="+source.id);
       await expect(page.getByText("Passations physiques entre caissiers",{exact:true})).toBeVisible();
-      for(const width of [320,390,768,1024]){
+      for(const width of [320,360,375,390,414,768,1024]){
         await page.setViewportSize({width,height:844});
         expect(await page.evaluate(()=>document.documentElement.scrollWidth-window.innerWidth)).toBeLessThanOrEqual(2);
       }
@@ -215,6 +215,30 @@ test.describe.serial("Hotfix #1226 financial integrity (isolated browser and Pos
       expect(await prisma.enterpriseTreasuryTransaction.count({where:{organizationId,financialAccountId:cash.id}})).toBe(0);
       expect((await call(c,"POST",endpoint,correction)).response.ok()).toBeFalsy();
       expect(await prisma.enterpriseJournalReversal.count({where:{organizationId,originalEntryId:original.id}})).toBe(1);
+      // The physical reconciliation requires independent approval and a fresh count.
+      const physical={financialAccountId:cash.id,physicalCount:"100",periodStart:now.toISOString(),periodEnd:now.toISOString(),evidenceReference:"PV-H1226-PHYSICAL",attest:true};
+      const incorrect=(await ok(c,"POST",root+"/reconciliations",{...physical,physicalCount:"105"})).session;
+      const incorrectEndpoint=root+"/reconciliations/"+incorrect.id;
+      expect((await call(c,"POST",incorrectEndpoint+"/complete",{action:"SUBMIT",revision:incorrect.revision,approverUserId:recipient.id})).response.status()).toBe(409);
+      await ok(c,"PATCH",incorrectEndpoint,{revision:incorrect.revision,reason:"Correct inaccurate synthetic count"});
+      const stale=(await ok(c,"POST",root+"/reconciliations",physical)).session;
+      const staleEndpoint=root+"/reconciliations/"+stale.id;
+      const reopened=(await ok(a,"POST",root+"/cash-sessions",{financialAccountId:cash.id,openingAmount:"100"})).session;
+      expect((await call(c,"POST",staleEndpoint+"/complete",{action:"SUBMIT",revision:stale.revision,approverUserId:recipient.id})).response.status()).toBe(409);
+      await ok(c,"PATCH",staleEndpoint,{revision:stale.revision,reason:"Cash session opened after count"});
+      const closed=(await ok(a,"POST",root+"/cash-sessions/"+reopened.id+"/close",{revision:reopened.revision,countedClosingAmount:"100",counts:[{denomination:"10",quantity:10}],approverUserId:recipient.id})).session;
+      await ok(b,"POST",root+"/cash-sessions/"+reopened.id+"/validate",{revision:closed.revision,approve:true});
+      const fresh=(await ok(c,"POST",root+"/reconciliations",physical)).session;
+      const freshEndpoint=root+"/reconciliations/"+fresh.id+"/complete";
+      const submitted=(await ok(c,"POST",freshEndpoint,{action:"SUBMIT",revision:fresh.revision,approverUserId:recipient.id})).session;
+      expect((await call(b,"POST",freshEndpoint,{action:"APPROVE",revision:submitted.revision})).response.status()).toBe(428);
+      await stepUp(b,process.env.E2E_USER_PASSWORD);
+      const reconciled=(await ok(b,"POST",freshEndpoint,{action:"APPROVE",revision:submitted.revision})).session;
+      expect(reconciled.status).toBe("COMPLETED");
+      const balances=await prisma.enterpriseFinancialAccount.findUniqueOrThrow({where:{id:cash.id}});
+      expect(balances.operationalBalance.toFixed()).toBe("100");
+      expect(balances.reconciledBalance.toFixed()).toBe("100");
+      expect(await prisma.enterpriseTreasuryTransaction.count({where:{organizationId,financialAccountId:cash.id}})).toBe(0);
     }finally{await a.close();await b.close();if(c)await c.close();}
   });
 

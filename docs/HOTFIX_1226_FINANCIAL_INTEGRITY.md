@@ -85,3 +85,6 @@ Le KPI produits totalise désormais REVENUE et OTHER_INCOME. Les ventes/services
 
 ## Recette historique complémentaire (candidate)
 Un troisième acteur indépendant et des écritures fictives sans site sont créés exclusivement dans la base jetable existante. Contrôle de la ventilation produits, filtre site, identifiant exact, lien profond comptable, interdiction de contrepassation isolée, correction indépendante et unicité de la contrepassation sans mouvement de trésorerie. Aucun accès à ETS KIN FOREX. Résultat à vérifier en CI.
+
+## Extension de recette physique
+Le scénario historique se poursuit par un rapprochement physique : refus d’un montant divergent, annulation motivée, invalidation du comptage par une nouvelle session, nouveau comptage et approbation avec step-up ; le solde rapproché doit passer à 100 USD sans changer le solde opérationnel ni créer de mouvement de trésorerie. La recette responsive ajoute 360, 375 et 414 px. Résultats non anticipés.
