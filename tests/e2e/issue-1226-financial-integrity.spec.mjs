@@ -271,4 +271,48 @@ test.describe.serial("Hotfix #1226 financial integrity (isolated browser and Pos
     }finally{await a.close();await b.close();if(c)await c.close();}
   });
 
+  test("durable Mobile Money import validates private staged content, retry identity and overlapping statement exclusion",async({browser})=>{
+    const a=await signIn(browser,process.env.E2E_ADMIN_EMAIL,process.env.E2E_ADMIN_PASSWORD);
+    try{
+      expect(process.env.SUPABASE_STORAGE_URL).toBe("http://127.0.0.1:8089");
+      const bank=await account("MOBILE_MONEY",0,251);
+      const day="2026-11-24";
+      const data={financialAccountId:bank.id,reference:"H1226-BULK-"+randomUUID(),statementDate:day,periodStart:day,periodEnd:day,currencyCode:"USD",openingBalance:"0",closingBalance:"251",lines:Array.from({length:251},(_,i)=>({transactionDate:day,description:"Synthetic operator credit "+i,reference:"OP-"+i,debit:"0",credit:"1",runningBalance:String(i+1)}))};
+      const first=await call(a,"POST",root+"/bank-statements",data);
+      expect(first.response.status(),JSON.stringify(first.body)).toBe(202);
+      const id=first.body.job.id;
+      expect((await ok(a,"POST",root+"/bank-statements",data)).job.id).toBe(id);
+      const changed=await call(a,"POST",root+"/bank-statements",{...data,lines:data.lines.map((line,i)=>i===0?{...line,description:"Changed content"}:line)});
+      expect(changed.response.status(),JSON.stringify(changed.body)).toBe(409);
+      expect(changed.body.error).toBe("BANK_STATEMENT_RETRY_PAYLOAD_MISMATCH");
+      const staged=await prisma.enterpriseDomainEvent.findUniqueOrThrow({where:{id}});
+      expect(staged.payloadJson.lines).toBeUndefined();
+      expect(staged.payloadJson.stagingPath).toContain("enterprise-bulk/"+organizationId+"/");
+      const second=await call(a,"POST",root+"/bank-statements",{...data,reference:"H1226-BULK-OVERLAP-"+randomUUID()});
+      expect(second.response.status(),JSON.stringify(second.body)).toBe(202);
+      const other=second.body.job.id;
+      const url=base+"/api/internal/enterprise-bulk/process?batch=1";
+      expect((await a.request.post(url)).status()).toBe(401);
+      for(let i=0;i<8;i++){
+        const response=await a.request.post(url,{headers:{authorization:"Bearer "+process.env.ENTERPRISE_BULK_WORKER_SECRET}});
+        expect(response.ok(),await response.text()).toBeTruthy();
+        const jobs=await prisma.enterpriseDomainEvent.findMany({where:{id:{in:[id,other]}}});
+        if(jobs.every(job=>["PROCESSED","DEAD"].includes(job.processingStatus)))break;
+      }
+      const statuses=await Promise.all([id,other].map(async jobId=>(await ok(a,"GET",root+"/bank-statement-imports/"+jobId)).job));
+      const completed=statuses.find(job=>job.status==="COMPLETED");
+      const rejected=statuses.find(job=>job.status==="DEAD");
+      expect(completed).toBeDefined();expect(rejected).toBeDefined();
+      expect(completed.progressPercent).toBe(100);
+      expect(completed.importedLineCount).toBe(251);
+      expect(rejected.errorCode).toBe("BANK_STATEMENT_PERIOD_OVERLAP");
+      const saved=await prisma.enterpriseBankStatement.findMany({where:{organizationId,financialAccountId:bank.id},include:{lines:true}});
+      expect(saved).toHaveLength(1);expect(saved[0].status).toBe("IMPORTED");expect(saved[0].lines).toHaveLength(251);
+      expect(saved[0].closingBalance.toFixed()).toBe("251");
+      const subsequent=await call(a,"POST",root+"/bank-statements",{...data,reference:"H1226-BULK-LATE-"+randomUUID()});
+      expect(subsequent.response.status(),JSON.stringify(subsequent.body)).toBe(409);
+      expect(subsequent.body.error).toBe("BANK_STATEMENT_PERIOD_OVERLAP");
+    }finally{await a.close();}
+  });
+
 });
