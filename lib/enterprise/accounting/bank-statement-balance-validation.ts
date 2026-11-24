@@ -9,7 +9,7 @@ function units(value:DecimalText):bigint {
   if(!/^-?\d{1,14}(\.\d{1,6})?$/.test(raw)) throw new Error("BANK_STATEMENT_AMOUNT_INVALID");
   const negative=raw.startsWith("-");
   const [whole,fraction=""]=raw.replace(/^-/,"").split(".");
-  const magnitude=BigInt(whole)*1000000n+BigInt(fraction.padEnd(6,"0"));
+  const magnitude=BigInt(whole)*BigInt(1000000)+BigInt(fraction.padEnd(6,"0"));
   return negative?-magnitude:magnitude;
 }
 /** Exact monetary continuity for normalized imports, before any staging or persistence. */
@@ -28,7 +28,7 @@ export function bankStatementBalanceIssues(input:StatementBalanceInput):BankBala
     previousDate=line.transactionDate;
     try{
       const debit=units(line.debit),credit=units(line.credit);
-      if(debit<0n||credit<0n||(debit>0n)===(credit>0n)){issues.push({field:"debit",line:lineNumber,code:"BANK_STATEMENT_LINE_DIRECTION_INVALID"});continue;}
+      if(debit<BigInt(0)||credit<BigInt(0)||(debit>BigInt(0))===(credit>BigInt(0))){issues.push({field:"debit",line:lineNumber,code:"BANK_STATEMENT_LINE_DIRECTION_INVALID"});continue;}
       running+=credit-debit;
       if(line.runningBalance!==undefined && units(line.runningBalance)!==running) issues.push({field:"runningBalance",line:lineNumber,code:"BANK_STATEMENT_RUNNING_BALANCE_MISMATCH"});
       if(line.reference?.trim()){

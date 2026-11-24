@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { authorizeFinanceRequest, financeBusinessDateRange, financeErrorResponse, financeListParams } from "@/lib/enterprise/accounting/http";
+import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
 import { importBankStatement } from "@/lib/enterprise/accounting/treasury-service";
 import { bankStatementSchema } from "@/lib/enterprise/accounting/treasury-schemas";
 import { ENTERPRISE_BULK_LIMITS } from "@/lib/enterprise/bulk-jobs/constants";
@@ -58,7 +59,12 @@ export async function POST(req: Request, { params }: Params) {
   const auth = await authorizeFinanceRequest(req, organizationId, "FINANCE_BANK", "create", { mutation: true, limit: 20 });
   if (!auth.ok) return auth.response;
   const parsed = bankStatementSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "ENTERPRISE_INPUT_INVALID", message: parsed.error.issues[0]?.message }, { status: 400 });
+  if (!parsed.success) {
+    const issues=parsed.error.issues;
+    const balanceIssue=issues.find(issue=>issue.code==="custom"&&issue.message.startsWith("BANK_STATEMENT_"));
+    if(balanceIssue)return financeErrorResponse(new EnterpriseAccountingError(balanceIssue.message,422,{field:balanceIssue.path.join(".")}));
+    return NextResponse.json({error:"ENTERPRISE_INPUT_INVALID",message:"Vérifiez les champs du relevé et les montants saisis."},{status:400});
+  }
 
   try {
     if (parsed.data.lines.length > ENTERPRISE_BULK_LIMITS.bankStatementSyncMaxLines) {

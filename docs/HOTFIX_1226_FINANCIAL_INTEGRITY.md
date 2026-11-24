@@ -43,3 +43,5 @@ Rollback avant fusion : abandon de la branche; après fusion suivre la procédur
 
 ## Tranche D2 — import bancaire XLSX candidat
 - Modèle natif ExcelJS réimportable, colonnes canoniques, instructions et compte/devise facultatifs, aperçu serveur protégé (ZIP et types de cellule contrôlés), aucune persistance du fichier brut en prévisualisation. Le chemin existant CSV et l'import durable normalisé sont conservés. Aperçu paginé de toutes les lignes avant confirmation. Validation exacte des soldes, dates, ordre, sens et doublons référencés dans le schéma commun HTTP/worker et le service synchrone. Limite XLSX 2 Mo, 10 000 lignes; les gros fichiers devront être divisés si la limite de taille sûre est atteinte. Tests round-trip XLSX, import durable et browser encore requis.
+
+- Compatibilité TypeScript : valeurs BigInt construites via BigInt() (pas de littéraux ES2020), contrat d'erreur import contextualisé. Validation CI requise.

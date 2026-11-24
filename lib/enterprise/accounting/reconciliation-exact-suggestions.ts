@@ -6,12 +6,12 @@ function moneyKey(value: Amount) {
   const text = value.toString();
   if (!/^\d+(\.\d{1,6})?$/.test(text)) return null;
   const [whole, fraction = ""] = text.split(".");
-  return BigInt(whole) * 1000000n + BigInt(fraction.padEnd(6,"0"));
+  return BigInt(whole) * BigInt(1000000) + BigInt(fraction.padEnd(6,"0"));
 }
 function key(reference: string | null, businessDay: string, currency: string, direction: string, amount: bigint) {
   // No fuzzy reference normalization: punctuation can identify different transfers.
   const normalized = reference?.trim();
-  if (!normalized || amount <= 0n) return null;
+  if (!normalized || amount <= BigInt(0)) return null;
   return JSON.stringify([normalized, businessDay, currency, direction, amount.toString()]);
 }
 /** Read-only, exact and mutually unique proposals. Never silently select ambiguous candidates. */
@@ -21,8 +21,8 @@ export function suggestExactReconciliationMatches(lines: Line[], transactions: T
   for (const line of lines) {
     if (line.reconciliationStatus !== "UNMATCHED") continue;
     const debit = moneyKey(line.debit), credit = moneyKey(line.credit);
-    if (debit === null || credit === null || (debit > 0n) === (credit > 0n)) continue;
-    const k = key(line.reference, day.statement(line.transactionDate), line.currencyCode, credit > 0n ? "INBOUND" : "OUTBOUND", credit > 0n ? credit : debit);
+    if (debit === null || credit === null || (debit > BigInt(0)) === (credit > BigInt(0))) continue;
+    const k = key(line.reference, day.statement(line.transactionDate), line.currencyCode, credit > BigInt(0) ? "INBOUND" : "OUTBOUND", credit > BigInt(0) ? credit : debit);
     if (k) lineIndex.set(k,[...(lineIndex.get(k) || []),line]);
   }
   for (const transaction of transactions) {
