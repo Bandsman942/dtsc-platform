@@ -179,7 +179,7 @@ test.describe.serial("Hotfix #1226 financial integrity (isolated browser and Pos
       if(!period){
         const year=await prisma.enterpriseFiscalYear.findFirst({where:{organizationId,startDate:{lte:now},endDate:{gte:now},status:"OPEN"}});
         if(!year)throw new Error("Synthetic fiscal year not seeded");
-        period=await prisma.enterpriseFiscalPeriod.create({data:{organizationId,fiscalYearId:year.id,code:"H1226-"+randomUUID(),startDate:from,endDate:to,status:"OPEN"}});
+        period=await prisma.enterpriseFiscalPeriod.create({data:{organizationId,fiscalYearId:year.id,code:"H1226-"+randomUUID(),startDate:from,endDate:to,status:"OPEN",createdByUserId:owner.id}});
       }
       const other=await prisma.enterpriseLedgerAccount.create({data:{organizationId,chartId:ledger.chartId,code:"H1226-OTHER-"+randomUUID().slice(0,8),nameFr:"Autres produits fictifs",nameEn:"Synthetic other income",accountType:"OTHER_INCOME",currencyCode:"USD",isActive:true,allowDirectPosting:true}});
       const journal=await prisma.enterpriseJournal.findFirstOrThrow({where:{organizationId,isActive:true}});

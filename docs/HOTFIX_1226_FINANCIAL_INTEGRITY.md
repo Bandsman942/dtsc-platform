@@ -91,3 +91,5 @@ Le scénario historique se poursuit par un rapprochement physique : refus d’un
 
 ## Résultats du SHA 272ba00d
 17/18 workflows réussis, dont Quality Gates #45446349296, migration #45446349388, les deux premières recettes #1226 et les trois scénarios #662. La troisième recette échoue avant création du journal historique car le test n'effectuait pas le step-up du validateur de caisse (HTTP 428). Correctif du scénario uniquement : vérifie le refus initial, réalise le step-up, puis efface le cookie step-up avant le contrôle du rapprochement physique, sans modifier la protection applicative. Nouvelle exécution obligatoire ; OWNER_E2E non exécuté.
+
+- Revue du jeu de données de recette historique : le seed Shop2 ne crée que la période d'août 2026. La période de test couvrant la date courante doit renseigner createdByUserId, champ obligatoire du modèle EnterpriseFiscalPeriod. Correctif limité à la fixture isolée, sans changement applicatif ni historique client. CI finale à confirmer.
