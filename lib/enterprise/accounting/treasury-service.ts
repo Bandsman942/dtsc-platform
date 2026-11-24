@@ -17,6 +17,7 @@ type ReconciliationInput = z.infer<typeof reconciliationCreateSchema>;
 
 export async function openCashSession(organizationId: string, cashierUserId: string, input: CashSessionOpenInput) {
   return prisma.$transaction(async (tx) => {
+    await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterpriseFinancialAccount" WHERE id = ${input.financialAccountId} AND "organizationId" = ${organizationId} FOR UPDATE`);
     const account = await tx.enterpriseFinancialAccount.findFirst({ where: { id: input.financialAccountId, organizationId, accountType: "CASH", status: "ACTIVE", archivedAt: null } });
     if (!account) throw new EnterpriseAccountingError("CASH_ACCOUNT_INVALID", 409);
     // Cash sessions inherit their site from the *financial account*, never
@@ -37,11 +38,22 @@ export async function openCashSession(organizationId: string, cashierUserId: str
         catch { throw new EnterpriseAccountingError("RETAIL_SITE_ACCESS_DENIED", 403); }
       }
     }
-    const existing = await tx.enterpriseCashSession.findFirst({ where: { organizationId, financialAccountId: account.id, cashierUserId, status: { in: ["OPEN", "CLOSING"] } } });
+    const existing = await tx.enterpriseCashSession.findFirst({ where: { organizationId, financialAccountId: account.id, cashierUserId, status: { in: ["OPEN", "CLOSING", "PENDING_VALIDATION"] } } });
     if (existing) throw new EnterpriseAccountingError("CASH_SESSION_ALREADY_ACTIVE", 409, { sessionId: existing.id });
     const openingAmount = new Prisma.Decimal(input.openingAmount);
+    if(openingAmount.isNegative()) throw new EnterpriseAccountingError("CASH_OPENING_AMOUNT_INVALID",409);
+    const active = await tx.enterpriseCashSession.findMany({where:{organizationId,financialAccountId:account.id,status:{in:["OPEN","CLOSING","PENDING_VALIDATION"]}},select:{openingAmount:true,status:true,expectedClosingAmount:true,countedClosingAmount:true,movements:{select:{amount:true,direction:true}}}});
+    let reserved=new Prisma.Decimal(0);
+    for(const item of active){
+      const expected=item.movements.reduce((balance,movement)=>movement.direction==="INBOUND"?balance.plus(movement.amount):balance.minus(movement.amount),item.openingAmount);
+      if(expected.isNegative())throw new EnterpriseAccountingError("CASH_CUSTODY_REVIEW_REQUIRED",409);
+      // A pending count cannot make an unexplained shortage available to another till.
+      reserved=reserved.plus(Prisma.Decimal.max(expected,item.countedClosingAmount||new Prisma.Decimal(0)));
+    }
+    const remaining=account.operationalBalance.minus(reserved);
+    if(remaining.isNegative()||openingAmount.greaterThan(remaining))throw new EnterpriseAccountingError("CASH_OPENING_FUNDS_RESERVED",409,{available:Prisma.Decimal.max(remaining,new Prisma.Decimal(0)).toFixed(),requested:openingAmount.toFixed(),currencyCode:account.currencyCode});
     const session = await tx.enterpriseCashSession.create({ data: { organizationId, number: financeReference("CASH"), financialAccountId: account.id, cashierUserId, siteId: account.siteId || null, openingAmount } });
-    await publishFinanceEvent(tx, { organizationId, entityType: "EnterpriseCashSession", entityId: session.id, eventType: "CASH_SESSION_OPENED", summary: `Cash session ${session.number} opened`, actorUserId: cashierUserId, toStatus: "OPEN", metadataJson: { financialAccountId: account.id, openingAmount: openingAmount.toFixed(), currency: account.currencyCode } });
+    await publishFinanceEvent(tx, { organizationId, entityType: "EnterpriseCashSession", entityId: session.id, eventType: "CASH_SESSION_OPENED", summary: `Cash session ${session.number} opened`, actorUserId: cashierUserId, toStatus: "OPEN", metadataJson: { financialAccountId: account.id, openingAmount: openingAmount.toFixed(), currency: account.currencyCode, remainingUnassignedBeforeOpening: remaining.toFixed() } });
     return session;
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 }

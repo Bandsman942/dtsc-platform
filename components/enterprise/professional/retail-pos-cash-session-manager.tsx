@@ -51,7 +51,7 @@ export function RetailPosCashSessionManager({
     () => sessions.filter((session) => session.status === "OPEN").sort((a, b) => a.financialAccount.currencyCode.localeCompare(b.financialAccount.currencyCode) || a.financialAccount.name.localeCompare(b.financialAccount.name)),
     [sessions],
   );
-  const lockedAccountIds = useMemo(() => new Set(sessions.map((session) => session.financialAccountId)), [sessions]);
+  const lockedAccountIds = useMemo(() => new Set(sessions.filter(session=>["OPEN","CLOSING","PENDING_VALIDATION"].includes(session.status)).map((session) => session.financialAccountId)), [sessions]);
   const availableAccounts = cashAccounts.filter((account) => !lockedAccountIds.has(account.id));
   const [error, setError] = useState("");
 
@@ -129,7 +129,7 @@ export function RetailPosCashSessionManager({
                         <p className="mt-1 break-words text-sm font-black text-dtsc-ink">{session.financialAccount.name}</p>
                         <p className="mt-1 text-xs text-dtsc-muted">{locale === "fr" ? "Ouverte par" : "Opened by"} {session.openedByLabel || "—"} · {new Date(session.openedAt).toLocaleString(locale === "fr" ? "fr-FR" : "en-US")}</p>
                         <p className="mt-1 text-xs font-semibold text-dtsc-muted">{copy.openingFloat}: {moneyValue(session.openingAmount, currency, locale)}</p>
-                        <p className="text-xs font-semibold text-dtsc-muted">{copy.currentBalance}: {moneyValue(session.financialAccount.operationalBalance, currency, locale)}</p>
+                        <p className="text-xs font-semibold text-dtsc-muted">{copy.currentBalance}: {session.expectedCurrentAmount == null ? (locale==="fr"?"Indisponible":"Unavailable") : moneyValue(session.expectedCurrentAmount, currency, locale)}</p>
                       </div>
                       <CircleDollarSign className="h-5 w-5 shrink-0 text-dtsc-muted" aria-hidden="true" />
                     </div>

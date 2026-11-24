@@ -644,6 +644,7 @@ export async function createRetailDailyClose(organizationId: string, actorUserId
         const inflows = sumDecimals(cashSession.movements.filter((movement) => movement.direction === "INBOUND").map((movement) => movement.amount));
         const outflows = sumDecimals(cashSession.movements.filter((movement) => movement.direction === "OUTBOUND").map((movement) => movement.amount));
         const expected = money(cashSession.openingAmount.plus(inflows).minus(outflows));
+        if (line.cashSessionRevision !== undefined && cashSession.revision !== line.cashSessionRevision) throw new EnterpriseRetailError("RETAIL_CLOSE_CONFLICT",409,{cashSessionId:cashSession.id});
         if (line.expectedSessionAmount !== undefined && !expected.equals(money(decimal(line.expectedSessionAmount)))) {
           throw new EnterpriseRetailError("RETAIL_CLOSE_CONFLICT", 409, { financialAccountId: account.id });
         }

@@ -44,6 +44,7 @@ type CashSession = {
   status: string;
   openingAmount: string | number;
   expectedCurrentAmount?: string | number;
+  revision: number;
   openedAt: string;
   financialAccountId: string;
   financialAccount: {
@@ -299,7 +300,7 @@ export function RetailDailyCloseWorkspace({
       setNotice({ tone: "warning", description: locale === "fr" ? "Sélectionnez une boutique précise : une clôture ne peut pas regrouper plusieurs boutiques." : "Select one store: a daily close cannot combine multiple stores." });
       return;
     }
-    const lines: Array<{ financialAccountId: string; accountType: string; cashSessionId?: string; expectedSessionAmount?: number; declaredBalance: number; varianceReason: string | null; denominations: Array<{ denomination: number; quantity: number }> }> = [];
+    const lines: Array<{ financialAccountId: string; accountType: string; cashSessionId?: string; cashSessionRevision?: number; expectedSessionAmount?: number; declaredBalance: number; varianceReason: string | null; denominations: Array<{ denomination: number; quantity: number }> }> = [];
     for (const account of closeAccounts.filter((candidate) => form.get(`include-${candidate.id}`) === "on")) {
       const physicalCount = account.accountType === "CASH"
         ? cashCountsFromDailyCloseForm(form, account.id, account.currencyCode)
@@ -327,7 +328,7 @@ export function RetailDailyCloseWorkspace({
       lines.push({
         financialAccountId: account.id,
         accountType: account.accountType,
-        ...(account.closeSession ? { cashSessionId: account.closeSession.id, expectedSessionAmount: account.expectedCloseAmount } : {}),
+        ...(account.closeSession ? { cashSessionId: account.closeSession.id, cashSessionRevision: account.closeSession.revision, expectedSessionAmount: account.expectedCloseAmount } : {}),
         declaredBalance,
         varianceReason,
         denominations: physicalCount?.counts ?? [],

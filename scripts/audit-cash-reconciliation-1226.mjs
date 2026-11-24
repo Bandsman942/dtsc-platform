@@ -13,7 +13,7 @@ const prisma=new PrismaClient();
 try{
   const report=await prisma.$transaction(async tx=>{
     await tx.$executeRaw`SET TRANSACTION READ ONLY`;
-    const org=await tx.organization.findFirst({where:{id:organizationId,organizationType:"CLIENT",deletedAt:null},select:{id:true}});
+    const org=await tx.organization.findFirst({where:{id:organizationId,deletedAt:null},select:{id:true}});
     if(!org)throw new Error("Unknown client organization");
     const [discrepancies,sessions]=await Promise.all([
       tx.enterpriseCashDiscrepancy.findMany({where:{organizationId,createdAt:range},take:LIMIT+1,orderBy:{id:"asc"},select:{id:true,status:true,amount:true,journalEntryId:true,cashSession:{select:{financialAccountId:true,siteId:true,expectedClosingAmount:true,countedClosingAmount:true,financialAccount:{select:{ledgerAccountId:true,currencyCode:true,siteId:true}}}}}}),

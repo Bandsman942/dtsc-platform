@@ -102,3 +102,9 @@ const audit1226=read("scripts/audit-cash-reconciliation-1226.mjs");
 assert.match(audit1226,/SET TRANSACTION READ ONLY/);
 assert.match(audit1226,/LIMIT=2000/);
 console.log("#1226 tranche G inverse and dry-run guards: PASS");
+
+assert.match(treasury,/CASH_OPENING_FUNDS_RESERVED/);
+assert.match(treasury,/remaining=account.operationalBalance.minus\(reserved\)/);
+assert.match(service,/cashSession.revision !== line.cashSessionRevision/);
+assert.match(ui,/cashSessionRevision: account.closeSession.revision/);
+console.log("#1226 tranche H cash custody guards: PASS");
