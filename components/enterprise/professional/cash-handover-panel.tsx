@@ -27,7 +27,7 @@ export function CashHandoverPanel({organizationId,sessionId,locale,onChanged}:{o
    const form=new FormData(event.currentTarget);
    try{
      await performFinanceCriticalStepUp(form,"APPROVE");
-     const payload=action.action==="PROPOSE"?{action:action.action,targetSessionId:String(form.get("targetSessionId")||""),amount:String(form.get("amount")||""),reason:String(form.get("reason")||""),idempotencyKey:token.current}:{action:action.action,handoverId:action.record.id,revision:action.record.revision,reason:String(form.get("reason")||"")};
+     const payload=action.action==="PROPOSE"?{action:action.action,targetSessionId:String(form.get("targetSessionId")||""),amount:String(form.get("amount")||""),reason:String(form.get("reason")||""),idempotencyKey:token.current,attest:form.get("attest")==="on"}:{action:action.action,handoverId:action.record.id,revision:action.record.revision,reason:String(form.get("reason")||""),attest:form.get("attest")==="on"};
      const response=await fetch(endpoint,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
      const body=await response.json().catch(()=>null);if(!response.ok)throw new Error(body?.message||tr("Passation refusée.","Handover rejected."));
      setAction(null);await load();await onChanged();setMessage(tr("Décision enregistrée.","Decision recorded."));
@@ -47,7 +47,7 @@ export function CashHandoverPanel({organizationId,sessionId,locale,onChanged}:{o
  {action?<form onSubmit={submit} className="grid min-w-0 gap-3">
  {action.action==="PROPOSE"?<><Field label={tr("Session destinataire","Receiving session")}><NativeSelect name="targetSessionId" required items={[{id:"",label:"—"},...(data?.candidates||[])]}/></Field><Field label={tr("Montant remis","Amount handed over")}><Input name="amount" type="number" min="0.000001" step="0.000001" required/></Field></>:<p className="text-sm">{financeMoney(action.record.amount,action.record.currencyCode,locale)} · {status(action.record.status)}</p>}
  <Field label={tr("Motif / référence de remise","Reason / handover reference")}><Input name="reason" minLength={4} maxLength={500} required/></Field>
- <label className="flex items-start gap-2 text-sm"><input type="checkbox" required/>{tr("Je confirme cette décision et, en cas de remise ou d’acceptation, la vérification du montant physique.","I confirm this decision and, for proposal or acceptance, the verified physical amount.")}</label>
+ <label className="flex items-start gap-2 text-sm"><input type="checkbox" name="attest" required/>{tr("Je confirme cette décision et, en cas de remise ou d’acceptation, la vérification du montant physique.","I confirm this decision and, for proposal or acceptance, the verified physical amount.")}</label>
  <FinanceCriticalStepUpFields action="APPROVE" locale={locale}/>
  <Button type="submit" disabled={busy}>{tr("Confirmer","Confirm")}</Button></form>:null}
  </Dialog>

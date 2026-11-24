@@ -179,7 +179,7 @@ export function MobileMoneyCashSessionManager({
     () => sessions.filter((session) => session.status === "CLOSING" || session.status === "PENDING_VALIDATION"),
     [sessions],
   );
-  const lockedAccountIds = useMemo(() => new Set(sessions.filter(session=>["OPEN","CLOSING","PENDING_VALIDATION"].includes(session.status)).map((session) => session.financialAccountId)), [sessions]);
+  const lockedAccountIds = useMemo(() => new Set(sessions.filter(session=>["OPEN","CLOSING"].includes(session.status)).map((session) => session.financialAccountId)), [sessions]);
   const availableAccounts = cashAccounts.filter((account) => !lockedAccountIds.has(account.id));
   const [openError, setOpenError] = useState("");
 

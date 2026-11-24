@@ -51,7 +51,7 @@ export function RetailPosCashSessionManager({
     () => sessions.filter((session) => session.status === "OPEN").sort((a, b) => a.financialAccount.currencyCode.localeCompare(b.financialAccount.currencyCode) || a.financialAccount.name.localeCompare(b.financialAccount.name)),
     [sessions],
   );
-  const lockedAccountIds = useMemo(() => new Set(sessions.filter(session=>["OPEN","CLOSING","PENDING_VALIDATION"].includes(session.status)).map((session) => session.financialAccountId)), [sessions]);
+  const lockedAccountIds = useMemo(() => new Set(sessions.filter(session=>["OPEN","CLOSING"].includes(session.status)).map((session) => session.financialAccountId)), [sessions]);
   const availableAccounts = cashAccounts.filter((account) => !lockedAccountIds.has(account.id));
   const [error, setError] = useState("");
 

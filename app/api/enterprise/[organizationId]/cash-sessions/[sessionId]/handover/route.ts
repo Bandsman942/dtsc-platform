@@ -8,8 +8,8 @@ import { changeCashHandover } from "@/lib/enterprise/accounting/cash-handover-se
 import { retailFinanceReadSiteScope } from "@/lib/enterprise/retail/site-access";
 const reason=z.string().trim().min(4).max(500);
 const schema=z.discriminatedUnion("action",[
-  z.object({action:z.literal("PROPOSE"),targetSessionId:z.string().min(1).max(240),amount:z.string().regex(/^\d{1,14}(\.\d{1,6})?$/),reason,idempotencyKey:z.string().uuid()}),
-  z.object({action:z.enum(["ACCEPT","DECLINE","CANCEL"]),handoverId:z.string().min(1).max(240),revision:z.number().int().positive(),reason}),
+  z.object({action:z.literal("PROPOSE"),targetSessionId:z.string().min(1).max(240),amount:z.string().regex(/^\d{1,14}(\.\d{1,6})?$/),reason,idempotencyKey:z.string().uuid(),attest:z.literal(true)}),
+  z.object({action:z.enum(["ACCEPT","DECLINE","CANCEL"]),handoverId:z.string().min(1).max(240),revision:z.number().int().positive(),reason,attest:z.literal(true)}),
 ]);
 type Params={params:Promise<{organizationId:string;sessionId:string}>};
 export async function GET(req:Request,{params}:Params){

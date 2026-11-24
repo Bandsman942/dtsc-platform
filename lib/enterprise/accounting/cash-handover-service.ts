@@ -5,8 +5,8 @@ import { publishFinanceEvent } from "@/lib/enterprise/accounting/helpers";
 import { retailFinanceReadSiteScope } from "@/lib/enterprise/retail/site-access";
 
 export type CashHandoverInput =
- | {action:"PROPOSE";targetSessionId:string;amount:string;reason:string;idempotencyKey:string}
- | {action:"ACCEPT"|"DECLINE"|"CANCEL";handoverId:string;revision:number;reason:string};
+ | {action:"PROPOSE";targetSessionId:string;amount:string;reason:string;idempotencyKey:string;attest:true}
+ | {action:"ACCEPT"|"DECLINE"|"CANCEL";handoverId:string;revision:number;reason:string;attest:true};
 
 async function assertScope(tx:Prisma.TransactionClient,organizationId:string,userId:string,siteId:string|null){
   const scope=await retailFinanceReadSiteScope(organizationId,userId,"CLOSE_CASH",tx);

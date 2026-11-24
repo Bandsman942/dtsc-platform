@@ -38,7 +38,7 @@ export async function openCashSession(organizationId: string, cashierUserId: str
         catch { throw new EnterpriseAccountingError("RETAIL_SITE_ACCESS_DENIED", 403); }
       }
     }
-    const existing = await tx.enterpriseCashSession.findFirst({ where: { organizationId, financialAccountId: account.id, cashierUserId, status: { in: ["OPEN", "CLOSING", "PENDING_VALIDATION"] } } });
+    const existing = await tx.enterpriseCashSession.findFirst({ where: { organizationId, financialAccountId: account.id, cashierUserId, status: { in: ["OPEN", "CLOSING"] } } });
     if (existing) throw new EnterpriseAccountingError("CASH_SESSION_ALREADY_ACTIVE", 409, { sessionId: existing.id });
     const openingAmount = new Prisma.Decimal(input.openingAmount);
     if(openingAmount.isNegative()) throw new EnterpriseAccountingError("CASH_OPENING_AMOUNT_INVALID",409);

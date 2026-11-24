@@ -64,3 +64,6 @@ Les allocations nouvelles sont RESERVED jusqu’à validation globale; le passag
 
 ## Tranche I — passation contradictoire candidate
 - Entité tenant-scoped additive EnterpriseCashHandover et migration. Proposition par le caissier source, acceptation/refus par le caissier destinataire, annulation par le proposant; step-up et contrôle site/compte/acteur, révision, idempotence de proposition, sérialisation et contrôle de fonds à l'exécution. Deux mouvements de session opposés, aucun changement de trésorerie générale ni nouvelle écriture. Une passation non décidée interdit la clôture. Liste paginée et panneau FR/EN dans la caisse. Le justificatif est une attestation et référence saisie, pas une preuve téléversée. Ce flux exige deux sessions ouvertes du même compte; pas de transfert entre comptes ou magasins. Certification PostgreSQL et navigateur requise.
+
+## Tranche I2 — compatibilité #700
+Une nouvelle session reste possible quand la précédente attend validation, mais ses fonds restent réservés. Attestation explicite dans le schéma serveur de passation. Aucune recette finale.

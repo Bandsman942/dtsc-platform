@@ -11,6 +11,10 @@ import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
 
 const ERROR_MESSAGES: Record<string, string> = {
+  CASH_HANDOVER_PENDING: "Une passation attend une décision. Acceptez-la, refusez-la ou annulez-la dans la caisse avant de clôturer.",
+  CASH_OPENING_FUNDS_RESERVED: "Le fonds demandé dépasse les fonds non affectés aux autres sessions. Vérifiez la trésorerie et les sessions en cours.",
+  CASH_OPENING_AMOUNT_INVALID: "Le fonds d’ouverture ne peut pas être négatif.",
+  CASH_CUSTODY_REVIEW_REQUIRED: "Une session présente un solde incohérent. Vérifiez sa situation avant de réaffecter des fonds.",
   RETAIL_DIRECT_CHECKOUT_NOT_ACTIVE: "Le mode Commerce sans caissier n’est pas actif pour cette boutique. Demandez son activation à l’administrateur.",
   RETAIL_DIRECT_CHECKOUT_APPROVAL_REQUIRED: "Les autorisations de validation personnelle de facture et de paiement manquent pour cette boutique. Demandez une délégation explicite à l’administrateur.",
   RETAIL_DIRECT_CHECKOUT_CASH_INSUFFICIENT: "Les espèces reçues ne couvrent pas le total calculé. Vérifiez le montant remis.",
