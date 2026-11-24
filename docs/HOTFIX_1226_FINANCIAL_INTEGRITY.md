@@ -1,6 +1,6 @@
 # #1226 — Intégrité financière et rapprochement intelligent
 
-**DRAFT — tranche A, non certifiée, non fusionnable.** Aucune donnée client dans ce dépôt public.
+**DRAFT — tranches A à E2 candidates, non certifiées, non fusionnables.** Aucune donnée client dans ce dépôt public.
 
 ## Contrat
 - Le détail comptable utilise l'autorité de capacités commune aux listes. La mutation conserve les gardes serveur, séparation des acteurs, période et audit.
@@ -45,3 +45,8 @@ Rollback avant fusion : abandon de la branche; après fusion suivre la procédur
 - Modèle natif ExcelJS réimportable, colonnes canoniques, instructions et compte/devise facultatifs, aperçu serveur protégé (ZIP et types de cellule contrôlés), aucune persistance du fichier brut en prévisualisation. Le chemin existant CSV et l'import durable normalisé sont conservés. Aperçu paginé de toutes les lignes avant confirmation. Validation exacte des soldes, dates, ordre, sens et doublons référencés dans le schéma commun HTTP/worker et le service synchrone. Limite XLSX 2 Mo, 10 000 lignes; les gros fichiers devront être divisés si la limite de taille sûre est atteinte. Tests round-trip XLSX, import durable et browser encore requis.
 
 - Compatibilité TypeScript : valeurs BigInt construites via BigInt() (pas de littéraux ES2020), contrat d'erreur import contextualisé. Validation CI requise.
+
+## Tranches E1/E2 — comptage physique et soldes datés candidats
+- Migration additive nullable physicalEvidenceJson, sans backfill ni changement des anciennes preuves. La caisse est rapprochée par comptage physique de tous les fonds, pas par addition des clôtures. Tous les dossiers de session et d'écart doivent être résolus. Attestation et référence du justificatif, instant serveur, révision du compte et empreinte des sessions, relecture transactionnelle à la soumission/validation, approbateur indépendant et step-up. Ce contrôle ne marque aucune transaction individuelle comme rapprochée. Justificatif référencé, non téléversé ni automatiquement authentifié.
+- Relevés banque/opérateur : fenêtre civile du fuseau entreprise demi-ouverte incluant la journée finale; solde opérationnel reconstitué à la fin de période, cohérence vérifiée avec le solde courant et revalidation avant approbation. Les anciennes contrepassations dans le périmètre sans représentation de mouvement distincte bloquent la certification. Pas d'écrasement d'un rapprochement achevé plus récent.
+- Restent bloquants : annulation/reprise d'un rapprochement physique périmé, annulation des allocations et passage de leur statut définitif à l'approbation globale, passation/custodie et consolidation des caisses, inverse métier d'un nouvel écart réel, audit historique et preuves de données, revue complète Design 2.0, recette PostgreSQL et navigateur (dont XLSX aller-retour et import durable), CI du dernier SHA et OWNER_E2E. Aucun accès ou changement de données client, aucune fusion et aucun déploiement.
