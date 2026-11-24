@@ -1,3 +1,7 @@
+## 2026-11-24 — HOTFIX #1226 — tranche C2 candidate
+
+- Qualification indépendante et sécurisée d’un écart, correction de comptage, contrepassation historique sous preuve et ajustement atomique d’un écart réel. Historique préservé et lien source exact. Non certifié et non livré.
+
 ## 2026-11-24 — HOTFIX #1226 — tranche C1 candidate
 
 - Rétablissement du contrat d'erreur #580, propositions exactes et non ambiguës de rapprochement, confirmation explicite, QA spécifique intégrée aux régressions. Non livré.

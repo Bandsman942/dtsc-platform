@@ -12,6 +12,7 @@ type Params = { params: Promise<{ organizationId: string }> };
 type JournalListItem = {
   id: string;
   status: string;
+  postingEvent?: string | null;
   preparedByUserId: string;
   approvedByUserId?: string | null;
   postedByUserId?: string | null;

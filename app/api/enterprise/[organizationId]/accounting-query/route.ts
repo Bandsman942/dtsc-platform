@@ -88,11 +88,12 @@ export async function GET(req: Request, { params }: Params) {
       if (!entry) {
         return NextResponse.json({ error: "NOT_FOUND", message: "Cette écriture comptable est introuvable." }, { status: 404 });
       }
+      const variance = entry.sourceEntityType === "EnterpriseCashDiscrepancy" && entry.sourceEntityId ? await prisma.enterpriseCashDiscrepancy.findFirst({ where: { organizationId, id: entry.sourceEntityId }, select: { cashSessionId: true } }) : null;
       const sourceLink = await resolveAccountingSourceLink({
         userId: auth.session.userId,
         organizationId,
         sourceModule: entry.sourceModule,
-        sourceEntityId: entry.sourceEntityId,
+        sourceEntityId: entry.sourceEntityType === "EnterpriseCashDiscrepancy" ? variance?.cashSessionId : entry.sourceEntityId,
         reference: entry.reference,
       });
       const assigned = entry.status === "PENDING_APPROVAL" && Boolean(await prisma.enterpriseApproval.findFirst({

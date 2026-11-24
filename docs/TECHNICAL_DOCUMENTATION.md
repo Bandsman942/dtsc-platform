@@ -1,3 +1,5 @@
+> **#1226 tranche C2 candidate** : revue d’écart par session, preuve référencée, acteur indépendant et step-up, correction historique conservatrice sans double mouvement, posting/ajustement atomiques pour écart réel. Certification PostgreSQL/UI et autres lots encore bloquants.
+
 > **#1226 tranche C1 candidate** : suggestions déterministes et mutuellement uniques sur relevé, confirmation explicite via API existante, régression #580 corrigée, QA spécifique branchée. Pas de certification E2E ni production.
 
 > **#1226 tranche B2 candidate** : protection contre rapprochement incomplet, référence masquée et état jamais rapproché. Rapprochement intelligent complet non certifié et bloquant.

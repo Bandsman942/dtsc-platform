@@ -1,6 +1,6 @@
 /** Display capabilities only: mutation services remain the authoritative guards. */
 export function journalEntryCapabilities(input: {
-  entry: { status: string; preparedByUserId: string | null; approvedByUserId?: string | null; postedByUserId?: string | null; journal?: { requiresApproval?: boolean } | null };
+  entry: { status: string; postingEvent?: string | null; preparedByUserId: string | null; approvedByUserId?: string | null; postedByUserId?: string | null; journal?: { requiresApproval?: boolean } | null };
   actorUserId: string;
   access: { canSubmit: boolean; canApprove: boolean; canManage: boolean };
   assigned: boolean;
@@ -12,7 +12,7 @@ export function journalEntryCapabilities(input: {
     canApprove: Boolean(access.canApprove && entry.status === "PENDING_APPROVAL" && assigned && entry.preparedByUserId !== actorUserId),
     canReject: Boolean(access.canApprove && entry.status === "PENDING_APPROVAL" && assigned),
     canPost: Boolean(access.canManage && entry.status === "APPROVED" && (!entry.journal?.requiresApproval || entry.preparedByUserId !== actorUserId)),
-    canReverse: Boolean(access.canManage && entry.status === "POSTED" && independent),
-    reverseBlockReason: entry.status !== "POSTED" ? null : !access.canManage ? "PERMISSION_REQUIRED" : !independent ? "JOURNAL_ENTRY_SELF_REVERSAL_FORBIDDEN" : null,
+    canReverse: Boolean(access.canManage && entry.status === "POSTED" && independent && entry.postingEvent !== "CASH_VARIANCE_POSTED"),
+    reverseBlockReason: entry.status !== "POSTED" ? null : !access.canManage ? "PERMISSION_REQUIRED" : !independent ? "JOURNAL_ENTRY_SELF_REVERSAL_FORBIDDEN" : entry.postingEvent === "CASH_VARIANCE_POSTED" ? "CASH_VARIANCE_REVIEW_REQUIRED" : null,
   };
 }

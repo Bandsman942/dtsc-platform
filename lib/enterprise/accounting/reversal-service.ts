@@ -6,7 +6,7 @@ import { financeReference, publishFinanceEvent } from "@/lib/enterprise/accounti
 import { getPostingPeriod } from "@/lib/enterprise/accounting/periods";
 import { assertAcquisitionJournalCorrectionAllowedTx } from "@/lib/enterprise/accounting/inventory-acquisition-cost-guards";
 
-export type JournalReversalAuthorization = "USER" | "APPROVED_PERIODIC_TEMPLATE" | "SYSTEM_CLOSING" | "DOMAIN_INVERSE";
+export type JournalReversalAuthorization = "USER" | "APPROVED_PERIODIC_TEMPLATE" | "SYSTEM_CLOSING" | "DOMAIN_INVERSE" | "CASH_VARIANCE_REVIEW";
 
 export async function reverseJournalEntryTx(
   tx: Prisma.TransactionClient,
@@ -30,6 +30,8 @@ export async function reverseJournalEntryTx(
       include: { lines: true },
     });
   }
+  if (original.postingEvent === "CASH_VARIANCE_POSTED" && options?.authorization !== "CASH_VARIANCE_REVIEW") throw new EnterpriseAccountingError("CASH_VARIANCE_REVIEW_REQUIRED", 409);
+  if (options?.authorization === "CASH_VARIANCE_REVIEW" && original.postingEvent !== "CASH_VARIANCE_POSTED") throw new EnterpriseAccountingError("CASH_VARIANCE_REVIEW_REQUIRED", 409);
   if (original.status === "REVERSED") throw new EnterpriseAccountingError("JOURNAL_REVERSAL_INCONSISTENT", 409);
   if (original.status !== "POSTED") throw new EnterpriseAccountingError("ONLY_POSTED_ENTRY_CAN_BE_REVERSED", 409);
   await assertAcquisitionJournalCorrectionAllowedTx(tx, organizationId, {
@@ -55,7 +57,7 @@ export async function reverseJournalEntryTx(
     ]},select:{id:true}});
     if(linked)throw new EnterpriseAccountingError("INVENTORY_RETURN_RECOVERY_DOMAIN_REVERSAL_REQUIRED",409);
   }
-  if ((options?.authorization || "USER") === "USER") {
+  if ((options?.authorization || "USER") === "USER" || options?.authorization === "CASH_VARIANCE_REVIEW") {
     assertIndependentActor({
       actorUserId,
       relatedUserIds: [original.preparedByUserId, original.approvedByUserId, original.postedByUserId],

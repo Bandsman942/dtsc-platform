@@ -49,3 +49,14 @@ assert.equal(suggestExactReconciliationMatches([line,{...line,id:"l2"}],[transac
 assert.equal(suggestExactReconciliationMatches([{...line,reconciliationStatus:"MATCHED"}],[transaction]).length,0);
 assert.match(treasury,/RECONCILIATION_AMOUNT_EXCEEDS_BANK_LINE/);
 console.log("#1226 tranche C1 exact suggestions: PASS");
+
+const varianceReview=read("lib/enterprise/accounting/cash-variance-review-service.ts");
+for(const marker of ["CASH_VARIANCE_REVIEW_FORBIDDEN","CASH_VARIANCE_CORRECTED_COUNT_MISMATCH","CASH_VARIANCE_LEGACY_PROOF_REQUIRED","CASH_VARIANCE_REVIEWED","reverseJournalEntryTx","postBusinessEventTx","Prisma.TransactionIsolationLevel.Serializable","RESOLVED_COUNT_ERROR","LEGACY_REVERSED"]) assert.ok(varianceReview.includes(marker),marker);
+assert.match(varianceReview,/verifiedCount.equals\(session.expectedClosingAmount\)/);
+assert.match(varianceReview,/originalEntries.length !== 1/);
+assert.match(varianceReview,/cashVarianceQualification:true/);
+assert.match(read("lib/enterprise/accounting/posting-service.ts"),/CASH_VARIANCE_QUALIFICATION_REQUIRED/);
+assert.match(read("lib/enterprise/accounting/reversal-service.ts"),/CASH_VARIANCE_REVIEW_REQUIRED/);
+const varianceRoute=read("app/api/enterprise/[organizationId]/cash-sessions/[sessionId]/variance-review/route.ts");
+for(const marker of ["hasRecentStepUp","getEnterpriseAccountingAccess","authorizeFinanceRequest","writeAuditLog","writeApiLog"]) assert.ok(varianceRoute.includes(marker),marker);
+console.log("#1226 tranche C2 review guards: PASS");

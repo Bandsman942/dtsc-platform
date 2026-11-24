@@ -141,7 +141,7 @@ export const buildPaymentAllocationPosting: PostingBuilder = async (tx, input) =
 };
 
 export const buildCashVariancePosting: PostingBuilder = async (tx, input) => {
-  const discrepancy = await tx.enterpriseCashDiscrepancy.findFirst({ where: { id: input.sourceEntityId, organizationId: input.organizationId, status: "APPROVED" }, include: { cashSession: { include: { financialAccount: true } } } });
+  const discrepancy = await tx.enterpriseCashDiscrepancy.findFirst({ where: { id: input.sourceEntityId, organizationId: input.organizationId, status: "QUALIFIED_REAL" }, include: { cashSession: { include: { financialAccount: true } } } });
   if (!discrepancy) throw new EnterpriseAccountingError("CASH_DISCREPANCY_NOT_POSTABLE", 409);
   const short = discrepancy.amount.isNegative();
   const amount = discrepancy.amount.abs();
@@ -150,7 +150,7 @@ export const buildCashVariancePosting: PostingBuilder = async (tx, input) => {
   const accountSite = discrepancy.cashSession.financialAccount.siteId;
   if (sessionSite && accountSite && sessionSite !== accountSite) throw new EnterpriseAccountingError("CASH_ACCOUNT_SITE_MISMATCH", 409);
   const siteId = sessionSite ?? accountSite;
-  return { organizationId: input.organizationId, journalType: "CASH", accountingDate: discrepancy.createdAt, documentDate: discrepancy.createdAt, reference: discrepancy.cashSession.number, description: `Cash variance ${discrepancy.cashSession.number}`, sourceModule: "FINANCE_CASH", sourceEntityType: "EnterpriseCashDiscrepancy", sourceEntityId: discrepancy.id, currencyCode: discrepancy.cashSession.financialAccount.currencyCode, lines: [
+  return { organizationId: input.organizationId, journalType: "CASH", accountingDate: discrepancy.updatedAt, documentDate: discrepancy.createdAt, reference: discrepancy.cashSession.number, description: `Cash variance ${discrepancy.cashSession.number}`, sourceModule: "FINANCE_CASH", sourceEntityType: "EnterpriseCashDiscrepancy", sourceEntityId: discrepancy.id, currencyCode: discrepancy.cashSession.financialAccount.currencyCode, lines: [
     { accountMappingKey: short ? "CASH_VARIANCE_EXPENSE" : cashKey, siteId, description: discrepancy.reason, debit: amount, transactionCurrencyCode: discrepancy.cashSession.financialAccount.currencyCode, transactionAmount: amount },
     { accountMappingKey: short ? cashKey : "CASH_VARIANCE_INCOME", siteId, description: discrepancy.reason, credit: amount, transactionCurrencyCode: discrepancy.cashSession.financialAccount.currencyCode, transactionAmount: amount },
   ] };
