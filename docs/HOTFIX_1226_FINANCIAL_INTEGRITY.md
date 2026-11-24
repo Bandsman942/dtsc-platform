@@ -105,3 +105,6 @@ Recette #662 3/3 et recette financière #1226 3/3 réussies (45498697034), y com
 
 ## Résultats du SHA 26af8c63
 Échecs précoces des scripts QA : déclaration en double de maskFinancialReference dans qa-financial-integrity-1226 et contrat historique #1205 attendant exportCurrentPageCsv, remplacé par l'export intégral filtré. Suppression de la déclaration redondante uniquement, conservation des assertions et extension du contrat #1205 aux trois formats et au snapshot autorisé borné. Recette PostgreSQL enrichie : contrôle des lignes exactes du registre exporté, devise, exclusion d'un autre site et masquage des références. Pas de succès présumé sur le nouveau SHA.
+
+## Résultats du SHA dc987b06
+Le contrat #1226 corrigé a dépassé le contrôle initial ; les régressions #664, #666, #667, #668 et #669 passent dans le workflow financier. Le contrôle transversal #670 bloque le nom de fichier du nouvel export, qui dérivait sa date du jour UTC. Le nom d'export utilise désormais defaultBusinessDate, date métier fournie par le serveur au workspace. Aucune modification du calcul, des données exportées ou de la sécurité. Preuve : https://github.com/Bandsman942/dtsc-platform/actions/runs/45500650327. Nouvelle CI nécessaire.
