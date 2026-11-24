@@ -205,7 +205,13 @@ test.describe.serial("Hotfix #1226 financial integrity (isolated browser and Pos
       const endpoint=root+"/cash-sessions/"+opened.id+"/variance-review";
       const correction={discrepancyId:discrepancy.id,revision:approved.revision,decision:"CORRECT_COUNT",verifiedCount:"100",reason:"Synthetic independently verified original count error",evidenceReference:"PV-H1226-TEST",attest:true};
       await stepUp(a,process.env.E2E_ADMIN_PASSWORD);
-      expect((await call(a,"POST",endpoint,correction)).response.ok()).toBeFalsy();
+      const selfReview=await call(a,"POST",endpoint,correction);
+      expect(selfReview.response.status(),JSON.stringify(selfReview.body)).toBe(403);
+      expect(selfReview.body.error).toBe("CASH_VARIANCE_REVIEW_FORBIDDEN");
+      // Workspace navigation can rotate the session token. Step-up is bound to
+      // that exact token; repeat it immediately before the critical action.
+      await stepUp(c,process.env.E2E_ADMIN_PASSWORD);
+      expect((await ok(c,"GET","/api/auth/step-up")).verified).toBe(true);
       const result=await ok(c,"POST",endpoint,correction);
       expect(result.discrepancy.status).toBe("LEGACY_REVERSED");
       const reversal=await prisma.enterpriseJournalEntry.findUniqueOrThrow({where:{id:result.reversalEntryId},include:{lines:true}});
