@@ -206,10 +206,11 @@ test.describe.serial("Hotfix #1226 financial integrity (isolated browser and Pos
       const correction={discrepancyId:discrepancy.id,revision:approved.revision,decision:"CORRECT_COUNT",verifiedCount:"100",reason:"Synthetic independently verified original count error",evidenceReference:"PV-H1226-TEST",attest:true};
       await stepUp(a,process.env.E2E_ADMIN_PASSWORD);
       const selfReview=await call(a,"POST",endpoint,correction);
-      expect(selfReview.response.status(),JSON.stringify(selfReview.body)).toBe(403);
+      expect(selfReview.response.status(),JSON.stringify(selfReview.body)).toBe(409);
       expect(selfReview.body.error).toBe("CASH_VARIANCE_REVIEW_FORBIDDEN");
       // Workspace navigation can rotate the session token. Step-up is bound to
       // that exact token; repeat it immediately before the critical action.
+      await page.close(); // Stop workspace polling before issuing the token-bound step-up.
       await stepUp(c,process.env.E2E_ADMIN_PASSWORD);
       expect((await ok(c,"GET","/api/auth/step-up")).verified).toBe(true);
       const result=await ok(c,"POST",endpoint,correction);
