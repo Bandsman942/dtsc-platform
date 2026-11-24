@@ -1,4 +1,5 @@
 import type { Prisma } from "@prisma/client";
+import { datedReconciliationBalanceTx, reconciliationTreasuryWindow } from "@/lib/enterprise/accounting/reconciliation-dated-balance";
 import { assertCashPhysicalEvidenceTx } from "@/lib/enterprise/accounting/cash-physical-reconciliation";
 import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
 
@@ -16,10 +17,13 @@ export async function assertReconciliationEvidenceTx(
     select: { id: true, periodStart: true, periodEnd: true },
   });
   if (!statement || statement.periodStart.getTime() !== session.periodStart.getTime() || statement.periodEnd.getTime() !== session.periodEnd.getTime()) throw new EnterpriseAccountingError("RECONCILIATION_PERIOD_MISMATCH", 409);
+  const window = await reconciliationTreasuryWindow(tx,organizationId,session.periodStart,session.periodEnd);
+  const bookBalance = await datedReconciliationBalanceTx(tx,organizationId,session.financialAccountId,session.periodStart,session.periodEnd,session.id);
+  if(!bookBalance.equals(session.bookBalance)) throw new EnterpriseAccountingError("RECONCILIATION_BOOK_BALANCE_UNVERIFIED",409);
   const [total, verified, unmatchedTransactions] = await Promise.all([
     tx.enterpriseBankStatementLine.count({ where: { organizationId, bankStatementId: statement.id } }),
     tx.enterpriseBankStatementLine.count({ where: { organizationId, bankStatementId: statement.id, reconciliationStatus: "MATCHED" } }),
-    tx.enterpriseTreasuryTransaction.count({ where: { organizationId, financialAccountId: session.financialAccountId, status: "CONFIRMED", transactionDate: { gte: session.periodStart, lte: session.periodEnd }, reconciliationStatus: { not: "RECONCILED" } } }),
+    tx.enterpriseTreasuryTransaction.count({ where: { organizationId, financialAccountId: session.financialAccountId, status: "CONFIRMED", transactionDate: window, reconciliationStatus: { not: "RECONCILED" } } }),
   ]);
   const distinctLines = await tx.enterpriseReconciliationMatch.groupBy({
     by: ["bankStatementLineId"],
@@ -28,7 +32,7 @@ export async function assertReconciliationEvidenceTx(
   if (!total || verified !== total || distinctLines.length !== total || unmatchedTransactions !== 0) throw new EnterpriseAccountingError("RECONCILIATION_EVIDENCE_REQUIRED", 409);
   const [lines,transactions,allocations] = await Promise.all([
     tx.enterpriseBankStatementLine.findMany({where:{organizationId,bankStatementId:statement.id},select:{id:true,debit:true,credit:true,currencyCode:true}}),
-    tx.enterpriseTreasuryTransaction.findMany({where:{organizationId,financialAccountId:session.financialAccountId,status:"CONFIRMED",transactionDate:{gte:session.periodStart,lte:session.periodEnd}},select:{id:true,amount:true,direction:true,currencyCode:true}}),
+    tx.enterpriseTreasuryTransaction.findMany({where:{organizationId,financialAccountId:session.financialAccountId,status:"CONFIRMED",transactionDate:window},select:{id:true,amount:true,direction:true,currencyCode:true}}),
     tx.enterpriseReconciliationMatch.findMany({where:{organizationId,reconciliationSessionId:session.id,status:"CONFIRMED"},select:{bankStatementLineId:true,treasuryTransactionId:true,matchedAmount:true}}),
   ]);
   const lineMap = new Map(lines.map(line=>[line.id,line]));

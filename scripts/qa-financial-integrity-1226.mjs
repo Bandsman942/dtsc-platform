@@ -84,3 +84,8 @@ const physical=read("lib/enterprise/accounting/cash-physical-reconciliation.ts")
 for (const marker of ["RECONCILIATION_CASH_SESSIONS_UNRESOLVED","RECONCILIATION_CASH_SNAPSHOT_CHANGED","sessionDigest","FOR UPDATE","retailFinanceReadSiteScope"]) assert.ok(physical.includes(marker),marker);
 assert.match(evidence,/assertCashPhysicalEvidenceTx/);
 console.log("#1226 tranche E1 physical cash guards: PASS");
+
+const dated=read("lib/enterprise/accounting/reconciliation-dated-balance.ts");
+for(const marker of ["civilMidnightUtc","followingCivilDate","RECONCILIATION_BOOK_BALANCE_UNVERIFIED","RECONCILIATION_HISTORICAL_REVERSAL_REVIEW_REQUIRED","operationalBalance"]) assert.ok(dated.includes(marker),marker);
+assert.match(evidence,/datedReconciliationBalanceTx/);
+console.log("#1226 tranche E2 dated balance guards: PASS");
