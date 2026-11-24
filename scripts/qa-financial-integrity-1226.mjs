@@ -70,3 +70,12 @@ assert.match(treasury,/row.reconciliationSessionId!==session.id/);
 assert.match(evidence,/lineTotals.get\(line.id\)\?\.equals/);
 assert.match(evidence,/transactionTotals.get\(transaction.id\)\?\.equals/);
 console.log("#1226 tranche D1 partial allocation guards: PASS");
+
+const {bankStatementBalanceIssues}=await import("../lib/enterprise/accounting/bank-statement-balance-validation.ts");
+const statement={periodStart:dt,periodEnd:dt,openingBalance:"100.10",closingBalance:"102.10",lines:[{transactionDate:dt,debit:"0",credit:"2.00",description:"Receipt",reference:"ref",runningBalance:"102.10"}]};
+assert.deepEqual(bankStatementBalanceIssues(statement),[]);
+assert.ok(bankStatementBalanceIssues({...statement,closingBalance:"102.11"}).some(issue=>issue.code==="BANK_STATEMENT_CLOSING_BALANCE_MISMATCH"));
+assert.ok(bankStatementBalanceIssues({...statement,lines:[{...statement.lines[0],debit:"1"}]}).some(issue=>issue.code==="BANK_STATEMENT_LINE_DIRECTION_INVALID"));
+assert.ok(bankStatementBalanceIssues({...statement,lines:[{...statement.lines[0],runningBalance:"102.11"}]}).some(issue=>issue.code==="BANK_STATEMENT_RUNNING_BALANCE_MISMATCH"));
+assert.ok(bankStatementBalanceIssues({...statement,lines:[...statement.lines,...statement.lines]}).some(issue=>issue.code==="BANK_STATEMENT_DUPLICATE_LINE"));
+console.log("#1226 tranche D2 statement balance guards: PASS");

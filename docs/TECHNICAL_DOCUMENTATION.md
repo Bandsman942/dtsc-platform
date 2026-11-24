@@ -1,3 +1,5 @@
+> **#1226 tranche D2 candidate** : modèle XLSX et prévisualisation protégée, validation monétaire exacte des relevés et aperçu paginé. Tests round-trip et intégration durable/UX encore requis.
+
 > **#1226 tranche D1 candidate** : allocations partielles/groupées avec bornes, exclusivité et preuve de couverture, correction du calendrier des suggestions. Annulation, historique, physique et tests complets restent bloquants.
 
 > **#1226 tranche C2 candidate** : revue d’écart par session, preuve référencée, acteur indépendant et step-up, correction historique conservatrice sans double mouvement, posting/ajustement atomiques pour écart réel. Certification PostgreSQL/UI et autres lots encore bloquants.

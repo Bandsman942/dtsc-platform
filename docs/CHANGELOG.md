@@ -1,3 +1,7 @@
+## 2026-11-24 — HOTFIX #1226 — tranche D2 candidate
+
+- Modèle Excel natif et aperçu protégé, contrôles de continuité et de doublons du relevé, prévisualisation paginée CSV/XLSX. Non certifié; pas de production.
+
 ## 2026-11-24 — HOTFIX #1226 — tranche D1 candidate
 
 - Allocations partielles et groupées bornées, contrôle des totaux de couverture, proposition exacte avec fuseau métier et affichage du reste. Non certifié ; pas de production.

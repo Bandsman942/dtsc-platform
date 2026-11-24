@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { bankStatementBalanceIssues } from "@/lib/enterprise/accounting/bank-statement-balance-validation";
 import { requireRetailSiteCapability, retailFinanceReadSiteScope, retailStaffIsolationIsEnabled } from "@/lib/enterprise/retail/site-access";
 import { assertReconciliationEvidenceTx } from "@/lib/enterprise/accounting/reconciliation-evidence";
 import { assertIndependentActor } from "@/lib/enterprise/accounting/access";
@@ -44,6 +45,8 @@ export async function openCashSession(organizationId: string, cashierUserId: str
 }
 
 export async function importBankStatement(organizationId: string, actorUserId: string, input: BankStatementInput) {
+  const issues=bankStatementBalanceIssues(input);
+  if(issues.length) throw new EnterpriseAccountingError(issues[0].code,422,{issues});
   return prisma.$transaction(async (tx) => {
     const account = await tx.enterpriseFinancialAccount.findFirst({ where: { id: input.financialAccountId, organizationId, accountType: { in: ["BANK", "MOBILE_MONEY"] }, status: "ACTIVE" } });
     if (!account || account.currencyCode !== input.currencyCode) throw new EnterpriseAccountingError("BANK_STATEMENT_ACCOUNT_INVALID", 409);

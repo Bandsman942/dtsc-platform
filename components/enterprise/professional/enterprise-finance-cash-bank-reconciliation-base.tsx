@@ -219,6 +219,8 @@ export function EnterpriseFinanceCashBankReconciliationBase(props: Props) {
   const [actionTarget, setActionTarget] = useState<ReconciliationAction | null>(null);
   const [csvLines, setCsvLines] = useState<ParsedBankLine[]>([]);
   const [csvName, setCsvName] = useState("");
+  const [bankImportAccount,setBankImportAccount]=useState("");
+  const [previewPage,setPreviewPage]=useState(1);
   const [reconciliationAccountId, setReconciliationAccountId] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
@@ -265,7 +267,7 @@ export function EnterpriseFinanceCashBankReconciliationBase(props: Props) {
     { key: "closing", labelFr: "Clôture", labelEn: "Closing", get: (row) => String(row.closingBalance || row.differenceAmount || "") },
   ];
   function downloadBankImportTemplate() {
-    // The bank import accepts CSV only; never advertise an XLSX format it cannot parse.
+    // CSV remains available for legacy statements; XLSX uses its own round-trip server template.
     const fields = ["transactionDate", "valueDate", "description", "reference", "counterparty", "debit", "credit", "runningBalance"];
     const model: ProfessionalReportExportModel = {
       title: tx(locale, "Modèle des lignes de relevé", "Bank statement lines template"), organizationName,
@@ -273,6 +275,12 @@ export function EnterpriseFinanceCashBankReconciliationBase(props: Props) {
       rows: [], chart: [], insights: [], kpis: [],
     };
     downloadProfessionalCsv(model);
+  }
+
+  function downloadBankImportXlsx() {
+    const query=new URLSearchParams({locale});
+    if(bankImportAccount)query.set("financialAccountId",bankImportAccount);
+    window.location.assign(`/api/enterprise/${organizationId}/bank-statements/template?${query}`);
   }
 
   const loadExact = useCallback(async (recordId: string) => {
@@ -354,15 +362,25 @@ export function EnterpriseFinanceCashBankReconciliationBase(props: Props) {
 
   async function onCsv(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
-    setCsvLines([]); setCsvName("");
+    setCsvLines([]); setCsvName("");setPreviewPage(1);
     if (!file) return;
-    if (!file.name.toLowerCase().endsWith(".csv") || !["text/csv", "application/vnd.ms-excel", ""].includes(file.type)) { setErrorMessage(t("selectValidCsv")); return; }
-    if (file.size > 5 * 1024 * 1024) { setErrorMessage(t("fileExceeds5Mb")); return; }
+    const isXlsx=file.name.toLowerCase().endsWith(".xlsx");
+    if (!isXlsx && (!file.name.toLowerCase().endsWith(".csv") || !["text/csv", "application/vnd.ms-excel", ""].includes(file.type))) { setErrorMessage(tx(locale,"Sélectionnez un CSV ou un Excel .xlsx.","Select a CSV or .xlsx Excel file.")); return; }
+    if (file.size > (isXlsx?2:5) * 1024 * 1024) { setErrorMessage(isXlsx?tx(locale,"Le fichier Excel dépasse 2 Mo.","Excel file exceeds 2 MB."):t("fileExceeds5Mb")); return; }
+    setBusy(true);
     try {
-      const parsed = parseBankCsv(await file.text(), locale);
+      let parsed:ParsedBankLine[];
+      if(isXlsx){
+        const payload=new FormData();payload.set("file",file);
+        const response=await fetch(`/api/enterprise/${organizationId}/bank-statements/template`,{method:"POST",body:payload,cache:"no-store"});
+        const data=await response.json().catch(()=>null);
+        if(!response.ok||!Array.isArray(data?.lines))throw new Error(data?.message||tx(locale,"Le fichier Excel ne peut pas être analysé.","Excel file could not be analyzed."));
+        parsed=data.lines;
+      }else parsed = parseBankCsv(await file.text(), locale);
       if (parsed.length > 10_000) throw new Error(t("bankStatementTooManyRows"));
       setCsvLines(parsed); setCsvName(file.name); setErrorMessage("");
     } catch (error) { setErrorMessage(safeFinanceError(error, t("csvParsingFailed"))); }
+    finally {setBusy(false);}
   }
 
   async function importStatement(event: FormEvent<HTMLFormElement>) {
@@ -479,7 +497,7 @@ export function EnterpriseFinanceCashBankReconciliationBase(props: Props) {
       controls={<div className="grid min-w-0 gap-2">
         <ProfessionalTabs value={tab} onChange={(value) => { setTab(value); setPage(1); setStatus(""); setDetail(null); }} items={tabs.map(({ id, label }) => ({ id, label }))} label={t("moduleViews")} />
         <NativeSelect value={status} onChange={(value) => { setStatus(value); setPage(1); }} items={[{ id: "", label: t("allStatuses") }, ...statusItems.map((id) => ({ id, label: financeStatusLabel(id, locale) }))]} />
-        <div className="flex min-w-0 flex-wrap items-end gap-2"><FinanceDateFilter locale={locale} from={dateFrom} to={dateTo} onChange={(from, to) => { setDateFrom(from); setDateTo(to); setPage(1); }} /><FinanceExportControls endpoint={`/api/enterprise/${organizationId}/${endpoint}`} organizationName={organizationName} title={title} locale={locale} filters={{ search, status: effectiveStatus, dateFrom, dateTo }} columns={exportColumns} disabled={collection.loading} />{isBank ? <Button type="button" size="sm" variant="outline" onClick={downloadBankImportTemplate}><FileSpreadsheet className="mr-1 h-4 w-4" />{tx(locale, "Modèle CSV", "CSV template")}</Button> : null}</div>
+        <div className="flex min-w-0 flex-wrap items-end gap-2"><FinanceDateFilter locale={locale} from={dateFrom} to={dateTo} onChange={(from, to) => { setDateFrom(from); setDateTo(to); setPage(1); }} /><FinanceExportControls endpoint={`/api/enterprise/${organizationId}/${endpoint}`} organizationName={organizationName} title={title} locale={locale} filters={{ search, status: effectiveStatus, dateFrom, dateTo }} columns={exportColumns} disabled={collection.loading} />{isBank ? <Button type="button" size="sm" variant="outline" onClick={downloadBankImportTemplate}><FileSpreadsheet className="mr-1 h-4 w-4" />{tx(locale, "Modèle CSV", "CSV template")}</Button> : null}{isBank ? <Button type="button" size="sm" variant="outline" onClick={downloadBankImportXlsx}><FileSpreadsheet className="mr-1 h-4 w-4" />{tx(locale,"Modèle Excel","Excel template")}</Button> : null}</div>
       </div>}
       summary={isBank ? t("bankSectionDescription") : t("noReconciledLineReuse")}
     />
@@ -559,7 +577,7 @@ export function EnterpriseFinanceCashBankReconciliationBase(props: Props) {
       </form> : null}
       {isBank ? <form onSubmit={importStatement} className="grid gap-6">
         <ProfessionalFormSection title={t("scope")}>
-          <Field label={t("financialAccount")}><FinanceReferenceSelect organizationId={organizationId} moduleCode="FINANCE_BANK" kind="financial-account" name="financialAccountId" label={t("financialAccount")} locale={rawLocale} required disabled={busy} /></Field>
+          <Field label={t("financialAccount")}><FinanceReferenceSelect organizationId={organizationId} moduleCode="FINANCE_BANK" kind="financial-account" name="financialAccountId" label={t("financialAccount")} locale={rawLocale} required disabled={busy} onOptionChange={option=>setBankImportAccount(option?.id||"")} /></Field>
           <Field label={t("currency")}><FinanceReferenceSelect organizationId={organizationId} moduleCode="FINANCE_BANK" kind="currency" name="currencyCode" label={t("currency")} locale={rawLocale} required disabled={busy} /></Field>
           <Field label={t("bankStatement")}><Input name="reference" required maxLength={120} disabled={busy} /></Field>
           <Field label={t("date")}><Input name="statementDate" type="date" required disabled={busy} /></Field>
@@ -569,8 +587,13 @@ export function EnterpriseFinanceCashBankReconciliationBase(props: Props) {
           <Field label={tx(locale, "Solde de clôture", "Closing balance")}><Input name="closingBalance" type="number" step="0.01" required disabled={busy} /></Field>
         </ProfessionalFormSection>
         <ProfessionalFormSection title={t("preview")}>
-          <Input type="file" accept=".csv,text/csv" onChange={onCsv} disabled={busy} />
+          <div data-responsive-actions><Button type="button" variant="outline" disabled={busy} onClick={downloadBankImportTemplate}>{tx(locale,"Modèle CSV","CSV template")}</Button><Button type="button" variant="outline" disabled={busy} onClick={downloadBankImportXlsx}>{tx(locale,"Modèle Excel du compte","Account Excel template")}</Button></div>
+          <Input type="file" accept=".csv,text/csv,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={onCsv} disabled={busy} />
           <p className="text-sm text-dtsc-muted">{csvName || t("noFileAnalyzed")} · {csvLines.length} {t("linePlural")}</p>
+          {csvLines.length ? <div className="grid min-w-0 gap-2">
+            {csvLines.slice((previewPage-1)*20,previewPage*20).map((line,index)=><div key={(previewPage-1)*20+index} className="grid min-w-0 gap-1 rounded-xl border border-dtsc-border p-3"><p className="break-words text-sm font-semibold">{line.description}</p><p className="break-words text-xs text-dtsc-muted">{line.transactionDate} · {line.reference||"—"} · {Number(line.credit)>0?"+ "+line.credit:"− "+line.debit}</p><p className="text-xs text-dtsc-muted">{tx(locale,"Solde courant","Running balance")}: {line.runningBalance??"—"}</p></div>)}
+            <div className="flex flex-wrap items-center justify-between gap-2"><Button type="button" size="sm" variant="outline" disabled={previewPage===1} onClick={()=>setPreviewPage(page=>page-1)}>{tx(locale,"Précédent","Previous")}</Button><span className="text-xs">{previewPage} / {Math.ceil(csvLines.length/20)}</span><Button type="button" size="sm" variant="outline" disabled={previewPage*20>=csvLines.length} onClick={()=>setPreviewPage(page=>page+1)}>{tx(locale,"Suivant","Next")}</Button></div>
+          </div>:null}
         </ProfessionalFormSection>
         <Button type="submit" disabled={busy || !csvLines.length}><FileSpreadsheet className="h-4 w-4" />{t("confirmImport")}</Button>
       </form> : null}
