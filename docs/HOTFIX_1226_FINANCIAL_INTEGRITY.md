@@ -79,3 +79,6 @@ Consolidation propriétaire par boutique et devise, sessions validées distincte
 
 ## Tranche K — ventilation des produits candidate
 Le KPI produits totalise désormais REVENUE et OTHER_INCOME. Les ventes/services sont identifiés par mappings de vente ou classe 70 d'un plan SYSCOHADA explicitement identifié; mappings d'écart caisse et FX exclus en priorité. Le résidu est nommé autres produits/non ventilés (les comptes personnalisés non mappés ne sont pas supposés des ventes). Marge brute = ventes identifiées moins COGS; résultat d'exploitation inchangé. Même prédicat pour agrégats, détail et exports. Les anciennes colonnes REVENUE/OTHER_INCOME sont conservées comme catégories techniques dans l'export. Aucune reclassification des écritures ni certification de compte historique. CI du dernier SHA requise.
+
+## Recette du SHA 9360b129
+- Migration complète : PASS (#45441600783, migration Quality également réussie). Recette #662 et les deux scénarios #1226 caisse et banque : PASS (#45441600971). Quality #45441601057 : échec du contrat statique #1117 (24 indicateurs au lieu de 22). Le contrat est étendu en comparant explicitement les 22 identifiants historiques de la base et les 2 ajouts, sans supprimer d'assertion métier. Les autres étapes Quality restent à rejouer. OWNER_E2E non exécuté.

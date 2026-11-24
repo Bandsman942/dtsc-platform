@@ -14,7 +14,9 @@ const dashboard = readFileSync("components/enterprise/professional/retail-site-o
 const list = metricsFile.match(/RETAIL_EXECUTIVE_METRICS\s*=\s*\[([^\]]+)\]\s*as const/s);
 assert.ok(list, "The canonical Retail executive metrics list must exist");
 const keys = [...list[1].matchAll(/"([a-zA-Z]+)"/g)].map((match) => match[1]);
-assert.equal(keys.length, 22, "Existing canonical metrics must remain represented");
+const historicalKeys = ["posSales","posCollections","financeCollections","invoices","invoiceAllocated","outstanding","overdue","expenses","postedRevenue","postedCogs","postedGrossMargin","postedOperatingResult","mobileMoneyDeposits","mobileMoneyWithdrawals","mobileMoneyCommission","mobileMoneyFees","telcoSales","telcoCost","telcoMargin","treasuryBalance","treasuryReconciled","treasuryAvailable"];
+const addedKeys = ["postedSalesRevenue", "postedOtherProducts"];
+assert.deepEqual([...keys].sort(), [...historicalKeys, ...addedKeys].sort(), "All 22 historical metrics and both new product classifications must remain represented");
 assert.equal(new Set(keys).size, keys.length, "Metric identifiers must remain unique");
 
 for (const key of keys) {
