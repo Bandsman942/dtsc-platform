@@ -28,3 +28,7 @@ Rollback avant fusion : abandon de la branche; après fusion suivre la procédur
 - Verrou de session et cibles, relevé exact, période/devise/sens contrôlés; refus des montants partiels avant statut rapproché. Validation exige couverture du relevé et absence de transactions non rapprochées. Le rapprochement physique, partiel/groupé et historique reste bloquant : cette tranche ne constitue pas le moteur final.
 - Trésorerie : distinguer jamais rapproché d'un vrai zéro; dernier rapprochement issu des sessions terminées, référence masquée sur la liste et nouvelles écritures de référentiel. Auditer les autres lecteurs historiques avant livraison.
 - Aucun test exécuté localement. E2E propriétaire requis.
+
+## Tranche C1 — suggestions exactes et régression #580
+- Code d'erreur de dépassement du montant bancaire restauré sans autoriser le partiel. La QA spécifique #1226 entre dans qa:regression.
+- Analyse lecture seule des candidats du compte/relevé/période, même référence exacte/date UTC/devise/sens/montant décimal, unicité dans les deux sens; aucun résultat si limite de 5000 dépassée. Confirmation explicite par le chemin canonique, actualisation; aucun moteur fuzzy, aucun posting automatique. Réconciliation partielle/groupée, historique, rapprochement physique, qualification et régularisation restent bloquants. Aucune preuve CI de ce SHA avant exécution.

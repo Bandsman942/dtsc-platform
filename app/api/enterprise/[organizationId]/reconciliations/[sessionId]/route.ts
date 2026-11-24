@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { writeApiLog } from "@/lib/audit";
 import { authorizeFinanceRequest } from "@/lib/enterprise/accounting/http";
 import { prisma } from "@/lib/prisma";
+import { suggestExactReconciliationMatches } from "@/lib/enterprise/accounting/reconciliation-exact-suggestions";
+import { maskFinancialReference } from "@/lib/enterprise/accounting/masked-financial-reference";
 
 type Params = { params: Promise<{ organizationId: string; sessionId: string }> };
 
@@ -50,11 +52,24 @@ export async function GET(req: Request, { params }: Params) {
   ]);
   const assigned = pendingApproval?.approverUserId === auth.session.userId;
   const capabilities = auth.access.capabilities;
+  const canSuggest = capabilities.canManage && ["DRAFT", "IN_PROGRESS"].includes(reconciliation.status) && Boolean(bankStatement);
+  // Avoid false uniqueness from a truncated candidate set. Large periods require a later paginated analysis job.
+  const candidateLimit = 5000;
+  const transactions = canSuggest && statementLines.length <= candidateLimit ? await prisma.enterpriseTreasuryTransaction.findMany({
+    where: { organizationId, financialAccountId: reconciliation.financialAccountId, status: "CONFIRMED", reconciliationStatus: "UNRECONCILED", currencyCode: reconciliation.financialAccount.currencyCode, transactionDate: { gte: reconciliation.periodStart, lte: reconciliation.periodEnd } },
+    select: { id: true, reference: true, transactionDate: true, currencyCode: true, direction: true, amount: true },
+    take: candidateLimit + 1,
+  }) : [];
+  const suggestionLimitExceeded = canSuggest && (statementLines.length > candidateLimit || transactions.length > candidateLimit);
+  const exactSuggestions = canSuggest && !suggestionLimitExceeded ? suggestExactReconciliationMatches(statementLines, transactions) : [];
 
   await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "reconciliation-detail", reconciliationId: sessionId } });
   return NextResponse.json({
     reconciliation: {
       ...reconciliation,
+      financialAccount: { ...reconciliation.financialAccount, maskedReference: maskFinancialReference(reconciliation.financialAccount.maskedReference) },
+      exactSuggestions,
+      suggestionLimitExceeded,
       differenceAmount: reconciliation.reconciledDifference,
       bankStatement,
       statementLines,

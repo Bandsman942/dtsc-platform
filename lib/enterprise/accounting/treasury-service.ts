@@ -126,6 +126,7 @@ export async function confirmReconciliationMatch(organizationId: string, session
     if (session.bankStatementId && (!line || !transaction)) throw new EnterpriseAccountingError("RECONCILIATION_EVIDENCE_REQUIRED", 409);
     if (line) {
       const lineAmount = Prisma.Decimal.max(line.debit.abs(), line.credit.abs());
+      if (matchedAmount.greaterThan(lineAmount)) throw new EnterpriseAccountingError("RECONCILIATION_AMOUNT_EXCEEDS_BANK_LINE", 409, { matchedAmount: matchedAmount.toFixed(), lineAmount: lineAmount.toFixed() });
       if (!matchedAmount.equals(lineAmount)) throw new EnterpriseAccountingError("RECONCILIATION_PARTIAL_NOT_SUPPORTED", 409);
       const direction = line.credit.greaterThan(0) && line.debit.isZero() ? "INBOUND" : line.debit.greaterThan(0) && line.credit.isZero() ? "OUTBOUND" : null;
       if (!direction || (transaction && transaction.direction !== direction) || (payment && payment.direction !== direction)) throw new EnterpriseAccountingError("RECONCILIATION_DIRECTION_MISMATCH", 409);

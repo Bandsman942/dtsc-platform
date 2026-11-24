@@ -1,3 +1,7 @@
+## 2026-11-24 — HOTFIX #1226 — tranche C1 candidate
+
+- Rétablissement du contrat d'erreur #580, propositions exactes et non ambiguës de rapprochement, confirmation explicite, QA spécifique intégrée aux régressions. Non livré.
+
 ## 2026-11-24 — HOTFIX #1226 — tranche B2 candidate
 
 - Garde conservatoire du rapprochement, état jamais rapproché, masquage des références. Rapprochements partiels/groupés, physique et historique à terminer. Pas de livraison.

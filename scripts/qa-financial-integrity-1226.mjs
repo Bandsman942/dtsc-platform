@@ -37,3 +37,15 @@ const { maskFinancialReference }=await import("../lib/enterprise/accounting/mask
 assert.equal(maskFinancialReference("+123456789"),"•••• 6789");
 assert.equal(maskFinancialReference("•••• 6789"),"•••• 6789");
 console.log("#1226 tranche B2 guards: PASS");
+
+const { suggestExactReconciliationMatches } = await import("../lib/enterprise/accounting/reconciliation-exact-suggestions.ts");
+const dt = new Date("2026-11-24T08:00:00Z");
+const line = {id:"l1",reference:"REF-1",transactionDate:dt,currencyCode:"CDF",debit:"0",credit:"100.10",reconciliationStatus:"UNMATCHED"};
+const transaction = {id:"t1",reference:"REF-1",transactionDate:dt,currencyCode:"CDF",direction:"INBOUND",amount:"100.100000"};
+assert.equal(suggestExactReconciliationMatches([line],[transaction]).length,1);
+for(const mismatch of [{currencyCode:"USD"},{direction:"OUTBOUND"},{amount:"100.11"},{reference:null},{transactionDate:new Date("2026-11-25T08:00:00Z")}]) assert.equal(suggestExactReconciliationMatches([line],[{...transaction,...mismatch}]).length,0);
+assert.equal(suggestExactReconciliationMatches([line],[transaction,{...transaction,id:"t2"}]).length,0);
+assert.equal(suggestExactReconciliationMatches([line,{...line,id:"l2"}],[transaction]).length,0);
+assert.equal(suggestExactReconciliationMatches([{...line,reconciliationStatus:"MATCHED"}],[transaction]).length,0);
+assert.match(treasury,/RECONCILIATION_AMOUNT_EXCEEDS_BANK_LINE/);
+console.log("#1226 tranche C1 exact suggestions: PASS");

@@ -100,6 +100,8 @@ type Reconciliation = FinanceRecord & {
   capabilities?: RecordCapabilities;
   statementLines?: BankStatementLine[];
   matches?: Array<{ id: string; matchedAmount: string | number; status: string }>;
+  exactSuggestions?: Array<{ bankStatementLineId: string; treasuryTransactionId: string; matchedAmount: string; reference: string; transactionDate: string; currencyCode: string }>;
+  suggestionLimitExceeded?: boolean;
   financialAccount?: { id: string; code: string; name: string; currencyCode: string } | null;
   bankStatement?: { id: string; reference: string; currencyCode: string; closingBalance: string | number } | null;
 };
@@ -418,6 +420,21 @@ export function EnterpriseFinanceCashBankReconciliationBase(props: Props) {
     finally { setBusy(false); }
   }
 
+  async function confirmExactSuggestion(record: Reconciliation, suggestion: NonNullable<Reconciliation["exactSuggestions"]>[number]) {
+    if (busy || !record.capabilities?.canMatch) return;
+    setBusy(true); setErrorMessage("");
+    try {
+      await financeMutation(`/api/enterprise/${organizationId}/reconciliations/${record.id}/matches`, {
+        bankStatementLineId: suggestion.bankStatementLineId,
+        treasuryTransactionId: suggestion.treasuryTransactionId,
+        matchedAmount: suggestion.matchedAmount,
+      });
+      setDetail(await loadExact(record.id)); setRefreshKey(value => value + 1); setMessage(t("matchRecorded"));
+    } catch (error) {
+      setErrorMessage(safeFinanceError(error, t("matchingFailed")));
+    } finally { setBusy(false); }
+  }
+
   async function reconciliationTransition(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!actionTarget) return;
@@ -515,6 +532,17 @@ export function EnterpriseFinanceCashBankReconciliationBase(props: Props) {
           <FinanceDetailValue label={t("difference")} value={String(selectedRecon.differenceAmount ?? "—")} />
           <FinanceDetailValue label={t("revision")} value={String(selectedRecon.revision)} />
         </FinanceDetailGrid>
+        {selectedRecon.capabilities?.canMatch && selectedRecon.bankStatementId ? <section className="grid min-w-0 gap-3 rounded-2xl border border-dtsc-border bg-dtsc-page p-4">
+          <h3 className="font-black text-dtsc-ink">{tx(locale,"Correspondances exactes proposées","Suggested exact matches")}</h3>
+          <p className="text-xs text-dtsc-muted">{tx(locale,"Référence, date, devise, sens et montant identiques; seules les correspondances uniques sont proposées. Chaque confirmation reste contrôlée par le serveur.","Identical reference, date, currency, direction and amount; only unique matches are suggested. The server rechecks each confirmation.")}</p>
+          {selectedRecon.suggestionLimitExceeded ? <p role="status" className="text-sm text-dtsc-muted">{tx(locale,"Périmètre trop volumineux pour une analyse immédiate. Utilisez le rapprochement manuel.","This scope is too large for immediate analysis. Use manual matching.")}</p> : null}
+          {!selectedRecon.suggestionLimitExceeded && !selectedRecon.exactSuggestions?.length ? <p className="text-sm text-dtsc-muted">{tx(locale,"Aucune correspondance exacte unique disponible.","No unique exact match available.")}</p> : null}
+          {(selectedRecon.exactSuggestions || []).slice(0,25).map(suggestion => <div key={suggestion.bankStatementLineId} className="flex min-w-0 flex-wrap items-center justify-between gap-2 rounded-xl border border-dtsc-border p-3">
+            <div className="min-w-0"><p className="break-words text-sm font-semibold text-dtsc-ink">{suggestion.reference}</p><p className="text-xs text-dtsc-muted">{financeDate(suggestion.transactionDate, locale)} · {financeMoney(suggestion.matchedAmount, suggestion.currencyCode, locale)}</p></div>
+            <Button size="sm" disabled={busy} onClick={() => void confirmExactSuggestion(selectedRecon, suggestion)}>{t("confirm")}</Button>
+          </div>)}
+          {(selectedRecon.exactSuggestions?.length || 0) > 25 ? <p className="text-xs text-dtsc-muted">{tx(locale,"Les 25 premières suggestions sont affichées. La liste est recalculée après chaque confirmation.","The first 25 suggestions are displayed. The list refreshes after each confirmation.")}</p> : null}
+        </section> : null}
       </div> : null}
     </Dialog>
 

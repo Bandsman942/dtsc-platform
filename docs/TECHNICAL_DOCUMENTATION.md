@@ -1,3 +1,5 @@
+> **#1226 tranche C1 candidate** : suggestions déterministes et mutuellement uniques sur relevé, confirmation explicite via API existante, régression #580 corrigée, QA spécifique branchée. Pas de certification E2E ni production.
+
 > **#1226 tranche B2 candidate** : protection contre rapprochement incomplet, référence masquée et état jamais rapproché. Rapprochement intelligent complet non certifié et bloquant.
 
 > **#1226 tranche B1 candidate** : écarts de caisse à qualifier sans posting automatique à la clôture. Le parcours de qualification et régularisation reste bloquant. Aucune validation locale ni E2E final.
