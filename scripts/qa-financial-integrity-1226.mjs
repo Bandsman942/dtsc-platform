@@ -28,7 +28,9 @@ console.log("#1226 tranche B1 guards: PASS");
 
 const treasury=read("lib/enterprise/accounting/treasury-service.ts");
 assert.match(treasury,/bankStatementId: session.bankStatementId/);
-assert.match(treasury,/RECONCILIATION_PARTIAL_NOT_SUPPORTED/);
+assert.match(treasury,/lineTotal.equals\(lineAmount\)/);
+assert.match(treasury,/transactionTotal.equals\(transaction.amount\)/);
+assert.match(treasury,/RECONCILIATION_AMOUNT_EXCEEDS_TRANSACTION/);
 assert.match(treasury,/assertReconciliationEvidenceTx\(tx, organizationId, session\)/);
 const evidence=read("lib/enterprise/accounting/reconciliation-evidence.ts");
 assert.match(evidence,/distinctLines.length !== total/);
@@ -40,13 +42,15 @@ console.log("#1226 tranche B2 guards: PASS");
 
 const { suggestExactReconciliationMatches } = await import("../lib/enterprise/accounting/reconciliation-exact-suggestions.ts");
 const dt = new Date("2026-11-24T08:00:00Z");
+const dayFormatter = new Intl.DateTimeFormat("en-CA",{timeZone:"UTC",year:"numeric",month:"2-digit",day:"2-digit"});
+const days = {statement:date=>dayFormatter.format(date),transaction:date=>dayFormatter.format(date)};
 const line = {id:"l1",reference:"REF-1",transactionDate:dt,currencyCode:"CDF",debit:"0",credit:"100.10",reconciliationStatus:"UNMATCHED"};
 const transaction = {id:"t1",reference:"REF-1",transactionDate:dt,currencyCode:"CDF",direction:"INBOUND",amount:"100.100000"};
-assert.equal(suggestExactReconciliationMatches([line],[transaction]).length,1);
-for(const mismatch of [{currencyCode:"USD"},{direction:"OUTBOUND"},{amount:"100.11"},{reference:null},{transactionDate:new Date("2026-11-25T08:00:00Z")}]) assert.equal(suggestExactReconciliationMatches([line],[{...transaction,...mismatch}]).length,0);
-assert.equal(suggestExactReconciliationMatches([line],[transaction,{...transaction,id:"t2"}]).length,0);
-assert.equal(suggestExactReconciliationMatches([line,{...line,id:"l2"}],[transaction]).length,0);
-assert.equal(suggestExactReconciliationMatches([{...line,reconciliationStatus:"MATCHED"}],[transaction]).length,0);
+assert.equal(suggestExactReconciliationMatches([line],[transaction],days).length,1);
+for(const mismatch of [{currencyCode:"USD"},{direction:"OUTBOUND"},{amount:"100.11"},{reference:null},{transactionDate:new Date("2026-11-25T08:00:00Z")}]) assert.equal(suggestExactReconciliationMatches([line],[{...transaction,...mismatch}],days).length,0);
+assert.equal(suggestExactReconciliationMatches([line],[transaction,{...transaction,id:"t2"}],days).length,0);
+assert.equal(suggestExactReconciliationMatches([line,{...line,id:"l2"}],[transaction],days).length,0);
+assert.equal(suggestExactReconciliationMatches([{...line,reconciliationStatus:"MATCHED"}],[transaction],days).length,0);
 assert.match(treasury,/RECONCILIATION_AMOUNT_EXCEEDS_BANK_LINE/);
 console.log("#1226 tranche C1 exact suggestions: PASS");
 
@@ -60,3 +64,9 @@ assert.match(read("lib/enterprise/accounting/reversal-service.ts"),/CASH_VARIANC
 const varianceRoute=read("app/api/enterprise/[organizationId]/cash-sessions/[sessionId]/variance-review/route.ts");
 for(const marker of ["hasRecentStepUp","getEnterpriseAccountingAccess","authorizeFinanceRequest","writeAuditLog","writeApiLog"]) assert.ok(varianceRoute.includes(marker),marker);
 console.log("#1226 tranche C2 review guards: PASS");
+
+assert.match(treasury,/existingPair.matchedAmount.equals/);
+assert.match(treasury,/row.reconciliationSessionId!==session.id/);
+assert.match(evidence,/lineTotals.get\(line.id\)\?\.equals/);
+assert.match(evidence,/transactionTotals.get\(transaction.id\)\?\.equals/);
+console.log("#1226 tranche D1 partial allocation guards: PASS");

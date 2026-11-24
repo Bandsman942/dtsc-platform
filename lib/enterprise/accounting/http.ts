@@ -40,6 +40,7 @@ const FINANCE_ERROR_MESSAGES: Record<string, string> = {
   RECONCILIATION_EVIDENCE_REQUIRED: "Le rapprochement exige des justificatifs et des correspondances vérifiées pour toutes les opérations du périmètre.",
   RECONCILIATION_PERIOD_MISMATCH: "La période et la devise doivent correspondre exactement au relevé sélectionné.",
   RECONCILIATION_STATEMENT_ALREADY_USED: "Ce relevé est déjà utilisé dans un rapprochement. Retrouvez la session existante.",
+  RECONCILIATION_AMOUNT_EXCEEDS_TRANSACTION: "Le montant dépasse le reste à rapprocher de la transaction ou du paiement.",
   RECONCILIATION_PARTIAL_NOT_SUPPORTED: "Le montant ne correspond pas intégralement à la ligne et à l’opération. La correspondance partielle doit être traitée séparément.",
   RECONCILIATION_DIRECTION_MISMATCH: "Le sens du mouvement ne correspond pas au relevé.",
   RECONCILIATION_DUPLICATE_MATCH: "Cette écriture est déjà liée à une correspondance de cette session.",

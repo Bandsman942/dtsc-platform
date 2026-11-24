@@ -93,6 +93,12 @@ export async function confirmReconciliationMatch(organizationId: string, session
     if (!session) throw new EnterpriseAccountingError("RECONCILIATION_SESSION_NOT_OPEN", 409);
     const matchedAmount = new Prisma.Decimal(input.matchedAmount);
     if (!matchedAmount.greaterThan(0)) throw new EnterpriseAccountingError("RECONCILIATION_AMOUNT_INVALID", 400);
+    if (!session.bankStatementId || !input.bankStatementLineId || !input.treasuryTransactionId) throw new EnterpriseAccountingError("RECONCILIATION_EVIDENCE_REQUIRED", 409);
+    const existingPair = await tx.enterpriseReconciliationMatch.findFirst({ where: { organizationId, reconciliationSessionId: session.id, bankStatementLineId: input.bankStatementLineId, treasuryTransactionId: input.treasuryTransactionId, status: "CONFIRMED" } });
+    if (existingPair) {
+      if (existingPair.matchedAmount.equals(matchedAmount) && (!input.paymentId || existingPair.paymentId === input.paymentId) && (!input.journalEntryId || existingPair.journalEntryId === input.journalEntryId)) return existingPair;
+      throw new EnterpriseAccountingError("RECONCILIATION_DUPLICATE_MATCH", 409);
+    }
 
     if (input.bankStatementLineId) {
       await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterpriseBankStatementLine" WHERE id = ${input.bankStatementLineId} AND "organizationId" = ${organizationId} FOR UPDATE`);
@@ -123,16 +129,19 @@ export async function confirmReconciliationMatch(organizationId: string, session
     if (transaction?.paymentId && !payment) throw new EnterpriseAccountingError("RECONCILIATION_LINKED_PAYMENT_INVALID", 409);
     if (input.journalEntryId && !journalEntry) throw new EnterpriseAccountingError("RECONCILIATION_JOURNAL_ENTRY_INVALID", 409);
     if (!line && !transaction && !payment && !journalEntry) throw new EnterpriseAccountingError("RECONCILIATION_MATCH_TARGET_REQUIRED", 409);
-    if (session.bankStatementId && (!line || !transaction)) throw new EnterpriseAccountingError("RECONCILIATION_EVIDENCE_REQUIRED", 409);
-    if (line) {
-      const lineAmount = Prisma.Decimal.max(line.debit.abs(), line.credit.abs());
-      if (matchedAmount.greaterThan(lineAmount)) throw new EnterpriseAccountingError("RECONCILIATION_AMOUNT_EXCEEDS_BANK_LINE", 409, { matchedAmount: matchedAmount.toFixed(), lineAmount: lineAmount.toFixed() });
-      if (!matchedAmount.equals(lineAmount)) throw new EnterpriseAccountingError("RECONCILIATION_PARTIAL_NOT_SUPPORTED", 409);
-      const direction = line.credit.greaterThan(0) && line.debit.isZero() ? "INBOUND" : line.debit.greaterThan(0) && line.credit.isZero() ? "OUTBOUND" : null;
-      if (!direction || (transaction && transaction.direction !== direction) || (payment && payment.direction !== direction)) throw new EnterpriseAccountingError("RECONCILIATION_DIRECTION_MISMATCH", 409);
-    }
-    if ((transaction && !transaction.amount.equals(matchedAmount)) || (payment && !payment.amount.equals(matchedAmount))) throw new EnterpriseAccountingError("RECONCILIATION_PARTIAL_NOT_SUPPORTED", 409);
-    if (journalEntry && await tx.enterpriseReconciliationMatch.findFirst({ where: { organizationId, reconciliationSessionId: session.id, journalEntryId: journalEntry.id, status: "CONFIRMED" }, select: { id: true } })) throw new EnterpriseAccountingError("RECONCILIATION_DUPLICATE_MATCH", 409);
+    if (!line || !transaction) throw new EnterpriseAccountingError("RECONCILIATION_EVIDENCE_REQUIRED", 409);
+    const lineAmount = Prisma.Decimal.max(line.debit.abs(), line.credit.abs());
+    const direction = line.credit.greaterThan(0) && line.debit.isZero() ? "INBOUND" : line.debit.greaterThan(0) && line.credit.isZero() ? "OUTBOUND" : null;
+    if (!direction || transaction.direction !== direction || (payment && payment.direction !== direction)) throw new EnterpriseAccountingError("RECONCILIATION_DIRECTION_MISMATCH", 409);
+    // Match reservations are global within the tenant; another draft cannot consume this evidence.
+    const previous = await tx.enterpriseReconciliationMatch.findMany({where:{organizationId,status:"CONFIRMED",OR:[{bankStatementLineId:line.id},{treasuryTransactionId:transaction.id},...(payment?[{paymentId:payment.id}]:[])]},select:{reconciliationSessionId:true,bankStatementLineId:true,treasuryTransactionId:true,paymentId:true,matchedAmount:true}});
+    if(previous.some(row=>row.reconciliationSessionId!==session.id)) throw new EnterpriseAccountingError("RECONCILIATION_DUPLICATE_MATCH",409);
+    const lineTotal = sumDecimals(previous.filter(row=>row.bankStatementLineId===line.id).map(row=>row.matchedAmount)).plus(matchedAmount);
+    const transactionTotal = sumDecimals(previous.filter(row=>row.treasuryTransactionId===transaction.id).map(row=>row.matchedAmount)).plus(matchedAmount);
+    const paymentTotal = payment ? sumDecimals(previous.filter(row=>row.paymentId===payment.id).map(row=>row.matchedAmount)).plus(matchedAmount) : null;
+    if (lineTotal.greaterThan(lineAmount)) throw new EnterpriseAccountingError("RECONCILIATION_AMOUNT_EXCEEDS_BANK_LINE",409,{remainingAmount:lineAmount.minus(lineTotal.minus(matchedAmount)).toFixed()});
+    if (transactionTotal.greaterThan(transaction.amount) || (payment && paymentTotal?.greaterThan(payment.amount))) throw new EnterpriseAccountingError("RECONCILIATION_AMOUNT_EXCEEDS_TRANSACTION",409);
+    if (journalEntry && await tx.enterpriseReconciliationMatch.findFirst({where:{organizationId,reconciliationSessionId:session.id,journalEntryId:journalEntry.id,status:"CONFIRMED",NOT:{treasuryTransactionId:transaction.id}},select:{id:true}})) throw new EnterpriseAccountingError("RECONCILIATION_DUPLICATE_MATCH",409);
 
     const match = await tx.enterpriseReconciliationMatch.create({
       data: {
@@ -148,9 +157,9 @@ export async function confirmReconciliationMatch(organizationId: string, session
         confirmedAt: new Date(),
       },
     });
-    if (line) await tx.enterpriseBankStatementLine.update({ where: { id: line.id }, data: { reconciliationStatus: "MATCHED" } });
-    if (transaction) await tx.enterpriseTreasuryTransaction.update({ where: { id: transaction.id }, data: { reconciliationStatus: "RECONCILED" } });
-    if (payment) await tx.enterprisePayment.update({ where: { id: payment.id }, data: { status: "RECONCILED", reconciledAt: new Date(), revision: { increment: 1 } } });
+    if (lineTotal.equals(lineAmount)) await tx.enterpriseBankStatementLine.update({ where: { id: line.id }, data: { reconciliationStatus: "MATCHED" } });
+    if (transactionTotal.equals(transaction.amount)) await tx.enterpriseTreasuryTransaction.update({ where: { id: transaction.id }, data: { reconciliationStatus: "RECONCILED" } });
+    if (payment && paymentTotal?.equals(payment.amount)) await tx.enterprisePayment.update({ where: { id: payment.id }, data: { status: "RECONCILED", reconciledAt: new Date(), revision: { increment: 1 } } });
     await tx.enterpriseReconciliationSession.update({ where: { id: session.id }, data: { status: "IN_PROGRESS", revision: { increment: 1 } } });
     return match;
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });

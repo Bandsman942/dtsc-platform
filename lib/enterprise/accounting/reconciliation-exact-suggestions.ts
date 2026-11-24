@@ -8,27 +8,27 @@ function moneyKey(value: Amount) {
   const [whole, fraction = ""] = text.split(".");
   return BigInt(whole) * 1000000n + BigInt(fraction.padEnd(6,"0"));
 }
-function key(reference: string | null, date: Date, currency: string, direction: string, amount: bigint) {
+function key(reference: string | null, businessDay: string, currency: string, direction: string, amount: bigint) {
   // No fuzzy reference normalization: punctuation can identify different transfers.
   const normalized = reference?.trim();
   if (!normalized || amount <= 0n) return null;
-  return JSON.stringify([normalized, date.toISOString().slice(0,10), currency, direction, amount.toString()]);
+  return JSON.stringify([normalized, businessDay, currency, direction, amount.toString()]);
 }
 /** Read-only, exact and mutually unique proposals. Never silently select ambiguous candidates. */
-export function suggestExactReconciliationMatches(lines: Line[], transactions: Transaction[]): ExactReconciliationSuggestion[] {
+export function suggestExactReconciliationMatches(lines: Line[], transactions: Transaction[], day: { statement: (date: Date) => string; transaction: (date: Date) => string }): ExactReconciliationSuggestion[] {
   const lineIndex = new Map<string, Line[]>();
   const transactionIndex = new Map<string, Transaction[]>();
   for (const line of lines) {
     if (line.reconciliationStatus !== "UNMATCHED") continue;
     const debit = moneyKey(line.debit), credit = moneyKey(line.credit);
     if (debit === null || credit === null || (debit > 0n) === (credit > 0n)) continue;
-    const k = key(line.reference, line.transactionDate, line.currencyCode, credit > 0n ? "INBOUND" : "OUTBOUND", credit > 0n ? credit : debit);
+    const k = key(line.reference, day.statement(line.transactionDate), line.currencyCode, credit > 0n ? "INBOUND" : "OUTBOUND", credit > 0n ? credit : debit);
     if (k) lineIndex.set(k,[...(lineIndex.get(k) || []),line]);
   }
   for (const transaction of transactions) {
     const amount = moneyKey(transaction.amount);
     if (amount === null || !["INBOUND","OUTBOUND"].includes(transaction.direction)) continue;
-    const k = key(transaction.reference, transaction.transactionDate, transaction.currencyCode, transaction.direction, amount);
+    const k = key(transaction.reference, day.transaction(transaction.transactionDate), transaction.currencyCode, transaction.direction, amount);
     if (k) transactionIndex.set(k,[...(transactionIndex.get(k) || []),transaction]);
   }
   const result: ExactReconciliationSuggestion[] = [];

@@ -1,3 +1,7 @@
+## 2026-11-24 — HOTFIX #1226 — tranche D1 candidate
+
+- Allocations partielles et groupées bornées, contrôle des totaux de couverture, proposition exacte avec fuseau métier et affichage du reste. Non certifié ; pas de production.
+
 ## 2026-11-24 — HOTFIX #1226 — tranche C2 candidate
 
 - Qualification indépendante et sécurisée d’un écart, correction de comptage, contrepassation historique sous preuve et ajustement atomique d’un écart réel. Historique préservé et lien source exact. Non certifié et non livré.

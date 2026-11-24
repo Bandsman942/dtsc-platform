@@ -73,6 +73,8 @@ type BankStatementLine = {
   credit: string | number;
   runningBalance?: string | number | null;
   reconciliationStatus?: string | null;
+  allocatedAmount?: string;
+  remainingAmount?: string;
 };
 
 type BankStatement = FinanceRecord & {
@@ -611,11 +613,11 @@ export function EnterpriseFinanceCashBankReconciliationBase(props: Props) {
     <Dialog open={Boolean(matchTarget)} onClose={() => { if (!busy) setMatchTarget(null); }} title={t("toReconcile")} description={t("noReconciledLineReuse")} presentation="editor" className="max-w-4xl">
       <form onSubmit={matchReconciliation} className="grid gap-6">
         <ProfessionalFormSection title={tx(locale, "Correspondance", "Match")}>
-          <Field label={tx(locale, "Ligne bancaire", "Bank line")}><NativeSelect name="bankStatementLineId" disabled={busy} items={[{ id: "", label: tx(locale, "Sélectionner…", "Select…") }, ...((matchTarget?.statementLines || []).filter((line) => line.id && line.reconciliationStatus === "UNMATCHED").map((line) => ({ id: line.id!, label: `${financeDate(line.transactionDate, locale)} · ${line.description}` })))]} /></Field>
+          <Field label={tx(locale, "Ligne bancaire", "Bank line")}><NativeSelect name="bankStatementLineId" disabled={busy} items={[{ id: "", label: tx(locale, "Sélectionner…", "Select…") }, ...((matchTarget?.statementLines || []).filter((line) => line.id && line.reconciliationStatus === "UNMATCHED").map((line) => ({ id: line.id!, label: `${financeDate(line.transactionDate, locale)} · ${line.description} · ${tx(locale,"Reste","Remaining")}: ${line.remainingAmount ?? String(Number(line.credit) || Number(line.debit))}` })))]} /></Field>
           <Field label={tx(locale, "Paiement confirmé", "Confirmed payment")}><FinanceReferenceSelect organizationId={organizationId} moduleCode="FINANCE_RECONCILIATION" kind="reconciliation-payment" name="paymentId" label={tx(locale, "paiement", "payment")} locale={rawLocale} parentId={matchTarget?.financialAccountId} disabled={busy} /></Field>
           <Field label={tx(locale, "Transaction de trésorerie", "Treasury transaction")}><FinanceReferenceSelect organizationId={organizationId} moduleCode="FINANCE_RECONCILIATION" kind="treasury-transaction" name="treasuryTransactionId" label={tx(locale, "transaction", "transaction")} locale={rawLocale} parentId={matchTarget?.financialAccountId} disabled={busy} /></Field>
           <Field label={tx(locale, "Écriture comptable", "Journal entry")}><FinanceReferenceSelect organizationId={organizationId} moduleCode="FINANCE_RECONCILIATION" kind="journal-entry" name="journalEntryId" label={tx(locale, "écriture", "entry")} locale={rawLocale} parentId={matchTarget?.financialAccountId} disabled={busy} /></Field>
-          <Field label={t("amount")}><Input name="matchedAmount" type="number" step="0.01" min="0.01" required disabled={busy} /></Field>
+          <Field label={t("amount")}><Input name="matchedAmount" type="number" step="0.000001" min="0.000001" required disabled={busy} /><p className="text-xs text-dtsc-muted">{tx(locale,"Saisissez la part à rapprocher. Une ligne ou une transaction peut recevoir plusieurs allocations jusqu’à son montant total.","Enter the portion to match. A statement line or transaction can receive multiple allocations up to its full amount.")}</p></Field>
         </ProfessionalFormSection>
         <Button type="submit" disabled={busy}>{t("confirm")}</Button>
       </form>

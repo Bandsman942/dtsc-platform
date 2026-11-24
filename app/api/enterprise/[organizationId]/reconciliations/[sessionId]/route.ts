@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { writeApiLog } from "@/lib/audit";
 import { authorizeFinanceRequest } from "@/lib/enterprise/accounting/http";
 import { prisma } from "@/lib/prisma";
+import { formatEnterpriseBusinessDate, getEnterpriseBusinessContext } from "@/lib/enterprise/business-context";
 import { suggestExactReconciliationMatches } from "@/lib/enterprise/accounting/reconciliation-exact-suggestions";
 import { maskFinancialReference } from "@/lib/enterprise/accounting/masked-financial-reference";
 
@@ -61,7 +62,25 @@ export async function GET(req: Request, { params }: Params) {
     take: candidateLimit + 1,
   }) : [];
   const suggestionLimitExceeded = canSuggest && (statementLines.length > candidateLimit || transactions.length > candidateLimit);
-  const exactSuggestions = canSuggest && !suggestionLimitExceeded ? suggestExactReconciliationMatches(statementLines, transactions) : [];
+  const businessContext = canSuggest && !suggestionLimitExceeded ? await getEnterpriseBusinessContext(prisma, organizationId) : null;
+  const confirmed = reconciliation.matches.filter(match => match.status === "CONFIRMED");
+  const reservedLines = new Set(confirmed.map(match => match.bankStatementLineId));
+  const reservedTransactions = new Set(confirmed.map(match => match.treasuryTransactionId));
+  const exactSuggestions = businessContext ? suggestExactReconciliationMatches(
+    statementLines.filter(line => !reservedLines.has(line.id)),
+    transactions.filter(transaction => !reservedTransactions.has(transaction.id)),
+    { statement: date => formatEnterpriseBusinessDate(date, "UTC"), transaction: date => formatEnterpriseBusinessDate(date, businessContext.timezone) },
+  ) : [];
+  const lineAllocated = new Map<string, import("@prisma/client").Prisma.Decimal>();
+  for (const match of confirmed) if (match.bankStatementLineId) {
+    const previous = lineAllocated.get(match.bankStatementLineId);
+    lineAllocated.set(match.bankStatementLineId, previous ? previous.plus(match.matchedAmount) : match.matchedAmount);
+  }
+  const linesWithAllocation = statementLines.map(line => {
+    const amount = line.credit.greaterThan(0) ? line.credit : line.debit;
+    const allocated = lineAllocated.get(line.id);
+    return {...line, allocatedAmount: allocated?.toFixed() || "0", remainingAmount: allocated ? amount.minus(allocated).toFixed() : amount.toFixed()};
+  });
 
   await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "reconciliation-detail", reconciliationId: sessionId } });
   return NextResponse.json({
@@ -72,7 +91,7 @@ export async function GET(req: Request, { params }: Params) {
       suggestionLimitExceeded,
       differenceAmount: reconciliation.reconciledDifference,
       bankStatement,
-      statementLines,
+      statementLines: linesWithAllocation,
       capabilities: {
         canMatch: Boolean(capabilities.canManage && ["DRAFT", "IN_PROGRESS"].includes(reconciliation.status)),
         canSubmit: Boolean(capabilities.canSubmit && ["DRAFT", "IN_PROGRESS"].includes(reconciliation.status) && reconciliation.preparedByUserId === auth.session.userId),
