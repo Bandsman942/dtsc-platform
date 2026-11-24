@@ -8,7 +8,6 @@ import {
 import { calculateFinancialCloseChecklist } from "@/lib/enterprise/accounting/close-service";
 import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
 import { money, publishFinanceEvent, serializeFinanceValue, sumDecimals } from "@/lib/enterprise/accounting/helpers";
-import { postBusinessEvent } from "@/lib/enterprise/accounting/posting-service";
 
 export async function submitFinancialCloseForAssignedApproval(
   organizationId: string,
@@ -287,7 +286,7 @@ export async function validateCashSessionAssignedApproval(
   });
   const result = await prisma.$transaction(async (tx) => {
     await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterpriseCashSession" WHERE id = ${sessionId} AND "organizationId" = ${organizationId} FOR UPDATE`);
-    const session = await tx.enterpriseCashSession.findFirst({ where: { id: sessionId, organizationId }, include: { discrepancies: true } });
+    const session = await tx.enterpriseCashSession.findFirst({ where: { id: sessionId, organizationId }, });
     if (!session) throw new EnterpriseAccountingError("CASH_SESSION_NOT_FOUND", 404);
     if (session.status !== "PENDING_VALIDATION" || session.revision !== input.revision) throw new EnterpriseAccountingError("CASH_SESSION_CONFLICT", 409);
 
@@ -304,7 +303,7 @@ export async function validateCashSessionAssignedApproval(
     if (input.approve) {
       await tx.enterpriseCashDiscrepancy.updateMany({
         where: { organizationId, cashSessionId: session.id, status: "PENDING" },
-        data: { status: "APPROVED", approvedByUserId: validatorUserId },
+        data: { status: "PENDING_QUALIFICATION" },
       });
     }
     const updated = await tx.enterpriseCashSession.update({
@@ -332,19 +331,9 @@ export async function validateCashSessionAssignedApproval(
         ...(input.reason ? { reason: input.reason.slice(0, 500) } : {}),
       },
     });
-    return { updated, discrepancies: session.discrepancies };
+    return updated;
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
-
-  if (input.approve) {
-    for (const discrepancy of result.discrepancies.filter((item) => !item.amount.isZero())) {
-      await postBusinessEvent(organizationId, validatorUserId, {
-        postingEvent: "CASH_VARIANCE_POSTED",
-        sourceEntityType: "EnterpriseCashDiscrepancy",
-        sourceEntityId: discrepancy.id,
-      });
-    }
-  }
-  return result.updated;
+  return result;
 }
 
 async function reconciliationSnapshot(organizationId: string, sessionId: string) {

@@ -20,3 +20,8 @@ const builder=read("lib/enterprise/accounting/core-posting-builders.ts").split("
 assert.match(builder,/sessionSite !== accountSite/);
 assert.equal((builder.match(/, siteId, description: discrepancy.reason/g)||[]).length,2);
 console.log("#1226 tranche A guards: PASS");
+
+const retailClose=read("lib/enterprise/retail/service.ts").split("export async function decideRetailDailyClose(")[1].split("export async function getRetailDashboard(")[0];
+const cashClose=read("lib/enterprise/accounting/accounting-operations-approval-orchestration.ts").split("export async function validateCashSessionAssignedApproval(")[1].split("async function reconciliationSnapshot")[0];
+for(const code of [retailClose,cashClose]) { assert.match(code,/PENDING_QUALIFICATION/); assert.doesNotMatch(code,/postBusinessEvent\(/); }
+console.log("#1226 tranche B1 guards: PASS");

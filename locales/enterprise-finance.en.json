@@ -1,4 +1,5 @@
 {
+  "cashVarianceQualificationPending": "Cash variance awaiting financial review. Closing does not constitute posting.",
   "finance": "Finance",
   "budgets": "Budgets",
   "expenses": "Expenses",

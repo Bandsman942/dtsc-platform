@@ -588,6 +588,7 @@ export function RetailDailyCloseWorkspace({
               description={translateRetailWorkspace(locale, "dailyCloseSelectTheBalancesYouCountedEveryVarianceShouldHaveAClearBusiness")}
             >
               <form onSubmit={(event) => void submitClose(event)} className="grid min-w-0 gap-4">
+                 <p className="text-sm text-dtsc-muted">{translateRetailWorkspace(locale, "dailyCloseVarianceReview")}</p>
                 <div className="grid min-w-0 gap-3 sm:grid-cols-2">
                   <Field label={translateRetailWorkspace(locale, "dailyCloseBusinessDate")}><Input name="businessDate" type="date" defaultValue={defaultBusinessDate} required /></Field>
                   <Field label={translateRetailWorkspace(locale, "dailyCloseCloseNotes")}><Input name="notes" maxLength={2000} /></Field>

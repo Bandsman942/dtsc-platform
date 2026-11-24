@@ -44,6 +44,7 @@ type CashSession = FinanceRecord & {
   theoreticalClosingAmount?: string | number | null;
   countedClosingAmount?: string | number | null;
   discrepancyAmount?: string | number | null;
+  varianceQualificationPending?: boolean;
   openedAt: string;
   openedByLabel?: string;
   submittedAt?: string | null;
@@ -247,6 +248,7 @@ export function EnterpriseFinanceCashWorkspace({ organizationId, organizationNam
           {detail.countedClosingAmount !== undefined ? <FinanceDetailValue label={t("counted")}>{financeMoney(detail.countedClosingAmount, String(detail.financialAccount?.currencyCode || "USD"), locale)}</FinanceDetailValue> : null}
           {detail.discrepancyAmount !== undefined ? <FinanceDetailValue label={t("variance")}>{financeMoney(detail.discrepancyAmount, String(detail.financialAccount?.currencyCode || "USD"), locale)}</FinanceDetailValue> : null}
         </FinanceDetailGrid>
+        {detail.varianceQualificationPending ? <p role="status" className="rounded-xl border border-amber-500/30 p-3 text-sm text-dtsc-ink">{t("cashVarianceQualificationPending")}</p> : null}
         {detail.status === "PENDING_VALIDATION" ? (
           <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3 rounded-xl border border-dtsc-border bg-dtsc-page p-4">
             <p className="break-words text-sm font-semibold text-dtsc-muted">

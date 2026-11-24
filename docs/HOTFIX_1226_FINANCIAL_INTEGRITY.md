@@ -19,3 +19,7 @@
 6. Restants : clôture sans posting non qualifié, correction tracée, rapprochement partiel/groupé/idempotent, imports privés XLSX/CSV, approbation indépendante, couverture et soldes datés, responsive 320–1024 FR/EN clair/sombre; non-régression Health/Pharmacy/Finance/Retail.
 7. QA locale/CI, migrations, OWNER_E2E et revue : NOT_EXECUTED à ce stade.
 Rollback avant fusion : abandon de la branche; après fusion suivre la procédure officielle de hotfix, sans supprimer d'historique.
+
+## Tranche B1 — séparation du comptage et du posting (candidate)
+- Approbation des clôtures Finance et Retail : les écarts passent à PENDING_QUALIFICATION sans posting automatique. Le détail de caisse indique la qualification en attente; le formulaire Retail précise le comportement. La commande de qualification et régularisation reste à implémenter. Aucun changement historique et aucune mutation production.
+- QA ciblée étendue. La qualification, le rapprochement complet et E2E propriétaire restent bloquants.

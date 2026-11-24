@@ -44,6 +44,7 @@ export async function GET(req: Request, { params }: Params) {
       include: {
         financialAccount: { select: { id: true, code: true, name: true, currencyCode: true } },
         movements: { select: { direction: true, amount: true } },
+        discrepancies: { where: { status: "PENDING_QUALIFICATION" }, select: { id: true }, take: 1 },
         _count: { select: { movements: true, counts: true, discrepancies: true } },
       },
     }),
@@ -79,7 +80,7 @@ export async function GET(req: Request, { params }: Params) {
       : member.user.name || member.user.email,
   ]));
   const capabilities = auth.access.capabilities;
-  const items = rawItems.map(({ movements, ...item }) => {
+  const items = rawItems.map(({ movements, discrepancies, ...item }) => {
     const expectedCurrentAmount = movements.reduce(
       (totalAmount, movement) => movement.direction === "INBOUND" ? totalAmount.plus(movement.amount) : totalAmount.minus(movement.amount),
       new Prisma.Decimal(item.openingAmount),
@@ -88,6 +89,7 @@ export async function GET(req: Request, { params }: Params) {
     const assignedToCurrentUser = approval?.status === "PENDING" && approval.approverUserId === auth.session.userId;
     return {
       ...item,
+      varianceQualificationPending: discrepancies.length > 0,
       openedByLabel: operatorNames.get(item.cashierUserId) || "—",
       submittedByLabel: item.submittedAt ? operatorNames.get(item.cashierUserId) || "—" : null,
       closedByLabel: item.validatedAt ? operatorNames.get(item.validatedByUserId || "") || "—" : null,

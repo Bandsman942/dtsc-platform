@@ -1,3 +1,7 @@
+## 2026-11-24 — HOTFIX #1226 — tranche B1 candidate
+
+- Séparation de la validation du comptage et de la comptabilisation des écarts ; statut à qualifier sans posting automatique. Non livré, workflow de régularisation encore à terminer.
+
 ## 2026-11-24 — HOTFIX #1226 — Intégrité financière (v1.24.4 candidate DRAFT)
 
 - Tranche A : détail comptable et capacités d’action, lien profond, comptage par session et garde de fraîcheur, attribution analytique des écarts.

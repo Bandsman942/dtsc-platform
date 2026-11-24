@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { ensureMobileMoneyTransactionLedgerMappingTx } from "@/lib/enterprise/accounting/mobile-money-ledger-provisioning";
 import { createAccountingApprovalAssignment, decideAccountingApproval, requireAccountingApprovalDecision } from "@/lib/enterprise/accounting/accounting-approval-service";
-import { postBusinessEvent, postBusinessEventTx } from "@/lib/enterprise/accounting/posting-service";
+import { postBusinessEventTx } from "@/lib/enterprise/accounting/posting-service";
 import { money, publishFinanceEvent, sumDecimals } from "@/lib/enterprise/accounting/helpers";
 import { publishEnterpriseEvent } from "@/lib/enterprise/crm-sales/helpers";
 import { applyStockMovementTx } from "@/lib/enterprise/inventory/service";
@@ -704,9 +704,8 @@ export async function decideRetailDailyClose(organizationId: string, closeId: st
     }
     if (close.submittedByUserId === actorUserId) throw new EnterpriseRetailError("RETAIL_CLOSE_SELF_VALIDATION_FORBIDDEN", 409);
     if (close.status !== "SUBMITTED" || close.revision !== input.revision) throw new EnterpriseRetailError("RETAIL_CLOSE_CONFLICT", 409);
-    const discrepancyIds: string[] = [];
     for (const line of close.lines.filter((item) => item.cashSessionId)) {
-      const cashSession = await tx.enterpriseCashSession.findFirst({ where: { id: line.cashSessionId as string, organizationId }, include: { discrepancies: true } });
+      const cashSession = await tx.enterpriseCashSession.findFirst({ where: { id: line.cashSessionId as string, organizationId } });
       if (!cashSession || cashSession.cashierUserId !== close.submittedByUserId) throw new EnterpriseRetailError("RETAIL_CLOSE_CONFLICT", 409, { cashSessionId: line.cashSessionId });
 
       if (cashSession.status !== "PENDING_VALIDATION") {
@@ -732,8 +731,7 @@ export async function decideRetailDailyClose(organizationId: string, closeId: st
         selfApprovalOverride: decision.selfApprovalOverride,
       });
       if (input.decision === "APPROVE") {
-        await tx.enterpriseCashDiscrepancy.updateMany({ where: { organizationId, cashSessionId: cashSession.id, status: "PENDING" }, data: { status: "APPROVED", approvedByUserId: actorUserId } });
-        discrepancyIds.push(...cashSession.discrepancies.filter((item) => !item.amount.isZero()).map((item) => item.id));
+        await tx.enterpriseCashDiscrepancy.updateMany({ where: { organizationId, cashSessionId: cashSession.id, status: "PENDING" }, data: { status: "PENDING_QUALIFICATION" } });
       }
       const nextCashStatus = input.decision === "APPROVE" ? "CLOSED" : "REJECTED";
       await tx.enterpriseCashSession.update({
@@ -757,12 +755,9 @@ export async function decideRetailDailyClose(organizationId: string, closeId: st
     const nextStatus = input.decision === "APPROVE" ? "APPROVED" : "REJECTED";
     const updated = await tx.enterpriseRetailDailyClose.update({ where: { id: close.id }, data: { status: nextStatus, validatedByUserId: actorUserId, validatedAt: input.decision === "APPROVE" ? new Date() : null, rejectedAt: input.decision === "REJECT" ? new Date() : null, rejectionReason: input.decision === "REJECT" ? input.reason || null : null, revision: { increment: 1 } } });
     await publishFinanceEvent(tx, { organizationId, entityType: "EnterpriseRetailDailyClose", entityId: close.id, eventType: `RETAIL_DAILY_CLOSE_${nextStatus}`, summary: `Clôture ${close.number}: ${nextStatus}`, actorUserId, fromStatus: close.status, toStatus: nextStatus, metadataJson: input.reason ? { reason: input.reason.slice(0, 500) } : undefined });
-    return { updated, discrepancyIds };
+    return updated;
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 30000 });
-  if (input.decision === "APPROVE") {
-    for (const discrepancyId of result.discrepancyIds) await postBusinessEvent(organizationId, actorUserId, { postingEvent: "CASH_VARIANCE_POSTED", sourceEntityType: "EnterpriseCashDiscrepancy", sourceEntityId: discrepancyId });
-  }
-  return result.updated;
+  return result;
 }
 
 export async function getRetailDashboard(organizationId: string, from?: Date, to?: Date) {
