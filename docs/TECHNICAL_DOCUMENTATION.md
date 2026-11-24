@@ -1,3 +1,5 @@
+> **#1226 H/I candidates** : contrôle fonds d’ouverture, passation physique entre sessions du même compte avec double attestation, deux mouvements de session sans mouvement financier. Migration additive et preuves CI requises. Voir `docs/HOTFIX_1226_FINANCIAL_INTEGRITY.md`.
+
 > **#1226 F/G candidates** : cycle de réservation et approbation atomique, annulation de brouillon, correction métier conditionnelle, audit historique borné. Voir `docs/HOTFIX_1226_FINANCIAL_INTEGRITY.md`. Tests complets et E2E non certifiés.
 
 > **#1226 tranche D2 candidate** : modèle XLSX et prévisualisation protégée, validation monétaire exacte des relevés et aperçu paginé. Tests round-trip et intégration durable/UX encore requis.

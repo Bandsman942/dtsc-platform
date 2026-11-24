@@ -108,3 +108,12 @@ assert.match(treasury,/remaining=account.operationalBalance.minus\(reserved\)/);
 assert.match(service,/cashSession.revision !== line.cashSessionRevision/);
 assert.match(ui,/cashSessionRevision: account.closeSession.revision/);
 console.log("#1226 tranche H cash custody guards: PASS");
+
+const handover=read("lib/enterprise/accounting/cash-handover-service.ts");
+assert.match(handover,/source.cashierUserId===target.cashierUserId/);
+assert.match(handover,/sourceBalance.lessThan\(amount\)/);
+assert.match(handover,/movementType:"CUSTODY_HANDOVER",direction:"OUTBOUND"/);
+assert.match(handover,/movementType:"CUSTODY_HANDOVER",direction:"INBOUND"/);
+assert.doesNotMatch(handover,/enterpriseFinancialAccount.update|enterpriseJournalEntry.create|enterpriseTreasuryTransaction.create/);
+assert.match(service,/assertNoPendingCashHandoverTx/);
+console.log("#1226 tranche I custody handover guards: PASS");

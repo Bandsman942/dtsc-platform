@@ -5,6 +5,7 @@ import { Banknote, LockKeyhole, Plus, ShieldCheck } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { Field, NativeSelect } from "@/components/enterprise/core-v2/erp-v2-ui";
 import { fetchOperationalFinanceRecord } from "@/components/enterprise/professional/use-operational-finance-collection";
+import { CashHandoverPanel } from "@/components/enterprise/professional/cash-handover-panel";
 import { CashPhysicalCountFields, cashCountsFromForm } from "@/components/enterprise/professional/cash-physical-count-fields";
 import { FinanceDateFilter, FinanceExportControls, type FinanceExportColumn } from "@/components/enterprise/professional/finance-design2-controls";
 import { EnterpriseApproverSelect } from "@/components/enterprise/enterprise-approver-select";
@@ -48,6 +49,7 @@ type CashSession = FinanceRecord & {
   varianceQualificationPending?: boolean;
   varianceReviews?: Array<{id:string;status:string;amount:string|number;reason:string;journalEntryId?:string|null;updatedAt:string}>;
   canReviewVariance?: boolean;
+  canViewHandover?: boolean;
   openedAt: string;
   openedByLabel?: string;
   submittedAt?: string | null;
@@ -293,6 +295,7 @@ export function EnterpriseFinanceCashWorkspace({ organizationId, organizationNam
           </div>
         ) : null}
         {detail.capabilities?.canClose ? <Button disabled={busy} onClick={() => setCloseTarget(detail)}><LockKeyhole className="h-4 w-4" />{t("closeCashSession")}</Button> : null}
+        {detail.canViewHandover?<CashHandoverPanel key={detail.id} organizationId={organizationId} sessionId={detail.id} locale={locale} onChanged={async()=>{setDetail(await fetchOperationalFinanceRecord<CashSession>(`/api/enterprise/${organizationId}/cash-sessions`,detail.id));setRefreshKey(v=>v+1);}}/>:null}
         <FinanceCollaboration organizationId={organizationId} moduleCode="FINANCE_CASH" record={detail} locale={locale} />
       </div> : null}
     </Dialog>

@@ -1006,6 +1006,8 @@ model EnterpriseCashSession {
   discrepancies         EnterpriseCashDiscrepancy[]
   payments              EnterprisePayment[]
   fundingOperations      EnterpriseFundingOperation[]
+  outgoingHandovers     EnterpriseCashHandover[] @relation("CashHandoverSource")
+  incomingHandovers     EnterpriseCashHandover[] @relation("CashHandoverTarget")
 
   @@unique([organizationId, id])
   @@unique([organizationId, number])
@@ -1662,4 +1664,29 @@ model EnterpriseInventoryTransferCostAllocation {
 
   @@unique([organizationId, valuationId, sourceCostLayerId], map: "inv_transfer_alloc_value_layer_key")
   @@index([organizationId, sourceCostLayerId], map: "inv_transfer_alloc_layer_idx")
+}
+
+/// Custody transfer between two sessions of the same financial account.
+model EnterpriseCashHandover {
+  id                String   @id @default(cuid())
+  organizationId    String
+  sourceSessionId   String
+  targetSessionId   String
+  amount            Decimal  @db.Decimal(20, 6)
+  currencyCode      String
+  status            String   @default("PENDING")
+  reason            String
+  decisionReason    String?
+  proposedByUserId  String
+  decidedByUserId   String?
+  idempotencyKey    String
+  revision          Int      @default(1)
+  createdAt         DateTime @default(now())
+  decidedAt         DateTime?
+  sourceSession     EnterpriseCashSession @relation("CashHandoverSource", fields: [organizationId, sourceSessionId], references: [organizationId, id], onDelete: Restrict)
+  targetSession     EnterpriseCashSession @relation("CashHandoverTarget", fields: [organizationId, targetSessionId], references: [organizationId, id], onDelete: Restrict)
+  @@unique([organizationId, id])
+  @@unique([organizationId, idempotencyKey])
+  @@index([organizationId, sourceSessionId, status])
+  @@index([organizationId, targetSessionId, status])
 }

@@ -91,6 +91,7 @@ export async function GET(req: Request, { params }: Params) {
     const assignedToCurrentUser = approval?.status === "PENDING" && approval.approverUserId === auth.session.userId;
     return {
       ...item,
+      canViewHandover:item.cashierUserId===auth.session.userId,
       varianceQualificationPending: discrepancies.some(d => d.status === "PENDING_QUALIFICATION"),
       varianceReviews: discrepancies,
       canReviewVariance: Boolean(accountingReview && item.status === "CLOSED" && item.cashierUserId !== auth.session.userId && item.validatedByUserId !== auth.session.userId),

@@ -6,6 +6,7 @@ import {
   requireAccountingApprovalDecision,
 } from "@/lib/enterprise/accounting/accounting-approval-service";
 import { calculateFinancialCloseChecklist } from "@/lib/enterprise/accounting/close-service";
+import { assertNoPendingCashHandoverTx } from "@/lib/enterprise/accounting/cash-handover-service";
 import { assertReconciliationEvidenceTx, finalizeReconciliationEvidenceTx } from "@/lib/enterprise/accounting/reconciliation-evidence";
 import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
 import { money, publishFinanceEvent, serializeFinanceValue, sumDecimals } from "@/lib/enterprise/accounting/helpers";
@@ -140,6 +141,7 @@ export async function submitCashSessionCloseForAssignedValidation(
     if (!session) throw new EnterpriseAccountingError("CASH_SESSION_NOT_FOUND", 404);
     if (session.cashierUserId !== cashierUserId) throw new EnterpriseAccountingError("CASH_SESSION_NOT_OWNED", 403);
     if (session.status !== "OPEN" || session.revision !== input.revision) throw new EnterpriseAccountingError("CASH_SESSION_CONFLICT", 409);
+    await assertNoPendingCashHandoverTx(tx,organizationId,session.id);
 
     const inflows = sumDecimals(session.movements.filter((movement) => movement.direction === "INBOUND").map((movement) => movement.amount));
     const outflows = sumDecimals(session.movements.filter((movement) => movement.direction === "OUTBOUND").map((movement) => movement.amount));

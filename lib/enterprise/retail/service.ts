@@ -1,3 +1,4 @@
+import { assertNoPendingCashHandoverTx } from "@/lib/enterprise/accounting/cash-handover-service";
 import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { ensureMobileMoneyTransactionLedgerMappingTx } from "@/lib/enterprise/accounting/mobile-money-ledger-provisioning";
@@ -638,6 +639,7 @@ export async function createRetailDailyClose(organizationId: string, actorUserId
         await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterpriseCashSession" WHERE "organizationId" = ${organizationId} AND "financialAccountId" = ${account.id} AND "cashierUserId" = ${actorUserId} AND status = 'OPEN' FOR UPDATE`);
         const cashSession = await tx.enterpriseCashSession.findFirst({ where: { organizationId, financialAccountId: account.id, cashierUserId: actorUserId, status: "OPEN", ...(line.cashSessionId ? { id: line.cashSessionId } : {}) }, include: { movements: true } });
         if (!cashSession) throw new EnterpriseRetailError("RETAIL_OPEN_CASH_SESSION_REQUIRED", 409, { financialAccountId: account.id });
+        await assertNoPendingCashHandoverTx(tx,organizationId,cashSession.id);
         if (strictSites && (!cashSession.siteId || cashSession.siteId !== account.siteId)) {
           throw new EnterpriseRetailError("RETAIL_CLOSE_ACCOUNT_SITE_MISMATCH", 409);
         }

@@ -1,3 +1,7 @@
+## 2026-11-24 — HOTFIX #1226 — tranches H/I candidates
+
+- Répartition contrôlée des fonds d’ouverture, solde individuel POS et Mobile Money, révision de clôture, passation contradictoire et mouvements de garde équilibrés. Non livré.
+
 ## 2026-11-24 — HOTFIX #1226 — tranches F/G candidates
 
 - Réservations avant approbation, annulation motivée, contrepassation métier avec mouvement inverse et audit borné en lecture seule. Non livré.
