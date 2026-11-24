@@ -191,7 +191,7 @@ export function EnterpriseFinanceTreasuryWorkspace(props: Props) {
   async function updateAccount(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); if (!editingAccount) return; const form = new FormData(event.currentTarget); setBusy(true); setErrorMessage("");
     try {
-      await financeMutation(`/api/enterprise/${organizationId}/financial-accounts/${editingAccount.id}`, { name: String(form.get("name") || editingAccount.name), maskedReference: String(form.get("maskedReference") || "") || null, status: String(form.get("status") || editingAccount.status), revision: editingAccount.revision }, "PATCH");
+      await financeMutation(`/api/enterprise/${organizationId}/financial-accounts/${editingAccount.id}`, { name: String(form.get("name") || editingAccount.name), ...(String(form.get("maskedReference") || "") !== (editingAccount.maskedReference || "") ? {maskedReference: String(form.get("maskedReference") || "") || null} : {}), status: String(form.get("status") || editingAccount.status), revision: editingAccount.revision }, "PATCH");
       setEditingAccount(null); refresh(t("accountUpdated"));
     } catch (error) { setErrorMessage(safeFinanceError(error, t("operationError"), locale)); }
     finally { setBusy(false); }

@@ -1,3 +1,4 @@
+import { maskFinancialReference } from "@/lib/enterprise/accounting/masked-financial-reference";
 import { NextResponse } from "next/server";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { authorizeFinanceRequest, financeErrorResponse, financeValidationErrorResponse } from "@/lib/enterprise/accounting/http";
@@ -30,7 +31,7 @@ export async function PATCH(req: Request, { params }: Params) {
       metadata: { organizationId, status: account.status, revision: account.revision },
     });
     await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "financial-accounts", action: "update" } });
-    return NextResponse.json({ ok: true, account });
+    return NextResponse.json({ ok: true, account: {...account, maskedReference:maskFinancialReference(account.maskedReference)} });
   } catch (error) {
     return financeErrorResponse(error, "FINANCIAL_ACCOUNT_UPDATE_FAILED");
   }
@@ -54,7 +55,7 @@ export async function DELETE(req: Request, { params }: Params) {
       metadata: { organizationId, reason: parsed.data.reason },
     });
     await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "financial-accounts", action: "archive" } });
-    return NextResponse.json({ ok: true, account });
+    return NextResponse.json({ ok: true, account: {...account, maskedReference:maskFinancialReference(account.maskedReference)} });
   } catch (error) {
     return financeErrorResponse(error, "FINANCIAL_ACCOUNT_ARCHIVE_FAILED");
   }

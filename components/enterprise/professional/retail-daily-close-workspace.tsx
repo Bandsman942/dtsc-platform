@@ -11,6 +11,7 @@ import { EnterpriseApproverSelect } from "@/components/enterprise/enterprise-app
 import { cashCountsFromDailyCloseForm, RetailDailyCloseCashCount, RetailDailyCloseNonCashCount } from "@/components/enterprise/professional/retail-daily-close-cash-count";
 import { useToastMessage } from "@/components/ui/use-toast-message";
 import type { ToastNotice } from "@/lib/client-toast";
+import { downloadProfessionalCsv, downloadProfessionalPdf, downloadProfessionalXlsx, type ProfessionalReportExportModel } from "@/lib/reporting/professional-export";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { BusinessList, BusinessListItem } from "@/components/workspace/business-list";
@@ -146,6 +147,7 @@ export function RetailDailyCloseWorkspace({
   const [notice, setNotice] = useState<ToastNotice | null>(null);
   useToastMessage(notice);
   const [historyPage, setHistoryPage] = useState(1);
+  const [exporting,setExporting]=useState<"CSV"|"Excel"|"PDF"|null>(null);
   const [selectedAccountIds, setSelectedAccountIds] = useState<string[]>([]);
   const [searchDraft, setSearchDraft] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
@@ -359,26 +361,26 @@ export function RetailDailyCloseWorkspace({
     );
   }
 
-  function exportCurrentPageCsv() {
-    if (!closes.length) return;
-    const heading = locale === "fr"
-      ? ["Clôture", "Date", "Boutique", "Statut", "Compte", "Devise", "Solde système", "Solde déclaré", "Écart", "Justification"]
-      : ["Close", "Date", "Store", "Status", "Account", "Currency", "System balance", "Declared balance", "Variance", "Explanation"];
-    const rows = [heading, ...closes.flatMap((close) => close.lines.map((line) => [
-      close.number, formatEnterpriseDate(close.businessDate, locale), close.siteId || "",
-      customerFacingStatusLabel(close.status, locale), customerFacingFinancialAccountType(line.accountType, locale),
-      line.currencyCode, String(line.systemClosingBalance), String(line.declaredBalance),
-      String(line.differenceAmount), line.varianceReason || "",
-    ]))];
-    const csv = String.fromCharCode(0xFEFF) + rows.map((row) => row.map((cell) => `"${String(cell).replaceAll('"', '""')}"`).join(";")).join(String.fromCharCode(13, 10));
-    const link = document.createElement("a");
-    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
-    link.href = url;
-    link.download = `dtsc-clotures-magasin-page-${historyPage}.csv`;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(url);
+  async function exportFilteredCloses(format:"CSV"|"Excel"|"PDF") {
+    if(exporting)return;
+    setExporting(format);setNotice(null);
+    const tr=(fr:string,en:string)=>locale==="fr"?fr:en;
+    try{
+      const params=new URLSearchParams({export:"1"});
+      if(searchQuery)params.set("search",searchQuery);
+      if(dateFrom)params.set("from",dateFrom);
+      if(dateTo)params.set("to",dateTo);
+      if(statusFilter!=="ALL")params.set("status",statusFilter);
+      if(siteFilter!=="ALL")params.set("siteId",siteFilter);
+      const response=await fetch(`/api/enterprise/${organizationId}/retail/daily-close?${params}`,{cache:"no-store"});
+      const body=await response.json().catch(()=>null) as {rows?:Array<{number:string;businessDate:string;site:string|null;status:string;account:string|null;accountType:string;currencyCode:string;cashSessionId:string|null;systemClosingBalance:string;declaredBalance:string;differenceAmount:string;varianceReason:string|null}>;error?:string}|null;
+      if(!response.ok||!Array.isArray(body?.rows))throw new Error(body?.error==="RETAIL_CLOSE_EXPORT_LIMIT"?tr("Affinez les filtres : 1 000 lignes maximum.","Narrow filters: maximum 1,000 lines."):tr("Export indisponible. Actualisez et réessayez.","Export unavailable. Refresh and retry."));
+      const rows=body.rows.map(row=>({...row,businessDate:formatEnterpriseDate(row.businessDate,locale),site:row.site||tr("Non attribuée","Unassigned"),account:row.account||tr("Compte non identifié","Unidentified account"),accountType:customerFacingFinancialAccountType(row.accountType,locale),status:customerFacingStatusLabel(row.status,locale)}));
+      const columns=[["number","Clôture","Close"],["businessDate","Date","Date"],["site","Boutique","Store"],["status","Statut","Status"],["account","Compte","Account"],["accountType","Type","Type"],["currencyCode","Devise","Currency"],["systemClosingBalance","Solde système","System balance"],["declaredBalance","Solde déclaré","Declared balance"],["differenceAmount","Écart déclaré","Declared variance"],["varianceReason","Justification","Explanation"]];
+      const model:ProfessionalReportExportModel={organizationName,title:tr("Historique des clôtures magasin","Store closing history"),subtitle:tr("Déclarations historiques par compte et devise · non assimilables à un solde global","Historical declarations by account and currency · not a consolidated balance"),filenameBase:"DTSC-clotures-"+new Date().toISOString().slice(0,10),generatedLabel:new Intl.DateTimeFormat(locale,{dateStyle:"long",timeStyle:"short"}).format(new Date()),columns:columns.map(([key,fr,en])=>({key,label:tr(fr,en)})),rows,chart:[],insights:[{title:tr("Lecture des écarts","Reading variances"),body:tr("Les montants sont les déclarations originales. Les régularisations sont consultables dans la caisse source. Ne pas additionner les comptages successifs ni les devises.","Amounts are original declarations. Review corrections in the source cash module. Do not sum successive counts or currencies.")}],kpis:[{label:tr("Lignes","Lines"),value:String(rows.length)},{label:tr("Clôtures","Closes"),value:String(new Set(rows.map(row=>row.number)).size)}],filters:[{label:tr("Boutique","Store"),value:siteFilter==="ALL"?tr("Toutes les boutiques autorisées","All authorized stores"):adminStores?.find(site=>site.id===siteFilter)?.name||siteFilter},{label:tr("Statut","Status"),value:statusFilter==="ALL"?tr("Tous","All"):customerFacingStatusLabel(statusFilter,locale)},{label:tr("Du","From"),value:dateFrom||"—"},{label:tr("Au","To"),value:dateTo||"—"},{label:tr("Recherche","Search"),value:searchQuery||"—"}]};
+      if(format==="CSV")downloadProfessionalCsv(model);else if(format==="Excel")downloadProfessionalXlsx(model);else downloadProfessionalPdf(model);
+      setNotice({tone:"success",description:tr(`${rows.length} lignes exportées en ${format}.`,`${rows.length} lines exported as ${format}.`)});
+    }catch(caught){setNotice({tone:"error",description:caught instanceof Error?caught.message:tr("Export impossible.","Export failed.")});}finally{setExporting(null);}
   }
 
   async function decide(item: DailyClose, decision: "APPROVE" | "REJECT") {
@@ -695,7 +697,7 @@ export function RetailDailyCloseWorkspace({
 
             <ModuleSection density="compact" id="retail-close-history"
               title={translateRetailWorkspace(locale, "dailyCloseDailyCloseHistory")}
-              action={<Button variant="outline" size="sm" disabled={!closes.length} onClick={exportCurrentPageCsv}><Download className="h-4 w-4" />{locale === "fr" ? "Exporter CSV · page" : "Export CSV · page"}</Button>}
+              action={<div className="flex flex-wrap gap-1.5" aria-label={locale==="fr"?"Exporter les clôtures filtrées":"Export filtered closes"}>{(["Excel","CSV","PDF"] as const).map(format=><Button key={format} variant="outline" size="sm" disabled={loading||!closeList?.pagination.total||Boolean(exporting)} onClick={()=>void exportFilteredCloses(format)}><Download className="h-4 w-4" />{exporting===format?"…":format}</Button>)}</div>}
               description={closeList ? `${closeList.pagination.total} ${translateRetailWorkspace(locale, "dailyCloseCloseS")}` : undefined}
             >
               {closes.length ? (

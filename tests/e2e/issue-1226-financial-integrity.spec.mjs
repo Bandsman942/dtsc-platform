@@ -104,6 +104,9 @@ test.describe.serial("Hotfix #1226 financial integrity (isolated browser and Pos
     const [a,b]=await contextPair(browser);
     try{
       const bank=await account("BANK",100,250);
+      await prisma.enterpriseFinancialAccount.update({where:{id:bank.id},data:{maskedReference:"AB12"}});
+      const masked=(await ok(a,"GET",root+"/financial-accounts?recordId="+bank.id)).items[0];
+      expect(masked.maskedReference).toBe("••••");
       const day="2026-11-24";
       const when=new Date(day+"T10:00:00Z");
       const next=new Date("2026-11-25T10:00:00Z");

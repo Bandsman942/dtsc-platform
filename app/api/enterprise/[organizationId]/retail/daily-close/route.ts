@@ -24,6 +24,30 @@ export async function GET(req: Request, { params }: Params) {
     ...(status ? { status } : {}),
     ...(search ? { OR: [{ number: { contains: search, mode: "insensitive" } }, { notes: { contains: search, mode: "insensitive" } }] } : {}),
     ...(from || endOfDay ? { businessDate: { ...(from ? { gte: from } : {}), ...(endOfDay ? { lte: endOfDay } : {}) } } : {}) };
+  if (new URL(req.url).searchParams.get("export") === "1") {
+    // Single bounded snapshot of the same server-authorized filters, never the visible page.
+    const snapshot = await prisma.$transaction(async (tx) => {
+      const lines = await tx.enterpriseRetailDailyCloseLine.findMany({
+        where:{organizationId,dailyClose:where},
+        orderBy:[{dailyClose:{businessDate:"desc"}},{dailyCloseId:"asc"},{id:"asc"}],
+        take:1001,
+        select:{id:true,financialAccountId:true,accountType:true,currencyCode:true,cashSessionId:true,systemClosingBalance:true,declaredBalance:true,differenceAmount:true,varianceReason:true,dailyClose:{select:{number:true,businessDate:true,siteId:true,status:true}}},
+      });
+      if(lines.length>1000)return null;
+      const siteIds=[...new Set(lines.flatMap(line=>line.dailyClose.siteId?[line.dailyClose.siteId]:[]))];
+      const accountIds=[...new Set(lines.map(line=>line.financialAccountId))];
+      const [sites,accounts]=await Promise.all([
+        tx.enterpriseSite.findMany({where:{organizationId,id:{in:siteIds}},select:{id:true,name:true,code:true}}),
+        tx.enterpriseFinancialAccount.findMany({where:{organizationId,id:{in:accountIds}},select:{id:true,name:true,code:true}}),
+      ]);
+      const siteMap=new Map(sites.map(site=>[site.id,site.code+" · "+site.name]));
+      const accountMap=new Map(accounts.map(account=>[account.id,account.code+" · "+account.name]));
+      return lines.map(line=>({id:line.id,number:line.dailyClose.number,businessDate:line.dailyClose.businessDate.toISOString(),site:line.dailyClose.siteId?siteMap.get(line.dailyClose.siteId)||null:null,status:line.dailyClose.status,account:accountMap.get(line.financialAccountId)||null,accountType:line.accountType,currencyCode:line.currencyCode,cashSessionId:line.cashSessionId,systemClosingBalance:line.systemClosingBalance.toFixed(),declaredBalance:line.declaredBalance.toFixed(),differenceAmount:line.differenceAmount.toFixed(),varianceReason:line.varianceReason}));
+    },{isolationLevel:Prisma.TransactionIsolationLevel.RepeatableRead});
+    if(!snapshot)return NextResponse.json({error:"RETAIL_CLOSE_EXPORT_LIMIT",message:"Affinez les filtres : 1 000 lignes maximum par export."},{status:422});
+    await writeApiLog({request:req,statusCode:200,userId:auth.session.userId,startedAt,metadata:{organizationId,domain:"retail-daily-close-export",rowCount:snapshot.length}});
+    return NextResponse.json({rows:snapshot},{headers:{"Cache-Control":"private, no-store"}});
+  }
   const [rawItems, total] = await Promise.all([
     prisma.enterpriseRetailDailyClose.findMany({ where, orderBy: [{ businessDate: "desc" }, { createdAt: "desc" }], skip: (page - 1) * pageSize, take: pageSize, include: { lines: true } }),
     prisma.enterpriseRetailDailyClose.count({ where }),

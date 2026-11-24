@@ -124,3 +124,15 @@ assert.match(closeSummary,/SELECT DISTINCT s.id/);
 assert.match(closeSummary,/CUSTODY_HANDOVER/);
 assert.doesNotMatch(closeSummary,/SUM\(l."declaredBalance"\)/);
 console.log("#1226 tranche J consolidated cash flow guards: PASS");
+
+const {maskFinancialReference}=await import("../lib/enterprise/accounting/masked-financial-reference.ts");
+assert.equal(maskFinancialReference("1234"),"••••");
+assert.equal(maskFinancialReference("AB-12"),"••••");
+assert.equal(maskFinancialReference("123456789"),"•••• 6789");
+assert.equal(maskFinancialReference("•••• 6789"),"•••• 6789");
+assert.equal(maskFinancialReference("••••"),"••••");
+assert.equal(maskFinancialReference(null),null);
+const closeExport=read("app/api/enterprise/[organizationId]/retail/daily-close/route.ts");
+for(const marker of ["dailyClose:where","RepeatableRead","take:1001","RETAIL_CLOSE_EXPORT_LIMIT"])assert.ok(closeExport.includes(marker),marker);
+for(const marker of ["downloadProfessionalCsv","downloadProfessionalXlsx","downloadProfessionalPdf","exportFilteredCloses"])assert.ok(ui.includes(marker)||read("components/enterprise/professional/retail-daily-close-workspace.tsx").includes(marker),marker);
+console.log("#1226 filtered closure export and reference masking: PASS");

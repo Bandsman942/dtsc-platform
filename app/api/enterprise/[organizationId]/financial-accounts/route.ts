@@ -118,10 +118,10 @@ export async function POST(req: Request, { params }: Params) {
       entity: "EnterpriseFinancialAccount",
       entityId: account.id,
       request: req,
-      metadata: { organizationId, accountType: account.accountType, currency: account.currencyCode, code: account.code, maskedReference: account.maskedReference },
+      metadata: { organizationId, accountType: account.accountType, currency: account.currencyCode, code: account.code },
     });
     await writeApiLog({ request: req, statusCode: 201, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "financial-accounts" } });
-    return NextResponse.json({ ok: true, account }, { status: 201 });
+    return NextResponse.json({ ok: true, account: {...account, maskedReference:maskFinancialReference(account.maskedReference)} }, { status: 201 });
   } catch (error) {
     return financeErrorResponse(error, "FINANCIAL_ACCOUNT_CREATE_FAILED");
   }
