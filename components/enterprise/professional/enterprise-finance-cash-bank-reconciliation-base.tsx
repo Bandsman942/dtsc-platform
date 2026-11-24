@@ -300,13 +300,13 @@ export function EnterpriseFinanceCashBankReconciliationBase(props: Props) {
     const key = isCash ? "cashSessionId" : isBank ? "statementId" : "reconciliationId";
     const id = searchParams.get(key);
     if (!id) return;
-    void loadExact(id).then((record) => { if (record) setDetail(record); }).catch((error) => setErrorMessage(safeFinanceError(error, t("cashDetailUnavailable"))));
+    void loadExact(id).then((record) => { if (record) setDetail(record); }).catch((error) => setErrorMessage(safeFinanceError(error, t("cashDetailUnavailable"), locale)));
   }, [isBank, isCash, loadExact, searchParams, t]);
 
   async function openDetail(record: FinanceRecord) {
     setErrorMessage("");
     try { setDetail(await loadExact(record.id) || record); }
-    catch (error) { setDetail(record); setErrorMessage(safeFinanceError(error, t("cashDetailUnavailable"))); }
+    catch (error) { setDetail(record); setErrorMessage(safeFinanceError(error, t("cashDetailUnavailable"), locale)); }
   }
 
   function mutationSuccess(copy: string) {
@@ -326,7 +326,7 @@ export function EnterpriseFinanceCashBankReconciliationBase(props: Props) {
         openingAmount: String(form.get("openingAmount") || "0"),
       });
       setCreateOpen(false); mutationSuccess(t("cashSessionOpened"));
-    } catch (error) { setErrorMessage(safeFinanceError(error, t("openingFailed"))); }
+    } catch (error) { setErrorMessage(safeFinanceError(error, t("openingFailed"), locale)); }
     finally { setBusy(false); }
   }
 
@@ -345,7 +345,7 @@ export function EnterpriseFinanceCashBankReconciliationBase(props: Props) {
         approverUserId: String(form.get("approverUserId") || ""),
       });
       setCloseTarget(null); mutationSuccess(t("cashCloseSubmitted"));
-    } catch (error) { setErrorMessage(safeFinanceError(error, t("closeFailed"))); }
+    } catch (error) { setErrorMessage(safeFinanceError(error, t("closeFailed"), locale)); }
     finally { setBusy(false); }
   }
 
@@ -361,7 +361,7 @@ export function EnterpriseFinanceCashBankReconciliationBase(props: Props) {
         revision: validateTarget.revision,
       });
       setValidateTarget(null); mutationSuccess(t("cashDecisionRecorded"));
-    } catch (error) { setErrorMessage(safeFinanceError(error, t("validationFailed"))); }
+    } catch (error) { setErrorMessage(safeFinanceError(error, t("validationFailed"), locale)); }
     finally { setBusy(false); }
   }
 
@@ -384,7 +384,7 @@ export function EnterpriseFinanceCashBankReconciliationBase(props: Props) {
       }else parsed = parseBankCsv(await file.text(), locale);
       if (parsed.length > 10_000) throw new Error(t("bankStatementTooManyRows"));
       setCsvLines(parsed); setCsvName(file.name); setErrorMessage("");
-    } catch (error) { setErrorMessage(safeFinanceError(error, t("csvParsingFailed"))); }
+    } catch (error) { setErrorMessage(safeFinanceError(error, t("csvParsingFailed"), locale)); }
     finally {setBusy(false);}
   }
 
@@ -406,7 +406,7 @@ export function EnterpriseFinanceCashBankReconciliationBase(props: Props) {
         lines: csvLines,
       });
       setCreateOpen(false); setCsvLines([]); setCsvName(""); mutationSuccess(t("statementImported"));
-    } catch (error) { setErrorMessage(safeFinanceError(error, t("importFailed"))); }
+    } catch (error) { setErrorMessage(safeFinanceError(error, t("importFailed"), locale)); }
     finally { setBusy(false); }
   }
 
@@ -423,7 +423,7 @@ export function EnterpriseFinanceCashBankReconciliationBase(props: Props) {
         ...(physicalMode ? {physicalCount: String(form.get("physicalCount") || ""), evidenceReference: String(form.get("evidenceReference") || ""), attest: form.get("attest") === "on"} : {}),
       });
       setCreateOpen(false); setReconciliationAccountId(""); setPhysicalMode(false); mutationSuccess(t("reconciliationPrepared"));
-    } catch (error) { setErrorMessage(safeFinanceError(error, t("creationFailed"))); }
+    } catch (error) { setErrorMessage(safeFinanceError(error, t("creationFailed"), locale)); }
     finally { setBusy(false); }
   }
 
@@ -442,7 +442,7 @@ export function EnterpriseFinanceCashBankReconciliationBase(props: Props) {
       });
       const refreshed = await loadExact(matchTarget.id);
       setMatchTarget(null); setDetail(refreshed); setRefreshKey((value) => value + 1); setMessage(t("matchRecorded"));
-    } catch (error) { setErrorMessage(safeFinanceError(error, t("matchingFailed"))); }
+    } catch (error) { setErrorMessage(safeFinanceError(error, t("matchingFailed"), locale)); }
     finally { setBusy(false); }
   }
 
@@ -457,7 +457,7 @@ export function EnterpriseFinanceCashBankReconciliationBase(props: Props) {
       });
       setDetail(await loadExact(record.id)); setRefreshKey(value => value + 1); setMessage(t("matchRecorded"));
     } catch (error) {
-      setErrorMessage(safeFinanceError(error, t("matchingFailed")));
+      setErrorMessage(safeFinanceError(error, t("matchingFailed"), locale));
     } finally { setBusy(false); }
   }
 
@@ -471,7 +471,7 @@ export function EnterpriseFinanceCashBankReconciliationBase(props: Props) {
       const body=await response.json().catch(()=>null);
       if(!response.ok)throw new Error(body?.message||tx(locale,"Annulation impossible.","Unable to cancel."));
       setDetail(await loadExact(cancelTarget.record.id));setCancelTarget(null);setRefreshKey(value=>value+1);setMessage(tx(locale,"Annulation enregistrée.","Cancellation recorded."));
-    }catch(error){setErrorMessage(safeFinanceError(error,tx(locale,"Annulation impossible.","Unable to cancel.")));}
+    }catch(error){setErrorMessage(safeFinanceError(error, tx(locale,"Annulation impossible.","Unable to cancel."), locale));}
     finally{setBusy(false);}
   }
   async function reconciliationTransition(event: FormEvent<HTMLFormElement>) {
@@ -488,7 +488,7 @@ export function EnterpriseFinanceCashBankReconciliationBase(props: Props) {
         ...(actionTarget.action === "SUBMIT" ? { approverUserId: String(form.get("approverUserId") || "") } : {}),
       });
       setActionTarget(null); mutationSuccess(t("reconciliationCompleted"));
-    } catch (error) { setErrorMessage(safeFinanceError(error, t("completionFailed"))); }
+    } catch (error) { setErrorMessage(safeFinanceError(error, t("completionFailed"), locale)); }
     finally { setBusy(false); }
   }
 

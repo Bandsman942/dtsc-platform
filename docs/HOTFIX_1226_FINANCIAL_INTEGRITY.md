@@ -73,3 +73,6 @@ Consolidation propriétaire par boutique et devise, sessions validées distincte
 
 ## Recette automatisée ciblée (candidate)
 `tests/e2e/issue-1226-financial-integrity.spec.mjs` est exécuté après la recette #662 dans son environnement PostgreSQL et Redis isolé, avec garde stricte CI/localhost/base jetable. Vérifie réellement ouverture, fonds réservés, deux acteurs, step-up, passation, fermeture bloquée, solde de session, absence de posting d'écart non qualifié, plusieurs tailles écran, aller-retour XLSX, solde daté, allocations partielles/groupées, annulation et approbation indépendante. Cette recette n'est pas le OWNER_E2E manuel et ne couvre pas encore tous les cas historiques ou secteurs. Aucun résultat anticipé.
+
+## Recette du SHA 36c58ce3
+- Scénario caisse multi-caissiers et passation : PASS réel PostgreSQL/navigateur (#45439315326). Scénario bancaire : échec HTTP 500 lors de l'import synchrone ; la création imbriquée comportait un organizationId redondant avec la relation composite. Correctif candidat : création parent puis createMany des lignes tenant-scoped dans la même transaction, sans modification de la recette. QA #986 : format de propagation de locale corrigé et locale explicite également en rapprochement. À rejouer sur le dernier SHA.

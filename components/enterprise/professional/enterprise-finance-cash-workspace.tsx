@@ -121,7 +121,7 @@ export function EnterpriseFinanceCashWorkspace({ organizationId, organizationNam
       if (!active) return;
       if (record) openDetail(record);
       else setError(locale === "fr" ? "Session introuvable ou non autorisée." : "Session not found or not authorized.");
-    }).catch(error => { if (active) setError(safeFinanceError(error,locale === "fr" ? "Impossible d’ouvrir la session." : "Unable to open the session.",locale)); });
+    }).catch(error => { if (active) setError(safeFinanceError(error,locale === "fr" ? "Impossible d’ouvrir la session." : "Unable to open the session.", locale)); });
     return () => { active = false; };
   }, [organizationId, openDetail, searchParams, locale]);
 
@@ -216,7 +216,7 @@ export function EnterpriseFinanceCashWorkspace({ organizationId, organizationNam
       await financeMutation(`/api/enterprise/${organizationId}/cash-sessions/${varianceTarget.session.id}/variance-review`,{discrepancyId:varianceTarget.variance.id,revision:varianceTarget.session.revision,decision:varianceDecision,verifiedCount:String(form.get("verifiedCount")||""),evidenceReference:String(form.get("evidenceReference")||""),reason:String(form.get("reason")||""),attest:form.get("attest")==="on"});
       const fresh=await fetchOperationalFinanceRecord<CashSession>(`/api/enterprise/${organizationId}/cash-sessions`,varianceTarget.session.id);
       setVarianceTarget(null);setDetail(fresh);setRefreshKey(value=>value+1);setMessage(t("cashVarianceReviewed"));
-    } catch(error) {setError(safeFinanceError(error,t("cashVarianceReviewFailed"),locale));}
+    } catch(error) {setError(safeFinanceError(error,t("cashVarianceReviewFailed"), locale));}
     finally {setBusy(false);}
   }
 
@@ -277,7 +277,7 @@ export function EnterpriseFinanceCashWorkspace({ organizationId, organizationNam
         {detail.varianceQualificationPending ? <p role="status" className="rounded-xl border border-amber-500/30 p-3 text-sm text-dtsc-ink">{t("cashVarianceQualificationPending")}</p> : null}
         {(detail.varianceReviews || []).map(variance => <section key={variance.id} className="grid min-w-0 gap-2 rounded-xl border border-dtsc-border p-3">
           <strong>{t("cashVarianceReviewTitle")}</strong>
-          <p className="text-sm">{financeMoney(variance.amount,String(detail.financialAccount?.currencyCode || ""),locale)} · {t(variance.status==="PENDING_QUALIFICATION"?"cashVarianceAwaitingReview":variance.status==="APPROVED"?"cashVarianceLegacy":variance.status==="POSTED"?"cashVariancePosted":variance.status==="LEGACY_REVERSED"?"cashVarianceLegacyReversed":variance.status==="REAL_REVERSED"?"cashVarianceRealReversed":"cashVarianceCountCorrected")}</p>
+          <p className="text-sm">{financeMoney(variance.amount,String(detail.financialAccount?.currencyCode || ""), locale)} · {t(variance.status==="PENDING_QUALIFICATION"?"cashVarianceAwaitingReview":variance.status==="APPROVED"?"cashVarianceLegacy":variance.status==="POSTED"?"cashVariancePosted":variance.status==="LEGACY_REVERSED"?"cashVarianceLegacyReversed":variance.status==="REAL_REVERSED"?"cashVarianceRealReversed":"cashVarianceCountCorrected")}</p>
           <p className="break-words text-xs text-dtsc-muted">{variance.reason}</p>
           {detail.canReviewVariance && ["PENDING_QUALIFICATION","APPROVED","POSTED"].includes(variance.status) ? <Button variant="outline" disabled={busy} onClick={()=>{setVarianceDecision(variance.status==="POSTED"?"REVERSE_REAL":"CORRECT_COUNT");setVarianceTarget({session:detail,variance});setDetail(null);}}>{t("cashVarianceReviewTitle")}</Button> : null}
         </section>)}

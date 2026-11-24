@@ -77,12 +77,12 @@ export async function importBankStatement(organizationId: string, actorUserId: s
         closingBalance: new Prisma.Decimal(input.closingBalance),
         privateDocumentId: input.privateDocumentId || null,
         importedByUserId: actorUserId,
-        lines: { create: input.lines.map((line, index) => ({ organizationId, lineNumber: index + 1, transactionDate: line.transactionDate, valueDate: line.valueDate || null, description: line.description.replace(/^[=+\-@]/, "'"), reference: line.reference || null, counterparty: line.counterparty || null, debit: new Prisma.Decimal(line.debit), credit: new Prisma.Decimal(line.credit), currencyCode: input.currencyCode, runningBalance: line.runningBalance ? new Prisma.Decimal(line.runningBalance) : null })) },
       },
-      include: { lines: true },
     });
-    await publishFinanceEvent(tx, { organizationId, entityType: "EnterpriseBankStatement", entityId: statement.id, eventType: "BANK_STATEMENT_IMPORTED", summary: `Bank statement ${statement.reference} imported`, actorUserId, toStatus: "IMPORTED", metadataJson: { lineCount: statement.lines.length, currency: statement.currencyCode } });
-    return statement;
+    await tx.enterpriseBankStatementLine.createMany({data: input.lines.map((line, index) => ({ organizationId, bankStatementId: statement.id, lineNumber: index + 1, transactionDate: line.transactionDate, valueDate: line.valueDate || null, description: line.description.replace(/^[=+\-@]/, "'"), reference: line.reference || null, counterparty: line.counterparty || null, debit: new Prisma.Decimal(line.debit), credit: new Prisma.Decimal(line.credit), currencyCode: input.currencyCode, runningBalance: line.runningBalance ? new Prisma.Decimal(line.runningBalance) : null }))});
+    const lines=await tx.enterpriseBankStatementLine.findMany({where:{organizationId,bankStatementId:statement.id},orderBy:{lineNumber:"asc"}});
+    await publishFinanceEvent(tx, { organizationId, entityType: "EnterpriseBankStatement", entityId: statement.id, eventType: "BANK_STATEMENT_IMPORTED", summary: `Bank statement ${statement.reference} imported`, actorUserId, toStatus: "IMPORTED", metadataJson: { lineCount: lines.length, currency: statement.currencyCode } });
+    return {...statement,lines};
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 30000 });
 }
 
