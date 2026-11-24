@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { retailPostedSalesPredicate } from "@/lib/enterprise/retail/posted-sales-classification";
 
 type PostedPnlRow = {
   siteId: string | null;
@@ -7,6 +8,7 @@ type PostedPnlRow = {
   accountType: string;
   accountSubtype: string | null;
   isCostOfSales: boolean;
+  isSalesRevenue: boolean;
   amount: Prisma.Decimal;
   lineCount: bigint;
 };
@@ -16,6 +18,9 @@ type SitePnl = {
   currencyCode: string;
   revenue: string;
   otherIncome: string;
+  salesRevenue: string;
+  otherProducts: string;
+  totalProducts: string;
   costOfSales: string;
   operatingExpenses: string;
   grossMargin: string;
@@ -28,6 +33,7 @@ type PnlAccumulator = {
   currencyCode: string;
   revenue: Prisma.Decimal;
   otherIncome: Prisma.Decimal;
+  salesRevenue: Prisma.Decimal;
   costOfSales: Prisma.Decimal;
   operatingExpenses: Prisma.Decimal;
   journalLineCount: number;
@@ -50,6 +56,7 @@ export async function retailPostedSiteLedger(
   const rows = await prisma.$queryRaw<PostedPnlRow[]>(Prisma.sql`
     SELECT l."siteId" AS "siteId", e."functionalCurrencyCode" AS "currencyCode",
       a."accountType" AS "accountType", a."accountSubtype" AS "accountSubtype",
+      ${retailPostedSalesPredicate(organizationId)} AS "isSalesRevenue",
       CASE WHEN a."accountType" IN ('EXPENSE', 'OTHER_EXPENSE') AND (
         a."accountSubtype" = 'COST_OF_SALES' OR EXISTS (
           SELECT 1 FROM "EnterpriseAccountMapping" mapping
@@ -80,12 +87,13 @@ export async function retailPostedSiteLedger(
     if (!current) {
       current = {
         siteId: row.siteId, currencyCode: row.currencyCode,
-        revenue: new Prisma.Decimal(0), otherIncome: new Prisma.Decimal(0),
+        revenue: new Prisma.Decimal(0), otherIncome: new Prisma.Decimal(0), salesRevenue: new Prisma.Decimal(0),
         costOfSales: new Prisma.Decimal(0), operatingExpenses: new Prisma.Decimal(0),
         journalLineCount: 0,
       };
       totals.set(key, current);
     }
+    if (row.isSalesRevenue) current.salesRevenue = current.salesRevenue.plus(row.amount);
     if (row.accountType === "REVENUE") current.revenue = current.revenue.plus(row.amount);
     else if (row.accountType === "OTHER_INCOME") current.otherIncome = current.otherIncome.plus(row.amount);
     else if (row.isCostOfSales) current.costOfSales = current.costOfSales.plus(row.amount);
@@ -97,9 +105,12 @@ export async function retailPostedSiteLedger(
     currencyCode: entry.currencyCode,
     revenue: entry.revenue.toFixed(6),
     otherIncome: entry.otherIncome.toFixed(6),
+    salesRevenue: entry.salesRevenue.toFixed(6),
+    otherProducts: entry.revenue.plus(entry.otherIncome).minus(entry.salesRevenue).toFixed(6),
+    totalProducts: entry.revenue.plus(entry.otherIncome).toFixed(6),
     costOfSales: entry.costOfSales.toFixed(6),
     operatingExpenses: entry.operatingExpenses.toFixed(6),
-    grossMargin: entry.revenue.minus(entry.costOfSales).toFixed(6),
+    grossMargin: entry.salesRevenue.minus(entry.costOfSales).toFixed(6),
     operatingResult: entry.revenue.plus(entry.otherIncome).minus(entry.costOfSales).minus(entry.operatingExpenses).toFixed(6),
     journalLineCount: entry.journalLineCount,
   });

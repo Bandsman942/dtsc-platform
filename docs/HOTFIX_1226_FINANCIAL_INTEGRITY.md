@@ -76,3 +76,6 @@ Consolidation propriétaire par boutique et devise, sessions validées distincte
 
 ## Recette du SHA 36c58ce3
 - Scénario caisse multi-caissiers et passation : PASS réel PostgreSQL/navigateur (#45439315326). Scénario bancaire : échec HTTP 500 lors de l'import synchrone ; la création imbriquée comportait un organizationId redondant avec la relation composite. Correctif candidat : création parent puis createMany des lignes tenant-scoped dans la même transaction, sans modification de la recette. QA #986 : format de propagation de locale corrigé et locale explicite également en rapprochement. À rejouer sur le dernier SHA.
+
+## Tranche K — ventilation des produits candidate
+Le KPI produits totalise désormais REVENUE et OTHER_INCOME. Les ventes/services sont identifiés par mappings de vente ou classe 70 d'un plan SYSCOHADA explicitement identifié; mappings d'écart caisse et FX exclus en priorité. Le résidu est nommé autres produits/non ventilés (les comptes personnalisés non mappés ne sont pas supposés des ventes). Marge brute = ventes identifiées moins COGS; résultat d'exploitation inchangé. Même prédicat pour agrégats, détail et exports. Les anciennes colonnes REVENUE/OTHER_INCOME sont conservées comme catégories techniques dans l'export. Aucune reclassification des écritures ni certification de compte historique. CI du dernier SHA requise.

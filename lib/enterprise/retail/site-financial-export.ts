@@ -5,6 +5,9 @@ export type RetailPostedLedger = {
   currencyCode: string;
   revenue: string;
   otherIncome: string;
+  salesRevenue?: string;
+  otherProducts?: string;
+  totalProducts?: string;
   costOfSales: string;
   operatingExpenses: string;
   grossMargin: string;
@@ -88,6 +91,7 @@ export function buildRetailPostedLedgerExport(input: {
   const status = en ? "PROVISIONAL — NOT CERTIFIED" : "PROVISOIRE — NON CERTIFIÉ";
   const toRow = (shop: string, entry: RetailPostedLedger, attributed: boolean) => ({
     site: shop, currency: entry.currencyCode, revenue: entry.revenue,
+    salesRevenue: entry.salesRevenue ?? (en?"NOT DETERMINED":"NON DÉTERMINÉ"), otherProducts: entry.otherProducts ?? (en?"NOT DETERMINED":"NON DÉTERMINÉ"), totalProducts: entry.totalProducts ?? (en?"NOT DETERMINED":"NON DÉTERMINÉ"),
     costOfSales: entry.costOfSales, otherIncome: entry.otherIncome,
     operatingExpenses: entry.operatingExpenses, grossMargin: entry.grossMargin,
     operatingResult: entry.operatingResult, journalLineCount: entry.journalLineCount,
@@ -111,10 +115,13 @@ export function buildRetailPostedLedgerExport(input: {
     columns: [
       { key: "site", label: en ? "Store" : "Boutique" },
       { key: "currency", label: en ? "Functional currency" : "Devise fonctionnelle" },
-      { key: "revenue", label: en ? "Revenue" : "Produits" },
+      { key: "totalProducts", label: en ? "Total income" : "Total des produits" },
+      { key: "salesRevenue", label: en ? "Sales and services" : "Ventes et services" },
+      { key: "otherProducts", label: en ? "Other / unclassified income" : "Autres produits / non ventilés" },
+      { key: "revenue", label: en ? "REVENUE account types" : "Comptes de type REVENUE" },
       { key: "costOfSales", label: en ? "Cost of sales" : "Coût des ventes" },
       { key: "grossMargin", label: en ? "Gross margin" : "Marge brute" },
-      { key: "otherIncome", label: en ? "Other income" : "Autres produits" },
+      { key: "otherIncome", label: en ? "OTHER_INCOME account types" : "Comptes de type OTHER_INCOME" },
       { key: "operatingExpenses", label: en ? "Other expenses" : "Autres charges" },
       { key: "operatingResult", label: en ? "Operating result" : "Résultat d'exploitation" },
       { key: "journalLineCount", label: en ? "Journal lines" : "Lignes comptables" },
@@ -147,7 +154,9 @@ const metricLabels: Record<RetailExecutiveMetric, [string, string]> = {
   invoiceAllocated: ["Factures de la période réglées à date", "Period invoices paid to date"],
   outstanding: ["Créances totales ouvertes à date", "Current open receivables"], overdue: ["Créances échues à date", "Current overdue receivables"],
   expenses: ["Dépenses approuvées (non forcément payées)", "Approved expenses (not necessarily paid)"],
-  postedRevenue: ["Produits comptabilisés provisoires", "Provisional posted revenue"], postedCogs: ["Coût des ventes comptabilisé", "Posted COGS"],
+  postedRevenue: ["Total des produits comptabilisés provisoires", "Total provisional posted income"],
+  postedSalesRevenue: ["Ventes et services comptabilisés", "Posted sales and services"],
+  postedOtherProducts: ["Autres produits / non ventilés", "Other / unclassified income"], postedCogs: ["Coût des ventes comptabilisé", "Posted COGS"],
   postedGrossMargin: ["Marge brute comptabilisée provisoire", "Provisional posted gross margin"],
   postedOperatingResult: ["Résultat d'exploitation provisoire", "Provisional operating result"],
   mobileMoneyDeposits: ["Principal dépôts Mobile Money (hors CA)", "Mobile Money deposit principal (not revenue)"],

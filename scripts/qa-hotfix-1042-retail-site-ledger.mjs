@@ -10,12 +10,13 @@ const source = fs.readFileSync("lib/enterprise/retail/site-financial-report.ts",
 const module = { exports: {} };
 let calls = 0;
 const groupedRows = [
-  { siteId: "site-a", currencyCode: "CDF", accountType: "REVENUE", accountSubtype: "REVENUE", isCostOfSales: false, amount: new Prisma.Decimal("100.50"), lineCount: 2n },
+  { siteId: "site-a", currencyCode: "CDF", accountType: "REVENUE", isSalesRevenue:true, accountSubtype: "REVENUE", isCostOfSales: false, amount: new Prisma.Decimal("100.50"), lineCount: 2n },
+  { siteId: "site-a", currencyCode: "CDF", accountType: "REVENUE", isSalesRevenue:false, accountSubtype: "REVENUE", isCostOfSales:false, amount:new Prisma.Decimal("7"),lineCount:1n },
   { siteId: "site-a", currencyCode: "CDF", accountType: "EXPENSE", accountSubtype: null, isCostOfSales: true, amount: new Prisma.Decimal("40.20"), lineCount: 1n },
   { siteId: "site-a", currencyCode: "CDF", accountType: "EXPENSE", accountSubtype: "OPERATING_EXPENSES", isCostOfSales: false, amount: new Prisma.Decimal("10.30"), lineCount: 1n },
   { siteId: "site-a", currencyCode: "CDF", accountType: "OTHER_INCOME", accountSubtype: "OTHER_INCOME", isCostOfSales: false, amount: new Prisma.Decimal("5.01"), lineCount: 1n },
-  { siteId: "site-a", currencyCode: "USD", accountType: "REVENUE", accountSubtype: "REVENUE", isCostOfSales: false, amount: new Prisma.Decimal("20"), lineCount: 1n },
-  { siteId: "site-b", currencyCode: "CDF", accountType: "REVENUE", accountSubtype: "REVENUE", isCostOfSales: false, amount: new Prisma.Decimal("-10.50"), lineCount: 2n },
+  { siteId: "site-a", currencyCode: "USD", accountType: "REVENUE", isSalesRevenue:true, accountSubtype: "REVENUE", isCostOfSales: false, amount: new Prisma.Decimal("20"), lineCount: 1n },
+  { siteId: "site-b", currencyCode: "CDF", accountType: "REVENUE", isSalesRevenue:true, accountSubtype: "REVENUE", isCostOfSales: false, amount: new Prisma.Decimal("-10.50"), lineCount: 2n },
   { siteId: null, currencyCode: "CDF", accountType: "EXPENSE", accountSubtype: "OPERATING_EXPENSES", isCostOfSales: false, amount: new Prisma.Decimal("12"), lineCount: 1n },
 ];
 vm.runInNewContext(ts.transpileModule(source, {
@@ -24,6 +25,7 @@ vm.runInNewContext(ts.transpileModule(source, {
   module, exports: module.exports,
   require: (id) => {
     if (id === "@prisma/client") return { Prisma };
+    if (id === "@/lib/enterprise/retail/posted-sales-classification") return {retailPostedSalesPredicate:()=>Prisma.sql`TRUE`};
     if (id === "@/lib/prisma") return { prisma: { $queryRaw: async (sql) => {
       calls += 1;
       const statement = sql.strings.join("?");
@@ -47,13 +49,16 @@ const report = await retailPostedSiteLedger("tenant", new Date("2026-11-01"), ne
 assert.equal(calls, 1, "Single grouped tenant/site/currency query");
 assert.equal(report.bySite.length, 3, "Currency figures never mixed");
 const cdf = report.bySite.find((row) => row.siteId === "site-a" && row.currencyCode === "CDF");
-assert.equal(cdf.revenue, "100.500000");
+assert.equal(cdf.revenue, "107.500000");
+assert.equal(cdf.salesRevenue,"100.500000");
+assert.equal(cdf.otherProducts,"12.010000");
+assert.equal(cdf.totalProducts,"112.510000");
 assert.equal(cdf.costOfSales, "40.200000");
 assert.equal(cdf.operatingExpenses, "10.300000");
 assert.equal(cdf.otherIncome, "5.010000");
 assert.equal(cdf.grossMargin, "60.300000");
-assert.equal(cdf.operatingResult, "55.010000");
-assert.equal(cdf.journalLineCount, 5);
+assert.equal(cdf.operatingResult, "62.010000");
+assert.equal(cdf.journalLineCount, 6);
 assert.equal(report.bySite.find((row) => row.currencyCode === "USD").revenue, "20.000000");
 assert.equal(report.bySite.find((row) => row.siteId === "site-b").revenue, "-10.500000", "Reversals retain their signed effect");
 assert.equal(report.unallocated.length, 1, "Entries without a store must be flagged, not allocated proportionally");

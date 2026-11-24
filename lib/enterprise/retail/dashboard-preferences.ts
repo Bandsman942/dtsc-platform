@@ -10,7 +10,7 @@ export const retailDashboardPreferencesSchema = z.object({
   warnOutstandingByCurrency: z.record(z.string().regex(/^[A-Z]{3}$/), z.number().min(0).max(1_000_000_000_000)).default({}),
   warnStockDays: z.number().int().min(1).max(365),
   showLegacyPos: z.boolean(),
-  favoriteMetrics: z.array(z.enum(RETAIL_EXECUTIVE_METRICS)).max(13).refine((values) => new Set(values).size === values.length, "Indicateurs en double").default([]),
+  favoriteMetrics: z.array(z.enum(RETAIL_EXECUTIVE_METRICS)).max(15).refine((values) => new Set(values).size === values.length, "Indicateurs en double").default([]),
 }).strict();
 export type RetailDashboardPreferences = z.infer<typeof retailDashboardPreferencesSchema>;
 export const DEFAULT_RETAIL_DASHBOARD_PREFERENCES: RetailDashboardPreferences = {
