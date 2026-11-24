@@ -78,6 +78,7 @@ const FINANCE_ERROR_MESSAGES: Record<string, string> = {
   BANK_STATEMENT_ROW_INVALID: "Une ligne du relevé comporte des données incorrectes.",
   BANK_STATEMENT_CLOSING_BALANCE_MISMATCH: "Le solde final ne correspond pas aux mouvements du relevé.",
   BANK_STATEMENT_RUNNING_BALANCE_MISMATCH: "Le solde courant ne correspond pas aux mouvements précédents.",
+  BANK_STATEMENT_PERIOD_OVERLAP: "Un relevé couvre déjà tout ou partie de cette période pour ce compte. Vérifiez le relevé existant avant tout nouvel import.",
   BANK_STATEMENT_DUPLICATE_LINE: "Une ligne identique référencée est répétée.",
   CASH_DISCREPANCY_REASON_REQUIRED: "Un motif est obligatoire lorsqu’un écart de caisse est constaté.",
   ACCOUNTING_APPROVAL_CONFLICT: "Cette validation a déjà changé. Actualisez les données avant de prendre une nouvelle décision.",

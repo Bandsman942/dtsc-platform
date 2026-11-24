@@ -1,6 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { bankStatementBalanceIssues } from "@/lib/enterprise/accounting/bank-statement-balance-validation";
+import { bankStatementBalanceIssues, bankStatementOverlapWhere } from "@/lib/enterprise/accounting/bank-statement-balance-validation";
 import { requireRetailSiteCapability, retailFinanceReadSiteScope, retailStaffIsolationIsEnabled } from "@/lib/enterprise/retail/site-access";
 import { datedReconciliationBalanceTx, reconciliationTreasuryWindow } from "@/lib/enterprise/accounting/reconciliation-dated-balance";
 import { captureCashPhysicalSnapshotTx } from "@/lib/enterprise/accounting/cash-physical-reconciliation";
@@ -62,8 +62,10 @@ export async function importBankStatement(organizationId: string, actorUserId: s
   const issues=bankStatementBalanceIssues(input);
   if(issues.length) throw new EnterpriseAccountingError(issues[0].code,422,{issues});
   return prisma.$transaction(async (tx) => {
-    const account = await tx.enterpriseFinancialAccount.findFirst({ where: { id: input.financialAccountId, organizationId, accountType: { in: ["BANK", "MOBILE_MONEY"] }, status: "ACTIVE" } });
+    await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterpriseFinancialAccount" WHERE id = ${input.financialAccountId} AND "organizationId" = ${organizationId} FOR UPDATE`);
+    const account = await tx.enterpriseFinancialAccount.findFirst({ where: { id: input.financialAccountId, organizationId, accountType: { in: ["BANK", "MOBILE_MONEY"] }, status: "ACTIVE", archivedAt:null } });
     if (!account || account.currencyCode !== input.currencyCode) throw new EnterpriseAccountingError("BANK_STATEMENT_ACCOUNT_INVALID", 409);
+    if(await tx.enterpriseBankStatement.findFirst({where:bankStatementOverlapWhere(organizationId,input),select:{id:true}})) throw new EnterpriseAccountingError("BANK_STATEMENT_PERIOD_OVERLAP",409);
     const statement = await tx.enterpriseBankStatement.create({
       data: {
         organizationId,

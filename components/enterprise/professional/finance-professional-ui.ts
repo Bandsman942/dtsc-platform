@@ -74,6 +74,7 @@ const ENUM_LABELS: Record<FinanceLocale, Record<string, string>> = {
 
 export const FINANCE_ERROR_MESSAGES: Record<FinanceLocale, Record<string, string>> = {
   fr: {
+    BANK_STATEMENT_PERIOD_OVERLAP: "Un relevé couvre déjà cette période. Vérifiez le relevé existant avant tout nouvel import.",
     SUPPLIER_RETURN_NONRECOVERABLE_COST_RECONCILIATION_REQUIRED: "La TVA non récupérable exige une réception et une valorisation d'origine entièrement rapprochées, sans consommation ni opération ouverte. Vérifiez les pièces et la période avant de poursuivre.",
     INVENTORY_ACQUISITION_COST_DOMAIN_CORRECTION_REQUIRED: "Ce coût de stock intègre une taxe non récupérable. Un avoir ou une contrepassation isolée déséquilibrerait le stock et la comptabilité. Utilisez une correction coordonnée lorsqu’elle sera disponible.",
     INVENTORY_ACQUISITION_COST_HISTORY_REQUIRED: "Cette date exige une reconstitution historique du stock valorisé. Consultez un état déjà enregistré ou la valorisation actuelle ; aucun nouvel état historique approximatif n’a été créé.",
@@ -225,6 +226,7 @@ export const FINANCE_ERROR_MESSAGES: Record<FinanceLocale, Record<string, string
     FINANCE_NETWORK_UNAVAILABLE: "La connexion a été interrompue. Votre opération n'est pas confirmée ; vérifiez son statut avant de réessayer."
   },
   en: {
+    BANK_STATEMENT_PERIOD_OVERLAP: "An existing statement overlaps this period. Review it before importing again.",
     SUPPLIER_RETURN_NONRECOVERABLE_COST_RECONCILIATION_REQUIRED: "Non-recoverable VAT requires a fully reconciled original receipt and valuation, with no consumption or open stock operation. Review the documents and period before continuing.",
     INVENTORY_ACQUISITION_COST_DOMAIN_CORRECTION_REQUIRED: "This stock cost includes non-recoverable tax. A standalone credit or reversal would leave inventory and accounting inconsistent. Use a coordinated correction when available.",
     INVENTORY_ACQUISITION_COST_HISTORY_REQUIRED: "This date requires historical inventory valuation replay. Consult an existing statement or current valuation; no inaccurate historical statement was created.",

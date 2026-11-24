@@ -135,3 +135,9 @@ const closeExport=read("app/api/enterprise/[organizationId]/retail/daily-close/r
 for(const marker of ["dailyClose:where","RepeatableRead","take:1001","RETAIL_CLOSE_EXPORT_LIMIT"])assert.ok(closeExport.includes(marker),marker);
 for(const marker of ["downloadProfessionalCsv","downloadProfessionalXlsx","downloadProfessionalPdf","exportFilteredCloses"])assert.ok(ui.includes(marker)||read("components/enterprise/professional/retail-daily-close-workspace.tsx").includes(marker),marker);
 console.log("#1226 filtered closure export and reference masking: PASS");
+
+const {bankStatementOverlapWhere}=await import("../lib/enterprise/accounting/bank-statement-balance-validation.ts");
+assert.deepEqual(bankStatementOverlapWhere("tenant",{financialAccountId:"bank",periodStart:dt,periodEnd:dt}),{organizationId:"tenant",financialAccountId:"bank",periodStart:{lte:dt},periodEnd:{gte:dt}});
+assert.deepEqual(bankStatementOverlapWhere("tenant",{financialAccountId:"bank",periodStart:dt,periodEnd:dt},"resume").id,{not:"resume"});
+for(const source of [treasury,read("lib/enterprise/bulk-jobs/queue.ts"),read("lib/enterprise/bulk-jobs/worker.ts")])assert.match(source,/bankStatementOverlapWhere\(/);
+console.log("#1226 cross-statement period overlap guard: PASS");

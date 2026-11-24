@@ -141,6 +141,10 @@ test.describe.serial("Hotfix #1226 financial integrity (isolated browser and Pos
       const statementInput={financialAccountId:bank.id,reference:"H1226-"+randomUUID(),statementDate:day,periodStart:day,periodEnd:day,currencyCode:"USD",openingBalance:"100",closingBalance:"230",lines:parsed.lines};
       expect((await call(a,"POST",root+"/bank-statements",{...statementInput,closingBalance:"231"})).response.status()).toBe(422);
       const statement=(await ok(a,"POST",root+"/bank-statements",statementInput)).statement;
+      const repeated=await call(a,"POST",root+"/bank-statements",{...statementInput,reference:"H1226-DUP-"+randomUUID()});
+      expect(repeated.response.status(),JSON.stringify(repeated.body)).toBe(409);
+      expect(repeated.body.error).toBe("BANK_STATEMENT_PERIOD_OVERLAP");
+      expect(await prisma.enterpriseBankStatement.count({where:{organizationId,financialAccountId:bank.id}})).toBe(1);
       const session=(await ok(a,"POST",root+"/reconciliations",{financialAccountId:bank.id,bankStatementId:statement.id,periodStart:day,periodEnd:day})).session;
       expect(String(session.bookBalance)).toBe("230");
       const rec=root+"/reconciliations/"+session.id;

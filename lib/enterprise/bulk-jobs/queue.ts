@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import type { z } from "zod";
 import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
 import { bankStatementSchema } from "@/lib/enterprise/accounting/treasury-schemas";
+import { bankStatementOverlapWhere } from "@/lib/enterprise/accounting/bank-statement-balance-validation";
 import { enterpriseReportGenerateSchema } from "@/lib/enterprise/finance/validators";
 import { prisma } from "@/lib/prisma";
 import {
@@ -158,12 +159,12 @@ async function validateBankStatementQueueInput(
     }),
   ]);
   if (!account || account.currencyCode !== input.currencyCode) throw new EnterpriseAccountingError("BANK_STATEMENT_ACCOUNT_INVALID", 409);
-  if (!statement) return;
-  const resumable = allowFailedResume
+  const resumable = statement && allowFailedResume
     && statement.status === "IMPORT_FAILED"
     && statement.financialAccountId === input.financialAccountId
     && statement.currencyCode === input.currencyCode;
-  if (!resumable) throw new EnterpriseAccountingError("BANK_STATEMENT_REFERENCE_ALREADY_EXISTS", 409, { statementId: statement.id, status: statement.status });
+  if (statement && !resumable) throw new EnterpriseAccountingError("BANK_STATEMENT_REFERENCE_ALREADY_EXISTS", 409, { statementId: statement.id, status: statement.status });
+  if(await prisma.enterpriseBankStatement.findFirst({where:bankStatementOverlapWhere(organizationId,input,resumable?statement.id:undefined),select:{id:true}})) throw new EnterpriseAccountingError("BANK_STATEMENT_PERIOD_OVERLAP",409);
 }
 
 async function stageNormalizedBankInput(organizationId: string, reference: string, normalized: ReturnType<typeof normalizeBankInput>) {
@@ -180,10 +181,12 @@ export async function enqueueBankStatementImport(organizationId: string, actorUs
   if (!isEnterpriseBulkStorageConfigured()) throw new EnterpriseAccountingError("BANK_STATEMENT_BULK_STORAGE_NOT_CONFIGURED", 503);
   const idempotencyKey = bankImportIdempotencyKey(organizationId, input.financialAccountId, input.reference);
   const existing = await prisma.enterpriseDomainEvent.findUnique({ where: { idempotencyKey } });
-  if (existing && existing.processingStatus !== "DEAD") return existing;
-
   const normalized = normalizeBankInput(input);
   const sourceDigest = bankInputDigest(normalized);
+  if (existing && existing.processingStatus !== "DEAD") {
+    if (bankJobPayload(existing.payloadJson)?.sourceDigest !== sourceDigest) throw new EnterpriseAccountingError("BANK_STATEMENT_RETRY_PAYLOAD_MISMATCH",409);
+    return existing;
+  }
 
   if (existing?.processingStatus === "DEAD") {
     const previous = bankJobPayload(existing.payloadJson);
@@ -263,7 +266,10 @@ export async function enqueueBankStatementImport(organizationId: string, actorUs
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
       await deleteEnterpriseBulkArtifact({ organizationId, path: staging.path }).catch(() => undefined);
       const raced = await prisma.enterpriseDomainEvent.findUnique({ where: { idempotencyKey } });
-      if (raced) return raced;
+      if (raced) {
+        if(bankJobPayload(raced.payloadJson)?.sourceDigest !== sourceDigest) throw new EnterpriseAccountingError("BANK_STATEMENT_RETRY_PAYLOAD_MISMATCH",409);
+        return raced;
+      }
     }
     throw error;
   }

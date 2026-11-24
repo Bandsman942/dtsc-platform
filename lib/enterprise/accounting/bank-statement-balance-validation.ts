@@ -42,3 +42,10 @@ export function bankStatementBalanceIssues(input:StatementBalanceInput):BankBala
   if(running!==closing) issues.push({field:"closingBalance",code:"BANK_STATEMENT_CLOSING_BALANCE_MISMATCH"});
   return issues;
 }
+
+/** Reconciliation uses inclusive civil statement periods; overlapping evidence for the same
+ * account is ambiguous even if an importer changes the external statement reference.
+ * A verified durable retry excludes only its own existing statement. */
+export function bankStatementOverlapWhere(organizationId:string,input:{financialAccountId:string;periodStart:Date;periodEnd:Date},resumeStatementId?:string){
+  return {organizationId,financialAccountId:input.financialAccountId,periodStart:{lte:input.periodEnd},periodEnd:{gte:input.periodStart},...(resumeStatementId?{id:{not:resumeStatementId}}:{})};
+}
