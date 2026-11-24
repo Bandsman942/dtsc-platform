@@ -95,3 +95,10 @@ assert.match(treasury,/cancelReconciliationReservation/);
 assert.match(evidence,/finalizeReconciliationEvidenceTx/);
 assert.match(evidence,/paymentTotals.get\(payment.id\)\?\.equals/);
 console.log("#1226 tranche F reservation lifecycle guards: PASS");
+
+assert.match(varianceReview,/CASH_VARIANCE_REVERSAL/);
+assert.match(varianceReview,/nextStatus="REAL_REVERSED"/);
+const audit1226=read("scripts/audit-cash-reconciliation-1226.mjs");
+assert.match(audit1226,/SET TRANSACTION READ ONLY/);
+assert.match(audit1226,/LIMIT=2000/);
+console.log("#1226 tranche G inverse and dry-run guards: PASS");

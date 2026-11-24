@@ -275,9 +275,9 @@ export function EnterpriseFinanceCashWorkspace({ organizationId, organizationNam
         {detail.varianceQualificationPending ? <p role="status" className="rounded-xl border border-amber-500/30 p-3 text-sm text-dtsc-ink">{t("cashVarianceQualificationPending")}</p> : null}
         {(detail.varianceReviews || []).map(variance => <section key={variance.id} className="grid min-w-0 gap-2 rounded-xl border border-dtsc-border p-3">
           <strong>{t("cashVarianceReviewTitle")}</strong>
-          <p className="text-sm">{financeMoney(variance.amount,String(detail.financialAccount?.currencyCode || ""),locale)} · {t(variance.status==="PENDING_QUALIFICATION"?"cashVarianceAwaitingReview":variance.status==="APPROVED"?"cashVarianceLegacy":variance.status==="POSTED"?"cashVariancePosted":variance.status==="LEGACY_REVERSED"?"cashVarianceLegacyReversed":"cashVarianceCountCorrected")}</p>
+          <p className="text-sm">{financeMoney(variance.amount,String(detail.financialAccount?.currencyCode || ""),locale)} · {t(variance.status==="PENDING_QUALIFICATION"?"cashVarianceAwaitingReview":variance.status==="APPROVED"?"cashVarianceLegacy":variance.status==="POSTED"?"cashVariancePosted":variance.status==="LEGACY_REVERSED"?"cashVarianceLegacyReversed":variance.status==="REAL_REVERSED"?"cashVarianceRealReversed":"cashVarianceCountCorrected")}</p>
           <p className="break-words text-xs text-dtsc-muted">{variance.reason}</p>
-          {detail.canReviewVariance && ["PENDING_QUALIFICATION","APPROVED"].includes(variance.status) ? <Button variant="outline" disabled={busy} onClick={()=>{setVarianceDecision("CORRECT_COUNT");setVarianceTarget({session:detail,variance});setDetail(null);}}>{t("cashVarianceReviewTitle")}</Button> : null}
+          {detail.canReviewVariance && ["PENDING_QUALIFICATION","APPROVED","POSTED"].includes(variance.status) ? <Button variant="outline" disabled={busy} onClick={()=>{setVarianceDecision(variance.status==="POSTED"?"REVERSE_REAL":"CORRECT_COUNT");setVarianceTarget({session:detail,variance});setDetail(null);}}>{t("cashVarianceReviewTitle")}</Button> : null}
         </section>)}
         {detail.status === "PENDING_VALIDATION" ? (
           <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3 rounded-xl border border-dtsc-border bg-dtsc-page p-4">
@@ -329,11 +329,11 @@ export function EnterpriseFinanceCashWorkspace({ organizationId, organizationNam
     <Dialog open={Boolean(varianceTarget)} onClose={()=>{if(!busy)setVarianceTarget(null);}} title={t("cashVarianceReviewTitle")} presentation="editor" className="max-w-xl">
       {varianceTarget ? <form onSubmit={submitVarianceReview} className="grid min-w-0 gap-4">
         <p className="text-sm text-dtsc-muted">{t("cashVarianceReviewHelp")}</p>
-        <Field label={t("decision")}><NativeSelect name="decision" value={varianceDecision} onChange={setVarianceDecision} disabled={busy} required items={[{id:"CORRECT_COUNT",label:t("cashVarianceCorrectCount")},...(varianceTarget.variance.status==="PENDING_QUALIFICATION"?[{id:"REAL_VARIANCE",label:t("cashVarianceReal")}]:[])]}/></Field>
+        <Field label={t("decision")}><NativeSelect name="decision" value={varianceDecision} onChange={setVarianceDecision} disabled={busy} required items={varianceTarget.variance.status==="POSTED"?[{id:"REVERSE_REAL",label:t("cashVarianceReverseReal")}]:[{id:"CORRECT_COUNT",label:t("cashVarianceCorrectCount")},...(varianceTarget.variance.status==="PENDING_QUALIFICATION"?[{id:"REAL_VARIANCE",label:t("cashVarianceReal")}]:[])]}/></Field>
         <Field label={t("cashVarianceVerifiedCount")}><Input name="verifiedCount" type="number" min="0" step="0.000001" required disabled={busy}/></Field>
         <Field label={t("cashVarianceEvidence")}><Input name="evidenceReference" minLength={3} maxLength={200} required disabled={busy}/></Field>
         <Field label={t("decisionReasonComment")}><textarea name="reason" minLength={10} maxLength={1000} required rows={4} disabled={busy} className="w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2"/></Field>
-        <p className="text-sm text-dtsc-muted">{t(varianceDecision==="CORRECT_COUNT"?"cashVarianceNoCashEffect":"cashVarianceRealEffect")}</p>
+        <p className="text-sm text-dtsc-muted">{t(varianceDecision==="CORRECT_COUNT"?"cashVarianceNoCashEffect":varianceDecision==="REVERSE_REAL"?"cashVarianceReverseRealEffect":"cashVarianceRealEffect")}</p>
         <label className="flex items-start gap-2 text-sm"><input type="checkbox" name="attest" required disabled={busy}/>{t("cashVarianceAttest")}</label>
         <FinanceCriticalStepUpFields action="APPROVE" locale={locale}/>
         <div data-responsive-actions><Button type="button" variant="outline" disabled={busy} onClick={()=>setVarianceTarget(null)}>{t("cancel")}</Button><Button type="submit" disabled={busy}>{t("saveDecision")}</Button></div>

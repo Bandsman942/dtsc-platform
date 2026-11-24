@@ -1,4 +1,7 @@
 {
+  "cashVarianceRealReversed": "Posted variance subsequently reversed",
+  "cashVarianceReverseReal": "Correct an incorrectly qualified actual variance",
+  "cashVarianceReverseRealEffect": "If the corrected count equals the expected balance and no subsequent reconciliation blocks the correction, a reversal and an inverse movement are recorded. Do not use for a new cash receipt or disbursement.",
   "cashVarianceReviewed": "Cash variance reviewed.",
   "cashVarianceReviewFailed": "Cash variance review failed.",
   "cashVarianceReviewTitle": "Variance review and correction",

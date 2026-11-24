@@ -45,7 +45,7 @@ export async function GET(req: Request, { params }: Params) {
       include: {
         financialAccount: { select: { id: true, code: true, name: true, currencyCode: true } },
         movements: { select: { direction: true, amount: true } },
-        discrepancies: { where: { status: { in: ["PENDING_QUALIFICATION","APPROVED","POSTED","RESOLVED_COUNT_ERROR","LEGACY_REVERSED"] } }, select: { id: true, status: true, amount: true, reason: true, journalEntryId: true, updatedAt: true }, orderBy: { createdAt: "desc" } },
+        discrepancies: { where: { status: { in: ["PENDING_QUALIFICATION","APPROVED","POSTED","RESOLVED_COUNT_ERROR","LEGACY_REVERSED","REAL_REVERSED"] } }, select: { id: true, status: true, amount: true, reason: true, journalEntryId: true, updatedAt: true }, orderBy: { createdAt: "desc" } },
         _count: { select: { movements: true, counts: true, discrepancies: true } },
       },
     }),
@@ -81,7 +81,7 @@ export async function GET(req: Request, { params }: Params) {
       : member.user.name || member.user.email,
   ]));
   const capabilities = auth.access.capabilities;
-  const accountingReview = capabilities.canApprove && rawItems.some(item => item.discrepancies.some(d => ["PENDING_QUALIFICATION","APPROVED"].includes(d.status))) ? await getEnterpriseAccountingAccess({ session: auth.session, organizationId, moduleCode: "FINANCE_ACCOUNTING", action: "manage" }) : null;
+  const accountingReview = capabilities.canApprove && rawItems.some(item => item.discrepancies.some(d => ["PENDING_QUALIFICATION","APPROVED","POSTED"].includes(d.status))) ? await getEnterpriseAccountingAccess({ session: auth.session, organizationId, moduleCode: "FINANCE_ACCOUNTING", action: "manage" }) : null;
   const items = rawItems.map(({ movements, discrepancies, ...item }) => {
     const expectedCurrentAmount = movements.reduce(
       (totalAmount, movement) => movement.direction === "INBOUND" ? totalAmount.plus(movement.amount) : totalAmount.minus(movement.amount),

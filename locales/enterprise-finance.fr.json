@@ -1,4 +1,7 @@
 {
+  "cashVarianceRealReversed": "Écart comptabilisé puis contrepassé",
+  "cashVarianceReverseReal": "Corriger une qualification réelle erronée",
+  "cashVarianceReverseRealEffect": "Si le comptage corrigé rejoint le théorique et qu’aucun rapprochement ultérieur ne l’interdit, une contrepassation et un mouvement inverse sont enregistrés. Ne pas utiliser pour une nouvelle entrée ou sortie d’argent.",
   "cashVarianceReviewed": "Écart de caisse régularisé.",
   "cashVarianceReviewFailed": "La régularisation n’a pas abouti.",
   "cashVarianceReviewTitle": "Qualification et régularisation",

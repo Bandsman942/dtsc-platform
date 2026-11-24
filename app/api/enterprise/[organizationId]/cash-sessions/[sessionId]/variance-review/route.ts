@@ -9,7 +9,7 @@ import { reviewCashVariance } from "@/lib/enterprise/accounting/cash-variance-re
 const schema = z.object({
   discrepancyId:z.string().trim().min(1).max(240),
   revision:z.number().int().positive(),
-  decision:z.enum(["CORRECT_COUNT","REAL_VARIANCE"]),
+  decision:z.enum(["CORRECT_COUNT","REAL_VARIANCE","REVERSE_REAL"]),
   verifiedCount:z.string().regex(/^\d{1,14}(\.\d{1,6})?$/),
   evidenceReference:z.string().trim().min(3).max(200),
   reason:z.string().trim().min(10).max(1000),

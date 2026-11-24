@@ -9,7 +9,7 @@ import { retailFinanceReadSiteScope } from "@/lib/enterprise/retail/site-access"
 
 export type CashVarianceReviewInput = {
   discrepancyId: string; revision: number; evidenceReference: string; reason: string;
-  verifiedCount: string; decision: "CORRECT_COUNT" | "REAL_VARIANCE"; attest: true;
+  verifiedCount: string; decision: "CORRECT_COUNT" | "REAL_VARIANCE" | "REVERSE_REAL"; attest: true;
 };
 
 /** The initial declaration is evidence, not a mutable cash balance. Review is separate,
@@ -24,7 +24,7 @@ export async function reviewCashVariance(organizationId: string, sessionId: stri
     if (session.siteId && session.financialAccount.siteId && session.siteId !== session.financialAccount.siteId) throw new EnterpriseAccountingError("CASH_ACCOUNT_SITE_MISMATCH",409);
     await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterpriseCashDiscrepancy" WHERE id = ${input.discrepancyId} AND "organizationId" = ${organizationId} FOR UPDATE`);
     const discrepancy = await tx.enterpriseCashDiscrepancy.findFirst({ where: { organizationId, id: input.discrepancyId, cashSessionId: session.id } });
-    if (!discrepancy || !["PENDING_QUALIFICATION","APPROVED"].includes(discrepancy.status)) throw new EnterpriseAccountingError("CASH_VARIANCE_REVIEW_CONFLICT",409);
+    if (!discrepancy || !["PENDING_QUALIFICATION","APPROVED","POSTED"].includes(discrepancy.status)) throw new EnterpriseAccountingError("CASH_VARIANCE_REVIEW_CONFLICT",409);
     assertIndependentActor({ actorUserId, relatedUserIds:[session.cashierUserId,session.validatedByUserId,discrepancy.createdByUserId,discrepancy.approvedByUserId], errorCode:"CASH_VARIANCE_REVIEW_FORBIDDEN" });
     if (discrepancy.amount.isZero() || !session.countedClosingAmount.minus(session.expectedClosingAmount).equals(discrepancy.amount)) throw new EnterpriseAccountingError("CASH_VARIANCE_REVIEW_CONFLICT",409);
     const verifiedCount = new Prisma.Decimal(input.verifiedCount);
@@ -35,7 +35,29 @@ export async function reviewCashVariance(organizationId: string, sessionId: stri
     let reversalEntryId: string | null = null;
     let treasuryTransactionId: string | null = null;
     let nextStatus: string;
-    if (input.decision === "CORRECT_COUNT") {
+    if (input.decision === "REVERSE_REAL") {
+      // The original variance was incorrectly classified; do not treat an actual later
+      // cash receipt/disbursement as a counting correction.
+      const original=originalEntries[0];
+      if(discrepancy.status!=="POSTED" || !verifiedCount.equals(session.expectedClosingAmount) || originalEntries.length!==1 || !original || original.status!=="POSTED" || discrepancy.journalEntryId!==original.id || original.sourceModule!=="FINANCE_CASH") throw new EnterpriseAccountingError("CASH_VARIANCE_REVIEW_CONFLICT",409);
+      const cashLines=original.lines.filter(line=>line.ledgerAccountId===account.ledgerAccountId);
+      if(cashLines.length!==1 || cashLines[0].transactionCurrencyCode!==account.currencyCode || !cashLines[0].transactionAmount?.abs().equals(discrepancy.amount.abs()) || (discrepancy.amount.isNegative()?!cashLines[0].credit.greaterThan(0):!cashLines[0].debit.greaterThan(0))) throw new EnterpriseAccountingError("CASH_VARIANCE_LEGACY_PROOF_REQUIRED",409);
+      await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterpriseFinancialAccount" WHERE id = ${account.id} AND "organizationId" = ${organizationId} FOR UPDATE`);
+      const locked=await tx.enterpriseFinancialAccount.findFirstOrThrow({where:{organizationId,id:account.id}});
+      if(locked.status!=="ACTIVE" || locked.archivedAt || locked.accountType!=="CASH" || locked.operationalBalance.minus(discrepancy.amount).isNegative()) throw new EnterpriseAccountingError("CASH_VARIANCE_REVIEW_CONFLICT",409);
+      const movements=await tx.enterpriseTreasuryTransaction.findMany({where:{organizationId,financialAccountId:account.id,reference:adjustmentReference},take:2});
+      const movement=movements[0];
+      if(movements.length!==1 || !movement || movement.status!=="CONFIRMED" || movement.transactionType!=="CASH_VARIANCE" || movement.reconciliationStatus!=="UNRECONCILED" || movement.currencyCode!==account.currencyCode || movement.direction!==(discrepancy.amount.isNegative()?"OUTBOUND":"INBOUND") || !movement.amount.equals(discrepancy.amount.abs())) throw new EnterpriseAccountingError("CASH_VARIANCE_LEGACY_PROOF_REQUIRED",409);
+      if(await tx.enterpriseReconciliationSession.findFirst({where:{organizationId,financialAccountId:account.id,status:{in:["DRAFT","IN_PROGRESS","PENDING_VALIDATION","COMPLETED"]},periodEnd:{gte:movement.transactionDate}},select:{id:true}})) throw new EnterpriseAccountingError("CASH_VARIANCE_REVIEW_CONFLICT",409);
+      if(await tx.enterpriseReconciliationMatch.findFirst({where:{organizationId,OR:[{treasuryTransactionId:movement.id},{journalEntryId:original.id}],status:{in:["RESERVED","CONFIRMED"]}},select:{id:true}})) throw new EnterpriseAccountingError("CASH_VARIANCE_REVIEW_CONFLICT",409);
+      const reverseReference="CASH-VARIANCE-REVERSAL:"+discrepancy.id;
+      if(await tx.enterpriseTreasuryTransaction.findFirst({where:{organizationId,financialAccountId:account.id,reference:reverseReference},select:{id:true}})) throw new EnterpriseAccountingError("CASH_VARIANCE_REVIEW_CONFLICT",409);
+      const reversal=await reverseJournalEntryTx(tx,organizationId,original.id,actorUserId,{reason:input.reason,accountingDate:new Date()},{authorization:"CASH_VARIANCE_REVIEW"});
+      const inverse=await tx.enterpriseTreasuryTransaction.create({data:{organizationId,financialAccountId:account.id,transactionType:"CASH_VARIANCE_REVERSAL",direction:movement.direction==="INBOUND"?"OUTBOUND":"INBOUND",currencyCode:account.currencyCode,amount:movement.amount,transactionDate:new Date(),reference:reverseReference,createdByUserId:actorUserId}});
+      await tx.enterpriseFinancialAccount.update({where:{id:account.id},data:{operationalBalance:{decrement:discrepancy.amount},revision:{increment:1}}});
+      journalEntryId=original.id; reversalEntryId=reversal.id; treasuryTransactionId=inverse.id; nextStatus="REAL_REVERSED";
+    } else if (input.decision === "CORRECT_COUNT") {
+      if(discrepancy.status==="POSTED")throw new EnterpriseAccountingError("CASH_VARIANCE_REVIEW_CONFLICT",409);
       if (!verifiedCount.equals(session.expectedClosingAmount)) throw new EnterpriseAccountingError("CASH_VARIANCE_CORRECTED_COUNT_MISMATCH",409);
       if (discrepancy.status === "APPROVED") {
         // Legacy journals came from the old closing code, which did not create a treasury adjustment.

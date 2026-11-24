@@ -1,3 +1,7 @@
+## 2026-11-24 — HOTFIX #1226 — tranches F/G candidates
+
+- Réservations avant approbation, annulation motivée, contrepassation métier avec mouvement inverse et audit borné en lecture seule. Non livré.
+
 ## 2026-11-24 — HOTFIX #1226 — tranche D2 candidate
 
 - Modèle Excel natif et aperçu protégé, contrôles de continuité et de doublons du relevé, prévisualisation paginée CSV/XLSX. Non certifié; pas de production.
