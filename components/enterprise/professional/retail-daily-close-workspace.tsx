@@ -43,6 +43,7 @@ type CashSession = {
   number: string;
   status: string;
   openingAmount: string | number;
+  expectedCurrentAmount?: string | number;
   openedAt: string;
   financialAccountId: string;
   financialAccount: {
@@ -82,6 +83,7 @@ type Dashboard = {
   access: { canWrite: boolean; canManage: boolean };
   accounts: FinancialAccount[];
   cashSession: CashSession | null;
+  cashSessions?: CashSession[];
   range: { from: string; to: string };
 };
 
@@ -267,17 +269,24 @@ export function RetailDailyCloseWorkspace({
     return Array.from(sites, ([id, label]) => ({ id, label }));
   }, [adminStores, dashboard]);
   const effectiveSiteId = siteFilter !== "ALL" ? siteFilter : selectableSites.length === 1 ? selectableSites[0].id : "ALL";
-  const closeAccounts = useMemo(
+  const siteAccounts = useMemo(
     () => (dashboard?.accounts || []).filter((account) => ["CASH", "MOBILE_MONEY", "CLEARING"].includes(account.accountType) && (effectiveSiteId === "ALL" || account.siteId === effectiveSiteId)),
     [dashboard, effectiveSiteId],
   );
-  const cashAccounts = useMemo(
-    () => closeAccounts.filter((account) => account.accountType === "CASH"),
-    [closeAccounts],
-  );
-  const currentCashSession = dashboard?.cashSession && cashAccounts.some((account) => account.id === dashboard.cashSession?.financialAccountId) ? dashboard.cashSession : null;
-  const multipleStoreAccounts = new Set(closeAccounts.map((account) => account.siteId).filter(Boolean)).size > 1;
-  const legacyUnassignedAccounts = closeAccounts.length > 0 && closeAccounts.every((account) => !account.siteId);
+  const cashAccounts = useMemo(() => siteAccounts.filter((account) => account.accountType === "CASH"), [siteAccounts]);
+  const closeAccounts = useMemo(() => {
+    const sessions = dashboard?.cashSessions ?? (dashboard?.cashSession ? [dashboard.cashSession] : []);
+    return siteAccounts.flatMap((account) => {
+      if (account.accountType !== "CASH") return [{ ...account, closeSession: null as CashSession | null, expectedCloseAmount: Number(account.operationalBalance) }];
+      const eligible = sessions.filter((session) => session.financialAccountId === account.id && session.status === "OPEN");
+      const session = eligible[0];
+      if (eligible.length !== 1 || !session || session.expectedCurrentAmount == null || !Number.isFinite(Number(session.expectedCurrentAmount))) return [];
+      return [{ ...account, closeSession: session, expectedCloseAmount: Number(session.expectedCurrentAmount) }];
+    });
+  }, [dashboard, siteAccounts]);
+  const currentCashSession = closeAccounts.find((account) => account.closeSession)?.closeSession ?? null;
+  const multipleStoreAccounts = new Set(siteAccounts.map((account) => account.siteId).filter(Boolean)).size > 1;
+  const legacyUnassignedAccounts = siteAccounts.length > 0 && siteAccounts.every((account) => !account.siteId);
   const storeSelectionRequired = multipleStoreAccounts || (effectiveSiteId === "ALL" && !legacyUnassignedAccounts);
   const closes = closeList?.items || [];
   const pendingCount = closes.filter((item) => item.status === "SUBMITTED").length;
@@ -290,7 +299,7 @@ export function RetailDailyCloseWorkspace({
       setNotice({ tone: "warning", description: locale === "fr" ? "Sélectionnez une boutique précise : une clôture ne peut pas regrouper plusieurs boutiques." : "Select one store: a daily close cannot combine multiple stores." });
       return;
     }
-    const lines: Array<{ financialAccountId: string; accountType: string; declaredBalance: number; varianceReason: string | null; denominations: Array<{ denomination: number; quantity: number }> }> = [];
+    const lines: Array<{ financialAccountId: string; accountType: string; cashSessionId?: string; expectedSessionAmount?: number; declaredBalance: number; varianceReason: string | null; denominations: Array<{ denomination: number; quantity: number }> }> = [];
     for (const account of closeAccounts.filter((candidate) => form.get(`include-${candidate.id}`) === "on")) {
       const physicalCount = account.accountType === "CASH"
         ? cashCountsFromDailyCloseForm(form, account.id, account.currencyCode)
@@ -309,7 +318,7 @@ export function RetailDailyCloseWorkspace({
         return;
       }
       const varianceReason = String(form.get(`reason-${account.id}`) || "").trim() || null;
-      if (Math.abs(declaredBalance - Number(account.operationalBalance)) > 0.005 && (!varianceReason || varianceReason.length < 3)) {
+      if (Math.abs(declaredBalance - account.expectedCloseAmount) > 0.005 && (!varianceReason || varianceReason.length < 3)) {
         setNotice({ tone: "error", description: locale === "fr"
           ? `Justifiez l'écart de ${account.name} avant la soumission.`
           : `Explain the variance for ${account.name} before submitting.` });
@@ -318,6 +327,7 @@ export function RetailDailyCloseWorkspace({
       lines.push({
         financialAccountId: account.id,
         accountType: account.accountType,
+        ...(account.closeSession ? { cashSessionId: account.closeSession.id, expectedSessionAmount: account.expectedCloseAmount } : {}),
         declaredBalance,
         varianceReason,
         denominations: physicalCount?.counts ?? [],
@@ -507,7 +517,7 @@ export function RetailDailyCloseWorkspace({
                         <div className="min-w-0">
                           <p className="break-words font-black text-dtsc-ink">{currentCashSession.financialAccount.name} · {currentCashSession.financialAccount.currencyCode}</p>
                           <p className="mt-1 text-xs font-semibold text-dtsc-muted">
-                            {translateRetailWorkspace(locale, "openingFloat")}: {moneyValue(currentCashSession.openingAmount, currentCashSession.financialAccount.currencyCode, locale)} · {translateRetailWorkspace(locale, "currentBalance")}: {moneyValue(currentCashSession.financialAccount.operationalBalance, currentCashSession.financialAccount.currencyCode, locale)}
+                            {translateRetailWorkspace(locale, "openingFloat")}: {moneyValue(currentCashSession.openingAmount, currentCashSession.financialAccount.currencyCode, locale)} · {translateRetailWorkspace(locale, "dailyCloseSessionExpected")}: {moneyValue(currentCashSession.expectedCurrentAmount ?? 0, currentCashSession.financialAccount.currencyCode, locale)}
                           </p>
                         </div>
                         <StatusBadge tone="success">{customerFacingStatusLabel(currentCashSession.status, locale)}</StatusBadge>
@@ -556,7 +566,7 @@ export function RetailDailyCloseWorkspace({
 
             <ModuleSection density="compact" id="retail-close-balances"
               title={translateRetailWorkspace(locale, "dailyCloseBalancesToCount")}
-              description={locale === "fr" ? "Comptes liés à la boutique sélectionnée. Les montants et les devises restent distincts." : "Accounts for the selected store. Amounts and currencies stay separate."}
+              description={translateRetailWorkspace(locale, "dailyCloseSessionScope")}
             >
               {closeAccounts.length ? (
                 <div className="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -564,8 +574,9 @@ export function RetailDailyCloseWorkspace({
                     <div key={account.id} className="min-w-0 rounded-2xl border border-dtsc-border bg-dtsc-page p-4">
                       <p className="break-words font-black text-dtsc-ink">{account.name}</p>
                       <p className="mt-1 text-xs font-semibold text-dtsc-muted">{customerFacingFinancialAccountType(account.accountType, locale)} · {account.currencyCode}</p>
-                      <p className="mt-3 text-xl font-black text-dtsc-ink">{moneyValue(account.operationalBalance, account.currencyCode, locale)}</p>
-                      <p className="text-xs font-semibold text-dtsc-muted">{translateRetailWorkspace(locale, "dailyCloseCurrentOperationalBalance")}</p>
+                      <p className="mt-3 text-xl font-black text-dtsc-ink">{moneyValue(account.expectedCloseAmount, account.currencyCode, locale)}</p>
+                      <p className="text-xs font-semibold text-dtsc-muted">{translateRetailWorkspace(locale, account.closeSession ? "dailyCloseSessionExpected" : "dailyCloseCurrentOperationalBalance")}</p>
+                      {account.closeSession ? <p className="mt-1 break-words text-xs text-dtsc-muted">{account.closeSession.number}</p> : null}
                     </div>
                   ))}
                 </div>
@@ -590,19 +601,19 @@ export function RetailDailyCloseWorkspace({
                             ? [...previous, account.id] : previous.filter((id) => id !== account.id))}
                           disabled={Boolean(busyAction) || !dashboard.access.canWrite || storeSelectionRequired} />
                         <span className="min-w-0 flex-1 break-words">{account.name}
-                          <span className="mt-0.5 block text-xs font-semibold text-dtsc-muted">{customerFacingFinancialAccountType(account.accountType, locale)} · {account.currencyCode}</span>
+                          <span className="mt-0.5 block text-xs font-semibold text-dtsc-muted">{customerFacingFinancialAccountType(account.accountType, locale)} · {account.currencyCode}{account.closeSession ? ` · ${account.closeSession.number}` : ""}</span>
                         </span>
                         <span className="shrink-0 rounded-full bg-dtsc-soft px-2 py-1 text-xs font-black text-dtsc-blue">{account.currencyCode}</span>
                       </label>
                       {account.accountType === "CASH" ? (
                         <RetailDailyCloseCashCount key={`${account.id}-${account.currencyCode}`}
                           accountId={account.id} currencyCode={account.currencyCode}
-                          expectedAmount={Number(account.operationalBalance)} locale={locale}
+                          expectedAmount={account.expectedCloseAmount} locale={locale}
                           disabled={!selectedAccountIds.includes(account.id) || Boolean(busyAction) || !dashboard.access.canWrite || storeSelectionRequired} />
                       ) : (
                         <RetailDailyCloseNonCashCount key={`${account.id}-${account.currencyCode}`}
                           accountId={account.id} currencyCode={account.currencyCode}
-                          expectedAmount={Number(account.operationalBalance)} locale={locale}
+                          expectedAmount={account.expectedCloseAmount} locale={locale}
                           disabled={!selectedAccountIds.includes(account.id) || Boolean(busyAction) || !dashboard.access.canWrite || storeSelectionRequired} />
                       )}
                     </div>

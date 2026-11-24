@@ -318,7 +318,8 @@ export async function getAccountingEntryTrace(
       postedAt: true,
       reversedAt: true,
       reversalOfEntryId: true,
-      journal: { select: { code: true, nameFr: true, nameEn: true, journalType: true } },
+      revision: true,
+      journal: { select: { code: true, nameFr: true, nameEn: true, journalType: true, requiresApproval: true } },
       fiscalPeriod: { select: { id: true, code: true, startDate: true, endDate: true, status: true } },
       lines: {
         orderBy: { createdAt: "asc" },

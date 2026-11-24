@@ -11,6 +11,7 @@ import {
 import { resolveAccountingSourceLink } from "@/lib/enterprise/accounting/accounting-source-link-registry";
 import { serializeFinanceValue } from "@/lib/enterprise/accounting/helpers";
 import { prisma } from "@/lib/prisma";
+import { journalEntryCapabilities } from "@/lib/enterprise/accounting/journal-entry-capabilities";
 
 type Params = { params: Promise<{ organizationId: string }> };
 type View = "general-ledger" | "trial-balance" | "entry-trace" | "anomalies";
@@ -94,7 +95,12 @@ export async function GET(req: Request, { params }: Params) {
         sourceEntityId: entry.sourceEntityId,
         reference: entry.reference,
       });
-      data = { entry, sourceLink };
+      const assigned = entry.status === "PENDING_APPROVAL" && Boolean(await prisma.enterpriseApproval.findFirst({
+        where: { organizationId, targetEntityType: "EnterpriseJournalEntry", targetEntityId: entry.id, status: "PENDING", archivedAt: null, approverUserId: auth.session.userId },
+        select: { id: true },
+      }));
+      const capabilities = journalEntryCapabilities({ entry, actorUserId: auth.session.userId, access: auth.access.capabilities, assigned });
+      data = { entry: { ...entry, capabilities }, sourceLink };
     }
 
     await writeApiLog({

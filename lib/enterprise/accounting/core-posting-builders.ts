@@ -146,9 +146,13 @@ export const buildCashVariancePosting: PostingBuilder = async (tx, input) => {
   const short = discrepancy.amount.isNegative();
   const amount = discrepancy.amount.abs();
   const cashKey = `ACCOUNT_ID:${discrepancy.cashSession.financialAccount.ledgerAccountId}`;
+  const sessionSite = discrepancy.cashSession.siteId;
+  const accountSite = discrepancy.cashSession.financialAccount.siteId;
+  if (sessionSite && accountSite && sessionSite !== accountSite) throw new EnterpriseAccountingError("CASH_ACCOUNT_SITE_MISMATCH", 409);
+  const siteId = sessionSite ?? accountSite;
   return { organizationId: input.organizationId, journalType: "CASH", accountingDate: discrepancy.createdAt, documentDate: discrepancy.createdAt, reference: discrepancy.cashSession.number, description: `Cash variance ${discrepancy.cashSession.number}`, sourceModule: "FINANCE_CASH", sourceEntityType: "EnterpriseCashDiscrepancy", sourceEntityId: discrepancy.id, currencyCode: discrepancy.cashSession.financialAccount.currencyCode, lines: [
-    { accountMappingKey: short ? "CASH_VARIANCE_EXPENSE" : cashKey, description: discrepancy.reason, debit: amount, transactionCurrencyCode: discrepancy.cashSession.financialAccount.currencyCode, transactionAmount: amount },
-    { accountMappingKey: short ? cashKey : "CASH_VARIANCE_INCOME", description: discrepancy.reason, credit: amount, transactionCurrencyCode: discrepancy.cashSession.financialAccount.currencyCode, transactionAmount: amount },
+    { accountMappingKey: short ? "CASH_VARIANCE_EXPENSE" : cashKey, siteId, description: discrepancy.reason, debit: amount, transactionCurrencyCode: discrepancy.cashSession.financialAccount.currencyCode, transactionAmount: amount },
+    { accountMappingKey: short ? cashKey : "CASH_VARIANCE_INCOME", siteId, description: discrepancy.reason, credit: amount, transactionCurrencyCode: discrepancy.cashSession.financialAccount.currencyCode, transactionAmount: amount },
   ] };
 };
 

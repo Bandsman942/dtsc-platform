@@ -46,7 +46,7 @@ type ConfigCreatable = Exclude<ConfigureView, "setup">;
 
 type Pagination = { page: number; pageSize: number; total: number; pageCount: number };
 type AnyRow = Record<string, unknown> & { id: string };
-type EntryCapabilities = { canSubmit?: boolean; canApprove?: boolean; canReject?: boolean; canPost?: boolean; canReverse?: boolean };
+type EntryCapabilities = { canSubmit?: boolean; canApprove?: boolean; canReject?: boolean; canPost?: boolean; canReverse?: boolean; reverseBlockReason?: string | null };
 type JournalEntry = AnyRow & {
   number?: string;
   reference?: string | null;
@@ -157,6 +157,7 @@ export function EnterpriseFinanceAccountingWorkspace(props: Props) {
   const [detailEntryId, setDetailEntryId] = useState<string | null>(null);
   const [detailEntryRefreshKey, setDetailEntryRefreshKey] = useState(0);
   const [entryTrace, setEntryTrace] = useState<EntryTracePayload | null>(null);
+  const [entryTraceError, setEntryTraceError] = useState("");
   const [recordDetail, setRecordDetail] = useState<RecordDetailState>(null);
   const [approvalTarget, setApprovalTarget] = useState<JournalEntry | null>(null);
   const [actionTarget, setActionTarget] = useState<{ entry: JournalEntry; action: "APPROVE" | "REJECT" | "POST" | "REVERSE" } | null>(null);
@@ -176,6 +177,12 @@ export function EnterpriseFinanceAccountingWorkspace(props: Props) {
   }, []);
 
   useEffect(() => {
+    const recordId = searchParams.get("recordId")?.trim();
+    if (recordId && searchParams.get("entityType") === "EnterpriseJournalEntry") {
+      setSpace("post");
+      setDetailEntryId(recordId);
+      return;
+    }
     const legacyTab = searchParams.get("tab");
     if (!legacyTab) return;
     if (legacyTab === "entries") setSpace("post");
@@ -252,6 +259,7 @@ export function EnterpriseFinanceAccountingWorkspace(props: Props) {
   }, [configureView, dateFrom, dateTo, en, locale, organizationId, page, refreshKey, reviewView, search, space, statusFilter]);
 
   useEffect(() => {
+    setEntryTraceError("");
     if (!detailEntryId) { setEntryTrace(null); return; }
     let cancelled = false;
     setEntryTrace(null);
@@ -262,7 +270,7 @@ export function EnterpriseFinanceAccountingWorkspace(props: Props) {
         if (!cancelled) setEntryTrace(body);
       })
       .catch((error) => {
-        if (!cancelled) setErrorMessage(safeFinanceError(error, en ? "The journal entry could not be opened." : "L’écriture n’a pas pu être ouverte.", locale));
+        if (!cancelled) setEntryTraceError(safeFinanceError(error, en ? "The journal entry could not be opened." : "L’écriture n’a pas pu être ouverte.", locale));
       });
     return () => { cancelled = true; };
   }, [detailEntryId, detailEntryRefreshKey, en, locale, organizationId]);
@@ -580,7 +588,7 @@ export function EnterpriseFinanceAccountingWorkspace(props: Props) {
       actions={entryDetailActions}
       actionLabel={en ? "Journal entry actions" : "Actions de l’écriture"}
     >
-      {!entryTrace?.entry ? <ProfessionalLoading /> : <div className="grid min-w-0 gap-4"><div className="grid min-w-0 gap-3 rounded-2xl border border-dtsc-border bg-dtsc-page/60 p-4 sm:grid-cols-2 lg:grid-cols-4"><div><span className="text-xs font-black uppercase text-dtsc-muted">{en ? "Entry" : "Écriture"}</span><strong className="mt-1 block break-words text-dtsc-ink">{entryTrace.entry.number || "—"}</strong></div><div><span className="text-xs font-black uppercase text-dtsc-muted">{en ? "Date" : "Date"}</span><strong className="mt-1 block text-dtsc-ink">{financeDate(entryTrace.entry.accountingDate || "", locale)}</strong></div><div><span className="text-xs font-black uppercase text-dtsc-muted">{en ? "Status" : "Statut"}</span><div className="mt-1"><StatusBadge tone={financeStatusTone(entryTrace.entry.status || "")}>{financeStatusLabel(entryTrace.entry.status || "", locale)}</StatusBadge></div></div><div><span className="text-xs font-black uppercase text-dtsc-muted">{en ? "Source" : "Source"}</span>{entryTrace.sourceLink ? <Link href={entryTrace.sourceLink.href} className="mt-1 inline-flex items-center font-black text-dtsc-blue hover:underline">{en ? entryTrace.sourceLink.labelEn : entryTrace.sourceLink.labelFr}<ChevronRight className="ml-1 h-4 w-4" /></Link> : <span className="mt-1 block text-sm font-semibold text-dtsc-muted">{en ? "No authorized source link" : "Aucun lien source autorisé"}</span>}</div></div><AccountingCompactTable rows={(entryTrace.entry.lines || []) as LedgerRow[]} columns={ledgerColumns.filter((column) => !["date", "entry", "journal", "period"].includes(column.key))} rowKey={(row) => row.id} emptyLabel={en ? "No journal line." : "Aucune ligne comptable."} minWidth="min-w-[760px]" /></div>}
+      {entryTraceError ? <ProfessionalError message={entryTraceError} /> : !entryTrace?.entry ? <ProfessionalLoading /> : <div className="grid min-w-0 gap-4"><div className="grid min-w-0 gap-3 rounded-2xl border border-dtsc-border bg-dtsc-page/60 p-4 sm:grid-cols-2 lg:grid-cols-4"><div><span className="text-xs font-black uppercase text-dtsc-muted">{en ? "Entry" : "Écriture"}</span><strong className="mt-1 block break-words text-dtsc-ink">{entryTrace.entry.number || "—"}</strong></div><div><span className="text-xs font-black uppercase text-dtsc-muted">{en ? "Date" : "Date"}</span><strong className="mt-1 block text-dtsc-ink">{financeDate(entryTrace.entry.accountingDate || "", locale)}</strong></div><div><span className="text-xs font-black uppercase text-dtsc-muted">{en ? "Status" : "Statut"}</span><div className="mt-1"><StatusBadge tone={financeStatusTone(entryTrace.entry.status || "")}>{financeStatusLabel(entryTrace.entry.status || "", locale)}</StatusBadge></div></div><div><span className="text-xs font-black uppercase text-dtsc-muted">{en ? "Source" : "Source"}</span>{entryTrace.sourceLink ? <Link href={entryTrace.sourceLink.href} className="mt-1 inline-flex items-center font-black text-dtsc-blue hover:underline">{en ? entryTrace.sourceLink.labelEn : entryTrace.sourceLink.labelFr}<ChevronRight className="ml-1 h-4 w-4" /></Link> : <span className="mt-1 block text-sm font-semibold text-dtsc-muted">{en ? "No authorized source link" : "Aucun lien source autorisé"}</span>}</div></div>{entryTrace.entry.capabilities?.reverseBlockReason ? <p className="rounded-xl border border-dtsc-border bg-dtsc-page p-3 text-sm text-dtsc-muted">{entryTrace.entry.capabilities.reverseBlockReason === "JOURNAL_ENTRY_SELF_REVERSAL_FORBIDDEN" ? (en ? "An independent authorized person must reverse this entry." : "Une autre personne autorisée et indépendante doit contrepasser cette écriture.") : (en ? "You do not have permission to reverse this entry." : "Vous ne disposez pas du droit de contrepasser cette écriture.")}</p> : null}<AccountingCompactTable rows={(entryTrace.entry.lines || []) as LedgerRow[]} columns={ledgerColumns.filter((column) => !["date", "entry", "journal", "period"].includes(column.key))} rowKey={(row) => row.id} emptyLabel={en ? "No journal line." : "Aucune ligne comptable."} minWidth="min-w-[760px]" /></div>}
     </FullscreenEntityDetail>
 
     <AccountingRecordDetail

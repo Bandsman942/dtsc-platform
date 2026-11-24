@@ -1,3 +1,8 @@
+## 2026-11-24 — HOTFIX #1226 — Intégrité financière (v1.24.4 candidate DRAFT)
+
+- Tranche A : détail comptable et capacités d’action, lien profond, comptage par session et garde de fraîcheur, attribution analytique des écarts.
+- Non certifié, travaux de qualification/régularisation/rapprochement et Design 2.0 restant à implémenter. Aucune mutation de données historiques. Voir `docs/HOTFIX_1226_FINANCIAL_INTEGRITY.md`.
+
 ## 2026-11-23 — RETAIL #1224 — Reprise guidée des retours historiques et filtrage des factures (candidat DRAFT)
 
 - Registre POS : filtre des 11 statuts Finance, requête validée au serveur avant pagination, compatible boutique/recherche/dates, FR/EN.

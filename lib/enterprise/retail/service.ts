@@ -636,7 +636,7 @@ export async function createRetailDailyClose(organizationId: string, actorUserId
       const declared = money(decimal(line.declaredBalance));
       if (account.accountType === "CASH") {
         await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterpriseCashSession" WHERE "organizationId" = ${organizationId} AND "financialAccountId" = ${account.id} AND "cashierUserId" = ${actorUserId} AND status = 'OPEN' FOR UPDATE`);
-        const cashSession = await tx.enterpriseCashSession.findFirst({ where: { organizationId, financialAccountId: account.id, cashierUserId: actorUserId, status: "OPEN" }, include: { movements: true } });
+        const cashSession = await tx.enterpriseCashSession.findFirst({ where: { organizationId, financialAccountId: account.id, cashierUserId: actorUserId, status: "OPEN", ...(line.cashSessionId ? { id: line.cashSessionId } : {}) }, include: { movements: true } });
         if (!cashSession) throw new EnterpriseRetailError("RETAIL_OPEN_CASH_SESSION_REQUIRED", 409, { financialAccountId: account.id });
         if (strictSites && (!cashSession.siteId || cashSession.siteId !== account.siteId)) {
           throw new EnterpriseRetailError("RETAIL_CLOSE_ACCOUNT_SITE_MISMATCH", 409);
@@ -644,6 +644,9 @@ export async function createRetailDailyClose(organizationId: string, actorUserId
         const inflows = sumDecimals(cashSession.movements.filter((movement) => movement.direction === "INBOUND").map((movement) => movement.amount));
         const outflows = sumDecimals(cashSession.movements.filter((movement) => movement.direction === "OUTBOUND").map((movement) => movement.amount));
         const expected = money(cashSession.openingAmount.plus(inflows).minus(outflows));
+        if (line.expectedSessionAmount !== undefined && !expected.equals(money(decimal(line.expectedSessionAmount)))) {
+          throw new EnterpriseRetailError("RETAIL_CLOSE_CONFLICT", 409, { financialAccountId: account.id });
+        }
         const countTotal = money(sumDecimals(line.denominations.map((count) => decimal(count.denomination).times(count.quantity))));
         if (!countTotal.equals(declared)) throw new EnterpriseRetailError("RETAIL_CASH_COUNT_TOTAL_MISMATCH", 409, { financialAccountId: account.id, countTotal: countTotal.toFixed(), declared: declared.toFixed() });
         const difference = money(declared.minus(expected));

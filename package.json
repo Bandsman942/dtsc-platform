@@ -1,11 +1,12 @@
 {
   "name": "dtsc-platform",
-  "version": "1.24.3",
+  "version": "1.24.4",
   "private": true,
   "engines": {
     "node": "22.x"
   },
   "scripts": {
+    "qa:financial-integrity-1226": "node --experimental-strip-types scripts/qa-financial-integrity-1226.mjs",
     "qa:retail-direct-cash-1216": "node scripts/qa-retail-direct-cash-1216.mjs",
     "qa:inventory-lot-traceability-1212": "node scripts/qa-inventory-lot-traceability-1212.mjs",
     "qa:retail-invoice-workflow-links-1210": "node --experimental-strip-types scripts/qa-retail-invoice-workflow-links-1210.mjs",

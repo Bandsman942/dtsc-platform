@@ -5,6 +5,7 @@ import { authorizeFinanceRequest, financeBusinessDateRange, financeErrorResponse
 import { createJournalEntryDraft, listJournalEntries } from "@/lib/enterprise/accounting/journal-service";
 import { journalEntryCreateSchema } from "@/lib/enterprise/accounting/schemas";
 import { prisma } from "@/lib/prisma";
+import { journalEntryCapabilities } from "@/lib/enterprise/accounting/journal-entry-capabilities";
 
 type Params = { params: Promise<{ organizationId: string }> };
 
@@ -12,6 +13,9 @@ type JournalListItem = {
   id: string;
   status: string;
   preparedByUserId: string;
+  approvedByUserId?: string | null;
+  postedByUserId?: string | null;
+  journal?: { requiresApproval?: boolean } | null;
   [key: string]: unknown;
 };
 
@@ -52,13 +56,7 @@ export async function GET(req: Request, { params }: Params) {
   const capabilities = auth.access.capabilities;
   const items = rawItems.map((item) => ({
     ...item,
-    capabilities: {
-      canSubmit: Boolean(capabilities.canSubmit && item.status === "DRAFT" && item.preparedByUserId === auth.session.userId),
-      canApprove: Boolean(capabilities.canApprove && item.status === "PENDING_APPROVAL" && assignedIds.has(item.id)),
-      canReject: Boolean(capabilities.canApprove && item.status === "PENDING_APPROVAL" && assignedIds.has(item.id)),
-      canPost: Boolean(capabilities.canManage && item.status === "APPROVED"),
-      canReverse: Boolean(capabilities.canManage && item.status === "POSTED"),
-    },
+    capabilities: journalEntryCapabilities({ entry: item, actorUserId: auth.session.userId, access: capabilities, assigned: assignedIds.has(item.id) }),
   }));
   const pagination = recordId
     ? { page: 1, pageSize: 1, total: items.length, pageCount: 1 }
