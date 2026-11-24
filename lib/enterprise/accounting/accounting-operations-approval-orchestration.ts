@@ -6,7 +6,7 @@ import {
   requireAccountingApprovalDecision,
 } from "@/lib/enterprise/accounting/accounting-approval-service";
 import { calculateFinancialCloseChecklist } from "@/lib/enterprise/accounting/close-service";
-import { assertReconciliationEvidenceTx } from "@/lib/enterprise/accounting/reconciliation-evidence";
+import { assertReconciliationEvidenceTx, finalizeReconciliationEvidenceTx } from "@/lib/enterprise/accounting/reconciliation-evidence";
 import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
 import { money, publishFinanceEvent, serializeFinanceValue, sumDecimals } from "@/lib/enterprise/accounting/helpers";
 
@@ -343,7 +343,7 @@ async function reconciliationSnapshot(organizationId: string, sessionId: string)
     include: { matches: true, financialAccount: true },
   });
   if (!session) throw new EnterpriseAccountingError("RECONCILIATION_SESSION_NOT_FOUND", 404);
-  const matchedTotal = money(sumDecimals(session.matches.filter((match) => match.status === "CONFIRMED").map((match) => match.matchedAmount)));
+  const matchedTotal = money(sumDecimals(session.matches.filter((match) => match.status === "RESERVED").map((match) => match.matchedAmount)));
   const difference = money(session.statementBalance.minus(session.bookBalance));
   const tolerance = (await prisma.enterpriseFinanceConfiguration.findUnique({ where: { organizationId } }))?.reconciliationTolerance || new Prisma.Decimal("0.01");
   return { session, matchedTotal, difference, tolerance };
@@ -370,7 +370,7 @@ export async function submitReconciliationForAssignedValidation(
     if (session.preparedByUserId !== actorUserId) throw new EnterpriseAccountingError("RECONCILIATION_SUBMITTER_MISMATCH", 403);
     await assertReconciliationEvidenceTx(tx, organizationId, session, actorUserId);
 
-    if (session.physicalEvidenceJson && input.approverUserId === actorUserId) throw new EnterpriseAccountingError("RECONCILIATION_SELF_APPROVAL_FORBIDDEN",409);
+    if (input.approverUserId === actorUserId) throw new EnterpriseAccountingError("RECONCILIATION_SELF_APPROVAL_FORBIDDEN",409);
     const approval = await createAccountingApprovalAssignment(tx, {
       organizationId,
       targetEntityType: "EnterpriseReconciliationSession",
@@ -423,7 +423,7 @@ export async function decideReconciliationAssignedValidation(
     const session = await tx.enterpriseReconciliationSession.findFirst({ where: { id: sessionId, organizationId } });
     if (!session) throw new EnterpriseAccountingError("RECONCILIATION_SESSION_NOT_FOUND", 404);
     if (session.status !== "PENDING_VALIDATION" || session.revision !== input.revision) throw new EnterpriseAccountingError("RECONCILIATION_SESSION_CONFLICT", 409);
-    if (session.physicalEvidenceJson && session.preparedByUserId === actorUserId) throw new EnterpriseAccountingError("RECONCILIATION_SELF_APPROVAL_FORBIDDEN",409);
+    if (session.preparedByUserId === actorUserId) throw new EnterpriseAccountingError("RECONCILIATION_SELF_APPROVAL_FORBIDDEN",409);
 
     await decideAccountingApproval(tx, {
       organizationId,
@@ -454,6 +454,7 @@ export async function decideReconciliationAssignedValidation(
     }
 
     await assertReconciliationEvidenceTx(tx, organizationId, session, actorUserId);
+    await finalizeReconciliationEvidenceTx(tx, organizationId, session);
     const updated = await tx.enterpriseReconciliationSession.update({
       where: { id: session.id },
       data: {

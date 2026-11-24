@@ -45,6 +45,7 @@ type RecordCapabilities = {
   canClose?: boolean;
   canValidate?: boolean;
   canMatch?: boolean;
+  canCancel?: boolean;
   canSubmit?: boolean;
   canApprove?: boolean;
   canReject?: boolean;
@@ -219,6 +220,7 @@ export function EnterpriseFinanceCashBankReconciliationBase(props: Props) {
   const [validateTarget, setValidateTarget] = useState<CashSession | null>(null);
   const [matchTarget, setMatchTarget] = useState<Reconciliation | null>(null);
   const [actionTarget, setActionTarget] = useState<ReconciliationAction | null>(null);
+  const [cancelTarget,setCancelTarget]=useState<{record:Reconciliation;matchId?:string}|null>(null);
   const [csvLines, setCsvLines] = useState<ParsedBankLine[]>([]);
   const [csvName, setCsvName] = useState("");
   const [bankImportAccount,setBankImportAccount]=useState("");
@@ -459,6 +461,19 @@ export function EnterpriseFinanceCashBankReconciliationBase(props: Props) {
     } finally { setBusy(false); }
   }
 
+  async function cancelReservation(event:FormEvent<HTMLFormElement>){
+    event.preventDefault();
+    if(!cancelTarget||busy)return;
+    const form=new FormData(event.currentTarget);
+    setBusy(true);setErrorMessage("");
+    try{
+      const response=await fetch(`/api/enterprise/${organizationId}/reconciliations/${cancelTarget.record.id}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({revision:cancelTarget.record.revision,reason:String(form.get("reason")||""),matchId:cancelTarget.matchId})});
+      const body=await response.json().catch(()=>null);
+      if(!response.ok)throw new Error(body?.message||tx(locale,"Annulation impossible.","Unable to cancel."));
+      setDetail(await loadExact(cancelTarget.record.id));setCancelTarget(null);setRefreshKey(value=>value+1);setMessage(tx(locale,"Annulation enregistrée.","Cancellation recorded."));
+    }catch(error){setErrorMessage(safeFinanceError(error,tx(locale,"Annulation impossible.","Unable to cancel.")));}
+    finally{setBusy(false);}
+  }
   async function reconciliationTransition(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!actionTarget) return;
@@ -545,6 +560,7 @@ export function EnterpriseFinanceCashBankReconciliationBase(props: Props) {
       {selectedRecon ? <div className="grid gap-5">
         <div className="flex flex-wrap items-center gap-2">
           <StatusBadge tone={financeStatusTone(selectedRecon.status)}>{financeStatusLabel(selectedRecon.status, locale)}</StatusBadge>
+          {selectedRecon.capabilities?.canCancel ? <Button variant="outline" onClick={()=>{setCancelTarget({record:selectedRecon});setDetail(null);}}>{tx(locale,"Annuler le brouillon","Cancel draft")}</Button> : null}
           {selectedRecon.capabilities?.canMatch ? <Button onClick={() => setMatchTarget(selectedRecon)}><Scale className="h-4 w-4" />{t("toReconcile")}</Button> : null}
           {selectedRecon.capabilities?.canSubmit ? <Button onClick={() => setActionTarget({ record: selectedRecon, action: "SUBMIT" })}><Send className="h-4 w-4" />{t("actionSubmit")}</Button> : null}
           {selectedRecon.capabilities?.canApprove ? <Button onClick={() => setActionTarget({ record: selectedRecon, action: "APPROVE" })}><CheckCircle2 className="h-4 w-4" />{t("actionApprove")}</Button> : null}
@@ -558,6 +574,7 @@ export function EnterpriseFinanceCashBankReconciliationBase(props: Props) {
           <FinanceDetailValue label={t("difference")} value={String(selectedRecon.differenceAmount ?? "—")} />
           <FinanceDetailValue label={t("revision")} value={String(selectedRecon.revision)} />
         </FinanceDetailGrid>
+        {(selectedRecon.matches||[]).some(match=>match.status==="RESERVED")?<section className="grid gap-2 rounded-xl border border-dtsc-border p-3"><h3 className="font-semibold">{tx(locale,"Allocations réservées (avant approbation)","Reserved allocations (before approval)")}</h3>{(selectedRecon.matches||[]).filter(match=>match.status==="RESERVED").map(match=><div key={match.id} className="flex flex-wrap items-center justify-between gap-2"><span>{financeMoney(match.matchedAmount,selectedRecon.financialAccount?.currencyCode||"",locale)}</span>{selectedRecon.capabilities?.canCancel?<Button size="sm" variant="outline" onClick={()=>{setCancelTarget({record:selectedRecon,matchId:match.id});setDetail(null);}}>{tx(locale,"Libérer","Release")}</Button>:null}</div>)}</section>:null}
         {selectedRecon.capabilities?.canMatch && selectedRecon.bankStatementId ? <section className="grid min-w-0 gap-3 rounded-2xl border border-dtsc-border bg-dtsc-page p-4">
           <h3 className="font-black text-dtsc-ink">{tx(locale,"Correspondances exactes proposées","Suggested exact matches")}</h3>
           <p className="text-xs text-dtsc-muted">{tx(locale,"Référence, date, devise, sens et montant identiques; seules les correspondances uniques sont proposées. Chaque confirmation reste contrôlée par le serveur.","Identical reference, date, currency, direction and amount; only unique matches are suggested. The server rechecks each confirmation.")}</p>
@@ -650,7 +667,7 @@ export function EnterpriseFinanceCashBankReconciliationBase(props: Props) {
     <Dialog open={Boolean(matchTarget)} onClose={() => { if (!busy) setMatchTarget(null); }} title={t("toReconcile")} description={t("noReconciledLineReuse")} presentation="editor" className="max-w-4xl">
       <form onSubmit={matchReconciliation} className="grid gap-6">
         <ProfessionalFormSection title={tx(locale, "Correspondance", "Match")}>
-          <Field label={tx(locale, "Ligne bancaire", "Bank line")}><NativeSelect name="bankStatementLineId" disabled={busy} items={[{ id: "", label: tx(locale, "Sélectionner…", "Select…") }, ...((matchTarget?.statementLines || []).filter((line) => line.id && line.reconciliationStatus === "UNMATCHED").map((line) => ({ id: line.id!, label: `${financeDate(line.transactionDate, locale)} · ${line.description} · ${tx(locale,"Reste","Remaining")}: ${line.remainingAmount ?? String(Number(line.credit) || Number(line.debit))}` })))]} /></Field>
+          <Field label={tx(locale, "Ligne bancaire", "Bank line")}><NativeSelect name="bankStatementLineId" disabled={busy} items={[{ id: "", label: tx(locale, "Sélectionner…", "Select…") }, ...((matchTarget?.statementLines || []).filter((line) => line.id && line.reconciliationStatus === "UNMATCHED" && Number(line.remainingAmount ?? 1)>0).map((line) => ({ id: line.id!, label: `${financeDate(line.transactionDate, locale)} · ${line.description} · ${tx(locale,"Reste","Remaining")}: ${line.remainingAmount ?? String(Number(line.credit) || Number(line.debit))}` })))]} /></Field>
           <Field label={tx(locale, "Paiement confirmé", "Confirmed payment")}><FinanceReferenceSelect organizationId={organizationId} moduleCode="FINANCE_RECONCILIATION" kind="reconciliation-payment" name="paymentId" label={tx(locale, "paiement", "payment")} locale={rawLocale} parentId={matchTarget?.financialAccountId} disabled={busy} /></Field>
           <Field label={tx(locale, "Transaction de trésorerie", "Treasury transaction")}><FinanceReferenceSelect organizationId={organizationId} moduleCode="FINANCE_RECONCILIATION" kind="treasury-transaction" name="treasuryTransactionId" label={tx(locale, "transaction", "transaction")} locale={rawLocale} parentId={matchTarget?.financialAccountId} disabled={busy} /></Field>
           <Field label={tx(locale, "Écriture comptable", "Journal entry")}><FinanceReferenceSelect organizationId={organizationId} moduleCode="FINANCE_RECONCILIATION" kind="journal-entry" name="journalEntryId" label={tx(locale, "écriture", "entry")} locale={rawLocale} parentId={matchTarget?.financialAccountId} disabled={busy} /></Field>
@@ -660,6 +677,9 @@ export function EnterpriseFinanceCashBankReconciliationBase(props: Props) {
       </form>
     </Dialog>
 
+    <Dialog open={Boolean(cancelTarget)} onClose={()=>{if(!busy)setCancelTarget(null);}} title={tx(locale,"Annulation motivée","Cancellation with reason")} presentation="editor">
+      <form onSubmit={cancelReservation} className="grid gap-4"><p className="text-sm text-dtsc-muted">{tx(locale,"Les réservations seront libérées sans modifier les soldes ni effacer l’historique.","Reservations are released without changing balances or deleting history.")}</p><Field label={t("reason")}><Input name="reason" minLength={4} maxLength={500} required disabled={busy}/></Field><Button type="submit" disabled={busy}>{t("confirm")}</Button></form>
+    </Dialog>
     <Dialog open={Boolean(actionTarget)} onClose={() => { if (!busy) setActionTarget(null); }} title={actionTarget ? financeStatusLabel(actionTarget.action, locale) : ""} description={t("sodSelfApprovalBlocked")} presentation="editor">
       <form onSubmit={reconciliationTransition} className="grid gap-5">
         {actionTarget?.record.physicalEvidenceJson && actionTarget.action === "APPROVE" ? <FinanceCriticalStepUpFields action="APPROVE" locale={rawLocale} /> : null}

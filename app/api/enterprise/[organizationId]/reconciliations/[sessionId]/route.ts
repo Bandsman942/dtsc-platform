@@ -1,6 +1,8 @@
+import { z } from "zod";
+import { cancelReconciliationReservation } from "@/lib/enterprise/accounting/treasury-service";
 import { NextResponse } from "next/server";
-import { writeApiLog } from "@/lib/audit";
-import { authorizeFinanceRequest } from "@/lib/enterprise/accounting/http";
+import { writeApiLog, writeAuditLog } from "@/lib/audit";
+import { authorizeFinanceRequest, financeErrorResponse, financeValidationErrorResponse } from "@/lib/enterprise/accounting/http";
 import { prisma } from "@/lib/prisma";
 import { formatEnterpriseBusinessDate, getEnterpriseBusinessContext } from "@/lib/enterprise/business-context";
 import { reconciliationTreasuryWindow } from "@/lib/enterprise/accounting/reconciliation-dated-balance";
@@ -65,7 +67,7 @@ export async function GET(req: Request, { params }: Params) {
   }) : [];
   const suggestionLimitExceeded = canSuggest && (statementLines.length > candidateLimit || transactions.length > candidateLimit);
   const businessContext = canSuggest && !suggestionLimitExceeded ? await getEnterpriseBusinessContext(prisma, organizationId) : null;
-  const confirmed = reconciliation.matches.filter(match => match.status === "CONFIRMED");
+  const confirmed = reconciliation.matches.filter(match => ["RESERVED","CONFIRMED"].includes(match.status));
   const reservedLines = new Set(confirmed.map(match => match.bankStatementLineId));
   const reservedTransactions = new Set(confirmed.map(match => match.treasuryTransactionId));
   const exactSuggestions = businessContext ? suggestExactReconciliationMatches(
@@ -95,6 +97,7 @@ export async function GET(req: Request, { params }: Params) {
       bankStatement,
       statementLines: linesWithAllocation,
       capabilities: {
+        canCancel: Boolean(capabilities.canManage && reconciliation.preparedByUserId === auth.session.userId && ["DRAFT","IN_PROGRESS"].includes(reconciliation.status) && !reconciliation.matches.some(match=>match.status==="CONFIRMED")),
         canMatch: Boolean(reconciliation.bankStatementId && capabilities.canManage && ["DRAFT", "IN_PROGRESS"].includes(reconciliation.status)),
         canSubmit: Boolean(capabilities.canSubmit && ["DRAFT", "IN_PROGRESS"].includes(reconciliation.status) && reconciliation.preparedByUserId === auth.session.userId),
         canApprove: Boolean(capabilities.canApprove && reconciliation.status === "PENDING_VALIDATION" && assigned),
@@ -102,4 +105,19 @@ export async function GET(req: Request, { params }: Params) {
       },
     },
   });
+}
+
+const cancelSchema=z.object({revision:z.number().int().positive(),reason:z.string().trim().min(4).max(500),matchId:z.string().min(1).max(240).optional()});
+export async function PATCH(req:Request,{params}:Params){
+  const startedAt=Date.now(),{organizationId,sessionId}=await params;
+  const auth=await authorizeFinanceRequest(req,organizationId,"FINANCE_RECONCILIATION","reconcile",{mutation:true,limit:40});
+  if(!auth.ok)return auth.response;
+  const parsed=cancelSchema.safeParse(await req.json().catch(()=>null));
+  if(!parsed.success)return financeValidationErrorResponse(parsed.error);
+  try{
+    const session=await cancelReconciliationReservation(organizationId,sessionId,auth.session.userId,parsed.data);
+    await writeAuditLog({userId:auth.session.userId,action:"ENTERPRISE_RECONCILIATION_CANCEL_RESERVATION",entity:"EnterpriseReconciliationSession",entityId:sessionId,request:req,metadata:{organizationId,matchId:parsed.data.matchId||null}});
+    await writeApiLog({request:req,statusCode:200,userId:auth.session.userId,startedAt,metadata:{organizationId,domain:"reconciliation-cancellation"}});
+    return NextResponse.json({ok:true,session});
+  }catch(error){return financeErrorResponse(error,"RECONCILIATION_CANCEL_FAILED");}
 }

@@ -364,6 +364,7 @@ export async function transitionEnterprisePayment(
     }[action];
     if (!transition?.from.includes(payment.status)) throw new EnterpriseAccountingError("PAYMENT_TRANSITION_INVALID", 409);
     if (action === "APPROVE") assertIndependentActor({ actorUserId, relatedUserIds: [payment.initiatedByUserId], errorCode: "PAYMENT_SELF_APPROVAL_FORBIDDEN" });
+    if (["RECONCILE","REVERSE"].includes(action) && await tx.enterpriseReconciliationMatch.findFirst({where:{organizationId,paymentId,status:{in:["RESERVED","CONFIRMED"]}},select:{id:true}})) throw new EnterpriseAccountingError("RECONCILIATION_PAYMENT_RESERVED",409);
     if (action === "REVERSE") {
       assertIndependentActor({
         actorUserId,
