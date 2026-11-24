@@ -70,3 +70,6 @@ Une nouvelle session reste possible quand la précédente attend validation, mai
 
 ## Tranche J — consolidation candidate
 Consolidation propriétaire par boutique et devise, sessions validées distinctes et flux nets hors passations internes, sans addition des fonds comptés. Les flux sont ceux des sessions clôturées à la date métier, pas un inventaire global de la caisse; rapprochement physique séparé. La définition du KPI produits comptabilisés distingue ce total du chiffre d’affaires des ventes. La ventilation des ventes et autres produits par métriques distinctes et les exports correspondants restent à finaliser. Aucune validation finale.
+
+## Recette automatisée ciblée (candidate)
+`tests/e2e/issue-1226-financial-integrity.spec.mjs` est exécuté après la recette #662 dans son environnement PostgreSQL et Redis isolé, avec garde stricte CI/localhost/base jetable. Vérifie réellement ouverture, fonds réservés, deux acteurs, step-up, passation, fermeture bloquée, solde de session, absence de posting d'écart non qualifié, plusieurs tailles écran, aller-retour XLSX, solde daté, allocations partielles/groupées, annulation et approbation indépendante. Cette recette n'est pas le OWNER_E2E manuel et ne couvre pas encore tous les cas historiques ou secteurs. Aucun résultat anticipé.

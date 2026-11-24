@@ -23,6 +23,7 @@ on:
       - "scripts/qa-307-mobile-money-multicurrency.mjs"
       - "scripts/qa-hotfix-662-cash-orphan-approval-recovery.mjs"
       - "tests/e2e/issue-662-cash-orphan-approval-recovery.spec.mjs"
+      - "tests/e2e/issue-1226-financial-integrity.spec.mjs"
       - "docs/OWNER_E2E_662_CASH_ORPHAN_APPROVAL_RECOVERY.md"
       - "docs/ISSUE_307_MOBILE_MONEY_MULTICURRENCY_ACCOUNTS.md"
       - "docs/ERP_RETAIL_TELCO_MOBILE_MONEY.md"
@@ -159,6 +160,14 @@ jobs:
         run: |
           set -o pipefail
           pnpm exec playwright test tests/e2e/issue-662-cash-orphan-approval-recovery.spec.mjs --workers=1 2>&1 | tee /tmp/dtsc-hotfix-662-browser.log
+      - name: Reset isolated Redis before financial integrity acceptance
+        run: |
+          curl --fail --silent --show-error -H "Authorization: Bearer ${CI_REDIS_REST_TOKEN}" -H "Content-Type: application/json" --data '["FLUSHDB"]' http://127.0.0.1:8079/ >/dev/null
+      - name: "Hotfix #1226 financial integrity browser and PostgreSQL acceptance"
+        shell: bash
+        run: |
+          set -o pipefail
+          pnpm exec playwright test tests/e2e/issue-1226-financial-integrity.spec.mjs --workers=1 2>&1 | tee /tmp/dtsc-hotfix-1226-browser.log
       - name: Stop application and Redis REST proxy
         if: always()
         run: |
@@ -176,4 +185,5 @@ jobs:
             /tmp/dtsc-hotfix-662-build.log
             /tmp/dtsc-hotfix-662-next.log
             /tmp/dtsc-hotfix-662-browser.log
+            /tmp/dtsc-hotfix-1226-browser.log
             /tmp/dtsc-hotfix-662-redis-rest.log
