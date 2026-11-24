@@ -107,6 +107,17 @@ test.describe.serial("Hotfix #1226 financial integrity (isolated browser and Pos
       await prisma.enterpriseFinancialAccount.update({where:{id:bank.id},data:{maskedReference:"AB12"}});
       const masked=(await ok(a,"GET",root+"/financial-accounts?recordId="+bank.id)).items[0];
       expect(masked.maskedReference).toBe("••••");
+      // Existing #662 recipe creates store closings in this disposable tenant.
+      const exportQuery=root+"/retail/daily-close?export=1";
+      const filtered=await ok(a,"GET",exportQuery+"&siteId="+site.id);
+      expect(Array.isArray(filtered.rows)).toBeTruthy();
+      const fixture=await prisma.enterpriseRetailDailyClose.findFirstOrThrow({where:{organizationId,siteId:site.id,lines:{some:{}}},include:{lines:true}});
+      const exactExport=await ok(a,"GET",exportQuery+"&siteId="+site.id+"&search="+encodeURIComponent(fixture.number));
+      expect(exactExport.rows.length).toBe(fixture.lines.length);
+      expect(exactExport.rows.every(row=>row.number===fixture.number && row.currencyCode && typeof row.declaredBalance==="string")).toBeTruthy();
+      expect(new Set(exactExport.rows.map(row=>row.id))).toEqual(new Set(fixture.lines.map(line=>line.id)));
+      const excluded=await ok(a,"GET",exportQuery+"&siteId=missing-"+randomUUID()+"&search="+encodeURIComponent(fixture.number));
+      expect(excluded.rows).toHaveLength(0);
       const day="2026-11-24";
       const when=new Date(day+"T10:00:00Z");
       const next=new Date("2026-11-25T10:00:00Z");

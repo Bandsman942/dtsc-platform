@@ -19,7 +19,7 @@ for (const marker of [
   "RetailDailyCloseCashCount", "RetailDailyCloseNonCashCount",
   "cashCountsFromDailyCloseForm", 'type="search"', '"search", searchQuery',
   'name="businessDate"', 'setHistoryPage', 'dateFrom', 'dateTo',
-  'exportCurrentPageCsv', 'useToastMessage(notice)', 'EnterpriseApproverSelect',
+  'exportFilteredCloses', 'downloadProfessionalCsv', 'downloadProfessionalXlsx', 'downloadProfessionalPdf', 'useToastMessage(notice)', 'EnterpriseApproverSelect',
   'item.capabilities?.canApprove', 'item.capabilities?.canReject',
   'setSelectedAccountIds', 'selectedAccountIds.includes(account.id)',
 ]) {
@@ -45,6 +45,7 @@ for (const path of historyPaths) {
 assert.ok(shopPanel.includes('id="retail-shop-history-import"') && shopPanel.includes('id="retail-shop-history-records"'), "SHOP UI retains isolated, compact sections");
 const api = read("app/api/enterprise/[organizationId]/retail/daily-close/route.ts");
 assert.ok(api.includes("search, status, from, to") && api.includes('mode: "insensitive"') && api.includes("endOfDay"), "History filters must apply server-side");
+assert.ok(api.includes("dailyClose:where") && api.includes("RepeatableRead") && api.includes("RETAIL_CLOSE_EXPORT_LIMIT"), "Complete export must enforce the same authorized filters, bounded consistent snapshot");
 assert.ok(api.includes("cashApproverById") && api.includes("auth.access.canManage"), "Independent approval must remain protected");
 assert.ok(read("lib/enterprise/retail/service.ts").includes("RETAIL_CASH_COUNT_TOTAL_MISMATCH"), "Server cash-count reconciliation must remain authoritative");
 assert.match(read("lib/enterprise/retail/service.ts"), /accountSiteIdentities\.size > 1/, "Every daily close must reject cross-store mixes even without staff-isolation mode");

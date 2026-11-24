@@ -125,7 +125,6 @@ assert.match(closeSummary,/CUSTODY_HANDOVER/);
 assert.doesNotMatch(closeSummary,/SUM\(l."declaredBalance"\)/);
 console.log("#1226 tranche J consolidated cash flow guards: PASS");
 
-const {maskFinancialReference}=await import("../lib/enterprise/accounting/masked-financial-reference.ts");
 assert.equal(maskFinancialReference("1234"),"••••");
 assert.equal(maskFinancialReference("AB-12"),"••••");
 assert.equal(maskFinancialReference("123456789"),"•••• 6789");
