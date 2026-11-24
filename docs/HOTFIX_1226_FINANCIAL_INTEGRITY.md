@@ -82,3 +82,6 @@ Le KPI produits totalise désormais REVENUE et OTHER_INCOME. Les ventes/services
 
 ## Recette du SHA 9360b129
 - Migration complète : PASS (#45441600783, migration Quality également réussie). Recette #662 et les deux scénarios #1226 caisse et banque : PASS (#45441600971). Quality #45441601057 : échec du contrat statique #1117 (24 indicateurs au lieu de 22). Le contrat est étendu en comparant explicitement les 22 identifiants historiques de la base et les 2 ajouts, sans supprimer d'assertion métier. Les autres étapes Quality restent à rejouer. OWNER_E2E non exécuté.
+
+## Recette historique complémentaire (candidate)
+Un troisième acteur indépendant et des écritures fictives sans site sont créés exclusivement dans la base jetable existante. Contrôle de la ventilation produits, filtre site, identifiant exact, lien profond comptable, interdiction de contrepassation isolée, correction indépendante et unicité de la contrepassation sans mouvement de trésorerie. Aucun accès à ETS KIN FOREX. Résultat à vérifier en CI.

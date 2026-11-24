@@ -157,4 +157,65 @@ test.describe.serial("Hotfix #1226 financial integrity (isolated browser and Pos
       expect(states.find(t=>t.id===transactions[3].id).reconciliationStatus).toBe("UNRECONCILED");
     }finally{await a.close();await b.close();}
   });
+  test("legacy no-site other product is traced to its exact journal and reversed only by independent cash review",async({browser})=>{
+    const [a,b]=await contextPair(browser);
+    let c;
+    try{
+      const reviewerEmail="h1226-reviewer-"+randomUUID()+"@example.test";
+      const reviewer=await prisma.user.create({data:{email:reviewerEmail,name:"Synthetic Independent Reviewer",passwordHash:owner.passwordHash,role:"CLIENT",status:"ACTIVE",locale:"fr",startPage:"/dashboard"}});
+      await prisma.organizationMember.create({data:{organizationId,userId:reviewer.id,role:"ADMIN_ENTERPRISE",status:"ACTIVE",joinedAt:new Date()}});
+      c=await signIn(browser,reviewerEmail,process.env.E2E_ADMIN_PASSWORD);
+      await stepUp(c,process.env.E2E_ADMIN_PASSWORD);
+      const cash=await account("CASH",100,100);
+      const opened=(await ok(a,"POST",root+"/cash-sessions",{financialAccountId:cash.id,openingAmount:"100"})).session;
+      const close=(await ok(a,"POST",root+"/cash-sessions/"+opened.id+"/close",{revision:opened.revision,countedClosingAmount:"105",counts:[{denomination:"5",quantity:21}],closingReason:"Synthetic legacy count error",approverUserId:recipient.id})).session;
+      const approved=(await ok(b,"POST",root+"/cash-sessions/"+opened.id+"/validate",{revision:close.revision,approve:true})).session;
+      const discrepancy=await prisma.enterpriseCashDiscrepancy.findFirstOrThrow({where:{organizationId,cashSessionId:opened.id}});
+      const now=new Date(),from=new Date(now);from.setUTCDate(from.getUTCDate()-2);
+      const to=new Date(now);to.setUTCDate(to.getUTCDate()+2);
+      let period=await prisma.enterpriseFiscalPeriod.findFirst({where:{organizationId,startDate:{lte:now},endDate:{gte:now},status:"OPEN",fiscalYear:{status:"OPEN"}},orderBy:{startDate:"desc"}});
+      if(!period){
+        const year=await prisma.enterpriseFiscalYear.findFirst({where:{organizationId,startDate:{lte:now},endDate:{gte:now},status:"OPEN"}});
+        if(!year)throw new Error("Synthetic fiscal year not seeded");
+        period=await prisma.enterpriseFiscalPeriod.create({data:{organizationId,fiscalYearId:year.id,code:"H1226-"+randomUUID(),startDate:from,endDate:to,status:"OPEN"}});
+      }
+      const other=await prisma.enterpriseLedgerAccount.create({data:{organizationId,chartId:ledger.chartId,code:"H1226-OTHER-"+randomUUID().slice(0,8),nameFr:"Autres produits fictifs",nameEn:"Synthetic other income",accountType:"OTHER_INCOME",currencyCode:"USD",isActive:true,allowDirectPosting:true}});
+      const journal=await prisma.enterpriseJournal.findFirstOrThrow({where:{organizationId,isActive:true}});
+      const number="H1226-LEGACY-"+randomUUID().slice(0,8);
+      const original=await prisma.enterpriseJournalEntry.create({data:{organizationId,number,journalId:journal.id,fiscalPeriodId:period.id,accountingDate:now,description:"Synthetic old cash variance without site",sourceModule:"FINANCE_CASH",sourceEntityType:"EnterpriseCashDiscrepancy",sourceEntityId:discrepancy.id,postingEvent:"CASH_VARIANCE_POSTED",status:"POSTED",totalDebit:"5",totalCredit:"5",functionalCurrencyCode:"USD",preparedByUserId:owner.id,approvedByUserId:recipient.id,postedByUserId:recipient.id,postedAt:now}});
+      await prisma.enterpriseJournalLine.createMany({data:[
+        {organizationId,journalEntryId:original.id,ledgerAccountId:ledger.id,debit:"5",credit:"0",functionalAmount:"5",transactionCurrencyCode:"USD",transactionAmount:"5",exchangeRate:"1"},
+        {organizationId,journalEntryId:original.id,ledgerAccountId:other.id,debit:"0",credit:"5",functionalAmount:"5",transactionCurrencyCode:"USD",transactionAmount:"5",exchangeRate:"1"}
+      ]});
+      await prisma.enterpriseCashDiscrepancy.update({where:{id:discrepancy.id},data:{status:"APPROVED",journalEntryId:original.id,approvedByUserId:recipient.id}});
+      const trace=root+"/retail/financial-drilldown?from="+from.toISOString().slice(0,10)+"&to="+to.toISOString().slice(0,10)+"&currency=USD&search="+encodeURIComponent(number);
+      const details=await ok(c,"GET",trace+"&metric=postedOtherProducts");
+      expect(details.lines).toHaveLength(1);
+      expect(details.lines[0]).toMatchObject({siteId:null,sourceType:"EnterpriseJournalEntry",sourceId:original.id,amount:"5.000000"});
+      expect((await ok(c,"GET",trace+"&metric=postedSalesRevenue")).totalLines).toBe(0);
+      expect((await ok(c,"GET",trace+"&metric=postedOtherProducts&siteId="+site.id)).totalLines).toBe(0);
+      const exact=(await ok(c,"GET",root+"/journal-entries?recordId="+original.id)).items;
+      expect(exact).toHaveLength(1);
+      expect(exact[0].capabilities).toMatchObject({canReverse:false,reverseBlockReason:"CASH_VARIANCE_REVIEW_REQUIRED"});
+      const page=await c.newPage();
+      await page.goto(base+"/enterprise-modules/FINANCE_ACCOUNTING?recordId="+original.id+"&entityType=EnterpriseJournalEntry");
+      await expect(page.getByText("Régularisez cet écart depuis sa session de caisse source.",{exact:false})).toBeVisible();
+      const endpoint=root+"/cash-sessions/"+opened.id+"/variance-review";
+      const correction={discrepancyId:discrepancy.id,revision:approved.revision,decision:"CORRECT_COUNT",verifiedCount:"100",reason:"Synthetic independently verified original count error",evidenceReference:"PV-H1226-TEST",attest:true};
+      await stepUp(a,process.env.E2E_ADMIN_PASSWORD);
+      expect((await call(a,"POST",endpoint,correction)).response.ok()).toBeFalsy();
+      const result=await ok(c,"POST",endpoint,correction);
+      expect(result.discrepancy.status).toBe("LEGACY_REVERSED");
+      const reversal=await prisma.enterpriseJournalEntry.findUniqueOrThrow({where:{id:result.reversalEntryId},include:{lines:true}});
+      expect(reversal.reversalOfEntryId).toBe(original.id);
+      expect(reversal.lines.find(line=>line.ledgerAccountId===other.id).debit.toFixed()).toBe("5");
+      expect(reversal.lines.every(line=>line.siteId===null)).toBeTruthy();
+      expect((await prisma.enterpriseJournalEntry.findUniqueOrThrow({where:{id:original.id}})).status).toBe("REVERSED");
+      expect((await prisma.enterpriseFinancialAccount.findUniqueOrThrow({where:{id:cash.id}})).operationalBalance.toFixed()).toBe("100");
+      expect(await prisma.enterpriseTreasuryTransaction.count({where:{organizationId,financialAccountId:cash.id}})).toBe(0);
+      expect((await call(c,"POST",endpoint,correction)).response.ok()).toBeFalsy();
+      expect(await prisma.enterpriseJournalReversal.count({where:{organizationId,originalEntryId:original.id}})).toBe(1);
+    }finally{await a.close();await b.close();if(c)await c.close();}
+  });
+
 });
