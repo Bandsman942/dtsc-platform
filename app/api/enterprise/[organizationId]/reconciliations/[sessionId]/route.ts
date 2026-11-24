@@ -93,7 +93,7 @@ export async function GET(req: Request, { params }: Params) {
       bankStatement,
       statementLines: linesWithAllocation,
       capabilities: {
-        canMatch: Boolean(capabilities.canManage && ["DRAFT", "IN_PROGRESS"].includes(reconciliation.status)),
+        canMatch: Boolean(reconciliation.bankStatementId && capabilities.canManage && ["DRAFT", "IN_PROGRESS"].includes(reconciliation.status)),
         canSubmit: Boolean(capabilities.canSubmit && ["DRAFT", "IN_PROGRESS"].includes(reconciliation.status) && reconciliation.preparedByUserId === auth.session.userId),
         canApprove: Boolean(capabilities.canApprove && reconciliation.status === "PENDING_VALIDATION" && assigned),
         canReject: Boolean(capabilities.canApprove && reconciliation.status === "PENDING_VALIDATION" && assigned),

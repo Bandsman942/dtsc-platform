@@ -1123,6 +1123,7 @@ model EnterpriseReconciliationSession {
   number              String
   financialAccountId  String
   bankStatementId     String?
+  physicalEvidenceJson Json?
   status              String                         @default("DRAFT")
   periodStart         DateTime
   periodEnd           DateTime

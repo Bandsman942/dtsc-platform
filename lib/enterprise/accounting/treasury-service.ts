@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { bankStatementBalanceIssues } from "@/lib/enterprise/accounting/bank-statement-balance-validation";
 import { requireRetailSiteCapability, retailFinanceReadSiteScope, retailStaffIsolationIsEnabled } from "@/lib/enterprise/retail/site-access";
+import { captureCashPhysicalSnapshotTx } from "@/lib/enterprise/accounting/cash-physical-reconciliation";
 import { assertReconciliationEvidenceTx } from "@/lib/enterprise/accounting/reconciliation-evidence";
 import { assertIndependentActor } from "@/lib/enterprise/accounting/access";
 import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
@@ -76,6 +77,19 @@ export async function createReconciliationSession(organizationId: string, actorU
   return prisma.$transaction(async (tx) => {
     const account = await tx.enterpriseFinancialAccount.findFirst({ where: { id: input.financialAccountId, organizationId, status: "ACTIVE" } });
     if (!account) throw new EnterpriseAccountingError("RECONCILIATION_ACCOUNT_INVALID", 409);
+    if (account.accountType === "CASH") {
+      if (input.bankStatementId || input.physicalCount === undefined || !input.evidenceReference || input.attest !== true) throw new EnterpriseAccountingError("RECONCILIATION_EVIDENCE_REQUIRED", 409);
+      const { account: locked, sessionDigest } = await captureCashPhysicalSnapshotTx(tx, organizationId, account.id, actorUserId);
+      const open = await tx.enterpriseReconciliationSession.findFirst({ where: { organizationId, financialAccountId: account.id, status: { in: ["DRAFT","IN_PROGRESS","PENDING_VALIDATION"] } } });
+      if (open) throw new EnterpriseAccountingError("RECONCILIATION_SESSION_CONFLICT", 409);
+      const previous = await tx.enterpriseReconciliationSession.findFirst({ where: { organizationId, financialAccountId: account.id, status: "COMPLETED" }, orderBy: { periodEnd: "desc" } });
+      const now = new Date();
+      const counted = new Prisma.Decimal(input.physicalCount);
+      const session = await tx.enterpriseReconciliationSession.create({ data: { organizationId, number: financeReference("REC"), financialAccountId: account.id, periodStart: previous?.periodEnd || locked.createdAt, periodEnd: now, bookBalance: locked.operationalBalance, statementBalance: counted, reconciledDifference: counted.minus(locked.operationalBalance), preparedByUserId: actorUserId, physicalEvidenceJson: { version: 1, accountRevision: locked.revision, sessionDigest, countedAt: now.toISOString(), evidenceReference: input.evidenceReference, physicalCount: counted.toFixed(), attested: true } } });
+      await publishFinanceEvent(tx, { organizationId, entityType: "EnterpriseReconciliationSession", entityId: session.id, eventType: "RECONCILIATION_SESSION_CREATED", summary: "Physical cash reconciliation prepared", actorUserId, toStatus: "DRAFT" });
+      return session;
+    }
+    if (!input.bankStatementId || input.physicalCount !== undefined || input.evidenceReference || input.attest) throw new EnterpriseAccountingError("RECONCILIATION_EVIDENCE_REQUIRED", 409);
     const statement = input.bankStatementId ? await tx.enterpriseBankStatement.findFirst({ where: { id: input.bankStatementId, organizationId, financialAccountId: account.id } }) : null;
     if (input.periodStart > input.periodEnd || (statement && (statement.periodStart.getTime() !== input.periodStart.getTime() || statement.periodEnd.getTime() !== input.periodEnd.getTime() || statement.currencyCode !== account.currencyCode))) throw new EnterpriseAccountingError("RECONCILIATION_PERIOD_MISMATCH", 409);
     if (input.bankStatementId && (!statement || statement.status !== "IMPORTED")) throw new EnterpriseAccountingError("RECONCILIATION_STATEMENT_INVALID", 409);
@@ -179,7 +193,7 @@ export async function completeReconciliationSession(organizationId: string, sess
     const difference = money(session.statementBalance.minus(session.bookBalance));
     const tolerance = (await tx.enterpriseFinanceConfiguration.findUnique({ where: { organizationId } }))?.reconciliationTolerance || new Prisma.Decimal("0.01");
     if (difference.abs().greaterThan(tolerance)) throw new EnterpriseAccountingError("RECONCILIATION_DIFFERENCE_UNRESOLVED", 409, { difference: difference.toFixed(), matchedTotal: matchedTotal.toFixed() });
-    await assertReconciliationEvidenceTx(tx, organizationId, session);
+    await assertReconciliationEvidenceTx(tx, organizationId, session, actorUserId);
     const updated = await tx.enterpriseReconciliationSession.update({ where: { id: session.id }, data: { status: "COMPLETED", approvedByUserId: actorUserId, completedAt: new Date(), reconciledDifference: difference, revision: { increment: 1 } } });
     await tx.enterpriseFinancialAccount.update({ where: { id: session.financialAccountId }, data: { reconciledBalance: session.statementBalance, revision: { increment: 1 } } });
     if (session.bankStatementId) await tx.enterpriseBankStatement.update({ where: { id: session.bankStatementId }, data: { status: "RECONCILED" } });

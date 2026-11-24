@@ -1,12 +1,15 @@
 import type { Prisma } from "@prisma/client";
+import { assertCashPhysicalEvidenceTx } from "@/lib/enterprise/accounting/cash-physical-reconciliation";
 import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
 
 /** Do not certify an equal balance without matching evidence. */
 export async function assertReconciliationEvidenceTx(
   tx: Prisma.TransactionClient,
   organizationId: string,
-  session: { id: string; financialAccountId: string; bankStatementId: string | null; periodStart: Date; periodEnd: Date },
+  session: { id: string; financialAccountId: string; bankStatementId: string | null; periodStart: Date; periodEnd: Date; physicalEvidenceJson: Prisma.JsonValue | null; bookBalance: Prisma.Decimal; statementBalance: Prisma.Decimal },
+  actorUserId?: string,
 ) {
+  if (!session.bankStatementId && session.physicalEvidenceJson) return assertCashPhysicalEvidenceTx(tx, organizationId, session, actorUserId);
   if (!session.bankStatementId) throw new EnterpriseAccountingError("RECONCILIATION_EVIDENCE_REQUIRED", 409);
   const statement = await tx.enterpriseBankStatement.findFirst({
     where: { organizationId, id: session.bankStatementId, financialAccountId: session.financialAccountId, status: "IMPORTED" },

@@ -368,8 +368,9 @@ export async function submitReconciliationForAssignedValidation(
     if (!session) throw new EnterpriseAccountingError("RECONCILIATION_SESSION_NOT_FOUND", 404);
     if (!["DRAFT", "IN_PROGRESS"].includes(session.status) || session.revision !== input.revision) throw new EnterpriseAccountingError("RECONCILIATION_SESSION_CONFLICT", 409);
     if (session.preparedByUserId !== actorUserId) throw new EnterpriseAccountingError("RECONCILIATION_SUBMITTER_MISMATCH", 403);
-    await assertReconciliationEvidenceTx(tx, organizationId, session);
+    await assertReconciliationEvidenceTx(tx, organizationId, session, actorUserId);
 
+    if (session.physicalEvidenceJson && input.approverUserId === actorUserId) throw new EnterpriseAccountingError("RECONCILIATION_SELF_APPROVAL_FORBIDDEN",409);
     const approval = await createAccountingApprovalAssignment(tx, {
       organizationId,
       targetEntityType: "EnterpriseReconciliationSession",
@@ -422,6 +423,7 @@ export async function decideReconciliationAssignedValidation(
     const session = await tx.enterpriseReconciliationSession.findFirst({ where: { id: sessionId, organizationId } });
     if (!session) throw new EnterpriseAccountingError("RECONCILIATION_SESSION_NOT_FOUND", 404);
     if (session.status !== "PENDING_VALIDATION" || session.revision !== input.revision) throw new EnterpriseAccountingError("RECONCILIATION_SESSION_CONFLICT", 409);
+    if (session.physicalEvidenceJson && session.preparedByUserId === actorUserId) throw new EnterpriseAccountingError("RECONCILIATION_SELF_APPROVAL_FORBIDDEN",409);
 
     await decideAccountingApproval(tx, {
       organizationId,
@@ -451,7 +453,7 @@ export async function decideReconciliationAssignedValidation(
       return updated;
     }
 
-    await assertReconciliationEvidenceTx(tx, organizationId, session);
+    await assertReconciliationEvidenceTx(tx, organizationId, session, actorUserId);
     const updated = await tx.enterpriseReconciliationSession.update({
       where: { id: session.id },
       data: {

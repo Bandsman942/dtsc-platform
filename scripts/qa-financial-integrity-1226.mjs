@@ -79,3 +79,8 @@ assert.ok(bankStatementBalanceIssues({...statement,lines:[{...statement.lines[0]
 assert.ok(bankStatementBalanceIssues({...statement,lines:[{...statement.lines[0],runningBalance:"102.11"}]}).some(issue=>issue.code==="BANK_STATEMENT_RUNNING_BALANCE_MISMATCH"));
 assert.ok(bankStatementBalanceIssues({...statement,lines:[...statement.lines,...statement.lines]}).some(issue=>issue.code==="BANK_STATEMENT_DUPLICATE_LINE"));
 console.log("#1226 tranche D2 statement balance guards: PASS");
+
+const physical=read("lib/enterprise/accounting/cash-physical-reconciliation.ts");
+for (const marker of ["RECONCILIATION_CASH_SESSIONS_UNRESOLVED","RECONCILIATION_CASH_SNAPSHOT_CHANGED","sessionDigest","FOR UPDATE","retailFinanceReadSiteScope"]) assert.ok(physical.includes(marker),marker);
+assert.match(evidence,/assertCashPhysicalEvidenceTx/);
+console.log("#1226 tranche E1 physical cash guards: PASS");

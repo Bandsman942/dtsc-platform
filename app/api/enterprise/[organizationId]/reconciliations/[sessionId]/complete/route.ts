@@ -1,3 +1,6 @@
+import { prisma } from "@/lib/prisma";
+import { hasRecentStepUp } from "@/lib/auth/step-up";
+import { getEnterpriseAccountingAccess } from "@/lib/enterprise/accounting/access";
 import { NextResponse } from "next/server";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { authorizeFinanceRequest, financeErrorResponse, financeValidationErrorResponse } from "@/lib/enterprise/accounting/http";
@@ -20,6 +23,11 @@ export async function POST(req: Request, { params }: Params) {
   if (!auth.ok) return auth.response;
 
   try {
+    const current = await prisma.enterpriseReconciliationSession.findFirst({where:{id:sessionId,organizationId},select:{physicalEvidenceJson:true}});
+    if (current?.physicalEvidenceJson) {
+      if (!await getEnterpriseAccountingAccess({session:auth.session,organizationId,moduleCode:"FINANCE_CASH",action:"view"})) return NextResponse.json({error:"Forbidden"},{status:403});
+      if (parsed.data.action === "APPROVE" && !await hasRecentStepUp(auth.session)) return NextResponse.json({error:"STEP_UP_REQUIRED",message:"Vérification de sécurité récente obligatoire."},{status:428});
+    }
     const session = parsed.data.action === "SUBMIT"
       ? await submitReconciliationForAssignedValidation(organizationId, sessionId, auth.session.userId, parsed.data)
       : await decideReconciliationAssignedValidation(organizationId, sessionId, auth.session.userId, parsed.data);
