@@ -52,7 +52,7 @@ export const RETAIL_METRIC_DEFINITIONS = {
   },
   postedRevenue: {
     timeBasis: "PERIOD_FLOW", evidence: "POSTED_LEDGER", dateField: "accountingDate",
-    interpretation: { fr: "Produits issus des écritures postées de la période ; attribution boutique et exhaustivité à vérifier.", en: "Revenue from posted ledger lines in the period; store attribution and completeness require verification." },
+    interpretation: { fr: "Produits issus des écritures postées de la période, y compris les autres produits (ex. excédents qualifiés). Ce total ne représente pas le chiffre d’affaires des ventes ; attribution boutique et exhaustivité à vérifier.", en: "Revenue from posted ledger lines in the period, including other income (e.g. qualified cash surpluses). This total is not sales turnover; store attribution and completeness require verification." },
   },
   postedCogs: {
     timeBasis: "PERIOD_FLOW", evidence: "POSTED_LEDGER", dateField: "accountingDate",

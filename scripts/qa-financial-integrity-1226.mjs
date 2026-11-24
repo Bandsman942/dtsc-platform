@@ -117,3 +117,10 @@ assert.match(handover,/movementType:"CUSTODY_HANDOVER",direction:"INBOUND"/);
 assert.doesNotMatch(handover,/enterpriseFinancialAccount.update|enterpriseJournalEntry.create|enterpriseTreasuryTransaction.create/);
 assert.match(service,/assertNoPendingCashHandoverTx/);
 console.log("#1226 tranche I custody handover guards: PASS");
+
+assert.match(treasury,/cashierUserId, status: \{ in: \["OPEN", "CLOSING"\] \}/);
+const closeSummary=read("app/api/enterprise/[organizationId]/retail/daily-close/summary/route.ts");
+assert.match(closeSummary,/SELECT DISTINCT s.id/);
+assert.match(closeSummary,/CUSTODY_HANDOVER/);
+assert.doesNotMatch(closeSummary,/SUM\(l."declaredBalance"\)/);
+console.log("#1226 tranche J consolidated cash flow guards: PASS");

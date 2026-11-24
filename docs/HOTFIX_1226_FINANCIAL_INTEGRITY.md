@@ -67,3 +67,6 @@ Les allocations nouvelles sont RESERVED jusqu’à validation globale; le passag
 
 ## Tranche I2 — compatibilité #700
 Une nouvelle session reste possible quand la précédente attend validation, mais ses fonds restent réservés. Attestation explicite dans le schéma serveur de passation. Aucune recette finale.
+
+## Tranche J — consolidation candidate
+Consolidation propriétaire par boutique et devise, sessions validées distinctes et flux nets hors passations internes, sans addition des fonds comptés. Les flux sont ceux des sessions clôturées à la date métier, pas un inventaire global de la caisse; rapprochement physique séparé. La définition du KPI produits comptabilisés distingue ce total du chiffre d’affaires des ventes. La ventilation des ventes et autres produits par métriques distinctes et les exports correspondants restent à finaliser. Aucune validation finale.

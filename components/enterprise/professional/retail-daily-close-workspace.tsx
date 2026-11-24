@@ -92,7 +92,7 @@ type CloseListResponse = {
   items: DailyClose[];
   pagination: { page: number; pageSize: number; total: number; pageCount: number };
 };
-type CloseSummary = { date: string; rows: Array<{ siteId: string | null; status: string; closeCount: number; varianceCount: number }> };
+type CloseSummary = { date: string; cashCoverage?: Array<{siteId:string|null;currencyCode:string;approvedSessionCount:number;unresolvedSessionCount:number;inflow:string;outflow:string;net:string}>; rows: Array<{ siteId: string | null; status: string; closeCount: number; varianceCount: number }> };
 type AdminStore = { id: string; name: string; code: string };
 type StockReport = {
   date: string; site: { id: string; name: string; code: string }; timezone: string;
@@ -490,6 +490,8 @@ export function RetailDailyCloseWorkspace({
                   <p className="mt-3 text-sm font-bold text-dtsc-ink">{locale === "fr" ? "Clôtures" : "Closes"} : {total}</p>
                   <p className="mt-1 text-xs text-dtsc-muted">{locale === "fr" ? "En attente" : "Pending"} : {count("SUBMITTED")} · {locale === "fr" ? "Validées" : "Approved"} : {count("APPROVED")} · {locale === "fr" ? "Rejetées" : "Rejected"} : {count("REJECTED")}</p>
                   <p className={`mt-2 text-xs font-bold ${variances ? "text-amber-700 dark:text-amber-300" : "text-emerald-700 dark:text-emerald-300"}`}>{locale === "fr" ? "Lignes avec écart" : "Lines with variance"} : {variances}</p>
+                  {(summary.cashCoverage||[]).filter(row=>row.siteId===site.id).map(row=><div key={row.currencyCode} className="mt-3 grid min-w-0 gap-1 border-t border-dtsc-border pt-2"><p className="font-semibold text-sm">{row.currencyCode} · {row.approvedSessionCount} {locale==="fr"?"sessions validées":"approved sessions"}</p><p className="text-xs text-dtsc-muted">{locale==="fr"?"Entrées / sorties hors passations":"Inflows / outflows excluding handovers"} : {moneyValue(row.inflow,row.currencyCode,locale)} / {moneyValue(row.outflow,row.currencyCode,locale)}</p><p className="text-sm font-semibold">{locale==="fr"?"Flux net des sessions":"Net session flows"} : {moneyValue(row.net,row.currencyCode,locale)}</p><p className="text-xs text-dtsc-muted">{row.unresolvedSessionCount} {locale==="fr"?"sessions avec écart à régulariser":"sessions with unresolved variance"}</p></div>)}
+                  <p className="mt-2 text-xs text-dtsc-muted">{locale==="fr"?"Les flux des sessions clôturées ne sont pas un solde physique global. Consultez le rapprochement de caisse pour ce dernier.":"Closed-session flows are not an account-wide physical balance. See cash reconciliation for that balance."}</p>
                   <Button size="sm" className="mt-3" variant="outline" onClick={() => { setSiteFilter(site.id); setStatusFilter("ALL"); setHistoryPage(1); setSelectedAccountIds([]); }}>{locale === "fr" ? "Voir les clôtures de cette boutique" : "View this store’s closes"}</Button>
                 </div>;
               })}{(() => {
