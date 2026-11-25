@@ -6,9 +6,10 @@ import {
   requireAccountingApprovalDecision,
 } from "@/lib/enterprise/accounting/accounting-approval-service";
 import { calculateFinancialCloseChecklist } from "@/lib/enterprise/accounting/close-service";
+import { assertNoPendingCashHandoverTx } from "@/lib/enterprise/accounting/cash-handover-service";
+import { assertReconciliationEvidenceTx, finalizeReconciliationEvidenceTx } from "@/lib/enterprise/accounting/reconciliation-evidence";
 import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
 import { money, publishFinanceEvent, serializeFinanceValue, sumDecimals } from "@/lib/enterprise/accounting/helpers";
-import { postBusinessEvent } from "@/lib/enterprise/accounting/posting-service";
 
 export async function submitFinancialCloseForAssignedApproval(
   organizationId: string,
@@ -140,6 +141,7 @@ export async function submitCashSessionCloseForAssignedValidation(
     if (!session) throw new EnterpriseAccountingError("CASH_SESSION_NOT_FOUND", 404);
     if (session.cashierUserId !== cashierUserId) throw new EnterpriseAccountingError("CASH_SESSION_NOT_OWNED", 403);
     if (session.status !== "OPEN" || session.revision !== input.revision) throw new EnterpriseAccountingError("CASH_SESSION_CONFLICT", 409);
+    await assertNoPendingCashHandoverTx(tx,organizationId,session.id);
 
     const inflows = sumDecimals(session.movements.filter((movement) => movement.direction === "INBOUND").map((movement) => movement.amount));
     const outflows = sumDecimals(session.movements.filter((movement) => movement.direction === "OUTBOUND").map((movement) => movement.amount));
@@ -287,7 +289,7 @@ export async function validateCashSessionAssignedApproval(
   });
   const result = await prisma.$transaction(async (tx) => {
     await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterpriseCashSession" WHERE id = ${sessionId} AND "organizationId" = ${organizationId} FOR UPDATE`);
-    const session = await tx.enterpriseCashSession.findFirst({ where: { id: sessionId, organizationId }, include: { discrepancies: true } });
+    const session = await tx.enterpriseCashSession.findFirst({ where: { id: sessionId, organizationId }, });
     if (!session) throw new EnterpriseAccountingError("CASH_SESSION_NOT_FOUND", 404);
     if (session.status !== "PENDING_VALIDATION" || session.revision !== input.revision) throw new EnterpriseAccountingError("CASH_SESSION_CONFLICT", 409);
 
@@ -304,7 +306,7 @@ export async function validateCashSessionAssignedApproval(
     if (input.approve) {
       await tx.enterpriseCashDiscrepancy.updateMany({
         where: { organizationId, cashSessionId: session.id, status: "PENDING" },
-        data: { status: "APPROVED", approvedByUserId: validatorUserId },
+        data: { status: "PENDING_QUALIFICATION" },
       });
     }
     const updated = await tx.enterpriseCashSession.update({
@@ -332,19 +334,9 @@ export async function validateCashSessionAssignedApproval(
         ...(input.reason ? { reason: input.reason.slice(0, 500) } : {}),
       },
     });
-    return { updated, discrepancies: session.discrepancies };
+    return updated;
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
-
-  if (input.approve) {
-    for (const discrepancy of result.discrepancies.filter((item) => !item.amount.isZero())) {
-      await postBusinessEvent(organizationId, validatorUserId, {
-        postingEvent: "CASH_VARIANCE_POSTED",
-        sourceEntityType: "EnterpriseCashDiscrepancy",
-        sourceEntityId: discrepancy.id,
-      });
-    }
-  }
-  return result.updated;
+  return result;
 }
 
 async function reconciliationSnapshot(organizationId: string, sessionId: string) {
@@ -353,7 +345,7 @@ async function reconciliationSnapshot(organizationId: string, sessionId: string)
     include: { matches: true, financialAccount: true },
   });
   if (!session) throw new EnterpriseAccountingError("RECONCILIATION_SESSION_NOT_FOUND", 404);
-  const matchedTotal = money(sumDecimals(session.matches.filter((match) => match.status === "CONFIRMED").map((match) => match.matchedAmount)));
+  const matchedTotal = money(sumDecimals(session.matches.filter((match) => match.status === "RESERVED").map((match) => match.matchedAmount)));
   const difference = money(session.statementBalance.minus(session.bookBalance));
   const tolerance = (await prisma.enterpriseFinanceConfiguration.findUnique({ where: { organizationId } }))?.reconciliationTolerance || new Prisma.Decimal("0.01");
   return { session, matchedTotal, difference, tolerance };
@@ -378,7 +370,9 @@ export async function submitReconciliationForAssignedValidation(
     if (!session) throw new EnterpriseAccountingError("RECONCILIATION_SESSION_NOT_FOUND", 404);
     if (!["DRAFT", "IN_PROGRESS"].includes(session.status) || session.revision !== input.revision) throw new EnterpriseAccountingError("RECONCILIATION_SESSION_CONFLICT", 409);
     if (session.preparedByUserId !== actorUserId) throw new EnterpriseAccountingError("RECONCILIATION_SUBMITTER_MISMATCH", 403);
+    await assertReconciliationEvidenceTx(tx, organizationId, session, actorUserId);
 
+    if (input.approverUserId === actorUserId) throw new EnterpriseAccountingError("RECONCILIATION_SELF_APPROVAL_FORBIDDEN",409);
     const approval = await createAccountingApprovalAssignment(tx, {
       organizationId,
       targetEntityType: "EnterpriseReconciliationSession",
@@ -431,6 +425,7 @@ export async function decideReconciliationAssignedValidation(
     const session = await tx.enterpriseReconciliationSession.findFirst({ where: { id: sessionId, organizationId } });
     if (!session) throw new EnterpriseAccountingError("RECONCILIATION_SESSION_NOT_FOUND", 404);
     if (session.status !== "PENDING_VALIDATION" || session.revision !== input.revision) throw new EnterpriseAccountingError("RECONCILIATION_SESSION_CONFLICT", 409);
+    if (session.preparedByUserId === actorUserId) throw new EnterpriseAccountingError("RECONCILIATION_SELF_APPROVAL_FORBIDDEN",409);
 
     await decideAccountingApproval(tx, {
       organizationId,
@@ -460,6 +455,8 @@ export async function decideReconciliationAssignedValidation(
       return updated;
     }
 
+    await assertReconciliationEvidenceTx(tx, organizationId, session, actorUserId);
+    await finalizeReconciliationEvidenceTx(tx, organizationId, session);
     const updated = await tx.enterpriseReconciliationSession.update({
       where: { id: session.id },
       data: {
@@ -474,6 +471,7 @@ export async function decideReconciliationAssignedValidation(
       where: { id: session.financialAccountId },
       data: { reconciledBalance: session.statementBalance, revision: { increment: 1 } },
     });
+    if (session.bankStatementId) await tx.enterpriseBankStatement.update({ where: { id: session.bankStatementId }, data: { status: "RECONCILED" } });
     await publishFinanceEvent(tx, {
       organizationId,
       entityType: "EnterpriseReconciliationSession",

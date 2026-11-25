@@ -27,6 +27,8 @@
     "next": "Suivant"
   },
   "common": {
+    "close": "Fermer",
+    "closeForm": "Fermer le formulaire",
     "actions": "Actions",
     "archive": "Archiver",
     "cancel": "Annuler",
@@ -983,6 +985,15 @@
       "searchPlaceholder": "Rechercher une action, une règle ou une limitation…",
       "noResult": "Aucune section du guide ne correspond à cette recherche.",
       "limitations": "Fonctionnalités conditionnelles ou limites connues"
+    },
+    "enterpriseHelp": {
+      "eyebrow": "Centre d’aide ERP",
+      "missing": "Aucun guide n’est encore publié pour ce module. Le support DTSC peut vous accompagner dans votre parcours.",
+      "related": "Modules et parcours liés",
+      "support": "Besoin d’accompagnement",
+      "back": "Revenir au module",
+      "contactSupport": "Contacter le support DTSC",
+      "configuration": "Vérifier la configuration"
     },
     "enterpriseGovernance": {
       "budgets": "Budgets et dépenses",

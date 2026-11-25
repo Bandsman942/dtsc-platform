@@ -14,7 +14,9 @@ const dashboard = readFileSync("components/enterprise/professional/retail-site-o
 const list = metricsFile.match(/RETAIL_EXECUTIVE_METRICS\s*=\s*\[([^\]]+)\]\s*as const/s);
 assert.ok(list, "The canonical Retail executive metrics list must exist");
 const keys = [...list[1].matchAll(/"([a-zA-Z]+)"/g)].map((match) => match[1]);
-assert.equal(keys.length, 22, "Existing canonical metrics must remain represented");
+const historicalKeys = ["posSales","posCollections","financeCollections","invoices","invoiceAllocated","outstanding","overdue","expenses","postedRevenue","postedCogs","postedGrossMargin","postedOperatingResult","mobileMoneyDeposits","mobileMoneyWithdrawals","mobileMoneyCommission","mobileMoneyFees","telcoSales","telcoCost","telcoMargin","treasuryBalance","treasuryReconciled","treasuryAvailable"];
+const addedKeys = ["postedSalesRevenue", "postedOtherProducts"];
+assert.deepEqual([...keys].sort(), [...historicalKeys, ...addedKeys].sort(), "All 22 historical metrics and both new product classifications must remain represented");
 assert.equal(new Set(keys).size, keys.length, "Metric identifiers must remain unique");
 
 for (const key of keys) {
@@ -79,12 +81,12 @@ const overviewRoute = readFileSync("app/api/enterprise/[organizationId]/retail/s
 const traceExport = readFileSync("lib/enterprise/retail/financial-drilldown-export.ts", "utf8");
 const expectedTraces = [
   "financeCollections", "invoices", "outstanding", "overdue", "postedRevenue", "postedGrossMargin",
-  "postedOperatingResult", "treasuryAvailable", "expenses", "mobileMoneyCommission", "telcoMargin", "posSales",
+  "postedOperatingResult", "postedSalesRevenue", "postedOtherProducts", "treasuryAvailable", "expenses", "mobileMoneyCommission", "telcoMargin", "posSales",
 ];
 const traceList = traceService.match(/RETAIL_FINANCIAL_TRACES\s*=\s*\[([^\]]+)\] as const/s);
 assert.ok(traceList, "All drill-down targets must be in an allow-list");
 const traced = [...traceList[1].matchAll(/"([a-zA-Z]+)"/g)].map((match) => match[1]);
-assert.deepEqual(traced, expectedTraces, "All 12 remaining highlighted KPI sources must be supported");
+assert.deepEqual(traced, expectedTraces, "All 14 remaining highlighted KPI sources must be supported");
 assert.match(traceRoute, /getEnterpriseCommonDomainAccess/, "Tenant RETAIL access must be checked");
 assert.match(traceRoute, /organizationMember\.findFirst/, "Only active enterprise owner/admin can inspect finance traces");
 assert.match(traceRoute, /requiredModules\(filter\.metric\)/, "Module entitlement must be rechecked for each KPI");
@@ -166,3 +168,6 @@ assert.ok(provisional.insights.some((item) => item.body.includes("USD")), "Nativ
 assert.equal(provisional.columns.length, 5, "PDF remains readable with five columns");
 
 console.log(`Retail KPI definitions v2: ${keys.length} metrics, temporal badges and source interpretations validated.`);
+
+const split=summary.summarizeRetailExecutive([{...base(),postedLedger:[{currencyCode:"CDF",revenue:"107",salesRevenue:"100",otherProducts:"12",totalProducts:"112",costOfSales:"40",grossMargin:"60",operatingResult:"62"}]}])[0];
+assert.equal(split.values.postedRevenue,"112.000000");assert.equal(split.values.postedSalesRevenue,"100.000000");assert.equal(split.values.postedOtherProducts,"12.000000");assert.equal(split.values.postedGrossMargin,"60.000000");

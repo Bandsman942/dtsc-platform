@@ -135,8 +135,9 @@ hasAll(treasuryService, [
   "const resolvedPaymentId = input.paymentId || transaction?.paymentId || null",
   "RECONCILIATION_LINKED_PAYMENT_INVALID",
   "paymentId: payment?.id || null",
-  'data: { status: "RECONCILED", reconciledAt: new Date(), revision: { increment: 1 } }',
-], "reconciliation payment propagation");
+], "reconciliation payment linkage");
+const reconciliationEvidence = read("lib/enterprise/accounting/reconciliation-evidence.ts");
+hasAll(reconciliationEvidence, ["finalizeReconciliationEvidenceTx", 'status:"RECONCILED",reconciledAt:new Date(),revision:{increment:1}'], "payment status on global reconciliation approval");
 
 for (const [tool, moduleCode] of [
   ["FINANCE_TREASURY_READ", "FINANCE_TREASURY"],

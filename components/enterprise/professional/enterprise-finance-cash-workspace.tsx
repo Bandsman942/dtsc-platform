@@ -4,6 +4,8 @@ import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { Banknote, LockKeyhole, Plus, ShieldCheck } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { Field, NativeSelect } from "@/components/enterprise/core-v2/erp-v2-ui";
+import { fetchOperationalFinanceRecord } from "@/components/enterprise/professional/use-operational-finance-collection";
+import { CashHandoverPanel } from "@/components/enterprise/professional/cash-handover-panel";
 import { CashPhysicalCountFields, cashCountsFromForm } from "@/components/enterprise/professional/cash-physical-count-fields";
 import { FinanceDateFilter, FinanceExportControls, type FinanceExportColumn } from "@/components/enterprise/professional/finance-design2-controls";
 import { EnterpriseApproverSelect } from "@/components/enterprise/enterprise-approver-select";
@@ -44,6 +46,11 @@ type CashSession = FinanceRecord & {
   theoreticalClosingAmount?: string | number | null;
   countedClosingAmount?: string | number | null;
   discrepancyAmount?: string | number | null;
+  varianceQualificationPending?: boolean;
+  varianceReviews?: Array<{id:string;status:string;amount:string|number;reason:string;journalEntryId?:string|null;canonicalSourceHref?:string|null;canReview?:boolean;updatedAt:string}>;
+  canLinkCanonical?:boolean;
+  canReviewVariance?: boolean;
+  canViewHandover?: boolean;
   openedAt: string;
   openedByLabel?: string;
   submittedAt?: string | null;
@@ -82,6 +89,25 @@ export function EnterpriseFinanceCashWorkspace({ organizationId, organizationNam
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [cashDecision, setCashDecision] = useState("true");
+  const [varianceTarget,setVarianceTarget] = useState<{session:CashSession; variance:NonNullable<CashSession["varianceReviews"]>[number]} | null>(null);
+  const [varianceDecision,setVarianceDecision] = useState("CORRECT_COUNT");
+  const [canonicalCandidates,setCanonicalCandidates] = useState<Array<{id:string;number:string;amount:string;currencyCode:string}>>([]);
+  const [canonicalPage,setCanonicalPage] = useState(1);
+  const [canonicalHasMore,setCanonicalHasMore] = useState(false);
+  const [canonicalLoading,setCanonicalLoading] = useState(false);
+  const [canonicalTransaction,setCanonicalTransaction] = useState("");
+  useEffect(()=>{
+    if(!varianceTarget || varianceDecision!=="LINK_CANONICAL")return;
+    const controller=new AbortController();
+    setCanonicalLoading(true);setCanonicalTransaction("");setCanonicalCandidates([]);
+    void fetch(`/api/enterprise/${organizationId}/cash-sessions/${varianceTarget.session.id}/variance-review?page=${canonicalPage}`,{signal:controller.signal,cache:"no-store"}).then(async response=>{
+      if(!response.ok)throw new Error("CASH_VARIANCE_CANONICAL_PROOF_REQUIRED");
+      const data=await response.json();
+      if(!controller.signal.aborted){setCanonicalCandidates(data.items);setCanonicalHasMore(data.hasMore);}
+    }).catch(error=>{if(!controller.signal.aborted)setError(safeFinanceError(error, translateEnterpriseFinance(locale, "cashVarianceReviewFailed"), locale));})
+      .finally(()=>{if(!controller.signal.aborted)setCanonicalLoading(false);});
+    return ()=>controller.abort();
+  },[varianceTarget,varianceDecision,canonicalPage,organizationId,locale]);
   useToastMessage(message, "success");
   useToastMessage(error, "error");
 
@@ -106,11 +132,16 @@ export function EnterpriseFinanceCashWorkspace({ organizationId, organizationNam
 
   const openDetail = useCallback((record: CashSession) => setDetail(record), []);
   useEffect(() => {
-    const deepId = searchParams.get("cashSessionId") || searchParams.get("session");
+    const deepId = searchParams.get("recordId") || searchParams.get("cashSessionId") || searchParams.get("session");
     if (!deepId) return;
-    const found = collection.items.find((item) => item.id === deepId);
-    if (found) openDetail(found);
-  }, [collection.items, openDetail, searchParams]);
+    let active = true;
+    void fetchOperationalFinanceRecord<CashSession>(`/api/enterprise/${organizationId}/cash-sessions`,deepId).then(record => {
+      if (!active) return;
+      if (record) openDetail(record);
+      else setError(locale === "fr" ? "Session introuvable ou non autorisée." : "Session not found or not authorized.");
+    }).catch(error => { if (active) setError(safeFinanceError(error,locale === "fr" ? "Impossible d’ouvrir la session." : "Unable to open the session.", locale)); });
+    return () => { active = false; };
+  }, [organizationId, openDetail, searchParams, locale]);
 
   async function openCashSession(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -193,6 +224,20 @@ export function EnterpriseFinanceCashWorkspace({ organizationId, organizationNam
     } finally { setBusy(false); }
   }
 
+  async function submitVarianceReview(event:FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!varianceTarget || busy) return;
+    const form=new FormData(event.currentTarget);
+    setBusy(true);setMessage("");setError("");
+    try {
+      await performFinanceCriticalStepUp(form,"APPROVE");
+      await financeMutation(`/api/enterprise/${organizationId}/cash-sessions/${varianceTarget.session.id}/variance-review`,{discrepancyId:varianceTarget.variance.id,revision:varianceTarget.session.revision,decision:varianceDecision,...(varianceDecision==="LINK_CANONICAL"?{canonicalTreasuryTransactionId:canonicalTransaction}:{}),verifiedCount:String(form.get("verifiedCount")||""),evidenceReference:String(form.get("evidenceReference")||""),reason:String(form.get("reason")||""),attest:form.get("attest")==="on"});
+      const fresh=await fetchOperationalFinanceRecord<CashSession>(`/api/enterprise/${organizationId}/cash-sessions`,varianceTarget.session.id);
+      setVarianceTarget(null);setDetail(fresh);setRefreshKey(value=>value+1);setMessage(t("cashVarianceReviewed"));
+    } catch(error) {setError(safeFinanceError(error,t("cashVarianceReviewFailed"), locale));}
+    finally {setBusy(false);}
+  }
+
   const openCount = collection.items.filter((item) => item.status === "OPEN").length;
   const pendingCount = collection.items.filter((item) => item.status === "PENDING_VALIDATION").length;
 
@@ -247,6 +292,14 @@ export function EnterpriseFinanceCashWorkspace({ organizationId, organizationNam
           {detail.countedClosingAmount !== undefined ? <FinanceDetailValue label={t("counted")}>{financeMoney(detail.countedClosingAmount, String(detail.financialAccount?.currencyCode || "USD"), locale)}</FinanceDetailValue> : null}
           {detail.discrepancyAmount !== undefined ? <FinanceDetailValue label={t("variance")}>{financeMoney(detail.discrepancyAmount, String(detail.financialAccount?.currencyCode || "USD"), locale)}</FinanceDetailValue> : null}
         </FinanceDetailGrid>
+        {detail.varianceQualificationPending ? <p role="status" className="rounded-xl border border-amber-500/30 p-3 text-sm text-dtsc-ink">{t("cashVarianceQualificationPending")}</p> : null}
+        {(detail.varianceReviews || []).map(variance => <section key={variance.id} className="grid min-w-0 gap-2 rounded-xl border border-dtsc-border p-3">
+          <strong>{t("cashVarianceReviewTitle")}</strong>
+          <p className="text-sm">{financeMoney(variance.amount,String(detail.financialAccount?.currencyCode || ""), locale)} · {t(variance.status==="RESOLVED_CANONICAL"?"cashVarianceCanonicalResolved":variance.status==="PENDING_QUALIFICATION"?"cashVarianceAwaitingReview":variance.status==="APPROVED"?"cashVarianceLegacy":variance.status==="POSTED"?"cashVariancePosted":variance.status==="LEGACY_REVERSED"?"cashVarianceLegacyReversed":variance.status==="REAL_REVERSED"?"cashVarianceRealReversed":"cashVarianceCountCorrected")}</p>
+          <p className="break-words text-xs text-dtsc-muted">{variance.reason}</p>
+          {variance.canonicalSourceHref?<a href={variance.canonicalSourceHref} className="break-words text-sm text-dtsc-primary underline hover:opacity-80 focus-visible:outline focus-visible:outline-2 active:opacity-70">{t("cashVarianceCanonicalSource")}</a>:null}
+          {detail.canReviewVariance && variance.canReview!==false && ["PENDING_QUALIFICATION","APPROVED","POSTED","RESOLVED_CANONICAL"].includes(variance.status) ? <Button variant="outline" disabled={busy} onClick={()=>{setCanonicalPage(1);setCanonicalTransaction("");setVarianceDecision(variance.status==="RESOLVED_CANONICAL"?"UNLINK_CANONICAL":variance.status==="POSTED"?"REVERSE_REAL":"CORRECT_COUNT");setVarianceTarget({session:detail,variance});setDetail(null);}}>{t("cashVarianceReviewTitle")}</Button> : null}
+        </section>)}
         {detail.status === "PENDING_VALIDATION" ? (
           <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3 rounded-xl border border-dtsc-border bg-dtsc-page p-4">
             <p className="break-words text-sm font-semibold text-dtsc-muted">
@@ -261,6 +314,7 @@ export function EnterpriseFinanceCashWorkspace({ organizationId, organizationNam
           </div>
         ) : null}
         {detail.capabilities?.canClose ? <Button disabled={busy} onClick={() => setCloseTarget(detail)}><LockKeyhole className="h-4 w-4" />{t("closeCashSession")}</Button> : null}
+        {detail.canViewHandover?<CashHandoverPanel key={detail.id} organizationId={organizationId} sessionId={detail.id} locale={locale} onChanged={async()=>{setDetail(await fetchOperationalFinanceRecord<CashSession>(`/api/enterprise/${organizationId}/cash-sessions`,detail.id));setRefreshKey(v=>v+1);}}/>:null}
         <FinanceCollaboration organizationId={organizationId} moduleCode="FINANCE_CASH" record={detail} locale={locale} />
       </div> : null}
     </Dialog>
@@ -294,6 +348,25 @@ export function EnterpriseFinanceCashWorkspace({ organizationId, organizationNam
       </form> : null}
     </Dialog>
 
+    <Dialog open={Boolean(varianceTarget)} onClose={()=>{if(!busy)setVarianceTarget(null);}} title={t("cashVarianceReviewTitle")} presentation="editor" className="max-w-xl">
+      {varianceTarget ? <form onSubmit={submitVarianceReview} className="grid min-w-0 gap-4">
+        <p className="text-sm text-dtsc-muted">{t("cashVarianceReviewHelp")}</p>
+        <p className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-dtsc-ink">{t("cashVarianceCanonicalHelp")}</p>
+        <Field label={t("decision")}><NativeSelect name="decision" value={varianceDecision} onChange={setVarianceDecision} disabled={busy} required items={varianceTarget.variance.status==="RESOLVED_CANONICAL"?[{id:"UNLINK_CANONICAL",label:t("cashVarianceCanonicalUnlink")}]:varianceTarget.variance.status==="POSTED"?[{id:"REVERSE_REAL",label:t("cashVarianceReverseReal")}]:[{id:"CORRECT_COUNT",label:t("cashVarianceCorrectCount")},...(varianceTarget.variance.status==="PENDING_QUALIFICATION"?[...(varianceTarget.session.canLinkCanonical?[{id:"LINK_CANONICAL",label:t("cashVarianceCanonicalLink")}]:[]),{id:"REAL_VARIANCE",label:t("cashVarianceReal")}]:[])]}/></Field>
+        {varianceDecision==="LINK_CANONICAL"?<div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-2">
+          <Field label={t("cashVarianceCanonicalSource")}><NativeSelect name="canonicalTreasuryTransactionId" value={canonicalTransaction} onChange={setCanonicalTransaction} disabled={busy||canonicalLoading} required items={[{id:"",label:t(canonicalLoading?"cashVarianceCanonicalLoading":"cashVarianceCanonicalChoose")},...canonicalCandidates.map(item=>({id:item.id,label:`${item.number} · ${financeMoney(item.amount,item.currencyCode,locale)}`}))]}/></Field>
+          {!canonicalLoading&&!canonicalCandidates.length?<p className="text-sm text-dtsc-muted">{t("cashVarianceCanonicalEmpty")}</p>:null}
+          <div data-responsive-actions><Button type="button" variant="outline" disabled={busy||canonicalLoading||canonicalPage===1} onClick={()=>setCanonicalPage(p=>p-1)}>{t("previous")}</Button><Button type="button" variant="outline" disabled={busy||canonicalLoading||!canonicalHasMore} onClick={()=>setCanonicalPage(p=>p+1)}>{t("next")}</Button></div>
+        </div>:null}
+        <Field label={t("cashVarianceVerifiedCount")}><Input name="verifiedCount" type="number" min="0" step="0.000001" required disabled={busy}/></Field>
+        <Field label={t("cashVarianceEvidence")}><Input name="evidenceReference" minLength={3} maxLength={200} required disabled={busy}/></Field>
+        <Field label={t("decisionReasonComment")}><textarea name="reason" minLength={10} maxLength={1000} required rows={4} disabled={busy} className="w-full rounded-xl border border-dtsc-border bg-dtsc-surface px-3 py-2"/></Field>
+        <p className="text-sm text-dtsc-muted">{t(["LINK_CANONICAL","UNLINK_CANONICAL"].includes(varianceDecision)?"cashVarianceCanonicalNoEffect":varianceDecision==="CORRECT_COUNT"?"cashVarianceNoCashEffect":varianceDecision==="REVERSE_REAL"?"cashVarianceReverseRealEffect":"cashVarianceRealEffect")}</p>
+        <label className="flex items-start gap-2 text-sm"><input type="checkbox" name="attest" required disabled={busy}/>{t("cashVarianceAttest")}</label>
+        <FinanceCriticalStepUpFields action="APPROVE" locale={locale}/>
+        <div data-responsive-actions><Button type="button" variant="outline" disabled={busy} onClick={()=>setVarianceTarget(null)}>{t("cancel")}</Button><Button type="submit" disabled={busy||(varianceDecision==="LINK_CANONICAL"&&(canonicalLoading||!canonicalTransaction))}>{t("saveDecision")}</Button></div>
+      </form> : null}
+    </Dialog>
     <Dialog open={Boolean(validateTarget)} onClose={() => setValidateTarget(null)} title={t("independentValidation")} className="max-w-xl">
       {validateTarget ? <form onSubmit={validateCashSession} className="grid gap-4">
         <Field label={t("decision")}><NativeSelect name="approve" value={cashDecision} onChange={setCashDecision} required disabled={busy} items={[{ id: "true", label: t("approveClose") }, { id: "false", label: t("rejectRequestCorrection") }]} /></Field>

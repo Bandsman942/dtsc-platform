@@ -5,6 +5,7 @@ import { authorizeFinanceRequest, financeBusinessDateRange, financeErrorResponse
 import { createManagedFinancialAccount } from "@/lib/enterprise/accounting/financial-account-service";
 import { financialAccountCreateSchema } from "@/lib/enterprise/accounting/treasury-schemas";
 import { prisma } from "@/lib/prisma";
+import { maskFinancialReference } from "@/lib/enterprise/accounting/masked-financial-reference";
 
 type Params = { params: Promise<{ organizationId: string }> };
 
@@ -29,7 +30,7 @@ export async function GET(req: Request, { params }: Params) {
         { code: { contains: search, mode: "insensitive" } },
         { name: { contains: search, mode: "insensitive" } },
         { currencyCode: { contains: search, mode: "insensitive" } },
-        { maskedReference: { contains: search, mode: "insensitive" } },
+        // Never search stored private references: result counts could disclose hidden characters.
       ],
     } : {}),
   };
@@ -79,6 +80,8 @@ export async function GET(req: Request, { params }: Params) {
       cashSessionStateByAccountId.set(session.financialAccountId, session.status);
     }
   }
+  const reconciliations = await prisma.enterpriseReconciliationSession.groupBy({ by: ["financialAccountId"], where: { organizationId, financialAccountId: { in: rawItems.map((item) => item.id) }, status: "COMPLETED" }, _max: { completedAt: true } });
+  const lastReconciled = new Map(reconciliations.map((item) => [item.financialAccountId, item._max.completedAt]));
   const capabilities = auth.access.capabilities;
   const items = rawItems.map((item) => {
     const cashSessionState = item.accountType === "CASH"
@@ -86,6 +89,8 @@ export async function GET(req: Request, { params }: Params) {
       : null;
     return {
     ...item,
+    maskedReference: maskFinancialReference(item.maskedReference),
+    lastReconciledAt: lastReconciled.get(item.id) ?? null,
     cashSessionStateForCurrentUser: cashSessionState,
     hasOpenCashSessionForCurrentUser: item.accountType === "CASH" ? cashSessionState === "OPEN" : null,
     capabilities: {
@@ -113,10 +118,10 @@ export async function POST(req: Request, { params }: Params) {
       entity: "EnterpriseFinancialAccount",
       entityId: account.id,
       request: req,
-      metadata: { organizationId, accountType: account.accountType, currency: account.currencyCode, code: account.code, maskedReference: account.maskedReference },
+      metadata: { organizationId, accountType: account.accountType, currency: account.currencyCode, code: account.code },
     });
     await writeApiLog({ request: req, statusCode: 201, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "financial-accounts" } });
-    return NextResponse.json({ ok: true, account }, { status: 201 });
+    return NextResponse.json({ ok: true, account: {...account, maskedReference:maskFinancialReference(account.maskedReference)} }, { status: 201 });
   } catch (error) {
     return financeErrorResponse(error, "FINANCIAL_ACCOUNT_CREATE_FAILED");
   }

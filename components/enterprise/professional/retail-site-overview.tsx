@@ -32,9 +32,11 @@ const METRIC_COPY: Record<RetailExecutiveMetric, [string, string, string, string
   outstanding: ["Créances Retail ouvertes", "Open Retail receivables", "Soldes impayés actuels de toutes les factures Retail, quelle que soit leur date d'émission.", "Current unpaid balances of all Retail invoices, regardless of issue date."],
   overdue: ["Créances échues", "Overdue receivables", "Créances encore impayées dont l'échéance est dépassée à date.", "Outstanding receivables with a past due date as of now."],
   expenses: ["Dépenses approuvées", "Approved expenses", "Engagements approuvés sur la période ; ne constituent pas un décaissement prouvé.", "Approved expenses in period, not necessarily paid."],
-  postedRevenue: ["Produits comptabilisés", "Posted revenue", "Produits des écritures postées, provisoires tant que l'attribution boutique n'est pas exhaustive.", "Revenue from posted ledger, provisional until store attribution is complete."],
+  postedRevenue: ["Total des produits comptabilisés", "Total posted income", "Ventes et autres produits, provisoires tant que l’attribution boutique n’est pas exhaustive.", "Sales and other income, provisional until store attribution is complete."],
+  postedSalesRevenue: ["Ventes et services comptabilisés", "Posted sales and services", "Produits identifiés par mapping de ventes ou classe 70 SYSCOHADA.", "Sales mappings or SYSCOHADA class 70."],
+  postedOtherProducts: ["Autres produits / non ventilés", "Other / unclassified income", "Y compris les écarts favorables qualifiés et les comptes non mappés.", "Includes qualified cash overages and unmapped income."],
   postedCogs: ["Coût des ventes comptabilisé", "Posted cost of goods sold", "Charges des ventes dans les écritures comptables postées.", "Cost of sales in posted journal entries."],
-  postedGrossMargin: ["Marge brute comptabilisée", "Posted gross margin", "Produits moins coût des ventes ; comptabilité postée seulement, encore provisoire.", "Posted revenue less cost of sales, still provisional."],
+  postedGrossMargin: ["Marge brute comptabilisée", "Posted gross margin", "Ventes et services identifiés moins coût des ventes ; marge postée provisoire.", "Classified sales and services less cost of sales, still provisional."],
   postedOperatingResult: ["Résultat d'exploitation comptabilisé", "Posted operating result", "Produits et autres produits moins coût des ventes et charges ; résultat partiel non certifié.", "Posted operating result; provisional, not certified net profit."],
   mobileMoneyDeposits: ["Dépôts Mobile Money", "Mobile Money deposits", "Principal traité pour les clients ; ce n'est pas un chiffre d'affaires.", "Customer principal handled, not company revenue."],
   mobileMoneyWithdrawals: ["Retraits Mobile Money", "Mobile Money withdrawals", "Principal remis aux clients ; ce n'est pas une charge d'exploitation.", "Customer principal paid out, not an operating expense."],
@@ -47,7 +49,7 @@ const METRIC_COPY: Record<RetailExecutiveMetric, [string, string, string, string
   treasuryReconciled: ["Solde rapproché", "Reconciled balances", "Partie rapprochée des soldes des comptes financiers actifs.", "Reconciled positions across active financial accounts."],
   treasuryAvailable: ["Trésorerie disponible", "Available treasury", "Solde disponible déclaré par les comptes financiers ; contrôlez les mouvements non rapprochés.", "Available financial account balance; verify unreconciled movements."],
 };
-const HIGHLIGHT_METRICS: RetailExecutiveMetric[] = ["financeCollections", "invoices", "outstanding", "overdue", "postedRevenue", "postedCogs", "postedGrossMargin", "postedOperatingResult", "treasuryAvailable", "expenses", "mobileMoneyCommission", "telcoMargin", "posSales"];
+const HIGHLIGHT_METRICS: RetailExecutiveMetric[] = ["financeCollections", "invoices", "outstanding", "overdue", "postedRevenue", "postedSalesRevenue", "postedOtherProducts", "postedCogs", "postedGrossMargin", "postedOperatingResult", "treasuryAvailable", "expenses", "mobileMoneyCommission", "telcoMargin", "posSales"];
 
 function currencyAmount(value: string, currency: string, en: boolean) {
   try { return new Intl.NumberFormat(en ? "en-US" : "fr-FR", { maximumFractionDigits: 2 }).format(Number(value)) + " " + currency; }
@@ -191,7 +193,7 @@ export function RetailSiteOverview({ organizationId, organizationName, locale, t
     onBack={() => setCogsOpen(false)} />;
   const canInspectMetric = (value: RetailExecutiveMetric) => {
     if (value === "postedCogs") return sourceAvailability.accounting;
-    if (value === "postedRevenue" || value === "postedGrossMargin" || value === "postedOperatingResult") return sourceAvailability.accounting;
+    if (value.startsWith("posted")) return sourceAvailability.accounting;
     if (value === "financeCollections") return sourceAvailability.financeReceivables && sourceAvailability.financePayments;
     if (value === "invoices" || value === "outstanding" || value === "overdue") return sourceAvailability.financeReceivables;
     if (value === "treasuryAvailable") return sourceAvailability.treasury;
@@ -309,10 +311,11 @@ export function RetailSiteOverview({ organizationId, organizationName, locale, t
         {(site.postedLedger || []).length ? site.postedLedger?.map((entry) => <div key={entry.currencyCode} className="mt-3 border-t border-amber-500/20 pt-2 first:border-0 first:pt-0">
           <p className="text-xs font-bold text-dtsc-muted">{entry.currencyCode} · {entry.journalLineCount} {en ? "posted P&L lines" : "lignes de résultat postées"}</p>
           <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-2 text-xs sm:grid-cols-3">
-            <div><dt className="text-dtsc-muted">{en ? "Revenue" : "Produits"}</dt><dd className="font-bold text-emerald-700 dark:text-emerald-300">{currencyAmount(entry.revenue, entry.currencyCode, en)}</dd></div>
+            <div><dt className="text-dtsc-muted">{en ? "Total income" : "Total des produits"}</dt><dd className="font-bold text-emerald-700 dark:text-emerald-300">{entry.totalProducts===undefined?"—":currencyAmount(entry.totalProducts, entry.currencyCode, en)}</dd></div>
+             <div><dt className="text-dtsc-muted">{en ? "Sales and services" : "Ventes et services"}</dt><dd className="font-bold text-emerald-700 dark:text-emerald-300">{entry.salesRevenue===undefined?"—":currencyAmount(entry.salesRevenue, entry.currencyCode, en)}</dd></div>
             <div><dt className="text-dtsc-muted">{en ? "Cost of sales" : "Coût des ventes"}</dt><dd><button type="button" className="inline-flex min-h-10 items-center gap-1 rounded-lg text-left font-bold text-dtsc-blue underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-cyan-500" onClick={() => { setCogsSite(site.id); setCogsCurrency(entry.currencyCode); setCogsOpen(true); }}>{currencyAmount(entry.costOfSales, entry.currencyCode, en)}<GitBranch className="h-3.5 w-3.5" /></button></dd></div>
             <div><dt className="text-dtsc-muted">{en ? "Other expenses" : "Autres charges"}</dt><dd className="font-bold text-dtsc-ink">{currencyAmount(entry.operatingExpenses, entry.currencyCode, en)}</dd></div>
-            <div><dt className="text-dtsc-muted">{en ? "Other income" : "Autres produits"}</dt><dd className="font-bold text-dtsc-ink">{currencyAmount(entry.otherIncome, entry.currencyCode, en)}</dd></div>
+            <div><dt className="text-dtsc-muted">{en ? "Other / unclassified income" : "Autres produits / non ventilés"}</dt><dd className="font-bold text-dtsc-ink">{entry.otherProducts===undefined?"—":currencyAmount(entry.otherProducts, entry.currencyCode, en)}</dd></div>
             <div><dt className="text-dtsc-muted">{en ? "Gross margin" : "Marge brute"}</dt><dd className="font-black text-dtsc-blue">{currencyAmount(entry.grossMargin, entry.currencyCode, en)}</dd></div>
             <div><dt className="text-dtsc-muted">{en ? "Operating result" : "Résultat d'exploitation"}</dt><dd className="font-black text-dtsc-ink">{currencyAmount(entry.operatingResult, entry.currencyCode, en)}</dd></div>
           </dl>

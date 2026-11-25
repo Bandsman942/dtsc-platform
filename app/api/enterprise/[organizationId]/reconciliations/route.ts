@@ -1,3 +1,4 @@
+import { getEnterpriseAccountingAccess } from "@/lib/enterprise/accounting/access";
 import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
@@ -67,7 +68,7 @@ export async function GET(req: Request, { params }: Params) {
     differenceAmount: item.reconciledDifference,
     bankStatement: item.bankStatementId ? statementById.get(item.bankStatementId) || null : null,
     capabilities: {
-      canMatch: Boolean(capabilities.canManage && ["DRAFT", "IN_PROGRESS"].includes(item.status)),
+      canMatch: Boolean(item.bankStatementId && capabilities.canManage && ["DRAFT", "IN_PROGRESS"].includes(item.status)),
       canSubmit: Boolean(capabilities.canSubmit && ["DRAFT", "IN_PROGRESS"].includes(item.status) && item.preparedByUserId === auth.session.userId),
       canApprove: Boolean(capabilities.canApprove && item.status === "PENDING_VALIDATION" && assignedIds.has(item.id)),
       canReject: Boolean(capabilities.canApprove && item.status === "PENDING_VALIDATION" && assignedIds.has(item.id)),
@@ -87,6 +88,7 @@ export async function POST(req: Request, { params }: Params) {
   if (!parsed.success) return financeValidationErrorResponse(parsed.error, "RECONCILIATION_INPUT_INVALID");
 
   try {
+    if (parsed.data.physicalCount !== undefined && !await getEnterpriseAccountingAccess({session:auth.session,organizationId,moduleCode:"FINANCE_CASH",action:"view"})) return NextResponse.json({error:"Forbidden"},{status:403});
     if (parsed.data.bankStatementId) {
       const importReady = await prisma.enterpriseBankStatement.findFirst({
         where: {

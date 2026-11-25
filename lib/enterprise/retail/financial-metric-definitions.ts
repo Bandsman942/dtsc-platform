@@ -52,7 +52,15 @@ export const RETAIL_METRIC_DEFINITIONS = {
   },
   postedRevenue: {
     timeBasis: "PERIOD_FLOW", evidence: "POSTED_LEDGER", dateField: "accountingDate",
-    interpretation: { fr: "Produits issus des écritures postées de la période ; attribution boutique et exhaustivité à vérifier.", en: "Revenue from posted ledger lines in the period; store attribution and completeness require verification." },
+    interpretation: { fr: "Produits issus des écritures postées de la période, y compris les autres produits (ex. excédents qualifiés). Ce total ne représente pas le chiffre d’affaires des ventes ; attribution boutique et exhaustivité à vérifier.", en: "Revenue from posted ledger lines in the period, including other income (e.g. qualified cash surpluses). This total is not sales turnover; store attribution and completeness require verification." },
+  },
+  postedSalesRevenue: {
+    timeBasis: "PERIOD_FLOW", evidence: "POSTED_LEDGER", dateField: "accountingDate",
+    interpretation: { fr: "Ventes et services postés selon les mappings de ventes ou la classe 70 du plan SYSCOHADA. Hors écarts de caisse et gains de change.", en: "Posted sales and services from sales mappings or SYSCOHADA class 70. Excludes cash variances and FX gains." },
+  },
+  postedOtherProducts: {
+    timeBasis: "PERIOD_FLOW", evidence: "POSTED_LEDGER", dateField: "accountingDate",
+    interpretation: { fr: "Autres produits et produits non ventilés en ventes. Un compte personnalisé non mappé reste dans ce groupe jusqu'à revue.", en: "Other income and income not classified as sales. Unmapped custom accounts stay here until reviewed." },
   },
   postedCogs: {
     timeBasis: "PERIOD_FLOW", evidence: "POSTED_LEDGER", dateField: "accountingDate",
@@ -60,7 +68,7 @@ export const RETAIL_METRIC_DEFINITIONS = {
   },
   postedGrossMargin: {
     timeBasis: "PERIOD_FLOW", evidence: "POSTED_LEDGER", dateField: "accountingDate",
-    interpretation: { fr: "Produits postés moins coûts des ventes postés de la même période et devise ; marge provisoire.", en: "Posted revenue less posted cost of sales in the same period/currency; provisional margin." },
+    interpretation: { fr: "Ventes et services identifiés moins coûts des ventes postés de la même période et devise ; marge provisoire, sous réserve de classification.", en: "Classified sales and services less posted cost of sales in the same period/currency; provisional pending classification." },
   },
   postedOperatingResult: {
     timeBasis: "PERIOD_FLOW", evidence: "POSTED_LEDGER", dateField: "accountingDate",

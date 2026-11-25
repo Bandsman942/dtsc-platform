@@ -119,6 +119,9 @@ export const retailDailyCloseCreateSchema = z.object({
   lines: z.array(z.object({
     financialAccountId: id,
     accountType: z.enum(RETAIL_CLOSE_ACCOUNT_TYPES),
+    cashSessionId: id.optional(),
+    cashSessionRevision: z.coerce.number().int().positive().optional(),
+    expectedSessionAmount: z.coerce.number().finite().min(-1_000_000_000_000).max(1_000_000_000_000).optional(),
     declaredBalance: money,
     varianceReason: z.string().trim().max(1000).optional().nullable(),
     denominations: z.array(z.object({ denomination: positiveMoney, quantity: z.coerce.number().int().nonnegative().max(1_000_000) })).max(40).optional().default([]),

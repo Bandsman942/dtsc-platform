@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { physicalCountRowsSchema } from "@/lib/enterprise/accounting/physical-count";
+import { bankStatementBalanceIssues } from "@/lib/enterprise/accounting/bank-statement-balance-validation";
 
 const currency = z.string().trim().regex(/^[A-Z]{3}$/);
 const id = z.string().cuid();
@@ -99,8 +101,8 @@ export const cashValidateSchema = z.object({ approve: z.boolean(), reason: z.str
     ctx.addIssue({ code: "custom", path: ["reason"], message: "Le motif de refus doit contenir au moins 4 caractères." });
   }
 });
-export const bankStatementSchema = z.object({ financialAccountId: id, reference: z.string().trim().min(1).max(120), statementDate: date, periodStart: date, periodEnd: date, currencyCode: currency, openingBalance: amount, closingBalance: amount, privateDocumentId: id.optional(), lines: z.array(z.object({ transactionDate: date, valueDate: date.optional(), description: z.string().trim().min(1).max(500), reference: z.string().trim().max(200).optional(), counterparty: z.string().trim().max(200).optional(), debit: amount.default("0"), credit: amount.default("0"), runningBalance: amount.optional() })).min(1).max(10000) });
-export const reconciliationCreateSchema = z.object({ financialAccountId: id, bankStatementId: id.optional(), periodStart: date, periodEnd: date });
+export const bankStatementSchema = z.object({ financialAccountId: id, reference: z.string().trim().min(1).max(120), statementDate: date, periodStart: date, periodEnd: date, currencyCode: currency, openingBalance: amount, closingBalance: amount, privateDocumentId: id.optional(), lines: z.array(z.object({ transactionDate: date, valueDate: date.optional(), description: z.string().trim().min(1).max(500), reference: z.string().trim().max(200).optional(), counterparty: z.string().trim().max(200).optional(), debit: amount.default("0"), credit: amount.default("0"), runningBalance: amount.optional() })).min(1).max(10000) }).superRefine((input,ctx)=>{ for(const issue of bankStatementBalanceIssues(input)) ctx.addIssue({code:"custom",path:issue.line?["lines",issue.line-1,issue.field]:[issue.field],message:issue.code}); });
+export const reconciliationCreateSchema = z.object({ financialAccountId: id, bankStatementId: id.optional(), periodStart: date, periodEnd: date, physicalCounts: physicalCountRowsSchema.optional(), physicalCount: z.string().regex(/^\d{1,14}(\.\d{1,6})?$/).optional(), evidenceReference: z.string().trim().min(3).max(200).optional(), attest: z.literal(true).optional() });
 export const reconciliationMatchSchema = z.object({ bankStatementLineId: id.optional(), paymentId: id.optional(), treasuryTransactionId: id.optional(), journalEntryId: id.optional(), matchedAmount: amount }).refine((v) => Boolean(v.bankStatementLineId || v.paymentId || v.treasuryTransactionId || v.journalEntryId));
 export const reconciliationCompleteSchema = z.object({ revision });
 export const closePrepareSchema = z.object({ fiscalPeriodId: id });

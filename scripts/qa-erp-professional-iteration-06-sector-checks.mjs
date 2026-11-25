@@ -45,6 +45,8 @@ const healthFinanceQa = read("scripts/qa-health-financial-convergence-checks.mjs
 const pharmacyCoreQa = read("scripts/qa-pharmacy-core-convergence-checks.mjs");
 const pharmacyFinanceQa = read("scripts/qa-pharmacy-financial-convergence-checks.mjs");
 const helpPage = read("app/help/enterprise/page.tsx");
+const frenchHelp = JSON.parse(read("locales/fr.json")).userGuides.enterpriseHelp;
+const englishHelp = JSON.parse(read("locales/en.json")).userGuides.enterpriseHelp;
 const guideRegistry = read("lib/user-guides/enterprise-guide-registry.ts");
 const canonicalGuide = read("lib/user-guides/canonical-guide.ts");
 const sectorGuides = read("lib/enterprise/sector-user-guides.ts");
@@ -181,8 +183,13 @@ const checks = {
     need(helpPage, "getCanonicalEnterpriseUserGuide", "Centre d’aide sectoriel canonique");
     need(helpPage, "ContextualUserGuide", "Renderer canonique du centre d’aide");
     need(canonicalGuide, "toCanonicalEnterpriseUserGuide", "Adaptateur canonique des guides sectoriels");
-    need(helpPage, "Modules et parcours liés", "Liens entre guides et modules");
-    need(helpPage, "Revenir au module", "Retour du guide vers le module");
+    need(helpPage, 't("related")', "Liens entre guides et modules via le dictionnaire");
+    need(helpPage, 't("back")', "Retour du guide vers le module via le dictionnaire");
+    need(helpPage, "getCanonicalEnterpriseUserGuide(code, user.locale)", "Langue du guide selon le compte");
+    need(frenchHelp.related, "Modules et parcours liés", "Liens entre guides et modules en français");
+    need(frenchHelp.back, "Revenir au module", "Retour du guide vers le module en français");
+    need(englishHelp.related, "Related modules and workflows", "Liens entre guides et modules en anglais");
+    need(englishHelp.back, "Return to the module", "Retour du guide vers le module en anglais");
     need(sectorWorkspace, "ProfessionalHelp", "Accès au guide dans les workspaces sectoriels");
     need(sectorWorkspace, "withHelp", "Guide présent sur tous les workspaces sectoriels");
     for (const moduleCode of [...healthModules, ...pharmacyModules]) {

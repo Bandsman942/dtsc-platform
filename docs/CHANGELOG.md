@@ -1,3 +1,47 @@
+## 2026-11-25 — HOTFIX #1226 — liaison canonique candidate
+
+- Liaison indépendante d’un écart à une source Financement/Transfert/Paiement confirmée et comptabilisée ; contrôle exact compte/devise/sens/montant/date et de la clé de posting canonique, sans second mouvement ni écriture. Unicité en base, audit, retrait indépendant conditionnel et blocage de la contrepassation d’une source liée. Sources historiques/ambiguës exclues ; certification du nouveau SHA requise.
+- Sélecteur et explications FR/EN, capacités de revue par acteur et lien profond vers la source ; compatibilité du lien canonique de transfert. Matrice de captures navigateur ajoutée pour les huit largeurs et les deux thèmes/langues ; une capture rendue reste à inspecter.
+- Recette propriétaire actualisée. Intégration Supabase réelle bloquée faute d’environnement isolé ; pas de GO, fusion ou déploiement.
+- Le libellé accessible et l’infobulle de fermeture du dialogue partagé suivent la locale canonique. La recette utilise cinq acteurs et un amorçage par session à zéro. Les scénarios réutilisent leurs authentifications réelles pour respecter la limite de connexion, sans désactiver ni réinitialiser cette protection.
+
+## 2026-11-24 — HOTFIX #1226 — tranches H/I candidates
+
+- Répartition contrôlée des fonds d’ouverture, solde individuel POS et Mobile Money, révision de clôture, passation contradictoire et mouvements de garde équilibrés. Non livré.
+
+## 2026-11-24 — HOTFIX #1226 — tranches F/G candidates
+
+- Réservations avant approbation, annulation motivée, contrepassation métier avec mouvement inverse et audit borné en lecture seule. Non livré.
+
+## 2026-11-24 — HOTFIX #1226 — tranche D2 candidate
+
+- Modèle Excel natif et aperçu protégé, contrôles de continuité et de doublons du relevé, prévisualisation paginée CSV/XLSX. Non certifié; pas de production.
+
+## 2026-11-24 — HOTFIX #1226 — tranche D1 candidate
+
+- Allocations partielles et groupées bornées, contrôle des totaux de couverture, proposition exacte avec fuseau métier et affichage du reste. Non certifié ; pas de production.
+
+## 2026-11-24 — HOTFIX #1226 — tranche C2 candidate
+
+- Qualification indépendante et sécurisée d’un écart, correction de comptage, contrepassation historique sous preuve et ajustement atomique d’un écart réel. Historique préservé et lien source exact. Non certifié et non livré.
+
+## 2026-11-24 — HOTFIX #1226 — tranche C1 candidate
+
+- Rétablissement du contrat d'erreur #580, propositions exactes et non ambiguës de rapprochement, confirmation explicite, QA spécifique intégrée aux régressions. Non livré.
+
+## 2026-11-24 — HOTFIX #1226 — tranche B2 candidate
+
+- Garde conservatoire du rapprochement, état jamais rapproché, masquage des références. Rapprochements partiels/groupés, physique et historique à terminer. Pas de livraison.
+
+## 2026-11-24 — HOTFIX #1226 — tranche B1 candidate
+
+- Séparation de la validation du comptage et de la comptabilisation des écarts ; statut à qualifier sans posting automatique. Non livré, workflow de régularisation encore à terminer.
+
+## 2026-11-24 — HOTFIX #1226 — Intégrité financière (v1.24.4 candidate DRAFT)
+
+- Tranche A : détail comptable et capacités d’action, lien profond, comptage par session et garde de fraîcheur, attribution analytique des écarts.
+- Non certifié, travaux de qualification/régularisation/rapprochement et Design 2.0 restant à implémenter. Aucune mutation de données historiques. Voir `docs/HOTFIX_1226_FINANCIAL_INTEGRITY.md`.
+
 ## 2026-11-23 — RETAIL #1224 — Reprise guidée des retours historiques et filtrage des factures (candidat DRAFT)
 
 - Registre POS : filtre des 11 statuts Finance, requête validée au serveur avant pagination, compatible boutique/recherche/dates, FR/EN.

@@ -80,15 +80,15 @@ export function MobilePwaHeader({
       transition={{ duration: 0.24, ease: "easeOut" }}
       className="sticky top-0 z-40 border-b border-white/14 bg-dtsc-surface/78 px-4 py-3 shadow-[0_16px_50px_rgba(0,23,54,0.10)] backdrop-blur-2xl lg:hidden"
     >
-      <div className="flex min-w-0 items-center justify-between gap-3">
-        <Link href={getDashboardUrl()} className="flex min-w-0 flex-1 items-center gap-3" aria-label={copy.homeAria}>
+      <div className="flex min-w-0 items-center justify-between gap-2 min-[380px]:gap-3">
+        <Link href={getDashboardUrl()} className="flex min-w-0 flex-1 items-center gap-2 min-[380px]:gap-3" aria-label={copy.homeAria}>
           <span className="relative flex h-11 w-11 shrink-0 overflow-hidden rounded-2xl border border-white/20 bg-dtsc-navy shadow-[0_18px_45px_rgba(0,43,91,0.25)]">
             <Image src="/dtsc-logo.png" alt="Logo DTSC" fill sizes="44px" className="object-cover" priority />
             <span className="animate-dtsc-online-pulse absolute bottom-0.5 right-0.5 z-20 h-3.5 w-3.5 rounded-full border-2 border-dtsc-surface bg-emerald-400 shadow-[0_0_18px_rgba(52,211,153,0.9)]" />
           </span>
           <span className="min-w-0 flex-1">
-            <span className="block text-base font-black tracking-tight text-dtsc-ink">DTSC</span>
-            <span className="block max-w-[9rem] break-words text-[0.62rem] font-black uppercase leading-4 tracking-[0.14em] text-cyan-600">{productBranding}</span>
+            <span className="block whitespace-nowrap text-base font-black tracking-tight text-dtsc-ink">DTSC</span>
+            <span className="hidden max-w-[9rem] truncate text-[0.62rem] font-black uppercase leading-4 tracking-[0.14em] text-cyan-600 min-[380px]:block">{productBranding}</span>
           </span>
         </Link>
 

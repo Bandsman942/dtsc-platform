@@ -5,7 +5,9 @@ import { authorizeFinanceRequest, financeBusinessDateRange, financeErrorResponse
 import { openCashSession } from "@/lib/enterprise/accounting/treasury-service";
 import { cashSessionOpenSchema } from "@/lib/enterprise/accounting/treasury-schemas";
 import { prisma } from "@/lib/prisma";
+import { getEnterpriseAccountingAccess } from "@/lib/enterprise/accounting/access";
 import { retailFinanceReadSiteScope } from "@/lib/enterprise/retail/site-access";
+import { enterpriseApprovalTargetDeepLink } from "@/lib/enterprise/approval-targets";
 
 type Params = { params: Promise<{ organizationId: string }> };
 
@@ -44,6 +46,7 @@ export async function GET(req: Request, { params }: Params) {
       include: {
         financialAccount: { select: { id: true, code: true, name: true, currencyCode: true } },
         movements: { select: { direction: true, amount: true } },
+        discrepancies: { where: { status: { in: ["PENDING_QUALIFICATION","APPROVED","POSTED","RESOLVED_COUNT_ERROR","LEGACY_REVERSED","REAL_REVERSED","RESOLVED_CANONICAL"] } }, select: { id: true, status: true, amount: true, reason: true, journalEntryId: true, createdByUserId:true,approvedByUserId:true,canonicalTreasuryTransaction:{select:{fundingOperationId:true,paymentId:true,transferId:true}}, updatedAt: true }, orderBy: { createdAt: "desc" } },
         _count: { select: { movements: true, counts: true, discrepancies: true } },
       },
     }),
@@ -79,7 +82,13 @@ export async function GET(req: Request, { params }: Params) {
       : member.user.name || member.user.email,
   ]));
   const capabilities = auth.access.capabilities;
-  const items = rawItems.map(({ movements, ...item }) => {
+  const accountingReview = capabilities.canApprove && rawItems.some(item => item.discrepancies.some(d => ["PENDING_QUALIFICATION","APPROVED","POSTED","RESOLVED_CANONICAL"].includes(d.status))) ? await getEnterpriseAccountingAccess({ session: auth.session, organizationId, moduleCode: "FINANCE_ACCOUNTING", action: "manage" }) : null;
+  const canonicalAccess=rawItems.some(item=>item.discrepancies.some(d=>["PENDING_QUALIFICATION","RESOLVED_CANONICAL"].includes(d.status)))?await Promise.all([
+    getEnterpriseAccountingAccess({session:auth.session,organizationId,moduleCode:"FINANCE_TREASURY",action:"view"}),
+    getEnterpriseAccountingAccess({session:auth.session,organizationId,moduleCode:"FINANCE_PAYMENTS",action:"view"}),
+  ]):[null,null];
+  const canViewCanonicalSource=canonicalAccess.every(Boolean);
+  const items = rawItems.map(({ movements, discrepancies, ...item }) => {
     const expectedCurrentAmount = movements.reduce(
       (totalAmount, movement) => movement.direction === "INBOUND" ? totalAmount.plus(movement.amount) : totalAmount.minus(movement.amount),
       new Prisma.Decimal(item.openingAmount),
@@ -88,6 +97,15 @@ export async function GET(req: Request, { params }: Params) {
     const assignedToCurrentUser = approval?.status === "PENDING" && approval.approverUserId === auth.session.userId;
     return {
       ...item,
+      canViewHandover:item.cashierUserId===auth.session.userId,
+      varianceQualificationPending: discrepancies.some(d => d.status === "PENDING_QUALIFICATION"),
+      canLinkCanonical:canViewCanonicalSource,
+      varianceReviews: discrepancies.map(({canonicalTreasuryTransaction:source,createdByUserId,approvedByUserId,...discrepancy})=>({
+        ...discrepancy,
+        canReview:Boolean(accountingReview&&item.status==="CLOSED"&&![item.cashierUserId,item.validatedByUserId,createdByUserId,approvedByUserId].includes(auth.session.userId)),
+        canonicalSourceHref:canViewCanonicalSource&&source ? source.fundingOperationId?enterpriseApprovalTargetDeepLink("EnterpriseFundingOperation",source.fundingOperationId):source.paymentId?enterpriseApprovalTargetDeepLink("EnterprisePayment",source.paymentId):source.transferId?enterpriseApprovalTargetDeepLink("EnterpriseAccountTransfer",source.transferId):null:null,
+      })),
+      canReviewVariance: Boolean(accountingReview && item.status === "CLOSED" && item.cashierUserId !== auth.session.userId && item.validatedByUserId !== auth.session.userId),
       openedByLabel: operatorNames.get(item.cashierUserId) || "—",
       submittedByLabel: item.submittedAt ? operatorNames.get(item.cashierUserId) || "—" : null,
       closedByLabel: item.validatedAt ? operatorNames.get(item.validatedByUserId || "") || "—" : null,

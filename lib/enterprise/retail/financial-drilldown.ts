@@ -1,10 +1,11 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { retailPostedSalesPredicate } from "@/lib/enterprise/retail/posted-sales-classification";
 
 /** The 12 other executive cards. Posted COGS retains its dedicated stock reconciliation. */
 export const RETAIL_FINANCIAL_TRACES = [
   "financeCollections", "invoices", "outstanding", "overdue",
-  "postedRevenue", "postedGrossMargin", "postedOperatingResult",
+  "postedRevenue", "postedGrossMargin", "postedOperatingResult", "postedSalesRevenue", "postedOtherProducts",
   "treasuryAvailable", "expenses", "mobileMoneyCommission", "telcoMargin", "posSales",
 ] as const;
 export type RetailFinancialTrace = typeof RETAIL_FINANCIAL_TRACES[number];
@@ -36,7 +37,7 @@ export async function readRetailFinancialTrace(input: {
 }): Promise<RetailTraceResult> {
   const { organizationId, metric, from, to, siteId, currency, search, page, pageSize } = input;
   const now = input.now || new Date();
-  const ledger = metric === "postedRevenue" || metric === "postedGrossMargin" || metric === "postedOperatingResult";
+  const ledger = metric.startsWith("posted");
   const isBalance = metric === "outstanding" || metric === "overdue" || metric === "treasuryAvailable";
   const timeBasis = isBalance ? "CURRENT_BALANCE" : "PERIOD_FLOW";
   let source: Prisma.Sql;
@@ -46,9 +47,13 @@ export async function readRetailFinancialTrace(input: {
       WHERE mapping."organizationId" = ${organizationId}
         AND mapping."ledgerAccountId" = a.id AND mapping."mappingKey" = 'COST_OF_SALES'
     ))`;
-    const accountScope = metric === "postedRevenue" ? Prisma.sql`a."accountType" = 'REVENUE'`
+    const sales = retailPostedSalesPredicate(organizationId);
+    const products = Prisma.sql`a."accountType" IN ('REVENUE','OTHER_INCOME')`;
+    const accountScope = metric === "postedRevenue" ? products
+      : metric === "postedSalesRevenue" ? sales
+      : metric === "postedOtherProducts" ? Prisma.sql`(${products} AND NOT ${sales})`
       : metric === "postedGrossMargin"
-        ? Prisma.sql`(a."accountType" = 'REVENUE' OR (a."accountType" IN ('EXPENSE','OTHER_EXPENSE') AND ${cogs}))`
+        ? Prisma.sql`(${sales} OR (a."accountType" IN ('EXPENSE','OTHER_EXPENSE') AND ${cogs}))`
         : Prisma.sql`a."accountType" IN ('REVENUE','OTHER_INCOME','EXPENSE','OTHER_EXPENSE')`;
     source = Prisma.sql`
       SELECT l.id, l."siteId", site.name AS "siteName", e."functionalCurrencyCode" AS "currencyCode",

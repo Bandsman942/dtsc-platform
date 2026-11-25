@@ -11,6 +11,7 @@ import {
 import { resolveAccountingSourceLink } from "@/lib/enterprise/accounting/accounting-source-link-registry";
 import { serializeFinanceValue } from "@/lib/enterprise/accounting/helpers";
 import { prisma } from "@/lib/prisma";
+import { journalEntryCapabilities } from "@/lib/enterprise/accounting/journal-entry-capabilities";
 
 type Params = { params: Promise<{ organizationId: string }> };
 type View = "general-ledger" | "trial-balance" | "entry-trace" | "anomalies";
@@ -87,14 +88,20 @@ export async function GET(req: Request, { params }: Params) {
       if (!entry) {
         return NextResponse.json({ error: "NOT_FOUND", message: "Cette écriture comptable est introuvable." }, { status: 404 });
       }
+      const variance = entry.sourceEntityType === "EnterpriseCashDiscrepancy" && entry.sourceEntityId ? await prisma.enterpriseCashDiscrepancy.findFirst({ where: { organizationId, id: entry.sourceEntityId }, select: { cashSessionId: true } }) : null;
       const sourceLink = await resolveAccountingSourceLink({
         userId: auth.session.userId,
         organizationId,
         sourceModule: entry.sourceModule,
-        sourceEntityId: entry.sourceEntityId,
+        sourceEntityId: entry.sourceEntityType === "EnterpriseCashDiscrepancy" ? variance?.cashSessionId : entry.sourceEntityId,
         reference: entry.reference,
       });
-      data = { entry, sourceLink };
+      const assigned = entry.status === "PENDING_APPROVAL" && Boolean(await prisma.enterpriseApproval.findFirst({
+        where: { organizationId, targetEntityType: "EnterpriseJournalEntry", targetEntityId: entry.id, status: "PENDING", archivedAt: null, approverUserId: auth.session.userId },
+        select: { id: true },
+      }));
+      const capabilities = journalEntryCapabilities({ entry, actorUserId: auth.session.userId, access: auth.access.capabilities, assigned });
+      data = { entry: { ...entry, capabilities }, sourceLink };
     }
 
     await writeApiLog({

@@ -15,16 +15,9 @@ import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
 import { assertSupplierPaymentCapacityTx, lockSupplierReturnInvoiceTx } from "@/lib/enterprise/accounting/supplier-return-credit-reconciliation";
 import type { paymentCreateSchema } from "@/lib/enterprise/accounting/schemas";
 import type { z } from "zod";
+import { paymentPostingEvent } from "@/lib/enterprise/accounting/source-posting-events";
 
 type PaymentInput = z.infer<typeof paymentCreateSchema> & { cashSessionId?: string | null };
-
-function paymentPostingEvent(paymentType: string) {
-  if (paymentType === "CUSTOMER_PAYMENT") return "CUSTOMER_PAYMENT_CONFIRMED" as const;
-  if (paymentType === "SUPPLIER_PAYMENT") return "SUPPLIER_PAYMENT_CONFIRMED" as const;
-  if (paymentType === "PAYROLL_PAYMENT") return "PAYROLL_PAYMENT_CONFIRMED" as const;
-  if (paymentType === "EXPENSE_SETTLEMENT") return "EXPENSE_SETTLEMENT_CONFIRMED" as const;
-  return null;
-}
 
 async function addPaymentEvent(tx: Prisma.TransactionClient, organizationId: string, paymentId: string, actorUserId: string, eventType: string, summary: string, metadataJson?: Prisma.InputJsonValue) {
   await tx.enterprisePaymentEvent.create({ data: { organizationId, paymentId, actorUserId, eventType, summary, metadataJson } });
@@ -364,6 +357,7 @@ export async function transitionEnterprisePayment(
     }[action];
     if (!transition?.from.includes(payment.status)) throw new EnterpriseAccountingError("PAYMENT_TRANSITION_INVALID", 409);
     if (action === "APPROVE") assertIndependentActor({ actorUserId, relatedUserIds: [payment.initiatedByUserId], errorCode: "PAYMENT_SELF_APPROVAL_FORBIDDEN" });
+    if (["RECONCILE","REVERSE"].includes(action) && await tx.enterpriseReconciliationMatch.findFirst({where:{organizationId,paymentId,status:{in:["RESERVED","CONFIRMED"]}},select:{id:true}})) throw new EnterpriseAccountingError("RECONCILIATION_PAYMENT_RESERVED",409);
     if (action === "REVERSE") {
       assertIndependentActor({
         actorUserId,

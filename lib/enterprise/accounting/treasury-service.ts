@@ -1,6 +1,11 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { bankStatementBalanceIssues, bankStatementOverlapWhere } from "@/lib/enterprise/accounting/bank-statement-balance-validation";
 import { requireRetailSiteCapability, retailFinanceReadSiteScope, retailStaffIsolationIsEnabled } from "@/lib/enterprise/retail/site-access";
+import { datedReconciliationBalanceTx, reconciliationTreasuryWindow } from "@/lib/enterprise/accounting/reconciliation-dated-balance";
+import { physicalCountTotal } from "@/lib/enterprise/accounting/physical-count";
+import { captureCashPhysicalSnapshotTx } from "@/lib/enterprise/accounting/cash-physical-reconciliation";
+import { assertReconciliationEvidenceTx, finalizeReconciliationEvidenceTx } from "@/lib/enterprise/accounting/reconciliation-evidence";
 import { assertIndependentActor } from "@/lib/enterprise/accounting/access";
 import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
 import { financeReference, money, publishFinanceEvent, sumDecimals } from "@/lib/enterprise/accounting/helpers";
@@ -13,6 +18,7 @@ type ReconciliationInput = z.infer<typeof reconciliationCreateSchema>;
 
 export async function openCashSession(organizationId: string, cashierUserId: string, input: CashSessionOpenInput) {
   return prisma.$transaction(async (tx) => {
+    await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterpriseFinancialAccount" WHERE id = ${input.financialAccountId} AND "organizationId" = ${organizationId} FOR UPDATE`);
     const account = await tx.enterpriseFinancialAccount.findFirst({ where: { id: input.financialAccountId, organizationId, accountType: "CASH", status: "ACTIVE", archivedAt: null } });
     if (!account) throw new EnterpriseAccountingError("CASH_ACCOUNT_INVALID", 409);
     // Cash sessions inherit their site from the *financial account*, never
@@ -36,16 +42,31 @@ export async function openCashSession(organizationId: string, cashierUserId: str
     const existing = await tx.enterpriseCashSession.findFirst({ where: { organizationId, financialAccountId: account.id, cashierUserId, status: { in: ["OPEN", "CLOSING"] } } });
     if (existing) throw new EnterpriseAccountingError("CASH_SESSION_ALREADY_ACTIVE", 409, { sessionId: existing.id });
     const openingAmount = new Prisma.Decimal(input.openingAmount);
+    if(openingAmount.isNegative()) throw new EnterpriseAccountingError("CASH_OPENING_AMOUNT_INVALID",409);
+    const active = await tx.enterpriseCashSession.findMany({where:{organizationId,financialAccountId:account.id,status:{in:["OPEN","CLOSING","PENDING_VALIDATION"]}},select:{openingAmount:true,status:true,expectedClosingAmount:true,countedClosingAmount:true,movements:{select:{amount:true,direction:true}}}});
+    let reserved=new Prisma.Decimal(0);
+    for(const item of active){
+      const expected=item.movements.reduce((balance,movement)=>movement.direction==="INBOUND"?balance.plus(movement.amount):balance.minus(movement.amount),item.openingAmount);
+      if(expected.isNegative())throw new EnterpriseAccountingError("CASH_CUSTODY_REVIEW_REQUIRED",409);
+      // A pending count cannot make an unexplained shortage available to another till.
+      reserved=reserved.plus(Prisma.Decimal.max(expected,item.countedClosingAmount||new Prisma.Decimal(0)));
+    }
+    const remaining=account.operationalBalance.minus(reserved);
+    if(remaining.isNegative()||openingAmount.greaterThan(remaining))throw new EnterpriseAccountingError("CASH_OPENING_FUNDS_RESERVED",409,{available:Prisma.Decimal.max(remaining,new Prisma.Decimal(0)).toFixed(),requested:openingAmount.toFixed(),currencyCode:account.currencyCode});
     const session = await tx.enterpriseCashSession.create({ data: { organizationId, number: financeReference("CASH"), financialAccountId: account.id, cashierUserId, siteId: account.siteId || null, openingAmount } });
-    await publishFinanceEvent(tx, { organizationId, entityType: "EnterpriseCashSession", entityId: session.id, eventType: "CASH_SESSION_OPENED", summary: `Cash session ${session.number} opened`, actorUserId: cashierUserId, toStatus: "OPEN", metadataJson: { financialAccountId: account.id, openingAmount: openingAmount.toFixed(), currency: account.currencyCode } });
+    await publishFinanceEvent(tx, { organizationId, entityType: "EnterpriseCashSession", entityId: session.id, eventType: "CASH_SESSION_OPENED", summary: `Cash session ${session.number} opened`, actorUserId: cashierUserId, toStatus: "OPEN", metadataJson: { financialAccountId: account.id, openingAmount: openingAmount.toFixed(), currency: account.currencyCode, remainingUnassignedBeforeOpening: remaining.toFixed() } });
     return session;
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 }
 
 export async function importBankStatement(organizationId: string, actorUserId: string, input: BankStatementInput) {
+  const issues=bankStatementBalanceIssues(input);
+  if(issues.length) throw new EnterpriseAccountingError(issues[0].code,422,{issues});
   return prisma.$transaction(async (tx) => {
-    const account = await tx.enterpriseFinancialAccount.findFirst({ where: { id: input.financialAccountId, organizationId, accountType: { in: ["BANK", "MOBILE_MONEY"] }, status: "ACTIVE" } });
+    await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterpriseFinancialAccount" WHERE id = ${input.financialAccountId} AND "organizationId" = ${organizationId} FOR UPDATE`);
+    const account = await tx.enterpriseFinancialAccount.findFirst({ where: { id: input.financialAccountId, organizationId, accountType: { in: ["BANK", "MOBILE_MONEY"] }, status: "ACTIVE", archivedAt:null } });
     if (!account || account.currencyCode !== input.currencyCode) throw new EnterpriseAccountingError("BANK_STATEMENT_ACCOUNT_INVALID", 409);
+    if(await tx.enterpriseBankStatement.findFirst({where:bankStatementOverlapWhere(organizationId,input),select:{id:true}})) throw new EnterpriseAccountingError("BANK_STATEMENT_PERIOD_OVERLAP",409);
     const statement = await tx.enterpriseBankStatement.create({
       data: {
         organizationId,
@@ -59,12 +80,12 @@ export async function importBankStatement(organizationId: string, actorUserId: s
         closingBalance: new Prisma.Decimal(input.closingBalance),
         privateDocumentId: input.privateDocumentId || null,
         importedByUserId: actorUserId,
-        lines: { create: input.lines.map((line, index) => ({ organizationId, lineNumber: index + 1, transactionDate: line.transactionDate, valueDate: line.valueDate || null, description: line.description.replace(/^[=+\-@]/, "'"), reference: line.reference || null, counterparty: line.counterparty || null, debit: new Prisma.Decimal(line.debit), credit: new Prisma.Decimal(line.credit), currencyCode: input.currencyCode, runningBalance: line.runningBalance ? new Prisma.Decimal(line.runningBalance) : null })) },
       },
-      include: { lines: true },
     });
-    await publishFinanceEvent(tx, { organizationId, entityType: "EnterpriseBankStatement", entityId: statement.id, eventType: "BANK_STATEMENT_IMPORTED", summary: `Bank statement ${statement.reference} imported`, actorUserId, toStatus: "IMPORTED", metadataJson: { lineCount: statement.lines.length, currency: statement.currencyCode } });
-    return statement;
+    await tx.enterpriseBankStatementLine.createMany({data: input.lines.map((line, index) => ({ organizationId, bankStatementId: statement.id, lineNumber: index + 1, transactionDate: line.transactionDate, valueDate: line.valueDate || null, description: line.description.replace(/^[=+\-@]/, "'"), reference: line.reference || null, counterparty: line.counterparty || null, debit: new Prisma.Decimal(line.debit), credit: new Prisma.Decimal(line.credit), currencyCode: input.currencyCode, runningBalance: line.runningBalance ? new Prisma.Decimal(line.runningBalance) : null }))});
+    const lines=await tx.enterpriseBankStatementLine.findMany({where:{organizationId,bankStatementId:statement.id},orderBy:{lineNumber:"asc"}});
+    await publishFinanceEvent(tx, { organizationId, entityType: "EnterpriseBankStatement", entityId: statement.id, eventType: "BANK_STATEMENT_IMPORTED", summary: `Bank statement ${statement.reference} imported`, actorUserId, toStatus: "IMPORTED", metadataJson: { lineCount: lines.length, currency: statement.currencyCode } });
+    return {...statement,lines};
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 30000 });
 }
 
@@ -72,9 +93,30 @@ export async function createReconciliationSession(organizationId: string, actorU
   return prisma.$transaction(async (tx) => {
     const account = await tx.enterpriseFinancialAccount.findFirst({ where: { id: input.financialAccountId, organizationId, status: "ACTIVE" } });
     if (!account) throw new EnterpriseAccountingError("RECONCILIATION_ACCOUNT_INVALID", 409);
+    if (account.accountType === "CASH") {
+      if (input.bankStatementId || input.physicalCount === undefined || !input.evidenceReference || input.attest !== true) throw new EnterpriseAccountingError("RECONCILIATION_EVIDENCE_REQUIRED", 409);
+      const { account: locked, sessionDigest } = await captureCashPhysicalSnapshotTx(tx, organizationId, account.id, actorUserId);
+      const open = await tx.enterpriseReconciliationSession.findFirst({ where: { organizationId, financialAccountId: account.id, status: { in: ["DRAFT","IN_PROGRESS","PENDING_VALIDATION"] } } });
+      if (open) throw new EnterpriseAccountingError("RECONCILIATION_SESSION_CONFLICT", 409);
+      const previous = await tx.enterpriseReconciliationSession.findFirst({ where: { organizationId, financialAccountId: account.id, status: "COMPLETED" }, orderBy: { periodEnd: "desc" } });
+      const now = new Date();
+      const counted = new Prisma.Decimal(input.physicalCount);
+      if(input.physicalCounts){
+        try{if(!counted.equals(physicalCountTotal(input.physicalCounts)))throw Error();}
+        catch{throw new EnterpriseAccountingError("RECONCILIATION_COUNT_ROWS_INVALID",422);}
+      }
+      const session = await tx.enterpriseReconciliationSession.create({ data: { organizationId, number: financeReference("REC"), financialAccountId: account.id, periodStart: previous?.periodEnd || locked.createdAt, periodEnd: now, bookBalance: locked.operationalBalance, statementBalance: counted, reconciledDifference: counted.minus(locked.operationalBalance), preparedByUserId: actorUserId, physicalEvidenceJson: { version: 1, accountRevision: locked.revision, sessionDigest, countedAt: now.toISOString(), evidenceReference: input.evidenceReference, physicalCount: counted.toFixed(), ...(input.physicalCounts?{counts:input.physicalCounts,currencyCode:locked.currencyCode}:{}), attested: true } } });
+      await publishFinanceEvent(tx, { organizationId, entityType: "EnterpriseReconciliationSession", entityId: session.id, eventType: "RECONCILIATION_SESSION_CREATED", summary: "Physical cash reconciliation prepared", actorUserId, toStatus: "DRAFT" });
+      return session;
+    }
+    if (!input.bankStatementId || input.physicalCount !== undefined || input.physicalCounts || input.evidenceReference || input.attest) throw new EnterpriseAccountingError("RECONCILIATION_EVIDENCE_REQUIRED", 409);
     const statement = input.bankStatementId ? await tx.enterpriseBankStatement.findFirst({ where: { id: input.bankStatementId, organizationId, financialAccountId: account.id } }) : null;
-    if (input.bankStatementId && !statement) throw new EnterpriseAccountingError("RECONCILIATION_STATEMENT_INVALID", 409);
-    const session = await tx.enterpriseReconciliationSession.create({ data: { organizationId, number: financeReference("REC"), financialAccountId: account.id, bankStatementId: statement?.id || null, periodStart: input.periodStart, periodEnd: input.periodEnd, bookBalance: account.operationalBalance, statementBalance: statement?.closingBalance || account.reconciledBalance, reconciledDifference: (statement?.closingBalance || account.reconciledBalance).minus(account.operationalBalance), preparedByUserId: actorUserId } });
+    if (input.periodStart > input.periodEnd || (statement && (statement.periodStart.getTime() !== input.periodStart.getTime() || statement.periodEnd.getTime() !== input.periodEnd.getTime() || statement.currencyCode !== account.currencyCode))) throw new EnterpriseAccountingError("RECONCILIATION_PERIOD_MISMATCH", 409);
+    if (input.bankStatementId && (!statement || statement.status !== "IMPORTED")) throw new EnterpriseAccountingError("RECONCILIATION_STATEMENT_INVALID", 409);
+    if (statement && await tx.enterpriseReconciliationSession.findFirst({ where: { organizationId, bankStatementId: statement.id, status: { in: ["DRAFT", "IN_PROGRESS", "PENDING_VALIDATION", "COMPLETED"] } }, select: { id: true } })) throw new EnterpriseAccountingError("RECONCILIATION_STATEMENT_ALREADY_USED", 409);
+    if(!statement) throw new EnterpriseAccountingError("RECONCILIATION_EVIDENCE_REQUIRED",409);
+    const bookBalance = await datedReconciliationBalanceTx(tx,organizationId,account.id,input.periodStart,input.periodEnd);
+    const session = await tx.enterpriseReconciliationSession.create({ data: { organizationId, number: financeReference("REC"), financialAccountId: account.id, bankStatementId: statement.id, periodStart: input.periodStart, periodEnd: input.periodEnd, bookBalance, statementBalance: statement.closingBalance, reconciledDifference: statement.closingBalance.minus(bookBalance), preparedByUserId: actorUserId } });
     await publishFinanceEvent(tx, { organizationId, entityType: "EnterpriseReconciliationSession", entityId: session.id, eventType: "RECONCILIATION_SESSION_CREATED", summary: `Reconciliation ${session.number} created`, actorUserId, toStatus: "DRAFT" });
     return session;
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
@@ -82,33 +124,44 @@ export async function createReconciliationSession(organizationId: string, actorU
 
 export async function confirmReconciliationMatch(organizationId: string, sessionId: string, actorUserId: string, input: { bankStatementLineId?: string; paymentId?: string; treasuryTransactionId?: string; journalEntryId?: string; matchedAmount: string }) {
   return prisma.$transaction(async (tx) => {
+    await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterpriseReconciliationSession" WHERE id = ${sessionId} AND "organizationId" = ${organizationId} FOR UPDATE`);
     const session = await tx.enterpriseReconciliationSession.findFirst({
       where: { id: sessionId, organizationId, status: { in: ["DRAFT", "IN_PROGRESS"] } },
-      include: { financialAccount: { select: { ledgerAccountId: true } } },
+      include: { financialAccount: { select: { ledgerAccountId: true, currencyCode: true } } },
     });
     if (!session) throw new EnterpriseAccountingError("RECONCILIATION_SESSION_NOT_OPEN", 409);
+    const window = await reconciliationTreasuryWindow(tx,organizationId,session.periodStart,session.periodEnd);
     const matchedAmount = new Prisma.Decimal(input.matchedAmount);
     if (!matchedAmount.greaterThan(0)) throw new EnterpriseAccountingError("RECONCILIATION_AMOUNT_INVALID", 400);
+    if (!session.bankStatementId || !input.bankStatementLineId || !input.treasuryTransactionId) throw new EnterpriseAccountingError("RECONCILIATION_EVIDENCE_REQUIRED", 409);
+    if (await tx.enterpriseReconciliationMatch.findFirst({where:{organizationId,reconciliationSessionId:session.id,status:"CONFIRMED"},select:{id:true}})) throw new EnterpriseAccountingError("RECONCILIATION_LEGACY_REVIEW_REQUIRED",409);
+    const existingPair = await tx.enterpriseReconciliationMatch.findFirst({ where: { organizationId, reconciliationSessionId: session.id, bankStatementLineId: input.bankStatementLineId, treasuryTransactionId: input.treasuryTransactionId, status: "RESERVED" } });
+    if (existingPair) {
+      if (existingPair.matchedAmount.equals(matchedAmount) && (!input.paymentId || existingPair.paymentId === input.paymentId) && (!input.journalEntryId || existingPair.journalEntryId === input.journalEntryId)) return existingPair;
+      throw new EnterpriseAccountingError("RECONCILIATION_DUPLICATE_MATCH", 409);
+    }
 
     if (input.bankStatementLineId) {
       await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterpriseBankStatementLine" WHERE id = ${input.bankStatementLineId} AND "organizationId" = ${organizationId} FOR UPDATE`);
     }
     const line = input.bankStatementLineId ? await tx.enterpriseBankStatementLine.findFirst({
-      where: { id: input.bankStatementLineId, organizationId, bankStatement: { financialAccountId: session.financialAccountId }, reconciliationStatus: "UNMATCHED" },
+      where: { id: input.bankStatementLineId, organizationId, bankStatementId: session.bankStatementId || "__no_statement__", bankStatement: { financialAccountId: session.financialAccountId }, reconciliationStatus: "UNMATCHED", currencyCode: session.financialAccount.currencyCode, transactionDate: { gte: session.periodStart, lte: session.periodEnd } },
     }) : null;
+    if (input.treasuryTransactionId) await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterpriseTreasuryTransaction" WHERE id = ${input.treasuryTransactionId} AND "organizationId" = ${organizationId} FOR UPDATE`);
     const transaction = input.treasuryTransactionId ? await tx.enterpriseTreasuryTransaction.findFirst({
-      where: { id: input.treasuryTransactionId, organizationId, financialAccountId: session.financialAccountId, status: "CONFIRMED", reconciliationStatus: "UNRECONCILED" },
+      where: { id: input.treasuryTransactionId, organizationId, financialAccountId: session.financialAccountId, status: "CONFIRMED", reconciliationStatus: "UNRECONCILED", currencyCode: session.financialAccount.currencyCode, transactionDate: window },
     }) : null;
     if (input.treasuryTransactionId && !transaction) throw new EnterpriseAccountingError("RECONCILIATION_TRANSACTION_INVALID", 409);
     if (input.paymentId && transaction && transaction.paymentId !== input.paymentId) {
       throw new EnterpriseAccountingError("RECONCILIATION_MATCH_TARGET_CONFLICT", 409);
     }
     const resolvedPaymentId = input.paymentId || transaction?.paymentId || null;
+    if (resolvedPaymentId) await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterprisePayment" WHERE id = ${resolvedPaymentId} AND "organizationId" = ${organizationId} FOR UPDATE`);
     const payment = resolvedPaymentId ? await tx.enterprisePayment.findFirst({
-      where: { id: resolvedPaymentId, organizationId, financialAccountId: session.financialAccountId, status: "CONFIRMED" },
+      where: { id: resolvedPaymentId, organizationId, financialAccountId: session.financialAccountId, status: "CONFIRMED", currencyCode: session.financialAccount.currencyCode, paymentDate: window },
     }) : null;
     const journalEntry = input.journalEntryId ? await tx.enterpriseJournalEntry.findFirst({
-      where: { id: input.journalEntryId, organizationId, status: "POSTED", lines: { some: { ledgerAccountId: session.financialAccount.ledgerAccountId } } },
+      where: { id: input.journalEntryId, organizationId, status: "POSTED", accountingDate: { gte: session.periodStart, lte: session.periodEnd }, lines: { some: { ledgerAccountId: session.financialAccount.ledgerAccountId } } },
       select: { id: true },
     }) : null;
 
@@ -117,10 +170,19 @@ export async function confirmReconciliationMatch(organizationId: string, session
     if (transaction?.paymentId && !payment) throw new EnterpriseAccountingError("RECONCILIATION_LINKED_PAYMENT_INVALID", 409);
     if (input.journalEntryId && !journalEntry) throw new EnterpriseAccountingError("RECONCILIATION_JOURNAL_ENTRY_INVALID", 409);
     if (!line && !transaction && !payment && !journalEntry) throw new EnterpriseAccountingError("RECONCILIATION_MATCH_TARGET_REQUIRED", 409);
-    if (line) {
-      const lineAmount = Prisma.Decimal.max(line.debit.abs(), line.credit.abs());
-      if (matchedAmount.greaterThan(lineAmount)) throw new EnterpriseAccountingError("RECONCILIATION_AMOUNT_EXCEEDS_BANK_LINE", 409, { matchedAmount: matchedAmount.toFixed(), lineAmount: lineAmount.toFixed() });
-    }
+    if (!line || !transaction) throw new EnterpriseAccountingError("RECONCILIATION_EVIDENCE_REQUIRED", 409);
+    const lineAmount = Prisma.Decimal.max(line.debit.abs(), line.credit.abs());
+    const direction = line.credit.greaterThan(0) && line.debit.isZero() ? "INBOUND" : line.debit.greaterThan(0) && line.credit.isZero() ? "OUTBOUND" : null;
+    if (!direction || transaction.direction !== direction || (payment && payment.direction !== direction)) throw new EnterpriseAccountingError("RECONCILIATION_DIRECTION_MISMATCH", 409);
+    // Match reservations are global within the tenant; another draft cannot consume this evidence.
+    const previous = await tx.enterpriseReconciliationMatch.findMany({where:{organizationId,status:{in:["RESERVED","CONFIRMED"]},OR:[{bankStatementLineId:line.id},{treasuryTransactionId:transaction.id},...(payment?[{paymentId:payment.id}]:[])]},select:{reconciliationSessionId:true,bankStatementLineId:true,treasuryTransactionId:true,paymentId:true,matchedAmount:true}});
+    if(previous.some(row=>row.reconciliationSessionId!==session.id)) throw new EnterpriseAccountingError("RECONCILIATION_DUPLICATE_MATCH",409);
+    const lineTotal = sumDecimals(previous.filter(row=>row.bankStatementLineId===line.id).map(row=>row.matchedAmount)).plus(matchedAmount);
+    const transactionTotal = sumDecimals(previous.filter(row=>row.treasuryTransactionId===transaction.id).map(row=>row.matchedAmount)).plus(matchedAmount);
+    const paymentTotal = payment ? sumDecimals(previous.filter(row=>row.paymentId===payment.id).map(row=>row.matchedAmount)).plus(matchedAmount) : null;
+    if (lineTotal.greaterThan(lineAmount)) throw new EnterpriseAccountingError("RECONCILIATION_AMOUNT_EXCEEDS_BANK_LINE",409,{remainingAmount:lineAmount.minus(lineTotal.minus(matchedAmount)).toFixed()});
+    if (transactionTotal.greaterThan(transaction.amount) || (payment && paymentTotal?.greaterThan(payment.amount))) throw new EnterpriseAccountingError("RECONCILIATION_AMOUNT_EXCEEDS_TRANSACTION",409);
+    if (journalEntry && await tx.enterpriseReconciliationMatch.findFirst({where:{organizationId,reconciliationSessionId:session.id,journalEntryId:journalEntry.id,status:{in:["RESERVED","CONFIRMED"]},NOT:{treasuryTransactionId:transaction.id}},select:{id:true}})) throw new EnterpriseAccountingError("RECONCILIATION_DUPLICATE_MATCH",409);
 
     const match = await tx.enterpriseReconciliationMatch.create({
       data: {
@@ -131,14 +193,11 @@ export async function confirmReconciliationMatch(organizationId: string, session
         treasuryTransactionId: transaction?.id || null,
         journalEntryId: journalEntry?.id || null,
         matchedAmount,
-        status: "CONFIRMED",
+        status: "RESERVED",
         matchedByUserId: actorUserId,
-        confirmedAt: new Date(),
       },
     });
-    if (line) await tx.enterpriseBankStatementLine.update({ where: { id: line.id }, data: { reconciliationStatus: "MATCHED" } });
-    if (transaction) await tx.enterpriseTreasuryTransaction.update({ where: { id: transaction.id }, data: { reconciliationStatus: "RECONCILED" } });
-    if (payment) await tx.enterprisePayment.update({ where: { id: payment.id }, data: { status: "RECONCILED", reconciledAt: new Date(), revision: { increment: 1 } } });
+    await publishFinanceEvent(tx,{organizationId,entityType:"EnterpriseReconciliationMatch",entityId:match.id,eventType:"RECONCILIATION_MATCH_RESERVED",summary:"Reconciliation allocation reserved",actorUserId,toStatus:"RESERVED",metadataJson:{sessionId:session.id,matchedAmount:matchedAmount.toFixed(),lineComplete:lineTotal.equals(lineAmount),transactionComplete:transactionTotal.equals(transaction.amount)}});
     await tx.enterpriseReconciliationSession.update({ where: { id: session.id }, data: { status: "IN_PROGRESS", revision: { increment: 1 } } });
     return match;
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
@@ -151,14 +210,32 @@ export async function completeReconciliationSession(organizationId: string, sess
     if (!session) throw new EnterpriseAccountingError("RECONCILIATION_SESSION_NOT_FOUND", 404);
     if (!(["DRAFT", "IN_PROGRESS"].includes(session.status)) || session.revision !== revision) throw new EnterpriseAccountingError("RECONCILIATION_SESSION_CONFLICT", 409);
     assertIndependentActor({ actorUserId, relatedUserIds: [session.preparedByUserId], errorCode: "RECONCILIATION_SELF_APPROVAL_FORBIDDEN" });
-    const matchedTotal = money(sumDecimals(session.matches.filter((match) => match.status === "CONFIRMED").map((match) => match.matchedAmount)));
+    const matchedTotal = money(sumDecimals(session.matches.filter((match) => match.status === "RESERVED").map((match) => match.matchedAmount)));
     const difference = money(session.statementBalance.minus(session.bookBalance));
     const tolerance = (await tx.enterpriseFinanceConfiguration.findUnique({ where: { organizationId } }))?.reconciliationTolerance || new Prisma.Decimal("0.01");
     if (difference.abs().greaterThan(tolerance)) throw new EnterpriseAccountingError("RECONCILIATION_DIFFERENCE_UNRESOLVED", 409, { difference: difference.toFixed(), matchedTotal: matchedTotal.toFixed() });
+    await assertReconciliationEvidenceTx(tx, organizationId, session, actorUserId);
+    await finalizeReconciliationEvidenceTx(tx, organizationId, session);
     const updated = await tx.enterpriseReconciliationSession.update({ where: { id: session.id }, data: { status: "COMPLETED", approvedByUserId: actorUserId, completedAt: new Date(), reconciledDifference: difference, revision: { increment: 1 } } });
     await tx.enterpriseFinancialAccount.update({ where: { id: session.financialAccountId }, data: { reconciledBalance: session.statementBalance, revision: { increment: 1 } } });
     if (session.bankStatementId) await tx.enterpriseBankStatement.update({ where: { id: session.bankStatementId }, data: { status: "RECONCILED" } });
     await publishFinanceEvent(tx, { organizationId, entityType: "EnterpriseReconciliationSession", entityId: session.id, eventType: "RECONCILIATION_COMPLETED", summary: `Reconciliation ${session.number} completed`, actorUserId, fromStatus: session.status, toStatus: "COMPLETED", metadataJson: { matchedTotal: matchedTotal.toFixed(), difference: difference.toFixed() } });
     return updated;
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+}
+
+/** Cancel a draft or release a single reservation without changing source balances or historical matches. */
+export async function cancelReconciliationReservation(organizationId:string,sessionId:string,actorUserId:string,input:{revision:number;reason:string;matchId?:string}) {
+  return prisma.$transaction(async tx=>{
+    await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterpriseReconciliationSession" WHERE id = ${sessionId} AND "organizationId" = ${organizationId} FOR UPDATE`);
+    const session=await tx.enterpriseReconciliationSession.findFirst({where:{organizationId,id:sessionId}});
+    if(!session || session.revision!==input.revision || !["DRAFT","IN_PROGRESS"].includes(session.status)) throw new EnterpriseAccountingError("RECONCILIATION_SESSION_CONFLICT",409);
+    if(session.preparedByUserId!==actorUserId) throw new EnterpriseAccountingError("RECONCILIATION_SUBMITTER_MISMATCH",403);
+    if(await tx.enterpriseReconciliationMatch.findFirst({where:{organizationId,reconciliationSessionId:session.id,status:"CONFIRMED"},select:{id:true}})) throw new EnterpriseAccountingError("RECONCILIATION_LEGACY_REVIEW_REQUIRED",409);
+    const cancelled=await tx.enterpriseReconciliationMatch.updateMany({where:{organizationId,reconciliationSessionId:session.id,status:"RESERVED",...(input.matchId?{id:input.matchId}:{})},data:{status:"CANCELLED"}});
+    if(input.matchId && cancelled.count!==1) throw new EnterpriseAccountingError("RECONCILIATION_SESSION_CONFLICT",409);
+    const updated=await tx.enterpriseReconciliationSession.update({where:{id:session.id},data:{status:input.matchId?"IN_PROGRESS":"CANCELLED",revision:{increment:1}}});
+    await publishFinanceEvent(tx,{organizationId,entityType:"EnterpriseReconciliationSession",entityId:session.id,eventType:input.matchId?"RECONCILIATION_RESERVATION_CANCELLED":"RECONCILIATION_CANCELLED",summary:"Reconciliation reservation released",actorUserId,fromStatus:session.status,toStatus:updated.status,metadataJson:{reason:input.reason,matchId:input.matchId||null,released:cancelled.count}});
+    return updated;
+  },{isolationLevel:Prisma.TransactionIsolationLevel.Serializable});
 }

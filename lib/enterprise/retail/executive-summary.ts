@@ -7,7 +7,7 @@ type OverviewSite = {
   financeInvoices: Array<{ currencyCode: string; issuedTotal: string; allocatedToDate: string }>;
   receivables: Array<{ currencyCode: string; total: string; overdue: string }>;
   approvedExpenses: Amount[];
-  postedLedger: Array<{ currencyCode: string; revenue: string; costOfSales: string; grossMargin: string; operatingResult: string }>;
+  postedLedger: Array<{ currencyCode: string; revenue: string; salesRevenue?: string; otherProducts?: string; totalProducts?: string; costOfSales: string; grossMargin: string; operatingResult: string }>;
   mobileMoney: Array<{ currencyCode: string; transactionType: string; principal: string; commission: string; fees: string }>;
   telco: Array<{ currencyCode: string; total: string; operatorCost: string; margin: string }>;
   treasury: Array<{ currencyCode: string; total: string; reconciled: string; available: string | null }>;
@@ -40,7 +40,7 @@ export function summarizeRetailExecutive(sites: OverviewSite[], unallocated?: Un
     for (const row of site.financeInvoices) { add(row.currencyCode, "invoices", row.issuedTotal); add(row.currencyCode, "invoiceAllocated", row.allocatedToDate); }
     for (const row of site.receivables) { add(row.currencyCode, "outstanding", row.total); add(row.currencyCode, "overdue", row.overdue); }
     for (const row of site.approvedExpenses) add(row.currencyCode, "expenses", row.total);
-    for (const row of site.postedLedger) { add(row.currencyCode, "postedRevenue", row.revenue); add(row.currencyCode, "postedCogs", row.costOfSales); add(row.currencyCode, "postedGrossMargin", row.grossMargin); add(row.currencyCode, "postedOperatingResult", row.operatingResult); }
+    for (const row of site.postedLedger) { add(row.currencyCode, "postedRevenue", row.totalProducts ?? row.revenue); if(row.salesRevenue===undefined||row.otherProducts===undefined||row.totalProducts===undefined){markUnavailable(row.currencyCode,"postedRevenue");markUnavailable(row.currencyCode,"postedSalesRevenue");markUnavailable(row.currencyCode,"postedOtherProducts");markUnavailable(row.currencyCode,"postedGrossMargin");}else{add(row.currencyCode,"postedSalesRevenue",row.salesRevenue);add(row.currencyCode,"postedOtherProducts",row.otherProducts);} add(row.currencyCode, "postedCogs", row.costOfSales); add(row.currencyCode, "postedGrossMargin", row.grossMargin); add(row.currencyCode, "postedOperatingResult", row.operatingResult); }
     for (const row of site.mobileMoney) {
       if (row.transactionType === "DEPOSIT") add(row.currencyCode, "mobileMoneyDeposits", row.principal);
       if (row.transactionType === "WITHDRAWAL") add(row.currencyCode, "mobileMoneyWithdrawals", row.principal);

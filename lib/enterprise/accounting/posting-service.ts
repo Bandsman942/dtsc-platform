@@ -160,7 +160,7 @@ export async function postBusinessEventTx(
   organizationId: string,
   actorUserId: string,
   input: PostingInput,
-  options?: { supplierInvoiceTransition?: true; supplierCreditTransition?: true; inventoryTransferTransition?: true },
+  options?: { supplierInvoiceTransition?: true; supplierCreditTransition?: true; inventoryTransferTransition?: true; cashVarianceQualification?: true },
 ) {
   const version = input.postingVersion || 1;
   if (["INVENTORY_TRANSFER_DISPATCHED","INVENTORY_TRANSFER_RECEIVED"].includes(input.postingEvent) && (!options?.inventoryTransferTransition || version!==1 || input.sourceEntityType!=="EnterpriseInventoryTransferValuation")) throw new EnterpriseAccountingError("INVENTORY_TRANSFER_VALUATION_WORKFLOW_REQUIRED",409);
@@ -177,6 +177,7 @@ export async function postBusinessEventTx(
     if (!existingEntry) throw new EnterpriseAccountingError("POSTING_BATCH_ENTRY_MISSING", 409);
     return { batch: existingBatch, entry: existingEntry, idempotent: true };
   }
+  if (input.postingEvent === "CASH_VARIANCE_POSTED" && (!options?.cashVarianceQualification || input.sourceEntityType !== "EnterpriseCashDiscrepancy" || version !== 1)) throw new EnterpriseAccountingError("CASH_VARIANCE_QUALIFICATION_REQUIRED", 409);
   if (existingBatch?.status === "PROCESSING") throw new EnterpriseAccountingError("POSTING_ALREADY_PROCESSING", 409);
   const batch = existingBatch
     ? await tx.enterprisePostingBatch.update({

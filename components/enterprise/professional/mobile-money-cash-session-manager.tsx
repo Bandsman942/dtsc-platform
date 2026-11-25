@@ -179,7 +179,7 @@ export function MobileMoneyCashSessionManager({
     () => sessions.filter((session) => session.status === "CLOSING" || session.status === "PENDING_VALIDATION"),
     [sessions],
   );
-  const lockedAccountIds = useMemo(() => new Set(sessions.map((session) => session.financialAccountId)), [sessions]);
+  const lockedAccountIds = useMemo(() => new Set(sessions.filter(session=>["OPEN","CLOSING"].includes(session.status)).map((session) => session.financialAccountId)), [sessions]);
   const availableAccounts = cashAccounts.filter((account) => !lockedAccountIds.has(account.id));
   const [openError, setOpenError] = useState("");
 
@@ -242,7 +242,7 @@ export function MobileMoneyCashSessionManager({
                           <div className="flex flex-wrap items-center gap-2"><span className="text-xl font-black text-dtsc-ink">{currency}</span>{selected ? <StatusBadge tone="success">{copy.active}</StatusBadge> : null}</div>
                           <p className="mt-1 break-words text-sm font-black text-dtsc-ink">{session.financialAccount.name}</p>
                           <p className="mt-1 text-xs font-semibold text-dtsc-muted">{copy.openingFloat}: {moneyValue(session.openingAmount, currency, locale)}</p>
-                          <p className="text-xs font-semibold text-dtsc-muted">{copy.currentBalance}: {moneyValue(session.financialAccount.operationalBalance, currency, locale)}</p>
+                          <p className="text-xs font-semibold text-dtsc-muted">{copy.currentBalance}: {session.expectedCurrentAmount == null ? (locale==="fr"?"Indisponible":"Unavailable") : moneyValue(session.expectedCurrentAmount, currency, locale)}</p>
                         </div>
                         <CircleDollarSign className="h-5 w-5 shrink-0 text-dtsc-muted" aria-hidden="true" />
                       </div>

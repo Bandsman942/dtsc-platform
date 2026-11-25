@@ -10,10 +10,11 @@ class EnterpriseAccountingError extends Error {
   constructor(code, status = 409) { super(code); this.code = code; this.status = status; }
 }
 const state = {
-  account: { id: "cash-A", siteId: "shop-A", accountType: "CASH", status: "ACTIVE", currencyCode: "CDF" },
-  allowed: ["shop-A"], created: [],
+  account: { id: "cash-A", siteId: "shop-A", accountType: "CASH", status: "ACTIVE", currencyCode: "CDF", operationalBalance: new Prisma.Decimal(1000) },
+  allowed: ["shop-A"], created: [], active: [],
 };
 const tx = {
+  $executeRaw: async()=>1,
   enterpriseFinancialAccount: { findFirst: async ({ where }) => {
     assert.equal(where.organizationId, "tenant");
     assert.equal(where.accountType, "CASH");
@@ -21,6 +22,7 @@ const tx = {
   } },
   enterpriseCashSession: {
     findFirst: async () => null,
+    findMany: async () => state.active,
     create: async ({ data }) => { state.created.push(data); return { id: "session-" + state.created.length, ...data }; },
   },
   enterpriseRetailConfiguration: { findUnique: async () => ({ settingsJson: { siteStaffIsolationEnabled: false } }) },
@@ -48,6 +50,11 @@ vm.runInNewContext(ts.transpileModule(source, {
       },
       retailStaffIsolationIsEnabled: (settings) => settings?.siteStaffIsolationEnabled === true,
     };
+    if (id === "@/lib/enterprise/accounting/bank-statement-balance-validation") return {bankStatementBalanceIssues:()=>{throw new Error("Unexpected bank validation in cash site test");}};
+    if (id === "@/lib/enterprise/accounting/reconciliation-dated-balance") return {};
+    if (id === "@/lib/enterprise/accounting/cash-physical-reconciliation") return {};
+    if (id === "@/lib/enterprise/accounting/physical-count") return {physicalCountTotal:()=>{throw new Error("Unexpected physical reconciliation in cash site test");}};
+    if (id === "@/lib/enterprise/accounting/reconciliation-evidence") return {};
     return require(id);
   },
 });
@@ -68,6 +75,13 @@ state.allowed = null; // Finance-only or owner: existing Finance permission stil
 const financeSession = await open();
 assert.equal(financeSession.siteId, "shop-A");
 assert.equal(state.created.length, 2);
+state.active=[{openingAmount:new Prisma.Decimal(950),status:"OPEN",countedClosingAmount:null,movements:[]}];
+await assert.rejects(open(),{code:"CASH_OPENING_FUNDS_RESERVED"});
+state.active=[{openingAmount:new Prisma.Decimal(850),status:"PENDING_VALIDATION",countedClosingAmount:new Prisma.Decimal(950),movements:[]}];
+await assert.rejects(open(),{code:"CASH_OPENING_FUNDS_RESERVED"});
+state.active=[{openingAmount:new Prisma.Decimal(850),status:"OPEN",countedClosingAmount:null,movements:[{direction:"OUTBOUND",amount:new Prisma.Decimal(50)}]}];
+assert.equal((await open()).openingAmount.toFixed(),"100");
+assert.equal(state.created.length,3);
 
 const financeCashList = fs.readFileSync("app/api/enterprise/[organizationId]/cash-sessions/route.ts", "utf8");
 assert.match(financeCashList, /retailFinanceReadSiteScope\(organizationId, auth\.session\.userId, "CLOSE_CASH"\)/);

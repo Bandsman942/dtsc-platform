@@ -5,6 +5,7 @@ import { writeAuditLog } from "@/lib/audit";
 import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
 import { publishFinanceEvent } from "@/lib/enterprise/accounting/helpers";
 import { bankStatementSchema } from "@/lib/enterprise/accounting/treasury-schemas";
+import { bankStatementOverlapWhere } from "@/lib/enterprise/accounting/bank-statement-balance-validation";
 import {
   AUDIT_EXPORT_EVENT_TYPE,
   BANK_STATEMENT_IMPORT_EVENT_TYPE,
@@ -181,7 +182,7 @@ async function markBankStatementFailed(job: ClaimedJob) {
   if (job.eventType !== BANK_STATEMENT_IMPORT_EVENT_TYPE) return;
   const payload = bankPayload(job);
   await prisma.enterpriseBankStatement.updateMany({
-    where: { organizationId: job.organizationId, reference: payload.reference, status: "IMPORTING" },
+    where: { organizationId: job.organizationId, financialAccountId:payload.financialAccountId, reference: payload.reference, status: "IMPORTING" },
     data: { status: "IMPORT_FAILED", revision: { increment: 1 } },
   });
 }
@@ -199,13 +200,14 @@ async function processBankStatement(job: ClaimedJob) {
     where: { organizationId: job.organizationId, reference: payload.reference },
     include: { _count: { select: { lines: true } } },
   });
-  if (existing?.status === "IMPORTED" && existing._count.lines === payload.expectedLineCount) {
+  if (existing && (existing.financialAccountId !== payload.financialAccountId || existing.currencyCode !== payload.currencyCode || existing.periodStart.toISOString()!==payload.periodStart || existing.periodEnd.toISOString()!==payload.periodEnd || !existing.openingBalance.equals(payload.openingBalance) || !existing.closingBalance.equals(payload.closingBalance))) {
+    throw new EnterpriseBulkWorkerError("BANK_STATEMENT_EXISTING_RECORD_CONFLICT", false);
+  }
+  if (existing && ["IMPORTED","RECONCILED"].includes(existing.status) && existing._count.lines === payload.expectedLineCount) {
     await deleteEnterpriseBulkArtifact({ organizationId: job.organizationId, path: payload.stagingPath }).catch(() => undefined);
     return { statementId: existing.id, lineCount: existing._count.lines, alreadyImported: true };
   }
-  if (existing && (existing.financialAccountId !== payload.financialAccountId || existing.currencyCode !== payload.currencyCode)) {
-    throw new EnterpriseBulkWorkerError("BANK_STATEMENT_EXISTING_RECORD_CONFLICT", false);
-  }
+  if(existing && !["IMPORTING","IMPORT_FAILED"].includes(existing.status)) throw new EnterpriseBulkWorkerError("BANK_STATEMENT_EXISTING_RECORD_CONFLICT",false);
 
   const stagedBlob = await downloadEnterpriseBulkArtifact({ organizationId: job.organizationId, path: payload.stagingPath });
   const stagedText = await stagedBlob.text();
@@ -225,13 +227,18 @@ async function processBankStatement(job: ClaimedJob) {
     input.lines.length !== payload.expectedLineCount
   ) throw new EnterpriseBulkWorkerError("BANK_STATEMENT_STAGING_METADATA_MISMATCH", false);
 
-  const account = await prisma.enterpriseFinancialAccount.findFirst({
-    where: { id: input.financialAccountId, organizationId: job.organizationId, accountType: { in: ["BANK", "MOBILE_MONEY"] }, status: "ACTIVE" },
+  const statement = await prisma.$transaction(async tx=>{
+    await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterpriseFinancialAccount" WHERE id = ${input.financialAccountId} AND "organizationId" = ${job.organizationId} FOR UPDATE`);
+    const account = await tx.enterpriseFinancialAccount.findFirst({
+    where: { id: input.financialAccountId, organizationId: job.organizationId, accountType: { in: ["BANK", "MOBILE_MONEY"] }, status: "ACTIVE", archivedAt:null },
     select: { id: true, currencyCode: true },
   });
   if (!account || account.currencyCode !== input.currencyCode) throw new EnterpriseBulkWorkerError("BANK_STATEMENT_ACCOUNT_INVALID", false);
 
-  const statement = existing || await prisma.enterpriseBankStatement.create({
+    if(await tx.enterpriseBankStatement.findFirst({where:bankStatementOverlapWhere(job.organizationId,input,existing?.id),select:{id:true}})) throw new EnterpriseBulkWorkerError("BANK_STATEMENT_PERIOD_OVERLAP",false);
+    const current=existing?await tx.enterpriseBankStatement.findFirst({where:{organizationId:job.organizationId,id:existing.id,financialAccountId:account.id,status:{in:["IMPORTING","IMPORT_FAILED"]}}}):null;
+    if(existing&&!current)throw new EnterpriseBulkWorkerError("BANK_STATEMENT_EXISTING_RECORD_CONFLICT",false);
+    return current || await tx.enterpriseBankStatement.create({
     data: {
       organizationId: job.organizationId,
       financialAccountId: account.id,
@@ -247,6 +254,7 @@ async function processBankStatement(job: ClaimedJob) {
       status: "IMPORTING",
     },
   });
+  },{isolationLevel:Prisma.TransactionIsolationLevel.Serializable});
 
   for (let offset = 0; offset < input.lines.length; offset += ENTERPRISE_BULK_LIMITS.bankStatementInsertChunkSize) {
     const chunk = input.lines.slice(offset, offset + ENTERPRISE_BULK_LIMITS.bankStatementInsertChunkSize);

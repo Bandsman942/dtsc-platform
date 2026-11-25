@@ -1,4 +1,7 @@
 {
+  "dailyCloseVarianceReview": "Approving the count does not turn a variance into income or expense. Separate financial review is required.",
+  "dailyCloseSessionExpected": "Expected balance of my session",
+  "dailyCloseSessionScope": "Only your open sessions are offered for physical cash counting. Other accounts and currencies remain separate.",
   "shopOperations": "Retail store operations",
   "shopControl": "Retail store control",
   "userGuide": "User guide",

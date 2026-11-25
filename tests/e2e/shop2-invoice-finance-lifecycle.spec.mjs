@@ -76,6 +76,28 @@ async function ensureStepUp(context, password) {
   expect(result.status, JSON.stringify(result.body)).toBe(200);
 }
 
+// Historical valuation uses inclusive recognition timestamps (GREATEST of
+// document date and committed evidence). Around local midnight, the civil
+// accounting date encoded at UTC midnight can coincide for sequential events.
+// A single cutoff cannot represent two different balances. Preserve all
+// distinct checkpoints, enforce nondecreasing recognition, and at a shared
+// instant assert the complete accumulated state, never a fictitious interval.
+function historicalCheckpoints(states) {
+  const checkpoints=[];
+  for (const state of states) {
+    const previous=checkpoints.at(-1);
+    if(previous) {
+      expect(previous[0].getTime(), "Recognition chronology must not reverse").toBeLessThanOrEqual(state[0].getTime());
+      if(previous[0].getTime()===state[0].getTime()) {
+        checkpoints[checkpoints.length-1]=state;
+        continue;
+      }
+    }
+    checkpoints.push(state);
+  }
+  return checkpoints;
+}
+
 async function financeFixture() {
   const owner = await prisma.user.findUniqueOrThrow({ where: { email: ownerEmail } });
   const cashier = await prisma.user.findUniqueOrThrow({ where: { email: cashierEmail } });
@@ -198,6 +220,8 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
   // #1187 adds two independent cancellation flows and the FX invoice journal
   // to the same serializable PostgreSQL scenario. Keep the timeout local.
   test.setTimeout(600_000);
+  const before=new Date("2026-11-24T23:59:59.000Z"),same=new Date("2026-11-25T00:00:00.000Z"),after=new Date("2026-11-25T00:00:01.000Z");
+  expect(historicalCheckpoints([[before,"10","70"],[same,"10","81.2"],[same,"8","64.96"],[after,"6","48.72"]])).toEqual([[before,"10","70"],[same,"8","64.96"],[after,"6","48.72"]]);
   if (process.env.CI !== "true" || !/\/dtsc_shop2_behavioral(?:\?|$)/.test(process.env.DATABASE_URL || "")) {
     throw new Error("RETAIL_1042_FINANCE_LIFECYCLE_REQUIRES_EPHEMERAL_CI_DATABASE");
   }
@@ -2627,9 +2651,10 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
         const receiptCutoff=latest(layer.effectiveAt,layer.createdAt,raceSource.occurredAt,raceSource.createdAt,receiptEvent.createdAt,receiptJournal.accountingDate,receiptJournal.postedAt);
         const capitalizedCutoff=latest(proof.effectiveAt,proof.createdAt,invoiceJournal.accountingDate,invoiceJournal.postedAt);
         const dispatchCutoff=latest(shipped.dispatchedAt,dispatchMovement.occurredAt,dispatchMovement.createdAt,shippedValue.createdAt,shippedJournal.accountingDate,shippedJournal.postedAt);
-        expect(receiptCutoff.getTime()).toBeLessThan(capitalizedCutoff.getTime());
-        expect(capitalizedCutoff.getTime()).toBeLessThan(dispatchCutoff.getTime());
-        for(const [cutoff,quantity,value] of [[receiptCutoff,"10","70"],[capitalizedCutoff,"10","81.2"],...(firstDispatchCutoff?[[firstDispatchCutoff,"8","64.96"]]:[]),[dispatchCutoff,repeatedReturn?"6":"8",repeatedReturn?"48.72":"64.96"]]){
+        expect(receiptJournal.postedAt.getTime()).toBeLessThan(invoiceJournal.postedAt.getTime());
+        expect(invoiceJournal.postedAt.getTime()).toBeLessThan(shippedJournal.postedAt.getTime());
+        const checkpoints=historicalCheckpoints([[receiptCutoff,"10","70"],[capitalizedCutoff,"10","81.2"],...(firstDispatchCutoff?[[firstDispatchCutoff,"8","64.96"]]:[]),[dispatchCutoff,repeatedReturn?"6":"8",repeatedReturn?"48.72":"64.96"]]);
+        for(const [cutoff,quantity,value] of checkpoints){
           const report=await post(context.owner,base+"/financial-statements",{
             statementType:"INVENTORY_VALUATION",periodStart:new Date(receiptCutoff.getTime()-86400000).toISOString(),
             periodEnd:cutoff.toISOString(),currencyCode:fixture.currencyCode,publish:false,
@@ -2671,7 +2696,7 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
       const event=await prisma.enterpriseInventoryAccountingEvent.findFirstOrThrow({where:{organizationId,stockMovementId:movement.id,eventType:"RECEIPT",status:"POSTED"}});
       const journal=await prisma.enterpriseJournalEntry.findUniqueOrThrow({where:{id:event.journalEntryId}});
       const layer=await prisma.enterpriseInventoryCostLayer.findFirstOrThrow({where:{organizationId,sourceMovementId:movement.id}});
-      mixedReceipts.push({movement,cutoff:recognized(movement.occurredAt,movement.createdAt,event.createdAt,journal.accountingDate,journal.postedAt,layer.effectiveAt,layer.createdAt)});
+      mixedReceipts.push({movement,postedAt:journal.postedAt,cutoff:recognized(movement.occurredAt,movement.createdAt,event.createdAt,journal.accountingDate,journal.postedAt,layer.effectiveAt,layer.createdAt)});
     }
     const firstMixed=mixedReceipts[0].movement;
     const isolateMixed=await patchLot(context.owner,{id:firstMixed.stockLotId,revision:firstMixed.stockLot.revision,status:"QUARANTINED",qualityReason:"Mixed pool defect found before approved write-off"});
@@ -2688,9 +2713,9 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
     const beforeReports=await prisma.enterpriseInventoryCostLayer.findMany({where:{organizationId,inventoryItemId:mixedItem.id},orderBy:{id:"asc"}});
     expect(beforeReports.map(layer=>layer.remainingQuantity.toFixed())).toEqual(["8","8"]);
     const firstCutoff=mixedReceipts[0].cutoff,secondCutoff=mixedReceipts[1].cutoff;
-    expect(firstCutoff.getTime()).toBeLessThan(secondCutoff.getTime());
-    expect(secondCutoff.getTime()).toBeLessThan(mixedCutoff.getTime());
-    for(const [cutoff,quantity,value] of [[firstCutoff,"10","50"],[secondCutoff,"20","140"],[mixedCutoff,"16","112"]]){
+    expect(mixedReceipts[0].postedAt.getTime()).toBeLessThan(mixedReceipts[1].postedAt.getTime());
+    expect(mixedReceipts[1].postedAt.getTime()).toBeLessThan(mixedJournal.postedAt.getTime());
+    for(const [cutoff,quantity,value] of historicalCheckpoints([[firstCutoff,"10","50"],[secondCutoff,"20","140"],[mixedCutoff,"16","112"]])){
       const report=await post(context.owner,base+"/financial-statements",{statementType:"INVENTORY_VALUATION",periodStart:new Date(firstCutoff.getTime()-86400000).toISOString(),periodEnd:cutoff.toISOString(),currencyCode:fixture.currencyCode,publish:false});
       expect(report.status,JSON.stringify(report.body)).toBe(201);
       const row=report.body.snapshot.find(r=>r.inventoryItemId===mixedItem.id&&r.warehouseId===fixture.warehouse.id);
@@ -2784,8 +2809,12 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
     expect(receiveEntry.lines.find(x=>x.credit.equals(28))?.siteId).toBeNull();
     expect(receiveEntry.lines.find(x=>x.debit.equals(28))?.siteId).toBe(fixture.site.id);
     const receivingCutoff=recognized(receivedProof.receivedAt,receivedProof.receiptMovement.createdAt,receivedProof.receiptMovement.occurredAt,destLayer.createdAt,destLayer.effectiveAt,receiveEntry.accountingDate,receiveEntry.postedAt);
-    await checkTransferReport(transitCutoff,false);
-    await checkTransferReport(receivingCutoff,true);
+    expect(transitEntry.postedAt.getTime()).toBeLessThan(receiveEntry.postedAt.getTime());
+    // Transit was checked before receipt. If both are recognized at the same
+    // inclusive instant, a new historical report must now include receipt.
+    for(const [cutoff,received] of historicalCheckpoints([[transitCutoff,false],[receivingCutoff,true]])){
+      await checkTransferReport(cutoff,received);
+    }
     const replayValued=await post(context.owner,transferPath+"/"+vtid+"/receive",{revision:vtdispatch.body.transfer.revision,comment:"Replay must not apply"});
     expect(replayValued.status).toBe(409);
     expect(await prisma.enterpriseInventoryTransferValuation.count({where:{organizationId,transferLineId:vtline}})).toBe(1);

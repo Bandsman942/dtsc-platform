@@ -77,7 +77,7 @@ hasAll(referenceRoute, [
 ], "accounting reference endpoint");
 hasAll(referenceUi, ["setTimeout", "220", "accounting-reference-options", "parentId", "directPosting"], "accounting reference selector");
 
-hasAll(journalRoute, [
+hasAll(journalRoute + read("lib/enterprise/accounting/journal-entry-capabilities.ts"), [
   "recordId",
   'targetEntityType: "EnterpriseJournalEntry"',
   'status: "PENDING"',

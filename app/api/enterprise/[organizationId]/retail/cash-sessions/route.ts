@@ -39,13 +39,13 @@ export async function GET(req: Request, { params }: Params) {
       status: { in: ["OPEN", "PENDING_VALIDATION", "CLOSED", "REJECTED"] } },
     orderBy: { openedAt: "desc" },
     take: 30,
-    include: { financialAccount: { select: { id: true, code: true, name: true, currencyCode: true } }, _count: { select: { movements: true, counts: true, discrepancies: true } } },
+    include: { movements:{select:{amount:true,direction:true}}, financialAccount: { select: { id: true, code: true, name: true, currencyCode: true } }, _count: { select: { movements: true, counts: true, discrepancies: true } } },
   });
   const operatorIds = [...new Set(items.flatMap((item) => [item.cashierUserId, item.validatedByUserId].filter((id): id is string => Boolean(id))))];
   const members = await prisma.organizationMember.findMany({ where: { organizationId, userId: { in: operatorIds } }, select: { userId: true, user: { select: { name: true, email: true } } } });
   const operatorNames = new Map(members.map((member) => [member.userId, member.user.name || member.user.email || "—"]));
   await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "retail-cash-sessions", moduleCode: auth.moduleCode } });
-  return NextResponse.json({ items: items.map((session) => ({ ...session, openedByLabel: operatorNames.get(session.cashierUserId) || "—", submittedByLabel: session.submittedAt ? operatorNames.get(session.cashierUserId) || "—" : null, closedByLabel: session.validatedAt ? operatorNames.get(session.validatedByUserId || "") || "—" : null, closedAt: session.validatedAt || null })) });
+  return NextResponse.json({ items: items.map(({movements,...session}) => ({ ...session, expectedCurrentAmount:movements.reduce((balance,movement)=>movement.direction==="INBOUND"?balance.plus(movement.amount):balance.minus(movement.amount),session.openingAmount).toFixed(), openedByLabel: operatorNames.get(session.cashierUserId) || "—", submittedByLabel: session.submittedAt ? operatorNames.get(session.cashierUserId) || "—" : null, closedByLabel: session.validatedAt ? operatorNames.get(session.validatedByUserId || "") || "—" : null, closedAt: session.validatedAt || null })) });
 }
 
 export async function POST(req: Request, { params }: Params) {

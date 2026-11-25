@@ -1,4 +1,7 @@
 {
+  "dailyCloseVarianceReview": "La validation du comptage ne transforme pas un écart en produit ou en charge. Une qualification financière distincte est nécessaire.",
+  "dailyCloseSessionExpected": "Solde théorique de ma session",
+  "dailyCloseSessionScope": "Seules vos sessions ouvertes sont proposées pour le comptage des espèces. Les autres comptes et devises restent distincts.",
   "shopOperations": "Opérations commerce de détail",
   "shopControl": "Contrôle commerce de détail",
   "userGuide": "Guide utilisateur",
