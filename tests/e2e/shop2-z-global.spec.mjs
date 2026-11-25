@@ -515,6 +515,13 @@ test.describe.serial("Shop 2.0 Iteration 4 global behavioral acceptance", () => 
     expect(valuations.length).toBe(2);
     expect(valuations.reduce((sum, valuation) => sum + asNumber(valuation.totalCost), 0)).toBe(160);
     expect(valuations.every((valuation) => Boolean(valuation.journalEntryId))).toBe(true);
+    // #1228: the persisted narrative is a business snapshot, not an inventory ID.
+    const stockJournals = await prisma.enterpriseJournalEntry.findMany({ where: { organizationId, id: { in: valuations.map(row => row.journalEntryId) } }, include: { lines: true } });
+    expect(stockJournals).toHaveLength(2);
+    for (const journal of stockJournals) {
+      expect(journal.description).toBe(`ISSUE catalog ${product.name} · ${product.code}`);
+      expect(journal.lines.every(line => line.description === journal.description)).toBe(true);
+    }
     const replayDelivery = await apiPost(page, endpoint, firstDeliveryInput);
     expect(replayDelivery.response.ok(), JSON.stringify(replayDelivery.body)).toBeTruthy();
     expect(replayDelivery.body.fulfillment.id).toBe(firstDelivery.body.fulfillment.id);
@@ -559,10 +566,15 @@ test.describe.serial("Shop 2.0 Iteration 4 global behavioral acceptance", () => 
     expect(low.body.pagination.total).toBe(1);
     expect(low.body.metrics.lowStockCount).toBe(1);
     expect(low.body.items[0].isLowStock).toBe(true);
+    expect(low.body.physicalTotals).toHaveLength(1);
+    expect(low.body.physicalTotals[0].unitId).toBe(product.unitOfMeasureId);
+    expect(Number(low.body.physicalTotals[0].value)).toBe(250);
+    expect(low.body.items[0].quantityOnHandExact).toBe("250");
     const beyond=await apiGet(page,`/api/enterprise/${organizationId}/inventory?search=${encodeURIComponent(key)}&warehouseId=${fixture.warehouseId}&lowStock=true&pageSize=5&page=2`);
     expect(beyond.response.status(),JSON.stringify(beyond.body)).toBe(200);
     expect(beyond.body.items).toHaveLength(0);
     expect(beyond.body.pagination.total).toBe(1);
+    expect(beyond.body.physicalTotals).toEqual(low.body.physicalTotals);
   });
 
   test("HOTFIX #1212 first tracked batch is selectable without a stock balance on real FR/EN mobile and desktop", async ({ page }) => {

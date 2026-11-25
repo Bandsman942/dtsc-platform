@@ -745,6 +745,9 @@ test.describe.serial("Shop 2.0 Retail behavioral acceptance", () => {
       expect(scopedAvailable.body.pagination.total).toBe(1);
       expect(scopedAvailable.body.metrics.lowStockCount).toBe(1);
       expect(scopedAvailable.body.items[0].quantityOnHand).toBe(3);
+      expect(scopedAvailable.body.physicalTotals).toHaveLength(1);
+      expect(Number(scopedAvailable.body.physicalTotals[0].value)).toBe(3);
+      expect(scopedAvailable.body.items[0].quantityOnHandExact).toBe("3");
       expect(scopedAvailable.body.items[0].quantityAvailable).toBe(0);
       expect(scopedAvailable.body.items[0].balances.every(row=>row.warehouseId===secondaryWarehouse.id)).toBe(true);
       const forbiddenLotUpdate=await apiJson(await page.context().request.patch(scopedLotsPath,{data:{id:lotA.id,revision:lotA.revision,status:"QUARANTINED",qualityReason:"Forbidden cross-site quality mutation"},headers:{origin:baseUrl,referer:baseUrl+"/enterprise-modules/INVENTORY_LOGISTICS"}}));
