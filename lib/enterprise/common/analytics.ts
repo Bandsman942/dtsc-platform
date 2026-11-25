@@ -1,6 +1,6 @@
 import { Prisma } from "@prisma/client";
 
-export type MonetaryMetric = "debit" | "credit" | "original" | "outstanding" | "inbound" | "outbound" | "invoiceTotal" | "paid" | "credited" | "creditTotal" | "tax" | "subtotal" | "discount" | "total";
+export type MonetaryMetric = "debit" | "credit" | "original" | "outstanding" | "inbound" | "outbound" | "invoiceTotal" | "paid" | "credited" | "creditTotal" | "tax" | "subtotal" | "discount" | "total" | "payrollGross" | "payrollBonuses" | "payrollDeductions" | "payrollNet";
 export type MonetaryTotal = { currencyCode: string; metric: MonetaryMetric; amount: string; status?: string };
 export type MonetaryScopes = { filteredTotals: MonetaryTotal[]; generalTotals: MonetaryTotal[]; pageTotals: MonetaryTotal[] };
 
@@ -59,4 +59,34 @@ export function directionalPageTotals(rows: DirectionalAmount[]): MonetaryTotal[
     grouped.set(key, { ...row, amount });
   }
   return directionalAmountTotals([...grouped.values()]);
+}
+
+const payrollAmountFields = [
+  ["grossAmount", "payrollGross"],
+  ["bonusAmount", "payrollBonuses"],
+  ["deductionAmount", "payrollDeductions"],
+  ["netAmount", "payrollNet"],
+] as const;
+type PayrollAmounts = Record<(typeof payrollAmountFields)[number][0], Prisma.Decimal | null>;
+type PayrollAmountGroup = { currency: string; status: string; _sum: Partial<PayrollAmounts> };
+
+export function payrollAmountTotals(groups: PayrollAmountGroup[]): MonetaryTotal[] {
+  return groups.flatMap(({ currency, status, _sum }) => payrollAmountFields.flatMap(([field, metric]) => {
+    const amount = _sum[field];
+    return amount == null ? [] : [{ currencyCode: currency, status, metric, amount: amount.toFixed() }];
+  }));
+}
+
+export function payrollPageTotals(rows: Array<PayrollAmounts & { currency: string; status: string }>): MonetaryTotal[] {
+  const grouped = new Map<string, PayrollAmountGroup>();
+  for (const row of rows) {
+    const key = JSON.stringify([row.currency, row.status]);
+    const group = grouped.get(key) ?? { currency: row.currency, status: row.status, _sum: {} };
+    for (const [field] of payrollAmountFields) {
+      const value = row[field];
+      if (value !== null) group._sum[field] = new ExactAmount(group._sum[field] ?? 0).plus(value);
+    }
+    grouped.set(key, group);
+  }
+  return payrollAmountTotals([...grouped.values()]);
 }

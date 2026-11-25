@@ -119,7 +119,7 @@ export async function GET(req: Request, { params }: Params) {
       where: { organizationId, status: "ACTIVE", archivedAt: null },
       orderBy: { catalogItem: { name: "asc" } },
       take: 3000,
-      select: { id: true, minimumQuantity: true, catalogItem: { select: { id: true, code: true, sku: true, name: true } } },
+      select: { id: true, minimumQuantity: true, catalogItem: { select: { id: true, code: true, sku: true, name: true, unitOfMeasure: { select: { symbol: true, decimalScale: true } } } } },
     }),
     prisma.enterpriseProject.findMany({
       where: { organizationId, archivedAt: null, status: { notIn: ["CANCELLED", "ARCHIVED"] } },
@@ -240,7 +240,7 @@ export async function GET(req: Request, { params }: Params) {
     sites,
     warehouses,
     locations,
-    inventoryItems: inventoryItems.map((item) => ({ id: item.id, minimumQuantity: item.minimumQuantity, catalogItemId: item.catalogItem.id, code: item.catalogItem.code, sku: item.catalogItem.sku, name: item.catalogItem.name })),
+    inventoryItems: inventoryItems.map((item) => ({ id: item.id, minimumQuantity: item.minimumQuantity, catalogItemId: item.catalogItem.id, code: item.catalogItem.code, sku: item.catalogItem.sku, name: item.catalogItem.name, unitOfMeasure: item.catalogItem.unitOfMeasure })),
     projects,
     payrollPeriods: financePayrollPeriods,
     payrollRuns,

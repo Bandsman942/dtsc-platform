@@ -111,6 +111,7 @@ console.log("#1228 purchase request ordering: aborted/stale/unmounted responses 
     "@/lib/enterprise/inventory/quantity-display":moduleAt("lib/enterprise/inventory/quantity-display.ts"),
     "@/components/ui/button":{Button:"button"},
     "@/components/enterprise/professional/finance-professional-ui":{financeMoney:(amount,currency)=>`${amount} ${currency}`,financeStatusLabel:status=>status},
+    "@/components/enterprise/professional/professional-erp-i18n":{professionalErpEnumLabel:(_locale,_domain,status)=>status},
     "@/lib/client-toast":{notifyToast:(...args)=>notices.push(args)},
     "@/lib/reporting/professional-export":Object.fromEntries(["Csv","Xlsx","Pdf"].map(format=>[`downloadProfessional${format}`,model=>exports.push({format,model})])),
   },{fetch:async()=>({ok:true,json:async()=>pages.shift()})});

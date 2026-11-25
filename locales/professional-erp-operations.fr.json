@@ -161,6 +161,7 @@
   "inventory.countType": "Type de comptage",
   "inventory.notes": "Notes",
   "inventory.firstCount": "Premier comptage",
+  "inventory.quantityPrecisionInvalid": "Saisissez une quantité qui respecte la précision de l’unité de l’article.",
   "inventory.countedQuantity": "Quantité comptée",
   "inventory.observation": "Observation",
   "inventory.createCount": "Créer l’inventaire",

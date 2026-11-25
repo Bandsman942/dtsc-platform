@@ -1,6 +1,7 @@
 "use client";
 import { ErpDesign2RegisterTools, type ErpDesign2StatusOption } from "@/components/enterprise/professional/erp-design2-register";
 import type { FinanceExportColumn } from "@/components/enterprise/professional/finance-design2-controls";
+import { professionalErpEnumLabel } from "@/components/enterprise/professional/professional-erp-i18n";
 
 type HrKind = "contracts" | "schedules" | "attendance" | "leave" | "timesheets" | "payroll-runs" | "payroll-periods";
 const txt = (value: unknown) => value == null ? "" : String(value);
@@ -22,7 +23,12 @@ const columns: Record<HrKind, FinanceExportColumn[]> = {
   attendance: [employee, col("attendanceDate", "Date", "Date", (row) => date(row.attendanceDate)), status, col("source", "Origine", "Source")],
   leave: [reference, employee, col("leaveType", "Type de congé", "Leave type"), start("startDate"), end("endDate"), status],
   timesheets: [reference, employee, start("periodStart"), end("periodEnd"), status, col("totalApprovedMinutes", "Minutes approuvées", "Approved minutes")],
-  "payroll-runs": [reference, col("payrollPeriod", "Période de paie", "Payroll period", (row) => name(row, "payrollPeriod", "name")), status, col("employeeCount", "Effectif", "Employees"), col("currency", "Devise", "Currency"), col("netAmount", "Total net", "Net total")],
+  "payroll-runs": [
+    reference, col("payrollPeriod", "Période de paie", "Payroll period", (row) => name(row, "payrollPeriod", "name")), status,
+    col("employeeCount", "Effectif", "Employees"), col("currency", "Devise", "Currency"),
+    col("grossAmount", "Total brut", "Gross total"), col("bonusAmount", "Primes", "Bonuses"),
+    col("deductionAmount", "Retenues", "Deductions"), col("netAmount", "Total net", "Net total"),
+  ],
   "payroll-periods": [col("code", "Code", "Code"), col("name", "Libellé", "Name"), start("periodStart"), end("periodEnd"), status, col("payDate", "Paiement prévu", "Planned pay date", (row) => date(row.payDate))],
 };
 const endpoint: Record<HrKind, string> = {
@@ -37,10 +43,13 @@ export function HrDesign2Tools({ kind, organizationId, organizationName, title, 
   onStatusChange: (value: string) => void; dateFrom: string; dateTo: string;
   onDateChange: (from: string, to: string) => void;
 }) {
+  const exportColumns = kind === "payroll-runs" ? columns[kind].map((column) => column.key === "status"
+    ? { ...column, get: (row) => professionalErpEnumLabel(locale, "payrollStatus", txt(row.status)) }
+    : column) : columns[kind];
   return <ErpDesign2RegisterTools
     locale={locale} title={title} organizationName={organizationName}
     endpoint={`/api/enterprise/${organizationId}/${endpoint[kind]}`}
-    filters={Object.fromEntries(filters.entries())} columns={columns[kind]}
+    filters={Object.fromEntries(filters.entries())} columns={exportColumns}
     status={current} statuses={statuses} onStatusChange={onStatusChange}
     dateFrom={dateFrom} dateTo={dateTo} onDateChange={onDateChange}
   />;

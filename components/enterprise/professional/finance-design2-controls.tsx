@@ -5,6 +5,7 @@ import { CalendarDays, Download, FileSpreadsheet, FileText } from "lucide-react"
 import { Button } from "@/components/ui/button";
 import { ModuleMetric, ModuleMetrics } from "@/components/workspace/module-metrics";
 import { financeStatusLabel } from "@/components/enterprise/professional/finance-professional-ui";
+import { professionalErpEnumLabel } from "@/components/enterprise/professional/professional-erp-i18n";
 import { Input } from "@/components/ui/input";
 import { notifyToast } from "@/lib/client-toast";
 import { downloadProfessionalCsv, downloadProfessionalPdf, downloadProfessionalXlsx, type ProfessionalReportExportModel } from "@/lib/reporting/professional-export";
@@ -84,9 +85,16 @@ const filteredMetricLabels = {
   outstanding: { fr: "Solde restant dû", en: "Outstanding balance" },
   inbound: { fr: "Montants entrants", en: "Inbound amounts" },
   outbound: { fr: "Montants sortants", en: "Outbound amounts" },
+  payrollGross: { fr: "Total brut", en: "Gross total" },
+  payrollBonuses: { fr: "Primes", en: "Bonuses" },
+  payrollDeductions: { fr: "Retenues", en: "Deductions" },
+  payrollNet: { fr: "Total net", en: "Net total" },
 } as const;
 function filteredMetricLabel(row: FinanceFilteredTotal, locale: Locale) {
-  return [filteredMetricLabels[row.metric][locale], row.status ? financeStatusLabel(row.status, locale) : "", row.currencyCode].filter(Boolean).join(" · ");
+  const status = row.status
+    ? (row.metric.startsWith("payroll") ? professionalErpEnumLabel(locale, "payrollStatus", row.status) : financeStatusLabel(row.status, locale))
+    : "";
+  return [filteredMetricLabels[row.metric][locale], status, row.currencyCode].filter(Boolean).join(" · ");
 }
 
 function filteredAmount(row: FinanceFilteredTotal, locale: Locale) {

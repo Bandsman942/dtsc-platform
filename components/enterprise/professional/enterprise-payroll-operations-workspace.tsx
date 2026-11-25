@@ -2,6 +2,7 @@
 
 import { ErpDesign2Metric, ErpDesign2RegisterSection } from "@/components/enterprise/professional/erp-design2-register";
 import { HrDesign2Tools } from "@/components/enterprise/professional/hr-design2-tools";
+import { FinanceAmountScopes } from "@/components/enterprise/professional/finance-design2-controls";
 
 import Link from "next/link";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
@@ -37,6 +38,7 @@ import { ModuleContent, ModuleHeader, ModuleToolbar, ModuleWorkspace } from "@/c
 import { StatusBadge } from "@/components/workspace/status-badge";
 import { ProfessionalReportView } from "@/components/reports/professional-report-view";
 import type { EnterpriseModuleDefinition } from "@/lib/enterprise/module-registry";
+import type { MonetaryScopes } from "@/lib/enterprise/common/analytics";
 import { buildPayrollProfessionalReport } from "@/lib/reporting/payroll-professional-report";
 
 type Employee = {
@@ -164,7 +166,7 @@ export function EnterprisePayrollOperationsWorkspace({ organizationId, organizat
     return value;
   }, [dateFrom, dateTo, page, status]);
   const periods = useProfessionalCollection<PayrollPeriod>({ endpoint: `/api/enterprise/${organizationId}/payroll-periods`, params, refreshKey });
-  const runs = useProfessionalCollection<PayrollRun>({ endpoint: `/api/enterprise/${organizationId}/payroll-runs`, params, refreshKey });
+  const runs = useProfessionalCollection<PayrollRun, Partial<MonetaryScopes>>({ endpoint: `/api/enterprise/${organizationId}/payroll-runs`, params, refreshKey });
   const activeCollection = tab === "RUNS" ? runs : periods;
   const previousPayrollRun = useMemo(() => {
     if (!detail) return null;
@@ -310,6 +312,7 @@ export function EnterprisePayrollOperationsWorkspace({ organizationId, organizat
         {activeCollection.error ? <ProfessionalError message={activeCollection.error} /> : activeCollection.loading ? <ProfessionalLoading /> : tab === "RUNS" ? (
           runs.items.length ? <BusinessList ariaLabel={t("payroll.runsSection")}>{runs.items.map((run) => <BusinessListItem key={run.id} title={`${run.reference} · ${run.payrollPeriod.name}`} status={<StatusBadge tone={statusTone(run.status)}>{professionalErpEnumLabel(locale, "payrollStatus", run.status)}</StatusBadge>} meta={t("payroll.employeeCountNet", { count: run.employeeCount, suffix: suffix(run.employeeCount), amount: professionalErpMoney(run.netAmount, run.currency, locale) })} description={t("payroll.amountSummary", { gross: professionalErpMoney(run.grossAmount, run.currency, locale), bonus: professionalErpMoney(run.bonusAmount, run.currency, locale), deduction: professionalErpMoney(run.deductionAmount, run.currency, locale) })} onOpen={() => setDetail(run)} actions={<ContextActions label={t("payroll.actions")} actions={actionsFor(run)} />} />)}</BusinessList> : <EmptyState compact title={t("payroll.noRun")} description={t("payroll.noRunDescription")} />
         ) : periods.items.length ? <BusinessList ariaLabel={t("payroll.periodsSection")}>{periods.items.map((period) => <BusinessListItem key={period.id} title={`${period.code} · ${period.name}`} status={<StatusBadge tone={statusTone(period.status)}>{professionalErpEnumLabel(locale, "payrollStatus", period.status)}</StatusBadge>} meta={`${professionalErpDate(period.periodStart, locale)} – ${professionalErpDate(period.periodEnd, locale)}`} description={`${t("payroll.runCount", { count: period._count.payrollRuns, suffix: suffix(period._count.payrollRuns) })}${period.payDate ? t("payroll.paymentPlanned", { date: professionalErpDate(period.payDate, locale) }) : ""}`} />)}</BusinessList> : <EmptyState compact title={t("payroll.noPeriod")} description={t("payroll.noPeriodDescription")} />}
+        {tab === "RUNS" && !runs.loading && !runs.error && runs.extra.generalTotals?.length ? <FinanceAmountScopes totals={runs.extra} locale={locale} /> : null}
         <PaginationControls page={activeCollection.pagination.page} pageCount={activeCollection.pagination.pageCount} onChange={setPage} copy={copy} />
       </ErpDesign2RegisterSection>
       <ProfessionalHelp moduleCode="PAYROLL_OPERATIONS" />

@@ -42,6 +42,7 @@ for (const scale of [-1, 7, 1.5, undefined]) assert.throws(() => quantity("1", s
 assert.equal(convert("1.234567", "1000", 3).toFixed(), "1234.567");
 assert.equal(convert("-1.5", "2", 0).toFixed(), "-3");
 assert.throws(() => convert("0.000001", "0.1", 6), { code: "INVENTORY_PHYSICAL_QUANTITY_PRECISION" });
+assert.throws(() => convert("1", `1.${"0".repeat(60)}1`, 6), { code: "INVENTORY_PHYSICAL_QUANTITY_PRECISION" });
 assert.throws(() => convert("1.5", "1", 0), { code: "INVENTORY_UNIT_QUANTITY_PRECISION" });
 for (const factor of ["0", "-1", "NaN"]) assert.throws(() => convert("1", factor, 6), { code: "INVENTORY_UNIT_CONVERSION_INVALID" });
 const historical = new Decimal("1.123456");

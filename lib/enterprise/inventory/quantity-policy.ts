@@ -49,6 +49,8 @@ export function convertInventoryQuantity(
   if (!multiplier.isFinite() || multiplier.lte(0)) {
     throw new EnterpriseDomainError("INVENTORY_UNIT_CONVERSION_INVALID", 400);
   }
-  const converted = new ExactQuantity(value).mul(multiplier);
+  const source = new ExactQuantity(value);
+  const ExactProduct = Prisma.Decimal.clone({ precision: source.sd() + multiplier.sd() });
+  const converted = new ExactProduct(source.toString()).mul(multiplier.toString());
   return requireInventoryQuantity(converted.toFixed(), targetDecimalScale, { signed: true });
 }

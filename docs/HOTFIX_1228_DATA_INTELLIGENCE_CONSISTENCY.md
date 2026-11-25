@@ -35,6 +35,9 @@ Même filtre, précision, libellé, agrégat et devise dans UI/PDF/XLSX/CSV. Mé
 | Rapports consolidés / autres tableaux chiffrés | métriques typées, pas de double comptage |
 Inventaire exhaustif des surfaces réelles à compléter pendant lot 1. Chaque surface marquée corrigée, déjà conforme (preuve) ou non applicable (motif). Pas de module fantôme ni nouveau droit implicite.
 ## Lot 7 — QA et recette OWNER_E2E
+
+Les étapes de validation sur l’application et le jeu de préparation sont dans la [recette propriétaire #1228](OWNER_E2E_1228_DATA_INTELLIGENCE_CONSISTENCY.md).
+
 | ID | Scénario / attendu | Preuve initiale |
 |---|---|---|
 | Q01 | Créer unités 0/1/2/3 décimales ; les trois écrans prioritaires et exports suivent le catalogue | NOT_EXECUTED |
@@ -76,6 +79,16 @@ Les sous-totaux distinguent les flux entrants et sortants par devise et statut d
 
 La fixture PostgreSQL exécute l’API Trésorerie avec 56 mouvements dans les résultats filtrés, un mouvement contrepassé et un mouvement d’une autre organisation. Elle vérifie le montant exact toutes pages, le sous-total de la dernière page, les devises, les statuts et la suppression des données de test par rollback. La suite locale #1228 vérifie en plus les références de transfert et la conservation d’un total de 21 chiffres dans les synthèses d’export.
 
+### Saisie des opérations de stock
+
+Les formulaires de transfert, de comptage et d’ajustement utilisent la précision de l’article sélectionné. Le comptage conserve la valeur zéro. Les API de stock revalident la quantité selon l’unité effective et retournent des messages FR/EN. Les détails conservent les fractions historiques affichées. Le test navigateur couvre l’activation du champ à la sélection de l’article, le refus des sept décimales et l’acceptation de la micro-unité et du zéro selon le formulaire. Le calcul de conversion vérifie aussi le produit décimal avant de juger la précision cible, même avec un facteur très précis.
+
+### Registre de paie
+
+Le registre calcule le brut, les primes, les retenues et le net par devise et statut dans le même instantané que la liste. Les compteurs approuvés et en attente suivent le filtre courant. Les totaux toutes pages, généraux autorisés et de page suivent les droits du gestionnaire, du préparateur ou du validateur désigné. Le profil en lecture personnelle ne reçoit aucun agrégat du registre. Les exports reprennent les totaux filtrés et généraux, avec les libellés de statut FR/EN.
+
+La fixture PostgreSQL contrôle 56 exécutions filtrées, les quatre montants exacts, la seconde page, un préparateur hors périmètre, un statut annulé en USD et le profil en lecture personnelle.
+
 ### Sources vérifiées pour les agrégations restantes
 
 | Surface | Source actuelle | Vérification encore nécessaire |
@@ -83,8 +96,8 @@ La fixture PostgreSQL exécute l’API Trésorerie avec 56 mouvements dans les r
 | Caisse | `cash-sessions` projette les sessions, les mouvements et les écarts de caisse | Agréger les flux et les écarts selon les mêmes filtres et droits. Définir ouverture et clôture à date avant de consolider les soldes |
 | Budgets | `budgets` utilise `getBudgetPosition` pour les versions de budget de la page, à partir des lignes et engagements | Séparer versions et scénarios avant toute somme, puis utiliser les mêmes prévisions, engagements et réalisations pour le registre et l’export |
 | Dépenses | `expenses` lit et agrège le registre dédié par devise et statut, sous le même filtre de visibilité. Le registre et les exports reprennent ces agrégats | Certifier les parcours navigateur FR/EN et les relations avec les positions budgétaires versionnées |
-| Mobile Money et Telco | `retail/mobile-money` et `retail/telco-topups` fournissent les opérations paginées avec les restrictions de boutique et les numéros masqués | Appliquer les mêmes restrictions aux montants, commissions et recharges. Les soldes de float doivent être rapportés à une date |
-| Paie | `payroll-runs` compte les paies approuvées et en attente dans le périmètre de l’acteur | Faire correspondre les compteurs aux filtres et valider les agrégats monétaires sous les permissions RH |
+| Mobile Money et Telco | Le registre Telco applique le périmètre boutique du compte d’encaissement. Le registre direct Mobile Money vérifie le droit de l’organisation et reste à aligner sur le périmètre du compte de caisse. Les deux registres masquent les numéros sur les lignes | Fonder les agrégats de flux et de commissions sur les mêmes restrictions que les lignes. Rapporter les soldes de float à une date |
+| Paie | `payroll-runs` aligne compteurs et agrégats de brut, primes, retenues et net sur le registre autorisé | Certifier le rendu et les exports du parcours navigateur FR/EN |
 | Projets | `projects` compte les projets actifs, retards et risques, avec les livrables acceptés agrégés par projet de la page | Différencier volumes organisationnels et filtrés. Vérifier les sources de budget, dépenses et temps avant de les réunir |
 | Actifs | `assets` fournit le registre opérationnel et `assets/[assetId]/accounting-profile` la fiche comptable | Raccorder acquisition, amortissement et valeur nette aux comptes autorisés, avec période et devise explicites |
 | Santé et Pharmacie | `healthcare/medical-billing` lit les factures sectorielles. `pharmacy/reports` utilise `getPharmacyReportsDataset` pour les rapports filtrés | Vérifier les correspondances avec les pièces financières communes et conserver les protections des données cliniques et personnelles |

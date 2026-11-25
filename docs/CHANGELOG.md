@@ -1,7 +1,9 @@
 ## 2026-11-25 — HOTFIX #1228 — Data Intelligence & Consistency 2.0 (v1.24.5 candidate DRAFT)
 
+- Stock : la saisie des transferts, comptages et ajustements suit la précision de l’unité catalogue. Lecture exacte des valeurs historiques et contrôle de la précision du produit lors des conversions.
 - Trésorerie : sous-totaux de l’historique par devise, statut et sens, avec comparaison du filtré, du général et de la page. Filtres et synthèses des exports partagent les calculs serveur.
 - Dépenses : sous-totaux et exports par devise et statut, calculés dans le périmètre autorisé du registre.
+- Paie : compteurs filtrés et montants exacts de brut, primes, retenues et net, groupés par statut et devise dans le périmètre autorisé du registre et de ses exports.
 - Achats et réceptions : précision catalogue des formulaires et lots, reliquat exact après réceptions partielles, contrôle de l’unité de la commande et quantités exactes dans l’aperçu A4.
 
 - Suite à l’inspection des captures #1228 : en-tête de registre mobile non comprimé par le compteur/action ; langue active propagée au document et aux notifications globales, intitulés/fermeture cohérents, slogan/footer AppShell FR/EN. Rails d’indicateurs accessibles au clavier et valeurs longues sans perte de chiffres. Assertions navigateur et matrice de 32 captures de quantité maximale ajoutées ; CI/inspection du nouveau SHA requises.

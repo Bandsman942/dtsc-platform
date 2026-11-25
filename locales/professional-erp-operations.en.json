@@ -161,6 +161,7 @@
   "inventory.countType": "Count type",
   "inventory.notes": "Notes",
   "inventory.firstCount": "First count",
+  "inventory.quantityPrecisionInvalid": "Enter a quantity that matches the item’s unit precision.",
   "inventory.countedQuantity": "Counted quantity",
   "inventory.observation": "Observation",
   "inventory.createCount": "Create inventory count",

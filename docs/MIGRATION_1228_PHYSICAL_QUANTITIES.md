@@ -46,5 +46,6 @@ Les nouveaux contrôles PostgreSQL vérifient les types déployés, les limites,
 
 - Installation complète sur PostgreSQL 16.11 avec pgvector 0.8.2, puis exécution de la fixture #1228. Les trois lectures de l’API Stock (501 articles, réservations, retenues et périmètre dépôt) ont totalisé 3,39 s sur ce jeu, sous le budget de 10 s.
 - Mise à niveau depuis `main` à `6aa0e7b4` sur un second jeu synthétique. Avant migration, 501 soldes, 501 mouvements et 501 lignes d’achat, avec des fractions à trois décimales et un solde de `999999999999999.999`. Les deux migrations candidates ont terminé en environ 2,4 s et toutes les valeurs contrôlées sont restées exactes. Une addition de `0.000001` après migration a donné `999999999999999.999001`. La taille de la base est passée de 58 708 451 à 59 765 219 octets sur cet essai.
+- Sur une troisième base isolée, une transaction a conservé un verrou partagé sur les soldes de stock pendant la migration. PostgreSQL a interrompu la migration au délai de verrou configuré. Les soldes ainsi que les lignes d’achat modifiées plus tôt dans la même transaction ont conservé l’échelle trois. Les deux migrations candidates n’avaient aucun enregistrement de fin d’application.
 
 La mesure des verrous, de l’espace et du débit sur une base représentative des données et de la concurrence de production reste requise.

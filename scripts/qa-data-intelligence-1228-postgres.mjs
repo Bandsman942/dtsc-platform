@@ -61,6 +61,25 @@ const { GET: getExpenses } = workflowTestLoader({
   "@/lib/enterprise/finance/expense-service": {},
   "@/lib/rate-limit": {},
 })("@/app/api/enterprise/[organizationId]/expenses/route");
+let payrollWrite = true;
+const { GET: getPayrollRuns } = workflowTestLoader({
+  "@/lib/prisma": { prisma: { $transaction: async (callback, options) => {
+    assert.equal(options.isolationLevel, "RepeatableRead");
+    return callback(treasuryFixture.reader);
+  } } },
+  "@/lib/auth": { getSession: async () => ({ userId: treasuryFixture.actor }) },
+  "@/lib/audit": { writeApiLog: async () => {} },
+  "@/lib/enterprise/accounting/http": { financeBusinessDateRange: () => ({ ok: true, from: null, to: null }) },
+  "@/lib/enterprise/common/access": { getEnterpriseCommonDomainAccess: async ({ organizationId, moduleCode, action }) => {
+    assert.equal(moduleCode, "PAYROLL_OPERATIONS");
+    return organizationId === treasuryFixture.organizationId && (action === "read" || (action === "write" && payrollWrite))
+      ? { canManage: false }
+      : null;
+  } },
+  "@/lib/enterprise/hr-payroll/payroll": {},
+  "@/lib/enterprise/hr-payroll/schemas": {},
+  "@/lib/rate-limit": {},
+})("@/app/api/enterprise/[organizationId]/payroll-runs/route");
 
 class RollbackFixture extends Error {}
 try {
@@ -246,6 +265,43 @@ try {
       assert.equal(expensePage.generalTotals.length, 2);
       assert.ok(expensePage.generalTotals.some((row) => row.status === "CANCELLED" && row.currencyCode === "USD" && row.amount === "7.55"));
       console.log("PASS #1228 PostgreSQL expenses: exact aggregates, filtered/page scopes and requester/tenant boundaries");
+
+      const payrollPeriods = Array.from({ length: 57 }, (_, index) => ({
+        id: `${tenant}-payroll-${index}`, organizationId: tenant, code: `QA-${index}`, name: `Test period ${index}`,
+        periodStart: new Date(Date.UTC(2026, index, 1)), periodEnd: new Date(Date.UTC(2026, index + 1, 0)), createdByUserId: actor,
+      }));
+      await tx.enterprisePayrollPeriod.createMany({ data: payrollPeriods });
+      const payrollRun = {
+        organizationId: tenant, status: "APPROVED", currency: "CDF", grossAmount: "9999999999999999.99",
+        bonusAmount: "0.01", deductionAmount: "0.01", netAmount: "9999999999999999.98", preparedByUserId: actor,
+      };
+      await tx.enterprisePayrollRun.createMany({ data: [
+        ...payrollPeriods.slice(0, 56).map((period, index) => ({ ...payrollRun, payrollPeriodId: period.id, reference: `QA-RUN-${index}` })),
+        { ...payrollRun, payrollPeriodId: payrollPeriods[56].id, reference: "QA-RUN-RESTRICTED", preparedByUserId: "other-actor" },
+        { ...payrollRun, payrollPeriodId: payrollPeriods[0].id, reference: "QA-RUN-CANCELLED", status: "CANCELLED", currency: "USD" },
+      ] });
+      const readPayrollPage = async (page) => {
+        const request = new Request(`http://localhost/api/enterprise/${tenant}/payroll-runs?status=APPROVED&pageSize=25&page=${page}`);
+        const response = await getPayrollRuns(request, { params: Promise.resolve({ organizationId: tenant }) });
+        assert.equal(response.status, 200);
+        assert.equal(response.headers.get("cache-control"), "private, no-store");
+        return response.json();
+      };
+      const payrollPage = await readPayrollPage(3);
+      assert.equal(payrollPage.pagination.total, 56);
+      assert.equal(payrollPage.items.length, 6);
+      assert.deepEqual(payrollPage.metrics, { pendingApproval: 0, approved: 56 });
+      assert.equal(payrollPage.filteredTotals.find((item) => item.metric === "payrollGross").amount, money(56));
+      assert.equal(payrollPage.filteredTotals.find((item) => item.metric === "payrollBonuses").amount, "0.56");
+      assert.equal(payrollPage.filteredTotals.find((item) => item.metric === "payrollDeductions").amount, "0.56");
+      assert.equal(payrollPage.filteredTotals.find((item) => item.metric === "payrollNet").amount, "559999999999999998.88");
+      assert.equal(payrollPage.pageTotals.find((item) => item.metric === "payrollGross").amount, money(6));
+      assert.ok(payrollPage.generalTotals.some((item) => item.status === "CANCELLED" && item.currencyCode === "USD"));
+      payrollWrite = false;
+      const selfOnly = await readPayrollPage(1);
+      assert.deepEqual(selfOnly.items, []);
+      assert.equal(selfOnly.generalTotals, undefined);
+      console.log("PASS #1228 PostgreSQL payroll: four exact types of amount, workflow statuses, filtered counts and role boundaries");
       throw new RollbackFixture();
     }, { timeout: 30000, isolationLevel: "RepeatableRead" });
   } catch (error) {
@@ -255,6 +311,7 @@ try {
   for(const model of ["enterpriseQuote","enterpriseSalesOrder","enterprisePurchase"]) assert.equal(await db[model].count({where:{organizationId:{in:[tenant,otherTenant]}}}),0,"Commercial rollback must leave no rows");
   assert.equal(await db.enterpriseTreasuryTransaction.count({ where: { organizationId: { in: [tenant, otherTenant] } } }), 0, "Treasury rollback must leave no rows");
   assert.equal(await db.enterpriseExpense.count({ where: { organizationId: { in: [tenant, otherTenant] } } }), 0, "Expense rollback must leave no rows");
+  assert.equal(await db.enterprisePayrollRun.count({ where: { organizationId: { in: [tenant, otherTenant] } } }), 0, "Payroll rollback must leave no rows");
   console.log("PASS #1228 PostgreSQL: deployed quantity types, preserved integer capacity, exact micro-unit subtraction and transfer conservation constraint");
 } finally {
   await db.$disconnect();

@@ -913,6 +913,30 @@ test.describe.serial("Shop 2.0 Iteration 4 global behavioral acceptance", () => 
           await page.evaluate(()=>window.scrollTo(0,0));await page.screenshot({path:testInfo.outputPath(`1228-stock-capacity-${locale}-${theme}-${width}.png`),fullPage:true});
         }
       }
+      const stockForms = [
+        { button: "New transfer", title: "New inventory transfer", field: "quantity" },
+        { button: "New inventory count", title: "New inventory count campaign", field: "countedQuantity" },
+        { button: "Adjustment", title: "Controlled adjustment", field: "quantity" },
+      ];
+      for (const { button, title, field } of stockForms) {
+        await page.getByRole("button", { name: button, exact: true }).click();
+        const dialog = page.getByRole("dialog", { name: title });
+        const input = dialog.locator(`[name="${field}"]`);
+        await expect(input).toBeDisabled();
+        await dialog.locator('[name="inventoryItemId"]').selectOption(inventory.id);
+        await expect(input).toBeEnabled();
+        await expect(input).toHaveAttribute("step", "0.000001");
+        await input.fill("0.0000001");
+        expect(await input.evaluate((element) => element.validity.valid)).toBe(false);
+        await input.fill("0.000001");
+        expect(await input.evaluate((element) => element.validity.valid)).toBe(true);
+        if (field === "countedQuantity") {
+          await input.fill("0");
+          expect(await input.evaluate((element) => element.validity.valid)).toBe(true);
+        }
+        await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+        await expect(dialog).toBeHidden();
+      }
     }finally{
       await prisma.user.update({where:{id:fixture.userId},data:{locale:user.locale}});
       if(inventory){await prisma.enterpriseInventoryBalance.deleteMany({where:{organizationId,inventoryItemId:inventory.id}});await prisma.enterpriseInventoryItem.deleteMany({where:{organizationId,id:inventory.id}});}
