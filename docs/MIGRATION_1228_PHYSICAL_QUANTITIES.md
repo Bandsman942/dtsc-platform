@@ -41,3 +41,10 @@ Ne jamais rétrécir les colonnes, arrondir ou supprimer les quantités enregist
 ## Preuves requises
 
 Les nouveaux contrôles PostgreSQL vérifient les types déployés, les limites, une soustraction exacte, la contrainte de transfert et une fixture Prisma réelle (solde limite, mouvement, couche de coût, FK inter-tenant refusée et clé d’idempotence). La fixture exige une base locale isolée `*_test` et un flag explicite ; ses écritures sont annulées et l’absence de résidus est vérifiée. Ces contrôles sont ajoutés aux Quality Gates. Ils ne certifient pas seuls la mise à niveau d’une base peuplée, les performances, les parcours Health/Pharmacy ou l’E2E propriétaire. Voir la matrice du cahier des charges pour les lots encore ouverts.
+
+### Essais PostgreSQL locaux
+
+- Installation complète sur PostgreSQL 16.11 avec pgvector 0.8.2, puis exécution de la fixture #1228. Les trois lectures de l’API Stock (501 articles, réservations, retenues et périmètre dépôt) ont totalisé 3,39 s sur ce jeu, sous le budget de 10 s.
+- Mise à niveau depuis `main` à `6aa0e7b4` sur un second jeu synthétique. Avant migration, 501 soldes, 501 mouvements et 501 lignes d’achat, avec des fractions à trois décimales et un solde de `999999999999999.999`. Les deux migrations candidates ont terminé en environ 2,4 s et toutes les valeurs contrôlées sont restées exactes. Une addition de `0.000001` après migration a donné `999999999999999.999001`. La taille de la base est passée de 58 708 451 à 59 765 219 octets sur cet essai.
+
+La mesure des verrous, de l’espace et du débit sur une base représentative des données et de la concurrence de production reste requise.

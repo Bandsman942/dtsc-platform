@@ -8,6 +8,7 @@ import { EnterpriseDomainError } from "@/lib/enterprise/common/errors";
 import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
 import { resolveEnterpriseModuleCapabilities } from "@/lib/enterprise/module-access";
 import { formatEnterpriseBusinessDate, getEnterpriseBusinessContext } from "@/lib/enterprise/business-context";
+import { exactInventoryQuantity } from "@/lib/enterprise/inventory/quantity-policy";
 import { assertSupplierReturnAccess, inspectSupplierReturnTx } from "@/lib/enterprise/inventory/supplier-return-preflight";
 import { withdrawApprovedSupplierReturn, supplierReturnWithdrawalSchema, dispatchSupplierReturn, supplierReturnDispatchSchema, requireSupplierReturnParticipantAccess, submitSupplierReturnRequest, supplierReturnApprovalCandidates, supplierReturnRequestSchema, SUPPLIER_RETURN_TARGET } from "@/lib/enterprise/inventory/supplier-return-request-service";
 import { notifyUser } from "@/lib/notifications";
@@ -182,9 +183,32 @@ export async function GET(req: Request, { params }: Params) {
     itemIds.length ? prisma.enterprisePurchaseItemCatalogLink.findMany({ where: { organizationId, purchaseItemId: { in: itemIds } }, select: { purchaseItemId: true, catalogItemId: true, unitOfMeasureId: true, expectedItemType: true } }) : Promise.resolve([]),
   ]);
   const catalogIds = [...new Set(itemCatalogLinks.flatMap((link) => link.catalogItemId ? [link.catalogItemId] : []))];
-  const inventoryRules = catalogIds.length ? await prisma.enterpriseInventoryItem.findMany({ where: { organizationId, catalogItemId: { in: catalogIds }, status: "ACTIVE", archivedAt: null }, select: { catalogItemId: true, lotTracking: true, expiryTracking: true } }) : [];
+  const [inventoryRules, catalogUnits] = catalogIds.length ? await Promise.all([
+    prisma.enterpriseInventoryItem.findMany({ where: { organizationId, catalogItemId: { in: catalogIds }, status: "ACTIVE", archivedAt: null }, select: { catalogItemId: true, lotTracking: true, expiryTracking: true } }),
+    prisma.enterpriseCatalogItem.findMany({ where: { organizationId, id: { in: catalogIds } }, select: { id: true, unitOfMeasure: { select: { id: true, decimalScale: true } } } }),
+  ]) : [[], []];
+  const unitByCatalogItem = new Map(catalogUnits.map((catalog) => [catalog.id, catalog.unitOfMeasure]));
+  const linkByItem = new Map(itemCatalogLinks.map((link) => [link.purchaseItemId, link]));
+  const receivedByItem = new Map<string, Prisma.Decimal>();
+  for (const receipt of purchase.receipts) {
+    for (const item of receipt.items) {
+      const received = receivedByItem.get(item.purchaseItemId) ?? exactInventoryQuantity(0);
+      receivedByItem.set(item.purchaseItemId, received.plus(item.quantityReceived));
+    }
+  }
+  const receiptQuantities = purchase.items.map((item) => {
+    const link = linkByItem.get(item.id);
+    const unit = link?.catalogItemId ? unitByCatalogItem.get(link.catalogItemId) : undefined;
+    const decimalScale = unit && link?.unitOfMeasureId === unit.id ? unit.decimalScale : null;
+    const remaining = exactInventoryQuantity(item.quantity).minus(receivedByItem.get(item.id) ?? 0);
+    return {
+      purchaseItemId: item.id,
+      remaining: remaining.toFixed(),
+      decimalScale: decimalScale !== null && item.quantity.decimalPlaces() <= decimalScale && remaining.decimalPlaces() <= decimalScale ? decimalScale : null,
+    };
+  });
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "purchases", purchaseId: id } });
-  return NextResponse.json({ purchase, request: requestRecord, approvals, links, events, comments, operationalLink, itemCatalogLinks, inventoryRules, canManage: access.canManage, currentUserId: session.userId });
+  return NextResponse.json({ purchase, request: requestRecord, approvals, links, events, comments, operationalLink, itemCatalogLinks, inventoryRules, receiptQuantities, canManage: access.canManage, currentUserId: session.userId });
 }
 
 export async function PATCH(req: Request, { params }: Params) {
@@ -200,7 +224,11 @@ export async function PATCH(req: Request, { params }: Params) {
     await writeAuditLog({ userId: session.userId, action: "ENTERPRISE_PURCHASE_UPDATED", entity: "EnterprisePurchase", entityId: id, request: req, metadata: { organizationId } });
     await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "purchases", purchaseId: id } });
     return NextResponse.json({ ok: true, purchase });
-  } catch (error) { const normalized = normalizeEnterpriseCoreV2Error(error); return NextResponse.json({ error: normalized.code, message: normalized.message }, { status: normalized.status }); }
+  } catch (error) {
+    if (error instanceof EnterpriseDomainError) return enterpriseDomainErrorResponse(error, "PURCHASE_UPDATE_FAILED", req);
+    const normalized = normalizeEnterpriseCoreV2Error(error);
+    return NextResponse.json({ error: normalized.code, message: normalized.message }, { status: normalized.status });
+  }
 }
 
 export async function POST(req: Request, { params }: Params) {

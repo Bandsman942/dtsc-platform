@@ -62,6 +62,12 @@ Réutiliser services et contrats existants, pas de dépendance ni migration sans
 
 Le rail partagé `ModuleMetrics` prend en charge les flèches gauche/droite, Début et Fin lorsqu’il a le focus et déborde. Les commandes des contrôles enfants conservent leur comportement. La recette Shop 2 vérifie l’accès au dernier indicateur, le retour au premier et l’absence de débordement de page. Le composant isolé a passé ces vérifications dans Chromium aux huit largeurs de référence, avec un contrôle enfant conservant la navigation du curseur. Les contrôles statiques responsive et expérience standard ont également réussi. La recette intégrée sur le nouveau commit reste à exécuter.
 
+### Quantités dans les achats et réceptions
+
+La création et l’édition d’achats, les réceptions et les allocations par lot suivent la précision de l’unité catalogue. Les API acceptent les quantités décimales en texte ainsi que les nombres existants et gardent la limite d’un million par saisie. Le détail calcule le reliquat exact à partir des réceptions du document et indique les lignes dont l’unité de commande diffère du catalogue, manque ou ne décrit plus la quantité. Le moteur partagé de réception revalide ces règles avant de créer un mouvement ou d’accepter une prestation. Une réception déjà intégrée conserve son circuit idempotent. L’aperçu A4 reprend les quantités exactes et les réceptions cumulées.
+
+La QA ciblée exécute le moteur de réception avec les sept précisions, des lots à la micro-unité, une prestation, une unité historique absente ou modifiée et un replay après changement. Un cas navigateur est ajouté pour la création d’un achat, le refus d’une réception si l’unité du catalogue a changé, deux réceptions fractionnées, le reliquat exact et l’aperçu A4. Les conversions avec facteur historique restent ouvertes.
+
 ## Journal d'implémentation — tranche initiale
 Inspection statique de main (aucun test exécuté) :
 - `prisma/enterprise-master-data.prisma` : EnterpriseUnitOfMeasure.decimalScale est le référentiel existant, validation 0–6 dans master-data/schemas.ts.

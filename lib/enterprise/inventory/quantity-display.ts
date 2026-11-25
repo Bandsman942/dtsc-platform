@@ -43,6 +43,20 @@ export function isInventoryQuantityInputValid(value: string, decimalScale: numbe
   return !positive || /[1-9]/.test(integer + fraction);
 }
 
+/** Exact millionths for forms that must sum several valid physical quantities. */
+export function inventoryQuantityMicrounits(value: string): bigint {
+  const [whole, fraction = ""] = value.trim().split(".");
+  return BigInt(whole) * BigInt(1_000_000) + BigInt(fraction.slice(0, 6).padEnd(6, "0"));
+}
+
+export function localizeInventoryQuantity(value: string, locale: string): string {
+  const parts = /^(-?)(\d+)(?:\.(\d+))?$/.exec(value);
+  if (!parts) return value;
+  const formatter = new Intl.NumberFormat(locale, { maximumFractionDigits: 0 });
+  const separator = new Intl.NumberFormat(locale).formatToParts(1.1).find(({ type }) => type === "decimal")?.value ?? ".";
+  return parts[1] + formatter.format(BigInt(parts[2])) + (parts[3] ? separator + parts[3] : "");
+}
+
 export type InventoryQuantityMetric = "onHand" | "reserved" | "sellable";
 export function inventoryQuantityMetricLabel(metric: InventoryQuantityMetric, locale: "fr" | "en"): string {
   const labels = { onHand: { fr: "Stock physique", en: "On-hand stock" }, reserved: { fr: "Réservations et retenues", en: "Reservations and holds" }, sellable: { fr: "Stock vendable", en: "Sellable stock" } };

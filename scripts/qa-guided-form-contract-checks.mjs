@@ -59,7 +59,7 @@ expect(
 );
 expect(
   "Operational lookups expose the catalog unit without creating a second reference source",
-  operationalLookups.includes('unitOfMeasure: { select: { id: true, code: true, symbol: true, name: true } }'),
+  operationalLookups.includes('unitOfMeasure: { select: { id: true, code: true, symbol: true, name: true, decimalScale: true } }'),
 );
 expect(
   "Purchase service remains authoritative for the persisted unit",

@@ -1,6 +1,8 @@
 import { randomBytes } from "node:crypto";
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
+import { localizeInventoryQuantity } from "@/lib/enterprise/inventory/quantity-display";
+import { exactInventoryQuantity } from "@/lib/enterprise/inventory/quantity-policy";
 import { enterprisePurchaseVisibilityWhere, getEnterpriseProcurementAccess } from "@/lib/enterprise/procurement/access";
 import { prisma } from "@/lib/prisma";
 import { resolveOrganizationLogoStoragePath } from "@/lib/enterprise/organization-logo-storage";
@@ -37,7 +39,7 @@ export async function GET(req: Request, { params }: Params) {
   const en = new URL(req.url).searchParams.get("lang") === "en", index = en ? 1 : 0;
   const txt = (fr: string, english: string) => en ? english : fr;
   const money = (value: unknown) => Number(value ?? 0).toLocaleString(en ? "en-GB" : "fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const number = (value: unknown) => Number(value ?? 0).toLocaleString(en ? "en-GB" : "fr-FR", { maximumFractionDigits: 3 });
+  const formatQuantity = (value: ReturnType<typeof exactInventoryQuantity>) => localizeInventoryQuantity(value.toFixed(), en ? "en-GB" : "fr-FR");
   const date = (value: Date | null) => {
     if (!value) return "—";
     try { return new Intl.DateTimeFormat(en ? "en-GB" : "fr-FR", { dateStyle: "medium", timeZone: organization.timezone || "UTC" }).format(value); }
@@ -47,13 +49,14 @@ export async function GET(req: Request, { params }: Params) {
   const pending = ["DRAFT", "PENDING_APPROVAL"].includes(purchase.status);
   const warning = voided ? txt("DOCUMENT ANNULÉ OU REFUSÉ — NE PAS EXÉCUTER", "CANCELLED OR REJECTED — DO NOT EXECUTE")
     : pending ? txt("DOCUMENT PROVISOIRE — NON VALIDÉ", "PROVISIONAL — NOT APPROVED") : "";
-  const received = new Map<string, number>();
+  const received = new Map<string, ReturnType<typeof exactInventoryQuantity>>();
   for (const receipt of purchase.receipts) for (const line of receipt.items) {
-    received.set(line.purchaseItemId, (received.get(line.purchaseItemId) || 0) + Number(line.quantityReceived));
+    const previous = received.get(line.purchaseItemId) ?? exactInventoryQuantity(0);
+    received.set(line.purchaseItemId, previous.plus(line.quantityReceived));
   }
   const rows = purchase.items.map((line, i) => '<tr><td>' + (i + 1) + '</td><td>' + escape(line.description) +
-    '</td><td class="num">' + number(line.quantity) + ' ' + escape(line.unit) + '</td><td class="num">' +
-    number(received.get(line.id) || 0) + '</td><td class="num">' + money(line.unitPrice) +
+    '</td><td class="num">' + escape(formatQuantity(line.quantity)) + ' ' + escape(line.unit) + '</td><td class="num">' +
+    escape(formatQuantity(received.get(line.id) ?? exactInventoryQuantity(0))) + '</td><td class="num">' + money(line.unitPrice) +
     '</td><td class="num">' + money(line.taxAmount) + '</td><td class="num"><b>' + money(line.lineTotal) + '</b></td></tr>').join("");
   const supplier = purchase.supplier;
   const supplierName = supplier ? (supplier.displayName || supplier.legalName) : txt("Non renseigné", "Not specified");

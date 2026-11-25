@@ -101,4 +101,6 @@ await import("./qa-data-intelligence-commercial-1228.mjs");
 
 await import("./qa-data-intelligence-sales-quantities-1228.mjs");
 
+await import("./qa-data-intelligence-purchase-quantities-1228.mjs");
+
 await import("./qa-data-intelligence-stock-totals-1228.mjs");

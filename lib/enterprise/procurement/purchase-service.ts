@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
-import { requireInventoryQuantity } from "@/lib/enterprise/inventory/quantity-policy";
+import { exactInventoryQuantity, requireInventoryQuantity } from "@/lib/enterprise/inventory/quantity-policy";
 import type { z } from "zod";
 import { assertEnterpriseApprovalCandidate, assertEnterpriseApprovalDecision } from "@/lib/enterprise/approval-assignment";
 import { EnterpriseCoreV2Error } from "@/lib/enterprise/core-v2/errors";
@@ -305,7 +305,13 @@ export async function receiveEnterprisePurchase(organizationId: string, purchase
     for (const inputItem of input.items) if (!itemMap.has(inputItem.purchaseItemId)) throw new EnterpriseCoreV2Error("Une ligne de réception n’appartient pas à cet achat.", 400, "CROSS_TENANT_RECEIPT_ITEM");
     const prior = await tx.enterprisePurchaseReceiptItem.groupBy({ by: ["purchaseItemId"], where: { organizationId, purchaseItemId: { in: purchase.items.map((item) => item.id) } }, _sum: { quantityReceived: true } });
     const receivedMap = new Map(prior.map((entry) => [entry.purchaseItemId, quantity(entry._sum.quantityReceived || 0)]));
-    for (const inputItem of input.items) { const ordered = quantity(itemMap.get(inputItem.purchaseItemId)!.quantity); const previous = receivedMap.get(inputItem.purchaseItemId) || quantity(0); const next = previous.add(quantity(inputItem.quantityReceived)); if (next.gt(ordered)) throw new EnterpriseCoreV2Error("La quantité reçue ne peut pas dépasser la quantité restant à recevoir.", 409, "PURCHASE_OVER_RECEIPT"); receivedMap.set(inputItem.purchaseItemId, next); }
+    for (const inputItem of input.items) {
+      const ordered = quantity(itemMap.get(inputItem.purchaseItemId)!.quantity);
+      const previous = exactInventoryQuantity(receivedMap.get(inputItem.purchaseItemId) ?? 0);
+      const next = previous.add(quantity(inputItem.quantityReceived));
+      if (next.gt(ordered)) throw new EnterpriseCoreV2Error("La quantité reçue ne peut pas dépasser la quantité restant à recevoir.", 409, "PURCHASE_OVER_RECEIPT");
+      receivedMap.set(inputItem.purchaseItemId, next);
+    }
     const fullyReceived = purchase.items.every((item) => (receivedMap.get(item.id) || quantity(0)).gte(quantity(item.quantity)));
     const nextStatus = fullyReceived ? "RECEIVED" : "PARTIALLY_RECEIVED";
     const locked = await tx.enterprisePurchase.updateMany({ where: { id: purchaseId, organizationId, status: purchase.status, revision: input.revision, archivedAt: null }, data: { status: nextStatus, ...(fullyReceived ? { receivedAt: input.receivedAt } : {}), updatedByUserId: actorUserId, revision: { increment: 1 } } });

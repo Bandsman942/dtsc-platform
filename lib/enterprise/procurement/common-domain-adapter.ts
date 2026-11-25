@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { receiptLotAllocationsSchema } from "@/lib/enterprise/procurement/receipt-lot-schema";
 import { EnterpriseDomainError } from "@/lib/enterprise/common/errors";
+import { exactInventoryQuantity, requireInventoryQuantity } from "@/lib/enterprise/inventory/quantity-policy";
 import { applyStockMovementTx } from "@/lib/enterprise/inventory/service";
 import { requireRetailSiteCapability } from "@/lib/enterprise/retail/site-access";
 import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
@@ -184,6 +185,20 @@ export async function postEnterprisePurchaseReceiptToInventoryTx(
 
     const requiresStockMovement = itemLink.expectedItemType === "GOODS";
     const batches = allocationsByItem.get(receiptItem.purchaseItemId) || [];
+    if (requiresStockMovement && !itemLink.catalogItemId) throw new EnterpriseDomainError("CATALOG_ITEM_REQUIRED_FOR_GOODS", 409);
+    const catalogItem = itemLink.catalogItemId ? await tx.enterpriseCatalogItem.findFirst({
+      where: { id: itemLink.catalogItemId, organizationId, ...(requiresStockMovement ? { status: "ACTIVE", archivedAt: null } : {}) },
+      select: { id: true, trackInventory: true, unitOfMeasure: { select: { id: true, decimalScale: true } } },
+    }) : null;
+    if (requiresStockMovement && !catalogItem?.trackInventory) throw new EnterpriseDomainError("INVENTORY_CATALOG_ITEM_REQUIRED", 409);
+    if (!catalogItem || itemLink.unitOfMeasureId !== catalogItem.unitOfMeasure.id) {
+      throw new EnterpriseDomainError("INVENTORY_UNIT_CONVERSION_REQUIRED", 409);
+    }
+    const scale = catalogItem.unitOfMeasure.decimalScale;
+    requireInventoryQuantity(receiptItem.purchaseItem.quantity, scale, { positive: true });
+    const receivedQuantity = requireInventoryQuantity(receiptItem.quantityReceived, scale, { positive: true });
+    for (const batch of batches) requireInventoryQuantity(batch.quantity, scale, { positive: true });
+
     if (!requiresStockMovement) {
       if (batches.length) throw new EnterpriseDomainError("RECEIPT_BATCH_SERVICE_INVALID", 400, "Une prestation de service ne possède pas de lot physique.");
       const operationalLink = await tx.enterprisePurchaseReceiptItemStockLink.create({
@@ -194,12 +209,6 @@ export async function postEnterprisePurchaseReceiptToInventoryTx(
     }
 
     if (!warehouseId) throw new EnterpriseDomainError("RECEIPT_WAREHOUSE_REQUIRED", 409);
-    if (!itemLink.catalogItemId) throw new EnterpriseDomainError("CATALOG_ITEM_REQUIRED_FOR_GOODS", 409);
-    const catalogItem = await tx.enterpriseCatalogItem.findFirst({
-      where: { id: itemLink.catalogItemId, organizationId, status: "ACTIVE", archivedAt: null },
-    });
-    if (!catalogItem || !catalogItem.trackInventory) throw new EnterpriseDomainError("INVENTORY_CATALOG_ITEM_REQUIRED", 409);
-
     let inventoryItem = await tx.enterpriseInventoryItem.findFirst({
       where: { organizationId, catalogItemId: catalogItem.id, archivedAt: null },
     });
@@ -214,8 +223,8 @@ export async function postEnterprisePurchaseReceiptToInventoryTx(
     if (!inventoryItem.lotTracking && batches.length) throw new EnterpriseDomainError("RECEIPT_BATCH_POLICY_REQUIRED", 409, "Activez le suivi des lots dans Stock & logistique avant cette réception.");
     if (batches.length) {
       const seen = new Set(batches.map((batch) => batch.lotNumber));
-      const total = batches.reduce((sum, batch) => sum.plus(batch.quantity), new Prisma.Decimal(0));
-      if (seen.size !== batches.length || !total.equals(receiptItem.quantityReceived)) throw new EnterpriseDomainError("RECEIPT_BATCH_QUANTITY_INVALID", 409, "La somme des quantités par lot doit correspondre à la quantité reçue, sans numéro en double.");
+      const total = batches.reduce((sum, batch) => sum.plus(batch.quantity), exactInventoryQuantity(0));
+      if (seen.size !== batches.length || !total.equals(receivedQuantity)) throw new EnterpriseDomainError("RECEIPT_BATCH_QUANTITY_INVALID", 409, "La somme des quantités par lot doit correspondre à la quantité reçue, sans numéro en double.");
     }
     const stockMovementIds: string[] = [];
     const entries = batches.length ? batches : [{ lotNumber: "", productionDate: null, expiryDate: null, quantity: receiptItem.quantityReceived }];

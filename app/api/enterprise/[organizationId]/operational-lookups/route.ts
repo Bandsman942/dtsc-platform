@@ -170,7 +170,7 @@ export async function GET(req: Request, { params }: Params) {
         currency: true,
         indicativeSalePrice: true,
         indicativeCost: true,
-        unitOfMeasure: { select: { id: true, code: true, symbol: true, name: true } },
+        unitOfMeasure: { select: { id: true, code: true, symbol: true, name: true, decimalScale: true } },
       },
     }),
     prisma.enterpriseSalesOrder.findMany({

@@ -31,16 +31,18 @@ import { PurchaseReceiptTrace } from "@/components/enterprise/core-v2/purchase-r
 import { FinanceAmountScopes, FinanceDateFilter, FinanceExportControls } from "@/components/enterprise/professional/finance-design2-controls";
 import type { ProcurementUiCapabilities } from "@/components/enterprise/professional/enterprise-procurement-operations-workspace";
 import { enterpriseCoreT, type EnterpriseCoreKey } from "@/lib/enterprise-core-i18n";
+import { inventoryQuantityMicrounits, inventoryQuantityStep, isInventoryQuantityInputValid, localizeInventoryQuantity } from "@/lib/enterprise/inventory/quantity-display";
 import { purchaseFormGuidance, type PurchaseFormGuidanceKey } from "@/lib/enterprise/purchase-form-i18n";
 
 type PurchaseListItem = { pendingAssignedApproval?: { id: string; revision: number } | null; id: string; reference: string; title: string; description: string | null; status: string; priority: string; supplierId: string | null; requestedByUserId: string; buyerUserId: string | null; createdByUserId: string; departmentId: string | null; requestId: string | null; budgetLineId: string | null; currency: string; totalAmount: string | number; expectedAt: string | null; revision: number; createdAt: string; supplier: { id: string; legalName: string; displayName: string | null; status: string } | null; budgetLine: { id: string; name: string; budget: { id: string; reference: string; title: string; currency: string; status: string } } | null; _count: { items: number; receipts: number } };
 type PurchaseDetail = PurchaseListItem & { items: Array<{ id: string; description: string; quantity: string | number; unit: string; unitPrice: string | number; taxRate: string | number; lineTotal: string | number }>; receipts: Array<{ id: string; reference: string; receivedAt: string; items: Array<{ purchaseItemId: string; quantityReceived: string | number }> }>; supplier: PurchaseListItem["supplier"] };
 type PurchaseOperationalLink = { id: string; siteId: string | null; destinationWarehouseId: string | null; expectedReceiptType: string } | null;
 type PurchaseItemCatalogLink = { purchaseItemId: string; catalogItemId: string | null; unitOfMeasureId: string | null; expectedItemType: string };
-type DetailPayload = { purchase: PurchaseDetail; approvals: Array<{ id: string; status: string; revision: number; approverUserId: string; decisionComment: string | null }>; events: Array<{ id: string; summary: string; createdAt: string }>; comments: Array<{ id: string; content: string; createdAt: string }>; operationalLink: PurchaseOperationalLink; itemCatalogLinks: PurchaseItemCatalogLink[]; inventoryRules?: Array<{ catalogItemId: string; lotTracking: boolean; expiryTracking: boolean }> };
+type ReceiptQuantity = { purchaseItemId: string; remaining: string; decimalScale: number | null };
+type DetailPayload = { purchase: PurchaseDetail; approvals: Array<{ id: string; status: string; revision: number; approverUserId: string; decisionComment: string | null }>; events: Array<{ id: string; summary: string; createdAt: string }>; comments: Array<{ id: string; content: string; createdAt: string }>; operationalLink: PurchaseOperationalLink; itemCatalogLinks: PurchaseItemCatalogLink[]; inventoryRules?: Array<{ catalogItemId: string; lotTracking: boolean; expiryTracking: boolean }>; receiptQuantities: ReceiptQuantity[] };
 type SupplierChoice = EnterpriseChoice & { status?: string };
 type LegacyRecord = { id: string; title: string; description: string | null; status: string; updatedAt: string };
-type CatalogChoice = { id: string; code: string; sku: string | null; name: string; itemType: string; currency: string | null; indicativeCost: string | number | null; unitOfMeasure: { id: string; code: string; symbol: string; name: string } };
+type CatalogChoice = { id: string; code: string; sku: string | null; name: string; itemType: string; currency: string | null; indicativeCost: string | number | null; unitOfMeasure: { id: string; code: string; symbol: string; name: string; decimalScale: number } };
 type SiteChoice = { id: string; code: string; name: string };
 type WarehouseChoice = { id: string; siteId: string; code: string; name: string };
 type LocationChoice = { id: string; warehouseId: string; code: string; name: string };
@@ -99,6 +101,8 @@ export function EnterprisePurchasesWorkspace({ organizationId, organizationName 
   const [draftItems, setDraftItems] = useState<DraftItem[]>([emptyDraftItem()]);
   const [message, setMessage] = useState("");
   useToastMessage(message);
+  const catalogById = useMemo(() => new Map(catalogItems.map((item) => [item.id, item])), [catalogItems]);
+  const receiptLines = (receiveTarget?.receiptQuantities ?? []).filter((line) => line.remaining !== "0" && !line.remaining.startsWith("-"));
 
   useEffect(() => {
     if (!linkedPurchaseId) return;
@@ -186,8 +190,12 @@ export function EnterprisePurchasesWorkspace({ organizationId, organizationName 
   async function submitPurchase(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (formSubmitting) return;
+    if (draftItems.some((item) => !isInventoryQuantityInputValid(item.quantity, catalogById.get(item.catalogItemId)?.unitOfMeasure.decimalScale))) {
+      setMessage(guide("quantityPrecisionInvalid"));
+      return;
+    }
     const form = Object.fromEntries(new FormData(event.currentTarget).entries());
-    const items = draftItems.map((item) => ({ ...item, quantity: Number(item.quantity), unitPrice: Number(item.unitPrice), taxRate: Number(item.taxRate) }));
+    const items = draftItems.map((item) => ({ ...item, unitPrice: Number(item.unitPrice), taxRate: Number(item.taxRate) }));
     setFormSubmitting(true);
     try {
       if (editTarget) await enterpriseV2Mutation(`/api/enterprise/${organizationId}/purchases/${editTarget.purchase.id}`, "PATCH", { ...form, revision: editTarget.purchase.revision, siteId: purchaseSiteId, destinationWarehouseId: purchaseWarehouseId, items });
@@ -250,24 +258,40 @@ export function EnterprisePurchasesWorkspace({ organizationId, organizationName 
     } catch (error) { setMessage(error instanceof Error ? error.message : "LOAD_FAILED"); }
   }
 
-  function totalPreviouslyReceived(payload: DetailPayload, purchaseItemId: string) {
-    return payload.purchase.receipts.reduce((sum, receipt) => sum + receipt.items.filter((item) => item.purchaseItemId === purchaseItemId).reduce((lineSum, item) => lineSum + Number(item.quantityReceived || 0), 0), 0);
-  }
-
   async function receive(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!receiveTarget || receiveSubmitting) return;
     const form = new FormData(event.currentTarget);
-    const items = receiveTarget.purchase.items.map((item) => ({ purchaseItemId: item.id, quantityReceived: Number(form.get(`quantity_${item.id}`) || 0) })).filter((item) => item.quantityReceived > 0);
-    if (!items.length) { setMessage(guide("receiptQuantity")); return; }
-    const lotAllocations = items.filter((item) => receiptRule(receiveTarget, item.purchaseItemId)?.lotTracking).map((item) => ({ purchaseItemId: item.purchaseItemId, batches: (receiptBatches[item.purchaseItemId] || []).filter((batch) => batch.lotNumber.trim() || batch.quantity || batch.productionDate || batch.expiryDate).map((batch) => ({ lotNumber: batch.lotNumber.trim(), productionDate: batch.productionDate || null, expiryDate: batch.expiryDate || null, quantity: Number(batch.quantity) })) }));
-    for (const allocation of lotAllocations) {
-      const expected = items.find((item) => item.purchaseItemId === allocation.purchaseItemId)!.quantityReceived;
-      const rule = receiptRule(receiveTarget, allocation.purchaseItemId);
-      if (!allocation.batches.length || allocation.batches.some((batch) => !batch.lotNumber || !Number.isFinite(batch.quantity) || batch.quantity <= 0 || (rule?.expiryTracking && !batch.expiryDate)) || Math.abs(allocation.batches.reduce((sum, batch) => sum + batch.quantity, 0) - expected) > 0.0000001) {
-        setMessage(guide("receiptBatchInvalid")); return;
+    const items: Array<{ purchaseItemId: string; quantityReceived: string }> = [];
+    const lotAllocations: Array<{ purchaseItemId: string; batches: Array<{ lotNumber: string; productionDate: string | null; expiryDate: string | null; quantity: string }> }> = [];
+    for (const { purchaseItemId, decimalScale, remaining } of receiptLines) {
+      const quantityReceived = String(form.get(`quantity_${purchaseItemId}`) ?? "").trim();
+      if (!quantityReceived || /^0+(?:\.0+)?$/.test(quantityReceived)) continue;
+      const scale = decimalScale ?? undefined;
+      if (!isInventoryQuantityInputValid(quantityReceived, scale)) {
+        setMessage(guide("quantityPrecisionInvalid"));
+        return;
       }
+      const requested = inventoryQuantityMicrounits(quantityReceived);
+      if (requested > inventoryQuantityMicrounits(remaining)) {
+        setMessage(guide("receiptQuantity"));
+        return;
+      }
+      items.push({ purchaseItemId, quantityReceived });
+      const rule = receiptRule(receiveTarget, purchaseItemId);
+      if (!rule?.lotTracking) continue;
+      const batches = (receiptBatches[purchaseItemId] || [])
+        .filter((batch) => batch.lotNumber.trim() || batch.quantity || batch.productionDate || batch.expiryDate)
+        .map((batch) => ({ lotNumber: batch.lotNumber.trim(), productionDate: batch.productionDate || null, expiryDate: batch.expiryDate || null, quantity: batch.quantity.trim() }));
+      if (!batches.length || batches.some((batch) => !batch.lotNumber || !isInventoryQuantityInputValid(batch.quantity, scale) || (rule.expiryTracking && !batch.expiryDate))
+        || new Set(batches.map((batch) => batch.lotNumber)).size !== batches.length
+        || batches.reduce((sum, batch) => sum + inventoryQuantityMicrounits(batch.quantity), BigInt(0)) !== requested) {
+        setMessage(guide("receiptBatchInvalid"));
+        return;
+      }
+      lotAllocations.push({ purchaseItemId, batches });
     }
+    if (!items.length) { setMessage(guide("receiptQuantity")); return; }
     setReceiveSubmitting(true);
     try {
       await enterpriseV2Mutation(`/api/enterprise/${organizationId}/purchases/${receiveTarget.purchase.id}/receive`, "POST", { revision: receiveTarget.purchase.revision, receivedAt: new Date().toISOString(), warehouseId: receiveWarehouseId, storageLocationId: receiveLocationId, notes: String(form.get("notes") || ""), items, lotAllocations });
@@ -354,14 +378,17 @@ export function EnterprisePurchasesWorkspace({ organizationId, organizationName 
         <Field label={t("purchases.form.description")} help={guide("description")}><textarea name="description" defaultValue={formTarget?.description || ""} className="min-h-24 max-w-full rounded-xl border border-dtsc-border bg-dtsc-surface p-3 text-base text-dtsc-ink md:text-sm" /></Field>
         <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 border-y border-dtsc-border py-4">
           <div className="flex min-w-0 flex-wrap items-start justify-between gap-3"><div className="min-w-0"><strong className="block break-words text-dtsc-ink">{t("purchases.form.items")}</strong><p className="mt-1 max-w-3xl break-words text-sm leading-6 text-dtsc-muted">{guide("items")}</p></div><Button type="button" variant="outline" onClick={() => setDraftItems((items) => [...items, emptyDraftItem()])}><Plus className="h-4 w-4" />{t("purchases.form.line")}</Button></div>
-          {draftItems.map((item, index) => <div key={index} className="grid min-w-0 max-w-full grid-cols-[minmax(0,1fr)] gap-3 rounded-2xl border border-dtsc-border bg-dtsc-page p-3 md:grid-cols-2 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1.5fr)_minmax(0,.7fr)_minmax(0,.8fr)_minmax(0,1fr)_minmax(0,.8fr)]">
+          {draftItems.map((item, index) => {
+            const step = inventoryQuantityStep(catalogById.get(item.catalogItemId)?.unitOfMeasure.decimalScale);
+            return <div key={index} className="grid min-w-0 max-w-full grid-cols-[minmax(0,1fr)] gap-3 rounded-2xl border border-dtsc-border bg-dtsc-page p-3 md:grid-cols-2 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1.5fr)_minmax(0,.7fr)_minmax(0,.8fr)_minmax(0,1fr)_minmax(0,.8fr)]">
             <Field label={guide("catalogItem")} help={guide("catalogItemHelp")} required><NativeSelect value={item.catalogItemId} onChange={(value) => { const catalog = catalogItems.find((entry) => entry.id === value); setDraftItems((items) => items.map((entry, itemIndex) => itemIndex === index ? { ...entry, catalogItemId: value, description: catalog?.name || entry.description, unit: catalog ? (catalog.unitOfMeasure.symbol || catalog.unitOfMeasure.code) : "", unitPrice: catalog?.indicativeCost != null ? String(catalog.indicativeCost) : entry.unitPrice } : entry)); }} items={catalogChoices} required /></Field>
             <Field label={guide("lineDescription")} help={guide("lineDescriptionHelp")} required><Input value={item.description} onChange={(event) => setDraftItems((items) => items.map((entry, itemIndex) => itemIndex === index ? { ...entry, description: event.target.value } : entry))} required /></Field>
-            <Field label={guide("quantity")} help={guide("quantityHelp")} required><Input value={item.quantity} onChange={(event) => setDraftItems((items) => items.map((entry, itemIndex) => itemIndex === index ? { ...entry, quantity: event.target.value } : entry))} type="number" min="0.001" step="0.001" required /></Field>
+            <Field label={guide("quantity")} help={guide("quantityHelp")} required><Input value={item.quantity} onChange={(event) => setDraftItems((items) => items.map((entry, itemIndex) => itemIndex === index ? { ...entry, quantity: event.target.value } : entry))} type="number" min={step} step={step} max="1000000" inputMode="decimal" disabled={!step} required /></Field>
             <Field label={guide("unit")} help={guide("unitHelp")} required><div data-dtsc-canonical-unit aria-live="polite" className="flex h-11 min-w-0 items-center rounded-xl border border-dtsc-border bg-dtsc-surface px-3 text-base font-semibold text-dtsc-ink md:text-sm">{item.unit || t("common.notSpecified")}</div></Field>
             <Field label={guide("unitPrice")} help={guide("unitPriceHelp")} required><Input value={item.unitPrice} onChange={(event) => setDraftItems((items) => items.map((entry, itemIndex) => itemIndex === index ? { ...entry, unitPrice: event.target.value } : entry))} type="number" min="0" step="0.01" required /></Field>
             <Field label={guide("taxRate")} help={guide("taxRateHelp")}><Input value={item.taxRate} onChange={(event) => setDraftItems((items) => items.map((entry, itemIndex) => itemIndex === index ? { ...entry, taxRate: event.target.value } : entry))} type="number" min="0" max="100" step="0.01" /></Field>
-          </div>)}
+            </div>;
+          })}
         </div>
         <Button disabled={formSubmitting} className="bg-dtsc-blue text-white"><ShoppingCart className="h-4 w-4" />{formSubmitting ? t("common.loading") : formTarget ? t("common.save") : t("purchases.form.createDraft")}</Button>
       </form>
@@ -369,7 +396,46 @@ export function EnterprisePurchasesWorkspace({ organizationId, organizationName 
 
     <Dialog open={Boolean(approvalTarget)} onClose={() => setApprovalTarget(null)} title={t("purchases.approval.title")} description={approvalTarget?.title} presentation="editor"><form onSubmit={(event) => { event.preventDefault(); if (!approvalTarget) return; const approver = String(new FormData(event.currentTarget).get("approverUserId") || ""); void runAction(approvalTarget, "SUBMIT", approver).catch((error) => setMessage(error instanceof Error ? error.message : "ACTION_FAILED")); }} className="grid gap-4"><Field label={t("purchases.approval.designated")} help={guide("approver")} required><EnterpriseApproverSelect organizationId={organizationId} moduleCode="SUPPLIERS_PURCHASES" locale={locale} /></Field><Button className="bg-dtsc-blue text-white">{t("purchases.approval.submit")}</Button></form></Dialog>
 
-    <Dialog open={Boolean(receiveTarget)} onClose={() => { if (!receiveSubmitting) { setReceiveTarget(null); setReceiveWarehouseId(""); setReceiveLocationId(""); } }} title={t("purchases.receive.title")} description={receiveTarget?.purchase.reference} presentation="editor" className="max-w-4xl"><form onSubmit={receive} className="grid gap-4">{receiveRequiresWarehouse ? <div className="grid gap-3 md:grid-cols-2"><Field label={guide("receiptWarehouse")} help={guide("receiptWarehouseHelp")} required><NativeSelect name="warehouseId" value={receiveWarehouseId} onChange={(value) => { setReceiveWarehouseId(value); setReceiveLocationId(""); }} items={receiveWarehouseChoices} required /></Field><Field label={guide("receiptLocation")} help={guide("receiptLocationHelp")}><NativeSelect name="storageLocationId" value={receiveLocationId} onChange={setReceiveLocationId} items={receiveLocationChoices} /></Field></div> : null}{receiveTarget?.purchase.items.map((item) => { const received = receiveTarget ? totalPreviouslyReceived(receiveTarget, item.id) : 0; const remaining = Math.max(0, Number(item.quantity) - received); return remaining > 0 ? <div key={item.id} className="grid min-w-0 gap-2 border-b border-dtsc-border pb-3"><Field label={t("purchases.receive.ordered", { description: item.description, quantity: remaining, unit: item.unit })} help={guide("receiptQuantity")}><Input name={`quantity_${item.id}`} type="number" min="0" max={String(remaining)} step="0.001" defaultValue="0" inputMode="decimal" /></Field>{receiptRule(receiveTarget, item.id)?.lotTracking ? <div className="grid gap-2"><p className="text-xs font-semibold text-dtsc-muted">{guide("receiptBatchHelp")}</p>{(receiptBatches[item.id] || []).map((batch, index) => <div key={index} className="grid min-w-0 gap-2 rounded-xl border border-dtsc-border p-2 sm:grid-cols-2">{([["lotNumber", guide("receiptBatchNumber"), "text"], ["quantity", guide("receiptBatchQuantity"), "number"], ["productionDate", guide("receiptBatchProduction"), "date"], ["expiryDate", receiptRule(receiveTarget, item.id)?.expiryTracking ? (guide("receiptBatchExpiryRequired")) : (guide("receiptBatchExpiry")), "date"]] as const).map(([field, label, type]) => <Field key={field} label={label}><Input type={type} min={type === "number" ? "0.001" : undefined} step={type === "number" ? "0.001" : undefined} maxLength={field === "lotNumber" ? 120 : undefined} value={batch[field]} onChange={(event) => { const value = event.target.value; setReceiptBatches((previous) => ({ ...previous, [item.id]: (previous[item.id] || []).map((row, rowIndex) => rowIndex === index ? { ...row, [field]: value } : row) })); }} /></Field>)}<Button type="button" variant="outline" className="sm:col-span-2" onClick={() => setReceiptBatches((previous) => ({ ...previous, [item.id]: (previous[item.id] || []).filter((_, rowIndex) => rowIndex !== index) }))}>{guide("receiptBatchRemove")}</Button></div>)}<Button type="button" variant="outline" disabled={(receiptBatches[item.id] || []).length >= 100} onClick={() => setReceiptBatches((previous) => ({ ...previous, [item.id]: [...(previous[item.id] || []), emptyReceiptBatch()] }))}><Plus className="h-4 w-4" />{guide("receiptBatchAdd")}</Button></div> : null}</div> : null; })}<Field label={t("purchases.receive.notes")} help={guide("receiptNotes")}><textarea name="notes" className="min-h-24 rounded-xl border border-dtsc-border bg-dtsc-surface p-3 text-base text-dtsc-ink md:text-sm" /></Field><Button disabled={receiveSubmitting} className="bg-dtsc-blue text-white"><PackageCheck className="h-4 w-4" />{receiveSubmitting ? t("common.loading") : t("purchases.receive.save")}</Button></form></Dialog>
+    <Dialog open={Boolean(receiveTarget)} onClose={() => { if (!receiveSubmitting) { setReceiveTarget(null); setReceiveWarehouseId(""); setReceiveLocationId(""); } }} title={t("purchases.receive.title")} description={receiveTarget?.purchase.reference} presentation="editor" className="max-w-4xl">
+      <form onSubmit={receive} className="grid min-w-0 gap-4">
+        {receiveRequiresWarehouse ? <div className="grid min-w-0 gap-3 md:grid-cols-2">
+          <Field label={guide("receiptWarehouse")} help={guide("receiptWarehouseHelp")} required><NativeSelect name="warehouseId" value={receiveWarehouseId} onChange={(value) => { setReceiveWarehouseId(value); setReceiveLocationId(""); }} items={receiveWarehouseChoices} required /></Field>
+          <Field label={guide("receiptLocation")} help={guide("receiptLocationHelp")}><NativeSelect name="storageLocationId" value={receiveLocationId} onChange={setReceiveLocationId} items={receiveLocationChoices} /></Field>
+        </div> : null}
+        {receiptLines.map(({ purchaseItemId, decimalScale, remaining }) => {
+          const item = receiveTarget?.purchase.items.find((line) => line.id === purchaseItemId);
+          if (!item) return null;
+          const step = inventoryQuantityStep(decimalScale ?? undefined);
+          const rule = receiptRule(receiveTarget, item.id);
+          const displayRemaining = localizeInventoryQuantity(remaining, displayLocale === "fr" ? "fr-FR" : "en-GB");
+          return <div key={item.id} className="grid min-w-0 gap-2 border-b border-dtsc-border pb-3">
+            <Field label={t("purchases.receive.ordered", { description: item.description, quantity: displayRemaining, unit: item.unit })} help={step ? guide("receiptQuantity") : guide("receiptUnitUnverified")}>
+              <Input name={`quantity_${item.id}`} type="number" min="0" max={remaining} step={step} disabled={!step} defaultValue="0" inputMode="decimal" />
+            </Field>
+            {step && rule?.lotTracking ? <div className="grid min-w-0 gap-2">
+              <p className="text-xs font-semibold text-dtsc-muted">{guide("receiptBatchHelp")}</p>
+              {(receiptBatches[item.id] || []).map((batch, index) => <div key={index} className="grid min-w-0 gap-2 rounded-xl border border-dtsc-border p-2 sm:grid-cols-2">
+                {([
+                  ["lotNumber", guide("receiptBatchNumber"), "text"],
+                  ["quantity", guide("receiptBatchQuantity"), "number"],
+                  ["productionDate", guide("receiptBatchProduction"), "date"],
+                  ["expiryDate", guide(rule.expiryTracking ? "receiptBatchExpiryRequired" : "receiptBatchExpiry"), "date"],
+                ] as const).map(([field, label, type]) => <Field key={field} label={label}>
+                  <Input type={type} min={type === "number" ? step : undefined} step={type === "number" ? step : undefined} max={type === "number" ? remaining : undefined} inputMode={type === "number" ? "decimal" : undefined} maxLength={field === "lotNumber" ? 120 : undefined} value={batch[field]} onChange={(event) => {
+                    const value = event.target.value;
+                    setReceiptBatches((previous) => ({ ...previous, [item.id]: (previous[item.id] || []).map((row, rowIndex) => rowIndex === index ? { ...row, [field]: value } : row) }));
+                  }} />
+                </Field>)}
+                <Button type="button" variant="outline" className="sm:col-span-2" onClick={() => setReceiptBatches((previous) => ({ ...previous, [item.id]: (previous[item.id] || []).filter((_, rowIndex) => rowIndex !== index) }))}>{guide("receiptBatchRemove")}</Button>
+              </div>)}
+              <Button type="button" variant="outline" disabled={(receiptBatches[item.id] || []).length >= 100} onClick={() => setReceiptBatches((previous) => ({ ...previous, [item.id]: [...(previous[item.id] || []), emptyReceiptBatch()] }))}><Plus className="h-4 w-4" />{guide("receiptBatchAdd")}</Button>
+            </div> : null}
+          </div>;
+        })}
+        <Field label={t("purchases.receive.notes")} help={guide("receiptNotes")}><textarea name="notes" className="min-h-24 rounded-xl border border-dtsc-border bg-dtsc-surface p-3 text-base text-dtsc-ink md:text-sm" /></Field>
+        <Button disabled={receiveSubmitting || !receiptLines.some((line) => line.decimalScale !== null)} className="bg-dtsc-blue text-white"><PackageCheck className="h-4 w-4" />{receiveSubmitting ? t("common.loading") : t("purchases.receive.save")}</Button>
+      </form>
+    </Dialog>
 
     <Dialog open={Boolean(pendingAction)} onClose={() => { if (!actionSubmitting) { setPendingAction(null); setActionReason(""); } }} title={pendingAction?.label || ""} description={guide("actionReview")} presentation={actionRequiresReason ? "editor" : "default"}>{pendingAction ? <div className="grid gap-4"><div className="rounded-xl border border-dtsc-border bg-dtsc-page p-3 text-sm"><strong className="text-dtsc-ink">{pendingAction.item.reference} · {pendingAction.item.title}</strong><p className="mt-1 text-dtsc-muted">{formatEnterpriseAmount(pendingAction.item.totalAmount, pendingAction.item.currency, locale)}</p></div>{actionRequiresReason ? <Field label={guide("actionReason")} help={guide("actionReasonHelp")} required><textarea value={actionReason} onChange={(event) => setActionReason(event.target.value)} minLength={3} required className="min-h-28 rounded-xl border border-dtsc-border bg-dtsc-surface p-3 text-base text-dtsc-ink md:text-sm" /></Field> : null}<Button disabled={actionSubmitting} onClick={() => void confirmPendingAction()} className="bg-dtsc-blue text-white">{actionSubmitting ? t("common.loading") : t("common.confirm")}</Button></div> : null}</Dialog>
 

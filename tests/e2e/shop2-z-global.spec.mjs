@@ -803,6 +803,75 @@ test.describe.serial("Shop 2.0 Iteration 4 global behavioral acceptance", () => 
     }
   });
 
+  test("#1228 purchase receipt API preserves micro-units and rejects an unproven unit change", async ({ page }) => {
+    test.setTimeout(90_000);
+    await signIn(page);
+    const key = `E2E-1228-RECEIPT-${Date.now()}`;
+    const endpoint = `/api/enterprise/${organizationId}/purchases`;
+    const units = [];
+    let catalogItem, purchase;
+    try {
+      for (const suffix of ["ORDER", "OTHER"]) {
+        const unit = await prisma.enterpriseUnitOfMeasure.create({ data: {
+          organizationId, code: `${key}-${suffix}`, name: `Precision ${suffix}`, symbol: "u", decimalScale: 6, createdByUserId: fixture.userId,
+        } });
+        units.push(unit);
+      }
+      catalogItem = await prisma.enterpriseCatalogItem.create({ data: {
+        organizationId, code: key, name: key, normalizedName: key.toLowerCase(), itemType: "SERVICE", unitOfMeasureId: units[0].id, currency: fixture.currencyCode, createdByUserId: fixture.userId,
+      } });
+      const created = await apiPost(page, endpoint, {
+        title: key, currency: fixture.currencyCode, buyerUserId: fixture.userId,
+        items: [{ catalogItemId: catalogItem.id, description: catalogItem.name, quantity: "0.000007", unit: "u", unitPrice: 100000, taxRate: 0 }],
+      });
+      expect(created.response.status(), JSON.stringify(created.body)).toBe(201);
+      purchase = created.body.purchase;
+      const line = purchase.items[0];
+      expect(String(line.quantity)).toBe("0.000007");
+      await prisma.enterprisePurchase.update({ where: { id: purchase.id }, data: { status: "ORDERED", orderedAt: new Date() } });
+      const detailPath = `${endpoint}/${purchase.id}`;
+      const readRemaining = async () => {
+        const detail = await apiGet(page, detailPath);
+        expect(detail.response.status(), JSON.stringify(detail.body)).toBe(200);
+        return detail.body.receiptQuantities.find((quantity) => quantity.purchaseItemId === line.id);
+      };
+      expect(await readRemaining()).toMatchObject({ remaining: "0.000007", decimalScale: 6 });
+      const receive = (quantityReceived, revision = purchase.revision) => apiPost(page, `${detailPath}/receive`, {
+        revision, receivedAt: new Date().toISOString(), items: [{ purchaseItemId: line.id, quantityReceived }],
+      });
+      await prisma.enterpriseCatalogItem.update({ where: { id: catalogItem.id }, data: { unitOfMeasureId: units[1].id } });
+      expect(await readRemaining()).toMatchObject({ remaining: "0.000007", decimalScale: null });
+      const refused = await receive("0.000003");
+      expect(refused.response.status(), JSON.stringify(refused.body)).toBe(409);
+      expect(refused.body.error).toBe("INVENTORY_UNIT_CONVERSION_REQUIRED");
+      expect(await prisma.enterprisePurchaseReceipt.count({ where: { organizationId, purchaseId: purchase.id } })).toBe(0);
+
+      await prisma.enterpriseCatalogItem.update({ where: { id: catalogItem.id }, data: { unitOfMeasureId: units[0].id } });
+      const partial = await receive("0.000003");
+      expect(partial.response.status(), JSON.stringify(partial.body)).toBe(201);
+      expect(partial.body.purchase.status).toBe("PARTIALLY_RECEIVED");
+      expect(await readRemaining()).toMatchObject({ remaining: "0.000004", decimalScale: 6 });
+      const complete = await receive("0.000004", partial.body.purchase.revision);
+      expect(complete.response.status(), JSON.stringify(complete.body)).toBe(201);
+      expect(complete.body.purchase.status).toBe("RECEIVED");
+      expect(await readRemaining()).toMatchObject({ remaining: "0", decimalScale: 6 });
+      const printable = await page.context().request.get(`${detailPath}/print?lang=en`);
+      expect(printable.status(), await printable.text()).toBe(200);
+      expect(await printable.text()).toContain("0.000007");
+    } finally {
+      if (purchase) {
+        const receipts = await prisma.enterprisePurchaseReceipt.findMany({ where: { organizationId, purchaseId: purchase.id }, include: { items: true } });
+        await prisma.enterprisePurchaseReceiptItemStockLink.deleteMany({ where: { organizationId, purchaseReceiptItemId: { in: receipts.flatMap((receipt) => receipt.items.map((item) => item.id)) } } });
+        await prisma.enterprisePurchaseReceiptOperationalLink.deleteMany({ where: { organizationId, purchaseReceiptId: { in: receipts.map((receipt) => receipt.id) } } });
+        await prisma.enterprisePurchaseReceipt.deleteMany({ where: { organizationId, purchaseId: purchase.id } });
+        await prisma.enterprisePurchaseItemCatalogLink.deleteMany({ where: { organizationId, purchaseItemId: { in: purchase.items.map((item) => item.id) } } });
+        await prisma.enterprisePurchase.delete({ where: { id: purchase.id } });
+      }
+      if (catalogItem) await prisma.enterpriseCatalogItem.delete({ where: { id: catalogItem.id } });
+      await prisma.enterpriseUnitOfMeasure.deleteMany({ where: { organizationId, id: { in: units.map((unit) => unit.id) } } });
+    }
+  });
+
   test("#1228 full-capacity stock stays exact and keyboard-readable in every viewport",async({page},testInfo)=>{
     test.setTimeout(180_000);await signIn(page);const key=`E2E-1228-CAP-${Date.now()}`;
     const user=await prisma.user.findUniqueOrThrow({where:{id:fixture.userId},select:{locale:true}});
