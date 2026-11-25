@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { safeFinanceError } from "@/components/enterprise/professional/finance-professional-ui";
+import type { FinanceFilteredTotal } from "@/components/enterprise/professional/finance-design2-controls";
 import type { FinanceRecord } from "@/components/enterprise/professional/finance-professional-workspace-shared";
 
 type Pagination = { page: number; pageSize: number; total: number; pageCount: number };
@@ -25,6 +26,7 @@ export function useOperationalFinanceCollection<T extends FinanceRecord>({
   const [items, setItems] = useState<T[]>([]);
   const [pagination, setPagination] = useState<Pagination>(EMPTY_PAGINATION);
   const [metrics, setMetrics] = useState<Record<string, unknown>>({});
+  const [filteredTotals, setFilteredTotals] = useState<FinanceFilteredTotal[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const filterKey = useMemo(() => JSON.stringify(filters || {}), [filters]);
@@ -44,22 +46,25 @@ export function useOperationalFinanceCollection<T extends FinanceRecord>({
       .then(async (response) => {
         const body = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(body.message || body.error || "Finance list unavailable");
+        if (controller.signal.aborted) return;
+        setFilteredTotals(Array.isArray(body.filteredTotals) ? body.filteredTotals : []);
         setItems(Array.isArray(body.items) ? body.items : []);
         setPagination(body.pagination || EMPTY_PAGINATION);
         setMetrics(body.metrics || {});
       })
       .catch((requestError) => {
-        if (requestError instanceof DOMException && requestError.name === "AbortError") return;
+        if (controller.signal.aborted || (requestError instanceof DOMException && requestError.name === "AbortError")) return;
+        setFilteredTotals([]);
         setItems([]);
         setPagination(EMPTY_PAGINATION);
         setMetrics({});
         setError(safeFinanceError(requestError, "Impossible de charger cette vue Finance."));
       })
-      .finally(() => setLoading(false));
+      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
   }, [endpoint, page, refreshKey, search, status, filterKey]);
 
-  return { items, pagination, metrics, loading, error };
+  return { items, pagination, metrics, filteredTotals, loading, error };
 }
 
 export async function fetchOperationalFinanceRecord<T extends FinanceRecord>(endpoint: string, recordId: string): Promise<T | null> {

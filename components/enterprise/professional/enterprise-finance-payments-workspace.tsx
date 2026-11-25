@@ -18,7 +18,7 @@ import {
   type FinanceRecord,
 } from "@/components/enterprise/professional/finance-professional-workspace-shared";
 import { useOperationalFinanceCollection, fetchOperationalFinanceRecord } from "@/components/enterprise/professional/use-operational-finance-collection";
-import { FinanceDateFilter, FinanceExportControls, type FinanceExportColumn } from "@/components/enterprise/professional/finance-design2-controls";
+import { FinanceDateFilter, FinanceExportControls, FinanceFilteredTotals, type FinanceExportColumn } from "@/components/enterprise/professional/finance-design2-controls";
 import { useOperationalFinanceSummary } from "@/components/enterprise/professional/use-operational-finance-summary";
 import { ProfessionalError, ProfessionalFormSection, ProfessionalHelp, ProfessionalLoading, ProfessionalSearch, ProfessionalTabs } from "@/components/enterprise/professional/professional-erp-ui";
 import { financeDate, financeEnumLabel, financeErrorMessage, financeMoney, financePaymentConfirmationCopy, financeStatusLabel, financeStatusTone, safeFinanceError, type FinanceLocale } from "@/components/enterprise/professional/finance-professional-ui";
@@ -289,6 +289,7 @@ export function EnterpriseFinancePaymentsWorkspace(props: Props) {
     />
     <ModuleContent>
       {summaryError ? <ProfessionalError message={summaryError} /> : null}
+      {!collection.loading && !collection.error ? <FinanceFilteredTotals rows={collection.filteredTotals} locale={locale} /> : null}
       <ModuleSection title={tabs.find((item) => item.id === tab)?.label || ""} description={t("paymentSectionDescription")}>
         {collection.error ? <ProfessionalError message={collection.error} /> : collection.loading ? <ProfessionalLoading /> : <FinanceRecordList items={collection.items} locale={locale} emptyTitle={t("noItemInView")} emptyDescription={t("professionalFormOrFilters")} onOpen={(record) => openPaymentDetail(record as Payment)} actions={(record) => (record as Payment).linkedSalesInvoiceId ? <Button size="sm" variant="outline" onClick={() => printLinkedInvoice(record as Payment)}><Printer className="h-4 w-4" />{t("printInvoicePreview")}</Button> : undefined} />}
         <FinancePaginationControls pagination={collection.pagination} page={page} onPage={setPage} locale={locale} />

@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { CalendarDays, Download, FileSpreadsheet, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ModuleMetric, ModuleMetrics } from "@/components/workspace/module-metrics";
+import { financeMoney, financeStatusLabel } from "@/components/enterprise/professional/finance-professional-ui";
 import { Input } from "@/components/ui/input";
 import { notifyToast } from "@/lib/client-toast";
 import { downloadProfessionalCsv, downloadProfessionalPdf, downloadProfessionalXlsx, type ProfessionalReportExportModel } from "@/lib/reporting/professional-export";
@@ -62,6 +64,22 @@ export function FinanceDateFilter({ locale, from, to, onChange, disabledReason }
   </div>;
 }
 
+export type FinanceFilteredTotal = { currencyCode: string; metric: "original" | "outstanding" | "inbound" | "outbound"; amount: string; status?: string };
+const filteredMetricLabels = {
+  original: { fr: "Montant initial", en: "Original amount" },
+  outstanding: { fr: "Solde restant dû", en: "Outstanding balance" },
+  inbound: { fr: "Montants entrants", en: "Inbound amounts" },
+  outbound: { fr: "Montants sortants", en: "Outbound amounts" },
+} as const;
+function filteredMetricLabel(row: FinanceFilteredTotal, locale: Locale) {
+  return [filteredMetricLabels[row.metric][locale], row.status ? financeStatusLabel(row.status, locale) : "", row.currencyCode].filter(Boolean).join(" · ");
+}
+export function FinanceFilteredTotals({ rows, locale }: { rows: FinanceFilteredTotal[]; locale: Locale }) {
+  if (!rows.length) return null;
+  const label = locale === "fr" ? "Sous-totaux filtrés (toutes pages)" : "Filtered subtotals (all pages)";
+  return <div className="min-w-0"><p className="text-xs font-semibold text-dtsc-muted">{label}</p><ModuleMetrics label={label}>{rows.map(row => <ModuleMetric key={[row.metric,row.status,row.currencyCode].join(":")} label={filteredMetricLabel(row, locale)} value={financeMoney(row.amount,row.currencyCode,locale)} />)}</ModuleMetrics></div>;
+}
+
 export type FinanceExportColumn = { key: string; labelFr: string; labelEn: string; get: (row: Record<string, unknown>) => string | number };
 
 /** Downloads the FULL authorized, filtered result up to the safe export cap; never silently exports only the visible page. */
@@ -86,7 +104,7 @@ export function FinanceExportControls({ endpoint, organizationName, title, local
     try {
       const params = new URLSearchParams({ ...filters, page: "1", pageSize: "100" });
       const first = await fetch(`${endpoint}${endpoint.includes("?") ? "&" : "?"}${params}`, { cache: "no-store" });
-      const body = await first.json().catch(() => null) as { items?: Record<string, unknown>[]; pagination?: { pageCount?: number; total?: number }; message?: string } | null;
+      const body = await first.json().catch(() => null) as { items?: Record<string, unknown>[]; pagination?: { pageCount?: number; total?: number }; filteredTotals?: FinanceFilteredTotal[]; message?: string } | null;
       if (!first.ok || !body || !Array.isArray(body.items)) throw new Error(body?.message || tr("L’export des données a échoué.", "Data export failed."));
       const total = body.pagination?.total ?? body.items.length;
       const pages = body.pagination?.pageCount ?? 1;
@@ -111,7 +129,7 @@ export function FinanceExportControls({ endpoint, organizationName, title, local
         organizationName, title, subtitle: tr(subtitleFr || "DTSC Platform · Comptabilité & conformité", subtitleEn || "DTSC Platform · Accounting & compliance"),
         filenameBase: `DTSC-${title.replace(/\s+/g, "-")}-${localToday()}`,
         generatedLabel: `${tr("Édité le", "Generated on")} ${now}`,
-        kpis: [{ label: tr("Enregistrements", "Records"), value: String(all.length), numericValue: all.length }],
+        kpis: [{ label: tr("Enregistrements", "Records"), value: String(all.length), numericValue: all.length }, ...(Array.isArray(body.filteredTotals) ? body.filteredTotals.filter(row => row.metric in filteredMetricLabels).map(row => ({ label: `${tr("Sous-total filtré", "Filtered subtotal")} · ${filteredMetricLabel(row, locale)}`, value: financeMoney(row.amount,row.currencyCode,locale) })) : [])],
         chart: [], insights: [],
         filters: reportFilters ?? Object.entries(filters || {}).filter(([, value]) => value).map(([key, value]) => ({ label: key, value })),
         columns: columns.map((column) => ({ key: column.key, label: en ? column.labelEn : column.labelFr })),

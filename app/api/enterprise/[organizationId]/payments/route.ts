@@ -57,7 +57,7 @@ export async function GET(req: Request, { params }: Params) {
     ] } : {}),
   };
 
-  const [items, total, inboundByCurrency, outboundByCurrency, unallocatedByCurrency] = await Promise.all([
+  const [items, total, inboundByCurrency, outboundByCurrency, unallocatedByCurrency, filtered] = await prisma.$transaction([
     prisma.enterprisePayment.findMany({
       where,
       orderBy: [{ paymentDate: "desc" }, { createdAt: "desc" }],
@@ -84,7 +84,8 @@ export async function GET(req: Request, { params }: Params) {
       _sum: { unallocatedAmount: true },
       _count: { _all: true },
     }),
-  ]);
+    prisma.enterprisePayment.groupBy({ by: ["currencyCode", "direction", "status"], where, _sum: { amount: true } }),
+  ], { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
 
   // Invoice identity originates from the canonical Retail intent or confirmed
   // receivable allocations; a payment without an invoice is not a fake invoice.
@@ -175,6 +176,7 @@ export async function GET(req: Request, { params }: Params) {
     items: resultItems,
     pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) },
     metrics: { inboundByCurrency, outboundByCurrency, unallocatedByCurrency },
+    filteredTotals: filtered.map(row => ({ currencyCode: row.currencyCode, metric: row.direction === "INBOUND" ? "inbound" : "outbound", status: row.status, amount: row._sum.amount?.toFixed() ?? "0" })),
   });
 }
 

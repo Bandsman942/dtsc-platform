@@ -68,7 +68,7 @@ export async function GET(req: Request, { params }: Params) {
     ] } } : {}),
   };
   const today = startOfUtcDay();
-  const [items, total, openByCurrency, overdueByCurrency] = await Promise.all([
+  const [items, total, openByCurrency, overdueByCurrency, filtered] = await prisma.$transaction([
     prisma.enterpriseReceivable.findMany({
       where,
       orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }],
@@ -89,12 +89,17 @@ export async function GET(req: Request, { params }: Params) {
       _sum: { outstandingAmount: true },
       _count: { _all: true },
     }),
-  ]);
+    prisma.enterpriseReceivable.groupBy({ by: ["currencyCode"], where, _sum: { originalAmount: true, outstandingAmount: true } }),
+  ], { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
 
   await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "receivables", page, overdue, ageBucket } });
   return NextResponse.json({
     items,
     pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) },
     metrics: { openByCurrency, overdueByCurrency },
+    filteredTotals: filtered.flatMap(row => [
+      { currencyCode: row.currencyCode, metric: "original", amount: row._sum.originalAmount?.toFixed() ?? "0" },
+      { currencyCode: row.currencyCode, metric: "outstanding", amount: row._sum.outstandingAmount?.toFixed() ?? "0" },
+    ]),
   });
 }

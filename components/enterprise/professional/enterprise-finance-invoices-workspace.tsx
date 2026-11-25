@@ -17,7 +17,7 @@ import {
   type FinanceRecord,
 } from "@/components/enterprise/professional/finance-professional-workspace-shared";
 import { useOperationalFinanceCollection, fetchOperationalFinanceRecord } from "@/components/enterprise/professional/use-operational-finance-collection";
-import { FinanceDateFilter, FinanceExportControls, type FinanceExportColumn } from "@/components/enterprise/professional/finance-design2-controls";
+import { FinanceDateFilter, FinanceExportControls, FinanceFilteredTotals, type FinanceExportColumn } from "@/components/enterprise/professional/finance-design2-controls";
 import { useOperationalFinanceSummary } from "@/components/enterprise/professional/use-operational-finance-summary";
 import {
   ProfessionalError,
@@ -390,11 +390,12 @@ export function EnterpriseFinanceInvoicesWorkspace(props: Props) {
     </ModuleMetrics>
     <ModuleToolbar
       search={<ProfessionalSearch value={search} onChange={(value) => { setSearch(value); setPage(1); }} placeholder={t("financeSearchPlaceholder")} />}
-      controls={<div className="grid min-w-0 gap-2"><ProfessionalTabs value={tab} onChange={(value) => { setTab(value); setStatus(""); setAgeBucket(""); setPage(1); setDetail(null); }} items={tabs} label={t("financeViews")} /><div className="flex min-w-0 flex-wrap items-end gap-2"><NativeSelect value={status} onChange={(value) => { setStatus(value); setPage(1); }} items={[{ id: "", label: t("allStatuses") }, ...["DRAFT", "PENDING_REVIEW", "PENDING_APPROVAL", "APPROVED", "REJECTED", "ISSUED", "POSTED", "PARTIALLY_PAID", "PAID", "CANCELLED"].map((id) => ({ id, label: financeStatusLabel(id, locale) }))]} /><FinanceDateFilter locale={locale} from={dateFrom} to={dateTo} onChange={(from, to) => { setDateFrom(from); setDateTo(to); setPage(1); }} /><FinanceExportControls endpoint={endpoint} organizationName={organizationName} title={`${locale === "en" ? definition.labelEn : definition.labelFr} · ${tab}`} locale={locale} filters={{ search, status: effectiveStatus, overdue: tab === "overdue" ? "true" : "", workflowPending: !isReceivables && tab === "to-approve" ? "true" : "", dateFrom, dateTo }} columns={exportColumns} disabled={collection.loading} /></div></div>}
+      controls={<div className="grid min-w-0 gap-2"><ProfessionalTabs value={tab} onChange={(value) => { setTab(value); setStatus(""); setAgeBucket(""); setPage(1); setDetail(null); }} items={tabs} label={t("financeViews")} /><div className="flex min-w-0 flex-wrap items-end gap-2"><NativeSelect value={status} onChange={(value) => { setStatus(value); setPage(1); }} items={[{ id: "", label: t("allStatuses") }, ...["DRAFT", "PENDING_REVIEW", "PENDING_APPROVAL", "APPROVED", "REJECTED", "ISSUED", "POSTED", "PARTIALLY_PAID", "PAID", "CANCELLED"].map((id) => ({ id, label: financeStatusLabel(id, locale) }))]} /><FinanceDateFilter locale={locale} from={dateFrom} to={dateTo} onChange={(from, to) => { setDateFrom(from); setDateTo(to); setPage(1); }} /><FinanceExportControls endpoint={endpoint} organizationName={organizationName} title={`${locale === "en" ? definition.labelEn : definition.labelFr} · ${tab}`} locale={locale} filters={{ search, status: effectiveStatus, overdue: tab === "overdue" ? "true" : "", ageBucket: tab === "ageing" ? ageBucket : "", workflowPending: !isReceivables && tab === "to-approve" ? "true" : "", dateFrom, dateTo }} columns={exportColumns} disabled={collection.loading} /></div></div>}
       summary={t("currenciesSeparated")}
     />
     <ModuleContent>
       {summaryError ? <ProfessionalError message={summaryError} /> : null}
+      {!collection.loading && !collection.error ? <FinanceFilteredTotals rows={collection.filteredTotals} locale={locale} /> : null}
       <ModuleSection title={tabs.find((item) => item.id === tab)?.label || ""} description={t(isReceivables ? "receivablesSectionDescription" : "payablesSectionDescription")}>
         {collection.error ? <ProfessionalError message={collection.error} /> : collection.loading ? <ProfessionalLoading /> : <div className="grid gap-3">
           {tab === "ageing" ? <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
