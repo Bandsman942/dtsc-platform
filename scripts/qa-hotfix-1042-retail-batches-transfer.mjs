@@ -1,3 +1,5 @@
+import { workflowTestLoader } from "./lib/workflow-test-loader.mjs";
+const qaQuantityPolicy = workflowTestLoader({})("@/lib/enterprise/inventory/quantity-policy");
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import { createRequire } from "node:module";
@@ -14,7 +16,7 @@ const cjs = typescript.transpileModule(source, {
   compilerOptions: { module: typescript.ModuleKind.CommonJS, target: typescript.ScriptTarget.ES2022 },
 }).outputText;
 const plannerModule = { exports: {} };
-vm.runInNewContext(typescript.transpileModule(fs.readFileSync("lib/enterprise/inventory/lot-allocation.ts", "utf8"), { compilerOptions: { module: typescript.ModuleKind.CommonJS, target: typescript.ScriptTarget.ES2022 } }).outputText, { module: plannerModule, exports: plannerModule.exports, require, Date, Set, Map });
+vm.runInNewContext(typescript.transpileModule(fs.readFileSync("lib/enterprise/inventory/lot-allocation.ts", "utf8"), { compilerOptions: { module: typescript.ModuleKind.CommonJS, target: typescript.ScriptTarget.ES2022 } }).outputText, { module: plannerModule, exports: plannerModule.exports, require: id => id === "@/lib/enterprise/inventory/quantity-policy" ? qaQuantityPolicy : require(id), Date, Set, Map });
 let holds = [];
 const cjsModule = { exports: {} };
 vm.runInNewContext(cjs, {

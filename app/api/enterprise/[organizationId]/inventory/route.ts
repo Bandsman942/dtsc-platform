@@ -1,3 +1,4 @@
+import { exactInventoryQuantity } from "@/lib/enterprise/inventory/quantity-policy";
 import { Prisma } from "@prisma/client";
 import { formatInventoryQuantity } from "@/lib/enterprise/inventory/quantity-display";
 import { NextResponse } from "next/server";
@@ -138,7 +139,7 @@ export async function GET(req: Request, { params }: Params) {
     prisma.enterpriseSectorInventoryEvent.groupBy({by:["catalogItemId"],where:{organizationId,catalogItemId:{in:pageCatalogIds}}}),
   ]);
   const sectorManaged=new Set([...pharmacyItems,...sectorItems].map(row=>row.catalogItemId));
-  const zero=()=>new Prisma.Decimal(0);
+  const zero=()=>exactInventoryQuantity(0);
   const today=businessDateKey(new Date(),organization.timezone||"UTC");
   const normalizedItems=items.map(item=>{
     const physical=item.balances.reduce((sum,row)=>sum.plus(row.quantityOnHand),zero());
@@ -146,7 +147,7 @@ export async function GET(req: Request, { params }: Params) {
     const authorizedWarehouseIds=new Set(item.balances.map(row=>row.warehouseId));
     const activeReservations=reservations.filter(row=>row.inventoryItemId===item.id&&authorizedWarehouseIds.has(row.warehouseId));
     const activeHolds=holds.filter(row=>row.inventoryItemId===item.id&&authorizedWarehouseIds.has(row.warehouseId));
-    const orderReserved=activeReservations.reduce((sum,row)=>sum.plus(row.quantity.minus(row.fulfilledQuantity)),zero());
+    const orderReserved=activeReservations.reduce((sum,row)=>sum.plus(exactInventoryQuantity(row.quantity).minus(row.fulfilledQuantity)),zero());
     const invoiceHeld=activeHolds.reduce((sum,row)=>sum.plus(row.quantity),zero());
     let available=zero();
     for(const warehouseId of authorizedWarehouseIds){
@@ -162,8 +163,8 @@ export async function GET(req: Request, { params }: Params) {
           available=available.plus(plan.allocations.reduce((sum,row)=>sum.plus(row.quantity),zero()));
         }
       }else{
-        const local=rows.reduce((sum,row)=>sum.plus(row.quantityOnHand.minus(row.quantityReserved)),zero())
-          .minus(promised.reduce((sum,row)=>sum.plus(row.quantity.minus(row.fulfilledQuantity)),zero()))
+        const local=rows.reduce((sum,row)=>sum.plus(exactInventoryQuantity(row.quantityOnHand).minus(row.quantityReserved)),zero())
+          .minus(promised.reduce((sum,row)=>sum.plus(exactInventoryQuantity(row.quantity).minus(row.fulfilledQuantity)),zero()))
           .minus(held.reduce((sum,row)=>sum.plus(row.quantity),zero()));
         if(local.gt(0))available=available.plus(local);
       }

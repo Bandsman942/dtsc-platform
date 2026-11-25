@@ -1,3 +1,5 @@
+import { workflowTestLoader } from "./lib/workflow-test-loader.mjs";
+const qaQuantityPolicy = workflowTestLoader({})("@/lib/enterprise/inventory/quantity-policy");
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
@@ -6,7 +8,7 @@ const require = createRequire(import.meta.url);
 const ts = require("typescript");
 const { Prisma } = require("@prisma/client");
 const lotTools = { exports: {} };
-vm.runInNewContext(ts.transpileModule(fs.readFileSync("lib/enterprise/inventory/lot-allocation.ts", "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, { exports: lotTools.exports, require: (id) => id === "@prisma/client" ? { Prisma } : require(id) });
+vm.runInNewContext(ts.transpileModule(fs.readFileSync("lib/enterprise/inventory/lot-allocation.ts", "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, { exports: lotTools.exports, require: (id) => id === "@/lib/enterprise/inventory/quantity-policy" ? qaQuantityPolicy : id === "@prisma/client" ? { Prisma } : require(id) });
 
 const d = (value) => new Prisma.Decimal(value);
 class EnterpriseRetailError extends Error {

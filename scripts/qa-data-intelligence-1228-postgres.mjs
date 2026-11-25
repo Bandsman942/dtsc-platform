@@ -1,3 +1,4 @@
+import { workflowTestLoader } from "./lib/workflow-test-loader.mjs";
 import assert from "node:assert/strict";
 import { PrismaClient } from "@prisma/client";
 import { randomUUID } from "node:crypto";
@@ -9,6 +10,7 @@ if (process.env.QA_1228_DATABASE_FIXTURE !== "true" || !["localhost", "127.0.0.1
   throw new Error("An explicitly enabled local isolated *_test database is required for the rollback fixture");
 }
 const db = new PrismaClient();
+const { planFefoLots } = workflowTestLoader({})("@/lib/enterprise/inventory/lot-allocation");
 class RollbackFixture extends Error {}
 try {
   const expected = [
@@ -65,6 +67,10 @@ try {
       const balance = await tx.enterpriseInventoryBalance.create({ data: { ...coordinates, quantityOnHand: "999999999999999.999998" } });
       const updated = await tx.enterpriseInventoryBalance.update({ where: { id: balance.id }, data: { quantityOnHand: { increment: "0.000001" } } });
       assert.equal(updated.quantityOnHand.toFixed(), "999999999999999.999999", "Prisma round-trip and PostgreSQL increment retain the last micro-unit");
+      const promisedBalance=await tx.enterpriseInventoryBalance.update({where:{id:balance.id},data:{quantityReserved:"0.000001"}});
+      const maximumPlan=planFefoLots({candidates:[{id:promisedBalance.id,status:"AVAILABLE",expiryDate:null,quantityOnHand:promisedBalance.quantityOnHand,quantityReserved:promisedBalance.quantityReserved}],quantity:promisedBalance.quantityOnHand,businessDate:"2026-11-25",expiryMode:"BLOCK"});
+      assert.equal(maximumPlan.allocations[0].quantity.toFixed(),"999999999999999.999998","The real Prisma NUMERIC values retain the last reserved micro-unit in FEFO");
+      assert.equal(maximumPlan.shortfall.toFixed(),"0.000001");
       const movement = await tx.enterpriseStockMovement.create({ data: { ...coordinates, movementType: "PURCHASE_RECEIPT", direction: "IN", quantity: "0.123456", balanceAfter: "999999999999999.999999", idempotencyKey: `${tenant}-movement`, createdByUserId: actor } });
       assert.equal(movement.quantity.toFixed(), "0.123456");
       assert.equal(movement.balanceAfter.toFixed(), "999999999999999.999999");

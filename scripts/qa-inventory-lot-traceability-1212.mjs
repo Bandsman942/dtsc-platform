@@ -1,3 +1,5 @@
+import { workflowTestLoader } from "./lib/workflow-test-loader.mjs";
+const qaQuantityPolicy = workflowTestLoader({})("@/lib/enterprise/inventory/quantity-policy");
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
@@ -59,6 +61,7 @@ function load(path) {
   vm.runInNewContext(js, { module: mod, exports: mod.exports, require: (id) => mocks[id] || require(id), URL, Date }, { filename: path });
   return mod.exports;
 }
+mocks["@/lib/enterprise/inventory/quantity-policy"] = qaQuantityPolicy;
 mocks["@/lib/enterprise/inventory/quantity-display"] = load("lib/enterprise/inventory/quantity-display.ts");
 const { GET } = load("app/api/enterprise/[organizationId]/inventory/route.ts");
 const { PUT } = load("app/api/enterprise/[organizationId]/inventory/item-policy/route.ts");

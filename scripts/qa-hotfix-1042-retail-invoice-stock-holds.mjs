@@ -1,3 +1,5 @@
+import { workflowTestLoader } from "./lib/workflow-test-loader.mjs";
+const qaQuantityPolicy = workflowTestLoader({})("@/lib/enterprise/inventory/quantity-policy");
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
@@ -16,11 +18,12 @@ const { Decimal } = Prisma;
 
 const module = { exports: {} };
 const actualLotTools = { exports: {} };
-vm.runInNewContext(ts.transpileModule(read("lib/enterprise/inventory/lot-allocation.ts"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, { exports: actualLotTools.exports, require: (name) => name === "@prisma/client" ? { Prisma: { Decimal } } : require(name) });
+vm.runInNewContext(ts.transpileModule(read("lib/enterprise/inventory/lot-allocation.ts"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, { exports: actualLotTools.exports, require: (name) => name === "@/lib/enterprise/inventory/quantity-policy" ? qaQuantityPolicy : name === "@prisma/client" ? { Prisma: { Decimal } } : require(name) });
 const javascript = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
 vm.runInNewContext(javascript, {
   exports: module.exports,
   require(name) {
+    if (name === "@/lib/enterprise/inventory/quantity-policy") return qaQuantityPolicy;
     if (name === "@/lib/enterprise/inventory/lot-allocation") return actualLotTools.exports;
     assert.equal(name, "@prisma/client");
     return { Prisma: { Decimal } };
@@ -67,7 +70,7 @@ let moved = 0;
 let pharmacyMapping=0, sectorMapping=0;
 const inventoryModule = { exports: {} };
 const allocationModule = { exports: {} };
-vm.runInNewContext(ts.transpileModule(read("lib/enterprise/inventory/lot-allocation.ts"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, { exports: allocationModule.exports, require: (name) => name === "@prisma/client" ? { Prisma: { Decimal } } : require(name) });
+vm.runInNewContext(ts.transpileModule(read("lib/enterprise/inventory/lot-allocation.ts"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, { exports: allocationModule.exports, require: (name) => name === "@/lib/enterprise/inventory/quantity-policy" ? qaQuantityPolicy : name === "@prisma/client" ? { Prisma: { Decimal } } : require(name) });
 const serviceJavaScript = ts.transpileModule(movement, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
 vm.runInNewContext(serviceJavaScript, {
   exports: inventoryModule.exports,
@@ -160,6 +163,16 @@ for (const [scale, accepted, remaining] of [[0, 1, "4"], [1, 0.1, "4.9"], [2, 0.
   assert.equal(persistedMovement.balanceAfter.toFixed(), remaining);
 }
 unitScale = 6;
+
+// A large physical balance must preserve its final held/reserved micro-unit.
+balance.quantityOnHand = new Decimal("999999999999999.999999");
+outstandingHold = new Decimal("0.000001");
+const beforeCapacity = moved;
+await assert.rejects(inventoryModule.exports.applyStockMovementTx(movementTx,"tenant-a","actor",{...outbound,quantity:"999999999999999.999999"}),{code:"RETAIL_INVOICE_STOCK_HELD"});
+assert.equal(moved,beforeCapacity);
+await inventoryModule.exports.applyStockMovementTx(movementTx,"tenant-a","actor",{...outbound,quantity:"999999999999999.999998"});
+assert.equal(persistedMovement.balanceAfter.toFixed(),"0.000001");
+balance.quantityOnHand = new Decimal(5); outstandingHold = new Decimal(0);
 
 // All reservation sources must share the same canonical invoice lines.
 assert.match(checkout, /readActiveRetailInvoiceStockHoldsTx\(tx, \{ organizationId, warehouseId: input\.warehouseId/);

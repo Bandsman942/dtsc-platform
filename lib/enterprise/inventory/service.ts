@@ -18,7 +18,7 @@ import type {
 import { prisma } from "@/lib/prisma";
 import { prepareValuedTransferDispatchTx, completeValuedTransferDispatchTx, prepareValuedTransferReceiptTx, completeValuedTransferReceiptTx } from "@/lib/enterprise/accounting/inventory-transfer-service";
 import { lotExpiryDateKey, reservationExactBalanceRemaining, reservationLegacyRemaining, reservationLotRemaining } from "@/lib/enterprise/inventory/lot-allocation";
-import { addInventoryQuantities, requireInventoryQuantity } from "@/lib/enterprise/inventory/quantity-policy";
+import { exactInventoryQuantity, addInventoryQuantities, requireInventoryQuantity } from "@/lib/enterprise/inventory/quantity-policy";
 
 type StockMovementInput = z.infer<typeof stockMovementCreateSchema>;
 type StockTransferCreateInput = z.infer<typeof stockTransferCreateSchema>;
@@ -171,7 +171,7 @@ export async function applyStockMovementTx(
   }
   const balance = await tx.enterpriseInventoryBalance.findFirst({ where: { organizationId, inventoryItemId: input.inventoryItemId, warehouseId: input.warehouseId, storageLocationId: input.storageLocationId || null, stockLotId: input.stockLotId || null } });
   const movementQuantity = requireInventoryQuantity(input.quantity, inventoryItem.catalogItem.unitOfMeasure.decimalScale, { positive: true });
-  const currentQuantity = new Prisma.Decimal(balance?.quantityOnHand || 0);
+  const currentQuantity = exactInventoryQuantity(balance?.quantityOnHand || 0);
   const nextBalance = addInventoryQuantities(currentQuantity, input.direction === "IN" ? movementQuantity : movementQuantity.negated());
   // Historical incompatible fractions are never rounded or rewritten. An
   // outbound correction may preserve them; the physical capacity still applies.
@@ -188,7 +188,7 @@ export async function applyStockMovementTx(
       excludeSalesInvoiceId: internal?.consumingRetailInvoiceId,
     });
     const held = holds.filter((row) => row.stockLotId === (input.stockLotId || null) || (Boolean(input.stockLotId) && !row.stockLotId))
-      .reduce((sum, row) => sum.plus(row.quantity), new Prisma.Decimal(0));
+      .reduce((sum, row) => sum.plus(row.quantity), exactInventoryQuantity(0));
     if (held.greaterThan(0) || inventoryItem.lotTracking || input.stockLotId) {
       const balances = await tx.enterpriseInventoryBalance.findMany({
         where: {
@@ -197,15 +197,15 @@ export async function applyStockMovementTx(
         },
         select: { quantityOnHand: true, quantityReserved: true },
       });
-      const physicallyFree = balances.reduce((sum, row) => sum.plus(row.quantityOnHand.minus(row.quantityReserved)), new Prisma.Decimal(0));
+      const physicallyFree = balances.reduce((sum, row) => sum.plus(exactInventoryQuantity(row.quantityOnHand).minus(row.quantityReserved)), exactInventoryQuantity(0));
       if (held.gt(0) && physicallyFree.minus(input.quantity).lessThan(held)) {
         throw new EnterpriseDomainError("RETAIL_INVOICE_STOCK_HELD", 409);
       }
       if (inventoryItem.lotTracking || input.stockLotId) {
         const reservations = await tx.enterpriseInventoryReservation.findMany({ where: { organizationId, inventoryItemId: input.inventoryItemId, warehouseId: input.warehouseId, status: "ACTIVE", OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] }, select: { quantity: true, fulfilledQuantity: true, lotAllocations: true, storageLocationId: true } });
-        const lotPromised = reservations.reduce((sum, row) => sum.plus(reservationLotRemaining(row, input.stockLotId || null)), new Prisma.Decimal(0));
-        const localPromised = reservations.reduce((sum, row) => sum.plus(balance ? reservationExactBalanceRemaining(row, balance.id) : 0).plus(!row.storageLocationId || row.storageLocationId === (input.storageLocationId || null) ? reservationLegacyRemaining(row) : 0), new Prisma.Decimal(0));
-        const localFree = new Prisma.Decimal(balance?.quantityOnHand || 0).minus(balance?.quantityReserved || 0).minus(localPromised);
+        const lotPromised = reservations.reduce((sum, row) => sum.plus(reservationLotRemaining(row, input.stockLotId || null)), exactInventoryQuantity(0));
+        const localPromised = reservations.reduce((sum, row) => sum.plus(balance ? reservationExactBalanceRemaining(row, balance.id) : 0).plus(!row.storageLocationId || row.storageLocationId === (input.storageLocationId || null) ? reservationLegacyRemaining(row) : 0), exactInventoryQuantity(0));
+        const localFree = exactInventoryQuantity(balance?.quantityOnHand || 0).minus(balance?.quantityReserved || 0).minus(localPromised);
         if (localFree.lt(input.quantity) || physicallyFree.minus(input.quantity).lt(held.plus(lotPromised))) throw new EnterpriseDomainError("INVENTORY_RESERVATION_STOCK_HELD", 409);
       }
     }
@@ -413,7 +413,7 @@ export async function createEnterpriseInventoryCount(organizationId: string, act
       const coordinates = await assertInventoryCoordinates(tx, organizationId, { inventoryItemId: line.inventoryItemId, warehouseId: input.warehouseId, storageLocationId: input.storageLocationId, stockLotId: line.stockLotId });
       requireInventoryQuantity(line.countedQuantity, coordinates.inventoryItem.catalogItem.unitOfMeasure.decimalScale);
       const balance = await tx.enterpriseInventoryBalance.findFirst({ where: { organizationId, inventoryItemId: line.inventoryItemId, warehouseId: input.warehouseId, storageLocationId: input.storageLocationId || null, stockLotId: line.stockLotId || null } });
-      const expectedQuantity = new Prisma.Decimal(balance?.quantityOnHand || 0);
+      const expectedQuantity = exactInventoryQuantity(balance?.quantityOnHand || 0);
       lines.push({ inventoryItemId: line.inventoryItemId, stockLotId: line.stockLotId || null, expectedQuantity, countedQuantity: line.countedQuantity, varianceQuantity: addInventoryQuantities(line.countedQuantity, expectedQuantity.negated()), countedByUserId: actorUserId, countedAt: new Date(), notes: line.notes || null });
     }
     const count = await tx.enterpriseInventoryCount.create({ data: { organizationId, reference: inventoryReference("CNT"), warehouseId: input.warehouseId, storageLocationId: input.storageLocationId || null, status: "SUBMITTED", countType: input.countType, startedAt: new Date(), submittedAt: new Date(), requestedByUserId: actorUserId, approvedByUserId: input.approverUserId, notes: input.notes || null, lines: { create: lines } }, include: { lines: true } });

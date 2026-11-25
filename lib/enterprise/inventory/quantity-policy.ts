@@ -27,6 +27,13 @@ export function requireInventoryQuantity(
   return quantity;
 }
 
+/** Local arithmetic context, also for aggregates exceeding one stored balance.
+ * This does not alter Decimal's global monetary configuration or validate input.
+ */
+export function exactInventoryQuantity(value: Prisma.Decimal.Value): Prisma.Decimal {
+  return new ExactQuantity(value);
+}
+
 export function addInventoryQuantities(left: Prisma.Decimal.Value, right: Prisma.Decimal.Value): Prisma.Decimal {
   return new Prisma.Decimal(new ExactQuantity(left).plus(right).toFixed());
 }

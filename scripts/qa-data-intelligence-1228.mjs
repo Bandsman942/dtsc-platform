@@ -57,6 +57,26 @@ const allocation = planFefoLots({ candidates: [candidate], quantity: "0.000001",
 assert.equal(allocation.allocations[0].quantity.toFixed(), "0.000001");
 assert.equal(allocation.shortfall.toFixed(), "0");
 assert.throws(() => planFefoLots({ candidates: [candidate], quantity: "0.0000001", businessDate: "2026-11-25", expiryMode: "BLOCK" }));
+// Regression: default Decimal precision (20 significant digits) used to make
+// the final reserved micro-unit sellable at the preserved 21-digit capacity.
+const largestLot = { ...candidate, quantityOnHand: new Decimal("999999999999999.999999"), quantityReserved: new Decimal("0.000001") };
+const largestPlan = planFefoLots({ candidates: [largestLot], quantity: "999999999999999.999999", businessDate: "2026-11-25", expiryMode: "BLOCK" });
+assert.equal(largestPlan.allocations[0].quantity.toFixed(), "999999999999999.999998");
+assert.equal(largestPlan.shortfall.toFixed(), "0.000001");
+assert.equal(Prisma.Decimal.precision, 20, "Physical arithmetic must not change the global monetary Decimal context");
+const lotTools = load("lib/enterprise/inventory/lot-allocation.ts");
+const full = new Decimal("999999999999999.999999"), micro = new Decimal("0.000001");
+assert.equal(lotTools.reservationLegacyRemaining({ quantity: full, fulfilledQuantity: micro }).toFixed(), "999999999999999.999998");
+const split = [{balanceId:"a",stockLotId:"A",storageLocationId:null,quantity:"999999999999999.999998",fulfilledQuantity:"0.000001"},{balanceId:"b",stockLotId:"B",storageLocationId:null,quantity:"0.000001",fulfilledQuantity:"0"}];
+assert.equal(lotTools.readReservationLotAllocations({quantity:full,fulfilledQuantity:micro,lotAllocations:split}).length,2);
+const consumed = lotTools.consumeReservationLotAllocations(split,new Decimal("999999999999999.999998"));
+assert.equal(consumed.movements[0].consumedQuantity,"999999999999999.999997");assert.equal(consumed.movements[1].consumedQuantity,"0.000001");assert.equal(consumed.next[0].fulfilledQuantity,"999999999999999.999998");
+const invoiceLots = lotTools.readInvoiceLotAllocations({stockLotId:null,invoiceItem:{quantity:full},lotAllocations:[{stockLotId:"A",quantity:"999999999999999.999998"},{stockLotId:"B",quantity:"0.000001"}]},micro);
+assert.equal(invoiceLots.length,1);assert.equal(invoiceLots[0].quantity.toFixed(),"999999999999999.999998");
+const promised = lotTools.planReservationLotAllocations({balances:[{id:"a",stockLotId:"A",storageLocationId:null,quantityOnHand:full,quantityReserved:micro,stockLot:{status:"AVAILABLE",archivedAt:null,expiryDate:null}}],reservations:[],holds:[],quantity:full,businessDate:"2026-11-25",requireExpiry:false});
+assert.equal(promised.allocations[0].quantity,"999999999999999.999998");assert.equal(promised.shortfall.toFixed(),"0.000001");
+const returned = lotTools.planPhysicalInvoiceReturnLots({source:{stockLotId:"A",invoiceItem:{quantity:full}},movements:[{id:"out",stockLotId:"A",quantity:full}],previous:[{quantity:micro,stockDisposition:"RESTOCK",lotAllocations:[{stockLotId:"A",quantity:"0.000001"}]}],quantity:new Decimal("999999999999999.999998"),selected:[{stockLotId:"A",quantity:"999999999999999.999998"}]});
+assert.equal(returned[0].quantity.toFixed(),"999999999999999.999998");
 const snapshot = { quantity: new Decimal("0.000001"), fulfilledQuantity: new Decimal(0), lotAllocations: [{ balanceId: "balance-A", stockLotId: "batch-A", storageLocationId: null, quantity: "0.000001", fulfilledQuantity: "0" }] };
 assert.equal(readReservationLotAllocations(snapshot)[0].quantity, "0.000001");
 assert.throws(() => readReservationLotAllocations({ ...snapshot, lotAllocations: [{ ...snapshot.lotAllocations[0], quantity: "0.0000001" }] }));

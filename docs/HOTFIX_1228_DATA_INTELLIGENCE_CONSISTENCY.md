@@ -177,3 +177,15 @@ API catalogue : précision ajoutée à l’unité projetée. Formulaire de devis
 Lot commercial précédent (`28335eb8`) : Migration, fixture PostgreSQL étendue, type-check, régression et lint CI réussis jusqu’au build ; [Quality 45684071690](https://github.com/Bandsman942/dtsc-platform/actions/runs/45684071690) encore en cours à cette rédaction. Vérification globale de types locale sur sources commerciales identiques terminée avec succès. Le scénario navigateur commercial n’a pas encore de résultat confirmé.
 
 Les anciens devis catalogue sans unité enregistrée ne prouvent pas l’unité de leur quantité acceptée : conversion bloquée explicitement pour revue, sans remplir l’unité historique à partir du catalogue courant. Ce cas est testé (aucune écriture). Les nouveaux devis enregistrent l’unité dès leur création.
+
+### Régression FEFO à la capacité maximale — candidat suivant
+
+Reproduction réelle du planificateur avant correction : stock `999999999999999.999999`, réserve `0.000001`, demande égale au stock ; allocation erronée de la totalité et shortfall zéro. La soustraction utilisait la précision globale Decimal de 20 chiffres significatifs, inférieure aux 21 chiffres du stockage physique.
+
+Correction : contexte local `exactInventoryQuantity` à 48 chiffres, sans modifier la configuration globale des montants. Les opérandes Prisma chargés sont convertis dans ce contexte avant calcul, y compris FEFO, consommation des allocations, retours physiques, snapshots et réserves, garde des sorties et projection stock. Aucun arrondi ajouté. Tests : allocation correcte `999999999999999.999998`, shortfall `0.000001`, dernière réserve/hold non consommée, consommation/annulation/retour multilot à pleine capacité, contexte monétaire global conservé. Fixture PostgreSQL complétée avec NUMERIC réel vers FEFO ; nouvelle CI requise.
+
+Les harness VM #1042/#1187/#1212 chargent le helper réel via le loader existant, sans substituer l’arithmétique et sans retirer leurs assertions. QA #1228, suite complète #1212 et suites #1042/#1187 ciblées réussies localement. Régression globale et types relancés après ces modifications ; résultat en cours à cette rédaction.
+
+### CI commerciale complète confirmée
+
+Les 19 workflows de `28335eb864fee9fb7fda4f721cf3b8dba76fc3f2` sont terminés avec succès : [Quality](https://github.com/Bandsman942/dtsc-platform/actions/runs/45684071690), [Retail navigateur, y compris le nouveau scénario commercial](https://github.com/Bandsman942/dtsc-platform/actions/runs/45684071625), [Accounting](https://github.com/Bandsman942/dtsc-platform/actions/runs/45684072130), [contrôles du commit](https://github.com/Bandsman942/dtsc-platform/commit/28335eb864fee9fb7fda4f721cf3b8dba76fc3f2/checks). Ces preuves ne couvrent pas les changements ultérieurs de validation des ventes et FEFO. Les captures #1228 seront conservées par un upload dédié immédiatement après le scénario navigateur, avant nettoyage par les suites suivantes.

@@ -8,7 +8,7 @@ import { readActiveRetailInvoiceStockHoldsTx } from "@/lib/enterprise/retail/inv
 import { prisma } from "@/lib/prisma";
 import { consumeReservationLotAllocations, planReservationLotAllocations, readReservationLotAllocations } from "@/lib/enterprise/inventory/lot-allocation";
 import { businessDateKey, lotIsExpired } from "@/lib/enterprise/retail/inventory-policy";
-import { requireInventoryQuantity } from "@/lib/enterprise/inventory/quantity-policy";
+import { exactInventoryQuantity, requireInventoryQuantity } from "@/lib/enterprise/inventory/quantity-policy";
 
 type ReservationCreateInput = z.infer<typeof inventoryReservationCreateSchema>;
 
@@ -32,7 +32,7 @@ type AvailabilityRow = {
 };
 
 function decimal(value: Prisma.Decimal.Value = 0) {
-  return new Prisma.Decimal(value);
+  return exactInventoryQuantity(value);
 }
 
 function activeReservationWhere(
@@ -191,7 +191,7 @@ export async function createEnterpriseInventoryReservation(organizationId: strin
 
     if (options?.requireTracked && !inventoryItem.lotTracking && !inventoryItem.expiryTracking) throw new EnterpriseDomainError("INVENTORY_RESERVATION_TRACKED_ITEM_REQUIRED", 409);
     const orderPromises = await tx.enterpriseInventoryReservation.findMany({ where: { organizationId, salesOrderItemId: input.salesOrderItemId, status: "ACTIVE", OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] }, select: { quantity: true, fulfilledQuantity: true } });
-    const alreadyPromised = orderPromises.reduce((sum, row) => sum.plus(row.quantity.minus(row.fulfilledQuantity)), decimal());
+    const alreadyPromised = orderPromises.reduce((sum, row) => sum.plus(exactInventoryQuantity(row.quantity).minus(row.fulfilledQuantity)), decimal());
     if (alreadyPromised.plus(input.quantity).gt(remainingOrderQuantity)) throw new EnterpriseDomainError("RESERVATION_EXCEEDS_ORDER_REMAINING", 409);
     const [balances, activeReservations, retailHolds] = await Promise.all([
       tx.enterpriseInventoryBalance.findMany({
