@@ -826,9 +826,19 @@ test.describe.serial("Shop 2.0 Iteration 4 global behavioral acceptance", () => 
           await page.setViewportSize({width,height:900});await expect(page.locator("html")).toHaveClass(new RegExp("\\b"+theme+"\\b"));
           const rail=totals.getByRole("group");
           if(await rail.evaluate(element=>element.scrollWidth>element.clientWidth)){
-            await rail.focus();for(let i=0;i<14;i++)await page.keyboard.press("ArrowRight");
-            await expect.poll(()=>rail.evaluate(element=>element.scrollLeft+element.clientWidth>=element.scrollWidth-2)).toBe(true);
-            await rail.evaluate(element=>{element.scrollLeft=0;});
+            const atEnd=()=>rail.evaluate(element=>element.scrollLeft+element.clientWidth>=element.scrollWidth-2);
+            const atStart=()=>rail.evaluate(element=>element.scrollLeft<=2);
+            await rail.focus();
+            await page.keyboard.press("Home");
+            await expect.poll(atStart).toBe(true);
+            for(let i=0;i<14;i++)await page.keyboard.press("ArrowRight");
+            await expect.poll(atEnd).toBe(true);
+            for(let i=0;i<14;i++)await page.keyboard.press("ArrowLeft");
+            await expect.poll(atStart).toBe(true);
+            await page.keyboard.press("End");
+            await expect.poll(atEnd).toBe(true);
+            await page.keyboard.press("Home");
+            await expect.poll(atStart).toBe(true);
           }
           expect(await page.evaluate(()=>document.documentElement.scrollWidth-innerWidth)).toBeLessThanOrEqual(2);
           await page.evaluate(()=>window.scrollTo(0,0));await page.screenshot({path:testInfo.outputPath(`1228-stock-capacity-${locale}-${theme}-${width}.png`),fullPage:true});

@@ -58,6 +58,10 @@ Inventaire exhaustif des surfaces réelles à compléter pendant lot 1. Chaque s
 ## Livraison et rollback
 Réutiliser services et contrats existants, pas de dépendance ni migration sans nécessité. Migrations additives seulement ; pas de backfill POSTED. Toute intervention sur données historiques distincte, bornée, dry-run et autorisée selon AGENTS. Revert applicatif par PR, compatibilité schéma conservée. Pas de changement de secrets prévu. Tenir changelog, documentation technique/domaine, matrice preuves et runbook E2E. Issue et PR non clôturées tant que scope incomplet ; CI réelle + OWNER_E2E soumis à validation explicite avant merge main et unique production. Aucune preview ni vercel --prod manuel.
 
+### Navigation clavier des indicateurs
+
+Le rail partagé `ModuleMetrics` prend en charge les flèches gauche/droite, Début et Fin lorsqu’il a le focus et déborde. Les commandes des contrôles enfants conservent leur comportement. La recette Shop 2 vérifie l’accès au dernier indicateur, le retour au premier et l’absence de débordement de page. Le composant isolé a passé ces vérifications dans Chromium aux huit largeurs de référence, avec un contrôle enfant conservant la navigation du curseur. Les contrôles statiques responsive et expérience standard ont également réussi. La recette intégrée sur le nouveau commit reste à exécuter.
+
 ## Journal d'implémentation — tranche initiale
 Inspection statique de main (aucun test exécuté) :
 - `prisma/enterprise-master-data.prisma` : EnterpriseUnitOfMeasure.decimalScale est le référentiel existant, validation 0–6 dans master-data/schemas.ts.

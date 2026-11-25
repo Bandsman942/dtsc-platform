@@ -1,10 +1,38 @@
-import type { ReactNode } from "react";
+"use client";
+
+import type { KeyboardEvent, ReactNode } from "react";
 import { cn } from "@/lib/utils";
+
+function handleMetricsKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+  const rail = event.currentTarget;
+  if (event.target !== rail || event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+
+  const maxScroll = rail.scrollWidth - rail.clientWidth;
+  if (maxScroll <= 1) return;
+
+  switch (event.key) {
+    case "ArrowRight":
+      rail.scrollBy({ left: rail.clientWidth, behavior: "instant" });
+      break;
+    case "ArrowLeft":
+      rail.scrollBy({ left: -rail.clientWidth, behavior: "instant" });
+      break;
+    case "Home":
+      rail.scrollTo({ left: 0, behavior: "instant" });
+      break;
+    case "End":
+      rail.scrollTo({ left: maxScroll, behavior: "instant" });
+      break;
+    default:
+      return;
+  }
+  event.preventDefault();
+}
 
 export function ModuleMetrics({ children, className, label = "Indicateurs" }: { children: ReactNode; className?: string; label?: string }) {
   return (
     <section data-workspace-metrics aria-label={label} className={cn("min-w-0 max-w-full", className)}>
-      <div tabIndex={0} role="group" aria-label={label} className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 -mx-1 flex max-w-full touch-pan-x snap-x snap-mandatory flex-nowrap gap-2 overflow-x-auto overscroll-x-contain border-y border-dtsc-border/80 px-1 py-3 scroll-px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden lg:mx-0 lg:grid lg:grid-cols-4 lg:overflow-visible lg:px-0">
+      <div data-horizontal-rail tabIndex={0} role="group" aria-label={label} onKeyDown={handleMetricsKeyDown} className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 -mx-1 flex max-w-full touch-pan-x snap-x snap-mandatory flex-nowrap gap-2 overflow-x-auto overscroll-x-contain border-y border-dtsc-border/80 px-1 py-3 scroll-px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden lg:mx-0 lg:grid lg:grid-cols-4 lg:overflow-visible lg:px-0">
         {children}
       </div>
     </section>
