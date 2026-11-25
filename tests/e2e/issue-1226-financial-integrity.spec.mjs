@@ -29,7 +29,6 @@ async function signIn(browser,email,password){
 async function releaseContext(context){
   if(!context)return;
   await Promise.all(context.pages().map(page=>page.close()));
-  await context.clearCookies({name:"dtsc_stepup"});
 }
 async function call(context,method,url,data){
   const response=await context.request.fetch(base+url,{method,headers:{origin:base,referer:base+path},...(data===undefined?{}:{data})});
@@ -41,6 +40,7 @@ async function ok(context,method,url,data){
   return result.body;
 }
 async function stepUp(context,password){
+  if((await ok(context,"GET","/api/auth/step-up")).verified)return;
   await ok(context,"POST","/api/auth/step-up",{password});
 }
 async function account(type,opening,balance){
@@ -200,6 +200,7 @@ test.describe.serial("Hotfix #1226 financial integrity (isolated browser and Pos
       const cash=await account("CASH",100,100);
       const opened=(await ok(a,"POST",root+"/cash-sessions",{financialAccountId:cash.id,openingAmount:"100"})).session;
       const close=(await ok(a,"POST",root+"/cash-sessions/"+opened.id+"/close",{revision:opened.revision,countedClosingAmount:"105",counts:[{denomination:"5",quantity:21}],closingReason:"Synthetic legacy count error",approverUserId:recipient.id})).session;
+      await b.clearCookies({name:"dtsc_stepup"});
       expect((await call(b,"POST",root+"/cash-sessions/"+opened.id+"/validate",{revision:close.revision,approve:true})).response.status()).toBe(428);
       await stepUp(b,process.env.E2E_USER_PASSWORD);
       const approved=(await ok(b,"POST",root+"/cash-sessions/"+opened.id+"/validate",{revision:close.revision,approve:true})).session;
@@ -340,6 +341,7 @@ test.describe.serial("Hotfix #1226 financial integrity (isolated browser and Pos
         {organizationId,journalEntryId:entry.id,ledgerAccountId:counterpart.id,debit:outbound?"5":"0",credit:outbound?"0":"5",functionalAmount:"5",transactionCurrencyCode:"USD",transactionAmount:"5",exchangeRate:"1",siteId:site.id}
       ]});
       const command={discrepancyId:discrepancy.id,revision:closed.revision,decision:"LINK_CANONICAL",canonicalTreasuryTransactionId:transaction.id,verifiedCount:count,evidenceReference:"SYNTHETIC-1226-PROOF",reason:"Independent verification of the original canonical source",attest:true};
+      await c.clearCookies({name:"dtsc_stepup"});
       expect((await call(c,"POST",endpoint,command)).response.status()).toBe(428);
       await stepUp(c,process.env.E2E_ADMIN_PASSWORD);
       await stepUp(a,process.env.E2E_ADMIN_PASSWORD);
@@ -365,10 +367,11 @@ test.describe.serial("Hotfix #1226 financial integrity (isolated browser and Pos
       const listed=(await ok(c,"GET",root+"/cash-sessions?recordId="+opened.id)).items[0];
       expect(listed.varianceReviews[0].canReview).toBe(false);
       expect(listed.varianceReviews[0].canonicalSourceHref).toContain(source.id);
-      const page=await c.newPage();
+      const page=await d.newPage();
       await page.goto(base+listed.varianceReviews[0].canonicalSourceHref);
       await expect(page.getByRole("dialog").getByText(number,{exact:true}).last()).toBeVisible();
-      await page.close();await stepUp(c,process.env.E2E_ADMIN_PASSWORD);
+      await page.close();
+      expect((await ok(c,"GET","/api/auth/step-up")).verified).toBe(true);
       const refusedReverse=await call(c,"POST",root+"/journal-entries/"+entry.id+"/reverse",{reason:"Source correction requires independent unlink",accountingDate:now.toISOString(),revision:entry.revision});
       expect(refusedReverse.response.status(),JSON.stringify(refusedReverse.body)).toBe(409);expect(refusedReverse.body.error).toBe("CASH_VARIANCE_CANONICAL_LINK_ACTIVE");
       await stepUp(d,process.env.E2E_ADMIN_PASSWORD);
@@ -465,6 +468,20 @@ test.describe.serial("Hotfix #1226 financial integrity (isolated browser and Pos
           await page.keyboard.press("Tab");
           expect(await dialog.evaluate(element=>element.contains(document.activeElement))).toBe(true);
           await page.keyboard.press("Escape");await expect(dialog).not.toBeVisible();
+          if(theme==="light"){
+            const guides = locale==="fr"
+              ? {FINANCE_CASH:"Caisse",FINANCE_BANK:"Banque et relevés",FINANCE_TREASURY:"Trésorerie, financements et transferts",FINANCE_RECONCILIATION:"Rapprochement bancaire"}
+              : {FINANCE_CASH:"Cash sessions and variance review",FINANCE_BANK:"Bank and operator statements",FINANCE_TREASURY:"Treasury, funding and transfers",FINANCE_RECONCILIATION:"Cash, bank and operator reconciliation"};
+            for(const [module,title] of Object.entries(guides)){
+              const guide=await page.goto(base+"/help/enterprise?module="+module);
+              expect(guide.status()).toBe(200);
+              await expect(page.getByRole("heading",{level:1,name:title,exact:true})).toBeVisible();
+              await expect(page.getByRole("link",{name:locale==="fr"?"Revenir au module":"Return to the module"})).toHaveAttribute("href","/enterprise-modules/"+module);
+            }
+            await page.goto(base+"/enterprise-modules/RETAIL_DAILY_CLOSE");
+            await page.getByRole("button",{name:locale==="fr"?"Guide utilisateur":"User guide",exact:true}).click();
+            await expect(page.getByRole("dialog",{name:locale==="fr"?"Guide Clôture magasin":"Store daily close guide"})).toBeVisible();
+          }
         }finally{await authenticated.addCookies(await context.cookies());await context.close();}
       }
     }

@@ -6,6 +6,8 @@ export type FinanceUserGuide = {
   workflow: string[];
   controls: string[];
   troubleshooting: string[];
+  updatedAt?: string;
+  locales?: { en: Omit<FinanceUserGuide, "locales"> };
 };
 
 export const FINANCE_USER_GUIDES: Record<string, FinanceUserGuide> = {
@@ -135,6 +137,16 @@ export const FINANCE_USER_GUIDES: Record<string, FinanceUserGuide> = {
     ],
   },
   FINANCE_TREASURY: {
+    updatedAt: "2026-11-25",
+    locales: { en: {
+      title: "Treasury, funding and transfers",
+      purpose: "Manage financial accounts, receive external funding and transfer existing funds between controlled accounts.",
+      prerequisites: ["Configure the chart, currencies and required account mappings.", "Use active accounts; cash funding requires an open session on the receiving account.", "A transfer requires two distinct accounts and an independent approver."],
+      steps: ["Create an account with its type, currency, ledger account and responsible person. Enter any external reference once; subsequent displays remain masked.", "Under Funding, choose a capital contribution, shareholder advance or loan, the receiving account and the approver.", "For a shareholder advance choose the liability account; for cash choose the open session receiving the funds.", "After approval, a third authorized person confirms funding. Inspect the treasury movement and posted journal.", "Use a transfer for money already held by the enterprise. Review both amounts and the actual historical exchange rate when currencies differ.", "Submit for independent approval, then confirm and verify the resulting journal. A source linked to a cash variance requires an independent unlink before correction."],
+      workflow: ["Funding: prepared, approved, confirmed; correction uses the controlled reversal workflow.", "Transfers: draft, approved, confirmed and posted. Account changes preserve history."],
+      controls: ["Funding is not sales revenue.", "Never use the same account on both sides or add different currencies together.", "References remain masked; retries must not create duplicate movements or journals."],
+      troubleshooting: ["Missing account: check status, currency and permissions.", "Cash funding refused: select a compatible open session on the receiving account.", "Shareholder advance refused: choose an active postable liability account.", "Unexpected balance: inspect confirmed sources and their journals before any adjustment."],
+    } },
     title: "Trésorerie, financements et transferts",
     purpose: "Gérer les comptes bancaires, caisses, portefeuilles et comptes de transit, recevoir des financements externes puis effectuer des transferts contrôlés entre comptes.",
     prerequisites: [
@@ -172,6 +184,16 @@ export const FINANCE_USER_GUIDES: Record<string, FinanceUserGuide> = {
     ],
   },
   FINANCE_CASH: {
+    updatedAt: "2026-11-25",
+    locales: { en: {
+      title: "Cash sessions and variance review",
+      purpose: "Manage each cashier's custody, count cash and obtain an independent closing and evidence review.",
+      prerequisites: ["An active cash account, authorized cashier and known opening funds.", "A separate closing approver and an independent financial reviewer with the required permissions."],
+      steps: ["Open a session and select its account and opening amount. Opening funds already reserved by other cashiers are unavailable.", "Record receipts and disbursements through their original financial workflows. A physical handover requires the receiving cashier's acceptance and does not create an account transfer.", "At closing, review this session's opening funds and net movements, then enter the actual denomination counts and explain any difference.", "Submit to the designated independent approver. Approval alone does not post unexplained income.", "For a counting error or a justified real variance, an independent reviewer checks the evidence and confirms the corresponding review decision.", "For omitted funding, a transfer or payment, first confirm and post the correction through its original workflow. Select Link a confirmed omitted operation in the variance review, verify the exact account, currency, direction, amount and session dates, and provide the original count, evidence, reason and attestation.", "This evidence link preserves the closing snapshot and creates no extra movement or journal. A different independent reviewer may remove it before an account reconciliation is prepared; the variance then requires review again."],
+      workflow: ["Open session, count, submit, independent approval, then financial qualification when needed.", "The original count and closing remain historical evidence. A linked operation and any later unlink retain their audits."],
+      controls: ["Cashiers cannot reuse opening funds or approve their own closing.", "A matching amount alone is insufficient; the source must be confirmed after the count and have its own canonical posted journal.", "An operation already counted or used elsewhere cannot explain the same difference again. Historical, ambiguous and partial source evidence requires separate review."],
+      troubleshooting: ["Opening refused: check existing sessions and available unreserved funds.", "No eligible source: check the original workflow, confirmation and posting, dates, account, currency, exact amount and reviewer independence.", "Missing action: check the designated approver and independent financial permissions. Never choose a real variance simply to clear an identified source."],
+    } },
     title: "Caisse",
     purpose: "Ouvrir une session de caisse, enregistrer les opérations, effectuer le comptage physique et obtenir une clôture validée indépendamment.",
     prerequisites: [
@@ -186,6 +208,8 @@ export const FINANCE_USER_GUIDES: Record<string, FinanceUserGuide> = {
       "Expliquez tout écart, puis soumettez la clôture.",
       "Le validateur indépendant approuve ou retourne la clôture avec un motif.",
       "Un écart approuvé reste à qualifier ; ne comptabilisez jamais comme produit une entrée de fonds identifiée. Orientez un apport vers Financement, un transfert vers Trésorerie, un paiement oublié vers son circuit financier d’origine.",
+      "Après confirmation et comptabilisation de la correction dans son circuit d’origine, un réviseur indépendant peut choisir Lier une opération oubliée confirmée, vérifier compte, devise, sens, montant exact et dates, puis attester le comptage et le justificatif. Aucun mouvement ni écriture supplémentaire n’est créé.",
+      "Un autre réviseur indépendant peut retirer une liaison avant préparation d’un rapprochement du compte ; la qualification est rouverte et les deux décisions restent auditées. Les preuves historiques, ambiguës ou partielles restent à examiner séparément.",
     ],
     workflow: [
       "Session ouverte → En comptage → En attente de validation → Validée/Clôturée.",
@@ -203,6 +227,16 @@ export const FINANCE_USER_GUIDES: Record<string, FinanceUserGuide> = {
     ],
   },
   FINANCE_BANK: {
+    updatedAt: "2026-11-25",
+    locales: { en: {
+      title: "Bank and operator statements",
+      purpose: "Preview and privately import CSV or Excel statements, inspect their lines and prepare reconciliation.",
+      prerequisites: ["An active account in the statement currency.", "CSV up to 5 MB or XLSX up to 2 MB, with no more than 10,000 lines. Use the selected account's template."],
+      steps: ["Select the account and download its CSV or Excel template.", "For Mobile Money, use the operator wallet's references and balances; physical cash counts are separate evidence.", "Preview the account, currency, exact period, opening and closing balances and line continuity. Correct invalid columns or values before submission.", "Confirm the import and inspect its lines. Above 250 lines, follow durable processing until the complete statement is available.", "Open Reconciliation to match eligible lines to confirmed payments or treasury movements."],
+      workflow: ["Selected file, preview, confirmation, durable processing when required, imported statement, reconciliation.", "A failed or incomplete import cannot be reconciled."],
+      controls: ["Duplicate and overlapping statements are refused without deleting existing evidence.", "Formula-like values are neutralized; private references and full statement data do not enter application logs.", "Files remain in the private import workflow; never use a public file link as evidence of authorization."],
+      troubleshooting: ["File refused: use the supported CSV format or the account's XLSX template and respect size and row limits.", "Unknown columns: use the preview's canonical headers.", "Duplicate import refused: open the existing statement and verify its period before trying a new file."],
+    } },
     title: "Banque et relevés",
     purpose: "Importer un relevé bancaire ou opérateur CSV/XLSX, contrôler sa prévisualisation, consulter ses lignes et préparer le rapprochement.",
     prerequisites: [
@@ -233,6 +267,16 @@ export const FINANCE_USER_GUIDES: Record<string, FinanceUserGuide> = {
     ],
   },
   FINANCE_RECONCILIATION: {
+    updatedAt: "2026-11-25",
+    locales: { en: {
+      title: "Cash, bank and operator reconciliation",
+      purpose: "Compare dated account evidence with confirmed operations and submit an explainable reconciliation for independent approval.",
+      prerequisites: ["An imported statement and confirmed operations in the same enterprise, account and currency; or fully closed cash sessions with all differences qualified.", "An authorized independent approver and evidence for the selected period."],
+      steps: ["Create a reconciliation for the account and exact period.", "For cash, enter denomination counts or download and reimport the account's physical-count workbook. Verify the computed total and count-report reference.", "For a bank or operator statement, inspect suggestions by amount, date, reference, account and currency. Accept only unambiguous evidence.", "Allocate amounts without exceeding either the statement line or the source transaction; partial and grouped matches remain reserved until approval.", "Review remaining lines and unresolved differences, then submit to the designated independent approver.", "If a physical snapshot becomes stale, cancel it with a reason and prepare a new count. Approval certifies the evidence without creating another cash movement."],
+      workflow: ["Prepared, in progress, submitted, independently approved and completed.", "Completed evidence is immutable. Cancelling a draft releases its reservations and preserves the reason."],
+      controls: ["A line or amount cannot be consumed twice; ambiguous suggestions are never automatically approved.", "Keep currencies and inclusive account periods separate.", "Each match retains its author, criteria, amount and audit. An unreconciled account is distinct from a certified zero balance."],
+      troubleshooting: ["No suggestion: check dates, currency, account, reference, exact amount and confirmation status.", "Allocation refused: inspect reservations and the remaining line and transaction amounts.", "Submission refused: resolve all differences, qualify cash sessions and refresh any stale count evidence."],
+    } },
     title: "Rapprochement bancaire",
     purpose: "Comparer les lignes de relevé aux paiements et mouvements financiers, enregistrer des correspondances explicables et clôturer une session contrôlée.",
     prerequisites: [

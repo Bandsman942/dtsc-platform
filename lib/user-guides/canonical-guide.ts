@@ -33,20 +33,23 @@ export type LegacyEnterpriseUserGuide = {
   troubleshooting: string[];
   limitations?: string[];
   relatedModules?: CanonicalUserGuideLink[];
+  updatedAt?: string;
+  locales?: { en: Omit<LegacyEnterpriseUserGuide, "locales"> };
 };
 
 export function toCanonicalEnterpriseUserGuide(
   code: string,
-  guide: LegacyEnterpriseUserGuide,
+  source: LegacyEnterpriseUserGuide,
   locale?: string | null,
 ): CanonicalUserGuide {
   const english = locale === "en";
+  const guide = english ? source.locales?.en || source : source;
   return {
     code,
     title: guide.title,
     summary: guide.purpose,
     audience: english ? "Authorized users of this business module" : "Utilisateurs autorisés de ce module métier",
-    updatedAt: "2026-09-17",
+    updatedAt: guide.updatedAt || source.updatedAt || "2026-09-17",
     capabilities: guide.controls.length ? guide.controls : [guide.purpose],
     steps: [
       {

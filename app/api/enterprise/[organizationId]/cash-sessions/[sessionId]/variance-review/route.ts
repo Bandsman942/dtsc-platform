@@ -58,7 +58,10 @@ export async function POST(req:Request,{params}:Params) {
     await writeApiLog({request:req,statusCode:200,userId:auth.session.userId,startedAt,metadata:{organizationId,domain:"cash-variance-review"}});
     return NextResponse.json({ok:true,...result});
   } catch(error) {
-    if(error && typeof error==="object" && "code" in error && error.code==="P2034")return NextResponse.json({error:"CASH_VARIANCE_REVIEW_CONFLICT",message:"Actualisez le dossier puis réessayez."},{status:409});
+    if(error && typeof error==="object" && "code" in error){
+      const sqlState=(error as {meta?:{code?:unknown}}).meta?.code;
+      if(error.code==="P2034" || (error.code==="P2010" && (sqlState==="40001" || sqlState==="40P01")))return NextResponse.json({error:"CASH_VARIANCE_REVIEW_CONFLICT",message:"Actualisez le dossier puis réessayez."},{status:409});
+    }
     return financeErrorResponse(error,"CASH_VARIANCE_REVIEW_FAILED");
   }
 }

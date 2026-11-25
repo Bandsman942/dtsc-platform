@@ -986,6 +986,15 @@
       "noResult": "No guide section matches this search.",
       "limitations": "Conditional features or known limitations"
     },
+    "enterpriseHelp": {
+      "eyebrow": "ERP Help Center",
+      "missing": "A guide for this module has not been published yet. Contact DTSC support for help with your workflow.",
+      "related": "Related modules and workflows",
+      "support": "Get help",
+      "back": "Return to the module",
+      "contactSupport": "Contact DTSC support",
+      "configuration": "Check configuration"
+    },
     "enterpriseGovernance": {
       "budgets": "Budgets and expenses",
       "reports": "Reports and metrics",

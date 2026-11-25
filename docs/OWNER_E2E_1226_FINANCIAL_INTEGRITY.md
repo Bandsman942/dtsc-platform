@@ -38,6 +38,7 @@ Pour chaque cas : PASS/FAIL/BLOCKED + date, SHA, preuve anonymisée et remarque.
 
 - `ca8c8943` : 8/18 workflows réussis. #662 `45577586798` et Quality `45577587209` échouent avant le navigateur sur le marqueur de guide CSV manquant. Correctif déjà présent dans `20b207a9`.
 - `56fc7c807fae2446f9de826355cfe7f69a634417` : 18/18 workflows réussis, dont #662 `45587119039` et Quality `45587118264`. Ces résultats ne certifient pas les modifications ultérieures.
+- `02f9301a` a réussi 17 workflows sur 18, dont Quality `45595383379`. Dans #662 `45595383246`, le premier lien concurrent a été enregistré et le second a rencontré un conflit PostgreSQL `40001`. La réponse 500 attend désormais une nouvelle exécution pour confirmer sa correction en 409. Les scénarios suivants et les captures de ce SHA n’ont pas été exécutés.
 - Nouvelle liaison canonique, migration et matrice rendue : résultats du nouveau SHA à consigner après exécution. Un fichier de captures ou un contrôle de débordement n’équivaut pas à une revue visuelle complète ; inspecter les captures et les actions.
 - Supabase réel : BLOCKED. Le propriétaire confirme qu’aucun projet de test n’est disponible et demande de poursuivre sans en utiliser un. Le double HTTP local reste une preuve de contrat uniquement. Aucun secret, projet ni objet de production utilisé/modifié pour cette recette.
 - OWNER_E2E : NON_EXÉCUTÉ. Aucun GO, aucune fusion ni aucun déploiement. Surveillance existante laissée intacte, aucune nouvelle automatisation créée.
