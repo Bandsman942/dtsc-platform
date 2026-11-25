@@ -214,8 +214,8 @@ export function ProfessionalTabs<T extends string>({
           aria-pressed={value === item.id}
           onClick={() => onChange(item.id)}
           className={cn(
-            "min-h-10 shrink-0 snap-center whitespace-nowrap rounded-full border px-3.5 py-2 text-sm font-black transition",
-            value === item.id ? "border-dtsc-blue bg-dtsc-blue text-white" : "border-dtsc-border bg-dtsc-surface text-dtsc-ink hover:bg-dtsc-soft",
+            "min-h-10 shrink-0 snap-center whitespace-nowrap rounded-full border px-3.5 py-2 text-sm font-black transition focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring",
+            value === item.id ? "border-primary bg-primary text-primary-foreground" : "border-dtsc-border bg-dtsc-surface text-dtsc-ink hover:bg-dtsc-soft",
           )}
         >
           {item.label}{item.count !== undefined ? ` · ${item.count}` : ""}

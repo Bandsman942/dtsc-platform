@@ -3,7 +3,7 @@ import type { EnterpriseCashDiscrepancy, EnterpriseCashSession } from "@prisma/c
 import { prisma } from "@/lib/prisma";
 import { assertIndependentActor } from "@/lib/enterprise/accounting/access";
 import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
-import { idempotencyKey, publishFinanceEvent } from "@/lib/enterprise/accounting/helpers";
+import { idempotencyKey, money, publishFinanceEvent } from "@/lib/enterprise/accounting/helpers";
 import { cashVarianceCanonicalProofMatches } from "@/lib/enterprise/accounting/cash-variance-canonical-proof";
 import { formatEnterpriseBusinessDate, getEnterpriseBusinessContext } from "@/lib/enterprise/business-context";
 import { fundingPostingEvent, paymentPostingEvent } from "@/lib/enterprise/accounting/source-posting-events";
@@ -24,7 +24,7 @@ export async function resolveCashVarianceCanonicalProofTx(
   if (!transaction || !session.submittedAt) throw new EnterpriseAccountingError("CASH_VARIANCE_CANONICAL_PROOF_REQUIRED",409);
   const transfer = transaction.transferId ? await tx.enterpriseAccountTransfer.findFirst({where:{organizationId,id:transaction.transferId}}) : null;
   const source = transaction.fundingOperation || transaction.payment || transfer;
-  if (!source) throw new EnterpriseAccountingError("CASH_VARIANCE_CANONICAL_PROOF_REQUIRED",409);
+  if (!source || source.organizationId !== organizationId) throw new EnterpriseAccountingError("CASH_VARIANCE_CANONICAL_PROOF_REQUIRED",409);
   const sourceEntityType = transaction.fundingOperationId ? "EnterpriseFundingOperation" : transaction.paymentId ? "EnterprisePayment" : "EnterpriseAccountTransfer";
   const sourceFilter=transaction.fundingOperationId?{fundingOperationId:source.id}:transaction.paymentId?{paymentId:source.id}:{transferId:source.id};
   if(await tx.enterpriseTreasuryTransaction.count({where:{organizationId,financialAccountId:session.financialAccountId,...sourceFilter}})!==1) throw new EnterpriseAccountingError("CASH_VARIANCE_CANONICAL_PROOF_REQUIRED",409);
@@ -48,7 +48,7 @@ export async function resolveCashVarianceCanonicalProofTx(
     const inbound=transaction.direction === "INBOUND";
     if (transaction.transactionType !== "TRANSFER" || (inbound?transfer.targetFinancialAccountId:transfer.sourceFinancialAccountId)!==account.id || (inbound?transfer.targetCurrencyCode:transfer.sourceCurrencyCode)!==account.currencyCode || !(inbound?transfer.targetAmount:transfer.sourceAmount).equals(transaction.amount)) throw new EnterpriseAccountingError("CASH_VARIANCE_CANONICAL_PROOF_REQUIRED",409);
   }
-  assertIndependentActor({actorUserId,relatedUserIds:[source.initiatedByUserId,source.approvedByUserId,...("confirmedByUserId" in source?[source.confirmedByUserId]:[])],errorCode:"CASH_VARIANCE_REVIEW_FORBIDDEN"});
+  assertIndependentActor({actorUserId,relatedUserIds:[source.initiatedByUserId,source.approvedByUserId,transaction.createdByUserId,...("confirmedByUserId" in source?[source.confirmedByUserId]:[])],errorCode:"CASH_VARIANCE_REVIEW_FORBIDDEN"});
   const entries=await tx.enterpriseJournalEntry.findMany({where:{organizationId,sourceEntityType,sourceEntityId:source.id},include:{lines:true},take:2});
   const entry=entries[0];
   if(lock && entry) await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterpriseJournalEntry" WHERE id=${entry.id} AND "organizationId"=${organizationId} FOR UPDATE`);
@@ -57,8 +57,34 @@ export async function resolveCashVarianceCanonicalProofTx(
   const expectedKey=transfer?`${organizationId}:ACCOUNT_TRANSFER:${source.id}:1`:postingEvent?idempotencyKey({organizationId,sourceEntityType,sourceEntityId:source.id,postingEvent,postingVersion:1}):null;
   if(!expectedKey || entry.idempotencyKey!==expectedKey || (!transfer && entry.postingEvent!==postingEvent) || entry.postingVersion!==1 || entry.sourceModule!==(transaction.payment?"FINANCE_PAYMENTS":"FINANCE_TREASURY") || !entry.postedAt || entry.postedAt<=session.submittedAt) throw new EnterpriseAccountingError("CASH_VARIANCE_CANONICAL_PROOF_REQUIRED",409);
   assertIndependentActor({actorUserId,relatedUserIds:[entry.preparedByUserId,entry.approvedByUserId,entry.postedByUserId],errorCode:"CASH_VARIANCE_REVIEW_FORBIDDEN"});
-  const cashLines=entry.lines.filter(line=>line.ledgerAccountId===account.ledgerAccountId);
-  if(cashLines.length!==1 || cashLines[0].transactionCurrencyCode!==account.currencyCode || !cashLines[0].transactionAmount?.abs().equals(transaction.amount) || (transaction.direction==="INBOUND" ? !cashLines[0].debit.greaterThan(0)||!cashLines[0].credit.isZero() : !cashLines[0].credit.greaterThan(0)||!cashLines[0].debit.isZero())) throw new EnterpriseAccountingError("CASH_VARIANCE_CANONICAL_PROOF_REQUIRED",409);
+  let journalCurrency = account.currencyCode;
+  let journalAmount = transaction.amount;
+  if (transfer) {
+    // The transfer journal records both legs in functional currency.
+    // The booked currency and amount must agree with the original FX snapshot.
+    journalCurrency = entry.functionalCurrencyCode;
+    journalAmount = transfer.sourceAmount;
+    if (transfer.sourceCurrencyCode !== journalCurrency) {
+      const rate = await tx.enterpriseExchangeRateSnapshot.findFirst({
+        where: { organizationId, sourceEntityType, sourceEntityId: transfer.id, sourceCurrencyCode: transfer.sourceCurrencyCode, targetCurrencyCode: journalCurrency },
+        select: { rate: true },
+      });
+      if (!rate?.rate.greaterThan(0)) throw new EnterpriseAccountingError("CASH_VARIANCE_CANONICAL_PROOF_REQUIRED",409);
+      journalAmount = money(transfer.sourceAmount.times(rate.rate));
+    }
+  }
+  const cashLines = entry.lines.filter(line => line.ledgerAccountId === account.ledgerAccountId);
+  const [cashLine] = cashLines;
+  if (cashLines.length !== 1 ||
+    cashLine.transactionCurrencyCode !== journalCurrency ||
+    !cashLine.transactionAmount?.abs().equals(journalAmount) ||
+    (transfer && (cashLine.exchangeRate?.equals(1) !== true ||
+      !cashLine.functionalAmount.equals(journalAmount) ||
+      !(transaction.direction === "INBOUND" ? cashLine.debit : cashLine.credit).equals(journalAmount))) ||
+    (transaction.direction === "INBOUND"
+      ? !cashLine.debit.greaterThan(0) || !cashLine.credit.isZero()
+      : !cashLine.credit.greaterThan(0) || !cashLine.debit.isZero())
+  ) throw new EnterpriseAccountingError("CASH_VARIANCE_CANONICAL_PROOF_REQUIRED",409);
   if(await tx.enterpriseCashDiscrepancy.findFirst({where:{organizationId,canonicalTreasuryTransactionId:transaction.id,id:{not:discrepancy.id}},select:{id:true}})) throw new EnterpriseAccountingError("CASH_VARIANCE_CANONICAL_ALREADY_USED",409);
   return {transaction,sourceEntityType,sourceEntityId:source.id,number:source.number,journalEntryId:entry.id};
 }
