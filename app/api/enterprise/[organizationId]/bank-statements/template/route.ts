@@ -10,7 +10,7 @@ export async function GET(req:Request,{params}:Params){
   if(!auth.ok)return auth.response;
   const query=new URL(req.url).searchParams;
   const id=query.get("financialAccountId");
-  const account=id?await prisma.enterpriseFinancialAccount.findFirst({where:{organizationId,id,status:"ACTIVE",archivedAt:null,accountType:{in:["BANK","MOBILE_MONEY"]}},select:{code:true,name:true,currencyCode:true}}):null;
+  const account=id?await prisma.enterpriseFinancialAccount.findFirst({where:{organizationId,id,status:"ACTIVE",archivedAt:null,accountType:{in:["BANK","MOBILE_MONEY"]}},select:{code:true,name:true,currencyCode:true,accountType:true}}):null;
   if(id&&!account)return NextResponse.json({error:"BANK_STATEMENT_ACCOUNT_INVALID"},{status:404});
   const bytes=await buildBankStatementXlsx(query.get("locale")==="en"?"en":"fr",account||undefined);
   await writeApiLog({request:req,statusCode:200,userId:auth.session.userId,startedAt,metadata:{organizationId,domain:"bank-statement-template",format:"xlsx"}});

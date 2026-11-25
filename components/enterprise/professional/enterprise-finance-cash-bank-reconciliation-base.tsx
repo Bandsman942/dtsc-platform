@@ -20,6 +20,8 @@ import { fetchOperationalFinanceRecord, useOperationalFinanceCollection } from "
 import { ProfessionalError, ProfessionalFormSection, ProfessionalHelp, ProfessionalLoading, ProfessionalSearch, ProfessionalTabs } from "@/components/enterprise/professional/professional-erp-ui";
 import { financeDate, financeMoney, financeStatusLabel, financeStatusTone, safeFinanceError, type FinanceLocale } from "@/components/enterprise/professional/finance-professional-ui";
 import { Button } from "@/components/ui/button";
+import { ReconciliationPhysicalCount } from "@/components/enterprise/professional/reconciliation-physical-count";
+import { physicalCountTotal } from "@/lib/enterprise/accounting/physical-count";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { useToastMessage } from "@/components/ui/use-toast-message";
@@ -96,7 +98,7 @@ type Reconciliation = FinanceRecord & {
   number?: string;
   financialAccountId: string;
   bankStatementId?: string | null;
-  physicalEvidenceJson?: { physicalCount: string; evidenceReference: string; countedAt: string } | null;
+  physicalEvidenceJson?: { physicalCount: string; evidenceReference: string; countedAt: string; counts?: Array<{denomination:string;quantity:number}>; currencyCode?:string } | null;
   periodStart: string;
   periodEnd: string;
   differenceAmount?: string | number | null;
@@ -227,6 +229,7 @@ export function EnterpriseFinanceCashBankReconciliationBase(props: Props) {
   const [previewPage,setPreviewPage]=useState(1);
   const [reconciliationAccountId, setReconciliationAccountId] = useState("");
   const [physicalMode, setPhysicalMode] = useState(false);
+  const [physicalCurrency,setPhysicalCurrency]=useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
@@ -415,12 +418,14 @@ export function EnterpriseFinanceCashBankReconciliationBase(props: Props) {
     const form = new FormData(event.currentTarget);
     setBusy(true); setErrorMessage("");
     try {
+      const physicalCounts=physicalMode?JSON.parse(String(form.get("physicalCounts")||"null")):undefined;
+      if(physicalMode&&(!physicalCounts||physicalCountTotal(physicalCounts)!==String(form.get("physicalCount")||"")))throw new Error("RECONCILIATION_COUNT_ROWS_INVALID");
       await financeMutation(`/api/enterprise/${organizationId}/reconciliations`, {
         financialAccountId: String(form.get("financialAccountId") || ""),
         bankStatementId: String(form.get("bankStatementId") || "") || undefined,
         periodStart: physicalMode ? new Date().toISOString() : String(form.get("periodStart") || ""),
         periodEnd: physicalMode ? new Date().toISOString() : String(form.get("periodEnd") || ""),
-        ...(physicalMode ? {physicalCount: String(form.get("physicalCount") || ""), evidenceReference: String(form.get("evidenceReference") || ""), attest: form.get("attest") === "on"} : {}),
+        ...(physicalMode ? {physicalCounts,physicalCount: String(form.get("physicalCount") || ""), evidenceReference: String(form.get("evidenceReference") || ""), attest: form.get("attest") === "on"} : {}),
       });
       setCreateOpen(false); setReconciliationAccountId(""); setPhysicalMode(false); mutationSuccess(t("reconciliationPrepared"));
     } catch (error) { setErrorMessage(safeFinanceError(error, t("creationFailed"), locale)); }
@@ -570,7 +575,7 @@ export function EnterpriseFinanceCashBankReconciliationBase(props: Props) {
           <FinanceDetailValue label={t("reference")} value={selectedRecon.number || selectedRecon.id} />
           <FinanceDetailValue label={t("financialAccount")} value={selectedRecon.financialAccount ? `${selectedRecon.financialAccount.code} · ${selectedRecon.financialAccount.name}` : selectedRecon.financialAccountId} />
           <FinanceDetailValue label={t("bankStatement")} value={selectedRecon.bankStatement?.reference || "—"} />
-          {selectedRecon.physicalEvidenceJson ? <><FinanceDetailValue label={tx(locale,"Comptage physique","Physical count")} value={selectedRecon.physicalEvidenceJson.physicalCount} /><FinanceDetailValue label={tx(locale,"Justificatif","Evidence")} value={selectedRecon.physicalEvidenceJson.evidenceReference} /><FinanceDetailValue label={tx(locale,"Compté le","Counted at")} value={financeDate(selectedRecon.physicalEvidenceJson.countedAt,locale)} /></> : null}
+          {selectedRecon.physicalEvidenceJson ? <><FinanceDetailValue label={tx(locale,"Comptage physique","Physical count")} value={selectedRecon.physicalEvidenceJson.physicalCount} /><FinanceDetailValue label={tx(locale,"Justificatif","Evidence")} value={selectedRecon.physicalEvidenceJson.evidenceReference} /><FinanceDetailValue label={tx(locale,"Compté le","Counted at")} value={financeDate(selectedRecon.physicalEvidenceJson.countedAt,locale)} />{selectedRecon.physicalEvidenceJson.counts?.map(row=><FinanceDetailValue key={row.denomination} label={row.denomination+" "+(selectedRecon.physicalEvidenceJson?.currencyCode||"")} value={String(row.quantity)}/>)}</> : null}
           <FinanceDetailValue label={t("difference")} value={String(selectedRecon.differenceAmount ?? "—")} />
           <FinanceDetailValue label={t("revision")} value={String(selectedRecon.revision)} />
         </FinanceDetailGrid>
@@ -622,11 +627,11 @@ export function EnterpriseFinanceCashBankReconciliationBase(props: Props) {
       </form> : null}
       {!isCash && !isBank ? <form onSubmit={createReconciliation} className="grid gap-6">
         <ProfessionalFormSection title={t("scope")}>
-          <Field label={t("financialAccount")}><FinanceReferenceSelect organizationId={organizationId} moduleCode="FINANCE_RECONCILIATION" kind="financial-account" name="financialAccountId" label={t("financialAccount")} locale={rawLocale} required disabled={busy} onOptionChange={(option) => setReconciliationAccountId(option?.id || "")} /></Field>
+          <Field label={t("financialAccount")}><FinanceReferenceSelect organizationId={organizationId} moduleCode="FINANCE_RECONCILIATION" kind="financial-account" name="financialAccountId" label={t("financialAccount")} locale={rawLocale} required disabled={busy} onOptionChange={(option) => {setReconciliationAccountId(option?.id || "");setPhysicalCurrency(option?.currency||"");setPhysicalMode(option?.accountType==="CASH");}} /></Field>
           <label className="flex items-center gap-2"><input type="checkbox" checked={physicalMode} onChange={e=>setPhysicalMode(e.target.checked)} disabled={busy} />{tx(locale,"Comptage physique global de caisse","Account-wide physical cash count")}</label>
           {physicalMode ? <>
             <p className="text-sm text-dtsc-muted">{tx(locale,"Comptez la totalité des fonds du compte, après clôture et qualification de toutes les sessions. Ne cumulez pas les déclarations des caissiers.","Count all funds held in the account after every session and variance is resolved. Do not sum cashier declarations.")}</p>
-            <Field label={tx(locale,"Montant compté","Counted amount")}><Input name="physicalCount" type="number" min="0" step="0.000001" required disabled={busy}/></Field>
+            {reconciliationAccountId&&physicalCurrency?<ReconciliationPhysicalCount key={reconciliationAccountId} organizationId={organizationId} accountId={reconciliationAccountId} currency={physicalCurrency} locale={locale} disabled={busy}/>:<p className="text-sm text-dtsc-muted">{tx(locale,"Choisissez un compte de caisse.","Select a cash account.")}</p>}
             <Field label={tx(locale,"Référence du procès-verbal","Count evidence reference")}><Input name="evidenceReference" minLength={3} maxLength={200} required disabled={busy}/></Field>
             <label className="flex gap-2"><input type="checkbox" name="attest" required disabled={busy}/>{tx(locale,"J'atteste le comptage physique intégral.","I attest the complete physical count.")}</label>
           </> : <>

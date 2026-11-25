@@ -5,7 +5,7 @@ import { isValidEnterpriseActivityCivilDate } from "@/lib/enterprise/enterprise-
 import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
 export const BANK_STATEMENT_COLUMNS = ["transactionDate","valueDate","description","reference","counterparty","debit","credit","runningBalance"] as const;
 type Locale="fr"|"en";
-export async function buildBankStatementXlsx(locale:Locale,account?:{code:string;name:string;currencyCode:string}){
+export async function buildBankStatementXlsx(locale:Locale,account?:{code:string;name:string;currencyCode:string;accountType?:string}){
   const workbook=new ExcelJS.Workbook();workbook.creator="DTSC Platform";
   const sheet=workbook.addWorksheet("Données");
   sheet.columns=BANK_STATEMENT_COLUMNS.map(key=>({key,width:key==="description"?40:key==="reference"||key==="counterparty"?26:20}));
@@ -19,6 +19,10 @@ export async function buildBankStatementXlsx(locale:Locale,account?:{code:string
   const tr=(fr:string,en:string)=>locale==="fr"?fr:en;
   help.addRow([tr("Compte sélectionné","Selected account"),account?account.code+" · "+account.name:tr("À choisir dans DTSC","Select in DTSC")]);
   help.addRow([tr("Devise","Currency"),account?.currencyCode||tr("Devise du compte","Account currency")]);
+  if(account?.accountType==="MOBILE_MONEY"){
+    help.addRow([tr("Relevé opérateur","Operator statement"),tr("Utilisez la référence unique de transaction opérateur et le solde du portefeuille. Dépôts, retraits, commissions et frais selon leur sens réel sur le float.","Use the unique operator transaction reference and wallet balance. Cash-in, cash-out, commissions and fees follow their actual float direction.")]);
+    help.addRow([tr("Attention","Important"),tr("Ne pas mélanger espèces et float opérateur ni plusieurs devises ou comptes.","Do not combine physical cash with operator float, currencies or accounts.")]);
+  }
   help.addRow([tr("Dates","Dates"),"YYYY-MM-DD"]);
   help.addRow([tr("Ordre","Order"),tr("Date croissante, ordre du relevé à date égale.","Ascending date, statement order for equal dates.")]);
   help.addRow([tr("Débit / crédit","Debit / credit"),tr("Une seule valeur positive par ligne, du point de vue du titulaire.","One positive value per row, from the account holder’s perspective.")]);

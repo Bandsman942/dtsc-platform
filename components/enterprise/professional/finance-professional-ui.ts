@@ -74,6 +74,7 @@ const ENUM_LABELS: Record<FinanceLocale, Record<string, string>> = {
 
 export const FINANCE_ERROR_MESSAGES: Record<FinanceLocale, Record<string, string>> = {
   fr: {
+    RECONCILIATION_COUNT_ROWS_INVALID: "Vérifiez les coupures, quantités entières, devise, compte et total du comptage.",
     BANK_STATEMENT_PERIOD_OVERLAP: "Un relevé couvre déjà cette période. Vérifiez le relevé existant avant tout nouvel import.",
     SUPPLIER_RETURN_NONRECOVERABLE_COST_RECONCILIATION_REQUIRED: "La TVA non récupérable exige une réception et une valorisation d'origine entièrement rapprochées, sans consommation ni opération ouverte. Vérifiez les pièces et la période avant de poursuivre.",
     INVENTORY_ACQUISITION_COST_DOMAIN_CORRECTION_REQUIRED: "Ce coût de stock intègre une taxe non récupérable. Un avoir ou une contrepassation isolée déséquilibrerait le stock et la comptabilité. Utilisez une correction coordonnée lorsqu’elle sera disponible.",
@@ -226,6 +227,7 @@ export const FINANCE_ERROR_MESSAGES: Record<FinanceLocale, Record<string, string
     FINANCE_NETWORK_UNAVAILABLE: "La connexion a été interrompue. Votre opération n'est pas confirmée ; vérifiez son statut avant de réessayer."
   },
   en: {
+    RECONCILIATION_COUNT_ROWS_INVALID: "Check denominations, integer quantities, account, currency and count total.",
     BANK_STATEMENT_PERIOD_OVERLAP: "An existing statement overlaps this period. Review it before importing again.",
     SUPPLIER_RETURN_NONRECOVERABLE_COST_RECONCILIATION_REQUIRED: "Non-recoverable VAT requires a fully reconciled original receipt and valuation, with no consumption or open stock operation. Review the documents and period before continuing.",
     INVENTORY_ACQUISITION_COST_DOMAIN_CORRECTION_REQUIRED: "This stock cost includes non-recoverable tax. A standalone credit or reversal would leave inventory and accounting inconsistent. Use a coordinated correction when available.",

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { bankStatementBalanceIssues, bankStatementOverlapWhere } from "@/lib/enterprise/accounting/bank-statement-balance-validation";
 import { requireRetailSiteCapability, retailFinanceReadSiteScope, retailStaffIsolationIsEnabled } from "@/lib/enterprise/retail/site-access";
 import { datedReconciliationBalanceTx, reconciliationTreasuryWindow } from "@/lib/enterprise/accounting/reconciliation-dated-balance";
+import { physicalCountTotal } from "@/lib/enterprise/accounting/physical-count";
 import { captureCashPhysicalSnapshotTx } from "@/lib/enterprise/accounting/cash-physical-reconciliation";
 import { assertReconciliationEvidenceTx, finalizeReconciliationEvidenceTx } from "@/lib/enterprise/accounting/reconciliation-evidence";
 import { assertIndependentActor } from "@/lib/enterprise/accounting/access";
@@ -100,11 +101,15 @@ export async function createReconciliationSession(organizationId: string, actorU
       const previous = await tx.enterpriseReconciliationSession.findFirst({ where: { organizationId, financialAccountId: account.id, status: "COMPLETED" }, orderBy: { periodEnd: "desc" } });
       const now = new Date();
       const counted = new Prisma.Decimal(input.physicalCount);
-      const session = await tx.enterpriseReconciliationSession.create({ data: { organizationId, number: financeReference("REC"), financialAccountId: account.id, periodStart: previous?.periodEnd || locked.createdAt, periodEnd: now, bookBalance: locked.operationalBalance, statementBalance: counted, reconciledDifference: counted.minus(locked.operationalBalance), preparedByUserId: actorUserId, physicalEvidenceJson: { version: 1, accountRevision: locked.revision, sessionDigest, countedAt: now.toISOString(), evidenceReference: input.evidenceReference, physicalCount: counted.toFixed(), attested: true } } });
+      if(input.physicalCounts){
+        try{if(!counted.equals(physicalCountTotal(input.physicalCounts)))throw Error();}
+        catch{throw new EnterpriseAccountingError("RECONCILIATION_COUNT_ROWS_INVALID",422);}
+      }
+      const session = await tx.enterpriseReconciliationSession.create({ data: { organizationId, number: financeReference("REC"), financialAccountId: account.id, periodStart: previous?.periodEnd || locked.createdAt, periodEnd: now, bookBalance: locked.operationalBalance, statementBalance: counted, reconciledDifference: counted.minus(locked.operationalBalance), preparedByUserId: actorUserId, physicalEvidenceJson: { version: 1, accountRevision: locked.revision, sessionDigest, countedAt: now.toISOString(), evidenceReference: input.evidenceReference, physicalCount: counted.toFixed(), ...(input.physicalCounts?{counts:input.physicalCounts,currencyCode:locked.currencyCode}:{}), attested: true } } });
       await publishFinanceEvent(tx, { organizationId, entityType: "EnterpriseReconciliationSession", entityId: session.id, eventType: "RECONCILIATION_SESSION_CREATED", summary: "Physical cash reconciliation prepared", actorUserId, toStatus: "DRAFT" });
       return session;
     }
-    if (!input.bankStatementId || input.physicalCount !== undefined || input.evidenceReference || input.attest) throw new EnterpriseAccountingError("RECONCILIATION_EVIDENCE_REQUIRED", 409);
+    if (!input.bankStatementId || input.physicalCount !== undefined || input.physicalCounts || input.evidenceReference || input.attest) throw new EnterpriseAccountingError("RECONCILIATION_EVIDENCE_REQUIRED", 409);
     const statement = input.bankStatementId ? await tx.enterpriseBankStatement.findFirst({ where: { id: input.bankStatementId, organizationId, financialAccountId: account.id } }) : null;
     if (input.periodStart > input.periodEnd || (statement && (statement.periodStart.getTime() !== input.periodStart.getTime() || statement.periodEnd.getTime() !== input.periodEnd.getTime() || statement.currencyCode !== account.currencyCode))) throw new EnterpriseAccountingError("RECONCILIATION_PERIOD_MISMATCH", 409);
     if (input.bankStatementId && (!statement || statement.status !== "IMPORTED")) throw new EnterpriseAccountingError("RECONCILIATION_STATEMENT_INVALID", 409);

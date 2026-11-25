@@ -255,7 +255,17 @@ test.describe.serial("Hotfix #1226 financial integrity (isolated browser and Pos
       await ok(c,"PATCH",staleEndpoint,{revision:stale.revision,reason:"Cash session opened after count"});
       const closed=(await ok(a,"POST",root+"/cash-sessions/"+reopened.id+"/close",{revision:reopened.revision,countedClosingAmount:"100",counts:[{denomination:"10",quantity:10}],approverUserId:recipient.id})).session;
       await ok(b,"POST",root+"/cash-sessions/"+reopened.id+"/validate",{revision:closed.revision,approve:true});
-      const fresh=(await ok(c,"POST",root+"/reconciliations",physical)).session;
+      const templatePath=root+"/reconciliations/physical-count-template?financialAccountId="+cash.id;
+      const template=await c.request.get(base+templatePath);expect(template.ok(),await template.text()).toBeTruthy();
+      const book=new ExcelJS.Workbook();await book.xlsx.load(await template.body());
+      const sheet=book.getWorksheet("Comptage");expect(sheet.getCell("A1").value).toBe("denomination");
+      sheet.getCell("B2").value=1;
+      const file=Buffer.from(await book.xlsx.writeBuffer());
+      const preview=await c.request.post(base+templatePath,{headers:{origin:base,referer:base+path},multipart:{file:{name:"count.xlsx",mimeType:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",buffer:file}}});
+      expect(preview.ok(),await preview.text()).toBeTruthy();const imported=await preview.json();expect(imported.physicalCount).toBe("100");
+      expect((await call(c,"POST",root+"/reconciliations",{...physical,physicalCounts:imported.counts,physicalCount:"99"})).response.status()).toBe(422);
+      const fresh=(await ok(c,"POST",root+"/reconciliations",{...physical,physicalCounts:imported.counts})).session;
+      expect(fresh.physicalEvidenceJson.counts).toEqual(imported.counts);
       const freshEndpoint=root+"/reconciliations/"+fresh.id+"/complete";
       const submitted=(await ok(c,"POST",freshEndpoint,{action:"SUBMIT",revision:fresh.revision,approverUserId:recipient.id})).session;
       // Remove only the short-lived step-up cookie, not the authenticated session.

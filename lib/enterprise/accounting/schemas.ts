@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { physicalCountRowsSchema } from "@/lib/enterprise/accounting/physical-count";
 import {
   ACCOUNT_SUBTYPES,
   ACCOUNT_TYPES,
@@ -293,7 +294,7 @@ export const bankStatementImportSchema = z.object({
 export const reconciliationCreateSchema = z.object({
   financialAccountId: z.string().min(1),
   bankStatementId: z.string().min(1).optional(),
-  physicalCount: z.string().regex(/^\d{1,14}(\.\d{1,6})?$/).optional(), evidenceReference: z.string().trim().min(3).max(200).optional(), attest: z.literal(true).optional(),
+  physicalCounts: physicalCountRowsSchema.optional(), physicalCount: z.string().regex(/^\d{1,14}(\.\d{1,6})?$/).optional(), evidenceReference: z.string().trim().min(3).max(200).optional(), attest: z.literal(true).optional(),
   periodStart: dateInputSchema,
   periodEnd: dateInputSchema,
 });

@@ -37,6 +37,7 @@ const FINANCE_ERROR_MESSAGES: Record<string, string> = {
   SALES_INVOICE_SUBMITTER_MISMATCH: "Seule la personne qui a préparé cette facture peut la soumettre à validation.",
   CASH_REJECTION_REASON_REQUIRED: "Indiquez un motif de refus d’au moins 4 caractères.",
   CASH_COUNT_TOTAL_MISMATCH: "Le total du comptage physique ne correspond pas au montant de clôture saisi. Vérifiez les coupures et quantités.",
+  RECONCILIATION_COUNT_ROWS_INVALID: "Vérifiez les coupures, quantités entières, devise, compte et total du comptage physique.",
   RECONCILIATION_CASH_SESSIONS_UNRESOLVED: "Clôturez et régularisez les sessions et écarts de caisse avant le comptage global.",
   RECONCILIATION_CASH_SNAPSHOT_CHANGED: "Le compte ou les sessions ont changé depuis le comptage. Un nouveau contrôle est nécessaire.",
   RECONCILIATION_BOOK_BALANCE_UNVERIFIED: "Le solde des mouvements ne correspond pas au solde attendu. Vérifiez les écritures avant le rapprochement.",

@@ -1,10 +1,11 @@
 import { createHash } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { z } from "zod";
+import { physicalCountRowsSchema,physicalCountTotal } from "@/lib/enterprise/accounting/physical-count";
 import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
 import { retailFinanceReadSiteScope } from "@/lib/enterprise/retail/site-access";
 
-const physicalEvidenceSchema = z.object({ version: z.literal(1), accountRevision: z.number().int(), sessionDigest: z.string(), countedAt: z.string(), evidenceReference: z.string().min(3).max(200), physicalCount: z.string(), attested: z.literal(true) });
+const physicalEvidenceSchema = z.object({ version: z.literal(1), accountRevision: z.number().int(), sessionDigest: z.string(), countedAt: z.string(), evidenceReference: z.string().min(3).max(200), physicalCount: z.string(), counts:physicalCountRowsSchema.optional(),currencyCode:z.string().optional(), attested: z.literal(true) });
 
 export async function captureCashPhysicalSnapshotTx(tx: Prisma.TransactionClient, organizationId: string, financialAccountId: string, actorUserId?: string) {
   await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterpriseFinancialAccount" WHERE id = ${financialAccountId} AND "organizationId" = ${organizationId} FOR UPDATE`);
@@ -25,5 +26,9 @@ export async function assertCashPhysicalEvidenceTx(tx: Prisma.TransactionClient,
   if (!parsed.success) throw new EnterpriseAccountingError("RECONCILIATION_EVIDENCE_REQUIRED",409);
   const current = await captureCashPhysicalSnapshotTx(tx, organizationId, session.financialAccountId, actorUserId);
   if (current.account.revision !== parsed.data.accountRevision || current.sessionDigest !== parsed.data.sessionDigest || !current.account.operationalBalance.equals(session.bookBalance) || !session.statementBalance.equals(parsed.data.physicalCount)) throw new EnterpriseAccountingError("RECONCILIATION_CASH_SNAPSHOT_CHANGED",409);
+  if(parsed.data.counts){
+    try{if(parsed.data.currencyCode!==current.account.currencyCode||!session.statementBalance.equals(physicalCountTotal(parsed.data.counts)))throw Error();}
+    catch{throw new EnterpriseAccountingError("RECONCILIATION_COUNT_ROWS_INVALID",409);}
+  }
   if (!session.bookBalance.equals(session.statementBalance)) throw new EnterpriseAccountingError("RECONCILIATION_DIFFERENCE_UNRESOLVED",409);
 }
