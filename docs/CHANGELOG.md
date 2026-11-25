@@ -1,6 +1,6 @@
 ## 2026-11-25 — HOTFIX #1228 — Data Intelligence & Consistency 2.0 (v1.24.5 candidate DRAFT)
 
-- Contrat Design 2.0 normatif, préflight obligatoire, cadrage exhaustif ; précision catalogue sur les trois premières surfaces, agrégat de valorisation par devise et export journalier numérique dans les limites Excel ; libellés de nouveaux postings de stock à partir du catalogue. Tranches candidates, non certifiées ; autres agrégations, historique et recette à terminer. Voir `docs/HOTFIX_1228_DATA_INTELLIGENCE_CONSISTENCY.md`.
+- Contrat Design 2.0 normatif, préflight obligatoire, cadrage exhaustif ; précision catalogue sur les trois premières surfaces, agrégat de valorisation par devise et export journalier numérique dans les limites Excel ; libellés de nouveaux postings de stock à partir du catalogue. Enrichissement non destructif des libellés historiques stock dans le grand livre et le détail. Tranches candidates, non certifiées ; autres agrégations, sources de libellés et recette à terminer. Voir `docs/HOTFIX_1228_DATA_INTELLIGENCE_CONSISTENCY.md`.
 
 ## 2026-11-25 — HOTFIX #1226 — liaison canonique candidate
 

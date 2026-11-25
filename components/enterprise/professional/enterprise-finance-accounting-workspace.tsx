@@ -77,6 +77,7 @@ type LedgerRow = AnyRow & {
     fiscalPeriod?: { code?: string };
   };
   description?: string | null;
+  displayDescription?: string | null;
   debit?: string | number;
   credit?: string | number;
   transactionCurrencyCode?: string | null;
@@ -439,7 +440,7 @@ export function EnterpriseFinanceAccountingWorkspace(props: Props) {
     { key: "date", label: en ? "Date" : "Date", render: (row) => financeDate(row.journalEntry?.accountingDate || "", locale) },
     { key: "entry", label: en ? "Entry" : "Écriture", render: (row) => <span className="font-black text-dtsc-blue">{row.journalEntry?.number || "—"}</span> },
     { key: "account", label: en ? "Account" : "Compte", render: (row) => <span className="font-bold">{row.ledgerAccount?.code || "—"} · {locale === "en" ? row.ledgerAccount?.nameEn || row.ledgerAccount?.nameFr : row.ledgerAccount?.nameFr || row.ledgerAccount?.nameEn}</span> },
-    { key: "description", label: en ? "Description" : "Libellé", cellClassName: "max-w-[24rem] truncate", render: (row) => formatAccountingNarrative(row.description || row.journalEntry?.description, locale) || "—" },
+    { key: "description", label: en ? "Description" : "Libellé", cellClassName: "max-w-[24rem] truncate", render: (row) => formatAccountingNarrative(row.displayDescription || row.description || row.journalEntry?.description, locale) || "—" },
     { key: "journal", label: en ? "Journal" : "Journal", render: (row) => row.journalEntry?.journal?.code || "—" },
     { key: "period", label: en ? "Period" : "Période", render: (row) => row.journalEntry?.fiscalPeriod?.code || "—" },
     { key: "debit", label: en ? "Debit" : "Débit", numeric: true, render: (row) => financeMoney(row.debit || 0, row.journalEntry?.functionalCurrencyCode || "", locale) },
@@ -527,7 +528,7 @@ export function EnterpriseFinanceAccountingWorkspace(props: Props) {
       : `/api/enterprise/${organizationId}/${configureView === "rules" ? "account-mappings" : configureView === "charts" ? "charts-of-accounts" : configureView === "accounts" ? "ledger-accounts" : configureView === "years" ? "fiscal-years" : configureView === "periods" ? "fiscal-periods" : "journals"}`;
   const currentExportColumns: FinanceExportColumn[] = [
     { key: "reference", labelFr: "Code / référence", labelEn: "Code / reference", get: (row) => rawText(row.code || row.number || row.reference || row.id) },
-    { key: "description", labelFr: "Désignation", labelEn: "Description", get: (row) => formatAccountingNarrative(row.description || (en ? row.nameEn || row.nameFr : row.nameFr || row.nameEn) || (row.ledgerAccount as Record<string, unknown> | undefined)?.code, locale) },
+    { key: "description", labelFr: "Désignation", labelEn: "Description", get: (row) => formatAccountingNarrative(row.displayDescription || row.description || (en ? row.nameEn || row.nameFr : row.nameFr || row.nameEn) || (row.ledgerAccount as Record<string, unknown> | undefined)?.code, locale) },
     { key: "status", labelFr: "Statut", labelEn: "Status", get: (row) => financeStatusLabel(rawText(row.status), locale) },
     { key: "account", labelFr: "Compte", labelEn: "Account", get: (row) => rawText((row.ledgerAccount as Record<string, unknown> | undefined)?.code || row.mappingKey) },
     { key: "date", labelFr: "Date comptable", labelEn: "Accounting date", get: (row) => financeDate(row.accountingDate || row.createdAt || row.startDate, locale) },

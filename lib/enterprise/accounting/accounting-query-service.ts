@@ -27,9 +27,37 @@ type AccountingQueryDb = Pick<
   | "enterpriseFiscalPeriod"
   | "enterpriseJournalEntry"
   | "enterpriseJournalLine"
+  | "enterpriseInventoryItem"
   | "enterpriseLedgerAccount"
   | "enterprisePostingBatch"
 >;
+
+// Only replace exactly recognized machine-generated legacy stock narratives.
+type InventoryNarrativeLine = { inventoryItemId: string | null; description: string | null };
+async function enrichInventoryNarratives<T extends InventoryNarrativeLine>(
+  db: AccountingQueryDb, organizationId: string, rows: T[],
+): Promise<Array<T & { displayDescription: string | null }>> {
+  const legacyKind = (row: T) => {
+    if (!row.inventoryItemId || !row.description) return null;
+    return ["ISSUE", "RECEIPT", "LOSS", "SUPPLIER_RETURN", "CUSTODY_RECOVERY"].find(
+      (kind) => row.description === `${kind} ${row.inventoryItemId}`,
+    ) || null;
+  };
+  const ids = [...new Set(rows.filter(row => legacyKind(row)).map(row => row.inventoryItemId!))];
+  const items = ids.length ? await db.enterpriseInventoryItem.findMany({
+    where: { organizationId, id: { in: ids } },
+    select: { id: true, catalogItem: { select: { name: true, code: true } } },
+  }) : [];
+  const byId = new Map(items.map(item => [item.id, item.catalogItem]));
+  return rows.map(row => {
+    const kind = legacyKind(row);
+    if (!kind) return { ...row, displayDescription: row.description };
+    const item = byId.get(row.inventoryItemId!);
+    return { ...row, displayDescription: item
+      ? `${kind} current catalog ${[item.name, item.code].filter(Boolean).join(" · ")}`
+      : `${kind} catalog unavailable` };
+  });
+}
 
 const MAX_PAGE_SIZE = 100;
 export const LEDGER_BEARING_ENTRY_STATUSES = ["POSTED", "REVERSED"] as const;
@@ -150,7 +178,7 @@ export async function getAccountingGeneralLedger(
   ]);
 
   return {
-    items: rows,
+    items: await enrichInventoryNarratives(db, organizationId, rows),
     pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) },
   };
 }
@@ -294,7 +322,7 @@ export async function getAccountingEntryTrace(
   organizationId: string,
   entryId: string,
 ) {
-  return db.enterpriseJournalEntry.findFirst({
+  const entry = await db.enterpriseJournalEntry.findFirst({
     where: { organizationId, id: entryId },
     select: {
       id: true,
@@ -345,6 +373,8 @@ export async function getAccountingEntryTrace(
       },
     },
   });
+  if (!entry) return null;
+  return { ...entry, lines: await enrichInventoryNarratives(db, organizationId, entry.lines) };
 }
 
 export async function getAccountingAnomalies(

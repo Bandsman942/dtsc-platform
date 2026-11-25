@@ -62,6 +62,11 @@ const templates: Template[] = [
   { pattern: /^(CASH|CARD|MOBILE_MONEY|BANK_TRANSFER|TRANSFER) refund (.+)$/i, fr: "Remboursement client ($1) — $2", en: "Customer refund ($1) — $2" },
   { pattern: /^(CASH|CARD|MOBILE_MONEY|BANK_TRANSFER|TRANSFER) (.+)$/i, fr: "Encaissement client ($1) — $2", en: "Customer receipt ($1) — $2" },
 
+  { pattern: /^ISSUE current catalog (.+)$/i, fr: "Sortie de stock — $1 (désignation actuelle)", en: "Inventory issue — $1 (current designation)" },
+  { pattern: /^RECEIPT current catalog (.+)$/i, fr: "Entrée de stock — $1 (désignation actuelle)", en: "Inventory receipt — $1 (current designation)" },
+  { pattern: /^LOSS current catalog (.+)$/i, fr: "Perte de stock — $1 (désignation actuelle)", en: "Inventory loss — $1 (current designation)" },
+  { pattern: /^SUPPLIER_RETURN current catalog (.+)$/i, fr: "Retour fournisseur — $1 (désignation actuelle)", en: "Supplier return — $1 (current designation)" },
+  { pattern: /^CUSTODY_RECOVERY current catalog (.+)$/i, fr: "Récupération de stock — $1 (désignation actuelle)", en: "Inventory recovery — $1 (current designation)" },
   { pattern: /^ISSUE catalog unavailable$/i, fr: "Sortie de stock — article introuvable", en: "Inventory issue — item unavailable" },
   { pattern: /^RECEIPT catalog unavailable$/i, fr: "Entrée de stock — article introuvable", en: "Inventory receipt — item unavailable" },
   { pattern: /^LOSS catalog unavailable$/i, fr: "Perte de stock — article introuvable", en: "Inventory loss — item unavailable" },
