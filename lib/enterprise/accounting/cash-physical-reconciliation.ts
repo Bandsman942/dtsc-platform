@@ -16,7 +16,7 @@ export async function captureCashPhysicalSnapshotTx(tx: Prisma.TransactionClient
     if (scope !== null && (!account.siteId || !scope.includes(account.siteId))) throw new EnterpriseAccountingError("RETAIL_SITE_ACCESS_DENIED", 403);
   }
   const sessions = await tx.enterpriseCashSession.findMany({ where: { organizationId, financialAccountId }, orderBy: { id: "asc" }, select: { id: true, revision: true, status: true, updatedAt: true, discrepancies: { orderBy: { id: "asc" }, select: { id: true, status: true, updatedAt: true } } } });
-  if (sessions.some(s => s.status !== "CLOSED" || s.discrepancies.some(d => !["POSTED", "RESOLVED_COUNT_ERROR", "LEGACY_REVERSED", "REAL_REVERSED"].includes(d.status)))) throw new EnterpriseAccountingError("RECONCILIATION_CASH_SESSIONS_UNRESOLVED", 409);
+  if (sessions.some(s => s.status !== "CLOSED" || s.discrepancies.some(d => !["POSTED", "RESOLVED_COUNT_ERROR", "LEGACY_REVERSED", "REAL_REVERSED", "RESOLVED_CANONICAL"].includes(d.status)))) throw new EnterpriseAccountingError("RECONCILIATION_CASH_SESSIONS_UNRESOLVED", 409);
   const sessionDigest = createHash("sha256").update(JSON.stringify(sessions)).digest("hex");
   return { account, sessionDigest };
 }

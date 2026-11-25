@@ -1,4 +1,13 @@
 {
+  "cashVarianceCanonicalResolved": "Variance explained by a linked operation",
+  "cashVarianceCanonicalLoading": "Loading verifiable operations…",
+  "cashVarianceCanonicalLink": "Link a confirmed omitted operation",
+  "cashVarianceCanonicalUnlink": "Remove the link and reopen review",
+  "cashVarianceCanonicalSource": "Confirmed and posted operation",
+  "cashVarianceCanonicalChoose": "Choose a verified operation",
+  "cashVarianceCanonicalEmpty": "No eligible operation on this page. Check the original workflow, dates, account, amount and independent approval.",
+  "cashVarianceCanonicalNoEffect": "This decision preserves the original counts and creates no movement or journal entry. Removing a link requires a different reviewer and is blocked once an account reconciliation has been prepared.",
+  "cashVarianceCanonicalHelp": "Funding, transfers and omitted payments follow their original workflow. After this correction is confirmed and posted, an independent reviewer can link it to a variance with the same account, currency, direction, exact amount and session date. Operations already included in the count or used elsewhere are excluded. Historical or ambiguous cases require separate review.",
   "cashVarianceRealReversed": "Posted variance subsequently reversed",
   "cashVarianceReverseReal": "Correct an incorrectly qualified actual variance",
   "cashVarianceReverseRealEffect": "If the corrected count equals the expected balance and no subsequent reconciliation blocks the correction, a reversal and an inverse movement are recorded. Do not use for a new cash receipt or disbursement.",

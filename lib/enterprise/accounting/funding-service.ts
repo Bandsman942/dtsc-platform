@@ -3,7 +3,7 @@ import type { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { assertEnterpriseApprovalCandidate, assertEnterpriseApprovalDecision } from "@/lib/enterprise/approval-assignment";
 import { assertIndependentActor } from "@/lib/enterprise/accounting/access";
-import type { PostingEvent } from "@/lib/enterprise/accounting/constants";
+import { fundingPostingEvent } from "@/lib/enterprise/accounting/source-posting-events";
 import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
 import { financeReference, money, publishFinanceEvent } from "@/lib/enterprise/accounting/helpers";
 import { postBusinessEventTx } from "@/lib/enterprise/accounting/posting-service";
@@ -15,13 +15,6 @@ import type {
 
 type FundingCreateInput = z.infer<typeof fundingOperationCreateSchema>;
 type FundingReverseInput = z.infer<typeof fundingOperationReverseSchema>;
-
-function fundingPostingEvent(fundingType: string): PostingEvent {
-  if (fundingType === "CAPITAL_CONTRIBUTION") return "CAPITAL_CONTRIBUTION_CONFIRMED";
-  if (fundingType === "SHAREHOLDER_ADVANCE") return "SHAREHOLDER_ADVANCE_CONFIRMED";
-  if (fundingType === "LOAN_DRAW") return "LOAN_DRAW_CONFIRMED";
-  throw new EnterpriseAccountingError("FUNDING_TYPE_INVALID", 400);
-}
 
 async function resolveOpenCashSession(
   tx: Prisma.TransactionClient,

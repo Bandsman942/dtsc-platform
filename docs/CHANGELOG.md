@@ -1,3 +1,9 @@
+## 2026-11-25 — HOTFIX #1226 — liaison canonique candidate
+
+- Liaison indépendante d’un écart à une source Financement/Transfert/Paiement confirmée et comptabilisée ; contrôle exact compte/devise/sens/montant/date et de la clé de posting canonique, sans second mouvement ni écriture. Unicité en base, audit, retrait indépendant conditionnel et blocage de la contrepassation d’une source liée. Sources historiques/ambiguës exclues ; certification du nouveau SHA requise.
+- Sélecteur et explications FR/EN, capacités de revue par acteur et lien profond vers la source ; compatibilité du lien canonique de transfert. Matrice de captures navigateur ajoutée pour les huit largeurs et les deux thèmes/langues ; une capture rendue reste à inspecter.
+- Recette propriétaire actualisée. Intégration Supabase réelle bloquée faute d’environnement isolé ; pas de GO, fusion ou déploiement.
+
 ## 2026-11-24 — HOTFIX #1226 — tranches H/I candidates
 
 - Répartition contrôlée des fonds d’ouverture, solde individuel POS et Mobile Money, révision de clôture, passation contradictoire et mouvements de garde équilibrés. Non livré.

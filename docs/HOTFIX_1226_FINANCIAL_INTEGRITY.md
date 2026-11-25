@@ -126,3 +126,13 @@ La recette propriétaire détaillée est dans docs/OWNER_E2E_1226_FINANCIAL_INTE
 
 ## Durcissement complémentaire — confidentialité et contrepassations
 Les listes et sélecteurs de comptes ne recherchent plus les références privées brutes ; leurs réponses projettent les références masquées. Le contrat QA vérifie les deux surfaces. Les contrepassations historiques et réelles refusent une ligne de caisse dont le sens débit/crédit ne correspond pas au signe de l'écart ou dont les deux côtés sont non nuls. Ces modifications restent candidates jusqu'à certification du SHA courant. La liaison canonique des fonds, la revue Design 2.0 et la preuve Storage réelle restent ouvertes. Aucun changement des données de production.
+
+## Liaison canonique candidate — 25 novembre 2026
+
+Le contrôle initial a retrouvé une tête plus récente que celle transmise : `56fc7c807fae2446f9de826355cfe7f69a634417`. Ses 18 workflows ont réussi, notamment #662 `45587119039` et Quality `45587118264`. Les échecs #662 `45577586798` et Quality `45577587209` sur `ca8c8943` provenaient du marqueur métier du guide CSV, rétabli dans `20b207a9`. Les preuves anciennes ne certifient pas les nouveaux changements.
+
+La liaison nouvelle conserve les montants de clôture et rattache la preuve à un mouvement canonique unique via FK composite et contrainte de statut. La confirmation de la source, son journal et sa clé d’idempotence sont revalidés sous transaction sérialisable ; l’acteur est indépendant de la clôture et de la source. Aucun montant, mouvement ni posting n’est créé par cette liaison. Un retrait indépendant rouvrant la qualification conserve les événements d’audit ; il est interdit lorsqu’un rapprochement actif ou terminé existe. La contrepassation du journal source est refusée tant que la liaison existe. Les liens source réutilisent le builder canonique ; la Trésorerie accepte aussi son alias de transfert historique.
+
+Les tests de preuve exacte et les scénarios navigateur/PostgreSQL des trois types couvrent cette frontière de liaison, avec sources canoniques fictives préparées en base isolée. Ils ne valent pas recette de création/approbation complète des sources. La matrice rendue prévue comprend 192 captures (cinq surfaces et formulaire de revue, huit largeurs, FR/EN, clair/sombre), à inspecter après exécution ; elle ne s’auto-attribue pas de PASS visuel. La recette propriétaire précise les résultats attendus et les limites conservatrices.
+
+Supabase réel : BLOCKED, aucun projet de test disponible selon le propriétaire. Aucun projet existant utilisé comme recette ; le double HTTP ne certifie pas les policies du service réel. Aucun GO, fusion, déploiement ou mutation Production. Surveillance existante inchangée, aucune automatisation ajoutée.

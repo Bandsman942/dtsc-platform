@@ -1,4 +1,13 @@
 {
+  "cashVarianceCanonicalResolved": "Écart justifié par une opération liée",
+  "cashVarianceCanonicalLoading": "Chargement des opérations vérifiables…",
+  "cashVarianceCanonicalLink": "Lier une opération oubliée confirmée",
+  "cashVarianceCanonicalUnlink": "Retirer la liaison et rouvrir la qualification",
+  "cashVarianceCanonicalSource": "Opération confirmée et comptabilisée",
+  "cashVarianceCanonicalChoose": "Choisir une opération vérifiée",
+  "cashVarianceCanonicalEmpty": "Aucune opération admissible sur cette page. Vérifiez le circuit d’origine, les dates, le compte, le montant et la validation indépendante.",
+  "cashVarianceCanonicalNoEffect": "Cette décision conserve les comptages initiaux et ne crée aucun mouvement ni écriture. Retirer une liaison exige un autre réviseur et reste bloqué après préparation d’un rapprochement du compte.",
+  "cashVarianceCanonicalHelp": "Un apport, un transfert ou un paiement oublié suit son circuit d’origine. Après confirmation et comptabilisation de cette correction, un réviseur indépendant peut la lier à un écart du même compte, devise, sens, montant exact et jour de session. Une opération déjà incluse dans le comptage ou utilisée ailleurs est exclue. Les dossiers historiques ou ambigus restent à examiner séparément.",
   "cashVarianceRealReversed": "Écart comptabilisé puis contrepassé",
   "cashVarianceReverseReal": "Corriger une qualification réelle erronée",
   "cashVarianceReverseRealEffect": "Si le comptage corrigé rejoint le théorique et qu’aucun rapprochement ultérieur ne l’interdit, une contrepassation et un mouvement inverse sont enregistrés. Ne pas utiliser pour une nouvelle entrée ou sortie d’argent.",

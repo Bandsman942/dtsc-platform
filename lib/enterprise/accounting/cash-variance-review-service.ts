@@ -6,10 +6,12 @@ import { publishFinanceEvent } from "@/lib/enterprise/accounting/helpers";
 import { postBusinessEventTx } from "@/lib/enterprise/accounting/posting-service";
 import { reverseJournalEntryTx } from "@/lib/enterprise/accounting/reversal-service";
 import { retailFinanceReadSiteScope } from "@/lib/enterprise/retail/site-access";
+import { recordCashVarianceCanonicalLinkTx } from "@/lib/enterprise/accounting/cash-variance-canonical-service";
 
 export type CashVarianceReviewInput = {
   discrepancyId: string; revision: number; evidenceReference: string; reason: string;
-  verifiedCount: string; decision: "CORRECT_COUNT" | "REAL_VARIANCE" | "REVERSE_REAL"; attest: true;
+  verifiedCount: string; decision: "CORRECT_COUNT" | "REAL_VARIANCE" | "REVERSE_REAL" | "LINK_CANONICAL" | "UNLINK_CANONICAL"; attest: true;
+  canonicalTreasuryTransactionId?: string;
 };
 
 /** The initial declaration is evidence, not a mutable cash balance. Review is separate,
@@ -24,11 +26,16 @@ export async function reviewCashVariance(organizationId: string, sessionId: stri
     if (session.siteId && session.financialAccount.siteId && session.siteId !== session.financialAccount.siteId) throw new EnterpriseAccountingError("CASH_ACCOUNT_SITE_MISMATCH",409);
     await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterpriseCashDiscrepancy" WHERE id = ${input.discrepancyId} AND "organizationId" = ${organizationId} FOR UPDATE`);
     const discrepancy = await tx.enterpriseCashDiscrepancy.findFirst({ where: { organizationId, id: input.discrepancyId, cashSessionId: session.id } });
-    if (!discrepancy || !["PENDING_QUALIFICATION","APPROVED","POSTED"].includes(discrepancy.status)) throw new EnterpriseAccountingError("CASH_VARIANCE_REVIEW_CONFLICT",409);
+    if (!discrepancy || !["PENDING_QUALIFICATION","APPROVED","POSTED","RESOLVED_CANONICAL"].includes(discrepancy.status)) throw new EnterpriseAccountingError("CASH_VARIANCE_REVIEW_CONFLICT",409);
     assertIndependentActor({ actorUserId, relatedUserIds:[session.cashierUserId,session.validatedByUserId,discrepancy.createdByUserId,discrepancy.approvedByUserId], errorCode:"CASH_VARIANCE_REVIEW_FORBIDDEN" });
     if (discrepancy.amount.isZero() || !session.countedClosingAmount.minus(session.expectedClosingAmount).equals(discrepancy.amount)) throw new EnterpriseAccountingError("CASH_VARIANCE_REVIEW_CONFLICT",409);
     const verifiedCount = new Prisma.Decimal(input.verifiedCount);
     const originalEntries = await tx.enterpriseJournalEntry.findMany({ where: { organizationId, sourceEntityType: "EnterpriseCashDiscrepancy", sourceEntityId: discrepancy.id, postingEvent: "CASH_VARIANCE_POSTED" }, include: { lines: true }, take: 2 });
+    if (["LINK_CANONICAL","UNLINK_CANONICAL"].includes(input.decision)) {
+      if(originalEntries.length || discrepancy.journalEntryId) throw new EnterpriseAccountingError("CASH_VARIANCE_LEGACY_PROOF_REQUIRED",409);
+      return recordCashVarianceCanonicalLinkTx(tx,organizationId,session,discrepancy,actorUserId,input);
+    }
+    if(discrepancy.status==="RESOLVED_CANONICAL") throw new EnterpriseAccountingError("CASH_VARIANCE_REVIEW_CONFLICT",409);
     const account = session.financialAccount;
     const adjustmentReference = "CASH-VARIANCE:" + discrepancy.id;
     let journalEntryId: string | null = null;

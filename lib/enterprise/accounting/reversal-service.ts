@@ -5,6 +5,7 @@ import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
 import { financeReference, publishFinanceEvent } from "@/lib/enterprise/accounting/helpers";
 import { getPostingPeriod } from "@/lib/enterprise/accounting/periods";
 import { assertAcquisitionJournalCorrectionAllowedTx } from "@/lib/enterprise/accounting/inventory-acquisition-cost-guards";
+import { assertNoCashVarianceCanonicalLinkTx } from "@/lib/enterprise/accounting/cash-variance-canonical-service";
 
 export type JournalReversalAuthorization = "USER" | "APPROVED_PERIODIC_TEMPLATE" | "SYSTEM_CLOSING" | "DOMAIN_INVERSE" | "CASH_VARIANCE_REVIEW";
 
@@ -22,6 +23,7 @@ export async function reverseJournalEntryTx(
     include: { lines: true, journal: true },
   });
   if (!original) throw new EnterpriseAccountingError("JOURNAL_ENTRY_NOT_FOUND", 404);
+  if(original.sourceEntityType && original.sourceEntityId) await assertNoCashVarianceCanonicalLinkTx(tx,organizationId,original.sourceEntityType,original.sourceEntityId);
 
   const existing = await tx.enterpriseJournalReversal.findFirst({ where: { organizationId, originalEntryId } });
   if (existing) {

@@ -9,6 +9,9 @@ import { isSameOriginRequest } from "@/lib/request-security";
 import { isValidEnterpriseActivityCivilDate } from "@/lib/enterprise/enterprise-activity-civil-date";
 
 const FINANCE_ERROR_MESSAGES: Record<string, string> = {
+  CASH_VARIANCE_CANONICAL_PROOF_REQUIRED: "Cette opération ne justifie pas cet écart. Vérifiez la source confirmée et comptabilisée, le compte, la devise, le montant, les dates et l’indépendance du réviseur.",
+  CASH_VARIANCE_CANONICAL_ALREADY_USED: "Cette opération justifie déjà un autre écart. Ne créez pas de double correction.",
+  CASH_VARIANCE_CANONICAL_LINK_ACTIVE: "Cette opération justifie un écart de caisse. Faites retirer cette liaison par un réviseur indépendant avant toute correction de la source.",
   SUPPLIER_RETURN_NONRECOVERABLE_COST_RECONCILIATION_REQUIRED: "La TVA non récupérable exige une réception et une valorisation d'origine entièrement rapprochées, sans consommation ni opération ouverte. Vérifiez les pièces et la période avant de poursuivre.",
   INVENTORY_ACQUISITION_COST_DOMAIN_CORRECTION_REQUIRED: "Ce coût de stock intègre une taxe non récupérable. Un avoir ou une contrepassation isolée déséquilibrerait le stock et la comptabilité. Utilisez une correction coordonnée lorsqu’elle sera disponible.",
   INVENTORY_ACQUISITION_COST_HISTORY_REQUIRED: "Cette date exige une reconstitution historique du stock valorisé. Consultez un état déjà enregistré ou la valorisation actuelle ; aucun nouvel état historique approximatif n’a été créé.",

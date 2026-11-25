@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import "./qa-cash-variance-canonical-proof-1226.mjs";
 import { journalEntryCapabilities } from "../lib/enterprise/accounting/journal-entry-capabilities.ts";
 const entry = {status:"POSTED",preparedByUserId:"a",approvedByUserId:"b",postedByUserId:"c"};
 const access={canSubmit:true,canApprove:true,canManage:true};

@@ -2,6 +2,8 @@ import {expect,test} from "@playwright/test";
 import {PrismaClient} from "@prisma/client";
 import {randomUUID} from "node:crypto";
 import ExcelJS from "exceljs";
+import {mkdir,writeFile} from "node:fs/promises";
+import {join} from "node:path";
 
 // This scenario writes synthetic fixtures only in the isolated #662 CI job.
 if(process.env.CI!=="true" || !/^postgresql:\/\/[^@]+@localhost:5432\/dtsc_hotfix_662_acceptance(?:\?|$)/.test(process.env.DATABASE_URL||"")) throw new Error("Financial #1226 E2E requires disposable CI PostgreSQL");
@@ -11,7 +13,7 @@ const base=process.env.E2E_BASE_URL||"http://127.0.0.1:3000";
 if(new URL(base).hostname!=="127.0.0.1")throw new Error("Financial #1226 E2E requires local application");
 const root="/api/enterprise/"+organizationId;
 const path="/enterprise-modules/FINANCE_CASH";
-let owner,recipient,ledger,site;
+let owner,recipient,ledger,site,visualSessionId;
 async function signIn(browser,email,password){
   const context=await browser.newContext({baseURL:base,viewport:{width:390,height:844}});
   const response=await context.request.post(base+"/api/auth/sign-in",{data:{email,password,organizationId,next:path},headers:{origin:base,referer:base+"/auth/sign-in"}});
@@ -46,7 +48,7 @@ test.describe.serial("Hotfix #1226 financial integrity (isolated browser and Pos
     await prisma.organizationMember.upsert({where:{organizationId_userId:{organizationId,userId:recipient.id}},update:{role:"ADMIN_ENTERPRISE",status:"ACTIVE",removedAt:null},create:{organizationId,userId:recipient.id,role:"ADMIN_ENTERPRISE",status:"ACTIVE",joinedAt:new Date()}});
     ledger=await prisma.enterpriseLedgerAccount.findFirstOrThrow({where:{organizationId,code:"SHOP2-CASH"}});
     site=await prisma.enterpriseSite.findFirstOrThrow({where:{organizationId,code:"SHOP2-E2E-SITE"}});
-    for(const [index,moduleCode] of ["FINANCE_CASH","FINANCE_BANK","FINANCE_RECONCILIATION","FINANCE_ACCOUNTING","FINANCE_TREASURY","FINANCE_OVERVIEW","VALIDATIONS"].entries()){
+    for(const [index,moduleCode] of ["FINANCE_CASH","FINANCE_BANK","FINANCE_RECONCILIATION","FINANCE_ACCOUNTING","FINANCE_TREASURY","FINANCE_PAYMENTS","FINANCE_OVERVIEW","VALIDATIONS","RETAIL_DAILY_CLOSE"].entries()){
       await prisma.enterpriseModule.upsert({where:{organizationId_moduleCode:{organizationId,moduleCode}},update:{isEnabled:true},create:{organizationId,moduleCode,labelFr:moduleCode,labelEn:moduleCode,moduleCategory:"E2E_1226",isEnabled:true,isCore:false,requiresPlanLevel:"BUSINESS",sortOrder:12260+index}});
     }
   });
@@ -281,6 +283,90 @@ test.describe.serial("Hotfix #1226 financial integrity (isolated browser and Pos
     }finally{await a.close();await b.close();if(c)await c.close();}
   });
 
+  for(const kind of ["FUNDING","TRANSFER","PAYMENT"])test(`canonical ${kind} evidence is linked exactly once without a second movement or posting`,async({browser})=>{
+    // Confirmed source fixtures isolate this new evidence-review boundary. They
+    // do not claim to certify creation/approval of the three source workflows.
+    const [a,b]=await contextPair(browser);
+    let c,d;
+    try{
+      const reviewers=[];
+      for(const suffix of ["link","unlink"]){
+        const user=await prisma.user.create({data:{email:`h1226-${suffix}-${randomUUID()}@example.test`,name:"Synthetic evidence reviewer",passwordHash:owner.passwordHash,role:"CLIENT",status:"ACTIVE",locale:"fr",startPage:"/dashboard"}});
+        await prisma.organizationMember.create({data:{organizationId,userId:user.id,role:"ADMIN_ENTERPRISE",status:"ACTIVE",joinedAt:new Date()}});
+        reviewers.push(user);
+      }
+      c=await signIn(browser,reviewers[0].email,process.env.E2E_ADMIN_PASSWORD);
+      d=await signIn(browser,reviewers[1].email,process.env.E2E_ADMIN_PASSWORD);
+      const outbound=kind==="PAYMENT",count=outbound?"95":"105";
+      const cash=await account("CASH",100,100);
+      const opened=(await ok(a,"POST",root+"/cash-sessions",{financialAccountId:cash.id,openingAmount:"100"})).session;
+      const endpoint=root+"/cash-sessions/"+opened.id+"/variance-review";
+      const close=(await ok(a,"POST",root+"/cash-sessions/"+opened.id+"/close",{revision:opened.revision,countedClosingAmount:count,counts:[{denomination:"1",quantity:Number(count)}],closingReason:"Synthetic omitted canonical operation",approverUserId:recipient.id})).session;
+      await stepUp(b,process.env.E2E_USER_PASSWORD);
+      const closed=(await ok(b,"POST",root+"/cash-sessions/"+opened.id+"/validate",{revision:close.revision,approve:true})).session;
+      const discrepancy=await prisma.enterpriseCashDiscrepancy.findFirstOrThrow({where:{organizationId,cashSessionId:opened.id}});
+      const now=new Date(),number="H1226-SOURCE-"+randomUUID().slice(0,8);
+      const sourceEntityType=kind==="FUNDING"?"EnterpriseFundingOperation":kind==="TRANSFER"?"EnterpriseAccountTransfer":"EnterprisePayment";
+      const counterpart=await prisma.enterpriseLedgerAccount.create({data:{organizationId,chartId:ledger.chartId,code:number,nameFr:"Contrepartie fictive",nameEn:"Synthetic counterpart",accountType:kind==="FUNDING"?"EQUITY":kind==="TRANSFER"?"ASSET":"LIABILITY",currencyCode:"USD",isActive:true,allowDirectPosting:true}});
+      let source;
+      if(kind==="FUNDING")source=await prisma.enterpriseFundingOperation.create({data:{organizationId,number,fundingType:"CAPITAL_CONTRIBUTION",financialAccountId:cash.id,currencyCode:"USD",amount:"5",operationDate:opened.openedAt,status:"CONFIRMED",initiatedByUserId:owner.id,approvedByUserId:recipient.id,confirmedByUserId:recipient.id,confirmedAt:now}});
+      if(kind==="PAYMENT")source=await prisma.enterprisePayment.create({data:{organizationId,number,direction:"OUTBOUND",paymentType:"SUPPLIER_PAYMENT",methodType:"CASH",financialAccountId:cash.id,currencyCode:"USD",amount:"5",unallocatedAmount:"5",paymentDate:opened.openedAt,status:"CONFIRMED",initiatedByUserId:owner.id,approvedByUserId:recipient.id,confirmedByUserId:recipient.id,confirmedAt:now}});
+      if(kind==="TRANSFER"){
+        const bank=await prisma.enterpriseFinancialAccount.create({data:{organizationId,code:number,name:"Synthetic transfer source",accountType:"BANK",currencyCode:"USD",openingBalance:"100",operationalBalance:"95",ledgerAccountId:counterpart.id,siteId:site.id,status:"ACTIVE"}});
+        source=await prisma.enterpriseAccountTransfer.create({data:{organizationId,number,sourceFinancialAccountId:bank.id,targetFinancialAccountId:cash.id,sourceCurrencyCode:"USD",targetCurrencyCode:"USD",sourceAmount:"5",targetAmount:"5",transferDate:opened.openedAt,status:"CONFIRMED",initiatedByUserId:owner.id,approvedByUserId:recipient.id,confirmedAt:now}});
+        await prisma.enterpriseTreasuryTransaction.create({data:{organizationId,financialAccountId:bank.id,transferId:source.id,transactionType:"TRANSFER",direction:"OUTBOUND",currencyCode:"USD",amount:"5",transactionDate:opened.openedAt,createdByUserId:recipient.id}});
+      }
+      const sourceField=kind==="FUNDING"?{fundingOperationId:source.id}:kind==="PAYMENT"?{paymentId:source.id}:{transferId:source.id};
+      const transaction=await prisma.enterpriseTreasuryTransaction.create({data:{organizationId,financialAccountId:cash.id,...sourceField,transactionType:kind==="PAYMENT"?"SUPPLIER_PAYMENT":kind,direction:outbound?"OUTBOUND":"INBOUND",currencyCode:"USD",amount:"5",transactionDate:opened.openedAt,createdByUserId:recipient.id}});
+      await prisma.enterpriseFinancialAccount.update({where:{id:cash.id},data:{operationalBalance:count,revision:{increment:1}}});
+      const period=await prisma.enterpriseFiscalPeriod.findFirstOrThrow({where:{organizationId,startDate:{lte:now},endDate:{gte:now},status:"OPEN",fiscalYear:{status:"OPEN"}}});
+      const journal=await prisma.enterpriseJournal.findFirstOrThrow({where:{organizationId,isActive:true}});
+      const entry=await prisma.enterpriseJournalEntry.create({data:{organizationId,number,journalId:journal.id,fiscalPeriodId:period.id,accountingDate:now,description:"Synthetic posted canonical source",sourceModule:kind==="PAYMENT"?"FINANCE_PAYMENTS":"FINANCE_TREASURY",sourceEntityType,sourceEntityId:source.id,status:"POSTED",totalDebit:"5",totalCredit:"5",functionalCurrencyCode:"USD",preparedByUserId:owner.id,approvedByUserId:recipient.id,postedByUserId:recipient.id,postedAt:now}});
+      const postingEvent=kind==="FUNDING"?"CAPITAL_CONTRIBUTION_CONFIRMED":kind==="PAYMENT"?"SUPPLIER_PAYMENT_CONFIRMED":null;
+      await prisma.enterpriseJournalEntry.update({where:{id:entry.id},data:{postingEvent,idempotencyKey:kind==="TRANSFER"?`${organizationId}:ACCOUNT_TRANSFER:${source.id}:1`:[organizationId,sourceEntityType,source.id,postingEvent,1].join(":"),postingVersion:1}});
+      await prisma.enterpriseJournalLine.createMany({data:[
+        {organizationId,journalEntryId:entry.id,ledgerAccountId:ledger.id,debit:outbound?"0":"5",credit:outbound?"5":"0",functionalAmount:"5",transactionCurrencyCode:"USD",transactionAmount:"5",exchangeRate:"1",siteId:site.id},
+        {organizationId,journalEntryId:entry.id,ledgerAccountId:counterpart.id,debit:outbound?"5":"0",credit:outbound?"0":"5",functionalAmount:"5",transactionCurrencyCode:"USD",transactionAmount:"5",exchangeRate:"1",siteId:site.id}
+      ]});
+      const command={discrepancyId:discrepancy.id,revision:closed.revision,decision:"LINK_CANONICAL",canonicalTreasuryTransactionId:transaction.id,verifiedCount:count,evidenceReference:"SYNTHETIC-1226-PROOF",reason:"Independent verification of the original canonical source",attest:true};
+      expect((await call(c,"POST",endpoint,command)).response.status()).toBe(428);
+      await stepUp(c,process.env.E2E_ADMIN_PASSWORD);
+      await stepUp(a,process.env.E2E_ADMIN_PASSWORD);
+      expect((await call(a,"POST",endpoint,command)).body.error).toBe("CASH_VARIANCE_REVIEW_FORBIDDEN");
+      const wrong=await account("CASH",100,105);
+      const wrongTransaction=await prisma.enterpriseTreasuryTransaction.create({data:{organizationId,financialAccountId:wrong.id,...sourceField,transactionType:kind==="PAYMENT"?"SUPPLIER_PAYMENT":kind,direction:outbound?"OUTBOUND":"INBOUND",currencyCode:"USD",amount:"5",transactionDate:opened.openedAt,createdByUserId:recipient.id}});
+      expect((await call(c,"POST",endpoint,{...command,canonicalTreasuryTransactionId:wrongTransaction.id})).body.error).toBe("CASH_VARIANCE_CANONICAL_PROOF_REQUIRED");
+      const candidates=await ok(c,"GET",endpoint);
+      expect(candidates.items.map(item=>item.id)).toContain(transaction.id);
+      expect(candidates.items.map(item=>item.id)).not.toContain(wrongTransaction.id);
+      const before={treasury:await prisma.enterpriseTreasuryTransaction.count({where:{organizationId}}),cash:await prisma.enterpriseCashMovement.count({where:{organizationId}}),journal:await prisma.enterpriseJournalEntry.count({where:{organizationId}})};
+      const results=await Promise.all([call(c,"POST",endpoint,command),call(c,"POST",endpoint,command)]);
+      expect(results.map(r=>r.response.status()).sort()).toEqual([200,409]);
+      const resolved=await prisma.enterpriseCashDiscrepancy.findUniqueOrThrow({where:{id:discrepancy.id}});
+      expect(resolved.status).toBe("RESOLVED_CANONICAL");expect(resolved.canonicalTreasuryTransactionId).toBe(transaction.id);expect(resolved.journalEntryId).toBeNull();
+      await expect(prisma.enterpriseCashDiscrepancy.create({data:{organizationId,cashSessionId:opened.id,amount:"5",reason:"Duplicate evidence must be refused",status:"RESOLVED_CANONICAL",canonicalTreasuryTransactionId:transaction.id,createdByUserId:owner.id}})).rejects.toMatchObject({code:"P2002"});
+      expect(await prisma.enterpriseTreasuryTransaction.count({where:{organizationId}})).toBe(before.treasury);
+      expect(await prisma.enterpriseCashMovement.count({where:{organizationId}})).toBe(before.cash);
+      expect(await prisma.enterpriseJournalEntry.count({where:{organizationId}})).toBe(before.journal);
+      const snapshot=await prisma.enterpriseCashSession.findUniqueOrThrow({where:{id:opened.id}});
+      expect(snapshot.expectedClosingAmount.toFixed()).toBe("100");expect(snapshot.countedClosingAmount.toFixed()).toBe(count);
+      expect((await prisma.enterpriseFinancialAccount.findUniqueOrThrow({where:{id:cash.id}})).operationalBalance.toFixed()).toBe(count);
+      const listed=(await ok(c,"GET",root+"/cash-sessions?recordId="+opened.id)).items[0];
+      expect(listed.varianceReviews[0].canReview).toBe(false);
+      expect(listed.varianceReviews[0].canonicalSourceHref).toContain(source.id);
+      const page=await c.newPage();
+      await page.goto(base+listed.varianceReviews[0].canonicalSourceHref);
+      await expect(page.getByText(number,{exact:true}).last()).toBeVisible();
+      await page.close();await stepUp(c,process.env.E2E_ADMIN_PASSWORD);
+      const refusedReverse=await call(c,"POST",root+"/journal-entries/"+entry.id+"/reverse",{reason:"Source correction requires independent unlink",accountingDate:now.toISOString(),revision:entry.revision});
+      expect(refusedReverse.response.status(),JSON.stringify(refusedReverse.body)).toBe(409);expect(refusedReverse.body.error).toBe("CASH_VARIANCE_CANONICAL_LINK_ACTIVE");
+      await stepUp(d,process.env.E2E_ADMIN_PASSWORD);
+      expect((await ok(d,"POST",endpoint,{...command,revision:snapshot.revision,decision:"UNLINK_CANONICAL"})).discrepancy.status).toBe("PENDING_QUALIFICATION");
+      expect(await prisma.enterpriseOperationalEvent.count({where:{organizationId,entityId:discrepancy.id,eventType:"CASH_VARIANCE_CANONICAL_LINKED"}})).toBe(1);
+      expect(await prisma.enterpriseOperationalEvent.count({where:{organizationId,entityId:discrepancy.id,eventType:"CASH_VARIANCE_CANONICAL_UNLINKED"}})).toBe(1);
+      if(kind==="FUNDING")visualSessionId=opened.id;
+    }finally{await a.close();await b.close();if(c)await c.close();if(d)await d.close();}
+  });
   test("durable Mobile Money import validates private staged content, retry identity and overlapping statement exclusion",async({browser})=>{
     const a=await signIn(browser,process.env.E2E_ADMIN_EMAIL,process.env.E2E_ADMIN_PASSWORD);
     try{
@@ -325,4 +411,51 @@ test.describe.serial("Hotfix #1226 financial integrity (isolated browser and Pos
     }finally{await a.close();}
   });
 
+  test("Design 2.0 rendered FR/EN light/dark width matrix and canonical review form",async({browser})=>{
+    test.setTimeout(240000);
+    expect(visualSessionId).toBeTruthy();
+    const reviewer=await prisma.user.create({data:{email:`h1226-visual-${randomUUID()}@example.test`,name:"Synthetic visual reviewer",passwordHash:owner.passwordHash,role:"CLIENT",status:"ACTIVE",locale:"fr",startPage:"/dashboard"}});
+    await prisma.organizationMember.create({data:{organizationId,userId:reviewer.id,role:"ADMIN_ENTERPRISE",status:"ACTIVE",joinedAt:new Date()}});
+    const directory=join(process.cwd(),"artifacts","1226-design2");await mkdir(directory,{recursive:true});
+    const manifest=[];
+    for(const locale of ["fr","en"]){
+      await prisma.user.update({where:{id:reviewer.id},data:{locale}});
+      for(const theme of ["light","dark"]){
+        const context=await signIn(browser,reviewer.email,process.env.E2E_ADMIN_PASSWORD);
+        await context.addInitScript(value=>localStorage.setItem("theme",value),theme);
+        const page=await context.newPage();
+        try{
+          for(const module of ["FINANCE_CASH","FINANCE_BANK","FINANCE_TREASURY","FINANCE_RECONCILIATION","RETAIL_DAILY_CLOSE"]){
+            const response=await page.goto(base+"/enterprise-modules/"+module,{waitUntil:"networkidle"});
+            expect(response.status()).toBe(200);expect(new URL(page.url()).pathname).toBe("/enterprise-modules/"+module);
+            await expect(page.getByRole("heading",{level:1})).toBeVisible();
+            await expect(page.locator("html")).toHaveClass(theme==="dark"?/dark/:/light/);
+            for(const width of [320,360,375,390,414,768,1024,1440]){
+              await page.setViewportSize({width,height:900});
+              expect(await page.evaluate(()=>document.documentElement.scrollWidth-window.innerWidth)).toBeLessThanOrEqual(2);
+              const file=`${module}-${locale}-${theme}-${width}.png`;
+              await page.screenshot({path:join(directory,file)});
+              manifest.push({module,locale,theme,width,file,title:await page.getByRole("heading",{level:1}).innerText()});
+            }
+          }
+          await page.goto(base+path+"?recordId="+visualSessionId,{waitUntil:"networkidle"});
+          await page.getByRole("button",{name:locale==="fr"?"Qualification et régularisation":"Variance review and correction",exact:true}).click();
+          const dialog=page.getByRole("dialog");
+          await dialog.locator('select[name="decision"]').selectOption("LINK_CANONICAL");
+          await expect(dialog.locator('select[name="canonicalTreasuryTransactionId"] option')).not.toHaveCount(1);
+          for(const width of [320,360,375,390,414,768,1024,1440]){
+            await page.setViewportSize({width,height:900});
+            expect(await page.evaluate(()=>document.documentElement.scrollWidth-window.innerWidth)).toBeLessThanOrEqual(2);
+            const file=`CANONICAL-REVIEW-${locale}-${theme}-${width}.png`;
+            await page.screenshot({path:join(directory,file)});manifest.push({module:"CANONICAL-REVIEW",locale,theme,width,file});
+          }
+          await page.keyboard.press("Tab");
+          expect(await dialog.evaluate(element=>element.contains(document.activeElement))).toBe(true);
+          await page.keyboard.press("Escape");await expect(dialog).not.toBeVisible();
+        }finally{await context.close();}
+      }
+    }
+    await writeFile(join(directory,"matrix.json"),JSON.stringify({candidateSha:process.env.E2E_CANDIDATE_SHA||null,executionSha:process.env.GITHUB_SHA||null,status:"RENDERED_AWAITING_VISUAL_INSPECTION",screens:manifest},null,2));
+    expect(manifest).toHaveLength(192);
+  });
 });

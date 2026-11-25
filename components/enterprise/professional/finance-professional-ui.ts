@@ -6,6 +6,7 @@ export type FinanceLocale = "fr" | "en";
 
 const STATUS_LABELS: Record<FinanceLocale, Record<string, string>> = {
   fr: {
+    RESOLVED_CANONICAL: "Justifié par une opération liée",
     DRAFT: "Brouillon", SUBMITTED: "Soumis", IN_REVIEW: "En revue", PENDING_REVIEW: "En attente de revue", REVIEWED: "Revu",
     PENDING_APPROVAL: "En attente de validation", APPROVED: "Approuvé", ISSUED: "Émis", POSTED: "Comptabilisé", PARTIALLY_PAID: "Partiellement payé",
     PAID: "Payé", OVERDUE: "En retard", DISPUTED: "En litige", WRITTEN_OFF: "Passé en irrécouvrable", CANCELLED: "Annulé", VOID: "Invalidé", VOIDED: "Invalidé",
@@ -17,6 +18,7 @@ const STATUS_LABELS: Record<FinanceLocale, Record<string, string>> = {
     REOPENED: "Réouvert", MATCHED: "Rapproché", UNMATCHED: "À rapprocher", PENDING: "En attente", PLANNED: "Planifié"
   },
   en: {
+    RESOLVED_CANONICAL: "Explained by a linked operation",
     DRAFT: "Draft", SUBMITTED: "Submitted", IN_REVIEW: "In review", PENDING_REVIEW: "Pending review", REVIEWED: "Reviewed", PENDING_APPROVAL: "Pending approval",
     APPROVED: "Approved", ISSUED: "Issued", POSTED: "Posted", PARTIALLY_PAID: "Partially paid", PAID: "Paid", OVERDUE: "Overdue", DISPUTED: "Disputed",
     WRITTEN_OFF: "Written off", CANCELLED: "Cancelled", VOID: "Voided", VOIDED: "Voided", CREDIT_NOTE: "Credit note", REJECTED: "Rejected", RETURNED: "Returned for correction",
@@ -74,6 +76,9 @@ const ENUM_LABELS: Record<FinanceLocale, Record<string, string>> = {
 
 export const FINANCE_ERROR_MESSAGES: Record<FinanceLocale, Record<string, string>> = {
   fr: {
+    CASH_VARIANCE_CANONICAL_PROOF_REQUIRED: "Vérifiez la source confirmée et comptabilisée, le compte, la devise, le montant, les dates et l’indépendance du réviseur.",
+    CASH_VARIANCE_CANONICAL_ALREADY_USED: "Cette opération justifie déjà un autre écart. Ne créez pas de double correction.",
+    CASH_VARIANCE_CANONICAL_LINK_ACTIVE: "Cette opération justifie un écart de caisse. Faites retirer la liaison par un réviseur indépendant avant de corriger la source.",
     RECONCILIATION_COUNT_ROWS_INVALID: "Vérifiez les coupures, quantités entières, devise, compte et total du comptage.",
     BANK_STATEMENT_PERIOD_OVERLAP: "Un relevé couvre déjà cette période. Vérifiez le relevé existant avant tout nouvel import.",
     SUPPLIER_RETURN_NONRECOVERABLE_COST_RECONCILIATION_REQUIRED: "La TVA non récupérable exige une réception et une valorisation d'origine entièrement rapprochées, sans consommation ni opération ouverte. Vérifiez les pièces et la période avant de poursuivre.",
@@ -227,6 +232,9 @@ export const FINANCE_ERROR_MESSAGES: Record<FinanceLocale, Record<string, string
     FINANCE_NETWORK_UNAVAILABLE: "La connexion a été interrompue. Votre opération n'est pas confirmée ; vérifiez son statut avant de réessayer."
   },
   en: {
+    CASH_VARIANCE_CANONICAL_PROOF_REQUIRED: "Check the confirmed and posted source, account, currency, amount, dates and reviewer independence.",
+    CASH_VARIANCE_CANONICAL_ALREADY_USED: "This operation already explains another variance. Do not create a duplicate correction.",
+    CASH_VARIANCE_CANONICAL_LINK_ACTIVE: "This operation explains a cash variance. Ask an independent reviewer to remove the link before correcting the source.",
     RECONCILIATION_COUNT_ROWS_INVALID: "Check denominations, integer quantities, account, currency and count total.",
     BANK_STATEMENT_PERIOD_OVERLAP: "An existing statement overlaps this period. Review it before importing again.",
     SUPPLIER_RETURN_NONRECOVERABLE_COST_RECONCILIATION_REQUIRED: "Non-recoverable VAT requires a fully reconciled original receipt and valuation, with no consumption or open stock operation. Review the documents and period before continuing.",

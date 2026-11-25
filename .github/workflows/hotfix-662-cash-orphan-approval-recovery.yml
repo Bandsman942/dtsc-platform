@@ -80,6 +80,7 @@ jobs:
       E2E_BASE_URL: http://127.0.0.1:3000
       E2E_ORGANIZATION_ID: e2e-erp-professional-org
       E2E_ORGANIZATION_CODE: e2e-erp-professional
+      E2E_CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
       E2E_ADMIN_EMAIL: erp-admin@example.test
       E2E_ADMIN_PASSWORD: E2eAdmin2026!
       E2E_USER_EMAIL: erp-user@example.test
@@ -205,3 +206,10 @@ jobs:
             /tmp/dtsc-hotfix-1226-browser.log
             /tmp/dtsc-hotfix-662-redis-rest.log
             /tmp/dtsc-ci-private-storage.log
+      - name: Upload financial Design 2.0 rendered evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: financial-integrity-1226-design2
+          if-no-files-found: ignore
+          path: artifacts/1226-design2

@@ -905,6 +905,7 @@ model EnterpriseTreasuryTransaction {
   financialAccount      EnterpriseFinancialAccount @relation(fields: [organizationId, financialAccountId], references: [organizationId, id], onDelete: Restrict)
   payment               EnterprisePayment?          @relation(fields: [organizationId, paymentId], references: [organizationId, id], onDelete: Restrict)
   fundingOperation      EnterpriseFundingOperation? @relation(fields: [organizationId, fundingOperationId], references: [organizationId, id], onDelete: Restrict)
+  explainedCashDiscrepancies EnterpriseCashDiscrepancy[] @relation("CashVarianceCanonicalTransaction")
 
   @@unique([organizationId, id])
   @@index([organizationId, financialAccountId, transactionDate])
@@ -1063,10 +1064,13 @@ model EnterpriseCashDiscrepancy {
   createdByUserId    String
   approvedByUserId   String?
   journalEntryId     String?
+  canonicalTreasuryTransactionId String?
   createdAt          DateTime              @default(now())
   updatedAt          DateTime              @updatedAt
   cashSession        EnterpriseCashSession @relation(fields: [organizationId, cashSessionId], references: [organizationId, id], onDelete: Restrict)
+  canonicalTreasuryTransaction EnterpriseTreasuryTransaction? @relation("CashVarianceCanonicalTransaction", fields: [organizationId, canonicalTreasuryTransactionId], references: [organizationId, id], onDelete: Restrict, map: "CashVariance_canonical_transaction_fkey")
 
+  @@unique([organizationId, canonicalTreasuryTransactionId], map: "CashVariance_canonical_transaction_key")
   @@unique([organizationId, id])
   @@index([organizationId, cashSessionId, status])
 }

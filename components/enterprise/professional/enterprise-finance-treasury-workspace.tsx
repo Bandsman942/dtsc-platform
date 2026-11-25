@@ -160,7 +160,7 @@ export function EnterpriseFinanceTreasuryWorkspace(props: Props) {
 
   useEffect(() => {
     const accountId = searchParams.get("accountId");
-    const transferId = searchParams.get("transferId");
+    const transferId = searchParams.get("transferId") || searchParams.get("transfer");
     if (!accountId && !transferId) return;
     const targetEndpoint = accountId ? "financial-accounts" : "account-transfers";
     const id = accountId || transferId || "";
