@@ -119,9 +119,12 @@ state.allocations = [{ ...state.allocations[0], amount: D("99.999999") }];
 await assert.rejects(preview(), { code: "RETAIL_INVOICE_RETURN_SETTLEMENT_ALLOCATION_PRECISION_INVALID" });
 state.allocations[0].amount = D(100);
 
-// Stock movements have three decimal places, invoice items may have six.
-state.request.lines[0].quantity = D("0.0001");
+// Physical movements and return quantities share the six-decimal contract.
+state.request.lines[0].quantity = D("0.0000001");
 await assert.rejects(preview(), { code: "RETAIL_INVOICE_RETURN_STOCK_QUANTITY_PRECISION" });
+state.request.lines[0].quantity = D("0.000001");
+const microReturn = await preview();
+assert.equal(microReturn.stockSourcePlan[0].quantity.toFixed(), "0.000001");
 state.request.lines[0].quantity = D(1);
 
 // A duplicated or out-of-balance posting must never feed a return.

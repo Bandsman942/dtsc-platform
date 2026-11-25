@@ -245,8 +245,13 @@ state.operations.length = operationsBeforeUnfulfilled;
 state.events.length = eventsBeforeUnfulfilled;
 await assert.rejects(createRetailInvoiceReturnRequest("tenant", "invoice-A", "requester", {
   ...input, idempotencyKey: "shop-return-stock-precision-001",
-  lines: [{ ...input.lines[0], quantity: "0.0001" }],
+  lines: [{ ...input.lines[0], quantity: "0.0000001" }],
 }), { code: "RETAIL_INVOICE_RETURN_STOCK_QUANTITY_PRECISION" });
+// Physical precision does not waive the canonical currency minor-unit guard.
+await assert.rejects(createRetailInvoiceReturnRequest("tenant", "invoice-A", "requester", {
+  ...input, idempotencyKey: "shop-return-micro-money-001",
+  lines: [{ ...input.lines[0], quantity: "0.000001" }],
+}), { code: "RETAIL_INVOICE_RETURN_AMOUNT_BELOW_MINOR_UNIT" });
 await assert.rejects(createRetailInvoiceReturnRequest("tenant", "invoice-A", "requester", {
   ...input, approverUserId: "requester",
 }), { code: "RETAIL_INVOICE_RETURN_SELF_APPROVAL_FORBIDDEN" });

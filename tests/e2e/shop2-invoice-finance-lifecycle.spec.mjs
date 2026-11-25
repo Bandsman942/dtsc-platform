@@ -1751,8 +1751,11 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
     const tooMuch=await context.owner.request.get(returnCheck+"&quantity=5");
     expect(tooMuch.status(),await tooMuch.text()).toBe(409);
     expect((await tooMuch.json()).error).toBe("SUPPLIER_RETURN_QUANTITY_INVALID");
-    const invalidPrecision=await context.owner.request.get(returnCheck+"&quantity=1.0001");
+    const invalidPrecision=await context.owner.request.get(returnCheck+"&quantity=1.0000001");
     expect(invalidPrecision.status()).toBe(400);
+    const microPrecision=await context.owner.request.get(returnCheck+"&quantity=1.000001");
+    expect(microPrecision.status(),await microPrecision.text()).toBe(409);
+    expect((await microPrecision.json()).error).toBe("SUPPLIER_RETURN_INVOICE_REQUIRED");
     const missingInvoice=await context.owner.request.get(returnCheck+"&quantity=2");
     expect(missingInvoice.status(),await missingInvoice.text()).toBe(409);
     expect((await missingInvoice.json()).error).toBe("SUPPLIER_RETURN_INVOICE_REQUIRED");
