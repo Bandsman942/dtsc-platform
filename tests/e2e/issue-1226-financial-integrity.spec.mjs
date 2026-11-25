@@ -1,5 +1,6 @@
 import {expect,test} from "@playwright/test";
 import {PrismaClient} from "@prisma/client";
+import {createClient} from "@supabase/supabase-js";
 import {randomUUID} from "node:crypto";
 import ExcelJS from "exceljs";
 import {mkdir,writeFile} from "node:fs/promises";
@@ -384,7 +385,14 @@ test.describe.serial("Hotfix #1226 financial integrity (isolated browser and Pos
   test("durable Mobile Money import validates private staged content, retry identity and overlapping statement exclusion",async({browser})=>{
     const a=await signIn(browser,process.env.E2E_ADMIN_EMAIL,process.env.E2E_ADMIN_PASSWORD);
     try{
-      expect(process.env.SUPABASE_STORAGE_URL).toBe("http://127.0.0.1:8089");
+      const storageUrl = "http://127.0.0.1:54321";
+      const bucket = "dtsc-ci-private";
+      expect(process.env.SUPABASE_STORAGE_URL).toBe(storageUrl);
+      expect(process.env.SUPABASE_STORAGE_BUCKET).toBe(bucket);
+      expect(Boolean(process.env.SUPABASE_STORAGE_SERVICE_ROLE_KEY && process.env.E2E_SUPABASE_ANON_KEY)).toBe(true);
+      const auth = { persistSession: false, autoRefreshToken: false };
+      const serverStorage = createClient(storageUrl, process.env.SUPABASE_STORAGE_SERVICE_ROLE_KEY, {auth}).storage;
+      const anonStorage = createClient(storageUrl, process.env.E2E_SUPABASE_ANON_KEY, {auth}).storage;
       const bank=await account("MOBILE_MONEY",0,251);
       const day="2026-11-24";
       const data={financialAccountId:bank.id,reference:"H1226-BULK-"+randomUUID(),statementDate:day,periodStart:day,periodEnd:day,currencyCode:"USD",openingBalance:"0",closingBalance:"251",lines:Array.from({length:251},(_,i)=>({transactionDate:day,description:"Synthetic operator credit "+i,reference:"OP-"+i,debit:"0",credit:"1",runningBalance:String(i+1)}))};
@@ -398,9 +406,19 @@ test.describe.serial("Hotfix #1226 financial integrity (isolated browser and Pos
       const staged=await prisma.enterpriseDomainEvent.findUniqueOrThrow({where:{id}});
       expect(staged.payloadJson.lines).toBeUndefined();
       expect(staged.payloadJson.stagingPath).toContain("enterprise-bulk/"+organizationId+"/");
+      const stagingPath = staged.payloadJson.stagingPath;
+      const object = await serverStorage.from(bucket).download(stagingPath);
+      expect(Boolean(object.error)).toBe(false);
+      expect(object.data.size).toBeGreaterThan(0);
+      const denied = await anonStorage.from(bucket).download(stagingPath);
+      expect(denied.data).toBeNull();
+      expect([400,401,403,404]).toContain(Number(denied.error?.status ?? denied.error?.statusCode));
+      const publicUrl = anonStorage.from(bucket).getPublicUrl(stagingPath).data.publicUrl;
+      expect([400,401,403,404]).toContain((await fetch(publicUrl)).status);
       const second=await call(a,"POST",root+"/bank-statements",{...data,reference:"H1226-BULK-OVERLAP-"+randomUUID()});
       expect(second.response.status(),JSON.stringify(second.body)).toBe(202);
       const other=second.body.job.id;
+      const otherStaged=await prisma.enterpriseDomainEvent.findUniqueOrThrow({where:{id:other}});
       const url=base+"/api/internal/enterprise-bulk/process?batch=1";
       expect((await a.request.post(url)).status()).toBe(401);
       for(let i=0;i<8;i++){
@@ -419,6 +437,10 @@ test.describe.serial("Hotfix #1226 financial integrity (isolated browser and Pos
       const saved=await prisma.enterpriseBankStatement.findMany({where:{organizationId,financialAccountId:bank.id},include:{lines:true}});
       expect(saved).toHaveLength(1);expect(saved[0].status).toBe("IMPORTED");expect(saved[0].lines).toHaveLength(251);
       expect(saved[0].closingBalance.toFixed()).toBe("251");
+      const importedPath = completed === statuses[0] ? stagingPath : otherStaged.payloadJson.stagingPath;
+      const removed = await serverStorage.from(bucket).download(importedPath);
+      expect(removed.data).toBeNull();
+      expect([400,404]).toContain(Number(removed.error?.status ?? removed.error?.statusCode));
       const subsequent=await call(a,"POST",root+"/bank-statements",{...data,reference:"H1226-BULK-LATE-"+randomUUID()});
       expect(subsequent.response.status(),JSON.stringify(subsequent.body)).toBe(409);
       expect(subsequent.body.error).toBe("BANK_STATEMENT_PERIOD_OVERLAP");

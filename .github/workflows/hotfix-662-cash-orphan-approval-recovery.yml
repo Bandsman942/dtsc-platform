@@ -25,6 +25,7 @@ on:
       - "tests/e2e/issue-662-cash-orphan-approval-recovery.spec.mjs"
       - "tests/e2e/issue-1226-financial-integrity.spec.mjs"
       - "scripts/ci-private-storage-contract.mjs"
+      - "scripts/ci-supabase-storage-1226.sh"
       - "lib/enterprise/bulk-jobs/**"
       - "docs/OWNER_E2E_662_CASH_ORPHAN_APPROVAL_RECOVERY.md"
       - "docs/ISSUE_307_MOBILE_MONEY_MULTICURRENCY_ACCOUNTS.md"
@@ -89,8 +90,6 @@ jobs:
       UPSTASH_REDIS_REST_URL: http://127.0.0.1:8079
       UPSTASH_REDIS_REST_TOKEN: dtsc-hotfix-662-ci-${{ github.run_id }}-${{ github.run_attempt }}
       CI_REDIS_REST_TOKEN: dtsc-hotfix-662-ci-${{ github.run_id }}-${{ github.run_attempt }}
-      SUPABASE_STORAGE_URL: http://127.0.0.1:8089
-      SUPABASE_STORAGE_SERVICE_ROLE_KEY: ci-storage-only-${{ github.run_id }}-${{ github.run_attempt }}
       SUPABASE_STORAGE_BUCKET: dtsc-ci-private
       ENTERPRISE_BULK_WORKER_SECRET: ci-bulk-only-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
@@ -119,16 +118,6 @@ jobs:
           done
           cat /tmp/dtsc-hotfix-662-redis-rest.log
           exit 1
-      - name: Start loopback private storage contract
-        run: |
-          nohup node scripts/ci-private-storage-contract.mjs >/tmp/dtsc-ci-private-storage.log 2>&1 &
-          echo $! >/tmp/dtsc-ci-private-storage.pid
-          for attempt in $(seq 1 30); do
-            if curl --fail --silent --show-error -H "Authorization: Bearer ${SUPABASE_STORAGE_SERVICE_ROLE_KEY}" http://127.0.0.1:8089/healthz >/dev/null; then exit 0; fi
-            sleep 1
-          done
-          cat /tmp/dtsc-ci-private-storage.log
-          exit 1
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       - name: Generate Prisma client
@@ -149,6 +138,12 @@ jobs:
           NODE_OPTIONS: --max-old-space-size=6144
       - name: Lint
         run: pnpm lint
+      - name: Install Supabase CLI for isolated private storage
+        uses: supabase/setup-cli@689adcfb80d947100a1eab127289b97d1fb07b13 # v3.2.0
+        with:
+          version: 2.79.0
+      - name: Start disposable Supabase Storage
+        run: bash scripts/ci-supabase-storage-1226.sh start
       - name: Build production application
         shell: bash
         run: |
@@ -190,7 +185,9 @@ jobs:
         run: |
           if [ -f /tmp/dtsc-hotfix-662-next.pid ]; then kill "$(cat /tmp/dtsc-hotfix-662-next.pid)" || true; fi
           if [ -f /tmp/dtsc-hotfix-662-redis-rest.pid ]; then kill "$(cat /tmp/dtsc-hotfix-662-redis-rest.pid)" || true; fi
-          if [ -f /tmp/dtsc-ci-private-storage.pid ]; then kill "$(cat /tmp/dtsc-ci-private-storage.pid)" || true; fi
+      - name: Stop disposable Supabase Storage
+        if: always()
+        run: bash scripts/ci-supabase-storage-1226.sh stop
       - name: Upload hotfix #662 diagnostics
         if: failure()
         uses: actions/upload-artifact@v7
@@ -205,7 +202,6 @@ jobs:
             /tmp/dtsc-hotfix-662-browser.log
             /tmp/dtsc-hotfix-1226-browser.log
             /tmp/dtsc-hotfix-662-redis-rest.log
-            /tmp/dtsc-ci-private-storage.log
       - name: Upload financial Design 2.0 rendered evidence
         if: always()
         uses: actions/upload-artifact@v7
