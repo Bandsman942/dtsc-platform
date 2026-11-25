@@ -98,7 +98,7 @@ type AdminStore = { id: string; name: string; code: string };
 type StockReport = {
   date: string; site: { id: string; name: string; code: string }; timezone: string;
   generatedAt: string; currentReservations: boolean; page: number; pageCount: number; total: number;
-  rows: Array<{ code: string; name: string; opening: string; entries: string; sold: string;
+  rows: Array<{ code: string; name: string; unit: string; decimalScale: number; precisionMismatch: boolean; opening: string; entries: string; sold: string;
     otherOut: string; closing: string; reserved: string | null; available: string | null;
     lots: Array<{ number: string; expiry: string | null }> }>;
 };
@@ -680,7 +680,8 @@ export function RetailDailyCloseWorkspace({
                         locale === "fr" ? "Disponible" : "Available"].map((label) => <th key={label} className="p-2">{label}</th>)}
                     </tr></thead>
                     <tbody>{stockReport.rows.map((row) => <tr key={row.code} className="border-t border-dtsc-border text-dtsc-ink">
-                      <td className="p-2 font-bold">{row.name}<span className="block text-dtsc-muted">{row.code}</span>
+                      <td className="p-2 font-bold">{row.name}<span className="block text-dtsc-muted">{row.code} · {row.unit}</span>
+                        {row.precisionMismatch ? <span className="block text-amber-700 dark:text-amber-300">{locale === "fr" ? "Précision historique à vérifier" : "Historical precision needs review"}</span> : null}
                         {row.lots.length ? <span className="block text-dtsc-muted">{row.lots.map((lot) => lot.number + (lot.expiry ? " · " + lot.expiry : "")).join(", ")}</span> : null}</td>
                       {[row.opening, row.entries, row.sold, row.otherOut, row.closing, row.reserved ?? "—", row.available ?? "—"].map((number, index) =>
                         <td key={index} className="p-2 tabular-nums">{number}</td>)}

@@ -142,8 +142,8 @@ export async function GET(req: Request, { params }: Params) {
       timezone, generatedAt: new Date().toISOString(), currentReservations: currentDay && settings.stockReportIncludeReserved,
       page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)), rows };
     if (format === "json") return NextResponse.json(meta, { headers: jsonHeaders });
-    const columns = ["SKU", "Article", "Stock initial", "Entrées", "Vendues", "Autres sorties", "Stock final", "Réservé", "Disponible", "Lots / péremptions"];
-    const cells = (r: Row) => [r.code, r.name, r.opening, r.entries, r.sold, r.otherOut, r.closing,
+    const columns = ["SKU", "Article / unité", "Stock initial", "Entrées", "Vendues", "Autres sorties", "Stock final", "Réservé", "Disponible", "Lots / péremptions"];
+    const cells = (r: Row) => [r.code, `${r.name} (${r.unit})${r.precisionMismatch ? " — précision historique à vérifier" : ""}`, r.opening, r.entries, r.sold, r.otherOut, r.closing,
       r.reserved ?? "—", r.available ?? "—", r.lots.map((l) => l.number + (l.expiry ? " (" + l.expiry + ")" : "")).join("; ")];
     const stem = "rapport-stocks-" + site.code.replace(/[^a-zA-Z0-9_-]/g, "-") + "-" + date;
     if (format === "csv") {
@@ -163,7 +163,20 @@ export async function GET(req: Request, { params }: Params) {
       sheet.addRow([]);
       const header = sheet.addRow(columns); header.font = { bold: true, color: { argb: "FFFFFFFF" } };
       header.eachCell((cell) => { cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1769A1" } }; });
-      for (const row of rows) sheet.addRow(cells(row));
+      for (const row of rows) {
+        const excelRow = sheet.addRow(cells(row));
+        for (let index = 3; index <= 9; index++) {
+          const cell = excelRow.getCell(index);
+          const raw = String(cell.value ?? "");
+          if (!/^-?\d+(?:\.\d+)?$/.test(raw)) continue;
+          // Excel has a 15-significant-digit limit. Preserve exact text beyond it.
+          const significantDigits = raw.replace(/[-.]/g, "").replace(/^0+/, "").length;
+          if (significantDigits > 15) continue;
+          cell.value = Number(raw);
+          const scale = raw.split(".")[1]?.length || 0;
+          cell.numFmt = scale ? "0." + "0".repeat(scale) : "0";
+        }
+      }
       sheet.columns = columns.map((_, i) => ({ width: i === 1 ? 40 : i === 9 ? 34 : 18 }));
       sheet.autoFilter = { from: "A5", to: "J" + Math.max(5, rows.length + 5) };
       sheet.pageSetup.orientation = "landscape";

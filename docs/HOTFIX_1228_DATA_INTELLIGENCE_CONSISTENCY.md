@@ -66,3 +66,9 @@ Inspection statique de main (aucun test exécuté) :
 - Workspace inventory-operations (107,405,437 baseline) : format numérique commun sans decimalScale malgré unité chargée dans API inventory. Vérifier aussi export de liste et détails des mouvements.
 - Correction initiale : helper exact de présentation des Decimal, lecture unité existante dans les deux API, métadonnées de précision et valeurs non arrondies lorsque incompatibles. Adapter les consommateurs et afficher les alertes dans les interfaces et exports reste obligatoire. QA #1221 étendue sans neutraliser les assertions précédentes (attendus modifiés selon nouvelle configuration). Aucune migration ni mutation.
 - Restant : UI Stock et Valorisation et rapport, formats XLSX, agrégats complets, libellés posting, audit SYSCOHADA, tous autres lots et certifications. Aucun E2E final à ce stade. Ne pas fusionner cette tranche isolée.
+
+### Tranche suivante — 25 novembre 2026
+- Valorisation : agrégat filtré par devise avant pagination, même WHERE, transaction RepeatableRead pour lignes/comptage/agrégat ; KPI par devise. Aucune somme de quantités hétérogènes.
+- Stock : affichage catalogue sur liste et détail de solde, signalement de précision incompatible ; autres opérations à raccorder.
+- Clôture : unité et alerte visibles ; export XLSX numérique si compatible avec la limite Excel de 15 chiffres, sinon conservation exacte en texte. CSV/print désignation et unité.
+- Gouvernance PR : premier run Quality gates #45651800939 échoué sur liaison issue et labels ; métadonnées corrigées. Les tests métier de ce run étaient skipped. Aucun E2E final.
