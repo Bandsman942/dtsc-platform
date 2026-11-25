@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { EnterpriseDomainError } from "@/lib/enterprise/common/errors";
 
 const BUSINESS_ERROR_MESSAGES: Record<string, { fr: string; en: string }> = {
+  INVENTORY_PHYSICAL_QUANTITY_PRECISION: { fr: "La quantité doit être positive et représentable sans arrondi dans le registre physique (trois décimales maximum actuellement).", en: "The quantity must be positive and exactly representable in the physical ledger (currently at most three decimal places)." },
   INVENTORY_RETURN_CUSTODY_NOT_FOUND:{fr:"Retour isolé introuvable.",en:"Isolated return not found."},
   INVENTORY_RETURN_CUSTODY_STATUS_INVALID:{fr:"Cette opération ne correspond plus au statut du retour isolé.",en:"This action no longer matches the isolated return status."},
   INVENTORY_RETURN_CUSTODY_APPROVER_REQUIRED:{fr:"La preuve de destruction exige un administrateur distinct de l’inspecteur, du demandeur et du liquidateur.",en:"Disposal evidence requires an administrator independent of the inspector, requester and settler."},

@@ -98,11 +98,12 @@ vm.runInNewContext(serviceJavaScript, {
 });
 const balance = { id: "balance-1", revision: 1, quantityOnHand: new Decimal(5), quantityReserved: new Decimal(0) };
 let promises = [];
+let persistedMovement;
 const movementTx = {
   enterpriseInventoryReservation: { findMany: async () => promises },
   enterpriseStockMovement: {
     findFirst: async () => null,
-    create: async () => { moved++; return { id: "movement-1" }; },
+    create: async ({ data }) => { persistedMovement = data; moved++; return { id: "movement-1" }; },
   },
   enterpriseInventoryItem: { findFirst: async () => ({ catalogItemId: "catalog-1", allowNegativeStock: false, catalogItem: { id:"catalog-1", trackInventory: true } }) },
   pharmacyProductExtension: {count:async ({where})=>{assert.equal(where.organizationId,"tenant-a");assert.equal(where.catalogItemId,"catalog-1");return pharmacyMapping;}},
@@ -134,6 +135,13 @@ assert.equal(moved, 3, "Cancelled invoice must no longer reduce stock availabili
 promises = [{ quantity: new Decimal(3), fulfilledQuantity: new Decimal(0), lotAllocations: [{ balanceId: "balance-1", stockLotId: "lot-1", storageLocationId: null, quantity: "3", fulfilledQuantity: "0" }] }];
 await assert.rejects(inventoryModule.exports.applyStockMovementTx(movementTx, "tenant-a", "actor", outbound), { code: "INVENTORY_RESERVATION_STOCK_HELD" });
 await assert.doesNotReject(inventoryModule.exports.applyStockMovementTx(movementTx, "tenant-a", "actor", { ...outbound, quantity: 2 }));
+
+// #1228: exact decimal movements, no silent physical-ledger rounding.
+promises = [];
+await assert.rejects(inventoryModule.exports.applyStockMovementTx(movementTx, "tenant-a", "actor", { ...outbound, quantity: 0.0001 }), { code: "INVENTORY_PHYSICAL_QUANTITY_PRECISION" });
+await inventoryModule.exports.applyStockMovementTx(movementTx, "tenant-a", "actor", { ...outbound, quantity: 0.123 });
+assert.equal(persistedMovement.quantity.toFixed(), "0.123");
+assert.equal(persistedMovement.balanceAfter.toFixed(), "4.877");
 
 // All reservation sources must share the same canonical invoice lines.
 assert.match(checkout, /readActiveRetailInvoiceStockHoldsTx\(tx, \{ organizationId, warehouseId: input\.warehouseId/);

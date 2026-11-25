@@ -169,13 +169,16 @@ export async function applyStockMovementTx(
     if (lotExpiryDateKey(stockLot.expiryDate) < today) throw new EnterpriseDomainError("STOCK_LOT_EXPIRED", 409);
   }
   const balance = await tx.enterpriseInventoryBalance.findFirst({ where: { organizationId, inventoryItemId: input.inventoryItemId, warehouseId: input.warehouseId, storageLocationId: input.storageLocationId || null, stockLotId: input.stockLotId || null } });
-  const currentQuantity = Number(balance?.quantityOnHand || 0);
-  const delta = input.direction === "IN" ? input.quantity : -input.quantity;
-  const nextQuantity = currentQuantity + delta;
-  // The restricted supplier return uses the exact stored decimal, not a floating-point subtraction.
-  const nextBalance = supplierReturn ? new Prisma.Decimal(balance?.quantityOnHand || 0).minus(input.quantity) : recovery ? new Prisma.Decimal(balance?.quantityOnHand || 0).plus(input.quantity) : nextQuantity;
-  if (supplierReturn && (!balance || new Prisma.Decimal(nextBalance).lt(0))) throw new EnterpriseDomainError("NEGATIVE_STOCK_FORBIDDEN",409);
-  if (nextQuantity < -0.000001 && !inventoryItem.allowNegativeStock) throw new EnterpriseDomainError("NEGATIVE_STOCK_FORBIDDEN", 409);
+  const movementQuantity = new Prisma.Decimal(input.quantity);
+  // Until the coordinated physical-ledger migration is delivered, do not
+  // let PostgreSQL round quantities beyond its actual 3-place storage scale.
+  if (!movementQuantity.isFinite() || movementQuantity.lte(0) || movementQuantity.decimalPlaces() > 3) {
+    throw new EnterpriseDomainError("INVENTORY_PHYSICAL_QUANTITY_PRECISION", 400);
+  }
+  const currentQuantity = new Prisma.Decimal(balance?.quantityOnHand || 0);
+  const nextBalance = input.direction === "IN" ? currentQuantity.plus(movementQuantity) : currentQuantity.minus(movementQuantity);
+  if (supplierReturn && (!balance || nextBalance.lt(0))) throw new EnterpriseDomainError("NEGATIVE_STOCK_FORBIDDEN",409);
+  if (nextBalance.lt(0) && !inventoryItem.allowNegativeStock) throw new EnterpriseDomainError("NEGATIVE_STOCK_FORBIDDEN", 409);
   if (input.direction === "OUT") {
     // An invoice is not a stock movement until fully paid, but it promises
     // this stock to its customer. Every outbound channel (manual adjustment,
@@ -208,14 +211,14 @@ export async function applyStockMovementTx(
       }
     }
   }
-  const movement = await tx.enterpriseStockMovement.create({ data: { organizationId, inventoryItemId: input.inventoryItemId, warehouseId: input.warehouseId, storageLocationId: input.storageLocationId || null, stockLotId: input.stockLotId || null, movementType: input.movementType, direction: input.direction, quantity: input.quantity, balanceAfter: nextBalance, sourceEntityType: input.sourceEntityType || null, sourceEntityId: input.sourceEntityId || null, sourceLineId: input.sourceLineId || null, idempotencyKey: input.idempotencyKey, reason: input.reason || null, createdByUserId: actorUserId } });
+  const movement = await tx.enterpriseStockMovement.create({ data: { organizationId, inventoryItemId: input.inventoryItemId, warehouseId: input.warehouseId, storageLocationId: input.storageLocationId || null, stockLotId: input.stockLotId || null, movementType: input.movementType, direction: input.direction, quantity: movementQuantity, balanceAfter: nextBalance, sourceEntityType: input.sourceEntityType || null, sourceEntityId: input.sourceEntityId || null, sourceLineId: input.sourceLineId || null, idempotencyKey: input.idempotencyKey, reason: input.reason || null, createdByUserId: actorUserId } });
   if (balance) {
     const updated = await tx.enterpriseInventoryBalance.updateMany({ where: { id: balance.id, organizationId, revision: balance.revision }, data: { quantityOnHand: nextBalance, revision: { increment: 1 } } });
     if (updated.count !== 1) throw new EnterpriseDomainConflictError("INVENTORY_BALANCE_CONFLICT");
   } else {
     await tx.enterpriseInventoryBalance.create({ data: { organizationId, inventoryItemId: input.inventoryItemId, warehouseId: input.warehouseId, storageLocationId: input.storageLocationId || null, stockLotId: input.stockLotId || null, quantityOnHand: nextBalance } });
   }
-  await publishEnterpriseEvent(tx, { organizationId, entityType: "EnterpriseInventoryItem", entityId: input.inventoryItemId, eventType: `STOCK_${input.movementType}`, summary: `Mouvement ${input.movementType} de ${input.quantity}`, actorUserId, metadataJson: { movementId: movement.id, warehouseId: input.warehouseId, balanceAfter: nextQuantity } });
+  await publishEnterpriseEvent(tx, { organizationId, entityType: "EnterpriseInventoryItem", entityId: input.inventoryItemId, eventType: `STOCK_${input.movementType}`, summary: `Mouvement ${input.movementType} de ${input.quantity}`, actorUserId, metadataJson: { movementId: movement.id, warehouseId: input.warehouseId, balanceAfter: Number(nextBalance), balanceAfterExact: nextBalance.toFixed() } });
   return { movement, idempotent: false };
 }
 
