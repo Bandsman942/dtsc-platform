@@ -141,3 +141,11 @@ assert.deepEqual(bankStatementOverlapWhere("tenant",{financialAccountId:"bank",p
 assert.deepEqual(bankStatementOverlapWhere("tenant",{financialAccountId:"bank",periodStart:dt,periodEnd:dt},"resume").id,{not:"resume"});
 for(const source of [treasury,read("lib/enterprise/bulk-jobs/queue.ts"),read("lib/enterprise/bulk-jobs/worker.ts")])assert.match(source,/bankStatementOverlapWhere\(/);
 console.log("#1226 cross-statement period overlap guard: PASS");
+
+const accountListRoute=read("app/api/enterprise/[organizationId]/financial-accounts/route.ts");
+const treasuryLookupRoute=read("app/api/enterprise/[organizationId]/treasury-lookups/route.ts");
+for (const source of [accountListRoute,treasuryLookupRoute]) {
+  assert.doesNotMatch(source,/maskedReference:\s*\{\s*contains:/);
+  assert.match(source,/maskedReference:\s*maskFinancialReference\(/);
+}
+console.log("#1226 private account reference list and lookup guards: PASS");
