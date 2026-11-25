@@ -39,7 +39,8 @@ for (const phrase of [
 must(label, /formatAccountingNarrative\(/, "Central narrative translation");
 must(label, /Human-authored comments[\s\S]*preserved/, "Do not mutate custom labels");
 must(accountingUi, /render: \(row\) => formatAccountingNarrative\(row\.description, locale\)/, "Journal entries display translated");
-must(accountingUi, /formatAccountingNarrative\(row\.description \|\| row\.journalEntry\?\.description, locale\)/, "Ledger and journal detail translated");
+must(accountingUi, /formatAccountingNarrative\(row\.displayDescription \|\| row\.description \|\| row\.journalEntry\?\.description, locale\)/, "Ledger and journal detail translate enriched or original narratives");
+must(accountingUi, /columns=\{ledgerColumns\.filter\(/, "Journal detail reuses translated ledger columns");
 must(accountingUi, /get: \(row\) => formatAccountingNarrative\(/, "Export descriptions translated");
 for (const value of [
   "Retail POS sale", "Retail POS reversal", "Retail POS return", "Retail cashback expense",
@@ -55,6 +56,9 @@ must(worker, /bridgeHealthy\(\)/, "A dead Fetch stdio process revokes bridge rea
 // source-level regex presence; historical manually authored labels are intact.
 const { formatAccountingNarrative } = await import("data:text/javascript," + encodeURIComponent(stripTypeScriptTypes(label)));
 for (const [source, fr, en] of [
+  ["ISSUE catalog Chargeur USB · CHG-25", "Sortie de stock — Chargeur USB · CHG-25", "Inventory issue — Chargeur USB · CHG-25"],
+  ["ISSUE current catalog Chargeur USB · CHG-25", "Sortie de stock — Chargeur USB · CHG-25 (désignation actuelle)", "Inventory issue — Chargeur USB · CHG-25 (current designation)"],
+  ["ISSUE catalog unavailable", "Sortie de stock — article introuvable", "Inventory issue — item unavailable"],
   ["ISSUE cmw83foo", "Sortie de stock — article cmw83foo", "Inventory issue — item cmw83foo"],
   ["RECEIPT cmw83foo", "Entrée de stock — article cmw83foo", "Inventory receipt — item cmw83foo"],
   ["Settle receivable PAY-MW9A1KC3-6E441F", "Affectation d’un encaissement à une créance client — paiement PAY-MW9A1KC3-6E441F", "Customer receivable settlement — payment PAY-MW9A1KC3-6E441F"],
