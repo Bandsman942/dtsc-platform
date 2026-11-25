@@ -38,6 +38,11 @@ const csv = await downloads[0].text();
 assert.match(csv, /DTSC-125/);
 assert.match(csv, /'\=HYPERLINK\(unsafe\)/, "CSV formula injection must be neutralized");
 assert.equal(csv.split(/\r?\n/).length, 126);
+// Explicit analytical exports include all subtotals; normal flat templates do not.
+const analytics = { ...model, includeCompleteSummary: true, kpis: Array.from({ length: 28 }, (_, i) => ({ label: `Sous-total ${i+1} CDF`, value: `${1000+i} CDF` })) };
+exports.downloadProfessionalCsv(analytics);
+exports.downloadProfessionalPdf(analytics);
+assert.match(await downloads[3].text(), /Sous-total 28 CDF/);
 
 const bytes = Buffer.from(await downloads[1].arrayBuffer());
 const workbook = new ExcelJS.Workbook();
@@ -59,6 +64,11 @@ try {
   assert.match(text, /SHOP BCN/);
   assert.match(text, /DTSC-125/);
   assert.match(text, /COLONNE-HUIT-125/, "PDF must preserve columns past the first seven");
+  fs.writeFileSync(pdfPath, Buffer.from(await downloads[4].arrayBuffer()));
+  const analyticsText = execFileSync("pdftotext", [pdfPath, "-"], { encoding: "utf8" });
+  assert.match(analyticsText, /Sous-total 28 CDF/);
+  assert.match(analyticsText, /1027 CDF/);
+  assert.match(analyticsText, /DTSC-125/);
 } finally {
   fs.unlinkSync(pdfPath);
   fs.rmdirSync(scratch);

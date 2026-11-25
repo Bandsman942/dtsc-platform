@@ -36,6 +36,8 @@ export type ProfessionalReportExportModel = {
   insights: ProfessionalReportInsight[];
   filters?: Array<{ label: string; value: string }>;
   accentHex?: string;
+  /** Opt-in for analytical exports only. Import templates keep their flat schema. */
+  includeCompleteSummary?: boolean;
 };
 
 const textEncoder = new TextEncoder();
@@ -68,6 +70,11 @@ export function downloadProfessionalCsv(model: ProfessionalReportExportModel) {
     model.columns.map((column) => csvCell(column.label)).join(","),
     ...model.rows.map((row) => model.columns.map((column) => csvCell(row[column.key])).join(",")),
   ];
+  if (model.includeCompleteSummary) {
+    const width = Math.max(2, model.columns.length);
+    const line = (label: string, value: string) => [label, value, ...Array.from({ length: width - 2 }, () => "")].map(csvCell).join(",");
+    lines.push(line("", ""), line(model.organizationName || "", model.title), line(model.generatedLabel || "", ""), ...model.kpis.map(item => line(item.label, item.value)), ...(model.filters || []).map(item => line(item.label, item.value)));
+  }
   triggerDownload(new Blob(["\ufeff", lines.join("\r\n")], { type: "text/csv;charset=utf-8" }), `${safeFileName(model.filenameBase)}.csv`);
 }
 
@@ -254,7 +261,19 @@ function pdfDocument(model: ProfessionalReportExportModel) {
   };
   startPage();
   if (model.generatedLabel) { text(36, y, 8, cut(model.generatedLabel, 110)); y -= 20; }
-  if (model.kpis.length) {
+  if (model.includeCompleteSummary && model.kpis.length) {
+    text(36, y, 10, "Synthèse / Summary", true);
+    y -= 20;
+    for (const item of model.kpis) {
+      if (y < 100) startPage();
+      // Separate label and value to preserve currency, status and metric.
+      text(40, y, 8, cut(item.label, 108), true);
+      y -= 13;
+      text(40, y, 10, cut(item.value, 80));
+      y -= 20;
+    }
+    y -= 10;
+  } else if (model.kpis.length) {
     model.kpis.slice(0, 4).forEach((item, index) => {
       const x = 36 + index * 132;
       commands.push("0.94 0.97 0.99 rg", `${x} ${y - 47} 125 50 re f`);
@@ -266,7 +285,8 @@ function pdfDocument(model: ProfessionalReportExportModel) {
   if (model.filters?.length) {
     text(36, y, 9, "Périmètre et critères de sélection", true);
     y -= 17;
-    for (const filter of model.filters.slice(0, 6)) {
+    for (const filter of (model.includeCompleteSummary ? model.filters : model.filters.slice(0, 6))) {
+      if (y < 90) startPage();
       text(40, y, 8, cut(`${filter.label}: ${filter.value}`, 110));
       y -= 15;
     }

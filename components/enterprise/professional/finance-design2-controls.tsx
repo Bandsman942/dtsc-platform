@@ -111,32 +111,38 @@ export function FinanceExportControls({ endpoint, organizationName, title, local
     try {
       const params = new URLSearchParams({ ...filters, page: "1", pageSize: "100" });
       const first = await fetch(`${endpoint}${endpoint.includes("?") ? "&" : "?"}${params}`, { cache: "no-store" });
-      const body = await first.json().catch(() => null) as { items?: Record<string, unknown>[]; pagination?: { pageCount?: number; total?: number }; filteredTotals?: FinanceFilteredTotal[]; message?: string } | null;
+      const body = await first.json().catch(() => null) as { items?: Record<string, unknown>[]; pagination?: { pageCount?: number; total?: number }; filteredTotals?: FinanceFilteredTotal[]; physicalTotals?: Array<{ unitId: string; unit: string; value: string; precisionMismatch: boolean }>; message?: string } | null;
       if (!first.ok || !body || !Array.isArray(body.items)) throw new Error(body?.message || tr("L’export des données a échoué.", "Data export failed."));
       const total = body.pagination?.total ?? body.items.length;
       const pages = body.pagination?.pageCount ?? 1;
       // Some Finance APIs cap pageSize at 50; still retrieve every eligible row.
       if (total > 1000 || pages > 200) throw new Error(tr(`Le résultat contient ${total} lignes. Affinez les dates ou la recherche (limite de 1 000 lignes par export).`, `There are ${total} rows. Narrow the date or search filters (1,000 rows per export).`));
       const all = [...body.items];
+      const summarySignature = (value: { filteredTotals?: FinanceFilteredTotal[]; physicalTotals?: Array<{ unitId: string; unit: string; value: string; precisionMismatch: boolean }> }) => JSON.stringify([...(value.filteredTotals || []).map(row => JSON.stringify([row.metric, row.currencyCode, row.status || "", row.amount])), ...(value.physicalTotals || []).map(row => JSON.stringify([row.unitId,row.value,row.precisionMismatch]))].sort());
+      const firstSummary = summarySignature(body);
       for (let start = 2; start <= pages; start += 3) {
         const batch = await Promise.all(Array.from({ length: Math.min(3, pages - start + 1) }, (_, index) => {
           const query = new URLSearchParams(params);
           query.set("page", String(start + index));
           return fetch(`${endpoint}${endpoint.includes("?") ? "&" : "?"}${query}`, { cache: "no-store" }).then(async (response) => {
-            const result = await response.json().catch(() => null) as { items?: Record<string, unknown>[]; message?: string } | null;
+            const result = await response.json().catch(() => null) as { items?: Record<string, unknown>[]; pagination?: { total?: number }; filteredTotals?: FinanceFilteredTotal[]; physicalTotals?: Array<{ unitId: string; unit: string; value: string; precisionMismatch: boolean }>; message?: string } | null;
             if (!response.ok || !Array.isArray(result?.items)) throw new Error(result?.message || tr("L’extraction a été interrompue.", "The export was interrupted."));
+            if ((result.pagination?.total ?? total) !== total || summarySignature(result) !== firstSummary) throw new Error(tr("Les données ont changé pendant l’export. Réessayez.", "Data changed during export. Retry."));
             return result.items;
           });
         }));
         all.push(...batch.flat());
       }
+      const ids = all.map(row => row.id).filter((id): id is string => typeof id === "string" && Boolean(id));
+      if (all.length !== total || new Set(ids).size !== ids.length) throw new Error(tr("Les données ont changé pendant l’export. Réessayez.", "Data changed during export. Retry."));
       // Date/status filters are validated and enforced by each module API, not a browser-only projection.
       const now = new Intl.DateTimeFormat(en ? "en-GB" : "fr-FR", { dateStyle: "long", timeStyle: "short" }).format(new Date());
       const model: ProfessionalReportExportModel = {
         organizationName, title, subtitle: tr(subtitleFr || "DTSC Platform · Comptabilité & conformité", subtitleEn || "DTSC Platform · Accounting & compliance"),
         filenameBase: `DTSC-${title.replace(/\s+/g, "-")}-${localToday()}`,
         generatedLabel: `${tr("Édité le", "Generated on")} ${now}`,
-        kpis: [{ label: tr("Enregistrements", "Records"), value: String(all.length), numericValue: all.length }, ...(Array.isArray(body.filteredTotals) ? body.filteredTotals.filter(row => row.metric in filteredMetricLabels).map(row => ({ label: `${tr("Sous-total filtré", "Filtered subtotal")} · ${filteredMetricLabel(row, locale)}`, value: financeMoney(row.amount,row.currencyCode,locale) })) : [])],
+        kpis: [{ label: tr("Enregistrements", "Records"), value: String(all.length), numericValue: all.length }, ...(Array.isArray(body.filteredTotals) ? body.filteredTotals.filter(row => row.metric in filteredMetricLabels).map(row => ({ label: `${tr("Sous-total filtré", "Filtered subtotal")} · ${filteredMetricLabel(row, locale)}`, value: financeMoney(row.amount,row.currencyCode,locale) })) : []), ...(body.physicalTotals || []).map(row => ({ label: `${tr("Sous-total physique filtré", "Filtered on-hand subtotal")} · ${row.unit}`, value: `${row.value} ${row.unit}${row.precisionMismatch ? tr(" · Précision à vérifier", " · Precision needs review") : ""}` }))],
+        includeCompleteSummary: Boolean(body.filteredTotals?.length || body.physicalTotals?.length),
         chart: [], insights: [],
         filters: reportFilters ?? Object.entries(filters || {}).filter(([, value]) => value).map(([key, value]) => ({ label: key, value })),
         columns: columns.map((column) => ({ key: column.key, label: en ? column.labelEn : column.labelFr })),
