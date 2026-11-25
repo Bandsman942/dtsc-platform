@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import { formatInventoryQuantity } from "@/lib/enterprise/inventory/quantity-display";
 import ExcelJS from "exceljs";
 import { NextResponse } from "next/server";
 import { writeApiLog } from "@/lib/audit";
@@ -12,7 +13,7 @@ import { prisma } from "@/lib/prisma";
 
 type Params = { params: Promise<{ organizationId: string }> };
 type Row = {
-  code: string; name: string; opening: string; entries: string; sold: string;
+  code: string; name: string; unit: string; decimalScale: number; precisionMismatch: boolean; opening: string; entries: string; sold: string;
   otherOut: string; closing: string; reserved: string | null; available: string | null;
   lots: { number: string; expiry: string | null }[];
 };
@@ -89,7 +90,7 @@ export async function GET(req: Request, { params }: Params) {
       return NextResponse.json({ error: "STOCK_REPORT_TOO_LARGE", message: "Le rapport dépasse 5 000 articles. Réduisez la sélection ou contactez le support pour un export volumineux." }, { status: 422 });
     }
     const items = await prisma.enterpriseInventoryItem.findMany({
-      where: baseWhere, include: { catalogItem: { select: { code: true, name: true } } },
+      where: baseWhere, include: { catalogItem: { select: { code: true, name: true, unitOfMeasure: { select: { name: true, symbol: true, decimalScale: true } } } } },
       orderBy: [{ catalogItem: { name: "asc" } }, { id: "asc" }],
       skip: exportMode ? 0 : (page - 1) * pageSize, take: exportMode ? Math.max(1, total) : pageSize,
     });
@@ -116,12 +117,20 @@ export async function GET(req: Request, { params }: Params) {
       const closing = opening.plus(entries).minus(sold).minus(otherOut);
       const reserved = currentDay && settings.stockReportIncludeReserved
         ? balances.filter((b) => b.inventoryItemId === item.id).reduce((sum, b) => sum.plus(b.quantityReserved), decimal(0)) : null;
+      const unit = item.catalogItem.unitOfMeasure;
+      const decimalScale = unit.decimalScale;
+      const display = (value: Prisma.Decimal) => formatInventoryQuantity(value, decimalScale);
+      const amounts = [opening, entries, sold, otherOut, closing].map(display);
+      const reservedDisplay = reserved === null ? null : display(reserved);
+      const availableDisplay = reserved === null ? null : display(closing.minus(reserved));
       return {
         code: item.catalogItem.code, name: item.catalogItem.name,
-        opening: opening.toFixed(3), entries: entries.toFixed(3), sold: sold.toFixed(3),
-        otherOut: otherOut.toFixed(3), closing: closing.toFixed(3),
-        reserved: reserved?.toFixed(3) || null,
-        available: reserved ? closing.minus(reserved).toFixed(3) : null,
+        unit: unit.symbol || unit.name, decimalScale,
+        precisionMismatch: amounts.some((value) => value.precisionMismatch) || Boolean(reservedDisplay?.precisionMismatch || availableDisplay?.precisionMismatch),
+        opening: amounts[0].value, entries: amounts[1].value, sold: amounts[2].value,
+        otherOut: amounts[3].value, closing: amounts[4].value,
+        reserved: reservedDisplay?.value ?? null,
+        available: availableDisplay?.value ?? null,
         lots: lots.filter((lot) => lot.inventoryItemId === item.id).map((lot) => ({
           number: lot.lotNumber, expiry: settings.stockReportIncludeExpiry ? lot.expiryDate ? new Intl.DateTimeFormat("sv-SE", { timeZone: "UTC", year: "numeric", month: "2-digit", day: "2-digit" }).format(lot.expiryDate) : null : null,
         })),

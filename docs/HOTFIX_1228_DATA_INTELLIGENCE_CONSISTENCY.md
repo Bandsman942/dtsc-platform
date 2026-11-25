@@ -57,3 +57,12 @@ Inventaire exhaustif des surfaces réelles à compléter pendant lot 1. Chaque s
 | R03 | Revue finale et recette propriétaire du SHA exact ; pas de déploiement de branche | NOT_EXECUTED |
 ## Livraison et rollback
 Réutiliser services et contrats existants, pas de dépendance ni migration sans nécessité. Migrations additives seulement ; pas de backfill POSTED. Toute intervention sur données historiques distincte, bornée, dry-run et autorisée selon AGENTS. Revert applicatif par PR, compatibilité schéma conservée. Pas de changement de secrets prévu. Tenir changelog, documentation technique/domaine, matrice preuves et runbook E2E. Issue et PR non clôturées tant que scope incomplet ; CI réelle + OWNER_E2E soumis à validation explicite avant merge main et unique production. Aucune preview ni vercel --prod manuel.
+
+## Journal d'implémentation — tranche initiale
+Inspection statique de main (aucun test exécuté) :
+- `prisma/enterprise-master-data.prisma` : EnterpriseUnitOfMeasure.decimalScale est le référentiel existant, validation 0–6 dans master-data/schemas.ts.
+- API inventory-valuation (ligne 172 baseline) : quantité toFixed(3) ; pas de select unité ni d'agrégats filtrés ; garde d'isolation Retail préservée.
+- API retail/daily-close/stock-report (121–124 baseline) : 7 quantités forcées à 3 ; catalogue sélectionne uniquement code/nom ; Excel réutilise les strings ; groupBy borné aux articles de page en JSON.
+- Workspace inventory-operations (107,405,437 baseline) : format numérique commun sans decimalScale malgré unité chargée dans API inventory. Vérifier aussi export de liste et détails des mouvements.
+- Correction initiale : helper exact de présentation des Decimal, lecture unité existante dans les deux API, métadonnées de précision et valeurs non arrondies lorsque incompatibles. Adapter les consommateurs et afficher les alertes dans les interfaces et exports reste obligatoire. QA #1221 étendue sans neutraliser les assertions précédentes (attendus modifiés selon nouvelle configuration). Aucune migration ni mutation.
+- Restant : UI Stock et Valorisation et rapport, formats XLSX, agrégats complets, libellés posting, audit SYSCOHADA, tous autres lots et certifications. Aucun E2E final à ce stade. Ne pas fusionner cette tranche isolée.
