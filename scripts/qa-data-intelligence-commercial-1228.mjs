@@ -117,7 +117,17 @@ console.log("#1228 purchase request ordering: aborted/stale/unmounted responses 
   const page=(id,general="8")=>({items:[{id}],pagination:{total:2,pageCount:2},filteredTotals:[total("3")],generalTotals:[total(general)],pageTotals:[total("999")]});
   function find(node,label){if(node?.props?.children===label)return node;const children=node?.props?.children;if(Array.isArray(children)&&children.includes(label))return node;for(const child of Array.isArray(children)?children:[children]){if(Array.isArray(child)){for(const value of child){if(value===label)return node;}}else if(child&&typeof child==="object"){const match=find(child,label);if(match)return match;}}return null;}
   async function click(label){const tree=exporter.FinanceExportControls({endpoint:"/quotes",organizationName:"Tenant",title:"Quotes",locale:"en",columns:[{key:"id",labelFr:"Référence",labelEn:"Reference",get:r=>r.id}]});const button=find(tree,label);assert(button,`Missing ${label} button`);button.props.onClick();await new Promise(resolve=>setTimeout(resolve,10));}
-  for(const label of ["CSV","Excel","PDF"]){pages=[page("a"),page("b")];await click(label);const result=exports.at(-1);assert(result,JSON.stringify(notices));assert.equal(result.model.rows.length,2);assert(result.model.kpis.some(x=>x.label.startsWith("Filtered subtotal")&&x.value==="3 USD"));assert(result.model.kpis.some(x=>x.label.startsWith("Authorized general total")&&x.value==="8 USD"));assert(!result.model.kpis.some(x=>x.value==="999 USD"));assert.equal(result.model.includeCompleteSummary,true);}
+  for(const label of ["CSV","Excel","PDF"]){
+    pages=[page("a","999999999999999.999999"),page("b","999999999999999.999999")];
+    await click(label);
+    const result=exports.at(-1);
+    assert(result,JSON.stringify(notices));
+    assert.equal(result.model.rows.length,2);
+    assert(result.model.kpis.some(x=>x.label.startsWith("Filtered subtotal")&&x.value.replace(/\s+/g," ")==="USD 3.00"));
+    assert(result.model.kpis.some(x=>x.label.startsWith("Authorized general total")&&x.value.replace(/\s+/g," ")==="USD 999,999,999,999,999.999999"));
+    assert(!result.model.kpis.some(x=>x.value.replace(/\s+/g," ")==="USD 999.00"));
+    assert.equal(result.model.includeCompleteSummary,true);
+  }
   const quantity=(metric,value)=>({unitId:"unit",unit:"kg",decimalScale:6,metric,value,precisionMismatch:false});
   const stockPage=id=>({...page(id),quantityTotals:[quantity("onHand","10"),quantity("reserved","4"),quantity("sellable","6")],generalQuantityTotals:[quantity("onHand","999999999999999.999999")],physicalTotals:[{unitId:"unit",unit:"kg",value:"10",precisionMismatch:false}]});
   pages=[stockPage("a"),stockPage("b")];await click("CSV");const stockModel=exports.at(-1).model;

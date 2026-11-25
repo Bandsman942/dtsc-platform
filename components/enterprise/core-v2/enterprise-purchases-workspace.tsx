@@ -30,7 +30,7 @@ import { EnterpriseApproverSelect } from "@/components/enterprise/enterprise-app
 import { PurchaseReceiptTrace } from "@/components/enterprise/core-v2/purchase-receipt-trace";
 import { FinanceAmountScopes, FinanceDateFilter, FinanceExportControls } from "@/components/enterprise/professional/finance-design2-controls";
 import type { ProcurementUiCapabilities } from "@/components/enterprise/professional/enterprise-procurement-operations-workspace";
-import { enterpriseCoreT, type EnterpriseCoreKey } from "@/lib/enterprise-core-i18n";
+import { enterpriseCoreIntlLocale, enterpriseCoreT, type EnterpriseCoreKey } from "@/lib/enterprise-core-i18n";
 import { inventoryQuantityMicrounits, inventoryQuantityStep, isInventoryQuantityInputValid, localizeInventoryQuantity } from "@/lib/enterprise/inventory/quantity-display";
 import { purchaseFormGuidance, type PurchaseFormGuidanceKey } from "@/lib/enterprise/purchase-form-i18n";
 
@@ -407,7 +407,7 @@ export function EnterprisePurchasesWorkspace({ organizationId, organizationName 
           if (!item) return null;
           const step = inventoryQuantityStep(decimalScale ?? undefined);
           const rule = receiptRule(receiveTarget, item.id);
-          const displayRemaining = localizeInventoryQuantity(remaining, displayLocale === "fr" ? "fr-FR" : "en-GB");
+          const displayRemaining = localizeInventoryQuantity(remaining, enterpriseCoreIntlLocale(locale));
           return <div key={item.id} className="grid min-w-0 gap-2 border-b border-dtsc-border pb-3">
             <Field label={t("purchases.receive.ordered", { description: item.description, quantity: displayRemaining, unit: item.unit })} help={step ? guide("receiptQuantity") : guide("receiptUnitUnverified")}>
               <Input name={`quantity_${item.id}`} type="number" min="0" max={remaining} step={step} disabled={!step} defaultValue="0" inputMode="decimal" />

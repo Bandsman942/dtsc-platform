@@ -40,3 +40,23 @@ export function commercialPageTotals(rows: Array<CommercialAmounts & { currency:
 export function commercialStatusCount(groups: CommercialAmountGroup[], statuses: readonly string[]): number {
   return groups.reduce((count, group) => count + (statuses.includes(group.status) ? group._count?._all || 0 : 0), 0);
 }
+
+type DirectionalAmount = { currencyCode: string; direction: string; status: string; amount: Prisma.Decimal | null };
+
+export function directionalAmountTotals(rows: DirectionalAmount[]): MonetaryTotal[] {
+  return rows.flatMap(({ currencyCode, direction, status, amount }) => {
+    if (amount === null || (direction !== "INBOUND" && direction !== "OUTBOUND")) return [];
+    return [{ currencyCode, metric: direction === "INBOUND" ? "inbound" : "outbound", status, amount: amount.toFixed() }];
+  });
+}
+
+export function directionalPageTotals(rows: DirectionalAmount[]): MonetaryTotal[] {
+  const grouped = new Map<string, DirectionalAmount>();
+  for (const row of rows) {
+    if (row.amount === null) continue;
+    const key = JSON.stringify([row.currencyCode, row.status, row.direction]);
+    const amount = new ExactAmount(grouped.get(key)?.amount ?? 0).plus(row.amount);
+    grouped.set(key, { ...row, amount });
+  }
+  return directionalAmountTotals([...grouped.values()]);
+}

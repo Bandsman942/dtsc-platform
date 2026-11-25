@@ -24,6 +24,43 @@ const {GET:inventoryGet}=workflowTestLoader({
         "@/lib/enterprise/retail/http":{},
       })("@/app/api/enterprise/[organizationId]/inventory/route");
 console.log(`#1228 test handler loading outside PostgreSQL transaction: ${(performance.now()-handlerLoadStarted).toFixed(0)}ms`);
+const treasuryFixture = { reader: null, organizationId: "", actor: "" };
+const { GET: getTreasuryHistory } = workflowTestLoader({
+  "@/lib/prisma": { prisma: { $transaction: async (callback, options) => {
+    assert.equal(options.isolationLevel, "RepeatableRead");
+    assert.ok(treasuryFixture.reader);
+    return callback(treasuryFixture.reader);
+  } } },
+  "@/lib/audit": { writeApiLog: async () => {} },
+  "@/lib/enterprise/accounting/http": {
+    authorizeFinanceRequest: async (_req, organizationId, feature, action) => {
+      assert.equal(feature, "FINANCE_TREASURY");
+      assert.equal(action, "view");
+      return organizationId === treasuryFixture.organizationId
+        ? { ok: true, session: { userId: treasuryFixture.actor } }
+        : { ok: false, response: new Response(null, { status: 403 }) };
+    },
+    financeListParams(req) {
+      const params = new URL(req.url).searchParams;
+      return { page: Number(params.get("page") || 1), pageSize: 25, search: params.get("search") };
+    },
+  },
+})("@/app/api/enterprise/[organizationId]/treasury-history/route");
+const { GET: getExpenses } = workflowTestLoader({
+  "@/lib/prisma": { prisma: { $transaction: async (callback, options) => {
+    assert.equal(options.isolationLevel, "RepeatableRead");
+    return callback(treasuryFixture.reader);
+  } } },
+  "@/lib/auth": { getSession: async () => ({ userId: treasuryFixture.actor }) },
+  "@/lib/audit": { writeApiLog: async () => {} },
+  "@/lib/enterprise/accounting/http": { financeBusinessDateRange: () => ({ ok: true, from: null, to: null }) },
+  "@/lib/enterprise/core-v2/access": {},
+  "@/lib/enterprise/module-access": { resolveEnterpriseModuleCapabilities: async () => ({ canRead: true, canManage: false, canApprove: false }) },
+  "@/lib/enterprise-sector-templates": { requireEnterpriseMembership: async (_session, org) => org === treasuryFixture.organizationId ? {} : null },
+  "@/lib/enterprise/finance/document-visibility": {},
+  "@/lib/enterprise/finance/expense-service": {},
+  "@/lib/rate-limit": {},
+})("@/app/api/enterprise/[organizationId]/expenses/route");
 
 class RollbackFixture extends Error {}
 try {
@@ -146,6 +183,69 @@ try {
         assert.equal((await tx[model].findMany({where,take:5,skip:1000})).length,0);
         assert.deepEqual(await tx[model].groupBy({by:["currency","status"],where,_sum:{totalAmount:true},_count:{_all:true}}),filtered);
       }
+      const makeFinancialAccount = async (organizationId, currencyCode) => {
+        const chart = await tx.enterpriseChartOfAccounts.create({ data: {
+          organizationId, code: "QA-TREASURY", nameFr: "Plan test", nameEn: "Test chart", createdByUserId: actor,
+        } });
+        const ledger = await tx.enterpriseLedgerAccount.create({ data: {
+          organizationId, chartId: chart.id, code: "QA-CASH", nameFr: "Caisse test", nameEn: "Test cash", accountType: "ASSET",
+        } });
+        return tx.enterpriseFinancialAccount.create({ data: {
+          organizationId, ledgerAccountId: ledger.id, code: "QA-ACCOUNT", name: "QA financial account", accountType: "CASH", currencyCode,
+        } });
+      };
+      const localAccount = await makeFinancialAccount(tenant, "CDF");
+      const otherAccount = await makeFinancialAccount(otherTenant, "USD");
+      const entry = {
+        organizationId: tenant, financialAccountId: localAccount.id, reference: "QA-1228",
+        transactionDate: new Date(), direction: "INBOUND", status: "CONFIRMED",
+        currencyCode: "CDF", transactionType: "FUNDING", amount: "99999999999999.999999", createdByUserId: actor,
+      };
+      await tx.enterpriseTreasuryTransaction.createMany({ data: [
+        ...Array.from({ length: 56 }, () => entry),
+        { ...entry, direction: "OUTBOUND", status: "REVERSED", amount: "0.000001" },
+        { ...entry, organizationId: otherTenant, financialAccountId: otherAccount.id, currencyCode: "USD" },
+      ] });
+      Object.assign(treasuryFixture, { reader: tx, organizationId: tenant, actor });
+      const treasuryPage = async (page) => {
+        const request = new Request(`http://localhost/api/enterprise/${tenant}/treasury-history?search=QA-1228&direction=INBOUND&currencyCode=CDF&page=${page}`);
+        const response = await getTreasuryHistory(request, { params: Promise.resolve({ organizationId: tenant }) });
+        assert.equal(response.status, 200);
+        return response.json();
+      };
+      const firstTreasuryPage = await treasuryPage(1);
+      const lastTreasuryPage = await treasuryPage(3);
+      assert.equal(firstTreasuryPage.pagination.total, 56);
+      assert.equal(firstTreasuryPage.items.length, 25);
+      assert.equal(lastTreasuryPage.items.length, 6);
+      assert.equal(firstTreasuryPage.filteredTotals[0].amount, "5599999999999999.999944");
+      assert.deepEqual(firstTreasuryPage.filteredTotals, lastTreasuryPage.filteredTotals);
+      assert.equal(lastTreasuryPage.pageTotals[0].amount, "599999999999999.999994");
+      assert.ok(firstTreasuryPage.generalTotals.some((row) => row.status === "REVERSED" && row.amount === "0.000001"));
+      assert.ok(firstTreasuryPage.generalTotals.every((row) => row.currencyCode === "CDF"));
+      console.log("PASS #1228 PostgreSQL treasury history: exact aggregates, 56 filtered records, stable pagination and tenant/currency boundaries");
+
+      const expense = { organizationId: tenant, title: "QA-1228", status: "APPROVED", expenseDate: new Date(), currency: "CDF", amount: "9999999999999999.99", requestedByUserId: actor, createdByUserId: actor };
+      await tx.enterpriseExpense.createMany({ data: [
+        ...Array.from({ length: 56 }, (_, index) => ({ ...expense, reference: `QA-1228-EXPENSE-${index}` })),
+        { ...expense, reference: "UNAUTHORIZED", requestedByUserId: "other-actor", createdByUserId: "other-actor" },
+        { ...expense, reference: "OTHER-TENANT", organizationId: otherTenant },
+        { ...expense, reference: "CANCELLED-USD", currency: "USD", status: "CANCELLED", amount: "7.55" },
+      ] });
+      const readExpensePage = async (page) => {
+        const request = new Request(`http://localhost/api/enterprise/${tenant}/expenses?status=APPROVED&currency=CDF&search=QA-1228&pageSize=25&page=${page}`);
+        const response = await getExpenses(request, { params: Promise.resolve({ organizationId: tenant }) });
+        assert.equal(response.status, 200);
+        return response.json();
+      };
+      const expensePage = await readExpensePage(3);
+      assert.equal(expensePage.pagination.total, 56);
+      assert.equal(expensePage.items.length, 6);
+      assert.deepEqual(expensePage.filteredTotals, [{ currencyCode: "CDF", status: "APPROVED", metric: "total", amount: money(56) }]);
+      assert.equal(expensePage.pageTotals[0].amount, money(6));
+      assert.equal(expensePage.generalTotals.length, 2);
+      assert.ok(expensePage.generalTotals.some((row) => row.status === "CANCELLED" && row.currencyCode === "USD" && row.amount === "7.55"));
+      console.log("PASS #1228 PostgreSQL expenses: exact aggregates, filtered/page scopes and requester/tenant boundaries");
       throw new RollbackFixture();
     }, { timeout: 30000, isolationLevel: "RepeatableRead" });
   } catch (error) {
@@ -153,6 +253,8 @@ try {
   }
   assert.equal(await db.enterpriseCatalogItem.count({ where: { organizationId: { in: [tenant, otherTenant] } } }), 0, "No fixture data may remain");
   for(const model of ["enterpriseQuote","enterpriseSalesOrder","enterprisePurchase"]) assert.equal(await db[model].count({where:{organizationId:{in:[tenant,otherTenant]}}}),0,"Commercial rollback must leave no rows");
+  assert.equal(await db.enterpriseTreasuryTransaction.count({ where: { organizationId: { in: [tenant, otherTenant] } } }), 0, "Treasury rollback must leave no rows");
+  assert.equal(await db.enterpriseExpense.count({ where: { organizationId: { in: [tenant, otherTenant] } } }), 0, "Expense rollback must leave no rows");
   console.log("PASS #1228 PostgreSQL: deployed quantity types, preserved integer capacity, exact micro-unit subtraction and transfer conservation constraint");
 } finally {
   await db.$disconnect();

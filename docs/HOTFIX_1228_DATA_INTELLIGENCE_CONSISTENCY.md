@@ -68,6 +68,27 @@ La création et l’édition d’achats, les réceptions et les allocations par 
 
 La QA ciblée exécute le moteur de réception avec les sept précisions, des lots à la micro-unité, une prestation, une unité historique absente ou modifiée et un replay après changement. Un cas navigateur est ajouté pour la création d’un achat, le refus d’une réception si l’unité du catalogue a changé, deux réceptions fractionnées, le reliquat exact et l’aperçu A4. Les conversions avec facteur historique restent ouvertes.
 
+Les deux scénarios navigateur ciblés, achat/réception et rail Stock, ont réussi sur le build local avec PostgreSQL et Redis isolés. Le second a produit 32 captures pour les huit largeurs, deux langues et deux thèmes.
+
+### Historique de trésorerie
+
+Les sous-totaux distinguent les flux entrants et sortants par devise et statut du mouvement. L’historique, le comptage, le calcul filtré toutes pages et le général autorisé partagent le même instantané PostgreSQL. Chaque côté d’un transfert reste attribué à son compte. La page affichée possède ses propres sous-totaux. Les filtres de statut et de devise utilisent les références et traductions existantes. Les exports reprennent les deux synthèses serveur, avec le sens et le libellé du mouvement. Les grands montants et fractions sont formatés à partir de leur chaîne décimale dans les synthèses.
+
+La fixture PostgreSQL exécute l’API Trésorerie avec 56 mouvements dans les résultats filtrés, un mouvement contrepassé et un mouvement d’une autre organisation. Elle vérifie le montant exact toutes pages, le sous-total de la dernière page, les devises, les statuts et la suppression des données de test par rollback. La suite locale #1228 vérifie en plus les références de transfert et la conservation d’un total de 21 chiffres dans les synthèses d’export.
+
+### Sources vérifiées pour les agrégations restantes
+
+| Surface | Source actuelle | Vérification encore nécessaire |
+|---|---|---|
+| Caisse | `cash-sessions` projette les sessions, les mouvements et les écarts de caisse | Agréger les flux et les écarts selon les mêmes filtres et droits. Définir ouverture et clôture à date avant de consolider les soldes |
+| Budgets | `budgets` utilise `getBudgetPosition` pour les versions de budget de la page, à partir des lignes et engagements | Séparer versions et scénarios avant toute somme, puis utiliser les mêmes prévisions, engagements et réalisations pour le registre et l’export |
+| Dépenses | `expenses` lit et agrège le registre dédié par devise et statut, sous le même filtre de visibilité. Le registre et les exports reprennent ces agrégats | Certifier les parcours navigateur FR/EN et les relations avec les positions budgétaires versionnées |
+| Mobile Money et Telco | `retail/mobile-money` et `retail/telco-topups` fournissent les opérations paginées avec les restrictions de boutique et les numéros masqués | Appliquer les mêmes restrictions aux montants, commissions et recharges. Les soldes de float doivent être rapportés à une date |
+| Paie | `payroll-runs` compte les paies approuvées et en attente dans le périmètre de l’acteur | Faire correspondre les compteurs aux filtres et valider les agrégats monétaires sous les permissions RH |
+| Projets | `projects` compte les projets actifs, retards et risques, avec les livrables acceptés agrégés par projet de la page | Différencier volumes organisationnels et filtrés. Vérifier les sources de budget, dépenses et temps avant de les réunir |
+| Actifs | `assets` fournit le registre opérationnel et `assets/[assetId]/accounting-profile` la fiche comptable | Raccorder acquisition, amortissement et valeur nette aux comptes autorisés, avec période et devise explicites |
+| Santé et Pharmacie | `healthcare/medical-billing` lit les factures sectorielles. `pharmacy/reports` utilise `getPharmacyReportsDataset` pour les rapports filtrés | Vérifier les correspondances avec les pièces financières communes et conserver les protections des données cliniques et personnelles |
+
 ## Journal d'implémentation — tranche initiale
 Inspection statique de main (aucun test exécuté) :
 - `prisma/enterprise-master-data.prisma` : EnterpriseUnitOfMeasure.decimalScale est le référentiel existant, validation 0–6 dans master-data/schemas.ts.
