@@ -41,6 +41,8 @@ const activeCustomer = read("components/enterprise/professional/retail-active-cu
 const paymentFollowup = read("components/enterprise/professional/retail-payment-followup.tsx");
 const dailyClose = read("components/enterprise/professional/retail-daily-close-workspace.tsx");
 const dailyCloseRoute = read("app/api/enterprise/[organizationId]/retail/daily-close/route.ts");
+const professionalUi = read("components/enterprise/professional/professional-erp-ui.tsx");
+const mobileStyles = read("app/mobile-stability.css");
 const retailWorkspaceFr = read("locales/retail-workspace.fr.json");
 const retailWorkspaceEn = read("locales/retail-workspace.en.json");
 const commercial = read("components/enterprise/professional/retail-commercial-workspace.tsx");
@@ -115,8 +117,13 @@ for (const marker of [
   'href="/enterprise-modules/FINANCE_TREASURY"',
   "idempotencyKey",
   "stableKey",
-  "[touch-action:pan-x]",
 ]) check(dailyClose.includes(marker), `Retail daily close workspace must include ${marker}.`);
+check(
+  dailyClose.includes("<ProfessionalTabs") &&
+  containsAll(professionalUi, ["data-professional-tabs", "overflow-x-auto", "shrink-0 snap-center"]) &&
+  /\[data-professional-tabs\],[^{]*\{[^}]*touch-action:\s*pan-x\b/.test(mobileStyles),
+  "Retail daily close statuses must use the shared touch-scrollable rail without shrinking its buttons.",
+);
 for (const [key, frLabel, enLabel] of [
   ["dailyCloseSubmitTheDailyClose", "Soumettre la clôture journalière", "Submit the daily close"],
   ["dailyCloseDailyCloseHistory", "Historique des clôtures", "Daily close history"],

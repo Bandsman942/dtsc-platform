@@ -497,6 +497,7 @@ test.describe.serial("Hotfix #1226 financial integrity (isolated browser and Pos
                 const status=page.getByRole("navigation",{name:locale==="fr"?"Filtrer par statut":"Filter by status",exact:true});
                 const all=status.getByRole("button",{pressed:true});
                 await expect(all).toBeVisible();
+                await expect(status).toHaveCSS("touch-action","pan-x");
                 expect(await status.evaluate(element=>element.scrollWidth>element.clientWidth)).toBe(true);
               }
               expect(await page.evaluate(()=>document.documentElement.scrollWidth-window.innerWidth)).toBeLessThanOrEqual(2);
