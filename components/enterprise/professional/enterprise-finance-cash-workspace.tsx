@@ -104,7 +104,7 @@ export function EnterpriseFinanceCashWorkspace({ organizationId, organizationNam
       if(!response.ok)throw new Error("CASH_VARIANCE_CANONICAL_PROOF_REQUIRED");
       const data=await response.json();
       if(!controller.signal.aborted){setCanonicalCandidates(data.items);setCanonicalHasMore(data.hasMore);}
-    }).catch(error=>{if(!controller.signal.aborted)setError(safeFinanceError(error,translateEnterpriseFinance(locale,"cashVarianceReviewFailed"),locale));})
+    }).catch(error=>{if(!controller.signal.aborted)setError(safeFinanceError(error, translateEnterpriseFinance(locale, "cashVarianceReviewFailed"), locale));})
       .finally(()=>{if(!controller.signal.aborted)setCanonicalLoading(false);});
     return ()=>controller.abort();
   },[varianceTarget,varianceDecision,canonicalPage,organizationId,locale]);

@@ -27,6 +27,8 @@
     "next": "Suivant"
   },
   "common": {
+    "close": "Fermer",
+    "closeForm": "Fermer le formulaire",
     "actions": "Actions",
     "archive": "Archiver",
     "cancel": "Annuler",

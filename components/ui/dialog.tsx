@@ -7,6 +7,8 @@ import { requestPersistentCallHandoff, PERSISTENT_CALL_RESTORE_EVENT } from "@/c
 import { Button } from "@/components/ui/button";
 import { containModalTab, isTopmostModal } from "@/lib/client-focus-management";
 import { cn } from "@/lib/utils";
+import { useAppLocale } from "@/components/i18n/locale-provider";
+import { translate } from "@/lib/i18n";
 
 type DialogProps = {
   open: boolean;
@@ -52,6 +54,7 @@ export function Dialog({
   className,
   presentation = "default",
 }: DialogProps) {
+  const locale = useAppLocale();
   const titleId = useId();
   const descriptionId = useId();
   const overlayRef = useRef<HTMLDivElement>(null);
@@ -295,8 +298,8 @@ export function Dialog({
                 size="icon"
                 onClick={onClose}
                 className="shrink-0 rounded-xl text-dtsc-muted hover:bg-dtsc-soft hover:text-dtsc-ink"
-                aria-label="Fermer"
-                title="Fermer le formulaire"
+                  aria-label={translate(locale, "common.close")}
+                  title={translate(locale, "common.closeForm")}
               >
                 <X className="h-4 w-4" />
               </Button>

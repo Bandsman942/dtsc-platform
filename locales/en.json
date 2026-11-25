@@ -27,6 +27,8 @@
     "next": "Next"
   },
   "common": {
+    "close": "Close",
+    "closeForm": "Close the form",
     "actions": "Actions",
     "archive": "Archive",
     "cancel": "Cancel",

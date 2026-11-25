@@ -14,11 +14,22 @@ if(new URL(base).hostname!=="127.0.0.1")throw new Error("Financial #1226 E2E req
 const root="/api/enterprise/"+organizationId;
 const path="/enterprise-modules/FINANCE_CASH";
 let owner,recipient,ledger,site,visualSessionId;
+const authenticatedContexts=new Map();
+let canonicalReviewers=[];
 async function signIn(browser,email,password){
+  // Reuse real authenticated sessions rather than exhausting or resetting the
+  // application's eight-sign-ins-per-address policy in this serial suite.
+  if(authenticatedContexts.has(email))return authenticatedContexts.get(email);
   const context=await browser.newContext({baseURL:base,viewport:{width:390,height:844}});
   const response=await context.request.post(base+"/api/auth/sign-in",{data:{email,password,organizationId,next:path},headers:{origin:base,referer:base+"/auth/sign-in"}});
   expect(response.ok(),await response.text()).toBeTruthy();
+  authenticatedContexts.set(email,context);
   return context;
+}
+async function releaseContext(context){
+  if(!context)return;
+  await Promise.all(context.pages().map(page=>page.close()));
+  await context.clearCookies({name:"dtsc_stepup"});
 }
 async function call(context,method,url,data){
   const response=await context.request.fetch(base+url,{method,headers:{origin:base,referer:base+path},...(data===undefined?{}:{data})});
@@ -52,7 +63,7 @@ test.describe.serial("Hotfix #1226 financial integrity (isolated browser and Pos
       await prisma.enterpriseModule.upsert({where:{organizationId_moduleCode:{organizationId,moduleCode}},update:{isEnabled:true},create:{organizationId,moduleCode,labelFr:moduleCode,labelEn:moduleCode,moduleCategory:"E2E_1226",isEnabled:true,isCore:false,requiresPlanLevel:"BUSINESS",sortOrder:12260+index}});
     }
   });
-  test.afterAll(async()=>{await prisma.$disconnect();});
+  test.afterAll(async()=>{await Promise.all([...authenticatedContexts.values()].map(context=>context.close()));await prisma.$disconnect();});
   test("two cashiers cannot reuse opening funds; handover is independent and cash close does not post unexplained income",async({browser})=>{
     const [a,b]=await contextPair(browser);
     try{
@@ -100,7 +111,7 @@ test.describe.serial("Hotfix #1226 financial integrity (isolated browser and Pos
       expect(discrepancy.status).toBe("PENDING_QUALIFICATION");
       expect(await prisma.enterpriseJournalEntry.count({where:{organizationId,sourceEntityType:"EnterpriseCashDiscrepancy",sourceEntityId:discrepancy.id}})).toBe(0);
       expect((await prisma.enterpriseFinancialAccount.findUniqueOrThrow({where:{id:cash.id}})).operationalBalance.toFixed()).toBe("100");
-    }finally{await a.close();await b.close();}
+    }finally{await releaseContext(a);await releaseContext(b);}
   });
   test("Excel round trip, partial/grouped reservations, release, independent approval and dated balance",async({browser})=>{
     const [a,b]=await contextPair(browser);
@@ -175,7 +186,7 @@ test.describe.serial("Hotfix #1226 financial integrity (isolated browser and Pos
       const states=await prisma.enterpriseTreasuryTransaction.findMany({where:{organizationId,financialAccountId:bank.id}});
       expect(states.filter(t=>t.reconciliationStatus==="RECONCILED")).toHaveLength(3);
       expect(states.find(t=>t.id===transactions[3].id).reconciliationStatus).toBe("UNRECONCILED");
-    }finally{await a.close();await b.close();}
+    }finally{await releaseContext(a);await releaseContext(b);}
   });
   test("legacy no-site other product is traced to its exact journal and reversed only by independent cash review",async({browser})=>{
     const [a,b]=await contextPair(browser);
@@ -280,7 +291,7 @@ test.describe.serial("Hotfix #1226 financial integrity (isolated browser and Pos
       expect(balances.operationalBalance.toFixed()).toBe("100");
       expect(balances.reconciledBalance.toFixed()).toBe("100");
       expect(await prisma.enterpriseTreasuryTransaction.count({where:{organizationId,financialAccountId:cash.id}})).toBe(0);
-    }finally{await a.close();await b.close();if(c)await c.close();}
+    }finally{await releaseContext(a);await releaseContext(b);await releaseContext(c);}
   });
 
   for(const kind of ["FUNDING","TRANSFER","PAYMENT"])test(`canonical ${kind} evidence is linked exactly once without a second movement or posting`,async({browser})=>{
@@ -289,12 +300,12 @@ test.describe.serial("Hotfix #1226 financial integrity (isolated browser and Pos
     const [a,b]=await contextPair(browser);
     let c,d;
     try{
-      const reviewers=[];
-      for(const suffix of ["link","unlink"]){
+      for(const suffix of canonicalReviewers.length?[]:["link","unlink"]){
         const user=await prisma.user.create({data:{email:`h1226-${suffix}-${randomUUID()}@example.test`,name:"Synthetic evidence reviewer",passwordHash:owner.passwordHash,role:"CLIENT",status:"ACTIVE",locale:"fr",startPage:"/dashboard"}});
         await prisma.organizationMember.create({data:{organizationId,userId:user.id,role:"ADMIN_ENTERPRISE",status:"ACTIVE",joinedAt:new Date()}});
-        reviewers.push(user);
+        canonicalReviewers.push(user);
       }
+      const reviewers=canonicalReviewers;
       c=await signIn(browser,reviewers[0].email,process.env.E2E_ADMIN_PASSWORD);
       d=await signIn(browser,reviewers[1].email,process.env.E2E_ADMIN_PASSWORD);
       const outbound=kind==="PAYMENT",count=outbound?"95":"105";
@@ -356,7 +367,7 @@ test.describe.serial("Hotfix #1226 financial integrity (isolated browser and Pos
       expect(listed.varianceReviews[0].canonicalSourceHref).toContain(source.id);
       const page=await c.newPage();
       await page.goto(base+listed.varianceReviews[0].canonicalSourceHref);
-      await expect(page.getByText(number,{exact:true}).last()).toBeVisible();
+      await expect(page.getByRole("dialog").getByText(number,{exact:true}).last()).toBeVisible();
       await page.close();await stepUp(c,process.env.E2E_ADMIN_PASSWORD);
       const refusedReverse=await call(c,"POST",root+"/journal-entries/"+entry.id+"/reverse",{reason:"Source correction requires independent unlink",accountingDate:now.toISOString(),revision:entry.revision});
       expect(refusedReverse.response.status(),JSON.stringify(refusedReverse.body)).toBe(409);expect(refusedReverse.body.error).toBe("CASH_VARIANCE_CANONICAL_LINK_ACTIVE");
@@ -365,7 +376,7 @@ test.describe.serial("Hotfix #1226 financial integrity (isolated browser and Pos
       expect(await prisma.enterpriseOperationalEvent.count({where:{organizationId,entityId:discrepancy.id,eventType:"CASH_VARIANCE_CANONICAL_LINKED"}})).toBe(1);
       expect(await prisma.enterpriseOperationalEvent.count({where:{organizationId,entityId:discrepancy.id,eventType:"CASH_VARIANCE_CANONICAL_UNLINKED"}})).toBe(1);
       if(kind==="FUNDING")visualSessionId=opened.id;
-    }finally{await a.close();await b.close();if(c)await c.close();if(d)await d.close();}
+    }finally{await releaseContext(a);await releaseContext(b);await releaseContext(c);await releaseContext(d);}
   });
   test("durable Mobile Money import validates private staged content, retry identity and overlapping statement exclusion",async({browser})=>{
     const a=await signIn(browser,process.env.E2E_ADMIN_EMAIL,process.env.E2E_ADMIN_PASSWORD);
@@ -408,7 +419,7 @@ test.describe.serial("Hotfix #1226 financial integrity (isolated browser and Pos
       const subsequent=await call(a,"POST",root+"/bank-statements",{...data,reference:"H1226-BULK-LATE-"+randomUUID()});
       expect(subsequent.response.status(),JSON.stringify(subsequent.body)).toBe(409);
       expect(subsequent.body.error).toBe("BANK_STATEMENT_PERIOD_OVERLAP");
-    }finally{await a.close();}
+    }finally{await releaseContext(a);}
   });
 
   test("Design 2.0 rendered FR/EN light/dark width matrix and canonical review form",async({browser})=>{
@@ -421,7 +432,8 @@ test.describe.serial("Hotfix #1226 financial integrity (isolated browser and Pos
     for(const locale of ["fr","en"]){
       await prisma.user.update({where:{id:reviewer.id},data:{locale}});
       for(const theme of ["light","dark"]){
-        const context=await signIn(browser,reviewer.email,process.env.E2E_ADMIN_PASSWORD);
+        const authenticated=await signIn(browser,reviewer.email,process.env.E2E_ADMIN_PASSWORD);
+        const context=await browser.newContext({baseURL:base,viewport:{width:390,height:844},storageState:await authenticated.storageState()});
         await context.addInitScript(value=>localStorage.setItem("theme",value),theme);
         const page=await context.newPage();
         try{
@@ -441,6 +453,7 @@ test.describe.serial("Hotfix #1226 financial integrity (isolated browser and Pos
           await page.goto(base+path+"?recordId="+visualSessionId,{waitUntil:"networkidle"});
           await page.getByRole("button",{name:locale==="fr"?"Qualification et régularisation":"Variance review and correction",exact:true}).click();
           const dialog=page.getByRole("dialog");
+          await expect(dialog.getByRole("button",{name:locale==="fr"?"Fermer":"Close",exact:true})).toBeVisible();
           await dialog.locator('select[name="decision"]').selectOption("LINK_CANONICAL");
           await expect(dialog.locator('select[name="canonicalTreasuryTransactionId"] option')).not.toHaveCount(1);
           for(const width of [320,360,375,390,414,768,1024,1440]){
@@ -452,7 +465,7 @@ test.describe.serial("Hotfix #1226 financial integrity (isolated browser and Pos
           await page.keyboard.press("Tab");
           expect(await dialog.evaluate(element=>element.contains(document.activeElement))).toBe(true);
           await page.keyboard.press("Escape");await expect(dialog).not.toBeVisible();
-        }finally{await context.close();}
+        }finally{await authenticated.addCookies(await context.cookies());await context.close();}
       }
     }
     await writeFile(join(directory,"matrix.json"),JSON.stringify({candidateSha:process.env.E2E_CANDIDATE_SHA||null,executionSha:process.env.GITHUB_SHA||null,status:"RENDERED_AWAITING_VISUAL_INSPECTION",screens:manifest},null,2));

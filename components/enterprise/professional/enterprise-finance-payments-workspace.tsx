@@ -154,7 +154,7 @@ export function EnterpriseFinancePaymentsWorkspace(props: Props) {
   }, [businessContext?.functionalCurrencyCode, currencyCode]);
 
   useEffect(() => {
-    const deepId = searchParams.get("paymentId");
+    const deepId = searchParams.get("paymentId") || searchParams.get("payment") || searchParams.get("recordId");
     if (!deepId) return;
     fetchOperationalFinanceRecord<Payment>(`/api/enterprise/${organizationId}/payments`, deepId)
       .then((record) => { if (record) setDetail(record); })
