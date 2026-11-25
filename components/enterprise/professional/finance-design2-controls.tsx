@@ -64,8 +64,13 @@ export function FinanceDateFilter({ locale, from, to, onChange, disabledReason }
   </div>;
 }
 
-export type FinanceFilteredTotal = { currencyCode: string; metric: "original" | "outstanding" | "inbound" | "outbound"; amount: string; status?: string };
+export type FinanceFilteredTotal = { currencyCode: string; metric: "original" | "outstanding" | "inbound" | "outbound" | "invoiceTotal" | "paid" | "credited" | "creditTotal" | "tax"; amount: string; status?: string };
 const filteredMetricLabels = {
+  invoiceTotal: { fr: "Total des factures", en: "Invoice total" },
+  paid: { fr: "Montants réglés", en: "Paid amounts" },
+  credited: { fr: "Montants crédités", en: "Credited amounts" },
+  creditTotal: { fr: "Total des avoirs", en: "Credit note total" },
+  tax: { fr: "Taxes", en: "Taxes" },
   original: { fr: "Montant initial", en: "Original amount" },
   outstanding: { fr: "Solde restant dû", en: "Outstanding balance" },
   inbound: { fr: "Montants entrants", en: "Inbound amounts" },

@@ -59,6 +59,7 @@ function load(path) {
   vm.runInNewContext(js, { module: mod, exports: mod.exports, require: (id) => mocks[id] || require(id), URL, Date }, { filename: path });
   return mod.exports;
 }
+mocks["@/lib/enterprise/inventory/quantity-display"] = load("lib/enterprise/inventory/quantity-display.ts");
 const { GET } = load("app/api/enterprise/[organizationId]/inventory/route.ts");
 const { PUT } = load("app/api/enterprise/[organizationId]/inventory/item-policy/route.ts");
 const get = (extra = "") => GET({ url: "https://example.test/api?view=lot-options&warehouseId=wh-a&page=2&search=milk" + extra }, params);

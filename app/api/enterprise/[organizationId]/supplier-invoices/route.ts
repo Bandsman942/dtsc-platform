@@ -31,8 +31,8 @@ export async function GET(req: Request, { params }: Params) {
     ...(search ? { number: { contains: search, mode: "insensitive" } } : {}),
   };
 
-  const {items,total,returns}=await prisma.$transaction(async tx=>{
-  const [items,total]=await Promise.all([
+  const {items,total,returns,filtered}=await prisma.$transaction(async tx=>{
+  const [items,total,filtered]=await Promise.all([
     tx.enterpriseSupplierInvoice.findMany({
       where,
       orderBy: [{ invoiceDate: "desc" }, { createdAt: "desc" }],
@@ -41,9 +41,10 @@ export async function GET(req: Request, { params }: Params) {
       include: { items: true, payable: true, threeWayMatch: true },
     }),
     tx.enterpriseSupplierInvoice.count({ where }),
+    tx.enterpriseSupplierInvoice.groupBy({ by: ["currencyCode", "status"], where, _sum: { grandTotal: true, taxTotal: true, amountPaid: true, amountCredited: true, outstandingAmount: true } }),
   ]);
   const returns=await supplierReturnFinanceProjectionTx(tx,organizationId,items.map(row=>row.id));
-  return {items,total,returns};
+  return {items,total,returns,filtered};
   },{isolationLevel:Prisma.TransactionIsolationLevel.RepeatableRead});
   const assignedApprovals = items.length ? await prisma.enterpriseApproval.findMany({
     where: {
@@ -75,7 +76,13 @@ export async function GET(req: Request, { params }: Params) {
   }; });
 
   await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "supplier-invoices", page, recordId: Boolean(recordId), workflowPending } });
-  return NextResponse.json({ items: resultItems, pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) } });
+  return NextResponse.json({ items: resultItems, filteredTotals: filtered.flatMap(row => [
+      { currencyCode: row.currencyCode, status: row.status, metric: "invoiceTotal", amount: row._sum.grandTotal?.toFixed() ?? "0" },
+      { currencyCode: row.currencyCode, status: row.status, metric: "tax", amount: row._sum.taxTotal?.toFixed() ?? "0" },
+      { currencyCode: row.currencyCode, status: row.status, metric: "paid", amount: row._sum.amountPaid?.toFixed() ?? "0" },
+      { currencyCode: row.currencyCode, status: row.status, metric: "credited", amount: row._sum.amountCredited?.toFixed() ?? "0" },
+      { currencyCode: row.currencyCode, status: row.status, metric: "outstanding", amount: row._sum.outstandingAmount?.toFixed() ?? "0" },
+    ]), pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) } });
 }
 
 export async function POST(req: Request, { params }: Params) {

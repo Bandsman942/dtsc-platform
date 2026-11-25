@@ -231,7 +231,7 @@ export function EnterpriseFinanceInvoicesWorkspace(props: Props) {
     { key: "status", labelFr: "Statut", labelEn: "Status", get: (row) => financeStatusLabel(String(row.status || ""), locale) },
     { key: "date", labelFr: "Date de la pièce / échéance", labelEn: "Document date / due date", get: (row) => financeDate(row.invoiceDate || row.creditDate || row.dueDate, locale) },
     { key: "currency", labelFr: "Devise", labelEn: "Currency", get: (row) => String(row.currencyCode || row.currency || "") },
-    { key: "total", labelFr: "Total", labelEn: "Total", get: (row) => String(row.totalAmount || row.amount || row.balanceDue || "") },
+    { key: "total", labelFr: "Total", labelEn: "Total", get: (row) => String(row.grandTotal ?? row.originalAmount ?? row.totalAmount ?? row.amount ?? row.balanceDue ?? "") },
     ...(!isReceivables && endpointName !== "supplier-credit-notes" ? [
       { key: "returnReserved", labelFr: purchaseFormGuidance("fr","returnFinanceExportReserved"),labelEn:purchaseFormGuidance("en","returnFinanceExportReserved"),get:(row:Record<string,unknown>)=>String(row.supplierReturnReservedAmount ?? "") },
       { key: "returnAllocatable", labelFr: purchaseFormGuidance("fr","returnFinanceExportAllocatable"),labelEn:purchaseFormGuidance("en","returnFinanceExportAllocatable"),get:(row:Record<string,unknown>)=>String(row.supplierReturnAllocatableAmount ?? "") },
