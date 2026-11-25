@@ -30,7 +30,7 @@ export async function GET(req: Request, { params }: Params) {
         { code: { contains: search, mode: "insensitive" } },
         { name: { contains: search, mode: "insensitive" } },
         { currencyCode: { contains: search, mode: "insensitive" } },
-        { maskedReference: { contains: search, mode: "insensitive" } },
+        // Never search stored private references: result counts could disclose hidden characters.
       ],
     } : {}),
   };
