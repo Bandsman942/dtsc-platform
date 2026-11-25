@@ -1,5 +1,7 @@
 ## 2026-11-25 — HOTFIX #1228 — Data Intelligence & Consistency 2.0 (v1.24.5 candidate DRAFT)
 
+- Devis, commandes directes et conversion de devis : contrôle serveur groupé des quantités selon la précision 0–6 de l’unité catalogue ; unité effective enregistrée sur les nouvelles lignes. Unité étrangère/archivée et changement d’unité sans conversion vérifiée refusés, historique et replays conservés. Le formulaire de devis et le contrat catalogue partagent maintenant la précision effective, messages FR/EN. Couverture comportementale des sept précisions et scénario API navigateur ajoutés ; nouvelle CI requise.
+
 - Devis, commandes et achats : compteurs et montants selon les filtres serveur, agrégats exacts par devise/statut en lecture cohérente, distinction général autorisé/toutes pages filtrées/page. Affichage FR/EN et synthèse générale dans CSV/Excel/PDF ; refus d'export si un agrégat change entre les pages. Chargement achats protégé contre réponses tardives et annulation ; aucun ancien total présenté comme actuel pendant le chargement ou en erreur. Tests comportementaux ajoutés, certification navigateur du nouveau SHA encore requise.
 - Retours Retail/fournisseur : cas historiques de rejet à quatre décimales remplacés par frontière sept décimales et cas positifs six décimales ; garde monétaire minimale conservée. Échecs CI du SHA 825315ef documentés, sans supprimer d'assertion métier.
 

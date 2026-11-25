@@ -264,6 +264,14 @@ jobs:
             http://127.0.0.1:8079/ >/dev/null
       - name: Shop 2 invoice and global multistore acceptance
         run: pnpm exec playwright test tests/e2e/shop2-retail.spec.mjs tests/e2e/shop2-z-global.spec.mjs
+      - name: Preserve Data Intelligence 1228 browser screenshots
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: data-intelligence-1228-${{ github.sha }}
+          if-no-files-found: warn
+          retention-days: 14
+          path: test-results/**/1228-*.png
       - name: Reset isolated Redis state before Shop 2 three-actor Finance acceptance
         run: |
           curl --fail --silent --show-error \

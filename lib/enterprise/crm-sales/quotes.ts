@@ -1,3 +1,4 @@
+import { resolveSalesQuantitiesTx } from "@/lib/enterprise/crm-sales/quantity";
 import type { z } from "zod";
 import { EnterpriseDomainConflictError, EnterpriseDomainError } from "@/lib/enterprise/common/errors";
 import { QUOTE_TRANSITIONS } from "@/lib/enterprise/crm-sales/constants";
@@ -30,13 +31,7 @@ export async function createEnterpriseQuote(organizationId: string, actorUserId:
       if (!opportunity) throw new EnterpriseDomainError("OPPORTUNITY_NOT_FOUND", 404);
     }
 
-    const catalogIds = [...new Set(input.items.map((item) => item.catalogItemId).filter((id): id is string => Boolean(id)))];
-    if (catalogIds.length) {
-      const count = await tx.enterpriseCatalogItem.count({
-        where: { organizationId, id: { in: catalogIds }, status: "ACTIVE", archivedAt: null },
-      });
-      if (count !== catalogIds.length) throw new EnterpriseDomainError("CATALOG_ITEM_NOT_FOUND", 404);
-    }
+    const quantities = await resolveSalesQuantitiesTx(tx, organizationId, input.items);
 
     const calculatedItems = input.items.map((item, index) => {
       const lineSubtotal = roundMoney(item.quantity * item.unitPrice);
@@ -45,6 +40,8 @@ export async function createEnterpriseQuote(organizationId: string, actorUserId:
       const taxAmount = roundMoney(taxableBase * (item.taxRate / 100));
       return {
         ...item,
+        quantity: quantities[index].quantity,
+        unitOfMeasureId: quantities[index].unitOfMeasureId,
         lineSubtotal,
         discountAmount,
         taxAmount,
@@ -159,6 +156,13 @@ export async function convertEnterpriseQuoteToOrder(organizationId: string, quot
     }
     if (quote.status !== "ACCEPTED") throw new EnterpriseDomainError("QUOTE_MUST_BE_ACCEPTED", 409);
     if (quote.revision !== revision) throw new EnterpriseDomainConflictError();
+
+    // Legacy catalog lines without a recorded unit cannot prove which unit
+    // their accepted quantity represents. Preserve the quote and require review.
+    if (quote.items.some(item => item.catalogItemId && !item.unitOfMeasureId)) {
+      throw new EnterpriseDomainError("INVENTORY_UNIT_CONVERSION_REQUIRED", 409);
+    }
+    await resolveSalesQuantitiesTx(tx, organizationId, quote.items);
 
     const order = await tx.enterpriseSalesOrder.create({
       data: {

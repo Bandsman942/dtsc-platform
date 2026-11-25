@@ -34,9 +34,9 @@ const nestedConvertedOrder = quoteService.match(/create: quote\.items\.map\(\(it
 assert.ok(nestedQuote && nestedConvertedOrder, "Expected both quote -> lines and quote -> order nested creates");
 absent("Quote creation must not pass tenant key into Prisma nested items.create", nestedQuote, /^\s*organizationId\s*,/m);
 absent("Quote conversion must not pass tenant key into Prisma nested order lines", nestedConvertedOrder, /^\s*organizationId\s*,/m);
-check("Tenant isolation stays on both parent create operations and canonical party/catalog checks", quoteService, [
+check("Tenant isolation stays on both parent create operations and canonical party/catalog checks", quoteService + read("lib/enterprise/crm-sales/quantity.ts"), [
   /enterpriseQuote\.create/, /enterpriseSalesOrder\.create/, /organizationId,/, /businessPartyId: input\.businessPartyId/,
-  /catalogIds/, /transaction/,
+  /catalogIds/, /transaction/, /resolveSalesQuantitiesTx/, /where: \{ organizationId, id: \{ in: catalogIds \}, status: "ACTIVE", archivedAt: null \}/,
 ]);
 check("Generated Prisma schema has composite parent-to-child FK and prices/taxes", quoteSchema, [
   /model EnterpriseQuoteItem/, /@relation\(fields: \[organizationId, quoteId\]/,

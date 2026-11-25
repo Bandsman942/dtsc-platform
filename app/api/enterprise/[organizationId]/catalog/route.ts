@@ -50,7 +50,7 @@ export async function GET(req: Request, { params }: Params) {
     ...(status ? { status } : {}),
   };
   const [items, total, products, services, tracked, units, categories] = await Promise.all([
-    prisma.enterpriseCatalogItem.findMany({ where, orderBy: [{ name: "asc" }, { createdAt: "desc" }], skip: (page - 1) * pageSize, take: pageSize, include: { category: { select: { id: true, code: true, name: true } }, unitOfMeasure: { select: { id: true, code: true, name: true, symbol: true } }, inventoryItems: { select: { id: true, minimumQuantity: true, reorderQuantity: true, lotTracking: true, expiryTracking: true } }, prices: { where: { archivedAt: null }, orderBy: { effectiveFrom: "desc" }, take: 8 } } }),
+    prisma.enterpriseCatalogItem.findMany({ where, orderBy: [{ name: "asc" }, { createdAt: "desc" }], skip: (page - 1) * pageSize, take: pageSize, include: { category: { select: { id: true, code: true, name: true } }, unitOfMeasure: { select: { id: true, code: true, name: true, symbol: true, decimalScale: true } }, inventoryItems: { select: { id: true, minimumQuantity: true, reorderQuantity: true, lotTracking: true, expiryTracking: true } }, prices: { where: { archivedAt: null }, orderBy: { effectiveFrom: "desc" }, take: 8 } } }),
     prisma.enterpriseCatalogItem.count({ where }),
     prisma.enterpriseCatalogItem.count({ where: { organizationId, archivedAt: null, itemType: "PRODUCT", status: "ACTIVE" } }),
     prisma.enterpriseCatalogItem.count({ where: { organizationId, archivedAt: null, itemType: "SERVICE", status: "ACTIVE" } }),

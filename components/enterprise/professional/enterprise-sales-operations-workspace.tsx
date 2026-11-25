@@ -1,5 +1,6 @@
 "use client";
 
+import { inventoryQuantityStep, isInventoryQuantityInputValid } from "@/lib/enterprise/inventory/quantity-display";
 import type { MonetaryScopes } from "@/lib/enterprise/common/analytics";
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
@@ -96,6 +97,7 @@ type CatalogItem = {
   code: string;
   name: string;
   itemType: string;
+  unitOfMeasure: { id: string; name: string; symbol: string | null; decimalScale: number };
   indicativeSalePrice: string | number | null;
   currency: string | null;
 };
@@ -244,6 +246,10 @@ export function EnterpriseSalesOperationsWorkspace({
     setCreateOpen(true);
   }
 
+  function lineQuantityScale(line: QuoteLine) {
+    return line.catalogItemId ? catalogItems.find(item => item.id === line.catalogItemId)?.unitOfMeasure?.decimalScale : 6;
+  }
+
   function updateLine(lineId: string, key: keyof QuoteLine, value: string) {
     setMessage("");
     setLines((current) => current.map((line) => {
@@ -269,6 +275,7 @@ export function EnterpriseSalesOperationsWorkspace({
         return hotfix.quoteLineRequired;
       }
       const item = line.catalogItemId ? catalogItems.find((candidate) => candidate.id === line.catalogItemId) : null;
+      if (!isInventoryQuantityInputValid(line.quantity, lineQuantityScale(line))) return hotfix.quoteQuantityUnit;
       if (item?.currency && item.currency !== quoteCurrency) return hotfix.quoteCurrencyMismatch;
     }
     return "";
@@ -295,6 +302,7 @@ export function EnterpriseSalesOperationsWorkspace({
         terms: String(form.get("terms") || "") || null,
         items: lines.map((line) => ({
           catalogItemId: line.catalogItemId || null,
+          unitOfMeasureId: line.catalogItemId ? catalogItems.find(item => item.id === line.catalogItemId)?.unitOfMeasure?.id : null,
           description: line.description,
           quantity: Number(line.quantity),
           unitPrice: Number(line.unitPrice),
@@ -505,7 +513,7 @@ export function EnterpriseSalesOperationsWorkspace({
           <ProfessionalFormSection title={t("sales.productsServices")} description={t("sales.productsServicesHelp")}>
             <div className="md:col-span-2 grid gap-3">
               <Field label={t("sales.productsServices")} help={hotfix.catalogSearchHelp}><ProfessionalSearch value={catalogSearch} onChange={setCatalogSearch} placeholder={hotfix.catalogSearch} /></Field>
-              {lines.map((line, index) => <div key={line.id} className="grid gap-3 rounded-2xl border border-dtsc-border p-3 md:grid-cols-6"><div className="md:col-span-2"><Field label={t("sales.item", { index: index + 1 })}><NativeSelect value={line.catalogItemId} onChange={(value) => updateLine(line.id, "catalogItemId", value)} items={[{ id: "", label: t("sales.freeDescription") }, ...catalogItems.map((item) => ({ id: item.id, label: `${item.code} · ${item.name}${item.currency ? ` · ${item.currency}` : ""}` }))]} /></Field></div><div className="md:col-span-2"><Field label={t("sales.description")} required><Input value={line.description} onChange={(event) => updateLine(line.id, "description", event.target.value)} required /></Field></div><Field label={t("sales.quantity")} required><Input type="number" min="0.01" step="0.01" value={line.quantity} onChange={(event) => updateLine(line.id, "quantity", event.target.value)} required /></Field><Field label={t("sales.unitPrice")} required><Input type="number" min="0" step="0.01" value={line.unitPrice} onChange={(event) => updateLine(line.id, "unitPrice", event.target.value)} required /></Field><Field label={t("sales.discount")}><Input type="number" min="0" max="100" step="0.01" value={line.discountRate} onChange={(event) => updateLine(line.id, "discountRate", event.target.value)} /></Field><Field label={t("sales.tax")}><Input type="number" min="0" max="100" step="0.01" value={line.taxRate} onChange={(event) => updateLine(line.id, "taxRate", event.target.value)} /></Field>{lines.length > 1 ? <div className="md:col-span-2 flex items-end"><Button type="button" variant="outline" onClick={() => setLines((current) => current.filter((candidate) => candidate.id !== line.id))}>{t("sales.removeLine")}</Button></div> : null}</div>)}
+              {lines.map((line, index) => <div key={line.id} className="grid gap-3 rounded-2xl border border-dtsc-border p-3 md:grid-cols-6"><div className="md:col-span-2"><Field label={t("sales.item", { index: index + 1 })}><NativeSelect value={line.catalogItemId} onChange={(value) => updateLine(line.id, "catalogItemId", value)} items={[{ id: "", label: t("sales.freeDescription") }, ...catalogItems.map((item) => ({ id: item.id, label: `${item.code} · ${item.name}${item.currency ? ` · ${item.currency}` : ""}` }))]} /></Field></div><div className="md:col-span-2"><Field label={t("sales.description")} required><Input value={line.description} onChange={(event) => updateLine(line.id, "description", event.target.value)} required /></Field></div><Field label={t("sales.quantity")} required><Input type="number" min={inventoryQuantityStep(lineQuantityScale(line))} step={inventoryQuantityStep(lineQuantityScale(line))} disabled={!inventoryQuantityStep(lineQuantityScale(line))} value={line.quantity} onChange={(event) => updateLine(line.id, "quantity", event.target.value)} required /></Field><Field label={t("sales.unitPrice")} required><Input type="number" min="0" step="0.01" value={line.unitPrice} onChange={(event) => updateLine(line.id, "unitPrice", event.target.value)} required /></Field><Field label={t("sales.discount")}><Input type="number" min="0" max="100" step="0.01" value={line.discountRate} onChange={(event) => updateLine(line.id, "discountRate", event.target.value)} /></Field><Field label={t("sales.tax")}><Input type="number" min="0" max="100" step="0.01" value={line.taxRate} onChange={(event) => updateLine(line.id, "taxRate", event.target.value)} /></Field>{lines.length > 1 ? <div className="md:col-span-2 flex items-end"><Button type="button" variant="outline" onClick={() => setLines((current) => current.filter((candidate) => candidate.id !== line.id))}>{t("sales.removeLine")}</Button></div> : null}</div>)}
               <Button type="button" variant="outline" onClick={() => setLines((current) => [...current, newLine(current.length)])}><Plus className="h-4 w-4" />{t("sales.addLine")}</Button>
             </div>
           </ProfessionalFormSection>

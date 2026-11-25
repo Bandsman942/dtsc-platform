@@ -1,3 +1,4 @@
+import { resolveSalesQuantitiesTx } from "@/lib/enterprise/crm-sales/quantity";
 import { createHash } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { EnterpriseDomainError } from "@/lib/enterprise/common/errors";
@@ -50,11 +51,7 @@ export async function createEnterpriseDirectSalesOrder(organizationId: string, a
     });
     if (!party) throw new EnterpriseDomainError("BUSINESS_PARTY_NOT_FOUND", 404);
 
-    const catalogIds = [...new Set(input.items.map((item) => item.catalogItemId))];
-    const catalogCount = await tx.enterpriseCatalogItem.count({
-      where: { organizationId, id: { in: catalogIds }, status: "ACTIVE", archivedAt: null },
-    });
-    if (catalogCount !== catalogIds.length) throw new EnterpriseDomainError("CATALOG_ITEM_NOT_FOUND", 404);
+    const quantities = await resolveSalesQuantitiesTx(tx, organizationId, input.items);
 
     const subtotalAmount = input.items.reduce((sum, item) => sum + item.lineSubtotal, 0);
     const discountAmount = input.items.reduce((sum, item) => sum + item.discountAmount, 0);
@@ -82,7 +79,8 @@ export async function createEnterpriseDirectSalesOrder(organizationId: string, a
           create: input.items.map((item, index) => ({
             catalogItemId: item.catalogItemId,
             description: item.description,
-            quantityOrdered: item.quantity,
+            quantityOrdered: quantities[index].quantity,
+            unitOfMeasureId: quantities[index].unitOfMeasureId,
             unitPrice: item.unitPrice,
             discountRate: 0,
             discountAmount: item.discountAmount,

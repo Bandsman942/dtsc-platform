@@ -27,3 +27,18 @@ export function inventoryQuantityExportValue(value: string): string | number {
   const numeric = Number(value);
   return Number.isFinite(numeric) ? numeric : value;
 }
+
+/** Exact HTML step for a configured catalog unit. Missing configuration remains
+ * explicit so callers can disable editing instead of inventing a precision. */
+export function inventoryQuantityStep(decimalScale: number | undefined): string | undefined {
+  if (typeof decimalScale !== "number" || !Number.isInteger(decimalScale) || decimalScale < 0 || decimalScale > 6) return undefined;
+  return decimalScale === 0 ? "1" : `0.${"0".repeat(decimalScale - 1)}1`;
+}
+
+/** Browser validation complements the authoritative Decimal check on the server. */
+export function isInventoryQuantityInputValid(value: string, decimalScale: number | undefined, positive = true): boolean {
+  if (typeof decimalScale !== "number" || !inventoryQuantityStep(decimalScale) || !/^\d+(?:\.\d+)?$/.test(value.trim())) return false;
+  const [integer, fraction = ""] = value.trim().split(".");
+  if (integer.replace(/^0+/, "").length > 15 || fraction.replace(/0+$/, "").length > decimalScale) return false;
+  return !positive || /[1-9]/.test(integer + fraction);
+}

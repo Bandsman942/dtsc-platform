@@ -759,4 +759,24 @@ test.describe.serial("Shop 2.0 Iteration 4 global behavioral acceptance", () => 
     }
   });
 
+  test("#1228 quote API validates all seven effective catalog unit precisions", async ({page})=>{
+    await signIn(page);const key=`E2E-1228-UNIT-${Date.now()}`;const quoteIds=[],catalogIds=[],unitIds=[];
+    try{
+      for(let scale=0;scale<=6;scale++){
+        const unit=await prisma.enterpriseUnitOfMeasure.create({data:{organizationId,code:`${key}-${scale}`,name:`Precision ${scale}`,decimalScale:scale,createdByUserId:fixture.userId}});unitIds.push(unit.id);
+        const product=await prisma.enterpriseCatalogItem.create({data:{organizationId,code:`${key}-${scale}`,name:`Unit product ${scale}`,normalizedName:`${key}-${scale}`.toLowerCase(),itemType:"PRODUCT",unitOfMeasureId:unit.id,currency:"USD",createdByUserId:fixture.userId}});catalogIds.push(product.id);
+        const quantity=scale?`1.${"0".repeat(scale-1)}1`:"1";
+        const payload={businessPartyId:fixture.customerId,title:`${key}-${scale}`,currency:"USD",items:[{catalogItemId:product.id,description:product.name,quantity:Number(quantity),unitPrice:10,discountRate:0,taxRate:0}]};
+        const accepted=await apiPost(page,`/api/enterprise/${organizationId}/quotes`,payload);expect(accepted.response.status(),JSON.stringify(accepted.body)).toBe(201);quoteIds.push(accepted.body.quote.id);
+        const saved=await prisma.enterpriseQuoteItem.findFirstOrThrow({where:{organizationId,quoteId:accepted.body.quote.id}});expect(saved.quantity.toFixed()).toBe(quantity);expect(saved.unitOfMeasureId).toBe(unit.id);
+        const rejected=await apiPost(page,`/api/enterprise/${organizationId}/quotes`,{...payload,items:[{...payload.items[0],quantity:Number(`1.${"0".repeat(scale)}1`)}]});
+        expect(rejected.response.status(),JSON.stringify(rejected.body)).toBe(400);expect(rejected.body.error).toBe(scale===6?"INVENTORY_PHYSICAL_QUANTITY_PRECISION":"INVENTORY_UNIT_QUANTITY_PRECISION");
+        expect(await prisma.enterpriseQuote.count({where:{organizationId,title:payload.title}})).toBe(1);
+      }
+    }finally{
+      await prisma.enterpriseQuote.deleteMany({where:{organizationId,id:{in:quoteIds},status:"DRAFT"}});
+      await prisma.enterpriseCatalogItem.deleteMany({where:{organizationId,id:{in:catalogIds}}});await prisma.enterpriseUnitOfMeasure.deleteMany({where:{organizationId,id:{in:unitIds}}});
+    }
+  });
+
 });
