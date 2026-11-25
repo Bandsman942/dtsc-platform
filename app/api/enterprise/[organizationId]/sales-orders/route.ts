@@ -1,3 +1,4 @@
+import { commercialAmountTotals, commercialPageTotals, commercialStatusCount } from "@/lib/enterprise/common/analytics";
 import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
@@ -45,9 +46,9 @@ export async function GET(req: Request, { params }: Params) {
     return NextResponse.json({ error: "SALES_SEARCH_TOO_BROAD", message: "Trop de clients correspondent : affinez la recherche." }, { status: 422 });
   }
   const clientIds = matchingParties.map((party) => party.id);
+  const base: Prisma.EnterpriseSalesOrderWhereInput = { organizationId, archivedAt: null };
   const where: Prisma.EnterpriseSalesOrderWhereInput = {
-    organizationId,
-    archivedAt: null,
+    ...base,
     ...(search ? { OR: [
       { title: { contains: search, mode: "insensitive" } },
       { reference: { contains: search, mode: "insensitive" } },
@@ -57,10 +58,11 @@ export async function GET(req: Request, { params }: Params) {
     ...(status ? { status } : {}),
     ...(businessPartyId ? { businessPartyId } : {}),
   };
-  const [items, total, confirmed, partial, fulfilled, pending] = await Promise.all([
-    prisma.enterpriseSalesOrder.findMany({
+  const { items, total, filteredGroups, generalGroups } = await prisma.$transaction(async tx => {
+    const [items, total, filteredGroups, generalGroups] = await Promise.all([
+    tx.enterpriseSalesOrder.findMany({
       where,
-      orderBy: [{ expectedFulfillmentAt: "asc" }, { createdAt: "desc" }],
+      orderBy: [{ expectedFulfillmentAt: "asc" }, { createdAt: "desc" }, { id: "asc" }],
       skip: (page - 1) * pageSize,
       take: pageSize,
       include: {
@@ -68,12 +70,17 @@ export async function GET(req: Request, { params }: Params) {
         fulfillments: { orderBy: { createdAt: "desc" }, take: 10, include: { items: true } },
       },
     }),
-    prisma.enterpriseSalesOrder.count({ where }),
-    prisma.enterpriseSalesOrder.count({ where: { organizationId, archivedAt: null, status: "CONFIRMED" } }),
-    prisma.enterpriseSalesOrder.count({ where: { organizationId, archivedAt: null, status: "PARTIALLY_FULFILLED" } }),
-    prisma.enterpriseSalesOrder.count({ where: { organizationId, archivedAt: null, status: "FULFILLED" } }),
-    prisma.enterpriseSalesOrder.count({ where: { organizationId, archivedAt: null, status: { in: ["DRAFT", "PENDING_APPROVAL"] } } }),
-  ]);
+    tx.enterpriseSalesOrder.count({ where }),
+    tx.enterpriseSalesOrder.groupBy({ by: ["currency", "status"], where, _sum: { subtotalAmount: true, discountAmount: true, taxAmount: true, totalAmount: true }, _count: { _all: true } }),
+    tx.enterpriseSalesOrder.groupBy({ by: ["currency", "status"], where: base, _sum: { subtotalAmount: true, discountAmount: true, taxAmount: true, totalAmount: true }, _count: { _all: true } }),
+    ]);
+    return { items, total, filteredGroups, generalGroups };
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
+  const confirmed = commercialStatusCount(filteredGroups, ["CONFIRMED"]);
+  const partial = commercialStatusCount(filteredGroups, ["PARTIALLY_FULFILLED"]);
+  const fulfilled = commercialStatusCount(filteredGroups, ["FULFILLED"]);
+  const pending = commercialStatusCount(filteredGroups, ["DRAFT", "PENDING_APPROVAL"]);
+  const generalMetrics = { confirmed: commercialStatusCount(generalGroups, ["CONFIRMED"]), partial: commercialStatusCount(generalGroups, ["PARTIALLY_FULFILLED"]), fulfilled: commercialStatusCount(generalGroups, ["FULFILLED"]), pending: commercialStatusCount(generalGroups, ["DRAFT", "PENDING_APPROVAL"]) };
   const partyIds = [...new Set(items.map((item) => item.businessPartyId))];
   const parties = partyIds.length
     ? await prisma.enterpriseBusinessParty.findMany({
@@ -89,6 +96,10 @@ export async function GET(req: Request, { params }: Params) {
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "sales-orders", page } });
   return NextResponse.json({
     items: projectedItems,
+    filteredTotals: commercialAmountTotals(filteredGroups),
+    generalTotals: commercialAmountTotals(generalGroups),
+    pageTotals: commercialPageTotals(items),
+    generalMetrics,
     pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) },
     metrics: { confirmed, partial, fulfilled, pending },
     canManage: access.canManage,

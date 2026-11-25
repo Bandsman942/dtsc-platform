@@ -1,12 +1,14 @@
 "use client";
 
+import type { MonetaryScopes } from "@/lib/enterprise/common/analytics";
+
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { BadgeCheck, Boxes, CheckCircle2, Eye, FilePenLine, FileText, PackageCheck, Plus, Printer, RefreshCcw, Send, ShoppingCart, Truck, XCircle } from "lucide-react";
 import Link from "next/link";
 import { currencyChoices, Field, NativeSelect } from "@/components/enterprise/core-v2/erp-v2-ui";
 import { OrderBatchReservationsDialog, orderBatchCopy } from "@/components/enterprise/professional/order-batch-reservations-dialog";
 import { commercialHotfixCopy } from "@/components/enterprise/professional/commercial-hotfix-copy";
-import { FinanceDateFilter, FinanceExportControls, type FinanceExportColumn } from "@/components/enterprise/professional/finance-design2-controls";
+import { FinanceAmountScopes, FinanceDateFilter, FinanceExportControls, type FinanceExportColumn } from "@/components/enterprise/professional/finance-design2-controls";
 import {
   ProfessionalError,
   ProfessionalFormSection,
@@ -201,8 +203,8 @@ export function EnterpriseSalesOperationsWorkspace({
     if (dateTo) value.set("dateTo", dateTo);
     return value;
   }, [page, search, status, dateFrom, dateTo]);
-  const quotes = useProfessionalCollection<Quote>({ endpoint: `/api/enterprise/${organizationId}/quotes`, params, refreshKey });
-  const orders = useProfessionalCollection<SalesOrder>({ endpoint: `/api/enterprise/${organizationId}/sales-orders`, params, refreshKey });
+  const quotes = useProfessionalCollection<Quote, MonetaryScopes>({ endpoint: `/api/enterprise/${organizationId}/quotes`, params, refreshKey });
+  const orders = useProfessionalCollection<SalesOrder, MonetaryScopes>({ endpoint: `/api/enterprise/${organizationId}/sales-orders`, params, refreshKey });
   const activeCollection = tab === "QUOTES" ? quotes : orders;
   const activeFilters = { search, status, dateFrom, dateTo };
   const exportColumns: FinanceExportColumn[] = [
@@ -434,11 +436,11 @@ export function EnterpriseSalesOperationsWorkspace({
         primaryAction={quotes.canWrite ? <Button onClick={openCreate} className="bg-dtsc-blue text-white"><Plus className="h-4 w-4" />{t("sales.newQuote")}</Button> : undefined}
       />
       <ModuleMetrics label={t("sales.metrics")} className="lg:[&>div]:grid-cols-5">
-        <ModuleMetric icon={<FilePenLine className="h-4 w-4 text-slate-500" />} className="border-l-slate-400" label={t("sales.metricDraftQuotes")} value={quotes.metrics.draft || 0} />
-        <ModuleMetric icon={<Send className="h-4 w-4 text-sky-500" />} className="border-l-sky-500" label={t("sales.metricSentQuotes")} value={quotes.metrics.sent || 0} />
-        <ModuleMetric icon={<BadgeCheck className="h-4 w-4 text-emerald-500" />} className="border-l-emerald-500" label={t("sales.metricAcceptedQuotes")} value={quotes.metrics.accepted || 0} />
-        <ModuleMetric icon={<Boxes className="h-4 w-4 text-indigo-500" />} className="border-l-indigo-500" label={t("sales.metricConfirmedOrders")} value={orders.metrics.confirmed || 0} />
-        <ModuleMetric icon={<Truck className="h-4 w-4 text-amber-500" />} className="border-l-amber-500" label={t("sales.metricPartial")} value={orders.metrics.partial || 0} />
+        <ModuleMetric icon={<FilePenLine className="h-4 w-4 text-slate-500" />} className="border-l-slate-400" label={t("sales.metricDraftQuotes")} value={quotes.loading || quotes.error ? "—" : quotes.metrics.draft ?? 0} />
+        <ModuleMetric icon={<Send className="h-4 w-4 text-sky-500" />} className="border-l-sky-500" label={t("sales.metricSentQuotes")} value={quotes.loading || quotes.error ? "—" : quotes.metrics.sent ?? 0} />
+        <ModuleMetric icon={<BadgeCheck className="h-4 w-4 text-emerald-500" />} className="border-l-emerald-500" label={t("sales.metricAcceptedQuotes")} value={quotes.loading || quotes.error ? "—" : quotes.metrics.accepted ?? 0} />
+        <ModuleMetric icon={<Boxes className="h-4 w-4 text-indigo-500" />} className="border-l-indigo-500" label={t("sales.metricConfirmedOrders")} value={orders.loading || orders.error ? "—" : orders.metrics.confirmed ?? 0} />
+        <ModuleMetric icon={<Truck className="h-4 w-4 text-amber-500" />} className="border-l-amber-500" label={t("sales.metricPartial")} value={orders.loading || orders.error ? "—" : orders.metrics.partial ?? 0} />
       </ModuleMetrics>
       <ModuleToolbar
         search={<ProfessionalSearch value={search} onChange={(value) => { setSearch(value); setPage(1); }} placeholder={t("sales.search")} />}
@@ -459,6 +461,7 @@ export function EnterpriseSalesOperationsWorkspace({
         summary={t("sales.toolbarSummary")}
       />
       <ModuleContent density="compact">
+        {!activeCollection.loading && !activeCollection.error ? <FinanceAmountScopes totals={activeCollection.extra} locale={locale} /> : null}
         <nav aria-label={t("sales.connectedModules")} className="flex min-w-0 max-w-full flex-wrap items-center gap-2 rounded-xl border border-cyan-500/20 bg-cyan-500/5 px-3 py-2 text-xs">
           <span className="font-black text-dtsc-ink">{t("sales.connectedModules")}</span>
           {([["CRM_CUSTOMERS", "sales.linkCustomers"], ["CATALOG", "sales.linkCatalog"], ["INVENTORY_LOGISTICS", "sales.linkInventory"], ["FINANCE_RECEIVABLES", "sales.linkFinance"]] as const).map(([code, label]) => <Link key={code} href={`/enterprise-modules/${code}`} className="rounded-lg border border-dtsc-border bg-dtsc-surface px-2.5 py-1.5 font-semibold text-dtsc-blue transition hover:border-cyan-500/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400">{t(label)}</Link>)}

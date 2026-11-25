@@ -1,3 +1,4 @@
+import { commercialAmountTotals, commercialPageTotals, commercialStatusCount } from "@/lib/enterprise/common/analytics";
 import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
@@ -27,11 +28,27 @@ export async function GET(req: Request, { params }: Params) {
     if (from) createdAt.gte = new Date(from + "T00:00:00.000Z");
     if (to) { const end = new Date(to + "T00:00:00.000Z"); end.setUTCDate(end.getUTCDate() + 1); createdAt.lt = end; }
     filters.push({ createdAt }); } if (expectedBefore) filters.push({ expectedAt: { lte: new Date(expectedBefore) } });
-  const where: Prisma.EnterprisePurchaseWhereInput = { AND: [base, ...filters] }; const [items, total, drafts, pending, ordered, receiving, received] = await Promise.all([prisma.enterprisePurchase.findMany({ where, orderBy: { createdAt: "desc" }, skip: (page - 1) * pageSize, take: pageSize, include: { supplier: { select: { id: true, legalName: true, displayName: true, status: true } }, budgetLine: { select: { id: true, name: true, budget: { select: { id: true, reference: true, title: true, currency: true, status: true } } } }, _count: { select: { items: true, receipts: true } } } }), prisma.enterprisePurchase.count({ where }), prisma.enterprisePurchase.count({ where: { AND: [base, { status: "DRAFT" }] } }), prisma.enterprisePurchase.count({ where: { AND: [base, { status: "PENDING_APPROVAL" }] } }), prisma.enterprisePurchase.count({ where: { AND: [base, { status: "ORDERED" }] } }), prisma.enterprisePurchase.count({ where: { AND: [base, { status: "PARTIALLY_RECEIVED" }] } }), prisma.enterprisePurchase.count({ where: { AND: [base, { status: "RECEIVED", receivedAt: { gte: new Date(Date.now() - 30 * 86400000) } }] } })]);
+  const where: Prisma.EnterprisePurchaseWhereInput = { AND: [base, ...filters] };
+  const { items, total, filteredGroups, generalGroups, received, generalReceived } = await prisma.$transaction(async tx => {
+    const [items, total, filteredGroups, generalGroups, received, generalReceived] = await Promise.all([
+      tx.enterprisePurchase.findMany({ where, orderBy: [{ createdAt: "desc" }, { id: "desc" }], skip: (page - 1) * pageSize, take: pageSize, include: { supplier: { select: { id: true, legalName: true, displayName: true, status: true } }, budgetLine: { select: { id: true, name: true, budget: { select: { id: true, reference: true, title: true, currency: true, status: true } } } }, _count: { select: { items: true, receipts: true } } } }),
+      tx.enterprisePurchase.count({ where }),
+      tx.enterprisePurchase.groupBy({ by: ["currency", "status"], where, _sum: { subtotalAmount: true, taxAmount: true, totalAmount: true }, _count: { _all: true } }),
+      tx.enterprisePurchase.groupBy({ by: ["currency", "status"], where: base, _sum: { subtotalAmount: true, taxAmount: true, totalAmount: true }, _count: { _all: true } }),
+      tx.enterprisePurchase.count({ where: { AND: [where, { status: "RECEIVED", receivedAt: { gte: new Date(Date.now() - 30 * 86400000) } }] } }),
+      tx.enterprisePurchase.count({ where: { AND: [base, { status: "RECEIVED", receivedAt: { gte: new Date(Date.now() - 30 * 86400000) } }] } }),
+    ]);
+    return { items, total, filteredGroups, generalGroups, received, generalReceived };
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
+  const drafts = commercialStatusCount(filteredGroups, ["DRAFT"]);
+  const pending = commercialStatusCount(filteredGroups, ["PENDING_APPROVAL"]);
+  const ordered = commercialStatusCount(filteredGroups, ["ORDERED"]);
+  const receiving = commercialStatusCount(filteredGroups, ["PARTIALLY_RECEIVED"]);
+  const generalMetrics = { drafts: commercialStatusCount(generalGroups, ["DRAFT"]), pending: commercialStatusCount(generalGroups, ["PENDING_APPROVAL"]), ordered: commercialStatusCount(generalGroups, ["ORDERED"]), receiving: commercialStatusCount(generalGroups, ["PARTIALLY_RECEIVED"]), received: generalReceived };
   const assigned = items.length ? await prisma.enterpriseApproval.findMany({ where: { organizationId, targetEntityType: "EnterprisePurchase", targetEntityId: { in: items.map((item) => item.id) }, approverUserId: session.userId, status: "PENDING", archivedAt: null }, select: { id: true, targetEntityId: true, revision: true } }) : [];
   const byPurchase = new Map(assigned.map((approval) => [approval.targetEntityId, { id: approval.id, revision: approval.revision }]));
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "purchases", page } });
-  return NextResponse.json({ items: items.map((item) => ({ ...item, pendingAssignedApproval: item.status === "PENDING_APPROVAL" ? byPurchase.get(item.id) || null : null })), pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) }, metrics: { drafts, pending, ordered, receiving, received }, canManage: access.canManage, currentUserId: session.userId }, { headers: { "Cache-Control": "private, no-store" } });
+  return NextResponse.json({ filteredTotals: commercialAmountTotals(filteredGroups), generalTotals: commercialAmountTotals(generalGroups), pageTotals: commercialPageTotals(items), generalMetrics, items: items.map((item) => ({ ...item, pendingAssignedApproval: item.status === "PENDING_APPROVAL" ? byPurchase.get(item.id) || null : null })), pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) }, metrics: { drafts, pending, ordered, receiving, received }, canManage: access.canManage, currentUserId: session.userId }, { headers: { "Cache-Control": "private, no-store" } });
 }
 
 export async function POST(req: Request, { params }: Params) {

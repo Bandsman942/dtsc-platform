@@ -76,3 +76,5 @@ for (const [locale, fragment] of [["fr", "six décimales"], ["en", "six decimal 
   assert.ok(!body.message.includes("INVENTORY_"), "Validation messages must remain human in both languages");
 }
 console.log("PASS #1228: unit precision 0–6, physical capacity, exact arithmetic, conversions, historical preservation and FEFO snapshots");
+
+await import("./qa-data-intelligence-commercial-1228.mjs");

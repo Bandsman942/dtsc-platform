@@ -717,4 +717,46 @@ test.describe.serial("Shop 2.0 Iteration 4 global behavioral acceptance", () => 
     }
   });
 
+  test("#1228 commercial totals keep filtered, general and page scopes across currencies", async ({ page }, testInfo) => {
+    await signIn(page);
+    test.setTimeout(180_000);
+    const key=`E2E-1228-COMM-${Date.now()}`;
+    const user=await prisma.user.findUniqueOrThrow({where:{id:fixture.userId},select:{locale:true}});
+    const models=[["quotes","enterpriseQuote"],["sales-orders","enterpriseSalesOrder"],["purchases","enterprisePurchase"]];
+    try {
+      for(const [,model] of models) await prisma[model].createMany({data:Array.from({length:36},(_,i)=>({organizationId,reference:`${key}-${i}`,title:key,status:"DRAFT",currency:i%2?"USD":"CDF",subtotalAmount:"1.23",taxAmount:0,totalAmount:"1.23",createdByUserId:fixture.userId,...(model==="enterprisePurchase"?{requestedByUserId:fixture.userId}:{businessPartyId:fixture.customerId,discountAmount:0})}))});
+      for(const [endpoint] of models){
+        const query=`/api/enterprise/${organizationId}/${endpoint}?search=${key}&status=DRAFT&pageSize=5`;
+        const first=await apiGet(page,query+"&page=1"),second=await apiGet(page,query+"&page=2"),beyond=await apiGet(page,query+"&page=99");
+        expect(first.response.status(),JSON.stringify(first.body)).toBe(200);expect(first.body.pagination.total).toBe(36);
+        expect(first.body.items).toHaveLength(5);expect(second.body.items).toHaveLength(5);expect(beyond.body.items).toHaveLength(0);
+        expect(second.body.filteredTotals).toEqual(first.body.filteredTotals);expect(beyond.body.filteredTotals).toEqual(first.body.filteredTotals);
+        expect(second.body.generalTotals).toEqual(first.body.generalTotals);expect(beyond.body.pageTotals).toEqual([]);
+        for(const currencyCode of ["USD","CDF"])expect(first.body.filteredTotals.find(row=>row.currencyCode===currencyCode&&row.metric==="total"&&row.status==="DRAFT").amount).toBe("22.14");
+        expect(first.body.pageTotals.filter(row=>row.metric==="total").reduce((sum,row)=>sum.plus(row.amount),new Prisma.Decimal(0)).toFixed(2)).toBe("6.15");
+      }
+      for(const {locale,theme,width} of [{locale:"fr",theme:"dark",width:320},{locale:"en",theme:"light",width:1440},{locale:"fr",theme:"light",width:1440},{locale:"en",theme:"dark",width:320}]){
+        await prisma.user.update({where:{id:fixture.userId},data:{locale}});await page.setViewportSize({width,height:900});
+        await page.evaluate(value=>localStorage.setItem("theme",value),theme);
+        for(const moduleCode of ["SALES_QUOTES_ORDERS","SUPPLIERS_PURCHASES"]){
+          await page.goto(`/enterprise-modules/${moduleCode}`);
+          await expect(page.locator("html")).toHaveClass(new RegExp("\\b"+theme+"\\b"));
+          const search=moduleCode==="SALES_QUOTES_ORDERS"?page.locator("[data-workspace-toolbar]").getByRole("textbox"):page.locator("[data-purchase-design2]").getByRole("textbox");
+          await search.fill(key);
+          const scopes=page.locator("[data-commercial-amount-scopes]");await expect(scopes).toBeVisible();
+          await expect(scopes).toContainText(locale==="fr"?"22,14":"22.14");
+          await scopes.locator("summary").click();await expect(scopes).toContainText(locale==="fr"?"sans filtres":"without filters");await expect(scopes).toContainText(locale==="fr"?"page affichée":"Displayed page");
+          const download=page.waitForEvent("download");const exportRoot=moduleCode==="SALES_QUOTES_ORDERS"?page.locator("[data-workspace-toolbar]"):page.locator("[data-purchase-design2]");await exportRoot.getByRole("button",{name:"CSV",exact:true}).click();const file=await download;expect(await file.failure()).toBeNull();
+          const csv=(await readFile(await file.path())).toString("utf8");expect(csv).toContain(locale==="fr"?"Sous-total filtré":"Filtered subtotal");expect(csv).toContain(locale==="fr"?"Total général autorisé sans filtres":"Authorized general total without filters");expect(csv).toContain(key);
+          if(moduleCode==="SALES_QUOTES_ORDERS"){await page.locator("[data-professional-tabs]").getByRole("button").nth(1).click();await expect(scopes).toContainText(locale==="fr"?"22,14":"22.14");}
+          expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
+          await page.screenshot({path:testInfo.outputPath(`1228-${moduleCode}-${locale}-${theme}-${width}.png`),fullPage:true});
+        }
+      }
+    } finally {
+      await prisma.user.update({where:{id:fixture.userId},data:{locale:user.locale}});
+      for(const [,model] of models)await prisma[model].deleteMany({where:{organizationId,reference:{startsWith:key},status:"DRAFT"}});
+    }
+  });
+
 });

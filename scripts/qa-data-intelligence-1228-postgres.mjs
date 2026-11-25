@@ -73,12 +73,32 @@ try {
       await tx.$executeRawUnsafe("SAVEPOINT qa_1228_idempotence");
       await assert.rejects(async () => tx.enterpriseStockMovement.create({ data: { ...coordinates, movementType: "PURCHASE_RECEIPT", direction: "IN", quantity: "0.123456", idempotencyKey: `${tenant}-movement`, createdByUserId: actor } }), { code: "P2002" });
       await tx.$executeRawUnsafe("ROLLBACK TO SAVEPOINT qa_1228_idempotence");
+      // Commercial aggregates use PostgreSQL NUMERIC across more than one page,
+      // with both foreign rows and a second document status/currency present.
+      const exactCents = 999999999999999999n;
+      const money = count => { const cents=exactCents*BigInt(count); return `${cents/100n}.${String(cents%100n).padStart(2,"0")}`; };
+      for(const model of ["enterpriseQuote","enterpriseSalesOrder","enterprisePurchase"]){
+        const data=Array.from({length:104},(_,i)=>({organizationId:i<102?tenant:otherTenant,reference:`COMM-${i}`,title:i%2?"Other":"Target",status:i%3?"DRAFT":"CANCELLED",currency:i%5?"USD":"CDF",subtotalAmount:"9999999999999999.99",taxAmount:"0",totalAmount:"9999999999999999.99",createdByUserId:actor,...(model==="enterprisePurchase"?{requestedByUserId:i%7?actor:"other-actor"}:{businessPartyId:`${tenant}-party`,discountAmount:"0"})}));
+        await tx[model].createMany({data});
+        const base={organizationId:tenant,archivedAt:null,...(model==="enterprisePurchase"?{requestedByUserId:actor}:{})};
+        const where={...base,status:"DRAFT",title:{contains:"Target",mode:"insensitive"}};
+        const general=await tx[model].groupBy({by:["currency","status"],where:base,_sum:{totalAmount:true},_count:{_all:true}});
+        const filtered=await tx[model].groupBy({by:["currency","status"],where,_sum:{totalAmount:true},_count:{_all:true}});
+        for(const group of general){const count=data.filter(row=>row.organizationId===tenant&&row.currency===group.currency&&row.status===group.status&&(model!=="enterprisePurchase"||row.requestedByUserId===actor)).length;assert.equal(group._sum.totalAmount.toFixed(2),money(count));assert.equal(group._count._all,count);}
+        for(const group of filtered){const count=data.filter(row=>row.organizationId===tenant&&row.currency===group.currency&&row.status==="DRAFT"&&row.title==="Target"&&(model!=="enterprisePurchase"||row.requestedByUserId===actor)).length;assert.equal(group._sum.totalAmount.toFixed(2),money(count));assert.equal(group._count._all,count);}
+        assert.equal(await tx[model].count({where}),filtered.reduce((sum,row)=>sum+row._count._all,0));
+        const first=await tx[model].findMany({where,take:5,orderBy:{id:"asc"}}),second=await tx[model].findMany({where,take:5,skip:5,orderBy:{id:"asc"}});
+        assert.equal(first.length,5);assert.equal(second.length,5);assert.equal(new Set([...first,...second].map(row=>row.id)).size,10);
+        assert.equal((await tx[model].findMany({where,take:5,skip:1000})).length,0);
+        assert.deepEqual(await tx[model].groupBy({by:["currency","status"],where,_sum:{totalAmount:true},_count:{_all:true}}),filtered);
+      }
       throw new RollbackFixture();
-    }, { timeout: 30000 });
+    }, { timeout: 30000, isolationLevel: "RepeatableRead" });
   } catch (error) {
     if (!(error instanceof RollbackFixture)) throw error;
   }
   assert.equal(await db.enterpriseCatalogItem.count({ where: { organizationId: { in: [tenant, otherTenant] } } }), 0, "No fixture data may remain");
+  for(const model of ["enterpriseQuote","enterpriseSalesOrder","enterprisePurchase"]) assert.equal(await db[model].count({where:{organizationId:{in:[tenant,otherTenant]}}}),0,"Commercial rollback must leave no rows");
   console.log("PASS #1228 PostgreSQL: deployed quantity types, preserved integer capacity, exact micro-unit subtraction and transfer conservation constraint");
 } finally {
   await db.$disconnect();
