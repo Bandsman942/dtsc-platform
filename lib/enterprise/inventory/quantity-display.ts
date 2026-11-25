@@ -15,3 +15,15 @@ export function formatInventoryQuantity(
     precisionMismatch: actualScale > decimalScale,
   };
 }
+
+/** Excel preserves at most 15 significant digits. Keep larger quantities as
+ * exact text instead of first losing their micro-units through Number().
+ * This is only an export representation; the canonical value remains decimal.
+ */
+export function inventoryQuantityExportValue(value: string): string | number {
+  if (!/^-?\d+(?:\.\d+)?$/.test(value)) return value;
+  const significant = value.replace(/^-/, "").replace(".", "").replace(/^0+/, "");
+  if (significant.length > 15) return value;
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : value;
+}

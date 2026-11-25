@@ -17,7 +17,7 @@ import { idempotencyKey, publishFinanceEvent } from "@/lib/enterprise/accounting
 export const SUPPLIER_RETURN_TARGET = "EnterpriseSupplierReturnRequest";
 export const supplierReturnRequestSchema = z.object({
   movementId: z.string().trim().min(1).max(191),
-  quantity: z.string().trim().regex(/^\d{1,12}(?:\.\d{1,3})?$/),
+  quantity: z.string().trim().regex(/^\d{1,12}(?:\.\d{1,6})?$/),
   approverUserId: z.string().trim().min(1).max(191),
   reason: z.string().trim().min(8).max(2000),
   idempotencyKey: z.string().trim().min(8).max(180),
@@ -203,7 +203,7 @@ export async function dispatchSupplierReturn(organizationId: string, purchaseId:
     if (!payable || payable.organizationId !== organizationId || payable.outstandingAmount.lt(request.totalCost.plus(request.recoverableTaxAmount))) throw new EnterpriseDomainError("SUPPLIER_RETURN_PAYABLE_INSUFFICIENT",409);
     const movement = await applyStockMovementTx(tx, organizationId, actorUserId, {
       inventoryItemId: request.inventoryItemId, warehouseId: request.warehouseId, storageLocationId: request.storageLocationId,
-      stockLotId: request.stockLotId, movementType: "SUPPLIER_RETURN_OUT", direction: "OUT", quantity: Number(request.quantity.toFixed()),
+      stockLotId: request.stockLotId, movementType: "SUPPLIER_RETURN_OUT", direction: "OUT", quantity: request.quantity,
       sourceEntityType: SUPPLIER_RETURN_TARGET, sourceEntityId: request.id, sourceLineId: request.receiptItemId,
       idempotencyKey: "supplier-return:" + request.id + ":dispatch", reason: request.reason,
     }, { approvedSupplierReturnId: request.id });

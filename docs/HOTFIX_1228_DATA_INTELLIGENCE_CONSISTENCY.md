@@ -102,3 +102,42 @@ Inspection statique de main (aucun test exécuté) :
 - Exports analytiques : le PDF partagé limitait les KPI aux quatre premiers et le CSV omettait tous les KPI. Option explicite includeCompleteSummary activée uniquement pour registres avec sous-totaux ; PDF pagine tous les indicateurs et filtres, CSV ajoute la synthèse et conserve la protection formule. Templates plats inchangés. Sous-totaux physiques stock repris ; garde de cohérence entre pages (compte, IDs dupliqués, signature agrégats) refuse une exportation manifestement incohérente. Cette garde n'est pas un snapshot serveur intégral. Test export étendu à 28 indicateurs et contrôle du dernier dans CSV/PDF.
 
 - Moteur stock : calcul exact Decimal de quantité et solde pour tous mouvements communs (au lieu de Number et epsilon), garde anti-arrondi au niveau de la capacité physique actuelle à trois décimales, message FR/EN dans erreurs communes. Métadonnée historique numérique conservée pour compatibilité, balanceAfterExact additive. QA #1042 : refus 0.0001, solde 5−0.123=4.877 exact. Cette protection transitoire n'est pas la migration six décimales ni la validation complète par unité ; ces chantiers restent ouverts.
+## Reprise Work — contrôles et migration physique candidate
+
+État repris : `30c65166fbe446dbcae50333449a69d89e5290f0`, PR #1229 toujours DRAFT, même branche. Base réelle main vérifiée : `6aa0e7b4ead0f6dac1212fc6a78caa38a5effc32`.
+
+### Contrôle de la CI du SHA repris
+
+Le [run Quality Gates 45669007897](https://github.com/Bandsman942/dtsc-platform/actions/runs/45669007897) est terminé : Delivery governance, Quality et Migration réussies. Quality comprend notamment type-check, régression, lint et build. Les deux jobs navigateur de ce workflow sont `skipped` : ne pas les compter comme une preuve navigateur ou OWNER_E2E. Cette preuve concerne uniquement le SHA repris, pas les modifications Work suivantes.
+
+Le contrôle de tous les workflows du SHA repris donne 16 réussites et un échec : [Shop 2 behavioral 45669008204](https://github.com/Bandsman942/dtsc-platform/actions/runs/45669008204). Dans `shop2-z-global.spec.mjs`, le test de premier lot attendait deux lignes CSV alors que l’export analytique en fournit neuf (en-tête, donnée, séparateur, entreprise, date, comptage, sous-total et deux filtres). Les huit autres tests du groupe sont passés ; les étapes suivantes du job ont été ignorées après cet échec. L’assertion est actualisée pour conserver les contrôles sur la donnée et vérifier explicitement synthèse, précision d’unité et filtres FR/EN ; le CSV vide reste vérifié. Nouvelle preuve navigateur du correctif requise, aucune assertion désactivée.
+
+### Modifications Work à certifier sur le prochain SHA
+
+- Migration nouvelle de 110 colonnes dans 65 modèles, `(18,3)→(21,6)`, `(14,3)→(17,6)` et consommateurs de quantités `(20,6)→(21,6)` ; capacité entière préservée et contrainte de transfert coordonnée, sans modification de migration historique ni UPDATE métier.
+- Validation des mouvements et réservations par unité catalogue effective ; validation des seuils catalogue et quantités d’achat ; garde physique six décimales. Les conversions exactes disposent d’un helper testé, mais pas encore d’un parcours complet avec références et facteurs historiques : ne pas certifier Q02 globalement.
+- Soldes, écarts d’inventaire et comparaisons de livraison en Decimal exact ; micro-unités préservées dans la répartition des couches. Réceptions, transferts, retour fournisseur et récupération évitent l’aller-retour interne par Number. Suppression des troncatures trois décimales en achats et production ; les quantités calculées incompatibles sont refusées.
+- FEFO, snapshots de réservation, sélection de lots de retour et preuve de transfert admettent six décimales ; sept restent refusées. Les assertions historiques sont conservées et les nouvelles limites positives/négatives sont testées.
+- [Audit SYSCOHADA](AUDIT_1228_SYSCOHADA_INVENTORY.md) : source téléchargée et fingerprintée, CUMP distinct de FEFO, anomalie de mapping achat/variation identifiée. Baseline publiée inchangée ; politique versionnée coordonnée et preuve de configuration de la pièce utilisateur encore requises.
+- [Runbook de migration et retour arrière](MIGRATION_1228_PHYSICAL_QUANTITIES.md). Aucun lancement en Production.
+
+### Preuves ciblées de la reprise
+
+| Contrôle | Statut | Portée et limite |
+|---|---|---|
+| Unités 0–6, bornes physiques, conversions exactes/incompatibles, conservation historique, snapshots FEFO, messages FR/EN | LOCAL_EXECUTED | `qa:data-intelligence-1228` ; ne certifie pas les formulaires ni toutes les sources de quantité |
+| Promesses stock #1042 | LOCAL_EXECUTED | `qa-hotfix-1042-retail-invoice-stock-holds.mjs`, y compris solde exact à six décimales |
+| Libellés #1094 | LOCAL_EXECUTED | `qa-hotfix-1094-accounting-mcp.mjs` ; certification live distante explicitement non exécutée |
+| Lots, retours, coûts et transferts #1212 | LOCAL_EXECUTED | `qa:inventory-lot-traceability-1212`, mocks isolés ; ne remplace pas PostgreSQL/HTTP |
+| CSV/XLSX/PDF 125 lignes et 28 indicateurs | LOCAL_EXECUTED | `qa-finance-design2-exports.mjs` avec Poppler réel ; round-trip XLSX de micro-unités numériques et quantité limite exacte en texte ajouté, aucune assertion supprimée |
+| Régression générale | LOCAL_EXECUTED | Suite package exécutée intégralement sur état intermédiaire ; expansion séquentielle des mêmes commandes à cause de la limite de longueur Windows. CI du prochain SHA requise |
+| Prisma generate | LOCAL_EXECUTED | Client 6.19.3 généré depuis le schéma multi-fichier |
+| Migration et fixture PostgreSQL du nouveau schéma | NOT_EXECUTED | Contrôle ajouté aux Quality Gates : capacités, round-trip de micro-unités, FK tenant, idempotence et rollback de fixture sur base locale isolée |
+| Types et lint locaux | LOCAL_EXECUTED | Types réussis avec mémoire augmentée, lint réussi avec résolution du plugin transitif et avertissements existants. État intermédiaire, CI finale requise |
+| Build du nouveau SHA | NOT_EXECUTED | Première tentative bloquée par réseau des polices et accès aux fichiers générés ; relance locale avec accès nécessaire en cours. Aucune réussite présumée |
+| Mise à niveau d’une base peuplée, volume/verrous/EXPLAIN | NOT_EXECUTED | À certifier sur copie représentative, selon runbook |
+| Navigateur et OWNER_E2E du nouveau SHA | NOT_EXECUTED | Aucune validation manuelle propriétaire inventée |
+
+### Lots toujours ouverts
+
+La migration candidate ne clôture pas tout #1228. Restent notamment validation client selon unité effective et conversions intégrées, historique des changements d’unité, flux sectoriels et formulaires à certifier, consolidation réservée/vendable toutes pages, inventaire exhaustif et agrégats des autres modules ERP, totaux général/page contextualisés, menus analytiques et préférences, libellés de toutes les sources et recherche historique, concordance des exports de chaque module, politique comptable versionnée coordonnée, performances et matrice navigateur/RBAC complète. Le cahier des charges initial et Q01–R03 restent opposables. Aucun E2E final ne peut être annoncé sur cette seule tranche.

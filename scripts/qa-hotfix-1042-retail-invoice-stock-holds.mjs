@@ -83,6 +83,13 @@ vm.runInNewContext(serviceJavaScript, {
         return args.excludeSalesInvoiceId === "invoice-paying" ? [] : [{ inventoryItemId: "item-1", stockLotId: "lot-1", warehouseId: "store-a", quantity: outstandingHold }];
       },
     };
+    if (name === "@/lib/enterprise/inventory/quantity-policy") {
+      const mod = { exports: {} };
+      vm.runInNewContext(ts.transpileModule(read("lib/enterprise/inventory/quantity-policy.ts"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, {
+        module: mod, exports: mod.exports, require: id => id === "@prisma/client" ? { Prisma: { Decimal } } : { EnterpriseDomainError: DomainError },
+      });
+      return mod.exports;
+    }
     if (name === "@/lib/enterprise/inventory/lot-allocation") return allocationModule.exports;
     if (name === "@/lib/enterprise/accounting/inventory-transfer-service") return {};
     if (name === "@/lib/enterprise/inventory/approval") return {};
@@ -99,13 +106,14 @@ vm.runInNewContext(serviceJavaScript, {
 const balance = { id: "balance-1", revision: 1, quantityOnHand: new Decimal(5), quantityReserved: new Decimal(0) };
 let promises = [];
 let persistedMovement;
+let unitScale = 6;
 const movementTx = {
   enterpriseInventoryReservation: { findMany: async () => promises },
   enterpriseStockMovement: {
     findFirst: async () => null,
     create: async ({ data }) => { persistedMovement = data; moved++; return { id: "movement-1" }; },
   },
-  enterpriseInventoryItem: { findFirst: async () => ({ catalogItemId: "catalog-1", allowNegativeStock: false, catalogItem: { id:"catalog-1", trackInventory: true } }) },
+  enterpriseInventoryItem: { findFirst: async () => ({ catalogItemId: "catalog-1", allowNegativeStock: false, catalogItem: { id:"catalog-1", trackInventory: true, unitOfMeasure: { decimalScale: unitScale } } }) },
   pharmacyProductExtension: {count:async ({where})=>{assert.equal(where.organizationId,"tenant-a");assert.equal(where.catalogItemId,"catalog-1");return pharmacyMapping;}},
   enterpriseSectorInventoryEvent: {count:async ({where})=>{assert.equal(where.organizationId,"tenant-a");assert.equal(where.catalogItemId,"catalog-1");return sectorMapping;}},
   enterpriseWarehouse: { findFirst: async () => ({ id: "store-a" }) },
@@ -138,10 +146,20 @@ await assert.doesNotReject(inventoryModule.exports.applyStockMovementTx(movement
 
 // #1228: exact decimal movements, no silent physical-ledger rounding.
 promises = [];
-await assert.rejects(inventoryModule.exports.applyStockMovementTx(movementTx, "tenant-a", "actor", { ...outbound, quantity: 0.0001 }), { code: "INVENTORY_PHYSICAL_QUANTITY_PRECISION" });
-await inventoryModule.exports.applyStockMovementTx(movementTx, "tenant-a", "actor", { ...outbound, quantity: 0.123 });
-assert.equal(persistedMovement.quantity.toFixed(), "0.123");
-assert.equal(persistedMovement.balanceAfter.toFixed(), "4.877");
+await assert.rejects(inventoryModule.exports.applyStockMovementTx(movementTx, "tenant-a", "actor", { ...outbound, quantity: 0.0000001 }), { code: "INVENTORY_PHYSICAL_QUANTITY_PRECISION" });
+await inventoryModule.exports.applyStockMovementTx(movementTx, "tenant-a", "actor", { ...outbound, quantity: 0.123456 });
+assert.equal(persistedMovement.quantity.toFixed(), "0.123456");
+assert.equal(persistedMovement.balanceAfter.toFixed(), "4.876544");
+for (const [scale, accepted, remaining] of [[0, 1, "4"], [1, 0.1, "4.9"], [2, 0.01, "4.99"], [3, 0.001, "4.999"], [4, 0.0001, "4.9999"], [5, 0.00001, "4.99999"], [6, 0.000001, "4.999999"]]) {
+  unitScale = scale;
+  const before = moved;
+  const incompatible = `0.${"0".repeat(scale)}1`;
+  await assert.rejects(inventoryModule.exports.applyStockMovementTx(movementTx, "tenant-a", "actor", { ...outbound, quantity: incompatible }), { code: scale === 6 ? "INVENTORY_PHYSICAL_QUANTITY_PRECISION" : "INVENTORY_UNIT_QUANTITY_PRECISION" });
+  assert.equal(moved, before, "An incompatible unit quantity must not write a movement");
+  await inventoryModule.exports.applyStockMovementTx(movementTx, "tenant-a", "actor", { ...outbound, quantity: accepted });
+  assert.equal(persistedMovement.balanceAfter.toFixed(), remaining);
+}
+unitScale = 6;
 
 // All reservation sources must share the same canonical invoice lines.
 assert.match(checkout, /readActiveRetailInvoiceStockHoldsTx\(tx, \{ organizationId, warehouseId: input\.warehouseId/);

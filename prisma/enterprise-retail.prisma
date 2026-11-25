@@ -82,7 +82,7 @@ model EnterpriseRetailSaleLine {
   inventoryItemId   String?
   stockLotId        String?
   description       String
-  quantity          Decimal  @db.Decimal(20, 6)
+  quantity          Decimal  @db.Decimal(21, 6)
   unitPrice         Decimal  @db.Decimal(20, 6)
   discountAmount    Decimal  @default(0) @db.Decimal(20, 6)
   taxAmount         Decimal  @default(0) @db.Decimal(20, 6)
@@ -246,8 +246,8 @@ model EnterpriseRetailPriceCondition {
   siteId                  String?
   customerBusinessPartyId String?
   customerSegmentCode     String?
-  minQuantity             Decimal? @db.Decimal(20, 6)
-  maxQuantity             Decimal? @db.Decimal(20, 6)
+  minQuantity             Decimal? @db.Decimal(21, 6)
+  maxQuantity             Decimal? @db.Decimal(21, 6)
   channelCode             String   @default("POS")
   priority                Int      @default(0)
   isActive                Boolean  @default(true)
@@ -325,7 +325,7 @@ model EnterpriseRetailPricingDecision {
   saleId                  String
   catalogItemId           String
   catalogPriceId          String?
-  quantity                Decimal  @db.Decimal(20, 6)
+  quantity                Decimal  @db.Decimal(21, 6)
   baseUnitPrice           Decimal  @db.Decimal(20, 6)
   resolvedUnitPrice       Decimal  @db.Decimal(20, 6)
   discountAmount          Decimal  @default(0) @db.Decimal(20, 6)
@@ -386,7 +386,7 @@ model EnterpriseRetailReturnLine {
   saleLineId       String
   catalogItemId    String
   inventoryItemId  String?
-  quantity         Decimal  @db.Decimal(20, 6)
+  quantity         Decimal  @db.Decimal(21, 6)
   unitPrice        Decimal  @db.Decimal(20, 6)
   discountAmount   Decimal  @default(0) @db.Decimal(20, 6)
   taxAmount        Decimal  @default(0) @db.Decimal(20, 6)

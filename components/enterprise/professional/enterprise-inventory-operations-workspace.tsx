@@ -33,6 +33,7 @@ import { ErpDesign2Metric, ErpDesign2RegisterSection, ErpDesign2RegisterTools } 
 import { ModuleContent, ModuleHeader, ModuleToolbar, ModuleWorkspace } from "@/components/workspace/module-workspace";
 import { StatusBadge } from "@/components/workspace/status-badge";
 import type { EnterpriseModuleDefinition } from "@/lib/enterprise/module-registry";
+import { inventoryQuantityExportValue } from "@/lib/enterprise/inventory/quantity-display";
 
 type Member = { id: string; label: string; role: string; positionTitle: string | null };
 type Warehouse = { id: string; code: string; name: string; siteId: string };
@@ -403,9 +404,9 @@ export function EnterpriseInventoryOperationsWorkspace({ organizationId, organiz
             { key: "item", labelFr: "Article", labelEn: "Item", get: (row) => String((row.catalogItem as InventoryItem["catalogItem"] | null)?.name || "") },
             { key: "unit", labelFr: "Unité", labelEn: "Unit", get: (row) => String((row.catalogItem as InventoryItem["catalogItem"] | null)?.unitOfMeasure?.symbol || "") },
             { key: "status", labelFr: "Statut", labelEn: "Status", get: (row) => stockStatusLabel(Boolean(row.isLowStock), Number(row.quantityAvailable || 0)) },
-            { key: "onHand", labelFr: "Stock physique", labelEn: "On-hand stock", get: (row) => Number(row.quantityOnHand || 0) },
-            { key: "reserved", labelFr: "Réservations et retenues", labelEn: "Reservations and holds", get: (row) => Number(row.quantityReserved || 0) },
-            { key: "available", labelFr: "Stock vendable", labelEn: "Sellable stock", get: (row) => Number(row.quantityAvailable || 0) },
+            { key: "onHand", labelFr: "Stock physique", labelEn: "On-hand stock", get: (row) => inventoryQuantityExportValue(String(row.quantityOnHandExact ?? row.quantityOnHand ?? 0)) },
+            { key: "reserved", labelFr: "Réservations et retenues", labelEn: "Reservations and holds", get: (row) => inventoryQuantityExportValue(String(row.quantityReservedExact ?? row.quantityReserved ?? 0)) },
+            { key: "available", labelFr: "Stock vendable", labelEn: "Sellable stock", get: (row) => inventoryQuantityExportValue(String(row.quantityAvailableExact ?? row.quantityAvailable ?? 0)) },
           ] : [
             { key: "reference", labelFr: "Référence / Code", labelEn: "Reference / Code", get: (row) => String(row.reference || (row.catalogItem as { code?: string } | null)?.code || "") },
             { key: "item", labelFr: "Article", labelEn: "Item", get: (row) => String((row.catalogItem as { name?: string } | null)?.name || (row.inventoryItem as { catalogItem?: { name?: string } } | null)?.catalogItem?.name || "") },

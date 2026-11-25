@@ -582,6 +582,7 @@ test.describe.serial("Shop 2.0 Iteration 4 global behavioral acceptance", () => 
     await signIn(page);
     const key = "UI1212-" + crypto.randomUUID().slice(0, 12);
     const baseProduct = await prisma.enterpriseCatalogItem.findUniqueOrThrow({ where: { id: fixture.catalogItemId } });
+    const unit = await prisma.enterpriseUnitOfMeasure.findUniqueOrThrow({ where: { id: baseProduct.unitOfMeasureId } });
     const name = "E2E first tracked batch with an intentionally long catalogue description " + key;
     const product = await prisma.enterpriseCatalogItem.create({
       data: { organizationId, code: key, sku: key, name, normalizedName: name.toLowerCase(),
@@ -624,11 +625,18 @@ test.describe.serial("Shop 2.0 Iteration 4 global behavioral acceptance", () => 
         const csv = await downloadRegister("CSV");
         expect(csv.name).toMatch(/\.csv$/i);
         const rows = csv.bytes.toString("utf8").trim().split(/\r?\n/);
-        expect(rows).toHaveLength(2);
+        // #1228 analytical CSV keeps the same one data row, followed by the
+        // complete summary and filters. Verify both sections explicitly.
+        expect(rows).toHaveLength(9);
         expect(rows[0]).toContain(locale === "fr" ? '"Stock vendable"' : '"Sellable stock"');
         expect(rows[1]).toContain(key);
         expect(rows[1]).toContain(locale === "fr" ? '"Aucun stock vendable"' : '"No sellable stock"');
         expect(rows[1]).toMatch(/,"0","0","0"$/);
+        expect(rows[2]).toBe(Array(8).fill('""').join(","));
+        expect(rows[5].startsWith(locale === "fr" ? '"Enregistrements","1"' : '"Records","1"')).toBe(true);
+        expect(rows[6].startsWith(`"${locale === "fr" ? "Sous-total physique filtré" : "Filtered on-hand subtotal"} · ${unit.symbol || unit.name}","${new Prisma.Decimal(0).toFixed(unit.decimalScale)} ${unit.symbol || unit.name}"`)).toBe(true);
+        expect(rows[7].startsWith(`"${locale === "fr" ? "Recherche" : "Search"}","${key}"`)).toBe(true);
+        expect(rows[8].startsWith(locale === "fr" ? '"Dépôt","Tous les dépôts autorisés"' : '"Warehouse","All authorized warehouses"')).toBe(true);
         if (locale === "en") {
           const xlsx = await downloadRegister("Excel");
           expect(xlsx.name).toMatch(/\.xlsx$/i);

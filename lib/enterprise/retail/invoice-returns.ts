@@ -29,7 +29,7 @@ export const retailInvoiceReturnRequestSchema = z.object({
   lines: z.array(z.object({
     checkoutLineId: z.string().trim().min(1).max(191),
     quantity,
-    lotAllocations: z.array(z.object({ stockLotId: z.string().trim().min(1).max(191), quantity: z.string().trim().regex(/^\d{1,15}(\.\d{1,3})?$/) }).strict()).min(1).max(100).optional(),
+    lotAllocations: z.array(z.object({ stockLotId: z.string().trim().min(1).max(191), quantity: z.string().trim().regex(/^\d{1,15}(\.\d{1,6})?$/) }).strict()).min(1).max(100).optional(),
     stockDisposition: z.enum(["RESTOCK", "QUARANTINE", "DISPOSE", "SERVICE_CREDIT", "UNDELIVERED_CREDIT"]),
   }).strict()).min(1).max(100),
 }).strict();
@@ -497,10 +497,9 @@ export async function createRetailInvoiceReturnRequest(
       if (!value.greaterThan(0) || value.greaterThan(left)) {
         throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_QUANTITY_EXCEEDED", 409);
       }
-      // Inventory balances/movements store three decimal places. An invoice
-      // item may have six, but a physical return cannot silently round its
-      // quantity when it is later applied to the canonical stock ledger.
-      if (line.inventoryItemId && value.decimalPlaces() > 3) {
+      // Both invoice and physical ledgers preserve six places after #1228.
+      // A physical return must remain representable without silent rounding.
+      if (line.inventoryItemId && value.decimalPlaces() > 6) {
         throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_STOCK_QUANTITY_PRECISION", 409);
       }
       // Never report a phantom physical return or put goods back in stock

@@ -18,6 +18,7 @@ import type {
 import { prisma } from "@/lib/prisma";
 import { prepareValuedTransferDispatchTx, completeValuedTransferDispatchTx, prepareValuedTransferReceiptTx, completeValuedTransferReceiptTx } from "@/lib/enterprise/accounting/inventory-transfer-service";
 import { lotExpiryDateKey, reservationExactBalanceRemaining, reservationLegacyRemaining, reservationLotRemaining } from "@/lib/enterprise/inventory/lot-allocation";
+import { addInventoryQuantities, requireInventoryQuantity } from "@/lib/enterprise/inventory/quantity-policy";
 
 type StockMovementInput = z.infer<typeof stockMovementCreateSchema>;
 type StockTransferCreateInput = z.infer<typeof stockTransferCreateSchema>;
@@ -92,7 +93,7 @@ async function assertInventoryCoordinates(tx: Prisma.TransactionClient, organiza
   const [inventoryItem, warehouse, storageLocation, stockLot] = await Promise.all([
     tx.enterpriseInventoryItem.findFirst({
       where: { id: input.inventoryItemId, organizationId, status: "ACTIVE", archivedAt: null },
-      include: { catalogItem: { select: { id: true, code: true, name: true, trackInventory: true } } },
+      include: { catalogItem: { select: { id: true, code: true, name: true, trackInventory: true, unitOfMeasure: { select: { decimalScale: true } } } } },
     }),
     tx.enterpriseWarehouse.findFirst({ where: { id: input.warehouseId, organizationId, status: "ACTIVE", archivedAt: null }, select: { id: true } }),
     input.storageLocationId
@@ -117,7 +118,7 @@ export async function applyStockMovementTx(
   tx: Prisma.TransactionClient,
   organizationId: string,
   actorUserId: string,
-  input: Omit<StockMovementInput, "movementType"> & {movementType: StockMovementInput["movementType"] | "LOT_WRITE_OFF" | "SUPPLIER_RETURN_OUT" | "CUSTODY_RECOVERY_IN"},
+  input: Omit<StockMovementInput, "movementType" | "quantity"> & {quantity: Prisma.Decimal.Value; movementType: StockMovementInput["movementType"] | "LOT_WRITE_OFF" | "SUPPLIER_RETURN_OUT" | "CUSTODY_RECOVERY_IN"},
   internal?: { consumingRetailInvoiceId?: string; approvedLotWriteOffId?: string; quarantinedTransferReceiptId?: string; approvedSupplierReturnId?: string; approvedRecoveryAssessmentId?: string },
 ) {
   const recovery=input.movementType==="CUSTODY_RECOVERY_IN";
@@ -169,14 +170,12 @@ export async function applyStockMovementTx(
     if (lotExpiryDateKey(stockLot.expiryDate) < today) throw new EnterpriseDomainError("STOCK_LOT_EXPIRED", 409);
   }
   const balance = await tx.enterpriseInventoryBalance.findFirst({ where: { organizationId, inventoryItemId: input.inventoryItemId, warehouseId: input.warehouseId, storageLocationId: input.storageLocationId || null, stockLotId: input.stockLotId || null } });
-  const movementQuantity = new Prisma.Decimal(input.quantity);
-  // Until the coordinated physical-ledger migration is delivered, do not
-  // let PostgreSQL round quantities beyond its actual 3-place storage scale.
-  if (!movementQuantity.isFinite() || movementQuantity.lte(0) || movementQuantity.decimalPlaces() > 3) {
-    throw new EnterpriseDomainError("INVENTORY_PHYSICAL_QUANTITY_PRECISION", 400);
-  }
+  const movementQuantity = requireInventoryQuantity(input.quantity, inventoryItem.catalogItem.unitOfMeasure.decimalScale, { positive: true });
   const currentQuantity = new Prisma.Decimal(balance?.quantityOnHand || 0);
-  const nextBalance = input.direction === "IN" ? currentQuantity.plus(movementQuantity) : currentQuantity.minus(movementQuantity);
+  const nextBalance = addInventoryQuantities(currentQuantity, input.direction === "IN" ? movementQuantity : movementQuantity.negated());
+  // Historical incompatible fractions are never rounded or rewritten. An
+  // outbound correction may preserve them; the physical capacity still applies.
+  if (nextBalance.abs().gte("1000000000000000")) throw new EnterpriseDomainError("INVENTORY_PHYSICAL_QUANTITY_PRECISION", 400);
   if (supplierReturn && (!balance || nextBalance.lt(0))) throw new EnterpriseDomainError("NEGATIVE_STOCK_FORBIDDEN",409);
   if (nextBalance.lt(0) && !inventoryItem.allowNegativeStock) throw new EnterpriseDomainError("NEGATIVE_STOCK_FORBIDDEN", 409);
   if (input.direction === "OUT") {
@@ -242,7 +241,8 @@ export async function createEnterpriseStockTransfer(organizationId: string, acto
     if (!approver) throw new EnterpriseDomainError("APPROVER_NOT_MEMBER", 404);
     await requireTransferSiteAuthority(tx, organizationId, actorUserId, source.siteId);
     for (const line of input.lines) {
-      await assertInventoryCoordinates(tx, organizationId, { inventoryItemId: line.inventoryItemId, warehouseId: input.sourceWarehouseId, storageLocationId: line.sourceLocationId, stockLotId: line.stockLotId });
+      const coordinates = await assertInventoryCoordinates(tx, organizationId, { inventoryItemId: line.inventoryItemId, warehouseId: input.sourceWarehouseId, storageLocationId: line.sourceLocationId, stockLotId: line.stockLotId });
+      requireInventoryQuantity(line.quantity, coordinates.inventoryItem.catalogItem.unitOfMeasure.decimalScale, { positive: true });
       if (line.destinationLocationId) {
         const destinationLocation = await tx.enterpriseStorageLocation.findFirst({ where: { id: line.destinationLocationId, organizationId, warehouseId: input.destinationWarehouseId, status: "ACTIVE", archivedAt: null }, select: { id: true } });
         if (!destinationLocation) throw new EnterpriseDomainError("DESTINATION_LOCATION_NOT_FOUND", 404);
@@ -322,7 +322,7 @@ async function receiveTransferLinesTx(
       stockLotId: destinationLotId,
       movementType: "TRANSFER_IN",
       direction: "IN",
-      quantity: Number(line.quantity),
+      quantity: line.quantity,
       sourceEntityType: "EnterpriseStockTransfer",
       sourceEntityId: transfer.id,
       sourceLineId: line.id,
@@ -361,7 +361,7 @@ export async function decideEnterpriseStockTransfer(organizationId: string, tran
     const confirmedReceipt = Boolean(retailConfig && readRetailInventoryPolicy(retailConfig.settingsJson).transferReception === "CONFIRMED");
     for (const line of transfer.lines) {
       const financialDispatch=await prepareValuedTransferDispatchTx(tx,organizationId,transfer.id,line.id);
-      const dispatchedMovement=await applyStockMovementTx(tx, organizationId, actorUserId, { inventoryItemId: line.inventoryItemId, warehouseId: transfer.sourceWarehouseId, storageLocationId: line.sourceLocationId, stockLotId: line.stockLotId, movementType: "TRANSFER_OUT", direction: "OUT", quantity: Number(line.quantity), sourceEntityType: "EnterpriseStockTransfer", sourceEntityId: transfer.id, sourceLineId: line.id, idempotencyKey: `transfer:${transfer.id}:${line.id}:out`, reason: input.comment || null });
+      const dispatchedMovement=await applyStockMovementTx(tx, organizationId, actorUserId, { inventoryItemId: line.inventoryItemId, warehouseId: transfer.sourceWarehouseId, storageLocationId: line.sourceLocationId, stockLotId: line.stockLotId, movementType: "TRANSFER_OUT", direction: "OUT", quantity: line.quantity, sourceEntityType: "EnterpriseStockTransfer", sourceEntityId: transfer.id, sourceLineId: line.id, idempotencyKey: `transfer:${transfer.id}:${line.id}:out`, reason: input.comment || null });
       if(financialDispatch) await completeValuedTransferDispatchTx(tx,organizationId,actorUserId,financialDispatch,dispatchedMovement.movement.id);
     }
     if (!confirmedReceipt) await receiveTransferLinesTx(tx, transfer, actorUserId, input.comment);
@@ -410,10 +410,11 @@ export async function createEnterpriseInventoryCount(organizationId: string, act
       const key = `${line.inventoryItemId}:${line.stockLotId || ""}`;
       if (seen.has(key)) throw new EnterpriseDomainError("INVENTORY_COUNT_LINE_DUPLICATE");
       seen.add(key);
-      await assertInventoryCoordinates(tx, organizationId, { inventoryItemId: line.inventoryItemId, warehouseId: input.warehouseId, storageLocationId: input.storageLocationId, stockLotId: line.stockLotId });
+      const coordinates = await assertInventoryCoordinates(tx, organizationId, { inventoryItemId: line.inventoryItemId, warehouseId: input.warehouseId, storageLocationId: input.storageLocationId, stockLotId: line.stockLotId });
+      requireInventoryQuantity(line.countedQuantity, coordinates.inventoryItem.catalogItem.unitOfMeasure.decimalScale);
       const balance = await tx.enterpriseInventoryBalance.findFirst({ where: { organizationId, inventoryItemId: line.inventoryItemId, warehouseId: input.warehouseId, storageLocationId: input.storageLocationId || null, stockLotId: line.stockLotId || null } });
-      const expectedQuantity = Number(balance?.quantityOnHand || 0);
-      lines.push({ inventoryItemId: line.inventoryItemId, stockLotId: line.stockLotId || null, expectedQuantity, countedQuantity: line.countedQuantity, varianceQuantity: line.countedQuantity - expectedQuantity, countedByUserId: actorUserId, countedAt: new Date(), notes: line.notes || null });
+      const expectedQuantity = new Prisma.Decimal(balance?.quantityOnHand || 0);
+      lines.push({ inventoryItemId: line.inventoryItemId, stockLotId: line.stockLotId || null, expectedQuantity, countedQuantity: line.countedQuantity, varianceQuantity: addInventoryQuantities(line.countedQuantity, expectedQuantity.negated()), countedByUserId: actorUserId, countedAt: new Date(), notes: line.notes || null });
     }
     const count = await tx.enterpriseInventoryCount.create({ data: { organizationId, reference: inventoryReference("CNT"), warehouseId: input.warehouseId, storageLocationId: input.storageLocationId || null, status: "SUBMITTED", countType: input.countType, startedAt: new Date(), submittedAt: new Date(), requestedByUserId: actorUserId, approvedByUserId: input.approverUserId, notes: input.notes || null, lines: { create: lines } }, include: { lines: true } });
     await tx.enterpriseApproval.create({ data: { organizationId, targetEntityType: "EnterpriseInventoryCount", targetEntityId: count.id, requestedByUserId: actorUserId, approverUserId: input.approverUserId } });
@@ -448,9 +449,9 @@ export async function decideEnterpriseInventoryCount(organizationId: string, cou
       const item=await tx.enterpriseInventoryItem.findFirst({where:{organizationId,id:line.inventoryItemId},select:{catalogItemId:true}});
       if(!item)throw new EnterpriseDomainError("INVENTORY_ITEM_NOT_FOUND",404);
       await assertCommonInventoryCatalogAuthorityTx(tx,organizationId,item.catalogItemId);
-      const variance = Number(line.varianceQuantity || 0);
-      if (Math.abs(variance) < 0.000001) continue;
-      await applyStockMovementTx(tx, organizationId, actorUserId, { inventoryItemId: line.inventoryItemId, warehouseId: count.warehouseId, storageLocationId: count.storageLocationId, stockLotId: line.stockLotId, movementType: "COUNT_CORRECTION", direction: variance > 0 ? "IN" : "OUT", quantity: Math.abs(variance), sourceEntityType: "EnterpriseInventoryCount", sourceEntityId: count.id, sourceLineId: line.id, idempotencyKey: `inventory-count:${count.id}:${line.id}`, reason: input.comment || `Correction inventaire ${count.reference}` });
+      const variance = new Prisma.Decimal(line.varianceQuantity || 0);
+      if (variance.isZero()) continue;
+      await applyStockMovementTx(tx, organizationId, actorUserId, { inventoryItemId: line.inventoryItemId, warehouseId: count.warehouseId, storageLocationId: count.storageLocationId, stockLotId: line.stockLotId, movementType: "COUNT_CORRECTION", direction: variance.gt(0) ? "IN" : "OUT", quantity: variance.abs(), sourceEntityType: "EnterpriseInventoryCount", sourceEntityId: count.id, sourceLineId: line.id, idempotencyKey: `inventory-count:${count.id}:${line.id}`, reason: input.comment || `Correction inventaire ${count.reference}` });
     }
     const updated = await tx.enterpriseInventoryCount.updateMany({ where: { id: count.id, organizationId, revision: input.revision, status: "SUBMITTED" }, data: { status: "COMPLETED", approvedAt: new Date(), completedAt: new Date(), revision: { increment: 1 } } });
     if (updated.count !== 1) throw new EnterpriseDomainConflictError();

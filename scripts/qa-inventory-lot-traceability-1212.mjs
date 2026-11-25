@@ -126,7 +126,8 @@ const short = planFefoLots({ candidates, quantity: 100, businessDate: "2026-11-1
 assert.equal(short.shortfall.toFixed(), "10");
 assert.equal(planFefoLots({ candidates, quantity: 100, businessDate: "2026-11-17", expiryMode: "WARN" }).allocations.at(-1).stockLotId, "expired");
 assert.equal(planFefoLots({ candidates: [candidate("undated", null, 10)], quantity: 1, businessDate: "2026-11-17", expiryMode: "BLOCK", requireExpiry: true }).shortfall.toFixed(), "1");
-assert.throws(() => planFefoLots({ candidates, quantity: 0.0001, businessDate: "2026-11-17", expiryMode: "BLOCK" }), { name: "RangeError" });
+assert.equal(planFefoLots({ candidates, quantity: 0.000001, businessDate: "2026-11-17", expiryMode: "BLOCK" }).allocations[0].quantity.toFixed(), "0.000001");
+assert.throws(() => planFefoLots({ candidates, quantity: 0.0000001, businessDate: "2026-11-17", expiryMode: "BLOCK" }), { name: "RangeError" });
 console.log("FEFO multi-lot planning, holds, quarantine and calendar dates OK");
 
 class TestDomainError extends Error { constructor(code, status = 400) { super(code); this.code = code; this.status = status; } }
@@ -272,7 +273,7 @@ mocks["@/lib/enterprise/inventory/supplier-return-preflight"] = {
 mocks["@/lib/enterprise/accounting/helpers"] = { idempotencyKey: () => "value-a", publishFinanceEvent: async () => { writes.push("audit"); } };
 mocks["@/lib/enterprise/inventory/service"] = {
   applyStockMovementTx: async (_tx, org, actor, input, internal) => {
-    assert.equal(org,"org-a"); assert.equal(actor,"requester"); assert.equal(input.quantity,2);
+    assert.equal(org,"org-a"); assert.equal(actor,"requester"); assert.equal(input.quantity.toFixed(),"2");
     assert.equal(input.movementType,"SUPPLIER_RETURN_OUT"); assert.equal(input.stockLotId,"lot-a");
     assert.equal(internal.approvedSupplierReturnId,"rtv-a"); writes.push("movement"); return {movement:sourceOut,idempotent:false};
   },
@@ -286,8 +287,8 @@ mocks["@/lib/enterprise/accounting/posting-service"] = {
 mocks["@/lib/enterprise/accounting/errors"] = { EnterpriseAccountingError: TestDomainError };
 const returnSvc = load("lib/enterprise/inventory/supplier-return-request-service.ts");
 const qtySchema = returnSvc.supplierReturnRequestSchema.shape.quantity;
-for (const quantity of ["2","1.125","0.001","999999999999.999"]) assert.equal(qtySchema.safeParse(quantity).success,true);
-for (const quantity of ["1.0001","-1","2e2","2,5","1000000000000"]) assert.equal(qtySchema.safeParse(quantity).success,false);
+for (const quantity of ["2","1.125","0.001","0.000001","999999999999.999999"]) assert.equal(qtySchema.safeParse(quantity).success,true);
+for (const quantity of ["1.0000001","-1","2e2","2,5","1000000000000"]) assert.equal(qtySchema.safeParse(quantity).success,false);
 assert.equal(returnSvc.supplierReturnDispatchSchema.safeParse({...dispatch,dispatchReference:""}).success,false);
 const doDispatch = () => returnSvc.dispatchSupplierReturn("org-a","po-a","requester",dispatch);
 canManageValue=false;
@@ -408,7 +409,8 @@ for(const invalid of [
   transferPool("1",[["zero","1","0"]]),
   transferPool("1",[]),
 ])assert.throws(()=>planInventoryTransferCost(invalid,d("1")),{code:"INVENTORY_TRANSFER_COST_POOL_UNPROVEN"});
-for(const quantity of ["0","21","0.0001"])assert.throws(()=>planInventoryTransferCost(exactSource,d(quantity)),{code:"INVENTORY_TRANSFER_COST_POOL_UNPROVEN"});
+for(const quantity of ["0","21","0.0000001"])assert.throws(()=>planInventoryTransferCost(exactSource,d(quantity)),{code:quantity === "0.0000001" ? "INVENTORY_TRANSFER_COST_NOT_EXACT" : "INVENTORY_TRANSFER_COST_POOL_UNPROVEN"});
+assert.equal(planInventoryTransferCost(transferPool("1",[["micro","1","7"]]),d("0.000001")).quantity.toFixed(),"0.000001");
 assert.throws(()=>planInventoryTransferCost(transferPool("3",[["a","1","5"],["b","1","7"],["c","1","9"]]),d("1")),{code:"INVENTORY_TRANSFER_COST_NOT_EXACT"});
 assert.throws(()=>proveInventoryTransferDestination(transferPool("1",[]),transferCost),{code:"INVENTORY_TRANSFER_COST_POOL_UNPROVEN"});
 assert.throws(()=>proveInventoryTransferDestination(transferPool("0",[],"CDF"),transferCost),{code:"INVENTORY_TRANSFER_COST_POOL_UNPROVEN"});

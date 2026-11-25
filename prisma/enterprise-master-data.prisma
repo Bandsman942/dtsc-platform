@@ -293,7 +293,7 @@ model EnterpriseStorageLocation {
   status             String                       @default("ACTIVE")
   restrictedAccess   Boolean                      @default(false)
   barcode            String?
-  capacityValue      Decimal?                     @db.Decimal(18, 3)
+  capacityValue      Decimal?                     @db.Decimal(21, 6)
   capacityUnit       String?
   createdByUserId    String
   revision           Int                          @default(1)

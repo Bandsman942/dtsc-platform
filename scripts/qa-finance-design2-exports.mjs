@@ -73,4 +73,15 @@ try {
   fs.unlinkSync(pdfPath);
   fs.rmdirSync(scratch);
 }
+const quantityTools = {};
+vm.runInNewContext(ts.transpileModule(fs.readFileSync("lib/enterprise/inventory/quantity-display.ts", "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, { exports: quantityTools });
+exports.downloadProfessionalXlsx({ ...model,
+  columns: [{ key: "quantity", label: "Quantité" }],
+  rows: ["999999999999999.999999", "0.123456"].map(value => ({ quantity: quantityTools.inventoryQuantityExportValue(value) })),
+});
+const quantityWorkbook = new ExcelJS.Workbook();
+await quantityWorkbook.xlsx.load(Buffer.from(await downloads.at(-1).arrayBuffer()));
+const quantitySheet = quantityWorkbook.getWorksheet("Données");
+assert.equal(quantitySheet.getRow(2).getCell(1).value, "999999999999999.999999", "An unrepresentable Excel quantity must retain every micro-unit as exact text");
+assert.equal(quantitySheet.getRow(3).getCell(1).value, 0.123456, "A representable Excel quantity must remain numeric");
 console.log("PASS Finance Design 2.0: CSV 125 lignes, XLSX ouvrable, PDF premium multipage PDFInfo et texte final vérifiés.");

@@ -4,7 +4,9 @@ import { NextResponse } from "next/server";
 import { EnterpriseDomainError } from "@/lib/enterprise/common/errors";
 
 const BUSINESS_ERROR_MESSAGES: Record<string, { fr: string; en: string }> = {
-  INVENTORY_PHYSICAL_QUANTITY_PRECISION: { fr: "La quantité doit être positive et représentable sans arrondi dans le registre physique (trois décimales maximum actuellement).", en: "The quantity must be positive and exactly representable in the physical ledger (currently at most three decimal places)." },
+  INVENTORY_PHYSICAL_QUANTITY_PRECISION: { fr: "La quantité dépasse la capacité du stock ou ses six décimales maximales. Corrigez la quantité sans l’arrondir.", en: "The quantity exceeds stock capacity or its maximum of six decimal places. Correct the quantity without rounding it." },
+  INVENTORY_UNIT_QUANTITY_PRECISION: { fr: "La quantité ne respecte pas la précision de l’unité du catalogue. Utilisez une quantité compatible avec cette unité.", en: "The quantity does not match the catalog unit precision. Use a quantity compatible with this unit." },
+  INVENTORY_UNIT_CONVERSION_INVALID: { fr: "La conversion d’unité n’est pas valide. Vérifiez les unités et leur facteur de conversion.", en: "The unit conversion is invalid. Check the units and their conversion factor." },
   INVENTORY_RETURN_CUSTODY_NOT_FOUND:{fr:"Retour isolé introuvable.",en:"Isolated return not found."},
   INVENTORY_RETURN_CUSTODY_STATUS_INVALID:{fr:"Cette opération ne correspond plus au statut du retour isolé.",en:"This action no longer matches the isolated return status."},
   INVENTORY_RETURN_CUSTODY_APPROVER_REQUIRED:{fr:"La preuve de destruction exige un administrateur distinct de l’inspecteur, du demandeur et du liquidateur.",en:"Disposal evidence requires an administrator independent of the inspector, requester and settler."},
@@ -30,7 +32,7 @@ const BUSINESS_ERROR_MESSAGES: Record<string, { fr: string; en: string }> = {
   INVENTORY_RETURN_RECOVERY_LOT_UNSAFE: { fr: "Le lot est rappelé, bloqué, périmé ou insuffisamment documenté. Aucune remise en circulation n’est autorisée.", en: "The batch is recalled, blocked, expired or insufficiently documented. No release is authorized." },
   INVENTORY_RETURN_RECOVERY_SECTOR_REQUIRED: { fr: "Cet article relève d’un registre sectoriel spécialisé. Utilisez le circuit de contrôle correspondant.", en: "This item belongs to a specialized sector register. Use its dedicated control workflow." },
   INVENTORY_RETURN_RECOVERY_VALUATION_REQUIRED: { fr: "Les preuves de valorisation et les comptes ne permettent pas de calculer un plafond fiable. Sollicitez Finance.", en: "Valuation evidence and accounts do not support a reliable ceiling. Contact Finance." },
-  SUPPLIER_RETURN_QUANTITY_INVALID: { fr: "Renseignez une quantité positive, au maximum trois décimales, dans la quantité encore détenue et libre.", en: "Enter a positive quantity with at most three decimal places, within the remaining unreserved stock." },
+  SUPPLIER_RETURN_QUANTITY_INVALID: { fr: "Renseignez une quantité positive, au maximum six décimales, dans la quantité encore détenue et libre.", en: "Enter a positive quantity with at most six decimal places, within the remaining unreserved stock." },
   SUPPLIER_RETURN_ORIGIN_INVALID: { fr: "La réception d’origine ou le lot n’est pas admissible pour ce circuit. Vérifiez le fournisseur, le dépôt et les pièces d’achat.", en: "The original receipt or batch is not eligible for this workflow. Check the supplier, warehouse and purchase documents." },
   SUPPLIER_RETURN_ISOLATE_FIRST: { fr: "Bloquez ou mettez le lot en quarantaine avant de vérifier un retour fournisseur.", en: "Block or quarantine the batch before checking a supplier return." },
   SUPPLIER_RETURN_PROVENANCE_AMBIGUOUS: { fr: "La provenance du lot est ambiguë (plusieurs entrées, transfert ou sortie antérieure). Une réconciliation de traçabilité est nécessaire.", en: "The batch provenance is ambiguous (multiple receipts, a transfer or a previous issue). Traceability reconciliation is required." },
@@ -212,11 +214,11 @@ export function enterpriseValidationErrorResponse(
   const firstIssue = error.issues[0];
   const firstMessage = typeof firstIssue?.message === "string" ? firstIssue.message.trim() : "";
   const looksFrench = /[àâçéèêëîïôùûüœ]|\b(?:doit|doivent|obligatoire|invalide|requis|requise|sélectionnez|renseignez)\b/i.test(firstMessage);
-  const message = firstMessage && (locale === "fr" || !looksFrench)
+  const message = BUSINESS_ERROR_MESSAGES[firstMessage]?.[locale] || (firstMessage && (locale === "fr" || !looksFrench)
     ? firstMessage
     : locale === "en"
       ? "Some information is invalid. Review the highlighted fields and try again."
-      : "Certaines informations sont invalides. Vérifiez les champs concernés puis réessayez.";
+      : "Certaines informations sont invalides. Vérifiez les champs concernés puis réessayez.");
   return NextResponse.json({
     error: code,
     message,

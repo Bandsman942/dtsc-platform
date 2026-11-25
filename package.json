@@ -6,6 +6,8 @@
     "node": "22.x"
   },
   "scripts": {
+    "qa:data-intelligence-1228": "node scripts/qa-data-intelligence-1228.mjs",
+    "qa:data-intelligence-1228:postgres": "node scripts/qa-data-intelligence-1228-postgres.mjs",
     "qa:financial-integrity-1226": "node --experimental-strip-types scripts/qa-financial-integrity-1226.mjs",
     "qa:retail-direct-cash-1216": "node scripts/qa-retail-direct-cash-1216.mjs",
     "qa:inventory-lot-traceability-1212": "node scripts/qa-inventory-lot-traceability-1212.mjs",

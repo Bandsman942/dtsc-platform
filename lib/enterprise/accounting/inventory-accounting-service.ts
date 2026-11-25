@@ -21,12 +21,11 @@ export function planWeightedAverageResidualQuantities(
   layers: ReadonlyArray<{id: string; remainingQuantity: Prisma.Decimal}>,
   issueQuantity: Prisma.Decimal,
 ): Array<{id: string; remainingQuantity: Prisma.Decimal}> {
-  const scale = new Prisma.Decimal("1000000");
   const toUnits = (quantity: Prisma.Decimal) => {
     if (!quantity.isFinite() || quantity.isNegative() || quantity.decimalPlaces() > 6) {
       throw new EnterpriseAccountingError("INVENTORY_COST_LAYER_PRECISION_INVALID",409);
     }
-    return BigInt(quantity.times(scale).toFixed(0));
+    return BigInt(quantity.toFixed(6).replace(".", ""));
   };
   const zero = BigInt(0);
   const one = BigInt(1);
@@ -58,7 +57,10 @@ export function planWeightedAverageResidualQuantities(
   if (extras !== zero || allocations.some(row=>row.residual>row.units)) {
     throw new EnterpriseAccountingError("INVENTORY_COST_LAYER_PRECISION_INVALID",409);
   }
-  return allocations.map(row=>({id:row.id,remainingQuantity:new Prisma.Decimal(row.residual.toString()).dividedBy(scale)}));
+  return allocations.map(row=>{
+    const digits = row.residual.toString().padStart(7, "0");
+    return {id:row.id,remainingQuantity:new Prisma.Decimal(`${digits.slice(0, -6)}.${digits.slice(-6)}`)};
+  });
 }
 
 export async function valueInventoryReceipt(
@@ -318,7 +320,7 @@ export async function getInventoryValuation(organizationId: string, input?: { wa
 
   return [...grouped.values()].map((row) => ({
     ...row,
-    quantity: row.quantity.toDecimalPlaces(3, Prisma.Decimal.ROUND_HALF_UP),
+    quantity: row.quantity,
     value: money(row.value),
     weightedAverageUnitCost: row.quantity.greaterThan(0) ? money(row.value.dividedBy(row.quantity)) : new Prisma.Decimal(0),
   }));

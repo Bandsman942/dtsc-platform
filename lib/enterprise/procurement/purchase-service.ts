@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
+import { requireInventoryQuantity } from "@/lib/enterprise/inventory/quantity-policy";
 import type { z } from "zod";
 import { assertEnterpriseApprovalCandidate, assertEnterpriseApprovalDecision } from "@/lib/enterprise/approval-assignment";
 import { EnterpriseCoreV2Error } from "@/lib/enterprise/core-v2/errors";
@@ -37,7 +38,7 @@ function dateOrNull(value?: string | null) { return value ? new Date(value) : nu
 function purchaseReference(businessDate: string) { return `PUR-${businessDate.replace(/-/g, "")}-${randomUUID().slice(0, 8).toUpperCase()}`; }
 function receiptReference(businessDate: string) { return `REC-${businessDate.replace(/-/g, "")}-${randomUUID().slice(0, 8).toUpperCase()}`; }
 function money(value: number | string | Prisma.Decimal) { return new Prisma.Decimal(value).toDecimalPlaces(2); }
-function quantity(value: number | string | Prisma.Decimal) { return new Prisma.Decimal(value).toDecimalPlaces(3); }
+function quantity(value: number | string | Prisma.Decimal) { return requireInventoryQuantity(value, 6); }
 
 function approvalError(error: unknown, fallback: string) {
   const code = error && typeof error === "object" && "code" in error ? String(error.code) : fallback;
@@ -60,14 +61,14 @@ async function preparePurchaseItems(tx: ProcurementTransaction, organizationId: 
     const item = items[index];
     const catalogItem = await tx.enterpriseCatalogItem.findFirst({
       where: { id: item.catalogItemId, organizationId, status: "ACTIVE", archivedAt: null },
-      include: { unitOfMeasure: { select: { id: true, code: true, symbol: true } } },
+      include: { unitOfMeasure: { select: { id: true, code: true, symbol: true, decimalScale: true } } },
     });
     if (!catalogItem) throw new EnterpriseCoreV2Error("L’article sélectionné n’appartient pas au catalogue actif de cette entreprise.", 400, "INVALID_PURCHASE_CATALOG_ITEM");
     const hasSourceType = Boolean(nullable(item.sourceEntityType));
     const hasSourceId = Boolean(nullable(item.sourceEntityId));
     if (hasSourceType !== hasSourceId) throw new EnterpriseCoreV2Error("La source d’une ligne doit préciser type et identifiant.", 400, "INCOMPLETE_PURCHASE_ITEM_SOURCE");
     if (hasSourceType && hasSourceId && !(await enterpriseSourceEntityExists(tx, organizationId, item.sourceEntityType!, item.sourceEntityId!))) throw new EnterpriseCoreV2Error("Une ligne d’achat référence un objet d’une autre organisation.", 400, "CROSS_TENANT_PURCHASE_ITEM_SOURCE");
-    const itemQuantity = quantity(item.quantity);
+    const itemQuantity = requireInventoryQuantity(item.quantity, catalogItem.unitOfMeasure.decimalScale, { positive: true });
     const unitPrice = money(item.unitPrice);
     const taxRate = new Prisma.Decimal(item.taxRate || 0).toDecimalPlaces(4);
     const lineSubtotal = itemQuantity.mul(unitPrice).toDecimalPlaces(2);

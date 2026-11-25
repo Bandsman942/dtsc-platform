@@ -30,7 +30,7 @@ export const retailInvoicePrepareSchema = z.object({
   lines: z.array(z.object({
     catalogItemId: z.string().trim().min(1).max(191),
     stockLotId: z.string().trim().min(1).max(191).optional().nullable(),
-    quantity: z.number().positive().max(1_000_000).refine((value) => Math.abs(value * 1000 - Math.round(value * 1000)) < 0.000001),
+    quantity: z.number().positive().max(1_000_000).refine((value) => new Prisma.Decimal(value).decimalPlaces() <= 6),
   }).strict()).min(1).max(100),
 }).strict();
 

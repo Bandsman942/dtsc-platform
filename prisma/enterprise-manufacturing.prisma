@@ -24,7 +24,7 @@ model EnterpriseManufacturingWorkCenter {
   siteId         String?
   assetId        String?
   status         String   @default("ACTIVE")
-  capacityPerDay Decimal? @db.Decimal(18, 3)
+  capacityPerDay Decimal? @db.Decimal(21, 6)
   capacityUnit   String?
   costRate       Decimal? @db.Decimal(18, 2)
   currency       String?
@@ -102,7 +102,7 @@ model EnterpriseBillOfMaterial {
   name            String
   catalogItemId   String
   version         Int      @default(1)
-  outputQuantity  Decimal  @db.Decimal(18, 3)
+  outputQuantity  Decimal  @db.Decimal(21, 6)
   status          String   @default("DRAFT")
   effectiveFrom   DateTime?
   effectiveUntil  DateTime?
@@ -128,7 +128,7 @@ model EnterpriseBillOfMaterialLine {
   organizationId  String
   bomId           String
   catalogItemId   String
-  quantity        Decimal  @db.Decimal(18, 3)
+  quantity        Decimal  @db.Decimal(21, 6)
   scrapRate       Decimal  @default(0) @db.Decimal(8, 4)
   issueMethod     String   @default("MANUAL")
   sequence        Int      @default(0)
@@ -158,9 +158,9 @@ model EnterpriseProductionOrder {
   outputWarehouseId   String
   status              String   @default("DRAFT")
   priority            String   @default("NORMAL")
-  plannedQuantity     Decimal  @db.Decimal(18, 3)
-  producedQuantity    Decimal  @default(0) @db.Decimal(18, 3)
-  scrappedQuantity    Decimal  @default(0) @db.Decimal(18, 3)
+  plannedQuantity     Decimal  @db.Decimal(21, 6)
+  producedQuantity    Decimal  @default(0) @db.Decimal(21, 6)
+  scrappedQuantity    Decimal  @default(0) @db.Decimal(21, 6)
   plannedStartAt      DateTime?
   plannedEndAt        DateTime?
   actualStartAt       DateTime?
@@ -205,9 +205,9 @@ model EnterpriseProductionMaterialRequirement {
   catalogItemId     String
   inventoryItemId   String
   warehouseId       String
-  requiredQuantity  Decimal  @db.Decimal(18, 3)
-  consumedQuantity  Decimal  @default(0) @db.Decimal(18, 3)
-  shortageQuantity  Decimal  @default(0) @db.Decimal(18, 3)
+  requiredQuantity  Decimal  @db.Decimal(21, 6)
+  consumedQuantity  Decimal  @default(0) @db.Decimal(21, 6)
+  shortageQuantity  Decimal  @default(0) @db.Decimal(21, 6)
   status            String   @default("PLANNED")
   purchaseId        String?
   revision          Int      @default(1)
@@ -234,7 +234,7 @@ model EnterpriseProductionExecution {
   assetId            String?
   timesheetEntryId   String?
   executionType      String
-  quantityCompleted  Decimal? @db.Decimal(18, 3)
+  quantityCompleted  Decimal? @db.Decimal(21, 6)
   minutesWorked      Int?
   startedAt          DateTime?
   endedAt            DateTime?
@@ -261,9 +261,9 @@ model EnterpriseProductionQualityCheck {
   routingOperationId  String?
   checkType           String
   result              String
-  quantityChecked     Decimal  @db.Decimal(18, 3)
-  quantityAccepted    Decimal  @default(0) @db.Decimal(18, 3)
-  quantityRejected    Decimal  @default(0) @db.Decimal(18, 3)
+  quantityChecked     Decimal  @db.Decimal(21, 6)
+  quantityAccepted    Decimal  @default(0) @db.Decimal(21, 6)
+  quantityRejected    Decimal  @default(0) @db.Decimal(21, 6)
   notes               String?
   inspectedByUserId   String
   inspectedEmployeeId String?
@@ -286,7 +286,7 @@ model EnterpriseProductionScrap {
   catalogItemId         String
   inventoryItemId       String?
   warehouseId           String?
-  quantity              Decimal  @db.Decimal(18, 3)
+  quantity              Decimal  @db.Decimal(21, 6)
   reasonCode            String
   notes                 String?
   affectsInventory      Boolean  @default(false)

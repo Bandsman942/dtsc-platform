@@ -95,6 +95,12 @@ jobs:
         run: pnpm prisma:deploy
       - name: "ERP #1198 PostgreSQL quote creation and conversion regression"
         run: pnpm qa:erp-quote-prisma-postgres-1198
+      - name: "Data Intelligence #1228 quantity and conversion contracts"
+        run: pnpm qa:data-intelligence-1228
+      - name: "Data Intelligence #1228 PostgreSQL physical quantity capacity"
+        run: pnpm qa:data-intelligence-1228:postgres
+        env:
+          QA_1228_DATABASE_FIXTURE: "true"
       - name: Workflow ERP contracts PostgreSQL integration
         run: node scripts/qa-workflow-814-postgres.mjs
       - name: Workflow crash recovery on PostgreSQL

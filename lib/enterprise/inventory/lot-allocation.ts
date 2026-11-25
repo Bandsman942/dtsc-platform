@@ -31,7 +31,7 @@ export function planFefoLots(input: {
 }) {
   const zero = new Prisma.Decimal(0);
   const requested = new Prisma.Decimal(input.quantity);
-  if (!requested.isFinite() || requested.lte(0) || requested.decimalPlaces() > 3) {
+  if (!requested.isFinite() || requested.lte(0) || requested.decimalPlaces() > 6) {
     throw new RangeError("Invalid physical allocation quantity");
   }
   const isExpired = (lot: LotAllocationCandidate) => Boolean(lot.expiryDate && lotExpiryDateKey(lot.expiryDate) < input.businessDate);
@@ -82,7 +82,7 @@ export function readReservationLotAllocations(reservation: ReservationSnapshot):
   for (const value of reservation.lotAllocations) {
     if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("INVENTORY_RESERVATION_ALLOCATION_INVALID");
     const { balanceId, stockLotId, storageLocationId, quantity: rawQuantity, fulfilledQuantity: rawFulfilled } = value;
-    if (typeof balanceId !== "string" || !balanceId || seen.has(balanceId) || typeof stockLotId !== "string" || !stockLotId || !(storageLocationId === null || typeof storageLocationId === "string") || typeof rawQuantity !== "string" || typeof rawFulfilled !== "string" || !/^\d{1,15}(\.\d{1,3})?$/.test(rawQuantity) || !/^\d{1,15}(\.\d{1,3})?$/.test(rawFulfilled)) throw new Error("INVENTORY_RESERVATION_ALLOCATION_INVALID");
+    if (typeof balanceId !== "string" || !balanceId || seen.has(balanceId) || typeof stockLotId !== "string" || !stockLotId || !(storageLocationId === null || typeof storageLocationId === "string") || typeof rawQuantity !== "string" || typeof rawFulfilled !== "string" || !/^\d{1,15}(\.\d{1,6})?$/.test(rawQuantity) || !/^\d{1,15}(\.\d{1,6})?$/.test(rawFulfilled)) throw new Error("INVENTORY_RESERVATION_ALLOCATION_INVALID");
     const q = new Prisma.Decimal(rawQuantity), f = new Prisma.Decimal(rawFulfilled);
     if (q.lte(0) || f.lt(0) || f.gt(q)) throw new Error("INVENTORY_RESERVATION_ALLOCATION_INVALID");
     quantity = quantity.plus(q); fulfilled = fulfilled.plus(f); seen.add(balanceId);
@@ -173,7 +173,7 @@ export function readInvoiceLotAllocations(line: { stockLotId: string | null; lot
   const entries: Array<{ stockLotId: string; quantity: Prisma.Decimal }> = [];
   const seen = new Set<string>();
   for (const value of line.lotAllocations) {
-    if (!value || typeof value !== "object" || Array.isArray(value) || typeof value.stockLotId !== "string" || !value.stockLotId || seen.has(value.stockLotId) || typeof value.quantity !== "string" || !/^\d{1,15}(\.\d{1,3})?$/.test(value.quantity)) throw new Error("RETAIL_INVOICE_LOT_ALLOCATION_INVALID");
+    if (!value || typeof value !== "object" || Array.isArray(value) || typeof value.stockLotId !== "string" || !value.stockLotId || seen.has(value.stockLotId) || typeof value.quantity !== "string" || !/^\d{1,15}(\.\d{1,6})?$/.test(value.quantity)) throw new Error("RETAIL_INVOICE_LOT_ALLOCATION_INVALID");
     const quantity = new Prisma.Decimal(value.quantity);
     if (!quantity.gt(0)) throw new Error("RETAIL_INVOICE_LOT_ALLOCATION_INVALID");
     seen.add(value.stockLotId);
@@ -196,7 +196,7 @@ export function readPhysicalReturnLots(value: Prisma.JsonValue | undefined | nul
   let total = new Prisma.Decimal(0);
   const result: InvoiceLotAllocation[] = [];
   for (const entry of value) {
-    if (!entry || typeof entry !== "object" || Array.isArray(entry) || typeof entry.stockLotId !== "string" || !entry.stockLotId || seen.has(entry.stockLotId) || typeof entry.quantity !== "string" || !/^\d{1,15}(\.\d{1,3})?$/.test(entry.quantity)) throw new Error("RETAIL_INVOICE_RETURN_BATCH_SELECTION_REQUIRED");
+    if (!entry || typeof entry !== "object" || Array.isArray(entry) || typeof entry.stockLotId !== "string" || !entry.stockLotId || seen.has(entry.stockLotId) || typeof entry.quantity !== "string" || !/^\d{1,15}(\.\d{1,6})?$/.test(entry.quantity)) throw new Error("RETAIL_INVOICE_RETURN_BATCH_SELECTION_REQUIRED");
     const q = new Prisma.Decimal(entry.quantity);
     if (!q.gt(0)) throw new Error("RETAIL_INVOICE_RETURN_BATCH_SELECTION_REQUIRED");
     total = total.plus(q); seen.add(entry.stockLotId);

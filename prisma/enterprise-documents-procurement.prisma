@@ -181,7 +181,7 @@ model EnterprisePurchaseItem {
   organizationId   String
   purchaseId       String
   description      String
-  quantity         Decimal            @db.Decimal(18, 3)
+  quantity         Decimal            @db.Decimal(21, 6)
   unit             String
   unitPrice        Decimal            @db.Decimal(18, 2)
   taxRate          Decimal            @default(0) @db.Decimal(8, 4)
@@ -224,7 +224,7 @@ model EnterprisePurchaseReceiptItem {
   organizationId   String
   receiptId        String
   purchaseItemId   String
-  quantityReceived Decimal                   @db.Decimal(18, 3)
+  quantityReceived Decimal                   @db.Decimal(21, 6)
   createdAt        DateTime                  @default(now())
   receipt          EnterprisePurchaseReceipt @relation(fields: [organizationId, receiptId], references: [organizationId, id], onDelete: Cascade)
   purchaseItem     EnterprisePurchaseItem    @relation(fields: [organizationId, purchaseItemId], references: [organizationId, id], onDelete: Restrict)

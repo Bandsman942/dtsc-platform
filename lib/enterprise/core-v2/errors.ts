@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import { EnterpriseDomainError } from "@/lib/enterprise/common/errors";
 
 export class EnterpriseCoreV2Error extends Error {
   status: number;
@@ -13,6 +14,9 @@ export class EnterpriseCoreV2Error extends Error {
 }
 
 export function normalizeEnterpriseCoreV2Error(error: unknown) {
+  if (error instanceof EnterpriseDomainError && ["INVENTORY_PHYSICAL_QUANTITY_PRECISION", "INVENTORY_UNIT_QUANTITY_PRECISION"].includes(error.code)) {
+    return { status: error.status, code: error.code, message: "La quantité doit respecter la précision de son unité du catalogue, sans dépasser six décimales. Corrigez la quantité puis réessayez." };
+  }
   if (error instanceof EnterpriseCoreV2Error) {
     return { status: error.status, code: error.code, message: error.message };
   }

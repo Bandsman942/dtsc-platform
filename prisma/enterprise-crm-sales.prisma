@@ -139,7 +139,7 @@ model EnterpriseQuoteItem {
   quoteId            String
   catalogItemId      String?
   description        String
-  quantity           Decimal               @db.Decimal(18, 3)
+  quantity           Decimal               @db.Decimal(21, 6)
   unitOfMeasureId    String?
   unitPrice          Decimal               @db.Decimal(18, 2)
   discountRate       Decimal               @default(0) @db.Decimal(8, 4)
@@ -258,8 +258,8 @@ model EnterpriseSalesOrderItem {
   salesOrderId        String
   catalogItemId       String?
   description         String
-  quantityOrdered     Decimal                    @db.Decimal(18, 3)
-  quantityFulfilled   Decimal                    @default(0) @db.Decimal(18, 3)
+  quantityOrdered     Decimal                    @db.Decimal(21, 6)
+  quantityFulfilled   Decimal                    @default(0) @db.Decimal(21, 6)
   unitOfMeasureId     String?
   unitPrice           Decimal                    @db.Decimal(18, 2)
   discountRate        Decimal                    @default(0) @db.Decimal(8, 4)
@@ -315,7 +315,7 @@ model EnterpriseFulfillmentItem {
   organizationId      String
   fulfillmentId       String
   salesOrderItemId    String
-  quantityFulfilled   Decimal                  @db.Decimal(18, 3)
+  quantityFulfilled   Decimal                  @db.Decimal(21, 6)
   notes               String?
   createdAt           DateTime                 @default(now())
   fulfillment         EnterpriseFulfillment    @relation(fields: [organizationId, fulfillmentId], references: [organizationId, id], onDelete: Cascade)

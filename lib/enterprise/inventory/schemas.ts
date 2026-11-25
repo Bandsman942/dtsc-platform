@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { Prisma } from "@prisma/client";
 import { STOCK_DIRECTIONS, STOCK_MOVEMENT_TYPES } from "@/lib/enterprise/inventory/constants";
 
 export const stockMovementCreateSchema = z.object({
@@ -8,7 +9,7 @@ export const stockMovementCreateSchema = z.object({
   stockLotId: z.string().trim().min(1).optional().nullable(),
   movementType: z.enum(STOCK_MOVEMENT_TYPES),
   direction: z.enum(STOCK_DIRECTIONS),
-  quantity: z.coerce.number().positive().max(1_000_000_000),
+  quantity: z.coerce.number().positive().max(1_000_000_000).refine(value => new Prisma.Decimal(value).decimalPlaces() <= 6, "INVENTORY_PHYSICAL_QUANTITY_PRECISION"),
   sourceEntityType: z.string().trim().max(120).optional().nullable(),
   sourceEntityId: z.string().trim().max(240).optional().nullable(),
   sourceLineId: z.string().trim().max(240).optional().nullable(),
@@ -21,7 +22,7 @@ export const stockTransferLineSchema = z.object({
   stockLotId: z.string().trim().min(1).optional().nullable(),
   sourceLocationId: z.string().trim().min(1).optional().nullable(),
   destinationLocationId: z.string().trim().min(1).optional().nullable(),
-  quantity: z.coerce.number().positive().max(1_000_000_000),
+  quantity: z.coerce.number().positive().max(1_000_000_000).refine(value => new Prisma.Decimal(value).decimalPlaces() <= 6, "INVENTORY_PHYSICAL_QUANTITY_PRECISION"),
 });
 
 export const stockTransferCreateSchema = z.object({
@@ -45,7 +46,7 @@ export const stockTransferDecisionSchema = stockDecisionSchema;
 export const inventoryCountLineSchema = z.object({
   inventoryItemId: z.string().trim().min(1),
   stockLotId: z.string().trim().min(1).optional().nullable(),
-  countedQuantity: z.coerce.number().nonnegative().max(1_000_000_000),
+  countedQuantity: z.coerce.number().nonnegative().max(1_000_000_000).refine(value => new Prisma.Decimal(value).decimalPlaces() <= 6, "INVENTORY_PHYSICAL_QUANTITY_PRECISION"),
   notes: z.string().trim().max(1000).optional().nullable(),
 });
 
@@ -67,13 +68,13 @@ export const stockAdjustmentCreateSchema = z.object({
   stockLotId: z.string().trim().min(1).optional().nullable(),
   adjustmentType: z.enum(["IN", "OUT"]),
   lossReason: z.enum(["EXPIRY", "DAMAGE", "RECALL", "DESTRUCTION"]).optional().nullable(),
-  quantity: z.coerce.number().positive().max(1_000_000_000),
+  quantity: z.coerce.number().positive().max(1_000_000_000).refine(value => new Prisma.Decimal(value).decimalPlaces() <= 6, "INVENTORY_PHYSICAL_QUANTITY_PRECISION"),
   reason: z.string().trim().min(3).max(2000),
   approverUserId: z.string().trim().min(1),
   idempotencyKey: z.string().trim().min(8).max(180).optional().nullable(),
 }).superRefine((data, ctx) => {
   if (data.lossReason && (data.adjustmentType !== "OUT" || !data.stockLotId || data.reason.length < 8 || !data.idempotencyKey)) ctx.addIssue({code:"custom",path:["lossReason"],message:"Specify a batch, outbound direction, detailed reason and unique request key."});
-  if (data.lossReason && Math.abs(data.quantity * 1000 - Math.round(data.quantity * 1000)) > 0.000001) ctx.addIssue({code:"custom",path:["quantity"],message:"Maximum 3 decimal places."});
+  if (data.lossReason && new Prisma.Decimal(data.quantity).decimalPlaces() > 6) ctx.addIssue({code:"custom",path:["quantity"],message:"INVENTORY_PHYSICAL_QUANTITY_PRECISION"});
 });
 
 export const stockAdjustmentDecisionSchema = stockDecisionSchema;

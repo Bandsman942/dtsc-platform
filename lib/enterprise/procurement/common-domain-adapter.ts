@@ -218,7 +218,7 @@ export async function postEnterprisePurchaseReceiptToInventoryTx(
       if (seen.size !== batches.length || !total.equals(receiptItem.quantityReceived)) throw new EnterpriseDomainError("RECEIPT_BATCH_QUANTITY_INVALID", 409, "La somme des quantités par lot doit correspondre à la quantité reçue, sans numéro en double.");
     }
     const stockMovementIds: string[] = [];
-    const entries = batches.length ? batches : [{ lotNumber: "", productionDate: null, expiryDate: null, quantity: Number(receiptItem.quantityReceived) }];
+    const entries = batches.length ? batches : [{ lotNumber: "", productionDate: null, expiryDate: null, quantity: receiptItem.quantityReceived }];
     for (const batch of entries) {
       let stockLotId: string | null = null;
       if (batch.lotNumber) {

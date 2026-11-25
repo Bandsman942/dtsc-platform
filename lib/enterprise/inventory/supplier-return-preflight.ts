@@ -25,7 +25,7 @@ function blocked(code: string): never { throw new EnterpriseDomainError(code, 40
 export async function inspectSupplierReturnTx(tx: Prisma.TransactionClient, organizationId: string, actorUserId: string, input: SupplierReturnCoordinates) {
   await requireInventoryStockAuthorityTx(tx, organizationId, actorUserId, input.warehouseId);
   const qty = new Prisma.Decimal(input.quantity);
-  if (!qty.gt(0) || qty.decimalPlaces() > 3 || !input.stockLotId) blocked("SUPPLIER_RETURN_QUANTITY_INVALID");
+  if (!qty.gt(0) || qty.decimalPlaces() > 6 || !input.stockLotId) blocked("SUPPLIER_RETURN_QUANTITY_INVALID");
   const origin = await tx.enterpriseStockMovement.findFirst({
     where: { organizationId, id: input.supplierReturnSourceMovementId, movementType: "PURCHASE_RECEIPT", direction: "IN",
       sourceEntityType: "EnterprisePurchaseReceipt", inventoryItemId: input.inventoryItemId, warehouseId: input.warehouseId,
