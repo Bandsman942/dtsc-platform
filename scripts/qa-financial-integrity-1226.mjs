@@ -149,3 +149,9 @@ for (const source of [accountListRoute,treasuryLookupRoute]) {
   assert.match(source,/maskedReference:\s*maskFinancialReference\(/);
 }
 console.log("#1226 private account reference list and lookup guards: PASS");
+
+// Both legacy and real variance reversals require an exclusive ledger direction.
+assert.match(varianceReview,/!cashLine\.credit\.greaterThan\(0\) \|\| !cashLine\.debit\.isZero\(\)/);
+assert.match(varianceReview,/!cashLine\.debit\.greaterThan\(0\) \|\| !cashLine\.credit\.isZero\(\)/);
+assert.match(varianceReview,/!cashLines\[0\]\.credit\.greaterThan\(0\) \|\| !cashLines\[0\]\.debit\.isZero\(\)/);
+assert.match(varianceReview,/!cashLines\[0\]\.debit\.greaterThan\(0\) \|\| !cashLines\[0\]\.credit\.isZero\(\)/);
