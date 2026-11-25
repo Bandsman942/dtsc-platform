@@ -98,18 +98,21 @@ export async function GET(req: Request, { params }: Params) {
       ${matchingSearch} ${balanceRequired}`;
   const lowStockQuery=Prisma.sql`SELECT id,name FROM (${scopedItemsQuery}) scoped WHERE "minimumQuantity" IS NOT NULL AND on_hand<="minimumQuantity"`;
   const selectedScope=lowStock ? Prisma.sql`WHERE scoped."minimumQuantity" IS NOT NULL AND scoped.on_hand<=scoped."minimumQuantity"` : Prisma.empty;
-  const [lowCount, lowPage]=await Promise.all([
+  const selectedIds=Prisma.sql`SELECT scoped.id FROM (${scopedItemsQuery}) scoped ${selectedScope}`;
+  const [lowCount, pageIds, selectedCount]=await Promise.all([
     tx.$queryRaw<Array<{total:bigint}>>(Prisma.sql`SELECT COUNT(*) AS total FROM (${lowStockQuery}) l`),
-    lowStock?tx.$queryRaw<Array<{id:string}>>(Prisma.sql`SELECT id FROM (${lowStockQuery}) l ORDER BY name ASC,id ASC LIMIT ${pageSize} OFFSET ${(page-1)*pageSize}`):Promise.resolve([]),
+    tx.$queryRaw<Array<{id:string}>>(Prisma.sql`SELECT scoped.id FROM (${scopedItemsQuery}) scoped ${selectedScope} ORDER BY scoped.name ASC,scoped.id ASC LIMIT ${pageSize} OFFSET ${(page-1)*pageSize}`),
+    lowStock?Promise.resolve([]):tx.$queryRaw<Array<{total:bigint}>>(Prisma.sql`SELECT COUNT(*) AS total FROM (${selectedIds}) selected`),
   ]);
   const lowStockCount=Number(lowCount[0]?.total||0);
-  const itemWhere:Prisma.EnterpriseInventoryItemWhereInput=lowStock?{AND:[where,{id:{in:lowPage.map(row=>row.id)}}]}:where;
-  const selectedIds=Prisma.sql`SELECT scoped.id FROM (${scopedItemsQuery}) scoped ${selectedScope}`;
-  const filteredMovementCountQuery=Prisma.sql`SELECT COUNT(*) AS total FROM "EnterpriseStockMovement" b JOIN "EnterpriseWarehouse" w ON w.id=b."warehouseId" AND w."organizationId"=b."organizationId" WHERE b."organizationId"=${organizationId} ${warehouseClause} ${siteClause} AND b."inventoryItemId" IN (${selectedIds})`;
-  const filteredWarehouseCountQuery=Prisma.sql`SELECT COUNT(DISTINCT w.id) AS total FROM "EnterpriseInventoryBalance" b JOIN "EnterpriseWarehouse" w ON w.id=b."warehouseId" AND w."organizationId"=b."organizationId" WHERE b."organizationId"=${organizationId} ${warehouseClause} ${siteClause} AND w.status='ACTIVE' AND w."archivedAt" IS NULL AND b."inventoryItemId" IN (${selectedIds})`;
-  const [items,total,generalMovementCount,generalWarehouseCount,organization,filteredMovementCounts,filteredWarehouseCounts]=await Promise.all([
-    tx.enterpriseInventoryItem.findMany({where:itemWhere,orderBy:[{catalogItem:{name:"asc"}},{id:"asc"}],skip:lowStock?0:(page-1)*pageSize,take:pageSize,include:{catalogItem:{include:{unitOfMeasure:true,category:true}},balances:{where:warehouseId||scope.isolationEnabled?balancesScope:undefined,include:{warehouse:{select:{id:true,code:true,name:true,status:true,archivedAt:true}},storageLocation:{select:{id:true,code:true,name:true,status:true,archivedAt:true}},stockLot:{select:{id:true,lotNumber:true,expiryDate:true,status:true,archivedAt:true}}},orderBy:{updatedAt:"desc"}}}}),
-    lowStock?Promise.resolve(lowStockCount):tx.enterpriseInventoryItem.count({where}),
+  const total=lowStock?lowStockCount:Number(selectedCount[0]?.total||0);
+  // Pagination and count reuse the authorized SQL selection. Fetch only those
+  // keys instead of repeating expensive relation predicates for a tiny page.
+  const itemWhere:Prisma.EnterpriseInventoryItemWhereInput={organizationId,id:{in:pageIds.map(row=>row.id)}};
+  const filteredMovementCountQuery=Prisma.sql`WITH selected AS MATERIALIZED (${selectedIds}) SELECT COUNT(*) AS total FROM "EnterpriseStockMovement" b JOIN "EnterpriseWarehouse" w ON w.id=b."warehouseId" AND w."organizationId"=b."organizationId" WHERE b."organizationId"=${organizationId} ${warehouseClause} ${siteClause} AND b."inventoryItemId" IN (SELECT id FROM selected)`;
+  const filteredWarehouseCountQuery=Prisma.sql`WITH selected AS MATERIALIZED (${selectedIds}) SELECT COUNT(DISTINCT w.id) AS total FROM "EnterpriseInventoryBalance" b JOIN "EnterpriseWarehouse" w ON w.id=b."warehouseId" AND w."organizationId"=b."organizationId" WHERE b."organizationId"=${organizationId} ${warehouseClause} ${siteClause} AND w.status='ACTIVE' AND w."archivedAt" IS NULL AND b."inventoryItemId" IN (SELECT id FROM selected)`;
+  const [items,generalMovementCount,generalWarehouseCount,organization,filteredMovementCounts,filteredWarehouseCounts]=await Promise.all([
+    tx.enterpriseInventoryItem.findMany({where:itemWhere,orderBy:[{catalogItem:{name:"asc"}},{id:"asc"}],take:pageSize,include:{catalogItem:{include:{unitOfMeasure:true,category:true}},balances:{where:warehouseId||scope.isolationEnabled?balancesScope:undefined,include:{warehouse:{select:{id:true,code:true,name:true,status:true,archivedAt:true}},storageLocation:{select:{id:true,code:true,name:true,status:true,archivedAt:true}},stockLot:{select:{id:true,lotNumber:true,expiryDate:true,status:true,archivedAt:true}}},orderBy:{updatedAt:"desc"}}}}),
     tx.enterpriseStockMovement.count({where:{organizationId,...(scope.isolationEnabled?{warehouse:{siteId:{in:scope.siteIds}}}:{})}}),
     tx.enterpriseWarehouse.count({
       where: {

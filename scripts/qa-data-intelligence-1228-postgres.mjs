@@ -102,6 +102,7 @@ try {
       await tx.enterpriseInventoryItem.createMany({data:bulk.map(row=>({id:row.id,organizationId:tenant,catalogItemId:row.catalogId,minimumQuantity:10,createdByUserId:actor}))});
       await tx.enterpriseInventoryBalance.createMany({data:bulk.map(row=>({organizationId:tenant,inventoryItemId:row.id,warehouseId:warehouse.id,quantityOnHand:10,quantityReserved:1}))});
       await tx.enterpriseInventoryReservation.createMany({data:bulk.map(row=>({organizationId:tenant,inventoryItemId:row.id,warehouseId:warehouse.id,salesOrderId:"fixture-order",salesOrderItemId:row.id,quantity:2,fulfilledQuantity:0,idempotencyKey:row.id,createdByUserId:actor}))});
+      await tx.enterpriseInventoryItem.update({where:{id:bulk[1].id},data:{minimumQuantity:5}});
       const invoice=await tx.enterpriseSalesInvoice.create({data:{organizationId:tenant,number:"QA-1228-HOLDS",businessPartyId:`${tenant}-party`,invoiceDate:new Date(),currencyCode:"USD",subtotal:501,taxTotal:0,grandTotal:501,outstandingAmount:501,createdByUserId:actor}});
       await tx.enterpriseSalesInvoiceItem.createMany({data:bulk.map(row=>({id:row.invoiceItemId,organizationId:tenant,salesInvoiceId:invoice.id,catalogItemId:row.catalogId,description:"Unpaid fixture line",quantity:1,unitPrice:1,netAmount:1,taxAmount:0,totalAmount:1}))});
       const checkout=await tx.enterpriseRetailInvoiceCheckout.create({data:{organizationId:tenant,salesInvoiceId:invoice.id,siteId:site.id,warehouseId:warehouse.id,idempotencyKey:`${tenant}-checkout`,requestFingerprint:"a".repeat(64),preparedByUserId:actor}});
@@ -119,8 +120,10 @@ try {
       assert.deepEqual(firstPage.quantityTotals,secondPage.quantityTotals);assert.deepEqual(firstPage.quantityTotals,beyondPage.quantityTotals);assert.deepEqual(beyondPage.pageQuantityTotals,[]);
       assert.deepEqual(firstPage.generalQuantityTotals,secondPage.generalQuantityTotals);
       for(const [unitId,onHand,reserved,sellable]of [[unit.id,"2510.000000","1004.000000","1506.000000"],[integerUnit.id,"2500","1000","1500"]])for(const [metric,value]of [["onHand",onHand],["reserved",reserved],["sellable",sellable]])assert.equal(firstPage.quantityTotals.find(row=>row.unitId===unitId&&row.metric===metric).value,value);
+      assert.equal(firstPage.metrics.lowStockCount,500);
       assert.equal(firstPage.metrics.warehouseCount,1);assert.equal(firstPage.metrics.movementCount,0);
       assert.equal(firstPage.generalQuantityTotals.find(row=>row.unitId===unit.id&&row.metric==="onHand").value,"1000000000002509.999999");
+      const lowPage=await inventoryPage(1,"&lowStock=true");assert.equal(lowPage.pagination.total,500);assert.equal(lowPage.quantityTotals.find(row=>row.unitId===integerUnit.id&&row.metric==="onHand").value,"2490");assert.equal(lowPage.quantityTotals.find(row=>row.unitId===integerUnit.id&&row.metric==="reserved").value,"996");assert.equal(lowPage.quantityTotals.find(row=>row.unitId===integerUnit.id&&row.metric==="sellable").value,"1494");assert.deepEqual(lowPage.generalQuantityTotals,firstPage.generalQuantityTotals);
       const forbiddenPage=await inventoryPage(1,`&warehouseId=${forbiddenWarehouse.id}`);assert.equal(forbiddenPage.pagination.total,0);assert.deepEqual(forbiddenPage.quantityTotals,[]);assert.deepEqual(forbiddenPage.generalQuantityTotals,firstPage.generalQuantityTotals);
       assert.equal((await inventoryGet(new Request(`http://localhost/api/enterprise/${otherTenant}/inventory`),{params:Promise.resolve({organizationId:otherTenant})})).status,403);
       console.log(`PASS #1228 PostgreSQL inventory analytics: 501 items, real reservations/holds, two units, forbidden site, three pages in ${elapsed.toFixed(0)}ms`);
