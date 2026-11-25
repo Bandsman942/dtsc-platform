@@ -440,7 +440,12 @@ for(const [kind,movement] of [
 }
 console.log("Inventory transfer: generic purchase/COGS posting blocked even through direct builder");
 
+const originalStockRead = rtvTx.enterpriseStockMovement.findFirst;
+rtvTx.enterpriseStockMovement.findFirst = async () => ({ ...sourceOut, inventoryItem: { catalogItem: { name: "Article test", code: "SKU-TEST" } } });
 const doc = await postingBuilder.buildInventoryAccountingPosting(rtvTx,{organizationId:"org-a",sourceEntityType:"EnterpriseInventoryAccountingEvent",sourceEntityId:"event-a"},"SUPPLIER_RETURN");
+rtvTx.enterpriseStockMovement.findFirst = originalStockRead;
+assert.equal(doc.description, "SUPPLIER_RETURN catalog Article test · SKU-TEST");
+assert.ok(doc.lines.every(line => line.description === doc.description));
 assert.equal(doc.lines[0].accountMappingKey,"GOODS_RECEIVED_CLEARING");
 assert.equal(doc.lines[1].accountMappingKey,"INVENTORY");
 assert.ok(doc.lines[0].debit.equals(14)); assert.ok(doc.lines[1].credit.equals(14));

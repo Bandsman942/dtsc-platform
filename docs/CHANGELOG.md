@@ -1,3 +1,7 @@
+## 2026-11-25 — HOTFIX #1228 — Data Intelligence & Consistency 2.0 (v1.24.5 candidate DRAFT)
+
+- Contrat Design 2.0 normatif, préflight obligatoire, cadrage exhaustif ; précision catalogue sur les trois premières surfaces, agrégat de valorisation par devise et export journalier numérique dans les limites Excel ; libellés de nouveaux postings de stock à partir du catalogue. Tranches candidates, non certifiées ; autres agrégations, historique et recette à terminer. Voir `docs/HOTFIX_1228_DATA_INTELLIGENCE_CONSISTENCY.md`.
+
 ## 2026-11-25 — HOTFIX #1226 — liaison canonique candidate
 
 - Liaison indépendante d’un écart à une source Financement/Transfert/Paiement confirmée et comptabilisée ; contrôle exact compte/devise/sens/montant/date et de la clé de posting canonique, sans second mouvement ni écriture. Unicité en base, audit, retrait indépendant conditionnel et blocage de la contrepassation d’une source liée. Sources historiques/ambiguës exclues ; certification du nouveau SHA requise.

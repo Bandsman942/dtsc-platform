@@ -117,7 +117,7 @@ export async function buildInventoryAccountingPosting(tx: Prisma.TransactionClie
   if (!event) throw new EnterpriseAccountingError("INVENTORY_ACCOUNTING_EVENT_NOT_POSTABLE", 409);
   const sourceMovement = await tx.enterpriseStockMovement.findFirst({
     where: { organizationId: input.organizationId, id: event.stockMovementId },
-    select: { movementType:true, direction:true, sourceEntityType:true, sourceEntityId:true, quantity:true, inventoryItemId:true, warehouseId:true, stockLotId:true, warehouse: { select: { siteId: true } } },
+    select: { movementType:true, direction:true, sourceEntityType:true, sourceEntityId:true, quantity:true, inventoryItemId:true, warehouseId:true, stockLotId:true, inventoryItem: { select: { catalogItem: { select: { code: true, name: true } } } }, warehouse: { select: { siteId: true } } },
   });
   // A direct posting request must enforce the same transfer boundary as the valuation APIs.
   if (sourceMovement && (sourceMovement.movementType === "TRANSFER_IN" || sourceMovement.movementType === "TRANSFER_OUT" || sourceMovement.sourceEntityType === "EnterpriseStockTransfer")) throw new EnterpriseAccountingError("INVENTORY_TRANSFER_VALUATION_WORKFLOW_REQUIRED",409);
@@ -139,6 +139,13 @@ export async function buildInventoryAccountingPosting(tx: Prisma.TransactionClie
     const origin=await tx.enterpriseJournalEntry.findFirst({where:{organizationId:input.organizationId,id:appraisal.originalIssueJournalId,status:"POSTED",sourceEntityType:"EnterpriseInventoryAccountingEvent",sourceEntityId:appraisal.originalIssueEventId,postingEvent:"INVENTORY_ISSUE_VALUED"}});
     if(!origin)throw new EnterpriseAccountingError("INVENTORY_ACCOUNTING_EVENT_NOT_POSTABLE",409);
   }
+  const catalog = sourceMovement?.inventoryItem?.catalogItem;
+  // Store the business designation in the immutable journal at posting time.
+  // Technical source and inventory IDs remain on the structured dimensions.
+  const article = sourceMovement?.inventoryItemId === event.inventoryItemId && catalog
+    ? [catalog.name, catalog.code].filter(Boolean).join(" · ")
+    : "";
+  const narrative = article ? `${kind} catalog ${article}` : `${kind} catalog unavailable`;
   const recovery = kind === "CUSTODY_RECOVERY";
   const receipt = kind === "RECEIPT";
   const accountingDate = kind === "SUPPLIER_RETURN" || recovery ? new Date((await resolveEnterpriseBusinessDate(tx, input.organizationId, event.createdAt)) + "T00:00:00.000Z") : event.createdAt;
@@ -148,14 +155,14 @@ export async function buildInventoryAccountingPosting(tx: Prisma.TransactionClie
     accountingDate,
     documentDate: accountingDate,
     reference: event.stockMovementId,
-    description: `${kind} valuation ${event.stockMovementId}`,
+    description: narrative,
     sourceModule: "FINANCE_INVENTORY",
     sourceEntityType: "EnterpriseInventoryAccountingEvent",
     sourceEntityId: event.id,
     currencyCode: event.currencyCode,
     lines: [
-      { accountMappingKey: receipt || recovery ? "INVENTORY" : kind === "SUPPLIER_RETURN" ? "GOODS_RECEIVED_CLEARING" : kind === "LOSS" ? "OPERATING_EXPENSE" : "COST_OF_SALES", description: `${kind} ${event.inventoryItemId}`, debit: event.totalCost, transactionCurrencyCode: event.currencyCode, transactionAmount: event.totalCost, inventoryItemId: event.inventoryItemId, siteId: sourceMovement?.warehouse.siteId },
-      { accountMappingKey: recovery ? "COST_OF_SALES" : receipt ? "GOODS_RECEIVED_CLEARING" : "INVENTORY", description: `${kind} ${event.inventoryItemId}`, credit: event.totalCost, transactionCurrencyCode: event.currencyCode, transactionAmount: event.totalCost, inventoryItemId: event.inventoryItemId, siteId: sourceMovement?.warehouse.siteId },
+      { accountMappingKey: receipt || recovery ? "INVENTORY" : kind === "SUPPLIER_RETURN" ? "GOODS_RECEIVED_CLEARING" : kind === "LOSS" ? "OPERATING_EXPENSE" : "COST_OF_SALES", description: narrative, debit: event.totalCost, transactionCurrencyCode: event.currencyCode, transactionAmount: event.totalCost, inventoryItemId: event.inventoryItemId, siteId: sourceMovement?.warehouse.siteId },
+      { accountMappingKey: recovery ? "COST_OF_SALES" : receipt ? "GOODS_RECEIVED_CLEARING" : "INVENTORY", description: narrative, credit: event.totalCost, transactionCurrencyCode: event.currencyCode, transactionAmount: event.totalCost, inventoryItemId: event.inventoryItemId, siteId: sourceMovement?.warehouse.siteId },
     ],
   };
 }

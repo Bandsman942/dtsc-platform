@@ -72,3 +72,7 @@ Inspection statique de main (aucun test exécuté) :
 - Stock : affichage catalogue sur liste et détail de solde, signalement de précision incompatible ; autres opérations à raccorder.
 - Clôture : unité et alerte visibles ; export XLSX numérique si compatible avec la limite Excel de 15 chiffres, sinon conservation exacte en texte. CSV/print désignation et unité.
 - Gouvernance PR : premier run Quality gates #45651800939 échoué sur liaison issue et labels ; métadonnées corrigées. Les tests métier de ce run étaient skipped. Aucun E2E final.
+
+- Nouveau constat : le builder canonique `buildInventoryAccountingPosting` utilisait `${kind} ${event.inventoryItemId}` sur les deux lignes, et le dictionnaire traduisait l'ID littéralement. Désignation catalogue tenant-scoped désormais sélectionnée via le mouvement et enregistrée dans les nouveaux libellés ; aucune modification des mappings, montants, ni journaux existants. Test fournisseur étendu. Anciennes écritures encore à enrichir en lecture.
+- SemVer : correctif candidat 1.24.5 (base 1.24.4), suite à échec de validate-semver sur run 45661092070. Métadonnées PR et Conventional Commits validés par ce run, QA et E2E skipped.
+- Le schéma physique `EnterpriseStockMovement.quantity` et `balanceAfter` est Decimal(18,3), alors que le référentiel autorise 0–6 : audit des modèles, contraintes et conversions avant évolution additive nécessaire ; ne pas prétendre avoir corrigé la précision de stockage.
