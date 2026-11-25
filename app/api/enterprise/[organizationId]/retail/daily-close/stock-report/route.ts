@@ -17,6 +17,12 @@ type Row = {
   otherOut: string; closing: string; reserved: string | null; available: string | null;
   lots: { number: string; expiry: string | null }[];
 };
+type UnitTotal = {
+  unitId: string; unitName: string; unitSymbol: string | null; decimalScale: number;
+  opening: Prisma.Decimal; entries: Prisma.Decimal; sold: Prisma.Decimal;
+  otherOut: Prisma.Decimal; closing: Prisma.Decimal; reserved: Prisma.Decimal | null;
+  available: Prisma.Decimal | null;
+};
 const decimal = (v: Prisma.Decimal.Value) => new Prisma.Decimal(v);
 const escapeHtml = (v: unknown) => String(v ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#39;");
 const quoteCsv = (v: unknown, textColumn = true) => {
@@ -105,6 +111,71 @@ export async function GET(req: Request, { params }: Params) {
         ? prisma.enterpriseStockLot.findMany({ where: { organizationId, warehouseId: { in: warehouseIds }, inventoryItemId: { in: ids }, archivedAt: null },
           select: { inventoryItemId: true, lotNumber: true, expiryDate: true }, take: 5000, orderBy: { lotNumber: "asc" } }) : Promise.resolve([]),
     ]);
+    // Aggregate the same eligible inventory items across all pages. Movement
+    // and balance ledgers are aggregated separately before joining, so lots
+    // and reservations cannot multiply movement quantities.
+    const filteredUnitTotals = await prisma.$queryRaw<UnitTotal[]>(Prisma.sql`
+      WITH site_warehouses AS (
+        SELECT id FROM "EnterpriseWarehouse"
+        WHERE "organizationId" = ${organizationId} AND "siteId" = ${siteId}
+      ), eligible AS (
+        SELECT i.id, u.id AS "unitId", u.name AS "unitName", u.symbol AS "unitSymbol", u."decimalScale"
+        FROM "EnterpriseInventoryItem" i
+        JOIN "EnterpriseCatalogItem" c ON c.id = i."catalogItemId" AND c."organizationId" = i."organizationId"
+        JOIN "EnterpriseUnitOfMeasure" u ON u.id = c."unitOfMeasureId" AND u."organizationId" = c."organizationId"
+        WHERE i."organizationId" = ${organizationId} AND i."createdAt" < ${to}
+          AND (
+            EXISTS (SELECT 1 FROM "EnterpriseInventoryBalance" b WHERE b."organizationId" = ${organizationId}
+              AND b."inventoryItemId" = i.id AND b."warehouseId" IN (SELECT id FROM site_warehouses))
+            OR EXISTS (SELECT 1 FROM "EnterpriseStockMovement" m WHERE m."organizationId" = ${organizationId}
+              AND m."inventoryItemId" = i.id AND m."warehouseId" IN (SELECT id FROM site_warehouses) AND m."occurredAt" < ${to})
+          )
+          ${settings.stockReportIncludeZeroMovement ? Prisma.empty : Prisma.sql`AND EXISTS (
+            SELECT 1 FROM "EnterpriseStockMovement" m WHERE m."organizationId" = ${organizationId}
+              AND m."inventoryItemId" = i.id AND m."warehouseId" IN (SELECT id FROM site_warehouses)
+              AND m."occurredAt" >= ${from} AND m."occurredAt" < ${to})`}
+          ${search ? Prisma.sql`AND (c.name ILIKE ${"%" + search + "%"} OR c.code ILIKE ${"%" + search + "%"})` : Prisma.empty}
+      ), movement_totals AS (
+        SELECT m."inventoryItemId",
+          COALESCE(SUM(CASE WHEN m."occurredAt" < ${from} THEN CASE WHEN m.direction = 'IN' THEN m.quantity ELSE -m.quantity END ELSE 0 END), 0) AS opening,
+          COALESCE(SUM(CASE WHEN m."occurredAt" >= ${from} AND m.direction = 'IN' THEN m.quantity ELSE 0 END), 0) AS entries,
+          COALESCE(SUM(CASE WHEN m."occurredAt" >= ${from} AND m.direction = 'OUT' AND m."movementType" = 'SALE_FULFILLMENT' THEN m.quantity ELSE 0 END), 0) AS sold,
+          COALESCE(SUM(CASE WHEN m."occurredAt" >= ${from} AND m.direction = 'OUT' AND m."movementType" <> 'SALE_FULFILLMENT' THEN m.quantity ELSE 0 END), 0) AS "otherOut"
+        FROM "EnterpriseStockMovement" m JOIN eligible e ON e.id = m."inventoryItemId"
+        WHERE m."organizationId" = ${organizationId} AND m."warehouseId" IN (SELECT id FROM site_warehouses)
+          AND m."occurredAt" < ${to}
+        GROUP BY m."inventoryItemId"
+      ), reservation_totals AS (
+        SELECT b."inventoryItemId", SUM(b."quantityReserved") AS reserved
+        FROM "EnterpriseInventoryBalance" b JOIN eligible e ON e.id = b."inventoryItemId"
+        WHERE ${currentDay && settings.stockReportIncludeReserved} AND b."organizationId" = ${organizationId}
+          AND b."warehouseId" IN (SELECT id FROM site_warehouses)
+        GROUP BY b."inventoryItemId"
+      ), grouped AS (
+        SELECT e."unitId", e."unitName", e."unitSymbol", e."decimalScale",
+          COALESCE(SUM(m.opening),0) AS opening, COALESCE(SUM(m.entries),0) AS entries,
+          COALESCE(SUM(m.sold),0) AS sold, COALESCE(SUM(m."otherOut"),0) AS "otherOut",
+          CASE WHEN ${currentDay && settings.stockReportIncludeReserved} THEN COALESCE(SUM(b.reserved),0) ELSE NULL END AS reserved
+        FROM eligible e LEFT JOIN movement_totals m ON m."inventoryItemId" = e.id
+        LEFT JOIN reservation_totals b ON b."inventoryItemId" = e.id
+        GROUP BY e."unitId", e."unitName", e."unitSymbol", e."decimalScale"
+      )
+      SELECT *, opening + entries - sold - "otherOut" AS closing,
+        opening + entries - sold - "otherOut" - reserved AS available
+      FROM grouped ORDER BY "unitName", "unitId"
+    `);
+    const subtotalRows: Row[] = filteredUnitTotals.map(group => {
+      const fmt = (value: Prisma.Decimal) => formatInventoryQuantity(value, group.decimalScale);
+      const values = [group.opening, group.entries, group.sold, group.otherOut, group.closing].map(fmt);
+      const reserved = group.reserved === null ? null : fmt(group.reserved);
+      const available = group.available === null ? null : fmt(group.available);
+      return {
+        code: "", name: "Sous-total filtré", unit: group.unitSymbol || group.unitName, decimalScale: group.decimalScale,
+        precisionMismatch: values.some(value => value.precisionMismatch) || Boolean(reserved?.precisionMismatch || available?.precisionMismatch),
+        opening: values[0].value, entries: values[1].value, sold: values[2].value, otherOut: values[3].value, closing: values[4].value,
+        reserved: reserved?.value ?? null, available: available?.value ?? null, lots: [],
+      };
+    });
     const rows: Row[] = items.map((item) => {
       const opening = openingTotals.filter((m) => m.inventoryItemId === item.id).reduce((sum, m) =>
         sum.plus(decimal(m._sum.quantity || 0).times(m.direction === "IN" ? 1 : -1)), decimal(0));
@@ -140,14 +211,14 @@ export async function GET(req: Request, { params }: Params) {
       metadata: { organizationId, domain: "retail-daily-stock-report", siteId, date, format, page, total } });
     const meta = { date, site: { id: site.id, name: site.name, code: site.code }, company: issuer,
       timezone, generatedAt: new Date().toISOString(), currentReservations: currentDay && settings.stockReportIncludeReserved,
-      page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)), rows };
+      page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)), rows, filteredTotals: subtotalRows };
     if (format === "json") return NextResponse.json(meta, { headers: jsonHeaders });
     const columns = ["SKU", "Article / unité", "Stock initial", "Entrées", "Vendues", "Autres sorties", "Stock final", "Réservé", "Disponible", "Lots / péremptions"];
     const cells = (r: Row) => [r.code, `${r.name} (${r.unit})${r.precisionMismatch ? " — précision historique à vérifier" : ""}`, r.opening, r.entries, r.sold, r.otherOut, r.closing,
       r.reserved ?? "—", r.available ?? "—", r.lots.map((l) => l.number + (l.expiry ? " (" + l.expiry + ")" : "")).join("; ")];
     const stem = "rapport-stocks-" + site.code.replace(/[^a-zA-Z0-9_-]/g, "-") + "-" + date;
     if (format === "csv") {
-      const csv = "\uFEFF" + [columns, ...rows.map(cells)].map((row, rowIndex) =>
+      const csv = "\uFEFF" + [columns, ...rows.map(cells), ...subtotalRows.map(cells)].map((row, rowIndex) =>
         row.map((cell, colIndex) => quoteCsv(cell, rowIndex === 0 || [0, 1, 9].includes(colIndex))).join(";")).join("\r\n");
       return new NextResponse(csv, { headers: { ...jsonHeaders, "content-type": "text/csv; charset=utf-8", "content-disposition": `attachment; filename="${stem}.csv"` } });
     }
@@ -163,7 +234,7 @@ export async function GET(req: Request, { params }: Params) {
       sheet.addRow([]);
       const header = sheet.addRow(columns); header.font = { bold: true, color: { argb: "FFFFFFFF" } };
       header.eachCell((cell) => { cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1769A1" } }; });
-      for (const row of rows) {
+      for (const row of [...rows, ...subtotalRows]) {
         const excelRow = sheet.addRow(cells(row));
         for (let index = 3; index <= 9; index++) {
           const cell = excelRow.getCell(index);
@@ -185,7 +256,7 @@ export async function GET(req: Request, { params }: Params) {
         "content-disposition": `attachment; filename="${stem}.xlsx"` } });
     }
     const th = columns.map((x) => `<th>${escapeHtml(x)}</th>`).join("");
-    const body = rows.map((row) => `<tr>${cells(row).map((v) => `<td>${escapeHtml(v)}</td>`).join("")}</tr>`).join("");
+    const body = [...rows, ...subtotalRows].map((row) => `<tr>${cells(row).map((v) => `<td>${escapeHtml(v)}</td>`).join("")}</tr>`).join("");
     const logo = resolveOrganizationLogoStoragePath({ organizationId, logoUrl: organization.logoUrl })
       ? `<img src="/api/enterprise/${encodeURIComponent(organizationId)}/logo" alt="${escapeHtml(issuer)}" style="height:46px;width:auto;max-width:140px;object-fit:contain" />` : "";
     const legalLine = [legal.rccm ? "RCCM: " + legal.rccm : "", legal.idNat ? "ID.NAT: " + legal.idNat : "",

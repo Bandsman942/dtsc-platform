@@ -98,6 +98,7 @@ type AdminStore = { id: string; name: string; code: string };
 type StockReport = {
   date: string; site: { id: string; name: string; code: string }; timezone: string;
   generatedAt: string; currentReservations: boolean; page: number; pageCount: number; total: number;
+  filteredTotals?: StockReport["rows"];
   rows: Array<{ code: string; name: string; unit: string; decimalScale: number; precisionMismatch: boolean; opening: string; entries: string; sold: string;
     otherOut: string; closing: string; reserved: string | null; available: string | null;
     lots: Array<{ number: string; expiry: string | null }> }>;
@@ -686,6 +687,7 @@ export function RetailDailyCloseWorkspace({
                       {[row.opening, row.entries, row.sold, row.otherOut, row.closing, row.reserved ?? "—", row.available ?? "—"].map((number, index) =>
                         <td key={index} className="p-2 tabular-nums">{number}</td>)}
                     </tr>)}</tbody>
+                    {stockReport.filteredTotals?.length ? <tfoot>{stockReport.filteredTotals.map((row, index) => <tr key={index} className="border-t-2 border-dtsc-border bg-dtsc-soft font-bold text-dtsc-ink"><th scope="row" className="p-2 text-left">{locale === "fr" ? "Sous-total filtré" : "Filtered subtotal"} · {row.unit}</th>{[row.opening, row.entries, row.sold, row.otherOut, row.closing, row.reserved ?? "—", row.available ?? "—"].map((number, cellIndex) => <td key={cellIndex} className="p-2 tabular-nums">{number}</td>)}</tr>)}</tfoot> : null}
                   </table>
                 </div>
                 {!stockReport.rows.length ? <EmptyState compact title={locale === "fr" ? "Aucun article à présenter" : "No inventory items"} /> : null}

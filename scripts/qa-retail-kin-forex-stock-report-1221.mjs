@@ -55,6 +55,13 @@ const today = [
   { inventoryItemId: "product-b", direction: "OUT", movementType: "SALE_FULFILLMENT", _sum: { quantity: 8 } },
 ];
 const prisma = {
+  $queryRaw: async (query) => {
+    assert.ok(query.text.includes("site_warehouses") && query.text.includes("GROUP BY e."));
+    return [
+      { unitId: "pc", unitName: "Pièce", unitSymbol: "pc", decimalScale: 0, opening: new Decimal(20), entries: new Decimal(10), sold: new Decimal(7), otherOut: new Decimal(2), closing: new Decimal(21), reserved: null, available: null },
+      { unitId: "L", unitName: "Litre", unitSymbol: "L", decimalScale: 2, opening: new Decimal(15), entries: new Decimal(5), sold: new Decimal(8), otherOut: new Decimal(0), closing: new Decimal(12), reserved: null, available: null },
+    ];
+  },
   enterpriseSite: { findFirst: async ({ where }) => where.organizationId === "tenant" && where.id === "store-a"
     ? { id: "store-a", code: "A", name: "Boutique A", timezone: "Africa/Kinshasa" } : null },
   organization: { findFirst: async () => ({ name: "KIN FOREX", timezone: "Africa/Kinshasa" }) },
@@ -74,7 +81,7 @@ const prisma = {
 };
 class RetailError extends Error { constructor(code, status) { super(code); this.code = code; this.status = status; } }
 const api = loadModule(read("app/api/enterprise/[organizationId]/retail/daily-close/stock-report/route.ts"), {
-  "@prisma/client": { Prisma: { Decimal } },
+  "@prisma/client": { Prisma: { Decimal, empty: { text: "" }, sql: (strings, ...values) => ({ text: strings.join("?"), values }) } },
   "@/lib/enterprise/inventory/quantity-display": quantityDisplay,
   exceljs: { default: class Workbook {} },
   "next/server": { NextResponse },
@@ -108,6 +115,9 @@ const [a, b] = response.body.rows;
 assert.equal(response.body.timezone, "Africa/Kinshasa");
 assert.deepEqual([a.opening, a.entries, a.sold, a.otherOut, a.closing], ["20", "10", "7", "2", "21"]);
 assert.deepEqual([b.opening, b.entries, b.sold, b.otherOut, b.closing], ["15.00", "5.00", "8.00", "0.00", "12.00"]);
+assert.equal(response.body.filteredTotals.length, 2);
+assert.equal(response.body.filteredTotals[0].closing, "21");
+assert.equal(response.body.filteredTotals[1].closing, "12.00");
 assert.equal(a.decimalScale, 0);
 assert.equal(b.decimalScale, 2);
 assert.equal(a.precisionMismatch, false);
