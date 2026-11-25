@@ -486,9 +486,22 @@ test.describe.serial("Hotfix #1226 financial integrity (isolated browser and Pos
             }
             for(const width of [320,360,375,390,414,768,1024,1440]){
               await page.setViewportSize({width,height:900});
+              if(width>=1024){
+                await expect.poll(() => page.evaluate(() => {
+                  const sidebar=document.querySelector("#dtsc-desktop-sidebar");
+                  const main=document.querySelector(".dtsc-private-main");
+                  return main.getBoundingClientRect().left-sidebar.getBoundingClientRect().right;
+                })).toBeGreaterThanOrEqual(-1);
+              }
+              if(module==="RETAIL_DAILY_CLOSE" && width===320){
+                const status=page.getByRole("navigation",{name:locale==="fr"?"Filtrer par statut":"Filter by status",exact:true});
+                const all=status.getByRole("button",{pressed:true});
+                await expect(all).toBeVisible();
+                expect(await status.evaluate(element=>element.scrollWidth>element.clientWidth)).toBe(true);
+              }
               expect(await page.evaluate(()=>document.documentElement.scrollWidth-window.innerWidth)).toBeLessThanOrEqual(2);
               const file=`${module}-${locale}-${theme}-${width}.png`;
-              await page.screenshot({path:join(directory,file)});
+              await page.screenshot({path:join(directory,file),animations:"disabled"});
               manifest.push({module,locale,theme,width,file,title:await page.getByRole("heading",{level:1}).innerText()});
             }
           }
@@ -502,7 +515,7 @@ test.describe.serial("Hotfix #1226 financial integrity (isolated browser and Pos
             await page.setViewportSize({width,height:900});
             expect(await page.evaluate(()=>document.documentElement.scrollWidth-window.innerWidth)).toBeLessThanOrEqual(2);
             const file=`CANONICAL-REVIEW-${locale}-${theme}-${width}.png`;
-            await page.screenshot({path:join(directory,file)});manifest.push({module:"CANONICAL-REVIEW",locale,theme,width,file});
+            await page.screenshot({path:join(directory,file),animations:"disabled"});manifest.push({module:"CANONICAL-REVIEW",locale,theme,width,file});
           }
           await page.setViewportSize({width:320,height:900});
           await page.keyboard.press("Tab");

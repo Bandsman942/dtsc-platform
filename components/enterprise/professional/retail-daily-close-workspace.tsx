@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Banknote, Building2, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, ClipboardCheck, Download, Search, RefreshCw, XCircle } from "lucide-react";
 import { useAppLocale } from "@/components/i18n/locale-provider";
 import { Field, formatEnterpriseDate } from "@/components/enterprise/core-v2/erp-v2-ui";
-import { ProfessionalError, ProfessionalLoading } from "@/components/enterprise/professional/professional-erp-ui";
+import { ProfessionalError, ProfessionalLoading, ProfessionalTabs } from "@/components/enterprise/professional/professional-erp-ui";
 import { ContextualUserGuide } from "@/components/user-guides/contextual-user-guide";
 import { EnterpriseApproverSelect } from "@/components/enterprise/enterprise-approver-select";
 import { cashCountsFromDailyCloseForm, RetailDailyCloseCashCount, RetailDailyCloseNonCashCount } from "@/components/enterprise/professional/retail-daily-close-cash-count";
@@ -402,7 +402,7 @@ export function RetailDailyCloseWorkspace({
     <ModuleWorkspace density="compact">
       <ModuleHeader
         eyebrow={`${locale === "fr" ? "Clôture magasin" : "Store daily closing"} · ${organizationName}`}
-        count={closeList ? `${closeList.pagination.total} ${locale === "fr" ? "clôtures" : "closes"}` : undefined}
+        count={closeList ? `${closeList.pagination.total} ${locale === "fr" ? "clôture" : "close"}${closeList.pagination.total === 1 ? "" : "s"}` : undefined}
         title={locale === "en" ? definition.labelEn : definition.labelFr}
         description={translateRetailWorkspace(locale, "dailyCloseCountTheTillAndOperationalBalancesExplainVariancesThenSubmitTheDay")}
         primaryAction={(
@@ -438,14 +438,15 @@ export function RetailDailyCloseWorkspace({
           </form>
         )}
         controls={(
-          <div className="flex min-w-0 gap-2 overflow-x-auto [touch-action:pan-x]" aria-label={locale === "fr" ? "Filtrer par statut" : "Filter by status"}>
-            {["ALL", "SUBMITTED", "APPROVED", "REJECTED"].map((status) => (
-              <Button key={status} size="sm" variant={statusFilter === status ? "default" : "outline"}
-                onClick={() => { setHistoryPage(1); setStatusFilter(status); }}>
-                {status === "ALL" ? translateRetailWorkspace(locale, "dailyCloseAllCloses") : customerFacingStatusLabel(status, locale)}
-              </Button>
-            ))}
-          </div>
+          <ProfessionalTabs
+            label={locale === "fr" ? "Filtrer par statut" : "Filter by status"}
+            value={statusFilter}
+            onChange={(status) => { setHistoryPage(1); setStatusFilter(status); }}
+            items={["ALL", "SUBMITTED", "APPROVED", "REJECTED"].map((id) => ({
+              id,
+              label: id === "ALL" ? translateRetailWorkspace(locale, "dailyCloseAllCloses") : customerFacingStatusLabel(id, locale),
+            }))}
+          />
         )}
         activeFilters={(
           <div className="flex flex-wrap items-end gap-2">
