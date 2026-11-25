@@ -100,3 +100,5 @@ console.log("PASS #1228: unit precision 0–6, physical capacity, exact arithmet
 await import("./qa-data-intelligence-commercial-1228.mjs");
 
 await import("./qa-data-intelligence-sales-quantities-1228.mjs");
+
+await import("./qa-data-intelligence-stock-totals-1228.mjs");

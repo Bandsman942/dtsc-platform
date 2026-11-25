@@ -1,5 +1,7 @@
 ## 2026-11-25 — HOTFIX #1228 — Data Intelligence & Consistency 2.0 (v1.24.5 candidate DRAFT)
 
+- Stock : physique/réservé/vendable sur toutes les pages, général autorisé et page, par unité ; même calcul FEFO pour lignes et agrégats, lecture RepeatableRead et lots de 200 sans limite silencieuse. Compteurs mouvements/dépôts selon filtres, contexte général distinct. Exports complets avec gardes de cohérence et synthèse générale même pour résultat filtré vide. Fixture 501 articles et seuil de performance ajoutés, CI à vérifier.
+
 - Régression FEFO reproduite à la capacité 21 chiffres : la précision Decimal globale de 20 chiffres pouvait rendre vendable la dernière micro-unité réservée. Contexte physique local de 48 chiffres dans le planificateur, snapshots de réservations/factures/retours, gardes de sortie, réservations, holds et projection stock ; configuration monétaire globale inchangée. Tests de capacité et de non-consommation des holds ajoutés, ainsi qu’un round-trip PostgreSQL vers FEFO.
 
 - Devis, commandes directes et conversion de devis : contrôle serveur groupé des quantités selon la précision 0–6 de l’unité catalogue ; unité effective enregistrée sur les nouvelles lignes. Unité étrangère/archivée et changement d’unité sans conversion vérifiée refusés, historique et replays conservés. Le formulaire de devis et le contrat catalogue partagent maintenant la précision effective, messages FR/EN. Couverture comportementale des sept précisions et scénario API navigateur ajoutés ; nouvelle CI requise.

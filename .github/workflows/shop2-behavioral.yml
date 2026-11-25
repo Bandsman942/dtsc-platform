@@ -268,7 +268,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: data-intelligence-1228-${{ github.sha }}
+          name: data-intelligence-1228-${{ github.event.pull_request.head.sha || github.sha }}
           if-no-files-found: warn
           retention-days: 14
           path: test-results/**/1228-*.png

@@ -9,6 +9,8 @@ import { Input } from "@/components/ui/input";
 import { notifyToast } from "@/lib/client-toast";
 import { downloadProfessionalCsv, downloadProfessionalPdf, downloadProfessionalXlsx, type ProfessionalReportExportModel } from "@/lib/reporting/professional-export";
 
+import type { InventoryQuantityTotal } from "@/lib/enterprise/inventory/availability-analytics";
+import { inventoryQuantityMetricLabel, inventoryQuantityExportValue } from "@/lib/enterprise/inventory/quantity-display";
 import type { MonetaryScopes, MonetaryTotal } from "@/lib/enterprise/common/analytics";
 
 type Locale = "fr" | "en";
@@ -105,6 +107,12 @@ export function FinanceAmountScopes({ totals, locale }: { totals: Partial<Moneta
   </div>;
 }
 
+type AnalyticalExportTotals = { filteredTotals?: FinanceFilteredTotal[]; generalTotals?: FinanceFilteredTotal[]; physicalTotals?: Array<{unitId:string;unit:string;value:string;precisionMismatch:boolean}>; quantityTotals?: InventoryQuantityTotal[]; generalQuantityTotals?: InventoryQuantityTotal[] };
+type PaginatedExportPayload = AnalyticalExportTotals & {items?:Record<string,unknown>[];pagination?:{pageCount?:number;total?:number};message?:string};
+function quantitySummaryKpis(rows:InventoryQuantityTotal[],locale:Locale,scope:"filtered"|"general") {
+  return rows.map(row=>{const numeric=inventoryQuantityExportValue(row.value);return {label:`${scope==="filtered"?(locale==="fr"?"Sous-total filtré":"Filtered subtotal"):(locale==="fr"?"Total général autorisé sans filtres":"Authorized general total without filters")} · ${inventoryQuantityMetricLabel(row.metric,locale)} · ${row.unit}`,value:`${row.value} ${row.unit}${row.precisionMismatch?(locale==="fr"?" · Précision à vérifier":" · Precision needs review"):""}`,numericValue:typeof numeric==="number"?numeric:undefined};});
+}
+
 export type FinanceExportColumn = { key: string; labelFr: string; labelEn: string; get: (row: Record<string, unknown>) => string | number };
 
 /** Downloads the FULL authorized, filtered result up to the safe export cap; never silently exports only the visible page. */
@@ -129,21 +137,26 @@ export function FinanceExportControls({ endpoint, organizationName, title, local
     try {
       const params = new URLSearchParams({ ...filters, page: "1", pageSize: "100" });
       const first = await fetch(`${endpoint}${endpoint.includes("?") ? "&" : "?"}${params}`, { cache: "no-store" });
-      const body = await first.json().catch(() => null) as { items?: Record<string, unknown>[]; pagination?: { pageCount?: number; total?: number }; filteredTotals?: FinanceFilteredTotal[]; generalTotals?: FinanceFilteredTotal[]; physicalTotals?: Array<{ unitId: string; unit: string; value: string; precisionMismatch: boolean }>; message?: string } | null;
+      const body = await first.json().catch(() => null) as PaginatedExportPayload | null;
       if (!first.ok || !body || !Array.isArray(body.items)) throw new Error(body?.message || tr("L’export des données a échoué.", "Data export failed."));
       const total = body.pagination?.total ?? body.items.length;
       const pages = body.pagination?.pageCount ?? 1;
       // Some Finance APIs cap pageSize at 50; still retrieve every eligible row.
       if (total > 1000 || pages > 200) throw new Error(tr(`Le résultat contient ${total} lignes. Affinez les dates ou la recherche (limite de 1 000 lignes par export).`, `There are ${total} rows. Narrow the date or search filters (1,000 rows per export).`));
       const all = [...body.items];
-      const summarySignature = (value: { filteredTotals?: FinanceFilteredTotal[]; generalTotals?: FinanceFilteredTotal[]; physicalTotals?: Array<{ unitId: string; unit: string; value: string; precisionMismatch: boolean }> }) => JSON.stringify([...(value.filteredTotals || []).map(row => JSON.stringify(["filtered", row.metric, row.currencyCode, row.status || "", row.amount])), ...(value.generalTotals || []).map(row => JSON.stringify(["general", row.metric, row.currencyCode, row.status || "", row.amount])), ...(value.physicalTotals || []).map(row => JSON.stringify([row.unitId,row.value,row.precisionMismatch]))].sort());
+      const summarySignature = (value: AnalyticalExportTotals) => JSON.stringify([
+        ...(value.filteredTotals || []).map(row=>JSON.stringify(["filtered",row.metric,row.currencyCode,row.status||"",row.amount])),
+        ...(value.generalTotals || []).map(row=>JSON.stringify(["general",row.metric,row.currencyCode,row.status||"",row.amount])),
+        ...(value.physicalTotals || []).map(row=>JSON.stringify(["physical",row.unitId,row.unit,row.value,row.precisionMismatch])),
+        ...(["quantityTotals","generalQuantityTotals"] as const).flatMap(scope=>(value[scope]||[]).map(row=>JSON.stringify([scope,row.metric,row.unitId,row.unit,row.decimalScale,row.value,row.precisionMismatch]))),
+      ].sort());
       const firstSummary = summarySignature(body);
       for (let start = 2; start <= pages; start += 3) {
         const batch = await Promise.all(Array.from({ length: Math.min(3, pages - start + 1) }, (_, index) => {
           const query = new URLSearchParams(params);
           query.set("page", String(start + index));
           return fetch(`${endpoint}${endpoint.includes("?") ? "&" : "?"}${query}`, { cache: "no-store" }).then(async (response) => {
-            const result = await response.json().catch(() => null) as { items?: Record<string, unknown>[]; pagination?: { total?: number }; filteredTotals?: FinanceFilteredTotal[]; generalTotals?: FinanceFilteredTotal[]; physicalTotals?: Array<{ unitId: string; unit: string; value: string; precisionMismatch: boolean }>; message?: string } | null;
+            const result = await response.json().catch(() => null) as PaginatedExportPayload | null;
             if (!response.ok || !Array.isArray(result?.items)) throw new Error(result?.message || tr("L’extraction a été interrompue.", "The export was interrupted."));
             if ((result.pagination?.total ?? total) !== total || summarySignature(result) !== firstSummary) throw new Error(tr("Les données ont changé pendant l’export. Réessayez.", "Data changed during export. Retry."));
             return result.items;
@@ -159,8 +172,8 @@ export function FinanceExportControls({ endpoint, organizationName, title, local
         organizationName, title, subtitle: tr(subtitleFr || "DTSC Platform · Comptabilité & conformité", subtitleEn || "DTSC Platform · Accounting & compliance"),
         filenameBase: `DTSC-${title.replace(/\s+/g, "-")}-${localToday()}`,
         generatedLabel: `${tr("Édité le", "Generated on")} ${now}`,
-        kpis: [{ label: tr("Enregistrements", "Records"), value: String(all.length), numericValue: all.length }, ...(Array.isArray(body.filteredTotals) ? body.filteredTotals.filter(row => row.metric in filteredMetricLabels).map(row => ({ label: `${tr("Sous-total filtré", "Filtered subtotal")} · ${filteredMetricLabel(row, locale)}`, value: financeMoney(row.amount,row.currencyCode,locale) })) : []), ...(body.generalTotals || []).filter(row => row.metric in filteredMetricLabels).map(row => ({ label: `${tr("Total général autorisé sans filtres", "Authorized general total without filters")} · ${filteredMetricLabel(row, locale)}`, value: financeMoney(row.amount,row.currencyCode,locale) })), ...(body.physicalTotals || []).map(row => ({ label: `${tr("Sous-total physique filtré", "Filtered on-hand subtotal")} · ${row.unit}`, value: `${row.value} ${row.unit}${row.precisionMismatch ? tr(" · Précision à vérifier", " · Precision needs review") : ""}` }))],
-        includeCompleteSummary: Boolean(body.filteredTotals?.length || body.generalTotals?.length || body.physicalTotals?.length),
+        kpis: [{ label: tr("Enregistrements", "Records"), value: String(all.length), numericValue: all.length }, ...(Array.isArray(body.filteredTotals) ? body.filteredTotals.filter(row => row.metric in filteredMetricLabels).map(row => ({ label: `${tr("Sous-total filtré", "Filtered subtotal")} · ${filteredMetricLabel(row, locale)}`, value: financeMoney(row.amount,row.currencyCode,locale) })) : []), ...(body.generalTotals || []).filter(row => row.metric in filteredMetricLabels).map(row => ({ label: `${tr("Total général autorisé sans filtres", "Authorized general total without filters")} · ${filteredMetricLabel(row, locale)}`, value: financeMoney(row.amount,row.currencyCode,locale) })), ...quantitySummaryKpis(body.quantityTotals||[],locale,"filtered"), ...quantitySummaryKpis(body.generalQuantityTotals||[],locale,"general"), ...(body.quantityTotals ? [] : body.physicalTotals || []).map(row => ({ label: `${tr("Sous-total physique filtré", "Filtered on-hand subtotal")} · ${row.unit}`, value: `${row.value} ${row.unit}${row.precisionMismatch ? tr(" · Précision à vérifier", " · Precision needs review") : ""}` }))],
+        includeCompleteSummary: Boolean(body.filteredTotals?.length || body.generalTotals?.length || body.physicalTotals?.length || body.quantityTotals?.length || body.generalQuantityTotals?.length),
         chart: [], insights: [],
         filters: reportFilters ?? Object.entries(filters || {}).filter(([, value]) => value).map(([key, value]) => ({ label: key, value })),
         columns: columns.map((column) => ({ key: column.key, label: en ? column.labelEn : column.labelFr })),

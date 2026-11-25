@@ -613,7 +613,9 @@ test.describe.serial("Shop 2.0 Iteration 4 global behavioral acceptance", () => 
           return url.pathname === "/api/enterprise/" + organizationId + "/inventory" && url.searchParams.get("search") === key && !url.searchParams.get("view");
         });
         await page.locator("[data-workspace-toolbar]").getByRole("textbox").fill(key);
-        expect((await registerQuery).ok()).toBeTruthy();
+        const registerResponse=await registerQuery;
+        expect(registerResponse.ok()).toBeTruthy();
+        const registerBody=await registerResponse.json();
         await expect(stockRegister.getByText(locale === "fr" ? "Aucun stock vendable" : "No sellable stock", { exact: true })).toBeVisible();
         async function downloadRegister(format) {
           const downloaded = page.waitForEvent("download");
@@ -627,16 +629,21 @@ test.describe.serial("Shop 2.0 Iteration 4 global behavioral acceptance", () => 
         const rows = csv.bytes.toString("utf8").trim().split(/\r?\n/);
         // #1228 analytical CSV keeps the same one data row, followed by the
         // complete summary and filters. Verify both sections explicitly.
-        expect(rows).toHaveLength(9);
+        expect(rows).toHaveLength(8+registerBody.quantityTotals.length+registerBody.generalQuantityTotals.length);
         expect(rows[0]).toContain(locale === "fr" ? '"Stock vendable"' : '"Sellable stock"');
         expect(rows[1]).toContain(key);
         expect(rows[1]).toContain(locale === "fr" ? '"Aucun stock vendable"' : '"No sellable stock"');
         expect(rows[1]).toMatch(/,"0","0","0"$/);
         expect(rows[2]).toBe(Array(8).fill('""').join(","));
         expect(rows[5].startsWith(locale === "fr" ? '"Enregistrements","1"' : '"Records","1"')).toBe(true);
-        expect(rows[6].startsWith(`"${locale === "fr" ? "Sous-total physique filtré" : "Filtered on-hand subtotal"} · ${unit.symbol || unit.name}","${new Prisma.Decimal(0).toFixed(unit.decimalScale)} ${unit.symbol || unit.name}"`)).toBe(true);
-        expect(rows[7].startsWith(`"${locale === "fr" ? "Recherche" : "Search"}","${key}"`)).toBe(true);
-        expect(rows[8].startsWith(locale === "fr" ? '"Dépôt","Tous les dépôts autorisés"' : '"Warehouse","All authorized warehouses"')).toBe(true);
+        const metricLabels=locale==="fr"?{onHand:"Stock physique",reserved:"Réservations et retenues",sellable:"Stock vendable"}:{onHand:"On-hand stock",reserved:"Reservations and holds",sellable:"Sellable stock"};
+        for(const row of registerBody.quantityTotals)expect(rows.some(line=>line.startsWith(`"${locale==="fr"?"Sous-total filtré":"Filtered subtotal"} · ${metricLabels[row.metric]} · ${row.unit}","${row.value} ${row.unit}"`))).toBe(true);
+        for(const row of registerBody.generalQuantityTotals)expect(rows.some(line=>line.startsWith(`"${locale==="fr"?"Total général autorisé sans filtres":"Authorized general total without filters"} · ${metricLabels[row.metric]} · ${row.unit}","${row.value} ${row.unit}${row.precisionMismatch?(locale==="fr"?" · Précision à vérifier":" · Precision needs review"):""}"`))).toBe(true);
+        expect(rows.at(-2).startsWith(`"${locale === "fr" ? "Recherche" : "Search"}","${key}"`)).toBe(true);
+        expect(rows.at(-1).startsWith(locale === "fr" ? '"Dépôt","Tous les dépôts autorisés"' : '"Warehouse","All authorized warehouses"')).toBe(true);
+        const quantityCards=page.locator("[data-inventory-quantity-totals]").getByRole("region",{name:locale==="fr"?"Quantités filtrées, toutes pages":"Filtered quantities, all pages",exact:true});
+        for(const metric of Object.values(metricLabels))await expect(quantityCards.getByText(`${metric} · ${unit.symbol||unit.name}`,{exact:true})).toBeVisible();
+        await page.screenshot({path:test.info().outputPath(`1228-stock-${locale}-${theme}-${widths[0]}.png`),fullPage:true});
         if (locale === "en") {
           const xlsx = await downloadRegister("Excel");
           expect(xlsx.name).toMatch(/\.xlsx$/i);
@@ -655,9 +662,16 @@ test.describe.serial("Shop 2.0 Iteration 4 global behavioral acceptance", () => 
         await warehouseFilter.selectOption(fixture.warehouseId);
         const scopedStock = await scopedQuery;
         expect(scopedStock.ok()).toBeTruthy();
-        expect((await scopedStock.json()).items).toEqual([]);
+        const scopedBody=await scopedStock.json();
+        expect(scopedBody.items).toEqual([]);
+        expect(scopedBody.quantityTotals).toEqual([]);
+        expect(scopedBody.generalQuantityTotals).toEqual(registerBody.generalQuantityTotals);
         const scopedCsv = await downloadRegister("CSV");
-        expect(scopedCsv.bytes.toString("utf8").trim().split(/\r?\n/)).toHaveLength(1);
+        const scopedRows=scopedCsv.bytes.toString("utf8").trim().split(/\r?\n/);
+        expect(scopedRows).toHaveLength(7+scopedBody.generalQuantityTotals.length);
+        expect(scopedRows[1]).toBe(Array(8).fill('""').join(","));
+        expect(scopedRows[4].startsWith(locale==="fr"?'"Enregistrements","0"':'"Records","0"')).toBe(true);
+        expect(scopedRows.some(line=>line.startsWith(locale==="fr"?'"Sous-total filtré':'"Filtered subtotal'))).toBe(false);
         await warehouseFilter.selectOption("");
         const governance = page.getByTestId("inventory-stock-governance");
         await expect(governance.getByRole("heading", { name: locale === "fr" ? "Règles de stock, lots et péremptions" : "Stock rules, batches and expiry", exact: true })).toBeVisible();

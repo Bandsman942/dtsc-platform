@@ -33,7 +33,8 @@ import { ErpDesign2Metric, ErpDesign2RegisterSection, ErpDesign2RegisterTools } 
 import { ModuleContent, ModuleHeader, ModuleToolbar, ModuleWorkspace } from "@/components/workspace/module-workspace";
 import { StatusBadge } from "@/components/workspace/status-badge";
 import type { EnterpriseModuleDefinition } from "@/lib/enterprise/module-registry";
-import { inventoryQuantityExportValue } from "@/lib/enterprise/inventory/quantity-display";
+import type { InventoryQuantityTotal } from "@/lib/enterprise/inventory/availability-analytics";
+import { inventoryQuantityMetricLabel, inventoryQuantityExportValue } from "@/lib/enterprise/inventory/quantity-display";
 
 type Member = { id: string; label: string; role: string; positionTitle: string | null };
 type Warehouse = { id: string; code: string; name: string; siteId: string };
@@ -53,7 +54,7 @@ type InventoryItem = {
   catalogItem: { id: string; code: string; sku: string | null; name: string; unitOfMeasure: { symbol: string | null; decimalScale: number } | null; category: { name: string } | null };
   balances: Array<{ id: string; quantityOnHand: string | number; quantityReserved: string | number; warehouse: { id: string; code: string; name: string }; storageLocation: { id: string; code: string; name: string } | null; stockLot: { id: string; lotNumber: string; expiryDate: string | null } | null }>;
 };
-type PhysicalSubtotal = { unitId: string; unit: string; decimalScale: number; value: string; precisionMismatch: boolean };
+type StockAnalytics = { quantityTotals?: InventoryQuantityTotal[]; generalQuantityTotals?: InventoryQuantityTotal[]; pageQuantityTotals?: InventoryQuantityTotal[] };
 type Transfer = {
   id: string;
   reference: string;
@@ -202,7 +203,7 @@ export function EnterpriseInventoryOperationsWorkspace({ organizationId, organiz
     if (stockLowOnly) value.set("lowStock", "true");
     return value;
   }, [page, search, stockWarehouseId, stockLowOnly]);
-  const stock = useProfessionalCollection<InventoryItem, { physicalTotals?: PhysicalSubtotal[] }>({ endpoint: `/api/enterprise/${organizationId}/inventory`, params: stockParams, refreshKey });
+  const stock = useProfessionalCollection<InventoryItem, StockAnalytics>({ endpoint: `/api/enterprise/${organizationId}/inventory`, params: stockParams, refreshKey });
   const transfers = useProfessionalCollection<Transfer>({ endpoint: `/api/enterprise/${organizationId}/stock-transfers`, params, refreshKey });
   const counts = useProfessionalCollection<Count>({ endpoint: `/api/enterprise/${organizationId}/inventory-counts`, params, refreshKey });
   const adjustments = useProfessionalCollection<Adjustment>({ endpoint: `/api/enterprise/${organizationId}/stock-adjustments`, params, refreshKey });
@@ -384,7 +385,12 @@ export function EnterpriseInventoryOperationsWorkspace({ organizationId, organiz
           </label>
           <label className="flex min-h-11 min-w-0 items-center gap-2 text-sm text-dtsc-ink"><input type="checkbox" checked={stockLowOnly} onChange={(event) => { setStockLowOnly(event.target.checked); setPage(1); }} className="h-4 w-4 shrink-0 accent-sky-600" />{locale === "en" ? "Low physical stock only" : "Stock physique faible uniquement"}</label>
         </div> : null}
-        {tab === "STOCK" && !stock.loading && !stock.error && stock.extra.physicalTotals?.length ? <ModuleMetrics label={locale === "fr" ? "Stock physique filtré, toutes pages" : "Filtered on-hand stock, all pages"}>{stock.extra.physicalTotals.map(row => <ErpDesign2Metric key={row.unitId} tone="teal" label={locale === "fr" ? `Sous-total physique · ${row.unit}` : `On-hand subtotal · ${row.unit}`} value={quantity(row.value,row.unit,row.decimalScale)} hint={locale === "fr" ? "Toutes les pages filtrées" : "All filtered pages"} />)}</ModuleMetrics> : null}
+        {tab === "STOCK" && !stock.loading && !stock.error ? <div className="grid min-w-0 gap-3" data-inventory-quantity-totals>
+          {stock.extra.quantityTotals?.length ? <ModuleMetrics label={locale === "fr" ? "Quantités filtrées, toutes pages" : "Filtered quantities, all pages"}>{stock.extra.quantityTotals.map(row => <ErpDesign2Metric key={`${row.unitId}:${row.metric}`} tone="teal" label={`${inventoryQuantityMetricLabel(row.metric,locale)} · ${row.unit}`} value={quantity(row.value,row.unit,row.decimalScale)} hint={row.precisionMismatch ? (locale === "fr" ? "Précision historique à vérifier" : "Historical precision needs review") : locale === "fr" ? "Toutes les pages filtrées" : "All filtered pages"} />)}</ModuleMetrics> : <p className="text-sm text-dtsc-muted">{locale === "fr" ? "Aucune quantité dans le résultat filtré." : "No quantities in the filtered result."}</p>}
+          <details className="min-w-0 rounded-xl border border-dtsc-border p-3"><summary className="cursor-pointer text-sm font-semibold text-dtsc-ink">{locale === "fr" ? "Comparer avec le général et la page" : "Compare general and page totals"}</summary>
+            {([["general",stock.extra.generalQuantityTotals],["page",stock.extra.pageQuantityTotals]] as const).map(([scope,rows])=><ModuleMetrics key={scope} label={scope === "general" ? (locale === "fr" ? "Général autorisé sans filtres" : "Authorized general totals without filters") : (locale === "fr" ? "Page affichée" : "Displayed page")}>{(rows||[]).map(row=><ErpDesign2Metric key={`${row.unitId}:${row.metric}`} tone="slate" label={`${inventoryQuantityMetricLabel(row.metric,locale)} · ${row.unit}`} value={quantity(row.value,row.unit,row.decimalScale)} hint={scope === "general" ? (locale === "fr" ? "Sans filtres, dépôts autorisés" : "Without filters, authorized warehouses") : (locale === "fr" ? "Page affichée uniquement" : "Displayed page only")} />)}</ModuleMetrics>)}
+          </details>
+        </div> : null}
         <ErpDesign2RegisterTools locale={locale} organizationName={organizationName}
           title={tab === "STOCK" ? t("inventory.stockSection") : tab === "TRANSFERS" ? t("inventory.transferSection") : tab === "COUNTS" ? t("inventory.countSection") : t("inventory.adjustmentSection")}
           endpoint={`/api/enterprise/${organizationId}/${tab === "STOCK" ? "inventory" : tab === "TRANSFERS" ? "stock-transfers" : tab === "COUNTS" ? "inventory-counts" : "stock-adjustments"}`}

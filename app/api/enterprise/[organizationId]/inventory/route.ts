@@ -1,6 +1,5 @@
-import { exactInventoryQuantity } from "@/lib/enterprise/inventory/quantity-policy";
+import { inventoryQuantityMetrics, inventoryQuantityTotals, readInventoryQuantityTotalsTx } from "@/lib/enterprise/inventory/availability-analytics";
 import { Prisma } from "@prisma/client";
-import { formatInventoryQuantity } from "@/lib/enterprise/inventory/quantity-display";
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog } from "@/lib/audit";
@@ -8,7 +7,6 @@ import { getEnterpriseCommonDomainAccess } from "@/lib/enterprise/common/access"
 import { retailErrorResponse } from "@/lib/enterprise/retail/http";
 import { requireRetailWarehouseCapability, retailInventoryVisibleSites } from "@/lib/enterprise/retail/site-access";
 import { prisma } from "@/lib/prisma";
-import { planReservationLotAllocations } from "@/lib/enterprise/inventory/lot-allocation";
 import { readActiveRetailInvoiceStockHoldsTx } from "@/lib/enterprise/retail/invoice-stock-holds";
 import { businessDateKey } from "@/lib/enterprise/retail/inventory-policy";
 
@@ -59,12 +57,15 @@ export async function GET(req: Request, { params }: Params) {
     await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "inventory-lot-options", page } });
     return NextResponse.json({ items, pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) } }, { headers: { "Cache-Control": "private, no-store" } });
   }
+  return prisma.$transaction(async tx => {
   const page = Math.max(1, Math.min(10000, Math.floor(Number(url.searchParams.get("page") || 1)) || 1));
   const pageSize = Math.min(50, Math.max(5, Math.floor(Number(url.searchParams.get("pageSize") || 20)) || 20));
   const search = (url.searchParams.get("search")?.trim() || "").slice(0,120);
   const warehouseId = url.searchParams.get("warehouseId")?.trim() || "";
   const lowStock = url.searchParams.get("lowStock") === "true";
+  const asOf = new Date();
   const balancesScope: Prisma.EnterpriseInventoryBalanceWhereInput = {
+    organizationId,
     ...(warehouseId ? { warehouseId } : {}),
     ...(scope.isolationEnabled ? { warehouse: { siteId: { in: scope.siteIds } } } : {}),
   };
@@ -97,25 +98,20 @@ export async function GET(req: Request, { params }: Params) {
       ${matchingSearch} ${balanceRequired}`;
   const lowStockQuery=Prisma.sql`SELECT id,name FROM (${scopedItemsQuery}) scoped WHERE "minimumQuantity" IS NOT NULL AND on_hand<="minimumQuantity"`;
   const selectedScope=lowStock ? Prisma.sql`WHERE scoped."minimumQuantity" IS NOT NULL AND scoped.on_hand<=scoped."minimumQuantity"` : Prisma.empty;
-  // Physical stock only: sellable and reserved include separate FEFO/hold sources,
-  // so do not derive them from the physical total.
-  const physicalTotalsQuery=Prisma.sql`
-    SELECT u.id AS "unitId",u.name AS "unitName",u.symbol AS "unitSymbol",u."decimalScale",SUM(scoped.on_hand) AS quantity
-    FROM (SELECT scoped.* FROM (${scopedItemsQuery}) scoped ${selectedScope}) scoped
-    JOIN "EnterpriseUnitOfMeasure" u ON u.id=scoped."unitOfMeasureId" AND u."organizationId"=${organizationId}
-    GROUP BY u.id,u.name,u.symbol,u."decimalScale" ORDER BY u.name,u.id`;
-  const [lowCount, lowPage, physicalTotals]=await Promise.all([
-    prisma.$queryRaw<Array<{total:bigint}>>(Prisma.sql`SELECT COUNT(*) AS total FROM (${lowStockQuery}) l`),
-    lowStock?prisma.$queryRaw<Array<{id:string}>>(Prisma.sql`SELECT id FROM (${lowStockQuery}) l ORDER BY name ASC,id ASC LIMIT ${pageSize} OFFSET ${(page-1)*pageSize}`):Promise.resolve([]),
-    prisma.$queryRaw<Array<{unitId:string;unitName:string;unitSymbol:string|null;decimalScale:number;quantity:Prisma.Decimal}>>(physicalTotalsQuery),
+  const [lowCount, lowPage]=await Promise.all([
+    tx.$queryRaw<Array<{total:bigint}>>(Prisma.sql`SELECT COUNT(*) AS total FROM (${lowStockQuery}) l`),
+    lowStock?tx.$queryRaw<Array<{id:string}>>(Prisma.sql`SELECT id FROM (${lowStockQuery}) l ORDER BY name ASC,id ASC LIMIT ${pageSize} OFFSET ${(page-1)*pageSize}`):Promise.resolve([]),
   ]);
   const lowStockCount=Number(lowCount[0]?.total||0);
   const itemWhere:Prisma.EnterpriseInventoryItemWhereInput=lowStock?{AND:[where,{id:{in:lowPage.map(row=>row.id)}}]}:where;
-  const [items,total,movementCount,warehouseCount,organization]=await Promise.all([
-    prisma.enterpriseInventoryItem.findMany({where:itemWhere,orderBy:[{catalogItem:{name:"asc"}},{id:"asc"}],skip:lowStock?0:(page-1)*pageSize,take:pageSize,include:{catalogItem:{include:{unitOfMeasure:true,category:true}},balances:{where:warehouseId||scope.isolationEnabled?balancesScope:undefined,include:{warehouse:{select:{id:true,code:true,name:true,status:true,archivedAt:true}},storageLocation:{select:{id:true,code:true,name:true,status:true,archivedAt:true}},stockLot:{select:{id:true,lotNumber:true,expiryDate:true,status:true,archivedAt:true}}},orderBy:{updatedAt:"desc"}}}}),
-    lowStock?Promise.resolve(lowStockCount):prisma.enterpriseInventoryItem.count({where}),
-    prisma.enterpriseStockMovement.count({where:{organizationId,...(scope.isolationEnabled?{warehouse:{siteId:{in:scope.siteIds}}}:{})}}),
-    prisma.enterpriseWarehouse.count({
+  const selectedIds=Prisma.sql`SELECT scoped.id FROM (${scopedItemsQuery}) scoped ${selectedScope}`;
+  const filteredMovementCountQuery=Prisma.sql`SELECT COUNT(*) AS total FROM "EnterpriseStockMovement" b JOIN "EnterpriseWarehouse" w ON w.id=b."warehouseId" AND w."organizationId"=b."organizationId" WHERE b."organizationId"=${organizationId} ${warehouseClause} ${siteClause} AND b."inventoryItemId" IN (${selectedIds})`;
+  const filteredWarehouseCountQuery=Prisma.sql`SELECT COUNT(DISTINCT w.id) AS total FROM "EnterpriseInventoryBalance" b JOIN "EnterpriseWarehouse" w ON w.id=b."warehouseId" AND w."organizationId"=b."organizationId" WHERE b."organizationId"=${organizationId} ${warehouseClause} ${siteClause} AND w.status='ACTIVE' AND w."archivedAt" IS NULL AND b."inventoryItemId" IN (${selectedIds})`;
+  const [items,total,generalMovementCount,generalWarehouseCount,organization,filteredMovementCounts,filteredWarehouseCounts]=await Promise.all([
+    tx.enterpriseInventoryItem.findMany({where:itemWhere,orderBy:[{catalogItem:{name:"asc"}},{id:"asc"}],skip:lowStock?0:(page-1)*pageSize,take:pageSize,include:{catalogItem:{include:{unitOfMeasure:true,category:true}},balances:{where:warehouseId||scope.isolationEnabled?balancesScope:undefined,include:{warehouse:{select:{id:true,code:true,name:true,status:true,archivedAt:true}},storageLocation:{select:{id:true,code:true,name:true,status:true,archivedAt:true}},stockLot:{select:{id:true,lotNumber:true,expiryDate:true,status:true,archivedAt:true}}},orderBy:{updatedAt:"desc"}}}}),
+    lowStock?Promise.resolve(lowStockCount):tx.enterpriseInventoryItem.count({where}),
+    tx.enterpriseStockMovement.count({where:{organizationId,...(scope.isolationEnabled?{warehouse:{siteId:{in:scope.siteIds}}}:{})}}),
+    tx.enterpriseWarehouse.count({
       where: {
         organizationId,
         status: "ACTIVE",
@@ -123,54 +119,38 @@ export async function GET(req: Request, { params }: Params) {
         ...(scope.isolationEnabled ? { siteId: { in: scope.siteIds } } : {}),
       },
     }),
-    prisma.organization.findUniqueOrThrow({where:{id:organizationId},select:{timezone:true}}),
+    tx.organization.findUniqueOrThrow({where:{id:organizationId},select:{timezone:true}}),
+    tx.$queryRaw<Array<{total:bigint}>>(filteredMovementCountQuery),
+    tx.$queryRaw<Array<{total:bigint}>>(filteredWarehouseCountQuery),
   ]);
   // One bounded read per promise source for the page; use the same FEFO
   // planner as reservation creation and retail availability, not onHand alone.
   const itemIds=items.map(item=>item.id);
   const pageWarehouseIds=[...new Set(items.flatMap(item=>item.balances.map(row=>row.warehouseId)))];
   const [reservations,holds]=await Promise.all([
-    prisma.enterpriseInventoryReservation.findMany({where:{organizationId,inventoryItemId:{in:itemIds},status:"ACTIVE",OR:[{expiresAt:null},{expiresAt:{gt:new Date()}}],warehouseId:{in:pageWarehouseIds}},select:{inventoryItemId:true,warehouseId:true,quantity:true,fulfilledQuantity:true,lotAllocations:true,storageLocationId:true}}),
-    readActiveRetailInvoiceStockHoldsTx(prisma,{organizationId,inventoryItemIds:itemIds,...(warehouseId?{warehouseId}:{})}),
+    tx.enterpriseInventoryReservation.findMany({where:{organizationId,inventoryItemId:{in:itemIds},status:"ACTIVE",OR:[{expiresAt:null},{expiresAt:{gt:asOf}}],warehouseId:{in:pageWarehouseIds}},select:{inventoryItemId:true,warehouseId:true,quantity:true,fulfilledQuantity:true,lotAllocations:true,storageLocationId:true}}),
+    readActiveRetailInvoiceStockHoldsTx(tx,{organizationId,inventoryItemIds:itemIds,warehouseIds:pageWarehouseIds,...(warehouseId?{warehouseId}:{})}),
   ]);
   const pageCatalogIds=[...new Set(items.map(item=>item.catalogItemId))];
   const [pharmacyItems,sectorItems]=await Promise.all([
-    prisma.pharmacyProductExtension.findMany({where:{organizationId,catalogItemId:{in:pageCatalogIds}},select:{catalogItemId:true}}),
-    prisma.enterpriseSectorInventoryEvent.groupBy({by:["catalogItemId"],where:{organizationId,catalogItemId:{in:pageCatalogIds}}}),
+    tx.pharmacyProductExtension.findMany({where:{organizationId,catalogItemId:{in:pageCatalogIds}},select:{catalogItemId:true}}),
+    tx.enterpriseSectorInventoryEvent.groupBy({by:["catalogItemId"],where:{organizationId,catalogItemId:{in:pageCatalogIds}}}),
   ]);
   const sectorManaged=new Set([...pharmacyItems,...sectorItems].map(row=>row.catalogItemId));
-  const zero=()=>exactInventoryQuantity(0);
-  const today=businessDateKey(new Date(),organization.timezone||"UTC");
+  const today=businessDateKey(asOf,organization.timezone||"UTC");
+  const rowMetrics=new Map(items.map(item=>[item.id,inventoryQuantityMetrics(item,reservations,holds,today)]));
   const normalizedItems=items.map(item=>{
-    const physical=item.balances.reduce((sum,row)=>sum.plus(row.quantityOnHand),zero());
-    const legacy=item.balances.reduce((sum,row)=>sum.plus(row.quantityReserved),zero());
-    const authorizedWarehouseIds=new Set(item.balances.map(row=>row.warehouseId));
-    const activeReservations=reservations.filter(row=>row.inventoryItemId===item.id&&authorizedWarehouseIds.has(row.warehouseId));
-    const activeHolds=holds.filter(row=>row.inventoryItemId===item.id&&authorizedWarehouseIds.has(row.warehouseId));
-    const orderReserved=activeReservations.reduce((sum,row)=>sum.plus(exactInventoryQuantity(row.quantity).minus(row.fulfilledQuantity)),zero());
-    const invoiceHeld=activeHolds.reduce((sum,row)=>sum.plus(row.quantity),zero());
-    let available=zero();
-    for(const warehouseId of authorizedWarehouseIds){
-      const rows=item.balances.filter(row=>row.warehouseId===warehouseId&&row.warehouse.status==="ACTIVE"&&!row.warehouse.archivedAt&&(!row.storageLocationId||(row.storageLocation?.status==="ACTIVE"&&!row.storageLocation.archivedAt)));
-      const promised=activeReservations.filter(row=>row.warehouseId===warehouseId);
-      const held=activeHolds.filter(row=>row.warehouseId===warehouseId);
-      const tracked=item.lotTracking||item.expiryTracking;
-      if(tracked){
-        const positive=rows.filter(row=>row.quantityOnHand.gt(0));
-        const demand=positive.reduce((sum,row)=>sum.plus(row.quantityOnHand),zero());
-        if(demand.gt(0)){
-          const plan=planReservationLotAllocations({balances:positive,reservations:promised,holds:held,quantity:demand,businessDate:today,requireExpiry:item.expiryTracking});
-          available=available.plus(plan.allocations.reduce((sum,row)=>sum.plus(row.quantity),zero()));
-        }
-      }else{
-        const local=rows.reduce((sum,row)=>sum.plus(exactInventoryQuantity(row.quantityOnHand).minus(row.quantityReserved)),zero())
-          .minus(promised.reduce((sum,row)=>sum.plus(exactInventoryQuantity(row.quantity).minus(row.fulfilledQuantity)),zero()))
-          .minus(held.reduce((sum,row)=>sum.plus(row.quantity),zero()));
-        if(local.gt(0))available=available.plus(local);
-      }
-    }
-    return {...item,quantityOnHandExact:physical.toFixed(),quantityReservedExact:legacy.plus(orderReserved).plus(invoiceHeld).toFixed(),quantityAvailableExact:available.toFixed(),sectorManaged:sectorManaged.has(item.catalogItemId),quantityOnHand:Number(physical),quantityReserved:Number(legacy.plus(orderReserved).plus(invoiceHeld)),legacyQuantityReserved:Number(legacy),orderReservedQuantity:Number(orderReserved),invoiceHeldQuantity:Number(invoiceHeld),quantityAvailable:Number(available),isLowStock:item.minimumQuantity!==null&&physical.lte(item.minimumQuantity)};
+    const values=rowMetrics.get(item.id)!;
+    return {...item,quantityOnHandExact:values.onHand.toFixed(),quantityReservedExact:values.reserved.toFixed(),quantityAvailableExact:values.sellable.toFixed(),sectorManaged:sectorManaged.has(item.catalogItemId),quantityOnHand:Number(values.onHand),quantityReserved:Number(values.reserved),legacyQuantityReserved:Number(values.legacy),orderReservedQuantity:Number(values.orderReserved),invoiceHeldQuantity:Number(values.invoiceHeld),quantityAvailable:Number(values.sellable),isLowStock:item.minimumQuantity!==null&&values.onHand.lte(item.minimumQuantity)};
   });
+  const totalsInput={organizationId,where,balancesWhere:balancesScope,lowStock,businessDate:today,asOf};
+  const quantityTotals=await readInventoryQuantityTotalsTx(tx,totalsInput);
+  const generalBalancesScope:Prisma.EnterpriseInventoryBalanceWhereInput={organizationId,...(scope.isolationEnabled?{warehouse:{siteId:{in:scope.siteIds}}}:{})};
+  const generalWhere:Prisma.EnterpriseInventoryItemWhereInput={organizationId,status:"ACTIVE",archivedAt:null,...(scope.isolationEnabled?{balances:{some:generalBalancesScope}}:{})};
+  const generalQuantityTotals=!search&&!warehouseId&&!lowStock?quantityTotals:await readInventoryQuantityTotalsTx(tx,{...totalsInput,where:generalWhere,balancesWhere:generalBalancesScope,lowStock:false});
+  const pageQuantityTotals=inventoryQuantityTotals(items.map(item=>({unit:item.catalogItem.unitOfMeasure,metrics:rowMetrics.get(item.id)!})));
+  const physicalTotals=quantityTotals.filter(row=>row.metric==="onHand");
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "inventory", page } });
-  return NextResponse.json({ items: normalizedItems, physicalTotals:physicalTotals.map(row=>({unitId:row.unitId,unit:row.unitSymbol||row.unitName,decimalScale:row.decimalScale,...formatInventoryQuantity(row.quantity,row.decimalScale)})), pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) }, metrics: { lowStockCount, movementCount, warehouseCount }, canManage: access.canManage && !scope.isolationEnabled, canAdminister: access.canAdminister && !scope.isolationEnabled });
+  return NextResponse.json({ items: normalizedItems, physicalTotals, quantityTotals, generalQuantityTotals, pageQuantityTotals, analyticsAsOf:asOf.toISOString(), pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) }, metrics: { lowStockCount, movementCount:Number(filteredMovementCounts[0]?.total||0), warehouseCount:Number(filteredWarehouseCounts[0]?.total||0) }, generalMetrics:{movementCount:generalMovementCount,warehouseCount:generalWarehouseCount}, canManage: access.canManage && !scope.isolationEnabled, canAdminister: access.canAdminister && !scope.isolationEnabled },{headers:{"Cache-Control":"private, no-store"}});
+  },{isolationLevel:Prisma.TransactionIsolationLevel.RepeatableRead,timeout:30000});
 }

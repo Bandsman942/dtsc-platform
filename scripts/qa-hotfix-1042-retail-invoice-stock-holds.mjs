@@ -56,6 +56,8 @@ assert.deepEqual(Array.from(captured.where.inventoryItemId.in), ["item-1", "item
 assert.equal(result[0].quantity.toFixed(), "4.25");
 assert.equal(result[1].stockLotId, null);
 assert.equal(result[1].warehouseId, "store-a");
+await readActiveRetailInvoiceStockHoldsTx(tx,{organizationId:"tenant-a",inventoryItemIds:["item-1"],warehouseIds:["store-a","store-b"]});
+assert.deepEqual(Array.from(captured.where.checkout.warehouseId.in),["store-a","store-b"]);
 captured = null;
 assert.deepEqual(Array.from(await readActiveRetailInvoiceStockHoldsTx(tx, { organizationId: "tenant-b", inventoryItemIds: [] })), []);
 assert.equal(captured, null, "Empty inventory selection must not query another tenant");

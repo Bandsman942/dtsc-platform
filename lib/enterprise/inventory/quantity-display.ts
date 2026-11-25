@@ -42,3 +42,9 @@ export function isInventoryQuantityInputValid(value: string, decimalScale: numbe
   if (integer.replace(/^0+/, "").length > 15 || fraction.replace(/0+$/, "").length > decimalScale) return false;
   return !positive || /[1-9]/.test(integer + fraction);
 }
+
+export type InventoryQuantityMetric = "onHand" | "reserved" | "sellable";
+export function inventoryQuantityMetricLabel(metric: InventoryQuantityMetric, locale: "fr" | "en"): string {
+  const labels = { onHand: { fr: "Stock physique", en: "On-hand stock" }, reserved: { fr: "Réservations et retenues", en: "Reservations and holds" }, sellable: { fr: "Stock vendable", en: "Sellable stock" } };
+  return labels[metric][locale];
+}

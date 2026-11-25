@@ -18,6 +18,7 @@ export async function readActiveRetailInvoiceStockHoldsTx(
     organizationId: string;
     inventoryItemIds: string[];
     warehouseId?: string;
+    warehouseIds?: string[];
     excludeSalesInvoiceId?: string;
   },
 ) {
@@ -27,7 +28,7 @@ export async function readActiveRetailInvoiceStockHoldsTx(
       organizationId: input.organizationId,
       inventoryItemId: { in: input.inventoryItemIds },
       checkout: {
-        ...(input.warehouseId ? { warehouseId: input.warehouseId } : {}),
+        ...(input.warehouseId ? { warehouseId: input.warehouseId } : input.warehouseIds ? { warehouseId: { in: input.warehouseIds } } : {}),
         ...(input.excludeSalesInvoiceId ? { salesInvoiceId: { not: input.excludeSalesInvoiceId } } : {}),
         stockPostedAt: null,
         invoice: { status: { notIn: ["CANCELLED", "VOIDED"] } },

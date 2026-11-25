@@ -108,6 +108,7 @@ console.log("#1228 purchase request ordering: aborted/stale/unmounted responses 
   const total=(amount,metric="total")=>({currencyCode:"USD",status:"DRAFT",metric,amount});
   const exporter=moduleAt("components/enterprise/professional/finance-design2-controls.tsx",{
     react:{useEffect:()=>{},useState:initial=>[initial,()=>{}]},
+    "@/lib/enterprise/inventory/quantity-display":moduleAt("lib/enterprise/inventory/quantity-display.ts"),
     "@/components/ui/button":{Button:"button"},
     "@/components/enterprise/professional/finance-professional-ui":{financeMoney:(amount,currency)=>`${amount} ${currency}`,financeStatusLabel:status=>status},
     "@/lib/client-toast":{notifyToast:(...args)=>notices.push(args)},
@@ -117,6 +118,14 @@ console.log("#1228 purchase request ordering: aborted/stale/unmounted responses 
   function find(node,label){if(node?.props?.children===label)return node;const children=node?.props?.children;if(Array.isArray(children)&&children.includes(label))return node;for(const child of Array.isArray(children)?children:[children]){if(Array.isArray(child)){for(const value of child){if(value===label)return node;}}else if(child&&typeof child==="object"){const match=find(child,label);if(match)return match;}}return null;}
   async function click(label){const tree=exporter.FinanceExportControls({endpoint:"/quotes",organizationName:"Tenant",title:"Quotes",locale:"en",columns:[{key:"id",labelFr:"Référence",labelEn:"Reference",get:r=>r.id}]});const button=find(tree,label);assert(button,`Missing ${label} button`);button.props.onClick();await new Promise(resolve=>setTimeout(resolve,10));}
   for(const label of ["CSV","Excel","PDF"]){pages=[page("a"),page("b")];await click(label);const result=exports.at(-1);assert(result,JSON.stringify(notices));assert.equal(result.model.rows.length,2);assert(result.model.kpis.some(x=>x.label.startsWith("Filtered subtotal")&&x.value==="3 USD"));assert(result.model.kpis.some(x=>x.label.startsWith("Authorized general total")&&x.value==="8 USD"));assert(!result.model.kpis.some(x=>x.value==="999 USD"));assert.equal(result.model.includeCompleteSummary,true);}
+  const quantity=(metric,value)=>({unitId:"unit",unit:"kg",decimalScale:6,metric,value,precisionMismatch:false});
+  const stockPage=id=>({...page(id),quantityTotals:[quantity("onHand","10"),quantity("reserved","4"),quantity("sellable","6")],generalQuantityTotals:[quantity("onHand","999999999999999.999999")],physicalTotals:[{unitId:"unit",unit:"kg",value:"10",precisionMismatch:false}]});
+  pages=[stockPage("a"),stockPage("b")];await click("CSV");const stockModel=exports.at(-1).model;
+  assert.equal(stockModel.kpis.filter(x=>x.label.includes("On-hand stock")).length,2,"Legacy physical totals must not duplicate the new quantity scope");
+  assert(stockModel.kpis.some(x=>x.label.includes("Reservations and holds")&&x.numericValue===4));
+  assert(stockModel.kpis.some(x=>x.label.includes("Sellable stock")&&x.numericValue===6));
+  const exactQuantity=stockModel.kpis.find(x=>x.label.startsWith("Authorized general total")&&x.label.includes("On-hand stock"));assert.equal(exactQuantity.value,"999999999999999.999999 kg");assert.equal(exactQuantity.numericValue,undefined);
+  const beforeStockChange=exports.length;const stockChanged=stockPage("b");stockChanged.quantityTotals[1].value="5";pages=[stockPage("a"),stockChanged];await click("CSV");assert.equal(exports.length,beforeStockChange);assert(notices.at(-1)[0].includes("Data changed"));
   const before=exports.length;pages=[page("a"),page("b","9")];await click("CSV");assert.equal(exports.length,before);assert(notices.at(-1)[0].includes("Data changed"));
 }
 console.log("#1228 actual CSV/XLSX/PDF controls: all rows and filtered/general totals, page scope excluded, inconsistent snapshots rejected");

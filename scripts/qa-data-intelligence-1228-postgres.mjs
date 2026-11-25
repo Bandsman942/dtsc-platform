@@ -79,6 +79,42 @@ try {
       await tx.$executeRawUnsafe("SAVEPOINT qa_1228_idempotence");
       await assert.rejects(async () => tx.enterpriseStockMovement.create({ data: { ...coordinates, movementType: "PURCHASE_RECEIPT", direction: "IN", quantity: "0.123456", idempotencyKey: `${tenant}-movement`, createdByUserId: actor } }), { code: "P2002" });
       await tx.$executeRawUnsafe("ROLLBACK TO SAVEPOINT qa_1228_idempotence");
+      // More than two analytical batches, with real orders, unpaid invoice
+      // holds, another unit and forbidden site. No ledger posting is performed.
+      const integerUnit=await tx.enterpriseUnitOfMeasure.create({data:{organizationId:tenant,code:"INTEGER",name:"Piece",decimalScale:0}});
+      const bulk=Array.from({length:501},(_,i)=>({id:`${tenant}-bulk-${String(i).padStart(4,"0")}`,catalogId:`${tenant}-catalog-${i}`,invoiceItemId:`${tenant}-invoice-item-${i}`}));
+      await tx.enterpriseCatalogItem.createMany({data:bulk.map((row,i)=>({...catalogData,id:row.catalogId,organizationId:tenant,code:`BULK-1228-${i}`,normalizedName:`bulk-1228-${i}`,name:`BULK-1228-${i}`,unitOfMeasureId:i%2?integerUnit.id:unit.id}))});
+      await tx.enterpriseInventoryItem.createMany({data:bulk.map(row=>({id:row.id,organizationId:tenant,catalogItemId:row.catalogId,minimumQuantity:10,createdByUserId:actor}))});
+      await tx.enterpriseInventoryBalance.createMany({data:bulk.map(row=>({organizationId:tenant,inventoryItemId:row.id,warehouseId:warehouse.id,quantityOnHand:10,quantityReserved:1}))});
+      await tx.enterpriseInventoryReservation.createMany({data:bulk.map(row=>({organizationId:tenant,inventoryItemId:row.id,warehouseId:warehouse.id,salesOrderId:"fixture-order",salesOrderItemId:row.id,quantity:2,fulfilledQuantity:0,idempotencyKey:row.id,createdByUserId:actor}))});
+      const invoice=await tx.enterpriseSalesInvoice.create({data:{organizationId:tenant,number:"QA-1228-HOLDS",businessPartyId:`${tenant}-party`,invoiceDate:new Date(),currencyCode:"USD",subtotal:501,taxTotal:0,grandTotal:501,outstandingAmount:501,createdByUserId:actor}});
+      await tx.enterpriseSalesInvoiceItem.createMany({data:bulk.map(row=>({id:row.invoiceItemId,organizationId:tenant,salesInvoiceId:invoice.id,catalogItemId:row.catalogId,description:"Unpaid fixture line",quantity:1,unitPrice:1,netAmount:1,taxAmount:0,totalAmount:1}))});
+      const checkout=await tx.enterpriseRetailInvoiceCheckout.create({data:{organizationId:tenant,salesInvoiceId:invoice.id,siteId:site.id,warehouseId:warehouse.id,idempotencyKey:`${tenant}-checkout`,requestFingerprint:"a".repeat(64),preparedByUserId:actor}});
+      await tx.enterpriseRetailInvoiceCheckoutLine.createMany({data:bulk.map(row=>({organizationId:tenant,checkoutId:checkout.id,invoiceItemId:row.invoiceItemId,inventoryItemId:row.id}))});
+      const forbiddenSite=await tx.enterpriseSite.create({data:{organizationId:tenant,code:"FORBIDDEN",name:"Forbidden shop",siteType:"STORE",createdByUserId:actor}});
+      const forbiddenWarehouse=await tx.enterpriseWarehouse.create({data:{organizationId:tenant,siteId:forbiddenSite.id,code:"FORBIDDEN",name:"Forbidden warehouse",createdByUserId:actor}});
+      await tx.enterpriseInventoryBalance.create({data:{organizationId:tenant,inventoryItemId:bulk[0].id,warehouseId:forbiddenWarehouse.id,quantityOnHand:99999}});
+      const reader=new Proxy(tx,{get:(target,key)=>key==="organization"?{findUniqueOrThrow:async()=>({timezone:"UTC"})}:Reflect.get(target,key)});
+      const {GET:inventoryGet}=workflowTestLoader({
+        "@/lib/prisma":{prisma:{$transaction:async(fn,options)=>{assert.equal(options.isolationLevel,"RepeatableRead");return fn(reader);}}},
+        "@/lib/auth":{getSession:async()=>({userId:actor})},
+        "@/lib/audit":{writeApiLog:async()=>{}},
+        "@/lib/enterprise/common/access":{getEnterpriseCommonDomainAccess:async({organizationId})=>organizationId===tenant?{canManage:false,canWrite:false,canAdminister:false}:null},
+        "@/lib/enterprise/retail/site-access":{retailInventoryVisibleSites:async()=>({isolationEnabled:true,siteIds:[site.id]})},
+        "@/lib/enterprise/retail/http":{},
+      })("@/app/api/enterprise/[organizationId]/inventory/route");
+      const inventoryPage=async(page,extra="")=>{const response=await inventoryGet(new Request(`http://localhost/api/enterprise/${tenant}/inventory?search=BULK-1228&pageSize=5&page=${page}${extra}`),{params:Promise.resolve({organizationId:tenant})});assert.equal(response.status,200);return response.json();};
+      const started=performance.now();const firstPage=await inventoryPage(1),secondPage=await inventoryPage(2),beyondPage=await inventoryPage(999);
+      const elapsed=performance.now()-started;assert(elapsed<10000,`501-item full analytics plus three HTTP projections exceeded 10s: ${elapsed}ms`);
+      assert.equal(firstPage.pagination.total,501);assert.equal(firstPage.items.length,5);assert.equal(secondPage.items.length,5);assert.equal(beyondPage.items.length,0);
+      assert.deepEqual(firstPage.quantityTotals,secondPage.quantityTotals);assert.deepEqual(firstPage.quantityTotals,beyondPage.quantityTotals);assert.deepEqual(beyondPage.pageQuantityTotals,[]);
+      assert.deepEqual(firstPage.generalQuantityTotals,secondPage.generalQuantityTotals);
+      for(const [unitId,onHand,reserved,sellable]of [[unit.id,"2510.000000","1004.000000","1506.000000"],[integerUnit.id,"2500","1000","1500"]])for(const [metric,value]of [["onHand",onHand],["reserved",reserved],["sellable",sellable]])assert.equal(firstPage.quantityTotals.find(row=>row.unitId===unitId&&row.metric===metric).value,value);
+      assert.equal(firstPage.metrics.warehouseCount,1);assert.equal(firstPage.metrics.movementCount,0);
+      assert.equal(firstPage.generalQuantityTotals.find(row=>row.unitId===unit.id&&row.metric==="onHand").value,"1000000000002509.999999");
+      const forbiddenPage=await inventoryPage(1,`&warehouseId=${forbiddenWarehouse.id}`);assert.equal(forbiddenPage.pagination.total,0);assert.deepEqual(forbiddenPage.quantityTotals,[]);assert.deepEqual(forbiddenPage.generalQuantityTotals,firstPage.generalQuantityTotals);
+      assert.equal((await inventoryGet(new Request(`http://localhost/api/enterprise/${otherTenant}/inventory`),{params:Promise.resolve({organizationId:otherTenant})})).status,403);
+      console.log(`PASS #1228 PostgreSQL inventory analytics: 501 items, real reservations/holds, two units, forbidden site, three pages in ${elapsed.toFixed(0)}ms`);
       // Commercial aggregates use PostgreSQL NUMERIC across more than one page,
       // with both foreign rows and a second document status/currency present.
       const exactCents = 999999999999999999n;
