@@ -11,6 +11,18 @@ if (process.env.QA_1228_DATABASE_FIXTURE !== "true" || !["localhost", "127.0.0.1
 }
 const db = new PrismaClient();
 const { planFefoLots } = workflowTestLoader({})("@/lib/enterprise/inventory/lot-allocation");
+const handlerLoadStarted=performance.now();
+const inventoryFixture={reader:null,organizationId:"",siteId:"",actor:""};
+const {GET:inventoryGet}=workflowTestLoader({
+        "@/lib/prisma":{prisma:{$transaction:async(fn,options)=>{assert.equal(options.isolationLevel,"RepeatableRead");assert(inventoryFixture.reader,"Fixture transaction must be initialized");return fn(inventoryFixture.reader);}}},
+        "@/lib/auth":{getSession:async()=>({userId:inventoryFixture.actor})},
+        "@/lib/audit":{writeApiLog:async()=>{}},
+        "@/lib/enterprise/common/access":{getEnterpriseCommonDomainAccess:async({organizationId})=>organizationId===inventoryFixture.organizationId?{canManage:false,canWrite:false,canAdminister:false}:null},
+        "@/lib/enterprise/retail/site-access":{retailInventoryVisibleSites:async()=>({isolationEnabled:true,siteIds:[inventoryFixture.siteId]})},
+        "@/lib/enterprise/retail/http":{},
+      })("@/app/api/enterprise/[organizationId]/inventory/route");
+console.log(`#1228 test handler loading outside PostgreSQL transaction: ${(performance.now()-handlerLoadStarted).toFixed(0)}ms`);
+
 class RollbackFixture extends Error {}
 try {
   const expected = [
@@ -52,6 +64,7 @@ try {
   const actor = "qa-1228-actor";
   try {
     await db.$transaction(async tx => {
+      const fixtureStarted=performance.now();
       const unit = await tx.enterpriseUnitOfMeasure.create({ data: { organizationId: tenant, code: "MICRO", name: "Micro-unit", decimalScale: 6 } });
       const otherUnit = await tx.enterpriseUnitOfMeasure.create({ data: { organizationId: otherTenant, code: "MICRO", name: "Other unit", decimalScale: 6 } });
       const catalogData = { code: "MICRO", name: "Micro article", normalizedName: "micro article", itemType: "PRODUCT", trackInventory: true, createdByUserId: actor };
@@ -94,16 +107,10 @@ try {
       const forbiddenSite=await tx.enterpriseSite.create({data:{organizationId:tenant,code:"FORBIDDEN",name:"Forbidden shop",siteType:"STORE",createdByUserId:actor}});
       const forbiddenWarehouse=await tx.enterpriseWarehouse.create({data:{organizationId:tenant,siteId:forbiddenSite.id,code:"FORBIDDEN",name:"Forbidden warehouse",createdByUserId:actor}});
       await tx.enterpriseInventoryBalance.create({data:{organizationId:tenant,inventoryItemId:bulk[0].id,warehouseId:forbiddenWarehouse.id,quantityOnHand:99999}});
-      const reader=new Proxy(tx,{get:(target,key)=>key==="organization"?{findUniqueOrThrow:async()=>({timezone:"UTC"})}:Reflect.get(target,key)});
-      const {GET:inventoryGet}=workflowTestLoader({
-        "@/lib/prisma":{prisma:{$transaction:async(fn,options)=>{assert.equal(options.isolationLevel,"RepeatableRead");return fn(reader);}}},
-        "@/lib/auth":{getSession:async()=>({userId:actor})},
-        "@/lib/audit":{writeApiLog:async()=>{}},
-        "@/lib/enterprise/common/access":{getEnterpriseCommonDomainAccess:async({organizationId})=>organizationId===tenant?{canManage:false,canWrite:false,canAdminister:false}:null},
-        "@/lib/enterprise/retail/site-access":{retailInventoryVisibleSites:async()=>({isolationEnabled:true,siteIds:[site.id]})},
-        "@/lib/enterprise/retail/http":{},
-      })("@/app/api/enterprise/[organizationId]/inventory/route");
-      const inventoryPage=async(page,extra="")=>{const response=await inventoryGet(new Request(`http://localhost/api/enterprise/${tenant}/inventory?search=BULK-1228&pageSize=5&page=${page}${extra}`),{params:Promise.resolve({organizationId:tenant})});assert.equal(response.status,200);return response.json();};
+      inventoryFixture.reader=new Proxy(tx,{get:(target,key)=>key==="organization"?{findUniqueOrThrow:async()=>({timezone:"UTC"})}:Reflect.get(target,key)});
+      inventoryFixture.organizationId=tenant;inventoryFixture.siteId=site.id;inventoryFixture.actor=actor;
+      console.log(`#1228 PostgreSQL fixture setup: ${(performance.now()-fixtureStarted).toFixed(0)}ms`);
+      const inventoryPage=async(page,extra="")=>{const response=await inventoryGet(new Request(`http://localhost/api/enterprise/${tenant}/inventory?search=BULK-1228&pageSize=5&page=${page}${extra}`),{params:Promise.resolve({organizationId:tenant})});assert.equal(response.status,200);const body=await response.json();console.log(`#1228 actual inventory GET page ${page}: ${body.pagination.total} matches`);return body;};
       const started=performance.now();const firstPage=await inventoryPage(1),secondPage=await inventoryPage(2),beyondPage=await inventoryPage(999);
       const elapsed=performance.now()-started;assert(elapsed<10000,`501-item full analytics plus three HTTP projections exceeded 10s: ${elapsed}ms`);
       assert.equal(firstPage.pagination.total,501);assert.equal(firstPage.items.length,5);assert.equal(secondPage.items.length,5);assert.equal(beyondPage.items.length,0);
