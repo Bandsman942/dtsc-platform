@@ -68,8 +68,8 @@ export function ModuleHeader({
         className,
       )}
     >
-      <div className="flex min-w-0 max-w-full flex-col gap-3 lg:flex-row lg:items-center lg:justify-between lg:gap-4">
-        <div className="min-w-0 max-w-4xl border-l-[3px] border-cyan-500 pl-3">
+      <div className="flex min-w-0 max-w-full flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-center lg:justify-between lg:gap-4">
+        <div className="min-w-0 max-w-4xl border-l-[3px] border-cyan-500 pl-3 lg:flex-[1_1_16rem]">
           {eyebrow ? (
             <div className="mb-0.5 text-[0.65rem] font-bold uppercase tracking-[0.09em] text-dtsc-muted sm:text-[0.7rem]">
               {eyebrow}
