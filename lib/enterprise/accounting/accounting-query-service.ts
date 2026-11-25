@@ -126,13 +126,14 @@ export async function getAccountingGeneralLedger(
       : {}),
   };
 
-  const [rows, total] = await Promise.all([
+  const [rows, total, currencies] = await Promise.all([
     db.enterpriseJournalLine.findMany({
       where,
       orderBy: [
         { journalEntry: { accountingDate: "desc" } },
         { journalEntry: { number: "desc" } },
         { createdAt: "asc" },
+        { id: "asc" },
       ],
       skip,
       take: pageSize,
@@ -175,9 +176,22 @@ export async function getAccountingGeneralLedger(
       },
     }),
     db.enterpriseJournalLine.count({ where }),
+    // Debit and credit are functional amounts, not transaction-currency amounts.
+    db.enterpriseJournalEntry.groupBy({ by: ["functionalCurrencyCode"], where: { organizationId, lines: { some: where } } }),
   ]);
+  const totalsByCurrency = await Promise.all(currencies.map(async ({ functionalCurrencyCode }) => {
+    const result = await db.enterpriseJournalLine.aggregate({
+      where: { AND: [where, { journalEntry: { organizationId, functionalCurrencyCode } }] },
+      _sum: { debit: true, credit: true },
+    });
+    return [
+      { currencyCode: functionalCurrencyCode, metric: "debit", amount: result._sum.debit?.toFixed() ?? "0" },
+      { currencyCode: functionalCurrencyCode, metric: "credit", amount: result._sum.credit?.toFixed() ?? "0" },
+    ];
+  }));
 
   return {
+    filteredTotals: totalsByCurrency.flat(),
     items: await enrichInventoryNarratives(db, organizationId, rows),
     pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) },
   };
