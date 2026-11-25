@@ -4,6 +4,7 @@ import { listEnterpriseCurrencies } from "@/lib/enterprise/accounting/currency-s
 import { authorizeFinanceRequest } from "@/lib/enterprise/accounting/http";
 import type { EnterpriseFinanceModuleCode } from "@/lib/enterprise/accounting/constants";
 import { prisma } from "@/lib/prisma";
+import { maskFinancialReference } from "@/lib/enterprise/accounting/masked-financial-reference";
 
 type Params = { params: Promise<{ organizationId: string }> };
 type TreasuryModule = "FINANCE_TREASURY" | "FINANCE_CASH" | "FINANCE_BANK" | "FINANCE_RECONCILIATION";
@@ -48,7 +49,7 @@ export async function GET(req: Request, { params }: Params) {
     const take = 30;
     let items: Array<Record<string, unknown>> = [];
     if (kind === "financial-account") {
-      items = await prisma.enterpriseFinancialAccount.findMany({
+      const accounts = await prisma.enterpriseFinancialAccount.findMany({
         where: {
           organizationId,
           status: "ACTIVE",
@@ -56,12 +57,13 @@ export async function GET(req: Request, { params }: Params) {
           ...(requestedModule === "FINANCE_CASH" ? { accountType: "CASH" } : {}),
           ...(requestedModule === "FINANCE_BANK" ? { accountType: "BANK" } : {}),
           ...(parentId ? { currencyCode: parentId.toUpperCase() } : {}),
-          ...(search ? { OR: [{ code: { contains: search, mode: "insensitive" } }, { name: { contains: search, mode: "insensitive" } }, { currencyCode: { contains: search, mode: "insensitive" } }, { maskedReference: { contains: search, mode: "insensitive" } }] } : {}),
+          ...(search ? { OR: [{ code: { contains: search, mode: "insensitive" } }, { name: { contains: search, mode: "insensitive" } }, { currencyCode: { contains: search, mode: "insensitive" } }] } : {}),
         },
         orderBy: [{ accountType: "asc" }, { code: "asc" }],
         take,
         select: { id: true, code: true, name: true, accountType: true, currencyCode: true, maskedReference: true, operationalBalance: true, availableBalance: true, revision: true },
       });
+      items = accounts.map((account) => ({ ...account, maskedReference: maskFinancialReference(account.maskedReference) }));
     } else if (kind === "ledger-account") {
       items = await prisma.enterpriseLedgerAccount.findMany({
         where: {
