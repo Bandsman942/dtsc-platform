@@ -2,6 +2,8 @@
 
 Candidate non déployée : `20261125190000_physical_quantity_six_decimals`.
 
+Complément non déployé : `20261125200000_inventory_catalog_tenant_reference`. Le test PostgreSQL du SHA `e0d98f94` a démontré que la FK composite stock→catalogue décrite par Prisma manquait physiquement. La nouvelle migration ajoute et valide cette contrainte, sans toucher la migration de précision déjà exécutée en CI. Une référence historique orpheline/hors tenant fait échouer la validation : diagnostic et remédiation séparés, jamais correction automatique.
+
 ## Périmètre et capacité
 
 110 colonnes dans 65 modèles : stock, mouvements, inventaires, transferts, réservations, ventes, devis, achats/réceptions, production, retours omnicanaux, projections sectorielles, confection et quantités Health/Pharmacy. Le SQL de migration est l’inventaire exact colonne par colonne.

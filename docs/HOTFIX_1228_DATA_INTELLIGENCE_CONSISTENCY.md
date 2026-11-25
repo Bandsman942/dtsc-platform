@@ -140,4 +140,8 @@ Le contrôle de tous les workflows du SHA repris donne 16 réussites et un éche
 
 ### Lots toujours ouverts
 
+### Échec PostgreSQL révélé par le premier SHA Work
+
+Le [run Quality Gates 45678238781](https://github.com/Bandsman942/dtsc-platform/actions/runs/45678238781) du SHA `e0d98f946ba4323463967f7d93aa44608e9745cd` applique les migrations avec succès et réussit `qa:data-intelligence-1228`. La fixture PostgreSQL échoue sur le rejet attendu `P2003` : une référence stock→catalogue d’un autre tenant était acceptée par la base. Le schéma Prisma décrivait cette FK composite, mais aucune migration ne l’avait matérialisée. Correctif candidat : **nouvelle** migration `20261125200000_inventory_catalog_tenant_reference`, ajout et validation sans mutation des données. L’assertion négative reste intacte. Nouvelle CI requise ; cet échec n’est pas déclaré résolu avant son résultat.
+
 La migration candidate ne clôture pas tout #1228. Restent notamment validation client selon unité effective et conversions intégrées, historique des changements d’unité, flux sectoriels et formulaires à certifier, consolidation réservée/vendable toutes pages, inventaire exhaustif et agrégats des autres modules ERP, totaux général/page contextualisés, menus analytiques et préférences, libellés de toutes les sources et recherche historique, concordance des exports de chaque module, politique comptable versionnée coordonnée, performances et matrice navigateur/RBAC complète. Le cahier des charges initial et Q01–R03 restent opposables. Aucun E2E final ne peut être annoncé sur cette seule tranche.
