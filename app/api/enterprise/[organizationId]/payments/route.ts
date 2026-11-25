@@ -57,35 +57,38 @@ export async function GET(req: Request, { params }: Params) {
     ] } : {}),
   };
 
-  const [items, total, inboundByCurrency, outboundByCurrency, unallocatedByCurrency, filtered] = await prisma.$transaction([
-    prisma.enterprisePayment.findMany({
+  const [items, total, inboundByCurrency, outboundByCurrency, unallocatedByCurrency, filtered] = await prisma.$transaction(async tx => {
+    const result = await Promise.all([
+    tx.enterprisePayment.findMany({
       where,
       orderBy: [{ paymentDate: "desc" }, { createdAt: "desc" }],
       skip: (page - 1) * pageSize,
       take: pageSize,
       include: { cashSession: { select: { status: true, financialAccountId: true } }, _count: { select: { allocations: true, events: true } } },
     }),
-    prisma.enterprisePayment.count({ where }),
-    prisma.enterprisePayment.groupBy({
+    tx.enterprisePayment.count({ where }),
+    tx.enterprisePayment.groupBy({
       by: ["currencyCode"],
       where: { organizationId, ...(sitePaymentScope ? { AND: [sitePaymentScope] } : {}), status: { in: ["CONFIRMED", "RECONCILED"] }, direction: "INBOUND" },
       _sum: { amount: true },
       _count: { _all: true },
     }),
-    prisma.enterprisePayment.groupBy({
+    tx.enterprisePayment.groupBy({
       by: ["currencyCode"],
       where: { organizationId, ...(sitePaymentScope ? { AND: [sitePaymentScope] } : {}), status: { in: ["CONFIRMED", "RECONCILED"] }, direction: "OUTBOUND" },
       _sum: { amount: true },
       _count: { _all: true },
     }),
-    prisma.enterprisePayment.groupBy({
+    tx.enterprisePayment.groupBy({
       by: ["currencyCode"],
       where: { organizationId, ...(sitePaymentScope ? { AND: [sitePaymentScope] } : {}), status: { in: ["CONFIRMED", "RECONCILED"] }, unallocatedAmount: { gt: 0 } },
       _sum: { unallocatedAmount: true },
       _count: { _all: true },
     }),
-    prisma.enterprisePayment.groupBy({ by: ["currencyCode", "direction", "status"], where, _sum: { amount: true } }),
-  ], { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
+    tx.enterprisePayment.groupBy({ by: ["currencyCode", "direction", "status"], where, _sum: { amount: true } }),
+    ]);
+    return result;
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
 
   // Invoice identity originates from the canonical Retail intent or confirmed
   // receivable allocations; a payment without an invoice is not a fake invoice.

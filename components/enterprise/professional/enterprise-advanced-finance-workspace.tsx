@@ -125,7 +125,7 @@ function itemDescription(item: Item, activeKey: string, locale: FinanceLocale) {
   if (activeKey === "close") return nestedText(item, "fiscalPeriod", "code");
   if (activeKey === "statements") return `${financeDate(item.periodStart, locale)} → ${financeDate(item.periodEnd, locale)} · ${text(item, "currencyCode")}`;
   if (activeKey === "assets") return `${businessLabel(item.depreciationMethod, locale)} · ${text(item, "usefulLifeMonths")} ${ft(locale, "months")}`;
-  if (activeKey === "inventory") return `${[text(item, "quantity"), text(item, "quantityUnit")].filter(Boolean).join(" ")} × ${financeMoney(item.weightedAverageUnitCost, text(item, "currencyCode") || "USD", locale)}${item.quantityPrecisionMismatch ? (locale === "fr" ? " · Précision historique à vérifier" : " · Historical precision needs review") : ""}`;
+  if (activeKey === "inventory") return `${[text(item, "quantity"), text(item, "quantityUnit")].filter(Boolean).join(" ")} × ${financeMoney(item.weightedAverageUnitCost, text(item, "currencyCode"), locale)}${item.quantityPrecisionMismatch ? (locale === "fr" ? " · Précision historique à vérifier" : " · Historical precision needs review") : ""}`;
   return formatAccountingNarrative(text(item, "description"), locale) || (locale === "fr" ? text(item, "nameFr") : text(item, "nameEn")) || "";
 }
 function amountSummary(item: Item, activeKey: string, locale: FinanceLocale) {
