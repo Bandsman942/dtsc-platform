@@ -1,5 +1,7 @@
 ## 2026-11-25 — HOTFIX #1228 — Data Intelligence & Consistency 2.0 (v1.24.5 candidate DRAFT)
 
+- Suite à l’inspection des captures #1228 : en-tête de registre mobile non comprimé par le compteur/action ; langue active propagée au document et aux notifications globales, intitulés/fermeture cohérents, slogan/footer AppShell FR/EN. Rails d’indicateurs accessibles au clavier et valeurs longues sans perte de chiffres. Assertions navigateur et matrice de 32 captures de quantité maximale ajoutées ; CI/inspection du nouveau SHA requises.
+
 - Stock : physique/réservé/vendable sur toutes les pages, général autorisé et page, par unité ; même calcul FEFO pour lignes et agrégats, lecture RepeatableRead et lots de 200 sans limite silencieuse. Compteurs mouvements/dépôts selon filtres, contexte général distinct. Exports complets avec gardes de cohérence et synthèse générale même pour résultat filtré vide. Fixture 501 articles et seuil de performance ajoutés, CI à vérifier.
 
 - Régression FEFO reproduite à la capacité 21 chiffres : la précision Decimal globale de 20 chiffres pouvait rendre vendable la dernière micro-unité réservée. Contexte physique local de 48 chiffres dans le planificateur, snapshots de réservations/factures/retours, gardes de sortie, réservations, holds et projection stock ; configuration monétaire globale inchangée. Tests de capacité et de non-consommation des holds ajoutés, ainsi qu’un round-trip PostgreSQL vers FEFO.

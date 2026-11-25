@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 export function ModuleMetrics({ children, className, label = "Indicateurs" }: { children: ReactNode; className?: string; label?: string }) {
   return (
     <section data-workspace-metrics aria-label={label} className={cn("min-w-0 max-w-full", className)}>
-      <div className="-mx-1 flex max-w-full touch-pan-x snap-x snap-mandatory flex-nowrap gap-2 overflow-x-auto overscroll-x-contain border-y border-dtsc-border/80 px-1 py-3 scroll-px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden lg:mx-0 lg:grid lg:grid-cols-4 lg:overflow-visible lg:px-0">
+      <div tabIndex={0} role="group" aria-label={label} className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 -mx-1 flex max-w-full touch-pan-x snap-x snap-mandatory flex-nowrap gap-2 overflow-x-auto overscroll-x-contain border-y border-dtsc-border/80 px-1 py-3 scroll-px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden lg:mx-0 lg:grid lg:grid-cols-4 lg:overflow-visible lg:px-0">
         {children}
       </div>
     </section>
@@ -24,7 +24,7 @@ export function ModuleMetric({ label, value, hint, icon, className }: { label: R
         {icon ? <span className="shrink-0" aria-hidden="true">{icon}</span> : null}
         <span className="min-w-0">{label}</span>
       </div>
-      <div className="mt-1.5 text-2xl font-black leading-none tracking-[-0.025em] text-dtsc-ink">{value}</div>
+      <div className="mt-1.5 break-words [overflow-wrap:anywhere] text-2xl font-black leading-none tracking-[-0.025em] text-dtsc-ink">{value}</div>
       {hint ? <div className="mt-1.5 text-xs font-semibold leading-4 text-dtsc-muted">{hint}</div> : null}
     </div>
   );

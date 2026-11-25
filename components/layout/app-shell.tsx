@@ -192,7 +192,7 @@ export async function AppShell({
 
   return (
     <LocaleProvider locale={user.locale}>
-      <div style={enterpriseBrandStyle} className="min-h-screen bg-dtsc-page text-dtsc-ink dtsc-mobile-mesh">
+      <div lang={user.locale === "en" ? "en" : "fr"} style={enterpriseBrandStyle} className="min-h-screen bg-dtsc-page text-dtsc-ink dtsc-mobile-mesh">
         <NavigationProgress locale={user.locale} />
         <SessionTimeoutGuard />
         <AppResumeSync pushEnabled={Boolean(user.pushNotificationsEnabled)} initialUnreadCount={unreadNotifications} />
@@ -273,7 +273,7 @@ export async function AppShell({
               </Link>
               <div className="hidden items-center gap-2 text-sm font-medium text-dtsc-muted md:flex">
                 {organizationContext && activeOrganizationLogoUrl ? <Image src={activeOrganizationLogoUrl} alt="" width={28} height={28} unoptimized className="h-7 w-7 rounded-lg bg-white object-contain p-0.5" /> : null}
-                <span>{organizationContext && activeOrganization ? activeOrganization.name : productBranding} · {dtsc.slogan}</span>
+                <span>{organizationContext && activeOrganization ? activeOrganization.name : productBranding} · {user.locale === "en" ? dtsc.sloganEn : dtsc.slogan}</span>
               </div>
               <div className="flex items-center gap-3">
                 {organizationContext && enterpriseShell.modules.length > 0 ? <EnterpriseCommandTrigger locale={user.locale} /> : null}
@@ -309,7 +309,7 @@ export async function AppShell({
           />
           <PWAInstallPrompt />
           <PwaNotificationBridge enabled={Boolean(user.pushNotificationsEnabled)} />
-          <DtscFooter />
+          <DtscFooter locale={user.locale} />
         </div>
         </DesktopSidebarFrame>
       </div>

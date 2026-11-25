@@ -35,14 +35,14 @@ export function notifyToast(payloadOrDescription: ToastPayload | string, tone?: 
   window.dispatchEvent(new CustomEvent<ToastPayload>(DTSC_TOAST_EVENT, { detail: payload }));
 }
 
-export function toastSuccess(description: string, title = "Succès") {
+export function toastSuccess(description: string, title?: string) {
   notifyToast({ title, description, tone: "success" });
 }
 
-export function toastError(description: string, title = "Action impossible") {
+export function toastError(description: string, title?: string) {
   notifyToast({ title, description, tone: "error", durationMs: 7000 });
 }
 
-export function toastInfo(description: string, title = "Information") {
+export function toastInfo(description: string, title?: string) {
   notifyToast({ title, description, tone: "info" });
 }

@@ -755,15 +755,25 @@ test.describe.serial("Shop 2.0 Iteration 4 global behavioral acceptance", () => 
         for(const moduleCode of ["SALES_QUOTES_ORDERS","SUPPLIERS_PURCHASES"]){
           await page.goto(`/enterprise-modules/${moduleCode}`);
           await expect(page.locator("html")).toHaveClass(new RegExp("\\b"+theme+"\\b"));
+          await expect(page.locator("html")).toHaveAttribute("lang",locale);
+          if(moduleCode==="SUPPLIERS_PURCHASES"){
+            const heading=page.locator("[data-erp-design2-register]").getByRole("heading",{name:locale==="fr"?"Achats":"Purchases",exact:true});
+            await expect(heading).toBeVisible();expect((await heading.boundingBox()).width).toBeGreaterThan(180);
+          }
           const search=moduleCode==="SALES_QUOTES_ORDERS"?page.locator("[data-workspace-toolbar]").getByRole("textbox"):page.locator("[data-purchase-design2]").getByRole("textbox");
           await search.fill(key);
           const scopes=page.locator("[data-commercial-amount-scopes]");await expect(scopes).toBeVisible();
           await expect(scopes).toContainText(locale==="fr"?"22,14":"22.14");
           await scopes.locator("summary").click();await expect(scopes).toContainText(locale==="fr"?"sans filtres":"without filters");await expect(scopes).toContainText(locale==="fr"?"page affichée":"Displayed page");
           const download=page.waitForEvent("download");const exportRoot=moduleCode==="SALES_QUOTES_ORDERS"?page.locator("[data-workspace-toolbar]"):page.locator("[data-purchase-design2]");await exportRoot.getByRole("button",{name:"CSV",exact:true}).click();const file=await download;expect(await file.failure()).toBeNull();
+          const exportNotice=page.getByRole("status").filter({hasText:locale==="fr"?"téléchargées en CSV":"downloaded as CSV"});
+          await expect(exportNotice.getByText(locale==="fr"?"Succès":"Success",{exact:true})).toBeVisible();
+          await expect(exportNotice.getByRole("button",{name:locale==="fr"?"Fermer la notification":"Dismiss notification",exact:true})).toBeVisible();
+          await expect(page.locator("footer")).toContainText(locale==="fr"?"Tous droits réservés":"All rights reserved");
           const csv=(await readFile(await file.path())).toString("utf8");expect(csv).toContain(locale==="fr"?"Sous-total filtré":"Filtered subtotal");expect(csv).toContain(locale==="fr"?"Total général autorisé sans filtres":"Authorized general total without filters");expect(csv).toContain(key);
           if(moduleCode==="SALES_QUOTES_ORDERS"){await page.locator("[data-professional-tabs]").getByRole("button").nth(1).click();await expect(scopes).toContainText(locale==="fr"?"22,14":"22.14");}
           expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
+          await page.evaluate(()=>window.scrollTo(0,0));
           await page.screenshot({path:testInfo.outputPath(`1228-${moduleCode}-${locale}-${theme}-${width}.png`),fullPage:true});
         }
       }
@@ -790,6 +800,44 @@ test.describe.serial("Shop 2.0 Iteration 4 global behavioral acceptance", () => 
     }finally{
       await prisma.enterpriseQuote.deleteMany({where:{organizationId,id:{in:quoteIds},status:"DRAFT"}});
       await prisma.enterpriseCatalogItem.deleteMany({where:{organizationId,id:{in:catalogIds}}});await prisma.enterpriseUnitOfMeasure.deleteMany({where:{organizationId,id:{in:unitIds}}});
+    }
+  });
+
+  test("#1228 full-capacity stock stays exact and keyboard-readable in every viewport",async({page},testInfo)=>{
+    test.setTimeout(180_000);await signIn(page);const key=`E2E-1228-CAP-${Date.now()}`;
+    const user=await prisma.user.findUniqueOrThrow({where:{id:fixture.userId},select:{locale:true}});
+    let unit,product,inventory;
+    try{
+      unit=await prisma.enterpriseUnitOfMeasure.create({data:{organizationId,code:key,name:"Micro-unit",symbol:"q",decimalScale:6,createdByUserId:fixture.userId}});
+      product=await prisma.enterpriseCatalogItem.create({data:{organizationId,code:key,name:key,normalizedName:key.toLowerCase(),itemType:"PRODUCT",trackInventory:true,unitOfMeasureId:unit.id,createdByUserId:fixture.userId}});
+      inventory=await prisma.enterpriseInventoryItem.create({data:{organizationId,catalogItemId:product.id,createdByUserId:fixture.userId}});
+      await prisma.enterpriseInventoryBalance.create({data:{organizationId,inventoryItemId:inventory.id,warehouseId:fixture.warehouseId,quantityOnHand:"999999999999999.999999",quantityReserved:"0.000001"}});
+      for(const locale of ["fr","en"])for(const theme of ["light","dark"]){
+        await prisma.user.update({where:{id:fixture.userId},data:{locale}});await page.evaluate(value=>localStorage.setItem("theme",value),theme);
+        await page.goto("/enterprise-modules/INVENTORY_LOGISTICS");await expect(page.locator("html")).toHaveAttribute("lang",locale);
+        const query=page.waitForResponse(response=>{const url=new URL(response.url());return url.pathname===`/api/enterprise/${organizationId}/inventory`&&url.searchParams.get("search")===key;});
+        await page.locator("[data-workspace-toolbar]").getByRole("textbox").fill(key);const response=await query;expect(response.ok(),await response.text()).toBe(true);
+        const body=await response.json();expect(body.items[0].quantityOnHandExact).toBe("999999999999999.999999");expect(body.items[0].quantityReservedExact).toBe("0.000001");expect(body.items[0].quantityAvailableExact).toBe("999999999999999.999998");
+        const totals=page.locator("[data-inventory-quantity-totals]").getByRole("region",{name:locale==="fr"?"Quantités filtrées, toutes pages":"Filtered quantities, all pages",exact:true});
+        await expect(totals).toContainText(locale==="fr"?"999 999 999 999 999,999999 q":"999,999,999,999,999.999999 q");
+        await expect(totals).toContainText(locale==="fr"?"0,000001 q":"0.000001 q");
+        await expect(totals).toContainText(locale==="fr"?"999 999 999 999 999,999998 q":"999,999,999,999,999.999998 q");
+        for(const width of [320,360,375,390,414,768,1024,1440]){
+          await page.setViewportSize({width,height:900});await expect(page.locator("html")).toHaveClass(new RegExp("\\b"+theme+"\\b"));
+          const rail=totals.getByRole("group");
+          if(await rail.evaluate(element=>element.scrollWidth>element.clientWidth)){
+            await rail.focus();for(let i=0;i<14;i++)await page.keyboard.press("ArrowRight");
+            await expect.poll(()=>rail.evaluate(element=>element.scrollLeft+element.clientWidth>=element.scrollWidth-2)).toBe(true);
+            await rail.evaluate(element=>{element.scrollLeft=0;});
+          }
+          expect(await page.evaluate(()=>document.documentElement.scrollWidth-innerWidth)).toBeLessThanOrEqual(2);
+          await page.evaluate(()=>window.scrollTo(0,0));await page.screenshot({path:testInfo.outputPath(`1228-stock-capacity-${locale}-${theme}-${width}.png`),fullPage:true});
+        }
+      }
+    }finally{
+      await prisma.user.update({where:{id:fixture.userId},data:{locale:user.locale}});
+      if(inventory){await prisma.enterpriseInventoryBalance.deleteMany({where:{organizationId,inventoryItemId:inventory.id}});await prisma.enterpriseInventoryItem.deleteMany({where:{organizationId,id:inventory.id}});}
+      if(product)await prisma.enterpriseCatalogItem.deleteMany({where:{organizationId,id:product.id}});if(unit)await prisma.enterpriseUnitOfMeasure.deleteMany({where:{organizationId,id:unit.id}});
     }
   });
 
