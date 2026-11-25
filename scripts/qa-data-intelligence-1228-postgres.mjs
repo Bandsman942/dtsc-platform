@@ -9,7 +9,9 @@ const target = new URL(process.env.DATABASE_URL);
 if (process.env.QA_1228_DATABASE_FIXTURE !== "true" || !["localhost", "127.0.0.1"].includes(target.hostname) || !target.pathname.endsWith("_test")) {
   throw new Error("An explicitly enabled local isolated *_test database is required for the rollback fixture");
 }
-const db = new PrismaClient();
+const queryTimings=[];
+const db = new PrismaClient({log:[{emit:"event",level:"query"}]});
+db.$on("query",event=>{if(event.duration>=25)queryTimings.push({ms:event.duration,sql:event.query.slice(0,180)});});
 const { planFefoLots } = workflowTestLoader({})("@/lib/enterprise/inventory/lot-allocation");
 const handlerLoadStarted=performance.now();
 const inventoryFixture={reader:null,organizationId:"",siteId:"",actor:""};
@@ -110,7 +112,7 @@ try {
       inventoryFixture.reader=new Proxy(tx,{get:(target,key)=>key==="organization"?{findUniqueOrThrow:async()=>({timezone:"UTC"})}:Reflect.get(target,key)});
       inventoryFixture.organizationId=tenant;inventoryFixture.siteId=site.id;inventoryFixture.actor=actor;
       console.log(`#1228 PostgreSQL fixture setup: ${(performance.now()-fixtureStarted).toFixed(0)}ms`);
-      const inventoryPage=async(page,extra="")=>{const response=await inventoryGet(new Request(`http://localhost/api/enterprise/${tenant}/inventory?search=BULK-1228&pageSize=5&page=${page}${extra}`),{params:Promise.resolve({organizationId:tenant})});assert.equal(response.status,200);const body=await response.json();console.log(`#1228 actual inventory GET page ${page}: ${body.pagination.total} matches`);return body;};
+      const inventoryPage=async(page,extra="")=>{const readStarted=performance.now();queryTimings.length=0;const response=await inventoryGet(new Request(`http://localhost/api/enterprise/${tenant}/inventory?search=BULK-1228&pageSize=5&page=${page}${extra}`),{params:Promise.resolve({organizationId:tenant})});assert.equal(response.status,200);const body=await response.json();const duration=performance.now()-readStarted;console.log(`#1228 actual inventory GET page ${page}: ${body.pagination.total} matches in ${duration.toFixed(0)}ms; slow queries ${JSON.stringify(queryTimings)}`);assert(duration<10000,`One inventory page alone exceeded the unchanged 10s three-page budget: ${duration.toFixed(0)}ms`);return body;};
       const started=performance.now();const firstPage=await inventoryPage(1),secondPage=await inventoryPage(2),beyondPage=await inventoryPage(999);
       const elapsed=performance.now()-started;assert(elapsed<10000,`501-item full analytics plus three HTTP projections exceeded 10s: ${elapsed}ms`);
       assert.equal(firstPage.pagination.total,501);assert.equal(firstPage.items.length,5);assert.equal(secondPage.items.length,5);assert.equal(beyondPage.items.length,0);
