@@ -227,7 +227,7 @@ export const FINANCE_USER_GUIDES: Record<string, FinanceUserGuide> = {
       "Les références bancaires complètes et les données privées ne sont pas exposées dans les logs applicatifs.",
     ],
     troubleshooting: [
-      "Fichier refusé : utilisez un CSV conforme et respectez les limites de taille et de lignes.",
+      "Fichier refusé : utilisez le format CSV réellement supporté ou le modèle XLSX du compte, et respectez les limites de taille et de lignes.",
       "Colonnes non reconnues : adaptez les en-têtes au format présenté dans la prévisualisation.",
       "Réimportation bloquée : ouvrez le relevé déjà importé au lieu de créer un doublon.",
     ],
