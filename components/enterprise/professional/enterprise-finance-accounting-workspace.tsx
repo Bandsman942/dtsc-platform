@@ -221,7 +221,7 @@ export function EnterpriseFinanceAccountingWorkspace(props: Props) {
           const response = await fetch(`/api/enterprise/${organizationId}/journal-entries?${query.toString()}`, { cache: "no-store", signal: controller.signal });
           const body = await response.json().catch(() => ({})) as ListPayload<JournalEntry> & { message?: string; error?: string };
           if (!response.ok) throw new Error(body.message || body.error || "JOURNAL_ENTRIES_FAILED");
-          if (!cancelled) { setEntries(body.items || []); setRows([]); setPagination(body.pagination || EMPTY_PAGINATION); }
+          if (!cancelled) { setEntries(body.items || []); setRows([]); setPagination(body.pagination || EMPTY_PAGINATION); setFilteredTotals(body.filteredTotals || []); }
           return;
         }
         if (space === "review") {
@@ -571,7 +571,7 @@ export function EnterpriseFinanceAccountingWorkspace(props: Props) {
 
       {space === "post" ? loading ? <ProfessionalLoading /> : <AccountingCompactTable rows={entries} columns={entryColumns} rowKey={(row) => row.id} onRowClick={(row) => setDetailEntryId(row.id)} emptyLabel={en ? "No journal entry matches these filters." : "Aucune écriture ne correspond à ces filtres."} minWidth="min-w-[980px]" /> : null}
 
-      {space === "review" && reviewView === "ledger" && !loading ? <FinanceFilteredTotals rows={filteredTotals} locale={locale} /> : null}
+      {(space === "post" || (space === "review" && reviewView === "ledger")) && !loading ? <FinanceFilteredTotals rows={filteredTotals} locale={locale} /> : null}
       {space === "review" ? loading ? <ProfessionalLoading /> : reviewView === "ledger" ? <AccountingCompactTable rows={rows as LedgerRow[]} columns={ledgerColumns} rowKey={(row) => row.id} onRowClick={(row) => row.journalEntry?.id && setDetailEntryId(row.journalEntry.id)} emptyLabel={en ? "No ledger movement in this scope." : "Aucun mouvement de grand livre sur ce périmètre."} minWidth="min-w-[1180px]" /> : reviewView === "trial" ? <AccountingCompactTable rows={rows as TrialRow[]} columns={trialColumns} rowKey={(row) => row.id} onRowClick={(row) => setRecordDetail({ kind: "trial", row })} emptyLabel={en ? "No balance in this scope." : "Aucun solde sur ce périmètre."} minWidth="min-w-[860px]" /> : <AccountingCompactTable rows={rows} columns={anomalyColumns} rowKey={(row) => row.id} onRowClick={(row) => setRecordDetail({ kind: "anomalies", row })} emptyLabel={en ? "No posting anomaly." : "Aucune anomalie de comptabilisation."} minWidth="min-w-[820px]" /> : null}
 
       {space === "configure" ? configureView === "setup" ? <EnterpriseAccountingOnboardingPanel organizationId={organizationId} locale={rawLocale} canManage={canManage} /> : loading ? <ProfessionalLoading /> : <AccountingCompactTable rows={rows} columns={configColumns} rowKey={(row) => row.id} onRowClick={(row) => setRecordDetail({ kind: configureView as AccountingRecordDetailKind, row })} emptyLabel={en ? "No configuration item in this scope." : "Aucun élément de configuration sur ce périmètre."} minWidth="min-w-[760px]" /> : null}

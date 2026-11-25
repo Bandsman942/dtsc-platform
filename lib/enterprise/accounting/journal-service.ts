@@ -236,15 +236,23 @@ export async function listJournalEntries(organizationId: string, input: { page: 
       { description: { contains: input.search, mode: "insensitive" } },
     ] } : {}),
   };
-  const [items, total] = await Promise.all([
-    prisma.enterpriseJournalEntry.findMany({
+  const [items, total, grouped] = await prisma.$transaction(async tx => {
+    const result = await Promise.all([
+    tx.enterpriseJournalEntry.findMany({
       where,
-      orderBy: [{ accountingDate: "desc" }, { createdAt: "desc" }],
+      orderBy: [{ accountingDate: "desc" }, { createdAt: "desc" }, { id: "asc" }],
       skip: (input.page - 1) * input.pageSize,
       take: input.pageSize,
       include: { journal: true, fiscalPeriod: true, _count: { select: { lines: true } } },
     }),
-    prisma.enterpriseJournalEntry.count({ where }),
+    tx.enterpriseJournalEntry.count({ where }),
+    tx.enterpriseJournalEntry.groupBy({ by: ["functionalCurrencyCode", "status"], where, _sum: { totalDebit: true, totalCredit: true } }),
+    ]);
+    return result;
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
+  const filteredTotals = grouped.flatMap(row => [
+    { currencyCode: row.functionalCurrencyCode, status: row.status, metric: "debit", amount: row._sum.totalDebit?.toFixed() ?? "0" },
+    { currencyCode: row.functionalCurrencyCode, status: row.status, metric: "credit", amount: row._sum.totalCredit?.toFixed() ?? "0" },
   ]);
-  return { items, pagination: { page: input.page, pageSize: input.pageSize, total, pageCount: Math.max(1, Math.ceil(total / input.pageSize)) } };
+  return { items, filteredTotals, pagination: { page: input.page, pageSize: input.pageSize, total, pageCount: Math.max(1, Math.ceil(total / input.pageSize)) } };
 }

@@ -39,6 +39,7 @@ export async function GET(req: Request, { params }: Params) {
           include: { journal: true, fiscalPeriod: true, _count: { select: { lines: true } } },
         }),
         pagination: { page: 1, pageSize: 1, total: 0, pageCount: 1 },
+        filteredTotals: [],
       }
     : await listJournalEntries(organizationId, { ...input, dateFrom: dates.from, dateTo: dates.to });
   const rawItems = baseResult.items as JournalListItem[];
@@ -64,7 +65,7 @@ export async function GET(req: Request, { params }: Params) {
     : baseResult.pagination;
 
   await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "journal-entries", recordId: recordId || null } });
-  return NextResponse.json({ items, pagination });
+  return NextResponse.json({ items, pagination, filteredTotals: baseResult.filteredTotals });
 }
 
 export async function POST(req: Request, { params }: Params) {
