@@ -185,13 +185,14 @@ export const FINANCE_USER_GUIDES: Record<string, FinanceUserGuide> = {
       "Vérifiez les opérations, saisissez les dénominations ou le total physique et comparez-le au théorique.",
       "Expliquez tout écart, puis soumettez la clôture.",
       "Le validateur indépendant approuve ou retourne la clôture avec un motif.",
+      "Un écart approuvé reste à qualifier ; ne comptabilisez jamais comme produit une entrée de fonds identifiée. Orientez un apport vers Financement, un transfert vers Trésorerie, un paiement oublié vers son circuit financier d’origine.",
     ],
     workflow: [
       "Session ouverte → En comptage → En attente de validation → Validée/Clôturée.",
       "Une clôture retournée conserve l’écart, le motif et l’historique avant correction.",
     ],
     controls: [
-      "Une seule session active compatible est autorisée pour une caisse.",
+      "Une seule session active compatible par caissier et compte ; le total des fonds réservés ne dépasse pas les fonds disponibles.",
       "Le caissier ne peut pas auto-valider sa clôture lorsque la séparation des rôles est requise.",
       "Les écarts et mouvements ne sont jamais supprimés silencieusement.",
     ],
@@ -203,14 +204,14 @@ export const FINANCE_USER_GUIDES: Record<string, FinanceUserGuide> = {
   },
   FINANCE_BANK: {
     title: "Banque et relevés",
-    purpose: "Importer un relevé bancaire CSV supporté, contrôler sa prévisualisation, consulter ses lignes et préparer le rapprochement.",
+    purpose: "Importer un relevé bancaire ou opérateur CSV/XLSX, contrôler sa prévisualisation, consulter ses lignes et préparer le rapprochement.",
     prerequisites: [
       "Compte bancaire actif dans la bonne devise.",
-      "Fichier CSV de 5 Mo maximum et de 10 000 lignes maximum, utilisant les colonnes reconnues par l’importeur.",
+      "Fichier CSV de 5 Mo ou XLSX de 2 Mo maximum, 10 000 lignes maximum ; utilisez le modèle du compte.",
     ],
     steps: [
       "Touchez Importer un relevé bancaire et sélectionnez le compte concerné.",
-      "Choisissez le fichier CSV ; vérifiez le type, la taille et les colonnes détectées.",
+      "Téléchargez le modèle CSV ou Excel ; pour un compte Mobile Money utilisez les références et les soldes du portefeuille opérateur, jamais les espèces physiques.",
       "Examinez la prévisualisation, la période, la devise, les soldes et les premières lignes.",
       "Corrigez le fichier si une colonne obligatoire ou une valeur est invalide.",
       "Confirmez l’import puis ouvrez le relevé pour consulter ses lignes et leur statut de rapprochement.",
@@ -218,7 +219,7 @@ export const FINANCE_USER_GUIDES: Record<string, FinanceUserGuide> = {
     ],
     workflow: [
       "Fichier sélectionné → Prévisualisé → Confirmé/Importé → Partiellement ou totalement rapproché.",
-      "La portée commerciale actuelle couvre le format CSV réellement supporté ; aucun format bancaire additionnel n’est simulé.",
+      "Au-delà de 250 lignes, suivez le traitement durable jusqu’à l’import complet ; un échec ne peut pas être rapproché.",
     ],
     controls: [
       "Les doublons sont bloqués sans effacer la preuve du relevé existant.",
@@ -235,11 +236,11 @@ export const FINANCE_USER_GUIDES: Record<string, FinanceUserGuide> = {
     title: "Rapprochement bancaire",
     purpose: "Comparer les lignes de relevé aux paiements et mouvements financiers, enregistrer des correspondances explicables et clôturer une session contrôlée.",
     prerequisites: [
-      "Relevé bancaire importé et opérations financières confirmées dans la même entreprise et la même devise.",
+      "Relevé bancaire/opérateur importé et opérations financières confirmées dans la même entreprise et la même devise, ou caisse intégralement comptée après clôture et qualification de toutes ses sessions.",
       "Validateur autorisé pour la soumission et la clôture selon la politique de l’entreprise.",
     ],
     steps: [
-      "Touchez Créer un rapprochement et choisissez le relevé ou le compte concerné.",
+      "Touchez Créer un rapprochement et choisissez le compte. Pour une caisse : saisissez les coupures ou téléchargez puis réimportez le modèle Excel de comptage du compte, vérifiez le total et renseignez la référence du procès-verbal.",
       "Ouvrez une ligne bancaire et examinez les suggestions ainsi que leurs critères : montant, date, référence, tiers, compte et devise.",
       "Acceptez uniquement une suggestion non ambiguë ou choisissez Nouvelle correspondance pour un rapprochement manuel.",
       "Saisissez le montant rapproché sans dépasser la ligne ni l’opération sélectionnée.",
@@ -248,7 +249,7 @@ export const FINANCE_USER_GUIDES: Record<string, FinanceUserGuide> = {
     ],
     workflow: [
       "Préparé → En cours → Soumis → Validé → Clôturé.",
-      "Une session clôturée devient immuable ; rejet, correction ou réouverture suivent les actions contrôlées disponibles.",
+      "Les allocations restent réservées jusqu’à l’approbation indépendante. Une session clôturée devient immuable. Un comptage physique devenu périmé doit être annulé puis repris.",
     ],
     controls: [
       "Une ligne ou un montant déjà rapproché ne peut pas être utilisé deux fois.",

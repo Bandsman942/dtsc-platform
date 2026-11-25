@@ -26,7 +26,7 @@ export async function parsePhysicalCountXlsx(file:File,account:Account){
     for(let i=2;i<=sheet.rowCount;i++){
       const denomination=sheet.getCell(i,1).value,quantity=sheet.getCell(i,2).value;
       if(denomination==null&&quantity==null)continue;
-      if(!["number","string"].includes(typeof denomination)||!["number","string"].includes(typeof quantity)||String(quantity).trim()==="")throw Error();
+      if(!["number","string"].includes(typeof denomination)||!["number","string"].includes(typeof quantity)||!/^\d{1,10}$/.test(String(quantity).trim()))throw Error();
       rows.push({denomination:String(denomination).trim(),quantity:Number(quantity)});
     }
     const parsed=physicalCountRowsSchema.parse(rows);

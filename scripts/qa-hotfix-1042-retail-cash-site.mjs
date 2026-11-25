@@ -53,6 +53,7 @@ vm.runInNewContext(ts.transpileModule(source, {
     if (id === "@/lib/enterprise/accounting/bank-statement-balance-validation") return {bankStatementBalanceIssues:()=>{throw new Error("Unexpected bank validation in cash site test");}};
     if (id === "@/lib/enterprise/accounting/reconciliation-dated-balance") return {};
     if (id === "@/lib/enterprise/accounting/cash-physical-reconciliation") return {};
+    if (id === "@/lib/enterprise/accounting/physical-count") return {physicalCountTotal:()=>{throw new Error("Unexpected physical reconciliation in cash site test");}};
     if (id === "@/lib/enterprise/accounting/reconciliation-evidence") return {};
     return require(id);
   },

@@ -17,14 +17,14 @@ async function prepare(req:Request,organizationId:string,mutation:boolean){
 }
 export async function GET(req:Request,{params}:Params){
   const {organizationId}=await params,startedAt=Date.now(),context=await prepare(req,organizationId,false);
-  if("response" in context)return context.response;
+  if(context.response)return context.response;
   const bytes=await buildPhysicalCountXlsx(context.account,new URL(req.url).searchParams.get("locale")==="en"?"en":"fr");
   await writeApiLog({request:req,statusCode:200,userId:context.auth.session.userId,startedAt,metadata:{organizationId,domain:"physical-count-template"}});
   return new NextResponse(new Uint8Array(bytes),{headers:{"Content-Type":"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet","Content-Disposition":'attachment; filename="DTSC-comptage-physique.xlsx"',"Cache-Control":"private, no-store"}});
 }
 export async function POST(req:Request,{params}:Params){
   const {organizationId}=await params,startedAt=Date.now(),context=await prepare(req,organizationId,true);
-  if("response" in context)return context.response;
+  if(context.response)return context.response;
   const form=await req.formData().catch(()=>null),file=form?.get("file");
   if(!(file instanceof File))return NextResponse.json({error:"RECONCILIATION_COUNT_ROWS_INVALID"},{status:422});
   try{
