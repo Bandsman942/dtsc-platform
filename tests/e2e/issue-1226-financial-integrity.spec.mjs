@@ -14,7 +14,7 @@ const base=process.env.E2E_BASE_URL||"http://127.0.0.1:3000";
 if(new URL(base).hostname!=="127.0.0.1")throw new Error("Financial #1226 E2E requires local application");
 const root="/api/enterprise/"+organizationId;
 const path="/enterprise-modules/FINANCE_CASH";
-let owner,recipient,ledger,site,visualSessionId,visualSourceNumber;
+let owner,recipient,ledger,site,visualSessionId,visualSourceNumber,visualReviewer;
 const authenticatedContexts=new Map();
 let canonicalReviewers=[];
 async function signIn(browser,email,password){
@@ -462,6 +462,7 @@ test.describe.serial("Hotfix #1226 financial integrity (isolated browser and Pos
     test.setTimeout(240000);
     expect(visualSessionId).toBeTruthy();
     const reviewer=await prisma.user.create({data:{email:`h1226-visual-${randomUUID()}@example.test`,name:"Synthetic visual reviewer",passwordHash:owner.passwordHash,role:"CLIENT",status:"ACTIVE",locale:"fr",startPage:"/dashboard"}});
+    visualReviewer=reviewer;
     await prisma.organizationMember.create({data:{organizationId,userId:reviewer.id,role:"ADMIN_ENTERPRISE",status:"ACTIVE",joinedAt:new Date()}});
     const directory=join(process.cwd(),"artifacts","1226-design2");await mkdir(directory,{recursive:true});
     const manifest=[];
@@ -503,35 +504,48 @@ test.describe.serial("Hotfix #1226 financial integrity (isolated browser and Pos
             const file=`CANONICAL-REVIEW-${locale}-${theme}-${width}.png`;
             await page.screenshot({path:join(directory,file)});manifest.push({module:"CANONICAL-REVIEW",locale,theme,width,file});
           }
+          await page.setViewportSize({width:320,height:900});
           await page.keyboard.press("Tab");
           expect(await dialog.evaluate(element=>element.contains(document.activeElement))).toBe(true);
           await page.keyboard.press("Escape");await expect(dialog).not.toBeVisible();
-          if(theme==="light"){
-            const guides = locale==="fr"
-              ? {FINANCE_CASH:"Caisse",FINANCE_BANK:"Banque et relevés",FINANCE_TREASURY:"Trésorerie, financements et transferts",FINANCE_RECONCILIATION:"Rapprochement bancaire"}
-              : {FINANCE_CASH:"Cash sessions and variance review",FINANCE_BANK:"Bank and operator statements",FINANCE_TREASURY:"Treasury, funding and transfers",FINANCE_RECONCILIATION:"Cash, bank and operator reconciliation"};
-            for(const [module,title] of Object.entries(guides)){
-              const guide=await page.goto(base+"/help/enterprise?module="+module);
-              expect(guide.status()).toBe(200);
-              await expect(page.getByRole("heading",{level:1,name:title,exact:true})).toBeVisible();
-              const help=page.getByRole("region",{name:locale==="fr"?"Besoin d’accompagnement":"Get help",exact:true});
-              const openHelp=help.getByRole("button");
-              await expect(openHelp).toHaveAttribute("aria-expanded","false");
-              await openHelp.press("Enter");
-              await expect(openHelp).toHaveAttribute("aria-expanded","true");
-              const back=help.getByRole("link",{name:locale==="fr"?"Revenir au module":"Return to the module",exact:true});
-              await expect(back).toHaveAttribute("href","/enterprise-modules/"+module);
-              await back.click();
-              await expect(page).toHaveURL(base+"/enterprise-modules/"+module);
-            }
-            await page.goto(base+"/enterprise-modules/RETAIL_DAILY_CLOSE");
-            await page.getByRole("button",{name:locale==="fr"?"Guide utilisateur":"User guide",exact:true}).click();
-            await expect(page.getByRole("dialog",{name:locale==="fr"?"Guide Clôture magasin":"Store daily close guide"})).toBeVisible();
-          }
         }finally{await authenticated.addCookies(await context.cookies());await context.close();}
       }
     }
     await writeFile(join(directory,"matrix.json"),JSON.stringify({candidateSha:process.env.E2E_CANDIDATE_SHA||null,executionSha:process.env.GITHUB_SHA||null,status:"RENDERED_AWAITING_VISUAL_INSPECTION",screens:manifest},null,2));
     expect(manifest).toHaveLength(192);
+  });
+
+  test("Finance and Retail guides open in the account language and return to the exact module",async({browser})=>{
+    test.setTimeout(120000);
+    const context=await signIn(browser,visualReviewer.email,process.env.E2E_ADMIN_PASSWORD);
+    const page=await context.newPage();
+    try {
+      for(const locale of ["fr","en"]){
+        await prisma.user.update({where:{id:visualReviewer.id},data:{locale}});
+        const guides = locale==="fr"
+          ? {FINANCE_CASH:"Caisse",FINANCE_BANK:"Banque et relevés",FINANCE_TREASURY:"Trésorerie, financements et transferts",FINANCE_RECONCILIATION:"Rapprochement bancaire"}
+          : {FINANCE_CASH:"Cash sessions and variance review",FINANCE_BANK:"Bank and operator statements",FINANCE_TREASURY:"Treasury, funding and transfers",FINANCE_RECONCILIATION:"Cash, bank and operator reconciliation"};
+        for(const [module,title] of Object.entries(guides)){
+          const guide=await page.goto(base+"/help/enterprise?module="+module);
+          expect(guide.status()).toBe(200);
+          await expect(page.getByRole("heading",{level:1,name:title,exact:true})).toBeVisible();
+          const supportTitle=locale==="fr"?"Besoin d’accompagnement":"Get help";
+          const openHelp=page.getByRole("region",{name:supportTitle,exact:true}).getByRole("button");
+          await expect(openHelp).toHaveAttribute("aria-expanded","false");
+          await openHelp.press("Enter");
+          const support=page.getByRole("dialog",{name:supportTitle,exact:true});
+          await expect(support).toBeVisible();
+          const back=support.getByRole("link",{name:locale==="fr"?"Revenir au module":"Return to the module",exact:true});
+          await expect(back).toHaveAttribute("href","/enterprise-modules/"+module);
+          await back.click();
+          await expect(page).toHaveURL(base+"/enterprise-modules/"+module);
+        }
+        await page.goto(base+"/enterprise-modules/RETAIL_DAILY_CLOSE");
+        await page.getByRole("button",{name:locale==="fr"?"Guide utilisateur":"User guide",exact:true}).click();
+        await expect(page.getByRole("dialog",{name:locale==="fr"?"Guide Clôture magasin":"Store daily close guide",exact:true})).toBeVisible();
+      }
+    } finally {
+      await page.close();
+    }
   });
 });
