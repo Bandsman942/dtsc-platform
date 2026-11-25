@@ -132,8 +132,10 @@ export function useProfessionalCollection<T, TExtra extends Record<string, unkno
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const serializedParams = params.toString();
+  const requestRevision = useRef(0);
 
   const load = useCallback(async () => {
+    const revision = ++requestRevision.current;
     setLoading(true);
     setError("");
     try {
@@ -141,6 +143,7 @@ export function useProfessionalCollection<T, TExtra extends Record<string, unkno
         `${endpoint}?${serializedParams}`,
         { fallbackCode: "PROFESSIONAL_COLLECTION_READ_FAILED", fallbackMessage: copy.loadFailed },
       );
+      if (revision !== requestRevision.current) return;
       if (!body?.items || !body.pagination) {
         throw new ProfessionalApiError({
           code: "PROFESSIONAL_COLLECTION_INVALID",
@@ -159,13 +162,13 @@ export function useProfessionalCollection<T, TExtra extends Record<string, unkno
       );
       setExtra(rest as TExtra);
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : copy.loadFailed);
+      if (revision === requestRevision.current) setError(loadError instanceof Error ? loadError.message : copy.loadFailed);
     } finally {
-      setLoading(false);
+      if (revision === requestRevision.current) setLoading(false);
     }
   }, [copy.loadFailed, endpoint, serializedParams]);
 
-  useEffect(() => { void load(); }, [load, refreshKey]);
+  useEffect(() => { void load(); return () => { requestRevision.current++; }; }, [load, refreshKey]);
   return { items, pagination, metrics, extra, canManage, canWrite, loading, error, reload: load };
 }
 

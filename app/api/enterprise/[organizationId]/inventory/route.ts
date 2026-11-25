@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import { formatInventoryQuantity } from "@/lib/enterprise/inventory/quantity-display";
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog } from "@/lib/audit";
@@ -80,7 +81,7 @@ export async function GET(req: Request, { params }: Params) {
   const siteClause=scope.isolationEnabled?(scope.siteIds.length?Prisma.sql`AND w."siteId" IN (${Prisma.join(scope.siteIds)})`:Prisma.sql`AND FALSE`):Prisma.empty;
   const matchingSearch=search?Prisma.sql`AND (c.name ILIKE ${"%"+search+"%"} OR c.code ILIKE ${"%"+search+"%"} OR c.sku ILIKE ${"%"+search+"%"})`:Prisma.empty;
   const balanceRequired=warehouseId||scope.isolationEnabled?Prisma.sql`AND b."inventoryItemId" IS NOT NULL`:Prisma.empty;
-  const lowStockQuery=Prisma.sql`
+  const scopedItemsQuery=Prisma.sql`
     WITH scoped_balances AS (
       SELECT b."inventoryItemId", SUM(b."quantityOnHand") AS on_hand
       FROM "EnterpriseInventoryBalance" b
@@ -88,15 +89,24 @@ export async function GET(req: Request, { params }: Params) {
       WHERE b."organizationId"=${organizationId} ${warehouseClause} ${siteClause}
       GROUP BY b."inventoryItemId"
     )
-    SELECT i.id,c.name FROM "EnterpriseInventoryItem" i
+    SELECT i.id,c.name,c."unitOfMeasureId",COALESCE(b.on_hand,0) AS on_hand,i."minimumQuantity" FROM "EnterpriseInventoryItem" i
     JOIN "EnterpriseCatalogItem" c ON c.id=i."catalogItemId" AND c."organizationId"=i."organizationId"
     LEFT JOIN scoped_balances b ON b."inventoryItemId"=i.id
     WHERE i."organizationId"=${organizationId} AND i."archivedAt" IS NULL AND i.status='ACTIVE'
-      AND i."minimumQuantity" IS NOT NULL AND COALESCE(b.on_hand,0)<=i."minimumQuantity"
       ${matchingSearch} ${balanceRequired}`;
-  const [lowCount, lowPage]=await Promise.all([
+  const lowStockQuery=Prisma.sql`SELECT id,name FROM (${scopedItemsQuery}) scoped WHERE "minimumQuantity" IS NOT NULL AND on_hand<="minimumQuantity"`;
+  const selectedScope=lowStock ? Prisma.sql`WHERE scoped."minimumQuantity" IS NOT NULL AND scoped.on_hand<=scoped."minimumQuantity"` : Prisma.empty;
+  // Physical stock only: sellable and reserved include separate FEFO/hold sources,
+  // so do not derive them from the physical total.
+  const physicalTotalsQuery=Prisma.sql`
+    SELECT u.id AS "unitId",u.name AS "unitName",u.symbol AS "unitSymbol",u."decimalScale",SUM(scoped.on_hand) AS quantity
+    FROM (SELECT scoped.* FROM (${scopedItemsQuery}) scoped ${selectedScope}) scoped
+    JOIN "EnterpriseUnitOfMeasure" u ON u.id=scoped."unitOfMeasureId" AND u."organizationId"=${organizationId}
+    GROUP BY u.id,u.name,u.symbol,u."decimalScale" ORDER BY u.name,u.id`;
+  const [lowCount, lowPage, physicalTotals]=await Promise.all([
     prisma.$queryRaw<Array<{total:bigint}>>(Prisma.sql`SELECT COUNT(*) AS total FROM (${lowStockQuery}) l`),
     lowStock?prisma.$queryRaw<Array<{id:string}>>(Prisma.sql`SELECT id FROM (${lowStockQuery}) l ORDER BY name ASC,id ASC LIMIT ${pageSize} OFFSET ${(page-1)*pageSize}`):Promise.resolve([]),
+    prisma.$queryRaw<Array<{unitId:string;unitName:string;unitSymbol:string|null;decimalScale:number;quantity:Prisma.Decimal}>>(physicalTotalsQuery),
   ]);
   const lowStockCount=Number(lowCount[0]?.total||0);
   const itemWhere:Prisma.EnterpriseInventoryItemWhereInput=lowStock?{AND:[where,{id:{in:lowPage.map(row=>row.id)}}]}:where;
@@ -158,8 +168,8 @@ export async function GET(req: Request, { params }: Params) {
         if(local.gt(0))available=available.plus(local);
       }
     }
-    return {...item,sectorManaged:sectorManaged.has(item.catalogItemId),quantityOnHand:Number(physical),quantityReserved:Number(legacy.plus(orderReserved).plus(invoiceHeld)),legacyQuantityReserved:Number(legacy),orderReservedQuantity:Number(orderReserved),invoiceHeldQuantity:Number(invoiceHeld),quantityAvailable:Number(available),isLowStock:item.minimumQuantity!==null&&physical.lte(item.minimumQuantity)};
+    return {...item,quantityOnHandExact:physical.toFixed(),quantityReservedExact:legacy.plus(orderReserved).plus(invoiceHeld).toFixed(),quantityAvailableExact:available.toFixed(),sectorManaged:sectorManaged.has(item.catalogItemId),quantityOnHand:Number(physical),quantityReserved:Number(legacy.plus(orderReserved).plus(invoiceHeld)),legacyQuantityReserved:Number(legacy),orderReservedQuantity:Number(orderReserved),invoiceHeldQuantity:Number(invoiceHeld),quantityAvailable:Number(available),isLowStock:item.minimumQuantity!==null&&physical.lte(item.minimumQuantity)};
   });
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "inventory", page } });
-  return NextResponse.json({ items: normalizedItems, pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) }, metrics: { lowStockCount, movementCount, warehouseCount }, canManage: access.canManage && !scope.isolationEnabled, canAdminister: access.canAdminister && !scope.isolationEnabled });
+  return NextResponse.json({ items: normalizedItems, physicalTotals:physicalTotals.map(row=>({unitId:row.unitId,unit:row.unitSymbol||row.unitName,decimalScale:row.decimalScale,...formatInventoryQuantity(row.quantity,row.decimalScale)})), pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) }, metrics: { lowStockCount, movementCount, warehouseCount }, canManage: access.canManage && !scope.isolationEnabled, canAdminister: access.canAdminister && !scope.isolationEnabled });
 }

@@ -42,6 +42,9 @@ type Lookups = { members: Member[]; warehouses: Warehouse[]; locations: Location
 type InventoryItem = {
   id: string;
   quantityOnHand: number;
+  quantityOnHandExact?: string;
+  quantityReservedExact?: string;
+  quantityAvailableExact?: string;
   quantityReserved: number;
   quantityAvailable: number;
   isLowStock: boolean;
@@ -49,6 +52,7 @@ type InventoryItem = {
   catalogItem: { id: string; code: string; sku: string | null; name: string; unitOfMeasure: { symbol: string | null; decimalScale: number } | null; category: { name: string } | null };
   balances: Array<{ id: string; quantityOnHand: string | number; quantityReserved: string | number; warehouse: { id: string; code: string; name: string }; storageLocation: { id: string; code: string; name: string } | null; stockLot: { id: string; lotNumber: string; expiryDate: string | null } | null }>;
 };
+type PhysicalSubtotal = { unitId: string; unit: string; decimalScale: number; value: string; precisionMismatch: boolean };
 type Transfer = {
   id: string;
   reference: string;
@@ -107,9 +111,13 @@ export function EnterpriseInventoryOperationsWorkspace({ organizationId, organiz
   const quantity = (value: string | number, symbol?: string | null, scale?: number) => {
     if (scale === undefined) return `${professionalErpNumber(value, locale)} ${symbol || ""}`.trim();
     const raw = String(value);
-    const actual = (raw.split(".")[1] || "").replace(/0+$/, "").length;
+    const parts = /^(-?)(\d+)(?:\.(\d+))?$/.exec(raw);
+    if (!parts) return raw;
+    const actual = (parts[3] || "").replace(/0+$/, "").length;
     const precision = Math.max(actual, scale);
-    const formatted = new Intl.NumberFormat(locale === "en" ? "en-US" : "fr-FR", { minimumFractionDigits: precision, maximumFractionDigits: precision }).format(Number(value));
+    const whole = new Intl.NumberFormat(locale === "en" ? "en-US" : "fr-FR", { maximumFractionDigits: 0 }).format(BigInt(parts[2]));
+    const fraction = (parts[3] || "").slice(0, precision).padEnd(precision, "0");
+    const formatted = parts[1] + whole + (precision ? (locale === "en" ? "." : ",") + fraction : "");
     const warning = actual > scale ? (locale === "fr" ? " · Précision à vérifier" : " · Precision needs review") : "";
     return `${formatted} ${symbol || ""}`.trim() + warning;
   };
@@ -193,7 +201,7 @@ export function EnterpriseInventoryOperationsWorkspace({ organizationId, organiz
     if (stockLowOnly) value.set("lowStock", "true");
     return value;
   }, [page, search, stockWarehouseId, stockLowOnly]);
-  const stock = useProfessionalCollection<InventoryItem>({ endpoint: `/api/enterprise/${organizationId}/inventory`, params: stockParams, refreshKey });
+  const stock = useProfessionalCollection<InventoryItem, { physicalTotals?: PhysicalSubtotal[] }>({ endpoint: `/api/enterprise/${organizationId}/inventory`, params: stockParams, refreshKey });
   const transfers = useProfessionalCollection<Transfer>({ endpoint: `/api/enterprise/${organizationId}/stock-transfers`, params, refreshKey });
   const counts = useProfessionalCollection<Count>({ endpoint: `/api/enterprise/${organizationId}/inventory-counts`, params, refreshKey });
   const adjustments = useProfessionalCollection<Adjustment>({ endpoint: `/api/enterprise/${organizationId}/stock-adjustments`, params, refreshKey });
@@ -375,6 +383,7 @@ export function EnterpriseInventoryOperationsWorkspace({ organizationId, organiz
           </label>
           <label className="flex min-h-11 min-w-0 items-center gap-2 text-sm text-dtsc-ink"><input type="checkbox" checked={stockLowOnly} onChange={(event) => { setStockLowOnly(event.target.checked); setPage(1); }} className="h-4 w-4 shrink-0 accent-sky-600" />{locale === "en" ? "Low physical stock only" : "Stock physique faible uniquement"}</label>
         </div> : null}
+        {tab === "STOCK" && !stock.loading && !stock.error && stock.extra.physicalTotals?.length ? <ModuleMetrics label={locale === "fr" ? "Stock physique filtré, toutes pages" : "Filtered on-hand stock, all pages"}>{stock.extra.physicalTotals.map(row => <ErpDesign2Metric key={row.unitId} tone="teal" label={locale === "fr" ? `Sous-total physique · ${row.unit}` : `On-hand subtotal · ${row.unit}`} value={quantity(row.value,row.unit,row.decimalScale)} hint={locale === "fr" ? "Toutes les pages filtrées" : "All filtered pages"} />)}</ModuleMetrics> : null}
         <ErpDesign2RegisterTools locale={locale} organizationName={organizationName}
           title={tab === "STOCK" ? t("inventory.stockSection") : tab === "TRANSFERS" ? t("inventory.transferSection") : tab === "COUNTS" ? t("inventory.countSection") : t("inventory.adjustmentSection")}
           endpoint={`/api/enterprise/${organizationId}/${tab === "STOCK" ? "inventory" : tab === "TRANSFERS" ? "stock-transfers" : tab === "COUNTS" ? "inventory-counts" : "stock-adjustments"}`}
@@ -410,7 +419,7 @@ export function EnterpriseInventoryOperationsWorkspace({ organizationId, organiz
             { key: "requested", labelFr: "Date de demande", labelEn: "Requested at", get: (row) => String(row.requestedAt || row.createdAt || "") },
           ]} />
          {activeCollection.error ? <ProfessionalError message={activeCollection.error} /> : activeCollection.loading ? <ProfessionalLoading /> : tab === "STOCK" ? (
-          stock.items.length ? <BusinessList ariaLabel={t("inventory.stockAria")}>{stock.items.map((item) => <BusinessListItem key={item.id} title={`${item.catalogItem.code} · ${item.catalogItem.name}`} status={<StatusBadge tone={item.isLowStock ? "danger" : item.quantityAvailable > 0 ? "success" : "warning"}>{stockStatusLabel(item.isLowStock, item.quantityAvailable)}</StatusBadge>} meta={`${t("inventory.availableQuantity", { value: quantity(item.quantityAvailable, item.catalogItem.unitOfMeasure?.symbol, item.catalogItem.unitOfMeasure?.decimalScale) })} · ${t("inventory.reservedQuantity", { value: quantity(item.quantityReserved, item.catalogItem.unitOfMeasure?.symbol, item.catalogItem.unitOfMeasure?.decimalScale) })}`} description={item.balances.map((balance) => `${balance.warehouse.name}${balance.storageLocation ? ` / ${balance.storageLocation.name}` : ""}: ${quantity(balance.quantityOnHand, item.catalogItem.unitOfMeasure?.symbol, item.catalogItem.unitOfMeasure?.decimalScale)}`).join(" · ") || t("inventory.noBalance")} onOpen={() => setDetail(item)} openLabel={t("inventory.openStock", { name: item.catalogItem.name })} />)}</BusinessList> : <EmptyState compact title={t("inventory.noTrackedItem")} description={t("inventory.noTrackedItemDescription")} />
+          stock.items.length ? <BusinessList ariaLabel={t("inventory.stockAria")}>{stock.items.map((item) => <BusinessListItem key={item.id} title={`${item.catalogItem.code} · ${item.catalogItem.name}`} status={<StatusBadge tone={item.isLowStock ? "danger" : item.quantityAvailable > 0 ? "success" : "warning"}>{stockStatusLabel(item.isLowStock, item.quantityAvailable)}</StatusBadge>} meta={`${t("inventory.availableQuantity", { value: quantity(item.quantityAvailableExact ?? item.quantityAvailable, item.catalogItem.unitOfMeasure?.symbol, item.catalogItem.unitOfMeasure?.decimalScale) })} · ${t("inventory.reservedQuantity", { value: quantity(item.quantityReservedExact ?? item.quantityReserved, item.catalogItem.unitOfMeasure?.symbol, item.catalogItem.unitOfMeasure?.decimalScale) })}`} description={item.balances.map((balance) => `${balance.warehouse.name}${balance.storageLocation ? ` / ${balance.storageLocation.name}` : ""}: ${quantity(balance.quantityOnHand, item.catalogItem.unitOfMeasure?.symbol, item.catalogItem.unitOfMeasure?.decimalScale)}`).join(" · ") || t("inventory.noBalance")} onOpen={() => setDetail(item)} openLabel={t("inventory.openStock", { name: item.catalogItem.name })} />)}</BusinessList> : <EmptyState compact title={t("inventory.noTrackedItem")} description={t("inventory.noTrackedItemDescription")} />
         ) : tab === "TRANSFERS" ? (
           transfers.items.length ? <BusinessList ariaLabel={t("inventory.transfersAria")}>{transfers.items.map((item) => <BusinessListItem key={item.id} title={item.reference} leading={<Truck className="h-5 w-5 text-dtsc-blue" />} status={<StatusBadge tone={statusTone(item.status)}>{professionalErpEnumLabel(locale, "inventoryStatus", item.status)}</StatusBadge>} meta={`${item.sourceWarehouse.name} → ${item.destinationWarehouse.name}`} description={`${t("inventory.lines", { count: item.lines.length, suffix: suffix(item.lines.length) })} · ${t("inventory.requestedOn", { date: professionalErpDate(item.requestedAt, locale) })}`} onOpen={() => setDetail(item)} actions={<ContextActions label={t("inventory.transferActions")} actions={transferActions(item)} />} />)}</BusinessList> : <EmptyState compact title={t("inventory.noTransfer")} description={t("inventory.noTransferDescription")} />
         ) : tab === "COUNTS" ? (
