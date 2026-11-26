@@ -140,6 +140,88 @@ async function verifyConversionHistory(tenant, otherTenant, actor) {
   console.log("PASS #1228 PostgreSQL conversion history: exact factors, stale unit proof, unique versions, tenant FKs and rollback");
 }
 
+const projectFixture = { reader: null, organizationId: "", actor: "" };
+const { GET: getProjects } = workflowTestLoader({
+  "@/lib/prisma": { prisma: { $transaction: async (callback, options) => {
+    assert.equal(options.isolationLevel, "RepeatableRead");
+    return callback(projectFixture.reader);
+  } } },
+  "@/lib/auth": { getSession: async () => ({ userId: projectFixture.actor }) },
+  "@/lib/audit": { writeApiLog: async () => {} },
+  "@/lib/enterprise/business-context": { resolveEnterpriseBusinessDate: async () => "2026-11-26" },
+  "@/lib/enterprise/common/access": { getEnterpriseCommonDomainAccess: async ({ organizationId, action }) =>
+    organizationId === projectFixture.organizationId && action === "read" ? { canManage: false } : null },
+  "@/lib/enterprise/accounting/http": { financeBusinessDateRange: (req) => {
+    const requested = new URL(req.url).searchParams.get("dateFrom");
+    return { ok: true, from: requested ? new Date(requested) : null, to: null };
+  } },
+  "@/lib/enterprise/projects-assets/projects": {},
+  "@/lib/enterprise/projects-assets/schemas": {},
+  "@/lib/rate-limit": {},
+})("@/app/api/enterprise/[organizationId]/projects/route");
+
+async function verifyProjectAnalytics(tenant, otherTenant, actor) {
+  await assert.rejects(db.$transaction(async tx => {
+    const today = new Date("2026-11-26");
+    const past = new Date("2026-11-01");
+    const project = { organizationId: tenant, name: "Portfolio QA #1228", status: "ACTIVE", currency: "CDF",
+      indicativeBudget: "9999999999999999.99", createdAt: past, targetEndDate: past, createdByUserId: actor };
+    const filtered = Array.from({ length: 56 }, (_, index) => ({
+      ...project, id: `${tenant}-project-${index}`, reference: `TARGET-${index}`, targetEndDate: index === 55 ? today : past,
+    }));
+    await tx.enterpriseProject.createMany({ data: [
+      ...filtered,
+      { ...project, id: `${tenant}-usd`, reference: "USD", name: "Another project", status: "COMPLETED", currency: "USD", indicativeBudget: "12.34" },
+      { ...project, id: `${tenant}-archived`, reference: "ARCHIVED", archivedAt: today },
+      { ...project, reference: "NO-CURRENCY", name: "Another project", status: "DRAFT", currency: null, indicativeBudget: "5" },
+      { ...project, organizationId: otherTenant, id: `${tenant}-foreign`, reference: "TARGET-0" },
+    ] });
+    const risk = { organizationId: tenant, reference: "RISK", title: "Risk", description: "Project risk", status: "OPEN", severity: "HIGH", createdByUserId: actor };
+    await tx.enterpriseProjectRisk.createMany({ data: [
+      { ...risk, projectId: filtered[55].id },
+      { ...risk, projectId: `${tenant}-usd` },
+      { ...risk, projectId: `${tenant}-archived` },
+      { ...risk, projectId: `${tenant}-foreign`, organizationId: otherTenant },
+    ] });
+    await tx.enterpriseProjectDeliverable.createMany({ data: ["ACCEPTED", "DRAFT"].map(status => ({
+      organizationId: tenant, projectId: filtered[55].id, reference: status, name: status, status, createdByUserId: actor,
+    })) });
+    Object.assign(projectFixture, { reader: tx, organizationId: tenant, actor });
+    const read = (query, organizationId = tenant) => getProjects(
+      new Request(`http://localhost/api/enterprise/${organizationId}/projects?${query}`),
+      { params: Promise.resolve({ organizationId }) },
+    );
+    const query = "search=Portfolio%20QA&status=ACTIVE&pageSize=25.5&dateFrom=2026-11-01";
+    const first = await read(query);
+    assert.equal(first.status, 200);
+    assert.equal(first.headers.get("cache-control"), "private, no-store");
+    const firstPage = await first.json();
+    const lastPage = await (await read(query + "&page=3")).json();
+    const absent = await (await read(query + "&page=4")).json();
+    assert.deepEqual(firstPage.pagination, { page: 1, pageSize: 25, total: 56, pageCount: 3 });
+    assert.deepEqual(firstPage.metrics, { active: 56, overdue: 55, highRisks: 1 });
+    assert.deepEqual(firstPage.generalMetrics, { active: 56, overdue: 56, highRisks: 2 });
+    assert.deepEqual(firstPage.pageMetrics, { active: 25, overdue: 25, highRisks: 0 });
+    assert.deepEqual(lastPage.pageMetrics, { active: 6, overdue: 5, highRisks: 1 });
+    assert.deepEqual(absent.pageMetrics, { active: 0, overdue: 0, highRisks: 0 });
+    assert.equal(lastPage.items.find(row => row.id === filtered[55].id).progressPercent, 50);
+    assert.deepEqual(lastPage.filteredTotals, firstPage.filteredTotals);
+    assert.deepEqual(absent.generalTotals, firstPage.generalTotals);
+    assert.deepEqual(absent.pageTotals, []);
+    assert.deepEqual(firstPage.filteredTotals, [{ currencyCode: "CDF", status: "ACTIVE", metric: "projectIndicativeBudget", amount: "559999999999999999.44" }]);
+    assert.equal(lastPage.pageTotals[0].amount, "59999999999999999.94");
+    assert.equal(firstPage.generalTotals.find(row => row.currencyCode === "USD").amount, "12.34");
+    assert.equal(firstPage.generalTotals.length, 2, "Legacy projects without proved currency are excluded from monetary totals");
+    const noMatches = await (await read("search=Portfolio%20QA&dateFrom=2026-11-27")).json();
+    assert.equal(noMatches.pagination.total, 0);
+    assert.deepEqual(noMatches.filteredTotals, []);
+    assert.equal((await read(query, otherTenant)).status, 403);
+    throw new RollbackFixture();
+  }, { isolationLevel: "RepeatableRead", timeout: 10000 }), RollbackFixture);
+  assert.equal(await db.enterpriseProject.count({ where: { organizationId: { in: [tenant, otherTenant] } } }), 0);
+  console.log("PASS #1228 PostgreSQL projects: filtered/authorized/page counters and budget amounts, date and tenant scopes");
+}
+
 try {
   const expected = [
     ["EnterpriseInventoryBalance", "quantityOnHand", 21],
@@ -179,6 +261,7 @@ try {
   const otherTenant = `${tenant}-other`;
   const actor = "qa-1228-actor";
   await verifyConversionHistory(tenant, otherTenant, actor);
+  await verifyProjectAnalytics(tenant, otherTenant, actor);
   try {
     await db.$transaction(async tx => {
       const fixtureStarted=performance.now();

@@ -1,6 +1,6 @@
 import { Prisma } from "@prisma/client";
 
-export type MonetaryMetric = "debit" | "credit" | "original" | "outstanding" | "inbound" | "outbound" | "invoiceTotal" | "paid" | "credited" | "creditTotal" | "tax" | "subtotal" | "discount" | "total" | "payrollGross" | "payrollBonuses" | "payrollDeductions" | "payrollNet";
+export type MonetaryMetric = "debit" | "credit" | "original" | "outstanding" | "inbound" | "outbound" | "invoiceTotal" | "paid" | "credited" | "creditTotal" | "tax" | "subtotal" | "discount" | "total" | "payrollGross" | "payrollBonuses" | "payrollDeductions" | "payrollNet" | "projectIndicativeBudget";
 export type MonetaryTotal = { currencyCode: string; metric: MonetaryMetric; amount: string; status?: string };
 export type MonetaryScopes = { filteredTotals: MonetaryTotal[]; generalTotals: MonetaryTotal[]; pageTotals: MonetaryTotal[] };
 
