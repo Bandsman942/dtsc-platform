@@ -13,6 +13,8 @@ const queryTimings=[];
 const db = new PrismaClient({log:[{emit:"event",level:"query"}]});
 db.$on("query",event=>{if(event.duration>=25)queryTimings.push({ms:event.duration,sql:event.query.slice(0,180)});});
 const { planFefoLots } = workflowTestLoader({})("@/lib/enterprise/inventory/lot-allocation");
+const { appendCatalogUnitConversion, projectCatalogConversion, resolveCatalogUnitConversion } =
+  workflowTestLoader({})("@/lib/enterprise/master-data/unit-conversions");
 const handlerLoadStarted=performance.now();
 const inventoryFixture={reader:null,organizationId:"",siteId:"",actor:""};
 const {GET:inventoryGet}=workflowTestLoader({
@@ -82,6 +84,62 @@ const { GET: getPayrollRuns } = workflowTestLoader({
 })("@/app/api/enterprise/[organizationId]/payroll-runs/route");
 
 class RollbackFixture extends Error {}
+
+async function verifyConversionHistory(tenant, otherTenant, actor) {
+  await assert.rejects(db.$transaction(async tx => {
+    const createUnit = (organizationId, code, decimalScale) => tx.enterpriseUnitOfMeasure.create({
+      data: { organizationId, code, name: code, decimalScale },
+    });
+    const carton = await createUnit(tenant, "CARTON", 3);
+    const stock = await createUnit(tenant, "STOCK", 6);
+    const foreignUnit = await createUnit(otherTenant, "CARTON", 3);
+    const createItem = (organizationId, unitOfMeasureId) => tx.enterpriseCatalogItem.create({
+      data: { organizationId, unitOfMeasureId, code: "CONVERSION-QA", name: "Conversion QA", normalizedName: "conversion qa", itemType: "PRODUCT", trackInventory: true, createdByUserId: actor },
+    });
+    const item = await createItem(tenant, stock.id);
+    const foreignItem = await createItem(otherTenant, foreignUnit.id);
+    const context = { organizationId: tenant, catalogItemId: item.id, sourceUnitId: carton.id, actorUserId: actor };
+    const first = await appendCatalogUnitConversion(tx, { ...context, factor: "12.123", expectedVersion: 0 });
+    assert.equal(first.factor.toFixed(), "12.123");
+    const resolve = () => resolveCatalogUnitConversion(tx, { ...context, quantity: "1.001" });
+    assert.equal((await resolve()).stockQuantity, "12.135123");
+    await assert.rejects(appendCatalogUnitConversion(tx, { ...context, factor: "24", expectedVersion: 0 }),
+      { code: "CATALOG_CONVERSION_REVISION_CONFLICT" });
+
+    await tx.enterpriseUnitOfMeasure.update({ where: { id: carton.id }, data: { code: "PACK" } });
+    await assert.rejects(resolve(), { code: "INVENTORY_UNIT_CONVERSION_REQUIRED" });
+    const second = await appendCatalogUnitConversion(tx, { ...context, factor: "24", expectedVersion: 1 });
+    assert.equal(second.version, 2);
+    assert.equal((await resolve()).sourceCode, "PACK");
+    assert.equal((await resolve()).stockQuantity, "24.024");
+    const historical = await tx.enterpriseCatalogUnitConversion.findUniqueOrThrow({ where: { id: first.id } });
+    assert.equal(historical.sourceCode, "CARTON");
+    assert.equal(projectCatalogConversion(historical, "1.001").stockQuantity, "12.135123");
+    assert.equal(await tx.enterpriseOperationalEvent.count({
+      where: { organizationId: tenant, entityId: item.id, eventType: "CATALOG_UNIT_CONVERSION_VERSION_CREATED" },
+    }), 2);
+
+    const { id, createdAt, ...conversion } = second;
+    assert.ok(id && createdAt);
+    for (const [changes, code] of [
+      [{}, "P2002"],
+      [{ version: 3, catalogItemId: foreignItem.id }, "P2003"],
+      [{ version: 3, sourceUnitId: foreignUnit.id }, "P2003"],
+      [{ version: 3, targetUnitId: foreignUnit.id }, "P2003"],
+    ]) {
+      await tx.$executeRaw`SAVEPOINT qa_1228_conversion_constraint`;
+      await assert.rejects(tx.enterpriseCatalogUnitConversion.create({ data: { ...conversion, ...changes } }), { code });
+      await tx.$executeRaw`ROLLBACK TO SAVEPOINT qa_1228_conversion_constraint`;
+      await tx.$executeRaw`RELEASE SAVEPOINT qa_1228_conversion_constraint`;
+    }
+    assert.equal(await tx.enterpriseCatalogUnitConversion.count({ where: { organizationId: tenant } }), 2);
+    throw new RollbackFixture();
+  }, { isolationLevel: "Serializable", timeout: 10000 }), RollbackFixture);
+  assert.equal(await db.enterpriseCatalogUnitConversion.count({ where: { organizationId: tenant } }), 0);
+  assert.equal(await db.enterpriseOperationalEvent.count({ where: { organizationId: tenant } }), 0);
+  console.log("PASS #1228 PostgreSQL conversion history: exact factors, stale unit proof, unique versions, tenant FKs and rollback");
+}
+
 try {
   const expected = [
     ["EnterpriseInventoryBalance", "quantityOnHand", 21],
@@ -120,6 +178,7 @@ try {
   const tenant = `qa-1228-${randomUUID()}`;
   const otherTenant = `${tenant}-other`;
   const actor = "qa-1228-actor";
+  await verifyConversionHistory(tenant, otherTenant, actor);
   try {
     await db.$transaction(async tx => {
       const fixtureStarted=performance.now();

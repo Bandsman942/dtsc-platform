@@ -8,6 +8,18 @@ type ConversionSnapshot = {
   sourceCode: string; targetCode: string;
 };
 
+type ConversionUnit = { id: string; code: string; decimalScale: number };
+
+export function catalogConversionMatchesUnits(
+  snapshot: Pick<ConversionSnapshot, "sourceUnitId" | "targetUnitId" | "sourceCode" | "targetCode" | "sourceScale" | "targetScale">,
+  source: ConversionUnit,
+  target: ConversionUnit,
+) {
+  return snapshot.sourceUnitId === source.id && snapshot.targetUnitId === target.id
+    && snapshot.sourceScale === source.decimalScale && snapshot.targetScale === target.decimalScale
+    && snapshot.sourceCode === source.code && snapshot.targetCode === target.code;
+}
+
 export function requireCatalogConversionFactor(value: string) {
   if (!/^\d{1,18}(?:\.\d{1,12})?$/.test(value)) throw new EnterpriseDomainError("INVENTORY_UNIT_CONVERSION_INVALID", 400);
   const factor = new Prisma.Decimal(value);
@@ -75,6 +87,8 @@ export async function resolveCatalogUnitConversion(tx: Prisma.TransactionClient,
     sourceCode: source.code, targetCode: target.code, sourceScale: source.decimalScale, targetScale: target.decimalScale, factor: "1", version: 0,
   }, input.quantity) };
   const version = await tx.enterpriseCatalogUnitConversion.findFirst({ where: { organizationId: input.organizationId, catalogItemId: item.id, sourceUnitId: source.id }, orderBy: { version: "desc" } });
-  if (!version || version.targetUnitId !== target.id || version.sourceScale !== source.decimalScale || version.targetScale !== target.decimalScale) throw new EnterpriseDomainError("INVENTORY_UNIT_CONVERSION_REQUIRED", 409);
+  if (!version || !catalogConversionMatchesUnits(version, source, target)) {
+    throw new EnterpriseDomainError("INVENTORY_UNIT_CONVERSION_REQUIRED", 409);
+  }
   return { conversionId: version.id, ...projectCatalogConversion(version, input.quantity) };
 }

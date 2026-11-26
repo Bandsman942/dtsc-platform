@@ -8,6 +8,7 @@ import { professionalErpDate } from "@/components/enterprise/professional/profes
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { notifyToast } from "@/lib/client-toast";
+import { localizeInventoryQuantity } from "@/lib/enterprise/inventory/quantity-display";
 import { BusinessList, BusinessListItem } from "@/components/workspace/business-list";
 import { EmptyState } from "@/components/workspace/empty-state";
 import { StatusBadge } from "@/components/workspace/status-badge";
@@ -15,7 +16,11 @@ import { StatusBadge } from "@/components/workspace/status-badge";
 type Locale = "fr" | "en";
 type SourceUnit = { id: string; code: string; name: string; symbol: string | null; decimalScale: number };
 type Conversion = { id: string; sourceUnitId: string; targetUnitId: string; version: number; factor: string; sourceScale: number; targetScale: number; sourceCode: string; targetCode: string; createdAt: string };
-type CatalogExtra = { catalogItem?: { id: string; status: string; archivedAt: string | null; trackInventory: boolean; unitOfMeasure: { id: string; code: string; name: string; decimalScale: number } } };
+type CatalogExtra = {
+  catalogItem?: { id: string; status: string; archivedAt: string | null; trackInventory: boolean; unitOfMeasure: { id: string; code: string; name: string; decimalScale: number; status: string; archivedAt: string | null } };
+  sourceUnit?: Pick<SourceUnit, "id" | "code" | "decimalScale"> | null;
+  currentConversionMatchesUnits?: boolean | null;
+};
 type Preview = { sourceQuantity: string; stockQuantity: string; sourceCode: string; targetCode: string; factor: string; version: number };
 
 const labels = {
@@ -26,7 +31,8 @@ const labels = {
     newVersion: "Nouvelle version", factor: "Facteur de conversion", factorHelp: "Nombre d’unités de stock pour une unité source entière. Exemple : 24 bouteilles pour 1 carton. Utilisez le point ou la virgule décimale.",
     save: "Enregistrer la version", saving: "Enregistrement…", saved: "Nouvelle version enregistrée", failed: "Impossible d’enregistrer la conversion.",
     version: "Version", refresh: "Actualiser", readOnly: "Consultation uniquement. La configuration nécessite le droit d’administration du Catalogue.",
-    inactive: "Cet article n’est pas actif pour le suivi du stock.", history: "Historique des conversions", old: "Historique", latest: "Dernière version", review: "Unité de stock ou précision modifiée : une nouvelle version doit être définie.",
+    inactive: "Cet article doit être actif, suivi en stock et associé à une unité de stock active.", history: "Historique des conversions", old: "Historique", latest: "Dernière version", review: "Une unité, son code ou sa précision a changé. Enregistrez une nouvelle version.",
+    unavailableSource: "Choisissez une unité source active et différente de l’unité de stock.",
     preview: "Simuler la conversion enregistrée", quantity: "Quantité source", calculate: "Calculer", calculating: "Calcul…", previewFailed: "Conversion impossible.", previewNote: "Simulation uniquement : aucune opération de stock n’est créée.",
     noUnits: "Aucune autre unité disponible. Créez une unité dans le Catalogue.",
     noMatch: "Aucune unité ne correspond à cette recherche.", invalidFactor: "Renseignez un facteur décimal strictement positif, avec au maximum 18 chiffres entiers et 12 décimales.",
@@ -40,7 +46,8 @@ const labels = {
     newVersion: "New version", factor: "Conversion factor", factorHelp: "Number of stock units per whole source unit. Example: 24 bottles per carton. Use a decimal point or comma.",
     save: "Save version", saving: "Saving…", saved: "New version saved", failed: "Unable to save conversion.",
     version: "Version", refresh: "Refresh", readOnly: "Read only. Configuration requires Catalog administration permission.",
-    inactive: "This item is not active for stock tracking.", history: "Conversion history", old: "Historical", latest: "Latest version", review: "Stock unit or precision changed: define a new version.",
+    inactive: "This item must be active, tracked in inventory and linked to an active stock unit.", history: "Conversion history", old: "Historical", latest: "Latest version", review: "A unit, its code or its precision changed. Save a new version.",
+    unavailableSource: "Choose an active source unit that differs from the stock unit.",
     preview: "Preview the saved conversion", quantity: "Source quantity", calculate: "Calculate", calculating: "Calculating…", previewFailed: "Unable to convert.", previewNote: "Simulation only: no stock operation is created.",
     noUnits: "No other unit available. Create a unit in Catalog.",
     noMatch: "No units match this search.", invalidFactor: "Enter a strictly positive decimal factor, with at most 18 integer digits and 12 decimal places.",
@@ -103,19 +110,21 @@ function ConversionHistory({ endpoint, catalogItemId, source, locale }: { endpoi
   const previewLock = useRef(false);
   const history = useProfessionalCollection<Conversion, CatalogExtra>({ endpoint, params: new URLSearchParams({ catalogItemId, page: String(page), pageSize: "20", ...(source ? { sourceUnitId: source.id } : {}) }), refreshKey: revision });
   const catalog = history.extra.catalogItem;
+  const sourceUnit = history.extra.sourceUnit;
   const current = source && page === 1 ? history.items[0] : undefined;
   const settled = !history.loading && !history.error && history.pagination.page === page;
-  const active = Boolean(catalog?.status === "ACTIVE" && !catalog.archivedAt && catalog.trackInventory);
-  const canSave = settled && active && history.canManage && Boolean(source) && page === 1;
-  const outdated = current && (current.targetUnitId !== catalog?.unitOfMeasure.id || current.targetScale !== catalog?.unitOfMeasure.decimalScale || current.sourceScale !== source?.decimalScale);
+  const active = Boolean(catalog?.status === "ACTIVE" && !catalog.archivedAt && catalog.trackInventory
+    && catalog.unitOfMeasure.status === "ACTIVE" && !catalog.unitOfMeasure.archivedAt);
+  const canSave = settled && active && history.canManage && Boolean(sourceUnit) && page === 1;
+  const canSimulate = settled && active && Boolean(sourceUnit && current && history.extra.currentConversionMatchesUnits);
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!source || !canSave || saveLock.current) return;
+    if (!sourceUnit || !canSave || saveLock.current) return;
     const value = decimalInput(factor);
     if (!isPositiveDecimal(value, 18, 12)) { setError(t.invalidFactor); return; }
     saveLock.current = true; setBusy(true); setError(""); setPreview(null); setPreviewError("");
     try {
-      await professionalMutation(endpoint, { catalogItemId, sourceUnitId: source.id, factor: value, expectedVersion: current?.version ?? 0 });
+      await professionalMutation(endpoint, { catalogItemId, sourceUnitId: sourceUnit.id, factor: value, expectedVersion: current?.version ?? 0 });
       setFactor(""); notifyToast(t.saved, "success");
       // Keep submission locked until the fresh version is loaded.
       await history.reload();
@@ -126,12 +135,12 @@ function ConversionHistory({ endpoint, catalogItemId, source, locale }: { endpoi
   }
   async function simulate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!source || !settled || !active || previewLock.current || busy) return;
+    if (!sourceUnit || !canSimulate || previewLock.current || busy) return;
     const value = decimalInput(quantity);
-    if (!isPositiveDecimal(value, 15, source.decimalScale)) { setPreview(null); setPreviewError(t.invalidQuantity); return; }
+    if (!isPositiveDecimal(value, 15, sourceUnit.decimalScale)) { setPreview(null); setPreviewError(t.invalidQuantity); return; }
     previewLock.current = true; setPreviewBusy(true); setPreview(null); setPreviewError("");
     try {
-      const result = await professionalRequest<{ preview: Preview }>(`${endpoint}?${new URLSearchParams({ catalogItemId, sourceUnitId: source.id, quantity: value })}`);
+      const result = await professionalRequest<{ preview: Preview }>(`${endpoint}?${new URLSearchParams({ catalogItemId, sourceUnitId: sourceUnit.id, quantity: value })}`);
       setPreview(result.preview);
     } catch (failure) { setPreviewError(failure instanceof Error ? failure.message : t.previewFailed); }
     finally { previewLock.current = false; setPreviewBusy(false); }
@@ -141,25 +150,26 @@ function ConversionHistory({ endpoint, catalogItemId, source, locale }: { endpoi
     <div className="flex flex-wrap items-center justify-between gap-2"><h4 className="font-semibold text-dtsc-ink">{t.history}</h4><Button type="button" variant="outline" size="sm" disabled={history.loading || busy || previewBusy} onClick={() => { setPreview(null); setPage(1); setRevision(value => value + 1); }}><RefreshCw className="h-4 w-4" />{t.refresh}</Button></div>
     {history.error ? <ProfessionalError message={history.error} notify={false} /> : !settled ? <ProfessionalLoading /> : <>
       {history.items.length ? <BusinessList ariaLabel={t.history}>{history.items.map((row, index) => <BusinessListItem key={row.id}
-        title={`1 ${row.sourceCode} = ${row.factor} ${row.targetCode}`}
+        title={`1 ${row.sourceCode} = ${localizeInventoryQuantity(row.factor, locale)} ${row.targetCode}`}
         meta={`${t.version} ${row.version} · ${professionalErpDate(row.createdAt, locale)}`}
         status={source && page === 1 ? <StatusBadge tone={index === 0 ? "success" : "neutral"}>{index === 0 ? t.latest : t.old}</StatusBadge> : undefined}
         description={`${row.sourceCode}: ${row.sourceScale} · ${row.targetCode}: ${row.targetScale} ${t.precision}`} />)}</BusinessList> : <EmptyState compact title={t.empty} description={t.emptyHelp} />}
       <Paging page={page} count={history.pagination.pageCount} onChange={next => { if (!busy && !previewBusy) { setPage(next); setPreview(null); } }} locale={locale} />
       {!active ? <p className="text-sm text-dtsc-muted">{t.inactive}</p> : !history.canManage ? <p className="text-sm text-dtsc-muted">{t.readOnly}</p> : null}
-      {outdated ? <p role="status" className="break-words text-sm font-medium text-amber-700 dark:text-amber-300">{t.review}</p> : null}
-      {canSave && source ? <form className="grid min-w-0 gap-3 border-t border-dtsc-border pt-3" onSubmit={save}>
+      {source && !sourceUnit ? <p role="status" className="text-sm text-dtsc-muted">{t.unavailableSource}</p> : null}
+      {active && history.extra.currentConversionMatchesUnits === false ? <p role="status" className="break-words text-sm font-medium text-amber-700 dark:text-amber-300">{t.review}</p> : null}
+      {canSave ? <form className="grid min-w-0 gap-3 border-t border-dtsc-border pt-3" onSubmit={save}>
         <h4 className="font-semibold text-dtsc-ink">{t.newVersion}</h4>
         {error ? <ProfessionalError message={error} notify={false} /> : null}
         <Field label={t.factor} help={t.factorHelp} required><Input value={factor} inputMode="decimal" maxLength={31} required disabled={busy || previewBusy} onChange={event => setFactor(event.target.value)} /></Field>
         <Button type="submit" disabled={busy || previewBusy}><Plus className="h-4 w-4" />{busy ? t.saving : t.save}</Button>
       </form> : null}
-      {source && current && active && !outdated ? <form className="grid min-w-0 gap-2 border-t border-dtsc-border pt-3" onSubmit={simulate}>
+      {sourceUnit && canSimulate ? <form className="grid min-w-0 gap-2 border-t border-dtsc-border pt-3" onSubmit={simulate}>
         <h4 className="font-semibold text-dtsc-ink">{t.preview}</h4>
-        <Field label={`${t.quantity} (${source.code})`} required><Input value={quantity} inputMode="decimal" maxLength={22} required disabled={previewBusy || busy} onChange={event => { setQuantity(event.target.value); setPreview(null); }} /></Field>
+        <Field label={`${t.quantity} (${sourceUnit.code})`} required><Input value={quantity} inputMode="decimal" maxLength={22} required disabled={previewBusy || busy} onChange={event => { setQuantity(event.target.value); setPreview(null); }} /></Field>
         <Button type="submit" variant="outline" disabled={previewBusy || busy}>{previewBusy ? t.calculating : t.calculate}</Button>
         {previewError ? <ProfessionalError message={previewError} notify={false} /> : null}
-        {preview ? <p aria-live="polite" className="break-words rounded-xl border border-dtsc-border p-3 font-semibold tabular-nums text-dtsc-ink">{preview.sourceQuantity} {preview.sourceCode} = {preview.stockQuantity} {preview.targetCode} · {t.version} {preview.version}</p> : null}
+        {preview ? <p aria-live="polite" className="break-words rounded-xl border border-dtsc-border p-3 font-semibold tabular-nums text-dtsc-ink">{localizeInventoryQuantity(preview.sourceQuantity, locale)} {preview.sourceCode} = {localizeInventoryQuantity(preview.stockQuantity, locale)} {preview.targetCode} · {t.version} {preview.version}</p> : null}
         <p className="text-xs text-dtsc-muted">{t.previewNote}</p>
       </form> : null}
     </>}

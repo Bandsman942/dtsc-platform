@@ -6,7 +6,7 @@ import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { getEnterpriseCommonDomainAccess } from "@/lib/enterprise/common/access";
 import { EnterpriseDomainError } from "@/lib/enterprise/common/errors";
 import { enterpriseDomainErrorResponse, enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
-import { appendCatalogUnitConversion, resolveCatalogUnitConversion } from "@/lib/enterprise/master-data/unit-conversions";
+import { appendCatalogUnitConversion, catalogConversionMatchesUnits, resolveCatalogUnitConversion } from "@/lib/enterprise/master-data/unit-conversions";
 import { prisma } from "@/lib/prisma";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
@@ -87,14 +87,27 @@ export async function GET(req: Request, { params }: Params) {
       // Preserve historical access for archived articles in the same tenant.
       const catalogItem = await tx.enterpriseCatalogItem.findFirst({
         where: { organizationId, id: item.data },
-        select: { id: true, name: true, code: true, status: true, archivedAt: true, trackInventory: true, unitOfMeasure: { select: { id: true, code: true, name: true, decimalScale: true } } },
+        select: { id: true, name: true, code: true, status: true, archivedAt: true, trackInventory: true, unitOfMeasure: { select: { id: true, code: true, name: true, decimalScale: true, status: true, archivedAt: true } } },
       });
       if (!catalogItem) throw new EnterpriseDomainError("CATALOG_CONVERSION_REFERENCE_UNAVAILABLE", 404);
-      const [items, total] = await Promise.all([
+      const [items, total, sourceUnit] = await Promise.all([
         tx.enterpriseCatalogUnitConversion.findMany({ where, orderBy: [{ sourceUnitId: "asc" }, { version: "desc" }, { id: "desc" }], skip: (page - 1) * pageSize, take: pageSize, select: historySelect }),
         tx.enterpriseCatalogUnitConversion.count({ where }),
+        source?.success && source.data !== catalogItem.unitOfMeasure.id
+          ? tx.enterpriseUnitOfMeasure.findFirst({
+            where: { organizationId, id: source.data, status: "ACTIVE", archivedAt: null },
+            select: { id: true, code: true, decimalScale: true },
+          })
+          : null,
       ]);
-      return { catalogItem, items: items.map(publicConversion), pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) } };
+      const current = source?.success && page === 1 ? items[0] : undefined;
+      return {
+        catalogItem, sourceUnit, items: items.map(publicConversion),
+        currentConversionMatchesUnits: current && sourceUnit
+          ? catalogConversionMatchesUnits(current, sourceUnit, catalogItem.unitOfMeasure)
+          : null,
+        pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) },
+      };
     }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
     await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "catalog-unit-conversions", page } });
     return NextResponse.json({ ...result, canManage: access.canAdminister }, { headers: privateHeaders });

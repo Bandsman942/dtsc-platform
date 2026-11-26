@@ -783,6 +783,80 @@ test.describe.serial("Shop 2.0 Iteration 4 global behavioral acceptance", () => 
     }
   });
 
+  test("#1228 catalog keeps conversion versions and refuses a changed unit", async ({ page }, testInfo) => {
+    await signIn(page);
+    const key = `E2E-1228-CONV-${Date.now()}`;
+    const user = await prisma.user.findUniqueOrThrow({ where: { id: fixture.userId }, select: { locale: true } });
+    const unitIds = [];
+    let itemId;
+    try {
+      const unit = async (suffix, decimalScale) => {
+        const created = await prisma.enterpriseUnitOfMeasure.create({
+          data: { organizationId, code: `${key}-${suffix}`, name: `${key} ${suffix}`, decimalScale, createdByUserId: fixture.userId },
+        });
+        unitIds.push(created.id);
+        return created;
+      };
+      const carton = await unit("CARTON", 3);
+      const stock = await unit("STOCK", 6);
+      const item = await prisma.enterpriseCatalogItem.create({
+        data: { organizationId, code: key, name: key, normalizedName: key.toLowerCase(), unitOfMeasureId: stock.id, itemType: "PRODUCT", trackInventory: true, createdByUserId: fixture.userId },
+      });
+      itemId = item.id;
+      const openPanel = async (locale, width) => {
+        const french = locale === "fr";
+        await prisma.user.update({ where: { id: fixture.userId }, data: { locale } });
+        await page.setViewportSize({ width, height: 900 });
+        await page.goto("/enterprise-modules/CATALOG");
+        await expect(page.locator("html")).toHaveAttribute("lang", locale);
+        await page.getByPlaceholder(french ? "Nom, référence ou SKU…" : "Name, reference or SKU…").fill(key);
+        const register = french ? "Catalogue opérationnel" : "Operational catalog";
+        await page.getByRole("button", { name: new RegExp(register) }).click({ timeout: 15_000 });
+        await page.getByRole("dialog", { name: register, exact: true })
+          .getByRole("button", { name: `${french ? "Ouvrir" : "Open"} ${key}`, exact: true }).click({ timeout: 15_000 });
+        const panel = page.getByRole("region", { name: french ? "Conversions d’unités" : "Unit conversions", exact: true });
+        const search = french ? "Rechercher une unité" : "Search units";
+        await panel.getByRole("textbox", { name: search, exact: true }).fill(carton.name);
+        await panel.getByRole("button", { name: search, exact: true }).click();
+        const select = panel.getByRole("combobox", { name: french ? "Unité d’achat ou de vente" : "Purchase or sales unit" });
+        await select.selectOption(carton.id);
+        return panel;
+      };
+      const frenchPanel = await openPanel("fr", 320);
+      await frenchPanel.getByRole("textbox", { name: /^Facteur de conversion/ }).fill("12,123");
+      await frenchPanel.getByRole("button", { name: "Enregistrer la version", exact: true }).click();
+      await expect(frenchPanel.getByText(`1 ${carton.code} = 12,123 ${stock.code}`, { exact: true })).toBeVisible();
+      await frenchPanel.getByRole("textbox", { name: /^Quantité source/ }).fill("1,001");
+      await frenchPanel.getByRole("button", { name: "Calculer", exact: true }).click();
+      await expect(frenchPanel.getByText(`1,001 ${carton.code} = 12,135123 ${stock.code} · Version 1`, { exact: true })).toBeVisible();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+      await page.screenshot({ path: testInfo.outputPath("1228-catalog-conversion-fr-320.png") });
+
+      const nextCode = `${key}-PACK`;
+      await prisma.enterpriseUnitOfMeasure.update({ where: { id: carton.id }, data: { code: nextCode } });
+      const englishPanel = await openPanel("en", 1440);
+      await expect(englishPanel.getByText("A unit, its code or its precision changed. Save a new version.")).toBeVisible();
+      await expect(englishPanel.getByRole("button", { name: "Calculate", exact: true })).toHaveCount(0);
+      const endpoint = `/api/enterprise/${organizationId}/catalog/unit-conversions?catalogItemId=${item.id}&sourceUnitId=${carton.id}&quantity=1.001`;
+      expect((await apiGet(page, endpoint)).response.status()).toBe(409);
+      await englishPanel.getByRole("textbox", { name: /^Conversion factor/ }).fill("24");
+      await englishPanel.getByRole("button", { name: "Save version", exact: true }).click();
+      await expect(englishPanel.getByText(`1 ${nextCode} = 24 ${stock.code}`, { exact: true })).toBeVisible();
+      await expect(englishPanel.getByText(`1 ${carton.code} = 12.123 ${stock.code}`, { exact: true })).toBeVisible();
+      await expect(englishPanel.getByRole("button", { name: "Calculate", exact: true })).toBeVisible();
+      expect(await prisma.enterpriseInventoryItem.count({ where: { organizationId, catalogItemId: item.id } })).toBe(0);
+      await page.screenshot({ path: testInfo.outputPath("1228-catalog-conversion-en-1440.png") });
+    } finally {
+      await prisma.user.update({ where: { id: fixture.userId }, data: { locale: user.locale } });
+      if (itemId) {
+        await prisma.enterpriseOperationalEvent.deleteMany({ where: { organizationId, entityId: itemId, eventType: "CATALOG_UNIT_CONVERSION_VERSION_CREATED" } });
+        await prisma.enterpriseCatalogUnitConversion.deleteMany({ where: { organizationId, catalogItemId: itemId } });
+        await prisma.enterpriseCatalogItem.delete({ where: { id: itemId } });
+      }
+      await prisma.enterpriseUnitOfMeasure.deleteMany({ where: { organizationId, id: { in: unitIds } } });
+    }
+  });
+
   test("#1228 quote API validates all seven effective catalog unit precisions", async ({page})=>{
     await signIn(page);const key=`E2E-1228-UNIT-${Date.now()}`;const quoteIds=[],catalogIds=[],unitIds=[];
     try{
