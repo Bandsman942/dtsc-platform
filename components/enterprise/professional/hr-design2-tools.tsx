@@ -44,7 +44,7 @@ export function HrDesign2Tools({ kind, organizationId, organizationName, title, 
   onDateChange: (from: string, to: string) => void;
 }) {
   const exportColumns = kind === "payroll-runs" ? columns[kind].map((column) => column.key === "status"
-    ? { ...column, get: (row) => professionalErpEnumLabel(locale, "payrollStatus", txt(row.status)) }
+    ? { ...column, get: (row: Record<string, unknown>) => professionalErpEnumLabel(locale, "payrollStatus", txt(row.status)) }
     : column) : columns[kind];
   return <ErpDesign2RegisterTools
     locale={locale} title={title} organizationName={organizationName}
