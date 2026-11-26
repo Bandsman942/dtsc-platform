@@ -1,7 +1,7 @@
 "use client";
 import { ErpDesign2RegisterTools, type ErpDesign2StatusOption } from "@/components/enterprise/professional/erp-design2-register";
 import type { FinanceExportColumn } from "@/components/enterprise/professional/finance-design2-controls";
-import { professionalErpEnumLabel, professionalErpT } from "@/components/enterprise/professional/professional-erp-i18n";
+import { canonicalContractType, professionalErpEnumLabel, professionalErpT, professionalHrCodeLabel } from "@/components/enterprise/professional/professional-erp-i18n";
 
 type HrKind = "contracts" | "schedules" | "attendance" | "leave" | "timesheets" | "payroll-runs" | "payroll-periods";
 const txt = (value: unknown) => value == null ? "" : String(value);
@@ -44,6 +44,21 @@ export function HrDesign2Tools({ kind, organizationId, organizationName, title, 
   onDateChange: (from: string, to: string) => void;
 }) {
   const exportColumns: FinanceExportColumn[] = columns[kind].map((column) => {
+    if (kind === "contracts" && column.key === "contractType") return {
+      ...column,
+      get: (row: Record<string, unknown>) => {
+        const value = txt(row.contractType);
+        return value ? professionalErpEnumLabel(locale, "employmentContractType", canonicalContractType(value)) : "";
+      },
+    };
+    if (kind === "schedules" && column.key === "scheduleType") return {
+      ...column,
+      get: (row: Record<string, unknown>) => professionalHrCodeLabel(locale, "scheduleType", txt(row.scheduleType)),
+    };
+    if (kind === "attendance" && column.key === "source") return {
+      ...column,
+      get: (row: Record<string, unknown>) => professionalHrCodeLabel(locale, "attendanceSource", txt(row.source)),
+    };
     if (column.key === "status") return {
       ...column,
       get: (row: Record<string, unknown>) => {
@@ -67,10 +82,24 @@ export function HrDesign2Tools({ kind, organizationId, organizationName, title, 
     };
     return column;
   });
+  const reportFilters: { label: string; value: string }[] = [];
+  const appendFilter = (key: Parameters<typeof professionalErpT>[1], value: string | null) => {
+    if (value) reportFilters.push({ label: professionalErpT(locale, key), value });
+  };
+  const statusValue = filters.get("status");
+  if (statusValue) {
+    appendFilter("hr.filter.status", statuses.find((option) => option.id === statusValue)?.label || professionalErpT(locale, "common.valueToReview"));
+  }
+  appendFilter("hr.filter.search", filters.get("search"));
+  appendFilter("hr.filter.from", filters.get("dateFrom"));
+  appendFilter("hr.filter.to", filters.get("dateTo"));
+  if (kind === "contracts") {
+    appendFilter("hr.filter.archive", professionalErpT(locale, filters.get("archived") === "1" ? "hr.filter.archived" : "hr.filter.current"));
+  }
   return <ErpDesign2RegisterTools
     locale={locale} title={title} organizationName={organizationName}
     endpoint={`/api/enterprise/${organizationId}/${endpoint[kind]}`}
-    filters={Object.fromEntries(filters.entries())} columns={exportColumns}
+    filters={Object.fromEntries(filters.entries())} reportFilters={reportFilters} columns={exportColumns}
     status={current} statuses={statuses} onStatusChange={onStatusChange}
     dateFrom={dateFrom} dateTo={dateTo} onDateChange={onDateChange}
   />;

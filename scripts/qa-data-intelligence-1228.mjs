@@ -115,6 +115,30 @@ await import("./qa-data-intelligence-stock-totals-1228.mjs");
   const unit = { exports: {} };
   const jsx = (_component, props) => props;
   const label = (locale, group, value) => [locale, group, value].join(":");
+  const i18nPath = "components/enterprise/professional/professional-erp-i18n.ts";
+  const i18nUnit = { exports: {} };
+  const dictionaries = Object.fromEntries(["fr", "en"].map(locale => [locale, JSON.parse(fs.readFileSync("locales/professional-erp-people." + locale + ".json", "utf8"))]));
+  vm.runInNewContext(ts.transpileModule(fs.readFileSync(i18nPath, "utf8"), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+  }).outputText, {
+    module: i18nUnit, exports: i18nUnit.exports,
+    require: name => {
+      if (name === "@/components/i18n/locale-provider") return { useAppLocale: () => "fr" };
+      if (name === "@/lib/i18n") return { translateProfessionalErp: (locale, key) => dictionaries[locale][key] || label(locale, "fallback", key) };
+      throw new Error("Unexpected HR dictionary dependency: " + name);
+    },
+  }, { filename: i18nPath });
+  const { canonicalContractType, professionalHrCodeLabel, professionalErpT } = i18nUnit.exports;
+  for (const locale of ["fr", "en"]) {
+    assert.equal(professionalHrCodeLabel(locale, "scheduleType", "WEEKLY"), locale === "fr" ? "Hebdomadaire" : "Weekly");
+    assert.equal(professionalHrCodeLabel(locale, "scheduleType", "DATE"), locale === "fr" ? "Date précise" : "Specific date");
+    assert.equal(professionalHrCodeLabel(locale, "attendanceSource", "MANUAL"), locale === "fr" ? "Saisie manuelle" : "Manual entry");
+    assert.equal(professionalHrCodeLabel(locale, "attendanceSource", "IMPORT"), "Import");
+    assert.equal(professionalHrCodeLabel(locale, "attendanceSource", "SYSTEM"), locale === "fr" ? "Système" : "System");
+    assert.equal(professionalHrCodeLabel(locale, "attendanceSource", ""), "");
+    assert.equal(professionalHrCodeLabel(locale, "attendanceSource", "UNKNOWN"), professionalErpT(locale, "common.valueToReview"));
+  }
+  for (const [legacy, canonical] of [["EMPLOYEE","EMPLOYMENT"],["CONTRACTOR","CONSULTING"],["INTERN","INTERNSHIP"],["TEMPORARY","FIXED_TERM"],["INDEFINITE","INDEFINITE"]]) assert.equal(canonicalContractType(legacy), canonical);
   vm.runInNewContext(ts.transpileModule(fs.readFileSync(path, "utf8"), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX },
   }).outputText, {
@@ -122,7 +146,7 @@ await import("./qa-data-intelligence-stock-totals-1228.mjs");
     require: (name) => {
       if (name === "react/jsx-runtime") return { jsx, jsxs: jsx };
       if (name.endsWith("/erp-design2-register")) return { ErpDesign2RegisterTools: () => null };
-      if (name.endsWith("/professional-erp-i18n")) return { professionalErpEnumLabel: label, professionalErpT: (locale, key) => [locale, key].join(":") };
+      if (name.endsWith("/professional-erp-i18n")) return { canonicalContractType, professionalHrCodeLabel, professionalErpEnumLabel: label, professionalErpT: (locale, key) => [locale, key].join(":") };
       throw new Error("Unexpected HR export dependency: " + name);
     },
   }, { filename: path });
@@ -131,7 +155,7 @@ await import("./qa-data-intelligence-stock-totals-1228.mjs");
     const known = locale === "fr" ? "Statut affiché" : "Displayed status";
     const props = unit.exports.HrDesign2Tools({
       kind, locale, organizationId: "tenant-A", organizationName: "Example", title: "Register",
-      filters: new URLSearchParams({ status: "TEST_STATUS", search: "sample" }),
+      filters: new URLSearchParams({ status: "TEST_STATUS", search: "sample", dateFrom: "2026-11-01", dateTo: "2026-11-25", page: "2", pageSize: "25", ...(kind === "contracts" ? { archived: "1" } : {}) }),
       status: "TEST_STATUS", statuses: [{ id: "", label: "All" }, { id: "TEST_STATUS", label: known }],
       onStatusChange() {}, dateFrom: "", dateTo: "", onDateChange() {},
     });
@@ -140,6 +164,20 @@ await import("./qa-data-intelligence-stock-totals-1228.mjs");
     assert.equal(statusColumn.get({ status: null }), "");
     assert.equal(props.filters.status, "TEST_STATUS");
     assert.equal(props.filters.search, "sample");
+    assert.equal(props.filters.page, "2");
+    assert.equal(props.reportFilters.find(filter => filter.label === locale + ":hr.filter.status").value, known);
+    assert.equal(props.reportFilters.find(filter => filter.label === locale + ":hr.filter.search").value, "sample");
+    assert.equal(props.reportFilters.find(filter => filter.label === locale + ":hr.filter.from").value, "2026-11-01");
+    assert.equal(props.reportFilters.find(filter => filter.label === locale + ":hr.filter.to").value, "2026-11-25");
+    assert.ok(!props.reportFilters.some(filter => filter.label === "page" || filter.label === "pageSize"));
+    if (kind === "contracts") {
+      assert.equal(props.reportFilters.find(filter => filter.label === locale + ":hr.filter.archive").value, locale + ":hr.filter.archived");
+      const type = props.columns.find(column => column.key === "contractType");
+      assert.equal(type.get({ contractType: "TEMPORARY" }), label(locale, "employmentContractType", "FIXED_TERM"));
+      assert.equal(type.get({ contractType: null }), "");
+    }
+    if (kind === "schedules") assert.equal(props.columns.find(column => column.key === "scheduleType").get({ scheduleType: "WEEKLY" }), professionalHrCodeLabel(locale, "scheduleType", "WEEKLY"));
+    if (kind === "attendance") assert.equal(props.columns.find(column => column.key === "source").get({ source: "MANUAL" }), professionalHrCodeLabel(locale, "attendanceSource", "MANUAL"));
     assert.ok(props.endpoint.startsWith("/api/enterprise/tenant-A/"));
     for (const privateKey of ["notes", "baseCompensation", "terms", "payslip", "reason"]) {
       assert.ok(!props.columns.some((column) => column.key === privateKey));

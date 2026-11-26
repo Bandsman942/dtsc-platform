@@ -10,6 +10,7 @@ import { Field, NativeSelect } from "@/components/enterprise/core-v2/erp-v2-ui";
 import { EnterpriseEmployeesIdentityWorkspace } from "@/components/enterprise/professional/enterprise-employees-identity-workspace";
 
 import {
+  canonicalContractType,
   professionalErpDate,
   professionalErpEnumLabel,
   professionalErpMoney,
@@ -144,18 +145,6 @@ type ContractRevision = { id: string; revisionNumber: number; savedAt: string; s
 } };
 
 const CONTRACT_TYPES = ["EMPLOYMENT", "INDEFINITE", "FIXED_TERM", "CONSULTING", "INTERNSHIP"] as const;
-const LEGACY_CONTRACT_TYPE_MAP: Record<string, (typeof CONTRACT_TYPES)[number]> = {
-  EMPLOYEE: "EMPLOYMENT",
-  CONTRACTOR: "CONSULTING",
-  INTERN: "INTERNSHIP",
-  TEMPORARY: "FIXED_TERM",
-};
-
-function canonicalContractType(value: string | null | undefined): string {
-  if (!value) return "EMPLOYMENT";
-  return LEGACY_CONTRACT_TYPE_MAP[value] || value;
-}
-
 export function EnterpriseHumanResourcesWorkspace({ organizationId, organizationName, definition }: { organizationId: string; organizationName: string; definition: EnterpriseModuleDefinition }) {
   const locale = useProfessionalErpLocale();
   const t = (key: Parameters<typeof professionalErpT>[1], values?: Record<string, string | number>) => professionalErpT(locale, key, values);
