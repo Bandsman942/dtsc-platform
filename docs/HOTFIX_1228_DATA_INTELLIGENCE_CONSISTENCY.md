@@ -99,6 +99,12 @@ Le parcours Chromium local a vérifié l’authentification, la clôture en fran
 
 Grand livre. La recherche canonique retrouve les désignations et codes actuels pour les formes historiques exactes générées par le moteur de stock. Le journal conserve son libellé d’origine. Le rendu indique l’origine de la désignation et signale la référence manquante. Les rédactions libres et les snapshots restent recherchables par leur texte enregistré. La sélection avant pagination alimente aussi le nombre de lignes et les totaux de débit/crédit en devise fonctionnelle. La fixture PostgreSQL vérifie cette concordance sur deux pages, les dimensions, les écritures contrepassées, les brouillons, une référence d’un autre tenant et les caractères littéraux de recherche.
 
+### Historique Télécom
+
+L’historique lit les opérations, leurs totaux et le périmètre boutique dans le même instantané. Le compte d’encaissement rattache l’opération à la boutique, et le numéro de téléphone retourné reste masqué. Le registre et les exports distinguent ventes, coûts opérateur et marges par devise d’origine et statut. Les montants d’opérations échouées ou contrepassées sont identifiés par leur statut. Le calcul de la page et la projection des pièces conservent les décimales d’origine. La fixture PostgreSQL exerce 57 opérations filtrées sur trois pages, avec plusieurs devises, un statut contrepassé et des opérations hors boutique et hors entreprise.
+
+Dans Chromium, le parcours d’intégration Mobile Money, change et Télécom confirme le posting unique et le rollback en période fermée. Le scénario complémentaire filtre 35 recharges, change de page, vérifie la stabilité du montant exact et télécharge les 35 lignes avec téléphones masqués.
+
 ### Sources vérifiées pour les agrégations restantes
 
 | Surface | Source actuelle | Vérification encore nécessaire |
@@ -106,7 +112,8 @@ Grand livre. La recherche canonique retrouve les désignations et codes actuels 
 | Caisse | `cash-sessions` aligne les compteurs, flux et écarts constatés sur le registre autorisé | Définir le calcul des soldes d’ouverture et de clôture à date pour la consolidation |
 | Budgets | `budgets` utilise `getBudgetPosition` pour les versions de budget de la page, à partir des lignes et engagements | Séparer versions et scénarios avant toute somme, puis utiliser les mêmes prévisions, engagements et réalisations pour le registre et l’export |
 | Dépenses | `expenses` lit et agrège le registre dédié par devise et statut, sous le même filtre de visibilité. Le registre et les exports reprennent ces agrégats | Certifier les parcours navigateur FR/EN et les relations avec les positions budgétaires versionnées |
-| Mobile Money et Telco | Le registre Telco applique le périmètre boutique du compte d’encaissement. Le registre direct Mobile Money vérifie le droit de l’organisation et reste à aligner sur le périmètre du compte de caisse. Les deux registres masquent les numéros sur les lignes | Fonder les agrégats de flux et de commissions sur les mêmes restrictions que les lignes. Rapporter les soldes de float à une date |
+| Télécom | Le registre applique le périmètre boutique du compte d’encaissement et calcule les montants par devise et statut | Rapprocher le solde de float à date avec les transactions canoniques |
+| Mobile Money | Le registre direct vérifie le droit de l’organisation et masque les numéros | Aligner les flux et commissions sur le périmètre du compte de caisse et rapprocher le float à date. Préserver le circuit distinct de change |
 | Paie | `payroll-runs` aligne compteurs et agrégats de brut, primes, retenues et net sur le registre autorisé | Certifier le rendu et les exports du parcours navigateur FR/EN |
 | Projets | `projects` calcule les compteurs et le budget indicatif par devise et statut pour le résultat filtré, le général autorisé et la page. Le progrès de chaque projet utilise ses livrables acceptés | Certifier les parcours navigateur FR/EN. Les engagements et dépenses sourcés en Finance et les temps validés restent à rapprocher |
 | Actifs | `assets` fournit le registre opérationnel et `assets/[assetId]/accounting-profile` la fiche comptable | Raccorder acquisition, amortissement et valeur nette aux comptes autorisés, avec période et devise explicites |

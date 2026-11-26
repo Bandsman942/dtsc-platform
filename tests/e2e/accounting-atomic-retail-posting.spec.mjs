@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { Prisma, PrismaClient } from "@prisma/client";
+import { readFile } from "node:fs/promises";
 
 const prisma = new PrismaClient();
 const baseUrl = process.env.E2E_BASE_URL || "http://127.0.0.1:3000";
@@ -493,6 +494,43 @@ test.describe.serial("Accounting atomic Retail browser acceptance", () => {
         where: { id: period.id },
         data: periodSnapshot,
       });
+    }
+  });
+
+  test("Telco history shows and exports exact amounts across filtered pages", async ({ page }) => {
+    const key = `TELCO-1229-${Date.now()}`;
+    const ids = Array.from({ length: 35 }, (_, index) => `${key}-${String(index).padStart(2, "0")}`);
+    const amount = "99999999999999.999999";
+    await prisma.enterpriseTelcoTopup.createMany({ data: ids.map(id => ({
+      id, number: id, idempotencyKey: id, organizationId, providerCode: "AFRICELL", offerLabel: "Recharge de test",
+      destinationPhone: "243811234567", currencyCode: "USD", saleAmount: amount, operatorCost: "99999999999999.999998",
+      marginAmount: "0.000001", tenderFinancialAccountId: fixture.bankAccountId, operatorFloatAccountId: fixture.telcoUsdAccountId,
+      agentUserId: fixture.userId, status: "SUCCESS",
+    })) });
+    try {
+      await signIn(page, "TELCO_TOPUPS");
+      await page.getByRole("button", { name: /^(Historique|History)$/ }).click();
+      const history = page.locator("[data-telco-history-design2]");
+      const query = page.waitForResponse(response => response.url().includes("telco-topups?") && new URL(response.url()).searchParams.get("search") === key);
+      await history.getByRole("textbox").fill(key);
+      const result = await (await query).json();
+      expect(result.pagination).toEqual({ page: 1, pageSize: 30, total: 35, pageCount: 2 });
+      expect(result.filteredTotals).toContainEqual({ currencyCode: "USD", status: "SUCCESS", metric: "telcoSale", amount: "3499999999999999.999965" });
+      const amounts = history.locator("[data-commercial-amount-scopes]");
+      await expect(amounts).toContainText(/3\D499\D999\D999\D999\D999[,.]999965/);
+      await history.getByRole("button", { name: /^(Suivant|Next)$/ }).click();
+      await expect(history.getByText("Page 2 / 2")).toBeVisible();
+      await expect(amounts).toContainText(/3\D499\D999\D999\D999\D999[,.]999965/);
+      await expect(history.getByText(/2438••••567/).first()).toBeVisible();
+      const download = page.waitForEvent("download");
+      await history.getByRole("button", { name: "CSV", exact: true }).click();
+      const csv = await readFile(await (await download).path(), "utf8");
+      const records = csv.split(/\r?\n/).filter(row => row.includes(`${key}-`));
+      expect(records).toHaveLength(35);
+      expect(records.every(row => row.includes(amount) && row.includes("2438••••567"))).toBe(true);
+      expect(csv).not.toContain("243811234567");
+    } finally {
+      await prisma.enterpriseTelcoTopup.deleteMany({ where: { organizationId, id: { in: ids } } });
     }
   });
 });

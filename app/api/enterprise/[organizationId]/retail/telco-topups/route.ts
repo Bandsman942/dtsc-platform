@@ -11,6 +11,7 @@ import { createConnectedTelcoTopupOperation } from "@/lib/enterprise/retail/oper
 import { telcoTopupCreateSchema } from "@/lib/enterprise/retail/schemas";
 import { createTelcoTopupWithPosting } from "@/lib/enterprise/retail/service";
 import { retailFinanceReadSiteScope } from "@/lib/enterprise/retail/site-access";
+import { telcoHistoryFields, telcoHistoryPageTotals, telcoHistoryTotals } from "@/lib/enterprise/retail/telco-history-analytics";
 import { prisma } from "@/lib/prisma";
 
 type Params = { params: Promise<{ organizationId: string }> };
@@ -20,16 +21,6 @@ export async function GET(req: Request, { params }: Params) {
   const { organizationId } = await params;
   const auth = await authorizeRetailRequest(req, organizationId, "TELCO_TOPUPS", "read");
   if (!auth.ok) return auth.response;
-  // RETAIL store-isolated staff cannot export another boutique's operator
-  // transactions. The topup has no siteId: attribute it only via its
-  // canonical tender financial account's siteId, never by client-side hints.
-  let visibleSites: Awaited<ReturnType<typeof retailFinanceReadSiteScope>>;
-  try { visibleSites = await retailFinanceReadSiteScope(organizationId, auth.session.userId, "VIEW_SALES"); }
-  catch (error) { return retailErrorResponse(error, "RETAIL_SITE_ACCESS_DENIED"); }
-  const permittedTenderAccountIds = visibleSites === null ? null : (await prisma.enterpriseFinancialAccount.findMany({
-    where: { organizationId, siteId: { in: visibleSites }, archivedAt: null },
-    select: { id: true },
-  })).map((item) => item.id);
   const { page, pageSize, status, providerCode, search, from, to } = retailListParams(req);
   const dates = financeBusinessDateRange(req);
   if (!dates.ok) return dates.response;
@@ -39,21 +30,59 @@ export async function GET(req: Request, { params }: Params) {
   }
   const effectiveFrom = dates.from || from;
   const effectiveTo = dates.to || to;
-  const where: Prisma.EnterpriseTelcoTopupWhereInput = {
-    organizationId,
-    ...(permittedTenderAccountIds !== null ? { tenderFinancialAccountId: { in: permittedTenderAccountIds } } : {}),
-    ...(status ? { status } : {}),
-    ...(providerCode ? { providerCode } : {}),
-    ...(effectiveFrom || effectiveTo ? { occurredAt: { ...(effectiveFrom ? { gte: effectiveFrom } : {}), ...(effectiveTo ? { lte: effectiveTo } : {}) } } : {}),
-    ...(search ? { OR: [{ number: { contains: search, mode: "insensitive" } }, { offerLabel: { contains: search, mode: "insensitive" } }, { externalReference: { contains: search, mode: "insensitive" } }, { destinationPhone: { contains: search } }] } : {}),
-  };
-  const [items, total] = await Promise.all([
-    prisma.enterpriseTelcoTopup.findMany({ where, orderBy: { occurredAt: "desc" }, skip: (page - 1) * pageSize, take: pageSize }),
-    prisma.enterpriseTelcoTopup.count({ where }),
-  ]);
-  const masked = items.map((item) => { const phone = item.destinationPhone.length > 6 ? `${item.destinationPhone.slice(0, 4)}••••${item.destinationPhone.slice(-3)}` : item.destinationPhone; return { ...item, destinationPhone: phone, destinationPhoneMasked: phone }; });
-  await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "telco-topups", page } });
-  return NextResponse.json({ items: masked, pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) } });
+  try {
+    const result = await prisma.$transaction(async tx => {
+      // A top-up belongs to the shop of its canonical tender account.
+      const visibleSites = await retailFinanceReadSiteScope(organizationId, auth.session.userId, "VIEW_SALES", tx);
+      const permittedTenderAccountIds = visibleSites === null ? null : (await tx.enterpriseFinancialAccount.findMany({
+        where: { organizationId, siteId: { in: visibleSites }, archivedAt: null },
+        select: { id: true },
+      })).map(account => account.id);
+      const authorizedScope: Prisma.EnterpriseTelcoTopupWhereInput = {
+        organizationId,
+        ...(permittedTenderAccountIds !== null ? { tenderFinancialAccountId: { in: permittedTenderAccountIds } } : {}),
+      };
+      const where: Prisma.EnterpriseTelcoTopupWhereInput = {
+        ...authorizedScope,
+        ...(status ? { status } : {}),
+        ...(providerCode ? { providerCode } : {}),
+        ...(effectiveFrom || effectiveTo ? { occurredAt: { ...(effectiveFrom ? { gte: effectiveFrom } : {}), ...(effectiveTo ? { lte: effectiveTo } : {}) } } : {}),
+        ...(search ? { OR: [
+          { number: { contains: search, mode: "insensitive" } },
+          { providerCode: { contains: search, mode: "insensitive" } },
+          { offerLabel: { contains: search, mode: "insensitive" } },
+          { externalReference: { contains: search, mode: "insensitive" } },
+          { destinationPhone: { contains: search } },
+        ] } : {}),
+      };
+      const summarize = (scope: Prisma.EnterpriseTelcoTopupWhereInput) => tx.enterpriseTelcoTopup.groupBy({
+        by: ["currencyCode", "status"], where: scope, _sum: telcoHistoryFields, _count: { _all: true },
+        orderBy: [{ currencyCode: "asc" }, { status: "asc" }],
+      });
+      const general = summarize(authorizedScope);
+      const filtered = status || providerCode || effectiveFrom || effectiveTo || search ? summarize(where) : general;
+      const [items, filteredGroups, generalGroups] = await Promise.all([
+        tx.enterpriseTelcoTopup.findMany({ where, orderBy: [{ occurredAt: "desc" }, { id: "desc" }], skip: (page - 1) * pageSize, take: pageSize }),
+        filtered, general,
+      ]);
+      const total = filteredGroups.reduce((count, group) => count + group._count._all, 0);
+      return {
+        items: items.map(item => {
+          const phone = item.destinationPhone.length > 6 ? `${item.destinationPhone.slice(0, 4)}••••${item.destinationPhone.slice(-3)}` : item.destinationPhone;
+          return { ...item, destinationPhone: phone, destinationPhoneMasked: phone, saleAmount: item.saleAmount.toFixed(),
+            operatorCost: item.operatorCost.toFixed(), marginAmount: item.marginAmount.toFixed() };
+        }),
+        pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) },
+        filteredTotals: telcoHistoryTotals(filteredGroups),
+        generalTotals: telcoHistoryTotals(generalGroups),
+        pageTotals: telcoHistoryPageTotals(items),
+      };
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
+    await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "telco-topups", page } });
+    return NextResponse.json(result, { headers: { "Cache-Control": "private, no-store" } });
+  } catch (error) {
+    return retailErrorResponse(error, "TELCO_HISTORY_FAILED");
+  }
 }
 
 export async function POST(req: Request, { params }: Params) {

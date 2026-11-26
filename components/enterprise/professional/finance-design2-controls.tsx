@@ -8,6 +8,7 @@ import { financeStatusLabel } from "@/components/enterprise/professional/finance
 import { professionalErpEnumLabel } from "@/components/enterprise/professional/professional-erp-i18n";
 import { Input } from "@/components/ui/input";
 import { notifyToast } from "@/lib/client-toast";
+import { customerFacingStatusLabel } from "@/lib/customer-facing-language";
 import { downloadProfessionalCsv, downloadProfessionalPdf, downloadProfessionalXlsx, type ProfessionalReportExportModel } from "@/lib/reporting/professional-export";
 
 import type { InventoryQuantityTotal } from "@/lib/enterprise/inventory/availability-analytics";
@@ -92,11 +93,15 @@ const filteredMetricLabels = {
   projectIndicativeBudget: { fr: "Budget indicatif", en: "Indicative budget" },
   cashClosingShortage: { fr: "Manquants constatés à la clôture", en: "Recorded closing shortages" },
   cashClosingSurplus: { fr: "Excédents constatés à la clôture", en: "Recorded closing surpluses" },
+  telcoSale: { fr: "Montants de vente Télécom", en: "Telco sale amounts" },
+  telcoCost: { fr: "Coûts opérateur Télécom", en: "Telco operator costs" },
+  telcoMargin: { fr: "Marges Télécom", en: "Telco margins" },
 } as const;
 function filteredMetricLabel(row: FinanceFilteredTotal, locale: Locale) {
   const status = row.status
     ? (row.metric === "projectIndicativeBudget" ? professionalErpEnumLabel(locale, "projectStatus", row.status)
-      : row.metric.startsWith("payroll") ? professionalErpEnumLabel(locale, "payrollStatus", row.status) : financeStatusLabel(row.status, locale))
+      : row.metric.startsWith("payroll") ? professionalErpEnumLabel(locale, "payrollStatus", row.status)
+        : row.metric.startsWith("telco") ? customerFacingStatusLabel(row.status, locale) : financeStatusLabel(row.status, locale))
     : "";
   return [filteredMetricLabels[row.metric][locale], status, row.currencyCode].filter(Boolean).join(" · ");
 }

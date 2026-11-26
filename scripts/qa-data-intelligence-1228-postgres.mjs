@@ -147,6 +147,44 @@ const { GET: getCashSessions } = workflowTestLoader({
   "@/lib/enterprise/approval-targets": {},
 })("@/app/api/enterprise/[organizationId]/cash-sessions/route");
 
+const { GET: getTelcoTopups } = workflowTestLoader({
+  "@/lib/prisma": { prisma: { $transaction: async (callback, options) => {
+    assert.equal(options.isolationLevel, "RepeatableRead");
+    return callback(cashFixture.reader);
+  } } },
+  "@/lib/enterprise/retail/http": {
+    authorizeRetailRequest: async (_req, organizationId, feature, action) => {
+      assert.equal(feature, "TELCO_TOPUPS");
+      assert.equal(action, "read");
+      return organizationId === cashFixture.organizationId
+        ? { ok: true, session: { userId: cashFixture.actor } }
+        : { ok: false, response: new Response(null, { status: 403 }) };
+    },
+    retailListParams(req) {
+      const params = new URL(req.url).searchParams;
+      return { page: Number(params.get("page") || 1), pageSize: 25,
+        search: params.get("search") || "", status: params.get("status"), providerCode: params.get("providerCode") };
+    },
+    retailErrorResponse: error => { throw error; },
+  },
+  "@/lib/enterprise/accounting/http": { financeBusinessDateRange(req) {
+    const params = new URL(req.url).searchParams;
+    return { ok: true, from: params.get("dateFrom") ? new Date(params.get("dateFrom")) : null, to: null };
+  } },
+  "@/lib/enterprise/retail/site-access": { retailFinanceReadSiteScope: async (organizationId, actor, action, tx) => {
+    assert.equal(action, "VIEW_SALES");
+    assert.equal(organizationId, cashFixture.organizationId);
+    assert.equal(actor, cashFixture.actor);
+    assert.equal(tx, cashFixture.reader);
+    return [cashFixture.siteId];
+  } },
+  "@/lib/audit": { writeApiLog: async () => {} },
+  "@/lib/enterprise/retail/commercial-guardrails": {},
+  "@/lib/enterprise/retail/operator-orchestration": {},
+  "@/lib/enterprise/retail/schemas": {},
+  "@/lib/enterprise/retail/service": {},
+})("@/app/api/enterprise/[organizationId]/retail/telco-topups/route");
+
 async function verifyCashAnalytics(tenant, otherTenant, actor) {
   await assert.rejects(db.$transaction(async tx => {
     const siteA = `${tenant}-cash-shop-a`;
@@ -225,10 +263,54 @@ async function verifyCashAnalytics(tenant, otherTenant, actor) {
     assert.deepEqual(forbidden.items, []);
     assert.equal(forbidden.generalTotals, undefined);
     assert.equal((await read(scope, otherTenant)).status, 403);
+    const otherStore = await account(tenant, "QA-OTHER-SHOP", "CDF");
+    for (const registered of [cdf, usd, otherStore]) {
+      await tx.enterpriseFinancialAccount.update({ where: { id: registered.id }, data: { siteId: registered.id === otherStore.id ? siteB : siteA } });
+    }
+    const telco = {
+      organizationId: tenant, providerCode: "QA-PROVIDER", destinationPhone: "243811234567", offerLabel: "QA Recharge",
+      currencyCode: "CDF", saleAmount: amount, operatorCost: "99999999999999.999998", marginAmount: "0.000001",
+      tenderFinancialAccountId: cdf.id, operatorFloatAccountId: cdf.id, agentUserId: actor, status: "SUCCESS",
+      occurredAt: new Date("2026-11-05"),
+    };
+    const records = [
+      ...Array.from({ length: 56 }, (_, index) => ({ ...telco, number: `RECHARGE-TARGET-${index}` })),
+      { ...telco, number: "RECHARGE-TARGET-USD", currencyCode: "USD", tenderFinancialAccountId: usd.id },
+      { ...telco, number: "RECHARGE-TARGET-REVERSED", status: "REVERSED", saleAmount: "1", operatorCost: "1", marginAmount: "0" },
+      { ...telco, number: "RECHARGE-TARGET-OTHER-SHOP", tenderFinancialAccountId: otherStore.id },
+      { ...telco, number: "RECHARGE-TARGET-OTHER-TENANT", organizationId: otherTenant, tenderFinancialAccountId: foreign.id },
+      { ...telco, number: "RECHARGE-TARGET-AUGUST", occurredAt: new Date("2026-08-01"), saleAmount: "1", operatorCost: "1", marginAmount: "0" },
+      { ...telco, number: "RECHARGE-EXCLUDED", saleAmount: "1", operatorCost: "1", marginAmount: "0" },
+    ];
+    await tx.enterpriseTelcoTopup.createMany({ data: records.map(row => ({ ...row, idempotencyKey: row.number })) });
+    const telcoQuery = "search=RECHARGE-TARGET&status=SUCCESS&dateFrom=2026-11-01&providerCode=QA-PROVIDER";
+    const topups = (query, organizationId = tenant) => getTelcoTopups(
+      new Request(`http://localhost/api/enterprise/${organizationId}/retail/telco-topups?${query}`),
+      { params: Promise.resolve({ organizationId }) },
+    );
+    const telcoResponse = await topups(telcoQuery);
+    assert.equal(telcoResponse.status, 200);
+    assert.equal(telcoResponse.headers.get("cache-control"), "private, no-store");
+    const firstTelco = await telcoResponse.json();
+    const lastTelco = await (await topups(telcoQuery + "&page=3")).json();
+    assert.deepEqual(firstTelco.pagination, { page: 1, pageSize: 25, total: 57, pageCount: 3 });
+    assert.equal(firstTelco.items[0].destinationPhone, "2438••••567");
+    assert.equal(firstTelco.items[0].saleAmount, amount);
+    assert.equal(lastTelco.items.length, 7);
+    assert.deepEqual(lastTelco.filteredTotals, firstTelco.filteredTotals);
+    assert.deepEqual(lastTelco.generalTotals, firstTelco.generalTotals);
+    assert.equal(total(firstTelco, "filteredTotals", "telcoSale", "CDF"), "5599999999999999.999944");
+    assert.equal(total(firstTelco, "filteredTotals", "telcoCost", "CDF"), "5599999999999999.999888");
+    assert.equal(total(firstTelco, "filteredTotals", "telcoMargin", "CDF"), "0.000056");
+    assert.equal(total(firstTelco, "filteredTotals", "telcoSale", "USD"), amount);
+    assert.equal(firstTelco.generalTotals.find(row => row.metric === "telcoSale" && row.status === "REVERSED")?.amount, "1");
+    assert.equal(firstTelco.generalTotals.find(row => row.metric === "telcoSale" && row.status === "SUCCESS" && row.currencyCode === "CDF")?.amount, "5600000000000001.999944");
+    assert.equal((await topups(telcoQuery, otherTenant)).status, 403);
     throw new RollbackFixture();
   }, { isolationLevel: "RepeatableRead", timeout: 10000 }), RollbackFixture);
   assert.equal(await db.enterpriseCashSession.count({ where: { organizationId: { in: [tenant, otherTenant] } } }), 0);
   console.log("PASS #1228 PostgreSQL cash sessions: exact 56-session totals, page/authorized scopes, signed closing variances and store isolation");
+  console.log("PASS #1228 PostgreSQL Telco history: exact 57-record sales, costs and margins, mixed currencies and statuses, phone masking and store isolation");
 }
 
 async function verifyLedgerSearch(tenant, otherTenant, actor) {
