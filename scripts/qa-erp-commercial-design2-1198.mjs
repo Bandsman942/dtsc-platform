@@ -66,10 +66,11 @@ for (const [module, path, ui] of routes) {
   ]);
 }
 check("Telco History uses the complete canonical API rather than dashboard.recent", telcoUi, [
-  /useProfessionalCollection<TelcoTopup>/,
+  /useProfessionalCollection<TelcoTopup, MonetaryScopes>/,
   /\/retail\/telco-topups/, /CommercialDesign2Controls/,
   /CommercialDesign2Connections/, /dateFrom/, /dateTo/, /recordStatus/,
   /collection\.pagination\.total/, /collection\.items/,
+  /FinanceAmountScopes totals=\{collection\.extra\}/,
 ]);
 absent("Telco history must not treat dashboard sample as the source", telcoUi, /const items = dashboard\.recent\.topups \|\| \[\]/);
 const telcoRoute = read("app/api/enterprise/[organizationId]/retail/telco-topups/route.ts");
@@ -77,6 +78,12 @@ check("Telco API date filters and masked phone remain server-side and tenant-sco
   /authorizeRetailRequest/, /retailFinanceReadSiteScope/, /tenderFinancialAccountId: \{ in: permittedTenderAccountIds \}/, /financeBusinessDateRange\(req\)/,
   /effectiveFrom/, /effectiveTo/, /occurredAt: \{/, /destinationPhoneMasked/,
   /organizationId,/, /REVERSED/,
+]);
+check("Telco scopes and register share an authorized transaction", telcoRoute, [
+  /retailFinanceReadSiteScope\(organizationId, auth\.session\.userId, "VIEW_SALES", tx\)/,
+  /summarize\(authorizedScope\)/, /summarize\(where\)/,
+  /filteredTotals: telcoHistoryTotals\(filteredGroups\)/, /generalTotals: telcoHistoryTotals\(generalGroups\)/,
+  /pageTotals: telcoHistoryPageTotals\(items\)/, /RepeatableRead/,
 ]);
 check("Retail frame can refresh Telco history without affecting other Retail modules", sharedRetail, [
   /refreshKey,\s*mutate/, /moduleCode === "TELCO_TOPUPS" \? "compact"/,
