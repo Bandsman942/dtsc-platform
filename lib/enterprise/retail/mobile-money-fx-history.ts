@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import type { MonetaryTotal } from "@/lib/enterprise/common/analytics";
 import { retailFinanceReadSiteScope } from "@/lib/enterprise/retail/site-access";
 
 // A conversion can disclose two wallets. A scoped reader must be allowed
@@ -52,6 +53,16 @@ function pageTotals(rows: Array<Pick<Group, "sourceCurrencyCode" | "targetCurren
   return serialize([...groups.values()]);
 }
 
+function monetaryTotals(groups: ReturnType<typeof serialize>): MonetaryTotal[] {
+  return groups.flatMap(group => {
+    const currencyPair = group.sourceCurrencyCode + " → " + group.targetCurrencyCode;
+    const totals: MonetaryTotal[] = [];
+    if (group.sourceAmount !== null) totals.push({ metric: "mobileMoneyFxSource", currencyCode: group.sourceCurrencyCode, currencyPair, status: group.status, amount: group.sourceAmount });
+    if (group.targetAmount !== null) totals.push({ metric: "mobileMoneyFxTarget", currencyCode: group.targetCurrencyCode, currencyPair, status: group.status, amount: group.targetAmount });
+    return totals;
+  });
+}
+
 export async function readMobileMoneyFxHistory(tx: Prisma.TransactionClient, input: {
   organizationId: string; userId: string; page: number; pageSize: number;
   search?: string; status?: string; providerCode?: string; from?: Date | null; to?: Date | null;
@@ -89,6 +100,7 @@ export async function readMobileMoneyFxHistory(tx: Prisma.TransactionClient, inp
   const latest = new Map<string, typeof batches[number]>();
   for (const batch of batches) if (!latest.has(batch.sourceEntityId)) latest.set(batch.sourceEntityId, batch);
   const total = filteredGroups.reduce((count, group) => count + group._count._all, 0);
+  const fxTotals = { filtered: serialize(filteredGroups), general: serialize(generalGroups), page: pageTotals(rows) };
   return {
     items: rows.map(row => {
       const batch = latest.get(row.id);
@@ -98,6 +110,9 @@ export async function readMobileMoneyFxHistory(tx: Prisma.TransactionClient, inp
         accountingBlockerCode: posted ? null : batch?.errorCode || "POSTING_PENDING" };
     }),
     pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) },
-    fxTotals: { filtered: serialize(filteredGroups), general: serialize(generalGroups), page: pageTotals(rows) },
+    fxTotals,
+    filteredTotals: monetaryTotals(fxTotals.filtered),
+    generalTotals: monetaryTotals(fxTotals.general),
+    pageTotals: monetaryTotals(fxTotals.page),
   };
 }

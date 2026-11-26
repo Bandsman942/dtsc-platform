@@ -424,5 +424,13 @@
   "mobileMoneyHistoryPrevious": "Précédent",
   "mobileMoneyHistoryNext": "Suivant",
   "mobileMoneyHistoryPage": "Page",
-  "mobileMoneyHistoryCurrency": "Devise"
+  "mobileMoneyHistoryCurrency": "Devise",
+  "mobileMoneyFxHistoryTitle": "Conversions de devises",
+  "mobileMoneyFxHistorySearch": "Référence, opérateur ou devise…",
+  "mobileMoneyFxHistoryNote": "Montants historiques par paire directionnelle et statut. Les montants source et cible restent distincts ; ce ne sont ni des revenus ni des soldes à date. Une opération contrepassée conserve ses montants d’origine.",
+  "mobileMoneyFxHistoryEmpty": "Aucune conversion dans le résultat filtré.",
+  "mobileMoneyFxHistoryPosting": "Comptabilisation d’origine",
+  "mobileMoneyFxHistoryRateDate": "Date du taux",
+  "mobileMoneyFxHistorySourceAmount": "Montant source",
+  "mobileMoneyFxHistoryTargetAmount": "Montant cible"
 }

@@ -3,6 +3,7 @@ import fs from "node:fs";
 const files = {
   dashboard: "app/api/enterprise/[organizationId]/retail/dashboard/route.ts",
   fx: "app/api/enterprise/[organizationId]/retail/mobile-money/fx/route.ts",
+  history: "lib/enterprise/retail/mobile-money-fx-history.ts",
   retry: "app/api/enterprise/[organizationId]/retail/mobile-money/fx/[transferId]/accounting/route.ts",
   workspace: "components/enterprise/professional/mobile-money-agency-workspace.tsx",
   diagnostic: "lib/enterprise/retail/accounting-pending-diagnostic.ts",
@@ -24,8 +25,11 @@ const requireSource = (name, condition, message) => {
   if (!condition) failures.push(`${name}: ${message}`);
 };
 
-requireSource("dashboard", source.dashboard.includes("enterpriseMobileMoneyFxTransfer.findMany"), "les conversions FX ne sont pas chargées dans l'historique Mobile Money");
-requireSource("dashboard", source.dashboard.includes('sourceEntityType: "EnterpriseMobileMoneyFxTransfer"') && source.dashboard.includes('postingEvent: "RETAIL_MOBILE_MONEY_FX_POSTED"'), "le statut comptable des conversions FX n'est pas relié au posting canonique");
+requireSource("dashboard", source.dashboard.includes("readMobileMoneyFxHistory(tx") && source.history.includes("enterpriseMobileMoneyFxTransfer.findMany"), "les conversions FX ne sont pas chargées via le registre commun");
+requireSource("dashboard", source.history.includes('sourceEntityType: "EnterpriseMobileMoneyFxTransfer"') && source.history.includes('postingEvent: "RETAIL_MOBILE_MONEY_FX_POSTED"') && source.dashboard.includes('transfer.accountingStatus === "POSTED"'), "le statut comptable des conversions FX n'est pas relié au posting canonique");
+requireSource("history", source.history.includes("mobileMoneyFxReadScope(tx") && source.history.includes("sourceFloatAccountId: { in: ids }, targetFloatAccountId: { in: ids }"), "le registre FX doit protéger les deux wallets");
+requireSource("history", source.fx.includes('url.searchParams.get("view") === "history"') && source.fx.includes("readMobileMoneyFxHistory(tx") && source.fx.includes("RepeatableRead"), "le registre paginé doit réutiliser la lecture canonique");
+requireSource("history", !source.history.includes("finalizeMobileMoneyFxAccounting") && !source.history.includes("postBusinessEventTx"), "le service de lecture ne doit jamais déclencher un posting");
 requireSource("dashboard", source.dashboard.includes("mobileMoneyHistory = [...mobileMoneyRecent, ...fxHistory]"), "les conversions FX ne sont pas fusionnées à l'historique rendu");
 requireSource("dashboard", source.dashboard.includes('status: reversed ? "REVERSED" : posted ? "SUCCESS" : "CONFIRMED"'), "le statut métier d'une conversion durable est encore confondu avec son statut comptable");
 requireSource("dashboard", source.dashboard.includes('accountingStatus: posted ? "POSTED" : "PENDING"'), "le statut comptable FX n'est pas exposé séparément");
@@ -47,7 +51,8 @@ requireSource("retry", !source.retry.includes("createMobileMoneyFxTransfer"), "l
 requireSource("retry", !source.retry.includes("operationalBalance"), "la reprise comptable ne doit jamais modifier directement les soldes wallet");
 requireSource("retry", !source.retry.includes("retailErrorResponse"), "une erreur de posting non classée après transfert durable ne doit pas redevenir un faux FAILURE global");
 
-requireSource("workspace", source.workspace.includes('startsWith("FX_CONVERSION_PENDING:")'), "l'historique ne détecte pas les conversions historiques en attente de comptabilisation");
+requireSource("workspace", source.workspace.includes('item.accountingStatus === "PENDING"') && source.workspace.includes("FX_CONVERSION_PENDING:"), "l'historique ne détecte pas les conversions historiques en attente de comptabilisation");
+requireSource("workspace", source.workspace.includes('view: "history"') && source.workspace.includes("data-mobile-money-fx-history-design2") && source.workspace.includes("FinanceAmountScopes totals={collection.extra}"), "l’interface FX doit consommer le registre paginé et ses agrégats");
 requireSource("workspace", source.workspace.includes("/retail/mobile-money/fx/${item.id}/accounting"), "l'action de finalisation comptable n'appelle pas l'endpoint dédié");
 requireSource("workspace", source.workspace.includes('accountingRetry: "Finaliser la comptabilisation"') && source.workspace.includes('accountingRetry: "Finalize accounting"'), "l'action de reprise n'est pas bilingue");
 requireSource("workspace", source.workspace.includes("{ idempotent: false }"), "l'action de reprise doit appeler l'endpoint dédié sans générer une seconde clé de transfert côté client");

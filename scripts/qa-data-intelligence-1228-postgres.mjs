@@ -499,6 +499,12 @@ async function verifyCashAnalytics(tenant, otherTenant, actor) {
     assert.deepEqual(emptyFx.fxTotals.page, []);
     assert.deepEqual(thirdFx.fxTotals.filtered, firstFx.fxTotals.filtered);
     assert.deepEqual(emptyFx.fxTotals.general, firstFx.fxTotals.general);
+    assert.deepEqual(emptyFx.pageTotals, []);
+    assert.deepEqual(thirdFx.filteredTotals, firstFx.filteredTotals);
+    assert.deepEqual(emptyFx.generalTotals, firstFx.generalTotals);
+    assert.equal(firstFx.filteredTotals.find(row => row.metric === "mobileMoneyFxSource" && row.currencyPair === "CDF → USD").amount, "5599999999999999.999944");
+    assert.equal(firstFx.filteredTotals.find(row => row.metric === "mobileMoneyFxTarget" && row.currencyPair === "USD → CDF").amount, "4000");
+    assert.equal(firstFx.filteredTotals.length, 4);
     const directPair = firstFx.fxTotals.filtered.find(row => row.sourceCurrencyCode === "CDF");
     assert.equal(directPair.sourceAmount, "5599999999999999.999944");
     assert.equal(directPair.targetAmount, "0.000056");

@@ -424,5 +424,13 @@
   "mobileMoneyHistoryPrevious": "Previous",
   "mobileMoneyHistoryNext": "Next",
   "mobileMoneyHistoryPage": "Page",
-  "mobileMoneyHistoryCurrency": "Currency"
+  "mobileMoneyHistoryCurrency": "Currency",
+  "mobileMoneyFxHistoryTitle": "Currency conversions",
+  "mobileMoneyFxHistorySearch": "Reference, provider or currency…",
+  "mobileMoneyFxHistoryNote": "Historical amounts by directional pair and status. Source and target amounts remain separate; these are neither revenue nor as-of balances. Reversed operations retain original amounts.",
+  "mobileMoneyFxHistoryEmpty": "No currency conversions in the filtered result.",
+  "mobileMoneyFxHistoryPosting": "Original accounting posting",
+  "mobileMoneyFxHistoryRateDate": "Rate date",
+  "mobileMoneyFxHistorySourceAmount": "Source amount",
+  "mobileMoneyFxHistoryTargetAmount": "Target amount"
 }

@@ -44,3 +44,7 @@ Consigner le commit testé, l’organisation et le rôle utilisés, ainsi que le
 ### Mobile Money — registre des dépôts et retraits
 
 Sur 58 opérations admissibles, deux devises et deux boutiques, filtrer par type, statut, dates et référence. Comparer les cinq montants exacts par devise/type/statut et les trois périmètres de total ; changer de page et exporter CSV, XLSX et PDF. Vérifier le téléphone masqué, les montants négatifs, la séparation des conversions FX (aperçu distinct) et la lecture interdite pour une autre organisation ou une boutique non autorisée. Le registre FX complet et le solde à date ne sont pas validés par ce scénario.
+
+### Mobile Money — conversions de devises
+
+Avec 57 conversions autorisées, deux paires inverses et une conversion contrepassée, comparer les trois périmètres des montants source et cible sur plusieurs pages et dans les trois exports. Le taux historique, son jour, le statut métier et l’état du posting d’origine doivent rester distincts. Vérifier qu’un opérateur d’une seule boutique ne reçoit pas une conversion dont l’un des wallets est hors boutique ou partagé sans affectation. Tester la reprise comptable idempotente d’une opération confirmée en attente ; aucun nouveau mouvement wallet ne doit être créé. La validation des soldes à date et des droits de toutes les mutations reste indépendante.
