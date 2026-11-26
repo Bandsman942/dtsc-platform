@@ -1,7 +1,7 @@
 "use client";
 import { ErpDesign2RegisterTools, type ErpDesign2StatusOption } from "@/components/enterprise/professional/erp-design2-register";
 import type { FinanceExportColumn } from "@/components/enterprise/professional/finance-design2-controls";
-import { professionalErpEnumLabel } from "@/components/enterprise/professional/professional-erp-i18n";
+import { professionalErpEnumLabel, professionalErpT } from "@/components/enterprise/professional/professional-erp-i18n";
 
 type HrKind = "contracts" | "schedules" | "attendance" | "leave" | "timesheets" | "payroll-runs" | "payroll-periods";
 const txt = (value: unknown) => value == null ? "" : String(value);
@@ -43,9 +43,30 @@ export function HrDesign2Tools({ kind, organizationId, organizationName, title, 
   onStatusChange: (value: string) => void; dateFrom: string; dateTo: string;
   onDateChange: (from: string, to: string) => void;
 }) {
-  const exportColumns = kind === "payroll-runs" ? columns[kind].map((column) => column.key === "status"
-    ? { ...column, get: (row: Record<string, unknown>) => professionalErpEnumLabel(locale, "payrollStatus", txt(row.status)) }
-    : column) : columns[kind];
+  const exportColumns: FinanceExportColumn[] = columns[kind].map((column) => {
+    if (column.key === "status") return {
+      ...column,
+      get: (row: Record<string, unknown>) => {
+        const value = txt(row.status);
+        if (kind === "contracts" && row.archivedAt) return locale === "en" ? "Archived" : "Archivé";
+        if (!value) return "";
+        const known = statuses.find((option) => option.id === value)?.label;
+        if (known) return known;
+        if (kind === "contracts") return professionalErpEnumLabel(locale, "employmentContractStatus", value);
+        if (kind === "payroll-runs" || kind === "payroll-periods") return professionalErpEnumLabel(locale, "payrollStatus", value);
+        if (kind === "leave" || kind === "timesheets") return professionalErpEnumLabel(locale, "timeStatus", value);
+        return professionalErpT(locale, "common.valueToReview");
+      },
+    };
+    if (kind === "leave" && column.key === "leaveType") return {
+      ...column,
+      get: (row: Record<string, unknown>) => {
+        const value = txt(row.leaveType);
+        return value ? professionalErpEnumLabel(locale, "leaveType", value) : "";
+      },
+    };
+    return column;
+  });
   return <ErpDesign2RegisterTools
     locale={locale} title={title} organizationName={organizationName}
     endpoint={`/api/enterprise/${organizationId}/${endpoint[kind]}`}

@@ -107,3 +107,55 @@ await import("./qa-data-intelligence-purchase-quantities-1228.mjs");
 await import("./qa-data-intelligence-treasury-1228.mjs");
 
 await import("./qa-data-intelligence-stock-totals-1228.mjs");
+
+
+// #1228: export the register's localized statuses without changing API filters.
+{
+  const path = "components/enterprise/professional/hr-design2-tools.tsx";
+  const unit = { exports: {} };
+  const jsx = (_component, props) => props;
+  const label = (locale, group, value) => [locale, group, value].join(":");
+  vm.runInNewContext(ts.transpileModule(fs.readFileSync(path, "utf8"), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX },
+  }).outputText, {
+    module: unit, exports: unit.exports,
+    require: (name) => {
+      if (name === "react/jsx-runtime") return { jsx, jsxs: jsx };
+      if (name.endsWith("/erp-design2-register")) return { ErpDesign2RegisterTools: () => null };
+      if (name.endsWith("/professional-erp-i18n")) return { professionalErpEnumLabel: label, professionalErpT: (locale, key) => [locale, key].join(":") };
+      throw new Error("Unexpected HR export dependency: " + name);
+    },
+  }, { filename: path });
+  const kinds = ["contracts", "schedules", "attendance", "leave", "timesheets", "payroll-runs", "payroll-periods"];
+  for (const locale of ["fr", "en"]) for (const kind of kinds) {
+    const known = locale === "fr" ? "Statut affiché" : "Displayed status";
+    const props = unit.exports.HrDesign2Tools({
+      kind, locale, organizationId: "tenant-A", organizationName: "Example", title: "Register",
+      filters: new URLSearchParams({ status: "TEST_STATUS", search: "sample" }),
+      status: "TEST_STATUS", statuses: [{ id: "", label: "All" }, { id: "TEST_STATUS", label: known }],
+      onStatusChange() {}, dateFrom: "", dateTo: "", onDateChange() {},
+    });
+    const statusColumn = props.columns.find((column) => column.key === "status");
+    assert.equal(statusColumn.get({ status: "TEST_STATUS" }), known);
+    assert.equal(statusColumn.get({ status: null }), "");
+    assert.equal(props.filters.status, "TEST_STATUS");
+    assert.equal(props.filters.search, "sample");
+    assert.ok(props.endpoint.startsWith("/api/enterprise/tenant-A/"));
+    for (const privateKey of ["notes", "baseCompensation", "terms", "payslip", "reason"]) {
+      assert.ok(!props.columns.some((column) => column.key === privateKey));
+    }
+    if (kind === "contracts") {
+      assert.equal(statusColumn.get({ status: "ENDED", archivedAt: "2026-11-25" }), locale === "fr" ? "Archivé" : "Archived");
+      assert.equal(statusColumn.get({ status: "ENDED" }), label(locale, "employmentContractStatus", "ENDED"));
+    }
+    if (kind === "schedules" || kind === "attendance") assert.equal(statusColumn.get({ status: "UNRECOGNIZED" }), locale + ":common.valueToReview");
+    if (kind === "leave" || kind === "timesheets") assert.equal(statusColumn.get({ status: "APPROVED" }), label(locale, "timeStatus", "APPROVED"));
+    if (kind.startsWith("payroll-")) assert.equal(statusColumn.get({ status: "APPROVED" }), label(locale, "payrollStatus", "APPROVED"));
+    if (kind === "leave") {
+      const type = props.columns.find((column) => column.key === "leaveType");
+      assert.equal(type.get({ leaveType: "ANNUAL" }), label(locale, "leaveType", "ANNUAL"));
+      assert.equal(type.get({ leaveType: null }), "");
+    }
+  }
+  console.log("PASS #1228: localized HR register export statuses in all seven registries, leave type and unchanged filter/privacy contract");
+}
