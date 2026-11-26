@@ -39,7 +39,7 @@ import { notifyToast } from "@/lib/client-toast";
 import { customerFacingError, customerFacingStatusLabel } from "@/lib/customer-facing-language";
 import type { EnterpriseModuleDefinition } from "@/lib/enterprise/module-registry";
 import { customerFacingFeeCollectionMode, customerFacingMobileMoneyTransactionType } from "@/lib/retail-customer-language";
-import { translateRetailWorkspace } from "@/lib/i18n";
+import { translateRetailWorkspace, type RetailWorkspaceKey } from "@/lib/i18n";
 
 type CurrencyAccount = {
   id: string;
@@ -1042,34 +1042,6 @@ function WalletMappingRow({
   );
 }
 
-const retailHistoryLabels = {
-  "mobileMoneyHistoryOperations": true,
-  "mobileMoneyHistorySearch": true,
-  "mobileMoneyHistoryAllStatuses": true,
-  "mobileMoneyHistoryAllTypes": true,
-  "mobileMoneyHistoryType": true,
-  "mobileMoneyHistoryStatus": true,
-  "mobileMoneyHistorySearchLabel": true,
-  "mobileMoneyHistoryDateFrom": true,
-  "mobileMoneyHistoryDateTo": true,
-  "mobileMoneyHistoryDate": true,
-  "mobileMoneyHistoryReference": true,
-  "mobileMoneyHistoryProvider": true,
-  "mobileMoneyHistoryMaskedPhone": true,
-  "mobileMoneyHistoryPrincipal": true,
-  "mobileMoneyHistoryCashEffect": true,
-  "mobileMoneyHistoryFloatEffect": true,
-  "mobileMoneyHistoryNote": true,
-  "mobileMoneyHistoryRecentFx": true,
-  "mobileMoneyHistoryRecentFxNote": true,
-  "mobileMoneyHistoryNoFx": true,
-  "mobileMoneyHistoryNoOperations": true,
-  "mobileMoneyHistoryPrevious": true,
-  "mobileMoneyHistoryNext": true,
-  "mobileMoneyHistoryPage": true,
-  "mobileMoneyHistoryCurrency": true
-} as const;
-
 function MobileMoneyHistory({
   organizationId,
   organizationName,
@@ -1088,7 +1060,7 @@ function MobileMoneyHistory({
   mutate: RetailMutation;
 }) {
   const copy = COPY[locale];
-  const label = (key: keyof typeof retailHistoryLabels) => translateRetailWorkspace(locale, key);
+  const label = (key: RetailWorkspaceKey) => translateRetailWorkspace(locale, key);
   const [search, setSearch] = useState("");
   const [recordStatus, setRecordStatus] = useState("");
   const [transactionType, setTransactionType] = useState("");
