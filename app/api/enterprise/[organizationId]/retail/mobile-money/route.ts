@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import type { MonetaryTotal } from "@/lib/enterprise/common/analytics";
 import { financeBusinessDateRange } from "@/lib/enterprise/accounting/http";
 import { NextResponse } from "next/server";
 import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
@@ -52,6 +53,17 @@ function historyPageTotals(rows: (HistoryAmounts & Pick<HistoryGroup, "currencyC
   return historyTotals([...groups.values()]);
 }
 
+const monetaryMetrics = [
+  ["principalAmount", "mobileMoneyPrincipal"], ["customerFeeAmount", "mobileMoneyFee"],
+  ["providerCommissionAmount", "mobileMoneyCommission"], ["cashEffectAmount", "mobileMoneyCashEffect"],
+  ["floatEffectAmount", "mobileMoneyFloatEffect"],
+] as const;
+function monetaryTotals(groups: ReturnType<typeof historyTotals>): MonetaryTotal[] {
+  return groups.flatMap(group => monetaryMetrics.flatMap(([field, metric]) =>
+    group[field] === null ? [] : [{ currencyCode: group.currencyCode, status: group.status, operationType: group.transactionType, metric, amount: group[field]! }]
+  ));
+}
+
 export async function GET(req: Request, { params }: Params) {
   const startedAt = Date.now();
   const { organizationId } = await params;
@@ -62,6 +74,10 @@ export async function GET(req: Request, { params }: Params) {
   if (!dates.ok) return dates.response;
   if (!Number.isSafeInteger(page) || !Number.isSafeInteger(pageSize) || !Number.isSafeInteger((page - 1) * pageSize) || search.length > 120) {
     return NextResponse.json({ error: "MOBILE_MONEY_HISTORY_FILTER_INVALID", message: "Vérifiez la pagination et limitez la recherche à 120 caractères." }, { status: 400 });
+  }
+  const transactionType = (new URL(req.url).searchParams.get("transactionType") || "").trim().toUpperCase();
+  if (transactionType && !["DEPOSIT", "WITHDRAWAL"].includes(transactionType)) {
+    return NextResponse.json({ error: "MOBILE_MONEY_HISTORY_FILTER_INVALID", message: "Choisissez un type d’opération valide." }, { status: 400 });
   }
   const effectiveFrom = dates.from || from;
   const effectiveTo = dates.to || to;
@@ -82,6 +98,7 @@ export async function GET(req: Request, { params }: Params) {
         ...authorizedScope,
         ...(status ? { status } : {}),
         ...(providerCode ? { providerCode } : {}),
+        ...(transactionType ? { transactionType } : {}),
         ...(effectiveFrom || effectiveTo ? { occurredAt: { ...(effectiveFrom ? { gte: effectiveFrom } : {}), ...(effectiveTo ? { lte: effectiveTo } : {}) } } : {}),
         ...(search ? { OR: [
           { number: { contains: search, mode: "insensitive" } },
@@ -96,12 +113,13 @@ export async function GET(req: Request, { params }: Params) {
         orderBy: [{ currencyCode: "asc" }, { status: "asc" }, { transactionType: "asc" }],
       });
       const general = summarize(authorizedScope);
-      const filtered = status || providerCode || effectiveFrom || effectiveTo || search ? summarize(where) : general;
+      const filtered = status || providerCode || transactionType || effectiveFrom || effectiveTo || search ? summarize(where) : general;
       const [items, filteredGroups, generalGroups] = await Promise.all([
         tx.enterpriseMobileMoneyTransaction.findMany({ where, orderBy: [{ occurredAt: "desc" }, { id: "desc" }], skip: (page - 1) * pageSize, take: pageSize }),
         filtered, general,
       ]);
       const total = filteredGroups.reduce((count, group) => count + group._count._all, 0);
+      const operationTotals = { filtered: historyTotals(filteredGroups), general: historyTotals(generalGroups), page: historyPageTotals(items) };
       return {
         items: items.map(item => {
           const phone = item.customerPhone.length > 6 ? item.customerPhone.slice(0, 4) + "••••" + item.customerPhone.slice(-3) : "••••";
@@ -111,7 +129,10 @@ export async function GET(req: Request, { params }: Params) {
             floatEffectAmount: item.floatEffectAmount.toFixed() };
         }),
         pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) },
-        operationTotals: { filtered: historyTotals(filteredGroups), general: historyTotals(generalGroups), page: historyPageTotals(items) },
+        operationTotals,
+        filteredTotals: monetaryTotals(operationTotals.filtered),
+        generalTotals: monetaryTotals(operationTotals.general),
+        pageTotals: monetaryTotals(operationTotals.page),
       };
     }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
     await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "mobile-money", page } });

@@ -1,6 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import { CommercialDesign2Controls } from "@/components/enterprise/professional/commercial-design2-controls";
+import { FinanceAmountScopes, formatAnalyticsAmount, type FinanceExportColumn } from "@/components/enterprise/professional/finance-design2-controls";
+import { ProfessionalError, ProfessionalLoading, ProfessionalSearch, useProfessionalCollection } from "@/components/enterprise/professional/professional-erp-ui";
+import type { MonetaryScopes } from "@/lib/enterprise/common/analytics";
+import { inventoryQuantityExportValue as exactDecimalExportValue } from "@/lib/enterprise/inventory/quantity-display";
 import { useCallback, useEffect, useMemo, useState, type ReactNode, type SelectHTMLAttributes } from "react";
 import { ArrowRightLeft, CheckCircle2, RefreshCw, RotateCcw, Settings2, Smartphone, WalletCards } from "lucide-react";
 import { useAppLocale } from "@/components/i18n/locale-provider";
@@ -17,6 +22,7 @@ import {
   normalizePhonePreview,
   providerLabel,
   statusTone,
+  type MobileMoneyOperation,
   type RetailDashboard,
   type RetailMutation,
 } from "@/components/enterprise/professional/retail-workspace-shared";
@@ -354,7 +360,7 @@ export function MobileMoneyAgencyWorkspace({
           context.setRefreshKey((value) => value + 1);
         };
         if (context.tab === "HISTORY") {
-          return <MobileMoneyHistory organizationId={organizationId} dashboard={dashboard} locale={locale} busyAction={context.busyAction} mutate={context.mutate} />;
+          return <MobileMoneyHistory organizationId={organizationId} organizationName={organizationName} dashboard={dashboard} locale={locale} busyAction={context.busyAction} refreshKey={context.refreshKey} mutate={context.mutate} />;
         }
         if (context.tab === "CONFIG") {
           return <MobileMoneyConfigurationPanel dashboard={dashboard} locale={locale} configuration={configuration} configurationBusy={configurationBusy} configurationError={configurationError} reload={reload} busyAction={context.busyAction} mutate={context.mutate} organizationId={organizationId} />;
@@ -1036,21 +1042,95 @@ function WalletMappingRow({
   );
 }
 
+const retailHistoryLabels = {
+  "mobileMoneyHistoryOperations": true,
+  "mobileMoneyHistorySearch": true,
+  "mobileMoneyHistoryAllStatuses": true,
+  "mobileMoneyHistoryAllTypes": true,
+  "mobileMoneyHistoryType": true,
+  "mobileMoneyHistoryStatus": true,
+  "mobileMoneyHistorySearchLabel": true,
+  "mobileMoneyHistoryDateFrom": true,
+  "mobileMoneyHistoryDateTo": true,
+  "mobileMoneyHistoryDate": true,
+  "mobileMoneyHistoryReference": true,
+  "mobileMoneyHistoryProvider": true,
+  "mobileMoneyHistoryMaskedPhone": true,
+  "mobileMoneyHistoryPrincipal": true,
+  "mobileMoneyHistoryCashEffect": true,
+  "mobileMoneyHistoryFloatEffect": true,
+  "mobileMoneyHistoryNote": true,
+  "mobileMoneyHistoryRecentFx": true,
+  "mobileMoneyHistoryRecentFxNote": true,
+  "mobileMoneyHistoryNoFx": true,
+  "mobileMoneyHistoryNoOperations": true,
+  "mobileMoneyHistoryPrevious": true,
+  "mobileMoneyHistoryNext": true,
+  "mobileMoneyHistoryPage": true,
+  "mobileMoneyHistoryCurrency": true
+} as const;
+
 function MobileMoneyHistory({
   organizationId,
+  organizationName,
   dashboard,
   locale,
   busyAction,
+  refreshKey,
   mutate,
 }: {
   organizationId: string;
+  organizationName: string;
   dashboard: RetailDashboard;
   locale: "fr" | "en";
   busyAction: string | null;
+  refreshKey: number;
   mutate: RetailMutation;
 }) {
   const copy = COPY[locale];
-  const items = dashboard.recent.mobileMoney || [];
+  const label = (key: keyof typeof retailHistoryLabels) => translateRetailWorkspace(locale, key);
+  const [search, setSearch] = useState("");
+  const [recordStatus, setRecordStatus] = useState("");
+  const [transactionType, setTransactionType] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [page, setPage] = useState(1);
+  const params = useMemo(() => {
+    const query = new URLSearchParams({ page: String(page), pageSize: "30" });
+    if (search.trim()) query.set("search", search.trim());
+    if (recordStatus) query.set("status", recordStatus);
+    if (transactionType) query.set("transactionType", transactionType);
+    if (dateFrom) query.set("dateFrom", dateFrom);
+    if (dateTo) query.set("dateTo", dateTo);
+    return query;
+  }, [page, search, recordStatus, transactionType, dateFrom, dateTo]);
+  const endpoint = `/api/enterprise/${organizationId}/retail/mobile-money`;
+  const collection = useProfessionalCollection<MobileMoneyOperation, MonetaryScopes>({ endpoint, params, refreshKey });
+  const ready = !collection.loading && !collection.error;
+  const fxItems = (dashboard.recent.mobileMoney || []).filter(item => item.transactionType.startsWith("FX_CONVERSION_"));
+  const filters = { search: search.trim(), status: recordStatus, transactionType, dateFrom, dateTo };
+  const reportFilters = [
+    { label: label("mobileMoneyHistorySearchLabel"), value: search.trim() },
+    { label: label("mobileMoneyHistoryStatus"), value: recordStatus ? customerFacingStatusLabel(recordStatus, locale) : "" },
+    { label: label("mobileMoneyHistoryType"), value: transactionType ? customerFacingMobileMoneyTransactionType(transactionType, locale) : "" },
+    { label: label("mobileMoneyHistoryDateFrom"), value: dateFrom },
+    { label: label("mobileMoneyHistoryDateTo"), value: dateTo },
+  ].filter(filter => filter.value);
+  const columns: FinanceExportColumn[] = [
+    { key: "number", labelFr: translateRetailWorkspace("fr", "mobileMoneyHistoryReference"), labelEn: translateRetailWorkspace("en", "mobileMoneyHistoryReference"), get: row => String(row.number ?? "") },
+    { key: "provider", labelFr: translateRetailWorkspace("fr", "mobileMoneyHistoryProvider"), labelEn: translateRetailWorkspace("en", "mobileMoneyHistoryProvider"), get: row => providerLabel(dashboard, String(row.providerCode ?? "")) },
+    { key: "type", labelFr: translateRetailWorkspace("fr", "mobileMoneyHistoryType"), labelEn: translateRetailWorkspace("en", "mobileMoneyHistoryType"), get: row => customerFacingMobileMoneyTransactionType(String(row.transactionType ?? ""), locale) },
+    { key: "status", labelFr: translateRetailWorkspace("fr", "mobileMoneyHistoryStatus"), labelEn: translateRetailWorkspace("en", "mobileMoneyHistoryStatus"), get: row => customerFacingStatusLabel(String(row.status ?? ""), locale) },
+    { key: "phone", labelFr: translateRetailWorkspace("fr", "mobileMoneyHistoryMaskedPhone"), labelEn: translateRetailWorkspace("en", "mobileMoneyHistoryMaskedPhone"), get: row => String(row.customerPhoneMasked ?? "") },
+    { key: "principal", labelFr: translateRetailWorkspace("fr", "mobileMoneyHistoryPrincipal"), labelEn: translateRetailWorkspace("en", "mobileMoneyHistoryPrincipal"), get: row => exactDecimalExportValue(String(row.principalAmount ?? "")) },
+    { key: "fee", labelFr: COPY.fr.fee, labelEn: COPY.en.fee, get: row => exactDecimalExportValue(String(row.customerFeeAmount ?? "")) },
+    { key: "commission", labelFr: COPY.fr.commission, labelEn: COPY.en.commission, get: row => exactDecimalExportValue(String(row.providerCommissionAmount ?? "")) },
+    { key: "cashEffect", labelFr: translateRetailWorkspace("fr", "mobileMoneyHistoryCashEffect"), labelEn: translateRetailWorkspace("en", "mobileMoneyHistoryCashEffect"), get: row => exactDecimalExportValue(String(row.cashEffectAmount ?? "")) },
+    { key: "floatEffect", labelFr: translateRetailWorkspace("fr", "mobileMoneyHistoryFloatEffect"), labelEn: translateRetailWorkspace("en", "mobileMoneyHistoryFloatEffect"), get: row => exactDecimalExportValue(String(row.floatEffectAmount ?? "")) },
+    { key: "currency", labelFr: translateRetailWorkspace("fr", "mobileMoneyHistoryCurrency"), labelEn: translateRetailWorkspace("en", "mobileMoneyHistoryCurrency"), get: row => String(row.currencyCode ?? "") },
+    { key: "reference", labelFr: COPY.fr.operatorReference, labelEn: COPY.en.operatorReference, get: row => String(row.externalReference ?? "") },
+    { key: "date", labelFr: translateRetailWorkspace("fr", "mobileMoneyHistoryDate"), labelEn: translateRetailWorkspace("en", "mobileMoneyHistoryDate"), get: row => String(row.occurredAt ?? "") },
+  ];
   const [reverseTarget, setReverseTarget] = useState<{ id: string; revision: number; number: string } | null>(null);
   const [reverseReason, setReverseReason] = useState("");
   const [reverseError, setReverseError] = useState("");
@@ -1081,12 +1161,7 @@ function MobileMoneyHistory({
     if (result) closeReverseDialog();
   }
 
-  return (
-    <div className="grid min-w-0 gap-5">
-      <ModuleSection title={copy.history}>
-        {items.length ? (
-          <BusinessList ariaLabel={copy.history}>
-            {items.map((item) => {
+  function renderItem(item: MobileMoneyOperation) {
               const isFxConversion = item.transactionType.startsWith("FX_CONVERSION_");
               const isFxAccountingPending = item.transactionType.startsWith("FX_CONVERSION_PENDING:");
               const accountingAction = `fx-accounting-${item.id}`;
@@ -1095,7 +1170,7 @@ function MobileMoneyHistory({
                   key={item.id}
                   title={`${item.number} · ${providerLabel(dashboard, item.providerCode)}`}
                   status={<StatusBadge tone={statusTone(item.status)}>{customerFacingStatusLabel(item.status, locale)}</StatusBadge>}
-                  meta={`${customerFacingMobileMoneyTransactionType(item.transactionType, locale)} · ${moneyValue(item.principalAmount, item.currencyCode, locale)} · ${formatEnterpriseDate(item.occurredAt, locale)}`}
+                  meta={`${customerFacingMobileMoneyTransactionType(item.transactionType, locale)} · ${formatAnalyticsAmount({ amount: String(item.principalAmount), currencyCode: item.currencyCode }, locale)} · ${formatEnterpriseDate(item.occurredAt, locale)}`}
                   description={isFxConversion
                     ? `${item.customerPhoneMasked || "—"} · ${item.externalReference || "—"}`
                     : `${item.customerPhoneMasked || "—"} · ${copy.operatorReference}: ${item.externalReference || "—"}`}
@@ -1114,7 +1189,7 @@ function MobileMoneyHistory({
                     >
                       <RefreshCw className="h-4 w-4" />{busyAction === accountingAction ? copy.processing : copy.accountingRetry}
                     </Button>
-                  ) : dashboard.access.canManage && item.status === "CONFIRMED" ? (
+                  ) : dashboard.access.canManage && !isFxConversion && item.status === "CONFIRMED" ? (
                     <Button
                       size="sm"
                       variant="outline"
@@ -1130,9 +1205,39 @@ function MobileMoneyHistory({
                   ) : undefined}
                 />
               );
-            })}
-          </BusinessList>
-        ) : <EmptyState compact title={copy.noTransaction} description={copy.noTransactionDescription} />}
+  }
+
+  return (
+    <div className="grid min-w-0 gap-5">
+      <section data-mobile-money-history-design2 className="grid min-w-0 max-w-full grid-cols-[minmax(0,1fr)] gap-3 rounded-2xl border border-dtsc-border bg-dtsc-surface p-3 sm:p-4">
+        <h2 className="text-lg font-black text-dtsc-ink">{label("mobileMoneyHistoryOperations")}{ready ? <span className="ml-2 text-xs text-dtsc-muted">{collection.pagination.total}</span> : null}</h2>
+        <ProfessionalSearch value={search} onChange={value => { setSearch(value); setPage(1); }} placeholder={label("mobileMoneyHistorySearch")} />
+        <Field label={label("mobileMoneyHistoryType")}>
+          <MobileMoneySelect value={transactionType} onChange={event => { setTransactionType(event.target.value); setPage(1); }}>
+            <option value="">{label("mobileMoneyHistoryAllTypes")}</option>
+            {["DEPOSIT", "WITHDRAWAL"].map(type => <option key={type} value={type}>{customerFacingMobileMoneyTransactionType(type, locale)}</option>)}
+          </MobileMoneySelect>
+        </Field>
+        <CommercialDesign2Controls locale={locale} organizationName={organizationName} title={label("mobileMoneyHistoryOperations")}
+          endpoint={endpoint} filters={filters} reportFilters={reportFilters} columns={columns}
+          from={dateFrom} to={dateTo} onDateChange={(from, to) => { setDateFrom(from); setDateTo(to); setPage(1); }}
+          status={recordStatus} onStatusChange={next => { setRecordStatus(next); setPage(1); }}
+          choices={[{ id: "", label: label("mobileMoneyHistoryAllStatuses") }, ...["CONFIRMED", "REVERSED"].map(id => ({ id, label: customerFacingStatusLabel(id, locale) }))]}
+          disabledExport={!ready} noteFr={translateRetailWorkspace("fr", "mobileMoneyHistoryNote")} noteEn={translateRetailWorkspace("en", "mobileMoneyHistoryNote")} />
+        {ready ? <FinanceAmountScopes totals={collection.extra} locale={locale} /> : null}
+        {collection.error ? <ProfessionalError message={collection.error} /> : collection.loading ? <ProfessionalLoading /> : collection.items.length ? (
+          <BusinessList ariaLabel={label("mobileMoneyHistoryOperations")}>{collection.items.map(renderItem)}</BusinessList>
+        ) : <EmptyState compact title={copy.noTransaction} description={label("mobileMoneyHistoryNoOperations")} />}
+        <div className="flex min-w-0 flex-wrap items-center justify-between gap-2" data-responsive-actions>
+          <Button type="button" variant="outline" disabled={!ready || page <= 1} onClick={() => setPage(value => Math.max(1, value - 1))}>{label("mobileMoneyHistoryPrevious")}</Button>
+          <span className="text-xs font-semibold text-dtsc-muted">{label("mobileMoneyHistoryPage")} {collection.pagination.page} / {collection.pagination.pageCount}</span>
+          <Button type="button" variant="outline" disabled={!ready || page >= collection.pagination.pageCount} onClick={() => setPage(value => value + 1)}>{label("mobileMoneyHistoryNext")}</Button>
+        </div>
+      </section>
+      <ModuleSection title={label("mobileMoneyHistoryRecentFx")}>
+        <p className="text-sm text-dtsc-muted">{label("mobileMoneyHistoryRecentFxNote")}</p>
+        {fxItems.length ? <BusinessList ariaLabel={label("mobileMoneyHistoryRecentFx")}>{fxItems.map(renderItem)}</BusinessList>
+          : <EmptyState compact title={label("mobileMoneyHistoryNoFx")} />}
       </ModuleSection>
       <RetailErpLinks moduleCode="MOBILE_MONEY_AGENCY" locale={locale} />
 

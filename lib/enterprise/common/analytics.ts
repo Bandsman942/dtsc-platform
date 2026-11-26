@@ -1,7 +1,7 @@
 import { Prisma } from "@prisma/client";
 
-export type MonetaryMetric = "debit" | "credit" | "original" | "outstanding" | "inbound" | "outbound" | "invoiceTotal" | "paid" | "credited" | "creditTotal" | "tax" | "subtotal" | "discount" | "total" | "payrollGross" | "payrollBonuses" | "payrollDeductions" | "payrollNet" | "projectIndicativeBudget" | "cashClosingShortage" | "cashClosingSurplus" | "telcoSale" | "telcoCost" | "telcoMargin";
-export type MonetaryTotal = { currencyCode: string; metric: MonetaryMetric; amount: string; status?: string };
+export type MonetaryMetric = "debit" | "credit" | "original" | "outstanding" | "inbound" | "outbound" | "invoiceTotal" | "paid" | "credited" | "creditTotal" | "tax" | "subtotal" | "discount" | "total" | "payrollGross" | "payrollBonuses" | "payrollDeductions" | "payrollNet" | "projectIndicativeBudget" | "cashClosingShortage" | "cashClosingSurplus" | "telcoSale" | "telcoCost" | "telcoMargin" | "mobileMoneyPrincipal" | "mobileMoneyFee" | "mobileMoneyCommission" | "mobileMoneyCashEffect" | "mobileMoneyFloatEffect";
+export type MonetaryTotal = { currencyCode: string; metric: MonetaryMetric; amount: string; status?: string; operationType?: string };
 export type MonetaryScopes = { filteredTotals: MonetaryTotal[]; generalTotals: MonetaryTotal[]; pageTotals: MonetaryTotal[] };
 
 type CommercialAmounts = { subtotalAmount?: Prisma.Decimal | null; discountAmount?: Prisma.Decimal | null; taxAmount?: Prisma.Decimal | null; totalAmount?: Prisma.Decimal | null };

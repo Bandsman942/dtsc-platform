@@ -396,6 +396,17 @@ async function verifyCashAnalytics(tenant, otherTenant, actor) {
     assert.equal(firstMobile.operationTotals.filtered.find(row => row.transactionType === "WITHDRAWAL").cashEffectAmount, "-2");
     assert.equal(firstMobile.operationTotals.filtered.find(row => row.currencyCode === "USD").principalAmount, amount);
     assert.equal(firstMobile.operationTotals.general.find(row => row.status === "REVERSED").principalAmount, "1");
+    assert.deepEqual(lastMobile.filteredTotals, firstMobile.filteredTotals);
+    assert.deepEqual(emptyMobile.generalTotals, firstMobile.generalTotals);
+    assert.deepEqual(emptyMobile.pageTotals, []);
+    assert.equal(firstMobile.filteredTotals.find(row => row.operationType === "DEPOSIT" && row.metric === "mobileMoneyPrincipal" && row.currencyCode === "CDF").amount, deposits.principalAmount);
+    assert.equal(firstMobile.filteredTotals.find(row => row.operationType === "WITHDRAWAL" && row.metric === "mobileMoneyCashEffect").amount, "-2");
+    const withdrawals = await (await history(mobileQuery + "&transactionType=WITHDRAWAL")).json();
+    assert.equal(withdrawals.pagination.total, 1);
+    assert.equal(withdrawals.filteredTotals.length, 5);
+    assert.ok(withdrawals.filteredTotals.every(row => row.operationType === "WITHDRAWAL"));
+    assert.deepEqual(withdrawals.generalTotals, firstMobile.generalTotals);
+    assert.equal((await history(mobileQuery + "&transactionType=INVALID")).status, 400);
     assert.equal((await history(mobileQuery, otherTenant)).status, 403);
     throw new RollbackFixture();
   }, { isolationLevel: "RepeatableRead", timeout: 10000 }), RollbackFixture);

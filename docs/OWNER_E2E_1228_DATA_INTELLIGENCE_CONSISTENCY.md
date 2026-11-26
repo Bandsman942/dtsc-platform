@@ -40,3 +40,7 @@ La recette concerne la PR #1229 et la version candidate 1.24.5. Exécuter les sc
 Tester les largeurs 320, 360, 375, 390, 414, 768, 1024 et 1440 px, les interfaces FR/EN et les thèmes clair/sombre. Vérifier le clavier, le focus visible, les messages et la lecture des nombres longs. Sur mobile, le rail d’indicateurs doit atteindre le dernier indicateur avec la flèche droite ou Fin et revenir au premier avec la flèche gauche ou Début.
 
 Consigner le commit testé, l’organisation et le rôle utilisés, ainsi que les résultats. Confirmer **E2E FINAL #1229 BON** après réussite de la recette sur le commit proposé.
+
+### Mobile Money — registre des dépôts et retraits
+
+Sur 58 opérations admissibles, deux devises et deux boutiques, filtrer par type, statut, dates et référence. Comparer les cinq montants exacts par devise/type/statut et les trois périmètres de total ; changer de page et exporter CSV, XLSX et PDF. Vérifier le téléphone masqué, les montants négatifs, la séparation des conversions FX (aperçu distinct) et la lecture interdite pour une autre organisation ou une boutique non autorisée. Le registre FX complet et le solde à date ne sont pas validés par ce scénario.

@@ -9,6 +9,7 @@ import { professionalErpEnumLabel } from "@/components/enterprise/professional/p
 import { Input } from "@/components/ui/input";
 import { notifyToast } from "@/lib/client-toast";
 import { customerFacingStatusLabel } from "@/lib/customer-facing-language";
+import { customerFacingMobileMoneyTransactionType } from "@/lib/retail-customer-language";
 import { downloadProfessionalCsv, downloadProfessionalPdf, downloadProfessionalXlsx, type ProfessionalReportExportModel } from "@/lib/reporting/professional-export";
 
 import type { InventoryQuantityTotal } from "@/lib/enterprise/inventory/availability-analytics";
@@ -96,14 +97,19 @@ const filteredMetricLabels = {
   telcoSale: { fr: "Montants de vente Télécom", en: "Telco sale amounts" },
   telcoCost: { fr: "Coûts opérateur Télécom", en: "Telco operator costs" },
   telcoMargin: { fr: "Marges Télécom", en: "Telco margins" },
+  mobileMoneyPrincipal: { fr: "Principal Mobile Money", en: "Mobile Money principal" },
+  mobileMoneyFee: { fr: "Frais clients", en: "Customer fees" },
+  mobileMoneyCommission: { fr: "Commissions opérateur", en: "Provider commissions" },
+  mobileMoneyCashEffect: { fr: "Effet caisse enregistré", en: "Recorded cash effect" },
+  mobileMoneyFloatEffect: { fr: "Effet float enregistré", en: "Recorded float effect" },
 } as const;
 function filteredMetricLabel(row: FinanceFilteredTotal, locale: Locale) {
   const status = row.status
     ? (row.metric === "projectIndicativeBudget" ? professionalErpEnumLabel(locale, "projectStatus", row.status)
       : row.metric.startsWith("payroll") ? professionalErpEnumLabel(locale, "payrollStatus", row.status)
-        : row.metric.startsWith("telco") ? customerFacingStatusLabel(row.status, locale) : financeStatusLabel(row.status, locale))
+        : (row.metric.startsWith("telco") || row.metric.startsWith("mobileMoney")) ? customerFacingStatusLabel(row.status, locale) : financeStatusLabel(row.status, locale))
     : "";
-  return [filteredMetricLabels[row.metric][locale], status, row.currencyCode].filter(Boolean).join(" · ");
+  return [filteredMetricLabels[row.metric][locale], row.operationType ? customerFacingMobileMoneyTransactionType(row.operationType, locale) : "", status, row.currencyCode].filter(Boolean).join(" · ");
 }
 
 export function formatAnalyticsAmount(row: Pick<FinanceFilteredTotal, "amount" | "currencyCode">, locale: Locale) {
@@ -129,7 +135,7 @@ export function FinanceFilteredTotals({ rows, locale, scope = "filtered" }: { ro
   const label = scope === "general" ? (locale === "fr" ? "Totaux généraux autorisés (sans filtres)" : "Authorized general totals (without filters)")
     : scope === "page" ? (locale === "fr" ? "Sous-totaux de la page affichée" : "Displayed page subtotals")
     : locale === "fr" ? "Sous-totaux filtrés (toutes pages)" : "Filtered subtotals (all pages)";
-  return <div className="min-w-0"><p className="text-xs font-semibold text-dtsc-muted">{label}</p><ModuleMetrics label={label}>{rows.map(row => <ModuleMetric key={[row.metric,row.status,row.currencyCode].join(":")} label={filteredMetricLabel(row, locale)} value={formatAnalyticsAmount(row, locale)} />)}</ModuleMetrics></div>;
+  return <div className="min-w-0"><p className="text-xs font-semibold text-dtsc-muted">{label}</p><ModuleMetrics label={label}>{rows.map(row => <ModuleMetric key={[row.metric,row.operationType,row.status,row.currencyCode].join(":")} label={filteredMetricLabel(row, locale)} value={formatAnalyticsAmount(row, locale)} />)}</ModuleMetrics></div>;
 }
 
 /** Keep all three scopes explicit; currencies and document statuses never mix. */
@@ -181,8 +187,8 @@ export function FinanceExportControls({ endpoint, organizationName, title, local
       if (total > 1000 || pages > 200) throw new Error(tr(`Le résultat contient ${total} lignes. Affinez les dates ou la recherche (limite de 1 000 lignes par export).`, `There are ${total} rows. Narrow the date or search filters (1,000 rows per export).`));
       const all = [...body.items];
       const summarySignature = (value: AnalyticalExportTotals) => JSON.stringify([
-        ...(value.filteredTotals || []).map(row=>JSON.stringify(["filtered",row.metric,row.currencyCode,row.status||"",row.amount])),
-        ...(value.generalTotals || []).map(row=>JSON.stringify(["general",row.metric,row.currencyCode,row.status||"",row.amount])),
+        ...(value.filteredTotals || []).map(row=>JSON.stringify(["filtered",row.metric,row.currencyCode,row.status||"",row.operationType||"",row.amount])),
+        ...(value.generalTotals || []).map(row=>JSON.stringify(["general",row.metric,row.currencyCode,row.status||"",row.operationType||"",row.amount])),
         ...(value.physicalTotals || []).map(row=>JSON.stringify(["physical",row.unitId,row.unit,row.value,row.precisionMismatch])),
         ...(["quantityTotals","generalQuantityTotals"] as const).flatMap(scope=>(value[scope]||[]).map(row=>JSON.stringify([scope,row.metric,row.unitId,row.unit,row.decimalScale,row.value,row.precisionMismatch]))),
       ].sort());
