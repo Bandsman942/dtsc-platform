@@ -231,6 +231,46 @@ const { GET: getMobileMoneyHistory } = workflowTestLoader({
   "@/lib/enterprise/retail/service": {},
 })("@/app/api/enterprise/[organizationId]/retail/mobile-money/route");
 
+const { GET: getMobileMoneyFxHistory } = workflowTestLoader({
+  "@/lib/prisma": { prisma: { $transaction: async (callback, options) => {
+    assert.equal(options.isolationLevel, "RepeatableRead");
+    return callback(cashFixture.reader);
+  } } },
+  "@/lib/enterprise/retail/http": {
+    authorizeRetailRequest: async (_req, organizationId, feature, action) => {
+      assert.equal(feature, "MOBILE_MONEY_AGENCY");
+      assert.equal(action, "read");
+      return organizationId === cashFixture.organizationId
+        ? { ok: true, session: { userId: cashFixture.actor } }
+        : { ok: false, response: new Response(null, { status: 403 }) };
+    },
+    retailListParams(req) {
+      const params = new URL(req.url).searchParams;
+      return { page: Number(params.get("page") || 1), pageSize: 25,
+        search: params.get("search") || "", status: params.get("status"), providerCode: params.get("providerCode") };
+    },
+    retailErrorResponse: error => { throw error; },
+  },
+  "@/lib/enterprise/accounting/http": { financeBusinessDateRange(req) {
+    const params = new URL(req.url).searchParams;
+    return { ok: true, from: params.get("dateFrom") ? new Date(params.get("dateFrom")) : null, to: null };
+  } },
+  "@/lib/enterprise/retail/site-access": { retailFinanceReadSiteScope: async (organizationId, actor, action, tx) => {
+    assert.equal(action, "VIEW_SALES");
+    assert.equal(organizationId, cashFixture.organizationId);
+    assert.equal(actor, cashFixture.actor);
+    assert.equal(tx, cashFixture.reader);
+    return [cashFixture.siteId];
+  } },
+  "@/lib/audit": { writeApiLog: async () => {} },
+  "@/lib/enterprise/retail/commercial-guardrails": {},
+  "@/lib/enterprise/retail/operator-orchestration": {},
+  "@/lib/enterprise/retail/schemas": {},
+  "@/lib/enterprise/retail/service": {},
+  "@/lib/enterprise/retail/mobile-money-multicurrency-service": {},
+  "@/lib/enterprise/retail/mobile-money-multicurrency-schemas": {},
+})("@/app/api/enterprise/[organizationId]/retail/mobile-money/fx/route");
+
 async function verifyCashAnalytics(tenant, otherTenant, actor) {
   await assert.rejects(db.$transaction(async tx => {
     const siteA = `${tenant}-cash-shop-a`;
@@ -408,11 +448,75 @@ async function verifyCashAnalytics(tenant, otherTenant, actor) {
     assert.deepEqual(withdrawals.generalTotals, firstMobile.generalTotals);
     assert.equal((await history(mobileQuery + "&transactionType=INVALID")).status, 400);
     assert.equal((await history(mobileQuery, otherTenant)).status, 403);
+    const wallet = async (code, currencyCode, siteId) => {
+      const row = await account(tenant, code, currencyCode);
+      return tx.enterpriseFinancialAccount.update({ where: { id: row.id }, data: { accountType: "MOBILE_MONEY", siteId } });
+    };
+    const fxCdf = await wallet("QA-FX-CDF", "CDF", siteA);
+    const fxUsd = await wallet("QA-FX-USD", "USD", siteA);
+    const fxOther = await wallet("QA-FX-OTHER", "USD", siteB);
+    const fxShared = await wallet("QA-FX-SHARED", "USD", null);
+    const fxBase = {
+      organizationId: tenant, providerId: "QA-PROVIDER", providerCode: "QA-PROVIDER",
+      sourceProviderAccountId: "QA-SOURCE", targetProviderAccountId: "QA-TARGET",
+      sourceFloatAccountId: fxCdf.id, targetFloatAccountId: fxUsd.id,
+      sourceCurrencyCode: "CDF", targetCurrencyCode: "USD", sourceAmount: amount, targetAmount: "0.000001",
+      exchangeRate: "0.000000000001", exchangeRateDate: new Date("2026-11-05"), exchangeRateSource: "QA",
+      occurredAt: new Date("2026-11-05"), status: "CONFIRMED", agentUserId: actor,
+    };
+    const fxRecords = [
+      ...Array.from({ length: 56 }, (_, index) => ({ ...fxBase, id: tenant + "-fx-" + index, number: "FX-TARGET-" + index })),
+      { ...fxBase, number: "FX-TARGET-REVERSED", status: "REVERSED", sourceAmount: "1", targetAmount: "1" },
+      { ...fxBase, number: "FX-TARGET-OTHER-SHOP", targetFloatAccountId: fxOther.id },
+      { ...fxBase, number: "FX-TARGET-OTHER-SOURCE", sourceFloatAccountId: fxOther.id },
+      { ...fxBase, number: "FX-TARGET-SHARED", targetFloatAccountId: fxShared.id },
+      { ...fxBase, number: "FX-TARGET-FOREIGN", organizationId: otherTenant },
+      { ...fxBase, number: "FX-TARGET-AUGUST", occurredAt: new Date("2026-08-01"), sourceAmount: "1" },
+      { ...fxBase, number: "FX-TARGET-REVERSE-PAIR", sourceFloatAccountId: fxUsd.id, targetFloatAccountId: fxCdf.id,
+        sourceCurrencyCode: "USD", targetCurrencyCode: "CDF", sourceAmount: "2", targetAmount: "4000", exchangeRate: "2000" },
+    ];
+    await tx.enterpriseMobileMoneyFxTransfer.createMany({ data: fxRecords.map(row => ({ ...row, idempotencyKey: row.number })) });
+    await tx.enterprisePostingBatch.createMany({ data: [
+      { organizationId: tenant, reference: "QA-FX-1", postingEvent: "RETAIL_MOBILE_MONEY_FX_POSTED", sourceEntityType: "EnterpriseMobileMoneyFxTransfer",
+        sourceEntityId: tenant + "-fx-0", postingVersion: 1, idempotencyKey: "QA-FX-POST-1", status: "FAILED", errorCode: "POSTING_FAILED", createdByUserId: actor },
+      { organizationId: tenant, reference: "QA-FX-2", postingEvent: "RETAIL_MOBILE_MONEY_FX_POSTED", sourceEntityType: "EnterpriseMobileMoneyFxTransfer",
+        sourceEntityId: tenant + "-fx-0", postingVersion: 2, idempotencyKey: "QA-FX-POST-2", status: "COMPLETED", createdByUserId: actor },
+    ] });
+    const fxQuery = "view=history&search=FX-TARGET&status=CONFIRMED&dateFrom=2026-11-01";
+    const fxRead = (query, organizationId = tenant) => getMobileMoneyFxHistory(
+      new Request("http://localhost/api/enterprise/" + organizationId + "/retail/mobile-money/fx?" + query),
+      { params: Promise.resolve({ organizationId }) },
+    );
+    const fxResponse = await fxRead(fxQuery);
+    assert.equal(fxResponse.status, 200);
+    assert.equal(fxResponse.headers.get("cache-control"), "private, no-store");
+    const firstFx = await fxResponse.json();
+    const secondFx = await (await fxRead(fxQuery + "&page=2")).json();
+    const thirdFx = await (await fxRead(fxQuery + "&page=3")).json();
+    const emptyFx = await (await fxRead(fxQuery + "&page=4")).json();
+    assert.deepEqual(firstFx.pagination, { page: 1, pageSize: 25, total: 57, pageCount: 3 });
+    assert.equal(thirdFx.items.length, 7);
+    assert.deepEqual(emptyFx.fxTotals.page, []);
+    assert.deepEqual(thirdFx.fxTotals.filtered, firstFx.fxTotals.filtered);
+    assert.deepEqual(emptyFx.fxTotals.general, firstFx.fxTotals.general);
+    const directPair = firstFx.fxTotals.filtered.find(row => row.sourceCurrencyCode === "CDF");
+    assert.equal(directPair.sourceAmount, "5599999999999999.999944");
+    assert.equal(directPair.targetAmount, "0.000056");
+    assert.equal(firstFx.fxTotals.filtered.find(row => row.sourceCurrencyCode === "USD").targetAmount, "4000");
+    assert.equal(firstFx.fxTotals.general.find(row => row.status === "REVERSED").sourceAmount, "1");
+    const fxItems = [...firstFx.items, ...secondFx.items, ...thirdFx.items];
+    assert.equal(fxItems.find(row => row.id === tenant + "-fx-0").accountingStatus, "POSTED");
+    assert.equal(fxItems.find(row => row.id === tenant + "-fx-1").accountingStatus, "PENDING");
+    assert.equal(fxItems.find(row => row.id === tenant + "-fx-1").exchangeRate, "0.000000000001");
+    assert.equal((await fxRead(fxQuery, otherTenant)).status, 403);
+    assert.equal((await fxRead("view=history&status=INVALID")).status, 400);
     throw new RollbackFixture();
   }, { isolationLevel: "RepeatableRead", timeout: 10000 }), RollbackFixture);
   assert.equal(await db.enterpriseCashSession.count({ where: { organizationId: { in: [tenant, otherTenant] } } }), 0);
   console.log("PASS #1228 PostgreSQL cash sessions: exact 56-session totals, page/authorized scopes, signed closing variances and store isolation");
   assert.equal(await db.enterpriseMobileMoneyTransaction.count({ where: { organizationId: { in: [tenant, otherTenant] } } }), 0);
+  assert.equal(await db.enterpriseMobileMoneyFxTransfer.count({ where: { organizationId: { in: [tenant, otherTenant] } } }), 0);
+  console.log("PASS #1228 PostgreSQL FX history: 57 filtered transfers, exact directional currency pairs, both wallet scopes, posting version and rollback");
   console.log("PASS #1228 PostgreSQL Mobile Money history: exact multi-page totals, operation types, status, currency, cash shop and masked phone");
   console.log("PASS #1228 PostgreSQL Telco history: exact 57-record sales, costs and margins, mixed currencies and statuses, phone masking and store isolation");
 }

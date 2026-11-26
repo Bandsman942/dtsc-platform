@@ -1,7 +1,11 @@
+import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
+import { financeBusinessDateRange } from "@/lib/enterprise/accounting/http";
+import { readMobileMoneyFxHistory } from "@/lib/enterprise/retail/mobile-money-fx-history";
+import { prisma } from "@/lib/prisma";
 import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
-import { authorizeRetailRequest, retailErrorResponse } from "@/lib/enterprise/retail/http";
+import { authorizeRetailRequest, retailErrorResponse, retailListParams } from "@/lib/enterprise/retail/http";
 import { mobileMoneyFxPreviewSchema, mobileMoneyFxTransferSchema } from "@/lib/enterprise/retail/mobile-money-multicurrency-schemas";
 import { createMobileMoneyFxTransferWithPosting, previewMobileMoneyFxTransfer } from "@/lib/enterprise/retail/mobile-money-multicurrency-service";
 import { retailSuccessOutcome } from "@/lib/enterprise/retail/mutation-outcome";
@@ -14,6 +18,25 @@ export async function GET(req: Request, { params }: Params) {
   const auth = await authorizeRetailRequest(req, organizationId, "MOBILE_MONEY_AGENCY", "read");
   if (!auth.ok) return auth.response;
   const url = new URL(req.url);
+  if (url.searchParams.get("view") === "history") {
+    const { page, pageSize, search, status, providerCode, from, to } = retailListParams(req);
+    const dates = financeBusinessDateRange(req);
+    if (!dates.ok) return dates.response;
+    if (!Number.isSafeInteger(page) || !Number.isSafeInteger(pageSize) || !Number.isSafeInteger((page - 1) * pageSize) || search.length > 120 ||
+        (status && !["CONFIRMED", "REVERSED"].includes(status))) {
+      return NextResponse.json({ error: "MOBILE_MONEY_FX_HISTORY_FILTER_INVALID", message: "Vérifiez les filtres et la pagination des conversions." }, { status: 400 });
+    }
+    try {
+      const result = await prisma.$transaction(tx => readMobileMoneyFxHistory(tx, {
+        organizationId, userId: auth.session.userId, page, pageSize, search, status, providerCode,
+        from: dates.from || from, to: dates.to || to,
+      }), { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
+      await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "mobile-money-fx", action: "history", page } });
+      return NextResponse.json(result, { headers: { "Cache-Control": "private, no-store" } });
+    } catch (error) {
+      return retailErrorResponse(error, "MOBILE_MONEY_FX_HISTORY_FAILED");
+    }
+  }
   const parsed = mobileMoneyFxPreviewSchema.safeParse({
     providerCode: url.searchParams.get("providerCode"),
     sourceCurrencyCode: url.searchParams.get("sourceCurrencyCode"),
