@@ -81,7 +81,16 @@ assert.equal(returned[0].quantity.toFixed(),"999999999999999.999998");
 const snapshot = { quantity: new Decimal("0.000001"), fulfilledQuantity: new Decimal(0), lotAllocations: [{ balanceId: "balance-A", stockLotId: "batch-A", storageLocationId: null, quantity: "0.000001", fulfilledQuantity: "0" }] };
 assert.equal(readReservationLotAllocations(snapshot)[0].quantity, "0.000001");
 assert.throws(() => readReservationLotAllocations({ ...snapshot, lotAllocations: [{ ...snapshot.lotAllocations[0], quantity: "0.0000001" }] }));
-const { stockMovementCreateSchema } = load("lib/enterprise/inventory/schemas.ts");
+const { stockMovementCreateSchema, stockTransferLineSchema } = load("lib/enterprise/inventory/schemas.ts");
+const transferLine = { inventoryItemId: "transfer-item", quantity: "0.125" };
+assert.equal(stockTransferLineSchema.safeParse(transferLine).success, true);
+assert.equal(stockTransferLineSchema.safeParse({ ...transferLine, quantity: 4 }).success, true);
+assert.equal(stockTransferLineSchema.safeParse({ ...transferLine, sourceUnitId: "box", expectedConversionVersion: 1 }).success, true);
+assert.equal(stockTransferLineSchema.safeParse({ ...transferLine, sourceUnitId: "box" }).success, false);
+assert.equal(stockTransferLineSchema.safeParse({ ...transferLine, expectedConversionVersion: 1 }).success, false);
+for (const invalidQuantity of ["abc", "", "0", "0.0000001", "1000000001"]) {
+  assert.equal(stockTransferLineSchema.safeParse({ ...transferLine, quantity: invalidQuantity }).success, false);
+}
 const { receiptLotAllocationsSchema } = load("lib/enterprise/procurement/receipt-lot-schema.ts");
 const move = { inventoryItemId: "item", warehouseId: "warehouse", movementType: "PURCHASE_RECEIPT", direction: "IN", quantity: 0.000001, idempotencyKey: "precision-test" };
 assert.equal(stockMovementCreateSchema.safeParse(move).success, true);

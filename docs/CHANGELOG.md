@@ -1,5 +1,8 @@
 ## 2026-11-25 — HOTFIX #1228 — Data Intelligence & Consistency 2.0 (v1.24.5 candidate DRAFT)
 
+- SYSCOHADA. Empreinte de l’édition signée et aperçu du candidat marchandises dans la mise en service comptable. La comparaison indique les conflits de codes et l’historique comptabilisé ou contrepassé de l’entreprise.
+- Stock. Les transferts peuvent utiliser une conversion catalogue versionnée. La quantité saisie et la quantité de stock restent accessibles depuis la demande jusqu’à la réception.
+- Comptabilité. Les lignes du grand livre, de la balance et du détail conservent les fractions de la devise fonctionnelle à l’écran.
 - Caisse. Compteurs toutes pages, flux exacts par devise et écarts des clôtures validées. Scopes général autorisé, filtres actifs et page, avec colonnes d’export concordantes.
 - Grand livre. Recherche des désignations et codes du catalogue pour les libellés stock historiques reconnus. Les totaux exacts de débit et de crédit suivent la recherche toutes pages et la devise fonctionnelle. Les écritures conservent leur libellé enregistré.
 - Télécom. Le registre et les exports utilisent les mêmes ventes, coûts opérateur et marges, groupés par devise et statut dans le périmètre boutique autorisé. Les lignes conservent la précision décimale et masquent les téléphones.

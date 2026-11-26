@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
+import { assertTransferUnitsStillMatch, resolveTransferUnitConversionTx } from "@/lib/enterprise/inventory/transfer-unit-conversion";
 import type { z } from "zod";
 import { EnterpriseDomainConflictError, EnterpriseDomainError } from "@/lib/enterprise/common/errors";
 import { publishEnterpriseEvent } from "@/lib/enterprise/crm-sales/helpers";
@@ -240,15 +241,26 @@ export async function createEnterpriseStockTransfer(organizationId: string, acto
     if (!source || !destination) throw new EnterpriseDomainError("WAREHOUSE_NOT_FOUND", 404);
     if (!approver) throw new EnterpriseDomainError("APPROVER_NOT_MEMBER", 404);
     await requireTransferSiteAuthority(tx, organizationId, actorUserId, source.siteId);
-    for (const line of input.lines) {
+    const lines = [];
+    for (const { sourceUnitId, expectedConversionVersion, ...line } of input.lines) {
       const coordinates = await assertInventoryCoordinates(tx, organizationId, { inventoryItemId: line.inventoryItemId, warehouseId: input.sourceWarehouseId, storageLocationId: line.sourceLocationId, stockLotId: line.stockLotId });
-      requireInventoryQuantity(line.quantity, coordinates.inventoryItem.catalogItem.unitOfMeasure.decimalScale, { positive: true });
+      if (Boolean(sourceUnitId) !== Boolean(expectedConversionVersion)) throw new EnterpriseDomainError("CATALOG_CONVERSION_REVISION_CONFLICT", 409);
+      const conversion = sourceUnitId && expectedConversionVersion ? await resolveTransferUnitConversionTx(tx, {
+        organizationId,
+        catalogItemId: coordinates.inventoryItem.catalogItem.id,
+        sourceUnitId,
+        quantity: line.quantity,
+        expectedVersion: expectedConversionVersion,
+      }) : null;
+      const stockQuantity = requireInventoryQuantity(conversion?.stockQuantity ?? line.quantity, coordinates.inventoryItem.catalogItem.unitOfMeasure.decimalScale, { positive: true });
+      if (stockQuantity.gt(1_000_000_000)) throw new EnterpriseDomainError("INVENTORY_PHYSICAL_QUANTITY_PRECISION", 400);
       if (line.destinationLocationId) {
         const destinationLocation = await tx.enterpriseStorageLocation.findFirst({ where: { id: line.destinationLocationId, organizationId, warehouseId: input.destinationWarehouseId, status: "ACTIVE", archivedAt: null }, select: { id: true } });
         if (!destinationLocation) throw new EnterpriseDomainError("DESTINATION_LOCATION_NOT_FOUND", 404);
       }
+      lines.push({ ...line, quantity: stockQuantity, ...(conversion ? { unitConversionJson: conversion } : {}) });
     }
-    const transfer = await tx.enterpriseStockTransfer.create({ data: { organizationId, reference: inventoryReference("TRF"), sourceWarehouseId: input.sourceWarehouseId, destinationWarehouseId: input.destinationWarehouseId, status: "PENDING_APPROVAL", requestedByUserId: actorUserId, approvedByUserId: input.approverUserId, notes: input.notes || null, lines: { create: input.lines.map((line) => ({ ...line })) } }, include: { lines: true } });
+    const transfer = await tx.enterpriseStockTransfer.create({ data: { organizationId, reference: inventoryReference("TRF"), sourceWarehouseId: input.sourceWarehouseId, destinationWarehouseId: input.destinationWarehouseId, status: "PENDING_APPROVAL", requestedByUserId: actorUserId, approvedByUserId: input.approverUserId, notes: input.notes || null, lines: { create: lines } }, include: { lines: true } });
     await tx.enterpriseApproval.create({ data: { organizationId, targetEntityType: "EnterpriseStockTransfer", targetEntityId: transfer.id, requestedByUserId: actorUserId, approverUserId: input.approverUserId } });
     await publishEnterpriseEvent(tx, { organizationId, entityType: "EnterpriseStockTransfer", entityId: transfer.id, eventType: "STOCK_TRANSFER_SUBMITTED", summary: `Transfert ${transfer.reference} soumis`, actorUserId, toStatus: "PENDING_APPROVAL" });
     return transfer;
@@ -359,6 +371,7 @@ export async function decideEnterpriseStockTransfer(organizationId: string, tran
     }
     const retailConfig = await tx.enterpriseRetailConfiguration.findUnique({ where: { organizationId }, select: { settingsJson: true } });
     const confirmedReceipt = Boolean(retailConfig && readRetailInventoryPolicy(retailConfig.settingsJson).transferReception === "CONFIRMED");
+    await assertTransferUnitsStillMatch(tx, organizationId, transfer.lines);
     for (const line of transfer.lines) {
       const financialDispatch=await prepareValuedTransferDispatchTx(tx,organizationId,transfer.id,line.id);
       const dispatchedMovement=await applyStockMovementTx(tx, organizationId, actorUserId, { inventoryItemId: line.inventoryItemId, warehouseId: transfer.sourceWarehouseId, storageLocationId: line.sourceLocationId, stockLotId: line.stockLotId, movementType: "TRANSFER_OUT", direction: "OUT", quantity: line.quantity, sourceEntityType: "EnterpriseStockTransfer", sourceEntityId: transfer.id, sourceLineId: line.id, idempotencyKey: `transfer:${transfer.id}:${line.id}:out`, reason: input.comment || null });
@@ -383,6 +396,7 @@ export async function receiveEnterpriseStockTransfer(organizationId: string, tra
     if (!transfer) throw new EnterpriseDomainError("STOCK_TRANSFER_NOT_IN_TRANSIT", 409);
     await requireTransferSiteAuthority(tx, organizationId, actorUserId, transfer.destinationWarehouse.siteId);
     if (transfer.revision !== revision) throw new EnterpriseDomainConflictError("STOCK_TRANSFER_REVISION_CONFLICT");
+    await assertTransferUnitsStillMatch(tx, organizationId, transfer.lines);
     await receiveTransferLinesTx(tx, transfer, actorUserId, comment);
     const updated = await tx.enterpriseStockTransfer.updateMany({
       where: { id: transferId, organizationId, status: "IN_TRANSIT", revision },

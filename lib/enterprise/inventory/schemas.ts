@@ -22,7 +22,21 @@ export const stockTransferLineSchema = z.object({
   stockLotId: z.string().trim().min(1).optional().nullable(),
   sourceLocationId: z.string().trim().min(1).optional().nullable(),
   destinationLocationId: z.string().trim().min(1).optional().nullable(),
-  quantity: z.coerce.number().positive().max(1_000_000_000).refine(value => new Prisma.Decimal(value).decimalPlaces() <= 6, "INVENTORY_PHYSICAL_QUANTITY_PRECISION"),
+  quantity: z.union([z.string().trim(), z.number().finite()]).refine(value => {
+    if (typeof value === "string" && (!value || value.length > 32)) return false;
+    try {
+      const amount = new Prisma.Decimal(value);
+      return amount.gt(0) && amount.lte(1_000_000_000) && amount.decimalPlaces() <= 6;
+    } catch {
+      return false;
+    }
+  }, "INVENTORY_PHYSICAL_QUANTITY_PRECISION"),
+  sourceUnitId: z.string().trim().min(1).max(191).optional(),
+  expectedConversionVersion: z.number().int().positive().max(2147483647).optional(),
+}).superRefine((data, ctx) => {
+  if (Boolean(data.sourceUnitId) !== Boolean(data.expectedConversionVersion)) {
+    ctx.addIssue({ code: "custom", path: ["sourceUnitId"], message: "CATALOG_CONVERSION_REVISION_CONFLICT" });
+  }
 });
 
 export const stockTransferCreateSchema = z.object({

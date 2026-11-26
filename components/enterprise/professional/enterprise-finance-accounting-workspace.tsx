@@ -10,7 +10,7 @@ import { AccountingCompactTable, type AccountingCompactColumn } from "@/componen
 import { AccountingJournalWorkbench } from "@/components/enterprise/professional/accounting-journal-workbench";
 import { formatAccountingNarrative } from "@/lib/enterprise/accounting/narrative-i18n";
 import { AccountingRecordDetail, type AccountingRecordDetailKind } from "@/components/enterprise/professional/accounting-record-detail";
-import { FinanceDateFilter, FinanceExportControls, FinanceFilteredTotals, type FinanceFilteredTotal, type FinanceExportColumn } from "@/components/enterprise/professional/finance-design2-controls";
+import { FinanceDateFilter, FinanceExportControls, FinanceFilteredTotals, formatAnalyticsAmount, type FinanceFilteredTotal, type FinanceExportColumn } from "@/components/enterprise/professional/finance-design2-controls";
 import { FinanceTemplateImportControls } from "@/components/enterprise/professional/finance-template-import-controls";
 import { AssignedApprovalSubmitPanel } from "@/components/enterprise/professional/assigned-approval-submit-panel";
 import { EnterpriseAccountingOnboardingPanel } from "@/components/enterprise/professional/enterprise-accounting-onboarding-panel";
@@ -109,6 +109,10 @@ const JOURNAL_TYPES = ["GENERAL", "SALES", "PURCHASES", "BANK", "CASH", "MOBILE_
 const FULLSCREEN_FORM_CLASS = "h-[100dvh] w-full max-w-none rounded-none sm:h-[94dvh] sm:w-auto sm:max-w-3xl sm:rounded-3xl";
 
 function rawText(value: unknown) { return value === null || value === undefined ? "" : String(value); }
+function ledgerAmount(value: unknown, currencyCode: string | null | undefined, locale: FinanceLocale) {
+  if (value == null) return "—";
+  return currencyCode ? formatAnalyticsAmount({ amount: String(value), currencyCode }, locale) : String(value);
+}
 function rowText(row: AnyRow, key: string) { return rawText(row[key]); }
 function rowObject(row: AnyRow | null | undefined, key: string) {
   const value = row?.[key];
@@ -445,16 +449,16 @@ export function EnterpriseFinanceAccountingWorkspace(props: Props) {
     { key: "description", label: en ? "Description" : "Libellé", cellClassName: "max-w-[24rem] truncate", render: (row) => formatAccountingNarrative(row.displayDescription || row.description || row.journalEntry?.description, locale) || "—" },
     { key: "journal", label: en ? "Journal" : "Journal", render: (row) => row.journalEntry?.journal?.code || "—" },
     { key: "period", label: en ? "Period" : "Période", render: (row) => row.journalEntry?.fiscalPeriod?.code || "—" },
-    { key: "debit", label: en ? "Debit" : "Débit", numeric: true, render: (row) => financeMoney(row.debit || 0, row.journalEntry?.functionalCurrencyCode || "", locale) },
-    { key: "credit", label: en ? "Credit" : "Crédit", numeric: true, render: (row) => financeMoney(row.credit || 0, row.journalEntry?.functionalCurrencyCode || "", locale) },
+    { key: "debit", label: en ? "Debit" : "Débit", numeric: true, render: (row) => ledgerAmount(row.debit, row.journalEntry?.functionalCurrencyCode || entryTrace?.entry?.functionalCurrencyCode, locale) },
+    { key: "credit", label: en ? "Credit" : "Crédit", numeric: true, render: (row) => ledgerAmount(row.credit, row.journalEntry?.functionalCurrencyCode || entryTrace?.entry?.functionalCurrencyCode, locale) },
   ];
 
   const trialColumns: AccountingCompactColumn<TrialRow>[] = [
     { key: "account", label: en ? "Account" : "Compte", render: (row) => <span className="font-black">{row.code || "—"} · {locale === "en" ? row.nameEn || row.nameFr : row.nameFr || row.nameEn}</span> },
-    { key: "opening", label: en ? "Opening" : "Ouverture", numeric: true, render: (row) => financeMoney(row.openingBalance || 0, row.functionalCurrencyCode || "", locale) },
-    { key: "debit", label: en ? "Period debit" : "Débit période", numeric: true, render: (row) => financeMoney(row.periodDebit || 0, row.functionalCurrencyCode || "", locale) },
-    { key: "credit", label: en ? "Period credit" : "Crédit période", numeric: true, render: (row) => financeMoney(row.periodCredit || 0, row.functionalCurrencyCode || "", locale) },
-    { key: "closing", label: en ? "Closing" : "Clôture", numeric: true, render: (row) => <strong>{financeMoney(row.closingBalance || 0, row.functionalCurrencyCode || "", locale)}</strong> },
+    { key: "opening", label: en ? "Opening" : "Ouverture", numeric: true, render: (row) => ledgerAmount(row.openingBalance, row.functionalCurrencyCode, locale) },
+    { key: "debit", label: en ? "Period debit" : "Débit période", numeric: true, render: (row) => ledgerAmount(row.periodDebit, row.functionalCurrencyCode, locale) },
+    { key: "credit", label: en ? "Period credit" : "Crédit période", numeric: true, render: (row) => ledgerAmount(row.periodCredit, row.functionalCurrencyCode, locale) },
+    { key: "closing", label: en ? "Closing" : "Clôture", numeric: true, render: (row) => <strong>{ledgerAmount(row.closingBalance, row.functionalCurrencyCode, locale)}</strong> },
   ];
 
   const anomalyColumns: AccountingCompactColumn<AnyRow>[] = [

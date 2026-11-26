@@ -220,6 +220,7 @@ model EnterpriseStockTransferLine {
   sourceLocationId     String?
   destinationLocationId String?
   quantity             Decimal                   @db.Decimal(21, 6)
+  unitConversionJson   Json?
   createdAt            DateTime                  @default(now())
   stockTransfer        EnterpriseStockTransfer   @relation(fields: [organizationId, stockTransferId], references: [organizationId, id], onDelete: Cascade)
   inventoryItem        EnterpriseInventoryItem   @relation(fields: [organizationId, inventoryItemId], references: [organizationId, id], onDelete: Restrict)

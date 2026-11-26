@@ -73,6 +73,14 @@ La QA ciblée exécute le moteur de réception avec les sept précisions, des lo
 
 Les deux scénarios navigateur ciblés, achat/réception et rail Stock, ont réussi sur le build local avec PostgreSQL et Redis isolés. Le second a produit 32 captures pour les huit largeurs, deux langues et deux thèmes.
 
+### Transferts avec conversion versionnée
+
+Le transfert accepte une quantité saisie dans une unité alternative configurée pour l’article. La liste des unités suit le périmètre de l’entrepôt source et affiche les versions courantes compatibles avec le catalogue. La création vérifie la version choisie et calcule la quantité de stock au serveur. La ligne conserve la quantité saisie, le facteur, la version, l’unité de stock et la quantité exacte calculée. Le détail, la décision du validateur, la réception et les exports affichent cette preuve.
+
+L’expédition et la réception utilisent la quantité de stock enregistrée. Une version ultérieure du facteur ne change pas le transfert. Si l’unité cible, son code ou sa précision a changé, l’opération échoue avant tout mouvement. Les documents enregistrés avant cette migration restent lisibles et utilisent la quantité de stock stockée. La migration ajoute une colonne JSON nullable, sans reprise de données. Un retour à la version applicative précédente conserve cette preuve.
+
+PostgreSQL vérifie le stockage de la conversion, le changement de facteur, le refus d’une version périmée ou d’une unité cible modifiée et l’isolation entre entreprises. La recette locale Chromium a vérifié la création depuis le formulaire, l’expédition par un autre acteur, le refus de réception après changement de l’unité cible, la réception avec le facteur figé après révision du catalogue et le refus d’une seconde réception.
+
 ### Historique de trésorerie
 
 Les sous-totaux distinguent les flux entrants et sortants par devise et statut du mouvement. L’historique, le comptage, le calcul filtré toutes pages et le général autorisé partagent le même instantané PostgreSQL. Chaque côté d’un transfert reste attribué à son compte. La page affichée possède ses propres sous-totaux. Les filtres de statut et de devise utilisent les références et traductions existantes. Les exports reprennent les deux synthèses serveur, avec le sens et le libellé du mouvement. Les grands montants et fractions sont formatés à partir de leur chaîne décimale dans les synthèses.
@@ -98,6 +106,12 @@ Le registre et l’export partagent les filtres par référence, compte, statut 
 Le parcours Chromium local a vérifié l’authentification, la clôture en français avec validateur désigné, la file de validations en anglais et la stabilité du total de 102 sessions filtrées sur cinq pages. Les trois exports téléchargés depuis la deuxième page reprennent les valeurs exactes du registre. Le test contrôle les 102 lignes CSV, les cellules texte et numériques du classeur et les montants détaillés et de synthèse du PDF. Le rendu PDF partagé ajuste le corps des nombres qui tiennent dans la colonne et répartit les autres cellules sur plusieurs lignes, avec répétition de l’en-tête lors d’un saut de page.
 
 Grand livre. La recherche canonique retrouve les désignations et codes actuels pour les formes historiques exactes générées par le moteur de stock. Le journal conserve son libellé d’origine. Le rendu indique l’origine de la désignation et signale la référence manquante. Les rédactions libres et les snapshots restent recherchables par leur texte enregistré. La sélection avant pagination alimente aussi le nombre de lignes et les totaux de débit/crédit en devise fonctionnelle. La fixture PostgreSQL vérifie cette concordance sur deux pages, les dimensions, les écritures contrepassées, les brouillons, une référence d’un autre tenant et les caractères littéraux de recherche.
+
+Le grand livre, la balance et le détail des lignes comptables affichent les fractions conservées par le serveur dans la devise fonctionnelle. La présentation reprend le même format décimal exact que les agrégats.
+
+### Préparation SYSCOHADA après validation propriétaire
+
+La validation du SYSCOHADA permet de poursuivre l’implémentation. L’édition signée est vérifiée et fingerprintée. Dans Comptabilité → Configurer → Mise en service, la comparaison en lecture seule couvre le candidat marchandises. Elle présente le compte proposé, les codes déjà utilisés et le nombre d’écritures comptabilisées ou contrepassées dans l’entreprise. La migration et le posting sous la nouvelle politique exigent le dataset complet, les contrôles réglementaires et les rapprochements par type de mouvement. [Audit et source officielle](AUDIT_1228_SYSCOHADA_INVENTORY.md).
 
 ### Historique Télécom
 

@@ -118,7 +118,11 @@ if (draft.code !== "OHADA_SYSCOHADA" || draft.frameworkCode !== "OHADA_AUDCIF") 
 if (draft.accounts.length !== syntheticDataset.accounts.length) fail("Le générateur a perdu des comptes synthétiques");
 if (draft.semanticMappings.length !== 0 || draft.journals.length !== 0 || draft.financialStatementMappings.length !== 0) fail("Le pipeline ne doit pas inventer mappings, journaux ou états");
 
-const blockedByManifest = validateReviewedDataset(syntheticDataset, parseJson("lib/enterprise/accounting/templates/syscohada/source-manifest.json"));
+const blockedByManifest = validateReviewedDataset(syntheticDataset, {
+  ...verifiedManifest,
+  verificationStatus: "SOURCE_FILE_REQUIRED",
+  verifiedSourceFile: { fileName: null, sha256: null, sizeBytes: null, verifiedAt: null, verifiedBy: null },
+});
 if (blockedByManifest.valid || !blockedByManifest.issues.some((entry) => entry.code === "SOURCE_FILE_NOT_VERIFIED")) {
   fail("Le pipeline doit refuser la génération tant que la source officielle n'est pas vérifiée");
 }

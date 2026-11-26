@@ -14,7 +14,7 @@ import { adoptDraftChartTemplate } from "@/lib/enterprise/accounting/chart-templ
 import { chartTemplateReference, DEFAULT_ACCOUNTING_TEMPLATE_REFERENCE, listAccountingFrameworks, listChartTemplates } from "@/lib/enterprise/accounting/chart-template-registry";
 import { applyRecommendedJournals } from "@/lib/enterprise/accounting/journal-template-registry";
 import { COUNTRY_ACCOUNTING_OVERLAYS } from "@/lib/enterprise/accounting/country-accounting-overlays";
-import { accountingTemplateProductionReadiness, applySafeChartTemplateUpgrade, previewChartTemplateUpgrade } from "@/lib/enterprise/accounting/chart-version-migration-service";
+import { accountingTemplateProductionReadiness, applySafeChartTemplateUpgrade, previewChartTemplateUpgrade, previewSyscohadaMerchandisePolicy } from "@/lib/enterprise/accounting/chart-version-migration-service";
 import { getRegulatoryStatementSupport } from "@/lib/enterprise/accounting/regulatory-statements-service";
 import { prisma } from "@/lib/prisma";
 
@@ -28,6 +28,12 @@ export async function GET(req: Request, { params }: Params) {
   try {
     const url = new URL(req.url);
     const chartId = url.searchParams.get("chartId");
+    if (url.searchParams.get("compareSyscohada") === "1" && chartId) {
+      const comparison = await previewSyscohadaMerchandisePolicy(organizationId, chartId);
+      await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt,
+        metadata: { organizationId, domain: "accounting-setup", action: "preview-syscohada-merchandise", chartId } });
+      return NextResponse.json({ comparison }, { headers: { "Cache-Control": "private, no-store" } });
+    }
     const previewTemplate = url.searchParams.get("previewTemplate");
     const upgradeTo = url.searchParams.get("upgradeTo");
     const [charts, regulatorySupport] = await Promise.all([

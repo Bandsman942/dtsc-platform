@@ -2,7 +2,7 @@
   "frameworkCode": "OHADA_AUDCIF",
   "plannedTemplateCode": "OHADA_SYSCOHADA",
   "plannedTemplateVersion": "1.0.0",
-  "verificationStatus": "SOURCE_FILE_REQUIRED",
+  "verificationStatus": "SOURCE_FILE_VERIFIED",
   "legalUseStatus": "REVIEW_REQUIRED",
   "regulatoryAuthority": "OHADA",
   "officialAct": {
@@ -24,14 +24,14 @@
       "Acte uniforme relatif au droit comptable et à l'information financière - Version complète signée",
       "Acte uniforme relatif au droit comptable et à l’information financière - AUDCIF"
     ],
-    "directDownloadUrl": null
+    "directDownloadUrl": "https://biblio.ohada.org/doc_num.php?explnum_id=2063"
   },
   "verifiedSourceFile": {
-    "fileName": null,
-    "sha256": null,
-    "sizeBytes": null,
-    "verifiedAt": null,
-    "verifiedBy": null
+    "fileName": "audcif-syscohada-2017-signed.pdf",
+    "sha256": "d5ecb380984b792c4d586b0efa77931249a4c0c25daf39d3c50b27648dd05300",
+    "sizeBytes": 81369223,
+    "verifiedAt": "2026-11-26",
+    "verifiedBy": "DTSC #1228 source verification"
   },
   "bootstrapPolicy": {
     "enabled": true,
@@ -75,10 +75,10 @@
     "accountCount": null,
     "groupCount": null
   },
-  "lastRegulatoryVerificationAt": "2026-08-09",
+  "lastRegulatoryVerificationAt": "2026-11-26",
   "notes": [
     "La baseline 0.1.0 est le plan officiel par défaut de DTSC Platform par instruction propriétaire explicite du 2026-08-09.",
     "Le pipeline déterministe reste obligatoire pour toute nouvelle version officielle afin de préserver provenance, comparaison, migration contrôlée et historique.",
-    "Le statut SOURCE_FILE_REQUIRED du manifeste concerne la prochaine version planifiée 1.0.0 et ne rétrograde pas la baseline 0.1.0."
+    "Le fichier complet signé de la notice OHADA 4847 a été téléchargé et son empreinte vérifiée pour la prochaine version 1.0.0. Le dataset canonique reste à relire et à valider."
   ]
 }

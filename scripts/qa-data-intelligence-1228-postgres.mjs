@@ -16,6 +16,8 @@ const { planFefoLots } = workflowTestLoader({})("@/lib/enterprise/inventory/lot-
 const { appendCatalogUnitConversion, projectCatalogConversion, resolveCatalogUnitConversion } =
   workflowTestLoader({})("@/lib/enterprise/master-data/unit-conversions");
 const { getAccountingGeneralLedger } = workflowTestLoader({})("@/lib/enterprise/accounting/accounting-query-service");
+const { assertTransferUnitsStillMatch, listTransferUnitConversions, resolveTransferUnitConversionTx } =
+  workflowTestLoader({})("@/lib/enterprise/inventory/transfer-unit-conversion");
 const handlerLoadStarted=performance.now();
 const inventoryFixture={reader:null,organizationId:"",siteId:"",actor:""};
 const {GET:inventoryGet}=workflowTestLoader({
@@ -88,6 +90,12 @@ class RollbackFixture extends Error {}
 
 const cashFixture = { reader: null, organizationId: "", siteId: "", actor: "" };
 const ledgerFixture = { reader: null, organizationId: "", actor: "" };
+const { previewSyscohadaMerchandisePolicy } = workflowTestLoader({
+  "@/lib/prisma": { prisma: { $transaction: async (callback, options) => {
+    assert.equal(options.isolationLevel, "RepeatableRead");
+    return callback(ledgerFixture.reader);
+  } } },
+})("@/lib/enterprise/accounting/chart-version-migration-service");
 const { GET: getAccountingLedger } = workflowTestLoader({
   "@/lib/prisma": { prisma: { $transaction: async (callback, options) => {
     assert.equal(options.isolationLevel, "RepeatableRead");
@@ -325,6 +333,7 @@ async function verifyLedgerSearch(tenant, otherTenant, actor) {
       } });
       const chart = await tx.enterpriseChartOfAccounts.create({ data: {
         organizationId, code: "QA-LEDGER", nameFr: "Plan", nameEn: "Chart", createdByUserId: actor,
+        templateCode: "OHADA_SYSCOHADA@0.1.0",
       } });
       const ledger = await tx.enterpriseLedgerAccount.create({ data: {
         organizationId, chartId: chart.id, code: "QA-LEDGER-35", nameFr: "Stock test", nameEn: "Stock test", accountType: "ASSET",
@@ -338,7 +347,7 @@ async function verifyLedgerSearch(tenant, otherTenant, actor) {
         unitOfMeasureId: unit.id, createdByUserId: actor,
       } });
       const inventory = await tx.enterpriseInventoryItem.create({ data: { organizationId, catalogItemId: item.id, createdByUserId: actor } });
-      return { organizationId, fiscalPeriodId: period.id, journalId: journal.id, ledgerAccountId: ledger.id, item, inventoryItemId: inventory.id };
+      return { organizationId, chartId: chart.id, fiscalPeriodId: period.id, journalId: journal.id, ledgerAccountId: ledger.id, item, inventoryItemId: inventory.id };
     }
     const currentName = "Produit actuel 75%_test";
     const local = await createAccountingContext(tenant, "Ancienne désignation");
@@ -414,9 +423,21 @@ async function verifyLedgerSearch(tenant, otherTenant, actor) {
     assert.equal(snapshot.pagination.total, 1);
     assert.equal(snapshot.items[0].displayDescription, "ISSUE Ancienne désignation");
     assert.equal((await ledger({ search: "commentaire libre" })).items[0].displayDescription, `ISSUE ${local.inventoryItemId} commentaire libre`);
+    for (const context of [local, foreign]) await tx.enterpriseLedgerAccount.create({ data: {
+      organizationId: context.organizationId, chartId: context.chartId, code: "6031",
+      nameFr: context === local ? "Compte de l’entreprise" : "Compte étranger", nameEn: "Test account", accountType: "EXPENSE",
+    } });
+    const comparison = await previewSyscohadaMerchandisePolicy(tenant, local.chartId);
+    assert.deepEqual(comparison.diff.accounts.added.map(row => row.code), ["6031"]);
+    assert.equal(comparison.journalHistoryCount, 32);
+    assert.deepEqual(comparison.accountConflicts, [{ code: "6031", nameFr: "Compte de l’entreprise", nameEn: "Test account" }]);
+    assert.equal(comparison.canApplyAutomatically, false);
+    await assert.rejects(previewSyscohadaMerchandisePolicy(tenant, foreign.chartId), { code: "CHART_OF_ACCOUNTS_NOT_FOUND" });
+    assert.equal((await tx.enterpriseChartOfAccounts.findUniqueOrThrow({ where: { id: local.chartId } })).templateCode, "OHADA_SYSCOHADA@0.1.0");
     throw new RollbackFixture();
   }, { isolationLevel: "RepeatableRead", timeout: 10000 }), RollbackFixture);
   console.log("PASS #1228 PostgreSQL general ledger: current catalog search, immutable descriptions, exact multi-currency totals and tenant isolation");
+  console.log("PASS #1228 PostgreSQL SYSCOHADA preview: account conflict, posted and reversed history, tenant isolation and no chart mutation");
 }
 
 async function verifyConversionHistory(tenant, otherTenant, actor) {
@@ -437,6 +458,23 @@ async function verifyConversionHistory(tenant, otherTenant, actor) {
     assert.equal(first.factor.toFixed(), "12.123");
     const resolve = () => resolveCatalogUnitConversion(tx, { ...context, quantity: "1.001" });
     assert.equal((await resolve()).stockQuantity, "12.135123");
+    const inventory = await tx.enterpriseInventoryItem.create({ data: { organizationId: tenant, catalogItemId: item.id, createdByUserId: actor } });
+    const site = await tx.enterpriseSite.create({ data: { organizationId: tenant, code: "TRANSFERS", name: "Test", siteType: "STORE", createdByUserId: actor } });
+    const warehouses = await Promise.all(["SOURCE", "TARGET"].map(code => tx.enterpriseWarehouse.create({
+      data: { organizationId: tenant, siteId: site.id, code, name: code, createdByUserId: actor },
+    })));
+    await tx.enterpriseInventoryBalance.create({ data: { organizationId: tenant, inventoryItemId: inventory.id,
+      warehouseId: warehouses[0].id, quantityOnHand: "100" } });
+    const transferConversion = await resolveTransferUnitConversionTx(tx, { ...context, quantity: "1.001", expectedVersion: first.version });
+    const transfer = await tx.enterpriseStockTransfer.create({ data: {
+      organizationId: tenant, reference: "UNIT-CONVERSION", sourceWarehouseId: warehouses[0].id,
+      destinationWarehouseId: warehouses[1].id, requestedByUserId: actor,
+      lines: { create: { inventoryItemId: inventory.id, quantity: transferConversion.stockQuantity, unitConversionJson: transferConversion } },
+    }, select: { lines: true } });
+    assert.deepEqual(transfer.lines[0].unitConversionJson, transferConversion);
+    assert.equal((await listTransferUnitConversions(tx, tenant, inventory.id, warehouses[0].id))[0].version, 1);
+    assert.deepEqual(await listTransferUnitConversions(tx, otherTenant, inventory.id, warehouses[0].id), []);
+    assert.deepEqual(await listTransferUnitConversions(tx, tenant, inventory.id, warehouses[1].id), []);
     await assert.rejects(appendCatalogUnitConversion(tx, { ...context, factor: "24", expectedVersion: 0 }),
       { code: "CATALOG_CONVERSION_REVISION_CONFLICT" });
 
@@ -446,6 +484,12 @@ async function verifyConversionHistory(tenant, otherTenant, actor) {
     assert.equal(second.version, 2);
     assert.equal((await resolve()).sourceCode, "PACK");
     assert.equal((await resolve()).stockQuantity, "24.024");
+    assert.equal((await listTransferUnitConversions(tx, tenant, inventory.id, warehouses[0].id))[0].version, 2);
+    await assert.rejects(resolveTransferUnitConversionTx(tx, { ...context, quantity: "1.001", expectedVersion: first.version }), { code: "CATALOG_CONVERSION_REVISION_CONFLICT" });
+    await assertTransferUnitsStillMatch(tx, tenant, transfer.lines);
+    await tx.enterpriseUnitOfMeasure.update({ where: { id: stock.id }, data: { decimalScale: 5 } });
+    assert.deepEqual(await listTransferUnitConversions(tx, tenant, inventory.id, warehouses[0].id), []);
+    await assert.rejects(assertTransferUnitsStillMatch(tx, tenant, transfer.lines), { code: "INVENTORY_UNIT_CONVERSION_REQUIRED" });
     const historical = await tx.enterpriseCatalogUnitConversion.findUniqueOrThrow({ where: { id: first.id } });
     assert.equal(historical.sourceCode, "CARTON");
     assert.equal(projectCatalogConversion(historical, "1.001").stockQuantity, "12.135123");
@@ -472,6 +516,7 @@ async function verifyConversionHistory(tenant, otherTenant, actor) {
   assert.equal(await db.enterpriseCatalogUnitConversion.count({ where: { organizationId: tenant } }), 0);
   assert.equal(await db.enterpriseOperationalEvent.count({ where: { organizationId: tenant } }), 0);
   console.log("PASS #1228 PostgreSQL conversion history: exact factors, stale unit proof, unique versions, tenant FKs and rollback");
+  console.log("PASS #1228 PostgreSQL transfers: exact conversion snapshot, latest choice, historical factor replay, tenant and changed-target guards");
 }
 
 const projectFixture = { reader: null, organizationId: "", actor: "" };
