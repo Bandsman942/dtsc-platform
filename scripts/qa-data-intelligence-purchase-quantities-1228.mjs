@@ -4,7 +4,9 @@ import { workflowTestLoader } from "./lib/workflow-test-loader.mjs";
 
 const writes = [];
 const tenant = "test-tenant";
-const unit = { id: "unit", decimalScale: 6 };
+const unit = { id: "unit", code: "BT", decimalScale: 6 };
+let recordedScale = null;
+let recordedCode = null;
 let recordedUnitId = unit.id;
 let orderedQuantity = "1";
 let receivedQuantity = "1";
@@ -29,7 +31,7 @@ const tx = {
     findFirst: async () => null,
     create: async ({ data }) => { writes.push(data); return data; },
   },
-  enterprisePurchaseItemCatalogLink: { findFirst: async () => ({ catalogItemId: "catalog", unitOfMeasureId: recordedUnitId, expectedItemType }) },
+  enterprisePurchaseItemCatalogLink: { findFirst: async () => ({ catalogItemId: "catalog", unitOfMeasureId: recordedUnitId, unitDecimalScale: recordedScale, unitCodeSnapshot: recordedCode, expectedItemType }) },
   enterpriseCatalogItem: {
     findFirst: async ({ where }) => {
       assert.equal(where.organizationId, tenant);
@@ -103,6 +105,21 @@ assert.deepEqual(writes, []);
 
 existingReceipt = null;
 recordedUnitId = unit.id;
+// An exact integer fits both scales, but this must not bypass the snapshot guard.
+recordedScale = 0; recordedCode = "BT";
+unit.decimalScale = 6; receivedQuantity = "1";
+await assert.rejects(receipt([batch("batch", "1")]), { code: "INVENTORY_UNIT_CONVERSION_REQUIRED" });
+assert.deepEqual(writes, []);
+recordedScale = 6; recordedCode = "FORMER";
+await assert.rejects(receipt([batch("batch", "1")]), { code: "INVENTORY_UNIT_CONVERSION_REQUIRED" });
+assert.deepEqual(writes, []);
+recordedCode = null;
+await assert.rejects(receipt([batch("batch", "1")]), { code: "INVENTORY_UNIT_CONVERSION_REQUIRED" });
+assert.deepEqual(writes, []);
+recordedCode = "BT";
+assert.equal((await receipt([batch("batch", "1")])).idempotent, false);
+writes.length = 0;
+recordedScale = null; recordedCode = null;
 expectedItemType = "SERVICE";
 unit.decimalScale = 0;
 receivedQuantity = "0.5";

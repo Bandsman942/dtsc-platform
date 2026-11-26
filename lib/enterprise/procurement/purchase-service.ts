@@ -32,7 +32,7 @@ type PurchaseUpdateInput = z.infer<typeof enterprisePurchaseUpdateSchema>;
 type PurchaseActionInput = z.infer<typeof enterprisePurchaseActionSchema>;
 type PurchaseReceiptInput = z.infer<typeof enterprisePurchaseReceiptSchema>;
 type PurchaseItemInput = PurchaseCreateInput["items"][number];
-type PurchaseItemCatalogLinkDraft = { catalogItemId: string; unitOfMeasureId: string; expectedItemType: string; sortOrder: number };
+type PurchaseItemCatalogLinkDraft = { catalogItemId: string; unitOfMeasureId: string; expectedItemType: string; sortOrder: number; unitDecimalScale?: number | null; unitCodeSnapshot?: string | null };
 
 function dateOrNull(value?: string | null) { return value ? new Date(value) : null; }
 function purchaseReference(businessDate: string) { return `PUR-${businessDate.replace(/-/g, "")}-${randomUUID().slice(0, 8).toUpperCase()}`; }
@@ -78,7 +78,7 @@ async function preparePurchaseItems(tx: ProcurementTransaction, organizationId: 
     taxAmount = taxAmount.add(lineTax).toDecimalPlaces(2);
     const canonicalUnit = catalogItem.unitOfMeasure.symbol || catalogItem.unitOfMeasure.code || item.unit;
     prepared.push({ description: item.description, quantity: itemQuantity, unit: canonicalUnit, unitPrice, taxRate, lineSubtotal, taxAmount: lineTax, lineTotal, sourceEntityType: nullable(item.sourceEntityType), sourceEntityId: nullable(item.sourceEntityId), sortOrder: index });
-    catalogLinks.push({ catalogItemId: catalogItem.id, unitOfMeasureId: catalogItem.unitOfMeasureId, expectedItemType: catalogExpectedItemType(catalogItem.itemType, catalogItem.trackInventory), sortOrder: index });
+    catalogLinks.push({ catalogItemId: catalogItem.id, unitOfMeasureId: catalogItem.unitOfMeasureId, unitDecimalScale: catalogItem.unitOfMeasure.decimalScale, unitCodeSnapshot: catalogItem.unitOfMeasure.code, expectedItemType: catalogExpectedItemType(catalogItem.itemType, catalogItem.trackInventory), sortOrder: index });
   }
   return { items: prepared, catalogLinks, subtotalAmount, taxAmount, totalAmount: subtotalAmount.add(taxAmount).toDecimalPlaces(2) };
 }
@@ -91,7 +91,7 @@ async function syncPurchaseItemCatalogLinks(tx: ProcurementTransaction, organiza
     data: purchaseItems.map((purchaseItem) => {
       const link = linkByOrder.get(purchaseItem.sortOrder);
       if (!link) throw new EnterpriseCoreV2Error("Une ligne d’achat ne possède pas de référence catalogue.", 409, "PURCHASE_ITEM_CATALOG_LINK_MISSING");
-      return { organizationId, purchaseItemId: purchaseItem.id, catalogItemId: link.catalogItemId, unitOfMeasureId: link.unitOfMeasureId, expectedItemType: link.expectedItemType };
+      return { organizationId, purchaseItemId: purchaseItem.id, catalogItemId: link.catalogItemId, unitOfMeasureId: link.unitOfMeasureId, unitDecimalScale: link.unitDecimalScale, unitCodeSnapshot: link.unitCodeSnapshot, expectedItemType: link.expectedItemType };
     }),
   });
 }

@@ -188,14 +188,23 @@ export async function postEnterprisePurchaseReceiptToInventoryTx(
     if (requiresStockMovement && !itemLink.catalogItemId) throw new EnterpriseDomainError("CATALOG_ITEM_REQUIRED_FOR_GOODS", 409);
     const catalogItem = itemLink.catalogItemId ? await tx.enterpriseCatalogItem.findFirst({
       where: { id: itemLink.catalogItemId, organizationId, ...(requiresStockMovement ? { status: "ACTIVE", archivedAt: null } : {}) },
-      select: { id: true, trackInventory: true, unitOfMeasure: { select: { id: true, decimalScale: true } } },
+      select: { id: true, trackInventory: true, unitOfMeasure: { select: { id: true, code: true, decimalScale: true } } },
     }) : null;
     if (requiresStockMovement && !catalogItem?.trackInventory) throw new EnterpriseDomainError("INVENTORY_CATALOG_ITEM_REQUIRED", 409);
     if (!catalogItem || itemLink.unitOfMeasureId !== catalogItem.unitOfMeasure.id) {
       throw new EnterpriseDomainError("INVENTORY_UNIT_CONVERSION_REQUIRED", 409);
     }
     const scale = catalogItem.unitOfMeasure.decimalScale;
-    requireInventoryQuantity(receiptItem.purchaseItem.quantity, scale, { positive: true });
+    // New purchases carry their original unit precision and code. A changed
+    // scale, even when the numeric quantity fits both units, requires review.
+    // Older links keep the prior compatibility path without inventing a snapshot.
+    const recordedScale = itemLink.unitDecimalScale;
+    const recordedCode = itemLink.unitCodeSnapshot;
+    if ((recordedScale != null || recordedCode != null) &&
+        (recordedScale !== scale || !recordedCode || recordedCode !== catalogItem.unitOfMeasure.code)) {
+      throw new EnterpriseDomainError("INVENTORY_UNIT_CONVERSION_REQUIRED", 409);
+    }
+    requireInventoryQuantity(receiptItem.purchaseItem.quantity, recordedScale ?? scale, { positive: true });
     const receivedQuantity = requireInventoryQuantity(receiptItem.quantityReceived, scale, { positive: true });
     for (const batch of batches) requireInventoryQuantity(batch.quantity, scale, { positive: true });
 
