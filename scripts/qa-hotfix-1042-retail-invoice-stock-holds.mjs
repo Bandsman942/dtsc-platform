@@ -67,6 +67,14 @@ assert.equal(captured, null, "Empty inventory selection must not query another t
 class DomainError extends Error {
   constructor(code, status) { super(code); this.code = code; this.status = status; }
 }
+// Load the actual conversion module (including its schema and catalog resolver).
+// Only the existing domain error boundary and shared quantity policy are injected.
+const transferUnitTools = workflowTestLoader({
+  "@/lib/enterprise/common/errors": { EnterpriseDomainError: DomainError, EnterpriseDomainConflictError: DomainError },
+  "@/lib/enterprise/inventory/quantity-policy": qaQuantityPolicy,
+})("@/lib/enterprise/inventory/transfer-unit-conversion");
+assert.equal(typeof transferUnitTools.resolveTransferUnitConversionTx, "function");
+assert.equal(typeof transferUnitTools.assertTransferUnitsStillMatch, "function");
 let outstandingHold = new Decimal(3);
 let moved = 0;
 let pharmacyMapping=0, sectorMapping=0;
@@ -96,6 +104,7 @@ vm.runInNewContext(serviceJavaScript, {
       return mod.exports;
     }
     if (name === "@/lib/enterprise/inventory/lot-allocation") return allocationModule.exports;
+    if (name === "@/lib/enterprise/inventory/transfer-unit-conversion") return transferUnitTools;
     if (name === "@/lib/enterprise/accounting/inventory-transfer-service") return {};
     if (name === "@/lib/enterprise/inventory/approval") return {};
     if (name === "@/lib/enterprise/retail/inventory-policy") return {};
