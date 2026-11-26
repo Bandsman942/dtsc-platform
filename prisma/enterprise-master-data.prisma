@@ -120,6 +120,8 @@ model EnterpriseUnitOfMeasure {
   updatedAt       DateTime                @updatedAt
   archivedAt      DateTime?
   catalogItems    EnterpriseCatalogItem[]
+  conversionSources EnterpriseCatalogUnitConversion[] @relation("CatalogConversionSource")
+  conversionTargets EnterpriseCatalogUnitConversion[] @relation("CatalogConversionTarget")
 
   @@unique([organizationId, id])
   @@unique([organizationId, code])
@@ -183,6 +185,7 @@ model EnterpriseCatalogItem {
   quoteItems            EnterpriseQuoteItem[]
   salesOrderItems       EnterpriseSalesOrderItem[]
   prices                EnterpriseCatalogPrice[]
+  unitConversions       EnterpriseCatalogUnitConversion[]
 
   @@unique([organizationId, id])
   @@unique([organizationId, code])
@@ -192,6 +195,32 @@ model EnterpriseCatalogItem {
   @@index([organizationId, normalizedName, status])
   @@index([organizationId, trackInventory, status])
   @@index([archivedAt])
+}
+
+// Product-specific direct conversion, versioned without overwriting the previous factor.
+model EnterpriseCatalogUnitConversion {
+  id                String @id @default(cuid())
+  organizationId    String
+  catalogItemId     String
+  sourceUnitId      String
+  targetUnitId      String
+  version           Int
+  factor            Decimal @db.Decimal(30, 12)
+  sourceScale       Int
+  targetScale       Int
+  sourceCode        String
+  targetCode        String
+  createdByUserId   String
+  createdAt         DateTime @default(now())
+  catalogItem       EnterpriseCatalogItem @relation(fields: [organizationId, catalogItemId], references: [organizationId, id], onDelete: Restrict, map: "catalog_conversion_item_fk")
+  sourceUnit        EnterpriseUnitOfMeasure @relation("CatalogConversionSource", fields: [organizationId, sourceUnitId], references: [organizationId, id], onDelete: Restrict, map: "catalog_conversion_source_fk")
+  targetUnit        EnterpriseUnitOfMeasure @relation("CatalogConversionTarget", fields: [organizationId, targetUnitId], references: [organizationId, id], onDelete: Restrict, map: "catalog_conversion_target_fk")
+
+  @@unique([organizationId, id], map: "catalog_conversion_tenant_id_uq")
+  @@unique([organizationId, catalogItemId, sourceUnitId, version], map: "catalog_conversion_version_uq")
+  @@index([organizationId, catalogItemId, createdAt], map: "catalog_conversion_history_idx")
+  @@index([organizationId, sourceUnitId], map: "catalog_conversion_source_idx")
+  @@index([organizationId, targetUnitId], map: "catalog_conversion_target_idx")
 }
 
 model EnterpriseCatalogPrice {
