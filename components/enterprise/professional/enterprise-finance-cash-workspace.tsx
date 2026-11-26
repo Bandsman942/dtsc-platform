@@ -4,10 +4,10 @@ import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { Banknote, LockKeyhole, Plus, ShieldCheck } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { Field, NativeSelect } from "@/components/enterprise/core-v2/erp-v2-ui";
-import { fetchOperationalFinanceRecord } from "@/components/enterprise/professional/use-operational-finance-collection";
+import { fetchOperationalFinanceRecord, useOperationalFinanceCollection } from "@/components/enterprise/professional/use-operational-finance-collection";
 import { CashHandoverPanel } from "@/components/enterprise/professional/cash-handover-panel";
 import { CashPhysicalCountFields, cashCountsFromForm } from "@/components/enterprise/professional/cash-physical-count-fields";
-import { FinanceDateFilter, FinanceExportControls, type FinanceExportColumn } from "@/components/enterprise/professional/finance-design2-controls";
+import { FinanceAmountScopes, FinanceDateFilter, FinanceExportControls, formatAnalyticsAmount, type FinanceExportColumn } from "@/components/enterprise/professional/finance-design2-controls";
 import { EnterpriseApproverSelect } from "@/components/enterprise/enterprise-approver-select";
 import {
   FinanceCollaboration,
@@ -15,7 +15,6 @@ import {
   FinanceDetailValue,
   FinancePaginationControls,
   financeMutation,
-  useFinanceCollection,
   useFinanceLookups,
   type FinanceRecord,
 } from "@/components/enterprise/professional/finance-professional-workspace-shared";
@@ -37,12 +36,16 @@ import { ModuleMetric, ModuleMetrics } from "@/components/workspace/module-metri
 import { ModuleContent, ModuleHeader, ModuleSection, ModuleToolbar, ModuleWorkspace } from "@/components/workspace/module-workspace";
 import { StatusBadge } from "@/components/workspace/status-badge";
 import type { EnterpriseModuleDefinition } from "@/lib/enterprise/module-registry";
+import { inventoryQuantityExportValue as exactDecimalExportValue } from "@/lib/enterprise/inventory/quantity-display";
 import { translateEnterpriseFinance, type EnterpriseFinanceKey } from "@/lib/i18n";
 
 type CashSession = FinanceRecord & {
   financialAccountId: string;
   financialAccount?: { id: string; code: string; name: string; currencyCode: string };
   openingAmount: string | number;
+  inboundAmount?: string | null;
+  outboundAmount?: string | null;
+  expectedCurrentAmount?: string | null;
   theoreticalClosingAmount?: string | number | null;
   countedClosingAmount?: string | number | null;
   discrepancyAmount?: string | number | null;
@@ -62,6 +65,8 @@ type CashSession = FinanceRecord & {
   approval?: { assigned: boolean; status: string | null; approverLabel: string | null };
   capabilities?: { canClose?: boolean; canAssignApprover?: boolean; canApprove?: boolean; canReject?: boolean };
 };
+
+type CashSessionCounts = { total: number; open: number; pending: number };
 
 export function EnterpriseFinanceCashWorkspace({ organizationId, organizationName, definition, locale: requestedLocale, canManage }: {
   organizationId: string;
@@ -112,14 +117,27 @@ export function EnterpriseFinanceCashWorkspace({ organizationId, organizationNam
   useToastMessage(error, "error");
 
   const effectiveStatus = status || (tab === "pending" ? "PENDING_VALIDATION" : tab === "open" ? "OPEN" : tab === "closed" ? "CLOSED" : "");
-  const collection = useFinanceCollection<CashSession>({ endpoint: `/api/enterprise/${organizationId}/cash-sessions`, page, search, status: effectiveStatus, dateFrom, dateTo, refreshKey });
+  const endpoint = `/api/enterprise/${organizationId}/cash-sessions`;
+  const collection = useOperationalFinanceCollection<CashSession>({ endpoint, page, search, status: effectiveStatus, filters: { dateFrom, dateTo }, refreshKey });
+  const ready = !collection.loading && !collection.error;
+  const metrics = collection.metrics as Partial<CashSessionCounts> & { general?: CashSessionCounts; page?: CashSessionCounts };
+  const metricHint = (key: keyof CashSessionCounts) => ready && metrics.general && metrics.page
+    ? `${t("cashAuthorizedTotal")} ${metrics.general[key]} · ${t("cashDisplayedPage")} ${metrics.page[key]}` : undefined;
+  const cashAmount = (amount: unknown, currency: string | undefined) =>
+    amount != null && currency ? formatAnalyticsAmount({ amount: String(amount), currencyCode: currency }, locale) : "—";
   const exportColumns: FinanceExportColumn[] = [
-    { key: "reference", labelFr: "Référence", labelEn: "Reference", get: (row) => String(row.code || row.number || row.id || "") },
+    { key: "reference", labelFr: "Référence", labelEn: "Reference", get: (row) => String(row.number ?? "") },
     { key: "status", labelFr: "Statut", labelEn: "Status", get: (row) => financeStatusLabel(String(row.status || ""), locale) },
+    { key: "currency", labelFr: "Devise", labelEn: "Currency", get: (row) => String(row.currencyCode ?? "") },
     { key: "opened", labelFr: "Ouverture", labelEn: "Opened on", get: (row) => String(row.openedAt || "") },
     { key: "closed", labelFr: "Clôture", labelEn: "Closed on", get: (row) => String(row.closedAt || "") },
-    { key: "opening", labelFr: "Solde d’ouverture", labelEn: "Opening balance", get: (row) => String(row.openingAmount || "") },
-    { key: "difference", labelFr: "Écart", labelEn: "Difference", get: (row) => String(row.discrepancyAmount || "") },
+    { key: "opening", labelFr: "Solde d’ouverture", labelEn: "Opening balance", get: (row) => exactDecimalExportValue(String(row.openingAmount ?? "")) },
+    { key: "inbound", labelFr: "Entrées", labelEn: "Inflow", get: (row) => exactDecimalExportValue(String(row.inboundAmount ?? "")) },
+    { key: "outbound", labelFr: "Sorties", labelEn: "Outflow", get: (row) => exactDecimalExportValue(String(row.outboundAmount ?? "")) },
+    { key: "theoretical", labelFr: "Théorique", labelEn: "Expected", get: (row) => exactDecimalExportValue(String(row.theoreticalClosingAmount ?? "")) },
+    { key: "counted", labelFr: "Compté", labelEn: "Counted", get: (row) => exactDecimalExportValue(String(row.countedClosingAmount ?? "")) },
+    { key: "difference", labelFr: "Écart", labelEn: "Difference", get: (row) => exactDecimalExportValue(String(row.discrepancyAmount ?? "")) },
+    { key: "movementEvidence", labelFr: "État des mouvements", labelEn: "Movement evidence", get: (row) => row.expectedCurrentAmount === null ? t("cashMovementEvidenceUnavailable") : "" },
   ];
   const lookupData = useFinanceLookups(organizationId, "FINANCE_CASH", refreshKey);
   const cashAccounts = lookupData.accounts.filter((account) => account.accountType === "CASH");
@@ -238,32 +256,54 @@ export function EnterpriseFinanceCashWorkspace({ organizationId, organizationNam
     finally {setBusy(false);}
   }
 
-  const openCount = collection.items.filter((item) => item.status === "OPEN").length;
-  const pendingCount = collection.items.filter((item) => item.status === "PENDING_VALIDATION").length;
-
   return <ModuleWorkspace>
     <ModuleHeader
       eyebrow={`${t("cashOperations")} · ${organizationName}`}
       title={t("professionalCash")}
       description={locale === "en" ? definition.descriptionEn : definition.descriptionFr}
-      count={`${collection.pagination.total}`}
+      count={ready ? `${collection.pagination.total}` : undefined}
       primaryAction={canManage ? <Button disabled={busy} onClick={() => setCreateOpen(true)}><Plus className="h-4 w-4" />{t("openCashSession")}</Button> : undefined}
     />
-    <ModuleMetrics label={t("operationalMetrics")}>
-      <ModuleMetric label={t("total")} value={collection.pagination.total} />
-      <ModuleMetric label={t("openLabel")} value={openCount} />
-      <ModuleMetric label={t("toValidate")} value={pendingCount} />
-      <ModuleMetric label={t("compatibleAccounts")} value={cashAccounts.length} />
-    </ModuleMetrics>
+    <div className="min-w-0">
+      <p className="mb-1 text-xs font-semibold text-dtsc-muted">{t("cashFilteredIndicators")}</p>
+      <ModuleMetrics label={t("cashFilteredIndicators")}>
+        <ModuleMetric label={t("total")} value={ready ? collection.pagination.total : "—"} hint={metricHint("total")} />
+        <ModuleMetric label={t("openLabel")} value={ready ? metrics.open ?? "—" : "—"} hint={metricHint("open")} />
+        <ModuleMetric label={t("toValidate")} value={ready ? metrics.pending ?? "—" : "—"} hint={metricHint("pending")} />
+      </ModuleMetrics>
+    </div>
     <ModuleToolbar
       search={<ProfessionalSearch value={search} onChange={(value) => { setSearch(value); setPage(1); }} placeholder={t("cashSearchPlaceholder")} />}
-      controls={<div className="grid min-w-0 gap-2"><ProfessionalTabs value={tab} onChange={(value) => { setTab(value); setStatus(""); setPage(1); }} items={tabs} label={t("moduleViews")} /><div className="flex min-w-0 flex-wrap items-end gap-2"><NativeSelect value={status} onChange={(value) => { setStatus(value); setPage(1); }} items={[{ id: "", label: t("allStatuses") }, ...["OPEN", "PENDING_VALIDATION", "CLOSED", "REJECTED"].map((id) => ({ id, label: financeStatusLabel(id, locale) }))]} /><FinanceDateFilter locale={locale} from={dateFrom} to={dateTo} onChange={(from, to) => { setDateFrom(from); setDateTo(to); setPage(1); }} /><FinanceExportControls endpoint={`/api/enterprise/${organizationId}/cash-sessions`} organizationName={organizationName} title={locale === "en" ? definition.labelEn : definition.labelFr} locale={locale} filters={{ search, status: effectiveStatus, dateFrom, dateTo }} columns={exportColumns} disabled={collection.loading} /></div></div>}
+      controls={<div className="grid min-w-0 gap-2">
+        <ProfessionalTabs value={tab} onChange={(value) => { setTab(value); setStatus(""); setPage(1); }} items={tabs} label={t("moduleViews")} />
+        <div className="flex min-w-0 flex-wrap items-end gap-2">
+          <NativeSelect value={status} onChange={(value) => { setStatus(value); setPage(1); }} items={[
+            { id: "", label: t("allStatuses") },
+            ...["OPEN", "PENDING_VALIDATION", "CLOSED", "REJECTED"].map((id) => ({ id, label: financeStatusLabel(id, locale) })),
+          ]} />
+          <FinanceDateFilter locale={locale} from={dateFrom} to={dateTo} onChange={(from, to) => { setDateFrom(from); setDateTo(to); setPage(1); }} />
+          <FinanceExportControls endpoint={endpoint} organizationName={organizationName}
+            title={locale === "en" ? definition.labelEn : definition.labelFr} locale={locale}
+            filters={{ search, status: effectiveStatus, dateFrom, dateTo }}
+            reportFilters={[
+              { label: locale === "en" ? "Search" : "Recherche", value: search },
+              { label: t("status"), value: effectiveStatus ? financeStatusLabel(effectiveStatus, locale) : "" },
+              { label: locale === "en" ? "Opened from" : "Ouverture à partir du", value: dateFrom },
+              { label: locale === "en" ? "Opened through" : "Ouverture jusqu’au", value: dateTo },
+            ].filter(filter => filter.value)}
+            columns={exportColumns} disabled={!ready} />
+        </div>
+      </div>}
       summary={t("cashSectionDescription")}
     />
     <ModuleContent>
       {message ? <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm font-bold text-emerald-800 dark:text-emerald-200">{message}</div> : null}
       {error ? <ProfessionalError message={error} /> : null}
       {lookupData.error ? <ProfessionalError message={lookupData.error} /> : null}
+      {ready ? <div className="grid min-w-0 gap-2">
+        <p className="text-xs text-dtsc-muted">{t("cashSummaryBasis")}</p>
+        <FinanceAmountScopes totals={collection} locale={locale} />
+      </div> : null}
       <ModuleSection title={tabs.find((item) => item.id === tab)?.label || ""} description={t("cashSectionDescription")}>
         {collection.error ? <ProfessionalError message={collection.error} /> : collection.loading ? <ProfessionalLoading /> : !collection.items.length ? <p className="rounded-xl bg-dtsc-page p-4 text-sm text-dtsc-muted">{t("noItem")}</p> : <div className="grid min-w-0 gap-2">{collection.items.map((session) => <button key={session.id} type="button" onClick={() => openDetail(session)} className="min-w-0 rounded-xl border border-dtsc-border bg-dtsc-page p-3 text-left hover:border-cyan-500 focus-visible:outline-2 focus-visible:outline-cyan-500"><div className="flex flex-wrap items-center justify-between gap-2"><strong className="break-all text-sm text-dtsc-ink">{session.number}</strong><span className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-2 py-1 text-xs font-bold text-dtsc-ink">{financeStatusLabel(session.status, locale)} · {session.status === "CLOSED" ? (session.closedByLabel || "—") : session.openedByLabel || "—"}</span></div><div className="mt-2 grid gap-1 text-xs text-dtsc-muted sm:grid-cols-2"><span>{locale === "fr" ? "Ouverture" : "Opened"} : {new Date(session.openedAt).toLocaleString(locale === "fr" ? "fr-FR" : "en-US")} · {session.openedByLabel || "—"}</span>{session.submittedAt ? <span>{locale === "fr" ? "Clôture soumise" : "Closing submitted"} : {new Date(session.submittedAt).toLocaleString(locale === "fr" ? "fr-FR" : "en-US")} · {session.submittedByLabel || "—"}</span> : null}{session.validatedAt ? <span>{locale === "fr" ? "Clôture validée" : "Closing approved"} : {new Date(session.validatedAt).toLocaleString(locale === "fr" ? "fr-FR" : "en-US")} · {session.closedByLabel || "—"}</span> : null}</div></button>)}</div>}
         <FinancePaginationControls pagination={collection.pagination} page={page} onPage={setPage} locale={locale} />
@@ -287,11 +327,12 @@ export function EnterpriseFinanceCashWorkspace({ organizationId, organizationNam
         <div className="flex flex-wrap gap-2"><StatusBadge tone={financeStatusTone(detail.status)}>{financeStatusLabel(detail.status, locale)} · {detail.status === "CLOSED" ? detail.closedByLabel || "—" : detail.openedByLabel || "—"}</StatusBadge></div>
         <div className="grid gap-1 rounded-xl bg-dtsc-page p-3 text-xs text-dtsc-muted"><p>{locale === "fr" ? "Ouverte le" : "Opened on"} {new Date(detail.openedAt).toLocaleString(locale === "fr" ? "fr-FR" : "en-US")} · {detail.openedByLabel || "—"}</p>{detail.submittedAt ? <p>{locale === "fr" ? "Clôture soumise le" : "Closing submitted on"} {new Date(detail.submittedAt).toLocaleString(locale === "fr" ? "fr-FR" : "en-US")} · {detail.submittedByLabel || "—"}</p> : null}{detail.validatedAt ? <p>{locale === "fr" ? "Clôture validée le" : "Closing approved on"} {new Date(detail.validatedAt).toLocaleString(locale === "fr" ? "fr-FR" : "en-US")} · {detail.closedByLabel || "—"}</p> : null}</div>
         <FinanceDetailGrid>
-          <FinanceDetailValue label={t("opening")}>{financeMoney(detail.openingAmount, String(detail.financialAccount?.currencyCode || "USD"), locale)}</FinanceDetailValue>
-          {detail.theoreticalClosingAmount !== undefined ? <FinanceDetailValue label={t("theoretical")}>{financeMoney(detail.theoreticalClosingAmount, String(detail.financialAccount?.currencyCode || "USD"), locale)}</FinanceDetailValue> : null}
-          {detail.countedClosingAmount !== undefined ? <FinanceDetailValue label={t("counted")}>{financeMoney(detail.countedClosingAmount, String(detail.financialAccount?.currencyCode || "USD"), locale)}</FinanceDetailValue> : null}
-          {detail.discrepancyAmount !== undefined ? <FinanceDetailValue label={t("variance")}>{financeMoney(detail.discrepancyAmount, String(detail.financialAccount?.currencyCode || "USD"), locale)}</FinanceDetailValue> : null}
+          <FinanceDetailValue label={t("opening")}>{cashAmount(detail.openingAmount, detail.financialAccount?.currencyCode)}</FinanceDetailValue>
+          {detail.theoreticalClosingAmount !== undefined ? <FinanceDetailValue label={t("theoretical")}>{cashAmount(detail.theoreticalClosingAmount, detail.financialAccount?.currencyCode)}</FinanceDetailValue> : null}
+          {detail.countedClosingAmount !== undefined ? <FinanceDetailValue label={t("counted")}>{cashAmount(detail.countedClosingAmount, detail.financialAccount?.currencyCode)}</FinanceDetailValue> : null}
+          {detail.discrepancyAmount !== undefined ? <FinanceDetailValue label={t("variance")}>{cashAmount(detail.discrepancyAmount, detail.financialAccount?.currencyCode)}</FinanceDetailValue> : null}
         </FinanceDetailGrid>
+        {detail.expectedCurrentAmount === null ? <p role="status" className="text-sm text-dtsc-muted">{t("cashMovementEvidenceUnavailable")}</p> : null}
         {detail.varianceQualificationPending ? <p role="status" className="rounded-xl border border-amber-500/30 p-3 text-sm text-dtsc-ink">{t("cashVarianceQualificationPending")}</p> : null}
         {(detail.varianceReviews || []).map(variance => <section key={variance.id} className="grid min-w-0 gap-2 rounded-xl border border-dtsc-border p-3">
           <strong>{t("cashVarianceReviewTitle")}</strong>

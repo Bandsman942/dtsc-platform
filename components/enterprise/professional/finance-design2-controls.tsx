@@ -90,6 +90,8 @@ const filteredMetricLabels = {
   payrollDeductions: { fr: "Retenues", en: "Deductions" },
   payrollNet: { fr: "Total net", en: "Net total" },
   projectIndicativeBudget: { fr: "Budget indicatif", en: "Indicative budget" },
+  cashClosingShortage: { fr: "Manquants constatés à la clôture", en: "Recorded closing shortages" },
+  cashClosingSurplus: { fr: "Excédents constatés à la clôture", en: "Recorded closing surpluses" },
 } as const;
 function filteredMetricLabel(row: FinanceFilteredTotal, locale: Locale) {
   const status = row.status

@@ -89,11 +89,21 @@ Le registre calcule le brut, les primes, les retenues et le net par devise et st
 
 La fixture PostgreSQL contrôle 56 exécutions filtrées, les quatre montants exacts, la seconde page, un préparateur hors périmètre, un statut annulé en USD et le profil en lecture personnelle.
 
+### Registre Caisse et recherche dans le grand livre
+
+Caisse. Le registre compte les sessions ouvertes et à valider sur le résultat filtré complet. Les compteurs et les montants distinguent le général autorisé, le résultat filtré et la page affichée. La sélection des boutiques, les agrégats et les lignes sont lus dans la même transaction. Le filtre de date s’applique à l’ouverture de session et les flux représentent les mouvements rattachés à ces sessions. Les manquants et excédents constatés des clôtures validées sont séparés par devise. Ces écarts de comptage et les soldes d’ouverture et de clôture conservent leur sens historique. La projection indique une preuve de mouvement incohérente si la devise ou le sens empêche de calculer le montant théorique exact.
+
+Le registre et l’export partagent les filtres par référence, compte, statut et dates. Le CSV, Excel et PDF reprennent la devise, les flux, les soldes de la session et les écarts. La fixture PostgreSQL teste 56 sessions filtrées, trois pages, deux devises, un magasin hors périmètre et une autre organisation.
+
+Le parcours Chromium local a vérifié l’authentification, la clôture en français avec validateur désigné, la file de validations en anglais et la stabilité du total de 102 sessions filtrées sur cinq pages. Les trois exports téléchargés depuis la deuxième page reprennent les valeurs exactes du registre. Le test contrôle les 102 lignes CSV, les cellules texte et numériques du classeur et les montants détaillés et de synthèse du PDF. Le rendu PDF partagé ajuste le corps des nombres qui tiennent dans la colonne et répartit les autres cellules sur plusieurs lignes, avec répétition de l’en-tête lors d’un saut de page.
+
+Grand livre. La recherche canonique retrouve les désignations et codes actuels pour les formes historiques exactes générées par le moteur de stock. Le journal conserve son libellé d’origine. Le rendu indique l’origine de la désignation et signale la référence manquante. Les rédactions libres et les snapshots restent recherchables par leur texte enregistré. La sélection avant pagination alimente aussi le nombre de lignes et les totaux de débit/crédit en devise fonctionnelle. La fixture PostgreSQL vérifie cette concordance sur deux pages, les dimensions, les écritures contrepassées, les brouillons, une référence d’un autre tenant et les caractères littéraux de recherche.
+
 ### Sources vérifiées pour les agrégations restantes
 
 | Surface | Source actuelle | Vérification encore nécessaire |
 |---|---|---|
-| Caisse | `cash-sessions` projette les sessions, les mouvements et les écarts de caisse | Agréger les flux et les écarts selon les mêmes filtres et droits. Définir ouverture et clôture à date avant de consolider les soldes |
+| Caisse | `cash-sessions` aligne les compteurs, flux et écarts constatés sur le registre autorisé | Définir le calcul des soldes d’ouverture et de clôture à date pour la consolidation |
 | Budgets | `budgets` utilise `getBudgetPosition` pour les versions de budget de la page, à partir des lignes et engagements | Séparer versions et scénarios avant toute somme, puis utiliser les mêmes prévisions, engagements et réalisations pour le registre et l’export |
 | Dépenses | `expenses` lit et agrège le registre dédié par devise et statut, sous le même filtre de visibilité. Le registre et les exports reprennent ces agrégats | Certifier les parcours navigateur FR/EN et les relations avec les positions budgétaires versionnées |
 | Mobile Money et Telco | Le registre Telco applique le périmètre boutique du compte d’encaissement. Le registre direct Mobile Money vérifie le droit de l’organisation et reste à aligner sur le périmètre du compte de caisse. Les deux registres masquent les numéros sur les lignes | Fonder les agrégats de flux et de commissions sur les mêmes restrictions que les lignes. Rapporter les soldes de float à une date |

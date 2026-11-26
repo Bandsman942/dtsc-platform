@@ -15,6 +15,7 @@ db.$on("query",event=>{if(event.duration>=25)queryTimings.push({ms:event.duratio
 const { planFefoLots } = workflowTestLoader({})("@/lib/enterprise/inventory/lot-allocation");
 const { appendCatalogUnitConversion, projectCatalogConversion, resolveCatalogUnitConversion } =
   workflowTestLoader({})("@/lib/enterprise/master-data/unit-conversions");
+const { getAccountingGeneralLedger } = workflowTestLoader({})("@/lib/enterprise/accounting/accounting-query-service");
 const handlerLoadStarted=performance.now();
 const inventoryFixture={reader:null,organizationId:"",siteId:"",actor:""};
 const {GET:inventoryGet}=workflowTestLoader({
@@ -84,6 +85,257 @@ const { GET: getPayrollRuns } = workflowTestLoader({
 })("@/app/api/enterprise/[organizationId]/payroll-runs/route");
 
 class RollbackFixture extends Error {}
+
+const cashFixture = { reader: null, organizationId: "", siteId: "", actor: "" };
+const ledgerFixture = { reader: null, organizationId: "", actor: "" };
+const { GET: getAccountingLedger } = workflowTestLoader({
+  "@/lib/prisma": { prisma: { $transaction: async (callback, options) => {
+    assert.equal(options.isolationLevel, "RepeatableRead");
+    return callback(ledgerFixture.reader);
+  } } },
+  "@/lib/enterprise/accounting/http": {
+    authorizeFinanceRequest: async (_req, organizationId, feature, action) => {
+      assert.equal(feature, "FINANCE_ACCOUNTING");
+      assert.equal(action, "view");
+      return organizationId === ledgerFixture.organizationId
+        ? { ok: true, session: { userId: ledgerFixture.actor } }
+        : { ok: false, response: new Response(null, { status: 403 }) };
+    },
+    financeErrorResponse: error => { throw error; },
+  },
+  "@/lib/audit": { writeApiLog: async () => {} },
+  "@/lib/enterprise/accounting/accounting-source-link-registry": {},
+  "@/lib/enterprise/accounting/journal-entry-capabilities": {},
+})("@/app/api/enterprise/[organizationId]/accounting-query/route");
+const { GET: getCashSessions } = workflowTestLoader({
+  "@/lib/prisma": { prisma: {
+    $transaction: async (callback, options) => {
+      assert.equal(options.isolationLevel, "RepeatableRead");
+      return callback(cashFixture.reader);
+    },
+    get organizationMember() { return cashFixture.reader.organizationMember; },
+    get enterpriseApproval() { return cashFixture.reader.enterpriseApproval; },
+  } },
+  "@/lib/enterprise/accounting/http": {
+    authorizeFinanceRequest: async (_req, organizationId, feature, action) => {
+      assert.equal(feature, "FINANCE_CASH");
+      assert.equal(action, "view");
+      return organizationId === cashFixture.organizationId
+        ? { ok: true, session: { userId: cashFixture.actor }, access: { capabilities: {} } }
+        : { ok: false, response: new Response(null, { status: 403 }) };
+    },
+    financeListParams(req) {
+      const params = new URL(req.url).searchParams;
+      return { page: Number(params.get("page") || 1), pageSize: 25, search: params.get("search"), status: params.get("status") };
+    },
+    financeBusinessDateRange(req) {
+      const params = new URL(req.url).searchParams;
+      return { ok: true, from: params.get("dateFrom") ? new Date(params.get("dateFrom")) : null, to: null };
+    },
+  },
+  "@/lib/enterprise/retail/site-access": { retailFinanceReadSiteScope: async (organizationId, actor, action, tx) => {
+    assert.equal(action, "CLOSE_CASH");
+    assert.equal(organizationId, cashFixture.organizationId);
+    assert.equal(actor, cashFixture.actor);
+    assert.equal(tx, cashFixture.reader);
+    return [cashFixture.siteId];
+  } },
+  "@/lib/audit": { writeApiLog: async () => {} },
+  "@/lib/enterprise/accounting/treasury-service": {},
+  "@/lib/enterprise/accounting/treasury-schemas": {},
+  "@/lib/enterprise/accounting/access": {},
+  "@/lib/enterprise/approval-targets": {},
+})("@/app/api/enterprise/[organizationId]/cash-sessions/route");
+
+async function verifyCashAnalytics(tenant, otherTenant, actor) {
+  await assert.rejects(db.$transaction(async tx => {
+    const siteA = `${tenant}-cash-shop-a`;
+    const siteB = `${tenant}-cash-shop-b`;
+    const account = async (organizationId, code, currencyCode) => {
+      const chart = await tx.enterpriseChartOfAccounts.create({ data: { organizationId, code, nameFr: code, nameEn: code, createdByUserId: actor } });
+      const ledger = await tx.enterpriseLedgerAccount.create({ data: { organizationId, chartId: chart.id, code, nameFr: code, nameEn: code, accountType: "ASSET" } });
+      return tx.enterpriseFinancialAccount.create({
+        data: { organizationId, ledgerAccountId: ledger.id, code, name: code, accountType: "CASH", currencyCode },
+      });
+    };
+    const cdf = await account(tenant, "QA-CDF", "CDF");
+    const usd = await account(tenant, "QA-USD", "USD");
+    const foreign = await account(otherTenant, "QA-CDF", "CDF");
+    const amount = "99999999999999.999999";
+    const session = { organizationId: tenant, financialAccountId: cdf.id, cashierUserId: actor, siteId: siteA,
+      status: "OPEN", openedAt: new Date("2026-11-05"), openingAmount: amount };
+    const bulk = Array.from({ length: 56 }, (_, index) => ({
+      ...session, id: `${tenant}-till-${String(index).padStart(2, "0")}`, number: `CASH-TARGET-${index}`,
+    }));
+    const closed = { status: "CLOSED", expectedClosingAmount: "10", countedClosingAmount: "9.5", discrepancyAmount: "-0.5" };
+    const extra = [
+      { ...session, ...closed, id: `${tenant}-shortage`, number: "CASH-SHORTAGE" },
+      { ...session, ...closed, id: `${tenant}-surplus`, financialAccountId: usd.id, number: "CASH-SURPLUS", countedClosingAmount: "10.6", discrepancyAmount: "0.6" },
+      { ...session, ...closed, id: `${tenant}-surplus-cdf`, number: "CASH-SURPLUS-CDF", countedClosingAmount: "10.2", discrepancyAmount: "0.2" },
+      { ...session, ...closed, status: "PENDING_VALIDATION", id: `${tenant}-pending`, number: "CASH-PENDING" },
+      { ...session, id: `${tenant}-old`, number: "CASH-TARGET-OLD", openedAt: new Date("2026-10-31") },
+      { ...session, id: `${tenant}-forbidden`, number: "CASH-TARGET-FORBIDDEN", siteId: siteB },
+      { ...session, id: `${tenant}-foreign`, number: "CASH-TARGET-FOREIGN", organizationId: otherTenant, financialAccountId: foreign.id },
+      { ...session, id: `${tenant}-invalid`, number: "CASH-INVALID-EVIDENCE" },
+    ];
+    await tx.enterpriseCashSession.createMany({ data: [...bulk, ...extra] });
+    const movement = { organizationId: tenant, direction: "INBOUND", currencyCode: "CDF", movementType: "PAYMENT", amount, createdByUserId: actor,
+      createdAt: new Date("2026-11-09") };
+    await tx.enterpriseCashMovement.createMany({ data: [
+      ...bulk.map(row => ({ ...movement, cashSessionId: row.id })),
+      { ...movement, cashSessionId: bulk[0].id, direction: "OUTBOUND", amount: "0.000001" },
+      { ...movement, cashSessionId: `${tenant}-surplus`, currencyCode: "USD", amount: "4.65" },
+      { ...movement, cashSessionId: `${tenant}-forbidden`, amount: "4545" },
+      { ...movement, cashSessionId: `${tenant}-foreign`, organizationId: otherTenant, amount: "4545" },
+      { ...movement, cashSessionId: `${tenant}-invalid`, currencyCode: "USD", amount: "0.5" },
+    ] });
+    Object.assign(cashFixture, { reader: tx, organizationId: tenant, siteId: siteA, actor });
+    const read = (query, organizationId = tenant) => getCashSessions(new Request(`http://localhost/api/enterprise/${organizationId}/cash-sessions?${query}`), {
+      params: Promise.resolve({ organizationId }),
+    });
+    const scope = "search=CASH-TARGET&status=OPEN&dateFrom=2026-11-01";
+    const response = await read(scope);
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get("cache-control"), "private, no-store");
+    const first = await response.json();
+    const third = await (await read(scope + "&page=3")).json();
+    const absent = await (await read(scope + "&page=4")).json();
+    const total = (body, field, metric, currencyCode) => body[field].find(row => row.metric === metric && row.currencyCode === currencyCode)?.amount;
+    assert.deepEqual(first.pagination, { page: 1, pageSize: 25, total: 56, pageCount: 3 });
+    assert.deepEqual(first.metrics, { total: 56, open: 56, pending: 0,
+      general: { total: 62, open: 58, pending: 1 }, page: { total: 25, open: 25, pending: 0 } });
+    assert.equal(third.metrics.page.open, 6);
+    assert.deepEqual(absent.pageTotals, []);
+    assert.deepEqual(third.filteredTotals, first.filteredTotals);
+    assert.deepEqual(absent.generalTotals, first.generalTotals);
+    assert.equal(total(first, "filteredTotals", "inbound", "CDF"), "5599999999999999.999944");
+    assert.equal(total(first, "filteredTotals", "outbound", "CDF"), "0.000001");
+    assert.equal(total(third, "pageTotals", "inbound", "CDF"), "599999999999999.999994");
+    assert.equal(total(first, "generalTotals", "inbound", "CDF"), "5599999999999999.999944");
+    assert.equal(total(first, "generalTotals", "inbound", "USD"), "5.15");
+    assert.equal(total(first, "generalTotals", "cashClosingShortage", "CDF"), "0.5", "Unvalidated counts must not inflate closing shortages");
+    assert.equal(total(first, "generalTotals", "cashClosingSurplus", "CDF"), "0.2", "Surpluses must remain distinct from shortages");
+    assert.equal(total(first, "generalTotals", "cashClosingSurplus", "USD"), "0.6");
+    assert.equal(third.items.find(row => row.id === bulk[0].id).theoreticalClosingAmount, "199999999999999.999997");
+    const invalid = await (await read(`recordId=${tenant}-invalid`)).json();
+    assert.equal(invalid.items[0].expectedCurrentAmount, null);
+    assert.equal(invalid.items[0].inboundAmount, null);
+    assert.equal(invalid.filteredTotals, undefined);
+    const forbidden = await (await read(`recordId=${tenant}-forbidden`)).json();
+    assert.deepEqual(forbidden.items, []);
+    assert.equal(forbidden.generalTotals, undefined);
+    assert.equal((await read(scope, otherTenant)).status, 403);
+    throw new RollbackFixture();
+  }, { isolationLevel: "RepeatableRead", timeout: 10000 }), RollbackFixture);
+  assert.equal(await db.enterpriseCashSession.count({ where: { organizationId: { in: [tenant, otherTenant] } } }), 0);
+  console.log("PASS #1228 PostgreSQL cash sessions: exact 56-session totals, page/authorized scopes, signed closing variances and store isolation");
+}
+
+async function verifyLedgerSearch(tenant, otherTenant, actor) {
+  await assert.rejects(db.$transaction(async tx => {
+    const accountingDate = new Date("2026-11-10");
+    async function createAccountingContext(organizationId, catalogName) {
+      const year = await tx.enterpriseFiscalYear.create({ data: {
+        organizationId, code: "2026", startDate: new Date("2026-01-01"), endDate: new Date("2026-12-31"), createdByUserId: actor,
+      } });
+      const period = await tx.enterpriseFiscalPeriod.create({ data: {
+        organizationId, fiscalYearId: year.id, code: "2026-11", startDate: new Date("2026-11-01"), endDate: new Date("2026-11-30"), createdByUserId: actor,
+      } });
+      const chart = await tx.enterpriseChartOfAccounts.create({ data: {
+        organizationId, code: "QA-LEDGER", nameFr: "Plan", nameEn: "Chart", createdByUserId: actor,
+      } });
+      const ledger = await tx.enterpriseLedgerAccount.create({ data: {
+        organizationId, chartId: chart.id, code: "QA-LEDGER-35", nameFr: "Stock test", nameEn: "Stock test", accountType: "ASSET",
+      } });
+      const journal = await tx.enterpriseJournal.create({ data: {
+        organizationId, code: "QA-LEDGER", nameFr: "Journal", nameEn: "Journal", journalType: "GENERAL", createdByUserId: actor,
+      } });
+      const unit = await tx.enterpriseUnitOfMeasure.create({ data: { organizationId, code: "GL-QA", name: "Test unit", decimalScale: 6 } });
+      const item = await tx.enterpriseCatalogItem.create({ data: {
+        organizationId, code: "SEARCH_1228", name: catalogName, normalizedName: catalogName.toLowerCase(), itemType: "PRODUCT",
+        unitOfMeasureId: unit.id, createdByUserId: actor,
+      } });
+      const inventory = await tx.enterpriseInventoryItem.create({ data: { organizationId, catalogItemId: item.id, createdByUserId: actor } });
+      return { organizationId, fiscalPeriodId: period.id, journalId: journal.id, ledgerAccountId: ledger.id, item, inventoryItemId: inventory.id };
+    }
+    const currentName = "Produit actuel 75%_test";
+    const local = await createAccountingContext(tenant, "Ancienne désignation");
+    const foreign = await createAccountingContext(otherTenant, "FOREIGN DESIGNATION");
+    const amount = "99999999999999.999999";
+    const exact = context => `ISSUE ${context.inventoryItemId}`;
+    async function journalLine(context, index, { status = "POSTED", currency = "CDF", site = "warehouse-a", narrative = exact(context), inventoryItemId = context.inventoryItemId, debit = amount } = {}) {
+      const number = `GL-${String(index).padStart(3, "0")}`;
+      const entry = await tx.enterpriseJournalEntry.create({ data: {
+        organizationId: context.organizationId, fiscalPeriodId: context.fiscalPeriodId, journalId: context.journalId,
+        number, reference: `QA-${number}`, description: "Movement", accountingDate, sourceModule: "INVENTORY", sourceEntityType: "StockMovement",
+        functionalCurrencyCode: currency, preparedByUserId: actor, status, totalDebit: debit, totalCredit: debit,
+        ...(status === "DRAFT" ? {} : { postedAt: accountingDate, postedByUserId: actor }),
+      } });
+      await tx.enterpriseJournalLine.createMany({ data: [
+        { organizationId: entry.organizationId, journalEntryId: entry.id, ledgerAccountId: context.ledgerAccountId,
+          siteId: site, inventoryItemId, description: narrative, debit, functionalAmount: debit },
+        { organizationId: entry.organizationId, journalEntryId: entry.id, ledgerAccountId: context.ledgerAccountId,
+          siteId: site, description: "Counterpart", credit: debit, functionalAmount: debit },
+      ] });
+    }
+    for (let index = 1; index <= 26; index++) await journalLine(local, index);
+    await journalLine(local, 27, { status: "REVERSED", debit: "0.000001" });
+    await journalLine(local, 28, { currency: "USD", debit: "3.65" });
+    await journalLine(local, 29, { site: "warehouse-b" });
+    await journalLine(local, 30, { status: "DRAFT" });
+    await journalLine(local, 31, { narrative: "ISSUE Ancienne désignation" });
+    await journalLine(local, 32, { narrative: `ISSUE ${local.inventoryItemId} commentaire libre` });
+    await journalLine(local, 33, { narrative: exact(foreign), inventoryItemId: foreign.inventoryItemId });
+    await journalLine(foreign, 1);
+    await tx.enterpriseCatalogItem.update({ where: { id: local.item.id }, data: { name: currentName, normalizedName: currentName.toLowerCase() } });
+
+    const search = { search: "75%_test", siteId: "warehouse-a", sourceModule: "INVENTORY", sourceEntityType: "StockMovement",
+      fiscalPeriodId: local.fiscalPeriodId, journalId: local.journalId, ledgerAccountId: local.ledgerAccountId,
+      dateFrom: new Date("2026-11-01"), dateTo: new Date("2026-11-30"), pageSize: 25 };
+    const ledger = filters => getAccountingGeneralLedger(tx, tenant, filters);
+    Object.assign(ledgerFixture, { reader: tx, organizationId: tenant, actor });
+    const requestQuery = new URLSearchParams({ ...search, dateFrom: search.dateFrom.toISOString(), dateTo: search.dateTo.toISOString() });
+    const request = (organizationId = tenant) => getAccountingLedger(
+      new Request(`http://localhost/api/enterprise/${organizationId}/accounting-query?${requestQuery}`),
+      { params: Promise.resolve({ organizationId }) },
+    );
+    const firstResponse = await request();
+    assert.equal(firstResponse.status, 200);
+    assert.equal((await request(otherTenant)).status, 403);
+    const first = await firstResponse.json();
+    const second = await ledger({ ...search, page: 2 });
+    const empty = await ledger({ ...search, page: 3 });
+    assert.deepEqual(first.pagination, { page: 1, pageSize: 25, total: 28, pageCount: 2 });
+    assert.equal(first.items.length, 25);
+    assert.equal(first.items[0].journalEntry.number, "GL-028");
+    assert.deepEqual(second.items.map(row => row.journalEntry.number), ["GL-003", "GL-002", "GL-001"]);
+    assert.deepEqual(empty.items, []);
+    assert.deepEqual(first.filteredTotals, [
+      { currencyCode: "CDF", metric: "debit", amount: "2599999999999999.999975" },
+      { currencyCode: "CDF", metric: "credit", amount: "0" },
+      { currencyCode: "USD", metric: "debit", amount: "3.65" },
+      { currencyCode: "USD", metric: "credit", amount: "0" },
+    ]);
+    assert.deepEqual(second.filteredTotals, first.filteredTotals);
+    assert.deepEqual(empty.filteredTotals, first.filteredTotals);
+    assert.equal(first.items[0].description, exact(local));
+    assert.equal(first.items[0].displayDescription, `ISSUE current catalog ${currentName} · SEARCH_1228`);
+    assert.equal((await ledger({ ...search, search: "search_1228", currencyCode: "USD" })).pagination.total, 1);
+    assert.equal((await ledger({ ...search, status: "REVERSED" })).pagination.total, 1);
+    assert.equal((await ledger({ ...search, status: "DRAFT" })).pagination.total, 0);
+    assert.equal((await ledger({ ...search, search: "75%_nom-absent" })).pagination.total, 0);
+    assert.equal((await ledger({ ...search, search: "search%1228" })).pagination.total, 0);
+    assert.equal((await ledger({ search: "foreign designation" })).pagination.total, 0);
+    const missing = await ledger({ search: "QA-GL-033" });
+    assert.equal(missing.items.find(row => row.inventoryItemId)?.displayDescription, "ISSUE catalog unavailable");
+    const snapshot = await ledger({ search: "ancienne désignation" });
+    assert.equal(snapshot.pagination.total, 1);
+    assert.equal(snapshot.items[0].displayDescription, "ISSUE Ancienne désignation");
+    assert.equal((await ledger({ search: "commentaire libre" })).items[0].displayDescription, `ISSUE ${local.inventoryItemId} commentaire libre`);
+    throw new RollbackFixture();
+  }, { isolationLevel: "RepeatableRead", timeout: 10000 }), RollbackFixture);
+  console.log("PASS #1228 PostgreSQL general ledger: current catalog search, immutable descriptions, exact multi-currency totals and tenant isolation");
+}
 
 async function verifyConversionHistory(tenant, otherTenant, actor) {
   await assert.rejects(db.$transaction(async tx => {
@@ -262,6 +514,8 @@ try {
   const actor = "qa-1228-actor";
   await verifyConversionHistory(tenant, otherTenant, actor);
   await verifyProjectAnalytics(tenant, otherTenant, actor);
+  await verifyCashAnalytics(tenant, otherTenant, actor);
+  await verifyLedgerSearch(tenant, otherTenant, actor);
   try {
     await db.$transaction(async tx => {
       const fixtureStarted=performance.now();

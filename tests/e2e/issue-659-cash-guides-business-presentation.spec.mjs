@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { PrismaClient } from "@prisma/client";
+import { readFile } from "node:fs/promises";
 
 const prisma = new PrismaClient();
 const baseUrl = process.env.E2E_BASE_URL || "http://127.0.0.1:3000";
@@ -219,5 +220,67 @@ test.describe.serial("Hotfix #659 cash validation, canonical guides and business
     await assertNoGlobalOverflow(page, 1440);
 
     await context.close();
+  });
+
+  test("cash totals and filtered CSV include all authorized sessions across pages", async ({ page }) => {
+    const suffix = `CASH-1229-${Date.now()}`;
+    const sessionIds = Array.from({ length: 102 }, (_, index) => `${suffix}-${String(index).padStart(3, "0")}`);
+    const amount = "99999999999999.999999";
+    await prisma.enterpriseCashSession.createMany({ data: sessionIds.map((id, index) => ({
+      id, number: id, organizationId, financialAccountId: cashAccount.id, siteId: cashAccount.siteId,
+      cashierUserId: adminUser.id, status: "OPEN", openingAmount: amount, openedAt: new Date(Date.UTC(2026, 10, 5, 0, index)),
+    })) });
+    try {
+      await prisma.enterpriseCashMovement.createMany({ data: sessionIds.map(cashSessionId => ({
+        organizationId, cashSessionId, amount, currencyCode: "USD", direction: "INBOUND",
+        movementType: "PAYMENT", createdByUserId: adminUser.id,
+      })) });
+      await signIn(page, adminEmail, adminPassword, "/enterprise-modules/FINANCE_CASH");
+      await page.goto("/enterprise-modules/FINANCE_CASH");
+      const request = page.waitForResponse(response => response.url().includes("cash-sessions?") && new URL(response.url()).searchParams.get("search") === suffix);
+      await page.getByPlaceholder("Référence, compte ou période…").fill(suffix);
+      const firstPage = await (await request).json();
+      expect(firstPage.metrics.open).toBe(102);
+      expect(firstPage.metrics.page.open).toBe(25);
+      expect(firstPage.filteredTotals).toContainEqual({ currencyCode: "USD", metric: "inbound", amount: "10199999999999999.999898", status: "" });
+      const amounts = page.locator("[data-commercial-amount-scopes]");
+      await expect(amounts).toContainText(/10\D199\D999\D999\D999\D999[,.]999898/);
+      await page.locator("[data-workspace-section-header]").filter({ hasText: "Toutes les sessions" }).click();
+      await expect(page.getByText("102 élément(s) · Page 1/5")).toBeVisible();
+      await expect(page.getByRole("button", { name: new RegExp(sessionIds[101]) })).toBeVisible();
+      await page.getByRole("button", { name: "Suivant" }).click();
+      await expect(page.getByText("102 élément(s) · Page 2/5")).toBeVisible();
+      await expect(page.getByRole("button", { name: new RegExp(sessionIds[76]) })).toBeVisible();
+      await page.locator("[data-workspace-section-back]").click();
+      await expect(amounts).toContainText(/10\D199\D999\D999\D999\D999[,.]999898/);
+      async function downloadRegister(format) {
+        const download = page.waitForEvent("download");
+        await page.getByRole("button", { name: format, exact: true }).click();
+        const file = await download;
+        expect(await file.failure()).toBeNull();
+        return readFile(await file.path());
+      }
+      const csv = (await downloadRegister("CSV")).toString("utf8");
+      const records = csv.split(/\r?\n/).filter(row => row.includes(`${suffix}-`));
+      expect(records).toHaveLength(102);
+      expect(records.some(row => row.includes(sessionIds[0]) && row.includes(amount))).toBe(true);
+      expect(records.some(row => row.includes(sessionIds[101]) && row.includes(amount))).toBe(true);
+      expect(csv).toMatch(/10\D199\D999\D999\D999\D999[,.]999898/);
+      expect(csv).not.toContain(cashSession?.number || "UNFILTERED-CASH-SESSION");
+      const excel = await downloadRegister("Excel");
+      expect(excel.subarray(0, 4)).toEqual(Buffer.from([0x50, 0x4b, 0x03, 0x04]));
+      const workbook = excel.toString("utf8");
+      expect(workbook).toContain(sessionIds[0]);
+      expect(workbook).toContain(sessionIds[101]);
+      expect(workbook).toMatch(new RegExp(`<c r="F2" t="inlineStr"[^>]*><is><t>${amount.replace(".", "\\.")}</t>`));
+      expect(workbook).toMatch(/<c r="H2"[^>]*><v>0<\/v><\/c>/);
+      const pdf = (await downloadRegister("PDF")).toString("latin1");
+      expect(pdf.slice(0, 5)).toBe("%PDF-");
+      expect(pdf).toMatch(/10\xa0199\xa0999\xa0999\xa0999\xa0999,999898[ \xa0]USD/);
+      expect(pdf.split(`(${amount})`).length - 1).toBe(204);
+    } finally {
+      await prisma.enterpriseCashMovement.deleteMany({ where: { organizationId, cashSessionId: { in: sessionIds } } });
+      await prisma.enterpriseCashSession.deleteMany({ where: { organizationId, id: { in: sessionIds } } });
+    }
   });
 });
