@@ -54,6 +54,30 @@ export async function GET(req: Request, { params }: Params) {
       await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "catalog-unit-conversion-preview" } });
       return NextResponse.json({ preview: result }, { headers: privateHeaders });
     }
+    if (query.has("unitSearch")) {
+      const search = z.string().trim().max(120).safeParse(query.get("unitSearch"));
+      if (!search.success) return enterpriseValidationErrorResponse(search.error, "CATALOG_CONVERSION_INPUT_INVALID", req);
+      const page = Math.max(1, Math.min(10000, Math.trunc(Number(query.get("page")) || 1)));
+      const pageSize = Math.max(5, Math.min(50, Math.trunc(Number(query.get("pageSize")) || 20)));
+      const result = await prisma.$transaction(async tx => {
+        const catalog = await tx.enterpriseCatalogItem.findFirst({
+          where: { organizationId, id: item.data },
+          select: { unitOfMeasureId: true },
+        });
+        if (!catalog) throw new EnterpriseDomainError("CATALOG_CONVERSION_REFERENCE_UNAVAILABLE", 404);
+        const where: Prisma.EnterpriseUnitOfMeasureWhereInput = {
+          organizationId, archivedAt: null, status: "ACTIVE", id: { not: catalog.unitOfMeasureId },
+          ...(search.data ? { OR: [{ code: { contains: search.data, mode: "insensitive" } }, { name: { contains: search.data, mode: "insensitive" } }, { symbol: { contains: search.data, mode: "insensitive" } }] } : {}),
+        };
+        const [items, total] = await Promise.all([
+          tx.enterpriseUnitOfMeasure.findMany({ where, orderBy: [{ code: "asc" }, { id: "asc" }], skip: (page - 1) * pageSize, take: pageSize, select: { id: true, code: true, name: true, symbol: true, decimalScale: true } }),
+          tx.enterpriseUnitOfMeasure.count({ where }),
+        ]);
+        return { items, pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) } };
+      }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
+      await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "catalog-unit-conversion-units", page } });
+      return NextResponse.json({ ...result, canManage: access.canAdminister }, { headers: privateHeaders });
+    }
     const source = query.has("sourceUnitId") ? reference.safeParse(query.get("sourceUnitId")) : null;
     if (source && !source.success) return enterpriseValidationErrorResponse(source.error, "CATALOG_CONVERSION_INPUT_INVALID", req);
     const page = Math.max(1, Math.min(10000, Math.trunc(Number(query.get("page")) || 1)));

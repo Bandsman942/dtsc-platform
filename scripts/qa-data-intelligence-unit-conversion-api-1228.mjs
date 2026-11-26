@@ -7,11 +7,15 @@ let signedIn = true, canRead = true, canManage = false, sameOrigin = true, limit
 const transactions = [], audit = [], events = [], versions = [];
 const unit = { id:"bottle", organizationId:tenant, code:"BT", name:"Bottle", decimalScale:0, status:"ACTIVE", archivedAt:null };
 const carton = { ...unit, id:"carton", code:"CT", name:"Carton" };
-const item = { id:itemId, organizationId:tenant, name:"Water", code:"W", trackInventory:true, status:"ACTIVE", archivedAt:null, unitOfMeasure:unit };
+const item = { id:itemId, unitOfMeasureId:"bottle", organizationId:tenant, name:"Water", code:"W", trackInventory:true, status:"ACTIVE", archivedAt:null, unitOfMeasure:unit };
 const match = (row, where) => Object.entries(where).every(([key,value])=>row[key]===value);
 const tx = {
   enterpriseCatalogItem:{findFirst:async({where})=>match(item,where)?item:null},
-  enterpriseUnitOfMeasure:{findFirst:async({where})=>[unit,carton].find(row=>match(row,where))??null},
+  enterpriseUnitOfMeasure:{
+    findFirst:async({where})=>[unit,carton].find(row=>match(row,where))??null,
+    findMany:async({where,skip,take})=>{ assert.equal(where.organizationId,tenant); assert.equal(where.id.not,"bottle"); return [carton].filter(row=>!where.OR||where.OR.some(term=>Object.entries(term).some(([field,value])=>String(row[field]||"").toLowerCase().includes(value.contains.toLowerCase())))).slice(skip,skip+take); },
+    count:async({where})=>[carton].filter(row=>!where.OR||where.OR.some(term=>Object.entries(term).some(([field,value])=>String(row[field]||"").toLowerCase().includes(value.contains.toLowerCase())))).length,
+  },
   enterpriseCatalogUnitConversion:{
     findFirst:async({where})=>versions.filter(row=>match(row,where)).sort((a,b)=>b.version-a.version)[0]??null,
     findMany:async({where,skip,take,select,orderBy})=>{
@@ -69,6 +73,12 @@ assert.equal(transactions.at(-1),"RepeatableRead");
 const preview=await (await get("catalogItemId=water&sourceUnitId=carton&quantity=2")).json();
 assert.equal(preview.preview.stockQuantity,"24");assert.equal(preview.preview.version,2);
 assert.equal((await get("catalogItemId=water&sourceUnitId=carton&quantity=0.1")).status,400);
+const choices=await (await get("catalogItemId=water&unitSearch=cart")).json();
+assert.equal(choices.pagination.total,1);assert.equal(choices.items[0].id,"carton");
+const noChoices=await (await get("catalogItemId=water&unitSearch=missing")).json();
+assert.equal(noChoices.pagination.total,0);
+assert.equal((await get("catalogItemId=unknown&unitSearch=")).status,404);
+assert.equal((await get("catalogItemId=water&unitSearch=","B")).status,403);
 assert.equal((await get("catalogItemId=unknown")).status,404);
 assert.equal((await get("catalogItemId=water","B")).status,403);
 canRead=false;assert.equal((await get()).status,403);
