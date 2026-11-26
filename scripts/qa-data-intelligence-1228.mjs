@@ -197,3 +197,5 @@ await import("./qa-data-intelligence-stock-totals-1228.mjs");
   }
   console.log("PASS #1228: localized HR register export statuses in all seven registries, leave type and unchanged filter/privacy contract");
 }
+
+await import("./qa-data-intelligence-syscohada-draft-1228.mjs");
