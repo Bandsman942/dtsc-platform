@@ -153,7 +153,7 @@ function ConversionHistory({ endpoint, catalogItemId, source, locale }: { endpoi
         title={`1 ${row.sourceCode} = ${localizeInventoryQuantity(row.factor, locale)} ${row.targetCode}`}
         meta={`${t.version} ${row.version} · ${professionalErpDate(row.createdAt, locale)}`}
         status={source && page === 1 ? <StatusBadge tone={index === 0 ? "success" : "neutral"}>{index === 0 ? t.latest : t.old}</StatusBadge> : undefined}
-        description={`${row.sourceCode}: ${row.sourceScale} · ${row.targetCode}: ${row.targetScale} ${t.precision}`} />)}</BusinessList> : <EmptyState compact title={t.empty} description={t.emptyHelp} />}
+        description={`${row.sourceScale} → ${row.targetScale} ${t.precision}`} />)}</BusinessList> : <EmptyState compact title={t.empty} description={t.emptyHelp} />}
       <Paging page={page} count={history.pagination.pageCount} onChange={next => { if (!busy && !previewBusy) { setPage(next); setPreview(null); } }} locale={locale} />
       {!active ? <p className="text-sm text-dtsc-muted">{t.inactive}</p> : !history.canManage ? <p className="text-sm text-dtsc-muted">{t.readOnly}</p> : null}
       {source && !sourceUnit ? <p role="status" className="text-sm text-dtsc-muted">{t.unavailableSource}</p> : null}

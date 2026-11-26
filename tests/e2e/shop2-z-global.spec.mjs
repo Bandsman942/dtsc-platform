@@ -826,6 +826,9 @@ test.describe.serial("Shop 2.0 Iteration 4 global behavioral acceptance", () => 
       await frenchPanel.getByRole("textbox", { name: /^Facteur de conversion/ }).fill("12,123");
       await frenchPanel.getByRole("button", { name: "Enregistrer la version", exact: true }).click();
       await expect(frenchPanel.getByText(`1 ${carton.code} = 12,123 ${stock.code}`, { exact: true })).toBeVisible();
+      const precision = frenchPanel.getByText("3 → 6 décimales", { exact: true });
+      await expect(precision).toBeVisible();
+      expect(await precision.evaluate(element => element.scrollHeight <= element.clientHeight)).toBe(true);
       await frenchPanel.getByRole("textbox", { name: /^Quantité source/ }).fill("1,001");
       await frenchPanel.getByRole("button", { name: "Calculer", exact: true }).click();
       await expect(frenchPanel.getByText(`1,001 ${carton.code} = 12,135123 ${stock.code} · Version 1`, { exact: true })).toBeVisible();
@@ -854,6 +857,64 @@ test.describe.serial("Shop 2.0 Iteration 4 global behavioral acceptance", () => 
         await prisma.enterpriseCatalogItem.delete({ where: { id: itemId } });
       }
       await prisma.enterpriseUnitOfMeasure.deleteMany({ where: { organizationId, id: { in: unitIds } } });
+    }
+  });
+
+  test("#1228 project filters preserve portfolio totals and exact budget exports", async ({ page }) => {
+    await signIn(page);
+    const stamp = Date.now();
+    const key = `E2E-1228-PROJECT-${stamp}`;
+    const generalReference = `E2E-OUTSIDE-${stamp}`;
+    const moduleCode = "PROJECTS_SERVICES";
+    const where = { organizationId_moduleCode: { organizationId, moduleCode } };
+    const previousModule = await prisma.enterpriseModule.findUnique({ where });
+    const user = await prisma.user.findUniqueOrThrow({ where: { id: fixture.userId }, select: { locale: true } });
+    try {
+      await prisma.enterpriseModule.upsert({
+        where,
+        update: { isEnabled: true },
+        create: { organizationId, moduleCode, labelFr: "Projets", labelEn: "Projects", moduleCategory: "E2E", isEnabled: true, isCore: false, requiresPlanLevel: "STARTER", sortOrder: 948 },
+      });
+      const project = { organizationId, name: key, status: "ACTIVE", currency: "CDF", indicativeBudget: "9999999999999999.99", createdByUserId: fixture.userId };
+      await prisma.enterpriseProject.createMany({ data: [
+        ...Array.from({ length: 26 }, (_, index) => ({ ...project, reference: `${key}-${index}` })),
+        { ...project, name: "Unfiltered project", reference: generalReference, status: "COMPLETED", currency: "USD", indicativeBudget: "12.34" },
+      ] });
+      await prisma.user.update({ where: { id: fixture.userId }, data: { locale: "fr" } });
+      await page.goto(`/enterprise-modules/${moduleCode}`);
+      await expect(page.locator("html")).toHaveAttribute("lang", "fr");
+      await page.getByPlaceholder("Projet ou référence…").fill(key);
+      const register = page.locator("[data-erp-design2-register]");
+      await expect(register.getByText("Page 1 sur 2 · 26 résultat(s)")).toBeVisible();
+      const summary = register.locator("[data-commercial-amount-scopes]");
+      const filtered = summary.getByRole("region", { name: "Sous-totaux filtrés (toutes pages)" });
+      const total = /259\s999\s999\s999\s999\s999,74/;
+      await expect(filtered).toContainText(total);
+      await expect(filtered).not.toContainText("USD");
+      await register.getByRole("button", { name: "Suivant", exact: true }).click();
+      await expect(register.getByText("Page 2 sur 2 · 26 résultat(s)")).toBeVisible();
+      await expect(filtered).toContainText(total);
+      await summary.locator("summary").click();
+      await expect(summary.getByRole("region", { name: "Sous-totaux de la page affichée" })).toContainText(/9\s999\s999\s999\s999\s999,99/);
+      await expect(summary.getByRole("region", { name: "Totaux généraux autorisés (sans filtres)" })).toContainText("USD");
+
+      const download = page.waitForEvent("download");
+      await register.getByRole("button", { name: "CSV", exact: true }).click();
+      const file = await download;
+      expect(await file.failure()).toBeNull();
+      const csv = (await readFile(await file.path())).toString("utf8");
+      expect(csv).toMatch(total);
+      expect(csv).toContain("9999999999999999.99");
+      expect(csv).toContain("Total général autorisé sans filtres");
+      expect(csv.split("\n").filter(line => line.includes(key) && line.includes("9999999999999999.99"))).toHaveLength(26);
+    } finally {
+      await prisma.user.update({ where: { id: fixture.userId }, data: { locale: user.locale } });
+      await prisma.enterpriseProject.deleteMany({ where: { organizationId, OR: [{ reference: { startsWith: key } }, { reference: generalReference }] } });
+      if (previousModule) {
+        await prisma.enterpriseModule.update({ where, data: { isEnabled: previousModule.isEnabled } });
+      } else {
+        await prisma.enterpriseModule.deleteMany({ where: { organizationId, moduleCode } });
+      }
     }
   });
 

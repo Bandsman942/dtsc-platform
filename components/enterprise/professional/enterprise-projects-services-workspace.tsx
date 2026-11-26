@@ -35,6 +35,7 @@ import { StatusBadge } from "@/components/workspace/status-badge";
 import { useEnterpriseBusinessContext } from "@/components/enterprise/use-enterprise-business-context";
 import type { EnterpriseModuleDefinition } from "@/lib/enterprise/module-registry";
 import type { MonetaryScopes } from "@/lib/enterprise/common/analytics";
+import { inventoryQuantityExportValue as exactDecimalExportValue } from "@/lib/enterprise/inventory/quantity-display";
 
 type Employee = { id: string; employeeNumber: string; displayName: string; workEmail?: string | null };
 type Member = { id: string; label: string; role: string; positionTitle: string | null };
@@ -271,7 +272,7 @@ export function EnterpriseProjectsServicesWorkspace({ organizationId, organizati
             { key: "type", labelFr: "Type", labelEn: "Type", get: (row) => professionalErpEnumLabel(locale, "projectType", String(row.projectType || "")) },
             { key: "status", labelFr: "Statut", labelEn: "Status", get: (row) => professionalErpEnumLabel(locale, "projectStatus", String(row.status || "")) },
             { key: "progress", labelFr: "Avancement (%)", labelEn: "Progress (%)", get: (row) => Number(row.progressPercent || 0) },
-            { key: "budget", labelFr: "Budget indicatif", labelEn: "Indicative budget", get: (row) => String(row.indicativeBudget ?? "") },
+            { key: "budget", labelFr: "Budget indicatif", labelEn: "Indicative budget", get: (row) => exactDecimalExportValue(String(row.indicativeBudget ?? "")) },
             { key: "currency", labelFr: "Devise", labelEn: "Currency", get: (row) => String(row.currency || "") },
             { key: "target", labelFr: "Échéance cible", labelEn: "Target date", get: (row) => String(row.targetEndDate || "") },
           ]} />
