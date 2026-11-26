@@ -193,6 +193,44 @@ const { GET: getTelcoTopups } = workflowTestLoader({
   "@/lib/enterprise/retail/service": {},
 })("@/app/api/enterprise/[organizationId]/retail/telco-topups/route");
 
+const { GET: getMobileMoneyHistory } = workflowTestLoader({
+  "@/lib/prisma": { prisma: { $transaction: async (callback, options) => {
+    assert.equal(options.isolationLevel, "RepeatableRead");
+    return callback(cashFixture.reader);
+  } } },
+  "@/lib/enterprise/retail/http": {
+    authorizeRetailRequest: async (_req, organizationId, feature, action) => {
+      assert.equal(feature, "MOBILE_MONEY_AGENCY");
+      assert.equal(action, "read");
+      return organizationId === cashFixture.organizationId
+        ? { ok: true, session: { userId: cashFixture.actor } }
+        : { ok: false, response: new Response(null, { status: 403 }) };
+    },
+    retailListParams(req) {
+      const params = new URL(req.url).searchParams;
+      return { page: Number(params.get("page") || 1), pageSize: 25,
+        search: params.get("search") || "", status: params.get("status"), providerCode: params.get("providerCode") };
+    },
+    retailErrorResponse: error => { throw error; },
+  },
+  "@/lib/enterprise/accounting/http": { financeBusinessDateRange(req) {
+    const params = new URL(req.url).searchParams;
+    return { ok: true, from: params.get("dateFrom") ? new Date(params.get("dateFrom")) : null, to: null };
+  } },
+  "@/lib/enterprise/retail/site-access": { retailFinanceReadSiteScope: async (organizationId, actor, action, tx) => {
+    assert.equal(action, "VIEW_SALES");
+    assert.equal(organizationId, cashFixture.organizationId);
+    assert.equal(actor, cashFixture.actor);
+    assert.equal(tx, cashFixture.reader);
+    return [cashFixture.siteId];
+  } },
+  "@/lib/audit": { writeApiLog: async () => {} },
+  "@/lib/enterprise/retail/commercial-guardrails": {},
+  "@/lib/enterprise/retail/operator-orchestration": {},
+  "@/lib/enterprise/retail/schemas": {},
+  "@/lib/enterprise/retail/service": {},
+})("@/app/api/enterprise/[organizationId]/retail/mobile-money/route");
+
 async function verifyCashAnalytics(tenant, otherTenant, actor) {
   await assert.rejects(db.$transaction(async tx => {
     const siteA = `${tenant}-cash-shop-a`;
@@ -314,10 +352,57 @@ async function verifyCashAnalytics(tenant, otherTenant, actor) {
     assert.equal(firstTelco.generalTotals.find(row => row.metric === "telcoSale" && row.status === "REVERSED")?.amount, "1");
     assert.equal(firstTelco.generalTotals.find(row => row.metric === "telcoSale" && row.status === "SUCCESS" && row.currencyCode === "CDF")?.amount, "5600000000000001.999944");
     assert.equal((await topups(telcoQuery, otherTenant)).status, 403);
+    // Deposit/withdrawal history uses the cash shop, not a shared operator float.
+    const mobile = {
+      organizationId: tenant, providerCode: "QA-PROVIDER", transactionType: "DEPOSIT", customerPhone: "243811234567",
+      currencyCode: "CDF", principalAmount: amount, customerFeeAmount: "0.000001", providerCommissionAmount: "0.000002",
+      cashEffectAmount: amount, floatEffectAmount: "-99999999999999.999999", cashAccountId: cdf.id,
+      floatAccountId: otherStore.id, agentUserId: actor, status: "CONFIRMED", occurredAt: new Date("2026-11-05"),
+    };
+    const mobileRecords = [
+      ...Array.from({ length: 56 }, (_, index) => ({ ...mobile, number: "MM-TARGET-" + index })),
+      { ...mobile, number: "MM-TARGET-USD", currencyCode: "USD", cashAccountId: usd.id },
+      { ...mobile, number: "MM-TARGET-WITHDRAWAL", transactionType: "WITHDRAWAL", principalAmount: "2", cashEffectAmount: "-2", floatEffectAmount: "2" },
+      { ...mobile, number: "MM-TARGET-REVERSED", status: "REVERSED", principalAmount: "1" },
+      { ...mobile, number: "MM-TARGET-OTHER-SHOP", cashAccountId: otherStore.id, floatAccountId: cdf.id },
+      { ...mobile, number: "MM-TARGET-OTHER-TENANT", organizationId: otherTenant, cashAccountId: foreign.id, floatAccountId: foreign.id },
+      { ...mobile, number: "MM-TARGET-AUGUST", occurredAt: new Date("2026-08-01"), principalAmount: "1" },
+    ];
+    await tx.enterpriseMobileMoneyTransaction.createMany({ data: mobileRecords.map(row => ({ ...row, idempotencyKey: row.number })) });
+    const mobileQuery = "search=MM-TARGET&status=CONFIRMED&dateFrom=2026-11-01&providerCode=QA-PROVIDER";
+    const history = (query, organizationId = tenant) => getMobileMoneyHistory(
+      new Request("http://localhost/api/enterprise/" + organizationId + "/retail/mobile-money?" + query),
+      { params: Promise.resolve({ organizationId }) },
+    );
+    const mobileResponse = await history(mobileQuery);
+    assert.equal(mobileResponse.status, 200);
+    assert.equal(mobileResponse.headers.get("cache-control"), "private, no-store");
+    const firstMobile = await mobileResponse.json();
+    const lastMobile = await (await history(mobileQuery + "&page=3")).json();
+    const emptyMobile = await (await history(mobileQuery + "&page=4")).json();
+    assert.deepEqual(firstMobile.pagination, { page: 1, pageSize: 25, total: 58, pageCount: 3 });
+    assert.equal(firstMobile.items[0].customerPhoneMasked, "2438••••567");
+    assert.equal(firstMobile.items[0].customerPhone, "2438••••567");
+    assert.equal(lastMobile.items.length, 8);
+    assert.deepEqual(emptyMobile.operationTotals.page, []);
+    assert.deepEqual(lastMobile.operationTotals.filtered, firstMobile.operationTotals.filtered);
+    assert.deepEqual(emptyMobile.operationTotals.general, firstMobile.operationTotals.general);
+    const deposits = firstMobile.operationTotals.filtered.find(row => row.currencyCode === "CDF" && row.status === "CONFIRMED" && row.transactionType === "DEPOSIT");
+    assert.equal(deposits.count, 56);
+    assert.equal(deposits.principalAmount, "5599999999999999.999944");
+    assert.equal(deposits.customerFeeAmount, "0.000056");
+    assert.equal(deposits.providerCommissionAmount, "0.000112");
+    assert.equal(deposits.floatEffectAmount, "-5599999999999999.999944");
+    assert.equal(firstMobile.operationTotals.filtered.find(row => row.transactionType === "WITHDRAWAL").cashEffectAmount, "-2");
+    assert.equal(firstMobile.operationTotals.filtered.find(row => row.currencyCode === "USD").principalAmount, amount);
+    assert.equal(firstMobile.operationTotals.general.find(row => row.status === "REVERSED").principalAmount, "1");
+    assert.equal((await history(mobileQuery, otherTenant)).status, 403);
     throw new RollbackFixture();
   }, { isolationLevel: "RepeatableRead", timeout: 10000 }), RollbackFixture);
   assert.equal(await db.enterpriseCashSession.count({ where: { organizationId: { in: [tenant, otherTenant] } } }), 0);
   console.log("PASS #1228 PostgreSQL cash sessions: exact 56-session totals, page/authorized scopes, signed closing variances and store isolation");
+  assert.equal(await db.enterpriseMobileMoneyTransaction.count({ where: { organizationId: { in: [tenant, otherTenant] } } }), 0);
+  console.log("PASS #1228 PostgreSQL Mobile Money history: exact multi-page totals, operation types, status, currency, cash shop and masked phone");
   console.log("PASS #1228 PostgreSQL Telco history: exact 57-record sales, costs and margins, mixed currencies and statuses, phone masking and store isolation");
 }
 
