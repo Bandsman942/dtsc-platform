@@ -257,6 +257,8 @@ En mode connecté, le service refuse l’envoi si la caisse ou le float est hors
 
 Les POST de contrepassation d’un dépôt, retrait ou change exigent le droit de gestion du module, l’accès aux comptes et une révision avec motif. Une seule transaction enregistre le statut, les mouvements inverses et la contrepassation au grand livre. Si la période comptable est fermée ou que la comptabilisation échoue, toute la tentative est annulée. Un rejeu autorisé retrouve l’identifiant de l’écriture déjà créée.
 
+Après confirmation par l’opérateur, le service enregistre dans une transaction la fiche Mobile Money, les mouvements, le posting et le lien à la demande fournisseur. La date de confirmation sert de date de l’opération si aucune date n’a été fournie. Si le traitement local échoue, le POST retourne 202 avec la référence de la demande et un message bilingue distinct. Le circuit de rapprochement existant peut reprendre cette demande confirmée en réutilisant la même référence et sans appeler une nouvelle fois l’opérateur.
+
 ### Contrat de formulaires Mobile Money — #512
 
 Tous les formulaires de ce module suivent `docs/FORM_UX_CONTRACT.md` :

@@ -302,18 +302,44 @@ const { mobileMoneyWalletConfigurationScope, mobileMoneyScopedAccountWhere, asse
 
 let connectedMobileMoneyTx;
 let connectedShopIds = [];
+let connectedMobileMoneyActor;
 let providerCalls = 0;
+let mobileMoneyPostingBlocked = false;
 const connectedMobileMoneyDb = {
   $transaction: async (callback, options) => {
-    assert.equal(options.isolationLevel, "RepeatableRead");
-    return callback(connectedMobileMoneyTx);
+    if (options.isolationLevel === "RepeatableRead") return callback(connectedMobileMoneyTx);
+    assert.equal(options.isolationLevel, "Serializable");
+    // Nest the service boundary in the disposable fixture using a savepoint.
+    await connectedMobileMoneyTx.$executeRaw`SAVEPOINT connected_mobile_money_posting`;
+    try {
+      const result = await callback(connectedMobileMoneyTx);
+      await connectedMobileMoneyTx.$executeRaw`RELEASE SAVEPOINT connected_mobile_money_posting`;
+      return result;
+    } catch (error) {
+      await connectedMobileMoneyTx.$executeRaw`ROLLBACK TO SAVEPOINT connected_mobile_money_posting`;
+      await connectedMobileMoneyTx.$executeRaw`RELEASE SAVEPOINT connected_mobile_money_posting`;
+      throw error;
+    }
   },
   get enterpriseRetailProvider() { return connectedMobileMoneyTx.enterpriseRetailProvider; },
   get enterpriseRetailProviderIntegration() { return connectedMobileMoneyTx.enterpriseRetailProviderIntegration; },
   get enterpriseRetailProviderOperation() { return connectedMobileMoneyTx.enterpriseRetailProviderOperation; },
+  get enterpriseMobileMoneyTransaction() { return connectedMobileMoneyTx.enterpriseMobileMoneyTransaction; },
 };
 const connectedMobileMoneyLoad = workflowTestLoader({
   "@/lib/prisma": { prisma: connectedMobileMoneyDb },
+  "@/lib/audit": { writeApiLog: async () => {}, writeAuditLog: async () => {} },
+  "@/lib/enterprise/accounting/http": {},
+  "@/lib/enterprise/common/http": {},
+  "@/lib/enterprise/retail/commercial-guardrails": { prepareCommercialMobileMoney: async (_organizationId, input) => ({ input, executionMode: "CONNECTED" }) },
+  "@/lib/enterprise/retail/http": {
+    authorizeRetailRequest: async (_request, _organizationId, feature, action) => {
+      assert.equal(feature, "MOBILE_MONEY_AGENCY");
+      assert.equal(action, "submit");
+      return { ok: true, session: { userId: connectedMobileMoneyActor } };
+    },
+    retailErrorResponse(error) { throw error; },
+  },
   "@/lib/enterprise/retail/site-access": { retailFinanceReadSiteScope: async (_org, _actor, capability, tx) => {
     assert.equal(capability, "COLLECT_PAYMENT");
     assert.equal(tx, connectedMobileMoneyTx);
@@ -332,13 +358,19 @@ const connectedMobileMoneyLoad = workflowTestLoader({
       return { status: "PENDING_PROVIDER", externalReference: "QA-CONNECTED-MM" };
     },
   }) },
-  "@/lib/enterprise/retail/mobile-money-accounting": {},
+  "@/lib/enterprise/retail/mobile-money-accounting": { finalizeMobileMoneyAccounting: async () => {} },
   "@/lib/enterprise/retail/telco-accounting": {},
   "@/lib/enterprise/accounting/cash-handover-service": {},
-  "@/lib/enterprise/accounting/mobile-money-ledger-provisioning": {},
+  "@/lib/enterprise/accounting/mobile-money-ledger-provisioning": { ensureMobileMoneyTransactionLedgerMappingTx: async () => {} },
   "@/lib/enterprise/accounting/accounting-approval-service": {},
-  "@/lib/enterprise/accounting/posting-service": {},
-  "@/lib/enterprise/accounting/helpers": {},
+  "@/lib/enterprise/accounting/posting-service": { postBusinessEventTx: async (tx, organizationId, _actor, input) => {
+    assert.equal(tx, connectedMobileMoneyTx);
+    assert.equal(input.postingEvent, "RETAIL_MOBILE_MONEY_POSTED");
+    assert.equal(await tx.enterpriseMobileMoneyTransaction.count({ where: { organizationId, id: input.sourceEntityId } }), 1);
+    if (mobileMoneyPostingBlocked) throw new Error("FINANCE_PERIOD_CLOSED");
+    return { entry: { id: "qa-journal" }, idempotent: false };
+  } },
+  "@/lib/enterprise/accounting/helpers": { publishFinanceEvent: async () => {} },
   "@/lib/enterprise/crm-sales/helpers": {},
   "@/lib/enterprise/inventory/service": {},
   "@/lib/enterprise/retail/accounting": {},
@@ -349,12 +381,14 @@ const connectedMobileMoneyLoad = workflowTestLoader({
   "@/lib/enterprise/retail/relationship-store-credit": {},
   "@/lib/enterprise/retail/telco-multicurrency-service": {},
 });
-const { createConnectedMobileMoneyOperation } = connectedMobileMoneyLoad("@/lib/enterprise/retail/operator-orchestration");
+const { createConnectedMobileMoneyOperation, reconcileRetailProviderOperations } = connectedMobileMoneyLoad("@/lib/enterprise/retail/operator-orchestration");
 const { mobileMoneyCreateSchema } = connectedMobileMoneyLoad("@/lib/enterprise/retail/schemas");
+const { POST: submitConnectedMobileMoney } = connectedMobileMoneyLoad("@/app/api/enterprise/[organizationId]/retail/mobile-money/route");
 
 async function verifyConnectedMobileMoney(tenant, actor) {
   await assert.rejects(db.$transaction(async tx => {
     connectedMobileMoneyTx = tx;
+    connectedMobileMoneyActor = actor;
     const site = tenant + "-connected-shop";
     connectedShopIds = [site];
     await tx.organization.create({ data: { id: tenant, name: "QA connected Mobile Money", status: "ACTIVE", sectorCode: "COMMERCE_RETAIL" } });
@@ -401,10 +435,43 @@ async function verifyConnectedMobileMoney(tenant, actor) {
     await assert.rejects(submit(), { code: "RETAIL_SITE_ACCESS_DENIED" });
     assert.equal(providerCalls, 1);
     assert.equal((await tx.enterpriseFinancialAccount.findUniqueOrThrow({ where: { id: shared.id } })).operationalBalance.toFixed(), "10");
+
+    // Provider confirmation can outlive a failed local posting. A recovery
+    // must commit once, using the existing receipt and its confirmation date.
+    connectedShopIds = [site];
+    await tx.enterpriseCashSession.update({ where: { id: session.id }, data: { status: "OPEN" } });
+    const confirmedAt = new Date("2026-11-26T12:34:00Z");
+    await tx.enterpriseRetailProviderOperation.update({
+      where: { id: sent.operation.id }, data: { status: "CONFIRMED", confirmedAt },
+    });
+    mobileMoneyPostingBlocked = true;
+    const response = await submitConnectedMobileMoney(new Request(`http://127.0.0.1/api/enterprise/${tenant}/retail/mobile-money`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input),
+    }), { params: Promise.resolve({ organizationId: tenant }) });
+    assert.equal(response.status, 202);
+    const blocked = await response.json();
+    assert.equal(blocked.messageCode, "RETAIL_PROVIDER_FINALIZATION_PENDING");
+    assert.deepEqual(blocked.operation, { id: sent.operation.id, status: "CONFIRMED" });
+    assert.equal(blocked.transaction, null);
+    assert.equal(await tx.enterpriseMobileMoneyTransaction.count({ where: { organizationId: tenant } }), 0);
+    assert.equal(await tx.enterpriseTreasuryTransaction.count({ where: { organizationId: tenant } }), 0);
+    assert.equal((await tx.enterpriseRetailProviderOperation.findUniqueOrThrow({ where: { id: sent.operation.id } })).sourceEntityType, "PENDING_MOBILE_MONEY");
+    assert.equal((await tx.enterpriseFinancialAccount.findUniqueOrThrow({ where: { id: till.id } })).operationalBalance.toFixed(), "5");
+    assert.equal((await tx.enterpriseFinancialAccount.findUniqueOrThrow({ where: { id: shared.id } })).operationalBalance.toFixed(), "10");
+    mobileMoneyPostingBlocked = false;
+    const recovered = await reconcileRetailProviderOperations(tenant, sent.operation.id);
+    assert.deepEqual(recovered, [{ operationId: sent.operation.id, status: "CONFIRMED", finalized: true }]);
+    const posted = await tx.enterpriseMobileMoneyTransaction.findFirstOrThrow({ where: { organizationId: tenant } });
+    assert.equal(posted.occurredAt.toISOString(), confirmedAt.toISOString());
+    const replay = await submit();
+    assert.equal(replay.finalized.transaction.id, posted.id);
+    assert.equal(await tx.enterpriseMobileMoneyTransaction.count({ where: { organizationId: tenant } }), 1);
+    assert.equal(await tx.enterpriseTreasuryTransaction.count({ where: { organizationId: tenant } }), 2);
+    assert.equal(providerCalls, 1);
     throw new RollbackFixture();
   }, { isolationLevel: "RepeatableRead", timeout: 10000 }), RollbackFixture);
   assert.equal(await db.enterpriseRetailProviderOperation.count({ where: { organizationId: tenant } }), 0);
-  console.log("PASS #1228 PostgreSQL connected Mobile Money: till/float preflight, no provider calls on refusal and permission-checked replay");
+  console.log("PASS #1228 PostgreSQL connected Mobile Money: till/float preflight, permission-checked replay, posting rollback and recovery from the same provider receipt");
 }
 
 async function verifyCashAnalytics(tenant, otherTenant, actor) {

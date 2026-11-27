@@ -147,6 +147,7 @@ export async function POST(req: Request, { params }: Params) {
       const finalized = connected.finalized?.kind === "MOBILE_MONEY" ? connected.finalized.transaction : null;
       const failed = connected.operation.status === "FAILED";
       const pending = !failed && !finalized;
+      const operation = { id: connected.operation.id, status: connected.operation.status };
       const statusCode = failed ? 422 : pending ? 202 : connected.idempotent ? 200 : 201;
       await Promise.allSettled([
         writeAuditLog({
@@ -170,18 +171,19 @@ export async function POST(req: Request, { params }: Params) {
       ]);
       if (failed) {
         return NextResponse.json(
-          retailFailureOutcome("RETAIL_PROVIDER_FAILED", { mode: "CONNECTED", operation: connected.operation, transaction: finalized, idempotent: connected.idempotent }),
+          retailFailureOutcome("RETAIL_PROVIDER_FAILED", { mode: "CONNECTED", operation, transaction: finalized, idempotent: connected.idempotent }),
           { status: statusCode },
         );
       }
       if (pending) {
+        const messageCode = operation.status === "CONFIRMED" ? "RETAIL_PROVIDER_FINALIZATION_PENDING" : "RETAIL_PROVIDER_PENDING";
         return NextResponse.json(
-          retailPendingOutcome("RETAIL_PROVIDER_PENDING", { mode: "CONNECTED", operation: connected.operation, transaction: finalized, idempotent: connected.idempotent }),
+          retailPendingOutcome(messageCode, { mode: "CONNECTED", operation, transaction: finalized, idempotent: connected.idempotent }),
           { status: statusCode },
         );
       }
       return NextResponse.json(
-        retailSuccessOutcome({ mode: "CONNECTED", operation: connected.operation, transaction: finalized, idempotent: connected.idempotent }),
+        retailSuccessOutcome({ mode: "CONNECTED", operation, transaction: finalized, idempotent: connected.idempotent }),
         { status: statusCode },
       );
     }

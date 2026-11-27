@@ -549,24 +549,22 @@ async function createMobileMoneyTransactionTx(
   return { transaction, idempotent: false };
 }
 
-export async function createMobileMoneyTransaction(organizationId: string, actorUserId: string, input: MobileMoneyInput) {
-  return prisma.$transaction(
-    (tx) => createMobileMoneyTransactionTx(tx, organizationId, actorUserId, input),
-    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 30000 },
-  );
+export async function createMobileMoneyTransactionWithPostingTx(tx: Prisma.TransactionClient, organizationId: string, actorUserId: string, input: MobileMoneyInput) {
+  const result = await createMobileMoneyTransactionTx(tx, organizationId, actorUserId, input);
+  await ensureMobileMoneyTransactionLedgerMappingTx(tx, organizationId, actorUserId, result.transaction.id);
+  const accounting = await postBusinessEventTx(tx, organizationId, actorUserId, {
+    postingEvent: "RETAIL_MOBILE_MONEY_POSTED",
+    sourceEntityType: "EnterpriseMobileMoneyTransaction",
+    sourceEntityId: result.transaction.id,
+  });
+  return { ...result, accounting };
 }
 
 export async function createMobileMoneyTransactionWithPosting(organizationId: string, actorUserId: string, input: MobileMoneyInput) {
-  return prisma.$transaction(async (tx) => {
-    const result = await createMobileMoneyTransactionTx(tx, organizationId, actorUserId, input);
-    await ensureMobileMoneyTransactionLedgerMappingTx(tx, organizationId, actorUserId, result.transaction.id);
-    const accounting = await postBusinessEventTx(tx, organizationId, actorUserId, {
-      postingEvent: "RETAIL_MOBILE_MONEY_POSTED",
-      sourceEntityType: "EnterpriseMobileMoneyTransaction",
-      sourceEntityId: result.transaction.id,
-    });
-    return { ...result, accounting };
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 30000 });
+  return prisma.$transaction(
+    tx => createMobileMoneyTransactionWithPostingTx(tx, organizationId, actorUserId, input),
+    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 30000 },
+  );
 }
 
 async function reverseMobileMoneyTransactionTx(

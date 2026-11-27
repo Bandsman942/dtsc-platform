@@ -41,7 +41,10 @@ for (const [name, route, atomicWrapper] of [
   ["telco", source.telco, "createTelcoTopupWithPosting"],
 ]) {
   requireSource(name, route.includes('retailFailureOutcome("RETAIL_PROVIDER_FAILED"'), "un échec provider n'utilise pas FAILURE");
-  requireSource(name, route.includes('retailPendingOutcome("RETAIL_PROVIDER_PENDING"'), "un provider en attente n'utilise pas PENDING");
+  const pending = name === "mobile-money"
+    ? route.includes('operation.status === "CONFIRMED" ? "RETAIL_PROVIDER_FINALIZATION_PENDING" : "RETAIL_PROVIDER_PENDING"') && route.includes("retailPendingOutcome(messageCode,")
+    : route.includes('retailPendingOutcome("RETAIL_PROVIDER_PENDING"');
+  requireSource(name, pending, "les opérations fournisseur en attente doivent utiliser PENDING et distinguer la confirmation de la comptabilisation");
   requireSource(name, route.includes("failed ? 422 : pending ? 202"), "les statuts provider FAILED/PENDING ne sont pas 422/202");
   requireSource(name, !route.includes('connected.operation.status === "FAILED" ? 200 : 202'), "le legacy HTTP 200 + ok:false est revenu");
   requireSource(name, route.includes(atomicWrapper), "le flux manuel n'utilise pas le wrapper métier + trésorerie + posting atomique");

@@ -11,6 +11,7 @@ export type RetailMutationMessageCode =
   | "RETAIL_ACCOUNTING_PENDING_CONFIGURATION"
   | "RETAIL_ACCOUNTING_PENDING_UNKNOWN"
   | "RETAIL_PROVIDER_PENDING"
+  | "RETAIL_PROVIDER_FINALIZATION_PENDING"
   | "RETAIL_PROVIDER_FAILED";
 
 type LocalizedCopy = { fr: string; en: string };
@@ -55,6 +56,10 @@ const OUTCOME_MESSAGES: Record<RetailMutationMessageCode, LocalizedCopy> = {
   RETAIL_PROVIDER_PENDING: {
     fr: "L’opération a été transmise à l’opérateur et reste en attente de confirmation. Ne la relancez pas avec de nouvelles données tant que son statut n’a pas été actualisé.",
     en: "The operation was sent to the provider and is still awaiting confirmation. Do not submit it again with new data until its status has been refreshed.",
+  },
+  RETAIL_PROVIDER_FINALIZATION_PENDING: {
+    fr: "L’opérateur a confirmé cette opération. Son enregistrement en caisse et en comptabilité est encore en attente. Conservez la référence et évitez de soumettre une nouvelle opération.",
+    en: "The provider has confirmed this operation. Recording it in the till and accounts is still pending. Keep the reference and avoid submitting a new operation.",
   },
   RETAIL_PROVIDER_FAILED: {
     fr: "L’opérateur n’a pas confirmé l’opération. Aucun succès n’est enregistré : vérifiez le statut et les informations avant de réessayer.",

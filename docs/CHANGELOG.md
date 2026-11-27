@@ -8,6 +8,7 @@
 - Télécom. Le registre et les exports utilisent les mêmes ventes, coûts opérateur et marges, groupés par devise et statut dans le périmètre boutique autorisé. Les lignes conservent la précision décimale et masquent les téléphones.
 - Mobile Money connecté. La caisse, le float, la session et les soldes sont vérifiés avant la transmission à l’opérateur. Une référence rejouée reste liée au même caissier et à la même opération.
 - Contrepassations Mobile Money et change. Les mouvements de caisse et de float et l’écriture de contrepassation sont enregistrés ensemble. Un refus comptable annule toute la tentative.
+- Confirmation Mobile Money connectée. La réponse distingue une confirmation de l’opérateur d’un enregistrement local encore en attente. La reprise utilise la demande confirmée et ne renvoie pas l’opération à l’opérateur.
 - Stock : la saisie des transferts, comptages et ajustements suit la précision de l’unité catalogue. Lecture exacte des valeurs historiques et contrôle de la précision du produit lors des conversions.
 - Trésorerie : sous-totaux de l’historique par devise, statut et sens, avec comparaison du filtré, du général et de la page. Filtres et synthèses des exports partagent les calculs serveur.
 - Dépenses : sous-totaux et exports par devise et statut, calculés dans le périmètre autorisé du registre.
