@@ -27,3 +27,26 @@ export function mobileMoneyScopedAccountWhere(organizationId: string, scope: Awa
     ],
   };
 }
+
+/** A shared wallet can be used through an authorized till without granting
+ * direct wallet access. A wallet assigned to another site is not shared. */
+export function mobileMoneyOperationWalletWhere(organizationId: string, collectionSites: string[] | null): Prisma.EnterpriseFinancialAccountWhereInput {
+  return {
+    organizationId, accountType: "MOBILE_MONEY", status: "ACTIVE", archivedAt: null,
+    ...(collectionSites === null ? {} : collectionSites.length ? { OR: [{ siteId: null }, { siteId: { in: collectionSites } }] } : { id: { in: [] } }),
+  };
+}
+
+export async function assertMobileMoneyOperationAccess(tx: Prisma.TransactionClient, organizationId: string, userId: string, cashAccountId: string, floatAccountId: string) {
+  const sites = await retailFinanceReadSiteScope(organizationId, userId, "COLLECT_PAYMENT", tx);
+  const accounts = await tx.enterpriseFinancialAccount.findMany({
+    where: { organizationId, id: { in: [cashAccountId, floatAccountId] } },
+    select: { id: true, siteId: true, accountType: true },
+  });
+  const cash = accounts.find(account => account.id === cashAccountId && account.accountType === "CASH");
+  const wallet = accounts.find(account => account.id === floatAccountId && account.accountType === "MOBILE_MONEY");
+  if (!cash || !wallet || (sites !== null && (!cash.siteId || !sites.includes(cash.siteId) || (wallet.siteId !== null && !sites.includes(wallet.siteId))))) {
+    throw new EnterpriseRetailError("RETAIL_SITE_ACCESS_DENIED", 403);
+  }
+  return { hideFloatBalance: sites !== null };
+}

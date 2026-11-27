@@ -433,5 +433,6 @@
   "mobileMoneyFxHistoryRateDate": "Rate date",
   "mobileMoneyFxHistorySourceAmount": "Source amount",
   "mobileMoneyFxHistoryTargetAmount": "Target amount",
-  "mobileMoneyWalletScopedReadOnly": "You only see wallets authorized for your shop. Provider wallet mappings apply to the whole company and can only be changed by managers with organization-wide scope."
+  "mobileMoneyWalletScopedReadOnly": "You only see wallets authorized for your retail store. Provider wallet mappings apply to the whole company and can only be changed by managers with organization-wide scope.",
+  "mobileMoneyWalletAutomaticRestricted": "Automatic provider wallet (balance not visible)"
 }

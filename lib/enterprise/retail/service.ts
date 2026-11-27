@@ -23,6 +23,7 @@ import { applyRetailRelationshipLoyaltyTx, reverseRetailRelationshipLoyaltyTx } 
 import { applyRetailRelationshipCashbackTx, reverseRetailRelationshipCashbackTx } from "@/lib/enterprise/relationship-benefits/retail-cashback";
 import { changeRelationalStoreCreditTx } from "@/lib/enterprise/retail/relationship-store-credit";
 import { resolveMobileMoneyFloatAccountTx } from "@/lib/enterprise/retail/mobile-money-multicurrency-service";
+import { assertMobileMoneyOperationAccess } from "@/lib/enterprise/retail/mobile-money-wallet-configuration-access";
 import { resolveTelcoFloatAccountTx } from "@/lib/enterprise/retail/telco-multicurrency-service";
 import type { mobileMoneyCreateSchema, retailDailyCloseCreateSchema, retailDailyCloseDecisionSchema, retailProviderUpsertSchema, retailSaleCreateSchema, retailSaleReverseSchema, telcoTopupCreateSchema } from "@/lib/enterprise/retail/schemas";
 import { prisma } from "@/lib/prisma";
@@ -110,13 +111,14 @@ async function applyAccountEffectTx(
     transactionDate: Date;
     cashSessionId?: string | null;
     cashReason?: string | null;
+    hideAvailableBalance?: boolean;
   },
 ) {
   if (input.effect.isZero()) return;
   const outbound = input.effect.isNegative();
   const amount = input.effect.abs();
   if (outbound && input.account.operationalBalance.lessThan(amount)) {
-    throw new EnterpriseRetailError("RETAIL_INSUFFICIENT_BALANCE", 409, { financialAccountId: input.account.id, requiredAmount: amount.toFixed(), availableBalance: input.account.operationalBalance.toFixed() });
+    throw new EnterpriseRetailError("RETAIL_INSUFFICIENT_BALANCE", 409, input.hideAvailableBalance ? { requiredAmount: amount.toFixed() } : { financialAccountId: input.account.id, requiredAmount: amount.toFixed(), availableBalance: input.account.operationalBalance.toFixed() });
   }
   await tx.enterpriseFinancialAccount.update({
     where: { id: input.account.id },
@@ -466,13 +468,17 @@ async function createMobileMoneyTransactionTx(
   await assertRetailOrganization(tx, organizationId);
   await ensureRetailConfigurationTx(tx, organizationId, actorUserId);
   const existing = await tx.enterpriseMobileMoneyTransaction.findFirst({ where: { organizationId, idempotencyKey: input.idempotencyKey } });
-  if (existing) return { transaction: existing, idempotent: true };
+  if (existing) {
+    await assertMobileMoneyOperationAccess(tx, organizationId, actorUserId, existing.cashAccountId, existing.floatAccountId);
+    return { transaction: existing, idempotent: true };
+  }
   const provider = await getRetailProviderTx(tx, organizationId, input.providerCode);
   if (!["MOBILE_MONEY", "BOTH"].includes(provider.providerType)) throw new EnterpriseRetailError("RETAIL_PROVIDER_NOT_FOUND", 409, { providerCode: input.providerCode });
   const cashAccount = await assertFinancialAccount(tx, organizationId, input.cashAccountId, input.currencyCode, ["CASH"]);
   const resolvedFloatAccount = await resolveMobileMoneyFloatAccountTx(tx, organizationId, provider, input.currencyCode);
   const floatAccount = resolvedFloatAccount.account;
   if (cashAccount.id === floatAccount.id) throw new EnterpriseRetailError("RETAIL_FINANCIAL_ACCOUNT_INVALID", 409);
+  const authority = await assertMobileMoneyOperationAccess(tx, organizationId, actorUserId, cashAccount.id, floatAccount.id);
   const cashSession = await assertOpenCashSession(tx, organizationId, cashAccount.id, actorUserId);
   const principal = decimal(input.principalAmount);
   const cashFee = input.feeCollectionMode === "CASH" ? decimal(input.customerFeeAmount || 0) : decimal(0);
@@ -482,7 +488,7 @@ async function createMobileMoneyTransactionTx(
   const number = retailReference("MM");
   const transaction = await tx.enterpriseMobileMoneyTransaction.create({ data: { organizationId, number, providerCode: provider.providerCode, transactionType: input.transactionType, customerPhone: input.customerPhone, currencyCode: input.currencyCode, principalAmount: principal, customerFeeAmount: decimal(input.customerFeeAmount || 0), providerCommissionAmount: decimal(input.providerCommissionAmount || 0), feeCollectionMode: input.feeCollectionMode, cashAccountId: cashAccount.id, floatAccountId: floatAccount.id, cashEffectAmount: cashEffect, floatEffectAmount: floatEffect, externalReference: input.externalReference || null, occurredAt, agentUserId: actorUserId, idempotencyKey: input.idempotencyKey } });
   await applyAccountEffectTx(tx, { organizationId, actorUserId, account: cashAccount, effect: cashEffect, transactionType: `MOBILE_MONEY_${input.transactionType}_CASH`, reference: number, transactionDate: occurredAt, cashSessionId: cashSession.id, cashReason: `${provider.label} ${input.transactionType}` });
-  await applyAccountEffectTx(tx, { organizationId, actorUserId, account: floatAccount, effect: floatEffect, transactionType: `MOBILE_MONEY_${input.transactionType}_FLOAT`, reference: number, transactionDate: occurredAt });
+  await applyAccountEffectTx(tx, { organizationId, actorUserId, account: floatAccount, effect: floatEffect, transactionType: `MOBILE_MONEY_${input.transactionType}_FLOAT`, reference: number, transactionDate: occurredAt, hideAvailableBalance: authority.hideFloatBalance });
   await publishFinanceEvent(tx, { organizationId, entityType: "EnterpriseMobileMoneyTransaction", entityId: transaction.id, eventType: `MOBILE_MONEY_${input.transactionType}_CONFIRMED`, summary: `${provider.label} ${input.transactionType} ${number}`, actorUserId, toStatus: "CONFIRMED", metadataJson: { principal: principal.toFixed(), customerFee: transaction.customerFeeAmount.toFixed(), providerCommission: transaction.providerCommissionAmount.toFixed(), currency: input.currencyCode, cashAccountId: cashAccount.id, floatAccountId: floatAccount.id } });
   return { transaction, idempotent: false };
 }
@@ -513,13 +519,14 @@ export async function reverseMobileMoneyTransaction(organizationId: string, tran
     await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterpriseMobileMoneyTransaction" WHERE id = ${transactionId} AND "organizationId" = ${organizationId} FOR UPDATE`);
     const transaction = await tx.enterpriseMobileMoneyTransaction.findFirst({ where: { id: transactionId, organizationId } });
     if (!transaction) throw new EnterpriseRetailError("RETAIL_TRANSACTION_NOT_FOUND", 404);
+    const authority = await assertMobileMoneyOperationAccess(tx, organizationId, actorUserId, transaction.cashAccountId, transaction.floatAccountId);
     if (transaction.status === "REVERSED") return transaction;
     if (transaction.status !== "CONFIRMED" || transaction.revision !== input.revision) throw new EnterpriseRetailError("RETAIL_TRANSACTION_CONFLICT", 409);
     const cashAccount = await assertFinancialAccount(tx, organizationId, transaction.cashAccountId, transaction.currencyCode, ["CASH"]);
     const floatAccount = await assertFinancialAccount(tx, organizationId, transaction.floatAccountId, transaction.currencyCode, ["MOBILE_MONEY"]);
     const cashSession = await assertOpenCashSession(tx, organizationId, cashAccount.id, actorUserId);
     await applyAccountEffectTx(tx, { organizationId, actorUserId, account: cashAccount, effect: transaction.cashEffectAmount.negated(), transactionType: "MOBILE_MONEY_REVERSAL_CASH", reference: transaction.number, transactionDate: new Date(), cashSessionId: cashSession.id, cashReason: input.reason });
-    await applyAccountEffectTx(tx, { organizationId, actorUserId, account: floatAccount, effect: transaction.floatEffectAmount.negated(), transactionType: "MOBILE_MONEY_REVERSAL_FLOAT", reference: transaction.number, transactionDate: new Date() });
+    await applyAccountEffectTx(tx, { organizationId, actorUserId, account: floatAccount, effect: transaction.floatEffectAmount.negated(), transactionType: "MOBILE_MONEY_REVERSAL_FLOAT", reference: transaction.number, transactionDate: new Date(), hideAvailableBalance: authority.hideFloatBalance });
     const updated = await tx.enterpriseMobileMoneyTransaction.update({ where: { id: transaction.id }, data: { status: "REVERSED", reversalReason: input.reason, reversedAt: new Date(), reversedByUserId: actorUserId, revision: { increment: 1 } } });
     await publishFinanceEvent(tx, { organizationId, entityType: "EnterpriseMobileMoneyTransaction", entityId: transaction.id, eventType: "MOBILE_MONEY_REVERSED", summary: `Opération ${transaction.number} annulée`, actorUserId, fromStatus: "CONFIRMED", toStatus: "REVERSED", metadataJson: { reason: input.reason.slice(0, 500) } });
     return updated;

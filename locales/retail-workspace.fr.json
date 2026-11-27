@@ -433,5 +433,6 @@
   "mobileMoneyFxHistoryRateDate": "Date du taux",
   "mobileMoneyFxHistorySourceAmount": "Montant source",
   "mobileMoneyFxHistoryTargetAmount": "Montant cible",
-  "mobileMoneyWalletScopedReadOnly": "Vous consultez uniquement les wallets autorisés pour votre boutique. L’affectation des wallets opérateur est une configuration de toute l’entreprise ; elle est réservée aux gestionnaires disposant d’un périmètre global."
+  "mobileMoneyWalletScopedReadOnly": "Vous consultez uniquement les wallets autorisés pour votre boutique. L’affectation des wallets opérateur est une configuration de toute l’entreprise ; elle est réservée aux gestionnaires disposant d’un périmètre global.",
+  "mobileMoneyWalletAutomaticRestricted": "Wallet opérateur automatique (solde non visible)"
 }

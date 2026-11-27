@@ -47,13 +47,13 @@ requireSource(
 
 requireSource(
   "workspace",
-  source.workspace.includes("eligibleProviders = providers.filter((provider) => provider.accounts.some((mapping) => mapping.currencyCode === currency))"),
+  source.workspace.includes("eligibleProviders = providers.filter((provider) => provider.operationCurrencies?.includes(currency))"),
   "les opérateurs ne sont pas filtrés par la devise de la caisse sélectionnée",
 );
 requireSource(
   "workspace",
   source.workspace.includes("formWallet = formProvider?.accounts.find((mapping) => mapping.currencyCode === currency)")
-    && source.workspace.includes("value={formWallet?.financialAccountId || \"\"}")
+    && source.workspace.includes('value={formWallet?.financialAccountId || (formProvider ? "automatic" : "")}') && source.workspace.includes("mobileMoneyWalletAutomaticRestricted")
     && source.workspace.includes("walletAutomatic"),
   "le wallet opérateur de même devise n'est pas sélectionné et affiché automatiquement dans le formulaire",
 );
@@ -117,7 +117,7 @@ requireSource(
 );
 requireSource(
   "service",
-  source.service.includes("assertOpenCashSession(tx, organizationId, cashAccount.id, actorUserId)"),
+  source.service.includes("assertMobileMoneyOperationAccess(tx, organizationId, actorUserId, cashAccount.id, floatAccount.id)") && source.service.includes("assertMobileMoneyOperationAccess(tx, organizationId, actorUserId, existing.cashAccountId, existing.floatAccountId)") && source.service.includes("assertMobileMoneyOperationAccess(tx, organizationId, actorUserId, transaction.cashAccountId, transaction.floatAccountId)") && source.service.includes("assertOpenCashSession(tx, organizationId, cashAccount.id, actorUserId)"),
   "le serveur ne revalide pas que la caisse choisie appartient à une session ouverte de l'utilisateur",
 );
 

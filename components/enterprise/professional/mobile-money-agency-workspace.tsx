@@ -65,6 +65,7 @@ type ProviderConfiguration = {
   providerType: string;
   executionMode?: "MANUAL" | "CONNECTED";
   accounts: ProviderMapping[];
+  operationCurrencies?: string[];
   mappedCurrencyCount: number;
   ready: boolean;
 };
@@ -420,7 +421,7 @@ function MobileMoneyOperations({
   const activeCash = openCashSessions.find((session) => session.id === selectedCashSessionId) || openCashSessions[0] || null;
   const currency = activeCash?.financialAccount.currencyCode || "";
   const providers = configuration?.providers || [];
-  const eligibleProviders = providers.filter((provider) => provider.accounts.some((mapping) => mapping.currencyCode === currency));
+  const eligibleProviders = providers.filter((provider) => provider.operationCurrencies?.includes(currency));
   const formProvider = eligibleProviders.find((provider) => provider.providerCode === selectedProviderCode) || null;
   const formWallet = formProvider?.accounts.find((mapping) => mapping.currencyCode === currency) || null;
   const pendingProvider = pending ? providers.find((provider) => provider.providerCode === pending.providerCode) : null;
@@ -493,7 +494,6 @@ function MobileMoneyOperations({
 
             const providerCode = selectedProviderCode || String(form.get("providerCode") || "");
             const provider = eligibleProviders.find((item) => item.providerCode === providerCode) || null;
-            const wallet = provider?.accounts.find((mapping) => mapping.currencyCode === currency) || null;
             const phone = normalizePhonePreview(String(form.get("customerPhone") || ""));
             const principalAmount = Number(form.get("principalAmount") || 0);
             const customerFeeAmount = Number(form.get("customerFeeAmount") || 0);
@@ -502,7 +502,7 @@ function MobileMoneyOperations({
             const providerManualExecution = Boolean(provider && provider.executionMode !== "CONNECTED");
             const nextErrors: OperationFieldErrors = {};
 
-            if (!provider || !wallet) nextErrors.provider = formCopy.providerRequired;
+            if (!provider || !provider.operationCurrencies?.includes(currency)) nextErrors.provider = formCopy.providerRequired;
             if (phone.length < 5) nextErrors.phone = formCopy.phoneRequired;
             if (!Number.isFinite(principalAmount) || principalAmount <= 0) nextErrors.amount = formCopy.amountInvalid;
             if (!Number.isFinite(customerFeeAmount) || customerFeeAmount < 0) nextErrors.fee = formCopy.feeInvalid;
@@ -517,7 +517,7 @@ function MobileMoneyOperations({
               setPending(null);
               return;
             }
-            if (!provider || !wallet) return;
+            if (!provider || !provider.operationCurrencies?.includes(currency)) return;
 
             setOperationError("");
             setPending({
@@ -563,9 +563,9 @@ function MobileMoneyOperations({
             </MobileMoneyGuidedField>
 
             <MobileMoneyGuidedField label={copy.walletUsed} help={formCopy.walletHelp} required requiredLabel={formCopy.required} error={fieldErrors.provider}>
-              <MobileMoneySelect value={formWallet?.financialAccountId || ""} disabled aria-label={copy.walletUsed}>
+              <MobileMoneySelect value={formWallet?.financialAccountId || (formProvider ? "automatic" : "")} disabled aria-label={copy.walletUsed}>
                 <option value="">—</option>
-                {formWallet ? <option value={formWallet.financialAccountId}>{formWallet.financialAccount.name} · {currency}</option> : null}
+                {formWallet ? <option value={formWallet.financialAccountId}>{formWallet.financialAccount.name} · {currency}</option> : formProvider ? <option value="automatic">{translateRetailWorkspace(locale, "mobileMoneyWalletAutomaticRestricted")} · {currency}</option> : null}
               </MobileMoneySelect>
             </MobileMoneyGuidedField>
 
@@ -715,7 +715,7 @@ function MobileMoneyOperations({
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <MobileMoneyReviewItem label={formCopy.till} value={`${activeCash?.financialAccount.name || "—"} · ${pending.currencyCode}`} />
-              <MobileMoneyReviewItem label={formCopy.wallet} value={`${pendingWallet?.financialAccount.name || "—"} · ${pending.currencyCode}`} />
+              <MobileMoneyReviewItem label={formCopy.wallet} value={`${pendingWallet?.financialAccount.name || translateRetailWorkspace(locale, "mobileMoneyWalletAutomaticRestricted")} · ${pending.currencyCode}`} />
               <MobileMoneyReviewItem label={formCopy.customer} value={pending.customerPhone} />
               <MobileMoneyReviewItem label={copy.feeCollection} value={customerFacingFeeCollectionMode(pending.feeCollectionMode, locale)} />
               <MobileMoneyReviewItem label={formCopy.fees} value={moneyValue(pending.customerFeeAmount, pending.currencyCode, locale)} />

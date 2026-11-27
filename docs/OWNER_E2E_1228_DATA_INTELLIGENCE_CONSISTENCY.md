@@ -60,3 +60,7 @@ Avec des wallets CDF/USD dans deux boutiques et un wallet partagé sans affectat
 ### Mobile Money — soldes et configuration par boutique
 
 Comparer la configuration wallet et le tableau de bord entre un gestionnaire global et un collaborateur limité à une boutique. Les soldes des wallets et caisses d'une autre boutique et les wallets sans affectation ne doivent pas apparaître ; le bouton de mapping est absent pour le gestionnaire limité et son POST direct doit être refusé. Vérifier les six décimales, la révocation d'accès et la non-divulgation interentreprises. La configuration globale reste gérable par les personnes autorisées ; un mapping unique ne devient pas un mapping par boutique. Tester séparément les opérations de caisse ordinaires utilisant un float mutualisé.
+
+### Mobile Money — float mutualisé utilisable sans consultation du solde
+
+Configurer un wallet CDF mutualisé, une caisse CDF affectée à chaque boutique et un wallet USD réservé à une autre boutique. Vérifier que le caissier autorisé peut choisir l'opérateur CDF sans voir le nom, l'identifiant ou le solde du wallet dans la configuration ; l'API ne permet pas de choisir arbitrairement un autre wallet. Vérifier le refus d'une caisse ou d'un float affecté hors périmètre, y compris par rejeu et contrepassation, et l'absence du solde dans une erreur d'insuffisance. Les tests d'autorisation en base utilisent des droits simulés ; le parcours connecté avant soumission opérateur reste à certifier.

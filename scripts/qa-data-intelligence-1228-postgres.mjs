@@ -291,7 +291,7 @@ const { assertMobileMoneyFxWalletAccess, mobileMoneyFxWalletScope } = workflowTe
   } },
 })("@/lib/enterprise/retail/mobile-money-fx-access");
 
-const { mobileMoneyWalletConfigurationScope, mobileMoneyScopedAccountWhere, assertMobileMoneyGlobalMappingAccess } = workflowTestLoader({
+const { mobileMoneyWalletConfigurationScope, mobileMoneyScopedAccountWhere, assertMobileMoneyGlobalMappingAccess, mobileMoneyOperationWalletWhere, assertMobileMoneyOperationAccess } = workflowTestLoader({
   "@/lib/enterprise/retail/site-access": { retailFinanceReadSiteScope: async (organizationId, actor, capability, tx) => {
     assert.equal(organizationId, cashFixture.organizationId);
     assert.equal(actor, cashFixture.actor);
@@ -523,6 +523,12 @@ async function verifyCashAnalytics(tenant, otherTenant, actor) {
     assert.deepEqual(await mobileMoneyFxWalletScope(tx, tenant, actor, "COLLECT_PAYMENT"), []);
     cashFixture.fxCollectSites = [siteA];
     assert.deepEqual(await visibleAccountIds(), [cdf.id, usd.id, fxCdf.id, fxUsd.id].sort());
+    const usable = await tx.enterpriseFinancialAccount.findMany({ where: mobileMoneyOperationWalletWhere(tenant, [siteA]), select: { id: true } });
+    assert.deepEqual(usable.map(row => row.id).sort(), [fxCdf.id, fxUsd.id, fxShared.id].sort());
+    assert.equal((await assertMobileMoneyOperationAccess(tx, tenant, actor, cdf.id, fxShared.id)).hideFloatBalance, true);
+    await assert.rejects(assertMobileMoneyOperationAccess(tx, tenant, actor, cdf.id, fxOther.id), denied);
+    await assert.rejects(assertMobileMoneyOperationAccess(tx, tenant, actor, otherStore.id, fxShared.id), denied);
+    await assert.rejects(assertMobileMoneyOperationAccess(tx, tenant, actor, foreign.id, fxShared.id), denied);
     await assert.rejects(mappingAccess(), error => error.code === "RETAIL_SITE_ACCESS_DENIED" && error.status === 403);
     await assertWallets("COLLECT_PAYMENT", fxCdf.id, fxUsd.id);
     await assert.rejects(assertWallets("COLLECT_PAYMENT", fxOther.id, fxUsd.id), denied);

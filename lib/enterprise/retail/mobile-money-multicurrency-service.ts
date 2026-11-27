@@ -5,7 +5,7 @@ import { postBusinessEventTx } from "@/lib/enterprise/accounting/posting-service
 import { financeReference, money, publishFinanceEvent } from "@/lib/enterprise/accounting/helpers";
 import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
 import { assertMobileMoneyFxWalletAccess } from "@/lib/enterprise/retail/mobile-money-fx-access";
-import { assertMobileMoneyGlobalMappingAccess, mobileMoneyWalletConfigurationScope } from "@/lib/enterprise/retail/mobile-money-wallet-configuration-access";
+import { assertMobileMoneyGlobalMappingAccess, mobileMoneyWalletConfigurationScope, mobileMoneyOperationWalletWhere } from "@/lib/enterprise/retail/mobile-money-wallet-configuration-access";
 import { requiredRetailOperatorCurrencies } from "@/lib/enterprise/retail/operator-currency-policy";
 import { prisma } from "@/lib/prisma";
 
@@ -85,8 +85,8 @@ export async function resolveMobileMoneyFloatAccountTx(
   });
 }
 
-async function loadMobileMoneyProviderAccountConfiguration(database: Prisma.TransactionClient, organizationId: string, readSites: string[] | null, canManageMappings: boolean) {
-  const [organization, providers, mappings, financialAccounts, financeConfiguration] = await Promise.all([
+async function loadMobileMoneyProviderAccountConfiguration(database: Prisma.TransactionClient, organizationId: string, readSites: string[] | null, collectionSites: string[] | null, canManageMappings: boolean) {
+  const [organization, providers, mappings, financialAccounts, financeConfiguration, operationalWallets] = await Promise.all([
     database.organization.findFirst({ where: { id: organizationId, deletedAt: null }, select: { country: true } }),
     database.enterpriseRetailProvider.findMany({
       where: { organizationId, providerType: { in: ["MOBILE_MONEY", "BOTH"] }, isActive: true },
@@ -105,10 +105,12 @@ async function loadMobileMoneyProviderAccountConfiguration(database: Prisma.Tran
       where: { organizationId },
       select: { functionalCurrencyCode: true, presentationCurrencyCode: true },
     }),
+    database.enterpriseFinancialAccount.findMany({ where: mobileMoneyOperationWalletWhere(organizationId, collectionSites), select: { id: true, currencyCode: true } }),
   ]);
   if (!organization) throw new EnterpriseRetailError("RETAIL_ORGANIZATION_NOT_FOUND", 404);
 
   const accountById = new Map(financialAccounts.map((account) => [account.id, account]));
+  const operationalCurrencyById = new Map(operationalWallets.map(account => [account.id, account.currencyCode]));
   const requiredCurrencies = requiredMobileMoneyCurrencies(organization.country);
   const availableCurrencies = Array.from(new Set([
     ...requiredCurrencies,
@@ -123,6 +125,7 @@ async function loadMobileMoneyProviderAccountConfiguration(database: Prisma.Tran
       .map((mapping) => ({ ...mapping, financialAccount: accountById.get(mapping.financialAccountId) || null }))
       .filter((mapping) => Boolean(mapping.financialAccount));
     const mappedCurrencies = new Set(providerMappings.map((mapping) => mapping.currencyCode));
+    const operationCurrencies = [...new Set(mappings.filter(mapping => mapping.providerId === provider.id && operationalCurrencyById.get(mapping.financialAccountId) === mapping.currencyCode).map(mapping => mapping.currencyCode))].sort();
     const ready = requiredCurrencies.length
       ? requiredCurrencies.every((currency) => mappedCurrencies.has(currency))
       : mappedCurrencies.size >= 2;
@@ -132,6 +135,7 @@ async function loadMobileMoneyProviderAccountConfiguration(database: Prisma.Tran
       label: provider.label,
       providerType: provider.providerType,
       accounts: providerMappings,
+      operationCurrencies,
       mappedCurrencyCount: mappedCurrencies.size,
       ready,
     };
@@ -150,10 +154,10 @@ async function loadMobileMoneyProviderAccountConfiguration(database: Prisma.Tran
 
 /** Internal callers use an organization projection; API callers must supply an actor. */
 export async function getMobileMoneyProviderAccountConfiguration(organizationId: string, userId?: string) {
-  if (userId === undefined) return loadMobileMoneyProviderAccountConfiguration(prisma, organizationId, null, true);
+  if (userId === undefined) return loadMobileMoneyProviderAccountConfiguration(prisma, organizationId, null, null, true);
   return prisma.$transaction(async tx => {
     const scope = await mobileMoneyWalletConfigurationScope(tx, organizationId, userId);
-    return loadMobileMoneyProviderAccountConfiguration(tx, organizationId, scope.readSites, scope.canManageMappings);
+    return loadMobileMoneyProviderAccountConfiguration(tx, organizationId, scope.readSites, scope.collectionSites, scope.canManageMappings);
   }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
 }
 
