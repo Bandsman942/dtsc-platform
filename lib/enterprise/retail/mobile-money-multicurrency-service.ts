@@ -7,6 +7,7 @@ import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
 import { assertMobileMoneyFxWalletAccess } from "@/lib/enterprise/retail/mobile-money-fx-access";
 import { assertMobileMoneyGlobalMappingAccess, mobileMoneyWalletConfigurationScope, mobileMoneyOperationWalletWhere } from "@/lib/enterprise/retail/mobile-money-wallet-configuration-access";
 import { requiredRetailOperatorCurrencies } from "@/lib/enterprise/retail/operator-currency-policy";
+import { finalizeMobileMoneyFxReversalAccountingTx } from "@/lib/enterprise/retail/mobile-money-accounting";
 import { prisma } from "@/lib/prisma";
 
 const MOBILE_MONEY_FLOAT = "MOBILE_MONEY_FLOAT";
@@ -425,64 +426,77 @@ export async function createMobileMoneyFxTransferWithPosting(
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 30000 });
 }
 
-export async function reverseMobileMoneyFxTransfer(
+async function reverseMobileMoneyFxTransferTx(
+  tx: Prisma.TransactionClient,
   organizationId: string,
   transferId: string,
   actorUserId: string,
   input: { revision: number; reason: string },
 ) {
-  return prisma.$transaction(async (tx) => {
-    await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterpriseMobileMoneyFxTransfer" WHERE id = ${transferId} AND "organizationId" = ${organizationId} FOR UPDATE`);
-    const transfer = await tx.enterpriseMobileMoneyFxTransfer.findFirst({ where: { id: transferId, organizationId } });
-    if (!transfer) throw new EnterpriseRetailError("RETAIL_MOBILE_MONEY_FX_TRANSFER_NOT_FOUND", 404);
-    await assertMobileMoneyFxWalletAccess(tx, organizationId, actorUserId, "COLLECT_PAYMENT", transfer.sourceFloatAccountId, transfer.targetFloatAccountId);
-    if (transfer.status === "REVERSED") return transfer;
-    if (transfer.status !== "CONFIRMED" || transfer.revision !== input.revision) {
-      throw new EnterpriseRetailError("RETAIL_MOBILE_MONEY_FX_TRANSFER_CONFLICT", 409);
-    }
+  await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterpriseMobileMoneyFxTransfer" WHERE id = ${transferId} AND "organizationId" = ${organizationId} FOR UPDATE`);
+  const transfer = await tx.enterpriseMobileMoneyFxTransfer.findFirst({ where: { id: transferId, organizationId } });
+  if (!transfer) throw new EnterpriseRetailError("RETAIL_MOBILE_MONEY_FX_TRANSFER_NOT_FOUND", 404);
+  await assertMobileMoneyFxWalletAccess(tx, organizationId, actorUserId, "COLLECT_PAYMENT", transfer.sourceFloatAccountId, transfer.targetFloatAccountId);
+  if (transfer.status === "REVERSED") return transfer;
+  if (transfer.status !== "CONFIRMED" || transfer.revision !== input.revision) {
+    throw new EnterpriseRetailError("RETAIL_MOBILE_MONEY_FX_TRANSFER_CONFLICT", 409);
+  }
 
-    const lockIds = [transfer.sourceFloatAccountId, transfer.targetFloatAccountId].sort();
-    await tx.$queryRaw(Prisma.sql`
-      SELECT id FROM "EnterpriseFinancialAccount"
-      WHERE "organizationId" = ${organizationId} AND id IN (${Prisma.join(lockIds)})
-      ORDER BY id FOR UPDATE
-    `);
-    const [source, target] = await Promise.all([
-      assertMobileMoneyAccountTx(tx, organizationId, transfer.sourceFloatAccountId, transfer.sourceCurrencyCode),
-      assertMobileMoneyAccountTx(tx, organizationId, transfer.targetFloatAccountId, transfer.targetCurrencyCode),
-    ]);
-    if (target.operationalBalance.lessThan(transfer.targetAmount)) {
-      throw new EnterpriseRetailError("RETAIL_INSUFFICIENT_BALANCE", 409, { financialAccountId: target.id, currencyCode: target.currencyCode });
-    }
-    await tx.enterpriseFinancialAccount.update({ where: { id: source.id }, data: { operationalBalance: { increment: transfer.sourceAmount }, revision: { increment: 1 } } });
-    await tx.enterpriseFinancialAccount.update({ where: { id: target.id }, data: { operationalBalance: { decrement: transfer.targetAmount }, revision: { increment: 1 } } });
-    await tx.enterpriseTreasuryTransaction.createMany({
-      data: [
-        { organizationId, financialAccountId: source.id, transactionType: "MOBILE_MONEY_FX_REVERSAL", direction: "INBOUND", currencyCode: source.currencyCode, amount: transfer.sourceAmount, transactionDate: new Date(), reference: `${transfer.number}-REV`, createdByUserId: actorUserId },
-        { organizationId, financialAccountId: target.id, transactionType: "MOBILE_MONEY_FX_REVERSAL", direction: "OUTBOUND", currencyCode: target.currencyCode, amount: transfer.targetAmount, transactionDate: new Date(), reference: `${transfer.number}-REV`, createdByUserId: actorUserId },
-      ],
-    });
-    const reversed = await tx.enterpriseMobileMoneyFxTransfer.update({
-      where: { id: transfer.id },
-      data: {
-        status: "REVERSED",
-        reversalReason: input.reason,
-        reversedAt: new Date(),
-        reversedByUserId: actorUserId,
-        revision: { increment: 1 },
-      },
-    });
-    await publishFinanceEvent(tx, {
-      organizationId,
-      entityType: "EnterpriseMobileMoneyFxTransfer",
-      entityId: transfer.id,
-      eventType: "MOBILE_MONEY_FX_TRANSFER_REVERSED",
-      summary: `Reversal ${transfer.number}`,
-      actorUserId,
-      fromStatus: "CONFIRMED",
-      toStatus: "REVERSED",
-      metadataJson: { reason: input.reason.slice(0, 500) },
-    });
-    return reversed;
+  const lockIds = [transfer.sourceFloatAccountId, transfer.targetFloatAccountId].sort();
+  await tx.$queryRaw(Prisma.sql`
+    SELECT id FROM "EnterpriseFinancialAccount"
+    WHERE "organizationId" = ${organizationId} AND id IN (${Prisma.join(lockIds)})
+    ORDER BY id FOR UPDATE
+  `);
+  const [source, target] = await Promise.all([
+    assertMobileMoneyAccountTx(tx, organizationId, transfer.sourceFloatAccountId, transfer.sourceCurrencyCode),
+    assertMobileMoneyAccountTx(tx, organizationId, transfer.targetFloatAccountId, transfer.targetCurrencyCode),
+  ]);
+  if (target.operationalBalance.lessThan(transfer.targetAmount)) {
+    throw new EnterpriseRetailError("RETAIL_INSUFFICIENT_BALANCE", 409, { financialAccountId: target.id, currencyCode: target.currencyCode });
+  }
+  const reversedAt = new Date();
+  await tx.enterpriseFinancialAccount.update({ where: { id: source.id }, data: { operationalBalance: { increment: transfer.sourceAmount }, revision: { increment: 1 } } });
+  await tx.enterpriseFinancialAccount.update({ where: { id: target.id }, data: { operationalBalance: { decrement: transfer.targetAmount }, revision: { increment: 1 } } });
+  await tx.enterpriseTreasuryTransaction.createMany({
+    data: [
+      { organizationId, financialAccountId: source.id, transactionType: "MOBILE_MONEY_FX_REVERSAL", direction: "INBOUND", currencyCode: source.currencyCode, amount: transfer.sourceAmount, transactionDate: reversedAt, reference: `${transfer.number}-REV`, createdByUserId: actorUserId },
+      { organizationId, financialAccountId: target.id, transactionType: "MOBILE_MONEY_FX_REVERSAL", direction: "OUTBOUND", currencyCode: target.currencyCode, amount: transfer.targetAmount, transactionDate: reversedAt, reference: `${transfer.number}-REV`, createdByUserId: actorUserId },
+    ],
+  });
+  const reversed = await tx.enterpriseMobileMoneyFxTransfer.update({
+    where: { id: transfer.id },
+    data: {
+      status: "REVERSED",
+      reversalReason: input.reason,
+      reversedAt,
+      reversedByUserId: actorUserId,
+      revision: { increment: 1 },
+    },
+  });
+  await publishFinanceEvent(tx, {
+    organizationId,
+    entityType: "EnterpriseMobileMoneyFxTransfer",
+    entityId: transfer.id,
+    eventType: "MOBILE_MONEY_FX_TRANSFER_REVERSED",
+    summary: `Reversal ${transfer.number}`,
+    actorUserId,
+    fromStatus: "CONFIRMED",
+    toStatus: "REVERSED",
+    metadataJson: { reason: input.reason.slice(0, 500) },
+  });
+  return reversed;
+}
+
+export async function reverseMobileMoneyFxTransferWithPosting(
+  organizationId: string,
+  transferId: string,
+  actorUserId: string,
+  input: { revision: number; reason: string },
+) {
+  return prisma.$transaction(async tx => {
+    const transfer = await reverseMobileMoneyFxTransferTx(tx, organizationId, transferId, actorUserId, input);
+    const accounting = await finalizeMobileMoneyFxReversalAccountingTx(tx, organizationId, actorUserId, transfer.id);
+    return { transfer, accounting };
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 30000 });
 }

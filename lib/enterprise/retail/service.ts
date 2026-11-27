@@ -26,6 +26,7 @@ import { resolveMobileMoneyFloatAccountTx } from "@/lib/enterprise/retail/mobile
 import { assertMobileMoneyOperationAccess } from "@/lib/enterprise/retail/mobile-money-wallet-configuration-access";
 import { resolveTelcoFloatAccountTx } from "@/lib/enterprise/retail/telco-multicurrency-service";
 import type { mobileMoneyCreateSchema, retailDailyCloseCreateSchema, retailDailyCloseDecisionSchema, retailProviderUpsertSchema, retailSaleCreateSchema, retailSaleReverseSchema, telcoTopupCreateSchema } from "@/lib/enterprise/retail/schemas";
+import { finalizeMobileMoneyReversalAccountingTx } from "@/lib/enterprise/retail/mobile-money-accounting";
 import { prisma } from "@/lib/prisma";
 import type { z } from "zod";
 
@@ -568,24 +569,42 @@ export async function createMobileMoneyTransactionWithPosting(organizationId: st
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 30000 });
 }
 
-export async function reverseMobileMoneyTransaction(organizationId: string, transactionId: string, actorUserId: string, input: RetailSaleReverseInput) {
-  return prisma.$transaction(async (tx) => {
-    await assertRetailOrganization(tx, organizationId);
-    await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterpriseMobileMoneyTransaction" WHERE id = ${transactionId} AND "organizationId" = ${organizationId} FOR UPDATE`);
-    const transaction = await tx.enterpriseMobileMoneyTransaction.findFirst({ where: { id: transactionId, organizationId } });
-    if (!transaction) throw new EnterpriseRetailError("RETAIL_TRANSACTION_NOT_FOUND", 404);
-    const authority = await assertMobileMoneyOperationAccess(tx, organizationId, actorUserId, transaction.cashAccountId, transaction.floatAccountId);
-    if (transaction.status === "REVERSED") return transaction;
-    if (transaction.status !== "CONFIRMED" || transaction.revision !== input.revision) throw new EnterpriseRetailError("RETAIL_TRANSACTION_CONFLICT", 409);
-    const cashAccount = await assertFinancialAccount(tx, organizationId, transaction.cashAccountId, transaction.currencyCode, ["CASH"]);
-    const floatAccount = await assertFinancialAccount(tx, organizationId, transaction.floatAccountId, transaction.currencyCode, ["MOBILE_MONEY"]);
-    const cashSession = await assertOpenCashSession(tx, organizationId, cashAccount.id, actorUserId);
-    await applyAccountEffectTx(tx, { organizationId, actorUserId, account: cashAccount, effect: transaction.cashEffectAmount.negated(), transactionType: "MOBILE_MONEY_REVERSAL_CASH", reference: transaction.number, transactionDate: new Date(), cashSessionId: cashSession.id, cashReason: input.reason });
-    await applyAccountEffectTx(tx, { organizationId, actorUserId, account: floatAccount, effect: transaction.floatEffectAmount.negated(), transactionType: "MOBILE_MONEY_REVERSAL_FLOAT", reference: transaction.number, transactionDate: new Date(), hideAvailableBalance: authority.hideFloatBalance });
-    const updated = await tx.enterpriseMobileMoneyTransaction.update({ where: { id: transaction.id }, data: { status: "REVERSED", reversalReason: input.reason, reversedAt: new Date(), reversedByUserId: actorUserId, revision: { increment: 1 } } });
-    await publishFinanceEvent(tx, { organizationId, entityType: "EnterpriseMobileMoneyTransaction", entityId: transaction.id, eventType: "MOBILE_MONEY_REVERSED", summary: `Opération ${transaction.number} annulée`, actorUserId, fromStatus: "CONFIRMED", toStatus: "REVERSED", metadataJson: { reason: input.reason.slice(0, 500) } });
-    return updated;
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 30000 });
+async function reverseMobileMoneyTransactionTx(
+  tx: Prisma.TransactionClient,
+  organizationId: string,
+  transactionId: string,
+  actorUserId: string,
+  input: RetailSaleReverseInput,
+) {
+  await assertRetailOrganization(tx, organizationId);
+  await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterpriseMobileMoneyTransaction" WHERE id = ${transactionId} AND "organizationId" = ${organizationId} FOR UPDATE`);
+  const transaction = await tx.enterpriseMobileMoneyTransaction.findFirst({ where: { id: transactionId, organizationId } });
+  if (!transaction) throw new EnterpriseRetailError("RETAIL_TRANSACTION_NOT_FOUND", 404);
+  const authority = await assertMobileMoneyOperationAccess(tx, organizationId, actorUserId, transaction.cashAccountId, transaction.floatAccountId);
+  if (transaction.status === "REVERSED") return transaction;
+  if (transaction.status !== "CONFIRMED" || transaction.revision !== input.revision) throw new EnterpriseRetailError("RETAIL_TRANSACTION_CONFLICT", 409);
+  const cashAccount = await assertFinancialAccount(tx, organizationId, transaction.cashAccountId, transaction.currencyCode, ["CASH"]);
+  const floatAccount = await assertFinancialAccount(tx, organizationId, transaction.floatAccountId, transaction.currencyCode, ["MOBILE_MONEY"]);
+  const cashSession = await assertOpenCashSession(tx, organizationId, cashAccount.id, actorUserId);
+  const reversedAt = new Date();
+  await applyAccountEffectTx(tx, { organizationId, actorUserId, account: cashAccount, effect: transaction.cashEffectAmount.negated(), transactionType: "MOBILE_MONEY_REVERSAL_CASH", reference: transaction.number, transactionDate: reversedAt, cashSessionId: cashSession.id, cashReason: input.reason });
+  await applyAccountEffectTx(tx, { organizationId, actorUserId, account: floatAccount, effect: transaction.floatEffectAmount.negated(), transactionType: "MOBILE_MONEY_REVERSAL_FLOAT", reference: transaction.number, transactionDate: reversedAt, hideAvailableBalance: authority.hideFloatBalance });
+  const updated = await tx.enterpriseMobileMoneyTransaction.update({ where: { id: transaction.id }, data: { status: "REVERSED", reversalReason: input.reason, reversedAt, reversedByUserId: actorUserId, revision: { increment: 1 } } });
+  await publishFinanceEvent(tx, { organizationId, entityType: "EnterpriseMobileMoneyTransaction", entityId: transaction.id, eventType: "MOBILE_MONEY_REVERSED", summary: `Opération ${transaction.number} annulée`, actorUserId, fromStatus: "CONFIRMED", toStatus: "REVERSED", metadataJson: { reason: input.reason.slice(0, 500) } });
+  return updated;
+}
+
+export async function reverseMobileMoneyTransactionWithPosting(
+  organizationId: string,
+  transactionId: string,
+  actorUserId: string,
+  input: RetailSaleReverseInput,
+) {
+  return prisma.$transaction(async tx => {
+    const transaction = await reverseMobileMoneyTransactionTx(tx, organizationId, transactionId, actorUserId, input);
+    const accounting = await finalizeMobileMoneyReversalAccountingTx(tx, organizationId, actorUserId, transaction.id);
+    return { transaction, accounting };
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 30000 });
 }
 
 export async function createTelcoTopupTx(

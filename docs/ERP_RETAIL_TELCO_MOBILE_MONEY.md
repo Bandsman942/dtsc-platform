@@ -255,6 +255,8 @@ L’agent sélectionne l’opérateur, le type `DEPOSIT`/`WITHDRAWAL`, le télé
 
 En mode connecté, le service refuse l’envoi si la caisse ou le float est hors du périmètre autorisé (403), si la session de caisse du caissier est fermée ou si le solde nécessaire est insuffisant (409). Il conserve la demande avant son envoi. En cas de rejeu, le caissier doit toujours avoir accès à la caisse et au float. Le serveur refuse une même référence pour un caissier ou une opération différente (409). La confirmation différée vérifie de nouveau que les mouvements peuvent être enregistrés.
 
+Les POST de contrepassation d’un dépôt, retrait ou change exigent le droit de gestion du module, l’accès aux comptes et une révision avec motif. Une seule transaction enregistre le statut, les mouvements inverses et la contrepassation au grand livre. Si la période comptable est fermée ou que la comptabilisation échoue, toute la tentative est annulée. Un rejeu autorisé retrouve l’identifiant de l’écriture déjà créée.
+
 ### Contrat de formulaires Mobile Money — #512
 
 Tous les formulaires de ce module suivent `docs/FORM_UX_CONTRACT.md` :

@@ -339,7 +339,7 @@ test.describe.serial("Accounting atomic Retail browser acceptance", () => {
     await prisma.$disconnect();
   });
 
-  test("manual Mobile Money, FX and Telco commit once with GL and a closed period rolls everything back", async ({ page }) => {
+  test("manual Mobile Money, FX and Telco commit once with GL and a closed period rolls back creation and reversals", async ({ page }) => {
     await signIn(page, "MOBILE_MONEY_AGENCY");
     await ensureOpenTill(page);
 
@@ -469,6 +469,11 @@ test.describe.serial("Accounting atomic Retail browser acceptance", () => {
     };
     const rollbackCashBefore = await accountBalance(fixture.cashAccountId);
     const rollbackFloatBefore = await accountBalance(fixture.mobileUsdAccountId);
+    const rollbackCdfBefore = await accountBalance(fixture.mobileCdfAccountId);
+    const mobileReversePath = `/api/enterprise/${organizationId}/retail/mobile-money/${mobileId}/reverse`;
+    const fxReversePath = `/api/enterprise/${organizationId}/retail/mobile-money/fx/${fxId}/reverse`;
+    const mobileReversePayload = { revision: mobile.body.transaction.revision, reason: "Annulation de recette Mobile Money" };
+    const fxReversePayload = { revision: fx.body.transfer.revision, reason: "Annulation de recette du change" };
 
     try {
       await prisma.enterpriseFiscalPeriod.update({
@@ -489,12 +494,46 @@ test.describe.serial("Accounting atomic Retail browser acceptance", () => {
       expect(await prisma.enterprisePostingBatch.count({ where: { organizationId, sourceEntityType: "EnterpriseMobileMoneyTransaction", sourceEntityId: { startsWith: "e2e-602-rollback" } } })).toBe(0);
       expect(await accountBalance(fixture.cashAccountId)).toBeCloseTo(rollbackCashBefore, 5);
       expect(await accountBalance(fixture.mobileUsdAccountId)).toBeCloseTo(rollbackFloatBefore, 5);
+
+      for (const [path, payload] of [[mobileReversePath, mobileReversePayload], [fxReversePath, fxReversePayload]]) {
+        const failedReversal = await browserPost(page, path, payload);
+        expect(failedReversal.status, JSON.stringify(failedReversal.body)).toBe(409);
+        expect(failedReversal.body?.error).toMatch(/PERIOD.*(CLOSED|LOCKED|REQUIRED)/);
+      }
+      const mobileAfterRefusal = await prisma.enterpriseMobileMoneyTransaction.findUniqueOrThrow({ where: { id: mobileId } });
+      const fxAfterRefusal = await prisma.enterpriseMobileMoneyFxTransfer.findUniqueOrThrow({ where: { id: fxId } });
+      expect(mobileAfterRefusal).toMatchObject({ status: "CONFIRMED", revision: mobileReversePayload.revision });
+      expect(fxAfterRefusal).toMatchObject({ status: "CONFIRMED", revision: fxReversePayload.revision });
+      expect(await accountBalance(fixture.cashAccountId)).toBe(rollbackCashBefore);
+      expect(await accountBalance(fixture.mobileUsdAccountId)).toBe(rollbackFloatBefore);
+      expect(await accountBalance(fixture.mobileCdfAccountId)).toBe(rollbackCdfBefore);
     } finally {
       await prisma.enterpriseFiscalPeriod.update({
         where: { id: period.id },
         data: periodSnapshot,
       });
     }
+
+    for (const [path, payload, sourceEntityType, sourceEntityId, responseKey] of [
+      [mobileReversePath, mobileReversePayload, "EnterpriseMobileMoneyTransaction", mobileId, "transaction"],
+      [fxReversePath, fxReversePayload, "EnterpriseMobileMoneyFxTransfer", fxId, "transfer"],
+    ]) {
+      const reversed = await browserPost(page, path, payload);
+      expect(reversed.status, JSON.stringify(reversed.body)).toBe(200);
+      expect(reversed.body[responseKey]).toMatchObject({ status: "REVERSED", revision: payload.revision + 1 });
+      expect(reversed.body.accounting.idempotent).toBe(false);
+      const reversalEntryId = reversed.body.accounting.journalEntryId;
+      const entry = await prisma.enterpriseJournalEntry.findUniqueOrThrow({ where: { id: reversalEntryId }, include: { lines: true } });
+      expectBalanced(entry, sourceEntityType + " reversal");
+      const replay = await browserPost(page, path, payload);
+      expect(replay.status, JSON.stringify(replay.body)).toBe(200);
+      expect(replay.body[responseKey].revision).toBe(payload.revision + 1);
+      expect(replay.body.accounting).toEqual({ idempotent: true, journalEntryId: reversalEntryId });
+      expect(await prisma.enterpriseJournalEntry.count({ where: { organizationId, sourceEntityType, sourceEntityId } })).toBe(2);
+    }
+    expect(await accountBalance(fixture.cashAccountId)).toBe(rollbackCashBefore - 10);
+    expect(await accountBalance(fixture.mobileUsdAccountId)).toBe(rollbackFloatBefore + 20);
+    expect(await accountBalance(fixture.mobileCdfAccountId)).toBe(rollbackCdfBefore - 28_000);
   });
 
   test("Telco history shows and exports exact amounts across filtered pages", async ({ page }) => {
