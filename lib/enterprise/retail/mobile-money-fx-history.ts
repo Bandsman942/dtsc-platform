@@ -1,17 +1,12 @@
 import { Prisma } from "@prisma/client";
 import type { MonetaryTotal } from "@/lib/enterprise/common/analytics";
-import { retailFinanceReadSiteScope } from "@/lib/enterprise/retail/site-access";
+import { mobileMoneyFxWalletScope, type MobileMoneyFxCapability } from "@/lib/enterprise/retail/mobile-money-fx-access";
 
 // A conversion can disclose two wallets. A scoped reader must be allowed
 // to see both; unassigned/shared wallets are not silently attributed to a shop.
-export async function mobileMoneyFxReadScope(tx: Prisma.TransactionClient, organizationId: string, userId: string): Promise<Prisma.EnterpriseMobileMoneyFxTransferWhereInput> {
-  const sites = await retailFinanceReadSiteScope(organizationId, userId, "VIEW_SALES", tx);
-  if (sites === null) return { organizationId };
-  const accounts = await tx.enterpriseFinancialAccount.findMany({
-    where: { organizationId, accountType: "MOBILE_MONEY", siteId: { in: sites } },
-    select: { id: true },
-  });
-  const ids = accounts.map(account => account.id);
+export async function mobileMoneyFxReadScope(tx: Prisma.TransactionClient, organizationId: string, userId: string, capability: MobileMoneyFxCapability = "VIEW_SALES"): Promise<Prisma.EnterpriseMobileMoneyFxTransferWhereInput> {
+  const ids = await mobileMoneyFxWalletScope(tx, organizationId, userId, capability);
+  if (ids === null) return { organizationId };
   return { organizationId, sourceFloatAccountId: { in: ids }, targetFloatAccountId: { in: ids } };
 }
 

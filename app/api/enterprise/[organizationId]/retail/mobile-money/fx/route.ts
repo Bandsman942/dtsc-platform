@@ -45,9 +45,9 @@ export async function GET(req: Request, { params }: Params) {
   });
   if (!parsed.success) return NextResponse.json({ ok: false, outcome: "FAILURE", error: "Invalid query", message: parsed.error.issues[0]?.message || "Paramètres de conversion invalides." }, { status: 400 });
   try {
-    const preview = await previewMobileMoneyFxTransfer(organizationId, parsed.data);
+    const preview = await previewMobileMoneyFxTransfer(organizationId, auth.session.userId, parsed.data);
     await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "mobile-money-fx", action: "preview", providerCode: parsed.data.providerCode } });
-    return NextResponse.json({ ok: true, outcome: "SUCCESS", preview });
+    return NextResponse.json({ ok: true, outcome: "SUCCESS", preview }, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
     return retailErrorResponse(error, "MOBILE_MONEY_FX_PREVIEW_FAILED");
   }

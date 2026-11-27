@@ -4,6 +4,7 @@ import { ensureMobileMoneyFxLedgerMappingsTx } from "@/lib/enterprise/accounting
 import { postBusinessEventTx } from "@/lib/enterprise/accounting/posting-service";
 import { financeReference, money, publishFinanceEvent } from "@/lib/enterprise/accounting/helpers";
 import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
+import { assertMobileMoneyFxWalletAccess } from "@/lib/enterprise/retail/mobile-money-fx-access";
 import { requiredRetailOperatorCurrencies } from "@/lib/enterprise/retail/operator-currency-policy";
 import { prisma } from "@/lib/prisma";
 
@@ -236,11 +237,13 @@ async function resolveFxPairTx(
 
 export async function previewMobileMoneyFxTransfer(
   organizationId: string,
+  actorUserId: string,
   input: { providerCode: string; sourceCurrencyCode: string; targetCurrencyCode: string; sourceAmount: number },
 ) {
   const occurredAt = new Date();
   return prisma.$transaction(async (tx) => {
     const resolved = await resolveFxPairTx(tx, organizationId, { ...input, occurredAt });
+    await assertMobileMoneyFxWalletAccess(tx, organizationId, actorUserId, "VIEW_SALES", resolved.sourceResolved.account.id, resolved.targetResolved.account.id);
     return {
       providerCode: resolved.provider.providerCode,
       providerLabel: resolved.provider.label,
@@ -267,10 +270,14 @@ async function createMobileMoneyFxTransferTx(
   const existing = await tx.enterpriseMobileMoneyFxTransfer.findUnique({
     where: { organizationId_idempotencyKey: { organizationId, idempotencyKey: input.idempotencyKey } },
   });
-  if (existing) return { transfer: existing, idempotent: true };
+  if (existing) {
+    await assertMobileMoneyFxWalletAccess(tx, organizationId, actorUserId, "COLLECT_PAYMENT", existing.sourceFloatAccountId, existing.targetFloatAccountId);
+    return { transfer: existing, idempotent: true };
+  }
 
   const occurredAt = new Date();
   const resolved = await resolveFxPairTx(tx, organizationId, { ...input, occurredAt });
+  await assertMobileMoneyFxWalletAccess(tx, organizationId, actorUserId, "COLLECT_PAYMENT", resolved.sourceResolved.account.id, resolved.targetResolved.account.id);
   const lockIds = [resolved.sourceResolved.account.id, resolved.targetResolved.account.id].sort();
   await tx.$queryRaw(Prisma.sql`
     SELECT id FROM "EnterpriseFinancialAccount"
@@ -412,6 +419,7 @@ export async function reverseMobileMoneyFxTransfer(
     await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterpriseMobileMoneyFxTransfer" WHERE id = ${transferId} AND "organizationId" = ${organizationId} FOR UPDATE`);
     const transfer = await tx.enterpriseMobileMoneyFxTransfer.findFirst({ where: { id: transferId, organizationId } });
     if (!transfer) throw new EnterpriseRetailError("RETAIL_MOBILE_MONEY_FX_TRANSFER_NOT_FOUND", 404);
+    await assertMobileMoneyFxWalletAccess(tx, organizationId, actorUserId, "COLLECT_PAYMENT", transfer.sourceFloatAccountId, transfer.targetFloatAccountId);
     if (transfer.status === "REVERSED") return transfer;
     if (transfer.status !== "CONFIRMED" || transfer.revision !== input.revision) {
       throw new EnterpriseRetailError("RETAIL_MOBILE_MONEY_FX_TRANSFER_CONFLICT", 409);

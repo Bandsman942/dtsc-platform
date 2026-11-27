@@ -4,6 +4,8 @@ const files = {
   dashboard: "app/api/enterprise/[organizationId]/retail/dashboard/route.ts",
   fx: "app/api/enterprise/[organizationId]/retail/mobile-money/fx/route.ts",
   history: "lib/enterprise/retail/mobile-money-fx-history.ts",
+  access: "lib/enterprise/retail/mobile-money-fx-access.ts",
+  service: "lib/enterprise/retail/mobile-money-multicurrency-service.ts",
   retry: "app/api/enterprise/[organizationId]/retail/mobile-money/fx/[transferId]/accounting/route.ts",
   workspace: "components/enterprise/professional/mobile-money-agency-workspace.tsx",
   diagnostic: "lib/enterprise/retail/accounting-pending-diagnostic.ts",
@@ -29,6 +31,8 @@ requireSource("dashboard", source.dashboard.includes("readMobileMoneyFxHistory(t
 requireSource("dashboard", source.history.includes('sourceEntityType: "EnterpriseMobileMoneyFxTransfer"') && source.history.includes('postingEvent: "RETAIL_MOBILE_MONEY_FX_POSTED"') && source.dashboard.includes('transfer.accountingStatus === "POSTED"'), "le statut comptable des conversions FX n'est pas relié au posting canonique");
 requireSource("history", source.history.includes("mobileMoneyFxReadScope(tx") && source.history.includes("sourceFloatAccountId: { in: ids }, targetFloatAccountId: { in: ids }"), "le registre FX doit protéger les deux wallets");
 requireSource("history", source.fx.includes('url.searchParams.get("view") === "history"') && source.fx.includes("readMobileMoneyFxHistory(tx") && source.fx.includes("RepeatableRead"), "le registre paginé doit réutiliser la lecture canonique");
+requireSource("access", source.access.includes("retailFinanceReadSiteScope(organizationId, userId, capability, tx)") && source.access.includes("!allowed.includes(sourceId) || !allowed.includes(targetId)"), "la vérification doit porter sur les deux wallets et la permission demandée");
+requireSource("access", source.service.includes('"VIEW_SALES", resolved.sourceResolved.account.id, resolved.targetResolved.account.id') && source.service.includes('"COLLECT_PAYMENT", resolved.sourceResolved.account.id, resolved.targetResolved.account.id') && source.service.includes('"COLLECT_PAYMENT", existing.sourceFloatAccountId, existing.targetFloatAccountId') && source.service.includes('"COLLECT_PAYMENT", transfer.sourceFloatAccountId, transfer.targetFloatAccountId'), "la prévisualisation, la création, le rejeu et la contrepassation doivent vérifier les deux wallets");
 requireSource("history", !source.history.includes("finalizeMobileMoneyFxAccounting") && !source.history.includes("postBusinessEventTx"), "le service de lecture ne doit jamais déclencher un posting");
 requireSource("dashboard", source.dashboard.includes("mobileMoneyHistory = [...mobileMoneyRecent, ...fxHistory]"), "les conversions FX ne sont pas fusionnées à l'historique rendu");
 requireSource("dashboard", source.dashboard.includes('status: reversed ? "REVERSED" : posted ? "SUCCESS" : "CONFIRMED"'), "le statut métier d'une conversion durable est encore confondu avec son statut comptable");
@@ -43,7 +47,7 @@ requireSource("fx", !source.fx.includes("retailAccountingPendingDiagnostic") && 
 requireSource("fx", source.fx.includes('retailErrorResponse(error, "MOBILE_MONEY_FX_CREATE_FAILED")'), "un échec atomique FX n'est pas renvoyé via l'enveloppe FAILURE canonique");
 
 requireSource("retry", source.retry.includes("finalizeMobileMoneyFxAccounting(organizationId, auth.session.userId, transfer.id)"), "la reprise ne réutilise pas le posting idempotent du transfert existant");
-requireSource("retry", source.retry.includes("where: { id: transferId, organizationId }"), "la reprise comptable n'est pas strictement tenant-scoped");
+requireSource("retry", source.retry.includes("where: { ...scope, id: transferId, organizationId }") && source.retry.includes('mobileMoneyFxReadScope(tx, organizationId, auth.session.userId, "COLLECT_PAYMENT")'), "la reprise comptable n'est pas strictement tenant-scoped");
 requireSource("retry", source.retry.includes("retailAccountingPendingDiagnostic(error)"), "la reprise comptable perd le blocker réel");
 requireSource("retry", source.retry.includes("retailPendingOutcome(diagnostic.messageCode"), "un échec de finalisation après transfert durable n'est pas conservé en PENDING");
 requireSource("retry", source.retry.includes("status: 202"), "la reprise encore bloquée ne renvoie pas HTTP 202");

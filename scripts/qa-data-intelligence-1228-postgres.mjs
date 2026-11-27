@@ -281,6 +281,16 @@ const { readMobileMoneyDashboardOperations, maskMobileMoneyHistoryPhone } = work
   } },
 })("@/lib/enterprise/retail/mobile-money-dashboard-read");
 
+const { assertMobileMoneyFxWalletAccess, mobileMoneyFxWalletScope } = workflowTestLoader({
+  "@/lib/enterprise/retail/site-access": { retailFinanceReadSiteScope: async (organizationId, actor, action, tx) => {
+    assert.equal(organizationId, cashFixture.organizationId);
+    assert.equal(actor, cashFixture.actor);
+    assert.equal(tx, cashFixture.reader);
+    assert.ok(["VIEW_SALES", "COLLECT_PAYMENT"].includes(action));
+    return action === "COLLECT_PAYMENT" ? cashFixture.fxCollectSites : cashFixture.fxReadSites;
+  } },
+})("@/lib/enterprise/retail/mobile-money-fx-access");
+
 async function verifyCashAnalytics(tenant, otherTenant, actor) {
   await assert.rejects(db.$transaction(async tx => {
     const siteA = `${tenant}-cash-shop-a`;
@@ -487,6 +497,23 @@ async function verifyCashAnalytics(tenant, otherTenant, actor) {
     const fxUsd = await wallet("QA-FX-USD", "USD", siteA);
     const fxOther = await wallet("QA-FX-OTHER", "USD", siteB);
     const fxShared = await wallet("QA-FX-SHARED", "USD", null);
+    cashFixture.fxReadSites = [siteA];
+    cashFixture.fxCollectSites = [];
+    const assertWallets = (capability, source, target) => assertMobileMoneyFxWalletAccess(tx, tenant, actor, capability, source, target);
+    const denied = error => error.code === "RETAIL_SITE_ACCESS_DENIED" && error.status === 403;
+    await assertWallets("VIEW_SALES", fxCdf.id, fxUsd.id);
+    await assert.rejects(assertWallets("VIEW_SALES", fxCdf.id, fxOther.id), denied);
+    await assert.rejects(assertWallets("VIEW_SALES", fxShared.id, fxUsd.id), denied);
+    await assert.rejects(assertWallets("COLLECT_PAYMENT", fxCdf.id, fxUsd.id), denied);
+    assert.deepEqual(await mobileMoneyFxWalletScope(tx, tenant, actor, "COLLECT_PAYMENT"), []);
+    cashFixture.fxCollectSites = [siteA];
+    await assertWallets("COLLECT_PAYMENT", fxCdf.id, fxUsd.id);
+    await assert.rejects(assertWallets("COLLECT_PAYMENT", fxOther.id, fxUsd.id), denied);
+    cashFixture.fxCollectSites = null;
+    await assertWallets("COLLECT_PAYMENT", fxShared.id, fxOther.id);
+    await assert.rejects(assertWallets("COLLECT_PAYMENT", fxCdf.id, foreign.id), denied);
+    delete cashFixture.fxReadSites;
+    delete cashFixture.fxCollectSites;
     const fxBase = {
       organizationId: tenant, providerId: "QA-PROVIDER", providerCode: "QA-PROVIDER",
       sourceProviderAccountId: "QA-SOURCE", targetProviderAccountId: "QA-TARGET",

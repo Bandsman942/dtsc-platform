@@ -52,3 +52,7 @@ Avec 57 conversions autorisées, deux paires inverses et une conversion contrepa
 ### Mobile Money — indicateurs et confidentialité du tableau de bord
 
 Pour une période contenant des dépôts, retraits, contrepassations et opérations d'une autre boutique, comparer les totaux des opérations confirmées du tableau de bord aux résultats du registre avec les mêmes dates. Tester un acteur affecté à une boutique, un acteur sans périmètre autorisé et un administrateur. Vérifier le masquage des numéros courts et l'absence des opérations d'une autre entreprise. Les comptes et soldes de configuration ainsi que les mutations nécessitent leurs propres contrôles.
+
+### Mobile Money FX — accès directs
+
+Avec des wallets CDF/USD dans deux boutiques et un wallet partagé sans affectation, essayer prévisualisation, création, rejeu de la même clé, reprise comptable et contrepassation par API directe. Un lecteur sans COLLECT_PAYMENT ne doit pas obtenir de mutation, un gestionnaire limité à une boutique ne doit pas agir sur un wallet hors périmètre, même si le transfert existe déjà. Les droits de module restent obligatoires et l'administrateur global ne peut accéder au tenant voisin. Vérifier l'absence de mouvement et de changement de révision après refus. La recette doit aussi couvrir la révocation d'une affectation et le diagnostic de reprise ; aucun nouveau test navigateur exécuté dans cette tranche.

@@ -1,4 +1,6 @@
+import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
+import { mobileMoneyFxReadScope } from "@/lib/enterprise/retail/mobile-money-fx-history";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { retailAccountingPendingDiagnostic } from "@/lib/enterprise/retail/accounting-pending-diagnostic";
 import { authorizeRetailRequest } from "@/lib/enterprise/retail/http";
@@ -14,17 +16,22 @@ export async function POST(req: Request, { params }: Params) {
   const auth = await authorizeRetailRequest(req, organizationId, "MOBILE_MONEY_AGENCY", "manage", { mutation: true, limit: 100 });
   if (!auth.ok) return auth.response;
 
-  const transfer = await prisma.enterpriseMobileMoneyFxTransfer.findFirst({
-    where: { id: transferId, organizationId },
-    select: {
-      id: true,
-      number: true,
-      providerCode: true,
-      sourceCurrencyCode: true,
-      targetCurrencyCode: true,
-      status: true,
-    },
-  });
+  // The route-level manage grant is not a grant to every shop's wallets.
+  // Resolve the permitted transfer before entering the posting/retry handler.
+  const transfer = await prisma.$transaction(async tx => {
+    const scope = await mobileMoneyFxReadScope(tx, organizationId, auth.session.userId, "COLLECT_PAYMENT");
+    return tx.enterpriseMobileMoneyFxTransfer.findFirst({
+      where: { ...scope, id: transferId, organizationId },
+      select: {
+        id: true,
+        number: true,
+        providerCode: true,
+        sourceCurrencyCode: true,
+        targetCurrencyCode: true,
+        status: true,
+      },
+    });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
   if (!transfer) {
     return NextResponse.json(
       { ok: false, outcome: "FAILURE", message: "Conversion Mobile Money introuvable dans cette entreprise." },
