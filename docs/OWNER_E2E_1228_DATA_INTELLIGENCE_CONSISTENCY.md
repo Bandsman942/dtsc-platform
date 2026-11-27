@@ -48,3 +48,7 @@ Sur 58 opérations admissibles, deux devises et deux boutiques, filtrer par type
 ### Mobile Money — conversions de devises
 
 Avec 57 conversions autorisées, deux paires inverses et une conversion contrepassée, comparer les trois périmètres des montants source et cible sur plusieurs pages et dans les trois exports. Le taux historique, son jour, le statut métier et l’état du posting d’origine doivent rester distincts. Vérifier qu’un opérateur d’une seule boutique ne reçoit pas une conversion dont l’un des wallets est hors boutique ou partagé sans affectation. Tester la reprise comptable idempotente d’une opération confirmée en attente ; aucun nouveau mouvement wallet ne doit être créé. La validation des soldes à date et des droits de toutes les mutations reste indépendante.
+
+### Mobile Money — indicateurs et confidentialité du tableau de bord
+
+Pour une période contenant des dépôts, retraits, contrepassations et opérations d'une autre boutique, comparer les totaux des opérations confirmées du tableau de bord aux résultats du registre avec les mêmes dates. Tester un acteur affecté à une boutique, un acteur sans périmètre autorisé et un administrateur. Vérifier le masquage des numéros courts et l'absence des opérations d'une autre entreprise. Les comptes et soldes de configuration ainsi que les mutations nécessitent leurs propres contrôles.

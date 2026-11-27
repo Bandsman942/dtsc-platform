@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { readMobileMoneyFxHistory } from "@/lib/enterprise/retail/mobile-money-fx-history";
+import { readMobileMoneyDashboardOperations } from "@/lib/enterprise/retail/mobile-money-dashboard-read";
 import { writeApiLog } from "@/lib/audit";
 import { getCommercialRetailDashboardRead } from "@/lib/enterprise/retail/commercial-dashboard";
 import { RETAIL_MODULE_CODES, type RetailModuleCode } from "@/lib/enterprise/retail/constants";
@@ -57,11 +58,8 @@ export async function GET(req: Request, { params }: Params) {
     access: { canWrite: auth.access.canWrite, canManage: auth.access.canAdminister },
     range: dashboard.range,
   };
-  const mobileMoneyRecent: MobileMoneyHistoryItem[] = dashboard.recent.mobileMoney.map((entry) => {
-    const item = { ...entry };
-    Reflect.deleteProperty(item, "customerPhone");
-    return item as MobileMoneyHistoryItem;
-  });
+  let mobileMoneyRecent: MobileMoneyHistoryItem[] = [];
+  let mobileMoneyMetrics: typeof dashboard.metricsByCurrency.mobileMoney = [];
   const topupRecent = dashboard.recent.topups.map((entry) => {
     const item = { ...entry };
     Reflect.deleteProperty(item, "destinationPhone");
@@ -70,10 +68,16 @@ export async function GET(req: Request, { params }: Params) {
 
   let mobileMoneyHistory: MobileMoneyHistoryItem[] = mobileMoneyRecent;
   if (moduleCode === "MOBILE_MONEY_AGENCY") {
-    const history = await prisma.$transaction(tx => readMobileMoneyFxHistory(tx, {
-      organizationId, userId: auth.session.userId, page: 1, pageSize: 100,
-      from: new Date(dashboard.range.from), to: new Date(dashboard.range.to),
-    }), { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
+    const { operations, history } = await prisma.$transaction(async tx => {
+      const range = { organizationId, userId: auth.session.userId, from: new Date(dashboard.range.from), to: new Date(dashboard.range.to) };
+      const [operations, history] = await Promise.all([
+        readMobileMoneyDashboardOperations(tx, range),
+        readMobileMoneyFxHistory(tx, { ...range, page: 1, pageSize: 100 }),
+      ]);
+      return { operations, history };
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
+    mobileMoneyRecent = operations.items;
+    mobileMoneyMetrics = operations.metrics;
     const fxHistory: MobileMoneyHistoryItem[] = history.items.map(transfer => {
       const posted = transfer.accountingStatus === "POSTED";
       const reversed = transfer.status === "REVERSED";
@@ -109,7 +113,7 @@ export async function GET(req: Request, { params }: Params) {
   const scoped = moduleCode === "RETAIL_POS"
     ? { ...common, warehouses: dashboard.warehouses, catalogItems: dashboard.catalogItems, inventoryItems: dashboard.inventoryItems, metricsByCurrency: { sales: dashboard.metricsByCurrency.sales }, recent: { sales: dashboard.recent.sales } }
     : moduleCode === "MOBILE_MONEY_AGENCY"
-      ? { ...common, providers: dashboard.providers.filter((item) => item.providerType === "MOBILE_MONEY"), metricsByCurrency: { mobileMoney: dashboard.metricsByCurrency.mobileMoney }, recent: { mobileMoney: mobileMoneyHistory } }
+      ? { ...common, providers: dashboard.providers.filter((item) => item.providerType === "MOBILE_MONEY"), metricsByCurrency: { mobileMoney: mobileMoneyMetrics }, recent: { mobileMoney: mobileMoneyHistory } }
       : moduleCode === "TELCO_TOPUPS"
         ? { ...common, providers: dashboard.providers.filter((item) => item.providerType === "TELCO" || item.providerType === "BOTH"), telcoConfiguration: dashboard.telcoConfiguration, catalogItems: dashboard.catalogItems, metricsByCurrency: { telco: dashboard.metricsByCurrency.telco }, recent: { topups: topupRecent } }
         : { ...common, metricsByCurrency: {}, recent: { closes: dashboard.recent.closes } };
@@ -126,5 +130,5 @@ export async function GET(req: Request, { params }: Params) {
       retailCache: dashboardRead.cacheSources,
     },
   });
-  return NextResponse.json(scoped);
+  return NextResponse.json(scoped, { headers: { "Cache-Control": "private, no-store" } });
 }

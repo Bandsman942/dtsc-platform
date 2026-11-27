@@ -271,6 +271,16 @@ const { GET: getMobileMoneyFxHistory } = workflowTestLoader({
   "@/lib/enterprise/retail/mobile-money-multicurrency-schemas": {},
 })("@/app/api/enterprise/[organizationId]/retail/mobile-money/fx/route");
 
+const { readMobileMoneyDashboardOperations, maskMobileMoneyHistoryPhone } = workflowTestLoader({
+  "@/lib/enterprise/retail/site-access": { retailFinanceReadSiteScope: async (organizationId, actor, action, tx) => {
+    assert.equal(action, "VIEW_SALES");
+    assert.equal(organizationId, cashFixture.organizationId);
+    assert.equal(actor, cashFixture.actor);
+    assert.equal(tx, cashFixture.reader);
+    return cashFixture.dashboardSites === undefined ? [cashFixture.siteId] : cashFixture.dashboardSites;
+  } },
+})("@/lib/enterprise/retail/mobile-money-dashboard-read");
+
 async function verifyCashAnalytics(tenant, otherTenant, actor) {
   await assert.rejects(db.$transaction(async tx => {
     const siteA = `${tenant}-cash-shop-a`;
@@ -448,6 +458,27 @@ async function verifyCashAnalytics(tenant, otherTenant, actor) {
     assert.deepEqual(withdrawals.generalTotals, firstMobile.generalTotals);
     assert.equal((await history(mobileQuery + "&transactionType=INVALID")).status, 400);
     assert.equal((await history(mobileQuery, otherTenant)).status, 403);
+    const dashboardRange = { organizationId: tenant, userId: actor, from: new Date("2026-11-01"), to: new Date("2026-11-30") };
+    const mobileDashboard = await readMobileMoneyDashboardOperations(tx, dashboardRange);
+    assert.equal(mobileDashboard.items.length, 59);
+    assert.equal(mobileDashboard.metrics.find(row => row.currencyCode === "CDF").deposits, deposits.principalAmount);
+    assert.equal(mobileDashboard.metrics.find(row => row.currencyCode === "CDF").withdrawals, "2");
+    assert.equal(mobileDashboard.metrics.find(row => row.currencyCode === "CDF").commission, "0.000114");
+    assert.equal(mobileDashboard.metrics.find(row => row.currencyCode === "CDF").count, 57);
+    assert.equal(mobileDashboard.metrics.find(row => row.currencyCode === "USD").count, 1);
+    assert.ok(mobileDashboard.items.every(row => !("customerPhone" in row) && row.customerPhoneMasked === "2438••••567"));
+    assert.ok(mobileDashboard.items.every(row => !row.number.includes("OTHER-SHOP") && !row.number.includes("OTHER-TENANT")));
+    assert.equal(maskMobileMoneyHistoryPhone("1234567"), "••••");
+    cashFixture.dashboardSites = [];
+    const noSites = await readMobileMoneyDashboardOperations(tx, dashboardRange);
+    assert.deepEqual(noSites.items, []);
+    assert.deepEqual(noSites.metrics, []);
+    cashFixture.dashboardSites = null;
+    const globalDashboard = await readMobileMoneyDashboardOperations(tx, dashboardRange);
+    assert.equal(globalDashboard.items.length, 60);
+    assert.ok(globalDashboard.items.some(row => row.number.includes("OTHER-SHOP")));
+    assert.ok(globalDashboard.items.every(row => !row.number.includes("OTHER-TENANT")));
+    delete cashFixture.dashboardSites;
     const wallet = async (code, currencyCode, siteId) => {
       const row = await account(tenant, code, currencyCode);
       return tx.enterpriseFinancialAccount.update({ where: { id: row.id }, data: { accountType: "MOBILE_MONEY", siteId } });

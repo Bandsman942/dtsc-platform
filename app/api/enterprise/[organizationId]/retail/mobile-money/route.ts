@@ -11,7 +11,7 @@ import { retailFailureOutcome, retailPendingOutcome, retailSuccessOutcome } from
 import { createConnectedMobileMoneyOperation } from "@/lib/enterprise/retail/operator-orchestration";
 import { mobileMoneyCreateSchema } from "@/lib/enterprise/retail/schemas";
 import { createMobileMoneyTransactionWithPosting } from "@/lib/enterprise/retail/service";
-import { retailFinanceReadSiteScope } from "@/lib/enterprise/retail/site-access";
+import { mobileMoneyOperationReadScope, maskMobileMoneyHistoryPhone } from "@/lib/enterprise/retail/mobile-money-dashboard-read";
 import { prisma } from "@/lib/prisma";
 
 type Params = { params: Promise<{ organizationId: string }> };
@@ -83,17 +83,7 @@ export async function GET(req: Request, { params }: Params) {
   const effectiveTo = dates.to || to;
   try {
     const result = await prisma.$transaction(async tx => {
-      // An operation belongs to the shop of its cash account, not the provider's
-      // shared float. Archived cash accounts retain their historical site.
-      const visibleSites = await retailFinanceReadSiteScope(organizationId, auth.session.userId, "VIEW_SALES", tx);
-      const permittedCashAccountIds = visibleSites === null ? null : (await tx.enterpriseFinancialAccount.findMany({
-        where: { organizationId, siteId: { in: visibleSites }, accountType: "CASH" },
-        select: { id: true },
-      })).map(account => account.id);
-      const authorizedScope: Prisma.EnterpriseMobileMoneyTransactionWhereInput = {
-        organizationId,
-        ...(permittedCashAccountIds !== null ? { cashAccountId: { in: permittedCashAccountIds } } : {}),
-      };
+      const { where: authorizedScope } = await mobileMoneyOperationReadScope(tx, organizationId, auth.session.userId);
       const where: Prisma.EnterpriseMobileMoneyTransactionWhereInput = {
         ...authorizedScope,
         ...(status ? { status } : {}),
@@ -122,7 +112,7 @@ export async function GET(req: Request, { params }: Params) {
       const operationTotals = { filtered: historyTotals(filteredGroups), general: historyTotals(generalGroups), page: historyPageTotals(items) };
       return {
         items: items.map(item => {
-          const phone = item.customerPhone.length > 6 ? item.customerPhone.slice(0, 4) + "••••" + item.customerPhone.slice(-3) : "••••";
+          const phone = maskMobileMoneyHistoryPhone(item.customerPhone);
           return { ...item, customerPhone: phone, customerPhoneMasked: phone,
             principalAmount: item.principalAmount.toFixed(), customerFeeAmount: item.customerFeeAmount.toFixed(),
             providerCommissionAmount: item.providerCommissionAmount.toFixed(), cashEffectAmount: item.cashEffectAmount.toFixed(),
